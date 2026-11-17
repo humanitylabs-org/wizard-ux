@@ -28,7 +28,7 @@ const APP = `<!doctype html><html><head><meta charset="utf-8"><script src="/wiza
     results.ready = true;
   })();
   const run = (k, fn) => { try { results[k] = fn(); } catch (e) { results[k] = 'threw: ' + e.message; } };
-  document.getElementById('photo').onclick = () => run('photo', () => WizardApp.media.view([{ url: 'pic.svg', name: 'Lake' }, { url: blobUrl, name: 'Made here' }, { url: 'https://example.com/x.png' }], 1));
+  document.getElementById('photo').onclick = () => run('photo', () => WizardApp.media.view([{ url: 'pic.svg', name: 'Lake', placeholder: 'pic.svg?thumb' }, { url: blobUrl, name: 'Made here', placeholder: blobUrl }, { url: 'https://example.com/x.png' }], 1));
   document.getElementById('owner').onclick = () => run('owner', () => WizardApp.media.view([{ url: '/wizard/hermes/api/media/secret.png' }], 0));
   document.getElementById('back').onclick = () => run('back', () => WizardApp.nav.back());
   document.getElementById('draft').onclick = () => run('draft', () => JSON.stringify(WizardApp.nav.openContextDraft({ id: 'note-7', title: 'Shopping', message: 'Milk, eggs' })));
@@ -51,7 +51,7 @@ const SHELL = `<!doctype html><html><head><meta charset="utf-8">
   // The shell's media viewer: shows what it was given, and reads each photo the way the real viewer's <img> does.
   window.WosChat = { reply: { clean: r => (r && typeof r.key === 'string' ? { key: r.key, title: String(r.title || ''), message: String(r.message || '') } : null) },
     viewer: { open: (items, i) => {
-      const v = { items: items.map(x => ({ url: x.url, name: x.name, kind: x.kind })), i, loaded: [] }; viewed.push(v);
+      const v = { items: items.map(x => ({ url: x.url, name: x.name, kind: x.kind, placeholder: x.placeholder })), i, loaded: [] }; viewed.push(v);
       const box = document.getElementById('viewer'); box.replaceChildren();
       for (const [n, x] of items.entries()) { const img = new Image(); img.src = x.url; img.title = x.name; if (n === i) img.className = 'cur';
         img.onload = () => v.loaded.push({ n, w: img.naturalWidth }); img.onerror = () => v.loaded.push({ n, error: true }); box.append(img); }
@@ -117,6 +117,9 @@ const server = http.createServer((req, res) => {
   ok(!!v && v.i === 1 && /^blob:http:\/\/127\.0\.0\.1:\d+\//.test(v.items[1].url) && v.items[1].name === 'Made here',
     'the page\'s own blob: photo opens as the shell\'s own, and stays the one tapped: ' + JSON.stringify(v && v.items[1]));
   ok(!!v && v.loaded.length === 2 && v.loaded.every(x => x.w === 120), 'the viewer can show both photos: ' + JSON.stringify(v && v.loaded));
+  // ux#1509: each picture's quick stand-in comes along under the same rules (own address, or the page's bytes).
+  ok(!!v && v.items[0].placeholder === base + '/notes/pic.svg?thumb' && /^blob:http:\/\/127\.0\.0\.1:\d+\//.test(v.items[1].placeholder || ''),
+    'each picture\'s stand-in reaches the viewer: ' + JSON.stringify(v && v.items.map(x => x.placeholder)));
   await frameOf('/notes/').click('#owner'); await settle();
   s = await shell(); r = await app();
   ok(s.viewed.length === 1, 'a photo on an owner route is never opened: ' + JSON.stringify({ owner: r.owner, n: s.viewed.length }));

@@ -445,6 +445,10 @@ a.fchip { color: inherit; text-decoration: none; }
 .mv-doc pre { margin: 0; font-size: 12.5px; white-space: pre-wrap; word-break: break-word; color: var(--ink-2); }
 .mv-doc .bub { font-size: 15px; line-height: 1.5; }
 .mv-wait { color: var(--ink-3); text-align: center; margin-top: 30vh; }
+/* A picture still loading (chat-kit.js picture): a quiet ring over the stand-in; a failed load says so with Retry. */
+.mv-load { position: absolute; left: 50%; bottom: 16px; width: 22px; height: 22px; margin-left: -11px; border-radius: 50%; border: 2px solid color-mix(in srgb, white 30%, transparent); border-top-color: white; animation: ch-attspin .9s linear infinite; pointer-events: none; }
+.mv-fail { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: flex; align-items: center; gap: 12px; padding: 10px 10px 10px 16px; border-radius: 99px; font-size: var(--wz-text-sm); color: white; background: color-mix(in srgb, black 72%, transparent); white-space: nowrap; }
+.mv-fail button { padding: 8px 14px; border-radius: 99px; font-size: var(--wz-text-sm); font-weight: 700; color: white; background: color-mix(in srgb, white 16%, transparent); border: 1px solid color-mix(in srgb, white 30%, transparent); }
 .mv-bar { flex: 0 0 auto; display: flex; justify-content: center; gap: 8px; padding: 8px 10px calc(var(--safe-b, 0px) + 14px); }
 .mv-bar button { min-width: 44px; padding: 10px 16px; border-radius: 99px; font-size: 14px; font-weight: 700; color: var(--ink); background: rgba(205, 190, 255, .1); border: 1px solid var(--line-2); }
 .mv-bar button[data-mv="prev"], .mv-bar button[data-mv="next"] { font-size: 20px; padding: 6px 14px; }

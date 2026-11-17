@@ -1026,3 +1026,41 @@ test('nav.openThread: only an app the launcher lets open hosted threads, its own
   assert.throws(() => h.call('nav.openThread', { id: 'sid-1' }), /not verified/);
   assert.equal(opened.length, 1);
 });
+
+// ux#1509: a sandboxed window's picture stand-in (a placeholder address, or its own blob's bytes) reaches the viewer too.
+test('media.view: a picture\'s stand-in passes the same rules as the picture (own address or the page\'s bytes)', () => {
+  const opened = [], made = [];
+  const WosChat = { viewer: { open: items => { opened.push(JSON.parse(JSON.stringify(items))); return true; } } };
+  const f = fixture({ win: { WosChat } });
+  const create = URL.createObjectURL;
+  URL.createObjectURL = b => { const u = 'blob:https://wizard.example/p' + made.length; made.push(b); return u; };
+  try {
+    const pic = new Blob(['x'], { type: 'image/jpeg' });
+    assert.equal(f.call('media.view', { items: [
+      { url: 'm/1', placeholder: 'm/1?thumb' },
+      { url: 'm/2', placeholderBlob: pic },
+      { url: 'm/3', placeholder: 'https://example.com/t.jpg' },
+      { url: 'm/4', placeholder: '/wizard/hermes/api/media/secret.png' },
+      { url: 'm/5', kind: 'video', placeholderBlob: pic }],
+      base: 'https://wizard.example/morning-report/' }), true);
+    assert.deepEqual(opened[0].map(x => x.placeholder), ['https://wizard.example/morning-report/m/1?thumb', 'blob:https://wizard.example/p0', undefined, undefined, undefined]);
+    assert.equal(made.length, 1);
+  } finally { URL.createObjectURL = create; }
+});
+
+test('media.view: stand-in bytes never use up the pictures\' own blob quota (Codex P2)', () => {
+  const opened = [];
+  const WosChat = { viewer: { open: (items, i) => { opened.push({ items: JSON.parse(JSON.stringify(items)), i }); return true; } } };
+  const f = fixture({ win: { WosChat } });
+  const create = URL.createObjectURL; let n = 0;
+  URL.createObjectURL = () => 'blob:https://wizard.example/q' + n++;
+  try {
+    const pic = new Blob(['x'], { type: 'image/jpeg' });
+    const items = Array.from({ length: 50 }, (_, k) => ({ url: 'm/' + k, placeholderBlob: pic }));
+    for (let k = 0; k < 50; k++) items.push({ blob: pic, name: 'own ' + k });
+    assert.equal(f.call('media.view', { items, index: 99 }), true);
+    const got = opened[0];
+    assert.equal(got.items.length, 100, 'every picture opens');
+    assert.equal(got.items[got.i].name, 'own 49', 'the tapped picture stays the one shown');
+  } finally { URL.createObjectURL = create; }
+});
