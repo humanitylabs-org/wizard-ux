@@ -2689,13 +2689,22 @@ window.WizCore.chats = function createChats(H) {
    * same rows and rule activityBody draws for the main list (needs you OR unread, never snoozed), so the badges can never
    * disagree with the list. Notifications set to Chats are added by the badge itself (WosBell.unreadCount). Null with
    * Channels off: the badges keep their unread tally there. */
-  function activityReady(live) {
+  function activityReady(live) { const r = activityReadyRows(live); return r ? r.length : null; }
+  function activityReadyRows(live) {
     const L = live || LIVE, M = window.WizChatsListModel;
     if (!channelsOn() || !L?.ok || !M?.activityGroups) return null;
     const rows = (L.sessionsFor ? L.sessionsFor('') : L.unified()).filter(s => !s.hidden);
-    return M.activityGroups(L.workGroups(rows), { needs: actNeeds, unread: actUnread, at: chanAt }).ready.length;
+    return M.activityGroups(L.workGroups(rows), { needs: actNeeds, unread: actUnread, at: chanAt }).ready;
+  }
+  /* Home's "N need you" and its Needs you · Unread card (wizard-ux issue 1517): with Channels on, the same split as
+   * Activity's Ready (amber = actNeeds, the rest green), so an amber thread already opened still counts as needing you.
+   * Null with Channels off: Home keeps LIVE.groups(). */
+  function activityHome(live) {
+    const r = activityReadyRows(live); if (!r) return null;
+    return { needs: r.filter(actNeeds), ready: r.filter(s => !actNeeds(s)) };
   }
   window.WizCore.activityReady = activityReady;
+  window.WizCore.activityHome = activityHome;
   /* Activity with Channels on (wizard-ux issue 1336; James, 12 Nov 2026: "I'm not really going to archive threads
    * anymore"): a short what-needs-me list. Working as today; Ready holds amber (waiting on the owner, until addressed)
    * and green (finished, unread, until opened) mixed in the one sort; Recent is everything else, newest first, about a

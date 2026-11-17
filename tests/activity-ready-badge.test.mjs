@@ -80,3 +80,33 @@ test('issue 1504: the shells read the one count (orb badge, desk marks, phone Ho
   assert.match(read('web/desktop/desktop.js'), /C\.workspaceNav\.refreshChats\(LIVE, /);
   assert.match(chats, /window\.WizCore\.activityReady = activityReady;/);
 });
+
+// wizard-ux issue 1517: desktop Home said "0 need you" and its Needs you · Unread card listed only the 2 unread threads,
+// while Activity's Ready showed 4 amber threads already opened. Home now takes Activity's own split (activityHome).
+test('issue 1517: Home\'s need-you number and card follow Activity\'s amber rows, opened or not', () => {
+  const h = harness(robert());
+  h.open('y4');
+  const A = h.c.WizCore.activityHome(h.c.LIVE);
+  assert.deepEqual([...A.needs.map(s => s.id)].sort(), ['y1', 'y2', 'y3', 'y4'], 'every amber Activity row needs you, opened or not');
+  assert.deepEqual([...A.ready.map(s => s.id)].sort(), ['g1', 'g2'], 'the green rest');
+  assert.deepEqual([...A.needs, ...A.ready].map(s => s.id).sort(), [...h.activity()].sort(), 'the card lists exactly Activity Ready');
+  assert.equal(h.c.LIVE.groups().needs.length, 0, 'the old Chats rule: the "0 need you" the reporter saw');
+  h.markDone('y1');
+  assert.equal(h.c.WizCore.activityHome(h.c.LIVE).needs.length, 3, 'Mark done takes it off Home too');
+});
+
+test('issue 1517: with Channels off Home keeps the Chats groups', () => {
+  const { c } = harness(robert(), { on: false });
+  assert.equal(c.WizCore.activityHome(c.LIVE), null);
+});
+
+test('issue 1517: desktop Home line, its card, the status bar and the phone Ready card read activityHome', () => {
+  const desk = read('web/desktop/desktop.js'), app = read('web/app.js');
+  const home = block(desk, '  function homeHtml(i) {', '  stage.addEventListener(');
+  assert.match(home, /C\.activityHome\?\.\(LIVE\)/);
+  assert.match(home, /\$\{L\.needs\.length\} need/);
+  assert.match(home, /rows\(L\.needs\.concat\(L\.ready\)\)/);
+  assert.match(block(desk, '  function paintBar() {', '  function tickClock()'), /C\.activityHome\?\.\(LIVE\)/);
+  assert.match(block(app, '  function renderHome() {', '  setInterval(() =>'), /WizCore\.activityHome\?\.\(LIVE\)/);
+  assert.match(chats, /window\.WizCore\.activityHome = activityHome;/);
+});
