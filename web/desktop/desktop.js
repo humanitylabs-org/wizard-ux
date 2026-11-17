@@ -1457,7 +1457,7 @@
     }).join('') + `<button class="ws ws-add" data-newdesk aria-label="New desktop" title="New desktop (${MOD}T${C.workspaceNav.slot(ws.length) <= 9 ? ` / ${MOD}${C.workspaceNav.slot(ws.length)}` : ''})">+</button>`;
     const st = $('#status'), unread = C.workspaceNav.chatsCount(LIVE);
     if (!LIVE?.ok) st.innerHTML = `<span class="off">${LIVE?.error === 'access' ? 'Sign in to Wizard' : 'Connecting…'}</span>`;
-    else st.innerHTML = `${L.needs.length ? `<span title="Needs you"><i class="st needs"></i>${L.needs.length}</span>` : ''}${unread ? `<span title="Unread"><i class="st unread"></i>${C.workspaceNav.label(APP.wizard?.id || 'wizard')}</span>` : ''}${L.working.length ? `<span title="Working"><i class="st working"></i>${L.working.length}</span>` : ''}`;
+    else st.innerHTML = `${L.needs.length ? `<span title="Needs you"><i class="st needs"></i>${L.needs.length}</span>` : ''}${unread ? `<span title="${C.workspaceNav.readyWord(LIVE) === 'ready' ? 'Ready' : 'Unread'}"><i class="st unread"></i>${C.workspaceNav.label(APP.wizard?.id || 'wizard')}</span>` : ''}${L.working.length ? `<span title="Working"><i class="st working"></i>${L.working.length}</span>` : ''}`;
   }
   function tickClock() { const C = window.WizConfig; $('#clock').textContent = C.dateLabel() + '  ' + C.hm(); }
   setInterval(tickClock, 15000); tickClock(); window.addEventListener('wizard:config', tickClock);
@@ -1568,7 +1568,7 @@
       <nav class="home-tools" aria-label="System and settings"><button data-home-settings>Settings</button></nav>
       <div class="home-time">${window.WizConfig.hm()}</div>
       <div class="home-date">${window.WizConfig.dateLabel(Date.now(), { weekday: 'long', day: 'numeric', month: 'long' })}${i == null ? '' : ` · Desktop ${C.workspaceNav.slot(i)}`}</div>
-      <div class="home-line">${LIVE?.ok ? `<b>${L.needs.length} need${L.needs.length === 1 ? 's' : ''} you</b>, ${C.workspaceNav.chatsCount(LIVE)} unread, ${working.length} working.` : 'Connecting to Wizard…'}</div>
+      <div class="home-line">${LIVE?.ok ? `<b>${L.needs.length} need${L.needs.length === 1 ? 's' : ''} you</b>, ${C.workspaceNav.chatsCount(LIVE)} ${C.workspaceNav.readyWord(LIVE)}, ${working.length} working.` : 'Connecting to Wizard…'}</div>
       <div class="home-cols"><div class="home-card"><h4>Needs you · Unread</h4>${rows(L.needs.concat(L.ready))}</div><div class="home-card"><h4>Working</h4>${rows(working)}</div></div>
       ${pending.length ? `<button class="home-unsent" data-home-unsent>${pending.length} ${pending.some(u => u.state === 'failed') ? 'not sent' : 'waiting to send'} · View unsent messages</button>` : ''}
       <h3 class="home-resources-title">Resources</h3>${window.WosResources?.home() || ''}

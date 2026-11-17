@@ -27,11 +27,17 @@
   // One projection for every Chats/Ready pill; list membership remains a separate workflow concern.
   // Reuse the loaded unified list and canonical visibility/read rules: no reads, receipts or migration here.
   function chatsCount(live) {
-    const threads = live?.ok ? live.visibleUnread(live.unified()).length : 0;
+    /* With Channels on, Activity's Ready (amber needs-you + green unread) is the one number (wizard-ux issue 1504: the
+     * orb and Home said 3 while Activity listed 6, read needs-you threads were left out). chats.js registers that rule
+     * as WizCore.activityReady; it answers null with the switch off, and the unread tally below stays. */
+    const act = live?.ok ? window.WizCore?.activityReady?.(live) : null;
+    const threads = typeof act === 'number' ? act : live?.ok ? live.visibleUnread(live.unified()).length : 0;
     // Preserve app notification routing, but never badge read/snoozed inbox items as Ready did.
     const inbox = window.WosBell?.unreadCount?.() || 0;
     return threads + inbox;
   }
+  // What that number is called: Activity's Ready with Channels on (needs you + unread), else the unread tally.
+  const readyWord = live => live?.ok && typeof window.WizCore?.activityReady?.(live) === 'number' ? 'ready' : 'unread';
   function refreshChats(live, id = 'wizard') {
     setCount(id, chatsCount(live), !!window.WosBell?.unreadCount?.() && !!window.WosBell?.readyMore?.());
   }
@@ -70,5 +76,5 @@
     const index = digit - 1;
     return index < count ? { kind: 'desktop', index } : index === count ? { kind: 'new', index } : null;
   }
-  C.workspaceNav = Object.freeze({ icon, slot, digitTarget, setCount, chatsCount, refreshChats, carry, rerouted, deskCount, deskMore, fmt, label, counts });
+  C.workspaceNav = Object.freeze({ icon, slot, digitTarget, setCount, chatsCount, readyWord, refreshChats, carry, rerouted, deskCount, deskMore, fmt, label, counts });
 })();
