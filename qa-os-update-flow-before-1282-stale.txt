@@ -1,0 +1,13 @@
+[]
+tapped 20 min ago: {"paused":true,"panel":true,"flow":true}
++ actual - expected
+
+  {
++   flow: true,
++   panel: true,
++   paused: true
+-   flow: false,
+-   panel: false,
+-   paused: false
+  }
+

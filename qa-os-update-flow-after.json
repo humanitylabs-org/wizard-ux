@@ -112,6 +112,20 @@
      ]
     }
    }
+  },
+  {
+   "check": "stale-request",
+   "minutesAgo": 20,
+   "paused": false,
+   "panel": false,
+   "flow": false
+  },
+  {
+   "check": "stale-request",
+   "minutesAgo": 1,
+   "paused": true,
+   "panel": true,
+   "flow": true
   }
  ]
 }
