@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 const source = readFileSync(new URL('../web/core/reach.js', import.meta.url), 'utf8');
+const DERP = 'https://derp1.tailscale.com/', DIRECT = 'https://wizard.example-tailnet.ts.net:9691/troubleshoot/api/ping';
 const response = (body = { checks: [], overall: 'ok' }, status = 200) => ({ ok: status < 400, status, json: async () => body });
 function setup({ online = true, fetch = async () => response(), hostname = 'wizard.example-tailnet.ts.net' } = {}) {
   let now = 100000, calls = [], events = 0, id = 0;
@@ -13,7 +14,7 @@ function setup({ online = true, fetch = async () => response(), hostname = 'wiza
 }
 test('a false browser offline hint never proves absent internet', async () => {
   const h = setup({ online: false, fetch: async () => { throw Error('network'); } });
-  assert.equal((await h.api.diagnose()).layer, 'tailscale'); assert.equal(h.calls.length, 2);
+  assert.equal((await h.api.diagnose()).layer, 'tailscale'); assert.equal(h.calls.length, 3, 'ping, internet, and Troubleshooter’s own line');
   const falseOffline = setup({ online: false }); assert.equal((await falseOffline.api.diagnose()).layer, 'send');
 });
 test('an unreachable Wizard names actionable Tailscale guidance even when the public check is blocked', async () => {
@@ -23,7 +24,7 @@ test('an unreachable Wizard names actionable Tailscale guidance even when the pu
   assert.equal(d.layer, 'tailscale'); assert.equal(d.short, 'Can’t reach Wizard · retrying');
   assert.match(d.message, /Tailscale app/); assert.match(d.message, /computer running your Wizard is on/);
   assert.equal(d.action, 'troubleshoot');
-  assert.deepEqual(h.calls.map(c => c[0]), ['/troubleshoot/api/ping', 'https://derp1.tailscale.com/generate_204']);
+  assert.deepEqual(h.calls.map(c => c[0]), ['/troubleshoot/api/ping', 'https://derp1.tailscale.com/generate_204', DIRECT]);
   const local = setup({ hostname: '127.0.0.1', fetch: async () => { throw Error('network'); } });
   const l = await local.api.diagnose();
   assert.equal(l.layer, 'unreachable'); assert.doesNotMatch(l.message, /Tailscale/); assert.equal(local.calls.length, 2);
@@ -72,7 +73,7 @@ test('failure consumers throttle diagnosis to 15s; healthy module never polls', 
 test('4s deadline handles hung fetch and status bodies, without hanging consumers', async () => {
   const h = setup({ online: false, fetch: () => new Promise(() => {}) });
   const work = h.api.diagnose(); [...h.timers.values()][0]();
-  for (let i = 0; i < 12; i++) await Promise.resolve(); [...h.timers.values()][0]();
+  for (let i = 0; i < 12; i++) await Promise.resolve(); for (const fn of [...h.timers.values()]) fn();
   assert.equal((await work).layer, 'tailscale'); assert.equal(h.timers.size, 0);
   const b = setup({ fetch: async url => url.endsWith('ping') ? response() : { ok: true, json: () => new Promise(() => {}) } });
   const bodyWork = b.api.diagnose(); for (let i = 0; i < 10; i++) await Promise.resolve();
@@ -102,6 +103,14 @@ test('Troubleshooter navigation is same-tab on phone and a safe new tab on deskt
   h.ctx.document.documentElement.dataset.shell = 'desktop'; await h.api.open();
   assert.deepEqual(h.opened[1], ['/troubleshoot/', '_blank', 'noopener']);
 });
+test('the outage pop-up (auto) never leaves the shell: without shell windows it opens nothing (issue 1472)', () => {
+  const h = setup();
+  assert.equal(h.api.open({ auto: true }), false); assert.deepEqual(h.opened, []);
+  h.ctx.document.documentElement.dataset.shell = 'desktop';
+  assert.equal(h.api.open({ auto: true }), false); assert.deepEqual(h.opened, []);
+  h.ctx.WizOpenApp = id => { h.opened.push(id); return true; };
+  assert.equal(h.api.open({ auto: true }), true); assert.deepEqual(h.opened, ['troubleshooter']);
+});
 
 // James, 27 Oct: an Agent Service restart showed "Agent Service needs attention", then a Tinfoil repair-engine
 // failure; it reconnected on its own. A self-healing outage reads as reconnecting, never as an alarm.
@@ -127,7 +136,7 @@ test('repair-chat engine probes (Tinfoil, Claude, ChatGPT) never become the conn
   assert.equal((await both.api.diagnose()).layer, 'hermes');
 });
 test('James: internet working + Tailscale disconnected + navigator.onLine=false opens real Troubleshooter immediately', async () => {
-  const h = setup({ online: false, fetch: async url => { if (url.startsWith('https://')) return { type: 'opaque' }; throw Error('Tailscale disconnected'); } });
+  const h = setup({ online: false, fetch: async url => { if (url.startsWith(DERP)) return { type: 'opaque' }; throw Error('Tailscale disconnected'); } });
   h.ctx.WizOpenApp = id => { h.opened.push(id); return true; };
   assert.equal(h.api.open(), true);
   assert.deepEqual(h.opened, ['troubleshooter']); assert.equal(h.calls.length, 0, 'window opens before any network');
@@ -148,7 +157,7 @@ test('public no-cors probe uses follow: browsers reject error/manual before the 
     const c = detailed ? await h.api.checks() : await h.api.diagnose();
     assert.match(detailed ? c.help : c.message, /Internet works/);
     if (detailed) assert.equal(c.internet.state, 'ok');
-    const [, options] = h.calls.find(([url]) => url.startsWith('https:'));
+    const [, options] = h.calls.find(([url]) => url.startsWith(DERP));
     assert.equal(options.mode, 'no-cors'); assert.equal(options.credentials, 'omit');
     assert.equal(options.redirect, 'follow');
   }
@@ -158,18 +167,18 @@ test('checks: no internet, then Tailscale, then Wizard; each names its state and
   // The device itself is offline: nothing crosses the network for the internet row.
   let r = await run({ online: false, fetch: async () => { throw Error('network'); } });
   assert.equal(r.c.internet.state, 'skip'); assert.equal(r.c.tailscale.state, 'bad'); assert.equal(r.c.wizard.state, 'wait');
-  assert.deepEqual(r.urls, ['https://derp1.tailscale.com/generate_204', '/troubleshoot/api/ping']);
+  assert.deepEqual(r.urls, ['https://derp1.tailscale.com/generate_204', '/troubleshoot/api/ping', DIRECT]);
   // Internet works, Wizard's address doesn't answer: Tailscale (or the Wizard computer).
   r = await run({ fetch: async url => { if (url.startsWith('https://derp1.tailscale.com/')) return { ok: false, status: 0, type: 'opaque' }; throw Error('network'); } });
   assert.equal(r.c.internet.state, 'ok'); assert.equal(r.c.tailscale.state, 'bad'); assert.equal(r.c.wizard.state, 'wait'); assert.equal(r.c.tailnet, true);
-  const net = r.h.calls.find(c => c[0].startsWith('https://'));
+  const net = r.h.calls.find(c => c[0].startsWith(DERP));
   assert.equal(net[0], 'https://derp1.tailscale.com/generate_204', 'the one cross-site request: Tailscale’s own connectivity check');
   assert.equal(net[1].mode, 'no-cors'); assert.equal(net[1].credentials, 'omit');
   // Reached but unhealthy: Wizard is red with the existing diagnosis.
-  r = await run({ fetch: async url => url.startsWith('https://') ? { ok: false, type: 'opaque' } : response({ checks: [{ id: 'hermes', ok: false }], overall: 'down' }) });
+  r = await run({ fetch: async url => url.startsWith(DERP) ? { ok: false, type: 'opaque' } : response({ checks: [{ id: 'hermes', ok: false }], overall: 'down' }) });
   assert.equal(r.c.tailscale.state, 'ok'); assert.equal(r.c.wizard.state, 'bad'); assert.match(r.c.wizard.detail, /Hermes/);
   // Reached and healthy, even with the public check blocked: internet is skipped, never blamed.
-  r = await run({ fetch: async url => { if (url.startsWith('https://')) throw Error('blocked'); return response(); } });
+  r = await run({ fetch: async url => { if (url.startsWith(DERP)) throw Error('blocked'); return response(); } });
   assert.equal(r.c.internet.state, 'skip'); assert.equal(r.c.tailscale.state, 'ok'); assert.equal(r.c.wizard.state, 'ok');
 });
 test('checks: a slow link is timed and called slow, without a speed test', async () => {
@@ -202,7 +211,7 @@ test('late failed diagnosis cannot replace newer successful connection evidence'
   assert.equal((await h.api.diagnose()).layer, 'send');
 });
 test('a blocked public check is unknown even if the host answers with 502; it never masks service health', async () => {
-  const h = setup({ online: false, fetch: async url => { if (url.startsWith('https:')) throw Error('CSP blocked'); return response({}, 502); } });
+  const h = setup({ online: false, fetch: async url => { if (url.startsWith(DERP)) throw Error('CSP blocked'); return response({}, 502); } });
   const c = await h.api.checks();
   assert.equal(c.internet.state, 'skip'); assert.match(c.internet.detail, /Unknown/);
   assert.equal(c.hostReachable, true); assert.equal(c.tailscale.state, 'ok'); assert.equal(c.wizard.layer, 'gateway');
@@ -210,7 +219,7 @@ test('a blocked public check is unknown even if the host answers with 502; it ne
 });
 test('primary nginx policy and generator retain the narrow public probe allowlist', () => {
   const csp = readFileSync(new URL('../packaging/static.conf', import.meta.url), 'utf8').match(/Content-Security-Policy "([^"]+)"/)[1];
-  assert.deepEqual(csp.match(/connect-src ([^;]+)/)[1].split(' '), ["'self'", 'blob:', 'data:', 'https://derp1.tailscale.com/generate_204']);
+  assert.deepEqual(csp.match(/connect-src ([^;]+)/)[1].split(' '), ["'self'", 'blob:', 'data:', 'https://derp1.tailscale.com/generate_204', '$wizard_troubleshoot_direct']);
   assert.match(readFileSync(new URL('../packaging/entrypoint.sh', import.meta.url), 'utf8'), /cp \/etc\/wizard-shell\/static.conf \/tmp\/wizard-static.conf/);
 });
 test('Troubleshoot decides on a current diagnosis, not one from before the disconnect', async () => {
@@ -224,4 +233,27 @@ test('Troubleshoot decides on a current diagnosis, not one from before the disco
   const fresh = setup({ fetch: () => new Promise(() => {}) });
   fresh.ctx.WizOpenApp = () => true;
   assert.equal(fresh.api.open(), true); assert.equal(fresh.calls.length, 0);
+});
+
+// wizard-troubleshooter issue 37: the gateway route is down, Tailscale is up and Troubleshooter's own line (:9691)
+// answers. The shell must say the route is down, never "check Tailscale".
+test('gateway route down but the direct line answers: the Tailscale row and the pill name the route, not Tailscale', async () => {
+  const fetch = async url => { if (url === DIRECT) return { ok: false, status: 0, type: 'opaque' }; if (url.startsWith(DERP)) return { ok: false, status: 0, type: 'opaque' }; throw Error('gateway down'); };
+  const h = setup({ fetch });
+  const c = await h.api.checks();
+  assert.equal(c.directReachable, true);
+  assert.equal(c.tailscale.state, 'ok'); assert.doesNotMatch(c.tailscale.detail, /check Tailscale/);
+  assert.equal(c.wizard.state, 'bad'); assert.match(c.wizard.detail, /usual route/);
+  assert.match(c.help, /Tailscale is fine/); assert.doesNotMatch(c.help, /Open the Tailscale app/);
+  const d = await setup({ fetch }).api.diagnose();
+  assert.equal(d.layer, 'gateway'); assert.match(d.message, /usual route isn’t answering/);
+  const [, options] = h.calls.find(([url]) => url === DIRECT);
+  assert.equal(options.mode, 'no-cors'); assert.equal(options.credentials, 'omit');
+});
+test('the shell CSP lets the window frame and ping only Troubleshooter’s own line on a Tailscale address', () => {
+  for (const csp of [readFileSync(new URL('../packaging/static.conf', import.meta.url), 'utf8').match(/Content-Security-Policy "([^"]+)"/)[1], readFileSync(new URL('../server.py', import.meta.url), 'utf8')]) {
+    // This address's own :9691 only (nginx $wizard_troubleshoot_direct, server.py {direct}); see browser-boundary-paste-csp.
+    assert.match(csp, /frame-src 'self' blob: (?:\$wizard_troubleshoot_direct|\{direct\});/);
+    assert.match(csp, /connect-src [^;]*(?:\$wizard_troubleshoot_direct|\{direct\});/);
+  }
 });

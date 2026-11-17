@@ -252,7 +252,10 @@ public class CaptureJournalTest {
         Map<String, List<String>> allowed = new HashMap<>();
         // Metadata / screenshots only (not an exception for a whole class or arbitrary variable names).
         allow(allowed, "recording/RecordingStore.java", "meta(id).delete()");
-        allow(allowed, "everywhere/EverywhereOutbox.java", "File(it.shots.optString(i)).delete()");
+        allow(allowed, "everywhere/EverywhereOutbox.java", "File(it.shots.optString(i)).delete()", "File(picked.optString(\"path\")).delete()");
+        // Camera / Attach (wizard-os issue 655): the camera's temporary JPEG once its bytes are read, never audio.
+        allow(allowed, "assist/AssistPickActivity.java", "cameraJpeg.delete()");
+        allow(allowed, "assist/PickedFiles.java", "pickedCopy.delete()");
         allow(allowed, "mizel/MizelStore.java", "f.delete()"); // guarded non-audio metadata/empty directories
         // Shared/imported attachments are not native recorder output; their own delivery custody is unchanged.
         allow(allowed, "share/ShareStore.java", "f.delete()", "d.delete()");

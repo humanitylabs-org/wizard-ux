@@ -20,13 +20,14 @@ function mount({ boundary = true, fetch = async (u, o) => (o.method === 'HEAD' ?
   const direct = { hidden: true }, directLink = { removeAttribute() {} };
   const elements = { iframe: frame, details: { open: true }, '[data-recovery-check]': { addEventListener() {} }, '[data-recovery-message]': {}, '[data-recovery-rows]': {}, '[data-recovery-remote]': {}, '[data-recovery-direct]': direct, '[data-recovery-direct-link]': directLink };
   const root = { isConnected: true, classList: { add() {}, remove() {} }, querySelector(s) { assert.ok(elements[s], s); return elements[s]; } };
-  const context = { navigator: { onLine: true }, document: { hidden: false, documentElement: { dataset: { shell: 'desktop' } } }, location: { hostname: 'wizard.tail.ts.net', assign() {} }, Date, Event, AbortController, URL,
+  const msgs = [];
+  const context = { addEventListener(type, fn) { if (type === 'message') msgs.push(fn); }, navigator: { onLine: true }, document: { hidden: false, documentElement: { dataset: { shell: 'desktop' } } }, location: { hostname: 'wizard.tail.ts.net', assign() {} }, Date, Event, AbortController, URL,
     localStorage: { getItem: () => null, setItem() {} },
     requestAnimationFrame(fn) { fn(); }, setTimeout(fn, ms) { timers.set(++id, { fn, ms }); return id; }, clearTimeout(t) { timers.delete(t); }, dispatchEvent() {},
     fetch };
   if (boundary) context.WizBrowserBoundary = { enabled: true, frameAttributes: () => `sandbox="${SANDBOX}"`, attach(f) { attached.push(f); return () => {}; }, ready: () => ready, owns: f => attached.includes(f) };
   context.window = context; vm.runInNewContext(source, context);
-  return { context, root, frame, direct, timers, handlers, attached, answer() { ready = true; handlers['wizard:boundary-ready']?.(); }, ready(v) { ready = v; }, mount: () => context.WizReach.mountRecovery(root, '/troubleshoot/') };
+  return { context, root, frame, direct, directReady: () => msgs.forEach(fn => fn({ data: { type: 'wizard-troubleshooter:ready' }, origin: 'https://wizard.tail.ts.net:9691', source: frame.contentWindow })), timers, handlers, attached, answer() { ready = true; handlers['wizard:boundary-ready']?.(); }, ready(v) { ready = v; }, mount: () => context.WizReach.mountRecovery(root, '/troubleshoot/') };
 }
 const flush = async () => { for (let i = 0; i < 80; i++) await Promise.resolve(); };
 const fire = (h, ms) => { for (const [k, t] of [...h.timers]) if (t.ms === ms) { h.timers.delete(k); t.fn(); } };
@@ -66,9 +67,22 @@ test('switch on: a page that never answers falls back to local help and the dire
   const h = mount();
   h.mount(); fire(h, 0); await flush();
   h.handlers.load();
-  fire(h, 8000);
+  fire(h, 8000); fire(h, 4000); await flush(); // the direct line doesn't answer either (its ping times out)
   assert.equal(h.frame.hidden, true);
   assert.equal(h.direct.hidden, false, 'the direct line is offered');
+});
+
+test('switch on: a page that never answers opens the direct line in the window when that line answers', async () => {
+  const h = mount({ fetch: async (u, o) => o.method === 'HEAD' ? { ok: true, status: 200 } : String(u).startsWith('https://wizard.tail.ts.net:9691/') ? { ok: false, status: 0, type: 'opaque' } : new Promise(() => {}) });
+  h.mount(); fire(h, 0); await flush();
+  h.handlers.load();
+  fire(h, 8000); await flush();
+  assert.equal(h.frame.src, 'https://wizard.tail.ts.net:9691/troubleshoot/');
+  h.handlers.load(); // another origin: unreadable and never on this channel; its own ready message is the proof
+  assert.equal(h.frame.hidden, true);
+  h.directReady();
+  assert.equal(h.frame.hidden, false);
+  fire(h, 8000); assert.equal(h.frame.hidden, false);
 });
 
 test('switch off: the loaded document is still the proof, read as before', async () => {
@@ -85,7 +99,7 @@ test('switch on: after it once answered, a later load that never answers (an err
   h.handlers.load(); h.answer();
   assert.equal(h.frame.hidden, false);
   h.ready(false); h.handlers.load(); // the boundary renewed the channel on this load; nothing answers now
-  fire(h, 8000);
+  fire(h, 8000); fire(h, 4000); await flush();
   assert.equal(h.frame.hidden, true, 'the error page is not left on screen as the repair page');
   assert.equal(h.direct.hidden, false);
 });

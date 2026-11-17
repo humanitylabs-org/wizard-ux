@@ -37,10 +37,12 @@ test('PDFs preview in a typed blob: frame, with a Download fallback where browse
   assert.doesNotMatch(kit, /Share or save it to open it in a PDF app/);
 });
 
-test('the shell CSP lets the viewer frame blob: PDFs and nothing cross-origin', () => {
+test('the shell CSP lets the viewer frame blob: PDFs and nothing else cross-origin', () => {
   const csp = /Content-Security-Policy "([^"]+)"/.exec(read('../packaging/static.conf'))[1];
   const frame = /(?:^|; )frame-src ([^;]+)/.exec(csp)?.[1].trim().split(/\s+/);
-  assert.deepEqual(frame, ["'self'", 'blob:']);
+  // The one other frame: Troubleshooter's own line on this Tailscale address (wizard-troubleshooter issue 37).
+  // nginx fills it with this address's own https://<host>:9691 (packaging/nginx.conf.template, wizard-os#133).
+  assert.deepEqual(frame, ["'self'", 'blob:', '$wizard_troubleshoot_direct']);
   assert.match(csp, /object-src 'none'/);
   assert.match(read('../server.py'), /frame-src 'self' blob:/);
 });

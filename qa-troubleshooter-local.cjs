@@ -8,7 +8,7 @@ const { openChats, freshRead, entrySnapshot } = require('./tools/qa-troubleshoot
 const out = process.env.QA_OUT || '/srv/work/troubleshooter-evidence', root = path.join(__dirname, 'web');
 const tsRoot = process.env.QA_TS_DIR;
 assert.ok(tsRoot && fs.existsSync(path.join(tsRoot, 'index.html')), 'stage real Troubleshooter source');
-const policy = fs.readFileSync(path.join(__dirname, 'packaging/static.conf'), 'utf8').match(/Content-Security-Policy "([^"]+)"/)[1];
+const policy = fs.readFileSync(path.join(__dirname, 'packaging/static.conf'), 'utf8').match(/Content-Security-Policy "([^"]+)"/)[1].replace(/\$wizard_troubleshoot_direct/g, 'https://*.ts.net:9691'); // nginx's value for a non-Tailscale Host
 const publicUrl = 'https://derp1.tailscale.com/generate_204';
 const results = [], receipts = [];
 // Unchanged 03fa4ee shell startup attempts these writes (launcher.js:32, live.js:539).

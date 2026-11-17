@@ -29,6 +29,13 @@ http {
   }
   # Only a successful answer may be kept for a year; an error (a file missing mid-deploy) is never cached.
   map $status $wizard_cache_ok { 200 $wizard_cache; 304 $wizard_cache; default "no-store"; }
+  # Troubleshooter's own line (core/reach.js): the shell page may ping and frame https://<this address>:9691 only, never
+  # another tailnet name's :9691 (wizard-os#133, 17 Nov). A Host that is not a Tailscale name (a proxy that rewrites
+  # it) keeps the old *.ts.net:9691 allowance, so the direct line never breaks where the box can't see its own name.
+  map $host $wizard_troubleshoot_direct {
+    "~^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*\.ts\.net$" "https://$host:9691";
+    default "https://*.ts.net:9691";
+  }
   # Browser owner boundary (wizard-os#133): entrypoint.sh writes this file. Off (the default) it maps the shell token to
   # "" for every request; on, a real top-level page load gets the token. A page carrying the
   # token is never stored by the browser.

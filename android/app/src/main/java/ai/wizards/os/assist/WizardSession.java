@@ -157,10 +157,18 @@ final class WizardSession extends VoiceInteractionSession implements VoiceCaptur
         awake = false;
         syncAwake();
         Log.i(TAG, "shape corner wide=false");
+        away(false);
         whenReady(() -> {
             if (handoff) {
                 heard = args.getString(ARG_HEARD, "");
-                if (capture.listening()) js("W.begin()");
+                if (capture.listening()) {
+                    js("W.begin()");
+                    // Back from Camera / Attach (wizard-os issue 655): badges and the pause state come back too.
+                    String counts = capture.takeLastCounts();
+                    if (counts != null || args.getBoolean(AssistPickActivity.ARG_ATTACHED, false))
+                        js("W.onAttach(" + (counts != null ? counts : capture.attachCounts(0, 0, 0)) + ")");
+                    if (capture.paused()) js("W.onPaused(true)");
+                }
                 else if (!heard.isEmpty()) onHeard(heard, 0);
                 return;
             }
@@ -179,7 +187,8 @@ final class WizardSession extends VoiceInteractionSession implements VoiceCaptur
         // Dismissed (Back, Home, screen off, another app): what was said is never lost. A take with speech in it
         // is sent exactly as if the pause had ended it, and a message already sending keeps going and toasts
         // when it lands. Only Cancel throws a take away.
-        if (capture.listening()) capture.finishOnDismiss("dismiss");
+        // Camera / Attach open (wizard-os issue 655): the take is paused and waits for them, it is not dismissed.
+        if (capture.listening() && !capture.away()) capture.finishOnDismiss("dismiss");
         capture.detach(this);
         capture.noteDismissed();
         delivered = null;
@@ -216,7 +225,7 @@ final class WizardSession extends VoiceInteractionSession implements VoiceCaptur
         super.onComputeInsets(outInsets);
         if (root == null || web == null) return;
         Rect r = new Rect();
-        web.getHitRect(r);
+        if (!awayNow) web.getHitRect(r); // the orb steps aside for the camera / picker: nothing of it takes touches
         outInsets.contentInsets.top = root.getHeight();
         outInsets.touchableInsets = Insets.TOUCHABLE_INSETS_REGION;
         outInsets.touchableRegion.set(r);
@@ -322,6 +331,15 @@ final class WizardSession extends VoiceInteractionSession implements VoiceCaptur
 
     @Override public void onPaused(boolean p) { syncAwake(); js("W.onPaused(" + p + ")"); }
 
+    /** Back from Camera / Attach while this orb was still up (wizard-os issue 655). */
+    @Override public void onAttached(String counts) {
+        main.post(() -> {
+            away(false);
+            js("W.onAttach(" + counts + ")");
+            js("W.onPaused(" + capture.paused() + ")");
+        });
+    }
+
     private String delivered;
 
     /** Tap the bubble after it sent: open that thread in WizardOS (the unsent list if it is still on its way). */
@@ -360,6 +378,44 @@ final class WizardSession extends VoiceInteractionSession implements VoiceCaptur
         @JavascriptInterface public void shot() { main.post(WizardSession.this::screenshot); }
 
         @JavascriptInterface public int shots() { return capture.shotCount(); }
+
+        /* Camera and Attach (wizard-os issue 655, switch wizard/assist-attach, off by default; never on the lock screen). */
+        @JavascriptInterface public boolean attachOn() { return AssistAttach.on(getContext()) && !keyguard.isKeyguardLocked(); }
+
+        @JavascriptInterface public void camera() { main.post(() -> openPick(AssistPickActivity.KIND_CAMERA)); }
+
+        @JavascriptInterface public void pick() { main.post(() -> openPick(AssistPickActivity.KIND_PICK)); }
+    }
+
+    /* ---------------------------------------------------------------- Camera / Attach (wizard-os issue 655) */
+
+    private boolean awayNow;
+
+    /** The orb hides (and takes no touches) while the camera or picker is open over the app, and comes back after. */
+    private void away(boolean a) {
+        awayNow = a;
+        if (web != null) web.setVisibility(a ? View.INVISIBLE : View.VISIBLE);
+        if (root != null) root.requestLayout();
+    }
+
+    /**
+     * Camera: one full-size photo from the phone's camera app. Attach: pictures or files from Android's picker. The take
+     * pauses (so nothing is lost and the pause detector can't send it), the orb steps aside, and both come back when
+     * the picker answers. Only while talking, only with the switch on, never on the lock screen, up to the take's cap.
+     */
+    private void openPick(String kind) {
+        if (!capture.listening() || capture.away() || shotPending) return;
+        if (!AssistAttach.on(getContext()) || keyguard.isKeyguardLocked()) return;
+        if (capture.attachedCount() >= capture.attachCap()) { js("W.onAttach(" + capture.attachCounts(0, 1, 0) + ")"); return; }
+        if (!capture.beginAway()) return;
+        Log.i(TAG, "camera/attach open " + kind);
+        away(true);
+        try {
+            startAssistantActivity(AssistPickActivity.intent(getContext(), kind));
+        } catch (RuntimeException e) {
+            Log.w(TAG, "camera/attach could not start", e);
+            capture.pickDone(null, 0);
+        }
     }
 
     /* ---------------------------------------------------------------- Screen */
@@ -372,7 +428,7 @@ final class WizardSession extends VoiceInteractionSession implements VoiceCaptur
      */
     private void screenshot() {
         if (!capture.listening() || shotPending) return;
-        if (capture.shotCount() >= VoiceCapture.MAX_SHOTS) { js("W.onShot(-2)"); return; }
+        if (capture.attachedCount() >= capture.attachCap()) { js("W.onShot(-2)"); return; }
         if (Build.VERSION.SDK_INT < 30) { js("W.onShot(-3)"); return; }
         ai.wizards.os.everywhere.WizardKeyboardService k = ai.wizards.os.everywhere.WizardKeyboardService.get();
         if (k == null) {
