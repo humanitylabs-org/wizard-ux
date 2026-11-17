@@ -50,6 +50,11 @@ async function storeOpened(p) {
           assert.ok(await p.evaluate(() => [...document.querySelectorAll('.lapp')].some(b => b.offsetParent !== null && /Get apps/.test(b.textContent))), 'Get apps tile still there');
           await p.evaluate(() => [...document.querySelectorAll('.lapp')].find(b => b.offsetParent !== null && b.querySelector('.nm')?.textContent.trim() === 'App Store').click());
           await storeOpened(p);
+          // "+ Get apps" still opens the Store (its Apps section).
+          await p.evaluate(() => { __wos.closeSheets(true); [...document.querySelectorAll('iframe')].forEach(f => { if (f.src.includes('/store/')) f.src = 'about:blank'; }); });
+          await p.evaluate(() => __wos.openSheet('launcher')); await p.waitForTimeout(500);
+          await p.evaluate(() => [...document.querySelectorAll('.lapp')].find(b => b.offsetParent !== null && /Get apps/.test(b.textContent)).click());
+          await p.waitForFunction(() => [...document.querySelectorAll('iframe')].some(f => /\/store\/index\.html\?kind=apps/.test(f.src)), null, { timeout: 8000 });
         } else assert.equal(n, 0);
       } else {
         // AI apps view: "Add an app" opens the app picker (layouts/apps/chrome.js, fed by WosAppKinds.rows).

@@ -9,8 +9,8 @@ function paint(recent,APPS){
  const body={scrollTop:0,scrollHeight:400};
  const context={APPS,APP,tileN:0,oursSkin:()=>false,$:()=>body,store:{get:()=>recent},window:{WizCore:{isMaintenanceApp:()=>false}},appTile:a=>`<button data-app="${a.id}"></button>`};
  vm.runInNewContext(render+';renderLauncher("",false);',context);
- // App tiles (appTile) vs the "+ Get apps" tile, which also opens the Store (data-app="app-store", class lapp).
- return {html:body.innerHTML,ids:[...body.innerHTML.matchAll(/<button data-app="([^"]+)"/g)].map(m=>m[1]),get:body.innerHTML.match(/class="lapp" data-app="app-store"/g)?.length||0};
+ // The "+ Get apps" tile opens the Store's Apps section (data-storekind), so the App Store's own tile is its one entry.
+ return {html:body.innerHTML,ids:[...body.innerHTML.matchAll(/data-app="([^"]+)"/g)].map(m=>m[1]),get:body.innerHTML.match(/data-storekind="apps"/g)?.length||0};
 }
 const apps=[{id:'alpha',kind:'wizard'},{id:'beta',kind:'wizard'},{id:'wizard',kind:'chats'},{id:'app-store',kind:'wizard'}];
 test('Recent and Apps render one tile per resolved app id, preserving both destinations',()=>{
