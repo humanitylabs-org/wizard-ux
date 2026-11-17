@@ -10,7 +10,9 @@
  *   confirm   a sheet (.wz-sheet + kit/wizard-sheet.js): "Update WizardOS to 0.3.x?" · Cancel / Update now.
  *             Closing it any of the five ways is Cancel.
  *   heads-up  Automatic: a sheet "WizardOS updates in 5 minutes" · Not tonight / Update now, and the banner counts down
- *             with Not tonight while it is closed.
+ *             with Not tonight while it is closed. For testers (channel `latest`) the Mac updates at any hour as soon as
+ *             Wizard is free (Jan, 17 Nov 2026: the team stays on the newest build), so the answer is Not now (3 hours)
+ *             and Automatic "installs soon" instead of "tonight".
  *   updating  one opaque panel, no buttons: the steps (Backing up · Restarting · Installing · Verifying), how long it
  *             has run, that chats and files are safe. Sending pauses (the draft stays), and the expected outage
  *             notices (Can't reach Wizard, Saved copy, Interface updated) stay hidden until it ends.
@@ -229,8 +231,13 @@
     } catch (e) { ls.set(FLOW, null); toast('!', e?.message || 'Couldn’t reach the App Manager'); }
     render(); fastPoll();
   }
+  // For testers the Mac updates at any hour (OSUpdates.swift testerPostpone): Not now waits 3 hours, not the night.
+  const testers = () => st()?.channel === 'latest';
+  const notNow = () => testers() ? 'Not now' : 'Not tonight';
+  const autoWhen = () => testers() ? 'installs soon' : 'installs tonight';
   function postpone() {
-    U().post({ action: 'postpone' }).then(d => { if (d && 'update_available' in d) U().state = d; toast('✓', 'Not tonight · You can update any time in Settings'); })
+    const words = testers() ? 'Not now · Tries again in 3 hours; you can update any time in Settings' : 'Not tonight · You can update any time in Settings';
+    U().post({ action: 'postpone' }).then(d => { if (d && 'update_available' in d) U().state = d; toast('✓', words); })
       .catch(e => toast('!', e?.message || 'Couldn’t reach the App Manager')).finally(render);
   }
   function details(h) {
@@ -260,14 +267,14 @@
     const h = headsUp();
     if (h) {
       const mins = Math.max(1, Math.ceil((h.at * 1000 - Date.now()) / 60e3));
-      return { key: 'hu' + h.at, text: `${OS} updates in ${mins} min`, later: 'Not tonight', laterAct: 'postpone', go: 'Update now', act: 'now' };
+      return { key: 'hu' + h.at, text: `${OS} updates in ${mins} min`, later: notNow(), laterAct: 'postpone', go: 'Update now', act: 'now' };
     }
     const s = st();
     const w = s?.when_idle;
     if (w && s?.update_available && !s.installing)
       return { key: 'wi' + w.requested_at, text: `${OS} updates when Wizard finishes`, go: 'Options', act: 'waitopts' };
     if (!s?.update_available || s.unpinned || !s.latest || s.installing || ls.get(LATER) === s.latest) return null;
-    return { key: 'rd' + s.latest, text: s.mode === 'auto' ? `${OS} ${s.latest} installs tonight` : `${OS} ${s.latest} is ready`,
+    return { key: 'rd' + s.latest, text: s.mode === 'auto' ? `${OS} ${s.latest} ${autoWhen()}` : `${OS} ${s.latest} is ready`,
       later: 'Later', laterAct: 'later', go: 'Update now', act: 'confirm' };
   }
   function renderBanner() {
@@ -314,8 +321,8 @@
     const t = h.target || st()?.latest;
     ask({ title: `${OS} updates in 5 minutes`,
       body: p(`Automatic update to ${t}. Wizard restarts and is away for a while (${TAKES.toLowerCase()}); your chats and files stay as they are.`,
-              'Sending messages pauses while it updates. Not tonight skips tonight; you can update any time in Settings.'),
-      yes: 'Update now', no: 'Not tonight', onYes: () => start(t), onNo: why => { if (why === 'no') postpone(); } });
+              `Sending messages pauses while it updates. ${testers() ? 'Not now waits 3 hours' : 'Not tonight skips tonight'}; you can update any time in Settings.`),
+      yes: 'Update now', no: notNow(), onYes: () => start(t), onNo: why => { if (why === 'no') postpone(); } });
   }
 
   // ---- the panel while updating ----
@@ -423,7 +430,7 @@
       // Settings is narrow: a short title, the version on its own line, no duration (the confirm sheet says it).
       if (updating()) { const u = updating(); return { state: 'building', title: `Updating ${OS}`, line: u.target, action: '' }; }
       if (!s.update_available || s.unpinned || !s.latest) return null;
-      return { state: 'behind', title: `${OS} update ready`, line: s.mode === 'auto' ? `${s.latest} · installs tonight` : s.latest, action: 'apply', label: 'Update now', disabled: false };
+      return { state: 'behind', title: `${OS} update ready`, line: s.mode === 'auto' ? `${s.latest} · ${autoWhen()}` : s.latest, action: 'apply', label: 'Update now', disabled: false };
     },
   };
   setInterval(render, 1000);
