@@ -1335,7 +1335,7 @@ window.WizCore.chats = function createChats(H) {
   function chanHead(w, open) {
     if (open) return `<div class="ch-chan-h"><button type="button" class="ch-chan-back" data-chchanback aria-label="Back to channels"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg></button><b>${open.agentFeed ? `<span class="ch-chan-sig" aria-hidden="true">${AGS()?.sigil?.(agentRec(open.agent)) || ''}</span>` : '<span class="ch-chan-hash" aria-hidden="true">#</span>'}${esc(open.name)}</b></div>`;
     const sort = chanView === 'channels' ? orderBar('Sort channels', 'data-chchansort', ['az', 'za'], chanPrefs().sort, o => o === 'az' ? 'A–Z' : 'Z–A') : '';
-    return `<div class="ch-chan-tabs">${orderBar('Chats view', 'data-chview', ['activity', 'channels'], chanView, o => o === 'activity' ? 'Activity' : 'Channels')}${sort}</div>`;
+    return `<div class="ch-chan-tabs">${orderBar('Chats view', 'data-chview', ['channels', 'activity'], chanView, o => o === 'activity' ? 'Activity' : 'Channels')}${sort}</div>`;
   }
   // Long-press, right-click or Shift+F10 on a channel: the row action sheet's own markup, with channel actions.
   function openChannelSheet(wid, cid, trigger = null) {
@@ -3938,7 +3938,7 @@ window.WizCore.chats = function createChats(H) {
       const wasOpen = swipeOpen && swipeOpen.wrap === wrap;
       if (swipeOpen && !wasOpen) closeSwipe();
       const swipe = !!row.dataset.chopen && e.pointerType !== 'mouse' && ownerSwipe();
-      lp = { row, wrap, wid, sid: row.dataset.chopen, nid: row.dataset.chnotif, swipe, base: swipe && wasOpen ? -SWIPE_W : 0, pid: e.pointerId, pointerId: e.pointerId, x: e.clientX, y: e.clientY, dx: 0, moved: false, t: setTimeout(() => { if (!lp || lp.moved || window.WosSkinHost?.claimed(lp.pid)) return; lpUntil = Date.now() + 700; if (swipeOpen) closeSwipe(true); lpHeld = lp.pid; rowMenu(lp.wid, lp.row); lp = null; }, 480) };
+      lp = { row, wrap, wid, sid: row.dataset.chopen, nid: row.dataset.chnotif, swipe, page: e.pointerType === 'touch' && !!row.dataset.chchan && !!row.closest('.ch-list')?.querySelector('.ch-chan-tabs [data-chview]'), base: swipe && wasOpen ? -SWIPE_W : 0, pid: e.pointerId, pointerId: e.pointerId, x: e.clientX, y: e.clientY, dx: 0, moved: false, t: setTimeout(() => { if (!lp || lp.moved || window.WosSkinHost?.claimed(lp.pid)) return; lpUntil = Date.now() + 700; if (swipeOpen) closeSwipe(true); lpHeld = lp.pid; rowMenu(lp.wid, lp.row); lp = null; }, 480) };
     });
     root.addEventListener('pointermove', e => {
       if (!lp) return;
@@ -3947,7 +3947,8 @@ window.WizCore.chats = function createChats(H) {
       if (!lp.swipe) {
         if (Math.abs(dy) > 12 && Math.abs(dy) > Math.abs(dx)) { clearTimeout(lp.t); lp.row.style.transform = ''; lp = null; return; }
         if (Math.abs(dx) > 10) clearTimeout(lp.t);
-        if (dx < 0) { lp.dx = dx; lp.row.style.transform = `translateX(${Math.max(dx, -90)}px)`; }
+        // A channel row on the Channels page leaves a sideways touch to the page swipe (issue 1467: Channels → Activity).
+        if (dx < 0 && !lp.page) { lp.dx = dx; lp.row.style.transform = `translateX(${Math.max(dx, -90)}px)`; }
         return;
       }
       if (!lp.moved && Math.abs(dy) > 12 && Math.abs(dy) > Math.abs(dx)) { clearTimeout(lp.t); if (!lp.base) lp.row.style.transform = ''; lp = null; return; }
