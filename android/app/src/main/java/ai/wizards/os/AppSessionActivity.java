@@ -67,6 +67,7 @@ public final class AppSessionActivity extends MainActivity {
     boolean backToLink() {
         if (!fromLink) return false;
         fromLink = false;
+        if (!AppWindows.on(this)) return false; // the switch went off while this window was open
         return moveTaskToBack(true);
     }
     @Override protected void onNewIntent(Intent intent) {
@@ -80,7 +81,7 @@ public final class AppSessionActivity extends MainActivity {
             // A link to a page inside this app: the open window goes there (its page checks the page is in the app).
             String at = linkPath; linkPath = "";
             if (!at.isEmpty()) evalJs("(window.__wosSessionGo && window.__wosSessionGo(" + org.json.JSONObject.quote(at) + "))");
-        }
+        } else { fromLink = false; linkPath = ""; } // switch off since: an icon tap keeps today's Back
         setIntent(new Intent(this,AppSessionActivity.class).setAction(Intent.ACTION_VIEW).setData(intent.getData()));
     }
     boolean acceptsUrl(String raw) {
