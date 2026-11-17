@@ -997,7 +997,7 @@
       const kind = it?.kind === 'video' ? 'video' : 'image';
       // A picture's quick stand-in (the copy the app already shows) passes the same address check as the picture,
       // so the viewer can show it at once while the original loads (ux#1509).
-      const ph = kind === 'image' && (it?.placeholderBlob != null || (typeof it?.placeholder === 'string' && it.placeholder)) ? url(it.placeholderBlob != null ? { blob: it.placeholderBlob } : { url: it.placeholder }) : null;
+      const ph = kind === 'image' && (it?.placeholderBlob != null || (typeof it?.placeholder === 'string' && it.placeholder)) ? url(it.placeholderBlob != null ? { blob: it.placeholderBlob } : { url: it.placeholder }, true) : null;
       clean.push({ url: href, kind, name: String(it?.name || '').slice(0, 200), mime: String(it?.mime || (kind === 'video' ? 'video/mp4' : 'image/jpeg')).slice(0, 100), ...(ph && ph !== href ? { placeholder: ph } : {}) });
     }
     return clean.length ? window.WosChat.viewer.open(clean, Math.max(0, Math.min(clean.length - 1, i))) === true : false;
@@ -1048,11 +1048,11 @@
   function boundaryMedia(st, args) {
     if (st.isVisible?.() !== true || !window.WosChat?.viewer || !Array.isArray(args?.items)) return false;
     let base = st.url; try { if (typeof args.base === 'string' && args.base.length <= 2048) { const u = new URL(args.base); if (within(u, st.url)) base = u; } } catch (_) {}
-    const made = [];
-    const shown = mediaView(st, args.items, args.index, it => {
+    const made = [], count = [0, 0]; // pictures, stand-ins: each has its own quota, so stand-ins never crowd out a picture
+    const shown = mediaView(st, args.items, args.index, (it, stand) => {
       if (it?.blob != null) {
-        if (!['[object Blob]', '[object File]'].includes(Object.prototype.toString.call(it.blob)) || made.length >= MEDIA_BLOBS) return null;
-        const href = URL.createObjectURL(it.blob); made.push(href); return href;
+        if (!['[object Blob]', '[object File]'].includes(Object.prototype.toString.call(it.blob)) || count[stand ? 1 : 0] >= MEDIA_BLOBS) return null;
+        const href = URL.createObjectURL(it.blob); made.push(href); count[stand ? 1 : 0]++; return href;
       }
       if (typeof it?.url !== 'string' || !it.url || it.url.length > 8192) return null;
       let u; try { u = new URL(it.url, base); } catch (_) { return null; }
