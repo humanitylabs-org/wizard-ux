@@ -965,8 +965,9 @@
         channelFeedOpen: () => live() ? shell.chatFeedOpen?.() || null : null,
         // New chat with a channel's feed in front (wizard-ux issue 1291): its own box takes the post (true), never General.
         channelPost: () => live() ? !!shell.chatChannelPost?.() : false,
-        // + / ⌥N on the Channels list with no channel open (wizard-ux issue 1308): the new-channel form opens (true).
-        channelNew: () => live() ? !!shell.chatChannelNew?.() : false,
+        /* Kept for layouts built against it: always false now. + / ⌥N on the Channels list start a new chat; only the list's
+         * own + New channel row makes a channel (wizard-ux issue 1489, which reverses the + part of issue 1308). */
+        channelNew: () => false,
         // The Chats list's tab: 'activity' or 'channels' ('' with the switch off). It decides what + does (issue 1310).
         channelView: () => live() ? shell.chatChannelView?.() || '' : '',
         /* The owner's Default Chats look (Settings › Chats, switch wizard/sidebar-chats-view, wizard-ux issue 1443): that

@@ -4353,8 +4353,6 @@
     newChat: () => { const w = showChats(); if (!w) return false; CHATS.openChat(w.id, '__new__'); return true; },
     // New chat with a channel's feed in front (wizard-ux issue 1291): that feed's own box, never General.
     chatChannelPost: () => { const w = W[desks[idx]?.focus]; return w?.app === 'chats' && !w.thread && !!CHATS.chanCompose?.(w.id); },
-    // + on the Channels list with no channel open (wizard-ux issues 1308, 1328): the new-channel form opens (true).
-    chatChannelNew: () => { const w = W[desks[idx]?.focus]; return w?.app === 'chats' && !w.thread && !!CHATS.chanNew?.(w.id); },
     // The Chats list's tab: 'activity' or 'channels' ('' with the switch off). It decides what + does (issue 1310).
     chatChannelView: () => CHATS.chanView?.() || '',
     appOrb: () => { const f = frontAppFrame(); return f ? window.WizAppServices?.orb?.of(f) || null : null; },
