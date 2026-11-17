@@ -59,6 +59,14 @@ const BACK = '.aad-cback:not([hidden]), .aad-oneback:not([hidden])';
       const ds = () => page.evaluate(() => ({ ...document.documentElement.dataset }));
       await settle();
       await shot('1-home');
+      if (ON) {
+        // ux#1495: Home's message bar sits fully above the app bar (it ran under it; tests/qa-desktop-one-app-composer.cjs has more sizes)
+        const mb = await page.evaluate(() => { const bar = document.querySelector('.aad-vt').getBoundingClientRect();
+          const c = [...document.querySelectorAll('.ch-compose')].find(n => n.getBoundingClientRect().width > 40 && getComputedStyle(n).visibility !== 'hidden');
+          return c && { bottom: Math.round(c.getBoundingClientRect().bottom), barTop: Math.round(bar.top) }; });
+        // (under 680 px Home is the chats list alone: no message bar to check)
+        if (W >= 680) assert.ok(mb && mb.bottom <= mb.barTop + 1, stem + ': Home\'s message bar above the app bar ' + JSON.stringify(mb));
+      }
       // an app: the store, with an unsent word typed into it
       await page.evaluate(() => __wux.openApp(WizCore.apps('desktop').APP['app-store']));
       const store = page.frameLocator('iframe[src*="/store/index.html"]').locator('input');
