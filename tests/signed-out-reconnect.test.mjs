@@ -42,6 +42,28 @@ test('a failed send on a signed-out Claude subscription names the reason and off
   }
 });
 
+test('main and every routed agent kind get the same card; an Agent Service reason other than sign-in wins', () => {
+  const b = boot(); b.set([claudeOut]);
+  // main, host-profile, container and restricted rows (routed ids may equal a main id: the card reads only its own row).
+  for (const [kind, agent] of [['main', ''], ['host-ops', 'host'], ['box', 'container'], ['locked', 'restricted']]) {
+    const html = b.M.failureHtml({ s: { ...failed(SUB), id: 'same-id', agent, agentKind: kind }, canRetry: true });
+    assert.match(html, /Reconnect Claude/, kind); assert.doesNotMatch(html, /data-chretry /, kind);
+  }
+  for (const code of ['network', 'provider_quota']) {
+    const html = b.M.failureHtml({ s: { ...failed(SUB), runError: { code, provider: 'claude' } }, canRetry: true });
+    assert.doesNotMatch(html, /Reconnect Claude|disconnected/, code); assert.match(html, /data-chretry/, code);
+  }
+  assert.match(b.M.failureHtml({ s: { ...failed(SUB), runError: { code: 'provider_auth', provider: 'claude' } }, canRetry: true }), /Reconnect Claude/);
+});
+
+test('Tinfoil signed out: Reconnect goes to its Connect step', () => {
+  const b = boot(); b.set([{ id: 'tinfoil', name: 'Tinfoil', status: 'signed_out', limits: [] }]);
+  assert.match(b.M.failureHtml({ s: failed('tinfoil', 'deepseek-v4-1-flash'), canRetry: true }), /data-chreconnect="wizard-tinfoil" data-recovery-run="">Reconnect Tinfoil/);
+  assert.match(b.details(), /data-res-signin="wizard-tinfoil" data-res-reconnect="1">Reconnect Tinfoil/);
+  assert.match(read('web/core/resources.js'), /si\.hasAttribute\('data-res-reconnect'\)&&app==='wizard-tinfoil'\?'\/wizard-tinfoil\/\?connect=1'/);
+  assert.match(read('web/core/chat-power.js'), /appId === 'wizard-tinfoil' \? '\/wizard-tinfoil\/\?connect=1'/);
+});
+
 test('the same for ChatGPT; other providers and working subscriptions keep Retry', () => {
   const b = boot(); b.set([{ ...gptOk, status: 'signed_out', limits: [] }, claudeOk]);
   assert.match(b.M.failureHtml({ s: failed('openai-codex', 'gpt-6.1-sol'), canRetry: true }), /Reconnect ChatGPT/);
@@ -85,6 +107,6 @@ test('Home AI zone and Resources › AI accounts show a working Reconnect button
 
 test('Reconnect on the card opens the Claude app at Connect when there is no saved run to recover', () => {
   const src = read('web/core/chat-power.js');
-  assert.match(src, /if \(!runId\) \{ const path = `\/\$\{appId\}\/\?reconnect=1`; if \(!window\.WizOpenApp\?\.\(appId, path\)\) location\.assign\(path\); return true; \}/);
+  assert.match(src, /if \(!runId && \(RECONNECT_APPS\.has\(appId\) \|\| appId === 'wizard-tinfoil'\)\) \{ const path = .*: `\/\$\{appId\}\/\?reconnect=1`; if \(!window\.WizOpenApp\?\.\(appId, path\)\) location\.assign\(path\); return true; \}/);
   assert.match(src, /addEventListener\?\.\('wos:ai-signin', \(\) => rerenderAll\(\)\)/);
 });

@@ -509,7 +509,7 @@
       const U = window.WosUsage; if (!U?.signedOut || !s) return null;
       const p = String(s.provider || '').toLowerCase(), m = String(s.model || '').toLowerCase();
       const fam = CLAUDE_PROVIDERS.has(p) || p === 'claude' || (!p && /^claude-/.test(m)) ? 'claude'
-        : ['openai-codex', 'codex', 'chatgpt'].includes(p) ? 'chatgpt' : '';
+        : ['openai-codex', 'codex', 'chatgpt'].includes(p) ? 'chatgpt' : p === 'tinfoil' ? 'tinfoil' : '';
       if (!fam) return null;
       if (!U.snap || Date.now() - (U.at || 0) > 60e3) U.load?.();
       return U.signedOut(fam);
@@ -519,7 +519,8 @@
       const model = s.model ? M.name(s.model, s.provider) : '';
       // Not diagnosed by the Agent Service, but the subscription reads signed out: say so, and Reconnect, not Retry
       // (Retry would fail again the same way). After reconnecting the reading clears and Retry sends it again.
-      const out = !s.reconnect && ['failed', 'interrupted'].includes(s.status) && s.queueReason !== 'provider_access' && busy !== 'retry' ? M.signedOutFor(s) : null;
+      // A failure the Agent Service already named (network, quota, …) keeps its own card; only no reason or a sign-in one.
+      const out = !s.reconnect && (!s.runError || s.runError.code === 'provider_auth') && ['failed', 'interrupted'].includes(s.status) && s.queueReason !== 'provider_access' && busy !== 'retry' ? M.signedOutFor(s) : null;
       if (out) {
         return `<section class="ch-fail diagnosed" role="alert" aria-busy="${!!busy}" data-chfail="${esc(s.id)}" data-chsignedout="${esc(out.provider)}"><span class="lb">${esc(out.name)} disconnected${model ? ` · ${esc(model)}` : ''}</span>
         <p>This didn’t send because your ${esc(out.name)} subscription is disconnected. Your message is saved: reconnect ${esc(out.name)}, then send it again.</p>

@@ -27,8 +27,9 @@ const usage = signedIn => ({ fetchedAt: iso(Date.now()), providers: [signedIn
 (async () => {
   const browser = await chromium.launch(), report = [];
   try {
-    for (const view of [{ skin: 'nebula', phone: true }, { skin: 'grove', phone: true }, { skin: 'nebula', phone: false }]) {
-      const name = `${view.phone ? 'phone' : 'desktop'}-${view.skin}`;
+    for (const view of [{ skin: 'nebula', phone: true }, { skin: 'grove', phone: true }, { skin: 'nebula', phone: false }, { skin: 'nebula', phone: true, main: true }]) {
+      // main: the same failed thread on the main agent (parity with the routed Philosopher thread).
+      const name = `${view.phone ? 'phone' : 'desktop'}-${view.skin}${view.main ? '-main' : ''}`, mine = view.main ? '' : 'philosopher';
       const context = await browser.newContext(view.phone
         ? { viewport: { width: 412, height: 915 }, isMobile: true, hasTouch: true, serviceWorkers: 'block', userAgent: 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Mobile Safari/537.36' }
         : { viewport: { width: 1440, height: 900 }, serviceWorkers: 'block' });
@@ -58,10 +59,10 @@ const usage = signedIn => ({ fetchedAt: iso(Date.now()), providers: [signedIn
           if (p === '/wizard/v1/ui-preferences') return r.fulfill({ json: prefs });
           if (p === '/wizard/v1/agents') return r.fulfill({ json: { agents: AGENTS } });
           const agent = u.searchParams.get('agent') || '';
-          if (p === '/wizard/hermes/api/sessions') return r.fulfill({ json: { data: agent === 'philosopher' ? [row] : [], has_more: false } });
+          if (p === '/wizard/hermes/api/sessions') return r.fulfill({ json: { data: agent === mine ? [view.main ? { ...row, agent: undefined } : row] : [], has_more: false } });
           const m = /^\/wizard\/hermes\/api\/sessions\/([^/]+)(\/messages)?$/.exec(p);
           if (m) {
-            if (decodeURIComponent(m[1]) !== row.id || agent !== 'philosopher') return r.fulfill({ status: 404, json: {} });
+            if (decodeURIComponent(m[1]) !== row.id || agent !== mine) return r.fulfill({ status: 404, json: {} });
             return r.fulfill({ json: m[2] ? { messages: [{ role: 'user', content: 'What is virtue?', timestamp: now / 1000 - 600 }, { role: 'assistant', content: 'Your request was not processed. Send it again if you still want me to carry it out.', timestamp: now / 1000 - 590 }] } : { session: row } });
           }
           return r.fulfill({ json: ownerRead(p) });
@@ -89,7 +90,9 @@ const usage = signedIn => ({ fetchedAt: iso(Date.now()), providers: [signedIn
         }
         // The failed thread.
         await page.waitForFunction(() => window.WizLive?.session?.('qa-p1') || window.WizLive?.sessionFor?.('qa-p1', 'philosopher'), null, { timeout: 20000 }).catch(() => {});
-        if (view.phone) {
+        if (view.main) {
+          await page.evaluate(() => __wos.openWizardThread('qa-p1'));
+        } else if (view.phone) {
           await page.evaluate(() => __wos.openAgentChats('philosopher')); await nap(800);
           await page.locator('[data-chopen="qa-p1"]').filter({ visible: true }).first().click();
         } else {

@@ -553,11 +553,11 @@ window.WosChatPower = function chatPower(A) {
   }
   const RECONNECT_APPS = new Set(['wizard-claude', 'wizard-chatgpt']);
   function openReconnect(appId, installed, runId = '') {
+    // Issue 1487: no saved run to recover (the shell saw the signed-out reading itself): open the connection app
+    // straight at its Reconnect step (Tinfoil: its Connect step), like Home's Reconnect row.
+    if (!runId && (RECONNECT_APPS.has(appId) || appId === 'wizard-tinfoil')) { const path = appId === 'wizard-tinfoil' ? '/wizard-tinfoil/?connect=1' : `/${appId}/?reconnect=1`; if (!window.WizOpenApp?.(appId, path)) location.assign(path); return true; }
     if (!RECONNECT_APPS.has(appId)) return false;
     const provider = appId === 'wizard-claude' ? 'claude' : 'chatgpt';
-    // Issue 1487: no saved run to recover (the shell saw the signed-out reading itself): open the connection app
-    // straight at its Reconnect step, like Home's Reconnect row.
-    if (!runId) { const path = `/${appId}/?reconnect=1`; if (!window.WizOpenApp?.(appId, path)) location.assign(path); return true; }
     if (window.WizOpenApp?.('troubleshooter', `/troubleshoot/?provider=${provider}&run_id=${encodeURIComponent(runId)}`)) return true;
     return !!H.openLink?.(`/troubleshoot/?provider=${provider}&run_id=${encodeURIComponent(runId)}`, 'Fix Wizard');
 
