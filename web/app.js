@@ -1926,7 +1926,9 @@
     const off = (at - idx) * (device.clientWidth || innerWidth) + dx;
     settingsEl.style.transition = anim ? 'transform 520ms var(--ease)' : 'none';
     settingsEl.style.transform = `translate3d(${off}px,0,0)`;
-    if (at === idx && !dx && !sheet) { // home again: Settings is the open sheet once more
+    // home again: Settings is the open sheet once more. Not while a bar scrub is live (wizard-ux#1516): the scrub snaps the
+    // track on its start desk before it steps, and that snap must not re-open the Settings it just parked.
+    if (at === idx && !dx && !sheet && !(DS && DS.live)) {
       dropParkedSettings(); if (anim) settingsEl.style.transition = 'transform 520ms var(--ease)';
       sheet = 'settings'; device.classList.add('sheet-open'); tourEv('sheet', { which: 'settings' }); // same handoff as openSheet
       window.WosResources?.sync(); window.WosScenery?.update();

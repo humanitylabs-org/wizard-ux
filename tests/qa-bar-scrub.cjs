@@ -110,6 +110,14 @@ const nap = ms => new Promise(r => setTimeout(r, ms));
           assert.equal(steps.cancelled, 2, 'a cancelled touch leaves the desk where it started');
           await go(2); await drag(right, -84, { y: Math.round(bar.bottom - 8) }); steps.edge = await at();
           assert.equal(steps.edge, 2, 'a drag from the very bottom edge is the system\'s');
+          // wizard-ux#1516: with Settings open, a scrub parks Settings on its desk (like a flick) and lands three desks over.
+          const st = () => page.evaluate(() => ({ idx: __wos.idx, sheet: __wos.sheet, open: !!document.querySelector('.sheet-open'), parked: !!document.querySelector('.st-parked') }));
+          await go(2); await page.evaluate(() => __wos.openSheet('settings')); await nap(700);
+          await drag(right, -84); steps.settingsScrub = await st(); await shot('settings-after-scrub');
+          assert.deepEqual(steps.settingsScrub, { idx: 5, sheet: null, open: false, parked: true }, 'a scrub with Settings open parks it and lands three desks over');
+          await go(2); steps.settingsBack = await st();
+          assert.deepEqual(steps.settingsBack, { idx: 2, sheet: 'settings', open: true, parked: false }, 'back on its desk Settings shows again');
+          await page.evaluate(() => __wos.closeSheets()); await nap(500);
           await go(2); await page.locator('[data-goto="4"]').tap(); await nap(700); steps.dotTap = await at();
           assert.equal(steps.dotTap, 4, 'a dot tap still goes to its desk');
           const dot = await page.locator('[data-goto="3"]').boundingBox();
