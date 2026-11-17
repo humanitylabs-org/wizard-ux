@@ -326,6 +326,27 @@
       durationMs: s.final?.durationMs ?? 0, meta: { ...s.row.meta, ...(s.final?.meta ? { native: s.final.meta } : {}) },
       streamChunks: [], durable: false, storageError: 'local_backup_skipped', partial: true };
   }
+  // A slow phone store (a long take, a busy disk) is not a broken one (ux#1503: a 2:45 voice note showed
+  // "On-device saving failed (timeout)"). Instant takes retry a passing failure with backoff, quietly,
+  // for about 11 s of waits before any warning. Stop wakes a waiting retry for one last try, so Send
+  // never waits on the backoff; quota and security failures still fail at once.
+  const SAVE_RETRY_MS = [500, 1500, 3000, 6000];
+  const SAVE_RETRYABLE = ['timeout', 'blocked', 'UnknownError', 'InvalidStateError', 'AbortError'];
+  async function patiently(s, work) {
+    for (let i = 0; ; i++) {
+      try { return await work(); }
+      catch (e) {
+        if (!s.instant || s.discard || s.memoryOnly || s.phase === 'stopping' || i >= SAVE_RETRY_MS.length ||
+          !SAVE_RETRYABLE.includes(storageFailure(e).detail)) throw e;
+        await new Promise(resolve => {
+          const timer = setTimeout(done, SAVE_RETRY_MS[i]);
+          function done() { clearTimeout(timer); if (s.retryWake === done) s.retryWake = null; resolve(); }
+          s.retryWake = done;
+        });
+        if (s.discard || s.memoryOnly) throw e;
+      }
+    }
+  }
   function drain(s) {
     if (s.drainPromise) return s.drainPromise;
     s.drainPromise = drainQueue(s).finally(() => { s.drainPromise = null; });
@@ -342,19 +363,21 @@
         partial: !!s.partial,
         durationMs: s.row.pcm ? Math.max(...Object.values(tracks).map(t => t.startMs + t.bytes / 32)) : (s.pausedAt || Date.now()) - s.row.startedAt - (s.pausedTotal || 0) };
       try {
-        await transaction(['sessions', 'chunks'], 'readwrite', tx => {
+        await patiently(s, () => transaction(['sessions', 'chunks'], 'readwrite', tx => {
           tx.objectStore('chunks').put({ id: row.id, seq: s.row.seq, blob, source, startMs: startMs ?? (track.startMs + track.bytes / 32) });
           tx.objectStore('sessions').put(row);
-        });
+        }));
         if (s.discard || s.memoryOnly) return; // a timed-out write must not mutate a handed-off take
         s.row = row; ownedRows.set(row.id, structuredClone(row)); s.queue.shift(); s.queuedBytes = Math.max(0, (s.queuedBytes || 0) - blob.size); s.error = null;
         uploadChunk(s, source, blob, startMs ?? (track.startMs + track.bytes / 32));
       } catch (e) {
         if (s.meetingNative) { dropLocalBackup(s, e); return; }
+        if (s.instant && (s.discard || s.memoryOnly)) return; // already handed off from memory
         s.error = storageFailure(e);
         s.partial = true; changed();
         // Only instant takes may hand off an in-memory result. Durable recorders stay strict.
-        if (s.instant) { emit(s, 'warn', 'On-device saving failed (' + s.error.detail + '). Keep Wizard open; Send or Discard still works.'); return; }
+        // A take that is stopping sends from memory: no failure notice for it.
+        if (s.instant) { if (s.phase !== 'stopping') emit(s, 'warn', 'On-device saving failed (' + s.error.detail + '). Keep Wizard open; Send or Discard still works.'); return; }
         void finish(s, true).catch(() => {}); return;
       }
       if (s.row.bytes >= s.limit && !s.finishPromise) { s.partial = true; void finish(s, true).catch(() => {}); }
@@ -391,6 +414,7 @@
     s.finishPromise = (async () => {
       if (s.borrowWork) await s.borrowWork.catch(() => {});
       s.error = null; s.phase = 'stopping'; s.stopAt ||= Date.now(); s.partial = !!(s.partial || partial); changed();
+      s.retryWake?.(); // a save waiting to retry tries once more now, then Send goes on from memory
       if (!s.inputStopped) {
         try {
           // Input is stopped BEFORE any storage await, even when its final flush fails.
@@ -1172,8 +1196,14 @@
         // The session is already recording. Buffer chunks until its first row can commit. Recovery
         // runs at boot/pending(), never as an admission requirement for a fresh voice/song take.
         s.persistence = (async () => {
-          try { await openDB(); if (!s.discard && !s.memoryOnly) await put(s.row); }
-          catch (e) { s.error = storageFailure(e); emit(s, 'warn', 'On-device saving failed (' + s.error.detail + '). Keep Wizard open; Send or Discard still works.'); changed(); }
+          try { await patiently(s, async () => { await openDB(); if (!s.discard && !s.memoryOnly) await put(s.row); }); }
+          catch (e) {
+            if (!s.discard && !s.memoryOnly) {
+              s.error = storageFailure(e);
+              if (s.phase !== 'stopping') emit(s, 'warn', 'On-device saving failed (' + s.error.detail + '). Keep Wizard open; Send or Discard still works.');
+              changed();
+            }
+          }
           finally { clearTimeout(notice); s.persistencePending = false; }
           if (!s.discard) s.writes = s.writes.then(() => drain(s));
         })();
