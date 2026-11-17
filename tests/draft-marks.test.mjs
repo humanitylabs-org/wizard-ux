@@ -50,7 +50,7 @@ function device(storage = new Map(), dataset = { tweaks: ON }) {
   vm.runInContext(['const WORKING_ST =', 'const isWorking =', 'const channelsOn =', 'const markDoneOn =', 'const handledNow =', 'const chanNeeds =',
     'const chanUnread =', 'const actNeeds =', 'const actUnread =', 'const actMark =', 'const chanAt =', 'const ATT =', 'const attOf =', 'const STI_LAB =', 'const STI_TIP ='].map(line).join('\n')
     + '\nconst WosThreadTracker = { on: () => false, onFor: () => false };\n'
-    + block('/* Draft marks (wizard-ux issue 1445', '// A row\'s marker at its right end') + block('function actRowMark(s)', '// A thread of an agent other') + block('function stiKind(s)', 'const stiBadge =') + block('function chatRow(s', '/* Ready has three orders')
+    + block('/* Draft marks (wizard-ux issue 1445', '// A row\'s marker, drawn just left') + block('function actRowMark(s)', '// A thread of an agent other') + block('function stiKind(s)', 'const stiBadge =') + block('function chatRow(s', '/* Ready has three orders')
     + block('const ACT_SORTS = () =>', '// The sort and Show older taps').replace('let actOlder = false;', 'let actOlder = false, rowChan = true;')
     + '\nthis.activityBody = activityBody; this.rowDraft = rowDraft; this.chanLineDraft = chanLineDraft;', c);
   return { c, L: c.WizLive, drafts: c.WosChat.drafts, events, repaints, storage, dataset };
