@@ -37,6 +37,17 @@ Omit `--draft` for private collection only. Draft staging refuses to overwrite a
 
 `phone.json` has precisely these keys: `app`, `versionCode`, `versionName`, `sha256`, `bytes`, `signer`, `asset_url`, `notes`, `min_box_snapshot`, `source_commit`. The default minimum is `0.3.40`. Notes are one plain public sentence. Private origin values are never included.
 
+## Release from CI (off by default, ux#1400)
+
+`.github/workflows/phone-release.yml` does the same release with no step on a personal machine. On every push to `main` that touches `android/` it reads `versionName` from `android/app/build.gradle`; when `android-v<version>` does not exist yet, a Linux runner builds `:app:assembleRelease`, signs it with the WizardOS key from Actions secrets, and runs `python3 tools/phone_release.py ci --publish`. That command applies the same `metadata()` checks as the worker (one signer, `3bf74d0b…d1fd`; empty `ORIGIN`/`HOME_URL`/`PHOTOS_SERVER`; aapt2 and BuildConfig agree; placeholder App Link host), refuses a `versionCode` that does not rise over the last published `phone.json`, refuses to overwrite an existing release, and publishes `android-v<version>` as the latest release with the APK and `phone.json`, then downloads both back and checks their bytes. Boxes mirror it within the hour and phones update themselves. It can also be started by hand (Actions, Phone release, Run workflow) with optional one-sentence notes.
+
+It stays inert until an admin switches it on:
+
+1. Export the release keystore on the signing host and add these repository secrets: `WOS_KEYSTORE_BASE64` (`base64 -w0` of the keystore file), `WOS_STORE_PASSWORD`, `WOS_KEY_ALIAS`, `WOS_KEY_PASSWORD` (the same values as the private signing env). Never paste them anywhere else.
+2. Set the repository variable `WOS_PHONE_CI_RELEASE` to `on`. Remove it (or set anything else) to switch CI releases off again; the Thales path above keeps working either way.
+
+The CI path does not run the emulator upgrade-origin proof below (it needs a rooted test image and the previous owner APK); run that on Thales when a release changes pairing or `ServerSettings`. Pull requests run only the unit fixtures, never the signing job.
+
 ## Exact upgrade-origin proof
 
 The baseline APK digest is mandatory and the old/new signer is verified before installation. The test:

@@ -4,6 +4,7 @@ from pathlib import Path
 import struct
 import tempfile
 import unittest
+import unittest.mock
 from unittest.mock import patch
 import phone_release as release
 
@@ -150,6 +151,60 @@ class PhoneReleaseTests(unittest.TestCase):
                 release.draft(Path(self.temp.name), phone)
             self.assertEqual(run.call_count, 1)
 
+    def test_ci_publish_creates_a_published_latest_release(self):
+        phone = self.metadata()
+        out = Path(self.temp.name)
+        (out / 'wizard-os-0.10.14.apk').write_bytes(self.apk.read_bytes())
+        calls = []
+
+        def fake_run(argv, **kw):
+            calls.append(list(map(str, argv)))
+            result = unittest.mock.Mock(returncode=1 if argv[:3] == ['gh', 'release', 'view'] and len(calls) == 1 else 0)
+            return result
+        state = dict(url='u', isDraft=False, targetCommitish=phone['source_commit'], assets=[{'name': 'wizard-os-0.10.14.apk'}, {'name': 'phone.json'}])
+        with patch.object(release.subprocess, 'run', side_effect=fake_run), \
+                patch.object(release, 'text', return_value=release.json.dumps(state)), \
+                self.assertRaises(FileNotFoundError):  # stops at the byte readback (nothing downloaded in the fake)
+            release.draft(out, phone, publish=True)
+        create = next(c for c in calls if c[:3] == ['gh', 'release', 'create'])
+        self.assertIn('--latest', create)
+        self.assertNotIn('--draft', create)
+        with patch.object(release.subprocess, 'run', side_effect=lambda *a, **k: unittest.mock.Mock(returncode=1)), \
+                patch.object(release, 'text', return_value=release.json.dumps(dict(state, isDraft=True))), \
+                self.assertRaisesRegex(ValueError, 'readback'):
+            release.draft(out, phone, publish=True)
+
+    def test_ci_needs_a_rising_version_code(self):
+        phone = self.metadata()
+        release.newer_than(phone, None)
+        release.newer_than(phone, dict(app=release.APP, versionCode=77))
+        for previous in [dict(app=release.APP, versionCode=78), dict(app=release.APP, versionCode=90), dict(app='other', versionCode=1), dict(app=release.APP)]:
+            with self.subTest(previous=previous), self.assertRaises(ValueError):
+                release.newer_than(phone, previous)
+
+    def test_ci_picks_newest_runner_build_tools(self):
+        sdk = Path(self.temp.name) / 'sdk'
+        for version, tools in [('34.0.0', ('aapt2', 'apksigner')), ('35.0.0', ('aapt2', 'apksigner')), ('9.0.0', ('aapt2', 'apksigner')), ('36.0.0', ('aapt2',))]:
+            d = sdk / 'build-tools' / version
+            d.mkdir(parents=True)
+            for t in tools:
+                (d / t).write_text('')
+        self.assertEqual(release.build_tools(sdk).name, '35.0.0')
+        with self.assertRaises(ValueError):
+            release.build_tools(Path(self.temp.name) / 'none')
+
+    def test_ci_runs_only_in_actions(self):
+        args = unittest.mock.Mock()
+        with patch.dict(os.environ, {'GITHUB_ACTIONS': ''}), self.assertRaisesRegex(ValueError, 'GitHub Actions'):
+            release.ci(args)
+
+    def test_ci_workflow_is_off_until_switched_on(self):
+        wf = (Path(release.__file__).parent.parent / '.github/workflows/phone-release.yml').read_text()
+        self.assertIn("if: vars.WOS_PHONE_CI_RELEASE == 'on' && github.event_name != 'pull_request' && github.ref == 'refs/heads/main'", wf)
+        self.assertIn('tools/phone_release.py ci --publish', wf)
+        self.assertIn('rm -f "$RUNNER_TEMP/wos-release.keystore"', wf)
+        self.assertEqual(wf.count('secrets.'), 8, 'signing secrets only in the main-only release job')
+        self.assertLess(wf.index('  release:'), wf.index('secrets.'))
 
     def test_signing_env_cannot_undo_isolated_gradle_home(self):
         import subprocess

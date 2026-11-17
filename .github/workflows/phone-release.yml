@@ -1,0 +1,110 @@
+name: Phone release
+# Builds the phone app from main, signs it with the WizardOS release key on a Linux runner, audits it with
+# tools/phone_release.py (signer 3bf74d0b…d1fd, no owner address, version agreement) and publishes the shared
+# android-v<version> release that boxes mirror (ux#1400). It runs only when versionName on main has no release yet.
+#
+# Off by default: nothing happens until an admin sets the repository variable WOS_PHONE_CI_RELEASE=on and adds
+# the secrets WOS_KEYSTORE_BASE64, WOS_STORE_PASSWORD, WOS_KEY_ALIAS and WOS_KEY_PASSWORD
+# (docs/phone-canonical-release.md, "Release from CI").
+on:
+  pull_request:
+    paths: ['tools/phone_release.py', 'tools/apk_build_config.py', 'tools/test_canonical_phone_release.py', '.github/workflows/phone-release.yml']
+  push:
+    branches: [main]
+    paths: ['android/**', 'tools/phone_release.py', 'tools/apk_build_config.py', '.github/workflows/phone-release.yml']
+  workflow_dispatch:
+    inputs:
+      notes:
+        description: One plain public sentence for the release notes (ends with a full stop)
+        required: false
+permissions:
+  contents: read
+concurrency:
+  group: phone-release
+  cancel-in-progress: false
+jobs:
+  regression:
+    # Unit fixtures only: no SDK, no secrets, no publishing.
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Phone release metadata and publish regressions
+        run: python3 -m unittest discover -s tools -p test_canonical_phone_release.py -v
+  release:
+    needs: regression
+    if: vars.WOS_PHONE_CI_RELEASE == 'on' && github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Version on main, and whether it is already released
+        id: version
+        run: |
+          v=$(sed -n "s/^ *versionName '\([0-9][0-9.]*\)'.*/\1/p" android/app/build.gradle | head -1)
+          echo "$v" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' || { echo "::error::No versionName in android/app/build.gradle"; exit 1; }
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          if gh release view "android-v$v" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "android-v$v already exists: nothing to release." | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "new=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "new=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Signing secrets present
+        if: steps.version.outputs.new == 'true'
+        env:
+          KS: ${{ secrets.WOS_KEYSTORE_BASE64 }}
+          SP: ${{ secrets.WOS_STORE_PASSWORD }}
+          KA: ${{ secrets.WOS_KEY_ALIAS }}
+          KP: ${{ secrets.WOS_KEY_PASSWORD }}
+        run: |
+          [ -n "$KS" ] && [ -n "$SP" ] && [ -n "$KA" ] && [ -n "$KP" ] || {
+            echo "::error::WOS_PHONE_CI_RELEASE is on but a signing secret is missing (WOS_KEYSTORE_BASE64, WOS_STORE_PASSWORD, WOS_KEY_ALIAS, WOS_KEY_PASSWORD)"; exit 1; }
+      - uses: actions/setup-java@v4
+        if: steps.version.outputs.new == 'true'
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        if: steps.version.outputs.new == 'true'
+        with:
+          cache-read-only: true
+      - name: Build and sign the release APK
+        if: steps.version.outputs.new == 'true'
+        working-directory: android
+        env:
+          KS: ${{ secrets.WOS_KEYSTORE_BASE64 }}
+          WOS_STORE_PASSWORD: ${{ secrets.WOS_STORE_PASSWORD }}
+          WOS_KEY_ALIAS: ${{ secrets.WOS_KEY_ALIAS }}
+          WOS_KEY_PASSWORD: ${{ secrets.WOS_KEY_PASSWORD }}
+        run: |
+          umask 077
+          export WOS_KEYSTORE="$RUNNER_TEMP/wos-release.keystore"
+          printf '%s' "$KS" | base64 -d > "$WOS_KEYSTORE"
+          ./gradlew --no-daemon --stacktrace :app:assembleRelease
+          rm -f "$WOS_KEYSTORE"
+      - name: Audit and publish android-v${{ steps.version.outputs.version }}
+        if: steps.version.outputs.new == 'true'
+        env:
+          V: ${{ steps.version.outputs.version }}
+          NOTES: ${{ github.event.inputs.notes }}
+        run: |
+          prev="$(gh release list --repo "$GITHUB_REPOSITORY" --limit 100 --exclude-drafts --json tagName --jq '[.[].tagName | select(test("^android-v[0-9]+[.][0-9]+[.][0-9]+$"))][0] // ""')"
+          extra=()
+          if [ -n "$prev" ]; then
+            gh release download "$prev" --repo "$GITHUB_REPOSITORY" --pattern phone.json --dir "$RUNNER_TEMP/previous"
+            extra=(--previous-phone "$RUNNER_TEMP/previous/phone.json")
+          fi
+          python3 tools/phone_release.py ci --publish \
+            --apk android/app/build/outputs/apk/release/app-release.apk \
+            --commit "$GITHUB_SHA" --output "$RUNNER_TEMP/phone" \
+            --notes "${NOTES:-Shared Wizard OS phone release $V, built and signed from main; no owner address is built in.}" \
+            "${extra[@]}"
+          echo "Published android-v$V (signer 3bf74d0b…d1fd)." >> "$GITHUB_STEP_SUMMARY"
+      - name: Remove the keystore
+        if: always()
+        run: rm -f "$RUNNER_TEMP/wos-release.keystore"

@@ -3,7 +3,10 @@
 
 REUSE android-build-thales for snapshots, signing, SDK audits and the inherited lease.
 EXTEND the existing phone release QA with artifact-derived metadata and origin custody.
-No live feed writes. GitHub publication is deliberately draft-only.
+No live feed writes. The Thales path publishes draft-only.
+
+`ci` is the CI path (.github/workflows/phone-release.yml, ux#1400): the same metadata checks on an APK
+a Linux runner built and signed from main, then (with --publish) the shared android-v<version> release.
 """
 import argparse
 import hashlib
@@ -196,16 +199,17 @@ def collect(args):
     print(json.dumps(phone, indent=2))
 
 
-def draft(output, phone):
+def draft(output, phone, publish=False):
     tag = 'android-v' + phone['versionName']
     apk = output / f'wizard-os-{phone["versionName"]}.apk'
     require(digest(apk) == phone['sha256'], 'Draft APK mismatch')
     # Fail rather than overwrite an existing release (draft or published).
     existing = subprocess.run(['gh', 'release', 'view', tag, '--repo', REPO], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     require(existing.returncode != 0, 'Release already exists; do not overwrite it')
-    run(['gh', 'release', 'create', tag, '--repo', REPO, '--draft', '--target', phone['source_commit'], '--title', 'WizardOS Android ' + phone['versionName'], '--notes', phone['notes'], apk, output / 'phone.json'])
+    mode = ['--latest'] if publish else ['--draft']
+    run(['gh', 'release', 'create', tag, '--repo', REPO, *mode, '--target', phone['source_commit'], '--title', 'WizardOS Android ' + phone['versionName'], '--notes', phone['notes'], apk, output / 'phone.json'])
     state = json.loads(text(['gh', 'release', 'view', tag, '--repo', REPO, '--json', 'url,isDraft,targetCommitish,assets']))
-    require(state['isDraft'] and state['targetCommitish'] == phone['source_commit'], 'Release draft/target readback failed')
+    require(state['isDraft'] != publish and state['targetCommitish'] == phone['source_commit'], 'Release draft/target readback failed')
     require({a['name'] for a in state['assets']} == {apk.name, 'phone.json'}, 'Release assets readback failed')
     # Exact asset bytes, not only the upload response or filenames.
     verify = output / 'draft-readback'
@@ -213,6 +217,43 @@ def draft(output, phone):
     run(['gh', 'release', 'download', tag, '--repo', REPO, '--dir', verify])
     require(digest(verify / apk.name) == phone['sha256'] and json.loads((verify / 'phone.json').read_text()) == phone, 'Draft asset bytes readback failed')
     write_json(output / 'draft-release.json', state)
+
+
+def build_tools(sdk):
+    """Newest installed build-tools directory with both aapt2 and apksigner (the runner's SDK, not Homebrew)."""
+    def key(d):
+        return tuple(int(n) for n in re.findall(r'\d+', d.name))
+    found = sorted((d for d in (Path(sdk) / 'build-tools').glob('*') if (d / 'aapt2').exists() and (d / 'apksigner').exists()), key=key)
+    require(found, 'No Android build-tools with aapt2 and apksigner under ' + str(sdk))
+    return found[-1]
+
+
+def newer_than(phone, previous):
+    """A published phone must raise versionCode over the last published phone.json, or phones never update."""
+    if previous is not None:
+        require(previous.get('app') == APP and isinstance(previous.get('versionCode'), int), 'Previous phone.json is not a WizardOS phone release')
+        require(phone['versionCode'] > previous['versionCode'], 'versionCode must rise over the last published phone release')
+
+
+def ci(args):
+    """Audit a CI-built release APK with the same checks as the Thales worker; --publish makes it the shared release."""
+    reject_origin_environment(os.environ)
+    require(os.environ.get('GITHUB_ACTIONS') == 'true', 'The ci command runs only inside GitHub Actions')
+    tools = build_tools(os.environ.get('ANDROID_HOME') or os.environ.get('ANDROID_SDK_ROOT') or '')
+    apk = args.apk.resolve()
+    badging = text([tools / 'aapt2', 'dump', 'badging', apk])
+    certs = text([tools / 'apksigner', 'verify', '--verbose', '--print-certs', apk])
+    phone = metadata(apk, badging, certs, apk_build_config(apk), args.commit, args.notes, args.min_box_snapshot)
+    manifest = text([tools / 'aapt2', 'dump', 'xmltree', apk, '--file', 'AndroidManifest.xml'])
+    require('unconfigured.invalid' in manifest, 'Generic App Link host missing')
+    previous = json.loads(args.previous_phone.read_text()) if args.previous_phone else None
+    newer_than(phone, previous)
+    args.output.mkdir(parents=True, mode=0o700, exist_ok=True)
+    (args.output / f'wizard-os-{phone["versionName"]}.apk').write_bytes(apk.read_bytes())
+    write_json(args.output / 'phone.json', phone)
+    if args.publish:
+        draft(args.output, phone, publish=True)
+    print(json.dumps(phone, indent=2))
 
 
 def main():
@@ -236,6 +277,15 @@ def main():
     a.add_argument('--output', type=Path, required=True)
     a.add_argument('--draft', action='store_true')
     a.set_defaults(func=collect)
+    a = commands.add_parser('ci')
+    a.add_argument('--apk', type=Path, required=True)
+    a.add_argument('--commit', required=True)
+    a.add_argument('--output', type=Path, required=True)
+    a.add_argument('--notes', required=True)
+    a.add_argument('--min-box-snapshot', default='0.3.40')
+    a.add_argument('--previous-phone', type=Path, help='phone.json of the last published release')
+    a.add_argument('--publish', action='store_true')
+    a.set_defaults(func=ci)
     args = p.parse_args()
     args.func(args)
 
