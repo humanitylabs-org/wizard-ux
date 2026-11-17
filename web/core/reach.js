@@ -447,11 +447,13 @@
     },
     // Troubleshooter is an ordinary built-in app: open it in a shell window like any other app. Leaving the shell
     // for the bare page is only the last resort, when the shell can't open windows at all.
-    open() {
+    // `auto` (the outage pop-up, status.js) only ever opens the shell window: it never leaves the shell by itself.
+    open({ auto = false } = {}) {
       openedAt = Date.now();
       // Windows mounted before this tap; a window this tap mounts runs its own first load after paint.
       const reused = [...retaps];
       try { if (window.WizOpenApp?.('troubleshooter')) { for (const retap of reused) try { retap(); } catch (_) {} return true; } } catch (e) {}
+      if (auto) return false;
       if (document.documentElement.dataset.shell === 'desktop') window.open('/troubleshoot/', '_blank', 'noopener');
       else location.assign('/troubleshoot/');
       return true;

@@ -17,9 +17,10 @@
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const agent = () => { try { return window.WizConfig?.agent() || 'Wizard'; } catch (e) { return 'Wizard'; } };
   let netOpen = false;
-  /* Connection trouble is only ever a small pill at the top, after a grace so a momentary blip shows nothing. The
-   * checks open only when the owner taps the pill; Troubleshoot on the pill opens the Troubleshooter; neither opens by itself, and a voice or
-   * capture starting tucks them away again. (James, 1 Nov: an automatic pop-up for a short outage is too much.) */
+  /* Connection trouble is a small pill at the top, after a grace so a momentary blip shows nothing. The checks open
+   * only when the owner taps the pill, and a voice or capture starting tucks them away again (James, 1 Nov: no pop-up
+   * for a short outage). Past the grace the Troubleshooter itself pops up, once per outage (James, 15 Nov, issue 1472:
+   * "It should pop up"); closed, it stays closed, and Troubleshoot on the pill opens it again. */
   function captureBusy() {
     const shared = window.WizAppCapture?.getState?.();
     const voice = window.__wos?.voice || window.__wux?.voice;
@@ -37,6 +38,17 @@
   // that reports itself offline is certain, so it keeps the short wait.
   const graceMs = () => (navigator.onLine === false ? 3000 : 8000);
   let netAlerted = false; // An online hint cannot retract feedback already shown in this outage.
+  // Once per outage, and not again for 10 minutes even if Wizard flaps, so a closed Troubleshooter stays closed.
+  const AUTO_AGAIN_MS = 10 * 60e3;
+  let autoDone = false, autoAt = 0;
+  function autoTroubleshoot() {
+    if (autoDone || document.hidden || captureBusy() || fatalOpen) return;
+    if (autoAt && Date.now() - autoAt < AUTO_AGAIN_MS) { autoDone = true; return; }
+    // Only as a window inside the shell: never leave the shell for the bare page by itself.
+    if (typeof window.WizOpenApp !== 'function' || !window.WizReach?.open) return;
+    autoDone = true; autoAt = Date.now(); log('net:troubleshooter');
+    try { window.WizReach.open({ auto: true }); } catch (_) {}
+  }
   let offReturn = null, downSince = 0, graceT = 0, offDismissed = false, offOpen = false, offChecks = null, offBusy = false, offT = 0, offN = 0, offHappy = 0;
   let H = {}, net = navigator.onLine === false ? 'offline' : 'online', restoredT = 0, critHidden = '', fatalMsg = '', fatalOpen = false;
   if (net === 'offline') downSince = Date.now(); // the device said offline at boot: the grace runs from now (render re-checks)
@@ -101,7 +113,7 @@
     net = n; log('net:' + n);
     const down = n === 'offline' || n === 'reconnecting';
     if (down && !downSince) { downSince = Date.now(); clearTimeout(graceT); graceT = setTimeout(() => { graceT = 0; render(); }, graceMs() + 50); }
-    if (!down) { downSince = 0; netAlerted = false; clearTimeout(graceT); graceT = 0; offDismissed = false; if (offOpen) recovered(); }
+    if (!down) { downSince = 0; netAlerted = false; autoDone = false; clearTimeout(graceT); graceT = 0; offDismissed = false; if (offOpen) recovered(); }
     render();
   }
   const alerted = () => downSince && (netAlerted || (netAlerted = Date.now() - downSince >= graceMs()));
@@ -169,6 +181,7 @@
     if (!(net === 'offline' || net === 'reconnecting')) netOpen = false;
     if ((net === 'offline' || net === 'reconnecting') && alerted()) {
       if (captureBusy()) captureChanged();
+      autoTroubleshoot();
       // Tucked away: one small pill that says what still works. Tapping it brings the checks back; its Troubleshoot
       // button opens the real Troubleshooter in one tap (issue 1472: the only visible way there during an outage, so
       // tests/offline-pill-troubleshoot.test.mjs fails if a redesign drops it).
