@@ -3650,6 +3650,9 @@ window.WizCore.chats = function createChats(H) {
       // A named failure reason (wizard/failure-reason tweak) is a notice in the failed panel, not a Wizard reply:
       // it hides Hermes' generic failed_turn bubble and the duplicate "Reply not sent" line.
       const runErr = !working && !!window.WosModels?.runError?.(s);
+      // Issue 1500: a send that failed on a signed-out/expired subscription shows the Reconnect card only, never Hermes'
+      // generic "not processed… send it again" line above it.
+      const signedOut = !working && !!PW?.signedOutFail?.(s);
       // Issue 1235: a chat another app owns (Telegram, Slack …) refuses every reply, so its Not sent bubble has no
       // Retry and the clear card shows at once: on a failed thread or a Not sent message, without waiting for the
       // Service's words (they used to land about a minute after the generic Needs retry panel).
@@ -3669,11 +3672,11 @@ window.WizCore.chats = function createChats(H) {
           const at = turnAt(tn), dk = KIT.time.dayKey(at);
           const div = dk && dk !== day ? `<div class="ch-day"><span>${esc(KIT.time.day(at))}</span></div>` : '';
           if (dk) day = dk;
-          return rnBefore(at) + div + turnHtml(c, tn, k === arr.length - 1, working, s?.helperStatus, s?.reconnect || !!runErr, !!globalThis.WosThreadTracker?.onFor?.(TAG) || (typeof replyStd === 'function' && replyStd(TAG)), k === need.k ? need.html : '');
+          return rnBefore(at) + div + turnHtml(c, tn, k === arr.length - 1, working, s?.helperStatus, s?.reconnect || !!runErr || signedOut, !!globalThis.WosThreadTracker?.onFor?.(TAG) || (typeof replyStd === 'function' && replyStd(TAG)), k === need.k ? need.html : '');
         }).join('')
         + rns.splice(0).map(rnHtml).join('')
         + (refused ? `<div class="appr" role="status" data-chrefused><b>Reply not sent</b><p>${esc(window.WosModels.refusal(s))}</p>${['failed', 'interrupted'].includes(s?.status) ? '<div class="appr-b"><button type="button" class="no" data-chdismiss>Dismiss</button></div>' : ''}</div>`
-          : (!runErr && s?.safeError && !s?.reconnect && s?.queueReason !== 'provider_access' ? `<div class="appr" role="status"><b>Reply not sent</b><p>${esc(s.safeError)}</p></div>` : ''))
+          : (!runErr && !signedOut && s?.safeError && !s?.reconnect && s?.queueReason !== 'provider_access' ? `<div class="appr" role="status"><b>Reply not sent</b><p>${esc(s.safeError)}</p></div>` : ''))
         + approvalHtml(c, s)
         + pend.map(p => pendingHtml(p, c, s)).join('')
         // A send a graceful restart holds: one quiet saved line, never a Working timer (wizard-ux issue 1362).

@@ -422,7 +422,7 @@ test('eighteenth review: machines from a saved or failed-read snapshot are last 
 test('nineteenth review: a signed-out account is never a live usage reading; a vanished managed Wizard falls back before painting', () => {
   const usage = read('web/core/usage.js');
   assert.match(usage, /status: signedOut \? 'unavailable' : \['ok', 'stale', 'unavailable'\]\.includes\(p\.status\)/);
-  assert.match(usage, /p\.signedOut \? 'signed out · sign in again to read usage'/);
+  assert.match(usage, /p\.signedOut \? 'disconnected · reconnect to read usage'/);
   assert.match(read('web/core/resources.js'), /bad\?\(p\.signedOut\?'Signed out':'Unavailable'\):/);
   for (const who of ['miguel']) {
     const src = read(`web/tweaks/${who}/machines-home/tweak.js`);

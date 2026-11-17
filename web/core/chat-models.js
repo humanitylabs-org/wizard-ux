@@ -508,21 +508,28 @@
     signedOutFor(s) {
       const U = window.WosUsage; if (!U?.signedOut || !s) return null;
       const p = String(s.provider || '').toLowerCase(), m = String(s.model || '').toLowerCase();
-      const fam = CLAUDE_PROVIDERS.has(p) || p === 'claude' || (!p && /^claude-/.test(m)) ? 'claude'
+      // Issue 1500: the 'anthropic' provider is an API key, not the Claude subscription the app reconnects.
+      const fam = p === SUB || p === 'claude' || (!p && /^claude-/.test(m)) ? 'claude'
         : ['openai-codex', 'codex', 'chatgpt'].includes(p) ? 'chatgpt' : p === 'tinfoil' ? 'tinfoil' : '';
       if (!fam) return null;
       if (!U.snap || Date.now() - (U.at || 0) > 60e3) U.load?.();
       return U.signedOut(fam);
     },
+    /* Not diagnosed by the Agent Service, but the subscription reads signed out (or expired): the failed thread says
+     * so and offers Reconnect, never Retry (it would fail again the same way). After reconnecting the reading clears
+     * and Retry comes back. A failure the Agent Service already named (network, quota, …) keeps its own card.
+     * One rule for the thread card, the Errors row (desktop sidebar) and the hidden generic failed-turn line. */
+    signedOutFail(s, busy = '') {
+      return s && !s.reconnect && (!s.runError || s.runError.code === 'provider_auth') && ['failed', 'interrupted'].includes(s.status) && s.queueReason !== 'provider_access' && busy !== 'retry' ? M.signedOutFor(s) : null;
+    },
     /* A failed thread: what happened, on which model, and the ways out (Retry · Choose another model · Dismiss). */
     failureHtml({ s, busy, retryLabel, canRetry }) {
       const model = s.model ? M.name(s.model, s.provider) : '';
-      // Not diagnosed by the Agent Service, but the subscription reads signed out: say so, and Reconnect, not Retry
-      // (Retry would fail again the same way). After reconnecting the reading clears and Retry sends it again.
-      // A failure the Agent Service already named (network, quota, …) keeps its own card; only no reason or a sign-in one.
-      const out = !s.reconnect && (!s.runError || s.runError.code === 'provider_auth') && ['failed', 'interrupted'].includes(s.status) && s.queueReason !== 'provider_access' && busy !== 'retry' ? M.signedOutFor(s) : null;
+      const out = M.signedOutFail(s, busy);
       if (out) {
-        return `<section class="ch-fail diagnosed" role="alert" aria-busy="${!!busy}" data-chfail="${esc(s.id)}" data-chsignedout="${esc(out.provider)}"><span class="lb">${esc(out.name)} disconnected${model ? ` · ${esc(model)}` : ''}</span>
+        // "Claude disconnected · Claude Fable" said Claude twice: the model name already names it.
+        const tail = model && !model.toLowerCase().startsWith(out.name.toLowerCase()) ? ` · ${esc(model)}` : '';
+        return `<section class="ch-fail diagnosed" role="alert" aria-busy="${!!busy}" data-chfail="${esc(s.id)}" data-chsignedout="${esc(out.provider)}"><span class="lb">${esc(out.name)} disconnected${tail}</span>
         <p>This didn’t send because your ${esc(out.name)} subscription is disconnected. Your message is saved: reconnect ${esc(out.name)}, then send it again.</p>
         <div class="ch-fail-b"><button type="button" data-chreconnect="${esc(out.appId)}" data-recovery-run="">Reconnect ${esc(out.name)}</button><button type="button" data-chretrymodel ${busy || !canRetry ? 'disabled' : ''}>Choose another model</button><button type="button" class="ghost" data-chdismiss ${busy ? 'disabled' : ''}>${busy === 'dismiss' ? 'Dismissing…' : 'Dismiss'}</button></div></section>`;
       }

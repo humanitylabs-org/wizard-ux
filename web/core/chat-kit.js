@@ -207,7 +207,8 @@
         // The reply's own plain-words ask (its hidden status line, served as wizard_ask): a long reply can lead with it.
         if (typeof m.wizard_ask === 'string' && m.wizard_ask.trim()) cur.a.ask = m.wizard_ask.trim();
         // Hermes' own "Your request was not processed" boundary row (display_kind failed_turn), not the model's words.
-        if (kind === 'failed_turn') cur.a.failed = true;
+        // Older Hermes stores it as plain assistant text: the same exact sentences the Agent Service treats as one.
+        if (kind === 'failed_turn' || FAILED_TURN_TEXT.has(String(t).trim())) cur.a.failed = true;
       } else if (cur) { if (later(cur, at)) { const prev = cur; newTurn(null); cur.at = at; cur.later = { at, after: prev.a.at }; } cur.steps++; noteWork(cur, m, at); }
     }
     for (const t of out) { liftAnswer(t); delete t.said; }
@@ -217,6 +218,9 @@
   // turn with a one-line postscript. That answer must not fold into the work log behind the postscript (ux#1319):
   // a short final reply with a much longer earlier reply in the same turn shows both, the long one first.
   const POSTSCRIPT_MAX = 500, LIFT_MIN = 1000;
+  // Issue 1500: Hermes' failure boundary texts (wizard-agent-service hermes-http-readers.mjs isFailedTurnBoundary).
+  const FAILED_TURN_TEXT = new Set(['Your request was not processed. Send it again if you still want me to carry it out.',
+    'This turn did not complete. Some actions may already have run; verify their effects before resending.']);
   function liftAnswer(t) {
     const a = t.a, said = t.said;
     if (!a || !a.final || a.failed || !said?.length || String(a.text).length >= POSTSCRIPT_MAX) return;

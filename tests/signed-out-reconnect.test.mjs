@@ -32,7 +32,7 @@ const failed = (provider, model = 'claude-fable-5-1') => ({ id: 'philosopher', s
 
 test('a failed send on a signed-out Claude subscription names the reason and offers Reconnect, not Retry', () => {
   const b = boot(); b.set([claudeOut, gptOk]);
-  for (const provider of [SUB, 'anthropic', 'claude', '']) {
+  for (const provider of [SUB, 'claude', '']) {
     const html = b.M.failureHtml({ s: failed(provider), canRetry: true });
     assert.match(html, /This didn’t send because your Claude subscription is disconnected/, provider);
     assert.match(html, /<button type="button" data-chreconnect="wizard-claude" data-recovery-run="">Reconnect Claude<\/button>/, provider);
@@ -109,4 +109,78 @@ test('Reconnect on the card opens the Claude app at Connect when there is no sav
   const src = read('web/core/chat-power.js');
   assert.match(src, /if \(!runId && \(RECONNECT_APPS\.has\(appId\) \|\| appId === 'wizard-tinfoil'\)\) \{ const path = .*: `\/\$\{appId\}\/\?reconnect=1`; if \(!window\.WizOpenApp\?\.\(appId, path\)\) location\.assign\(path\); return true; \}/);
   assert.match(src, /addEventListener\?\.\('wos:ai-signin', \(\) => rerenderAll\(\)\)/);
+});
+
+// Issue 1500: an expired sign-in, the desktop Errors row, the generic line above the card, the app's own sentence,
+// the Anthropic API key and the doubled name.
+const claudeExpired = { id: 'claude', name: 'Claude', status: 'unavailable', fetchedAt: null, limits: [],
+  error: { code: 'expired', message: 'Claude sign-in has expired.' } };
+const gptExpiredAccounts = { id: 'codex', name: 'ChatGPT', status: 'ok', accounts: [
+  { id: 'codex:main', providerId: 'codex', providerName: 'ChatGPT', name: 'ChatGPT', status: 'unavailable', limits: [],
+    error: { code: 'expired', message: 'ChatGPT sign-in needs reconnecting.' } }] };
+
+test('issue 1500: an expired sign-in (whole family or per account) gets Reconnect, not Retry', () => {
+  const b = boot(); b.set([claudeExpired, gptExpiredAccounts]);
+  const c = b.M.failureHtml({ s: failed(SUB), canRetry: true });
+  assert.match(c, /your Claude subscription is disconnected/); assert.match(c, /Reconnect Claude/); assert.doesNotMatch(c, /data-chretry |>Retry</);
+  const g = b.M.failureHtml({ s: failed('openai-codex', 'gpt-6.1-sol'), canRetry: true });
+  assert.match(g, /Reconnect ChatGPT/); assert.doesNotMatch(g, /data-chretry |>Retry</);
+  assert.match(b.home(), /Reconnect Claude/); assert.match(b.home(), /Reconnect ChatGPT/);
+  assert.match(b.details(), /Reconnect Claude/); assert.match(b.details(), /Reconnect ChatGPT/);
+  // A provider_error is not a sign-in: Retry stays.
+  b.set([{ ...claudeExpired, error: { code: 'provider_error', message: 'Usage unavailable' } }]);
+  assert.match(b.M.failureHtml({ s: failed(SUB), canRetry: true }), /data-chretry /);
+});
+
+test('issue 1500: no "Open the Claude app and press Connect" beside the Reconnect button; the title names Claude once', () => {
+  const b = boot(); b.set([claudeOut, gptOk]);
+  const d = b.details();
+  assert.match(d, /Reconnect Claude/); assert.doesNotMatch(d, /press Connect|Open the Claude app/);
+  const lb = /<span class="lb">([^<]*)<\/span>/.exec(b.M.failureHtml({ s: failed(SUB), canRetry: true }))[1];
+  assert.equal((lb.match(/Claude/g) || []).length, 1, lb);
+});
+
+test('issue 1500: an Anthropic API-key route never shows the subscription card', () => {
+  const b = boot(); b.set([claudeOut]);
+  const html = b.M.failureHtml({ s: failed('anthropic'), canRetry: true });
+  assert.doesNotMatch(html, /Reconnect|disconnected/); assert.match(html, /data-chretry /);
+  assert.equal(b.M.signedOutFail(failed('anthropic')), null);
+});
+
+test('issue 1500: the Errors row (desktop sidebar) offers Reconnect and no Retry while signed out', () => {
+  const b = boot(); b.set([claudeExpired]);
+  const src = read('web/core/chat-power.js');
+  const body = src.slice(src.indexOf('  function errorRow(s, rowHtml) {'), src.indexOf('  function errorsExtra() {'));
+  const make = () => vm.runInNewContext(`(function(){ const esc = s => String(s ?? ''); const E = { busy: new Map() }; const M = window.WosModels;
+    const retrying = new Map(); const threadModel = s => ({ model: s.model, provider: s.provider });
+    const signedOutFail = (s, busy = '') => (s && M?.signedOutFail ? M.signedOutFail({ ...s, ...threadModel(s) }, busy || (retrying.has(s.id) ? 'retry' : '')) : null);
+    ${body} return errorRow; })()`, b.ctx);
+  const errorRow = make();
+  for (const [kind, agent] of [['main', ''], ['host-ops', 'host'], ['box', 'container'], ['locked', 'restricted']]) {
+    const row = errorRow({ ...failed(SUB), id: 'same-id', agent, agentKind: kind }, '<button data-chopen="same-id">row</button>');
+    assert.match(row, /data-chreconnect="wizard-claude" data-recovery-run="">Reconnect Claude/, kind);
+    assert.doesNotMatch(row, /data-errretry|>Retry</, kind); assert.match(row, /data-errdismiss/, kind);
+  }
+  b.set([claudeOk]);
+  assert.match(errorRow(failed(SUB), ''), /data-errretry/);
+  assert.match(src, /const signedOutFail = \(s, busy = ''\) => \(s && M\?\.signedOutFail \? M\.signedOutFail\(\{ \.\.\.s, \.\.\.threadModel\(s\) \}/);
+});
+
+test('issue 1500: the generic "not processed… send it again" line is hidden above a Reconnect card', () => {
+  const src = read('web/core/chats.js');
+  assert.match(src, /const signedOut = !working && !!PW\?\.signedOutFail\?\.\(s\);/);
+  assert.match(src, /s\?\.helperStatus, s\?\.reconnect \|\| !!runErr \|\| signedOut, /);
+  assert.match(src, /\(!runErr && !signedOut && s\?\.safeError/);
+  assert.match(src, /if \(last && reconnect && tn\.a\?\.failed\) tn = \{ \.\.\.tn, a: null \};/);
+});
+
+test('issue 1500: Hermes\' plain-text failure boundary (older Hermes, no display_kind) is marked like failed_turn', () => {
+  const ctx = { location: { origin: 'https://w.example', hostname: 'w.example', href: 'https://w.example/' }, localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    navigator: {}, document: { addEventListener() {}, querySelector: () => null, createElement: () => ({ style: {} }) }, addEventListener() {}, setTimeout, clearTimeout, console, URL, Intl, Date };
+  ctx.window = ctx;
+  vm.runInNewContext(read('web/core/chat-kit.js'), ctx);
+  const KIT = ctx.WosChat;
+  const rows = text => [{ role: 'user', content: 'What is virtue?', timestamp: 1 }, { role: 'assistant', content: text, timestamp: 2 }];
+  assert.equal(KIT.parseRows(rows('Your request was not processed. Send it again if you still want me to carry it out.')).at(-1).a.failed, true);
+  assert.equal(KIT.parseRows(rows('Virtue is a settled habit.')).at(-1).a.failed, undefined);
 });

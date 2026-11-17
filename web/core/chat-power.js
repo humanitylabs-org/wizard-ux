@@ -434,6 +434,8 @@ window.WosChatPower = function chatPower(A) {
     } catch (e) { toast('!', 'Couldn’t reach Wizard · tap Continue again', 2600); }
     finally { c.continuing = ''; rerenderAll(); }
   }
+  // The thread's own model route decides which subscription it runs on (issue 1500: one rule for every surface).
+  const signedOutFail = (s, busy = '') => (s && M?.signedOutFail ? M.signedOutFail({ ...s, ...threadModel(s) }, busy || (retrying.has(s.id) ? 'retry' : '')) : null);
   function failureHtml(w, s) {
     // Main agent only: the Service's discovery and Continue routes are scoped to it (agent_id hermes).
     if (s?.backgroundResult && !s.agent && backgroundOn()) return backgroundHtml(w, s);
@@ -579,6 +581,10 @@ window.WosChatPower = function chatPower(A) {
     const busy = E.busy.get(s.id);
     const rc = s.reconnect ? `<button type="button" data-chreconnect="${esc(s.reconnect.appId)}" data-recovery-run="${esc(s.reconnect.runId || '')}">Sign in</button>` : '';
     if (rc) return `<div class="ch-err diagnosed" data-errsid="${esc(s.id)}">${rowHtml}</div>`;
+    // Issue 1500: the subscription reads signed out or expired: Retry would only fail again, so the row offers
+    // Reconnect (the same rule as the thread's card) and Dismiss.
+    const out = signedOutFail(s, busy);
+    if (out) return `<div class="ch-err diagnosed" data-errsid="${esc(s.id)}" data-chsignedout="${esc(out.provider)}">${rowHtml}<div class="ch-err-b"><button type="button" data-chreconnect="${esc(out.appId)}" data-recovery-run="">Reconnect ${esc(out.name)}</button><button type="button" class="ghost" data-errdismiss="${esc(s.id)}" ${busy ? 'disabled' : ''}>${busy === 'dismiss' ? 'Dismissing…' : 'Dismiss'}</button></div></div>`;
     // Issue 1235: a chat another app owns can't be retried from here; only Dismiss.
     if (M?.foreignApp?.(s)) return `<div class="ch-err diagnosed" data-errsid="${esc(s.id)}">${rowHtml}<div class="ch-err-b"><button type="button" class="ghost" data-errdismiss="${esc(s.id)}" ${busy ? 'disabled' : ''}>${busy === 'dismiss' ? 'Dismissing…' : 'Dismiss'}</button></div></div>`;
     return `<div class="ch-err" data-errsid="${esc(s.id)}">${rowHtml}<div class="ch-err-b">${rc}<button type="button"${rc ? ' class="ghost"' : ''} data-errretry="${esc(s.id)}" ${busy ? 'disabled' : ''}>Retry</button><button type="button" class="ghost" data-errdismiss="${esc(s.id)}" ${busy ? 'disabled' : ''}>${busy === 'dismiss' ? 'Dismissing…' : 'Dismiss'}</button></div></div>`;
@@ -869,6 +875,6 @@ window.WosChatPower = function chatPower(A) {
     await pickModel(m, { wid, sid, alive: sameTarget, mode: sid ? 'thread' : 'new' });
     return sameTarget() ? tweakModel(wid) : null;
   }
-  return { tweakModels, tweakModel, position, capture, resume, reflow, follow, restore, anchorOf, landAt, latestBtn, filesBtn, workHtml, modelChip, modelLabel, modelSwitch: (w, s) => M?.ours?.() ? modelSwitch(w, s) : '', ensureModels, failureHtml, errorsFilter, errorRow, errorsExtra, micBtn, sendVoiceTo, paintMic,
+  return { tweakModels, tweakModel, position, capture, resume, reflow, follow, restore, anchorOf, landAt, latestBtn, filesBtn, workHtml, modelChip, modelLabel, modelSwitch: (w, s) => M?.ours?.() ? modelSwitch(w, s) : '', ensureModels, failureHtml, signedOutFail, errorsFilter, errorRow, errorsExtra, micBtn, sendVoiceTo, paintMic,
     paint, closeSheet, sheetOpen: () => !!sheet, click, bind, opened, holds, openFiles, openModels, retryThread, FOLDER_SVG, RP, newModel: c => c.newModel || null };
 };
