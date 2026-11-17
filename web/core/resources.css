@@ -116,3 +116,8 @@ body>.rs-backdrop{position:fixed}
 .rs-h-error{border-color:color-mix(in srgb,var(--red,#ff6b6b) 50%,var(--line))!important}
 .rs-h-error .rs-health-line span{color:var(--red,#ff6b6b)}
 .rs-health.rs-stale{opacity:.7}
+
+/* Issue 1487: a signed-out subscription's Reconnect, under Home's AI zone and in Resources › AI accounts. */
+.rs-reconnect, .us-fix { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px 15px; border-top: 1px solid var(--line); }
+.us-fix { padding: 8px 4px 0; border-top: 0; }
+.rs-reconnect button, .us-fix button { min-height: 36px; padding: 0 16px; border: 0; border-radius: 18px; font-size: .875rem; font-weight: 700; color: var(--wz-on-accent, var(--wz-base)); background: var(--wz-accent); cursor: pointer; }
