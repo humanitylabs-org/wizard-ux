@@ -112,8 +112,10 @@
     for (const [old, current] of Object.entries(catalog?.aliases || {})) if (current === id && Object.hasOwn(own.tweaks, old)) return own.tweaks[old];
     return undefined;
   };
+  // A worn own skin decides only the switches it saved a choice for; every other switch follows the owner's own
+  // (wizard-ux#1529: a Files skin saves none, and wearing it used to turn every feature off).
   const enabled = (id, own = recipe()) => id === LOOK_ONLY ? lookOnly() : retiring(id) ? false : globalIds().includes(id) ? !globalOff(id) && recipeChoice(own, id) !== false
-    : own ? (recipeChoice(own, id) ?? presetOn(id)) : (mixOf(id) ?? presetOn(id));
+    : recipeChoice(own, id) ?? mixOf(id) ?? presetOn(id);
   // Packages that fill the same place (two Home maps): the first one listed in a catalog `oneOf` group wins.
   // An explicit off for any member (My skin recipe, a saved off, a release-wide off) turns the whole group off.
   const oneOf = (ids, own = recipe()) => { const out = [...ids]; for (const g of catalog?.oneOf || []) { const off = g.some(id => recipeChoice(own, id) === false || offFor(owner).includes(id) || globalOff(id)), on = g.filter(x => out.includes(x)); for (const id of off ? on : on.slice(1)) out.splice(out.indexOf(id), 1); } return out; };
