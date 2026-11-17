@@ -1,0 +1,43 @@
+[
+ {
+  "check": "settings-card",
+  "skin": "nebula",
+  "shell": "desktop",
+  "text": "WizardOS update ready 0.3.243 Update now"
+ },
+ {
+  "check": "settings-card",
+  "skin": "nebula",
+  "shell": "phone",
+  "text": "WizardOS update ready 0.3.243 Update now"
+ },
+ {
+  "check": "settings-card",
+  "skin": "grove",
+  "shell": "desktop",
+  "text": "WizardOS update ready 0.3.243 Update now"
+ },
+ {
+  "check": "settings-card",
+  "skin": "grove",
+  "shell": "phone",
+  "text": "WizardOS update ready 0.3.243 Update now"
+ }
+]
+nebula: the first Esc minimizes the panel and changes nothing behind it {"panelHidden":false,"shell":{"settings":true,"focus":"page:about","esc":["esc:settings-page"]}}
++ actual - expected
+
+  {
++   panelHidden: false,
+-   panelHidden: true,
+    shell: {
+      esc: [
++       'esc:settings-page'
+-       'esc:os-update'
+      ],
++     focus: 'page:about',
+-     focus: 'SUMMARY',
+      settings: true
+    }
+  }
+

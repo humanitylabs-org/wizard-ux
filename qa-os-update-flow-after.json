@@ -1,0 +1,117 @@
+{
+ "ok": true,
+ "results": [
+  {
+   "check": "settings-card",
+   "skin": "nebula",
+   "shell": "desktop",
+   "text": "WizardOS update ready 0.3.243 Update now"
+  },
+  {
+   "check": "settings-card",
+   "skin": "nebula",
+   "shell": "phone",
+   "text": "WizardOS update ready 0.3.243 Update now"
+  },
+  {
+   "check": "settings-card",
+   "skin": "grove",
+   "shell": "desktop",
+   "text": "WizardOS update ready 0.3.243 Update now"
+  },
+  {
+   "check": "settings-card",
+   "skin": "grove",
+   "shell": "phone",
+   "text": "WizardOS update ready 0.3.243 Update now"
+  },
+  {
+   "check": "esc-minimizes-only-the-panel",
+   "skin": "nebula",
+   "before": {
+    "settings": true,
+    "focus": "SUMMARY",
+    "esc": []
+   },
+   "after1": {
+    "panelHidden": true,
+    "shell": {
+     "settings": true,
+     "focus": "SUMMARY",
+     "esc": [
+      "esc:os-update"
+     ]
+    }
+   },
+   "after2": {
+    "panelHidden": true,
+    "shell": {
+     "settings": true,
+     "focus": "page:about",
+     "esc": [
+      "esc:os-update",
+      "esc:settings-page"
+     ]
+    }
+   },
+   "control": {
+    "ctlBefore": {
+     "settings": true,
+     "focus": "SECTION",
+     "esc": []
+    },
+    "ctlAfter": {
+     "settings": true,
+     "focus": "page:about",
+     "esc": [
+      "esc:settings-page"
+     ]
+    }
+   }
+  },
+  {
+   "check": "esc-minimizes-only-the-panel",
+   "skin": "grove",
+   "before": {
+    "settings": true,
+    "focus": "SUMMARY",
+    "esc": []
+   },
+   "after1": {
+    "panelHidden": true,
+    "shell": {
+     "settings": true,
+     "focus": "SUMMARY",
+     "esc": [
+      "esc:os-update"
+     ]
+    }
+   },
+   "after2": {
+    "panelHidden": true,
+    "shell": {
+     "settings": true,
+     "focus": "page:about",
+     "esc": [
+      "esc:os-update",
+      "esc:settings-page"
+     ]
+    }
+   },
+   "control": {
+    "ctlBefore": {
+     "settings": true,
+     "focus": "SECTION",
+     "esc": []
+    },
+    "ctlAfter": {
+     "settings": true,
+     "focus": "page:about",
+     "esc": [
+      "esc:settings-page"
+     ]
+    }
+   }
+  }
+ ]
+}
