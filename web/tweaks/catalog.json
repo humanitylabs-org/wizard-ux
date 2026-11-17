@@ -32,7 +32,8 @@
     "wizard/app-updates-hourly",
     "wizard/clear-chat-notifications",
     "wizard/sidebar-chats-view",
-    "wizard/app-panel-left"
+    "wizard/app-panel-left",
+    "wizard/assist-attach"
   ],
   "defaults": [
     "wizard/unified-inbox",
