@@ -1,0 +1,70 @@
+[
+  {
+    "stem": "phone-nebula",
+    "fab": {
+      "label": "New chat",
+      "newChannel": false
+    },
+    "plus": {
+      "form": false,
+      "draft": true
+    },
+    "row": {
+      "form": true,
+      "draft": false
+    },
+    "errors": [],
+    "pass": true
+  },
+  {
+    "stem": "ai-apps-nebula",
+    "plus": {
+      "form": false,
+      "draft": true
+    },
+    "altN": {
+      "form": false,
+      "draft": true
+    },
+    "row": {
+      "form": true,
+      "draft": true
+    },
+    "errors": [],
+    "pass": true
+  },
+  {
+    "stem": "phone-grove",
+    "fab": {
+      "label": "New chat",
+      "newChannel": false
+    },
+    "plus": {
+      "form": false,
+      "draft": true
+    },
+    "row": {
+      "form": true,
+      "draft": false
+    },
+    "errors": [],
+    "pass": true
+  },
+  {
+    "stem": "ai-apps-grove",
+    "plus": {
+      "form": false,
+      "draft": true
+    },
+    "altN": {
+      "form": false,
+      "draft": true
+    },
+    "row": {
+      "form": true,
+      "draft": true
+    },
+    "errors": [],
+    "pass": true
+  }
+]
