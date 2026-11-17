@@ -553,6 +553,9 @@ window.WosChatPower = function chatPower(A) {
   }
   const RECONNECT_APPS = new Set(['wizard-claude', 'wizard-chatgpt']);
   function openReconnect(appId, installed, runId = '') {
+    // Issue 1487: no saved run to recover (the shell saw the signed-out reading itself): open the connection app
+    // straight at its Reconnect step (Tinfoil: its Connect step), like Home's Reconnect row.
+    if (!runId && (RECONNECT_APPS.has(appId) || appId === 'wizard-tinfoil')) { const path = appId === 'wizard-tinfoil' ? '/wizard-tinfoil/?connect=1' : `/${appId}/?reconnect=1`; if (!window.WizOpenApp?.(appId, path)) location.assign(path); return true; }
     if (!RECONNECT_APPS.has(appId)) return false;
     const provider = appId === 'wizard-claude' ? 'claude' : 'chatgpt';
     if (window.WizOpenApp?.('troubleshooter', `/troubleshoot/?provider=${provider}&run_id=${encodeURIComponent(runId)}`)) return true;
@@ -564,6 +567,8 @@ window.WosChatPower = function chatPower(A) {
   const rowFor = (wid, sid) => { const w = H.win(A.owner ? A.owner(wid) : wid), a = w ? A.winAgent?.(w) : ''; return (a && LIVE.sessionFor ? LIVE.sessionFor(sid, a) : null) || LIVE.session(sid); };
   function dismissThread(wid, sid) { E?.dismissFailure(sid, rowFor(wid, sid)); rerenderAll(); }
   function rerenderAll() { for (const id of Object.keys(A.CH)) { const w = H.win(id); if (w) A.renderChats(w); } H.changed?.(); }
+  // A subscription signed out or back in (WosUsage reading): failed-send cards switch between Reconnect and Retry.
+  window.addEventListener?.('wos:ai-signin', () => rerenderAll());
 
   /* Errors section extras: background work Wizard flagged (/wizard/attention) and voice notes that didn't send. */
   const voiceFailed = () => (OUTBOX ? OUTBOX.unsent().filter(it => it.state === 'failed' && (it.audio || it.audioFile)) : []);

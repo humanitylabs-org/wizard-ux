@@ -80,8 +80,28 @@
     const named = scope.filter(s => s.toLowerCase() !== 'all models'), parts = named.length ? named : scope;
     return parts.length > 1 ? parts.join(' · ') : `${p.name} · ${parts[0] || l.label}`;
   }
+  // Issue 1487: a subscription whose connection app reads signed out. Every account of that family must be signed
+  // out (a second account that still works keeps the family usable). Names the connection app that reconnects it.
+  const RECONNECT = { claude: ['wizard-claude', 'Claude'], chatgpt: ['wizard-chatgpt', 'ChatGPT'], tinfoil: ['wizard-tinfoil', 'Tinfoil'] };
+  function signedOutApps(s) {
+    const fam = new Map();
+    for (const p of s?.providers || []) { const k = String(p.provider || ''); if (!RECONNECT[k]) continue; const f = fam.get(k) || { all: true }; f.all = f.all && p.signedOut === true; fam.set(k, f); }
+    return [...fam].filter(([, f]) => f.all).map(([k]) => ({ provider: k, appId: RECONNECT[k][0], name: RECONNECT[k][1] }));
+  }
+  const reconnectBtn = a => `<button type="button" class="us-reconnect" data-res-signin="${esc(a.appId)}" data-res-reconnect="1">Reconnect ${esc(a.name)}</button>`;
+  let SNAP = null, outSig = '';
   const U = {
-    snap: null, error: '', at: 0, loading: null,
+    get snap() { return SNAP; },
+    // Both readers (this module and Home's resources.js) store the reading here; a change in which subscriptions are
+    // signed out tells open chats, so a failed send names the reason as soon as Wizard knows it.
+    set snap(v) {
+      SNAP = v; const sig = signedOutApps(v).map(a => a.provider).join(',');
+      if (sig !== outSig) { outSig = sig; try { globalThis.dispatchEvent?.(new CustomEvent('wos:ai-signin', { detail: { signedOut: sig ? sig.split(',') : [] } })); } catch (_) {} }
+    },
+    error: '', at: 0, loading: null,
+    /** The connection app for a provider family ('claude' | 'chatgpt' | 'tinfoil') that reads signed out, or null. */
+    signedOut(provider) { return signedOutApps(SNAP).find(a => a.provider === provider) || null; },
+    signedOutApps: () => signedOutApps(SNAP), reconnectBtn,
     load(force) {
       if (U.loading) return U.loading;
       if (!force && U.snap && Date.now() - U.at < 60e3) return Promise.resolve(U.snap);
@@ -108,8 +128,11 @@
           + `<small class="us-r">${esc(resetLine(l.resetsAt, now) || 'No reset time reported')}</small></div>`);
         const pl = paidLine(p.paid, p.provider); if (pl) notes.push(`${p.name}: ${pl}`);
       }
+      // A signed-out subscription gets its Reconnect button right here, not only a sentence (issue 1487).
+      const fix = signedOutApps(s).map(reconnectBtn).join('');
       return `<div class="st-group st-usage" data-usage>${head}${rows.join('') || '<div class="st-empty">No quota windows reported.</div>'}`
         + (notes.length ? `<p class="st-note us-notes">${notes.map(esc).join('<br>')}</p>` : '')
+        + (fix ? `<div class="us-fix">${fix}</div>` : '')
         + `<p class="st-note">${U.error ? 'Last known reading · ' : ''}${esc(freshness(s.providers, now))}${U.error ? ' · ' + esc(U.error) : ''} · times in ${esc(zone() || 'local time')}</p></div>`;
     },
   };

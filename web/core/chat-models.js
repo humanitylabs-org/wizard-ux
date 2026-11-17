@@ -503,9 +503,29 @@
         : (moreRows ? sec('More models', moreRows) : moreBtn) + (curPriv ? mainSec + privSec : privSec + mainSec) + (own ? '' : M.claudeNote());
       return { list, html: `<div class="ch-sheet ch-mpop" role="dialog" aria-label="${mode === 'new' ? 'Model for this new chat' : 'Model for this thread'}"><div class="ch-sheet-b"><div class="msheet-list">${body}</div></div></div>` };
     },
+    /* Issue 1487: the subscription this thread's model runs on, when its connection app reads signed out right now
+     * (WosUsage, the same reading Home shows). Only subscription routes: an API key is not what the app repairs. */
+    signedOutFor(s) {
+      const U = window.WosUsage; if (!U?.signedOut || !s) return null;
+      const p = String(s.provider || '').toLowerCase(), m = String(s.model || '').toLowerCase();
+      const fam = CLAUDE_PROVIDERS.has(p) || p === 'claude' || (!p && /^claude-/.test(m)) ? 'claude'
+        : ['openai-codex', 'codex', 'chatgpt'].includes(p) ? 'chatgpt' : p === 'tinfoil' ? 'tinfoil' : '';
+      if (!fam) return null;
+      if (!U.snap || Date.now() - (U.at || 0) > 60e3) U.load?.();
+      return U.signedOut(fam);
+    },
     /* A failed thread: what happened, on which model, and the ways out (Retry · Choose another model · Dismiss). */
     failureHtml({ s, busy, retryLabel, canRetry }) {
       const model = s.model ? M.name(s.model, s.provider) : '';
+      // Not diagnosed by the Agent Service, but the subscription reads signed out: say so, and Reconnect, not Retry
+      // (Retry would fail again the same way). After reconnecting the reading clears and Retry sends it again.
+      // A failure the Agent Service already named (network, quota, …) keeps its own card; only no reason or a sign-in one.
+      const out = !s.reconnect && (!s.runError || s.runError.code === 'provider_auth') && ['failed', 'interrupted'].includes(s.status) && s.queueReason !== 'provider_access' && busy !== 'retry' ? M.signedOutFor(s) : null;
+      if (out) {
+        return `<section class="ch-fail diagnosed" role="alert" aria-busy="${!!busy}" data-chfail="${esc(s.id)}" data-chsignedout="${esc(out.provider)}"><span class="lb">${esc(out.name)} disconnected${model ? ` · ${esc(model)}` : ''}</span>
+        <p>This didn’t send because your ${esc(out.name)} subscription is disconnected. Your message is saved: reconnect ${esc(out.name)}, then send it again.</p>
+        <div class="ch-fail-b"><button type="button" data-chreconnect="${esc(out.appId)}" data-recovery-run="">Reconnect ${esc(out.name)}</button><button type="button" data-chretrymodel ${busy || !canRetry ? 'disabled' : ''}>Choose another model</button><button type="button" class="ghost" data-chdismiss ${busy ? 'disabled' : ''}>${busy === 'dismiss' ? 'Dismissing…' : 'Dismiss'}</button></div></section>`;
+      }
       // The provider's sign-in expired: Retry can't fix that, the provider's connection app can.
       const rc = s.reconnect;
       if (rc && s.queueReason !== 'provider_access' && busy !== 'retry') {
