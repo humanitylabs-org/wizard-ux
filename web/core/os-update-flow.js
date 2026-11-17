@@ -384,10 +384,11 @@
   }, true);
   window.addEventListener('click', e => { if (paused() && e.target.closest?.('.ch-send, form[data-chform] button[type="submit"]')) stop(e); }, true);
 
+  // Esc / Back on the open Updating panel minimizes it and does nothing else: the panel is an owner in the shared
+  // Back catalog (core/escape-back.js 'os-update'), so the same press never also closes an app or a view behind it.
   window.addEventListener('keydown', e => {
     const u = updating(); if (!u) return;
-    if (e.key === 'Escape' && !minimized(u) && !document.querySelector('dialog[open]')) { minimize(u, true); render(); }
-    else if ((e.key === 'Enter' || e.key === ' ') && e.target?.id === 'dvOsu' && minimized(u)) { e.preventDefault(); minimize(u, false); render(); }
+    if ((e.key === 'Enter' || e.key === ' ') && e.target?.id === 'dvOsu' && minimized(u)) { e.preventDefault(); minimize(u, false); render(); }
   });
 
   // ---- loop ----
@@ -418,6 +419,9 @@
     confirm, render,
     get updating() { return updating(); },
     get paused() { return paused(); },
+    // The full Updating panel is showing (not minimized, no sheet over it): Esc / Back minimizes it (back()).
+    get panelOpen() { const u = updating(); return !!u && !minimized(u) && !document.querySelector('dialog[open]'); },
+    back() { const u = updating(); if (!u || minimized(u)) return ''; minimize(u, true); render(); return 'os-update'; },
     // An apply answered `waiting` (core/os-updates.js): name the work, or say it plainly if the answer named nothing.
     waiting(target, d) {
       const names = work(d), t = target || st()?.latest || '';

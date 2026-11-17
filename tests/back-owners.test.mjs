@@ -19,6 +19,7 @@ function fixture() {
  const links={isOpen:()=>state.open==='links',back(){hits.push('links');state.open='';}};
  module('WosDevice','device','sheet');w.WizWebUpdate={_state:()=>({listOpen:state.open==='update-list'}),back(){hits.push('update-list');state.open='';}};
  w.WosResources={get state(){return {panel:state.open==='resources'};},back(){hits.push('resources');state.open='';}};
+ w.WosUpdateFlow={get panelOpen(){return state.open==='os-update';},back(){hits.push('os-update');state.open='';return 'os-update';}};
  w.WizCore={status:{get state(){return {fatal:state.open==='status'};},back(){hits.push('status');state.open='';}}};
  c.CH={get x(){return {sheet:state.open==='filter-sheet'};}};
  for(const [variable,name] of [['swipeOpen','row-swipe'],['spacePicker','space-picker'],['rowSheet','thread-actions']]) Object.defineProperty(c,variable,{get:()=>state.open===name});
@@ -39,9 +40,16 @@ test('phone history/native Back and desktop Escape install the identical shared 
  assert.match(desktop,/escapeOverlay: close => escapeBack\.push\(close\)/);
 });
 test('enumerate EVERY registered shared Back handler: actual desktop Escape reaches each exactly once',()=>{
- const f=fixture(),expected=['welcome','orb-picker','share-wizard','pin-sheet','tour','share','lookup','selection','context','route','setup','reminder','viewer','viewer-menu','link-menu','links','downloads','row-swipe','space-picker','filter-sheet','thread-actions','chat-sheet','status','device','update-list','resources'];
+ const f=fixture(),expected=['welcome','orb-picker','share-wizard','pin-sheet','tour','share','lookup','selection','context','route','setup','reminder','viewer','viewer-menu','link-menu','links','downloads','row-swipe','space-picker','filter-sheet','thread-actions','chat-sheet','status','device','update-list','resources','os-update'];
  assert.deepEqual(Array.from(f.stack.names()).sort(),expected.sort());
  for(const name of expected) {f.state.open=name;const n=f.hits.length;f.press();assert.deepEqual(f.hits.slice(n),[name],name);}
+});
+test('the WizardOS Updating panel (drawn over everything) takes Esc before a newer owner under it, once',()=>{
+ const f=fixture();let panel=true;const opened=['context'];
+ Object.defineProperty(f.w.WosUpdateFlow,'panelOpen',{configurable:true,get:()=>panel});f.w.WosUpdateFlow.back=()=>{f.hits.push('os-update');panel=false;return 'os-update';};
+ f.stack.sync();f.state.open='context';f.stack.sync();   // the menu opened AFTER the panel showed
+ f.press();assert.deepEqual(f.hits,['os-update']);assert.equal(f.state.open,'context');
+ f.press();assert.deepEqual(f.hits,['os-update','context']);
 });
 test('voice-note cancellation beats image viewer, menu, chat and app focus; never sends',()=>{
  const f=fixture();f.state.open='viewer';f.state.voice=true;f.press();assert.deepEqual(f.hits,['voice-cancel']);assert.equal(f.state.open,'viewer');f.press();assert.deepEqual(f.hits,['voice-cancel','viewer']);
