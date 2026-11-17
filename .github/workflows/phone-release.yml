@@ -102,7 +102,7 @@ jobs:
           python3 tools/phone_release.py ci --publish \
             --apk android/app/build/outputs/apk/release/app-release.apk \
             --commit "$GITHUB_SHA" --output "$RUNNER_TEMP/phone" \
-            --notes "${NOTES:-Shared Wizard OS phone release $V, built and signed from main; no owner address is built in.}" \
+            --notes "${NOTES:-Shared WizardOS phone release $V, built and signed from main; no owner address is built in.}" \
             "${extra[@]}"
           echo "Published android-v$V (signer 3bf74d0b…d1fd)." >> "$GITHUB_STEP_SUMMARY"
       - name: Remove the keystore
