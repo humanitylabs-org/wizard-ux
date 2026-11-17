@@ -357,9 +357,9 @@ public final class EverywhereOutbox {
         for (int i = 0; i < it.shots.length(); i++) //noinspection ResultOfMethodCallIgnored
             new File(it.shots.optString(i)).delete();
         for (int i = 0; i < it.files.length(); i++) {
-            JSONObject f = it.files.optJSONObject(i);
-            if (f != null) //noinspection ResultOfMethodCallIgnored
-                new File(f.optString("path")).delete();
+            JSONObject picked = it.files.optJSONObject(i);
+            if (picked != null) //noinspection ResultOfMethodCallIgnored
+                new File(picked.optString("path")).delete();
         }
     }
 

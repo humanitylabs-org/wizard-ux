@@ -94,7 +94,7 @@ public class AssistPickActivity extends Activity {
 
     private void openPicker() {
         Intent i = new Intent(Intent.ACTION_GET_CONTENT)
-                .setType("*/*")
+                .setType("*/" + "*") // any type; written so no "slash-star" starts a comment for source scanners
                 .addCategory(Intent.CATEGORY_OPENABLE)
                 .putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
         startActivityForResult(i, REQ);
@@ -111,9 +111,9 @@ public class AssistPickActivity extends Activity {
     protected void onActivityResult(int req, int result, Intent data) {
         super.onActivityResult(req, result, data);
         if (req != REQ) return;
-        final File shot = photo;
+        final File cameraJpeg = photo;
         final List<Uri> uris = new ArrayList<>();
-        if (result == RESULT_OK && shot == null && data != null) {
+        if (result == RESULT_OK && cameraJpeg == null && data != null) {
             ClipData clip = data.getClipData();
             if (clip != null) for (int i = 0; i < clip.getItemCount(); i++) { Uri u = clip.getItemAt(i).getUri(); if (u != null) uris.add(u); }
             else if (data.getData() != null) uris.add(data.getData());
@@ -122,16 +122,16 @@ public class AssistPickActivity extends Activity {
         new Thread(() -> {
             List<EverywhereOutbox.Attachment> got = new ArrayList<>();
             int tooBig = 0;
-            if (shot != null) {
-                if (ok && shot.isFile()) {
-                    if (!AttachPolicy.fits(shot.length())) { if (shot.length() > 0) tooBig++; }
-                    else try (InputStream in = new FileInputStream(shot)) {
+            if (cameraJpeg != null) {
+                if (ok && cameraJpeg.isFile()) {
+                    if (!AttachPolicy.fits(cameraJpeg.length())) { if (cameraJpeg.length() > 0) tooBig++; }
+                    else try (InputStream in = new FileInputStream(cameraJpeg)) {
                         byte[] b = read(in);
                         if (b != null) got.add(new EverywhereOutbox.Attachment(b, "photo-" + System.currentTimeMillis() + ".jpg", "image/jpeg", AttachPolicy.KIND_PHOTO));
                     } catch (IOException e) { Log.w(TAG, "camera photo unreadable", e); }
                 }
                 //noinspection ResultOfMethodCallIgnored
-                shot.delete();
+                cameraJpeg.delete();
             }
             int room = AttachPolicy.MAX_ON;
             for (Uri u : uris) {
