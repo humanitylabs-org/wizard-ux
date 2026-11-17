@@ -13,11 +13,15 @@ public final class AppSessionActivity extends MainActivity {
         // Drop caller extras/actions before MainActivity sees them; invalid data gets
         // only the isolated unavailable surface, never the ordinary workspace.
         String requested = HomeScreenShortcuts.appId(this,getIntent());
+        // A link to this app asked for this window (AppWindows, switch wizard/app-windows): where to open, and that
+        // Back at the app's start returns to the window the link was in. Read before the extras are dropped.
+        if (requested != null && AppWindows.on(this)) linked(getIntent());
         setIntent(new Intent(this,AppSessionActivity.class).setAction(Intent.ACTION_VIEW)
             .setData(requested == null ? null : getIntent().getData()));
         super.onCreate(state);
         applyImmersive(false);
         String app = HomeScreenShortcuts.appId(this,getIntent());
+        if (app != null && !linkName.isEmpty()) setTaskDescription(new ActivityManager.TaskDescription(linkName,null,0xff110d1b));
         if (app != null) {
             // ShortcutManager performs binder/disk work; keep it off the first-paint UI thread.
             new Thread(() -> updateTaskLabel(app), "home-screen-task-label").start();
@@ -45,7 +49,26 @@ public final class AppSessionActivity extends MainActivity {
     }
     @Override String startUrl(Intent intent) {
         String app = HomeScreenShortcuts.appId(this,intent);
-        return ai.wizards.os.device.AppState.homeUrl(this) + "?app-session=" + android.net.Uri.encode(app == null ? "" : app);
+        String at = linkPath; linkPath = "";
+        return ai.wizards.os.device.AppState.homeUrl(this) + "?app-session=" + android.net.Uri.encode(app == null ? "" : app)
+            + (app != null && !at.isEmpty() ? "&app-path=" + android.net.Uri.encode(at) : "");
+    }
+    /* ---- App windows (wizard-os issue 650, switch wizard/app-windows, off by default) ---- */
+    private String linkPath = "", linkName = "";
+    private boolean fromLink = false;
+    /** Takes what a link launch carries; an icon tap (no extras) clears "opened by a link". */
+    private void linked(Intent intent) {
+        fromLink = intent.getBooleanExtra(AppWindows.EXTRA_FROM_LINK, false);
+        String at = AppWindows.path(intent.getStringExtra(AppWindows.EXTRA_PATH));
+        linkPath = at == null ? "" : at;
+        linkName = AppWindows.name(intent.getStringExtra(AppWindows.EXTRA_NAME));
+    }
+    /** Back at the app's start in a window a link opened: return to where the link was (once), never exit. */
+    boolean backToLink() {
+        if (!fromLink) return false;
+        fromLink = false;
+        if (!AppWindows.on(this)) return false; // the switch went off while this window was open
+        return moveTaskToBack(true);
     }
     @Override protected void onNewIntent(Intent intent) {
         // intoExisting has already selected this exact canonical component/data task.
@@ -53,6 +76,12 @@ public final class AppSessionActivity extends MainActivity {
         if (HomeScreenShortcuts.appId(this,intent) == null || getIntent().getData() == null
                 || !getIntent().getData().equals(intent.getData())) return;
         super.onNewIntent(intent);
+        if (AppWindows.on(this)) {
+            linked(intent);
+            // A link to a page inside this app: the open window goes there (its page checks the page is in the app).
+            String at = linkPath; linkPath = "";
+            if (!at.isEmpty()) evalJs("(window.__wosSessionGo && window.__wosSessionGo(" + org.json.JSONObject.quote(at) + "))");
+        } else { fromLink = false; linkPath = ""; } // switch off since: an icon tap keeps today's Back
         setIntent(new Intent(this,AppSessionActivity.class).setAction(Intent.ACTION_VIEW).setData(intent.getData()));
     }
     boolean acceptsUrl(String raw) {

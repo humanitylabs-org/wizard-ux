@@ -290,9 +290,46 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         }));
         if (!(this instanceof AppSessionActivity)) {
             if (ACTION_ACCESSIBILITY.equals(getIntent().getAction())) { getIntent().setAction(Intent.ACTION_MAIN); main.post(() -> offerAccessibility(true)); }
+            linkIntent(getIntent().getData());
             queueHandoff(getIntent());
             device.onIntent(getIntent());
         }
+    }
+
+    /* ---- App windows (wizard-os issue 650, switch wizard/app-windows, off by default): a link to a Wizard app opens
+     * that app's own window (AppWindows). Only right after a real tap here, or once after a link intent to an app. ---- */
+    private long tapUpAt = 0, linkIntentAt = 0, appWindowAt = 0;
+    @Override
+    public boolean dispatchTouchEvent(android.view.MotionEvent e) {
+        if (e.getActionMasked() == android.view.MotionEvent.ACTION_UP) tapUpAt = android.os.SystemClock.elapsedRealtime();
+        return super.dispatchTouchEvent(e);
+    }
+    /** This app was opened with a link to an app (…/wizard-os-home/?open=<id>, e.g. from a notification). */
+    private void linkIntent(Uri data) {
+        try {
+            if (data != null && Origin.isInApp(this, data) && data.getQueryParameter("open") != null) linkIntentAt = android.os.SystemClock.elapsedRealtime();
+        } catch (RuntimeException malformed) { /* not a link to an app */ }
+    }
+    void evalJs(String js) { if (web != null) web.evaluateJavascript(js, null); }
+    private boolean openAppWindow(String appId, String path, String name) {
+        if (!AppWindows.on(this)) return false;
+        final String id = String.valueOf(appId), at = AppWindows.path(path);
+        if (!HomeScreenPolicy.validId(id) || at == null) return false;
+        // This app's own window keeps its links in place.
+        if (this instanceof AppSessionActivity && id.equals(HomeScreenShortcuts.appId(this, getIntent()))) return false;
+        final Intent launch;
+        synchronized (this) {
+            long now = android.os.SystemClock.elapsedRealtime();
+            if (!AppWindows.admitted(now, tapUpAt, linkIntentAt, appWindowAt)) return false;
+            if (!(tapUpAt > 0 && now - tapUpAt <= AppWindows.TAP_MS)) linkIntentAt = 0; // a link intent opens one window
+            try { launch = AppWindows.intent(this, id, at, name); } catch (RuntimeException noOrigin) { return false; }
+            appWindowAt = now;
+        }
+        runOnUiThread(() -> {
+            if (isFinishing() || isDestroyed()) return;
+            try { startActivity(launch); } catch (RuntimeException e) { android.util.Log.w("WizardAppWindows", "could not open " + id, e); }
+        });
+        return true;
     }
 
     private void buildWebView() {
@@ -472,6 +509,8 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         if (reach != null && reach.isOffline()) { retryReach(); return; } // Back on the connection screen: try again, stay
         web.evaluateJavascript("(window.__wosNativeBack ? window.__wosNativeBack() : 'nojs')", result -> {
             String r = result == null ? "" : result.replace("\"", "");
+            // An app window a link opened (switch wizard/app-windows): Back at the app's start returns to the link's window.
+            if ("root".equals(r) && this instanceof AppSessionActivity && ((AppSessionActivity)this).backToLink()) return;
             if (!r.equals("nojs") && !r.isEmpty() && !r.equals("null")) return; // the shell handled it
             if (this instanceof AppSessionActivity) return; // not-yet-loaded sessions consume Back too
             // The shell is not loaded (or is a page off the shell): step back in the WebView, else go home.
@@ -504,6 +543,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         if (this instanceof AppSessionActivity) return; // document root owns resume; no workspace handoff/navigation
         setIntent(intent);
         Uri data = intent.getData();
+        linkIntent(data);
         if (data != null && Origin.isInApp(MainActivity.this, data)) {
             go(inAppUrl(data.toString()));
         }
@@ -1535,6 +1575,17 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         public void assistAttachSwitch(boolean on) {
             if (MainActivity.this instanceof AppSessionActivity) return;
             ai.wizards.os.assist.AssistAttach.setOn(MainActivity.this, on);
+        }
+        /* ---- App windows (wizard-os issue 650, switch wizard/app-windows, off by default): the main page copies the
+         * switch here; any page asks to open an app's own window for a link (false = keep the link where it is). ---- */
+        @JavascriptInterface
+        public void appWindowsSwitch(boolean on) {
+            if (MainActivity.this instanceof AppSessionActivity) return;
+            AppWindows.setOn(MainActivity.this, on);
+        }
+        @JavascriptInterface
+        public boolean openAppWindow(String appId, String path, String name) {
+            return MainActivity.this.openAppWindow(appId, path, name);
         }
         @JavascriptInterface
         public int chatNotifyRead(String json) {
