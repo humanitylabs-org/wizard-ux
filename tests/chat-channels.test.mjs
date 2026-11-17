@@ -2110,6 +2110,20 @@ test('issue 1336: one marker per row, amber over green, spinner for working; the
   assert.ok(css.includes('.aad-rw .aad-st.is-new { width: 8px; height: 8px; background: var(--ch-new); }'), 'the AI apps unread dot is green, not the accent');
 });
 
+test('issue 1497 main vs routed: every Activity row has one marker slot, drawn left of the title, for each agent kind', () => {
+  const agents = { a: '', h1: 'host', k1: 'container', r1: 'restricted' };
+  for (const [sid, kind] of [['a', 'main'], ['h1', 'host-profile'], ['k1', 'container'], ['r1', 'restricted']]) {
+    const f = fixture({ agents }), html = actFn(f, 'actRowMark');
+    assert.match(html(row(sid, 1, { attention: { state: 'needs_you', ask: 'x' } })), /^<span class="ch-act-ind"><i class="ch-chan-dot" role="img" aria-label="Needs you"><\/i><\/span>$/, `${kind}: amber`);
+    assert.match(html(row(sid, 1, { status: 'running' })), /^<span class="ch-act-ind"><i class="ch-spin" role="img" aria-label="Working"><\/i><\/span>$/, `${kind}: spinner`);
+    assert.equal(html(row(sid, 1)), '<span class="ch-act-ind" aria-hidden="true"></span>', `${kind}: no marker keeps an empty slot so titles line up`);
+  }
+  const css = readFileSync(new URL('../web/tweaks/wizard/chat-channels/tweak.css', import.meta.url), 'utf8');
+  assert.match(css, /\.ch-row > \.ch-act-ind \{ order: -1;/, 'the marker sits before the title');
+  assert.match(css, /\.aad-rw \.aad-row > \.aad-st \{ order: -1;/, 'the AI apps marker leads the row');
+  assert.doesNotMatch(css, /\.ch-act-ind \{ order: 6;/, 'nothing puts it back at the right end');
+});
+
 test('issue 1336: the three sorts (Newest first, Oldest first, Needs you first); Recent is always newest first', () => {
   const f = fixture();
   const rows = [row('old-needs', 5, { attention: { state: 'needs_you', ask: 'x' } }), row('mid', 3, { fresh: true }), row('new', 1, { fresh: true }), row('r1', 2), row('r2', 4)];
