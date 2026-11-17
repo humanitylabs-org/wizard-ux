@@ -99,7 +99,7 @@ const report = { origin, web, expect: EXPECT, cases: [] };
         entry.title = await page.evaluate(() => (document.querySelector('.aad-tt')?.textContent || '').trim());
         entry.back = (await vis('.aad-cback').innerText()).trim();
         await page.screenshot({ path: path.join(out, stem + '-thread.png') });
-        assert.equal(entry.back, '‹ # Launch');
+        assert.equal(entry.back, '‹ 💬 Launch');
         if (EXPECT === 'broken') { assert.equal(entry.title, '', 'main: blank title beside Back'); entry.pass = true; continue; }
         assert.equal(entry.title, 'Launch venue');
         assert.ok(entry.frames.length > 10, 'frames sampled: ' + entry.frames.length);

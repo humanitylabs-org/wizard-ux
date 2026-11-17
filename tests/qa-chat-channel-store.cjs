@@ -159,14 +159,14 @@ const report = { origin, web, cases: [] };
         // Activity: the "# channel" comes from the row (the projection still says Voice for qa-l1).
         await vis('[data-chview="activity"]').click(); await vis('.ch-list [data-chopen="qa-g1"]').waitFor();
         entry.line = (await vis('.ch-list [data-chopen="qa-l1"]').innerText()).replace(/\s+/g, ' ');
-        assert.match(entry.line, /# Launch/);
+        assert.match(entry.line, /💬 Launch/);
         // Move to channel: one PUT membership with the row's agent; the line follows at once.
         await menu(vis('.ch-list [data-chopen="qa-g1"]'));
         await vis('.ch-sheet [data-rsspacepicker]').click();
         await vis('.ch-space-picker [data-spspace="ideas"]').click(); await nap(400);
         entry.move = entry.writes.filter(w => w.path === '/wizard/v1/channels/membership').map(w => w.body);
         assert.deepEqual(entry.move, [{ sessionId: 'qa-g1', channelId: 'ideas', agent: 'hermes' }]);
-        await page.waitForFunction(() => [...document.querySelectorAll('.ch-list [data-chopen="qa-g1"]')].some(x => x.getClientRects().length && /# Ideas/.test(x.innerText)), null, { timeout: 5000 });
+        await page.waitForFunction(() => [...document.querySelectorAll('.ch-list [data-chopen="qa-g1"]')].some(x => x.getClientRects().length && /💬 Ideas/.test(x.innerText)), null, { timeout: 5000 });
         assert.equal(entry.writes.filter(w => w.path === '/wizard/v1/ui-preferences').length, 0, 'nothing through ui-preferences');
         await page.screenshot({ path: path.join(out, stem + '-moved.png') });
         assert.equal(entry.errors.length, 0, 'browser errors: ' + entry.errors.join('; '));
