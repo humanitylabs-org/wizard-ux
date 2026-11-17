@@ -1568,7 +1568,7 @@
       <nav class="home-tools" aria-label="System and settings"><button data-home-settings>Settings</button></nav>
       <div class="home-time">${window.WizConfig.hm()}</div>
       <div class="home-date">${window.WizConfig.dateLabel(Date.now(), { weekday: 'long', day: 'numeric', month: 'long' })}${i == null ? '' : ` · Desktop ${C.workspaceNav.slot(i)}`}</div>
-      <div class="home-line">${LIVE?.ok ? `<b>${L.needs.length} need${L.needs.length === 1 ? 's' : ''} you</b>, ${C.workspaceNav.chatsCount(LIVE)} unread, ${working.length} working.` : 'Connecting to Wizard…'}</div>
+      <div class="home-line">${LIVE?.ok ? `<b>${L.needs.length} need${L.needs.length === 1 ? 's' : ''} you</b>, ${C.workspaceNav.chatsCount(LIVE)} ${typeof C.activityReady?.(LIVE) === 'number' ? 'ready' : 'unread'}, ${working.length} working.` : 'Connecting to Wizard…'}</div>
       <div class="home-cols"><div class="home-card"><h4>Needs you · Unread</h4>${rows(L.needs.concat(L.ready))}</div><div class="home-card"><h4>Working</h4>${rows(working)}</div></div>
       ${pending.length ? `<button class="home-unsent" data-home-unsent>${pending.length} ${pending.some(u => u.state === 'failed') ? 'not sent' : 'waiting to send'} · View unsent messages</button>` : ''}
       <h3 class="home-resources-title">Resources</h3>${window.WosResources?.home() || ''}
