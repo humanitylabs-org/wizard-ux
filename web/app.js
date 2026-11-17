@@ -488,6 +488,8 @@
     if (!s.h) return;
     const dx = e.clientX - s.x, v = dx / ((performance.now() - s.t) || 1);
     dockSwiped = Date.now();
+    // A drag that lasted past BAR_FLICK_MS and then held still never got the move that starts the scrub: land where it points.
+    if (s.sc && !s.live && !s.up && e.timeStamp - s.ts >= BAR_FLICK_MS) { const n = Math.max(0, Math.min(desks.length - 1, s.start - Math.round(dx / SC_STEP))); s.live = true; if (n === s.start || CHATS.beforeNavigate(desks[n]?.wins || [])) s.at = n; }
     if (s.sc && (s.live || s.up)) {
       // A cancelled touch or one that rose is the system's swipe out: the desk goes back to where it started.
       if (s.up || e.type === 'pointercancel' || e.clientY - s.y < -30) { barScrubBack(s); return; }

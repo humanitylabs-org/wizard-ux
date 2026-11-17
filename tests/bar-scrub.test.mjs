@@ -32,11 +32,11 @@ function shell({ on = true, desks = 6, at = 2 } = {}) {
   vm.runInContext(BLOCK.replace('let DS = null, dockSwiped = 0;', 'var DS = null, dockSwiped = 0;'), ctx);
   const fire = (t, e) => on_[t].forEach(f => f({ type: t, pointerId: 1, pointerType: 'touch', target: { closest: () => null }, ...e }));
   // A finger: down at (x, y), moves to each dx at its time (ms), up (or cancel) at the end.
-  const finger = (path, { x = 300, y = 870, up = 'pointerup', dy = 0 } = {}) => {
+  const finger = (path, { x = 300, y = 870, up = 'pointerup', dy = 0, upAt } = {}) => {
     fire('pointerdown', { clientX: x, clientY: y, timeStamp: 0 });
     const labels = [];
     for (const [dx, t] of path) { fire('pointermove', { clientX: x + dx, clientY: y + dy, timeStamp: t }); if (cls.has('on') && labels.at(-1) !== label.textContent) labels.push(label.textContent); }
-    const [dx, t] = path.at(-1); fire(up, { clientX: x + dx, clientY: y + dy, timeStamp: t + 10 });
+    const [dx, t] = path.at(-1); fire(up, { clientX: x + dx, clientY: y + dy, timeStamp: upAt ?? t + 10 });
     return { labels, on: cls.has('on') };
   };
   const slow = dx => Array.from({ length: 12 }, (_, k) => [Math.round(dx * (k + 1) / 12), 100 + k * 60]);
@@ -61,6 +61,12 @@ test('switch on: a quick flick still moves exactly one desk', () => {
   const r = shell(); r.finger([[30, 20], [110, 80]]); assert.equal(r.ctx.idx, 1);
 });
 
+test('switch on: a drag that held still past the flick time before release still scrubs (no last move)', () => {
+  const s = shell(); s.finger([[-30, 40], [-84, 90]], { upAt: 400 });
+  assert.equal(s.ctx.idx, 5);
+  const h = shell(); h.finger([[-30, 40], [-84, 90]]); assert.equal(h.ctx.idx, 3, 'released at once: still a flick');
+});
+
 test('switch on: a drag that rises or is cancelled puts the desk back where it started', () => {
   const s = shell(); s.finger(s.slow(-84), { dy: -40 }); assert.equal(s.ctx.idx, 2);
   const c = shell(); c.finger(c.slow(-84), { up: 'pointercancel' }); assert.equal(c.ctx.idx, 2);
@@ -77,7 +83,7 @@ test('switch is a catalogued off-by-default tweak whose sheet only hides the han
   const cat = JSON.parse(read('web/tweaks/catalog.json'));
   assert.ok(cat.tweaks.includes(ID)); assert.ok(!cat.defaults.includes(ID));
   const man = JSON.parse(read('web/tweaks/wizard/bar-scrub/manifest.json'));
-  assert.equal(man.id, ID); assert.deepEqual(man.issues, ['humanitylabs-org/wizard-ux#1491']);
+  assert.equal(man.id, ID); assert.deepEqual(man.shells, ['phone']); assert.deepEqual(man.issues, ['humanitylabs-org/wizard-ux#1491']);
   const css = read('web/tweaks/wizard/bar-scrub/tweak.css').replace(/\/\*[\s\S]*?\*\//g, '');
   for (const rule of css.split('}').map(r => r.trim()).filter(Boolean)) assert.match(rule, /^html\[data-tweaks~="wizard\/bar-scrub"\] #scrub/);
   assert.match(APP, /const barScrubOn = \(\) => \{ try \{ return String\(document\.documentElement\.dataset\.tweaks \|\| ''\)\.split\(' '\)\.includes\('wizard\/bar-scrub'\)/);

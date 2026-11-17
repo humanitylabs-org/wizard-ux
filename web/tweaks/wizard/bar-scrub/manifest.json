@@ -7,6 +7,7 @@
   "capabilities": [
     "layout"
   ],
+  "shells": ["phone"],
   "issues": [
     "humanitylabs-org/wizard-ux#1491"
   ],
