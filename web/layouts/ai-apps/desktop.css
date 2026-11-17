@@ -1115,3 +1115,6 @@ html[data-shell="desktop"][data-layout="ai-apps"][data-aad-tabs="bar"] .win .dch
 html[data-shell="desktop"][data-layout="ai-apps"][data-aad-tabs="bar"] .win .dchats .pane-main .ch-row2::after { display: none; }
 /* everything else ends at the bar */
 html[data-shell="desktop"][data-layout="ai-apps"][data-aad-tabs="bar"] #stage > .wsp:not([data-aad-role]) { bottom: var(--aad-pane-main-bottom); }
+/* (a desk with one window, Home's or a new chat's, is set 8 px past the edges at the top of this file; the bar's edge
+ * needs the same weight, or that window and its message bar run under the bar: ux#1495) */
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-tabs="bar"] #stage > .wsp:not([data-aad-role]):not(:has(> .win:not(.gone) ~ .win:not(.gone))) { bottom: calc(var(--aad-pane-main-bottom) - 8px); }
