@@ -73,7 +73,7 @@ const nap = ms => new Promise(r => setTimeout(r, ms));
         const handle = () => page.evaluate(() => { const s = document.querySelector('#scrub'), i = s?.querySelector('i'); if (!i) return false; const b = i.getBoundingClientRect(); return getComputedStyle(i).display !== 'none' && getComputedStyle(s).display !== 'none' && b.width > 0 && +getComputedStyle(i).opacity > 0; });
         // A finger on the bar: hold `hold` ms, then move dx in `moves` steps over `ms`, sampling the label as it goes.
         // peek: after each move, the desk the scrub points at is rendered (not parked) and has slid on screen.
-        const peekNow = () => page.evaluate(() => { const d = __wos.desks[__wos.idx], el = d && document.querySelector(`.desk[data-did="${d.id}"]`); if (!el) return null; const b = el.getBoundingClientRect(); return { at: __wos.idx, shown: getComputedStyle(el).contentVisibility !== 'hidden' && !el.classList.contains('parked'), left: Math.round(b.left) }; });
+        const peekNow = () => page.evaluate(() => { const d = __wos.desks[__wos.idx], el = d && document.querySelector(`.desk[data-did="${d.id}"]`); if (!el) return null; const b = el.getBoundingClientRect(); const tr = el.parentElement; return { at: __wos.idx, shown: getComputedStyle(el).contentVisibility !== 'hidden' && !el.classList.contains('parked'), left: Math.round(b.left), dur: getComputedStyle(tr).transitionDuration, cls: tr.className, tf: tr.style.transform }; });
         const drag = async (x, dx, { y = bar.y, dy = 0, hold = 220, ms = 900, moves = 24, cancel = false, sample = true, lead = 0, peek = null } = {}) => {
           // Event times are given to Chrome (timestamp, seconds), so a slow host never turns a flick into a hold.
           const labels = [], t0 = Date.now() / 1000;
@@ -87,7 +87,7 @@ const nap = ms => new Promise(r => setTimeout(r, ms));
             await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x + dx * k / moves, y: y + dy * k / moves }], timestamp: t0 + (hold + ms * k / moves) / 1000 });
             const l = sample && await page.evaluate(() => { const s = document.querySelector('#scrub'); return s?.classList.contains('on') ? s.querySelector('.sc-label').textContent : ''; });
             if (l && labels.at(-1) !== l) labels.push(l);
-            if (peek) { await nap(260); const p = await peekNow(); if (p && peek.at(-1)?.at !== p.at) peek.push(p); }
+            if (peek) { await nap(260); let p = await peekNow(); if (p && Math.abs(p.left) >= 40) { await nap(400); p = await peekNow(); } if (p && peek.at(-1)?.at !== p.at) peek.push(p); } // a busy host can lag one frame
           }
           if (labels.length) await shot('scrubbing');
           await cdp.send('Input.dispatchTouchEvent', { type: cancel ? 'touchCancel' : 'touchEnd', touchPoints: [], timestamp: t0 + (hold + ms + 10) / 1000 });
