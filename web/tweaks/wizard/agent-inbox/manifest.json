@@ -1,0 +1,14 @@
+{
+  "id": "wizard/agent-inbox",
+  "name": "Agent inbox",
+  "version": "1.0.0",
+  "author": "wizard",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout"
+  ],
+  "issues": [
+    "humanitylabs-org/wizard-agent-service#549"
+  ],
+  "description": "Background tasks each keep one short record in an agent inbox: written when the task is handed off, updated every time its worker reports, and marked when a worker goes quiet for 6 hours. Read by the Agent Service (wizard-agent-service issue 549); the sweep card and Running view that show it come in the next steps of the series."
+}

@@ -1,0 +1,2 @@
+/* Agent inbox (wizard-agent-service issue 549): a box-side switch read by the Agent Service
+ * (server/agent-inbox.mjs). The shell changes nothing while it is on. */
