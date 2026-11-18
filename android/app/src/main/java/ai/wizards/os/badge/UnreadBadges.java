@@ -37,6 +37,7 @@ public final class UnreadBadges {
     private static final String PREFS = "unread-badge";
 
     private static final Object LOCK = new Object();
+    private static final Object POLL = new Object();
     private static final Set<Object> holders = Collections.newSetFromMap(new IdentityHashMap<>());
     private static Handler loop;
     private static Runnable tick;
@@ -77,6 +78,11 @@ public final class UnreadBadges {
 
     /** One pass: fetch, then offer the newest known count to each mechanism. Blocking; call off the main thread. */
     public static void pollNow(Context context) {
+        // One poll at a time (loop, job, widget update): a slow fetch must never re-post after another poll's cleanup.
+        synchronized (POLL) { pollLocked(context); }
+    }
+
+    private static void pollLocked(Context context) {
         Context c = context.getApplicationContext();
         if (!wanted(c)) { forget(c); cancelJob(c); return; }
         scheduleJob(c); // a target pinned after the app started still gets the background backstop (no-op when pending)
@@ -92,9 +98,11 @@ public final class UnreadBadges {
     /** Feed a count without the network (debug/QA entry and tests); same coalescing path as a poll. */
     public static int applyCount(Context context, int count) {
         Context c = context.getApplicationContext();
-        SharedPreferences p = prefs(c);
-        p.edit().putInt("count", Math.max(0, count)).apply();
-        return BadgeSync.syncAll(new PrefsStore(p), mechanisms(c), BadgeText.clamp(count));
+        synchronized (POLL) {
+            SharedPreferences p = prefs(c);
+            p.edit().putInt("count", Math.max(0, count)).apply();
+            return BadgeSync.syncAll(new PrefsStore(p), mechanisms(c), BadgeText.clamp(count));
+        }
     }
 
     /** The app is on screen or the Everywhere service lives: keep a light in-process poll going. */
