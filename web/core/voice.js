@@ -87,7 +87,9 @@
     };
     async function start() {
       // The Mac app sets this while it restarts for an approved update: a take started now would be cut off.
-      if (window.__wizardUpdateFrozen) throw Object.assign(new Error('Wizard is preparing an update; recording is paused'), { code: 'update_busy' });
+      // Checked again after every await below, so a freeze that lands while the mic opens still stops the take.
+      const frozen = () => { if (window.__wizardUpdateFrozen) throw Object.assign(new Error('Wizard is preparing an update; recording is paused'), { code: 'update_busy' }); };
+      frozen();
       if (V.state !== 'idle') return false;
       const shared = window.WizAppCapture?.getState?.();
       if (shared?.active || shared?.recording || shared?.hold) throw Object.assign(new Error('Microphone held by ' + (shared.appId || 'another app')), { code: 'busy', appId: shared.appId });
@@ -96,10 +98,12 @@
         if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) throw new Error('This browser has no microphone access here.');
         V.stream = await openMic();
         if (V.cancelled) { stop(); return false; }
+        frozen();
         const AC = window.AudioContext || window.webkitAudioContext; V.ac = new AC();
         const src = V.ac.createMediaStreamSource(V.stream); V.an = V.ac.createAnalyser(); V.an.fftSize = 1024; src.connect(V.an);
         const mono = await monoFor(V.stream, V.ac);
         if (V.cancelled) { stop(); return false; }
+        frozen();
         const mime = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus'].find(m => MediaRecorder.isTypeSupported(m)) || '';
         V.rec = new MediaRecorder(mono || V.stream, mime ? { mimeType: mime } : undefined);
         const captureId = V.captureId, chunks = V.chunks;
