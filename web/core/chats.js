@@ -2713,10 +2713,11 @@ window.WizCore.chats = function createChats(H) {
     if (p !== spacePicker || p.busy) return;
     const typed = p.name.trim();
     if (!typed || typed.length > 60 || /[\u0000-\u001f\u007f]/u.test(typed)) return;
-    // Channels (issue 1580): no emoji in front gets a fitting one from the keyword map (or none, shown as 💬); the
-    // typed name and the stored one are both checked against the agent's channels, so "Money" never makes a second "💰 Money".
+    // Channels (issue 1580): no emoji in front gets a fitting one from the keyword map (or none, shown as 💬). An added
+    // emoji never makes a second channel of the same words: "Money" is refused next to "Money", "💰 Money" or "🎯 Money".
     const name = typeof globalThis.WizCore?.channelAutoName === 'function' && SPACE.ch ? globalThis.WizCore.channelAutoName(typed) : typed;
-    if (spaces().some(s => spaceAgent(s) === p.agent && (norm(s.name) === norm(name) || norm(s.name) === norm(typed))) || (norm(name) === 'general' && SPACE.ch)) { p.error = SPACE.ch ? 'Already a channel' : 'Already a Space'; renderSpacePicker(); return; }
+    const words = n => name !== typed ? globalThis.WizCore.channelFace(n).label : n;
+    if (spaces().some(s => spaceAgent(s) === p.agent && (norm(s.name) === norm(name) || norm(words(s.name)) === norm(typed))) || (norm(name) === 'general' && SPACE.ch)) { p.error = SPACE.ch ? 'Already a channel' : 'Already a Space'; renderSpacePicker(); return; }
     // The channel store (wizard-ux issue 1261) holds 200 channels per agent and gives the new one its id.
     const onStore = typeof chanStore === 'function' && !!chanStore();
     if (onStore ? spaces().filter(s => spaceAgent(s) === p.agent).length >= CHAN_STORE_MAX : spaces().length >= 50) { p.error = onStore ? `Maximum ${CHAN_STORE_MAX} channels` : SPACE.ch ? 'Maximum 50 channels' : 'Maximum 50 Spaces'; renderSpacePicker(); return; }

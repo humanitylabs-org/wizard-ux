@@ -79,7 +79,7 @@ test('1308: creating a channel opens its empty feed with the box focused and sen
   assert.deepEqual(on, [['create', 'Test', 'hermes'], ['close'], ['target', 'w1::side'], ['open', 'feed::side', 'ch-new'], ['end', 'feed::side', true], ['end', 'feed::side', true]]);
   assert.ok(!on.some(c => c[0] === 'sendChat'), 'no "Fill my new Space" chat with channels on');
   // General is always a channel (wizard-ux issue 1308): its name is taken.
-  assert.match(chats, /norm\(s\.name\) === norm\(typed\)\)\) \|\| \(norm\(name\) === 'general' && SPACE\.ch\)\) \{ p\.error = SPACE\.ch \? 'Already a channel'/);
+  assert.match(chats, /norm\(words\(s\.name\)\) === norm\(typed\)\)\) \|\| \(norm\(name\) === 'general' && SPACE\.ch\)\) \{ p\.error = SPACE\.ch \? 'Already a channel'/);
   const off = await create(false);
   assert.deepEqual(off.at(-1), ['sendChat', 'Fill my new Space “T'], 'classic Spaces (switch off) keep their auto-fill');
 });

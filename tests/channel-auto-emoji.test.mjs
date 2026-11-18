@@ -66,10 +66,13 @@ test('1580: creating "Money", "Podcast" and "Zzzqx" stores "💰 Money", "🎙�
 });
 
 test('1580: a typed name that is already a channel with or without its emoji is refused, never a second one', async () => {
-  for (const existing of [[{ id: 'a', name: '💰 Money' }], [{ id: 'a', name: 'Money' }]]) {
+  for (const existing of [[{ id: 'a', name: '💰 Money' }], [{ id: 'a', name: 'Money' }], [{ id: 'a', name: '🎯 Money' }], [{ id: 'a', name: '💰 money' }]]) {
     const r = await create({ typed: 'Money', existing });
     assert.deepEqual(r.calls, [], existing[0].name); assert.equal(r.error, 'Already a channel');
   }
+  // No emoji added (no match, or the owner typed one): the name alone decides, as before.
+  assert.deepEqual((await create({ typed: 'Zzzqx', existing: [{ id: 'a', name: '🎯 Zzzqx' }] })).calls, [['create', 'Zzzqx', 'hermes']]);
+  assert.deepEqual((await create({ typed: '🎯 Money', existing: [{ id: 'a', name: '💰 Money' }] })).calls, [['create', '🎯 Money', 'hermes']]);
   // Another agent's "💰 Money" is not this agent's.
   assert.deepEqual((await create({ typed: 'Money', agent: 'host', existing: [{ id: 'a', name: '💰 Money', agent: 'hermes' }] })).calls, [['create', '💰 Money', 'host']]);
 });
