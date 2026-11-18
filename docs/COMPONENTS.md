@@ -4,7 +4,7 @@ Back: `WizEscapeBack`, `WosBack`; `WizChatsHost.registerBack`/back.push share re
 
 [Contracts](component-contract-details.md). [Style guide](https://github.com/humanitylabs-org/wizard-os/blob/main/style/APP-DESIGN-RULES.md). [Reuse gate](app-reuse-gate.md).
 
-| Search | `WizCore.chatSearch` (`web/core/chat-search.js`); ranked paged hits |
+| Search | `WizCore.chatSearch` (`chat-search.js`); ranked paged hits |
 
 | QA | `tools/qa-synthetic-fence.cjs` +startup/census |
 
@@ -50,11 +50,11 @@ Back: `WizEscapeBack`, `WosBack`; `WizChatsHost.registerBack`/back.push share re
 | Action menu | `WosContextMenu.open`/`.back` (`core/context-menu.js`) |
 | App setup | `WosAppSetup` (`app-setup.js`) |
 | Chats | `WizCore` (`chats.js`/`.css`); desktop `keepThreadOpen`; `WizConfig.chatAfterAction` (phone); Archive/Snooze→`archiveOrder`, `leaveFinishedThread`; `WizLive.messages`/`firstMessages`/`readyRank`; `setFocus`/`migrateChatsFocus`; `--wos-note-quiet` alerts; Esc→`CHATS.clearFilter(id::list)` |
-| Chats list model | `WizChatsListModel` (`chats-list-model.js`): `executionStatus`/`isListWorking`; `workingSort`; stalled waits Ready, `background` stays Working; running helper keeps failed Working; `WizLive.workingOrder`; `activityList` (Activity); Ready's `orderBar`; |
+| Chats list model | `WizChatsListModel` (`chats-list-model.js`): `executionStatus`/`isListWorking`; `workingSort`; stalled waits Ready, `background` stays Working; running helper keeps failed Working; `WizLive.workingOrder`; `activityList` (Activity); Ready's `orderBar` |
 | Pane placement | `WizCore.panes` (`pane-layout.js`): Classic split/cols; tiled/centre/pair/full geometry/focus/ratios/dock (<1100px bar)/appSide; AI keys/Back; local |
 | Desktop lifecycle | `WizDesktop.host` (`core/desktop-host.js`): snapshots, retained frames/readiness/tools, open/focus/close, onChange, panes; chats(id), settings, placements() |
 | Chat time | `WizCore.ago` (`core.js`): hours <24h, then owner day |
-| Chat state | `WizLive`: rename/read fence, `chanStore`/`chanDaily`; `WizCore.chats` dispose |
+| Chat state | `WizLive`: rename/read fence, `chanStore`/`chanDaily`/`agentInbox`; `WizCore.chats` dispose |
 | Group by day | `WizCore.chats` / `WizLive.groups`: `--wos-chats-group-switch` hook; Pins/compact independent |
 | Chats/Ready | `WizChatsHost` / `WizAppExtensions` (`chats-view.js`): surface/(views.)mount, placement, `replyRecorder`, draft admission; host `keepNewOpen(id)` keeps docked New open on send (`WosSkinHost.routeShows`); pills: `workspaceNav.chatsCount/refreshChats`; subgroups: `WizChatsListModel.unreadCount`; counts: `.unreadThreads` |
 | Bound-view handle (3 intro glows) | `WosSkinHost` built-in (`edge-peek.js`), host storage |

@@ -1,0 +1,24 @@
+/* Agent inbox (wizard-agent-service issue 549; Running view, wizard-ux issue 1569). The Agent Service reads this switch
+ * for the inbox itself; core/chats.js draws the Running row and view only while it is on. Skin colours come from the
+ * --wz-* tokens, with the dark Wizard look as the fallback when a skin has no value. */
+html[data-tweaks~="wizard/agent-inbox"] .ch-running { background: var(--wz-panel, #17131f); border: 1px solid var(--wz-border, rgba(255, 255, 255, .14)); color: var(--wz-text, #f1edf7); cursor: pointer; font: inherit; }
+html[data-tweaks~="wizard/agent-inbox"] .ch-running .pip { background: var(--wz-accent, #b99bff); }
+html[data-tweaks~="wizard/agent-inbox"] .ch-running.quiet .pip { background: var(--wz-warning, #ffbe55); }
+html[data-tweaks~="wizard/agent-inbox"] .ch-running .tx small { color: var(--wz-text-secondary, #c9c1d6); opacity: 1; }
+html[data-tweaks~="wizard/agent-inbox"] .ch-running .go { color: var(--wz-accent, #b99bff); }
+html[data-tweaks~="wizard/agent-inbox"] .ch-running:focus-visible { outline: 2px solid var(--wz-accent, #b99bff); outline-offset: 2px; }
+
+/* The Running view: a back header like a channel's, then one ordinary chat row per task on an opaque panel. */
+html[data-tweaks~="wizard/agent-inbox"] .ch-run-h { display: flex; align-items: center; gap: 4px; min-height: 44px; padding: 0 8px 4px; }
+html[data-tweaks~="wizard/agent-inbox"] .ch-run-h b { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 1rem; font-weight: 600; color: var(--wz-text, #f1edf7); }
+html[data-tweaks~="wizard/agent-inbox"] .ch-run-h .ch-chan-back { flex: none; width: 44px; height: 44px; display: grid; place-items: center; border: 0; background: transparent; color: var(--wz-text-secondary, #c9c1d6); cursor: pointer; }
+html[data-tweaks~="wizard/agent-inbox"] .ch-run-h .ch-chan-back svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+html[data-tweaks~="wizard/agent-inbox"] .ch-run { background: var(--wz-panel, #17131f); border: 1px solid var(--wz-border, rgba(255, 255, 255, .14)); border-radius: 14px; padding: 4px 0; margin: 0 0 96px; }
+html[data-tweaks~="wizard/agent-inbox"] .ch-run-row b { color: var(--wz-text, #f1edf7); }
+html[data-tweaks~="wizard/agent-inbox"] .ch-run-row time { color: var(--wz-text-secondary, #c9c1d6); }
+html[data-tweaks~="wizard/agent-inbox"] .ch-run-row .ch-run-pv { display: block; font-size: .8125rem; line-height: 1.35; color: var(--wz-text-secondary, #c9c1d6); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+html[data-tweaks~="wizard/agent-inbox"] .ch-run-row .ch-run-pv em.att { font-style: normal; }
+html[data-tweaks~="wizard/agent-inbox"] .ch-run-row .ch-run-age { display: block; font-size: .75rem; line-height: 1.3; color: var(--wz-text-muted, #a59cb3); }
+html[data-tweaks~="wizard/agent-inbox"] .ch-run-row.quiet .ch-run-pv em.att { color: var(--wz-warning, #ffbe55); }
+/* The one-line phone list keeps rows 48 px high; a task row shows three short lines, so it grows to fit them. */
+html[data-tweaks~="wizard/agent-inbox"] .ch-run .ch-row.ch-run-row { height: auto; min-height: 64px; padding-top: 8px; padding-bottom: 8px; align-items: center; }

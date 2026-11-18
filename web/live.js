@@ -1228,6 +1228,39 @@
     return { state, read, more, today, fresh };
   }
   /* ---- end channel daily ---- */
+  /* ---- agent inbox (wizard-ux issue 1569) ----
+   * The box's agent inbox (wizard-agent-service issue 549, docs/agent-inbox.md): one record per background task.
+   * state().records are the tasks still working (state running) or gone quiet for 6 h (stale), newest news first, as
+   * GET /wizard/v1/agent-inbox?state=running,stale answers; reading state() keeps it fresh every `every`. A 404 (the box's
+   * switch is off, or an older box) is an empty list, asked again after `every`. Chats reads it only while its
+   * wizard/agent-inbox switch is on (the Running view). */
+  function agentInbox({ req, emit, now = () => Date.now(), every = 30e3 } = {}) {
+    const SID = /^[A-Za-z0-9_.:-]{1,200}$/, RID = /^inbox_[a-f0-9]{24}$/, AID = /^[a-z][a-z0-9-]{0,40}$/;
+    const str = (v, n) => typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, n) : '';
+    const num = v => { const n = Number(v); return Number.isFinite(n) && n > 0 ? n : 0; };
+    const rec = r => r && typeof r === 'object' && RID.test(r.id) && typeof r.thread_id === 'string' && SID.test(r.thread_id) && (r.state === 'running' || r.state === 'stale')
+      ? { id: r.id, agent: typeof r.agent === 'string' && AID.test(r.agent) ? r.agent : 'hermes', thread: r.thread_id, title: str(r.title, 120), update: str(r.last_update, 200), state: r.state, createdAt: num(r.created_at), updatedAt: num(r.updated_at) || num(r.created_at) } : null;
+    const s = { records: [], ok: false, gone: false, at: 0, busy: null };
+    const tell = () => { try { emit(); } catch (_) {} };
+    function read() {
+      if (s.busy) return s.busy;
+      s.at = now();
+      s.busy = (async () => {
+        try {
+          const j = await (await req('/wizard/v1/agent-inbox?state=running,stale&limit=200', { cache: 'no-store' })).json();
+          s.records = (Array.isArray(j?.records) ? j.records : []).map(rec).filter(Boolean).sort((a, b) => b.updatedAt - a.updatedAt || (a.id < b.id ? -1 : 1));
+          s.ok = true; s.gone = false;
+        } catch (e) { if (e?.status === 404) { s.records = []; s.ok = true; s.gone = true; } }
+        finally { s.busy = null; tell(); }
+        return s;
+      })();
+      return s.busy;
+    }
+    function state() { if (!s.busy && now() - s.at >= every) read(); return s; }
+    const fresh = () => { s.at = 0; };
+    return { state, read, fresh };
+  }
+  /* ---- end agent inbox ---- */
   const L = {
     windows: {},
     ok: false, error: '', sessions: [], seen: readLocal(), deferred: {}, at: 0, listeners: new Set(), loading: null,
@@ -2196,6 +2229,7 @@
     } });
   L.chanReads = channelReads({ req, emit: () => L.emit() });
   L.chanDaily = channelDaily({ req, emit: () => L.emit() });
+  L.agentInbox = agentInbox({ req, emit: () => L.emit() });
   /* One Channels switch (wizard-ux issue 1358): the Agent Service reads the same switch from the synced Look file, so
    * right after it turns on ask the box again a few times (the Look file write and the service's 3 s read take a moment)
    * instead of waiting out the store's 5-minute off interval. */
