@@ -22,3 +22,12 @@ html[data-tweaks~="wizard/agent-inbox"] .ch-run-row .ch-run-age { display: block
 html[data-tweaks~="wizard/agent-inbox"] .ch-run-row.quiet .ch-run-pv em.att { color: var(--wz-warning, #ffbe55); }
 /* The one-line phone list keeps rows 48 px high; a task row shows three short lines, so it grows to fit them. */
 html[data-tweaks~="wizard/agent-inbox"] .ch-run .ch-row.ch-run-row { height: auto; min-height: 64px; padding-top: 8px; padding-bottom: 8px; align-items: center; }
+
+/* Open / Send to inbox (wizard-ux issue 1570): Open on a Running view row and in a hidden thread's header. */
+html[data-tweaks~="wizard/agent-inbox"] .ch-inbox-open { flex: none; min-height: 32px; padding: 6px 12px; border: 1px solid var(--wz-border, rgba(255, 255, 255, .14)); border-radius: 10px; background: var(--wz-surface, #221c2c); color: var(--wz-accent, #b99bff); font: inherit; font-size: .8125rem; font-weight: 600; cursor: pointer; }
+html[data-tweaks~="wizard/agent-inbox"] .ch-inbox-open:focus-visible { outline: 2px solid var(--wz-accent, #b99bff); outline-offset: 2px; }
+html[data-tweaks~="wizard/agent-inbox"] .ch-run .ch-row-wrap .ch-inbox-open { position: absolute; z-index: 2; right: 10px; top: 50%; transform: translateY(-50%); }
+html[data-tweaks~="wizard/agent-inbox"] .ch-run .ch-row-wrap:has(.ch-inbox-open) .ch-run-row { padding-right: 84px; }
+html[data-tweaks~="wizard/agent-inbox"] .ch-inbox-h { flex: none; display: inline-flex; align-items: center; gap: 8px; margin-left: 4px; }
+html[data-tweaks~="wizard/agent-inbox"] .ch-inbox-note { font-size: .75rem; color: var(--wz-text-secondary, #c9c1d6); white-space: nowrap; }
+@media (max-width: 420px) { html[data-tweaks~="wizard/agent-inbox"] .ch-inbox-note { display: none; } }

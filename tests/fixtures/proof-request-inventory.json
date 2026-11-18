@@ -375,6 +375,12 @@
       "kind": "read",
       "note": "Agent inbox Running view (wizard-ux issue 1569, wizard-agent-service issue 549): read only while the off-by-default wizard/agent-inbox switch is on, which none of the three flows turn on; tests/agent-inbox-running.test.mjs covers it against a fake box. Refused and collected, never answered, if a flow reaches it."
     },
+    "/wizard/v1/agent-inbox/{}": {
+      "status": "not-exercised",
+      "source": "web/live.js",
+      "kind": "write",
+      "note": "Agent inbox Open / Send to inbox (wizard-ux issue 1570): POST open|send only on an owner tap while the off-by-default wizard/agent-inbox switch is on, which none of the three flows turn on; tests/agent-inbox-open-send.test.mjs covers it against a fake box. Refused and collected, never answered, if a flow reaches it."
+    },
     "/wizard/v1/channels/read": {
       "status": "not-exercised",
       "source": "web/live.js",

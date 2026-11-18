@@ -1972,7 +1972,7 @@ window.WizCore.chats = function createChats(H) {
     return `<section class="ch-sec open ch-run" data-sec="running"><div class="ch-sec-b">${r.map(x => {
       const quiet = x.state === 'stale', lead = quiet ? '<em class="att quiet">No news for 6 h:</em> ' : '';
       return `<div class="ch-row-wrap" data-morph-key="run:${esc(x.id)}"><button type="button" data-part="thread-row" class="ch-row ch-run-row${quiet ? ' quiet' : ''}" data-chrunopen="${esc(x.thread)}" title="Open thread"><span class="emo sti ${quiet ? 'deferred' : 'working'}" aria-label="${quiet ? 'No news for 6 h' : 'Working'}">${quiet ? STI.deferred : STI.working}</span>
-      <span class="bd"><span class="tp"><b>${esc(x.title || 'Background task')}</b><time>${esc(x.updatedAt ? ago(x.updatedAt) : '')}</time></span><span class="ch-run-pv">${lead}${esc(clip(x.update || '', 140))}</span><span class="ch-run-age">Running ${esc(runningFor(now - (x.createdAt || now)))}</span></span></button></div>`;
+      <span class="bd"><span class="tp"><b>${esc(x.title || 'Background task')}</b><time>${esc(x.updatedAt ? ago(x.updatedAt) : '')}</time></span><span class="ch-run-pv">${lead}${esc(clip(x.update || '', 140))}</span><span class="ch-run-age">Running ${esc(runningFor(now - (x.createdAt || now)))}</span></span></button>${typeof inboxListed === 'function' && !inboxListed(x.thread) ? `<button type="button" class="ch-inbox-open" data-chinboxopen="${esc(x.thread)}" data-title="${esc(x.title || '')}" aria-label="Open in Chats: ${esc(x.title || 'Background task')}" title="Move it into the chat list">Open</button>` : ''}</div>`;
     }).join('')}</div></section>`;
   }
   function runningGo(w, on) {
@@ -1986,6 +1986,40 @@ window.WizCore.chats = function createChats(H) {
     const was = runningOn(w); ch(w.id).running = false;
     if (!was) return false;
     rerenderList(w); return true;
+  }
+  /* Open / Send to inbox (same switch; wizard-ux issue 1570). One tap fixes a wrong routing either way: Open (a Running
+   * view row, a hidden thread's header) moves a background thread into the chat list at once; Send to inbox (a visible
+   * thread's menu, never a pinned one) hides it and lets it finish in the background, its result in the next sweep.
+   * LIVE.inboxMove moves the row on the tap frame and tells the box (POST /wizard/v1/agent-inbox/open|send), which also
+   * keeps each tap as an example for the orb's router. Main agent threads only (the box hides only those). */
+  const INBOX_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13h4l2 3h4l2-3h4M5 13l2-8h10l2 8v6H5z"/></svg>';
+  function inboxListed(id) { return LIVE.sessions.some(x => x.id === id && !x.hidden && !x.optimistic); }
+  function inboxHidden(w, s) {
+    if (!s || !w || winAgent(w) || !inboxSwitchOn() || !LIVE.agentInbox || (LIVE.ownerOf && LIVE.ownerOf(s))) return false;
+    if (inboxListed(s.id)) return false;
+    return s.hidden === true || runningRecs().some(r => r.thread === s.id);
+  }
+  function inboxHeadHtml(w, s) {
+    return inboxHidden(w, s) ? `<span class="ch-inbox-h"><span class="ch-inbox-note">In the background</span><button type="button" class="ch-inbox-open" data-chinboxopen="${esc(s.id)}" aria-label="Open: move this thread into the chat list" title="Move it into the chat list">Open</button></span>` : '';
+  }
+  function inboxCanSend(wid, s) {
+    const w = W[wid];
+    return !!(s && w && !winAgent(w) && inboxSwitchOn() && LIVE.agentInbox && !(LIVE.ownerOf && LIVE.ownerOf(s)) && !s.hidden && !s.archived && !s.optimistic && !s.synthetic && !PIN.has(s.id));
+  }
+  function inboxRepaint(id) {
+    paintListsNow();
+    for (const x of Object.keys(CH)) { const ww = H.win(x); if (ww && ww.thread === id) renderThreadNow(ww); }
+  }
+  async function inboxMove(kind, id, opts = {}) {
+    try {
+      const moving = LIVE.inboxMove(kind, id, opts);
+      inboxRepaint(id); // the row moved on this frame (LIVE.inboxMove's first step)
+      await moving;
+      toast(kind === 'open' ? '✓' : '↧', kind === 'open' ? 'In Chats now' : 'Sent to the inbox · it finishes in the background', 2200);
+    } catch (e) {
+      toast('!', e?.status === 409 ? (kind === 'send' ? 'This chat stays in Chats' : 'Couldn’t move it') : 'Couldn’t move it · try again', 3200);
+    }
+    inboxRepaint(id);
   }
   /* Ready has three orders (James, 10 Oct 2026): Newest (pure recency, labels don't move rows), Priority
    * (needs you, then test this, then the rest) and By subject (the roundup, kept live). */
@@ -3536,6 +3570,7 @@ window.WizCore.chats = function createChats(H) {
       ${!nid && typeof canMarkDone === 'function' && canMarkDone(s) ? `<button type="button" data-rsmarkdone>${MARK_DONE_SVG}Mark done</button>` : ''}
       ${nid ? '' : `<button type="button" data-rsrename>${RENAME_SVG}Rename</button>
       ${PIN.on?.() !== false ? `<button type="button" data-part="pin-action" data-rspin>${PIN_SVG}${PIN.has(sid) ? 'Unpin' : 'Pin'}</button>` : ''}
+      ${typeof inboxCanSend === 'function' && inboxCanSend(wid, s) ? `<button type="button" data-rsinbox>${INBOX_SVG}Send to inbox</button>` : ''}
       <button type="button" data-rsspacepicker>${PIN_SVG}${SPACE.ch ? 'Move to channel…' : spacesOf(sid).length ? `Move to ${SPACE.one}…` : `Add to a ${SPACE.one}…`}</button>
       ${spacesOf(sid).map(space => `<button type="button" data-rsspace="${esc(space.id)}" data-add="false">${PIN_SVG}Remove from ${SPACE.ch ? 'channel' : SPACE.one} · ${esc(space.name)}</button>`).join('')}
       ${topicOn() ? `<button type="button" data-rsemo><span class="ch-sheet-emoji">${TOPIC.get(`thread:${sid}`, [subjectOf(s), s.title, s.preview].filter(Boolean).join(' '))}</span>Choose emoji</button>` : ''}`}
@@ -4067,7 +4102,7 @@ window.WizCore.chats = function createChats(H) {
     const keepSheet = keptSheet(el);
     const openContexts = el.dataset.draftFor === dkey ? new Set([...el.querySelectorAll('[data-run-original][open]')].map(e => e.dataset.runOriginal)) : new Set();
     const threadHTML = `<div data-part="thread" class="ch-thread${TAG ? ' agent' : ''}${NV ? ' ch-notif-thread' : ''}"${TAG ? ` style="--agc:${AGS()?.colour(agentRec(TAG)) || ''}"` : ''}>
-      <div class="ch-head"><button class="ch-back" data-chback aria-label="Back to threads"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>${s && !isNew && stiKind(s) !== 'none' ? stiBadge(s, ' ch-head-sti') : ''}<div class="ti" title="${esc(sub)}">${s && !DL ? `<button type="button" class="ti-b" data-chrename aria-label="Rename thread"><b>${esc(winTitle(w))}</b></button>` : `<b>${esc(NV ? NV.reply.title || NV.item?.title || 'Notification' : DL ? (typeof chanTitle === 'function' ? chanTitle(dailyName(w)) : '# ' + dailyName(w)) : winTitle(w))}</b>${NQ ? `<span class="ch-notif-hsrc"><span class="ch-notif-hic" aria-hidden="true">${NV.item ? noteIcon(NV.item) : window.WosBell?.icon || ''}</span>${esc(NV.item?.source === 'cron' ? 'Scheduled job' : NV.item?.appName || NV.item?.app || 'Notifications')}${NV.item?.time ? ` · ${timeTag(NV.item.time * 1000)}` : ''}</span>` : ''}`}${privTag}</div>${chip}${incognitoAction}<span data-slot="thread-header-actions"></span></div>
+      <div class="ch-head"><button class="ch-back" data-chback aria-label="Back to threads"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>${s && !isNew && stiKind(s) !== 'none' ? stiBadge(s, ' ch-head-sti') : ''}<div class="ti" title="${esc(sub)}">${s && !DL ? `<button type="button" class="ti-b" data-chrename aria-label="Rename thread"><b>${esc(winTitle(w))}</b></button>` : `<b>${esc(NV ? NV.reply.title || NV.item?.title || 'Notification' : DL ? (typeof chanTitle === 'function' ? chanTitle(dailyName(w)) : '# ' + dailyName(w)) : winTitle(w))}</b>${NQ ? `<span class="ch-notif-hsrc"><span class="ch-notif-hic" aria-hidden="true">${NV.item ? noteIcon(NV.item) : window.WosBell?.icon || ''}</span>${esc(NV.item?.source === 'cron' ? 'Scheduled job' : NV.item?.appName || NV.item?.app || 'Notifications')}${NV.item?.time ? ` · ${timeTag(NV.item.time * 1000)}` : ''}</span>` : ''}`}${privTag}</div>${chip}${incognitoAction}${typeof inboxHeadHtml === 'function' && s && !isNew ? inboxHeadHtml(w, s) : ''}<span data-slot="thread-header-actions"></span></div>
       ${s && !isNew && globalThis.WosThreadTracker?.on() ? globalThis.WosThreadTracker.stripHtml(s.id, TAG) : ''}${s && BOOM() ? BOOM().banner(s.id) : ''}<div class="ch-msgs">${msgs}${tacts}${fail}</div>${PW ? PW.latestBtn() : ''}${s && !isNew && typeof jumpPillsHtml === 'function' ? jumpPillsHtml() : ''}
       ${msw ? `<div class="ch-swrow">${msw}<span data-slot="thread-switch-row-end"></span></div>` : '<div data-slot="thread-switch-row-end"></div>'}<form data-slot="composer-end" data-part="composer" class="ch-compose${hasContent(draft, c.files || []) ? ' has-text' : ''}${rpl ? ' has-reply' : ''}" data-chform>${replyBubble(rpl)}${attachTray(c)}<div class="ch-row2"><button type="button" class="ch-attach" data-chattach aria-label="Attach photos or files">${CLIP_SVG}</button><div class="ch-field"><textarea rows="1" placeholder="${!isNew && window.WosModels?.foreignApp?.(s) ? `This chat lives in ${esc(window.WosModels.foreignApp(s))} · reply there` : working && !held ? `Steer ${esc(agentName(TAG))}…` : `Message ${esc(agentName(TAG))}`}" enterkeyhint="enter">${esc(draft)}</textarea>${mlabel}</div>${PW ? PW.micBtn(w.id) : ''}${canStop ? `<button type="button" class="ch-stop" data-chstop aria-label="Stop ${esc(window.WizConfig.agent())}"><svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2"/></svg></button>` : ''}<button type="submit" class="ch-send" aria-label="Send"><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button></div></form>
     </div>`;
@@ -5025,6 +5060,7 @@ window.WizCore.chats = function createChats(H) {
     if (e.target.closest('[data-chrunning]')) { runningGo(w, true); return true; }
     if (e.target.closest('[data-chrunback]')) { runningBack(w); return true; }
     const ro = e.target.closest('[data-chrunopen]'); if (ro) { openChat(id, ro.dataset.chrunopen); return true; }
+    const io = e.target.closest('[data-chinboxopen]'); if (io) { inboxMove('open', io.dataset.chinboxopen, { title: io.dataset.title || '' }); return true; }
     if (window.WizAppExtensions?.handle(e)) return true;
     if (e.target.closest('[data-obretryall]')) { H.toast('↻', OUTBOX.retryFeedback(OUTBOX.retryAll(winAgent(w))), 2400); return true; }
     const eb = e.target.closest('[data-obedit]'); if (eb) { const it = OUTBOX.get(eb.dataset.obedit); if (it && !(typeof chanEditUnsent === 'function' && chanEditUnsent(id, it))) H.editUnsent(it); return true; }
@@ -5098,6 +5134,7 @@ window.WizCore.chats = function createChats(H) {
     const rsSpace = e.target.closest('[data-rsspace]');
     if (rsSpace && rowSheet?.sid) { const { sid } = rowSheet, add = rsSpace.dataset.add === 'true', name = spaces().find(x => x.id === rsSpace.dataset.rsspace)?.name || (SPACE.ch ? 'channel' : SPACE.one); const rag = typeof chanRowAgent === 'function' ? chanRowAgent(rowSheet.wid, sid) : undefined; closeRowSheet(); if (spaceMember(rsSpace.dataset.rsspace, sid, add, rag)) toast('✓', `${add ? 'Added to' : 'Removed from'} ${name}`, 2000); return true; }
     if (e.target.closest('[data-rsmarkdone]') && rowSheet?.sid) { const { wid: rw, sid } = rowSheet; closeRowSheet(); markDone(rw, sid); return true; }
+    if (e.target.closest('[data-rsinbox]') && rowSheet?.sid) { const { sid } = rowSheet, r = LIVE.session(sid); closeRowSheet(); inboxMove('send', sid, { title: r?.title || '', utterance: [r?.firstRequest, r?.request].find(x => typeof x === 'string' && x.trim()) || '' }); return true; }
     if (e.target.closest('[data-rspin]') && rowSheet?.sid) { const { sid } = rowSheet, on = PIN.toggle(sid); closeRowSheet(); toast('⌖', on ? 'Pinned' : 'Unpinned', 1400); return true; }
     if (e.target.closest('[data-rsrename]') && rowSheet) { const { wid: rw, sid } = rowSheet; openRenameSheet(rw, sid); return true; }
     if (e.target.closest('[data-rncancel]') && rowSheet) { closeRowSheet(); return true; }

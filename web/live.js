@@ -1260,7 +1260,18 @@
     // One agent's records ('hermes' = the main agent): a view opens a record's thread only in that agent's own Chats.
     const records = agent => state().records.filter(r => r.agent === (agent || 'hermes'));
     const fresh = () => { s.at = 0; };
-    return { state, records, read, fresh };
+    // Open / Send to inbox (wizard-ux issue 1570): POST /wizard/v1/agent-inbox/open|send moves one main-agent thread
+    // between the chat list and the background; the box answers with its record. The list is asked again right after.
+    async function move(kind, thread, extra = {}) {
+      if ((kind !== 'open' && kind !== 'send') || !SID.test(String(thread || ''))) throw Object.assign(new Error('invalid'), { status: 400 });
+      const body = { thread_id: thread };
+      const title = str(extra.title, 120), utterance = str(extra.utterance, 600);
+      if (title) body.title = title;
+      if (utterance) body.utterance = utterance;
+      try { return await (await req(`/wizard/v1/agent-inbox/${kind}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })).json(); }
+      finally { fresh(); read(); }
+    }
+    return { state, records, read, fresh, move };
   }
   /* ---- end agent inbox ---- */
   const L = {
@@ -1763,6 +1774,25 @@
       else list.push({ ...s, detailNeeded: false });
       applyLocal(i >= 0 ? list[i] : DETAIL.get(id) || s);
       return s;
+    },
+    /* Open / Send to inbox (wizard-ux issue 1570, switch wizard/agent-inbox): the row moves on the tap frame (Open lists
+     * it, Send drops it), then the box is told; a refusal puts the row back and throws. Main agent threads only. */
+    async inboxMove(kind, id, opts = {}) {
+      if (!this.agentInbox || (kind !== 'open' && kind !== 'send')) throw new Error('Agent inbox unavailable');
+      let s = this.session(id), added = false;
+      if (s && otherAgent(this.ownerOf(s))) throw Object.assign(new Error('Only the main agent’s threads move'), { status: 409 });
+      const was = s ? !!s.hidden : null;
+      if (kind === 'open') {
+        if (!s && opts.title) s = normalize({ id, title: opts.title, updated_at: opts.at ? new Date(opts.at).toISOString() : new Date().toISOString(), hidden: false });
+        if (s) { s.hidden = false; if (!this.sessions.includes(s)) { this.sessions.unshift(s); DETAIL.delete(id); added = true; } }
+      } else if (s) s.hidden = true;
+      this.emit();
+      try { return await this.agentInbox.move(kind, id, opts); }
+      catch (e) {
+        if (s) { s.hidden = was ?? kind === 'open'; if (added) this.sessions = this.sessions.filter(x => x !== s); }
+        this.emit(); throw e;
+      }
+      finally { setTimeout(() => this.refresh(), 800); }
     },
     /* ---- thread actions ---- */
     busy(id) { const o = OVER.get(id); return !!o && !o.settled; },
