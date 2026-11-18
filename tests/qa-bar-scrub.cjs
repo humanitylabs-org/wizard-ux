@@ -1,20 +1,21 @@
 'use strict';
 // wizard-ux issue 1491 in a real browser: phone 412x915, Nebula + Grove, real CDP touches on the bottom bar.
-// Switch wizard/bar-scrub on: no little handle under the orb; hold and drag left on the bar from desk 3 of 6 steps one
+// No little handle under the orb; hold and drag left on the bar from desk 3 of 6 steps one
 // desk to the right per ~26 px with the desk name above the bar and lands on release; drag right goes left; on Home a
 // drag right does nothing; a quick flick moves one desk; a dot tap still goes to its desk; a drag that rises or starts
-// in the home-indicator strip leaves the desk where it started. QA_SWITCH=off checks the old bar + handle unchanged
-// (handle visible, a slow drag on the bar moves exactly one desk). Synthetic transport only (no box is reached).
+// in the home-indicator strip leaves the desk where it started. Synthetic transport only (no box is reached).
+// wizard-ux issue 1563: on for everyone, no switch. Default run = fresh state (no tweaks saved, Channels off);
+// QA_CHANNELS=on runs the same cases with wizard/chat-channels on, to show the scrub does not depend on Channels.
 // wizard-ux issue 1536: a sideways drag that starts on the orb scrubs the same as one on the bar; the scrub is live from
 // the first move (no hold), a 20-30 px first move changes at most one desk, a steady 3 x 26 px drag lands three desks
-// over. Orb up-swipes stay the orb's. QA_SWITCH=off: a sideways drag on the orb still moves one desk, as before.
+// over. Orb up-swipes stay the orb's.
 const assert = require('node:assert/strict');
 const { chromium } = require('../tools/qa-playwright.cjs');
 const { ownerRead } = require('../tools/qa-desktop-frame-fixture.cjs');
 const fs = require('node:fs'), path = require('node:path');
 const repo = path.resolve(__dirname, '..'), origin = 'https://bar-scrub.test', prefix = '/wizard-os-home/';
 const web = process.env.QA_WEB || path.join(repo, 'web'), out = process.env.QA_OUT || path.join(repo, 'bar-scrub-evidence');
-const off = process.env.QA_SWITCH === 'off', ID = 'wizard/bar-scrub';
+const chan = process.env.QA_CHANNELS === 'on', CH = 'wizard/chat-channels', tag = chan ? '-channels-on' : '-fresh';
 fs.mkdirSync(out, { recursive: true });
 const nap = ms => new Promise(r => setTimeout(r, ms));
 (async () => {
@@ -25,12 +26,13 @@ const nap = ms => new Promise(r => setTimeout(r, ms));
       const errors = [], steps = {};
       try {
         await context.routeWebSocket('**/*', w => w.close());
-        await context.addInitScript(({ skin, off, ID }) => {
+        await context.addInitScript(({ skin, chan, CH }) => {
           if (window !== top) return;
-          const mix = off ? { 'wizard/desktop-chats': true } : { 'wizard/desktop-chats': true, [ID]: true };
-          for (const [k, v] of Object.entries({ 'wos.shell': 'phone', 'wux.shell': 'phone', 'wos.coached': 'true', 'wos.tour.v1': 'true', 'wos.welcome.v1': 'done', 'wos.skin': skin,
-            'wos.skin-tweaks.v1': JSON.stringify({ version: 1, preset: 'none', off: {}, mix }) })) localStorage.setItem(k, v);
-        }, { skin, off, ID });
+          const seed = { 'wos.shell': 'phone', 'wux.shell': 'phone', 'wos.coached': 'true', 'wos.tour.v1': 'true', 'wos.welcome.v1': 'done', 'wos.skin': skin };
+          // Fresh state saves no tweak choice at all; the Channels run turns only Channels on (plus the default desktop-chats).
+          if (chan) seed['wos.skin-tweaks.v1'] = JSON.stringify({ version: 1, preset: 'none', off: {}, mix: { 'wizard/desktop-chats': true, [CH]: true } });
+          for (const [k, v] of Object.entries(seed)) localStorage.setItem(k, v);
+        }, { skin, chan, CH });
         const prefs = { migrations: { 'launcher-seed-v1': true } };
         await context.route('**/*', async r => {
           const q = r.request(), u = new URL(q.url()), p = u.pathname, method = q.method();
@@ -51,7 +53,11 @@ const nap = ms => new Promise(r => setTimeout(r, ms));
         const page = await context.newPage(); page.on('pageerror', e => errors.push(e.message));
         await page.goto(origin + prefix + 'index.html?phone');
         await page.waitForFunction(() => window.__wos && !window.WosWelcome?.active && window.WosExperience?.state.tweaks.length && !window.WosExperience.state.busy);
-        if (!off) await page.waitForFunction(id => (document.documentElement.dataset.tweaks || '').split(' ').includes(id), ID, { timeout: 15000 });
+        if (chan) await page.waitForFunction(id => (document.documentElement.dataset.tweaks || '').split(' ').includes(id), CH, { timeout: 15000 });
+        await nap(800);
+        steps.tweaks = await page.evaluate(() => document.documentElement.dataset.tweaks || '');
+        assert.equal(steps.tweaks.split(' ').includes(CH), chan, `Channels ${chan ? 'on' : 'off'}`);
+        assert.ok(!steps.tweaks.includes('bar-scrub'), 'no bar-scrub switch is worn');
         await page.addStyleTag({ content: '#wosWelcome{display:none!important}' });
         // Six desks: Home + five windows, each on its own desk.
         await page.evaluate(() => {
@@ -65,7 +71,7 @@ const nap = ms => new Promise(r => setTimeout(r, ms));
         const go = async i => { await page.evaluate(i => __wos.goDesk(i, true), i); await nap(700); };
         const at = () => page.evaluate(() => { const o = document.querySelector('.ov-hint'); if (o && o.offsetParent) throw new Error('the desk overview opened'); return __wos.idx; });
         const names = () => page.evaluate(() => __wos.desks.map((d, i) => document.querySelector(`[data-goto="${i}"]`)?.getAttribute('aria-label') || ''));
-        const shot = s => page.screenshot({ path: path.join(out, `${skin}${off ? '-off' : ''}-${s}.png`) });
+        const shot = s => page.screenshot({ path: path.join(out, `${skin}${tag}-${s}.png`) });
         const cdp = await context.newCDPSession(page);
         const bar = await page.evaluate(() => { const r = document.querySelector('#dock').getBoundingClientRect(), o = document.querySelector('#orbWrap').getBoundingClientRect(); return { y: Math.round(r.top + 22), orbL: o.left, orbR: o.right, orbX: Math.round(o.left + o.width / 2), orbY: Math.round(o.top + o.height / 2), bottom: r.bottom }; });
         const handle = () => page.evaluate(() => { const s = document.querySelector('#scrub'), i = s?.querySelector('i'); if (!i) return false; const b = i.getBoundingClientRect(); return getComputedStyle(i).display !== 'none' && getComputedStyle(s).display !== 'none' && b.width > 0 && +getComputedStyle(i).opacity > 0; });
@@ -91,14 +97,7 @@ const nap = ms => new Promise(r => setTimeout(r, ms));
         };
         const left = 40, right = 372; // bar edges, away from the orb in the middle
         const desk = await names();
-        if (off) {
-          steps.handle = await handle(); assert.equal(steps.handle, true, 'switch off: the little handle is there');
-          await go(2); await drag(right, -130, { hold: 0, ms: 600, sample: false }); steps.slowDragOff = await at();
-          assert.equal(steps.slowDragOff, 3, 'switch off: a slow drag on the bar moves one desk, as before');
-          await go(2); await drag(bar.orbX, -130, { y: bar.orbY, lead: 16, hold: 0, ms: 600, sample: false }); steps.orbDragOff = await at();
-          assert.equal(steps.orbDragOff, 3, 'switch off: a sideways drag on the orb moves one desk, as before');
-          await shot('bar');
-        } else {
+        {
           steps.handle = await handle(); assert.equal(steps.handle, false, 'no little handle under the orb');
           await shot('bar');
           await go(2); steps.leftLabels = await drag(right, -84); steps.left = await at();
@@ -164,10 +163,10 @@ const nap = ms => new Promise(r => setTimeout(r, ms));
           steps.orbStill = await page.evaluate(() => !!document.querySelector('#orbWrap')?.offsetParent);
         }
         assert.deepEqual(errors, []);
-        report.push({ skin, off, desks: n, ...steps });
+        report.push({ skin, channels: chan, desks: n, ...steps });
       } finally { await context.close(); }
     }
   } finally { await browser.close(); }
-  fs.writeFileSync(path.join(out, `report${off ? '-off' : ''}.json`), JSON.stringify(report, null, 2));
+  fs.writeFileSync(path.join(out, `report${tag}.json`), JSON.stringify(report, null, 2));
   console.log(JSON.stringify(report, null, 2));
 })().catch(e => { console.error(e); process.exit(1); });

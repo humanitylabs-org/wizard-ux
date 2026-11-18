@@ -227,7 +227,7 @@ html[data-skin^="obsidian"] .ch-swrow .ch-tacts button { border-radius: 18px; bo
 
 
 /* Opinionated (phone, test port): floating pill bottom bar, like iOS tab bars (LINE, Slack, WhatsApp, Telegram).
- * Same orb, desk icons, Back, scrubber and gestures; only the shape moves: an inset frosted capsule lifted off the
+ * Same orb, desk icons, Back and gestures; only the shape moves: an inset frosted capsule lifted off the
  * screen edge so desk swipes start well above the iPhone home-indicator swipe zone. Corner orb (full screen) unchanged. */
 html[data-skin^="obsidian"] { --pill-h: 66px; --pill-x: 12px; --pill-b: calc(var(--safe-b-low) + 8px); --pill-top: calc(var(--pill-b) + var(--pill-h)); }
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock { border-radius: calc(var(--pill-h) / 2); border: 1px solid color-mix(in srgb, var(--ink) 14%, transparent); background: color-mix(in srgb, var(--bg) 62%, transparent); -webkit-backdrop-filter: blur(22px) saturate(1.4); backdrop-filter: blur(22px) saturate(1.4); box-shadow: 0 8px 28px rgba(0, 0, 0, .28), inset 0 1px 0 color-mix(in srgb, var(--ink) 8%, transparent); }
@@ -249,7 +249,6 @@ html[data-skin^="obsidian"][data-shell="phone"] .device:not(.orb-corner) .tiles:
 
 html[data-skin^="obsidian"][data-shell="phone"] .device:not(.orb-corner) .tiles:not(.has-full) .win.solo.app-chats .ch-msgs { -webkit-mask-image: linear-gradient(to top, transparent 0, #000 28px); mask-image: linear-gradient(to top, transparent 0, #000 28px); }
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock { border-color: color-mix(in srgb, var(--ink) 7%, transparent); background: color-mix(in srgb, var(--bg) 78%, transparent); box-shadow: 0 10px 30px rgba(0, 0, 0, .22); }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .scrub:not(.on) i { opacity: 0; }
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .orb-ring { opacity: .45; }
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .dock :is(.dock-back, .mz-dock-back) { background: transparent; border: 0; -webkit-backdrop-filter: none; backdrop-filter: none; }
 
@@ -266,9 +265,8 @@ html[data-skin^="obsidian"][data-shell="phone"] .device:not(.orb-corner) .tiles:
 
 
 /* Opinionated (phone): just the orb. No ring, spinning arcs, orbit dots, halo or handle line; the count badge and the
- * tap ripple stay. Gestures unchanged (the scrub strip still works, it just draws nothing at rest). */
+ * tap ripple stay. Gestures unchanged. */
 
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .dock .scrub:not(.on) i { opacity: 0; }
 /* Opinionated (phone): bigger everything inside the pill. The orb grows to nearly the pill's height and carries the
  * current app's icon inside its glass, so it reads as the orb sitting on top of whatever is in view. */
 html[data-skin^="obsidian"] { --pill-h: 72px; }

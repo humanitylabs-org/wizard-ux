@@ -1,4 +1,0 @@
-/* Swipe the whole bar to scrub desks (wizard-ux#1491): the bar does the scrubbing, so the little handle under the
- * orb is gone. The handle's element stays only to carry the desk-name label while the bar scrubs. */
-html[data-tweaks~="wizard/bar-scrub"] #scrub { pointer-events: none; }
-html[data-tweaks~="wizard/bar-scrub"] #scrub > i { display: none; }
