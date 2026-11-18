@@ -8,6 +8,8 @@
 // wizard-ux issue 1536: a sideways drag that starts on the orb scrubs the same as one on the bar; the scrub is live from
 // the first move (no hold), a 20-30 px first move changes at most one desk, a steady 3 x 26 px drag lands three desks
 // over. Orb up-swipes stay the orb's. QA_SWITCH=off: a sideways drag on the orb still moves one desk, as before.
+// Issue 1536 kick-back: a fast long swipe (bar or orb) lands by distance (only a short flick is one desk), and while the
+// finger is down each step shows the hovered desk itself (rendered, on screen) before release.
 const assert = require('node:assert/strict');
 const { chromium } = require('../tools/qa-playwright.cjs');
 const { ownerRead } = require('../tools/qa-desktop-frame-fixture.cjs');
@@ -70,7 +72,9 @@ const nap = ms => new Promise(r => setTimeout(r, ms));
         const bar = await page.evaluate(() => { const r = document.querySelector('#dock').getBoundingClientRect(), o = document.querySelector('#orbWrap').getBoundingClientRect(); return { y: Math.round(r.top + 22), orbL: o.left, orbR: o.right, orbX: Math.round(o.left + o.width / 2), orbY: Math.round(o.top + o.height / 2), bottom: r.bottom }; });
         const handle = () => page.evaluate(() => { const s = document.querySelector('#scrub'), i = s?.querySelector('i'); if (!i) return false; const b = i.getBoundingClientRect(); return getComputedStyle(i).display !== 'none' && getComputedStyle(s).display !== 'none' && b.width > 0 && +getComputedStyle(i).opacity > 0; });
         // A finger on the bar: hold `hold` ms, then move dx in `moves` steps over `ms`, sampling the label as it goes.
-        const drag = async (x, dx, { y = bar.y, dy = 0, hold = 220, ms = 900, moves = 24, cancel = false, sample = true, lead = 0 } = {}) => {
+        // peek: after each move, the desk the scrub points at is rendered (not parked) and has slid on screen.
+        const peekNow = () => page.evaluate(() => { const d = __wos.desks[__wos.idx], el = d && document.querySelector(`.desk[data-did="${d.id}"]`); if (!el) return null; const b = el.getBoundingClientRect(); return { at: __wos.idx, shown: getComputedStyle(el).contentVisibility !== 'hidden' && !el.classList.contains('parked'), left: Math.round(b.left) }; });
+        const drag = async (x, dx, { y = bar.y, dy = 0, hold = 220, ms = 900, moves = 24, cancel = false, sample = true, lead = 0, peek = null } = {}) => {
           // Event times are given to Chrome (timestamp, seconds), so a slow host never turns a flick into a hold.
           const labels = [], t0 = Date.now() / 1000;
           await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }], timestamp: t0 });
@@ -83,6 +87,7 @@ const nap = ms => new Promise(r => setTimeout(r, ms));
             await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x + dx * k / moves, y: y + dy * k / moves }], timestamp: t0 + (hold + ms * k / moves) / 1000 });
             const l = sample && await page.evaluate(() => { const s = document.querySelector('#scrub'); return s?.classList.contains('on') ? s.querySelector('.sc-label').textContent : ''; });
             if (l && labels.at(-1) !== l) labels.push(l);
+            if (peek) { await nap(260); const p = await peekNow(); if (p && peek.at(-1)?.at !== p.at) peek.push(p); }
           }
           if (labels.length) await shot('scrubbing');
           await cdp.send('Input.dispatchTouchEvent', { type: cancel ? 'touchCancel' : 'touchEnd', touchPoints: [], timestamp: t0 + (hold + ms + 10) / 1000 });
@@ -119,8 +124,14 @@ const nap = ms => new Promise(r => setTimeout(r, ms));
           assert.equal(steps.orbRight, 2, 'a drag right from the orb goes two desks to the left');
           await go(0); await drag(bar.orbX, 120, { y: bar.orbY, lead: 16, hold: 0, moves: 10, ms: 500 }); steps.orbHomeRight = await at();
           assert.equal(steps.orbHomeRight, 0, 'on Home a drag right from the orb does nothing');
-          await go(2); await drag(bar.orbX, -110, { y: bar.orbY, lead: 16, hold: 0, ms: 60, moves: 4, sample: false }); steps.orbFlick = await at();
-          assert.equal(steps.orbFlick, 3, 'a quick flick on the orb moves one desk');
+          await go(2); await drag(bar.orbX, -44, { y: bar.orbY, lead: 16, hold: 0, ms: 60, moves: 2, sample: false }); steps.orbFlick = await at();
+          assert.equal(steps.orbFlick, 3, 'a short quick flick on the orb moves one desk');
+          await go(1); await drag(bar.orbX, -110, { y: bar.orbY, lead: 16, hold: 0, ms: 80, moves: 4, sample: false }); steps.orbFastLong = await at();
+          assert.equal(steps.orbFastLong, 5, 'a fast long swipe on the orb (110 px in under 0.1 s) lands by distance, four desks over');
+          // While the finger is down, each step shows the hovered desk itself (desks 3 and 4 are parked from desk 1).
+          await go(1); steps.peek = []; await drag(bar.orbX, -84, { y: bar.orbY, lead: 16, hold: 0, ms: 1200, moves: 12, peek: steps.peek });
+          steps.peek = steps.peek.filter(p => p.at !== 1); assert.deepEqual(steps.peek.map(p => p.at), [2, 3, 4], 'one peek per desk stepped');
+          for (const p of steps.peek) assert.ok(p.shown && Math.abs(p.left) < 40, `desk ${p.at} is rendered and on screen before release (${JSON.stringify(p)})`);
           await go(2); await drag(bar.orbX, -84, { y: bar.orbY, lead: 16, hold: 0, dy: -70 }); steps.orbRose = await at();
           assert.equal(steps.orbRose, 2, 'a drag from the orb that rises leaves the desk where it started');
           await page.evaluate(() => { __wos.closeSheets?.(); __wos.closeOverview?.(); }); await nap(500);
@@ -133,10 +144,12 @@ const nap = ms => new Promise(r => setTimeout(r, ms));
           assert.equal(steps.right, 2, 'drag right 60 px from desk 5 lands two desks to the left');
           await go(0); await drag(left, 120, { hold: 0, moves: 10, ms: 500 }); steps.homeRight = await at();
           assert.equal(steps.homeRight, 0, 'on Home a drag right does nothing');
-          await go(2); await drag(right, -110, { hold: 0, ms: 60, moves: 4, sample: false }); steps.flickLeft = await at();
-          assert.equal(steps.flickLeft, 3, 'a quick flick left moves one desk');
-          await drag(left, 110, { hold: 0, ms: 60, moves: 4, sample: false }); steps.flickRight = await at();
-          assert.equal(steps.flickRight, 2, 'a quick flick right moves one desk');
+          await go(2); await drag(right, -44, { hold: 0, ms: 60, moves: 2, sample: false }); steps.flickLeft = await at();
+          assert.equal(steps.flickLeft, 3, 'a short quick flick left moves one desk');
+          await drag(left, 44, { hold: 0, ms: 60, moves: 2, sample: false }); steps.flickRight = await at();
+          assert.equal(steps.flickRight, 2, 'a short quick flick right moves one desk');
+          await go(1); await drag(right, -110, { hold: 0, ms: 80, moves: 4, sample: false }); steps.fastLong = await at();
+          assert.equal(steps.fastLong, 5, 'a fast long swipe on the bar lands by distance, four desks over');
           await go(2); await drag(right, -84, { dy: -60 }); steps.rose = await at();
           assert.equal(steps.rose, 2, 'a drag that rises leaves the desk where it started');
           await go(2); await drag(right, -84, { cancel: true }); steps.cancelled = await at();
