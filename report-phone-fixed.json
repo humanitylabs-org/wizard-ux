@@ -1,0 +1,434 @@
+[
+  {
+    "stem": "phone-nebula",
+    "errors": [],
+    "follow": {
+      "doc": false,
+      "scrollTop": 1770,
+      "gap": 0,
+      "paras": 15,
+      "eye": "Chunk 32: the ",
+      "eyeTop": 226,
+      "latest": false,
+      "top": 101,
+      "bottom": 788
+    },
+    "followOk": true,
+    "before": {
+      "doc": false,
+      "scrollTop": 1080,
+      "gap": 690,
+      "paras": 15,
+      "eye": "Chunk 20: the ",
+      "eyeTop": 272,
+      "latest": true,
+      "top": 101,
+      "bottom": 788
+    },
+    "samples": [
+      {
+        "doc": false,
+        "scrollTop": 1080,
+        "gap": 885,
+        "paras": 17,
+        "eye": "Chunk 20: the ",
+        "eyeTop": 272,
+        "latest": true,
+        "top": 101,
+        "bottom": 788
+      },
+      {
+        "doc": false,
+        "scrollTop": 1080,
+        "gap": 1079,
+        "paras": 19,
+        "eye": "Chunk 20: the ",
+        "eyeTop": 272,
+        "latest": true,
+        "top": 101,
+        "bottom": 788
+      },
+      {
+        "doc": false,
+        "scrollTop": 1080,
+        "gap": 1274,
+        "paras": 21,
+        "eye": "Chunk 20: the ",
+        "eyeTop": 272,
+        "latest": true,
+        "top": 101,
+        "bottom": 788
+      },
+      {
+        "doc": false,
+        "scrollTop": 1080,
+        "gap": 1468,
+        "paras": 23,
+        "eye": "Chunk 20: the ",
+        "eyeTop": 272,
+        "latest": true,
+        "top": 101,
+        "bottom": 788
+      },
+      {
+        "doc": false,
+        "scrollTop": 1080,
+        "gap": 1663,
+        "paras": 25,
+        "eye": "Chunk 20: the ",
+        "eyeTop": 272,
+        "latest": true,
+        "top": 101,
+        "bottom": 788
+      },
+      {
+        "doc": false,
+        "scrollTop": 1080,
+        "gap": 1857,
+        "paras": 27,
+        "eye": "Chunk 20: the ",
+        "eyeTop": 272,
+        "latest": true,
+        "top": 101,
+        "bottom": 788
+      },
+      {
+        "doc": false,
+        "scrollTop": 1080,
+        "gap": 1892,
+        "paras": 27,
+        "eye": "Chunk 20: the ",
+        "eyeTop": 272,
+        "latest": true,
+        "top": 101,
+        "bottom": 753
+      }
+    ],
+    "holdOk": true,
+    "ok": true
+  },
+  {
+    "stem": "phone-grove",
+    "errors": [],
+    "follow": {
+      "doc": false,
+      "scrollTop": 1770,
+      "gap": 0,
+      "paras": 15,
+      "eye": "Chunk 32: the ",
+      "eyeTop": 226,
+      "latest": false,
+      "top": 101,
+      "bottom": 788
+    },
+    "followOk": true,
+    "before": {
+      "doc": false,
+      "scrollTop": 1080,
+      "gap": 690,
+      "paras": 15,
+      "eye": "Chunk 20: the ",
+      "eyeTop": 272,
+      "latest": true,
+      "top": 101,
+      "bottom": 788
+    },
+    "samples": [
+      {
+        "doc": false,
+        "scrollTop": 1080,
+        "gap": 885,
+        "paras": 17,
+        "eye": "Chunk 20: the ",
+        "eyeTop": 272,
+        "latest": true,
+        "top": 101,
+        "bottom": 788
+      },
+      {
+        "doc": false,
+        "scrollTop": 1080,
+        "gap": 1079,
+        "paras": 19,
+        "eye": "Chunk 20: the ",
+        "eyeTop": 272,
+        "latest": true,
+        "top": 101,
+        "bottom": 788
+      },
+      {
+        "doc": false,
+        "scrollTop": 1080,
+        "gap": 1274,
+        "paras": 21,
+        "eye": "Chunk 20: the ",
+        "eyeTop": 272,
+        "latest": true,
+        "top": 101,
+        "bottom": 788
+      },
+      {
+        "doc": false,
+        "scrollTop": 1080,
+        "gap": 1468,
+        "paras": 23,
+        "eye": "Chunk 20: the ",
+        "eyeTop": 272,
+        "latest": true,
+        "top": 101,
+        "bottom": 788
+      },
+      {
+        "doc": false,
+        "scrollTop": 1080,
+        "gap": 1663,
+        "paras": 25,
+        "eye": "Chunk 20: the ",
+        "eyeTop": 272,
+        "latest": true,
+        "top": 101,
+        "bottom": 788
+      },
+      {
+        "doc": false,
+        "scrollTop": 1080,
+        "gap": 1857,
+        "paras": 27,
+        "eye": "Chunk 20: the ",
+        "eyeTop": 272,
+        "latest": true,
+        "top": 101,
+        "bottom": 788
+      },
+      {
+        "doc": false,
+        "scrollTop": 1080,
+        "gap": 1892,
+        "paras": 27,
+        "eye": "Chunk 20: the ",
+        "eyeTop": 272,
+        "latest": true,
+        "top": 101,
+        "bottom": 753
+      }
+    ],
+    "holdOk": true,
+    "ok": true
+  },
+  {
+    "stem": "phone-doc-nebula",
+    "errors": [],
+    "follow": {
+      "doc": true,
+      "scrollTop": 1738,
+      "gap": 0,
+      "paras": 15,
+      "eye": "Chunk 32: the ",
+      "eyeTop": 210,
+      "latest": false,
+      "top": 53,
+      "bottom": 915
+    },
+    "followOk": true,
+    "before": {
+      "doc": true,
+      "scrollTop": 1048,
+      "gap": 690,
+      "paras": 15,
+      "eye": "Chunk 17: the ",
+      "eyeTop": 95,
+      "latest": true,
+      "top": 53,
+      "bottom": 915
+    },
+    "samples": [
+      {
+        "doc": true,
+        "scrollTop": 1048,
+        "gap": 885,
+        "paras": 17,
+        "eye": "Chunk 17: the ",
+        "eyeTop": 95,
+        "latest": true,
+        "top": 53,
+        "bottom": 915
+      },
+      {
+        "doc": true,
+        "scrollTop": 1048,
+        "gap": 1079,
+        "paras": 19,
+        "eye": "Chunk 17: the ",
+        "eyeTop": 95,
+        "latest": true,
+        "top": 53,
+        "bottom": 915
+      },
+      {
+        "doc": true,
+        "scrollTop": 1048,
+        "gap": 1274,
+        "paras": 21,
+        "eye": "Chunk 17: the ",
+        "eyeTop": 95,
+        "latest": true,
+        "top": 53,
+        "bottom": 915
+      },
+      {
+        "doc": true,
+        "scrollTop": 1048,
+        "gap": 1468,
+        "paras": 23,
+        "eye": "Chunk 17: the ",
+        "eyeTop": 95,
+        "latest": true,
+        "top": 53,
+        "bottom": 915
+      },
+      {
+        "doc": true,
+        "scrollTop": 1048,
+        "gap": 1663,
+        "paras": 25,
+        "eye": "Chunk 17: the ",
+        "eyeTop": 95,
+        "latest": true,
+        "top": 53,
+        "bottom": 915
+      },
+      {
+        "doc": true,
+        "scrollTop": 1048,
+        "gap": 1857,
+        "paras": 27,
+        "eye": "Chunk 17: the ",
+        "eyeTop": 95,
+        "latest": true,
+        "top": 53,
+        "bottom": 915
+      },
+      {
+        "doc": true,
+        "scrollTop": 1048,
+        "gap": 1892,
+        "paras": 27,
+        "eye": "Chunk 17: the ",
+        "eyeTop": 95,
+        "latest": true,
+        "top": 53,
+        "bottom": 880
+      }
+    ],
+    "holdOk": true,
+    "ok": true
+  },
+  {
+    "stem": "phone-doc-grove",
+    "errors": [],
+    "follow": {
+      "doc": true,
+      "scrollTop": 1738,
+      "gap": 0,
+      "paras": 15,
+      "eye": "Chunk 32: the ",
+      "eyeTop": 210,
+      "latest": false,
+      "top": 53,
+      "bottom": 915
+    },
+    "followOk": true,
+    "before": {
+      "doc": true,
+      "scrollTop": 1048,
+      "gap": 690,
+      "paras": 15,
+      "eye": "Chunk 17: the ",
+      "eyeTop": 95,
+      "latest": true,
+      "top": 53,
+      "bottom": 915
+    },
+    "samples": [
+      {
+        "doc": true,
+        "scrollTop": 1048,
+        "gap": 885,
+        "paras": 17,
+        "eye": "Chunk 17: the ",
+        "eyeTop": 95,
+        "latest": true,
+        "top": 53,
+        "bottom": 915
+      },
+      {
+        "doc": true,
+        "scrollTop": 1048,
+        "gap": 1079,
+        "paras": 19,
+        "eye": "Chunk 17: the ",
+        "eyeTop": 95,
+        "latest": true,
+        "top": 53,
+        "bottom": 915
+      },
+      {
+        "doc": true,
+        "scrollTop": 1048,
+        "gap": 1274,
+        "paras": 21,
+        "eye": "Chunk 17: the ",
+        "eyeTop": 95,
+        "latest": true,
+        "top": 53,
+        "bottom": 915
+      },
+      {
+        "doc": true,
+        "scrollTop": 1048,
+        "gap": 1468,
+        "paras": 23,
+        "eye": "Chunk 17: the ",
+        "eyeTop": 95,
+        "latest": true,
+        "top": 53,
+        "bottom": 915
+      },
+      {
+        "doc": true,
+        "scrollTop": 1048,
+        "gap": 1663,
+        "paras": 25,
+        "eye": "Chunk 17: the ",
+        "eyeTop": 95,
+        "latest": true,
+        "top": 53,
+        "bottom": 915
+      },
+      {
+        "doc": true,
+        "scrollTop": 1048,
+        "gap": 1857,
+        "paras": 27,
+        "eye": "Chunk 17: the ",
+        "eyeTop": 95,
+        "latest": true,
+        "top": 53,
+        "bottom": 915
+      },
+      {
+        "doc": true,
+        "scrollTop": 1048,
+        "gap": 1892,
+        "paras": 27,
+        "eye": "Chunk 17: the ",
+        "eyeTop": 95,
+        "latest": true,
+        "top": 53,
+        "bottom": 880
+      }
+    ],
+    "holdOk": true,
+    "ok": true
+  }
+]

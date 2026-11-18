@@ -1,0 +1,434 @@
+[
+  {
+    "stem": "classic-nebula",
+    "errors": [],
+    "follow": {
+      "doc": false,
+      "scrollTop": 549,
+      "gap": 0,
+      "paras": 15,
+      "eye": "Chunk 17: the ",
+      "eyeTop": 187,
+      "latest": false,
+      "top": 143,
+      "bottom": 825
+    },
+    "followOk": true,
+    "before": {
+      "doc": false,
+      "scrollTop": 0,
+      "gap": 549,
+      "paras": 15,
+      "eye": "Chunk 1: the l",
+      "eyeTop": 318,
+      "latest": true,
+      "top": 143,
+      "bottom": 825
+    },
+    "samples": [
+      {
+        "doc": false,
+        "scrollTop": 0,
+        "gap": 652,
+        "paras": 17,
+        "eye": "Chunk 1: the l",
+        "eyeTop": 318,
+        "latest": true,
+        "top": 143,
+        "bottom": 825
+      },
+      {
+        "doc": false,
+        "scrollTop": 0,
+        "gap": 755,
+        "paras": 19,
+        "eye": "Chunk 1: the l",
+        "eyeTop": 318,
+        "latest": true,
+        "top": 143,
+        "bottom": 825
+      },
+      {
+        "doc": false,
+        "scrollTop": 0,
+        "gap": 858,
+        "paras": 21,
+        "eye": "Chunk 1: the l",
+        "eyeTop": 318,
+        "latest": true,
+        "top": 143,
+        "bottom": 825
+      },
+      {
+        "doc": false,
+        "scrollTop": 0,
+        "gap": 961,
+        "paras": 23,
+        "eye": "Chunk 1: the l",
+        "eyeTop": 318,
+        "latest": true,
+        "top": 143,
+        "bottom": 825
+      },
+      {
+        "doc": false,
+        "scrollTop": 0,
+        "gap": 1064,
+        "paras": 25,
+        "eye": "Chunk 1: the l",
+        "eyeTop": 318,
+        "latest": true,
+        "top": 143,
+        "bottom": 825
+      },
+      {
+        "doc": false,
+        "scrollTop": 0,
+        "gap": 1167,
+        "paras": 27,
+        "eye": "Chunk 1: the l",
+        "eyeTop": 318,
+        "latest": true,
+        "top": 143,
+        "bottom": 825
+      },
+      {
+        "doc": false,
+        "scrollTop": 0,
+        "gap": 1207,
+        "paras": 27,
+        "eye": "Chunk 1: the l",
+        "eyeTop": 318,
+        "latest": true,
+        "top": 143,
+        "bottom": 785
+      }
+    ],
+    "holdOk": true,
+    "ok": true
+  },
+  {
+    "stem": "classic-grove",
+    "errors": [],
+    "follow": {
+      "doc": false,
+      "scrollTop": 549,
+      "gap": 0,
+      "paras": 15,
+      "eye": "Chunk 17: the ",
+      "eyeTop": 187,
+      "latest": false,
+      "top": 143,
+      "bottom": 825
+    },
+    "followOk": true,
+    "before": {
+      "doc": false,
+      "scrollTop": 0,
+      "gap": 549,
+      "paras": 15,
+      "eye": "Chunk 1: the l",
+      "eyeTop": 318,
+      "latest": true,
+      "top": 143,
+      "bottom": 825
+    },
+    "samples": [
+      {
+        "doc": false,
+        "scrollTop": 0,
+        "gap": 652,
+        "paras": 17,
+        "eye": "Chunk 1: the l",
+        "eyeTop": 318,
+        "latest": true,
+        "top": 143,
+        "bottom": 825
+      },
+      {
+        "doc": false,
+        "scrollTop": 0,
+        "gap": 755,
+        "paras": 19,
+        "eye": "Chunk 1: the l",
+        "eyeTop": 318,
+        "latest": true,
+        "top": 143,
+        "bottom": 825
+      },
+      {
+        "doc": false,
+        "scrollTop": 0,
+        "gap": 858,
+        "paras": 21,
+        "eye": "Chunk 1: the l",
+        "eyeTop": 318,
+        "latest": true,
+        "top": 143,
+        "bottom": 825
+      },
+      {
+        "doc": false,
+        "scrollTop": 0,
+        "gap": 961,
+        "paras": 23,
+        "eye": "Chunk 1: the l",
+        "eyeTop": 318,
+        "latest": true,
+        "top": 143,
+        "bottom": 825
+      },
+      {
+        "doc": false,
+        "scrollTop": 0,
+        "gap": 1064,
+        "paras": 25,
+        "eye": "Chunk 1: the l",
+        "eyeTop": 318,
+        "latest": true,
+        "top": 143,
+        "bottom": 825
+      },
+      {
+        "doc": false,
+        "scrollTop": 0,
+        "gap": 1167,
+        "paras": 27,
+        "eye": "Chunk 1: the l",
+        "eyeTop": 318,
+        "latest": true,
+        "top": 143,
+        "bottom": 825
+      },
+      {
+        "doc": false,
+        "scrollTop": 0,
+        "gap": 1207,
+        "paras": 27,
+        "eye": "Chunk 1: the l",
+        "eyeTop": 318,
+        "latest": true,
+        "top": 143,
+        "bottom": 785
+      }
+    ],
+    "holdOk": true,
+    "ok": true
+  },
+  {
+    "stem": "ai-apps-nebula",
+    "errors": [],
+    "follow": {
+      "doc": false,
+      "scrollTop": 463,
+      "gap": 0,
+      "paras": 15,
+      "eye": "Chunk 14: the ",
+      "eyeTop": 109,
+      "latest": false,
+      "top": 48,
+      "bottom": 822
+    },
+    "followOk": true,
+    "before": {
+      "doc": false,
+      "scrollTop": 0,
+      "gap": 463,
+      "paras": 15,
+      "eye": "Chunk 1: the l",
+      "eyeTop": 227,
+      "latest": true,
+      "top": 48,
+      "bottom": 822
+    },
+    "samples": [
+      {
+        "doc": false,
+        "scrollTop": 0,
+        "gap": 566,
+        "paras": 17,
+        "eye": "Chunk 1: the l",
+        "eyeTop": 227,
+        "latest": true,
+        "top": 48,
+        "bottom": 822
+      },
+      {
+        "doc": false,
+        "scrollTop": 0,
+        "gap": 669,
+        "paras": 19,
+        "eye": "Chunk 1: the l",
+        "eyeTop": 227,
+        "latest": true,
+        "top": 48,
+        "bottom": 822
+      },
+      {
+        "doc": false,
+        "scrollTop": 0,
+        "gap": 772,
+        "paras": 21,
+        "eye": "Chunk 1: the l",
+        "eyeTop": 227,
+        "latest": true,
+        "top": 48,
+        "bottom": 822
+      },
+      {
+        "doc": false,
+        "scrollTop": 0,
+        "gap": 875,
+        "paras": 23,
+        "eye": "Chunk 1: the l",
+        "eyeTop": 227,
+        "latest": true,
+        "top": 48,
+        "bottom": 822
+      },
+      {
+        "doc": false,
+        "scrollTop": 0,
+        "gap": 978,
+        "paras": 25,
+        "eye": "Chunk 1: the l",
+        "eyeTop": 227,
+        "latest": true,
+        "top": 48,
+        "bottom": 822
+      },
+      {
+        "doc": false,
+        "scrollTop": 0,
+        "gap": 1081,
+        "paras": 27,
+        "eye": "Chunk 1: the l",
+        "eyeTop": 227,
+        "latest": true,
+        "top": 48,
+        "bottom": 822
+      },
+      {
+        "doc": false,
+        "scrollTop": 0,
+        "gap": 1121,
+        "paras": 27,
+        "eye": "Chunk 1: the l",
+        "eyeTop": 227,
+        "latest": true,
+        "top": 48,
+        "bottom": 782
+      }
+    ],
+    "holdOk": true,
+    "ok": true
+  },
+  {
+    "stem": "ai-apps-grove",
+    "errors": [],
+    "follow": {
+      "doc": false,
+      "scrollTop": 463,
+      "gap": 0,
+      "paras": 15,
+      "eye": "Chunk 14: the ",
+      "eyeTop": 109,
+      "latest": false,
+      "top": 48,
+      "bottom": 822
+    },
+    "followOk": true,
+    "before": {
+      "doc": false,
+      "scrollTop": 0,
+      "gap": 463,
+      "paras": 15,
+      "eye": "Chunk 1: the l",
+      "eyeTop": 227,
+      "latest": true,
+      "top": 48,
+      "bottom": 822
+    },
+    "samples": [
+      {
+        "doc": false,
+        "scrollTop": 0,
+        "gap": 566,
+        "paras": 17,
+        "eye": "Chunk 1: the l",
+        "eyeTop": 227,
+        "latest": true,
+        "top": 48,
+        "bottom": 822
+      },
+      {
+        "doc": false,
+        "scrollTop": 0,
+        "gap": 669,
+        "paras": 19,
+        "eye": "Chunk 1: the l",
+        "eyeTop": 227,
+        "latest": true,
+        "top": 48,
+        "bottom": 822
+      },
+      {
+        "doc": false,
+        "scrollTop": 0,
+        "gap": 772,
+        "paras": 21,
+        "eye": "Chunk 1: the l",
+        "eyeTop": 227,
+        "latest": true,
+        "top": 48,
+        "bottom": 822
+      },
+      {
+        "doc": false,
+        "scrollTop": 0,
+        "gap": 875,
+        "paras": 23,
+        "eye": "Chunk 1: the l",
+        "eyeTop": 227,
+        "latest": true,
+        "top": 48,
+        "bottom": 822
+      },
+      {
+        "doc": false,
+        "scrollTop": 0,
+        "gap": 978,
+        "paras": 25,
+        "eye": "Chunk 1: the l",
+        "eyeTop": 227,
+        "latest": true,
+        "top": 48,
+        "bottom": 822
+      },
+      {
+        "doc": false,
+        "scrollTop": 0,
+        "gap": 1081,
+        "paras": 27,
+        "eye": "Chunk 1: the l",
+        "eyeTop": 227,
+        "latest": true,
+        "top": 48,
+        "bottom": 822
+      },
+      {
+        "doc": false,
+        "scrollTop": 0,
+        "gap": 1121,
+        "paras": 27,
+        "eye": "Chunk 1: the l",
+        "eyeTop": 227,
+        "latest": true,
+        "top": 48,
+        "bottom": 782
+      }
+    ],
+    "holdOk": true,
+    "ok": true
+  }
+]

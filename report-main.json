@@ -1,0 +1,218 @@
+[
+  {
+    "stem": "phone-nebula",
+    "errors": [],
+    "follow": {
+      "doc": false,
+      "scrollTop": 1770,
+      "gap": 0,
+      "paras": 15,
+      "eye": "Chunk 32: the ",
+      "eyeTop": 226,
+      "latest": false,
+      "top": 101,
+      "bottom": 788
+    },
+    "followOk": true,
+    "before": {
+      "doc": false,
+      "scrollTop": 1080,
+      "gap": 690,
+      "paras": 15,
+      "eye": "Chunk 20: the ",
+      "eyeTop": 272,
+      "latest": true,
+      "top": 101,
+      "bottom": 788
+    },
+    "samples": [
+      {
+        "doc": false,
+        "scrollTop": 1965,
+        "gap": 0,
+        "paras": 17,
+        "eye": "Chunk 35: the ",
+        "eyeTop": 192,
+        "latest": false,
+        "top": 101,
+        "bottom": 788
+      },
+      {
+        "doc": false,
+        "scrollTop": 2159,
+        "gap": 0,
+        "paras": 19,
+        "eye": "Chunk 38: the ",
+        "eyeTop": 159,
+        "latest": false,
+        "top": 101,
+        "bottom": 788
+      },
+      {
+        "doc": false,
+        "scrollTop": 2354,
+        "gap": 0,
+        "paras": 21,
+        "eye": "Chunk 41: the ",
+        "eyeTop": 125,
+        "latest": false,
+        "top": 101,
+        "bottom": 788
+      },
+      {
+        "doc": false,
+        "scrollTop": 2548,
+        "gap": 0,
+        "paras": 23,
+        "eye": "Chunk 22: the ",
+        "eyeTop": 184,
+        "latest": false,
+        "top": 101,
+        "bottom": 788
+      },
+      {
+        "doc": false,
+        "scrollTop": 2743,
+        "gap": 0,
+        "paras": 25,
+        "eye": "Chunk 25: the ",
+        "eyeTop": 184,
+        "latest": false,
+        "top": 101,
+        "bottom": 788
+      },
+      {
+        "doc": false,
+        "scrollTop": 2937,
+        "gap": 0,
+        "paras": 27,
+        "eye": "Chunk 28: the ",
+        "eyeTop": 184,
+        "latest": false,
+        "top": 101,
+        "bottom": 788
+      },
+      {
+        "doc": false,
+        "scrollTop": 2972,
+        "gap": 0,
+        "paras": 27,
+        "eye": "Chunk 28: the ",
+        "eyeTop": 149,
+        "latest": false,
+        "top": 101,
+        "bottom": 753
+      }
+    ],
+    "holdOk": false,
+    "ok": false
+  },
+  {
+    "stem": "ai-apps-nebula",
+    "errors": [],
+    "follow": {
+      "doc": false,
+      "scrollTop": 463,
+      "gap": 0,
+      "paras": 15,
+      "eye": "Chunk 14: the ",
+      "eyeTop": 109,
+      "latest": false,
+      "top": 48,
+      "bottom": 822
+    },
+    "followOk": true,
+    "before": {
+      "doc": false,
+      "scrollTop": 0,
+      "gap": 463,
+      "paras": 15,
+      "eye": "Chunk 1: the l",
+      "eyeTop": 227,
+      "latest": true,
+      "top": 48,
+      "bottom": 822
+    },
+    "samples": [
+      {
+        "doc": false,
+        "scrollTop": 566,
+        "gap": 0,
+        "paras": 17,
+        "eye": "Chunk 17: the ",
+        "eyeTop": 79,
+        "latest": false,
+        "top": 48,
+        "bottom": 822
+      },
+      {
+        "doc": false,
+        "scrollTop": 669,
+        "gap": 0,
+        "paras": 19,
+        "eye": "Chunk 23: the ",
+        "eyeTop": 122,
+        "latest": false,
+        "top": 48,
+        "bottom": 822
+      },
+      {
+        "doc": false,
+        "scrollTop": 772,
+        "gap": 0,
+        "paras": 21,
+        "eye": "Chunk 26: the ",
+        "eyeTop": 93,
+        "latest": false,
+        "top": 48,
+        "bottom": 822
+      },
+      {
+        "doc": false,
+        "scrollTop": 875,
+        "gap": 0,
+        "paras": 23,
+        "eye": "Chunk 32: the ",
+        "eyeTop": 136,
+        "latest": false,
+        "top": 48,
+        "bottom": 822
+      },
+      {
+        "doc": false,
+        "scrollTop": 978,
+        "gap": 0,
+        "paras": 25,
+        "eye": "Chunk 35: the ",
+        "eyeTop": 106,
+        "latest": false,
+        "top": 48,
+        "bottom": 822
+      },
+      {
+        "doc": false,
+        "scrollTop": 1081,
+        "gap": 0,
+        "paras": 27,
+        "eye": "Chunk 38: the ",
+        "eyeTop": 77,
+        "latest": false,
+        "top": 48,
+        "bottom": 822
+      },
+      {
+        "doc": false,
+        "scrollTop": 1121,
+        "gap": 0,
+        "paras": 27,
+        "eye": "Chunk 41: the ",
+        "eyeTop": 110,
+        "latest": false,
+        "top": 48,
+        "bottom": 782
+      }
+    ],
+    "holdOk": false,
+    "ok": false
+  }
+]
