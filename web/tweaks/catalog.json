@@ -38,7 +38,8 @@
     "wizard/bar-scrub",
     "wizard/app-windows",
     "wizard/pin-fast-open",
-    "wizard/private-first-setup"
+    "wizard/private-first-setup",
+    "wizard/chat-app-switches"
   ],
   "defaults": [
     "wizard/unified-inbox",
