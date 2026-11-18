@@ -454,13 +454,15 @@
    * scrub surface (dots, gaps, edges; the orb keeps its tap, hold and up/down). The scrub is live the moment the
    * finger passes the 12 px sideways slop (no hold time), counted from there, so it never jumps over the distance
    * already covered; it then steps one desk per SC_STEP px with a tick and the desk name, release lands. A SHORT touch
-   * (under 2 x SC_STEP) that ends within BAR_FLICK_MS (event time, so a busy page never turns a flick into a scrub) is
-   * a flick: exactly one desk; a fast long swipe goes by distance like a slow one (wizard-ux#1536 kick-back). Each step
+   * (under BAR_FLICK_STEPS = 2.5 x SC_STEP) that ends within BAR_FLICK_MS (event time, so a busy page never turns a flick
+   * into a scrub) is a flick: exactly one desk the way it travelled, however many moves it came as (wizard-ux#1601;
+   * under BAR_FLICK_MIN px it is drift and stays put); a fast long swipe goes by its whole distance like a slow one
+   * (wizard-ux#1536 kick-back). Each step
    * shows the hovered desk itself (unparked, quick slide), so the desk is visible under the finger before release
    * (barScrubPeek). Drag left = the desk to the right. A sideways drag that starts on the orb joins the same scrub
    * (barScrubJoin, from the orb's gesture code). Nothing here reads Channels: CHATS.beforeNavigate is the incognito
    * chat's leave guard, the same one goDesk uses. */
-  let DS = null, dockSwiped = 0; const BAR_FLICK_MS = 180;
+  let DS = null, dockSwiped = 0; const BAR_FLICK_MS = 180, BAR_FLICK_STEPS = 2.5, BAR_FLICK_MIN = 20;
   const barScrubBack = s => { if (s.live) { idx = s.start; placeTrack(0, true); renderDots(); parkDesks(false); } s.live = false; barScrubPeek(false); scrub.classList.remove('on'); };
   // The hovered desk and its neighbours render while the scrub points at it (parked desks skip rendering); the track
   // slides quicker so the desk follows each step. Desks the scrub has left behind (3+ away; 2 away may still be sliding
@@ -501,18 +503,22 @@
   const dockEnd = e => {
     if (!DS || e.pointerId !== DS.id) return; const s = DS; DS = null;
     if (!s.h) return;
-    const dx = e.clientX - s.x, v = dx / ((performance.now() - s.t) || 1);
+    const dx = e.clientX - s.x, quick = e.timeStamp - s.ts < BAR_FLICK_MS;
     dockSwiped = Date.now();
     // A cancelled touch or one that rose is the system's swipe out: the desk goes back to where it started.
     if (s.up || e.type === 'pointercancel' || e.clientY - s.y < -30) { barScrubBack(s); return; }
-    // A short quick flick moves exactly one desk, the way the scrub was heading (or by the flick rule if it crossed no
-    // step). A quick swipe that travelled further lands by distance, below.
-    if (e.timeStamp - s.ts < BAR_FLICK_MS && Math.abs(dx) < 2 * SC_STEP) {
-      const dir = s.at !== s.start ? Math.sign(s.at - s.start) : dx < -60 || v < -.5 ? 1 : dx > 60 || v > .5 ? -1 : 0;
+    // A short quick flick moves exactly one desk, the way the finger travelled in total (wizard-ux#1601: decided at
+    // release from the whole travel and time, not from steps crossed, so a flick that arrives as one or two merged
+    // moves is one desk too). A quick swipe that travelled further lands by distance, below.
+    if (quick && Math.abs(dx) < BAR_FLICK_STEPS * SC_STEP) {
+      // Under BAR_FLICK_MIN px (finger drift on a dock control, Codex P2 on PR 1603) is no swipe: the desk stays.
+      const dir = Math.abs(dx) >= BAR_FLICK_MIN ? -Math.sign(dx) : 0;
       barScrubBack(s); if (dir) { swipeDesk(dir); tourEv('desk', { home: idx === HOME }); } return;
     }
-    // The last move may not have come in before the release: land where the finger let go.
-    const n = barScrubAt(s, e.clientX); if (n !== s.at && (n === s.start || CHATS.beforeNavigate(desks[n]?.wins || []))) s.at = n;
+    // The last move may not have come in before the release: land where the finger let go. A quick long swipe counts
+    // its whole travel from touch-down, first move included (a lone far first move is not lost to the slop).
+    const n = quick ? Math.max(0, Math.min(desks.length - 1, s.start - Math.round(dx / SC_STEP))) : barScrubAt(s, e.clientX);
+    if (n !== s.at && (n === s.start || CHATS.beforeNavigate(desks[n]?.wins || []))) s.at = n;
     // The scrub moved idx as it went; land from the start desk so goDesk runs its desk-leave work (Resources, a Home
     // card's Chats chip, an empty desk going away, an open link) exactly as a tap or flick does.
     barScrubPeek(false); scrub.classList.remove('on'); idx = s.start; goDesk(s.at, true); tourEv('desk', { home: idx === HOME });

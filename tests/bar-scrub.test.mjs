@@ -253,3 +253,34 @@ test('the orb hands only its sideways drag to the scrub (tap, hold and up/down s
   assert.match(APP, /if \(g\.mode === 'scrub'\) \{ if \(cancelled\) barScrubDrop\(\); return; \}/);
   assert.match(APP, /if \(G\.mode === 'scrub'\) return;/);
 });
+
+// wizard-ux issue 1601: a short quick flick that arrives as one or two merged move events moved 0 desks (the first move
+// past the slop set the scrub origin and counted no step). A flick is decided at release from its whole travel and time.
+const moves = (dx, ms, n) => Array.from({ length: n }, (_, k) => [Math.round(dx * (k + 1) / n), Math.round(ms * (k + 1) / n)]);
+test('a short quick flick is exactly one desk as 1, 2 or many move events, bar and orb, both ways', () => {
+  for (const px of [30, 40, 44, 60]) for (const ms of [60, 91, 120, 160]) for (const n of [1, 2, 3, 8]) for (const dir of [-1, 1]) {
+    const path = moves(dir * px, ms - 10, n), at = 2, want = at - dir;
+    const b = shell({ at }); b.finger(path);
+    assert.equal(b.ctx.idx, want, `bar ${dir * px} px / ${ms} ms in ${n} move(s)`); assert.deepEqual(b.log.at(-1), ['swipe', -dir]);
+    const o = shell({ at }); o.orbFinger(path); assert.equal(o.ctx.idx, want, `orb ${dir * px} px / ${ms} ms in ${n} move(s)`);
+  }
+});
+test('the one-move and two-move flicks from the report (30 px / 91 ms, 40-60 px single move)', () => {
+  const a = shell(); a.finger([[-30, 81]]); assert.equal(a.ctx.idx, 3, 'single 30 px move, 91 ms');
+  const b = shell(); b.finger([[-18, 30], [-30, 81]]); assert.equal(b.ctx.idx, 3, 'two moves');
+  for (const px of [40, 50, 60]) { const c = shell(); c.finger([[px, 70]]); assert.equal(c.ctx.idx, 1, `single ${px} px move right`); }
+});
+test('a single-move fast long swipe lands by its whole distance, first move counted', () => {
+  const a = shell({ at: 0 }); a.finger([[-100, 70]]); assert.equal(a.ctx.idx, 4, '100 px / 80 ms in one move: four desks');
+  const b = shell({ at: 0, desks: 8 }); b.finger([[-160, 140]]); assert.equal(b.ctx.idx, 6, '160 px / 150 ms in one move: six desks');
+  const c = shell({ at: 0, desks: 8 }); c.finger(moves(-160, 140, 6)); assert.equal(c.ctx.idx, 6, 'the same swipe as many moves lands the same');
+  const o = shell({ at: 0 }); o.orbFinger([[-100, 70]]); assert.equal(o.ctx.idx, 4, 'from the orb too');
+  const r = shell({ at: 5 }); r.finger([[100, 70]]); assert.equal(r.ctx.idx, 1, 'right as well');
+});
+test('a quick touch that drifts only just past the slop (under 20 px) stays on its desk (Codex P2 on PR 1603)', () => {
+  for (const path of [[[-12, 150]], [[-14, 40], [-16, 150]], [[19, 100]]]) {
+    const s = shell(); s.finger(path); assert.equal(s.ctx.idx, 2, `drift ${path.at(-1)[0]} px`);
+    const o = shell(); o.orbFinger(path); assert.equal(o.ctx.idx, 2, `orb drift ${path.at(-1)[0]} px`);
+  }
+  const f = shell(); f.finger([[-20, 60]]); assert.equal(f.ctx.idx, 3, '20 px is a flick');
+});

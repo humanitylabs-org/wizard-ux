@@ -147,6 +147,17 @@ const nap = ms => new Promise(r => setTimeout(r, ms));
           assert.equal(steps.flickLeft, 3, 'a short quick flick left moves one desk');
           await drag(left, 44, { hold: 0, ms: 60, moves: 2, sample: false }); steps.flickRight = await at();
           assert.equal(steps.flickRight, 2, 'a short quick flick right moves one desk');
+          // wizard-ux#1601: a flick that arrives as one or two merged moves is still exactly one desk; a single-move fast
+          // long swipe lands by its whole distance (first move counted).
+          for (const [px, ms, moves] of [[30, 81, 1], [44, 60, 1], [60, 90, 1], [40, 100, 2]]) {
+            await go(2); await drag(right, -px, { hold: 0, ms, moves, sample: false }); const l = await at();
+            await go(2); await drag(left, px, { hold: 0, ms, moves, sample: false }); const r = await at();
+            steps[`flick${px}x${moves}`] = [l, r]; assert.deepEqual([l, r], [3, 1], `a ${px} px / ${ms} ms flick in ${moves} move(s): one desk each way`);
+          }
+          await go(2); await drag(bar.orbX, -40, { y: bar.orbY, lead: 16, hold: 0, ms: 60, moves: 1, sample: false }); steps.orbFlick1 = await at();
+          assert.equal(steps.orbFlick1, 3, 'an orb flick that arrives as two moves moves one desk');
+          await go(0); await drag(right, -100, { hold: 0, ms: 70, moves: 1, sample: false }); steps.oneMoveLong = await at();
+          assert.equal(steps.oneMoveLong, 4, 'a 100 px / 80 ms swipe in one move lands four desks over, by distance');
           await go(1); await drag(right, -110, { hold: 0, ms: 80, moves: 4, sample: false }); steps.fastLong = await at();
           assert.equal(steps.fastLong, 5, 'a fast long swipe on the bar lands by distance, four desks over');
           await go(2); await drag(right, -84, { dy: -60 }); steps.rose = await at();
