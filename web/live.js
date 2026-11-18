@@ -736,24 +736,27 @@
   const PEND = new Map(); // sessionId -> { key, kind, text, at, state: 'sending'|'waiting'|'sent', sentAt, runId }
   const STOPPING = new Map(); // runId -> when Stop was asked (applyLocal)
   const STOP_SEND_MS = 15000, STOP_FOLLOW_MS = [800, 800, 900, 1500, 2000, 3000, 4000, 7000]; // gaps between re-reads, ~20 s in all
-  const runRows = (L, runId) => [L.sessions || [], ...Object.values(L.agentSessions || {})].flat().filter(x => x && x.runId === runId);
+  // Every row of a run: the lists, rows read on their own (search, direct lookup, Spaces) and the thread Stop was tapped on.
+  const runRows = (L, runId, sid = '') => [...new Set([L.sessions || [], ...Object.values(L.agentSessions || {}), [...DETAIL.values()],
+    [...SPACE_ROWS.values()].map(x => x?.row), sid ? [L.session?.(sid)] : []].flat())].filter(x => x && x.runId === runId);
   // The tap: every row of this run says Stopping… now. Returns how to put them back if the Stop never arrives.
-  function markStopping(L, runId) {
+  function markStopping(L, runId, sid) {
     if (!runId || STOPPING.has(runId)) return () => {};
     STOPPING.set(runId, Date.now());
-    const before = runRows(L, runId).filter(s => WORKING.has(s.status) && s.status !== 'stopping').map(s => [s, s.status]);
+    const before = runRows(L, runId, sid).filter(s => WORKING.has(s.status) && s.status !== 'stopping').map(s => [s, s.status]);
     for (const [s] of before) s.status = 'stopping';
     if (before.length) L.emit();
     return () => { for (const [s, st] of before) if (s.status === 'stopping') s.status = st; };
   }
   // After a delivered Stop: re-read until no row of this run is still working (the run usually settles in a second or two).
-  function followStop(L, runId) {
+  function followStop(L, runId, sid) {
     let i = 0;
     const next = () => {
       if (i >= STOP_FOLLOW_MS.length || !STOPPING.has(runId)) return;
       setTimeout(async () => {
-        try { await L.refresh(); } catch {}
-        if (runRows(L, runId).some(s => WORKING.has(s.status))) next(); else STOPPING.delete(runId);
+        let read = true; try { await L.refresh(); } catch { read = false; } // a failed read proves nothing: try again
+        const rows = runRows(L, runId, sid);
+        if (!read || !rows.length || rows.some(s => WORKING.has(s.status))) next(); else STOPPING.delete(runId);
       }, STOP_FOLLOW_MS[i++]);
     };
     next();
@@ -1842,15 +1845,18 @@
      * looked ignored while the POST was in flight, and a repaint brought the Stop button back). A Stop that can't be
      * delivered in STOP_SEND_MS puts the row back and throws, so the caller says so. Once delivered, the list is
      * re-read quickly until the run has settled, instead of waiting for the next 15 s poll. */
-    async stop(runId) {
-      const init = { method: 'POST' }; if (globalThis.AbortSignal?.timeout) init.signal = AbortSignal.timeout(STOP_SEND_MS);
-      const sent = req(`/wizard/hermes/v1/runs/${encodeURIComponent(runId)}/stop${rq(runId)}`, init); // on the wire before the repaint
+    async stop(runId, sid = '') {
+      // A deadline on every WebView: AbortSignal.timeout is missing on iOS 16.0-16.3 (see core/status.js).
+      const ac = typeof AbortController === 'function' ? new AbortController() : null;
+      const timer = ac ? setTimeout(() => ac.abort(), STOP_SEND_MS) : 0;
+      const sent = req(`/wizard/hermes/v1/runs/${encodeURIComponent(runId)}/stop${rq(runId)}`, ac ? { method: 'POST', signal: ac.signal } : { method: 'POST' }); // on the wire before the repaint
       sent.catch(() => {}); // awaited below; never an unhandled rejection while the repaint runs
-      const undo = markStopping(this, runId);
+      const undo = markStopping(this, runId, sid);
       try { await sent; } catch (error) { STOPPING.delete(runId); undo(); this.emit(); this.refresh().catch?.(() => {}); throw error; }
+      finally { clearTimeout(timer); }
       STOPPING.set(runId, Date.now());
-      const s = [this.sessions, ...Object.values(this.agentSessions)].flat().find(x => x.runId === runId); if (s) { applyLocal(s); this.emit(); }
-      followStop(this, runId);
+      const rows = runRows(this, runId, sid).filter(s => WORKING.has(s.status) && s.status !== 'stopping'); for (const s of rows) s.status = 'stopping'; if (rows.length) this.emit();
+      followStop(this, runId, sid);
     },
   };
   // Wizard (in its desk, or another tab) writes the same key when a chat is opened.
@@ -2061,11 +2067,11 @@
       const at = Date.now(), p = PEND.get(sid), tapped = TAPS.has(sid);
       // A run already known is stopped at once, never after the withdrawals (a steer still in flight answers late).
       const known = [...new Set([runId, p?.runId].filter(Boolean))];
-      const stops = known.map(id => L.stop(id).then(() => null, e => e)); // settled here, thrown below
+      const stops = known.map(id => L.stop(id, sid).then(() => null, e => e)); // settled here, thrown below
       const w = OB ? await withdrawSends(OB, pendingFor(OB, sid)) : { items: [], started: [] };
       if (tapped) { STOP_MARKS.set(sid, { at, until: at + STOP_MARK_MS }); TAPS.delete(sid); }
       const later = [...new Set(w.started)].filter(id => !known.includes(id));
-      const failed = (await Promise.all([...stops, ...later.map(id => L.stop(id).then(() => null, e => e))])).find(Boolean);
+      const failed = (await Promise.all([...stops, ...later.map(id => L.stop(id, sid).then(() => null, e => e))])).find(Boolean);
       if (failed) throw failed;
       const runIds = [...known, ...later];
       return { outcome: runIds.length ? 'stopped' : w.items.length || tapped ? 'cancelled' : 'none', runIds, items: w.items };

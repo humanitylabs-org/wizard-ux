@@ -13,12 +13,13 @@ const between = (a, b) => { const i = liveSrc.indexOf(a), j = liveSrc.indexOf(b,
 // The real STOPPING helpers and L.stop method from live.js in a vm, with a fake request and list refresh.
 function harness({ deliver = async () => {}, settleAfter = 1, settles = true } = {}) {
   const helpers = between('  const STOPPING = new Map();', '  const PEND_MAX =');
-  const stop = between('    async stop(runId) {', '\n    },') + '\n    },';
-  const ctx = { Date, Promise, setTimeout: (fn, ms) => setTimeout(fn, Math.min(ms, 5)), AbortSignal, globalThis: {},
+  const stop = between("    async stop(runId, sid = '') {", '\n    },') + '\n    },';
+  const ctx = { Date, Promise, setTimeout: (fn, ms) => setTimeout(fn, Math.min(ms, 5)), clearTimeout, AbortController, AbortSignal, globalThis: {},
+    DETAIL: new Map(), SPACE_ROWS: new Map(),
     WORKING: new Set(['submitting', 'queued', 'running', 'stopping']), calls: [], emits: [], refreshes: 0 };
   ctx.globalThis = ctx;
   ctx.rq = () => '';
-  ctx.req = async (path, init) => { ctx.calls.push({ path, init, at: ctx.row.status }); await deliver(); return {}; };
+  ctx.req = async (path, init) => { ctx.calls.push({ path, init, at: ctx.row.status }); await deliver(init); return {}; };
   ctx.applyLocal = s => { const st = ctx.STOPPING.get(s.runId); if (st && ctx.WORKING.has(s.status)) s.status = 'stopping'; };
   vm.createContext(ctx);
   vm.runInContext(`${helpers}\nthis.STOPPING = STOPPING;\nthis.L = {
@@ -61,7 +62,7 @@ test('after a delivered Stop the list is re-read within a second until the run h
 
 test('Stop on a thread stops its known run before withdrawing queued sends (a steer in flight answers late)', () => {
   const body = between('  L.cancelSend = async', '  const resync = () =>');
-  const stopAt = body.indexOf('known.map(id => L.stop(id)'), withdrawAt = body.indexOf('await withdrawSends(');
+  const stopAt = body.indexOf('known.map(id => L.stop(id, sid)'), withdrawAt = body.indexOf('await withdrawSends(');
   assert.ok(stopAt > 0 && withdrawAt > stopAt, 'L.stop(runId) starts before the withdrawals are awaited');
 });
 
@@ -71,4 +72,24 @@ test('the Stop button answers on the tap: disabled, greyed and labelled Stopping
   const fn = chatsSrc.match(/function stopTapped\(b\) \{[^\n]+/)[0];
   assert.match(fn, /disabled = true/); assert.match(fn, /is-stopping/); assert.match(fn, /Stopping…/);
   assert.match(readFileSync(new URL('../web/core/chats.css', import.meta.url), 'utf8'), /\.ch-stop\.is-stopping \{/);
+});
+
+test('a Stop the box never answers gives up after its deadline (no AbortSignal.timeout needed) and says so', async () => {
+  const h = harness({ settles: false, deliver: init => new Promise((_, no) => init.signal.addEventListener('abort', () => no(new Error('aborted')))) });
+  h.AbortSignal = undefined; // iOS 16.0-16.3 WebViews
+  await assert.rejects(h.L.stop('run_1'), /aborted/);
+  assert.equal(h.row.status, 'running');
+});
+
+test('a thread opened from search (not in the lists) also says Stopping… and is followed until it settles', async () => {
+  const h = harness({ settles: false });
+  h.L.sessions = []; h.DETAIL.set('wizard_t', h.row);
+  let answer; const held = new Promise(r => { answer = r; });
+  const h2 = harness({ settles: false, deliver: () => held });
+  h2.L.sessions = []; h2.L.session = id => (id === 'wizard_t' ? h2.row : null);
+  const done = h2.L.stop('run_1', 'wizard_t');
+  assert.equal(h2.row.status, 'stopping', 'the tapped thread says Stopping… even outside the lists');
+  answer(); await done;
+  await h.L.stop('run_1');
+  assert.equal(h.row.status, 'stopping', 'a search/detail row is marked too');
 });
