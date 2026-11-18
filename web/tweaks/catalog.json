@@ -37,6 +37,7 @@
     "wizard/assist-attach",
     "wizard/bar-scrub",
     "wizard/app-windows",
+    "wizard/pin-fast-open",
     "wizard/private-first-setup"
   ],
   "defaults": [
