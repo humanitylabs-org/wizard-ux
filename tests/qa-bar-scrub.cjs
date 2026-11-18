@@ -5,6 +5,9 @@
 // drag right does nothing; a quick flick moves one desk; a dot tap still goes to its desk; a drag that rises or starts
 // in the home-indicator strip leaves the desk where it started. QA_SWITCH=off checks the old bar + handle unchanged
 // (handle visible, a slow drag on the bar moves exactly one desk). Synthetic transport only (no box is reached).
+// wizard-ux issue 1536: a sideways drag that starts on the orb scrubs the same as one on the bar; the scrub is live from
+// the first move (no hold), a 20-30 px first move changes at most one desk, a steady 3 x 26 px drag lands three desks
+// over. Orb up-swipes stay the orb's. QA_SWITCH=off: a sideways drag on the orb still moves one desk, as before.
 const assert = require('node:assert/strict');
 const { chromium } = require('../tools/qa-playwright.cjs');
 const { ownerRead } = require('../tools/qa-desktop-frame-fixture.cjs');
@@ -64,13 +67,16 @@ const nap = ms => new Promise(r => setTimeout(r, ms));
         const names = () => page.evaluate(() => __wos.desks.map((d, i) => document.querySelector(`[data-goto="${i}"]`)?.getAttribute('aria-label') || ''));
         const shot = s => page.screenshot({ path: path.join(out, `${skin}${off ? '-off' : ''}-${s}.png`) });
         const cdp = await context.newCDPSession(page);
-        const bar = await page.evaluate(() => { const r = document.querySelector('#dock').getBoundingClientRect(), o = document.querySelector('#orbWrap').getBoundingClientRect(); return { y: Math.round(r.top + 22), orbL: o.left, orbR: o.right, bottom: r.bottom }; });
+        const bar = await page.evaluate(() => { const r = document.querySelector('#dock').getBoundingClientRect(), o = document.querySelector('#orbWrap').getBoundingClientRect(); return { y: Math.round(r.top + 22), orbL: o.left, orbR: o.right, orbX: Math.round(o.left + o.width / 2), orbY: Math.round(o.top + o.height / 2), bottom: r.bottom }; });
         const handle = () => page.evaluate(() => { const s = document.querySelector('#scrub'), i = s?.querySelector('i'); if (!i) return false; const b = i.getBoundingClientRect(); return getComputedStyle(i).display !== 'none' && getComputedStyle(s).display !== 'none' && b.width > 0 && +getComputedStyle(i).opacity > 0; });
         // A finger on the bar: hold `hold` ms, then move dx in `moves` steps over `ms`, sampling the label as it goes.
-        const drag = async (x, dx, { y = bar.y, dy = 0, hold = 220, ms = 900, moves = 24, cancel = false, sample = true } = {}) => {
+        const drag = async (x, dx, { y = bar.y, dy = 0, hold = 220, ms = 900, moves = 24, cancel = false, sample = true, lead = 0 } = {}) => {
           // Event times are given to Chrome (timestamp, seconds), so a slow host never turns a flick into a hold.
           const labels = [], t0 = Date.now() / 1000;
           await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }], timestamp: t0 });
+          // lead: a first move at once (a real finger on the orb crosses its 14 px slop before the hold radial's timer;
+          // this host takes 100-200 ms per CDP touch, so the drag's own first steps would be too late).
+          if (lead) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x + Math.sign(dx) * lead, y }], timestamp: t0 + 0.016 });
           await nap(hold);
           for (let k = 1; k <= moves; k++) {
             await nap(ms / moves);
@@ -89,13 +95,40 @@ const nap = ms => new Promise(r => setTimeout(r, ms));
           steps.handle = await handle(); assert.equal(steps.handle, true, 'switch off: the little handle is there');
           await go(2); await drag(right, -130, { hold: 0, ms: 600, sample: false }); steps.slowDragOff = await at();
           assert.equal(steps.slowDragOff, 3, 'switch off: a slow drag on the bar moves one desk, as before');
+          await go(2); await drag(bar.orbX, -130, { y: bar.orbY, lead: 16, hold: 0, ms: 600, sample: false }); steps.orbDragOff = await at();
+          assert.equal(steps.orbDragOff, 3, 'switch off: a sideways drag on the orb moves one desk, as before');
           await shot('bar');
         } else {
           steps.handle = await handle(); assert.equal(steps.handle, false, 'no little handle under the orb');
           await shot('bar');
           await go(2); steps.leftLabels = await drag(right, -84); steps.left = await at();
           assert.equal(steps.left, 5, 'drag left 84 px from desk 3 lands three desks to the right');
-          assert.deepEqual(steps.leftLabels, desk.slice(3, 6), 'label names each desk as you go');
+          assert.deepEqual(steps.leftLabels.slice(1), desk.slice(3, 6), 'label names each desk as you go'); assert.equal(steps.leftLabels.length, 4, 'the start desk\'s name is up first');
+          // wizard-ux#1536: no hold, no first jump, the orb is part of the surface.
+          await go(2); steps.instantLabels = await drag(right, -78, { hold: 0, ms: 900, moves: 26 }); steps.instant = await at();
+          assert.equal(steps.instant, 5, 'a steady 3 x 26 px drag with no hold lands exactly three desks over');
+          assert.equal(steps.instantLabels.length, 4, 'the label is up from the first move'); assert.deepEqual(steps.instantLabels.slice(1), desk.slice(3, 6));
+          for (const first of [20, 25, 30]) {
+            await go(2); await drag(right, -first, { hold: 0, ms: 300, moves: 1 }); const got = await at();
+            steps['first' + first] = got; assert.ok(got === 2 || got === 3, `a ${first} px first move changes at most one desk (got ${got})`);
+          }
+          await go(2); steps.orbLabels = await drag(bar.orbX, -84, { y: bar.orbY, lead: 16, hold: 0 }); steps.orbLeft = await at();
+          assert.equal(steps.orbLeft, 5, 'a drag left from the orb scrubs three desks to the right, like the bar');
+          assert.deepEqual(steps.orbLabels, steps.leftLabels, 'same label steps as on the bar');
+          await go(4); await drag(bar.orbX, 60, { y: bar.orbY, lead: 16, hold: 0, moves: 6, ms: 500 }); steps.orbRight = await at();
+          assert.equal(steps.orbRight, 2, 'a drag right from the orb goes two desks to the left');
+          await go(0); await drag(bar.orbX, 120, { y: bar.orbY, lead: 16, hold: 0, moves: 10, ms: 500 }); steps.orbHomeRight = await at();
+          assert.equal(steps.orbHomeRight, 0, 'on Home a drag right from the orb does nothing');
+          await go(2); await drag(bar.orbX, -110, { y: bar.orbY, lead: 16, hold: 0, ms: 60, moves: 4, sample: false }); steps.orbFlick = await at();
+          assert.equal(steps.orbFlick, 3, 'a quick flick on the orb moves one desk');
+          await go(2); await drag(bar.orbX, -84, { y: bar.orbY, lead: 16, hold: 0, dy: -70 }); steps.orbRose = await at();
+          assert.equal(steps.orbRose, 2, 'a drag from the orb that rises leaves the desk where it started');
+          await page.evaluate(() => { __wos.closeSheets?.(); __wos.closeOverview?.(); }); await nap(500);
+          await go(2); await drag(bar.orbX, 0, { y: bar.orbY, dy: -160, hold: 0, ms: 300, moves: 8, sample: false });
+          steps.orbUp = await page.evaluate(() => ({ idx: __wos.idx, sheet: __wos.sheet || null, overview: !!document.querySelector('.ov-hint')?.offsetParent || !!document.querySelector('.pill-ov.open, .ov.open') }));
+          assert.equal(steps.orbUp.idx, 2, 'an upward orb swipe never moves desks');
+          assert.ok(steps.orbUp.sheet || steps.orbUp.overview, 'an upward orb swipe still opens what it always opened');
+          await page.evaluate(() => { __wos.closeSheets?.(); __wos.closeOverview?.(); }); await nap(500);
           await go(4); steps.rightLabels = await drag(left, 60, { hold: 0, moves: 5, ms: 500 }); steps.right = await at();
           assert.equal(steps.right, 2, 'drag right 60 px from desk 5 lands two desks to the left');
           await go(0); await drag(left, 120, { hold: 0, moves: 10, ms: 500 }); steps.homeRight = await at();

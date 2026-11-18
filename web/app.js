@@ -453,12 +453,27 @@
   /* Swipe anywhere on the bottom bar to change desks: the orb has its own gestures, the
    * scrubber its own; everything else in the bar (dots, gaps, edges) is a desk swipe.
    * Bar scrub (wizard-ux#1491, switch wizard/bar-scrub, off by default): the whole bar scrubs like the little
-   * handle did and the handle is gone (its tweak.css). A quick flick still moves one desk; a drag that lasts
-   * past BAR_FLICK_MS (event time, so a busy page never turns a flick into a scrub) steps one desk per SC_STEP px with a tick and the desk name, release lands. The bar's
-   * own direction: drag left = the desk to the right (the old handle went the other way). */
+   * handle did and the handle is gone (its tweak.css). The scrub is live the moment the finger passes the sideways
+   * slop (wizard-ux#1536: no hold time), counted from there, so it never jumps over the distance already covered; it
+   * then steps one desk per SC_STEP px with a tick and the desk name, release lands. A touch that ends within
+   * BAR_FLICK_MS (event time, so a busy page never turns a flick into a scrub) is a flick: exactly one desk. The bar's
+   * own direction: drag left = the desk to the right (the old handle went the other way). A sideways drag that starts
+   * on the orb joins the same scrub (barScrubJoin, from the orb's gesture code): the whole bar is one surface. */
   let DS = null, dockSwiped = 0; const BAR_FLICK_MS = 180;
   const barScrubOn = () => { try { return String(document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/bar-scrub'); } catch (_) { return false; } };
   const barScrubBack = s => { if (s.live) { idx = s.start; placeTrack(0, true); renderDots(); } s.live = false; scrub.classList.remove('on'); };
+  // Where the scrub points: counted from x0, set when the scrub went live (12 px before that point, the slop).
+  const barScrubAt = (s, x) => Math.max(0, Math.min(desks.length - 1, s.start - Math.round((x - s.x0) / SC_STEP)));
+  const barScrubLive = (s, e) => { s.live = true; s.x0 = e.clientX - Math.sign(e.clientX - s.x) * 12; placeTrack(0, true); scrub.classList.add('on'); scLabel(s.at); vib(10); };
+  // The orb's sideways drag hands its finger to the bar scrub (the orb keeps tap, hold and up/down). Its moves and
+  // release bubble from #orbWrap to #dock, so the dock's own handlers below run the scrub from here on.
+  const barScrubJoin = (e, g) => {
+    if (!barScrubOn() || (sheet && sheet !== 'settings') || DS) return false;
+    DS = { x: g.x, y: g.y, t: g.t, id: e.pointerId, h: true, sc: true, ts: g.ts ?? e.timeStamp, start: idx, at: idx, live: false, up: false };
+    endDotHold(); if (sheet === 'settings') liftSettings();
+    barScrubLive(DS, e); return true;
+  };
+  const barScrubDrop = () => { if (DS && DS.sc) barScrubBack(DS); DS = null; };
   $('#dock').addEventListener('pointerdown', e => {
     if (e.target.closest('#orbWrap, #scrub') || (sheet && sheet !== 'settings')) return; // Settings never blocks a desk swipe
     if (e.pointerType === 'touch' && e.clientY > innerHeight - 22) return; // iOS home-indicator strip: the system's swipe
@@ -472,9 +487,9 @@
     if (DS.sc) {
       if (DS.up) return;
       if (dy < -30) { DS.up = true; barScrubBack(DS); placeTrack(0, true); return; } // going up: the iPhone's swipe out
-      if (!DS.live && e.timeStamp - DS.ts >= BAR_FLICK_MS) { DS.live = true; placeTrack(0, true); scrub.classList.add('on'); scLabel(DS.at); vib(10); }
+      if (!DS.live) barScrubLive(DS, e);
       if (DS.live) {
-        const n = Math.max(0, Math.min(desks.length - 1, DS.start - Math.round(dx / SC_STEP)));
+        const n = barScrubAt(DS, e.clientX);
         if (n !== DS.at && !CHATS.beforeNavigate(desks[n]?.wins || [])) return;
         if (n !== DS.at) { DS.at = n; vib(6); idx = n; placeTrack(0, true); renderDots(); scLabel(n); }
         return;
@@ -488,11 +503,16 @@
     if (!s.h) return;
     const dx = e.clientX - s.x, v = dx / ((performance.now() - s.t) || 1);
     dockSwiped = Date.now();
-    // A drag that lasted past BAR_FLICK_MS and then held still never got the move that starts the scrub: land where it points.
-    if (s.sc && !s.live && !s.up && e.timeStamp - s.ts >= BAR_FLICK_MS) { const n = Math.max(0, Math.min(desks.length - 1, s.start - Math.round(dx / SC_STEP))); s.live = true; if (n === s.start || CHATS.beforeNavigate(desks[n]?.wins || [])) s.at = n; }
     if (s.sc && (s.live || s.up)) {
       // A cancelled touch or one that rose is the system's swipe out: the desk goes back to where it started.
       if (s.up || e.type === 'pointercancel' || e.clientY - s.y < -30) { barScrubBack(s); return; }
+      // A quick flick moves exactly one desk, the way the scrub was heading (or by the old flick rule if it crossed no step).
+      if (e.timeStamp - s.ts < BAR_FLICK_MS) {
+        const dir = s.at !== s.start ? Math.sign(s.at - s.start) : dx < -60 || v < -.5 ? 1 : dx > 60 || v > .5 ? -1 : 0;
+        barScrubBack(s); if (dir) { swipeDesk(dir); tourEv('desk', { home: idx === HOME }); } return;
+      }
+      // The last move may not have come in before the release: land where the finger let go.
+      const n = barScrubAt(s, e.clientX); if (n !== s.at && (n === s.start || CHATS.beforeNavigate(desks[n]?.wins || []))) s.at = n;
       scrub.classList.remove('on'); goDesk(s.at, true); tourEv('desk', { home: idx === HOME }); return;
     }
     if (e.clientY - s.y < -40) return placeTrack(0, true); // went up: the iPhone's swipe out, never a desk swipe
@@ -3657,7 +3677,7 @@
   orbWrap.addEventListener('pointerdown', e => {
     if (G || e.isPrimary === false) return;
     e.preventDefault(); try { orbWrap.setPointerCapture(e.pointerId); } catch (_) {} closeMenu();
-    G = { pointerId: e.pointerId, x: e.clientX, y: e.clientY, t: performance.now(), mode: 'pending', dx: 0, dy: 0, aim: null };
+    G = { pointerId: e.pointerId, x: e.clientX, y: e.clientY, t: performance.now(), ts: e.timeStamp, mode: 'pending', dx: 0, dy: 0, aim: null };
     Orb.press(true);
     G.corner = device.classList.contains('orb-corner'); G.ovWas = pillOvOpen(); G.upDesks = orbUpDesks(); G.swipes = window.WosSkinHost?.orbSwipes?.() || null;
     if (V.state === 'idle') G.warm = setTimeout(() => { if (G && G.mode === 'pending') warmMic(); }, MIC_WARM_MS);
@@ -3709,6 +3729,7 @@
   orbWrap.addEventListener('pointermove', e => {
     if (!G || e.pointerId !== G.pointerId) return; G.dx = e.clientX - G.x; G.dy = e.clientY - G.y;
     if (G.mode === 'radial') { window.WosOrbSwitcher.move(e.clientX, e.clientY); return; }
+    if (G.mode === 'scrub') return; // the bar scrub has this finger (barScrubJoin); the dock's handlers run it
     // A hold that starts travelling right after it fired was really a swipe (slow frame ate the moves).
     if (G.mode === 'hold' && G.holdAt && performance.now() - G.holdAt < 600 && (Math.hypot(G.dx, G.dy) > 34 || (G.dy > 16 && G.dy > Math.abs(G.dx) * 1.4)) && !(G.dy < -20 && Math.abs(G.dx) < 100)) {
       cancelVoice(true); G.mode = 'pending';
@@ -3733,6 +3754,8 @@
     // A downward slide commits sooner (10 px): the orb sits near the bottom of the glass, so there is little room below it.
     if (G.mode === 'pending' && (Math.hypot(G.dx, G.dy) > 14 || (G.dy > 10 && G.dy > Math.abs(G.dx) * 1.4))) {
       clearTimeout(G.hold); G.mode = Math.abs(G.dx) > Math.abs(G.dy) ? 'h' : 'v'; orbWrap.classList.add('dragging');
+      // wizard-ux#1536 (switch wizard/bar-scrub): the orb on the bar is part of the scrub surface, so its sideways swipe is the bar scrub.
+      if (G.mode === 'h' && !G.corner && !G.ovWas && !(G.swipes && orbSwipeAct(G) !== 'stock') && orbWrap.closest('#dock') && barScrubJoin(e, G)) { G.mode = 'scrub'; orbWrap.classList.remove('dragging'); return; }
     }
     // A layout's own swipe (Orb / Apps): nothing follows the finger; only the hint for Home.
     if (G.swipes && orbSwipeAct(G) !== 'stock') { orbWrap.dataset.dir = G.dy < -40 ? ({ home: '↑ Home', new: '↑ New chat' }[orbSwipeAct(G)] || '') : ''; return; }
@@ -3778,6 +3801,7 @@
     // a take this press starts has taken the warm mic by then (openRec claims it before its first await)
     clearTimeout(g.hold); clearTimeout(g.warm); queueMicrotask(dropWarm); Orb.press(false); orbWrap.classList.remove('dragging'); orbWrap.dataset.dir = ''; device.classList.remove('aiming'); generalTarget.classList.remove('selected');
     const vt = (performance.now() - g.t) || 1;
+    if (g.mode === 'scrub') { if (cancelled) barScrubDrop(); return; } // the dock's pointerup lands the scrub
     // Our skins, desks panel open: the orb is its handle. Any tap or swipe on it closes the panel (nothing else fires).
     if (g.ovWas && pillOvOpen()) { if (!cancelled && g.mode !== 'hold') { closeOverview(); return; } }
     if (g.ovOpened) { if (cancelled) closeOverview(); return; }
