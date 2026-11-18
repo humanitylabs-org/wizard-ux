@@ -401,7 +401,8 @@
       try { removeEventListener('pointerdown', act, true); removeEventListener('keydown', act, true); } catch (e) {}
       if ((ok === false || ok === true) && (acted || h.busy?.() || h.deeplinked?.())) { log('boot:busy'); return; }
       // Private first: a private agent already made counts as connected (its provider may not be the main agent's).
-      if (ok === false && (await pfRead())?.private_agent && privateFirst()) { ok = true; log('boot:private'); }
+      // (typeof: tests vm-slice boot() on its own.)
+      if (ok === false && typeof pfRead === 'function' && (await pfRead())?.private_agent && privateFirst()) { ok = true; log('boot:private'); }
       if (ok === false) return open('ai');
       if (ok === true && state !== 'done' && (state === 'ai' || setup?.first_run === true)) return open('look');
     }, 0);
