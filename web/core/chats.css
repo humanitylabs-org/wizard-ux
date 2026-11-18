@@ -412,6 +412,7 @@ a.fchip { color: inherit; text-decoration: none; }
 /* Stop */
 .ch-compose .ch-stop { background: rgba(255, 107, 134, .18); border: 1px solid rgba(255, 107, 134, .5); }
 .ch-compose .ch-stop svg { fill: var(--red); stroke: none; }
+.ch-compose .ch-stop.is-stopping { opacity: .5; cursor: progress; }
 /* Media viewer: full-screen overlay inside the app (Back closes it). */
 .mviewer { position: absolute; inset: 0; z-index: 68; display: flex; flex-direction: column; background: rgba(2, 1, 8, calc(.96 * var(--fade, 1))); opacity: 0; transition: opacity 180ms var(--ease); touch-action: none; }
 /* Stage/file text keeps light ink on the dark photo backdrop; only opaque
