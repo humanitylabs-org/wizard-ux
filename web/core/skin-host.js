@@ -379,7 +379,7 @@
   // clear until the layout says it is drawn (its own sheet applied) or has failed, never on a plain timer: a slow load
   // (cold cache, tailnet, Mac app) used to drop the veil after 5 s and show Classic Desks underneath (issue 1556).
   // The veil is an inline sheet, so it never waits on a fetch. A slow boot shows a quiet "Loading…" after BOOT_SLOW_MS;
-  // one still not drawn after BOOT_GIVEUP_MS gets the shared Chats recovery (layoutLoadFailed), never Classic.
+  // one still not drawn BOOT_GIVEUP_MS after the shell attached gets the shared Chats recovery (layoutLoadFailed), never Classic.
   const BOOT_SLOW_MS = 5000, BOOT_GIVEUP_MS = 45000;
   const BOOT_VEIL = 'html[data-layout-booting] body { opacity: 0 !important; pointer-events: none !important; }\n'
     + 'html[data-layout-booting="slow"]::after { content: "Loading\\2026"; position: fixed; inset: 0; display: grid; place-items: center; '
@@ -392,13 +392,18 @@
     // (unref: a test runtime never waits on these; a page ignores it)
     const later = (fn, ms) => { const t = setTimeout(fn, ms); try { t?.unref?.(); } catch (_) {} };
     later(() => { if (booting() && layoutId === id) document.documentElement.dataset.layoutBooting = 'slow'; }, BOOT_SLOW_MS);
-    later(() => {
+  }
+  // The give-up clock starts at attach: before it there is no shell to mount the recovery, and the layout has not
+  // even started loading (a slow parser can take longer than BOOT_GIVEUP_MS to reach desktop.js).
+  function bootGiveUp(id) {
+    const t = setTimeout(() => {
       if (!booting() || layoutId !== id) return;
       // Mounted but its sheet never answered: the layout's own DOM is there, so show it.
       if (layoutRec && !layoutRec.dead && layoutFailed !== id) return endBoot();
       // Still not mounted: give up on this load (a late import must not mount over the recovery) and recover.
       layoutSeq++; layoutLoadFailed(id, 'timeout');
     }, BOOT_GIVEUP_MS);
+    try { t?.unref?.(); } catch (_) {}
   }
   function layoutLoadFailed(id, reason = 'unavailable', error) {
     if (layoutId !== id) return false;
@@ -1792,7 +1797,7 @@
     /* core/skins.js: the owner picked a skin. Stylesheet plus (if any) its script. */
     commit(id) { ensureCss(id); committedId = id; if (shell) packageReady = load(id); },
     /* app.js: the shell is ready; hands over the narrow adapter skins are allowed to drive. */
-    attach(adapter) { shell = adapter; for (const n of builtinDefs.keys()) startBuiltin(n); const id = committedId || (window.WosSkin && window.WosSkin.current); committedId = id; if (id) packageReady = load(id); window.WosMySkin?.startScript(); if (layoutOf(layoutId)) loadLayout(layoutId); window.dispatchEvent?.(new Event('wos:skin-host-ready')); },
+    attach(adapter) { shell = adapter; for (const n of builtinDefs.keys()) startBuiltin(n); const id = committedId || (window.WosSkin && window.WosSkin.current); committedId = id; if (id) packageReady = load(id); window.WosMySkin?.startScript(); if (layoutOf(layoutId)) loadLayout(layoutId); if (booting()) bootGiveUp(layoutId); window.dispatchEvent?.(new Event('wos:skin-host-ready')); },
     /* Layouts: Settings › Look. Classic loads nothing. */
     layouts: LAYOUTS, setLayout,
     escapeSurface() { for (const h of [...escapeSurfaces].reverse()) if (!h.a.dead && h.back() === true) return true; return false; },

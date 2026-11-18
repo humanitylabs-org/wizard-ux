@@ -86,6 +86,14 @@ test('a stored layout paints before the shell attaches (no flash), then its scri
   assert.equal(P.imported.length, 1); assert.equal(P.host.layoutState.active, true);
 });
 
+test('issue 1556: before the shell attaches the boot veil never gives up, however long the parser takes', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const P = page({ layout: 'ai-apps' });
+  assert.equal(P.ctx.document.documentElement.dataset.layoutBooting, '');
+  t.mock.timers.tick(120000);
+  assert.notEqual(P.ctx.document.documentElement.dataset.layoutBooting, undefined, 'still veiled: no shell to recover with yet');
+});
+
 test('unknown layout ids fall back to Classic', async () => {
   // On the desktop an unknown stored hint means no choice: the standard view (AI apps) boots, as with no hint at all.
   for (const id of ['nope', 'two-orb', 'orb', 'apps']) assert.equal(page({ layout: id }).host.layout, 'ai-apps', id);
