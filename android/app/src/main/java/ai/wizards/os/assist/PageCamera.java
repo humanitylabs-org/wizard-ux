@@ -27,9 +27,10 @@ public final class PageCamera {
     private PageCamera() {}
 
     static final long STALE_MS = 24L * 60 * 60 * 1000;
-    private static final String[] IMAGE_EXT = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".heic", ".heif", ".bmp", ".avif"};
+    /* The camera writes a JPEG, so it is offered only where a JPEG is accepted (an image/png-only input gets the picker). */
+    private static final String[] JPEG = {"image/jpeg", "image/jpg", "image/pjpeg", ".jpg", ".jpeg", ".jfif"};
 
-    /** True when the page's accept list lets a photo through: no list (anything), any image type, a wildcard or an image extension. */
+    /** True when the page's accept list lets a JPEG photo through: no list (anything), image wildcard, a wildcard or a JPEG type. */
     public static boolean wantsImages(String[] accept) {
         if (accept == null) return true;
         boolean any = false;
@@ -39,8 +40,8 @@ public final class PageCamera {
                 String t = part.trim().toLowerCase(Locale.ROOT);
                 if (t.isEmpty()) continue;
                 any = true;
-                if (t.equals("*/" + "*") || t.equals("*") || t.startsWith("image/")) return true;
-                for (String e : IMAGE_EXT) if (t.equals(e)) return true;
+                if (t.equals("*/" + "*") || t.equals("*") || t.equals("image/" + "*")) return true;
+                for (String e : JPEG) if (t.equals(e)) return true;
             }
         }
         return !any; // an empty accept list means any file, pictures included

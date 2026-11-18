@@ -10,6 +10,7 @@ public class PageCameraTest {
     @Test public void captureWithImagesOpensTheCameraStraightAway() {
         assertTrue(PageCamera.direct(new String[]{"image/" + "*"}, true));
         assertTrue(PageCamera.direct(new String[]{"image/jpeg", "image/png"}, true));
+        assertTrue(PageCamera.direct(new String[]{"IMAGE/JPEG"}, true));
         assertTrue(PageCamera.direct(new String[]{".jpg"}, true));
         assertTrue(PageCamera.direct(new String[]{""}, true)); // no accept list = anything, a photo included
         assertTrue(PageCamera.direct(null, true));
@@ -22,8 +23,11 @@ public class PageCameraTest {
 
     @Test public void cameraIsOfferedOnlyWhenAPhotoIsAllowed() {
         assertTrue(PageCamera.wantsImages(new String[]{"image/" + "*"}));
-        assertTrue(PageCamera.wantsImages(new String[]{"IMAGE/HEIC"}));
-        assertTrue(PageCamera.wantsImages(new String[]{"application/pdf, image/png"}));
+        assertTrue(PageCamera.wantsImages(new String[]{"application/pdf, image/jpeg"}));
+        assertTrue(PageCamera.wantsImages(new String[]{".jpeg"}));
+        // The camera writes a JPEG: an input that takes only other image types keeps the plain picker (Codex P2).
+        assertFalse(PageCamera.wantsImages(new String[]{"image/png"}));
+        assertFalse(PageCamera.wantsImages(new String[]{".gif", "image/heic"}));
         assertTrue(PageCamera.wantsImages(new String[]{"*/" + "*"}));
         assertTrue(PageCamera.wantsImages(new String[]{}));
         assertTrue(PageCamera.wantsImages(new String[]{"", " "}));
