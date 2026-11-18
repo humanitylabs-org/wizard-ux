@@ -245,3 +245,20 @@ test('WosExperience.lookOnly follows the wizard/skins-look-only switch (real exp
     assert.equal(w.WosExperience.lookOnly, on);
   }
 });
+
+for (const shell of ['phone', 'desktop']) test(`${shell}: with Skins are look only on, New skin can be created while the tweak list is loading or failed to load`, async () => {
+  for (const fail of [false, true]) {
+    const h = look(shell, true);
+    h.s.WosExperience.lookOnly = true; h.s.WosExperience.installedReady = false;
+    h.s.WosExperience.installed = () => fail ? Promise.reject(new Error('offline')) : new Promise(() => {});
+    h.act('data-newskin', '');
+    for (let n = 0; n < 10; n++) await Promise.resolve();
+    assert.equal(!!h.view.context.skinDraft.error, fail);
+    assert.doesNotMatch(h.root.innerHTML, /data-skinretry|role="alert"/, 'no tweak-loading error in a look-only draft');
+    assert.doesNotMatch(h.root.innerHTML, /data-skin-create disabled/);
+    h.input('data-skin-name', 'Colour only');
+    h.act('data-skin-create', '');
+    assert.deepEqual(h.s.WosMySkin.created, { name: 'Colour only', base: 'nebula', tweaks: {} });
+    h.view.destroy();
+  }
+});
