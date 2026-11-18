@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 const source = readFileSync(new URL('../web/core/chat-power.js', import.meta.url), 'utf8');
-function harness(doc = false) {
+function harness(doc = false, live = { status: 'running' }) {
   const state = { lid: 'reply', posFor: 'thread', show: 120 }, w = { id: 'win', thread: 'thread' }, latest = { hidden: true };
   let top = 1500, height = 2000, now = 10_000;
   const sc = { get scrollHeight() { return height; }, clientHeight: 500, get scrollTop() { return top; }, set scrollTop(n) { top = n; } };
@@ -19,7 +19,7 @@ function harness(doc = false) {
     getBoundingClientRect: () => ({ top: 100 }) };
   if (!doc) Object.defineProperties(nb, { scrollTop: { get: () => sc.scrollTop, set: n => { sc.scrollTop = n; } }, scrollHeight: { get: () => sc.scrollHeight }, clientHeight: { get: () => sc.clientHeight } });
   const ctx = { console, Date: { now: () => now }, setTimeout: () => 1, clearTimeout() {}, addEventListener() {}, document: { addEventListener() {} },
-    localStorage: { getItem: () => null, setItem() {} }, WizCore: { esc: String }, WosModels: {}, WizLive: { session: () => ({ status: 'running' }) } };
+    localStorage: { getItem: () => null, setItem() {} }, WizCore: { esc: String }, WosModels: {}, WizLive: { session: () => live } };
   ctx.window = ctx; vm.createContext(ctx); vm.runInContext(source, ctx);
   const api = ctx.WosChatPower({ ch: () => state, CH: { win: state }, H: { win: () => w }, threadOnScreen: () => true, scrollBox: () => doc ? sc : nb,
     isWorking: () => true, elOf: () => ({ querySelector: () => nb }) });
@@ -44,8 +44,12 @@ for (const doc of [false, true]) {
   });
   // Issue 1546 (James, 18 Nov 2026): a first reply still streaming has no latest-reply id yet. Scrolling up must still save
   // his place, or the opening bottom place came back on the next chunk that grew no line and pulled him down.
-  test(`a reader scrolled up mid-stream of a first reply is never moved by any chunk (${mode})`, () => {
-    const h = harness(doc); h.state.lid = '';
+  // Main vs routed (Codex P1 on the fix): the thread's own agent row (host-profile, container, restricted; the same id
+  // as a main thread) is what the window shows; the rule must hold for each.
+  for (const kind of ['main', 'host-profile', 'container', 'restricted'])
+  test(`a reader scrolled up mid-stream of a first reply is never moved by any chunk (${mode}, ${kind})`, () => {
+    const h = harness(doc, { id: 'thread', status: 'running', runId: 'run-1', ...(kind === 'main' ? {} : { agent: `qa-${kind}`, runtime: kind }) });
+    h.state.lid = '';
     h.api.RP.save({ sessionId: 'thread', messageId: '', anchor: null, atBottom: true, working: true, scrollTop: 0, savedAt: 1 });
     h.api.reflow(h.nb); assert.equal(h.top(), 1500, 'at the bottom before he scrolls');
     h.sc.scrollTop = 900; h.api.capture(h.nb);

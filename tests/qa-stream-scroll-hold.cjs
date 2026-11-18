@@ -1,7 +1,8 @@
 'use strict';
 // wizard-ux issue 1546 in a real browser: a reader who scrolls up while a long reply streams in is never pulled back
 // to the bottom. The words he is reading stay put on every chunk, repaint and layout change, and ↓ Latest shows; a
-// reader still at the bottom keeps following the stream. Main chat + a channel thread; phone 412x915 (browser and the
+// reader still at the bottom keeps following the stream. A main (Archimedes) thread filed in a channel and a routed
+// (Claude) thread; phone 412x915 (browser and the
 // APK's WizardOS-DocScroll document scroll) and desktop 1440x900 (Classic and AI apps), Nebula + Grove.
 // Synthetic transport only (EventSource is faked so the test pushes each chunk); writes are answered in memory.
 // QA_WEB=<main>/web QA_EXPECT=broken runs the baseline; QA_OUT=<dir> keeps the screenshots; QA_CASES / QA_SKINS narrow it.
@@ -14,30 +15,35 @@ const web = process.env.QA_WEB || path.join(repo, 'web'), out = process.env.QA_O
 fs.mkdirSync(out, { recursive: true });
 const now = Date.now(), iso = t => new Date(t).toISOString(), nap = ms => new Promise(r => setTimeout(r, ms));
 const SPACES = [{ id: 'launch', name: 'WizardOS Chats', agent: 'hermes', threads: ['qa-w1'], createdAt: iso(now - 9e8) }];
-const AGENTS = [{ id: 'hermes', label: 'Archimedes', harness: 'hermes', privacy: 'standard', is_default: true, status: 'running', appearance: { glyph: 'a', hue: 260 }, model: { provider: 'anthropic', model: 'claude-opus-4' } }];
+const AGENTS = [
+  { id: 'hermes', label: 'Archimedes', harness: 'hermes', privacy: 'standard', is_default: true, status: 'running', appearance: { glyph: 'a', hue: 260 }, model: { provider: 'anthropic', model: 'claude-opus-4' } },
+  { id: 'claude', label: 'Claude', harness: 'claude', privacy: 'standard', status: 'running', appearance: { glyph: 'c', hue: 20 }, model: { provider: 'anthropic', model: 'claude-opus-4' } },
+];
 const shape = s => ({ id: s.id, title: s.title, runtime: 'direct', status: s.status || 'completed', updated_at: iso(s.at), updatedAt: iso(s.at), last_active: s.at / 1000, message_count: 2, messageCount: 2,
   archived: false, preview: s.preview || 'Done.', ...(s.status === 'running' ? { wizard_run_id: 'run-' + s.id, wizard_assigned_at: iso(s.at) } : {}) });
 const ROWS = [
   { id: 'qa-w1', title: 'Long essay', status: 'running', at: now - 60e3, preview: 'Writing…' },
   { id: 'qa-g1', title: 'Weekend plans', at: now - 60 * 6e4, preview: 'Here is a plan.' },
 ].map(shape);
+const CLAUDE = [{ id: 'qa-c1', title: 'Long outline', status: 'running', at: now - 50e3, preview: 'Writing…' }].map(shape);
 const para = (n, w) => Array.from({ length: n }, (_, i) => `${w} ${i + 1}: the launch needs a date, a venue and a short list of people to invite before we can print anything.`).join('\n\n');
 const HISTORY = [];
 if (process.env.QA_FRESH !== '1') for (let i = 0; i < 3; i++) HISTORY.push({ role: 'user', content: 'Step ' + (i + 1) + '?', timestamp: now / 1000 - 9000 + i * 600 }, { role: 'assistant', content: para(3, 'Earlier'), timestamp: now / 1000 - 8990 + i * 600 });
 HISTORY.push({ role: 'user', content: 'Write me the whole long plan, please.', timestamp: now / 1000 - 60 });
 const cases = (process.env.QA_CASES || 'phone,phone-doc,classic,ai-apps').split(','), skins = (process.env.QA_SKINS || 'nebula,grove').split(',');
+const sids = (process.env.QA_THREADS || 'qa-w1,qa-c1').split(',');
 const expectBroken = process.env.QA_EXPECT === 'broken';
 (async () => {
   const browser = await chromium.launch(), report = [];
   try {
-    for (const shell of cases) for (const skin of skins) {
-      const phone = shell.startsWith('phone'), ai = shell === 'ai-apps', stem = `${shell}-${skin}`, entry = { stem, errors: [] }; report.push(entry);
+    for (const shell of cases) for (const skin of skins) for (const sid of sids) {
+      const phone = shell.startsWith('phone'), ai = shell === 'ai-apps', stem = `${shell}-${skin}-${sid === 'qa-w1' ? 'main' : 'routed'}`, entry = { stem, errors: [] }; report.push(entry);
       const ua = 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Mobile Safari/537.36' + (shell === 'phone-doc' ? ' WizardOS-DocScroll' : '');
       const context = await browser.newContext({ viewport: phone ? { width: 412, height: 915 } : { width: 1440, height: 900 }, isMobile: phone, hasTouch: phone, serviceWorkers: 'block', ...(phone ? { userAgent: ua } : {}) });
       try {
         await context.routeWebSocket('**/*', w => w.close());
         const mix = { 'wizard/desktop-chats': true, 'wizard/chat-channels': true };
-        await context.addInitScript(({ shell, skin, mix, spaces, ai }) => {
+        await context.addInitScript(({ shell, skin, mix, spaces, ai, sid }) => {
           if (window !== top) return;
           for (const [k, v] of Object.entries({ 'wos.shell': shell === 'phone' ? 'phone' : 'desktop', 'wos.desktop-view.v1': ai ? 'ai-apps' : 'classic', 'wos.coached': 'true', 'wos.tour.v1': 'true', 'wos.welcome.v1': 'done', 'wos.skin': skin,
             'wos.chats.spaces.v1': JSON.stringify(spaces), 'wos.skin-tweaks.v1': JSON.stringify({ version: 1, preset: 'none', off: {}, mix }) })) localStorage.setItem(k, v);
@@ -46,9 +52,9 @@ const expectBroken = process.env.QA_EXPECT === 'broken';
           let seq = 0;
           window.EventSource = class { constructor(url) { this.url = url; this.on = {}; open.push(this); setTimeout(() => this.onopen?.(), 0); }
             addEventListener(n, f) { (this.on[n] ||= []).push(f); } removeEventListener() {} close() { this.closed = true; } };
-          window.__qaPush = delta => { const data = JSON.stringify({ event: 'message.delta', delta, seq: ++seq, session_id: 'qa-w1', run_id: 'run-qa-w1' });
+          window.__qaPush = delta => { const data = JSON.stringify({ event: 'message.delta', delta, seq: ++seq, session_id: sid, run_id: 'run-' + sid });
             for (const s of open) if (!s.closed) s.onmessage?.({ data, type: 'message', lastEventId: String(seq) }); };
-        }, { shell, skin, mix, spaces: SPACES, ai });
+        }, { shell, skin, mix, spaces: SPACES, ai, sid });
         const prefs = { migrations: { 'launcher-seed-v1': true }, spaces: structuredClone(SPACES) };
         await context.route('**/*', async r => {
           const q = r.request(), u = new URL(q.url()), p = u.pathname, method = q.method();
@@ -63,11 +69,12 @@ const expectBroken = process.env.QA_EXPECT === 'broken';
           if (p === '/wizard/v1/pages/wizard-look/look.json') return r.fulfill({ status: 404, json: { error: 'not_here' } });
           if (p === '/wizard/v1/ui-preferences') return r.fulfill({ json: prefs });
           if (p === '/wizard/v1/agents') return r.fulfill({ json: { agents: AGENTS } });
-          if (p === '/wizard/hermes/v1/runs/run-qa-w1') return r.fulfill({ json: { run_id: 'run-qa-w1', session_id: 'qa-w1', status: 'running' } });
-          if (p === '/wizard/hermes/api/sessions') return r.fulfill({ json: { data: u.searchParams.get('agent') ? [] : ROWS, has_more: false } });
+          const run = /^\/wizard\/hermes\/v1\/runs\/run-(qa-[wc]1)$/.exec(p);
+          if (run) return r.fulfill({ json: { run_id: 'run-' + run[1], session_id: run[1], status: 'running' } });
+          if (p === '/wizard/hermes/api/sessions') return r.fulfill({ json: { data: u.searchParams.get('agent') === 'claude' ? CLAUDE : u.searchParams.get('agent') ? [] : ROWS, has_more: false } });
           const m = /^\/wizard\/hermes\/api\/sessions\/([^/]+)(\/messages)?$/.exec(p);
-          if (m) { const s = ROWS.find(x => x.id === decodeURIComponent(m[1])); if (!s) return r.fulfill({ status: 404, json: {} });
-            return r.fulfill({ json: m[2] ? { messages: s.id === 'qa-w1' ? HISTORY : [{ role: 'user', content: 'Ask', timestamp: now / 1000 - 600 }, { role: 'assistant', content: s.preview, timestamp: now / 1000 - 590 }] } : { session: s } }); }
+          if (m) { const s = [...ROWS, ...CLAUDE].find(x => x.id === decodeURIComponent(m[1])); if (!s) return r.fulfill({ status: 404, json: {} });
+            return r.fulfill({ json: m[2] ? { messages: ['qa-w1', 'qa-c1'].includes(s.id) ? HISTORY : [{ role: 'user', content: 'Ask', timestamp: now / 1000 - 600 }, { role: 'assistant', content: s.preview, timestamp: now / 1000 - 590 }] } : { session: s } }); }
           return r.fulfill({ json: ownerRead(p) });
         });
         const page = await context.newPage(); page.on('pageerror', e => entry.errors.push(e.message));
@@ -79,8 +86,8 @@ const expectBroken = process.env.QA_EXPECT === 'broken';
         await page.evaluate(() => document.fonts.ready); await nap(600);
         const vis = sel => page.locator(sel).filter({ visible: true }).first();
         if (ai) await page.getByText('Working', { exact: true }).filter({ visible: true }).first().click(); // the Working fold starts closed
-        await vis(ai ? '.aad-rw[data-sid="qa-w1"] .aad-row' : '[data-chopen="qa-w1"]').click();
-        await page.waitForFunction(() => window.__qaES.some(s => !s.closed && /run-qa-w1/.test(s.url)), null, { timeout: 15000 });
+        await vis(ai ? `.aad-rw[data-sid="${sid}"] .aad-row` : `[data-chopen="${sid}"]`).click();
+        await page.waitForFunction(sid => window.__qaES.some(s => !s.closed && s.url.includes('run-' + sid) && (sid === 'qa-w1' || s.url.includes('agent=claude'))), sid, { timeout: 15000 });
         // The thread on screen: its scroller (box or document), the header bottom, and the streaming bubble.
         const probe = () => page.evaluate(() => {
           const nb = [...document.querySelectorAll('.ch-msgs')].find(n => n.getClientRects().length && n.querySelector('[data-morph-key]'));
