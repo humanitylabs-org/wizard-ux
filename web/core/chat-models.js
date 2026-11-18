@@ -68,21 +68,19 @@
    * why the last run failed (wizard_last_run_error), the Errors row and the thread say it plainly instead of
    * "Error: <your message>", and the ways out are ordered by what can work. A sign-out with a connection app keeps
    * its own Sign in panel (s.reconnect wins). */
-  /* Connector models (wizard-ux#1201, off by default behind the wizard/connector-models tweak): the compact menu's
-   * short list comes from the connected AI connectors, each giving only its few main models, never its whole catalogue.
-   * A connector's models show only while it is connected (the thread's current model always shows). With none
-   * connected the menu says so and links to Connectors in the App Store. */
-  const CONNECTOR_TWEAK = 'wizard/connector-models';
-  const connectorOn = () => { try { return (document.documentElement.dataset.tweaks || '').split(' ').includes(CONNECTOR_TWEAK); } catch (_) { return false; } };
+  /* Connector models (wizard-ux#1201; on for everyone since issue 1561, Tinfoil becomes the main provider): the compact
+   * menu's short list comes from the connected AI connectors, each giving only its few main models, never its whole
+   * catalogue. A connector's models show only while it is connected (the thread's current model always shows). With
+   * none connected the menu says so and links to Connectors in the App Store. */
   const CONNECTORS = [
     { id: 'claude', models: [['claude:opus', 'Opus'], ['claude:sonnet', 'Sonnet'], ['claude:haiku', 'Haiku'], ['claude:fable', 'Fable']] },
     { id: 'chatgpt', models: [['gpt:sol', 'Sol'], ['gpt:astra', 'Astra'], ['gpt:luna', 'Luna']] },
-    { id: 'tinfoil', models: [['tinfoil:glm', 'GLM'], ['tinfoil:kimi', 'Kimi'], ['tinfoil:deepseek', 'DeepSeek'], ['tinfoil:flash', 'Flash']] },
+    { id: 'tinfoil', models: [['tinfoil:glm', 'GLM'], ['tinfoil:kimi', 'Kimi'], ['tinfoil:deepseek', 'DeepSeek Flash']] },
   ];
   // Tinfoil's main chat models by id; utility models (embeddings, speech, filters) get no family and stay in More models.
+  // deepseek-v4-1-flash is ONE model, DeepSeek Flash: every deepseek-* id is one family (issue 1561).
   const tinfoilFamily = model => {
     const m = String(model || '').toLowerCase();
-    if (/(?:^|-)flash(?:-|$)/.test(m)) return 'tinfoil:flash';
     const f = /^(glm|kimi|deepseek)(?:-|$)/.exec(m)?.[1];
     return f ? `tinfoil:${f}` : undefined;
   };
@@ -118,14 +116,12 @@
   const foreignApp = s => (s && typeof s.source === 'string' && Object.prototype.hasOwnProperty.call(FOREIGN_APPS, s.source.toLowerCase()) ? FOREIGN_APPS[s.source.toLowerCase()] : '');
   const refusal = s => { const app = foreignApp(s); return app ? `This chat was started in ${app}, so WizardOS can’t add to it. Your message is saved. Reply in ${app}, or start a new chat.` : ''; };
   const connectorOf = o => CLAUDE_PROVIDERS.has(o.provider) ? 'claude' : o.provider === 'openai-codex' ? 'chatgpt' : isTinfoil(o.provider) ? 'tinfoil' : '';
-  const primaryFamilies = () => connectorOn() ? CONNECTORS.filter(c => M.connected(c.id)).flatMap(c => c.models.map(([family, name]) => ({ family, name })))
-    : ours() ? PRIMARY : PRIMARY.filter(p => p.family !== 'tinfoil');
-  // Connector models on: a disconnected connector's models leave the menu. Only an existing thread keeps its current
-  // one (keep); a new chat never inherits a disconnected default.
-  const reachable = (list, model, provider, keep = true) => connectorOn()
-    ? list.filter(o => { const c = connectorOf(o); return !c || M.connected(c) || (keep && o.value === model && (!provider || o.provider === provider)); }) : list;
-  const shown = (list, model, provider, keep) => connectorOn() ? reachable(list, model, provider, keep)
-    : ours() ? list : list.filter(o => !isTinfoil(o.provider));
+  const primaryFamilies = () => CONNECTORS.filter(c => M.connected(c.id)).flatMap(c => c.models.map(([family, name]) => ({ family, name })));
+  // A disconnected connector's models leave the menu. Only an existing thread keeps its current one (keep); a new chat
+  // never inherits a disconnected default.
+  const reachable = (list, model, provider, keep = true) =>
+    list.filter(o => { const c = connectorOf(o); return !c || M.connected(c) || (keep && o.value === model && (!provider || o.provider === provider)); });
+  const shown = reachable;
   /* Unified Chats: once a private agent offers models in the main picker, a confidential (Tinfoil) choice means the
    * private agent. The main agent's own Tinfoil route is hidden there so a locked GLM never lands in the shared
    * history; a thread already on it still shows its current model. */
@@ -167,7 +163,7 @@
     if (/^gpt-[\d.]+$/.test(base)) return 'gpt:plain';
     return undefined;
   }
-  const family = (model, provider) => { if (isTinfoil(provider)) return connectorOn() ? tinfoilFamily(model) : 'tinfoil'; const c = provider && CLAUDE_PROVIDERS.has(provider) ? claudeFamily(model, provider) : undefined; return c ? `claude:${c}` : gptFamily(model, provider); };
+  const family = (model, provider) => { if (isTinfoil(provider)) return tinfoilFamily(model); const c = provider && CLAUDE_PROVIDERS.has(provider) ? claudeFamily(model, provider) : undefined; return c ? `claude:${c}` : gptFamily(model, provider); };
   const generation = m => Number(/^gpt-([\d.]+)/i.exec(m)?.[1] ?? 0);
   const versionKey = m => m.replace(/\[.*$/, '').replace(/-900k$/i, '').replace(/-\d{8}$/, '');
   const longTwin = m => /-900k$/i.test(m);
@@ -290,7 +286,7 @@
         M.load(true).then(() => { if (JSON.stringify(M.options.map(o => [o.provider, o.value])) !== before) window.dispatchEvent?.(new Event('wos:models')); });
       }, wait);
     },
-    normalize, hasNativeClaude, visibleChoices, PRIMARY, family, privateName, isPrivateRoute: isTinfoil, ours, connectorOn,
+    normalize, hasNativeClaude, visibleChoices, PRIMARY, family, privateName, isPrivateRoute: isTinfoil, ours,
     /* Is this AI connector connected? Claude: its connection app reports a ready account; with no Claude app answering,
      * Hermes' own sign-in decides (alongside boxes). ChatGPT: Hermes owns the login (AI_CONNECTIONS #79). Tinfoil: its
      * app has a saved key. */
@@ -300,11 +296,12 @@
       if (id === 'chatgpt') return signedIn(['openai-codex']);
       if (id !== 'claude') return false;
       const accounts = obj(M.claudeAccounts).accounts;
-      return Array.isArray(accounts) ? accounts.some(a => a && ['ready', 'ok', 'connected', 'exhausted', 'rate_limited'].includes(a.status)) : signedIn([...CLAUDE_PROVIDERS]);
+      // The legacy Claude Code login lives in Hermes, not the Claude app: while it is signed in its route still works.
+      return Array.isArray(accounts) ? accounts.some(a => a && ['ready', 'ok', 'connected', 'exhausted', 'rate_limited'].includes(a.status)) || signedIn([SUB]) : signedIn([...CLAUDE_PROVIDERS]);
     },
     // Connector models with nothing connected: say so and point to Connectors in the App Store.
     noConnectorHtml() {
-      return connectorOn() && M.ready && !CONNECTORS.some(c => M.connected(c.id))
+      return M.ready && !CONNECTORS.some(c => M.connected(c.id))
         ? '<p class="ch-sheet-n" role="status" data-mnone>No AI connected yet</p><a class="mrow more" href="/wizard-os-home/store/index.html?kind=connections" target="_blank" rel="noopener">Connect an AI</a>' : '';
     },
     tinfoilReady() { return M.tinfoil?.provider === 'tinfoil' && M.tinfoil?.credentialStored === true; },
@@ -485,7 +482,7 @@
       const rest = own || !all ? [] : vis.filter(o => !primary.includes(o)); // the other families' newest models (Fable, Haiku, Terra, Luna)
       const curPriv = privList.some(isCur);
       // Primary rows read Opus · Sonnet · Astra · Sol; everything else keeps its catalogue name (GLM 5.3, Fable 5.1…).
-      const curated = o => connectorOn() ? up.includes(famOf(o)) && primaryFamilies().find(x => x.family === famOf(o))?.name : '';
+      const curated = o => up.includes(famOf(o)) && primaryFamilies().find(x => x.family === famOf(o))?.name;
       const label = (o, p) => own || p ? o.name : curated(o) || (isTinfoil(o.provider) ? M.short(o.value, o.provider) : PRIMARY.find(x => x.family === famOf(o))?.name || o.name || M.short(o.value, o.provider));
       const list = [], row = (o, cls = '') => { const i = list.push(o) - 1; const p = cls.includes('priv'); if (isTinfoil(o.provider)) cls += ' secure';
         return `<button type="button" class="mrow${cls}${isCur(o) ? ' on' : ''}" data-mpick="${i}"${p ? ` data-mprivate="${esc(o.agent)}"` : ''} aria-pressed="${isCur(o)}"><span class="mn"><b>${p || isTinfoil(o.provider) ? lock : ''}${esc(label(o, p))}</b></span>${isCur(o) ? '<i class="mck" aria-hidden="true">✓</i>' : ''}</button>`; };
@@ -493,7 +490,7 @@
       const setupRow = `<button type="button" class="mrow" disabled aria-disabled="true" title="Set up Tinfoil in its connection app"><span class="mn"><b>Tinfoil</b></span></button><a class="mrow more" href="/wizard-tinfoil/" target="_blank" rel="noopener">Set up Tinfoil</a>`;
       // A same-Hermes route, never a Private agent or a new history. No model id is guessed.
       const mainRows = primary.map(o => !own && isTinfoil(o.provider) && !M.tinfoilReady() ? setupRow : row(o)).join('')
-        + (!own && !privList.length && ours() && !connectorOn() && !primary.some(o => isTinfoil(o.provider)) ? setupRow : '') + (own ? '' : M.noConnectorHtml());
+        + (own ? '' : M.noConnectorHtml());
       const privRows = privList.map(o => row(o, ' priv')).join('');
       const moreRows = rest.map(o => row(o)).join('');
       const moreBtn = !own && M.ready && !all && vis.some(o => !primary.includes(o)) ? `<button type="button" class="mrow more" data-mall>More models</button>` : '';

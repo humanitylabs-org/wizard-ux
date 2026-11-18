@@ -12,17 +12,20 @@ function models() {
   const M = window.WosModels;
   const mk = (value, provider, name) => ({ value, provider, name, description: '' });
   M.options = [mk('claude-opus-5-5', 'anthropic', 'Claude Opus'), mk('claude-fable-5-1', 'anthropic', 'Claude Fable'), mk('claude-sonnet-5', 'anthropic', 'Claude Sonnet'),
-    mk('gpt-6-astra', 'openai-codex', 'Astra'), mk('gpt-6.1-sol', 'openai-codex', 'GPT 6.1 Sol'), mk('gpt-6-luna', 'openai-codex', 'Luna')];
+    mk('gpt-6-astra', 'openai-codex', 'Astra'), mk('gpt-6.1-sol', 'openai-codex', 'GPT 6.1 Sol'), mk('gpt-6-luna', 'openai-codex', 'Luna'), mk('gpt-5.6-terra', 'openai-codex', 'Terra')];
   M.options[0].isGlobalDefault = true; M.ready = true;
+  // Issue 1561: the short list comes from the connected connectors, so Claude and ChatGPT are signed in here.
+  M.providers = [{ slug: 'anthropic', authenticated: true }, { slug: 'openai-codex', authenticated: true }];
   return M;
 }
 test('new chat on Sol exposes catalogue Sonnet immediately without changing the default', () => {
   const M = models();
-  M.options = M.normalize({ provider: 'openai-codex', model: 'gpt-6.1-sol', providers: [
+  const payload = { provider: 'openai-codex', model: 'gpt-6.1-sol', providers: [
     { slug: 'openai-codex', authenticated: true, models: ['gpt-6-astra', 'gpt-6.1-sol'] },
     { slug: 'anthropic', authenticated: true, models: ['claude-opus-5-5', 'claude-sonnet-4-6', 'claude-sonnet-5-5'] },
     { slug: 'claude-subscription-directsdk-experimental', authenticated: true, models: ['claude-sonnet-5[1m]'] },
-  ] }, true);
+  ] };
+  M.options = M.normalize(payload, true); M.providers = payload.providers;
   const before = M.defaultOption();
   const cur = M.snapshot('');
   assert.equal(cur.model, 'gpt-6.1-sol');
@@ -42,12 +45,12 @@ test('new chat on Sol exposes catalogue Sonnet immediately without changing the 
 const priv = [{ value: 'glm-5.3', provider: 'custom', name: 'GLM 5.3', agent: 'private-1', private: true }];
 const order = html => [...html.matchAll(/<span>([^<]+)<\/span><\/div>|<b>(?:<svg[^>]*><\/svg>)?([^<]+)<\/b>|data-mall>([^<]+)</g)].map(m => m[1] ? `## ${m[1]}` : m[2] || m[3]);
 
-test('compact menu reads bottom-up from the thumb: Opus, Sonnet, Astra, Sol last, Private agent above, More models on top', () => {
+test('compact menu reads bottom-up from the thumb: the connectors\u2019 short lists last, Private agent above, More models on top', () => {
   const M = models();
   const { html, list } = M.popHtml({ mode: 'thread', cur: { model: 'claude-opus-5-5', provider: 'anthropic' }, all: false, priv });
-  assert.deepEqual(order(html), ['More models', '## Private agent', 'GLM 5.3', '## Models', 'Opus', 'Sonnet', 'Astra', 'Sol']);
+  assert.deepEqual(order(html), ['More models', '## Private agent', 'GLM 5.3', '## Models', 'Opus', 'Sonnet', 'Fable', 'Sol', 'Astra', 'Luna']);
   assert.match(html, /class="ch-sheet ch-mpop"/);
-  assert.equal(list.length, 5); // every row maps to a pickable option
+  assert.equal(list.length, 7); // every row maps to a pickable option
 });
 
 test('in a private chat the private models sit by the thumb and the main models move above', () => {
@@ -58,12 +61,12 @@ test('in a private chat the private models sit by the thumb and the main models 
   assert.ok(o.indexOf('## Models') < o.indexOf('## Private agent'));
 });
 
-test('More models expands to the other families once each, above the primary four', () => {
+test('More models expands to the other families once each, above the short list', () => {
   const M = models();
   const { html } = M.popHtml({ mode: 'thread', cur: { model: 'claude-opus-5-5', provider: 'anthropic' }, all: true, priv: [] });
   const o = order(html);
-  assert.deepEqual(o.slice(-4), ['Opus', 'Sonnet', 'Astra', 'Sol']);
-  assert.ok(o.includes('Fable') || o.includes('Claude Fable'));
+  assert.deepEqual(o.slice(-6), ['Opus', 'Sonnet', 'Fable', 'Sol', 'Astra', 'Luna']);
+  assert.ok(o.indexOf('Terra') >= 0 && o.indexOf('Terra') < o.indexOf('## Models'));
   assert.equal(o.filter(x => /Opus/.test(x)).length, 1);
 });
 

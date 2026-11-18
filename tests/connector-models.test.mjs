@@ -1,16 +1,16 @@
-// wizard-ux#1201: the chats model menu's short list comes from the connected AI connectors (off by default behind
-// the wizard/connector-models tweak). Each connector gives only its few main models, and only while connected.
+// wizard-ux#1201: the chats model menu's short list comes from the connected AI connectors. Each connector gives only
+// its few main models, and only while connected. Issue 1561: on for everyone (the wizard/connector-models tweak is gone),
+// and Tinfoil's deepseek-v4-1-flash is one row, DeepSeek Flash.
 // Run: node --test tests/connector-models.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 const read = p => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
-const TWEAK = 'wizard/connector-models';
 
 const TINFOIL_MODELS = ['glm-5-3', 'kimi-k3', 'deepseek-v4-1-flash', 'gpt-oss-120b', 'llama3-3-70b', 'nomic-embed-text', 'qwen3-tts', 'pii-filter', 'decision-small', 'whisper-large-v3-turbo'];
-function models({ on = true, claude = false, chatgpt = false, tinfoil = false, current = 'anthropic', model = 'claude-opus-5-5', claudeAccounts, agents } = {}) {
-  const document = { documentElement: { dataset: { skin: 'nebula', tweaks: on ? TWEAK : '' } } };
+function models({ claude = false, chatgpt = false, tinfoil = false, current = 'anthropic', model = 'claude-opus-5-5', claudeAccounts, agents } = {}) {
+  const document = { documentElement: { dataset: { skin: 'nebula', tweaks: '' } } };
   const window = { WosAgents: agents || { lock: () => '<svg class="ag-lock"></svg>' } };
   const ctx = vm.createContext({ window, document, AbortSignal, localStorage: { getItem: () => null }, fetch: async () => ({}) });
   vm.runInContext(read('web/core/chat-models.js'), ctx);
@@ -30,10 +30,10 @@ function models({ on = true, claude = false, chatgpt = false, tinfoil = false, c
 }
 const names = html => [...html.matchAll(/<b>(?:<svg[^>]*><\/svg>)?([^<]+)<\/b>/g)].map(m => m[1]);
 
-test('Tinfoil only: the menu offers GLM, Kimi and Flash, and no Claude model', () => {
+test('Tinfoil only: the menu offers GLM, Kimi and DeepSeek Flash, and no Claude model', () => {
   const M = models({ tinfoil: true, current: 'custom:wizard-tinfoil', model: 'glm-5-3' });
   const { html } = M.popHtml({ mode: 'new', cur: null });
-  assert.deepEqual(names(html), ['GLM', 'Kimi', 'Flash']);
+  assert.deepEqual(names(html), ['GLM', 'Kimi', 'DeepSeek Flash']);
   assert.doesNotMatch(html, /Opus|Sonnet|Astra|nomic|tts|pii|decision/i);
   assert.equal(M.visible('', '').some(o => /^claude-/.test(o.value)), false);
 });
@@ -41,14 +41,14 @@ test('Tinfoil only: the menu offers GLM, Kimi and Flash, and no Claude model', (
 test('Tinfoil only, Hermes still configured on Claude: Claude rows stay out of the short list', () => {
   const M = models({ tinfoil: true });
   const { html } = M.popHtml({ mode: 'new', cur: null });
-  assert.deepEqual(names(html), ['GLM', 'Kimi', 'Flash']);
+  assert.deepEqual(names(html), ['GLM', 'Kimi', 'DeepSeek Flash']);
 });
 
 test('a thread already on a disconnected model still shows that model', () => {
   const M = models({ tinfoil: true });
   const cur = { model: 'claude-opus-5-5', provider: 'anthropic' };
   const { html } = M.popHtml({ mode: 'thread', cur });
-  assert.deepEqual(names(html), ['GLM', 'Kimi', 'Flash', 'Opus']);
+  assert.deepEqual(names(html), ['GLM', 'Kimi', 'DeepSeek Flash', 'Opus']);
 });
 
 test('Claude and ChatGPT connected: their curated short lists, in connector order', () => {
@@ -59,7 +59,7 @@ test('Claude and ChatGPT connected: their curated short lists, in connector orde
 test('every connector connected: Terra and the utility models stay behind More models', () => {
   const M = models({ claude: true, chatgpt: true, tinfoil: true });
   const short = names(M.popHtml({ mode: 'new', cur: null }).html);
-  assert.deepEqual(short, ['Opus', 'Sonnet', 'Haiku', 'Sol', 'Astra', 'Luna', 'GLM', 'Kimi', 'Flash']);
+  assert.deepEqual(short, ['Opus', 'Sonnet', 'Haiku', 'Sol', 'Astra', 'Luna', 'GLM', 'Kimi', 'DeepSeek Flash']);
   assert.match(M.popHtml({ mode: 'new', cur: null }).html, /data-mall/);
 });
 
@@ -79,15 +79,18 @@ test('no Claude app answering: Hermes\u2019 own Claude sign-in decides (alongsid
 
 test('a Claude app with no ready account means Claude is not connected', () => {
   const M = models({ claude: true, claudeAccounts: { accounts: [{ id: 'a1', status: 'signed_out' }] }, tinfoil: true });
-  assert.deepEqual(names(M.popHtml({ mode: 'new', cur: null }).html), ['GLM', 'Kimi', 'Flash']);
+  assert.deepEqual(names(M.popHtml({ mode: 'new', cur: null }).html), ['GLM', 'Kimi', 'DeepSeek Flash']);
 });
 
-test('switch off: the stock compact menu is unchanged', () => {
-  const M = models({ on: false, tinfoil: true, claude: true, chatgpt: true });
-  const { html } = M.popHtml({ mode: 'new', cur: null });
-  assert.deepEqual(names(html), ['Opus', 'Sonnet', 'Astra', 'Sol']);
-  assert.doesNotMatch(html, /No AI connected|GLM|Kimi/);
-  assert.equal(M.family('glm-5-3', 'custom:wizard-tinfoil'), 'tinfoil');
+test('stock look, no tweak: a connected Tinfoil shows its three models; deepseek-* is one DeepSeek Flash row', () => {
+  const M = models({ tinfoil: true, claude: true, chatgpt: true });
+  const { html, list } = M.popHtml({ mode: 'new', cur: null });
+  assert.deepEqual(names(html).slice(-3), ['GLM', 'Kimi', 'DeepSeek Flash']);
+  assert.doesNotMatch(html, /<b>(?:<svg[^>]*><\/svg>)?(?:DeepSeek|Flash)<\/b>/);
+  assert.equal(M.family('deepseek-v4-1-flash', 'custom:wizard-tinfoil'), 'tinfoil:deepseek');
+  assert.equal(M.family('deepseek-v4', 'custom:wizard-tinfoil'), 'tinfoil:deepseek');
+  const ds = list.find(o => o.value === 'deepseek-v4-1-flash');
+  assert.equal(ds.provider, 'custom:wizard-tinfoil');
 });
 
 test('routed agents keep their own allowed models whatever is connected (host-profile, container, restricted)', () => {
@@ -101,13 +104,10 @@ test('routed agents keep their own allowed models whatever is connected (host-pr
   }
 });
 
-test('the tweak package is listed, never on by default', () => {
+test('the connector-models tweak is gone: no switch, no off path', () => {
   const cat = JSON.parse(read('web/tweaks/catalog.json'));
-  assert.ok(cat.tweaks.includes(TWEAK));
-  assert.ok(!cat.defaults.includes(TWEAK));
-  const man = JSON.parse(read('web/tweaks/wizard/connector-models/manifest.json'));
-  assert.equal(man.id, TWEAK);
-  assert.match(read('web/tweaks/wizard/connector-models/tweak.css'), /html\[data-tweaks~="wizard\/connector-models"\]/);
+  assert.ok(!cat.tweaks.includes('wizard/connector-models'));
+  assert.doesNotMatch(read('web/core/chat-models.js'), /connector-models|connectorOn/);
 });
 
 // Codex P2: a real new-chat picker passes the Hermes default as cur (chat-power openModels). A disconnected
@@ -119,8 +119,8 @@ test('a new chat never inherits a disconnected default into the menu', () => {
   assert.match(pop, /No AI connected yet/);
   assert.doesNotMatch(pop, /Opus/);
   assert.doesNotMatch(none.sheetHtml({ mode: 'new', cur }).html, /Claude Opus/);
-  assert.deepEqual(names(models({ tinfoil: true }).popHtml({ mode: 'new', cur }).html), ['GLM', 'Kimi', 'Flash']);
-  assert.deepEqual(names(models({ tinfoil: true }).popHtml({ mode: 'thread', cur }).html), ['GLM', 'Kimi', 'Flash', 'Opus']);
+  assert.deepEqual(names(models({ tinfoil: true }).popHtml({ mode: 'new', cur }).html), ['GLM', 'Kimi', 'DeepSeek Flash']);
+  assert.deepEqual(names(models({ tinfoil: true }).popHtml({ mode: 'thread', cur }).html), ['GLM', 'Kimi', 'DeepSeek Flash', 'Opus']);
 });
 
 // Codex P2: "More models" in the full sheet lists the reachable catalogue only.
@@ -132,14 +132,12 @@ test('the expanded sheet leaves out disconnected connectors too', () => {
   const all = M.sheetHtml({ mode: 'new', cur: null, all: true });
   assert.equal(all.list.some(o => /^claude-|^gpt-\d/.test(o.value)), false);
   assert.equal(all.list.length, TINFOIL_MODELS.length);
-  // Switch off: the full catalogue as before.
-  assert.equal(models({ on: false, tinfoil: true }).sheetHtml({ mode: 'new', cur: null, all: true }).list.some(o => /^claude-/.test(o.value)), true);
 });
 
 // Codex P1 / AGENTS.md agent parity: open the real picker through chat-power (the label in the message box), tap the
 // first row and check where the new chat routes, on the main agent and on host-profile, container and restricted agents.
 function powered(kind) {
-  const document = { documentElement: { dataset: { skin: 'nebula', tweaks: TWEAK } }, addEventListener() {} };
+  const document = { documentElement: { dataset: { skin: 'nebula', tweaks: '' } }, addEventListener() {} };
   const agent = kind === 'main' ? null : { id: `ag-${kind}`, label: `Agent ${kind}`, kind, model: { provider: 'custom', default: 'claude-sonnet-5' } };
   const AG = { ready: true, lock: () => '', isOther: id => !!agent && id === agent.id, get: id => (agent && id === agent.id ? agent : null),
     others: () => (agent ? [agent] : []), isPrivate: () => false, modelName: (_a, m) => m,
@@ -171,7 +169,7 @@ for (const kind of ['main', 'host-profile', 'container', 'restricted']) {
     const h = powered(kind);
     h.open();
     const shown = names(h.html());
-    if (kind === 'main') assert.deepEqual(shown, ['GLM', 'Kimi', 'Flash']);
+    if (kind === 'main') assert.deepEqual(shown, ['GLM', 'Kimi', 'DeepSeek Flash']);
     else assert.deepEqual(shown, ['Sonnet']);
     h.pick();
     if (kind === 'main') {

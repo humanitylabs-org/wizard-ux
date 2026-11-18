@@ -325,9 +325,9 @@ window.WosChatPower = function chatPower(A) {
     // Match by family in the model id (newest first), so e.g. gpt-6.1-sol still fills the Sol slot.
     const RX = [/opus/i, /astra/i, /-sol(-|$)/i], all = M && M.ready ? M.options.filter(o => !/-900k$/i.test(o.value)) : [];
     const newest = l => l.slice().sort((x, y) => y.value.localeCompare(x.value, 'en', { numeric: true }))[0] || null;
-    const standard = o => M.family(o.value, o.provider) !== 'tinfoil';
+    const standard = o => !M.isPrivateRoute(o.provider);
     const opts = RX.map(rx => vis.find(o => standard(o) && rx.test(o.value)) || newest(all.filter(o => standard(o) && rx.test(o.value))));
-    opts.push(M?.tinfoilReady?.() ? vis.find(o => M.family(o.value, o.provider) === 'tinfoil') || null : null);
+    opts.push(M?.tinfoilReady?.() ? (vis.find(o => M.isPrivateRoute(o.provider) && M.family(o.value, o.provider)) || vis.find(o => M.isPrivateRoute(o.provider))) || null : null);
     const at = cur?.model ? opts.findIndex(o => o && o.value === cur.model && (!cur.provider || o.provider === cur.provider)) : -1;
     return { opts, at };
   }
