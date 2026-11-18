@@ -24,10 +24,19 @@ final class ShortcutBadge implements BadgeSync.Mechanism {
     }
 
     @Override public boolean apply(int count) {
+        if (c.getSystemService(ShortcutManager.class) == null) return false;
+        if (!HomeScreenShortcuts.pinned(c, UnreadBadges.APP_ID)) return true; // nothing on the home screen to badge
+        return draw(c, HomeScreenShortcuts.origin(c), count);
+    }
+
+    /**
+     * Redraws the Messenger shortcut that belongs to {@code origin}. updateShortcuts only changes a shortcut this
+     * package already has, so this can never create or pin one (a removed pin is simply left alone).
+     */
+    static boolean draw(Context c, String origin, int count) {
         ShortcutManager m = c.getSystemService(ShortcutManager.class);
         if (m == null) return false;
-        if (!HomeScreenShortcuts.pinned(c, UnreadBadges.APP_ID)) return true; // nothing on the home screen to badge
-        String id = HomeScreenPolicy.identity(HomeScreenShortcuts.origin(c), UnreadBadges.APP_ID);
+        String id = HomeScreenPolicy.identity(origin, UnreadBadges.APP_ID);
         SharedPreferences pins = c.getSharedPreferences("home-screen-pins", Context.MODE_PRIVATE);
         String png = pins.getString(id + ":icon", null), name = pins.getString(id + ":name", null);
         // The shell page stores the plain icon at each pin/refresh; without it there is nothing to draw on yet.

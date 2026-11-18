@@ -38,6 +38,7 @@ public final class UnreadBadges {
 
     private static final Object LOCK = new Object();
     private static final Object POLL = new Object();
+    private static long started, appliedSeq; // guarded by POLL
     private static final Set<Object> holders = Collections.newSetFromMap(new IdentityHashMap<>());
     private static Handler loop;
     private static Runnable tick;
@@ -78,24 +79,25 @@ public final class UnreadBadges {
 
     /** One pass: fetch, then offer the newest known count to each mechanism. Blocking; call off the main thread. */
     public static void pollNow(Context context) {
-        // One poll at a time (loop, job, widget update): a slow fetch must never re-post after another poll's cleanup.
-        synchronized (POLL) { pollLocked(context); }
-    }
-
-    private static void pollLocked(Context context) {
         Context c = context.getApplicationContext();
-        if (!wanted(c)) { forget(c); cancelJob(c); return; }
+        if (!wanted(c)) { synchronized (POLL) { forget(c); } cancelJob(c); return; }
         scheduleJob(c); // a target pinned after the app started still gets the background backstop (no-op when pending)
-        String origin = AppState.origin(c);
-        int fetched = UnreadSource.fetch(origin);
-        // The Wizard address changed during the fetch (reset() ran): this count belongs to the old box, drop it.
-        if (!java.util.Objects.equals(origin, AppState.origin(c))) return;
-        SharedPreferences p = prefs(c);
-        if (fetched >= 0) p.edit().putInt("count", fetched).apply();
-        // A failed fetch (offline, endpoint absent) leaves the badge alone but still retries earlier deferrals.
-        int desired = fetched >= 0 ? fetched : (p.contains("count") ? p.getInt("count", 0) : -1);
-        int ok = BadgeSync.syncAll(new PrefsStore(p), mechanisms(c), desired);
-        Log.i(TAG, "poll fetched=" + fetched + " desired=" + desired + " inSync=" + ok);
+        long seq; String origin;
+        synchronized (POLL) { seq = ++started; origin = AppState.origin(c); }
+        int fetched = UnreadSource.fetch(origin); // network, outside the lock: reset() never waits on it
+        // Everything that shows a count happens under POLL, the same lock reset() and forget() take, and only for the
+        // newest poll of the Wizard that is still current. A slow or old-Wizard result is dropped, never applied.
+        synchronized (POLL) {
+            if (!java.util.Objects.equals(origin, AppState.origin(c)) || seq < appliedSeq) return;
+            appliedSeq = seq;
+            if (!wanted(c)) { forget(c); return; }
+            SharedPreferences p = prefs(c);
+            if (fetched >= 0) p.edit().putInt("count", fetched).apply();
+            // A failed fetch (offline, 5xx) leaves the badge alone but still retries earlier deferrals.
+            int desired = fetched >= 0 ? fetched : (p.contains("count") ? p.getInt("count", 0) : -1);
+            int ok = BadgeSync.syncAll(new PrefsStore(p), mechanisms(c), desired);
+            Log.i(TAG, "poll fetched=" + fetched + " desired=" + desired + " inSync=" + ok);
+        }
     }
 
     /** Feed a count without the network (debug/QA entry and tests); same coalescing path as a poll. */
@@ -162,14 +164,26 @@ public final class UnreadBadges {
         p.edit().clear().apply();
     }
 
-    /** Wizard address changed: forget the old box's count. */
-    public static void reset(Context context) {
+    /**
+     * Wizard address changed (called after the new address is saved): forget the old box's count, clear the tray
+     * note, redraw a placed widget plain with the new tap target, and take the bubble off the old Wizard's pinned
+     * shortcut, which later polls no longer look at. No network, so the caller never waits on a fetch.
+     */
+    public static void reset(Context context, String oldOrigin) {
         Context c = context.getApplicationContext();
+        prefs(c).edit().clear().apply();
+        // Shortcut and widget IPC stays off the caller's (possibly UI) thread.
+        new Thread(() -> { synchronized (POLL) { clearAfterSwitch(c, oldOrigin); } }, "wizard-unread-reset").start();
+    }
+
+    private static void clearAfterSwitch(Context c, String oldOrigin) {
         prefs(c).edit().clear().apply();
         android.app.NotificationManager nm = c.getSystemService(android.app.NotificationManager.class);
         if (nm != null) nm.cancel(UnreadNotification.ID);
-        // A placed widget keeps its last RemoteViews: redraw it plain, with the new Wizard's tap target.
         try { new WidgetBadge(c).apply(0); } catch (RuntimeException e) { Log.w(TAG, "widget reset: " + e); }
+        if (oldOrigin != null && !oldOrigin.isEmpty() && !oldOrigin.equals(HomeScreenShortcuts.origin(c))) {
+            try { ShortcutBadge.draw(c, oldOrigin, 0); } catch (RuntimeException e) { Log.w(TAG, "old shortcut reset: " + e); }
+        }
     }
 
     @SuppressWarnings("unused") static boolean frontForTests() { return AppState.front(); }
