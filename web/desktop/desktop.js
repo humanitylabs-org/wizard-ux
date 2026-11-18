@@ -1642,7 +1642,18 @@
     const over = t.closest('.win');
     if (over && over.dataset.win !== d.id) { const L = ws[cur].wins, a = L.indexOf(d.id), b = L.indexOf(over.dataset.win); if (a >= 0 && b >= 0) { [L[a], L[b]] = [L[b], L[a]]; save(); layout(); } }
   });
-  addEventListener('resize', () => layout());
+  // Tiles follow the window when it is resized natively (Mac window drag, zoom, full screen). WKWebView can send
+  // resize before the stage has its new bounds, and can pause CSS transitions while the window is behind another
+  // app, so: lay out again when the stage itself changes size, and turn the geometry transitions off while resizing.
+  let resizeSettled;
+  function resizeTiles() {
+    document.body.classList.add('desktop-resizing');
+    layout();
+    clearTimeout(resizeSettled);
+    resizeSettled = setTimeout(() => document.body.classList.remove('desktop-resizing'), 200);
+  }
+  addEventListener('resize', resizeTiles);
+  if (window.ResizeObserver) new ResizeObserver(resizeTiles).observe(stage);
 
   /* ---------------- palette: one box for apps, threads, commands and asking Archimedes ----------------
    * Two modes of the same box. 'all' (⌘K): apps, threads, commands, Search and Ask, as a list.
