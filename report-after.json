@@ -1,0 +1,19 @@
+{
+  "beforeTap": {
+    "status": "running",
+    "stopLive": true,
+    "work": "Working · 1m 1s"
+  },
+  "at200ms": {
+    "status": "stopping",
+    "stopLive": false,
+    "work": "Stopping…"
+  },
+  "settled": {
+    "status": "cancelled",
+    "stopLive": false,
+    "work": ""
+  },
+  "stopRequestMs": 78,
+  "settledAfterBoxMs": 942
+}
