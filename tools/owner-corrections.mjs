@@ -18,6 +18,9 @@ export const MARKER = /^\s*(?:\/\/|#)\s*owner-correction:\s*([\w.-]+\/[\w.-]+#\d
 const LOOSE = /owner-correction\s*:/;
 const ASSERTION = /\bassert\w*\b|\bexpect\s*\(|\bself\.assert\w+\(|\bassertThat\(/;
 const SKIP = /\b(?:test|it|describe|suite)\.(?:skip|todo)\s*\(|[{,]\s*(?:skip|todo)\s*:\s*(?!false\b)|\bxit\s*\(|\bxdescribe\s*\(|@(?:unittest\.)?skip|pytest\.mark\.(?:skip|xfail)|@Ignore\b|@Disabled\b|\bt\.skip\s*\(/;
+// test(name, opts, fn) with options from a variable: the runner may skip it and nothing in the block says so. Treated
+// as skipped (conservatively); fine when it already was on base.
+const OPTIONS_VAR = /\b(?:test|it|describe|suite)\s*\(\s*(?:'[^']*'|"[^"]*"|`[^`]*`|[\w$.]+)\s*,\s*(?!async\b|function\b)[A-Za-z_$][\w$.]*\s*,/;
 const TEST_FILE = /(^|\/)(tests?|__tests__|androidTest)\/|\.(test|spec)\.[cm]?[jt]s$|(^|\/)test_[^/]+\.py$/;
 const COMMENT = /https:\/\/github\.com\/([\w.-]+)\/([\w.-]+)\/(?:issues|pull)\/(\d+)#issuecomment-(\d+)/g;
 
@@ -44,20 +47,21 @@ export function scan(path, source) {
       if (/^[}\]]/.test(b)) break;
     }
     const asserts = block.filter(b => ASSERTION.test(b) && !/^\s*(\/\/|#)/.test(b)).map(norm);
-    const skipped = block.some(b => !/^\s*(\/\/|#)/.test(b) && SKIP.test(b));
+    const skipped = block.some(b => !/^\s*(\/\/|#)/.test(b) && (SKIP.test(b) || OPTIONS_VAR.test(b)));
     found.push({ path, line: i + 1, ref: m[1], date: m[2], quote: m[3], text: norm(l.replace(/^\s*(?:\/\/|#)\s*/, '')), asserts, skipped });
   });
   return { found, malformed };
 }
 
-/** Compare markers at base and head. Returns problems (strings); empty = nothing owner-protected was weakened. */
+/** Compare markers at base and head. Returns problems [{ ref, date, text }]; empty = nothing owner-protected was weakened. */
 export function compare(baseMarkers, headMarkers) {
   const problems = [];
+  const push = (b, text) => problems.push({ ref: b.ref, date: b.date, text });
   const pool = headMarkers.map(m => ({ ...m, used: false }));
   for (const b of baseMarkers) {
     const same = pool.filter(h => !h.used && h.text === b.text);
     if (!same.length) {
-      problems.push(`${b.path}:${b.line}: owner-correction test for ${b.ref} (${b.date}, ${b.quote}) was deleted, or its marker or quote was edited.`);
+      push(b, `${b.path}:${b.line}: owner-correction test for ${b.ref} (${b.date}, ${b.quote}) was deleted, or its marker or quote was edited.`);
       continue;
     }
     // Prefer the copy that kept everything (same path first, so a duplicate elsewhere can't hide a weakened original).
@@ -65,24 +69,36 @@ export function compare(baseMarkers, headMarkers) {
     const best = same.find(h => h.path === b.path && keeps(h)) || same.find(keeps) || same.find(h => h.path === b.path) || same[0];
     best.used = true;
     const lost = b.asserts.filter(a => !best.asserts.includes(a));
-    if (lost.length) problems.push(`${best.path}:${best.line}: owner-correction test for ${b.ref} lost ${lost.length} assertion(s): ${lost.map(a => JSON.stringify(a.slice(0, 120))).join('; ')}`);
-    if (best.skipped && !b.skipped) problems.push(`${best.path}:${best.line}: owner-correction test for ${b.ref} is now marked skip/todo.`);
+    if (lost.length) push(b, `${best.path}:${best.line}: owner-correction test for ${b.ref} lost ${lost.length} assertion(s): ${lost.map(a => JSON.stringify(a.slice(0, 120))).join('; ')}`);
+    if (best.skipped && !b.skipped) push(b, `${best.path}:${best.line}: owner-correction test for ${b.ref} is now marked skip/todo.`);
   }
   return problems;
 }
 
-/** Approval: the label plus a linked comment written by an approver. fetchComment(owner, repo, id) -> { login } | null. */
-export async function approval({ labels = [], body = '', approvers = APPROVERS, fetchComment }) {
+/** Approval: the label, plus for every weakened correction a linked comment that an approver wrote on that
+ *  correction's own issue or on this PR, on or after the correction's date. Where the comment sits and who wrote it come
+ *  from the API, not from the link text. fetchComment(owner, repo, id) -> { login, issue: 'owner/repo#n', created } | null. */
+export async function approval({ labels = [], body = '', approvers = APPROVERS, fetchComment, problems = [], pr = '' }) {
   if (!labels.includes(LABEL)) return { ok: false, why: `no \`${LABEL}\` label` };
   const links = [...String(body).matchAll(COMMENT)];
   if (!links.length) return { ok: false, why: `label \`${LABEL}\` is set, but the PR body links no owner comment (https://github.com/<owner>/<repo>/issues/<n>#issuecomment-<id>)` };
   if (!fetchComment) return { ok: false, why: 'cannot read the linked comment to check who wrote it (no GitHub token)' };
+  const comments = [];
   for (const [url, owner, repo, , id] of links) {
     let c = null;
     try { c = await fetchComment(owner, repo, id); } catch { c = null; }
-    if (c && approvers.includes(c.login)) return { ok: true, url, login: c.login };
+    if (c && approvers.includes(c.login)) comments.push({ ...c, url });
   }
-  return { ok: false, why: `none of the linked comments was written by ${approvers.map(a => '@' + a).join(' or ')}` };
+  if (!comments.length) return { ok: false, why: `none of the linked comments was written by ${approvers.map(a => '@' + a).join(' or ')}` };
+  const refs = new Map();
+  for (const p of problems) if (!refs.has(p.ref) || refs.get(p.ref) > p.date) refs.set(p.ref, p.date);
+  const used = [];
+  for (const [ref, date] of refs) {
+    const c = comments.find(c => (c.issue === ref || (pr && c.issue === pr)) && String(c.created || '').slice(0, 10) >= date);
+    if (!c) return { ok: false, why: `no linked comment by ${approvers.map(a => '@' + a).join(' or ')} on ${ref}${pr ? ` or on this PR (${pr})` : ''}, written on or after ${date}, approves changing that correction's test` };
+    used.push(c);
+  }
+  return { ok: true, url: [...new Set(used.map(c => c.url))].join(' '), login: used[0]?.login || comments[0].login };
 }
 
 const git = (cwd, args) => execFileSync('git', args, { cwd, encoding: 'utf8', maxBuffer: 64 << 20 });
@@ -103,7 +119,7 @@ export function markersAt(cwd, rev) {
   return out;
 }
 
-export async function guard({ cwd = process.cwd(), base, head, labels = [], body = '', approvers = APPROVERS, fetchComment }) {
+export async function guard({ cwd = process.cwd(), base, head, labels = [], body = '', approvers = APPROVERS, fetchComment, pr = '' }) {
   const b = markersAt(cwd, base), h = markersAt(cwd, head);
   const baseMalformed = new Set(b.malformed.map(m => m.text));
   const problems = compare(b.found, h.found);
@@ -112,8 +128,8 @@ export async function guard({ cwd = process.cwd(), base, head, labels = [], body
     .map(m => `${m.path}:${m.line}: owner-correction marker is malformed. Use: // owner-correction: <owner>/<repo>#<n> · YYYY-MM-DD · "<the owner's words>"`);
   const newOnes = h.found.filter(x => !b.found.some(y => y.text === x.text)).map(x => `${x.path}:${x.line} ${x.ref} ${x.date} ${x.quote}`);
   if (!problems.length) return { ok: !format.length, problems: format, approved: null, base: b.found.length, head: h.found.length, newOnes };
-  const ok = await approval({ labels, body, approvers, fetchComment });
-  return { ok: ok.ok && !format.length, problems: [...problems, ...format], approved: ok, base: b.found.length, head: h.found.length, newOnes };
+  const ok = await approval({ labels, body, approvers, fetchComment, problems, pr });
+  return { ok: ok.ok && !format.length, problems: [...problems.map(p => p.text), ...format], approved: ok, base: b.found.length, head: h.found.length, newOnes };
 }
 
 export function githubComment(token) {
@@ -124,7 +140,8 @@ export function githubComment(token) {
     });
     if (!r.ok) return null;
     const j = await r.json();
-    return { login: j?.user?.login || '' };
+    const m = String(j?.issue_url || '').match(/\/repos\/([^/]+)\/([^/]+)\/issues\/(\d+)$/);
+    return { login: j?.user?.login || '', issue: m ? `${m[1]}/${m[2]}#${m[3]}` : '', created: j?.created_at || '' };
   };
 }
 
@@ -136,7 +153,8 @@ async function main(argv) {
   try { labels = JSON.parse(process.env.PR_LABELS || '[]'); } catch { labels = []; }
   const approvers = (process.env.OWNER_CORRECTION_APPROVERS || '').split(/[\s,]+/).filter(Boolean);
   const r = await guard({ base, head, labels, body: process.env.PR_BODY || '', approvers: approvers.length ? approvers : APPROVERS,
-    fetchComment: githubComment(process.env.GITHUB_TOKEN) });
+    fetchComment: githubComment(process.env.GITHUB_TOKEN),
+    pr: process.env.GITHUB_REPOSITORY && process.env.PR_NUMBER ? `${process.env.GITHUB_REPOSITORY}#${process.env.PR_NUMBER}` : '' });
   console.log(`owner-correction tests: ${r.base} on base, ${r.head} on head`);
   for (const n of r.newOnes) console.log(`  new: ${n}`);
   for (const p of r.problems) console.log(`${r.ok ? 'approved' : '::error::'} ${p}`);

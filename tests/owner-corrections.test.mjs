@@ -25,8 +25,16 @@ for (const kind of ['offline', 'reconnecting']) {
 test('unrelated', () => { assert.equal(1, 1); });
 `;
 const APPROVAL = 'https://github.com/humanitylabs-org/wizard-ux/issues/1472#issuecomment-123';
-const comments = { 123: 'jdefleur', 456: 'someone-else' };
-const fetchComment = async (o, r, id) => comments[id] ? { login: comments[id] } : null;
+const ISSUE = 'humanitylabs-org/wizard-ux#1472', PR = 'humanitylabs-org/wizard-ux#9999';
+const comments = {
+  123: { login: 'jdefleur', issue: ISSUE, created: '2026-11-20T10:00:00Z' },
+  456: { login: 'someone-else', issue: ISSUE, created: '2026-11-20T10:00:00Z' },
+  321: { login: 'jdefleur', issue: 'humanitylabs-org/wizard-ux#803', created: '2026-11-20T10:00:00Z' }, // another correction
+  654: { login: 'jdefleur', issue: ISSUE, created: '2026-11-01T10:00:00Z' }, // before the correction it would undo
+  777: { login: 'jdefleur', issue: PR, created: '2026-11-21T10:00:00Z' }, // on the PR itself
+};
+const fetchComment = async (o, r, id) => comments[id] || null;
+const link = id => APPROVAL.replace('123', String(id));
 
 function repo(files = { 'tests/offline.test.mjs': TEST }) {
   const dir = mkdtempSync(join(process.env.TMPDIR || tmpdir(), 'owner-corr-'));
@@ -41,7 +49,7 @@ function repo(files = { 'tests/offline.test.mjs': TEST }) {
     commit() { g('add', '-A'); g('commit', '-qm', 'pr', '--allow-empty'); return g('rev-parse', 'HEAD'); },
     done() { rmSync(dir, { recursive: true, force: true }); } };
 }
-const run = (r, head, extra = {}) => guard({ cwd: r.dir, base: r.base, head, fetchComment, ...extra });
+const run = (r, head, extra = {}) => guard({ cwd: r.dir, base: r.base, head, fetchComment, pr: PR, ...extra });
 
 test('the marker format parses, and the guarded block is the marked test with its assertions', () => {
   const { found, malformed } = scan('tests/offline.test.mjs', TEST);
@@ -78,6 +86,12 @@ test('the same deletion passes with the label and a link to the owner’s approv
     const unknown = await run(r, head, { labels: [LABEL], body: APPROVAL.replace('123', '789') });
     assert.equal(unknown.ok, false, 'a comment that cannot be read approves nothing');
     assert.equal((await run(r, head, { labels: [LABEL], body: APPROVAL, fetchComment: null })).ok, false, 'no token: fail closed');
+    // The owner's comment must be about this correction: on its issue or on this PR, and not older than the correction.
+    const unrelated = await run(r, head, { labels: [LABEL], body: link(321) });
+    assert.equal(unrelated.ok, false); assert.match(unrelated.approved.why, /on humanitylabs-org\/wizard-ux#1472/);
+    assert.equal((await run(r, head, { labels: [LABEL], body: link(654) })).ok, false, 'an approval older than the correction');
+    assert.equal((await run(r, head, { labels: [LABEL], body: link(777) })).ok, true, 'James approving on the PR itself');
+    assert.equal((await run(r, head, { labels: [LABEL], body: link(777), pr: 'humanitylabs-org/wizard-ux#1' })).ok, false, 'another PR');
   } finally { r.done(); }
 });
 
@@ -102,7 +116,8 @@ test('editing the quote or the marker fails', async () => {
 });
 
 test('marking it skip or todo fails', async () => {
-  for (const edit of [s => s.replace('  test(`the Troubleshooter', '  test.skip(`the Troubleshooter'), s => s.replace('(${kind})`, () =>', '(${kind})`, { skip: true }, () =>'), s => s.replace('  test(`the Troubleshooter', '  test.todo(`the Troubleshooter')]) {
+  for (const edit of [s => s.replace('  test(`the Troubleshooter', '  test.skip(`the Troubleshooter'), s => s.replace('(${kind})`, () =>', '(${kind})`, { skip: true }, () =>'), s => s.replace('  test(`the Troubleshooter', '  test.todo(`the Troubleshooter'),
+    s => s.replace(MARK, 'const opts = { skip: true }; // declared above the marker\n' + MARK).replace('(${kind})`, () =>', '(${kind})`, opts, () =>')]) {
     const r = repo();
     try {
       r.put('tests/offline.test.mjs', edit(TEST));
