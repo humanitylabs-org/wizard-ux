@@ -203,7 +203,7 @@ test('parity: main and routed threads (host-profile, container, restricted) get 
 const CAL = 'wizard-calendar:drag-events';
 const calRow = on => ({ id: CAL, kind: 'app', app: 'wizard-calendar', app_name: 'Calendar', switch: 'drag-events', name: 'Drag to move events', description: 'Drag an event to a new time.', author: 'wizard-calendar', on, issues: ['humanitylabs-org/wizard-calendar#19'], locked: false });
 const listingOf = (rows, apps = [{ id: 'wizard-calendar', name: 'Calendar', ok: true }]) => ({ channel: 'latest', locked: false, switches: [{ id: 'wizard/desktop-chats', kind: 'core', name: 'x', on: false }, ...rows], apps });
-function appKit({ on = true, listing = listingOf([calRow(false)]), post } = {}) {
+function appKit({ on = true, listing = listingOf([calRow(false)]), post, timers = null } = {}) {
   const calls = [], cards = [], opened = [];
   const res = (status, body) => ({ ok: status >= 200 && status < 300, status, json: async () => body });
   const fetch = async (url, init = {}) => {
@@ -213,8 +213,8 @@ function appKit({ on = true, listing = listingOf([calRow(false)]), post } = {}) 
   };
   const E = { state: { shell: 'phone', busy: false, error: '', tweaks: [{ ...desktopChats, on: false }] }, toggle: async () => {}, authors: async () => [{ id: 'wizard', name: 'Wizard' }] };
   const doc = { activeElement: null, baseURI: 'https://box.example/wizard-os-home/', documentElement: { dataset: { tweaks: on ? 'wizard/chat-app-switches' : '' } }, querySelectorAll: q => q === '[data-chat-tweak-card]' ? cards : [] };
-  const ctx = { window: { WosExperience: E, fetch, WizOpenApp: (id, path) => { opened.push([id, path]); return true; } }, document: doc, esc: KIT.esc, URL, Date, Promise, authorList: [{ id: 'wizard', name: 'Wizard' }] };
-  vm.runInNewContext(`${between(settings, '  const tweakSwitches = ', '\n')}\n${between(settings, '  const cardPending = ', '  const newTile')}\nglobalThis.api = { tweakCard, tweakCardTap, paintTweakCards, tweakSwitches };`, ctx);
+  const ctx = { window: { WosExperience: E, fetch, WizOpenApp: (id, path) => { opened.push([id, path]); return true; }, ...(timers ? { setTimeout: (fn, ms) => { timers.push([fn, ms]); return timers.length; } } : {}) }, document: doc, esc: KIT.esc, URL, Date, Promise, authorList: [{ id: 'wizard', name: 'Wizard' }] };
+  vm.runInNewContext(`${between(settings, '  const tweakSwitches = ', '\n')}\n${between(settings, '  const cardPending = ', '  const newTile')}\nglobalThis.api = { tweakCard, tweakCardTap, paintTweakCards, tweakSwitches, forceRead: () => appSwRead(true) };`, ctx);
   return { ...ctx.api, calls, cards, opened, doc, res };
 }
 const settle = () => new Promise(r => setTimeout(r, 0));
@@ -303,4 +303,47 @@ test('app card parity: main and routed threads (host-profile, container, restric
     assert.deepEqual(k.calls.filter(c => c.method === 'POST').map(c => c.body), [{ id: CAL, on: true }], kind);
   }
   assert.equal(seen.size, 1, 'byte-identical card for every runtime kind');
+});
+
+// Two clients on one box (Codex P1): B's idle card follows A's flip within one 15 s tick, and taps from the new state.
+test('app card, two clients: an idle card on another device follows a flip within one tick (never stale)', async () => {
+  const box = { on: false };
+  const ok = body => ({ ok: true, status: 200, json: async () => body });
+  const shared = { listing: () => ok(listingOf([calRow(box.on)])), post: b => { box.on = b.on; return ok(listingOf([calRow(box.on)])); } };
+  const timersB = [];
+  const A = appKit(shared), B = appKit({ ...shared, timers: timersB });
+  const cardA = fakeCard(CAL), cardB = fakeCard(CAL); A.cards.push(cardA); B.cards.push(cardB);
+  A.tweakCard([CAL]); B.tweakCard([CAL]); await settle();
+  A.paintTweakCards(); B.paintTweakCards();
+  assert.match(cardB.innerHTML, /aria-checked="false"/);
+  assert.equal(A.tweakCardTap(fakeButton(CAL, false)), true); await settle();
+  assert.equal(box.on, true); assert.match(cardA.innerHTML, /aria-checked="true"/);
+  assert.match(cardB.innerHTML, /aria-checked="false"/, 'B has not looked yet');
+  const tick = timersB.find(([, ms]) => ms === 15000); assert.ok(tick, 'B scheduled a 15 s re-read while its card shows');
+  tick[0](); await settle();
+  assert.match(cardB.innerHTML, /aria-checked="true"[^]*class="sw on"/, 'B follows A after one tick');
+  assert.ok(timersB.filter(([, ms]) => ms === 15000).length >= 2, 'and keeps looking while the card shows');
+  B.tweakCardTap(fakeButton(CAL, true)); await settle();
+  assert.equal(box.on, false, 'B taps from the real state: off');
+  cardB.hidden = true; const n = timersB.length; timersB.at(-1)[0](); await settle();
+  assert.equal(timersB.length, n, 'no card on screen: the ticking stops');
+});
+
+// A read that started before a flip must not land over the flip's answer (Codex P2).
+test('app card: a catalog read that started before a flip never reverts the flip', async () => {
+  let release; const box = { on: false };
+  const ok = body => ({ ok: true, status: 200, json: async () => body });
+  let slow = false;
+  const k = appKit({ listing: () => slow ? new Promise(r => { const old = listingOf([calRow(box.on)]); release = () => r(ok(old)); }) : ok(listingOf([calRow(box.on)])),
+    post: b => { box.on = b.on; return ok(listingOf([calRow(box.on)])); } });
+  const card = fakeCard(CAL); k.cards.push(card);
+  k.tweakCard([CAL]); await settle(); k.paintTweakCards();
+  slow = true;
+  // the page shows again: a forced read starts with the OFF snapshot and is held
+  const g = k.calls.length; await new Promise(r => setTimeout(r, 0));
+  k.forceRead(); assert.equal(k.calls.length, g + 1);
+  k.tweakCardTap(fakeButton(CAL, false)); await settle();
+  assert.match(card.innerHTML, /aria-checked="true"/, 'flip answered');
+  release(); await settle();
+  assert.match(card.innerHTML, /aria-checked="true"[^]*class="sw on"/, 'the older read was dropped, the flip stands');
 });

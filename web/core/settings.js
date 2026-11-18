@@ -343,7 +343,7 @@
    * installed app without that switch yet is greyed with "Update <app> first" + Update (opens it in the App Store); an app
    * that isn't installed or declares no switches stays hidden. While the switch is off app ids are dropped, as before. */
   const APP_SWITCH = /^([a-z0-9][a-z0-9-]{0,62}):[a-z0-9][a-z0-9-]{0,63}$/, APP_SWITCHES_TWEAK = 'wizard/chat-app-switches';
-  const appSw = { list: null, at: 0, read: null, err: false };
+  const appSw = { list: null, at: 0, read: null, err: false, gen: 0, timer: 0 };
   const appSwOn = () => { try { return String(document.documentElement?.dataset?.tweaks || '').split(' ').includes(APP_SWITCHES_TWEAK); } catch (e) { return false; } };
   const homePath = p => { try { return new URL(p, document.baseURI || location.href).pathname; } catch (e) { return '/wizard-os-home/' + p; } };
   function appSwTake(d) {
@@ -358,10 +358,21 @@
     if (!r.ok) throw new Error(String(d?.error || `The App Manager said ${r.status}`).slice(0, 200));
     return d;
   }
+  // A read started before a flip never lands over the flip's answer (gen); the flip's answer is the newer catalog.
   function appSwRead(force) {
     if (appSw.read || (!force && Date.now() - appSw.at < 15000) || typeof window.fetch !== 'function') return appSw.read;
-    appSw.read = appSwFetch().then(appSwTake, () => { appSw.err = true; }).finally(() => { appSw.read = null; appSw.at = Date.now(); paintTweakCards(); });
+    const gen = appSw.gen;
+    appSw.read = appSwFetch().then(d => { if (gen === appSw.gen) appSwTake(d); }, () => { if (gen === appSw.gen) appSw.err = true; })
+      .finally(() => { appSw.read = null; appSw.at = Date.now(); paintTweakCards(); });
     return appSw.read;
+  }
+  // Another device (or the Tracker) may flip it meanwhile: while an app row is on screen and the page shows, read again
+  // every 15 s, so an idle card never keeps showing, or toggling from, an old state.
+  const appSwShown = () => [...(document.querySelectorAll?.('[data-chat-tweak-card]') || [])].some(n => !n.hidden && String(n.dataset?.chatTweakCard || '').split(' ').some(id => APP_SWITCH.test(id)));
+  function appSwTick() {
+    const later = window.setTimeout || (typeof setTimeout === 'function' ? setTimeout : null);
+    if (appSw.timer || !later) return;
+    appSw.timer = later(() => { appSw.timer = 0; if (!appSwOn() || document.visibilityState === 'hidden' || !appSwShown()) return; void appSwRead(true); appSwTick(); }, 15000);
   }
   function appSwRow(id) {
     const app = APP_SWITCH.exec(id)[1], L = appSw.list;
@@ -379,7 +390,8 @@
     cardPending.set(id, !was);
     btn.setAttribute('aria-checked', String(!was)); btn.querySelector('.sw')?.classList.toggle('on', !was); // this frame
     paintTweakCards();
-    appSwFetch({ id, on: !was }).then(d => { appSwTake(d); cardPending.delete(id); paintTweakCards(); },
+    appSw.gen++;
+    appSwFetch({ id, on: !was }).then(d => { appSw.gen++; appSwTake(d); cardPending.delete(id); paintTweakCards(); },
       e => { cardPending.delete(id); paintTweakCards(); toast?.('!', e?.message || 'Couldn’t change that switch'); void appSwRead(true); });
     return true;
   }
@@ -388,12 +400,12 @@
     if (!(typeof open === 'function' && open('app-store', path))) toast?.('!', 'Open the App Store to update this app');
     return true;
   }
-  window.addEventListener?.('visibilitychange', () => { if (document.visibilityState === 'visible' && appSw.list && appSwOn()) void appSwRead(true); });
+  window.addEventListener?.('visibilitychange', () => { if (document.visibilityState === 'visible' && appSw.list && appSwOn()) { void appSwRead(true); appSwTick(); } });
   function tweakCardRows(list) {
     const E = window.WosExperience, s = E?.state;
     if (s && !authorList) E.authors?.().then(a => { authorList = a; paintTweakCards(); }, () => {});
     const name = who => (authorList || []).find(a => a.id === who)?.name || who;
-    if (list.some(id => APP_SWITCH.test(id))) void appSwRead(false);
+    if (list.some(id => APP_SWITCH.test(id))) { void appSwRead(false); appSwTick(); }
     return list.map(id => {
       if (APP_SWITCH.test(id)) return appSwRow(id);
       const t = s?.tweaks.find(x => x.id === id);
