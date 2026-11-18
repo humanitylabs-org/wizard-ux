@@ -22,7 +22,10 @@ const appHTML = '<!doctype html><html><meta charset="utf-8"><style>html{color-sc
 const appJS = `window.fixtureCalls=[];window.fixturePulses=0;
 window.fixturePulse=()=>WizardApp.titlebar.set([{id:'search',kind:'button',icon:'search',label:'Synthetic search '+(++fixturePulses),dot:fixturePulses%2===0},{id:'mode',kind:'select',label:'Synthetic mode',value:'one',options:[{value:'one',label:'One'},{value:'two',label:'Two'}]}],e=>fixtureCalls.push(e));
 window.fixtureReady=WizardApp.ready().then(fixturePulse).then(()=>{window.fixtureToolsRegistered=true;setTimeout(fixturePulse,900);setInterval(fixturePulse,1700);});fixtureReady.catch(e=>{window.fixtureError=e.stack;console.error(e);});`;
-const modes = process.env.QA_BOOT_MODES ? process.env.QA_BOOT_MODES.split(',') : ['restored-apps-chat', 'restored-apps-front', 'default', 'reload', 'classic', 'stale-ai-apps', 'stale-classic'];
+// slow-*: a cold, far load (issue 1556: the Mac app over the tailnet). The layout code or the sheets answer 7 s late
+// under a 4x CPU throttle; nothing of Classic Desks may be drawn before the AI apps sidebar.
+const SLOW = { 'slow-layout': /\/layouts\/ai-apps\/desktop\.js$/, 'slow-veil-css': /\/layouts\/ai-apps\/desktop(-boot)?\.css$/, deeplink: /\/layouts\/ai-apps\/desktop\.js$/ };
+const modes = process.env.QA_BOOT_MODES ? process.env.QA_BOOT_MODES.split(',') : ['restored-apps-chat', 'restored-apps-front', 'default', 'reload', 'classic', 'stale-ai-apps', 'stale-classic', 'slow-layout', 'slow-veil-css', 'deeplink'];
 const report = { synthetic: true, source: process.env.QA_SOURCE_SHA || null, modes, cases: [], failures: [] };
 function save() { fs.writeFileSync(path.join(out, 'boot-report.json'), JSON.stringify(report, null, 2) + '\n'); }
 async function interaction(p, row) {
@@ -137,7 +140,7 @@ async function interaction(p, row) {
      if (mode === 'stale-classic') localStorage.setItem('wos.layout', 'ai-apps');
      if (mode === 'stale-ai-apps') { localStorage.setItem('wos.desktop-view.v1', 'ai-apps'); localStorage.setItem('wos.layout', 'orb'); }
     }
-    window.__legacy = { samples: 0, hits: [], rows: 0, phases: [], ownership: [] };
+    window.__legacy = { samples: 0, hits: [], chrome: [], rows: 0, phases: [], ownership: [] };
     const drawn = n => {
      const r = n.getBoundingClientRect(); if (r.width <= 0 || r.height <= 0) return false;
      let o = 1; for (let e = n; e; e = e.parentElement) { const s = getComputedStyle(e); if (s.display === 'none' || s.visibility === 'hidden') return false; o *= parseFloat(s.opacity); }
@@ -146,6 +149,9 @@ async function interaction(p, row) {
     const sample = why => {
      if (!document.documentElement) return; __legacy.samples++;
      for (const n of document.querySelectorAll('.pane-list,.pane-split,.pane-empty,.ch-list')) if (drawn(n) && __legacy.hits.length < 50) __legacy.hits.push({ why, cls: n.className, t: Math.round(performance.now()) });
+     // Classic chrome (menubar, windows, chat panes, skeleton rows) drawn before the AI apps sidebar is (issue 1556)
+     const side = document.querySelector('.aad-side');
+     if (document.documentElement.dataset.layout === 'ai-apps' && !(side && drawn(side))) for (const n of document.querySelectorAll('#bar,#logo,#wsList,.win,[data-chats],.pane-list,.pane-main,.ch-skel,.ch-row')) if (drawn(n) && __legacy.chrome.length < 50) __legacy.chrome.push({ why, id: n.id, cls: String(n.className), t: Math.round(performance.now()) });
      __legacy.rows = Math.max(__legacy.rows, document.querySelectorAll('.ch-row').length);
      const ph = document.readyState + (document.documentElement.dataset.layout ? '+' + document.documentElement.dataset.layout : '');
      if (__legacy.phases.at(-1) !== ph) __legacy.phases.push(ph);
@@ -172,6 +178,7 @@ async function interaction(p, row) {
     if (u.pathname === '/wizard/v1/apps') return r.fulfill({ json: { apps: realistic ? apps : [] } });
     if (u.pathname === '/wizard/v1/ui-preferences') return r.fulfill({ json: { migrations: { 'launcher-seed-v1': true } } });
     if (u.pathname.startsWith('/wizard/')) return r.fulfill({ json: ownerRead(u.pathname) });
+    if (SLOW[mode]?.test(u.pathname)) await new Promise(res => setTimeout(res, 7000));
     if (u.pathname.startsWith(prefix)) {
      const root = path.resolve(__dirname, '../web'), file = path.resolve(root, u.pathname.slice(prefix.length) || 'index.html');
      if (file.startsWith(root + path.sep) && fs.existsSync(file) && fs.statSync(file).isFile()) return r.fulfill({ path: file });
@@ -188,7 +195,8 @@ async function interaction(p, row) {
     pending.add(job); job.finally(() => pending.delete(job));
    });
    try {
-    await p.goto(origin + prefix + 'desktop.html');
+    if (SLOW[mode]) await (await context.newCDPSession(p)).send('Emulation.setCPUThrottlingRate', { rate: 4 });
+    await p.goto(origin + prefix + 'desktop.html' + (mode === 'deeplink' ? '?session=qa-thread' : ''));
     if (mode === 'reload') {
      await p.waitForFunction(() => localStorage.getItem('wos.desktop-view.v1') === 'ai-apps' && document.documentElement.dataset.aiApps === 'desktop');
      await p.reload();
@@ -213,6 +221,7 @@ async function interaction(p, row) {
        assert.equal(res.layout, 'ai-apps'); assert.equal(res.owner, 'layout'); assert.equal(res.bodyOpacity, '1');
        assert.equal(res.rows, 0, 'Classic list rows were never attached');
        assert.deepEqual(res.hits, [], 'Classic chats list never drawn');
+       assert.deepEqual(res.chrome, [], 'no Classic chrome drawn before the AI apps sidebar');
        if (realistic) {
         await p.locator('.aad-side').waitFor({ state: 'visible' });
         await p.locator('.aad-scroll .aad-row').first().waitFor({ state: 'visible' });

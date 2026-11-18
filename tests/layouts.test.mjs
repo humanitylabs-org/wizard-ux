@@ -80,7 +80,8 @@ test('a layout loads its own css and script only, and Classic removes everything
 test('a stored layout paints before the shell attaches (no flash), then its script loads on attach', async () => {
   const P = page({ layout: 'ai-apps' });
   assert.equal(P.ctx.document.documentElement.dataset.layout, 'ai-apps');
-  assert.equal(P.links.length, 1); assert.equal(P.imported.length, 0, 'no script before the shell is ready');
+  assert.equal(P.links.filter(l => l.tag === 'link').length, 1); assert.equal(P.imported.length, 0, 'no script before the shell is ready');
+  assert.equal(P.links.filter(l => l.tag === 'style').length, 1, 'plus the inline boot veil (issue 1556)');
   P.host.attach(P.adapter); await settle();
   assert.equal(P.imported.length, 1); assert.equal(P.host.layoutState.active, true);
 });
