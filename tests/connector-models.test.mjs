@@ -181,3 +181,15 @@ for (const kind of ['main', 'host-profile', 'container', 'restricted']) {
     }
   });
 }
+
+// Codex P2 on PR 1562: a connector that signs out while the picker opens changes no catalogue row, only the sign-in
+// state; the just-opened menu must still repaint without that connector's models.
+test('the open picker repaints when a connector signs out during its refresh', async () => {
+  const h = powered('main');
+  h.M.load = async () => { h.M.tinfoil = null; return h.M.options; };
+  h.open();
+  assert.deepEqual(names(h.html()), ['GLM', 'Kimi', 'DeepSeek Flash']);
+  await new Promise(r => setTimeout(r, 0));
+  assert.match(h.html(), /No AI connected yet/);
+  assert.doesNotMatch(h.html(), /GLM|Kimi|DeepSeek/);
+});
