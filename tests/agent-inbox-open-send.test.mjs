@@ -70,9 +70,22 @@ test('Send to inbox drops the row at once; a refused move puts it back and throw
   assert.deepEqual(f.emits[0], '', 'gone from the list on the tap frame');
   await assert.rejects(p, e => e.status === 409);
   assert.equal(row.hidden, false, 'refused: back in the list');
-  const g = liveMove({ detail: [{ id: 'wizard_worker_1', title: 'x', hidden: true }], fail: 503 });
+  const kept = { id: 'wizard_worker_1', title: 'x', hidden: true };
+  const g = liveMove({ detail: [kept], fail: 503 });
   await assert.rejects(g.L.inboxMove('open', 'wizard_worker_1'));
   assert.deepEqual(g.L.sessions, [], 'a failed Open takes the row out again');
+  assert.equal(g.L.session('wizard_worker_1'), kept, 'and the thread read by id is still found (back in the detail cache)');
+  assert.equal(kept.hidden, true);
+});
+
+test('Open resolves the main agent\'s thread even when a routed thread shares its id', async () => {
+  for (const agent of ['host-ops', 'box', 'locked']) {
+    const f = liveMove({ detail: [{ id: 'wizard_same', title: 'Routed one', agent }] });
+    f.L.agentSessions[agent] = [{ id: 'wizard_same', title: 'Routed one', agent }];
+    await f.L.inboxMove('open', 'wizard_same', { title: 'Main task' });
+    assert.deepEqual(clone(f.L.sessions.map(x => [x.id, x.title, x.agent || ''])), [['wizard_same', 'Main task', '']], `${agent}: the main task is listed, the routed row untouched`);
+    assert.deepEqual(clone(f.moves.map(m => m[0])), ['open']);
+  }
 });
 
 test('main versus routed: only the main agent\'s threads move (host-profile, container, restricted refused)', async () => {

@@ -1779,17 +1779,20 @@
      * it, Send drops it), then the box is told; a refusal puts the row back and throws. Main agent threads only. */
     async inboxMove(kind, id, opts = {}) {
       if (!this.agentInbox || (kind !== 'open' && kind !== 'send')) throw new Error('Agent inbox unavailable');
-      let s = this.session(id), added = false;
+      // The main agent's own row only: a routed thread may share the id (agentSessions), and is never the one moved.
+      const detail = DETAIL.get(id), fromDetail = !!detail && !otherAgent(detail.agent || '');
+      let s = this.sessions.find(x => x.id === id) || (fromDetail ? detail : null), added = false;
       if (s && otherAgent(this.ownerOf(s))) throw Object.assign(new Error('Only the main agent’s threads move'), { status: 409 });
       const was = s ? !!s.hidden : null;
       if (kind === 'open') {
         if (!s && opts.title) s = normalize({ id, title: opts.title, updated_at: opts.at ? new Date(opts.at).toISOString() : new Date().toISOString(), hidden: false });
-        if (s) { s.hidden = false; if (!this.sessions.includes(s)) { this.sessions.unshift(s); DETAIL.delete(id); added = true; } }
+        if (s) { s.hidden = false; if (!this.sessions.includes(s)) { this.sessions.unshift(s); if (s === detail) DETAIL.delete(id); added = true; } }
       } else if (s) s.hidden = true;
       this.emit();
       try { return await this.agentInbox.move(kind, id, opts); }
       catch (e) {
-        if (s) { s.hidden = was ?? kind === 'open'; if (added) this.sessions = this.sessions.filter(x => x !== s); }
+        // Put it back where it was: the hidden flag, and a thread only read by id back in the detail cache.
+        if (s) { s.hidden = was ?? kind === 'open'; if (added) { this.sessions = this.sessions.filter(x => x !== s); if (s === detail) DETAIL.set(id, s); } }
         this.emit(); throw e;
       }
       finally { setTimeout(() => this.refresh(), 800); }
