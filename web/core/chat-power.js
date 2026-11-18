@@ -147,7 +147,9 @@ window.WosChatPower = function chatPower(A) {
   }
   function position(w, el, nb, o) {
     const c = ch(w.id), sid = w.thread;
-    c.placeOptions = o;
+    // The options name the turns of ONE thread (issue 1581): a resume after a link or Back must never place the next
+    // thread with the previous thread's turns, which saved a fresh place over his reading place.
+    c.placeOptions = o; c.placeFor = sid;
     if (!nb) return false;
     if (c.placeWait) { c.placeWait.disconnect(); c.placeWait = null; }
     if (!onScreen(nb)) {
@@ -235,7 +237,7 @@ window.WosChatPower = function chatPower(A) {
   }
   function resume(nb) {
     const el = nb?.closest('[data-chats]'), w = el && H.win(el.dataset.chats), c = w && ch(w.id);
-    if (c?.placeOptions) position(w, el, nb, c.placeOptions);
+    if (c?.placeOptions && c.placeFor === w.thread) position(w, el, nb, c.placeOptions);
   }
   function reflow(nb) {
     const el = nb?.closest('[data-chats]'), w = el && H.win(el.dataset.chats), c = w && ch(w.id);
