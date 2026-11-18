@@ -168,6 +168,8 @@ public final class UnreadBadges {
         prefs(c).edit().clear().apply();
         android.app.NotificationManager nm = c.getSystemService(android.app.NotificationManager.class);
         if (nm != null) nm.cancel(UnreadNotification.ID);
+        // A placed widget keeps its last RemoteViews: redraw it plain, with the new Wizard's tap target.
+        try { new WidgetBadge(c).apply(0); } catch (RuntimeException e) { Log.w(TAG, "widget reset: " + e); }
     }
 
     @SuppressWarnings("unused") static boolean frontForTests() { return AppState.front(); }
