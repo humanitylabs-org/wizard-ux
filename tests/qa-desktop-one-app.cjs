@@ -86,6 +86,8 @@ const BACK = '.aad-cback:not([hidden]), .aad-oneback:not([hidden])';
         assert.ok(a && a.x <= 1 && a.x + a.w >= W - 1 && a.y + a.h <= d.y + 1, stem + ': the app fills the main area above the bar ' + JSON.stringify(entry.app));
         assert.ok(entry.app.chats && entry.app.all && entry.app.chats.x < entry.app.all.x, stem + ': Chats first, All apps last');
         const o = entry.app.orb; assert.ok(o && Math.abs(o.x + o.w / 2 - W / 2) <= 2 && o.y >= d.y - 2, stem + ': the orb at the bar\'s centre ' + JSON.stringify(o));
+        // ux#1552: sized to the bar (its drawn glow ~1.3x the box stays inside the bar), not the wide window's 60 px
+        assert.ok(o.w <= 46 && o.w >= 40 && o.y + o.h <= d.y + d.h && o.w * 1.3 <= d.h, stem + ': the orb fits the bar ' + JSON.stringify({ o, d }));
         assert.ok(await page.evaluate(() => [...document.querySelectorAll('.aad-vt .aad-vtab')].every(t => { const r = t.getBoundingClientRect(); return r.width > 20 && getComputedStyle(t).visibility !== 'hidden'; })), stem + ': every open app shows in the bar');
         assert.equal(entry.app.modes, null, stem + ': no pane modes');
         // Chats: from the app, one click, painted on the click's own frame

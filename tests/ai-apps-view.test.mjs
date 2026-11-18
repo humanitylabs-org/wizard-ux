@@ -2927,7 +2927,9 @@ test('desktop one app at a time: 1440 unchanged; 900 the bottom app bar, Chats f
     // the bar's CSS: placed by the pane geometry's dock box, the orb at its centre, the stage ending at the bar
     const css = read('web/layouts/ai-apps/desktop.css'), P = 'html[data-shell="desktop"][data-layout="ai-apps"][data-aad-tabs="bar"]';
     assert.ok(css.includes(P + ' .aad-vchats { order: 1; }') && css.includes(P + ' .aad-vall { order: 5; }'), 'Chats first, All apps last');
-    assert.match(css, /\[data-aad-tabs="bar"\] \.aad-orb \{ left: calc\(var\(--aad-pane-dock-x\) \+ var\(--aad-pane-dock-width\) \/ 2 - 30px\)/);
+    assert.match(css, /\[data-aad-tabs="bar"\] \.aad-orb \{ width: var\(--aad-bar-orb\); height: var\(--aad-bar-orb\); left: calc\(var\(--aad-pane-dock-x\) \+ var\(--aad-pane-dock-width\) \/ 2 - var\(--aad-bar-orb\) \/ 2\)/);
+    // ux#1552: the orb sized to the bar (44 px), not the wide window's 60 px
+    assert.ok(css.includes(P + ' { --aad-bar-orb: 44px; }'), 'the bar orb is 44 px');
     // 720: Chats with its list beside the chat
     const m = await run(720);
     assert.equal(m.chat.one, 'chats'); assert.equal(m.chat.side, 'open', '720: the list beside the chat'); assert.ok(!m.chat.back || m.chat.back.hidden, 'no Back: the list is beside it');
