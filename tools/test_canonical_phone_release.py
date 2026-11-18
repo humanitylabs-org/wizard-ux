@@ -68,7 +68,7 @@ class PhoneReleaseTests(unittest.TestCase):
 
     def test_build_tools_37_signer_format(self):
         # apksigner 37 (newest on ubuntu-latest, picked by build_tools()) prints per-scheme signer lines.
-        v37 = 'Number of signers: 1\nV3.0 Signer: certificate DN: CN=Wizard OS, O=AI Wizards\nV3.0 Signer: certificate SHA-256 digest: ' + release.SIGNER + '\n'
+        v37 = 'Number of signers: 1\nV3.0 Signer: certificate DN: CN=release\nV3.0 Signer: certificate SHA-256 digest: ' + release.SIGNER + '\n'
         self.assertEqual(self.metadata(certificates=v37)['signer'], release.SIGNER)
         with self.assertRaises(ValueError):
             self.metadata(certificates=v37.replace(release.SIGNER, '0' * 64))
