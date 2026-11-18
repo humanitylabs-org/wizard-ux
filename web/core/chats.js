@@ -3029,7 +3029,8 @@ window.WizCore.chats = function createChats(H) {
       clearReading(w.id); el.innerHTML = html; c.listHTML = html; c.listRoot = el.firstElementChild;
       // Back from the Android app's document-scrolled thread: leave document scroll now, in this paint, so the list is
       // never drawn (or its place restored) at the thread's page offset first (wizard-ux issue 1564).
-      if (androidDocument && docOwner && (docOwner === el || docOwner.contains(el))) syncDocumentThread();
+      // (typeof: tests run this function cut out of the file, without the document-scroll adapter around it.)
+      if (typeof docOwner !== 'undefined' && docOwner && androidDocument && (docOwner === el || docOwner.contains(el))) syncDocumentThread();
       restoreSheet(el, keepSheet);
       if (restoreListPlace(el.querySelector('.ch-scroll'), place)) c.listPending = null;
       // After a reload the rows come from the snapshot or the first read, which can take a few seconds.

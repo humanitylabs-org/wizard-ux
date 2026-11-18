@@ -72,6 +72,6 @@ test('a list paint over the document-scrolled thread leaves document scroll in t
   const i = src.indexOf('clearReading(w.id); el.innerHTML = html; c.listHTML = html; c.listRoot = el.firstElementChild;');
   assert.ok(i > 0);
   const next = src.slice(i, src.indexOf('if (restoreListPlace(el.querySelector(\'.ch-scroll\'), place)) c.listPending = null;', i));
-  assert.match(next, /if \(androidDocument && docOwner && \(docOwner === el \|\| docOwner\.contains\(el\)\)\) syncDocumentThread\(\);/,
+  assert.match(next, /if \(typeof docOwner !== 'undefined' && docOwner && androidDocument && \(docOwner === el \|\| docOwner\.contains\(el\)\)\) syncDocumentThread\(\);/,
     'the hand-back runs before the list restores its place');
 });
