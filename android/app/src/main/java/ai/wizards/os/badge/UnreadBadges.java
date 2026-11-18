@@ -78,7 +78,7 @@ public final class UnreadBadges {
     /** One pass: fetch, then offer the newest known count to each mechanism. Blocking; call off the main thread. */
     public static void pollNow(Context context) {
         Context c = context.getApplicationContext();
-        if (!wanted(c)) { cancelJob(c); return; }
+        if (!wanted(c)) { forget(c); cancelJob(c); return; }
         int fetched = UnreadSource.fetch(c);
         SharedPreferences p = prefs(c);
         if (fetched >= 0) p.edit().putInt("count", fetched).apply();
@@ -139,6 +139,15 @@ public final class UnreadBadges {
     static void cancelJob(Context c) {
         JobScheduler js = c.getSystemService(JobScheduler.class);
         if (js != null) js.cancel(JOB_ID);
+    }
+
+    /** Nothing left on the home screen: drop the tray count and its launcher dot, and start clean on a new pin. */
+    static void forget(Context c) {
+        SharedPreferences p = prefs(c);
+        if (p.getAll().isEmpty()) return;
+        android.app.NotificationManager nm = c.getSystemService(android.app.NotificationManager.class);
+        if (nm != null) nm.cancel(UnreadNotification.ID);
+        p.edit().clear().apply();
     }
 
     /** Wizard address changed: forget the old box's count. */

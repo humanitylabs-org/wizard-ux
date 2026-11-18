@@ -19,4 +19,8 @@ public class UnreadParseTest {
     @Test public void hugeCountsAreBounded() throws Exception {
         assertEquals(BadgeText.MAX_STORED, UnreadParse.total(new JSONObject("{\"unread_total\":99999999999}")));
     }
+    @Test public void switchOffClearsButOtherFailuresKeepTheBadge() {
+        assertEquals("404: Messenger's unread-count switch is off", 0, UnreadParse.forStatus(404));
+        for (int status : new int[]{0, 401, 403, 423, 500, 502, 503}) assertEquals(status + " is unknown", -1, UnreadParse.forStatus(status));
+    }
 }

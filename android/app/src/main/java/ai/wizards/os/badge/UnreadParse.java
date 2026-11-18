@@ -20,4 +20,11 @@ public final class UnreadParse {
         if (Double.isNaN(d) || d < 0) return -1;
         return BadgeText.clamp((int) Math.min(d, BadgeText.MAX_STORED));
     }
+
+    /**
+     * A failed read. 404 means Messenger answers but its {@code unread-count} switch is off (or the endpoint is
+     * gone): nothing to show, so the badge clears (0). Anything else (offline, 5xx, locked) is unknown (-1) and
+     * leaves the badge as it is.
+     */
+    public static int forStatus(int status) { return status == 404 ? 0 : -1; }
 }

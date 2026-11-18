@@ -11,9 +11,9 @@ import ai.wizards.os.device.AppState;
 import ai.wizards.os.device.Http;
 
 /**
- * Asks the Messenger service for one number. Needs the proposed read-only {@code GET api/unread} on Messenger
- * (see the PR); it returns only a count, never names, ids or text. Until the service has it the answer is 404 and
- * the badge stays as it is.
+ * Asks the Messenger service for one number: read-only {@code GET api/unread} (wizard-messenger#296), which returns
+ * only a count, never names, ids or text. It answers 404 while Messenger's {@code unread-count} switch is off, which
+ * clears the badge; other failures leave it as it is.
  */
 final class UnreadSource {
     private UnreadSource() {}
@@ -28,6 +28,7 @@ final class UnreadSource {
             return UnreadParse.total(reply);
         } catch (Http.Error e) {
             Log.i(UnreadBadges.TAG, "unread unavailable: HTTP " + e.status);
+            return UnreadParse.forStatus(e.status);
         } catch (IOException e) {
             Log.i(UnreadBadges.TAG, "unread unavailable");
         }
