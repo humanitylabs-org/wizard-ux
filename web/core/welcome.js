@@ -27,6 +27,26 @@
     { app: 'wizard-chatgpt', name: 'ChatGPT', note: '', mark: 'chatgpt', slug: 'openai-codex' },
     { app: 'wizard-tinfoil', name: 'Tinfoil', note: 'Private', mark: 'tinfoil', slug: 'wizard-tinfoil' },
   ];
+  /* Private first (wizard-ux issue 1549, wizard-os DECISIONS #115, switch wizard/private-first-setup, off by default):
+   * Tinfoil leads, recommended; signing in to it makes the box's private agent (the Agent Service's part). Claude and
+   * ChatGPT follow as optional extras that add a second agent. The Agent Service answers whether it is on
+   * (GET /wizard/v1/private-first: its env WIZARD_PRIVATE_FIRST beats the Look file, which a fresh box does not have
+   * yet); with no answer (an older Agent Service) the shell's own switch decides. Off: this Welcome is unchanged. */
+  const PF_SWITCH = 'wizard/private-first-setup', PF_STATE = '/wizard/v1/private-first', PRIVATE = 'wizard-tinfoil';
+  let pf = null, privateReady = false;
+  const pfTweak = () => { try { return String(document.documentElement.getAttribute('data-tweaks') || '').split(' ').includes(PF_SWITCH); } catch (e) { return false; } };
+  const privateFirst = () => (pf && typeof pf.on === 'boolean' ? pf.on : pfTweak());
+  async function pfRead() {
+    try {
+      const r = await fetch(PF_STATE, { credentials: 'same-origin', cache: 'no-store', signal: tsig(4000) });
+      const j = r.ok ? await r.json() : null;
+      pf = j && typeof j === 'object' ? j : null;
+    } catch (e) { pf = null; }
+    return pf;
+  }
+  // Switch on: Tinfoil first, then the two extras; off: PROVIDERS as listed.
+  const providers = () => (privateFirst() ? PROVIDERS.filter(p => p.app === PRIVATE).concat(PROVIDERS.filter(p => p.app !== PRIVATE)) : PROVIDERS);
+  const extraNote = p => `Adds a second agent that uses ${p.name}. Your private agent and its apps stay private.`;
   const brand = () => `<div class="wl-brand"><img src="brand/wizard-mark-white.png" alt=""><span>${OS()}</span></div>`;
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   // Product name: WizardOS, always one word (James, 8 Nov 2026; wizard-os#436).
@@ -178,11 +198,28 @@
       const p = PROVIDERS.find(x => x.app === provider), a = H.app(provider);
       return `${brand()}${dots()}<header class="wl-head wl-row"><button type="button" class="wl-back" data-wl="back" aria-label="Back">‹</button><h2 tabindex="-1">Sign in to ${esc(p.name)}</h2></header>
         <div class="wl-frame"><iframe src="${esc(signinUrl(a.url))}"${sbx(signinUrl(a.url), provider)} title="${esc(p.name)} sign-in"></iframe></div>
-        <p class="wl-status${connected ? ' ok' : ''}" role="status">${connected ? `${esc(p.name)} is connected.` : 'This continues by itself once you are signed in.'}</p>`;
+        <p class="wl-status${connected ? ' ok' : ''}" role="status">${connected ? `${esc(p.name)} is connected.` : `${privateFirst() && p.app !== PRIVATE ? esc(extraNote(p)) + ' ' : ''}This continues by itself once you are signed in.`}</p>`;
     }
+    if (privateFirst()) return paintPrivateAI();
     return `${brand()}${dots()}<header class="wl-head"><h2 tabindex="-1">Connect your AI</h2><p>${esc(agent())} thinks with your own AI subscription. Sign in once.</p></header>
       <div class="wl-choices">${PROVIDERS.map(p => `<button type="button" class="wl-choice" data-wl="provider" data-app="${esc(p.app)}"${installing ? ' disabled' : ''}><span class="wl-mark"><img src="brand/apps/${esc(p.mark)}.svg" alt=""></span><span class="wl-name">${esc(p.name)}</span>${installing === p.app ? '<span class="wl-sub">Installing…</span>' : p.note ? `<span class="wl-tag${p.note === 'Recommended' ? '' : ' soft'}">${esc(p.note)}</span>` : ''}</button>`).join('')}</div>
       ${installError ? `<p class="wl-status err" role="alert">${esc(installError)}</p>` : ''}`;
+  }
+
+  // Private first's Connect your AI: Tinfoil, then "Optional: a second agent" with Claude and ChatGPT. Once the private
+  // agent is ready the card stays here, so the owner can add a second agent or go on.
+  function paintPrivateAI() {
+    const choice = (p, lead) => {
+      const done = lead && privateReady, tag = done ? '<span class="wl-tag soft">Connected</span>' : installing === p.app ? '<span class="wl-sub">Installing…</span>'
+        : lead ? '<span class="wl-tag">Recommended</span>' : '';
+      return `<button type="button" class="wl-choice${lead ? '' : ' wl-extra'}" data-wl="provider" data-app="${esc(p.app)}"${installing || done ? ' disabled' : ''}><span class="wl-mark"><img src="brand/apps/${esc(p.mark)}.svg" alt=""></span><span class="wl-name">${esc(p.name)}${lead ? '<span class="wl-sub">Private</span>' : `<span class="wl-sub">${esc(extraNote(p))}</span>`}</span>${tag}</button>`;
+    };
+    const [lead, ...extras] = providers();
+    return `${brand()}${dots()}<header class="wl-head"><h2 tabindex="-1">Connect your AI</h2><p>${privateReady ? `Your private agent is ready. You can add a second agent now, or later.` : `${esc(agent())} thinks privately with Tinfoil: your chats and apps stay private. Sign in once.`}</p></header>
+      <div class="wl-choices">${choice(lead, true)}</div>
+      <p class="wl-extras-h">Optional: a second agent</p>
+      <div class="wl-choices wl-extras">${extras.map(p => choice(p, false)).join('')}</div>
+      ${installError ? `<p class="wl-status err" role="alert">${esc(installError)}</p>` : ''}${privateReady ? '<button type="button" class="wl-primary" data-wl="next">Continue</button>' : ''}`;
   }
 
   // The same preview cards as Settings › Look (core/settings.js skinCard + core/skins.css .skp): every color, any author.
@@ -248,10 +285,15 @@
     if (!el || step !== 'ai' || !provider) return; // only while signing in to a chosen provider
     const mine = el, chosen = provider; // a reply for an earlier choice (Back, then another provider) is ignored
     pollT = setTimeout(async () => {
-      const ok = await aiReady(PROVIDERS.find(x => x.app === chosen)?.slug);
+      let ok = await aiReady(PROVIDERS.find(x => x.app === chosen)?.slug);
+      // Private first: Tinfoil counts once the Agent Service has the private agent, wherever the provider sits.
+      const priv = privateFirst() && chosen === PRIVATE;
+      if (ok !== true && priv && el === mine && (await pfRead())?.private_agent) ok = true;
       if (!el || el !== mine || step !== 'ai' || provider !== chosen) return;
       if (ok === true) {
         connected = true; write('ai'); log('connected'); paint(false);
+        // The private agent is ready: back to Connect your AI, where a second agent is optional and Continue goes on.
+        if (priv) { privateReady = true; setTimeout(() => { if (el === mine && step === 'ai' && provider === chosen) { provider = null; paint(); } }, 1200); return; }
 
         setTimeout(() => { if (el && step === 'ai' && provider === chosen) { step = 'look'; provider = null; paint(); } }, 1200); // Back cancels it
         return;
@@ -264,6 +306,7 @@
     if (el) return;
     asked = unnamed(); after = at; saving = false; nameError = ''; prefill = agent();
     step = asked ? 'name' : at; provider = null; connected = false; sending = false; installing = ''; installError = ''; sendError = ''; bringOpen = false;
+    privateReady = !!pf?.private_agent && privateFirst();
     el = document.createElement('div');
     el.className = 'wl-overlay'; el.id = 'wosWelcome';
     el.innerHTML = '<div class="wl-card" role="dialog" aria-modal="true" aria-label="Welcome"></div>';
@@ -281,6 +324,8 @@
       e.stopPropagation(); // the shell's own shortcuts wait until the welcome is done (desktop onKey also stands down)
     });
     paint(); poll(); log('open:' + at + (asked ? ':name' : ''));
+    // Opened from Settings or the Setup tile: read the private first answer if boot did not, then repaint Connect your AI.
+    if (!pf && at === 'ai') { const mine = el; pfRead().then(s => { if (!s || el !== mine) return; privateReady = !!s.private_agent && privateFirst(); if (step === 'ai' && !provider) paint(false); }); }
   }
 
   function close() {
@@ -349,12 +394,14 @@
     setTimeout(async () => {
       if (seenPending()) markSeen();
       if (h.deeplinked?.()) { log('deeplink'); return; }
-      const [ok, setup] = await Promise.all([aiReady(), setupState(), Promise.race([Promise.resolve(window.WizCore?.appsLoaded?.()).catch(() => {}), new Promise(r => setTimeout(r, 5000))]),
+      let [ok, setup] = await Promise.all([aiReady(), setupState(), Promise.race([Promise.resolve(window.WizCore?.appsLoaded?.()).catch(() => {}), new Promise(r => setTimeout(r, 5000))]),
         Promise.race([Promise.resolve(window.WizConfig?.ready).catch(() => {}), new Promise(r => setTimeout(r, 5000))])]); // never wait forever on the app list or the settings
       const state = read();
       log('boot:' + ok + ':' + state + ':' + (setup?.first_run === true));
       try { removeEventListener('pointerdown', act, true); removeEventListener('keydown', act, true); } catch (e) {}
       if ((ok === false || ok === true) && (acted || h.busy?.() || h.deeplinked?.())) { log('boot:busy'); return; }
+      // Private first: a private agent already made counts as connected (its provider may not be the main agent's).
+      if (ok === false && (await pfRead())?.private_agent && privateFirst()) { ok = true; log('boot:private'); }
       if (ok === false) return open('ai');
       if (ok === true && state !== 'done' && (state === 'ai' || setup?.first_run === true)) return open('look');
     }, 0);
