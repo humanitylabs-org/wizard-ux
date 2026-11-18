@@ -36,7 +36,8 @@
     "wizard/app-panel-left",
     "wizard/assist-attach",
     "wizard/bar-scrub",
-    "wizard/app-windows"
+    "wizard/app-windows",
+    "wizard/private-first-setup"
   ],
   "defaults": [
     "wizard/unified-inbox",

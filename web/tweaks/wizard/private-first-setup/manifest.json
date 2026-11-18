@@ -1,0 +1,15 @@
+{
+  "id": "wizard/private-first-setup",
+  "name": "Private first setup",
+  "version": "1.0.0",
+  "author": "wizard",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout"
+  ],
+  "issues": [
+    "humanitylabs-org/wizard-agent-service#545",
+    "humanitylabs-org/wizard-os#676"
+  ],
+  "description": "New installs start private: connecting Tinfoil first makes one private agent the box's agent, with every app and every app's work going to it. Connecting Claude or ChatGPT adds a separate standard agent that starts with no apps; your private agent's model and apps never change. Read by the Agent Service (wizard-agent-service issue 545); a box set up before the switch keeps its agents as they are."
+}
