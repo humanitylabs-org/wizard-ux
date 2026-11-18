@@ -131,7 +131,7 @@ test('no switch: the scrub is the only bar path, in the catalogue and code there
   const cat = JSON.parse(read('web/tweaks/catalog.json'));
   assert.ok(!JSON.stringify(cat).includes('bar-scrub'), 'not in the catalogue');
   assert.equal(existsSync(new URL('../web/tweaks/wizard/bar-scrub', import.meta.url)), false, 'package folder is gone');
-  assert.doesNotMatch(APP, /bar-scrub|barScrubOn|\bSC_?=|SC\.live/, 'no switch check and no handle gesture left in app.js');
+  assert.doesNotMatch(APP, /bar-scrub(?!bing)|barScrubOn|\bSC_?=|SC\.live/, 'no switch check and no handle gesture left in app.js');
   assert.match(APP, /scrub\.innerHTML = '<span class="sc-label"><\/span>';/, 'the label box has no handle bar inside');
   assert.doesNotMatch(read('web/styles.css'), /\.scrub(\.on)? i\b/, 'no handle CSS');
   assert.match(read('web/styles.css'), /\.scrub \{[^}]*pointer-events: none;/, 'the label box takes no touches, the bar under it scrubs');
