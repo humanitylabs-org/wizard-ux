@@ -1,6 +1,7 @@
 import copy
 import os
 from pathlib import Path
+import re
 import struct
 import tempfile
 import unittest
@@ -64,6 +65,17 @@ class PhoneReleaseTests(unittest.TestCase):
     def test_multiple_signers_rejected(self):
         with self.assertRaises(ValueError):
             self.metadata(certificates=self.cert + self.cert.replace('#1', '#2'))
+
+    def test_build_tools_37_signer_format(self):
+        # apksigner 37 (newest on ubuntu-latest, picked by build_tools()) prints per-scheme signer lines.
+        v37 = 'Number of signers: 1\nV3.0 Signer: certificate DN: CN=release\nV3.0 Signer: certificate SHA-256 digest: ' + release.SIGNER + '\n'
+        self.assertEqual(self.metadata(certificates=v37)['signer'], release.SIGNER)
+        with self.assertRaises(ValueError):
+            self.metadata(certificates=v37.replace(release.SIGNER, '0' * 64))
+        with self.assertRaises(ValueError):
+            self.metadata(certificates=v37 + v37.replace('V3.0', 'V3.1').replace(release.SIGNER, 'f' * 64))
+        with self.assertRaises(ValueError):
+            self.metadata(certificates=v37 + self.cert)
 
     def test_missing_signer_rejected(self):
         with self.assertRaises(ValueError):
@@ -213,13 +225,53 @@ class PhoneReleaseTests(unittest.TestCase):
         with patch.dict(os.environ, {'GITHUB_ACTIONS': ''}), self.assertRaisesRegex(ValueError, 'GitHub Actions'):
             release.ci(args)
 
-    def test_ci_workflow_is_off_until_switched_on(self):
+    @staticmethod
+    def ci_workflow_jobs():
         wf = (Path(release.__file__).parent.parent / '.github/workflows/phone-release.yml').read_text()
-        self.assertIn("if: vars.WOS_PHONE_CI_RELEASE == 'on' && github.event_name != 'pull_request' && github.ref == 'refs/heads/main'", wf)
-        self.assertIn('tools/phone_release.py ci --publish', wf)
-        self.assertIn('rm -f "$RUNNER_TEMP/wos-release.keystore"', wf)
-        self.assertEqual(wf.count('secrets.'), 8, 'signing secrets only in the main-only release job')
-        self.assertLess(wf.index('  release:'), wf.index('secrets.'))
+        body = wf.split('\njobs:\n', 1)[1]
+        parts = re.split(r'^  ([a-z]+):\n', body, flags=re.M)
+        return wf, dict(zip(parts[1::2], parts[2::2]))
+
+    def test_ci_workflow_is_off_until_switched_on(self):
+        wf, jobs = self.ci_workflow_jobs()
+        self.assertEqual(list(jobs), ['regression', 'build', 'sign', 'publish'])
+        gate = "vars.WOS_PHONE_CI_RELEASE == 'on' && github.event_name != 'pull_request' && github.ref == 'refs/heads/main'"
+        for name in ('sign', 'publish'):
+            self.assertIn('    if: ' + gate + " && needs.build.outputs.new == 'true'", jobs[name])
+        build_if = re.search(r'^    if: (.*)$', jobs['build'], re.M).group(1)
+        self.assertNotIn('pull_request', build_if, 'pull requests run only the unit fixtures')
+        self.assertEqual(build_if.count("vars.WOS_PHONE_CI_RELEASE == 'on'"), 1, 'push builds only once switched on')
+        self.assertIn('tools/phone_release.py ci --publish', jobs['publish'])
+        self.assertIn('rm -f "$RUNNER_TEMP/wos-release.keystore"', jobs['sign'])
+
+    def test_ci_signing_key_reaches_only_the_sign_job(self):
+        # ux#1551 / wizard-os#680: Gradle and tools/ are project code, so they never share a job with the key.
+        wf, jobs = self.ci_workflow_jobs()
+        self.assertEqual(wf.count('secrets.'), 4)
+        self.assertEqual(jobs['sign'].count('secrets.'), 4)
+        self.assertEqual(wf.count('environment:'), 1)
+        self.assertIn('    environment: phone-release\n', jobs['sign'])
+        sign = jobs['sign']
+        for banned in ('actions/checkout', 'setup-java', 'setup-gradle', 'gradlew', 'python', 'github.token', 'GH_TOKEN'):
+            self.assertNotIn(banned, sign, banned)
+        self.assertNotRegex(sign, r'(?<![-\w])tools/', 'no repository scripts in the sign job')
+        uses = re.findall(r'uses: (\S+)', sign)
+        self.assertEqual({u.split('@')[0] for u in uses}, {'actions/download-artifact', 'actions/upload-artifact'})
+        for u in uses:
+            self.assertRegex(u, r'@[0-9a-f]{40}$', 'third-party actions in the sign job are pinned by full SHA')
+        self.assertIn('    permissions: {}\n', sign)
+        self.assertIn('apksigner" sign', sign)
+        self.assertNotIn('WOS_KEYSTORE', jobs['build'].replace('test -z "${WOS_KEYSTORE-}"', '').replace('WOS_KEYSTORE must not be set', '').replace('No WOS_KEYSTORE here', ''))
+        self.assertIn('app-release-unsigned.apk', jobs['build'])
+        self.assertIn('    needs: [build, sign]\n', jobs['publish'])
+        self.assertIn('contents: write', jobs['publish'])
+        self.assertIn('--apk "$RUNNER_TEMP/signed/app-release.apk"', jobs['publish'])
+
+    def test_codeowners_cover_the_release_pipeline(self):
+        owners = (Path(release.__file__).parent.parent / '.github/CODEOWNERS').read_text()
+        rules = dict(line.split(None, 1) for line in owners.splitlines() if line.strip() and not line.startswith('#'))
+        for path in ('/.github/**', '/tools/phone_release.py', '/.github/CODEOWNERS'):
+            self.assertEqual(rules.get(path), '@jdefleur', path)
 
     def test_signing_env_cannot_undo_isolated_gradle_home(self):
         import subprocess

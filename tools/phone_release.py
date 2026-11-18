@@ -79,7 +79,8 @@ def metadata(apk, badging, certificates, fields, commit, notes, minimum):
     app, code, version = match.groups()
     require(app == APP and int(code) > 0, 'Wrong application or version code')
     require(re.fullmatch(r'\d+\.\d+\.\d+', version), 'Invalid release version')
-    signers = re.findall(r'^Signer #\d+ certificate SHA-256 digest:\s*([a-fA-F0-9:]+)\s*$', certificates, re.M)
+    # build-tools <= 36 print "Signer #1 certificate ...", 37+ print "V3.0 Signer: certificate ..." (one line per scheme signer).
+    signers = re.findall(r'^(?:Signer #\d+|V\d+(?:\.\d+)? Signer(?: #\d+)?:) certificate SHA-256 digest:\s*([a-fA-F0-9:]+)\s*$', certificates, re.M)
     require(len(signers) == 1 and signers[0].replace(':', '').lower() == SIGNER, 'Wrong or ambiguous APK signer')
     require(fields.get('ORIGIN') == '' and fields.get('HOME_URL') == '' and fields.get('PHOTOS_SERVER') == '', 'Artifact contains a default origin or private server')
     require(fields.get('APPLICATION_ID') == APP and fields.get('VERSION_CODE') == int(code) and fields.get('VERSION_NAME') == version and fields.get('DEBUG') is False, 'BuildConfig disagrees with release metadata')

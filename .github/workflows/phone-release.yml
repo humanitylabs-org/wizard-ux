@@ -1,11 +1,20 @@
 name: Phone release
-# Builds the phone app from main, signs it with the WizardOS release key on a Linux runner, audits it with
-# tools/phone_release.py (signer 3bf74d0b…d1fd, no owner address, version agreement) and publishes the shared
-# android-v<version> release that boxes mirror (ux#1400). It runs only when versionName on main has no release yet.
+# Builds the phone app from main, signs it with the WizardOS release key, audits it with tools/phone_release.py
+# (signer 3bf74d0b…d1fd, no owner address, version agreement) and publishes the shared android-v<version> release
+# that boxes mirror (ux#1400). It runs only when versionName on main has no release yet.
 #
-# Off by default: nothing happens until an admin sets the repository variable WOS_PHONE_CI_RELEASE=on and adds
-# the secrets WOS_KEYSTORE_BASE64, WOS_STORE_PASSWORD, WOS_KEY_ALIAS and WOS_KEY_PASSWORD
-# (docs/phone-canonical-release.md, "Release from CI").
+# Three jobs, so project code never runs next to the signing key (ux#1551, design and review on wizard-os#680):
+#   build   - Gradle builds the UNSIGNED release APK. No secrets, no environment.
+#   sign    - the only job in the `phone-release` environment (main only) and the only job that reads a secret.
+#             It runs no project code: no checkout, no Gradle, no tools/ scripts. Pinned artifact actions plus
+#             the runner's own zipalign/apksigner in inline shell.
+#   publish - checks out main and runs tools/phone_release.py ci --publish on the signed APK with only
+#             github.token. phone_release.py still refuses any signer other than 3bf74d0b…d1fd.
+#
+# Off by default: sign and publish are skipped until an admin sets the repository variable
+# WOS_PHONE_CI_RELEASE=on and puts WOS_KEYSTORE_BASE64, WOS_STORE_PASSWORD, WOS_KEY_ALIAS and WOS_KEY_PASSWORD
+# in the phone-release environment (docs/phone-canonical-release.md, "Release from CI").
+# Run workflow by hand on any branch to build the unsigned APK only (sign and publish need main and the switch).
 on:
   pull_request:
     paths: ['tools/phone_release.py', 'tools/apk_build_config.py', 'tools/test_canonical_phone_release.py', '.github/workflows/phone-release.yml']
@@ -20,82 +29,150 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: phone-release
+  group: phone-release-${{ github.ref }}
   cancel-in-progress: false
 jobs:
   regression:
-    # Unit fixtures only: no SDK, no secrets, no publishing.
+    # Unit fixtures only: no SDK, no secrets, no publishing. Pull requests run only this job.
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - name: Phone release metadata and publish regressions
         run: python3 -m unittest discover -s tools -p test_canonical_phone_release.py -v
-  release:
+
+  build:
+    # Unsigned release APK. Runs project code (Gradle), so it never sees a secret or the environment.
     needs: regression
-    if: vars.WOS_PHONE_CI_RELEASE == 'on' && github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'workflow_dispatch' || (vars.WOS_PHONE_CI_RELEASE == 'on' && github.event_name == 'push' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
-      contents: write
+      contents: read
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      new: ${{ steps.version.outputs.new }}
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
-      - uses: actions/checkout@v4
-      - name: Version on main, and whether it is already released
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Version on this ref, and whether it is already released
         id: version
         run: |
           v=$(sed -n "s/^ *versionName '\([0-9][0-9.]*\)'.*/\1/p" android/app/build.gradle | head -1)
           echo "$v" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' || { echo "::error::No versionName in android/app/build.gradle"; exit 1; }
           echo "version=$v" >> "$GITHUB_OUTPUT"
-          if draft=$(gh release view "android-v$v" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft 2>/dev/null); then
-            if [ "$draft" = true ]; then
-              echo "::error::android-v$v is a draft (an earlier run failed its readback, or a Thales draft): check and publish or delete it by hand"; exit 1
-            fi
+          # A read-only token sees published releases; publish re-checks for drafts with its write token.
+          if gh release view "android-v$v" --repo "$GITHUB_REPOSITORY" --json tagName >/dev/null 2>&1; then
             echo "android-v$v already exists: nothing to release." | tee -a "$GITHUB_STEP_SUMMARY"
             echo "new=false" >> "$GITHUB_OUTPUT"
           else
             echo "new=true" >> "$GITHUB_OUTPUT"
           fi
-      - name: Signing secrets present
-        if: steps.version.outputs.new == 'true'
-        env:
-          KS: ${{ secrets.WOS_KEYSTORE_BASE64 }}
-          SP: ${{ secrets.WOS_STORE_PASSWORD }}
-          KA: ${{ secrets.WOS_KEY_ALIAS }}
-          KP: ${{ secrets.WOS_KEY_PASSWORD }}
-        run: |
-          [ -n "$KS" ] && [ -n "$SP" ] && [ -n "$KA" ] && [ -n "$KP" ] || {
-            echo "::error::WOS_PHONE_CI_RELEASE is on but a signing secret is missing (WOS_KEYSTORE_BASE64, WOS_STORE_PASSWORD, WOS_KEY_ALIAS, WOS_KEY_PASSWORD)"; exit 1; }
       - uses: actions/setup-java@v4
-        if: steps.version.outputs.new == 'true'
+        if: steps.version.outputs.new == 'true' || github.event_name == 'workflow_dispatch'
         with:
           distribution: temurin
           java-version: '17'
       - uses: gradle/actions/setup-gradle@v4
-        if: steps.version.outputs.new == 'true'
+        if: steps.version.outputs.new == 'true' || github.event_name == 'workflow_dispatch'
         with:
           cache-read-only: true
-      - name: Build and sign the release APK
-        if: steps.version.outputs.new == 'true'
+      - name: Build the unsigned release APK
+        if: steps.version.outputs.new == 'true' || github.event_name == 'workflow_dispatch'
         working-directory: android
+        run: |
+          # No WOS_KEYSTORE here, so Gradle leaves the release APK unsigned (android/app/build.gradle).
+          test -z "${WOS_KEYSTORE-}" || { echo "::error::WOS_KEYSTORE must not be set in the build job"; exit 1; }
+          ./gradlew --no-daemon --stacktrace :app:assembleRelease
+          apk=app/build/outputs/apk/release/app-release-unsigned.apk
+          test -f "$apk" || { echo "::error::Expected the unsigned APK at android/$apk"; ls -la app/build/outputs/apk/release || true; exit 1; }
+          echo "Unsigned release APK: $(stat -c %s "$apk") bytes, sha256 $(sha256sum "$apk" | cut -d' ' -f1)." >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: steps.version.outputs.new == 'true' || github.event_name == 'workflow_dispatch'
+        with:
+          name: phone-unsigned
+          path: android/app/build/outputs/apk/release/app-release-unsigned.apk
+          if-no-files-found: error
+          retention-days: 3
+
+  sign:
+    # The ONLY job that names the environment or reads a secret. No checkout and no project code runs here:
+    # pinned artifact actions and the runner's preinstalled build-tools only.
+    needs: build
+    if: vars.WOS_PHONE_CI_RELEASE == 'on' && github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && needs.build.outputs.new == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: phone-release
+    permissions: {}
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: phone-unsigned
+          path: ${{ runner.temp }}/unsigned
+      - name: Sign with apksigner
         env:
           KS: ${{ secrets.WOS_KEYSTORE_BASE64 }}
           WOS_STORE_PASSWORD: ${{ secrets.WOS_STORE_PASSWORD }}
           WOS_KEY_ALIAS: ${{ secrets.WOS_KEY_ALIAS }}
           WOS_KEY_PASSWORD: ${{ secrets.WOS_KEY_PASSWORD }}
         run: |
+          set -euo pipefail
           umask 077
-          export WOS_KEYSTORE="$RUNNER_TEMP/wos-release.keystore"
-          printf '%s' "$KS" | base64 -d > "$WOS_KEYSTORE"
-          ./gradlew --no-daemon --stacktrace :app:assembleRelease
-          rm -f "$WOS_KEYSTORE"
-      - name: Audit and publish android-v${{ steps.version.outputs.version }}
-        if: steps.version.outputs.new == 'true'
+          [ -n "$KS" ] && [ -n "$WOS_STORE_PASSWORD" ] && [ -n "$WOS_KEY_ALIAS" ] && [ -n "$WOS_KEY_PASSWORD" ] || {
+            echo "::error::WOS_PHONE_CI_RELEASE is on but a signing secret is missing from the phone-release environment (WOS_KEYSTORE_BASE64, WOS_STORE_PASSWORD, WOS_KEY_ALIAS, WOS_KEY_PASSWORD)"; exit 1; }
+          sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          bt=$(for d in "$sdk"/build-tools/*; do if [ -x "$d/apksigner" ] && [ -x "$d/zipalign" ]; then echo "$d"; fi; done | sort -V | tail -1)
+          [ -n "$bt" ] || { echo "::error::No runner build-tools with apksigner and zipalign under $sdk"; exit 1; }
+          in="$RUNNER_TEMP/unsigned/app-release-unsigned.apk"
+          aligned="$RUNNER_TEMP/aligned.apk"
+          mkdir -p "$RUNNER_TEMP/signed"
+          out="$RUNNER_TEMP/signed/app-release.apk"
+          if "$bt/zipalign" -c -P 16 4 "$in" >/dev/null; then cp "$in" "$aligned"; else "$bt/zipalign" -P 16 -f 4 "$in" "$aligned"; fi
+          printf '%s' "$KS" | base64 -d > "$RUNNER_TEMP/wos-release.keystore"
+          "$bt/apksigner" sign --ks "$RUNNER_TEMP/wos-release.keystore" --ks-key-alias "$WOS_KEY_ALIAS" \
+            --ks-pass env:WOS_STORE_PASSWORD --key-pass env:WOS_KEY_PASSWORD \
+            --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true --v4-signing-enabled false \
+            --out "$out" "$aligned"
+          rm -f "$RUNNER_TEMP/wos-release.keystore"
+          "$bt/apksigner" verify --print-certs "$out" | grep -E 'certificate SHA-256 digest:' >> "$GITHUB_STEP_SUMMARY"
+      - name: Remove the keystore
+        if: always()
+        run: rm -f "$RUNNER_TEMP/wos-release.keystore"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: phone-signed
+          path: ${{ runner.temp }}/signed/app-release.apk
+          if-no-files-found: error
+          retention-days: 3
+
+  publish:
+    # Project code (tools/phone_release.py) with github.token only: no environment, no signing secret.
+    needs: [build, sign]
+    if: vars.WOS_PHONE_CI_RELEASE == 'on' && github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && needs.build.outputs.new == 'true' && needs.sign.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: phone-signed
+          path: ${{ runner.temp }}/signed
+      - name: Audit and publish android-v${{ needs.build.outputs.version }}
         env:
-          V: ${{ steps.version.outputs.version }}
+          V: ${{ needs.build.outputs.version }}
           NOTES: ${{ github.event.inputs.notes }}
         run: |
+          if draft=$(gh release view "android-v$V" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft 2>/dev/null); then
+            if [ "$draft" = true ]; then
+              echo "::error::android-v$V is a draft (an earlier run failed its readback, or a Thales draft): check and publish or delete it by hand"; exit 1
+            fi
+            echo "::error::android-v$V appeared while this run was building: not overwriting it"; exit 1
+          fi
           prev="$(gh release list --repo "$GITHUB_REPOSITORY" --limit 100 --exclude-drafts --json tagName --jq '[.[].tagName | select(test("^android-v[0-9]+[.][0-9]+[.][0-9]+$"))][0] // ""')"
           extra=()
           if [ -n "$prev" ]; then
@@ -103,11 +180,8 @@ jobs:
             extra=(--previous-phone "$RUNNER_TEMP/previous/phone.json")
           fi
           python3 tools/phone_release.py ci --publish \
-            --apk android/app/build/outputs/apk/release/app-release.apk \
+            --apk "$RUNNER_TEMP/signed/app-release.apk" \
             --commit "$GITHUB_SHA" --output "$RUNNER_TEMP/phone" \
             --notes "${NOTES:-Shared WizardOS phone release $V, built and signed from main; no owner address is built in.}" \
             "${extra[@]}"
           echo "Published android-v$V (signer 3bf74d0b…d1fd)." >> "$GITHUB_STEP_SUMMARY"
-      - name: Remove the keystore
-        if: always()
-        run: rm -f "$RUNNER_TEMP/wos-release.keystore"
