@@ -86,7 +86,10 @@ public final class UnreadBadges {
         Context c = context.getApplicationContext();
         if (!wanted(c)) { forget(c); cancelJob(c); return; }
         scheduleJob(c); // a target pinned after the app started still gets the background backstop (no-op when pending)
-        int fetched = UnreadSource.fetch(c);
+        String origin = AppState.origin(c);
+        int fetched = UnreadSource.fetch(origin);
+        // The Wizard address changed during the fetch (reset() ran): this count belongs to the old box, drop it.
+        if (!java.util.Objects.equals(origin, AppState.origin(c))) return;
         SharedPreferences p = prefs(c);
         if (fetched >= 0) p.edit().putInt("count", fetched).apply();
         // A failed fetch (offline, endpoint absent) leaves the badge alone but still retries earlier deferrals.

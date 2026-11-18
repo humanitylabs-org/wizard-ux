@@ -1,13 +1,11 @@
 package ai.wizards.os.badge;
 
-import android.content.Context;
 import android.util.Log;
 
 import org.json.JSONObject;
 
 import java.io.IOException;
 
-import ai.wizards.os.device.AppState;
 import ai.wizards.os.device.Http;
 
 /**
@@ -20,8 +18,7 @@ final class UnreadSource {
     static final String PATH = "/apps/messenger/api/unread";
 
     /** @return the unread total, or -1 when it could not be read. Network: off the main thread. */
-    static int fetch(Context c) {
-        String origin = AppState.origin(c);
+    static int fetch(String origin) {
         if (origin == null || origin.isEmpty()) return -1;
         try {
             JSONObject reply = Http.json("GET", origin + PATH, origin, null, null);
