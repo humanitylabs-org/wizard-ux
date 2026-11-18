@@ -66,6 +66,17 @@ class PhoneReleaseTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.metadata(certificates=self.cert + self.cert.replace('#1', '#2'))
 
+    def test_build_tools_37_signer_format(self):
+        # apksigner 37 (newest on ubuntu-latest, picked by build_tools()) prints per-scheme signer lines.
+        v37 = 'Number of signers: 1\nV3.0 Signer: certificate DN: CN=Wizard OS, O=AI Wizards\nV3.0 Signer: certificate SHA-256 digest: ' + release.SIGNER + '\n'
+        self.assertEqual(self.metadata(certificates=v37)['signer'], release.SIGNER)
+        with self.assertRaises(ValueError):
+            self.metadata(certificates=v37.replace(release.SIGNER, '0' * 64))
+        with self.assertRaises(ValueError):
+            self.metadata(certificates=v37 + v37.replace('V3.0', 'V3.1').replace(release.SIGNER, 'f' * 64))
+        with self.assertRaises(ValueError):
+            self.metadata(certificates=v37 + self.cert)
+
     def test_missing_signer_rejected(self):
         with self.assertRaises(ValueError):
             self.metadata(certificates='DOES NOT VERIFY')

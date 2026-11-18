@@ -132,10 +132,10 @@ jobs:
           printf '%s' "$KS" | base64 -d > "$RUNNER_TEMP/wos-release.keystore"
           "$bt/apksigner" sign --ks "$RUNNER_TEMP/wos-release.keystore" --ks-key-alias "$WOS_KEY_ALIAS" \
             --ks-pass env:WOS_STORE_PASSWORD --key-pass env:WOS_KEY_PASSWORD \
-            --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true \
+            --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true --v4-signing-enabled false \
             --out "$out" "$aligned"
           rm -f "$RUNNER_TEMP/wos-release.keystore"
-          "$bt/apksigner" verify --print-certs "$out" | grep -E '^Signer #1 certificate SHA-256 digest:' >> "$GITHUB_STEP_SUMMARY"
+          "$bt/apksigner" verify --print-certs "$out" | grep -E 'certificate SHA-256 digest:' >> "$GITHUB_STEP_SUMMARY"
       - name: Remove the keystore
         if: always()
         run: rm -f "$RUNNER_TEMP/wos-release.keystore"
