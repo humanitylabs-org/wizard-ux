@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 const source = readFileSync(new URL('../web/core/chat-power.js', import.meta.url), 'utf8');
-function harness() {
+function harness(kind = 'main') {
   const state = {}, w = { id: 'win', thread: 'thread-a' }, storage = {};
   let top = 0;
   const sc = { scrollHeight: 4000, clientHeight: 800, get scrollTop() { return top; }, set scrollTop(n) { top = n; } };
@@ -23,7 +23,9 @@ function harness() {
   Object.defineProperties(nb, { scrollTop: { get: () => sc.scrollTop, set: n => { sc.scrollTop = n; } }, scrollHeight: { get: () => sc.scrollHeight }, clientHeight: { get: () => sc.clientHeight } });
   const ctx = { console, Date, setTimeout: () => 1, clearTimeout() {}, addEventListener() {}, document: { addEventListener() {} },
     localStorage: { getItem: k => storage[k], setItem: (k, v) => { storage[k] = v; } }, WizCore: { esc: String }, WosModels: {},
-    WizLive: { session: id => ({ id, status: 'completed' }), isNew: () => false } };
+    // Main vs routed: a routed thread's row carries its agent and runtime (host-profile, container, restricted) and the
+    // same ids as main threads; the place is kept per thread for each.
+    WizLive: { session: id => ({ id, status: 'completed', ...(kind === 'main' ? {} : { agent: `qa-${kind}`, runtime: kind }) }), isNew: () => false, agentOf: () => kind === 'main' ? '' : `qa-${kind}` } };
   ctx.window = ctx; vm.createContext(ctx); vm.runInContext(source, ctx);
   const api = ctx.WosChatPower({ ch: () => state, CH: { win: state }, H: { win: () => w }, threadOnScreen: () => true, scrollBox: () => nb, isWorking: () => false });
   const turnsOf = (n, at) => Array.from({ length: n }, (_, i) => ({ u: { text: 'q' + i }, a: { text: 'a' + i, at: at + i } }));
@@ -31,8 +33,9 @@ function harness() {
 }
 // A shell repaint: the new box shows first (resume, with whatever options the last placement used), then the paint's own placement.
 function paint(h, turns) { h.api.resume(h.nb); h.api.position(h.w, h.host, h.nb, { turns, working: false }); }
-test('Back from a linked thread restores the reading place, not the top of the latest reply', () => {
-  const h = harness(), A = h.turnsOf(5, 1000), B = h.turnsOf(1, 9000);
+for (const kind of ['main', 'host-profile', 'container', 'restricted'])
+test(`Back from a linked thread restores the reading place, not the top of the latest reply (${kind})`, () => {
+  const h = harness(kind), A = h.turnsOf(5, 1000), B = h.turnsOf(1, 9000);
   h.api.opened('win', 'thread-a'); paint(h, A);
   assert.equal(h.top(), 192, 'a fresh open lands on the first line of the latest reply');
   h.scrollBy(1700); h.api.capture(h.nb);                       // he reads down to the middle of the reply
