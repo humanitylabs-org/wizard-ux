@@ -4,6 +4,8 @@
 # Wizard at boot). One release-wide token (hash of every file under web/) is added as ?v=<token> to:
 #   - every local <script src> / <link href> .js/.css in each HTML page,
 #   - every relative static or literal dynamic ES module import in each .js file (import ... from './x.js'),
+#   - every relative CSS @import in each .css file (@import url("../kit/controls.css")), so an imported stylesheet
+#     is kept for the release like its importer instead of being asked for on every open (wizard-ux#1583),
 #   - a <meta name="wos-release"> in each page, which core/skin-host.js appends to skin/layout files it loads.
 # A release-wide token (not per-file hashes) also covers a module whose own bytes are unchanged but whose
 # dependency changed. Run at image build time on the copied web/ tree (see Dockerfile); git keeps plain links.
@@ -25,6 +27,10 @@ find . -name '*.js' -type f ! -name data.js ! -name summaries.js | while IFS= re
   grep -qE "(from|import)[[:space:]]*\(?[[:space:]]*['\"]\.\.?/" "$f" || continue
   sed -i.stamp -E "s#((from|import)[[:space:]]*\(?[[:space:]]*(['\"])\.\.?/[A-Za-z0-9._/-]+\.js)\?v=[0-9a-f]{12}(['\"])#\1\4#g" "$f"
 done
+find . -name '*.css' -type f | while IFS= read -r f; do
+  grep -q '@import' "$f" || continue
+  sed -i.stamp -E "s#(@import[[:space:]]+(url\()?[[:space:]]*(['\"])(\.\.?/)?[A-Za-z0-9._][A-Za-z0-9._/-]*\.css)\?v=[0-9a-f]{12}(['\"])#\1\5#g" "$f"
+done
 find . -name '*.stamp' -type f -exec rm -f {} +
 
 # Owner-generated data (data.js, summaries.js) changes at runtime: never part of the token, never stamped.
@@ -40,6 +46,11 @@ done
 find . -name '*.js' -type f ! -name data.js ! -name summaries.js | while IFS= read -r f; do
   grep -qE "(from|import)[[:space:]]*\(?[[:space:]]*['\"]\.\.?/" "$f" || continue
   sed -i.stamp -E "s#((from|import)[[:space:]]*\(?[[:space:]]*(['\"])\.\.?/[A-Za-z0-9._/-]+\.js)(['\"])#\1?v=$v\4#g" "$f"
+done
+# Relative @import only (./, ../ or a bare name); an absolute path or another origin stays plain.
+find . -name '*.css' -type f | while IFS= read -r f; do
+  grep -q '@import' "$f" || continue
+  sed -i.stamp -E "s#(@import[[:space:]]+(url\()?[[:space:]]*(['\"])(\.\.?/)?[A-Za-z0-9._][A-Za-z0-9._/-]*\.css)(['\"])#\1?v=$v\5#g" "$f"
 done
 # The in-place backups sed left behind.
 find . -name '*.stamp' -type f -exec rm -f {} +
