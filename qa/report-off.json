@@ -1,0 +1,94 @@
+[
+  {
+    "skin": "nebula",
+    "dev": "phone",
+    "off": true,
+    "steps": {
+      "touch": true,
+      "open": false,
+      "swipe": {
+        "slid": false,
+        "where": "list",
+        "leave": {
+          "ok": true,
+          "xs": [
+            70,
+            70
+          ],
+          "atRelease": 70
+        }
+      },
+      "button": false
+    },
+    "errors": []
+  },
+  {
+    "skin": "grove",
+    "dev": "phone",
+    "off": true,
+    "steps": {
+      "touch": true,
+      "open": false,
+      "swipe": {
+        "slid": false,
+        "where": "list",
+        "leave": {
+          "ok": true,
+          "xs": [
+            70,
+            70
+          ],
+          "atRelease": 70
+        }
+      },
+      "button": false
+    },
+    "errors": []
+  },
+  {
+    "skin": "nebula",
+    "dev": "desktop",
+    "off": true,
+    "steps": {
+      "touch": true,
+      "open": false,
+      "swipe": {
+        "slid": false,
+        "where": "list",
+        "leave": {
+          "ok": true,
+          "xs": [
+            70,
+            70
+          ],
+          "atRelease": 70
+        }
+      },
+      "button": false
+    },
+    "errors": []
+  },
+  {
+    "skin": "grove",
+    "dev": "desktop",
+    "off": true,
+    "steps": {
+      "touch": true,
+      "open": false,
+      "swipe": {
+        "slid": false,
+        "where": "list",
+        "leave": {
+          "ok": true,
+          "xs": [
+            70,
+            70
+          ],
+          "atRelease": 70
+        }
+      },
+      "button": false
+    },
+    "errors": []
+  }
+]
