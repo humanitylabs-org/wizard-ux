@@ -1362,13 +1362,21 @@ export default function desktop(api) {
   }
   // The orb is visually docked in the Chats composer, but lives outside its window.
   // A companion pane can own keyboard focus: reply to the composer, not that pane.
-  function talkFromOrb() {
-    if ((api.voice.state()?.state || 'idle') !== 'idle') return api.voice.talk();
+  const idle = () => (api.voice.state()?.state || 'idle') === 'idle';
+  // The Chats window whose thread's message box holds the orb, or null (New chat, Home, an app alone, the list).
+  function orbThread() {
     const wid = orbComposer()?.closest('[data-chats]')?.dataset.chats;
     const w = wid && host?.windows().find(w => w.id === wid && w.kind === 'chats');
-    if (w?.thread && w.thread !== '__new__') return api.voice.reply(w.id, w.thread);
-    return api.voice.talk();
+    return w?.thread && w.thread !== '__new__' ? w : null;
   }
+  function talkFromOrb() {
+    if (!idle()) return api.voice.talk();
+    const w = orbThread();
+    return w ? api.voice.reply(w.id, w.thread) : api.voice.talk();
+  }
+  // Wizard for Mac's orb and Right ⌘ (wizard:orb) start the same reply while an app beside the thread has keyboard focus
+  // (wizard-ux issue 1547); with no thread holding the orb they keep the shell's own action (undefined).
+  api.voice.onTap?.(() => { const w = idle() ? orbThread() : null; return w ? api.voice.reply(w.id, w.thread) : undefined; });
   api.listen(orbBtn, 'pointerdown', e => { if (!e.button) down(e, orbBtn, { drag: true }); });
   api.listen(orbBtn, 'pointermove', move);
   api.listen(orbBtn, 'pointerup', () => up(true)); api.listen(orbBtn, 'pointercancel', () => up(false));
@@ -2134,7 +2142,7 @@ export default function desktop(api) {
     // typing there; a letter it claims beats the view's own meaning for it while it is in front (⌥K = its key, not
     // search); Wizard's keys (RESERVED_KEYS) never reach it; nothing marked: the view's meaning below
     if (!sh && appFront()) { const t = appTarget(appKeyOf(code)); if (t) { if (!e.repeat) pressApp(t); return true; } }
-    if (code === 'Space' && !sh) return once(() => api.voice.talk());
+    if (code === 'Space' && !sh) return once(talkFromOrb);
     if ((code === 'ArrowDown' || code === 'ArrowUp') && !sh) { if (!e.repeat || here().thread) stepReady(code === 'ArrowDown' ? 1 : -1); return true; }
     // ⌥H Home: everything away (both sides, the chat, the app); ⌥H again: back exactly as it was (⌥` the same, quietly)
     if ((code === 'KeyH' || code === 'Backquote') && !sh) return once(() => (focusOn() && focusStash ? focusOut : focusIn)());

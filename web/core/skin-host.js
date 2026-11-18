@@ -902,6 +902,14 @@
         // Layout-only: a layout-docked composer owns its mic even while a companion app has keyboard focus.
         reply: (wid, sid) => live() && typeof wid === 'string' && typeof sid === 'string' && sid && sid !== '__new__'
           ? shell.recordReply?.(wid, sid) : false,
+        /* Layout-only: the orb's own tap, for the shell's other orb triggers (Wizard for Mac's orb and Right ⌘, sent as
+         * wizard:orb): the take goes where the layout's orb would send it, e.g. the thread whose message box holds it,
+         * not the window with keyboard focus (wizard-ux issue 1547). fn() returns the shell's answer; undefined = not mine. */
+        onTap(fn) {
+          if (!live() || typeof fn !== 'function') return () => {};
+          const g = guard(a, 'voice.onTap', fn); orbTaps.add(g);
+          const off = () => { orbTaps.delete(g); a.offs.delete(off); }; a.offs.add(off); return off;
+        },
         /* The layout draws the command take itself (its own orb state and caption): while held, a command take's
          * result comes to fn({ result: 'done' | 'miss' | 'silent' | 'kept', text, action, app, music }) instead of the
          * shell's toast, and the desktop's voice pill steps aside (html.voice-cmd). Released on teardown. */
@@ -1280,7 +1288,7 @@
     }
     return Object.freeze(o);
   }
-  const commandUis = new Set(), keyHandlers = new Set(), keyGuides = new Set();   // layout-only: api.voice.onCommand, api.keys
+  const commandUis = new Set(), orbTaps = new Set(), keyHandlers = new Set(), keyGuides = new Set();   // layout-only: api.voice.onCommand/onTap, api.keys
   let panelOn = false, panelHold = 0;
   function panelSync() {
     const on = [...panelHolders].some(l => !l.dead);
@@ -1837,6 +1845,9 @@
     /* desktop.js: a layout draws the command take (api.voice.onCommand); its result goes there, not to a toast. */
     get commandUi() { return commandUis.size > 0; },
     commandResult(ev) { for (const fn of [...commandUis]) fn(Object.freeze({ ...ev })); },
+    /* desktop.js: the orb tapped from outside the page (wizard:orb) or by Right ⌘: the layout's own orb tap (api.voice.onTap)
+     * decides where the take goes; undefined = no layout claims it (the shell's own talk). */
+    deskOrbTap() { for (const fn of [...orbTaps].reverse()) { const r = fn(); if (r !== undefined) return r; } return undefined; },
     /* desktop.js onKey / keyup: a layout's keys first (api.keys.on); true = used. holdKeys: it draws its own hold-⌥. */
     key(e) { for (const h of [...keyHandlers]) if (!h.a.dead && h.down && h.down(e) === true) return true; return false; },
     keyUp(e) { for (const h of [...keyHandlers]) if (!h.a.dead && h.up) h.up(e); },

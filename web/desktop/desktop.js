@@ -2441,6 +2441,14 @@
     } finally { target?.release(); if(dictTarget===target)dictTarget=null;vMode = 'talk'; dictationFinishing = false; }
   }
 
+  /* The orb tapped from outside the page (Wizard for Mac's orb and Right ⌘ send wizard:orb) or by the page's own Right ⌘:
+   * when a layout's orb sits in a thread's message box, the new take is a reply there, as that orb's click makes it,
+   * even while an app beside it has keyboard focus (wizard-ux issue 1547). Otherwise the shell's talk, as before. */
+  async function orbTap(action = 'toggle') {
+    const r = VOICE.state === 'idle' ? window.WosSkinHost?.deskOrbTap?.() : undefined;
+    if (r === undefined) return talk(action);
+    const st = await r; return st === 'recording' ? 'voice' : st;
+  }
   // Right ⌘ / Right ⌥ as tap keys: press and release alone, quickly (a chord like ⌘C never counts).
   // Inside Wizard for Mac the native app owns these keys system-wide and sends wizard:orb, so the page stands down.
   const NATIVE_KEYS = !!window.webkit?.messageHandlers?.wizardNative;
@@ -2460,7 +2468,7 @@
     const ok = !tapChord && performance.now() - tapAt < 450; tapKey = null;
     if (!ok) return;
     e.preventDefault();
-    if (e.code === 'MetaRight') { log('key:right-cmd'); talk(); } else { log('key:right-opt'); dictate(); }
+    if (e.code === 'MetaRight') { log('key:right-cmd'); orbTap(); } else { log('key:right-opt'); dictate(); }
   }, true);
   addEventListener('blur', () => { tapKey = null; });
 
@@ -3042,7 +3050,7 @@
 
   /* ---------------- native bridge (Wizard for Mac drives this by events) ---------------- */
   C.bridge.handle({
-    orb: d => talk(d.action || 'toggle'),
+    orb: d => { const a = d.action || 'toggle'; return a === 'toggle' || a === 'start' ? orbTap(a) : talk(a); },
     open(path, d) {
       const sid = d.thread || (String(path).match(/[?&]session=([^&#]+)/) || [])[1];
       if (sid) return openThread(decodeURIComponent(sid));
