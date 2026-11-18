@@ -38,8 +38,8 @@ import { engages, commits, COMMIT_PX } from './swipe-intent.js';
       api.frame(() => api.frame(() => reset(node)));
     };
     const chanOn = () => { try { return (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/chat-channels'); } catch (e) { return false; } };
-    // Which view a Chats window shows: its thread, a channel's feed, the Channels | Activity home, or a plain list.
-    // The slide moves the window's own Chats container (stable across repaints: a thread paints a skeleton, then its
+    // Which view a Chats window shows: its thread, a channel's feed, the Channels | Activity home, or a plain list
+    // (VIEWS: window -> { key, sid, trail }). The slide moves the window's own Chats container (stable across repaints: a thread paints a skeleton, then its
     // words, as new nodes), never the view node.
     const VIEWS = new WeakMap(); let steps = 0;
     const docScroll = (() => { try { return /\bWizardOS-DocScroll\b/.test(navigator.userAgent); } catch (e) { return false; } })();
@@ -50,15 +50,25 @@ import { engages, commits, COMMIT_PX } from './swipe-intent.js';
       return node.querySelector('.ch-chan-h [data-chchanback]') ? 'feed' : node.querySelector('.ch-chan-tabs') ? 'home' : 'list';
     };
     const DEPTH = { home: 0, list: 0, feed: 1, thread: 2 };
+    // A linked thread (opened from another thread) is one layer deeper too: each window keeps the trail of threads it
+    // came through, so Back to the parent slides in from the left and opening the link from the right.
+    const threadId = el => { try { return api.part('thread') === el ? api.route().thread || null : null; } catch (e) { return null; } };
     const step = ({ part, el } = {}) => {
       if (part !== 'list' && part !== 'thread') return;
       const key = viewOf(part, el); if (!key) return;
-      const was = VIEWS.get(el); VIEWS.set(el, key);
-      if (!was || DEPTH[key] === DEPTH[was] || !chanOn()) return;
+      const was = VIEWS.get(el), sid = key === 'thread' ? threadId(el) : null;
+      const trail = key === 'thread' && was?.key === 'thread' ? was.trail : [];
+      VIEWS.set(el, { key, sid, trail });
+      if (!was || !chanOn()) return;
+      let side = DEPTH[key] < DEPTH[was.key] ? -1 : DEPTH[key] > DEPTH[was.key] ? 1 : 0;
+      if (!side && key === 'thread' && sid && was.sid && sid !== was.sid) {
+        if (trail.at(-1) === sid) { trail.pop(); side = -1; } else { trail.push(was.sid); side = 1; }
+      }
+      if (!side) return;
       // The Android app's document-scrolled thread pins its header and box to the screen: moving their container
       // would carry them off it, so a thread opening there has no slide (going back from it still slides the list).
       if (key === 'thread' && docScroll) return;
-      steps++; slideIn(el, DEPTH[key] < DEPTH[was] ? -1 : 1);
+      steps++; slideIn(el, side);
     };
     // The nearest sideways scroller under the finger inside the Chats root, or null.
     const scroller = (t, root) => {

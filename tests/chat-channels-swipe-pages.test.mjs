@@ -156,17 +156,18 @@ function viewHarness({ on = true, reduced = false, start = 'thread', ua = '' } =
       : (n.key === 'home' && q === '.ch-chan-tabs') ? el('.ch-chan-tabs', n) : q === ':scope > .ch-scroll' ? n : null;
     return n;
   };
-  let cur = mk(start);
-  win.querySelector = q => (q === ':scope > [data-part="thread"]' && cur.key === 'thread') || (q === ':scope > [data-part="list"]' && cur.key !== 'thread') ? cur : null;
-  const show = (key, reuse = false) => {
+  let cur = mk(start); cur.sid = start === 'thread' ? 't1' : null;
+  win.querySelector = q => (/\[data-part="thread"\]$/.test(q) && cur.key === 'thread') || (/\[data-part="list"\]$/.test(q) && cur.key !== 'thread') ? cur : null;
+  win.contains = n => n === win;
+  const show = (key, reuse = false, sid = key === 'thread' ? 't1' : null) => {
     if (reuse && cur.key !== 'thread' && key !== 'thread') cur.key = key; // a morph keeps the .ch-list node
-    else { cur.isConnected = false; cur = mk(key); }
+    else { cur.isConnected = false; cur = mk(key); cur.sid = sid; }
     for (const fn of renders) fn({ part: key === 'thread' ? 'thread' : 'list', el: win });
   };
   const realNow = performance.now;
   setup({
-    part: n => (n === 'thread' || n === 'list' ? { ...win, querySelector: () => cur, contains: x => x === win } : null),
-    route: () => ({ view: cur.key === 'thread' ? 'thread' : 'list' }), env: { edgeInset: 24 },
+    part: n => (n === 'thread' || n === 'list' ? win : null),
+    route: () => ({ view: cur.key === 'thread' ? 'thread' : 'list', thread: cur.sid || null }), env: { edgeInset: 24 },
     listen: (_el, type, fn) => { handlers[type] = fn; }, frame: fn => queued.push(fn),
     on: (type, fn) => { if (type === 'render') renders.push(fn); },
     nav: { back: () => { backs++; show(cur.key === 'thread' ? 'feed' : 'home', true); return true; } },
@@ -238,6 +239,19 @@ test('switch on: the Back button and the shell Back step (any repaint to the lay
   assert.deepEqual(seen().slice(8), ['translateX(-48px)', ''], 'a thread opened from Activity goes back with the same slide');
   const n = h.log.length; h.show('home', true); h.settle();
   assert.equal(h.log.length, n, 'a live repaint of the same view has no motion');
+});
+
+test('switch on: Back from a linked thread to the thread it came from slides from the left; opening the link from the right', () => {
+  const h = viewHarness({ start: 'thread' });
+  const seen = () => h.log.filter(x => x.name === 'win' && x.k === 'transform').map(x => x.v);
+  h.show('thread', false, 't2'); h.settle();
+  assert.deepEqual(seen(), ['translateX(48px)', ''], 'opening the linked thread slides in from the right');
+  h.show('thread', false, 't2'); h.settle();
+  assert.equal(seen().length, 2, 'its own repaint has no motion');
+  h.show('thread', false, 't1'); h.settle();
+  assert.deepEqual(seen().slice(2), ['translateX(-48px)', ''], 'Back to the parent thread slides in from the left');
+  h.show('feed'); h.settle();
+  assert.deepEqual(seen().slice(4), ['translateX(-48px)', ''], 'and Back again to the feed');
 });
 
 test('the Android app (document-scrolled thread): opening a thread has no slide, going back still does', () => {
