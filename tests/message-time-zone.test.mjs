@@ -52,7 +52,11 @@ test('parity: main and routed threads (host-profile, container, restricted) name
     zone = z;
     const seen = new Map();
     for (const [kind, [sid, agent]] of Object.entries(ROUTES)) {
-      const history = [{ role: 'user', timestamp: AT / 1000, content: 'What time is it?' }, { role: 'assistant', timestamp: AT / 1000, content: 'Lunch time.' }]
+      // Each route keeps the time shape its runtime sends: Hermes rows carry seconds, a container agent's
+      // history an ISO created_at, a restricted route milliseconds. All must land on the same owner-zone label.
+      const when = { main: { timestamp: AT / 1000 }, 'host-profile': { timestamp: AT / 1000 },
+        container: { created_at: new Date(AT).toISOString() }, restricted: { timestamp: AT } }[kind];
+      const history = [{ role: 'user', ...when, content: 'What time is it?' }, { role: 'assistant', ...when, content: 'Lunch time.' }]
         .map(r => ({ ...r, session_id: sid, ...(agent ? { agent } : {}) }));
       const html = turnHtml(KIT.parseRows(history).at(-1));
       const t = titles(html);
