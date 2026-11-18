@@ -1,0 +1,138 @@
+[
+  {
+    "skin": "nebula",
+    "channels": true,
+    "desks": 7,
+    "tweaks": "wizard/unified-inbox wizard/desktop-chats wizard/chat-channels",
+    "handle": false,
+    "leftLabels": [
+      "Troubleshooter",
+      "Maps",
+      "Camera",
+      "Phone"
+    ],
+    "left": 5,
+    "instantLabels": [
+      "Troubleshooter",
+      "Maps",
+      "Camera",
+      "Phone"
+    ],
+    "instant": 5,
+    "first20": 2,
+    "first25": 2,
+    "first30": 2,
+    "orbLabels": [
+      "Troubleshooter",
+      "Maps",
+      "Camera",
+      "Phone"
+    ],
+    "orbLeft": 5,
+    "orbRight": 2,
+    "orbHomeRight": 0,
+    "orbFlick": 3,
+    "orbRose": 2,
+    "orbUp": {
+      "idx": 2,
+      "sheet": "launcher",
+      "overview": false
+    },
+    "rightLabels": [
+      "Camera",
+      "Maps",
+      "Troubleshooter"
+    ],
+    "right": 2,
+    "homeRight": 0,
+    "flickLeft": 3,
+    "flickRight": 2,
+    "rose": 2,
+    "cancelled": 2,
+    "edge": 2,
+    "settingsScrub": {
+      "idx": 5,
+      "sheet": null,
+      "open": false,
+      "parked": true
+    },
+    "settingsBack": {
+      "idx": 2,
+      "sheet": "settings",
+      "open": true,
+      "parked": false
+    },
+    "dotTap": 4,
+    "longPressOverview": true,
+    "plus": "1 desk(s) added",
+    "orbStill": true
+  },
+  {
+    "skin": "grove",
+    "channels": true,
+    "desks": 7,
+    "tweaks": "wizard/unified-inbox wizard/desktop-chats wizard/chat-channels",
+    "handle": false,
+    "leftLabels": [
+      "Troubleshooter",
+      "Maps",
+      "Camera",
+      "Phone"
+    ],
+    "left": 5,
+    "instantLabels": [
+      "Troubleshooter",
+      "Maps",
+      "Camera",
+      "Phone"
+    ],
+    "instant": 5,
+    "first20": 2,
+    "first25": 2,
+    "first30": 2,
+    "orbLabels": [
+      "Troubleshooter",
+      "Maps",
+      "Camera",
+      "Phone"
+    ],
+    "orbLeft": 5,
+    "orbRight": 2,
+    "orbHomeRight": 0,
+    "orbFlick": 3,
+    "orbRose": 2,
+    "orbUp": {
+      "idx": 2,
+      "sheet": "launcher",
+      "overview": false
+    },
+    "rightLabels": [
+      "Camera",
+      "Maps",
+      "Troubleshooter"
+    ],
+    "right": 2,
+    "homeRight": 0,
+    "flickLeft": 3,
+    "flickRight": 2,
+    "rose": 2,
+    "cancelled": 2,
+    "edge": 2,
+    "settingsScrub": {
+      "idx": 5,
+      "sheet": null,
+      "open": false,
+      "parked": true
+    },
+    "settingsBack": {
+      "idx": 2,
+      "sheet": "settings",
+      "open": true,
+      "parked": false
+    },
+    "dotTap": 4,
+    "longPressOverview": true,
+    "plus": "1 desk(s) added",
+    "orbStill": true
+  }
+]
