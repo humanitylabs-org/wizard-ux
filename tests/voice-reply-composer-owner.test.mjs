@@ -54,3 +54,7 @@ test('wizard:orb toggle goes through the layout tap and answers voice',async()=>
 test('wizard:orb with no layout claim keeps talk(toggle)',async()=>assert.deepEqual(await deskTap({layout:undefined}),{out:'voice',calls:[['layout'],['talk','toggle']]}));
 test('wizard:orb during a take never asks the layout',async()=>assert.deepEqual(await deskTap({state:'listen',layout:'x'}),{out:'voice',calls:[['talk','toggle']]}));
 test('wizard:orb send and cancel stay the shell\'s',async()=>{ for(const action of ['send','cancel']) assert.deepEqual(await deskTap({layout:'x',action}),{out:'voice',calls:[['talk',action]]}); });
+// Main versus routed threads (AGENTS.md agent chat parity): the Mac orb names the same (window, thread) for every route;
+// the thread's agent and model come from the unchanged recordReply -> sendVoiceTo -> outbox path, never from the layout.
+for(const [route,thread] of [['main','wizard_1795001256414_main'],['host-profile','agent:archimedes:t1'],['container','agent:sandbox:t2'],['restricted','agent:private:t3']])
+ test(`Mac orb reply keeps its thread on a ${route} route`,()=>assert.deepEqual(tapFixture({thread}),{out:'recording',calls:[['reply','chat',thread]]}));
