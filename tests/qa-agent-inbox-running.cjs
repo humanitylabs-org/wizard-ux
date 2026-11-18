@@ -167,6 +167,12 @@ const report = { origin, web, off, cases: [] };
         entry.listedAfter = await listed();
         assert.deepEqual(entry.listedAfter, ['qa-chat-1'], 'opening a worker thread never lists it');
         assert.ok(!entry.writes.some(w => w.method === 'PATCH' && /api\/sessions/.test(w.path)), 'opening never unhides it');
+        // 7. A switch flip repaints the list at once (the shell's wos:experience after a tweak change), not at the next tick.
+        const flip = on => page.evaluate(on => { const h = document.documentElement, t = (h.dataset.tweaks || '').split(' ').filter(x => x && x !== 'wizard/agent-inbox'); h.dataset.tweaks = (on ? t.concat('wizard/agent-inbox') : t).join(' '); window.dispatchEvent(new CustomEvent('wos:experience')); }, on);
+        await flip(false); await nap(250);
+        entry.rowAfterOff = await page.locator('.ch-running').filter({ visible: true }).count();
+        assert.equal(entry.rowAfterOff, 0, 'switch off: the Running row goes at once');
+        await flip(true); await vis('.ch-running').waitFor({ timeout: 3000 });
         assert.equal(entry.errors.length, 0, 'browser errors: ' + entry.errors.join('; '));
         entry.pass = true;
       } catch (e) { entry.failure = e.stack; const pages = context.pages(); if (pages[0]) { entry.body = (await pages[0].locator('body').innerText().catch(() => '')).slice(0, 1500); await pages[0].screenshot({ path: path.join(out, stem + '-failure.png') }).catch(() => {}); } }

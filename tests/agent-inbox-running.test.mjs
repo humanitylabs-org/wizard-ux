@@ -32,6 +32,17 @@ test('reads running and stale records once, newest news first, and keeps only we
   assert.ok(f.emits() >= 1, 'Chats repaints when the answer lands');
 });
 
+test('main versus routed: records stay with their own agent, even with the same thread id', async () => {
+  const f = make(() => ({ json: { records: [rec(1), rec(2, { agent: 'host-ops', thread_id: 'wizard_worker_1' }), rec(3, { agent: 'box' }), rec(4, { agent: 'locked' })] } }));
+  await f.inbox.read();
+  assert.deepEqual(clone(f.inbox.records('hermes').map(r => [r.agent, r.thread])), [['hermes', 'wizard_worker_1']], 'the main Chats list gets only the main agent\'s task');
+  assert.deepEqual(clone(f.inbox.records('').map(r => r.agent)), ['hermes'], 'no agent = the main agent');
+  for (const kind of ['host-ops', 'box', 'locked']) assert.deepEqual(clone(f.inbox.records(kind).map(r => r.agent)), [kind], kind + ': its own only');
+  const chats = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
+  assert.match(chats, /function runningRecs\(\) \{ return LIVE\.agentInbox\?\.records\?\.\('hermes'\) \|\| \[\]; \}/, 'the Running view reads the main agent\'s records');
+  assert.match(chats, /const st = LIVE\.agentInbox\?\.state\(\), r = runningRecs\(\)/, 'its rows too');
+});
+
 test('asks again only after its interval, and one read at a time', async () => {
   const f = make(() => ({ json: { records: [rec(1)] } }), { every: 30e3 });
   f.inbox.state(); f.inbox.state();
@@ -58,8 +69,10 @@ test('a box without the inbox (404) is an empty list, not an error; a failed rea
 
 test('Chats reads the inbox only through the switch, and the Running view sits on the main Chats list', () => {
   const chats = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
-  const on = chats.slice(chats.indexOf('  function runningOn(w) {'), chats.indexOf('  function runningOpen(w)'));
-  assert.match(on, /includes\('wizard\/agent-inbox'\)\) return false/, 'off: no Running row, no inbox read');
+  const on = chats.slice(chats.indexOf('  function inboxSwitchOn() {'), chats.indexOf('  function runningOpen(w)'));
+  assert.match(on, /includes\('wizard\/agent-inbox'\)/);
+  assert.match(on, /if \(!inboxSwitchOn\(\)\) return false;/, 'off: no Running row, no inbox read');
+  assert.match(chats, /addEventListener\('wos:experience', \(\) => \{ const on = inboxSwitchOn\(\); if \(runWas === on\) return;/, 'a switch flip repaints the lists at once');
   assert.match(on, /!winAgent\(w\)/, 'the main agent only (the orb dump is main only)');
   assert.match(chats, /if \(typeof runningBack === 'function' && runningBack\(w\)\) return true;/, 'Back from the Running view returns to Chats');
   const catalog = JSON.parse(readFileSync(new URL('../web/tweaks/catalog.json', import.meta.url), 'utf8'));

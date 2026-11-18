@@ -1943,12 +1943,18 @@ window.WizCore.chats = function createChats(H) {
    * window: one ordinary chat row per task with its title, last update, how long it has been running, and "No news for
    * 6 h" once it went quiet. A tap opens the thread (openChat, like any link); Back from the thread returns here (the
    * window keeps ch().running) and Back here returns to Chats (channelBack, clearFilter). Opening never unhides it. */
+  function inboxSwitchOn() { try { return (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/agent-inbox'); } catch (_) { return false; } }
   function runningOn(w) {
-    try { if (!(document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/agent-inbox')) return false; } catch (_) { return false; }
+    if (!inboxSwitchOn()) return false;
     return !!w && !winAgent(w) && !!LIVE.agentInbox;
   }
   function runningOpen(w) { return !!w && !!ch(w.id).running && runningOn(w); }
-  function runningRecs() { return LIVE.agentInbox?.state()?.records || []; }
+  // The main Chats list shows the main agent's tasks only (the orb's dump starts them there): a routed agent's record
+  // never opens as the main agent's thread, even when both use the same thread id.
+  function runningRecs() { return LIVE.agentInbox?.records?.('hermes') || []; }
+  // Turning the switch on or off repaints the lists at once (not at the next live tick).
+  let runWas = inboxSwitchOn();
+  try { window.addEventListener('wos:experience', () => { const on = inboxSwitchOn(); if (runWas === on) return; runWas = on; if (on) LIVE.agentInbox?.fresh?.(); for (const id of Object.keys(CH)) { const x = H.win(id); if (x && !x.thread) rerenderList(x); } }); } catch (_) {}
   function runningFor(ms) { const m = Math.max(1, Math.round(ms / 60000)); return m < 60 ? `${m} min` : m < 2880 ? `${Math.round(m / 60)} h` : `${Math.round(m / 1440)} d`; }
   function runningRow(w) {
     if (!runningOn(w) || ch(w.id).running) return '';
@@ -1960,7 +1966,7 @@ window.WizCore.chats = function createChats(H) {
     return '<div class="ch-chan-h ch-run-h" data-morph-key="run-head"><button type="button" class="ch-chan-back" data-chrunback aria-label="Back to chats"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg></button><b>Running</b></div>';
   }
   function runningBody() {
-    const st = LIVE.agentInbox?.state(), r = st?.records || [], now = Date.now();
+    const st = LIVE.agentInbox?.state(), r = runningRecs(), now = Date.now();
     if (!st?.ok) return '<div class="ch-empty">Checking what is running…</div>';
     if (!r.length) return `<div class="ch-empty">${st.gone ? 'Your Wizard keeps no agent inbox yet.' : 'Nothing is running.'}</div>`;
     return `<section class="ch-sec open ch-run" data-sec="running"><div class="ch-sec-b">${r.map(x => {

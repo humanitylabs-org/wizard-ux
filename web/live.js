@@ -1257,8 +1257,10 @@
       return s.busy;
     }
     function state() { if (!s.busy && now() - s.at >= every) read(); return s; }
+    // One agent's records ('hermes' = the main agent): a view opens a record's thread only in that agent's own Chats.
+    const records = agent => state().records.filter(r => r.agent === (agent || 'hermes'));
     const fresh = () => { s.at = 0; };
-    return { state, read, fresh };
+    return { state, records, read, fresh };
   }
   /* ---- end agent inbox ---- */
   const L = {
