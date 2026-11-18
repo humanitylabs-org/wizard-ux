@@ -455,16 +455,26 @@
    * Bar scrub (wizard-ux#1491, switch wizard/bar-scrub, off by default): the whole bar scrubs like the little
    * handle did and the handle is gone (its tweak.css). The scrub is live the moment the finger passes the sideways
    * slop (wizard-ux#1536: no hold time), counted from there, so it never jumps over the distance already covered; it
-   * then steps one desk per SC_STEP px with a tick and the desk name, release lands. A touch that ends within
-   * BAR_FLICK_MS (event time, so a busy page never turns a flick into a scrub) is a flick: exactly one desk. The bar's
+   * then steps one desk per SC_STEP px with a tick and the desk name, release lands. A SHORT touch (under 2 x SC_STEP)
+   * that ends within BAR_FLICK_MS (event time, so a busy page never turns a flick into a scrub) is a flick: exactly one
+   * desk; a fast long swipe goes by distance like a slow one (wizard-ux#1536 kick-back: a natural quick swipe on the
+   * phone took 3 desks' travel and moved one). Each step shows the hovered desk itself (unparked, quick slide), so the
+   * desk is visible under the finger before release (barScrubPeek). The bar's
    * own direction: drag left = the desk to the right (the old handle went the other way). A sideways drag that starts
    * on the orb joins the same scrub (barScrubJoin, from the orb's gesture code): the whole bar is one surface. */
   let DS = null, dockSwiped = 0; const BAR_FLICK_MS = 180;
   const barScrubOn = () => { try { return String(document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/bar-scrub'); } catch (_) { return false; } };
-  const barScrubBack = s => { if (s.live) { idx = s.start; placeTrack(0, true); renderDots(); } s.live = false; scrub.classList.remove('on'); };
+  const barScrubBack = s => { if (s.live) { idx = s.start; placeTrack(0, true); renderDots(); parkDesks(false); } s.live = false; barScrubPeek(false); scrub.classList.remove('on'); };
+  // The hovered desk and its neighbours render while the scrub points at it (parked desks skip rendering); the track
+  // slides quicker so the desk follows each step. Desks the scrub has left behind (3+ away; 2 away may still be sliding
+  // out) are parked again at once, and settling (goDesk / barScrubBack) parks the rest.
+  const barScrubPeek = n => {
+    track.classList.toggle('bar-scrubbing', n !== false);
+    if (n !== false) desks.forEach((_, i) => { const d = Math.abs(i - n); if (d <= 1) secOf(i)?.classList.remove('parked'); else if (d > 2) secOf(i)?.classList.add('parked'); });
+  };
   // Where the scrub points: counted from x0, set when the scrub went live (12 px before that point, the slop).
   const barScrubAt = (s, x) => Math.max(0, Math.min(desks.length - 1, s.start - Math.round((x - s.x0) / SC_STEP)));
-  const barScrubLive = (s, e) => { s.live = true; s.x0 = e.clientX - Math.sign(e.clientX - s.x) * 12; placeTrack(0, true); scrub.classList.add('on'); scLabel(s.at); vib(10); };
+  const barScrubLive = (s, e) => { s.live = true; s.x0 = e.clientX - Math.sign(e.clientX - s.x) * 12; barScrubPeek(s.at); placeTrack(0, true); scrub.classList.add('on'); scLabel(s.at); vib(10); };
   // The orb's sideways drag hands its finger to the bar scrub (the orb keeps tap, hold and up/down). Its moves and
   // release bubble from #orbWrap to #dock, so the dock's own handlers below run the scrub from here on.
   const barScrubJoin = (e, g) => {
@@ -491,7 +501,7 @@
       if (DS.live) {
         const n = barScrubAt(DS, e.clientX);
         if (n !== DS.at && !CHATS.beforeNavigate(desks[n]?.wins || [])) return;
-        if (n !== DS.at) { DS.at = n; vib(6); idx = n; placeTrack(0, true); renderDots(); scLabel(n); }
+        if (n !== DS.at) { DS.at = n; vib(6); idx = n; barScrubPeek(n); placeTrack(0, true); renderDots(); scLabel(n); }
         return;
       }
     }
@@ -506,14 +516,15 @@
     if (s.sc && (s.live || s.up)) {
       // A cancelled touch or one that rose is the system's swipe out: the desk goes back to where it started.
       if (s.up || e.type === 'pointercancel' || e.clientY - s.y < -30) { barScrubBack(s); return; }
-      // A quick flick moves exactly one desk, the way the scrub was heading (or by the old flick rule if it crossed no step).
-      if (e.timeStamp - s.ts < BAR_FLICK_MS) {
+      // A short quick flick moves exactly one desk, the way the scrub was heading (or by the old flick rule if it crossed
+      // no step). A quick swipe that travelled further lands by distance, below.
+      if (e.timeStamp - s.ts < BAR_FLICK_MS && Math.abs(dx) < 2 * SC_STEP) {
         const dir = s.at !== s.start ? Math.sign(s.at - s.start) : dx < -60 || v < -.5 ? 1 : dx > 60 || v > .5 ? -1 : 0;
         barScrubBack(s); if (dir) { swipeDesk(dir); tourEv('desk', { home: idx === HOME }); } return;
       }
       // The last move may not have come in before the release: land where the finger let go.
       const n = barScrubAt(s, e.clientX); if (n !== s.at && (n === s.start || CHATS.beforeNavigate(desks[n]?.wins || []))) s.at = n;
-      scrub.classList.remove('on'); goDesk(s.at, true); tourEv('desk', { home: idx === HOME }); return;
+      barScrubPeek(false); scrub.classList.remove('on'); goDesk(s.at, true); tourEv('desk', { home: idx === HOME }); return;
     }
     if (e.clientY - s.y < -40) return placeTrack(0, true); // went up: the iPhone's swipe out, never a desk swipe
     if (e.type !== 'pointercancel' && (dx < -60 || v < -.5)) { swipeDesk(1); tourEv('desk', { home: idx === HOME }); }

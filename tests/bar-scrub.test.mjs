@@ -24,7 +24,12 @@ function shell({ on = true, desks = 6, at = 2 } = {}) {
     scrub: { classList: { add: c => cls.add(c), remove: c => cls.delete(c), contains: c => cls.has(c) }, querySelector: () => label },
     SC_STEP: 26, deskName: i => 'Desk ' + i, vib() {}, endDotHold() {}, liftSettings() {}, tourEv() {}, renderDots() {},
     placeTrack: (d, snap) => log.push(['track', Math.round(d), snap]), atPickerEnd: () => false,
+    // Desk sections: two+ desks from the current one are parked (not rendered) like parkDesks does.
+    secs: Array.from({ length: desks }, (_, i) => ({ parked: Math.abs(i - at) > 1 })),
+    track: { classList: { toggle: (c, v) => { if (v) cls.add('track:' + c); else cls.delete('track:' + c); } } },
   };
+  ctx.secOf = i => { const sec = ctx.secs[i]; return sec && { classList: { remove: c => { if (c === 'parked') sec.parked = false; }, add: c => { if (c === 'parked') sec.parked = true; } } }; };
+  ctx.parkDesks = () => { ctx.secs.forEach((sec, i) => { sec.parked = Math.abs(i - ctx.idx) > 1; }); log.push(['park', ctx.idx]); };
   ctx.scLabel = at => { label.textContent = ctx.deskName(at); };
   ctx.goDesk = n => { ctx.idx = n; log.push(['go', n]); };
   ctx.swipeDesk = s => { ctx.idx += s; log.push(['swipe', s]); };
@@ -70,16 +75,44 @@ test('switch on: drag right goes to the left; on Home it does nothing', () => {
   const h = shell({ at: 0 }); h.finger(h.slow(120)); assert.equal(h.ctx.idx, 0);
 });
 
-test('switch on: a quick flick still moves exactly one desk', () => {
-  const s = shell(); s.finger([[-30, 20], [-80, 50], [-110, 80]]);
+test('switch on: a short quick flick still moves exactly one desk', () => {
+  const s = shell(); s.finger([[-20, 20], [-45, 60]]);
   assert.equal(s.ctx.idx, 3); assert.deepEqual(s.log.at(-1), ['swipe', 1]);
-  const r = shell(); r.finger([[30, 20], [110, 80]]); assert.equal(r.ctx.idx, 1);
+  const r = shell(); r.finger([[25, 20], [48, 70]]); assert.equal(r.ctx.idx, 1);
+});
+
+// wizard-ux issue 1536 kick-back: on James's phone a natural quick swipe ended inside the flick time and moved one desk.
+test('switch on: a fast long swipe lands by distance, like a slow one (not one desk)', () => {
+  const s = shell({ at: 1 }); s.finger([[-30, 20], [-80, 50], [-110, 80]]);
+  assert.equal(s.ctx.idx, 5, '110 px in 90 ms: four desks over'); assert.deepEqual(s.log.at(-1), ['go', 5]);
+  const t = shell({ at: 0 }); t.finger([[-20, 16], [-50, 40], [-78, 70]]);
+  assert.equal(t.ctx.idx, 3, '78 px (3 x 26) in 80 ms: three desks');
+  const r = shell({ at: 5 }); r.finger([[30, 20], [110, 80]]); assert.equal(r.ctx.idx, 1, 'fast long swipe right');
 });
 
 test('switch on: a drag that held still past the flick time before release still scrubs (no last move)', () => {
   const s = shell(); s.finger([[-30, 40], [-84, 90]], { upAt: 400 });
   assert.equal(s.ctx.idx, 5);
-  const h = shell(); h.finger([[-30, 40], [-84, 90]]); assert.equal(h.ctx.idx, 3, 'released at once: still a flick');
+  const h = shell(); h.finger([[-30, 40], [-84, 90]]); assert.equal(h.ctx.idx, 5, 'released at once: by distance too');
+});
+
+// wizard-ux issue 1536 (James, 18 Nov): while the finger is down, each step shows the desk it points at, not only its name.
+test('switch on: each scrub step un-parks the hovered desk so it is on screen before release; settling parks again', () => {
+  const s = shell({ at: 0 }), seen = [];
+  s.ctx.fire('pointerdown', { clientX: 300, clientY: 870, timeStamp: 0 });
+  for (const [dx, t] of [[-14, 100], [-40, 300], [-66, 500], [-92, 700]]) {
+    s.ctx.fire('pointermove', { clientX: 300 + dx, clientY: 870, timeStamp: t });
+    seen.push([s.ctx.idx, s.ctx.secs[s.ctx.idx].parked, s.ctx.secs[s.ctx.idx + 1]?.parked]);
+    assert.equal(s.ctx.scrub.classList.contains('track:bar-scrubbing'), true, 'quick slide while scrubbing');
+  }
+  assert.deepEqual(seen, [[0, false, false], [1, false, false], [2, false, false], [3, false, false]], 'hovered desk and the next one render');
+  assert.deepEqual(s.ctx.secs.map(x => x.parked), [true, false, false, false, false, true], 'desks left behind (3+ away) are parked again mid-scrub');
+  s.ctx.fire('pointerup', { clientX: 208, clientY: 870, timeStamp: 900 });
+  assert.equal(s.ctx.idx, 3); assert.equal(s.ctx.scrub.classList.contains('track:bar-scrubbing'), false, 'normal slide after release');
+  const c = shell({ at: 0 }); c.finger(c.slow(-84), { up: 'pointercancel' });
+  assert.equal(c.ctx.idx, 0); assert.deepEqual(c.log.at(-1), ['park', 0], 'cancelled: back on the start desk, far desks parked again');
+  assert.deepEqual(c.ctx.secs.map(x => x.parked), [false, false, true, true, true, true]);
+  const o = shell({ at: 0, on: false }); o.finger(o.slow(-84)); assert.deepEqual(o.ctx.secs.map(x => x.parked), [false, false, true, true, true, true], 'switch off: no peeking');
 });
 
 test('switch on: a drag that rises or is cancelled puts the desk back where it started', () => {
@@ -100,7 +133,7 @@ test('switch is a catalogued off-by-default tweak whose sheet only hides the han
   const man = JSON.parse(read('web/tweaks/wizard/bar-scrub/manifest.json'));
   assert.equal(man.id, ID); assert.deepEqual(man.shells, ['phone']); assert.deepEqual(man.issues, ['humanitylabs-org/wizard-ux#1491', 'humanitylabs-org/wizard-ux#1536']);
   const css = read('web/tweaks/wizard/bar-scrub/tweak.css').replace(/\/\*[\s\S]*?\*\//g, '');
-  for (const rule of css.split('}').map(r => r.trim()).filter(Boolean)) assert.match(rule, /^html\[data-tweaks~="wizard\/bar-scrub"\] #scrub/);
+  for (const rule of css.split('}').map(r => r.trim()).filter(Boolean)) assert.match(rule, /^html\[data-tweaks~="wizard\/bar-scrub"\] (#scrub|\.track\.anim\.bar-scrubbing)/);
   assert.match(APP, /const barScrubOn = \(\) => \{ try \{ return String\(document\.documentElement\.dataset\.tweaks \|\| ''\)\.split\(' '\)\.includes\('wizard\/bar-scrub'\)/);
 });
 
@@ -181,7 +214,8 @@ test('switch on: a drag that starts on the orb scrubs exactly like one on the ba
   assert.equal(orb.ctx.idx, bar.ctx.idx); assert.equal(orb.ctx.idx, 5); assert.deepEqual(b.labels, a.labels);
   const r = shell({ at: 4 }); r.orbFinger(r.slow(60), { joinAt: 2 }); assert.equal(r.ctx.idx, 2, 'drag right from the orb goes left');
   const h = shell({ at: 0 }); h.orbFinger(h.slow(120), { joinAt: 2 }); assert.equal(h.ctx.idx, 0, 'on Home a drag right from the orb does nothing');
-  const f = shell(); f.orbFinger([[-20, 20], [-80, 50], [-110, 80]]); assert.equal(f.ctx.idx, 3, 'a quick flick from the orb moves one desk');
+  const f = shell(); f.orbFinger([[-20, 20], [-45, 50]]); assert.equal(f.ctx.idx, 3, 'a short quick flick from the orb moves one desk');
+  const q = shell({ at: 1 }); q.orbFinger([[-20, 20], [-80, 50], [-110, 80]]); assert.equal(q.ctx.idx, 5, 'a fast long swipe from the orb goes by distance');
   const c = shell(); c.orbFinger(c.slow(-84), { joinAt: 1, up: 'pointercancel' }); assert.equal(c.ctx.idx, 2, 'cancelled: back to the start desk');
   const d = shell(); d.orbFinger(d.slow(-84), { joinAt: 1 }); vm.runInContext('barScrubDrop()', d.ctx); assert.equal(d.ctx.idx, 5, 'drop after release is inert');
   const g = shell(); g.ctx.fire('pointerdown', { clientX: 206, clientY: 870, timeStamp: 0, target: { closest: () => ({}) } });
