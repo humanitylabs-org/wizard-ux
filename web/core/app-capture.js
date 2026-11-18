@@ -1203,7 +1203,8 @@
       s.phase = s.nativeState?.paused ? 'paused' : 'recording';if(s.nativeState?.paused)s.pausedAt=Date.now(); if (!s.instant) s.writes = s.writes.then(() => drain(s)); changed();
       if (s.instant) {
         s.persistencePending = true;
-        const notice = setTimeout(() => { if (s.persistencePending && !s.discard) emit(s, 'warn', 'Recording is kept in memory while saving catches up. Keep Wizard open.'); }, 1000);
+        // No early "kept in memory" notice (ux#1553): a slow first save is retried quietly by patiently();
+        // the owner hears only about a real failure, below.
         // The session is already recording. Buffer chunks until its first row can commit. Recovery
         // runs at boot/pending(), never as an admission requirement for a fresh voice/song take.
         s.persistence = (async () => {
@@ -1215,7 +1216,7 @@
               changed();
             }
           }
-          finally { clearTimeout(notice); s.persistencePending = false; }
+          finally { s.persistencePending = false; }
           if (!s.discard) s.writes = s.writes.then(() => drain(s));
         })();
       }
