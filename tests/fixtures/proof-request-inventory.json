@@ -571,6 +571,12 @@
       "kind": "read",
       "note": "Only read, and only posted to by the Apps buttons (Update now, Retry, Hold, Unhold, Automatic / Ask me), while the off-by-default wizard/app-updates-list switch is on (Settings > About & updates > Apps); the QA harnesses run with it off. Refused and collected, never answered, if a flow reaches it."
     },
+    "/wizard-os-home/store-install/_feature-switches": {
+      "status": "not-exercised",
+      "source": "web/core/settings.js",
+      "kind": "read",
+      "note": "Only read, and only posted to by a chat reply's app switch row (wizard-ux issue 1560), while the off-by-default wizard/chat-app-switches switch is on and a reply carries an <app id>:<switch id> marker; the QA harnesses run with it off. Refused and collected, never answered, if a flow reaches it."
+    },
     "/wizard-os-home/store-install/_updates": {
       "status": "catalogued",
       "source": "web/core/os-updates.js",

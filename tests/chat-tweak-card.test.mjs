@@ -196,3 +196,111 @@ test('parity: main and routed threads (host-profile, container, restricted) get 
   }
   assert.equal(new Set(seen.values()).size, 1, 'byte-identical card for every runtime kind');
 });
+
+
+// App feature switches in the card (wizard-ux issue 1560, switch wizard/chat-app-switches): `<app id>:<switch id>` rows
+// from the App Manager's one catalog (store-install/_feature-switches), flipped through its POST like the Tracker's Try it.
+const CAL = 'wizard-calendar:drag-events';
+const calRow = on => ({ id: CAL, kind: 'app', app: 'wizard-calendar', app_name: 'Calendar', switch: 'drag-events', name: 'Drag to move events', description: 'Drag an event to a new time.', author: 'wizard-calendar', on, issues: ['humanitylabs-org/wizard-calendar#19'], locked: false });
+const listingOf = (rows, apps = [{ id: 'wizard-calendar', name: 'Calendar', ok: true }]) => ({ channel: 'latest', locked: false, switches: [{ id: 'wizard/desktop-chats', kind: 'core', name: 'x', on: false }, ...rows], apps });
+function appKit({ on = true, listing = listingOf([calRow(false)]), post } = {}) {
+  const calls = [], cards = [], opened = [];
+  const res = (status, body) => ({ ok: status >= 200 && status < 300, status, json: async () => body });
+  const fetch = async (url, init = {}) => {
+    calls.push({ url, method: init.method || 'GET', headers: init.headers, body: init.body ? JSON.parse(init.body) : null });
+    if ((init.method || 'GET') === 'GET') return typeof listing === 'function' ? listing() : res(200, listing);
+    return post ? post(JSON.parse(init.body)) : res(200, listingOf([calRow(JSON.parse(init.body).on)]));
+  };
+  const E = { state: { shell: 'phone', busy: false, error: '', tweaks: [{ ...desktopChats, on: false }] }, toggle: async () => {}, authors: async () => [{ id: 'wizard', name: 'Wizard' }] };
+  const doc = { activeElement: null, baseURI: 'https://box.example/wizard-os-home/', documentElement: { dataset: { tweaks: on ? 'wizard/chat-app-switches' : '' } }, querySelectorAll: q => q === '[data-chat-tweak-card]' ? cards : [] };
+  const ctx = { window: { WosExperience: E, fetch, WizOpenApp: (id, path) => { opened.push([id, path]); return true; } }, document: doc, esc: KIT.esc, URL, Date, Promise, authorList: [{ id: 'wizard', name: 'Wizard' }] };
+  vm.runInNewContext(`${between(settings, '  const tweakSwitches = ', '\n')}\n${between(settings, '  const cardPending = ', '  const newTile')}\nglobalThis.api = { tweakCard, tweakCardTap, paintTweakCards, tweakSwitches };`, ctx);
+  return { ...ctx.api, calls, cards, opened, doc, res };
+}
+const settle = () => new Promise(r => setTimeout(r, 0));
+
+test('app marker: <app id>:<switch id> parses (alone and mixed with core ids) and is stripped like any marker', () => {
+  assert.deepEqual([...KIT.tweakIds(MARK(CAL))], [CAL]);
+  assert.deepEqual([...KIT.tweakIds(`[WIZARD_TWEAK_V1]{"ids":["wizard/desktop-chats","${CAL}","bad:Up","x:../y"]}[/WIZARD_TWEAK_V1]`)], ['wizard/desktop-chats', CAL]);
+  const [tn] = KIT.parseRows(rows(`Try the calendar change.\n\n${MARK(CAL)}`));
+  assert.deepEqual([...tn.a.tweaks], [CAL]);
+  for (const t of [tn.a.text, tn.a.plainText]) assert.doesNotMatch(t, /WIZARD_TWEAK|drag-events/);
+});
+
+test('app card, switch off: app ids are dropped exactly as before (no card, no catalog read)', () => {
+  const k = appKit({ on: false });
+  assert.equal(k.tweakCard([CAL]), '');
+  const mixed = k.tweakCard(['wizard/desktop-chats', CAL]);
+  assert.match(mixed, /data-chat-tweak-card="wizard\/desktop-chats"/); assert.doesNotMatch(mixed, /drag-events/);
+  assert.equal(k.calls.length, 0, 'never asks the App Manager while off');
+});
+
+test('app card, switch on: name, description and the CURRENT state from the one catalog; mixed with a core row', async () => {
+  const k = appKit();
+  const first = k.tweakCard(['wizard/desktop-chats', CAL]);
+  assert.match(first, /Loading switch…/); assert.match(first, /Desktop-style Chats list/);
+  assert.equal(k.calls[0].url, '/wizard-os-home/store-install/_feature-switches'); assert.equal(k.calls[0].method, 'GET');
+  await settle();
+  const html = k.tweakCard([CAL]);
+  assert.match(html, /data-chat-tweak="wizard-calendar:drag-events" role="switch" aria-checked="false"/);
+  assert.match(html, /<b>Drag to move events<\/b><small class="tw-by">by Calendar<\/small><small>Drag an event to a new time\.<\/small>/);
+  assert.equal(k.calls.length, 1, 'read at most every 15 s, not on every paint');
+});
+
+test('app card tap: flips on the tap frame, POSTs the owner route once (X-Wizard-Store), then shows the answer', async () => {
+  const k = appKit(); k.tweakCard([CAL]); await settle();
+  const card = fakeCard(CAL); k.cards.push(card);
+  const btn = fakeButton(CAL, false);
+  assert.equal(k.tweakCardTap(btn), true);
+  assert.equal(btn.getAttribute('aria-checked'), 'true'); assert.match(card.innerHTML, /aria-checked="true"/);
+  assert.equal(k.tweakCardTap(btn), false, 'a second tap while pending is not a second flip');
+  await settle();
+  const posts = k.calls.filter(c => c.method === 'POST');
+  assert.equal(posts.length, 1);
+  assert.deepEqual(posts[0].body, { id: CAL, on: true });
+  assert.equal(posts[0].headers['X-Wizard-Store'], '1'); assert.equal(posts[0].headers['Content-Type'], 'application/json');
+  assert.match(card.innerHTML, /aria-checked="true"[^]*class="sw on"/, 'the App Manager\'s answer is the state shown');
+});
+
+test('app card tap: a refused flip reverts to the real state with the App Manager\'s words', async () => {
+  const toasts = [];
+  const k = appKit({ post: () => ({ ok: false, status: 503, json: async () => ({ error: 'can\u2019t reach Calendar' }) }) });
+  k.tweakCard([CAL]); await settle();
+  const card = fakeCard(CAL); k.cards.push(card);
+  k.tweakCardTap(fakeButton(CAL, false), (i, t) => toasts.push([i, t]));
+  await settle(); await settle();
+  assert.match(card.innerHTML, /aria-checked="false"/); assert.deepEqual(toasts, [['!', 'can\u2019t reach Calendar']]);
+});
+
+test('app card: the installed app without that switch yet is greyed with "Update Calendar first" + Update (App Store)', async () => {
+  const k = appKit({ listing: listingOf([]) }); k.tweakCard([CAL]); await settle();
+  const html = k.tweakCard([CAL]);
+  assert.match(html, /role="switch" aria-checked="false" disabled><span class="st-tx"><b>Calendar<\/b><small>Update Calendar first<\/small>/);
+  assert.match(html, /data-chat-tweak="" data-chat-tweak-update="wizard-calendar" aria-label="Update Calendar">Update<\/button>/);
+  assert.equal(k.tweakCardTap({ dataset: { chatTweak: '', chatTweakUpdate: 'wizard-calendar' } }), true);
+  assert.deepEqual(k.opened, [['app-store', '/wizard-os-home/store/index.html?app=wizard-calendar&open=1']]);
+  const k2 = appKit({ listing: listingOf([], [{ id: 'wizard-calendar', name: 'Calendar', ok: false, status: 503 }]) }); k2.tweakCard([CAL]); await settle();
+  const down = k2.tweakCard([CAL]); assert.match(down, /Can’t reach Calendar right now/); assert.doesNotMatch(down, /data-chat-tweak-update/);
+});
+
+test('app card: an app that is not installed (or declares no switches) stays hidden; a failed read says so quietly', async () => {
+  const k = appKit({ listing: listingOf([], []) }); k.tweakCard([CAL]); await settle();
+  assert.match(k.tweakCard([CAL]), /^<div class="ch-tweak"[^>]* hidden><\/div>$/);
+  const card = fakeCard(CAL); k.cards.push(card); k.paintTweakCards(); assert.equal(card.hidden, true);
+  const k2 = appKit({ listing: () => ({ ok: false, status: 502, json: async () => ({}) }) }); k2.tweakCard([CAL]); await settle();
+  assert.match(k2.tweakCard([CAL]), /Can’t read this Wizard’s app switches right now/);
+});
+
+test('app card parity: main and routed threads (host-profile, container, restricted) get the same app card and flip', async () => {
+  const seen = new Set();
+  for (const [kind, [sid, agent]] of Object.entries(ROUTES)) {
+    const history = rows(`Try it.\n${MARK(CAL)}`).map(r => ({ ...r, session_id: sid, ...(agent ? { agent } : {}) }));
+    const [tn] = KIT.parseRows(history);
+    const k = appKit(); k.tweakCard(tn.a.tweaks); await settle();
+    const html = k.tweakCard(tn.a.tweaks); seen.add(html);
+    assert.match(html, /role="switch" aria-checked="false"/, kind);
+    assert.equal(k.tweakCardTap(fakeButton(CAL, false)), true, kind); await settle();
+    assert.deepEqual(k.calls.filter(c => c.method === 'POST').map(c => c.body), [{ id: CAL, on: true }], kind);
+  }
+  assert.equal(seen.size, 1, 'byte-identical card for every runtime kind');
+});
