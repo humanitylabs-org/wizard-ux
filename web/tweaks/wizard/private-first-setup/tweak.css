@@ -1,0 +1,2 @@
+/* Private first setup (wizard-agent-service issue 545, wizard-os#676): a box-side switch read by the Agent Service
+ * (server/private-first.mjs). The shell changes nothing while it is on; Welcome's Connect your AI is wizard-ux#1549. */
