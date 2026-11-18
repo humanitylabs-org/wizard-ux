@@ -503,7 +503,9 @@
     }
     // The last move may not have come in before the release: land where the finger let go.
     const n = barScrubAt(s, e.clientX); if (n !== s.at && (n === s.start || CHATS.beforeNavigate(desks[n]?.wins || []))) s.at = n;
-    scrub.classList.remove('on'); goDesk(s.at, true); tourEv('desk', { home: idx === HOME });
+    // The scrub moved idx as it went; land from the start desk so goDesk runs its desk-leave work (Resources, a Home
+    // card's Chats chip, an empty desk going away, an open link) exactly as a tap or flick does.
+    scrub.classList.remove('on'); idx = s.start; goDesk(s.at, true); tourEv('desk', { home: idx === HOME });
   };
   $('#dock').addEventListener('pointerup', dockEnd); $('#dock').addEventListener('pointercancel', dockEnd);
   /* Overview (James, 10 Oct 2026): pinch in on a desk, or long-press the desk dots, to see every desk at once.

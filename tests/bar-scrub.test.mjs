@@ -64,6 +64,14 @@ test('a slow drag left steps one desk to the right per 26 px, with the label, an
   assert.equal(s.ctx.idx, 5); assert.deepEqual(s.log.at(-1), ['go', 5]); assert.equal(r.on, false, 'label hides on release');
 });
 
+test('release lands from the start desk, so goDesk runs its desk-leave work (Codex P2 on PR 1587)', () => {
+  const s = shell(), from = [];
+  s.ctx.goDesk = n => { from.push(s.ctx.idx); s.ctx.idx = n; };
+  s.finger(s.slow(-84)); assert.deepEqual(from, [2], 'goDesk sees the desk the scrub started on'); assert.equal(s.ctx.idx, 5);
+  const o = shell(), of = []; o.ctx.goDesk = n => { of.push(o.ctx.idx); o.ctx.idx = n; };
+  o.orbFinger(o.slow(-84), { joinAt: 1 }); assert.deepEqual(of, [2], 'same from the orb'); assert.equal(o.ctx.idx, 5);
+});
+
 test('drag right goes to the left; on Home it does nothing', () => {
   const s = shell({ at: 4 }); s.finger(s.slow(60)); assert.equal(s.ctx.idx, 2);
   const h = shell({ at: 0 }); h.finger(h.slow(120)); assert.equal(h.ctx.idx, 0);
