@@ -4,6 +4,8 @@ import android.content.ContentProvider;
 import android.content.ContentValues;
 import android.content.Context;
 import android.database.Cursor;
+import android.database.MatrixCursor;
+import android.provider.OpenableColumns;
 import android.net.Uri;
 import android.os.ParcelFileDescriptor;
 
@@ -39,7 +41,22 @@ public class AssistCameraProvider extends ContentProvider {
         return ParcelFileDescriptor.open(f, ParcelFileDescriptor.parseMode(mode.contains("a") ? "wa" : "rwt"));
     }
 
-    @Override public Cursor query(Uri uri, String[] projection, String selection, String[] args, String sort) { return null; }
+    /* Name and size only, for a web page's picker (wizard-ux issue 1534): WebView asks for the file's name before it
+     * hands the photo to the page, and a blank name breaks uploads that need one. */
+    @Override public Cursor query(Uri uri, String[] projection, String selection, String[] args, String sort) {
+        File f;
+        try { f = file(uri); } catch (FileNotFoundException e) { return null; }
+        String[] cols = projection != null ? projection : new String[]{OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE};
+        java.util.List<String> keep = new java.util.ArrayList<>();
+        java.util.List<Object> row = new java.util.ArrayList<>();
+        for (String c : cols) {
+            if (OpenableColumns.DISPLAY_NAME.equals(c)) { keep.add(c); row.add("photo-" + f.getName()); }
+            else if (OpenableColumns.SIZE.equals(c)) { keep.add(c); row.add(f.length()); }
+        }
+        MatrixCursor m = new MatrixCursor(keep.toArray(new String[0]), 1);
+        m.addRow(row.toArray());
+        return m;
+    }
 
     @Override public String getType(Uri uri) { return "image/jpeg"; }
 

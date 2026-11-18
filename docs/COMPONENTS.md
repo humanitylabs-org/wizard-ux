@@ -92,7 +92,7 @@ Back: `WizEscapeBack`, `WosBack`; `WizChatsHost.registerBack`/back.push share re
 | Provider login (Claude, ChatGPT) for agents and apps | installed login apps (`wizard-claude`, `wizard-chatgpt`; skill `app-owned-codex-connections`) |
 | Now playing | `WosMediaWatch` (`media-watch.js`), `WosSkinHost` `api.media`: same-origin media only, inert until watched |
 | Native mic/meeting | `NoteRecorder` (`audio/NoteRecorder.java`), `MicRoute` (`audio/MicRoute.java`): `NOTE_SOURCES` notes / `SOURCES` STT; `MeetingRecorderService`: update pause/resume/rollback |
-| Android shell capabilities | `WosDevicePort` (`device-port.js`), `WosDeviceRecording` (`device-recording.js`), `WosDeviceOrb` (`device-orb.js`); `wizardDevicePort` v1 (`device/DeviceMessageProtocol.java`) |
+| Android shell capabilities | `WosDevicePort`, `WosDeviceRecording`, `WosDeviceOrb` (`device-{port,recording,orb}.js`); `wizardDevicePort` v1 (`device/DeviceMessageProtocol.java`); page Camera `PageCamera` |
 | Home-screen apps / safe top | `WizHomeScreenApps.attach / offer / canOffer`; host owns cutout, child inset 0 |
 | Home-screen declaration | `WizHomeScreenCapabilities` (`home-screen-capabilities.js`): sanitize/matcher/replicaPrefix |
 | Long screenshot, text selection | WebView document scroll, `SelectionWebView`, `ScrollCaptureCrashGuard` (`docs/android-document-scroll.md`). The pinned thread composer sits above the bottom strip, so it reserves no orb column and re-measures on resume / dock animation end (`qa-orb-doc-scroll-composer.cjs`) |

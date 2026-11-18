@@ -30,6 +30,7 @@ import android.widget.FrameLayout;
 import android.widget.Toast;
 import android.window.OnBackInvokedDispatcher;
 
+import ai.wizards.os.assist.PageCamera;
 import ai.wizards.os.downloads.DownloadsCallerPolicy;
 
 /**
@@ -64,6 +65,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
     public static final String ACTION_FOOD = "ai.wizards.os.action.FOOD";
     public static final String ACTION_USUALS = "ai.wizards.os.action.USUALS"; // migration alias for installed callers
     private static final int REQ_EVERYWHERE = 44;
+    private static final int REQ_CAMERA = 45;
     private static java.lang.ref.WeakReference<MainActivity> current = new java.lang.ref.WeakReference<>(null);
     private boolean everywhereSetup; // James is on Android's "Display over other apps" page
     private boolean sideSetupActive; // the user tapped Turn on and is in the system picker
@@ -80,6 +82,8 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
     private FrameLayout root;
     private PermissionRequest pendingMic;
     private ValueCallback<Uri[]> pendingFiles;
+    private java.io.File pendingPhoto; // the empty file the camera writes the page's photo into (issue 1534)
+    private WebChromeClient.FileChooserParams pendingChooser; // waiting on the CAMERA prompt
     /** The native "can't reach your Wizard" screen over the WebView (ReachScreen / ReachPolicy). */
     private ReachScreen reach;
     private volatile boolean mainFailed; // this main-frame load failed: its error page must not count as "landed"
@@ -475,19 +479,67 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
             @Override
             public boolean onShowFileChooser(WebView view, ValueCallback<Uri[]> cb, FileChooserParams params) {
                 if (pendingFiles != null) pendingFiles.onReceiveValue(null);
+                PageCamera.drop(pendingPhoto);
+                pendingPhoto = null;
                 pendingFiles = cb;
-                try {
-                    Intent pick = params.createIntent();
-                    pick.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, params.getMode() == FileChooserParams.MODE_OPEN_MULTIPLE);
-                    pick.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-                    startActivityForResult(pick, REQ_FILE);
+                pendingChooser = null;
+                if (PageCamera.wantsImages(params.getAcceptTypes()) && PageCamera.needsPermission(MainActivity.this)) {
+                    pendingChooser = params;
+                    requestPermissions(new String[]{Manifest.permission.CAMERA}, REQ_CAMERA);
                     return true;
-                } catch (ActivityNotFoundException e) {
-                    pendingFiles = null;
-                    return false;
                 }
+                if (openChooser(params, true)) return true;
+                pendingFiles = null;
+                return false;
             }
         });
+    }
+
+    /* A page's file picker (wizard-ux issue 1534). WebView's own createIntent() is a plain ACTION_GET_CONTENT that
+     * ignores `capture`, so Camera buttons opened the gallery. Now, as in Chrome: capture + images opens the camera
+     * straight away; images without capture shows the usual picker with Camera beside it. No camera app (or no
+     * camera allowed): the plain picker, as before. */
+    private boolean openChooser(WebChromeClient.FileChooserParams params, boolean camera) {
+        String[] accept = params.getAcceptTypes();
+        Intent cam = null;
+        if (camera && PageCamera.wantsImages(accept)) {
+            try {
+                pendingPhoto = PageCamera.newPhoto(this);
+                cam = PageCamera.captureIntent(PageCamera.uriOf(this, pendingPhoto));
+            } catch (java.io.IOException | RuntimeException e) {
+                PageCamera.drop(pendingPhoto);
+                pendingPhoto = null;
+            }
+        }
+        if (cam != null && PageCamera.direct(accept, params.isCaptureEnabled())) {
+            try {
+                startActivityForResult(cam, REQ_FILE);
+                return true;
+            } catch (ActivityNotFoundException | SecurityException e) {
+                cam = null; // no camera app: the picker below
+            }
+        }
+        if (cam != null && cam.resolveActivity(getPackageManager()) == null) cam = null;
+        if (cam == null) {
+            PageCamera.drop(pendingPhoto);
+            pendingPhoto = null;
+        }
+        try {
+            Intent pick = params.createIntent();
+            pick.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, params.getMode() == WebChromeClient.FileChooserParams.MODE_OPEN_MULTIPLE);
+            pick.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            Intent go = pick;
+            if (cam != null) {
+                go = Intent.createChooser(pick, null);
+                go.putExtra(Intent.EXTRA_INITIAL_INTENTS, new Intent[]{cam});
+            }
+            startActivityForResult(go, REQ_FILE);
+            return true;
+        } catch (ActivityNotFoundException e) {
+            PageCamera.drop(pendingPhoto);
+            pendingPhoto = null;
+            return false;
+        }
     }
 
     /* ---------------- Back: always a step inside WizardOS, never an exit ---------------- */
@@ -862,6 +914,14 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
     @Override
     public void onRequestPermissionsResult(int code, String[] perms, int[] results) {
         super.onRequestPermissionsResult(code, perms, results);
+        if (code == REQ_CAMERA) {
+            WebChromeClient.FileChooserParams p = pendingChooser;
+            pendingChooser = null;
+            if (p == null || pendingFiles == null) return;
+            boolean ok = results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED;
+            if (!openChooser(p, ok)) { pendingFiles.onReceiveValue(null); pendingFiles = null; }
+            return;
+        }
         if (code == REQ_EVERYWHERE) { continueEverywhere(); return; }
         if (code == ai.wizards.os.photos.PhotosBridge.REQ_PERMISSIONS) { if (photos != null) photos.onPermissions(); return; }
         if (code == REQ_SIDE_MIC) {
@@ -884,7 +944,15 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
     protected void onActivityResult(int code, int result, Intent data) {
         super.onActivityResult(code, result, data);
         if (code != REQ_FILE || pendingFiles == null) return;
-        pendingFiles.onReceiveValue(pickedUris(result, data));
+        // The camera wrote into our file (straight camera, or Camera picked from the picker): hand that photo over.
+        java.io.File photo = pendingPhoto;
+        pendingPhoto = null;
+        Uri[] got = photo != null && result == Activity.RESULT_OK && photo.length() > 0 ? PageCamera.taken(this, photo) : null;
+        if (got == null) {
+            PageCamera.drop(photo);
+            got = pickedUris(result, data); // a cancelled camera or picker answers null, so the page's picker is not stuck
+        }
+        pendingFiles.onReceiveValue(got);
         pendingFiles = null;
     }
 

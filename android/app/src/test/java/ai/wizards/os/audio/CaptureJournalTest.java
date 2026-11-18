@@ -256,6 +256,8 @@ public class CaptureJournalTest {
         // Camera / Attach (wizard-os issue 655): the camera's temporary JPEG once its bytes are read, never audio.
         allow(allowed, "assist/AssistPickActivity.java", "cameraJpeg.delete()");
         allow(allowed, "assist/PickedFiles.java", "pickedCopy.delete()");
+        // A web page's camera photo (wizard-ux issue 1534): the empty file a cancelled camera left, or a day-old photo.
+        allow(allowed, "assist/PageCamera.java", "unusedPhoto.delete()", "stalePhoto.delete()");
         allow(allowed, "mizel/MizelStore.java", "f.delete()"); // guarded non-audio metadata/empty directories
         // Shared/imported attachments are not native recorder output; their own delivery custody is unchanged.
         allow(allowed, "share/ShareStore.java", "f.delete()", "d.delete()");

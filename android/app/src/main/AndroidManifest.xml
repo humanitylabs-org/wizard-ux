@@ -59,6 +59,10 @@
             <action android:name="android.support.customtabs.action.CustomTabsService" />
         </intent>
         <package android:name="com.android.vending" />
+        <!-- A web page's Camera picker (wizard-ux issue 1534): is there a camera app to offer beside Photos and Files. -->
+        <intent>
+            <action android:name="android.media.action.IMAGE_CAPTURE" />
+        </intent>
         <!-- The Tailscale guide: is it installed, and open it. -->
         <package android:name="com.tailscale.ipn" />
         <!-- Usuals: see and open Grab. -->
