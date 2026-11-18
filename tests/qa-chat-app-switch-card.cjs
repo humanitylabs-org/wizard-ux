@@ -21,7 +21,7 @@ const report = { origin, web, offOnly, cases: [] };
   const browser = await chromium.launch();
   try {
     for (const shell of ['phone', 'desktop']) for (const skin of ['nebula', 'grove']) {
-      const phone = shell === 'phone', stem = `${shell}-${skin}${offOnly ? '-off' : ''}`;
+      const phone = shell === 'phone', stem = `${shell}-${skin}${offOnly ? '-switch-off' : ''}`;
       const entry = { stem, errors: [], refused: [], posts: [], reads: 0 }; report.cases.push(entry);
       const calendar = { on: false };   // the app's own switch state (Calendar's DATA/switches.json)
       const listing = () => ({ channel: 'latest', channel_name: 'For testers', locked: false, note: '',
@@ -100,7 +100,7 @@ const report = { origin, web, offOnly, cases: [] };
           assert.equal(await page.locator('.ch-thread [data-chat-tweak-update="wizard-notes"]').filter({ visible: true }).count(), 1, 'Update button beside it');
           assert.equal(await page.locator(`[data-chat-tweak="${GONE}"]`).count(), 0, 'not-installed app hidden');
           await sw.scrollIntoViewIfNeeded(); await page.evaluate(() => document.fonts.ready);
-          await page.screenshot({ path: path.join(out, stem + '-off.png') });
+          await page.screenshot({ path: path.join(out, stem + '-before-tap.png') });
           await page.evaluate(id => {
             window.tapReceipt = null;
             window.addEventListener('click', e => { if (!e.target.closest(`[data-chat-tweak="${id}"]`)) return;
