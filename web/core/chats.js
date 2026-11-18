@@ -2002,9 +2002,16 @@ window.WizCore.chats = function createChats(H) {
   function inboxHeadHtml(w, s) {
     return inboxHidden(w, s) ? `<span class="ch-inbox-h"><span class="ch-inbox-note">In the background</span><button type="button" class="ch-inbox-open" data-chinboxopen="${esc(s.id)}" aria-label="Open: move this thread into the chat list" title="Move it into the chat list">Open</button></span>` : '';
   }
+  // Daily and Alerts threads always stay in Chats (issue 1569 review: the sweep card lives in today's Daily thread):
+  // the box names them (stays), the row's channel says so while Channels are on, and nothing is offered in the Daily view.
+  function inboxStays(w, s) {
+    if (w.daily || (LIVE.agentInbox.stays && LIVE.agentInbox.stays(s.id))) return true;
+    const st = typeof s.channel === 'string' && s.channel ? chanStore() : null, c = st && st.channels.find(x => x.id === s.channel);
+    return !!c && (c.kind === 'daily' || c.kind === 'alerts');
+  }
   function inboxCanSend(wid, s) {
     const w = W[wid];
-    return !!(s && w && !winAgent(w) && inboxSwitchOn() && LIVE.agentInbox && !(LIVE.ownerOf && LIVE.ownerOf(s)) && !s.hidden && !s.archived && !s.optimistic && !s.synthetic && !PIN.has(s.id));
+    return !!(s && w && !winAgent(w) && inboxSwitchOn() && LIVE.agentInbox && !(LIVE.ownerOf && LIVE.ownerOf(s)) && !s.hidden && !s.archived && !s.optimistic && !s.synthetic && !PIN.has(s.id) && !inboxStays(w, s));
   }
   function inboxRepaint(id) {
     paintListsNow();

@@ -1240,7 +1240,7 @@
     const num = v => { const n = Number(v); return Number.isFinite(n) && n > 0 ? n : 0; };
     const rec = r => r && typeof r === 'object' && RID.test(r.id) && typeof r.thread_id === 'string' && SID.test(r.thread_id) && (r.state === 'running' || r.state === 'stale')
       ? { id: r.id, agent: typeof r.agent === 'string' && AID.test(r.agent) ? r.agent : 'hermes', thread: r.thread_id, title: str(r.title, 120), update: str(r.last_update, 200), state: r.state, createdAt: num(r.created_at), updatedAt: num(r.updated_at) || num(r.created_at) } : null;
-    const s = { records: [], ok: false, gone: false, at: 0, busy: null };
+    const s = { records: [], stay: new Set(), ok: false, gone: false, at: 0, busy: null };
     const tell = () => { try { emit(); } catch (_) {} };
     function read() {
       if (s.busy) return s.busy;
@@ -1249,8 +1249,10 @@
         try {
           const j = await (await req('/wizard/v1/agent-inbox?state=running,stale&limit=200', { cache: 'no-store' })).json();
           s.records = (Array.isArray(j?.records) ? j.records : []).map(rec).filter(Boolean).sort((a, b) => b.updatedAt - a.updatedAt || (a.id < b.id ? -1 : 1));
+          // The main agent's Daily and Alerts threads (issue 1569 review): Send to inbox is never offered for them.
+          s.stay = new Set((Array.isArray(j?.stay) ? j.stay : []).filter(id => typeof id === 'string' && SID.test(id)).slice(0, 1000));
           s.ok = true; s.gone = false;
-        } catch (e) { if (e?.status === 404) { s.records = []; s.ok = true; s.gone = true; } }
+        } catch (e) { if (e?.status === 404) { s.records = []; s.stay = new Set(); s.ok = true; s.gone = true; } }
         finally { s.busy = null; tell(); }
         return s;
       })();
@@ -1271,7 +1273,9 @@
       try { return await (await req(`/wizard/v1/agent-inbox/${kind}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })).json(); }
       finally { fresh(); read(); }
     }
-    return { state, records, read, fresh, move };
+    // True for a main-agent Daily or Alerts thread, which always stays in Chats.
+    const stays = id => state().stay.has(id);
+    return { state, records, read, fresh, move, stays };
   }
   /* ---- end agent inbox ---- */
   const L = {

@@ -97,10 +97,11 @@ test('main versus routed: only the main agent\'s threads move (host-profile, con
 });
 
 // The chats.js rules: where Open and Send to inbox show.
-function rules({ on = true, routedWin = false, pins = [], recs = [], sessions = [] } = {}) {
+function rules({ on = true, routedWin = false, pins = [], recs = [], sessions = [], stay = [], channels = null, daily = false } = {}) {
   const ctx = {
-    LIVE: { sessions, agentInbox: {}, ownerOf: s => s.agent && s.agent !== 'hermes' ? s.agent : '' },
-    W: { w1: { id: 'w1' } }, winAgent: () => routedWin ? 'host-ops' : '', inboxSwitchOn: () => on, runningRecs: () => recs,
+    LIVE: { sessions, agentInbox: { stays: id => stay.includes(id) }, ownerOf: s => s.agent && s.agent !== 'hermes' ? s.agent : '' },
+    chanStore: () => channels ? { channels } : null,
+    W: { w1: daily ? { id: 'w1', daily: { id: 'daily', sid: 'wizard_visible_1' } } : { id: 'w1' } }, winAgent: () => routedWin ? 'host-ops' : '', inboxSwitchOn: () => on, runningRecs: () => recs,
     PIN: { has: id => pins.includes(id) }, esc: v => String(v),
   };
   vm.createContext(ctx);
@@ -126,6 +127,32 @@ test('Send to inbox is in a visible main thread\'s menu, never for a pinned, arc
   assert.equal(rules({ pins: ['wizard_visible_1'] }).inboxCanSend('w1', s), false, 'a pinned (collaborative) thread stays');
   for (const extra of [{ archived: true }, { hidden: true }, { optimistic: true }, { agent: 'host-ops' }, { agent: 'box' }, { agent: 'locked' }]) assert.equal(rules().inboxCanSend('w1', { ...s, ...extra }), false, JSON.stringify(extra));
   assert.equal(rules({ routedWin: true }).inboxCanSend('w1', s), false, 'a routed agent window');
+});
+
+// Issue 1569 review: one tap must never hide today's Daily thread (the sweep card lives there) or an Alerts thread.
+test('Send to inbox is never offered for a Daily or Alerts thread, with Channels on or off, nor in the Daily view', () => {
+  const s = { id: 'wizard_visible_1' };
+  // Channels off: rows carry no channel, the box's inbox list names the threads that stay.
+  assert.equal(rules({ stay: ['wizard_visible_1'] }).inboxCanSend('w1', s), false, 'named by the box (Channels off)');
+  assert.equal(rules({ stay: ['wizard_other'] }).inboxCanSend('w1', s), true, 'another thread named');
+  // Channels on: the row's channel is the Daily or Alerts channel.
+  const channels = [{ id: 'daily', kind: 'daily' }, { id: 'alerts', kind: 'alerts' }, { id: 'trips' }];
+  assert.equal(rules({ channels }).inboxCanSend('w1', { ...s, channel: 'daily' }), false, 'a Daily thread');
+  assert.equal(rules({ channels }).inboxCanSend('w1', { ...s, channel: 'alerts' }), false, 'an Alerts thread');
+  assert.equal(rules({ channels }).inboxCanSend('w1', { ...s, channel: 'trips' }), true, 'an ordinary channel');
+  assert.equal(rules({ daily: true }).inboxCanSend('w1', s), false, 'the window shows the Daily view');
+});
+
+test('the box\'s stay list is read with the running records and cleared on a 404', async () => {
+  let gone = false;
+  const f = inboxReader(() => gone ? { status: 404 } : { json: { records: [], stay: ['wizard_daily_1', 'wizard_alert_1', '../bad', 7] } });
+  await f.inbox.read();
+  assert.equal(f.inbox.stays('wizard_daily_1'), true);
+  assert.equal(f.inbox.stays('wizard_alert_1'), true);
+  assert.equal(f.inbox.stays('../bad'), false, 'an invalid id is dropped');
+  assert.equal(f.inbox.stays('wizard_visible_1'), false);
+  gone = true; f.inbox.fresh(); await f.inbox.read();
+  assert.equal(f.inbox.stays('wizard_daily_1'), false, 'switch off on the box: nothing named');
 });
 
 test('the buttons are wired: the Running view row, the header, the row menu and the click handler', () => {

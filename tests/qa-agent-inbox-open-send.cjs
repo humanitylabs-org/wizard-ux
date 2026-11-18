@@ -8,7 +8,8 @@
 //   1. the Running view shows Open on each task; Open lists the thread on the tap frame (before the box answers);
 //   2. a hidden worker thread opened by id shows "In the background · Open" in its header; Open removes it on the tap
 //      frame and the thread lists in Chats;
-//   3. the row menu of a visible thread has Send to inbox (a pinned thread has none); it leaves the list on the tap frame;
+//   3. the row menu of a visible thread has Send to inbox (a pinned, Daily or Alerts thread has none); it leaves the list
+//      on the tap frame;
 //   4. a live skin change repaints the buttons, and with no skin value they fall back to the dark look.
 // QA_ONLY_OFF=1: the switch stays off: no Open anywhere, no Send to inbox in the row menu, nothing asks the inbox.
 const assert = require('node:assert/strict');
@@ -23,6 +24,8 @@ fs.mkdirSync(out, { recursive: true });
 const now = Date.now(), iso = t => new Date(t).toISOString(), nap = ms => new Promise(r => setTimeout(r, ms)), M = 60e3, H = 36e5;
 const THREADS = {
   'qa-chat-2': { title: 'Plan with Jan', at: now - 40 * M, hidden: false, msgs: [['user', 'Let us plan the offsite together', 0], ['assistant', 'Happy to. Dates first?', 60]] },
+  'qa-daily-1': { title: 'Daily · Wed 18 Nov', at: now - 90 * M, hidden: false, msgs: [['user', 'Good morning, what is on today?', 0], ['assistant', 'Three things today.', 60]] },
+  'qa-alert-1': { title: 'Disk almost full', at: now - 60 * M, hidden: false, msgs: [['user', 'Tell me when the disk is nearly full', 0], ['assistant', 'The disk is 92% full.', 60]] },
   'qa-chat-1': { title: 'Weekend plans', at: now - 20 * M, hidden: false, msgs: [['user', 'What should we do on Saturday?', 0], ['assistant', 'A walk by the river, then the market.', 60]] },
   'qa-worker-1': { title: 'Lisbon flights', at: now - 3 * M, hidden: true, msgs: [['user', 'Research flights to Lisbon by Friday', 0], ['assistant', 'Comparing three fares for Friday morning.', 120]] },
   'qa-worker-2': { title: 'Dentist slot', at: now - 7 * H, hidden: true, msgs: [['user', 'Find a dentist slot this week', 0], ['assistant', 'Asked two practices, waiting to hear back.', 300]] },
@@ -78,7 +81,8 @@ const report = { origin, web, off, cases: [] };
           if (p === '/wizard/v1/agent-inbox') {
             entry.inboxReads++;
             assert.equal(u.searchParams.get('state'), 'running,stale');
-            return r.fulfill({ json: { records: RECORDS, check: null } });
+            // The box names the main agent's Daily and Alerts threads: Send to inbox is never offered for them.
+            return r.fulfill({ json: { records: RECORDS, check: null, stay: ['qa-daily-1', 'qa-alert-1'] } });
           }
           if (p === '/wizard/v1/pages/wizard-look/look.json') return r.fulfill({ status: 404, json: { error: 'not_here' } });
           if (p === '/wizard/v1/ui-preferences') return r.fulfill({ json: { migrations: { 'launcher-seed-v1': true } } });
@@ -186,7 +190,13 @@ const report = { origin, web, off, cases: [] };
         if (phone && !(await page.locator('.ch-list [data-chopen]').filter({ visible: true }).count())) { await openList(); await nap(400); }
         entry.listedAfterHead = await listed();
         assert.ok(entry.listedAfterHead.includes('qa-worker-2'), 'Open from the header lists it in Chats: ' + entry.listedAfterHead.join(','));
-        // 3. Send to inbox from a visible thread's menu; never for a pinned one.
+        // 3. Send to inbox from a visible thread's menu; never for a Daily or Alerts thread (issue 1569 review), nor a pinned one.
+        for (const id of ['qa-daily-1', 'qa-alert-1']) {
+          const menu = await rowMenu(id); (entry.stayMenus = entry.stayMenus || {})[id] = menu;
+          assert.ok(menu.length && !menu.some(t => /Send to inbox/.test(t)), `${id} has no Send to inbox: ` + menu.join(' | '));
+          if (id === 'qa-daily-1') await page.screenshot({ path: path.join(out, stem + '-5a-daily-no-send.png') });
+          await closeMenu();
+        }
         await page.evaluate(() => { const b = [...document.querySelectorAll('[data-chpin="qa-chat-2"]')].find(x => x.getClientRects().length); if (b) b.click(); else window.WosChatPins.toggle('qa-chat-2'); }); await nap(400);
         entry.pinned = await page.evaluate(() => window.WosChatPins.has('qa-chat-2'));
         assert.equal(entry.pinned, true, 'qa-chat-2 is pinned');
