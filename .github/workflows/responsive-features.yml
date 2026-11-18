@@ -115,6 +115,8 @@ jobs:
       - run: node tests/qa-desktop-one-app.cjs
       - run: QA_OUT=one-app-evidence/chats-back node tests/qa-desktop-chats-back-narrow.cjs
         if: always()
+      - run: QA_OUT=one-app-evidence/native-resize node tests/qa-desktop-native-resize.cjs
+        if: always()
       - uses: actions/upload-artifact@v4
         if: always()
         with:
