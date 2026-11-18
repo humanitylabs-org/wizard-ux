@@ -37,6 +37,7 @@
     "wizard/assist-attach",
     "wizard/app-windows",
     "wizard/pin-fast-open",
+    "wizard/pin-slim-doc",
     "wizard/private-first-setup",
     "wizard/chat-app-switches"
   ],

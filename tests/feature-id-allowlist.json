@@ -142,6 +142,7 @@
   "web/core/orb-handoff.js:mizel": 1,
   "web/core/photos-relay.js:Photos": 13,
   "web/core/photos-relay.js:photos": 10,
+  "web/core/pin-doc.js:photos": 1,
   "web/core/settings.js:mizel": 2,
   "web/core/sigils.css:usuals": 1,
   "web/core/sigils.css:wisdom": 1,

@@ -1,0 +1,203 @@
+// wizard-ux issue 1584: a pinned app (home-screen icon) loaded the whole phone shell, about 120 scripts, before its
+// app could start. With switch wizard/pin-slim-doc, core/pin-doc.js (first script of index.html) stops the page and
+// builds the pinned-app host from the same release: every stylesheet in order, only the scripts needed to open the
+// app, the rest once the app has loaded; and Wizard's first server read starts from the page head. Switched off, or
+// in any page that is not a pinned session, nothing changes.
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import vm from 'node:vm';
+
+const read = path => readFileSync(new URL('../web/' + path, import.meta.url), 'utf8');
+const SWITCH = 'wizard/pin-slim-doc';
+const INDEX = read('index.html');
+
+function indexFiles() {
+  return [...INDEX.matchAll(/<(script|link)\b[^>]*?\b(?:src|href)="([^"]+)"[^>]*>/g)].map(m => m[2])
+    .filter(f => /\.(js|css)$/.test(f) && f !== 'core/pin-doc.js');
+}
+
+// A small DOM: enough for pin-doc.js (head, meta, created elements, appended scripts that "load" on demand).
+function page({ search = '?app-session=wizard-search', pathname = '/wizard-os-home/', worn = [SWITCH], release = '', body = null } = {}) {
+  const head = [], scripts = [], log = [];
+  const el = tag => ({ tag, dataset: {}, attrs: {}, children: [], setAttribute(k, v) { this.attrs[k] = v; }, append(...c) { this.children.push(...c); } });
+  const html = { dataset: {}, children: [], append(c) { this.children.push(c); } };
+  const document = {
+    documentElement: html, body, baseURI: 'https://box.example' + pathname,
+    head: { append(n) { head.push(n); if (n.tag === 'script') scripts.push(n); } },
+    querySelector: s => s === 'meta[name="wos-release"]' && release ? { content: release } : null,
+    createElement: el,
+  };
+  const store = new Map([['wos.tweaks.expect', JSON.stringify(worn)]]);
+  const fetches = [];
+  const window = { stop: () => log.push('stop'), fetch: (u, o) => { fetches.push([u, o]); return Promise.resolve({ ok: true, u }); }, dispatchEvent: () => true };
+  const ctx = vm.createContext({ window, document, location: { search, pathname }, localStorage: { getItem: k => store.get(k) ?? null },
+    URL, URLSearchParams, CustomEvent: class { constructor(t) { this.type = t; } }, console });
+  vm.runInContext(read('core/pin-doc.js'), ctx);
+  // Scripts "run" in order when asked to; each load fires onload.
+  const run = async n => { for (const s of scripts.slice(0, n)) if (!s.ran) { s.ran = true; s.onload?.(); await null; } };
+  const runAll = async () => { for (let i = 0; i < 5; i++) { await run(scripts.length); await new Promise(setImmediate); } };
+  const P = window.WizPinDoc;
+  return { window, html, head, scripts, log, fetches, run, runAll, P, FILES: JSON.parse(JSON.stringify(P.FILES)) };
+}
+const files = p => p.scripts.map(s => new URL(s.src).pathname.replace('/wizard-os-home/', ''));
+
+test("pin-doc.js lists index.html's scripts and stylesheets exactly, in order", () => {
+  const P = page({ search: '' });
+  assert.deepEqual(P.FILES.map(([, f]) => f), indexFiles(),
+    'index.html changed: add the file to FILES in web/core/pin-doc.js in the same place (e = needed to open a pinned app, x = afterwards, c = stylesheet)');
+  for (const [k, f] of P.FILES) assert.equal(k === 'c', f.endsWith('.css'), `${f}: kind ${k}`);
+  const mod = new Set([...INDEX.matchAll(/<script type="module" src="([^"]+)"/g)].map(m => m[1]));
+  for (const [k, f] of P.FILES) if (mod.has(f)) assert.equal(k, 'm', `${f} is a module script`);
+});
+
+test('pin-doc.js runs right after shell-token.js (which must run once, first), before anything else', () => {
+  const headSrc = INDEX.slice(0, INDEX.indexOf('</head>'));
+  const scripts = [...headSrc.matchAll(/<script\b[^>]*src="([^"]+)"/g)].map(m => m[1]);
+  assert.deepEqual(scripts.slice(0, 2), ['core/shell-token.js', 'core/pin-doc.js']);
+  assert.equal(page({ search: '' }).FILES.filter(([k]) => k === 'h').map(([, f]) => f).join(), 'core/shell-token.js', 'only what ran above it is marked h');
+  assert.doesNotMatch(read('app-session.html'), /pin-doc/, 'the offline host stays exactly as it is');
+  assert.doesNotMatch(read('desktop.html'), /pin-doc/);
+});
+
+test('switched off, or not a pinned session, or another address: nothing happens', () => {
+  for (const opts of [{ worn: [] }, { search: '' }, { search: '?session=x' }, { pathname: '/wizard-os-home/app-session.html' },
+    { pathname: '/wizard-os-home/desktop.html' }, { body: {} }]) {
+    const p = page(opts);
+    assert.equal(p.P.active, false, JSON.stringify(opts));
+    assert.deepEqual(p.log, []); assert.equal(p.head.length, 0); assert.equal(p.html.dataset.pinDoc, undefined);
+    assert.equal(p.P.takeBootstrap(), null);
+  }
+  // A broken worn list never turns it on.
+  const store = page({ worn: 'x' }); assert.equal(store.P.active, false);
+});
+
+test('switched on: the page stops, every stylesheet comes first in order, then only the scripts that open the app', async () => {
+  const p = page({ release: 'abc123def456', worn: [SWITCH, 'wizard/pin-fast-open'] });
+  assert.equal(p.P.active, true);
+  assert.deepEqual(p.log, ['stop']);
+  assert.equal(p.html.dataset.pinDoc, '1');
+  assert.equal(p.html.dataset.tweaks, SWITCH + ' wizard/pin-fast-open', 'the worn tweaks are painted, so pin-fast-open etc. still read');
+  const css = p.head.filter(n => n.tag === 'link');
+  assert.deepEqual(css.map(l => new URL(l.href).pathname.replace('/wizard-os-home/', '')), p.FILES.filter(([k]) => k === 'c').map(([, f]) => f));
+  assert.ok(css.every(l => l.attrs.blocking === 'render' && new URL(l.href).searchParams.get('v') === 'abc123def456'), 'render-blocking, same release');
+  assert.ok(p.head.indexOf(css.at(-1)) < p.head.indexOf(p.scripts[0]));
+  assert.ok(p.head.some(n => n.tag === 'meta' && n.name === 'viewport'));
+  const eager = p.FILES.filter(([k]) => k === 'e').map(([, f]) => f);
+  assert.deepEqual(files(p), eager);
+  assert.ok(eager.length < 40 && eager.at(-1) === 'core/single-app-session.js');
+  assert.ok(p.scripts.every(s => s.async === false && new URL(s.src).searchParams.get('v') === 'abc123def456'));
+  assert.equal(p.html.children[0].tag, 'body');
+  assert.equal(p.html.children[0].children[0].id, 'device');
+  for (const f of ['app.js', 'device.js', 'core/chats.js', 'live.js', 'orb.js', 'core/shell-token.js']) assert.ok(!eager.includes(f), f + ' not now');
+});
+
+test('switched on: the rest arrives once asked, after the first scripts, once', async () => {
+  const p = page();
+  let arrived = false; p.P.arrived().then(() => { arrived = true; });
+  await p.runAll();
+  assert.equal(arrived, false, 'nothing more without asking');
+  const n = p.scripts.length;
+  const a = p.P.extras(), b = p.P.extras();
+  assert.equal(a, b, 'asked twice, loaded once');
+  await p.runAll();
+  assert.equal(await a, true); assert.equal(arrived, true);
+  const rest = files(p).slice(n);
+  assert.deepEqual(rest, p.FILES.filter(([k]) => k === 'x' || k === 'm').map(([, f]) => f));
+  assert.ok(rest.includes('core/chats.js') && rest.includes('live.js') && rest.includes('core/chats-view.js'));
+  for (const f of ['app.js', 'device.js', 'pwa-install.js']) assert.ok(!files(p).includes(f), f + ' never runs in a pinned session');
+  assert.equal(p.scripts.find(s => s.src.includes('thread-swipe-back')).type, 'module');
+});
+
+test('switched on: bootstrap starts at once from the page head (fetch is already the owner-header one), taken once', async () => {
+  const p = page();
+  assert.equal(p.fetches.length, 1);
+  assert.equal(p.fetches[0][0], '/wizard/v1/bootstrap');
+  assert.deepEqual({ ...p.fetches[0][1] }, { credentials: 'same-origin', cache: 'no-store' });
+  const first = p.P.takeBootstrap();
+  assert.ok(first && typeof first.then === 'function');
+  assert.equal(p.P.takeBootstrap(), null, 'taken once');
+});
+
+test('config.js uses the read the page head started, and starts its own without it', async () => {
+  const run = early => {
+    const calls = [];
+    const window = { addEventListener() {}, dispatchEvent() {}, WizPinDoc: early === undefined ? undefined : { takeBootstrap: () => { const p = early; early = null; return p; } } };
+    const ctx = vm.createContext({ window, document: { addEventListener() {} }, localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+      fetch: async u => { calls.push(u); return { ok: true, json: async () => ({ bootstrap: 2, from: 'own' }) }; },
+      CustomEvent: class {}, Intl, Date, URL, console });
+    ctx.self = window;
+    vm.runInContext(read('core/config.js'), ctx);
+    return { calls, C: window.WizConfig };
+  };
+  const mine = run(Promise.resolve({ ok: true, json: async () => ({ bootstrap: 2, from: 'head' }) }));
+  await mine.C.ready;
+  assert.deepEqual(mine.calls, [], 'no second bootstrap read');
+  const own = run(undefined); await own.C.ready;
+  assert.deepEqual(own.calls, ['/wizard/v1/bootstrap']);
+  const none = run(null); await none.C.ready;
+  assert.deepEqual(none.calls, ['/wizard/v1/bootstrap'], 'nothing started (switch off): its own read');
+});
+
+// The real single-app-session.js on the slim page: no Chats host yet.
+function session({ slim, host }) {
+  const params = new URLSearchParams({ 'app-session': 'wisdom' });
+  const pwin = {};
+  vm.runInContext(read('core/home-screen-policy.js'), vm.createContext({ window: pwin, document: { documentElement: { setAttribute() {} } },
+    location: { origin: 'https://box.example', search: '?' + params }, URL, URLSearchParams, Object, Proxy, Reflect, localStorage: { getItem: () => null, setItem() {} } }));
+  const apps = { APP: { wisdom: { id: 'wisdom', name: 'Wisdom', url: '/wisdom/', kind: 'wizard' } }, APPS: [] };
+  const frames = [], listeners = {}, opened = [], idle = [];
+  function el(tag) { return { tag, dataset: {}, style: { setProperty() {} }, classList: { add() {}, remove() {} }, children: [], isConnected: true, setAttribute() {}, remove() {},
+    addEventListener(t, fn) { (this.on ||= {})[t] = fn; }, set textContent(v) {}, set innerHTML(v) { this.children = []; },
+    appendChild(c) { this.children.push(c); if (c.tag === 'iframe') frames.push(c); }, append(...c) { this.children.push(...c); }, replaceChildren() { this.children = []; } }; }
+  const html = el('html'); html.dataset.tweaks = 'wizard/pin-fast-open';
+  let attached = null, arrive;
+  const arrived = new Promise(ok => { arrive = ok; });
+  let asked = 0;
+  const WizChatsHost = { create: () => ({ bind() {}, forget() {}, isHosted: () => false, openHosted: (...a) => { opened.push(a); return true; } }) };
+  const window = { WizHomeScreenPolicy: pwin.WizHomeScreenPolicy, WizCore: { apps: () => apps, appsLoaded: () => new Promise(() => {}) },
+    WizAppServices: { attach: (f, o) => { attached = o; return () => {}; }, guardBack() {} },
+    requestIdleCallback: fn => idle.push(fn),
+    ...(host ? { WizChatsHost } : {}),
+    ...(slim ? { WizPinDoc: { active: true, extras: () => { asked++; return arrived; }, arrived: () => arrived } } : {}) };
+  const document = { documentElement: html, getElementById: () => el('host'), addEventListener() {}, createElement: el, title: '' };
+  vm.runInContext(read('core/single-app-session.js'), vm.createContext({ window, document, localStorage: { getItem: () => null, setItem() {} },
+    location: { origin: 'https://box.example' }, URL, addEventListener: (t, fn) => { (listeners[t] ||= []).push(fn); }, setInterval() {}, setTimeout }));
+  return { frames, opened, idle, attached: () => attached, asked: () => asked,
+    arrive: async () => { window.WizChatsHost = WizChatsHost; arrive(true); await new Promise(setImmediate); } };
+}
+
+test('slim page: the app mounts at once; the rest is asked for when the app has loaded', async () => {
+  const s = session({ slim: true, host: false });
+  await new Promise(setImmediate);
+  assert.equal(s.frames.length, 1, 'mounted without the Chats host');
+  assert.equal(s.asked(), 0, 'nothing more while the app is loading');
+  s.frames[0].on.load();
+  assert.equal(s.idle.length, 1); s.idle[0]();
+  assert.equal(s.asked(), 1);
+});
+
+test('slim page: a thread the app asks for before the Chats host arrived opens once it is there', async () => {
+  const s = session({ slim: true, host: false });
+  await new Promise(setImmediate);
+  assert.equal(s.attached().openThread('t1', { reply: true }), true, 'accepted');
+  assert.equal(s.asked(), 1, 'first use asks for the rest');
+  assert.deepEqual(s.opened, []);
+  await s.arrive();
+  assert.equal(s.opened.length, 1);
+  assert.equal(s.opened[0][0], 'single-app'); assert.equal(s.opened[0][1], s.frames[0]); assert.equal(s.opened[0][2], 't1');
+  assert.equal(s.attached().openThread('t2'), true, 'later: straight through');
+  assert.equal(s.opened.length, 2);
+});
+
+test('full shell (switch off): the Chats host is there from the start, as before', async () => {
+  const s = session({ slim: false, host: true });
+  await new Promise(setImmediate);
+  assert.equal(s.attached().openThread('t1'), true);
+  assert.equal(s.opened.length, 1);
+  s.frames[0].on.load?.();
+  assert.equal(s.idle.length, 0, 'no extra loading in the full shell');
+  const none = session({ slim: false, host: false });
+  await new Promise(setImmediate);
+  assert.equal(none.attached().openThread('t1'), false, 'no host, no slim page: refused as before');
+});
