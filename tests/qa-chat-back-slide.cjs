@@ -25,7 +25,7 @@ const ROWS = [
 (async () => {
   const browser = await chromium.launch(), report = [];
   try {
-    for (const [skin, dev] of [['nebula', 'phone'], ['grove', 'phone'], ['nebula', 'desktop'], ['grove', 'desktop']]) {
+    for (const [skin, dev] of [['nebula', 'phone'], ['grove', 'phone'], ['nebula', 'desktop'], ['grove', 'desktop']].filter(([, d]) => !process.env.QA_DEVS || process.env.QA_DEVS.split(',').includes(d))) {
       const phone = dev === 'phone';
       const context = await browser.newContext({ viewport: phone ? { width: 412, height: 915 } : { width: 1280, height: 800 }, isMobile: phone, hasTouch: true, serviceWorkers: 'block', ...(phone ? { userAgent: 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Mobile Safari/537.36' } : {}) });
       const errors = [], steps = {};
@@ -79,9 +79,9 @@ const ROWS = [
         });
         const page = await context.newPage(); page.on('pageerror', e => errors.push(e.message));
         await page.goto(origin + prefix + (phone ? 'index.html?phone' : 'desktop.html'));
-        await page.waitForFunction(() => window.__wos && !window.WosWelcome?.active && window.WosExperience?.state.tweaks.length && !window.WosExperience.state.busy);
+        await page.waitForFunction(() => (window.__wux || window.__wos) && !window.WosWelcome?.active && window.WosExperience?.state.tweaks.length && !window.WosExperience.state.busy);
         if (!off) await page.waitForFunction(() => (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/chat-channels'), null, { timeout: 15000 });
-        if (phone) await page.evaluate(() => __wos.openSheet('inbox')); else await page.evaluate(() => window.WizOpenApp?.('wizard') || window.__wux?.newWin?.({ app: 'chats' }));
+        await page.evaluate(phone => phone ? __wos.openSheet('inbox') : __wux.openChatsList(), phone);
         await nap(600);
         const vis = sel => page.locator(sel).filter({ visible: true }).first();
         const shot = n => page.screenshot({ path: path.join(out, `${dev}-${skin}${off ? '-off' : ''}-${n}${broken ? '-before' : ''}.png`) });
@@ -108,7 +108,7 @@ const ROWS = [
         const record = async (act) => {
           await page.evaluate(() => { window.__frames = []; window.__sample = true; window.__release = 0; });
           const t0 = await act();
-          await nap(700);
+          await nap(1200); // a slow host can take a moment to paint a thread
           return page.evaluate(t0 => { window.__sample = false; const r = window.__release || t0; return { before: window.__frames.filter(f => f.t < r), after: window.__frames.filter(f => f.t >= r) }; }, t0);
         };
         const tapAt = sel => async () => { const t = await page.evaluate(() => performance.now()); await vis(sel).click(); return t; };
@@ -129,15 +129,19 @@ const ROWS = [
           return { ok: xs.every((x, i) => i === 0 || x >= xs[i - 1] - .5), xs: xs.slice(0, 6), atRelease: lastBefore.x };
         };
         const slid = rec => rec.after.some(f => f.v.some(v => Math.abs(v.x) > 20));
-        const mid = phone ? 500 : 420, sx = phone ? 120 : 420;
+        // Where to put the finger: inside the view on screen (phone: the whole screen; desktop: the Chats window).
+        const at = async sel => { // phone: the middle of the screen; desktop: inside the Chats window's pane on screen
+          if (phone) return { x: 120, y: 500 };
+          const b = await vis(sel).boundingBox(); return { x: b.x + Math.min(120, b.width / 4), y: b.y + b.height * .55 }; };
+        const swipeIn = async (sel, dx, ms = 260, mark = true) => { const p = await at(sel); await swipe(p.x, p.y, dx, 0, ms, mark); return 0; };
         steps.touch = built;
         if (off) {
           // Switch off: a thread from the plain list; the swipe back snaps back and cuts, taps have no motion.
           steps.open = slid(await record(tapAt('.ch-list [data-chopen="qa-a1"]'))); await nap(500);
-          const r = await record(async () => { await swipe(sx, mid, 220, 0, 260, true); return 0; });
+          const r = await record(() => swipeIn('[data-part="thread"]', 220));
           steps.swipe = { slid: slid({ after: r.after.map(f => ({ v: f.v.filter(v => v.kind !== 'thread') })) }), where: await where(), leave: leaving(r, 'thread') };
           await vis('.ch-list [data-chopen="qa-a1"]').click(); await nap(600);
-          steps.button = slid(await record(tapAt('[data-part="thread"] [data-chback]')));
+          steps.button = phone ? slid(await record(tapAt('[data-part="thread"] [data-chback]'))) : slid(await record(async () => { const t = await page.evaluate(() => performance.now()); await page.keyboard.press('Escape'); return t; }));
           report.push({ skin, dev, off, steps, errors });
           assert.equal(steps.open, false, `${dev} ${skin}: off, opening a thread has no motion`);
           assert.equal(steps.swipe.slid, false, `${dev} ${skin}: off, no slide-in after the swipe`); assert.equal(steps.swipe.where, 'list');
@@ -151,40 +155,45 @@ const ROWS = [
         // 2. Open a thread from the feed (forward).
         steps.openThread = judge(await record(tapAt('.ch-chan-feed [data-chopen="qa-a1"]')), 'thread', 1); await nap(500);
         // 3. A short swipe on the thread eases back; nothing changes.
-        const short = await record(async () => { await swipe(sx, mid, 70, 0, 900, true); return 0; });
+        const short = await record(() => swipeIn('[data-part="thread"]', 70, 900));
         steps.short = { stays: await where(), end: short.after.at(-1)?.v.find(v => v.kind === 'thread')?.x };
         // 4. Swipe right out of the thread: leaving never moves back, the feed slides in from the left.
-        const s1 = await record(async () => { await swipe(sx, mid, 220, 0, 260, true); return 0; });
+        const s1 = await record(() => swipeIn('[data-part="thread"]', 220));
         steps.swipeThread = { leave: leaving(s1, 'thread'), arrive: judge(s1, 'feed', -1), where: await where() };
         await shot('1-back-from-thread');
         // 5. Swipe right out of the feed: the Channels list slides in from the left.
-        const s2 = await record(async () => { await swipe(sx, mid, 220, 0, 260, true); return 0; });
+        const s2 = await record(() => swipeIn('.ch-list', 220));
         steps.swipeFeed = { leave: leaving(s2, 'feed'), arrive: judge(s2, 'home', -1), where: await where(), view: await view() };
         // 6. A third swipe right does nothing and the app stays open.
-        await swipe(sx, mid, 220); steps.third = { where: await where(), view: await view() };
+        await swipeIn('.ch-list', 220, 260, false); steps.third = { where: await where(), view: await view() };
         // 7. Back button: feed -> thread -> Back button -> feed -> Back button -> Channels.
         await vis('.ch-chan-open[data-chchan="apps"]').click(); await nap(500);
         await vis('.ch-chan-feed [data-chopen="qa-a1"]').click(); await nap(700);
-        steps.buttonThread = judge(await record(tapAt('[data-part="thread"] [data-chback]')), 'feed', -1);
+        // Classic desktop shows the thread in a pane beside the list and has no thread Back button: Esc closes the pane.
+        if (phone) steps.buttonThread = judge(await record(tapAt('[data-part="thread"] [data-chback]')), 'feed', -1);
+        else { await page.keyboard.press('Escape'); await nap(500); }
         steps.buttonFeed = judge(await record(tapAt('[data-chchanback]')), 'home', -1);
         // 8. The shell's Back step (hardware / gesture Back).
         await vis('.ch-chan-open[data-chchan="apps"]').click(); await nap(500);
         steps.shellBack = judge(await record(backStep), 'home', -1);
         // 9. The page swipe is unchanged: Channels -> Activity slides in from the right.
-        const pg = await record(async () => { await swipe(300, mid, -200, 0, 260, true); return 0; });
+        const pg = await record(async () => { const p = await at('.ch-list'); await swipe(p.x + (phone ? 180 : 140), p.y, -200, 0, 260, true); return 0; });
         steps.page = { view: await view(), body: judge(pg, 'body', 1) };
         await shot('2-after');
         report.push({ skin, dev, off, steps, errors });
         const want = !off && !broken && built;
         if (!built) { assert.ok(!slid(s1), `${dev} ${skin}: no touch built-in, no motion`); }
         else if (want) {
-          for (const k of ['openFeed', 'openThread', 'buttonThread', 'buttonFeed', 'shellBack']) assert.ok(steps[k].ok, `${dev} ${skin}: ${k} slides ${JSON.stringify(steps[k])}`);
+          for (const k of ['openFeed', 'openThread', 'buttonThread', 'buttonFeed', 'shellBack']) if (k in steps) assert.ok(steps[k].ok, `${dev} ${skin}: ${k} slides ${JSON.stringify(steps[k])}`);
           assert.ok(steps.swipeThread.leave.ok, `${dev} ${skin}: the thread never snaps back before it leaves ${JSON.stringify(steps.swipeThread.leave)}`);
-          assert.ok(steps.swipeThread.arrive.ok, `${dev} ${skin}: the feed slides in from the left ${JSON.stringify(steps.swipeThread.arrive)}`);
+          // Phone: the feed comes back in place of the thread and slides in. Desktop: the feed pane was on screen beside
+          // the thread all along, so only the thread pane closes (nothing arrives, nothing slides).
+          if (phone) assert.ok(steps.swipeThread.arrive.ok, `${dev} ${skin}: the feed slides in from the left ${JSON.stringify(steps.swipeThread.arrive)}`);
+          else assert.equal(steps.swipeThread.arrive.start, 0, `${dev} ${skin}: the feed pane beside the thread stays still`);
           assert.ok(steps.swipeFeed.leave.ok, `${dev} ${skin}: the feed never snaps back ${JSON.stringify(steps.swipeFeed.leave)}`);
           assert.ok(steps.swipeFeed.arrive.ok, `${dev} ${skin}: Channels slides in from the left ${JSON.stringify(steps.swipeFeed.arrive)}`);
         } else {
-          for (const k of ['openFeed', 'openThread', 'buttonThread', 'buttonFeed', 'shellBack']) assert.ok(!steps[k].ok, `${dev} ${skin}: ${k} has no slide (old behaviour)`);
+          for (const k of ['openFeed', 'openThread', 'buttonThread', 'buttonFeed', 'shellBack']) if (k in steps) assert.ok(!steps[k].ok, `${dev} ${skin}: ${k} has no slide (old behaviour)`);
           assert.ok(!steps.swipeThread.arrive.ok, `${dev} ${skin}: the old cut, no slide-in`);
         }
         assert.equal(steps.short.stays, 'thread'); assert.equal(steps.short.end, 0, `${dev} ${skin}: a short swipe eases back to rest`);

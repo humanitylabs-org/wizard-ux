@@ -85,11 +85,12 @@ import { engages, commits, COMMIT_PX } from './swipe-intent.js';
       if (!s.tabs || !!s.shown === want) return; s.shown = want;
       for (const b of s.tabs.querySelectorAll('[data-chview]')) b.classList.toggle('on', b.dataset.chview === (want ? s.to : s.page));
     };
-    const bind = root => {
+    const bind = (root, how) => {
       api.listen(root, 'touchstart', e => {
         sw = null;
         const view = api.route().view;
         if ((view !== 'thread' && view !== 'list') || e.touches.length !== 1) return;
+        if (how.listOnly && view !== 'list') return; // a separate list pane: only its own pages and feed, never the thread's Back
         const t0 = e.touches[0];
         if (t0.clientX < api.env.edgeInset || skip(e.target) || String(window.getSelection ? window.getSelection() : '')) return;
         if (view === 'thread') {
@@ -156,10 +157,25 @@ import { engages, commits, COMMIT_PX } from './swipe-intent.js';
       api.listen(root, 'touchcancel', end, { passive: true });
     };
     // The chats container is stable across repaints; bind once per container (desks can hold several chats windows).
-    const bound = new WeakSet();
-    const ensure = () => { const r = api.part('thread') || api.part('list'); if (r && !bound.has(r)) { bound.add(r); bind(r); } };
+    const bound = new WeakMap(), refs = []; // root -> { listOnly }; refs: every bound root, held weakly
+    const add = (r, listOnly) => { const how = { listOnly }; bound.set(r, how); refs.push(new WeakRef(r)); bind(r, how); };
+    const ensure = () => {
+      const r = api.part('thread') || api.part('list'); if (!r) return;
+      const how = bound.get(r); if (how) { how.listOnly = false; return; } // a pane bound first becomes the shell's root
+      add(r, false);
+    };
+    // Classic desktop draws the Chats list in its own pane, outside the shell's Chats root: with Channels on, bind
+    // that pane too (list swipes only), so its feed and pages swipe as on the phone (wizard-ux issue 1548).
+    const ensurePane = ({ part, el } = {}) => {
+      if (part !== 'list' || !el || bound.has(el) || !chanOn() || !viewOf('list', el)) return;
+      for (let i = refs.length - 1; i >= 0; i--) {
+        const r = refs[i].deref(); if (!r) { refs.splice(i, 1); continue; }
+        if (r.contains && (r.contains(el) || (el.contains && el.contains(r)))) return;
+      }
+      add(el, true);
+    };
     ensure();
-    api.on('render', p => { ensure(); step(p); });
+    api.on('render', p => { ensure(); ensurePane(p); step(p); });
     api.on('route', ensure);
     return () => { if (sw) { reset(sw.th); if (sw.mode === 'page') preview(sw, false); } sw = null; };
   }

@@ -165,7 +165,7 @@ function viewHarness({ on = true, reduced = false, start = 'thread', ua = '' } =
   };
   const realNow = performance.now;
   setup({
-    part: n => (n === 'thread' || n === 'list' ? { ...win, querySelector: () => cur } : null),
+    part: n => (n === 'thread' || n === 'list' ? { ...win, querySelector: () => cur, contains: x => x === win } : null),
     route: () => ({ view: cur.key === 'thread' ? 'thread' : 'list' }), env: { edgeInset: 24 },
     listen: (_el, type, fn) => { handlers[type] = fn; }, frame: fn => queued.push(fn),
     on: (type, fn) => { if (type === 'render') renders.push(fn); },
@@ -246,6 +246,34 @@ test('the Android app (document-scrolled thread): opening a thread has no slide,
   assert.ok(!h.log.some(w => w.name === 'win'), 'no slide carries the pinned header off screen');
   h.show('feed'); h.settle();
   assert.equal(h.log.filter(w => w.name === 'win' && w.k === 'transform')[0].v, 'translateX(-48px)');
+});
+
+test('classic desktop: the list pane outside the shell Chats root gets the feed swipe (list swipes only)', () => {
+  globalThis.document = { documentElement: { dataset: { tweaks: 'wizard/chat-channels' } } };
+  window.matchMedia = () => ({ matches: false });
+  const handlers = new Map(), renders = []; let backs = 0, view = 'list';
+  const shellRoot = el('[data-chats]'); shellRoot.querySelector = q => q === '[data-part="thread"]' ? null : null; shellRoot.contains = () => false;
+  const pane = el('[data-chats]'); pane.style = {};
+  const list = el('.ch-list', pane, { isConnected: true }); list.style = {};
+  list.querySelector = q => q === '.ch-chan-h [data-chchanback]' ? el('[data-chchanback]', list) : q === ':scope > .ch-scroll' ? list : null;
+  pane.querySelector = q => q === ':scope > [data-part="list"]' ? list : null;
+  pane.contains = () => false;
+  setup({
+    part: n => (n === 'thread' || n === 'list' ? shellRoot : null), route: () => ({ view }), env: { edgeInset: 24 },
+    listen: (target, type, fn) => { handlers.set(target, { ...(handlers.get(target) || {}), [type]: fn }); }, frame: () => {},
+    on: (type, fn) => { if (type === 'render') renders.push(fn); }, nav: { back: () => { backs++; return true; } },
+  });
+  for (const fn of renders) fn({ part: 'list', el: pane });
+  const h = handlers.get(pane); assert.ok(h, 'the pane is bound');
+  const swipe = () => { const realNow = performance.now; let now = 0; performance.now = () => now;
+    h.touchstart({ touches: [{ clientX: 150, clientY: 400 }], target: el('', list) });
+    for (let i = 1; i <= 8; i++) { now = 50 * i; h.touchmove({ touches: [{ clientX: 150 + 20 * i, clientY: 402 }] }); }
+    h.touchend({ type: 'touchend', changedTouches: [{ clientX: 310, clientY: 402 }] }); performance.now = realNow; };
+  swipe(); assert.equal(backs, 1, 'a swipe right on the feed pane goes back to Channels');
+  view = 'thread'; swipe(); assert.equal(backs, 1, 'with a thread open beside it, the pane never runs Back (that would close the thread)');
+  for (const fn of renders) fn({ part: 'list', el: pane });
+  assert.equal([...handlers.keys()].filter(k => k === pane).length, 1, 'bound once');
+  delete globalThis.document;
 });
 
 test('reduced motion: views change with no slide', () => {
