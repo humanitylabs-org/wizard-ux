@@ -36,7 +36,7 @@ const backs = (process.env.QA_BACKS || 'button,system').split(','), expectBroken
       ].map(shape);
       // Read threads carry a seen mark at their latest activity; the unread case leaves qa-a without one (bold in Ready).
       const seen = { version: 1, threads: {} };
-      for (const s of ROWS) if (!(kind === 'unread' && s.id === 'qa-a')) seen.threads[s.id] = { seenAt: now, updatedAt: s.updated_at, assistantActivityAt: s.updated_at, messageCount: s.message_count, status: s.status };
+      for (const s of ROWS) if (!(kind === 'unread' && s.id === 'qa-a')) seen.threads['direct:' + s.id] = { seenAt: now, updatedAt: s.updated_at, assistantActivityAt: s.updated_at, messageCount: s.message_count, status: s.status };
       const ua = 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Mobile Safari/537.36' + (shell === 'phone-doc' ? ' WizardOS-DocScroll' : '');
       const context = await browser.newContext({ viewport: phone ? { width: 412, height: 915 } : { width: 1440, height: 900 }, isMobile: phone, hasTouch: phone, serviceWorkers: 'block', ...(phone ? { userAgent: ua } : {}) });
       try {
@@ -62,7 +62,7 @@ const backs = (process.env.QA_BACKS || 'button,system').split(','), expectBroken
             if (!abs.startsWith(path.resolve(web) + path.sep)) return r.abort();
             return fs.existsSync(abs) && fs.statSync(abs).isFile() ? r.fulfill({ path: abs }) : r.fulfill({ status: 404, body: 'none' });
           }
-          if (p === '/wizard/thread-seen') return r.fulfill({ json: seen });
+          if (p === '/wizard/thread-seen') return r.fulfill({ json: { state: seen } });
           if (p === '/wizard/v1/pages/wizard-look/look.json') return r.fulfill({ status: 404, json: { error: 'not_here' } });
           if (p === '/wizard/v1/ui-preferences') return r.fulfill({ json: prefs });
           if (p === '/wizard/v1/agents') return r.fulfill({ json: { agents: [] } });
@@ -78,6 +78,8 @@ const backs = (process.env.QA_BACKS || 'button,system').split(','), expectBroken
         await page.evaluate(phone => phone ? __wos.openSheet('inbox') : __wux.openChatsList(), phone);
         await page.evaluate(() => document.fonts.ready); await nap(600);
         const vis = sel => page.locator(sel).filter({ visible: true }).first();
+        entry.unreadAtOpen = await page.evaluate(() => !!WizLive.isNew(WizLive.session('qa-a')));
+        assert.equal(entry.unreadAtOpen, kind === 'unread', `${stem}: the first thread is ${kind === 'unread' ? '' : 'not '}unread in Ready before it opens`);
         await vis('[data-chopen="qa-a"]').click();
         await page.waitForFunction(() => [...document.querySelectorAll('.ch-msgs .bub a')].some(a => a.getClientRects().length && /Press notes/.test(a.textContent)), null, { timeout: 15000 });
         await nap(3500); // past the opening settle
