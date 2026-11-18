@@ -277,3 +277,10 @@ test('a single-move fast long swipe lands by its whole distance, first move coun
   const o = shell({ at: 0 }); o.orbFinger([[-100, 70]]); assert.equal(o.ctx.idx, 4, 'from the orb too');
   const r = shell({ at: 5 }); r.finger([[100, 70]]); assert.equal(r.ctx.idx, 1, 'right as well');
 });
+test('a quick touch that drifts only just past the slop (under 20 px) stays on its desk (Codex P2 on PR 1603)', () => {
+  for (const path of [[[-12, 150]], [[-14, 40], [-16, 150]], [[19, 100]]]) {
+    const s = shell(); s.finger(path); assert.equal(s.ctx.idx, 2, `drift ${path.at(-1)[0]} px`);
+    const o = shell(); o.orbFinger(path); assert.equal(o.ctx.idx, 2, `orb drift ${path.at(-1)[0]} px`);
+  }
+  const f = shell(); f.finger([[-20, 60]]); assert.equal(f.ctx.idx, 3, '20 px is a flick');
+});

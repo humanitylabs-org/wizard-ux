@@ -455,13 +455,14 @@
    * finger passes the 12 px sideways slop (no hold time), counted from there, so it never jumps over the distance
    * already covered; it then steps one desk per SC_STEP px with a tick and the desk name, release lands. A SHORT touch
    * (under BAR_FLICK_STEPS = 2.5 x SC_STEP) that ends within BAR_FLICK_MS (event time, so a busy page never turns a flick
-   * into a scrub) is a flick: exactly one desk the way it travelled, however many moves it came as (wizard-ux#1601); a
-   * fast long swipe goes by its whole distance like a slow one (wizard-ux#1536 kick-back). Each step
+   * into a scrub) is a flick: exactly one desk the way it travelled, however many moves it came as (wizard-ux#1601;
+   * under BAR_FLICK_MIN px it is drift and stays put); a fast long swipe goes by its whole distance like a slow one
+   * (wizard-ux#1536 kick-back). Each step
    * shows the hovered desk itself (unparked, quick slide), so the desk is visible under the finger before release
    * (barScrubPeek). Drag left = the desk to the right. A sideways drag that starts on the orb joins the same scrub
    * (barScrubJoin, from the orb's gesture code). Nothing here reads Channels: CHATS.beforeNavigate is the incognito
    * chat's leave guard, the same one goDesk uses. */
-  let DS = null, dockSwiped = 0; const BAR_FLICK_MS = 180, BAR_FLICK_STEPS = 2.5;
+  let DS = null, dockSwiped = 0; const BAR_FLICK_MS = 180, BAR_FLICK_STEPS = 2.5, BAR_FLICK_MIN = 20;
   const barScrubBack = s => { if (s.live) { idx = s.start; placeTrack(0, true); renderDots(); parkDesks(false); } s.live = false; barScrubPeek(false); scrub.classList.remove('on'); };
   // The hovered desk and its neighbours render while the scrub points at it (parked desks skip rendering); the track
   // slides quicker so the desk follows each step. Desks the scrub has left behind (3+ away; 2 away may still be sliding
@@ -510,7 +511,8 @@
     // release from the whole travel and time, not from steps crossed, so a flick that arrives as one or two merged
     // moves is one desk too). A quick swipe that travelled further lands by distance, below.
     if (quick && Math.abs(dx) < BAR_FLICK_STEPS * SC_STEP) {
-      const dir = Math.abs(dx) >= 12 ? -Math.sign(dx) : Math.sign(s.at - s.start);
+      // Under BAR_FLICK_MIN px (finger drift on a dock control, Codex P2 on PR 1603) is no swipe: the desk stays.
+      const dir = Math.abs(dx) >= BAR_FLICK_MIN ? -Math.sign(dx) : 0;
       barScrubBack(s); if (dir) { swipeDesk(dir); tourEv('desk', { home: idx === HOME }); } return;
     }
     // The last move may not have come in before the release: land where the finger let go. A quick long swipe counts
