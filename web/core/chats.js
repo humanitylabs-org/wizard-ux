@@ -3253,7 +3253,7 @@ window.WizCore.chats = function createChats(H) {
     const wk = PW ? PW.workHtml(c, tn, live, helperStatus) : null; // the work receipt (chat-work.js #17)
     if (wk != null) h += wk;
     else if (tn.steps || tn.notes.length || live) {
-      const label = live ? (tn.notes.length ? esc(clip(tn.notes[tn.notes.length - 1], 90)) : 'Working') : `Worked through ${tn.steps} step${tn.steps === 1 ? '' : 's'}`;
+      const label = live && c.stopping ? 'Stopping…' : live ? (tn.notes.length ? esc(clip(tn.notes[tn.notes.length - 1], 90)) : 'Working') : `Worked through ${tn.steps} step${tn.steps === 1 ? '' : 's'}`;
       h += `<details class="steps${live ? ' live' : ''}"><summary>${live ? '<i class="dots"><b></b><b></b><b></b></i>' : '◇'} ${label}</summary>${tn.notes.map(x => `<div class="note-line">${md(x)}</div>`).join('')}</details>`;
     }
     h += steersHtml;
@@ -3942,6 +3942,7 @@ window.WizCore.chats = function createChats(H) {
       const rnBefore = at => { let out = ''; while (rns.length && isFinite(at) && rns[0].ms <= at) out += rnHtml(rns.shift()); return out; };
       const need = typeof needsMark === 'function' && !isNew && s ? needsMark(w.id, w.thread, s, shown) : { k: -1, html: '' }; // issue 1331
       c.restartHeld = held; // turnHtml: a held send's last turn is not live (wizard-ux issue 1362)
+      c.stopping = s?.status === 'stopping'; // turnHtml: the live work line says Stopping… from the tap (issue 1576)
       msgs = (from > 0 ? `<button type="button" class="ch-earlier" data-chearlier>Load earlier messages · ${from} more</button>` : '')
         + shown.map((tn, k, arr) => {
           const at = turnAt(tn), dk = KIT.time.dayKey(at);

@@ -36,7 +36,6 @@ test('Stop says Stopping… on the tap, before the stop request has answered', a
   const done = h.L.stop('run_1');
   assert.equal(h.row.status, 'stopping', 'the row says Stopping… at once');
   assert.equal(h.emits[0], 'stopping', 'and the shell is told before the network answers');
-  assert.equal(h.calls[0].at, 'stopping');
   assert.ok(h.calls[0].init.signal, 'the stop request has a deadline, so a lost Stop is reported');
   answer(); await done;
   assert.equal(h.row.status, 'stopping');

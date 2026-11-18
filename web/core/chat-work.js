@@ -86,6 +86,7 @@
     }
     const helper = live ? helperLabel(o.helperStatus, o.now) : '';
     if (helper) label = helper;
+    if (live && o.stopping) label = 'Stopping…'; // the owner's Stop was asked for (wizard-ux issue 1576)
     const icon = live ? '<i class="dots"><b></b><b></b><b></b></i>' : '◇';
     let body = '';
     if (helper) {

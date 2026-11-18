@@ -1843,11 +1843,11 @@
      * delivered in STOP_SEND_MS puts the row back and throws, so the caller says so. Once delivered, the list is
      * re-read quickly until the run has settled, instead of waiting for the next 15 s poll. */
     async stop(runId) {
+      const init = { method: 'POST' }; if (globalThis.AbortSignal?.timeout) init.signal = AbortSignal.timeout(STOP_SEND_MS);
+      const sent = req(`/wizard/hermes/v1/runs/${encodeURIComponent(runId)}/stop${rq(runId)}`, init); // on the wire before the repaint
+      sent.catch(() => {}); // awaited below; never an unhandled rejection while the repaint runs
       const undo = markStopping(this, runId);
-      try {
-        const init = { method: 'POST' }; if (globalThis.AbortSignal?.timeout) init.signal = AbortSignal.timeout(STOP_SEND_MS);
-        await req(`/wizard/hermes/v1/runs/${encodeURIComponent(runId)}/stop${rq(runId)}`, init);
-      } catch (error) { STOPPING.delete(runId); undo(); this.emit(); this.refresh().catch?.(() => {}); throw error; }
+      try { await sent; } catch (error) { STOPPING.delete(runId); undo(); this.emit(); this.refresh().catch?.(() => {}); throw error; }
       STOPPING.set(runId, Date.now());
       const s = [this.sessions, ...Object.values(this.agentSessions)].flat().find(x => x.runId === runId); if (s) { applyLocal(s); this.emit(); }
       followStop(this, runId);
