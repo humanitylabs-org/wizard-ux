@@ -13,6 +13,12 @@
  * Rows with their own swipe: a leftward swipe that starts on an Activity row, or any swipe while a row's tray is open,
  * stays the row's; a channel row leaves its sideways swipe to the page (chats.js `lp.page`; long-press still opens its
  * menu); with a row sheet open nothing moves. A sideways scroller (a wide table, a code block, chips) scrolls first; the page takes over only at its edge.
+ * One motion for every step between views (wizard-ux issue 1548, same switch; James, 18 Nov 2026: "I want that same
+ * animation when I go back from threads and channels"): `slideIn` is the page swipe's settle, and with Channels on it
+ * also plays when Chats changes view (a render that turns a thread into the list, a feed into the Channels list, or the
+ * reverse): back slides the previous view in from the left, forward from the right, whatever started it (a swipe, the
+ * Back button, the shell's Back step, a tap on a row). A committed back swipe leaves the view where the finger put it,
+ * so nothing snaps back before the slide. Reduced motion: no slide. Switch off: the old snap-back and cut.
  * API: none (registers itself). */
 import { engages, commits, COMMIT_PX } from './swipe-intent.js';
 {
@@ -21,6 +27,49 @@ import { engages, commits, COMMIT_PX } from './swipe-intent.js';
     const thread = () => { const r = api.part('thread'); return r && r.querySelector('[data-part="thread"]'); };
     const skip = t => !t || !t.closest || t.closest('pre, table, [data-part="composer"], .ms-track, input, textarea, [contenteditable="true"]');
     const reset = th => { if (!th) return; th.style.transition = 'transform .18s ease-out, opacity .18s ease-out'; th.style.transform = ''; th.style.opacity = ''; };
+    const calm = () => { try { return !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } };
+    // The one settle (page swipe and view steps): the arriving view starts 48 px off on `side` (-1 left, 1 right) at
+    // 0.4 opacity and eases into place. Transform and opacity only, so no layout runs during it.
+    const slideIn = (node, side) => {
+      if (!node || !node.style) return;
+      node.style.transition = 'none';
+      if (calm()) { node.style.transform = ''; node.style.opacity = ''; return; }
+      node.style.transform = `translateX(${side * 48}px)`; node.style.opacity = '.4';
+      api.frame(() => api.frame(() => reset(node)));
+    };
+    const chanOn = () => { try { return (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/chat-channels'); } catch (e) { return false; } };
+    // Which view a Chats window shows: its thread, a channel's feed, the Channels | Activity home, or a plain list
+    // (VIEWS: window -> { key, sid, trail }). The slide moves the window's own Chats container (stable across repaints: a thread paints a skeleton, then its
+    // words, as new nodes), never the view node.
+    const VIEWS = new WeakMap(); let steps = 0;
+    const docScroll = (() => { try { return /\bWizardOS-DocScroll\b/.test(navigator.userAgent); } catch (e) { return false; } })();
+    const viewOf = (part, el) => {
+      const node = el && el.querySelector ? el.querySelector(`:scope > [data-part="${part}"]`) : null;
+      if (!node || (node.classList && node.classList.contains('ch-side'))) return null; // the desktop sidebar list is not a view
+      if (part === 'thread') return 'thread';
+      return node.querySelector('.ch-chan-h [data-chchanback]') ? 'feed' : node.querySelector('.ch-chan-tabs') ? 'home' : 'list';
+    };
+    const DEPTH = { home: 0, list: 0, feed: 1, thread: 2 };
+    // A linked thread (opened from another thread) is one layer deeper too: each window keeps the trail of threads it
+    // came through, so Back to the parent slides in from the left and opening the link from the right.
+    const threadId = el => { try { return api.part('thread') === el ? api.route().thread || null : null; } catch (e) { return null; } };
+    const step = ({ part, el } = {}) => {
+      if (part !== 'list' && part !== 'thread') return;
+      const key = viewOf(part, el); if (!key) return;
+      const was = VIEWS.get(el), sid = key === 'thread' ? threadId(el) : null;
+      const trail = key === 'thread' && was?.key === 'thread' ? was.trail : [];
+      VIEWS.set(el, { key, sid, trail });
+      if (!was || !chanOn()) return;
+      let side = DEPTH[key] < DEPTH[was.key] ? -1 : DEPTH[key] > DEPTH[was.key] ? 1 : 0;
+      if (!side && key === 'thread' && sid && was.sid && sid !== was.sid) {
+        if (trail.at(-1) === sid) { trail.pop(); side = -1; } else { trail.push(was.sid); side = 1; }
+      }
+      if (!side) return;
+      // The Android app's document-scrolled thread pins its header and box to the screen: moving their container
+      // would carry them off it, so a thread opening there has no slide (going back from it still slides the list).
+      if (key === 'thread' && docScroll) return;
+      steps++; slideIn(el, side);
+    };
     // The nearest sideways scroller under the finger inside the Chats root, or null.
     const scroller = (t, root) => {
       for (let n = t; n && n !== root && n.nodeType === 1; n = n.parentElement) {
@@ -46,11 +95,12 @@ import { engages, commits, COMMIT_PX } from './swipe-intent.js';
       if (!s.tabs || !!s.shown === want) return; s.shown = want;
       for (const b of s.tabs.querySelectorAll('[data-chview]')) b.classList.toggle('on', b.dataset.chview === (want ? s.to : s.page));
     };
-    const bind = root => {
+    const bind = (root, how) => {
       api.listen(root, 'touchstart', e => {
         sw = null;
         const view = api.route().view;
         if ((view !== 'thread' && view !== 'list') || e.touches.length !== 1) return;
+        if (how.listOnly && view !== 'list') return; // a separate list pane: only its own pages and feed, never the thread's Back
         const t0 = e.touches[0];
         if (t0.clientX < api.env.edgeInset || skip(e.target) || String(window.getSelection ? window.getSelection() : '')) return;
         if (view === 'thread') {
@@ -94,11 +144,21 @@ import { engages, commits, COMMIT_PX } from './swipe-intent.js';
           s.th.style.transition = 'none'; s.th.style.transform = ''; s.th.style.opacity = '';
           s.tabs.querySelector(`[data-chview="${s.to}"]`)?.click();
           const body = s.list.isConnected !== false ? s.list.querySelector(':scope > .ch-scroll') : s.win.querySelector('.ch-list > .ch-scroll'); if (!body) return;
-          body.style.transition = 'none'; body.style.transform = `translateX(${-s.dir * 48}px)`; body.style.opacity = '.4';
-          api.frame(() => api.frame(() => reset(body)));
+          slideIn(body, -s.dir);
           return;
         }
         if (s.mode === 'page') preview(s, false);
+        if (go && s.on && chanOn()) {
+          // Back with Channels on: the leaving view stays where the finger put it; the repaint swaps it for the
+          // previous view, which slides in from the left (step). A view that is still on screen afterwards (Back did
+          // nothing, or repaints later) eases back after a frame, as a cancelled swipe does.
+          s.th.style.transition = 'none';
+          const n0 = steps, moved = api.nav.back();
+          // Its own offset goes in the same task as the slide starts, so no frame shows it easing back.
+          const left = () => { if (steps === n0) return false; s.th.style.transform = ''; s.th.style.opacity = ''; return true; };
+          if (!left()) { if (!moved) reset(s.th); else api.frame(() => { if (!left()) reset(s.th); }); }
+          return;
+        }
         // Snap back on every release: a drag frame queued by the last move must not re-indent the thread after it.
         if (s.on) { reset(s.th); api.frame(() => reset(s.th)); }
         if (go) api.nav.back();
@@ -107,10 +167,25 @@ import { engages, commits, COMMIT_PX } from './swipe-intent.js';
       api.listen(root, 'touchcancel', end, { passive: true });
     };
     // The chats container is stable across repaints; bind once per container (desks can hold several chats windows).
-    const bound = new WeakSet();
-    const ensure = () => { const r = api.part('thread') || api.part('list'); if (r && !bound.has(r)) { bound.add(r); bind(r); } };
+    const bound = new WeakMap(), refs = []; // root -> { listOnly }; refs: every bound root, held weakly
+    const add = (r, listOnly) => { const how = { listOnly }; bound.set(r, how); refs.push(new WeakRef(r)); bind(r, how); };
+    const ensure = () => {
+      const r = api.part('thread') || api.part('list'); if (!r) return;
+      const how = bound.get(r); if (how) { how.listOnly = false; return; } // a pane bound first becomes the shell's root
+      add(r, false);
+    };
+    // Classic desktop draws the Chats list in its own pane, outside the shell's Chats root: with Channels on, bind
+    // that pane too (list swipes only), so its feed and pages swipe as on the phone (wizard-ux issue 1548).
+    const ensurePane = ({ part, el } = {}) => {
+      if (part !== 'list' || !el || bound.has(el) || !chanOn() || !viewOf('list', el)) return;
+      for (let i = refs.length - 1; i >= 0; i--) {
+        const r = refs[i].deref(); if (!r) { refs.splice(i, 1); continue; }
+        if (r.contains && (r.contains(el) || (el.contains && el.contains(r)))) return;
+      }
+      add(el, true);
+    };
     ensure();
-    api.on('render', ensure);
+    api.on('render', p => { ensure(); ensurePane(p); step(p); });
     api.on('route', ensure);
     return () => { if (sw) { reset(sw.th); if (sw.mode === 'page') preview(sw, false); } sw = null; };
   }
