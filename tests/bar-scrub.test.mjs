@@ -31,6 +31,7 @@ function shell({ on = true, desks = 6, at = 2 } = {}) {
   vm.createContext(ctx);
   vm.runInContext(BLOCK.replace('let DS = null, dockSwiped = 0;', 'var DS = null, dockSwiped = 0;'), ctx);
   const fire = (t, e) => on_[t].forEach(f => f({ type: t, pointerId: 1, pointerType: 'touch', target: { closest: () => null }, ...e }));
+  ctx.fire = fire;
   // A finger: down at (x, y), moves to each dx at its time (ms), up (or cancel) at the end.
   const finger = (path, { x = 300, y = 870, up = 'pointerup', dy = 0, upAt } = {}) => {
     fire('pointerdown', { clientX: x, clientY: y, timeStamp: 0 });
@@ -40,13 +41,27 @@ function shell({ on = true, desks = 6, at = 2 } = {}) {
     return { labels, on: cls.has('on') };
   };
   const slow = dx => Array.from({ length: 12 }, (_, k) => [Math.round(dx * (k + 1) / 12), 100 + k * 60]);
-  return { ctx, finger, slow, log };
+  // A finger that starts on the orb (wizard-ux issue 1536): the dock ignores its pointerdown, the orb's gesture code calls
+  // barScrubJoin once it reads the drag as sideways (14 px), and the moves and release then bubble up to the dock.
+  const orbFinger = (path, { x = 206, y = 870, up = 'pointerup', joinAt = 0 } = {}) => {
+    fire('pointerdown', { clientX: x, clientY: y, timeStamp: 0, target: { closest: () => ({ id: 'orbWrap' }) } });
+    const join = vm.runInContext('barScrubJoin', ctx), labels = []; let joined = null;
+    path.forEach(([dx, t], k) => {
+      const e = { type: 'pointermove', pointerId: 1, pointerType: 'touch', clientX: x + dx, clientY: y, timeStamp: t };
+      if (k === joinAt) joined = join(e, { x, y, t: 0, ts: 0 });
+      if (joined) fire('pointermove', e);
+      if (cls.has('on') && labels.at(-1) !== label.textContent) labels.push(label.textContent);
+    });
+    const [dx, t] = path.at(-1); fire(up, { clientX: x + dx, clientY: y, timeStamp: t + 10 });
+    return { joined, labels };
+  };
+  return { ctx, finger, orbFinger, slow, log };
 }
 
 test('switch on: a slow drag left steps one desk to the right per 26 px, with the label, and lands there', () => {
   const s = shell();
   const r = s.finger(s.slow(-84));
-  assert.deepEqual(r.labels, ['Desk 3', 'Desk 4', 'Desk 5']);
+  assert.deepEqual(r.labels, ['Desk 2', 'Desk 3', 'Desk 4', 'Desk 5'], 'the label is up from the moment the scrub starts');
   assert.equal(s.ctx.idx, 5); assert.deepEqual(s.log.at(-1), ['go', 5]); assert.equal(r.on, false, 'label hides on release');
 });
 
@@ -83,7 +98,7 @@ test('switch is a catalogued off-by-default tweak whose sheet only hides the han
   const cat = JSON.parse(read('web/tweaks/catalog.json'));
   assert.ok(cat.tweaks.includes(ID)); assert.ok(!cat.defaults.includes(ID));
   const man = JSON.parse(read('web/tweaks/wizard/bar-scrub/manifest.json'));
-  assert.equal(man.id, ID); assert.deepEqual(man.shells, ['phone']); assert.deepEqual(man.issues, ['humanitylabs-org/wizard-ux#1491']);
+  assert.equal(man.id, ID); assert.deepEqual(man.shells, ['phone']); assert.deepEqual(man.issues, ['humanitylabs-org/wizard-ux#1491', 'humanitylabs-org/wizard-ux#1536']);
   const css = read('web/tweaks/wizard/bar-scrub/tweak.css').replace(/\/\*[\s\S]*?\*\//g, '');
   for (const rule of css.split('}').map(r => r.trim()).filter(Boolean)) assert.match(rule, /^html\[data-tweaks~="wizard\/bar-scrub"\] #scrub/);
   assert.match(APP, /const barScrubOn = \(\) => \{ try \{ return String\(document\.documentElement\.dataset\.tweaks \|\| ''\)\.split\(' '\)\.includes\('wizard\/bar-scrub'\)/);
@@ -120,4 +135,69 @@ test('switch on: a scrub with Settings open that comes back to its own desk show
   s.ctx.goDesk = n => { s.ctx.idx = n; s.ctx.placeTrack(0, true); };
   s.finger([[-20, 40], [-30, 200], [-60, 300], [-10, 400]]);
   assert.equal(s.ctx.idx, 2); assert.equal(s.ctx.sheet, 'settings'); assert.equal(s.dev.has('sheet-open'), true);
+});
+
+// wizard-ux issue 1536: the scrub is live the moment the finger passes the slop, with no hold time and no first jump.
+const steady = (dx, ms = 900, n = 30) => Array.from({ length: n }, (_, k) => [Math.round(dx * (k + 1) / n), Math.round(20 + ms * (k + 1) / n)]);
+test('switch on: the scrub starts at once; a 20-30 px first move changes at most one desk and the label shows from the first step', () => {
+  for (const first of [-20, -25, -30, 20, 30]) {
+    const s = shell({ at: 2 });
+    s.ctx.fire('pointerdown', { clientX: 300, clientY: 870, timeStamp: 0 });
+    s.ctx.fire('pointermove', { clientX: 300 + first, clientY: 870, timeStamp: 16 });
+    assert.ok(Math.abs(s.ctx.idx - 2) <= 1, `first ${first} px move: at most one desk (at ${s.ctx.idx})`);
+    assert.equal(s.ctx.scrub.classList.contains('on'), true, 'label is up at once, no hold time');
+    s.ctx.fire('pointerup', { clientX: 300 + first, clientY: 870, timeStamp: 400 });
+    assert.ok(Math.abs(s.ctx.idx - 2) <= 1, `released after ${first} px: at most one desk`);
+  }
+});
+test('switch on: one big first move never leaps ahead (the distance before the scrub went live is not counted)', () => {
+  const s = shell({ at: 1 });
+  s.ctx.fire('pointerdown', { clientX: 300, clientY: 870, timeStamp: 0 });
+  s.ctx.fire('pointermove', { clientX: 230, clientY: 870, timeStamp: 30 }); // a slow frame: 70 px in the first move
+  assert.equal(s.ctx.idx, 1, 'still on the start desk');
+  s.ctx.fire('pointermove', { clientX: 214, clientY: 870, timeStamp: 260 });
+  assert.equal(s.ctx.idx, 2, 'the next ~26 px is the very next desk');
+});
+test('switch on: a steady slow drag of 1, 3 or 5 x SC_STEP lands exactly that many desks away, both ways', () => {
+  for (const [k, at] of [[1, 0], [3, 0], [5, 0], [1, 5], [3, 5]]) {
+    const s = shell({ at }), dir = at ? 1 : -1;
+    const r = s.finger(steady(dir * k * 26));
+    assert.equal(s.ctx.idx, at - dir * k, `${k} steps from desk ${at}`);
+    assert.equal(r.labels.length, k + 1, 'the start desk, then one label per desk stepped');
+  }
+});
+test('switch on: a drag held from the very first move (no 180 ms pause) already steps desks', () => {
+  const s = shell({ at: 0 }), seen = [];
+  s.ctx.fire('pointerdown', { clientX: 300, clientY: 870, timeStamp: 0 });
+  for (const [dx, t] of [[-14, 10], [-30, 30], [-56, 60], [-82, 90]]) { s.ctx.fire('pointermove', { clientX: 300 + dx, clientY: 870, timeStamp: t }); seen.push(s.ctx.idx); }
+  assert.deepEqual(seen, [0, 1, 2, 3], 'desks step while the finger is still inside the old 180 ms window');
+  s.ctx.fire('pointerup', { clientX: 218, clientY: 870, timeStamp: 600 });
+  assert.equal(s.ctx.idx, 3);
+});
+test('switch on: a drag that starts on the orb scrubs exactly like one on the bar', () => {
+  const bar = shell(), orb = shell();
+  const a = bar.finger(bar.slow(-84)), b = orb.orbFinger(orb.slow(-84), { joinAt: 1 });
+  assert.equal(b.joined, true, 'the orb hands its sideways drag to the scrub');
+  assert.equal(orb.ctx.idx, bar.ctx.idx); assert.equal(orb.ctx.idx, 5); assert.deepEqual(b.labels, a.labels);
+  const r = shell({ at: 4 }); r.orbFinger(r.slow(60), { joinAt: 2 }); assert.equal(r.ctx.idx, 2, 'drag right from the orb goes left');
+  const h = shell({ at: 0 }); h.orbFinger(h.slow(120), { joinAt: 2 }); assert.equal(h.ctx.idx, 0, 'on Home a drag right from the orb does nothing');
+  const f = shell(); f.orbFinger([[-20, 20], [-80, 50], [-110, 80]]); assert.equal(f.ctx.idx, 3, 'a quick flick from the orb moves one desk');
+  const c = shell(); c.orbFinger(c.slow(-84), { joinAt: 1, up: 'pointercancel' }); assert.equal(c.ctx.idx, 2, 'cancelled: back to the start desk');
+  const d = shell(); d.orbFinger(d.slow(-84), { joinAt: 1 }); vm.runInContext('barScrubDrop()', d.ctx); assert.equal(d.ctx.idx, 5, 'drop after release is inert');
+  const g = shell(); g.ctx.fire('pointerdown', { clientX: 206, clientY: 870, timeStamp: 0, target: { closest: () => ({}) } });
+  const join = vm.runInContext('barScrubJoin', g.ctx);
+  join({ pointerId: 1, clientX: 180, clientY: 870, timeStamp: 100 }, { x: 206, y: 870, t: 0, ts: 0 });
+  g.ctx.fire('pointermove', { clientX: 150, clientY: 870, timeStamp: 200 }); vm.runInContext('barScrubDrop()', g.ctx);
+  assert.equal(g.ctx.idx, 2, 'the orb losing its finger mid-scrub puts the desk back');
+});
+test('switch off: the orb never joins the scrub', () => {
+  const s = shell({ on: false });
+  assert.equal(vm.runInContext('barScrubJoin', s.ctx)({ pointerId: 1, clientX: 180, clientY: 870, timeStamp: 100 }, { x: 206, y: 870, t: 0, ts: 0 }), false);
+  const o = shell({ on: true }); o.ctx.sheet = 'launcher';
+  assert.equal(vm.runInContext('barScrubJoin', o.ctx)({ pointerId: 1, clientX: 180, clientY: 870, timeStamp: 100 }, { x: 206, y: 870, t: 0, ts: 0 }), false, 'an open sheet keeps the orb\'s own gestures');
+});
+test('the orb hands only its sideways drag to the scrub (tap, hold and up/down stay the orb\'s)', () => {
+  assert.match(APP, /G\.mode = Math\.abs\(G\.dx\) > Math\.abs\(G\.dy\) \? 'h' : 'v';[\s\S]{0,300}if \(G\.mode === 'h' && !G\.corner && !G\.ovWas && [^\n]*barScrubJoin\(e, G\)\) \{ G\.mode = 'scrub';/);
+  assert.match(APP, /if \(g\.mode === 'scrub'\) \{ if \(cancelled\) barScrubDrop\(\); return; \}/);
+  assert.match(APP, /if \(G\.mode === 'scrub'\) return;/);
 });
