@@ -9,7 +9,8 @@
   ],
   "issues": [
     "humanitylabs-org/wizard-agent-service#545",
-    "humanitylabs-org/wizard-os#676"
+    "humanitylabs-org/wizard-os#676",
+    "humanitylabs-org/wizard-ux#1549"
   ],
-  "description": "New installs start private: connecting Tinfoil first makes one private agent the box's agent, with every app and every app's work going to it. Connecting Claude or ChatGPT adds a separate standard agent that starts with no apps; your private agent's model and apps never change. Read by the Agent Service (wizard-agent-service issue 545); a box set up before the switch keeps its agents as they are."
+  "description": "New installs start private: the Welcome's Connect your AI leads with Tinfoil, and connecting it first makes one private agent the box's agent, with every app and every app's work going to it. Claude and ChatGPT are offered as optional extras that add a separate standard agent starting with no apps; your private agent's model and apps never change. Read by the Agent Service (wizard-agent-service issue 545) and the Welcome (wizard-ux issue 1549); a box set up before the switch keeps its agents as they are."
 }

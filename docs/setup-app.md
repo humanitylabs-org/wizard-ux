@@ -53,6 +53,17 @@ not existing private-agent sessions or installed-upgrade evidence.
   notification tap or a shared link shouldn't be hijacked, so this one rule differs.)
 - No answer, an old box without the API (404), or `first_run: false`: the shell behaves exactly as before.
 
+## Private first setup (switch `wizard/private-first-setup`, off by default)
+wizard-os DECISIONS #115, spec/AGENTS.md section 10; wizard-ux issue 1549 (Welcome), wizard-agent-service issue 545 (agents).
+With the switch on, setting up the private agent is part of the first run: the Welcome (`web/core/welcome.js`) step
+**Connect your AI** lists Tinfoil first (Private, Recommended). Signing in to it makes the box's private agent (the
+Agent Service's part); the card then comes back with **Optional: a second agent**: Claude and ChatGPT, each worded
+"Adds a second agent that uses Claude. Your private agent and its apps stay private." (same for ChatGPT), and Continue
+goes on to Pick a skin. Whether it is on comes from the Agent Service (`GET /wizard/v1/private-first` `on`, where env
+`WIZARD_PRIVATE_FIRST=1`/`0` beats the Look file, which a fresh box does not have yet); with no answer (an older Agent
+Service) the shell's own switch decides. A box whose private agent already exists counts as connected. Switch off: the
+Welcome is unchanged. Tests: `tests/welcome-private-first.test.mjs`.
+
 ## Back (never exits)
 Disconnect sheet → menu → phone screen → checklist, each one press, via the shared WizardApp Back client
 (`WizardApp.back.register/push`). At the checklist the app declines and the shell takes its own step (phone: Home desk;

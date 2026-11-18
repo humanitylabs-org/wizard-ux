@@ -1100,7 +1100,7 @@ html[data-shell="desktop"][data-layout="ai-apps"][data-aad-tabs="bar"] :is(.aad-
 html[data-shell="desktop"][data-layout="ai-apps"][data-aad-tabs="bar"] .aad-vtfill { visibility: hidden; pointer-events: none; }
 html[data-shell="desktop"][data-layout="ai-apps"][data-aad-tabs="bar"] .aad-vchats { order: 1; }
 html[data-shell="desktop"][data-layout="ai-apps"][data-aad-tabs="bar"] [data-half="l"] { order: 2; }
-html[data-shell="desktop"][data-layout="ai-apps"][data-aad-tabs="bar"] .aad-vtorb { order: 3; display: block; flex: none; width: 76px; height: 52px; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-tabs="bar"] .aad-vtorb { order: 3; display: block; flex: none; width: 64px; height: 52px; }
 html[data-shell="desktop"][data-layout="ai-apps"][data-aad-tabs="bar"] [data-half="r"] { order: 4; }
 html[data-shell="desktop"][data-layout="ai-apps"][data-aad-tabs="bar"] .aad-vall { order: 5; }
 html[data-shell="desktop"][data-layout="ai-apps"][data-aad-tabs="bar"] .aad-vtn { flex: none; max-width: 100%; color: var(--aad-ink-2); font: 500 0.6875rem / 1.2 var(--wz-font-ui); }
@@ -1108,8 +1108,11 @@ html[data-shell="desktop"][data-layout="ai-apps"][data-aad-tabs="bar"] .aad-vall
 html[data-shell="desktop"][data-layout="ai-apps"][data-aad-tabs="bar"] :is(.aad-vtab.is-on, .aad-vchats.is-on) .aad-vtn { color: var(--aad-ink); font-weight: 600; }
 html[data-shell="desktop"][data-layout="ai-apps"][data-aad-tabs="bar"] .aad-vtb { position: absolute; top: 2px; left: calc(50% + 6px); min-width: 16px; height: 16px; padding: 0 4px; font-size: 0.5625rem; box-shadow: 0 0 0 2px var(--aad-panel); display: grid !important; }
 html[data-shell="desktop"][data-layout="ai-apps"][data-aad-tabs="bar"] .aad-vall .aad-vti { width: 24px; height: 24px; }
-/* the orb at the bar's centre (its spot is .aad-vtorb's, the halves balanced by desktop.js); never in the composer here */
-html[data-shell="desktop"][data-layout="ai-apps"][data-aad-tabs="bar"] .aad-orb { left: calc(var(--aad-pane-dock-x) + var(--aad-pane-dock-width) / 2 - 30px); bottom: calc(var(--aad-pane-dock-bottom) + (var(--aad-pane-dock-height) - 60px) / 2); }
+/* the orb at the bar's centre (its spot is .aad-vtorb's, the halves balanced by desktop.js); never in the composer here.
+ * Sized to the bar, not the wide window's 60 px (its glow drawn ~1.3x wider ran over the bar's top: ux#1552), still a
+ * 44 px tap target. */
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-tabs="bar"] { --aad-bar-orb: 44px; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-tabs="bar"] .aad-orb { width: var(--aad-bar-orb); height: var(--aad-bar-orb); left: calc(var(--aad-pane-dock-x) + var(--aad-pane-dock-width) / 2 - var(--aad-bar-orb) / 2); bottom: calc(var(--aad-pane-dock-bottom) + (var(--aad-pane-dock-height) - var(--aad-bar-orb)) / 2); }
 html[data-shell="desktop"][data-layout="ai-apps"][data-aad-tabs="bar"][data-aad-feed] .aad-orb { visibility: visible; }
 html[data-shell="desktop"][data-layout="ai-apps"][data-aad-tabs="bar"] .win .dchats .pane-main .ch-row2 { grid-template-columns: auto minmax(0, 1fr) auto 0 auto auto; }
 html[data-shell="desktop"][data-layout="ai-apps"][data-aad-tabs="bar"] .win .dchats .pane-main .ch-row2::after { display: none; }

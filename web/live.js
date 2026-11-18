@@ -735,6 +735,32 @@
    * A message that truly can't be sent puts the thread back where it was (the pill keeps Retry/Edit). */
   const PEND = new Map(); // sessionId -> { key, kind, text, at, state: 'sending'|'waiting'|'sent', sentAt, runId }
   const STOPPING = new Map(); // runId -> when Stop was asked (applyLocal)
+  const STOP_SEND_MS = 15000, STOP_FOLLOW_MS = [800, 800, 900, 1500, 2000, 3000, 4000, 7000]; // gaps between re-reads, ~20 s in all
+  // Every row of a run: the lists, rows read on their own (search, direct lookup, Spaces) and the thread Stop was tapped on.
+  const runRows = (L, runId, sid = '') => [...new Set([L.sessions || [], ...Object.values(L.agentSessions || {}), [...DETAIL.values()],
+    [...SPACE_ROWS.values()].map(x => x?.row), sid ? [L.session?.(sid)] : []].flat())].filter(x => x && x.runId === runId);
+  // The tap: every row of this run says Stopping… now. Returns how to put them back if the Stop never arrives.
+  function markStopping(L, runId, sid) {
+    if (!runId || STOPPING.has(runId)) return () => {};
+    STOPPING.set(runId, Date.now());
+    const before = runRows(L, runId, sid).filter(s => WORKING.has(s.status) && s.status !== 'stopping').map(s => [s, s.status]);
+    for (const [s] of before) s.status = 'stopping';
+    if (before.length) L.emit();
+    return () => { for (const [s, st] of before) if (s.status === 'stopping') s.status = st; };
+  }
+  // After a delivered Stop: re-read until no row of this run is still working (the run usually settles in a second or two).
+  function followStop(L, runId, sid) {
+    let i = 0;
+    const next = () => {
+      if (i >= STOP_FOLLOW_MS.length || !STOPPING.has(runId)) return;
+      setTimeout(async () => {
+        let read = true; try { await L.refresh(); } catch { read = false; } // a failed read proves nothing: try again
+        const rows = runRows(L, runId, sid);
+        if (!read || !rows.length || rows.some(s => WORKING.has(s.status))) next(); else STOPPING.delete(runId);
+      }, STOP_FOLLOW_MS[i++]);
+    };
+    next();
+  }
   const PEND_MAX = 2 * 60e3;
   const PLACEHOLDER_TITLES = new Set(['', 'New chat', 'Untitled chat', 'Chat']);
   // A send a graceful restart holds (the 202 restart_pending receipt, p.held / it.restartPending) stays this device's
@@ -1815,12 +1841,22 @@
     async resolveUnknown(runId, admissionId, generation) {
       return req(`/wizard/hermes/v1/runs/${encodeURIComponent(runId)}/resolve-unknown${rq(runId)}`, { method: 'POST', headers: J, body: JSON.stringify({ admission_id: admissionId, execution_generation: generation }) });
     },
-    async stop(runId) {
-      try { await req(`/wizard/hermes/v1/runs/${encodeURIComponent(runId)}/stop${rq(runId)}`, { method: 'POST' }); }
-      catch (error) { STOPPING.delete(runId); await this.refresh(); throw error; }
+    /* Stop shows “Stopping…” on the tap itself, before the request leaves (wizard-ux issue 1576: on desktop the press
+     * looked ignored while the POST was in flight, and a repaint brought the Stop button back). A Stop that can't be
+     * delivered in STOP_SEND_MS puts the row back and throws, so the caller says so. Once delivered, the list is
+     * re-read quickly until the run has settled, instead of waiting for the next 15 s poll. */
+    async stop(runId, sid = '') {
+      // A deadline on every WebView: AbortSignal.timeout is missing on iOS 16.0-16.3 (see core/status.js).
+      const ac = typeof AbortController === 'function' ? new AbortController() : null;
+      const timer = ac ? setTimeout(() => ac.abort(), STOP_SEND_MS) : 0;
+      const sent = req(`/wizard/hermes/v1/runs/${encodeURIComponent(runId)}/stop${rq(runId)}`, ac ? { method: 'POST', signal: ac.signal } : { method: 'POST' }); // on the wire before the repaint
+      sent.catch(() => {}); // awaited below; never an unhandled rejection while the repaint runs
+      const undo = markStopping(this, runId, sid);
+      try { await sent; } catch (error) { STOPPING.delete(runId); undo(); this.emit(); this.refresh().catch?.(() => {}); throw error; }
+      finally { clearTimeout(timer); }
       STOPPING.set(runId, Date.now());
-      const s = [this.sessions, ...Object.values(this.agentSessions)].flat().find(x => x.runId === runId); if (s) { applyLocal(s); this.emit(); }
-      setTimeout(() => this.refresh(), 2500);
+      const rows = runRows(this, runId, sid).filter(s => WORKING.has(s.status) && s.status !== 'stopping'); for (const s of rows) s.status = 'stopping'; if (rows.length) this.emit();
+      followStop(this, runId, sid);
     },
   };
   // Wizard (in its desk, or another tab) writes the same key when a chat is opened.
@@ -2029,10 +2065,15 @@
     CANCELLING.add(sid); resync(); L.emit();
     try {
       const at = Date.now(), p = PEND.get(sid), tapped = TAPS.has(sid);
+      // A run already known is stopped at once, never after the withdrawals (a steer still in flight answers late).
+      const known = [...new Set([runId, p?.runId].filter(Boolean))];
+      const stops = known.map(id => L.stop(id, sid).then(() => null, e => e)); // settled here, thrown below
       const w = OB ? await withdrawSends(OB, pendingFor(OB, sid)) : { items: [], started: [] };
       if (tapped) { STOP_MARKS.set(sid, { at, until: at + STOP_MARK_MS }); TAPS.delete(sid); }
-      const runIds = [...new Set([runId, p?.runId, ...w.started].filter(Boolean))];
-      await Promise.all(runIds.map(id => L.stop(id)));
+      const later = [...new Set(w.started)].filter(id => !known.includes(id));
+      const failed = (await Promise.all([...stops, ...later.map(id => L.stop(id, sid).then(() => null, e => e))])).find(Boolean);
+      if (failed) throw failed;
+      const runIds = [...known, ...later];
       return { outcome: runIds.length ? 'stopped' : w.items.length || tapped ? 'cancelled' : 'none', runIds, items: w.items };
     } finally { CANCELLING.delete(sid); resync(); L.emit(); }
   };

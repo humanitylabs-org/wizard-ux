@@ -213,7 +213,17 @@
       } catch (_) { unavailable('The app could not be loaded. Check your connection and try again.'); }
     });
   }
+  /* Fast pinned open (wizard-ux issue 1558, switch wizard/pin-fast-open): when this device's last-known app list
+   * already has the app, mount it now instead of waiting for bootstrap, preferences and the app list in a row. The
+   * fresh list still arrives through appsLoaded() and wizard:apps, and mount() follows a rename, a new URL or a
+   * removal from it. A first run with no cached entry waits as before. */
+  let fast = false;
+  try { fast = (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/pin-fast-open'); } catch (_) {}
+  const cached = fast ? registry.APP[id] : null;
+  // The frame replaces this note in the same task, so a cached open never paints it (an offline-declared app still
+  // shows it while its reading state is prepared).
   win.innerHTML = '<div class="single-unavailable" role="status">Loading app…</div>';
+  if (cached && cached.kind === 'wizard' && cached.url && policy.within(cached.url, cached.url) && !policy.isShell(cached.url)) mount();
   window.WizCore.appsLoaded().then(mount);
   addEventListener('wizard:apps', mount);
   addEventListener('pagehide', checkpoint); addEventListener('beforeunload', checkpoint);
