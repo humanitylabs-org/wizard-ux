@@ -103,7 +103,9 @@ test('switched on: the rest arrives once asked, after the first scripts, once', 
   await p.runAll();
   assert.equal(await a, true); assert.equal(arrived, true);
   const rest = files(p).slice(n);
-  assert.deepEqual(rest, p.FILES.filter(([k]) => k === 'x' || k === 'm').map(([, f]) => f));
+  assert.deepEqual(rest, [...p.FILES.filter(([k]) => k === 'x'), ...p.FILES.filter(([k]) => k === 'm')].map(([, f]) => f),
+    'classic scripts in order, then the module (it reads WosSkinHost from skin-host.js when it runs)');
+  assert.ok(p.FILES.some(([k]) => k === 'm'));
   assert.ok(rest.includes('core/chats.js') && rest.includes('live.js') && rest.includes('core/chats-view.js'));
   for (const f of ['app.js', 'device.js', 'pwa-install.js']) assert.ok(!files(p).includes(f), f + ' never runs in a pinned session');
   assert.equal(p.scripts.find(s => s.src.includes('thread-swipe-back')).type, 'module');

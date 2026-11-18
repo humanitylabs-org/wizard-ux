@@ -114,7 +114,9 @@
   const arrived = new Promise(done => { arrive = done; });
   function loadExtras() {
     if (extras) return extras;
-    extras = Promise.all(loads).then(() => Promise.all(FILES.filter(([k]) => k === 'x' || k === 'm').map(([k, f]) => add(f, k === 'm'))))
+    // Classic scripts in order; a module (async by nature) only once the classic ones it reads have run.
+    extras = Promise.all(loads).then(() => Promise.all(FILES.filter(([k]) => k === 'x').map(([, f]) => add(f))))
+      .then(() => Promise.all(FILES.filter(([k]) => k === 'm').map(([, f]) => add(f, true))))
       .then(() => { arrive(true); try { window.dispatchEvent(new CustomEvent('wos:pin-extras')); } catch (_) {} return true; });
     return extras;
   }
