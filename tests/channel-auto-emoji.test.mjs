@@ -20,6 +20,7 @@ test('1580: the keyword map picks a fitting emoji from the name, or none', () =>
   assert.equal(pick('Family trip to Rome'), '👪', 'the first word that matches wins');
   assert.equal(pick('Morning workout'), '🏋️', 'a whole word before a word start ("workout", not "work")');
   assert.equal(pick('Carrots'), '', 'no 3-letter word starts ("car" never matches "carrots")');
+  assert.equal(pick('Shopping'), '🛒'); assert.equal(pick('Photos'), '📷');
   assert.equal(pick('AI research'), '🤖'); assert.equal(pick('Said'), '', 'words, never letters inside one');
   // Every map emoji reads back as a channel's own emoji, so the list shows it and the picker can take it off again.
   for (const [e, ks] of C.CHANNEL_AUTO_EMOJI) { assert.ok(C.channelFace(e + ' x').own, e); assert.equal(C.channelFace(C.channelEmojiName('x', e)).emoji, e); assert.ok(ks.trim() === ks && !/ {2}/.test(ks), e); }
