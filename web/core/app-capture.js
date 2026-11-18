@@ -1178,13 +1178,14 @@
       try { void navigator.storage?.persist?.().catch(() => {}); } catch (_) {}
       s.stage = 'saving the take'; live(await softStore(s, () => put(s.row)));
       }
-      // A fresh take re-checks the update freeze right before a recorder starts; a resume keeps its recoverable row.
-      if (!opts.resumeId && globalThis.__wizardUpdateFrozen) throw fail('update_busy', 'Wizard is preparing an update; recording is paused');
       if (native) {
         s.row.native = native.name || 'configured';
         if (s.row.native === 'wizard-meetings') s.row.nativeId = opts.meta?.meetingId || s.row.nativeId;
         if (!s.instant) live(await softStore(s, () => put(s.row)));
         s.hasSystemAudio = !!opts.systemAudio && capabilities(opts).systemAudioStart;
+        // A fresh take re-checks the update freeze after the last store await, right before the native recorder
+        // starts (update_busy is a definitive refusal below, so its unused row is dropped); a resume keeps its row.
+        if (!opts.resumeId && globalThis.__wizardUpdateFrozen) throw fail('update_busy', 'Wizard is preparing an update; recording is paused');
         s.stage = 'native recorder';
         s.engine = await native.start({ ...opts, onPcm: frame => emit(s,'pcm',frame), onNativeState: st => { if(!st)return; s.nativeState=st; if(st.hasSystemAudio != null)s.hasSystemAudio=!!st.hasSystemAudio;
           if(st.recording && ['recording','paused'].includes(s.phase)) {
@@ -1232,7 +1233,7 @@
         cleanup(s);
         // A native start might have succeeded before its bridge reply failed.
         // Keep the reservation recoverable instead of deleting the only owner hint.
-        if (s.row.native && !['mic_permission','mic_busy','native_busy','busy_other_meeting','bad_meeting_id','permission_denied','busy'].includes(e.code) && e.name!=='NotAllowedError') {
+        if (s.row.native && !['mic_permission','mic_busy','native_busy','busy_other_meeting','bad_meeting_id','permission_denied','busy','update_busy'].includes(e.code) && e.name!=='NotAllowedError') {
           s.row.status='recoverable';s.row.partial=true;try {await put(s.row);const recovered=await adapter(opts)?.recover?.(s.row);if(recovered?.live)recoveryLive.add(s.row.id);}catch(_){}
         }
         else { try { await remove(s.row.id); } catch (_) {} }

@@ -89,12 +89,13 @@ test('app capture (browser mic): a freeze that lands during the permission promp
   assert.equal(f.calls.stopped, 1); assert.equal(s.stream, null); assert.equal(s.engine, undefined); assert.equal(f.calls.recorders, 0);
 });
 
-test('app capture (native recorder): a freeze that lands while the take is saved never starts the native recorder', async () => {
-  let nativeStarts = 0, released = 0; const removed = [];
+for (const [label, freezeOn] of [['the take is saved', 1], ['the native reservation is saved (last await)', 2]])
+test('app capture (native recorder): a freeze that lands while ' + label + ' never starts the native recorder', async () => {
+  let nativeStarts = 0, released = 0, puts = 0; const removed = [];
   const ctx = { W: {}, ready: Promise.resolve(), acquire: async () => () => {}, softStore: async (s, work) => work(), recoverLocked: async () => {}, recoveryError: null,
     rows: async () => [], ownedRows: new Map(), recoveryLive: new Set(), navigator: {}, capabilities: () => ({}),
     adapter: () => ({ name: 'configured', start: async () => { nativeStarts++; return { nativeId: 'n' }; } }),
-    put: async () => { ctx.__wizardUpdateFrozen = true; }, remove: async id => { removed.push(id); },
+    put: async () => { if (++puts === freezeOn) ctx.__wizardUpdateFrozen = true; }, remove: async id => { removed.push(id); },
     cleanup() {}, release() { released++; }, fail: (code, message, extra) => Object.assign(Error(message), { code }, extra) };
   slice('  async function startRun(', '  // Recover only this app', ctx);
   const s = { row: { id: 'synthetic', appId: 'recorder' }, opts: {}, offs: [], readyResolve() {} };
