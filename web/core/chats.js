@@ -191,11 +191,17 @@ window.WizCore.chats = function createChats(H) {
     const root = document.documentElement;
     const returning = next !== docOwner;
     if (returning) {
-      document.querySelectorAll('.wos-doc-path,.wos-doc-thread').forEach(n => n.classList.remove('wos-doc-path', 'wos-doc-thread'));
+      // Leaving document scroll puts the desk track's slide, the window padding and the header back in one style change.
+      // With their transitions live that change animated: Back from a thread rode the track in from the side while the
+      // list dropped down from the top (wizard-ux issue 1564). Swap the mode with transitions held, then hand them back.
+      const path = [...document.querySelectorAll('.wos-doc-path,.wos-doc-thread')], held = path.map(n => n.style.transition);
+      path.forEach(n => { n.style.transition = 'none'; n.classList.remove('wos-doc-path', 'wos-doc-thread'); });
       docResize?.disconnect(); docResize = null; docObserved = [];
       docOwner = next;
       root.classList.toggle('wos-doc-scroll', !!next);
-      if (!next) { if (document.scrollingElement.scrollTop) window.scrollTo(0, 0); return; }
+      if (!next && document.scrollingElement.scrollTop) window.scrollTo(0, 0);
+      if (path.length) { void root.offsetHeight; path.forEach((n, i) => { n.style.transition = held[i]; }); }
+      if (!next) return;
       next.classList.add('wos-doc-thread');
       for (let n = next; n && n !== root; n = n.parentElement) n.classList.add('wos-doc-path');
     }
@@ -3021,6 +3027,9 @@ window.WizCore.chats = function createChats(H) {
     } else {
       const keepSheet = keptSheet(el);
       clearReading(w.id); el.innerHTML = html; c.listHTML = html; c.listRoot = el.firstElementChild;
+      // Back from the Android app's document-scrolled thread: leave document scroll now, in this paint, so the list is
+      // never drawn (or its place restored) at the thread's page offset first (wizard-ux issue 1564).
+      if (androidDocument && docOwner && (docOwner === el || docOwner.contains(el))) syncDocumentThread();
       restoreSheet(el, keepSheet);
       if (restoreListPlace(el.querySelector('.ch-scroll'), place)) c.listPending = null;
       // After a reload the rows come from the snapshot or the first read, which can take a few seconds.
