@@ -30,4 +30,19 @@ public class BadgeGeometryTest {
         BadgeGeometry wide = BadgeGeometry.compute(192, 2, 200f);
         assertTrue(wide.width() >= 200f);
     }
+    @Test public void adaptiveBubbleStaysInsideTheSafeZoneCircleWhatEverTheMask() {
+        for (int full : new int[]{108, 162, 288, 432}) {
+            float[] r = BadgeGeometry.adaptiveRegion(full);
+            float cx = full / 2f, safe = full * 33f / 108f; // 66 dp safe-zone circle on 108 dp art
+            for (String label : new String[]{"1", "9+"}) {
+                BadgeGeometry g = BadgeGeometry.compute(Math.round(r[1]), label.length(), 0);
+                float l = r[0] + g.left - g.ring, t = r[0] + g.top - g.ring, rt = r[0] + g.right + g.ring, b = r[0] + g.bottom + g.ring;
+                for (float[] p : new float[][]{{l, t}, {rt, t}, {l, b}, {rt, b}}) {
+                    double d = Math.hypot(p[0] - cx, p[1] - cx);
+                    assertTrue(full + " " + label + " corner inside the safe circle: " + d + " <= " + safe, d <= safe + 0.5);
+                }
+                assertTrue(full + " " + label + " top-right of the visible icon", (l + rt) / 2f > cx && (t + b) / 2f < cx);
+            }
+        }
+    }
 }

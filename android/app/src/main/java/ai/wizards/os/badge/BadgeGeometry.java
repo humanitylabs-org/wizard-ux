@@ -31,4 +31,14 @@ public final class BadgeGeometry {
     }
 
     public static float textSizeFor(int size) { return size * 0.26f; }
+
+    /**
+     * Where the bubble may go on a full adaptive-icon bitmap of side {@code full} (108 dp): the square inscribed in
+     * Android's 66 dp safe-zone circle, which every launcher mask (circle, squircle, rounded square) shows whole.
+     * @return {offset, side} in px; the region is centred, so the offset is the same on both axes.
+     */
+    public static float[] adaptiveRegion(int full) {
+        float side = full * (66f / 108f) / (float) Math.sqrt(2.0);
+        return new float[]{(full - side) / 2f, side};
+    }
 }

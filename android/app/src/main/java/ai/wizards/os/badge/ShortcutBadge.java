@@ -5,7 +5,6 @@ import android.content.SharedPreferences;
 import android.content.pm.ShortcutInfo;
 import android.content.pm.ShortcutManager;
 import android.graphics.Bitmap;
-import android.graphics.drawable.Icon;
 import android.util.Log;
 
 import java.util.Collections;
@@ -36,7 +35,7 @@ final class ShortcutBadge implements BadgeSync.Mechanism {
         Bitmap base = HomeScreenShortcuts.decodeIcon(png);
         if (base == null) return false;
         ShortcutInfo s = new ShortcutInfo.Builder(c, id).setShortLabel(name).setLongLabel(name)
-                .setIcon(Icon.createWithBitmap(BadgeCompositor.compose(base, count))).build();
+                .setIcon(HomeScreenShortcuts.adaptive(base, count)).build(); // same adaptive art as a pin/refresh
         boolean ok = m.updateShortcuts(Collections.singletonList(s));
         Log.i(UnreadBadges.TAG, "shortcut icon count=" + count + " ok=" + ok);
         return ok;
