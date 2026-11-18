@@ -33,7 +33,8 @@
    * (GET /wizard/v1/private-first: its env WIZARD_PRIVATE_FIRST beats the Look file, which a fresh box does not have
    * yet); with no answer (an older Agent Service) the shell's own switch decides. Off: this Welcome is unchanged. */
   const PF_SWITCH = 'wizard/private-first-setup', PF_STATE = '/wizard/v1/private-first', PRIVATE = 'wizard-tinfoil';
-  let pf = null, privateReady = false;
+  let pf = null, privateReady = false, pfSeen = 0;
+  const PF_GRACE = 7; // polls (about 20 s) a Tinfoil sign-in may wait for the private agent record
   const pfTweak = () => { try { return String(document.documentElement.getAttribute('data-tweaks') || '').split(' ').includes(PF_SWITCH); } catch (e) { return false; } };
   const privateFirst = () => (pf && typeof pf.on === 'boolean' ? pf.on : pfTweak());
   async function pfRead() {
@@ -286,9 +287,16 @@
     const mine = el, chosen = provider; // a reply for an earlier choice (Back, then another provider) is ignored
     pollT = setTimeout(async () => {
       let ok = await aiReady(PROVIDERS.find(x => x.app === chosen)?.slug);
-      // Private first: Tinfoil counts once the Agent Service has the private agent, wherever the provider sits.
+      // Private first: Tinfoil is done once the Agent Service has the private agent (its record decides, not the
+      // provider sign-in alone). A box that is not fresh never gets a default private agent recorded (wizard-agent-service
+      // server/private-first.mjs), so a sign-in seen for PF_GRACE polls without one goes on; an older Agent Service
+      // (no answer) keeps the sign-in rule.
       const priv = privateFirst() && chosen === PRIVATE;
-      if (ok !== true && priv && el === mine && (await pfRead())?.private_agent) ok = true;
+      if (priv && el === mine) {
+        const s = await pfRead();
+        if (s?.private_agent) ok = true;
+        else if (s && ok === true) { pfSeen++; ok = pfSeen >= PF_GRACE ? true : null; }
+      }
       if (!el || el !== mine || step !== 'ai' || provider !== chosen) return;
       if (ok === true) {
         connected = true; write('ai'); log('connected'); paint(false);
@@ -341,7 +349,7 @@
     const t = e.target.closest('[data-wl]'); if (!t) return;
     const act = t.dataset.wl;
     if (act === 'provider') {
-      const id = t.dataset.app; installError = '';
+      const id = t.dataset.app; installError = ''; pfSeen = 0;
       if (isInstalled(id)) { provider = id; connected = false; paint(); poll(); return; }
       installing = id; paint(false);
       const mine = el; // a Welcome closed and reopened meanwhile (or another install) must not be taken over
@@ -396,13 +404,14 @@
       if (h.deeplinked?.()) { log('deeplink'); return; }
       let [ok, setup] = await Promise.all([aiReady(), setupState(), Promise.race([Promise.resolve(window.WizCore?.appsLoaded?.()).catch(() => {}), new Promise(r => setTimeout(r, 5000))]),
         Promise.race([Promise.resolve(window.WizConfig?.ready).catch(() => {}), new Promise(r => setTimeout(r, 5000))])]); // never wait forever on the app list or the settings
+      // Private first: a private agent already made counts as connected (its provider may not be the main agent's).
+      // Read before the tap/key listeners go, so the owner acting meanwhile still keeps the Welcome away.
+      // (typeof: tests vm-slice boot() on its own.)
+      if (ok === false && typeof pfRead === 'function' && (await pfRead())?.private_agent && privateFirst()) { ok = true; log('boot:private'); }
       const state = read();
       log('boot:' + ok + ':' + state + ':' + (setup?.first_run === true));
       try { removeEventListener('pointerdown', act, true); removeEventListener('keydown', act, true); } catch (e) {}
       if ((ok === false || ok === true) && (acted || h.busy?.() || h.deeplinked?.())) { log('boot:busy'); return; }
-      // Private first: a private agent already made counts as connected (its provider may not be the main agent's).
-      // (typeof: tests vm-slice boot() on its own.)
-      if (ok === false && typeof pfRead === 'function' && (await pfRead())?.private_agent && privateFirst()) { ok = true; log('boot:private'); }
       if (ok === false) return open('ai');
       if (ok === true && state !== 'done' && (state === 'ai' || setup?.first_run === true)) return open('look');
     }, 0);

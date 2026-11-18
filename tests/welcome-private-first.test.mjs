@@ -132,3 +132,26 @@ test('boot: a box whose private agent exists counts as connected (no Connect you
   await d.boot()
   assert.match(d.html(), /Pick a skin/)
 })
+
+test('Tinfoil signed in is not enough: the card waits for the private agent record (Codex P1), then a short grace', async () => {
+  const box = fakeBox({ pf: ON }), d = device(box)
+  await d.boot()
+  d.press('provider', { app: 'wizard-tinfoil' })
+  box.providers = [{ slug: 'wizard-tinfoil', authenticated: true }] // the sign-in shows before the agent is made
+  const reads = () => box.reads.filter(u => u.endsWith('/wizard/v1/private-first')).length
+  const before = reads()
+  assert.ok(await until(() => reads() >= before + 3))
+  assert.doesNotMatch(d.html(), /is connected|private agent is ready/, 'never ready on the sign-in alone')
+  box.pf = { ...ON, private_agent: 'private-1' }
+  assert.ok(await until(() => /Your private agent is ready/.test(d.html())))
+})
+
+test('a box that is not fresh (no private agent recorded) still goes on after the grace', async () => {
+  const box = fakeBox({ pf: ON }), d = device(box)
+  await d.boot()
+  d.press('provider', { app: 'wizard-tinfoil' })
+  box.providers = [{ slug: 'wizard-tinfoil', authenticated: true }] // signed in; the Agent Service records no default private agent
+  assert.ok(await until(() => /Your private agent is ready/.test(d.html()), 2000))
+  d.press('next')
+  assert.match(d.html(), /Pick a skin/)
+})
