@@ -700,6 +700,12 @@
       "kind": "write-or-stream",
       "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
     },
+    "/wizard/v1/private-first": {
+      "status": "not-exercised",
+      "source": "web/core/welcome.js",
+      "kind": "read",
+      "note": "Read only when the Welcome opens at Connect your AI (no AI signed in), behind wizard/private-first-setup's Agent Service answer; the proof harnesses sign an AI in, so the Welcome never opens there. Refused and collected, never answered, if a flow reaches it."
+    },
     "/wizard/v1/setup": {
       "status": "catalogued",
       "source": "web/core/setup-launch.js",

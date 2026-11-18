@@ -555,6 +555,8 @@ body {
 .scrub { position: absolute; left: 50%; bottom: calc(2px + var(--safe-b)); width: 190px; height: 26px; margin-left: -95px; pointer-events: none; display: grid; place-items: center; }
 .scrub .sc-label { position: absolute; bottom: 30px; white-space: nowrap; padding: 6px 12px; border-radius: 99px; background: linear-gradient(rgba(10, 6, 24, .88), rgba(10, 6, 24, .88)), var(--wz-panel, var(--wz-base, var(--bg, #05030c))); border: 1px solid var(--line-2); font-size: 13px; font-weight: 650; opacity: 0; transform: translateY(6px); transition: opacity 160ms, transform 160ms; pointer-events: none; }
 .scrub.on .sc-label { opacity: 1; transform: none; }
+/* wizard-ux#1536: while the bar scrubs, the desk under the finger slides in quickly so each step shows that desk. */
+.track.anim.bar-scrubbing { transition-duration: 180ms; }
 
 /* ================= Orb as a permanent bottom navigation bar (James, 9 Oct) =================
  * One slim bar owns the bottom edge: content always ends above it, nothing floats over content.

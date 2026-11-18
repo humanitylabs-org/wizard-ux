@@ -191,11 +191,17 @@ window.WizCore.chats = function createChats(H) {
     const root = document.documentElement;
     const returning = next !== docOwner;
     if (returning) {
-      document.querySelectorAll('.wos-doc-path,.wos-doc-thread').forEach(n => n.classList.remove('wos-doc-path', 'wos-doc-thread'));
+      // Leaving document scroll puts the desk track's slide, the window padding and the header back in one style change.
+      // With their transitions live that change animated: Back from a thread rode the track in from the side while the
+      // list dropped down from the top (wizard-ux issue 1564). Swap the mode with transitions held, then hand them back.
+      const path = [...document.querySelectorAll('.wos-doc-path,.wos-doc-thread')], held = path.map(n => n.style.transition);
+      path.forEach(n => { n.style.transition = 'none'; n.classList.remove('wos-doc-path', 'wos-doc-thread'); });
       docResize?.disconnect(); docResize = null; docObserved = [];
       docOwner = next;
       root.classList.toggle('wos-doc-scroll', !!next);
-      if (!next) { if (document.scrollingElement.scrollTop) window.scrollTo(0, 0); return; }
+      if (!next && document.scrollingElement.scrollTop) window.scrollTo(0, 0);
+      if (path.length) { void root.offsetHeight; path.forEach((n, i) => { n.style.transition = held[i]; }); }
+      if (!next) return;
       next.classList.add('wos-doc-thread');
       for (let n = next; n && n !== root; n = n.parentElement) n.classList.add('wos-doc-path');
     }
@@ -3021,6 +3027,10 @@ window.WizCore.chats = function createChats(H) {
     } else {
       const keepSheet = keptSheet(el);
       clearReading(w.id); el.innerHTML = html; c.listHTML = html; c.listRoot = el.firstElementChild;
+      // Back from the Android app's document-scrolled thread: leave document scroll now, in this paint, so the list is
+      // never drawn (or its place restored) at the thread's page offset first (wizard-ux issue 1564).
+      // (typeof: tests run this function cut out of the file, without the document-scroll adapter around it.)
+      if (typeof docOwner !== 'undefined' && docOwner && androidDocument && (docOwner === el || docOwner.contains(el))) syncDocumentThread();
       restoreSheet(el, keepSheet);
       if (restoreListPlace(el.querySelector('.ch-scroll'), place)) c.listPending = null;
       // After a reload the rows come from the snapshot or the first read, which can take a few seconds.
@@ -3253,7 +3263,7 @@ window.WizCore.chats = function createChats(H) {
     const wk = PW ? PW.workHtml(c, tn, live, helperStatus) : null; // the work receipt (chat-work.js #17)
     if (wk != null) h += wk;
     else if (tn.steps || tn.notes.length || live) {
-      const label = live ? (tn.notes.length ? esc(clip(tn.notes[tn.notes.length - 1], 90)) : 'Working') : `Worked through ${tn.steps} step${tn.steps === 1 ? '' : 's'}`;
+      const label = live && c.stopping ? 'Stopping…' : live ? (tn.notes.length ? esc(clip(tn.notes[tn.notes.length - 1], 90)) : 'Working') : `Worked through ${tn.steps} step${tn.steps === 1 ? '' : 's'}`;
       h += `<details class="steps${live ? ' live' : ''}"><summary>${live ? '<i class="dots"><b></b><b></b><b></b></i>' : '◇'} ${label}</summary>${tn.notes.map(x => `<div class="note-line">${md(x)}</div>`).join('')}</details>`;
     }
     h += steersHtml;
@@ -3942,6 +3952,7 @@ window.WizCore.chats = function createChats(H) {
       const rnBefore = at => { let out = ''; while (rns.length && isFinite(at) && rns[0].ms <= at) out += rnHtml(rns.shift()); return out; };
       const need = typeof needsMark === 'function' && !isNew && s ? needsMark(w.id, w.thread, s, shown) : { k: -1, html: '' }; // issue 1331
       c.restartHeld = held; // turnHtml: a held send's last turn is not live (wizard-ux issue 1362)
+      c.stopping = s?.status === 'stopping'; // turnHtml: the live work line says Stopping… from the tap (issue 1576)
       msgs = (from > 0 ? `<button type="button" class="ch-earlier" data-chearlier>Load earlier messages · ${from} more</button>` : '')
         + shown.map((tn, k, arr) => {
           const at = turnAt(tn), dk = KIT.time.dayKey(at);
@@ -4599,6 +4610,8 @@ window.WizCore.chats = function createChats(H) {
   /* Stop on a thread (Miguel, 28 Oct 2026: Stop must work the moment he sends). The live run stops through LIVE.stop
    * as before; sends not yet admitted are withdrawn so nothing more reaches the agent. Their typed words and files go
    * back into the composer they came from; a recording stays kept under Unsent. */
+  // The Stop button answers on the tap itself (issue 1576): greyed, labelled Stopping…, until the row repaints as Stopping….
+  function stopTapped(b) { b.disabled = true; b.classList.add('is-stopping'); b.setAttribute('aria-label', 'Stopping…'); b.title = 'Stopping…'; }
   function stopPendingSend(w, sid, runId) {
     toast('■', 'Stopping…', 1400);
     LIVE.cancelSend(sid, runId).then(async r => {
@@ -5041,7 +5054,7 @@ window.WizCore.chats = function createChats(H) {
     const nrm = e.target.closest('.ch-notif-route [data-notify-menu]'); if (nrm) { const m = nrm.nextElementSibling; if (m) { m.hidden = !m.hidden; nrm.setAttribute('aria-expanded', String(!m.hidden)); if (!m.hidden) m.querySelector('[aria-checked="true"], button')?.focus?.({ preventScroll: true }); } return true; }
     const nrt = e.target.closest('.ch-notif-route [data-notify-route]'); if (nrt && w.thread) { if (!nrt.disabled) notifRoute(id, nrt.dataset.notifyRoute, nrt.dataset.notifyTo); return true; }
     const ca = e.target.closest('[data-chact]'); if (ca && w.thread) { threadAct(id, w.thread, ca.dataset.chact); return true; }
-    if (e.target.closest('[data-chstop]')) { const s = LIVE.session(w.thread); if (s && LIVE.cancelSend) { e.target.closest('[data-chstop]').disabled = true; stopPendingSend(w, w.thread, s.runId || ''); } else if (s?.runId) { e.target.closest('[data-chstop]').disabled = true; toast('■', 'Stopping…', 1400); LIVE.stop(s.runId).catch(() => { toast('!', 'Couldn’t stop · try again', 2600); renderThreadNow(w); }); } return true; }
+    if (e.target.closest('[data-chstop]')) { const s = LIVE.session(w.thread), sb = e.target.closest('[data-chstop]'); stopTapped(sb); if (s && LIVE.cancelSend) { stopPendingSend(w, w.thread, s.runId || ''); } else if (s?.runId) { toast('■', 'Stopping…', 1400); LIVE.stop(s.runId).catch(() => { toast('!', 'Couldn’t stop · try again', 2600); renderThreadNow(w); }); } return true; }
     const apb = e.target.closest('[data-approve]'); if (apb) { chooseApproval(id, apb.dataset.approve, apb.dataset.controlKey, apb.closest('.appr')?.querySelector('[data-clarify-answer]')?.value); return true; }
     // Short answer ⇄ full reply. Only its own two buttons toggle, so links and text selection in the reply never do.
     // The choice is kept per reply (ch(id).rsum), so live repaints keep it.
