@@ -587,6 +587,7 @@
     s.stage = 'audio engine';
     // On the Android app the browser recorder skips the native phone-mic guard; ask Android where it really listens.
     if (await externalMic()) { s.stream.getTracks().forEach(t => t.stop()); s.stream = null; throw fail('external_mic', EXTERNAL_MIC); }
+    if (globalThis.__wizardUpdateFrozen) { s.stream.getTracks().forEach(t => t.stop()); s.stream = null; throw fail('update_busy', 'Wizard is preparing an update; recording is paused'); }
     s.stream.getAudioTracks().forEach(t => t.addEventListener('ended', () => { if (s.phase === 'starting') s.interrupted = true; else if (!s.inputStopped && !s.discard && active === s) void finish(s, true).catch(() => {}); }));
     const ctx = s.ctx, source = ctx?.createMediaStreamSource(s.stream), analyser = ctx?.createAnalyser();
     s.nodes = []; if (analyser) { analyser.fftSize = 512; source.connect(analyser); s.nodes.push(source, analyser); }
@@ -596,6 +597,7 @@
       s.row.pcm = true; s.row.mime = 'audio/wav';
       if (!WORKLET_URL) throw fail('pcm_module_url_missing', 'Load the shared capture resource through its external script URL.');
       await ctx.audioWorklet.addModule(WORKLET_URL);
+      if (globalThis.__wizardUpdateFrozen) throw fail('update_busy', 'Wizard is preparing an update; recording is paused'); // cleanup() releases the stream and nodes
       const sink = ctx.createGain(); sink.gain.value = 0; sink.connect(ctx.destination); s.nodes.push(sink);
       const taps = []; let systemTap = null, systemEndMs = 0;
       const flushTap = tap => new Promise((resolve,reject) => {
@@ -629,7 +631,9 @@
         systemTap.input=input;systemTap.an=an;
         stream.getAudioTracks().forEach(t=>t.addEventListener('ended',()=>{ if(s.hasSystemAudio && !s.inputStopped) void s.engine?.setSystemAudio(false).catch(()=>{}); },{once:true}));
       };
-      attachSystem(await s.displayPromise);
+      const shared = await s.displayPromise;
+      if (globalThis.__wizardUpdateFrozen) { shared?.getTracks().forEach(t => t.stop()); throw fail('update_busy', 'Wizard is preparing an update; recording is paused'); }
+      attachSystem(shared);
       let changing = null;
       s.engine = {
         stop: async () => {
@@ -1089,6 +1093,10 @@
   }
   async function start(appId, opts = {}) {
     const meta = validate(appId, opts);
+    // The Mac app sets this while it restarts for an approved update: a capture started now would be cut off.
+    // Read from globalThis (these functions also run in extracted test sandboxes). startRun and browserEngine check it
+    // again right before a recorder starts, because a freeze can land during their awaits.
+    if (globalThis.__wizardUpdateFrozen) throw fail('update_busy', 'Wizard is preparing an update; recording is paused');
     const prepared = opts.preparedId ? preparations.get(opts.preparedId) : null;
     if (opts.preparedId && (!prepared || prepared.appId !== appId)) throw fail('invalid_preparation', 'Preparation belongs to another app.');
     if (active) throw fail('busy', 'Microphone held by ' + active.row.appId, { appId: active.row.appId });
@@ -1175,6 +1183,9 @@
         if (s.row.native === 'wizard-meetings') s.row.nativeId = opts.meta?.meetingId || s.row.nativeId;
         if (!s.instant) live(await softStore(s, () => put(s.row)));
         s.hasSystemAudio = !!opts.systemAudio && capabilities(opts).systemAudioStart;
+        // A fresh take re-checks the update freeze after the last store await, right before the native recorder
+        // starts (update_busy is a definitive refusal below, so its unused row is dropped); a resume keeps its row.
+        if (!opts.resumeId && globalThis.__wizardUpdateFrozen) throw fail('update_busy', 'Wizard is preparing an update; recording is paused');
         s.stage = 'native recorder';
         s.engine = await native.start({ ...opts, onPcm: frame => emit(s,'pcm',frame), onNativeState: st => { if(!st)return; s.nativeState=st; if(st.hasSystemAudio != null)s.hasSystemAudio=!!st.hasSystemAudio;
           if(st.recording && ['recording','paused'].includes(s.phase)) {
@@ -1222,7 +1233,7 @@
         cleanup(s);
         // A native start might have succeeded before its bridge reply failed.
         // Keep the reservation recoverable instead of deleting the only owner hint.
-        if (s.row.native && !['mic_permission','mic_busy','native_busy','busy_other_meeting','bad_meeting_id','permission_denied','busy'].includes(e.code) && e.name!=='NotAllowedError') {
+        if (s.row.native && !['mic_permission','mic_busy','native_busy','busy_other_meeting','bad_meeting_id','permission_denied','busy','update_busy'].includes(e.code) && e.name!=='NotAllowedError') {
           s.row.status='recoverable';s.row.partial=true;try {await put(s.row);const recovered=await adapter(opts)?.recover?.(s.row);if(recovered?.live)recoveryLive.add(s.row.id);}catch(_){}
         }
         else { try { await remove(s.row.id); } catch (_) {} }
