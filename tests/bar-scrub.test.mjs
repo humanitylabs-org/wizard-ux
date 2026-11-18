@@ -28,7 +28,7 @@ function shell({ on = true, desks = 6, at = 2 } = {}) {
     secs: Array.from({ length: desks }, (_, i) => ({ parked: Math.abs(i - at) > 1 })),
     track: { classList: { toggle: (c, v) => { if (v) cls.add('track:' + c); else cls.delete('track:' + c); } } },
   };
-  ctx.secOf = i => { const sec = ctx.secs[i]; return sec && { classList: { remove: c => { if (c === 'parked') sec.parked = false; } } }; };
+  ctx.secOf = i => { const sec = ctx.secs[i]; return sec && { classList: { remove: c => { if (c === 'parked') sec.parked = false; }, add: c => { if (c === 'parked') sec.parked = true; } } }; };
   ctx.parkDesks = () => { ctx.secs.forEach((sec, i) => { sec.parked = Math.abs(i - ctx.idx) > 1; }); log.push(['park', ctx.idx]); };
   ctx.scLabel = at => { label.textContent = ctx.deskName(at); };
   ctx.goDesk = n => { ctx.idx = n; log.push(['go', n]); };
@@ -106,6 +106,7 @@ test('switch on: each scrub step un-parks the hovered desk so it is on screen be
     assert.equal(s.ctx.scrub.classList.contains('track:bar-scrubbing'), true, 'quick slide while scrubbing');
   }
   assert.deepEqual(seen, [[0, false, false], [1, false, false], [2, false, false], [3, false, false]], 'hovered desk and the next one render');
+  assert.deepEqual(s.ctx.secs.map(x => x.parked), [true, false, false, false, false, true], 'desks left behind (3+ away) are parked again mid-scrub');
   s.ctx.fire('pointerup', { clientX: 208, clientY: 870, timeStamp: 900 });
   assert.equal(s.ctx.idx, 3); assert.equal(s.ctx.scrub.classList.contains('track:bar-scrubbing'), false, 'normal slide after release');
   const c = shell({ at: 0 }); c.finger(c.slow(-84), { up: 'pointercancel' });

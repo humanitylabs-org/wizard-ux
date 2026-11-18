@@ -466,10 +466,11 @@
   const barScrubOn = () => { try { return String(document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/bar-scrub'); } catch (_) { return false; } };
   const barScrubBack = s => { if (s.live) { idx = s.start; placeTrack(0, true); renderDots(); parkDesks(false); } s.live = false; barScrubPeek(false); scrub.classList.remove('on'); };
   // The hovered desk and its neighbours render while the scrub points at it (parked desks skip rendering); the track
-  // slides quicker so the desk follows each step. Settling (goDesk / barScrubBack) parks the rest again.
+  // slides quicker so the desk follows each step. Desks the scrub has left behind (3+ away; 2 away may still be sliding
+  // out) are parked again at once, and settling (goDesk / barScrubBack) parks the rest.
   const barScrubPeek = n => {
     track.classList.toggle('bar-scrubbing', n !== false);
-    if (n !== false) for (let i = Math.max(0, n - 1); i <= Math.min(desks.length - 1, n + 1); i++) secOf(i)?.classList.remove('parked');
+    if (n !== false) desks.forEach((_, i) => { const d = Math.abs(i - n); if (d <= 1) secOf(i)?.classList.remove('parked'); else if (d > 2) secOf(i)?.classList.add('parked'); });
   };
   // Where the scrub points: counted from x0, set when the scrub went live (12 px before that point, the slop).
   const barScrubAt = (s, x) => Math.max(0, Math.min(desks.length - 1, s.start - Math.round((x - s.x0) / SC_STEP)));
