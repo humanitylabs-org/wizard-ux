@@ -79,6 +79,7 @@ public final class UnreadBadges {
     public static void pollNow(Context context) {
         Context c = context.getApplicationContext();
         if (!wanted(c)) { forget(c); cancelJob(c); return; }
+        scheduleJob(c); // a target pinned after the app started still gets the background backstop (no-op when pending)
         int fetched = UnreadSource.fetch(c);
         SharedPreferences p = prefs(c);
         if (fetched >= 0) p.edit().putInt("count", fetched).apply();
