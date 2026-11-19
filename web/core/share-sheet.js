@@ -63,8 +63,36 @@
   // app's own WizardApp.share.receive registration replaces it (and adds its people) the first time it runs.
   // Images stay out of the default until a Messenger that stages images (wizard-messenger#8) registers them itself:
   // an older, never-opened Messenger offered an image would leave it pending until expiry.
-  const DEFAULTS = Object.freeze({ messenger: Object.freeze({ accepts: Object.freeze(['text', 'url']), targets: Object.freeze([]) }) });
-  const live = kind => Object.entries({ ...DEFAULTS, ...receivers }).filter(([id, r]) => r?.accepts?.includes(kind) && installed(id));
+  // `switched`: a kind the app takes only while one of its own feature switches is on (wizard.app-switches/1). The
+  // App Manager's one catalog says so without loading the app, so a file is offered to Messenger in a window that has
+  // never opened it (wizard-ux issue 1625); a known switch state wins over the cached registration for that kind.
+  const DEFAULTS = Object.freeze({ messenger: Object.freeze({ accepts: Object.freeze(['text', 'url']), targets: Object.freeze([]), switched: Object.freeze({ file: 'messenger:share-files' }) }) });
+  // App switch states from store-install/_feature-switches: id -> true/false; a switch the catalog doesn't list is unknown.
+  const sw = { on: null, at: 0, read: null };
+  const homeUrl = p => { try { return new URL(p, document.baseURI || location.href).pathname; } catch (_) { return '/wizard-os-home/' + p; } };
+  function readSwitches() {
+    if (sw.read) return sw.read;
+    if (Date.now() - sw.at < 60000 || typeof window.fetch !== 'function') return Promise.resolve();
+    const ac = typeof AbortController === 'function' ? new AbortController() : null, timer = setTimeout(() => ac?.abort(), 8000);
+    sw.read = window.fetch(homeUrl('store-install/_feature-switches'), { credentials: 'same-origin', cache: 'no-store', headers: { Accept: 'application/json' }, ...(ac ? { signal: ac.signal } : {}) })
+      .then(r => (r.ok ? r.json() : null)).then(d => {
+        if (!d || !Array.isArray(d.switches)) return;
+        const on = new Map(); for (const x of d.switches) if (x && x.kind === 'app' && typeof x.id === 'string') on.set(x.id, x.on === true);
+        sw.on = on;
+      }, () => {}).finally(() => { clearTimeout(timer); sw.read = null; sw.at = Date.now(); });
+    return sw.read;
+  }
+  // Read ahead (never waited on: a Share tap opens the sheet, or goes out, in the same gesture): when a file is about to
+  // be shareable (the media viewer opened one) and on every share, for the next one.
+  function prime(kind) {
+    if (Object.entries(DEFAULTS).some(([id, d]) => d.switched?.[kind] && installed(id))) void readSwitches();
+  }
+  function takes(id, r, kind) {
+    const key = DEFAULTS[id]?.switched?.[kind];
+    if (key && sw.on?.has(key)) return sw.on.get(key);
+    return !!r?.accepts?.includes(kind);
+  }
+  const live = kind => Object.entries({ ...DEFAULTS, ...receivers }).filter(([id, r]) => takes(id, r, kind) && installed(id));
   const rank = key => { const i = recent.indexOf(key); return i < 0 ? 1e6 : i; };
   function people(kind) {
     // Cached metadata from every registered receiver; never open/unlock an app to choose a person.
@@ -217,6 +245,7 @@
   function show(payload, native) {
     payload = itemPayload(payload);
     if (!payload) return Promise.resolve('unsupported');
+    prime(payload.kind);
     const kind = payload.kind, agents = agentsFor(kind, origin());
     if (!wants(kind) && !agents.length) return native();
     if (open) close('cancelled');
@@ -256,7 +285,7 @@
   const back = () => (close('cancelled') ? 'share-sheet' : null);
   const claimed = !!window.WizAppServices?.claimShare?.(Object.freeze({ register, setTargets, pending, ack, deliver }));
   if (!claimed) console.warn('WosShareSheet: app services already claimed; apps cannot receive shares');
-  window.WosShareSheet = Object.freeze({ show, wants: kind => wants(kind), back, isOpen: () => !!open,
+  window.WosShareSheet = Object.freeze({ show, wants: kind => wants(kind), prime: kind => { prime(kind); }, back, isOpen: () => !!open,
     _state: () => ({ receivers, recent, pending: pendingItems.map(x => ({ id: x.id, appId: x.appId, target: x.target })) }),
     _people: kind => people(kind).map(p => p.id),
     _agents: (kind, from) => agentsFor(kind, { chat: false, agent: '', private: false, incognito: false, ...(from || {}) }).map(a => a.id), _quote: p => quoteOf(p) });
