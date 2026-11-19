@@ -2076,11 +2076,15 @@ window.WizCore.chats = function createChats(H) {
       + `${d.more ? `<p class="ch-sw-more">${sweepLink('more', d.link)}</p>` : ''}<p class="ch-sw-n">${counts.join('<br>')}</p></div>`;
   }
   function sweepRepaint() { for (const x of Object.keys(CH)) { const ww = H.win(x); if (ww && ww.thread) renderThreadNow(ww); } }
+  // Turning the switch on or off repaints open threads at once: the card's buttons come and go with it.
+  let sweepWas = inboxSwitchOn();
+  try { window.addEventListener('wos:experience', () => { const on = inboxSwitchOn(); if (sweepWas === on) return; sweepWas = on; sweepRepaint(); }); } catch (_) {}
   // Read the card again; only the same card's view is kept (a newer sweep posts its own row).
   async function sweepReread(id) {
     try { const v = await LIVE.agentInbox.sweep(); if (v && v.id === id) sweepOf(id).view = v; } catch (_) {}
   }
   async function sweepAnswer(cardId, itemId, option) {
+    if (!inboxSwitchOn()) { sweepRepaint(); return; }
     const s = sweepOf(cardId); if (s.busy[itemId] || s.all) return;
     s.busy[itemId] = option; sweepRepaint();
     try {
@@ -2094,6 +2098,7 @@ window.WizCore.chats = function createChats(H) {
     sweepRepaint();
   }
   async function sweepYesToAll(cardId) {
+    if (!inboxSwitchOn()) { sweepRepaint(); return; }
     const s = sweepOf(cardId); if (s.all || Object.keys(s.busy).length) return;
     s.all = true; sweepRepaint();
     try {

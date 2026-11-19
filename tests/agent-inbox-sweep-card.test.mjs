@@ -119,16 +119,18 @@ test('parseRows: the card row is its own turn carrying the card, and a later rep
 // The chats.js block with the real normalizer and the real chat-kit.
 function cardBlock({ on = true, listed = [], answer, yesToAll, sweep } = {}) {
   const box = inboxReader(() => ({ json: {} })).inbox;
-  const toasts = [], paints = [];
+  const toasts = [], paints = [], listeners = {}, sw = { on };
   const ctx = {
+    window: { addEventListener: (t, f) => { (listeners[t] ||= []).push(f); } },
     KIT: kit(), esc: v => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'),
-    inboxSwitchOn: () => on, inboxListed: id => listed.includes(id), toast: (i, t) => toasts.push(t),
+    inboxSwitchOn: () => sw.on, inboxListed: id => listed.includes(id), toast: (i, t) => toasts.push(t),
     CH: { w1: {} }, H: { win: () => ({ id: 'w1', thread: 'wizard_daily_1' }) }, renderThreadNow: () => paints.push(1),
     LIVE: { agentInbox: { card: box.card, answer: answer || (async () => ({})), yesToAll: yesToAll || (async () => ({ answered: [], card: null })), sweep: sweep || (async () => null) } },
   };
   vm.createContext(ctx);
   vm.runInContext(slice(chats, '  const SWEEP = new Map();', '  /* Ready has three orders') + '\nthis.api = { sweepHtml, sweepAnswer, sweepYesToAll, SWEEP };', ctx);
-  return { api: ctx.api, toasts, paints };
+  const flip = v => { sw.on = v; for (const f of listeners['wos:experience'] || []) f(); };
+  return { api: ctx.api, toasts, paints, flip };
 }
 const buttonsOf = (html, id) => [...html.matchAll(new RegExp(`data-chsweep="${id}" data-card="${CARD}" data-opt="([a-z-]+)"`, 'g'))].map(m => m[1]);
 
@@ -234,4 +236,18 @@ test('the buttons are wired in the click handler and every card rule is scoped t
     for (const c of rule.match(/var\(--[a-z0-9-]+/g) || []) assert.match(c, /^var\(--wz-/, 'skin tokens only');
   }
   assert.match(rules.find(r => r.includes('.appr.ch-sweep {')), /background: var\(--wz-panel, #17131f\)/, 'opaque panel with the dark fallback');
+});
+
+test('switch turned off while the Daily thread is open: the thread repaints (markdown again) and a tap sends nothing', async () => {
+  const sent = [];
+  const f = cardBlock({ answer: async (id, opt) => { sent.push([id, opt]); return {}; }, yesToAll: async id => { sent.push([id]); return { answered: [], card: null }; } });
+  assert.notEqual(f.api.sweepHtml(card()), '');
+  f.flip(false);
+  assert.equal(f.paints.length, 1, 'open threads repainted on the switch change');
+  assert.equal(f.api.sweepHtml(card()), '', 'no card once off');
+  await f.api.sweepAnswer(CARD, A, 'early');
+  await f.api.sweepYesToAll(CARD);
+  assert.deepEqual(sent, [], 'a stale button sends nothing');
+  f.flip(true);
+  assert.equal(f.paints.length, 4, 'and again when it comes back on');
 });
