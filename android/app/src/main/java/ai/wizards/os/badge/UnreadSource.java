@@ -15,7 +15,11 @@ import ai.wizards.os.device.Http;
  */
 final class UnreadSource {
     private UnreadSource() {}
-    static final String PATH = "/apps/messenger/api/unread";
+    /**
+     * Messenger's view lives at {@code /messenger/} (its registry {@code view.url}) and its API under it. {@code /apps/*}
+     * on the Wizard's gateway is the retired apps directory, which answers every such path 404 (James's phone, 19 Nov).
+     */
+    static final String PATH = "/messenger/api/unread";
 
     /** @return the unread total, or -1 when it could not be read. Network: off the main thread. */
     static int fetch(String origin) {
@@ -25,7 +29,7 @@ final class UnreadSource {
             return UnreadParse.total(reply);
         } catch (Http.Error e) {
             Log.i(UnreadBadges.TAG, "unread unavailable: HTTP " + e.status);
-            return UnreadParse.forStatus(e.status);
+            return UnreadParse.forStatus(e.status, e.body);
         } catch (IOException e) {
             Log.i(UnreadBadges.TAG, "unread unavailable");
         }
