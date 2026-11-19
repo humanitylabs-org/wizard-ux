@@ -6,6 +6,8 @@
 // ux#1635) and File. Outside the Android app (no WizardOSNative) + keeps the plain file dialog.
 // Phone 412x915, Android user agent, skins nebula + grove. QA_EXPECT=broken (QA_WEB=<main>/web) asserts the old
 // direct empty-accept dialog instead. Synthetic transport only; every write is answered locally.
+// Round 3 (James, 19 Nov, 23:46 Bangkok: "photo should be first ... clicking files repeats the same problem"): the
+// order is Photo or video, Camera, File, and File asks for */* so the app opens its file picker with no camera sheet.
 const assert = require('node:assert/strict');
 const { chromium } = require('../tools/qa-playwright.cjs');
 const { ownerRead } = require('../tools/qa-desktop-frame-fixture.cjs');
@@ -94,7 +96,6 @@ async function run(browser, skin, native) {
   return got;
 }
 // owner-correction: humanitylabs-org/wizard-ux#1634 · 2026-11-19 · "Come on bro, this should be simple."
-// owner-correction: humanitylabs-org/wizard-ux#1634 · 2026-11-19 · "photo should be first ... clicking files repeats the same problem."
 (async () => {
   const browser = await chromium.launch(), report = [];
   try {
