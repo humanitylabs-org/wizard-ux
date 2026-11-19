@@ -70,12 +70,13 @@ const priv = [{ value: 'glm-5.3', provider: 'custom', name: 'GLM 5.3', agent: 'p
 const order = html => [...html.matchAll(/<span>([^<]+)<\/span><\/div>|<b>(?:<svg[^>]*><\/svg>)?([^<]+)<\/b>|data-mall>([^<]+)</g)].map(m => m[1] ? `## ${m[1]}` : m[2] || m[3]);
 
 // owner-correction: humanitylabs-org/wizard-ux#939 · 2026-11-04 · "Why is Sonnet missing from my model list when I never requested Sonnet to be removed? We previously added it."
-test('compact menu reads bottom-up from the thumb: Fable, Opus, Sonnet, Astra, Sol last, Private agent above, More models on top', () => {
+test('compact menu reads bottom-up from the thumb: Opus, Sonnet, Astra, Sol last, Private agent above, More models on top', () => {
   const M = models();
+  M.options = M.options.filter(o => !/fable/.test(o.value)); // an owner with no Fable route (Fable's row: issue 1636 test above)
   const { html, list } = M.popHtml({ mode: 'thread', cur: { model: 'claude-opus-5-5', provider: 'anthropic' }, all: false, priv });
-  assert.deepEqual(order(html), ['More models', '## Private agent', 'GLM 5.3', '## Models', 'Fable', 'Opus', 'Sonnet', 'Astra', 'Sol']);
+  assert.deepEqual(order(html), ['More models', '## Private agent', 'GLM 5.3', '## Models', 'Opus', 'Sonnet', 'Astra', 'Sol']);
   assert.match(html, /class="ch-sheet ch-mpop"/);
-  assert.equal(list.length, 6); // every row maps to a pickable option
+  assert.equal(list.length, 5); // every row maps to a pickable option
 });
 
 test('in a private chat the private models sit by the thumb and the main models move above', () => {
