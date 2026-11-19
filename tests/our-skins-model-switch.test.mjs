@@ -29,7 +29,7 @@ for (const skin of ['obsidian', 'obsidian-light', 'landscapes', 'nebula', 'grove
     const M = models(skin);
     assert.equal(M.ours(), ['obsidian', 'obsidian-light', 'landscapes'].includes(skin));
     const { html } = M.popHtml({ mode: 'thread', cur });
-    assert.deepEqual(names(html), ['Opus', 'Sonnet', 'Sol', 'Astra', 'Kimi']);
+    assert.deepEqual(names(html), ['Opus', 'Sonnet', 'Astra', 'Sol', 'Kimi']);
     assert.match(html, /class="mrow secure"/);
   });
 }

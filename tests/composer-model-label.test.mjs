@@ -47,7 +47,7 @@ test('new chat on Sol exposes catalogue Sonnet immediately without changing the 
 test('Fable is a first-open compact row when the catalogue has it, and absent when it does not', () => {
   const M = models();
   const cat = fable => M.normalize({ provider: 'openai-codex', model: 'gpt-6.1-sol', providers: [
-    { slug: 'openai-codex', authenticated: true, models: ['gpt-6-astra', 'gpt-6.1-sol', 'gpt-6-luna'] },
+    { slug: 'openai-codex', authenticated: true, models: ['gpt-6-astra', 'gpt-6.1-sol'] }, // no Luna route here (issue 1561: Luna would join ChatGPT's short list)
     { slug: 'anthropic', authenticated: true, models: ['claude-opus-5-5', 'claude-sonnet-5-5', ...(fable ? ['claude-fable-5', 'claude-fable-5-1', 'claude-fable-5-2'] : [])] },
   ] }, true);
   M.options = cat(true);
@@ -55,7 +55,7 @@ test('Fable is a first-open compact row when the catalogue has it, and absent wh
   const cur = M.snapshot('');
   const { html, list } = M.popHtml({ mode: 'new', cur, all: false });
   const names = [...html.matchAll(/<span class="mn"><b>([^<]+)<\/b>/g)].map(m => m[1]);
-  assert.deepEqual(names, ['Fable', 'Opus', 'Sonnet', 'Sol', 'Astra', 'Luna']); // Claude's then ChatGPT's short list (issue 1561)
+  assert.deepEqual(names, ['Fable', 'Opus', 'Sonnet', 'Astra', 'Sol']);
   const match = html.match(/data-mpick="(\d+)"[^>]*><span class="mn"><b>Fable<\/b>/);
   const picked = list[Number(match[1])];
   assert.equal(picked.value, 'claude-fable-5-2'); // the newest Fable, via the visibleChoices winner
@@ -81,7 +81,7 @@ test('main vs routed threads: Fable joins the main menu, routed agents keep exac
     { slug: 'openai-codex', authenticated: true, models: ['gpt-6-astra', 'gpt-6.1-sol'] }] }, true);
   const names = html => [...html.matchAll(/<span class="mn"><b>([^<]+)<\/b>/g)].map(m => m[1]);
   const main = M.popHtml({ mode: 'thread', cur: { model: 'claude-opus-5-5', provider: 'anthropic' }, all: false });
-  assert.deepEqual(names(main.html), ['Fable', 'Opus', 'Sonnet', 'Sol', 'Astra']);
+  assert.deepEqual(names(main.html), ['Fable', 'Opus', 'Sonnet', 'Astra', 'Sol']);
   assert.equal(main.list[0].value, 'claude-fable-5-2');
   const W = M.__window;
   for (const a of agents) {
@@ -97,13 +97,13 @@ const priv = [{ value: 'glm-5.3', provider: 'custom', name: 'GLM 5.3', agent: 'p
 const order = html => [...html.matchAll(/<span>([^<]+)<\/span><\/div>|<b>(?:<svg[^>]*><\/svg>)?([^<]+)<\/b>|data-mall>([^<]+)</g)].map(m => m[1] ? `## ${m[1]}` : m[2] || m[3]);
 
 // owner-correction: humanitylabs-org/wizard-ux#939 · 2026-11-04 · "Why is Sonnet missing from my model list when I never requested Sonnet to be removed? We previously added it."
-test('compact menu reads bottom-up from the thumb: the connectors\u2019 short lists last, Private agent above, More models on top', () => {
+test('compact menu reads bottom-up from the thumb: Opus, Sonnet, Astra, Sol last, Private agent above, More models on top', () => {
   const M = models();
-  M.options = M.options.filter(o => !/fable/.test(o.value)); // an owner with no Fable route (Fable's row: issue 1636 test above)
+  M.options = M.options.filter(o => !/fable|luna/.test(o.value)); // an owner with no Fable or Luna route (Fable's row: issue 1636 test above; Luna: issue 1561)
   const { html, list } = M.popHtml({ mode: 'thread', cur: { model: 'claude-opus-5-5', provider: 'anthropic' }, all: false, priv });
-  assert.deepEqual(order(html), ['More models', '## Private agent', 'GLM 5.3', '## Models', 'Opus', 'Sonnet', 'Sol', 'Astra', 'Luna']);
+  assert.deepEqual(order(html), ['More models', '## Private agent', 'GLM 5.3', '## Models', 'Opus', 'Sonnet', 'Astra', 'Sol']);
   assert.match(html, /class="ch-sheet ch-mpop"/);
-  assert.equal(list.length, 6); // every row maps to a pickable option
+  assert.equal(list.length, 5); // every row maps to a pickable option
 });
 
 test('in a private chat the private models sit by the thumb and the main models move above', () => {
@@ -118,7 +118,7 @@ test('More models expands to the other families once each, above the short list'
   const M = models();
   const { html } = M.popHtml({ mode: 'thread', cur: { model: 'claude-opus-5-5', provider: 'anthropic' }, all: true, priv: [] });
   const o = order(html);
-  assert.deepEqual(o.slice(-6), ['Fable', 'Opus', 'Sonnet', 'Sol', 'Astra', 'Luna']);
+  assert.deepEqual(o.slice(-6), ['Fable', 'Opus', 'Sonnet', 'Astra', 'Sol', 'Luna']);
   assert.ok(o.indexOf('Terra') >= 0 && o.indexOf('Terra') < o.indexOf('## Models'));
   assert.equal(o.filter(x => /Opus/.test(x)).length, 1);
   assert.equal(o.filter(x => /Fable/.test(x)).length, 1);

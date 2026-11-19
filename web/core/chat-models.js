@@ -74,7 +74,7 @@
    * none connected the menu says so and links to Connectors in the App Store. */
   const CONNECTORS = [
     { id: 'claude', models: [['claude:fable', 'Fable'], ['claude:opus', 'Opus'], ['claude:sonnet', 'Sonnet'], ['claude:haiku', 'Haiku']] }, // Fable first (issue 1636)
-    { id: 'chatgpt', models: [['gpt:sol', 'Sol'], ['gpt:astra', 'Astra'], ['gpt:luna', 'Luna']] },
+    { id: 'chatgpt', models: [['gpt:astra', 'Astra'], ['gpt:sol', 'Sol'], ['gpt:luna', 'Luna']] }, // Astra before Sol, as the stock menu always read (owner tests #939, #1636)
     { id: 'tinfoil', models: [['tinfoil:glm', 'GLM'], ['tinfoil:kimi', 'Kimi'], ['tinfoil:deepseek', 'DeepSeek Flash']] },
   ];
   // Tinfoil's main chat models by id; utility models (embeddings, speech, filters) get no family and stay in More models.
@@ -481,7 +481,7 @@
       const primary = own || up.map(f => vis.find(o => famOf(o) === f)).filter(Boolean).concat(vis.filter(o => isCur(o) && !up.includes(famOf(o))));
       const rest = own || !all ? [] : vis.filter(o => !primary.includes(o)); // the other families' newest models (Fable, Haiku, Terra, Luna)
       const curPriv = privList.some(isCur);
-      // Primary rows read each connected connector's short list (Fable · Opus · Sonnet · Haiku, Sol · Astra · Luna, GLM · Kimi · DeepSeek Flash; issues 1561, 1636: a row only when the catalogue has it); everything else keeps its catalogue name (GLM 5.3, Fable 5.1…).
+      // Primary rows read each connected connector's short list (Fable · Opus · Sonnet · Haiku, Astra · Sol · Luna, GLM · Kimi · DeepSeek Flash; issues 1561, 1636: a row only when the catalogue has it); everything else keeps its catalogue name (GLM 5.3, Fable 5.1…).
       const curated = o => up.includes(famOf(o)) && primaryFamilies().find(x => x.family === famOf(o))?.name;
       const label = (o, p) => own || p ? o.name : curated(o) || (isTinfoil(o.provider) ? M.short(o.value, o.provider) : PRIMARY.find(x => x.family === famOf(o))?.name || o.name || M.short(o.value, o.provider));
       const list = [], row = (o, cls = '') => { const i = list.push(o) - 1; const p = cls.includes('priv'); if (isTinfoil(o.provider)) cls += ' secure';

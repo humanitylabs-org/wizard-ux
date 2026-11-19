@@ -53,13 +53,13 @@ test('a thread already on a disconnected model still shows that model', () => {
 
 test('Claude and ChatGPT connected: their curated short lists, in connector order', () => {
   const M = models({ claude: true, chatgpt: true });
-  assert.deepEqual(names(M.popHtml({ mode: 'new', cur: null }).html), ['Opus', 'Sonnet', 'Haiku', 'Sol', 'Astra', 'Luna']);
+  assert.deepEqual(names(M.popHtml({ mode: 'new', cur: null }).html), ['Opus', 'Sonnet', 'Haiku', 'Astra', 'Sol', 'Luna']);
 });
 
 test('every connector connected: Terra and the utility models stay behind More models', () => {
   const M = models({ claude: true, chatgpt: true, tinfoil: true });
   const short = names(M.popHtml({ mode: 'new', cur: null }).html);
-  assert.deepEqual(short, ['Opus', 'Sonnet', 'Haiku', 'Sol', 'Astra', 'Luna', 'GLM', 'Kimi', 'DeepSeek Flash']);
+  assert.deepEqual(short, ['Opus', 'Sonnet', 'Haiku', 'Astra', 'Sol', 'Luna', 'GLM', 'Kimi', 'DeepSeek Flash']);
   assert.match(M.popHtml({ mode: 'new', cur: null }).html, /data-mall/);
 });
 
