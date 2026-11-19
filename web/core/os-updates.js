@@ -83,20 +83,18 @@
     lastSig = sig; changed();
   }
 
-  /* ---- Apps (wizard-ux#1191, behind the off-by-default switch wizard/app-updates-list) ----
+  /* ---- Apps (wizard-ux#1191, on for everyone since James approved it; its switch wizard/app-updates-list is gone) ----
    * Every installed app: installed version, latest Store version and a plain status, read from the same Runtipi
    * list the App Manager's app updater reads (`wam app-updates` candidates): the Store's
    * `../store-data/api/apps/installed` (id, name, status, version, ignoredVersion, latestVersion). Read only; never
    * a copy of its own. Holds, failed versions (with the plain reason), rollbacks, the last run and the app
    * Automatic / Ask mode come from the App Manager's own app-update state, `../store-install/_app-updates`
-   * (owner only, same switch; an older App Manager answers 404 and the list stays as above). Fetched only while
-   * the switch is on. Only once that state has answered, each row also gets its buttons, all POSTs to the same
+   * (owner only; an older App Manager answers 404 and the list stays as above). Only once that state has answered, each row also gets its buttons, all POSTs to the same
    * route: Update now (ready, or held with a newer version) and Retry (failed) send {action:"apply", app}, which
    * the App Manager runs in the background and which overrides a hold or a past failure, never a system app;
    * Hold / Unhold send {hold}/{unhold}; the Automatic / Ask me choice sends {mode}. A button reads Starting… /
    * Holding… while it waits, then the row says what happened (or the App Manager's own words when it refused),
-   * and the list is read again from GET. Switch off: no buttons and no POST. */
-  const APPS_ID = 'wizard/app-updates-list';
+   * and the list is read again from GET. */
   const APPS_API = new URL('../store-data/api/apps/installed', document.currentScript?.src || location.href).href;
   const STORE_SLUG = 'wizardapps';   // wizard-app-manager cli.STORE: app updates only move this store's apps
   // wizard-app-manager app_updates.SYSTEM_APPS: these move with the WizardOS release, never one by one.
@@ -106,7 +104,6 @@
   let apps = null, appsAt = 0, appsBusy = null, appsIssue = '', au = null;
   let appAct = '', appMsg = {}, appsPoll = 0;   // the app button waiting for the App Manager; {id: {ok, text, at}} after it answered
   const APP_MSG_FOR = 120e3;      // how long a row keeps saying what its button did
-  function appsOn() { try { return String(document.documentElement?.dataset?.tweaks || '').split(' ').includes(APPS_ID); } catch (_) { return false; } }
   const num = v => (typeof v === 'number' || (typeof v === 'string' && /^\d{1,9}$/.test(v))) ? Number(v) : null;
   // One row per installed app of the Wizard store. Same comparison as the App Manager's candidates(): latest > have.
   const BUG_URL = /^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/issues\/[1-9][0-9]{0,9}$/;
@@ -164,7 +161,6 @@
     return out.sort((a, b) => rank[a.state] - rank[b.state] || a.name.localeCompare(b.name));
   }
   function loadApps(force) {
-    if (!appsOn()) return Promise.resolve(apps);
     if (!force && appsAt && Date.now() - appsAt < FRESH) return Promise.resolve(apps);
     if (appsBusy) return appsBusy;
     appsBusy = (async () => {
@@ -190,12 +186,11 @@
     appsPoll = setTimeout(() => {
       appsPoll = 0;
       let shown = false; try { shown = !!document.querySelector('[data-osu-apps]')?.getClientRects().length; } catch (_) {}
-      if (!appsOn() || !shown) return;
+      if (!shown) return;
       if (document.hidden) pollApps(); else void loadApps(true);
     }, 5000);
   }
   function appsHtml() {
-    if (!appsOn()) return '';
     // One read per minute at most, failed or not: a failed read must not refetch on every repaint.
     if (!appsAt || Date.now() - appsAt > FRESH) void loadApps(); else pollApps();
     const head = '<span class="osu-lbl">Apps</span>';
@@ -237,7 +232,7 @@
   // A tap on an app button. True when it was one (handled even while the server update controls are unavailable).
   function appTap(what, ctx) {
     const [key, arg] = what.split(':');
-    if (!appsOn() || !au || appAct) return true;
+    if (!au || appAct) return true;
     let body, done;
     if (key === 'app-mode') {
       if (!['auto', 'ask'].includes(arg) || arg === au.app_mode) return true;
@@ -476,7 +471,7 @@
   }
   window.WosUpdates = { html, act, load, card, cardHtml, popup, popKey, ownsReload, homeInView, appRows, loadApps, post, changed, apply, applied,
     get state() { return st; }, get issue() { return issue; }, set state(d) { if (valid(d)) { st = d; at = Date.now(); } } };
-  // Turning wizard/app-updates-list on or off repaints Settings (and reads the apps the first time).
+  // Turning a switch on or off repaints Settings (wizard/os-update-waits and the other update switches).
   try { window.addEventListener?.('wos:tweak-choice', () => changed()); } catch (_) {}
   window.WosSettings?.register({ id: 'updates', aliases: ['updates'], available: () => true, html: () => html(), act: (ctx, el) => act(el, ctx) });
   load();
