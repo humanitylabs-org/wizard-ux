@@ -174,6 +174,13 @@ const report = { origin, web, off, cases: [] };
         assert.equal(await page.locator('.ch-sweep [data-chsweepall]').count(), 0, 'nothing left for Yes to all');
         assert.equal(await card.locator('.ch-sw-confirm').count(), 1, 'the confirm item still waits');
         await page.screenshot({ path: path.join(out, stem + '-4-yes-to-all.png') });
+        // 5. Links: no ?inbox= list link (those views don't exist yet, they show as text); Running opens the Running view.
+        assert.equal(await page.locator('.ch-sweep a[href*="?inbox="]').count(), 0, 'no dead ?inbox= links on the card');
+        assert.match(await card.locator('.ch-sw-n').innerText(), /Later and FYI: 3/);
+        await vis('.ch-sweep [data-chsweeprunning]').click();
+        await vis('.ch-run-h').waitFor({ timeout: 6000 });
+        entry.runningView = true;
+        await page.screenshot({ path: path.join(out, stem + '-5-running-view.png') });
         assert.deepEqual(entry.refused, [], 'nothing refused');
         assert.equal(entry.errors.length, 0, 'browser errors: ' + entry.errors.join('; '));
         entry.pass = true;

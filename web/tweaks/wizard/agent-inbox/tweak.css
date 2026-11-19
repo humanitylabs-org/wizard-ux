@@ -54,3 +54,6 @@ html[data-tweaks~="wizard/agent-inbox"] .ch-sweep .appr-b button.def { outline: 
 html[data-tweaks~="wizard/agent-inbox"] .ch-sweep .appr-b .ch-sw-confirm { flex: 1 1 auto; display: grid; place-items: center; min-height: 44px; padding: 10px 12px; border-radius: 12px; font-size: 14px; font-weight: 750; text-decoration: none; color: var(--wz-text, #f1edf7); background: var(--wz-surface, #1d1828); border: 1px solid var(--wz-warning, #ffbe55); }
 html[data-tweaks~="wizard/agent-inbox"] .ch-sweep small, html[data-tweaks~="wizard/agent-inbox"] .ch-sweep .ch-sw-st { font-size: 12.5px; font-weight: 700; color: var(--wz-text-secondary, #c9c1d6); }
 html[data-tweaks~="wizard/agent-inbox"] .ch-sweep .appr-b button:focus-visible, html[data-tweaks~="wizard/agent-inbox"] .ch-sweep a:focus-visible { outline: 2px solid var(--wz-accent, #b99bff); outline-offset: 2px; }
+/* "Running: N" on the sweep card opens the Running view (the other ?inbox= lists have no view yet and show as text). */
+html[data-tweaks~="wizard/agent-inbox"] .ch-sweep .ch-sw-run { all: unset; cursor: pointer; display: inline; font: inherit; color: var(--wz-accent, #b99bff); text-decoration: underline; min-height: 0; padding: 0; background: none; border: 0; }
+html[data-tweaks~="wizard/agent-inbox"] .ch-sweep .ch-sw-run:focus-visible { outline: 2px solid var(--wz-accent, #b99bff); outline-offset: 2px; }

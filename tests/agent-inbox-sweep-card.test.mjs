@@ -152,8 +152,18 @@ test('the card draws one button per token plus Later, Open to confirm, the answe
   assert.match(html, /Waiting on you \(6\)/);
   assert.match(html, /and 2 more/);
   assert.match(html, /Tax form filed/);
-  assert.match(html, /Running: 3<\/a>, 1 with no news for 6 h/);
+  assert.match(html, /<button type="button" class="ch-sw-run" data-chsweeprunning[^>]*>Running: 3<\/button>, 1 with no news for 6 h/, 'Running opens the Running view');
+  assert.doesNotMatch(html, /href="[^"]*\?inbox=/, 'no ?inbox= list link: those views do not exist in the shell yet');
+  assert.match(html, /and 2 more/);
+  assert.match(html, /Later and FYI: 4/);
   assert.match(html, /<a href="\/wizard-os-home\/\?session=wizard_worker_a" class="wsl" data-session="wizard_worker_a">Lisbon flights<\/a>/, 'thread via the normal deep link');
+});
+
+test('an archived item reads Archived, not Done; the Running button goes to the Running view', () => {
+  const html = cardBlock().api.sweepHtml(card({ waiting: { items: [{ ...card().waiting.items[0], state: 'archived' }], more: 0 } }));
+  assert.match(html, /<small class="ch-sw-st">Archived<\/small>/);
+  assert.doesNotMatch(html, /ch-sw-st">Done</);
+  assert.match(chats, /const o = W\[owner\(w\.id\)\] \|\| w, lw = W\[o\.id \+ '::list'\];\n\s+if \(lw && runningOn\(lw\)\) runningGo\(lw, true\); else if \(runningOn\(o\)\) \{ chatsBack\(o\); runningGo\(o, true\); \}/, 'desktop list pane, else back to the list');
 });
 
 test('main versus routed: a routed agent\'s item answers by record id but never opens as a main-agent thread', () => {

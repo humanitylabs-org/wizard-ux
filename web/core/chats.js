@@ -2038,7 +2038,9 @@ window.WizCore.chats = function createChats(H) {
   const SWEEP = new Map();
   const sweepOf = id => { let s = SWEEP.get(id); if (!s) { s = { view: null, busy: {}, later: new Set(), all: false }; SWEEP.set(id, s); if (SWEEP.size > 20) SWEEP.delete(SWEEP.keys().next().value); } return s; };
   const sweepMd = v => String(v ?? '').replace(/\s+/g, ' ').replace(/([\\`*_[\]])/g, '\\$1').trim();
-  const sweepLink = (text, link) => link ? KIT.inline(`[${sweepMd(text)}](${link})`) : esc(text);
+  // A ?inbox= list link has no view in the shell yet (only Running has one, drawn as its own button): plain text, not a dead link.
+  const sweepLink = (text, link) => link && !/^\/wizard-os-home\/\?inbox=/.test(link) ? KIT.inline(`[${sweepMd(text)}](${link})`) : esc(text);
+  const sweepRunning = r => `<button type="button" class="ch-sw-run" data-chsweeprunning aria-label="Running: ${r.count}: open the Running view">Running: ${r.count}</button>`;
   const sweepThread = (i, inner) => i.agent === 'hermes' && i.thread ? `<a href="/wizard-os-home/?session=${encodeURIComponent(i.thread)}" class="wsl" data-session="${esc(i.thread)}">${inner}</a>` : inner;
   const sweepLabel = t => t === 'later' ? 'Later' : KIT.friendlyChoice(t);
   function sweepItemHtml(cardId, s, i) {
@@ -2047,7 +2049,7 @@ window.WizCore.chats = function createChats(H) {
     if (i.state === 'answered') act = `<small class="ch-sw-st">Answered: ${esc(sweepLabel(i.answer || ''))}</small>`;
     else if (s.later.has(i.id)) act = '<small class="ch-sw-st">Later · back at the next sweep</small>';
     else if (i.state === 'parked') act = '<small class="ch-sw-st">Parked</small>';
-    else if (i.state === 'archived') act = '<small class="ch-sw-st">Done</small>';
+    else if (i.state === 'archived') act = '<small class="ch-sw-st">Archived</small>';
     else if (i.state === 'running') act = '<small class="ch-sw-st">Working on it</small>';
     else if (i.confirm) act = i.agent === 'hermes' && i.thread ? `<div class="appr-b">${sweepThread(i, 'Open to confirm').replace('class="wsl"', 'class="wsl ch-sw-confirm"')}</div>` : '<small class="ch-sw-st">Open its thread to confirm</small>';
     else {
@@ -2065,7 +2067,7 @@ window.WizCore.chats = function createChats(H) {
     const s = sweepOf(base.id); s.base = base;
     const v = s.view || base, w = v.waiting, d = v.done;
     const yes = v.yes.count > 0 ? `<div class="appr-b ch-sw-all"><button type="button" data-chsweepall="${esc(v.id)}"${s.all || Object.keys(s.busy).length ? ' disabled' : ''}>${s.all ? 'Sending…' : `Yes to all (${v.yes.count})`}</button></div>${v.yes.skipped ? `<small>${v.yes.skipped} to confirm yourself</small>` : ''}` : '';
-    const counts = [sweepLink(`Running: ${v.running.count}`, v.running.link) + (v.running.stale ? `, ${v.running.stale} with no news for 6 h` : ''), sweepLink(`Later and FYI: ${v.later.count}`, v.later.link)];
+    const counts = [sweepRunning(v.running) + (v.running.stale ? `, ${v.running.stale} with no news for 6 h` : ''), sweepLink(`Later and FYI: ${v.later.count}`, v.later.link)];
     if (v.parked.count) counts.push(sweepLink(`${v.parked.count} parked`, v.parked.link));
     if (v.missing) counts.push(esc(`${v.missing} finished task${v.missing === 1 ? '' : 's'} had no inbox record at the last check`));
     if (v.rules) counts.push(sweepLink(`Alert rules let ${v.rules.alerts} alerts through on ${v.rules.day} (more than ${v.rules.cap}): check the rules`, v.rules.link));
@@ -5152,6 +5154,13 @@ window.WizCore.chats = function createChats(H) {
     const ro = e.target.closest('[data-chrunopen]'); if (ro) { openChat(id, ro.dataset.chrunopen); return true; }
     const io = e.target.closest('[data-chinboxopen]'); if (io) { inboxMove('open', io.dataset.chinboxopen, { title: io.dataset.title || '' }); return true; }
     const swb = e.target.closest('[data-chsweep]'); if (swb) { if (!swb.disabled) sweepAnswer(swb.dataset.card, swb.dataset.chsweep, swb.dataset.opt); return true; }
+    // Running on the sweep card: the desktop's list pane (id::list) shows the Running view next to the thread; with one
+    // pane (phone) the thread steps back to the list first.
+    if (e.target.closest('[data-chsweeprunning]')) {
+      const o = W[owner(w.id)] || w, lw = W[o.id + '::list'];
+      if (lw && runningOn(lw)) runningGo(lw, true); else if (runningOn(o)) { chatsBack(o); runningGo(o, true); } else H.toast('·', 'The Running view is in the Chats window', 2000);
+      return true;
+    }
     const swa = e.target.closest('[data-chsweepall]'); if (swa) { if (!swa.disabled) sweepYesToAll(swa.dataset.chsweepall); return true; }
     if (window.WizAppExtensions?.handle(e)) return true;
     if (e.target.closest('[data-obretryall]')) { H.toast('↻', OUTBOX.retryFeedback(OUTBOX.retryAll(winAgent(w))), 2400); return true; }
