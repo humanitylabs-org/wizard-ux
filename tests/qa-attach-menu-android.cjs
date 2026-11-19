@@ -82,11 +82,18 @@ async function run(browser, skin, native) {
       got.backHandled = await page.evaluate(() => { history.back(); return true; }); await nap(500);
       got.backClosed = !(await menu());
       got.stillInThread = await page.locator('[data-part="thread"]').filter({ visible: true }).count() > 0;
+      // A New chat's composer: the same menu.
+      await vis('[data-part="thread"] [data-chback]').click(); await nap(700);
+      await vis('[data-chnew]').click(); await nap(900);
+      got.newDirect = await chooser(() => vis('[data-part="thread"] [data-chattach]').click());
+      got.newMenu = (await menu())?.items || null;
+      await page.mouse.click(200, 200); await nap(200);
     }
     got.errors = errors;
   } finally { await context.close(); }
   return got;
 }
+// owner-correction: humanitylabs-org/wizard-ux#1634 · 2026-11-19 · "Come on bro, this should be simple."
 (async () => {
   const browser = await chromium.launch(), report = [];
   try {
@@ -106,6 +113,8 @@ async function run(browser, skin, native) {
       assert.deepEqual(app.file, { accept: '', capture: false, multiple: true }, 'File asks for any file');
       assert.ok(app.outsideClosed, 'an outside tap closes the menu');
       assert.ok(app.backClosed && app.stillInThread, 'Back closes the menu and stays in the thread');
+      assert.equal(app.newDirect, null, 'New chat: + opens no dialog straight away');
+      assert.deepEqual(app.newMenu, ['Camera', 'Photo or video', 'File'], 'New chat: the same menu');
       assert.equal(web.menu, null, 'phone browser: no menu');
       assert.deepEqual(web.direct, { accept: '', capture: false, multiple: true }, 'phone browser keeps the plain file dialog');
       assert.deepEqual(app.errors, []); assert.deepEqual(web.errors, []);
