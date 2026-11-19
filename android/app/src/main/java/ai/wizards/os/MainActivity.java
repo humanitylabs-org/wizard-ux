@@ -486,6 +486,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
                 pendingFiles = cb;
                 pendingChooser = null;
                 if (PageCamera.galleryType(params.getAcceptTypes(), params.isCaptureEnabled()) == null
+                        && !PageCamera.plainFile(params.getAcceptTypes(), params.isCaptureEnabled())
                         && PageCamera.wantsImages(params.getAcceptTypes()) && PageCamera.needsPermission(MainActivity.this)) {
                     pendingChooser = params;
                     requestPermissions(new String[]{Manifest.permission.CAMERA}, REQ_CAMERA);
@@ -506,7 +507,8 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         String[] accept = params.getAcceptTypes();
         if (openGallery(params)) return true;
         Intent cam = null;
-        if (camera && PageCamera.wantsImages(accept)) {
+        // File (accept "*/*", wizard-ux issue 1634): the file picker straight away, no Camera/Files chooser.
+        if (camera && PageCamera.wantsImages(accept) && !PageCamera.plainFile(accept, params.isCaptureEnabled())) {
             try {
                 pendingPhoto = PageCamera.newPhoto(this);
                 cam = PageCamera.captureIntent(PageCamera.uriOf(this, pendingPhoto));

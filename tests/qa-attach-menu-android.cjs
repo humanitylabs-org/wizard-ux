@@ -94,6 +94,7 @@ async function run(browser, skin, native) {
   return got;
 }
 // owner-correction: humanitylabs-org/wizard-ux#1634 · 2026-11-19 · "Come on bro, this should be simple."
+// owner-correction: humanitylabs-org/wizard-ux#1634 · 2026-11-19 · "photo should be first ... clicking files repeats the same problem."
 (async () => {
   const browser = await chromium.launch(), report = [];
   try {
@@ -106,15 +107,15 @@ async function run(browser, skin, native) {
         continue;
       }
       assert.equal(app.direct, null, 'Android app: + opens no dialog straight away');
-      assert.deepEqual(app.menu.items, ['Camera', 'Photo or video', 'File']);
+      assert.deepEqual(app.menu.items, ['Photo or video', 'Camera', 'File']);
       assert.ok(app.menu.inView && app.menu.bottom <= app.menu.plusTop, 'menu sits above the + on screen');
       assert.deepEqual(app.photo, { accept: 'image/*,video/*', capture: false, multiple: true }, 'Photo or video asks for the photo grid');
       assert.deepEqual(app.camera, { accept: 'image/*', capture: true, multiple: false }, 'Camera asks for the camera');
-      assert.deepEqual(app.file, { accept: '', capture: false, multiple: true }, 'File asks for any file');
+      assert.deepEqual(app.file, { accept: '*/*', capture: false, multiple: true }, 'File asks for any file as */* (no Camera/Files sheet in the app)');
       assert.ok(app.outsideClosed, 'an outside tap closes the menu');
       assert.ok(app.backClosed && app.stillInThread, 'Back closes the menu and stays in the thread');
       assert.equal(app.newDirect, null, 'New chat: + opens no dialog straight away');
-      assert.deepEqual(app.newMenu, ['Camera', 'Photo or video', 'File'], 'New chat: the same menu');
+      assert.deepEqual(app.newMenu, ['Photo or video', 'Camera', 'File'], 'New chat: the same menu');
       assert.equal(web.menu, null, 'phone browser: no menu');
       assert.deepEqual(web.direct, { accept: '', capture: false, multiple: true }, 'phone browser keeps the plain file dialog');
       assert.deepEqual(app.errors, []); assert.deepEqual(web.errors, []);

@@ -3,7 +3,7 @@
  * Without x/y it sits under the anchor, or above it when there is no room below (a composer's +).
  * stay: follow the anchor on scroll/resize instead of closing (a phone keyboard going down).
  * onClose: called when it closes without a choice (outside tap, Back, Tab).
- * attach(input, anchor, opts): the Android app's Camera / Photo or video / File menu for a file input.
+ * attach(input, anchor, opts): the Android app's Photo or video / Camera / File menu for a file input.
  * The selection/link menus own specialized selection/download gestures and are not
  * general action menus. Keep this primitive independent of desktop state. */
 (() => {
@@ -74,10 +74,12 @@
       input.click();
     };
     if (!nativeAndroid() || !anchor) { pick('', false)(); return false; }
+    // Photo or video first (James, 19 Nov). File asks for "*/*", not '': the app opens its file picker straight away
+    // for "*/*" (Camera is its own item), while an empty accept still got the Camera/Files sheet.
     open({ anchor, label, stay: true, onClose: onCancel, items: [
-      { label: 'Camera', action: pick('image/*', true) },
       { label: 'Photo or video', action: pick('image/*,video/*', false) },
-      { label: 'File', action: pick('', false) },
+      { label: 'Camera', action: pick('image/*', true) },
+      { label: 'File', action: pick('*/*', false) },
     ] });
     return true;
   }
