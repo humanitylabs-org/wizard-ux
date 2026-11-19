@@ -45,10 +45,12 @@
   ],
   "defaults": [
     "wizard/unified-inbox",
-    "wizard/desktop-chats"
+    "wizard/desktop-chats",
+    "wizard/draft-marks"
   ],
   "promotedDefaults": [
-    "wizard/desktop-chats"
+    "wizard/desktop-chats",
+    "wizard/draft-marks"
   ],
   "aliases": {
     "miguel/unified-inbox": "wizard/unified-inbox",
