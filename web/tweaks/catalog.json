@@ -41,7 +41,8 @@
     "wizard/private-first-setup",
     "wizard/chat-app-switches",
     "wizard/agent-inbox",
-    "wizard/pin-reach-answer"
+    "wizard/pin-reach-answer",
+    "wizard/attach-menu-icons"
   ],
   "defaults": [
     "wizard/unified-inbox",
