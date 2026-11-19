@@ -733,7 +733,11 @@
   // never shared as text to an app or a person (wizard-ux issue 1621); the file itself goes through shareFile.
   function privateMedia(u) {
     try { u = u instanceof URL ? u : new URL(String(u), location.href); } catch (_) { return false; }
-    return u.origin === new URL(location.href).origin && PRIVATE_MEDIA.test(u.pathname);
+    if (u.origin !== new URL(location.href).origin) return false;
+    // pathname keeps percent-encoding (a file ID `source:abc` arrives as `source%3Aabc`): test the decoded path too,
+    // and treat anything under the private file stores as private, so no encoding of an ID slips past this check.
+    let decoded = u.pathname; try { decoded = decodeURIComponent(u.pathname); } catch (_) {}
+    return [u.pathname, decoded].some(p => PRIVATE_MEDIA.test(p) || /^\/wizard\/(?:files|attachments)\//i.test(p));
   }
   async function sharePayload(data = {}) {
     if (!data || typeof data !== 'object') return 'unsupported';

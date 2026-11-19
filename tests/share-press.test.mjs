@@ -54,7 +54,7 @@ test('file hold captures direct mode before async work; normal file tap uses she
 });
 test('a private Wizard file link is never shared as text (issue 1621)', async () => {
   const f=fixture();
-  for (const url of ['https://wizard.test/wizard/attachments/0123456789abcdef0123456789abcdef', '/wizard/attachments/0123456789abcdef0123456789abcdef', '/wizard/files/f1.md/content']) {
+  for (const url of ['https://wizard.test/wizard/attachments/0123456789abcdef0123456789abcdef', '/wizard/attachments/0123456789abcdef0123456789abcdef', '/wizard/files/f1.md/content', '/wizard/files/source%3Aabc/content', 'https://wizard.test/wizard/files/source:abc/content', '/wizard/files/a%2Fb/content', '/wizard/attachments/0123456789ABCDEF0123456789abcdef']) {
     assert.equal(await f.kit.sharePayload({url, title:'notes.md'}),'unsupported', url);
     assert.equal(await f.kit.sharePayload({url, direct:true}),'unsupported', url);
   }
