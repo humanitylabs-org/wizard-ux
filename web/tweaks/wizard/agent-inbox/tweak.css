@@ -64,3 +64,6 @@ html[data-tweaks~="wizard/agent-inbox"] .ch-sweep .ch-sw-d li { display: flex; a
 html[data-tweaks~="wizard/agent-inbox"] .ch-sweep .ch-sw-d .ch-al-fb button { min-height: 44px; }
 html[data-tweaks~="wizard/agent-inbox"] .ch-sweep .ch-sw-lb { display: inline-flex; align-items: center; min-height: 44px; padding: 0; border: 0; background: none; color: var(--wz-accent, #b99bff); font: inherit; font-size: 13px; text-decoration: underline; cursor: pointer; }
 html[data-tweaks~="wizard/agent-inbox"] .ch-sweep .ch-sw-lb:focus-visible { outline: 2px solid var(--wz-accent, #b99bff); outline-offset: 2px; }
+/* "Running: N" on the sweep card opens the Running view (the other ?inbox= lists have no view yet and show as text). */
+html[data-tweaks~="wizard/agent-inbox"] .ch-sweep .ch-sw-run { all: unset; cursor: pointer; display: inline; font: inherit; color: var(--wz-accent, #b99bff); text-decoration: underline; min-height: 0; padding: 0; background: none; border: 0; }
+html[data-tweaks~="wizard/agent-inbox"] .ch-sweep .ch-sw-run:focus-visible { outline: 2px solid var(--wz-accent, #b99bff); outline-offset: 2px; }
