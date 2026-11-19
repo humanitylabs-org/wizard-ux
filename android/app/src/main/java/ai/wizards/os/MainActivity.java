@@ -485,7 +485,8 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
                 pendingPhoto = null;
                 pendingFiles = cb;
                 pendingChooser = null;
-                if (PageCamera.wantsImages(params.getAcceptTypes()) && PageCamera.needsPermission(MainActivity.this)) {
+                if (PageCamera.galleryType(params.getAcceptTypes(), params.isCaptureEnabled()) == null
+                        && PageCamera.wantsImages(params.getAcceptTypes()) && PageCamera.needsPermission(MainActivity.this)) {
                     pendingChooser = params;
                     requestPermissions(new String[]{Manifest.permission.CAMERA}, REQ_CAMERA);
                     return true;
@@ -503,6 +504,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
      * camera allowed): the plain picker, as before. */
     private boolean openChooser(WebChromeClient.FileChooserParams params, boolean camera) {
         String[] accept = params.getAcceptTypes();
+        if (openGallery(params)) return true;
         Intent cam = null;
         if (camera && PageCamera.wantsImages(accept)) {
             try {
@@ -540,6 +542,27 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         } catch (ActivityNotFoundException e) {
             PageCamera.drop(pendingPhoto);
             pendingPhoto = null;
+            return false;
+        }
+    }
+
+    /* Photo or video (wizard-ux issue 1634): a picture/video input without capture opens the system picture picker
+     * straight away, with no Camera/Files chooser (Camera is its own menu item). Older Android without the picker,
+     * or a picker that will not start: false, so openChooser keeps its old picker. */
+    private boolean openGallery(WebChromeClient.FileChooserParams params) {
+        String type = PageCamera.galleryType(params.getAcceptTypes(), params.isCaptureEnabled());
+        if (type == null) return false;
+        int limit;
+        if (Build.VERSION.SDK_INT >= 33) limit = android.provider.MediaStore.getPickImagesMaxLimit();
+        else if (Build.VERSION.SDK_INT >= 30 && android.os.ext.SdkExtensions.getExtensionVersion(Build.VERSION_CODES.R) >= 2) limit = 100;
+        else return false;
+        boolean many = params.getMode() == WebChromeClient.FileChooserParams.MODE_OPEN_MULTIPLE;
+        Intent pick = PageCamera.galleryIntent(type, many ? limit : 1);
+        if (pick.resolveActivity(getPackageManager()) == null) return false;
+        try {
+            startActivityForResult(pick, REQ_FILE);
+            return true;
+        } catch (ActivityNotFoundException | SecurityException e) {
             return false;
         }
     }
