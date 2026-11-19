@@ -12,7 +12,7 @@ const rejection = { error: { code: 'run_not_accepting_steer', message: `Run is n
 // Exercise the entire production outbox against an HTTP boundary, not extracted
 // functions or source assertions. A minimal IDB implements transaction completion
 // and structured-clone persistence, including reloads of dispatch journals.
-function client(origin, rows = new Map()) {
+function client(origin, rows = new Map(), permissions = {}) {
   const timers = new Set();
   const indexedDB = { open() {
     const r = {};
@@ -33,7 +33,7 @@ function client(origin, rows = new Map()) {
     setTimeout(fn, ms) { const t = setTimeout(fn, ms); t.unref(); timers.add(t); return t; },
     fetch: (path, init) => fetch(origin + path, init),
     WosModels: { snapshot: (_, route) => route, resolveRoute: async route => route },
-    WosAgents: { isOther: a => !!a, get: () => ({ permissions: {} }) },
+    WosAgents: { isOther: a => !!a, get: () => ({ permissions }) },
   };
   ctx.window = ctx; vm.runInNewContext(source, ctx);
   return { api: ctx.WosOutbox, rows, close: () => { for (const t of timers) clearTimeout(t); } };
@@ -74,7 +74,7 @@ async function fixture(t, options = {}) {
     json(500, { error: 'unexpected request' });
   });
   await new Promise(r => server.listen(0, '127.0.0.1', r));
-  const c = client(`http://127.0.0.1:${server.address().port}`);
+  const c = client(`http://127.0.0.1:${server.address().port}`, new Map(), options.permissions || {});
   t.after(async () => { c.close(); server.closeAllConnections(); await new Promise(r => server.close(r)); });
   const enqueue = () => c.api.enqueue({ kind: 'reply', sessionId, steerRunId: runId, ...(options.agent ? { agent: options.agent } : {}),
     text: 'Follow up in this same thread', model: 'test-model', provider: 'test-provider', instructions: 'Keep original instructions', files: [{ id: 'drop_attachment' }] });
@@ -202,6 +202,24 @@ for (const runStatus of ['queued', 'starting', 'running', 'completed']) {
     assert.equal(posts[0].key, it.id);
     assert.equal(JSON.parse(posts[0].body).session_id, sessionId);
     assert.equal(JSON.parse(posts[0].body).input, it.text);
+  });
+}
+// Main versus routed threads: the same refusal on a host-profile/container agent route (?agent=ops) and on a restricted
+// agent (no file access) continues on that agent's route only, never on main, with its own words.
+for (const [label, extra] of [['main', {}], ['routed', { agent: 'ops' }], ['restricted routed', { agent: 'locked', permissions: { files: 'none' } }]]) {
+  test(`dispatch_already_attempted on a ${label} thread continues as one same-thread turn on that route`, async t => {
+    const f = await fixture(t, { ...queuedDispatch, runStatus: 'queued', ...extra }); const it = await settled(f.api, (await f.enqueue()).id);
+    assert.equal(it.state, 'sent', it.error);
+    for (const c of f.calls) {
+      if (extra.agent) assert.match(c.path, new RegExp(`[?&]agent=${extra.agent}(&|$)`), `unscoped call: ${c.method} ${c.path}`);
+      else assert.doesNotMatch(c.path, /[?&]agent=/, `main thread call went to an agent: ${c.path}`);
+    }
+    const posts = f.calls.filter(x => x.path.split('?')[0] === '/wizard/hermes/v1/runs');
+    assert.equal(posts.length, 1);
+    const body = JSON.parse(posts[0].body);
+    assert.equal(body.session_id, sessionId);
+    assert.equal(body.agent, extra.agent);
+    assert.equal(body.input, it.text);
   });
 }
 test('a dispatch_already_attempted refusal for a run in another thread never becomes a turn here', async t => {
