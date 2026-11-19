@@ -1154,6 +1154,7 @@
     open(items, i = 0) {
       items = (items || []).filter(x => x && x.url); if (!items.length) return false;
       V.items = items; V.i = Math.max(0, Math.min(items.length - 1, i));
+      if (items.some(x => x.kind !== 'image')) window.WosShareSheet?.prime?.('file'); // its Share then knows who takes files
       const el = build(); if (el.hidden) V.focus = document.activeElement;
       el.hidden = false; requestAnimationFrame(() => el.classList.add('open'));
       show(); K.onChange(true); el.focus({ preventScroll: true }); return true;

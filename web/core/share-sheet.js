@@ -82,12 +82,10 @@
       }, () => {}).finally(() => { clearTimeout(timer); sw.read = null; sw.at = Date.now(); });
     return sw.read;
   }
-  // Wait briefly for the switch states a share of this kind depends on; a slow App Manager keeps the last known answer.
-  // null = nothing to wait for (the sheet opens in the same tick, as always).
-  function switchesFor(kind) {
-    const need = Object.entries(DEFAULTS).some(([id, d]) => d.switched?.[kind] && installed(id));
-    if (!need || (!sw.read && Date.now() - sw.at < 60000) || typeof window.fetch !== 'function') return null;
-    return Promise.race([readSwitches(), new Promise(r => setTimeout(r, 1500))]);
+  // Read ahead (never waited on: a Share tap opens the sheet, or goes out, in the same gesture): when a file is about to
+  // be shareable (the media viewer opened one) and on every share, for the next one.
+  function prime(kind) {
+    if (Object.entries(DEFAULTS).some(([id, d]) => d.switched?.[kind] && installed(id))) void readSwitches();
   }
   function takes(id, r, kind) {
     const key = DEFAULTS[id]?.switched?.[kind];
@@ -247,11 +245,8 @@
   function show(payload, native) {
     payload = itemPayload(payload);
     if (!payload) return Promise.resolve('unsupported');
-    const from = origin(), wait = switchesFor(payload.kind); // where it started is read at the tap, before any wait
-    return wait ? wait.then(() => present(payload, native, from)) : present(payload, native, from);
-  }
-  function present(payload, native, from) {
-    const kind = payload.kind, agents = agentsFor(kind, from);
+    prime(payload.kind);
+    const kind = payload.kind, agents = agentsFor(kind, origin());
     if (!wants(kind) && !agents.length) return native();
     if (open) close('cancelled');
     return new Promise(resolve => {
@@ -290,7 +285,7 @@
   const back = () => (close('cancelled') ? 'share-sheet' : null);
   const claimed = !!window.WizAppServices?.claimShare?.(Object.freeze({ register, setTargets, pending, ack, deliver }));
   if (!claimed) console.warn('WosShareSheet: app services already claimed; apps cannot receive shares');
-  window.WosShareSheet = Object.freeze({ show, wants: kind => wants(kind), back, isOpen: () => !!open,
+  window.WosShareSheet = Object.freeze({ show, wants: kind => wants(kind), prime: kind => { prime(kind); }, back, isOpen: () => !!open,
     _state: () => ({ receivers, recent, pending: pendingItems.map(x => ({ id: x.id, appId: x.appId, target: x.target })) }),
     _people: kind => people(kind).map(p => p.id),
     _agents: (kind, from) => agentsFor(kind, { chat: false, agent: '', private: false, incognito: false, ...(from || {}) }).map(a => a.id), _quote: p => quoteOf(p) });
