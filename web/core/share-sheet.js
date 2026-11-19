@@ -194,14 +194,18 @@
     return pendingItems.filter(mine).map(x => { if (claimant) x.claim = claimant; return { id: x.id, ...x.payload, target: x.target }; });
   }
   function ack(appId, id) { const n = pendingItems.length; pendingItems = pendingItems.filter(x => !(x.appId === appId && x.id === id)); return pendingItems.length < n; }
+  let handoffs = 0;
   function deliver(appId, payload, target) {
     payload = itemPayload(payload);
     if (!payload || !window.WizOpenApp) return false;
     prune();
     const id = 'sh-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
     pendingItems.push({ id, appId, payload, target: target || null, at: Date.now() });
-
+    // The app shows its own picker (Messenger's Send to…): an overlay the share came from (the media viewer) steps
+    // aside first, so the picker is where the owner is looking, never behind the file (ux#1630).
+    if (!window.WizCanOpen || window.WizCanOpen(appId)) { const V = window.WosChat?.viewer; for (let i = 0; i < 3 && V?.isOpen?.(); i++) V.close(); }
     if (window.WizOpenApp(appId) === false) { ack(appId, id); return false; }
+    handoffs++; // 'shared' is the receipt, but nothing is placed until the owner picks: callers must not toast Shared
     // An app already open pulls now; a fresh frame pulls when it registers.
     window.dispatchEvent(new CustomEvent('wizard:share-pending', { detail: { appId } }));
     return true;
@@ -285,7 +289,7 @@
   const back = () => (close('cancelled') ? 'share-sheet' : null);
   const claimed = !!window.WizAppServices?.claimShare?.(Object.freeze({ register, setTargets, pending, ack, deliver }));
   if (!claimed) console.warn('WosShareSheet: app services already claimed; apps cannot receive shares');
-  window.WosShareSheet = Object.freeze({ show, wants: kind => wants(kind), prime: kind => { prime(kind); }, back, isOpen: () => !!open,
+  window.WosShareSheet = Object.freeze({ show, wants: kind => wants(kind), prime: kind => { prime(kind); }, back, isOpen: () => !!open, handoffs: () => handoffs,
     _state: () => ({ receivers, recent, pending: pendingItems.map(x => ({ id: x.id, appId: x.appId, target: x.target })) }),
     _people: kind => people(kind).map(p => p.id),
     _agents: (kind, from) => agentsFor(kind, { chat: false, agent: '', private: false, incognito: false, ...(from || {}) }).map(a => a.id), _quote: p => quoteOf(p) });
