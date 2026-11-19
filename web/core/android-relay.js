@@ -174,6 +174,26 @@
   window.addEventListener('wos:experience', () => { chatSettled = true; windowsSync(); });
   setTimeout(() => { chatSettled = true; windowsSync(); }, 5000);
   windowsSync();
+
+  /* Connecting only while the Wizard hasn't answered (wizard-ux issue 1607, switch wizard/pin-reach-answer, off by
+   * default). In the Android app, "Connecting to your Wizard…" leaves as soon as the Wizard answers the page instead of
+   * when the page first paints, so a home-screen app the box answers at once never shows it. The main page copies the
+   * switch to the Android app (an app window's page never sees the shell's switches); off is applied once settled. */
+  const REACH_SWITCH = 'wizard/pin-reach-answer';
+  let reachWas = null;
+  function reachSync() {
+    const n = window.WizardOSNative; if (!n || typeof n.reachAnswerSwitch !== 'function' || window.WizHomeScreenPolicy?.mode) return;
+    let on = false; try { on = (document.documentElement.dataset.tweaks || '').split(' ').includes(REACH_SWITCH); } catch (_) {}
+    if (!on && !chatSettled) return;
+    if (on === reachWas) return;
+    reachWas = on; try { n.reachAnswerSwitch(on); } catch (_) {}
+  }
+  if (typeof MutationObserver === 'function' && document.documentElement) {
+    new MutationObserver(() => reachSync()).observe(document.documentElement, { attributes: true, attributeFilter: ['data-tweaks'] });
+  }
+  window.addEventListener('wos:experience', () => { chatSettled = true; reachSync(); });
+  setTimeout(() => { chatSettled = true; reachSync(); }, 5000);
+  reachSync();
   // The installed Wizard app a page of this Wizard belongs to (the longest app address it lies under), or the app a
   // shell link names (…/wizard-os-home/?open=<id>). Wizard's own pages and anything else: null.
   function appOfLink(u) {
