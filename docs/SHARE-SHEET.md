@@ -15,7 +15,7 @@ Share opens **People → Apps → Other apps…**. A normal tap stays inside Wiz
 
 ## Contract
 
-Shell: `WosShareSheet` (`web/core/share-sheet.js`, `web/core/share-sheet.css`), entered from `WosChat.sharePayload / shareFile`. The media viewer uses `shareFileOpen` so its legacy native bridge can report `opened` without pretending that is a delivery receipt. App callers retain `shared | copied | cancelled | unsupported`.
+Shell: `WosShareSheet` (`web/core/share-sheet.js`, `web/core/share-sheet.css`), entered from `WosChat.sharePayload / shareFile`. The media viewer uses `shareFileOpen` so its legacy native bridge can report `opened` without pretending that is a delivery receipt. App callers retain `shared | copied | cancelled | unsupported`. A handoff to an app (`deliver`) closes the media viewer first, so the app's own picker (Messenger's Send to…) is on top in the same tap; `WosShareSheet.handoffs()` counts them, and the viewer shows no "Shared" toast for one, because nothing is placed until the owner picks (ux#1630).
 
 ```js
 WizardApp.share.receive({

@@ -1008,6 +1008,7 @@
   const share = it => { const direct = directShareDepth > 0; return once('share', it, async () => {
     try {
       if (heavy(it) && native()) K.notify('↗', 'Preparing to share…');
+      const sheet = window.WosShareSheet, handed = sheet?.handoffs?.() || 0;
       let result = await shareFileOpen(it, { direct });
       // An old native bridge may already have opened the file chooser without an
       // outcome receipt. Never open a second text chooser or claim Shared then.
@@ -1016,6 +1017,8 @@
         if (privateMedia(it.url)) { K.notify('!', 'Couldn’t share this file from here. Download it, then send it.'); return; }
         result = await sharePayload({ url: new URL(it.url, location.href).href, title: it.name, direct });
       }
+      // Handed to an app (Messenger): its own picker is on screen and confirms after Send; nothing is shared yet.
+      if (result === 'shared' && (sheet?.handoffs?.() || 0) !== handed) return;
       if (result === 'shared') K.notify('↗', 'Shared');
       else if (result === 'opened') K.notify('↗', 'Share sheet opened');
       else if (result === 'copied') K.notify('⧉', 'Link copied');
