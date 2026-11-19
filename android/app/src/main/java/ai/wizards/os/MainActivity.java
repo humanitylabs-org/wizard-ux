@@ -449,7 +449,6 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
             @Override
             public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
                 if (device != null) device.onPageStarted();
-                answered(url); // switch wizard/pin-reach-answer: the main frame's response committed
                 pageUrl = url;
                 screenCaptureId = null;
                 downloadsEpoch++; // a new page load revokes every earlier Downloads admission
@@ -828,7 +827,8 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
     }
 
     /** Switch wizard/pin-reach-answer (wizard-ux issue 1607, off by default): the Wizard answered the load being
-     *  watched, so "Connecting…" has nothing to wait for. Only the connecting mark stops: a Wizard that answers but
+     *  watched (its main frame committed: doUpdateVisitedHistory; never onPageStarted, which can fire before any
+     *  response), so "Connecting…" has nothing to wait for. Only the connecting mark stops: a Wizard that answers but
      *  never paints still ends on the offline screen at GIVE_UP_MS, and only a paint (landed) clears that. */
     void answered(String url) {
         if (!ReachPolicy.answerDisarms(ReachAnswer.on(this), isWeb(url), mainFailed, sameHost(url, wantUrl))) return;

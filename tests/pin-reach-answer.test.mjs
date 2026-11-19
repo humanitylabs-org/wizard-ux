@@ -58,7 +58,7 @@ test('Android: an answer stops only the connecting mark, behind the switch; a pa
   assert.ok(body.includes('main.removeCallbacks(reachMark);'));
   assert.ok(!body.includes('reachGiveUp'), 'the give-up mark stays armed until a page paints');
   const started = src.slice(src.indexOf('public void onPageStarted(WebView view, String url'), src.indexOf('public void onPageFinished('));
-  assert.ok(started.includes('answered(url);'));
+  assert.ok(!started.includes('answered('), 'onPageStarted can fire before any response, so it is never an answer');
   const hist = src.slice(src.indexOf('public void doUpdateVisitedHistory('), src.indexOf('public void onPageCommitVisible('));
   assert.ok(hist.includes('if (ReachAnswer.on(MainActivity.this)) { answered(url); return; }'));
   const painted = src.slice(src.indexOf('public void onPageCommitVisible('), src.indexOf('public void onPageStarted('));
