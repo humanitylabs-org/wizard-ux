@@ -1548,7 +1548,8 @@ window.WizCore.chats = function createChats(H) {
     const line = '<div class="ch-chan-new" role="separator" aria-label="New posts" data-morph-key="chan-new"><span>New</span></div>';
     const html = shown.map(s => (cs?.newKey && cs.newKey === chanKey(s) ? line : '') + post(s)).join('') + sending.map(sendingPost).join(''), archNote = chanArchived(open.id) ? '<span class="ch-none">This channel is archived. Restore it to post here.</span>' : '';
     if (firstWant.size || replyWant.size) pullFirst();
-    return `<div class="ch-chan-feed">${shown.length || sending.length ? html : '<span class="ch-none">No posts in the last 30 days.</span>'}${archNote}</div>`;
+    const alertsNow = typeof alertsHtml === 'function' ? alertsHtml(open) : ''; // the Alerts channel's alert records (issue 1589)
+    return `<div class="ch-chan-feed">${shown.length || sending.length ? html : alertsNow ? '' : '<span class="ch-none">No posts in the last 30 days.</span>'}${alertsNow}${archNote}</div>`;
   }
   function chanHead(w, open) {
     if (open) return `<div class="ch-chan-h"><button type="button" class="ch-chan-back" data-chchanback aria-label="Back to channels"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg></button><b>${open.agentFeed ? `<span class="ch-chan-sig" aria-hidden="true">${AGS()?.sigil?.(agentRec(open.agent)) || ''}</span>` : `<span class="ch-chan-hash ch-chan-emo"${chanFace(open).label ? ' aria-hidden="true"' : ''}>${esc(chanFace(open).emoji)}</span>`}${esc(open.agentFeed ? open.name : chanFace(open).label)}</b></div>`;
@@ -2028,6 +2029,144 @@ window.WizCore.chats = function createChats(H) {
     }
     inboxRepaint(id);
   }
+  /* Signal sweep card (same switch; wizard-ux issue 1586, box half wizard-agent-service issue 550). The Service adds
+   * the card as the last row of today's Daily thread (display_kind agent_sweep); while the switch is on Chats draws it
+   * with the run-control buttons instead of its markdown copy: one button per answer token on each Waiting item (a tap
+   * posts the answer, the Service sends the full message into that task's thread), Later (snoozed to the next sweep),
+   * "Open to confirm" for an item that sends or spends, Open for a hidden main-agent thread, and Yes to all. After a tap
+   * the card is read again (GET /wizard/v1/agent-inbox/sweep) and repainted in place. SWEEP keeps per card: the newest
+   * view the box sent, the taps on their way, and the items snoozed here. */
+  const SWEEP = new Map();
+  const sweepOf = id => { let s = SWEEP.get(id); if (!s) { s = { view: null, busy: {}, later: new Set(), all: false }; SWEEP.set(id, s); if (SWEEP.size > 20) SWEEP.delete(SWEEP.keys().next().value); } return s; };
+  const sweepMd = v => String(v ?? '').replace(/\s+/g, ' ').replace(/([\\`*_[\]])/g, '\\$1').trim();
+  // A ?inbox= list link has no view in the shell yet (only Running has one, drawn as its own button): plain text, not a dead link.
+  const sweepLink = (text, link) => link && !/^\/wizard-os-home\/\?inbox=/.test(link) ? KIT.inline(`[${sweepMd(text)}](${link})`) : esc(text);
+  const sweepRunning = r => `<button type="button" class="ch-sw-run" data-chsweeprunning aria-label="Running: ${r.count}: open the Running view">Running: ${r.count}</button>`;
+  const sweepThread = (i, inner) => i.agent === 'hermes' && i.thread ? `<a href="/wizard-os-home/?session=${encodeURIComponent(i.thread)}" class="wsl" data-session="${esc(i.thread)}">${inner}</a>` : inner;
+  const sweepLabel = t => t === 'later' ? 'Later' : KIT.friendlyChoice(t);
+  function sweepItemHtml(cardId, s, i) {
+    const busy = s.busy[i.id], age = i.seen > 1 ? `<span class="ch-sw-age" title="Shown on ${i.seen} sweeps">Sweep ${i.seen}</span>` : '';
+    let act;
+    if (i.state === 'answered') act = `<small class="ch-sw-st">Answered: ${esc(sweepLabel(i.answer || ''))}</small>`;
+    else if (s.later.has(i.id)) act = '<small class="ch-sw-st">Later · back at the next sweep</small>';
+    else if (i.state === 'parked') act = '<small class="ch-sw-st">Parked</small>';
+    else if (i.state === 'archived') act = '<small class="ch-sw-st">Archived</small>';
+    else if (i.state === 'running') act = '<small class="ch-sw-st">Working on it</small>';
+    else if (i.confirm) act = i.agent === 'hermes' && i.thread ? `<div class="appr-b">${sweepThread(i, 'Open to confirm').replace('class="wsl"', 'class="wsl ch-sw-confirm"')}</div>` : '<small class="ch-sw-st">Open its thread to confirm</small>';
+    else {
+      const tokens = [...i.options, ...(i.options.includes('later') ? [] : ['later'])];
+      act = `<div class="appr-b${tokens.length > 2 ? ' many' : ''}">${tokens.map(t => `<button type="button" data-chsweep="${esc(i.id)}" data-card="${esc(cardId)}" data-opt="${esc(t)}" class="${t === 'later' ? 'no' : ''}${t === i.def ? ' def' : ''}"${busy || s.all ? ' disabled' : ''}>${busy === t ? 'Sending…' : esc(sweepLabel(t))}</button>`).join('')}</div>`;
+    }
+    const open = i.agent === 'hermes' && i.thread && !inboxListed(i.thread) ? `<button type="button" class="ch-inbox-open" data-chinboxopen="${esc(i.thread)}" data-title="${esc(i.title)}" aria-label="Open in Chats: ${esc(i.title || 'Task')}" title="Move it into the chat list">Open</button>` : '';
+    return `<li class="ch-sw-i" data-morph-key="sw:${esc(i.id)}"><div class="ch-sw-t"><b>${sweepThread(i, esc(i.title || 'Task'))}</b>${age}${open}</div>`
+      + `${i.ask ? `<p class="ch-sw-ask">${esc(i.ask)}</p>` : ''}${i.recommendation ? `<p class="ch-sw-rec">Recommendation: ${esc(i.recommendation)}</p>` : ''}${act}${alertFbHtml(i.id, 'should_alert')}</li>`;
+  }
+  // The card for one history row (tn.a.sweep), or '' (switch off, or not a card the shell can read: the markdown shows).
+  function sweepHtml(raw) {
+    if (!inboxSwitchOn() || !LIVE.agentInbox?.card) return '';
+    const base = LIVE.agentInbox.card(raw); if (!base) return '';
+    const s = sweepOf(base.id); s.base = base;
+    const v = s.view || base, w = v.waiting, d = v.done;
+    const yes = v.yes.count > 0 ? `<div class="appr-b ch-sw-all"><button type="button" data-chsweepall="${esc(v.id)}"${s.all || Object.keys(s.busy).length ? ' disabled' : ''}>${s.all ? 'Sending…' : `Yes to all (${v.yes.count})`}</button></div>${v.yes.skipped ? `<small>${v.yes.skipped} to confirm yourself</small>` : ''}` : '';
+    const counts = [sweepRunning(v.running) + (v.running.stale ? `, ${v.running.stale} with no news for 6 h` : ''), LIVE.agentInbox.later ? sweepLaterBtn(v, s) : sweepLink(`Later and FYI: ${v.later.count}`, v.later.link)];
+    if (v.parked.count) counts.push(sweepLink(`${v.parked.count} parked`, v.parked.link));
+    if (v.missing) counts.push(esc(`${v.missing} finished task${v.missing === 1 ? '' : 's'} had no inbox record at the last check`));
+    if (v.rules) counts.push(sweepLink(`Alert rules let ${v.rules.alerts} alerts through on ${v.rules.day} (more than ${v.rules.cap}): check the rules`, v.rules.link));
+    return `<div class="appr ch-sweep" role="group" aria-label="Signal sweep" data-chsweepcard="${esc(v.id)}"><b>Signal sweep</b>`
+      + `<div class="ch-sw-h" role="heading" aria-level="3">Waiting on you (${w.items.length + w.more})</div>${w.items.length ? `<ul class="ch-sw-l">${w.items.map(i => sweepItemHtml(v.id, s, i)).join('')}</ul>` : '<p class="ch-sw-none">Nothing is waiting on you.</p>'}`
+      + `${w.more ? `<p class="ch-sw-more">${sweepLink(`and ${w.more} more`, w.link)}</p>` : ''}${yes}`
+      + `<div class="ch-sw-h" role="heading" aria-level="3">Done (${d.items.length + d.more})</div>${d.items.length ? `<ul class="ch-sw-d">${d.items.map(i => `<li data-morph-key="sw:${esc(i.id)}"><span class="ch-sw-dt">${sweepLink(i.title || 'Task', i.link)}</span>${alertFbHtml(i.id, 'should_alert')}</li>`).join('')}</ul>` : '<p class="ch-sw-none">Nothing new finished.</p>'}`
+      + `${d.more ? `<p class="ch-sw-more">${sweepLink('more', d.link)}</p>` : ''}<p class="ch-sw-n">${counts.join('<br>')}</p>${sweepLaterHtml(s)}</div>`;
+  }
+  function sweepRepaint() { for (const x of Object.keys(CH)) { const ww = H.win(x); if (ww && ww.thread) renderThreadNow(ww); } }
+  // Turning the switch on or off repaints open threads at once: the card's buttons come and go with it.
+  let sweepWas = inboxSwitchOn();
+  try { window.addEventListener('wos:experience', () => { const on = inboxSwitchOn(); if (sweepWas === on) return; sweepWas = on; sweepRepaint(); }); } catch (_) {}
+  // Read the card again; only the same card's view is kept (a newer sweep posts its own row).
+  async function sweepReread(id) {
+    try { const v = await LIVE.agentInbox.sweep(); if (v && v.id === id) sweepOf(id).view = v; } catch (_) {}
+  }
+  async function sweepAnswer(cardId, itemId, option) {
+    if (!inboxSwitchOn()) { sweepRepaint(); return; }
+    const s = sweepOf(cardId); if (s.busy[itemId] || s.all) return;
+    s.busy[itemId] = option; sweepRepaint();
+    try {
+      await LIVE.agentInbox.answer(itemId, option);
+      if (option === 'later') s.later.add(itemId);
+      else if (s.view || s.base) { const v = s.view || s.base; s.view = { ...v, waiting: { ...v.waiting, items: v.waiting.items.map(i => i.id === itemId ? { ...i, state: 'answered', answer: option } : i) } }; }
+      toast('✓', option === 'later' ? 'Later · back at the next sweep' : 'Answer sent', 1800);
+    } catch (e) { toast('!', e?.status === 404 ? 'That item is no longer waiting' : 'Couldn’t send the answer · try again', 3200); }
+    delete s.busy[itemId];
+    await sweepReread(cardId);
+    sweepRepaint();
+  }
+  async function sweepYesToAll(cardId) {
+    if (!inboxSwitchOn()) { sweepRepaint(); return; }
+    const s = sweepOf(cardId); if (s.all || Object.keys(s.busy).length) return;
+    s.all = true; sweepRepaint();
+    try {
+      const r = await LIVE.agentInbox.yesToAll(cardId);
+      if (r.card && r.card.id === cardId) s.view = r.card;
+      toast('✓', `${r.answered.length} answer${r.answered.length === 1 ? '' : 's'} sent`, 1800);
+    } catch (e) { toast('!', 'Couldn’t send the answers · try again', 3200); }
+    s.all = false;
+    await sweepReread(cardId);
+    sweepRepaint();
+  }
+  /* Alert rules feedback (same switch; wizard-ux issue 1589, box half wizard-agent-service issue 552). The box decides
+   * what is loud: an alert record (kind alert) reaches Alerts, everything else waits for the sweep. Each answer teaches
+   * it one example: Not urgent on an alert in the Alerts channel (the alert moves to the sweep; on the day's collapsed
+   * "More alerts today" alert it only clears it) and Should have alerted on a sweep item (the card's Waiting and Done
+   * items and its Later list). ALFB keeps the taps on their way and the items marked here. */
+  const ALFB = { busy: {}, done: new Set() };
+  function alertFbHtml(id, action) {
+    if (ALFB.done.has(id)) return `<small class="ch-sw-st ch-al-done">${action === 'not_urgent' ? 'Not urgent · it waits for the sweep' : 'Marked · alerts like this get through next time'}</small>`;
+    const busy = ALFB.busy[id];
+    return `<div class="appr-b ch-al-fb"><button type="button" class="no" data-chalertfb="${esc(action)}" data-id="${esc(id)}"${busy ? ' disabled' : ''}>${busy ? 'Sending…' : action === 'not_urgent' ? 'Not urgent' : 'Should have alerted'}</button></div>`;
+  }
+  // The card's "Later and FYI: N" opens the Later list in place (read from the box on each open).
+  function sweepLaterBtn(v, s) {
+    return `<button type="button" class="ch-sw-lb" data-chsweeplater="${esc(v.id)}" aria-expanded="${s.laterOpen ? 'true' : 'false'}">Later and FYI: ${v.later.count}</button>`;
+  }
+  function sweepLaterHtml(s) {
+    if (!s.laterOpen) return '';
+    if (!s.laterList) return '<p class="ch-sw-none">Reading the Later list…</p>';
+    if (!s.laterList.length) return '<p class="ch-sw-none">Nothing waits for later.</p>';
+    return `<div class="ch-sw-h" role="heading" aria-level="3">Later and FYI</div><ul class="ch-sw-l ch-sw-later">${s.laterList.map(r => `<li class="ch-sw-i" data-morph-key="swl:${esc(r.id)}"><div class="ch-sw-t"><b>${esc(r.title || 'Note')}</b></div>${r.ask ? `<p class="ch-sw-ask">${esc(r.ask)}</p>` : ''}${r.feedback === 'should_alert' && !ALFB.done.has(r.id) ? '<small class="ch-sw-st ch-al-done">Marked · alerts like this get through next time</small>' : alertFbHtml(r.id, 'should_alert')}</li>`).join('')}</ul>`;
+  }
+  async function sweepLater(cardId) {
+    if (!inboxSwitchOn()) { sweepRepaint(); return; }
+    const s = sweepOf(cardId); s.laterOpen = !s.laterOpen;
+    if (!s.laterOpen) { sweepRepaint(); return; }
+    s.laterList = null; sweepRepaint();
+    try { s.laterList = await LIVE.agentInbox.later(); } catch (_) { s.laterOpen = false; toast('!', 'Couldn’t read the Later list · try again', 3200); }
+    sweepRepaint();
+  }
+  // The Alerts channel (kind alerts) shows the alert records still waiting on top of its posts' end, newest first.
+  function alertsChan(open) {
+    if (!open || open.general || open.agentFeed || !inboxSwitchOn() || !LIVE.agentInbox?.alerts) return false;
+    const st = typeof chanStore === 'function' ? chanStore() : null;
+    return !!st && st.channels.some(c => c.id === open.id && c.kind === 'alerts');
+  }
+  function alertsHtml(open) {
+    if (!alertsChan(open)) return '';
+    const list = LIVE.agentInbox.alerts(typeof storeAgent === 'function' ? storeAgent(open.agent) : (open.agent || 'hermes'));
+    if (!list.length) return '';
+    return `<section class="appr ch-sweep ch-alerts" role="group" aria-label="Alerts now" data-morph-key="alerts-now"><b>Alerts now</b><ul class="ch-sw-l">${list.map(r => `<li class="ch-sw-i ch-al-i${r.collapsed ? ' collapsed' : ''}" data-morph-key="al:${esc(r.id)}"><div class="ch-sw-t"><b>${r.agent === 'hermes' && r.thread && LIVE.sessions?.some?.(x => x.id === r.thread) ? `<a href="/wizard-os-home/?session=${encodeURIComponent(r.thread)}" class="wsl" data-session="${esc(r.thread)}">${esc(r.title || 'Alert')}</a>` : esc(r.title || 'Alert')}</b>${r.collapsed ? `<span class="ch-sw-age ch-al-n" title="${r.extra} more alerts today">${r.extra}</span>` : ''}</div>${r.ask ? `<p class="ch-sw-ask">${esc(r.ask)}</p>` : ''}${alertFbHtml(r.id, 'not_urgent')}</li>`).join('')}</ul></section>`;
+  }
+  async function alertFeedback(id, action, collapsed = false) {
+    if (!inboxSwitchOn()) { sweepRepaint(); return; }
+    if (ALFB.busy[id] || ALFB.done.has(id)) return;
+    ALFB.busy[id] = action; alertRepaint();
+    try {
+      const r = await LIVE.agentInbox.feedback(id, action), n = r.examples[action];
+      if (action === 'should_alert') ALFB.done.add(id);
+      toast('✓', collapsed ? 'Cleared' : action === 'not_urgent' ? `Not urgent · it waits for the sweep (${n} example${n === 1 ? '' : 's'})` : `Got it · alerts like this get through next time (${n} example${n === 1 ? '' : 's'})`, 2600);
+    } catch (e) { toast('!', e?.status === 404 ? 'That item is gone' : e?.status === 400 ? (action === 'not_urgent' ? 'That is no longer an alert' : 'That is already an alert') : 'Couldn’t send it · try again', 3200); }
+    delete ALFB.busy[id];
+    alertRepaint();
+  }
+  function alertRepaint() { sweepRepaint(); if (typeof paintListsNow === 'function') paintListsNow(); }
   /* Ready has three orders (James, 10 Oct 2026): Newest (pure recency, labels don't move rows), Priority
    * (needs you, then test this, then the rest) and By subject (the roundup, kept live). */
   const READY_ORDER_KEY = 'wos.chats.readyOrder.v1', READY_ORDERS = ['newest', 'priority', 'subject'];
@@ -3367,14 +3506,15 @@ window.WizCore.chats = function createChats(H) {
       const k = text ? c.texts.push(text) - 1 : -1;
       const bAt = tn.a?.at ?? tn.mediaAt;
       const placed = new Set();
-      const body = tn.a ? md(tn.a.text, (url, marker) => {
+      const sweep = tn.a?.sweep && typeof sweepHtml === 'function' ? sweepHtml(tn.a.sweep) : '';
+      const body = sweep || (tn.a ? md(tn.a.text, (url, marker) => {
         if (!marker || tn.a.inlineMedia?.[marker] !== url) return null;
         const image = tn.media.find(m => m.kind === 'image' && m.url === url);
         if (!image) return null; // no metadata: keep the ordinary safe image link
         if (placed.has(image.id)) return '';
         placed.add(image.id);
         return mediaBlock(c, [image]); // same thumbnail, gallery and viewer as bottom attachments
-      }) : '';
+      }) : '');
       const lead = summaryOf(tn.a), rk = esc(String(bAt));
       const open = !!lead && (c.rsum?.get(String(bAt)) ?? summaryStartsOpen());
       const shown = lead ? `<button type="button" class="rsum" data-reply-summary="${rk}" aria-expanded="false"${open ? ' hidden' : ''}><span class="rsum-t">${esc(leadText(lead))}</span>${CHEV_SVG}</button>`
@@ -5068,6 +5208,17 @@ window.WizCore.chats = function createChats(H) {
     if (e.target.closest('[data-chrunback]')) { runningBack(w); return true; }
     const ro = e.target.closest('[data-chrunopen]'); if (ro) { openChat(id, ro.dataset.chrunopen); return true; }
     const io = e.target.closest('[data-chinboxopen]'); if (io) { inboxMove('open', io.dataset.chinboxopen, { title: io.dataset.title || '' }); return true; }
+    const swb = e.target.closest('[data-chsweep]'); if (swb) { if (!swb.disabled) sweepAnswer(swb.dataset.card, swb.dataset.chsweep, swb.dataset.opt); return true; }
+    // Running on the sweep card: the desktop's list pane (id::list) shows the Running view next to the thread; with one
+    // pane (phone) the thread steps back to the list first.
+    if (e.target.closest('[data-chsweeprunning]')) {
+      const o = W[owner(w.id)] || w, lw = W[o.id + '::list'];
+      if (lw && runningOn(lw)) runningGo(lw, true); else if (runningOn(o)) { chatsBack(o); runningGo(o, true); } else H.toast('·', 'The Running view is in the Chats window', 2000);
+      return true;
+    }
+    const swa = e.target.closest('[data-chsweepall]'); if (swa) { if (!swa.disabled) sweepYesToAll(swa.dataset.chsweepall); return true; }
+    const swl = e.target.closest('[data-chsweeplater]'); if (swl) { sweepLater(swl.dataset.chsweeplater); return true; }
+    const afb = e.target.closest('[data-chalertfb]'); if (afb) { if (!afb.disabled) alertFeedback(afb.dataset.id, afb.dataset.chalertfb, !!afb.closest('.ch-al-i.collapsed')); return true; }
     if (window.WizAppExtensions?.handle(e)) return true;
     if (e.target.closest('[data-obretryall]')) { H.toast('↻', OUTBOX.retryFeedback(OUTBOX.retryAll(winAgent(w))), 2400); return true; }
     const eb = e.target.closest('[data-obedit]'); if (eb) { const it = OUTBOX.get(eb.dataset.obedit); if (it && !(typeof chanEditUnsent === 'function' && chanEditUnsent(id, it))) H.editUnsent(it); return true; }

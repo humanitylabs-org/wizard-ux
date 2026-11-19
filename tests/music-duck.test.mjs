@@ -21,6 +21,7 @@ function fixture({native = true, playing = true, volume = 0.8} = {}) {
   c.WizBackgroundAudio.init(() => ({'wizard-music': {url: '/wizard-music/'}}), () => true);
   return {c, sent, state, duck: (o, on) => c.WizBackgroundAudio.duck(o, on)};
 }
+// owner-correction: humanitylabs-org/wizard-ux#559 · 2026-10-24 · "Also, when I'm playing a voice note, it might be nice if it turns the music volume down."
 test('voice note ducks playing music and restores the owner volume', async () => {
   const f = fixture(), app = {};
   assert.equal(await f.duck(app, true), true); assert.equal(f.state.volume, 0.25);

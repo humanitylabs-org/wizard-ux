@@ -40,6 +40,7 @@ const DIRECT = 'https://wizard.tail.ts.net:9691/troubleshoot/';
 const isDirect = u => String(u).startsWith('https://wizard.tail.ts.net:9691/');
 const shown = h => ({ local: !h.root.cls.has('opening') && h.details.open, opening: h.root.cls.has('opening'), ready: h.root.cls.has('repair-ready') });
 
+// owner-correction: humanitylabs-org/wizard-troubleshooter#37 · 2026-11-13 · "The user should never have to go outside WizardOS to fix a problem with WizardOS."
 test('when Wizard’s usual address can’t serve it, the window opens the direct line in place, workflow kept', async () => {
   for (const shell of ['phone', 'desktop']) {
     const h = mount({ shell, url: '/troubleshoot/?provider=claude&run_id=r1', fetch: async (u, o) => o.method === 'HEAD' ? { ok: false, status: 502 } : isDirect(u) ? { ok: false, status: 0, type: 'opaque' } : never() });
@@ -87,6 +88,7 @@ test('a direct line whose page never says it is ready (error page, refused frame
 
 // Acceptance (James, 15 Nov): fresh install, empty localStorage, ts.net host, gateway ping fails -> one tap lands on
 // the direct line with no visible recovery section.
+// owner-correction: humanitylabs-org/wizard-troubleshooter#37 · 2026-11-04 · "First of all, clicking open troubleshooter should open the troubleshooter, not this pop-up."
 test('empty localStorage + ts.net host + gateway down: one Open Troubleshooter tap lands on the direct line', async () => {
   const h = mount({ fetch: async (u, o) => isDirect(u) ? { ok: false, status: 0, type: 'opaque' } : Promise.reject(TypeError('Load failed')) });
   assert.equal(h.store.size, 0);

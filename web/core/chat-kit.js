@@ -194,6 +194,13 @@
       } else if (m.role === 'assistant') {
         const h = helm(cleanText(raw));
         const t = h.text, tweaks = kind === 'commentary' ? [] : tweakIds(raw);
+        // The Agent Service's signal sweep card (wizard-ux issue 1586): its own turn, never folded into another one's
+        // answer; Chats draws its buttons from `sweep` (the markdown copy stays the text for Copy and older shells).
+        if (kind === 'agent_sweep' && m.agent_sweep && typeof m.agent_sweep === 'object' && !Array.isArray(m.agent_sweep)) {
+          newTurn(null); cur.at = at;
+          cur.a = { ...(identity.id != null ? { id: identity.id } : {}), text: t, plainText: h.plainText, inlineMedia: h.inlineMedia, at, final: true, sweep: m.agent_sweep };
+          cur = null; continue;
+        }
         if (!cur) newTurn(null);
         else if (later(cur, at)) { const prev = cur; newTurn(null); cur.at = at; cur.later = { at, after: prev.a.at }; }
         noteWork(cur, m, at);

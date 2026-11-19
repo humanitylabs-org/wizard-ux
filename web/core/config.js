@@ -206,7 +206,9 @@
 
   async function load(signal) {
     try {
-      const r = await fetch('/wizard/v1/bootstrap', { credentials: 'same-origin', cache: 'no-store', signal });
+      // Slim pin page (wizard-ux issue 1584): the read core/pin-doc.js started from the page head, taken once.
+      const early = signal ? null : window.WizPinDoc?.takeBootstrap?.();
+      const r = await (early || fetch('/wizard/v1/bootstrap', { credentials: 'same-origin', cache: 'no-store', signal }));
       if (!r.ok) throw new Error('HTTP ' + r.status);
       const next = await r.json();
       if (!next || typeof next.bootstrap !== 'number') throw new Error('bad bootstrap');

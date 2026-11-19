@@ -16,6 +16,7 @@ function models() {
   M.options[0].isGlobalDefault = true; M.ready = true;
   return M;
 }
+// owner-correction: humanitylabs-org/wizard-ux#1043 · 2026-11-06 · "Claude Sonnet seems to have been removed from my drop-down screen. Please add Sonnet back in there."
 test('new chat on Sol exposes catalogue Sonnet immediately without changing the default', () => {
   const M = models();
   M.options = M.normalize({ provider: 'openai-codex', model: 'gpt-6.1-sol', providers: [
@@ -42,6 +43,7 @@ test('new chat on Sol exposes catalogue Sonnet immediately without changing the 
 const priv = [{ value: 'glm-5.3', provider: 'custom', name: 'GLM 5.3', agent: 'private-1', private: true }];
 const order = html => [...html.matchAll(/<span>([^<]+)<\/span><\/div>|<b>(?:<svg[^>]*><\/svg>)?([^<]+)<\/b>|data-mall>([^<]+)</g)].map(m => m[1] ? `## ${m[1]}` : m[2] || m[3]);
 
+// owner-correction: humanitylabs-org/wizard-ux#939 · 2026-11-04 · "Why is Sonnet missing from my model list when I never requested Sonnet to be removed? We previously added it."
 test('compact menu reads bottom-up from the thumb: Opus, Sonnet, Astra, Sol last, Private agent above, More models on top', () => {
   const M = models();
   const { html, list } = M.popHtml({ mode: 'thread', cur: { model: 'claude-opus-5-5', provider: 'anthropic' }, all: false, priv });
