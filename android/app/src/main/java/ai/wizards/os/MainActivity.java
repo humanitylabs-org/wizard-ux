@@ -1670,6 +1670,13 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
             if (MainActivity.this instanceof AppSessionActivity) return;
             ReachAnswer.setOn(MainActivity.this, on);
         }
+        /** Phone notifications per app (wizard-ux issue 1567, switch wizard/phone-app-notifications): the main page's
+         *  copy of the switch, with the installed apps' names for their Android channels. */
+        @JavascriptInterface
+        public void appNotifySwitch(boolean on, String names) {
+            if (MainActivity.this instanceof AppSessionActivity) return;
+            ai.wizards.os.notify.AppNotify.setOn(MainActivity.this, on, names);
+        }
         @JavascriptInterface
         public boolean openAppWindow(String appId, String path, String name) {
             return MainActivity.this.openAppWindow(appId, path, name);
