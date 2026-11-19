@@ -7,7 +7,7 @@
   "capabilities": [
     "layout"
   ],
-  "description": "WizardOS Android app: the menu that opens from + in a chat (and the side-button orb's Attach) shows a round icon before each choice, a picture for Photo or video, a camera for Camera and a paperclip for File, with bigger rows that are easier to tap. The icons take your skin's colours.",
+  "description": "WizardOS Android app: the menu that opens from + in a chat or a New chat (and from Attach on the orb in the app) shows a round icon before each choice, a picture for Photo or video, a camera for Camera and a paperclip for File, with bigger rows that are easier to tap. The icons take your skin's colours.",
   "issues": [
     "humanitylabs-org/wizard-ux#1639"
   ]
