@@ -729,12 +729,22 @@
     return () => { cancel(); for (const [type, fn] of listeners) root.removeEventListener(type, fn, true); };
   }
   if (document.addEventListener) bindSharePress(document);
+  // A file on this Wizard (/wizard/attachments/…, /wizard/files/…/content) only opens for its owner: its link is
+  // never shared as text to an app or a person (wizard-ux issue 1621); the file itself goes through shareFile.
+  function privateMedia(u) {
+    try { u = u instanceof URL ? u : new URL(String(u), location.href); } catch (_) { return false; }
+    if (u.origin !== new URL(location.href).origin) return false;
+    // pathname keeps percent-encoding (a file ID `source:abc` arrives as `source%3Aabc`): test the decoded path too,
+    // and treat anything under the private file stores as private, so no encoding of an ID slips past this check.
+    let decoded = u.pathname; try { decoded = decodeURIComponent(u.pathname); } catch (_) {}
+    return [u.pathname, decoded].some(p => PRIVATE_MEDIA.test(p) || /^\/wizard\/(?:files|attachments)\//i.test(p));
+  }
   async function sharePayload(data = {}) {
     if (!data || typeof data !== 'object') return 'unsupported';
     const payload = {};
     for (const k of ['text', 'title', 'url']) if (data[k] != null && String(data[k])) payload[k] = String(data[k]);
     if ((!payload.text && !payload.url) || (payload.text || '').length > 90000 || (payload.title || '').length > 1024 || (payload.url || '').length > 8192) return 'unsupported';
-    if (payload.url) { try { const parsed = new URL(payload.url, location.href); if (!/^https?:$/.test(parsed.protocol)) return 'unsupported'; if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(payload.url)) payload.url = parsed.href; } catch (_) { return 'unsupported'; } }
+    if (payload.url) { try { const parsed = new URL(payload.url, location.href); if (!/^https?:$/.test(parsed.protocol) || privateMedia(parsed)) return 'unsupported'; if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(payload.url)) payload.url = parsed.href; } catch (_) { return 'unsupported'; } }
     // Wizard's own sheet first (people → Apps → Other apps…); no receiver for this kind = straight out.
     if (!data.direct && !directShareDepth && window.WosShareSheet) return window.WosShareSheet.show(payload, () => shareOut(payload));
     return shareOut(payload);
@@ -1002,6 +1012,8 @@
       // An old native bridge may already have opened the file chooser without an
       // outcome receipt. Never open a second text chooser or claim Shared then.
       if (result === 'unsupported' && typeof native()?.shareFile !== 'function') {
+        // A private file's link would reach the other person as a dead link: say so instead of pasting it.
+        if (privateMedia(it.url)) { K.notify('!', 'Couldn’t share this file from here. Download it, then send it.'); return; }
         result = await sharePayload({ url: new URL(it.url, location.href).href, title: it.name, direct });
       }
       if (result === 'shared') K.notify('↗', 'Shared');

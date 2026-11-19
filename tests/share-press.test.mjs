@@ -52,3 +52,18 @@ test('file hold captures direct mode before async work; normal file tap uses she
   assert.equal(f.calls.at(-1)[1].file,file);
   assert.equal(await f.kit.sharePayload({text:'explicit',direct:true}),'shared'); assert.equal(f.calls.at(-1)[0],'native');
 });
+test('a private Wizard file link is never shared as text (issue 1621)', async () => {
+  const f=fixture();
+  for (const url of ['https://wizard.test/wizard/attachments/0123456789abcdef0123456789abcdef', '/wizard/attachments/0123456789abcdef0123456789abcdef', '/wizard/files/f1.md/content', '/wizard/files/source%3Aabc/content', 'https://wizard.test/wizard/files/source:abc/content', '/wizard/files/a%2Fb/content', '/wizard/attachments/0123456789ABCDEF0123456789abcdef']) {
+    assert.equal(await f.kit.sharePayload({url, title:'notes.md'}),'unsupported', url);
+    assert.equal(await f.kit.sharePayload({url, direct:true}),'unsupported', url);
+  }
+  assert.equal(f.calls.length,0,'neither the Wizard sheet nor the native sheet saw the link');
+  assert.equal(await f.kit.sharePayload({url:'https://other.test/wizard/attachments/0123456789abcdef0123456789abcdef'}),'shared','another site keeps sharing');
+  assert.equal(await f.kit.sharePayload({url:'https://wizard.test/movies/'}),'shared','an ordinary Wizard page link still shares');
+});
+test('media viewer never falls back to sharing a private file link', () => {
+  const at = src.indexOf('const share = it =>'), body = src.slice(at, src.indexOf('\n  };', at));
+  assert.ok(at > 0 && body.includes("result === 'unsupported'"));
+  assert.ok(body.indexOf('privateMedia(it.url)') > 0 && body.indexOf('privateMedia(it.url)') < body.indexOf('sharePayload('), 'checks the link before any text fallback');
+});
