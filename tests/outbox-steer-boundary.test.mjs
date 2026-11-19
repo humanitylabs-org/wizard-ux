@@ -187,6 +187,28 @@ for (const status of ['running', 'launching', 'stopping', 'waiting_for_approval'
     assert.equal(it.steerBody, undefined); assert.equal(it.steerRunId, '');
   });
 }
+// Issue 1644 (James, 20 Nov 2026): a reply steered at a scheduled watch run waiting its turn in the same thread got
+// 409 dispatch_already_attempted from the Agent Service and stayed "Not sent" through six Retries. The run queue refuses
+// before changing anything, so nothing was delivered: the reply goes out once as the next same-thread turn instead.
+const queuedDispatch = { rejection: { error: { code: 'dispatch_already_attempted', message: 'Delivery may already have started; this reply cannot be changed' } } };
+for (const runStatus of ['queued', 'starting', 'running', 'completed']) {
+  test(`a steer refused with dispatch_already_attempted while the run is ${runStatus} is sent once as the next same-thread turn`, async t => {
+    const f = await fixture(t, { ...queuedDispatch, runStatus }); const it = await settled(f.api, (await f.enqueue()).id);
+    assert.equal(it.state, 'sent', it.error);
+    assert.equal(it.steered, false);
+    assert.equal(f.calls.filter(x => x.path.includes('/steer')).length, 1, 'the refused steer is never sent again');
+    const posts = f.calls.filter(x => x.path === '/wizard/hermes/v1/runs');
+    assert.equal(posts.length, 1, 'exactly one new-turn POST');
+    assert.equal(posts[0].key, it.id);
+    assert.equal(JSON.parse(posts[0].body).session_id, sessionId);
+    assert.equal(JSON.parse(posts[0].body).input, it.text);
+  });
+}
+test('a dispatch_already_attempted refusal for a run in another thread never becomes a turn here', async t => {
+  const f = await fixture(t, { ...queuedDispatch, runStatus: 'queued', otherSession: 'wizard_other' }); const it = await f.enqueue();
+  assert.equal((await settled(f.api, it.id)).state, 'failed');
+  assert.equal(f.admitted.size, 0);
+});
 test('a lost receipt on the queued follow-up replays the same frozen admission, never the steer', async t => {
   const f = await fixture(t, { runStatus: 'running', loseAdmission: true }); const it = await f.enqueue();
   assert.equal((await settled(f.api, it.id)).state, 'waiting');

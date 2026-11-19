@@ -570,7 +570,10 @@
         let terminal = false, live = false, working = false;
         // Hermes forgets a finished run after a while and answers 404 run_not_found; the run lookup below
         // still proves it terminal in this thread, so the message becomes a same-thread turn instead of failing.
-        if ((e.status === 409 && e.code === 'run_not_accepting_steer') || (e.status === 404 && e.code === 'run_not_found')) {
+        // A run the Agent Service already began dispatching (a scheduled watch waiting its turn in this thread) refuses
+        // queued guidance with 409 dispatch_already_attempted before changing anything (issue 1644): proven not accepted.
+        const queuedDispatch = e.status === 409 && e.code === 'dispatch_already_attempted';
+        if ((e.status === 409 && e.code === 'run_not_accepting_steer') || (e.status === 404 && e.code === 'run_not_found') || queuedDispatch) {
           try {
             const r = await call(`/wizard/hermes/v1/runs/${encodeURIComponent(it.steerTarget)}` + aq);
             const run = await r.json();
@@ -585,6 +588,9 @@
             // ends: send the frozen, idempotent same-thread turn now. A 404 run_not_found for a run that still reads
             // as working stays a failure.
             working = same && !terminal && typed409 && ['running', 'launching', 'stopping', 'waiting_for_approval'].includes(run.status);
+            // That run will never take a steer, so re-steering is pointless: the reply becomes the next same-thread turn,
+            // which the Agent Service holds until the waiting run is done (one run per thread at a time).
+            if (same && !terminal && queuedDispatch) working = true;
           } catch (_) { /* unknown status: keep the rejected message for explicit Retry */ }
         }
         // Stop pressed while this steer was in flight: a rejected steer never becomes a new turn.
