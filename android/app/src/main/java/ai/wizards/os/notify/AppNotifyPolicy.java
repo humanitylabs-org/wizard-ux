@@ -67,9 +67,46 @@ public final class AppNotifyPolicy {
         return APPID.matcher(from).matches() ? from : DEFAULT_APP;
     }
 
-    /** The owner's level for an app in Notifications (chats / badge / off); off keeps it off the phone too. */
-    static boolean off(JSONObject routes, String app) {
-        return routes != null && "off".equals(routes.optString(app, ""));
+    /* The System kinds the shell's bell knows (notif-bell.js SYSTEM): routed as system:<kind>, Morning Report by default. */
+    private static final String[][] SYSTEM = {
+        {"app-updates", "^(\\d+ apps? updated|App updates need a look)$"},
+        {"connections", "^(App connection added|Connection needs your OK)$"},
+        {"wizard-updates", "^(App Manager updated|Wizard ?OS updated|Your release needs you to finish an update)$"},
+    };
+
+    static boolean hasTag(JSONObject it, String tag) {
+        JSONArray tags = it.optJSONArray("tags");
+        if (tags != null) for (int i = 0; i < tags.length(); i++) if (tag.equals(tags.optString(i, ""))) return true;
+        return false;
+    }
+
+    /** Needs the owner (the bell's needsYou): tagged so, priority 4+, or a title that asks for him. */
+    static boolean needsYou(JSONObject it) {
+        return hasTag(it, "needs-you") || it.optInt("priority", 3) >= 4
+                || Pattern.compile("need(s)? (a look|your OK|you)", Pattern.CASE_INSENSITIVE).matcher(it.optString("title", "")).find();
+    }
+
+    /** The source whose level decides an item, as the bell's routeIdOf: its app, a System kind, else Notifications. */
+    static String routeOf(JSONObject it) {
+        String app = appOf(it);
+        if (APPID.matcher(it.optString("app", "")).matches()) return app; // an app's own feed item
+        if (needsYou(it)) return DEFAULT_APP; // one that needs the owner keeps following Notifications' level
+        if (!DEFAULT_APP.equals(app)) return app;
+        String title = it.optString("title", "").trim();
+        if (hasTag(it, "wizard-system")) for (String[] k : SYSTEM) if (hasTag(it, k[0])) return "system:" + k[0];
+        for (String[] k : SYSTEM) if (Pattern.compile(k[1], Pattern.CASE_INSENSITIVE).matcher(title).matches()) return "system:" + k[0];
+        return DEFAULT_APP;
+    }
+
+    /**
+     * The owner's level for the item's source in Notifications (chats / badge / daily / off). Off and the Morning
+     * Report (daily) keep it off the phone too; a System kind with no saved level is in the Morning Report.
+     */
+    static boolean quiet(JSONObject routes, JSONObject it) {
+        String key = routeOf(it);
+        String r = routes == null ? "" : routes.optString(key, "");
+        if (r.isEmpty() && key.startsWith("system:")) r = "daily";
+        return "off".equals(r) || "daily".equals(r);
     }
 
     /**
@@ -93,7 +130,7 @@ public final class AppNotifyPolicy {
             int pr = it.optInt("priority", 3);
             if (pr < MIN_PRIORITY) continue;
             String app = appOf(it);
-            if (off(routes, app)) continue;
+            if (quiet(routes, it)) continue;
             String title = clip(it.optString("title", ""), 120), text = clip(it.optString("message", ""), 400);
             if (title.isEmpty() && text.isEmpty()) continue;
             out.add(new Note(id, app, title, text, it.optString("link", ""), t, pr));

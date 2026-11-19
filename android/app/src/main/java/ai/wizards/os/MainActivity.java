@@ -66,6 +66,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
     public static final String ACTION_USUALS = "ai.wizards.os.action.USUALS"; // migration alias for installed callers
     private static final int REQ_EVERYWHERE = 44;
     private static final int REQ_CAMERA = 45;
+    private static final int REQ_APP_NOTIFY = 46;
     private static java.lang.ref.WeakReference<MainActivity> current = new java.lang.ref.WeakReference<>(null);
     private boolean everywhereSetup; // James is on Android's "Display over other apps" page
     private boolean sideSetupActive; // the user tapped Turn on and is in the system picker
@@ -926,6 +927,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
     @Override
     public void onRequestPermissionsResult(int code, String[] perms, int[] results) {
         super.onRequestPermissionsResult(code, perms, results);
+        if (code == REQ_APP_NOTIFY) { ai.wizards.os.notify.AppNotify.kick(this); return; }
         if (code == REQ_CAMERA) {
             WebChromeClient.FileChooserParams p = pendingChooser;
             pendingChooser = null;
@@ -1676,6 +1678,11 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         public void appNotifySwitch(boolean on, String names) {
             if (MainActivity.this instanceof AppSessionActivity) return;
             ai.wizards.os.notify.AppNotify.setOn(MainActivity.this, on, names);
+            // Android 13+: turning it on asks for permission to post (once per switch-on, never on its own).
+            if (on && Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+                    && ai.wizards.os.notify.AppNotify.askOnce(MainActivity.this)) {
+                main.post(() -> requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, REQ_APP_NOTIFY));
+            }
         }
         @JavascriptInterface
         public boolean openAppWindow(String appId, String path, String name) {

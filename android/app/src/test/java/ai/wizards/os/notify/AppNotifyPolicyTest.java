@@ -56,7 +56,7 @@ public class AppNotifyPolicyTest {
                 .put(item("quiet", 110, "All clear", 2, "cron", "app:sniper"))
                 .put(item("read", 111, "Read", 3, "app:messenger").put("read", true))
                 .put(item("archived", 112, "Done", 3).put("archived", true))
-                .put(item("muted", 113, "Sale", 4, "app:second-hand"))
+                .put(item("muted", 113, "Sale", 3, "app:second-hand"))
                 .put(item("dup", 114, "Twice", 3, "app:messenger"))
                 .put(item("ok", 115, "Hi", 3, "app:messenger"));
         JSONObject routes = new JSONObject().put("second-hand", "off").put("messenger", "badge");
@@ -66,6 +66,32 @@ public class AppNotifyPolicyTest {
         assertEquals(1, p.post.size());
         assertEquals("ok", p.post.get(0).id);
         assertEquals(115, p.since, 0);
+    }
+
+    @Test
+    public void theMorningReportLevelAndSystemNotesStayOffThePhone() throws Exception {
+        JSONArray items = new JSONArray()
+                .put(item("agent", 120, "Hermes release review", 3))
+                .put(item("sys", 121, "3 apps updated", 3))
+                .put(item("systag", 122, "Something", 3, "wizard-system", "connections"))
+                .put(item("app", 123, "Ana: lunch?", 3, "app:messenger"));
+        JSONObject routes = new JSONObject().put("notifications", "daily");
+        AppNotifyPolicy.Pass p = AppNotifyPolicy.pass(items, routes, 100, new HashSet<>());
+        assertEquals(1, p.post.size());
+        assertEquals("app", p.post.get(0).id);
+        // A System kind the owner moved to Chats does reach the phone.
+        p = AppNotifyPolicy.pass(items, new JSONObject().put("system:app-updates", "chats"), 100, new HashSet<>());
+        assertEquals(3, p.post.size());
+    }
+
+    @Test
+    public void anItemThatNeedsTheOwnerFollowsNotificationsLevel() throws Exception {
+        JSONObject urgent = item("u", 120, "Payment failed", 4, "app:second-hand");
+        assertEquals("notifications", AppNotifyPolicy.routeOf(urgent));
+        assertEquals("second-hand", AppNotifyPolicy.appOf(urgent));
+        JSONArray items = new JSONArray().put(urgent);
+        assertEquals(1, AppNotifyPolicy.pass(items, new JSONObject().put("second-hand", "off"), 100, new HashSet<>()).post.size());
+        assertEquals(0, AppNotifyPolicy.pass(items, new JSONObject().put("notifications", "off"), 100, new HashSet<>()).post.size());
     }
 
     @Test

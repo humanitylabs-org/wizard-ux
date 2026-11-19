@@ -69,10 +69,18 @@ public final class AppNotify {
         boolean was = on(app);
         e.putBoolean("on", on);
         // Off forgets the watermark: turning it on again starts from now and never replays what came in meanwhile.
-        if (!on) e.remove("since").remove("posted");
+        if (!on) e.remove("since").remove("posted").remove("asked");
         e.apply();
         if (was != on) Log.i(TAG, "switch " + (on ? "on" : "off"));
         if (on) kick(app); else stop(app);
+    }
+
+    /** True once per switch-on: the page may ask Android for permission to post, never again until it is off and on. */
+    public static boolean askOnce(Context c) {
+        SharedPreferences p = prefs(c);
+        if (p.getBoolean("asked", false)) return false;
+        p.edit().putBoolean("asked", true).apply();
+        return true;
     }
 
     /** Start (or keep) the in-process read and the backstop job; nothing while the switch is off. */
@@ -119,6 +127,8 @@ public final class AppNotify {
     /** One read of the Notifications app. Network: call off the main thread. */
     static void pollOnce(Context c) {
         if (!on(c)) return;
+        // Without permission to post (Android 13+, not granted yet) nothing is read or consumed, so it shows once allowed.
+        if (!canNotify(c)) return;
         synchronized (POLL) {
             String origin = AppState.origin(c);
             JSONArray items;
@@ -126,10 +136,18 @@ public final class AppNotify {
             try {
                 items = Http.json("GET", origin + "/notifications/api/items?view=all&limit=50", origin, null, null).optJSONArray("items");
             } catch (IOException e) { return; } // Notifications not installed or the box is away: try again next time
+            SharedPreferences p = prefs(c);
             try {
                 routes = Http.json("GET", origin + "/notifications/api/routes", origin, null, null).optJSONObject("routes");
-            } catch (IOException ignored) { } // no saved levels: every app is on
-            SharedPreferences p = prefs(c);
+                if (routes == null) routes = new JSONObject();
+                p.edit().putString("routes", routes.toString()).apply();
+            } catch (Http.Error e) {
+                // An Off app must never slip through a failed read: use the last levels read, else skip this pass.
+                // A Notifications without saved levels (404) means every app is on.
+                try { routes = e.status == 404 ? new JSONObject() : p.contains("routes") ? new JSONObject(p.getString("routes", "{}")) : null; }
+                catch (JSONException bad) { routes = null; }
+                if (routes == null) return;
+            } catch (IOException e) { return; }
             double since = p.contains("since") ? Double.longBitsToDouble(p.getLong("since", 0)) : -1;
             Set<String> posted = new LinkedHashSet<>();
             try {
@@ -137,7 +155,7 @@ public final class AppNotify {
                 for (int i = 0; i < a.length(); i++) posted.add(a.optString(i));
             } catch (JSONException ignored) { }
             AppNotifyPolicy.Pass pass = AppNotifyPolicy.pass(items, routes, since, posted);
-            boolean show = !AppState.front() && canNotify(c);
+            boolean show = !AppState.front();
             JSONObject names = names(c);
             for (AppNotifyPolicy.Note n : pass.post) {
                 posted.add(n.id);

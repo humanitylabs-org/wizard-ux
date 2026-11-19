@@ -70,7 +70,11 @@ test('Android: the switch is off by default, only the main page sets it, and the
   const an = read('android/app/src/main/java/ai/wizards/os/notify/AppNotify.java');
   assert.ok(an.includes('getBoolean("on", false)'), 'off by default on the phone');
   assert.ok(an.includes('if (!on(app)) { stop(app); return; }'), 'nothing is read while the switch is off');
-  assert.ok(an.includes('boolean show = !AppState.front() && canNotify(c);'), 'never posted while Wizard is on screen');
+  assert.ok(an.includes('boolean show = !AppState.front();'), 'never posted while Wizard is on screen');
+  const poll = an.slice(an.indexOf('static void pollOnce(Context c) {'), an.indexOf('static JSONObject names('));
+  assert.ok(poll.indexOf('if (!canNotify(c)) return;') < poll.indexOf('synchronized (POLL)'), 'nothing is consumed before Android allows posting');
+  assert.ok(poll.includes('if (routes == null) return;'), 'a failed levels read never lets an Off app through');
+  assert.ok(main.includes('requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, REQ_APP_NOTIFY)'), 'turning it on asks for permission');
   assert.ok(read('android/app/src/main/java/ai/wizards/os/device/DeviceBridge.java').includes('ai.wizards.os.notify.AppNotify.kick(activity);'));
   assert.ok(read('android/app/src/main/AndroidManifest.xml').includes('android:name=".notify.AppNotifyJob"'));
 });
