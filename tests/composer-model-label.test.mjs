@@ -40,16 +40,42 @@ test('new chat on Sol exposes catalogue Sonnet immediately without changing the 
   assert.equal(M.snapshot('').provider, 'openai-codex');
 });
 
+// owner-correction: humanitylabs-org/wizard-ux#1636 · 2026-11-19 · "Why isn't Fable visible in my model selector? Please fix."
+test('Fable is a first-open compact row when the catalogue has it, and absent when it does not', () => {
+  const M = models();
+  const cat = fable => M.normalize({ provider: 'openai-codex', model: 'gpt-6.1-sol', providers: [
+    { slug: 'openai-codex', authenticated: true, models: ['gpt-6-astra', 'gpt-6.1-sol', 'gpt-6-luna'] },
+    { slug: 'anthropic', authenticated: true, models: ['claude-opus-5-5', 'claude-sonnet-5-5', ...(fable ? ['claude-fable-5', 'claude-fable-5-1', 'claude-fable-5-2'] : [])] },
+  ] }, true);
+  M.options = cat(true);
+  const before = M.defaultOption();
+  const cur = M.snapshot('');
+  const { html, list } = M.popHtml({ mode: 'new', cur, all: false });
+  const names = [...html.matchAll(/<span class="mn"><b>([^<]+)<\/b>/g)].map(m => m[1]);
+  assert.deepEqual(names, ['Fable', 'Opus', 'Sonnet', 'Astra', 'Sol']);
+  const match = html.match(/data-mpick="(\d+)"[^>]*><span class="mn"><b>Fable<\/b>/);
+  const picked = list[Number(match[1])];
+  assert.equal(picked.value, 'claude-fable-5-2'); // the newest Fable, via the visibleChoices winner
+  assert.equal(picked.provider, 'anthropic');
+  assert.ok(M.options.includes(picked), 'the row points at the existing catalogue route');
+  assert.equal(M.defaultOption(), before);
+  assert.equal(M.snapshot('').model, 'gpt-6.1-sol');
+  M.options = cat(false);
+  const none = M.popHtml({ mode: 'new', cur: M.snapshot(''), all: false });
+  assert.doesNotMatch(none.html, /Fable/, 'no Fable route: no Fable row, no placeholder');
+  assert.ok(none.list.every(o => !/fable/.test(o.value)));
+});
+
 const priv = [{ value: 'glm-5.3', provider: 'custom', name: 'GLM 5.3', agent: 'private-1', private: true }];
 const order = html => [...html.matchAll(/<span>([^<]+)<\/span><\/div>|<b>(?:<svg[^>]*><\/svg>)?([^<]+)<\/b>|data-mall>([^<]+)</g)].map(m => m[1] ? `## ${m[1]}` : m[2] || m[3]);
 
 // owner-correction: humanitylabs-org/wizard-ux#939 · 2026-11-04 · "Why is Sonnet missing from my model list when I never requested Sonnet to be removed? We previously added it."
-test('compact menu reads bottom-up from the thumb: Opus, Sonnet, Astra, Sol last, Private agent above, More models on top', () => {
+test('compact menu reads bottom-up from the thumb: Fable, Opus, Sonnet, Astra, Sol last, Private agent above, More models on top', () => {
   const M = models();
   const { html, list } = M.popHtml({ mode: 'thread', cur: { model: 'claude-opus-5-5', provider: 'anthropic' }, all: false, priv });
-  assert.deepEqual(order(html), ['More models', '## Private agent', 'GLM 5.3', '## Models', 'Opus', 'Sonnet', 'Astra', 'Sol']);
+  assert.deepEqual(order(html), ['More models', '## Private agent', 'GLM 5.3', '## Models', 'Fable', 'Opus', 'Sonnet', 'Astra', 'Sol']);
   assert.match(html, /class="ch-sheet ch-mpop"/);
-  assert.equal(list.length, 5); // every row maps to a pickable option
+  assert.equal(list.length, 6); // every row maps to a pickable option
 });
 
 test('in a private chat the private models sit by the thumb and the main models move above', () => {
@@ -60,13 +86,14 @@ test('in a private chat the private models sit by the thumb and the main models 
   assert.ok(o.indexOf('## Models') < o.indexOf('## Private agent'));
 });
 
-test('More models expands to the other families once each, above the primary four', () => {
+test('More models expands to the other families once each, above the primary five', () => {
   const M = models();
   const { html } = M.popHtml({ mode: 'thread', cur: { model: 'claude-opus-5-5', provider: 'anthropic' }, all: true, priv: [] });
   const o = order(html);
-  assert.deepEqual(o.slice(-4), ['Opus', 'Sonnet', 'Astra', 'Sol']);
-  assert.ok(o.includes('Fable') || o.includes('Claude Fable'));
+  assert.deepEqual(o.slice(-5), ['Fable', 'Opus', 'Sonnet', 'Astra', 'Sol']);
+  assert.ok(o.includes('Luna'));
   assert.equal(o.filter(x => /Opus/.test(x)).length, 1);
+  assert.equal(o.filter(x => /Fable/.test(x)).length, 1);
 });
 
 test('the thread header no longer carries the model; a draft keeps the label outside the editable rows', () => {
