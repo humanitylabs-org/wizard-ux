@@ -1275,7 +1275,45 @@
     }
     // True for a main-agent Daily or Alerts thread, which always stays in Chats.
     const stays = id => state().stay.has(id);
-    return { state, records, read, fresh, move, stays };
+    /* Signal sweep card (wizard-ux issue 1586; box half wizard-agent-service issue 550, docs/agent-inbox.md). card()
+     * keeps only the fields the shell draws, checked: the history row's `agent_sweep` and GET .../sweep's `card` go
+     * through it alike. answer(): one tap on a token (PATCH <id> {action:'answer', option}; `later` snoozes).
+     * yesToAll(): POST <card id>/yes-to-all. sweep(): the newest card with each item's current state. */
+    const CID = /^sweep_[a-f0-9]{24}$/, TOK = /^[a-z][a-z0-9-]{0,19}$/, ISTATE = new Set(['running', 'new', 'surfaced', 'answered', 'parked', 'archived', 'stale']);
+    const href = v => typeof v === 'string' && /^\/(?![\/\\])\S{0,600}$/.test(v) ? v : '';
+    const cnt = v => { const n = Number(v); return Number.isFinite(n) && n > 0 ? Math.min(Math.floor(n), 1e6) : 0; };
+    function card(v) {
+      if (!v || typeof v !== 'object' || !CID.test(v.id)) return null;
+      const w = v.waiting && typeof v.waiting === 'object' ? v.waiting : {}, d = v.done && typeof v.done === 'object' ? v.done : {};
+      const box = (x, link) => ({ count: cnt(x?.count), link: href(x?.link) || link });
+      const items = (Array.isArray(w.items) ? w.items : []).slice(0, 7).map(i => {
+        if (!i || typeof i !== 'object' || !RID.test(i.id)) return null;
+        const options = [...new Set((Array.isArray(i.options) ? i.options : []).map(o => typeof o === 'string' ? o : o?.token).filter(t => typeof t === 'string' && TOK.test(t)))].slice(0, 8);
+        return { id: i.id, agent: typeof i.agent === 'string' && AID.test(i.agent) ? i.agent : 'hermes', thread: typeof i.thread_id === 'string' && SID.test(i.thread_id) ? i.thread_id : '',
+          title: str(i.title, 120), ask: str(i.ask, 300), recommendation: str(i.recommendation, 300), options,
+          def: typeof i.default_option === 'string' && options.includes(i.default_option) ? i.default_option : '', confirm: i.confirm === true,
+          seen: cnt(i.seen) || 1, state: ISTATE.has(i.state) ? i.state : 'surfaced', answer: typeof i.answer === 'string' && TOK.test(i.answer) ? i.answer : '', link: href(i.link) };
+      }).filter(Boolean);
+      const rf = v.rules_flag && typeof v.rules_flag === 'object' ? { day: str(v.rules_flag.day, 10), alerts: cnt(v.rules_flag.alerts), cap: cnt(v.rules_flag.cap), link: href(v.rules_flag.link) } : null;
+      return { id: v.id, at: num(v.at), thread: typeof v.thread_id === 'string' && SID.test(v.thread_id) ? v.thread_id : '',
+        waiting: { items, more: cnt(w.more), link: href(w.link) || '/wizard-os-home/?inbox=waiting' },
+        done: { items: (Array.isArray(d.items) ? d.items : []).slice(0, 10).map(i => i && RID.test(i.id) ? { id: i.id, title: str(i.title, 120), link: href(i.link) } : null).filter(Boolean), more: cnt(d.more), link: href(d.link) || '/wizard-os-home/?inbox=done' },
+        running: { ...box(v.running, '/wizard-os-home/?inbox=running'), stale: cnt(v.running?.stale) }, later: box(v.later, '/wizard-os-home/?inbox=later'), parked: box(v.parked, '/wizard-os-home/?inbox=parked'),
+        missing: cnt(v.missing), rules: rf && rf.alerts ? rf : null,
+        yes: { count: cnt(v.yes_to_all?.count), skipped: cnt(v.yes_to_all?.skipped) } };
+    }
+    const JSON_POST = body => ({ headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    async function answer(id, option) {
+      if (!RID.test(String(id || '')) || !TOK.test(String(option || ''))) throw Object.assign(new Error('invalid'), { status: 400 });
+      return (await req(`/wizard/v1/agent-inbox/${id}`, { method: 'PATCH', ...JSON_POST({ action: 'answer', option }) })).json();
+    }
+    async function yesToAll(cardId) {
+      if (!CID.test(String(cardId || ''))) throw Object.assign(new Error('invalid'), { status: 400 });
+      const j = await (await req(`/wizard/v1/agent-inbox/${cardId}/yes-to-all`, { method: 'POST', ...JSON_POST({}) })).json();
+      return { answered: Array.isArray(j?.answered) ? j.answered.filter(a => a && RID.test(a.id)).map(a => ({ id: a.id, option: TOK.test(a.option) ? a.option : '' })) : [], card: card(j?.card) };
+    }
+    async function sweep() { return card((await (await req('/wizard/v1/agent-inbox/sweep', { cache: 'no-store' })).json())?.card); }
+    return { state, records, read, fresh, move, stays, card, answer, yesToAll, sweep };
   }
   /* ---- end agent inbox ---- */
   const L = {
