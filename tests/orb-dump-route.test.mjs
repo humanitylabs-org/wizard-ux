@@ -166,8 +166,7 @@ test('phone and desktop mark the staged take and say Got it; the list never show
   assert.match(app, /\.\.\.\(typeof dumpTake === 'function' && dumpTake\(snap, rt, aimAt, kind\) \? \{ dump: true \} : \{\}\),/);
   assert.match(app, /OUTBOX\?\.onDump\?\.\(it => \{[\s\S]{0,200}Got it[\s\S]{0,80}esc\(title\)/);
   assert.match(desktop, /const dumpIt = !sealed && !extraFiles\.length && \(aimSid === '' \|\| \(aimSid === '__new__' && vNewChat && typeof vSpace !== 'string'\)\) && typeof dumpTake === 'function' && dumpTake\('', rp\);/);
-  assert.equal(desktop.match(/\.\.\.\(dumpIt \? \{ dump: true \} : \{\}\)/g)?.length, 2, 'staged and enqueued takes carry the mark');
-  assert.match(desktop, /if \(w && aimSid && !dumpIt\) CHATS\.sendChat\(/, 'a dump candidate never opens a new chat in a window');
+  assert.match(desktop, /if \(dumpIt\) \{ await OUTBOX\.enqueue\(\{ \.\.\.modelRoute, dump: true, custodyId: stagedId, captureId: stagedId \? null : r\.captureId, kind: 'new', sessionId: '',[^\n]*return 'sent'; \}\n    if \(w && aimSid\) CHATS\.sendChat\(/, 'a dump candidate goes through the outbox, never opened in a window');
   assert.match(desktop, /OUTBOX\?\.onDump\?\.\(it => \{[\s\S]{0,120}'Got it'/);
   assert.match(live, /if \(it\.dump === true \|\| it\.dumped\) continue;/);
   const css = readFileSync(new URL('../web/tweaks/wizard/agent-inbox/tweak.css', import.meta.url), 'utf8');
@@ -176,4 +175,12 @@ test('phone and desktop mark the staged take and say Got it; the list never show
   assert.match(css, /\.toast\.got-it \{ background: var\(--wz-panel, #17131f\)/, 'opaque panel from the skin, dark fallback');
   const manifest = JSON.parse(readFileSync(new URL('../web/tweaks/wizard/agent-inbox/manifest.json', import.meta.url), 'utf8'));
   assert.ok(manifest.issues.includes('humanitylabs-org/wizard-ux#1588'));
+});
+
+test('desktop: the dump mark given at Send reaches a take staged before it', async t => {
+  const f = await fixture(t, { item: row({ dump: undefined, state: 'processing', deliveryRequested: false, text: '' }) });
+  await f.api.enqueue({ custodyId: 'orb-take', dump: true, kind: 'new', sessionId: '', text: 'research flights to Lisbon for next week', model: 'm', provider: 'p', source: 'orb' });
+  await until(() => f.api.get('orb-take')?.state === 'sent');
+  assert.deepEqual(f.paths(), ['/wizard/v1/route']);
+  assert.equal(f.dumps.length, 1);
 });

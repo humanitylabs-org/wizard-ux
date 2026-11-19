@@ -2288,7 +2288,7 @@
     if (!strictReply && !forceNew && !vNewChat && !sealed?.text && !sealed?.files?.length && !sealed?.reply && !extraFiles.length) {
       // The microphone journal remains until staging owns the final chunk and the frozen destination.
       {
-        const staged = await OUTBOX.stage({kind:aimSid && aimSid!=='__new__'?'reply':'new',sessionId:aimSid==='__new__'?'':aimSid||'',steerRunId:rp?.steerRunId || '',...vRoute,...(dumpIt ? { dump: true } : {}),audio:r.blob,captureId:r.captureId,instructions:vContext,how:'voice, aimed at this thread',source:'orb'});
+        const staged = await OUTBOX.stage({kind:aimSid && aimSid!=='__new__'?'reply':'new',sessionId:aimSid==='__new__'?'':aimSid||'',steerRunId:rp?.steerRunId || '',...vRoute,audio:r.blob,captureId:r.captureId,instructions:vContext,how:'voice, aimed at this thread',source:'orb'});
         stagedId=staged.id;
         // The outbox owns transcription and delivery from here, so Reload no longer waits for either one.
         vHandedOff = !commandTake && await OUTBOX.handOff?.(stagedId) ? stagedId : null;
@@ -2296,9 +2296,11 @@
     }
     const w = vTarget && W[vTarget];
     if (rp) { CHATS.sendVoiceTo(rp.wid, rp.sid, r.blob, extraFiles, sealed, modelRoute, stagedId, stagedId ? null : r.captureId, rp.steerRunId, transcript, rp.space); toast('✦', 'Voice reply · waiting to send', 1400); syncChatsPane(rp.wid); return 'sent'; }
-    if (w && aimSid && !dumpIt) CHATS.sendChat(w.id, transcript, 'voice, aimed at this thread', r.blob, { custodyId: stagedId, captureId: stagedId ? null : r.captureId, sid: aimSid, seal: sealed, route: modelRoute, files: extraFiles, ...(aimSid === '__new__' && !rp && typeof vSpace === 'string' ? { space: vSpace } : {}) });
+    // A dump candidate is a new main-agent take through the outbox, never opened in a window (it may never be a thread).
+    if (dumpIt) { await OUTBOX.enqueue({ ...modelRoute, dump: true, custodyId: stagedId, captureId: stagedId ? null : r.captureId, kind: 'new', sessionId: '', audio: r.blob, text: transcript, instructions: vContext, how: 'voice, aimed at this thread', source: 'orb' }); toast('✦', 'Recording kept · waiting to send', 1400); return 'sent'; }
+    if (w && aimSid) CHATS.sendChat(w.id, transcript, 'voice, aimed at this thread', r.blob, { custodyId: stagedId, captureId: stagedId ? null : r.captureId, sid: aimSid, seal: sealed, route: modelRoute, files: extraFiles, ...(aimSid === '__new__' && !rp && typeof vSpace === 'string' ? { space: vSpace } : {}) });
     else {
-      const item = await OUTBOX.enqueue({ ...modelRoute, ...(dumpIt ? { dump: true } : {}), custodyId: stagedId, captureId: stagedId ? null : r.captureId, sealKey: sealed?.key, typed: sealed?.text || '', ...(sealed?.reply ? { reply: sealed.reply } : {}), files: [...(sealed?.files || []), ...extraFiles], kind: aimSid && aimSid !== '__new__' ? 'reply' : 'new', sessionId: aimSid && aimSid !== '__new__' ? aimSid : '', audio: r.blob, text: transcript, instructions: vContext, how: 'voice, aimed at this thread', source: 'orb' });
+      const item = await OUTBOX.enqueue({ ...modelRoute, custodyId: stagedId, captureId: stagedId ? null : r.captureId, sealKey: sealed?.key, typed: sealed?.text || '', ...(sealed?.reply ? { reply: sealed.reply } : {}), files: [...(sealed?.files || []), ...extraFiles], kind: aimSid && aimSid !== '__new__' ? 'reply' : 'new', sessionId: aimSid && aimSid !== '__new__' ? aimSid : '', audio: r.blob, text: transcript, instructions: vContext, how: 'voice, aimed at this thread', source: 'orb' });
       sealed?.done?.(item);
     }
     toast('✦', 'Recording kept · waiting to send', 1400);
