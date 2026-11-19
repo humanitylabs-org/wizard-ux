@@ -63,8 +63,38 @@
   // app's own WizardApp.share.receive registration replaces it (and adds its people) the first time it runs.
   // Images stay out of the default until a Messenger that stages images (wizard-messenger#8) registers them itself:
   // an older, never-opened Messenger offered an image would leave it pending until expiry.
-  const DEFAULTS = Object.freeze({ messenger: Object.freeze({ accepts: Object.freeze(['text', 'url']), targets: Object.freeze([]) }) });
-  const live = kind => Object.entries({ ...DEFAULTS, ...receivers }).filter(([id, r]) => r?.accepts?.includes(kind) && installed(id));
+  // `switched`: a kind the app takes only while one of its own feature switches is on (wizard.app-switches/1). The
+  // App Manager's one catalog says so without loading the app, so a file is offered to Messenger in a window that has
+  // never opened it (wizard-ux issue 1625); a known switch state wins over the cached registration for that kind.
+  const DEFAULTS = Object.freeze({ messenger: Object.freeze({ accepts: Object.freeze(['text', 'url']), targets: Object.freeze([]), switched: Object.freeze({ file: 'messenger:share-files' }) }) });
+  // App switch states from store-install/_feature-switches: id -> true/false; a switch the catalog doesn't list is unknown.
+  const sw = { on: null, at: 0, read: null };
+  const homeUrl = p => { try { return new URL(p, document.baseURI || location.href).pathname; } catch (_) { return '/wizard-os-home/' + p; } };
+  function readSwitches() {
+    if (sw.read) return sw.read;
+    if (Date.now() - sw.at < 60000 || typeof window.fetch !== 'function') return Promise.resolve();
+    const ac = typeof AbortController === 'function' ? new AbortController() : null, timer = setTimeout(() => ac?.abort(), 8000);
+    sw.read = window.fetch(homeUrl('store-install/_feature-switches'), { credentials: 'same-origin', cache: 'no-store', headers: { Accept: 'application/json' }, ...(ac ? { signal: ac.signal } : {}) })
+      .then(r => (r.ok ? r.json() : null)).then(d => {
+        if (!d || !Array.isArray(d.switches)) return;
+        const on = new Map(); for (const x of d.switches) if (x && x.kind === 'app' && typeof x.id === 'string') on.set(x.id, x.on === true);
+        sw.on = on;
+      }, () => {}).finally(() => { clearTimeout(timer); sw.read = null; sw.at = Date.now(); });
+    return sw.read;
+  }
+  // Wait briefly for the switch states a share of this kind depends on; a slow App Manager keeps the last known answer.
+  // null = nothing to wait for (the sheet opens in the same tick, as always).
+  function switchesFor(kind) {
+    const need = Object.entries(DEFAULTS).some(([id, d]) => d.switched?.[kind] && installed(id));
+    if (!need || (!sw.read && Date.now() - sw.at < 60000) || typeof window.fetch !== 'function') return null;
+    return Promise.race([readSwitches(), new Promise(r => setTimeout(r, 1500))]);
+  }
+  function takes(id, r, kind) {
+    const key = DEFAULTS[id]?.switched?.[kind];
+    if (key && sw.on?.has(key)) return sw.on.get(key);
+    return !!r?.accepts?.includes(kind);
+  }
+  const live = kind => Object.entries({ ...DEFAULTS, ...receivers }).filter(([id, r]) => takes(id, r, kind) && installed(id));
   const rank = key => { const i = recent.indexOf(key); return i < 0 ? 1e6 : i; };
   function people(kind) {
     // Cached metadata from every registered receiver; never open/unlock an app to choose a person.
@@ -217,7 +247,11 @@
   function show(payload, native) {
     payload = itemPayload(payload);
     if (!payload) return Promise.resolve('unsupported');
-    const kind = payload.kind, agents = agentsFor(kind, origin());
+    const from = origin(), wait = switchesFor(payload.kind); // where it started is read at the tap, before any wait
+    return wait ? wait.then(() => present(payload, native, from)) : present(payload, native, from);
+  }
+  function present(payload, native, from) {
+    const kind = payload.kind, agents = agentsFor(kind, from);
     if (!wants(kind) && !agents.length) return native();
     if (open) close('cancelled');
     return new Promise(resolve => {
