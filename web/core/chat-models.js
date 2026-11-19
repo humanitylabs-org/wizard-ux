@@ -74,7 +74,7 @@
    * none connected the menu says so and links to Connectors in the App Store. */
   const CONNECTORS = [
     { id: 'claude', models: [['claude:fable', 'Fable'], ['claude:opus', 'Opus'], ['claude:sonnet', 'Sonnet'], ['claude:haiku', 'Haiku']] }, // Fable first (issue 1636)
-    { id: 'chatgpt', models: [['gpt:astra', 'Astra'], ['gpt:sol', 'Sol'], ['gpt:luna', 'Luna']] }, // Astra before Sol, as the stock menu always read (owner tests #939, #1636)
+    { id: 'chatgpt', models: [['gpt:astra', 'Astra'], ['gpt:sol', 'Sol'], ['gpt:luna', 'Luna']] }, // Astra before Sol, as the stock menu always read (owner-correction tests for issues 939 and 1636)
     { id: 'tinfoil', models: [['tinfoil:glm', 'GLM'], ['tinfoil:kimi', 'Kimi'], ['tinfoil:deepseek', 'DeepSeek Flash']] },
   ];
   // Tinfoil's main chat models by id; utility models (embeddings, speech, filters) get no family and stay in More models.
