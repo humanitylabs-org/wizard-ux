@@ -820,7 +820,7 @@
     },
     // ?embed=settings: the view drops its own title, sheet and canvas and takes the shell's skin (Appearance v1), so the
     // page head is the one title and the content sits straight on the Settings page, with no box around it.
-    html: () => `<div class="st-embed" data-st-connections><iframe src="${esc(CONNECTIONS)}?embed=settings" title="Connections"></iframe></div>` });
+    html: () => `<div class="st-embed" data-st-connections><iframe src="${esc(CONNECTIONS)}?embed=settings" title="Connections" allow="geolocation 'none'"></iframe></div>` });
   register({ id: 'chats-list-style', page: 'chats', html: () => { const r = settingRow('wizard/desktop-chats'); return r ? `<div class="st-group"><h4>Chats list</h4>${r}</div>` : ''; }, act: settingAct });
   register({ id: 'notifications-in-chats', page: 'chats', html: () => { const r = settingRow('wizard/unified-inbox'); return r ? `<div class="st-group"><h4>Notifications</h4>${r}</div>` : ''; }, act: settingAct });
   // Draft marks are on for everyone (wizard-ux issue 1604, James: "just ship this"); an owner can still turn them off here.
