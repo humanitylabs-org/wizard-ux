@@ -48,6 +48,20 @@ It stays inert until an admin switches it on:
 
 The CI path does not run the emulator upgrade-origin proof below (it needs a rooted test image and the previous owner APK); run that on Thales when a release changes pairing or `ServerSettings`. Pull requests run only the unit fixtures, never the signing job.
 
+## Tester and public lanes (off by default, wizard-os#720)
+
+With the repository variable `WOS_RELEASE_LANES=on`, a merge that raises `versionName` still builds, signs and publishes `android-v<version>` automatically, but as a **tester build**: a GitHub prerelease that is never "latest". Boxes mirror only the latest release (`releases/latest`, which GitHub never resolves to a prerelease), and they check the APK's real signer and cap how far `versionCode` may jump (wizard-app-manager#789), so a tester build reaches no box by itself. Testers can install it from the release page.
+
+A tester build becomes **public** when a PR raises `android/public-release.json`:
+
+```json
+{"versionName": "0.10.60", "versionCode": 124, "sha256": "<sha256 of wizard-os-0.10.60.apk>"}
+```
+
+Copy the three values from that tester build's `phone.json`. The file is in `.github/CODEOWNERS` for `@jdefleur @JanMesaric @mistermizel`, so with code-owner review required on `main` the PR is blocked until one of them approves. When it merges, `.github/workflows/phone-promote.yml` runs `python3 tools/phone_release.py promote`: it downloads the tester build, checks that `phone.json` and the APK bytes match the file, re-runs the `metadata()` audit on those bytes (one signer, no origin), refuses a `versionCode` that does not rise over the current public release, then marks the release as not a prerelease and latest and reads that back. No rebuild, so boxes get the exact bytes testers ran. Run workflow (Actions, Phone promote) repeats a promotion that stopped half way.
+
+Without the variable (today), every CI release is the latest release and `android/public-release.json` is ignored. Switch it off again by removing the variable; tester builds already published stay prereleases until promoted.
+
 ## Exact upgrade-origin proof
 
 The baseline APK digest is mandatory and the old/new signer is verified before installation. The test:

@@ -15,9 +15,14 @@ name: Phone release
 # WOS_PHONE_CI_RELEASE=on and puts WOS_KEYSTORE_BASE64, WOS_STORE_PASSWORD, WOS_KEY_ALIAS and WOS_KEY_PASSWORD
 # in the phone-release environment (docs/phone-canonical-release.md, "Release from CI").
 # Run workflow by hand on any branch to build the unsigned APK only (sign and publish need main and the switch).
+#
+# Release lanes (wizard-os#720, off by default): with the repository variable WOS_RELEASE_LANES=on, publish makes
+# android-v<version> a tester build (a GitHub prerelease, never "latest"), so boxes keep mirroring the public release.
+# Raising android/public-release.json (code-owned: James, Jan or Miguel) promotes a tester build with the same bytes
+# (phone-promote.yml). Without the variable every release is the latest release, as before.
 on:
   pull_request:
-    paths: ['tools/phone_release.py', 'tools/apk_build_config.py', 'tools/test_canonical_phone_release.py', '.github/workflows/phone-release.yml']
+    paths: ['tools/phone_release.py', 'tools/apk_build_config.py', 'tools/test_canonical_phone_release.py', '.github/workflows/phone-release.yml', '.github/workflows/phone-promote.yml', 'android/public-release.json']
   push:
     branches: [main]
     paths: ['android/**', 'tools/phone_release.py', 'tools/apk_build_config.py', '.github/workflows/phone-release.yml']
@@ -166,6 +171,7 @@ jobs:
         env:
           V: ${{ needs.build.outputs.version }}
           NOTES: ${{ github.event.inputs.notes }}
+          LANES: ${{ vars.WOS_RELEASE_LANES }}
         run: |
           if draft=$(gh release view "android-v$V" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft 2>/dev/null); then
             if [ "$draft" = true ]; then
@@ -179,9 +185,12 @@ jobs:
             gh release download "$prev" --repo "$GITHUB_REPOSITORY" --pattern phone.json --dir "$RUNNER_TEMP/previous"
             extra=(--previous-phone "$RUNNER_TEMP/previous/phone.json")
           fi
+          # Release lanes on: a tester build (prerelease) that only android/public-release.json makes public.
+          if [ "$LANES" = on ]; then extra+=(--prerelease); fi
           python3 tools/phone_release.py ci --publish \
             --apk "$RUNNER_TEMP/signed/app-release.apk" \
             --commit "$GITHUB_SHA" --output "$RUNNER_TEMP/phone" \
             --notes "${NOTES:-Shared WizardOS phone release $V, built and signed from main; no owner address is built in.}" \
             "${extra[@]}"
-          echo "Published android-v$V (signer 3bf74d0b…d1fd)." >> "$GITHUB_STEP_SUMMARY"
+          if [ "$LANES" = on ]; then lane='tester build (prerelease; raise android/public-release.json to make it public)'; else lane='latest release'; fi
+          echo "Published android-v$V as the $lane (signer 3bf74d0b…d1fd)." >> "$GITHUB_STEP_SUMMARY"
