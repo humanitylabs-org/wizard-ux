@@ -160,13 +160,28 @@ test('AI apps sidebar: Activity rows from the list model carry draft only while 
   assert.deepEqual(flat(list()).filter(r => r.draft).map(r => r.id), [], 'off');
 });
 
-test('the switch is a listed, off-by-default tweak package', () => {
-  const cat = JSON.parse(read('web/tweaks/catalog.json'));
+test('the switch is a listed tweak package, on by default for everyone (issue 1604) and still switchable', () => {
+  const cat = JSON.parse(read('web/tweaks/catalog.json')), prof = JSON.parse(read('web/tweaks/wizard/profile.json'));
   assert.ok(cat.tweaks.includes('wizard/draft-marks'));
-  assert.ok(!cat.defaults.includes('wizard/draft-marks'));
+  assert.ok(cat.defaults.includes('wizard/draft-marks'));
+  assert.ok(cat.promotedDefaults.includes('wizard/draft-marks'), 'an off chosen before the promotion is kept');
+  assert.ok(!(prof.off || []).includes('wizard/draft-marks') && !(cat.lookOnlyOff || []).includes('wizard/draft-marks'));
+  assert.match(read('web/core/settings.js'), /register\(\{ id: 'chats-draft-marks', page: 'chats', html: \(\) => \{ const r = settingRow\('wizard\/draft-marks'\)/);
   const m = JSON.parse(read('web/tweaks/wizard/draft-marks/manifest.json'));
   assert.equal(m.id, 'wizard/draft-marks'); assert.match(m.description, /issue 1445/);
   const css = read('web/tweaks/wizard/draft-marks/tweak.css');
   for (const rule of css.split('}').map(r => r.trim()).filter(r => r && !r.startsWith('/*'))) assert.match(rule.replace(/^\/\*[^]*?\*\/\s*/, ''), /^html\[data-tweaks~="wizard\/draft-marks"\]/, rule);
   assert.doesNotMatch(css.replace(/var\(--wz-[a-z-]+, #[0-9a-f]+\)/g, ''), /#[0-9a-f]{3,6}\b/i, 'colours only through --wz-* tokens (with a dark fallback)');
+});
+
+test('on by default, main and routed rows alike: a thread of the main agent, host, container or restricted is marked by the same draft key its box saves under (direct:<id>)', async () => {
+  const d = device(); await d.L.refresh();
+  for (const agent of [undefined, 'host', 'container', 'restricted']) {
+    const s = { id: 'routed_' + (agent || 'main'), ...(agent ? { agent, owner: agent } : {}) };
+    assert.equal(d.c.rowDraft(s), false, (agent || 'main') + ': no draft, no mark');
+    d.drafts.set('direct:' + s.id, 'words', []);
+    assert.equal(d.c.rowDraft(s), true, (agent || 'main') + ': its draft marks it');
+    d.drafts.clear('direct:' + s.id);
+    assert.equal(d.c.rowDraft(s), false, (agent || 'main') + ': sent, gone');
+  }
 });

@@ -28,7 +28,9 @@
   }
   // [WIZARD_TWEAK_V1]{"id":"wizard/desktop-chats"}[/WIZARD_TWEAK_V1] (or {"ids":[…]}), on its own line: the reply carries
   // a tweak's live switch (WosSettings.tweakCard, the same row as Settings › Look). Ids only; a malformed marker is hidden.
-  const TWEAK_ID = /^[a-z0-9][a-z0-9-]*\/[a-z0-9][a-z0-9-]*$/, TWEAK_RE = /\[WIZARD_TWEAK_V1\]\s*([\s\S]*?)\s*\[\/WIZARD_TWEAK_V1\]/g;
+  // An app feature switch `<app id>:<switch id>` (wizard.app-switches/1) parses too; the card shows it only while the
+  // switch wizard/chat-app-switches is on (wizard-ux issue 1560) and drops it otherwise, as before.
+  const TWEAK_ID = /^(?:[a-z0-9][a-z0-9-]*\/[a-z0-9][a-z0-9-]*|[a-z0-9][a-z0-9-]{0,62}:[a-z0-9][a-z0-9-]{0,63})$/, TWEAK_RE = /\[WIZARD_TWEAK_V1\]\s*([\s\S]*?)\s*\[\/WIZARD_TWEAK_V1\]/g;
   function tweakIds(s) {
     const out = [];
     for (const m of String(s || '').matchAll(TWEAK_RE)) {
@@ -192,6 +194,13 @@
       } else if (m.role === 'assistant') {
         const h = helm(cleanText(raw));
         const t = h.text, tweaks = kind === 'commentary' ? [] : tweakIds(raw);
+        // The Agent Service's signal sweep card (wizard-ux issue 1586): its own turn, never folded into another one's
+        // answer; Chats draws its buttons from `sweep` (the markdown copy stays the text for Copy and older shells).
+        if (kind === 'agent_sweep' && m.agent_sweep && typeof m.agent_sweep === 'object' && !Array.isArray(m.agent_sweep)) {
+          newTurn(null); cur.at = at;
+          cur.a = { ...(identity.id != null ? { id: identity.id } : {}), text: t, plainText: h.plainText, inlineMedia: h.inlineMedia, at, final: true, sweep: m.agent_sweep };
+          cur = null; continue;
+        }
         if (!cur) newTurn(null);
         else if (later(cur, at)) { const prev = cur; newTurn(null); cur.at = at; cur.later = { at, after: prev.a.at }; }
         noteWork(cur, m, at);
@@ -720,12 +729,22 @@
     return () => { cancel(); for (const [type, fn] of listeners) root.removeEventListener(type, fn, true); };
   }
   if (document.addEventListener) bindSharePress(document);
+  // A file on this Wizard (/wizard/attachments/…, /wizard/files/…/content) only opens for its owner: its link is
+  // never shared as text to an app or a person (wizard-ux issue 1621); the file itself goes through shareFile.
+  function privateMedia(u) {
+    try { u = u instanceof URL ? u : new URL(String(u), location.href); } catch (_) { return false; }
+    if (u.origin !== new URL(location.href).origin) return false;
+    // pathname keeps percent-encoding (a file ID `source:abc` arrives as `source%3Aabc`): test the decoded path too,
+    // and treat anything under the private file stores as private, so no encoding of an ID slips past this check.
+    let decoded = u.pathname; try { decoded = decodeURIComponent(u.pathname); } catch (_) {}
+    return [u.pathname, decoded].some(p => PRIVATE_MEDIA.test(p) || /^\/wizard\/(?:files|attachments)\//i.test(p));
+  }
   async function sharePayload(data = {}) {
     if (!data || typeof data !== 'object') return 'unsupported';
     const payload = {};
     for (const k of ['text', 'title', 'url']) if (data[k] != null && String(data[k])) payload[k] = String(data[k]);
     if ((!payload.text && !payload.url) || (payload.text || '').length > 90000 || (payload.title || '').length > 1024 || (payload.url || '').length > 8192) return 'unsupported';
-    if (payload.url) { try { const parsed = new URL(payload.url, location.href); if (!/^https?:$/.test(parsed.protocol)) return 'unsupported'; if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(payload.url)) payload.url = parsed.href; } catch (_) { return 'unsupported'; } }
+    if (payload.url) { try { const parsed = new URL(payload.url, location.href); if (!/^https?:$/.test(parsed.protocol) || privateMedia(parsed)) return 'unsupported'; if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(payload.url)) payload.url = parsed.href; } catch (_) { return 'unsupported'; } }
     // Wizard's own sheet first (people → Apps → Other apps…); no receiver for this kind = straight out.
     if (!data.direct && !directShareDepth && window.WosShareSheet) return window.WosShareSheet.show(payload, () => shareOut(payload));
     return shareOut(payload);
@@ -989,12 +1008,17 @@
   const share = it => { const direct = directShareDepth > 0; return once('share', it, async () => {
     try {
       if (heavy(it) && native()) K.notify('↗', 'Preparing to share…');
+      const sheet = window.WosShareSheet, handed = sheet?.handoffs?.() || 0;
       let result = await shareFileOpen(it, { direct });
       // An old native bridge may already have opened the file chooser without an
       // outcome receipt. Never open a second text chooser or claim Shared then.
       if (result === 'unsupported' && typeof native()?.shareFile !== 'function') {
+        // A private file's link would reach the other person as a dead link: say so instead of pasting it.
+        if (privateMedia(it.url)) { K.notify('!', 'Couldn’t share this file from here. Download it, then send it.'); return; }
         result = await sharePayload({ url: new URL(it.url, location.href).href, title: it.name, direct });
       }
+      // Handed to an app (Messenger): its own picker is on screen and confirms after Send; nothing is shared yet.
+      if (result === 'shared' && (sheet?.handoffs?.() || 0) !== handed) return;
       if (result === 'shared') K.notify('↗', 'Shared');
       else if (result === 'opened') K.notify('↗', 'Share sheet opened');
       else if (result === 'copied') K.notify('⧉', 'Link copied');
@@ -1133,6 +1157,7 @@
     open(items, i = 0) {
       items = (items || []).filter(x => x && x.url); if (!items.length) return false;
       V.items = items; V.i = Math.max(0, Math.min(items.length - 1, i));
+      if (items.some(x => x.kind !== 'image')) window.WosShareSheet?.prime?.('file'); // its Share then knows who takes files
       const el = build(); if (el.hidden) V.focus = document.activeElement;
       el.hidden = false; requestAnimationFrame(() => el.classList.add('open'));
       show(); K.onChange(true); el.focus({ preventScroll: true }); return true;

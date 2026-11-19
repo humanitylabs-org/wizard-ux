@@ -681,6 +681,12 @@
       ],
       "note": "Pinned home-screen app task: one app full screen with its own Back history"
     },
+    "core/pin-doc.js": {
+      "loadedBy": [
+        "phone"
+      ],
+      "note": "Slim pin page (switch wizard/pin-slim-doc): a pinned app session builds its host from the shell's own files"
+    },
     "core/skin-frame.js": {
       "loadedBy": [
         "phone",
@@ -919,6 +925,11 @@
       "shell": "phone",
       "classification": "native",
       "reason": "Android pinned-shortcut app-only task (AppSessionActivity); desktop windows already isolate apps."
+    },
+    "core/pin-doc.js": {
+      "shell": "phone",
+      "classification": "native",
+      "reason": "Android pinned-shortcut app session only (index.html?app-session=); desktop has no home-screen pinning."
     },
     "orb.js": {
       "shell": "phone",

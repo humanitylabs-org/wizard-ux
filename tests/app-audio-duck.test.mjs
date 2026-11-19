@@ -16,6 +16,7 @@ function fixture(id='wizard-messenger') {
  const detach=window.WizAppServices.attach(frame,{appId:id,path:app.url,isVisible:()=>true});
  return {child,calls,detach,service:window.WizAppServices.connect(child,{})};
 }
+// owner-correction: humanitylabs-org/wizard-ux#559 · 2026-10-24 · "Also, when I'm playing a voice note, it might be nice if it turns the music volume down."
 test('an app ducks and restores Wizard Music through the shell, one owner per frame',async()=>{
  const f=fixture(); assert.equal(await f.service.audio.duck(true),true); assert.equal(await f.service.audio.duck(false),false);
  assert.equal(f.calls.length,2); assert.equal(f.calls[0][0],f.calls[1][0]); assert.deepEqual(f.calls.map(c=>c[1]),[true,false]);

@@ -107,7 +107,9 @@ window.WosChatPower = function chatPower(A) {
     if (!onScreen(nb) || nb.closest('[data-incog-thread]')) return;
     const el = nb.closest('[data-chats]'), w = H.win(el.dataset.chats), c = w && ch(w.id);
     if (c?.placeOptions?.notification) { c.placeOptions.notificationScroll = scrollBox(nb).scrollTop; return; }
-    if (!w?.thread || w.thread === '__new__' || !c.lid || c.posFor !== w.thread || settling(c)) return;
+    // A first reply still streaming has no latest-reply id yet (lid ''), and his scroll up must still be saved: an unsaved
+    // place stayed the opening bottom one, and the next chunk that grew no line pulled him back down (issue 1546).
+    if (!w?.thread || w.thread === '__new__' || c.lid == null || c.posFor !== w.thread || settling(c)) return;
     RP.save(c.eyeRec = { sessionId: w.thread, messageId: c.lid, anchor: anchorOf(nb), shown: c.show,
       scrollTop: scrollBox(nb).scrollTop, savedAt: Date.now(), atBottom: bottomGap(nb) < 80,
       working: !!A.isWorking?.(LIVE.session?.(w.thread)) });
@@ -121,16 +123,23 @@ window.WosChatPower = function chatPower(A) {
       scrollTop: 0, atBottom: true, savedAt: Date.now(), working: !!A.isWorking?.(LIVE.session?.(w.thread)) });
     const nb = A.elOf?.(wid)?.querySelector('.ch-msgs'); if (nb) { endSettle(c); restore(nb, RP.read(w.thread)); c.seenH = contentH(nb); }
   }
-  /* Live repaints and growth never pull the reader down (James, 8 Nov 2026: no scroll-yanking while a reply streams).
-   * A place at the bottom stays at the bottom only while the content is unchanged (keyboard, composer, rotation) or
-   * just after his own send; content that grew (bottom place, or the opening last-reply place clamped at the end)
-   * leaves the words he is reading where they are, re-pinned only to his own on-screen eye line, and shows ↓ Latest. Opening a thread still lands as before (position + settle use restore directly). */
+  /* Live repaints and growth never pull a reader who scrolled up (James, 8 Nov 2026: no scroll-yanking while a reply
+   * streams; 18 Nov, issue 1546: once he scrolls up, no chunk, repaint or layout change moves him). Only a thread
+   * already at the bottom keeps following the stream (issue 1546): its place says bottom and it was at the end just
+   * before this growth. A place at the bottom also stays there when the content is unchanged (keyboard, composer,
+   * rotation) and just after his own send. Any other growth (his scrolled-up place, or the opening last-reply place
+   * clamped at the end) leaves the words he is reading where they are, re-pinned only to his own on-screen eye line,
+   * and shows ↓ Latest. Opening a thread still lands as before (position + settle use restore directly). */
+  // Growth is all below him, so before it his gap to the end was the gap now less what grew.
+  const endBefore = (c, nb, h) => bottomGap(nb) - (h - (c.seenH ?? h)) < 80;
+  const following = (c, nb, place, h) => !!place?.atBottom && !place.landed && endBefore(c, nb, h);
   function hold(nb, place) {
     const el = nb.closest('[data-chats]'), w = el && H.win(el.dataset.chats), c = w && ch(w.id);
     if (!c || !onScreen(nb)) return restore(nb, place);
     const h = contentH(nb), grew = h > (c.seenH ?? h) + 1;
     let done = true;
-    if (!grew || Date.now() < (c.pinUntil || 0)) done = restore(nb, place);
+    if (grew && following(c, nb, place, h)) { done = restore(nb, place); capture(nb); }
+    else if (!grew || Date.now() < (c.pinUntil || 0)) done = restore(nb, place);
     else {
       // The eye-line record is only trusted when it was captured on this screen (just before the repaint).
       if (place === c.eyeRec && place.anchor) restore(nb, { ...place, atBottom: false });
@@ -147,7 +156,9 @@ window.WosChatPower = function chatPower(A) {
   }
   function position(w, el, nb, o) {
     const c = ch(w.id), sid = w.thread;
-    c.placeOptions = o;
+    // The options name the turns of ONE thread (issue 1581): a resume after a link or Back must never place the next
+    // thread with the previous thread's turns, which saved a fresh place over his reading place.
+    c.placeOptions = o; c.placeFor = sid;
     if (!nb) return false;
     if (c.placeWait) { c.placeWait.disconnect(); c.placeWait = null; }
     if (!onScreen(nb)) {
@@ -224,18 +235,19 @@ window.WosChatPower = function chatPower(A) {
     return true;
   }
   // Opening settles onto its place while images/history arrive, but a reply streaming in during those first seconds
-  // is still growth below: it keeps the view where it is and shows ↓ Latest (review of this fix).
+  // is still growth below: it keeps the view where it is and shows ↓ Latest (review of this fix), unless the thread
+  // opened at the bottom and is still there: then it follows the stream like any bottom place (issue 1546).
   function settleTo(c, nb, sid) {
     const h = contentH(nb), grew = h > (c.seenH ?? h) + 1;
     // A landing (landAt) is anchored on its message, so growth below cannot move it: it is kept also while working (Codex P2).
     const p = RP.read(sid);
-    if (!grew || !A.isWorking?.(LIVE.session?.(sid)) || p?.landed) restore(nb, p);
+    if (!grew || !A.isWorking?.(LIVE.session?.(sid)) || p?.landed || following(c, nb, p, h)) restore(nb, p);
     c.seenH = contentH(nb);
     const el = nb.closest('[data-chats]'); if (el) paintLatest(el, nb);
   }
   function resume(nb) {
     const el = nb?.closest('[data-chats]'), w = el && H.win(el.dataset.chats), c = w && ch(w.id);
-    if (c?.placeOptions) position(w, el, nb, c.placeOptions);
+    if (c?.placeOptions && c.placeFor === w.thread) position(w, el, nb, c.placeOptions);
   }
   function reflow(nb) {
     const el = nb?.closest('[data-chats]'), w = el && H.win(el.dataset.chats), c = w && ch(w.id);
@@ -276,7 +288,7 @@ window.WosChatPower = function chatPower(A) {
   function workHtml(c, tn, live, helperStatus) {
     if (!WK) return null;
     const key = turnKey(tn);
-    return WK.html(tn, { live, helperStatus, streamSteps: live && !c.stream?.landed && !c.stream?.terminal ? c.stream?.steps : [], open: !!c.wkOpen?.has(key), md: A.md, esc, clip, key });
+    return WK.html(tn, { live, stopping: live && !!c.stopping, helperStatus, streamSteps: live && !c.stream?.landed && !c.stream?.terminal ? c.stream?.steps : [], open: !!c.wkOpen?.has(key), md: A.md, esc, clip, key });
   }
 
   /* ================= #11 models ================= */

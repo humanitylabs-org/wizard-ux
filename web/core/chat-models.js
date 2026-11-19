@@ -59,7 +59,7 @@
   const CLAUDE_ORDER = ['fable', 'opus', 'sonnet', 'haiku'];
   const GPT_ORDER = ['astra', 'sol', 'terra', 'luna', 'codex-spark'];
   // The models closest to the thumb in the compact model menu (James 18 Oct 2026). Everything else is one tap away.
-  const PRIMARY = [{ family: 'claude:opus', name: 'Opus' }, { family: 'claude:sonnet', name: 'Sonnet' }, { family: 'gpt:astra', name: 'Astra' }, { family: 'gpt:sol', name: 'Sol' }, { family: 'tinfoil', name: '' }];
+  const PRIMARY = [{ family: 'claude:fable', name: 'Fable' }, { family: 'claude:opus', name: 'Opus' }, { family: 'claude:sonnet', name: 'Sonnet' }, { family: 'gpt:astra', name: 'Astra' }, { family: 'gpt:sol', name: 'Sol' }, { family: 'tinfoil', name: '' }];
   const isTinfoil = provider => provider === 'wizard-tinfoil' || provider === 'custom:wizard-tinfoil';
   /* Miguel's skins (Dark, Light, Landscapes) carry his model UX: the private Tinfoil slot, its setup row and the bottom
    * switch. James's skins keep the stock compact menu, so none of this shows there (team rule: taste lives in your skin). */
@@ -73,7 +73,7 @@
    * catalogue. A connector's models show only while it is connected (the thread's current model always shows). With
    * none connected the menu says so and links to Connectors in the App Store. */
   const CONNECTORS = [
-    { id: 'claude', models: [['claude:opus', 'Opus'], ['claude:sonnet', 'Sonnet'], ['claude:haiku', 'Haiku'], ['claude:fable', 'Fable']] },
+    { id: 'claude', models: [['claude:fable', 'Fable'], ['claude:opus', 'Opus'], ['claude:sonnet', 'Sonnet'], ['claude:haiku', 'Haiku']] }, // Fable first (issue 1636)
     { id: 'chatgpt', models: [['gpt:sol', 'Sol'], ['gpt:astra', 'Astra'], ['gpt:luna', 'Luna']] },
     { id: 'tinfoil', models: [['tinfoil:glm', 'GLM'], ['tinfoil:kimi', 'Kimi'], ['tinfoil:deepseek', 'DeepSeek Flash']] },
   ];
@@ -116,6 +116,7 @@
   const foreignApp = s => (s && typeof s.source === 'string' && Object.prototype.hasOwnProperty.call(FOREIGN_APPS, s.source.toLowerCase()) ? FOREIGN_APPS[s.source.toLowerCase()] : '');
   const refusal = s => { const app = foreignApp(s); return app ? `This chat was started in ${app}, so WizardOS can’t add to it. Your message is saved. Reply in ${app}, or start a new chat.` : ''; };
   const connectorOf = o => CLAUDE_PROVIDERS.has(o.provider) ? 'claude' : o.provider === 'openai-codex' ? 'chatgpt' : isTinfoil(o.provider) ? 'tinfoil' : '';
+  const CONNECT_AI = '<a class="mrow more" href="/wizard-os-home/store/index.html?kind=connections" target="_blank" rel="noopener">Connect an AI</a>';
   const primaryFamilies = () => CONNECTORS.filter(c => M.connected(c.id)).flatMap(c => c.models.map(([family, name]) => ({ family, name })));
   // A disconnected connector's models leave the menu. Only an existing thread keeps its current one (keep); a new chat
   // never inherits a disconnected default.
@@ -301,8 +302,7 @@
     },
     // Connector models with nothing connected: say so and point to Connectors in the App Store.
     noConnectorHtml() {
-      return M.ready && !CONNECTORS.some(c => M.connected(c.id))
-        ? '<p class="ch-sheet-n" role="status" data-mnone>No AI connected yet</p><a class="mrow more" href="/wizard-os-home/store/index.html?kind=connections" target="_blank" rel="noopener">Connect an AI</a>' : '';
+      return M.ready && !CONNECTORS.some(c => M.connected(c.id)) ? '<p class="ch-sheet-n" role="status" data-mnone>No AI connected yet</p>' + CONNECT_AI : '';
     },
     tinfoilReady() { return M.tinfoil?.provider === 'tinfoil' && M.tinfoil?.credentialStored === true; },
     defaultOption() { return M.options.find(o => o.isGlobalDefault) || null; },
@@ -481,7 +481,7 @@
       const primary = own || up.map(f => vis.find(o => famOf(o) === f)).filter(Boolean).concat(vis.filter(o => isCur(o) && !up.includes(famOf(o))));
       const rest = own || !all ? [] : vis.filter(o => !primary.includes(o)); // the other families' newest models (Fable, Haiku, Terra, Luna)
       const curPriv = privList.some(isCur);
-      // Primary rows read Opus · Sonnet · Astra · Sol; everything else keeps its catalogue name (GLM 5.3, Fable 5.1…).
+      // Primary rows read each connected connector's short list (Fable · Opus · Sonnet · Haiku, Sol · Astra · Luna, GLM · Kimi · DeepSeek Flash; issues 1561, 1636: a row only when the catalogue has it); everything else keeps its catalogue name (GLM 5.3, Fable 5.1…).
       const curated = o => up.includes(famOf(o)) && primaryFamilies().find(x => x.family === famOf(o))?.name;
       const label = (o, p) => own || p ? o.name : curated(o) || (isTinfoil(o.provider) ? M.short(o.value, o.provider) : PRIMARY.find(x => x.family === famOf(o))?.name || o.name || M.short(o.value, o.provider));
       const list = [], row = (o, cls = '') => { const i = list.push(o) - 1; const p = cls.includes('priv'); if (isTinfoil(o.provider)) cls += ' secure';
@@ -489,8 +489,13 @@
       const sec = (label, rows, cls = '') => rows ? `<div class="mpop-sec${cls}" role="group" aria-label="${esc(label)}"><div class="msheet-gh">${cls.includes('priv') ? lock : ''}<span>${esc(label)}</span></div>${rows}</div>` : '';
       const setupRow = `<button type="button" class="mrow" disabled aria-disabled="true" title="Set up Tinfoil in its connection app"><span class="mn"><b>Tinfoil</b></span></button><a class="mrow more" href="/wizard-tinfoil/" target="_blank" rel="noopener">Set up Tinfoil</a>`;
       // A same-Hermes route, never a Private agent or a new history. No model id is guessed.
-      const mainRows = primary.map(o => !own && isTinfoil(o.provider) && !M.tinfoilReady() ? setupRow : row(o)).join('')
+      let mainRows = primary.map(o => !own && isTinfoil(o.provider) && !M.tinfoilReady() ? setupRow : row(o)).join('')
         + (own ? '' : M.noConnectorHtml());
+      // Never an empty menu (issue 1561): with nothing to list, show the current model and a way to connect an AI.
+      if (!own && M.ready && !mainRows && !privList.length && !vis.length) {
+        const curO = cur?.model ? M.find(cur.model, cur.provider) : null;
+        mainRows = (curO ? row(curO) : '') + CONNECT_AI;
+      }
       const privRows = privList.map(o => row(o, ' priv')).join('');
       const moreRows = rest.map(o => row(o)).join('');
       const moreBtn = !own && M.ready && !all && vis.some(o => !primary.includes(o)) ? `<button type="button" class="mrow more" data-mall>More models</button>` : '';

@@ -193,3 +193,28 @@ test('the open picker repaints when a connector signs out during its refresh', a
   assert.match(h.html(), /No AI connected yet/);
   assert.doesNotMatch(h.html(), /GLM|Kimi|DeepSeek/);
 });
+
+// Issue 1561 (Archimedes, 19 Nov): a fresh install with Tinfoil as the only AI opened an EMPTY menu from the chip.
+test('fresh install, Tinfoil the only AI and the Hermes default: the chip menu lists Kimi and GLM', () => {
+  const M = models({ tinfoil: true, current: 'wizard-tinfoil', model: 'kimi-k3-1-pro' });
+  M.options = M.normalize({ provider: 'wizard-tinfoil', model: 'kimi-k3-1-pro', providers: [
+    { slug: 'wizard-tinfoil', is_user_defined: true, authenticated: true, models: ['kimi-k3-1-pro', 'glm-5-3'] }] });
+  const cur = M.snapshot ? M.snapshot('') : { model: 'kimi-k3-1-pro', provider: 'custom:wizard-tinfoil' };
+  const { html, list } = M.popHtml({ mode: 'thread', cur: { model: 'kimi-k3-1-pro', provider: cur.provider || 'custom:wizard-tinfoil' }, all: false });
+  assert.deepEqual(names(html).sort(), ['GLM', 'Kimi']);
+  assert.ok(list.length === 2 && list.every(o => /tinfoil/.test(o.provider)));
+});
+
+test('the menu is never empty: nothing listable still shows the current model and Connect an AI', () => {
+  const M = models({ claude: true });
+  M.options = []; // e.g. the catalogue answered with no routes for the connected account
+  const { html } = M.popHtml({ mode: 'new', cur: null, all: false });
+  assert.match(html, /Connect an AI/);
+  const M2 = models({ claude: true });
+  M2.options = M2.options.filter(o => o.value === 'claude-opus-5-5');
+  M2.claudeAccounts = { accounts: [] }; M2.providers = M2.providers.map(p => ({ ...p, authenticated: false }));
+  M2.tinfoil = { provider: 'tinfoil', credentialStored: true }; // connected, but no Tinfoil route in the catalogue
+  const thread = M2.popHtml({ mode: 'new', cur: { model: 'claude-opus-5-5', provider: 'anthropic' }, all: false }).html;
+  assert.match(thread, /Connect an AI/);
+  assert.match(thread, /Opus/);
+});

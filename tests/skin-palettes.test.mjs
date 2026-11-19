@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs';
 // wizard-os spec/SKINS_AND_VIEWS.md §1: palettes live inside skins.
 const read = f => readFileSync(new URL('../' + f, import.meta.url), 'utf8');
 
+// owner-correction: humanitylabs-org/wizard-ux#990 · 2026-11-05 · "Keep people's skins named the way they named their skins."
 test('the two skins hold the right palettes, and an unlisted skin becomes its own skin', () => {
   const s = read('web/core/skins.js');
   assert.match(s, /\{ id: 'wizard', name: 'Wizard', [^\n]*palettes: \['nebula', 'grove', 'tide', 'ember', 'signal'\] \}/);

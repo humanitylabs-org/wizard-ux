@@ -83,3 +83,57 @@ test('Classic shell reads the early claim, and releasing a reloading layout neve
   assert.match(read('web/desktop/desktop.js'), /var ownsChatList = !!globalThis\.WosSkinHost\?\.chatsClaimed\?\.\(\)/);
   assert.match(read('web/core/skin-host.js'), /shell\.ownsChatList\(chatsClaimed\(\)\)/);
 });
+
+// Issue 1556: on a slow load (cold cache, tailnet, Mac app) the veil used to drop on a 5 s timer and Classic Desks drew
+// under it. The veil now waits for the layout itself (or its failure), with a long watchdog that never shows Classic.
+const veilOn = f => f.doc.documentElement.dataset.layoutBooting !== undefined;
+async function slowBoot(t) {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const f = fixture({ shell: 'desktop', desktopView: null });
+  await f.host.whenLayoutReady();
+  let finish; const mounts = [];
+  f.host._test.setImporter(url => new Promise(res => { finish = () => res({ default: () => { mounts.push(url); return () => {}; } }); }));
+  f.host.setLayout('ai-apps', false);   // the view settling re-wears the same layout while its code is still loading
+  await Promise.resolve();
+  return { f, mounts, finish: () => finish() };
+}
+
+test('the boot veil is an inline sheet, so it never waits on a fetched stylesheet', () => {
+  const f = fixture({ shell: 'desktop', desktopView: null });
+  const st = f.doc.head.children.find(n => n.dataset?.layoutVeil !== undefined);
+  assert.ok(st, 'inline veil sheet in <head> at boot');
+  assert.match(st.textContent, /html\[data-layout-booting\] body \{ opacity: 0 !important/);
+  const classic = fixture({ shell: 'desktop', initialStorage: { [VIEW]: 'classic' } });
+  assert.ok(!classic.doc.head.children.some(n => n.dataset?.layoutVeil !== undefined), 'Classic boots without a veil');
+});
+
+test('a slow layout keeps the veil past 5 s and 44 s (quiet Loading, never Classic), and re-wearing never drops it', async t => {
+  const { f } = await slowBoot(t);
+  assert.ok(veilOn(f), 're-wearing the layout while it loads keeps the veil');
+  t.mock.timers.tick(5000);
+  assert.ok(veilOn(f), 'still veiled after the old 5 s timer');
+  assert.equal(f.doc.documentElement.dataset.layoutBooting, 'slow', 'a quiet Loading note shows');
+  t.mock.timers.tick(39000);
+  assert.ok(veilOn(f), 'still veiled at 44 s');
+  assert.equal(f.host.chatsClaimed(), true, "Classic's list stays claimed away");
+});
+
+test('a layout that never loads gets the recovery at 45 s, and a late import never mounts over it', async t => {
+  const { f, mounts, finish } = await slowBoot(t);
+  t.mock.timers.tick(45000);
+  assert.ok(!veilOn(f), 'the veil lifts onto the recovery, never a blank page for good');
+  assert.equal(f.host.chatsClaimed(), false, 'layoutLoadFailed: the shared Chats recovery takes the list');
+  finish(); await Promise.resolve(); await Promise.resolve(); await Promise.resolve();
+  assert.deepEqual(mounts, [], 'the abandoned load does not mount late');
+});
+
+test('a mounted layout whose sheet never answers is shown at 45 s', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const f = fixture({ shell: 'desktop', desktopView: null });
+  await f.host.whenLayoutReady();   // the stand-in layout mounts but never clears the veil (no sheet load event)
+  t.mock.timers.tick(44000);
+  assert.ok(veilOn(f));
+  t.mock.timers.tick(1000);
+  assert.ok(!veilOn(f));
+  assert.equal(f.host.chatsClaimed(), true, 'still the layout, not a recovery');
+});

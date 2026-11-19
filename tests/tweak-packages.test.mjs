@@ -350,7 +350,7 @@ test('flat Tweaks list keeps a device mix exactly: whatever is on stays on, rend
   assert.equal(E.chooseAuthor, undefined);
 });
 
-const REMOVED = ['wizard/orb-radial', 'wizard/new-send-list', 'wizard/wizardos-name', 'wizard/two-orbs', 'wizard/app-borders', 'wizard/pin-buttons', 'miguel/no-desk-close', 'miguel/group-by-day', 'miguel/switch-row-actions', 'miguel/orb-shell', 'miguel/apps-home'];
+const REMOVED = ['wizard/orb-radial', 'wizard/new-send-list', 'wizard/wizardos-name', 'wizard/two-orbs', 'wizard/app-borders', 'wizard/pin-buttons', 'miguel/no-desk-close', 'miguel/group-by-day', 'miguel/switch-row-actions', 'miguel/orb-shell', 'miguel/apps-home', 'wizard/bar-scrub'];
 test('retired Orb radial and the switches removed in wizard-ux issue 1239: saved mixes and recipes never request a removed package', async () => {
   const mixes = [
     new Map(),

@@ -24,6 +24,9 @@ Visual: <!-- anything drawn or animated: side-by-side screenshot of the existing
 
 <!-- Anything you could not verify, and why. Write "Nothing" if everything was checked. -->
 
+Owner corrections: <!-- Fixing something the owner corrected? Quote him in the test: // owner-correction: <owner>/<repo>#<n> · YYYY-MM-DD · "<his words>".
+     Changing or removing such a test needs the `owner-approved-change` label and a link to his approving comment here (AGENTS.md). -->
+
 ## Links
 
 <!-- Related issues, matching PRs in other repos, the decision or spec this follows. -->

@@ -41,4 +41,36 @@ public class HomeScreenIconTest {
         int mid = shown.getPixel(108, 108);
         assertTrue("glyph missing in the middle, was " + Integer.toHexString(mid), Color.red(mid) > 200 && Color.green(mid) > 200);
     }
+
+    /** Messenger unread bubble (wizard-ux#1568): drawn inside the launcher mask, top-right; nothing at zero. */
+    @Test public void unreadBubbleShowsInsideTheMaskTopRight() {
+        Context c = InstrumentationRegistry.getInstrumentation().getTargetContext();
+        Bitmap square = Bitmap.createBitmap(192, 192, Bitmap.Config.ARGB_8888);
+        new Canvas(square).drawColor(0xff110d1b);
+        assertEquals(0, red(shown(c, HomeScreenShortcuts.adaptive(square, 0)), 0, 0, 216, 216));
+        for (int n : new int[]{3, 12}) {
+            Icon icon = HomeScreenShortcuts.adaptive(square, n);
+            assertEquals(Icon.TYPE_ADAPTIVE_BITMAP, icon.getType());
+            Bitmap b = shown(c, icon);
+            int topRight = red(b, 108, 0, 216, 108);
+            assertTrue(n + ": red bubble in the top-right, red px=" + topRight, topRight > 600);
+            assertEquals(n + ": nothing red in the bottom half", 0, red(b, 0, 120, 216, 216));
+            assertEquals(n + ": nothing red in the left third", 0, red(b, 0, 0, 72, 216));
+        }
+    }
+    private static Bitmap shown(Context c, Icon icon) {
+        Drawable d = icon.loadDrawable(c);
+        Bitmap b = Bitmap.createBitmap(216, 216, Bitmap.Config.ARGB_8888);
+        d.setBounds(0, 0, 216, 216);
+        d.draw(new Canvas(b));
+        return b;
+    }
+    private static int red(Bitmap b, int x0, int y0, int x1, int y1) {
+        int n = 0;
+        for (int x = x0; x < x1; x++) for (int y = y0; y < y1; y++) {
+            int p = b.getPixel(x, y);
+            if (Color.alpha(p) > 200 && Math.abs(Color.red(p) - 0xE5) < 16 && Math.abs(Color.green(p) - 0x32) < 16 && Math.abs(Color.blue(p) - 0x2D) < 16) n++;
+        }
+        return n;
+    }
 }

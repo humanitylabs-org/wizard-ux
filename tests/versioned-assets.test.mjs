@@ -46,6 +46,20 @@ test('module imports carry the token too, so a changed dependency gets a new URL
   assert.ok(land.includes(`from '../obsidian/intro.js?v=${v}'`));
 });
 
+// Live box, 18 Nov 2026: kit/controls.css came back as a 304 on every open because phone-connect.css @imports it
+// unstamped, so it never got the year-long cache the stamped files get (wizard-ux#1583).
+test('relative CSS @imports carry the token; other origins and absolute paths stay plain', t => {
+  const d = stamped(t), v = tokenOf(readFileSync(join(d, 'index.html'), 'utf8'));
+  assert.ok(readFileSync(join(d, 'core/phone-connect.css'), 'utf8').includes(`@import url("../kit/controls.css?v=${v}");`));
+  writeFileSync(join(d, 'probe.css'), '@import url("https://x.org/a.css");\n@import "/abs.css";\n@import \'./b.css\';\n');
+  execFileSync('sh', [STAMP, d]);
+  const w = tokenOf(readFileSync(join(d, 'index.html'), 'utf8')), css = readFileSync(join(d, 'probe.css'), 'utf8');
+  assert.ok(css.includes('@import url("https://x.org/a.css");') && css.includes('@import "/abs.css";'));
+  assert.ok(css.includes(`@import './b.css?v=${w}';`));
+  const pc = readFileSync(join(d, 'core/phone-connect.css'), 'utf8');
+  assert.ok(pc.includes(`controls.css?v=${w}"`) && !/\?v=[0-9a-f]+\?v=/.test(pc), 'a restamp swaps the token, never adds a second');
+});
+
 test('any change anywhere in web/ moves the token; rerunning the stamp is a no-op', t => {
   const a = stamped(t);
   const b = mkdtempSync(join(tmpdir(), 'stamp-'));

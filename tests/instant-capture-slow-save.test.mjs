@@ -54,18 +54,22 @@ for (const detail of ['timeout', 'blocked', 'UnknownError', 'InvalidStateError',
     assert.equal(f.tries, 2); assert.equal(f.saved.length, 1); assert.deepEqual(f.warns, []);
   });
 
-test('quota failure is not retried (strict as before)', async () => {
+test('quota failure is not retried, and shows no notice: Send still hands the take over from memory', async () => {
   const f = fixture({fast: true, write: () => Object.assign(Error('private'), {name: 'QuotaExceededError'})});
   await f.enqueue('A'); await f.settle();
-  assert.equal(f.tries, 1); assert.deepEqual(f.waits, []); assert.equal(f.warns.length, 1);
+  assert.equal(f.tries, 1); assert.deepEqual(f.waits, []); assert.deepEqual(f.warns, []);
+  const out = await f.c.finish(f.s);
+  assert.equal(await out.blob.text(), 'AC'); assert.equal(out.durable, false);
 });
 
-test('a store that stays broken warns only after the whole backoff (well beyond 1.5 s), then Send still works from memory', async () => {
+// ux#1503 reopen (James's phone, 18 Nov): the store kept timing out past the whole backoff and the warning still
+// showed. The on-device copy is only a backup for an instant take, so a store that stays broken says nothing.
+test('a store that stays broken retries the whole backoff (well beyond 1.5 s), shows no notice, and Send works from memory', async () => {
   const f = fixture({fast: true, write: () => failure('timeout')});
   await f.enqueue('A'); await f.settle();
   assert.deepEqual(f.waits, [500, 1500, 3000, 6000]);
   assert.ok(f.waits.reduce((a, b) => a + b) > 1500 * 5);
-  assert.equal(f.tries, 5); assert.equal(f.warns.length, 1); assert.match(f.warns[0], /\(timeout\)/);
+  assert.equal(f.tries, 5); assert.deepEqual(f.warns, []);
   const out = await f.c.finish(f.s);
   assert.equal(await out.blob.text(), 'AC'); assert.equal(out.durable, false); assert.equal(f.c.active, null);
 });
@@ -101,7 +105,21 @@ test('the first-row save of an instant take (openDB + put) goes through the same
   const at = source.indexOf('        s.persistence = (async () => {');
   const block = source.slice(at, source.indexOf('        })();', at));
   assert.match(block, /await patiently\(s, async \(\) => \{ await openDB\(\); if \(!s\.discard && !s\.memoryOnly\) await put\(s\.row\); \}\)/);
-  assert.match(block, /if \(s\.phase !== 'stopping'\) emit\(s, 'warn'/);
+  assert.doesNotMatch(block, /emit\(s, 'warn'/);
+});
+
+test('no instant-take storage failure anywhere emits the old notice, and getInfo carries no storage warning', () => {
+  assert.doesNotMatch(source, /'On-device saving failed/);
+  assert.match(source, /warning:s\.instant&&s\.error\?\.code==='storage_failed'\?null:s\.error\?\.message\|\|null/);
+});
+
+test('a long take (36 chunks, about 3 minutes) on a store that never works sends every piece from memory with no notice', async () => {
+  const f = fixture({fast: true, write: () => failure('timeout')});
+  let text = '';
+  for (let i = 0; i < 36; i++) { const t = String.fromCharCode(65 + (i % 26)); text += t; await f.enqueue(t); }
+  await f.settle();
+  const out = await f.c.finish(f.s);
+  assert.equal(await out.blob.text(), text + 'C'); assert.equal(out.durable, false); assert.deepEqual(f.warns, []);
 });
 
 test('slow openDB then put: patiently retries the whole first-row save', async () => {

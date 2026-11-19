@@ -120,6 +120,31 @@ test('no URL stays greyed and explains why, never switches or navigates', async 
   assert.match(b.body.querySelector('.wz-workspaces-why').textContent, /isn’t running Wizard yet/);
   await assert.rejects(b.w.switch('managed'), /isn’t running/); assert.equal(b.nav.length, 0);
 });
+test('wizard-ux#1640: the Add a Wizard sheet survives the keyboard resize; the anchored menu still closes', async () => {
+  for (const shell of ['phone', 'desktop']) {
+    const b = boot({ shell, local: [remote()] }); b.start(); await b.w.list();
+    await b.w.add();
+    const sheet = b.body.querySelector('.wz-workspaces-panel');
+    assert.match(sheet.className, /is-sheet/);
+    const url = sheet.querySelectorAll('input').find(n => n.name === 'url'); assert.equal(url.focused, true);
+    b.win.dispatchEvent(new Event('resize'));
+    assert.equal(b.body.querySelector('.wz-workspaces-panel'), sheet, shell + ': sheet stays open after the keyboard resize');
+    assert.equal(b.stack.length, 1); b.stack.at(-1)(); assert.equal(b.body.querySelector('.wz-workspaces-panel'), null);
+    b.w.openMenu(b.slot.querySelector('button') || b.body.querySelector('button'));
+    assert.ok(b.body.querySelector('.wz-workspaces-panel'));
+    b.win.dispatchEvent(new Event('resize'));
+    assert.equal(b.body.querySelector('.wz-workspaces-panel'), null, shell + ': anchored menu still closes on resize');
+  }
+});
+test('wizard-ux#1640: with only one Wizard, a shell repaint keeps the Add a Wizard sheet open', async () => {
+  for (const shell of ['phone', 'desktop']) {
+    const b = boot({ shell }); b.start(); await b.w.list(); assert.equal(b.w.visible, false);
+    await b.w.add(); const sheet = b.body.querySelector('.wz-workspaces-panel');
+    for (const k of ['render', 'route', 'home']) b.hooks[k]();
+    b.win.dispatchEvent(new Event('resize'));
+    assert.equal(b.body.querySelector('.wz-workspaces-panel'), sheet, shell + ': sheet stays open with one Wizard');
+  }
+});
 test('menu Back registration and teardown stay bounded across 100 opens', async () => {
   const b = boot({ local: [remote()] }); const stop = b.start(); await b.w.list();
   for (let i = 0; i < 100; i++) { b.w.openMenu(b.slot.querySelector('button')); assert.equal(b.stack.length, 1); b.stack.at(-1)(); assert.equal(b.stack.length, 0); }
