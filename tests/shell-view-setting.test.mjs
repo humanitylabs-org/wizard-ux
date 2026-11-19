@@ -45,7 +45,6 @@ function box({ shell = 'desktop', storage = new Map() } = {}) {
 const switches = html => [...html.matchAll(/data-tweak-toggle="([^"]+)" role="switch" aria-checked="(true|false)"[^>]*><span class="st-tx"><b>([^<]+)<\/b>/g)].map(m => [m[1], m[3], m[2] === 'true']);
 const look = async b => { b.view.focus('look'); await tick(); return b.root.innerHTML; };
 
-// owner-correction: humanitylabs-org/wizard-ux#990 · 2026-11-05 · "Keep people's skins named the way they named their skins."
 for (const shell of ['desktop', 'phone']) test(`${shell}: Look offers no Orb or Apps view; the desktop picks Desks or AI apps, the phone none`, async () => {
   const b = box({ shell }); await b.E.refresh();
   const html = await look(b);
