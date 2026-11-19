@@ -160,10 +160,13 @@ test('AI apps sidebar: Activity rows from the list model carry draft only while 
   assert.deepEqual(flat(list()).filter(r => r.draft).map(r => r.id), [], 'off');
 });
 
-test('the switch is a listed, off-by-default tweak package', () => {
-  const cat = JSON.parse(read('web/tweaks/catalog.json'));
+test('the switch is a listed tweak package, on by default for everyone (issue 1604) and still switchable', () => {
+  const cat = JSON.parse(read('web/tweaks/catalog.json')), prof = JSON.parse(read('web/tweaks/wizard/profile.json'));
   assert.ok(cat.tweaks.includes('wizard/draft-marks'));
-  assert.ok(!cat.defaults.includes('wizard/draft-marks'));
+  assert.ok(cat.defaults.includes('wizard/draft-marks'));
+  assert.ok(cat.promotedDefaults.includes('wizard/draft-marks'), 'an off chosen before the promotion is kept');
+  assert.ok(!(prof.off || []).includes('wizard/draft-marks') && !(cat.lookOnlyOff || []).includes('wizard/draft-marks'));
+  assert.match(read('web/core/settings.js'), /register\(\{ id: 'chats-draft-marks', page: 'chats', html: \(\) => \{ const r = settingRow\('wizard\/draft-marks'\)/);
   const m = JSON.parse(read('web/tweaks/wizard/draft-marks/manifest.json'));
   assert.equal(m.id, 'wizard/draft-marks'); assert.match(m.description, /issue 1445/);
   const css = read('web/tweaks/wizard/draft-marks/tweak.css');
