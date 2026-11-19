@@ -164,7 +164,11 @@ test('phone: only a plain take away from any thread is marked, and only with the
 
 test('phone and desktop mark the staged take and say Got it; the list never shows a dump', () => {
   assert.match(app, /\.\.\.\(typeof dumpTake === 'function' && dumpTake\(snap, rt, aimAt, kind\) \? \{ dump: true \} : \{\}\),/);
-  assert.match(app, /OUTBOX\?\.onDump\?\.\(it => \{[\s\S]{0,200}Got it[\s\S]{0,80}esc\(title\)/);
+  assert.match(app, /function gotIt\(title\) \{[\s\S]{0,120}Got it[\s\S]{0,40}esc\(title\)/);
+  assert.match(app, /OUTBOX\?\.onDump\?\.\(it => gotIt\(it\.dumped\?\.title\)\);/);
+  // A quick take asks once: its command call carries accept_dump, and the outbox is told not to ask again.
+  assert.match(app, /\.\.\.\(dumpAsk \? \{ accept_dump: true \} : \{\}\) \}\) \}\);\n[^\n]*\n\s*if \(dumpAsk && r\.ok\) snap\.dumpAsked = true;[^\n]*\n\s*if \(dumpAsk && c\.route === 'dump' && c\.record_id\) \{ setVoice\('idle'\); txHide\(0\); gotIt\(c\.title\); return \{ outcome: 'local' \}; \}/);
+  assert.match(app, /\.\.\.\(opts\.snap\?\.dumpAsked \? \{ dump: false \} : \{\}\) \}\);/);
   assert.match(desktop, /const dumpIt = !sealed && !extraFiles\.length && \(aimSid === '' \|\| \(aimSid === '__new__' && vNewChat && typeof vSpace !== 'string'\)\) && typeof dumpTake === 'function' && dumpTake\('', rp\);/);
   assert.match(desktop, /if \(dumpIt\) \{ await OUTBOX\.enqueue\(\{ \.\.\.modelRoute, dump: true, custodyId: stagedId, captureId: stagedId \? null : r\.captureId, kind: 'new', sessionId: '',[^\n]*return 'sent'; \}\n    if \(w && aimSid\) CHATS\.sendChat\(/, 'a dump candidate goes through the outbox, never opened in a window');
   assert.match(desktop, /OUTBOX\?\.onDump\?\.\(it => \{[\s\S]{0,120}'Got it'/);
@@ -183,4 +187,13 @@ test('desktop: the dump mark given at Send reaches a take staged before it', asy
   await until(() => f.api.get('orb-take')?.state === 'sent');
   assert.deepEqual(f.paths(), ['/wizard/v1/route']);
   assert.equal(f.dumps.length, 1);
+});
+
+test('phone quick take: once its router call answered, the outbox does not ask again', async t => {
+  const f = await fixture(t, { item: row({ state: 'processing', deliveryRequested: false, text: '' }) });
+  await f.api.enqueue({ custodyId: 'orb-take', dump: false, kind: 'new', sessionId: '', text: 'research flights to Lisbon for next week', model: 'm', provider: 'p', source: 'orb' });
+  await until(() => f.api.get('orb-take')?.state === 'sent');
+  assert.deepEqual(f.paths(), ['/wizard/hermes/api/sessions', '/wizard/hermes/v1/runs']);
+  assert.equal(f.api.get('orb-take').dump, undefined);
+  assert.deepEqual(f.news, ['orb-take']);
 });

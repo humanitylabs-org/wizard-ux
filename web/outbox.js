@@ -885,7 +885,8 @@
         // The delivery caller names the agent (an orb pick); a staged take that lost it must not fall back to the main agent.
         if (agent && !it.agent) { it.agent = agent; if (snapshot) Object.assign(it, snapshot); }
         fitAgentRoute(it);
-        if (o.dump === true && it.kind === 'new') it.dump = true; // the orb's dump mark (issue 1588), given at Send
+        // The orb's dump mark (issue 1588): given at Send (desktop), or taken back once the phone's quick router call answered.
+        if (o.dump === true && it.kind === 'new') it.dump = true; else if (o.dump === false) delete it.dump;
         // Preserve the original route/destination/id. Routing is allowed to choose a local command;
         // message delivery always retains the send-time thread and selected provider.
         Object.assign(it, { text: String(o.text || '').trim(), typed: o.typed || it.typed, files: [...(it.files || []), ...(o.files || [])].filter((f, i, all) => all.findIndex(x => x.id === f.id) === i), instructions: o.instructions || it.instructions, wid: o.wid || it.wid, ...(replyOf(o) || it.reply ? { reply: replyOf(o) || it.reply } : {}),
