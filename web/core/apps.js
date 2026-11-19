@@ -135,6 +135,34 @@
     const yes = !!app && Array.isArray(app.permissions) && app.permissions.includes('geolocation');
     return `${base ? base + '; ' : ''}geolocation${yes ? '' : " 'none'"}`;
   };
+  // Turning the switch off (here or from another device), or an app no longer declaring it, takes location back from a
+  // frame that is already open: its `allow` loses `geolocation` and the frame reloads, because a browser applies a
+  // frame's `allow` only to its next page. It never grants on its own: a frame drawn after the switch turns on asks.
+  const LOC_ON = /(^|;)\s*geolocation\s*(;|$)/;
+  const relockLocation = () => {
+    let frames = [];
+    try { frames = [...document.querySelectorAll('iframe[allow]')]; } catch (_) { return 0; }
+    let n = 0;
+    for (const f of frames) {
+      const allow = String(f.getAttribute('allow') || '');
+      if (!LOC_ON.test(allow)) continue;
+      const base = allow.split(';').map(x => x.trim()).filter(x => x && !/^geolocation\b/.test(x)).join('; ');
+      const id = f.getAttribute('data-own-app') || '';
+      let url = f.getAttribute('src') || '';
+      try { url = f.contentWindow.location.href || url; } catch (_) {}
+      const next = window.WizCore.frameAllow(base, id ? { id } : { url });
+      if (LOC_ON.test(next)) continue;
+      f.setAttribute('allow', next); n++;
+      try { f.contentWindow.location.reload(); } catch (_) { try { f.setAttribute('src', f.src); } catch (_) {} }
+    }
+    return n;
+  };
+  window.WizCore.relockLocation = relockLocation;
+  try {
+    if (typeof MutationObserver === 'function' && document.documentElement) {
+      new MutationObserver(() => relockLocation()).observe(document.documentElement, { attributes: true, attributeFilter: ['data-tweaks'] });
+    }
+  } catch (_) {}
   const BACK_KEY = 'wux.apps.backend.v1';
   window.WizCore.appMetadata = id => [...REMOTE, ...BACK].find(a => a.id === id)?.sigil;
   let BACK = (() => { try { return (JSON.parse(localStorage.getItem(BACK_KEY) || '[]') || []).filter(a => !SHELL_HIDDEN.has(a?.id)).map(a => toTile(a)); } catch (e) { return []; } })();
@@ -201,6 +229,7 @@
       const back = all.filter(a => !a.url && !window.WizCore.isMaintenanceApp?.(a));
       try { localStorage.setItem(REMOTE_KEY, JSON.stringify(list)); localStorage.setItem(BACK_KEY, JSON.stringify(back)); } catch (e) {}
       REMOTE = list.map(a => toTile(a, true));
+      relockLocation();
       // The pinned-app worker learns which installed apps declared an offline pin (no per-app list in the shell).
       window.WizOfflineSession?.publish(REMOTE).catch(() => {});
       BACK = back.map(a => toTile(a));

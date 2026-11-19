@@ -1723,6 +1723,8 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         public void appLocationSwitch(boolean on) {
             if (MainActivity.this instanceof AppSessionActivity) return;
             AppLocation.setOn(MainActivity.this, on);
+            // Off: forget any grant this WebView still holds; the shell also takes `geolocation` off open frames.
+            if (!on) runOnUiThread(() -> GeolocationPermissions.getInstance().clearAll());
         }
         @JavascriptInterface
         public boolean openAppWindow(String appId, String path, String name) {

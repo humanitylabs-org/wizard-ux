@@ -58,6 +58,16 @@ const shellPage = on => `<!doctype html><html data-tweaks="${on ? 'wizard/app-lo
       if (!pass) failed++;
       console.log(`${pass ? 'PASS' : 'FAIL'} switch ${on ? 'on ' : 'off'} ${app} -> ${got?.ok ? 'position ' + got.lat : 'denied (code ' + got?.code + ')'}`);
     }
+    if (on) {
+      // Switch turned off while Maps is open (here or from another device): the open Maps frame loses location.
+      await page.evaluate(() => { window.results.length = 0; document.documentElement.setAttribute('data-tweaks', ''); });
+      await page.waitForFunction(() => window.results.some(x => x.app === '/maps/'), null, { timeout: 15000 });
+      const again = (await page.evaluate(() => window.results)).find(x => x.app === '/maps/');
+      const pass = again.ok === false && again.code === 1;
+      if (!pass) failed++;
+      out.revoked = again;
+      console.log(`${pass ? 'PASS' : 'FAIL'} switch on->off with Maps open: /maps/ reloads -> ${again.ok ? 'position ' + again.lat : 'denied (code ' + again.code + ')'}`);
+    }
     await ctx.close();
   }
   await browser.close();

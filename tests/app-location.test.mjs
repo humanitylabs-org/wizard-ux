@@ -13,19 +13,30 @@ const BASE = 'microphone; clipboard-read; clipboard-write; autoplay; fullscreen'
 const MAPS = { id: 'maps', name: 'Maps', url: '/maps/', source: 'apps.json', type: 'service', category: 'app', permissions: ['geolocation'] };
 const NOTES = { id: 'wizard-notes', name: 'Notes', url: '/notes/', source: 'apps.json', type: 'view', category: 'app' };
 
-async function shell({ on = false, snapshot = { apps: [MAPS, NOTES] }, cached = null } = {}) {
-  const storage = new Map();
+async function shell({ on = false, snapshot = { apps: [MAPS, NOTES] }, cached = null, frames = [] } = {}) {
+  const storage = new Map(), observers = [];
   if (cached) storage.set('wux.apps.v1', JSON.stringify(cached));
   const root = { attrs: { 'data-tweaks': on ? 'wizard/desktop-chats ' + SWITCH : 'wizard/desktop-chats' }, getAttribute(k) { return this.attrs[k] ?? null; } };
   const window = { WizCore: { norm: s => s.toLowerCase() }, WizConfig: { endpoint: () => '/apps' }, dispatchEvent() {} };
-  const ctx = { window, document: { hidden: false, documentElement: root, addEventListener() {} }, CustomEvent: class {}, URL,
-    location: new URL('https://wizard.test/wizard-os-home/'),
+  let answer = snapshot;
+  const ctx = { window, document: { hidden: false, documentElement: root, addEventListener() {}, querySelectorAll: sel => sel === 'iframe[allow]' ? frames : [] },
+    MutationObserver: class { constructor(fn) { this.fn = fn; observers.push(this); } observe(node, o) { this.node = node; this.o = o; } },
+    CustomEvent: class {}, URL, location: new URL('https://wizard.test/wizard-os-home/'),
     localStorage: { getItem: k => storage.get(k) || null, setItem: (k, v) => storage.set(k, v) },
-    addEventListener() {}, fetch: async () => ({ ok: snapshot !== null, json: async () => snapshot }) };
+    addEventListener() {}, fetch: async () => ({ ok: answer !== null, json: async () => answer }) };
   vm.runInNewContext(read('web/core/apps.js'), ctx);
   if (snapshot !== null) await window.WizCore.appsLoaded();
-  const flip = v => { root.attrs['data-tweaks'] = v ? SWITCH : ''; };
-  return { allow: (o, base = BASE) => window.WizCore.frameAllow(base, o), flip };
+  const flip = v => { root.attrs['data-tweaks'] = v ? SWITCH : ''; for (const o of observers) if (o.node === root && o.o.attributeFilter?.includes('data-tweaks')) o.fn([]); };
+  const relist = async next => { answer = next; await window.WizCore.refreshApps?.(); };
+  return { allow: (o, base = BASE) => window.WizCore.frameAllow(base, o), flip, relist, window };
+}
+
+// A frame as the shell draws it: attributes plus a same-origin page that can be reloaded.
+function frame(attrs, href) {
+  const f = { attrs: { ...attrs }, reloads: 0, getAttribute(k) { return this.attrs[k] ?? null; }, setAttribute(k, v) { this.attrs[k] = v; },
+    get src() { return this.attrs.src || ''; } };
+  f.contentWindow = { location: { href: href || attrs.src || '', reload: () => { f.reloads++; } } };
+  return f;
 }
 
 test('switch off: every app frame, Maps too, says geolocation \'none\' (denied with no prompt, as before)', async () => {
@@ -43,6 +54,31 @@ test('switch on: only the app that declared location (Maps) gets it; any other a
   assert.equal(s.allow({}), BASE + "; geolocation 'none'");
   s.flip(false);
   assert.equal(s.allow({ id: 'maps' }), BASE + "; geolocation 'none'", 'reads the switch at every frame, never a stale copy');
+});
+
+test('turning the switch off takes location back from an open Maps frame (here or from another device): allow + reload', async () => {
+  const maps = frame({ 'data-own-app': 'maps', src: '/maps/', allow: BASE + '; geolocation' });
+  const sheet = frame({ allow: 'microphone; clipboard-read; clipboard-write; fullscreen; geolocation' }, 'https://wizard.test/maps/?q=x');
+  const notes = frame({ 'data-own-app': 'wizard-notes', src: '/notes/', allow: BASE + "; geolocation 'none'" });
+  const s = await shell({ on: true, frames: [maps, sheet, notes] });
+  s.flip(true);
+  assert.equal(maps.reloads + sheet.reloads + notes.reloads, 0, 'nothing changes while it stays allowed');
+  s.flip(false);
+  assert.equal(maps.attrs.allow, BASE + "; geolocation 'none'");
+  assert.equal(sheet.attrs.allow, "microphone; clipboard-read; clipboard-write; fullscreen; geolocation 'none'");
+  assert.deepEqual([maps.reloads, sheet.reloads, notes.reloads], [1, 1, 0]);
+  s.flip(true);
+  assert.equal(maps.attrs.allow, BASE + "; geolocation 'none'", 'never grants on its own; the next frame drawn asks');
+  assert.equal(maps.reloads, 1);
+});
+
+test('an app that stops declaring location loses it on the next box read', async () => {
+  const maps = frame({ 'data-own-app': 'maps', src: '/maps/', allow: BASE + '; geolocation' });
+  const s = await shell({ on: true, frames: [maps] });
+  assert.equal(maps.reloads, 0);
+  await s.relist({ apps: [{ ...MAPS, permissions: [] }, NOTES] });
+  assert.equal(maps.attrs.allow, BASE + "; geolocation 'none'");
+  assert.equal(maps.reloads, 1);
 });
 
 test('a link sheet page gets location only under a declaring app\'s address; an app at the site root never claims all', async () => {
@@ -140,6 +176,7 @@ test('Android: location is asked only through Android\'s prompt, only for this W
   const r = main.slice(main.indexOf('if (code == REQ_LOCATION)'), main.indexOf('if (code == REQ_EVERYWHERE)'));
   assert.match(r, /cb\.invoke\(origin, ok && AppLocation\.mayAsk\(/);
   assert.match(main, /public void appLocationSwitch\(boolean on\) \{\s*if \(MainActivity\.this instanceof AppSessionActivity\) return;/);
+  assert.match(main, /AppLocation\.setOn\(MainActivity\.this, on\);\s*\/\/[^\n]*\n\s*if \(!on\) runOnUiThread\(\(\) -> GeolocationPermissions\.getInstance\(\)\.clearAll\(\)\);/);
 });
 
 test('the switch is listed for the Tracker and is off by default', () => {
