@@ -1264,7 +1264,7 @@
     function state() { if (!s.busy && now() - s.at >= every) read(); return s; }
     // One agent's records ('hermes' = the main agent): a view opens a record's thread only in that agent's own Chats.
     const records = agent => state().records.filter(r => r.agent === (agent || 'hermes'));
-    const fresh = () => { s.at = 0; };
+    const fresh = () => { s.at = 0; al.at = 0; };
     // Open / Send to inbox (wizard-ux issue 1570): POST /wizard/v1/agent-inbox/open|send moves one main-agent thread
     // between the chat list and the background; the box answers with its record. The list is asked again right after.
     async function move(kind, thread, extra = {}) {
@@ -1316,7 +1316,48 @@
       return { answered: Array.isArray(j?.answered) ? j.answered.filter(a => a && RID.test(a.id)).map(a => ({ id: a.id, option: TOK.test(a.option) ? a.option : '' })) : [], card: card(j?.card) };
     }
     async function sweep() { return card((await (await req('/wizard/v1/agent-inbox/sweep', { cache: 'no-store' })).json())?.card); }
-    return { state, records, read, fresh, move, stays, card, answer, yesToAll, sweep };
+    /* Alert rules feedback (wizard-ux issue 1589; box half wizard-agent-service issue 552, docs/agent-inbox.md).
+     * alerts(agent): the alert records still new or surfaced (GET ...?kind=alert&state=new,surfaced), kept fresh like
+     * the Running list; the day's collapsed "More alerts today" alert carries how many it holds (`extra`). later():
+     * the Later and FYI records (kinds fyi and note, new or surfaced) for the sweep card's Later list, read on demand.
+     * feedback(id, action): PATCH <id> {action: not_urgent | should_alert}; the box answers with the record and how many
+     * examples each kind now has. A 404 (the box's switch off, an older box) is an empty list. */
+    const FB = new Set(['not_urgent', 'should_alert']), LATER = new Set(['fyi', 'note']);
+    const alertRec = r => r && typeof r === 'object' && RID.test(r.id) && typeof r.kind === 'string'
+      ? { id: r.id, kind: r.kind, agent: typeof r.agent === 'string' && AID.test(r.agent) ? r.agent : 'hermes', thread: typeof r.thread_id === 'string' && SID.test(r.thread_id) ? r.thread_id : '',
+        title: str(r.title, 120), ask: str(r.ask || r.last_update, 300), severity: str(r.severity, 12), collapsed: r.alert_collapsed === true, extra: cnt(r.alert_extra),
+        feedback: FB.has(r.feedback) ? r.feedback : '', link: href(r.link), state: str(r.state, 12), updatedAt: num(r.updated_at) || num(r.created_at) } : null;
+    const al = { records: [], ok: false, gone: false, at: 0, busy: null };
+    function readAlerts() {
+      if (al.busy) return al.busy;
+      al.at = now();
+      al.busy = (async () => {
+        try {
+          const j = await (await req('/wizard/v1/agent-inbox?kind=alert&state=new,surfaced&limit=50', { cache: 'no-store' })).json();
+          al.records = (Array.isArray(j?.records) ? j.records : []).map(alertRec).filter(r => r && r.kind === 'alert').sort((a, b) => b.updatedAt - a.updatedAt || (a.id < b.id ? -1 : 1));
+          al.ok = true; al.gone = false;
+        } catch (e) { if (e?.status === 404) { al.records = []; al.ok = true; al.gone = true; } }
+        finally { al.busy = null; tell(); }
+        return al;
+      })();
+      return al.busy;
+    }
+    function alertState() { if (!al.busy && now() - al.at >= every) readAlerts(); return al; }
+    const alerts = agent => alertState().records.filter(r => r.agent === (agent || 'hermes'));
+    async function later() {
+      const j = await (await req('/wizard/v1/agent-inbox?state=new,surfaced&limit=200', { cache: 'no-store' })).json();
+      return (Array.isArray(j?.records) ? j.records : []).map(alertRec).filter(r => r && LATER.has(r.kind)).sort((a, b) => b.updatedAt - a.updatedAt || (a.id < b.id ? -1 : 1)).slice(0, 30);
+    }
+    async function feedback(id, action) {
+      if (!RID.test(String(id || '')) || !FB.has(action)) throw Object.assign(new Error('invalid'), { status: 400 });
+      try {
+        const j = await (await req(`/wizard/v1/agent-inbox/${id}`, { method: 'PATCH', ...JSON_POST({ action }) })).json();
+        // The alert left Alerts (it waits for the sweep now, or the collapsed one is cleared): gone on this frame.
+        if (action === 'not_urgent') al.records = al.records.filter(r => r.id !== id);
+        return { record: alertRec(j?.record), examples: { not_urgent: cnt(j?.examples?.not_urgent), should_alert: cnt(j?.examples?.should_alert) } };
+      } finally { al.at = 0; readAlerts(); }
+    }
+    return { state, records, read, fresh, move, stays, card, answer, yesToAll, sweep, alerts, alertState, readAlerts, later, feedback };
   }
   /* ---- end agent inbox ---- */
   const L = {
