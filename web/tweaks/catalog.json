@@ -50,7 +50,8 @@
     "wizard/mac-app-updates",
     "wizard/phone-tester-builds",
     "wizard/share-people-box",
-    "wizard/agent-approvals"
+    "wizard/agent-approvals",
+    "wizard/attach-menu-icons"
   ],
   "defaults": [],
   "promotedDefaults": [],
