@@ -173,3 +173,15 @@ test('the switch is a listed tweak package, on by default for everyone (issue 16
   for (const rule of css.split('}').map(r => r.trim()).filter(r => r && !r.startsWith('/*'))) assert.match(rule.replace(/^\/\*[^]*?\*\/\s*/, ''), /^html\[data-tweaks~="wizard\/draft-marks"\]/, rule);
   assert.doesNotMatch(css.replace(/var\(--wz-[a-z-]+, #[0-9a-f]+\)/g, ''), /#[0-9a-f]{3,6}\b/i, 'colours only through --wz-* tokens (with a dark fallback)');
 });
+
+test('on by default, main and routed rows alike: a thread of the main agent, host, container or restricted is marked by the same draft key its box saves under (direct:<id>)', async () => {
+  const d = device(); await d.L.refresh();
+  for (const agent of [undefined, 'host', 'container', 'restricted']) {
+    const s = { id: 'routed_' + (agent || 'main'), ...(agent ? { agent, owner: agent } : {}) };
+    assert.equal(d.c.rowDraft(s), false, (agent || 'main') + ': no draft, no mark');
+    d.drafts.set('direct:' + s.id, 'words', []);
+    assert.equal(d.c.rowDraft(s), true, (agent || 'main') + ': its draft marks it');
+    d.drafts.clear('direct:' + s.id);
+    assert.equal(d.c.rowDraft(s), false, (agent || 'main') + ': sent, gone');
+  }
+});
