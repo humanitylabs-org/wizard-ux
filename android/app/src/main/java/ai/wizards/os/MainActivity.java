@@ -434,6 +434,8 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
             @Override
             public void doUpdateVisitedHistory(WebView view, String url, boolean isReload) {
                 // A commit (also a same-document hop). Never fires for a load that was abandoned or still hangs.
+                // Switch wizard/pin-reach-answer: the Wizard answered; Connecting stops, the give-up mark waits for a paint.
+                if (ReachAnswer.on(MainActivity.this)) { answered(url); return; }
                 if (isWeb(url) && !mainFailed && sameHost(url, wantUrl) && reach != null && reach.isShowing() && !reach.isOffline()) landed();
             }
 
@@ -822,6 +824,16 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         main.removeCallbacks(reachRetry);
         if (reach != null && reach.isShowing()) android.util.Log.i("WizardOSReach", "reached " + pageUrl);
         if (reach != null) reach.hide();
+    }
+
+    /** Switch wizard/pin-reach-answer (wizard-ux issue 1607, off by default): the Wizard answered the load being
+     *  watched (its main frame committed: doUpdateVisitedHistory; never onPageStarted, which can fire before any
+     *  response), so "Connecting…" has nothing to wait for. Only the connecting mark stops: a Wizard that answers but
+     *  never paints still ends on the offline screen at GIVE_UP_MS, and only a paint (landed) clears that. */
+    void answered(String url) {
+        if (!ReachPolicy.answerDisarms(ReachAnswer.on(this), isWeb(url), mainFailed, sameHost(url, wantUrl))) return;
+        main.removeCallbacks(reachMark);
+        if (reach != null && ReachPolicy.answerHides(reach.isShowing(), reach.isOffline())) reach.hide();
     }
 
     private void showOffline(String why) {
@@ -1650,6 +1662,13 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         public void appWindowsSwitch(boolean on) {
             if (MainActivity.this instanceof AppSessionActivity) return;
             AppWindows.setOn(MainActivity.this, on);
+        }
+        /* ---- Connecting only while the Wizard hasn't answered (wizard-ux issue 1607, switch wizard/pin-reach-answer,
+         * off by default): the main page copies the switch here (ReachAnswer). ---- */
+        @JavascriptInterface
+        public void reachAnswerSwitch(boolean on) {
+            if (MainActivity.this instanceof AppSessionActivity) return;
+            ReachAnswer.setOn(MainActivity.this, on);
         }
         @JavascriptInterface
         public boolean openAppWindow(String appId, String path, String name) {

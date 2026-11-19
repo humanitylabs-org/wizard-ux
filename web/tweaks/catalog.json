@@ -40,7 +40,8 @@
     "wizard/pin-slim-doc",
     "wizard/private-first-setup",
     "wizard/chat-app-switches",
-    "wizard/agent-inbox"
+    "wizard/agent-inbox",
+    "wizard/pin-reach-answer"
   ],
   "defaults": [
     "wizard/unified-inbox",
