@@ -1228,6 +1228,56 @@
     return { state, read, more, today, fresh };
   }
   /* ---- end channel daily ---- */
+  /* ---- agent inbox (wizard-ux issue 1569) ----
+   * The box's agent inbox (wizard-agent-service issue 549, docs/agent-inbox.md): one record per background task.
+   * state().records are the tasks still working (state running) or gone quiet for 6 h (stale), newest news first, as
+   * GET /wizard/v1/agent-inbox?state=running,stale answers; reading state() keeps it fresh every `every`. A 404 (the box's
+   * switch is off, or an older box) is an empty list, asked again after `every`. Chats reads it only while its
+   * wizard/agent-inbox switch is on (the Running view). */
+  function agentInbox({ req, emit, now = () => Date.now(), every = 30e3 } = {}) {
+    const SID = /^[A-Za-z0-9_.:-]{1,200}$/, RID = /^inbox_[a-f0-9]{24}$/, AID = /^[a-z][a-z0-9-]{0,40}$/;
+    const str = (v, n) => typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, n) : '';
+    const num = v => { const n = Number(v); return Number.isFinite(n) && n > 0 ? n : 0; };
+    const rec = r => r && typeof r === 'object' && RID.test(r.id) && typeof r.thread_id === 'string' && SID.test(r.thread_id) && (r.state === 'running' || r.state === 'stale')
+      ? { id: r.id, agent: typeof r.agent === 'string' && AID.test(r.agent) ? r.agent : 'hermes', thread: r.thread_id, title: str(r.title, 120), update: str(r.last_update, 200), state: r.state, createdAt: num(r.created_at), updatedAt: num(r.updated_at) || num(r.created_at) } : null;
+    const s = { records: [], stay: new Set(), ok: false, gone: false, at: 0, busy: null };
+    const tell = () => { try { emit(); } catch (_) {} };
+    function read() {
+      if (s.busy) return s.busy;
+      s.at = now();
+      s.busy = (async () => {
+        try {
+          const j = await (await req('/wizard/v1/agent-inbox?state=running,stale&limit=200', { cache: 'no-store' })).json();
+          s.records = (Array.isArray(j?.records) ? j.records : []).map(rec).filter(Boolean).sort((a, b) => b.updatedAt - a.updatedAt || (a.id < b.id ? -1 : 1));
+          // The main agent's Daily and Alerts threads (issue 1569 review): Send to inbox is never offered for them.
+          s.stay = new Set((Array.isArray(j?.stay) ? j.stay : []).filter(id => typeof id === 'string' && SID.test(id)).slice(0, 1000));
+          s.ok = true; s.gone = false;
+        } catch (e) { if (e?.status === 404) { s.records = []; s.stay = new Set(); s.ok = true; s.gone = true; } }
+        finally { s.busy = null; tell(); }
+        return s;
+      })();
+      return s.busy;
+    }
+    function state() { if (!s.busy && now() - s.at >= every) read(); return s; }
+    // One agent's records ('hermes' = the main agent): a view opens a record's thread only in that agent's own Chats.
+    const records = agent => state().records.filter(r => r.agent === (agent || 'hermes'));
+    const fresh = () => { s.at = 0; };
+    // Open / Send to inbox (wizard-ux issue 1570): POST /wizard/v1/agent-inbox/open|send moves one main-agent thread
+    // between the chat list and the background; the box answers with its record. The list is asked again right after.
+    async function move(kind, thread, extra = {}) {
+      if ((kind !== 'open' && kind !== 'send') || !SID.test(String(thread || ''))) throw Object.assign(new Error('invalid'), { status: 400 });
+      const body = { thread_id: thread };
+      const title = str(extra.title, 120), utterance = str(extra.utterance, 600);
+      if (title) body.title = title;
+      if (utterance) body.utterance = utterance;
+      try { return await (await req(`/wizard/v1/agent-inbox/${kind}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })).json(); }
+      finally { fresh(); read(); }
+    }
+    // True for a main-agent Daily or Alerts thread, which always stays in Chats.
+    const stays = id => state().stay.has(id);
+    return { state, records, read, fresh, move, stays };
+  }
+  /* ---- end agent inbox ---- */
   const L = {
     windows: {},
     ok: false, error: '', sessions: [], seen: readLocal(), deferred: {}, at: 0, listeners: new Set(), loading: null,
@@ -1729,6 +1779,28 @@
       applyLocal(i >= 0 ? list[i] : DETAIL.get(id) || s);
       return s;
     },
+    /* Open / Send to inbox (wizard-ux issue 1570, switch wizard/agent-inbox): the row moves on the tap frame (Open lists
+     * it, Send drops it), then the box is told; a refusal puts the row back and throws. Main agent threads only. */
+    async inboxMove(kind, id, opts = {}) {
+      if (!this.agentInbox || (kind !== 'open' && kind !== 'send')) throw new Error('Agent inbox unavailable');
+      // The main agent's own row only: a routed thread may share the id (agentSessions), and is never the one moved.
+      const detail = DETAIL.get(id), fromDetail = !!detail && !otherAgent(detail.agent || '');
+      let s = this.sessions.find(x => x.id === id) || (fromDetail ? detail : null), added = false;
+      if (s && otherAgent(this.ownerOf(s))) throw Object.assign(new Error('Only the main agent’s threads move'), { status: 409 });
+      const was = s ? !!s.hidden : null;
+      if (kind === 'open') {
+        if (!s && opts.title) s = normalize({ id, title: opts.title, updated_at: opts.at ? new Date(opts.at).toISOString() : new Date().toISOString(), hidden: false });
+        if (s) { s.hidden = false; if (!this.sessions.includes(s)) { this.sessions.unshift(s); if (s === detail) DETAIL.delete(id); added = true; } }
+      } else if (s) s.hidden = true;
+      this.emit();
+      try { return await this.agentInbox.move(kind, id, opts); }
+      catch (e) {
+        // Put it back where it was: the hidden flag, and a thread only read by id back in the detail cache.
+        if (s) { s.hidden = was ?? kind === 'open'; if (added) { this.sessions = this.sessions.filter(x => x !== s); if (s === detail) DETAIL.set(id, s); } }
+        this.emit(); throw e;
+      }
+      finally { setTimeout(() => this.refresh(), 800); }
+    },
     /* ---- thread actions ---- */
     busy(id) { const o = OVER.get(id); return !!o && !o.settled; },
     async _act(id, patch, write, capMs = 60000) {
@@ -2196,6 +2268,7 @@
     } });
   L.chanReads = channelReads({ req, emit: () => L.emit() });
   L.chanDaily = channelDaily({ req, emit: () => L.emit() });
+  L.agentInbox = agentInbox({ req, emit: () => L.emit() });
   /* One Channels switch (wizard-ux issue 1358): the Agent Service reads the same switch from the synced Look file, so
    * right after it turns on ask the box again a few times (the Look file write and the service's 3 s read take a moment)
    * instead of waiting out the store's 5-minute off interval. */
