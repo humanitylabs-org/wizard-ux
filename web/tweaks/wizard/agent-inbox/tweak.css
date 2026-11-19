@@ -32,6 +32,11 @@ html[data-tweaks~="wizard/agent-inbox"] .ch-inbox-h { flex: none; display: inlin
 html[data-tweaks~="wizard/agent-inbox"] .ch-inbox-note { font-size: .75rem; color: var(--wz-text-secondary, #c9c1d6); white-space: nowrap; }
 @media (max-width: 420px) { html[data-tweaks~="wizard/agent-inbox"] .ch-inbox-note { display: none; } }
 
+/* Orb dump (wizard-ux issue 1588): the "Got it" toast after the box took a take as a background task. An opaque panel in
+ * the skin's own colours, so it reads on every wallpaper; follows a skin change at once (plain custom properties). */
+html[data-tweaks~="wizard/agent-inbox"] .toast.got-it { background: var(--wz-panel, #17131f); border: 1px solid var(--wz-border, rgba(255, 255, 255, .14)); color: var(--wz-text, #f1edf7); }
+html[data-tweaks~="wizard/agent-inbox"] .toast.got-it b { font-weight: 700; color: var(--wz-text, #f1edf7); }
+html[data-tweaks~="wizard/agent-inbox"] .toast.got-it .ti { color: var(--wz-accent, #b99bff); }
 /* The signal sweep card in today's Daily thread (wizard-ux issue 1586): the run-control card's layout and buttons
  * (core/chats.css .appr) on an opaque skin panel, so every skin keeps its text readable over its background. */
 html[data-tweaks~="wizard/agent-inbox"] .appr.ch-sweep { background: var(--wz-panel, #17131f); border: 1px solid var(--wz-border, rgba(255, 255, 255, .14)); color: var(--wz-text, #f1edf7); gap: 6px; }

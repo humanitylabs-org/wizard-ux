@@ -2163,7 +2163,7 @@
   }
   let toastT = 0;
   function toast(icon, text, ms = 2200) {
-    const t = $('#toast'); delete t.dataset.opening; t.innerHTML = `<span class="ti">${window.WizBrand.icon(icon)}</span><span>${text}</span>`; t.classList.add('show');
+    const t = $('#toast'); delete t.dataset.opening; t.classList.remove('got-it'); t.innerHTML = `<span class="ti">${window.WizBrand.icon(icon)}</span><span>${text}</span>`; t.classList.add('show');
     clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), ms);
   }
 
@@ -3116,6 +3116,7 @@
       sessionId: sid && sid !== '__new__' ? sid : '',
       steerRunId: snap.meetingEventId ? '' : rt?.steerRunId ?? (CHATS.isWorking(LIVE.session(sid)) ? LIVE.session(sid)?.runId || '' : ''), audio, typed: snap.seal?.text || '', ...(snap.seal?.reply ? { reply: snap.seal.reply } : {}),
       meetingEventId:snap.meetingEventId,sealKey: snap.seal?.key, captureId: V.custodyCapture, nativeId: nid, intent: kind, agent: sv?.agent || snap.route?.agent || '',
+      ...(typeof dumpTake === 'function' && dumpTake(snap, rt, aimAt, kind) ? { dump: true } : {}),
       files: [...takeFiles(), ...(snap.seal?.files || [])].filter(f => f?.id),
       instructions: viewContext(sv?.id, 'voice', snap), source: 'orb', wid: rt?.wid || sv?.id || '' });
     V.custodyCapture = null;
@@ -3374,10 +3375,14 @@
       if (loc) { snap.quickRan = true; showRouted('command', `Quick command · on-device${sttNote}`); return finishCmd(loc, text, qo); }
       if (window.WosTour?.isHelp(text) && snap.view?.kind !== 'chat thread') { snap.quickRan = true; setVoice('idle'); txHide(0); return window.WosTour.openHelp(); }
       const routeUrl = snap.view?.kind !== 'chat thread' && window.WizConfig.endpoint('route');
+      // A take marked as a possible background task (wizard/agent-inbox, issue 1588) asks for it in this one call.
+      const dumpAsk = OUTBOX.get?.(snap.custodyId)?.dump === true;
       if (routeUrl) try {
         setVoice('think'); if (isPill()) tx.dataset.detail = 'Quick command? · routing'; else $('#txRouteText').textContent = 'Quick command? · routing';
-        const r = await fetch(routeUrl, { method: 'POST', signal: AbortSignal.timeout ? AbortSignal.timeout(3000) : undefined, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, force: '', view: null, apps: APPS.filter(a => a.kind !== 'view').map(a => a.name) }) });
+        const r = await fetch(routeUrl, { method: 'POST', signal: AbortSignal.timeout ? AbortSignal.timeout(3000) : undefined, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, force: '', view: null, apps: APPS.filter(a => a.kind !== 'view').map(a => a.name), ...(dumpAsk ? { accept_dump: true } : {}) }) });
         const j = await r.json(); const c = r.ok && j.cmd || {};
+        if (dumpAsk && r.ok) snap.dumpAsked = true; // answered: the outbox never asks again
+        if (dumpAsk && c.route === 'dump' && c.record_id) { setVoice('idle'); txHide(0); gotIt(c.title); return { outcome: 'local' }; }
         if (c.route === 'command' && !c.then_agent) { snap.quickRan = true; showRouted('command', `Quick command · ${j.ms} ms${sttNote}`); return finishCmd(c, text, qo); }
       } catch (_) {}
       kind = 'auto';
@@ -3546,10 +3551,28 @@
       return sendChat(opts.snap.newChatWid, text, 'new voice chat', opts.audio || opts.snap.audio || null, { custodyId: opts.snap.custodyId, sid: '__new__', route: opts.snap.route, seal: false, files: opts.files || [], instructions: 'Explicit new voice chat. No foreground app or private thread context shared.' });
     }
     // Saved before it is sent: a dropped connection can delay this, never lose it.
-    const item = await OUTBOX.enqueue({ sealKey: opts.snap?.seal?.key, custodyId: opts.snap?.custodyId, kind: 'new', text, typed: opts.typed || '', ...(opts.snap?.route || {}), instructions: ctx, audio: opts.audio || opts.snap?.audio || null, source: opts.source || 'orb', files: opts.files || [], ...(opts.reply ? { reply: opts.reply } : {}) });
+    const item = await OUTBOX.enqueue({ sealKey: opts.snap?.seal?.key, custodyId: opts.snap?.custodyId, kind: 'new', text, typed: opts.typed || '', ...(opts.snap?.route || {}), instructions: ctx, audio: opts.audio || opts.snap?.audio || null, source: opts.source || 'orb', files: opts.files || [], ...(opts.reply ? { reply: opts.reply } : {}), ...(opts.snap?.dumpAsked ? { dump: false } : {}) });
     renderMoons(); refreshHome(); renderDots();
     return item;
   }
+  /* Orb dump (switch wizard/agent-inbox, off by default; wizard-ux issue 1588): a plain new take to the main agent, said
+   * away from any thread (home, an app, the Chats list), is offered to the router as a possible background task (the
+   * outbox asks with accept_dump). A take aimed anywhere (a thread, a review, a capture view, an agent's or a channel's
+   * chats, a desk, the general button, a meeting) or carrying composer words, files or a reply is never one. */
+  function dumpTake(snap, rt, aimAt, kind) {
+    try { if (!(document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/agent-inbox')) return false; } catch (_) { return false; }
+    const v = snap?.view;
+    return !rt && aimAt == null && kind !== 'command' && !snap.general && !snap.conversation && !snap.meetingEventId && !V.meetingLoan
+      && !snap.seal && !snap.newChatWid && !(snap.route?.agent && window.WosAgents?.isOther?.(snap.route.agent)) && !V.files?.length
+      && !(v && (v.review || v.mode === 'capture' || v.agent || v.channel || v.kind === 'chat thread' || (v.thread && v.thread !== '__new__')));
+  }
+  // The box took it as a background task: "Got it" with its title, no navigation, nothing new in Chats.
+  function gotIt(title) {
+    title = String(title || '').slice(0, 80);
+    toast('✦', `<b>Got it</b>${title ? ' · ' + esc(title) : ''}`, 2600);
+    $('#toast').classList.add('got-it');
+  }
+  OUTBOX?.onDump?.(it => gotIt(it.dumped?.title));
   OUTBOX?.onSent((it, res) => {
     if (it.kind === 'new' && LIVE && !LIVE.session(it.sessionId)) {
       LIVE.sessions.unshift({ id: it.sessionId, runtime: 'direct', title: (it.text || 'Voice note').slice(0, 60), status: 'running', runId: res.runId, updatedAt: new Date().toISOString(), lastUserAt: new Date().toISOString(), preview: it.text, source: 'wizard-mobile' });
