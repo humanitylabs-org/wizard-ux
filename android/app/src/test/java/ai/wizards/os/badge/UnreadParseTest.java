@@ -20,7 +20,16 @@ public class UnreadParseTest {
         assertEquals(BadgeText.MAX_STORED, UnreadParse.total(new JSONObject("{\"unread_total\":99999999999}")));
     }
     @Test public void switchOffClearsButOtherFailuresKeepTheBadge() {
-        assertEquals("404: Messenger's unread-count switch is off", 0, UnreadParse.forStatus(404));
-        for (int status : new int[]{0, 401, 403, 423, 500, 502, 503}) assertEquals(status + " is unknown", -1, UnreadParse.forStatus(status));
+        String off = "{\"ok\":false,\"error\":{\"code\":\"not_found\",\"message\":\"No such route\"}}";
+        assertEquals("Messenger's own 404: its unread-count switch is off", 0, UnreadParse.forStatus(404, off));
+        assertEquals("top-level code shape", 0, UnreadParse.forStatus(404, "{\"ok\":false,\"code\":\"not_found\"}"));
+        assertEquals("a proxy's plain-text 404 (wrong path) is unknown, not zero", -1, UnreadParse.forStatus(404, "404 page not found"));
+        assertEquals("empty 404 body is unknown", -1, UnreadParse.forStatus(404, ""));
+        assertEquals("null body is unknown", -1, UnreadParse.forStatus(404, null));
+        for (int status : new int[]{0, 401, 403, 423, 500, 502, 503}) assertEquals(status + " is unknown", -1, UnreadParse.forStatus(status, off));
+    }
+    @Test public void routeIsMessengersViewPathNotTheRetiredAppsDirectory() throws Exception {
+        java.lang.reflect.Field f = Class.forName("ai.wizards.os.badge.UnreadSource").getDeclaredField("PATH"); f.setAccessible(true);
+        assertEquals("/messenger/api/unread", f.get(null));
     }
 }
