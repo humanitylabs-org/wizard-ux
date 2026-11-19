@@ -2163,7 +2163,7 @@
   }
   let toastT = 0;
   function toast(icon, text, ms = 2200) {
-    const t = $('#toast'); delete t.dataset.opening; t.innerHTML = `<span class="ti">${window.WizBrand.icon(icon)}</span><span>${text}</span>`; t.classList.add('show');
+    const t = $('#toast'); delete t.dataset.opening; t.classList.remove('got-it'); t.innerHTML = `<span class="ti">${window.WizBrand.icon(icon)}</span><span>${text}</span>`; t.classList.add('show');
     clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), ms);
   }
 
@@ -3116,6 +3116,7 @@
       sessionId: sid && sid !== '__new__' ? sid : '',
       steerRunId: snap.meetingEventId ? '' : rt?.steerRunId ?? (CHATS.isWorking(LIVE.session(sid)) ? LIVE.session(sid)?.runId || '' : ''), audio, typed: snap.seal?.text || '', ...(snap.seal?.reply ? { reply: snap.seal.reply } : {}),
       meetingEventId:snap.meetingEventId,sealKey: snap.seal?.key, captureId: V.custodyCapture, nativeId: nid, intent: kind, agent: sv?.agent || snap.route?.agent || '',
+      ...(typeof dumpTake === 'function' && dumpTake(snap, rt, aimAt, kind) ? { dump: true } : {}),
       files: [...takeFiles(), ...(snap.seal?.files || [])].filter(f => f?.id),
       instructions: viewContext(sv?.id, 'voice', snap), source: 'orb', wid: rt?.wid || sv?.id || '' });
     V.custodyCapture = null;
@@ -3550,6 +3551,23 @@
     renderMoons(); refreshHome(); renderDots();
     return item;
   }
+  /* Orb dump (switch wizard/agent-inbox, off by default; wizard-ux issue 1588): a plain new take to the main agent, said
+   * away from any thread (home, an app, the Chats list), is offered to the router as a possible background task (the
+   * outbox asks with accept_dump). A take aimed anywhere (a thread, a review, a capture view, an agent's or a channel's
+   * chats, a desk, the general button, a meeting) or carrying composer words, files or a reply is never one. */
+  function dumpTake(snap, rt, aimAt, kind) {
+    try { if (!(document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/agent-inbox')) return false; } catch (_) { return false; }
+    const v = snap?.view;
+    return !rt && aimAt == null && kind !== 'command' && !snap.general && !snap.conversation && !snap.meetingEventId && !V.meetingLoan
+      && !snap.seal && !snap.newChatWid && !(snap.route?.agent && window.WosAgents?.isOther?.(snap.route.agent)) && !V.files?.length
+      && !(v && (v.review || v.mode === 'capture' || v.agent || v.channel || v.kind === 'chat thread' || (v.thread && v.thread !== '__new__')));
+  }
+  // The box took it as a background task: "Got it" with its title, no navigation, nothing new in Chats.
+  OUTBOX?.onDump?.(it => {
+    const title = it.dumped?.title || '';
+    toast('✦', `<b>Got it</b>${title ? ' · ' + esc(title) : ''}`, 2600);
+    $('#toast').classList.add('got-it');
+  });
   OUTBOX?.onSent((it, res) => {
     if (it.kind === 'new' && LIVE && !LIVE.session(it.sessionId)) {
       LIVE.sessions.unshift({ id: it.sessionId, runtime: 'direct', title: (it.text || 'Voice note').slice(0, 60), status: 'running', runId: res.runId, updatedAt: new Date().toISOString(), lastUserAt: new Date().toISOString(), preview: it.text, source: 'wizard-mobile' });

@@ -33,7 +33,7 @@
   const STEER_WAIT_LABEL = 'Queued · sends when the current reply can take it';
   const STEER_STALLED_LABEL = 'Waiting · your agent hasn’t started the current reply yet. This sends when it does.';
   const steerRetryDelay = waits => Math.min(STEER_RETRY_MAX_MS, STEER_RETRY_MS * 2 ** Math.max(0, Math.min(10, waits - 1)));
-  const J = { 'Content-Type': 'application/json' }, listeners = new Set(), sentHooks = new Set(), newHooks = new Set();
+  const J = { 'Content-Type': 'application/json' }, listeners = new Set(), sentHooks = new Set(), newHooks = new Set(), dumpHooks = new Set();
   const items = new Map(), writes = new Map(), encodings = new WeakMap();
   const conversationWork = new Map(), transcriptWork = new Map(), removeErrors = new Map();
   // One authority check for explicit retry and automatic delivery. Terminal/ambiguous
@@ -460,6 +460,43 @@
     await put(it); schedule();
     settleCancel(it, { outcome: 'cancelled', item: it });
   }
+  /* Orb dump (switch wizard/agent-inbox, off by default; wizard-ux issue 1588, the shell half of wizard-agent-service
+   * issue 551). A plain orb take to the main agent that the shell marked `dump: true` asks the router once, with
+   * accept_dump, before any thread exists. The box answers {cmd: {route: 'dump', title, record_id, thread_id}} after it
+   * has written the inbox record and started the hidden worker itself: the item is done here (no thread, no run POST,
+   * no row in the list) and onDump says "Got it". Any other answer, an error or a slow router: the take goes on as
+   * today's visible new thread, so nothing is lost. A replay after a reload asks again; the box keeps one task for the
+   * same words the same day. Switch off: no item is marked and nothing here runs. */
+  const inboxOn = () => { try { return (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/agent-inbox'); } catch (_) { return false; } };
+  const DUMP_ROUTE_MS = 6000;
+  async function dumped(it) {
+    if (it.dump !== true) return false;
+    const plain = it.kind === 'new' && !(it.agent && window.WosAgents?.isOther?.(it.agent)) && !it.steerRunId && !it.reply && !it.retryRunId && !String(it.typed || '').trim()
+      && !(it.files || []).some(f => f?.id && f.id !== it.audioFile?.id);
+    let url = '';
+    try { url = plain && it.text && inboxOn() ? window.WizConfig?.endpoint?.('route') || '' : ''; } catch (_) {}
+    let cmd = null;
+    if (url) try {
+      const r = await bounded(signal => fetch(url, { method: 'POST', cache: 'no-store', credentials: 'same-origin', signal, headers: J,
+        body: JSON.stringify({ text: it.text, force: '', view: null, apps: [], accept_dump: true }) }), DUMP_ROUTE_MS);
+      const j = r.ok ? await r.json() : null;
+      cmd = j?.cmd?.route === 'dump' && j.cmd.record_id ? j.cmd : null;
+    } catch (_) { /* router away or slow: a visible thread, as before */ }
+    it.dump = false;
+    if (!cmd) {
+      await put(it);
+      // Not a dump: it is an ordinary new thread from here, announced now (enqueue held the announcement back).
+      if (it.kind === 'new' && it.sessionId) for (const fn of newHooks) try { fn(it, {}); } catch (e) { console.error(e); }
+      return false;
+    }
+    it.dumped = { title: String(cmd.title || it.title || '').slice(0, 80), record_id: String(cmd.record_id), thread_id: String(cmd.thread_id || ''), deadline: typeof cmd.deadline === 'string' ? cmd.deadline : null };
+    Object.assign(it, { state: 'sent', sentAt: now(), threadHidden: true, error: '' });
+    delete it.audio; delete it.pendingBlobs;
+    await put(it);
+    admitting.delete(it.id);
+    for (const fn of dumpHooks) try { fn(it); } catch (e) { console.error(e); }
+    return true;
+  }
   async function deliver(it) {
     halt(it);
     if (it.kind === 'conversation') throw new HttpError(409, 'App voice input messages use explicit conversation delivery only');
@@ -480,6 +517,7 @@
       it.text = [typed, text].filter(Boolean).join('\n\n').slice(0, 64000); await put(it);
     }
     halt(it);
+    if (await dumped(it)) return; // the orb's new task went to the agent inbox: no visible thread (issue 1588)
     await keepAudio(it);
     await settlePending(it); // attachments sent while still uploading: their receipts, before the run is admitted
     halt(it);
@@ -681,6 +719,7 @@
       retryRunId: typeof o.retryRunId === 'string' ? o.retryRunId : '',
       audio: o.audio || null, audioType: o.audio?.type || '', model: o.model || '', provider: o.provider || '',
       pendingBlobs: keepPending(o.files), sealKey: o.sealKey || '', nativeId: o.nativeId || '', agent: o.agent || '', wid: o.wid || '', how: o.how || '', intent: o.intent || 'message', deliveryRequested: false, source: o.source || 'chat', title: String(o.text || o.typed || '').slice(0, 60), durable: false,
+      ...(o.dump === true ? { dump: true } : {}),
       // A Notifications Reply: the item, framed after his words only in the message that is delivered (deliver()).
       ...(replyOf(o) ? { reply: replyOf(o) } : {}) };
   }
@@ -859,7 +898,7 @@
       it.deliveryRequested = true;
       await put(it); // own the entire submission even if route discovery fails
       // A new thread is announced once it is saved (Chats files it into the Space in front).
-      if (it.kind === 'new' && it.sessionId) for (const fn of newHooks) try { fn(it, o); } catch (e) { console.error(e); }
+      if (it.kind === 'new' && it.sessionId && it.dump !== true) for (const fn of newHooks) try { fn(it, o); } catch (e) { console.error(e); }
       try {
         if (routeError) throw routeError;
         if (!M) throw new Error('Model selector unavailable · reload Wizard before sending');
@@ -975,6 +1014,8 @@
     onSent(fn) { sentHooks.add(fn); return () => sentHooks.delete(fn); },
     // fn(item, request) after a new-thread message is saved; request.space === false: file it nowhere.
     onNew(fn) { newHooks.add(fn); return () => newHooks.delete(fn); },
+    // fn(item) once the box took an orb take as a background task (item.dumped: title, record_id, thread_id).
+    onDump(fn) { dumpHooks.add(fn); return () => dumpHooks.delete(fn); },
     notice, paintNotice, pump, load, bounded, TRANSCRIBE_TIMEOUT_MS, _items: items, AUTO_TRIES, BACKOFF,
   };
   addEventListener('beforeunload', e => { if ([...items.values()].some(it => it.state !== 'sent' && !it.durable)) { e.preventDefault(); e.returnValue = ''; } });

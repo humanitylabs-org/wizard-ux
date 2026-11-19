@@ -823,6 +823,9 @@
     const latest = new Map();
     for (const it of OB._items.values()) {
       if ((it.kind !== 'reply' && it.kind !== 'new') || !it.sessionId || it.compact || it.withdrawn) continue;
+      // An orb take still asking the router whether it is a background task, or one that was (wizard/agent-inbox,
+      // issue 1588): no Working row. A take the router keeps visible drops the mark and lists as usual.
+      if (it.dump === true || it.dumped) continue;
       const tap = TAPS.get(it.sessionId); if (tap && it.createdAt >= tap.at) TAPS.delete(it.sessionId);
       // Custody without delivery intent must neither own Sending nor hide an older real send.
       if (OB.quarantined?.(it.id) || ['failed', 'empty', 'held', 'unconfirmed'].includes(it.state) || (it.state === 'sent' && it.steered)) continue;
