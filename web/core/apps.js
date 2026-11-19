@@ -93,6 +93,9 @@
     voice_routes_confirmed: trusted === true,
     voice_names: Array.isArray(a.voice_names) ? a.voice_names.filter(n => typeof n === 'string') : [],
     provides: trusted && Array.isArray(a.provides) ? a.provides.filter(n => typeof n === 'string') : [],
+    // Device powers the app declared it needs (wizard.md permissions; today only geolocation, wizard-ux issue 1629). Like
+    // provides, only the box's own list counts: a device cache never grants one.
+    permissions: trusted === true && Array.isArray(a.permissions) ? a.permissions.filter(n => n === 'geolocation') : [],
     // Declared kind (wizard.md type) and store shelf, as the Agent Service projects them from apps.json. Not sensitive,
     // so backend-only tiles carry them too; app-kinds.js sorts Connectors by type === 'external'.
     ...(APP_TYPES.has(a.type) ? { type: a.type } : {}),
@@ -105,6 +108,33 @@
   let REMOTE = (() => { try { return (JSON.parse(localStorage.getItem(REMOTE_KEY) || '[]') || []).filter(a => !SHELL_HIDDEN.has(a?.id)).map(toTile); } catch (e) { return []; } })();
   // The installed app's own home-screen declaration (or null), for shell code that has no registry handle.
   window.WizCore.appHomeScreen = id => REMOTE.find(a => a.id === id)?.homeScreen || null;
+  /* Location only for the apps that ask for it (wizard-ux issue 1629, switch wizard/app-location, off by default). The
+   * shell's header allows location for Wizard's own origin, so every frame says who may use it through its `allow`:
+   * an app frame gets `geolocation` only while the switch is on AND the box's app list says that app declared
+   * `permissions: [geolocation]` in its wizard.md (today only Maps); every other frame gets `geolocation 'none'`, so
+   * its navigator.geolocation is denied with no prompt, exactly as before. The browser (or the Android/Mac app) still
+   * asks the owner before the first position. Pass the app's id, or for a link sheet the page URL (longest app address). */
+  const LOCATION_SWITCH = 'wizard/app-location';
+  window.WizCore.frameAllow = (base, { id = '', url = '' } = {}) => {
+    let on = false;
+    try { on = String(document.documentElement.getAttribute('data-tweaks') || '').split(' ').includes(LOCATION_SWITCH); } catch (_) {}
+    let app = null;
+    if (on && id) app = REMOTE.find(a => a.id === String(id)) || null;
+    else if (on && url) {
+      try {
+        const u = new URL(url, location.href);
+        let best = 0;
+        for (const a of REMOTE) {
+          const t = a.url ? new URL(a.url, location.href) : null, dir = t ? t.pathname.replace(/[^/]*$/, '') : '';
+          // A page lies under an app's address; an app at the site root ('/') never claims every page.
+          if (!t || t.origin !== u.origin || dir.length < 2 || !u.pathname.startsWith(dir) || dir.length <= best) continue;
+          app = a; best = dir.length;
+        }
+      } catch (_) { app = null; }
+    }
+    const yes = !!app && Array.isArray(app.permissions) && app.permissions.includes('geolocation');
+    return `${base ? base + '; ' : ''}geolocation${yes ? '' : " 'none'"}`;
+  };
   const BACK_KEY = 'wux.apps.backend.v1';
   window.WizCore.appMetadata = id => [...REMOTE, ...BACK].find(a => a.id === id)?.sigil;
   let BACK = (() => { try { return (JSON.parse(localStorage.getItem(BACK_KEY) || '[]') || []).filter(a => !SHELL_HIDDEN.has(a?.id)).map(a => toTile(a)); } catch (e) { return []; } })();
