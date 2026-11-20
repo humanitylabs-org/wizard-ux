@@ -75,6 +75,23 @@ test('the switch is read at call time; a live session keeps the port after it go
   assert.equal(f.c.wizardAudioPort, undefined, 'gone once the session ended');
 });
 
+test('a load still on its way keeps the port reachable after the switch goes off, until it is answered', () => {
+  const f = phone({ on: true });
+  f.c.wizardAudioPort.postMessage(JSON.stringify({ id: 'audio-1', v: 1, appId: 'wizard-podcasts', method: 'load' }));
+  f.root.dataset.tweaks = 'wizard/thread-tracker';
+  assert.ok(f.c.wizardAudioPort, 'the off-edge release can still reach the player');
+  f.c.__wizardAudioReply({ id: 'audio-1', ok: true, result: {}, live: false });
+  assert.equal(f.c.wizardAudioPort, undefined);
+});
+
+test('Change Wizard: the player drops the old Wizard\'s queue and unsent feedback before serving the new one', () => {
+  assert.match(player, /player\.bind\(origin: origin\)/);
+  const bind = player.split('func bind(origin new: String)')[1].split('\n    }\n')[0];
+  assert.match(bind, /tracks\.removeAll\(\)/);
+  assert.match(bind, /reports\.removeAll \{ \$0\["origin"\] as\? String != new \}/);
+  assert.match(player, /first\["origin"\] as\? String == origin/);
+});
+
 test('a live-only push (no id) is not delivered as an answer, and pages cannot replace the port', () => {
   const f = phone({ on: true });
   let got = 0; f.c.wizardAudioPort.onmessage = () => { got++; };
