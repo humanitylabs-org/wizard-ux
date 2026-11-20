@@ -3,6 +3,9 @@
 # publish script need a code owner's review once "require review from code owners" is on.
 # James only for now; @mistermizel joins once Miguel's agent has its own GitHub account.
 # android/** is deliberately not covered: its Gradle code runs only in the unsigned build job.
+# Except android/public-release.json (wizard-os#720): raising it makes a tester build the public phone release every
+# box mirrors, so it needs one approval from James, Jan or Miguel. Tester builds (version bumps) need none.
 /.github/** @jdefleur
 /tools/phone_release.py @jdefleur
 /.github/CODEOWNERS @jdefleur
+/android/public-release.json @jdefleur @JanMesaric @mistermizel
