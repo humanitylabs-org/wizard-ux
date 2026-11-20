@@ -7,8 +7,9 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import vm from 'node:vm'
 import { sharedBox, liveDevice } from './two-devices.mjs'
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 
-const chats = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8')
+const chats = withParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'))
 const cut = (from, to) => { const a = chats.indexOf(from), b = chats.indexOf(to, a); assert.ok(a >= 0 && b > a, from); return chats.slice(a, b) }
 const SPACES = 'wos.chats.spaces.v1', at = '2026-10-29T00:00:00.000Z'
 const space = (id, threads = [], agent) => ({ id, name: 'Space ' + id, threads, createdAt: at, ...(agent ? { agent } : {}) })

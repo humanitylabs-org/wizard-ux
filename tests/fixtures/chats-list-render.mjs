@@ -3,7 +3,8 @@ import { modelContext, runWithChatsModel } from './chats-list-model.mjs';
 // Peripheral services and row markup are stubbed; section selection, collapse and footer assembly are production code.
 import fs from 'node:fs';
 import vm from 'node:vm';
-const source = fs.readFileSync(new URL('../../web/core/chats.js', import.meta.url), 'utf8');
+import { withParts } from './chats-parts.mjs';
+const source = withParts(fs.readFileSync(new URL('../../web/core/chats.js', import.meta.url), 'utf8')); // chats.js parts put back (issue 1665)
 export function listFixture({ status = false, query = '', busy = false, footer = true, inputRows = null, pinned = [], unread = () => false, reach = null } = {}) {
   const state = { q: query }, writes = [], groups = Object.fromEntries(['errors', 'working', 'ready', 'yesterday', 'pastWeek', 'deferred', 'archive'].map(k => [k, [{ id: k, title: 'match', section: k }]]));
   const rows = inputRows || Object.values(groups).flat(), el = { querySelector: () => null, innerHTML: '', firstElementChild: null };

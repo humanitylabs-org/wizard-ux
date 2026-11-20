@@ -3,12 +3,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 
 const root = new URL('../', import.meta.url);
 const read = f => readFileSync(new URL(f, root), 'utf8');
 
 test('stock Chats: Archive is the last section in By status and By day', () => {
-  const js = read('web/core/chats.js');
+  const js = withParts(read('web/core/chats.js'));
   for (const name of ['SECTIONS_DAY', 'SECTIONS_STATUS']) {
     const m = js.match(new RegExp(`const ${name} = (\\[\\[.*?\\]\\]);`));
     assert.ok(m, name);

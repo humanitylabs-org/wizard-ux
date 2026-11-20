@@ -9,6 +9,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
 import vm from 'node:vm';
 import { fixture } from './fixtures/tweaks.mjs';
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 
 const root = new URL('../', import.meta.url);
 const read = p => readFileSync(new URL(p, root), 'utf8');
@@ -102,7 +103,7 @@ test('the desktop adapter routes Snooze / Done through Chats\' own threadAct and
   assert.match(src, /window\.WosSkinHost\?\.voice\(st\)/); assert.match(src, /window\.WosSkinHost\?\.level\(l\)/);
   assert.match(src, /home: homeOpen \|\| !ws\[cur\]\.wins\.length/);
   assert.match(src, /removeDesktop\(d\); if \(window\.WosSkinHost\?\.emptyHome\) goHome\(\);/);
-  assert.match(read('web/core/chats.js'), /KIT, threadAct, threadActions,/);
+  assert.match(withParts(read('web/core/chats.js')), /KIT, threadAct, threadActions,/);
 });
 
 test('no desks: while a layout holds the panel everything opens in panels over Home; desks stay put', () => {
@@ -144,7 +145,7 @@ test('no desks: while a layout holds the panel everything opens in panels over H
   assert.match(fn('panelClose'), /winEl\(l\.id\)\?\.focus\(\{ preventScroll: true \}\)/, 'the keyboard goes back to the list');
   assert.match(fn('panelDock'), /if \(on && !panelListW\(\)\) \{ const id = uid\(\); W\[id\] = \{ id, app: 'chats', thread: null/);
   assert.match(src, /keepThreadOpen: true/, 'desktop chat panels stay on their thread after send and state changes');
-  assert.match(read('web/core/chats.js'), /!\(isNew \|\| PHONE\(\) \|\| H\.leaveOnSend\?\.\(wid\)\)\) return false;/);
+  assert.match(withParts(read('web/core/chats.js')), /!\(isNew \|\| PHONE\(\) \|\| H\.leaveOnSend\?\.\(wid\)\)\) return false;/);
   // the keys reach the docked Chats over Home: ⌥↓/⌥↑ (also with its list folded behind a thread); plain ⌥←/⌥→ stay native
   assert.match(fn('stepReady'), /const atHome = homeOpen && !\(globalThis\.WosSkinHost\?\.panelMode && panelWins\(\)\.some\(mainChats\)\);/);
   assert.match(fn('chatAct'), /homeOpen && !\(globalThis\.WosSkinHost\?\.panelMode && panelHas\(f\?\.id\)\)/, 'remaining Resolve action still reaches a docked panel over Home');

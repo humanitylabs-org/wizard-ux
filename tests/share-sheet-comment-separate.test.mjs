@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
 import path from 'node:path';
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 const root = process.env.SHARE_TEST_TREE || path.resolve(import.meta.dirname, '..');
 const read = p => readFileSync(path.join(root,p),'utf8');
 const shared = read('web/core/share-wizard.js');
@@ -49,7 +50,7 @@ test('James: every share panel uses opaque panel tokens; pixel guard includes ro
   for (const name of ['share-compose','share-destination','share-agent-row','share-chat-row','share-message','share-attachment','share-picker','share-option','share-backhint']) assert.ok(guard.includes(name));
 });
 test('James: real Chats outbox receives explicit second-agent id for NEW and EXISTING chats, without inheriting another window route/model', async () => {
-  const src = read('web/core/chats.js'), start = src.indexOf('  async function sendChat('), end = src.indexOf('  const picker =',start);
+  const src = withParts(read('web/core/chats.js')), start = src.indexOf('  async function sendChat('), end = src.indexOf('  const picker =',start);
   for (const [sid,agent] of [['__new__','synthetic-private'],['existing-synthetic','synthetic-private'],['__new__','']]) {
     const writes=[], draft={draft:'Keep me',files:[]};
     const sandbox={window:{},INC:null,MAX_FILES:10,W:{w1:{id:'w1',app:'chats',thread:'unrelated'}},ch:()=>draft,

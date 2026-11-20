@@ -7,10 +7,11 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 
 const j = x => JSON.parse(JSON.stringify(x));
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
-const chats = read('web/core/chats.js'), desktop = read('web/desktop/desktop.js'), aad = read('web/layouts/ai-apps/desktop.js');
+const chats = withParts(read('web/core/chats.js')), desktop = read('web/desktop/desktop.js'), aad = read('web/layouts/ai-apps/desktop.js');
 const cut = (src, from, to) => { const a = src.indexOf(from); assert.ok(a >= 0, from); const b = src.indexOf(to, a + from.length); assert.ok(b > a, to); return src.slice(a, b); };
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 
