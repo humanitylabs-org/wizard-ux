@@ -26,7 +26,7 @@ ${links.map(h => `<link rel="stylesheet" href="/${h}">`).join('\n')}
 const MIME = { '.css': 'text/css', '.js': 'text/javascript', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.png': 'image/png' };
 const server = http.createServer((req, res) => {
   const u = new URL(req.url, 'http://x');
-  if (u.pathname === '/') { res.setHeader('Content-Type', 'text/html; charset=utf-8'); return res.end(page(u.searchParams.get('skin') || 'nebula')); }
+  if (u.pathname === '/') { res.setHeader('Content-Type', 'text/html; charset=utf-8'); return res.end(page(u.searchParams.get('skin') === 'grove' ? 'grove' : 'nebula')); }
   const f = path.join(WEB, decodeURIComponent(u.pathname));
   if (!f.startsWith(WEB) || !fs.existsSync(f) || fs.statSync(f).isDirectory()) { res.statusCode = 404; return res.end(); }
   res.setHeader('Content-Type', MIME[path.extname(f)] || 'application/octet-stream'); fs.createReadStream(f).pipe(res);
