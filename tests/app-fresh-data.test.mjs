@@ -6,7 +6,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
-const services=readFileSync(new URL('../web/core/app-services.js',import.meta.url),'utf8');
+import { withServicesParts } from './fixtures/app-services-parts.mjs';
+const services=withServicesParts(readFileSync(new URL('../web/core/app-services.js',import.meta.url),'utf8'));
 const client=readFileSync(new URL('../web/core/app-client.js',import.meta.url),'utf8');
 const live=readFileSync(new URL('../web/live.js',import.meta.url),'utf8');
 

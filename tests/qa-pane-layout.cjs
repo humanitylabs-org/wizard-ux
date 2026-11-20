@@ -13,11 +13,12 @@ const changed = new Set(['desktop.html', 'desktop/desktop.js', 'layouts/ai-apps/
 const baseline = {};
 for (const f of changed) baseline[f] = execFileSync('git', ['show', baselineRef + ':web/' + f], { cwd: repo });
 // The pinned old desktop.html runs today's core/chats.js, which now calls the Chats parts split out of it (issue 1665:
-// core/chats-*.js, loaded just before chats.js). Give the old page the same script tags it lacks; nothing else changes.
-{
- const tag = '  <script src="core/chats.js"></script>', old = String(baseline['desktop.html']);
- const parts = [...fs.readFileSync(path.join(repo, 'web/desktop.html'), 'utf8').matchAll(/<script src="core\/chats-[a-z-]+\.js"><\/script>/g)].map(m => m[0]).filter(t => !old.includes(t));
- assert.ok(old.includes(tag), 'the pinned desktop.html loads core/chats.js');
+// core/chats-*.js, loaded just before chats.js; the same for core/app-services.js and its core/app-services-*.js).
+// Give the old page the same script tags it lacks; nothing else changes.
+for (const host of ['chats', 'app-services']) {
+ const tag = `  <script src="core/${host}.js"></script>`, old = String(baseline['desktop.html']);
+ const parts = [...fs.readFileSync(path.join(repo, 'web/desktop.html'), 'utf8').matchAll(new RegExp(`<script src="core/${host}-[a-z-]+\\.js"></script>`, 'g'))].map(m => m[0]).filter(t => !old.includes(t));
+ assert.ok(old.includes(tag), `the pinned desktop.html loads core/${host}.js`);
  baseline['desktop.html'] = Buffer.from(old.replace(tag, parts.map(t => '  ' + t + '\n').join('') + tag));
 }
 const mime = f => f.endsWith('.js') ? 'text/javascript' : f.endsWith('.css') ? 'text/css' : 'text/html';

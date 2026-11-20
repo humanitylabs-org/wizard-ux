@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
 import {randomUUID} from 'node:crypto';
+import { withServicesParts } from './fixtures/app-services-parts.mjs';
 const read = name => readFileSync(process.env.QA_REVIEW_CORE ? `${process.env.QA_REVIEW_CORE}/${name}.js` : new URL(`../web/core/${name}.js`,import.meta.url),'utf8');
 function capture(patch={}) {
   const source=read('app-capture'),start=source.indexOf('  function reloadCheck()'),end=source.indexOf('  // Last moment before the shell reloads',start);
@@ -17,7 +18,7 @@ function service(c) {
   const sourceWindow={location:new URL('https://fixture.invalid/synthetic/'),document:{},addEventListener(){},postMessage(){}};
   const frame={tagName:'IFRAME',src:sourceWindow.location.href,isConnected:true,contentWindow:sourceWindow,hasAttribute:()=>false,addEventListener(){},removeEventListener(){}};
   const window={WizCore:{apps:()=>({APPS:[{id:'synthetic',name:'Synthetic',kind:'wizard',url:'/synthetic/'}]})},WizAppCapture:{reloadCheck:()=>c.reloadCheck()},dispatchEvent(){}};
-  vm.runInNewContext(read('app-services'),{window,location:new URL('https://fixture.invalid/wizard-os-home/'),URL,crypto:{randomUUID},addEventListener(){},setInterval(){},setTimeout,clearTimeout,document:{readyState:'loading',addEventListener(){}},CustomEvent:class{},navigator:{}});
+  vm.runInNewContext(withServicesParts(read('app-services')),{window,location:new URL('https://fixture.invalid/wizard-os-home/'),URL,crypto:{randomUUID},addEventListener(){},setInterval(){},setTimeout,clearTimeout,document:{readyState:'loading',addEventListener(){}},CustomEvent:class{},navigator:{}});
   const host=window.WizAppServices;host.attach(frame,{appId:'synthetic',path:'/synthetic/'});
   return {host,facade:host.connect(sourceWindow,{}),plan:()=>host.update.reloadPlan()};
 }
