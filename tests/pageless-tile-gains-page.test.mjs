@@ -55,3 +55,21 @@ test('the phone shell decides at the tap and redraws the New desk when the list 
   assert.match(appJs, /function openAppInfo\(el, fromSheet\) \{ AK\.pageOrSheet\(APP, el\.dataset\.appinfo/);
   assert.match(appJs, /window\.addEventListener\('wizard:apps', \(\) => \{ try \{ repaintNewDesks\(true\); \} catch \(_\) \{\} \}\);/);
 });
+
+test('a slow read shows the sheet first, then swaps it for the app when the page arrives (Codex review)', async () => {
+  const ctx = { window: {} };
+  vm.runInNewContext(kindsJs, { ...ctx, setTimeout, Promise });
+  const { pageOrSheet } = ctx.window.WosAppKinds;
+  const APP = {};
+  let finish; const read = new Promise(ok => { finish = ok; });
+  let sheetOpen = null; const opened = [];
+  ctx.window.WizCore = { refreshApps: () => read };
+  ctx.window.WosAppRoute = { open: id => { sheetOpen = id; }, isOpen: () => !!sheetOpen, close: () => { sheetOpen = null; }, get current() { return sheetOpen && { appId: sheetOpen }; } };
+  pageOrSheet(APP, 'tg-style', 'TG style', a => opened.push(a.id));
+  await new Promise(ok => setTimeout(ok, 1000));
+  assert.equal(sheetOpen, 'tg-style', 'sheet shown after the wait');
+  APP['tg-style'] = { id: 'tg-style', kind: 'wizard', url: '/tg-style/' };
+  finish(true); await new Promise(ok => setImmediate(ok));
+  assert.equal(sheetOpen, null, 'sheet closed');
+  assert.deepEqual(opened, ['tg-style'], 'app opened');
+});
