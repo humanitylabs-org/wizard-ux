@@ -545,42 +545,8 @@ window.WizCore.chats = function createChats(H) {
     }).join('') : '';
     return `<section class="ch-sec ch-chan-agents${chanAgentsOpen ? ' open' : ''}" data-sec="chan-agents"><button type="button" class="ch-sec-h" data-chchanagents aria-expanded="${chanAgentsOpen}"><span>Agents</span><small>${list.length}</small><i aria-hidden="true"></i></button>${chanAgentsOpen ? `<div class="ch-sec-b">${lines}</div>` : ''}</section>`;
   }
-  /* The one Undo after an archive (issue 1336: "if the user archives something accidentally, how will they find it
-   * quickly"): about five seconds, from any surface that archives a thread (row menus, swipe, the thread's own button,
-   * the AI apps sidebar); Undo restores it where it was. Opaque, above the shell's own toast. */
-  const ACT_UNDO_MS = 5000;
-  let actUndoEl = null, actUndoT = 0;
-  function actUndo(label, undo) {
-    if (!channelsOn() || typeof document.createElement !== 'function' || !document.body) return false;
-    clearTimeout(actUndoT); actUndoEl?.remove();
-    const el = document.createElement('div'); el.className = 'ch-undo'; el.setAttribute('role', 'status');
-    el.innerHTML = `<span>${esc(label)}</span><button type="button" data-chundo>Undo</button>`;
-    el.querySelector('[data-chundo]').addEventListener('click', () => { clearTimeout(actUndoT); el.remove(); if (actUndoEl === el) actUndoEl = null; vib(8); undo(); });
-    document.body.append(el); actUndoEl = el;
-    actUndoT = setTimeout(() => { el.remove(); if (actUndoEl === el) actUndoEl = null; }, ACT_UNDO_MS);
-    return true;
-  }
-  // Undo of a thread's archive: after that archive's write settled (pending: its promise), the restore, then every list.
-  async function actRestore(sid, pending) {
-    await Promise.resolve(pending).catch(() => {});
-    const ok = await LIVE.restore(sid);
-    if (!ok) toast('!', 'Couldn’t undo · still archived', 3200);
-    paintListsNow();
-    return ok;
-  }
-  /* A channel's read watermark (wizard-ux issue 1316, which supersedes the opening place and New line of 1263 and 1269;
-   * James, 12 Nov 2026: "Just track their scroll position in the channel as what they have read. If they've scrolled
-   * to the bottom of the channel, mark the whole thing as read"). Slack's model: each channel keeps the newest activity
-   * time (chanAt: a post's start or its latest reply) the owner has scrolled past in its feed; the end of the feed is
-   * all of it. A post is new for the channel only when it changed after the mark. That alone places the opening and
-   * the New line and makes the channel's line bold. A reply never opened keeps its own "● New reply" words
-   * (chanUnread), passive only: it never moves the opening, the line or the channel's state.
-   * The mark lives on this device (localStorage). A channel never read here counts as read up to when this device first
-   * kept marks (since), so nothing old comes back as new. A move forward is written at most once per CHAN_READ_MS.
-   * With Channels on (the read point had its own switch until wizard-ux issue 1358; wizard-agent-service issue 471) the marks are also
-   * kept on the box (LIVE.chanReads, /wizard/v1/channels/read), so every device of the owner reads the newer of its
-   * own mark and the box's: reading a channel to the bottom on the desktop clears it on the phone. */
-  const CHAN_READ_KEY = 'wos.chats.channel-read.v1', CHAN_READ_MAX = 300, CHAN_READ_MS = 2000, CHAN_READ_SYNC = 'wizard/chat-channels', CHAN_READ_UP_MS = 30e3, chanActs = {};
+  /* Undo after an archive and channel read-mark names; core/chats-undo.js. */
+  const { actRestore, actUndo, CHAN_READ_KEY, CHAN_READ_MAX, CHAN_READ_MS, CHAN_READ_SYNC, CHAN_READ_UP_MS, chanActs } = window.WizCore.chatsParts.undo({ channelsOn, esc, LIVE, paintListsNow, toast, vib });
   let chanReadDoc = null, chanReadT = 0, chanReadPaintT = 0;
   let chanReadUpAt = -Infinity;
   // The box's marks (key -> ms) while Channels are on and the box keeps them, else null.
@@ -686,43 +652,8 @@ window.WizCore.chats = function createChats(H) {
     // that the desktop's Live repaint skips while focus is inside it.
     for (const id of Object.keys(CH)) { const x = W[id]; if (!x || x.thread || !(chanOpen(x) || chanView === 'activity') || holdList(id)) continue; const el = elOf(id); if (el) renderChatList(x, el); }
   }
-  /* Unread is a green dot, needs-you the amber one (issue 1266: the violet dot blended into the shell). A channel line
-   * and a chevron post line keep every marker in one slot at the right, just before the chevron, always in this order:
-   * spinner (working), amber (needs you), green (new replies). Nothing sits beside the name, and there is no number
-   * pill (issue 1269): the green dot carries the unread count in its label. */
-  function chanMark(rows, post = false, un = chanUnreadN(rows)) {
-    const marks = (rows.some(isWorking) ? '<i class="ch-spin" role="img" aria-label="Working"></i>' : '')
-      + (rows.some(chanNeeds) ? '<i class="ch-chan-dot" role="img" aria-label="Needs you"></i>' : '')
-      + (un ? `<i class="ch-chan-dot new" role="img" aria-label="${post ? 'Unread' : `${un} unread`}"></i>` : '');
-    return marks ? `<span class="ch-chan-ind">${marks}</span>` : '';
-  }
-  // The drop-down of a channel whose chats are not in the loaded list (older ones only the box's store counts): their
-  // number and a way in; the empty line is kept for a channel that holds no chats at all (issue 1531).
-  const CHAN_RECENT_MIN = 3;
-  function chanNoRecent(ch0) {
-    // The store's count, else (store off: Spaces) the Space's own chat list, which also holds chats not loaded here.
-    const st = typeof chanStore === 'function' ? chanStore() : null, own = !ch0.general && !ch0.agentFeed;
-    const n = (own && (st ? st.channels?.find?.(c => c.id === ch0.id)?.count : spaces().find(s => s.id === ch0.id && spaceAgent(s) === ch0.agent)?.threads?.length)) || 0;
-    return n > 0 ? `<button type="button" class="ch-chan-post ch-chan-more" data-chchan="${esc(ch0.id)}"><span>${n} ${n === 1 ? 'chat' : 'chats'}, open channel</span></button>` : '<span class="ch-none">No chats yet</span>';
-  }
-  function channelLine(ch0, rows, now, cur = '', gAg = '', dAg = '') {
-    const mine = rows.filter(s => !s.archived && inChannel(ch0, s)), ex = chanExpanded.has(ch0.id), pinned = chanPrefs().pins.includes(ch0.id), on = !!cur && cur === ch0.id;
-    const byNew = (a, b) => chanAt(b) - chanAt(a);
-    let recent = ex ? mine.filter(s => isWorking(s) || chanNeeds(s) || now - chanAt(s) < CHAN_DAY).sort(byNew) : [];
-    // Nothing from the last day: the newest few anyway, so a channel with chats never reads as empty (issue 1531).
-    if (ex && !recent.length) recent = mine.slice().sort(byNew).slice(0, CHAN_RECENT_MIN);
-    // The channel's own state is its watermark (issue 1316): posts changed since the owner last scrolled past them.
-    const un = chanNewCount(ch0, mine, gAg), face = typeof chanFace === 'function' ? chanFace(ch0) : { emoji: '#', label: ch0.name };
-    return `<div class="ch-chan${pinned ? ' pinned' : ''}${un ? ' unread' : ''}${on ? ' cur' : ''}" data-morph-key="chan:${esc(ch0.id)}"><div class="ch-chan-r"><button type="button" class="ch-chan-open" data-chchan="${esc(ch0.id)}"${on ? ' aria-current="true"' : ''} aria-haspopup="dialog" aria-keyshortcuts="Shift+F10" title="Open channel · hold or open the context menu for actions"><span class="ch-chan-hash ch-chan-emo"${face.label ? ' aria-hidden="true"' : ''}>${esc(face.emoji)}</span><b>${esc(face.label)}</b>${pinned ? `<i class="ch-chan-pin" role="img" aria-label="Pinned">${PIN_SVG}</i>` : ''}${typeof chanDraftMark === 'function' ? chanDraftMark(ch0, dAg) : ''}${chanMark(mine, false, un)}</button><button type="button" class="ch-chan-x" data-chchanx="${esc(ch0.id)}" aria-expanded="${ex}" aria-label="${ex ? 'Hide' : 'Show'} recent posts in ${esc(face.label || face.emoji)}"><i aria-hidden="true"></i></button></div>`
-      + (ex ? `<div class="ch-chan-recent">${recent.length ? recent.map(s => `<button type="button" class="ch-chan-post${chanUnread(s) ? ' unread' : ''}" data-chopen="${esc(s.id)}"><span>${esc(s.title)}</span>${chanMark([s], true)}</button>`).join('') : chanNoRecent(ch0)}</div>` : '') + '</div>';
-  }
-  // The agent a new channel from this list belongs to: the list's agent (its Focus; else the default one), and only while
-  // it is a visible one the form can take (a hidden agent's list gets no row: never filed under another agent).
-  const chanNewAgent = w => {
-    const ags = typeof focusAgents === 'function' ? focusAgents() : []; if (!ags.length) return ''; // (tests slice the list without the agents)
-    const a = focusedAgent(focusOf(w)) || AGS()?.defaultId() || 'hermes';
-    return ags.some(x => x.id === a) ? a : '';
-  };
+  /* A channel's line in the list; core/chats-chanline.js. */
+  const { chanMark, channelLine, chanNewAgent } = window.WizCore.chatsParts.chanline({ AGS: (...a) => AGS(...a), CHAN_DAY, chanAt, chanDraftMark, chanExpanded, chanFace, chanNeeds, chanNewCount, chanPrefs, chanStore, chanUnread, chanUnreadN, esc, focusAgents, focusedAgent, focusOf, inChannel, isWorking, PIN_SVG, spaceAgent, spaces });
   // + New channel (wizard-ux issue 1308): the existing name form, opened straight on its input; Esc or outside cancels.
   function chanNewForm(w, tab = null) {
     const a = w && chanNewAgent(w); if (!a) return false;
@@ -748,67 +679,8 @@ window.WizCore.chats = function createChats(H) {
   const { chanHold, chanKey, chanNewN, chanPostText, chanRepaint, chanReplies, chanScrolled, chanStart, chanUser, chanUserAt, FIRST, firstAgent, firstPost, firstWant, pullFirst, replyWant } = window.WizCore.chatsParts.posts({ ch, CH, CHAN_TEXT_MAX, chanChanged, chanGenAgent, channelsOn, chanOpen, chanReadAt, chanReadFeed, chanReadKey, elOf: (...a) => elOf(...a), holdList: (...a) => holdList(...a), isWorking, LIVE, mediaOfFile: (...a) => mediaOfFile(...a), owner: (...a) => owner(...a), paintFeedJump, rerenderList, rowAgent, toTurns, W });
   channelsLate({ chanHold, chanUserAt });
   doneLate({ chanUser });
-  /* Issue 1440 (James, 13 Nov 2026): no Open / Needs you / All selector. The feed is every post of the channel; the
-   * thread's own jump pills (issue 1359) point at posts that need you (amber) or have unread replies (green). */
-  function channelFeed(w, open, rows) {
-    const mine = rows.filter(s => inChannel(open, s)), shown = mine.slice().sort(chanPostOrder);
-    const cs = chanStart(w, shown, open);
-    // Every post of the channel with its activity time for the watermark (chanReadFeed).
-    const on = new Set(shown);
-    chanActs[w.id] = { key: chanReadKey(open, open.general ? chanGenAgent(w) : ''), rows: mine.map(s => ({ row: chanKey(s), post: 'post:' + s.id, at: chanAt(s), changed: chanChanged(s, -Infinity), shown: on.has(s) })) };
-    // The wizard's own sigil (WosAgents.sigil) as the reply line's avatar: the channel's agent, General's the list's.
-    const hat = `<span class="ch-post-av" aria-hidden="true">${AGS()?.sigil?.(agentRec(open.agent || focusedAgent(focusOf(w)) || '')) || ''}</span>`;
-    const me = String(window.WizConfig?.owner?.() || '').trim(), meAv = `<span class="ch-post-me" aria-hidden="true">${esc((me || 'You').slice(0, 1).toUpperCase())}</span>`;
-    const post = s => {
-      // Slack-style: avatar, name and time, then the message as plain text (4 lines, then "more") and its pictures.
-      // A thread whose first message hasn't been read yet shows its owner preview meanwhile (chanPostText); the title
-      // only when the thread has no owner message at all (the agent started it).
-      const p = firstPost(s), byAgent = p?.none && p.agent ? p.agent : null, said = byAgent ? { text: byAgent.text } : chanPostText(s, p), text = said.text, media = byAgent ? byAgent.media : p?.media || [];
-      const long = text.length > CHAN_CLAMP || (text.match(/\n/g) || []).length >= 4, more = chanMore.has(s.id);
-      const pAt = byAgent ? byAgent.at : p?.at, at = pAt && isFinite(pAt) ? new Date(pAt).toISOString() : s.startedAt || s.createdAt || LIVE.cardAt(s);
-      // Replies are the bubbles James sees in the thread (chanReplies), never a raw message count; none until read.
-      const r = chanReplies(s), n = r && !r.partial ? Math.max(0, r.ats.length - (byAgent ? 1 : 0)) : 0, un = chanUnread(s);
-      // Unread (issue 1269): a green dot with words ("● 2 new replies", "● New reply") at the right of the reply line,
-      // in the slot and style of the amber "Needs you", never a dot on the left. It stays until the post is opened.
-      // An agent's post is its own first message: never counted as a new reply.
-      const nn = un ? chanNewN(s, byAgent && r ? { ...r, ats: r.ats.slice(1) } : r) : 0, replies = n ? `<span>${n} ${n === 1 ? 'reply' : 'replies'}</span>` : '';
-      const fresh = un ? `<span class="ch-post-st new"><i class="ch-chan-dot new" aria-hidden="true"></i>${nn ? `${nn} new ${nn === 1 ? 'reply' : 'replies'}` : byAgent && !n ? 'New' : 'New reply'}</span>` : '';
-      const state = (isWorking(s) ? '<span class="ch-post-st working"><i class="ch-spin" aria-hidden="true"></i>Working</span>' : chanNeeds(s) ? '<span class="ch-post-st needs"><i class="ch-chan-dot" aria-hidden="true"></i>Needs you</span>' : s.archived ? '<span class="ch-post-st">Done</span>' : '') + fresh;
-      const marks = state ? `<span class="ch-post-sts">${state}</span>` : ''; // one unit: it wraps whole, never split
-      const mk = !isWorking(s) && chanNeeds(s) ? 'needs' : un ? 'new' : ''; // what the feed's jump pills count (issue 1440)
-      const pics = media.length ? `<div class="ch-post-media">${media.slice(0, 6).map((m, i) => `<button type="button" class="ch-post-img" data-chpostimg="${esc(s.id)}" data-chpostag="${esc(firstAgent(s))}" data-i="${i}" aria-label="Open ${esc(m.name || 'photo')}"><img src="${esc(m.thumb || m.url)}" alt="" loading="lazy" decoding="async"></button>`).join('')}${media.length > 6 ? `<span class="ch-post-n">+${media.length - 6}</span>` : ''}</div>` : '';
-      // An agent's words keep the chat bubble's inline markdown (wizard-ux issue 1287: bold, italics, links, code; a
-      // report opens with a bold sentence, never "**…**"). The owner's own words stay plain text, as typed.
-      // Its links are never inside the post's button: the agent's words sit beside it (a tap there still opens the
-      // thread; the header button is the keyboard's way in), so each link is its own control.
-      // A heading line ("## Executive signal") shows as bold words, never a raw "#": the feed keeps one text size.
-      // Lines inside a ``` or ~~~ fence are code and stay as written ("# a shell comment").
-      let fence = '';
-      const heads = t => t.split('\n').map(l => { const f = /^ {0,3}(`{3,}|~{3,})/.exec(l); if (f) { if (!fence) fence = f[1][0]; else if (f[1][0] === fence) fence = ''; return l; }
-        const m = !fence && /^ {0,3}#{1,6}[ \t]+(.*?)(?:[ \t]+#+)?[ \t]*$/.exec(l); return !m || !m[1] ? l : m[1].includes('**') ? m[1] : `**${m[1]}**`; }).join('\n');
-      const words = byAgent && KIT?.inline ? KIT.inline(heads(text)) : esc(text);
-      const body = text ? `<span class="ch-post-t${long && !more ? ' clamp' : ''}">${words}</span>` : said.voice ? '<span class="ch-post-t ch-post-voice">Voice note</span>' : p ? '' : '<span class="ch-post-t ch-post-wait" aria-label="Loading the first message"><i class="ch-sk"></i></span>';
-      // A post the agent wrote (an alert, a reminder, a chat it opened; wizard-agent-service issue 441) carries the
-      // agent's avatar and name, and a Reply button until the thread has replies; then the usual reply line.
-      const av = byAgent ? `<span class="ch-post-me ch-post-ag" aria-hidden="true">${AGS()?.sigil?.(agentRec(firstAgent(s) || open.agent || '')) || ''}</span>` : meAv;
-      const who = byAgent ? (typeof agentName === 'function' ? agentName(firstAgent(s) || open.agent || '') : 'Wizard') : (me || 'You');
-      const foot = byAgent && !n ? `<span class="ch-post-rr"><button type="button" class="ch-post-reply" data-chreply="${esc(s.id)}" aria-label="Reply to ${esc(who)}">Reply</button>${marks}</span>`
-        : `<button type="button" class="ch-post-r${un ? ' unread' : ''}" data-chopen="${esc(s.id)}">${hat}${replies}<time>${esc(ago(LIVE.cardAt(s)))}</time>${marks}</button>`;
-      return `<div class="ch-post${un ? ' unread' : ''}${byAgent ? ' by-agent' : ''}"${mk ? ` data-chmark="${mk}"` : ''} data-morph-key="post:${esc(s.id)}" data-chrow="${esc(chanKey(s))}" data-chtitle="${esc(s.title || '')}">${av}<div class="ch-post-c"><button type="button" class="ch-post-b" data-chopen="${esc(s.id)}" aria-label="Open thread: ${esc(s.title)}"><span class="ch-post-h"><b>${esc(who)}</b><time>${esc(ago(at))}</time></span>${byAgent ? '' : body}</button>${byAgent && body ? `<div class="ch-post-tb" data-chopen="${esc(s.id)}">${body}</div>` : ''}${long ? `<button type="button" class="ch-post-more" data-chpostmore="${esc(s.id)}" aria-expanded="${more}">${more ? 'less' : 'more'}</button>` : ''}${pics}${foot}</div></div>`;
-    };
-    // A post just sent from the channel's box: on screen from the Send tap, with the reply line saying it is on its way.
-    const sendingPost = p => {
-      const long = p.text.length > CHAN_CLAMP || (p.text.match(/\n/g) || []).length >= 4;
-      const pics = p.media.length ? `<div class="ch-post-media">${p.media.slice(0, 6).map(m => `<span class="ch-post-img"><img src="${esc(m.url)}" alt="" decoding="async"></span>`).join('')}${p.media.length > 6 ? `<span class="ch-post-n">+${p.media.length - 6}</span>` : ''}</div>` : '';
-      return `<div class="ch-post sending" data-morph-key="post:${esc(p.key)}">${meAv}<div class="ch-post-c"><div class="ch-post-b"><span class="ch-post-h"><b>${esc(me || 'You')}</b><time>${esc(ago(new Date(p.at).toISOString()))}</time></span>${p.text ? `<span class="ch-post-t${long ? ' clamp' : ''}">${esc(p.text)}</span>` : ''}</div>${pics}<span class="ch-post-r">${hat}<span class="ch-post-st working"><i class="ch-spin" aria-hidden="true"></i>Sending…</span></span></div></div>`;
-    };
-    const sending = typeof chanSending === 'function' ? chanSending(w, open, mine) : [];
-    const line = '<div class="ch-chan-new" role="separator" aria-label="New posts" data-morph-key="chan-new"><span>New</span></div>';
-    const html = shown.map(s => (cs?.newKey && cs.newKey === chanKey(s) ? line : '') + post(s)).join('') + sending.map(sendingPost).join(''), archNote = chanArchived(open.id) ? '<span class="ch-none">This channel is archived. Restore it to post here.</span>' : '';
-    if (firstWant.size || replyWant.size) pullFirst();
-    const alertsNow = typeof alertsHtml === 'function' ? alertsHtml(open) : ''; // the Alerts channel's alert records (issue 1589)
-    return `<div class="ch-chan-feed">${shown.length || sending.length ? html : alertsNow ? '' : '<span class="ch-none">No posts in the last 30 days.</span>'}${alertsNow}${archNote}</div>`;
-  }
+  /* A channel's feed; core/chats-feed.js. */
+  const { channelFeed, bindLate: feedLate } = window.WizCore.chatsParts.feed({ agentName: (...a) => agentName(...a), agentRec, ago, AGS: (...a) => AGS(...a), CHAN_CLAMP, chanActs, chanArchived, chanAt, chanChanged, chanGenAgent, chanKey, chanMore, chanNeeds, chanNewN, chanPostOrder, chanPostText, chanReadKey, chanReplies, chanStart, chanUnread, esc, firstAgent, firstPost, firstWant, focusedAgent, focusOf, inChannel, isWorking, KIT, LIVE, pullFirst, replyWant });
   function chanHead(w, open) {
     if (open) return `<div class="ch-chan-h"><button type="button" class="ch-chan-back" data-chchanback aria-label="Back to channels"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg></button><b>${open.agentFeed ? `<span class="ch-chan-sig" aria-hidden="true">${AGS()?.sigil?.(agentRec(open.agent)) || ''}</span>` : `<span class="ch-chan-hash ch-chan-emo"${chanFace(open).label ? ' aria-hidden="true"' : ''}>${esc(chanFace(open).emoji)}</span>`}${esc(open.agentFeed ? open.name : chanFace(open).label)}</b></div>`;
     const sort = chanView === 'channels' ? orderBar('Sort channels', 'data-chchansort', ['az', 'za'], chanPrefs().sort, o => o === 'az' ? 'A–Z' : 'Z–A') : '';
@@ -828,41 +700,8 @@ window.WizCore.chats = function createChats(H) {
     el.querySelector('.ch-sheet button')?.focus({ preventScroll: true });
     vib(10); return true;
   }
-  /* Channel emoji (issue 1506): a row of emoji under the name field of New channel and Rename. A tap puts that emoji in
-   * front of the name; a tap on the one already there takes it off (the list then shows 💬). Any other emoji: type it
-   * first in the name, or Emoji… in the channel's actions (the full emoji sheet with search). */
-  function chanEmojiPick(name) {
-    const L = window.WizCore?.CHANNEL_EMOJI; if (!Array.isArray(L) || !channelsOn()) return '';
-    const f = chanFace(String(name || '')), cur = f.own ? f.emoji : '';
-    return `<div class="ch-emoji-pick" role="group" aria-label="Channel emoji">${L.map(e => `<button type="button" data-chemoji="${esc(e)}" aria-pressed="${e === cur}" aria-label="Emoji ${esc(e)}">${esc(e)}</button>`).join('')}</div>`;
-  }
-  function chanEmojiSync(form) {
-    const f = chanFace(String(form?.querySelector('input')?.value || '')), cur = f.own ? f.emoji : '';
-    for (const x of form?.querySelectorAll('[data-chemoji]') || []) x.setAttribute('aria-pressed', String(x.dataset.chemoji === cur));
-  }
-  function chanEmojiTap(b) {
-    const form = b?.closest('form'), inp = form?.querySelector('input'); if (!inp || inp.disabled) return false;
-    const f = chanFace(inp.value), e = b.dataset.chemoji, off = f.own && f.emoji === e, t = window.WizCore.channelEmojiName(inp.value, off ? '' : e);
-    if (!t) { toast('!', 'Name too long for an emoji: shorten it first', 2200); inp.focus(); return true; }
-    inp.value = t;
-    inp.dispatchEvent(new Event('input', { bubbles: true }));
-    chanEmojiSync(form); return true;
-  }
-  // The full emoji sheet (the topic emoji one) for a channel; the pick renames it with that emoji in front.
-  function openChannelEmoji(wid, cid) {
-    const sp = spaces().find(s => s.id === cid); if (!sp) return false;
-    openEmojiSheet(wid, `chanemoji:${cid}`, `Emoji for ${chanFace(sp.name).label || chanFace(sp.name).emoji}`);
-    return true;
-  }
-  function chanSetEmoji(cid, e) {
-    const sp = spaces().find(s => s.id === cid); if (!sp || !e) return false;
-    const f = chanFace(sp.name), off = f.own && f.emoji === e;
-    let t = window.WizCore.channelEmojiName(sp.name, off ? '' : e);
-    if (!t) { toast('!', 'Name too long for an emoji: shorten it first', 2200); return false; }
-    // An emoji-only name taken off becomes 'Channel'; a second one of the same agent gets 'Channel 2', and so on.
-    if (off && !f.bare) { const taken = n => spaces().some(s => s.id !== cid && spaceAgent(s) === spaceAgent(sp) && norm(s.name) === norm(n)); for (let i = 2; taken(t); i++) t = `Channel ${i}`; }
-    return chanRenameTo(cid, t) !== false;
-  }
+  /* Channel emoji; core/chats-chanemoji.js. */
+  const { chanEmojiPick, chanEmojiSync, chanEmojiTap, chanSetEmoji, openChannelEmoji } = window.WizCore.chatsParts.chanemoji({ chanFace, channelsOn, chanRenameTo, esc, norm, openEmojiSheet, spaceAgent, spaces, toast });
   function openChannelRename(wid, cid) {
     const el = track.querySelector(`[data-chats="${wid}"]`), sp = spaces().find(s => s.id === cid); if (!el || !sp) return;
     closeRowSheet();
@@ -948,6 +787,7 @@ window.WizCore.chats = function createChats(H) {
   }
   /* A channel's message box, its own posts and Sending…; core/chats-chanbox.js. */
   const { boxModel, chanCompose, chanComposer, chanDraftKey, chanDropSending, chanEditUnsent, chanModel, channelSend, chanOwnPost, chanSending, chanSpaceOf, chanToEnd, setChanModel, bindLate: chanboxLate } = window.WizCore.chatsParts.chanbox({ AGS: (...a) => AGS(...a), ch, CH, CHAN_TEXT_MAX, chanArchived, channelsOn, chanOpen, chanRepaint, chanTitle, elOf: (...a) => elOf(...a), esc, FIRST, firstAgent, focusAgentId, growTa, H, KIT, OUTBOX, owner: (...a) => owner(...a), renderChatList, spaceContains, toast, viewContext, W, winAgent });
+  feedLate({ chanSending });
   function clearAll(w) { const c = ch(w.id); c.filter = ''; c.q = ''; c.filterFrom = null; window.WizCore.chatSearch?.cancel(w.id); rerenderList(w); }
   function setQuery(w, q) { const c = ch(w.id); if (w.thread) chatsBack(w); c.q = String(q || ''); rerenderList(w); }
   const SEC_DEFAULT = { errors: true, working: true, saved: true, ready: true, yesterday: true, pastWeek: false, deferred: false, archive: false, recent: true, snoozed: false, archived: false };
@@ -994,6 +834,7 @@ window.WizCore.chats = function createChats(H) {
   }
   /* Agent inbox (switch wizard/agent-inbox): Running view, Open / Send to inbox, sweep card, alert feedback; core/chats-running.js. */
   const { alertFeedback, alertsHtml, INBOX_SVG, inboxCanSend, inboxHeadHtml, inboxMove, runningBack, runningBody, runningGo, runningHead, runningOn, runningOpen, runningRow, sweepAnswer, sweepHtml, sweepLater, sweepYesToAll } = window.WizCore.chatsParts.running({ ago, ch, CH, chanStore, clip, esc, H, KIT, LIVE, paintListsNow, PIN, renderThreadNow, rerenderList, STI, storeAgent, toast, W, winAgent });
+  feedLate({ alertsHtml });
   channelsLate({ runningBack });
   /* Ready has three orders (James, 10 Oct 2026): Newest (pure recency, labels don't move rows), Priority
    * (needs you, then test this, then the rest) and By subject (the roundup, kept live). */
@@ -1010,45 +851,8 @@ window.WizCore.chats = function createChats(H) {
     try { const v = localStorage.getItem(READY_ORDER_KEY); if (READY_ORDERS.includes(v) || v === 'oldest') readyOrder = v; } catch (e) {}
     for (const id of Object.keys(CH)) if (W[id]) renderChats(W[id]);
   });
-  // Switching to or from Novairecito swaps topic emojis and status icons without a reload.
-  if (typeof MutationObserver === 'function') {
-    let wasTopic = topicOn();
-    new MutationObserver(() => { const on = topicOn(); if (on === wasTopic) return; wasTopic = on; for (const id of Object.keys(CH)) if (W[id] && !W[id].thread) renderChats(W[id]); })
-      .observe(document.documentElement, { attributes: true, attributeFilter: ['data-skin'] });
-  }
-  // A pin changed here, on another tab, or on another device (pulled through the shared preferences).
-  // The device refused to store drafts (storage full): say so, the words stay in the box on screen (issue 1444).
-  window.addEventListener('wos:drafts-unsaved', () => toast('!', 'Couldn’t save your draft on this device · storage is full, keep this box open or send it', 4200));
-  window.addEventListener('wos:chat-pins', () => { for (const id of Object.keys(CH)) { const w = W[id]; if (w && !w.thread && !holdList(id)) renderChats(w); } });
-  // The Snooze toast carries the return time. After-actions (keepThreadOpen) governs send, unread, restore and filing;
-  // Archive and Snooze share leaveFinishedThread instead.
-  const keepThreadOpen = () => H.keepThreadOpen || window.WizConfig?.chatAfterAction?.() !== 'list';
-  window.addEventListener('wos:boomerang-set', e => {
-    toast('◷', e.detail.label, 3200);
-    leaveSnoozed(e.detail.session);
-  });
-  window.addEventListener('wos:snooze-someday', e => {
-    if (!e.detail.quiet) leaveSnoozed(e.detail.session); // a timed Snooze already left the thread on wos:boomerang-set
-    if (!e.detail.quiet) toast('◷', snoozeLast() ? 'Snoozed · bottom of Ready' : 'Snoozed · out of your list', 2400); H.changed?.();
-  });
-  // Snooze of an open thread lands exactly where Archive does (James, 8 Nov 2026): same leaveFinishedThread, any setting, either shell.
-  const leaveSnoozed = sid => { if (sid) for (const id of Object.keys(CH)) leaveFinishedThread(W[id], sid); };
-  window.addEventListener('wos:snooze-chosen', e => leaveSnoozed(e.detail.session)); // the commit tap itself, before any request returns
-  // A scheduled Snooze was set, changed or came back: list markers, the thread banner and the Ready place follow.
-  let boomPaint = 0;
-  window.addEventListener('wos:boomerang', () => { clearTimeout(boomPaint); boomPaint = setTimeout(() => { for (const id of Object.keys(CH)) { const w = W[id]; if (!w) continue; if (w.thread) { if (!ch(id).held) renderThreadNow(w); } else if (!holdList(id)) renderChats(w); } }, 60); });
-  // Show the exact message a Boomerang was set on: scroll it into the middle and mark it briefly.
-  function showBoomMessage(el, at) {
-    const m = el?.querySelector(`.ch-msgs [data-boom-at="${CSS.escape(String(at))}"]`); if (!m) return false;
-    m.scrollIntoView({ block: 'center' }); m.classList.add('boom-flash'); setTimeout(() => m.classList.remove('boom-flash'), 2400); return true;
-  }
-  window.addEventListener('wos:prefs-error', () => toast('!', 'Saved on this device only — box preferences unavailable', 4000));
-  const waitsOn = s => !window.WizChatsListModel.isListWorking(s) && !(snoozeLast() && deferredOf(s) && !isWorking(s)) && (['waiting_for_approval', 'unknown'].includes(s.status) || (!deferredOf(s) && ['needs_you', 'check'].includes(attOf(s)?.state)));
-  // Every Sort uses the same row model; By subject orders its rows by Priority.
-  const ARCH_OPTS = [[1, '1 day'], [3, '3 days'], [7, '1 week'], [14, '2 weeks'], [30, '1 month'], [0, 'Never']];
-  const archSel = () => { const cur = LIVE.archiveAfterDays; return `<label class="ch-arch-sel">Auto-archive after <select data-archafter>${ARCH_OPTS.map(([d, l]) => `<option value="${d}"${d === cur ? ' selected' : ''}>${l}</option>`).join('')}</select></label>`; };
-  // Opinionated: tapping Newest again flips it to Oldest (same button, no fourth option).
-  const workingOrdered = list => window.WizChatsListModel.workingSort((list || []).map(s => ({ title: s.title || 'New chat', at: window.WizChatsListModel.workingAt(s, LIVE), value: s })), LIVE.workingOrder?.()).map(r => r.value);
+  /* Shell events, after-actions, Auto-archive picker and Working order; core/chats-events.js. */
+  const { archSel, keepThreadOpen, showBoomMessage, waitsOn, workingOrdered, bindLate: eventsLate } = window.WizCore.chatsParts.events({ attOf, ch, CH, deferredOf, H, holdList: (...a) => holdList(...a), isWorking, leaveFinishedThread, LIVE, renderThreadNow, toast, topicOn, W });
   const readyOrdered = list => window.WizChatsListModel.orderSessions(list, readyOrder, { at: s => LIVE.cardAt(s), rank: sesRank });
   // List mode can end while no list is on screen (a thread, search): let the watcher go on the host's change event too.
   window.addEventListener('wos:prefs', () => { if (notesOff && !window.WosSkinHost?.inboxList) { notesOff(); notesOff = null; } });
@@ -1109,6 +913,7 @@ window.WizCore.chats = function createChats(H) {
   const { draftRow, moveSubject, newDrafts, noteMoreHtml, noteRouteHtml, noteStackHtml, noteTactsHtml, notifAct, notifDoneAll, notifOf, notifRoute, openContextDraft, openNewDraft, sendPill, subjOrder, workLabel, bindLate: draftsLate } = window.WizCore.chatsParts.drafts({ ago, ch, CH, chatsBack, clip, elOf: (...a) => elOf(...a), esc, H, holdList: (...a) => holdList(...a), keepThreadOpen, KIT, LIVE, noteAt, notePlain, noteQuiet: (...a) => noteQuiet(...a), noteSiblings, noteSrcName, noteTitle, openChat, OUTBOX, owner: (...a) => owner(...a), PHONE: (...a) => PHONE(...a), reachLabel, renderChatList, renderChats: (...a) => renderChats(...a), saveDraft, setFocus, toast, TOPIC, topicOn, troubleshoot, vib, W, winAgent });
   /* Thread tracker (Reply, go to a message), reply summary, Compact list and the Filter sheet's Focus; core/chats-tracker.js. */
   const { CHEV_SVG, COG_SVG, COMPACT_KEY, compactOn, discardDraft, filterSheet, focusLabel, focusOption, focusOptions, jumpToMessage, leadText, listTitle, noteQuiet, quoteMessage, regenOn, replyBubble, replyCard, setSummaryOpen, snoozeLast, summaryOf, summaryStartsOpen, syncListTitle, bindLate: trackerLate } = window.WizCore.chatsParts.tracker({ agentName: (...a) => agentName(...a), agentRec, AGS: (...a) => AGS(...a), byStatus, ch, CH, chanArchived, channelsOn, chanOpen, clip, draftKey: (...a) => draftKey(...a), elOf: (...a) => elOf(...a), esc, focusAgents, focusedAgent, focusOf, focusUseful, holdList: (...a) => holdList(...a), KIT, LIVE, matchesFocus, notifOf, owner: (...a) => owner(...a), pinsOn, refreshReply: (...a) => refreshReply(...a), rememberedFocus, renderChatList, renderThread, renderThreadLive, renderThreadNow, saveDraft, scrollBox, spaceAgent, spaces, statusEntries, syncDocumentThread, threadViewportTop, toast, toTurns, track, visibleSpaces, W });
+  eventsLate({ snoozeLast });
   statusLate({ snoozeLast });
   notesLate({ snoozeLast });
   setupLate({ snoozeLast });
@@ -1236,112 +1041,11 @@ window.WizCore.chats = function createChats(H) {
       });
     }
   }
-  // The phone replaces the list with the thread. Keep a bounded return bookmark before
-  // that replacement, including nearby row anchors so Done or live updates above it
-  // can remove/reorder rows without moving the surviving row under James's eyes.
-  function listPlace(el) {
-    const sc = el?.querySelector('.ch-scroll'); if (!sc) return null;
-    const top = sc.scrollTop, edge = sc.getBoundingClientRect().top;
-    const rows = top > 0 ? [...sc.querySelectorAll('[data-chopen]')].filter(r => r.getBoundingClientRect().bottom > edge).slice(0, 8) : [];
-    return { top, rows: rows.map(r => ({ id: r.dataset.chopen, section: r.closest('[data-sec]')?.dataset.sec, y: r.getBoundingClientRect().top - edge })) };
-  }
-  // After an in-place patch the scroller kept its offset: only a row above that grew or shrank may move the reader.
-  // Never re-assign an unchanged scrollTop (that stops a phone's momentum scroll mid-fling).
-  function anchorListPlace(sc, place) {
-    if (!sc || !place || !place.rows.length) return;
-    const edge = sc.getBoundingClientRect().top, rows = [...sc.querySelectorAll('[data-chopen]')];
-    for (const anchor of place.rows) {
-      const row = rows.find(r => r.dataset.chopen === anchor.id && r.closest('[data-sec]')?.dataset.sec === anchor.section);
-      if (row) { const d = row.getBoundingClientRect().top - edge - anchor.y; if (Math.abs(d) >= 1) sc.scrollTop += d; break; }
-    }
-  }
-  /* Put the return bookmark back; true once it landed. A scroller with no layout yet (its window hidden, parked or
-   * mid-transition on the phone) ignores scrollTop and sits at 0, and rows not painted yet clamp it short. Every
-   * later paint then read that 0 as the place, so a reply or Done sent James to the top of Chats although Back kept
-   * his spot (James, 24 Oct 2026). */
-  function restoreListPlace(sc, place) {
-    if (!sc || !place) return true;
-    if (place.top < 1) { sc.scrollTop = 0; return true; }
-    if (!sc.isConnected || !sc.getClientRects().length || !sc.clientHeight) return false;
-    sc.scrollTop = place.top;
-    const rows = [...sc.querySelectorAll('[data-chopen]')];
-    for (const anchor of place.rows) {
-      // Done can leave the same ID visible in expanded Archive. Follow a surviving
-      // neighbor in the original section, never the archived row to its new home.
-      const row = rows.find(r => r.dataset.chopen === anchor.id && r.closest('[data-sec]')?.dataset.sec === anchor.section);
-      if (row) { sc.scrollTop += row.getBoundingClientRect().top - sc.getBoundingClientRect().top - anchor.y; return true; }
-    }
-    return Math.abs(sc.scrollTop - place.top) < 2;
-  }
-  // Keep putting an unlanded bookmark back each frame (≤3 s) until it lands, the thread changes, James touches the
-  // list, or anything else scrolls it.
-  // The window body can be remounted meanwhile, so each frame looks up the live scroller.
-  function holdListPlace(w, el, place, ms = 3000) {
-    const c = ch(w.id), until = Date.now() + ms; c.listPending = place;
-    let box = el.querySelector('.ch-scroll'), mine = box?.scrollTop ?? 0;
-    const step = () => {
-      if (c.listPending !== place) return;
-      const sc = (elOf(w.id) || el).querySelector('.ch-scroll');
-      if (sc !== box) { box = sc; mine = sc?.scrollTop ?? 0; }
-      if (w.thread || !sc || Date.now() > until || Math.abs(sc.scrollTop - mine) >= 1) { c.listPending = null; return; }
-      if (restoreListPlace(sc, place)) { c.listPending = null; return; }
-      mine = sc.scrollTop; requestAnimationFrame(step);
-    };
-    requestAnimationFrame(step);
-  }
-  /* One remembered place per Chats list, whatever repaints or replaces it (James, 25 Oct 2026: tapping Reload on an
-   * update put him back at the top; Back, Done and a reply had each been fixed one route at a time). Every scroll of a
-   * laid-out list saves its bookmark here, and so does leaving the page; a list painted with no place of its own (a
-   * fresh page after Reload, an app restart within the hour) takes it back. The key includes what the list shows, so
-   * a different agent, Space, filter or search starts at its own top. */
-  const LIST_PLACE_KEY = 'wos.chats.list-place.v1', LIST_PLACE_TTL = 60 * 60 * 1000;
+  /* List places (the return bookmark); core/chats-places.js. */
+  const { anchorListPlace, holdListPlace, LIST_PLACE_KEY, LIST_PLACE_TTL, listPlace, restoreListPlace } = window.WizCore.chatsParts.places({ ch, elOf: (...a) => elOf(...a) });
   const listSig = w => { const f = focusOf(w), cv = typeof channelsOn === 'function' && channelsOn() ? (chanOpen(w)?.id || chanView) : ''; return [winAgent(w), f ? f.kind + ':' + f.key : '', ch(w.id).filter || '', norm(ch(w.id).q)].concat(cv ? [cv] : [], ch(w.id).running && typeof runningOpen === 'function' && runningOpen(w) ? ['running'] : []).join('|'); };
-  function readListPlaces() { try { return JSON.parse(localStorage.getItem(LIST_PLACE_KEY) || '{}') || {}; } catch (e) { return {}; } }
-  function storeListPlace(wid) {
-    const w = W[wid], c = CH[wid], el = elOf(wid), sc = el?.querySelector('.ch-list > .ch-scroll');
-    // A list without layout (hidden, parked desk, mid-transition) reads 0: that is not where James is.
-    if (!w || w.thread || !c || c.listPending || !sc || !sc.isConnected || !sc.clientHeight) return;
-    const place = listPlace(el); if (!place) return;
-    const all = readListPlaces(), now = Date.now();
-    for (const k of Object.keys(all)) if (!(now - (all[k]?.at || 0) < LIST_PLACE_TTL)) delete all[k];
-    all[wid] = { ...place, sig: listSig(w), at: now };
-    try { localStorage.setItem(LIST_PLACE_KEY, JSON.stringify(all)); } catch (e) {}
-  }
-  function storedListPlace(w) {
-    const r = readListPlaces()[w.id];
-    return r && Date.now() - (r.at || 0) < LIST_PLACE_TTL && r.sig === listSig(w) ? { top: r.top, rows: r.rows || [] } : null;
-  }
-  const listSaveT = {};
-  function queueListPlace(wid) { clearTimeout(listSaveT[wid]); listSaveT[wid] = setTimeout(() => storeListPlace(wid), 200); }
-  function flushListPlaces() { for (const wid of Object.keys(listSaveT)) { clearTimeout(listSaveT[wid]); delete listSaveT[wid]; } for (const el of H.root().querySelectorAll('[data-chats]')) storeListPlace(el.dataset.chats); }
-  window.addEventListener('pagehide', flushListPlaces);
-  document.addEventListener('visibilitychange', () => { if (document.hidden) flushListPlaces(); });
-  /* Activity's Ready as one number for the orb badge, the desk marks and Home's Ready card (wizard-ux issue 1504): the
-   * same rows and rule activityBody draws for the main list (needs you OR unread, never snoozed), so the badges can never
-   * disagree with the list. Notifications set to Chats are added by the badge itself (WosBell.unreadCount). Null with
-   * Channels off: the badges keep their unread tally there. */
-  function activityReady(live) { const r = activityReadyRows(live); return r ? r.length : null; }
-  function activityReadyRows(live) {
-    const L = live || LIVE, M = window.WizChatsListModel;
-    if (!channelsOn() || !L?.ok || !M?.activityGroups) return null;
-    const rows = (L.sessionsFor ? L.sessionsFor('') : L.unified()).filter(s => !s.hidden);
-    return M.activityGroups(L.workGroups(rows), { needs: actNeeds, unread: actUnread, at: chanAt }).ready;
-  }
-  /* Home's "N need you" and its Needs you · Unread card (wizard-ux issue 1517): with Channels on, the same split as
-   * Activity's Ready (amber = actNeeds, the rest green), so an amber thread already opened still counts as needing you.
-   * Null with Channels off: Home keeps LIVE.groups(). */
-  function activityHome(live) {
-    const r = activityReadyRows(live); if (!r) return null;
-    return { needs: r.filter(actNeeds), ready: r.filter(s => !actNeeds(s)) };
-  }
-  window.WizCore.activityReady = activityReady;
-  window.WizCore.activityHome = activityHome;
-  /* Activity with Channels on (wizard-ux issue 1336; James, 12 Nov 2026: "I'm not really going to archive threads
-   * anymore"): a short what-needs-me list. Working as today; Ready holds amber (waiting on the owner, until addressed)
-   * and green (finished, unread, until opened) mixed in the one sort; Recent is everything else, newest first, about a
-   * week back, then Show older within the live window; Snoozed and Archived fold at the very bottom. The one sort menu
-   * sits on Ready (Newest first, Oldest first, Needs you first), stored as Chats' own Ready order. */
-  const ACT_SORTS = () => window.WizChatsListModel.ACTIVITY_SORTS;
+  /* Stored list places and Activity's Ready counts; core/chats-ready.js. */
+  const { ACT_SORTS, listSaveT, queueListPlace, storedListPlace } = window.WizCore.chatsParts.ready({ actNeeds, actUnread, CH, chanAt, channelsOn, elOf: (...a) => elOf(...a), H, LIST_PLACE_KEY, LIST_PLACE_TTL, listPlace, listSig, LIVE, W });
   let actOlder = false;
   function activityBody(w, rows, nt) {
     const M = window.WizChatsListModel, c = ch(w.id), order = M.activitySortOf(readyOrder);
@@ -1597,30 +1301,8 @@ window.WizCore.chats = function createChats(H) {
   const { addFiles, attachTray, CHECK_SVG, CLIP_SVG, fileUrl, hasContent, mediaOfFile, MIC_SVG, PEND, pendRef, PREVIEW, refreshCompose, refreshReply, syncSend, timeTag, toggleVoice, turnAt, turnHtml, UPLOAD_ABORT, uploadFile, userMedia, bindLate: attachLate } = window.WizCore.chatsParts.attach({ ch, CHEV_SVG, clip, COG_SVG, draftKey: (...a) => draftKey(...a), draftsLate, elOf: (...a) => elOf(...a), esc, fileRef: (...a) => fileRef(...a), INC, KIT, leadText, md, needsThreadOn, regenOn, replyBubble, replyCard, saveDraft, summaryOf, summaryStartsOpen, sweepHtml, toast, track, W, winAgent });
   dailyLate({ turnHtml });
   chanboxLate({ attachTray, CLIP_SVG, fileUrl, hasContent, pendRef, PREVIEW, syncSend });
-  /* Thread actions: Snooze / Archive on a settled thread with an answer (Close & file retired with Helm).
-   * A durable follow-up adds an explicit Stop action; Archive becomes "Archive for now" and never cancels it. */
-  const followUpActive = s => s?.followUp?.active === true && Number(s.followUp.count) > 0;
-  function threadActions(s, turns) {
-    if (!s || LIVE.busy(s.id)) return [];
-    const watching = followUpActive(s);
-    // A watcher check really running (quiet, so its thread may stay archived): Stop watching is the only action.
-    if (watching && (WORKING_ST.has(s.status) || ['waiting_for_approval', 'unknown'].includes(s.status))) return ['stop_watch'];
-    const inArchive = s.archived || LIVE.workGroups([s]).archive.length > 0;
-    if (inArchive) return watching ? ['restore', 'snooze', 'stop_watch'] : ['restore', 'snooze'];
-    if (isWorking(s) || ['waiting_for_approval', 'unknown'].includes(s.status)) return [];
-    if (s.deferred) return watching ? ['restore', 'snooze', 'stop_watch', 'done'] : ['restore', 'snooze', 'done'];
-    // A run James stopped (or one that died) before any answer still needs a way out: Done files it.
-    if (turns && !turns.some(t => t.a || t.media.length)) return ['cancelled', 'failed', 'interrupted'].includes(s.status) ? (watching ? ['stop_watch', 'done'] : ['done']) : [];
-    return watching ? ['snooze', 'stop_watch', 'done'] : ['snooze', 'done'];
-  }
-  const ACT = {
-    unread: { label: 'Mark unread', icon: '<svg viewBox="0 0 24 24"><rect x="3.5" y="5.5" width="17" height="13" rx="2"/><path d="m5 7 7 5 7-5"/></svg>', hint: 'Mark unread' },
-    done: { label: 'Archive', icon: '<svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="4" rx="1.2"/><path d="M5.5 9v9a1.5 1.5 0 0 0 1.5 1.5h10a1.5 1.5 0 0 0 1.5-1.5V9M10 13h4"/></svg>', hint: 'Archive' },
-    file: { label: 'Close & file', icon: '<svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="4" rx="1.2"/><path d="M5.5 9v9a1.5 1.5 0 0 0 1.5 1.5h10a1.5 1.5 0 0 0 1.5-1.5V9M10 13h4"/></svg>', hint: 'Close and file thread' },
-    snooze: { label: 'Snooze', icon: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v4.5l3 2"/></svg>', hint: 'Snooze: bring this thread back later' },
-    stop_watch: { label: 'Stop watching', icon: '<svg viewBox="0 0 24 24"><path d="M3 12s3.5-6 9-6 9 6 9 6-3.5 6-9 6-9-6-9-6Z"/><path d="m4 4 16 16"/></svg>', hint: 'Stop watching this follow-up' },
-    restore: { label: 'Restore', icon: '<svg viewBox="0 0 24 24"><path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3M4.5 4.5v4h4"/></svg>', hint: 'Restore to Work' },
-  };
+  /* Thread actions (Snooze / Archive) and the action icons; core/chats-threadacts.js. */
+  const { ACT, followUpActive, threadActions } = window.WizCore.chatsParts.threadacts({ isWorking, LIVE, WORKING_ST });
   draftsLate({ ACT });
   // Notification-thread only: hand it to the agent to stop or fix (the package sends the ask).
   const NACT = { resolve: { label: 'Resolve this', icon: '<svg viewBox="0 0 24 24"><path d="M14.7 6.3a4 4 0 0 0 5 5L12 19l-3 1 1-3 7.7-7.7M5 5l3 3"/></svg>', hint: 'Ask Wizard to stop these or fix the cause' }, restore: { ...ACT.restore, label: 'Restore', hint: 'Move back to your inbox' } };
@@ -1830,60 +1512,8 @@ window.WizCore.chats = function createChats(H) {
   /* Approvals in a thread and repainting around a field; core/chats-approvals.js. */
   const { approvalHtml, chooseApproval, loadApproval, rebuildAround } = window.WizCore.chatsParts.approvals({ ch, esc, KIT, LIVE, renderThreadNow, toast, W });
   function renderThreadNow(w) { const el = track.querySelector(`[data-chats="${w.id}"]`); if (el && w.thread) renderThread(w, el); }
-  /* Selecting text (James, 12 Oct): a working thread re-renders on every new step, which replaced the bubble under
-   * a long-press (Android cancels the press) and wiped any selection a few seconds later. Background updates now
-   * wait while a finger is down on the messages or text is selected in them, and land once the selection clears. */
-  // A selection holds updates for two minutes at most, so a forgotten one never freezes a working thread.
-  const SEL = { down: null, at: 0, x: 0, y: 0, since: 0 }, SEL_MAX = 120000;
-  // Native scrolling cancels Pointer Events before the finger lifts. Touch Events retain ownership;
-  // scroll events keep the same nodes through inertia. Only background paints use these guards.
-  const TOUCH = new Map(), SCROLL_IDLE = 350;
-  let idleT = 0;
-  function scheduleHeld() { clearTimeout(idleT); idleT = setTimeout(flushHeld, SCROLL_IDLE); }
-  function readingIn(el) {
-    const g = ch(idOf(el)).reading;
-    if (!g || !g.node.isConnected || !el.contains(g.node)) return false;
-    // Recovery for a lost end event, not a 15-second deadline on a genuine slow drag.
-    if (g.touches.size && Date.now() - g.at < SEL_MAX) return true;
-    return Date.now() < g.until;
-  }
-  function readGuard(node) {
-    const c = ch(idOf(node));
-    if (!c.reading || c.reading.node !== node) c.reading = { node, touches: new Set(), at: 0, until: 0 };
-    return c.reading;
-  }
-  function clearReading(id) {
-    const g = CH[id]?.reading; if (!g) return;
-    for (const [key, owner] of TOUCH) if (owner === g) TOUCH.delete(key);
-    if (SEL.down === g.node) SEL.down = null;
-    delete CH[id].reading; // explicit navigation/remount must not retain a detached touch target
-  }
-  function resetReading() {
-    TOUCH.clear(); SEL.down = null;
-    for (const c of Object.values(CH)) if (c.reading) { c.reading.touches.clear(); c.reading.until = 0; }
-    scheduleHeld();
-  }
-  document.addEventListener('touchend', endTouches, { capture: true, passive: true });
-  document.addEventListener('touchcancel', endTouches, { capture: true, passive: true });
-  function endTouches(e) {
-    for (const t of e.changedTouches) {
-      const g = TOUCH.get(t.identifier); if (!g) continue;
-      g.touches.delete(t.identifier); g.until = Date.now() + SCROLL_IDLE; TOUCH.delete(t.identifier);
-    }
-    if (!TOUCH.size) SEL.down = null;
-    scheduleHeld();
-  }
-  document.addEventListener('visibilitychange', () => { resetReading(); });
-  window.addEventListener('pagehide', resetReading);
-  window.addEventListener('blur', resetReading);
-  function selectingIn(el) {
-    if (readingIn(el)) return true;
-    if (SEL.down && el.contains(SEL.down) && Date.now() - SEL.at < SEL_MAX) return true;
-    const s = window.getSelection?.(); if (!s || s.isCollapsed || !s.rangeCount) return false;
-    if (SEL.since && Date.now() - SEL.since > SEL_MAX) return false;
-    const n = s.anchorNode, e = n && (n.nodeType === 1 ? n : n.parentElement);
-    return !!e && el.contains(e) && !!e.closest('.ch-msgs');
-  }
+  /* Selecting text in a working thread; core/chats-select.js. */
+  const { clearReading, readGuard, readingIn, scheduleHeld, SCROLL_IDLE, SEL, selectingIn, TOUCH } = window.WizCore.chatsParts.select({ ch, CH, flushHeld, idOf: (...a) => idOf(...a) });
   function renderThreadLive(w) { const el = track.querySelector(`[data-chats="${w.id}"]`); if (el && w.thread) renderLive(w, el); }
   function renderLive(w, el) {
     const c = ch(w.id);
@@ -1914,127 +1544,8 @@ window.WizCore.chats = function createChats(H) {
   setInterval(flushHeld, 10000); // bounded recovery for lost touch/selection-end or an external sheet close
   const PAGE = 60;
   trackerLate({ PAGE });
-  // Photos in the thread, keyed by src. Returns a function that puts the loaded ones back after a repaint.
-  function keepLoadedImages(root) {
-    const byKey = new Map();
-    for (const im of root.querySelectorAll('.ch-msgs img')) {
-      const k = im.getAttribute('src');
-      if (k && im.complete && im.naturalWidth && !byKey.has(k)) byKey.set(k, im);
-    }
-    return fresh => {
-      if (!byKey.size) return;
-      for (const im of fresh.querySelectorAll('.ch-msgs img')) {
-        const old = byKey.get(im.getAttribute('src'));
-        if (!old) continue;
-        byKey.delete(im.getAttribute('src'));
-        for (const a of ['alt', 'class', 'loading', 'decoding']) { const v = im.getAttribute(a); if (v === null) old.removeAttribute(a); else old.setAttribute(a, v); }
-        im.replaceWith(old);
-      }
-    };
-  }
-  const assistantStamp = turns => { const a = (turns || []).findLast(t => t.a && t.a.final !== false)?.a; return a ? JSON.stringify([a.at, a.text]) : ''; };
-  // Hide protocol trailers even when their opening marker spans token chunks.
-  const streamAnswer = value => {
-    // A whole tweak card is mid-reply (its own line): drop it and keep streaming; a half-typed one is cut below.
-    let s = String(value || '').replace(/\n*[ \t]*\[WIZARD_TWEAK_V1\](?:[\s\S]*?\[\/WIZARD_TWEAK_V1\]|[\s\S]*$)[ \t]*\n*/g, '\n\n');
-    const markers = ['[WIZARD_STATUS_V1]', '[WIZARD_CLOSE_AND_FILE_V1]', '[WIZARD_FILES_V1]', '[WIZARD_FILE_CHIPS_V1]', '[WIZARD_IMAGE_INTENT_V1]', '[WIZARD_TWEAK_V1]', '<helm_attachments>'];
-    for (const marker of markers) {
-      const at = s.indexOf(marker); if (at >= 0) s = s.slice(0, at);
-      for (let n = 1; n < marker.length; n++) if (s.endsWith(marker.slice(0, n))) { s = s.slice(0, -n); break; }
-    }
-    // A `MEDIA:/abs/path` line is the agent sending a picture. The Agent Service turns it into the thumbnail when the
-    // transcript lands; the live stream still carries the raw line, so leave it out (also while it is half typed).
-    s = s.replace(STREAM_MEDIA, '');
-    const tail = s.slice(s.lastIndexOf('\n') + 1).trimStart();
-    if (tail && (tail.startsWith('MEDIA:') || 'MEDIA:'.startsWith(tail))) s = s.slice(0, s.lastIndexOf('\n') + 1);
-    return s.replace(/\n{3,}/g, '\n\n').trimEnd();
-  };
-  const STREAM_MEDIA = /^[ \t]*MEDIA:[ \t]*\/[^\r\n]*$/gm;
-  // The same picture as the transcript shows it: a positioned thumbnail, or the line saying it could not be shown.
-  const SHOWN_MEDIA = /!\[[^\]\n]*\]\(\/wizard\/attachments\/[0-9a-f]{32}(?: "[^"\n]*")?\)|\[file: [^\]\n]* unavailable\]/g;
-  // A replay of the turn on screen: the streamed words end with its answer AND add nothing beyond that turn's own
-  // words (its interim notes). A new run that merely ends like an old short answer ("Yes.") never matches.
-  // Pictures are compared as absent on both sides: the stream has MEDIA lines, the transcript has thumbnails.
-  const bare = v => streamAnswer(v).replace(SHOWN_MEDIA, '').replace(/\s+/g, '');
-  const streamEnded = st => {
-    if (st.terminal) return true;
-    // The complete done trailer is the older service's final-answer receipt,
-    // emitted before its SSE terminal frame; partial markers are not receipts.
-    const marker = String(st.text || '').match(/\[WIZARD_STATUS_V1\]\s*(\{[\s\S]*\})\s*\[\/WIZARD_STATUS_V1\]\s*$/);
-    try { return !!marker && JSON.parse(marker[1]).state === 'done'; } catch (_) { return false; }
-  };
-  const streamShown = (st, turns) => {
-    const got = bare(st.text);
-    // A stale Working row or recent outbox receipt can reopen an earlier run AFTER the latest answer landed.
-    // Its replay then shares that latest baseline: match any displayed final turn (James, 1 Nov 2026), but
-    // keep the bound local to that turn so a new answer merely ending like an old "Yes." cannot disappear.
-    return turns.some(t => {
-      if (!t.a || t.a.final === false) return false;
-      const ans = bare(t.a.text);
-      return !!ans && got.endsWith(ans) && got.length <= [...(t.notes || []), t.a.text].map(bare).join('').length;
-    });
-  };
-  // Mid-run the transcript already shows the run's interim words (a message the agent wrote before a tool call, and
-  // earlier notes), while the stream replays them from its first event. Draw only what the transcript lacks, or the
-  // same line shows twice: once as a message, once under "Replying…" (Miguel, 29 Oct 2026).
-  const streamUnshown = (text, turns) => {
-    const t = (turns || []).at(-1);
-    if (!t || (t.a && t.a.final !== false)) return text;
-    const shown = [...(t.notes || []), t.a?.text || ''].map(bare).join('');
-    if (!shown) return text;
-    let i = 0, j = 0;
-    for (; i < text.length && j < shown.length; i++) { if (/\s/.test(text[i])) continue; if (text[i] !== shown[j]) return text; j++; }
-    return j === shown.length ? text.slice(i).trimStart() : text;
-  };
-  function closeStream(c) { c.stream?.handle?.close(); clearTimeout(c.stream?.retry); c.stream = null; }
-  function syncStream(w, c, turns, agent) {
-    const sid = w.thread, s = LIVE.session(sid), pendingRun = LIVE.pendingRun?.(sid), rid = pendingRun || s?.runId;
-    if (c.stream && (c.stream.sid !== sid || (rid && c.stream.rid !== rid) || s?.archived || agentRec(agent).privacy === 'private')) closeStream(c);
-    if (!c.stream && turns && rid && !s?.archived && (pendingRun || isWorking(s)) && agentRec(agent).privacy !== 'private') {
-      const st = { sid, rid, baseline: assistantStamp(turns), text: '', terminal: false, landed: false };
-      c.stream = st;
-      st.handle = LIVE.openRunStream?.(sid, agent, rid, snapshot => {
-        if (c.stream !== st || W[w.id] !== w || w.thread !== sid || !elOf(w.id)) { closeStream(c); return; }
-        st.text = snapshot.text; st.steps = snapshot.steps || []; st.terminal = snapshot.terminal;
-        renderThreadLive(w);
-        if (st.terminal && !st.reconciling) {
-          st.reconciling = true;
-          const until = Date.now() + 60000;
-          const reconcile = async () => {
-            if (c.stream !== st || w.thread !== sid || st.landed) return;
-            // The transcript is the authority: a provisional that never matched it must not linger as a second copy.
-            if (Date.now() > until) { st.landed = true; st.handle?.close(); renderThreadLive(w); return; }
-            await loadThread(w, true);
-            if (c.stream === st && !st.landed) st.retry = setTimeout(reconcile, 500);
-          };
-          reconcile();
-        }
-      });
-      if (!st.handle) c.stream = null;
-    }
-    const st = c.stream;
-    // Publish the authoritative transcript and retire the provisional in the SAME paint.
-    // Keep the last words visible while terminal receipts race transcript persistence.
-    // Or the transcript already shows these words: reopening a thread while the outbox still names its run (or the list
-    // still says working) starts a new subscriber whose baseline already includes the answer, and the run replays from
-    // its first event. Without this the whole reply showed twice under "Finishing…" (Miguel, 27 Oct 2026).
-    // A textual match is not run identity while tokens are still arriving. In
-    // particular a new "Yes." prefix must not close its subscriber just because
-    // an older turn said the same thing. Only a terminal replay can be deduped
-    // without a changed transcript; completed streams have no later deltas.
-    if (st && !st.landed && turns && (assistantStamp(turns) !== st.baseline || (streamEnded(st) && streamShown(st, turns)))) {
-      st.landed = true; st.handle?.close(); clearTimeout(st.retry);
-    }
-    const visible = st && !st.landed ? streamUnshown(streamAnswer(st.text), turns) : '';
-    // James: one activity surface. Timed tool rows belong to the existing WosWork disclosure;
-    // the stream adds only answer text, never a second steps list or a steps-only bubble.
-    return visible ? `<div class="msg a" data-streaming="${esc(st.rid)}"><div class="bub">${md(visible)}</div><div class="mmeta">${st.terminal ? 'Finishing…' : 'Replying…'}</div></div>` : '';
-  }
-  function threadState(s, agent) {
-    const working = isWorking(s);
-    const sub = !s ? '' : s.status === 'queued' && s.queueReason === 'provider_access' ? 'AI could not start · message saved · choose another model or retry' : s.archived ? 'Archived' : snoozeLast() && stiKind(s) === 'deferred' ? 'Snoozed' : s.status === 'unknown' ? 'Needs recovery · needs your acknowledgement' : s.status === 'stopping' ? 'Stopping…' : working && globalThis.WizReach?.restartHeld?.(s) ? 'Saved · sends after Wizard restarts' : working ? (window.WosWork?.helperLabel(s.helperStatus) || (s.waitingOn === 'helper' ? `A helper is finishing this for ${agentName(agent)}` : `${agentName(agent)} is working`)) : s.status === 'waiting_for_approval' ? 'Waiting for your response' : s.deferred ? 'Snoozed' : `Updated ${ago(s.lastAssistantAt || s.updatedAt)}`;
-    return { working, sub };
-  }
+  /* Thread streaming and a thread's working state; core/chats-stream.js. */
+  const { closeStream, keepLoadedImages, syncStream, threadState, bindLate: streamLate } = window.WizCore.chatsParts.stream({ agentName, agentRec, ago, elOf: (...a) => elOf(...a), esc, isWorking, LIVE, md, renderThreadLive, snoozeLast, stiKind, W });
   function renderThread(w, el, keep) {
     if (INC?.render(w.id, el)) return;
     if (H.renderView?.(w, el, () => renderThread(w, el, keep), 'thread')) return;
@@ -2432,6 +1943,8 @@ window.WizCore.chats = function createChats(H) {
   }
   /* Durable outbox and reading a thread: core/chats-outbox.js. */
   const { echoed, loadThread, localSent, pendingFor, pendingHtml, reconcileSent, renderChats, retryShown, threadAlive, threadErrHtml, turnsCurrent } = window.WizCore.chatsParts.outbox({ ch, CH, CHECK_SVG, elOf: (...a) => elOf(...a), esc, H, INC, isWorking, KIT, LIVE, loadApproval, md, MIC_SVG, needsLand, OUTBOX, PEND, reach, reachLabel, renderChatList, renderLive, renderThread, renderThreadLive, replyCard, rowOf, syncListTitle, toTurns, track, troubleshoot, userMedia, W });
+  eventsLate({ renderChats });
+  streamLate({ loadThread });
   rowactsLate({ renderChats });
   setupLate({ renderChats });
   /* Thread trail: a thread opened from a link inside another thread remembers where it came from, so Back,

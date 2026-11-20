@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { shortTime } from '../web/layouts/ai-apps/parts.js';
+import { withParts } from './fixtures/chats-parts.mjs';
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
 const now = Date.UTC(2026, 10, 3, 5);
 function core(zone = 'UTC') {
@@ -47,8 +48,8 @@ test('older labels follow the owner time zone, not the desktop midnight', () => 
 test('all Chats surfaces delegate labels; message stamps and day dividers keep their existing meaning', () => {
   assert.match(read('web/app.js'), /const ago = window\.WizCore\.ago;/);
   assert.match(read('web/desktop/desktop.js'), /const \{ esc, clip, norm, ago, emoOf \} = C;/);
-  assert.match(read('web/core/chats.js'), /const \{ esc, clip, norm, ago, emoOf \} = window\.WizCore;/);
-  assert.match(read('web/core/chats.js'), /const sub = [^\n]+ago\(/, 'shared thread header');
+  assert.match(withParts(read('web/core/chats.js')), /const \{ esc, clip, norm, ago, emoOf \} = window\.WizCore;/);
+  assert.match(withParts(read('web/core/chats.js')), /const sub = [^\n]+ago\(/, 'shared thread header');
   const desktop = read('web/layouts/ai-apps/desktop.js');
   assert.match(desktop, /shortTime\(s\.at, Date\.now\(\)\)/, 'sidebar');
   assert.match(desktop, /shortTime\(r\.at, now\)/, 'rail flyout');
