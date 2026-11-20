@@ -44,7 +44,7 @@
     ['e', 'core/app-reading-position.js'], ['c', 'core/share-wizard.css'], ['e', 'core/sheetback.js'],
     ['e', 'core/share-wizard.js'], ['e', 'core/app-services-windows.js'], ['e', 'core/app-services-boundary.js'], ['e', 'core/app-services.js'], ['e', 'core/app-versions.js'], ['e', 'core/agents.js'],
     ['e', 'core/app-route.js'], ['e', 'core/app-setup.js'], ['c', 'core/app-setup.css'], ['x', 'core/chats-list-model.js'],
-    ['x', 'live.js'], ['x', 'outbox.js'], ['x', 'core/orb-handoff.js'], ['e', 'core/share-sheet.js'],
+    ['x', 'live-channels.js'], ['x', 'live-seen.js'], ['x', 'live-streams.js'], ['x', 'live-work.js'], ['x', 'live.js'], ['x', 'outbox.js'], ['x', 'core/orb-handoff.js'], ['e', 'core/share-sheet.js'],
     ['x', 'core/chat-kit.js'], ['x', 'core/composer-input.js'], ['x', 'core/attach-chip.js'], ['x', 'core/chat-pins.js'],
     ['x', 'core/thread-tracker.js'], ['x', 'core/chat-topic-emojis-data.js'], ['x', 'core/chat-topic-emojis.js'],
     ['x', 'core/chat-models.js'], ['x', 'core/chat-work.js'], ['x', 'core/chat-errors.js'], ['x', 'core/files.js'],

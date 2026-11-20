@@ -6,7 +6,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
-const live = readFileSync(new URL('../web/live.js', import.meta.url), 'utf8');
+import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
+const live = withLiveParts(readFileSync(new URL('../web/live.js', import.meta.url), 'utf8'));
 const cut = (a, b) => { const i = live.indexOf(a); assert.ok(i >= 0, a); const j = live.indexOf(b, i); assert.ok(j > i, b); return live.slice(i, j); };
 const seenBlock = cut('  /* ---- thread-seen', '  /* ---- network');
 const markSeen = cut('    markSeen(ids) {', '    async markUnread(ids) {');

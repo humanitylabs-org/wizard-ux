@@ -7,9 +7,10 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
 import { withServicesParts } from './fixtures/app-services-parts.mjs';
+import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
 const services=withServicesParts(readFileSync(new URL('../web/core/app-services.js',import.meta.url),'utf8'));
 const client=readFileSync(new URL('../web/core/app-client.js',import.meta.url),'utf8');
-const live=readFileSync(new URL('../web/live.js',import.meta.url),'utf8');
+const live=withLiveParts(readFileSync(new URL('../web/live.js',import.meta.url),'utf8'));
 
 function host(id='wizard-calendar') {
  const posted=[],location=new URL('https://wizard.example/wizard-os-home/'),view={seen:true,front:false},doc={hidden:false,readyState:'loading',listeners:{},addEventListener(t,fn){(this.listeners[t]||=[]).push(fn);}};

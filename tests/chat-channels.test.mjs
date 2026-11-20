@@ -5,6 +5,7 @@ import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { modelContext } from './fixtures/chats-list-model.mjs';
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
+import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
 const src = withParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'));
 const app = readFileSync(new URL('../web/app.js', import.meta.url), 'utf8');
 const cut = (a, b) => { const i = src.indexOf(a); assert.ok(i >= 0, a); return src.slice(i, src.indexOf(b, i)); };
@@ -1580,7 +1581,7 @@ test('issue 1316 review: an agent-focused General has its own mark; reading it n
 // wizard-agent-service issue 471: with Channels on (its own wizard/channel-read-sync switch until wizard-ux issue 1358), the watermark is also kept on the box
 // (/wizard/v1/channels/read, forward only), so reading a channel on one device clears it on the owner's others.
 // The real LIVE.chanReads (web/live.js channelReads) runs against a fake box shared by two fixtures.
-const liveSrc = readFileSync(new URL('../web/live.js', import.meta.url), 'utf8');
+const liveSrc = withLiveParts(readFileSync(new URL('../web/live.js', import.meta.url), 'utf8'));
 const readsBlock = (() => { const a = liveSrc.indexOf('  /* ---- channel reads'), b = liveSrc.indexOf('  /* ---- end channel reads ---- */'); assert.ok(a > 0 && b > a); return liveSrc.slice(a, b); })();
 function fakeBox({ on = true } = {}) {
   const box = { at: {}, on, calls: [] };

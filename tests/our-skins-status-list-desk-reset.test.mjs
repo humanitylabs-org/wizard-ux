@@ -6,13 +6,14 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
+import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
 
 const read = f => fs.readFileSync(new URL(f, import.meta.url), 'utf8');
 const SKINS = ['obsidian', 'obsidian-light', 'landscapes', 'landscapes-light', 'nebula', 'grove', 'tide', 'ember', 'signal'];
 
 // Evaluate live.js's chatLayout() in isolation with a given skin and stored choice.
 function layoutFor(skin, stored, groupSwitch = false) {
-  const src = read('../web/live.js');
+  const src = withLiveParts(read('../web/live.js'));
   const start = src.indexOf("  const LAYOUT_KEY = 'wos.chats.layout.v1';");
   const end = src.indexOf('  const archiveAfterDays');
   assert.ok(start > 0 && end > start, 'chatLayout block found');

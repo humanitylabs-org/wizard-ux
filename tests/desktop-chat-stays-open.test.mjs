@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
 const desktop = read('web/desktop/desktop.js'), core = read('web/core/chats.js');
 const cut = (source, from, to) => {
@@ -78,7 +79,7 @@ for (const desktopHost of [true, false]) for (const agent of ['', 'philosopher']
     WizConfig: { dayStart:n=>n-n%864e5 }, WosAgents: { isOther:id=>id!=='hermes',get:id=>({id,privacy:'standard'}) } });
   c.window = c; c.document = { readyState:'loading',hidden:false,documentElement:{dataset:{}}, addEventListener(){} };
   vm.runInContext(read('web/core/chats-list-model.js'), c);
-  vm.runInContext(read('web/live.js'), c);
+  vm.runInContext(withLiveParts(read('web/live.js')), c);
   const L = c.LIVE = c.WizLive; L.ok = true; L.seen = {initializedAt:1,threads:{}};
   // Dated relative to now: a fixed day aged past the 7-day automatic Archive (archived threads read as read) on 13 Nov 2026.
   const at = new Date(Date.now() - 36e5).toISOString();

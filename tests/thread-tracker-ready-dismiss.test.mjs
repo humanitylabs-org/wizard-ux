@@ -5,8 +5,9 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { execFileSync } from 'node:child_process';
+import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
 const src = (rel, rev) => rev ? execFileSync('git', ['show', `${rev}:${rel}`], { encoding: 'utf8' }) : readFileSync(new URL('../' + rel, import.meta.url), 'utf8');
-const live = src('web/live.js', process.env.QA_BASELINE);
+const live = withLiveParts(src('web/live.js', process.env.QA_BASELINE));
 const trackerSrc = src('web/core/thread-tracker.js', process.env.QA_BASELINE);
 
 test('Archive (Ready Done) paints on the same frame and persists the archive', async () => {

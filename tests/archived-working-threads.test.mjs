@@ -3,8 +3,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
+import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
 
-const source = readFileSync(new URL('../web/live.js', import.meta.url), 'utf8');
+const source = withLiveParts(readFileSync(new URL('../web/live.js', import.meta.url), 'utf8'));
 const chatsSource = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
 const desktopSource = readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8');
 const kinds = ['main', 'host-profile', 'container', 'restricted'];

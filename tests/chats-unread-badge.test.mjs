@@ -4,8 +4,9 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import path from 'node:path';
+import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
 const source = f => fs.readFileSync(process.env.QA_TREE ? path.join(process.env.QA_TREE, f) : new URL('../' + f, import.meta.url), 'utf8');
-const live = source('web/live.js'), nav = source('web/core/workspace-navigation.js');
+const live = withLiveParts(source('web/live.js')), nav = source('web/core/workspace-navigation.js');
 
 function harness(shell = 'web/app.js') {
   const storage = new Map(), calls = [], events = [];
