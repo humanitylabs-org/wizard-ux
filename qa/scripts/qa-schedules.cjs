@@ -8,7 +8,7 @@ fs.mkdirSync(OUT, { recursive: true });
 const checks = [], errors = [], writes = [], screenshots = [];
 function check(v, name, detail) { checks.push({ pass: !!v, name, detail }); assert.ok(v, name); console.log('PASS', name); }
 (async () => {
-  const { schedulerFixture } = await import('./tests/fixtures/scheduler.mjs');
+  const { schedulerFixture } = await import('../../tests/fixtures/scheduler.mjs');
   const browser = await chromium.launch({ headless: true, executablePath: process.env.QA_CHROME });
   try {
     for (const phone of [true, false]) {

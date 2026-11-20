@@ -27,8 +27,8 @@ function rebuilt() {
 }
 
 (async () => {
-  const { startBox } = await import('./tests/fixtures/customize-box.mjs');
-  const { run } = await import('./skills/wizard-customize/scripts/wizard-customize.mjs');
+  const { startBox } = await import('../../tests/fixtures/customize-box.mjs');
+  const { run } = await import('../../skills/wizard-customize/scripts/wizard-customize.mjs');
   const root = fs.mkdtempSync(path.join(process.env.TMPDIR || os.tmpdir(), 'qa-customize-files-'));
   fs.mkdirSync(path.join(root, 'Skins/My skin'), { recursive: true });
   const OWNER = '/* owner notes */\n.qa-owner-mark { outline: 0 }\n';
