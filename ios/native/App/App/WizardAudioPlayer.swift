@@ -20,22 +20,28 @@ final class WizardAudioBridge: NSObject, WKScriptMessageHandler {
     static let handlerName = "wizardAudio"
 
     /// Injected at document start in the main frame. Exposes the port only while the switch is on, or while the native
-    /// player still has a session loaded (so turning the switch off mid-play can still stop it).
+    /// player still has a session loaded or a request unanswered (so turning the switch off mid-play can still stop it).
     // shim:begin
     static let shim = """
     (function () {
       'use strict';
       var h = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.wizardAudio;
       if (!h || Object.prototype.hasOwnProperty.call(window, 'wizardAudioPort')) return;
-      var SWITCH = 'wizard/lock-screen-player', live = false;
-      var port = { onmessage: null, postMessage: function (raw) { h.postMessage(String(raw)); } };
+      var SWITCH = 'wizard/lock-screen-player', live = false, inflight = {}, waiting = 0;
+      // A request still on its way counts as live: turning the switch off before a load answers can still stop it.
+      var port = { onmessage: null, postMessage: function (raw) {
+        var id = ''; try { id = String(JSON.parse(raw).id || ''); } catch (_) {}
+        if (id && !inflight[id]) { inflight[id] = 1; waiting++; }
+        h.postMessage(String(raw));
+      } };
       function on() { try { return (document.documentElement.dataset.tweaks || '').split(' ').indexOf(SWITCH) >= 0; } catch (_) { return false; } }
       Object.defineProperty(window, '__wizardAudioReply', { value: function (m) {
         if (!m || typeof m !== 'object') return;
         if (typeof m.live === 'boolean') live = m.live;
+        if (m.id && inflight[m.id]) { delete inflight[m.id]; waiting--; }
         if (m.id && typeof port.onmessage === 'function') port.onmessage({ data: JSON.stringify(m) });
       } });
-      Object.defineProperty(window, 'wizardAudioPort', { configurable: false, get: function () { return on() || live ? port : undefined; } });
+      Object.defineProperty(window, 'wizardAudioPort', { configurable: false, get: function () { return on() || live || waiting > 0 ? port : undefined; } });
     })();
     """
     // shim:end
@@ -100,7 +106,7 @@ final class WizardAudioBridge: NSObject, WKScriptMessageHandler {
         web.configuration.websiteDataStore.httpCookieStore.getAllCookies { [weak self] cookies in
             guard let self else { return }
             let player = WizardAudioPlayer.shared
-            player.origin = origin
+            player.bind(origin: origin)
             player.cookies = cookies
             do {
                 try player.command(app: app, method: method, params: request)
@@ -146,7 +152,7 @@ final class WizardAudioPlayer: NSObject {
     static let shared = WizardAudioPlayer()
     struct Failure: Error { let message: String }
 
-    var origin = ""
+    private(set) var origin = ""
     var cookies: [HTTPCookie] = []
     private(set) var owner = WizardAudioPolicy.music
     var hasQueue: Bool { !tracks.isEmpty }
@@ -199,6 +205,20 @@ final class WizardAudioPlayer: NSObject {
     }
 
     // MARK: commands from the shell
+
+    /// Change Wizard: nothing of the previous Wizard (queue, track URLs, unsent feedback) ever reaches the new one.
+    func bind(origin new: String) {
+        guard new != origin else { return }
+        if !origin.isEmpty {
+            requestPlaying(false); generation += 1; station = nil; advanceAfterRefill = false
+            player.replaceCurrentItem(with: nil); tracks.removeAll(); index = -1; revision += 1; error = ""
+            owner = WizardAudioPolicy.music; skipBack = 0; skipForward = 0; applyOwner(); artwork = nil; nowPlaying()
+            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        }
+        origin = new
+        reports.removeAll { $0["origin"] as? String != new }
+        UserDefaults.standard.set(reports, forKey: Self.reportsKey)
+    }
 
     func command(app: String, method: String, params p: [String: Any]) throws {
         guard WizardAudioPolicy.admitted(app) else { throw Failure(message: "Unknown audio app") }
@@ -561,18 +581,18 @@ final class WizardAudioPlayer: NSObject {
     /// Music's taste feedback only, kept until the Wizard has it.
     private func report(_ action: String) {
         guard owner == WizardAudioPolicy.music, index >= 0, index < tracks.count, let id = tracks[index]["id"] as? String else { return }
-        reports.append(["eventId": sessionId + ":" + playEvent + ":" + action, "id": id, "action": action])
+        reports.append(["eventId": sessionId + ":" + playEvent + ":" + action, "id": id, "action": action, "origin": origin])
         if reports.count > 200 { reports.removeFirst(reports.count - 200) }
         UserDefaults.standard.set(reports, forKey: Self.reportsKey)
         drainReports()
     }
 
     private func drainReports() {
-        guard !reporting, let first = reports.first, !origin.isEmpty,
+        guard !reporting, let first = reports.first, !origin.isEmpty, first["origin"] as? String == origin,
               let url = URL(string: origin + "/" + WizardAudioPolicy.music + "/api/feedback"),
               WizardAudioPolicy.trusted(url.absoluteString, origin: origin, kind: "feedback", app: WizardAudioPolicy.music) else { return }
         reporting = true
-        fetch(url, body: first) { [weak self] data in
+        fetch(url, body: first.filter { $0.key != "origin" }) { [weak self] data in
             DispatchQueue.main.async {
                 guard let self else { return }
                 self.reporting = false
