@@ -5,6 +5,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 
 const read = f => fs.readFileSync(new URL(f, import.meta.url), 'utf8');
 const SKINS = ['obsidian', 'obsidian-light', 'landscapes', 'landscapes-light', 'nebula', 'grove', 'tide', 'ember', 'signal'];
@@ -29,7 +30,7 @@ test('every skin keeps the stored layout and the By day default (an old miguel/l
 });
 
 test('the Filter sheet always offers the Layout picker and the Yesterday filter', () => {
-  const src = read('../web/core/chats.js');
+  const src = withParts(read('../web/core/chats.js'));
   assert.match(src, /\$\{LIVE\.groupSwitch \? '' : `<h5>Layout<\/h5>/);
   assert.match(src, /statusEntries = \(\) => Object\.entries\(STATUS\)\.filter\(\(\[k\]\) => !\(snoozeLast\(\) && k === 'deferred'\)\);/);
   assert.doesNotMatch(src, /Object\.entries\(STATUS\)\.map/, 'every status list goes through statusEntries');

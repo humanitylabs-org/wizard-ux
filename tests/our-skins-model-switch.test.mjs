@@ -4,6 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 const read = p => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
 function models(skin) {
   const document = { documentElement: { dataset: { skin, tweaks: ['obsidian','obsidian-light','landscapes'].includes(skin) ? 'miguel/model-pills' : '' } } };
@@ -34,7 +35,7 @@ for (const skin of ['obsidian', 'obsidian-light', 'landscapes', 'nebula', 'grove
   });
 }
 test('the switch row is gated on the skin in chat-power and chats', () => {
-  const cp = read('web/core/chat-power.js'), cj = read('web/core/chats.js');
+  const cp = read('web/core/chat-power.js'), cj = withParts(read('web/core/chats.js'));
   assert.match(cp, /modelSwitch: \(w, s\) => M\?\.ours\?\.\(\) \? modelSwitch\(w, s\) : ''/);
   assert.match(cj, /const mlabel = PW\?\.modelLabel && !msw/);
   for (const d of ['obsidian', 'landscapes']) assert.match(read(`web/skins/${d}/skin.css`), /\.ms-track/);
@@ -46,7 +47,7 @@ test('the switch row is gated on the skin in chat-power and chats', () => {
 });
 
 test('the compact chat list is off until chosen in Filter, on every skin', () => {
-  const cj = read('web/core/chats.js');
+  const cj = withParts(read('web/core/chats.js'));
   assert.doesNotMatch(cj, /ourSkin|miguel\/layout/);
   assert.match(cj, /const compactOn = \(\) => \{ try \{ const v = localStorage\.getItem\(COMPACT_KEY\); return v === '1'; \}/);
 });

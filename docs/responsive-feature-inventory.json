@@ -270,6 +270,13 @@
       "classification": "shared",
       "note": "Optional in-memory temporary chat; strict server capability plus default-off preference"
     },
+    "core/chats-drafts.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Chats By subject order, saved new-chat drafts and notification threads moved out of chats.js (issue 1665); called by createChats"
+    },
     "core/chats-outbox.js": {
       "loadedBy": [
         "phone",
@@ -290,6 +297,13 @@
         "desktop"
       ],
       "note": "Chats agent inbox parts moved out of chats.js (issue 1665); called by createChats"
+    },
+    "core/chats-tracker.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Chats thread tracker (Reply, go to a message), reply summary, Compact list and Filter sheet Focus moved out of chats.js (issue 1665); called by createChats"
     },
     "core/chats.js": {
       "loadedBy": [
@@ -999,10 +1013,12 @@
     "core/chat-topic-emojis-data.js",
     "core/chat-topic-emojis.js",
     "core/chat-work.js",
+    "core/chats-drafts.js",
     "core/chats-list-model.js",
     "core/chats-outbox.js",
     "core/chats-posts.js",
     "core/chats-running.js",
+    "core/chats-tracker.js",
     "core/chats-view.css",
     "core/chats-view.js",
     "core/chats.css",

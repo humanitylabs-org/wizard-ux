@@ -4,9 +4,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
-const chats = read('web/core/chats.js'), services = read('web/core/app-services.js'), css = read('web/core/chats.css');
+const chats = withParts(read('web/core/chats.js')), services = read('web/core/app-services.js'), css = read('web/core/chats.css');
 const JAMES = ['nebula', 'grove', 'tide', 'ember', 'signal'];
 const block = (src, a, b) => { const s = src.indexOf(a), e = src.indexOf(b, s + a.length); assert.ok(s >= 0 && e > s, a); return src.slice(s, e); };
 const rule = sel => { const m = css.match(new RegExp('(^|\\n)' + sel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*\\{([^}]*)\\}')); assert.ok(m, sel); return m[2]; };

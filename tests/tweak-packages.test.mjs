@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { fixture, contract, read } from './fixtures/tweaks.mjs';
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 const catalog = JSON.parse(read('web/tweaks/catalog.json'));
 // Capability-gate fixtures: a package id that asks for exactly these capabilities (no shipped package needed).
 const asking = (id, capabilities) => ({ id, name: id, version: '1.0.0', author: id.split('/')[0], apiVersion: 1, capabilities, description: 'test fixture' });
@@ -138,7 +139,7 @@ test('window refresh is layout+nav gated, revoked on teardown, and stale handles
   api.windowRefresh.use({pull:false}); assert.equal(f.windowRefresh,null);
 });
 test('stock shell: no ↻ in window bars and pull-to-refresh stays unless a package holds window refresh', () => {
-  const app=read('web/app.js'), chats=read('web/core/chats.js');
+  const app=read('web/app.js'), chats=withParts(read('web/core/chats.js'));
   assert.match(app,/\$\{refreshModes\.length \? RELOAD_BTN : ''\}<button class="wb" data-wact="full"/);
   assert.equal((app.match(/data-wact="reload"/g)||[]).length,2,'only RELOAD_BTN markup and its sync selector');
   assert.match(app,/pullRefresh: \(\) => !refreshModes\.some\(m => m\.pull === false\)/);
@@ -256,7 +257,7 @@ test('notification rows in the list: only a holder that asks for list mode turns
 });
 
 test('chats.js lists notifications among Ready chats only in list mode, in every Ready order', () => {
-  const src = read('web/core/chats.js');
+  const src = withParts(read('web/core/chats.js'));
   assert.match(src, /const on = !!window\.WosSkinHost\?\.inboxList;/, 'gated on the host list flag');
   assert.match(src, /const nt = k === 'ready' \? listNotes : null/, 'eligible notifications join Ready');
   assert.match(src, /const top = sec === 'ready' \? bar : ''/, 'only Ready owns the order controls');
@@ -266,7 +267,7 @@ test('chats.js lists notifications among Ready chats only in list mode, in every
   assert.match(src, /\.ch-list \.ch-notif-row\[data-chnotif\]'\); if \(nr\) \{ window\.WosSkinHost\?\.inboxAct\?\.\('open'/, 'a tap goes to the package');
 });
 test('chats.js shows a notification draft as its thread only while notification threads are on', () => {
-  const src = read('web/core/chats.js');
+  const src = withParts(read('web/core/chats.js'));
   assert.match(src, /function notifOf\(w\) \{\n    if \(!w \|\| w\.thread !== '__new__' \|\| winAgent\(w\) \|\| !window\.WosSkinHost\?\.inboxThreads\) return null;/);
   assert.match(src, /const NV = isNew && !pend\.length \? notifOf\(w\) : null;/);
   assert.match(src, /if \(sid === '__new__'\) \{ notifAct\(wid, a\); return; \}/);

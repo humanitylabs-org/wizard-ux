@@ -5,9 +5,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
-const src = read('web/core/chats.js');
+const src = withParts(read('web/core/chats.js'));
 const between = (a, b) => { const i = src.indexOf(a), j = src.indexOf(b, i + a.length); assert.ok(i >= 0 && j > i, `found ${a}`); return src.slice(i, j); };
 
 function load(items = []) {

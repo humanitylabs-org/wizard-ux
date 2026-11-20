@@ -5,7 +5,7 @@ import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { modelContext } from './fixtures/chats-list-model.mjs';
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
-const src = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
+const src = withParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'));
 const app = readFileSync(new URL('../web/app.js', import.meta.url), 'utf8');
 const cut = (a, b) => { const i = src.indexOf(a); assert.ok(i >= 0, a); return src.slice(i, src.indexOf(b, i)); };
 const block = withParts(cut('  /* Channels view (switch wizard/chat-channels', '  function clearAll(w)'));

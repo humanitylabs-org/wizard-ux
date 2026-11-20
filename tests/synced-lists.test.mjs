@@ -5,9 +5,10 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import vm from 'node:vm'
 import { sharedBox, liveDevice, stale, simultaneous, tick } from './two-devices.mjs'
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8')
-const chats = read('web/core/chats.js')
+const chats = withParts(read('web/core/chats.js'))
 const cut = (from, to) => chats.slice(chats.indexOf(from), chats.indexOf(to))
 const SPACES = 'wos.chats.spaces.v1', SUBJ = 'wos.chats.subjectOrder.v1'
 const at = '2026-10-28T08:00:00.000Z'

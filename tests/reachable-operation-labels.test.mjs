@@ -2,13 +2,14 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 
 // PR689: one shared formatter, WizReach.label(operation), words every failing
 // request. Saved outbound messages ('send') and read-only failures ('read') each
 // render through it, using the real reach.js probe and each production renderer.
 const read = file => readFileSync(new URL('../' + file, import.meta.url), 'utf8');
 const reachSource = read('web/core/reach.js');
-const chats = read('web/core/chats.js');
+const chats = withParts(read('web/core/chats.js'));
 const outbox = read('web/core/chats-outbox.js'); // pendingState / threadErrHtml moved there (issue 1665)
 function productionFunction(source, name, next) {
   const start = source.indexOf(`  function ${name}(`), end = source.indexOf(`\n  function ${next}(`, start);
