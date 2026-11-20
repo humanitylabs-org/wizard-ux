@@ -6,6 +6,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 const kit = readFileSync(new URL('../web/core/chat-kit.js', import.meta.url), 'utf8');
 const power = readFileSync(new URL('../web/core/chat-power.js', import.meta.url), 'utf8');
 
@@ -68,7 +69,7 @@ test('the box model label opens the new-chat model menu without private-agent mo
 
 // The real composer seal helpers from core/chats.js: a take pinned to channel A's box takes A's box (never channel B's
 // in front by Send, never the New chat draft) and gives it back to A when the take is dropped.
-const chats = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
+const chats = withParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'));
 function seals(d = {}) {
   const a = chats.indexOf('  const composerKey = sid =>'), b = chats.indexOf('  // Typed words first, then what was said');
   assert.ok(a > 0 && b > a);

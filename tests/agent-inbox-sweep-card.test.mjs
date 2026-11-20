@@ -6,9 +6,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 
 const live = readFileSync(new URL('../web/live.js', import.meta.url), 'utf8');
-const chats = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
+const chats = withParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'));
 const running = readFileSync(new URL('../web/core/chats-running.js', import.meta.url), 'utf8'); // the agent inbox parts (issue 1665)
 const kitSrc = readFileSync(new URL('../web/core/chat-kit.js', import.meta.url), 'utf8');
 const clone = v => JSON.parse(JSON.stringify(v));

@@ -6,6 +6,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 const source = readFileSync(new URL('../web/core/chat-power.js', import.meta.url), 'utf8');
 function harness(doc, working = false) {
   const state = { show: 120 }, w = { id: 'win', thread: 'thread' }, latest = { hidden: true };
@@ -77,7 +78,7 @@ test('landAt refuses a new chat, a hidden thread and a node with no message afte
 });
 
 test('needsLand hands the placed line to PW.landAt', () => {
-  const src = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
+  const src = withParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'));
   const body = src.slice(src.indexOf('  function needsLand(w, nav) {'), src.indexOf('  function chanPrefs() {'));
   assert.ok(body.includes("if (typeof PW !== 'undefined') PW?.landAt?.(w.id, line);"));
 });

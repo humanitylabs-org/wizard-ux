@@ -270,6 +270,20 @@
       "classification": "shared",
       "note": "Optional in-memory temporary chat; strict server capability plus default-off preference"
     },
+    "core/chats-attach.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Chats composer attachments, uploads, mic/send swap, voice notes and media turns moved out of chats.js (issue 1665); called by createChats"
+    },
+    "core/chats-done.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Chats Mark done, the waiting-on-owner rule, Needs you in the thread and Jump to Needs you moved out of chats.js (issue 1665); called by createChats"
+    },
     "core/chats-drafts.js": {
       "loadedBy": [
         "phone",
@@ -1013,6 +1027,8 @@
     "core/chat-topic-emojis-data.js",
     "core/chat-topic-emojis.js",
     "core/chat-work.js",
+    "core/chats-attach.js",
+    "core/chats-done.js",
     "core/chats-drafts.js",
     "core/chats-list-model.js",
     "core/chats-outbox.js",

@@ -7,8 +7,9 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import { modelContext } from './fixtures/chats-list-model.mjs';
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 const read = p => fs.readFileSync(new URL('../' + p, import.meta.url), 'utf8');
-const live = read('web/live.js'), chats = read('web/core/chats.js'), nav = read('web/core/workspace-navigation.js');
+const live = read('web/live.js'), chats = withParts(read('web/core/chats.js')), nav = read('web/core/workspace-navigation.js');
 const block = (text, a, b) => { const i = text.indexOf(a); assert.ok(i >= 0, a); const j = text.indexOf(b, i); assert.ok(j > i, b); return text.slice(i, j); };
 const line = (text, token) => { const l = text.split('\n').find(x => x.includes(token)); assert.ok(l, token); return l; };
 const NOW = Date.now(), H = 3600e3;

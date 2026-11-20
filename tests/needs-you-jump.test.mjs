@@ -4,8 +4,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 
-const src = fs.readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
+const src = withParts(fs.readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'));
 const start = src.indexOf('  function jumpOpened('), end = src.indexOf('  function chanPrefs()', start);
 assert.ok(start > 0 && end > start, 'jump helpers sit in the Channels block');
 const block = src.slice(start, end);

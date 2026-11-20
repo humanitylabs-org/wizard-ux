@@ -7,6 +7,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 
 const read = p => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
 const FIELD = { kind: 'provider_signed_out', provider: 'claude', app_id: 'wizard-claude', app_name: 'Claude', installed: true, app_status: 'expired' };
@@ -74,7 +75,7 @@ test("Hermes' failed_turn notice is marked, and hidden only when a reconnect pan
   ]);
   assert.equal(turns.length, 1);
   assert.equal(turns[0].a.failed, true);
-  const chats = read('web/core/chats.js');
+  const chats = withParts(read('web/core/chats.js'));
   assert.match(chats, /if \(last && reconnect && tn\.a\?\.failed\) tn = \{ \.\.\.tn, a: null \};/);
   assert.match(chats, /turnHtml\(c, tn, k === arr\.length - 1, working, s\?\.helperStatus, s\?\.reconnect \|\| !!runErr(?: \|\| signedOut)?[,)]/);
   assert.match(chats, /s\?\.safeError && !s\?\.reconnect && s\?\.queueReason !== 'provider_access' \?/);
