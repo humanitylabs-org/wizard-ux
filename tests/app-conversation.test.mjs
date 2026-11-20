@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
-const source=readFileSync(new URL('../web/core/app-services.js',import.meta.url),'utf8');
+import { withServicesParts } from './fixtures/app-services-parts.mjs';
+const source=withServicesParts(readFileSync(new URL('../web/core/app-services.js',import.meta.url),'utf8'));
 function fixture({installed=true,ready=true,enabled=true,id='wizard-manager'}={}) {
  const calls=[],sourceWindow={location:new URL('https://wizard.example/'+id+'/'),document:{},addEventListener(){},postMessage(){}};
  const frame={tagName:'IFRAME',src:sourceWindow.location.href,isConnected:true,contentWindow:sourceWindow,hasAttribute:()=>false,addEventListener(){},removeEventListener(){}};

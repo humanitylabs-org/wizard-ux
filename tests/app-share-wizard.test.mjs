@@ -2,8 +2,9 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
+import { withServicesParts } from './fixtures/app-services-parts.mjs';
 const read = p => readFileSync(new URL('../'+p,import.meta.url),'utf8');
-const source=read('web/core/app-services.js'), shared=read('web/core/share-wizard.js');
+const source=withServicesParts(read('web/core/app-services.js')), shared=read('web/core/share-wizard.js');
 function fixture() {
  const calls=[],replies=[],events={},location=new URL('https://wizard.example/wizard-os-home/');
  const child={location:new URL('/messenger/',location),document:{},addEventListener(){},postMessage(m){replies.push(m);}};

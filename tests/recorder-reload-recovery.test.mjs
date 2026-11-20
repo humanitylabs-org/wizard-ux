@@ -6,6 +6,7 @@ import stopEvidence from '../tools/qa-recorder-stop-evidence.cjs';
 import {randomUUID,createHash} from 'node:crypto';
 import path from 'node:path';
 import {createRequire} from 'node:module';
+import { withServicesParts } from './fixtures/app-services-parts.mjs';
 const require=createRequire(import.meta.url);
 const read = name => readFileSync(process.env.QA_REVIEW_CORE ? process.env.QA_REVIEW_CORE+'/'+name+'.js' : new URL('../web/core/'+name+'.js', import.meta.url),'utf8');
 const source = read('app-capture');
@@ -25,7 +26,7 @@ function service(cap,appId='mizel') {
   const sourceWindow={location:new URL('https://fixture.invalid/'+appId+'/'),document:{},addEventListener(){},postMessage(){}};
   const frame={tagName:'IFRAME',src:sourceWindow.location.href,isConnected:true,contentWindow:sourceWindow,hasAttribute:()=>false,addEventListener(){},removeEventListener(){}};
   const window={WizCore:{apps:()=>({APPS:[{id:appId,name:'Synthetic Recorder',kind:'wizard',url:'/'+appId+'/'}]})},WizAppCapture:{reloadCheck:()=>typeof cap==='function'?cap():cap},dispatchEvent(){}};
-  vm.runInNewContext(read('app-services'),{window,location:new URL('https://fixture.invalid/wizard-os-home/'),URL,crypto:{randomUUID},addEventListener(){},setInterval(){},setTimeout,clearTimeout,document:{readyState:'loading',addEventListener(){}},CustomEvent:class{},navigator:{}});
+  vm.runInNewContext(withServicesParts(read('app-services')),{window,location:new URL('https://fixture.invalid/wizard-os-home/'),URL,crypto:{randomUUID},addEventListener(){},setInterval(){},setTimeout,clearTimeout,document:{readyState:'loading',addEventListener(){}},CustomEvent:class{},navigator:{}});
   const host=window.WizAppServices;host.attach(frame,{appId,path:'/'+appId+'/'});
   return {host,window,frame,facade:host.connect(sourceWindow,{}),plan:()=>host.update.reloadPlan()};
 }

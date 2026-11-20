@@ -3,8 +3,9 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
 import {randomUUID} from 'node:crypto';
+import { withServicesParts } from './fixtures/app-services-parts.mjs';
 
-const source = readFileSync(new URL('../web/core/app-services.js', import.meta.url), 'utf8');
+const source = withServicesParts(readFileSync(new URL('../web/core/app-services.js', import.meta.url), 'utf8'));
 function fixture() {
   let elapsed = 0, wall = 100000;
   const app = {location: new URL('https://fixture.invalid/wisdom/'), document: {}, addEventListener(){}, postMessage(){}};

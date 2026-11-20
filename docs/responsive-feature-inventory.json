@@ -75,6 +75,20 @@
       ],
       "note": "Direct entrypoint import"
     },
+    "core/app-services-boundary.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Sandboxed app window services (vault, Wizard ID, recording, net.fetch, streams, WebSockets) moved out of app-services.js (issue 1665); called by app-services.js"
+    },
+    "core/app-services-windows.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "App window media viewer, Back, thread links and the Update ready reload plan moved out of app-services.js (issue 1665); called by app-services.js"
+    },
     "core/app-services.js": {
       "loadedBy": [
         "phone",
@@ -996,6 +1010,8 @@
     "core/app-reading-position.js",
     "core/app-route.css",
     "core/app-route.js",
+    "core/app-services-boundary.js",
+    "core/app-services-windows.js",
     "core/app-services.js",
     "core/app-setup.css",
     "core/app-setup.js",

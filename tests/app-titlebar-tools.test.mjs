@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
-const source=readFileSync(new URL('../web/core/app-services.js',import.meta.url),'utf8');
+import { withServicesParts } from './fixtures/app-services-parts.mjs';
+const source=withServicesParts(readFileSync(new URL('../web/core/app-services.js',import.meta.url),'utf8'));
 // Minimal DOM: a window with a bar, enough for the shell to render tools from data.
 class El { constructor(tag){this.tagName=tag.toUpperCase();this.children=[];this.dataset={};this.attrs={};this.listeners={};this.classList={s:new Set(),add:(...c)=>c.forEach(x=>this.classList.s.add(x)),remove:(...c)=>c.forEach(x=>this.classList.s.delete(x)),contains:c=>this.classList.s.has(c)};this.className='';this.textContent='';}
  append(...k){for(const c of k){c.parentNode=this;this.children.push(c);}} insertBefore(c,ref){c.parentNode=this;const i=ref?this.children.indexOf(ref):-1;if(i<0)this.children.push(c);else this.children.splice(i,0,c);}

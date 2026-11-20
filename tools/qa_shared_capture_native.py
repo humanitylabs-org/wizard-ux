@@ -7,7 +7,7 @@ import base64, hashlib, json, pathlib, time
 
 def pages(root):
     root = pathlib.Path(root)
-    scripts = {p: (root / 'web' / p).read_text() for p in ['core/app-capture.js', 'core/app-services.js', 'core/app-client.js', 'core/chat-kit.js', 'device.js']}
+    scripts = {p: (root / 'web' / p).read_text() for p in ['core/app-capture.js', 'core/app-services-windows.js', 'core/app-services-boundary.js', 'core/app-services.js', 'core/app-client.js', 'core/chat-kit.js', 'device.js']}
     boot = """window.sharedQaBoot=crypto.randomUUID();window.resumes=[];window.webShares=0;navigator.share=()=>{webShares++;return Promise.resolve();}; window.__wos={voice:'idle',V:{native:null},toast(){},txHide(){},setVoice(v){this.voice=v},nativeResume(a){resumes.push(a.id);this.V.native=a.id;this.voice='listen';return true}};
 window.WizConfig={agent:()=> 'Synthetic',owner:()=> 'Synthetic'};
 window.WizCore={apps:()=>({APPS:[{id:'mizel',url:'/mizel-qa/capture-frame.html'},{id:'trackhunt',url:'/mizel-qa/task-frame.html'}]})};
@@ -24,7 +24,7 @@ window.shareText=async()=>{window.shareOutcome=await WizardApp.share.text({title
 window.shareFile=async()=>{window.shareOutcome=await WizardApp.share.file(new File(['Synthetic staged file'],'fixture.txt',{type:'text/plain'}),{title:'Synthetic file'});};
 """
     html = '<!doctype html><div id="device"></div><iframe style="height:600px;width:100%"></iframe><script>' + boot + '</script>'
-    for name in ['core/app-capture.js', 'core/chat-kit.js', 'core/app-services.js', 'device.js']:
+    for name in ['core/app-capture.js', 'core/chat-kit.js', 'core/app-services-windows.js', 'core/app-services-boundary.js', 'core/app-services.js', 'device.js']:
         html += '<script>' + scripts[name] + '</script>'
     html += '<script>' + mount + '</script>'
     result = {'/mizel-qa/shared-native.html': html}

@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
 import {randomUUID} from 'node:crypto';
+import { withServicesParts } from './fixtures/app-services-parts.mjs';
 const read = n => readFileSync(n==='web-update' && process.env.QA_RELOAD_UPDATE ? process.env.QA_RELOAD_UPDATE : new URL(`../web/core/${n}.js`, import.meta.url), 'utf8');
 const tick = async () => { for (let i=0;i<60;i++) await Promise.resolve(); };
 function fixture(patch={}) {
@@ -20,7 +21,7 @@ function fixture(patch={}) {
   const window={WizCore:{apps:()=>({APPS:[{id:'messenger',name:'Messenger',kind:'wizard',url:'/messenger/'}]})},
     WizAppCapture:{reloadCheck:()=>c.reloadCheck(),pageAudioFree:()=>c.pageAudioFree(),cancelReloadRecovery:()=>c.cancelReloadRecovery(),
       reconcileReload:()=>{checks++;return c.reconcileReload()}},dispatchEvent(){},WizAppReadingPosition:{attach(){},flush(){}}};
-  vm.runInNewContext(read('app-services'),{window,location:new URL('https://synthetic.invalid/wizard-os-home/'),URL,crypto:{randomUUID},addEventListener(){},setInterval(){},setTimeout,clearTimeout,document:{readyState:'loading',addEventListener(){}},CustomEvent:class{},navigator:{}});
+  vm.runInNewContext(withServicesParts(read('app-services')),{window,location:new URL('https://synthetic.invalid/wizard-os-home/'),URL,crypto:{randomUUID},addEventListener(){},setInterval(){},setTimeout,clearTimeout,document:{readyState:'loading',addEventListener(){}},CustomEvent:class{},navigator:{}});
   window.WizAppServices.attach(frame,{appId:'messenger',path:'/messenger/'});
   const facade=window.WizAppServices.connect(source,{}), timers=[],toasts=[];
   const element=()=>({classList:{toggle(){}},setAttribute(){},dataset:{},addEventListener(){},remove(){}});

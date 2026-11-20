@@ -42,7 +42,7 @@
     ['e', 'core/launcher-defaults.js'], ['e', 'core/launcher.js'], ['x', 'core/pages.js'], ['c', 'core/pages.css'],
     ['e', 'core/apps.js'], ['e', 'core/app-kinds.js'], ['e', 'core/appearance-host.js'], ['e', 'core/app-capture.js'],
     ['e', 'core/app-reading-position.js'], ['c', 'core/share-wizard.css'], ['e', 'core/sheetback.js'],
-    ['e', 'core/share-wizard.js'], ['e', 'core/app-services.js'], ['e', 'core/app-versions.js'], ['e', 'core/agents.js'],
+    ['e', 'core/share-wizard.js'], ['e', 'core/app-services-windows.js'], ['e', 'core/app-services-boundary.js'], ['e', 'core/app-services.js'], ['e', 'core/app-versions.js'], ['e', 'core/agents.js'],
     ['e', 'core/app-route.js'], ['e', 'core/app-setup.js'], ['c', 'core/app-setup.css'], ['x', 'core/chats-list-model.js'],
     ['x', 'live.js'], ['x', 'outbox.js'], ['x', 'core/orb-handoff.js'], ['e', 'core/share-sheet.js'],
     ['x', 'core/chat-kit.js'], ['x', 'core/composer-input.js'], ['x', 'core/attach-chip.js'], ['x', 'core/chat-pins.js'],
