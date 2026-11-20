@@ -284,6 +284,13 @@
       "classification": "shared",
       "note": "Optional in-memory temporary chat; strict server capability plus default-off preference"
     },
+    "core/chats-approvals.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Chats Approve / Deny cards in a thread and repainting around a field being typed in moved out of chats.js (issue 1665); called by createChats"
+    },
     "core/chats-attach.js": {
       "loadedBy": [
         "phone",
@@ -297,6 +304,13 @@
         "desktop"
       ],
       "note": "Chats channel message box: its draft and model, the owner's own posts, Sending… and Edit on an unsent post, moved out of chats.js (issue 1665); called by createChats"
+    },
+    "core/chats-channels.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Chats channel list, channel order, a row's channel and opening a channel moved out of chats.js (issue 1665); called by createChats"
     },
     "core/chats-daily.js": {
       "loadedBy": [
@@ -319,6 +333,13 @@
       ],
       "note": "Chats By subject order, saved new-chat drafts and notification threads moved out of chats.js (issue 1665); called by createChats"
     },
+    "core/chats-notes.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Chats notification rows (one row per app) and Priority groups moved out of chats.js (issue 1665); called by createChats"
+    },
     "core/chats-outbox.js": {
       "loadedBy": [
         "phone",
@@ -332,6 +353,13 @@
         "desktop"
       ],
       "note": "Chats channel posts (first message, words, reply counts, feed place) moved out of chats.js (issue 1665); called by createChats"
+    },
+    "core/chats-rowacts.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Chats row actions sheet for threads, alerts and channel lines moved out of chats.js (issue 1665); called by createChats"
     },
     "core/chats-running.js": {
       "loadedBy": [
@@ -353,6 +381,13 @@
         "desktop"
       ],
       "note": "Chats setup: chat-kit names, incognito, Pins, Boomerang, topic emojis, list layouts and the Focus moved out of chats.js (issue 1665); called by createChats"
+    },
+    "core/chats-status.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Chats status marks, loading placeholders and the New chat face moved out of chats.js (issue 1665); called by createChats"
     },
     "core/chats-tracker.js": {
       "loadedBy": [
@@ -1078,17 +1113,22 @@
     "core/chat-topic-emojis-data.js",
     "core/chat-topic-emojis.js",
     "core/chat-work.js",
+    "core/chats-approvals.js",
     "core/chats-attach.js",
     "core/chats-chanbox.js",
+    "core/chats-channels.js",
     "core/chats-daily.js",
     "core/chats-done.js",
     "core/chats-drafts.js",
     "core/chats-list-model.js",
+    "core/chats-notes.js",
     "core/chats-outbox.js",
     "core/chats-posts.js",
+    "core/chats-rowacts.js",
     "core/chats-running.js",
     "core/chats-send.js",
     "core/chats-setup.js",
+    "core/chats-status.js",
     "core/chats-tracker.js",
     "core/chats-view.css",
     "core/chats-view.js",

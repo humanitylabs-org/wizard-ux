@@ -8,6 +8,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { core, settle, read } from './fixtures/notification-levels.mjs';
+import { withParts } from './fixtures/chats-parts.mjs';
 
 const NOTES = [
   { id: 's1', time: 40, title: 'Sniper daily scan', message: 'All clear', priority: 2, tags: ['cron', 'clock', 'app:sniper'] },
@@ -100,7 +101,7 @@ test('the app\'s own reported badge and the carried count add up', async () => {
 });
 
 test('chats.js lists them under the app: its name, its mark, one fold per app', () => {
-  const src = read('web/core/chats.js');
+  const src = withParts(read('web/core/chats.js'));
   const between = (a, b) => { const i = src.indexOf(a), j = src.indexOf(b, i + a.length); assert.ok(i >= 0 && j > i, a); return src.slice(i, j); };
   const ctx = { window: { WizConfig: { agent: () => 'Oscar' }, WosBell: { items: () => [], icon: '<svg class="bell"></svg>' }, WizSigil: { html: m => `<i data-sigil="${m.name}"></i>` }, WizCore: { appMetadata: () => null } },
     esc: s => String(s), clip: (s, n) => String(s).slice(0, n), ago: () => '2m' };

@@ -421,104 +421,8 @@ window.WizCore.chats = function createChats(H) {
     else { chanCarried = false; chanCarryAfter = Date.now() + 60e3; }
     return done;
   }
-  // The channel a window's list draws as a feed, or null. It only holds while the Focus still matches it (a Focus
-  // tap elsewhere simply leaves the feed).
-  function chanOpen(w) {
-    if (!channelsOn() || !w) return null;
-    const o = W[owner(w.id)] || w, c = o.chan, f = focusOf(o);
-    if (!c || typeof c.id !== 'string') return null;
-    if (c.id === CHAN_GENERAL) return f?.kind === 'space' ? null : { id: CHAN_GENERAL, name: 'General', general: true };
-    // An agent's feed (issue 1336): every thread with that agent, while its Focus holds.
-    const ag = typeof chanAgentId === 'function' ? chanAgentId(c.id) : '';
-    if (ag) return f?.kind === 'agent' && f.key === ag ? { id: c.id, name: typeof agentName === 'function' ? agentName(ag) : ag, agent: ag, agentFeed: true } : null;
-    const sp = f?.kind === 'space' && f.key === c.id && spaces().find(s => s.id === c.id);
-    return sp ? { id: sp.id, name: sp.name, agent: spaceAgent(sp) } : null;
-  }
-  // Switched off with a feed open: the list returns to the Focus it had before the channel, never the Space filter.
-  function chanSwitchedOff(w) {
-    const o = w && (W[owner(w.id)] || w); if (!o?.chan || channelsOn()) return false;
-    const prev = o.chan.prev; o.chan = null;
-    o.focus = prev && ['agent', 'space'].includes(prev.kind) && prev.key ? { kind: prev.kind, key: String(prev.key) } : null;
-    save(); return true;
-  }
-  const chanByName = dir => (a, b) => dir * String(typeof chanFace === 'function' ? chanFace(a.name).label || a.name : a.name).localeCompare(String(typeof chanFace === 'function' ? chanFace(b.name).label || b.name : b.name), undefined, { sensitivity: 'base', numeric: true }) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
-  // The channels the list shows: the Spaces of the Focus's agent (all visible agents' on All). Pinned first in pin
-  // order, then A–Z (default) or Z–A, General last; { archived: true } gives the archived ones, sorted the same way.
-  function channelsFor(w, { archived = false } = {}) {
-    const ag = focusedAgent(focusOf(w)), p = chanPrefs(), pin = new Map(p.pins.map((id, i) => [id, i]));
-    const mine = (ag ? spaces().filter(s => spaceAgent(s) === ag) : visibleSpaces()).map(s => ({ id: s.id, name: s.name, agent: spaceAgent(s) })).filter(c => !!p.archived[c.id] === archived);
-    const byName = chanByName(p.sort === 'za' ? -1 : 1);
-    if (archived) return mine.sort(byName);
-    return mine.filter(c => pin.has(c.id)).sort((a, b) => pin.get(a.id) - pin.get(b.id)).concat(mine.filter(c => !pin.has(c.id)).sort(byName), { id: CHAN_GENERAL, name: 'General', general: true });
-  }
-  // The row's own owner (a main and a routed thread can share an id), else the id-only pin.
-  const rowAgent = s => (LIVE.ownerOf ? LIVE.ownerOf(s) : LIVE.agentOf(s.id)) || AGS()?.defaultId() || 'hermes';
-  const inChannel = (ch0, s) => ch0.agentFeed ? rowAgent(s) === ch0.agent : ch0.general ? !spacesOf(s.id).length : spaceContains(ch0.id, s.id) && rowAgent(s) === ch0.agent;
-  const chanName = s => spacesOf(s.id)[0]?.name || 'General';
-  // A channel's emoji and words (issue 1506): { emoji, label } of a channel ({ name, general }) or a name.
-  const chanFace = c => window.WizCore?.channelFace?.(typeof c === 'string' ? c : c?.name, typeof c === 'string' ? c === 'General' : !!c?.general || c?.id === CHAN_GENERAL) || { emoji: '#', label: typeof c === 'string' ? c : c?.name || '' };
-  const chanTitle = c => { const f = chanFace(c); return f.title || (f.label ? `${f.emoji} ${f.label}` : f.emoji); };
-  // A layout that draws its own chat list (AI apps) asks for these through the Chats API: the "# channel" of a row
-  // ('' with the switch off) and the sidebar's Channels pane, the desktop's id::side window (issue 1256).
-  // A row's channel is its OWN agent's Space (a main and a routed thread can share an id), as inChannel files it.
-  const channelOf = s => { if (!channelsOn() || !s || typeof s.id !== 'string') return ''; const a = rowAgent(s); return spaces().find(sp => spaceAgent(sp) === a && spaceContains(sp.id, s.id))?.name || 'General'; };
-  const chanSide = w => /::side$/.test(String(w?.id || '')) && channelsOn();
-  // cardAt is an ISO time; a new chat still in the outbox has none yet (its row's own time, so it sorts as newest).
-  const chanAt = s => Date.parse(LIVE.cardAt(s)) || Date.parse(s.updatedAt) || Date.parse(s.createdAt) || 0;
-  // A post's place in its channel feed (wizard-ux issue 1289, James: Slack threads): when the thread was started, so a
-  // new reply never moves its post. A row without a start time (an older Service, a chat still in the outbox) falls
-  // back to its card time, which for a new chat is now: it sorts as the newest post.
-  const chanPostedAt = s => Date.parse(s.startedAt) || Date.parse(s.createdAt) || chanAt(s);
-  const chanPostOrder = (a, b) => chanPostedAt(a) - chanPostedAt(b) || (String(a.id) < String(b.id) ? -1 : String(a.id) > String(b.id) ? 1 : 0);
-  // Archive drops a channel once its newest chat (or the archiving itself) is older than CHAN_ARCHIVE_PRUNE_DAYS.
-  function chanPruned(c, rows, now = Date.now()) {
-    const t = rows.filter(s => inChannel(c, s)).reduce((m, s) => Math.max(m, chanAt(s)), Date.parse(chanPrefs().archived[c.id]) || 0);
-    return now - t > CHAN_ARCHIVE_PRUNE_DAYS * CHAN_DAY;
-  }
-  // Where a channel opens from this window: in place, or (the AI apps sidebar's pane, wizard-ux issue 1256) in the
-  // host's own feed window in the main chat column, so the sidebar keeps its channel list.
-  const chanTarget = w => (w && H.channelWin?.(w)) || w;
-  // The sidebar pane whose channels open elsewhere: it never draws a feed itself, only marks the open channel.
-  const chanElsewhere = w => !!w && !!H.channelsElsewhere?.(w);
-  function openChannel(w, id, feed = false) {
-    // The Daily channel opens as one continuous chat (issue 1469), never as a feed.
-    if (!feed && typeof dailyChan === 'function' && dailyChan(id)) return openDaily(w, id);
-    w = chanTarget(w);
-    const o = W[owner(w.id)] || w; if (!o) return false;
-    // Back returns to the list this channel was opened from: a feed still open keeps its own way back; a stale one
-    // (the Focus moved since) gives way to the Focus showing now.
-    const prev = o.chan && chanOpen(w) ? o.chan.prev : (o.focus || null), sp = id !== CHAN_GENERAL && spaces().find(s => s.id === id);
-    const ag = typeof chanAgentId === 'function' ? chanAgentId(id) : ''; // an agent's feed (issue 1336) is that agent's Focus
-    if (id !== CHAN_GENERAL && !sp && !(ag && focusAgents().some(a => a.id === ag))) return false;
-    o.chan = { id, prev }; chanUserAt[w.id] = 0; // the tap that opened it is not a scroll
-    const f = focusOf(o), back = prev?.kind === 'space' ? { kind: 'agent', key: focusedAgent(prev) } : prev;
-    // A Space channel is that Space's Focus; General keeps the agent the list was on (never a Space).
-    setFocus(w, ag ? { kind: 'agent', key: ag } : sp ? { kind: 'space', key: sp.id } : f?.kind === 'space' ? back : f);
-    chanHold(w.id); requestAnimationFrame(() => chanHold(w.id));
-    H.channelOpened?.(w.id);
-    return true;
-  }
-  // Back from a feed: to the Channels list, with the Focus the list had before.
-  function channelBack(w) {
-    if (!w || w.thread) return false;
-    if (typeof runningBack === 'function' && runningBack(w)) return true; // the Running view → Chats (wizard-ux issue 1569)
-    const o = W[owner(w.id)] || w; if (!o?.chan) return false;
-    const open = chanOpen(w), prev = o.chan.prev || null; o.chan = null;
-    if (!open) { save(); return false; }
-    setFocus(w, prev);
-    return true;
-  }
-  /* The Daily channel (wizard-ux issue 1469, part of the Channels switch; wizard-agent-service issue 527,
-   * docs/chats-channels.md, Daily channel). The box keeps one real thread per day in its channel of kind 'daily' (pinned
-   * at the top of Channels); Chats shows them as one continuous chat in the ordinary thread view. A tap on the channel
-   * opens today's thread (before today's first post: the newest day's, with an empty Today line under it), and each
-   * earlier day sits above it as a folded header (the day, its opener's first line, its message count) that unfolds in
-   * place through the normal history read; the top reads older days as it scrolls into view. Every send from the Daily
-   * view goes to today's thread: the box's POST /today names it (and makes it at the day's first post), so the box alone
-   * decides where the day starts (05:00) and the view moves on without a reload. A window shows Daily while
-   * w.daily = { id, agent }; Back, or opening any other thread, leaves it. Activity and the rows stay as they are. */
-  const dailyChan = id => { const st = typeof chanStore === 'function' ? chanStore() : null; return (st && st.channels.find(c => c.id === id && c.kind === 'daily' && !c.archived)) || null; };
-  const DAILY_OPEN = new Map(), DAILY_HIST = new Map(), DAILY_LAST = 'wos.chats.daily-last.v1';
+  /* Channel list, order, a row's channel and opening a channel; core/chats-channels.js. */
+  const { chanAt, chanElsewhere, chanFace, chanName, channelBack, channelOf, channelsFor, chanOpen, chanPostOrder, chanPruned, chanSide, chanSwitchedOff, chanTarget, chanTitle, DAILY_HIST, DAILY_LAST, DAILY_OPEN, dailyChan, inChannel, openChannel, rowAgent, bindLate: channelsLate } = window.WizCore.chatsParts.channels({ agentName: (...a) => agentName(...a), AGS: (...a) => AGS(...a), CHAN_ARCHIVE_PRUNE_DAYS, CHAN_DAY, CHAN_GENERAL, chanAgentId: (...a) => chanAgentId(...a), channelsOn, chanPrefs, chanStore, focusAgents, focusedAgent, focusOf, H, LIVE, openDaily, owner: (...a) => owner(...a), save, setFocus, spaceAgent, spaceContains, spaces, spacesOf, visibleSpaces, W });
   let dailyNext = null;
   // Only while the window still shows the thread Daily opened (a list window may move its thread without openChat).
   const dailyOn = w => !!w?.daily && w.daily.sid === w.thread && channelsOn() && !!LIVE.chanDaily && !!dailyChan(w.daily.id);
@@ -842,6 +746,7 @@ window.WizCore.chats = function createChats(H) {
   }
   /* Channel posts (switch wizard/chat-channels): first message, words, reply counts, feed place; core/chats-posts.js. */
   const { chanHold, chanKey, chanNewN, chanPostText, chanRepaint, chanReplies, chanScrolled, chanStart, chanUser, chanUserAt, FIRST, firstAgent, firstPost, firstWant, pullFirst, replyWant } = window.WizCore.chatsParts.posts({ ch, CH, CHAN_TEXT_MAX, chanChanged, chanGenAgent, channelsOn, chanOpen, chanReadAt, chanReadFeed, chanReadKey, elOf: (...a) => elOf(...a), holdList: (...a) => holdList(...a), isWorking, LIVE, mediaOfFile: (...a) => mediaOfFile(...a), owner: (...a) => owner(...a), paintFeedJump, rerenderList, rowAgent, toTurns, W });
+  channelsLate({ chanHold, chanUserAt });
   doneLate({ chanUser });
   /* Issue 1440 (James, 13 Nov 2026): no Open / Needs you / All selector. The feed is every post of the channel; the
    * thread's own jump pills (issue 1359) point at posts that need you (amber) or have unread replies (green). */
@@ -1047,59 +952,8 @@ window.WizCore.chats = function createChats(H) {
   function setQuery(w, q) { const c = ch(w.id); if (w.thread) chatsBack(w); c.q = String(q || ''); rerenderList(w); }
   const SEC_DEFAULT = { errors: true, working: true, saved: true, ready: true, yesterday: true, pastWeek: false, deferred: false, archive: false, recent: true, snoozed: false, archived: false };
   let secOpen = (() => { try { return { ...SEC_DEFAULT, ...JSON.parse(localStorage.getItem(SEC_OPEN_KEY) || '{}') }; } catch (e) { return { ...SEC_DEFAULT }; } })();
-  const SEC_PAGE = 40;
-  // The agent's status line for a finished thread (live.js attention): what it asks of James.
-  const ATT = { needs_you: { cls: 'needs', label: 'Needs you' }, check: { cls: 'check', label: 'Your call' }, done: { cls: 'done', label: 'Done' }, fyi: { cls: 'fyi', label: '' } };
-  const deferredOf = s => !!s.deferred && !s.archived && !(Date.parse(s.lastUserAt) > Date.parse(s.deferredAt));
-  const attOf = s => (s.attention && (!isWorking(s) || ['needs_you', 'check'].includes(s.attention.state)) && s.status !== 'waiting_for_approval' && s.status !== 'failed' && s.status !== 'interrupted') && !(['needs_you', 'check'].includes(s.attention.state) && typeof handledNow === 'function' && handledNow(s)) ? s.attention : null;
-  const svg = b => `<svg viewBox="0 0 24 24" aria-hidden="true">${b}</svg>`;
-  const STI = {
-    needs: svg('<path d="M18 11V6a2 2 0 0 0-4 0M14 10V4a2 2 0 0 0-4 0v2M10 10.5V6a2 2 0 0 0-4 0v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-6-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/>'),
-    check: svg('<path d="M10 2v7.5a2 2 0 0 1-.2.9L4.7 20.6a1 1 0 0 0 .9 1.4h12.8a1 1 0 0 0 .9-1.4l-5.1-10.2a2 2 0 0 1-.2-.9V2M8.5 2h7M7 16h10"/>'),
-    done: svg('<circle class="f" cx="12" cy="12" r="10"/><path class="k" d="m7.5 12.3 3 3 6-6.3"/>'),
-    fyi: svg('<circle class="f" cx="12" cy="12" r="10"/><path class="k" d="M12 11v5.5"/><circle class="kd" cx="12" cy="7.6" r="1.35"/>'),
-    deferred: svg('<circle cx="12" cy="12" r="9"/><path d="M12 7.5V12l3 2"/>'),
-    held: svg('<circle cx="12" cy="12" r="9"/><path d="M12 7.5V12l3 2"/>'),
-    approval: svg('<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/>'),
-    failed: svg('<path d="m21.7 18-8-14a2 2 0 0 0-3.4 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3M12 9v4M12 17h.01"/>'),
-    working: '<i class="spin" aria-hidden="true"></i>',
-    offline: svg('<path d="M12 20h.01M8.5 16.4a5 5 0 0 1 7 0M2 8.8a15 15 0 0 1 20 0M5 12.9a10 10 0 0 1 14 0"/><path d="m2 2 20 20"/>'),
-    none: '<i class="dot" aria-hidden="true"></i>',
-  };
-  const STI_LAB = { needs: 'Needs you', check: 'Your call', done: 'Done', fyi: 'FYI', deferred: 'Snoozed', approval: 'Needs approval', failed: 'Error' };
-  const STI_TIP = { deferred: 'Snoozed', needs: 'Needs you', check: 'Your call: see if it is what you meant', done: 'Done', fyi: 'FYI', approval: 'Approval needed', failed: 'Stopped with an error', working: 'Working', offline: 'Offline · will retry', held: 'Saved · sends after Wizard restarts', none: 'No status' };
-  // One status for a thread, shared by its list row and its open header (James, 25 Oct 2026: the open thread shows
-  // the same raised hand / tick as its row, so a thread that needs him says so while he reads it).
-  function stiKind(s) {
-
-    const working = isWorking(s), needs = ['waiting_for_approval', 'unknown', 'failed', 'interrupted'].includes(s.status);
-    // Personal Snooze lowers effective priority, not just list position. Keep the underlying
-    // attention/status intact so Restore (or a newer reply) recovers it, including approvals/errors.
-    if (snoozeLast() && deferredOf(s) && !working) return 'deferred';
-    const def = deferredOf(s) && !working && !needs, at = def ? null : attOf(s);
-    // A send a graceful restart holds (wizard/graceful-restart; WizReach.restartHeld: queued, on its way, or a 202 held
-    // for the restart) is saved, not working yet, also while the service is down for the restart itself.
-    return working ? (globalThis.WizReach?.restartHeld?.(s) ? 'held' : s.pend === 'waiting' ? 'offline' : 'working') : (s.status === 'failed' || s.status === 'interrupted' || s.queueReason === 'provider_access') && !window.WosErrors?.dismissed?.(s) ? 'failed' : ['waiting_for_approval', 'unknown'].includes(s.status) ? 'approval' : def ? 'deferred' : at ? (at.state === 'needs_you' ? 'needs' : at.state) : 'none';
-  }
-  const stiBadge = (s, cls = '') => { const k = stiKind(s); return `<span class="emo sti ${k}${cls}" title="${STI_TIP[k]}" aria-label="${STI_TIP[k]}">${STI[k]}</span>`; };
-  // Loading placeholders: quiet rows/bubbles shaped like the real ones, with a soft shimmer.
-  function skelRows(label) {
-    const row = (w1, w2) => `<div class="ch-skel-row"><i class="ch-sk av"></i><span class="bd"><i class="ch-sk" style="width:${w1}%"></i><i class="ch-sk sm" style="width:${w2}%"></i></span></div>`;
-    return `<div class="ch-skel" role="status" aria-label="${esc(label)}…">${row(46, 78)}${row(62, 70)}${row(38, 84)}${row(54, 66)}${row(44, 74)}</div>`;
-  }
-  /* New chat, Miguel's skins only (Obsidian, Obsidian Light, Landscapes; core/chats.css): the agent's mark, a
-   * time-of-day greeting and key chips. Every other skin keeps the boxed "New chat" (.nc-classic) unchanged. */
-  function newChatHtml(TAG) {
-    const hr = (window.WizConfig.dayParts?.() || { h: new Date().getHours() }).h;
-    const part = hr < 5 ? 'Up late' : hr < 12 ? 'Good morning' : hr < 18 ? 'Good afternoon' : 'Good evening';
-    const who = (window.WizConfig.owner?.() || '').split(/\s+/)[0];
-    const priv = TAG && AGS()?.isPrivate(agentRec(TAG));
-    const hint = H.newChatKeys ? H.newChatKeys.map(k => `<span class="nc-key">${k.keys.map(x => `<kbd>${esc(x)}</kbd>`).join('')}<small>${esc(k.label)}</small></span>`).join('') : `<span class="nc-tip">${esc(H.newChatHint || 'Type below.')}</span>`;
-    return `<div class="ch-newchat" role="note"><span class="nc-mark" aria-hidden="true"><i class="sgi ${priv ? 'sg-hat-private' : 'sg-hat'}"></i></span><b class="nc-hi">${esc(part)}${who ? `, ${esc(who)}` : ''}</b><span class="nc-sub">What should ${esc(agentName(TAG))} work on${priv ? ' privately' : ''}?</span><span class="nc-keys">${hint}</span></div>`;
-  }
-  function skelThread() {
-    return `<div class="ch-skel thread" role="status" aria-label="Loading thread…"><i class="ch-sk bub u" style="width:52%"></i><span class="ch-skel-a"><i class="ch-sk" style="width:92%"></i><i class="ch-sk" style="width:84%"></i><i class="ch-sk" style="width:58%"></i></span><i class="ch-sk bub u" style="width:36%"></i><span class="ch-skel-a"><i class="ch-sk" style="width:88%"></i><i class="ch-sk" style="width:64%"></i></span></div>`;
-  }
+  /* Status marks, loading placeholders and the New chat face; core/chats-status.js. */
+  const { ATT, attOf, deferredOf, newChatHtml, SEC_PAGE, skelRows, skelThread, STI, STI_LAB, STI_TIP, stiBadge, stiKind, bindLate: statusLate } = window.WizCore.chatsParts.status({ agentName: (...a) => agentName(...a), agentRec, AGS: (...a) => AGS(...a), esc, H, handledNow, isWorking });
   // Unified Chats: in the owner's main list, a private agent's row wears the lock. data-wiz-private keeps its words out
   // of the screen text sent as context with a message to another agent (core/screen-text.js).
   let rowListAgent = '', rowChan = false;
@@ -1140,6 +994,7 @@ window.WizCore.chats = function createChats(H) {
   }
   /* Agent inbox (switch wizard/agent-inbox): Running view, Open / Send to inbox, sweep card, alert feedback; core/chats-running.js. */
   const { alertFeedback, alertsHtml, INBOX_SVG, inboxCanSend, inboxHeadHtml, inboxMove, runningBack, runningBody, runningGo, runningHead, runningOn, runningOpen, runningRow, sweepAnswer, sweepHtml, sweepLater, sweepYesToAll } = window.WizCore.chatsParts.running({ ago, ch, CH, chanStore, clip, esc, H, KIT, LIVE, paintListsNow, PIN, renderThreadNow, rerenderList, STI, storeAgent, toast, W, winAgent });
+  channelsLate({ runningBack });
   /* Ready has three orders (James, 10 Oct 2026): Newest (pure recency, labels don't move rows), Priority
    * (needs you, then test this, then the rest) and By subject (the roundup, kept live). */
   const READY_ORDER_KEY = 'wos.chats.readyOrder.v1', READY_ORDERS = ['newest', 'priority', 'subject'];
@@ -1235,58 +1090,8 @@ window.WizCore.chats = function createChats(H) {
     const all = (window.WosBell?.items?.() || []).filter(i => i && i.id && !i.archived);
     return { awake: fold(all.filter(i => !i.read)), later: fold(all.filter(i => i.read)) };
   }
-  /* One row per app (Miguel, 3 Nov 2026: a noisy app is one row in Chats, not 50). Two or more waiting items from the
-   * same place (an app, or Wizard's own alerts) fold into one row: its mark, its name, how many, the newest first.
-   * Opening it opens the newest, with the rest listed under it and Done all. Anything that needs you (priority 4+)
-   * keeps its own row, so it is never buried in a fold. The Chats badge still counts every item (badge == items). */
-  // A Notifications item about an app (tagged app:<id>, WosBell's `from`) is that app's, not the agent's.
-  const noteSrc = it => it.app || it.from || 'notifications';
-  const noteSrcName = it => it.app ? (it.appName || it.app) : it.from ? (it.fromName || it.from) : (window.WizConfig?.agent?.() || 'Wizard');
-  const noteFolds = it => !it.group && (Number(it.priority) || 3) < 4;
-  function fold(list) {
-    const by = new Map(), out = [];
-    for (const it of list) { if (!noteFolds(it)) { out.push(it); continue; } const k = noteSrc(it); if (!by.has(k)) by.set(k, []); by.get(k).push(it); }
-    for (const [k, l] of by) {
-      if (l.length < 2) { out.push(l[0]); continue; }
-      const items = l.slice().sort((a, b) => noteAt(b) - noteAt(a)), top = items[0];
-      out.push(Object.freeze({ ...top, group: k, items, time: top.time, priority: Math.max(...items.map(i => Number(i.priority) || 3)), read: items.every(i => i.read) }));
-    }
-    return out;
-  }
-  // The open item's place: everything else waiting from the same app (what Done all clears with it).
-  function noteSiblings(it) {
-    if (!it || !noteFolds(it)) return [];
-    const k = noteSrc(it);
-    return (window.WosBell?.items?.() || []).filter(i => i && i.id && !i.archived && i.id !== it.id && noteFolds(i) && noteSrc(i) === k).sort((a, b) => noteAt(b) - noteAt(a));
-  }
-  const noteAt = it => (Number(it.time) || 0) * 1000;
-  const sesRank = s => window.WizChatsListModel.sessionRank(s, { snoozeLast: snoozeLast(), failed: stiKind(s) === 'failed' });
-  /* Priority shows its groups (Miguel, 29 Oct 2026: "they're not grouped properly … it doesn't really change from
-   * newest"): a small header per status, most urgent first, newest first inside each. Notifications join the group of
-   * their own priority (4–5 Needs you, 3 Your call, the rest FYI). */
-  const PRI_LABEL = { 0: 'Needs approval', 1: 'Needs you', 2: 'Your call', 3: 'FYI', 4: 'Done', 5: 'No status', 9: 'Snoozed' };
-  function priorityGroups(list, awake, rowFn, sec) {
-    return window.WizChatsListModel.priorityGroups(list, awake, sesRank).map(g => { const r = g.rank, n = window.WizChatsListModel.unreadThreads(g.rows, s => LIVE.isNew(s), g.notes);
-      return `<div class="ch-subj ch-pri" data-pri="${r}" data-morph-key="${esc(sec === 'ready' ? `pri:${r}` : `pri:${sec}:${r}`)}"><span>${PRI_LABEL[r] || 'Other'}</span><small>${n || ''}</small></div>` + withNotes(g.rows, g.notes, rowFn); }).join('');
-  }
-  const notePlain = t => String(t || '').replace(/\[([^\]\n]+)\]\((https?:[^\s)]+)\)/g, '$1').replace(/[*`#>]/g, '').replace(/\s+/g, ' ').trim();
-  // An app's item (Settings › Notifications set to Chats) wears that app's own mark in the yellow tile; Notifications keeps the bell.
-  function noteIcon(it) {
-    const app = it.app || it.from;
-    if (!app || !window.WizSigil) return window.WosBell?.icon || '';
-    try { const meta = window.WizCore?.appMetadata?.(app) || { id: app, name: it.appName || it.fromName || app }; return window.WizSigil.html(meta); } catch (e) { return window.WosBell?.icon || ''; }
-  }
-  const noteTitle = it => notePlain(it.title) || notePlain(String(it.message || '').split('\n').find(l => l.trim())) || 'Notification';
-  /* A notification row reads unlike a chat at a glance: the app's mark on a yellow tile, the app's name as a small
-   * yellow label, then one line of what happened (and a count when several from that app wait together). */
-  function noteRow(it) {
-    const later = !!it.read, from = noteSrcName(it), n = it.group ? it.items.length : 0;
-    const title = n ? it.items.slice(0, 4).map(noteTitle).join(' · ') : noteTitle(it);
-    const pv = (it.source === 'cron' && !n ? 'Scheduled job · ' : '') + clip(notePlain(it.message), 160);
-    const lbl = n ? `${from}: ${n} waiting · newest ${noteTitle(it)}` : `${from}: ${noteTitle(it)}`;
-    return `<div class="ch-row-wrap ch-notif-wrap${later ? ' later' : ''}${it.app ? ' ch-notif-app' : ''}${n ? ' ch-notif-group' : ''}" data-morph-key="${n ? `notifg:${esc(it.group)}:${later ? 'l' : 'a'}` : `notif:${esc(it.id)}`}"><button type="button" class="ch-row ch-notif-row${later ? ' deferred' : ' unread'}" data-chnotif="${esc(it.id)}"${it.app ? ` data-chnotif-app="${esc(it.app)}"` : ''}${n ? ` data-chnotif-group="${esc(it.group)}"` : ''} aria-label="${esc(clip(lbl, 200))}" aria-haspopup="dialog" aria-keyshortcuts="Shift+F10" title="${n ? 'Open the newest · the rest are listed under it' : 'Open'} · hold or open the context menu for actions"><span class="emo ch-notif-ic" aria-hidden="true">${noteIcon(it)}</span>
-      <span class="bd"><span class="tp"><span class="ch-notif-from">${esc(clip(from, 40))}</span><b>${esc(clip(title, 160))}</b>${n ? `<span class="ch-notif-n">${n > 99 ? '99+' : n}</span>` : ''}<time>${esc(ago(new Date(noteAt(it)).toISOString()))}</time></span><span class="pv">${later ? '<em class="att ch-notif-snz">Snoozed:</em> ' : ''}${esc(pv)}</span></span></button></div>`;
-  }
+  /* Notification rows and Priority groups; core/chats-notes.js. */
+  const { fold, noteAt, noteIcon, notePlain, noteRow, noteSiblings, noteSrcName, noteTitle, priorityGroups, sesRank, bindLate: notesLate } = window.WizCore.chatsParts.notes({ ago, clip, esc, LIVE, stiKind, withNotes });
   // The snoozed tail is one time-ordered run (Oldest reverses it), snoozed notes included, whatever the order.
   function withNotes(list, nts, rowFn, timeOnly = false) {
     return window.WizChatsListModel.mixedRows(list, nts, readyOrder, { at: s => LIVE.cardAt(s), rank: sesRank }, { timeOnly })
@@ -1304,6 +1109,8 @@ window.WizCore.chats = function createChats(H) {
   const { draftRow, moveSubject, newDrafts, noteMoreHtml, noteRouteHtml, noteStackHtml, noteTactsHtml, notifAct, notifDoneAll, notifOf, notifRoute, openContextDraft, openNewDraft, sendPill, subjOrder, workLabel, bindLate: draftsLate } = window.WizCore.chatsParts.drafts({ ago, ch, CH, chatsBack, clip, elOf: (...a) => elOf(...a), esc, H, holdList: (...a) => holdList(...a), keepThreadOpen, KIT, LIVE, noteAt, notePlain, noteQuiet: (...a) => noteQuiet(...a), noteSiblings, noteSrcName, noteTitle, openChat, OUTBOX, owner: (...a) => owner(...a), PHONE: (...a) => PHONE(...a), reachLabel, renderChatList, renderChats: (...a) => renderChats(...a), saveDraft, setFocus, toast, TOPIC, topicOn, troubleshoot, vib, W, winAgent });
   /* Thread tracker (Reply, go to a message), reply summary, Compact list and the Filter sheet's Focus; core/chats-tracker.js. */
   const { CHEV_SVG, COG_SVG, COMPACT_KEY, compactOn, discardDraft, filterSheet, focusLabel, focusOption, focusOptions, jumpToMessage, leadText, listTitle, noteQuiet, quoteMessage, regenOn, replyBubble, replyCard, setSummaryOpen, snoozeLast, summaryOf, summaryStartsOpen, syncListTitle, bindLate: trackerLate } = window.WizCore.chatsParts.tracker({ agentName: (...a) => agentName(...a), agentRec, AGS: (...a) => AGS(...a), byStatus, ch, CH, chanArchived, channelsOn, chanOpen, clip, draftKey: (...a) => draftKey(...a), elOf: (...a) => elOf(...a), esc, focusAgents, focusedAgent, focusOf, focusUseful, holdList: (...a) => holdList(...a), KIT, LIVE, matchesFocus, notifOf, owner: (...a) => owner(...a), pinsOn, refreshReply: (...a) => refreshReply(...a), rememberedFocus, renderChatList, renderThread, renderThreadLive, renderThreadNow, saveDraft, scrollBox, spaceAgent, spaces, statusEntries, syncDocumentThread, threadViewportTop, toast, toTurns, track, visibleSpaces, W });
+  statusLate({ snoozeLast });
+  notesLate({ snoozeLast });
   setupLate({ snoozeLast });
   dailyLate({ snoozeLast });
   /* Focus only appears once there is something to switch between (James, 24 Oct 2026): a second agent, or an
@@ -1898,74 +1705,8 @@ window.WizCore.chats = function createChats(H) {
     H.changed?.();
     window.WosSkinHost?.rendered?.('chats-list', null); // a layout that draws its own list (AI apps sidebar) re-reads it now too
   }
-  async function threadAct(wid, sid, a) {
-    wid = owner(wid);
-    const s = rowOf(wid, sid); if (sid === '__new__') { notifAct(wid, a); return; } if (a === 'markdone') { markDone(wid, sid); return; } if (!s || !ACT[a]) return;
-    const w = W[wid];
-    vib(8);
-    if (a === 'unread') {
-      closeRowSheet();
-      // Hold an open reader's explicit unread marker until navigation; its live repaint must not consume it.
-      for (const id of Object.keys(CH)) {
-        const x = W[id]; if (!x || x.thread !== sid) continue;
-        if (keepThreadOpen()) ch(id).unreadHold = { sid, nav: ch(id).readNav };
-        else threadBack(x);
-      }
-      const write = LIVE.markUnread(sid); paintListsNow();
-      const ok = await write;
-      toast(ok ? '●' : '!', ok ? 'Marked unread' : 'Couldn’t mark unread', ok ? 1600 : 3200);
-      for (const id of Object.keys(CH)) { const x = W[id]; if (x) renderChats(x); } H.changed?.();
-      return;
-    }
-    if (a === 'stop_watch') {
-      closeRowSheet();
-      const ok = await LIVE.stopWatching(sid, LIVE.ownerOf ? LIVE.ownerOf(s) : undefined);
-      toast(ok ? '◉' : '!', ok ? 'Stopped watching' : 'Couldn’t stop watching', ok ? 1600 : 3200);
-      for (const id of Object.keys(CH)) { const x = W[id]; if (x) renderChats(x); } H.changed?.();
-      return;
-    }
-    if (a === 'snooze' && window.WosSkinHost?.action('snooze', { sessionId: sid })) return;
-    if (a === 'snooze') { const B = BOOM(); if (B) B.open({ sessionId: sid, targetKind: 'thread', title: s.title, context: s.title }, B.nextFor(sid)); else toast('!', 'Snooze is still loading', 1600); return; }
-    // Archive of the open thread: desktop opens the next chat in the drawn list, the phone returns to the chats list
-    // (James, 7 Nov 2026); Snooze lands the same way through the same helper.
-    if (a === 'done' && w?.thread === sid) leaveFinishedThread(w, sid);
-    else if (!keepThreadOpen() && a !== 'restore' && w && w.thread === sid) threadBack(w);
-    const msg = { done: ['✓', followUpActive(s) ? 'Archived · still watching' : 'Archived'], file: ['▤', 'Filing…'], restore: ['↺', 'Restored to Work'] }[a];
-    // With Channels on, an archive offers Undo for about five seconds (issue 1336), in place of the plain toast. Undo
-    // waits for the archive's own write to settle (a restore while it is in flight is refused as busy), then restores.
-    let archiving = null;
-    if (!(a === 'done' && typeof actUndo === 'function' && actUndo(msg[1], () => actRestore(sid, archiving))))
-      toast(msg[0], msg[1], 1600);
-    // Same frame as the tap (James, 7 Nov 2026, reported again): LIVE patches its list synchronously and only then awaits
-    // the write, so start it, paint every list now (open sheet / swipe / long-press holds must not defer it), reconcile after.
-    const write = a === 'done' ? LIVE.archive(sid) : a === 'file' ? LIVE.archive(sid, { file: true }) : LIVE.restore(sid); archiving = write;
-    paintListsNow();
-    const ok = await write;
-    if (ok && a === 'file') toast('▤', 'Filed in Archive', 1800);
-    if (!ok) toast('!', { done: 'Couldn’t archive · thread restored', file: 'Couldn’t close & file · thread restored', restore: 'Couldn’t restore · thread kept where it was' }[a], 3200);
-    for (const id of Object.keys(CH)) { const x = W[id]; if (x) renderChats(x); } H.changed?.();
-  }
-  /* Threads and alerts share one actions sheet, dismissal and gesture ownership. */
-  const ROW_MENU = '.ch-list [data-chopen], .ch-list .ch-notif-row[data-chnotif], .ch-list [data-chchan]';
-  // A channel line opens the channel sheet (wizard/chat-channels); every other row its thread or alert sheet.
-  const rowMenu = (wid, row) => row?.dataset.chchan ? openChannelSheet(wid, row.dataset.chchan, row) : openRowSheet(wid, row?.dataset.chopen, row?.dataset.chnotif);
-  const NOTE_ACT = { done: ACT.done, snooze: { ...ACT.snooze, label: 'Snooze' }, unread: ACT.unread };
-  // On a folded row (several from one app) every action covers the whole fold.
-  async function noteRowAct(nid, a, ids) {
-    const it = window.WosBell?.item?.(nid);
-    if (!it || it.archived || !NOTE_ACT[a]) return;
-    vib(8);
-    ids = ids && ids.length ? ids : [nid];
-    // The Notifications app has read / archived, not a separate done or flag state.
-    // Archive marks the alert read and takes it out of Ready; Snooze marks it read and keeps it (the snoozed tail).
-    const write = window.WosBell.mark(ids, a === 'unread' ? { read: false } : a === 'snooze' ? { read: true } : { read: true, archived: true });
-    paintListsNow(); // mark() patches its items synchronously; the list follows on this frame, not on the 60 ms watcher
-    const ok = await write;
-    const many = ids.length > 1 ? `${ids.length} ` : '';
-    // Archive offers Undo with Channels on (issue 1336): the alerts come back unarchived, still read.
-    if (ok && a === 'done' && typeof actUndo === 'function' && actUndo(many ? `${ids.length} done` : 'Done', () => { void window.WosBell.mark(ids, { archived: false }); paintListsNow(); })) return;
-    toast(ok ? '✓' : '!', ok ? (a === 'unread' ? `${many}Marked unread` : a === 'snooze' ? `${many}Snoozed` : many ? `${ids.length} done` : 'Done') : 'Couldn’t save · restored', ok ? 1600 : 3200);
-  }
+  /* Row actions for threads, alerts and channel lines; core/chats-rowacts.js. */
+  const { NOTE_ACT, noteRowAct, ROW_MENU, rowMenu, threadAct, bindLate: rowactsLate } = window.WizCore.chatsParts.rowacts({ ACT, actRestore, actUndo, BOOM, ch, CH, closeRowSheet, followUpActive, H, keepThreadOpen, leaveFinishedThread, LIVE, markDone, notifAct, openChannelSheet, openRowSheet, owner, paintListsNow, rowOf, threadBack, toast, vib, W });
   let rowSheet = null; // { wid, sid?, nid?, trigger }
   function rowActions(s) {
     const acts = threadActions(s, null);
@@ -2086,105 +1827,8 @@ window.WizCore.chats = function createChats(H) {
     if (trigger?.isConnected) trigger.focus({ preventScroll: true });
     return true;
   }
-  /* Controls are bound to the displayed identity, never to whichever prompt arrives next. */
-  function approvalHtml(c, s) {
-    const ap = c.approval;
-    if (!ap || !s || ap.runId !== s.runId) return '';
-    if (ap.resolved) return `<div class="appr done">${esc(ap.stale ? 'No longer waiting · already answered or expired' : ap.kind === 'unknown' ? 'Recovery acknowledged · execution interrupted' : ap.kind === 'clarify' ? 'Answer sent' : KIT.choiceReceipt(ap.resolved))}</div>`;
-    const buttons = ap.kind === 'clarify' ? [...ap.choices, { value: '__answer', label: 'Send answer' }] : ap.choices;
-    return `<div class="appr" role="group" aria-label="Run control"><b>${ap.kind === 'unknown' ? 'Needs recovery' : ap.kind === 'clarify' ? 'Answer needed' : 'Needs your approval'}</b><pre>${esc(ap.action)}</pre>
-      ${ap.kind === 'clarify' ? `<input data-clarify-answer aria-label="Clarification answer" value="${esc(ap.answer || '')}" maxlength="16384">` : ''}
-      <div class="appr-b${buttons.length > 2 ? ' many' : ''}">${buttons.map(ch => `<button type="button" data-approve="${esc(ch.value)}" data-control-key="${esc(ap.key)}" class="${/^(deny|reject)$/.test(ch.value) ? 'no' : ''}" ${ap.pending ? 'disabled' : ''}>${ap.pending === ch.value ? 'Sending…' : esc(ch.label)}</button>`).join('')}</div>
-      ${ap.error ? `<small class="err">${esc(ap.error)}</small>` : '<small>Only the displayed request will be answered.</small>'}</div>`;
-  }
-  async function loadApproval(w, s) {
-    const c = ch(w.id), sid = w.thread, nav = c.readNav;
-    const current = () => W[w.id] === w && w.thread === sid && c.readNav === nav;
-    if (!s || !['waiting_for_approval', 'unknown', 'running'].includes(s.status) || !s.runId) { if (c.approval && !c.approval.resolved) c.approval = null; return false; }
-    if (c.approval?.runId === s.runId && Date.now() - c.approval.at < 3000) return false;
-    try {
-      const run = await LIVE.run(s.runId);
-      if (!current()) return false;
-      const prev = c.approval;
-      let ap;
-      if (run.status === 'unknown') {
-        const caps = await LIVE.runCapabilities(s.runId).catch(() => ({}));
-        if (!current()) return false;
-        ap = { kind: 'unknown', requestId: run.admission_id, generation: run.execution_generation,
-          action: 'Hermes restarted before this execution could be confirmed. Some work may already have happened. Acknowledge the uncertain outcome to release queued replies without repeating this turn.',
-          choices: caps.features?.run_unknown_resolution === true && typeof run.admission_id === 'string' && Number.isSafeInteger(run.execution_generation) ? [{ value: 'resolve', label: 'Acknowledge interrupted execution' }] : [] };
-      } else ap = Array.isArray(run.pending_controls) ? run.pending_controls.map(KIT.normalizeApproval).find(Boolean) : KIT.normalizeApproval(run.approval);
-      if (ap) {
-        ap.key = JSON.stringify([s.runId, ap.kind, ap.requestId, ap.generation]);
-        if (prev?.key === ap.key) Object.assign(ap, { pending: prev.pending, error: prev.error, answer: prev.answer });
-        // An answered control stays answered: a runtime snapshot that still lists it (lagging poll, stale queue
-        // payload) must never re-offer it, or every tap 409s and the same card comes straight back (James, 23 Oct).
-        const settled = c.settled?.get(ap.key);
-        if (settled) Object.assign(ap, { resolved: settled.resolved, stale: settled.stale, pending: '' });
-      }
-      c.approval = ap ? { ...ap, runId: s.runId, at: Date.now() } : null;
-      return JSON.stringify(prev && { k: prev.key, a: prev.action, c: prev.choices, r: prev.resolved }) !== JSON.stringify(c.approval && { k: c.approval.key, a: c.approval.action, c: c.approval.choices, r: c.approval.resolved });
-    } catch { return false; }
-  }
-  function settle(c, key, resolved, stale = false) {
-    const m = c.settled || (c.settled = new Map()); m.delete(key); m.set(key, { resolved, stale });
-    while (m.size > 50) m.delete(m.keys().next().value);
-  }
-  async function chooseApproval(wid, choice, key, answer) {
-    const w = W[wid], c = ch(wid), ap = c.approval;
-    if (!w || !ap || ap.pending || ap.resolved || ap.key !== key || !(ap.choices.some(x => x.value === choice) || ap.kind === 'clarify' && choice === '__answer')) return;
-    const sid = w.thread, nav = c.readNav;
-    const owns = () => W[wid] === w && w.thread === sid && c.readNav === nav && c.approval?.key === key;
-    if (ap.kind === 'clarify') { ap.answer = choice === '__answer' ? answer : choice; if (!ap.answer?.trim()) return; }
-    if (ap.kind === 'unknown' && !window.confirm('Mark this lost execution interrupted and release queued replies? It will not be replayed.')) return;
-    ap.pending = choice; ap.error = ''; renderThreadNow(w);
-    try {
-      if (ap.kind === 'unknown') await LIVE.resolveUnknown(ap.runId, ap.requestId, ap.generation);
-      else if (ap.kind === 'clarify') await LIVE.clarify(ap.runId, ap.answer, ap.requestId, ap.generation);
-      else await LIVE.approve(ap.runId, choice, ap.requestId, ap.generation);
-      settle(c, key, ap.kind === 'approval' ? choice : 'closed');
-      if (owns()) c.approval.resolved = ap.kind === 'approval' ? choice : 'closed';
-    } catch (e) {
-      if (owns()) {
-        if ([404, 409, 410].includes(e.status)) {
-          // The runtime says this exact control is no longer pending: retire its key so a reload can't re-offer it.
-          settle(c, key, 'closed', true);
-          c.approval = null;
-          await loadApproval(w, LIVE.session(sid));
-          const next = c.approval;
-          if (W[wid] === w && w.thread === sid && c.readNav === nav && next && !next.resolved && next.key !== key) toast('·', 'This control changed. Check the current prompt before responding.', 3000);
-        } else c.approval.error = 'Couldn’t send. Check the connection and try again.';
-      }
-    }
-    if (owns()) c.approval.pending = '';
-    if (W[wid] === w && w.thread === sid && c.readNav === nav) renderThreadNow(w);
-    LIVE.refresh();
-  }
-  /* Replace el's contents with html while `keep` (a field inside el) stays attached: every ancestor of keep takes the
-   * fresh attributes and children, and keep takes the fresh field's place. Returns false (caller falls back to
-   * innerHTML) when the fresh markup has no matching field. */
-  function rebuildAround(el, html, keep) {
-    const tpl = document.createElement('template'); tpl.innerHTML = html;
-    const fresh = tpl.content.querySelector('.ch-compose textarea'); if (!fresh || !el.contains(keep)) return false;
-    const oldPath = [], newPath = [];
-    for (let n = keep; n && n !== el; n = n.parentNode) oldPath.unshift(n);
-    for (let n = fresh; n && n !== tpl.content; n = n.parentNode) newPath.unshift(n);
-    if (oldPath.length !== newPath.length || oldPath.some((n, i) => n.nodeName !== newPath[i].nodeName)) return false;
-    keep.placeholder = fresh.placeholder;
-    let oldParent = el, newParent = tpl.content;
-    oldPath.forEach((o, i) => {
-      const f = newPath[i];
-      for (const c of [...oldParent.childNodes]) if (c !== o) c.remove();
-      const kids = [...newParent.childNodes], at = kids.indexOf(f);
-      o.before(...kids.slice(0, at)); o.after(...kids.slice(at + 1));
-      if (o !== keep) {
-        for (const a of [...o.attributes]) if (!f.hasAttribute(a.name)) o.removeAttribute(a.name);
-        for (const a of [...f.attributes]) if (o.getAttribute(a.name) !== a.value) o.setAttribute(a.name, a.value);
-      }
-      oldParent = o; newParent = f;
-    });
-    return true;
-  }
+  /* Approvals in a thread and repainting around a field; core/chats-approvals.js. */
+  const { approvalHtml, chooseApproval, loadApproval, rebuildAround } = window.WizCore.chatsParts.approvals({ ch, esc, KIT, LIVE, renderThreadNow, toast, W });
   function renderThreadNow(w) { const el = track.querySelector(`[data-chats="${w.id}"]`); if (el && w.thread) renderThread(w, el); }
   /* Selecting text (James, 12 Oct): a working thread re-renders on every new step, which replaced the bubble under
    * a long-press (Android cancels the press) and wiped any selection a few seconds later. Background updates now
@@ -2788,6 +2432,7 @@ window.WizCore.chats = function createChats(H) {
   }
   /* Durable outbox and reading a thread: core/chats-outbox.js. */
   const { echoed, loadThread, localSent, pendingFor, pendingHtml, reconcileSent, renderChats, retryShown, threadAlive, threadErrHtml, turnsCurrent } = window.WizCore.chatsParts.outbox({ ch, CH, CHECK_SVG, elOf: (...a) => elOf(...a), esc, H, INC, isWorking, KIT, LIVE, loadApproval, md, MIC_SVG, needsLand, OUTBOX, PEND, reach, reachLabel, renderChatList, renderLive, renderThread, renderThreadLive, replyCard, rowOf, syncListTitle, toTurns, track, troubleshoot, userMedia, W });
+  rowactsLate({ renderChats });
   setupLate({ renderChats });
   /* Thread trail: a thread opened from a link inside another thread remembers where it came from, so Back,
    * Done and Defer step back to that thread instead of the list (James clicks through a summary thread's links,
