@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
-const source = fs.readFileSync(new URL('../web/core/settings.js', import.meta.url), 'utf8');
+import { withSettingsParts } from './fixtures/settings-parts.mjs'; // settings.js parts moved out verbatim (issue 1665)
+const source = withSettingsParts(fs.readFileSync(new URL('../web/core/settings.js', import.meta.url), 'utf8'));
 const tick = () => new Promise(resolve => setImmediate(resolve));
 function harness({ android = false, shell = 'phone', installed = true, failure = false, stale = false } = {}) {
   const storage = new Map(), posts = [], reads = [], notices = [], changed = [], stores = [];

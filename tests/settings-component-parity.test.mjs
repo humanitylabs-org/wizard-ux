@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import path from 'node:path';
+import { withSettingsParts } from './fixtures/settings-parts.mjs'; // settings.js parts moved out verbatim (issue 1665)
 const root = process.env.QA_SETTINGS_SOURCE || new URL('../', import.meta.url).pathname;
 const read = p => fs.readFileSync(path.join(root, p), 'utf8');
 const tick = () => new Promise(resolve => setTimeout(resolve, 0));
@@ -13,7 +14,7 @@ async function harness(reply = () => [200, status]) {
   s.window = s; s.WizCore = {}; s.WizBrand = { html: 'W' }; s.WizConfig = { agent: () => 'Fixture assistant' };
   s.WizWebUpdate = { firstObservedVersion: 'a'.repeat(40), version: 'v:' + 'b'.repeat(40) };
   s.fetch = async (url, options = {}) => { calls.push({ url, ...options }); const [code, body] = await reply(options.method || 'GET'); return { ok: code >= 200 && code < 300, status: code, json: async () => body }; };
-  vm.runInNewContext(read('web/core/settings.js'), s);
+  vm.runInNewContext(withSettingsParts(read('web/core/settings.js')), s);
   vm.runInNewContext(read('web/core/os-updates.js'), s);
   await tick(); await tick();
   const mounts = ['phone', 'desktop'].map(shell => {

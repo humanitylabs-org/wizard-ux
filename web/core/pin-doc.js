@@ -51,7 +51,7 @@
     ['x', 'core/usage.js'], ['x', 'core/resources.js'], ['x', 'core/chat-power.js'], ['x', 'core/chat-search.js'],
     ['x', 'core/uploads.js'], ['x', 'core/notif-bell.js'], ['x', 'core/scheduled-reminders.js'], ['x', 'core/dom-morph.js'],
     ['x', 'core/chats-attach.js'], ['x', 'core/chats-done.js'], ['x', 'core/chats-drafts.js'], ['x', 'core/chats-outbox.js'], ['x', 'core/chats-posts.js'], ['x', 'core/chats-running.js'], ['x', 'core/chats-tracker.js'], ['x', 'core/chats.js'], ['x', 'core/deeplink.js'], ['x', 'core/companion-pane.js'], ['x', 'core/companion-legacy.js'],
-    ['x', 'core/voice-status.js'], ['x', 'core/phone-connect.js'], ['x', 'core/settings.js'], ['x', 'core/incognito-chat.js'],
+    ['x', 'core/voice-status.js'], ['x', 'core/phone-connect.js'], ['x', 'core/settings-view.js'], ['x', 'core/settings.js'], ['x', 'core/incognito-chat.js'],
     ['x', 'core/workspace-sync.js'], ['x', 'core/photos-relay.js'], ['x', 'core/cancelled.js'], ['x', 'core/mic.js'],
     ['x', 'core/os-updates.js'], ['x', 'kit/wizard-sheet.js'], ['x', 'core/os-update-flow.js'], ['x', 'core/box-source.js'],
     ['x', 'core/disk-status.js'], ['x', 'core/schedules.js'], ['x', 'core/own-views.js'], ['x', 'core/screen-text.js'],
