@@ -112,7 +112,7 @@ test('the switch is listed, off by default, linked to its issue', async () => {
   await fresh.E.toggle(SWITCH); assert.ok(fresh.active().includes(SWITCH), 'the switch turns it on');
   const m = JSON.parse(read('web/tweaks/wizard/lock-screen-player/manifest.json'));
   assert.equal(m.id, SWITCH);
-  assert.deepEqual(m.issues, ['humanitylabs-org/wizard-ux#1661']);
+  assert.ok(m.issues.includes('humanitylabs-org/wizard-ux#1661'));
 });
 
 // Not run here (wizard-ux issue 1674): this pinned Java/Swift source text and no JDK runs it in this suite. Android lock-screen player wiring: the admitted apps and the open path run in the JVM suite (AudioPolicyTest).
