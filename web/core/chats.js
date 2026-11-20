@@ -4794,9 +4794,11 @@ window.WizCore.chats = function createChats(H) {
     c.readNav = (c.readNav || 0) + 1;
     if (w.thread !== sid) H.threadShown?.(wid, null); // close the old preview immediately, even while the new thread loads
     if (opts.via === 'link' && w.thread && w.thread !== '__new__' && w.thread !== sid) {
-      c.trail = (c.trail || []).concat(w.thread).slice(-20);
       // A thread left from the Daily view comes back in it (issue 1653): the same earlier days above, so the same place.
-      c.trailDaily = { ...(c.trailDaily || {}) }; if (typeof dailyOn === 'function' && dailyOn(w)) c.trailDaily[w.thread] = { id: w.daily.id, agent: w.daily.agent }; else delete c.trailDaily[w.thread];
+      // Kept per trail entry (index-aligned with the trail; the trail can hold one thread twice, once in each view).
+      const t = c.trail || [], td = (c.trailDaily || []).slice(0, t.length); while (td.length < t.length) td.push(null);
+      td.push(typeof dailyOn === 'function' && dailyOn(w) ? { sid: w.thread, id: w.daily.id, agent: w.daily.agent } : null);
+      c.trail = t.concat(w.thread).slice(-20); c.trailDaily = td.slice(-20);
     } else if (!opts.keepTrail) c.trail = [];
     PW?.opened(wid, sid, !!opts.back);
     if (sid === '__new__' && w.thread !== '__new__') c.newAt = Date.now(); // a fresh new chat: nothing older shows in it
@@ -4839,7 +4841,7 @@ window.WizCore.chats = function createChats(H) {
   function threadBack(w) {
     const c = ch(w.id), prev = (c.trail || []).pop();
     if (prev && prev !== w.thread && LIVE.session(prev)) {
-      const d = c.trailDaily?.[prev]; if (d && typeof dailyChan === 'function' && dailyChan(d.id)) dailyNext = { sid: prev, daily: { id: d.id, agent: d.agent }, at: Date.now() };
+      const d = (c.trailDaily || [])[c.trail.length]; if (d?.sid === prev && typeof dailyChan === 'function' && dailyChan(d.id)) dailyNext = { sid: prev, daily: { id: d.id, agent: d.agent }, at: Date.now() };
       openChat(w.id, prev, { keepTrail: true, back: true }); return 'trail';
     }
     chatsBack(w); return 'thread';

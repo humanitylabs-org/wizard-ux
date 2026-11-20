@@ -9,7 +9,8 @@
 // and send-go (a typed reply with Send and go on: the phone steps back by itself), and two more parents: newreply (a new
 // reply lands in the parent while he is away), working-newreply (the parent was Working and its reply lands) and daily
 // (the parent is today's thread of the Daily channel, opened from Channels in the Daily view with an earlier day folded
-// above it, and a new reply lands there while he is away: Back must bring the Daily view back at his place).
+// above it, and a new reply lands there while he is away: Back must bring the Daily view back at his place) and routed
+// (both threads are a routed Claude agent's, with an agent-qualified link, and a new reply lands in the parent).
 const assert = require('node:assert/strict');
 const { chromium } = require('../tools/qa-playwright.cjs');
 const { ownerRead } = require('../tools/qa-desktop-frame-fixture.cjs');
@@ -19,8 +20,13 @@ const web = process.env.QA_WEB || path.join(repo, 'web'), out = process.env.QA_O
 fs.mkdirSync(out, { recursive: true });
 const now = Date.now(), iso = t => new Date(t).toISOString(), nap = ms => new Promise(r => setTimeout(r, ms));
 const para = (n, tag) => Array.from({ length: n }, (_, i) => `${tag} ${i + 1}: the ready list needs a short look at each thread before we decide what to keep and what to close today.`).join('\n\n');
-const linkTo = id => `${origin}${prefix}?session=${id}`;
-const reply = `Here is the triage.\n\n${para(10, 'Before')}\n\nOpen [Press notes](${linkTo('qa-b')}) and check the draft.\n\n${para(14, 'After')}`;
+const linkTo = (id, agent) => `${origin}${prefix}?session=${id}${agent ? '&agent=' + agent : ''}`;
+const replyTo = agent => `Here is the triage.\n\n${para(10, 'Before')}\n\nOpen [Press notes](${linkTo('qa-b', agent)}) and check the draft.\n\n${para(14, 'After')}`;
+const reply = replyTo('');
+const AGENTS = [
+  { id: 'hermes', label: 'Archimedes', harness: 'hermes', privacy: 'standard', is_default: true, status: 'running', appearance: { glyph: 'a', hue: 260 }, model: { provider: 'anthropic', model: 'claude-opus-4' } },
+  { id: 'claude', label: 'Claude', harness: 'claude', privacy: 'standard', status: 'running', appearance: { glyph: 'c', hue: 20 }, model: { provider: 'anthropic', model: 'claude-opus-4' } },
+];
 const msgs = [];
 for (let i = 0; i < 4; i++) msgs.push({ role: 'user', content: 'Step ' + (i + 1) + '?', timestamp: now / 1000 - 9000 + i * 600 }, { role: 'assistant', content: para(4, 'Old'), timestamp: now / 1000 - 8990 + i * 600 });
 msgs.push({ role: 'user', content: 'Triage the ready list', timestamp: now / 1000 - 400 }, { role: 'assistant', content: reply, timestamp: now / 1000 - 390 });
@@ -36,7 +42,8 @@ const acts = (process.env.QA_ACTS || 'look,send,send-go').split(',');
     for (const shell of cases) for (const skin of (process.env.QA_SKINS || 'nebula,grove').split(',')) for (const kind of kinds) for (const act of acts) for (const back of (act === 'send-go' ? ['auto'] : shell === 'desktop' ? ['escape'] : backs)) {
       const phone = shell.startsWith('phone'); if (act === 'send-go' && !phone) continue; // desktop keeps its thread pane
       const stem = `${shell}-${skin}-${kind}-${act}-${back}`, entry = { stem, errors: [] }; report.push(entry);
-      const msgsA = msgs.slice(), working = kind === 'working' || kind === 'working-newreply', daily = kind === 'daily';
+      const working = kind === 'working' || kind === 'working-newreply', daily = kind === 'daily', routed = kind === 'routed';
+      const msgsA = routed ? msgs.map(m => m.content === reply ? { ...m, content: replyTo('claude') } : m) : msgs.slice();
       const DAY = d => new Date(now - d * 864e5).toISOString().slice(0, 10);
       const ROWS = [
         { id: 'qa-a', title: 'Ready list triage', at: now - 6 * 6e4, preview: 'Here is the triage.', count: msgs.length, status: working ? 'running' : 'completed' },
@@ -45,6 +52,8 @@ const acts = (process.env.QA_ACTS || 'look,send,send-go').split(',');
         ...(daily ? [{ id: 'qa-y', title: 'Daily · ' + DAY(1), at: now - 864e5, preview: 'Yesterday.' }] : []),
       ].map(shape);
       if (daily) for (const s of ROWS) if (s.id === 'qa-a' || s.id === 'qa-y') s.channel = 'daily';
+      const CLAUDE = routed ? ROWS.filter(s => s.id === 'qa-a' || s.id === 'qa-b') : [];
+      if (routed) for (const s of CLAUDE) ROWS.splice(ROWS.indexOf(s), 1);
       const CHANNELS = [{ id: 'daily', agent: 'hermes', name: 'Daily', order: -2, createdAt: iso(now - 9e8), archived: false, pinned: true, pinOrder: 0, kind: 'daily', dayStartsAt: '05:00' }];
       const dayRow = (id, d) => ({ day: DAY(d), sessionId: id, title: 'Daily · ' + DAY(d), opener: id === 'qa-a' ? 'Step 1?' : 'Yesterday', count: id === 'qa-a' ? msgsA.length : 2, lastAt: iso(now - d * 864e5) });
       // Read threads carry a seen mark at their latest activity; the unread case leaves qa-a without one (bold in Ready).
@@ -54,13 +63,13 @@ const acts = (process.env.QA_ACTS || 'look,send,send-go').split(',');
       const context = await browser.newContext({ viewport: phone ? { width: 412, height: 915 } : { width: 1440, height: 900 }, isMobile: phone, hasTouch: phone, serviceWorkers: 'block', ...(phone ? { userAgent: ua } : {}) });
       try {
         await context.routeWebSocket('**/*', w => w.close());
-        await context.addInitScript(({ shell, skin, go, daily }) => {
+        await context.addInitScript(({ shell, skin, go, daily, routed }) => {
           if (window !== top) return;
           if (go) localStorage.setItem('wos.chats.afterAction.v1', 'list');
           for (const [k, v] of Object.entries({ 'wos.shell': shell.startsWith('phone') ? 'phone' : 'desktop', 'wos.desktop-view.v1': 'classic', 'wos.coached': 'true', 'wos.tour.v1': 'true', 'wos.welcome.v1': 'done', 'wos.skin': skin,
-            'wos.skin-tweaks.v1': JSON.stringify({ version: 1, preset: 'none', off: {}, mix: { 'wizard/desktop-chats': true, ...(daily ? { 'wizard/chat-channels': true } : {}) } }) })) localStorage.setItem(k, v);
+            'wos.skin-tweaks.v1': JSON.stringify({ version: 1, preset: 'none', off: {}, mix: { 'wizard/desktop-chats': true, ...(daily || routed ? { 'wizard/chat-channels': true } : {}) } }) })) localStorage.setItem(k, v);
           if (daily) localStorage.setItem('wos.chats.view.v1', 'channels');
-        }, { shell, skin, go: act === 'send-go', daily });
+        }, { shell, skin, go: act === 'send-go', daily, routed });
         const prefs = { migrations: { 'launcher-seed-v1': true } };
         await context.route('**/*', async r => {
           const q = r.request(), u = new URL(q.url()), p = u.pathname, method = q.method();
@@ -81,7 +90,7 @@ const acts = (process.env.QA_ACTS || 'look,send,send-go').split(',');
           if (p === '/wizard/thread-seen') return r.fulfill({ json: { state: seen } });
           if (p === '/wizard/v1/pages/wizard-look/look.json') return r.fulfill({ status: 404, json: { error: 'not_here' } });
           if (p === '/wizard/v1/ui-preferences') return r.fulfill({ json: prefs });
-          if (p === '/wizard/v1/agents') return r.fulfill({ json: { agents: [] } });
+          if (p === '/wizard/v1/agents') return r.fulfill({ json: { agents: routed ? AGENTS : [] } });
           if (p === '/wizard/v1/channels') return r.fulfill({ json: { schema: 'wizard.channels/1', sort: 'az', channels: daily ? CHANNELS : [] } });
           if (p === '/wizard/v1/channels/read') return r.fulfill({ json: { at: {} } });
           if (p === '/wizard/v1/channels/daily/days') return r.fulfill({ json: { channel: 'daily', agent: 'hermes', dayStartsAt: '05:00', today: 'qa-a', days: [dayRow('qa-a', 0), dayRow('qa-y', 1)], next: null } });
@@ -89,9 +98,9 @@ const acts = (process.env.QA_ACTS || 'look,send,send-go').split(',');
             const data = daily && u.searchParams.get('channel') === 'daily' ? ROWS.filter(x => x.channel === 'daily').reverse().map(x => ({ ...x, listVersion: 1, agent: '' })) : [];
             return r.fulfill({ json: { object: 'list', data, offset: 0, limit: 100, has_more: false, snapshot: 'snap', window: 'channel', channel: u.searchParams.get('channel'), order: 'oldest', channel_total: data.length, view: 'list', list_version: 1 } });
           }
-          if (p === '/wizard/hermes/api/sessions') return r.fulfill({ json: { data: ROWS, has_more: false } });
+          if (p === '/wizard/hermes/api/sessions') return r.fulfill({ json: { data: u.searchParams.get('agent') === 'claude' ? CLAUDE : u.searchParams.get('agent') ? [] : ROWS, has_more: false } });
           const m = /^\/wizard\/hermes\/api\/sessions\/([^/]+)(\/messages)?$/.exec(p);
-          if (m) { const s = ROWS.find(x => x.id === decodeURIComponent(m[1])); if (!s) return r.fulfill({ status: 404, json: {} });
+          if (m) { const s = [...ROWS, ...CLAUDE].find(x => x.id === decodeURIComponent(m[1]) && (x.id !== 'qa-a' && x.id !== 'qa-b' || !routed || u.searchParams.get('agent') === 'claude')); if (!s) return r.fulfill({ status: 404, json: {} });
             return r.fulfill({ json: m[2] ? { messages: s.id === 'qa-a' ? msgsA : [{ role: 'user', content: 'Ask for ' + s.title, timestamp: now / 1000 - 3600 }, { role: 'assistant', content: s.preview + '\n\n' + para(3, 'Note'), timestamp: now / 1000 - 3590 }] } : { session: s } }); }
           return r.fulfill({ json: ownerRead(p) });
         });
@@ -101,8 +110,9 @@ const acts = (process.env.QA_ACTS || 'look,send,send-go').split(',');
         await page.evaluate(phone => phone ? __wos.openSheet('inbox') : __wux.openChatsList(), phone);
         await page.evaluate(() => document.fonts.ready); await nap(600);
         const vis = sel => page.locator(sel).filter({ visible: true }).first();
+        if (routed) await page.waitForFunction(() => (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/chat-channels') && WizLive.agentOf?.('qa-a') === 'claude', null, { timeout: 15000 });
         entry.unreadAtOpen = await page.evaluate(() => !!WizLive.isNew(WizLive.session('qa-a')));
-        assert.equal(entry.unreadAtOpen, kind === 'unread', `${stem}: the first thread is ${kind === 'unread' ? '' : 'not '}unread in Ready before it opens`);
+        if (!routed) assert.equal(entry.unreadAtOpen, kind === 'unread', `${stem}: the first thread is ${kind === 'unread' ? '' : 'not '}unread in Ready before it opens`);
         if (daily) {
           await page.waitForFunction(() => (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/chat-channels'), null, { timeout: 15000 });
           await page.addStyleTag({ content: '#wosWelcome{display:none!important}' });
@@ -135,10 +145,10 @@ const acts = (process.env.QA_ACTS || 'look,send,send-go').split(',');
         if (act === 'look') { if (await ta.count()) { await ta.click(); await ta.fill('Looks good'); await ta.fill(''); await page.keyboard.press('Tab').catch(() => {}); } }
         else { await ta.click(); await ta.fill('Looks good, send it'); await vis('.ch-compose .ch-send').click(); }
         // A new reply lands in the parent while he is away (issue 1653): the list and the thread both say so.
-        if (kind === 'newreply' || kind === 'working-newreply' || daily) {
+        if (kind === 'newreply' || kind === 'working-newreply' || daily || routed) {
           await nap(400);
           msgsA.push({ role: 'assistant', content: 'One more thing: ' + para(3, 'Later'), timestamp: Date.now() / 1000 });
-          const a = ROWS.find(x => x.id === 'qa-a'); Object.assign(a, { status: 'completed', updated_at: iso(Date.now()), updatedAt: iso(Date.now()), last_active: Date.now() / 1000, message_count: msgsA.length, messageCount: msgsA.length, preview: 'One more thing' });
+          const a = [...ROWS, ...CLAUDE].find(x => x.id === 'qa-a'); Object.assign(a, { status: 'completed', updated_at: iso(Date.now()), updatedAt: iso(Date.now()), last_active: Date.now() / 1000, message_count: msgsA.length, messageCount: msgsA.length, preview: 'One more thing' });
           delete a.wizard_run_id; delete a.wizard_assigned_at;
           await page.evaluate(() => WizLive.refresh?.()).catch(() => {});
         }

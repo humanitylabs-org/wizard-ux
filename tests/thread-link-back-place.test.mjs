@@ -67,10 +67,11 @@ test('a new reply that arrived while he was away still opens at its first line (
 });
 // wizard-ux issue 1653 (James, 20 Nov 2026): in the Daily thread he taps a link, replies in the linked thread and goes
 // Back (or Send and go steps back). The parent came back at the bottom: a new reply had landed there while he was away,
-// so his saved place no longer matched the latest reply and was dropped.
-for (const kind of ['main', 'host-profile', 'container', 'restricted'])
-test(`Back keeps his mid-thread place when a new reply landed in the parent while he was away (${kind})`, () => {
-  const h = harness(kind), A = h.turnsOf(5, 1000);
+// so his saved place no longer matched the latest reply and was dropped. The place rule reads no agent or runtime field;
+// main versus routed (a Claude agent's threads, agent-qualified link) is exercised in the real shell by
+// tests/qa-thread-link-back.cjs QA_KINDS=routed.
+test('Back keeps his mid-thread place when a new reply landed in the parent while he was away', () => {
+  const h = harness(), A = h.turnsOf(5, 1000);
   h.api.opened('win', 'thread-a'); paint(h, A); h.scrollBy(1700); h.api.capture(h.nb);
   h.w.thread = 'thread-b'; h.api.opened('win', 'thread-b'); h.setTop(0); paint(h, h.turnsOf(1, 9000));
   h.api.follow('win', true, 'thread-b');                                    // his reply in the linked thread
