@@ -8,6 +8,7 @@ import vm from 'node:vm';
 
 const live = readFileSync(new URL('../web/live.js', import.meta.url), 'utf8');
 const chats = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
+const running = readFileSync(new URL('../web/core/chats-running.js', import.meta.url), 'utf8'); // the agent inbox parts (issue 1665)
 const clone = v => JSON.parse(JSON.stringify(v));
 const slice = (src, a, b) => { const i = src.indexOf(a), j = src.indexOf(b, i); assert.ok(i > 0 && j > i, `${a} is in the file`); return src.slice(i, j); };
 
@@ -105,7 +106,7 @@ function rules({ on = true, routedWin = false, pins = [], recs = [], sessions = 
     PIN: { has: id => pins.includes(id) }, esc: v => String(v),
   };
   vm.createContext(ctx);
-  vm.runInContext(slice(chats, '  function inboxListed(id) {', '  function inboxRepaint(id) {') + '\nthis.api = { inboxListed, inboxHidden, inboxHeadHtml, inboxCanSend };', ctx);
+  vm.runInContext(slice(running, '  function inboxListed(id) {', '  function inboxRepaint(id) {') + '\nthis.api = { inboxListed, inboxHidden, inboxHeadHtml, inboxCanSend };', ctx);
   return ctx.api;
 }
 
@@ -156,7 +157,7 @@ test('the box\'s stay list is read with the running records and cleared on a 404
 });
 
 test('the buttons are wired: the Running view row, the header, the row menu and the click handler', () => {
-  assert.match(chats, /typeof inboxListed === 'function' && !inboxListed\(x\.thread\) \? `<button type="button" class="ch-inbox-open" data-chinboxopen=/);
+  assert.match(running, /typeof inboxListed === 'function' && !inboxListed\(x\.thread\) \? `<button type="button" class="ch-inbox-open" data-chinboxopen=/);
   assert.ok(chats.includes("${chip}${incognitoAction}${typeof inboxHeadHtml === 'function' && s && !isNew ? inboxHeadHtml(w, s) : ''}"));
   assert.match(slice(chats, 'function openRowSheet', 'const emojiCategoryHtml'), /inboxCanSend\(wid, s\) \? `<button type="button" data-rsinbox>\$\{INBOX_SVG\}Send to inbox<\/button>`/);
   assert.match(chats, /closest\('\[data-chinboxopen\]'\); if \(io\) \{ inboxMove\('open'/);

@@ -270,6 +270,13 @@
       "classification": "shared",
       "note": "Optional in-memory temporary chat; strict server capability plus default-off preference"
     },
+    "core/chats-running.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Chats agent inbox parts moved out of chats.js (issue 1665); called by createChats"
+    },
     "core/chats.js": {
       "loadedBy": [
         "phone",
@@ -979,6 +986,7 @@
     "core/chat-topic-emojis.js",
     "core/chat-work.js",
     "core/chats-list-model.js",
+    "core/chats-running.js",
     "core/chats-view.css",
     "core/chats-view.js",
     "core/chats.css",
