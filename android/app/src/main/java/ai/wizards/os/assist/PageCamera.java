@@ -47,6 +47,26 @@ public final class PageCamera {
         return !any; // an empty accept list means any file, pictures included
     }
 
+    /**
+     * The shell's File item (wizard-ux issue 1634): an explicit "*" + "/*" accept list and no capture asks for any file
+     * with no camera beside it, because Camera is its own menu item. The plain file picker opens straight away instead
+     * of the Camera/Files "Choose an action" sheet. An empty accept list keeps #1535's camera chooser.
+     */
+    public static boolean plainFile(String[] accept, boolean capture) {
+        if (capture || accept == null) return false;
+        boolean any = false;
+        for (String raw : accept) {
+            if (raw == null) continue;
+            for (String part : raw.split(",")) {
+                String t = part.trim();
+                if (t.isEmpty()) continue;
+                if (!t.equals("*/" + "*")) return false;
+                any = true;
+            }
+        }
+        return any;
+    }
+
     /** Open the camera straight away (no picker): the page asked for capture and takes images. */
     public static boolean direct(String[] accept, boolean capture) {
         return capture && wantsImages(accept);

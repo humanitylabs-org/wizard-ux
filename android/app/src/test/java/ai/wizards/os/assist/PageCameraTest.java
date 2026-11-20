@@ -56,4 +56,16 @@ public class PageCameraTest {
         assertNull(PageCamera.galleryType(new String[]{"image/" + "*", "application/pdf"}, false));
         assertNull(PageCamera.galleryType(new String[]{"audio/" + "*"}, false));
     }
+
+    /* File (wizard-ux issue 1634, round 3): an explicit any-file accept without capture opens the file picker alone. */
+    @Test public void anyFileWithoutCaptureSkipsTheCameraChooser() {
+        assertTrue(PageCamera.plainFile(new String[]{"*/" + "*"}, false));
+        assertTrue(PageCamera.plainFile(new String[]{" */" + "*", ""}, false));
+        assertFalse(PageCamera.plainFile(new String[]{"*/" + "*"}, true)); // capture: the camera
+        assertFalse(PageCamera.plainFile(new String[]{""}, false)); // empty accept keeps #1535's chooser
+        assertFalse(PageCamera.plainFile(new String[]{}, false));
+        assertFalse(PageCamera.plainFile(null, false));
+        assertFalse(PageCamera.plainFile(new String[]{"*/" + "*", "image/jpeg"}, false));
+        assertFalse(PageCamera.plainFile(new String[]{"image/" + "*"}, false));
+    }
 }
