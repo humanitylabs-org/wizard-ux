@@ -26,7 +26,7 @@ function list({ agents = [{ id: 'hermes' }], view = 'channels', open = null, q =
     openSpacePicker: (w, a, tab, o) => { calls.push(['picker', w.id, a, j(o)]); ctx.spacePicker = { o }; }, spacePicker: null,
   };
   vm.createContext(ctx);
-  vm.runInContext(cut(chats, '  const chanNewAgent = w =>', '  /* A post is the owner') + '\nthis.channelsBody = channelsBody; this.chanNewForm = chanNewForm;', ctx);
+  vm.runInContext(cut(chats, '  const chanNewAgent = w =>', '  /* Channel posts (switch wizard/chat-channels)') + '\nthis.channelsBody = channelsBody; this.chanNewForm = chanNewForm;', ctx);
   return ctx;
 }
 
