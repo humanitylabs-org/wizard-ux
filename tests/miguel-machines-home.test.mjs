@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { fixture, read } from './fixtures/tweaks.mjs';
+import { withSettingsParts } from './fixtures/settings-parts.mjs'; // settings.js parts moved out verbatim (issue 1665)
 
 // Miguel's Machines-on-Home tweak and the two narrow host hooks it needs (home-main mount + api.on('home'),
 // data.read.app). Stock Home stays plain markup: the slot is empty and takes no space without a package.
@@ -268,7 +269,7 @@ test('fourth review: sign-in state survives normalisation, managed workspaces ge
 });
 
 test('fifth review: System pages open by deep link; phone Ready opens the unfiltered list', () => {
-  const set = read('web/core/settings.js'), phone = read('web/app.js');
+  const set = withSettingsParts(read('web/core/settings.js')), phone = read('web/app.js');
   assert.match(set, /const sys = PAGES\.find\(p => p\.group === 'System' && p\.id === view\); if \(!sys\) return false;/);
   assert.match(set, /if \(sys\.available\(\)\) open\(view\);\n      else \{ let n = 0; waiting = setInterval/, 'a link that arrives before the package waits for it');
   assert.match(read('web/core/deeplink.js'), /window\.WosSettings\?\.systemPages\?\.includes\(view\)/, '?view=network is a link the shell accepts');
@@ -360,7 +361,7 @@ test('twelfth review: unread chat counts are unknown, not zero', () => {
 });
 
 test('thirteenth review: Resources stays in Settings; the owner\'s meter pick holds through an outage; reachability is not claimed', () => {
-  assert.match(read('web/core/settings.js'), /\{ id: 'usage', get title\(\) \{ return window\.WosResources\?\.bars \? 'Resources' : 'AI usage'; \} \},/);
+  assert.match(withSettingsParts(read('web/core/settings.js')), /\{ id: 'usage', get title\(\) \{ return window\.WosResources\?\.bars \? 'Resources' : 'AI usage'; \} \},/);
   for (const who of ['miguel']) {
     const src = read(`web/tweaks/${who}/machines-home/tweak.js`);
     assert.match(src, /if \(chosen\.length\) return \{ use: live\.filter\(s => S\.meter\.includes\(s\.id\)\), custom: true \};/, who);
@@ -405,7 +406,7 @@ test('sixteenth review: an unavailable group reaches its accounts; a saved or ag
 
 test('seventeenth review: a new My skin shows one switch per replacement group and never saves the hidden member off', () => {
   assert.match(read('web/core/experience.js'), /groups: \(\) => \(catalog\?\.oneOf \|\| \[\]\)\.map\(g => \[\.\.\.g\]\),/);
-  const src = read('web/core/settings.js');
+  const src = withSettingsParts(read('web/core/settings.js'));
   assert.match(src, /for \(const g of window\.WosExperience\.groups\?\.\(\) \|\| \[\]\) \{/);
   assert.match(src, /const pick = present\.find\(id => map\[id\]\) \|\| present\[0\];/);
   assert.match(src, /map = Object\.fromEntries\(Object\.entries\(map\)\.filter\(\(\[id\]\) => id === pick \|\| !present\.includes\(id\)\)\);/);
@@ -431,7 +432,7 @@ test('nineteenth review: a signed-out account is never a live usage reading; a v
 });
 
 test('twentieth review: a deferred System link is cancelled by a newer link, Back or the user moving on', () => {
-  const src = read('web/core/settings.js');
+  const src = withSettingsParts(read('web/core/settings.js'));
   assert.match(src, /const STOPS = \['popstate', 'hashchange', 'pointerdown', 'keydown'\];/);
   assert.match(src, /function route\(view, open\) \{\n    cancelWait\(\);/);
   assert.match(src, /waiting = setInterval\(\(\) => \{ if \(sys\.available\(\)\) \{ cancelWait\(\); open\(view\); \} else if \(\+\+n >= 40\) cancelWait\(\); \}, 250\);/);
@@ -506,11 +507,11 @@ test('every Back path cancels a waiting System link', () => {
   // #880 adds outside-dismiss options; every Back still cancels pending navigation.
   assert.match(read('web/app.js'), /function backStep\([^\n]+\n    window\.WosSettings\?\.cancelWait\?\.\(\);/);
   assert.match(read('web/desktop/desktop.js'), /function desktopBack\(event\) \{\n    window\.WosSettings\?\.cancelWait\?\.\(\);/);
-  assert.match(read('web/core/settings.js'), /register, mount, route, cancelWait,/);
+  assert.match(withSettingsParts(read('web/core/settings.js')), /register, mount, route, cancelWait,/);
 });
 
 test('machines-home: Home is one glance; the full views live in Settings › System', () => {
-  const src = read('web/tweaks/miguel/machines-home/tweak.js'), host = read('web/core/skin-host.js'), set = read('web/core/settings.js');
+  const src = read('web/tweaks/miguel/machines-home/tweak.js'), host = read('web/core/skin-host.js'), set = withSettingsParts(read('web/core/settings.js'));
   const man = JSON.parse(read('web/tweaks/miguel/machines-home/manifest.json'));
   assert.ok(man.capabilities.includes('settings'));
   for (const page of ['overview', 'ai', 'network', 'storage']) assert.match(src, new RegExp(`api\\.settings\\?\\.section\\('[a-z]+', '${page}'`), page);

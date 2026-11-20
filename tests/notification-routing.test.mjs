@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
+import { withSettingsParts } from './fixtures/settings-parts.mjs'; // settings.js parts moved out verbatim (issue 1665)
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
 
 function boot({ storage = new Map(), inboxList = true, notifications = true } = {}) {
@@ -143,7 +144,7 @@ test('without the inbox in Chats everything is a badge, and Chats\' own count is
 });
 
 test('Settings has a Notifications page with Badge | Chats per app, and Chats rows for app items open the app', () => {
-  const s = read('web/core/settings.js');
+  const s = withSettingsParts(read('web/core/settings.js'));
   assert.match(s, /\{ id: 'notifications', title: 'Notifications', available: /);
   assert.match(s, /register\(\{ id: 'notification-routing', page: 'notifications'/);
   assert.match(read('web/core/notif-bell.js'), /data-notify-route="\$\{escH\(id\)\}" data-notify-to="\$\{to\}"/);
@@ -167,7 +168,7 @@ test('one picker (Chats · Badge · Morning report · Off): Settings and every n
   assert.deepEqual([...html.matchAll(/data-notify-to="(\w+)"/g)].map(m => m[1]), ['chats', 'badge', 'daily', 'off']);
   assert.match(html, /data-notify-to="daily" aria-checked="false" disabled title="Messenger would lose its point waiting for the Morning Report"/, 'an app\'s feed cannot wait a day');
   assert.match(B.picker('messenger', { off: true }), /data-notify-to="chats" aria-checked="false" disabled/, 'without Chats only Badge can be picked');
-  const s = read('web/core/settings.js'), c = withParts(read('web/core/chats.js'));
+  const s = withSettingsParts(read('web/core/settings.js')), c = withParts(read('web/core/chats.js'));
   assert.match(s, /const routeSeg = \(r, off\) => window\.WosBell\.picker\(r\.id, \{ name: r\.name, off \}\);/, 'Settings renders the shared picker');
   assert.match(c, /\$\{B\.picker\(id, \{ name \}\)\}/, 'Chats renders the same shared picker');
   assert.match(c, /if \(NV\) msgs = noteRouteHtml\(NV\) \+ msgs;/, 'on every notification opened in Chats');
@@ -183,7 +184,7 @@ test('one saved setting: a pick in either place updates the other at once', asyn
   B.setRoute('notifications', 'badge');
   assert.equal(heard, 1, 'both Settings and Chats repaint on wizard:notify-route');
   assert.match(B.picker('notifications'), /data-notify-to="badge" aria-checked="true"/);
-  const c = withParts(read('web/core/chats.js')), s = read('web/core/settings.js');
+  const c = withParts(read('web/core/chats.js')), s = withSettingsParts(read('web/core/settings.js'));
   assert.match(c, /window\.addEventListener\('wizard:notify-route', \(\) => \{[^\n]*renderThreadNow\(x\)/, 'an open notification repaints its picker');
   assert.match(s, /window\.addEventListener\?\.\('wizard:notify-route', appsChanged\)/, 'Settings repaints too');
   assert.match(c, /notifRoute\(id, nrt\.dataset\.notifyRoute, nrt\.dataset\.notifyTo\)/, 'a tap in Chats writes the same route');

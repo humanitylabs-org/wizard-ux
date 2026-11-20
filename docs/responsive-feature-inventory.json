@@ -682,6 +682,13 @@
       ],
       "note": "Direct entrypoint import"
     },
+    "core/settings-view.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Settings view, deep links and focus trap, moved verbatim out of core/settings.js (wizard-ux issue 1665)"
+    },
     "core/settings.js": {
       "loadedBy": [
         "phone",
@@ -1110,6 +1117,7 @@
     "core/screen-text.js",
     "core/sel-menu.css",
     "core/sel-menu.js",
+    "core/settings-view.js",
     "core/settings.css",
     "core/settings.js",
     "core/setup-launch.js",

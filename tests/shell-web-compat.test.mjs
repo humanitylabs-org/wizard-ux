@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { withSettingsParts } from './fixtures/settings-parts.mjs'; // settings.js parts moved out verbatim (issue 1665)
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
 function settings({ shell = true, ready = true, full = false } = {}) {
   const calls = [];
@@ -10,7 +11,7 @@ function settings({ shell = true, ready = true, full = false } = {}) {
   let on = false;
   s.WosDeviceOrb = { ready, get state() { return { on, permitted: true }; }, async toggle() { on = !on; calls.push('shell'); } };
   if (full) s.WizardOSNative = { everywhere: () => '{"enabled":true,"overlay":true}', setEverywhere() { calls.push('full'); }, voiceTypingSettings() {} };
-  vm.runInNewContext(read('web/core/settings.js'), s);
+  vm.runInNewContext(withSettingsParts(read('web/core/settings.js')), s);
   const root = { innerHTML: '', scrollTop: 0, classList: { add() {} }, dataset: {}, contains: () => false, querySelector: () => null, addEventListener() {}, removeEventListener() {} };
   const view = s.WosSettings.mount(root, { shell: 'phone', helpSub: '' });
   view.focus('assistant');

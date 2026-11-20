@@ -8,6 +8,7 @@ import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
 import vm from 'node:vm';
 import { read, fixture } from './fixtures/tweaks.mjs';
+import { withSettingsParts } from './fixtures/settings-parts.mjs'; // settings.js parts moved out verbatim (issue 1665)
 
 const tick = async () => { for (let i = 0; i < 8; i++) await new Promise(r => setImmediate(r)); };
 const REMOVED = ['miguel/orb-shell', 'miguel/apps-home'];
@@ -32,7 +33,7 @@ function box({ shell = 'desktop', storage = new Map() } = {}) {
     return { ok: false, status: 404, json: async () => ({}) };
   };
   vm.runInNewContext(read('web/core/experience.js'), s);
-  vm.runInNewContext(read('web/core/settings.js'), s);
+  vm.runInNewContext(withSettingsParts(read('web/core/settings.js')), s);
   const root = { innerHTML: '', scrollTop: 0, dataset: {}, classList: { add() {} }, contains: () => false, querySelector: () => null, querySelectorAll: () => [], addEventListener() {}, removeEventListener() {} };
   const view = s.WosSettings.mount(root, { shell, live: { ok: true, onChange: () => () => {} } });
   // a tap on a Look row, as the click handler passes it to the Look feature
@@ -109,7 +110,7 @@ for (const shell of ['desktop', 'phone']) test(`${shell}: each choice wears its 
 });
 
 test('core keeps only the exclusivity: no Shell view row on the phone, no chooseView, the removed views and their code are gone', () => {
-  const settings = read('web/core/settings.js'), css = read('web/core/settings.css'), exp = read('web/core/experience.js');
+  const settings = withSettingsParts(read('web/core/settings.js')), css = read('web/core/settings.css'), exp = read('web/core/experience.js');
   assert.match(settings, /data-desktop-view/);
   assert.doesNotMatch(settings, /data-shellview/);
   assert.doesNotMatch(css, /\.sv-(group|seg)/);

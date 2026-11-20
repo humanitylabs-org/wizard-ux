@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import { withSettingsParts } from './fixtures/settings-parts.mjs'; // settings.js parts moved out verbatim (issue 1665)
 const read = p => fs.readFileSync(new URL('../' + p, import.meta.url), 'utf8');
 const assetList = html => [...html.matchAll(/<(?:script[^>]*src|link[^>]*href)="([^"]+)"/g)].map(m => m[1]);
 const inventory = JSON.parse(read('docs/responsive-feature-inventory.json'));
@@ -42,7 +43,7 @@ test('shell adapters cannot retain a second Settings renderer, picker, or hardco
     assert.doesNotMatch(s, /data-skinpick|<div class="st-group"/);
   }
   assert.doesNotMatch(read('web/core/polish.css'), /html\[data-shell="desktop"\] \.st-/);
-  const settings = read('web/core/settings.js');
+  const settings = withSettingsParts(read('web/core/settings.js'));
   assert.doesNotMatch(settings, /data-layoutpick|data-layout-row/);
   assert.match(settings, /data-skinfamily=/, 'skin families and their colours stay separate in the shared renderer');
   assert.match(settings, /<h4>Skin<\/h4>/);
@@ -54,7 +55,7 @@ function harness() {
   const sandbox = { console, Map, Set, Date, String, navigator: { userAgent: 'Desktop fixture' }, location: { host: 'fixture.invalid' }, setTimeout: fn => fn(), CSS: { escape: String }, document: { activeElement: null } };
   sandbox.window = sandbox;
   sandbox.WizCore = {}; sandbox.WizBrand = { html: 'W' };
-  vm.runInNewContext(read('web/core/settings.js'), sandbox);
+  vm.runInNewContext(withSettingsParts(read('web/core/settings.js')), sandbox);
   const roots = [];
   for (const shell of ['phone', 'desktop']) {
     const handlers = {}, root = { innerHTML: '', scrollTop: 0, classList: { add() {} }, dataset: {}, contains: () => false, querySelector: () => null, addEventListener: (event, fn) => handlers[event] = fn, removeEventListener() {} };
