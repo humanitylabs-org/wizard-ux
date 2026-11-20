@@ -291,6 +291,20 @@
       ],
       "note": "Chats composer attachments, uploads, mic/send swap, voice notes and media turns moved out of chats.js (issue 1665); called by createChats"
     },
+    "core/chats-chanbox.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Chats channel message box: its draft and model, the owner's own posts, Sending… and Edit on an unsent post, moved out of chats.js (issue 1665); called by createChats"
+    },
+    "core/chats-daily.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Chats Daily view, channel and Activity unread marks, what-needs-me marks and draft marks moved out of chats.js (issue 1665); called by createChats"
+    },
     "core/chats-done.js": {
       "loadedBy": [
         "phone",
@@ -325,6 +339,20 @@
         "desktop"
       ],
       "note": "Chats agent inbox parts moved out of chats.js (issue 1665); called by createChats"
+    },
+    "core/chats-send.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Chats Stop, Send and go and the one send carrying the whole composer (voice, files, sealed drafts) moved out of chats.js (issue 1665); called by createChats"
+    },
+    "core/chats-setup.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Chats setup: chat-kit names, incognito, Pins, Boomerang, topic emojis, list layouts and the Focus moved out of chats.js (issue 1665); called by createChats"
     },
     "core/chats-tracker.js": {
       "loadedBy": [
@@ -1051,12 +1079,16 @@
     "core/chat-topic-emojis.js",
     "core/chat-work.js",
     "core/chats-attach.js",
+    "core/chats-chanbox.js",
+    "core/chats-daily.js",
     "core/chats-done.js",
     "core/chats-drafts.js",
     "core/chats-list-model.js",
     "core/chats-outbox.js",
     "core/chats-posts.js",
     "core/chats-running.js",
+    "core/chats-send.js",
+    "core/chats-setup.js",
     "core/chats-tracker.js",
     "core/chats-view.css",
     "core/chats-view.js",

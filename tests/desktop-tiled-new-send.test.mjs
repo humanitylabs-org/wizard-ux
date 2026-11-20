@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 
 // Execute the shipped capture handler and the actual composer-mic handoff branch.
 // Browser-free branch regression with James's return-to-list tweak explicitly ON, not proof of client geometry.
@@ -32,7 +33,7 @@ function fixture({ viewport = 1920, count = 2, mono = false, sid = '__new__', na
     rp: { wid: 'qa', sid }, r: { blob: {} }, extraFiles: [], sealed: false,
     modelRoute: {}, stagedId: null, transcript: '',
   });
-  const shared = fs.readFileSync(path.join(root, 'web/core/chats.js'), 'utf8');
+  const shared = withParts(fs.readFileSync(path.join(root, 'web/core/chats.js'), 'utf8'));
   const start = shared.indexOf('  function leaveAfterSend('), end = shared.indexOf('\n  }', start) + 4;
   Object.assign(context, { keepThreadOpen: () => true, H: { keepThreadOpen: true }, PHONE: () => false, hosted: new Map(),
     ch: () => ({trail: [], readNav: 0}), save() {}, threadBack() {}, renderChats() {}, applyLayout() {}, deskOf: () => 0 });

@@ -4,8 +4,9 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import { modelContext } from './fixtures/chats-list-model.mjs';
 import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 const live = withLiveParts(fs.readFileSync(new URL('../web/live.js', import.meta.url), 'utf8'));
-const chats = fs.readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
+const chats = withParts(fs.readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'));
 const nav = fs.readFileSync(new URL('../web/core/workspace-navigation.js', import.meta.url), 'utf8');
 const block = (text, a, b) => text.slice(text.indexOf(a), text.indexOf(b, text.indexOf(a)));
 const line = (text, token) => text.split('\n').find(l => l.includes(token));

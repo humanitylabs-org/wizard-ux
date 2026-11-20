@@ -3,8 +3,9 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
-const desktop = read('web/desktop/desktop.js'), core = read('web/core/chats.js');
+const desktop = read('web/desktop/desktop.js'), core = withParts(read('web/core/chats.js'));
 const cut = (source, from, to) => {
   const a = source.indexOf(from), b = source.indexOf(to, a);
   assert.ok(a >= 0 && b > a, from); return source.slice(a, b);

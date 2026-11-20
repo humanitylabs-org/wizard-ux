@@ -5,6 +5,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import vm from 'node:vm'
 import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8')
 const store = () => { const m = new Map(); return { getItem: k => m.has(k) ? m.get(k) : null, setItem: (k, v) => m.set(k, String(v)), removeItem: k => m.delete(k) } }
@@ -133,7 +134,7 @@ test('Back closes the picker before anything under it, on phone and desktop', ()
 })
 
 test('one Snooze action replaces Defer and Boomerang, with no second Snooze under each reply', () => {
-  const js = read('web/core/chats.js')
+  const js = withParts(read('web/core/chats.js'))
   assert.match(js, /watching \? \['snooze', 'stop_watch', 'done'\] : \['snooze', 'done'\]/)
   assert.doesNotMatch(js, /label: '(Defer|Boomerang)'|🪃/)
   assert.match(read('web/core/scheduled-reminders.js'), /live\(\)\.defer\(opts.sessionId\)/)
@@ -151,7 +152,7 @@ test('Snooze confirms the actual Bangkok time, independent of device timezone', 
 })
 
 test('Snoozed preserves the deferred API and search aliases; Someday creates no schedule', () => {
-  const chats = read('web/core/chats.js'), picker = read('web/core/scheduled-reminders.js')
+  const chats = withParts(read('web/core/chats.js')), picker = read('web/core/scheduled-reminders.js')
   assert.match(chats, /label: 'Snoozed', syn: \['snooze', 'defer', 'deferred', 'later', 'boomerang'/)
   assert.match(chats, /Snoozed · out of your list/)
   assert.match(chats, /\['deferred', 'Snoozed'\], \['archive', 'Archive'\]/, 'Snoozed threads wait in their own section')
