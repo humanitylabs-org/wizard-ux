@@ -102,6 +102,10 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
       // Never silently substitute a removed explicit release after Refresh.
       if(S.selections.has(key(a)) && !a.releases.some(r=>`${r.source}:${r.commit}`===S.selections.get(key(a)))) S.selections.set(key(a),'unavailable');
     }
+    // A removed app forgets its open wait, so a later reinstall waits afresh (issue 1652).
+    const live = new Set([...S.installed.values()].map(i => i?.id).filter(Boolean));
+    for (const id of [...S.starting.keys()]) if (!live.has(id)) S.starting.delete(id);
+    for (const id of [...S.late]) if (!live.has(id)) S.late.delete(id);
     // First-run shell discovery can finish after the Store's own reads.
     try { if(framed) await parent.WizCore?.appsLoaded?.(); } catch (_) {}
     S.loaded = true; paint(); resumeInstalls();
@@ -502,7 +506,9 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
     if (!a || architectureReason(a,S.architecture) || S.busy.has(a.id) || S.removing.has(a.id) || !['get','update','switch'].includes(status(a))) return;
     const operation = status(a)==='get'?'install':status(a);
     if(a.install_link && S.link) S.link.error='';
-    S.busy.add(a.id); S.busyAt.set(a.id, Date.now()); refresh();
+    S.busy.add(a.id); S.busyAt.set(a.id, Date.now());
+    for (const id of new Set([a.id, openId(a)])) { S.starting.delete(id); S.late.delete(id); }   // a new install waits afresh
+    refresh();
     const say = (m, ok=false) => toast(renderInstallResult({ name: a.name, message: m, ok }));
     try {
       await installRelease({ ...a, operation });

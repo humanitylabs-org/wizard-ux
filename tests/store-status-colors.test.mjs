@@ -49,6 +49,9 @@ test('issue 1652: an installed app the shell cannot open yet shows Starting… a
 test('issue 1652: Starting… polls the shell registry with backoff and stops once the app opens or the wait ends', () => {
   assert.match(src, /async function checkStarting\(\) \{[\s\S]*?parent\.WizCore\?\.refreshApps\?\.\(\)[\s\S]*?if \(canOpen\(w\.a\)\) \{ S\.starting\.delete\(id\)[\s\S]*?S\.late\.add\(id\)[\s\S]*?refresh\(\)/);
   assert.match(src, /const START_WAIT = 120000/);
+  // Codex P2: a removed (or reinstalled) app never inherits an old wait.
+  assert.match(src, /for \(const id of \[\.\.\.S\.late\]\) if \(!live\.has\(id\)\) S\.late\.delete\(id\)/);
+  assert.match(src, /S\.starting\.delete\(id\); S\.late\.delete\(id\); \}   \/\/ a new install waits afresh/);
   assert.match(src, /if \(framed\) openInShell\(o\.dataset\.open\)/);
 });
 test('a fresh installed-app snapshot exposes Open before the parent registry finishes refreshing', () => {
