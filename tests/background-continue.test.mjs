@@ -156,6 +156,6 @@ test('on: a thread that moved on (409) keeps its latest request in charge', asyn
 });
 
 test('Chats re-renders the thread header when a result appears or clears', () => {
-  const js = read('web/core/chats.js');
+  const js = read('web/core/chats.js') + read('web/core/chats-outbox.js');
   assert.equal((js.match(/s2?\.backgroundResult\?\.id \|\| ''\]\.join\('\|'\)/g) || []).length, 2);
 });

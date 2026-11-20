@@ -51,7 +51,7 @@ test('no Needs retry panel, no Errors-list Retry, and Retry itself refuses in su
 });
 
 test('the thread shows the clear card at once, with Dismiss and without Retry; the reply box says it up front', () => {
-  const chats = read('web/core/chats.js');
+  const chats = read('web/core/chats.js') + read('web/core/chats-outbox.js');
   // Refused as soon as the thread failed or a message is marked Not sent, not only once the Service's words arrive.
   assert.match(chats, /const refused = !working && !!foreign && \(\['failed', 'interrupted'\]\.includes\(s\?\.status\) \|\| !!s\?\.safeError\n\s*\|\| shown\.some\(tn => \['failed', 'interrupted'\]\.includes\(tn\.u\?\.queue\?\.status\)\)\);/);
   // The Not sent bubble's Retry needs c.retryRunId, which a foreign chat never gets.

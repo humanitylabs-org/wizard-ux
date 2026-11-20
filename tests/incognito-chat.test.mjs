@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 import vm from 'node:vm'
 import { readFileSync } from 'node:fs'
 const source = readFileSync(new URL('../web/core/incognito-chat.js', import.meta.url), 'utf8')
-const chats = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8')
+const chats = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8') + readFileSync(new URL('../web/core/chats-outbox.js', import.meta.url), 'utf8')
 function rig(extra = {}) {
   const events = {}, calls = [], field = { value: '', selectionStart: 0, selectionEnd: 0 }, box = { scrollTop: 0, scrollHeight: 20 }
   const el = { innerHTML: '', querySelector(s) { if (s === '[data-incog-thread]') return this.innerHTML.includes('data-incog-thread') ? {} : null; if (s === '[data-incog-field]') return this.innerHTML.includes('data-incog-field') ? field : null; if (s === '.ch-msgs') return box; return null }, replaceChildren() { this.innerHTML = ''; field.value = '' } }
@@ -116,7 +116,7 @@ test('Incognito blocks microphone admission before snapshots, custody or recorde
   }
   assert.match(phone, /captureBusy:.*V.state !== 'idle'/)
   assert.match(desktop, /captureBusy:.*VOICE.state !== 'idle'/)
-  const chats = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8')
+  const chats = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8') + readFileSync(new URL('../web/core/chats-outbox.js', import.meta.url), 'utf8')
   assert.match(chats, /if \(H.captureBusy\?\.\(\)\)/)
 })
 

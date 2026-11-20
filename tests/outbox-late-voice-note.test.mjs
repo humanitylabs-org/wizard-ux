@@ -180,7 +180,8 @@ function uiHarness(api) {
     Promise, window: {}, esc: s => s, reach: () => ({}), troubleshoot: '' };
   const back = chats.slice(chats.indexOf('  function threadBack(w) {'), chats.indexOf('  /* Opt-in Send and go steps back'));
   const click = chats.slice(chats.indexOf('  function click(e, id) {'), chats.indexOf("    const recovery = e.target.closest('[data-obrecover]');")) + '\n return false; }';
-  const pending = chats.slice(chats.indexOf('  function pendingState(p, s) {'), chats.indexOf('  function pendingHtml('));
+  const outbox = readFileSync(new URL('../web/core/chats-outbox.js', import.meta.url), 'utf8'); // pendingState moved there (issue 1665)
+  const pending = outbox.slice(outbox.indexOf('  function pendingState(p, s) {'), outbox.indexOf('  function pendingHtml('));
   vm.runInNewContext(back + click + pending + '\nthis.click = click; this.pendingState = pendingState; this.threadBack = threadBack;', ctx);
   return { ...ctx, w, c, opened, notices };
 }

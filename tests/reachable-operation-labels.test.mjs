@@ -9,6 +9,7 @@ import vm from 'node:vm';
 const read = file => readFileSync(new URL('../' + file, import.meta.url), 'utf8');
 const reachSource = read('web/core/reach.js');
 const chats = read('web/core/chats.js');
+const outbox = read('web/core/chats-outbox.js'); // pendingState / threadErrHtml moved there (issue 1665)
 function productionFunction(source, name, next) {
   const start = source.indexOf(`  function ${name}(`), end = source.indexOf(`\n  function ${next}(`, start);
   assert.ok(start >= 0 && end > start, `${name} production boundary`);
@@ -18,8 +19,8 @@ const labelAt = chats.indexOf('  const reachLabel = ');
 const reachLabelSource = chats.slice(labelAt, chats.indexOf('\n', labelAt)).trim().replace('const reachLabel', 'this.reachLabel');
 const sources = {
   pill: chats.slice(chats.indexOf('  function sendPill(items, w) {'), chats.indexOf('\n  // Rotate one storage write:')) + '\nthis.render = sendPill;',
-  pending: productionFunction(chats, 'pendingState', 'pendingHtml'),
-  threadErr: productionFunction(chats, 'threadErrHtml', 'renderChats'),
+  pending: productionFunction(outbox, 'pendingState', 'pendingHtml'),
+  threadErr: productionFunction(outbox, 'threadErrHtml', 'renderChats'),
   unsent: productionFunction(read('web/core/settings.js'), 'unsentRow', 'focusUnsent'),
   // The chat list's read-failure bar: the production statements, from its last-updated time to the end of `sync`.
   listSync: (() => {

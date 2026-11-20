@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 const source = readFileSync(new URL('../web/outbox.js', import.meta.url), 'utf8');
-const chats = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
+const chats = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8') + readFileSync(new URL('../web/core/chats-outbox.js', import.meta.url), 'utf8');
 function client(rows = new Map(), broken = false) {
   const calls = [], timers = new Set();
   const indexedDB = { open() {
