@@ -5278,7 +5278,9 @@ window.WizCore.chats = function createChats(H) {
     const rg = e.target.closest('[data-rdyorder]');
     if (rg) { readyOrder = nextOrder(readyOrder, rg.dataset.rdyorder, READY_ORDERS); try { localStorage.setItem(READY_ORDER_KEY, readyOrder); } catch (err) {} LIVE.putPrefs?.({ readyOrder }); for (const x of Object.keys(CH)) { const ww = W[x]; if (ww) renderChats(ww); } return true; }
     const more = e.target.closest('[data-secmore]'); if (more) { const c = ch(id); c.more = { ...(c.more || {}), [more.dataset.secmore]: true }; renderChatList(w, elOf(id)); return true; }
-    if (e.target.closest('[data-chattach]')) { pickFor = id; picker.accept = ''; picker.click(); return true; }
+    // Android app: Camera / Photo or video / File menu (ux#1634); elsewhere the plain file dialog.
+    const att = e.target.closest('[data-chattach]');
+    if (att) { pickFor = id; if (window.WosContextMenu?.attach) window.WosContextMenu.attach(picker, att, { label: 'Attach pictures or files' }); else { picker.accept = ''; picker.click(); } return true; }
     const rm = e.target.closest('[data-attrm]'); if (rm) { const c = ch(id); UPLOAD_ABORT.get(rm.dataset.attrm)?.abort(); c.files = (c.files || []).filter(f => f.key !== rm.dataset.attrm); refreshCompose(id); saveDraft(id); return true; }
     const rsa = e.target.closest('[data-rsact]'); if (rsa && rowSheet) { const { wid: rw, sid, nid, grp } = rowSheet; closeRowSheet(); if (nid) void noteRowAct(nid, rsa.dataset.rsact, grp); else threadAct(rw, sid, rsa.dataset.rsact); return true; }
     if (e.target.closest('[data-chemoclear]') && rowSheet?.emoji) { const sheet = e.target.closest('.ch-emoji-sheet'), input = sheet?.querySelector('[data-chemosearch]'); if (input) { input.value = ''; renderEmojiSearch(sheet, ''); input.focus(); } return true; }

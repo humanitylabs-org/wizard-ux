@@ -337,9 +337,9 @@ window.WosChatPower = function chatPower(A) {
     // Match by family in the model id (newest first), so e.g. gpt-6.1-sol still fills the Sol slot.
     const RX = [/opus/i, /astra/i, /-sol(-|$)/i], all = M && M.ready ? M.options.filter(o => !/-900k$/i.test(o.value)) : [];
     const newest = l => l.slice().sort((x, y) => y.value.localeCompare(x.value, 'en', { numeric: true }))[0] || null;
-    const standard = o => M.family(o.value, o.provider) !== 'tinfoil';
+    const standard = o => !M.isPrivateRoute(o.provider);
     const opts = RX.map(rx => vis.find(o => standard(o) && rx.test(o.value)) || newest(all.filter(o => standard(o) && rx.test(o.value))));
-    opts.push(M?.tinfoilReady?.() ? vis.find(o => M.family(o.value, o.provider) === 'tinfoil') || null : null);
+    opts.push(M?.tinfoilReady?.() ? (vis.find(o => M.isPrivateRoute(o.provider) && M.family(o.value, o.provider)) || vis.find(o => M.isPrivateRoute(o.provider))) || null : null);
     const at = cur?.model ? opts.findIndex(o => o && o.value === cur.model && (!cur.provider || o.provider === cur.provider)) : -1;
     return { opts, at };
   }
@@ -768,10 +768,11 @@ window.WosChatPower = function chatPower(A) {
     // The owner's main Chats also lists the private agents' models (unified Chats); an agent's own Chats does not.
     const priv = !chan && !agent && !A.winAgent(w) && mode !== 'retry' && w.thread && M.privateOptions ? M.privateOptions() : null; // a channel's box stays with its agent
     openSheet({ type: 'model', pane, wid, sid, mode, chan, cur, retryRunId: s?.retryRunId || '', all: false, agent, priv, pop: !!pop && mode !== 'retry' });
-    // Revalidate every open; repaint only if visible choices or the Claude status note changed.
+    // Revalidate every open; repaint only if visible choices, the connectors' sign-in state (which rows the menu
+    // keeps, issue 1561) or the Claude status note changed.
     // WosModels.options is the catalogue array (never a function): compare the fields the sheet shows.
     const rows = list => (Array.isArray(list) ? list : []).map(o => [o.agent, o.provider, o.value, o.name, o.description, !!o.isGlobalDefault]);
-    const key = () => JSON.stringify([rows(M.options), rows(M.privateOptions?.()), M.claudeNote?.()]);
+    const key = () => JSON.stringify([rows(M.options), rows(M.privateOptions?.()), M.claudeNote?.(), ['claude', 'chatgpt', 'tinfoil'].map(id => !!M.connected?.(id))]);
     const opened = sheet, before = key();
     M.load(M.ready).then(() => {
       if (sheet !== opened || sheet?.type !== 'model' || paneThread(pane) !== opened.sid) return;

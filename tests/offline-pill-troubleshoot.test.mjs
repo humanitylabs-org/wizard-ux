@@ -67,7 +67,7 @@ test('without shell windows the pill never opens anything by itself (never leave
   assert.equal(h.ctx.WizCore.status.state.offline, 'pill');
 });
 
-// James, 15 Nov 2026 (issue 1472 kick-back): "It should pop up."
+// owner-correction: humanitylabs-org/wizard-ux#1472 · 2026-11-15 · "It should pop up."
 for (const calm of [false, true]) for (const kind of ['offline', 'reconnecting']) {
   test(`when Wizard can't be reached, the Troubleshooter pops up on its own (${kind}, calm ${calm ? 'on' : 'off'})`, () => {
     const h = setup({ calm, shellWindows: true });

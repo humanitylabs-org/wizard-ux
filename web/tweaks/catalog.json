@@ -25,7 +25,6 @@
     "wizard/app-updates-list",
     "wizard/os-update-waits",
     "wizard/update-bug-reports",
-    "wizard/connector-models",
     "wizard/link-token-repair",
     "wizard/chat-channels",
     "wizard/graceful-restart",

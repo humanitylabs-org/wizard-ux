@@ -3235,7 +3235,9 @@
     if (V.state !== 'listen' && V.state !== 'paused') return;
     const failed=V.files.filter(f=>f.error&&f.local);if(failed.length){for(const f of failed)uploadVoiceFile(f.local,V.files,f);return;}
     if (V.state === 'listen') { $('#arcPause').click(); V.pickPaused = true; }
-    voicePicker.click();
+    // Android app: the same Camera / Photo or video / File menu as the chat composer (ux#1634).
+    if (window.WosContextMenu?.attach) window.WosContextMenu.attach(voicePicker, $('#arcAttach'), { label: 'Attach to this take', onCancel: pickerBack });
+    else voicePicker.click();
   });
   const pickerBack = () => { if (!V.pickPaused) return; V.pickPaused = false; if (V.state === 'paused') $('#arcPause').click(); };
   voicePicker.addEventListener('change', pickerBack); voicePicker.addEventListener('cancel', pickerBack);

@@ -270,7 +270,8 @@ html:is([data-skin^="obsidian"], [data-skin^="landscapes"]) .pal-app.pal-sys.sel
 .krow span:last-child { white-space: nowrap; }
 
 /* ---------- toast ---------- */
-.toast { position: fixed; left: 50%; top: 3px; z-index: 50; transform: translate(-50%, -12px); opacity: 0; pointer-events: none; display: flex; align-items: center; gap: 8px;
+/* Above the media viewer (200) and the share sheet (250): a share or save from the viewer must say what happened (wizard-ux issue 1625). */
+.toast { position: fixed; left: 50%; top: 3px; z-index: 300; transform: translate(-50%, -12px); opacity: 0; pointer-events: none; display: flex; align-items: center; gap: 8px;
   padding: 8px 14px; border-radius: 99px; background: linear-gradient(rgba(22, 14, 46, .96), rgba(22, 14, 46, .96)), var(--wz-panel, var(--wz-base, var(--bg, #05030c))); border: 1px solid var(--line-2); font-size: 13px; color: var(--ink); transition: opacity 160ms, transform 160ms var(--ease); }
 .toast.on { opacity: 1; transform: translate(-50%, 0); }
 /* A toast with an action (Undo) takes taps while it shows. */
