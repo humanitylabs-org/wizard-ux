@@ -7,8 +7,9 @@
   "capabilities": [
     "layout"
   ],
-  "description": "WizardOS Android app: Podcasts plays through the phone's own media player, like Music already does. Lock-screen and notification controls, headset buttons, the episode's artwork and a progress bar you can drag; it keeps playing with the screen locked, and saves your place as it goes. Podcasts gets back 15 / forward 30 buttons, and a tap on the player opens the app that is playing. Only Music and Podcasts get this.",
+  "description": "Wizard phone app (Android, and iPhone): Music and Podcasts play through the phone's own media player. Lock-screen and Control Center / notification controls, headset buttons, the episode's artwork and a progress bar you can drag; it keeps playing with the screen locked, and saves your place as it goes. Podcasts gets back 15 / forward 30 buttons, and the player opens the app that is playing. Only Music and Podcasts get this.",
   "issues": [
-    "humanitylabs-org/wizard-ux#1661"
+    "humanitylabs-org/wizard-ux#1661",
+    "humanitylabs-org/wizard-ux#1664"
   ]
 }
