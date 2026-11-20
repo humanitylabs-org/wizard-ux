@@ -9,14 +9,16 @@ import {join} from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {createDevicesReader} from './system-devices.mjs';
 import {createHealthReader} from './system-health.mjs';
+import {cliSecret} from './runtipi-cli-key.mjs';
 export const RESOURCE_FIELDS=['cpuLoad','percentUsedMemory','percentUsed','memoryTotal','diskUsed','diskSize'];
 export function readConfig(path=process.env.WIZARD_RUNTIPI_ENV_FILE||join(homedir(),'runtipi/.env')) {
   const env=Object.fromEntries(readFileSync(path,'utf8').split('\n').filter(l=>l.includes('=')&&!l.startsWith('#')).map(l=>{const i=l.indexOf('=');return[l.slice(0,i).trim(),l.slice(i+1).trim().replace(/^["']|["']$/g,'')];}));
-  if(!env.JWT_SECRET)throw new Error('Runtipi resource configuration unavailable');
-  return {origin:`http://${env.INTERNAL_IP||'127.0.0.1'}:${env.NGINX_PORT||80}`,secret:env.JWT_SECRET};
+  if(!cliSecret(env))throw new Error('Runtipi resource configuration unavailable');
+  // A getter, read per token: the App Manager adds or removes the 4.12 CLI key copy while this runs (WAM#839).
+  return {origin:`http://${env.INTERNAL_IP||'127.0.0.1'}:${env.NGINX_PORT||80}`,secret:()=>cliSecret(env)};
 }
 export function createResourceReader({origin,secret,fetchImpl=fetch,now=Date.now}) {
-  return async()=>{const n=Math.floor(now()/1000),b=j=>Buffer.from(JSON.stringify(j)).toString('base64url'),h=b({alg:'HS256',typ:'JWT'}),p=b({sub:'cli',iat:n,nbf:n,exp:n+60});const token=`${h}.${p}.${createHmac('sha256',secret).update(`${h}.${p}`).digest('base64url')}`;
+  return async()=>{const n=Math.floor(now()/1000),b=j=>Buffer.from(JSON.stringify(j)).toString('base64url'),h=b({alg:'HS256',typ:'JWT'}),p=b({sub:'cli',iat:n,nbf:n,exp:n+60});const token=`${h}.${p}.${createHmac('sha256',typeof secret==='function'?secret():secret).update(`${h}.${p}`).digest('base64url')}`;
     const r=await fetchImpl(origin+'/api/system/load',{headers:{Authorization:`Bearer ${token}`},redirect:'error',signal:AbortSignal.timeout(8000)});if(!r.ok)throw new Error('Server readings unavailable');const raw=await r.text();if(raw.length>16384)throw new Error('Invalid server reading');const j=JSON.parse(raw),out={};for(const k of RESOURCE_FIELDS)out[k]=typeof j[k]==='number'&&Number.isFinite(j[k])?j[k]:null;return out;
   };
 }

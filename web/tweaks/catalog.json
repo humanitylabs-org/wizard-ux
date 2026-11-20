@@ -41,7 +41,8 @@
     "wizard/chat-app-switches",
     "wizard/agent-inbox",
     "wizard/pin-reach-answer",
-    "wizard/phone-app-notifications"
+    "wizard/phone-app-notifications",
+    "wizard/runtipi-cli-key"
   ],
   "defaults": [
     "wizard/unified-inbox",
