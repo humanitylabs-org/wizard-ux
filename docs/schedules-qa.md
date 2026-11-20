@@ -2,7 +2,7 @@
 
 Candidate only, Chrome on Thales; no deployment or real scheduler state.
 
-`node qa-schedules.cjs "$QA_ORIGIN/wizard-os-home/"` with `QA_SHOTS`,
+`node qa/scripts/qa-schedules.cjs "$QA_ORIGIN/wizard-os-home/"` with `QA_SHOTS`,
 `QA_PLAYWRIGHT`, `QA_CHROME` and worker-local `TMPDIR` configured.
 The candidate origin serves this branch and refuses all production mutations;
 read-only ordinary service APIs remain live. Scheduler and synthetic destination-chat

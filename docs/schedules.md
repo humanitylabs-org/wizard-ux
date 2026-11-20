@@ -39,7 +39,7 @@ exact as “Custom timing” rather than a potentially false English interpretat
   404 hiding in both mounts, list/chat link, toggle PATCH/readback, run-now,
   import dry-run/confirm, Back, create/edit, errors/drafts/live refresh,
   delete confirmation and form validation. No real state or agent runs.
-- `qa-schedules.cjs` drives the actual phone and desktop shells on a read-only
+- `qa/scripts/qa-schedules.cjs` drives the actual phone and desktop shells on a read-only
   candidate origin. Scheduler API responses are intercepted fixtures and every
   other mutation is blocked. Run on a browser worker (Thales); use `QA_SHOTS`,
   `QA_PLAYWRIGHT`, `QA_CHROME`, and an isolated `TMPDIR` for private evidence.

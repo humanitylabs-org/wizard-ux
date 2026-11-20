@@ -41,11 +41,11 @@ server=socketserver.ThreadingTCPServer(('127.0.0.1',0),Handler);threading.Thread
 base='http://127.0.0.1:'+str(server.server_address[1])+'/wizard-os-home/'
 try:
  run('capture-and-mizel',['node','qa-app-capture/run.cjs'])
- run('host',['node','-r','./qa-thales-loader.cjs','qa-app-services.cjs'],{'QA_BLOCK_WRITES':'0'}) # Self-contained server; actual SW/cache migration must not be mocked/blocked.
- run('share-ab',['node','-r','./qa-thales-loader.cjs','qa-share-receipt-ab.cjs'],{'QA_BASELINE':env['SHARE_BASELINE']})
- run('device',['node','-r','./qa-thales-loader.cjs','qa-device.cjs'])
- run('chats-return-position',['node','-r','./qa-thales-loader.cjs','qa-chats-return-position.cjs',base])
- run('chats-return-position-full',['node','-r','./qa-thales-loader.cjs','qa-chats-return-position.cjs',base],{'QA_FULL':'1'})
+ run('host',['node','-r','./qa/scripts/qa-thales-loader.cjs','qa/scripts/qa-app-services.cjs'],{'QA_BLOCK_WRITES':'0'}) # Self-contained server; actual SW/cache migration must not be mocked/blocked.
+ run('share-ab',['node','-r','./qa/scripts/qa-thales-loader.cjs','qa/scripts/qa-share-receipt-ab.cjs'],{'QA_BASELINE':env['SHARE_BASELINE']})
+ run('device',['node','-r','./qa/scripts/qa-thales-loader.cjs','qa/scripts/qa-device.cjs'])
+ run('chats-return-position',['node','-r','./qa/scripts/qa-thales-loader.cjs','qa/scripts/qa-chats-return-position.cjs',base])
+ run('chats-return-position-full',['node','-r','./qa/scripts/qa-thales-loader.cjs','qa/scripts/qa-chats-return-position.cjs',base],{'QA_FULL':'1'})
  # Native sources unchanged, exact integration-built debug APK, test-only package on an isolated API35 guest.
  sdk=str(android_sdk());jdk=java_home()
  nativeEnv={'JAVA_HOME':jdk,'ANDROID_HOME':sdk,'ANDROID_SDK_ROOT':sdk,'PATH':jdk+'/bin:'+env.get('PATH','')}

@@ -42,7 +42,7 @@ test('v11 refused startup paths have typed, stable synthetic answers; neighbours
 });
 
 test('offline proof requires the rendered mic and nonzero geometry without weakening pointer checks', () => {
- const source = read('qa-offline-popup.cjs');
+ const source = read('qa/scripts/qa-offline-popup.cjs');
  assert.match(source, /WizConfig\.live && WizConfig\.has\('voice'\)/);
  assert.match(source, /locator\(phone \? '#orb' : '#micBtn'\)\.waitFor\(\{ state: 'visible' \}\)/);
  assert.match(source, /r\.width > 0 && r\.height > 0/);

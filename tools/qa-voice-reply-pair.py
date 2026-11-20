@@ -17,7 +17,7 @@ for name, source, smoke in [('red-live', baseline, True), ('green-candidate', ro
     target.mkdir(exist_ok=True)
     current = dict(env, QA_SOURCE=str(source), QA_OUT=str(target), QA_VOICE_REPLY_SMOKE='1' if smoke else '0')
     with (target / 'browser.log').open('w') as log:
-        p = subprocess.run(['node', str(root / 'qa-voice-custody-callers.cjs')], cwd=root, env=current, stdout=log, stderr=subprocess.STDOUT, timeout=600)
+        p = subprocess.run(['node', str(root / 'qa/scripts/qa-voice-custody-callers.cjs')], cwd=root, env=current, stdout=log, stderr=subprocess.STDOUT, timeout=600)
     receipt = target / 'receipt.json'
     data = json.loads(receipt.read_text()) if receipt.exists() else {'results': []}
     failures = [r for r in data['results'] if not r['pass']]

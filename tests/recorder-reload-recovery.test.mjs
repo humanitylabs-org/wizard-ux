@@ -314,7 +314,7 @@ test('unknown native status cannot become an empty app-custody proof, but repair
   await assert.rejects(c.pending('fixture'),e=>e.code==='native_owner_uncertain');
   data=[row];c.ownedRows.set(row.id,row);assert.equal((await c.pending('fixture'))[0],row);
 });
-const runner=readFileSync(new URL('../qa-recorder-reload-recovery.cjs',import.meta.url),'utf8');
+const runner=readFileSync(new URL('../qa/scripts/qa-recorder-reload-recovery.cjs',import.meta.url),'utf8');
 test('browser Stop evidence callback sends the genuine blob without awaiting a dying page hash',async()=>{
   const start=runner.indexOf('  await page.evaluate(()=>{void syntheticSession.stop()');
   const end=runner.indexOf('\n  const kept=await stopped()',start);assert(start>=0&&end>start);

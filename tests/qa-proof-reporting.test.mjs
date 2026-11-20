@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const fx = require('../tools/qa-proof-fixture.cjs');
-const source = readFileSync(new URL('../qa-offline-popup.cjs', import.meta.url), 'utf8');
+const source = readFileSync(new URL('../qa/scripts/qa-offline-popup.cjs', import.meta.url), 'utf8');
 const captureNames = ['orb-tap-starts-real-fake-mic', 'capture-hides-checks', 'capture-navigation-suppressed'];
 // Execute the actual capture branch and actual emitted result, not a parallel report builder.
 async function captureCase(phone, captured) {
@@ -90,7 +90,7 @@ test('startup discovery has explicit synthetic skins and My skin responses', () 
 });
 
 test('Wisdom verifies every pinned static asset, never nonexistent legacy files', async () => {
-  const wisdom = readFileSync(new URL('../qa-wisdom-pinned-thread.cjs', import.meta.url), 'utf8');
+  const wisdom = readFileSync(new URL('../qa/scripts/qa-wisdom-pinned-thread.cjs', import.meta.url), 'utf8');
   const start = wisdom.indexOf('  for(const f of ', wisdom.indexOf("extra.status='pass'"));
   const end = wisdom.indexOf('  await Promise.all(staticReads);', start);
   const manifest = { files: { 'static/discussions.js':'a', 'static/wisdom.js':'b', 'static/wizard-appearance.css':'c', 'static/icon.svg':'d' } };

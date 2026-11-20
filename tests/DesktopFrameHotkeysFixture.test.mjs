@@ -5,7 +5,7 @@ import vm from 'node:vm';
 import fixture from '../tools/qa-desktop-frame-fixture.cjs';
 const welcome = fs.readFileSync(new URL('../web/core/welcome.js', import.meta.url), 'utf8');
 const desktop = fs.readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8');
-const harness = fs.readFileSync(new URL('../qa-desktop-frame-hotkeys.cjs', import.meta.url), 'utf8');
+const harness = fs.readFileSync(new URL('../qa/scripts/qa-desktop-frame-hotkeys.cjs', import.meta.url), 'utf8');
 function slice(source, start, end) { const a = source.indexOf(start), b = source.indexOf(end, a); assert(a >= 0 && b > a); return source.slice(a, b); }
 function storage(phone = false) {
   const saved = new Map(), s = { localStorage: { getItem: k => saved.has(k) ? saved.get(k) : null, setItem: (k, v) => saved.set(k, String(v)) } };

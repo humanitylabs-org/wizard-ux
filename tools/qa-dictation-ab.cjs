@@ -6,7 +6,7 @@ const evidence = path.join(root, 'evidence'); fs.mkdirSync(evidence, { recursive
 const reports = [];
 for (const suite of ['qa-voice-seal.cjs', 'qa-hold-command.cjs', 'qa-immersive.cjs', 'qa-awake.cjs']) {
   for (const label of ['base', 'candidate']) {
-    const command = [ '-r', path.join(__dirname, 'qa-playwright-thales.cjs'), path.join(root, 'candidate', suite) ];
+    const command = [ '-r', path.join(__dirname, 'qa-playwright-thales.cjs'), path.join(root, 'candidate', 'qa', 'scripts', suite) ];
     const env = { ...process.env, QA_WEB_DIR: path.join(root, label), PLAYWRIGHT_PATH: 'playwright-core', QA_SUITE: suite };
     const p = spawnSync(process.execPath, command, { env, encoding: 'utf8', timeout: 180000, maxBuffer: 8 * 1024 * 1024 });
     const log = (p.stdout || '') + (p.stderr || '') + (p.error ? '\n' + p.error.stack : '');

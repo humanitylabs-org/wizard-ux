@@ -11,6 +11,7 @@ const fx = require('../tools/qa-proof-fixture.cjs');
 const { scan } = require('../tools/qa-request-inventory.cjs');
 const inventory = JSON.parse(readFileSync(path.join(root, 'tests/fixtures/proof-request-inventory.json'), 'utf8'));
 const HARNESSES = ['qa-instant-ui-taps.cjs', 'qa-offline-popup.cjs', 'qa-search-archive-routed.cjs'];
+const QA_DIR = path.join(root, 'qa/scripts'); // where the QA harnesses live
 
 test('every network path in web/ is classified in the committed inventory (and nothing stale)', () => {
  const found = scan(root), known = new Set(Object.keys(inventory.paths));
@@ -73,13 +74,13 @@ test('a run with refusals continues, then exits non-zero with the full list and 
 
 test('all three harnesses use the shared collect-all fence and never answer unknown paths with a silent success', () => {
  for (const name of HARNESSES) {
-  const src = readFileSync(path.join(root, name), 'utf8');
+  const src = readFileSync(path.join(QA_DIR, name), 'utf8');
   assert.match(src, /fx\.failAtExit\(/, name);
   assert.doesNotMatch(src, /Uncatalogued/, name);
  }
- const instant = readFileSync(path.join(root, HARNESSES[0]), 'utf8');
+ const instant = readFileSync(path.join(QA_DIR, HARNESSES[0]), 'utf8');
  assert.doesNotMatch(instant, /return json\(\{\}\);/);
- assert.ok(!existsSync(path.join(root, 'qa-hosted-notes-read.cjs.disabled')));
+ assert.ok(!existsSync(path.join(QA_DIR, 'qa-hosted-notes-read.cjs.disabled')));
 });
 
 test('refused-*.json lands in the harness default output directory, resolved at exit, and writes are never silent successes', () => {
@@ -89,8 +90,8 @@ test('refused-*.json lands in the harness default output directory, resolved at 
   assert.equal(cp.status, 1);
   assert.equal(readdirSync(dir).filter(f => f.startsWith('refused-')).length, 1);
  } finally { rmSync(dir, { recursive: true, force: true }); }
- for (const name of HARNESSES) assert.match(readFileSync(path.join(root, name), 'utf8'), /failAtExit\(\(\) => (?:out|OUT)\)/, name);
- const search = readFileSync(path.join(root, HARNESSES[2]), 'utf8');
+ for (const name of HARNESSES) assert.match(readFileSync(path.join(QA_DIR, name), 'utf8'), /failAtExit\(\(\) => (?:out|OUT)\)/, name);
+ const search = readFileSync(path.join(QA_DIR, HARNESSES[2]), 'utf8');
  assert.doesNotMatch(search, /ok: true, record/);
  assert.match(search, /writes\.push\(\{ method, path: u\.pathname \}\); return route\.fulfill\(fx\.response\(u\.pathname, method\)\)/);
  fx.resetRefusals();
