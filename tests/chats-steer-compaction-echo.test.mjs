@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 
-// Pull the real `echoed` out of chats.js so the test exercises production code, not a copy.
-const src = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
+// Pull the real `echoed` out of chats-outbox.js (moved from chats.js, issue 1665) so the test exercises production code, not a copy.
+const src = readFileSync(new URL('../web/core/chats-outbox.js', import.meta.url), 'utf8');
 const start = src.indexOf('function echoed(turns, p)');
 const end = src.indexOf('function retireLanded', start);
 assert.ok(start > 0 && end > start, 'echoed() found');

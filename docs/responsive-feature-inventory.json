@@ -270,6 +270,13 @@
       "classification": "shared",
       "note": "Optional in-memory temporary chat; strict server capability plus default-off preference"
     },
+    "core/chats-outbox.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Chats durable outbox and thread reading moved out of chats.js (issue 1665); called by createChats"
+    },
     "core/chats-running.js": {
       "loadedBy": [
         "phone",
@@ -986,6 +993,7 @@
     "core/chat-topic-emojis.js",
     "core/chat-work.js",
     "core/chats-list-model.js",
+    "core/chats-outbox.js",
     "core/chats-running.js",
     "core/chats-view.css",
     "core/chats-view.js",

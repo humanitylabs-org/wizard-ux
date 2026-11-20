@@ -3,13 +3,14 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 const source = fs.readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
-const start = source.indexOf('  function pendingState(');
-const end = source.indexOf('  // Failed thread reads retry', start);
+const outbox = fs.readFileSync(new URL('../web/core/chats-outbox.js', import.meta.url), 'utf8'); // pendingState moved there (issue 1665)
+const start = outbox.indexOf('  function pendingState(');
+const end = outbox.indexOf('  // Failed thread reads retry', start);
 function receipt(p, s) {
   const c = vm.createContext({ OUTBOX: { quarantined: () => false }, H: {}, esc: String,
     window: { WizConfig: { agent: () => 'Wizard' } }, CHECK_SVG: '✓',
     KIT: { reply: { clean: () => null } }, replyCard: () => '', userMedia: () => '', md: String });
-  vm.runInContext(source.slice(start, end), c);
+  vm.runInContext(outbox.slice(start, end), c);
   return c.pendingHtml(p, { media: [] }, s);
 }
 const pending = { id: 'send', state: 'sent', runId: 'held-run', text: 'A saved request' };

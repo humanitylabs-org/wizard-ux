@@ -2018,9 +2018,10 @@ test('issue 1331: opening a thread with an open Needs you lands on that message 
   f.env.document.documentElement.dataset.tweaks = MD_ON; f.env._c.w.readNav = 5; f.land(w, 5);
   assert.equal(scrolled.length, 3, 'switch off: the thread opens where it always did');
   // Both opens call it: a fresh history read and a reopen inside the 60-second history cache (Codex P2).
-  const load = src.slice(src.indexOf('  async function loadThread('), src.indexOf('    // Every read owns a captured thread AND navigation generation.'));
+  const outboxSrc = readFileSync(new URL('../web/core/chats-outbox.js', import.meta.url), 'utf8'); // loadThread lives in core/chats-outbox.js (issue 1665)
+  const load = outboxSrc.slice(outboxSrc.indexOf('  async function loadThread('), outboxSrc.indexOf('    // Every read owns a captured thread AND navigation generation.'));
   assert.match(load, /if \(fresh && !force\) \{\n      c\.loadedNav = nav;[^\n]*\n      if \(typeof needsLand === 'function'\) needsLand\(w, nav\);/);
-  assert.match(src, /if \(typeof needsLand === 'function' && current\(\)\) needsLand\(w, nav\);/);
+  assert.match(outboxSrc, /if \(typeof needsLand === 'function' && current\(\)\) needsLand\(w, nav\);/);
 });
 
 test('issue 1331: the landing becomes the reading place for main and routed threads alike (second AI review)', () => {
