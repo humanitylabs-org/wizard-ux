@@ -89,5 +89,31 @@ if TailscaleNet.isTailscale(interface: "en0", ipv4: v4(100, 101, 2, 3)) { failur
 if TailscaleNet.isTailscale(interface: "utun2", ipv4: v4(10, 8, 0, 2)) { failures += 1; print("FAIL: another VPN counted as Tailscale") }
 print("tailscale on this Mac: \(TailscaleNet.isOn())")
 
+// Saved address lives in its own suite; a Wizard page writing UserDefaults.standard can't change it (SavedWizard)
+func suite() -> (UserDefaults, String) { let n = "wizard-origin-test.\(UUID().uuidString)"; return (UserDefaults(suiteName: n)!, n) }
+do {
+    let (store, a) = suite(), (legacy, b) = suite()
+    defer { store.removePersistentDomain(forName: a); legacy.removePersistentDomain(forName: b) }
+    expect(SavedWizard.load(store: store, legacy: legacy), nil, "nothing saved")
+    legacy.set("https://box.example.ts.net/", forKey: SavedWizard.key)           // an older build's save moves over once
+    expect(SavedWizard.load(store: store, legacy: legacy), "https://box.example.ts.net/", "migrated")
+    expect(legacy.string(forKey: SavedWizard.key), nil, "legacy key removed after migration")
+    legacy.set("https://evil.test/", forKey: SavedWizard.key)                    // a page writing .standard later
+    expect(SavedWizard.load(store: store, legacy: legacy), "https://box.example.ts.net/", "page write ignored")
+    expect(legacy.string(forKey: SavedWizard.key), nil, "page write cleared")
+    SavedWizard.save("https://other.example.ts.net", store: store, legacy: legacy)
+    expect(SavedWizard.load(store: store, legacy: legacy), "https://other.example.ts.net/", "Connect saves")
+}
+do {
+    let (store, a) = suite(), (legacy, b) = suite()
+    defer { store.removePersistentDomain(forName: a); legacy.removePersistentDomain(forName: b) }
+    legacy.set("javascript:alert(1)", forKey: SavedWizard.key)                   // junk in .standard never migrates
+    expect(SavedWizard.load(store: store, legacy: legacy), nil, "junk not migrated")
+    let (same, c) = suite()
+    defer { same.removePersistentDomain(forName: c) }
+    SavedWizard.save("https://box.example", store: same, legacy: same)            // fallback: one store, never wiped
+    expect(SavedWizard.load(store: same, legacy: same), "https://box.example/", "single store kept")
+}
+
 print(failures == 0 ? "WIZARD_ORIGIN_CHECKS_PASS" : "WIZARD_ORIGIN_CHECKS_FAIL \(failures)")
 exit(failures == 0 ? 0 : 1)

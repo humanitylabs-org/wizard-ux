@@ -7,8 +7,9 @@ import Capacitor
 /// (like the Android app): it opens that Wizard's `/wizard-os-home/` and Wizard UX picks its phone shell from the
 /// iPhone user agent.
 enum WizardAddress {
-    static let key = "wizardOrigin"
     static let shellPath = "wizard-os-home/"
+    /// Out of reach of the Wizard's pages (SavedWizard); `.standard` only if the suite can't open.
+    private static let store = UserDefaults(suiteName: SavedWizard.suite) ?? .standard
 
     /// Built in at compile time (`WIZARD_ORIGIN` build setting → Info.plist `WizardOrigin`). May be empty.
     static var bundled: String {
@@ -16,7 +17,7 @@ enum WizardAddress {
     }
 
     /// The address saved in the app (Connect / Change Wizard), else the built-in one.
-    static var current: URL? { normalized(UserDefaults.standard.string(forKey: key) ?? bundled) }
+    static var current: URL? { normalized(SavedWizard.load(store: store, legacy: .standard) ?? bundled) }
 
     static var home: URL? { current.flatMap { URL(string: shellPath, relativeTo: $0)?.absoluteURL } }
 
@@ -27,7 +28,7 @@ enum WizardAddress {
 
     /// Only an address that passed the shell check is saved (WizardProbe; Android CONNECT.md).
     static func save(origin: String) {
-        UserDefaults.standard.set(origin + "/", forKey: key)
+        SavedWizard.save(origin, store: store, legacy: .standard)
     }
 
     // A Setup QR code or `wizard://connect` link waiting on the connect screen, and whether that screen should show

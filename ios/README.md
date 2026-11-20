@@ -12,7 +12,7 @@ phone shell from the iPhone user agent; the app adds `WizardOS-iOS/<version>` to
 | Change Wizard | `Capacitor.Plugins.WizardShell.changeWizard()` from the Wizard's pages shows the connect screen; the current Wizard stays until a new one passes the check |
 | Navigation | Pages of the Wizard's host stay in the app; other sites open in Safari |
 | Microphone / camera | The page's `getUserMedia` + `MediaRecorder` and file inputs. Capture is granted only to the Wizard's https pages (`MediaGate`), after iOS's own prompt |
-| Native features | Capacitor plugins, callable from the Wizard's pages as `window.Capacitor.Plugins.*`: App, Camera, Haptics, LocalNotifications, Preferences, PushNotifications, Share, SplashScreen, StatusBar |
+| Native features | Capacitor plugins, callable from the Wizard's pages as `window.Capacitor.Plugins.*`: App, Camera, Haptics, LocalNotifications, PushNotifications, Share, SplashScreen, StatusBar. The saved Wizard address is kept where no plugin reaches it (`SavedWizard`); only Connect saves it, after the shell check |
 | Back | Left-edge swipe calls `window.__wosNativeBack()` (same contract as Android) |
 | Resume | Foregrounding dispatches `wos-native-resume`, like Android |
 

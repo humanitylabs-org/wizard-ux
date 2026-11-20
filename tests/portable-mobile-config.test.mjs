@@ -75,5 +75,6 @@ test('iOS has empty defaults and forwards explicit origin to simulator and TestF
   assert.match(fastlane, /Shellwords\.escape\("WIZARD_ORIGIN=#\{ENV\['WIZARD_ORIGIN'\]\}"\)/);
   assert.match(fastlane, /CURRENT_PROJECT_VERSION=#\{build\}#\{origin_arg\}/);
   const swift = read('ios/native/App/App/WizardViewController.swift');
-  assert.match(swift, /UserDefaults\.standard\.string\(forKey: key\) \?\? bundled/);
+  // A saved address (its own suite, out of the Wizard pages' reach) wins over the built-in default.
+  assert.match(swift, /SavedWizard\.load\(store: store, legacy: \.standard\) \?\? bundled/);
 });
