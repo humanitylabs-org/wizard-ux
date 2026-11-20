@@ -26,10 +26,10 @@ Native adapters remain native: Android Everywhere, physical side key, external-a
 
 All browser and sustained tests run on `thales.local`, under the external-volume QA directory `responsive-parity-remainder-20261015`, one Chrome instance at a time. No VPS browser, Android/VM build, device install, production message or deployment.
 
-- `qa-responsive-remainder.cjs` uses the existing isolated-origin custody harness: real phone Android-UA/touch and desktop shells, common controls, real MediaRecorder with Chrome's fake microphone; STT/upload/install/screenshot-port responses are explicitly synthetic. It exercises registration, commands and misses, original-view chat search, review/Maps/Back, selection, bound callers, pause/resume, screenshot races, upload failure/retry, model pinning and cursor/stale-field dictation.
-- `qa-responsive-parity.cjs` uses actual live GET data with the candidate static-source overlay, including shared Settings regression, actual generated review data and installed Music. All non-GET requests are fenced; beacons and service workers are blocked. Screenshots contain private live thread metadata and stay on Thales.
-- `qa-voice-custody-callers.cjs` retains the existing full caller/steer/tombstone/held-audio scenarios, not a replacement mock-only outbox suite.
-- `qa-manager-orb.cjs` uses the live Manager page and installed registry with fixture state and intercepted mutation requests; this proves route/custody, not real Manager admission.
+- `qa/scripts/qa-responsive-remainder.cjs` uses the existing isolated-origin custody harness: real phone Android-UA/touch and desktop shells, common controls, real MediaRecorder with Chrome's fake microphone; STT/upload/install/screenshot-port responses are explicitly synthetic. It exercises registration, commands and misses, original-view chat search, review/Maps/Back, selection, bound callers, pause/resume, screenshot races, upload failure/retry, model pinning and cursor/stale-field dictation.
+- `qa/scripts/qa-responsive-parity.cjs` uses actual live GET data with the candidate static-source overlay, including shared Settings regression, actual generated review data and installed Music. All non-GET requests are fenced; beacons and service workers are blocked. Screenshots contain private live thread metadata and stay on Thales.
+- `qa/scripts/qa-voice-custody-callers.cjs` retains the existing full caller/steer/tombstone/held-audio scenarios, not a replacement mock-only outbox suite.
+- `qa/scripts/qa-manager-orb.cjs` uses the live Manager page and installed registry with fixture state and intercepted mutation requests; this proves route/custody, not real Manager admission.
 - `npm test` discovers the existing guards plus common grammar/dispatch, bound lifecycle and finite inventory tests.
 
 ### Exact candidate proof

@@ -21,7 +21,7 @@ if [ "${1:-}" = "--remote" ]; then
     if curl -fsS "http://127.0.0.1:$PORT/__fake/state" >/dev/null; then break; fi
     sleep .1
   done
-  node qa-setup-app.cjs "http://127.0.0.1:$PORT/wizard-os-home/" >out/qa-setup-app.log 2>&1
+  node qa/scripts/qa-setup-app.cjs "http://127.0.0.1:$PORT/wizard-os-home/" >out/qa-setup-app.log 2>&1
   exit
 fi
 : "${WIZARD_BUILD_HOST:?Set WIZARD_BUILD_HOST to the remote SSH worker}"

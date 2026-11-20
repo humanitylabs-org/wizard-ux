@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import fixture from '../tools/qa-settings-fixture.cjs';
 const welcome = fs.readFileSync(new URL('../web/core/welcome.js', import.meta.url), 'utf8');
-const harness = fs.readFileSync(new URL('../qa-settings-component-parity.cjs', import.meta.url), 'utf8');
+const harness = fs.readFileSync(new URL('../qa/scripts/qa-settings-component-parity.cjs', import.meta.url), 'utf8');
 function slice(start, end) { const a=welcome.indexOf(start),b=welcome.indexOf(end,a);assert(a>=0&&b>a);return welcome.slice(a,b); }
 async function boot(options, setup, state) {
   const tasks=[],opened=[],log=[],s={Promise,tsig:()=>({}),booted:false,H:null,acted:false,act(){},addEventListener(){},removeEventListener(){},seenPending:()=>false,markSeen(){},read:()=>state,log:x=>log.push(x),open:x=>opened.push(x),setTimeout:(f,ms)=>{if(!ms)tasks.push(f);},fetch:async url=>({ok:true,json:async()=>url.endsWith('/model/options')?options:setup})};

@@ -10,7 +10,7 @@ Reuse:
 ## Regression checks
 
 - `node --test --test-name-pattern='desktop contextual Chats|phone search still covers' tests/ai-apps-view.test.mjs`
-- Browser: `QA_TREE=<exact-source-root> QA_OUT=<fresh-evidence-directory> QA_PLAYWRIGHT=<module> QA_CHROME=<binary> node qa-desktop-chats-thread-search.cjs`
+- Browser: `QA_TREE=<exact-source-root> QA_OUT=<fresh-evidence-directory> QA_PLAYWRIGHT=<module> QA_CHROME=<binary> node qa/scripts/qa-desktop-chats-thread-search.cjs`
 - Set `QA_EXPECT_RED=1` only for the exact pre-fix tree. A valid red receipt must say `expected-product-failure`, with the specific zero-app-recommendations assertion after a clean boot, the installed Browser positive control and multiple rendered thread matches. A timeout, missing control or unrelated error is not a product red.
 
 Run browser/behavior verification through the finite forum queue runner, never on a live owner origin. Its matrix covers same-input-task local matches, installed Browser plus matching threads, app-only and no-match Enter, clear/Cancel/Back, folded rail and Alt+K, exact archive click/first-result Enter, preserved global app ranking and classic Chats, live Nebula→Signal change, and adjacent phone captures on both palettes. Inspect all retained screenshots before acceptance. No CSS changes are made by this fix; the existing Appearance and dark fallback implementation is retained byte-for-byte.

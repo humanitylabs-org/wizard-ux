@@ -12,8 +12,8 @@ Successful synchronous shell commands (including opening Wisdom or Recorder) fin
 - Draft text, photos, attachments, parked drafts, sealed agent requests and ambiguous steering remain protected.
 
 ## Focused verification
-Run `QA_LOCAL_ONLY=1 node qa-voice-custody-callers.cjs` with `PLAYWRIGHT_MODULE`, `CHROMIUM`, and `QA_OUT` set for the available browser toolchain. Runs on the remote QA host; all network mutations are intercepted. 55 assertions passed: real phone/desktop callers open the requested app, zero recovery row, durable reload/reconnect, held-command path, ambiguous old rows retained, failed storage preserves bytes, accepted-only music retains audio, delayed storage retry and enqueue cannot resurrect completion.
+Run `QA_LOCAL_ONLY=1 node qa/scripts/qa-voice-custody-callers.cjs` with `PLAYWRIGHT_MODULE`, `CHROMIUM`, and `QA_OUT` set for the available browser toolchain. Runs on the remote QA host; all network mutations are intercepted. 55 assertions passed: real phone/desktop callers open the requested app, zero recovery row, durable reload/reconnect, held-command path, ambiguous old rows retained, failed storage preserves bytes, accepted-only music retains audio, delayed storage retry and enqueue cannot resurrect completion.
 
-`QA_RECOVERY_ONLY=1 node qa-voice-custody-callers.cjs`: 52 passed, covering real recovery controls, routing/model/file preservation, eligible-only retry, lost receipt identity and ambiguous steering.
+`QA_RECOVERY_ONLY=1 node qa/scripts/qa-voice-custody-callers.cjs`: 52 passed, covering real recovery controls, routing/model/file preservation, eligible-only retry, lost receipt identity and ambiguous steering.
 
 Web-only update. No Android, native Mac or guest-image rebuild. Physical handset-local historic rows cannot be inspected or cleaned remotely; this is a forward fix rather than a bulk deletion of old recordings.

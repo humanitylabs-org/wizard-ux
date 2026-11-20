@@ -17,7 +17,7 @@ Requested: a desktop hotkey for a new chat, and a voice hotkey that always creat
 All browser/native execution took place on **Thales**, using isolated staging and intercepted write endpoints.
 
 - Untouched daily baseline: fails `Command-N opens a fresh New chat`, confirming the added behavior.
-- Final staging served assets: `qa-new-chat-keys.cjs` **26/26**. Includes input/iframe focus, draft retention, pinned destination across navigation, actual MediaRecorder audio and durable outbox new-session delivery through intercepted APIs, active reply/dictation/transcription guards, both browser aliases, cancel/autorepeat, and Back preservation.
+- Final staging served assets: `qa/scripts/qa-new-chat-keys.cjs` **26/26**. Includes input/iframe focus, draft retention, pinned destination across navigation, actual MediaRecorder audio and durable outbox new-session delivery through intercepted APIs, active reply/dictation/transcription guards, both browser aliases, cancel/autorepeat, and Back preservation.
 - Command-W existing regression: **13/13**.
 - Native WKWebView/AppKit event path: **5/5**. An isolated QA-only copy of Wizard 0.5.1 injects NSEvents into the real AppKit key-equivalent/responder chain; production native sources and app stay unchanged. Both chords reach the web shell, send-again enqueues exactly one `kind:new` audio message, and Wizard remains open. Audio is a generated test tone captured by actual MediaRecorder; live microphone permission and physical hardware keys are not claimed by this test.
 - Native preferences restored with exact semantic readback. Test app stopped afterward.
@@ -37,7 +37,7 @@ QA_LIVE=1 QA_OUT="$PWD/evidence/staging" \
 node candidate/qa-new-chat-keys.cjs "${QA_ORIGIN:?Set an isolated tailnet preview origin}/wizard-os-home/?open=chats"
 ```
 
-Native: build the QA-only event injector with `tools/qa-native-new-chat-injector.py` on Thales, then run `qa-native-new-chat-keys.py`. It uses the existing QA notifier and refuses to disturb another running Wizard.app.
+Native: build the QA-only event injector with `tools/qa-native-new-chat-injector.py` on Thales, then run `qa/scripts/qa-native-new-chat-keys.py`. It uses the existing QA notifier and refuses to disturb another running Wizard.app.
 
 ## Release boundary
 
