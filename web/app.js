@@ -450,75 +450,78 @@
     closeOverview(); goDesk(+b.dataset.goto); tourEv('desk', { home: idx === HOME });
   });
   $('#dock').addEventListener('contextmenu', e => { if (e.target.closest('[data-goto]')) e.preventDefault(); });
-  /* Swipe anywhere on the bottom bar to change desks: the orb has its own gestures, the
-   * scrubber its own; everything else in the bar (dots, gaps, edges) is a desk swipe.
-   * Bar scrub (wizard-ux#1491, switch wizard/bar-scrub, off by default): the whole bar scrubs like the little
-   * handle did and the handle is gone (its tweak.css). The scrub is live the moment the finger passes the sideways
-   * slop (wizard-ux#1536: no hold time), counted from there, so it never jumps over the distance already covered; it
-   * then steps one desk per SC_STEP px with a tick and the desk name, release lands. A touch that ends within
-   * BAR_FLICK_MS (event time, so a busy page never turns a flick into a scrub) is a flick: exactly one desk. The bar's
-   * own direction: drag left = the desk to the right (the old handle went the other way). A sideways drag that starts
-   * on the orb joins the same scrub (barScrubJoin, from the orb's gesture code): the whole bar is one surface. */
-  let DS = null, dockSwiped = 0; const BAR_FLICK_MS = 180;
-  const barScrubOn = () => { try { return String(document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/bar-scrub'); } catch (_) { return false; } };
-  const barScrubBack = s => { if (s.live) { idx = s.start; placeTrack(0, true); renderDots(); } s.live = false; scrub.classList.remove('on'); };
+  /* Swiping desks (wizard-ux#1491, #1536; on for everyone since #1563): the whole bottom bar, orb included, is one
+   * scrub surface (dots, gaps, edges; the orb keeps its tap, hold and up/down). The scrub is live the moment the
+   * finger passes the 12 px sideways slop (no hold time), counted from there, so it never jumps over the distance
+   * already covered; it then steps one desk per SC_STEP px with a tick and the desk name, release lands. A SHORT touch
+   * (under BAR_FLICK_STEPS = 2.5 x SC_STEP) that ends within BAR_FLICK_MS (event time, so a busy page never turns a flick
+   * into a scrub) is a flick: exactly one desk the way it travelled, however many moves it came as (wizard-ux#1601;
+   * under BAR_FLICK_MIN px it is drift and stays put); a fast long swipe goes by its whole distance like a slow one
+   * (wizard-ux#1536 kick-back). Each step
+   * shows the hovered desk itself (unparked, quick slide), so the desk is visible under the finger before release
+   * (barScrubPeek). Drag left = the desk to the right. A sideways drag that starts on the orb joins the same scrub
+   * (barScrubJoin, from the orb's gesture code). Nothing here reads Channels: CHATS.beforeNavigate is the incognito
+   * chat's leave guard, the same one goDesk uses. */
+  let DS = null, dockSwiped = 0; const BAR_FLICK_MS = 180, BAR_FLICK_STEPS = 2.5, BAR_FLICK_MIN = 20;
+  const barScrubBack = s => { if (s.live) { idx = s.start; placeTrack(0, true); renderDots(); parkDesks(false); } s.live = false; barScrubPeek(false); scrub.classList.remove('on'); };
+  // The hovered desk and its neighbours render while the scrub points at it (parked desks skip rendering); the track
+  // slides quicker so the desk follows each step. Desks the scrub has left behind (3+ away; 2 away may still be sliding
+  // out) are parked again at once, and settling (goDesk / barScrubBack) parks the rest.
+  const barScrubPeek = n => {
+    track.classList.toggle('bar-scrubbing', n !== false);
+    if (n !== false) desks.forEach((_, i) => { const d = Math.abs(i - n); if (d <= 1) secOf(i)?.classList.remove('parked'); else if (d > 2) secOf(i)?.classList.add('parked'); });
+  };
   // Where the scrub points: counted from x0, set when the scrub went live (12 px before that point, the slop).
   const barScrubAt = (s, x) => Math.max(0, Math.min(desks.length - 1, s.start - Math.round((x - s.x0) / SC_STEP)));
-  const barScrubLive = (s, e) => { s.live = true; s.x0 = e.clientX - Math.sign(e.clientX - s.x) * 12; placeTrack(0, true); scrub.classList.add('on'); scLabel(s.at); vib(10); };
+  const barScrubLive = (s, e) => { s.live = true; s.x0 = e.clientX - Math.sign(e.clientX - s.x) * 12; barScrubPeek(s.at); placeTrack(0, true); scrub.classList.add('on'); scLabel(s.at); vib(10); };
   // The orb's sideways drag hands its finger to the bar scrub (the orb keeps tap, hold and up/down). Its moves and
   // release bubble from #orbWrap to #dock, so the dock's own handlers below run the scrub from here on.
   const barScrubJoin = (e, g) => {
-    if (!barScrubOn() || (sheet && sheet !== 'settings') || DS) return false;
-    DS = { x: g.x, y: g.y, t: g.t, id: e.pointerId, h: true, sc: true, ts: g.ts ?? e.timeStamp, start: idx, at: idx, live: false, up: false };
+    if ((sheet && sheet !== 'settings') || DS) return false;
+    DS = { x: g.x, y: g.y, t: g.t, id: e.pointerId, h: true, ts: g.ts ?? e.timeStamp, start: idx, at: idx, live: false, up: false };
     endDotHold(); if (sheet === 'settings') liftSettings();
     barScrubLive(DS, e); return true;
   };
-  const barScrubDrop = () => { if (DS && DS.sc) barScrubBack(DS); DS = null; };
+  const barScrubDrop = () => { if (DS) barScrubBack(DS); DS = null; };
   $('#dock').addEventListener('pointerdown', e => {
-    if (e.target.closest('#orbWrap, #scrub') || (sheet && sheet !== 'settings')) return; // Settings never blocks a desk swipe
+    if (e.target.closest('#orbWrap') || (sheet && sheet !== 'settings')) return; // Settings never blocks a desk swipe
     if (e.pointerType === 'touch' && e.clientY > innerHeight - 22) return; // iOS home-indicator strip: the system's swipe
-    DS = { x: e.clientX, y: e.clientY, t: performance.now(), id: e.pointerId, h: false, sc: barScrubOn(), ts: e.timeStamp, start: idx, at: idx, live: false, up: false };
+    DS = { x: e.clientX, y: e.clientY, t: performance.now(), id: e.pointerId, h: false, ts: e.timeStamp, start: idx, at: idx, live: false, up: false };
   });
   $('#dock').addEventListener('pointermove', e => {
     if (!DS || e.pointerId !== DS.id) return;
     const dx = e.clientX - DS.x, dy = e.clientY - DS.y;
     if (!DS.h && window.WosSkinHost?.claimed(e.pointerId)) { DS = null; return; } // a skin gesture owns this finger
     if (!DS.h) { if (Math.abs(dx) < 12 || Math.abs(dx) < Math.abs(dy)) return; DS.h = true; endDotHold(); if (sheet === 'settings') liftSettings(); try { $('#dock').setPointerCapture(e.pointerId); } catch (_) {} }
-    if (DS.sc) {
-      if (DS.up) return;
-      if (dy < -30) { DS.up = true; barScrubBack(DS); placeTrack(0, true); return; } // going up: the iPhone's swipe out
-      if (!DS.live) barScrubLive(DS, e);
-      if (DS.live) {
-        const n = barScrubAt(DS, e.clientX);
-        if (n !== DS.at && !CHATS.beforeNavigate(desks[n]?.wins || [])) return;
-        if (n !== DS.at) { DS.at = n; vib(6); idx = n; placeTrack(0, true); renderDots(); scLabel(n); }
-        return;
-      }
-    }
-    let d = dx; if ((idx === 0 && d > 0) || (atPickerEnd() && d < 0)) d *= .28;
-    placeTrack(d * 1.1, false);
+    if (DS.up) return;
+    if (dy < -30) { DS.up = true; barScrubBack(DS); placeTrack(0, true); return; } // going up: the iPhone's swipe out
+    if (!DS.live) barScrubLive(DS, e);
+    const n = barScrubAt(DS, e.clientX);
+    if (n !== DS.at && !CHATS.beforeNavigate(desks[n]?.wins || [])) return;
+    if (n !== DS.at) { DS.at = n; vib(6); idx = n; barScrubPeek(n); placeTrack(0, true); renderDots(); scLabel(n); }
   });
   const dockEnd = e => {
     if (!DS || e.pointerId !== DS.id) return; const s = DS; DS = null;
     if (!s.h) return;
-    const dx = e.clientX - s.x, v = dx / ((performance.now() - s.t) || 1);
+    const dx = e.clientX - s.x, quick = e.timeStamp - s.ts < BAR_FLICK_MS;
     dockSwiped = Date.now();
-    if (s.sc && (s.live || s.up)) {
-      // A cancelled touch or one that rose is the system's swipe out: the desk goes back to where it started.
-      if (s.up || e.type === 'pointercancel' || e.clientY - s.y < -30) { barScrubBack(s); return; }
-      // A quick flick moves exactly one desk, the way the scrub was heading (or by the old flick rule if it crossed no step).
-      if (e.timeStamp - s.ts < BAR_FLICK_MS) {
-        const dir = s.at !== s.start ? Math.sign(s.at - s.start) : dx < -60 || v < -.5 ? 1 : dx > 60 || v > .5 ? -1 : 0;
-        barScrubBack(s); if (dir) { swipeDesk(dir); tourEv('desk', { home: idx === HOME }); } return;
-      }
-      // The last move may not have come in before the release: land where the finger let go.
-      const n = barScrubAt(s, e.clientX); if (n !== s.at && (n === s.start || CHATS.beforeNavigate(desks[n]?.wins || []))) s.at = n;
-      scrub.classList.remove('on'); goDesk(s.at, true); tourEv('desk', { home: idx === HOME }); return;
+    // A cancelled touch or one that rose is the system's swipe out: the desk goes back to where it started.
+    if (s.up || e.type === 'pointercancel' || e.clientY - s.y < -30) { barScrubBack(s); return; }
+    // A short quick flick moves exactly one desk, the way the finger travelled in total (wizard-ux#1601: decided at
+    // release from the whole travel and time, not from steps crossed, so a flick that arrives as one or two merged
+    // moves is one desk too). A quick swipe that travelled further lands by distance, below.
+    if (quick && Math.abs(dx) < BAR_FLICK_STEPS * SC_STEP) {
+      // Under BAR_FLICK_MIN px (finger drift on a dock control, Codex P2 on PR 1603) is no swipe: the desk stays.
+      const dir = Math.abs(dx) >= BAR_FLICK_MIN ? -Math.sign(dx) : 0;
+      barScrubBack(s); if (dir) { swipeDesk(dir); tourEv('desk', { home: idx === HOME }); } return;
     }
-    if (e.clientY - s.y < -40) return placeTrack(0, true); // went up: the iPhone's swipe out, never a desk swipe
-    if (e.type !== 'pointercancel' && (dx < -60 || v < -.5)) { swipeDesk(1); tourEv('desk', { home: idx === HOME }); }
-    else if (e.type !== 'pointercancel' && (dx > 60 || v > .5)) { swipeDesk(-1); tourEv('desk', { home: idx === HOME }); }
-    else placeTrack(0, true);
+    // The last move may not have come in before the release: land where the finger let go. A quick long swipe counts
+    // its whole travel from touch-down, first move included (a lone far first move is not lost to the slop).
+    const n = quick ? Math.max(0, Math.min(desks.length - 1, s.start - Math.round(dx / SC_STEP))) : barScrubAt(s, e.clientX);
+    if (n !== s.at && (n === s.start || CHATS.beforeNavigate(desks[n]?.wins || []))) s.at = n;
+    // The scrub moved idx as it went; land from the start desk so goDesk runs its desk-leave work (Resources, a Home
+    // card's Chats chip, an empty desk going away, an open link) exactly as a tap or flick does.
+    barScrubPeek(false); scrub.classList.remove('on'); idx = s.start; goDesk(s.at, true); tourEv('desk', { home: idx === HOME });
   };
   $('#dock').addEventListener('pointerup', dockEnd); $('#dock').addEventListener('pointercancel', dockEnd);
   /* Overview (James, 10 Oct 2026): pinch in on a desk, or long-press the desk dots, to see every desk at once.
@@ -759,34 +762,11 @@
     renderDesk(i); pruneDesks(); toast('✕', `Closed ${esc(name)}`); ovLog('close'); return true;
   }
 
-  /* Scrubber: the strip just below the orb. Touch, hold, and drag sideways;
-   * every small nudge steps one desk (haptic tick), release lands. */
+  /* The desk scrub's name label (the bar scrub above shows it); it takes no touches, the bar under it scrubs. */
   const scrub = document.createElement('div'); scrub.id = 'scrub'; scrub.className = 'scrub';
-  scrub.innerHTML = '<i></i><span class="sc-label"></span>'; $('#dock').appendChild(scrub);
-  let SC = null; const SC_STEP = 26;
-  scrub.addEventListener('pointerdown', e => {
-    e.preventDefault(); scrub.setPointerCapture(e.pointerId);
-    SC = { x: e.clientX, y: e.clientY, start: idx, at: idx, live: false, t: setTimeout(() => { if (SC) { SC.live = true; scrub.classList.add('on'); scLabel(); vib(10); } }, 140) };
-  });
-  scrub.addEventListener('pointermove', e => {
-    if (!SC) return; const dx = e.clientX - SC.x, dy = e.clientY - SC.y;
-    if (dy < -30) { if (SC.live) { idx = SC.start; placeTrack(0, true); renderDots(); } SC.live = false; clearTimeout(SC.t); return; } // going up: iOS swipe out
-    if (!SC.live && Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy)) { clearTimeout(SC.t); SC.live = true; scrub.classList.add('on'); }
-    if (!SC.live) return;
-    const n = Math.max(0, Math.min(desks.length - 1, SC.start + Math.round(dx / SC_STEP)));
-    if (n !== SC.at && !CHATS.beforeNavigate(desks[n]?.wins || [])) return;
-    if (n !== SC.at) { SC.at = n; vib(6); idx = n; placeTrack(0, true); renderDots(); scLabel(); }
-  });
-  function scLabel(at = SC.at) { scrub.querySelector('.sc-label').textContent = deskName(at); }
-  // A cancelled touch (iOS takes it for its own swipe home) or one that rose more than a nudge is the system's
-  // swipe out, not a scrub: put the desk back where it started instead of landing on the scrubbed one.
-  const scEnd = e => {
-    if (!SC) return; clearTimeout(SC.t); const { live, at, start, y } = SC; SC = null; scrub.classList.remove('on');
-    if (!live) return;
-    if (e.type === 'pointercancel' || e.clientY - y < -30) { idx = start; placeTrack(0, true); renderDots(); return; }
-    goDesk(at, true);
-  };
-  scrub.addEventListener('pointerup', scEnd); scrub.addEventListener('pointercancel', scEnd);
+  scrub.innerHTML = '<span class="sc-label"></span>'; $('#dock').appendChild(scrub);
+  const SC_STEP = 26;
+  function scLabel(at) { scrub.querySelector('.sc-label').textContent = deskName(at); }
 
   /* ---------------- window operations ---------------- */
   /* Every new thing opens on its own desk, right beside the one in front (James, 12 Oct 2026: apps always open
@@ -2183,7 +2163,7 @@
   }
   let toastT = 0;
   function toast(icon, text, ms = 2200) {
-    const t = $('#toast'); delete t.dataset.opening; t.innerHTML = `<span class="ti">${window.WizBrand.icon(icon)}</span><span>${text}</span>`; t.classList.add('show');
+    const t = $('#toast'); delete t.dataset.opening; t.classList.remove('got-it'); t.innerHTML = `<span class="ti">${window.WizBrand.icon(icon)}</span><span>${text}</span>`; t.classList.add('show');
     clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), ms);
   }
 
@@ -3136,6 +3116,7 @@
       sessionId: sid && sid !== '__new__' ? sid : '',
       steerRunId: snap.meetingEventId ? '' : rt?.steerRunId ?? (CHATS.isWorking(LIVE.session(sid)) ? LIVE.session(sid)?.runId || '' : ''), audio, typed: snap.seal?.text || '', ...(snap.seal?.reply ? { reply: snap.seal.reply } : {}),
       meetingEventId:snap.meetingEventId,sealKey: snap.seal?.key, captureId: V.custodyCapture, nativeId: nid, intent: kind, agent: sv?.agent || snap.route?.agent || '',
+      ...(typeof dumpTake === 'function' && dumpTake(snap, rt, aimAt, kind) ? { dump: true } : {}),
       files: [...takeFiles(), ...(snap.seal?.files || [])].filter(f => f?.id),
       instructions: viewContext(sv?.id, 'voice', snap), source: 'orb', wid: rt?.wid || sv?.id || '' });
     V.custodyCapture = null;
@@ -3254,7 +3235,9 @@
     if (V.state !== 'listen' && V.state !== 'paused') return;
     const failed=V.files.filter(f=>f.error&&f.local);if(failed.length){for(const f of failed)uploadVoiceFile(f.local,V.files,f);return;}
     if (V.state === 'listen') { $('#arcPause').click(); V.pickPaused = true; }
-    voicePicker.click();
+    // Android app: the same Camera / Photo or video / File menu as the chat composer (ux#1634).
+    if (window.WosContextMenu?.attach) window.WosContextMenu.attach(voicePicker, $('#arcAttach'), { label: 'Attach to this take', onCancel: pickerBack });
+    else voicePicker.click();
   });
   const pickerBack = () => { if (!V.pickPaused) return; V.pickPaused = false; if (V.state === 'paused') $('#arcPause').click(); };
   voicePicker.addEventListener('change', pickerBack); voicePicker.addEventListener('cancel', pickerBack);
@@ -3394,10 +3377,14 @@
       if (loc) { snap.quickRan = true; showRouted('command', `Quick command · on-device${sttNote}`); return finishCmd(loc, text, qo); }
       if (window.WosTour?.isHelp(text) && snap.view?.kind !== 'chat thread') { snap.quickRan = true; setVoice('idle'); txHide(0); return window.WosTour.openHelp(); }
       const routeUrl = snap.view?.kind !== 'chat thread' && window.WizConfig.endpoint('route');
+      // A take marked as a possible background task (wizard/agent-inbox, issue 1588) asks for it in this one call.
+      const dumpAsk = OUTBOX.get?.(snap.custodyId)?.dump === true;
       if (routeUrl) try {
         setVoice('think'); if (isPill()) tx.dataset.detail = 'Quick command? · routing'; else $('#txRouteText').textContent = 'Quick command? · routing';
-        const r = await fetch(routeUrl, { method: 'POST', signal: AbortSignal.timeout ? AbortSignal.timeout(3000) : undefined, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, force: '', view: null, apps: APPS.filter(a => a.kind !== 'view').map(a => a.name) }) });
+        const r = await fetch(routeUrl, { method: 'POST', signal: AbortSignal.timeout ? AbortSignal.timeout(3000) : undefined, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, force: '', view: null, apps: APPS.filter(a => a.kind !== 'view').map(a => a.name), ...(dumpAsk ? { accept_dump: true } : {}) }) });
         const j = await r.json(); const c = r.ok && j.cmd || {};
+        if (dumpAsk && r.ok) snap.dumpAsked = true; // answered: the outbox never asks again
+        if (dumpAsk && c.route === 'dump' && c.record_id) { setVoice('idle'); txHide(0); gotIt(c.title); return { outcome: 'local' }; }
         if (c.route === 'command' && !c.then_agent) { snap.quickRan = true; showRouted('command', `Quick command · ${j.ms} ms${sttNote}`); return finishCmd(c, text, qo); }
       } catch (_) {}
       kind = 'auto';
@@ -3566,10 +3553,28 @@
       return sendChat(opts.snap.newChatWid, text, 'new voice chat', opts.audio || opts.snap.audio || null, { custodyId: opts.snap.custodyId, sid: '__new__', route: opts.snap.route, seal: false, files: opts.files || [], instructions: 'Explicit new voice chat. No foreground app or private thread context shared.' });
     }
     // Saved before it is sent: a dropped connection can delay this, never lose it.
-    const item = await OUTBOX.enqueue({ sealKey: opts.snap?.seal?.key, custodyId: opts.snap?.custodyId, kind: 'new', text, typed: opts.typed || '', ...(opts.snap?.route || {}), instructions: ctx, audio: opts.audio || opts.snap?.audio || null, source: opts.source || 'orb', files: opts.files || [], ...(opts.reply ? { reply: opts.reply } : {}) });
+    const item = await OUTBOX.enqueue({ sealKey: opts.snap?.seal?.key, custodyId: opts.snap?.custodyId, kind: 'new', text, typed: opts.typed || '', ...(opts.snap?.route || {}), instructions: ctx, audio: opts.audio || opts.snap?.audio || null, source: opts.source || 'orb', files: opts.files || [], ...(opts.reply ? { reply: opts.reply } : {}), ...(opts.snap?.dumpAsked ? { dump: false } : {}) });
     renderMoons(); refreshHome(); renderDots();
     return item;
   }
+  /* Orb dump (switch wizard/agent-inbox, off by default; wizard-ux issue 1588): a plain new take to the main agent, said
+   * away from any thread (home, an app, the Chats list), is offered to the router as a possible background task (the
+   * outbox asks with accept_dump). A take aimed anywhere (a thread, a review, a capture view, an agent's or a channel's
+   * chats, a desk, the general button, a meeting) or carrying composer words, files or a reply is never one. */
+  function dumpTake(snap, rt, aimAt, kind) {
+    try { if (!(document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/agent-inbox')) return false; } catch (_) { return false; }
+    const v = snap?.view;
+    return !rt && aimAt == null && kind !== 'command' && !snap.general && !snap.conversation && !snap.meetingEventId && !V.meetingLoan
+      && !snap.seal && !snap.newChatWid && !(snap.route?.agent && window.WosAgents?.isOther?.(snap.route.agent)) && !V.files?.length
+      && !(v && (v.review || v.mode === 'capture' || v.agent || v.channel || v.kind === 'chat thread' || (v.thread && v.thread !== '__new__')));
+  }
+  // The box took it as a background task: "Got it" with its title, no navigation, nothing new in Chats.
+  function gotIt(title) {
+    title = String(title || '').slice(0, 80);
+    toast('✦', `<b>Got it</b>${title ? ' · ' + esc(title) : ''}`, 2600);
+    $('#toast').classList.add('got-it');
+  }
+  OUTBOX?.onDump?.(it => gotIt(it.dumped?.title));
   OUTBOX?.onSent((it, res) => {
     if (it.kind === 'new' && LIVE && !LIVE.session(it.sessionId)) {
       LIVE.sessions.unshift({ id: it.sessionId, runtime: 'direct', title: (it.text || 'Voice note').slice(0, 60), status: 'running', runId: res.runId, updatedAt: new Date().toISOString(), lastUserAt: new Date().toISOString(), preview: it.text, source: 'wizard-mobile' });
@@ -3756,7 +3761,7 @@
     // A downward slide commits sooner (10 px): the orb sits near the bottom of the glass, so there is little room below it.
     if (G.mode === 'pending' && (Math.hypot(G.dx, G.dy) > 14 || (G.dy > 10 && G.dy > Math.abs(G.dx) * 1.4))) {
       clearTimeout(G.hold); G.mode = Math.abs(G.dx) > Math.abs(G.dy) ? 'h' : 'v'; orbWrap.classList.add('dragging');
-      // wizard-ux#1536 (switch wizard/bar-scrub): the orb on the bar is part of the scrub surface, so its sideways swipe is the bar scrub.
+      // wizard-ux#1536: the orb on the bar is part of the scrub surface, so its sideways swipe is the bar scrub.
       if (G.mode === 'h' && !G.corner && !G.ovWas && !(G.swipes && orbSwipeAct(G) !== 'stock') && orbWrap.closest('#dock') && barScrubJoin(e, G)) { G.mode = 'scrub'; orbWrap.classList.remove('dragging'); return; }
     }
     // A layout's own swipe (Orb / Apps): nothing follows the finger; only the hint for Home.

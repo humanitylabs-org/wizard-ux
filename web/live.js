@@ -735,6 +735,32 @@
    * A message that truly can't be sent puts the thread back where it was (the pill keeps Retry/Edit). */
   const PEND = new Map(); // sessionId -> { key, kind, text, at, state: 'sending'|'waiting'|'sent', sentAt, runId }
   const STOPPING = new Map(); // runId -> when Stop was asked (applyLocal)
+  const STOP_SEND_MS = 15000, STOP_FOLLOW_MS = [800, 800, 900, 1500, 2000, 3000, 4000, 7000]; // gaps between re-reads, ~20 s in all
+  // Every row of a run: the lists, rows read on their own (search, direct lookup, Spaces) and the thread Stop was tapped on.
+  const runRows = (L, runId, sid = '') => [...new Set([L.sessions || [], ...Object.values(L.agentSessions || {}), [...DETAIL.values()],
+    [...SPACE_ROWS.values()].map(x => x?.row), sid ? [L.session?.(sid)] : []].flat())].filter(x => x && x.runId === runId);
+  // The tap: every row of this run says Stopping… now. Returns how to put them back if the Stop never arrives.
+  function markStopping(L, runId, sid) {
+    if (!runId || STOPPING.has(runId)) return () => {};
+    STOPPING.set(runId, Date.now());
+    const before = runRows(L, runId, sid).filter(s => WORKING.has(s.status) && s.status !== 'stopping').map(s => [s, s.status]);
+    for (const [s] of before) s.status = 'stopping';
+    if (before.length) L.emit();
+    return () => { for (const [s, st] of before) if (s.status === 'stopping') s.status = st; };
+  }
+  // After a delivered Stop: re-read until no row of this run is still working (the run usually settles in a second or two).
+  function followStop(L, runId, sid) {
+    let i = 0;
+    const next = () => {
+      if (i >= STOP_FOLLOW_MS.length || !STOPPING.has(runId)) return;
+      setTimeout(async () => {
+        let read = true; try { await L.refresh(); } catch { read = false; } // a failed read proves nothing: try again
+        const rows = runRows(L, runId, sid);
+        if (!read || !rows.length || rows.some(s => WORKING.has(s.status))) next(); else STOPPING.delete(runId);
+      }, STOP_FOLLOW_MS[i++]);
+    };
+    next();
+  }
   const PEND_MAX = 2 * 60e3;
   const PLACEHOLDER_TITLES = new Set(['', 'New chat', 'Untitled chat', 'Chat']);
   // A send a graceful restart holds (the 202 restart_pending receipt, p.held / it.restartPending) stays this device's
@@ -797,6 +823,9 @@
     const latest = new Map();
     for (const it of OB._items.values()) {
       if ((it.kind !== 'reply' && it.kind !== 'new') || !it.sessionId || it.compact || it.withdrawn) continue;
+      // An orb take still asking the router whether it is a background task, or one that was (wizard/agent-inbox,
+      // issue 1588): no Working row. A take the router keeps visible drops the mark and lists as usual.
+      if (it.dump === true || it.dumped) continue;
       const tap = TAPS.get(it.sessionId); if (tap && it.createdAt >= tap.at) TAPS.delete(it.sessionId);
       // Custody without delivery intent must neither own Sending nor hide an older real send.
       if (OB.quarantined?.(it.id) || ['failed', 'empty', 'held', 'unconfirmed'].includes(it.state) || (it.state === 'sent' && it.steered)) continue;
@@ -1202,6 +1231,135 @@
     return { state, read, more, today, fresh };
   }
   /* ---- end channel daily ---- */
+  /* ---- agent inbox (wizard-ux issue 1569) ----
+   * The box's agent inbox (wizard-agent-service issue 549, docs/agent-inbox.md): one record per background task.
+   * state().records are the tasks still working (state running) or gone quiet for 6 h (stale), newest news first, as
+   * GET /wizard/v1/agent-inbox?state=running,stale answers; reading state() keeps it fresh every `every`. A 404 (the box's
+   * switch is off, or an older box) is an empty list, asked again after `every`. Chats reads it only while its
+   * wizard/agent-inbox switch is on (the Running view). */
+  function agentInbox({ req, emit, now = () => Date.now(), every = 30e3 } = {}) {
+    const SID = /^[A-Za-z0-9_.:-]{1,200}$/, RID = /^inbox_[a-f0-9]{24}$/, AID = /^[a-z][a-z0-9-]{0,40}$/;
+    const str = (v, n) => typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, n) : '';
+    const num = v => { const n = Number(v); return Number.isFinite(n) && n > 0 ? n : 0; };
+    const rec = r => r && typeof r === 'object' && RID.test(r.id) && typeof r.thread_id === 'string' && SID.test(r.thread_id) && (r.state === 'running' || r.state === 'stale')
+      ? { id: r.id, agent: typeof r.agent === 'string' && AID.test(r.agent) ? r.agent : 'hermes', thread: r.thread_id, title: str(r.title, 120), update: str(r.last_update, 200), state: r.state, createdAt: num(r.created_at), updatedAt: num(r.updated_at) || num(r.created_at) } : null;
+    const s = { records: [], stay: new Set(), ok: false, gone: false, at: 0, busy: null };
+    const tell = () => { try { emit(); } catch (_) {} };
+    function read() {
+      if (s.busy) return s.busy;
+      s.at = now();
+      s.busy = (async () => {
+        try {
+          const j = await (await req('/wizard/v1/agent-inbox?state=running,stale&limit=200', { cache: 'no-store' })).json();
+          s.records = (Array.isArray(j?.records) ? j.records : []).map(rec).filter(Boolean).sort((a, b) => b.updatedAt - a.updatedAt || (a.id < b.id ? -1 : 1));
+          // The main agent's Daily and Alerts threads (issue 1569 review): Send to inbox is never offered for them.
+          s.stay = new Set((Array.isArray(j?.stay) ? j.stay : []).filter(id => typeof id === 'string' && SID.test(id)).slice(0, 1000));
+          s.ok = true; s.gone = false;
+        } catch (e) { if (e?.status === 404) { s.records = []; s.stay = new Set(); s.ok = true; s.gone = true; } }
+        finally { s.busy = null; tell(); }
+        return s;
+      })();
+      return s.busy;
+    }
+    function state() { if (!s.busy && now() - s.at >= every) read(); return s; }
+    // One agent's records ('hermes' = the main agent): a view opens a record's thread only in that agent's own Chats.
+    const records = agent => state().records.filter(r => r.agent === (agent || 'hermes'));
+    const fresh = () => { s.at = 0; al.at = 0; };
+    // Open / Send to inbox (wizard-ux issue 1570): POST /wizard/v1/agent-inbox/open|send moves one main-agent thread
+    // between the chat list and the background; the box answers with its record. The list is asked again right after.
+    async function move(kind, thread, extra = {}) {
+      if ((kind !== 'open' && kind !== 'send') || !SID.test(String(thread || ''))) throw Object.assign(new Error('invalid'), { status: 400 });
+      const body = { thread_id: thread };
+      const title = str(extra.title, 120), utterance = str(extra.utterance, 600);
+      if (title) body.title = title;
+      if (utterance) body.utterance = utterance;
+      try { return await (await req(`/wizard/v1/agent-inbox/${kind}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })).json(); }
+      finally { fresh(); read(); }
+    }
+    // True for a main-agent Daily or Alerts thread, which always stays in Chats.
+    const stays = id => state().stay.has(id);
+    /* Signal sweep card (wizard-ux issue 1586; box half wizard-agent-service issue 550, docs/agent-inbox.md). card()
+     * keeps only the fields the shell draws, checked: the history row's `agent_sweep` and GET .../sweep's `card` go
+     * through it alike. answer(): one tap on a token (PATCH <id> {action:'answer', option}; `later` snoozes).
+     * yesToAll(): POST <card id>/yes-to-all. sweep(): the newest card with each item's current state. */
+    const CID = /^sweep_[a-f0-9]{24}$/, TOK = /^[a-z][a-z0-9-]{0,19}$/, ISTATE = new Set(['running', 'new', 'surfaced', 'answered', 'parked', 'archived', 'stale']);
+    const href = v => typeof v === 'string' && /^\/(?![\/\\])\S{0,600}$/.test(v) ? v : '';
+    const cnt = v => { const n = Number(v); return Number.isFinite(n) && n > 0 ? Math.min(Math.floor(n), 1e6) : 0; };
+    function card(v) {
+      if (!v || typeof v !== 'object' || !CID.test(v.id)) return null;
+      const w = v.waiting && typeof v.waiting === 'object' ? v.waiting : {}, d = v.done && typeof v.done === 'object' ? v.done : {};
+      const box = (x, link) => ({ count: cnt(x?.count), link: href(x?.link) || link });
+      const items = (Array.isArray(w.items) ? w.items : []).slice(0, 7).map(i => {
+        if (!i || typeof i !== 'object' || !RID.test(i.id)) return null;
+        const options = [...new Set((Array.isArray(i.options) ? i.options : []).map(o => typeof o === 'string' ? o : o?.token).filter(t => typeof t === 'string' && TOK.test(t)))].slice(0, 8);
+        return { id: i.id, agent: typeof i.agent === 'string' && AID.test(i.agent) ? i.agent : 'hermes', thread: typeof i.thread_id === 'string' && SID.test(i.thread_id) ? i.thread_id : '',
+          title: str(i.title, 120), ask: str(i.ask, 300), recommendation: str(i.recommendation, 300), options,
+          def: typeof i.default_option === 'string' && options.includes(i.default_option) ? i.default_option : '', confirm: i.confirm === true,
+          seen: cnt(i.seen) || 1, state: ISTATE.has(i.state) ? i.state : 'surfaced', answer: typeof i.answer === 'string' && TOK.test(i.answer) ? i.answer : '', link: href(i.link) };
+      }).filter(Boolean);
+      const rf = v.rules_flag && typeof v.rules_flag === 'object' ? { day: str(v.rules_flag.day, 10), alerts: cnt(v.rules_flag.alerts), cap: cnt(v.rules_flag.cap), link: href(v.rules_flag.link) } : null;
+      return { id: v.id, at: num(v.at), thread: typeof v.thread_id === 'string' && SID.test(v.thread_id) ? v.thread_id : '',
+        waiting: { items, more: cnt(w.more), link: href(w.link) || '/wizard-os-home/?inbox=waiting' },
+        done: { items: (Array.isArray(d.items) ? d.items : []).slice(0, 10).map(i => i && RID.test(i.id) ? { id: i.id, title: str(i.title, 120), link: href(i.link) } : null).filter(Boolean), more: cnt(d.more), link: href(d.link) || '/wizard-os-home/?inbox=done' },
+        running: { ...box(v.running, '/wizard-os-home/?inbox=running'), stale: cnt(v.running?.stale) }, later: box(v.later, '/wizard-os-home/?inbox=later'), parked: box(v.parked, '/wizard-os-home/?inbox=parked'),
+        missing: cnt(v.missing), rules: rf && rf.alerts ? rf : null,
+        yes: { count: cnt(v.yes_to_all?.count), skipped: cnt(v.yes_to_all?.skipped) } };
+    }
+    const JSON_POST = body => ({ headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    async function answer(id, option) {
+      if (!RID.test(String(id || '')) || !TOK.test(String(option || ''))) throw Object.assign(new Error('invalid'), { status: 400 });
+      return (await req(`/wizard/v1/agent-inbox/${id}`, { method: 'PATCH', ...JSON_POST({ action: 'answer', option }) })).json();
+    }
+    async function yesToAll(cardId) {
+      if (!CID.test(String(cardId || ''))) throw Object.assign(new Error('invalid'), { status: 400 });
+      const j = await (await req(`/wizard/v1/agent-inbox/${cardId}/yes-to-all`, { method: 'POST', ...JSON_POST({}) })).json();
+      return { answered: Array.isArray(j?.answered) ? j.answered.filter(a => a && RID.test(a.id)).map(a => ({ id: a.id, option: TOK.test(a.option) ? a.option : '' })) : [], card: card(j?.card) };
+    }
+    async function sweep() { return card((await (await req('/wizard/v1/agent-inbox/sweep', { cache: 'no-store' })).json())?.card); }
+    /* Alert rules feedback (wizard-ux issue 1589; box half wizard-agent-service issue 552, docs/agent-inbox.md).
+     * alerts(agent): the alert records still new or surfaced (GET ...?kind=alert&state=new,surfaced), kept fresh like
+     * the Running list; the day's collapsed "More alerts today" alert carries how many it holds (`extra`). later():
+     * the Later and FYI records (kinds fyi and note, new or surfaced) for the sweep card's Later list, read on demand.
+     * feedback(id, action): PATCH <id> {action: not_urgent | should_alert}; the box answers with the record and how many
+     * examples each kind now has. A 404 (the box's switch off, an older box) is an empty list. */
+    const FB = new Set(['not_urgent', 'should_alert']), LATER = new Set(['fyi', 'note']);
+    const alertRec = r => r && typeof r === 'object' && RID.test(r.id) && typeof r.kind === 'string'
+      ? { id: r.id, kind: r.kind, agent: typeof r.agent === 'string' && AID.test(r.agent) ? r.agent : 'hermes', thread: typeof r.thread_id === 'string' && SID.test(r.thread_id) ? r.thread_id : '',
+        title: str(r.title, 120), ask: str(r.ask || r.last_update, 300), severity: str(r.severity, 12), collapsed: r.alert_collapsed === true, extra: cnt(r.alert_extra),
+        feedback: FB.has(r.feedback) ? r.feedback : '', link: href(r.link), state: str(r.state, 12), updatedAt: num(r.updated_at) || num(r.created_at) } : null;
+    const al = { records: [], ok: false, gone: false, at: 0, busy: null };
+    function readAlerts() {
+      if (al.busy) return al.busy;
+      al.at = now();
+      al.busy = (async () => {
+        try {
+          const j = await (await req('/wizard/v1/agent-inbox?kind=alert&state=new,surfaced&limit=50', { cache: 'no-store' })).json();
+          al.records = (Array.isArray(j?.records) ? j.records : []).map(alertRec).filter(r => r && r.kind === 'alert').sort((a, b) => b.updatedAt - a.updatedAt || (a.id < b.id ? -1 : 1));
+          al.ok = true; al.gone = false;
+        } catch (e) { if (e?.status === 404) { al.records = []; al.ok = true; al.gone = true; } }
+        finally { al.busy = null; tell(); }
+        return al;
+      })();
+      return al.busy;
+    }
+    function alertState() { if (!al.busy && now() - al.at >= every) readAlerts(); return al; }
+    const alerts = agent => alertState().records.filter(r => r.agent === (agent || 'hermes'));
+    async function later() {
+      const j = await (await req('/wizard/v1/agent-inbox?state=new,surfaced&limit=200', { cache: 'no-store' })).json();
+      return (Array.isArray(j?.records) ? j.records : []).map(alertRec).filter(r => r && LATER.has(r.kind)).sort((a, b) => b.updatedAt - a.updatedAt || (a.id < b.id ? -1 : 1)).slice(0, 30);
+    }
+    async function feedback(id, action) {
+      if (!RID.test(String(id || '')) || !FB.has(action)) throw Object.assign(new Error('invalid'), { status: 400 });
+      try {
+        const j = await (await req(`/wizard/v1/agent-inbox/${id}`, { method: 'PATCH', ...JSON_POST({ action }) })).json();
+        // The alert left Alerts (it waits for the sweep now, or the collapsed one is cleared): gone on this frame.
+        if (action === 'not_urgent') al.records = al.records.filter(r => r.id !== id);
+        return { record: alertRec(j?.record), examples: { not_urgent: cnt(j?.examples?.not_urgent), should_alert: cnt(j?.examples?.should_alert) } };
+      } finally { al.at = 0; readAlerts(); }
+    }
+    return { state, records, read, fresh, move, stays, card, answer, yesToAll, sweep, alerts, alertState, readAlerts, later, feedback };
+  }
+  /* ---- end agent inbox ---- */
   const L = {
     windows: {},
     ok: false, error: '', sessions: [], seen: readLocal(), deferred: {}, at: 0, listeners: new Set(), loading: null,
@@ -1703,6 +1861,28 @@
       applyLocal(i >= 0 ? list[i] : DETAIL.get(id) || s);
       return s;
     },
+    /* Open / Send to inbox (wizard-ux issue 1570, switch wizard/agent-inbox): the row moves on the tap frame (Open lists
+     * it, Send drops it), then the box is told; a refusal puts the row back and throws. Main agent threads only. */
+    async inboxMove(kind, id, opts = {}) {
+      if (!this.agentInbox || (kind !== 'open' && kind !== 'send')) throw new Error('Agent inbox unavailable');
+      // The main agent's own row only: a routed thread may share the id (agentSessions), and is never the one moved.
+      const detail = DETAIL.get(id), fromDetail = !!detail && !otherAgent(detail.agent || '');
+      let s = this.sessions.find(x => x.id === id) || (fromDetail ? detail : null), added = false;
+      if (s && otherAgent(this.ownerOf(s))) throw Object.assign(new Error('Only the main agent’s threads move'), { status: 409 });
+      const was = s ? !!s.hidden : null;
+      if (kind === 'open') {
+        if (!s && opts.title) s = normalize({ id, title: opts.title, updated_at: opts.at ? new Date(opts.at).toISOString() : new Date().toISOString(), hidden: false });
+        if (s) { s.hidden = false; if (!this.sessions.includes(s)) { this.sessions.unshift(s); if (s === detail) DETAIL.delete(id); added = true; } }
+      } else if (s) s.hidden = true;
+      this.emit();
+      try { return await this.agentInbox.move(kind, id, opts); }
+      catch (e) {
+        // Put it back where it was: the hidden flag, and a thread only read by id back in the detail cache.
+        if (s) { s.hidden = was ?? kind === 'open'; if (added) { this.sessions = this.sessions.filter(x => x !== s); if (s === detail) DETAIL.set(id, s); } }
+        this.emit(); throw e;
+      }
+      finally { setTimeout(() => this.refresh(), 800); }
+    },
     /* ---- thread actions ---- */
     busy(id) { const o = OVER.get(id); return !!o && !o.settled; },
     async _act(id, patch, write, capMs = 60000) {
@@ -1815,12 +1995,22 @@
     async resolveUnknown(runId, admissionId, generation) {
       return req(`/wizard/hermes/v1/runs/${encodeURIComponent(runId)}/resolve-unknown${rq(runId)}`, { method: 'POST', headers: J, body: JSON.stringify({ admission_id: admissionId, execution_generation: generation }) });
     },
-    async stop(runId) {
-      try { await req(`/wizard/hermes/v1/runs/${encodeURIComponent(runId)}/stop${rq(runId)}`, { method: 'POST' }); }
-      catch (error) { STOPPING.delete(runId); await this.refresh(); throw error; }
+    /* Stop shows “Stopping…” on the tap itself, before the request leaves (wizard-ux issue 1576: on desktop the press
+     * looked ignored while the POST was in flight, and a repaint brought the Stop button back). A Stop that can't be
+     * delivered in STOP_SEND_MS puts the row back and throws, so the caller says so. Once delivered, the list is
+     * re-read quickly until the run has settled, instead of waiting for the next 15 s poll. */
+    async stop(runId, sid = '') {
+      // A deadline on every WebView: AbortSignal.timeout is missing on iOS 16.0-16.3 (see core/status.js).
+      const ac = typeof AbortController === 'function' ? new AbortController() : null;
+      const timer = ac ? setTimeout(() => ac.abort(), STOP_SEND_MS) : 0;
+      const sent = req(`/wizard/hermes/v1/runs/${encodeURIComponent(runId)}/stop${rq(runId)}`, ac ? { method: 'POST', signal: ac.signal } : { method: 'POST' }); // on the wire before the repaint
+      sent.catch(() => {}); // awaited below; never an unhandled rejection while the repaint runs
+      const undo = markStopping(this, runId, sid);
+      try { await sent; } catch (error) { STOPPING.delete(runId); undo(); this.emit(); this.refresh().catch?.(() => {}); throw error; }
+      finally { clearTimeout(timer); }
       STOPPING.set(runId, Date.now());
-      const s = [this.sessions, ...Object.values(this.agentSessions)].flat().find(x => x.runId === runId); if (s) { applyLocal(s); this.emit(); }
-      setTimeout(() => this.refresh(), 2500);
+      const rows = runRows(this, runId, sid).filter(s => WORKING.has(s.status) && s.status !== 'stopping'); for (const s of rows) s.status = 'stopping'; if (rows.length) this.emit();
+      followStop(this, runId, sid);
     },
   };
   // Wizard (in its desk, or another tab) writes the same key when a chat is opened.
@@ -2029,10 +2219,15 @@
     CANCELLING.add(sid); resync(); L.emit();
     try {
       const at = Date.now(), p = PEND.get(sid), tapped = TAPS.has(sid);
+      // A run already known is stopped at once, never after the withdrawals (a steer still in flight answers late).
+      const known = [...new Set([runId, p?.runId].filter(Boolean))];
+      const stops = known.map(id => L.stop(id, sid).then(() => null, e => e)); // settled here, thrown below
       const w = OB ? await withdrawSends(OB, pendingFor(OB, sid)) : { items: [], started: [] };
       if (tapped) { STOP_MARKS.set(sid, { at, until: at + STOP_MARK_MS }); TAPS.delete(sid); }
-      const runIds = [...new Set([runId, p?.runId, ...w.started].filter(Boolean))];
-      await Promise.all(runIds.map(id => L.stop(id)));
+      const later = [...new Set(w.started)].filter(id => !known.includes(id));
+      const failed = (await Promise.all([...stops, ...later.map(id => L.stop(id, sid).then(() => null, e => e))])).find(Boolean);
+      if (failed) throw failed;
+      const runIds = [...known, ...later];
       return { outcome: runIds.length ? 'stopped' : w.items.length || tapped ? 'cancelled' : 'none', runIds, items: w.items };
     } finally { CANCELLING.delete(sid); resync(); L.emit(); }
   };
@@ -2155,6 +2350,7 @@
     } });
   L.chanReads = channelReads({ req, emit: () => L.emit() });
   L.chanDaily = channelDaily({ req, emit: () => L.emit() });
+  L.agentInbox = agentInbox({ req, emit: () => L.emit() });
   /* One Channels switch (wizard-ux issue 1358): the Agent Service reads the same switch from the synced Look file, so
    * right after it turns on ask the box again a few times (the Look file write and the service's 3 s read take a moment)
    * instead of waiting out the store's 5-minute off interval. */

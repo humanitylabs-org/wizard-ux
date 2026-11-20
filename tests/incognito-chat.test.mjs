@@ -145,7 +145,7 @@ test('preflight of a desktop close never destroys an earlier accepted chat', asy
 test('Settings registration follows dependency and scrub checks before active index mutation', () => {
   for(const f of ['index.html','desktop.html']) {const s=readFileSync(new URL('../web/'+f,import.meta.url),'utf8');assert.ok(s.indexOf('core/settings.js')<s.indexOf('core/incognito-chat.js'));}
   const phone=readFileSync(new URL('../web/app.js',import.meta.url),'utf8');
-  assert.match(phone,/if \(n !== SC.at && !CHATS.beforeNavigate\(desks\[n\]\?\.wins \|\| \[\]\)\) return;\s*if \(n !== SC.at\)/);
+  assert.match(phone,/if \(n !== DS\.at && !CHATS.beforeNavigate\(desks\[n\]\?\.wins \|\| \[\]\)\) return;\s*if \(n !== DS\.at\)/);
 });
 test('terminal reply uses the final run output, not a partial stream', async () => {
   const s = rig({ manualStream: true, fetchImpl: async path => path.endsWith('/incognito') ? { ok: true, json: async () => ({ session_id: 'incog_' + 'c'.repeat(32) }) } : { ok: true, json: async () => ({ run_id: 'synthetic-run' }) } })

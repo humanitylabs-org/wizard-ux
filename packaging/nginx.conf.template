@@ -54,6 +54,17 @@ http {
     "127.0.0.1|" 1;
     default 0;
   }
+  # A desktop that already chose its page (core/shell.js writes the wux_shell cookie) is sent from the phone page
+  # straight to desktop.html, before the browser starts fetching the phone shell's files: core/shell.js moving it
+  # there instead cancels those reads, and a cancelled read is never kept, so they were fetched again on every
+  # open (issue 1594). ?shell= (the override) and ?app-session= (a pinned app, always the phone page) are left to
+  # core/shell.js. No cookie, an old one or a wrong one: the page answers as before and core/shell.js decides.
+  map $args $wizard_shell_args { default 0; "~(?:^|&)(?:shell|app-session)(?:[=&]|$)" 1; }
+  map "$cookie_wux_shell|$request_method|$uri|$wizard_shell_args" $wizard_desktop_page {
+    default "";
+    "~^desktop\|(?:GET|HEAD)\|/wizard-os-home/(?:index\.html)?\|0$" "/wizard-os-home/desktop.html";
+    "~^desktop\|(?:GET|HEAD)\|/wizard-ux/(?:index\.html)?\|0$" "/wizard-ux/desktop.html";
+  }
   # Re-resolve the service name so the Agent Service can be replaced without restarting the shell.
   resolver 127.0.0.11 valid=5s ipv6=off;
   server {
@@ -61,6 +72,7 @@ http {
     server_name _;
     set $wizard_api "${WIZARD_AGENT_SERVICE_ORIGIN}";
 
+    if ($wizard_desktop_page) { return 302 $wizard_desktop_page$is_args$args; }
     location = /shell-health { default_type application/json; return 200 '{"ok":true,"component":"wizard-shell"}'; }
     location = / { return 302 /wizard-os-home/$is_args$args; }
     location = /wizard-os-home { return 302 /wizard-os-home/$is_args$args; }

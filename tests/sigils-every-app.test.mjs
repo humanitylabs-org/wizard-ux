@@ -32,6 +32,7 @@ test('every known Wizard App Store app has a designed sigil (no letter fallback)
   assert.deepEqual(missing, [], `add a HOUSE entry in tools/sigils/build.py for: ${missing.join(', ')}`);
 });
 
+// owner-correction: humanitylabs-org/wizard-ux#1166 · 2026-11-08 · "Why was my home icon replaced with a Hermes icon? Please undo and revert that. Hermes should not appear anywhere in our app icons."
 test('Home keeps its previous house artwork and app icons never select Hermes', () => {
   const S = sigil();
   for (const p of ['web/app.js', 'web/core/workspace-navigation.js', 'web/desktop.html']) {

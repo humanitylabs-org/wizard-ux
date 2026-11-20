@@ -24,23 +24,39 @@
   } });
   // EXTEND the single-app host, REUSE the real Chats host. No nested shell, workspace or second composer.
   const threadWindow = { id:wid, appId:id, app:'frame', thread:null };
-  const replyVoice = window.WizChatsHost?.replyRecorder?.({appId:id, chats:() => chats,
-    repaint:() => {
-      chats?.refreshCompose(wid);
-      chats?.PW?.paintMic(!!replyVoice?.recordingFor(), replyVoice?.recordingFor());
-    }, toast});
-  const chats = window.WizChatsHost?.create({
-    recordReply:(wid, sid) => replyVoice?.recordReply(wid, sid),
-    recordingFor:() => replyVoice?.recordingFor(),
-    win: value => value === wid ? threadWindow : null,
-    root: () => win, save: () => checkpoint(), layout() {}, toast,
-    title: () => policy.displayName(app || {id, name:'Thread'}),
-    viewContext: () => ({kind:'thread', appId:threadWindow.appId}),
-    visible: () => frame?.isConnected ? [wid] : [], front: () => wid,
-    openLink: url => links?.open(url),
-    captureBusy: () => !!window.WizAppCapture?.getState?.()?.active,
-  });
-  chats?.bind(win);
+  let replyVoice = null, chats = null;
+  function hostChats() {
+    if (chats || !window.WizChatsHost) return;
+    replyVoice = window.WizChatsHost?.replyRecorder?.({appId:id, chats:() => chats,
+      repaint:() => {
+        chats?.refreshCompose(wid);
+        chats?.PW?.paintMic(!!replyVoice?.recordingFor(), replyVoice?.recordingFor());
+      }, toast}) || null;
+    chats = window.WizChatsHost?.create({
+      recordReply:(wid, sid) => replyVoice?.recordReply(wid, sid),
+      recordingFor:() => replyVoice?.recordingFor(),
+      win: value => value === wid ? threadWindow : null,
+      root: () => win, save: () => checkpoint(), layout() {}, toast,
+      title: () => policy.displayName(app || {id, name:'Thread'}),
+      viewContext: () => ({kind:'thread', appId:threadWindow.appId}),
+      visible: () => frame?.isConnected ? [wid] : [], front: () => wid,
+      openLink: url => links?.open(url),
+      captureBusy: () => !!window.WizAppCapture?.getState?.()?.active,
+    }) || null;
+    chats?.bind(win);
+  }
+  /* Slim pin page (wizard-ux issue 1584, switch wizard/pin-slim-doc): core/pin-doc.js loads the Chats host after the
+   * app has loaded (or on first use), so the host is made when it arrives. In the full shell it is here already. */
+  const slim = window.WizPinDoc?.active === true;
+  hostChats();
+  if (slim && !chats) window.WizPinDoc.arrived().then(hostChats);
+  // A thread the app asks for before the Chats host has arrived opens once it has (same frame, same thread).
+  function slimThread(sid, opts) {
+    if (!slim || chats) return false;
+    const target = frame;
+    window.WizPinDoc.extras().then(() => { hostChats(); if (frame === target && target?.isConnected) chats?.openHosted(wid, target, sid, opts); });
+    return true;
+  }
   win.addEventListener('click', e => {
     if (!chats?.isHosted(wid)) return;
     if (e.target.closest('[data-chback]') && replyVoice?.back()) return;
@@ -167,12 +183,14 @@
     win.appendChild(frame);
     const mountedFrame = frame;
     detach = window.WizAppServices?.attach(frame, { appId:next.id || id, path:next.url,
-      openThread: (sid, opts) => chats?.openHosted(wid, frame, sid, opts) === true,
+      openThread: (sid, opts) => chats?.openHosted(wid, frame, sid, opts) === true || slimThread(sid, opts),
       isVisible: () => !!frame?.isConnected && !chats?.isHosted(wid) && frame === mountedFrame && document.visibilityState === 'visible',
       isFront:() => frame === mountedFrame && mountedFrame.isConnected && !chats?.isHosted(wid) && document.visibilityState === 'visible' && document.hasFocus(),
       back: () => { window.__wosNativeBack(); return true; }, readingStorage:localStorage });
     frame.addEventListener('load', () => {
       if (frame !== mountedFrame) return;
+      // The app is in: the rest of the pin host comes now, while nobody is waiting for it.
+      if (slim) (window.requestIdleCallback || (f => setTimeout(f, 300)))(() => window.WizPinDoc.extras(), { timeout: 1500 });
       // An opaque frame cannot be read: no route restore or save, no in-frame hooks. Back, appearance and dictation go
       // through WizAppServices.attach -> WizBrowserBoundary; a load is simply the app being there.
       if (opaque) { loaded = true; document.title = policy.displayName(app); safeInsets(); return; }
@@ -213,7 +231,17 @@
       } catch (_) { unavailable('The app could not be loaded. Check your connection and try again.'); }
     });
   }
+  /* Fast pinned open (wizard-ux issue 1558, switch wizard/pin-fast-open): when this device's last-known app list
+   * already has the app, mount it now instead of waiting for bootstrap, preferences and the app list in a row. The
+   * fresh list still arrives through appsLoaded() and wizard:apps, and mount() follows a rename, a new URL or a
+   * removal from it. A first run with no cached entry waits as before. */
+  let fast = false;
+  try { fast = (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/pin-fast-open'); } catch (_) {}
+  const cached = fast ? registry.APP[id] : null;
+  // The frame replaces this note in the same task, so a cached open never paints it (an offline-declared app still
+  // shows it while its reading state is prepared).
   win.innerHTML = '<div class="single-unavailable" role="status">Loading app…</div>';
+  if (cached && cached.kind === 'wizard' && cached.url && policy.within(cached.url, cached.url) && !policy.isShell(cached.url)) mount();
   window.WizCore.appsLoaded().then(mount);
   addEventListener('wizard:apps', mount);
   addEventListener('pagehide', checkpoint); addEventListener('beforeunload', checkpoint);

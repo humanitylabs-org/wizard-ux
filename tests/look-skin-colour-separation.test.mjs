@@ -37,6 +37,7 @@ function look(shell, ownSkins = false) {
   return { S, root, view, act, input, s, picked, familyPicked };
 }
 
+// owner-correction: humanitylabs-org/wizard-ux#803 · 2026-11-01 · "we don’t want to flatten the colors into the skins."
 for (const shell of ['phone', 'desktop']) test(`${shell}: Look keeps skin and colour as separate working controls`, async () => {
   const h = look(shell);
   const assertControls = (family, colours, foreign) => {

@@ -328,8 +328,8 @@
   }
   // A slow phone store (a long take, a busy disk) is not a broken one (ux#1503: a 2:45 voice note showed
   // "On-device saving failed (timeout)"). Instant takes retry a passing failure with backoff, quietly,
-  // for about 11 s of waits before any warning. Stop wakes a waiting retry for one last try, so Send
-  // never waits on the backoff; quota and security failures still fail at once.
+  // for about 11 s of waits. Stop wakes a waiting retry for one last try, so Send never waits on the
+  // backoff. A store that stays broken shows no notice either: the take hands off from memory.
   const SAVE_RETRY_MS = [500, 1500, 3000, 6000];
   const SAVE_RETRYABLE = ['timeout', 'blocked', 'UnknownError', 'InvalidStateError', 'AbortError'];
   async function patiently(s, work) {
@@ -376,8 +376,9 @@
         s.error = storageFailure(e);
         s.partial = true; changed();
         // Only instant takes may hand off an in-memory result. Durable recorders stay strict.
-        // A take that is stopping sends from memory: no failure notice for it.
-        if (s.instant) { if (s.phase !== 'stopping') emit(s, 'warn', 'On-device saving failed (' + s.error.detail + '). Keep Wizard open; Send or Discard still works.'); return; }
+        // An instant take keeps every piece in memory and Send hands it over from there, so the on-device
+        // copy is only a quiet backup: no notice (ux#1503 reopen). The next chunk tries the store again.
+        if (s.instant) return;
         void finish(s, true).catch(() => {}); return;
       }
       if (s.row.bytes >= s.limit && !s.finishPromise) { s.partial = true; void finish(s, true).catch(() => {}); }
@@ -542,7 +543,7 @@
   }
   function session(s) {
     return Object.freeze({ id: s.row.id, reattached: () => !!s.reattached,
-      getInfo: () => ({ phase:s.phase,inputStopped:!!s.inputStopped,error:s.error?.code||null,warning:s.error?.message||null,native: s.row.native || null, backendStopOwned: !!s.engine?.backendStopOwned, livePcm: s.engine?.livePcm !== false,
+      getInfo: () => ({ phase:s.phase,inputStopped:!!s.inputStopped,error:s.error?.code||null,warning:s.instant&&s.error?.code==='storage_failed'?null:s.error?.message||null,native: s.row.native || null, backendStopOwned: !!s.engine?.backendStopOwned, livePcm: s.engine?.livePcm !== false,
         hasSystemAudio: !!s.hasSystemAudio, paused: s.phase === 'paused' || s.phase === 'handoff',
         durationMs: s.nativeState?.mediaMs ?? (s.row.pcm && !s.row.native ? s.row.durationMs : (s.pausedAt || Date.now()) - s.row.startedAt - (s.pausedTotal || 0)),
         state: s.nativeState || null, meta: JSON.parse(JSON.stringify(s.row.meta)), capabilities: capabilities({ kind: s.row.kind, pcm: s.row.pcm }) }),
@@ -1210,11 +1211,8 @@
         s.persistence = (async () => {
           try { await patiently(s, async () => { await openDB(); if (!s.discard && !s.memoryOnly) await put(s.row); }); }
           catch (e) {
-            if (!s.discard && !s.memoryOnly) {
-              s.error = storageFailure(e);
-              if (s.phase !== 'stopping') emit(s, 'warn', 'On-device saving failed (' + s.error.detail + '). Keep Wizard open; Send or Discard still works.');
-              changed();
-            }
+            // Quiet backup (ux#1503 reopen): the take is in memory and Send hands it over from there.
+            if (!s.discard && !s.memoryOnly) { s.error = storageFailure(e); changed(); }
           }
           finally { s.persistencePending = false; }
           if (!s.discard) s.writes = s.writes.then(() => drain(s));

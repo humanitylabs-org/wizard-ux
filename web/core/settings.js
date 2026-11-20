@@ -336,11 +336,78 @@
    * was sent. A tap paints the flipped switch on its own frame (pending), then the real state reconciles; a failure
    * reverts with the same toast as Look. Every card on screen and Look repaint together on wos:experience. */
   const cardPending = new Map(), ONLY = { desktop: 'Desktop only', phone: 'Phone only' };
+  /* App feature switches in the same card (wizard-ux issue 1560, switch wizard/chat-app-switches): `<app id>:<switch id>`
+   * rows come from the App Manager's one catalog, store-install/_feature-switches (wizard-os docs/APP_SWITCHES.md), and
+   * flip through its POST, the owner-proof path the Tracker's Try it uses, so the app's own /api/switches changes. Live
+   * state: read when a card paints (at most every 15 s), when the page shows again, and from every flip's answer. An
+   * installed app without that switch yet is greyed with "Update <app> first" + Update (opens it in the App Store); an app
+   * that isn't installed or declares no switches stays hidden. While the switch is off app ids are dropped, as before. */
+  const APP_SWITCH = /^([a-z0-9][a-z0-9-]{0,62}):[a-z0-9][a-z0-9-]{0,63}$/, APP_SWITCHES_TWEAK = 'wizard/chat-app-switches';
+  const appSw = { list: null, at: 0, read: null, err: false, gen: 0, timer: 0 };
+  const appSwOn = () => { try { return String(document.documentElement?.dataset?.tweaks || '').split(' ').includes(APP_SWITCHES_TWEAK); } catch (e) { return false; } };
+  const homePath = p => { try { return new URL(p, document.baseURI || location.href).pathname; } catch (e) { return '/wizard-os-home/' + p; } };
+  function appSwTake(d) {
+    if (!d || !Array.isArray(d.switches)) return;
+    appSw.list = { switches: d.switches.filter(x => x && x.kind === 'app' && APP_SWITCH.test(String(x.id || ''))), apps: Array.isArray(d.apps) ? d.apps.filter(a => a && typeof a.id === 'string') : [] };
+    appSw.err = false; appSw.at = Date.now();
+  }
+  async function appSwFetch(body) {
+    const r = await window.fetch(homePath('store-install/_feature-switches'), { method: body ? 'POST' : 'GET', credentials: 'same-origin', cache: 'no-store',
+      headers: body ? { Accept: 'application/json', 'Content-Type': 'application/json', 'X-Wizard-Store': '1' } : { Accept: 'application/json' }, ...(body ? { body: JSON.stringify(body) } : {}) });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(String(d?.error || `The App Manager said ${r.status}`).slice(0, 200));
+    return d;
+  }
+  // A read started before a flip never lands over the flip's answer (gen); the flip's answer is the newer catalog.
+  function appSwRead(force) {
+    if (appSw.read || (!force && Date.now() - appSw.at < 15000) || typeof window.fetch !== 'function') return appSw.read;
+    const gen = appSw.gen;
+    appSw.read = appSwFetch().then(d => { if (gen === appSw.gen) appSwTake(d); }, () => { if (gen === appSw.gen) appSw.err = true; })
+      .finally(() => { appSw.read = null; appSw.at = Date.now(); paintTweakCards(); });
+    return appSw.read;
+  }
+  // Another device (or the Tracker) may flip it meanwhile: while an app row is on screen and the page shows, read again
+  // every 15 s, so an idle card never keeps showing, or toggling from, an old state.
+  const appSwShown = () => [...(document.querySelectorAll?.('[data-chat-tweak-card]') || [])].some(n => !n.hidden && String(n.dataset?.chatTweakCard || '').split(' ').some(id => APP_SWITCH.test(id)));
+  function appSwTick() {
+    const later = window.setTimeout || (typeof setTimeout === 'function' ? setTimeout : null);
+    if (appSw.timer || !later) return;
+    appSw.timer = later(() => { appSw.timer = 0; if (!appSwOn() || document.visibilityState === 'hidden' || !appSwShown()) return; void appSwRead(true); appSwTick(); }, 15000);
+  }
+  function appSwRow(id) {
+    const app = APP_SWITCH.exec(id)[1], L = appSw.list;
+    if (!L) return `<div class="st-row static tw-row tw-gone" data-chat-tweak-gone="${esc(id)}"><span class="st-tx"><small>${appSw.err ? 'Can’t read this Wizard’s app switches right now' : 'Loading switch…'}</small></span></div>`;
+    const s = L.switches.find(x => x.id === id), st = L.apps.find(a => a.id === app);
+    if (s) return tweakSwitches([{ id, name: s.name || id, description: s.description || '', author: s.app_name || st?.name || app, on: cardPending.has(id) ? cardPending.get(id) : s.on === true }], 'data-chat-tweak', false, who => who);
+    if (!st) return ''; // not installed here, or it declares no switches: hidden like any unknown id
+    const nm = String(st.name || app), code = Number(st.status) || 0;
+    const update = st.ok !== false || code === 404, why = update ? `Update ${nm} first` : code === 401 || code === 403 ? `Open ${nm} once, then try again` : `Can’t reach ${nm} right now`;
+    return tweakSwitches([{ id, name: nm, description: why, on: false }], 'data-chat-tweak', true) + (update ? `<div class="ch-tweak-upd"><button type="button" data-chat-tweak="" data-chat-tweak-update="${esc(app)}" aria-label="Update ${esc(nm)}">Update</button></div>` : '');
+  }
+  function appSwTap(btn, id, toast) {
+    if (btn.disabled || cardPending.has(id) || !appSwOn() || typeof window.fetch !== 'function') return false;
+    const was = btn.getAttribute('aria-checked') === 'true';
+    cardPending.set(id, !was);
+    btn.setAttribute('aria-checked', String(!was)); btn.querySelector('.sw')?.classList.toggle('on', !was); // this frame
+    paintTweakCards();
+    appSw.gen++;
+    appSwFetch({ id, on: !was }).then(d => { appSw.gen++; appSwTake(d); cardPending.delete(id); paintTweakCards(); },
+      e => { cardPending.delete(id); paintTweakCards(); toast?.('!', e?.message || 'Couldn’t change that switch'); void appSwRead(true); });
+    return true;
+  }
+  function appSwUpdate(app, toast) {
+    const open = window.WizOpenApp, path = homePath('store/index.html') + '?app=' + encodeURIComponent(app) + '&open=1';
+    if (!(typeof open === 'function' && open('app-store', path))) toast?.('!', 'Open the App Store to update this app');
+    return true;
+  }
+  window.addEventListener?.('visibilitychange', () => { if (document.visibilityState === 'visible' && appSw.list && appSwOn()) { void appSwRead(true); appSwTick(); } });
   function tweakCardRows(list) {
     const E = window.WosExperience, s = E?.state;
     if (s && !authorList) E.authors?.().then(a => { authorList = a; paintTweakCards(); }, () => {});
     const name = who => (authorList || []).find(a => a.id === who)?.name || who;
+    if (list.some(id => APP_SWITCH.test(id))) { void appSwRead(false); appSwTick(); }
     return list.map(id => {
+      if (APP_SWITCH.test(id)) return appSwRow(id);
       const t = s?.tweaks.find(x => x.id === id);
       if (!t) return `<div class="st-row static tw-row tw-gone" data-chat-tweak-gone="${esc(id)}"><span class="st-tx"><small>${!s || (!s.tweaks.length && !s.error) ? 'Loading tweak…' : 'This tweak isn’t installed on this Wizard'}</small></span></div>`;
       const here = !Array.isArray(t.shells) || t.shells.includes(s.shell);
@@ -348,20 +415,23 @@
       return tweakSwitches([{ ...t, on, where: t.locked ? 'For testers only' : here ? '' : ONLY[t.shells[0]] || '' }], 'data-chat-tweak', s.busy || !here || !!t.locked, name);
     }).join('');
   }
-  const cardIds = ids => [...new Set((Array.isArray(ids) ? ids : String(ids || '').split(' ')).filter(Boolean))];
+  const cardIds = ids => [...new Set((Array.isArray(ids) ? ids : String(ids || '').split(' ')).filter(id => id && (!APP_SWITCH.test(id) || appSwOn())))];
   function tweakCard(ids) {
     const list = cardIds(ids); if (!list.length) return '';
-    return `<div class="ch-tweak" data-chat-tweak-card="${esc(list.join(' '))}" role="group" aria-label="${list.length > 1 ? 'Tweaks' : 'Tweak'}">${tweakCardRows(list)}</div>`;
+    const rows = tweakCardRows(list);
+    return `<div class="ch-tweak" data-chat-tweak-card="${esc(list.join(' '))}" role="group" aria-label="${list.length > 1 ? 'Tweaks' : 'Tweak'}"${rows ? '' : ' hidden'}>${rows}</div>`;
   }
   function paintTweakCards() {
     for (const n of document.querySelectorAll?.('[data-chat-tweak-card]') || []) {
       const rows = tweakCardRows(cardIds(n.dataset.chatTweakCard)); if (n.__wosRows === rows) continue;
       const focused = n.contains(document.activeElement) ? document.activeElement.dataset?.chatTweak : '';
-      n.innerHTML = rows; n.__wosRows = rows;
+      n.innerHTML = rows; n.__wosRows = rows; n.hidden = !rows;
       if (focused) [...n.querySelectorAll('[data-chat-tweak]')].find(x => x.dataset.chatTweak === focused)?.focus({ preventScroll: true });
     }
   }
   function tweakCardTap(btn, toast) {
+    if (btn.dataset.chatTweakUpdate) return appSwUpdate(btn.dataset.chatTweakUpdate, toast);
+    if (APP_SWITCH.test(btn.dataset.chatTweak || '')) return appSwTap(btn, btn.dataset.chatTweak, toast);
     const id = btn.dataset.chatTweak, E = window.WosExperience;
     if (!id || !E || btn.disabled || cardPending.has(id)) return false;
     const was = btn.getAttribute('aria-checked') === 'true';
@@ -757,6 +827,8 @@
     html: () => `<div class="st-embed" data-st-connections><iframe src="${esc(CONNECTIONS)}?embed=settings" title="Connections"></iframe></div>` });
   register({ id: 'chats-list-style', page: 'chats', html: () => { const r = settingRow('wizard/desktop-chats'); return r ? `<div class="st-group"><h4>Chats list</h4>${r}</div>` : ''; }, act: settingAct });
   register({ id: 'notifications-in-chats', page: 'chats', html: () => { const r = settingRow('wizard/unified-inbox'); return r ? `<div class="st-group"><h4>Notifications</h4>${r}</div>` : ''; }, act: settingAct });
+  // Draft marks are on for everyone (wizard-ux issue 1604, James: "just ship this"); an owner can still turn them off here.
+  register({ id: 'chats-draft-marks', page: 'chats', html: () => { const r = settingRow('wizard/draft-marks'); return r ? `<div class="st-group"><h4>Drafts</h4>${r}</div>` : ''; }, act: settingAct });
   /* Settings › Notifications: one choice per app, Badge or Chats, never both (Miguel, 1 Nov 2026). Lists
    * Notifications and every installed app that has an inbox feed (only those can put items in Chats); every other app
    * shows a badge. Saved on this device. Chats needs Notifications in Chats (Settings › Chats) on. */

@@ -174,6 +174,51 @@
   window.addEventListener('wos:experience', () => { chatSettled = true; windowsSync(); });
   setTimeout(() => { chatSettled = true; windowsSync(); }, 5000);
   windowsSync();
+
+  /* Connecting only while the Wizard hasn't answered (wizard-ux issue 1607, switch wizard/pin-reach-answer, off by
+   * default). In the Android app, "Connecting to your Wizard…" leaves as soon as the Wizard answers the page instead of
+   * when the page first paints, so a home-screen app the box answers at once never shows it. The main page copies the
+   * switch to the Android app (an app window's page never sees the shell's switches); off is applied once settled. */
+  const REACH_SWITCH = 'wizard/pin-reach-answer';
+  let reachWas = null;
+  function reachSync() {
+    const n = window.WizardOSNative; if (!n || typeof n.reachAnswerSwitch !== 'function' || window.WizHomeScreenPolicy?.mode) return;
+    let on = false; try { on = (document.documentElement.dataset.tweaks || '').split(' ').includes(REACH_SWITCH); } catch (_) {}
+    if (!on && !chatSettled) return;
+    if (on === reachWas) return;
+    reachWas = on; try { n.reachAnswerSwitch(on); } catch (_) {}
+  }
+  if (typeof MutationObserver === 'function' && document.documentElement) {
+    new MutationObserver(() => reachSync()).observe(document.documentElement, { attributes: true, attributeFilter: ['data-tweaks'] });
+  }
+  window.addEventListener('wos:experience', () => { chatSettled = true; reachSync(); });
+  setTimeout(() => { chatSettled = true; reachSync(); }, 5000);
+  reachSync();
+
+  /* Phone notifications per app (wizard-ux issue 1567, switch wizard/phone-app-notifications, off by default). The
+   * Android app reads the Notifications app and posts each new item under its own app, on an Android channel per app.
+   * The main page copies the switch there with the installed apps' names (the channels' names); off once settled. */
+  const NOTIFY_SWITCH = 'wizard/phone-app-notifications';
+  let notifyWas = null;
+  function notifyNames() {
+    const out = {};
+    try { for (const a of window.WizCore?.apps?.('mobile')?.APPS || []) if (a && /^[a-z0-9][a-z0-9-]{0,63}$/.test(String(a.id || '')) && a.name) out[a.id] = String(a.name).slice(0, 40); } catch (_) {}
+    return JSON.stringify(out);
+  }
+  function notifySync() {
+    const n = window.WizardOSNative; if (!n || typeof n.appNotifySwitch !== 'function' || window.WizHomeScreenPolicy?.mode) return;
+    let on = false; try { on = (document.documentElement.dataset.tweaks || '').split(' ').includes(NOTIFY_SWITCH); } catch (_) {}
+    if (!on && !chatSettled) return;
+    const names = on ? notifyNames() : '', key = on + '|' + names;
+    if (key === notifyWas) return;
+    notifyWas = key; try { n.appNotifySwitch(on, names); } catch (_) {}
+  }
+  if (typeof MutationObserver === 'function' && document.documentElement) {
+    new MutationObserver(() => notifySync()).observe(document.documentElement, { attributes: true, attributeFilter: ['data-tweaks'] });
+  }
+  window.addEventListener('wos:experience', () => { chatSettled = true; notifySync(); });
+  setTimeout(() => { chatSettled = true; notifySync(); }, 5000);
+  notifySync();
   // The installed Wizard app a page of this Wizard belongs to (the longest app address it lies under), or the app a
   // shell link names (…/wizard-os-home/?open=<id>). Wizard's own pages and anything else: null.
   function appOfLink(u) {

@@ -1,6 +1,8 @@
 package ai.wizards.os.assist;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import org.junit.Test;
@@ -35,5 +37,35 @@ public class PageCameraTest {
         assertFalse(PageCamera.wantsImages(new String[]{"audio/" + "*", ".mp3"}));
         assertFalse(PageCamera.wantsImages(new String[]{"video/mp4"}));
         assertFalse(PageCamera.direct(new String[]{"video/" + "*"}, true)); // video capture keeps the old picker
+    }
+
+    /* Photo or video (wizard-ux issue 1634): picture/video inputs without capture go straight to the system picker. */
+    @Test public void pictureAndVideoInputsWithoutCaptureOpenTheGallery() {
+        assertEquals("*/" + "*", PageCamera.galleryType(new String[]{"image/" + "*", "video/" + "*"}, false));
+        assertEquals("*/" + "*", PageCamera.galleryType(new String[]{"image/" + "*,video/" + "*"}, false));
+        assertEquals("image/" + "*", PageCamera.galleryType(new String[]{"IMAGE/" + "*"}, false));
+        assertEquals("video/" + "*", PageCamera.galleryType(new String[]{" video/" + "*", ""}, false));
+    }
+
+    @Test public void cameraFilesAndSpecificTypesKeepTheOldPicker() {
+        assertNull(PageCamera.galleryType(new String[]{"image/" + "*"}, true)); // Camera: the camera straight away
+        assertNull(PageCamera.galleryType(new String[]{"*/" + "*"}, false)); // File
+        assertNull(PageCamera.galleryType(new String[]{""}, false));
+        assertNull(PageCamera.galleryType(null, false));
+        assertNull(PageCamera.galleryType(new String[]{"image/png", "image/jpeg"}, false));
+        assertNull(PageCamera.galleryType(new String[]{"image/" + "*", "application/pdf"}, false));
+        assertNull(PageCamera.galleryType(new String[]{"audio/" + "*"}, false));
+    }
+
+    /* File (wizard-ux issue 1634, round 3): an explicit any-file accept without capture opens the file picker alone. */
+    @Test public void anyFileWithoutCaptureSkipsTheCameraChooser() {
+        assertTrue(PageCamera.plainFile(new String[]{"*/" + "*"}, false));
+        assertTrue(PageCamera.plainFile(new String[]{" */" + "*", ""}, false));
+        assertFalse(PageCamera.plainFile(new String[]{"*/" + "*"}, true)); // capture: the camera
+        assertFalse(PageCamera.plainFile(new String[]{""}, false)); // empty accept keeps #1535's chooser
+        assertFalse(PageCamera.plainFile(new String[]{}, false));
+        assertFalse(PageCamera.plainFile(null, false));
+        assertFalse(PageCamera.plainFile(new String[]{"*/" + "*", "image/jpeg"}, false));
+        assertFalse(PageCamera.plainFile(new String[]{"image/" + "*"}, false));
     }
 }

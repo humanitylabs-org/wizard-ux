@@ -31,6 +31,15 @@
   const want = single ? 'phone' : forced || (android ? 'phone' : mac ? 'desktop' : (touchFirst || mobileUA) ? 'phone' : 'desktop');
   const here = document.documentElement.dataset.shell || 'phone';
   window.WIZ_SHELL = want;
+  // Tell the shell's server which page this device opens (packaging/nginx.conf.template), so the next plain open of
+  // /wizard-os-home/ on a desktop goes straight to desktop.html. Moving here instead cancels the phone files the
+  // browser already started fetching, and a cancelled file is never kept, so it was downloaded again every open
+  // (issue 1594). A pinned-app session is always the phone page and says nothing about this device's choice.
+  if (!single) try {
+    const dir = location.pathname.slice(0, location.pathname.lastIndexOf('/') + 1) || '/';
+    document.cookie = 'wux_shell=' + want + '; Path=' + dir + '; Max-Age=31536000; SameSite=Lax' +
+      (location.protocol === 'https:' ? '; Secure' : '');
+  } catch (e) {}
   if (want !== here) {
     const page = want === 'desktop' ? 'desktop.html' : './';
     const u = new URL(page, location.href);

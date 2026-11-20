@@ -14,7 +14,7 @@ const tick = async () => { for (let n = 0; n < 12; n++) await new Promise(r => s
 test('catalog: desktop-chats is a default, still listed, promoted once, never a profile off', () => {
   const cat = JSON.parse(read('web/tweaks/catalog.json')), prof = JSON.parse(read('web/tweaks/wizard/profile.json'));
   assert.ok(cat.defaults.includes(ID)); assert.ok(cat.tweaks.includes(ID));
-  assert.deepEqual(cat.promotedDefaults, [ID]);
+  assert.ok(cat.promotedDefaults.includes(ID));
   for (const id of cat.promotedDefaults) assert.ok(cat.defaults.includes(id), id + ' promoted must be a default');
   assert.ok(!(prof.off || []).includes(ID));
   assert.ok(!(cat.lookOnlyOff || []).includes(ID), 'the look-only drop list never turns the new default off');
@@ -48,7 +48,7 @@ test('a fresh install with no saved Look runs it, on For testers and on For ever
     const t = b.E.state.tweaks.find(x => x.id === ID);
     assert.equal(t.on, true); assert.equal(t.builtin, true); assert.notEqual(t.locked, true);
     assert.equal(b.E.defaultChoices[ID], true);
-    assert.deepEqual(clone(b.E.promotedDefaults), [ID]);
+    assert.ok(clone(b.E.promotedDefaults).includes(ID));
   }
 });
 
@@ -70,7 +70,7 @@ test('a pre-upgrade device whose off is still in the look-sync queue (offline, o
   const b = box('latest', before, { 'wos.look-sync.v1': JSON.stringify(queue) }); await b.E.refresh();
   assert.ok(!b.active().includes(ID), 'queued off kept');
   const saved = JSON.parse(b.storage.get('wos.skin-tweaks.v1'));
-  assert.deepEqual(saved.promotedMigrated, [ID]); assert.ok(saved.defaultsOff.includes(ID));
+  assert.ok(saved.promotedMigrated.includes(ID)); assert.ok(saved.defaultsOff.includes(ID));
   // Once: turning it on later is not undone by the same old queue entry.
   await b.E.toggle(ID); assert.ok(b.active().includes(ID));
   const again = box('latest', JSON.parse(b.storage.get('wos.skin-tweaks.v1')), { 'wos.look-sync.v1': JSON.stringify(queue) }); await again.E.refresh();

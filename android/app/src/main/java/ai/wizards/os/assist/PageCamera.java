@@ -47,9 +47,65 @@ public final class PageCamera {
         return !any; // an empty accept list means any file, pictures included
     }
 
+    /**
+     * The shell's File item (wizard-ux issue 1634): an explicit "*" + "/*" accept list and no capture asks for any file
+     * with no camera beside it, because Camera is its own menu item. The plain file picker opens straight away instead
+     * of the Camera/Files "Choose an action" sheet. An empty accept list keeps #1535's camera chooser.
+     */
+    public static boolean plainFile(String[] accept, boolean capture) {
+        if (capture || accept == null) return false;
+        boolean any = false;
+        for (String raw : accept) {
+            if (raw == null) continue;
+            for (String part : raw.split(",")) {
+                String t = part.trim();
+                if (t.isEmpty()) continue;
+                if (!t.equals("*/" + "*")) return false;
+                any = true;
+            }
+        }
+        return any;
+    }
+
     /** Open the camera straight away (no picker): the page asked for capture and takes images. */
     public static boolean direct(String[] accept, boolean capture) {
         return capture && wantsImages(accept);
+    }
+
+    /**
+     * The gallery type for a picture/video input without capture (wizard-ux issue 1634): "image/*", "video/*" or,
+     * for both, "*" + "/*"; null for anything else (specific types, files, or capture), which keeps the old picker.
+     * WebView's createIntent() is a plain ACTION_GET_CONTENT that Samsung answers with Files, and #1535 wrapped it in
+     * a Camera/Files chooser, so Photo or video took an extra tap and landed in Files instead of the gallery.
+     */
+    public static String galleryType(String[] accept, boolean capture) {
+        if (capture || accept == null) return null;
+        boolean img = false, vid = false;
+        for (String raw : accept) {
+            if (raw == null) continue;
+            for (String part : raw.split(",")) {
+                String t = part.trim().toLowerCase(Locale.ROOT);
+                if (t.isEmpty()) continue;
+                if (t.equals("image/" + "*")) img = true;
+                else if (t.equals("video/" + "*")) vid = true;
+                else return null;
+            }
+        }
+        if (img && vid) return "*/" + "*";
+        if (img) return "image/" + "*";
+        if (vid) return "video/" + "*";
+        return null; // an empty accept list means any file: the old picker
+    }
+
+    /** The system picture picker (MediaStore.ACTION_PICK_IMAGES), held as literals so older SDK stubs still build. */
+    public static final String ACTION_PICK_IMAGES = "android.provider.action.PICK_IMAGES";
+    public static final String EXTRA_PICK_IMAGES_MAX = "android.provider.extra.PICK_IMAGES_MAX";
+
+    /** The picker intent for {@link #galleryType}; max above 1 lets the person pick several (the picker refuses 1). */
+    public static Intent galleryIntent(String type, int max) {
+        Intent i = new Intent(ACTION_PICK_IMAGES).setType(type);
+        if (max > 1) i.putExtra(EXTRA_PICK_IMAGES_MAX, max);
+        return i;
     }
 
     /** Android refuses ACTION_IMAGE_CAPTURE to an app that declares CAMERA without holding it; WizardOS does not declare it. */

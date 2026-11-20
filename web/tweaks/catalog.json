@@ -25,7 +25,6 @@
     "wizard/app-updates-list",
     "wizard/os-update-waits",
     "wizard/update-bug-reports",
-    "wizard/connector-models",
     "wizard/link-token-repair",
     "wizard/chat-channels",
     "wizard/graceful-restart",
@@ -35,16 +34,23 @@
     "wizard/sidebar-chats-view",
     "wizard/app-panel-left",
     "wizard/assist-attach",
-    "wizard/bar-scrub",
     "wizard/app-windows",
-    "wizard/private-first-setup"
+    "wizard/pin-fast-open",
+    "wizard/pin-slim-doc",
+    "wizard/private-first-setup",
+    "wizard/chat-app-switches",
+    "wizard/agent-inbox",
+    "wizard/pin-reach-answer",
+    "wizard/phone-app-notifications"
   ],
   "defaults": [
     "wizard/unified-inbox",
-    "wizard/desktop-chats"
+    "wizard/desktop-chats",
+    "wizard/draft-marks"
   ],
   "promotedDefaults": [
-    "wizard/desktop-chats"
+    "wizard/desktop-chats",
+    "wizard/draft-marks"
   ],
   "aliases": {
     "miguel/unified-inbox": "wizard/unified-inbox",

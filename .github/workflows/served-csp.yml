@@ -1,0 +1,31 @@
+name: Served security policy
+# wizard-ux#1565 item 4 (wizard-troubleshooter#37): read the Content-Security-Policy the built shell image really
+# serves (image + entrypoint), not packaging/static.conf on its own. A box serving an older policy blocked
+# Troubleshooter's direct line while every file-level test was green.
+on:
+  pull_request:
+    paths: [Dockerfile, packaging/**, tools/served-csp.mjs, tools/stamp-assets.sh, .github/workflows/served-csp.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  served-csp:
+    name: Served CSP (built image)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build and start the shell image
+        run: |
+          docker build -q -t wizard-shell-csp .
+          docker run -d --name shell -p 127.0.0.1:18788:8788 wizard-shell-csp
+      - name: The served policy lets in Troubleshooter's direct line
+        run: node tools/served-csp.mjs --url http://127.0.0.1:18788/wizard-os-home/
+      - name: Shell log
+        if: failure()
+        run: docker logs shell || true

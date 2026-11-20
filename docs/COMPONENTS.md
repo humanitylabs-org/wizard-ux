@@ -4,7 +4,7 @@ Back: `WizEscapeBack`, `WosBack`; `WizChatsHost.registerBack`/back.push share re
 
 [Contracts](component-contract-details.md). [Style guide](https://github.com/humanitylabs-org/wizard-os/blob/main/style/APP-DESIGN-RULES.md). [Reuse gate](app-reuse-gate.md).
 
-| Search | `WizCore.chatSearch` (`web/core/chat-search.js`); ranked paged hits |
+| Search | `WizCore.chatSearch` (`chat-search.js`); ranked paged hits |
 
 | QA | `tools/qa-synthetic-fence.cjs` +startup/census |
 
@@ -14,13 +14,13 @@ Back: `WizEscapeBack`, `WosBack`; `WizChatsHost.registerBack`/back.push share re
 
 | Need | Use |
 |---|---|
-| Owner signatures | `WizardApp.identity.*` → `wizardDevicePort` |
+| Owner signatures | `WizardApp.identity.*`→`wizardDevicePort` |
 | Agent chat | `WizardApp.nav.openThread(sessionId, {reply})`, `nav.openContextDraft` |
 | App identity/root | `WizardAppIdentity` (`web/core/app-identity.js`), loaded by SDK |
 | Composer input | `WizardApp.composer.bind` (Chats' `web/core/composer-input.js`) |
 | File chip before send | `WizardApp.attachChip.node` (Chats' tray, `core/attach-chip.js`) |
 | Photo/video viewer | `WizardApp.media.view(items, i)` = Chats' `WosChat.viewer` |
-| Same-app companion | `WizardApp.shell.openCompanion` → `WizCompanionPane` (`web/core/companion-pane.js`); [API](shared-app-services-host.md) |
+| Same-app companion | `WizardApp.shell.openCompanion`→`WizCompanionPane` (`web/core/companion-pane.js`); [API](shared-app-services-host.md) |
 | Back in app; leave on dismiss | `WizardApp.back.register/push`, `nav.back()`; `WizOpenApp(id,path)` validates repair app URL + origin |
 | Skin/tokens/mode | `WizardApp.theme.get/onChange`, `--wz-*` (`--wz-owner-message`); fresh: `view.onRefresh` |
 | Native Android skin | `WizardLook` (`android/app/src/main/java/ai/wizards/os/WizardLook.java`): saved roles, Nebula fallback |
@@ -47,19 +47,19 @@ Back: `WizEscapeBack`, `WosBack`; `WizChatsHost.registerBack`/back.push share re
 | Need | Use |
 |---|---|
 | Pages: list, viewer, editor, history, bridge | `WosPages` (`pages.js`) |
-| Action menu | `WosContextMenu.open`/`.back` (`core/context-menu.js`) |
+| Action/attach menu | `WosContextMenu` (`context-menu.js`; open/attach) |
 | App setup | `WosAppSetup` (`app-setup.js`) |
 | Chats | `WizCore` (`chats.js`/`.css`); desktop `keepThreadOpen`; `WizConfig.chatAfterAction` (phone); Archive/Snooze→`archiveOrder`, `leaveFinishedThread`; `WizLive.messages`/`firstMessages`/`readyRank`; `setFocus`/`migrateChatsFocus`; `--wos-note-quiet` alerts; Esc→`CHATS.clearFilter(id::list)` |
-| Chats list model | `WizChatsListModel` (`chats-list-model.js`): `executionStatus`/`isListWorking`; `workingSort`; stalled waits Ready, `background` stays Working; running helper keeps failed Working; `WizLive.workingOrder`; `activityList` (Activity); Ready's `orderBar`; |
+| Chats list model | `WizChatsListModel` (`chats-list-model.js`): `executionStatus`/`isListWorking`; `workingSort`; stalled waits Ready, `background` stays Working; running helper keeps failed Working; `WizLive.workingOrder`; `activityList` (Activity); Ready's `orderBar` |
 | Pane placement | `WizCore.panes` (`pane-layout.js`): Classic split/cols; tiled/centre/pair/full geometry/focus/ratios/dock (<1100px bar)/appSide; AI keys/Back; local |
 | Desktop lifecycle | `WizDesktop.host` (`core/desktop-host.js`): snapshots, retained frames/readiness/tools, open/focus/close, onChange, panes; chats(id), settings, placements() |
 | Chat time | `WizCore.ago` (`core.js`): hours <24h, then owner day |
-| Chat state | `WizLive`: rename/read fence, `chanStore`/`chanDaily`; `WizCore.chats` dispose |
+| Chat state | `WizLive`: rename/read fence, `chanStore`/`chanDaily`/`agentInbox`; `WizCore.chats` dispose |
 | Group by day | `WizCore.chats` / `WizLive.groups`: `--wos-chats-group-switch` hook; Pins/compact independent |
 | Chats/Ready | `WizChatsHost` / `WizAppExtensions` (`chats-view.js`): surface/(views.)mount, placement, `replyRecorder`, draft admission; host `keepNewOpen(id)` keeps docked New open on send (`WosSkinHost.routeShows`); pills: `workspaceNav.chatsCount/refreshChats`; subgroups: `WizChatsListModel.unreadCount`; counts: `.unreadThreads` |
 | Bound-view handle (3 intro glows) | `WosSkinHost` built-in (`edge-peek.js`), host storage |
 | Repaint changed nodes without flicker | `WosMorph.morph` (`dom-morph.js`) |
-| Mic, retry, model, place | `WosChatPower` (`chat-power.js`; `chanOwnPost`/`chanModel`/`landAt`/`paintJump`); `voice.reply` → `recordReply`; `WosModels` (`foreignApp`); `WosErrors`; `WosWork`; composer `WizCore` (`chats.js` `fitLabel`, `.css` `lab-row`) |
+| Mic, retry, model, place/follow | `WosChatPower` (`chat-power.js`;`chanOwnPost`/`chanModel`/`landAt`/`paintJump`); `voice.reply`→`recordReply`; `WosModels` (`foreignApp`); `WosErrors`; `WosWork`; composer `WizCore` (`chats.js` `fitLabel`,`.css` `lab-row`) |
 | Text/media | `WosChat` (`chat-kit.js`: `helm`, `tweakIds`, `md`, `copyRich`, `viewer`, `drafts.keys`; fit/zoom-pan/keys+native seek); Chats `mediaBlock` |
 | Spaces / Focus | `WizCore` Chats (`chats.js`), `WizLive.prefOps` (`spaces`; add = move, one Space per chat); `WizLive.spaceSessions(ids)`; `winAgent`/`modelRoute`; `WosOutbox.onNew`; restored Focus awaits census; hidden routes; AI apps pills (`.aad-agents`): `focusRows`, `agents.focus`; `WosAgents.colour`/`distinctHues` + `--ch-agent-hue` |
 | Pins: menu / opt-in row buttons | `WosChatPins` (`chat-pins.js`) |
@@ -93,7 +93,7 @@ Back: `WizEscapeBack`, `WosBack`; `WizChatsHost.registerBack`/back.push share re
 | Now playing | `WosMediaWatch` (`media-watch.js`), `WosSkinHost` `api.media`: same-origin media only, inert until watched |
 | Native mic/meeting | `NoteRecorder` (`audio/NoteRecorder.java`), `MicRoute` (`audio/MicRoute.java`): `NOTE_SOURCES` notes / `SOURCES` STT; `MeetingRecorderService`: update pause/resume/rollback |
 | Android shell capabilities | `WosDevicePort`, `WosDeviceRecording`, `WosDeviceOrb` (`device-{port,recording,orb}.js`); `wizardDevicePort` v1 (`device/DeviceMessageProtocol.java`); page Camera `PageCamera` |
-| Home-screen apps / safe top | `WizHomeScreenApps.attach / offer / canOffer`; host owns cutout, child inset 0 |
+| Home-screen apps / safe top | `WizHomeScreenApps.attach/offer/canOffer/pinWidget`; host: cutout, child inset 0 |
 | Home-screen declaration | `WizHomeScreenCapabilities` (`home-screen-capabilities.js`): sanitize/matcher/replicaPrefix |
 | Long screenshot, text selection | WebView document scroll, `SelectionWebView`, `ScrollCaptureCrashGuard` (`docs/android-document-scroll.md`). The pinned thread composer sits above the bottom strip, so it reserves no orb column and re-measures on resume / dock animation end (`qa-orb-doc-scroll-composer.cjs`) |
 
@@ -123,7 +123,7 @@ Back: `WizEscapeBack`, `WosBack`; `WizChatsHost.registerBack`/back.push share re
 
 ## Plumbing (single owner; files in `web/core/` unless noted)
 
-`WizCompanionPane`, `WizardApp`, `WizAppCapture`, `WizComposerInput`, `WizAttachChip`, `WosSkinFrame`, `WosDevice` (`device.js`), `WizAppServices` (`app-services.js`; stopped), `WizCore` (`core.js`, `bridge.js`), `WizConfig` (`config.js`), `WizReach` (`reach.js`), `WizAndroidRelay` (`android-relay.js`), `WizBackgroundAudio` (`background-audio.js`), `WizHomeScreenPolicy` (`home-screen-policy.js`), `WosOwnViews` (`own-views.js`), `WosOrbHandoff` (`orb-handoff.js`), `WosShareSheet` (`share-sheet.js`), `WosBell` (`notif-bell.js`), `WosResources` (`resources.js`), `WosUsage` (`usage.js`), `WizPhotosRelay` (`photos-relay.js`), `WosMusic`, `WizDeviceLegacy` (`voice-legacy.js`), openers `WizAppOpen`, `WizCanOpen`, `WizOpenApp`, `WizOpenAgentChats` (`app.js`), `WosBoundView` (`bound-view.js`), `WosWorkspaceSync` (`workspace-sync.js`), `WosMedia`, `WizWorkspaces` (`workspaces.js`, [contract](workspaces.md)), `WizShellBoundary`, `WizBrowserBoundary` (keys/layout/wz-keys/svc/skin/link), `WizBoundaryClient`.
+`WizCompanionPane`, `WizardApp`, `WizAppCapture`, `WizComposerInput`, `WizAttachChip`, `WosSkinFrame`, `WosDevice` (`device.js`), `WizAppServices` (`app-services.js`; stopped), `WizCore` (`core.js`, `bridge.js`), `WizConfig`, `WizReach` (`reach.js`), `WizAndroidRelay` (`android-relay.js`), `WizBackgroundAudio` (`background-audio.js`), `WizHomeScreenPolicy`/`WizPinDoc` (`home-screen-policy.js`), `WosOwnViews` (`own-views.js`), `WosOrbHandoff` (`orb-handoff.js`), `WosShareSheet` (`share-sheet.js`), `WosBell` (`notif-bell.js`), `WosResources` (`resources.js`), `WosUsage` (`usage.js`), `WizPhotosRelay` (`photos-relay.js`), `WosMusic`, `WizDeviceLegacy` (`voice-legacy.js`), openers `WizAppOpen`, `WizCanOpen`, `WizOpenApp`, `WizOpenAgentChats` (`app.js`), `WosBoundView` (`bound-view.js`), `WosWorkspaceSync` (`workspace-sync.js`), `WosMedia`, `WizWorkspaces` (`workspaces.js`, [contract](workspaces.md)), `WizShellBoundary`, `WizBrowserBoundary` (keys/layout/wz-keys/svc/skin/link), `WizBoundaryClient`.
 
 AI usage: EXTEND `WosResources`/`WosUsage`: extra, sign-in ([details](component-contract-details.md)).
 

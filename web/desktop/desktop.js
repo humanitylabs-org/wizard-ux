@@ -2281,6 +2281,9 @@
     // Files still uploading go as pending placeholders the outbox completes behind the message (never a wait gate).
     const extraFiles = (vFiles?.files || []).map(f=>window.WizUploads?.pending?.ref(f) || (f.id && !f.uploading ? {id:f.id,name:f.name,mime:f.mime,bytes:f.bytes} : null)).filter(f=>f&&f.id);
     if (vFeedback) { const staged=await OUTBOX.stage({kind:'reply',sessionId:vFeedback.thread,...vRoute,audio:r.blob,captureId:r.captureId,files:extraFiles}); const item=await window.WosBoundView.feedback(OUTBOX,{...vFeedback,route:vRoute,custodyId:staged.id},'',r.blob,extraFiles); if(!item){await OUTBOX.transition(staged.id,'held','Feedback unavailable · original kept');toast('!','Feedback kept for its original thread',2600);return 'retained';} toast('✦','Feedback kept · waiting to send',1800);return 'sent'; }
+    // Orb dump (wizard/agent-inbox, issue 1588): an idle take (no thread in front, or a new voice chat over a Chats list
+    // that is no channel) may become a background task; it then goes through the outbox, never opened in a window.
+    const dumpIt = !sealed && !extraFiles.length && (aimSid === '' || (aimSid === '__new__' && vNewChat && typeof vSpace !== 'string')) && typeof dumpTake === 'function' && dumpTake('', rp);
     let stagedId = null, transcript = '';
     if (!strictReply && !forceNew && !vNewChat && !sealed?.text && !sealed?.files?.length && !sealed?.reply && !extraFiles.length) {
       // The microphone journal remains until staging owns the final chunk and the frozen destination.
@@ -2293,6 +2296,8 @@
     }
     const w = vTarget && W[vTarget];
     if (rp) { CHATS.sendVoiceTo(rp.wid, rp.sid, r.blob, extraFiles, sealed, modelRoute, stagedId, stagedId ? null : r.captureId, rp.steerRunId, transcript, rp.space); toast('✦', 'Voice reply · waiting to send', 1400); syncChatsPane(rp.wid); return 'sent'; }
+    // A dump candidate is a new main-agent take through the outbox, never opened in a window (it may never be a thread).
+    if (dumpIt) { await OUTBOX.enqueue({ ...modelRoute, dump: true, custodyId: stagedId, captureId: stagedId ? null : r.captureId, kind: 'new', sessionId: '', audio: r.blob, text: transcript, instructions: vContext, how: 'voice, aimed at this thread', source: 'orb' }); toast('✦', 'Recording kept · waiting to send', 1400); return 'sent'; }
     if (w && aimSid) CHATS.sendChat(w.id, transcript, 'voice, aimed at this thread', r.blob, { custodyId: stagedId, captureId: stagedId ? null : r.captureId, sid: aimSid, seal: sealed, route: modelRoute, files: extraFiles, ...(aimSid === '__new__' && !rp && typeof vSpace === 'string' ? { space: vSpace } : {}) });
     else {
       const item = await OUTBOX.enqueue({ ...modelRoute, custodyId: stagedId, captureId: stagedId ? null : r.captureId, sealKey: sealed?.key, typed: sealed?.text || '', ...(sealed?.reply ? { reply: sealed.reply } : {}), files: [...(sealed?.files || []), ...extraFiles], kind: aimSid && aimSid !== '__new__' ? 'reply' : 'new', sessionId: aimSid && aimSid !== '__new__' ? aimSid : '', audio: r.blob, text: transcript, instructions: vContext, how: 'voice, aimed at this thread', source: 'orb' });
@@ -3022,6 +3027,19 @@
     hudPaint();
   });
   OUTBOX?.onChange(() => { if (homeOpen) paintHome($('#desktopHome'), homeHtml(null)); else if (!ws[cur].wins.length) { const h = wsEl(cur).querySelector('.home'); if (h) paintHome(h, homeHtml(cur)); } for (const id of [...ws[cur].wins, ...(hud?.open ? [hud.id] : [])]) { const w = W[id]; if ((w?.app === 'chats' || CHATS.isHosted(id)) && w.thread) { const el = stage.querySelector(`[data-chats="${id}"]`); if (el) CHATS.renderThread(w, el); } } });
+  /* Orb dump (switch wizard/agent-inbox, off by default; wizard-ux issue 1588): an orb take to the main agent with no
+   * thread, window or reply in front is offered to the router as a possible background task (the outbox asks with
+   * accept_dump); on this shell that is the orb's idle take (talkNew, a new voice chat). If the box takes it: "Got it"
+   * with its title, nothing opens, nothing new in Chats. */
+  function dumpTake(aimSid, rp) {
+    try { if (!(document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/agent-inbox')) return false; } catch (_) { return false; }
+    return !aimSid && !rp && !vFeedback && !strictReply && !commandTake && !(vRoute?.agent && window.WosAgents?.isOther?.(vRoute.agent));
+  }
+  OUTBOX?.onDump?.(it => {
+    const title = it.dumped?.title || '';
+    toast('✦', 'Got it' + (title ? ' · ' + title : ''), 2600);
+    $('#toast').classList.add('got-it');
+  });
   OUTBOX?.onSent((it, res) => {
     if (it.kind === 'new' && LIVE && !LIVE.session(it.sessionId)) {
       LIVE.sessions.unshift({ id: it.sessionId, runtime: 'direct', title: (it.text || 'Voice note').slice(0, 60), status: 'running', runId: res.runId, updatedAt: new Date().toISOString(), lastUserAt: new Date().toISOString(), preview: it.text, source: 'wizard-mobile' });
@@ -3038,7 +3056,7 @@
 
   /* ---------------- toast ---------------- */
   let toastT = 0;
-  function toast(icon, text, ms = 2000) { const t = $('#toast'); t.innerHTML = `<span>${window.WizBrand.icon(esc(icon))}</span><span>${esc(text)}</span>`; t.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('on'), ms); }
+  function toast(icon, text, ms = 2000) { const t = $('#toast'); t.classList.remove('got-it'); t.innerHTML = `<span>${window.WizBrand.icon(esc(icon))}</span><span>${esc(text)}</span>`; t.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('on'), ms); }
 
   /* ---------------- native bridge (Wizard for Mac drives this by events) ---------------- */
   C.bridge.handle({

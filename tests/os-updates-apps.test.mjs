@@ -351,3 +351,24 @@ test('switch off: no bug link and no App Manager read, even when it would have o
   assert.doesNotMatch(h, /data-osu-app-bug|Bug report/);
   assert.ok(!calls.some(u => u.endsWith('/_app-updates')));
 });
+
+test('wizard-app-manager#764: an update asked for while another runs is queued; the row says Queued, not a refusal', async () => {
+  const toasts = [];
+  let queued = [];
+  const { U, posts } = await load({ on: true, mgr: () => [200, { ...MGR, queued }],
+    post: b => { queued = [{ app: b.app, at: 1762660000, name: 'Messenger' }]; return [200, { started: false, queued: [b.app], note: 'queued behind the update that is running' }]; } });
+  await U.loadApps();
+  tap(U, 'app-retry:wizard-messenger', { toast: (...a) => toasts.push(a) });
+  for (let i = 0; i < 8; i++) await tick();
+  assert.deepEqual(posts.at(-1).body, { action: 'apply', app: 'wizard-messenger' });
+  assert.deepEqual(toasts, [['✓', 'Queued · Messenger: updates after the one running', 2200]]);
+  const h = U.html();
+  assert.match(rowOf(h, 'wizard-messenger'), /data-osu-app-state="busy">.*data-osu-app-msg="done" role="status">Queued · Messenger: updates after the one running<\/span>.*<span class="st-val">Queued<\/span>/);
+  assert.doesNotMatch(rowOf(h, 'wizard-messenger'), /data-osu="app-/, 'no second Update now while it waits');
+  // "Update all" queued (app null): every app with an update ready waits too, up-to-date ones don't.
+  const all = await load({ on: true, mgr: () => [200, { ...MGR, holds: [], failed: {}, queued: [{ app: null, at: 1, name: 'All apps' }, 'junk'] }] });
+  await all.U.loadApps();
+  const ha = all.U.html();
+  assert.match(rowOf(ha, 'wizard-messenger'), /<span class="st-val">Queued<\/span>/);
+  assert.match(rowOf(ha, 'wizard-notes'), /<span class="st-val">Up to date<\/span>/);
+});
