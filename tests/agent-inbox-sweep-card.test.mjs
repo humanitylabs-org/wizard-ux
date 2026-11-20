@@ -9,6 +9,7 @@ import vm from 'node:vm';
 
 const live = readFileSync(new URL('../web/live.js', import.meta.url), 'utf8');
 const chats = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
+const running = readFileSync(new URL('../web/core/chats-running.js', import.meta.url), 'utf8'); // the agent inbox parts (issue 1665)
 const kitSrc = readFileSync(new URL('../web/core/chat-kit.js', import.meta.url), 'utf8');
 const clone = v => JSON.parse(JSON.stringify(v));
 const slice = (src, a, b) => { const i = src.indexOf(a), j = src.indexOf(b, i); assert.ok(i > 0 && j > i, `${a} is in the file`); return src.slice(i, j); };
@@ -128,7 +129,7 @@ function cardBlock({ on = true, listed = [], answer, yesToAll, sweep } = {}) {
     LIVE: { agentInbox: { card: box.card, answer: answer || (async () => ({})), yesToAll: yesToAll || (async () => ({ answered: [], card: null })), sweep: sweep || (async () => null) } },
   };
   vm.createContext(ctx);
-  vm.runInContext(slice(chats, '  const SWEEP = new Map();', '  /* Ready has three orders') + '\nthis.api = { sweepHtml, sweepAnswer, sweepYesToAll, SWEEP };', ctx);
+  vm.runInContext(slice(running, '  const SWEEP = new Map();', '  return { alertFeedback') + '\nthis.api = { sweepHtml, sweepAnswer, sweepYesToAll, SWEEP };', ctx);
   const flip = v => { sw.on = v; for (const f of listeners['wos:experience'] || []) f(); };
   return { api: ctx.api, toasts, paints, flip };
 }
