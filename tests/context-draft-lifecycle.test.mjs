@@ -5,8 +5,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 const kitSrc = readFileSync(new URL('../web/core/chat-kit.js', import.meta.url), 'utf8');
-const source = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
+const source = withParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'));
 const cut = (a, b) => { const s = source.indexOf(a), e = source.indexOf(b, s); assert.ok(s > 0 && e > s, a); return source.slice(s, e); };
 const block = cut('  function untouchedNotif', '  function rotateNew') + cut('  function dropOpenedNotifications', '  function openNewDraft') + cut('  function openContextDraft(', '  function discardDraft(');
 function kit(store) {

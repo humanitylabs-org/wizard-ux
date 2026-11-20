@@ -16,6 +16,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { fixture } from './fixtures/tweaks.mjs';
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 
 const root = new URL('../', import.meta.url);
 const read = p => readFileSync(new URL(p, root), 'utf8');
@@ -1161,7 +1162,7 @@ test('round 7 phone: the drawer header is the switcher, cog · gauge · +, talli
     // Codex P1: the phone foot is hidden at setup, so opening the drawer / sidebar re-arms the usage feed
     for (const f of ['web/layouts/ai-apps/layout.js', 'web/layouts/ai-apps/desktop.js']) assert.ok((read(f).match(/api\.aiUsage\?\.live\?\.\(foot\)/g) || []).length >= 2, f);
   }
-  assert.match(read('web/core/chats.js'), /KIT, threadAct, threadActions, stiKind, notifOpen:/);
+  assert.match(withParts(read('web/core/chats.js')), /KIT, threadAct, threadActions, stiKind, notifOpen:/);
   for (const f of ['web/desktop/desktop.js', 'web/app.js']) assert.match(read(f), /sessionList: \(\) => window\.WizChatsListModel\.sessionList\(/);
   assert.match(read('web/core/chats-list-model.js'), /needs: s\.status === 'waiting_for_approval' \|\| s\.attention\?\.state === 'needs_you', state,/);
 });
@@ -1848,7 +1849,7 @@ test('round 18 core: Ready\'s order is the stock Chats Filter choice (its key, t
   const host = read('web/core/skin-host.js');
   assert.match(host, /READY_ORDER_KEY = 'wos\.chats\.readyOrder\.v1'/, 'the stock key (core/chats.js)');
   assert.match(host, /setOrder: o => \{[\s\S]*?localStorage\.setItem\(READY_ORDER_KEY, o\)[\s\S]*?WizLive\?\.putPrefs\?\.\(\{ readyOrder: o \}\)[\s\S]*?'wos:prefs'/, 'saved where Chats saves it, shared, and Chats repaints');
-  assert.match(read('web/core/chats.js'), /const READY_ORDER_KEY = 'wos\.chats\.readyOrder\.v1'/, 'Chats reads the same key');
+  assert.match(withParts(read('web/core/chats.js')), /const READY_ORDER_KEY = 'wos\.chats\.readyOrder\.v1'/, 'Chats reads the same key');
   assert.match(read('web/core/chats-list-model.js'), /rank: state === 'failed' \? 1 : Number\.isFinite\(live\.readyRank\?\.\(s\)\) \? live\.readyRank\(s\) : undefined/, 'the shared stock rank on each row (a failed chat with Needs you)');
   assert.match(host, /note: true, sortTitle: row\.sortTitle, rank: row\.rank/, 'notification rank comes from the shared model');
 });
@@ -2157,7 +2158,7 @@ test('round 20 item 9 / round 22: Ready defaults to One list following the chose
 });
 
 test('notification stack (Miguel, 4 Nov 2026): one stable newest-first list, the open one expanded in place with its own buttons', () => {
-  const c = read('web/core/chats.js');
+  const c = withParts(read('web/core/chats.js'));
   assert.match(c, /const all = \[cur, \.\.\.sib\]\.sort\(\(a, b\) => noteAt\(b\) - noteAt\(a\)\)/, 'stable order: clicking through never reshuffles');
   assert.match(c, /class="msg a ch-notif is-quiet is-open"[^`]*aria-current="true"/, 'the open one is marked');
   assert.match(c, /if \(noteQuiet\(\)\) return '';   \/\/ the quiet thread lists them in its own stack/, 'no second More-from list');
@@ -2168,7 +2169,7 @@ test('notification stack (Miguel, 4 Nov 2026): one stable newest-first list, the
 });
 
 test('round 20 items 7 + 8: a quiet notification thread (source in the header, a thin amber edge, one muted routing line with a menu, Resolve); the open item\'s keys', () => {
-  const c = read('web/core/chats.js'), b = read('web/core/notif-bell.js');
+  const c = withParts(read('web/core/chats.js')), b = read('web/core/notif-bell.js');
   assert.match(c, /const noteQuiet = \(\) => \{ try \{ return getComputedStyle\(document\.documentElement\)\.getPropertyValue\('--wos-note-quiet'\)\.trim\(\) === 'on';/, 'off unless a view asks');
   assert.match(c, /class="ch-notif-route is-quiet" data-part="notify-route"><button type="button" class="ch-nr-b" data-notify-menu/);
   assert.match(c, /From <b>\$\{esc\(name\)\}<\/b>\$\{where \? ` · \$\{esc\(where\)\}` : ''\}/, "'From Messenger · shows in Chats ▾'");
@@ -2830,7 +2831,7 @@ test('agent choices: one agent (or none known) = no control at all', async () =>
 });
 
 test('agent choices: the shell side reuses Chats\' Focus (no second router) and the layout API exposes it', () => {
-  const host = noComments(read('web/core/skin-host.js')), desk = noComments(read('web/desktop/desktop.js')), chats = read('web/core/chats.js');
+  const host = noComments(read('web/core/skin-host.js')), desk = noComments(read('web/desktop/desktop.js')), chats = withParts(read('web/core/chats.js'));
   assert.match(host, /setFocus: id => shell\?\.agentFocusSet \? !!shell\.agentFocusSet\(/);
   assert.match(desk, /agentFocusSet: id => \{ if \(id\) \{ void openAgentChats\(id\); return true; \} const w = findWin\(mainChats\); return !!w && CHATS\.setFocus\(w, null\); \}/, 'picking = openAgentChats (CHATS.setFocus), All = setFocus(null)');
   assert.match(chats, /function focusRows\(w\) \{\s*if \(!focusOf\(w\)\) return null;[\s\S]*?focusMatches\(w, s\)/, 'the list is Chats\' own focusMatches');

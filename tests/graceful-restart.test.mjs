@@ -4,13 +4,14 @@ import { createServer } from 'node:http';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { randomUUID } from 'node:crypto';
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 
 // wizard-ux issue 1362 (shell half of wizard-agent-service issue 480): while the Agent Service waits to restart until
 // running chats finish, the shell shows a quiet "Restarting when chats finish" note instead of errors, a held send is
 // saved (never "Reply not sent" or Working), the overdue owner chooses Wait longer / Restart now, and a send that hits
 // the seconds the service is down is retried soon with the same Idempotency-Key. Switch wizard/graceful-restart, off.
 const read = p => readFileSync(new URL('../web/' + p, import.meta.url), 'utf8');
-const reachSource = read('core/reach.js'), outboxSource = read('outbox.js'), chats = read('core/chats.js');
+const reachSource = read('core/reach.js'), outboxSource = read('outbox.js'), chats = withParts(read('core/chats.js'));
 const SWITCH = 'wizard/graceful-restart';
 
 const ok = body => ({ ok: true, status: 200, json: async () => body });

@@ -6,8 +6,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
 const css = fs.readFileSync(new URL('../web/core/chats.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
-// chats.js and the agent inbox parts moved out of it (core/chats-running.js, issue 1665).
-const js = ['chats.js', 'chats-running.js'].map(f => fs.readFileSync(new URL('../web/core/' + f, import.meta.url), 'utf8')).join('\n');
+// chats.js and the parts moved out of it (core/chats-running.js, core/chats-drafts.js, issue 1665).
+const js = ['chats.js', 'chats-running.js', 'chats-drafts.js'].map(f => fs.readFileSync(new URL('../web/core/' + f, import.meta.url), 'utf8')).join('\n');
 const rules = [...css.matchAll(/([^{}]+)\{([^}]*)\}/g)].map(m => ({ sel: m[1].split(',').map(s => s.trim()), body: m[2] }));
 const textSels = new Set(rules.filter(r => /(^|;)\s*user-select:\s*text/.test(r.body)).flatMap(r => r.sel));
 const noneSels = new Set(rules.filter(r => /(^|;)\s*user-select:\s*none/.test(r.body)).flatMap(r => r.sel));

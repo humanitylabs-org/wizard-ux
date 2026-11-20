@@ -5,6 +5,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { core, settle, read } from './fixtures/notification-levels.mjs';
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 
 const NOTES = [
   { id: 'u1', time: 30, title: '1 app updated', message: 'Updated Notifications (2.29.0).', priority: 3, tags: [] },
@@ -108,7 +109,7 @@ test('a notification asks "<row> go to", never "Notifications notifications go t
   assert.equal(B.ask('notifications', 'Notifications'), 'Notifications go to');
   assert.equal(B.ask('system:app-updates', 'App updates'), 'App updates go to');
   assert.equal(B.ask('messenger', 'Messenger'), 'Messenger notifications go to');
-  assert.match(read('web/core/chats.js'), /ask = B\.ask\?\.\(id, name\) \|\| `\$\{name\} notifications go to`/);
+  assert.match(withParts(read('web/core/chats.js')), /ask = B\.ask\?\.\(id, name\) \|\| `\$\{name\} notifications go to`/);
 });
 
 test('unknown routes and ids are refused', () => {

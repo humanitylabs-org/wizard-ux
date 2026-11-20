@@ -1,9 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 
 const read = path => readFileSync(new URL('../' + path, import.meta.url), 'utf8');
-const chats = read('web/core/chats.js');
+const chats = withParts(read('web/core/chats.js'));
 const desktop = read('web/desktop/desktop.js');
 const css = read('web/core/chats.css');
 
