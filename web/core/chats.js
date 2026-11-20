@@ -3575,7 +3575,7 @@ window.WizCore.chats = function createChats(H) {
     const scoped = (other(row?.agent) ? row.agent : '') || winAgent(W[owner(id)] || w) || '';
     if (scoped !== ((LIVE.agentOf && LIVE.agentOf(sid)) || '')) return Promise.resolve(null);
     const it = sendChat(id, text, how, null, { sid, away: true, instructions: viewContext(id, how), ...(scoped ? { agent: scoped } : {}) });
-    PW?.follow(id); return it;
+    PW?.follow(id, true, sid); return it;
   }
   // AI Look up (core/lookup-pop.js): which agent/thread the words sit in. Private agents, private threads and Incognito
   // never use a cloud model, so the selection menu hides Look up there (the Agent Service refuses them too).
@@ -4793,9 +4793,14 @@ window.WizCore.chats = function createChats(H) {
     c.err = ''; c.failN = 0; clearTimeout(c.retryT); // a read error belongs to the thread that failed, never the next one opened
     c.readNav = (c.readNav || 0) + 1;
     if (w.thread !== sid) H.threadShown?.(wid, null); // close the old preview immediately, even while the new thread loads
-    if (opts.via === 'link' && w.thread && w.thread !== '__new__' && w.thread !== sid) c.trail = (c.trail || []).concat(w.thread).slice(-20);
-    else if (!opts.keepTrail) c.trail = [];
-    PW?.opened(wid, sid);
+    if (opts.via === 'link' && w.thread && w.thread !== '__new__' && w.thread !== sid) {
+      // A thread left from the Daily view comes back in it (issue 1653): the same earlier days above, so the same place.
+      // Kept per trail entry (index-aligned with the trail; the trail can hold one thread twice, once in each view).
+      const t = c.trail || [], td = (c.trailDaily || []).slice(0, t.length); while (td.length < t.length) td.push(null);
+      td.push(typeof dailyOn === 'function' && dailyOn(w) ? { sid: w.thread, id: w.daily.id, agent: w.daily.agent } : null);
+      c.trail = t.concat(w.thread).slice(-20); c.trailDaily = td.slice(-20);
+    } else if (!opts.keepTrail) c.trail = [];
+    PW?.opened(wid, sid, !!opts.back);
     if (sid === '__new__' && w.thread !== '__new__') c.newAt = Date.now(); // a fresh new chat: nothing older shows in it
     w.thread = sid; save(); loadDraft(w);
     if (typeof dailyClaim === 'function') dailyClaim(w, sid); // issue 1469: a Daily tap's thread shows the Daily view
@@ -4835,7 +4840,10 @@ window.WizCore.chats = function createChats(H) {
   /* One step back from a thread: to the thread it was opened from (trail), else to the list. */
   function threadBack(w) {
     const c = ch(w.id), prev = (c.trail || []).pop();
-    if (prev && prev !== w.thread && LIVE.session(prev)) { openChat(w.id, prev, { keepTrail: true }); return 'trail'; }
+    if (prev && prev !== w.thread && LIVE.session(prev)) {
+      const d = (c.trailDaily || [])[c.trail.length]; if (d?.sid === prev && typeof dailyChan === 'function' && dailyChan(d.id)) dailyNext = { sid: prev, daily: { id: d.id, agent: d.agent }, at: Date.now() };
+      openChat(w.id, prev, { keepTrail: true, back: true }); return 'trail';
+    }
     chatsBack(w); return 'thread';
   }
   /* Opt-in Send and go steps back one level on the phone: linked parent, otherwise the list. Desktop keeps its thread
@@ -5014,7 +5022,7 @@ window.WizCore.chats = function createChats(H) {
     const winAG = isNew ? winAgent(w) : '';
     const dkey = isNew ? (winAG ? 'agentnew:' + winAG : 'new') : 'direct:' + sid;
     if (here && !voice) { KIT.drafts.clear(dkey); c.draft = ''; c.files = []; }
-    if (here) PW?.follow(wid);
+    if (here) PW?.follow(wid, true, sid);
     const chanPost = isNew && typeof opts.space === 'string'; // a channel's post: its box keeps its own pick (issue 1309)
     if (nm && !chanPost) c.newModel = null;
     const carried = carryText ? c.carry : null;

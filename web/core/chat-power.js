@@ -116,9 +116,12 @@ window.WosChatPower = function chatPower(A) {
     c.seenH = contentH(nb); // what the reader has seen; growth past this never pulls him down
   }
   // Jump to the bottom once: his own send (pin: keeps his new message in view while it paints) or ↓ Latest (no pin).
-  function follow(wid, pin = true) {
-    const w = H.win(wid); if (!w?.thread || w.thread === '__new__') return;
-    const c = ch(wid); c.pinUntil = pin ? Date.now() + PIN_MS : 0; c.eyeRec = null;
+  // sid: the thread the send went to. A send pinned to another thread (a voice take, the orb) never moves or saves the
+  // thread this window shows now, and the pin belongs to the thread it was set for (issue 1653: replying in a linked
+  // thread then Back pinned the parent to the bottom).
+  function follow(wid, pin = true, sid = '') {
+    const w = H.win(wid); if (!w?.thread || w.thread === '__new__' || (sid && w.thread !== sid)) return;
+    const c = ch(wid); c.pinUntil = pin ? Date.now() + PIN_MS : 0; c.pinFor = w.thread; c.eyeRec = null;
     RP.save({ ...RP.read(w.thread), sessionId: w.thread, messageId: c.lid || '', anchor: null,
       scrollTop: 0, atBottom: true, savedAt: Date.now(), working: !!A.isWorking?.(LIVE.session?.(w.thread)) });
     const nb = A.elOf?.(wid)?.querySelector('.ch-msgs'); if (nb) { endSettle(c); restore(nb, RP.read(w.thread)); c.seenH = contentH(nb); }
@@ -133,13 +136,14 @@ window.WosChatPower = function chatPower(A) {
   // Growth is all below him, so before it his gap to the end was the gap now less what grew.
   const endBefore = (c, nb, h) => bottomGap(nb) - (h - (c.seenH ?? h)) < 80;
   const following = (c, nb, place, h) => !!place?.atBottom && !place.landed && endBefore(c, nb, h);
+  const pinned = (c, w) => Date.now() < (c.pinUntil || 0) && c.pinFor === w?.thread;
   function hold(nb, place) {
     const el = nb.closest('[data-chats]'), w = el && H.win(el.dataset.chats), c = w && ch(w.id);
     if (!c || !onScreen(nb)) return restore(nb, place);
     const h = contentH(nb), grew = h > (c.seenH ?? h) + 1;
     let done = true;
     if (grew && following(c, nb, place, h)) { done = restore(nb, place); capture(nb); }
-    else if (!grew || Date.now() < (c.pinUntil || 0)) done = restore(nb, place);
+    else if (!grew || pinned(c, w)) done = restore(nb, place);
     else {
       // The eye-line record is only trusted when it was captured on this screen (just before the repaint).
       if (place === c.eyeRec && place.anchor) restore(nb, { ...place, atBottom: false });
@@ -178,8 +182,13 @@ window.WosChatPower = function chatPower(A) {
     if (c.posFor !== sid) {
       c.posFor = sid; c.posLid = c.lid; c.readerMoved = false;
       c.posCached = !(c.loadedFor === sid && c.loadedNav === c.readNav);
-      const kept = c.unreadOpen === sid ? null : RP.read(sid);
-      const saved = kept && !(kept.atBottom && kept.working) && kept.messageId === c.lid ? kept : null;
+      // Back into a thread (the link trail, or Send and go stepping back to it) restores the place he was reading
+      // mid-thread even when a new reply landed there while he was away (issue 1653): it is anchored on the message he
+      // was reading, so the new reply below cannot move it (↓ Latest shows it). Any other open keeps the rules below.
+      const back = c.backTo === sid;
+      const kept = c.unreadOpen === sid && !back ? null : RP.read(sid);
+      const reading = back && !!kept?.anchor && !kept.atBottom;
+      const saved = kept && (reading || (!(kept.atBottom && kept.working) && kept.messageId === c.lid)) ? kept : null;
       const reply = lastReply(nb), last = o.turns[o.turns.length - 1];
       let place = saved;
       if (!place) {
@@ -659,7 +668,7 @@ window.WosChatPower = function chatPower(A) {
     // shows by the time it is saved (wizard-ux issue 1312).
     const chanAgent = typeof pinned === 'string' && route ? route.agent || '' : nm?.agent || A.winAgent(w);
     if (isNew && !chanTake) c.newModel = null;
-    follow(wid);
+    follow(wid, true, sid);
     const instructions = H.viewContext(wid, 'a voice reply recorded in this thread');
     // Send and go: a voice reply steps back one level like a typed send (chats.js), on
     // the tap, not after the recording has been written to the phone's storage (a blob commit can take seconds).
@@ -868,7 +877,8 @@ window.WosChatPower = function chatPower(A) {
       const inp = el?.querySelector('[data-fiq]'); if (inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
     });
   }
-  const opened = (wid, sid) => { const c = ch(wid), s = sid && sid !== '__new__' ? LIVE.session(sid) : null; c.unreadOpen = s && LIVE.isNew(s) ? sid : ''; c.posFor = ''; if (sid !== '__new__') c.newModel = null; if (sheet && A.owner(sheet.pane) === wid && sheet.type === 'model') closeSheet(); };
+  // back: the open steps back into a thread he left (threadBack), so its reading place wins (issue 1653).
+  const opened = (wid, sid, back = false) => { const c = ch(wid), s = sid && sid !== '__new__' ? LIVE.session(sid) : null; c.unreadOpen = s && LIVE.isNew(s) ? sid : ''; c.posFor = ''; c.backTo = back && sid !== '__new__' ? sid : ''; if (sid !== '__new__') c.newModel = null; if (sheet && A.owner(sheet.pane) === wid && sheet.type === 'model') closeSheet(); };
   const holds = id => !!sheet && sheet.pane === id;
   async function tweakModels(wid) {
     const w = H.win(wid); if (!w) return [];
