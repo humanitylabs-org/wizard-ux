@@ -773,12 +773,46 @@
   }
   const b64 = blob => new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(String(fr.result).split(',')[1] || ''); fr.onerror = rej; fr.readAsDataURL(blob); });
   const extFor = mime => ({ 'image/png': '.png', 'image/jpeg': '.jpg', 'image/webp': '.webp', 'image/gif': '.gif' }[mime] || '');
+  const hasExt = name => /\.[a-z0-9]{2,5}$/i.test(name || '');
+  // The file name the server gave the bytes (Content-Disposition), e.g. a chat photo's original IMG-…-WA0003.jpg.
+  function dispositionName(header) {
+    const h = String(header || '');
+    const star = /filename\*\s*=\s*(?:UTF-8|utf-8)''([^;]+)/.exec(h);
+    let name = '';
+    if (star) { try { name = decodeURIComponent(star[1].trim()); } catch (_) { name = ''; } }
+    if (!name) { const m = /filename\s*=\s*(?:"([^"]*)"|([^;]+))/.exec(h); name = m ? (m[1] ?? m[2] ?? '').trim() : ''; }
+    name = name.replace(/[\\/\x00-\x1f]/g, '_').slice(0, 160);
+    return name && name !== 'file' && name !== 'media' ? name : '';
+  }
+  /* Save and Share read the very picture the viewer is showing (wizard-os issue 747). They take it from the browser's
+   * own cache when it is there (the server marks media private and immutable), so the tap answers at once instead of
+   * fetching the whole file from the box again, and the share sheet still opens while the tap counts as fresh. A read
+   * that never answers ends after SAVE_WAIT, so the buttons always say what happened. */
+  const SAVE_WAIT = 60000;
+  async function fetchMedia(url) {
+    if (url.startsWith('data:') || url.startsWith('blob:')) { const r = await fetch(url); return { blob: await r.blob(), name: '' }; }
+    const ctl = typeof AbortController === 'function' ? new AbortController() : null;
+    const timer = ctl ? setTimeout(() => ctl.abort(), SAVE_WAIT) : 0;
+    try {
+      const r = await fetch(url, { credentials: 'same-origin', cache: 'default', ...(ctl ? { signal: ctl.signal } : {}) });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return { blob: await r.blob(), name: dispositionName(r.headers.get('content-disposition')) };
+    } finally { clearTimeout(timer); }
+  }
+  // A sensible file name: the item's own name when it is a file name, else the server's (a chat photo's item is named
+  // after the person who sent it), else the item's name plus the type's extension.
+  function fileName(item, type, served) {
+    const given = item.name && item.name !== 'Image' ? String(item.name) : '';
+    if (hasExt(given)) return given;
+    if (hasExt(served)) return served;
+    let name = given || `wizard-image${extFor(type) || '.png'}`;
+    if (extFor(type) && !hasExt(name)) name += extFor(type); // a search title has no extension
+    return name;
+  }
   async function asFile(item) {
-    const blob = await fetchBlob(item.url);
+    const { blob, name } = await fetchMedia(String(item.url || ''));
     const type = blob.type || item.mime || 'application/octet-stream';
-    let name = item.name && item.name !== 'Image' ? item.name : `wizard-image${extFor(type) || '.png'}`;
-    if (extFor(type) && !/\.[a-z0-9]{2,5}$/i.test(name)) name += extFor(type); // a search title has no extension
-    return new File([blob], name, { type });
+    return new File([blob], fileName(item, type, name), { type });
   }
   // Apps keep the receipt contract ('opened' is not a receipt); the media viewer uses shareFileOpen directly.
   async function shareFile(item, opts) { const r = await shareFileOpen(item, opts); return r === 'opened' ? 'unsupported' : r; }
@@ -1004,8 +1038,44 @@
   const busy = new Set();
   const heavy = it => it.kind === 'video' || it.kind === 'audio' || (it.bytes || 0) > 2 * 1048576;
   const once = (key, it, fn) => { if (busy.has(key + it.url)) return; busy.add(key + it.url); return Promise.resolve(fn()).finally(() => busy.delete(key + it.url)); };
-  const save = it => once('save', it, () => saveFile(it).then(r => r === 'downloading' ? K.notify('⤓', 'Saving to Downloads') : K.notify(r === 'unsupported' ? '!' : '⤓', r === 'saved' ? 'Saved' : r === 'shared' ? 'Choose where to save' : r === 'cancelled' ? 'Not saved' : 'Saving isn’t available here')).catch(() => K.notify('!', 'Couldn’t save this file')));
+  /* A tapped Save or Share never looks dead (wizard-os issue 747): the button itself says what it is doing
+   * ("Saving…") and then how it went, right where the owner is looking, as well as the usual notice. */
+  function working(key, text) {
+    const buttons = [...(V.el?.querySelectorAll?.(`[data-mv="${key}"]`) || [])], mark = {};
+    for (const b of buttons) { if (!b.dataset.was) b.dataset.was = b.textContent; b.textContent = text; b.setAttribute('aria-busy', 'true'); b.dataset.busy = '1'; b._mvMark = mark; }
+    return (outcome = '') => {
+      for (const b of buttons) {
+        b.removeAttribute('aria-busy'); delete b.dataset.busy;
+        if (b._mvMark !== mark) continue; // the viewer moved on to another item meanwhile
+        if (outcome) b.textContent = outcome;
+      }
+      setTimeout(() => { for (const b of buttons) if (b._mvMark === mark && !b.dataset.busy && b.dataset.was) { b.textContent = b.dataset.was; delete b.dataset.was; } }, outcome ? 1800 : 0);
+    };
+  }
+  // This Wizard's own address (http/https on this origin): the browser can fetch it as a download by itself.
+  const ownAddress = href => { try { const u = new URL(String(href), location.href); return /^https?:$/.test(u.protocol) && u.origin === location.origin ? u.href : ''; } catch (_) { return ''; } };
+  const saidSaved = { saved: 'Saved', shared: 'Choose where to save', cancelled: 'Not saved', downloading: 'Saving to Downloads' };
+  async function saveNow(it) {
+    try { return await saveFile(it); } catch (e) {
+      // The bytes could not be read here: hand the address itself to the browser's downloads, which show their own
+      // progress and result, instead of failing quietly.
+      const href = ownAddress(it.download || it.url);
+      if (!href || native()) throw e;
+      download(href, fileName(it, it.mime || '', ''));
+      return 'downloading';
+    }
+  }
+  const save = it => once('save', it, async () => {
+    const done = working('save', 'Saving…');
+    try {
+      const r = await saveNow(it);
+      K.notify(r === 'unsupported' ? '!' : '⤓', saidSaved[r] || 'Saving isn’t available here');
+      done(r === 'saved' || r === 'downloading' ? 'Saved ✓' : r === 'cancelled' ? 'Not saved' : r === 'shared' ? '' : 'Can’t save');
+    } catch (_) { K.notify('!', 'Couldn’t save this file'); done('Couldn’t save'); }
+  });
   const share = it => { const direct = directShareDepth > 0; return once('share', it, async () => {
+    const done = working('share', 'Sharing…');
+    let said = '';
     try {
       if (heavy(it) && native()) K.notify('↗', 'Preparing to share…');
       const sheet = window.WosShareSheet, handed = sheet?.handoffs?.() || 0;
@@ -1013,17 +1083,25 @@
       // An old native bridge may already have opened the file chooser without an
       // outcome receipt. Never open a second text chooser or claim Shared then.
       if (result === 'unsupported' && typeof native()?.shareFile !== 'function') {
-        // A private file's link would reach the other person as a dead link: say so instead of pasting it.
-        if (privateMedia(it.url)) { K.notify('!', 'Couldn’t share this file from here. Download it, then send it.'); return; }
+        // No way to hand the file itself to another app here (a desktop browser without file sharing). A file on this
+        // Wizard opens only for its owner, so its link would reach anyone else as a dead link: save the file instead,
+        // so the owner can send it from Downloads, and say so (wizard-os issue 747).
+        if (ownAddress(it.url) || privateMedia(it.url)) {
+          const r = await saveNow(it).catch(() => 'failed');
+          if (r === 'saved' || r === 'downloading') { K.notify('⤓', 'Sharing isn’t available here · saved to Downloads instead'); said = 'Saved ✓'; }
+          else { K.notify('!', 'Couldn’t share this file from here. Download it, then send it.'); said = 'Can’t share'; }
+          return;
+        }
         result = await sharePayload({ url: new URL(it.url, location.href).href, title: it.name, direct });
       }
       // Handed to an app (Messenger): its own picker is on screen and confirms after Send; nothing is shared yet.
       if (result === 'shared' && (sheet?.handoffs?.() || 0) !== handed) return;
-      if (result === 'shared') K.notify('↗', 'Shared');
+      if (result === 'shared') { K.notify('↗', 'Shared'); said = 'Shared ✓'; }
       else if (result === 'opened') K.notify('↗', 'Share sheet opened');
-      else if (result === 'copied') K.notify('⧉', 'Link copied');
-      else if (result === 'unsupported') K.notify('!', 'Sharing unavailable or not confirmed');
-    } catch (_) { K.notify('!', 'Couldn’t share this file'); }
+      else if (result === 'copied') { K.notify('⧉', 'Link copied'); said = 'Link copied'; }
+      else if (result === 'unsupported') { K.notify('!', 'Sharing unavailable or not confirmed'); said = 'Can’t share'; }
+    } catch (_) { K.notify('!', 'Couldn’t share this file'); said = 'Couldn’t share'; }
+    finally { done(said); }
   }); };
   // Zooming out keeps your place in a long screenshot; a normal photo recentres.
   function reset() { const s = V.s; V.s = 1; V.x = 0; V.y = V.long ? V.y / s : 0; clampPan(); paint(); }
@@ -1075,6 +1153,8 @@
     const el = build(), it = V.items[V.i]; if (!it) return;
     clearGesture(); V.s = 1; V.x = 0; V.y = 0; V.text = ''; V.long = false; stopFling(); el.classList.remove('long'); menu(false);
     dropPdf(); el.querySelector('.mv-bar [data-mv="save"]').textContent = it.kind === 'image' ? 'Save' : '⤓ Download';
+    el.querySelector('.mv-bar [data-mv="share"]').textContent = 'Share';
+    for (const b of el.querySelectorAll('.mv-bar [data-mv="save"], .mv-bar [data-mv="share"]')) { delete b.dataset.was; b._mvMark = null; } // a new item: no old outcome comes back
     const stage = el.querySelector('.mv-stage');
     for (const m of stage.querySelectorAll('video,audio')) { try { m.pause(); } catch (e) {} }
     el.dataset.kind = it.kind;
