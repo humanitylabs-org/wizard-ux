@@ -58,10 +58,37 @@ test('a resume only re-places the thread its options belong to', () => {
   assert.equal(h.api.RP.read('thread-b'), null, 'no place is saved for thread-b from thread-a\'s turns');
   assert.equal(h.state.posFor, '', 'thread-b is still unplaced, so its own paint places it');
 });
-test('a new reply that arrived while he was away still opens at its first line', () => {
+test('a new reply that arrived while he was away still opens at its first line (a plain open, not Back)', () => {
   const h = harness(), A = h.turnsOf(5, 1000);
   h.api.opened('win', 'thread-a'); paint(h, A); h.scrollBy(1700); h.api.capture(h.nb);
   h.w.thread = 'thread-b'; h.api.opened('win', 'thread-b'); h.setTop(0); paint(h, h.turnsOf(1, 9000));
   h.w.thread = 'thread-a'; h.api.opened('win', 'thread-a'); h.setTop(0); paint(h, h.turnsOf(6, 1000));
   assert.equal(h.top(), 192, 'a newer latest reply opens at its first line');
+});
+// wizard-ux issue 1653 (James, 20 Nov 2026): in the Daily thread he taps a link, replies in the linked thread and goes
+// Back (or Send and go steps back). The parent came back at the bottom: a new reply had landed there while he was away,
+// so his saved place no longer matched the latest reply and was dropped.
+for (const kind of ['main', 'host-profile', 'container', 'restricted'])
+test(`Back keeps his mid-thread place when a new reply landed in the parent while he was away (${kind})`, () => {
+  const h = harness(kind), A = h.turnsOf(5, 1000);
+  h.api.opened('win', 'thread-a'); paint(h, A); h.scrollBy(1700); h.api.capture(h.nb);
+  h.w.thread = 'thread-b'; h.api.opened('win', 'thread-b'); h.setTop(0); paint(h, h.turnsOf(1, 9000));
+  h.api.follow('win', true, 'thread-b');                                    // his reply in the linked thread
+  h.w.thread = 'thread-a'; h.api.opened('win', 'thread-a', true); h.setTop(0); paint(h, h.turnsOf(6, 1000)); // Back
+  assert.equal(h.top(), 1700, 'Back lands where he was reading, not on the new reply or the bottom');
+  assert.equal(h.api.RP.read('thread-a').atBottom, false);
+});
+test('his own send pins only the thread it went to', () => {
+  const h = harness(), A = h.turnsOf(5, 1000);
+  h.api.opened('win', 'thread-a'); paint(h, A); h.scrollBy(1700); h.api.capture(h.nb);
+  h.api.follow('win', true, 'thread-b');                                    // a take pinned to another thread (orb, voice)
+  assert.equal(h.api.RP.read('thread-a').scrollTop, 1700, 'a send to another thread never saves the bottom for this one');
+  assert.equal(h.top(), 1700, 'and never moves this one');
+  h.w.thread = 'thread-b'; h.api.opened('win', 'thread-b'); h.setTop(0); paint(h, h.turnsOf(1, 9000));
+  h.api.follow('win', true, 'thread-b');                                    // his send in the linked thread: pin set for B
+  assert.equal(h.state.pinFor, 'thread-b');
+  h.w.thread = 'thread-a'; h.api.opened('win', 'thread-a', true); h.setTop(0); paint(h, A);
+  assert.equal(h.top(), 1700, 'Back to the parent inside the pin window still lands on his place');
+  paint(h, A);                                                              // a repaint while B's pin is still running
+  assert.equal(h.top(), 1700, 'the pin set for the linked thread never applies to the parent');
 });
