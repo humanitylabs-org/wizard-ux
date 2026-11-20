@@ -28,7 +28,7 @@ export function listFixture({ status = false, query = '', busy = false, footer =
   vm.runInContext(fs.readFileSync(new URL('../../web/core/chat-search.js', import.meta.url), 'utf8'), ctx);
   Object.assign(ctx.window.WizCore.chatSearch, { query: () => footer ? bs : null, cancel: no, scanning: r => r.busy, footer: r => `<div class="ch-bodysearch${r.busy ? ' busy' : ''}" data-chbs="${r.busy ? 'busy' : 'done'}">Synthetic search status</div>` });
   const constants = source.slice(source.indexOf('  const SECTIONS_DAY ='), source.indexOf('\n', source.indexOf('  const SECTIONS_STATUS =')));
-  const render = source.slice(source.indexOf('  function renderChatList('), source.indexOf('  /* ---- attachments:'));
+  const render = source.slice(source.indexOf('  function renderChatList('), source.indexOf('  /* Attachments and voice notes; core/chats-attach.js.'));
   vm.runInContext(`${constants}\n${render}\nthis.render = renderChatList; this.toggle = toggleSection;`, ctx);
   return {
     state, writes,

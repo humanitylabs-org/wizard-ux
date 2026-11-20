@@ -5,6 +5,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
 const SUB = 'claude-subscription-directsdk-experimental';
@@ -173,7 +174,7 @@ test('issue 1500: the Errors row (desktop sidebar) offers Reconnect and no Retry
 });
 
 test('issue 1500: the generic "not processed… send it again" line is hidden above a Reconnect card', () => {
-  const src = read('web/core/chats.js');
+  const src = withParts(read('web/core/chats.js'));
   assert.match(src, /const signedOut = !working && !!PW\?\.signedOutFail\?\.\(s\);/);
   assert.match(src, /s\?\.helperStatus, s\?\.reconnect \|\| !!runErr \|\| signedOut, /);
   assert.match(src, /\(!runErr && !signedOut && s\?\.safeError/);

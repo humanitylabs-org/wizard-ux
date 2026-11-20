@@ -6,9 +6,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 const source = readFileSync(new URL('../web/core/thread-tracker.js', import.meta.url), 'utf8');
 const model = readFileSync(new URL('../web/core/chats-list-model.js', import.meta.url), 'utf8');
-const chats = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
+const chats = withParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'));
 const desk = readFileSync(new URL('../web/layouts/ai-apps/desktop.js', import.meta.url), 'utf8');
 const iso = ms => new Date(ms).toISOString();
 
