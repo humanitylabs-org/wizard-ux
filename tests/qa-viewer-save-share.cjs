@@ -100,6 +100,19 @@ const fails = [], ok = (c, m) => { if (!c) fails.push(m); console.log((c ? 'ok  
     ok(downloads.length === 1 && downloads[0] === 'IMG-20261120-WA0003.png', `Share without file sharing saves the photo instead (downloads ${JSON.stringify(downloads)})`);
     ok(st.toasts.some(t => /saved to Downloads instead/.test(t)), `Share says what happened (${JSON.stringify(st.toasts)}; button ${JSON.stringify(label)})`);
     ok(!st.toasts.some(t => /Link copied/.test(t)), 'Share never copies the private photo link instead');
+    // An app's own picture handed over as bytes (a shell blob: address), and a refused read: Share saves them too,
+    // reading the bytes once (no second wait for a read that already failed).
+    downloads.length = 0; await page.evaluate(() => { window.__toasts.length = 0; });
+    await page.evaluate(async () => { const c = document.createElement('canvas'); c.width = 30; c.height = 20; c.getContext('2d').fillRect(0, 0, 30, 20); const b = await new Promise(r => c.toBlob(r, 'image/png')); WosChat.viewer.open([{ url: URL.createObjectURL(b), kind: 'image', name: 'Made here', mime: 'image/png' }], 0); });
+    await page.waitForFunction(() => document.querySelector('.mviewer .mv-stage img')?.naturalWidth > 0, null, { timeout: 5000 });
+    await page.click('.mviewer [data-mv="share"]'); await page.waitForTimeout(1500);
+    ok(downloads.length === 1 && downloads[0] === 'Made here.png', `an app's own picture (bytes) is saved instead too (${JSON.stringify(downloads)}, ${JSON.stringify(await page.evaluate(() => window.__toasts))})`);
+    downloads.length = 0; const before = hits.filter(h => h === 'refused:read').length;
+    await page.evaluate(() => WosChat.viewer.open([{ url: '/messenger/api/unified/media/refused', kind: 'image', name: 'Miguel', mime: 'image/jpeg' }], 0));
+    await page.waitForFunction(() => document.querySelector('.mviewer .mv-stage img')?.naturalWidth > 0, null, { timeout: 5000 });
+    await page.click('.mviewer [data-mv="share"]'); await page.waitForTimeout(2000);
+    const refusedReads = hits.filter(h => h === 'refused:read').length - before;
+    ok(downloads.length === 1 && refusedReads === 1, `a refused read: Share saves through the browser's downloads after one read (${JSON.stringify(downloads)}, reads ${refusedReads})`);
     await context.close();
     const reads = hits.filter(h => h === 'slow:read');
     console.log('media requests: ' + JSON.stringify(hits));

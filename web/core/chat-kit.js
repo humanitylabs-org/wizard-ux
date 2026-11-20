@@ -855,8 +855,11 @@
     const file = await asFile(item);
     if (n && typeof n.saveFile === 'function') { n.saveFile(await b64(file), file.name, file.type); return 'saved'; }
     if (n) { const r = await shareFileOpen(item, { direct: true }); return r === 'opened' ? 'shared' : r; } // old app: the share sheet saves
-    const u = URL.createObjectURL(file); const a = document.createElement('a'); a.href = u; a.download = file.name; a.rel = 'noopener';
-    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(u), 60000);
+    return saveBlob(file);
+  }
+  // Bytes already in hand go to the browser's downloads under their own name.
+  function saveBlob(file) {
+    const u = URL.createObjectURL(file); download(u, file.name); setTimeout(() => URL.revokeObjectURL(u), 60000);
     return 'saved';
   }
 
@@ -1055,8 +1058,9 @@
   // This Wizard's own address (http/https on this origin): the browser can fetch it as a download by itself.
   const ownAddress = href => { try { const u = new URL(String(href), location.href); return /^https?:$/.test(u.protocol) && u.origin === location.origin ? u.href : ''; } catch (_) { return ''; } };
   const saidSaved = { saved: 'Saved', shared: 'Choose where to save', cancelled: 'Not saved', downloading: 'Saving to Downloads' };
-  async function saveNow(it) {
-    try { return await saveFile(it); } catch (e) {
+  // `failed`: the bytes could already not be read (Share tried first), so no second wait for the same read.
+  async function saveNow(it, failed) {
+    try { if (failed) throw failed; return await saveFile(it); } catch (e) {
       // The bytes could not be read here: hand the address itself to the browser's downloads, which show their own
       // progress and result, instead of failing quietly.
       const href = ownAddress(it.download || it.url);
@@ -1079,15 +1083,18 @@
     try {
       if (heavy(it) && native()) K.notify('↗', 'Preparing to share…');
       const sheet = window.WosShareSheet, handed = sheet?.handoffs?.() || 0;
-      let result = await shareFileOpen(it, { direct });
+      // Read the bytes once: the share and, where files can't be shared, the save below both use them.
+      let file = null, failed = null;
+      try { file = await asFile(it); } catch (e) { failed = e; }
+      let result = file ? await shareFileOpen(file, { direct }) : 'unsupported';
       // An old native bridge may already have opened the file chooser without an
       // outcome receipt. Never open a second text chooser or claim Shared then.
       if (result === 'unsupported' && typeof native()?.shareFile !== 'function') {
         // No way to hand the file itself to another app here (a desktop browser without file sharing). A file on this
         // Wizard opens only for its owner, so its link would reach anyone else as a dead link: save the file instead,
         // so the owner can send it from Downloads, and say so (wizard-os issue 747).
-        if (ownAddress(it.url) || privateMedia(it.url)) {
-          const r = await saveNow(it).catch(() => 'failed');
+        if (file || ownAddress(it.url) || privateMedia(it.url)) {
+          const r = await (file && !native() ? Promise.resolve(saveBlob(file)) : saveNow(it, failed)).catch(() => 'failed');
           if (r === 'saved' || r === 'downloading') { K.notify('⤓', 'Sharing isn’t available here · saved to Downloads instead'); said = 'Saved ✓'; }
           else { K.notify('!', 'Couldn’t share this file from here. Download it, then send it.'); said = 'Can’t share'; }
           return;

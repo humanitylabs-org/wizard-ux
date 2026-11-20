@@ -68,9 +68,12 @@ test('a refused read is an error the viewer can fall back from', async () => {
 
 test('the viewer falls back to a browser download and saves on Share where files cannot be shared', () => {
   const viewer = source.slice(source.indexOf('  const busy = new Set();'), source.indexOf('  // Zooming out keeps your place'));
-  assert.match(viewer, /async function saveNow\(it\) \{\n    try \{ return await saveFile\(it\); \} catch \(e\) \{/);
   assert.match(viewer, /if \(!href \|\| native\(\)\) throw e;\n      download\(href, fileName\(/);
   assert.match(viewer, /const done = working\('save', 'Saving…'\);/);
   assert.match(viewer, /const done = working\('share', 'Sharing…'\);/);
-  assert.match(viewer, /if \(ownAddress\(it\.url\) \|\| privateMedia\(it\.url\)\) \{\n\s+const r = await saveNow\(it\)/);
+  // The bytes are read once: a share that can't happen saves those bytes (also an app's own blob: picture), and a
+  // read that already failed goes straight to the browser download, never a second 60 s wait.
+  assert.match(viewer, /try \{ file = await asFile\(it\); \} catch \(e\) \{ failed = e; \}\n\s+let result = file \? await shareFileOpen\(file, \{ direct \}\) : 'unsupported';/);
+  assert.match(viewer, /if \(file \|\| ownAddress\(it\.url\) \|\| privateMedia\(it\.url\)\) \{\n\s+const r = await \(file && !native\(\) \? Promise\.resolve\(saveBlob\(file\)\) : saveNow\(it, failed\)\)/);
+  assert.match(viewer, /async function saveNow\(it, failed\) \{\n    try \{ if \(failed\) throw failed; return await saveFile\(it\); \} catch \(e\) \{/);
 });
