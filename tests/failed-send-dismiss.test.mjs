@@ -31,7 +31,7 @@ function client(rows = new Map(), broken = false) {
 const item = (id, extra = {}) => ({ id, kind: 'reply', state: 'failed', sessionId: 'test-thread', text: 'Switch', error: 'No confirmed model route', createdAt: Date.now(), ...extra });
 const tick = () => new Promise(r => setTimeout(r, 25));
 // This is an outbox custody unit, not routed UI parity. Actual Focus/list/thread coverage:
-// QA_DISMISS_ONLY=1 node qa-voice-custody-callers.cjs (qa-failed-send-dismiss.cjs).
+// QA_DISMISS_ONLY=1 node qa/scripts/qa-voice-custody-callers.cjs (qa-failed-send-dismiss.cjs).
   test('outbox custody: selected failure persisted; no admission/stop and original retained', async t => {
     const rows = new Map(), p = client(rows); t.after(p.close); await tick();
     const failed = item('failed', { audio: new Blob(['original']) });

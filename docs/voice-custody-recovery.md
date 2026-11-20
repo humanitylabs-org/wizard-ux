@@ -42,7 +42,7 @@ QA_REPAIR_ONLY=1 QA_OUT="$EVIDENCE/focused" node qa/scripts/qa-voice-custody-cal
 QA_OUT="$EVIDENCE/outbox" node qa/scripts/qa-voice-custody.cjs
 QA_OUT="$EVIDENCE/callers" node qa/scripts/qa-voice-custody-callers.cjs
 node qa/scripts/qa-recording-retention.cjs web "$EVIDENCE/retention"
-QA_EVIDENCE="$EVIDENCE/dictation.json" node -r ./qa-thales-loader.cjs qa/scripts/qa-in-app-dictation.cjs
+QA_EVIDENCE="$EVIDENCE/dictation.json" node -r ./qa/scripts/qa-thales-loader.cjs qa/scripts/qa-in-app-dictation.cjs
 ```
 
 `qa/scripts/qa-voice-custody-repairs.cjs` runs through normal caller-suite discovery and through the focused command. It covers confirmed steering from phone/desktop text and voice callers; exact routing and photos/files/audio; lost/malformed response plus reload/Retry; rejected-run retry/edit; journal storage failure; active native partial/short/missing-marker/complete reads; implicitly claimed Stop and same-process reload recovery; primary failure **after successful dismissal** with stale fallback; unrelated fresh sends; and held/compact pending ownership.

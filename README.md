@@ -154,11 +154,11 @@ Package `ai.wizards.os`, currently 0.4.0. Builds run on Thales (the Mac mini bui
 node qa/scripts/qa-os.cjs            # shell: Back, desks, windows, voice routing
 node qa/scripts/qa-chats-parity.cjs  # Chats against the live Wizard Agent Service (writes intercepted)
 node qa/scripts/qa-new-chat-first-paint.cjs "$QA_ORIGIN/wizard-os-home/" # empty composer, resize/reload, phone Back
-node qa/scripts/qa-live.cjs; node qa-livemode.cjs; node qa/scripts/qa-motion.cjs; node qa/scripts/qa-recordings.cjs
-node qa-android-*.cjs     # on Thales, against the emulator
+node qa/scripts/qa-live.cjs; node qa/scripts/qa-motion.cjs; node qa/scripts/qa-recordings.cjs
+node qa/scripts/qa-android-*.cjs     # on Thales, against the emulator
 ```
 
-The current pass counts per suite are in [BRANCHES.md](BRANCHES.md).
+The current pass counts per suite are in [BRANCHES.md](docs/notes/BRANCHES.md).
 
 Composer layout changes must run `qa/scripts/qa-new-chat-first-paint.cjs` before and after deployment.
 It checks the actual New chat action synchronously before the first animation frame, then

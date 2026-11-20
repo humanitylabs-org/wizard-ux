@@ -153,8 +153,8 @@ All four commands executed serially on Thales under `/usr/bin/lockf -k -t 5400 $
 ```sh
 node qa/scripts/qa-app-services.cjs
 node qa/scripts/qa-share-receipt-ab.cjs
-QA_BLOCK_WRITES=1 node -r ./qa-thales-loader.cjs qa/scripts/qa-share-select.cjs 'http://127.0.0.1:18923/wizard-os-home/?shell=phone'
-QA_BLOCK_WRITES=1 node -r ./qa-thales-loader.cjs qa/scripts/qa-device.cjs 'http://127.0.0.1:18923/wizard-os-home/?shell=phone'
+QA_BLOCK_WRITES=1 node -r ./qa/scripts/qa-thales-loader.cjs qa/scripts/qa-share-select.cjs 'http://127.0.0.1:18923/wizard-os-home/?shell=phone'
+QA_BLOCK_WRITES=1 node -r ./qa/scripts/qa-thales-loader.cjs qa/scripts/qa-device.cjs 'http://127.0.0.1:18923/wizard-os-home/?shell=phone'
 ```
 
 The A/B command used `QA_BASELINE=$WIZARD_WORK_ROOT/WizardApps/shared-services/host/baseline-951290d/web/core/chat-kit.js` (exact archived daily source). Legacy suites used a temporary read-only reverse tunnel to the control-plane origin; outbound non-read requests and service workers were fenced, and all intended writes were fixture responses.
