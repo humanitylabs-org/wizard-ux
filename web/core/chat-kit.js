@@ -849,13 +849,30 @@
     a.addEventListener('click', e => e.stopPropagation()); // the shell's link handlers never see it: only the download happens
     document.body.appendChild(a); a.click(); a.remove();
   }
+  // Wizard for Mac (try-wizard#139): a blob <a download> clicked after the fetch carries no user gesture, so the app
+  // drops it without a word. An app whose app.info lists `files.` writes the bytes to Downloads itself and answers.
+  const macShell = () => { try { return window.top === window && !!window.webkit?.messageHandlers?.wizardNative; } catch (_) { return false; } };
+  let macSave = null;
+  const macSaver = () => {
+    const b = window.WizCore?.bridge;
+    if (!macShell() || typeof b?.call !== 'function') return Promise.resolve(null);
+    return macSave || (macSave = b.call('app.info').then(i => (Array.isArray(i?.capabilities) && i.capabilities.includes('files.') ? b : null), () => { macSave = null; return null; }));
+  };
   async function saveFile(item) {
     const n = native(), href = String(item.download || item.url || '');
     if (appDownloads() && !(n && typeof n.saveFile === 'function') && !/^(blob|data):/i.test(href)) { download(href, item.name); return 'downloading'; }
+    const mac = macSaver();
     const file = await asFile(item);
     if (n && typeof n.saveFile === 'function') { n.saveFile(await b64(file), file.name, file.type); return 'saved'; }
     if (n) { const r = await shareFileOpen(item, { direct: true }); return r === 'opened' ? 'shared' : r; } // old app: the share sheet saves
-    return saveBlob(file);
+    const saver = await mac;
+    if (saver) {
+      const r = await saver.call('files.save', { data: await b64(file), name: file.name, mime: file.type });
+      if (r?.status === 'saved') return 'saved-downloads';
+      throw new Error(r?.error || 'not saved');
+    }
+    saveBlob(file);
+    return macShell() ? 'downloading' : 'saved'; // an older Mac app may drop this download: no false 'Saved'
   }
   // Bytes already in hand go to the browser's downloads under their own name.
   function saveBlob(file) {
@@ -1057,12 +1074,13 @@
   }
   // This Wizard's own address (http/https on this origin): the browser can fetch it as a download by itself.
   const ownAddress = href => { try { const u = new URL(String(href), location.href); return /^https?:$/.test(u.protocol) && u.origin === location.origin ? u.href : ''; } catch (_) { return ''; } };
-  const saidSaved = { saved: 'Saved', shared: 'Choose where to save', cancelled: 'Not saved', downloading: 'Saving to Downloads' };
+  const saidSaved = { saved: 'Saved', 'saved-downloads': 'Saved to Downloads', shared: 'Choose where to save', cancelled: 'Not saved', downloading: 'Saving to Downloads' };
   // `failed`: the bytes could already not be read (Share tried first), so no second wait for the same read.
   async function saveNow(it, failed) {
     try { if (failed) throw failed; return await saveFile(it); } catch (e) {
       // The bytes could not be read here: hand the address itself to the browser's downloads, which show their own
       // progress and result, instead of failing quietly.
+      if (macShell()) throw e; // the Mac app said it failed, and it drops a download started without a tap
       const href = ownAddress(it.download || it.url);
       if (!href || native()) throw e;
       download(href, fileName(it, it.mime || '', ''));
@@ -1074,7 +1092,7 @@
     try {
       const r = await saveNow(it);
       K.notify(r === 'unsupported' ? '!' : '⤓', saidSaved[r] || 'Saving isn’t available here');
-      done(r === 'saved' || r === 'downloading' ? 'Saved ✓' : r === 'cancelled' ? 'Not saved' : r === 'shared' ? '' : 'Can’t save');
+      done(r === 'saved' || r === 'saved-downloads' || r === 'downloading' ? 'Saved ✓' : r === 'cancelled' ? 'Not saved' : r === 'shared' ? '' : 'Can’t save');
     } catch (_) { K.notify('!', 'Couldn’t save this file'); done('Couldn’t save'); }
   });
   const share = it => { const direct = directShareDepth > 0; return once('share', it, async () => {
