@@ -8,6 +8,7 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { modelContext } from './fixtures/chats-list-model.mjs';
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 
 const read = f => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8');
 const slice = (js, a, b) => { const i = js.indexOf(a), j = js.indexOf(b, i + 1); assert.ok(i >= 0 && j > i, a); return js.slice(i, j); };
@@ -210,7 +211,7 @@ test('Activity rows carry their "# channel" from CHATS.channelOf (main and route
 
 test('the real channelOf / chanSide: names per agent, only with the switch on; only id::side is a sidebar pane', () => {
   const src = read('web/core/chats.js');
-  const block = slice(src, '  /* Channels view (switch wizard/chat-channels', '  function clearAll(w)');
+  const block = withParts(slice(src, '  /* Channels view (switch wizard/chat-channels', '  function clearAll(w)'));
   // 'x' is both a main thread (in Launch) and a container agent's thread (in Box): the row's own owner decides.
   const spacesData = [{ id: 'launch', name: 'Launch', threads: ['a', 'x'] }, { id: 'box', name: 'Box', agent: 'container', threads: ['k1', 'x'] }, { id: 'ops', name: 'Ops', agent: 'host', threads: ['x'] }];
   const agents = { k1: 'container', r1: 'restricted', h1: 'host', x: 'container' }; // the id-only pin points at one of them

@@ -277,6 +277,13 @@
       ],
       "note": "Chats durable outbox and thread reading moved out of chats.js (issue 1665); called by createChats"
     },
+    "core/chats-posts.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Chats channel posts (first message, words, reply counts, feed place) moved out of chats.js (issue 1665); called by createChats"
+    },
     "core/chats-running.js": {
       "loadedBy": [
         "phone",
@@ -994,6 +1001,7 @@
     "core/chat-work.js",
     "core/chats-list-model.js",
     "core/chats-outbox.js",
+    "core/chats-posts.js",
     "core/chats-running.js",
     "core/chats-view.css",
     "core/chats-view.js",
