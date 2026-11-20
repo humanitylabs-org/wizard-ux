@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import { modelContext } from './fixtures/chats-list-model.mjs';
 import '../web/core/chats-list-model.js';
+import { withParts } from './fixtures/chats-parts.mjs';
 import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
 const M = globalThis.WizChatsListModel;
 const at = n => `2026-11-06T${String(n).padStart(2, '0')}:00:00Z`;
@@ -31,7 +32,7 @@ test('Newest and Oldest reuse Ready time ordering without attention or snooze pr
   for (const order of ['oldest', 'newest']) assert.deepEqual(ids(M.workingSort(equal, order)), ['a', 'b']);
 });
 test('stock renderer uses the same Working comparator and raw session cardAt', () => {
-  const src = read('web/core/chats.js'), c = modelContext({ window: {}, LIVE: { cardAt: s => s.at, workingOrder: () => 'alphabetical' } });
+  const src = withParts(read('web/core/chats.js')), c = modelContext({ window: {}, LIVE: { cardAt: s => s.at, workingOrder: () => 'alphabetical' } });
   vm.runInContext(src.slice(src.indexOf('  const workingOrdered ='), src.indexOf('  const readyOrdered =')) + '\nthis.sort = workingOrdered;', c);
   assert.deepEqual(ids(c.sort(rows.filter(r => !r.pinned))), ['a-new', 'a-old', 'b', 'untitled', 'z']);
 });
@@ -48,14 +49,14 @@ test('every surface has a separate Working control, and Settings uses the shared
   assert.match(read('web/layouts/ai-apps/desktop.js'), /openSortMenu\(sort, 'working-sort'\)/);
   assert.match(read('web/layouts/ai-apps/layout.js'), /'aria-label': 'Sort Working'/);
   assert.match(read('web/core/settings.js'), /id: 'working-order', page: 'chats'/);
-  assert.match(read('web/core/chats.js'), /function workingOrderBar\(\)/);
-  assert.doesNotMatch(read('web/core/chats.js'), /<select data-working-order|Sort Working <select|ch-working-sort/, 'no native select in the Chats list');
+  assert.match(withParts(read('web/core/chats.js')), /function workingOrderBar\(\)/);
+  assert.doesNotMatch(withParts(read('web/core/chats.js')), /<select data-working-order|Sort Working <select|ch-working-sort/, 'no native select in the Chats list');
   assert.doesNotMatch(read('web/core/chats.css'), /ch-working-sort/);
   assert.match(withLiveParts(read('web/live.js')), /workingOrder: \['wos.chats.workingOrder.v1'/);
 });
 
 // The Chats list Working control is Ready's order bar (James, 6 Nov 2026: the native select looked foreign on phone).
-const chatsSrc = read('web/core/chats.js');
+const chatsSrc = withParts(read('web/core/chats.js'));
 const block = (a, b) => { const i = chatsSrc.indexOf(a), j = chatsSrc.indexOf(b, i); assert.ok(i >= 0 && j > i, `${a} anchor`); return chatsSrc.slice(i, j); };
 function barContext(order, readyOrder = 'newest') {
   const c = modelContext({ window: {}, LIVE: { cardAt: s => s.at, workingOrder: () => order }, readyOrder, READY_ORDERS: ['newest', 'priority', 'subject'], READY_ORDER_LABEL: { newest: 'Newest', priority: 'Priority', subject: 'By subject' }, snoozeLast: () => false, deferredOf: () => false, esc: String });
@@ -98,7 +99,7 @@ test('Working tap handler writes the shared preference through setWorkingOrder (
   assert.match(block('  window.addEventListener(\'wos:prefs\', () => {\n    try { const v = localStorage.getItem(READY_ORDER_KEY)', '  // Switching to or from Novairecito'), /renderChats\(W\[id\]\)/);
 });
 test('collapsing Working hides its order bar too (James, 6 Nov 2026: minimised Working shows no A to Z)', () => {
-  const src = read('web/core/chats.js'), at = src.indexOf('workingOrderBar()', src.indexOf('function workingOrderBar') + 30);
+  const src = withParts(read('web/core/chats.js')), at = src.indexOf('workingOrderBar()', src.indexOf('function workingOrderBar') + 30);
   const head = src.slice(Math.max(0, at - 400), at);
   assert.ok(at > 0, 'the list draws the Working order bar');
   assert.match(head, /\$\{open \? `<div class="ch-sec-b">\$\{k === 'working' && list\.length \? $/, 'drawn only inside the open section body');
@@ -110,7 +111,7 @@ test('main and routed-agent Working threads share one order on the stock rendere
   const mixed = rows.filter(r => !r.pinned).map((r, i) => ({ ...r, ...(AG[i % 4] ? { agent: AG[i % 4] } : {}) }));
   const plain = rows.filter(r => !r.pinned);
   for (const order of ['alphabetical', 'newest', 'oldest']) {
-    const src = read('web/core/chats.js'), c = modelContext({ window: {}, LIVE: { cardAt: s => s.at, workingOrder: () => order } });
+    const src = withParts(read('web/core/chats.js')), c = modelContext({ window: {}, LIVE: { cardAt: s => s.at, workingOrder: () => order } });
     vm.runInContext(src.slice(src.indexOf('  const workingOrdered ='), src.indexOf('  const readyOrdered =')) + '\nthis.sort = workingOrdered;', c);
     const stock = c.sort(mixed);
     assert.deepEqual(ids(stock), ids(c.sort(plain)), `${order}: routed rows sort exactly like main rows`);

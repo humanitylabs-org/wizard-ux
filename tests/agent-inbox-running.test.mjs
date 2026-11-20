@@ -4,6 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { withParts } from './fixtures/chats-parts.mjs';
 import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
 
 const src = withLiveParts(readFileSync(new URL('../web/live.js', import.meta.url), 'utf8'));
@@ -39,7 +40,7 @@ test('main versus routed: records stay with their own agent, even with the same 
   assert.deepEqual(clone(f.inbox.records('hermes').map(r => [r.agent, r.thread])), [['hermes', 'wizard_worker_1']], 'the main Chats list gets only the main agent\'s task');
   assert.deepEqual(clone(f.inbox.records('').map(r => r.agent)), ['hermes'], 'no agent = the main agent');
   for (const kind of ['host-ops', 'box', 'locked']) assert.deepEqual(clone(f.inbox.records(kind).map(r => r.agent)), [kind], kind + ': its own only');
-  const chats = ['chats.js', 'chats-running.js'].map(f => readFileSync(new URL('../web/core/' + f, import.meta.url), 'utf8')).join('\n'); // the Running view moved to chats-running.js (issue 1665)
+  const chats = withParts(['chats.js', 'chats-running.js'].map(f => readFileSync(new URL('../web/core/' + f, import.meta.url), 'utf8')).join('\n')); // the Running view moved to chats-running.js (issue 1665)
   assert.match(chats, /function runningRecs\(\) \{ return LIVE\.agentInbox\?\.records\?\.\('hermes'\) \|\| \[\]; \}/, 'the Running view reads the main agent\'s records');
   assert.match(chats, /const st = LIVE\.agentInbox\?\.state\(\), r = runningRecs\(\)/, 'its rows too');
 });
@@ -69,7 +70,7 @@ test('a box without the inbox (404) is an empty list, not an error; a failed rea
 });
 
 test('Chats reads the inbox only through the switch, and the Running view sits on the main Chats list', () => {
-  const chats = ['chats.js', 'chats-running.js'].map(f => readFileSync(new URL('../web/core/' + f, import.meta.url), 'utf8')).join('\n'); // the Running view moved to chats-running.js (issue 1665)
+  const chats = withParts(['chats.js', 'chats-running.js'].map(f => readFileSync(new URL('../web/core/' + f, import.meta.url), 'utf8')).join('\n')); // the Running view moved to chats-running.js (issue 1665)
   const on = chats.slice(chats.indexOf('  function inboxSwitchOn() {'), chats.indexOf('  function runningOpen(w)'));
   assert.match(on, /includes\('wizard\/agent-inbox'\)/);
   assert.match(on, /if \(!inboxSwitchOn\(\)\) return false;/, 'off: no Running row, no inbox read');
