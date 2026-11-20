@@ -4,7 +4,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
-const src = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
+import { withParts } from './fixtures/chats-parts.mjs';
+const src = withParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'));
 const rem = readFileSync(new URL('../web/core/scheduled-reminders.js', import.meta.url), 'utf8');
 const slice = (a, b) => { const i = src.indexOf(a), j = src.indexOf(b, i); assert.ok(i >= 0 && j > i, a); return src.slice(i, j); };
 function fixture({ desktop, after = 'stay', ids = ['a', 'b', 'c'], open = 'b' }) {
