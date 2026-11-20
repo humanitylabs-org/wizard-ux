@@ -513,7 +513,7 @@
     const host = [...document.querySelectorAll('iframe')].find(f => f.contentWindow === e.source)?.closest('[data-win]');
     const w = host && W[host.dataset.win]; if (!w || !['app-store', 'agents', 'setup'].includes(w.appId)) return;
     // A just-installed app may still be starting (its page and route land a few seconds after the Store says
-    // Installed, longer during a WizardOS update): say so and open it once the registry has its page (#1651).
+    // Installed, longer during a WizardOS update): say so and open it once the registry has its page (issue 1651).
     const a = await whenOpenable(d.id); if (!a) return;
     const here = host.isConnected && W[host.dataset.win] === w;
     if (openApp(a) !== false && here && d.replace === true && w.appId === 'app-store') closeWin(host.dataset.win);   // Get more: the app takes the Store's place
