@@ -307,6 +307,11 @@
             android:name=".notify.ReplyJob"
             android:exported="false"
             android:permission="android.permission.BIND_JOB_SERVICE" />
+        <!-- Phone notifications per app (issue 1567): backstop read of the Notifications app after the process is gone. -->
+        <service
+            android:name=".notify.AppNotifyJob"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
         <!-- Messenger icon unread count: periodic backstop poll, and the opt-in 1x1 widget fallback. -->
         <service
             android:name=".badge.UnreadJob"
