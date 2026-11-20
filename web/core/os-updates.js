@@ -124,6 +124,9 @@
     const fresh = new Set(Array.isArray(m.last?.updated) ? m.last.updated : []);
     const notes = m.notes && typeof m.notes === 'object' && !Array.isArray(m.notes) ? m.notes : null;
     const running = new Map((Array.isArray(m.running) ? m.running : []).filter(r => r && typeof r.app === 'string').map(r => [r.app, String(r.step || '')]));
+    // Update requests waiting for the app update that is running (wizard-app-manager#764): `app` null = every due app.
+    const queue = Array.isArray(m.queued) ? m.queued.filter(q => q && (typeof q.app === 'string' || q.app === null)) : [];
+    const queued = new Set(queue.map(q => q.app)), queuedAll = queued.has(null);
     for (const x of Array.isArray(doc?.installed) ? doc.installed : []) {
       const id = x?.info?.id; if (typeof id !== 'string' || !/^[a-z0-9][a-z0-9-]{0,63}$/.test(id)) continue;
       const urn = typeof x.info.urn === 'string' ? x.info.urn : '';
@@ -141,6 +144,7 @@
       if (held.has(id) && ['ready', 'current', 'unknown'].includes(state)) { state = 'held'; label = 'Held'; }
       if (MIDWAY.test(run)) { state = 'busy'; label = run === 'updating' ? 'Updating…' : `${run[0].toUpperCase()}${run.slice(1).replace(/_/g, ' ')}…`; }
       else if (running.has(id)) { state = 'busy'; label = STEP[running.get(id)] || 'Updating…'; }
+      else if ((queued.has(id) && ['ready', 'failed', 'held'].includes(state)) || (queuedAll && state === 'ready')) { state = 'busy'; label = 'Queued'; }
       const ver = have == null ? 'Version unavailable' : latest != null && latest > have ? `Version ${have} · latest ${latest}` : `Version ${have}`;
       const why = state === 'failed' ? String(failed[id].reason || '').slice(0, 300) : '';
       // The bug the App Manager filed or found for this failed version (wizard-app-manager#524), only a plain GitHub
@@ -226,7 +230,9 @@
     const r = await fetch(AU_API, { method: 'POST', credentials: 'same-origin', cache: 'no-store',
       headers: { 'Content-Type': 'application/json', 'X-Wizard-Store': '1' }, body: JSON.stringify(body) });
     const d = await r.json().catch(() => ({}));
-    return { ok: r.ok && (body.action !== 'apply' || d?.started === true), status: r.status, d: d && typeof d === 'object' ? d : {} };
+    // A request made while another app update runs is queued for that run (wizard-app-manager#764): that is a yes too.
+    const queuedOk = Array.isArray(d?.queued) && d.queued.length > 0;
+    return { ok: r.ok && (body.action !== 'apply' || d?.started === true || queuedOk), status: r.status, d: d && typeof d === 'object' ? d : {} };
   }
   // Read the rows again from GET after a POST: wait out a read already on its way (it may predate the POST).
   const reloadApps = () => (appsBusy || Promise.resolve()).then(() => loadApps(true));
@@ -250,6 +256,7 @@
     const id = key === 'app-mode' ? '' : arg;
     postApps(body).then(({ ok, status, d }) => {
       if (!ok) throw new Error(String(d.note || d.error || `The App Manager said ${status}`).slice(0, 200));
+      if (body.action === 'apply' && d.started !== true && Array.isArray(d.queued)) done = `Queued · ${(apps || []).find(x => x.id === id)?.name || id}: updates after the one running`;
       if (key === 'app-mode') au = { ...au, app_mode: arg };
       if (id) appMsg[id] = { ok: true, text: done, at: Date.now() };
       ctx?.toast?.('✓', done, 2200);
