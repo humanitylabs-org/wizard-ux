@@ -1,6 +1,6 @@
 // ux#1553: every Messenger voice note on a slow phone showed "Recording is kept in memory while saving catches up"
 // about one second in, because start() armed a 1 s notice while patiently() (ux#1503) was still quietly retrying the
-// first row save. A slow-but-healthy store now says nothing; only a real failure warns, exactly once.
+// first row save. A slow-but-healthy store now says nothing, and since the ux#1503 reopen a broken one says nothing either.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
@@ -43,10 +43,10 @@ test('a first save that is retried quietly and then lands shows no notice', asyn
   assert.deepEqual(r.warns, []);
 });
 
-test('a first save that keeps failing warns exactly once, with the on-device failure', async () => {
+// ux#1503 reopen: the take is in memory and hands off from there, so even a first save that keeps failing is quiet.
+test('a first save that keeps failing shows no notice; the failure is kept for the hand-off', async () => {
   const r = await run(() => Promise.reject(failure('timeout')));
   assert.equal(r.tries, 5);
-  assert.equal(r.warns.length, 1);
-  assert.match(r.warns[0], /^On-device saving failed \(timeout\)/);
-  assert.ok(!r.warns.some(w => /kept in memory/.test(w)));
+  assert.deepEqual(r.warns, []);
+  assert.equal(r.s.error.detail, 'timeout');
 });

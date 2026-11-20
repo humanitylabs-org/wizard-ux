@@ -145,8 +145,8 @@ public final class DeviceBridge implements RecorderService.Listener {
         }
     };
 
-    public void onStart() { AppState.setFront(activity,true); ReplyWatcher.appFront(activity); }
-    public void onStop() { AppState.setFront(activity,false); if (!AppState.front()) ReplyWatcher.kick(activity); if (!(activity instanceof ai.wizards.os.AppSessionActivity)) Updater.onStop(activity); }
+    public void onStart() { AppState.setFront(activity,true); ReplyWatcher.appFront(activity); ai.wizards.os.badge.UnreadBadges.hold(activity,activity,true); }
+    public void onStop() { AppState.setFront(activity,false); ai.wizards.os.badge.UnreadBadges.hold(activity,activity,false); if (!AppState.front()) ReplyWatcher.kick(activity); if (!(activity instanceof ai.wizards.os.AppSessionActivity)) Updater.onStop(activity); }
     public void onResume() { if (!(activity instanceof ai.wizards.os.AppSessionActivity)) Updater.onResume(activity); WizardIdentity.refresh(activity); }
     public void onDestroy() {
         onPageStarted();

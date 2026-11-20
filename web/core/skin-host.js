@@ -375,9 +375,36 @@
     if (!isDoc) return;
     if (chatsClaimed()) document.documentElement.dataset.chatsOwner = 'layout'; else delete document.documentElement.dataset.chatsOwner;
   }
-  // data-layout-booting: first frames of a refresh that wears a layout. The layout's own stylesheet keeps the page clear
-  // (opacity) until the layout removes it; failure, a switch or this timer always do, so a refresh never sticks on blank.
+  // data-layout-booting: first frames of a desktop refresh that wears a layout owning the chats (AI apps). The page stays
+  // clear until the layout says it is drawn (its own sheet applied) or has failed, never on a plain timer: a slow load
+  // (cold cache, tailnet, Mac app) used to drop the veil after 5 s and show Classic Desks underneath (issue 1556).
+  // The veil is an inline sheet, so it never waits on a fetch. A slow boot shows a quiet "Loading…" after BOOT_SLOW_MS;
+  // one still not drawn BOOT_GIVEUP_MS after the shell attached gets the shared Chats recovery (layoutLoadFailed), never Classic.
+  const BOOT_SLOW_MS = 5000, BOOT_GIVEUP_MS = 45000;
+  const BOOT_VEIL = 'html[data-layout-booting] body { opacity: 0 !important; pointer-events: none !important; }\n'
+    + 'html[data-layout-booting="slow"]::after { content: "Loading\\2026"; position: fixed; inset: 0; display: grid; place-items: center; '
+    + 'font: 500 var(--wz-text-sm, 0.9rem) system-ui, sans-serif; color: CanvasText; opacity: 0.6; pointer-events: none; }';
+  const booting = () => isDoc && document.documentElement.dataset.layoutBooting !== undefined;
   function endBoot() { if (isDoc) delete document.documentElement.dataset.layoutBooting; }
+  function startBoot(id) {
+    document.documentElement.dataset.layoutBooting = '';
+    try { const st = document.createElement('style'); st.dataset.layoutVeil = ''; st.textContent = BOOT_VEIL; document.head.appendChild(st); } catch (_) {}
+    // (unref: a test runtime never waits on these; a page ignores it)
+    const later = (fn, ms) => { const t = setTimeout(fn, ms); try { t?.unref?.(); } catch (_) {} };
+    later(() => { if (booting() && layoutId === id) document.documentElement.dataset.layoutBooting = 'slow'; }, BOOT_SLOW_MS);
+  }
+  // The give-up clock starts at attach: before it there is no shell to mount the recovery, and the layout has not
+  // even started loading (a slow parser can take longer than BOOT_GIVEUP_MS to reach desktop.js).
+  function bootGiveUp(id) {
+    const t = setTimeout(() => {
+      if (!booting() || layoutId !== id) return;
+      // Mounted but its sheet never answered: the layout's own DOM is there, so show it.
+      if (layoutRec && !layoutRec.dead && layoutFailed !== id) return endBoot();
+      // Still not mounted: give up on this load (a late import must not mount over the recovery) and recover.
+      layoutSeq++; layoutLoadFailed(id, 'timeout');
+    }, BOOT_GIVEUP_MS);
+    try { t?.unref?.(); } catch (_) {}
+  }
   function layoutLoadFailed(id, reason = 'unavailable', error) {
     if (layoutId !== id) return false;
     layoutDiagnostic('layout:' + id, 'load-failed', reason, error);
@@ -1264,7 +1291,8 @@
   function setLayout(id, persist = true) {
     const next = layoutOf(id) ? id : 'classic';
     try { if (persist) { if (next === 'classic') localStorage.removeItem(LAYOUT_KEY); else localStorage.setItem(LAYOUT_KEY, next); } } catch (_) {}
-    layoutId = next; endBoot(); paintLayout(next);
+    // Re-wearing a layout that owns the chats keeps the boot veil until it has mounted (it clears it itself, or fails).
+    layoutId = next; if (!layoutOf(next)?.ownsChats) endBoot(); paintLayout(next);
     if (shell) loadLayout(next); else if (next === 'classic') { layoutSeq++; dispose(layoutRec, 'off'); }
     try { shell?.relayout?.(); } catch (_) {}
     return next;
@@ -1769,7 +1797,7 @@
     /* core/skins.js: the owner picked a skin. Stylesheet plus (if any) its script. */
     commit(id) { ensureCss(id); committedId = id; if (shell) packageReady = load(id); },
     /* app.js: the shell is ready; hands over the narrow adapter skins are allowed to drive. */
-    attach(adapter) { shell = adapter; for (const n of builtinDefs.keys()) startBuiltin(n); const id = committedId || (window.WosSkin && window.WosSkin.current); committedId = id; if (id) packageReady = load(id); window.WosMySkin?.startScript(); if (layoutOf(layoutId)) loadLayout(layoutId); window.dispatchEvent?.(new Event('wos:skin-host-ready')); },
+    attach(adapter) { shell = adapter; for (const n of builtinDefs.keys()) startBuiltin(n); const id = committedId || (window.WosSkin && window.WosSkin.current); committedId = id; if (id) packageReady = load(id); window.WosMySkin?.startScript(); if (layoutOf(layoutId)) loadLayout(layoutId); if (booting()) bootGiveUp(layoutId); window.dispatchEvent?.(new Event('wos:skin-host-ready')); },
     /* Layouts: Settings › Look. Classic loads nothing. */
     layouts: LAYOUTS, setLayout,
     escapeSurface() { for (const h of [...escapeSurfaces].reverse()) if (!h.a.dead && h.back() === true) return true; return false; },
@@ -1906,7 +1934,7 @@
       }
       layoutId = chosen; paintLayout(chosen);
       if (isDoc && env().shell === 'desktop' && layoutOf(chosen)?.ownsChats) {
-        document.documentElement.dataset.layoutBooting = ''; setTimeout(endBoot, 5000);
+        startBoot(chosen);
       }
     } catch (_) {}
     if (isDoc) for (const pid of ['pointerup', 'pointercancel']) document.addEventListener(pid, e => release(e.pointerId), true);

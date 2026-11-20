@@ -45,6 +45,18 @@ final class ReachPolicy {
         return status >= 500 && status <= 599;
     }
 
+    /** Switch wizard/pin-reach-answer (wizard-ux issue 1607): the Wizard answered the load being watched (its main
+     *  frame committed, same host, not already failed), so the connecting mark stops. The give-up mark is not part of
+     *  this: it stays armed until a page paints. Off: only a paint stops either mark, as before. */
+    static boolean answerDisarms(boolean switchOn, boolean web, boolean failed, boolean sameHost) {
+        return switchOn && web && !failed && sameHost;
+    }
+
+    /** After an answer, a Connecting screen already up leaves; the offline screen (and its Retry) stays until a paint. */
+    static boolean answerHides(boolean showing, boolean offline) {
+        return showing && !offline;
+    }
+
     /** A network change worth a fresh try: the reason changed, and there is now a network to try on. */
     static boolean retryOnChange(Why shown, Why now) {
         return shown != now && now != Why.NO_NETWORK;

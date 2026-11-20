@@ -34,4 +34,12 @@ The Desktop-style Chats list is live on your phone. It starts off; switch it on 
 - Not installed on this Wizard: a quiet line, "This tweak isn't installed on this Wizard". A tweak whose manifest
   `shells` leaves out this shell shows disabled, labelled "Phone only" / "Desktop only".
 - Works for experiment tweaks and the release-wide settings that are tweaks underneath (e.g. `wizard/unified-inbox`).
-- Tests: `tests/chat-tweak-card.test.mjs`.
+- App feature switches (wizard-ux issue 1560, behind the off-by-default switch `wizard/chat-app-switches`): an id
+  `<app id>:<switch id>` (the `wizard.app-switches/1` catalog, wizard-os docs/APP_SWITCHES.md) draws the same switch
+  row, mixed freely with tweak ids in `ids`. Name, description and current state come from the App Manager's one
+  catalog (`/wizard-os-home/store-install/_feature-switches`, read when a card paints, at most every 15 s, and when the
+  page shows again); a tap POSTs `{"id","on"}` there with `X-Wizard-Store: 1`, the owner-proof path the Tracker's Try it
+  uses, so the app's own `/api/switches` changes. An installed app that doesn't have the switch yet is greyed with
+  "Update <app> first" and an Update button (opens that app in the App Store); an app that isn't installed, or declares
+  no switches, stays hidden. With the switch off app ids are dropped, as before.
+- Tests: `tests/chat-tweak-card.test.mjs`; browser: `tests/qa-chat-tweak-card.cjs`, `tests/qa-chat-app-switch-card.cjs`.

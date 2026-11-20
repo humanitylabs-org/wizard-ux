@@ -12,17 +12,21 @@ function models() {
   const M = window.WosModels;
   const mk = (value, provider, name) => ({ value, provider, name, description: '' });
   M.options = [mk('claude-opus-5-5', 'anthropic', 'Claude Opus'), mk('claude-fable-5-1', 'anthropic', 'Claude Fable'), mk('claude-sonnet-5', 'anthropic', 'Claude Sonnet'),
-    mk('gpt-6-astra', 'openai-codex', 'Astra'), mk('gpt-6.1-sol', 'openai-codex', 'GPT 6.1 Sol'), mk('gpt-6-luna', 'openai-codex', 'Luna')];
-  M.options[0].isGlobalDefault = true; M.ready = true;
+    mk('gpt-6-astra', 'openai-codex', 'Astra'), mk('gpt-6.1-sol', 'openai-codex', 'GPT 6.1 Sol'), mk('gpt-6-luna', 'openai-codex', 'Luna'), mk('gpt-5.6-terra', 'openai-codex', 'Terra')];
+  M.options[0].isGlobalDefault = true; M.ready = true; M.__window = window;
+  // Issue 1561: the short list comes from the connected connectors, so Claude and ChatGPT are signed in here.
+  M.providers = [{ slug: 'anthropic', authenticated: true }, { slug: 'openai-codex', authenticated: true }];
   return M;
 }
+// owner-correction: humanitylabs-org/wizard-ux#1043 · 2026-11-06 · "Claude Sonnet seems to have been removed from my drop-down screen. Please add Sonnet back in there."
 test('new chat on Sol exposes catalogue Sonnet immediately without changing the default', () => {
   const M = models();
-  M.options = M.normalize({ provider: 'openai-codex', model: 'gpt-6.1-sol', providers: [
+  const payload = { provider: 'openai-codex', model: 'gpt-6.1-sol', providers: [
     { slug: 'openai-codex', authenticated: true, models: ['gpt-6-astra', 'gpt-6.1-sol'] },
     { slug: 'anthropic', authenticated: true, models: ['claude-opus-5-5', 'claude-sonnet-4-6', 'claude-sonnet-5-5'] },
     { slug: 'claude-subscription-directsdk-experimental', authenticated: true, models: ['claude-sonnet-5[1m]'] },
-  ] }, true);
+  ] };
+  M.options = M.normalize(payload, true); M.providers = payload.providers;
   const before = M.defaultOption();
   const cur = M.snapshot('');
   assert.equal(cur.model, 'gpt-6.1-sol');
@@ -39,11 +43,63 @@ test('new chat on Sol exposes catalogue Sonnet immediately without changing the 
   assert.equal(M.snapshot('').provider, 'openai-codex');
 });
 
+// owner-correction: humanitylabs-org/wizard-ux#1636 · 2026-11-19 · "Why isn't Fable visible in my model selector? Please fix."
+test('Fable is a first-open compact row when the catalogue has it, and absent when it does not', () => {
+  const M = models();
+  const cat = fable => M.normalize({ provider: 'openai-codex', model: 'gpt-6.1-sol', providers: [
+    { slug: 'openai-codex', authenticated: true, models: ['gpt-6-astra', 'gpt-6.1-sol'] }, // no Luna route here (issue 1561: Luna would join ChatGPT's short list)
+    { slug: 'anthropic', authenticated: true, models: ['claude-opus-5-5', 'claude-sonnet-5-5', ...(fable ? ['claude-fable-5', 'claude-fable-5-1', 'claude-fable-5-2'] : [])] },
+  ] }, true);
+  M.options = cat(true);
+  const before = M.defaultOption();
+  const cur = M.snapshot('');
+  const { html, list } = M.popHtml({ mode: 'new', cur, all: false });
+  const names = [...html.matchAll(/<span class="mn"><b>([^<]+)<\/b>/g)].map(m => m[1]);
+  assert.deepEqual(names, ['Fable', 'Opus', 'Sonnet', 'Astra', 'Sol']);
+  const match = html.match(/data-mpick="(\d+)"[^>]*><span class="mn"><b>Fable<\/b>/);
+  const picked = list[Number(match[1])];
+  assert.equal(picked.value, 'claude-fable-5-2'); // the newest Fable, via the visibleChoices winner
+  assert.equal(picked.provider, 'anthropic');
+  assert.ok(M.options.includes(picked), 'the row points at the existing catalogue route');
+  assert.equal(M.defaultOption(), before);
+  assert.equal(M.snapshot('').model, 'gpt-6.1-sol');
+  M.options = cat(false);
+  const none = M.popHtml({ mode: 'new', cur: M.snapshot(''), all: false });
+  assert.doesNotMatch(none.html, /Fable/, 'no Fable route: no Fable row, no placeholder');
+  assert.ok(none.list.every(o => !/fable/.test(o.value)));
+});
+
+// Agent chat parity (wizard-agent-service qa/agent-parity/features.json compact-model-menu-families): the Fable row is
+// the main agent's; a host-profile, container or restricted agent's own chats list only that agent's allowed models.
+test('main vs routed threads: Fable joins the main menu, routed agents keep exactly their own models', () => {
+  const M = models();
+  const mkAgent = (id, kind, provider, allowed) => ({ id, kind, label: id, model: { provider, model: allowed[0], allowed_models: allowed } });
+  const agents = [mkAgent('philosopher', 'host-profile', 'anthropic', ['claude-opus-5-5', 'claude-fable-5-1']),
+    mkAgent('boxed', 'container', 'openai-codex', ['gpt-6-astra']), mkAgent('locked', 'restricted', 'anthropic', ['claude-sonnet-5'])];
+  M.options = M.normalize({ provider: 'anthropic', model: 'claude-opus-5-5', providers: [
+    { slug: 'anthropic', authenticated: true, models: ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-fable-5-2'] },
+    { slug: 'openai-codex', authenticated: true, models: ['gpt-6-astra', 'gpt-6.1-sol'] }] }, true);
+  const names = html => [...html.matchAll(/<span class="mn"><b>([^<]+)<\/b>/g)].map(m => m[1]);
+  const main = M.popHtml({ mode: 'thread', cur: { model: 'claude-opus-5-5', provider: 'anthropic' }, all: false });
+  assert.deepEqual(names(main.html), ['Fable', 'Opus', 'Sonnet', 'Astra', 'Sol']);
+  assert.equal(main.list[0].value, 'claude-fable-5-2');
+  const W = M.__window;
+  for (const a of agents) {
+    W.WosAgents.modelOptions = ag => ag.model.allowed_models.map(v => ({ value: v, provider: ag.model.provider, agent: ag.id, name: `own:${v}` }));
+    const { html, list } = M.popHtml({ mode: 'thread', cur: { model: a.model.model, provider: a.model.provider, agent: a.id }, all: false, agent: a });
+    assert.deepEqual(names(html), a.model.allowed_models.map(v => `own:${v}`), `${a.kind} lists only its own models`);
+    assert.ok(list.every(o => o.agent === a.id && o.provider === a.model.provider), `${a.kind} rows stay on its own route`);
+    assert.ok(!list.some(o => o.value === 'claude-fable-5-2'), `${a.kind} never inherits the main agent's Fable route`);
+  }
+});
+
 const priv = [{ value: 'glm-5.3', provider: 'custom', name: 'GLM 5.3', agent: 'private-1', private: true }];
 const order = html => [...html.matchAll(/<span>([^<]+)<\/span><\/div>|<b>(?:<svg[^>]*><\/svg>)?([^<]+)<\/b>|data-mall>([^<]+)</g)].map(m => m[1] ? `## ${m[1]}` : m[2] || m[3]);
 
+// owner-correction: humanitylabs-org/wizard-ux#939 · 2026-11-04 · "Why is Sonnet missing from my model list when I never requested Sonnet to be removed? We previously added it."
 test('compact menu reads bottom-up from the thumb: Opus, Sonnet, Astra, Sol last, Private agent above, More models on top', () => {
   const M = models();
+  M.options = M.options.filter(o => !/fable|luna/.test(o.value)); // an owner with no Fable or Luna route (Fable's row: issue 1636 test above; Luna: issue 1561)
   const { html, list } = M.popHtml({ mode: 'thread', cur: { model: 'claude-opus-5-5', provider: 'anthropic' }, all: false, priv });
   assert.deepEqual(order(html), ['More models', '## Private agent', 'GLM 5.3', '## Models', 'Opus', 'Sonnet', 'Astra', 'Sol']);
   assert.match(html, /class="ch-sheet ch-mpop"/);
@@ -58,13 +114,14 @@ test('in a private chat the private models sit by the thumb and the main models 
   assert.ok(o.indexOf('## Models') < o.indexOf('## Private agent'));
 });
 
-test('More models expands to the other families once each, above the primary four', () => {
+test('More models expands to the other families once each, above the short list', () => {
   const M = models();
   const { html } = M.popHtml({ mode: 'thread', cur: { model: 'claude-opus-5-5', provider: 'anthropic' }, all: true, priv: [] });
   const o = order(html);
-  assert.deepEqual(o.slice(-4), ['Opus', 'Sonnet', 'Astra', 'Sol']);
-  assert.ok(o.includes('Fable') || o.includes('Claude Fable'));
+  assert.deepEqual(o.slice(-6), ['Fable', 'Opus', 'Sonnet', 'Astra', 'Sol', 'Luna']);
+  assert.ok(o.indexOf('Terra') >= 0 && o.indexOf('Terra') < o.indexOf('## Models'));
   assert.equal(o.filter(x => /Opus/.test(x)).length, 1);
+  assert.equal(o.filter(x => /Fable/.test(x)).length, 1);
 });
 
 test('the thread header no longer carries the model; a draft keeps the label outside the editable rows', () => {

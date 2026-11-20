@@ -65,4 +65,29 @@ public class ReachPolicyTest {
         assertEquals("", ReachPolicy.detail(null));
         assertEquals(60, ReachPolicy.detail(new String(new char[200]).replace('\0', 'x')).length());
     }
+
+    @Test
+    public void anAnswerStopsConnectingOnlyWithTheSwitchOn() {
+        // wizard-ux issue 1607 (switch wizard/pin-reach-answer): the Wizard answered the load being watched.
+        assertTrue(ReachPolicy.answerDisarms(true, true, false, true));
+        assertFalse(ReachPolicy.answerDisarms(false, true, false, true));  // off: only a paint stops it, as before
+        assertFalse(ReachPolicy.answerDisarms(true, false, false, true));  // about:blank, data: and file pages are not answers
+        assertFalse(ReachPolicy.answerDisarms(true, true, true, true));    // this load already failed (5xx or error)
+        assertFalse(ReachPolicy.answerDisarms(true, true, false, false));  // a late answer from another Wizard's address
+    }
+
+    @Test
+    public void anAnswerHidesConnectingButNeverTheOfflineScreen() {
+        assertTrue(ReachPolicy.answerHides(true, false));   // Connecting… up: it leaves
+        assertFalse(ReachPolicy.answerHides(true, true));   // Can't reach / Retry: stays until a page paints
+        assertFalse(ReachPolicy.answerHides(false, false));
+    }
+
+    @Test
+    public void theGiveUpMarkStillEndsAnOpenThatNeverPaints() {
+        // The answer only stops the connecting mark; GIVE_UP_MS is still the offline screen's time (MainActivity.answered).
+        assertTrue(ReachPolicy.CONNECTING_MS < ReachPolicy.GIVE_UP_MS);
+        assertEquals(10_000L, ReachPolicy.GIVE_UP_MS);
+        assertEquals(1_200L, ReachPolicy.CONNECTING_MS);
+    }
 }

@@ -281,8 +281,10 @@
     let outside = false;
     root.addEventListener('pointerdown', e => { outside = e.target === root; }, { signal: abort.signal });
     root.addEventListener('click', e => { if (e.target === root && (outside || e.detail === 0)) { e.stopPropagation(); close(); } }, { signal: abort.signal });
-    window.addEventListener('resize', close, { signal: abort.signal });
+    // Only the anchored menu goes stale on resize. The centred sheet stays: on a phone, focusing its
+    // address field raises the keyboard, which resizes the WebView (wizard-ux#1640).
     if (!sheet) {
+      window.addEventListener('resize', close, { signal: abort.signal });
       const r = anchor?.getBoundingClientRect();
       panel.style.top = Math.max(8, r ? r.bottom + 6 : 56) + 'px';
       panel.style.left = Math.max(8, Math.min(r?.left || 8, window.innerWidth - Math.min(340, window.innerWidth - 16) - 8)) + 'px';
@@ -379,7 +381,8 @@
       button.title = `Wizard: ${current?.name || 'This Wizard'}`;
       button.setAttribute('aria-label', `Wizard: ${current?.name || 'This Wizard'}. Switch Wizard`);
       button.setAttribute('aria-busy', String(!!pending));
-      if (!W.visible) close();
+      // One Wizard hides the switcher, so its menu goes; the Add a Wizard sheet stays (that is how a second one is added).
+      if (!W.visible && overlay?.menu) close();
     };
     const off = subscribe(paint); host.listen(button, 'click', () => openMenu(button));
     host.on('route', paint); host.on('home', paint); host.on('render', paint);
