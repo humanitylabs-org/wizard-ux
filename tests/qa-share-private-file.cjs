@@ -1,6 +1,7 @@
 // Browser QA for wizard-ux issue 1621: Share on a chat file in the media viewer never hands Messenger (or anyone)
 // the owner's private /wizard/attachments/… link as text. Real Chromium, the real chat-kit.js + share-sheet.js.
-// Desktop browser: no native bridge and no navigator.share for files, so the file itself can't leave from here.
+// Desktop browser: no native bridge and no navigator.share for files, so the file itself can't leave from here:
+// it is saved to Downloads instead (wizard-os issue 747).
 //   QA_PLAYWRIGHT=<path to playwright> node tests/qa-share-private-file.cjs
 //   QA_WEB=<another web/ dir, e.g. main's> QA_EXPECT=broken: the checks must fail there.
 //   QA_SHOTS=<dir>: save a screenshot after Share.
@@ -47,7 +48,7 @@ const server = http.createServer((req, res) => {
   if (SHOTS) await page.screenshot({ path: path.join(SHOTS, 'share.png') });
   ok(!/\/wizard\/attachments\//.test(seen.preview), `no sheet offers the private link as text (preview=${JSON.stringify(seen.preview)})`);
   ok(!seen.messenger, 'Messenger is not offered the link');
-  ok(/Couldn.t share this file from here/.test(seen.toast), `the owner is told the file can't be shared from here (${JSON.stringify(seen.toast)})`);
+  ok(/saved to Downloads instead/.test(seen.toast), `the file is saved instead and the owner is told so (wizard-os issue 747) (${JSON.stringify(seen.toast)})`);
   // Even if a tap got through to Messenger, nothing would carry the link: deliver a tap on whatever sheet is open.
   if (seen.messenger) { await page.click('.wos-share [data-shs-app="messenger"]'); await page.waitForTimeout(300); }
   const opened = await page.evaluate(() => window.__opened.slice());
