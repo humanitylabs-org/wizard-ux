@@ -68,6 +68,80 @@ window.WizCore.channelEmojiName = function channelEmojiName(name, emoji) {
   const t = (emoji + (bare ? ' ' + bare : '')).trim();
   return t.length > 60 ? '' : t;
 };
+/* Auto channel emoji (wizard-ux issue 1580, switch wizard/chat-channels): a channel created with no emoji in front of its
+ * name gets a fitting one from this small keyword map, instantly and offline ("Money" → "💰 Money"), stored the same
+ * way as a picked one (the start of the name). A name that already starts with an emoji, or matches no word here, is
+ * kept exactly as typed (no emoji shows as 💬). channelAutoEmoji(name) → the emoji or ''; channelAutoName(name) → the
+ * name to store. Whole words first ("workout" before "work"), then a word that starts with a keyword of 4+ letters
+ * ("podcasting"). The agent's own create tool uses the same list (wizard-agent-service server/channel-emoji.mjs):
+ * change both together. */
+window.WizCore.CHANNEL_AUTO_EMOJI = [
+  ['💰', 'money finance finances budget budgets bank banking invest investing investment investments tax taxes savings expense expenses crypto bitcoin stocks accounting invoice invoices salary pension'],
+  ['🧾', 'receipts receipt bills bill'],
+  ['🎵', 'music song songs playlist playlists band guitar piano concert concerts spotify'],
+  ['🎙️', 'podcast podcasts interview interviews radio'],
+  ['🩺', 'health doctor doctors medical medicine clinic hospital symptoms dentist'],
+  ['🧘', 'meditation mindfulness wellbeing wellness therapy mental'],
+  ['🏋️', 'fitness gym workout workouts training exercise running yoga'],
+  ['⚽', 'football soccer sport sports'],
+  ['🍳', 'food cooking recipe recipes kitchen meal meals dinner lunch breakfast'],
+  ['☕', 'coffee'],
+  ['🛒', 'shop groceries grocery'],
+  ['📦', 'shipping packages orders delivery deliveries'],
+  ['✈️', 'travel travels trip trips flight flights vacation vacations holiday holidays'],
+  ['🏠', 'home house household apartment chores'],
+  ['👪', 'family kids parents children'],
+  ['❤️', 'love dating relationship relationships partner'],
+  ['💼', 'work job jobs career office business clients client'],
+  ['📅', 'calendar schedule schedules meeting meetings events agenda planning plans'],
+  ['🚀', 'launch launches startup release releases'],
+  ['💡', 'ideas idea brainstorm brainstorming inspiration'],
+  ['🛠️', 'dev development code coding engineering build builds tools repair'],
+  ['🐛', 'bug bugs debugging'],
+  ['🤖', 'ai agent agents bot bots automation automations'],
+  ['📚', 'books book reading study studies learning learn school homework course courses university'],
+  ['🔬', 'research science'],
+  ['🧪', 'test tests testing experiment experiments lab'],
+  ['📝', 'notes note writing journal diary blog drafts draft todo todos tasks'],
+  ['🎨', 'design art drawing painting creative'],
+  ['📷', 'photo photography pictures'],
+  ['🎬', 'movies movie film films video videos tv netflix'],
+  ['🎮', 'games game gaming'],
+  ['🌱', 'garden gardening plants plant nature'],
+  ['🐶', 'dog dogs pet pets puppy'],
+  ['🐱', 'cat cats kitten'],
+  ['🚗', 'car cars commute driving'],
+  ['🎉', 'party parties birthday birthdays celebration wedding'],
+  ['🎁', 'gifts gift presents christmas'],
+  ['📰', 'news newsletter newsletters press'],
+  ['⚖️', 'legal law lawyer contracts contract'],
+  ['📈', 'marketing growth sales analytics metrics investors'],
+  ['📊', 'reports report data dashboard stats'],
+  ['👥', 'team teams people friends community social hiring'],
+  ['🌍', 'world languages language translation'],
+  ['🔒', 'security privacy passwords'],
+  ['⚙️', 'settings admin system ops setup'],
+  ['✉️', 'email emails mail inbox'],
+  ['📞', 'calls call phone'],
+  ['☀️', 'weather'],
+  ['🙏', 'faith church prayer'],
+  ['⭐', 'favorites favourites starred important'],
+];
+window.WizCore.channelAutoEmoji = function channelAutoEmoji(name) {
+  const C = window.WizCore, words = String(name || '').toLowerCase().normalize('NFKC').split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+  if (!words.length) return '';
+  if (!C.channelAutoIndex) { C.channelAutoIndex = new Map(); for (const [e, ks] of C.CHANNEL_AUTO_EMOJI) for (const k of ks.split(' ')) if (!C.channelAutoIndex.has(k)) C.channelAutoIndex.set(k, e); }
+  const ix = C.channelAutoIndex;
+  for (const w of words) { const e = ix.get(w) || (w.length > 3 && w.endsWith('s') && ix.get(w.slice(0, -1))); if (e) return e; }
+  for (const w of words) for (const [k, e] of ix) if (k.length >= 4 && w.length > k.length && w.startsWith(k)) return e;
+  return '';
+};
+window.WizCore.channelAutoName = function channelAutoName(name) {
+  const C = window.WizCore, n = String(name || '').trim();
+  if (!n || C.channelFace(n).own) return n;
+  const e = C.channelAutoEmoji(n);
+  return (e && C.channelEmojiName(n, e)) || n;
+};
 window.WizCore.chats = function createChats(H) {
   'use strict';
   const { esc, clip, norm, ago, emoOf } = window.WizCore;
@@ -2458,9 +2532,13 @@ window.WizCore.chats = function createChats(H) {
   }
   async function createPickerSpace(p) {
     if (p !== spacePicker || p.busy) return;
-    const name = p.name.trim();
-    if (!name || name.length > 60 || /[\u0000-\u001f\u007f]/u.test(name)) return;
-    if (spaces().some(s => spaceAgent(s) === p.agent && norm(s.name) === norm(name)) || (norm(name) === 'general' && SPACE.ch)) { p.error = SPACE.ch ? 'Already a channel' : 'Already a Space'; renderSpacePicker(); return; }
+    const typed = p.name.trim();
+    if (!typed || typed.length > 60 || /[\u0000-\u001f\u007f]/u.test(typed)) return;
+    // Channels (issue 1580): no emoji in front gets a fitting one from the keyword map (or none, shown as 💬). An added
+    // emoji never makes a second channel of the same words: "Money" is refused next to "Money", "💰 Money" or "🎯 Money".
+    const name = typeof globalThis.WizCore?.channelAutoName === 'function' && SPACE.ch ? globalThis.WizCore.channelAutoName(typed) : typed;
+    const words = n => name !== typed ? globalThis.WizCore.channelFace(n).label : n;
+    if (spaces().some(s => spaceAgent(s) === p.agent && (norm(s.name) === norm(name) || norm(words(s.name)) === norm(typed))) || (norm(name) === 'general' && SPACE.ch)) { p.error = SPACE.ch ? 'Already a channel' : 'Already a Space'; renderSpacePicker(); return; }
     // The channel store (wizard-ux issue 1261) holds 200 channels per agent and gives the new one its id.
     const onStore = typeof chanStore === 'function' && !!chanStore();
     if (onStore ? spaces().filter(s => spaceAgent(s) === p.agent).length >= CHAN_STORE_MAX : spaces().length >= 50) { p.error = onStore ? `Maximum ${CHAN_STORE_MAX} channels` : SPACE.ch ? 'Maximum 50 channels' : 'Maximum 50 Spaces'; renderSpacePicker(); return; }
