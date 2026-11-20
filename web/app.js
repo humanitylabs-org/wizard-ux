@@ -1183,32 +1183,14 @@
     // a layout placing the shell's opens (apps.routeOpens): the app where it shows apps, at that page
     return window.WosSkinHost?.routeOpen?.('app', { id, path: rel }, go) ? true : go();
   };
-  // An app the Store just installed: re-check the registry (as Welcome does) with a visible Starting…, never a
-  // silent no-op. One wait per app; a second tap while it waits joins it. Gives up after about a minute.
-  const OPEN_WAIT = new Map();
-  function whenOpenable(id) {
-    const now = hostedOpenable(id); if (now) return Promise.resolve(now);
-    if (OPEN_WAIT.has(id)) return OPEN_WAIT.get(id);
-    const label = () => esc(APP[id]?.name || 'The app');
-    const p = (async () => {
-      for (let i = 0; i < 30; i++) {
-        try { await window.WizCore.refreshApps?.(); } catch (_) {}
-        const a = hostedOpenable(id); if (a) return a;
-        if (i === 0) toast('◌', `${label()} is starting…`, 4000);
-        await new Promise(r => setTimeout(r, i < 5 ? 1000 : 2000));
-      }
-      toast('◌', `${label()} is installed but still starting. Try again in a moment.`, 4000);
-      return null;
-    })().finally(() => OPEN_WAIT.delete(id));
-    OPEN_WAIT.set(id, p); return p;
-  }
+  // An app the Store just installed may still be starting: core/apps.js waits for its page, saying so (issue 1651).
+  const whenOpenable = id => window.WizCore.whenOpenable(id, { openable: hostedOpenable, name: id => APP[id]?.name, say: t => toast('◌', esc(t), 4000) });
   // Only trusted system windows may ask; check the actual sender frame, never a claimed app id.
   addEventListener('message', async e => {
     const d = e.data; if (e.origin !== location.origin || !d || d.type !== 'wizard:open-app' || typeof d.id !== 'string') return;
     const host = [...document.querySelectorAll('iframe')].find(f => f.contentWindow === e.source)?.closest('[data-win]');
     const w = host && W[host.dataset.win]; if (!w || !['app-store', 'agents', 'setup'].includes(w.appId)) return;
-    // A just-installed app may still be starting (its page and route land a few seconds after the Store says
-    // Installed, longer during a WizardOS update): say so and open it once the registry has its page (issue 1651).
+    // A just-installed app may still be starting: say so and open it once the registry has its page.
     const a = await whenOpenable(d.id); if (!a) return;
     const here = host.isConnected && W[host.dataset.win] === w;
     if (openApp(a) !== false && here && d.replace === true && w.appId === 'app-store') closeWin(host.dataset.win, true);   // Get more: the app takes the Store's place

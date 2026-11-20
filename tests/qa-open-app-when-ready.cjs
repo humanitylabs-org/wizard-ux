@@ -57,7 +57,7 @@ const toastText = p => p.evaluate(() => { const t = document.getElementById('toa
       // The Store's Open, right after the install: the shell's app list has no page for the Tracker yet.
       st.asked = true;
       await p.evaluate(() => { const f = [...document.querySelectorAll('iframe')].find(x => x.src.includes('/store/index.html')); f.contentWindow.eval("parent.postMessage({ type: 'wizard:open-app', id: 'wizardos-tracker' }, location.origin)"); });
-      await p.waitForTimeout(400);
+      await p.waitForTimeout(1200);
       const early = await toastText(p);
       await shot(p, `${broken ? 'before' : 'after'}-${shell}-tap`);
       await p.waitForTimeout(9000);
