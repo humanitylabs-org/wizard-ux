@@ -21,6 +21,9 @@
     { id: 'network', title: 'Network & security', group: 'System', available: filled('network') },
     { id: 'storage', title: 'Storage & backups', group: 'System', available: filled('storage') },
     { id: 'appearance', title: 'Appearance', group: 'Preferences' },
+    // With Skins are look only on (wizard-ux issue 1190), feature switches get their own page: Appearance is colours
+    // and background only. Off: they stay at the bottom of Look, as before.
+    { id: 'try-features', title: 'Try new features', available: () => lookOnlyDraft() && !!tweakRows(window.WosSkin, 'try') },
     { id: 'chats', title: 'Chats & app screens' },
     // Where each app's notifications go: a badge on its icon, or Chats (core/notif-bell.js routes; one place each).
     { id: 'notifications', title: 'Notifications', available: () => typeof window.WosBell?.routes === 'function' },
@@ -76,7 +79,7 @@
   // A quiet value on the right of a row, only where it tells you something at a glance; '' otherwise.
   function subtitle(id, ctx) {
     if (id === 'phones') { const pc = phones(), v = pc?.view; if (!v) return ''; if (pc.lost) return 'Can’t check'; const n = v.phones.length; return pc.on ? (n ? `${n} ${n === 1 ? 'device' : 'devices'}` : 'On') : pc.settingUp ? 'Setting up' : v.step === 'off' ? 'Off' : ''; }
-    if (id === 'appearance') return window.WosSkin ? (mySkinWorn() ? window.WosMySkin.active.name + ' · ' : '') + lookName(window.WosSkin, window.WosSkin.current) : '';
+    if (id === 'appearance') return window.WosSkin ? (mySkinWorn() && !lookOnlyDraft() ? window.WosMySkin.active.name + ' · ' : '') + lookName(window.WosSkin, window.WosSkin.current) : '';
     if (id === 'phone') { if (shell()) return shellOrb()?.state.on ? 'Everywhere on' : ''; try { return JSON.parse(native()?.everywhere?.() || '{}').enabled ? 'Everywhere on' : ''; } catch (_) { return ''; } }
     if (id === 'recovery') { const n = new Set([...unsentAll(ctx), ...recovered()].map(x => x.id)).size; return n ? String(n) : ''; }
     // Resources: quiet unless something is running low (under a quarter left), then the lowest one.
@@ -294,7 +297,8 @@
   // One support predicate for both Look and New skin. Filter rows only: the
   // draft map must retain hidden other-shell defaults when it is saved.
   const shellTweaks = (items, shell) => items.filter(t => !t.view || !Array.isArray(t.shells) || t.shells.includes(shell));
-  function tweakRows(S) {
+  // part: 'all' (Look, switch off), 'look' (views only) or 'try' (the Try new features page, Skins are look only on).
+  function tweakRows(S, part = 'all') {
     const E = window.WosExperience; if (!E) return '';
     const s = E.state, own = window.WosMySkin?.active;
     if (!s.tweaks.length && !s.error) return '';
@@ -322,7 +326,10 @@
     // For everyone, or the channel not read yet: a switch that is on keeps its options, without the switch itself.
     const opts = testers ? '' : list.filter(t => !t.view && t.on && tweakOpts.has(t.id)).map(t => `<div class="st-row static tw-row"><span class="st-tx"><b>${esc(t.name)}</b></span></div><div class="tw-opts" data-tweak-opts="${esc(t.id)}"></div>`).join('');
     const tryNew = testers && features ? `<div class="tw-group" data-try-features><h4>Try new features</h4><p class="st-hint">Unfinished features you can switch on to try. The team can see which ones you use only if you allow it.</p>${err}<div class="tw-list">${features}</div></div>` : '';
-    return `${viewPicker}${viewRows ? `<div class="tw-group"><h4>Views</h4>${tryNew ? '' : err}<div class="tw-list">${viewRows}</div></div>` : ''}${tryNew}${opts ? `<div class="tw-group"><div class="tw-list">${opts}</div></div>` : ''}${!viewRows && !tryNew ? err : ''}`;
+    const optsHtml = opts ? `<div class="tw-group"><div class="tw-list">${opts}</div></div>` : '';
+    if (part === 'try') return tryNew || optsHtml ? `${tryNew}${optsHtml}` : '';
+    if (part === 'look') return `${viewPicker}${viewRows ? `<div class="tw-group"><h4>Views</h4>${err}<div class="tw-list">${viewRows}</div></div>` : ''}`;
+    return `${viewPicker}${viewRows ? `<div class="tw-group"><h4>Views</h4>${tryNew ? '' : err}<div class="tw-list">${viewRows}</div></div>` : ''}${tryNew}${optsHtml}${!viewRows && !tryNew ? err : ''}`;
   }
   let authorList = null;
   const tweakOpts = new Map(); // tweak id -> its options node (skin-host api.settings.section(.., 'look', node))
@@ -495,6 +502,7 @@
   function lookHtml(S, ctx) {
     window.WosExperience?.installed?.().catch(() => {}); // warm the tweak list for New skin
     if (ctx.skinDraft) return newSkinHtml(S, ctx.skinDraft);
+    if (lookOnlyDraft()) return lookOnlyHtml(S, ctx);
     const cur = S.current, base = lookName(S, cur), own = window.WosMySkin?.active;
     loadFaces();
     const fams = S.families || [{ id: cur, name: base, palettes: S.list.map(k => k.id) }];
@@ -509,6 +517,21 @@
     const confirm = ctx.skinRemove ? `<div class="st-confirm-scrim"><section class="st-confirm" role="alertdialog" aria-modal="true" aria-labelledby="skin-remove-title"><h3 id="skin-remove-title">Remove ${esc(ctx.skinRemove.name)}?</h3><p>You can undo this removal. Your Wizard keeps the folder in trash for seven days.</p><div class="st-actions"><button data-skin-remove-cancel>Cancel</button><button data-skin-remove-confirm>Remove skin</button></div></section></div>` : '';
     const undo = ctx.skinUndo ? `<div class="st-skin-toast" role="status">Skin removed<button data-skin-undo>Undo</button><button data-skin-undo-dismiss aria-label="Dismiss">×</button></div>` : '';
     return `<div class="st-group" data-stgroup="look"><h4>Skin</h4><div class="skp-all${facesReady ? '' : ' skp-wait'}">${grid}${colours}</div>${deviceSkinRecovery()}${tweakRows(S)}${own ? mySkinRow(own) : ''}${confirm}${undo}</div>`;
+  }
+  /* Skins are look only (wizard-ux issue 1190, Miguel 20 Nov 2026: "it's really just colors and background"): no skins,
+   * own skins or New skin, one row of every colour (the scenic landscapes colours are a Background, not a colour), the
+   * worn colour's Background, and Views. Feature switches are on their own page (try-features above). Picking a colour
+   * takes off an own skin (my-skin.js leaves it when the worn colour changes); switching off brings the skins back. */
+  function lookOnlyHtml(S, ctx) {
+    const cur = S.current;
+    loadFaces();
+    const fams = S.families || [{ id: cur, name: lookName(S, cur), palettes: S.list.map(k => k.id) }];
+    const family = fams.find(f => f.id === S.familyOf?.(cur)) || fams[0];
+    const ids = [...new Set(fams.flatMap(f => f.palettes || []))].filter(id => !/^landscapes/.test(id));
+    const shownCur = /^landscapes/.test(cur) ? family?.palettes.find(id => !/^landscapes/.test(id) && isLight(id) === isLight(cur)) || cur : cur;
+    const colours = `<div class="skp-colours"><h4>Colors</h4><div class="skp" role="group" aria-label="Colors">${ids.map(id => S.list.find(k => k.id === id)).filter(Boolean).map(k => skinCard(k, shownCur)).join('')}</div></div>`;
+    const background = family && (S.wizardBackgrounds || twinned(S, family)) ? backgroundHtml(S, family, cur, ctx) : '';
+    return `<div class="st-group" data-stgroup="look" data-look-only><div class="skp-all${facesReady ? '' : ' skp-wait'}">${colours}${background}</div>${tweakRows(S, 'look')}</div>`;
   }
   // Background + Mode (Miguel, 4 Nov 2026): a skin whose colours come in dark/light twins shows ONE row of
   // backgrounds (Plain, landscape pictures, WizardOS scenes) and a separate Dark | Light switch. Keep the
@@ -576,7 +599,7 @@
     }
   }, act(ctx, el, event) {
     const M = window.WosMySkin, S = window.WosSkin;
-    const pickPalette = id => skinAction(() => M?.active ? M.update({ base: id }) : S.set(id), () => { void window.WosExperience?.chooseSkin?.(); for (const m of mounts) m.render(); ctx.haptic?.(8); }, e => ctx.toast?.('!', e.message, 3000));
+    const pickPalette = id => skinAction(() => M?.active && !lookOnlyDraft() ? M.update({ base: id }) : S.set(id), () => { void window.WosExperience?.chooseSkin?.(); for (const m of mounts) m.render(); ctx.haptic?.(8); }, e => ctx.toast?.('!', e.message, 3000));
     if (backgroundAct(ctx, el, pickPalette)) return true;
     if (el.closest('[data-skin-remove-cancel]')) { ctx.skinRemove = null; ctx.render(); return true; }
     if (el.closest('[data-skin-remove-confirm]')) {
@@ -627,11 +650,18 @@
     const family = el.closest('[data-skinfamily]');
     if (family) { skinAction(() => M?.active ? M.leave() : undefined, () => { S.setFamily(family.dataset.skinfamily); void window.WosExperience?.chooseSkin?.(); for (const m of mounts) m.render(); ctx.haptic?.(8); }, e => ctx.toast?.('!', e.message, 3000)); return true; }
     const b = el.closest('[data-skinpick]'); if (!b) return false;
-    skinAction(() => M?.active ? M.update({ base: b.dataset.skinpick }) : S.set(b.dataset.skinpick), () => {
+    skinAction(() => M?.active && !lookOnlyDraft() ? M.update({ base: b.dataset.skinpick }) : S.set(b.dataset.skinpick), () => {
       void window.WosExperience?.chooseSkin?.();
       for (const m of mounts) m.render(); ctx.haptic?.(8);
     }, e => ctx.toast?.('!', e.message, 3000)); return true;
   } });
+  // Try new features as its own page while Skins are look only is on (wizard-ux issue 1190): the same switches, state
+  // and options as the Look section it replaces; the page hides when the switch is off (PAGES above).
+  register({ id: 'try-features', page: 'try-features', aliases: ['try-new-features', 'feature-switches'], available: () => lookOnlyDraft(),
+    html: () => tweakRows(window.WosSkin, 'try'),
+    painted(ctx, section) { for (const slot of section?.querySelectorAll?.('[data-tweak-opts]') || []) { const n = tweakOpts.get(slot.dataset.tweakOpts); if (n && n.parentNode !== slot) slot.append(n); } },
+    deferRefresh: () => [...tweakOpts.values()].some(n => n.contains?.(document.activeElement) && document.activeElement?.matches?.('input, textarea')),
+    act: (ctx, el) => settingAct(ctx, el) });
   // Window opacity: one slider for the glass behind every window (Chats and every app). Per device, like the skin.
   const glassPct = S => Math.round((S.glass ?? S.skinGlass) * 100);
   const glassNote = S => S.glass == null ? 'Skin default · every window and app' : 'Every window and app';
@@ -653,7 +683,7 @@
   const settingRow = id => { const t = window.WosExperience?.state.tweaks.find(x => x.id === id && x.builtin); return t ? tweakSwitches([t], 'data-tweak-toggle', window.WosExperience.state.busy) : ''; };
   const settingAct = (ctx, el) => { const b = el.closest('[data-tweak-toggle]'); if (!b) return false; void window.WosExperience.toggle(b.dataset.tweakToggle).catch(e => ctx.toast?.('!', e.message, 2400)); return true; };
   register({ id: 'home-network', page: 'appearance', html: () => { const r = settingRow('wizard/machines-home'); return r ? `<div class="st-group"><h4>Home</h4>${r}</div>` : ''; }, act: settingAct });
-  register({ id: 'skin-frame', available: () => !!window.WosSkin, html() {
+  register({ id: 'skin-frame', available: () => !!window.WosSkin && !lookOnlyDraft(), html() {
     return '<div class="st-group sf-section"><details class="st-advanced"><summary>Advanced</summary><button class="sf-import" data-skinimport>Import skin JSON</button><input type="file" data-skinfile accept="application/json,.json" hidden><p data-skinimport-status role="status"></p></details></div>';
   }, act(ctx, el) {
     if (!el.closest('[data-skinimport]')) return false;
