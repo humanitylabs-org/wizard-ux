@@ -16,4 +16,5 @@
     admitted: appId => !on() || MEDIA.includes(appId),
     nativeAppId: appId => on() && MEDIA.includes(appId) ? appId : pilot,
   };
+  try { window.addEventListener('wos:tweak-choice', e => { if (e?.detail?.id === SWITCH && e.detail.on === false) window.WizBackgroundAudio?.releaseOwn?.(); }); } catch (_) {}
 })();

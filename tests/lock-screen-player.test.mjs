@@ -29,7 +29,7 @@ function shell({ on = false } = {}) {
     frames.push({ contentWindow: win, isConnected: true, hasAttribute: () => false, getAttribute: () => '/' + id + '/' });
     return win;
   };
-  return { c, sent, root, frame };
+  return { c, sent, root, frame, listeners };
 }
 
 test('switch off: the Android player hears the old single token for every admitted provider (unchanged)', () => {
@@ -71,6 +71,34 @@ test('the switch is read at call time, so flipping it needs no reload', () => {
   f.root.dataset.tweaks += ' ' + SWITCH;
   f.c.WizBackgroundAudio.request(win, 'state').catch(() => {});
   assert.equal(f.sent.at(-1).appId, 'wizard-podcasts');
+});
+
+test('turning the switch off mid-play never strands Podcasts: it keeps its own id, and the off edge stops its session', async () => {
+  const f = shell({ on: true });
+  const win = f.frame('wizard-podcasts');
+  f.c.WizBackgroundAudio.request(win, 'load', { sessionId: 's', queue: [] }).catch(() => {});
+  assert.equal(f.sent.at(-1).appId, 'wizard-podcasts');
+  f.root.dataset.tweaks = 'wizard/thread-tracker';
+  f.c.WizBackgroundAudio.request(win, 'pause', { sessionId: 's' }).catch(() => {});
+  assert.equal(f.sent.at(-1).appId, 'wizard-podcasts', 'the owner keeps controlling its own session');
+  const answer = result => f.c.wizardAudioPort.onmessage({ data: JSON.stringify({ id: f.sent.at(-1).id, ok: true, result }) });
+  const released = f.c.WizBackgroundAudio.releaseOwn();
+  assert.deepEqual([f.sent.at(-1).method, f.sent.at(-1).appId], ['state', 'wizard-podcasts']);
+  answer({ sessionId: 's' }); await new Promise(r => setImmediate(r));
+  assert.deepEqual([f.sent.at(-1).method, f.sent.at(-1).appId, f.sent.at(-1).sessionId], ['stop', 'wizard-podcasts', 's']);
+  answer({ sessionId: 's' }); await released;
+  f.c.WizBackgroundAudio.request(win, 'state').catch(() => {});
+  assert.equal(f.sent.at(-1).appId, 'wizard-music', 'after the stop, the off path is back to the old token');
+});
+
+test('the off edge of the switch (wos:tweak-choice) triggers the release; other switches and the on edge do not', () => {
+  const f = shell({ on: true });
+  let calls = 0; f.c.WizBackgroundAudio.releaseOwn = () => { calls++; };
+  const fire = detail => f.listeners['wos:tweak-choice']({ detail });
+  fire({ id: SWITCH, on: true }); fire({ id: 'wizard/thread-tracker', on: false });
+  assert.equal(calls, 0);
+  fire({ id: SWITCH, on: false });
+  assert.equal(calls, 1);
 });
 
 test('the switch is listed, off by default, linked to its issue', () => {

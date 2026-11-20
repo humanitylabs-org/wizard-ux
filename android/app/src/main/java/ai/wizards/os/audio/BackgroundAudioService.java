@@ -44,7 +44,8 @@ public final class BackgroundAudioService extends MediaSessionService {
     private boolean userWant;
     // The admitted app that owns the one device player (wizard-ux issue 1661). Music until another admitted app loads.
     private String owner = AudioPolicy.MUSIC;
-    private long skipBack, skipForward;
+    private long skipBack, skipForward, lastDurationMs;
+    private int lastIndex = -1;
     private static final long PROGRESS_EVERY_MS = 15000;
     private void requestPlaying(boolean want) { userWant=want; syncIntent(); }
     private void syncIntent() {
@@ -62,8 +63,11 @@ public final class BackgroundAudioService extends MediaSessionService {
             .setAudioAttributes(new AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MUSIC).build(), true)
             .setHandleAudioBecomingNoisy(true).setWakeMode(C.WAKE_MODE_NETWORK).setMaxSeekToPreviousPositionMs(4000).build();
         player.addListener(new Player.Listener() {
-            @Override public void onEvents(Player p, Player.Events events) { transportActive=userWant && p.getMediaItemCount()>0; }
+            @Override public void onEvents(Player p, Player.Events events) { transportActive=userWant && p.getMediaItemCount()>0; long d=p.getDuration(); if(d!=C.TIME_UNSET && d>0) lastDurationMs=d; }
             @Override public void onMediaItemTransition(@Nullable MediaItem item, int reason) {
+                // A spoken-word episode that played to its end and moved on is finished (STATE_ENDED only fires for the last one).
+                if(reason==Player.MEDIA_ITEM_TRANSITION_REASON_AUTO) saveFinished(lastIndex);
+                lastIndex=player.getCurrentMediaItemIndex(); lastDurationMs=0;
                 playEvent = UUID.randomUUID().toString(); error = ""; failure=null;
                 Log.i("WizardAudio", "transition " + (item == null ? "none" : item.mediaId) + " session=" + sessionId);
                 maybeRefill(); reportPlayed();
@@ -159,7 +163,7 @@ public final class BackgroundAudioService extends MediaSessionService {
     private void adopt(String app) {
         saveProgress(false); requestPlaying(false); generation++; station=null; advanceAfterRefill=false;
         player.stop(); player.clearMediaItems(); tracks.clear(); revision++; error=""; failure=null;
-        owner=app; skipBack=skipForward=0; applyOwner();
+        owner=app; skipBack=skipForward=0; lastIndex=-1; lastDurationMs=0; applyOwner();
         Log.i("WizardAudio","owner "+app+" session="+sessionId);
     }
     /** Spoken-word apps get their place saved by the player itself, so it keeps saving while the phone is locked. */
@@ -173,6 +177,17 @@ public final class BackgroundAudioService extends MediaSessionService {
             JSONObject body=new JSONObject().put("position",Math.max(0,player.getCurrentPosition())/1000.0);
             if(d!=C.TIME_UNSET && d>0) body.put("duration",d/1000.0);
             if(completed) body.put("completed",true);
+            net.execute(() -> { try { AudioHttp.json(url,origin,"progress",body,app); } catch(Exception ignored) { } });
+        } catch(JSONException|RuntimeException ignored) { }
+    }
+    /** The episode at `index` (no longer the current item) played to its end. */
+    private void saveFinished(int index) {
+        if(destroyed || !AudioPolicy.spoken(owner) || index<0 || index>=tracks.size()) return;
+        final String url=tracks.get(index).optString("progress"); if(url.isEmpty()) return;
+        final String app=owner;
+        try {
+            JSONObject body=new JSONObject().put("position",lastDurationMs/1000.0).put("completed",true);
+            if(lastDurationMs>0) body.put("duration",lastDurationMs/1000.0);
             net.execute(() -> { try { AudioHttp.json(url,origin,"progress",body,app); } catch(Exception ignored) { } });
         } catch(JSONException|RuntimeException ignored) { }
     }
