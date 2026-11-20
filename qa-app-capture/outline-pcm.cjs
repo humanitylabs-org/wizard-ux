@@ -7,7 +7,7 @@ const { installDeviceMock, installMeetingMock } = require('./native-mocks.cjs');
 const root = path.resolve(__dirname, '..'), evidence = process.env.CAPTURE_EVIDENCE;
 assert.ok(evidence, 'Set CAPTURE_EVIDENCE to an isolated evidence directory');
 fs.mkdirSync(evidence, { recursive: true });
-const files = ['web/core/app-capture.js', 'web/core/app-services.js', 'web/core/app-client.js', 'web/core/voice.js', 'qa-app-capture/outline-pcm.cjs', 'qa-app-capture/native-mocks.cjs'];
+const files = ['web/core/app-capture.js', 'web/core/app-services-windows.js', 'web/core/app-services-boundary.js', 'web/core/app-services.js', 'web/core/app-client.js', 'web/core/voice.js', 'qa-app-capture/outline-pcm.cjs', 'qa-app-capture/native-mocks.cjs'];
 const receipts = [], blocked = [], errors = [];
 const scripts = new Map(files.filter(f => f.startsWith('web/')).map(f => ['/' + f.slice(4), fs.readFileSync(path.join(root, f))]));
 scripts.set('/boot.js', `window.WizCore={apps:()=>({APPS:[{id:'voice-outline',url:'/outline/'}]})};`);
@@ -22,7 +22,7 @@ const server = http.createServer((req, res) => {
   }
   res.setHeader('Content-Type', 'text/html');
   if (req.url === '/outline/') return res.end('<!doctype html><html data-app="voice-outline"><button id="go">Capture</button><script src="/core/app-client.js"></script></html>');
-  res.end('<!doctype html><iframe></iframe><script src="/boot.js"></script><script src="/core/app-capture.js"></script><script src="/core/app-services.js"></script><script src="/core/voice.js"></script><script src="/mount.js"></script>');
+  res.end('<!doctype html><iframe></iframe><script src="/boot.js"></script><script src="/core/app-capture.js"></script><script src="/core/app-services-windows.js"></script><script src="/core/app-services-boundary.js"></script><script src="/core/app-services.js"></script><script src="/core/voice.js"></script><script src="/mount.js"></script>');
 });
 let browser, origin;
 async function fixture() {

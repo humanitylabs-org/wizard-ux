@@ -20,7 +20,7 @@ document.querySelector('#nested').onclick=()=>{history.pushState({depth:1},'','#
 addEventListener('popstate',()=>{routePops++;if(current===location.hash&&!isRoot()&&!history.state.depth)coldBack();else paint()});paint();
 </script></body></html>`;
 const host=`<!doctype html><html><body><div class="win"><iframe src="/app/"></iframe></div>
-${['core','config','apps','appearance-host','chat-kit','app-services'].map(n=>'<script src="/wizard-os-home/core/'+n+'.js"></script>').join('')}
+${['core','config','apps','appearance-host','chat-kit','app-services-windows','app-services-boundary','app-services'].map(n=>'<script src="/wizard-os-home/core/'+n+'.js"></script>').join('')}
 <script>WizCore.appsLoaded().then(()=>WizAppServices.attach(document.querySelector('iframe'),{appId:'fixture',path:'/app/'}));</script></body></html>`;
 const server=http.createServer((req,res)=>{
  const u=new URL(req.url,'http://localhost'),send=(s,type='text/html')=>{res.setHeader('Content-Type',type);res.end(s)};
