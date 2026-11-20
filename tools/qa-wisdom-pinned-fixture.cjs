@@ -16,4 +16,4 @@ const manifest={revision:git(ROOT,'rev-parse','HEAD'),shell_revision:git(SHELL,'
 fs.mkdirSync(OUT,{recursive:true});
 for(const[name,value]of Object.entries({'fixture.json':fixture,'source-manifest.json':manifest,'shell-allowlist.json':shellFiles.map(f=>'/wizard-os-home/'+f.slice(4))}))fs.writeFileSync(path.join(OUT,name),JSON.stringify(value));
 const env={...process.env,QA_ORIGIN:'https://wizard.test',QA_SOURCE:ROOT,QA_SHELL:SHELL,QA_FIXTURE:path.join(OUT,'fixture.json'),QA_SOURCE_MANIFEST:path.join(OUT,'source-manifest.json'),QA_SHELL_ALLOWLIST:path.join(OUT,'shell-allowlist.json')};
-const child=cp.spawnSync(process.execPath,[path.join(SHELL,'qa-wisdom-pinned-thread.cjs')],{env,stdio:'inherit'});process.exitCode=child.status??1;
+const child=cp.spawnSync(process.execPath,[path.join(SHELL,'qa/scripts/qa-wisdom-pinned-thread.cjs')],{env,stdio:'inherit'});process.exitCode=child.status??1;

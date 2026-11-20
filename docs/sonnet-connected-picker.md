@@ -5,7 +5,7 @@ Recommended fix: the Claude login app reports a native account as `connected`, b
 Reuse:
 - model choices: REUSE WosModels (`web/core/chat-models.js`), existing native-account predicate and provider normalization.
 - picker interaction: REUSE WizCore Chats and WosModels.popHtml, through the real phone and desktop composer.
-- browser QA: REUSE `qa-model-picker-bounds.cjs` boot, source transport and opaque-panel pixel method; focused companion `qa-sonnet-connected-picker.cjs` keeps the same shell/entrypoints rather than constructing another picker.
+- browser QA: REUSE `qa/scripts/qa-model-picker-bounds.cjs` boot, source transport and opaque-panel pixel method; focused companion `qa/scripts/qa-sonnet-connected-picker.cjs` keeps the same shell/entrypoints rather than constructing another picker.
 
 ## Focused acceptance (prepared, not claimed executed)
 

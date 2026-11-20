@@ -1,0 +1,14 @@
+{
+  "id": "wizard/lock-screen-player",
+  "name": "Phone media player for Podcasts",
+  "version": "1.0.0",
+  "author": "wizard",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout"
+  ],
+  "description": "WizardOS Android app: Podcasts plays through the phone's own media player, like Music already does. Lock-screen and notification controls, headset buttons, the episode's artwork and a progress bar you can drag; it keeps playing with the screen locked, and saves your place as it goes. Podcasts gets back 15 / forward 30 buttons, and a tap on the player opens the app that is playing. Only Music and Podcasts get this.",
+  "issues": [
+    "humanitylabs-org/wizard-ux#1661"
+  ]
+}

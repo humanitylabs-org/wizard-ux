@@ -38,14 +38,14 @@ Run browser QA on the designated external-volume QA host, not behind an Android/
 
 ```sh
 export QA_PLAYWRIGHT="$PLAYWRIGHT_MODULE" QA_CHROME="$CHROMIUM" PW="$PLAYWRIGHT_MODULE"
-QA_REPAIR_ONLY=1 QA_OUT="$EVIDENCE/focused" node qa-voice-custody-callers.cjs
-QA_OUT="$EVIDENCE/outbox" node qa-voice-custody.cjs
-QA_OUT="$EVIDENCE/callers" node qa-voice-custody-callers.cjs
-node qa-recording-retention.cjs web "$EVIDENCE/retention"
-QA_EVIDENCE="$EVIDENCE/dictation.json" node -r ./qa-thales-loader.cjs qa-in-app-dictation.cjs
+QA_REPAIR_ONLY=1 QA_OUT="$EVIDENCE/focused" node qa/scripts/qa-voice-custody-callers.cjs
+QA_OUT="$EVIDENCE/outbox" node qa/scripts/qa-voice-custody.cjs
+QA_OUT="$EVIDENCE/callers" node qa/scripts/qa-voice-custody-callers.cjs
+node qa/scripts/qa-recording-retention.cjs web "$EVIDENCE/retention"
+QA_EVIDENCE="$EVIDENCE/dictation.json" node -r ./qa/scripts/qa-thales-loader.cjs qa/scripts/qa-in-app-dictation.cjs
 ```
 
-`qa-voice-custody-repairs.cjs` runs through normal caller-suite discovery and through the focused command. It covers confirmed steering from phone/desktop text and voice callers; exact routing and photos/files/audio; lost/malformed response plus reload/Retry; rejected-run retry/edit; journal storage failure; active native partial/short/missing-marker/complete reads; implicitly claimed Stop and same-process reload recovery; primary failure **after successful dismissal** with stale fallback; unrelated fresh sends; and held/compact pending ownership.
+`qa/scripts/qa-voice-custody-repairs.cjs` runs through normal caller-suite discovery and through the focused command. It covers confirmed steering from phone/desktop text and voice callers; exact routing and photos/files/audio; lost/malformed response plus reload/Retry; rejected-run retry/edit; journal storage failure; active native partial/short/missing-marker/complete reads; implicitly claimed Stop and same-process reload recovery; primary failure **after successful dismissal** with stale fallback; unrelated fresh sends; and held/compact pending ownership.
 
 The outbox suite's unavailable-primary test now requires quarantine followed by authoritative storage recovery before delivery. This is an intentional protocol correction, not a weakened assertion permitting replay while terminal reconciliation is unavailable.
 

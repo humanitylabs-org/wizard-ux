@@ -68,7 +68,7 @@ Regression entrypoints: `tools/qa-tap-outside-closes.cjs` (390×844 touch, produ
 
 ## Context drafts (Reply)
 
-`WizardApp.nav.openContextDraft({id, title, message})` lets any installed, registered Wizard app (`kind:'wizard'`) attach bounded reference data (id ≤128 `[A-Za-z0-9_-]`, title ≤1000, message ≤32000 chars) to a fresh, unsent main Chats draft. It never sends or runs. The draft key is `<appId>:<id>`, where `appId` comes from the attached, visible, live frame — never from the payload — so an app cannot write another app's namespace. Hidden, detached, reloaded, foreign-origin, sibling-path and `srcdoc` frames are refused. Tests: `tests/app-context-draft.test.mjs`; browser QA: `qa-app-context-draft.cjs`.
+`WizardApp.nav.openContextDraft({id, title, message})` lets any installed, registered Wizard app (`kind:'wizard'`) attach bounded reference data (id ≤128 `[A-Za-z0-9_-]`, title ≤1000, message ≤32000 chars) to a fresh, unsent main Chats draft. It never sends or runs. The draft key is `<appId>:<id>`, where `appId` comes from the attached, visible, live frame — never from the payload — so an app cannot write another app's namespace. Hidden, detached, reloaded, foreign-origin, sibling-path and `srcdoc` frames are refused. Tests: `tests/app-context-draft.test.mjs`; browser QA: `qa/scripts/qa-app-context-draft.cjs`.
 
 ## Modal backdrop = Back
 
@@ -151,10 +151,10 @@ These are **host/client contract fixtures**, not proof of the independently migr
 All four commands executed serially on Thales under `/usr/bin/lockf -k -t 5400 $WIZARD_WORK_ROOT/AndroidBuilds/worker.lock`, using `PW=$HOME/workspace/wizard-mobile-link-candidate/node_modules/playwright`, the stage as `QA_WEB_DIR`, receipt directory as `QA_OUT`, and exact commit/tree as `QA_SHA`/`QA_TREE`:
 
 ```sh
-node qa-app-services.cjs
-node qa-share-receipt-ab.cjs
-QA_BLOCK_WRITES=1 node -r ./qa-thales-loader.cjs qa-share-select.cjs 'http://127.0.0.1:18923/wizard-os-home/?shell=phone'
-QA_BLOCK_WRITES=1 node -r ./qa-thales-loader.cjs qa-device.cjs 'http://127.0.0.1:18923/wizard-os-home/?shell=phone'
+node qa/scripts/qa-app-services.cjs
+node qa/scripts/qa-share-receipt-ab.cjs
+QA_BLOCK_WRITES=1 node -r ./qa/scripts/qa-thales-loader.cjs qa/scripts/qa-share-select.cjs 'http://127.0.0.1:18923/wizard-os-home/?shell=phone'
+QA_BLOCK_WRITES=1 node -r ./qa/scripts/qa-thales-loader.cjs qa/scripts/qa-device.cjs 'http://127.0.0.1:18923/wizard-os-home/?shell=phone'
 ```
 
 The A/B command used `QA_BASELINE=$WIZARD_WORK_ROOT/WizardApps/shared-services/host/baseline-951290d/web/core/chat-kit.js` (exact archived daily source). Legacy suites used a temporary read-only reverse tunnel to the control-plane origin; outbound non-read requests and service workers were fenced, and all intended writes were fixture responses.
