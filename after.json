@@ -1,0 +1,54 @@
+[
+ {
+  "tag": "after-nebula-390",
+  "rowEarly": "Starting…",
+  "detailEarly": "Starting…",
+  "detailLater": "Open",
+  "refreshes": 2,
+  "look": {
+   "bg": "rgb(79, 240, 176)",
+   "w": 96
+  },
+  "rowLater": "Open",
+  "background": "✓ Installed"
+ },
+ {
+  "tag": "after-nebula-1280",
+  "rowEarly": "Starting…",
+  "detailEarly": "Starting…",
+  "detailLater": "Open",
+  "refreshes": 2,
+  "look": {
+   "bg": "rgb(79, 240, 176)",
+   "w": 96
+  },
+  "rowLater": "Open",
+  "background": "✓ Installed"
+ },
+ {
+  "tag": "after-obsidian-light-390",
+  "rowEarly": "Starting…",
+  "detailEarly": "Starting…",
+  "detailLater": "Open",
+  "refreshes": 2,
+  "look": {
+   "bg": "rgb(79, 240, 176)",
+   "w": 96
+  },
+  "rowLater": "Open",
+  "background": "✓ Installed"
+ },
+ {
+  "tag": "after-obsidian-light-1280",
+  "rowEarly": "Starting…",
+  "detailEarly": "Starting…",
+  "detailLater": "Open",
+  "refreshes": 2,
+  "look": {
+   "bg": "rgb(79, 240, 176)",
+   "w": 96
+  },
+  "rowLater": "Open",
+  "background": "✓ Installed"
+ }
+]

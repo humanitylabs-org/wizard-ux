@@ -1,0 +1,26 @@
+[
+ {
+  "tag": "before-nebula-390",
+  "rowEarly": "✓ Installed",
+  "detailEarly": "✓ Installed",
+  "detailLater": "✓ Installed"
+ },
+ {
+  "tag": "before-nebula-1280",
+  "rowEarly": "✓ Installed",
+  "detailEarly": "✓ Installed",
+  "detailLater": "✓ Installed"
+ },
+ {
+  "tag": "before-obsidian-light-390",
+  "rowEarly": "✓ Installed",
+  "detailEarly": "✓ Installed",
+  "detailLater": "✓ Installed"
+ },
+ {
+  "tag": "before-obsidian-light-1280",
+  "rowEarly": "✓ Installed",
+  "detailEarly": "✓ Installed",
+  "detailLater": "✓ Installed"
+ }
+]
