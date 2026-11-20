@@ -4,7 +4,8 @@ import path from 'node:path';import {fileURLToPath} from 'node:url';
 const here=path.dirname(fileURLToPath(import.meta.url)),service=process.env.QA_SERVICE||path.join(here,'../../../service');
 const {listRow,normalizeFull}=await import(path.join(service,'server/session-list-view.mjs'));
 const {selectWindow}=await import(path.join(service,'server/session-list-window.mjs'));
-const src=fs.readFileSync(new URL('../../web/live.js',import.meta.url),'utf8');
+const {withLiveParts}=await import(new URL('../../tests/fixtures/live-parts.mjs',import.meta.url)); // live.js parts moved out verbatim (issue 1665)
+const src=withLiveParts(fs.readFileSync(new URL('../../web/live.js',import.meta.url),'utf8'));
 const normalize=src.slice(src.indexOf('  const iso ='),src.indexOf('  /* ---- thread-seen'));
 const seen=src.slice(src.indexOf('  const vis ='),src.indexOf('  function later('));
 const groups=src.slice(src.indexOf('  const DAY ='),src.indexOf('  async function fetchDispositions'));

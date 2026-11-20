@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { modelContext } from './fixtures/chats-list-model.mjs';
 import '../web/core/chats-list-model.js';
+import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
 const M = globalThis.WizChatsListModel;
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
 const at = n => `2026-11-05T${String(n).padStart(2, '0')}:00:00Z`;
@@ -110,7 +111,7 @@ test('notifications share time/priority/ties, never mutate inputs, and read note
 });
 
 test('raw live time key remains cardAt, not updatedAt, for Newest/Oldest/Priority compatibility helpers', () => {
-  const src = read('web/live.js');
+  const src = withLiveParts(read('web/live.js'));
   const block = (from, to) => src.slice(src.indexOf(from), src.indexOf(to, src.indexOf(from)));
   const c = modelContext({ Date, document: { documentElement: { dataset: {} } }, localStorage: { getItem: () => null }, window: { WizConfig: { dayStart: n => n - n % 864e5 } } });
   vm.runInContext(block('  const DAY = 864e5;', '  // Agent Service owns box-wide preferences.') + block('  const sectionTime =', '  async function fetchDispositions()') + '\nthis.group = groupWork; this.priority = byPriority; this.oldest = byOldest;', c);

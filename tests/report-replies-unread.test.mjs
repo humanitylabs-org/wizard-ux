@@ -3,7 +3,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
-const live = fs.readFileSync(new URL('../web/live.js', import.meta.url), 'utf8');
+import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
+const live = withLiveParts(fs.readFileSync(new URL('../web/live.js', import.meta.url), 'utf8'));
 // The read-state functions only (thread-seen block), with the helpers they lean on.
 function api() {
   const ctx = { otherAgent: a => !!a && a !== 'hermes', READY_OR_ATTENTION: new Set(['completed', 'failed', 'interrupted', 'waiting_for_approval', 'unknown']) };

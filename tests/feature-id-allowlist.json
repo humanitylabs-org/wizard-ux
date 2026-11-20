@@ -171,7 +171,7 @@
   "web/desktop/desktop.js:photos": 1,
   "web/device.js:Mizel": 1,
   "web/index.html:photos": 1,
-  "web/live.js:photos": 1,
+  "web/live-seen.js:photos": 1,
   "web/store/store-status.js:android-apps": 4,
   "web/store/store-status.js:photos": 4,
   "web/store/store-status.js:shopping": 2,

@@ -3,9 +3,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
 const chats = fs.readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
 const css = fs.readFileSync(new URL('../web/core/chats.css', import.meta.url), 'utf8');
-const live = fs.readFileSync(new URL('../web/live.js', import.meta.url), 'utf8');
+const live = withLiveParts(fs.readFileSync(new URL('../web/live.js', import.meta.url), 'utf8'));
 // James, 7 Nov 2026: the 'Helper still working' pill is gone everywhere; the Working spinner already shows it.
 test('no helper badge on any row, and its pill styling is gone', () => {
   assert.doesNotMatch(chats, /backgroundBadge|Helper still working/);

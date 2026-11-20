@@ -8,6 +8,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
+import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
 
 const read = p => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
 const FIELD = { kind: 'provider_signed_out', provider: 'claude', app_id: 'wizard-claude', app_name: 'Claude', installed: true, app_status: 'expired' };
@@ -26,7 +27,7 @@ function kit() {
   return ctx.WosChat;
 }
 function live() {
-  const src = read('web/live.js');
+  const src = withLiveParts(read('web/live.js'));
   // normalize() is internal; lift reconnectOf the way it is defined there and prove the field shapes.
   const body = src.slice(src.indexOf('  const RECONNECT = {'), src.indexOf('  const ATTN = new Set('));
   return new Function(`${body}; return reconnectOf;`)();
@@ -37,7 +38,7 @@ test('live.js keeps only the known connection apps from wizard_reconnect', () =>
   assert.deepEqual({ ...reconnectOf(FIELD) }, { provider: 'claude', appId: 'wizard-claude', name: 'Claude', runId: '', installed: true });
   assert.deepEqual({ ...reconnectOf({ ...FIELD, provider: 'chatgpt', app_id: 'wizard-chatgpt', installed: false }) }, { provider: 'chatgpt', appId: 'wizard-chatgpt', name: 'ChatGPT', runId: '', installed: false });
   for (const bad of [null, {}, { ...FIELD, app_id: 'evil' }, { ...FIELD, kind: 'x' }, { ...FIELD, provider: 'tinfoil' }]) assert.equal(reconnectOf(bad), null);
-  assert.match(read('web/live.js'), /reconnect: reconnectOf\(item\.wizard_reconnect\)/);
+  assert.match(withLiveParts(read('web/live.js')), /reconnect: reconnectOf\(item\.wizard_reconnect\)/);
 });
 
 test('a diagnosed sign-in failure shows Sign in, not Retry', () => {

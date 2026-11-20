@@ -1159,6 +1159,10 @@
     "kit/controls.css",
     "kit/shell-tokens.css",
     "kit/wizard-sheet.js",
+    "live-channels.js",
+    "live-seen.js",
+    "live-streams.js",
+    "live-work.js",
     "live.js",
     "manifest.webmanifest",
     "outbox.js"

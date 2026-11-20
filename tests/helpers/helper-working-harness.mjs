@@ -1,6 +1,7 @@
 import { modelContext, runWithChatsModel } from '../fixtures/chats-list-model.mjs';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
+import { withLiveParts } from '../fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
 
 // Run the whole serving client, including normalize, refresh, PEND and sessionInfo.
 // Only expose existing closures; no copied lifecycle implementation in the fixture.
@@ -41,4 +42,4 @@ export function helperWorkingHarness({ source, row, detail, agent = '', storage 
     send:()=>{const item={id:'test-send',kind:'reply',sessionId:row.id,text:'Test only',createdAt:now,state:'sent',sentAt:now,runId:'test-run',agent};outbox._items.set(item.id,item);api.syncPending(outbox);return item;},
   };
 }
-export const liveSource = () => readFileSync(process.env.WIZARD_LIVE_SOURCE || new URL('../../web/live.js',import.meta.url),'utf8');
+export const liveSource = () => withLiveParts(readFileSync(process.env.WIZARD_LIVE_SOURCE || new URL('../../web/live.js',import.meta.url),'utf8'));

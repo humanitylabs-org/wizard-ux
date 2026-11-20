@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import { modelContext } from './fixtures/chats-list-model.mjs';
 import '../web/core/chats-list-model.js';
+import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
 const M = globalThis.WizChatsListModel;
 const at = n => `2026-11-06T${String(n).padStart(2, '0')}:00:00Z`;
 const ids = rows => Array.from(rows, r => r.id);
@@ -50,7 +51,7 @@ test('every surface has a separate Working control, and Settings uses the shared
   assert.match(read('web/core/chats.js'), /function workingOrderBar\(\)/);
   assert.doesNotMatch(read('web/core/chats.js'), /<select data-working-order|Sort Working <select|ch-working-sort/, 'no native select in the Chats list');
   assert.doesNotMatch(read('web/core/chats.css'), /ch-working-sort/);
-  assert.match(read('web/live.js'), /workingOrder: \['wos.chats.workingOrder.v1'/);
+  assert.match(withLiveParts(read('web/live.js')), /workingOrder: \['wos.chats.workingOrder.v1'/);
 });
 
 // The Chats list Working control is Ready's order bar (James, 6 Nov 2026: the native select looked foreign on phone).
@@ -92,7 +93,7 @@ test("Ready's bar markup is byte-identical to the pre-reuse template", () => {
 test('Working tap handler writes the shared preference through setWorkingOrder (which repaints synchronously)', () => {
   const h = block("    const wo = e.target.closest('[data-workorder]');", "    const rg = e.target.closest('[data-rdyorder]');");
   assert.match(h, /LIVE\.setWorkingOrder\?\.\(nextOrder\(cur, wo\.dataset\.workorder, WORKING_ORDERS\)\)/);
-  const live = read('web/live.js'), set = live.slice(live.indexOf('    setWorkingOrder: o =>'), live.indexOf('    prefOps,'));
+  const live = withLiveParts(read('web/live.js')), set = live.slice(live.indexOf('    setWorkingOrder: o =>'), live.indexOf('    prefOps,'));
   assert.ok(set.indexOf("dispatchEvent(new Event('wos:prefs'))") < set.indexOf('putPrefs({ workingOrder: o })'), 'paint before the preference write');
   assert.match(block('  window.addEventListener(\'wos:prefs\', () => {\n    try { const v = localStorage.getItem(READY_ORDER_KEY)', '  // Switching to or from Novairecito'), /renderChats\(W\[id\]\)/);
 });

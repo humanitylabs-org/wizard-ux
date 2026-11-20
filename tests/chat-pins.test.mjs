@@ -4,6 +4,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import vm from 'node:vm'
+import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
 
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8')
 function load({ local = {}, server = [], status = 200, box = null } = {}) {
@@ -106,7 +107,7 @@ test('taps made offline stay pinned locally and reach the service later', async 
 })
 
 test('live.js syncs pinnedChats into the cache the pins read, and pulls when a phone comes back', () => {
-  const live = read('web/live.js')
+  const live = withLiveParts(read('web/live.js'))
   assert.match(live, /pinnedChats: \['wos\.chats\.pinned\.v2'/)
   assert.match(live, /visibilitychange', \(\) => \{ if \(document\.visibilityState === 'visible'\) pullPrefs\(\)/)
 })

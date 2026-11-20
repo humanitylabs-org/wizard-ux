@@ -5,7 +5,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
-const live = readFileSync(new URL('../web/live.js', import.meta.url), 'utf8');
+import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
+const live = withLiveParts(readFileSync(new URL('../web/live.js', import.meta.url), 'utf8'));
 const cut = (a, b) => { const i = live.indexOf(a); assert.ok(i >= 0, a); return live.slice(i, live.indexOf(b, i)); };
 const ctx = { otherAgent: id => !!id && id !== 'hermes', MAX: 500, READY_OR_ATTENTION: new Set(['completed', 'failed', 'interrupted', 'waiting_for_approval', 'unknown']) };
 vm.createContext(ctx);

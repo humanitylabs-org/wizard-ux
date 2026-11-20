@@ -10,6 +10,7 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { modelContext } from './fixtures/chats-list-model.mjs';
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
+import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
 
 const read = p => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
 function models() {
@@ -19,7 +20,7 @@ function models() {
   return window.WosModels;
 }
 function normalizer() {
-  const live = read('web/live.js'), a = live.indexOf('  const READY_OR_ATTENTION'), b = live.indexOf('  /* ---- thread-seen');
+  const live = withLiveParts(read('web/live.js')), a = live.indexOf('  const READY_OR_ATTENTION'), b = live.indexOf('  /* ---- thread-seen');
   const context = modelContext({}); vm.runInContext(`${live.slice(a, b)}\nthis.normalize = normalize;`, context);
   return context.normalize;
 }

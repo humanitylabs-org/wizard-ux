@@ -4,6 +4,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import vm from 'node:vm'
+import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
 
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8')
 const store = () => { const m = new Map(); return { getItem: k => m.has(k) ? m.get(k) : null, setItem: (k, v) => m.set(k, String(v)), removeItem: k => m.delete(k) } }
@@ -155,7 +156,7 @@ test('Snoozed preserves the deferred API and search aliases; Someday creates no 
   assert.match(chats, /Snoozed · out of your list/)
   assert.match(chats, /\['deferred', 'Snoozed'\], \['archive', 'Archive'\]/, 'Snoozed threads wait in their own section')
   assert.match(picker, /void away\(opts\.sessionId\)/, 'a timed Snooze also takes the thread out of the list')
-  const live = read('web/live.js')
+  const live = withLiveParts(read('web/live.js'))
   assert.match(live, /else if \(isDeferred\(s\)\) g\.deferred\.push\(s\);/, 'snoozed threads leave Ready')
   for (const label of ['Later today', 'Tomorrow', 'In 2 days', 'In 3 days', 'In 5 days', 'Next week', 'Someday', 'Other date…', 'When should this come back?']) assert.ok(picker.includes(label), label)
   assert.doesNotMatch(picker, /🪃|🪄/)

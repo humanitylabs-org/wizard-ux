@@ -8,8 +8,9 @@ import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { modelContext } from './fixtures/chats-list-model.mjs';
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
+import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
-const kitSrc = read('web/core/chat-kit.js'), live = read('web/live.js'), chats = withParts(read('web/core/chats.js'));
+const kitSrc = read('web/core/chat-kit.js'), live = withLiveParts(read('web/live.js')), chats = withParts(read('web/core/chats.js'));
 const RAW = JSON.parse(read('tests/fixtures/sessions-list-1360.json'));
 const SHIFT = Date.now() - 5 * 60e3 - Math.max(...RAW.data.map(s => Date.parse(s.activityAt)));
 const shift = v => typeof v === 'string' && /^\d{4}-\d\d-\d\dT[\d:.]+Z$/.test(v) ? new Date(Date.parse(v) + SHIFT).toISOString() : Array.isArray(v) ? v.map(shift) : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, shift(x)])) : v;

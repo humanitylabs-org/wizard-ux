@@ -12,8 +12,9 @@ import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { modelContext } from './fixtures/chats-list-model.mjs';
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
+import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
-const live = read('web/live.js'), chats = withParts(read('web/core/chats.js')), tracker = read('web/core/thread-tracker.js');
+const live = withLiveParts(read('web/live.js')), chats = withParts(read('web/core/chats.js')), tracker = read('web/core/thread-tracker.js');
 // The fixture's times move to "a few minutes ago", so Recent's one-week window never ages the test out.
 const RAW = JSON.parse(read('tests/fixtures/sessions-list-1360.json'));
 const SHIFT = Date.now() - 5 * 60e3 - Math.max(...RAW.data.map(s => Date.parse(s.activityAt)));

@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { modelContext } from './fixtures/chats-list-model.mjs';
+import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
 
 const read = p => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
 const ID = 'wizard/background-continue';
@@ -23,13 +24,13 @@ test('the tweak is in the catalog and off by default for everyone', () => {
 
 // The real live.js list normalizer (same extraction as ready-open-ask.test.mjs).
 function normalizer() {
-  const live = read('web/live.js'), a = live.indexOf('  const READY_OR_ATTENTION'), b = live.indexOf('  /* ---- thread-seen');
+  const live = withLiveParts(read('web/live.js')), a = live.indexOf('  const READY_OR_ATTENTION'), b = live.indexOf('  /* ---- thread-seen');
   const context = modelContext({}); vm.runInContext(`${live.slice(a, b)}\nthis.normalize = normalize;`, context);
   return context.normalize;
 }
 // live.js discovery block, run against stub network helpers.
 function discovery({ on, payload, fail = false }) {
-  const src = read('web/live.js');
+  const src = withLiveParts(read('web/live.js'));
   const body = src.slice(src.indexOf('  /* Saved background results'), src.indexOf('  const FULL_EVERY'));
   const calls = [];
   const ctx = {
@@ -80,7 +81,7 @@ test('on: a discovery read that lands after this device continued never brings C
   await ctx.merge(sessions);
   assert.equal(sessions.find(s => s.id === 'old').backgroundResult, null);
   assert.equal(sessions.filter(s => s.id === 'old').length, 1);
-  const src = read('web/live.js');
+  const src = withLiveParts(read('web/live.js'));
   assert.match(src, /backgroundSettled\(id\) \{ if \(typeof id === 'string' && id\) BACKGROUND_SETTLED\.add\(id\);/);
 });
 

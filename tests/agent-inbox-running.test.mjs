@@ -4,8 +4,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
 
-const src = readFileSync(new URL('../web/live.js', import.meta.url), 'utf8');
+const src = withLiveParts(readFileSync(new URL('../web/live.js', import.meta.url), 'utf8'));
 const start = src.indexOf('  /* ---- agent inbox (wizard-ux issue 1569)'), end = src.indexOf('/* ---- end agent inbox ---- */');
 assert.ok(start > 0 && end > start, 'the agent inbox block is in live.js');
 const make = (answer, opts = {}) => {
