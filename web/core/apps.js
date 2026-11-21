@@ -202,6 +202,31 @@
   }
   const firstLoad = loadRemote();
   window.WizCore.refreshApps = loadRemote;
+  // A tap on an app the Store just installed (issue 1651): its page lands in the list a few seconds after Installed,
+  // longer during a WizardOS update. Re-read the list (as Welcome does) with a visible "starting" note, then hand
+  // the app back to open; never a silent tap. Each read has its own deadline, so a stuck read still tells the owner.
+  // One wait per app; a second tap joins it. openable(id) → the shell's openable app or null; say(text) → its toast.
+  const openWaits = new Map();
+  window.WizCore.whenOpenable = (id, { openable, name = () => '', say = () => {}, limitMs = 60000 } = {}) => {
+    const now = openable(id); if (now) return Promise.resolve(now);
+    if (openWaits.has(id)) return openWaits.get(id);
+    const label = () => name(id) || 'The app', nap = ms => new Promise(r => setTimeout(r, ms));
+    const p = (async () => {
+      const end = Date.now() + limitMs;
+      const note = setTimeout(() => say(`${label()} is starting…`), 700);
+      try {
+        for (let i = 0; Date.now() < end; i++) {
+          try { await Promise.race([loadRemote({ afterPending: true }), nap(5000)]); } catch (_) {}
+          const a = openable(id); if (a) return a;
+          await nap(i < 5 ? 1000 : 2000);
+        }
+      } finally { clearTimeout(note); }
+      const a = openable(id); if (a) return a;
+      say(`${label()} is installed but still starting. Try again in a moment.`);
+      return null;
+    })().finally(() => openWaits.delete(id));
+    openWaits.set(id, p); return p;
+  };
   // ?open=<id> before the box's app list arrived (first run, no cache): wait for it once, then retry.
   window.WizCore.appsLoaded = () => Promise.all([firstLoad, window.WosAgents?.load(), window.WosPages?.ready]);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) loadRemote(); });

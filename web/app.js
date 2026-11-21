@@ -1183,15 +1183,17 @@
     // a layout placing the shell's opens (apps.routeOpens): the app where it shows apps, at that page
     return window.WosSkinHost?.routeOpen?.('app', { id, path: rel }, go) ? true : go();
   };
+  // An app the Store just installed may still be starting: core/apps.js waits for its page, saying so (issue 1651).
+  const whenOpenable = (id, hint) => window.WizCore.whenOpenable(id, { openable: hostedOpenable, name: id => APP[id]?.name || (typeof hint === 'string' ? hint.slice(0, 80) : ''), say: t => toast('◌', esc(t), 4000) });
   // Only trusted system windows may ask; check the actual sender frame, never a claimed app id.
   addEventListener('message', async e => {
     const d = e.data; if (e.origin !== location.origin || !d || d.type !== 'wizard:open-app' || typeof d.id !== 'string') return;
     const host = [...document.querySelectorAll('iframe')].find(f => f.contentWindow === e.source)?.closest('[data-win]');
     const w = host && W[host.dataset.win]; if (!w || !['app-store', 'agents', 'setup'].includes(w.appId)) return;
-    // Setup may have just installed it: apps-changed is asynchronous. Wait for the registry, not a guessed delay.
-    if (!hostedOpenable(d.id)) await window.WizCore.refreshApps?.();
-    if (!host.isConnected || W[host.dataset.win] !== w) return;
-    const a = hostedOpenable(d.id); if (a && openApp(a) !== false && d.replace === true && w.appId === 'app-store') closeWin(host.dataset.win, true);   // Get more: the app takes the Store's place
+    // A just-installed app may still be starting: say so and open it once the registry has its page.
+    const a = await whenOpenable(d.id, d.name); if (!a) return;
+    const here = host.isConnected && W[host.dataset.win] === w;
+    if (openApp(a) !== false && here && d.replace === true && w.appId === 'app-store') closeWin(host.dataset.win, true);   // Get more: the app takes the Store's place
   });
   /* App → agent binding: an app's settings sheet (core/app-route.js). Its Agents button opens the Agents app
    * at that agent; Agents frames may ask for an app's sheet. */

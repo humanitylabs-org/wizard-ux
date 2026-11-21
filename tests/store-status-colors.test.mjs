@@ -4,9 +4,10 @@ import {readFileSync} from 'node:fs';
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
 const src = read('web/store/store.js');
 const action = src.slice(src.indexOf('  function action('), src.indexOf('  const row ='));
-const render = (state, {busy = false, installed = false, open = false, reason = '', architecture = 'amd64'} = {}) =>
-  Function('status', 'S', 'architectureReason', 'esc', 'key', 'isInstalled', 'canOpen', 'openId', 'progressText', `${action}; return action({id:'fixture'}, 'big');`)(
-    () => state, {busy: new Set(busy ? ['fixture'] : []), architecture}, () => reason, x => x, () => 'fixture', () => installed, () => open, () => 'fixture', () => 'Installing…');
+const render = (state, {busy = false, installed = false, open = false, reason = '', architecture = 'amd64', framed = false, kind = 'apps', late = false, watched = []} = {}) =>
+  Function('status', 'S', 'architectureReason', 'esc', 'key', 'isInstalled', 'canOpen', 'openId', 'progressText', 'framed', 'kindOf', 'watchOpen', `${action}; return action({id:'fixture'}, 'big');`)(
+    () => state, {busy: new Set(busy ? ['fixture'] : []), architecture, late: new Set(late ? ['fixture'] : [])}, () => reason, x => x, () => 'fixture', () => installed, () => open, () => 'fixture', () => 'Installing…',
+    framed, () => ({id: kind}), a => watched.push(a.id));
 test('Store semantics preserve action precedence, hooks and compatibility while colouring each status', () => {
   for (const [state, options, cls, label] of [
     ['get', {}, '', 'Get'], ['installed', {installed:true,open:true}, 'open', 'Open'],
@@ -31,6 +32,27 @@ test('Open replaces Installed once the installed app is openable', () => {
   assert.match(html, /class="get open big"[^>]*data-open="fixture"[^>]*>Open<\/button>/);
   assert.doesNotMatch(html, /Installed|install-actions/);
   assert.match(src, /\$\{action\(a, 'big'\)\}/, 'the detail renderer uses the same exclusive action');
+});
+test('issue 1652: an installed app the shell cannot open yet shows Starting… and is watched, then Open after the wait', () => {
+  const watched = [];
+  const starting = render('installed', {installed:true, framed:true, watched});
+  assert.match(starting, /class="get wait big" data-starting="fixture"[^>]*>Starting…<\/span>/);
+  assert.doesNotMatch(starting, /✓ Installed|data-get/);
+  assert.deepEqual(watched, ['fixture'], 'Starting… re-checks the shell until the app opens');
+  const late = render('installed', {installed:true, framed:true, late:true});
+  assert.match(late, /class="get open big" data-open="fixture">Open<\/button>/);
+  // Openable wins at once; screenless agent apps and the Store on its own keep the passive pill.
+  assert.match(render('installed', {installed:true, framed:true, open:true}), /data-open="fixture">Open</);
+  assert.match(render('installed', {installed:true, framed:true, kind:'agent-apps'}), /✓ Installed/);
+  assert.match(render('installed', {installed:true}), /✓ Installed/);
+});
+test('issue 1652: Starting… polls the shell registry with backoff and stops once the app opens or the wait ends', () => {
+  assert.match(src, /async function checkStarting\(\) \{[\s\S]*?parent\.WizCore\?\.refreshApps\?\.\(\)[\s\S]*?if \(canOpen\(w\.a\)\) \{ S\.starting\.delete\(id\)[\s\S]*?S\.late\.add\(id\)[\s\S]*?refresh\(\)/);
+  assert.match(src, /const START_WAIT = 120000/);
+  // Codex P2: a removed (or reinstalled) app never inherits an old wait.
+  assert.match(src, /for \(const id of \[\.\.\.S\.late\]\) if \(!live\.has\(id\)\) S\.late\.delete\(id\)/);
+  assert.match(src, /S\.starting\.delete\(id\); S\.late\.delete\(id\); \}   \/\/ a new install waits afresh/);
+  assert.match(src, /if \(framed\) openInShell\(o\.dataset\.open\)/);
 });
 test('a fresh installed-app snapshot exposes Open before the parent registry finishes refreshing', () => {
   const declaration = src.match(/^  const canOpen = a => .*;$/m)?.[0];
