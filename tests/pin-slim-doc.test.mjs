@@ -97,11 +97,11 @@ test('switched off, or not a pinned session, or another address: nothing happens
 });
 
 test('switched on: the page stops, every stylesheet comes first in order, then only the scripts that open the app', async () => {
-  const p = page({ release: 'abc123def456', worn: [SWITCH, 'wizard/pin-fast-open'] });
+  const p = page({ release: 'abc123def456', worn: [SWITCH, 'wizard/sidebar-chats-view'] });
   assert.equal(p.P.active, true);
   assert.deepEqual(p.log, ['stop']);
   assert.equal(p.html.dataset.pinDoc, '1');
-  assert.equal(p.html.dataset.tweaks, SWITCH + ' wizard/pin-fast-open', 'the worn tweaks are painted, so pin-fast-open etc. still read');
+  assert.equal(p.html.dataset.tweaks, SWITCH + ' wizard/sidebar-chats-view', 'the worn tweaks are painted, so other switches still read');
   const css = p.head.filter(n => n.tag === 'link');
   assert.deepEqual(css.map(l => new URL(l.href).pathname.replace('/wizard-os-home/', '')), p.FILES.filter(([k]) => k === 'c').map(([, f]) => f));
   assert.ok(css.every(l => l.attrs.blocking === 'render' && new URL(l.href).searchParams.get('v') === 'abc123def456'), 'render-blocking, same release');
@@ -197,7 +197,7 @@ function session({ slim, host }) {
   function el(tag) { return { tag, dataset: {}, style: { setProperty() {} }, classList: { add() {}, remove() {} }, children: [], isConnected: true, setAttribute() {}, remove() {},
     addEventListener(t, fn) { (this.on ||= {})[t] = fn; }, set textContent(v) {}, set innerHTML(v) { this.children = []; },
     appendChild(c) { this.children.push(c); if (c.tag === 'iframe') frames.push(c); }, append(...c) { this.children.push(...c); }, replaceChildren() { this.children = []; } }; }
-  const html = el('html'); html.dataset.tweaks = 'wizard/pin-fast-open';
+  const html = el('html'); html.dataset.tweaks = '';
   let attached = null, arrive;
   const arrived = new Promise(ok => { arrive = ok; });
   let asked = 0, served = 0, serve;

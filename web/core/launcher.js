@@ -23,10 +23,7 @@
     if (loading) return loading;
     loading = (async () => {
       try {
-        // Pinned fast open (wizard-ux issue 1558, switch wizard/pin-fast-open): read beside bootstrap, not after it.
-        let fast = false;
-        try { fast = (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/pin-fast-open'); } catch (_) {}
-        if (!fast && window.WizConfig?.ready) await window.WizConfig.ready;
+        // Pinned fast open (wizard-ux issue 1558): read beside bootstrap, not after it.
         const options = { credentials: 'same-origin', cache: 'no-store', signal: AbortSignal.timeout(6000) };
         let r = await fetch('/wizard/v1/ui-preferences', options);
         if (!r.ok) return;

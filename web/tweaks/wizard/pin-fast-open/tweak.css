@@ -1,3 +1,0 @@
-/* Pinned apps open at once (wizard-ux issue 1558): the work is in core/single-app-session.js and core/launcher.js.
- * This rule only marks the switch as present. */
-html[data-tweaks~="wizard/pin-fast-open"] { --wos-pin-fast-open: 1; }
