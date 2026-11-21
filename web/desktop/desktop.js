@@ -132,7 +132,8 @@
   store.set('layoutVersion', 2);
   Object.keys(W).forEach(id => { if (id !== hud?.id && !ws.some(d => d.wins.includes(id))) delete W[id]; });
   if (!(cur >= 0 && cur < ws.length)) cur = 0;
-  function uid() { return 'w' + Math.random().toString(36).slice(2, 9); }
+  // Window ids: 'w' + 7 base-36 characters, from crypto rather than Math.random (CodeQL js/insecure-randomness).
+  function uid() { return 'w' + Array.from(crypto.getRandomValues(new Uint8Array(7)), n => (n % 36).toString(36)).join(''); }
   let desktop = null;
   // The AI apps main column's open channel feed is saved too (wizard-ux issue 1339: a reload, an update's included,
   // brought the column back empty). feedBase is a var: this first runs before its line below (undefined = not yet read).
