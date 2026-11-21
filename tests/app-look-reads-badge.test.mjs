@@ -80,7 +80,7 @@ test('a look before Notifications\' list has loaded is settled on the first read
 
 function services() {
   const src = withServicesParts(readFileSync(new URL('../web/core/app-services.js', import.meta.url), 'utf8'));
-  const looks = [], view = { seen: false, front: false }, doc = { hidden: false, readyState: 'loading', addEventListener() {} };
+  const looks = [], view = { seen: false, front: false }, doc = { hidden: false, readyState: 'loading', listeners: {}, addEventListener(t, fn) { (this.listeners[t] ||= []).push(fn); } };
   const location = new URL('https://wizard.example/wizard-os-home/');
   const child = { location: new URL('/messenger/', location), document: {}, addEventListener() {}, postMessage() {} };
   const frame = { tagName: 'IFRAME', src: child.location.href, isConnected: true, contentWindow: child, hasAttribute: () => false, addEventListener() {}, removeEventListener() {} };
@@ -100,4 +100,11 @@ test('the shell counts a look when an app window comes into view in front, once 
   h.view.front = false; look(); h.view.front = true; look(); assert.deepEqual(h.looks, ['messenger', 'messenger'], 'back to the front: a new look');
   h.doc.hidden = true; look(); assert.equal(h.looks.length, 2, 'the page hidden: no look');
   h.doc.hidden = false; look(); assert.equal(h.looks.length, 3, 'Wizard back with the app in front: a new look');
+});
+
+test('a page hidden with no tick (timers suspended) still ends the look, and coming back counts at once', () => {
+  const h = services(), vis = () => { for (const fn of h.doc.listeners.visibilitychange || []) fn(); };
+  h.view.seen = h.view.front = true; h.S.fresh.look(); assert.equal(h.looks.length, 1);
+  h.doc.hidden = true; vis();
+  h.doc.hidden = false; vis(); assert.equal(h.looks.length, 2, 'back to Wizard: a new look with no timer tick in between');
 });

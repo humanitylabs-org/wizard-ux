@@ -819,6 +819,8 @@
     }
   }
   setInterval(() => { freshTick(); lookTick(); }, 1000);
+  // A hidden page may never tick (mobile browsers suspend timers): the look ends as it hides, and coming back is a new one.
+  document.addEventListener('visibilitychange', () => { if (document.hidden) for (const st of frames.values()) st.looking = false; else lookTick(); });
   // The whole page coming back already gives every app frame its own real visibilitychange: count that as the read.
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) return;
