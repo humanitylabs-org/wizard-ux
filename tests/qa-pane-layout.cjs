@@ -12,6 +12,17 @@ const out = process.env.QA_OUT || 'pane-layout-evidence'; fs.mkdirSync(out, { re
 const changed = new Set(['desktop.html', 'desktop/desktop.js', 'layouts/ai-apps/desktop.js', 'layouts/ai-apps/desktop.css', 'layouts/ai-apps/parts.js']);
 const baseline = {};
 for (const f of changed) baseline[f] = execFileSync('git', ['show', baselineRef + ':web/' + f], { cwd: repo });
+// The pinned old desktop.html runs today's core/chats.js, which now calls the Chats parts split out of it (issue 1665:
+// core/chats-*.js, loaded just before chats.js; the same for core/app-services.js and its core/app-services-*.js, and
+// core/settings.js and its core/settings-*.js, live.js and its live-*.js, and core/skin-host.js and its
+// core/skin-host-*.js).
+// Give the old page the same script tags it lacks; nothing else changes.
+for (const host of ['core/chats', 'core/app-services', 'core/settings', 'live', 'core/skin-host']) {
+ const tag = `  <script src="${host}.js"></script>`, old = String(baseline['desktop.html']);
+ const parts = [...fs.readFileSync(path.join(repo, 'web/desktop.html'), 'utf8').matchAll(new RegExp(`<script src="${host}-[a-z-]+\\.js"></script>`, 'g'))].map(m => m[0]).filter(t => !old.includes(t));
+ assert.ok(old.includes(tag), `the pinned desktop.html loads ${host}.js`);
+ baseline['desktop.html'] = Buffer.from(old.replace(tag, parts.map(t => '  ' + t + '\n').join('') + tag));
+}
 const mime = f => f.endsWith('.js') ? 'text/javascript' : f.endsWith('.css') ? 'text/css' : 'text/html';
 const selectors = { side: '.aad-side', dock: '.aad-vt', chat: '#stage > .wsp[data-aad-role="chat"]', app: '#stage > .wsp[data-aad-role="app"]', header: '.aad-ptop', ctop: '.aad-ctop' };
 (async () => {

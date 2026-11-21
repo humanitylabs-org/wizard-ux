@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
+import { withServicesParts } from './fixtures/app-services-parts.mjs';
 const root=process.env.VAULT_SOURCE_ROOT||new URL('../',import.meta.url).pathname;
 const read=p=>fs.readFileSync(path.join(root,p),'utf8');
 function fixture({legacy=false,front=false,visible=true}={}) {
@@ -13,7 +14,7 @@ function fixture({legacy=false,front=false,visible=true}={}) {
  const frame={tagName:'IFRAME',src:child.location.href,isConnected:true,contentWindow:child,hasAttribute:()=>false,addEventListener(){},removeEventListener(){}};
  const document={hidden:false,readyState:'loading',addEventListener(){}};
  const DateFake=class extends Date {static now(){return now;}};
- vm.runInNewContext(read('web/core/app-services.js'),{window,document,location,URL,navigator:{},addEventListener(){},setInterval(){},setTimeout:(fn,ms)=>{timers.set(++seq,{fn,at:now+ms});return seq;},clearTimeout:id=>timers.delete(id),Date:DateFake,CustomEvent:class{},console});
+ vm.runInNewContext(withServicesParts(read('web/core/app-services.js')),{window,document,location,URL,navigator:{},addEventListener(){},setInterval(){},setTimeout:(fn,ms)=>{timers.set(++seq,{fn,at:now+ms});return seq;},clearTimeout:id=>timers.delete(id),Date:DateFake,CustomEvent:class{},console});
  const detach=window.WizAppServices.attach(frame,{appId:'sample',path:'/sample/',isVisible:()=>visible,isFront:()=>front});
  const service=window.WizAppServices.connect(child,{});
  async function advance(ms){for(let i=0;i<ms;i+=100){now+=Math.min(100,ms-i);for(const[id,t]of [...timers])if(t.at<=now){timers.delete(id);t.fn();}await Promise.resolve();await Promise.resolve();}}

@@ -2,12 +2,13 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 
 // wizard-ux issue 1576 (James, 18 Nov 2026, desktop): Stop on a running chat looked ignored, or the run only showed
 // as stopped long after. Stop must say Stopping… on the tap itself, never wait behind a withdrawal, say so when it
 // can't be delivered, and notice the settled run in about a second instead of at the next 15 s poll.
 const liveSrc = readFileSync(new URL('../web/live.js', import.meta.url), 'utf8');
-const chatsSrc = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
+const chatsSrc = withParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'));
 const between = (a, b) => { const i = liveSrc.indexOf(a), j = liveSrc.indexOf(b, i); assert.ok(i >= 0 && j > i, a); return liveSrc.slice(i, j); };
 
 // The real STOPPING helpers and L.stop method from live.js in a vm, with a fake request and list refresh.

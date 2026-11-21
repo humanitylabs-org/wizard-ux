@@ -5,6 +5,7 @@ import { mkdtempSync, cpSync, readFileSync, writeFileSync, rmSync } from 'node:f
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import vm from 'node:vm';
+import { withSkinHostParts } from './fixtures/skin-host-parts.mjs';
 
 // Robert's iPhone (24 Oct 2026) started a new shell against a cached old notif-bell.js and died at boot.
 // The image build stamps every local script/stylesheet with its file hash so a release only ever loads its own files.
@@ -97,10 +98,10 @@ test('the image build runs the stamp over the shipped web tree', () => {
 });
 
 test('skin packages still find core/skins.css once its link carries ?v=', () => {
-  assert.match(readFileSync(new URL('../web/core/skin-host.js', import.meta.url), 'utf8'), /link\[href\*="core\/skins\.css"\]/);
+  assert.match(withSkinHostParts(readFileSync(new URL('../web/core/skin-host.js', import.meta.url), 'utf8')), /link\[href\*="core\/skins\.css"\]/);
 });
 test('skin and layout files loaded on demand carry the page release token', () => {
-  const src = readFileSync(new URL('../web/core/skin-host.js', import.meta.url), 'utf8');
+  const src = withSkinHostParts(readFileSync(new URL('../web/core/skin-host.js', import.meta.url), 'utf8'));
   assert.match(src, /meta\[name="wos-release"\]/);
   assert.match(src, /const url = \(dir, file\) => isDoc \? stamp\(/);
   assert.match(src, /const layoutUrl = \(id, file\) => isDoc \? stamp\(/);

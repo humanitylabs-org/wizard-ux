@@ -73,6 +73,18 @@ test('Android: only the top-level shell page tells the app whether the box has t
   assert.equal(boot({ native: { browserBoundary() { throw new Error('x'); } } }).window.WizShellBoundary.on, true);
 });
 
+test('Android: only the top-level shell page with a real token hands it to the app for its own owner calls (wizard-os#133)', () => {
+  const given = [];
+  const native = { browserBoundary() {}, shellToken: t => given.push(t) };
+  boot({ native });
+  assert.deepEqual(given, [TOKEN], 'a real token: handed over once');
+  for (const token of ['off', '', null, 'not-a-token', 'AB'.repeat(32)]) { given.length = 0; boot({ token, native }); assert.deepEqual(given, [], `${token}: nothing handed over`); }
+  for (const token of [TOKEN, 'off', '']) { given.length = 0; boot({ token, framed: true, native }); assert.deepEqual(given, [], `framed ${token}: a frame never hands it over`); }
+  // An older app without the method, or one whose bridge throws, still arms the page.
+  assert.equal(boot({ native: { browserBoundary() {} } }).window.WizShellBoundary.on, true);
+  assert.equal(boot({ native: { browserBoundary() {}, shellToken() { throw new Error('x'); } } }).window.WizShellBoundary.on, true);
+});
+
 test('a framed shell page never arms the wrapper', () => {
   const b = boot({ framed: true });
   assert.equal(b.window.fetch, b.nativeFetch);

@@ -5,7 +5,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
-const chats = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
+import { withParts } from './fixtures/chats-parts.mjs';
+const chats = withParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'));
 const live = readFileSync(new URL('../web/live.js', import.meta.url), 'utf8');
 const aad = readFileSync(new URL('../web/layouts/ai-apps/desktop.js', import.meta.url), 'utf8');
 test('threadAct starts the write, paints every list, and only then awaits', () => {

@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
-const src = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
+const src = withParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'));
 const cut = (a,b) => src.slice(src.indexOf(a),src.indexOf(b,src.indexOf(a)));
 function fixture(agentIds, collections, focus = null, remembered = {}, channels = false, spaceOwner = 'hermes') {
   const env = { channelsOn: () => channels, spaceAgent: s => s?.agent || 'hermes', focusAgents: () => agentIds.map(id=>({id,label:id==='hermes'?'Archimedes':id})), visibleSpaces:()=>collections, spaces:()=>collections,

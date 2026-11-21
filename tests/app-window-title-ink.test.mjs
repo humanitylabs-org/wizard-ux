@@ -1,12 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { withAppParts } from './fixtures/app-parts.mjs';
 
 // Borderless app windows paint their heading in the app's colour (dark default, or the colour the phone measured along
 // the app's top), so the title and buttons there must not use the skin's ink: Landscapes Light put its dark ink on the
 // dark default heading. Behaviour (real Chromium, every skin, both shells): tools/qa-app-window-title-contrast.cjs.
 const css = fs.readFileSync(new URL('../web/core/skin-frame.css', import.meta.url), 'utf8');
-const app = fs.readFileSync(new URL('../web/app.js', import.meta.url), 'utf8');
+const app = withAppParts(fs.readFileSync(new URL('../web/app.js', import.meta.url), 'utf8'));
 const rule = (sel) => { const i = css.indexOf(sel + ' {'); return i < 0 ? '' : css.slice(i, css.indexOf('}', i)); };
 // Named-colour inks (the style check bans rgb()/hex literals): white, or black mixed toward white by N%.
 const rgbOf = (v) => v.trim() === 'white' ? 'rgb(255, 255, 255)' : v.trim() === 'black' ? 'rgb(0, 0, 0)' : (/^color-mix\(in srgb, black (\d+)%, white\)$/.exec(v.trim()) || [])[1]

@@ -3,6 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { withSettingsParts } from './fixtures/settings-parts.mjs'; // settings.js parts moved out verbatim (issue 1665)
 const read = p => readFileSync(process.env.QA_SETTINGS_SOURCE ? process.env.QA_SETTINGS_SOURCE + '/' + p : new URL('../' + p, import.meta.url), 'utf8');
 const css = read('web/core/settings.css'), desktop = read('web/desktop/desktop.js');
 const slice = (s, a, b) => { const start = s.indexOf(a); assert.ok(start >= 0, a); const end = s.indexOf(b, start); assert.ok(end > start, b); return s.slice(start, end); };
@@ -27,7 +28,7 @@ test('narrow desktop Settings follows its host container, never the desktop view
 test('same shared Settings DOM and dispatch provide category → Look → Back in either shell', () => {
   const s = { console, URL, Map, Set, Date, String, CSS: { escape: String }, navigator: { userAgent: 'fixture' }, location: { href: 'https://fixture.invalid/' }, document: { activeElement: null }, addEventListener() {} };
   s.window = s; s.WizCore = {};
-  vm.runInNewContext(read('web/core/settings.js'), s);
+  vm.runInNewContext(withSettingsParts(read('web/core/settings.js')), s);
   for (const shell of ['phone', 'desktop']) {
     const root = { innerHTML: '', scrollTop: 0, classList: { add() {} }, dataset: {}, contains: () => false, querySelector: () => null, addEventListener() {}, removeEventListener() {} };
     const view = s.WosSettings.mount(root, { shell, live: { ok: true } });

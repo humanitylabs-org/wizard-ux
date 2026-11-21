@@ -3,9 +3,10 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 
 const read = p => readFileSync(new URL(p, import.meta.url), 'utf8');
-const chats = read('../web/core/chats.js'), kit = read('../web/core/chat-kit.js'), css = read('../web/core/chats.css');
+const chats = withParts(read('../web/core/chats.js')), kit = read('../web/core/chat-kit.js'), css = read('../web/core/chats.css');
 const start = chats.indexOf('  function mediaBtn(c, m) {'), end = chats.indexOf('  function mediaBlock(', start);
 const mediaBtn = vm.runInNewContext('(' + chats.slice(start, end).trim() + ')', { esc: String, fsize: b => b + ' B', PLAY_SVG: '<svg/>', CLIP_SVG: '<svg/>', DL_SVG: '<svg/>' });
 

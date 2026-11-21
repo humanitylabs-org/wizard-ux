@@ -22,9 +22,18 @@ public final class UnreadParse {
     }
 
     /**
-     * A failed read. 404 means Messenger answers but its {@code unread-count} switch is off (or the endpoint is
-     * gone): nothing to show, so the badge clears (0). Anything else (offline, 5xx, locked) is unknown (-1) and
-     * leaves the badge as it is.
+     * A failed read. 404 clears the badge (0) only when it is Messenger's own JSON "not_found" (its {@code unread-count}
+     * switch is off). Any other 404, such as a proxy or directory answering the wrong path in plain text, is unknown (-1):
+     * it must not look like "nothing unread". Offline, 5xx and locked are unknown too and leave the badge as it is.
      */
-    public static int forStatus(int status) { return status == 404 ? 0 : -1; }
+    public static int forStatus(int status, String body) { return status == 404 && switchOff(body) ? 0 : -1; }
+
+    private static boolean switchOff(String body) {
+        if (body == null || body.isEmpty()) return false;
+        try {
+            JSONObject o = new JSONObject(body);
+            JSONObject err = o.optJSONObject("error");
+            return "not_found".equals(err != null ? err.optString("code") : o.optString("code"));
+        } catch (org.json.JSONException e) { return false; }
+    }
 }

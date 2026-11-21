@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 const kit=readFileSync(new URL('../web/core/chat-kit.js',import.meta.url),'utf8');
 const power=readFileSync(new URL('../web/core/chat-power.js',import.meta.url),'utf8');
 function harness({status='completed',images=false,fail=false}={}) {
@@ -24,7 +25,7 @@ test('Regenerate retains restored native image bytes beside the original file',a
 test('Unavailable screenshot never degrades into a text-only regeneration',async()=>{const h=harness({images:true,fail:true});h.click();await finished(h);assert.equal(h.sent.length,0);assert.ok(h.notices.some(x=>String(x[1]).includes('original request kept')))});
 for(const status of ['running','queued','stopping','waiting_for_approval','unknown'])test(`Regenerate refuses ${status} rather than steering or duplicating it`,async()=>{const h=harness({status});h.click();await finished(h);assert.equal(h.sent.length,0)});
 test('Regenerate renders only for a skin that opts in with --wos-reply-regenerate: on',()=>{
- const js=readFileSync(new URL('../web/core/chats.js',import.meta.url),'utf8');
+ const js=withParts(readFileSync(new URL('../web/core/chats.js',import.meta.url),'utf8'));
  assert.match(js,/getPropertyValue\('--wos-reply-regenerate'\)\.trim\(\) === 'on'/);
  assert.match(js,/last && !working && regenOn\(\) \? '<button type="button" data-mregen/);
  assert.equal((js.match(/data-mregen/g)||[]).length,1);

@@ -12,7 +12,7 @@ echo "START $(date -u +%FT%TZ) host=$(hostname) sha=${QA_SHA:-} tree=${QA_TREE:-
 "$NODE" tools/agents-fixture.mjs "$PORT" web --main=fixture > "$OUT/fixture.log" 2>&1 &
 FX=$!
 for i in $(seq 1 40); do curl -s -o /dev/null "http://127.0.0.1:$PORT/wizard-os-home/" && break; sleep 0.25; done
-QA_OUT="$OUT" "$NODE" qa-agents.cjs "http://127.0.0.1:$PORT/wizard-os-home/" 2>&1 | tee -a "$OUT/run.txt"
+QA_OUT="$OUT" "$NODE" qa/scripts/qa-agents.cjs "http://127.0.0.1:$PORT/wizard-os-home/" 2>&1 | tee -a "$OUT/run.txt"
 RC=${PIPESTATUS[0]}
 kill $FX 2>/dev/null; wait $FX 2>/dev/null
 echo "DONE rc=$RC $(date -u +%FT%TZ)" | tee -a "$OUT/run.txt"

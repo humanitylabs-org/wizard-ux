@@ -5,9 +5,11 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { launcherFixture } from './launcher-fixture.mjs';
 import { readFileSync } from 'node:fs';
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
-const chats = read('web/core/chats.js'), services = read('web/core/app-services.js'), client = read('web/core/app-client.js');
+import { withServicesParts } from './fixtures/app-services-parts.mjs';
+const chats = withParts(read('web/core/chats.js')), services = withServicesParts(read('web/core/app-services.js')), client = read('web/core/app-client.js');
 const app = read('web/app.js'), desktop = read('web/desktop/desktop.js');
 
 test('Manager and Wisdom use one synced launcher admission policy in both consumers', () => {

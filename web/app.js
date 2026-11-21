@@ -1154,51 +1154,8 @@
     closeSheets(true); mountLinks(); if (!LINKS) return false;
     LINKS.open(url); return true;
   }
-  /* THE placement rule for every app (James, 12 Oct 2026: apps always open in a new tab, as system behaviour,
-   * never per app). An app opener only says what to show (obj) and how to spot its open copy (mine); it never
-   * picks a desk. Not open yet: its own desk right beside the one in front (openWin). Already open: that window,
-   * brought beside the desk in front on a desk of its own (refresh lets the app take the new query/date).
-   * Chats is the hub and stays where it is; an explicit user placement (opts.desk) always gets a fresh window. */
-  /* Every app tap answers at once (James, 26 Oct 2026: "tapping an app like notes I get no UX response for a few
-   * seconds and tap it twice"). The tile shows it is opening; if the window is not on screen within a beat, an
-   * "Opening Notes…" notice with a spinner stays up until it is; a second tap on the same app while it opens is
-   * the same open, never a second one. The window itself shows a loading veil until the app's page has loaded. */
-  const OPENING = { id: null, el: null, t: 0, pill: 0, safety: 0, sheet: false };
-  function openingStart(a, el) {
-    openingEnd(); OPENING.id = a.id; OPENING.el = el || null; OPENING.t = Date.now();
-    // The feedback sits on the icon the finger is on (James, 26 Oct 2026): it sinks, dims and spins in place.
-    if (el) { el.classList.add('opening'); el.setAttribute('aria-busy', 'true'); el.setAttribute('aria-label', `Opening ${a.name || 'app'}`);
-      const ic = el.querySelector('.ic'); if (ic && !ic.querySelector('.open-spin')) ic.insertAdjacentHTML('beforeend', '<i class="open-spin" aria-hidden="true"></i>'); }
-    vib(6);
-    OPENING.safety = setTimeout(() => openingEnd(a.id), 10000);
-  }
-  function openingEnd(id) {
-    if (!OPENING.id || (id && id !== OPENING.id)) return;
-    clearTimeout(OPENING.pill); clearTimeout(OPENING.safety);
-    const el = OPENING.el; if (el) { el.classList.remove('opening'); el.removeAttribute('aria-busy'); el.removeAttribute('aria-label'); el.querySelectorAll('.open-spin').forEach(x => x.remove()); }
-    const sh = OPENING.sheet; OPENING.id = null; OPENING.el = null; OPENING.sheet = false;
-    if (sh) closeSheets();
-  }
-  // The Apps sheet stays up, its tapped icon spinning, until the app's window is about to show (or its setup sheet).
-  function openingReady() { if (OPENING.sheet) { OPENING.sheet = false; closeSheets(); } }
-  const isOpening = id => OPENING.id === id && Date.now() - OPENING.t < 10000;
-  // A tile tap (Apps sheet or New desk). fromSheet: the sheet closes first, then the app opens.
-  function tapOpen(a, el, fromSheet) {
-    if (!a) return;
-    if (isOpening(a.id)) { vib(4); return; }
-    const r = store.get('recent', []).filter(x => x !== a.id); r.unshift(a.id); store.set('recent', r.slice(0, 8));
-    openingStart(a, el);
-    OPENING.sheet = !!fromSheet;
-    // One frame so the pressed, spinning icon paints before any work starts.
-    requestAnimationFrame(() => { if (OPENING.id !== a.id) return; openApp(a); if (!window.WosAppSetup?.gate || a.kind !== 'wizard' || !a.url) openingEnd(a.id); });
-  }
-  // An app's open window taken to one of its own pages (replace: a page change never adds a Back step of its own).
-  function framePage(w, rel) {
-    w.url = rel; save(); const f = winEl(w.id)?.querySelector('iframe'); if (!f) return true;
-    let now = ''; try { const l = f.contentWindow.location; now = l.pathname + l.search + l.hash; } catch (_) {}
-    if (now !== rel) { const url = window.WosOwnViews?.frameUrl(winApp(w), rel) || rel; try { window.WizAppServices?.expectLoad?.(f); f.contentWindow.location.replace(url); } catch (_) { f.src = url; } }
-    return true;
-  }
+  /* opening: moved to app-opening.js (wizard-ux issue 1665), called once here */
+  const { framePage, openingEnd, openingReady, tapOpen } = window.WizCore.appParts.opening({ closeSheets, openApp, save, store, vib, winApp, winEl });
   function placeApp(mine, obj, opts = {}, refresh) {
     const here = opts.desk == null ? Object.keys(W).find(id => deskOf(id) >= 0 && mine(W[id])) : null;
     openingReady();
@@ -1387,27 +1344,8 @@
     if (was !== st.step) refreshHome(true);
     return true;
   };
-
-  /* ---------------- settings & unsent ----------------
-   * The gear sits top-right wherever no app is in front (Home and empty desks). Settings holds Wizard Everywhere,
-   * the side button and the Unsent list. Unsent = everything saved on this phone that Wizard hasn't accepted yet:
-   * messages from the app (outbox) and recordings from the Everywhere button (native outbox), one list, Retry each. */
-  const GEAR_SVG = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>';
-  // The cog also carries what the notification routing part puts there (WosBell.attention; stock: nothing).
-  function gearBtn() { const u = unsentAll().length, at = window.WosBell?.attention?.(), y = at?.n | 0, n = u + y; return `<button class="gear" data-act="settings" aria-label="Settings${u ? `, ${u} unsent` : ''}${y ? `, ${y} ${esc(at.label)}` : ''}">${GEAR_SVG}${n ? `<span class="gear-n">${n}</span>` : ''}</button>`; }
-  addEventListener('wizard:notify-attention', () => refreshHome());
-  let NATIVE_UNSENT = [];
-  function readNativeUnsent() { try { NATIVE_UNSENT = NATIVE() && window.WizardOSNative.unsent ? JSON.parse(window.WizardOSNative.unsent()) : []; } catch (e) { NATIVE_UNSENT = []; } }
-  // From the app (outbox) and from the Everywhere button (native), oldest first.
-  function unsentAll() { return window.WosSettings.unsentAll(settingsContext()); }
-  function unsentCard() {
-    const all = unsentAll(); if (!all.length) return '';
-    const failed = all.filter(x => ['failed', 'empty'].includes(x.state)).length;
-    const k = failed ? `${failed} not sent` : `${all.length} waiting to send`;
-    const v = esc(clip(all[0].text || 'Voice note', 70));
-    return `<button class="now-card unsent-card ${failed ? 'fail' : ''}" style="--c:${failed ? 'var(--amber)' : 'var(--violet-2)'}" data-act="unsent"><span class="pip ${failed ? '' : 'pulse'}"></span><span class="meta"><span class="k">${k}</span><span class="v">${v}</span></span><span class="side-go">${failed ? 'Retry' : 'View'}</span></button>`;
-  }
-  function unsentRow(it) { return window.WosSettings.unsentRow(it, settingsContext()); }
+  /* unsent: moved to app-unsent.js (wizard-ux issue 1665), called once here */
+  const { gearBtn, readNativeUnsent, unsentAll, unsentCard, unsentRow } = window.WizCore.appParts.unsent({ clip, esc, NATIVE, refreshHome: (...a) => refreshHome(...a), settingsContext: (...a) => settingsContext(...a) });
   let settingsView = null;
   const settingsContext = () => ({ outbox: OUTBOX, live: LIVE, ago, toast,
     shell: 'phone', haptic: vib, visible: () => sheet === 'settings',
@@ -1459,13 +1397,19 @@
     if (!window.WosSettings.moveDraft({ chats: CHATS, wid: wid, item: it, outbox: OUTBOX, toast })) return; renderChats(W[wid]);
     setTimeout(() => { const ta = track.querySelector(`[data-chats="${wid}"] textarea`); ta?.focus(); }, 50);
   }
+  // Empty desks (the New desk's app grid) drawn again, unless someone is typing in their search.
+  function repaintNewDesks(onlyChanged) {
+    desks.forEach((d, i) => { if (!d.wins.length && !d.home) { const g = secOf(i)?.querySelector('.glance'); if (g && !g.querySelector('[data-ndq]')?.value && document.activeElement?.closest('.glance') !== g) { const html = renderEmpty(i); if (!onlyChanged || g._wosNd !== html) { g.innerHTML = html; g._wosNd = html; } } } });
+  }
+  // ux#1646: a fresh app list redraws the New desk, so an app that gained its page leaves Agent apps for Apps.
+  window.addEventListener('wizard:apps', () => { try { repaintNewDesks(true); } catch (_) {} });
   let lastUnsentSig = '';
   function onUnsentChange() {
     readNativeUnsent();
     if (sheet === 'settings') renderSettings();
     if (sheet === 'inbox') renderInbox();
     refreshHome(); renderMoons();
-    desks.forEach((d, i) => { if (!d.wins.length && !d.home) { const g = secOf(i)?.querySelector('.glance'); if (g && !g.querySelector('[data-ndq]')?.value && document.activeElement?.closest('.glance') !== g) g.innerHTML = renderEmpty(i); } });
+    repaintNewDesks();
     for (const id of Object.keys(W)) { const w = W[id]; if ((w.app === 'chats' || CHATS.isHosted(id)) && w.thread) { const el = track.querySelector(`[data-chats="${id}"]`); if (el) renderThread(w, el); } }
     for (const id of Object.keys(W)) { const w = W[id]; if (w.app === 'chats' && !w.thread) { const el = track.querySelector(`[data-chats="${id}"]`); if (el && el.querySelector('.ch-list')) CHATS.renderChatList(w, el); } }
     // Tell Android how many app messages are stuck, so it can say so in a notification while the app is closed.
@@ -1476,40 +1420,8 @@
   OUTBOX?.onChange(onUnsentChange);
   window.__wosUnsent = () => { onUnsentChange(); return true; };
   window.__wosEverywhere = () => { if (sheet === 'settings') renderSettings(); return true; };
-
-  /* ---------------- home desk ---------------- */
-  function renderHome() {
-    const L = live(), A = window.WizCore.activityHome?.(LIVE), needs = (A ? A.needs : L.needs).length; // amber = Activity's needs you with Channels on (issue 1517)
-    // The card still opens all Ready threads; its pill shares the phone/desktop unread projection.
-    const ready = window.WizCore.workspaceNav.chatsCount(LIVE);
-    // Working counts what the Chats Working list (and the Working card's filter) shows, sending messages included.
-    const W0 = LIVE && LIVE.ok ? (LIVE.workGroups().working || []) : [], working = W0.length;
-    const now = new Date();
-    return `<div class="home"><div data-slot="home-main" hidden></div><nav class="home-tools" aria-label="System and settings"><button class="home-system home-agents" data-act="agents" aria-label="Agents" title="Agents"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8.5" r="3.2"/><path d="M3.5 19.5c.6-3.3 2.8-5.2 5.5-5.2s4.9 1.9 5.5 5.2"/><circle cx="17" cy="9.5" r="2.4"/><path d="M15.6 14.6c2.6-.3 4.4 1.4 4.9 4.4"/></svg></button>${gearBtn()}</nav>
-      <div class="home-top">
-        <div class="home-date" id="homeDate">${(() => { const p = window.WizConfig.dayParts(now.getTime()); return `${DOWL[p.dow]} · ${p.d} ${MON[p.m - 1]}`; })()}</div>
-        <div class="home-time" id="homeTime">${window.WizConfig.hm()}</div>
-        <div class="home-line">${LIVE.ok ? '' : LIVE.error === 'access' ? 'Sign in to Wizard to see your threads.' : 'Connecting to Wizard…'}</div>
-      </div>
-      <div class="home-gap home-gap-a"></div>
-      <div class="home-attn">
-      <div class="constellation">
-        <button class="now-card wz-home-widget" style="--c:${needs ? 'var(--amber)' : 'var(--green)'}" data-act="ready" aria-label="Ready${ready ? `, ${ready} ${window.WizCore.workspaceNav.readyWord(LIVE)}` : ''}"><span class="pip"></span><span class="meta"><span class="k">Ready</span></span>${ready ? `<span class="n">${ready}</span>` : ''}</button>
-        <button class="now-card wz-home-widget" style="--c:var(--violet-2)" data-act="working" aria-label="Working ${working}"><span class="pip pulse"></span><span class="meta"><span class="k">Working</span></span><span class="n">${working}</span></button>
-      </div>
-      ${unsentCard()}
-      ${sideCard()}
-      </div>
-      <div class="home-gap home-gap-b"></div>
-      ${window.WosResources?.home() || ''}
-    </div>`;
-  }
-  setInterval(() => {
-    const now = new Date(), t = $('#homeTime'), c = $('#clock');
-    const hm = window.WizConfig.hm();
-    if (t) t.textContent = hm; if (c) c.textContent = hm;
-  }, 5000);
-  window.addEventListener('wizard:notifications', () => { renderMoons(); refreshHome(); });
+  /* home: moved to app-home.js (wizard-ux issue 1665), called once here */
+  const { renderHome, bindLate: homeLate } = window.WizCore.appParts.home({ $, DOWL, gearBtn, live, LIVE, MON, refreshHome: (...a) => refreshHome(...a), sideCard, unsentCard });
   const refreshHome = force => { if (!desks[HOME].wins.length) { const g = secOf(HOME)?.querySelector('.glance'); if (g) paintHome(g, renderHome()); } };
   // Home repaints go through the skin host so a tweak's home-main mount survives (plain innerHTML without one).
   function paintHome(el, html) { if (window.WosSkinHost?.paintHome) window.WosSkinHost.paintHome(el, html); else el.innerHTML = html; }
@@ -1571,7 +1483,8 @@
     e.stopPropagation(); const key = t.dataset.fatoggle || 'agents'; foldOpen[key] = !foldOpen[key];
     document.querySelectorAll(`.forag[data-fold="${key}"]`).forEach(el => { el.classList.toggle('open', foldOpen[key]); el.querySelector('[data-fatoggle]')?.setAttribute('aria-expanded', String(foldOpen[key])); });
   }, true);
-  function openAppInfo(el) { window.WosAppRoute?.open(el.dataset.appinfo, { name: el.dataset.name || '' }); }
+  // The tile was drawn as an agent app; the app may have gained its page since (ux#1646): decide at the tap.
+  function openAppInfo(el, fromSheet) { AK.pageOrSheet(APP, el.dataset.appinfo, el.dataset.name || '', a => tapOpen(a, el, fromSheet)); }
   function renderEmpty(i) {
     // Miguel's app kinds are every skin's New desk (James, 23 Oct 2026): Apps with system apps first and ringed, then
     // Wizard apps, Agents and Connectors folded under "For agents".
@@ -1579,78 +1492,8 @@
     // (For agents unfolds while a query is on), Enter opens the first match.
     tileN = 0; return `<div class="desk-scroll new-desk kinds"><div class="nd-head"><b>New desk</b><span>Pick an app to open here</span></div>${kindGroups(['apps', 'wiz', 'agents', 'conns'])}<p class="nd-none" hidden>No app matches</p></div><form class="nd-search" role="search" data-ndsearch><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg><input type="search" data-ndq placeholder="Search apps" aria-label="Search apps" autocomplete="off" enterkeyhint="go"></form>`;
   }
-  function renderApp(w) {
-    const a = APP[w.appId] || {};
-    const native = a.kind === 'native';
-    let href = a.url || a.href;
-    if (a.id === 'spotify' && w.query) href = `spotify:search:${encodeURIComponent(w.query)}`;
-    return `<div class="desk-scroll"><div class="appcard">${ico('div', 'hero', a).replace(/^(<div[^>]*>)([\s\S]*)<\/div>$/, '$1<span class="big">$2</span></div>')}
-      <div class="body"><h3>${esc(a.name)}${w.query ? ` · “${esc(w.query)}”` : ''}</h3><p>${esc(a.desc || '')}${native ? '. Opens the real Android app.' : ''}</p>
-      <a class="cta" href="${esc(href)}" target="${native ? '_self' : '_blank'}" rel="noopener">Open ${esc(a.name)}</a></div></div></div>`;
-  }
-  function renderFrame(w) {
-    const a = APP[w.appId] || winApp(w);
-    return renderFrameCore(w, a);
-  }
-  function renderFrameCore(w, a) {
-    if (w.appId === 'troubleshooter') return window.WizReach.recoveryHtml();
-    const frameUrl = window.WosOwnViews?.frameUrl(a, w.url) || w.url || a.url || '/';
-    return `<div class="frame-wrap loading">${window.WosOwnViews?.noteHtml(a) || ''}<div class="frame-loading" role="status" aria-label="Loading ${esc(a.name || 'app')}">${ico('span', 'glyph', a)}<i class="wos-spin" aria-hidden="true"></i></div><div class="frame-coming">${ico('span', 'glyph', a)}<h3>${esc(a.name)} is on its way</h3><p>${esc(a.desc || '')}. It’s being built in another thread and appears here on its own once it’s published.</p></div><iframe class="appframe"${window.WizBrowserBoundary?.enabled ? ' ' + window.WizBrowserBoundary.frameAttributes(frameUrl, a.id) : ''} ${a.probe ? `data-probe="${esc(w.url || a.url)}"` : ''} data-own-app="${esc(a.id || '')}" src="${esc(frameUrl)}" title="${esc(a.name || 'App')}" allow="microphone; clipboard-read; clipboard-write; autoplay; fullscreen" referrerpolicy="same-origin"></iframe>
-      <div class="frame-fallback">${ico('span', 'glyph', a)}<h3>${esc(a.name)} can’t run in a window yet</h3><p>It opens in its own tab instead.</p><a class="cta" href="${esc(a.url || '/')}" target="_blank" rel="noopener">Open ${esc(a.name)}</a></div></div>`;
-  }
-  // A refused frame lands on an unreadable error document: show the fallback card.
-  // Readable (same-origin) frames get the shell's Back handling, pinch, and voice hooks.
-  function probeFrame(f, url) {
-    const wrap = f.closest('.frame-wrap'); if (!wrap) return;
-    fetch(url, { method: 'HEAD', cache: 'no-store', credentials: 'same-origin' }).then(r => {
-      if (r.ok) { if (wrap.classList.contains('coming')) { wrap.classList.remove('coming'); try { window.WizAppServices?.expectLoad?.(f); f.contentWindow.location.replace(url); } catch (e) { f.src = url; } } }
-      else { wrap.classList.add('coming'); setTimeout(() => { if (f.isConnected) probeFrame(f, url); }, 60000); }
-    }).catch(() => setTimeout(() => { if (f.isConnected) probeFrame(f, url); }, 60000));
-  }
-  /* Hosted apps must not pad the Back stack: a history entry an app pushes
-   * without the user touching it (router boot, redirects) becomes a replace.
-   * Patched as early as the new document exists, before its module scripts run. */
-  function tameHistory(win) {
-    try {
-      if (!win || win.__wosTamed || !win.history) return;
-      win.__wosTamed = true;
-      const h = win.history, push = h.pushState.bind(h), rep = h.replaceState.bind(h);
-      h.pushState = function (st, t, u) { const r = (st?.__wizardApp?.version === 1 || win.navigator.userActivation?.isActive ? push : rep)(st, t, u); try { win.__wosHref = win.location.href; } catch (e) {} return r; };
-      h.replaceState = function (st, t, u) { const r = rep(st, t, u); try { win.__wosHref = win.location.href; } catch (e) {} return r; };
-      // The app stepping back through its own entries (collapse a section with history.back()) is the app's
-      // step, never the user's Back: mark it so the frame popstate below lets the app handle it (James, 10 Oct:
-      // collapsing a part in a full-screen app dropped full screen).
-      const bk = h.back.bind(h), go = h.go.bind(h);
-      h.back = function () { selfPop(win); return bk(); };
-      h.go = function (n) { if (+n < 0) selfPop(win, +n); return go(n); };
-    } catch (e) {}
-  }
-  function selfPop(win, delta = -1) {
-    try {
-      // Traversal completion owns its document/target, not an 800 ms guess. Parked frames and busy
-      // WebViews can deliver this much later; it must never become another Back on the visible thread.
-      const nav = win.navigation, entries = nav?.entries?.(), at = nav?.currentEntry?.index;
-      const target = entries && Number.isInteger(at) ? entries[at + delta] : null;
-      if (entries && Number.isInteger(at) && !target) return; // a no-op must not consume the next user Back
-      win.__wosSelfPop = { doc: win.document, key: target?.key || null };
-    } catch (e) {}
-  }
-  function takeSelfPop(win) {
-    try {
-      const pop = win.__wosSelfPop; win.__wosSelfPop = null;
-      return !!pop && pop.doc === win.document && (!pop.key || win.navigation?.currentEntry?.key === pop.key);
-    } catch (e) { return false; }
-  }
-  function watchEarly(f) {
-    let last = null, n = 0;
-    const tick = () => {
-      if (!f.isConnected) return;
-      try { const w = f.contentWindow; if (w && w !== last && w.location.href !== 'about:blank') { last = w; tameHistory(w); } } catch (e) {}
-      if (++n < 4000) setTimeout(tick, 4);
-    };
-    tick();
-    f.addEventListener('load', () => { n = 0; tick(); });
-  }
+  /* frame: moved to app-frame.js (wizard-ux issue 1665), called once here */
+  const { probeFrame, renderApp, renderFrame, selfPop, takeSelfPop, tameHistory, watchEarly } = window.WizCore.appParts.frame({ APP, esc, ico, winApp });
   // Closed means closed: an app with no window left on any desk stops its microphone (take saved for recovery).
   window.WizAppServices?.trackOpenApps?.(() => desks.flatMap(d => d.wins).map(id => W[id]).filter(Boolean).flatMap(w => [w.appId, w.servicesAs]));
   function watchFrames(root) {
@@ -2031,7 +1874,7 @@
   launcher.addEventListener('click', e => {
     const sk = e.target.closest('[data-storekind]'); if (sk) return openStoreKind(sk.dataset.storekind);
     const a = e.target.closest('[data-app]'); if (a) return launch(APP[a.dataset.app], a);
-    const bi = e.target.closest('[data-appinfo]'); if (bi) { closeSheets(); return openAppInfo(bi); }
+    const bi = e.target.closest('[data-appinfo]'); if (bi) { closeSheets(); return openAppInfo(bi, true); }
     const t = e.target.closest('[data-thread]'); if (t) { closeSheets(); return openWizardThread(t.dataset.thread); }
     const dw = e.target.closest('[data-dw]');
     if (dw) {
@@ -2045,79 +1888,9 @@
     const qs = e.target.closest('[data-qsearch]'); if (qs) { openSearch(qs.dataset.qsearch, qs.dataset.qtab); return; }
     const c = e.target.closest('[data-cmd]'); if (c) { closeSheets(); runUtterance(c.dataset.cmd, 'command', true); }
   });
-
-  // Recorder recordings (formerly Mizel.ai): the bridge opens one "🎙 …" thread per recording; they live in the shade as their own source.
-  const isRec = n => /^\s*\u{1F399}/u.test(n?.title || '');
-  const REC_WORKING = new Set(['submitting', 'queued', 'running', 'stopping']);
-  function recState(s) { if (REC_WORKING.has(s.status)) return { k: 'run', g: '⏳', t: 'Follow-ups running' };
-    if (/\u2705/u.test(s.preview || '')) return { k: 'done', g: '✅', t: 'Ready for review' };
-    if (s.status === 'failed' || s.status === 'interrupted') return { k: 'fail', g: '⚠', t: 'Needs a look' };
-    return { k: 'sum', g: '◦', t: 'Summary ready' }; }
-  function recStripHtml() {
-    const rows = (LIVE?.sessions || []).filter(x => isRec(x) && !x.archived && !x.hidden)
-      .sort((p, q) => (Date.parse(q.activityAt || q.updatedAt) || 0) - (Date.parse(p.activityAt || p.updatedAt) || 0)).slice(0, 10);
-    const items = rows.map(r => { const st = recState(r); const t = r.title.replace(/^\s*\u{1F399}\uFE0F?\s*/u, '');
-      return `<button class="rec-row ${st.k}${LIVE.isNew(r) ? ' new' : ''}" data-rec="${esc(r.id)}" title="${esc(st.t)}"><span class="rt">${esc(ago(r.activityAt || r.updatedAt))}</span><span class="rn">${esc(t)}</span><span class="rs" aria-label="${esc(st.t)}">${st.g}</span></button>`; }).join('');
-    return `<div class="rec-h"><b>◉ Recordings</b><span>${rows.length ? rows.length + ' latest' : ''}</span></div><div class="rec-list">${items || '<div class="rec-empty">New recordings land here and in Chats.</div>'}</div>`;
-  }
-  function refreshRecStrips() { const h = recStripHtml(); document.querySelectorAll('.rec-strip').forEach(el => { if (el.innerHTML !== h) el.innerHTML = h; }); }
-  document.addEventListener('click', e => { const r = e.target.closest('[data-rec]'); if (!r) return; e.stopPropagation(); vib(6); openWizardThread(r.dataset.rec); }, true);
-
-  const GROUPS = [
-    { g: 'working', name: 'Working', c: 'var(--violet-2)' },
-    { g: 'ready', name: 'Unread', c: 'var(--green)' },
-    { g: 'needs', name: 'Needs you', c: 'var(--amber)' },
-  ];
-  function noteHtml(n, g) {
-    const sub = n.status === 'queued' && n.queueReason === 'provider_access' ? 'AI could not start · message saved · choose another model or retry' : g === 'working' ? (n.status === 'queued' ? 'Queued' : `${window.WizConfig.agent()} is on it`) : g === 'needs' ? (n.status === 'waiting_for_approval' ? 'Waiting for your approval' : n.status === 'failed' || n.status === 'interrupted' ? 'Stopped · needs a look' : 'Needs you') : (n.preview || '');
-    return `<button class="note ${g === 'working' ? 'working' : ''}" data-note="${esc(n.id)}" data-g="${g}">${isRec(n) ? '<span class="ic rec">◉</span>' : `<span class="ic emo">${emoOf(n.id)}</span>`}
-      <span class="bd"><span class="tp"><span class="src${isRec(n) ? ' mizel' : ''}">${isRec(n) ? 'Recorder' : 'Chats'}</span><span class="tm">${esc(ago(g === 'working' ? (n.lastUserAt || n.updatedAt) : (n.lastAssistantAt || n.activityAt || n.updatedAt)))}</span></span><span class="ti">${esc(n.title)}</span><span class="sb">${esc(clip(sub, 120))}</span></span></button>`;
-  }
-  function renderInbox() {
-    const L = live();
-    let html = '<div class="push"></div>';
-    if (!LIVE.ok) html += `<div class="ibx-empty">${LIVE.error === 'access' ? 'Wizard needs you to sign in. Open Wizard once, then come back.' : 'Connecting to Wizard…'}</div>`;
-    // Most urgent sits lowest: closest to the thumb and the orb.
-    for (const G of GROUPS) {
-      const items = L[G.g]; if (!items.length) continue;
-      html += `<div class="ibx-h" style="--c:${G.c}"><h4><i></i>${G.name}</h4><span>${items.length}${G.g === 'ready' && items.length > 1 ? ' · <button class="ibx-all" data-allread>Mark all read</button>' : ''}</span></div>` + items.slice(0, 40).map(n => noteHtml(n, G.g)).join('');
-    }
-    // Unsent sits lowest of all: it is the one thing that can be lost if nobody looks.
-    const un = unsentAll();
-    if (un.length) html += `<div class="ibx-h" style="--c:var(--amber)"><h4><i></i>Unsent</h4><span>${un.length}${un.length > 1 ? ' · <button class="ibx-all" data-ub-all="retry">Retry all</button>' : ''}</span></div>` + un.map(unsentRow).join('');
-    if (LIVE.ok && !un.length && !L.needs.length && !L.ready.length && !L.working.length) html += `<div class="ibx-empty"><b>All clear.</b> Nothing unread, nothing running.</div>`;
-    html += `<div class="sec-title" style="justify-content:center;margin:10px 0 4px"><span>Tap to open · swipe right to mark read</span></div>`;
-    $('#inboxBody').innerHTML = html;
-    const b = $('#inboxBody'); b.scrollTop = b.scrollHeight;
-  }
-  // tap opens the real thread, swipe right marks it read everywhere
-  let ns = null;
-  inboxEl.addEventListener('pointerdown', e => { const el = e.target.closest('.note'); if (el) ns = { el, x: e.clientX, y: e.clientY, dx: 0 }; });
-  inboxEl.addEventListener('pointermove', e => { if (!ns) return; ns.dx = e.clientX - ns.x; if (Math.abs(e.clientY - ns.y) > 20 && Math.abs(ns.dx) < 20) { ns.el.style.transform = ''; ns = null; return; } if (ns.dx > 0) ns.el.style.transform = `translateX(${ns.dx}px)`; });
-  inboxEl.addEventListener('pointerup', () => {
-    if (!ns) return; const { el, dx } = ns; ns = null;
-    const id = el.dataset.note, g = el.dataset.g;
-    if (dx > 90 && g !== 'working') { el.classList.add('gone'); vib(8); setTimeout(() => { LIVE.markSeen(id); toast('✓', 'Marked read'); }, 200); return; }
-    el.style.transform = '';
-    if (Math.abs(dx) < 8) { closeSheets(true); openWizardThread(id); }
-  });
-  inboxEl.addEventListener('pointercancel', () => { if (ns) ns.el.style.transform = ''; ns = null; });
-  inboxEl.addEventListener('click', e => {
-    if (e.target.closest('[data-allread]')) { LIVE.markSeen(live().ready.map(s => s.id)); vib(8); toast('✓', 'All marked read'); return; }
-    const ub = e.target.closest('[data-ub]'); if (ub) { const r = ub.closest('[data-ubid]'); return unsentAction(r.dataset.ubid, r.dataset.uborigin, ub.dataset.ub); }
-    if (e.target.closest('[data-ub-all]')) window.WosSettings.retryAll({ outbox: OUTBOX, toast, render: onUnsentChange });
-  });
-
-  // Moons orbit the orb: one per running agent (violet) or thread that needs you (amber).
-  function renderMoons() {
-    const L = live();
-    const m = [...L.needs.map(() => 'var(--amber)'), ...L.working.map(() => 'var(--violet-2)'), ...L.ready.map(() => 'var(--green)')].slice(0, 8);
-    $('#moons').innerHTML = m.map((c, k) => { const a = (k / Math.max(m.length, 1)) * Math.PI * 2 - Math.PI / 2, r = Math.round(($('#orbWrap').offsetWidth || 44) / 2 + 8);
-      return `<i style="--c:${c};transform:translate(${(Math.cos(a) * r).toFixed(1)}px,${(Math.sin(a) * r).toFixed(1)}px)"></i>`; }).join('');
-    // Notification badges reflect unread, independently of the Ready workflow. The orb shows the current desk.
-    window.WizCore.workspaceNav.refreshChats(LIVE, CHATS_APP.id);
-    paintOrbBadge();
-  }
+  /* inbox: moved to app-inbox.js (wizard-ux issue 1665), called once here */
+  const { refreshRecStrips, renderInbox, renderMoons } = window.WizCore.appParts.inbox({ $, ago, CHATS_APP, clip, closeSheets, emoOf, esc, inboxEl, live, LIVE, onUnsentChange, openWizardThread, OUTBOX, paintOrbBadge, toast, unsentAction, unsentAll, unsentRow, vib });
+  homeLate({ renderMoons });
   function paintOrbBadge() {
     const N = window.WizCore.workspaceNav, n = desks[idx] ? N.deskCount(desks[idx], W, winApp) : 0;
     $('#orbBadge').textContent = n ? N.fmt(n, N.deskMore?.(desks[idx], W, winApp)) : ''; $('#orbBadge').hidden = !n;
@@ -2199,307 +1972,12 @@
     // Field refresh can run after recording starts; keep its destination accessible.
     if (document.getElementById('generalVoice')) paintVoiceDestination();
   }
-  const DICTATION_KEY = 'wos.dictation-takes.v1';
-  const DICTATION_RECOVERY_KEY = 'wos.dictation-recovery.v1';
-  function dictationRecovery(id, meta) {
-    const rows = JSON.parse(localStorage.getItem(DICTATION_RECOVERY_KEY) || '{}');
-    if (meta === false) delete rows[id];
-    else if (meta) rows[id] = { ...rows[id], ...meta, id, kind: 'dictation', send: false };
-    if (meta !== undefined) localStorage.setItem(DICTATION_RECOVERY_KEY, JSON.stringify(rows));
-    return rows;
-  }
-  window.__wosDictationRecovery = () => { try { return Object.values(dictationRecovery()); } catch (_) { return []; } };
-  function dictationTake(id, keep) {
-    try {
-      const rows = JSON.parse(localStorage.getItem(DICTATION_KEY) || '{}');
-      if (keep === true) { rows[id] = true; localStorage.setItem(DICTATION_KEY, JSON.stringify(rows)); }
-      if (keep === false) { delete rows[id]; localStorage.setItem(DICTATION_KEY, JSON.stringify(rows)); }
-      return rows[id] === true;
-    } catch (_) { if (keep) throw new Error('Could not save dictation provenance'); return false; }
-  }
-  window.__wosDictationTake = id => dictationTake(id) || voiceTake(id)?.kind === 'dictation';
-  function startOrbVoice() { return startVoice(FIELDS.refresh() ? 'dictation' : 'auto'); }
-
-  // Keep the screen on while the orb records or transcribes: a screen lock mid-dictation pauses the WebView and loses the take.
-  // Native shell (0.5.1+) sets FLAG_KEEP_SCREEN_ON; browsers and PWAs use the Screen Wake Lock API.
-  const keepAwake = on => window.WosCaptureTools.awake(on);
-  window.__wosAwake = () => window.WosCaptureTools.awakeWanted;
-  // Native shell (0.7.0, native parity): the orb records in Android's foreground-service recorder
-  // (WizardOSDevice), so a take keeps going with the screen off or the app in the background, and
-  // survives an app kill on disk. Browsers/PWAs and older shells keep the in-page MediaRecorder.
-  // When James leaves the app mid-take, the floating orb (Everywhere) shows and drives this same take
-  // through __wosVoiceCmd below; it never starts a second recorder.
-  // Wizard Shell (android/shell): the same recorder surface over wizardDevicePort, only when it offers device.recording.
-  const DEV = () => { const d = window.WizardOSDevice; return d && typeof d.recStart === 'function' ? d : window.WosDeviceRecording?.device() || null; };
-  function nativeBlob(id, expected) {
-    return DEV()?.fetched?.(id)?.blob || window.WosDevice.readRecording(id, expected);
-  }
-  /* Stop (or claim an already-stopped) native take and hand its audio to the normal pipeline. */
-  function nativeTakeAppOwned(id) {
-    const shared = window.WizAppCapture?.getState?.();
-    if(V.meetingLoan?.native && V.native===id && shared?.voiceBorrow?.id===V.meetingLoan.id) return false;
-    const loan=window.WosOrbHandoff?.nativeTake(id);
-    if(loan && !shared?.nativeDeviceTakeIds?.includes(id) && (!shared?.active || shared.meetingId===loan.meetingId))return false;
-    return !!shared?.active || !!shared?.nativeDeviceTakeIds?.includes(id);
-  }
-  function pauseNativeTake(on) {
-    if (!V.native || nativeTakeAppOwned(V.native)) return false;
-    try { if (JSON.parse(DEV()?.recActive?.() || 'null')?.id !== V.native) return false; DEV().recPause(on); return true; } catch (_) { return false; }
-  }
-  const VOICE_RECOVERY_KEY = 'wos.voice-recovery.v1';
-  function voiceRecovery(id, meta) {
-    const rows = JSON.parse(localStorage.getItem(VOICE_RECOVERY_KEY) || '{}');
-    if (meta === false) delete rows[id];
-    else rows[id] = { ...rows[id], ...meta, id, send: false };
-    localStorage.setItem(VOICE_RECOVERY_KEY, JSON.stringify(rows));
-  }
-  window.__wosVoiceRecovery = () => { try { return Object.values(JSON.parse(localStorage.getItem(VOICE_RECOVERY_KEY) || '{}')); } catch (_) { return []; } };
-  const nativeFetching = new Set();
-  function nativeFinish(id, stopped) {
-    if (nativeTakeAppOwned(id)) { setVoice('paused'); toast('🎙', 'This recording belongs to another app'); return; }
-    // The shell recorder stops and reads asynchronously: fetch both first, then finish exactly as below.
-    const shell = DEV();
-    if (shell?.fetch && !shell.fetched(id)) {
-      if (nativeFetching.has(id)) return;
-      nativeFetching.add(id);
-      shell.fetch(id).then(() => { nativeFetching.delete(id); nativeFinish(id, stopped); }, () => {
-        nativeFetching.delete(id); V.native = null; setVoice('idle'); txHide(); toast('!', 'Could not read recording · original kept on this phone');
-      });
-      return;
-    }
-    // Notification/Everywhere Send enters here directly, bypassing finishVoice. Seal the model before claiming
-    // audio or awaiting STT. A recreated page restores the last route saved for this native take.
-    if (V.kind === 'dictation' || window.__wosDictationTake(id)) {
-      const dev = DEV(); let meta;
-      // Preserve a reload-visible exact-ID recovery owner BEFORE a destructive native claim.
-      try { dictationRecovery(id, { ms: V.acc, state: 'retained' }); }
-      catch (_) { pauseNativeTake(true); setVoice(stopped ? 'idle' : 'paused'); toast('!', 'Storage unavailable · dictation remains on the device'); return; }
-      try { meta = stopped ? (JSON.parse(dev.recPending() || '[]').find(t => t.id === id) || window.__wosDictationRecovery().find(t => t.id === id)) : JSON.parse(dev.recStop(id)); } catch (_) {}
-      V.native = null; V.kind = 'dictation';
-      if (!meta) { setVoice('idle'); txHide(); toast('!', 'Dictation retained · could not read recording'); return; }
-      V.acc = Math.max(V.acc, Number(meta.ms) || 0);
-      try { dictationRecovery(id, meta); } catch (_) { /* the exact-ID marker above remains durable */ }
-      try { return onRecStop(nativeBlob(id, Number(meta.bytes)), id); }
-      catch (_) { V.field?.release(); V.field = null; setVoice('idle'); txHide(); toast('!', 'Dictation retained · could not read audio · reopen recording recovery'); return; }
-    }
-    const hadSnap = !!V.snap;
-    const saved = window.__wosVoiceRecovery().find(t => t.id === id);
-    const recoveredLoan=window.WosOrbHandoff?.takeSnap(id);
-    // A live general take keeps its own start snapshot (window, new chat); only a recovered one is rebuilt (wizard-ux#1218).
-    const liveGeneral = hadSnap && V.snap.general && !V.snap.resumed;
-    const snap = recoveredLoan ? {...V.snap,...recoveredLoan} : (saved?.general && !liveGeneral ? { ...generalVoiceSnap(), route: window.WosModels.voiceRoute(id) } : V.snap || sendSnap());
-    if (saved?.general) { V.kind = 'general'; V.target = null; V.replyTo = null; }
-    try {
-      const nativePin = saved?.conversation;
-      if (!snap.meetingEventId && nativePin && V.target == null && !V.replyTo && V.kind !== 'command') snap.conversation = nativePin; // old token fails closed after shell reload
-      else if (!hadSnap) snap.conversation = null; // never infer a recovered native destination from today's focus
-      // A live take sent from the recording notification reads the model at that Send too, for its pinned destination
-      // (wizard-ux#1218). A take recovered after reload keeps its saved route.
-      if (!snap.conversation && hadSnap && !V.snap.resumed) {
-        const live = sendTapRoute(snap, V.replyTo || (snap.view?.thread ? { wid: snap.view.id, sid: snap.view.thread } : null));
-        if (live?.model && live?.provider) snap.route = live;
-      }
-      if (!snap.conversation && !(snap.route?.model&&snap.route?.provider)) {
-        const pin = V.replyTo || (snap.view?.thread ? { wid: snap.view.id, sid: snap.view.thread } : null);
-        snap.route = (!hadSnap && window.WosModels.voiceRoute(id)) || CHATS.modelRoute(pin?.wid, pin?.sid || '');
-      }
-      if (!snap.conversation && !(snap.route?.model&&snap.route?.provider)) { snap.route = null; window.WosModels.load?.(); throw new Error('Choose a model before sending'); }
-      if (!snap.conversation) saveVoiceRoute(id, snap.route); V.snap = snap;
-    } catch (e) {
-      // The native file remains on disk; no claim, transcription or inference happens on an uncertain route.
-      dropHold(); unseal();
-      if (JSON.parse(DEV()?.recActive?.() || 'null')?.id === id) { V.native = id; pauseCommandCapture(); }
-      else { V.native = null; setVoice('idle'); txHide(); }
-      toast('!', 'Recording saved · ' + String(e.message || e), 3200); return;
-    }
-    const dev = DEV(); let meta = null;
-    // recStop in shipped shells implicitly claims. Journal a reload-visible owner before
-    // that bridge call; already-stopped takes are read without recClaim.
-    try { voiceRecovery(id, { kind: V.kind, ms: V.acc }); }
-    catch (_) { pauseNativeTake(true); setVoice(stopped ? 'idle' : 'paused'); toast('!', 'Storage unavailable · recording remains on device'); return; }
-    try {
-      meta = stopped ? (JSON.parse(dev.recPending() || '[]').find(t => t.id === id) || window.__wosVoiceRecovery().find(t => t.id === id)) : JSON.parse(dev.recStop(id));
-      if (meta?.id === id) voiceRecovery(id, meta);
-    } catch (e) { meta = null; }
-    V.native = null;
-    if (!meta || meta.id !== id) { dropHold(); unseal(); setVoice('idle'); txHide(); toast('!', 'Could not read recording · original kept on device'); return; }
-    // A shipped kind-less recActive bridge reveals the original mode only after an explicit stop.
-    // Preserve command routing even when its older take had no page-side provenance at recovery.
-    if (!snap.general && ['auto', 'command', 'dictation'].includes(meta.kind)) V.kind = meta.kind;
-    V.acc = Math.max(V.acc, (V.nativeSegmentBase||0)+(Number(meta.ms) || 0));
-    try { return onRecStop(nativeBlob(id, Number(meta.bytes)), id); }
-    catch (e) { dropHold(); unseal(); setVoice('idle'); txHide(); toast('!', String(e.message || 'Recording retained · could not read audio'), 4000); }
-  }
-  const releasedTakes = new Set();
-  const recDone = id => {
-    if (!id || releasedTakes.has(id) || !DEV()?.recDone) return;
-    try { DEV().recDone(id); releasedTakes.add(id); window.WosModels.forgetVoiceRoute(id); dictationTake(id, false); dictationRecovery(id, false); voiceRecovery(id, false); } catch (e) {}
-  };
-  /* The page was reloaded or recreated while the native take kept going: pick the orb back up. */
-  // Positive provenance for the shipped kind-less native ABI. Never infer ownership by claiming audio.
-  const VOICE_TAKE_KEY = 'wos.voice-take.v1';
-  function voiceTake(id, kind) {
-    try {
-      if (kind) localStorage.setItem(VOICE_TAKE_KEY, JSON.stringify({ id, kind }));
-      const row = JSON.parse(localStorage.getItem(VOICE_TAKE_KEY) || 'null');
-      return row?.id === id && ['auto', 'command', 'dictation'].includes(row.kind) ? row : null;
-    } catch (_) { return null; }
-  }
-  window.__wosVoiceTake = id => voiceTake(id);
-  function nativeResume(a) {
-    if (V.state !== 'idle' || !a?.id) return false;
-    // Recovery can precede any Chats/model-picker visit, just like a cold first recording.
-    // Warm authority now; the exact route still seals at Send and remains fail-closed.
-    window.WosModels?.load().catch(() => {});
-    const kind = window.__wosDictationTake(a.id) || a.kind === 'dictation' ? 'dictation' : (a.kind || voiceTake(a.id)?.kind) === 'command' ? 'command' : 'auto';
-    V.captureEpoch = (V.captureEpoch || 0) + 1;
-    V.field?.release(); V.field = null; // page recreation can never reconstruct a DOM capability
-    const savedGeneral = window.__wosVoiceRecovery().find(t => t.id === a.id)?.general === true;
-    const knownReply = kind === 'dictation' || savedGeneral ? null : replyTake(a.id);
-    const prior = knownReply?.custodyId ? OUTBOX.get(knownReply.custodyId) : null, draft = prior?.parkedDraft;
-    if (knownReply?.custodyId && (!draft || prior.state !== 'held' || !prior.durable)) return false;
-    Object.assign(V, { native: a.id, kind, target: null, resumed: true, snap: window.WosOrbHandoff?.takeSnap(a.id)||null, seal: null, replyTo: knownReply, chunks: [], acc: Number(a.ms) || 0, t0: performance.now(), sim: false, stopAsked: false, sendAsked: false, cancelled: false, an: null, files: [], pickPaused: false });
-    V.parts=[];V.custodyCapture=null;V.nativeSegmentBase=0;V.meetingLoan=window.WosOrbHandoff?.forTake(a.id)||null;
-    if(draft)Object.assign(V,{parts:draft.parts||[prior.audio],custodyCapture:prior.id,snap:draft.snap,files:draft.files||[],nativeSegmentBase:draft.acc||0,acc:(draft.acc||0)+(Number(a.ms)||0),resumeNative:true,seal:{text:draft.typed||'',files:draft.sealFiles||[],reply:draft.sealReply||null,done:()=>{},putBack:()=>{}}});
-    if (savedGeneral && !V.snap?.meetingEventId) { V.kind = 'general'; V.snap = { ...generalVoiceSnap(), route: window.WosModels.voiceRoute(a.id) }; }
-    // A take resumed after a reload keeps the route it had; only a take started on this page reads the model at Send (wizard-ux#1218).
-    if (V.snap) V.snap = { ...V.snap, resumed: true };
-    renderVoiceFiles();
-    setVoice(a.paused ? 'paused' : 'listen');
-    txPill(a.paused ? '⏸' : '✦', kind === 'dictation' ? 'Dictation kept · tap orb to transcribe & copy' : a.paused ? 'Paused · recording kept · tap orb to resume' : 'Still recording · tap orb to send', kind === 'dictation' ? 'dictation' : 'agent'); txHide(2600);
-    V.raf = requestAnimationFrame(tick);
-    return true;
-  }
-  // Tell the native shell what the orb is doing, so leaving WizardOS mid-recording shows the floating orb
-  // (timer, Pause, Cancel, tap to send). Never auto-sends: going quiet only ever pauses nothing.
-  function voiceElapsed() { return Math.round((V.acc || 0) + (V.state === 'listen' || V.state === 'command' ? performance.now() - (V.t0 || performance.now()) : 0)); }
-  function reportVoice(s) {
-    try { const n = window.WizardOSNative; if (n && typeof n.appVoice === 'function') n.appVoice(s, voiceElapsed()); } catch (e) {}
-  }
-  // The floating orb's controls while WizardOS is in the background.
-  window.__wosVoiceCmd = cmd => {
-    if (V.state !== 'listen' && V.state !== 'paused' && V.state !== 'command') return false;
-    if (cmd === 'send') finishVoice();
-    else if (cmd === 'cancel') cancelVoice();
-    else if (cmd === 'pause') $('#arcPause').click();
-    return true;
-  };
+  /* dictation: moved to app-dictation.js (wizard-ux issue 1665), called once here */
+  const { DEV, dictationTake, keepAwake, nativeBlob, nativeFinish, nativeResume, nativeTakeAppOwned, pauseNativeTake, recDone, reportVoice, startOrbVoice, voiceElapsed, voiceRecovery, voiceTake, bindLate: dictationLate } = window.WizCore.appParts.dictation({ $, cancelVoice, CHATS, FIELDS, finishVoice, generalVoiceSnap, onRecStop, OUTBOX, replyTake, sendSnap, startVoice, tick, toast, txHide, V });
   let NOMIC = false;
-  function setVoice(s) {
-    V.state = s; device.dataset.voice = s; tourEv('voice', { state: s }); queueMicrotask(() => window.WosSkinHost?.voice?.(s)); if (s === 'listen' || s === 'idle') V.resumeBlocked = false;
-    $('#arcPause small').textContent=s==='paused'?'Resume':'Pause';$('#arcPause').setAttribute('aria-label',s==='paused'?'Resume recording':'Pause recording');
-    CHATS.PW?.paintMic((s === 'listen' || s === 'paused') && !!V.replyTo, V.replyTo?.sid || '');
-    reportVoice(s);
-    keepAwake(s === 'listen' || s === 'paused' || s === 'command' || s === 'think');
-    Orb.setMode({ idle: 'idle', listen: 'listen', command: 'command', paused: 'paused', think: 'think', done: 'done', agent: 'agent' }[s] || 'idle');
-    voiceEl.classList.toggle('on', s === 'listen' || s === 'paused' || s === 'command');
-    voiceEl.classList.toggle('cmd', V.kind === 'command' && s !== 'idle' && s !== 'listen' && s !== 'paused' && s !== 'command');
-    voiceEl.setAttribute('aria-hidden', String(s === 'idle'));
-    if (s === 'idle') FIELDS.refresh(); else paintFieldOrb();
-    paintVoiceDestination();
-  }
-  // The Auto/Agent toggle is gone: the router always decides (commands run, the rest goes to Archimedes).
-  V.route = 'auto';
-  // Third arc button: attach a photo or file to this take. It rides along with what you say.
-  V.files = [];
-  const voicePicker = Object.assign(document.createElement('input'), { type: 'file', multiple: true, hidden: true });
-  voicePicker.dataset.voiceFiles='';document.body.appendChild(voicePicker);
-  function renderVoiceFiles() {
-    const n = V.files.length, b = $('#arcAttach');
-    b.disabled = V.kind === 'dictation'; $('#arcScreen').disabled = V.kind === 'dictation';
-    b.classList.toggle('has', n > 0); b.classList.toggle('busy', V.files.some(f => f.uploading));
-    $('#attachCount').textContent = n ? String(n) : '';
-    $('#attachLabel').textContent = V.files.some(f => f.uploading) ? 'Uploading' : n ? (n === 1 ? '1 file' : `${n} files`) : 'Attach';
-  }
-  const sameTake = files => V.files === files && (V.state === 'listen' || V.state === 'paused');
-  function releaseScreenOperation(op) {
-    if (V.screenOp !== op) return;
-    V.screenOp = null;
-    device.classList.remove('capturing-screen');
-    $('#arcScreen').disabled = false; $('#arcScreen').classList.remove('busy');
-  }
-  function cancelTakeFiles() {
-    for (const f of V.files || []) f.abort?.abort();
-    if (V.screenOp) { const op = V.screenOp; op.abort.abort(); releaseScreenOperation(op); }
-  }
-  async function uploadVoiceFile(file, files, f) {
-    await window.WosCaptureTools.uploadRow(CHATS.uploadFile, file, f, { active: () => sameTake(files) && files.includes(f), changed: renderVoiceFiles });
-    if (sameTake(files) && f.error) toast('!', f.error + ' · original file kept; tap Attach to retry', 3200);
-  }
-  voicePicker.addEventListener('change', async () => {
-    const list = [...voicePicker.files], files = V.files; voicePicker.value = '';
-    if (!sameTake(files)) return;
-    // Every picked file joins the take at once, each tracked with its bytes, so a send before the uploads finish
-    // takes them all (James, 27 Oct 2026: picked two images, sent while the second was uploading, only the first
-    // arrived). Adding one row per finished upload left later files out of a send that happened in between.
-    const rows = list.map(file => {
-      const f = { name: file.name, mime: file.type, bytes: file.size, uploading: true, local: file };
-      window.WizUploads?.pending?.track(f, file);
-      files.push(f); return [file, f];
-    });
-    if (!rows.length) return;
-    renderVoiceFiles();
-    // One at a time; a row a send already took (handedOff) still uploads, because its message waits on it.
-    for (const [file, f] of rows) {
-      if (!f.handedOff && (!sameTake(files) || !files.includes(f))) { f.upSettle?.fail(new Error('Attachment removed')); continue; }
-      await uploadVoiceFile(file, files, f);
-    }
-  });
-  $('#arcScreen').addEventListener('click', async () => {
-    if (!sameTake(V.files) || $('#arcScreen').disabled) return;
-    const files = V.files;
-    // Reserve before asynchronous capture so an immediate Send cannot omit the screenshot.
-    const f = { name: 'Screenshot', mime: 'image/png', uploading: true };
-    files.push(f); renderVoiceFiles();
-    const op = { files, abort: new AbortController() }; V.screenOp = op; f.abort = op.abort;
-    // Tracked from the reservation: a Send during capture takes it as pending and the shot follows the message.
-    const st = window.WizUploads?.pending?.track(f, null);
-    const screen = $('#arcScreen'); screen.disabled = true; screen.classList.add('busy');
-    const conceal = () => {
-      if (V.screenOp !== op || op.abort.signal.aborted) return () => {};
-      device.classList.add('capturing-screen');
-      return () => { if (V.screenOp === op) device.classList.remove('capturing-screen'); };
-    };
-    try {
-      // The capture adapter conceals chrome only at actual sampling, after the desktop picker returns.
-      const file = await window.WosScreenCapture.capture({ signal: op.abort.signal, conceal });
-      if (!f.handedOff && (!sameTake(files) || !files.includes(f) || V.screenOp !== op)) { st?.fail(new Error('Screenshot cancelled')); return; }
-      Object.assign(f, { name: file.name, mime: file.type, bytes: file.size });
-      await uploadVoiceFile(file, files, f);
-      if (sameTake(files) && f.id) toast('▣', 'Screenshot attached', 1800);
-    } catch (e) {
-      st?.fail(e);
-      const i = files.indexOf(f); if (i >= 0) files.splice(i, 1);
-      if (sameTake(files)) { renderVoiceFiles(); toast('!', e.message || 'Screen capture failed · not attached', 3200); }
-    } finally { releaseScreenOperation(op); }
-  });
-  // The take's files in the shape the outbox sends as wizard_file_ids. One still uploading goes as a pending
-  // placeholder (WizUploads.pending) that the outbox swaps for its receipt before delivery.
-  const PEND = window.WizUploads?.pending;
-  const takeFiles = () => V.files.map(f => PEND ? PEND.ref(f) : (f.id && !f.uploading ? { id: f.id, name: f.name, mime: f.mime, bytes: f.bytes } : null)).filter(f => f && f.id);
-  // The take's own files plus the thread composer's (seal), each file once. Never a count cap (James, 6 Nov 2026):
-  // only real size limits (upload, inline image budget) apply.
-  const withSealFiles = (files, seal) => [...(files || []), ...(seal ? seal.files || [] : [])].filter((f, i, a) => f && f.id && a.findIndex(x => x.id === f.id) === i);
-  function txShow(text, label, cls, icon) {
-    tx.className = 'transcript ' + (cls || '');
-    window.WizBrand.paint($('#txRouteIcon'), icon || '✦');
-    $('#txRouteText').innerHTML = label || '';
-    $('#txText').textContent = text || '';
-    $('#txChips').innerHTML = '';
-    voiceEl.classList.add('tx');
-  }
-  // After the orb is tapped to send, the card shrinks to a one-line pill above the orb
-  // ("Sending…" → "Sent to Archimedes") and fades. The words James said never cover the screen;
-  // they are already in the thread. Timing/router detail rides in data-detail for diagnostics.
-  function txPill(icon, label, cls, detail) {
-    tx.className = 'transcript brief ' + (cls || '');
-    window.WizBrand.paint($('#txRouteIcon'), icon || '✦');
-    $('#txRouteText').textContent = label || '';
-    tx.dataset.detail = detail || '';
-    $('#txChips').innerHTML = '';
-    voiceEl.classList.add('tx');
-  }
-  const isPill = () => tx.classList.contains('brief');
+  /* voicefiles: moved to app-voicefiles.js (wizard-ux issue 1665), called once here */
+  const { cancelTakeFiles, isPill, renderVoiceFiles, setVoice, takeFiles, txPill, txShow, uploadVoiceFile, voicePicker, withSealFiles } = window.WizCore.appParts.voicefiles({ $, CHATS, device, FIELDS, keepAwake, paintFieldOrb, paintVoiceDestination, reportVoice, toast, tourEv, tx, V, voiceEl });
+  dictationLate({ renderVoiceFiles, setVoice, txPill });
   let txHideT = 0;
   // Once the card has faded, drop its choice chips too: a hidden card with chips kept the × "on" and made
   // the next Back silently clear an invisible card instead of navigating.
@@ -2686,125 +2164,8 @@
       if (V.stopAsked) { cancelVoice(true); }
     }
   }
-  /* A browser tab (not the installed app) can draw its own toolbar over the bottom of the page: iPhone Safari's bottom
-   * bar does, and only the visual viewport knows it. The dock, the orb and its Cancel/Pause controls would then sit
-   * under the toolbar, where taps go to Safari and the orb looks frozen. Lift everything above the visible bottom
-   * (--vv-b feeds --safe-b). Never while typing: the keyboard also shrinks the visual viewport and the composers
-   * handle it themselves. Installed apps and the native shells have no browser bar, so this stays 0 there. */
-  function browserBarInset() {
-    const vv = window.visualViewport, root = document.documentElement;
-    const mm = q => { try { return matchMedia(q).matches; } catch (e) { return false; } };
-    if (!vv || navigator.standalone === true || mm('(display-mode: standalone)') || mm('(display-mode: fullscreen)') || DEV() || window.WizardOSNative) return;
-    let cur = 0;
-    const set = v => {
-      if (v === cur) return;
-      cur = v; root.style.setProperty('--vv-b', v + 'px'); root.dataset.browserBar = v ? String(v) : '';
-      window.__vvLog = (window.__vvLog || []).concat('vv-b:' + v).slice(-20);
-    };
-    // A browser bar covers 6–160 px. Anything taller is the on-screen keyboard, which the composers handle
-    // themselves: then no bar inset at all, so the keyboard is never mistaken for a bar and no stale bar height stays
-    // on top of it. Measured by size, not focus: a focused field with a hardware keyboard still has Safari's bar.
-    const BAR_MAX = 160;
-    const apply = () => {
-      const shown = vv.offsetTop + vv.height, bottom = device.getBoundingClientRect().bottom;
-      const cover = Math.round(bottom - shown);
-      set(cover > 6 && cover <= BAR_MAX ? cover : 0);
-    };
-    vv.addEventListener('resize', apply); vv.addEventListener('scroll', apply); addEventListener('resize', apply);
-    addEventListener('focusout', () => setTimeout(apply, 350)); addEventListener('orientationchange', () => setTimeout(apply, 350));
-    apply();
-  }
-  // The microphone never opened for this take (no answer from the browser, or a second tap before it did): end the
-  // take, keep nothing (nothing was recorded) and say why where the person is looking (the tour hides toasts).
-  const MIC_OPEN_TIMEOUT_MS = 8000;
-  async function micNeverOpened(why) {
-    if (V.rec || V.native || V.state === 'idle') return;
-    window.__voiceLog = (window.__voiceLog || []).concat('mic-never-opened:' + why).slice(-20);
-    // A microphone borrowed from a browser meeting goes straight back: nothing was recorded, so no recording custody
-    // (cancelVoice would otherwise keep an empty "cancelled meeting interruption"). returnMeeting keeps the loan and
-    // says so when the return fails; the take then stays, and the next tap tries the return again.
-    if (V.meetingLoan && !V.parts.length && !(V.chunks || []).length) {
-      // First invalidate the capture still opening, so a microphone that opens during the handoff is stopped at once
-      // (openRec checks the epoch) and never becomes a live recorder behind the stop gesture.
-      V.captureEpoch = (V.captureEpoch || 0) + 1;
-      await returnMeeting({ status: 'cancelled' });
-      if (V.meetingLoan) { tourEv('voicefail', { text: 'The microphone didn’t start, and the meeting still has it. Tap the orb to try again.' }); return; }
-      if (V.rec || V.native || V.state === 'idle') return;
-    }
-    cancelVoice(true);
-    const text = why === 'timeout' ? 'The microphone didn’t start. Allow it for this site, then tap the orb again.' : 'The microphone didn’t start, so nothing was recorded. Tap the orb to try again.';
-    toast('🎙', text, 5200); tourEv('voicefail', { text });
-  }
-  $('#txChips').addEventListener('click', e => { const b = e.target.closest('[data-sim]'); if (!b) return; const k = V.kind; cancelVoice(true); runUtterance(b.dataset.sim, k); });
-  // Only a tap (or Cancel) ends a take. If Android takes the mic away (a call, another app, the system), the
-  // part recorded so far is kept and the take pauses: tap the orb to send it, or Pause to carry on recording.
-  async function browserMicIsExternal() {
-    const d = window.WizardOSDevice; if (!d || typeof d.micRoute !== 'function') return false;
-    for (let i = 0; i < 4; i++) {
-      await new Promise(r => setTimeout(r, 120));
-      let v = 'unknown'; try { v = String(d.micRoute()); } catch (_) { return false; }
-      if (v === 'external') return true;
-      if (v !== 'unknown') return false;
-    }
-    return false;
-  }
-  async function openMic() {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
-    // The phone's own mic only (18 Oct 2026): a take Android puts on a Bluetooth or external mic is refused.
-    if (await browserMicIsExternal()) { stream.getTracks().forEach(t => t.stop()); const e = new Error("Android moved the microphone to a Bluetooth or external device. Wizard records only from the phone's own mic. Try again, or choose another mic in Settings → Microphone."); e.code = 'external_mic'; throw e; }
-    micGranted = true;
-    return stream;
-  }
-  /* Pre-warmed microphone (Miguel, 31 Oct 2026: hold-for-command was slow to really listen). A press held still on the
-   * orb for MIC_WARM_MS opens the browser mic while the hold is still deciding, so by the time a hold becomes a command
-   * (or a slow tap becomes a message) the stream is already open and recording starts at once: the iPhone's
-   * getUserMedia (often 300-800 ms) leaves the critical path. Tap and hold mean exactly what they did; only the mic
-   * opens sooner. Never a permission prompt (only once the mic is known to be allowed), never with the native
-   * recorder, and released as the press ends unless that press started a take. */
-  const MIC_WARM_MS = 90;
-  let micGranted = false, MW = null;
-  try { navigator.permissions?.query?.({ name: 'microphone' })?.then(p => { micGranted = micGranted || p.state === 'granted'; p.onchange = () => { micGranted = p.state === 'granted'; }; }, () => {}); } catch (_) {}
-  function warmMic() {
-    if (MW || V.state !== 'idle' || !micGranted || DEV() || !navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) return;
-    // an app or meeting holding the mic is handed over by startVoice (WosOrbHandoff) first: never open a second stream
-    const shared = window.WizAppCapture?.getState?.(); if (V.admitting || shared?.active || shared?.recording || shared?.hold) return;
-    const w = MW = { p: openMic() };
-    w.p.catch(() => { if (MW === w) MW = null; });
-  }
-  // The take opening now takes the warm stream (synchronously, before its first await); a press that ends any other way drops it.
-  function takeWarm() { const w = MW; MW = null; return w ? w.p : null; }
-  function dropWarm() { const w = MW; MW = null; if (w) w.p.then(s => s.getTracks().forEach(t => t.stop()), () => {}); }
-  async function openRec(epoch = V.captureEpoch) {
-    if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) throw new Error('nomic');
-    const stream = await (takeWarm() || openMic());
-    if (epoch !== V.captureEpoch || V.cancelled || V.state === 'idle') { stream.getTracks().forEach(t => t.stop()); return false; }
-    V.stream = stream;
-    const AC = window.AudioContext || window.webkitAudioContext; V.ac = new AC();
-    const src = V.ac.createMediaStreamSource(V.stream); V.an = V.ac.createAnalyser(); V.an.fftSize = 1024; src.connect(V.an);
-    const mime = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus'].find(m => MediaRecorder.isTypeSupported(m)) || '';
-    const rec = V.rec = new MediaRecorder(V.stream, mime ? { mimeType: mime } : undefined);
-    V.mime = rec.mimeType || mime || 'audio/webm';
-    const captureId = V.custodyCapture || (V.custodyCapture = 'capture-' + crypto.randomUUID());
-    window.WosOrbHandoff?.bind(V.meetingLoan,captureId,V.snap);
-    rec.ondataavailable = e => { if (epoch === V.captureEpoch && !V.cancelled && e.data && e.data.size) { V.chunks.push(e.data); const parts=[...V.parts,new Blob(V.chunks,{type:rec.mimeType||V.mime})];OUTBOX.capture(new Blob(parts, { type: rec.mimeType || V.mime || 'audio/webm' }), captureId,parts); } };
-    rec.onstop = () => { if (epoch !== V.captureEpoch || V.cancelled) return; return V.state === 'think' ? onRecStop() : onRecInterrupted(rec); };
-    // A track ended by the system stops the recorder too; onstop handles it.
-    V.stream.getAudioTracks().forEach(tr => tr.addEventListener('ended', () => { try { rec.state !== 'inactive' && rec.stop(); } catch (e) {} }));
-    rec.start(250);
-    if (V.state === 'paused' || (V.stopAsked && V.kind === 'command')) pauseCommandCapture();
-    return true;
-  }
-  function onRecInterrupted(rec) {
-    if (V.cancelled || V.rec !== rec || (V.state !== 'listen' && V.state !== 'paused' && V.state !== 'command')) return;
-    if (V.chunks.length) V.parts.push(new Blob(V.chunks, { type: V.mime || 'audio/webm' }));
-    V.chunks = [];
-    if (V.state !== 'paused') V.acc += performance.now() - V.t0;
-    stopStream(); V.rec = null; orbLevel(0);
-    setVoice('paused');
-    $('#txRouteText').textContent = V.kind === 'dictation' ? 'Dictation interrupted · kept · tap orb to transcribe' : 'Mic interrupted · kept · tap the orb to send';
-    toast('⏸', 'Mic interrupted · your recording is kept');
-  }
-  function stopStream() { try { V.stream && V.stream.getTracks().forEach(t => t.stop()); } catch (e) {} try { V.ac && V.ac.close(); } catch (e) {} V.stream = null; V.ac = null; V.an = null; }
+  /* mic: moved to app-mic.js (wizard-ux issue 1665), called once here */
+  const { browserBarInset, dropWarm, MIC_OPEN_TIMEOUT_MS, MIC_WARM_MS, micNeverOpened, openRec, stopStream, warmMic, bindLate: micLate } = window.WizCore.appParts.mic({ $, cancelVoice, DEV, device, onRecStop, orbLevel, OUTBOX, returnMeeting, runUtterance, setVoice, toast, tourEv, V });
   /* Send and go for the orb (James, 10 Oct 2026: "it sits at this screen for like 10 seconds… process this in the
    * background, send them back out… allow them to keep using their phone"). The send tap steps a phone thread
    * back to the list at once, like a typed send; transcription, routing and delivery carry on behind the pill
@@ -2830,59 +2191,10 @@
     const v = V.snap?.view;
     return V.kind !== 'command' && V.target == null && v?.kind === 'chat thread' && v.thread && W[v.id] ? { wid: v.id, sid: v.thread, box: v.box } : null;
   }
-  // The model route for a take, read from the selector at the Send tap (wizard-ux#1218), for the same destination the
-  // take was pinned to when it started. An explicit agent pick keeps its own agent. Not used for a take resumed after
-  // a reload (snap.resumed): that keeps its saved route.
-  function sendTapRoute(snap, pin) {
-    if (snap.general) {
-      const r = snap.newChatWid ? CHATS.modelRoute(snap.newChatWid, '__new__') : CHATS.modelRoute();
-      const agent = snap.route?.agent || '';
-      return (r?.agent || '') === agent ? r : agent ? window.WosModels.snapshot('', null, agent) : null;
-    }
-    const live = pin ? CHATS.modelRoute(pin.wid, pin.sid, pin.box || undefined) : CHATS.modelRoute(snap.view?.id, snap.view?.thread || '__new__', snap.view?.box || undefined); // a channel take: the box it started in (issue 1309)
-    // A take pinned to a channel goes to that channel's agent ('' = the main agent: General with no agent picked),
-    // on the model picked for it. Another agent's channel in front by Send, or a model or agent left over from another
-    // agent's thread at the start of the take, never re-routes it (wizard-ux issue 1312).
-    if (typeof snap.view?.space === 'string') {
-      const want = typeof snap.view.chanAgent === 'string' ? snap.view.chanAgent : snap.route?.agent || '';
-      if (live && (live.agent || '') === want) return live;
-      if (snap.route && (snap.route.agent || '') === want) return snap.route;
-      // The box's own pick (wizard-ux issue 1309), never the window's New chat pick.
-      const box = pin ? pin.box : snap.view.box, nm = box ? CHATS.boxModel?.(box) || null : null;
-      return window.WosModels.snapshot('', nm && (nm.agent || '') === want ? nm : null, want);
-    }
-    return live;
-  }
-  // A take that sends nothing gives the composer it took back (words, photos, files: chats.js takeComposer).
-  function unseal(seal) { const t = seal || V.seal; if (!seal) V.seal = null; try { t?.putBack(); } catch (e) { console.error(e); } }
-  function dropHold() { if (V.hold) { LIVE.releaseSend?.(V.hold); V.hold = null; } }
-  function saveVoiceRoute(id, route) {
-    try { window.WosModels.keepVoiceRoute(id, route); } catch (e) { throw new Error('Could not save the recording’s model route'); }
-  }
-  // Release is a capture boundary, independent of model availability, uploads or permission latency.
-  function pauseCommandCapture() {
-    if (V.state !== 'command' && V.state !== 'listen' && V.state !== 'paused' && !(V.state === 'think' && V.native)) return;
-    if (V.state !== 'paused') V.acc += performance.now() - V.t0;
-    if (V.native) pauseNativeTake(true);
-    try { if (V.rec?.state === 'recording') V.rec.pause(); } catch (_) {}
-    setVoice('paused'); txPill('⏸', 'Paused · recording kept · tap orb to resume', 'agent');
-  }
-  function finishDictation() {
-    // Stop is solely an insertion boundary: no model route, composer seal, navigation or outbox.
-    if (!V.native && !V.rec && !V.parts.length) { V.stopAsked = true; return; }
-    if (V.state !== 'paused') V.acc += performance.now() - V.t0;
-    setVoice('think'); txHide();
-    if (V.native) return nativeFinish(V.native, false);
-    if (!V.rec) return onRecStop();
-    try { if (V.rec.state !== 'inactive') V.rec.stop(); else onRecStop(); } catch (_) { onRecStop(); }
-  }
-  function recoverDictation(t) {
-    if (V.state !== 'idle' || nativeTakeAppOwned(t.id)) return false;
-    if (t.kind !== 'dictation' && !window.__wosDictationTake(t.id)) return false;
-    nativeResume({ ...t, kind: 'dictation', paused: true });
-    setVoice('think'); txHide();
-    nativeFinish(t.id, true); return true;
-  }
+  /* voicesend: moved to app-voicesend.js (wizard-ux issue 1665), called once here */
+  const { dropHold, finishDictation, pauseCommandCapture, recoverDictation, saveVoiceRoute, sendTapRoute, unseal } = window.WizCore.appParts.voicesend({ CHATS, LIVE, nativeFinish, nativeResume, nativeTakeAppOwned, onRecStop, pauseNativeTake, setVoice, txHide, txPill, V });
+  dictationLate({ dropHold, pauseCommandCapture, saveVoiceRoute, sendTapRoute, unseal });
+  micLate({ pauseCommandCapture });
   function showDictationCopy(text, durable = true, native = false) {
     txShow(text, durable || native ? 'Dictation saved · field changed · nothing sent' : 'Storage unavailable · copy these words before closing', 'dictation', '✎');
     $('#txChips').innerHTML = '<button data-dictation-copy>Copy text</button>';
@@ -2893,61 +2205,8 @@
     txHide(0); // keep copy available; Settings retains the same transcript across reloads
     clearTimeout(txHideT); voiceEl.classList.add('tx');
   }
-  async function transcribeDictation(blobs, nid, captureId = null) {
-    const epoch = V.captureEpoch, target = V.field, ms = V.acc;
-    const op = V.dictationOp = { blobs, ms, nid, epoch, abort: new AbortController() };
-    const live = () => V.captureEpoch === epoch && !V.cancelled && V.dictationOp === op;
-    let timer;
-    try {
-      if (ms < 450 || blobs.reduce((n, b) => n + b.size, 0) < 1200) {
-        if (live()) { target?.release(); V.field = null; setVoice('idle'); txHide(); toast('◌', 'No speech detected · nothing inserted'); }
-        recDone(nid); return;
-      }
-      const words = [];
-      for (const part of blobs) {
-        // WebView can report offline while the configured voice endpoint works.
-        // The bounded request below is the evidence; retain audio on real failure.
-        const result = await Promise.race([
-          window.WizConfig.transcribe(part, { prompt: window.WizConfig.voicePrompt(), language: 'en', signal: op.abort.signal }),
-          new Promise((_, reject) => { timer = setTimeout(() => { op.abort.abort(); reject(new Error('Transcription timed out')); }, OUTBOX.TRANSCRIBE_TIMEOUT_MS); }),
-        ]);
-        clearTimeout(timer);
-        if (!live()) return;
-        words.push(String(result.text || '').trim());
-      }
-      const text = words.filter(Boolean).join(' ');
-      if (!text) { recDone(nid); target?.release(); V.field = null; setVoice('idle'); txHide(); toast('◌', 'No speech detected · nothing inserted'); return; }
-      const inserted = await FIELDS.insert(target, text);
-      target?.release(); V.field = null;
-      if (!inserted) {
-        // Never re-resolve a lost field or use the agent outbox as an audio recovery mechanism.
-        const kept = await window.WosCancelled.retainWeb(new Blob(blobs, { type: blobs[0]?.type }), ms, text);
-        if (kept) { recDone(nid); if (captureId) await OUTBOX.remove(captureId); }
-        if (!live()) return;
-        setVoice('idle'); showDictationCopy(text, kept, !!nid);
-      } else { recDone(nid); setVoice('idle'); txHide(); }
-    } catch (error) {
-      if (!live()) return;
-      target?.release(); V.field = null;
-      const kept = await window.WosCancelled.retainWeb(new Blob(blobs, { type: blobs[0]?.type }), ms);
-      if (kept) { recDone(nid); if (captureId) await OUTBOX.remove(captureId); } // otherwise native audio remains on disk
-      if (!live()) return;
-      setVoice('idle'); txHide();
-      toast('!', kept ? 'Dictation retained in Settings → Cancelled recordings · transcribe & copy' : nid ? 'Dictation kept on device · reopen recording recovery to retry' : 'Storage unavailable · kept only while this page stays open · retry saving in Settings', 6000);
-    } finally { clearTimeout(timer); if (V.dictationOp === op) V.dictationOp = null; }
-  }
-  /* Quick command (James, 25 Oct 2026): a tap take shorter than QUICK_MS is a command; longer goes to the agent.
-   * Only a plain tap take qualifies: replies pinned to a thread composer, app voice input, general takes, review
-   * feedback, captures and takes carrying files or composer text stay messages. A quick take with no command match
-   * still goes where a tap take always went (so a short "ship it" in a thread still reaches that thread).
-   * Opt-in (Orb switcher settings, default off): the live rule stays "a tap on the orb is a message to the agent". */
-  const QUICK_MS = 3000;
-  function quickTake(kind, snap, replyTo, target, ms) {
-    if (!window.WosOrbSwitcher?.active() || !window.WosOrbSwitcher.get().quickTakes) return false; // Orb switcher › "Short takes run as commands" (off: a tap is always a message)
-    if (kind !== 'auto' || replyTo || target != null || !snap || snap.general || snap.conversation || snap.meetingEventId || V.meetingLoan) return false;
-    if (snap.seal || V.seal || V.files?.length || snap.view?.review || snap.view?.mode === 'capture') return false;
-    return (ms || 0) < QUICK_MS;
-  }
+  /* transcribe: moved to app-transcribe.js (wizard-ux issue 1665), called once here */
+  const { QUICK_MS, quickTake, transcribeDictation } = window.WizCore.appParts.transcribe({ FIELDS, OUTBOX, recDone, setVoice, showDictationCopy, toast, txHide, V });
   function finishVoice() {
     if(parking)return; // sealing the original is not a new Send gesture
     if(V.admitting){V.admitSend=true;return;}
@@ -4168,50 +3427,8 @@
     runUtterance(text, 'auto');
     return true;
   };
-  $('#txChips').addEventListener('click', e => { if (e.target.closest('[data-handoff="drop"]')) { $('#txChips').innerHTML = ''; txHide(0); } });
-  // × on a choice card: clear it now, nothing sent. Touching the card keeps it up while James reads/picks.
-  const closeChoice = () => { $('#txChips').innerHTML = ''; V.holdText = ''; V.holdOpts = null; V.holdLong = false; window.__backLog = (window.__backLog || []).concat('tx:close').slice(-30); txHide(0); };
-  $('#txClose').addEventListener('click', e => { e.stopPropagation(); closeChoice(); });
-  tx.addEventListener('pointerdown', e => { if (!e.target.closest('#txClose') && V.holdText && !V.holdLong && $('#txChips').childElementCount) txHide(NOMATCH_MS); });
-  $('#txChips').addEventListener('click', e => {
-    const b = e.target.closest('[data-hold]'); if (!b) return;
-    const k = b.dataset.hold, q = V.holdText || '', opts = V.holdOpts || {};
-    V.holdText = ''; V.holdOpts = null; V.holdLong = false; $('#txChips').innerHTML = '';
-    if (k === 'search' || k === 'images') { txHide(0); openSearch(q, k === 'images' ? 'images' : 'all'); return; }
-    if (k === 'agent' && q) {
-      // A long take parked in Unsent (held-message) is settled once this explicit Send has its own outbox item.
-      const parked = opts.snap?.custodyId;
-      Promise.resolve(toAgent(q, `To ${window.WizConfig.agent()} · from a held command`, { ...opts, snap: opts.snap ? { ...opts.snap, custodyId: null } : opts.snap, how: 'voice (held command, sent on purpose)' }))
-        .then(item => { if (item && parked && OUTBOX.get(parked)?.state === 'held') return OUTBOX.completeLocal(parked); }).catch(() => {});
-      return;
-    }
-    txHide(0);
-  });
-  // Native bridge v0 (core/bridge.js): the same events drive the phone and the desktop shell.
-  window.WizCore.bridge?.handle({
-    orb(d) {
-      const a = d.action || 'toggle';
-      if (a === 'cancel') { if (V.state !== 'idle') cancelVoice(true); return 'none'; }
-      if (V.state === 'think' || V.state === 'agent' || V.state === 'done') return 'busy';
-      if (V.state === 'idle') { if (a === 'send') return 'none'; closeSheets(); startVoice('auto'); return 'voice'; }
-      if (a === 'start') return 'voice';
-      finishVoice(); return 'sent';
-    },
-    open(path, d) {
-      closeSheets();
-      const sid = d.thread || (String(path).match(/[?&]session=([^&#]+)/) || [])[1];
-      if (sid) { openWizardThread(decodeURIComponent(sid)); return; }
-      if (/^\/?apps\/?$/.test(path)) { openSheet('launcher'); return; }
-      const a = d.app ? APP[d.app] || findApp(d.app) : /^\/wizard\/?$/.test(path) ? APP.wizard : APPS.find(x => x.url && path && x.url.replace(/[#?].*$/, '') === String(path).replace(/[#?].*$/, ''));
-      if (a) openApp(a); else if (path) toast('◇', `No app for ${path}`, 1800);
-    },
-    dictation(text) {
-      const target = FIELDS.capture();
-      if (target) { FIELDS.insert(target, text); target.release(); }
-    },
-    back() { window.__wosNativeBack(); },
-  });
-  mountLinks();
+  /* choice: moved to app-choice.js (wizard-ux issue 1665), called once here */
+  const {  } = window.WizCore.appParts.choice({ $, APP, APPS, cancelVoice, closeSheets, FIELDS, findApp, finishVoice, mountLinks, NOMATCH_MS, openApp, openSearch, openSheet, openWizardThread, OUTBOX, startVoice, toAgent, toast, tx, txHide, V });
   // Shared app command delivery; compatibility ownership is confined to voice-legacy.
   window.WosAppVoice?.install({
     apps: () => APP,

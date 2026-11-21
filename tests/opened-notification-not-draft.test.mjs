@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
-const src=readFileSync(new URL('../web/core/chats.js',import.meta.url),'utf8');
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
+const src=withParts(readFileSync(new URL('../web/core/chats.js',import.meta.url),'utf8'));
 const cut=(start,end)=>{const a=src.indexOf(start),b=src.indexOf(end,a);assert.ok(a>0&&b>a,start);return src.slice(a,b);};
 const code=cut('  const SAVED_NEW','  function newDrafts')+cut('  function untouchedNotif','  function openNewDraft');
 function run(all){const store={'wos.chat.drafts.v1':JSON.stringify(all)};

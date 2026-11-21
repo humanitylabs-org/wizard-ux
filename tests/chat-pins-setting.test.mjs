@@ -4,8 +4,9 @@ import test from 'node:test';
 import vm from 'node:vm';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
-const src = read('web/core/chats.js');
+const src = withParts(read('web/core/chats.js'));
 
 test('Pins switch sits beside Compact in the Filter sheet and is saved on the device', () => {
   assert.match(src, /data-chpins>Pins\$\{pinsOn\(\) \? '<b>✓<\/b>' : ''\}<\/button>/);

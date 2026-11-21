@@ -4,7 +4,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
-const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
+import { withAppParts } from './fixtures/app-parts.mjs';
+const read = p => withAppParts(readFileSync(new URL('../' + p, import.meta.url), 'utf8'));
 
 function nav() {
   const events = [], window = { WizCore: {}, dispatchEvent: e => events.push(e), CustomEvent: class { constructor(t, o) { this.type = t; this.detail = o?.detail; } } };

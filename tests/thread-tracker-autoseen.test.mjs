@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 const source = readFileSync(process.env.TRACKER_SOURCE || new URL('../web/core/thread-tracker.js', import.meta.url), 'utf8');
 function harness(states = ['done', 'done'], agent = '', timestampOnly = false) {
   let now = 100, active = true, focus = true, open = false, hit = true, inView = true, present = true, io, check;
@@ -109,7 +110,7 @@ test('shared reading-position rule uses tracker eye-line; jumps retain unchanged
   const nb = { getBoundingClientRect: () => ({ top: 100 }) }, el = { getBoundingClientRect: () => ({ top: 208 }) };
   const relTop = vm.runInNewContext(power.slice(start, end) + '\nrelTop', { scrollBox: n => n, A: { threadViewportTop: () => 200 } });
   assert.equal(relTop(nb, el), 8, 'latest reply top is 8px below the actual tracker eye-line');
-  const chats = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
+  const chats = withParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'));
   assert.match(chats, /H\.front\(\) === w\.id/);
   assert.match(chats, /typeof H\.front === 'function'/);
   assert.match(chats, /H\.visible\(\)\.length === 1/);

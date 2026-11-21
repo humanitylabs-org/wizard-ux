@@ -12,6 +12,7 @@ import androidx.media3.common.*;
 import androidx.media3.datasource.*;
 import androidx.media3.exoplayer.ExoPlayer;
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory;
+import androidx.media3.session.CommandButton;
 import androidx.media3.session.MediaSession;
 import androidx.media3.session.MediaSessionService;
 import com.google.common.util.concurrent.MoreExecutors;
@@ -41,6 +42,11 @@ public final class BackgroundAudioService extends MediaSessionService {
     private volatile boolean transportActive;
     private PlaybackException failure;
     private boolean userWant;
+    // The admitted app that owns the one device player (wizard-ux issue 1661). Music until another admitted app loads.
+    private String owner = AudioPolicy.MUSIC;
+    private long skipBack, skipForward, lastDurationMs;
+    private int lastIndex = -1;
+    private static final long PROGRESS_EVERY_MS = 15000;
     private void requestPlaying(boolean want) { userWant=want; syncIntent(); }
     private void syncIntent() {
         if(destroyed || player==null) return;
@@ -57,8 +63,11 @@ public final class BackgroundAudioService extends MediaSessionService {
             .setAudioAttributes(new AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MUSIC).build(), true)
             .setHandleAudioBecomingNoisy(true).setWakeMode(C.WAKE_MODE_NETWORK).setMaxSeekToPreviousPositionMs(4000).build();
         player.addListener(new Player.Listener() {
-            @Override public void onEvents(Player p, Player.Events events) { transportActive=userWant && p.getMediaItemCount()>0; }
+            @Override public void onEvents(Player p, Player.Events events) { transportActive=userWant && p.getMediaItemCount()>0; long d=p.getDuration(); if(d!=C.TIME_UNSET && d>0) lastDurationMs=d; }
             @Override public void onMediaItemTransition(@Nullable MediaItem item, int reason) {
+                // A spoken-word episode that played to its end and moved on is finished (STATE_ENDED only fires for the last one).
+                if(reason==Player.MEDIA_ITEM_TRANSITION_REASON_AUTO) saveFinished(lastIndex);
+                lastIndex=player.getCurrentMediaItemIndex(); lastDurationMs=0;
                 playEvent = UUID.randomUUID().toString(); error = ""; failure=null;
                 Log.i("WizardAudio", "transition " + (item == null ? "none" : item.mediaId) + " session=" + sessionId);
                 maybeRefill(); reportPlayed();
@@ -66,8 +75,8 @@ public final class BackgroundAudioService extends MediaSessionService {
             @Override public void onPlayWhenReadyChanged(boolean ready,int reason) {
                 if(!ready && (reason==Player.PLAY_WHEN_READY_CHANGE_REASON_AUDIO_BECOMING_NOISY || reason==Player.PLAY_WHEN_READY_CHANGE_REASON_AUDIO_FOCUS_LOSS)) { userWant=false; transportActive=false; }
             }
-            @Override public void onIsPlayingChanged(boolean playing) { if (playing) { failure=null; reportPlayed(); } }
-            @Override public void onPlaybackStateChanged(int state) { if (state == Player.STATE_ENDED) { if(station==null) requestPlaying(false); else { advanceAfterRefill = true; maybeRefill(); } } }
+            @Override public void onIsPlayingChanged(boolean playing) { if (playing) { failure=null; reportPlayed(); progressTick(); } else saveProgress(false); }
+            @Override public void onPlaybackStateChanged(int state) { if (state == Player.STATE_ENDED) { saveProgress(true); if(station==null) requestPlaying(false); else { advanceAfterRefill = true; maybeRefill(); } } }
             @Override public void onPlayerError(@NonNull PlaybackException e) {
                 error = "This track could not be played. Skipping."; failure=e; final String event = playEvent;
                 Log.i("WizardAudio","error index="+player.getCurrentMediaItemIndex()+" wanted="+userWant);
@@ -81,16 +90,20 @@ public final class BackgroundAudioService extends MediaSessionService {
                 } }, 900);
             }
         });
-        Intent open = new Intent(this, MainActivity.class).setAction(Intent.ACTION_VIEW)
-            .setData(Uri.parse(origin + "/wizard-os-home/?open=wizard-music"))
-            .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
         ForwardingPlayer controls=new ForwardingPlayer(player) {
             @Override public void play() { requestPlaying(true); }
             @Override public void pause() { requestPlaying(false); }
             @Override public void setPlayWhenReady(boolean want) { requestPlaying(want); }
+            // An app that asked for skip buttons (Podcasts: -15/+30) gets them from the lock screen, notification and headset.
+            @Override public void seekBack() { if(skipBack>0) seekBy(-skipBack); else super.seekBack(); }
+            @Override public void seekForward() { if(skipForward>0) seekBy(skipForward); else super.seekForward(); }
+            @Override public long getSeekBackIncrement() { return skipBack>0 ? skipBack : super.getSeekBackIncrement(); }
+            @Override public long getSeekForwardIncrement() { return skipForward>0 ? skipForward : super.getSeekForwardIncrement(); }
+            @Override public void seekToNext() { if(skipForward>0) seekBy(skipForward); else super.seekToNext(); }
+            @Override public void seekToPrevious() { if(skipBack>0) seekBy(-skipBack); else super.seekToPrevious(); }
         };
         session = new MediaSession.Builder(this, controls)
-            .setSessionActivity(PendingIntent.getActivity(this, 7410, open, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT))
+            .setSessionActivity(activity(owner))
             .setBitmapLoader(new DataSourceBitmapLoader(MoreExecutors.listeningDecorator(artwork), source))
             .setCallback(new MediaSession.Callback() {
                 @Override public MediaSession.ConnectionResult onConnect(MediaSession s, MediaSession.ControllerInfo c) {
@@ -118,8 +131,81 @@ public final class BackgroundAudioService extends MediaSessionService {
         destroyed = true; live = null; main.removeCallbacksAndMessages(null); saveReports();
         if (session != null) session.release(); if (player != null) player.release(); net.shutdownNow(); artwork.shutdownNow(); super.onDestroy();
     }
-    JSONObject snapshot(int known) throws JSONException {
-        JSONObject o = new JSONObject().put("v",1).put("sessionId",sessionId).put("appId","wizard-music")
+    private PendingIntent activity(String app) {
+        Intent open = new Intent(this, MainActivity.class).setAction(Intent.ACTION_VIEW)
+            .setData(Uri.parse(origin + AudioPolicy.openPath(app)))
+            .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+        return PendingIntent.getActivity(this, AudioPolicy.MUSIC.equals(app) ? 7410 : 7411, open, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
+    }
+    private void seekBy(long delta) {
+        long d=player.getDuration(), t=Math.max(0,player.getCurrentPosition()+delta);
+        player.seekTo(d==C.TIME_UNSET ? t : Math.min(t,d));
+    }
+    private static int skipIcon(long ms, boolean back) {
+        int s=(int)(ms/1000);
+        if(back) return s==5 ? CommandButton.ICON_SKIP_BACK_5 : s==10 ? CommandButton.ICON_SKIP_BACK_10 : s==15 ? CommandButton.ICON_SKIP_BACK_15 : s==30 ? CommandButton.ICON_SKIP_BACK_30 : CommandButton.ICON_SKIP_BACK;
+        return s==5 ? CommandButton.ICON_SKIP_FORWARD_5 : s==10 ? CommandButton.ICON_SKIP_FORWARD_10 : s==15 ? CommandButton.ICON_SKIP_FORWARD_15 : s==30 ? CommandButton.ICON_SKIP_FORWARD_30 : CommandButton.ICON_SKIP_FORWARD;
+    }
+    /** Owner-specific session look: content type, where a tap opens, and skip buttons in place of previous/next. */
+    private void applyOwner() {
+        player.setAudioAttributes(new AudioAttributes.Builder().setUsage(C.USAGE_MEDIA)
+            .setContentType(AudioPolicy.spoken(owner) ? C.AUDIO_CONTENT_TYPE_SPEECH : C.AUDIO_CONTENT_TYPE_MUSIC).build(), true);
+        if(session==null) return;
+        session.setSessionActivity(activity(owner));
+        List<CommandButton> buttons=new ArrayList<>();
+        if(skipBack>0) buttons.add(new CommandButton.Builder(skipIcon(skipBack,true)).setPlayerCommand(Player.COMMAND_SEEK_BACK)
+            .setDisplayName("Back "+(skipBack/1000)+" seconds").setSlots(CommandButton.SLOT_BACK).build());
+        if(skipForward>0) buttons.add(new CommandButton.Builder(skipIcon(skipForward,false)).setPlayerCommand(Player.COMMAND_SEEK_FORWARD)
+            .setDisplayName("Forward "+(skipForward/1000)+" seconds").setSlots(CommandButton.SLOT_FORWARD).build());
+        session.setMediaButtonPreferences(buttons);
+    }
+    /** Another admitted app starts playing: the one device player becomes its own (the old app's queue is dropped). */
+    private void adopt(String app) {
+        saveProgress(false); requestPlaying(false); generation++; station=null; advanceAfterRefill=false;
+        player.stop(); player.clearMediaItems(); tracks.clear(); revision++; error=""; failure=null;
+        owner=app; skipBack=skipForward=0; lastIndex=-1; lastDurationMs=0; applyOwner();
+        Log.i("WizardAudio","owner "+app+" session="+sessionId);
+    }
+    /** Spoken-word apps get their place saved by the player itself, so it keeps saving while the phone is locked. */
+    private void saveProgress(boolean completed) {
+        if(destroyed || player==null || !AudioPolicy.spoken(owner)) return;
+        int at=player.getCurrentMediaItemIndex(); if(at<0 || at>=tracks.size()) return;
+        final String url=tracks.get(at).optString("progress"); if(url.isEmpty()) return;
+        final String app=owner;
+        try {
+            long d=player.getDuration();
+            JSONObject body=new JSONObject().put("position",Math.max(0,player.getCurrentPosition())/1000.0);
+            if(d!=C.TIME_UNSET && d>0) body.put("duration",d/1000.0);
+            if(completed) body.put("completed",true);
+            net.execute(() -> { try { AudioHttp.json(url,origin,"progress",body,app); } catch(Exception ignored) { } });
+        } catch(JSONException|RuntimeException ignored) { }
+    }
+    /** The episode at `index` (no longer the current item) played to its end. */
+    private void saveFinished(int index) {
+        if(destroyed || !AudioPolicy.spoken(owner) || index<0 || index>=tracks.size()) return;
+        final String url=tracks.get(index).optString("progress"); if(url.isEmpty()) return;
+        final String app=owner;
+        try {
+            JSONObject body=new JSONObject().put("position",lastDurationMs/1000.0).put("completed",true);
+            if(lastDurationMs>0) body.put("duration",lastDurationMs/1000.0);
+            net.execute(() -> { try { AudioHttp.json(url,origin,"progress",body,app); } catch(Exception ignored) { } });
+        } catch(JSONException|RuntimeException ignored) { }
+    }
+    private final Runnable progressSave = () -> { if(!destroyed && player.isPlaying()) { saveProgress(false); progressTick(); } };
+    private void progressTick() {
+        main.removeCallbacks(progressSave);
+        if(destroyed || player==null || !AudioPolicy.spoken(owner) || !player.isPlaying()) return;
+        main.postDelayed(progressSave, PROGRESS_EVERY_MS);
+    }
+    JSONObject snapshot(String app, int known) throws JSONException {
+        if(!owner.equals(app)) {
+            // Another admitted app owns the player: this app sees an idle player it may load into, never the other queue.
+            return new JSONObject().put("v",1).put("sessionId",sessionId).put("appId",app).put("index",-1).put("playing",false)
+                .put("wantPlaying",false).put("buffering",false).put("positionMs",0).put("durationMs",0).put("volume",player.getVolume())
+                .put("error","").put("station",JSONObject.NULL).put("queueRevision",-1).put("generation",generation)
+                .put("reporter","native").put("queue",new JSONArray());
+        }
+        JSONObject o = new JSONObject().put("v",1).put("sessionId",sessionId).put("appId",owner)
             .put("index",tracks.isEmpty() ? -1 : player.getCurrentMediaItemIndex()).put("playing",player.isPlaying())
             .put("wantPlaying",userWant).put("buffering",player.getPlaybackState() == Player.STATE_BUFFERING)
             .put("positionMs",Math.max(0,player.getCurrentPosition())).put("durationMs",player.getDuration() == C.TIME_UNSET ? 0 : player.getDuration())
@@ -129,12 +215,15 @@ public final class BackgroundAudioService extends MediaSessionService {
         return o;
     }
     private String absolute(String raw) { return raw.startsWith("/") && !raw.startsWith("//") ? origin+raw : raw; }
-    private MediaItem item(JSONObject t) throws JSONException {
+    private MediaItem item(JSONObject t) throws JSONException { return item(t, owner); }
+    private MediaItem item(JSONObject t, String app) throws JSONException {
         t.put("stream",absolute(t.optString("stream")));
         if(!t.optString("art").isEmpty()) t.put("art",absolute(t.optString("art")));
-        if (!t.optString("id").matches("(?:yt|lib):[A-Za-z0-9_-]{1,40}") || !AudioPolicy.trusted(t.optString("stream"),origin,"stream")) throw new SecurityException("Untrusted track");
+        if (!AudioPolicy.trackId(app,t.optString("id")) || !AudioPolicy.trusted(t.optString("stream"),origin,"stream",app)) throw new SecurityException("Untrusted track");
+        if(!t.optString("progress").isEmpty()) { t.put("progress",absolute(t.optString("progress"))); if(!AudioPolicy.trusted(t.optString("progress"),origin,"progress",app)) t.remove("progress"); }
         MediaMetadata.Builder m = new MediaMetadata.Builder().setTitle(t.optString("title")).setArtist(t.optString("artist")).setAlbumTitle(t.optString("album"));
-        if (AudioPolicy.trusted(t.optString("art"),origin,"art")) m.setArtworkUri(Uri.parse(t.optString("art")));
+        if (AudioPolicy.spoken(app)) m.setMediaType(MediaMetadata.MEDIA_TYPE_PODCAST_EPISODE);
+        if (AudioPolicy.trusted(t.optString("art"),origin,"art",app)) m.setArtworkUri(Uri.parse(t.optString("art")));
         return new MediaItem.Builder().setMediaId(t.getString("id")).setUri(t.getString("stream")).setMediaMetadata(m.build()).build();
     }
     private void seekCanonical(int at) throws JSONException {
@@ -145,22 +234,29 @@ public final class BackgroundAudioService extends MediaSessionService {
             player.setMediaItems(restored,at,0); player.prepare();
         } else player.seekTo(at,0);
     }
-    void command(String method, JSONObject p) throws JSONException {
+    void command(String app, String method, JSONObject p) throws JSONException {
+        if (!AudioPolicy.admitted(app)) throw new SecurityException("Unknown audio app");
         if (!"load".equals(method) && !"state".equals(method) && !"attach".equals(method) && !sessionId.equals(p.optString("sessionId"))) throw new SecurityException("Stale audio session");
+        // Only the app that owns the player controls it; any admitted app may load (and so take it over).
+        if (!owner.equals(app) && !"load".equals(method) && !"state".equals(method) && !"attach".equals(method) && !"detach".equals(method)) throw new SecurityException("Another app owns the player");
         switch (method) {
             case "load": {
                 if (!sessionId.equals(p.optString("sessionId"))) throw new SecurityException("Attach before load");
                 JSONArray q = p.getJSONArray("queue"); if (q.length() == 0 || q.length() > 100) throw new IllegalArgumentException("Queue length");
                 JSONObject st = p.optJSONObject("station");
-                if (st != null && !AudioPolicy.trusted(st.optString("more"),origin,"more")) throw new SecurityException("Untrusted continuation");
+                if (st != null && !AudioPolicy.trusted(st.optString("more"),origin,"more",app)) throw new SecurityException("Untrusted continuation");
                 List<JSONObject> add = new ArrayList<>(); List<MediaItem> items = new ArrayList<>();
-                for (int i=0;i<q.length();i++) { JSONObject t = q.getJSONObject(i); items.add(item(t)); add.add(t); }
+                for (int i=0;i<q.length();i++) { JSONObject t = q.getJSONObject(i); items.add(item(t,app)); add.add(t); }
+                if (!owner.equals(app)) adopt(app);
+                JSONObject skip = p.optJSONObject("skip");
+                long back = skip == null ? 0 : AudioPolicy.skipMs(skip.optDouble("back",0)), fwd = skip == null ? 0 : AudioPolicy.skipMs(skip.optDouble("forward",0));
+                if (back != skipBack || fwd != skipForward) { skipBack = back; skipForward = fwd; applyOwner(); }
                 int at = player.getMediaItemCount() == 0 ? -1 : player.getCurrentMediaItemIndex();
                 List<JSONObject> history = at < 0 ? new ArrayList<>() : new ArrayList<>(tracks.subList(Math.max(0,at+1-50),at+1));
                 for (int i=history.size()-1;i>=0;i--) items.add(0,item(history.get(i)));
                 int index = Math.max(0,Math.min(q.length()-1,p.optInt("index",0))) + history.size();
                 tracks.clear(); tracks.addAll(history); tracks.addAll(add); station = st; generation++; revision++; refillAttempts=0; advanceAfterRefill=false;
-                refillKey=UUID.randomUUID().toString(); player.setMediaItems(items,index,0); player.prepare(); requestPlaying(true); break;
+                refillKey=UUID.randomUUID().toString(); player.setMediaItems(items,index,Math.max(0,p.optLong("positionMs",0))); player.prepare(); requestPlaying(true); break;
             }
             case "play": failure=null; if(player.getPlaybackState()==Player.STATE_ENDED) player.seekTo(0); if (player.getPlaybackState()==Player.STATE_IDLE) player.prepare(); requestPlaying(true); maybeRefill(); break;
             case "pause": advanceAfterRefill=false; requestPlaying(false); break;
@@ -194,6 +290,7 @@ public final class BackgroundAudioService extends MediaSessionService {
     }
     private void reportPlayed() { if(player.isPlaying() && !playEvent.equals(reportedPlay)) { report("played"); reportedPlay=playEvent; } }
     private void report(String action) {
+        if(!AudioPolicy.MUSIC.equals(owner)) return; // Music's taste feedback only.
         int at=player.getCurrentMediaItemIndex(); if(at<0 || at>=tracks.size()) return;
         try {
             String key=sessionId+":"+playEvent+":"+action;

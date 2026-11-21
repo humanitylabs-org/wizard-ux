@@ -2,8 +2,10 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
+import { withServicesParts } from './fixtures/app-services-parts.mjs';
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 const read = p => readFileSync(new URL('../'+p,import.meta.url),'utf8');
-const source=read('web/core/app-services.js'), shared=read('web/core/share-wizard.js');
+const source=withServicesParts(read('web/core/app-services.js')), shared=read('web/core/share-wizard.js');
 function fixture() {
  const calls=[],replies=[],events={},location=new URL('https://wizard.example/wizard-os-home/');
  const child={location:new URL('/messenger/',location),document:{},addEventListener(){},postMessage(m){replies.push(m);}};
@@ -47,7 +49,7 @@ test('postMessage admits share.wizard only for installed source and returns its 
  await f.message({origin:'https://wizard.example',source:f.child,data});assert.equal(f.calls.length,1);assert.equal(f.replies.at(-1).value,'sent');
 });
 test('real shared Chats send enqueues all 21 attachments once without consuming destination draft',async()=>{
- const src=read('web/core/chats.js'),start=src.indexOf('  async function sendChat('),end=src.indexOf('  const picker =',start);
+ const src=withParts(read('web/core/chats.js')),start=src.indexOf('  async function sendChat('),end=src.indexOf('  const picker =',start);
  const files=Array.from({length:21},(_,n)=>({id:'f'+n,name:'voice-'+n+'.ogg',mime:'audio/ogg',bytes:10}));
  const draft={draft:'Keep my words',files:[{id:'existing',name:'mine'}]},enqueued=[];
  const sandbox={window:{},INC:null,W:{w1:{id:'w1',app:'chats',thread:'__new__'}},ch:()=>draft,
@@ -88,5 +90,5 @@ test('both shells load the same sheet and route Back to it, native imports reuse
  for(const p of ['app.js','desktop/desktop.js'])assert.match(read('web/'+p),/WizEscapeBack\.installOwners\(/);
  assert.match(read('web/core/escape-back.js'),/add\('share-wizard',[^\n]+WizShareWizard.back\(\)/);
  assert.match(read('web/device.js'),/await window.WizShareWizard.open/);assert.doesNotMatch(read('web/device.js'),/data-shareto/);
- assert.match(read('web/core/app-client.js'),/get wizard\(\)/);assert.doesNotMatch(read('web/core/chats.js'),/MAX_FILES|files per message/);
+ assert.match(read('web/core/app-client.js'),/get wizard\(\)/);assert.doesNotMatch(withParts(read('web/core/chats.js')),/MAX_FILES|files per message/);
 });

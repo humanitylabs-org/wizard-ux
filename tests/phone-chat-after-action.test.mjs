@@ -3,8 +3,9 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { join } from 'node:path';
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 const read = p => readFileSync(process.env.QA_POLICY_TREE ? join(process.env.QA_POLICY_TREE, p) : new URL('../' + p, import.meta.url), 'utf8');
-const core = read('web/core/chats.js'), power = read('web/core/chat-power.js');
+const core = withParts(read('web/core/chats.js')), power = read('web/core/chat-power.js');
 function cut(src, from, to) { const a = src.indexOf(from), b = src.indexOf(to, a); assert(a >= 0 && b > a, from); return src.slice(a, b); }
 function fixture({ phone = true, after = 'stay', sid = 'same', fail = false, deferred = false } = {}) {
   const w = { id: 'chat', app: 'chats', thread: sid }, c = { readNav: 1, trail: [], draft: 'Synthetic words', files: [] }, writes = [];

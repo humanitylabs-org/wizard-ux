@@ -19,7 +19,7 @@ Opens directly on **Preview · Stalled helpers**, phone shell. Tap the existing 
 
 ## Verified evidence
 
-- `qa-helper-status.cjs` ran on **Thales**, installed Google Chrome, against the exact HTTPS destination: **31/31 browser assertions**, phone and desktop, zero runtime errors. Deep link, partial sibling result, resumed example, Ready transition, touch target, both status displays, Back staying in Chats, and refusal of live continuation/run writes.
+- `qa/scripts/qa-helper-status.cjs` ran on **Thales**, installed Google Chrome, against the exact HTTPS destination: **31/31 browser assertions**, phone and desktop, zero runtime errors. Deep link, partial sibling result, resumed example, Ready transition, touch target, both status displays, Back staying in Chats, and refusal of live continuation/run writes.
 - `tests/helper-status.node.test.mjs`: **14/14** lightweight backend assertions. Real HTTP handler/access/body validation and session-list projection with explicit test fixtures; active lease/admission, pending siblings, owner gate, stale receipts, later requests/steering, final completion, and premature Done.
 - Parent inspected phone stalled and list screenshots. Screenshots: `~/.hermes/cache/scratch/helper-status-shots/` and Thales `$HOME/helper-status-qa/`.
 - Small remote browser QA used `$HOME/helper-status-qa` after the external ThalesMedia disk disconnected; it installed only playwright-core and reused installed Chrome. No sustained build or media staging on VPS.
@@ -28,7 +28,7 @@ Opens directly on **Preview · Stalled helpers**, phone shell. Tap the existing 
 
 - Removed this preview's staging `focus` selector after reproducing hidden `#device.scrollTop = 278`, which shifted the chat header above the browser viewport. The shell now stays unscrolled; no live shell/layout changes.
 - Fixed example request/message timestamps to stay stable across polling, preserving the expanded Working receipt.
-- `qa-helper-viewport.cjs`: **30/30 on Thales**. Delayed initial focus, four phone browser viewport sizes, keyboard-sized resize/restore, 15-second polling expansion, clickable Continue, completion, Back, zero page errors.
+- `qa/scripts/qa-helper-viewport.cjs`: **30/30 on Thales**. Delayed initial focus, four phone browser viewport sizes, keyboard-sized resize/restore, 15-second polling expansion, clickable Continue, completion, Back, zero page errors.
 - Re-ran original phone/desktop suite after the repair: **31/31**. Final exact HTTPS preview origin remains live.
 
 ## Delivery checkpoint

@@ -4,7 +4,8 @@ import vm from 'node:vm';
 import { launcherFixture } from './launcher-fixture.mjs';
 import {readFileSync} from 'node:fs';
 import {randomUUID} from 'node:crypto';
-const source=readFileSync(new URL('../web/core/app-services.js',import.meta.url),'utf8');
+import { withServicesParts } from './fixtures/app-services-parts.mjs';
+const source=withServicesParts(readFileSync(new URL('../web/core/app-services.js',import.meta.url),'utf8'));
 function fixture({id='wizard-manager',installed=true,path='/wizard-manager/'}={}){
  const calls=[],options=[],doc={},location=new URL('https://wizard.example/wizard-os-home/');
  const child={location:new URL(path,location),document:doc,addEventListener(){},postMessage(){}};

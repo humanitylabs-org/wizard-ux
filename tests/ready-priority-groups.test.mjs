@@ -3,10 +3,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
+import { withParts } from './fixtures/chats-parts.mjs';
+import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
 // Priority must actually reorder Ready: every status line ranks (Done below FYI, no status last), and the list
 // shows one header per group. Before: only needs you / check ranked, so a Ready of Done + FYI read like Newest.
-const live = readFileSync(new URL('../web/live.js', import.meta.url), 'utf8');
-const chats = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
+const live = withLiveParts(readFileSync(new URL('../web/live.js', import.meta.url), 'utf8'));
+const chats = withParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'));
 const block = (src, from, to) => { const i = src.indexOf(from); assert.ok(i >= 0, from); return src.slice(i, src.indexOf(to, i)); };
 const at = m => `2026-10-29T0${m}:00:00Z`;
 const rows = [

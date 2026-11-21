@@ -2,15 +2,17 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 // 9 Nov 2026 (James): "The message I sent is disappearing and being lost." A message Hermes never took in (three
 // resends that never started, a gateway restart, a thread another app owns) is served by the Agent Service as a user
 // row marked wizard_queue.status = failed. It must show as his message, marked Not sent, with Retry; and once Retry
 // lands it, the thread shows it once, never twice (this phone's retry copy plus Wizard's copy).
-const src = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
+const src = withParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'));
 const css = readFileSync(new URL('../web/core/chats.css', import.meta.url), 'utf8');
 const ctx = { window: { WizConfig: { agent: () => 'Archimedes' } }, document: {}, PW: { workHtml: () => '' }, replyCard: () => '', userMedia: (c, files) => (files || []).map(f => `<i data-file="${f.id}">${f.filename}</i>`).join(''), md: s => s, timeTag: () => '', summaryOf: () => null, mediaBlock: () => '', regenOn: () => false, esc: s => s, quoteBtn: () => '', msgIds: () => '', COPY_SVG: '', SHARE_SVG: '', CHECK_SVG: '' };
 vm.runInNewContext(readFileSync(new URL('../web/core/chat-kit.js', import.meta.url), 'utf8'), ctx);
-vm.runInNewContext(src.slice(src.indexOf('function echoed(turns, p)'), src.indexOf('function retireLanded')), ctx);
+const outboxSrc = readFileSync(new URL('../web/core/chats-outbox.js', import.meta.url), 'utf8'); // echoed..retireLanded live in core/chats-outbox.js (issue 1665)
+vm.runInNewContext(outboxSrc.slice(outboxSrc.indexOf('function echoed(turns, p)'), outboxSrc.indexOf('function retireLanded')), ctx);
 vm.runInNewContext(src.slice(src.indexOf('function runContextHtml('), src.indexOf('const turnAt =')), ctx);
 const { parseRows } = ctx.window.WosChat;
 const SID = 'wizard_1794122381681_0056d47f6f0e', RUN = 'wizardq_99bbcd4c7d7f4816982a709f412fe7f1';

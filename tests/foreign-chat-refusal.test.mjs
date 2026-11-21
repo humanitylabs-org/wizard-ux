@@ -9,6 +9,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { modelContext } from './fixtures/chats-list-model.mjs';
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
+import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
 
 const read = p => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
 function models() {
@@ -18,7 +20,7 @@ function models() {
   return window.WosModels;
 }
 function normalizer() {
-  const live = read('web/live.js'), a = live.indexOf('  const READY_OR_ATTENTION'), b = live.indexOf('  /* ---- thread-seen');
+  const live = withLiveParts(read('web/live.js')), a = live.indexOf('  const READY_OR_ATTENTION'), b = live.indexOf('  /* ---- thread-seen');
   const context = modelContext({}); vm.runInContext(`${live.slice(a, b)}\nthis.normalize = normalize;`, context);
   return context.normalize;
 }
@@ -51,7 +53,7 @@ test('no Needs retry panel, no Errors-list Retry, and Retry itself refuses in su
 });
 
 test('the thread shows the clear card at once, with Dismiss and without Retry; the reply box says it up front', () => {
-  const chats = read('web/core/chats.js');
+  const chats = withParts(read('web/core/chats.js')) + read('web/core/chats-outbox.js');
   // Refused as soon as the thread failed or a message is marked Not sent, not only once the Service's words arrive.
   assert.match(chats, /const refused = !working && !!foreign && \(\['failed', 'interrupted'\]\.includes\(s\?\.status\) \|\| !!s\?\.safeError\n\s*\|\| shown\.some\(tn => \['failed', 'interrupted'\]\.includes\(tn\.u\?\.queue\?\.status\)\)\);/);
   // The Not sent bubble's Retry needs c.retryRunId, which a foreign chat never gets.
@@ -66,7 +68,7 @@ test('the thread shows the clear card at once, with Dismiss and without Retry; t
 });
 
 test('a Not sent bubble without a retry run shows no Retry button (what a foreign chat gets)', () => {
-  const src = read('web/core/chats.js');
+  const src = withParts(read('web/core/chats.js'));
   const fn = src.slice(src.indexOf('  function turnHtml('), src.indexOf('    else if (tn.note) h += noteHtml(tn.note);'));
   const ctx = { replyCard: () => '', userMedia: () => '', md: s => s, timeTag: () => '', quoteBtn: () => '', msgIds: () => '' };
   vm.runInNewContext(`${fn} return h; }; this.turnHtml = turnHtml;`, ctx);
@@ -84,7 +86,7 @@ test('a routed agent thread from Telegram is refused the same way: the decision 
 });
 
 test('the chat-list send pill offers no Retry for a failed reply into such a chat', () => {
-  const chats = read('web/core/chats.js');
+  const chats = withParts(read('web/core/chats.js'));
   const pill = chats.slice(chats.indexOf('  function sendPill('), chats.indexOf('    } else if (waiting.length) {', chats.indexOf('  function sendPill(')));
   assert.match(pill, /const foreign = it => it\.kind === 'reply' && !!it\.sessionId && !!window\.WosModels\?\.foreignApp\?\.\(LIVE\.session\(it\.sessionId\)\);/);
   assert.match(pill, /btns = one \? `\$\{foreign\(one\) \? '' : `<button type="button" class="pbtn" data-obretry=/);

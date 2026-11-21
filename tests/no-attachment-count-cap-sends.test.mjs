@@ -6,6 +6,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { withAppParts } from './fixtures/app-parts.mjs';
 
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
 const file = n => ({ id: `up_${String(n).padStart(32, '0')}`, name: `shot-${n}.png`, mime: 'image/png', bytes: 10 });
@@ -15,7 +16,7 @@ const twelve = [...take, ...composer].map(f => f.id);
 const ids = list => [...list].map(f => f.id); // copy out of the vm realm before comparing
 
 test('orb and voice sends (web/app.js) keep all 12 files, each once', () => {
-  const src = read('web/app.js');
+  const src = withAppParts(read('web/app.js'));
   const line = src.split('\n').find(l => l.includes('const withSealFiles = '));
   assert.ok(line, 'app.js joins the take files and the composer files through one helper');
   const ctx = {}; vm.runInNewContext(line.trim().replace(/^const withSealFiles =/, 'this.withSealFiles ='), ctx);

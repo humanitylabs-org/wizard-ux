@@ -5,7 +5,8 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 import {modelContext} from './fixtures/chats-list-model.mjs';
-const live=readFileSync(new URL('../web/live.js',import.meta.url),'utf8');
+import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
+const live=withLiveParts(readFileSync(new URL('../web/live.js',import.meta.url),'utf8'));
 const RID='bg_'+'a'.repeat(32);
 function fixture() {
  const ctx=modelContext({document:{documentElement:{dataset:{tweaks:'wizard/background-continue'}},hidden:true},window:{addEventListener(){}},Date,Map,Set,Array,setTimeout,clearTimeout,WORKING:new Set(['submitting','queued','running','stopping']),L:{refresh(){}},listSignal:()=>({})});

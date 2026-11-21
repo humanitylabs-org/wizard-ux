@@ -11,8 +11,10 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { modelContext } from './fixtures/chats-list-model.mjs';
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
+import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
-const live = read('web/live.js'), chats = read('web/core/chats.js'), tracker = read('web/core/thread-tracker.js');
+const live = withLiveParts(read('web/live.js')), chats = withParts(read('web/core/chats.js')), tracker = read('web/core/thread-tracker.js');
 // The fixture's times move to "a few minutes ago", so Recent's one-week window never ages the test out.
 const RAW = JSON.parse(read('tests/fixtures/sessions-list-1360.json'));
 const SHIFT = Date.now() - 5 * 60e3 - Math.max(...RAW.data.map(s => Date.parse(s.activityAt)));
@@ -54,7 +56,7 @@ function harness(payload = PAYLOAD, box = { seen: { initializedAt: 1, threads: {
   vm.runInContext(['const WORKING_ST =', 'const isWorking =', 'const channelsOn =', 'const markDoneOn =', 'const handledNow =', 'const chanNeeds =',
     'const chanUnread =', 'const actNeeds =', 'const actUnread =', 'const actMark =', 'const chanAt =', 'const ATT =', 'const attOf =', 'const STI_LAB =', 'const STI_TIP ='].map(line).join('\n')
     + '\n' + ['const ID =', 'const RETIRED_BY =', 'const on ='].map(tline).join('\n')
-    + '\n' + block('function actRowMark(s)', '// A thread of an agent other') + block('function stiKind(s)', 'const stiBadge =') + block('function chatRow(s', '/* Ready has three orders')
+    + '\n' + block('function actRowMark(s)', '// A thread of an agent other') + block('function stiKind(s)', 'const stiBadge =') + block('function chatRow(s', '/* Agent inbox (switch wizard/agent-inbox)')
     + block('const ACT_SORTS = () =>', '// The sort and Show older taps').replace('let actOlder = false;', 'let actOlder = false, rowChan = true;')
     + '\nthis.rule = { needs: actNeeds, unread: actUnread, mark: actMark, attOf, trackerOn: on }; this.activityBody = activityBody;', c);
   // The Thread tracker as chats.js sees it: its real on(); if it were on, every row would get a "waiting on you" dot.

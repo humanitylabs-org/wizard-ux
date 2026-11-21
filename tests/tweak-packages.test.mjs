@@ -2,6 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { fixture, contract, read } from './fixtures/tweaks.mjs';
+import { withSkinHostParts } from './fixtures/skin-host-parts.mjs';
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
+import { withDesktopParts } from './fixtures/desktop-parts.mjs';
 const catalog = JSON.parse(read('web/tweaks/catalog.json'));
 // Capability-gate fixtures: a package id that asks for exactly these capabilities (no shipped package needed).
 const asking = (id, capabilities) => ({ id, name: id, version: '1.0.0', author: id.split('/')[0], apiVersion: 1, capabilities, description: 'test fixture' });
@@ -111,7 +114,7 @@ test('a saved legacy two-orb layout or framed composition turns nothing on now i
     const f = wizardExperience(storage); await f.E.refresh();
     assert.deepEqual(f.active(), []); assert.equal(f.E.state.error, '');
     // The layout itself is gone (wizard-ux issue 1338): skin-host's boot treats a stored 'two-orb' as unknown (tests/stale-layout-boot).
-    assert.ok(!/id: 'two-orb'/.test(read('web/core/skin-host.js')));
+    assert.ok(!/id: 'two-orb'/.test(withSkinHostParts(read('web/core/skin-host.js'))));
     assert.equal(storage.has('wos.two-orbs.migrated.v1') || storage.has('wos.app-borders.migrated.v1'), false, 'no migration ran');
   }
 });
@@ -138,7 +141,7 @@ test('window refresh is layout+nav gated, revoked on teardown, and stale handles
   api.windowRefresh.use({pull:false}); assert.equal(f.windowRefresh,null);
 });
 test('stock shell: no ↻ in window bars and pull-to-refresh stays unless a package holds window refresh', () => {
-  const app=read('web/app.js'), chats=read('web/core/chats.js');
+  const app=read('web/app.js'), chats=withParts(read('web/core/chats.js'));
   assert.match(app,/\$\{refreshModes\.length \? RELOAD_BTN : ''\}<button class="wb" data-wact="full"/);
   assert.equal((app.match(/data-wact="reload"/g)||[]).length,2,'only RELOAD_BTN markup and its sync selector');
   assert.match(app,/pullRefresh: \(\) => !refreshModes\.some\(m => m\.pull === false\)/);
@@ -190,7 +193,7 @@ test('disposed foundation capability cannot change windows', async () => {
 
 test('slot lookup prefers a visible instance over hidden Chats copies (desktop)', async () => {
   const { readFile } = await import('node:fs/promises');
-  const src = await readFile(new URL('../web/core/skin-host.js', import.meta.url), 'utf8');
+  const src = withSkinHostParts(await readFile(new URL('../web/core/skin-host.js', import.meta.url), 'utf8'));
   assert.match(src, /getClientRects\(\)\.length > 0\)/);
   assert.match(src, /querySelectorAll\(selector\)\]\.find\(seen\)/);
 });
@@ -256,7 +259,7 @@ test('notification rows in the list: only a holder that asks for list mode turns
 });
 
 test('chats.js lists notifications among Ready chats only in list mode, in every Ready order', () => {
-  const src = read('web/core/chats.js');
+  const src = withParts(read('web/core/chats.js'));
   assert.match(src, /const on = !!window\.WosSkinHost\?\.inboxList;/, 'gated on the host list flag');
   assert.match(src, /const nt = k === 'ready' \? listNotes : null/, 'eligible notifications join Ready');
   assert.match(src, /const top = sec === 'ready' \? bar : ''/, 'only Ready owns the order controls');
@@ -266,15 +269,15 @@ test('chats.js lists notifications among Ready chats only in list mode, in every
   assert.match(src, /\.ch-list \.ch-notif-row\[data-chnotif\]'\); if \(nr\) \{ window\.WosSkinHost\?\.inboxAct\?\.\('open'/, 'a tap goes to the package');
 });
 test('chats.js shows a notification draft as its thread only while notification threads are on', () => {
-  const src = read('web/core/chats.js');
+  const src = withParts(read('web/core/chats.js'));
   assert.match(src, /function notifOf\(w\) \{\n    if \(!w \|\| w\.thread !== '__new__' \|\| winAgent\(w\) \|\| !window\.WosSkinHost\?\.inboxThreads\) return null;/);
   assert.match(src, /const NV = isNew && !pend\.length \? notifOf\(w\) : null;/);
   assert.match(src, /if \(sid === '__new__'\) \{ notifAct\(wid, a\); return; \}/);
-  assert.match(read('web/desktop/desktop.js'), /f\.thread === '__new__' && !CHATS\.notifOpen\?\.\(f\.id\)/, 'remaining Resolve action rejects an empty new chat but reaches an open notification');
+  assert.match(withDesktopParts(read('web/desktop/desktop.js')), /f\.thread === '__new__' && !CHATS\.notifOpen\?\.\(f\.id\)/, 'remaining Resolve action rejects an empty new chat but reaches an open notification');
 });
 
 test('desktop keys: ⌥↓ walks notification rows with Ready, ⌥X resolves an open notification', () => {
-  const d = read('web/desktop/desktop.js');
+  const d = withDesktopParts(read('web/desktop/desktop.js'));
   assert.match(d, /\.ch-sec\[data-sec="ready"\] \[data-chnotif\]', document\)/, 'Ready walk includes [data-chnotif] rows');
   assert.match(d, /code === 'KeyX'\) return hit\(\(\) => \{ if \(!e\.repeat\) chatAct\('resolve', 'X'\)/);
   assert.match(read('web/tweaks/wizard/unified-inbox/tweak.js'), /b\.dataset\.chnotif = it\.id/, 'the package marks its rows');

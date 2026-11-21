@@ -14,11 +14,11 @@ Feature branch: `feature/in-app-dictation`. Untouched baseline: `201b4e66d1c3d8a
 
 ## Source
 
-New: `web/core/focused-field.js`, `qa-in-app-dictation.cjs`, `tools/qa-dictation-ab.cjs`, `tools/qa-playwright-thales.cjs`.
+New: `web/core/focused-field.js`, `qa/scripts/qa-in-app-dictation.cjs`, `tools/qa-dictation-ab.cjs`, `tools/qa-playwright-thales.cjs`.
 
 Integration: `web/app.js`, `web/device.js`, `web/core/cancelled.js`, `web/core/config.js`, `web/core/chats.js`, `web/core/app-capture.js`, both shell HTML loaders, `web/styles.css`, and `web/desktop/desktop.js`.
 
-`qa-voice-seal.cjs` now explicitly blurs a focused composer before starting AGENT orb voice. Its old focused-composer tap expectation intentionally conflicts with the new dictation contract; the new suite covers the focused path separately, using real orb gestures.
+`qa/scripts/qa-voice-seal.cjs` now explicitly blurs a focused composer before starting AGENT orb voice. Its old focused-composer tap expectation intentionally conflicts with the new dictation contract; the new suite covers the focused path separately, using real orb gestures.
 
 ## Thales evidence
 
@@ -51,7 +51,7 @@ export NODE_PATH=$HOME/workspace/wizard-mobile-link-candidate/node_modules
 # Run the SAME suite against baseline and candidate. Preserve each exit separately.
 for label in base candidate; do
   QA_WEB_DIR=../$label QA_EVIDENCE=../evidence/$label-dictation.json \
-    /opt/homebrew/bin/node qa-in-app-dictation.cjs \
+    /opt/homebrew/bin/node qa/scripts/qa-in-app-dictation.cjs \
     > ../evidence/$label-dictation.log 2>&1
   result=$?
   printf '%s\n' "$result" > ../evidence/$label-dictation.exit

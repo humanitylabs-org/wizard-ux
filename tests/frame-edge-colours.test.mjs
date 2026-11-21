@@ -4,8 +4,9 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { withAppParts } from './fixtures/app-parts.mjs';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const app = fs.readFileSync(path.join(root, 'web/app.js'), 'utf8');
+const app = withAppParts(fs.readFileSync(path.join(root, 'web/app.js'), 'utf8'));
 const source = app.slice(app.indexOf('  function frameEdge(f) {'), app.indexOf('  function syncImmersive()'));
 assert.ok(source.startsWith('  function frameEdge(f) {'));
 // Run the production measurement path. The canvas fixture models the browser's

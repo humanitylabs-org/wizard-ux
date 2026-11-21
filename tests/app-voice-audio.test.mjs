@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
+import { withServicesParts } from './fixtures/app-services-parts.mjs';
 const read=p=>readFileSync(new URL('../web/core/'+p,import.meta.url),'utf8');
 function fixture({id='wizard-music',provides=[],legacy=true,admitted=true}={}) {
   const origin='https://wizard.example',listeners={},sent=[],timers=new Map(),received=[];let seq=0;
@@ -15,7 +16,7 @@ function fixture({id='wizard-music',provides=[],legacy=true,admitted=true}={}) {
     wizardAudioPort:{postMessage:raw=>sent.push(JSON.parse(raw))}};
   c.window=c;vm.createContext(c);
   if(legacy)vm.runInContext(read('background-audio-legacy.js'),c);
-  vm.runInContext(read('background-audio.js'),c);vm.runInContext(read('app-services.js'),c);
+  vm.runInContext(read('background-audio.js'),c);vm.runInContext(withServicesParts(read('app-services.js')),c);
   c.WizAppServices.attach(frame,{appId:id,path:app.url});
   const handler={claims:(text)=>text==='test provider grammar',receive:text=>{received.push(text);return true;}};
   const service=c.WizAppServices.connect(win,{voiceCommands:handler});

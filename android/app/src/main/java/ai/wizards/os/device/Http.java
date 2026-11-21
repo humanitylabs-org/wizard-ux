@@ -17,7 +17,10 @@ public final class Http {
 
     public static final class Error extends IOException {
         public final int status;
-        public Error(int status, String m) { super(m); this.status = status; }
+        /** First 4 KB of the error response body ("" when none): lets a caller tell the service's own JSON error from a proxy's. */
+        public final String body;
+        public Error(int status, String m) { this(status, m, ""); }
+        public Error(int status, String m, String body) { super(m); this.status = status; this.body = body == null ? "" : body; }
     }
 
     public static JSONObject json(String method, String url, String origin, byte[] body, String type, String... headers) throws IOException {
@@ -27,6 +30,7 @@ public final class Http {
             c.setReadTimeout(body != null && body.length > 200_000 ? 120_000 : 30_000);
             c.setRequestMethod(method);
             c.setRequestProperty("Origin", origin);
+            ShellToken.apply(c);
             c.setRequestProperty("Accept", "application/json");
             for (int i = 0; i + 1 < headers.length; i += 2) c.setRequestProperty(headers[i], headers[i + 1]);
             if (body != null) {
@@ -38,7 +42,7 @@ public final class Http {
             int code = c.getResponseCode();
             InputStream is = code >= 400 ? c.getErrorStream() : c.getInputStream();
             String resp = is == null ? "" : new String(readAll(is), StandardCharsets.UTF_8);
-            if (code < 200 || code >= 300) throw new Error(code, "HTTP " + code);
+            if (code < 200 || code >= 300) throw new Error(code, "HTTP " + code, resp.length() > 4096 ? resp.substring(0, 4096) : resp);
             try { return resp.isEmpty() ? new JSONObject() : new JSONObject(resp); }
             catch (JSONException e) { throw new Error(code, "not JSON"); }
         } catch (Error e) {

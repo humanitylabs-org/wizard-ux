@@ -5,6 +5,7 @@ import { modelContext, runWithChatsModel } from './fixtures/chats-list-model.mjs
 // so two devices interleave GET, GET, PUT, PUT (or PATCH, PATCH). Each device has its own localStorage.
 // Use stale() and simultaneous() for every synced key: an edit on one device must never erase another's.
 import { readFileSync } from 'node:fs'
+import { withLiveParts } from './fixtures/live-parts.mjs' // live.js parts moved out verbatim (issue 1665)
 import vm from 'node:vm'
 
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8')
@@ -48,7 +49,7 @@ export function liveDevice(box, local = {}, { pulled = true } = {}) {
     addEventListener() {} }
   ctx.window = { dispatchEvent: e => events.push(e.type), addEventListener() {} }
   modelContext(ctx)
-  const live = read('web/live.js')
+  const live = withLiveParts(read('web/live.js'))
   vm.runInContext(live.slice(live.indexOf('  const PREFS_URL ='), live.indexOf('  const sectionTime =')) + '\nthis.api = { pullPrefs, putPrefs, prefOps, applyPrefOps };', ctx)
   box.apply ||= ctx.api.applyPrefOps
   return { ...ctx.api, ctx, store, events }
@@ -132,7 +133,7 @@ export function channelDevice(box, local = {}, { now = () => Date.parse('2026-11
   }
   const ctx = { console, URL, Date, JSON }
   vm.createContext(ctx)
-  const live = read('web/live.js')
+  const live = withLiveParts(read('web/live.js'))
   vm.runInContext(live.slice(live.indexOf('  /* ---- channel store'), live.indexOf('  /* ---- end channel store ---- */')) + '\nthis.channelStore = channelStore;', ctx)
   const clock = { t: now() }
   const api = ctx.channelStore({ req, emit: () => { emits++ }, onError: r => errors.push(r), now: () => clock.t,

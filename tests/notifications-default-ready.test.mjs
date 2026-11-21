@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
-const read = p => readFileSync(new URL('../'+p, import.meta.url), 'utf8');
+import { withAppParts } from './fixtures/app-parts.mjs';
+const read = p => withAppParts(readFileSync(new URL('../'+p, import.meta.url), 'utf8'));
 
 test('notification-only Ready survives an empty default main-agent Chats list', () => {
   const src = read('web/core/chats.js');

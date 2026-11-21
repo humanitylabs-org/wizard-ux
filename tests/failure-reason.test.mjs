@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { modelContext } from './fixtures/chats-list-model.mjs';
+import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
 
 const read = p => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
 const TWEAK = 'wizard/failure-reason';
@@ -18,7 +19,7 @@ function models(tweaks = TWEAK) {
   return window.WosModels;
 }
 function runErrorOf() {
-  const src = read('web/live.js');
+  const src = withLiveParts(read('web/live.js'));
   const body = src.slice(src.indexOf('  const RUN_ERROR_CODES = new Set('), src.indexOf('  function normalize(item) {'));
   return new Function(`${body}; return runErrorOf;`)();
 }
@@ -31,7 +32,7 @@ test('live.js keeps only known wizard_last_run_error codes, clipped', () => {
   assert.deepEqual({ ...of({ code: 'provider_billing', provider: 'openai-codex', message: '  Plan\n ended ' }) }, { code: 'provider_billing', provider: 'openai-codex', message: 'Plan ended' });
   assert.equal(of({ code: 'provider_quota', message: 'x'.repeat(500) }).message.length, 200);
   for (const bad of [null, 'provider_auth', {}, { code: 'evil' }, { code: 'provider_auth'.toUpperCase() }]) assert.equal(of(bad), null);
-  const live = read('web/live.js');
+  const live = withLiveParts(read('web/live.js'));
   assert.match(live, /runError: runErrorOf\(item\.wizard_last_run_error\),/);
   assert.match(live, /reconnect:null, runError:null,/);
   assert.match(live, /\.\.\.item, runError: runErrorOf\(item\.runError\), status:/);
@@ -96,7 +97,7 @@ test('Errors row and thread use the reason in place of "Error: <message>" and th
 // restricted agent normalizes through the real live.js normalize() (detail rows and compact list rows) and renders
 // the same reason and actions.
 function normalizer() {
-  const live = read('web/live.js'), a = live.indexOf('  const READY_OR_ATTENTION'), b = live.indexOf('  /* ---- thread-seen');
+  const live = withLiveParts(read('web/live.js')), a = live.indexOf('  const READY_OR_ATTENTION'), b = live.indexOf('  /* ---- thread-seen');
   const context = modelContext({}); vm.runInContext(`${live.slice(a, b)}\nthis.normalize = normalize;`, context);
   return context.normalize;
 }

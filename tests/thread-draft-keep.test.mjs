@@ -6,8 +6,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
+import { withParts } from './fixtures/chats-parts.mjs';
 const kitSrc = readFileSync(new URL('../web/core/chat-kit.js', import.meta.url), 'utf8');
-const chatsSrc = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
+const chatsSrc = withParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'));
 const KEY = 'wos.chat.drafts.v1', CHAN = 'chan:hermes:launch', THREAD = 'direct:philosopher';
 
 function kit(seed = {}, failure = '') {

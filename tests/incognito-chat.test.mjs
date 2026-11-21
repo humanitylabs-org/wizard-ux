@@ -3,8 +3,10 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import vm from 'node:vm'
 import { readFileSync } from 'node:fs'
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
+import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
 const source = readFileSync(new URL('../web/core/incognito-chat.js', import.meta.url), 'utf8')
-const chats = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8')
+const chats = withParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8')) + readFileSync(new URL('../web/core/chats-outbox.js', import.meta.url), 'utf8')
 function rig(extra = {}) {
   const events = {}, calls = [], field = { value: '', selectionStart: 0, selectionEnd: 0 }, box = { scrollTop: 0, scrollHeight: 20 }
   const el = { innerHTML: '', querySelector(s) { if (s === '[data-incog-thread]') return this.innerHTML.includes('data-incog-thread') ? {} : null; if (s === '[data-incog-field]') return this.innerHTML.includes('data-incog-field') ? field : null; if (s === '.ch-msgs') return box; return null }, replaceChildren() { this.innerHTML = ''; field.value = '' } }
@@ -116,7 +118,7 @@ test('Incognito blocks microphone admission before snapshots, custody or recorde
   }
   assert.match(phone, /captureBusy:.*V.state !== 'idle'/)
   assert.match(desktop, /captureBusy:.*VOICE.state !== 'idle'/)
-  const chats = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8')
+  const chats = withParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8')) + readFileSync(new URL('../web/core/chats-outbox.js', import.meta.url), 'utf8')
   assert.match(chats, /if \(H.captureBusy\?\.\(\)\)/)
 })
 
@@ -155,7 +157,7 @@ test('terminal reply uses the final run output, not a partial stream', async () 
   s.component.close('one', true)
 })
 test('Incognito stream target accepts every registry agent id, including a leading digit', () => {
-  const live = readFileSync(new URL('../web/live.js', import.meta.url), 'utf8')
+  const live = withLiveParts(readFileSync(new URL('../web/live.js', import.meta.url), 'utf8'))
   const re = new RegExp(live.match(/target && !(\/\^\\\/wizard.*?\$\/)\.test/)[1].slice(1, -1))
   assert.ok(re.test('/wizard/v1/agents/1-private/incognito/incog_' + 'a'.repeat(32)))
   assert.ok(!re.test('/wizard/v1/agents/-x/incognito/incog_' + 'a'.repeat(32)))

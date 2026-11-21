@@ -4,6 +4,8 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { modelContext } from './fixtures/chats-list-model.mjs';
 import '../web/core/chats-list-model.js';
+import { withParts } from './fixtures/chats-parts.mjs';
+import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
 const M = globalThis.WizChatsListModel;
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
 const at = n => `2026-11-05T${String(n).padStart(2, '0')}:00:00Z`;
@@ -74,7 +76,7 @@ test('both shell adapters delegate one projection, preserving errors/day groups,
   }
 });
 test('core/classic desktop and stock phone use shared ordering/grouping while keeping original row markup', () => {
-  const src = read('web/core/chats.js');
+  const src = withParts(read('web/core/chats.js'));
   const block = (from, to) => src.slice(src.indexOf(from), src.indexOf(to, src.indexOf(from)));
   const c = modelContext({ window: {}, READY_ORDERS: [], readyOrder: 'newest', snoozeLast: () => false, deferredOf: s => s.deferred,
     attOf: s => s.attention, stiKind: () => 'none', waitsOn: s => s.attention?.state === 'needs_you', subjOrder: () => [], esc: String,
@@ -110,7 +112,7 @@ test('notifications share time/priority/ties, never mutate inputs, and read note
 });
 
 test('raw live time key remains cardAt, not updatedAt, for Newest/Oldest/Priority compatibility helpers', () => {
-  const src = read('web/live.js');
+  const src = withLiveParts(read('web/live.js'));
   const block = (from, to) => src.slice(src.indexOf(from), src.indexOf(to, src.indexOf(from)));
   const c = modelContext({ Date, document: { documentElement: { dataset: {} } }, localStorage: { getItem: () => null }, window: { WizConfig: { dayStart: n => n - n % 864e5 } } });
   vm.runInContext(block('  const DAY = 864e5;', '  // Agent Service owns box-wide preferences.') + block('  const sectionTime =', '  async function fetchDispositions()') + '\nthis.group = groupWork; this.priority = byPriority; this.oldest = byOldest;', c);
@@ -132,7 +134,7 @@ test('raw and projected tie keys agree even when display titles add a source or 
 });
 
 test('folded notifications have the same Priority in real core fold and host, even with omitted/mixed priorities', () => {
-  const src = read('web/core/chats.js'), c = modelContext({ window: {} });
+  const src = withParts(read('web/core/chats.js')), c = modelContext({ window: {} });
   vm.runInContext(src.slice(src.indexOf('  const noteSrc ='), src.indexOf('  const sesRank =')) + '\nthis.fold = fold;', c);
   const cases = [
     [{ id: 'n', title: 'Newest' }, { id: 'o', priority: 3 }],

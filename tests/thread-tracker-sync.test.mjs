@@ -3,6 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 
 function boot(box, { enabled = true, windows, renders = [] } = {}) {
   const listeners = {};
@@ -26,14 +27,14 @@ function boot(box, { enabled = true, windows, renders = [] } = {}) {
     Object.assign(ctx, { CH: windows, W: new Proxy({}, { get: (_, id) => windows[id] }), WosThreadTracker: win.WosThreadTracker,
       elOf: () => ({ querySelector: () => null }), LIVE: { agentOf: sid => sid === 'private-thread' ? 'synthetic-agent' : '' },
       holdList: () => false, renderThreadLive: w => renders.push(w.id), renderChatList: w => renders.push(w.id) });
-    const source = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
+    const source = withParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'));
     vm.runInContext(source.slice(source.indexOf("  window.addEventListener('wos:thread-tracker'"), source.indexOf('  // Changed elsewhere (Settings')), ctx);
   }
   return { win, T: win.WosThreadTracker, change(value) { doc.documentElement.dataset.tweaks = value; mutation(); },
     choice(value) { win.dispatchEvent(new ctx.CustomEvent('wos:tweak-choice', { detail: { id: 'wizard/thread-tracker', on: value } })); } };
 }
 test('Chats row renders title, tracker dots, then timestamp (no helper badge), including tracker-off rows', () => {
-  const source = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
+  const source = withParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'));
   const header = source.split('\n').find(l => l.includes('<span class="bd"><span class="tp">')).trim();
   for (const enabled of [true, false]) {
     const html = vm.runInNewContext('`' + header + '`', { plock: '', s: { id: 't', title: 'Long title', background: 'helper' }, esc: String, ago: () => '2m',

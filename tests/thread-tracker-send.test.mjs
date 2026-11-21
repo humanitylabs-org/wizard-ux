@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
-const chats = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
+const chats = withParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'));
 const send = chats.slice(chats.indexOf('  async function sendChat('), chats.indexOf('  const picker =', chats.indexOf('  async function sendChat(')));
 function fixture(agent,working,save='pending') {
  const order=[], w={id:'w',thread:'t'}, c={files:[]};

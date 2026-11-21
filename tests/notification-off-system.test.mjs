@@ -5,6 +5,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { core, settle, read } from './fixtures/notification-levels.mjs';
+import { withAppParts } from './fixtures/app-parts.mjs';
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
+import { withDesktopParts } from './fixtures/desktop-parts.mjs';
 
 const NOTES = [
   { id: 'u1', time: 30, title: '1 app updated', message: 'Updated Notifications (2.29.0).', priority: 3, tags: [] },
@@ -108,7 +111,7 @@ test('a notification asks "<row> go to", never "Notifications notifications go t
   assert.equal(B.ask('notifications', 'Notifications'), 'Notifications go to');
   assert.equal(B.ask('system:app-updates', 'App updates'), 'App updates go to');
   assert.equal(B.ask('messenger', 'Messenger'), 'Messenger notifications go to');
-  assert.match(read('web/core/chats.js'), /ask = B\.ask\?\.\(id, name\) \|\| `\$\{name\} notifications go to`/);
+  assert.match(withParts(read('web/core/chats.js')), /ask = B\.ask\?\.\(id, name\) \|\| `\$\{name\} notifications go to`/);
 });
 
 test('unknown routes and ids are refused', () => {
@@ -142,7 +145,7 @@ test('the retired tweak is gone: no package, not in the catalog or Miguel\'s pro
 });
 
 test('cog and attention hooks: the phone gear, the desktop cog and the Settings row read WosBell.attention', () => {
-  const app = read('web/app.js'), desk = read('web/desktop/desktop.js'), st = read('web/core/settings.js');
+  const app = withAppParts(read('web/app.js')), desk = withDesktopParts(read('web/desktop/desktop.js')), st = read('web/core/settings.js');
   assert.match(app, /at = window\.WosBell\?\.attention\?\.\(\)/);
   assert.match(desk, /function paintCog\(\)[^]*window\.WosBell\?\.attention\?\.\(\)/);
   assert.match(st, /if \(at\?\.n\) items\.push\(\{ title: `\$\{at\.n\} \$\{at\.label\}`, feature: 'notification-routing' \}\)/);

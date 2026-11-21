@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import * as router from '../web/store/store-router.js';
 import { installRelease } from '../web/store/store-install.js';
+import { withDesktopParts } from './fixtures/desktop-parts.mjs';
 const read = p => fs.readFileSync(new URL('../' + p, import.meta.url), 'utf8');
 const provider = { id: 'wizard-tinfoil', name: 'Wizard Tinfoil', provides: ['live-transcription'], private: true, models: [{ id: 'flash', tier: 'fast' }] };
 const service = { slot: 'live-transcription', required: true, purpose: 'Words appear as you speak', recommend: provider.id, private_data: true, status: 'missing' };
@@ -148,7 +149,7 @@ test('compact disclosures escape need copy and never use purpose as the row name
 
 test('install links open the Store window synchronously so the link reaches its frame (both shells)', () => {
   for (const [file, call] of [['web/app.js', "openApp(APP['app-store'], {}, { setupChecked: true })"], ['web/desktop/desktop.js', "openApp(APP['app-store'], { setupChecked: true })"]]) {
-    const src = read(file), at = src.indexOf("if (v === 'install') {");
+    const src = withDesktopParts(read(file)), at = src.indexOf("if (v === 'install') {");
     assert.ok(at > 0, file); assert.ok(src.slice(at, at + 400).includes(call), `${file} skips the async setup gate for the install link`);
     assert.ok(src.slice(at, src.indexOf(call, at)).includes('WosAppSetup?.close()'), `${file} cancels an earlier pending setup gate first`);
   }

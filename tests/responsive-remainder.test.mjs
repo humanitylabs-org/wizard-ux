@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import fs from 'node:fs';
+import { withDesktopParts } from './fixtures/desktop-parts.mjs';
 const read=p=>fs.readFileSync(new URL('../web/'+p,import.meta.url),'utf8');
 function grammar(){
  const events=[],norm=s=>String(s||'').toLowerCase().replace(/[^a-z0-9 ]/g,'').trim();
@@ -35,7 +36,7 @@ test('one grammar handles music, app, filter, search, help and future registrati
  assert.equal(parser.parse('my normal one word reply',{view:{kind:'chat thread'}},'auto'),null);
 });
 test('explicit misses in phone never enter cloud routing; desktop command take is negative-send custody',()=>{
- const phone=read('app.js'),desk=read('desktop/desktop.js');
+ const phone=read('app.js'),desk=withDesktopParts(read('desktop/desktop.js'));
  const h=phone.slice(phone.indexOf('  async function handleText'),phone.indexOf('  /* Hold-command'));
  assert(h.indexOf("if (kind === 'command' && !typed) return holdNoMatch")<h.indexOf("endpoint('route')"));
  const command=desk.slice(desk.indexOf('    if (commandTake)'),desk.indexOf('    if (vConversation)'));
@@ -58,7 +59,7 @@ test('feedback rejects a missing route rather than targeting current focus',asyn
 });
 test('both adapters mount common nonsettings views, command grammar and capture tools',()=>{
  for(const p of ['index.html','desktop.html'])for(const asset of ['views.css','commands.js','features.js','bound-view.js','capture-tools.js','voice-legacy.js','app-voice.js','screen-capture.js','sel-menu.js'])assert(read(p).includes('core/'+asset),p+': '+asset);
- for(const p of ['app.js','desktop/desktop.js']){const s=read(p);assert(s.includes('WosFeatures.install('));assert(s.includes('WosCommands.create('));assert(s.includes('WosCommands.execute('));assert(s.includes('WosBoundView.create('));assert(s.includes('WosCaptureTools.'));assert(!s.includes('function localParse('));assert(!s.includes('function renderLevel('));}
+ for(const p of ['app.js','desktop/desktop.js']){const s=withDesktopParts(read(p));assert(s.includes('WosFeatures.install('));assert(s.includes('WosCommands.create('));assert(s.includes('WosCommands.execute('));assert(s.includes('WosBoundView.create('));assert(s.includes('WosCaptureTools.'));assert(!s.includes('function localParse('));assert(!s.includes('function renderLevel('));}
 });
 
 

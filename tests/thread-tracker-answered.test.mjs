@@ -6,9 +6,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 const source = readFileSync(new URL('../web/core/thread-tracker.js', import.meta.url), 'utf8');
 const model = readFileSync(new URL('../web/core/chats-list-model.js', import.meta.url), 'utf8');
-const chats = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
+const chats = withParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'));
 const desk = readFileSync(new URL('../web/layouts/ai-apps/desktop.js', import.meta.url), 'utf8');
 const iso = ms => new Date(ms).toISOString();
 
@@ -94,7 +95,7 @@ function renderRow(s, trackerOn, agent = '') {
     stiKind: s => s.status === 'running' ? 'working' : 'needs',
     WosThreadTracker: { on: () => trackerOn, onFor: a => trackerOn && (!a || a === 'hermes'), dots: () => '<span class="tt-dots"></span>' } });
   vm.runInContext([pick('const WORKING_ST ='), pick('const isWorking ='), pick('const deferredOf ='), pick('const attOf =')].join('\n')
-    + '\n' + block(chats, '  function chatRow(', '  /* Ready has three orders') + '\nthis.renderRow = chatRow;', c);
+    + '\n' + block(chats, '  function chatRow(', '  /* Agent inbox (switch wizard/agent-inbox)') + '\nthis.renderRow = chatRow;', c);
   return c.renderRow(s);
 }
 const ask = { state: 'needs_you', ask: 'Approve the Google setup' };

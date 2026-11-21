@@ -2,8 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
-const live = readFileSync(new URL('../web/live.js', import.meta.url), 'utf8');
-const chats = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
+import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
+import { withParts } from './fixtures/chats-parts.mjs';
+const live = withLiveParts(readFileSync(new URL('../web/live.js', import.meta.url), 'utf8'));
+const chats = withParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'));
 const settle = () => new Promise(r => setImmediate(r));
 
 // James, 1 Nov 2026. EXTEND WizCore's existing stream/transcript ownership; no second renderer.
