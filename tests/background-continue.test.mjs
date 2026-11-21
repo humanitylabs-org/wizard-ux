@@ -142,6 +142,15 @@ test('on: the panel shows Continue; showing it posts nothing; a double tap posts
   assert.deepEqual(h.settled, [RID], 'the list will not resurrect it from an older read');
 });
 
+test('on: a main-agent thread the shell labels hermes gets the panel and posts once', async () => {
+  // The shell names the main agent on its own rows (agent hermes); the panel must not treat that as a routed agent.
+  const h = power({ on: true, agent: 'hermes' });
+  assert.match(h.api.failureHtml(h.w, h.session), new RegExp(`data-background-continue="${RID}"`));
+  h.click(); await settle(h);
+  assert.equal(h.posts.length, 1);
+  assert.deepEqual(JSON.parse(h.posts[0][2]), { session_id: 'old' });
+});
+
 for (const kind of ['host-profile', 'container', 'restricted']) test(`on: a routed ${kind} thread gets no panel and never posts (main-agent route only)`, async () => {
   const h = power({ on: true, agent: `qa-${kind}` });
   assert.doesNotMatch(h.api.failureHtml(h.w, h.session), /data-background-continue/);
