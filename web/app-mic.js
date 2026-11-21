@@ -73,11 +73,19 @@ window.WizCore.appParts.mic = function ({ $, cancelVoice, DEV, device, onRecStop
     return false;
   }
   async function openMic() {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: micAudio() });
     // The phone's own mic only (18 Oct 2026): a take Android puts on a Bluetooth or external mic is refused.
     if (await browserMicIsExternal()) { stream.getTracks().forEach(t => t.stop()); const e = new Error("Android moved the microphone to a Bluetooth or external device. Wizard records only from the phone's own mic. Try again, or choose another mic in Settings → Microphone."); e.code = 'external_mic'; throw e; }
     micGranted = true;
     return stream;
+  }
+  // Phones (ux#1705): echo cancellation, noise suppression or auto gain make Android/iOS open the mic as a voice
+  // call, which pauses or ducks music from other apps and drops Bluetooth earbuds to call quality. All three off there.
+  function micAudio() {
+    const ua = String(navigator.userAgent || '');
+    const phone = /Android|iPhone|iPad|iPod|Mobile/i.test(ua) || (/Macintosh/.test(ua) && (navigator.maxTouchPoints || 0) > 1);
+    return phone ? { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: { ideal: 1 } }
+      : { echoCancellation: true, noiseSuppression: true, autoGainControl: true };
   }
   /* Pre-warmed microphone (Miguel, 31 Oct 2026: hold-for-command was slow to really listen). A press held still on the
    * orb for MIC_WARM_MS opens the browser mic while the hold is still deciding, so by the time a hold becomes a command

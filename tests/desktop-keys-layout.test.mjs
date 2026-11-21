@@ -58,7 +58,7 @@ test('desktop replies never schedule a new chat after sending', () => {
 test('desktop recordings skip echo cancellation (no music ducking) and pick a wired mic explicitly', async () => {
   const { readFileSync: r } = await import('node:fs');
   const v = r(new URL('../web/core/voice.js', import.meta.url), 'utf8');
-  assert.match(v, /echoCancellation: PHONE/);
+  assert.match(v, /: \{ echoCancellation: false, noiseSuppression: true, autoGainControl: true, channelCount: \{ ideal: 1 \} \};/);
   assert.match(v, /if \(wired\) return wired\.deviceId/);
 });
 

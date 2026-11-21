@@ -31,9 +31,14 @@
   }
   // Desktop: no echo cancellation. On macOS it switches the input to the system voice-processing path, which ducks
   // or briefly pauses whatever is playing (music in headphones dips each time a take starts). Speech is only
-  // transcribed, and with headphones there is no echo to cancel. Phones keep it (speaker playback can echo).
-  const PHONE = /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent);
-  const BASE = { echoCancellation: PHONE, noiseSuppression: true, autoGainControl: true, channelCount: { ideal: 1 } };
+  // transcribed, and with headphones there is no echo to cancel.
+  // Phones: none of the three (ux#1705). On Android WebView/Chrome and iOS Safari any of them opens the mic as a
+  // voice-call stream (MODE_IN_COMMUNICATION), which pauses or ducks music from other apps and moves Bluetooth
+  // earbuds to the call-quality headset profile while the stream is held. TG style's plainRecorder does the same.
+  const PHONE = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '') || (/Macintosh/.test(navigator.userAgent || '') && (navigator.maxTouchPoints || 0) > 1);
+  const BASE = PHONE
+    ? { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: { ideal: 1 } }
+    : { echoCancellation: false, noiseSuppression: true, autoGainControl: true, channelCount: { ideal: 1 } };
   // The Mac app (WKWebView) records the mono Mac mic as stereo Opus with the right channel silent (4 Nov 2026), so
   // every player and speech-to-text averages it down to half volume (-6 dB) and quiet takes lose words. When the
   // track is not already mono, record a mono copy: the left channel alone while the right one stays silent, the
