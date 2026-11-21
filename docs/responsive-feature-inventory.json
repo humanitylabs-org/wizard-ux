@@ -1074,11 +1074,6 @@
       "classification": "adapter",
       "reason": "Phone shell part moved verbatim out of app.js (issue 1665): orb voice takes, their recovery and which recorder a take uses."
     },
-    "app-edge.js": {
-      "shell": "phone",
-      "classification": "adapter",
-      "reason": "Phone shell part moved verbatim out of app.js (issue 1665): edge to edge: camera cutout, status bar and frame insets."
-    },
     "app-frame.js": {
       "shell": "phone",
       "classification": "adapter",
