@@ -148,7 +148,8 @@ async function interaction(p, row) {
     };
     const sample = why => {
      if (!document.documentElement) return; __legacy.samples++;
-     for (const n of document.querySelectorAll('.pane-list,.pane-split,.pane-empty,.ch-list')) if (drawn(n) && __legacy.hits.length < 50) __legacy.hits.push({ why, cls: n.className, t: Math.round(performance.now()) });
+     // The AI apps sidebar's own Channels pane (.aad-chan, on for everyone since wizard-ux issue 1258) is not Classic.
+     for (const n of document.querySelectorAll('.pane-list,.pane-split,.pane-empty,.ch-list')) if (drawn(n) && !n.closest('.aad-chan') && __legacy.hits.length < 50) __legacy.hits.push({ why, cls: n.className, t: Math.round(performance.now()) });
      // Classic chrome (menubar, windows, chat panes, skeleton rows) drawn before the AI apps sidebar is (issue 1556)
      const side = document.querySelector('.aad-side');
      if (document.documentElement.dataset.layout === 'ai-apps' && !(side && drawn(side))) for (const n of document.querySelectorAll('#bar,#logo,#wsList,.win,[data-chats],.pane-list,.pane-main,.ch-skel,.ch-row')) if (drawn(n) && __legacy.chrome.length < 50) __legacy.chrome.push({ why, id: n.id, cls: String(n.className), t: Math.round(performance.now()) });
