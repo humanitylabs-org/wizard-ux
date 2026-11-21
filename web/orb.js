@@ -153,6 +153,9 @@ void main(){
   function frame(now) {
     raf = 0;
     if (hidden()) return;
+    // A GPU context can be dropped while the page is paused or asleep without a webglcontextlost event
+    // (wizard-ux issue 1706: the floating orb kept only its icon). Show the picture orb instead of a blank canvas.
+    if (gl && gl.isContextLost?.() === true) { showFallback(); return; }
     const dt = Math.min((now - last) / 1000, .1); last = now;
     const k = 1 - Math.pow(.0015, dt);
     for (const key of ['energy','spin','ring','core']) cur[key] = lerp(cur[key], target[key], k);
@@ -221,7 +224,9 @@ void main(){
     get webgl() { return ok; },
     setMode(m) {
       mode = m; target = MODES[m] || MODES.idle;
-      fallback.src = (m === 'idle' || m === 'type') ? 'robert-thread-orb.png' : 'robert-listening-galaxy.png';
+      // Next to the page's own picture, so a page in a subfolder (web/assist/) keeps a picture that exists.
+      const pic = (m === 'idle' || m === 'type') ? 'robert-thread-orb.png' : 'robert-listening-galaxy.png';
+      try { fallback.src = new URL(pic, fallback.getAttribute('src') ? fallback.src : document.baseURI).href; } catch (_) { fallback.src = pic; }
       canvas.parentElement.dataset.mode = m;
       wake();
     },

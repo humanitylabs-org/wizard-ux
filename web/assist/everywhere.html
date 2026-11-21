@@ -18,10 +18,15 @@
   #orbBox canvas,#orbBox img{-webkit-mask-image:radial-gradient(circle closest-side,#000 72%,transparent 100%);mask-image:radial-gradient(circle closest-side,#000 72%,transparent 100%)}
   #orb{position:absolute;inset:0;width:100%;height:100%}
   #orbFallback{position:absolute;inset:18%;width:64%;height:64%;border-radius:50%}
+  /* The disc is always there (wizard-ux issue 1706): a plain picture orb under the WebGL canvas, with no mask and
+     nothing that depends on the GPU. The live orb covers it exactly; if the canvas is blank or invisible (a context
+     or surface dropped on pause or screen-off, a filtered masked canvas this WebView will not draw) the disc and
+     its skin colour still sit behind the icon. */
+  #orbDisc{position:absolute;inset:20%;border-radius:50%;background:url(../robert-thread-orb.png) center/cover no-repeat}
   /* The app orb's look (wizard-os#649): the skin's orb colour (web/core/skins.css --sk-orb) and, in James's five skins,
      the white icon in the orb that replaces the centre dot and the top-left shine (orb.js coreTarget). Native passes
      the skin through E.look(); before it does, the page wears Nebula, the default skin. */
-  #orb,#orbFallback{filter:var(--sk-orb,none)}
+  #orb,#orbFallback,#orbDisc{filter:var(--sk-orb,none)}
   .orb-app{position:absolute;left:50%;top:50%;width:26%;height:26%;transform:translate(-50%,-50%);display:none;
     place-items:center;pointer-events:none}
   html:is([data-skin="nebula"],[data-skin="grove"],[data-skin="tide"],[data-skin="ember"],[data-skin="signal"]) .orb-app{display:grid}
@@ -69,6 +74,7 @@
 </head>
 <body>
 <div id="orbBox">
+  <span id="orbDisc" aria-hidden="true"></span>
   <canvas id="orb" width="64" height="64" aria-hidden="true"></canvas>
   <img id="orbFallback" src="../robert-thread-orb.png" alt="" hidden>
   <span class="orb-app" aria-hidden="true"><svg viewBox="0 0 24 24"><rect class="cap" x="8.4" y="2" width="7.2" height="13" rx="3.6"/><path class="arm" d="M4.8 11.2a7.2 7.2 0 0 0 14.4 0M12 18.4V22"/></svg></span>
