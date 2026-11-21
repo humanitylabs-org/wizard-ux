@@ -5,7 +5,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
-const js = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
+const js = withParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'));
 const cut = (a, b) => { const i = js.indexOf(a), j = js.indexOf(b, i + 1); assert.ok(i >= 0 && j > i, a); return js.slice(i, j); };
 const code = [js.split('\n').find(l => l.startsWith('  function winAgent(w)')),
   js.split('\n').find(l => l.startsWith('  const AGS = ')), js.split('\n').find(l => l.startsWith('  const agentName = ')), js.split('\n').find(l => l.startsWith('  const winTitle = ')),

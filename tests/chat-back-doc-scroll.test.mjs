@@ -9,8 +9,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 
-const src = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
+const src = withParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'));
 const body = src.slice(src.indexOf('  function syncDocumentThread() {'), src.indexOf('\n  {\n    const queueDocumentThread'));
 
 function fixture() {

@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 
 const read = p => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
 
@@ -125,7 +126,7 @@ test('More models expands to the other families once each, above the short list'
 });
 
 test('the thread header no longer carries the model; a draft keeps the label outside the editable rows', () => {
-  const chats = read('web/core/chats.js'), power = read('web/core/chat-power.js'), css = read('web/core/chat-power.css');
+  const chats = withParts(read('web/core/chats.js')), power = read('web/core/chat-power.js'), css = read('web/core/chat-power.css');
   assert.match(chats, /<div class="ch-field"><textarea/);
   assert.match(chats, /\$\{mlabel\}<\/div>/);
   assert.match(chats, /const chip = PW && !PW\.modelLabel \? PW\.modelChip\(w, s\) : ''/);

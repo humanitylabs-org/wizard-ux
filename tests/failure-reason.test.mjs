@@ -8,6 +8,7 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { modelContext } from './fixtures/chats-list-model.mjs';
 import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 
 const read = p => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
 const TWEAK = 'wizard/failure-reason';
@@ -82,7 +83,7 @@ test('a sign-out with a connection app keeps its Sign in panel; working and retr
 });
 
 test('Errors row and thread use the reason in place of "Error: <message>" and the generic failed_turn bubble', () => {
-  const chats = read('web/core/chats.js');
+  const chats = withParts(read('web/core/chats.js'));
   assert.match(chats, /const rerr = needs && !working \? window\.WosModels\?\.runError\?\.\(s\) : null;/);
   assert.match(chats, /: rerr \? esc\(rerr\.line\) : working \?/);
   assert.match(chats, /const runErr = !working && !!window\.WosModels\?\.runError\?\.\(s\);/);

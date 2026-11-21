@@ -2,7 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
-const source=readFileSync(new URL('../web/core/chats.js',import.meta.url),'utf8');
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
+const source=withParts(readFileSync(new URL('../web/core/chats.js',import.meta.url),'utf8'));
 const outbox=readFileSync(new URL('../web/core/chats-outbox.js',import.meta.url),'utf8'); // loadThread moved there (issue 1665)
 const start=outbox.indexOf('  async function loadThread(w, force) {');
 const end=outbox.indexOf('  return { echoed',start);

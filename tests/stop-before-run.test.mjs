@@ -6,12 +6,13 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { randomUUID } from 'node:crypto';
 import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 
 // Miguel, 28 Oct 2026: "when I send there is no way to stop the agent for a while; the Stop button shows up late."
 // Stop must show the moment a send is pending, and before the run exists it withdraws the send: no run is created.
 const outboxSrc = readFileSync(new URL('../web/outbox.js', import.meta.url), 'utf8');
 const liveSrc = withLiveParts(readFileSync(new URL('../web/live.js', import.meta.url), 'utf8'));
-const chatsSrc = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
+const chatsSrc = withParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'));
 
 function client(origin, transcribe = async () => ({ text: 'hello there' })) {
   const rows = new Map(), timers = new Set();

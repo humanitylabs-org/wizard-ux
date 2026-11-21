@@ -14,7 +14,7 @@ class FixtureTests(unittest.TestCase):
         c.request(method,path);r=c.getresponse();data=r.read();status=r.status;c.close()
         return status,data
     def test_real_shell_assets(self):
-        for p,marker in [('index.html',b'core/chats.js'),('core/chats.js',b'wos-doc-scroll'),('core/chats.css',b'overflow-y: auto')]:
+        for p,marker in [('index.html',b'core/chats.js'),('core/chats-focus.js',b'wos-doc-scroll'),('core/chats.css',b'overflow-y: auto')]:
             status,body=self.request('GET','/wizard-os-home/'+p)
             self.assertEqual(status,200);self.assertIn(marker,body)
     def test_every_unsafe_method_blocked(self):

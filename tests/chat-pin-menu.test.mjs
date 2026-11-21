@@ -4,6 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { existsSync, readFileSync } from 'node:fs';
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
 const json = p => JSON.parse(read(p));
 const PIN = 'wizard/pin-buttons';
@@ -18,7 +19,7 @@ test('row pins are hidden by default and the Show pin buttons package is gone', 
 });
 
 test('right-click, long-press and swipe share the row menu: Pin/Unpin, never Open', () => {
-  const src = read('web/core/chats.js');
+  const src = withParts(read('web/core/chats.js'));
   const sheet = src.slice(src.indexOf('function openRowSheet'), src.indexOf('const emojiCategoryHtml'));
   assert.match(sheet, /data-part="pin-action" data-rspin>\$\{PIN_SVG\}\$\{PIN\.has\(sid\) \? 'Unpin' : 'Pin'\}/);
   assert.doesNotMatch(sheet, /data-part="pin-button"/, 'row pin styling never applies to the menu action');
