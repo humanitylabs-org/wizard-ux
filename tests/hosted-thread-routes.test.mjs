@@ -6,8 +6,9 @@ import { readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { launcherFixture } from './launcher-fixture.mjs';
 import { withServicesParts } from './fixtures/app-services-parts.mjs';
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 const read = p => readFileSync(new URL('../'+p,import.meta.url),'utf8');
-const source=read('web/core/chats.js');
+const source=withParts(read('web/core/chats.js'));
 function scene(kind, seed={}) {
  const agent=kind==='main'?'':'synthetic-'+kind, sid=agent?'agent:'+agent+':synthetic':'synthetic-main';
  const calls=[],store=new Map([['wos.chat.drafts.v1',JSON.stringify(seed)]]), hosted=new Map(), app={id:'wisdom',kind:'wizard',url:'/wisdom/'};

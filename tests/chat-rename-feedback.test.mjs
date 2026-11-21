@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
-const source=readFileSync(new URL('../web/core/chats.js',import.meta.url),'utf8');
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
+const source=withParts(readFileSync(new URL('../web/core/chats.js',import.meta.url),'utf8'));
 const body=source.slice(source.indexOf('  async function submitRename(form) {'),source.indexOf('  /* Live repaints rebuild'));
 for(const result of [true,'taken',false])test(`rename action paints synchronously while the write is held; result ${result}`,async()=>{
  let finish;const calls=[],input={value:' Owner   title '};

@@ -4,8 +4,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 const css = readFileSync(new URL('../web/styles.css', import.meta.url), 'utf8');
-const chats = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
+const chats = withParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'));
 test('the corner orb reserves no composer column when the composer is pinned above the bottom strip (Android document scroll)', () => {
   assert.match(css, /html\.wos-doc-scroll \.device\.orb-corner \.wos-doc-thread \.ch-compose\s*\{\s*padding-right:\s*10px;?\s*\}/);
 });

@@ -5,6 +5,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import vm from 'node:vm'
 import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8')
 function load({ local = {}, server = [], status = 200, box = null } = {}) {
@@ -137,7 +138,7 @@ test('partition keeps pin order and leaves archived pins where they are', () => 
 })
 
 test('rows carry a pin control and the long-press / right-click sheet offers Pin', () => {
-  const js = read('web/core/chats.js')
+  const js = withParts(read('web/core/chats.js'))
   assert.match(js, /class="ch-pin-toggle" data-chpin=/)
   assert.match(js, /data-rspin>\$\{PIN_SVG\}\$\{PIN\.has\(sid\) \? 'Unpin' : 'Pin'\}/)
   assert.match(js, /data-sec="pinned"/)

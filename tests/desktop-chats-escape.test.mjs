@@ -5,9 +5,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
 import {fileURLToPath} from 'node:url';
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 const root=process.env.QA_SOURCE_DIR||fileURLToPath(new URL('../',import.meta.url));
 const desktop=fs.readFileSync(path.join(root,'web/desktop/desktop.js'),'utf8');
-const core=fs.readFileSync(path.join(root,'web/core/chats.js'),'utf8');
+const core=withParts(fs.readFileSync(path.join(root,'web/core/chats.js'),'utf8'));
 const esc=desktop.slice(desktop.indexOf('  function escStep()'),desktop.indexOf('  /* ---------------- hold left',desktop.indexOf('  function escStep()')));
 const clear=core.slice(core.indexOf('  function clearFilter(w)'),core.indexOf('  const hasFilter',core.indexOf('  function clearFilter(w)')));
 function fixture({thread='selected',q='quokka',filter='unread',inList=true,mono=false}={}){

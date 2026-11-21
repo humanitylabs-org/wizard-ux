@@ -2,13 +2,14 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 
 // The Chats "Not up to date" notice is one quiet row (James, 7 Nov 2026: "a single row instead of a big pill button
 // that knocks the whole UX down a few centimeters"): dot + one line + a compact "Troubleshoot" text action at the
 // right end that opens the Troubleshooter exactly like every other data-chtroubleshoot control. Runs the production
 // statements of web/core/chats.js (renderChats' sync bar) and the shipped core/chats.css rules.
 const read = file => readFileSync(new URL('../' + file, import.meta.url), 'utf8');
-const chats = read('web/core/chats.js'), css = read('web/core/chats.css');
+const chats = withParts(read('web/core/chats.js')), css = read('web/core/chats.css');
 const a = chats.indexOf('    const lastAt = LST.at'), b = chats.indexOf(": '';", chats.indexOf('    const sync = ', a)) + 5;
 assert.ok(a > 0 && b > a, 'chat list sync boundary');
 const SYNC = chats.slice(a, b) + '\nthis.render = () => sync;';

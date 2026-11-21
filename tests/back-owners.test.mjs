@@ -3,8 +3,9 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { withDesktopParts } from './fixtures/desktop-parts.mjs';
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 const read = p => readFileSync(new URL('../web/'+p,import.meta.url),'utf8');
-const core=read('core/escape-back.js'),desktop=withDesktopParts(read('desktop/desktop.js')),phone=read('app.js'),chats=read('core/chats.js');
+const core=read('core/escape-back.js'),desktop=withDesktopParts(read('desktop/desktop.js')),phone=read('app.js'),chats=withParts(read('core/chats.js'));
 function fixture() {
  const hits=[], state={open:'',voice:false};
  const w={}, c={window:w,document:{documentElement:{}},MutationObserver:class {observe(){} disconnect(){}},queueMicrotask(){},hits,state,log(){}};

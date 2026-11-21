@@ -1,12 +1,13 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 
 // Regression: tapping Dismiss on a failed voice note in the Errors section showed
 // "Could not save dismissal · original kept". The generic Chats click handler grabbed every
 // [data-obdismiss] first and called OUTBOX.dismissBubble, which (correctly) refuses 'failed'
 // items, so the Errors row's own confirm → delete flow in chat-power.js never ran.
-const chats = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
+const chats = withParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'));
 const power = readFileSync(new URL('../web/core/chat-power.js', import.meta.url), 'utf8');
 const outbox = readFileSync(new URL('../web/outbox.js', import.meta.url), 'utf8');
 

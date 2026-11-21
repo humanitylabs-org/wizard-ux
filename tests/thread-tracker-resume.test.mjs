@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 // Stopped rows (marked running, nothing behind them) carry Resume: an ordinary owner send, spinner on the tap's frame.
 const source = readFileSync(new URL('../web/core/thread-tracker.js', import.meta.url), 'utf8');
 const model = readFileSync(new URL('../web/core/chats-list-model.js', import.meta.url), 'utf8');
@@ -74,7 +75,7 @@ function slice(src, start) {
   for (; i < src.length; i++) { if (src[i] === '{') depth++; else if (src[i] === '}' && --depth === 0) break; }
   return src.slice(at, i + 1);
 }
-const chatsSrc = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
+const chatsSrc = withParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'));
 function resumeIn({ winAgent = '', rowAgent, idAgent = '' }) {
   const sends = [];
   const ctx = vm.createContext({ W: { w1: { id: 'w1', thread: 't' } }, owner: id => id, PW: { follow() {} },
