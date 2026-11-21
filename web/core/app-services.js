@@ -809,7 +809,16 @@
       st.freshWasSeen = seen; st.freshWasFront = front;
     }
   }
-  setInterval(() => freshTick(), 1000);
+  /* Looking at an app (issue 1701): its window in view and in front, on a visible page. Each new look tells
+   * Notifications (WosBell.looked) so the items counted on that app's badge are read: a badge never outlives a look. */
+  function lookTick() {
+    for (const st of frames.values()) {
+      const on = !document.hidden && freshSeen(st) && freshFront(st);
+      if (on && !st.looking) { try { window.WosBell?.looked?.(st.appId); } catch (_) {} }
+      st.looking = on;
+    }
+  }
+  setInterval(() => { freshTick(); lookTick(); }, 1000);
   // The whole page coming back already gives every app frame its own real visibilitychange: count that as the read.
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) return;
@@ -1208,7 +1217,7 @@
   }
   // The shell is about to load a page in this window itself (location.replace keeps src as it was): see trackNav.
   const expectLoad = frame => { const st = frames.get(frame); if (st) st.navExpect = true; };
-  window.WizAppServices = Object.freeze({ expectLoad, fresh: Object.freeze({ tick: freshTick, tool: freshTool }), voiceCommand, runVoiceCommand, authorized: frame => { const st = frames.get(frame); return valid(st, st?.doc); }, version: VERSION, claimShare, attach, connect, back, guardBack, ownsThreadLink, appsClosed, trackOpenApps,
+  window.WizAppServices = Object.freeze({ expectLoad, fresh: Object.freeze({ tick: freshTick, tool: freshTool, look: lookTick }), voiceCommand, runVoiceCommand, authorized: frame => { const st = frames.get(frame); return valid(st, st?.doc); }, version: VERSION, claimShare, attach, connect, back, guardBack, ownsThreadLink, appsClosed, trackOpenApps,
     titlebar: Object.freeze({ render: renderTools }),
     orb: Object.freeze({ of: orbOf, tap: orbTap, presenter(fn) { orbShown = typeof fn === 'function' ? fn : () => false; } }),
     voiceInput: Object.freeze({ pin: pinConversation, deliver: deliverConversation }),
