@@ -40,7 +40,9 @@ let currentPage;
   if(view==='classic') await p.evaluate(()=>{for(const w of Object.values(__wux.wins))__wux.closeWin(w.id);});
   await p.waitForFunction(()=>!document.getAnimations().some(a=>a.playState==='running'&&Number.isFinite(a.effect?.getComputedTiming().endTime)));
   const before=await p.evaluate(()=>JSON.stringify({ws:__wux.ws,cur:__wux.cur,wins:__wux.wins,home:__wux.homeOpen}));
-  await p.evaluate(()=>{window.legacySamples=[];window.legacySampler=true;const step=()=>{if(!legacySampler)return;legacySamples.push([...document.querySelectorAll('.pane-list,.pane-empty,.ch-list')].map(n=>{const s=getComputedStyle(n),r=n.getBoundingClientRect();return {display:s.display,visibility:s.visibility,opacity:s.opacity,w:r.width,h:r.height,text:n.textContent.trim().length};}));requestAnimationFrame(step);};step();});
+  // The AI apps sidebar's own Channels pane (.aad-chan: Channels | Activity, on for everyone since issue 1258) is not a
+  // legacy list; anything else must stay hidden.
+  await p.evaluate(()=>{window.legacySamples=[];window.legacySampler=true;const step=()=>{if(!legacySampler)return;legacySamples.push([...document.querySelectorAll('.pane-list,.pane-empty,.ch-list')].filter(n=>!n.closest('.aad-chan')).map(n=>{const s=getComputedStyle(n),r=n.getBoundingClientRect();return {display:s.display,visibility:s.visibility,opacity:s.opacity,w:r.width,h:r.height,text:n.textContent.trim().length};}));requestAnimationFrame(step);};step();});
   await p.keyboard.press('Escape'); await p.waitForFunction(()=>legacySamples.length>=20);
   const samples=await p.evaluate(()=>{legacySampler=false;return legacySamples;});
   assert.equal(await p.evaluate(()=>JSON.stringify({ws:__wux.ws,cur:__wux.cur,wins:__wux.wins,home:__wux.homeOpen})),before,'bare desktop state unchanged');
