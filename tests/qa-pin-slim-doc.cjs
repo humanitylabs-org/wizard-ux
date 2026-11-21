@@ -17,8 +17,8 @@ const repo = path.resolve(__dirname, '..'), origin = process.env.QA_ORIGIN || 'h
 const web = process.env.QA_WEB || path.join(repo, 'web'), out = process.env.QA_OUT || path.join(repo, 'pin-slim-evidence');
 const RUNS = +process.env.QA_RUNS || 5, CPU = +process.env.QA_CPU || 4;
 const SWITCH = 'wizard/pin-slim-doc';
-// QA_FAST=1 also wears wizard/pin-fast-open (issue 1558) on both sides.
-const BASE = process.env.QA_FAST === '1' ? ['wizard/pin-fast-open'] : [];
+// The fast pinned open (issue 1558) is on for everyone, so both sides have it.
+const BASE = [];
 const APP = { id: 'wisdom', name: 'Wisdom', url: '/wisdom/', source: 'apps.json', type: 'view', kind: 'wizard', status: 'running' };
 const MESSENGER = { id: 'messenger', name: 'Messenger', url: '/messenger/', source: 'apps.json', type: 'view', kind: 'wizard', status: 'running' };
 const PAGE = `<!doctype html><meta charset="utf-8"><title>Wisdom</title><body style="font:18px system-ui;padding:24px;background:#fff">

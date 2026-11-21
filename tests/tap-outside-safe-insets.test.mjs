@@ -9,11 +9,13 @@ function session({top=36,cut=24,cover=false,sheets=[]}={}) {
   const appDoc={documentElement:{style:{setProperty(k,v,p){appStyles[k]=v;priority[k]=p;}}},querySelector:()=>cover?{}:null,styleSheets:sheets};
   const el=tag=>({tag,dataset:{},classList:{add(){},remove(){}},style:{setProperty(){}},events:{},setAttribute(){},append(){},replaceChildren(){},appendChild(child){if(child.tag==='iframe')frame=child;},addEventListener(k,fn){this.events[k]=fn;}});
   const host=el('host');const document={documentElement:{style:{setProperty(k,v){hostStyles[k]=v;}}},getElementById:()=>host,createElement:el,addEventListener(){}};
+  // No last-known list: the frame mounts only when the box's list arrives (wizard-ux issue 1558 mounts a cached pin at once).
+  const registry={APP:{}};const notes={id:'notes',name:'Notes',kind:'wizard',url:'/notes/'};
   const policy={mode:true,id:'notes',isShell:()=>false,displayName:a=>a.name,within:()=>true,key:()=> 'fixture'};
-  const window={WizHomeScreenPolicy:policy,WizCore:{apps:()=>({APP:{notes:{id:'notes',name:'Notes',kind:'wizard',url:'/notes/'}}}),appsLoaded:()=>new Promise(r=>resolveApps=r)},WizardOSNative:{immersive:v=>immersive.push(v),cutoutTop:()=>cut,insetTop:()=>top},WizAppServices:{attach:()=>()=>{},guardBack(){}},WosSelMenu:{back:()=>false}};
+  const window={WizHomeScreenPolicy:policy,WizCore:{apps:()=>registry,appsLoaded:()=>new Promise(r=>resolveApps=r)},WizardOSNative:{immersive:v=>immersive.push(v),cutoutTop:()=>cut,insetTop:()=>top},WizAppServices:{attach:()=>()=>{},guardBack(){}},WosSelMenu:{back:()=>false}};
   vm.runInContext(source,vm.createContext({window,document,location:{origin:'https://fixture.test'},URL,localStorage:{getItem:()=>null,setItem(){}},addEventListener(){},setTimeout(){},setInterval(){}}));
   const load=()=>{frame.contentDocument=appDoc;frame.contentWindow={location:{href:'https://fixture.test/notes/'},document:appDoc,history:{state:null,pushState(){},replaceState(){}},WizardApp:{ready(){}},addEventListener(){}};frame.events.load();};
-  return {hostStyles,appStyles,priority,window,sheets,immersive,get frame(){return frame;},load,async mount(){resolveApps();await Promise.resolve();load();}};
+  return {hostStyles,appStyles,priority,window,sheets,immersive,get frame(){return frame;},load,async mount(){registry.APP.notes=notes;resolveApps();await Promise.resolve();load();}};
 }
 const sheet=(text,extra={})=>({cssRules:[{cssText:text}],...extra});
 const cases={
