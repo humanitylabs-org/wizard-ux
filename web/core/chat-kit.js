@@ -564,12 +564,15 @@
     return out;
   }
   // A key gained or lost its draft: lists showing draft marks repaint (wos:drafts-keys), never on each keystroke.
+  // The event names the keys that changed (detail.keys), so a list can tell a thread's draft from a channel box's.
   function keysMoved(all) {
-    const sig = [...draftKeys(all)].sort().join('\n');
+    const now = [...draftKeys(all)].sort(), sig = now.join('\n');
     if (keysSig === null) { keysSig = sig; return; }
     if (sig === keysSig) return;
+    const was = new Set(keysSig ? keysSig.split('\n') : []), is = new Set(now);
+    const keys = [...now.filter(k => !was.has(k)), ...[...was].filter(k => !is.has(k))];
     keysSig = sig;
-    try { window.dispatchEvent(new CustomEvent('wos:drafts-keys')); } catch (_) {}
+    try { window.dispatchEvent(new CustomEvent('wos:drafts-keys', { detail: { keys } })); } catch (_) {}
   }
   // Every draft is kept until its own send, discard or thread deletion: no count cap drops the oldest ones (wizard-ux
   // issue 1444). A device that can't store them says so once a minute (wos:drafts-unsaved; Chats shows it), while the
