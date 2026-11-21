@@ -43,7 +43,8 @@
     "wizard/pin-reach-answer",
     "wizard/phone-app-notifications",
     "wizard/lock-screen-player",
-    "wizard/runtipi-cli-key"
+    "wizard/runtipi-cli-key",
+    "wizard/settings-search"
   ],
   "defaults": [
     "wizard/unified-inbox",
