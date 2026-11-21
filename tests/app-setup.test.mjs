@@ -5,7 +5,8 @@ import vm from 'node:vm';
 import * as router from '../web/store/store-router.js';
 import { installRelease } from '../web/store/store-install.js';
 import { withDesktopParts } from './fixtures/desktop-parts.mjs';
-const read = p => fs.readFileSync(new URL('../' + p, import.meta.url), 'utf8');
+import { withShellParts } from './fixtures/shell-parts.mjs';
+const read = p => withShellParts(fs.readFileSync(new URL('../' + p, import.meta.url), 'utf8'));
 const provider = { id: 'wizard-tinfoil', name: 'Wizard Tinfoil', provides: ['live-transcription'], private: true, models: [{ id: 'flash', tier: 'fast' }] };
 const service = { slot: 'live-transcription', required: true, purpose: 'Words appear as you speak', recommend: provider.id, private_data: true, status: 'missing' };
 async function harness(result, store = new Map()) {

@@ -3,9 +3,10 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import vm from 'node:vm';
+import { withShellParts } from './fixtures/shell-parts.mjs';
 
 const root = process.env.QA_SOURCE || new URL('..', import.meta.url).pathname;
-const source = readFileSync(resolve(root, 'web/desktop/desktop.js'), 'utf8');
+const source = withShellParts(readFileSync(resolve(root, 'web/desktop/desktop.js'), 'utf8'));
 const adapter = source.slice(source.indexOf('mountHost: () => stage,'));
 const expression = adapter.match(/^\s*talk: (.+),$/m)?.[1];
 assert.ok(expression, 'real desktop skin-host talk adapter exists');

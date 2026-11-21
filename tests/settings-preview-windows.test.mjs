@@ -5,8 +5,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import { withShellParts } from './fixtures/shell-parts.mjs';
 
-const read = p => fs.readFileSync(new URL('../' + p, import.meta.url), 'utf8');
+const read = p => withShellParts(fs.readFileSync(new URL('../' + p, import.meta.url), 'utf8'));
 const desk = read('web/desktop/desktop.js'), deskCss = read('web/desktop/desktop.css');
 const phone = read('web/app.js'), phoneCss = read('web/styles.css'), links = read('web/core/links.js');
 const slice = (s, from, to) => { const a = s.indexOf(from); assert.ok(a >= 0, from); const b = s.indexOf(to, a); assert.ok(b > a, to); return s.slice(a, b); };

@@ -3,9 +3,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import { withShellParts } from './fixtures/shell-parts.mjs';
 
-const features = fs.readFileSync(new URL('../web/core/features.js', import.meta.url), 'utf8');
-const src = fs.readFileSync(new URL('../web/core/workspace-sync.js', import.meta.url), 'utf8');
+const features = withShellParts(fs.readFileSync(new URL('../web/core/features.js', import.meta.url), 'utf8'));
+const src = withShellParts(fs.readFileSync(new URL('../web/core/workspace-sync.js', import.meta.url), 'utf8'));
 function load() {
   const sb = { console, JSON, Map, Set, Math, Date, setTimeout() {}, clearTimeout() {}, addEventListener() {}, navigator: { userAgent: 'iPhone' }, localStorage: { getItem: () => null, setItem() {} } };
   vm.runInNewContext(features, { window: sb });
@@ -279,7 +280,7 @@ test('starter apps a fresh device opened by itself never reach the box or the ot
 });
 
 test('the phone shell seeds starter apps only into a layout it just created, marked device-only', () => {
-  const app = fs.readFileSync(new URL('../web/app.js', import.meta.url), 'utf8');
+  const app = withShellParts(fs.readFileSync(new URL('../web/app.js', import.meta.url), 'utf8'));
   assert.match(app, /if \(!freshBoot \|\| joinedWorkspaces\(\)\) return;/, 'no seeding into an existing or already-synced layout');
   assert.match(app, /W\[id\] = \{ id, app: 'frame', appId, seed: true \}/, 'seeded windows are marked');
   assert.match(app, /W = \{\}; desks = \[blank\(\{ id: 'home', home: true \}\)\]; freshBoot = true;/);
@@ -288,7 +289,7 @@ test('the phone shell seeds starter apps only into a layout it just created, mar
 });
 
 test('upgrade: starter windows from the previous shell (no seed mark) on a not-yet-joined device are marked before the first join', async () => {
-  const src = fs.readFileSync(new URL('../web/app.js', import.meta.url), 'utf8');
+  const src = withShellParts(fs.readFileSync(new URL('../web/app.js', import.meta.url), 'utf8'));
   const at = src.indexOf('  function markLegacyStarters('); assert.ok(at >= 0);
   const body = src.slice(at, src.indexOf('\n  }\n', at) + 4);
   const mark = new Function(body + '\nreturn markLegacyStarters;')();

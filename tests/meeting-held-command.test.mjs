@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
-const s=readFileSync(new URL('../web/app.js',import.meta.url),'utf8');
+import { withShellParts } from './fixtures/shell-parts.mjs';
+const s=withShellParts(readFileSync(new URL('../web/app.js',import.meta.url),'utf8'));
 const a=s.indexOf('  function mayHoldCommand()'),b=s.indexOf('  function shock()',a);
 assert(a>=0&&b>a);
 function allowed({focused=false,meeting=false,recording=false,sheet=null}={}){

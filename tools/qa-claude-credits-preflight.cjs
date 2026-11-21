@@ -2,7 +2,7 @@
 'use strict';
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),assert=require('node:assert/strict');
 const root=path.resolve(__dirname,'..'),source=fs.readFileSync(path.join(root,'qa/scripts/qa-claude-credits.cjs'),'utf8');
-const read=p=>fs.readFileSync(path.join(root,p),'utf8');
+const read=p=>require('./shell-source.cjs').shellSource(root,p); // shells read whole again (issue 1665 parts)
 assert.match(read('web/desktop.html'),/<button id="logo"[^>]*aria-label="Home"/);
 assert.ok(read('web/desktop/desktop.js').includes("$('#logo').addEventListener('click', () => goHome());"));
 assert.match(read('web/desktop/desktop.js'),/homeOpen = true; store\.set\('homeOpen', true\); render\(\);/);

@@ -5,7 +5,8 @@ import vm from 'node:vm';
 import http from 'node:http';
 import { schedulerFixture } from './fixtures/scheduler.mjs';
 import { withSettingsParts } from './fixtures/settings-parts.mjs'; // settings.js parts moved out verbatim (issue 1665)
-const read = f => fs.readFileSync(new URL('../' + f, import.meta.url), 'utf8');
+import { withShellParts } from './fixtures/shell-parts.mjs';
+const read = f => withShellParts(fs.readFileSync(new URL('../' + f, import.meta.url), 'utf8'));
 const settle = async f => { const until = Date.now() + 3000; while (!f()) { if (Date.now() > until) throw Error('Fixture did not settle'); await new Promise(r => setTimeout(r, 5)); } };
 async function harness(t, { missing = false, shell = 'phone', timeZone = 'Europe/London', now = '2026-10-21T12:00:00Z' } = {}) {
   const fixture = schedulerFixture(); fixture.missing = missing;

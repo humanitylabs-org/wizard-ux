@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { withServicesParts } from './fixtures/app-services-parts.mjs';
-const read = name => readFileSync(new URL('../web/core/' + name + '.js', import.meta.url), 'utf8');
+import { withShellParts } from './fixtures/shell-parts.mjs';
+const read = name => withShellParts(readFileSync(new URL('../web/core/' + name + '.js', import.meta.url), 'utf8'));
 function fixture(mobile = true) {
   const frames = new Map(), events = {}, listeners = {}, wins = {}, desks = [{ id: 'home', home: true, wins: [] }, { id: 'chat', wins: ['chat'], focus: 'chat' }];
   wins.chat = { id: 'chat', app: 'chats' };
@@ -92,8 +93,8 @@ test('owner unload revokes pair and stale relay, restores previous width', () =>
 test('both shells load the generic module, legacy adapter only names old app, and root Back calls the shared pair', () => {
   const pane = read('companion-pane'); assert.doesNotMatch(pane, /video-editor|Feedback|WizVideoDesks/);
   for (const [entry, script] of [['index.html', 'app.js'], ['desktop.html', 'desktop/desktop.js']]) {
-    const html = readFileSync(new URL('../web/' + entry, import.meta.url), 'utf8');
+    const html = withShellParts(readFileSync(new URL('../web/' + entry, import.meta.url), 'utf8'));
     assert.match(html, /core\/companion-pane.js/); assert.match(html, /core\/companion-legacy.js/); assert.doesNotMatch(html, /video-desks/);
-    assert.match(readFileSync(new URL('../web/' + script, import.meta.url), 'utf8'), /WizCompanionPane\?\.back\(f.id\)/);
+    assert.match(withShellParts(readFileSync(new URL('../web/' + script, import.meta.url), 'utf8')), /WizCompanionPane\?\.back\(f.id\)/);
   }
 });

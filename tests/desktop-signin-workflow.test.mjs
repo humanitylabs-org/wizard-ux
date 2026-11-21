@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
-const source = fs.readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8');
+import { withShellParts } from './fixtures/shell-parts.mjs';
+const source = withShellParts(fs.readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8'));
 function setup() {
  const W = { chat: { id: 'chat', app: 'chats', thread: 'original' }, other: { id: 'other' } };
  const ws = [{ focus: 'chat' }]; let opened = null, focused = null;

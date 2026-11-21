@@ -7,11 +7,12 @@ import { readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import vm from 'node:vm';
+import { withShellParts } from './fixtures/shell-parts.mjs';
 
-const source = readFileSync(new URL('../web/outbox.js', import.meta.url), 'utf8');
-const app = readFileSync(new URL('../web/app.js', import.meta.url), 'utf8');
-const desktop = readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8');
-const live = readFileSync(new URL('../web/live.js', import.meta.url), 'utf8');
+const source = withShellParts(readFileSync(new URL('../web/outbox.js', import.meta.url), 'utf8'));
+const app = withShellParts(readFileSync(new URL('../web/app.js', import.meta.url), 'utf8'));
+const desktop = withShellParts(readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8'));
+const live = withShellParts(readFileSync(new URL('../web/live.js', import.meta.url), 'utf8'));
 const SWITCH = 'wizard/agent-inbox';
 const row = (extra = {}) => ({ id: 'orb-take', kind: 'new', intent: 'message', deliveryRequested: true, sessionId: 'wizard_new_1',
   agent: '', model: 'm', provider: 'p', createdAt: Date.now(), updatedAt: Date.now(), state: 'waiting', nextAt: 0, attempts: 0,
@@ -173,11 +174,11 @@ test('phone and desktop mark the staged take and say Got it; the list never show
   assert.match(desktop, /if \(dumpIt\) \{ await OUTBOX\.enqueue\(\{ \.\.\.modelRoute, dump: true, custodyId: stagedId, captureId: stagedId \? null : r\.captureId, kind: 'new', sessionId: '',[^\n]*return 'sent'; \}\n    if \(w && aimSid\) CHATS\.sendChat\(/, 'a dump candidate goes through the outbox, never opened in a window');
   assert.match(desktop, /OUTBOX\?\.onDump\?\.\(it => \{[\s\S]{0,120}'Got it'/);
   assert.match(live, /if \(it\.dump === true \|\| it\.dumped\) continue;/);
-  const css = readFileSync(new URL('../web/tweaks/wizard/agent-inbox/tweak.css', import.meta.url), 'utf8');
+  const css = withShellParts(readFileSync(new URL('../web/tweaks/wizard/agent-inbox/tweak.css', import.meta.url), 'utf8'));
   for (const rule of css.replace(/\/\*[\s\S]*?\*\//g, '').split('}').filter(r => r.includes('got-it')))
     assert.match(rule.trim(), /^html\[data-tweaks~="wizard\/agent-inbox"\] /, 'scoped to the switch');
   assert.match(css, /\.toast\.got-it \{ background: var\(--wz-panel, #17131f\)/, 'opaque panel from the skin, dark fallback');
-  const manifest = JSON.parse(readFileSync(new URL('../web/tweaks/wizard/agent-inbox/manifest.json', import.meta.url), 'utf8'));
+  const manifest = JSON.parse(withShellParts(readFileSync(new URL('../web/tweaks/wizard/agent-inbox/manifest.json', import.meta.url), 'utf8')));
   assert.ok(manifest.issues.includes('humanitylabs-org/wizard-ux#1588'));
 });
 

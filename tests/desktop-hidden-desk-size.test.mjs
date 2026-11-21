@@ -2,11 +2,12 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import test from 'node:test';
+import { withShellParts } from './fixtures/shell-parts.mjs';
 
 // Execute the production layout/tile functions. This is a geometry fixture, not browser acceptance.
-const js = readFileSync(process.env.QA_DESKTOP_JS || new URL('../web/desktop/desktop.js', import.meta.url), 'utf8');
+const js = withShellParts(readFileSync(process.env.QA_DESKTOP_JS || new URL('../web/desktop/desktop.js', import.meta.url), 'utf8'));
 const source = js.slice(js.indexOf('  function layout() {'), js.indexOf('  /* ---- heads-up chat'));
-const css = readFileSync(process.env.QA_DESKTOP_CSS || new URL('../web/desktop/desktop.css', import.meta.url), 'utf8');
+const css = withShellParts(readFileSync(process.env.QA_DESKTOP_CSS || new URL('../web/desktop/desktop.css', import.meta.url), 'utf8'));
 function harness({ mono = [false, false], wins = [['a'], ['b']], home = false, barHeight = 34 } = {}) {
   const classes = () => {
     const values = new Set();
@@ -30,7 +31,7 @@ function harness({ mono = [false, false], wins = [['a'], ['b']], home = false, b
     wsEl: i => hosts[i], winEl: id => nodes[id],
     splitOf: d => d.split, toggleMono() {},
   });
-  vm.runInContext(readFileSync(new URL('../web/core/pane-layout.js', import.meta.url), 'utf8') + '\nconst C = globalThis.WizCore;\n' + source, ctx);
+  vm.runInContext(withShellParts(readFileSync(new URL('../web/core/pane-layout.js', import.meta.url), 'utf8')) + '\nconst C = globalThis.WizCore;\n' + source, ctx);
   return { ctx, nodes, body, hosts, reads, writes, run: () => vm.runInContext('layout()', ctx) };
 }
 
@@ -86,8 +87,8 @@ test('Home hides every desktop host, including the mono desk', () => {
   assert.match(css, /\.wsp\[hidden\] \{[^}]*visibility: hidden/);
 });
 test('skin-frame and Appearance presentation use the same desk-local fullscreen state', () => {
-  const skin = readFileSync(process.env.QA_SKIN_FRAME_CSS || new URL('../web/core/skin-frame.css', import.meta.url), 'utf8');
-  const appearance = readFileSync(process.env.QA_APPEARANCE_JS || new URL('../web/core/appearance-host.js', import.meta.url), 'utf8');
+  const skin = withShellParts(readFileSync(process.env.QA_SKIN_FRAME_CSS || new URL('../web/core/skin-frame.css', import.meta.url), 'utf8'));
+  const appearance = withShellParts(readFileSync(process.env.QA_APPEARANCE_JS || new URL('../web/core/appearance-host.js', import.meta.url), 'utf8'));
   assert.match(skin, /html\[data-skin-frame\] \.wsp \.win\.full \{ border: 0; border-radius: 0; padding: 0; \}/);
   assert.match(skin, /html\[data-skin-frame\] \.wsp \.win\.full > \.wbar \{ display: none; \}/);
   const block = appearance.match(/const IMMERSIVE = [\s\S]*?const presentation =[^;]+;/)?.[0];

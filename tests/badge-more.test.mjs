@@ -5,7 +5,8 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { withAppParts } from './fixtures/app-parts.mjs';
-const read = p => withAppParts(readFileSync(new URL('../' + p, import.meta.url), 'utf8'));
+import { withShellParts } from './fixtures/shell-parts.mjs';
+const read = p => withAppParts(withShellParts(readFileSync(new URL('../' + p, import.meta.url), 'utf8')));
 
 function nav() {
   const events = [], window = { WizCore: {}, dispatchEvent: e => events.push(e), CustomEvent: class { constructor(t, o) { this.type = t; this.detail = o?.detail; } } };

@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 for (const file of ['web/app.js', 'web/desktop/desktop.js']) {
   test(file + ': cold canonical app ID cannot fuzzy-open LINE', async () => {
-    const source = [file, ...(file === 'web/desktop/desktop.js' ? ['web/desktop/desktop-links.js'] : [])].map(f => fs.readFileSync(path.join(QA_ROOT, f), 'utf8')).join('\n'); // deep links: desktop-links.js (issue 1665)
+    const source = require('../../tools/shell-source.cjs').shellSource(QA_ROOT, file); // deep links: desktop-links.js (issue 1665)
     const match = source.match(/    app\(id(?:, srcEl)?\) \{([\s\S]*?)\n    \},\n    video:/);
     assert.ok(match, 'Use the actual shell app deep-link handler');
     const APP = {}, opened = [], lookups = [];

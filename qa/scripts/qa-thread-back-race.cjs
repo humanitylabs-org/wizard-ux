@@ -7,7 +7,7 @@ const { chromium } = pw, fs = require('fs'), path = require('path'), vm = requir
 const WEB = process.env.QA_WEB_DIR || QA_ROOT;
 const URL_ = process.argv[2] || 'http://127.0.0.1:9440/wizard-os-home/';
 let pass=0, fail=0; const ok=(yes,label,data)=>{if(yes)pass++;else fail++;console.log(yes?'PASS':'FAIL',label,yes?'':JSON.stringify(data));};
-const source=fs.readFileSync(path.join(WEB,'web/app.js'),'utf8');
+const source=require('../../tools/shell-source.cjs').shellSource(WEB,'web/app.js'); // parts put back (issue 1665)
 function fn(name) { const start=source.indexOf('  function '+name+'('); let at=source.indexOf('{',start), depth=0, quote='',escape=false,line=false,block=false; for(let i=at;i<source.length;i++){const c=source[i],next=source[i+1];if(line){if(c==='\n')line=false;continue;}if(block){if(c==='*'&&next==='/'){block=false;i++;}continue;}if(quote){if(escape)escape=false;else if(c==='\\')escape=true;else if(c===quote)quote='';continue;}if(c==='/'&&next==='/'){line=true;i++;continue;}if(c==='/'&&next==='*'){block=true;i++;continue;}if(c==='"'||c==="'"||c==='`'){quote=c;continue;}if(c==='{')depth++;if(c==='}'&&!--depth)return source.slice(start,i+1);}throw Error('extract '+name); }
 function historyCase(delay,navAvailable=true,noop=false) {
   let now=0, calls=0, guards=0, entries=[{key:'root',index:0},{key:'nested',index:1}], current=noop?entries[0]:entries[1];

@@ -6,8 +6,9 @@ import { readFileSync } from 'node:fs'
 import vm from 'node:vm'
 import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
+import { withShellParts } from './fixtures/shell-parts.mjs';
 
-const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8')
+const read = p => withShellParts(readFileSync(new URL('../' + p, import.meta.url), 'utf8'))
 const store = () => { const m = new Map(); return { getItem: k => m.has(k) ? m.get(k) : null, setItem: (k, v) => m.set(k, String(v)), removeItem: k => m.delete(k) } }
 function load(schedules = [], extra = {}) {
   const calls = []

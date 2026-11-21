@@ -3,7 +3,7 @@ const QA_ROOT = require('node:path').resolve(__dirname, '../..'); // repo root (
 // No browser/model/network calls. Guards notification Send against changing the selector during STT.
 const fs=require('fs'),path=require('path'),vm=require('vm'),assert=require('assert/strict');
 const web=path.join(process.env.QA_WEB_DIR||QA_ROOT,'web');
-const app=fs.readFileSync(path.join(web,'app.js'),'utf8'),device=fs.readFileSync(path.join(web,'device.js'),'utf8');
+const app=require('../../tools/shell-source.cjs').shellSource(path.dirname(web),'web/app.js'),device=fs.readFileSync(path.join(web,'device.js'),'utf8');
 const native=app.slice(app.indexOf('  function nativeFinish(id, stopped) {'),app.indexOf('  const recDone ='));
 const processing=app.slice(app.indexOf('  async function onRecStop(nblob, nid) {'),app.indexOf('  // The tap that starts recording must not also press'));
 const notification=device.slice(device.indexOf('  function onRec(ev) {'),device.indexOf('  /* ================= #20 share'));

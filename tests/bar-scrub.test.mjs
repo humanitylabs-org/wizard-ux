@@ -6,8 +6,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
 import vm from 'node:vm';
+import { withShellParts } from './fixtures/shell-parts.mjs';
 
-const read = f => readFileSync(new URL('../' + f, import.meta.url), 'utf8');
+const read = f => withShellParts(readFileSync(new URL('../' + f, import.meta.url), 'utf8'));
 const APP = read('web/app.js');
 const from = APP.indexOf('  /* Swiping desks (wizard-ux#1491'), to = APP.indexOf('  /* Overview (James', from);
 assert.ok(from > 0 && to > from, 'dock gesture block found');

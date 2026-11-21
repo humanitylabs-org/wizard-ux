@@ -5,8 +5,9 @@ import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { withAppParts } from './fixtures/app-parts.mjs';
 import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
+import { withShellParts } from './fixtures/shell-parts.mjs';
 
-const read = path => readFileSync(new URL('../' + path, import.meta.url), 'utf8');
+const read = path => withShellParts(readFileSync(new URL('../' + path, import.meta.url), 'utf8'));
 // Extract complete, unchanged production declarations at named neighbouring declarations.
 // These are the actual shell count producers/listeners, not replacement count callbacks.
 function between(src, start, end) {
@@ -61,7 +62,7 @@ async function load(shell, { mode = true, unread = 2, liveOK = true } = {}) {
   context.LIVE = LIVE; context.live = () => LIVE.groups();
   vm.runInContext(read('web/core/workspace-navigation.js'), context);
   context.C = window.WizCore;
-  vm.runInContext(process.env.NOTIF_SOURCE ? readFileSync(process.env.NOTIF_SOURCE, 'utf8') : read('web/core/notif-bell.js'), context);
+  vm.runInContext(process.env.NOTIF_SOURCE ? withShellParts(readFileSync(process.env.NOTIF_SOURCE, 'utf8')) : read('web/core/notif-bell.js'), context);
   if (shell === 'phone') {
     vm.runInContext(between(phone, '  function renderMoons() {', '  function paintOrbBadge() {'), context);
     vm.runInContext(phone.split('\n').find(line => line.includes("window.addEventListener('wizard:notifications'")), context);

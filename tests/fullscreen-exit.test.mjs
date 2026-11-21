@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
-const source = fs.readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8');
+import { withShellParts } from './fixtures/shell-parts.mjs';
+const source = withShellParts(fs.readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8'));
 const block = source.slice(source.indexOf("    let ex = document.getElementById('exitFull');"), source.indexOf('    const configuredMax', source.indexOf("let ex = document.getElementById('exitFull')")));
 function harness() {
   let button, exits = 0;

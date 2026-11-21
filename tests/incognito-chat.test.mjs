@@ -5,8 +5,9 @@ import vm from 'node:vm'
 import { readFileSync } from 'node:fs'
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
-const source = readFileSync(new URL('../web/core/incognito-chat.js', import.meta.url), 'utf8')
-const chats = withParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8')) + readFileSync(new URL('../web/core/chats-outbox.js', import.meta.url), 'utf8')
+import { withShellParts } from './fixtures/shell-parts.mjs';
+const source = withShellParts(readFileSync(new URL('../web/core/incognito-chat.js', import.meta.url), 'utf8'))
+const chats = withParts(withShellParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'))) + withShellParts(readFileSync(new URL('../web/core/chats-outbox.js', import.meta.url), 'utf8'))
 function rig(extra = {}) {
   const events = {}, calls = [], field = { value: '', selectionStart: 0, selectionEnd: 0 }, box = { scrollTop: 0, scrollHeight: 20 }
   const el = { innerHTML: '', querySelector(s) { if (s === '[data-incog-thread]') return this.innerHTML.includes('data-incog-thread') ? {} : null; if (s === '[data-incog-field]') return this.innerHTML.includes('data-incog-field') ? field : null; if (s === '.ch-msgs') return box; return null }, replaceChildren() { this.innerHTML = ''; field.value = '' } }
@@ -67,7 +68,7 @@ test('James: Incognito reuses the skinned Settings switch, not a browser checkbo
   assert.match(s.el.innerHTML, /role="switch" aria-checked="true"/)
   assert.match(s.el.innerHTML, /class="sw on" aria-hidden="true"/)
   assert.ok(!s.el.innerHTML.includes('type="checkbox"'))
-  const bridge = readFileSync(new URL('../web/core/chats-view.css', import.meta.url), 'utf8')
+  const bridge = withShellParts(readFileSync(new URL('../web/core/chats-view.css', import.meta.url), 'utf8'))
   assert.match(bridge, /\.chats-view, \.ch-incog-toggle, \.ch-incognito \{/)
   assert.match(bridge, /--wz-text: var\(--ink/)
   s.component.close('one', true)
@@ -108,8 +109,8 @@ test('leaving for another view confirms once and destroys only temporary chats',
   s.setConfirm(true); assert.equal(s.component.beforeNavigate([]), true); assert.equal(s.component.active('one'), false)
 })
 test('Incognito blocks microphone admission before snapshots, custody or recorder access', () => {
-  const phone = readFileSync(new URL('../web/app.js', import.meta.url), 'utf8')
-  const desktop = readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8')
+  const phone = withShellParts(readFileSync(new URL('../web/app.js', import.meta.url), 'utf8'))
+  const desktop = withShellParts(readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8'))
   const mobileAdmission = phone.slice(phone.indexOf('async function startVoice'), phone.indexOf('async function startVoice') + 600)
   assert.ok(mobileAdmission.indexOf('CHATS.incognitoActive') < mobileAdmission.indexOf('V.onAt'))
   for (const name of ['talk(', 'dictate(', 'recordReply(']) {
@@ -118,7 +119,7 @@ test('Incognito blocks microphone admission before snapshots, custody or recorde
   }
   assert.match(phone, /captureBusy:.*V.state !== 'idle'/)
   assert.match(desktop, /captureBusy:.*VOICE.state !== 'idle'/)
-  const chats = withParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8')) + readFileSync(new URL('../web/core/chats-outbox.js', import.meta.url), 'utf8')
+  const chats = withParts(withShellParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'))) + withShellParts(readFileSync(new URL('../web/core/chats-outbox.js', import.meta.url), 'utf8'))
   assert.match(chats, /if \(H.captureBusy\?\.\(\)\)/)
 })
 
@@ -129,8 +130,8 @@ test('every persistent Chats adapter has an Incognito early return; both shells 
   }
   assert.match(chats, /const incognitoAction = isNew &&/); assert.ok(chats.includes('${chip}${incognitoAction}')); assert.match(chats, /w.thread !== '__new__'/)
   assert.match(chats, /beforeLeave: \(id, checkOnly = false\) => !INC\?\.active/)
-  for (const file of ['index.html', 'desktop.html']) assert.match(readFileSync(new URL('../web/' + file, import.meta.url), 'utf8'), /core\/incognito-chat.js/)
-  for (const file of ['app.js', 'desktop/desktop.js']) assert.match(readFileSync(new URL('../web/' + file, import.meta.url), 'utf8'), /CHATS.beforeLeave\(id(?:, checkOnly)?\)/)
+  for (const file of ['index.html', 'desktop.html']) assert.match(withShellParts(readFileSync(new URL('../web/' + file, import.meta.url), 'utf8')), /core\/incognito-chat.js/)
+  for (const file of ['app.js', 'desktop/desktop.js']) assert.match(withShellParts(readFileSync(new URL('../web/' + file, import.meta.url), 'utf8')), /CHATS.beforeLeave\(id(?:, checkOnly)?\)/)
 })
 test('preflight of a desktop close never destroys an earlier accepted chat', async () => {
   const s = rig(); await s.component.start('one', s.agent); await s.component.start('two', s.agent);
@@ -145,8 +146,8 @@ test('preflight of a desktop close never destroys an earlier accepted chat', asy
   assert.equal(s.calls.filter(c=>c.method==='DELETE').length,2);
 });
 test('Settings registration follows dependency and scrub checks before active index mutation', () => {
-  for(const f of ['index.html','desktop.html']) {const s=readFileSync(new URL('../web/'+f,import.meta.url),'utf8');assert.ok(s.indexOf('core/settings.js')<s.indexOf('core/incognito-chat.js'));}
-  const phone=readFileSync(new URL('../web/app.js',import.meta.url),'utf8');
+  for(const f of ['index.html','desktop.html']) {const s=withShellParts(readFileSync(new URL('../web/'+f,import.meta.url),'utf8'));assert.ok(s.indexOf('core/settings.js')<s.indexOf('core/incognito-chat.js'));}
+  const phone=withShellParts(readFileSync(new URL('../web/app.js',import.meta.url),'utf8'));
   assert.match(phone,/if \(n !== DS\.at && !CHATS.beforeNavigate\(desks\[n\]\?\.wins \|\| \[\]\)\) return;\s*if \(n !== DS\.at\)/);
 });
 test('terminal reply uses the final run output, not a partial stream', async () => {
@@ -157,13 +158,13 @@ test('terminal reply uses the final run output, not a partial stream', async () 
   s.component.close('one', true)
 })
 test('Incognito stream target accepts every registry agent id, including a leading digit', () => {
-  const live = withLiveParts(readFileSync(new URL('../web/live.js', import.meta.url), 'utf8'))
+  const live = withLiveParts(withShellParts(readFileSync(new URL('../web/live.js', import.meta.url), 'utf8')))
   const re = new RegExp(live.match(/target && !(\/\^\\\/wizard.*?\$\/)\.test/)[1].slice(1, -1))
   assert.ok(re.test('/wizard/v1/agents/1-private/incognito/incog_' + 'a'.repeat(32)))
   assert.ok(!re.test('/wizard/v1/agents/-x/incognito/incog_' + 'a'.repeat(32)))
 })
 test('desktop HUD title-bar close asks before ending an Incognito chat', () => {
-  const desktop = readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8')
+  const desktop = withShellParts(readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8'))
   assert.match(desktop, /act === 'close' && hud\?\.id === id\) return canLeave\(id\) && hudClose\(\)/)
   assert.equal(desktop.match(/if \(!internal && !canLeave\(id\)\) return;/g).length, 1)
 })

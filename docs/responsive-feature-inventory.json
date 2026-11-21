@@ -1197,10 +1197,55 @@
       "classification": "adapter",
       "reason": "Phone layout, orb/gesture input, shell navigation; shared feature rendering forbidden here."
     },
+    "app-agentorb.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone shell part moved out of app.js (issue 1665, shared values through accessors): who the agent orb talks to, and the app window in front."
+    },
+    "app-arc.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone shell part moved out of app.js (issue 1665, shared values through accessors): the arc buttons around the orb while it records."
+    },
+    "app-back.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone shell part moved out of app.js (issue 1665, shared values through accessors): the phone Back step and its watchers."
+    },
+    "app-boot.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone shell part moved out of app.js (issue 1665, shared values through accessors): the Back guard, first run, the native shell bridge and deep links."
+    },
+    "app-bound.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone shell part moved out of app.js (issue 1665, shared values through accessors): views bound to a thread and the peek."
+    },
+    "app-cards.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone shell part moved out of app.js (issue 1665, shared values through accessors): Settings as a sheet, unsent items, Home repaints and the New desk app cards."
+    },
     "app-choice.js": {
       "shell": "phone",
       "classification": "adapter",
       "reason": "Phone shell part moved verbatim out of app.js (issue 1665): the choice card after a held command and the native bridge events."
+    },
+    "app-deskbar.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone shell part moved out of app.js (issue 1665, shared values through accessors): the desk bar above search and the launcher grid."
+    },
+    "app-desks.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone shell part moved out of app.js (issue 1665, shared values through accessors): leaving an empty desk, going to a desk, the desk dots and the orb app mark."
+    },
+    "app-deskset.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone shell part moved out of app.js (issue 1665, shared values through accessors): Settings that belongs to a desk and opening a sheet."
     },
     "app-dictation.js": {
       "shell": "phone",
@@ -1222,15 +1267,70 @@
       "classification": "adapter",
       "reason": "Phone shell part moved verbatim out of app.js (issue 1665): the shade: recording strips, notification rows and the orb moons."
     },
+    "app-linkdesk.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone shell part moved out of app.js (issue 1665, shared values through accessors): full screen, clearing a desk, and links that open on a desk of their own."
+    },
     "app-mic.js": {
       "shell": "phone",
       "classification": "adapter",
       "reason": "Phone shell part moved verbatim out of app.js (issue 1665): the microphone for a take and the pre-warmed mic."
     },
+    "app-model.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone shell part moved out of app.js (issue 1665, shared values through accessors): saving the window model, live Wizard state, thread emojis and the reload buttons."
+    },
     "app-opening.js": {
       "shell": "phone",
       "classification": "adapter",
       "reason": "Phone shell part moved verbatim out of app.js (issue 1665): opening an app: placement in a new tab and the instant tap answer."
+    },
+    "app-orbswipe.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone shell part moved out of app.js (issue 1665, shared values through accessors): swipes and holds on the orb, and the Orb switcher."
+    },
+    "app-overview.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone shell part moved out of app.js (issue 1665, shared values through accessors): the Desks overview and the pill panel."
+    },
+    "app-pinch.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone shell part moved out of app.js (issue 1665, shared values through accessors): pinching a window to fill the screen and the bottom edge in full screen."
+    },
+    "app-reply.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone shell part moved out of app.js (issue 1665, shared values through accessors): a voice reply from a composer mic and parking a reply."
+    },
+    "app-routing.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone shell part moved out of app.js (issue 1665, shared values through accessors): where a take goes: review mode, the view in front, commands and new requests."
+    },
+    "app-scrub.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone shell part moved out of app.js (issue 1665, shared values through accessors): scrubbing along the bottom bar to step between desks."
+    },
+    "app-search.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone shell part moved out of app.js (issue 1665, shared values through accessors): the Review coach, quick search and placing an app in a window."
+    },
+    "app-seed.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone shell part moved out of app.js (issue 1665, shared values through accessors): a fresh layout, starter apps on a new device and the late layout pass."
+    },
+    "app-sendgo.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone shell part moved out of app.js (issue 1665, shared values through accessors): send and go for the orb and the dictation copy."
     },
     "app-transcribe.js": {
       "shell": "phone",
@@ -1242,6 +1342,11 @@
       "classification": "adapter",
       "reason": "Phone shell part moved verbatim out of app.js (issue 1665): the settings cog and the unsent card."
     },
+    "app-viewvoice.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone shell part moved out of app.js (issue 1665, shared values through accessors): which view a voice take is for."
+    },
     "app-voicefiles.js": {
       "shell": "phone",
       "classification": "adapter",
@@ -1251,6 +1356,16 @@
       "shell": "phone",
       "classification": "adapter",
       "reason": "Phone shell part moved verbatim out of app.js (issue 1665): sending a take: route, composer hand-back, capture pause."
+    },
+    "app-windows.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone shell part moved out of app.js (issue 1665, shared values through accessors): window and desk titles, desk sections and making a window."
+    },
+    "desktop/desktop-boot.js": {
+      "shell": "desktop",
+      "classification": "adapter",
+      "reason": "Desktop shell part moved out of desktop/desktop.js (issue 1665, shared values through accessors): the native bridge for Wizard for Mac, deep links, boot and workspace sync."
     },
     "desktop/desktop-boundarykeys.js": {
       "shell": "desktop",
@@ -1267,6 +1382,11 @@
       "classification": "adapter",
       "reason": "Desktop shell part moved verbatim out of desktop/desktop.js (issue 1665): the Chats list/thread divider (drag, arrow keys, reset, one width for every Chats window)."
     },
+    "desktop/desktop-frames.js": {
+      "shell": "desktop",
+      "classification": "adapter",
+      "reason": "Desktop shell part moved out of desktop/desktop.js (issue 1665, shared values through accessors): watching an app frame for refusal and its services."
+    },
     "desktop/desktop-generalvoice.js": {
       "shell": "desktop",
       "classification": "adapter",
@@ -1277,25 +1397,95 @@
       "classification": "adapter",
       "reason": "Desktop shell part moved verbatim out of desktop/desktop.js (issue 1665): how Home (the root or an empty workspace) is drawn."
     },
+    "desktop/desktop-keys.js": {
+      "shell": "desktop",
+      "classification": "adapter",
+      "reason": "Desktop shell part moved out of desktop/desktop.js (issue 1665, shared values through accessors): Back, Esc, moving between windows and the keys guide."
+    },
     "desktop/desktop-links.js": {
       "shell": "desktop",
       "classification": "adapter",
       "reason": "Desktop shell part moved verbatim out of desktop/desktop.js (issue 1665): links into installed apps open as their window; deep links on start."
+    },
+    "desktop/desktop-lists.js": {
+      "shell": "desktop",
+      "classification": "adapter",
+      "reason": "Desktop shell part moved out of desktop/desktop.js (issue 1665, shared values through accessors): the Chats list window, its side pane and the channel feed pane."
+    },
+    "desktop/desktop-palopen.js": {
+      "shell": "desktop",
+      "classification": "adapter",
+      "reason": "Desktop shell part moved out of desktop/desktop.js (issue 1665, shared values through accessors): opening, toggling and closing the palette, and where focus rests."
+    },
+    "desktop/desktop-palpaint.js": {
+      "shell": "desktop",
+      "classification": "adapter",
+      "reason": "Desktop shell part moved out of desktop/desktop.js (issue 1665, shared values through accessors): painting the command palette and the agent name labels."
+    },
+    "desktop/desktop-pickany.js": {
+      "shell": "desktop",
+      "classification": "adapter",
+      "reason": "Desktop shell part moved out of desktop/desktop.js (issue 1665, shared values through accessors): Pick anything, live data and the orb dump."
+    },
+    "desktop/desktop-picker.js": {
+      "shell": "desktop",
+      "classification": "adapter",
+      "reason": "Desktop shell part moved out of desktop/desktop.js (issue 1665, shared values through accessors): the app selector list and its ranking."
     },
     "desktop/desktop-recovery.js": {
       "shell": "desktop",
       "classification": "adapter",
       "reason": "Desktop shell part moved verbatim out of desktop/desktop.js (issue 1665): the retained recordings card (outbox takes to send again or discard)."
     },
+    "desktop/desktop-resize.js": {
+      "shell": "desktop",
+      "classification": "adapter",
+      "reason": "Desktop shell part moved out of desktop/desktop.js (issue 1665, shared values through accessors): resizing and splitting windows, spots on a desk and the light/dark flip."
+    },
+    "desktop/desktop-settings.js": {
+      "shell": "desktop",
+      "classification": "adapter",
+      "reason": "Desktop shell part moved out of desktop/desktop.js (issue 1665, shared values through accessors): opening, closing and toggling Settings."
+    },
+    "desktop/desktop-settingshost.js": {
+      "shell": "desktop",
+      "classification": "adapter",
+      "reason": "Desktop shell part moved out of desktop/desktop.js (issue 1665, shared values through accessors): moving the Settings host between the modal and a window."
+    },
+    "desktop/desktop-sideview.js": {
+      "shell": "desktop",
+      "classification": "adapter",
+      "reason": "Desktop shell part moved out of desktop/desktop.js (issue 1665, shared values through accessors): the Default Chats look beside a layout that owns the chat list, and finding Chats windows."
+    },
+    "desktop/desktop-steps.js": {
+      "shell": "desktop",
+      "classification": "adapter",
+      "reason": "Desktop shell part moved out of desktop/desktop.js (issue 1665, shared values through accessors): stepping along desks and windows, the bar and usage."
+    },
     "desktop/desktop-tapkeys.js": {
       "shell": "desktop",
       "classification": "adapter",
       "reason": "Desktop shell part moved verbatim out of desktop/desktop.js (issue 1665): Right ⌘ / Right ⌥ as tap keys (talk and dictate)."
     },
+    "desktop/desktop-tiling.js": {
+      "shell": "desktop",
+      "classification": "adapter",
+      "reason": "Desktop shell part moved out of desktop/desktop.js (issue 1665, shared values through accessors): tiling windows, full screen and the floating panel."
+    },
+    "desktop/desktop-voicekeys.js": {
+      "shell": "desktop",
+      "classification": "adapter",
+      "reason": "Desktop shell part moved out of desktop/desktop.js (issue 1665, shared values through accessors): the voice chords, screen speech and new voice chats."
+    },
     "desktop/desktop-voicemenu.js": {
       "shell": "desktop",
       "classification": "adapter",
       "reason": "Desktop shell part moved verbatim out of desktop/desktop.js (issue 1665): the bar mic's voice menu."
+    },
+    "desktop/desktop-windows.js": {
+      "shell": "desktop",
+      "classification": "adapter",
+      "reason": "Desktop shell part moved out of desktop/desktop.js (issue 1665, shared values through accessors): window titles, private agent names and opening a new window."
     },
     "desktop/desktop.js": {
       "shell": "desktop",

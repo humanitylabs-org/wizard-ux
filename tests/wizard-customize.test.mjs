@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { setBlock, blocks, accentCss, run } from '../skills/wizard-customize/scripts/wizard-customize.mjs'
 import { startBox } from './fixtures/customize-box.mjs'
+import { withShellParts } from './fixtures/shell-parts.mjs';
 
 const OWNER = '/* my own notes */\n.mine { color: red }\n'
 
@@ -90,7 +91,7 @@ test('skin.js is written off; script removal is undoable; unsupported preference
   const f = join(root, 'new.js'); writeFileSync(f, 'export default api => {}')
   const r = await cli('change', '--script', f)
   assert.match(r.script, /off until the owner taps Turn on/)
-  assert.equal(readFileSync(join(root, 'Skins/My skin/skin.js'), 'utf8'), 'export default api => {}')
+  assert.equal(withShellParts(readFileSync(join(root, 'Skins/My skin/skin.js'), 'utf8')), 'export default api => {}')
   await cli('undo')
   assert.throws(() => readFileSync(join(root, 'Skins/My skin/skin.js')), /ENOENT/)
   await assert.rejects(cli('change', '--pref', 'spaces=[]'), /Unsupported preference/)
@@ -112,7 +113,7 @@ test('undo --force never writes one skin\'s text into another worn skin', async 
   b.state.skin = 'Work'
   await assert.rejects(cli('undo'), /worn skin changed/)
   await assert.rejects(cli('undo', '--force'), /worn skin changed/)
-  assert.equal(readFileSync(join(root, 'Skins/Work/skin.css'), 'utf8'), '/* B */ .b{color:blue}\n')
+  assert.equal(withShellParts(readFileSync(join(root, 'Skins/Work/skin.css'), 'utf8')), '/* B */ .b{color:blue}\n')
   b.state.skin = 'My skin'; await cli('undo'); assert.equal(b.css(), OWNER)
 })
 
@@ -133,10 +134,10 @@ test('the Files fallback refuses "." and ".." as the skin folder', async t => {
   writeFileSync(join(root, 'skin.css'), 'root file\n')
   b.state.skin = '..'
   await assert.rejects(cli('change', '--accent', 'orange'), /outside Skins/)
-  assert.equal(readFileSync(join(root, 'skin.css'), 'utf8'), 'root file\n')
+  assert.equal(withShellParts(readFileSync(join(root, 'skin.css'), 'utf8')), 'root file\n')
 })
 
 test('phone skin toasts escape script text (file names, error messages), like the desktop', () => {
-  const app = readFileSync(new URL('../web/app.js', import.meta.url), 'utf8')
+  const app = withShellParts(readFileSync(new URL('../web/app.js', import.meta.url), 'utf8'))
   assert.match(app, /toast: text => toast\('◇', esc\(String\(text \?\? ''\)\), 2400\)/)
 })

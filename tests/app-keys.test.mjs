@@ -6,8 +6,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
+import { withShellParts } from './fixtures/shell-parts.mjs';
 
-const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
+const read = p => withShellParts(readFileSync(new URL('../' + p, import.meta.url), 'utf8'));
 const client = read('web/core/app-client.js');
 
 /* ---------- a tiny page: just what the key matcher reads ---------- */

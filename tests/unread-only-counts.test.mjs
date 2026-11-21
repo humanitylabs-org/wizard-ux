@@ -5,10 +5,11 @@ import { readFileSync } from 'node:fs';
 import { listFixture } from './fixtures/chats-list-render.mjs';
 import { modelContext } from './fixtures/chats-list-model.mjs';
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
+import { withShellParts } from './fixtures/shell-parts.mjs';
 
 // James, 8 Nov 2026: every number beside Chats / Ready counts UNREAD threads only. A finished thread that is already
 // read adds nothing; the list itself still shows every thread. Working, Snoozed and Archive keep their place counts.
-const src = f => readFileSync(new URL('../' + f, import.meta.url), 'utf8');
+const src = f => withShellParts(readFileSync(new URL('../' + f, import.meta.url), 'utf8'));
 const chats = withParts(src('web/core/chats.js'));
 const cut = (s, a, b) => s.slice(s.indexOf(a), s.indexOf(b, s.indexOf(a)));
 

@@ -3,9 +3,10 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { withDesktopParts } from './fixtures/desktop-parts.mjs';
-const phone = readFileSync(new URL('../web/app.js', import.meta.url), 'utf8');
-const desktop = withDesktopParts(readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8'));
-const outbox = readFileSync(new URL('../web/outbox.js', import.meta.url), 'utf8');
+import { withShellParts } from './fixtures/shell-parts.mjs';
+const phone = withShellParts(readFileSync(new URL('../web/app.js', import.meta.url), 'utf8'));
+const desktop = withDesktopParts(withShellParts(readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8')));
+const outbox = withShellParts(readFileSync(new URL('../web/outbox.js', import.meta.url), 'utf8'));
 function section(s, a, b) { return s.slice(s.indexOf(a), s.indexOf(b, s.indexOf(a))); }
 const pin = {appId:'wizard-manager',token:'sealed',label:'Manager conversation'};
 function desktopFixture(front) {

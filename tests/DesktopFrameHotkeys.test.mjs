@@ -2,11 +2,12 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import { withShellParts } from './fixtures/shell-parts.mjs';
 
 // Execute the owning function, not a second shortcut implementation. This tiny
 // propagation model checks the window -> document capture boundary; real browser
 // coverage is qa-desktop-frame-hotkeys.cjs on the admitted forum worker.
-const source = fs.readFileSync(process.env.QA_DESKTOP_SOURCE || new URL('../web/desktop/desktop.js', import.meta.url), 'utf8');
+const source = withShellParts(fs.readFileSync(process.env.QA_DESKTOP_SOURCE || new URL('../web/desktop/desktop.js', import.meta.url), 'utf8'));
 const start = source.indexOf('  function watchFrame(f, el) {');
 const end = source.indexOf('\n  function render()', start);
 assert(start >= 0 && end > start);

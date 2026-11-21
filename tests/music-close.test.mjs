@@ -2,9 +2,10 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
+import { withShellParts } from './fixtures/shell-parts.mjs';
 
-const source = readFileSync(new URL('../web/core/background-audio.js', import.meta.url),'utf8');
-const shell = readFileSync(new URL('../web/app.js', import.meta.url),'utf8');
+const source = withShellParts(readFileSync(new URL('../web/core/background-audio.js', import.meta.url),'utf8'));
+const shell = withShellParts(readFileSync(new URL('../web/app.js', import.meta.url),'utf8'));
 function fixture({native=true, known=true}={}) {
   const sent=[], replies=[], listeners={}, timers=new Map(); let seq=0;
   const origin='https://wizard.example';
@@ -14,7 +15,7 @@ function fixture({native=true, known=true}={}) {
   const c={location:{origin,href:origin+'/wizard-os-home/'},document:{querySelectorAll:()=>[frame]},URL,console,
     setTimeout:fn=>{const id=++seq;timers.set(id,fn);return id;},clearTimeout:id=>timers.delete(id),addEventListener:(name,fn)=>listeners[name]=fn};
   if(native)c.wizardAudioPort={postMessage:raw=>sent.push(JSON.parse(raw))};
-  c.window=c; vm.createContext(c); vm.runInContext(readFileSync(new URL('../web/core/background-audio-legacy.js',import.meta.url),'utf8'),c); vm.runInContext(source,c);
+  c.window=c; vm.createContext(c); vm.runInContext(withShellParts(readFileSync(new URL('../web/core/background-audio-legacy.js',import.meta.url),'utf8')),c); vm.runInContext(source,c);
   c.WizBackgroundAudio.init(()=>({'wizard-music':{url:'/wizard-music/'}}),()=>true);
   if(known)c.WizBackgroundAudio.lastState={...state};
   const answer=(command=sent.at(-1),ok=true)=>{

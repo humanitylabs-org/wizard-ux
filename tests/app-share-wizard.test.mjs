@@ -4,7 +4,8 @@ import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
 import { withServicesParts } from './fixtures/app-services-parts.mjs';
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
-const read = p => readFileSync(new URL('../'+p,import.meta.url),'utf8');
+import { withShellParts } from './fixtures/shell-parts.mjs';
+const read = p => withShellParts(readFileSync(new URL('../'+p,import.meta.url),'utf8'));
 const source=withServicesParts(read('web/core/app-services.js')), shared=read('web/core/share-wizard.js');
 function fixture() {
  const calls=[],replies=[],events={},location=new URL('https://wizard.example/wizard-os-home/');

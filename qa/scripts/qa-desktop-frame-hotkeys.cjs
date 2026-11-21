@@ -153,7 +153,7 @@ async function picker(p, chord, i = 0) {
         assert.equal(await outer.evaluate(f => f.contentDocument.querySelector('#nested').contentDocument === null), opaque);
         await outer.evaluate(f => f.contentDocument.querySelector('#nested').remove());
       }
-      const code = fs.readFileSync(path.join(TREE, 'web/desktop/desktop.js'), 'utf8');
+      const code = require('../../tools/shell-source.cjs').shellSource(TREE, 'web/desktop/desktop.js'); // parts put back (issue 1665)
       const hook = code.slice(code.indexOf('  function watchFrame(f, el)'), code.indexOf('\n  function render()'));
       assert(!hook.includes('postMessage')); assert(!hook.includes('querySelectorAll'));
     });

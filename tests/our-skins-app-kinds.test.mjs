@@ -3,9 +3,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-const app = readFileSync(new URL('../web/app.js', import.meta.url), 'utf8');
-const css = f => readFileSync(new URL(`../web/skins/${f}/skin.css`, import.meta.url), 'utf8');
-const kinds = readFileSync(new URL('../web/core/app-kinds.js', import.meta.url), 'utf8');
+import { withShellParts } from './fixtures/shell-parts.mjs';
+const app = withShellParts(readFileSync(new URL('../web/app.js', import.meta.url), 'utf8'));
+const css = f => withShellParts(readFileSync(new URL(`../web/skins/${f}/skin.css`, import.meta.url), 'utf8'));
+const kinds = withShellParts(readFileSync(new URL('../web/core/app-kinds.js', import.meta.url), 'utf8'));
 
 test('New desk wears the kinds on every skin; the Apps sheet keeps its Recent row', () => {
   assert.doesNotMatch(app, /oursSkin|miguel\/layout/);
@@ -23,7 +24,7 @@ test('kind styles: Miguel\'s packages keep their colours, the base stylesheet ca
   for (const f of ['obsidian', 'landscapes']) { assert.match(css(f), /\.lapp\.lapp-sys \.ic \{ border: 2\.5px solid #8f63ff/); assert.doesNotMatch(css(f), /\.lclose/); assert.doesNotMatch(css(f), /sysbox/); }
   for (const f of ['nebula', 'grove', 'tide', 'ember', 'signal']) { try { assert.doesNotMatch(css(f), /lapp-sys|lclose|sysbox|forag|new-desk\.kinds/); } catch (e) { if (e.code !== 'ENOENT') throw e; } }
   // Every skin gets the same layout from the base stylesheet, in the skin's own accent.
-  const base = readFileSync(new URL('../web/styles.css', import.meta.url), 'utf8');
+  const base = withShellParts(readFileSync(new URL('../web/styles.css', import.meta.url), 'utf8'));
   assert.match(base, /:is\(\.launcher, \.new-desk\) \.lapp\.lapp-sys \.ic \{ border: 2\.5px solid var\(--violet-2/);
   assert.match(base, /:is\(\.launcher, \.new-desk\) \.forag:not\(\.open\) \.fa-body \{ display: none/);
 });
@@ -32,5 +33,5 @@ test('every kind ends in a "+ Get" tile for its App Store section; Agents also h
   assert.match(kinds, /apps: \['apps', 'Get apps'\], wiz: \['agent-apps', 'Get agent apps'\], agents: \['agents', 'Get agents'\], conns: \['connections', 'Get connectors'\]/);
   assert.match(kinds, /wiz: 'Agent apps'/);
   assert.match(app, /'Build agents'/);
-  assert.match(readFileSync(new URL('../web/store/store.js', import.meta.url), 'utf8'), /get\('kind'\)/);
+  assert.match(withShellParts(readFileSync(new URL('../web/store/store.js', import.meta.url), 'utf8')), /get\('kind'\)/);
 });

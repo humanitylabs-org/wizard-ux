@@ -9,8 +9,9 @@ import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { withSkinHostParts } from './fixtures/skin-host-parts.mjs';
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
+import { withShellParts } from './fixtures/shell-parts.mjs';
 
-const read = f => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8');
+const read = f => withShellParts(readFileSync(new URL(`../${f}`, import.meta.url), 'utf8'));
 const src = withParts(read('web/core/chats.js'));
 const cut = (a, b, from = src) => { const i = from.indexOf(a); assert.ok(i >= 0, a); const j = from.indexOf(b, i + a.length); assert.ok(j > i, b); return from.slice(i, j); };
 
