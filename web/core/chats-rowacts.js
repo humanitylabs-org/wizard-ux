@@ -58,7 +58,7 @@ window.WizCore.chatsParts.rowacts = function ({ ACT, actRestore, actUndo, BOOM, 
   }
   /* Threads and alerts share one actions sheet, dismissal and gesture ownership. */
   const ROW_MENU = '.ch-list [data-chopen], .ch-list .ch-notif-row[data-chnotif], .ch-list [data-chchan]';
-  // A channel line opens the channel sheet (wizard/chat-channels); every other row its thread or alert sheet.
+  // A channel line opens the channel sheet; every other row its thread or alert sheet.
   const rowMenu = (wid, row) => row?.dataset.chchan ? openChannelSheet(wid, row.dataset.chchan, row) : openRowSheet(wid, row?.dataset.chopen, row?.dataset.chnotif);
   const NOTE_ACT = { done: ACT.done, snooze: { ...ACT.snooze, label: 'Snooze' }, unread: ACT.unread };
   // On a folded row (several from one app) every action covers the whole fold.

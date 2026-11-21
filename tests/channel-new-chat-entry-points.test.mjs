@@ -14,7 +14,7 @@ const j = x => JSON.parse(JSON.stringify(x)); // vm values are cross-realm
 const read = p => withShellParts(readFileSync(new URL('../' + p, import.meta.url), 'utf8'));
 const desktop = withDesktopParts(read('web/desktop/desktop.js'));
 const cut = (src, from, to) => { const a = src.indexOf(from); assert.ok(a >= 0, from); const b = src.indexOf(to, a); assert.ok(b > a, to); return src.slice(a, b); };
-const front = cut(desktop, '  function chanFront() {', '  // A take started in a channel (wizard/chat-channels)');
+const front = cut(desktop, '  function chanFront() {', '  // A take started in a channel re-reads');
 const talkNew = cut(desktop, '  function talkNew(', '  const generalVoice');
 const record = cut(desktop, '  async function recordReply(', '  // Dictation (Right');
 const chatsWinSrc = desktop.match(/^  const chatsWin = .+;$/m)?.[0];

@@ -10,7 +10,7 @@
 'use strict';
 window.WizCore = window.WizCore || {};
 window.WizCore.chatsParts = window.WizCore.chatsParts || {};
-window.WizCore.chatsParts.chanui = function ({ agentName, agentRec, ago, AGS, ch, CH, CHAN_CLAMP, CHAN_DAY, CHAN_GENERAL, CHAN_TEXT_MAX, CHAN_VIEW_KEY, chanActs, chanAgentsSec, chanArchived, chanAt, chanCarry, chanChanged, chanDraftMark, chanElsewhere, chanExpanded, chanFace, chanGenAgent, chanMore, chanNeeds, channelBack, channelsFor, channelsLate, channelsOn, chanNewCount, chanOpen, chanPostOrder, chanPrefEdit, chanPrefs, chanPruned, chanReadAt, chanReadFeed, chanReadKey, chanReadPaint, chanReadTo, chanStore, chanTarget, chanTitle, chanUnread, chanUnreadN, chatsBack, chatVars, closeRowSheet, doneLate, esc, focusAgentId, focusAgents, focusedAgent, focusOf, growTa, H, inChannel, isWorking, jumpGo, KIT, LIVE, MARK_DONE_SVG, markDoneOn, norm, openChannel, openChat, openEmojiSheet, OUTBOX, owner, paintFeedJump, paintListsNow, PIN_SVG, renderChatList, rerenderList, rowAgent, spaceAgent, spaceContains, spaces, toast, toTurns, track, vib, viewContext, W, winAgent }) {
+window.WizCore.chatsParts.chanui = function ({ agentName, agentRec, ago, AGS, ch, CH, CHAN_CLAMP, CHAN_DAY, CHAN_GENERAL, CHAN_TEXT_MAX, CHAN_VIEW_KEY, chanActs, chanAgentsSec, chanArchived, chanAt, chanCarry, chanChanged, chanDraftMark, chanElsewhere, chanExpanded, chanFace, chanGenAgent, chanMore, chanNeeds, channelBack, channelsFor, channelsLate, chanNewCount, chanOpen, chanPostOrder, chanPrefEdit, chanPrefs, chanPruned, chanReadAt, chanReadFeed, chanReadKey, chanReadPaint, chanReadTo, chanStore, chanTarget, chanTitle, chanUnread, chanUnreadN, chatsBack, chatVars, closeRowSheet, doneLate, esc, focusAgentId, focusAgents, focusedAgent, focusOf, growTa, H, inChannel, isWorking, jumpGo, KIT, LIVE, MARK_DONE_SVG, norm, openChannel, openChat, openEmojiSheet, OUTBOX, owner, paintFeedJump, paintListsNow, PIN_SVG, renderChatList, rerenderList, rowAgent, spaceAgent, spaceContains, spaces, toast, toTurns, track, vib, viewContext, W, winAgent }) {
   let ACT, elOf, holdList, mediaOfFile, openSpacePicker, orderBar, RENAME_SVG; // late-bound: chats.js declares these after the call, see bindLate
   /* A channel's line in the list; core/chats-chanline.js. */
   const { chanMark, channelLine, chanNewAgent } = window.WizCore.chatsParts.chanline({ AGS: (...a) => AGS(...a), CHAN_DAY, chanAt, chanDraftMark, chanExpanded, chanFace, chanNeeds, chanNewCount, chanPrefs, chanStore, chanUnread, chanUnreadN, esc, focusAgents, focusedAgent, focusOf, inChannel, isWorking, PIN_SVG, spaceAgent, spaces });
@@ -35,8 +35,8 @@ window.WizCore.chatsParts.chanui = function ({ agentName, agentRec, ago, AGS, ch
     const agents = typeof chanAgentsSec === 'function' ? chanAgentsSec(rows) : '';
     return `<div class="ch-chan-list">${channelsFor(w).map(c => channelLine(c, rows, now, cur, gAg, dAg)).join('')}${add}${agents}${archSec}</div>`;
   }
-  /* Channel posts (switch wizard/chat-channels): first message, words, reply counts, feed place; core/chats-posts.js. */
-  const { chanHold, chanKey, chanNewN, chanPostText, chanRepaint, chanReplies, chanScrolled, chanStart, chanUser, chanUserAt, FIRST, firstAgent, firstPost, firstWant, pullFirst, replyWant } = window.WizCore.chatsParts.posts({ ch, CH, CHAN_TEXT_MAX, chanChanged, chanGenAgent, channelsOn, chanOpen, chanReadAt, chanReadFeed, chanReadKey, elOf: (...a) => elOf(...a), holdList: (...a) => holdList(...a), isWorking, LIVE, mediaOfFile: (...a) => mediaOfFile(...a), owner: (...a) => owner(...a), paintFeedJump, rerenderList, rowAgent, toTurns, W });
+  /* Channel posts: first message, words, reply counts, feed place; core/chats-posts.js. */
+  const { chanHold, chanKey, chanNewN, chanPostText, chanRepaint, chanReplies, chanScrolled, chanStart, chanUser, chanUserAt, FIRST, firstAgent, firstPost, firstWant, pullFirst, replyWant } = window.WizCore.chatsParts.posts({ ch, CH, CHAN_TEXT_MAX, chanChanged, chanGenAgent, chanOpen, chanReadAt, chanReadFeed, chanReadKey, elOf: (...a) => elOf(...a), holdList: (...a) => holdList(...a), isWorking, LIVE, mediaOfFile: (...a) => mediaOfFile(...a), owner: (...a) => owner(...a), paintFeedJump, rerenderList, rowAgent, toTurns, W });
   channelsLate({ chanHold, chanUserAt });
   doneLate({ chanUser });
   /* A channel's feed; core/chats-feed.js. */
@@ -49,19 +49,19 @@ window.WizCore.chatsParts.chanui = function ({ agentName, agentRec, ago, AGS, ch
   // Long-press, right-click or Shift+F10 on a channel: the row action sheet's own markup, with channel actions.
   function openChannelSheet(wid, cid, trigger = null) {
     const el = track.querySelector(`[data-chats="${wid}"]`), sp = cid !== CHAN_GENERAL && spaces().find(s => s.id === cid);
-    if (!el || !channelsOn() || (cid !== CHAN_GENERAL && !sp)) return false;
+    if (!el || (cid !== CHAN_GENERAL && !sp)) return false;
     closeRowSheet();
     const p = chanPrefs(), pinned = p.pins.includes(cid), arch = !!p.archived[cid], name = sp ? sp.name : 'General';
     el.insertAdjacentHTML('beforeend', `<div class="ch-sheet" role="dialog" aria-label="Channel actions"><div class="ch-sheet-b"><div class="ch-sheet-t">${esc(chanTitle(sp ? name : { name, general: true }))}</div>
       ${sp ? `<button type="button" data-rschpin>${PIN_SVG}${pinned ? 'Unpin' : 'Pin'}</button><button type="button" data-rschrename>${RENAME_SVG}Rename</button><button type="button" data-rschemoji><span class="ch-sheet-emo" aria-hidden="true">${esc(chanFace(name).emoji)}</span>Emoji…</button><button type="button" data-rscharch>${ACT.done.icon}${arch ? 'Restore' : 'Archive channel'}</button>` : ''}
-      ${typeof markDoneOn === 'function' && markDoneOn() ? `<button type="button" data-rschread>${MARK_DONE_SVG}Mark channel read</button>` : ''}
+      <button type="button" data-rschread>${MARK_DONE_SVG}Mark channel read</button>
       ${arch ? '' : `<button type="button" data-rschnew><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>New post</button>`}</div></div>`);
     chatVars.rowSheet = { wid, chan: cid, trigger };
     el.querySelector('.ch-sheet button')?.focus({ preventScroll: true });
     vib(10); return true;
   }
   /* Channel emoji; core/chats-chanemoji.js. */
-  const { chanEmojiPick, chanEmojiSync, chanEmojiTap, chanSetEmoji, openChannelEmoji } = window.WizCore.chatsParts.chanemoji({ chanFace, channelsOn, chanRenameTo, esc, norm, openEmojiSheet, spaceAgent, spaces, toast });
+  const { chanEmojiPick, chanEmojiSync, chanEmojiTap, chanSetEmoji, openChannelEmoji } = window.WizCore.chatsParts.chanemoji({ chanFace, chanRenameTo, esc, norm, openEmojiSheet, spaceAgent, spaces, toast });
   function openChannelRename(wid, cid) {
     const el = track.querySelector(`[data-chats="${wid}"]`), sp = spaces().find(s => s.id === cid); if (!el || !sp) return;
     closeRowSheet();
@@ -75,7 +75,7 @@ window.WizCore.chatsParts.chanui = function ({ agentName, agentRec, ago, AGS, ch
   /* Mark channel read (issue 1317, with Mark done): the channel's read point moves to now (issue 1316) and its posts'
    * green New reply words clear (LIVE.markSeen of the posts that have one). Amber Needs you is cleared only per thread. */
   function chanMarkRead(w, cid) {
-    if (!w || !markDoneOn()) return false;
+    if (!w) return false;
     const sp = cid !== CHAN_GENERAL && spaces().find(x => x.id === cid), c = sp ? { id: cid, name: sp.name, agent: spaceAgent(sp) } : { id: CHAN_GENERAL, name: 'General', general: true };
     const ag = !c.general && AGS()?.isOther?.(c.agent) ? c.agent : winAgent(W[owner(w.id)] || w), rows = (LIVE.sessionsFor ? LIVE.sessionsFor(ag || '') : LIVE.unified()).filter(s => !s.hidden);
     const mine = rows.filter(s => !s.archived && inChannel(c, s)), unread = mine.filter(chanUnread);
@@ -121,12 +121,9 @@ window.WizCore.chatsParts.chanui = function ({ agentName, agentRec, ago, AGS, ch
     if (e.target.closest('[data-rschnew]')) { closeRowSheet(); const t = w && chanTarget(w); if (t && openChannel(t, cid)) chanToEnd(t.id, true); return true; }
     return false;
   }
-  // Turning the switch on or off repaints the lists at once (an open feed falls back to the list it came from).
-  let chanWas = null;
-  try { window.addEventListener('wos:experience', () => { const on = channelsOn(); if (chanWas === on) return; chanWas = on; for (const id of Object.keys(CH)) { const x = H.win(id); if (x && (x.app === 'chats' || /::side$/.test(id)) && !x.thread) rerenderList(x); } }); } catch (_) {}
   // The channel taps; false = not a channel control. Each paints on the same frame.
   function channelClick(e, id, w) {
-    if (!channelsOn() || !w) return false;
+    if (!w) return false;
     if (channelSheetClick(e)) return true;
     if (w.thread) return false;
     const v = e.target.closest('[data-chview]'); if (v) { chatVars.chanView = v.dataset.chview === 'channels' ? 'channels' : 'activity'; try { localStorage.setItem(CHAN_VIEW_KEY, chatVars.chanView); } catch (_) {} rerenderList(w); return true; }
@@ -146,7 +143,7 @@ window.WizCore.chatsParts.chanui = function ({ agentName, agentRec, ago, AGS, ch
     return false;
   }
   /* A channel's message box, its own posts and Sending…; core/chats-chanbox.js. */
-  const { boxModel, chanCompose, chanComposer, chanDraftKey, chanDropSending, chanEditUnsent, chanModel, channelSend, chanOwnPost, chanSending, chanSpaceOf, chanToEnd, setChanModel, bindLate: chanboxLate } = window.WizCore.chatsParts.chanbox({ AGS: (...a) => AGS(...a), ch, CH, CHAN_TEXT_MAX, chanArchived, channelsOn, chanOpen, chanRepaint, chanTitle, elOf: (...a) => elOf(...a), esc, FIRST, firstAgent, focusAgentId, growTa, H, KIT, OUTBOX, owner: (...a) => owner(...a), renderChatList, spaceContains, toast, viewContext, W, winAgent });
+  const { boxModel, chanCompose, chanComposer, chanDraftKey, chanDropSending, chanEditUnsent, chanModel, channelSend, chanOwnPost, chanSending, chanSpaceOf, chanToEnd, setChanModel, bindLate: chanboxLate } = window.WizCore.chatsParts.chanbox({ AGS: (...a) => AGS(...a), ch, CH, CHAN_TEXT_MAX, chanArchived, chanOpen, chanRepaint, chanTitle, elOf: (...a) => elOf(...a), esc, FIRST, firstAgent, focusAgentId, growTa, H, KIT, OUTBOX, owner: (...a) => owner(...a), renderChatList, spaceContains, toast, viewContext, W, winAgent });
   feedLate({ chanSending });
   function clearAll(w) { const c = ch(w.id); c.filter = ''; c.q = ''; c.filterFrom = null; window.WizCore.chatSearch?.cancel(w.id); rerenderList(w); }
   function setQuery(w, q) { const c = ch(w.id); if (w.thread) chatsBack(w); c.q = String(q || ''); rerenderList(w); }

@@ -10,8 +10,8 @@ window.WizCore.liveParts.channels = function () {
   /* ---- channel store (wizard-ux issue 1261) ----
    * Chats channels on the Agent Service's own store (wizard-agent-service docs/chats-channels.md, its
    * WIZARD_CHANNEL_STORE switch, issue 440 phase 2): the channel list with the shared sort, pins and archive, the
-   * atomic thread move, and one channel's own feed (view=list&channel=). Chats reads it only while its
-   * wizard/chat-channels switch is on. A 404 (store off, or an older service) means Spaces: Chats stays on
+   * atomic thread move, and one channel's own feed (view=list&channel=). Channels are on for everyone (wizard-ux
+   * issue 1258). A 404 (store off, or an older service) means Spaces: Chats stays on
    * ui-preferences as in phase 1 and asks again every few minutes. The last list read is kept on this device, so an
    * offline reload stays on the store. Edits show at once (applied to the kept list), are sent one at a time, and are
    * followed by a fresh read; a read that started before a later edit is dropped, so a slow answer never undoes a tap.
@@ -154,8 +154,8 @@ window.WizCore.liveParts.channels = function () {
   /* ---- channel reads (wizard-agent-service issue 471) ----
    * Each channel's read watermark on the box (GET/PUT /wizard/v1/channels/read, the Agent Service's
    * WIZARD_CHANNEL_READ_SYNC switch), so reading a channel to the bottom on one device clears it on the owner's others.
-   * Chats asks for it only while its wizard/chat-channels switch is on (issue 1358). marks() is the box's marks (key -> ms) or
-   * null (unknown yet, switch off on the box, older service: the device's own marks stay the only ones; asked again
+   * Channels are on for everyone (wizard-ux issue 1258). marks() is the box's marks (key -> ms) or
+   * null (unknown yet, turned off on the box, older service: the device's own marks stay the only ones; asked again
    * every few minutes). The box keeps every mark forward only, and so does this copy: a read that answers late never
    * moves a mark back. */
   const CHANNEL_READS_URL = '/wizard/v1/channels/read';
@@ -204,8 +204,7 @@ window.WizCore.liveParts.channels = function () {
    * `today` = today's thread id or null before the first post after the day boundary); more(id) reads the next older
    * page; today(id) is POST /wizard/v1/channels/<id>/today, which names today's thread and makes it at the first send of
    * the day (racing sends get the same one), so the box alone decides where the day starts. state(id) is the days this
-   * device knows (kept on the device, so an offline reload still opens Daily) and reads again every `every`. Chats asks
-   * only while its wizard/chat-channels switch is on. */
+   * device knows (kept on the device, so an offline reload still opens Daily) and reads again every `every`. */
   const CHANNEL_DAILY_CACHE = 'wos.chats.daily.v1';
   function channelDaily({ req, emit, now = () => Date.now(), storage = null, every = 60e3, keepMax = 60 } = {}) {
     const ID = /^[a-z0-9-]{1,48}$/, DAYRX = /^\d{4}-\d{2}-\d{2}$/, SID = /^[A-Za-z0-9_.:-]{1,200}$/;

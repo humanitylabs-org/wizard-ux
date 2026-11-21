@@ -28,7 +28,7 @@ function list({ agents = [{ id: 'hermes' }], view = 'channels', open = null, q =
     openSpacePicker: (w, a, tab, o) => { calls.push(['picker', w.id, a, j(o)]); ctx.spacePicker = { o }; }, spacePicker: null,
   };
   vm.createContext(ctx);
-  vm.runInContext(cut(chats, '  const chanNewAgent = w =>', '  /* Channel posts (switch wizard/chat-channels)') + '\nthis.channelsBody = channelsBody; this.chanNewForm = chanNewForm;', ctx);
+  vm.runInContext(cut(chats, '  const chanNewAgent = w =>', '  /* Channel posts: first message') + '\nthis.channelsBody = channelsBody; this.chanNewForm = chanNewForm;', ctx);
   return ctx;
 }
 
@@ -45,7 +45,7 @@ test('1308: the Channels list ends with an accent + New channel row after Genera
   // The list's own round + (phone, classic) on the Channels list starts a new chat, as on Activity (issue 1489).
   assert.doesNotMatch(chats, /fabNew/);
   assert.match(chats, /class="ch-fab" data-chnew data-chfab aria-label="\$\{AGID \? esc\(`New chat with \$\{agentName\(AGID\)\}`\) : 'New chat'\}">/);
-  const css = read('web/tweaks/wizard/chat-channels/tweak.css');
+  const css = (s => s.slice(s.indexOf('/* Channels in Chats (wizard-ux issue 1254)')))(read('web/core/chats.css'));
   assert.match(css, /\.ch-chan-add \{[^}]*min-height: 44px;[^}]*color: var\(--wz-accent/, 'one line high like the channels, in the skin accent');
 });
 

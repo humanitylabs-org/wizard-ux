@@ -50,7 +50,7 @@ window.WizCore.appParts.back = function ({ $, $$, agentWin, appVars, CHATS, clos
         if (did === 'chip' && !CHATS.hasFilter(f)) { c.fromCard = false; c.coach = false; c.filterFrom = null; const p = back ? appVars.desks.findIndex(x => x.id === back) : -1; if (p >= 0 && p !== appVars.idx) goDesk(p); }
         if (did) return did === 'search' ? 'search' : 'filter';
       }
-      if (f.app === 'chats' && CHATS.channelBack?.(f)) return 'channel'; // a channel's feed → Channels (wizard/chat-channels)
+      if (f.app === 'chats' && CHATS.channelBack?.(f)) return 'channel'; // a channel's feed → Channels
       if (f.app === 'chats' && CHATS.readyBack?.()) return 'ready-order'; // Priority / By subject → Newest
       // An agent's Chats opened from the Agents app: Back returns to that app (still open), never out.
       if (agentWin(f) && f.backTo && appVars.W[f.backTo] && deskOf(f.backTo) >= 0 && deskOf(f.backTo) !== appVars.idx) { const t = deskOf(f.backTo); f.backTo = ''; save(); goDesk(t); return 'agent-back'; }

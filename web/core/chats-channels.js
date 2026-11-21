@@ -7,12 +7,12 @@
  * body below keeps chats.js's indentation so `git log -L` and patches port over. */
 window.WizCore = window.WizCore || {};
 window.WizCore.chatsParts = window.WizCore.chatsParts || {};
-window.WizCore.chatsParts.channels = function ({ agentName, AGS, CHAN_ARCHIVE_PRUNE_DAYS, CHAN_DAY, CHAN_GENERAL, chanAgentId, channelsOn, chanPrefs, chanStore, focusAgents, focusedAgent, focusOf, H, LIVE, openDaily, owner, save, setFocus, spaceAgent, spaceContains, spaces, spacesOf, visibleSpaces, W }) {
+window.WizCore.chatsParts.channels = function ({ agentName, AGS, CHAN_ARCHIVE_PRUNE_DAYS, CHAN_DAY, CHAN_GENERAL, chanAgentId, chanPrefs, chanStore, focusAgents, focusedAgent, focusOf, H, LIVE, openDaily, owner, save, setFocus, spaceAgent, spaceContains, spaces, spacesOf, visibleSpaces, W }) {
   let chanHold, chanUserAt, runningBack; // late-bound: chats.js declares these after the call, see bindLate
   // The channel a window's list draws as a feed, or null. It only holds while the Focus still matches it (a Focus
   // tap elsewhere simply leaves the feed).
   function chanOpen(w) {
-    if (!channelsOn() || !w) return null;
+    if (!w) return null;
     const o = W[owner(w.id)] || w, c = o.chan, f = focusOf(o);
     if (!c || typeof c.id !== 'string') return null;
     if (c.id === CHAN_GENERAL) return f?.kind === 'space' ? null : { id: CHAN_GENERAL, name: 'General', general: true };
@@ -21,13 +21,6 @@ window.WizCore.chatsParts.channels = function ({ agentName, AGS, CHAN_ARCHIVE_PR
     if (ag) return f?.kind === 'agent' && f.key === ag ? { id: c.id, name: typeof agentName === 'function' ? agentName(ag) : ag, agent: ag, agentFeed: true } : null;
     const sp = f?.kind === 'space' && f.key === c.id && spaces().find(s => s.id === c.id);
     return sp ? { id: sp.id, name: sp.name, agent: spaceAgent(sp) } : null;
-  }
-  // Switched off with a feed open: the list returns to the Focus it had before the channel, never the Space filter.
-  function chanSwitchedOff(w) {
-    const o = w && (W[owner(w.id)] || w); if (!o?.chan || channelsOn()) return false;
-    const prev = o.chan.prev; o.chan = null;
-    o.focus = prev && ['agent', 'space'].includes(prev.kind) && prev.key ? { kind: prev.kind, key: String(prev.key) } : null;
-    save(); return true;
   }
   const chanByName = dir => (a, b) => dir * String(typeof chanFace === 'function' ? chanFace(a.name).label || a.name : a.name).localeCompare(String(typeof chanFace === 'function' ? chanFace(b.name).label || b.name : b.name), undefined, { sensitivity: 'base', numeric: true }) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
   // The channels the list shows: the Spaces of the Focus's agent (all visible agents' on All). Pinned first in pin
@@ -49,8 +42,8 @@ window.WizCore.chatsParts.channels = function ({ agentName, AGS, CHAN_ARCHIVE_PR
   // A layout that draws its own chat list (AI apps) asks for these through the Chats API: the "# channel" of a row
   // ('' with the switch off) and the sidebar's Channels pane, the desktop's id::side window (issue 1256).
   // A row's channel is its OWN agent's Space (a main and a routed thread can share an id), as inChannel files it.
-  const channelOf = s => { if (!channelsOn() || !s || typeof s.id !== 'string') return ''; const a = rowAgent(s); return spaces().find(sp => spaceAgent(sp) === a && spaceContains(sp.id, s.id))?.name || 'General'; };
-  const chanSide = w => /::side$/.test(String(w?.id || '')) && channelsOn();
+  const channelOf = s => { if (!s || typeof s.id !== 'string') return ''; const a = rowAgent(s); return spaces().find(sp => spaceAgent(sp) === a && spaceContains(sp.id, s.id))?.name || 'General'; };
+  const chanSide = w => /::side$/.test(String(w?.id || ''));
   // cardAt is an ISO time; a new chat still in the outbox has none yet (its row's own time, so it sorts as newest).
   const chanAt = s => Date.parse(LIVE.cardAt(s)) || Date.parse(s.updatedAt) || Date.parse(s.createdAt) || 0;
   // A post's place in its channel feed (wizard-ux issue 1289, James: Slack threads): when the thread was started, so a
@@ -107,5 +100,5 @@ window.WizCore.chatsParts.channels = function ({ agentName, AGS, CHAN_ARCHIVE_PR
    * w.daily = { id, agent }; Back, or opening any other thread, leaves it. Activity and the rows stay as they are. */
   const dailyChan = id => { const st = typeof chanStore === 'function' ? chanStore() : null; return (st && st.channels.find(c => c.id === id && c.kind === 'daily' && !c.archived)) || null; };
   const DAILY_OPEN = new Map(), DAILY_HIST = new Map(), DAILY_LAST = 'wos.chats.daily-last.v1';
-  return { chanAt, chanElsewhere, chanFace, chanName, channelBack, channelOf, channelsFor, chanOpen, chanPostOrder, chanPruned, chanSide, chanSwitchedOff, chanTarget, chanTitle, DAILY_HIST, DAILY_LAST, DAILY_OPEN, dailyChan, inChannel, openChannel, rowAgent, bindLate: v => { if ('chanHold' in v) chanHold = v.chanHold; if ('chanUserAt' in v) chanUserAt = v.chanUserAt; if ('runningBack' in v) runningBack = v.runningBack; } };
+  return { chanAt, chanElsewhere, chanFace, chanName, channelBack, channelOf, channelsFor, chanOpen, chanPostOrder, chanPruned, chanSide, chanTarget, chanTitle, DAILY_HIST, DAILY_LAST, DAILY_OPEN, dailyChan, inChannel, openChannel, rowAgent, bindLate: v => { if ('chanHold' in v) chanHold = v.chanHold; if ('chanUserAt' in v) chanUserAt = v.chanUserAt; if ('runningBack' in v) runningBack = v.runningBack; } };
 };

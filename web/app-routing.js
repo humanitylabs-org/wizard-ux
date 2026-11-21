@@ -44,7 +44,7 @@ window.WizCore.appParts.routing = function ({ $, APP, appAt, appByName, APPS, ap
     window.__ovLog = (window.__ovLog || []).concat('review-send:' + v.thread).slice(-30);
     return window.WosBoundView.feedback(OUTBOX, { thread: v.thread, url: v.url, route, custodyId, context: reviewContext(v) }, text, audio, files);
   }
-  // A take started in front of a channel (wizard/chat-channels) is filed into that channel, wherever James is by Send.
+  // A take started in front of a channel is filed into that channel, wherever James is by Send.
   const pinSpace = v => typeof v?.space === 'string' && v.thread === '__new__' ? { space: v.space } : {};
   function deliverToView(v, text, snap) {
     if (v.review) return sendReview(v, text, snap?.audio || null, [], snap?.route, snap?.custodyId);

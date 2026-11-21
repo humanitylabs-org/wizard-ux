@@ -212,7 +212,7 @@ test('Activity rows carry their "# channel" from CHATS.channelOf (main and route
 
 test('the real channelOf / chanSide: names per agent, only with the switch on; only id::side is a sidebar pane', () => {
   const src = withParts(read('web/core/chats.js'));
-  const block = slice(src, '  /* Channels view (switch wizard/chat-channels', '  function clearAll(w)');
+  const block = slice(src, '  /* Channels view (wizard-ux issue 1254)', '  function clearAll(w)');
   // 'x' is both a main thread (in Launch) and a container agent's thread (in Box): the row's own owner decides.
   const spacesData = [{ id: 'launch', name: 'Launch', threads: ['a', 'x'] }, { id: 'box', name: 'Box', agent: 'container', threads: ['k1', 'x'] }, { id: 'ops', name: 'Ops', agent: 'host', threads: ['x'] }];
   const agents = { k1: 'container', r1: 'restricted', h1: 'host', x: 'container' }; // the id-only pin points at one of them

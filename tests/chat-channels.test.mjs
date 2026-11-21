@@ -10,7 +10,7 @@ import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts move
 const src = withParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'));
 const app = withAppParts(readFileSync(new URL('../web/app.js', import.meta.url), 'utf8'));
 const cut = (a, b) => { const i = src.indexOf(a); assert.ok(i >= 0, a); return src.slice(i, src.indexOf(b, i)); };
-const block = withParts(cut('  /* Channels view (switch wizard/chat-channels', '  function clearAll(w)'));
+const block = withParts(cut('  /* Channels view (wizard-ux issue 1254)', '  function clearAll(w)'));
 
 const H = 3600e3, NOW = Date.UTC(2026, 10, 10, 12);
 function fixture({ on = true, rows = [], spacesList, agents = {}, history = {}, full = {}, sessions = {}, owner = 'James de Fleur', marksAt = null } = {}) {
@@ -69,7 +69,7 @@ function fixture({ on = true, rows = [], spacesList, agents = {}, history = {}, 
     orderBar: (label, attr, orders, cur, word) => `<div class="ch-rdy-bar" aria-label="${label}">${orders.map(o => `<button ${attr}="${o}" aria-pressed="${cur === o}">${word(o)}</button>`).join('')}</div>`,
   };
   vm.createContext(env); modelContext(env);
-  vm.runInContext(block + ';this.api={chanEmojiPick,chanEmojiTap,chanSetEmoji,openChannelEmoji,chanFace,setChanModel,chanModel,channelsOn,chanOpen,channelsFor,inChannel,chanName,openChannel,channelBack,channelsBody,channelFeed,chanHead,channelClick,chanSwitchedOff,chanPruned,openChannelSheet,submitChannelRename,firstPost,chanComposer,chanDraftKey,chanSpaceOf,channelSend,chanSeenPaint,chanSeenRow,chanHold,chanScrolled,chanUser,chanToEnd,chanOwnPost,chanReplies,chanEditUnsent,chanReadAt,chanReadKey,chanReadFeed,chanNewCount,chanReadTo,chanDropSending,REPLIES,CHAN_SENDING,FIRST,CHAN_ARCHIVE_PRUNE_DAYS,get view(){return chanView}};', env);
+  vm.runInContext(block + ';this.api={chanEmojiPick,chanEmojiTap,chanSetEmoji,openChannelEmoji,chanFace,setChanModel,chanModel,chanOpen,channelsFor,inChannel,chanName,openChannel,channelBack,channelsBody,channelFeed,chanHead,channelClick,chanPruned,openChannelSheet,submitChannelRename,firstPost,chanComposer,chanDraftKey,chanSpaceOf,channelSend,chanSeenPaint,chanSeenRow,chanHold,chanScrolled,chanUser,chanToEnd,chanOwnPost,chanReplies,chanEditUnsent,chanReadAt,chanReadKey,chanReadFeed,chanNewCount,chanReadTo,chanDropSending,REPLIES,CHAN_SENDING,FIRST,CHAN_ARCHIVE_PRUNE_DAYS,get view(){return chanView}};', env);
   const setOn = v => { env.document.documentElement.dataset.tweaks = v ? 'wizard/desktop-chats wizard/chat-channels' : 'wizard/desktop-chats'; };
   return { ...env.api, get view() { return env.api.view; }, w: wins.w, rows, renders, focusCalls, store, env, sheets, toasts, ops, reads, viewer, drafts, marks, setOn, spacesData };
 }
@@ -1103,7 +1103,7 @@ test('issue 1266: unread is a green dot and needs-you an amber one in Channels, 
   const html = f.channelsBody(f.w, [row('a', 1, { fresh: true }), row('b', 2, { attention: { state: 'needs_you' }, fresh: true })]);
   assert.match(html, /class="ch-chan-post unread" data-chopen="a"><span>T a<\/span><span class="ch-chan-ind"><i class="ch-chan-dot new" role="img" aria-label="Unread"><\/i><\/span>/);
   assert.match(html, /data-chopen="b"><span>T b<\/span><span class="ch-chan-ind"><i class="ch-chan-dot" role="img" aria-label="Needs you"><\/i><i class="ch-chan-dot new" role="img" aria-label="Unread"><\/i><\/span>/, 'amber, then green');
-  const css = readFileSync(new URL('../web/tweaks/wizard/chat-channels/tweak.css', import.meta.url), 'utf8');
+  const css = (s => s.slice(s.indexOf('/* Channels in Chats (wizard-ux issue 1254)')))(readFileSync(new URL('../web/core/chats.css', import.meta.url), 'utf8'));
   const rules = css.split('\n').filter(l => /unread|ch-chan-ind|ch-chan-new|ch-chan-dot\.new|ch-post-st\.new|ch-post-r span/.test(l));
   assert.ok(rules.length >= 5);
   for (const l of rules) assert.doesNotMatch(l, /--violet/, 'no violet unread marks: ' + l.slice(0, 90));
@@ -2086,9 +2086,9 @@ test('issue 1331: Reply on any message is standard for the main agent; the Threa
 
 test('issue 1331: Archive turns quiet; Mark done is the strong button, only while a Needs you is open', () => {
   // Moved into the Channels package (issue 1358); the rules come after its Needs you comment.
-  const all = readFileSync(new URL('../web/tweaks/wizard/chat-channels/tweak.css', import.meta.url), 'utf8');
+  const all = (s => s.slice(s.indexOf('/* Channels in Chats (wizard-ux issue 1254)')))(readFileSync(new URL('../web/core/chats.css', import.meta.url), 'utf8'));
   const css = all.slice(all.indexOf('/* Needs you in the thread (wizard-ux issue 1331'));
-  const S = 'html[data-tweaks~="wizard/chat-channels"]';
+  const S = 'html:root';
   assert.ok(css.includes(S + ' .ch-tacts button[data-chact="done"] { color: var(--wz-text-secondary); border-color: var(--wz-border); background: transparent;'), 'Archive: neutral ink, no accent fill');
   assert.match(css, /\.ch-tacts button\.ch-tact-md \{[^}]*background: var\(--wz-accent\); color: var\(--wz-base\);/, 'Mark done: the accent fill');
   for (const rule of css.split('\n').filter(l => l.includes('{'))) assert.ok(rule.startsWith(S), 'scoped: ' + rule.slice(0, 60));
@@ -2138,8 +2138,8 @@ test('issue 1336: one marker per row, amber over green, spinner for working; the
   assert.equal(mark(row('r', 1)), '');
   assert.match(html(both), /^<span class="ch-act-ind"><i class="ch-chan-dot" role="img" aria-label="Needs you"><\/i><\/span>$/);
   assert.match(html(row('n', 1, { fresh: true })), /ch-chan-dot new" role="img" aria-label="Unread"/);
-  const css = readFileSync(new URL('../web/tweaks/wizard/chat-channels/tweak.css', import.meta.url), 'utf8');
-  assert.ok(css.includes('html[data-tweaks~="wizard/chat-channels"] .ch-row.unread .tp time { color: var(--ink-3); font-weight: 400; }'), 'no violet unread time with the switch on');
+  const css = (s => s.slice(s.indexOf('/* Channels in Chats (wizard-ux issue 1254)')))(readFileSync(new URL('../web/core/chats.css', import.meta.url), 'utf8'));
+  assert.ok(css.includes('html:root .ch-row.unread .tp time { color: var(--ink-3); font-weight: 400; }'), 'no violet unread time with the switch on');
   assert.ok(css.includes('.aad-rw .aad-st.is-new { width: 8px; height: 8px; background: var(--ch-new); }'), 'the AI apps unread dot is green, not the accent');
 });
 
@@ -2151,7 +2151,7 @@ test('issue 1497 main vs routed: every Activity row has one marker slot, drawn l
     assert.match(html(row(sid, 1, { status: 'running' })), /^<span class="ch-act-ind"><i class="ch-spin" role="img" aria-label="Working"><\/i><\/span>$/, `${kind}: spinner`);
     assert.equal(html(row(sid, 1)), '<span class="ch-act-ind" aria-hidden="true"></span>', `${kind}: no marker keeps an empty slot so titles line up`);
   }
-  const css = readFileSync(new URL('../web/tweaks/wizard/chat-channels/tweak.css', import.meta.url), 'utf8');
+  const css = (s => s.slice(s.indexOf('/* Channels in Chats (wizard-ux issue 1254)')))(readFileSync(new URL('../web/core/chats.css', import.meta.url), 'utf8'));
   assert.match(css, /\.ch-row > \.ch-act-ind \{ order: -1;/, 'the marker sits before the title');
   assert.match(css, /\.aad-rw \.aad-row > \.aad-st \{ order: -1;/, 'the AI apps marker leads the row');
   assert.doesNotMatch(css, /\.ch-act-ind \{ order: 6;/, 'nothing puts it back at the right end');

@@ -19,7 +19,7 @@ window.WizCore.appParts.viewvoice = function ({ agentApp, agentWin, appVars, CHA
    * and the shared WizardApp.voiceInput receiver; app-authored meta tags grant nothing. */
   function viewOf(id) {
     const w = appVars.W[id]; if (!w) return null;
-    // A channel's feed in front (wizard/chat-channels, wizard-ux issue 1258): a tap take starts a new chat in that
+    // A channel's feed in front (wizard-ux issue 1258): a tap take starts a new chat in that
     // channel, exactly like its message box (whose words and pictures ride with it), pinned to that channel's Space,
     // and the window stays on the feed. A routed agent's channel keeps that agent's own voice path (below).
     const chan = w.app === 'chats' && !w.thread ? CHATS.chanOpen?.(w) : null, pin = chan ? { kind: 'chat thread', thread: '__new__', channel: chan.name, space: chan.general ? '' : chan.id, box: CHATS.chanBox?.(id) || '', chanAgent: CHATS.winAgent(w) || '' } : {};

@@ -130,7 +130,7 @@ test('a new channel gets its id from the box', async () => {
 // ---- Part 2: Chats' real Space code and Channels block on the store ----
 const src = withParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'))
 const cut = (a, b) => { const i = src.indexOf(a); assert.ok(i >= 0, a); return src.slice(i, src.indexOf(b, i)) }
-const code = cut("  const SPACE = { one: 'Space'", '  /* A Space open in front') + withParts(cut('  /* Channels view (switch wizard/chat-channels', '  function clearAll(w)'))
+const code = cut("  const SPACE = { one: 'Space'", '  /* A Space open in front') + withParts(cut('  /* Channels view (wizard-ux issue 1254)', '  function clearAll(w)'))
 const H = 3600e3, NOW = Date.parse('2026-11-11T12:00:00.000Z')
 const AG = { t1: '', t2: '', h1: 'host', k1: 'container', r1: 'restricted' }
 

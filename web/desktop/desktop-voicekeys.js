@@ -71,7 +71,7 @@ window.WizCore.desktopParts.voicekeys = function ({ $, C, CHATS, chatsWin, clip,
   desktopVars.voiceMenuBack = () => { if (voiceMenu.hidden) return false; closeVoiceMenu(); mic.focus(); return true; };
   /* The bar mic's voice menu: moved verbatim to desktop/desktop-voicemenu.js (issue 1665). */
   const { loadVoiceModels } = window.WizCore.desktopParts.voicemenu({ closeVoiceMenu, fields, mic, toast, voiceMenu });
-  /* A channel in front (wizard/chat-channels, wizard-ux issue 1291): the focused Chats window's feed, the AI apps main
+  /* A channel in front (wizard-ux issue 1291): the focused Chats window's feed, the AI apps main
    * column's feed, or a post's thread opened from one of them. Every way of starting a new chat there (⌥V, the orb,
    * New chat and its keys) goes where the feed's own box sends: a new post in that channel, or a reply in that post's
    * thread. { wid, sid } ('__new__' = a new post), or null with no channel in front (behaviour unchanged). */
@@ -94,7 +94,7 @@ window.WizCore.desktopParts.voicekeys = function ({ $, C, CHATS, chatsWin, clip,
   }
   // New chat (⌘N, ⌥Enter, the palette, a layout's +) with a channel's feed in front: that feed's own box, never General.
   function chanPost() { const c = chanFront(); return !!c && c.sid === '__new__' && !!CHATS.chanCompose?.(c.wid); }
-  // A take started in a channel (wizard/chat-channels) re-reads its model at Send but keeps the agent it started with:
+  // A take started in a channel re-reads its model at Send but keeps the agent it started with:
   // another agent's channel in front by then never re-routes it (its chat is filed into the starting channel).
   const chanRoute = (read, start) => () => { const r = read(), s = start(); return s && (r?.agent || '') !== (s.agent || '') ? s : r; };
   return { chanFront, chanPost, chanRoute, chanTalk, closeVoiceMenu, commandVoice, loadVoiceModels, paintVoiceFiles, speakScreen, talkNew, VOICE, voiceMenu };

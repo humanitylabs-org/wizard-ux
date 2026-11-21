@@ -7,7 +7,7 @@
  * body below keeps chats.js's indentation so `git log -L` and patches port over. */
 window.WizCore = window.WizCore || {};
 window.WizCore.chatsParts = window.WizCore.chatsParts || {};
-window.WizCore.chatsParts.attach = function ({ ch, CHEV_SVG, clip, COG_SVG, draftKey, draftsLate, elOf, esc, fileRef, INC, KIT, leadText, md, needsThreadOn, regenOn, replyBubble, replyCard, saveDraft, summaryOf, summaryStartsOpen, sweepHtml, toast, track, W, winAgent }) {
+window.WizCore.chatsParts.attach = function ({ ch, CHEV_SVG, clip, COG_SVG, draftKey, draftsLate, elOf, esc, fileRef, INC, KIT, leadText, md, regenOn, replyBubble, replyCard, saveDraft, summaryOf, summaryStartsOpen, sweepHtml, toast, track, W, winAgent }) {
   let PW; // late-bound: chats.js declares these after the call, see bindLate
   /* ---- attachments: Wizard Files + the wizard_file_ids contract Wizard uses ----
    * Every attachment goes through the resumable /wizard/v1/uploads API when the box offers it (core/uploads.js):
@@ -205,8 +205,8 @@ window.WizCore.chatsParts.attach = function ({ ch, CHEV_SVG, clip, COG_SVG, draf
   // Thread tracker: every message carries its row id and time so a tracker row or a quote can find it again.
   // Main builder agent only: turnHtml passes tt (onFor the thread's agent), so other agents' bubbles carry neither.
   // Issue 1331: Needs you in the thread makes Reply standard (turnHtml's tt: main agent) and retires the tracker itself.
-  const msgIds = (m, at, tt = true) => (tt && (globalThis.WosThreadTracker?.on() || (typeof needsThreadOn === 'function' && needsThreadOn())) && m ? `${m.id != null ? ` data-mid="${esc(String(m.id))}"` : ''}${isFinite(at ?? m.at) ? ` data-mat="${at ?? m.at}"` : ''}` : '');
-  const quoteBtn = (tt = true) => (tt && (globalThis.WosThreadTracker?.on() || (typeof needsThreadOn === 'function' && needsThreadOn())) ? '<button type="button" data-mquote aria-label="Reply to this message" title="Reply"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 6 6v3"/></svg>Reply</button>' : '');
+  const msgIds = (m, at, tt = true) => (tt && m ? `${m.id != null ? ` data-mid="${esc(String(m.id))}"` : ''}${isFinite(at ?? m.at) ? ` data-mat="${at ?? m.at}"` : ''}` : '');
+  const quoteBtn = (tt = true) => (tt ? '<button type="button" data-mquote aria-label="Reply to this message" title="Reply"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 6 6v3"/></svg>Reply</button>' : '');
   // needs: the amber Needs you line (issue 1331) drawn right above this turn's reply bubble.
   function turnHtml(c, tn, last, working, helperStatus, reconnect, tt = true, needs = '') {
     let h = '';

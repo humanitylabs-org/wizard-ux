@@ -25,7 +25,6 @@
     "wizard/app-updates-list",
     "wizard/update-bug-reports",
     "wizard/link-token-repair",
-    "wizard/chat-channels",
     "wizard/graceful-restart",
     "wizard/draft-marks",
     "wizard/app-updates-hourly",

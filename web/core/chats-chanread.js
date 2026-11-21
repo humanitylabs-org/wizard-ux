@@ -10,12 +10,11 @@
 'use strict';
 window.WizCore = window.WizCore || {};
 window.WizCore.chatsParts = window.WizCore.chatsParts || {};
-window.WizCore.chatsParts.chanread = function ({ CH, CHAN_GENERAL, CHAN_READ_KEY, CHAN_READ_MAX, CHAN_READ_MS, CHAN_READ_SYNC, CHAN_READ_UP_MS, chanActs, chanAt, channelsOn, chanOpen, chanStore, chatVars, focusAgentId, handledNow, isWorking, LIVE, owner, renderChatList, rowOf, storeAgent, W }) {
+window.WizCore.chatsParts.chanread = function ({ CH, CHAN_GENERAL, CHAN_READ_KEY, CHAN_READ_MAX, CHAN_READ_MS, CHAN_READ_UP_MS, chanActs, chanAt, chanOpen, chanStore, chatVars, focusAgentId, handledNow, isWorking, LIVE, owner, renderChatList, rowOf, storeAgent, W }) {
   let deferredOf, elOf, holdList, snoozeLast; // late-bound: chats.js declares these after the call, see bindLate
   let chanReadUpAt = -Infinity;
   // The box's marks (key -> ms) while Channels are on and the box keeps them, else null.
   const chanReadBox = () => {
-    try { if (!(document.documentElement.dataset.tweaks || '').split(' ').includes(CHAN_READ_SYNC)) return null; } catch (_) { return null; }
     const box = (typeof LIVE !== 'undefined' && LIVE.chanReads?.marks?.()) || null;
     if (box && Date.now() - chanReadUpAt >= CHAN_READ_UP_MS) chanReadUp(box);
     return box;
@@ -73,12 +72,11 @@ window.WizCore.chatsParts.chanread = function ({ CH, CHAN_GENERAL, CHAN_READ_KEY
     clearTimeout(chatVars.chanReadPaintT); chatVars.chanReadPaintT = setTimeout(chanReadPaint, 120);
     return true;
   }
-  function chanReadPaint() { if (!channelsOn()) return; for (const id of Object.keys(CH)) { const x = W[id]; if (!x || x.thread || chanOpen(x) || holdList(id)) continue; const el = elOf(id); if (el) renderChatList(x, el); } }
+  function chanReadPaint() { for (const id of Object.keys(CH)) { const x = W[id]; if (!x || x.thread || chanOpen(x) || holdList(id)) continue; const el = elOf(id); if (el) renderChatList(x, el); } }
   // Issue 1380: the box's channel list changed (right after Channels turns on, its first answer brings Alerts): the
   // lists on screen show it at once, also one the shells' Live repaint skips while focus sits inside it.
   let chanListSig = '';
   LIVE?.onChange?.(() => {
-    if (!channelsOn()) { chanListSig = ''; return; }
     // every field the list shows or sorts by (another device's sort, pin order or reorder too, Codex P2)
     const st = chanStore(), sig = st ? JSON.stringify([st.sort, st.channels]) : '';
     if (sig === chanListSig) return;
@@ -106,7 +104,6 @@ window.WizCore.chatsParts.chanread = function ({ CH, CHAN_GENERAL, CHAN_READ_KEY
   // The row to mark read when a thread opens from a window: with Channels on, the window's own row (rowOf: a routed
   // channel's post can share its id with a main thread, and the id-only lookup would mark the main one), else the id.
   function chanSeenRow(wid, sid) {
-    if (!channelsOn()) return sid;
     const r = rowOf(wid, sid);
     return r && r !== LIVE.session(sid) ? r : sid;
   }

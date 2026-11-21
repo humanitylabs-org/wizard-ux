@@ -7,7 +7,7 @@
  * body below keeps chats.js's indentation so `git log -L` and patches port over. */
 window.WizCore = window.WizCore || {};
 window.WizCore.chatsParts = window.WizCore.chatsParts || {};
-window.WizCore.chatsParts.daily = function ({ agentName, AGS, CH, chanElsewhere, chanNeeds, channelsOn, chanOpen, clip, DAILY_HIST, DAILY_OPEN, dailyOn, dailyPin, dailyState, deferredOf, elOf, esc, holdList, isWorking, KIT, LIVE, renderChatList, renderThread, rowAgent, toTurns, W }) {
+window.WizCore.chatsParts.daily = function ({ agentName, AGS, CH, chanElsewhere, chanNeeds, chanOpen, clip, DAILY_HIST, DAILY_OPEN, dailyOn, dailyPin, dailyState, deferredOf, elOf, esc, holdList, isWorking, KIT, LIVE, renderChatList, renderThread, rowAgent, toTurns, W }) {
   let snoozeLast, turnHtml; // late-bound: chats.js declares these after the call, see bindLate
   const DAILY_FMT = (() => { try { return new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' }); } catch (_) { return null; } })();
   const dailyDay = day => { const t = Date.parse(day + 'T12:00:00Z'); return DAILY_FMT && isFinite(t) ? DAILY_FMT.format(t) : day; };
@@ -102,7 +102,7 @@ window.WizCore.chatsParts.daily = function ({ agentName, AGS, CH, chanElsewhere,
   const chanDraftMark = (c0, ag) => chanLineDraft(c0, ag) ? '<span class="ch-chan-draft" role="img" aria-label="Draft" title="Unsent draft">✎</span>' : '';
   // The lists repaint when a draft appears or goes; a window drawing a channel's feed (its box is the one being typed in) waits.
   window.addEventListener?.('wos:drafts-keys', () => {
-    if (!draftMarksOn() || !channelsOn()) return;
+    if (!draftMarksOn()) return;
     for (const id of Object.keys(CH)) {
       const x = W[id]; if (!x || x.thread || (chanOpen(x) && !chanElsewhere(x)) || holdList(id)) continue;
       const el = elOf(id); if (el) renderChatList(x, el);
@@ -119,6 +119,6 @@ window.WizCore.chatsParts.daily = function ({ agentName, AGS, CH, chanElsewhere,
   }
   // A thread of an agent other than the main one names it after its channel ("# WizardOS Chats · Philosopher"): words,
   // never a coloured dot, so it never competes with the status dots. '' for the main agent.
-  const agentLabelOf = s => { if (!channelsOn() || !s) return ''; const a = rowAgent(s); return a && AGS()?.isOther?.(a) ? (typeof agentName === 'function' ? agentName(a) : a) : ''; };
+  const agentLabelOf = s => { if (!s) return ''; const a = rowAgent(s); return a && AGS()?.isOther?.(a) ? (typeof agentName === 'function' ? agentName(a) : a) : ''; };
   return { actMark, actNeeds, actRowMark, actUnread, agentLabelOf, chanDraftMark, chanUnread, chanUnreadN, dailyClick, dailyHtml, dailyLinkTo, dailyWatch, draftTag, rowDraft, bindLate: v => { if ('snoozeLast' in v) snoozeLast = v.snoozeLast; if ('turnHtml' in v) turnHtml = v.turnHtml; } };
 };

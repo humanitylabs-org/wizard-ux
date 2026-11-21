@@ -7,7 +7,7 @@
  * body below keeps chats.js's indentation so `git log -L` and patches port over. */
 window.WizCore = window.WizCore || {};
 window.WizCore.chatsParts = window.WizCore.chatsParts || {};
-window.WizCore.chatsParts.ready = function ({ actNeeds, actUnread, CH, chanAt, channelsOn, elOf, H, LIST_PLACE_KEY, LIST_PLACE_TTL, listPlace, listSig, LIVE, W }) {
+window.WizCore.chatsParts.ready = function ({ actNeeds, actUnread, CH, chanAt, elOf, H, LIST_PLACE_KEY, LIST_PLACE_TTL, listPlace, listSig, LIVE, W }) {
   function readListPlaces() { try { return JSON.parse(localStorage.getItem(LIST_PLACE_KEY) || '{}') || {}; } catch (e) { return {}; } }
   function storeListPlace(wid) {
     const w = W[wid], c = CH[wid], el = elOf(wid), sc = el?.querySelector('.ch-list > .ch-scroll');
@@ -35,7 +35,7 @@ window.WizCore.chatsParts.ready = function ({ actNeeds, actUnread, CH, chanAt, c
   function activityReady(live) { const r = activityReadyRows(live); return r ? r.length : null; }
   function activityReadyRows(live) {
     const L = live || LIVE, M = window.WizChatsListModel;
-    if (!channelsOn() || !L?.ok || !M?.activityGroups) return null;
+    if (!L?.ok || !M?.activityGroups) return null;
     const rows = (L.sessionsFor ? L.sessionsFor('') : L.unified()).filter(s => !s.hidden);
     return M.activityGroups(L.workGroups(rows), { needs: actNeeds, unread: actUnread, at: chanAt }).ready;
   }

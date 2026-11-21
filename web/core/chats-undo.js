@@ -7,14 +7,14 @@
  * body below keeps chats.js's indentation so `git log -L` and patches port over. */
 window.WizCore = window.WizCore || {};
 window.WizCore.chatsParts = window.WizCore.chatsParts || {};
-window.WizCore.chatsParts.undo = function ({ channelsOn, esc, LIVE, paintListsNow, toast, vib }) {
+window.WizCore.chatsParts.undo = function ({ esc, LIVE, paintListsNow, toast, vib }) {
   /* The one Undo after an archive (issue 1336: "if the user archives something accidentally, how will they find it
    * quickly"): about five seconds, from any surface that archives a thread (row menus, swipe, the thread's own button,
    * the AI apps sidebar); Undo restores it where it was. Opaque, above the shell's own toast. */
   const ACT_UNDO_MS = 5000;
   let actUndoEl = null, actUndoT = 0;
   function actUndo(label, undo) {
-    if (!channelsOn() || typeof document.createElement !== 'function' || !document.body) return false;
+    if (typeof document.createElement !== 'function' || !document.body) return false;
     clearTimeout(actUndoT); actUndoEl?.remove();
     const el = document.createElement('div'); el.className = 'ch-undo'; el.setAttribute('role', 'status');
     el.innerHTML = `<span>${esc(label)}</span><button type="button" data-chundo>Undo</button>`;
@@ -43,6 +43,6 @@ window.WizCore.chatsParts.undo = function ({ channelsOn, esc, LIVE, paintListsNo
    * With Channels on (the read point had its own switch until wizard-ux issue 1358; wizard-agent-service issue 471) the marks are also
    * kept on the box (LIVE.chanReads, /wizard/v1/channels/read), so every device of the owner reads the newer of its
    * own mark and the box's: reading a channel to the bottom on the desktop clears it on the phone. */
-  const CHAN_READ_KEY = 'wos.chats.channel-read.v1', CHAN_READ_MAX = 300, CHAN_READ_MS = 2000, CHAN_READ_SYNC = 'wizard/chat-channels', CHAN_READ_UP_MS = 30e3, chanActs = {};
-  return { actRestore, actUndo, CHAN_READ_KEY, CHAN_READ_MAX, CHAN_READ_MS, CHAN_READ_SYNC, CHAN_READ_UP_MS, chanActs };
+  const CHAN_READ_KEY = 'wos.chats.channel-read.v1', CHAN_READ_MAX = 300, CHAN_READ_MS = 2000, CHAN_READ_UP_MS = 30e3, chanActs = {};
+  return { actRestore, actUndo, CHAN_READ_KEY, CHAN_READ_MAX, CHAN_READ_MS, CHAN_READ_UP_MS, chanActs };
 };
