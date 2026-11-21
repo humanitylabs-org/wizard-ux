@@ -11,7 +11,7 @@ const ID = 'wizard/settings-search';
 const text = html => String(html).split(/<[^>]*>/).join(' ').split('&amp;').join('&');
 function harness({ on = true, shell = 'desktop' } = {}) {
   const storage = new Map(), listeners = {};
-  const documentElement = { dataset: { tweaks: on ? `wizard/thread-tracker ${ID}` : 'wizard/thread-tracker' } };
+  const documentElement = { dataset: { tweaks: on ? `wizard/sidebar-chats-view ${ID}` : 'wizard/sidebar-chats-view' } };
   // Test-only stand-in for the inert <template> the view parses page markup with.
   const createElement = () => { let h = ''; return { set innerHTML(v) { h = v; }, content: { querySelectorAll: () => [], get textContent() { return text(h); } } }; };
   const s = { console, Map, Set, Date, String, CSS: { escape: String }, setTimeout, document: { activeElement: null, documentElement, createElement }, navigator: { userAgent: 'Desktop' }, location: { host: 'example.test' }, localStorage: { getItem: k => storage.get(k), setItem: (k, v) => storage.set(k, v) } };
@@ -67,7 +67,7 @@ test('an explicitly opened page that does not match moves to the first match; tu
   h.view.focus('look'); assert.equal(h.view.page, 'appearance');
   h.type('hotkey');
   assert.equal(h.view.page, 'voice');
-  h.documentElement.dataset.tweaks = 'wizard/thread-tracker';
+  h.documentElement.dataset.tweaks = 'wizard/sidebar-chats-view';
   assert.match(h.root.innerHTML, /data-st-search/);
   assert.equal(h.winListeners['wos:tweak-choice']?.length, 1);
   for (const f of h.winListeners['wos:tweak-choice']) f();

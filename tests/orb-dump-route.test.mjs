@@ -109,7 +109,7 @@ for (const [name, answer] of [
 });
 
 test('switch off: the marked take routes exactly as today (no router call)', async t => {
-  const f = await fixture(t, { tweaks: 'wizard/thread-tracker' });
+  const f = await fixture(t, { tweaks: 'wizard/sidebar-chats-view' });
   await until(() => f.api.get('orb-take')?.state === 'sent');
   assert.deepEqual(f.paths(), ['/wizard/hermes/api/sessions', '/wizard/hermes/v1/runs']);
   assert.equal(f.dumps.length, 0);
