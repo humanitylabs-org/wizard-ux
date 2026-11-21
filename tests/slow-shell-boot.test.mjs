@@ -26,7 +26,9 @@ test('slow bootstrap cannot hold either shell past the cached launcher paint bud
   for (const shell of ['app.js','desktop/desktop.js']) {
     const h=fixture(); let resolveBootstrap, fetched=0, repaints=0;
     h.ctx.WizConfig={ready:new Promise(resolve=>{resolveBootstrap=resolve;})};
-    h.ctx.fetch=async()=>{fetched++;return {ok:true,json:async()=>({migrations:{'launcher-seed-v1':'done'},launcher:{desktopQuick:['late-app'],autoOpen:[]}})};};
+    // wizard-ux issue 1558: ui-preferences is read beside bootstrap, so the slow read the paint budget guards is that one.
+    let resolvePrefs; const prefsSlow=new Promise(resolve=>{resolvePrefs=resolve;});
+    h.ctx.fetch=async()=>{fetched++;await prefsSlow;return {ok:true,json:async()=>({migrations:{'launcher-seed-v1':'done'},launcher:{desktopQuick:['late-app'],autoOpen:[]}})};};
     const policy=launcherFixture(h.ctx);
     policy.onChange(()=>repaints++);
     // Execute the actual shell startup prefix, substituting only its DOM body.
@@ -35,9 +37,9 @@ test('slow bootstrap cannot hold either shell past the cached launcher paint bud
     const boot=prefix.slice(0,prefix.indexOf('  await window.WizLauncher'))+'  await window.WizLauncher?.waitForShell?.(); window.shellPainted=true; window.WizCore.status.attach({}); })();';
     h.event('load');vm.runInNewContext(boot,h.ctx);
     h.advance(999);await tick();assert.equal(h.ctx.shellPainted,undefined);
-    h.advance(1);await tick();assert.equal(h.ctx.shellPainted,true);assert.equal(fetched,0);
+    h.advance(1);await tick();assert.equal(h.ctx.shellPainted,true);assert.equal(fetched,1,'asked beside bootstrap, not after it');
     h.advance(3500);assert.equal(h.nodes.get('wxFatal'),undefined);assert.equal(h.reloads(),0);
-    resolveBootstrap();await policy.ready;assert.equal(fetched,1);assert.equal(repaints,1);assert.deepEqual([...policy.get('desktopQuick')],['late-app']);
+    resolveBootstrap();resolvePrefs();await policy.ready;assert.equal(fetched,1);assert.equal(repaints,1);assert.deepEqual([...policy.get('desktopQuick')],['late-app']);
     assert.match(read('core/apps.js'),/WizLauncher\?\.onChange\(rebuild\)/);
     assert.match(read(shell),/addEventListener\('wizard:apps'/);
   }
