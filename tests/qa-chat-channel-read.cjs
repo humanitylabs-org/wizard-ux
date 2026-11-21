@@ -97,7 +97,7 @@ const contrast = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - 
         const page = await context.newPage(); page.on('pageerror', e => entry.errors.push(String(e.stack || e.message).slice(0, 900)));
         const boot = async () => {
           await page.waitForFunction(() => (window.__wux || window.__wos) && !window.WosWelcome?.active && window.WosExperience?.state.tweaks.length && !window.WosExperience.state.busy);
-          if (on) await page.waitForFunction(() => (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/chat-channels'), null, { timeout: 15000 }).catch(() => {});
+          if (on) await page.waitForFunction(() => true, null, { timeout: 15000 }).catch(() => {});
           await page.evaluate(phone => phone ? __wos.openSheet('inbox') : __wux.openChatsList(), phone);
         };
         await page.goto(origin + prefix + (phone ? 'index.html?phone' : 'desktop.html')); await boot();

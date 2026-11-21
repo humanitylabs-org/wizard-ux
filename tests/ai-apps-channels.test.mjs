@@ -210,7 +210,7 @@ test('Activity rows carry their "# channel" from CHATS.channelOf (main and route
   assert.ok(M.sessionList({ ready: rows }, facts).ready.every(r => !('channel' in r)), 'an adapter without Channels: the rows as today');
 });
 
-test('the real channelOf / chanSide: names per agent, only with the switch on; only id::side is a sidebar pane', () => {
+test('the real channelOf / chanSide: names per agent; only id::side is a sidebar pane', () => {
   const src = withParts(read('web/core/chats.js'));
   const block = slice(src, '  /* Channels view (wizard-ux issue 1254)', '  function clearAll(w)');
   // 'x' is both a main thread (in Launch) and a container agent's thread (in Box): the row's own owner decides.
@@ -232,16 +232,13 @@ test('the real channelOf / chanSide: names per agent, only with the switch on; o
   assert.equal(channelOf({ id: 'h1' }), 'General', 'a host-profile agent\'s unfiled row is in General');
   assert.equal(chanSide({ id: 'w1::side' }), true);
   for (const id of ['w1', 'w1::list', 'side']) assert.equal(chanSide({ id }), false, id);
-  env.document.documentElement.dataset.tweaks = '';
-  assert.equal(channelOf({ id: 'a' }), '', 'switch off: no channel');
-  assert.equal(chanSide({ id: 'w1::side' }), false, 'switch off: the pane paints nothing');
 });
 
-test('Chats paints the side pane only with the switch on: tabs, then the channel list or a feed with its box; the layout wires it', () => {
+test('Chats paints the side pane: tabs, then the channel list or a feed with its box; the layout wires it', () => {
   const src = withParts(read('web/core/chats.js'));
   const r = slice(src, '  function renderChatList(w, el) {', '    syncListTitle(w);');
   assert.match(r, /const side = typeof chanSide === 'function' && chanSide\(w\);\n\s+if \(!side\) \{[^]*if \(H\.ownsChatList\?\.\(\)\) \{ el\?\.replaceChildren\(\); return; \}\n\s+\}/, 'a layout-owned list stays empty unless it is the switched-on side pane');
-  assert.match(r, /chanSwitchedOff\(w\)\) H\.layout/, 'switched off inside a feed: the Focus returns');
+  assert.doesNotMatch(src, /chanSwitchedOff|channelsOn/, 'Channels are on for everyone (issue 1258): no switch-off path');
   assert.match(src, /const head = side \? chanHead\(w, feed\) :/, 'the pane\'s head is the Channels tabs or the feed\'s header only (no search: the sidebar has its own)');
   assert.match(src, /if \(side && !feed && chanView !== 'channels'\) body = '';/, 'Activity: the sidebar draws its own rows');
   assert.match(src, /const html = side \? `<div data-part="list" class="ch-list ch-side\$\{feed \? ' ch-side-feed' : chanView === 'channels' \? ' ch-side-chan' : ''\}">\$\{head\}<div class="ch-scroll">\$\{body\}<\/div>\$\{feed && typeof jumpPillsHtml === 'function' \? jumpPillsHtml\(\) : ''\}\$\{feed \? fab : ''\}<\/div>`/);

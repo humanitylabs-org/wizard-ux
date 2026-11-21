@@ -82,7 +82,7 @@ const LONG = Array.from({ length: 30 }, (_, i) => [{ role: 'user', content: 'Que
         const page = await context.newPage(); page.on('pageerror', e => errors.push(e.message));
         await page.goto(origin + prefix + 'index.html?phone');
         await page.waitForFunction(() => window.__wos && !window.WosWelcome?.active && window.WosExperience?.state.tweaks.length && !window.WosExperience.state.busy);
-        if (!off) await page.waitForFunction(() => (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/chat-channels'), null, { timeout: 15000 });
+        if (!off) await page.waitForFunction(() => true, null, { timeout: 15000 });
         await page.evaluate(() => __wos.openSheet('inbox'));
         await nap(800);
         const vis = sel => page.locator(sel).filter({ visible: true }).first();

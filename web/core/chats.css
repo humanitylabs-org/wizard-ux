@@ -931,7 +931,7 @@ html:root .ch-post-t { font-size: .9375rem; line-height: 1.4; white-space: pre-w
 html:root .ch-post-t.clamp { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; line-clamp: 4; overflow: hidden; }
 html:root .ch-post-tb { width: 100%; margin-top: 2px; color: var(--ink); cursor: pointer; }
 html:root .ch-post-t a { color: var(--violet-2); }
-html:root .ch-post-t code { font-size: .875em; padding: 1px 5px; border-radius: 6px; background: rgba(205, 190, 255, .1); }
+html:root .ch-post-t code { font-size: .875em; padding: 1px 5px; border-radius: 6px; background: color-mix(in srgb, var(--violet-2) 10%, transparent); }
 html:root .ch-post-wait { display: block; width: 70%; }
 html:root .ch-post-wait .ch-sk { display: block; height: .75rem; margin: 4px 0; }
 html:root .ch-post-voice { color: var(--ink-3); font-style: italic; }
@@ -997,7 +997,7 @@ html:root .ch-row.unread .tp time { color: var(--ink-3); font-weight: 400; }
 /* Ready's one sort: a compact "Newest first ⌄" menu on the header line, beside the fold arrow (issue 1354) */
 html:root .ch-sec-hl { position: relative; }
 html:root .ch-act-sort { position: absolute; right: 26px; top: 50%; transform: translateY(-50%); display: inline-flex; align-items: center; }
-html:root .ch-act-sort select { appearance: none; -webkit-appearance: none; field-sizing: content; min-height: 28px; max-width: 150px; padding: 0 22px 0 8px; border: 0; border-radius: 8px; background: transparent; color: var(--ink-3); font: inherit; font-size: 12px; font-weight: 600; letter-spacing: 0; text-transform: none; cursor: pointer; }
+html:root .ch-act-sort select { appearance: none; -webkit-appearance: none; field-sizing: content; min-height: 28px; max-width: 150px; padding: 0 22px 0 8px; border: 0; border-radius: 8px; background: transparent; color: var(--ink-3); font: inherit; font-size: .75rem; font-weight: 600; letter-spacing: 0; text-transform: none; cursor: pointer; }
 html:root .ch-act-sort select:hover { background: color-mix(in srgb, var(--ink) 8%, transparent); color: var(--ink-2); }
 html:root .ch-act-sort select:focus-visible { outline: 2px solid var(--wz-accent, var(--violet-2)); outline-offset: 0; }
 html:root .ch-act-sort select option { color: var(--ink); background: var(--bg); }

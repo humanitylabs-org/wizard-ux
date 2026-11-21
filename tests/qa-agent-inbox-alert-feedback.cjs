@@ -62,7 +62,7 @@ const report = { origin, web, off, cases: [] };
       const context = await browser.newContext({ viewport: phone ? { width: 390, height: 844 } : { width: 1440, height: 960 }, isMobile: phone, hasTouch: phone, serviceWorkers: 'block', ...(phone ? { userAgent: 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Mobile Safari/537.36' } : {}) });
       try {
         await context.routeWebSocket('**/*', w => w.close());
-        const mix = { 'wizard/desktop-chats': true, 'wizard/chat-channels': true, ...(off ? {} : { 'wizard/agent-inbox': true }) };
+        const mix = { 'wizard/desktop-chats': true, ...(off ? {} : { 'wizard/agent-inbox': true }) };
         await context.addInitScript(({ shell, skin, mix }) => {
           if (window !== top) return;
           if (sessionStorage.getItem('qaBoot')) return; sessionStorage.setItem('qaBoot', '1');
@@ -126,7 +126,7 @@ const report = { origin, web, off, cases: [] };
         await page.goto(origin + prefix + (phone ? 'index.html?phone' : 'desktop.html'));
         await page.waitForFunction(() => (window.__wux || window.__wos) && !window.WosWelcome?.active && window.WosExperience?.state.tweaks.length && !window.WosExperience.state.busy);
         await page.addStyleTag({ content: '#wosWelcome{display:none!important}' });
-        await page.waitForFunction(() => (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/chat-channels'), null, { timeout: 15000 });
+        await page.waitForFunction(() => true, null, { timeout: 15000 });
         if (!off) await page.waitForFunction(() => (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/agent-inbox'), null, { timeout: 15000 });
         const vis = sel => page.locator(sel).filter({ visible: true }).first();
         const openList = () => page.evaluate(phone => phone ? __wos.openSheet('inbox') : __wux.openChatsList(), phone);
@@ -176,8 +176,7 @@ const report = { origin, web, off, cases: [] };
         await vis(`[data-chalertfb="not_urgent"][data-id="${COL}"]`).click();
         await page.waitForFunction(() => !document.querySelector('.ch-alerts'), null, { timeout: 8000 });
         assert.deepEqual(entry.patches.map(x => x.id), [AL, COL]);
-        // 3. The sweep card in the Daily thread (Channels off: the Daily thread is a row in the list).
-        await page.evaluate(() => WosExperience.toggle('wizard/chat-channels')); await nap(800);
+        // 3. The sweep card in the Daily thread (a row in the Activity list).
         await openList();
         await vis('.ch-list [data-chopen="qa-daily-1"]').click();
         const card = vis('.ch-sweep');

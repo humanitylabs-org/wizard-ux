@@ -44,7 +44,7 @@ const report = { origin, web, cases: [] };
       const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, serviceWorkers: 'block' });
       try {
         await context.routeWebSocket('**/*', w => w.close());
-        const mix = { 'wizard/desktop-chats': true, 'wizard/chat-channels': true, ...(on ? { 'wizard/app-panel-left': true } : {}) };
+        const mix = { 'wizard/desktop-chats': true, ...(on ? { 'wizard/app-panel-left': true } : {}) };
         await context.addInitScript(({ skin, mix, spaces, desk }) => {
           if (window !== top) return;
           if (sessionStorage.getItem('qaBoot')) return; sessionStorage.setItem('qaBoot', '1');
@@ -89,7 +89,7 @@ const report = { origin, web, cases: [] };
         await page.goto(origin + prefix + 'desktop.html');
         await page.waitForFunction(() => window.__wux && !window.WosWelcome?.active && window.WosExperience?.state.tweaks.length && !window.WosExperience.state.busy);
         await page.waitForFunction(() => document.documentElement.dataset.layout === 'ai-apps', null, { timeout: 15000 });
-        await page.waitForFunction(() => (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/chat-channels'), null, { timeout: 15000 }).catch(() => {});
+        await page.waitForFunction(() => true, null, { timeout: 15000 }).catch(() => {});
         if (on) await page.waitForFunction(() => (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/app-panel-left'), null, { timeout: 15000 }).catch(() => {});
         entry.tweaks = await page.evaluate(() => document.documentElement.dataset.tweaks);
         assert.equal(entry.tweaks.split(' ').includes('wizard/app-panel-left'), on, stem + ': switch state');

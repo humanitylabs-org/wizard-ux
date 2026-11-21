@@ -145,5 +145,5 @@ test('chanCompose: only a feed with its own box takes a new chat', () => {
   vm.createContext(ctx); vm.runInContext(src, ctx);
   assert.equal(ctx.chanCompose('feed'), true); assert.deepEqual(ended, [['feed', true]], 'the feed goes to its end with its box focused');
   assert.equal(ctx.chanCompose('list'), false); assert.equal(ctx.chanCompose('none'), false);
-  assert.match(chats, /chanSpaceOf, chanCompose, chanView: \(\) => channelsOn\(\) \? chanView : '', chanBox:/, 'exported to the shells');
+  assert.match(chats, /chanSpaceOf, chanCompose, chanView: \(\) => chanView, chanBox:/, 'exported to the shells');
 });

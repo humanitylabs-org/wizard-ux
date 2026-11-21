@@ -159,8 +159,6 @@ window.WizCore.chatsParts.bind = function ({ activityClick, actSetOrder, AGS, al
     }
     if (e.target.closest('[data-chfbtn]')) { const c = ch(id); c.sheet = c.sheet === 'status' ? false : 'status'; c.focus = false; rerenderList(w); return true; }
     if (e.target.closest('[data-chfclear]')) { const c = ch(id); c.sheet = false; c.coach = false; clearAll(w); return true; }
-    if (e.target.closest('[data-chgroupday]')) { LIVE.chatLayout = byStatus() ? 'day' : 'status'; for (const x of Object.keys(CH)) { const ww = W[x]; if (ww) renderChats(ww); } return; }
-    const lay = e.target.closest('[data-chlayout]'); if (lay) { LIVE.chatLayout = lay.dataset.chlayout; for (const x of Object.keys(CH)) { const ww = W[x]; if (ww) renderChats(ww); } return; }
     if (e.target.closest('[data-chpins]')) { const on = !pinsOn(); try { localStorage.setItem(PINS_KEY, on ? '1' : '0'); } catch (err) {} paintPins(); for (const x of Object.keys(CH)) { const ww = W[x]; if (ww) renderChats(ww); } return; }
     if (e.target.closest('[data-chcompact]')) { const on = !compactOn(); try { localStorage.setItem(COMPACT_KEY, on ? '1' : '0'); } catch (err) {} LIVE.putPrefs?.({ compact: on }); for (const x of Object.keys(CH)) { const ww = W[x]; if (ww) renderChats(ww); } return; }
     const fo = e.target.closest('[data-chfopt]'); if (fo) { const c = ch(id), [k, ...r] = fo.dataset.chfopt.split(':'), key = r.join(':'); c.sheet = false; c.coach = false;

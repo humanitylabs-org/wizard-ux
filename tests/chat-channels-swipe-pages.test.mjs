@@ -298,12 +298,4 @@ test('reduced motion: views change with no slide', () => {
   assert.equal(r.backs, 1); assert.ok(!h.log.some(x => x.name === 'win' && x.k === 'transform' && x.v), 'no slide after a swipe either');
 });
 
-test('switch off: the old behaviour exactly (snap back, then Back; no slide on any view change)', () => {
-  const h = viewHarness({ on: false, start: 'thread' });
-  const r = h.swipe(160, 400);
-  assert.equal(r.backs, 1);
-  assert.ok(r.after.some(w => w.name === 'thread' && w.k === 'transition' && /transform/.test(w.v)), 'the thread snaps back as before');
-  h.show('thread'); h.show('home'); h.settle();
-  assert.ok(!h.log.some(w => w.name === 'win'), 'no slide, on swipes or taps');
-  delete globalThis.document;
-});
+// (The switch-off case is gone: Channels are on for everyone since wizard-ux issue 1258, so slide-back always runs.)

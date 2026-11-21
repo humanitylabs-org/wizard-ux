@@ -241,8 +241,8 @@ test('the feed adds the channel own list to the live rows, last 30 days, by agen
   assert.equal(s.spaceContains('launch', 'old1'), true, 'a feed row belongs to its channel')
 })
 
-test('store off (404) or the switch off: Spaces exactly as in phase 1', async () => {
-  for (const opts of [{ off: true }, { on: false }]) {
+test('store off (404): Spaces exactly as in phase 1', async () => {
+  for (const opts of [{ off: true }]) {
     const s = await shell({ ...opts, projection: [{ id: 'launch', name: 'Launch', threads: ['t1'] }] })
     assert.equal(s.chanStore(), null)
     assert.deepEqual(clone(s.spaces()).map(x => x.id), ['launch'])

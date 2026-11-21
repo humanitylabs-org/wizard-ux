@@ -34,7 +34,7 @@ const report = { origin, web, cases: [] };
         await context.addInitScript(({ shell, skin, spaces }) => {
           if (window !== top || sessionStorage.getItem('qa.booted')) return; sessionStorage.setItem('qa.booted', '1');
           for (const [k, v] of Object.entries({ 'wos.shell': shell, 'wos.desktop-view.v1': 'classic', 'wos.coached': 'true', 'wos.tour.v1': 'true', 'wos.welcome.v1': 'done', 'wos.skin': skin,
-            'wos.chats.view.v1': 'channels', 'wos.chats.spaces.v1': JSON.stringify(spaces), 'wos.skin-tweaks.v1': JSON.stringify({ version: 1, preset: 'none', off: {}, mix: { 'wizard/desktop-chats': true, 'wizard/chat-channels': true } }) })) localStorage.setItem(k, v);
+            'wos.chats.view.v1': 'channels', 'wos.chats.spaces.v1': JSON.stringify(spaces), 'wos.skin-tweaks.v1': JSON.stringify({ version: 1, preset: 'none', off: {}, mix: { 'wizard/desktop-chats': true } }) })) localStorage.setItem(k, v);
         }, { shell, skin, spaces: SPACES });
         const prefs = { migrations: { 'launcher-seed-v1': true }, spaces: structuredClone(SPACES) };
         let start = 0, lists = 0; // start: when the two new posts arrive (set once the feed is open)
@@ -86,7 +86,7 @@ const report = { origin, web, cases: [] };
         const page = await context.newPage(); page.on('pageerror', e => entry.errors.push(String(e.stack || e.message).slice(0, 900)));
         await page.goto(origin + prefix + (phone ? 'index.html?phone' : 'desktop.html'));
         await page.waitForFunction(() => (window.__wux || window.__wos) && !window.WosWelcome?.active && window.WosExperience?.state.tweaks.length && !window.WosExperience.state.busy);
-        await page.waitForFunction(() => (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/chat-channels'), null, { timeout: 15000 });
+        await page.waitForFunction(() => true, null, { timeout: 15000 });
         await page.evaluate(phone => phone ? __wos.openSheet('inbox') : __wux.openChatsList(), phone);
         const vis = sel => page.locator(sel).filter({ visible: true }).first();
         await vis('.ch-chan-open[data-chchan="philosophy"]').click(); await vis('.ch-chan-h').waitFor(); await nap(500);

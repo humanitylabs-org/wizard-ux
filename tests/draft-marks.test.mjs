@@ -15,7 +15,7 @@ const RAW = JSON.parse(read('tests/fixtures/sessions-list-1360.json'));
 const SHIFT = Date.now() - 5 * 60e3 - Math.max(...RAW.data.map(s => Date.parse(s.activityAt)));
 const shift = v => typeof v === 'string' && /^\d{4}-\d\d-\d\dT[\d:.]+Z$/.test(v) ? new Date(Date.parse(v) + SHIFT).toISOString() : Array.isArray(v) ? v.map(shift) : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, shift(x)])) : v;
 const PAYLOAD = shift(RAW);
-const ON = 'wizard/chat-channels wizard/draft-marks', OFF = 'wizard/chat-channels';
+const ON = 'wizard/draft-marks', OFF = ''; // the draft-marks switch on / off (Channels are on for everyone, issue 1258)
 const GREEN = 'synthetic_1360_green', NEEDS = 'synthetic_1360_needs';
 
 // One device: its localStorage survives a "reload" (a new context on the same storage).
@@ -40,7 +40,7 @@ function device(storage = new Map(), dataset = { tweaks: ON }) {
   const line = t => { const i = chats.indexOf('\n  ' + t); assert.ok(i >= 0, t); return chats.slice(i + 1, chats.indexOf('\n', i + 1)); };
   const block = (a, b) => { const i = chats.indexOf('\n  ' + a); assert.ok(i >= 0, a); const j = chats.indexOf('\n  ' + b, i); assert.ok(j > i, b); return chats.slice(i + 1, j); };
   const repaints = [];
-  Object.assign(c, { KIT: c.WosChat, CHAN_SWITCH: 'wizard/chat-channels', LIVE: c.WizLive, snoozeLast: () => false, deferredOf: s => !!s.deferred && !s.archived,
+  Object.assign(c, { KIT: c.WosChat, LIVE: c.WizLive, snoozeLast: () => false, deferredOf: s => !!s.deferred && !s.archived,
     readyOrder: 'newest', SEC_PAGE: 40, secOpen: { working: true, ready: true, recent: true }, ch: () => ({ more: {} }), noteRow: () => '', noteAt: () => 0,
     STI: new Proxy({}, { get: () => '' }), esc: v => String(v ?? '').replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[ch]),
     clip: (v, n) => String(v ?? '').slice(0, n), ago: () => '1m', workLabel: () => 'Working', privRow: () => false, AGS: () => null, topicOn: () => false,
@@ -49,7 +49,7 @@ function device(storage = new Map(), dataset = { tweaks: ON }) {
     CH: { list: {}, feed: {}, thread: {} }, W: { list: { id: 'list' }, feed: { id: 'feed', feedOpen: true }, thread: { id: 'thread', thread: 's1' } },
     chanOpen: w => w.feedOpen ? { id: 'launch' } : null, chanElsewhere: () => false, holdList: () => false, elOf: id => ({ id }),
     renderChatList: w => repaints.push(w.id) });
-  vm.runInContext(['const WORKING_ST =', 'const isWorking =', 'const channelsOn =', 'const markDoneOn =', 'const handledNow =', 'const chanNeeds =',
+  vm.runInContext(['const WORKING_ST =', 'const isWorking =', 'const handledNow =', 'const chanNeeds =',
     'const chanUnread =', 'const actNeeds =', 'const actUnread =', 'const actMark =', 'const chanAt =', 'const ATT =', 'const attOf =', 'const STI_LAB =', 'const STI_TIP ='].map(line).join('\n')
     + '\nconst WosThreadTracker = { on: () => false, onFor: () => false };\n'
     + block('/* Draft marks (wizard-ux issue 1445', '// A row\'s marker, drawn just left') + block('function actRowMark(s)', '// A thread of an agent other') + block('function stiKind(s)', 'const stiBadge =') + block('function chatRow(s', '/* Agent inbox (switch wizard/agent-inbox)')

@@ -40,7 +40,7 @@ const report = { origin, web, expect: BROKEN ? 'broken' : 'fixed', cases: [] };
         await context.addInitScript(({ skin, spaces, phone }) => {
           if (window !== top) return;
           if (sessionStorage.getItem('qaBoot')) return; sessionStorage.setItem('qaBoot', '1');
-          const mix = { 'wizard/chat-channels': true, ...(phone ? {} : { 'wizard/desktop-chats': true }) };
+          const mix = { ...(phone ? {} : { 'wizard/desktop-chats': true }) };
           for (const [k, v] of Object.entries({ 'wos.shell': phone ? 'phone' : 'desktop', 'wux.shell': phone ? 'phone' : 'desktop', 'wos.desktop-view.v1': phone ? 'classic' : 'ai-apps', 'wos.coached': 'true', 'wos.tour.v1': 'true', 'wos.welcome.v1': 'done', 'wos.skin': skin,
             'wos.chats.spaces.v1': JSON.stringify(spaces), 'wos.skin-tweaks.v1': JSON.stringify({ version: 1, preset: 'none', off: {}, mix }) })) localStorage.setItem(k, v);
         }, { skin, spaces: SPACES, phone });
@@ -79,7 +79,7 @@ const report = { origin, web, expect: BROKEN ? 'broken' : 'fixed', cases: [] };
         const page = await context.newPage(); page.on('pageerror', e => entry.errors.push(e.message));
         await page.goto(origin + prefix + (phone ? 'index.html?phone' : 'desktop.html'));
         await page.waitForFunction(() => (window.__wux || window.__wos) && !window.WosWelcome?.active && window.WosExperience?.state.tweaks.length && !window.WosExperience.state.busy);
-        await page.waitForFunction(() => (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/chat-channels'), null, { timeout: 15000 });
+        await page.waitForFunction(() => true, null, { timeout: 15000 });
         if (!phone) await page.waitForFunction(() => document.documentElement.dataset.layout === 'ai-apps', null, { timeout: 15000 }); // the phone has no AI apps view
         const vis = sel => page.locator(sel).filter({ visible: true }).first();
         const filed = id => page.evaluate(id => JSON.parse(localStorage.getItem('wos.chats.spaces.v1') || '[]').find(s => s.id === id)?.threads || [], id);

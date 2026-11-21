@@ -1,4 +1,4 @@
-// Activity as a short what-needs-me list (wizard-ux issue 1336, switch wizard/chat-channels): the real Chats renderer
+// Activity as a short what-needs-me list (wizard-ux issue 1336, part of Channels, on for everyone since issue 1258): the real Chats renderer
 // for the phone / Classic list and the real AI apps sidebar paint, on the real list model.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -70,7 +70,7 @@ class Node {
   get childElementCount() { return this.children.length; }
   all() { return this.children.flatMap(n => [n, ...(n.all ? n.all() : [])]); }
 }
-function sidebar({ on = true, order = 'newest', agents = 3 } = {}) {
+function sidebar({ order = 'newest', agents = 3 } = {}) {
   const c = { console, Date, JSON, String, Object, Array };
   c.window = c; c.globalThis = c; modelContext(c);
   const M = c.WizChatsListModel, listens = [], set = [];
@@ -79,7 +79,7 @@ function sidebar({ on = true, order = 'newest', agents = 3 } = {}) {
   const api = { listen: (n, k, fn) => listens.push([n, k, fn]), storage: { set: (k, v) => set.push([k, v]), get: () => undefined },
     sessions: { order: () => order, list: o => { asked.push(o); return o?.activity ? M.activityList(groups([...ROWS(), row('h1', 1, { owner: 'host', fresh: true })]), facts, { order: M.activitySortOf(order), now: NOW, older: o.older }) : { working: [], snoozed: [], ready: [row('legacy', 1)], archive: [] }; } },
     agents: { focus: () => ({ id: '', agents: Array.from({ length: agents }, (_, i) => ({ id: 'a' + i, label: 'A' + i })) }) } };
-  Object.assign(c, { api, root: { dataset: { tweaks: on ? 'wizard/chat-channels' : '', aadSide: 'open' } }, scroll: new Node(), q: '', secOpen: { ready: true, working: false, snoozed: false, archive: false },
+  Object.assign(c, { api, root: { dataset: { aadSide: 'open' } }, scroll: new Node(), q: '', secOpen: { ready: true, working: false, snoozed: false, archive: false },
     sessions: null, drawn: '', KINDS: ['working', 'snoozed', 'ready', 'archive'], EMPTY: {}, sectionsFor: () => [['working', 'Working'], ['snoozed', 'Snoozed'], ['ready', 'Ready'], ['archive', 'Archive']],
     archiveTop: () => false, workingOrder: () => 'alphabetical', readyOrder: () => 'newest', badgeText: () => '', CHATS: 'wizard', here: () => ({ thread: null }),
     el: (...a) => new Node(...a), icon: () => new Node('i'), label: t => new Node('h3', 'aad-lab', { text: t }), markCurrent() {}, closeMenu() {}, openSortMenu() {},
@@ -95,7 +95,7 @@ function sidebar({ on = true, order = 'newest', agents = 3 } = {}) {
 const heads = sc => sc.all().filter(n => n.cls === 'aad-lab aad-sec').map(n => [n.attrs['data-sec'], n.attrs['aria-expanded']]);
 const texts = (sc, cls) => sc.all().filter(n => n.cls === cls).map(n => n.textContent);
 
-test('AI apps sidebar with the switch on: no agent chips, every agent, Working / Ready / Recent / Snoozed / Archived, one sort', () => {
+test('AI apps sidebar: no agent chips, every agent, Working / Ready / Recent / Snoozed / Archived, one sort', () => {
   const { c, asked, listens } = sidebar();
   c.paintAgents(); assert.equal(c.agentsRow.hidden, true, 'the agent chip strip is gone'); assert.equal(c.agentsRow.children.length, 0);
   c.readSessions(); c.paintList(true);
@@ -112,14 +112,10 @@ test('AI apps sidebar with the switch on: no agent chips, every agent, Working /
   assert.deepEqual(texts(c.scroll, 'aad-rw').slice(-3), ['r1', 'r2', 'old']);
 });
 
-test('AI apps sidebar: Needs you first puts amber first; with one agent or the switch off nothing changes', () => {
-  let { c } = sidebar({ order: 'priority' }); c.readSessions(); c.paintList(true);
+test('AI apps sidebar: Needs you first puts amber first', () => {
+  const { c } = sidebar({ order: 'priority' }); c.readSessions(); c.paintList(true);
   assert.deepEqual(texts(c.scroll, 'aad-rw').slice(0, 3), ['y1:needs', 'h1:new·Host', 'g1:new']);
   assert.equal(c.scroll.all().find(n => n.cls === 'aad-sortb aad-act-orderb').attrs['aria-label'], 'Sort: Needs you first. Change');
-  ({ c } = sidebar({ on: false })); c.paintAgents(); assert.equal(c.agentsRow.hidden, false, 'switch off: the chips stay');
-  c.readSessions(); c.paintList(true);
-  assert.deepEqual(heads(c.scroll).map(h => h[0]), ['working', 'snoozed', 'ready', 'archive'].filter(k => k !== 'snoozed'), 'switch off: today\'s sections');
-  assert.ok(!texts(c.scroll, 'aad-sec-w').includes('Recent'));
 });
 
 test('skin-host: list({ activity: true }) reads the shell\'s activity list; unread alerts wait in Ready, read ones in Recent', () => {
@@ -141,9 +137,8 @@ function realRule() {
   const read = new Set(), handled = new Set();
   const c = { console, Date, JSON, String, Object, Array };
   c.window = c; c.globalThis = c; modelContext(c);
-  Object.assign(c, { document: { documentElement: { dataset: { tweaks: 'wizard/chat-channels' } } }, CHAN_SWITCH: 'wizard/chat-channels',
-    LIVE: { isNew: s => !!s.fresh && !read.has(s.id), handled: s => handled.has(s.id) }, snoozeLast: () => false, deferredOf: s => !!s.deferred });
-  vm.runInContext(['const WORKING_ST =', 'const isWorking =', 'const channelsOn =', 'const markDoneOn =', 'const handledNow =', 'const chanNeeds =',
+  Object.assign(c, { LIVE: { isNew: s => !!s.fresh && !read.has(s.id), handled: s => handled.has(s.id) }, snoozeLast: () => false, deferredOf: s => !!s.deferred });
+  vm.runInContext(['const WORKING_ST =', 'const isWorking =', 'const handledNow =', 'const chanNeeds =',
     'const chanUnread =', 'const actNeeds =', 'const actUnread =', 'const attOf ='].map(line).join('\n')
     + '\nthis.needs = actNeeds; this.unread = actUnread; this.attOf = attOf;', c);
   return { c, open: id => read.add(id), markDone: id => { handled.add(id); read.add(id); } };
@@ -169,6 +164,4 @@ test('issue 1360: one waiting-on-you rule for Ready and the amber marker; openin
   assert.deepEqual(marks(l), { ready: ['apr:needs'], recent: ['grn', 'chk', 'ny', 'fyi'] }, 'Mark done clears amber and moves the thread to Recent');
   noAmberInRecent(l);
   assert.equal(c.attOf(rows[0]), null, 'Mark done clears a Your call status too');
-  c.document.documentElement.dataset.tweaks = '';
-  assert.equal(c.attOf(rows[0])?.state, 'check', 'switch off: the status line is untouched');
 });

@@ -32,7 +32,7 @@ const ROWS = [
         await context.routeWebSocket('**/*', w => w.close());
         await context.addInitScript(({ skin, spaces, off }) => {
           if (window !== top) return;
-          const mix = off ? { 'wizard/desktop-chats': true } : { 'wizard/desktop-chats': true, 'wizard/chat-channels': true };
+          const mix = off ? { 'wizard/desktop-chats': true } : { 'wizard/desktop-chats': true };
           for (const [k, v] of Object.entries({ 'wos.shell': 'phone', 'wos.coached': 'true', 'wos.tour.v1': 'true', 'wos.welcome.v1': 'done', 'wos.skin': skin,
             'wos.chats.spaces.v1': JSON.stringify(spaces), 'wos.skin-tweaks.v1': JSON.stringify({ version: 1, preset: 'none', off: {}, mix }) })) localStorage.setItem(k, v);
         }, { skin, spaces: SPACES, off });
@@ -58,7 +58,7 @@ const ROWS = [
         const page = await context.newPage(); page.on('pageerror', e => errors.push(e.message));
         await page.goto(origin + prefix + 'index.html?phone');
         await page.waitForFunction(() => window.__wos && !window.WosWelcome?.active && window.WosExperience?.state.tweaks.length && !window.WosExperience.state.busy);
-        if (!off) await page.waitForFunction(() => (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/chat-channels'), null, { timeout: 15000 });
+        if (!off) await page.waitForFunction(() => true, null, { timeout: 15000 });
         await page.evaluate(() => __wos.openSheet('inbox'));
         await nap(600);
         const vis = sel => page.locator(sel).filter({ visible: true }).first();
