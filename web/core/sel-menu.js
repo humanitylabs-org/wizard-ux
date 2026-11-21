@@ -252,13 +252,16 @@
     const now = selSnap(); if (now && now !== g.snap) { lp = null; return; } // Chrome started its own selection: leave it
     const w = wordAt(g.x, g.y); if (!w) { lp = null; return; }
     g.on = true; g.a = w; selectionPress = null; // our selection must survive the lift
-    document.addEventListener('touchmove', lpDrag, { capture: true, passive: false });
+    window.addEventListener('touchmove', lpDrag, { capture: true, passive: false });
     lpSelect([w.node, w.i, w.node, w.j]); tell(3);
   }
   function lpDrag(e) {
     const g = lp; if (!g?.on) return;
     const t = [...e.touches].find(t => t.identifier === g.id); if (!t) return;
-    if (e.cancelable) e.preventDefault(); // the finger is selecting, not scrolling
+    // The finger is selecting: no scroll, and no page gesture below (thread swipe-back would slide the thread away
+    // on a drag right along the line and close it on lift).
+    if (e.cancelable) e.preventDefault();
+    e.stopPropagation();
     const w = wordAt(t.clientX, t.clientY); if (!w) return;
     const a = g.a, before = w.node === a.node ? w.i < a.i : !!(a.node.compareDocumentPosition(w.node) & Node.DOCUMENT_POSITION_PRECEDING);
     const set = before ? [a.node, a.j, w.node, w.i] : [a.node, a.i, w.node, w.j];
@@ -266,7 +269,7 @@
   }
   function lpEnd(show) {
     const g = lp; lp = null; if (!g) return;
-    clearTimeout(g.t); document.removeEventListener('touchmove', lpDrag, true);
+    clearTimeout(g.t); window.removeEventListener('touchmove', lpDrag, true);
     if (g.on && show) settle(120);
   }
   function bindHold() {
@@ -287,7 +290,7 @@
     document.addEventListener('touchcancel', () => lpEnd(true), true);
     document.addEventListener('scroll', () => { if (lp && !lp.on) lpEnd(false); }, true);
     // Chrome took the selection over (its own long-press arrived late): stop steering it.
-    document.addEventListener('selectionchange', () => { if (lp?.on && lp.set && !sameSel(lp.set)) { document.removeEventListener('touchmove', lpDrag, true); lp.on = false; } });
+    document.addEventListener('selectionchange', () => { if (lp?.on && lp.set && !sameSel(lp.set)) { window.removeEventListener('touchmove', lpDrag, true); lp.on = false; } });
   }
 
   function bind() {

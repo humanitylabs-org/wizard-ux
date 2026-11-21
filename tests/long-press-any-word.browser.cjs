@@ -18,7 +18,9 @@ ${links.map(h=>`<link rel="stylesheet" href="/${h}">`).join('\n')}
 <link rel="stylesheet" href="/layouts/ai-apps/layout.css">
 <style>body{touch-action:auto;background:var(--wz-base,#111)}.ch-thread{padding-top:90px}.row{padding:14px;margin:12px 16px;border-radius:12px;background:var(--wz-surface,#222)}textarea{margin:12px 16px;width:80%;font:16px system-ui}</style>
 <script>window.__tell=[];window.WizardOSNative={selection:s=>window.__tell.push(s)};window.__wos={toast(){}};</script>
-<script src="/core/sel-menu.js"></script><script>document.addEventListener('click',e=>{if(e.target.closest('a'))e.preventDefault();});</script></head><body>
+<script src="/core/sel-menu.js"></script><script>document.addEventListener('click',e=>{if(e.target.closest('a'))e.preventDefault();});
+// Stand-in for core/thread-swipe-back.js: it listens for touchmove on the Chats root and slides the thread on a drag right.
+window.__swipeMoves=0;addEventListener('DOMContentLoaded',()=>document.querySelector('[data-chats]').addEventListener('touchmove',()=>window.__swipeMoves++,{passive:true}));</script></head><body>
 <div data-chats="w1"><div data-part="thread" class="ch-thread${route?' agent':''}"${route?` data-route="${route}" style="--agc:#7aa2ff"`:''}><div class="ch-msgs">
 <div class="msg a"><div class="bub md-doc" id="m1"><p>So it is a test of selection behaviour today.</p></div></div>
 <div class="msg u"><div class="bub" id="m2">Read <a href="https://example.com/x" id="ln">this link</a> to me.</div></div>
@@ -85,6 +87,11 @@ const server=http.createServer((req,res)=>{
     held=await hold(so,{moves:[{x:so.x+30,y:so.y},{x:sl.x-10,y:sl.y},{x:sl.x,y:sl.y}]});
     check(held==='So it is a test of selection','hold on "So" then drag to "selection" selects "So it is a test of selection"',held);
     check((await menu()).open&&(await sel())==='So it is a test of selection','the dragged selection stays after lift with the own menu',await menu());
+    // A drag right along the same line stays the selection's: the page gestures below (thread swipe-back) never see it.
+    await reset();const it=await wordBox('m1','it'),te=await wordBox('m1','test');await page.evaluate(()=>{window.__swipeMoves=0;});
+    held=await hold(it,{moves:[{x:it.x+12,y:it.y},{x:(it.x+te.x)/2,y:it.y},{x:te.x,y:te.y}]});
+    const sm=await page.evaluate(()=>window.__swipeMoves);
+    check(held==='it is a test'&&(await sel())==='it is a test'&&sm===0,'hold on "it" then drag right along the line to "test" selects "it is a test" and no swipe gesture sees the drag',{held,sm});
     await reset();const of=await wordBox('m1','of'),is=await wordBox('m1','is');
     held=await hold(of,{moves:[{x:of.x-20,y:of.y},{x:is.x,y:is.y}]});
     check(held==='is a test of','drag backwards from "of" to "is" selects "is a test of"',held);
