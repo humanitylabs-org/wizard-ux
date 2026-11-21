@@ -7,6 +7,8 @@
 // app's own layer; the app opens a hosted Chats thread (Wisdom may host threads) and Back leaves it; the app's own
 // page sees the shell's appearance tokens (--wz-*). QA_ONLY=off|on runs one side. QA_RUNS sets the open count.
 // Measured 18 Nov 2026 (QA_RUNS=3, 4x CPU): off 1253 ms / 119 scripts, on 758 ms / 34 scripts to the app's first script.
+// Since issue 1696 the app frame waits for the chat services it reads at load (parent.WizLive...): 21 Nov 2026 on a
+// busy 2-CPU box (QA_RUNS=3, 4x CPU): off 2434 ms / 173 scripts, on 2020 ms / 163 scripts.
 const assert = require('node:assert/strict');
 const { chromium } = require('../tools/qa-playwright.cjs');
 const { ownerRead } = require('../tools/qa-desktop-frame-fixture.cjs');

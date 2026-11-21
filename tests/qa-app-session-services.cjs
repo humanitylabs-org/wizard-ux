@@ -8,6 +8,8 @@
 // checks app-session.html holds every one the full shell holds, that the app sees WizLive/WosChat/WosModels from its own
 // first script, that the Chats host is there, that Back at the app's root is still consumed, and that there are no errors.
 // QA_TG_WEB=<telegram checkout>/web serves the real TG style app instead of the stand-in (screenshots only).
+// It also opens index.html?app-session=<id> with the slim pin page worn (switch wizard/pin-slim-doc, issue 1696): the
+// app's first script must see the same services there.
 // QA_WEB=<other checkout>/web runs against another tree (the baseline before the fix).
 const assert = require('node:assert/strict');
 const { chromium } = require('../tools/qa-playwright.cjs');
@@ -31,14 +33,15 @@ fs.mkdirSync(out, { recursive: true });
 const nap = ms => new Promise(r => setTimeout(r, ms));
 const SESSION = { id: 'qa-thread-1', title: 'Synthetic thread', source: 'wizard', started_at: 1, last_active: 2, message_count: 0 };
 
-async function open(browser, page_) {
+async function open(browser, page_, worn = []) {
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: 'block', isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
   await ctx.routeWebSocket('**/*', w => w.close());
-  await ctx.addInitScript(apps => {
+  await ctx.addInitScript(([apps, worn]) => {
     if (window !== top) return;
     localStorage.setItem('wux.apps.v1', JSON.stringify(apps));
+    if (worn.length) localStorage.setItem('wos.tweaks.expect', JSON.stringify(worn));
     for (const [k, v] of Object.entries({ 'wos.shell': 'phone', 'wux.shell': 'phone', 'wos.coached': 'true', 'wos.tour.v1': 'true', 'wos.welcome.v1': 'done', 'wos.skin': 'nebula' })) localStorage.setItem(k, v);
-  }, [APP]);
+  }, [[APP], worn]);
   await ctx.route('**/*', async r => {
     const q = r.request(), u = new URL(q.url()), method = q.method(), p = u.pathname;
     if (u.origin !== origin) return r.abort();
@@ -69,7 +72,8 @@ async function open(browser, page_) {
   });
   const page = await ctx.newPage(), errors = [];
   page.on('pageerror', e => errors.push(e.message));
-  await page.goto(origin + prefix + page_ + '?app-session=' + APP.id, { waitUntil: 'load' });
+  // The slim pin page stops the shell's own load (window.stop()), so it never fires load: wait for the commit there.
+  await page.goto(origin + prefix + page_ + '?app-session=' + APP.id, { waitUntil: worn.length ? 'commit' : 'load' });
   await page.locator('iframe.appframe').first().waitFor({ timeout: 30000 });
   await nap(TG ? 3500 : 1500);
   const frame = page.frames().find(f => f.url().includes(APP.url));
@@ -98,6 +102,18 @@ async function open(browser, page_) {
       report.session.tgOff = await one.frame.evaluate(() => !!document.querySelector('.tg-off'));
     }
     await one.ctx.close();
+    // Slim pin page (switch wizard/pin-slim-doc, issue 1696): the app's first script sees the same chat services.
+    const slim = await open(browser, 'index.html', ['wizard/pin-slim-doc']);
+    report.slim = { pinDoc: await slim.page.evaluate(() => document.documentElement.dataset.pinDoc === '1'), errors: slim.errors };
+    await slim.page.screenshot({ path: path.join(out, `app-session-2-slim${TG ? '-tg' : ''}.png`) });
+    if (!TG) {
+      report.slim.seen = await slim.frame.evaluate(() => window.seen);
+      report.slim.host = await slim.page.evaluate(() => ({ chats: !!window.WizChatsHost, viewer: !!window.WosChat?.viewer, audio: !!window.WizBackgroundAudio }));
+      report.slim.back = await slim.page.evaluate(() => window.__wosNativeBack());
+    } else {
+      report.slim.tgOff = await slim.frame.evaluate(() => !!document.querySelector('.tg-off'));
+    }
+    await slim.ctx.close();
     console.log(JSON.stringify(report, null, 1));
     fs.writeFileSync(path.join(out, 'app-session-report.json'), JSON.stringify(report, null, 1));
     assert.deepEqual(missing, [], 'app-session.html holds every service the full shell holds');
@@ -107,6 +123,14 @@ async function open(browser, page_) {
       assert.deepEqual(report.session.seen, { live: true, chat: true, models: true, uploads: true, bell: true }, "the app's first script sees the chat services");
       assert.deepEqual(report.session.host, { chats: true, viewer: true, audio: true }, 'Chats host, media viewer and background audio are there');
       assert.equal(report.session.back, 'root', 'Back at the app root is consumed, as before');
+    }
+    assert.equal(report.slim.pinDoc, true, 'the slim pin page is on');
+    assert.deepEqual(slim.errors, [], 'slim pin page: no page errors');
+    if (TG) assert.equal(report.slim.tgOff, false, 'TG style works on the slim pin page');
+    else {
+      assert.deepEqual(report.slim.seen, { live: true, chat: true, models: true, uploads: true, bell: true }, "slim pin page: the app's first script sees the chat services");
+      assert.deepEqual(report.slim.host, { chats: true, viewer: true, audio: true }, 'slim pin page: Chats host, media viewer and background audio');
+      assert.equal(report.slim.back, 'root', 'slim pin page: Back at the app root is consumed');
     }
     console.log('PASS');
   } finally { await browser.close(); }

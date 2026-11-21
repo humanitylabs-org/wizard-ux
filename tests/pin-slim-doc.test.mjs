@@ -189,31 +189,30 @@ function session({ slim, host }) {
   const document = { documentElement: html, getElementById: () => el('host'), addEventListener() {}, createElement: el, title: '' };
   vm.runInContext(read('core/single-app-session.js'), vm.createContext({ window, document, localStorage: { getItem: () => null, setItem() {} },
     location: { origin: 'https://box.example' }, URL, addEventListener: (t, fn) => { (listeners[t] ||= []).push(fn); }, setInterval() {}, setTimeout }));
-  return { frames, opened, idle, attached: () => attached, asked: () => asked,
+  return { frames, opened, idle, attached: () => attached, asked: () => asked, fire: t => (listeners[t] || []).forEach(fn => fn()),
     arrive: async () => { window.WizChatsHost = WizChatsHost; arrive(true); await new Promise(setImmediate); } };
 }
 
-test('slim page: the app mounts at once; the rest is asked for when the app has loaded', async () => {
+test('slim page: the rest is asked for at once and the app frame is made only once it has run (issue 1696)', async () => {
   const s = session({ slim: true, host: false });
   await new Promise(setImmediate);
-  assert.equal(s.frames.length, 1, 'mounted without the Chats host');
-  assert.equal(s.asked(), 0, 'nothing more while the app is loading');
-  s.frames[0].on.load();
-  assert.equal(s.idle.length, 1); s.idle[0]();
-  assert.equal(s.asked(), 1);
-});
-
-test('slim page: a thread the app asks for before the Chats host arrived opens once it is there', async () => {
-  const s = session({ slim: true, host: false });
-  await new Promise(setImmediate);
-  assert.equal(s.attached().openThread('t1', { reply: true }), true, 'accepted');
-  assert.equal(s.asked(), 1, 'first use asks for the rest');
-  assert.deepEqual(s.opened, []);
+  assert.equal(s.asked() >= 1, true, 'the rest is asked for right away');
+  assert.equal(s.frames.length, 0, 'no app frame before the services it reads at load (parent.WizLive...)');
   await s.arrive();
+  assert.equal(s.frames.length, 1, 'mounted once the rest has arrived');
+  assert.equal(s.attached().openThread('t1', { reply: true }), true, 'the Chats host is there before the app runs');
   assert.equal(s.opened.length, 1);
   assert.equal(s.opened[0][0], 'single-app'); assert.equal(s.opened[0][1], s.frames[0]); assert.equal(s.opened[0][2], 't1');
-  assert.equal(s.attached().openThread('t2'), true, 'later: straight through');
-  assert.equal(s.opened.length, 2);
+  s.frames[0].on.load();
+  assert.equal(s.idle.length, 0, 'nothing more to load after the app');
+});
+
+test('slim page: a later app list mounts the same frame, without asking again for a load', async () => {
+  const s = session({ slim: true, host: false });
+  await s.arrive();
+  assert.equal(s.frames.length, 1);
+  s.fire('wizard:apps'); await new Promise(setImmediate);
+  assert.equal(s.frames.length, 1, 'same URL: the mounted frame stays');
 });
 
 test('full shell (switch off): the Chats host is there from the start, as before', async () => {

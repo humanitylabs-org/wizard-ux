@@ -45,9 +45,12 @@
     }) || null;
     chats?.bind(win);
   }
-  /* Slim pin page (wizard-ux issue 1584, switch wizard/pin-slim-doc): core/pin-doc.js loads the Chats host after the
-   * app has loaded (or on first use), so the host is made when it arrives. In the full shell it is here already. */
+  /* Slim pin page (wizard-ux issue 1584, switch wizard/pin-slim-doc): core/pin-doc.js loads the rest of the pin host
+   * (live.js, the chat services, the Chats host...) right after the first scripts, and the app frame is made only once
+   * it has run (mount() below), because an app reads parent.WizLive and the rest from its first script (issue 1696).
+   * The host is made when it arrives. In the full shell it is here already. */
   const slim = window.WizPinDoc?.active === true;
+  if (slim) window.WizPinDoc.extras();
   hostChats();
   if (slim && !chats) window.WizPinDoc.arrived().then(hostChats);
   // A thread the app asks for before the Chats host has arrived opens once it has (same frame, same thread).
@@ -162,6 +165,12 @@
       if (window.WizOfflineSession) await window.WizOfflineSession.ready(registry.APPS);
       if (generation !== mountGeneration) return;
     }
+    // Slim pin page: the services an app frame reads at load are there before the frame is made (issue 1696).
+    if (slim) {
+      await window.WizPinDoc.extras();
+      if (generation !== mountGeneration) return;
+      hostChats();
+    }
     const next = registry.APP[id];
     if (!next || next.kind !== 'wizard' || !next.url || !policy.within(next.url, next.url) || policy.isShell(next.url)) { unavailable(); return; }
     if (frame && mountedURL === next.url) { app = next; return; }
@@ -189,8 +198,6 @@
       back: () => { window.__wosNativeBack(); return true; }, readingStorage:localStorage });
     frame.addEventListener('load', () => {
       if (frame !== mountedFrame) return;
-      // The app is in: the rest of the pin host comes now, while nobody is waiting for it.
-      if (slim) (window.requestIdleCallback || (f => setTimeout(f, 300)))(() => window.WizPinDoc.extras(), { timeout: 1500 });
       // An opaque frame cannot be read: no route restore or save, no in-frame hooks. Back, appearance and dictation go
       // through WizAppServices.attach -> WizBrowserBoundary; a load is simply the app being there.
       if (opaque) { loaded = true; document.title = policy.displayName(app); safeInsets(); return; }

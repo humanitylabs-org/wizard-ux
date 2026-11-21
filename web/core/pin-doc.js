@@ -4,8 +4,9 @@
  * pinned app uses a few. With the switch on, this first script of index.html stops the page here (window.stop())
  * and builds the pinned-app host in place from the same release's files: every stylesheet (so the look is exactly
  * the shell's, in the same order), then only the scripts a pinned app needs to open (EAGER below), and the rest
- * (hosted Chats threads, voice reply, the chat media viewer...) once the app has loaded or on first use
- * (WizPinDoc.extras()). The URL stays index.html?app-session=<id>, so the Android app window, Back and the offline
+ * (live.js and the chat services an app reads at load, hosted Chats threads, voice reply, the chat media viewer...)
+ * right after them (WizPinDoc.extras(), asked by core/single-app-session.js, which makes the app frame only once they
+ * have run: issue 1696). The URL stays index.html?app-session=<id>, so the Android app window, Back and the offline
  * route (app-session.html, untouched) are as before. Wizard's first server read (/wizard/v1/bootstrap) starts here,
  * right after shell-token.js, instead of after the head's scripts (WizPinDoc.takeBootstrap(), read by core/config.js).
  *
