@@ -311,6 +311,13 @@
       ],
       "note": "Chats thread shown as the page, move to a channel, the Space in front and the Focus agents moved out of chats.js (issue 1665); called by createChats"
     },
+    "core/chats-hosted.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Chats app thread opened over its window, closing it, per-window state and the document-scrolling check moved out of chats.js (issue 1665); called by createChats"
+    },
     "core/chats-pull.js": {
       "loadedBy": [
         "phone",
@@ -1426,6 +1433,7 @@
     "core/chats-feed.js",
     "core/chats-fitlabel.js",
     "core/chats-focus.js",
+    "core/chats-hosted.js",
     "core/chats-list-model.js",
     "core/chats-notes.js",
     "core/chats-outbox.js",

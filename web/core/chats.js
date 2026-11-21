@@ -103,11 +103,37 @@ window.WizCore.chats = function createChats(H) {
     get visibleThreads() { return visibleThreads; }, set visibleThreads(v) { visibleThreads = v; },
   };
   /* The shims: the original body's names, backed by the host; core/chats-shims.js. */
-  const { ago, androidDocument, applyLayout, ch, CH, clip, closeHosted, deskOf, desks, esc, hosted, idx, isHosted, LIVE, norm, openHosted, OUTBOX, prepThread, reach, reachLabel, save, toast, track, troubleshoot, vib, viewContext, W, winTitle, bindLate: shimsLate } = window.WizCore.chatsParts.shims({ H, openChat, saveDraft });
+  const { ago, applyLayout, clip, deskOf, desks, esc, hosted, idx, LIVE, norm, OUTBOX, reach, reachLabel, save, toast, track, troubleshoot, vib, viewContext, W, winTitle, bindLate: shimsLate } = window.WizCore.chatsParts.shims({ H });
+  // Apps admitted to open the standard thread over their window (app-services.js keeps the same list).
+  // Wisdom (James, 22 Oct 2026): Ask AI is the real Chats thread, never an app-built chat.
+  function openHosted(wid, frame, sid, opts = {}) {
+    const w = W[wid];
+    if (!w || !window.WizLauncher?.hasHostedThread(w.appId) || !frame?.isConnected || frame.closest('[data-win]')?.dataset.win !== wid) return false;
+    // Refuse replacement while any hosted thread is open; the app is not front.
+    if (opts.draft && hosted.has(wid)) return false;
+    if (!prepThread(sid, opts)) return false;
+    if (hosted.has(wid)) closeHosted(wid);
+    const layer = document.createElement('div'); layer.className = 'chats hosted-thread'; layer.dataset.chats = wid;
+    layer.style.cssText = 'position:absolute;inset:0;z-index:5;background:var(--wz-base,var(--base,#15151d));display:flex;flex-direction:column;min-height:0';
+    const container = frame.parentElement;
+    const oldPosition = container.style.position;
+    if (getComputedStyle(container).position === 'static') container.style.position = 'relative';
+    const previous = Object.getOwnPropertyDescriptor(w, 'thread');
+    Object.defineProperty(w, 'thread', { value: null, writable: true, configurable: true, enumerable: false });
+    const entry = { frame, layer, container, oldPosition, previous, w };
+    hosted.set(wid, entry);
+    frame.inert = true; frame.style.visibility = 'hidden'; container.append(layer);
+    openChat(wid, sid);
+    if (opts.draft) requestAnimationFrame(() => { if (hosted.get(wid) === entry) layer.querySelector('.ch-compose textarea')?.focus({preventScroll:true}); });
+    return true;
+  }
+  /* What an app's thread brings along, closing it, per-window state; core/chats-hosted.js. */
+  const { androidDocument, ch, CH, closeHosted, isHosted, prepThread, bindLate: hostedLate } = window.WizCore.chatsParts.hosted({ hosted, LIVE, saveDraft });
+  shimsLate({ isHosted });
   let docOwner = null, docFrame = 0, docResize = null, docObserved = [], visibleThreads = new Set();
   /* A thread as the page, move to a channel, the Space in front, Focus agents; core/chats-focus.js. */
   const { addFilter, agoText, BOOM, byStatus, CHAN_ARCHIVE_PRUNE_DAYS, CHAN_CLAMP, CHAN_DAY, CHAN_GENERAL, CHAN_PREFS_KEY, CHAN_TEXT_MAX, CHAN_VIEW_KEY, channelsOn, clearFilter, fileInGeneral, fileInSpace, focusAgentId, focusAgents, focusedAgent, focusMatches, focusOf, focusRows, hasFilter, INC, isWorking, KIT, matchesFocus, matchFilters, md, moveToChannel, paintPins, PIN, PIN_SVG, PINS_KEY, pinsOn, rememberedFocus, rerenderList, scrollBox, SEC_OPEN_KEY, SECTIONS_DAY, SECTIONS_STATUS, setFilter, setFocus, setupLate, SPACE, spaceAgent, spaceContains, spaceMember, spaces, spacesOf, STALE_LIST, STATUS, statusEntries, subjectOf, subjects, syncDocumentThread, threadOnScreen, threadViewportTop, TOPIC, topicOn, toTurns, visibleSpaces, watchTracker, WORKING_ST, bindLate: focusLate } = window.WizCore.chatsParts.focus({ agentRec, AGS: (...a) => AGS(...a), androidDocument, ch, chanStoreMove, chanStoreSpaces, chatsBack, chatVars, growTa, H, LIVE, norm, OUTBOX, owner: (...a) => owner(...a), renderChatList, renderThread, save, toast, W, winAgent });
-  shimsLate({ KIT });
+  hostedLate({ KIT });
   let chanView = (() => { try { return localStorage.getItem(CHAN_VIEW_KEY) === 'channels' ? 'channels' : 'activity'; } catch (_) { return 'activity'; } })();
   const chanExpanded = new Set(), chanMore = new Set();
   let chanArchOpen = false;
