@@ -986,7 +986,7 @@
       "loadedBy": [
         "phone"
       ],
-      "note": "Slim pin page (switch wizard/pin-slim-doc): a pinned app session builds its host from the shell's own files"
+      "note": "Slim pin page (issue 1584): a pinned app session builds its host from the shell's own files"
     },
     "core/skin-frame.js": {
       "loadedBy": [

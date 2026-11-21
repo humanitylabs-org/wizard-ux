@@ -45,8 +45,8 @@
     }) || null;
     chats?.bind(win);
   }
-  /* Slim pin page (wizard-ux issue 1584, switch wizard/pin-slim-doc): core/pin-doc.js loads the Chats host after the
-   * app has loaded (or on first use), so the host is made when it arrives. In the full shell it is here already.
+  /* Slim pin page (wizard-ux issue 1584): core/pin-doc.js loads the Chats host after the
+   * app has loaded (or on first use), so the host is made when it arrives. On app-session.html (the offline host) it is here already.
    * The services an app reads from its first script (parent.WizLive...) are asked for now, and mount() makes the frame
    * only once they have run (issue 1696). */
   const slim = window.WizPinDoc?.active === true;

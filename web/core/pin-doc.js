@@ -1,7 +1,7 @@
-/* Slim pin page (wizard-ux issue 1584, switch wizard/pin-slim-doc, off by default).
+/* Slim pin page (wizard-ux issue 1584, on for everyone).
  *
  * A home-screen app icon opens index.html?app-session=<id>: the whole phone shell, about 120 scripts, of which a
- * pinned app uses a few. With the switch on, this first script of index.html stops the page here (window.stop())
+ * pinned app uses a few. This first script of index.html stops the page here (window.stop())
  * and builds the pinned-app host in place from the same release's files: every stylesheet (so the look is exactly
  * the shell's, in the same order), then only the scripts a pinned app needs to open (EAGER below), then the services
  * an app reads from its first script (parent.WizLive, WosChat, WosModels, WizUploads, WosBell and what they read when
@@ -12,9 +12,9 @@
  * route (app-session.html, untouched) are as before. Wizard's first server read (/wizard/v1/bootstrap) starts here,
  * right after shell-token.js, instead of after the head's scripts (WizPinDoc.takeBootstrap(), read by core/config.js).
  *
- * The switch is this device's last worn tweak list (localStorage wos.tweaks.expect, written by core/skin-host.js in
- * the full shell), because data-tweaks is not painted yet at this point. Switched off, or not a pinned session, or a
- * saved copy of index.html answering another address (the service worker's offline fallback): nothing happens.
+ * data-tweaks is painted from this device's last worn tweak list (localStorage wos.tweaks.expect, written by
+ * core/skin-host.js in the full shell), so other switches still read. Not a pinned session, or a saved copy of
+ * index.html answering another address (the service worker's offline fallback): nothing happens.
  *
  * FILES is index.html's own scripts and stylesheets, in order (tests/pin-slim-doc.test.mjs keeps them identical):
  *   'h' already run above this script (shell-token.js reads its one-time meta and must run once), 'c' stylesheet,
@@ -23,7 +23,6 @@
  *   module script loaded afterwards. Scripts run in this order, each kind as listed: e, a, x, m. */
 (() => {
   'use strict';
-  const SWITCH = 'wizard/pin-slim-doc';
   const FILES = [
     ['h', 'core/shell-token.js'], ['e', 'core/browser-boundary.js'], ['e', 'core/home-screen-capabilities.js'],
     ['e', 'core/home-screen-policy.js'], ['e', 'core/offline-session.js'], ['c', 'core/home-screen-apps.css'],
@@ -77,17 +76,20 @@
     ['s', 'app-voicefiles.js'], ['s', 'app-voicesend.js'], ['s', 'app-windows.js'], ['s', 'app.js'],
     ['x', 'core/web-update.js'], ['s', 'device.js'], ['s', 'motion/wizard-motion.js'],
   ];
-  const off = () => { window.WizPinDoc = Object.freeze({ active: false, FILES, SWITCH, services: () => Promise.resolve(false), extras: () => Promise.resolve(false), arrived: () => Promise.resolve(false), takeBootstrap: () => null }); };
+  const off = () => { window.WizPinDoc = Object.freeze({ active: false, FILES, services: () => Promise.resolve(false), extras: () => Promise.resolve(false), arrived: () => Promise.resolve(false), takeBootstrap: () => null }); };
   let on = false;
   try {
     const q = new URLSearchParams(location.search);
     const path = location.pathname, dir = path.slice(0, path.lastIndexOf('/') + 1);
     const page = path === dir || path === dir + 'index.html';
-    const worn = JSON.parse(localStorage.getItem('wos.tweaks.expect') || '[]');
-    on = q.has('app-session') && page && Array.isArray(worn) && worn.includes(SWITCH) && !document.body;
-    if (on) var tweaks = worn.filter(x => typeof x === 'string' && /^[a-z0-9][a-z0-9-]*\/[a-z0-9][a-z0-9-]*$/.test(x)).slice(0, 40);
+    on = q.has('app-session') && page && !document.body;
   } catch (_) { on = false; }
   if (!on) { off(); return; }
+  let tweaks = [];
+  try {
+    const worn = JSON.parse(localStorage.getItem('wos.tweaks.expect') || '[]');
+    if (Array.isArray(worn)) tweaks = worn.filter(x => typeof x === 'string' && /^[a-z0-9][a-z0-9-]*\/[a-z0-9][a-z0-9-]*$/.test(x)).slice(0, 40);
+  } catch (_) { tweaks = []; }
   // Stop the full shell here: none of index.html's own tags below this script run.
   try { window.stop(); } catch (_) {}
   const html = document.documentElement, head = document.head;
@@ -139,7 +141,7 @@
     return extras;
   }
   window.WizPinDoc = Object.freeze({
-    active: true, FILES, SWITCH,
+    active: true, FILES,
     get loaded() { return !!extras; },
     // The services an app frame reads at load (kind 'a'); resolves once they have run.
     services: loadServices,

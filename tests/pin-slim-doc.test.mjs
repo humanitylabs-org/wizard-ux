@@ -1,15 +1,15 @@
 // wizard-ux issue 1584: a pinned app (home-screen icon) loaded the whole phone shell, about 120 scripts, before its
-// app could start. With switch wizard/pin-slim-doc, core/pin-doc.js (first script of index.html) stops the page and
-// builds the pinned-app host from the same release: every stylesheet in order, only the scripts needed to open the
-// app, the rest once the app has loaded; and Wizard's first server read starts from the page head. Switched off, or
-// in any page that is not a pinned session, nothing changes.
+// app could start. core/pin-doc.js (first script of index.html, on for everyone since the switch wizard/pin-slim-doc
+// was removed) stops the page and builds the pinned-app host from the same release: every stylesheet in order, only
+// the scripts needed to open the app, the rest once the app has loaded; and Wizard's first server read starts from
+// the page head. In any page that is not a pinned session, nothing changes.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 
 const read = path => readFileSync(new URL('../web/' + path, import.meta.url), 'utf8');
-const SWITCH = 'wizard/pin-slim-doc';
+const WORN = 'wizard/sidebar-chats-view';
 const INDEX = read('index.html');
 
 function indexFiles() {
@@ -18,7 +18,7 @@ function indexFiles() {
 }
 
 // A small DOM: enough for pin-doc.js (head, meta, created elements, appended scripts that "load" on demand).
-function page({ search = '?app-session=wizard-search', pathname = '/wizard-os-home/', worn = [SWITCH], release = '', body = null } = {}) {
+function page({ search = '?app-session=wizard-search', pathname = '/wizard-os-home/', worn = [], release = '', body = null } = {}) {
   const head = [], scripts = [], log = [];
   const el = tag => ({ tag, dataset: {}, attrs: {}, children: [], setAttribute(k, v) { this.attrs[k] = v; }, append(...c) { this.children.push(...c); } });
   const html = { dataset: {}, children: [], append(c) { this.children.push(c); } };
@@ -84,24 +84,33 @@ test('app-session.html loads every stylesheet and script a pinned app gets in th
   assert.match(tag('core/experience.js'), /\bdefer\b/);
 });
 
-test('switched off, or not a pinned session, or another address: nothing happens', () => {
-  for (const opts of [{ worn: [] }, { search: '' }, { search: '?session=x' }, { pathname: '/wizard-os-home/app-session.html' },
+test('not a pinned session, or another address: nothing happens', () => {
+  for (const opts of [{ search: '' }, { search: '?session=x' }, { pathname: '/wizard-os-home/app-session.html' },
     { pathname: '/wizard-os-home/desktop.html' }, { body: {} }]) {
     const p = page(opts);
     assert.equal(p.P.active, false, JSON.stringify(opts));
     assert.deepEqual(p.log, []); assert.equal(p.head.length, 0); assert.equal(p.html.dataset.pinDoc, undefined);
     assert.equal(p.P.takeBootstrap(), null);
   }
-  // A broken worn list never turns it on.
-  const store = page({ worn: 'x' }); assert.equal(store.P.active, false);
 });
 
-test('switched on: the page stops, every stylesheet comes first in order, then only the scripts that open the app', async () => {
-  const p = page({ release: 'abc123def456', worn: [SWITCH, 'wizard/sidebar-chats-view'] });
+test('the switch is gone: a pinned session always gets the slim page, whatever the worn list holds', () => {
+  for (const worn of [[], 'x', ['wizard/pin-slim-doc'], [WORN]]) {
+    const p = page({ worn });
+    assert.equal(p.P.active, true, JSON.stringify(worn)); assert.deepEqual(p.log, ['stop']);
+    assert.equal('SWITCH' in p.P, false);
+  }
+  assert.equal(page({ worn: 'x' }).html.dataset.tweaks, '', 'a broken worn list paints no tweaks');
+  const cat = JSON.parse(readFileSync(new URL('../web/tweaks/catalog.json', import.meta.url), 'utf8'));
+  assert.ok(![...cat.tweaks, ...(cat.defaults || [])].includes('wizard/pin-slim-doc'), 'no longer a switch');
+});
+
+test('pinned session: the page stops, every stylesheet comes first in order, then only the scripts that open the app', async () => {
+  const p = page({ release: 'abc123def456', worn: [WORN, 'wizard/thread-tracker'] });
   assert.equal(p.P.active, true);
   assert.deepEqual(p.log, ['stop']);
   assert.equal(p.html.dataset.pinDoc, '1');
-  assert.equal(p.html.dataset.tweaks, SWITCH + ' wizard/sidebar-chats-view', 'the worn tweaks are painted, so other switches still read');
+  assert.equal(p.html.dataset.tweaks, WORN + ' wizard/thread-tracker', 'the worn tweaks are painted, so other switches still read');
   const css = p.head.filter(n => n.tag === 'link');
   assert.deepEqual(css.map(l => new URL(l.href).pathname.replace('/wizard-os-home/', '')), p.FILES.filter(([k]) => k === 'c').map(([, f]) => f));
   assert.ok(css.every(l => l.attrs.blocking === 'render' && new URL(l.href).searchParams.get('v') === 'abc123def456'), 'render-blocking, same release');
@@ -116,7 +125,7 @@ test('switched on: the page stops, every stylesheet comes first in order, then o
   for (const f of ['app.js', 'device.js', 'core/chats.js', 'live.js', 'orb.js', 'core/shell-token.js']) assert.ok(!eager.includes(f), f + ' not now');
 });
 
-test('switched on: the rest arrives once asked, after the first scripts, once', async () => {
+test('pinned session: the rest arrives once asked, after the first scripts, once', async () => {
   const p = page();
   let arrived = false; p.P.arrived().then(() => { arrived = true; });
   await p.runAll();
@@ -136,7 +145,7 @@ test('switched on: the rest arrives once asked, after the first scripts, once', 
 });
 
 // wizard-ux issue 1696: an app reads parent.WizLive (and WosChat, WosModels, WizUploads, WosBell) from its first script.
-test('switched on: the services an app reads at load come first when asked, then the rest, in the same order', async () => {
+test('pinned session: the services an app reads at load come first when asked, then the rest, in the same order', async () => {
   const p = page();
   await p.runAll();
   const n = p.scripts.length;
@@ -156,7 +165,7 @@ test('switched on: the services an app reads at load come first when asked, then
   assert.deepEqual(files(p).slice(n), [...kind('a'), ...kind('x'), ...kind('m')], 'then the rest, each once');
 });
 
-test('switched on: bootstrap starts at once from the page head (fetch is already the owner-header one), taken once', async () => {
+test('pinned session: bootstrap starts at once from the page head (fetch is already the owner-header one), taken once', async () => {
   const p = page();
   assert.equal(p.fetches.length, 1);
   assert.equal(p.fetches[0][0], '/wizard/v1/bootstrap');
@@ -183,7 +192,7 @@ test('config.js uses the read the page head started, and starts its own without 
   const own = run(undefined); await own.C.ready;
   assert.deepEqual(own.calls, ['/wizard/v1/bootstrap']);
   const none = run(null); await none.C.ready;
-  assert.deepEqual(none.calls, ['/wizard/v1/bootstrap'], 'nothing started (switch off): its own read');
+  assert.deepEqual(none.calls, ['/wizard/v1/bootstrap'], 'nothing started (not a pinned session): its own read');
 });
 
 // The real single-app-session.js on the slim page: no Chats host yet.
@@ -243,7 +252,7 @@ test('slim page: a thread the app asks for before the Chats host arrived opens o
   assert.equal(s.opened.length, 2);
 });
 
-test('full shell (switch off): the Chats host is there from the start, as before', async () => {
+test('app-session.html (no slim page): the Chats host is there from the start, as before', async () => {
   const s = session({ slim: false, host: true });
   await new Promise(setImmediate);
   assert.equal(s.attached().openThread('t1'), true);
