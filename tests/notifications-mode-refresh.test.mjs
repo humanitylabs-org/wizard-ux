@@ -3,6 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
+import { withAppParts } from './fixtures/app-parts.mjs';
 import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
 
 const read = path => readFileSync(new URL('../' + path, import.meta.url), 'utf8');
@@ -13,7 +14,7 @@ function between(src, start, end) {
   assert.ok(a >= 0 && b > a, `production boundaries: ${start}`);
   return src.slice(a, b);
 }
-const phone = read('web/app.js'), desktop = read('web/desktop/desktop.js');
+const phone = withAppParts(read('web/app.js')), desktop = read('web/desktop/desktop.js');
 async function load(shell, { mode = true, unread = 2, liveOK = true } = {}) {
   const listeners = new Map(), events = [], requests = [], nodes = new Map();
   const addEventListener = (type, fn) => {

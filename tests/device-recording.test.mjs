@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { webcrypto } from 'node:crypto';
+import { withAppParts } from './fixtures/app-parts.mjs';
 
 const portSrc = readFileSync(new URL('../web/core/device-port.js', import.meta.url), 'utf8');
 const src = readFileSync(new URL('../web/core/device-recording.js', import.meta.url), 'utf8');
@@ -120,7 +121,7 @@ test('a take is never acked while the outbox copy is not durable', async () => {
 });
 
 test('app.js reaches the shell recorder only through DEV() and keeps the full app\'s bridge first', () => {
-  const app = readFileSync(new URL('../web/app.js', import.meta.url), 'utf8');
+  const app = withAppParts(readFileSync(new URL('../web/app.js', import.meta.url), 'utf8'));
   assert.match(app, /const DEV = \(\) => \{ const d = window\.WizardOSDevice; return d && typeof d\.recStart === 'function' \? d : window\.WosDeviceRecording\?\.device\(\) \|\| null; \};/);
   const html = readFileSync(new URL('../web/index.html', import.meta.url), 'utf8');
   assert.ok(html.indexOf('core/device-port.js') < html.indexOf('core/device-recording.js'));

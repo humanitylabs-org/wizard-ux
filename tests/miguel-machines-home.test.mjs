@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { fixture, read } from './fixtures/tweaks.mjs';
+import { withAppParts } from './fixtures/app-parts.mjs';
 import { withSettingsParts } from './fixtures/settings-parts.mjs'; // settings.js parts moved out verbatim (issue 1665)
 
 // Miguel's Machines-on-Home tweak and the two narrow host hooks it needs (home-main mount + api.on('home'),
@@ -41,7 +42,7 @@ test("api.on('home') needs layout; data.read.app is trusted-only, GET-only and p
   await g.clear();
 });
 test('stock Home markup carries an empty home-main slot that takes no space; core never names the package', () => {
-  const app = read('web/app.js'), desk = read('web/desktop/desktop.js'), host = read('web/core/skin-host.js');
+  const app = withAppParts(read('web/app.js')), desk = read('web/desktop/desktop.js'), host = read('web/core/skin-host.js');
   assert.match(app, /<div class="home"><div data-slot="home-main" hidden><\/div><nav class="home-tools"/);
   assert.match(desk, /<div class="home-in"><div data-slot="home-main" hidden><\/div>/);
   assert.doesNotMatch(app + desk, /\.innerHTML = (renderHome|homeHtml)\(/, 'every Home paint goes through paintHome');
@@ -69,7 +70,7 @@ test('api.back.push: newest package overlay closes first on shell Back; released
   r1(); assert.equal(f.host.back(), false); r1();
   api.back.push(() => closed.push(3)); await f.clear();
   assert.equal(f.host.back(), false, 'teardown removes open entries'); assert.deepEqual(closed, [2]);
-  const app = read('web/app.js'), desk = read('web/desktop/desktop.js');
+  const app = withAppParts(read('web/app.js')), desk = read('web/desktop/desktop.js');
   assert.match(app, /escapeOverlay: close => phoneBack\.push\(close\)/);
   assert.match(desk, /escapeOverlay: close => escapeBack\.push\(close\)/);
   assert.match(read('web/core/skin-host.js'), /shell\?\.escapeOverlay\?\.\(entry.close\)/);
@@ -90,7 +91,7 @@ test('machines-home: one inline map, the same on every workspace', () => {
   assert.match(css, /:is\(\.home, \.home-in\):has\(\[data-slot="home-main"\] > \.mh-root\) \.constellation \{ display: none; \}/);
   assert.doesNotMatch(css, /mh-orbit|mh-spin|rotate\(360/, 'nothing spins');
   for (const b of ['setTimeout', 'setInterval', 'requestAnimationFrame', 'innerHTML', 'localStorage', 'querySelector']) assert.ok(!src.includes(b), b);
-  const host = read('web/core/skin-host.js'), app = read('web/app.js'), desk = read('web/desktop/desktop.js');
+  const host = read('web/core/skin-host.js'), app = withAppParts(read('web/app.js')), desk = read('web/desktop/desktop.js');
   assert.match(host, /\.\.\.\(trusted \? \{ sessions: Object\.freeze/, 'sessions is trusted-only');
   for (const s of [app, desk]) { assert.match(s, /sessions: \(\) => \{/); assert.match(s, /openSessions: kind =>/); }
 });
@@ -184,7 +185,7 @@ test('api.nav.ask: trusted only, namespaced home: key, sends through the shell c
 });
 
 test('Home buttons that ask the agent open Chats with the draft even when no Chats window is on this desk', () => {
-  const phone = read('web/app.js'), desk = read('web/desktop/desktop.js');
+  const phone = withAppParts(read('web/app.js')), desk = read('web/desktop/desktop.js');
   assert.match(phone, /contextDraft: \(key, item, words, draft\) => \{ let w = skinChatsWin\(\); if \(!w\) \{ openChatsList\(\); w = skinChatsWin\(\); \}/, 'phone: Home opens Chats first');
   assert.match(desk, /contextDraft: \(key, item, words, draft\) => \{ let w = homeOpen \? null : skinChatsWin\(\); if \(!w\) \{ openChatsList\(\); w = skinChatsWin\(\); \}/, 'desktop: Home and the Settings panel open Chats first');
 });
@@ -269,7 +270,7 @@ test('fourth review: sign-in state survives normalisation, managed workspaces ge
 });
 
 test('fifth review: System pages open by deep link; phone Ready opens the unfiltered list', () => {
-  const set = withSettingsParts(read('web/core/settings.js')), phone = read('web/app.js');
+  const set = withSettingsParts(read('web/core/settings.js')), phone = withAppParts(read('web/app.js'));
   assert.match(set, /const sys = PAGES\.find\(p => p\.group === 'System' && p\.id === view\); if \(!sys\) return false;/);
   assert.match(set, /if \(sys\.available\(\)\) open\(view\);\n      else \{ let n = 0; waiting = setInterval/, 'a link that arrives before the package waits for it');
   assert.match(read('web/core/deeplink.js'), /window\.WosSettings\?\.systemPages\?\.includes\(view\)/, '?view=network is a link the shell accepts');
@@ -505,7 +506,7 @@ test('final review 2: exposure dates must be real; an open warning from a last r
 
 test('every Back path cancels a waiting System link', () => {
   // #880 adds outside-dismiss options; every Back still cancels pending navigation.
-  assert.match(read('web/app.js'), /function backStep\([^\n]+\n    window\.WosSettings\?\.cancelWait\?\.\(\);/);
+  assert.match(withAppParts(read('web/app.js')), /function backStep\([^\n]+\n    window\.WosSettings\?\.cancelWait\?\.\(\);/);
   assert.match(read('web/desktop/desktop.js'), /function desktopBack\(event\) \{\n    window\.WosSettings\?\.cancelWait\?\.\(\);/);
   assert.match(withSettingsParts(read('web/core/settings.js')), /register, mount, route, cancelWait,/);
 });

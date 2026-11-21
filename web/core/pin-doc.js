@@ -62,7 +62,10 @@
     ['x', 'core/app-voice.js'], ['x', 'core/tour.js'], ['x', 'core/commands.js'], ['x', 'core/features.js'],
     ['x', 'core/capture-tools.js'], ['x', 'core/bound-view.js'], ['x', 'core/home-screen-apps.js'], ['e', 'core/offline-kit.js'],
     ['e', 'core/single-app-session.js'], ['s', 'core/setup-launch.js'], ['s', 'core/welcome.js'], ['x', 'core/device-port.js'],
-    ['x', 'core/device-recording.js'], ['x', 'core/device-orb.js'], ['s', 'core/orb-switcher.js'], ['s', 'app.js'],
+    ['x', 'core/device-recording.js'], ['x', 'core/device-orb.js'], ['s', 'core/orb-switcher.js'],
+    ['s', 'app-choice.js'], ['s', 'app-dictation.js'], ['s', 'app-frame.js'], ['s', 'app-home.js'], ['s', 'app-inbox.js'],
+    ['s', 'app-mic.js'], ['s', 'app-opening.js'], ['s', 'app-transcribe.js'], ['s', 'app-unsent.js'], ['s', 'app-voicefiles.js'],
+    ['s', 'app-voicesend.js'], ['s', 'app.js'],
     ['x', 'core/web-update.js'], ['s', 'device.js'], ['s', 'motion/wizard-motion.js'],
   ];
   const off = () => { window.WizPinDoc = Object.freeze({ active: false, FILES, SWITCH, extras: () => Promise.resolve(false), arrived: () => Promise.resolve(false), takeBootstrap: () => null }); };

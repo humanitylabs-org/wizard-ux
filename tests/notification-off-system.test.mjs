@@ -5,6 +5,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { core, settle, read } from './fixtures/notification-levels.mjs';
+import { withAppParts } from './fixtures/app-parts.mjs';
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 
 const NOTES = [
@@ -143,7 +144,7 @@ test('the retired tweak is gone: no package, not in the catalog or Miguel\'s pro
 });
 
 test('cog and attention hooks: the phone gear, the desktop cog and the Settings row read WosBell.attention', () => {
-  const app = read('web/app.js'), desk = read('web/desktop/desktop.js'), st = read('web/core/settings.js');
+  const app = withAppParts(read('web/app.js')), desk = read('web/desktop/desktop.js'), st = read('web/core/settings.js');
   assert.match(app, /at = window\.WosBell\?\.attention\?\.\(\)/);
   assert.match(desk, /function paintCog\(\)[^]*window\.WosBell\?\.attention\?\.\(\)/);
   assert.match(st, /if \(at\?\.n\) items\.push\(\{ title: `\$\{at\.n\} \$\{at\.label\}`, feature: 'notification-routing' \}\)/);

@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { withAppParts } from './fixtures/app-parts.mjs';
 import { withSettingsParts } from './fixtures/settings-parts.mjs'; // settings.js parts moved out verbatim (issue 1665)
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
 function settings({ shell = true, ready = true, full = false } = {}) {
@@ -19,7 +20,7 @@ function settings({ shell = true, ready = true, full = false } = {}) {
 }
 const tap = { closest: sel => sel === '[data-st]' ? { dataset: { st: 'everywhere' } } : sel === '[data-settings-feature]' ? { dataset: { settingsFeature: 'assistant' } } : null };
 test('repeated Send while native bytes load performs a single stop/read', async () => {
-  const app = read('web/app.js');
+  const app = withAppParts(read('web/app.js'));
   const body = 'const nativeFetching = new Set();\n' + app.slice(app.indexOf('  function nativeFinish'), app.indexOf('    // Notification/Everywhere Send enters here directly')) + '\n}';
   let count = 0, resolve, fetched = false;
   const d = { fetched: () => fetched, fetch: () => { count++; return new Promise(r => { resolve = () => { fetched = true; r(); }; }); } };
@@ -47,7 +48,7 @@ test('shared app microphone admission and reload checks see the shell recorder',
   const s = read('web/core/app-capture.js');
   // The host-only pageAudioFree proof adds one safety check through the same shell bridge.
   assert.equal((s.match(/\(W\.WizardOSDevice \|\| W\.WosDeviceRecording\?\.device\(\)\)\?\.recActive/g) || []).length, 9);
-  const app = read('web/app.js');
+  const app = withAppParts(read('web/app.js'));
   const finish = app.slice(app.indexOf('function nativeFinish('), app.indexOf('const releasedTakes'));
   assert.ok(finish.indexOf('nativeTakeAppOwned(id)') < finish.indexOf('shell.fetch(id)'));
 });
