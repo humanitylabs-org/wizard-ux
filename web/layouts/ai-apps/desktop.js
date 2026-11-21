@@ -131,11 +131,11 @@ export default function desktop(api) {
   const paneVars = new Set();
   /* Narrower window, one app at a time (ONE above): from the window's width alone, never stored */
   const one = () => (globalThis.innerWidth || 1440) < ONE.from;
-  /* Activity as a short what-needs-me list (wizard-ux issue 1336, the Channels switch wizard/chat-channels): no agent
+  /* Activity as a short what-needs-me list (wizard-ux issue 1336, part of Channels, on for everyone since issue 1258): no agent
    * chips (every agent's chats; agents live in the Channels list), Working, Ready (amber needs you and green unread
    * only), Recent (the rest, newest first, a week back, then Show older), Snoozed and Archived folded at the bottom,
    * one sort on Ready (Newest first, Oldest first, Needs you first), and one marker per row: spinner, amber or green. */
-  const actOn = () => { try { return String(root.dataset.tweaks || '').split(' ').includes('wizard/chat-channels'); } catch (_) { return false; } };
+  const actOn = () => true; // tests that slice this file without it get the older list
   // The sidebar's list by the owner's Default Chats look (Settings › Chats; wizard-ux issue 1443), off by default.
   const viewOn = () => { try { return String(root.dataset.tweaks || '').split(' ').includes('wizard/sidebar-chats-view'); } catch (_) { return false; } };
   const ACT_SECTIONS = [['working', 'Working'], ['ready', 'Ready'], ['recent', 'Recent'], ['snoozed', 'Snoozed'], ['archive', 'Archived']];
@@ -302,7 +302,7 @@ export default function desktop(api) {
     api.agents.setFocus(id);
     agentsDrawn = ''; paintAgents(); readSessions(); paintList(true); paintRail(true);
   }
-  /* Channels (wizard/chat-channels, wizard-ux issue 1256): Chats' own Channels pane for this sidebar, through
+  /* Channels (wizard-ux issue 1256): Chats' own Channels pane for this sidebar, through
    * api.sessions.channels: the Activity / Channels tabs over the rows below, and in Channels the channel list, or a
    * channel's feed and its message box, in place of them (desktop.css). Empty and hidden with the switch off. */
   const chanBox = el('div', 'aad-chan'); chanBox.hidden = true;

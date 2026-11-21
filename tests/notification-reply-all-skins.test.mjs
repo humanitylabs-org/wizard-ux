@@ -34,7 +34,9 @@ test('core draws a real bubble (rounded, tinted, accent rule) from skin tokens o
   const card = rule('.ch-rq');
   assert.match(card, /border-radius:\s*10px/);
   const start = css.indexOf('/* Reply to a notification');
-  const reply = css.slice(start);
+  // The reply section runs to the Channels block appended at the end (wizard-ux issue 1258), which is not part of it.
+  const end = css.indexOf('/* Channels in Chats (wizard-ux issue 1254)', start);
+  const reply = css.slice(start, end > start ? end : undefined);
   assert.ok(start > 0);
   assert.doesNotMatch(reply, /#[0-9a-f]{3,8}\b|rgba?\(/i, 'reply styles use skin tokens, not literal colours');
   assert.doesNotMatch(reply, /font-family|data-skin/, 'no fonts and no per-skin rules in core');

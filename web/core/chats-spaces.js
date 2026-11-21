@@ -10,7 +10,7 @@
 'use strict';
 window.WizCore = window.WizCore || {};
 window.WizCore.chatsParts = window.WizCore.chatsParts || {};
-window.WizCore.chatsParts.spaces = function ({ actNeeds, actUnread, agentRec, AGS, ch, CH, CHAN_STORE_MAX, chanAt, chanEmojiPick, chanEmojiSync, chanEmojiTap, channelsOn, chanOpen, chanStore, chanTarget, chanToEnd, chatRow, chatVars, esc, fileInGeneral, fileInSpace, focusAgents, focusOf, focusOptions, H, LIVE, norm, noteAt, noteRow, openChannel, owner, READY_ORDER_KEY, renderChatList, rerenderList, runningOpen, SEC_PAGE, setFocus, SPACE, spaceAgent, spaceContains, spaceMember, spaces, spacesOf, storeAgent, toast, W, winAgent }) {
+window.WizCore.chatsParts.spaces = function ({ actNeeds, actUnread, agentRec, AGS, ch, CH, CHAN_STORE_MAX, chanAt, chanEmojiPick, chanEmojiSync, chanEmojiTap, chanOpen, chanStore, chanTarget, chanToEnd, chatRow, chatVars, esc, fileInGeneral, fileInSpace, focusAgents, focusOf, focusOptions, H, LIVE, norm, noteAt, noteRow, openChannel, owner, READY_ORDER_KEY, renderChatList, rerenderList, runningOpen, SEC_PAGE, setFocus, SPACE, spaceAgent, spaceContains, spaceMember, spaces, spacesOf, storeAgent, toast, W, winAgent }) {
   let elOf, idOf, renderChats, sendChat; // late-bound: chats.js declares these after the call, see bindLate
   function closeSpacePicker() {
     if (!chatVars.spacePicker) return false;
@@ -128,9 +128,9 @@ window.WizCore.chatsParts.spaces = function ({ actNeeds, actUnread, agentRec, AG
   }
   /* List places (the return bookmark); core/chats-places.js. */
   const { anchorListPlace, holdListPlace, LIST_PLACE_KEY, LIST_PLACE_TTL, listPlace, restoreListPlace } = window.WizCore.chatsParts.places({ ch, elOf: (...a) => elOf(...a) });
-  const listSig = w => { const f = focusOf(w), cv = typeof channelsOn === 'function' && channelsOn() ? (chanOpen(w)?.id || chatVars.chanView) : ''; return [winAgent(w), f ? f.kind + ':' + f.key : '', ch(w.id).filter || '', norm(ch(w.id).q)].concat(cv ? [cv] : [], ch(w.id).running && typeof runningOpen === 'function' && runningOpen(w) ? ['running'] : []).join('|'); };
+  const listSig = w => { const f = focusOf(w), cv = chanOpen(w)?.id || chatVars.chanView; return [winAgent(w), f ? f.kind + ':' + f.key : '', ch(w.id).filter || '', norm(ch(w.id).q)].concat(cv ? [cv] : [], ch(w.id).running && typeof runningOpen === 'function' && runningOpen(w) ? ['running'] : []).join('|'); };
   /* Stored list places and Activity's Ready counts; core/chats-ready.js. */
-  const { ACT_SORTS, listSaveT, queueListPlace, storedListPlace } = window.WizCore.chatsParts.ready({ actNeeds, actUnread, CH, chanAt, channelsOn, elOf: (...a) => elOf(...a), H, LIST_PLACE_KEY, LIST_PLACE_TTL, listPlace, listSig, LIVE, W });
+  const { ACT_SORTS, listSaveT, queueListPlace, storedListPlace } = window.WizCore.chatsParts.ready({ actNeeds, actUnread, CH, chanAt, elOf: (...a) => elOf(...a), H, LIST_PLACE_KEY, LIST_PLACE_TTL, listPlace, listSig, LIVE, W });
   let actOlder = false;
   function activityBody(w, rows, nt) {
     const M = window.WizChatsListModel, c = ch(w.id), order = M.activitySortOf(chatVars.readyOrder);
@@ -158,7 +158,7 @@ window.WizCore.chatsParts.spaces = function ({ actNeeds, actUnread, agentRec, AG
   }
   // The sort and Show older taps (Activity with Channels on); false = not one of them.
   function activityClick(e, w) {
-    if (!w || w.thread || typeof channelsOn !== 'function' || !channelsOn()) return false;
+    if (!w || w.thread) return false;
     if (e.target.closest('[data-chactorder]')) return true;   // the sort menu: its change event picks (actSetOrder)
     if (e.target.closest('[data-chactolder]')) { actOlder = true; renderChatList(w, elOf(w.id)); return true; }
     return false;

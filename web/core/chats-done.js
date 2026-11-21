@@ -7,19 +7,16 @@
  * body below keeps chats.js's indentation so `git log -L` and patches port over. */
 window.WizCore = window.WizCore || {};
 window.WizCore.chatsParts = window.WizCore.chatsParts || {};
-window.WizCore.chatsParts.done = function ({ attOf, ch, CH, CHAN_PREFS_KEY, channelsOn, chanSeenPaint, chanStore, chanStorePrefs, elOf, esc, isWorking, LIVE, owner, paintListsNow, renderThreadNow, rowOf, scrollBox, threadOnScreen, threadViewportTop, toast, vib, W }) {
+window.WizCore.chatsParts.done = function ({ attOf, ch, CH, CHAN_PREFS_KEY, chanSeenPaint, chanStore, chanStorePrefs, elOf, esc, isWorking, LIVE, owner, paintListsNow, renderThreadNow, rowOf, scrollBox, threadOnScreen, threadViewportTop, toast, vib, W }) {
   let chanUser, PW; // late-bound: chats.js declares these after the call, see bindLate
   /* Mark done (wizard-ux issue 1317, part of the Channels switch since issue 1358): the post and row menu clears a thread's
    * amber Needs you and green New reply in the feed, Activity and the Channels list, through the synced seen record
    * (LIVE.markHandled). It never archives or moves the thread; a later reply brings the markers back. An approval
    * gate is not a marker: it stays until it is answered. */
   const MARK_DONE_SVG = '<svg viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>';
-  // One Channels switch (wizard-ux issue 1358): Mark done, Needs you in the thread and the shared read point used to
-  // have their own switches; Channels in Chats now turns them all on, so testers get exactly what James runs.
-  const markDoneOn = () => channelsOn();
-  const handledNow = s => !!s && markDoneOn() && !!LIVE.handled?.(s);
+  const handledNow = s => !!s && !!LIVE.handled?.(s);
   // Offered while there is a marker to clear: not handled through its newest reply yet, or marked unread again since.
-  const canMarkDone = s => !!s && markDoneOn() && !!LIVE.markHandled && !isWorking(s) && !s.archived && (!handledNow(s) || !!LIVE.isNew?.(s));
+  const canMarkDone = s => !!s && !!LIVE.markHandled && !isWorking(s) && !s.archived && (!handledNow(s) || !!LIVE.isNew?.(s));
   // inThread: the thread's own Mark done beside its Needs you line, also while the agent works on a plain owner message.
   function markDone(wid, sid, inThread = false) {
     const s = (wid && W[owner(wid)] ? rowOf(owner(wid), sid) : null) || LIVE.session(sid);
@@ -42,10 +39,9 @@ window.WizCore.chatsParts.done = function ({ attOf, ch, CH, CHAN_PREFS_KEY, chan
    * mark clears it). It clears on Mark done, on Reply to that message, or when the agent's next status line no longer
    * lists the ask; a plain owner message never clears it. Channels also give Mark done (the menus), Reply on any
    * message in the main agent's threads, and retires the Thread tracker strip and dots (thread-tracker.js on()). */
-  const needsThreadOn = () => channelsOn();
-  const needsAsk = s => { if (!s || s.archived || s.status === 'waiting_for_approval' || !needsThreadOn()) return null; const a = attOf(s); return ['needs_you', 'check'].includes(a?.state) ? a : null; }; // the one rule above (issue 1360)
+  const needsAsk = s => { if (!s || s.archived || s.status === 'waiting_for_approval') return null; const a = attOf(s); return ['needs_you', 'check'].includes(a?.state) ? a : null; }; // the one rule above (issue 1360)
   // Reply on any message (the quote above the composer) is standard for the main agent's threads with this switch.
-  const replyStd = agent => needsThreadOn() && (!agent || agent === 'hermes');
+  const replyStd = agent => (!agent || agent === 'hermes');
   function needsLineHtml(s) {
     const a = needsAsk(s); if (!a) return '';
     return `<div class="ch-needs-line" data-needs-line role="status"><span class="ch-post-st needs"><i class="ch-chan-dot" aria-hidden="true"></i>${a.state === 'check' ? 'Your call' : 'Needs you'}</span><span class="ch-needs-ask">${esc(a.ask)}</span>${LIVE.markHandled ? `<button type="button" class="ch-needs-done" data-chmarkdone>${MARK_DONE_SVG}Mark done</button>` : ''}</div>`;
@@ -61,7 +57,7 @@ window.WizCore.chatsParts.done = function ({ attOf, ch, CH, CHAN_PREFS_KEY, chan
   // Reply on the needs-you message (3a): handled through the reply it shows, once the owner's message is saved.
   function needsReplied(wid, sid, reply) {
     const c = ch(wid), q = reply?.quote;
-    if (!needsThreadOn() || !q || q.role !== 'assistant' || !sid || c.needsFor !== sid || !(Math.abs((+q.at || 0) - c.needsAt) < 1500)) return false;
+    if (!q || q.role !== 'assistant' || !sid || c.needsFor !== sid || !(Math.abs((+q.at || 0) - c.needsAt) < 1500)) return false;
     const s = rowOf(owner(wid), sid) || LIVE.session(sid); if (!needsAsk(s) || !LIVE.markHandled) return false;
     void LIVE.markHandled(s); paintListsNow(); chanSeenPaint(); needsRepaint(wid, sid, s);
     return true;
@@ -73,7 +69,7 @@ window.WizCore.chatsParts.done = function ({ attOf, ch, CH, CHAN_PREFS_KEY, chan
   }
   // Opening a thread with an open Needs you lands on that message (once per open), its amber line at the top.
   function needsLand(w, nav) {
-    const c = ch(w.id); if (!needsThreadOn() || c.needsLandNav === nav) return;
+    const c = ch(w.id); if (c.needsLandNav === nav) return;
     c.needsLandNav = nav;
     const find = () => c.readNav === nav && c.needsFor === w.thread ? elOf(w.id)?.querySelector('.ch-msgs [data-needs-line]') : null;
     // Lands just under the thread's header, not under it (AI review of 1331: on a phone the document scrolls and the
@@ -100,14 +96,14 @@ window.WizCore.chatsParts.done = function ({ attOf, ch, CH, CHAN_PREFS_KEY, chan
   // Before openChat marks the thread read: replies newer than the read record are this open's green ones.
   function jumpOpened(wid, sid, r) {
     const c = ch(wid); c.jumpFor = sid; c.jumpSeen = new Set(); c.jumpSince = NaN; c.jumpTo = null;
-    if (!needsThreadOn() || !sid || sid === '__new__') return;
+    if (!sid || sid === '__new__') return;
     const s = r && typeof r === 'object' ? r : LIVE.session(sid);
     if (!s || !LIVE.isNew?.(s)) return;
     // No read record yet (a thread made after the synced seen state began): every reply is unread (Codex P2).
     const rec = LIVE.seenRecord?.(s), a = Date.parse(rec?.assistantActivityAt ?? '');
     c.jumpSince = !rec ? -Infinity : isFinite(a) ? a : isFinite(rec.seenAt) ? +rec.seenAt : NaN;
   }
-  const jumpPillsHtml = () => needsThreadOn() ? '<button type="button" class="ch-jump up" data-chjump="up" hidden></button><button type="button" class="ch-jump down" data-chjump="down" hidden></button>' : '';
+  const jumpPillsHtml = () => '<button type="button" class="ch-jump up" data-chjump="up" hidden></button><button type="button" class="ch-jump down" data-chjump="down" hidden></button>';
   // The thread's visible band: under its header (the phone's document scroll has a fixed header and composer).
   // Issue 1440: a channel's feed (its list scroller, .ch-scroll) uses the same pills; its band is the scroller itself.
   const jumpFeed = nb => !!nb?.classList?.contains('ch-scroll');
@@ -212,7 +208,7 @@ window.WizCore.chatsParts.done = function ({ attOf, ch, CH, CHAN_PREFS_KEY, chan
   }
   function jumpGo(wid, dir) {
     const el = elOf(wid), sc = !W[wid]?.thread ? el?.querySelector('.ch-list > .ch-scroll') : null, feed = !!sc?.querySelector(':scope > .ch-chan-feed');
-    const nb = feed ? sc : el?.querySelector('.ch-msgs'); if (!nb || !needsThreadOn()) return false;
+    const nb = feed ? sc : el?.querySelector('.ch-msgs'); if (!nb) return false;
     const band = jumpBand(nb), m = jumpMarks(wid, nb, band), t = jumpTarget(m[dir === 'down' ? 'down' : 'up'], dir);
     if (!t) { paintJump(el, nb); return false; }
     vib(6);
@@ -237,7 +233,7 @@ window.WizCore.chatsParts.done = function ({ attOf, ch, CH, CHAN_PREFS_KEY, chan
     const arch = v.archived && typeof v.archived === 'object' && !Array.isArray(v.archived) ? v.archived : {};
     return { sort: v.sort === 'za' ? 'za' : 'az', pins: Array.isArray(v.pins) ? [...new Set(v.pins.filter(x => typeof x === 'string'))] : [], archived: Object.fromEntries(Object.entries(arch).filter(([, t]) => typeof t === 'string')) };
   }
-  const chanArchived = id => channelsOn() && !!chanPrefs().archived[id];
+  const chanArchived = id => !!chanPrefs().archived[id];
   function setChanPrefs(p) { try { localStorage.setItem(CHAN_PREFS_KEY, JSON.stringify(p)); } catch (_) {} }
-  return { canMarkDone, chanArchived, chanNeeds, chanPrefs, handledNow, jumpGo, jumpOpened, jumpPillsHtml, MARK_DONE_SVG, markDone, markDoneOn, needsAsk, needsLand, needsMark, needsReplied, needsThreadOn, paintFeedJump, paintJump, replyStd, setChanPrefs, bindLate: v => { if ('chanUser' in v) chanUser = v.chanUser; if ('PW' in v) PW = v.PW; } };
+  return { canMarkDone, chanArchived, chanNeeds, chanPrefs, handledNow, jumpGo, jumpOpened, jumpPillsHtml, MARK_DONE_SVG, markDone, needsAsk, needsLand, needsMark, needsReplied, paintFeedJump, paintJump, replyStd, setChanPrefs, bindLate: v => { if ('chanUser' in v) chanUser = v.chanUser; if ('PW' in v) PW = v.PW; } };
 };

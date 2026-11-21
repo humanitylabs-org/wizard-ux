@@ -8,7 +8,7 @@
  * chats.js by both shells. The body below keeps chats.js's indentation so `git log -L` and patches port over. */
 window.WizCore = window.WizCore || {};
 window.WizCore.chatsParts = window.WizCore.chatsParts || {};
-window.WizCore.chatsParts.tracker = function ({ agentName, agentRec, AGS, byStatus, ch, CH, chanArchived, channelsOn, chanOpen, clip, draftKey, elOf, esc, focusAgents, focusedAgent, focusOf, focusUseful, holdList, KIT, LIVE, matchesFocus, notifOf, owner, pinsOn, refreshReply, rememberedFocus, renderChatList, renderThread, renderThreadLive, renderThreadNow, saveDraft, scrollBox, spaceAgent, spaces, statusEntries, syncDocumentThread, threadViewportTop, toast, toTurns, track, visibleSpaces, W }) {
+window.WizCore.chatsParts.tracker = function ({ agentName, agentRec, AGS, byStatus, ch, CH, chanArchived, chanOpen, clip, draftKey, elOf, esc, focusAgents, focusedAgent, focusOf, focusUseful, holdList, KIT, LIVE, matchesFocus, notifOf, owner, pinsOn, refreshReply, rememberedFocus, renderChatList, renderThread, renderThreadLive, renderThreadNow, saveDraft, scrollBox, spaceAgent, spaces, statusEntries, syncDocumentThread, threadViewportTop, toast, toTurns, track, visibleSpaces, W }) {
   let PAGE, PW; // late-bound: chats.js declares these after the call, see bindLate
   /* Thread tracker: Reply on a message, and going to a message (a tracker row, or the header of a quote). */
   function quoteMessage(w, node) {
@@ -138,8 +138,7 @@ window.WizCore.chatsParts.tracker = function ({ agentName, agentRec, AGS, byStat
     return `<div class="ch-fsheet" data-chfsheet><div class="ch-fcard" role="dialog" aria-label="Filter chats"><div class="ch-fh"><b>Filter</b>${c.filter ? '<button type="button" data-chfclear>Clear</button>' : ''}</div>
       <h5>Status</h5><div class="ch-fopts">${statusEntries().map(([k, f]) => opt('status', k, f.label, c.filter === k)).join('')}</div>
       ${focusSection(w)}
-      ${typeof channelsOn === 'function' && channelsOn() ? '' : `${LIVE.groupSwitch ? '' : `<h5>Layout</h5><div class="ch-fopts">${[['day', 'By day'], ['status', 'By status']].map(([v, l]) => { const on = (byStatus() ? 'status' : 'day') === v; return `<button type="button" class="ch-fopt${on ? ' on' : ''}" data-chlayout="${v}">${l}${on ? '<b>✓</b>' : ''}</button>`; }).join('')}</div>`}`}
-      <h5>View</h5><div class="ch-fopts"><button type="button" class="ch-fopt${compactOn() ? ' on' : ''}" data-chcompact>Compact · titles only${compactOn() ? '<b>✓</b>' : ''}</button><button type="button" class="ch-fopt${pinsOn() ? ' on' : ''}" data-chpins>Pins${pinsOn() ? '<b>✓</b>' : ''}</button>${typeof channelsOn === 'function' && channelsOn() ? '' : `${LIVE.groupSwitch ? `<button type="button" class="ch-fopt${byStatus() ? '' : ' on'}" data-chgroupday aria-pressed="${!byStatus()}">Group by day${byStatus() ? '' : '<b>✓</b>'}</button>` : ''}`}</div>
+      <h5>View</h5><div class="ch-fopts"><button type="button" class="ch-fopt${compactOn() ? ' on' : ''}" data-chcompact>Compact · titles only${compactOn() ? '<b>✓</b>' : ''}</button><button type="button" class="ch-fopt${pinsOn() ? ' on' : ''}" data-chpins>Pins${pinsOn() ? '<b>✓</b>' : ''}</button></div>
       </div></div>`;
   }
   function focusLabel(w) { const f = focusOf(w); return !f ? 'All' : f.kind === 'agent' ? agentRec(f.key).label : spaces().find(s => s.id === f.key)?.name || 'All'; }
@@ -165,11 +164,8 @@ window.WizCore.chatsParts.tracker = function ({ agentName, agentRec, AGS, byStat
   }
   function focusOption(w, o, strip = false) {
     const f = focusOf(w), on = o.kind === 'all' ? !f : strip && o.kind === 'agent' ? focusedAgent(f) === o.key : f?.kind === o.kind && f.key === o.key;
-    // An agent tab names the Space it will open: the focused one, or the one it remembers while All is in front
-    // (James, 25 Oct 2026: SS stays in that slot until he picks All Archimedes in its picker).
-    // With channels on, a channel is a feed, not a Focus: the tab always names the agent (wizard-ux issue 1340).
-    const shown = strip && o.kind === 'agent' && !(typeof channelsOn === 'function' && channelsOn()) ? (on ? f : rememberedFocus(w, o.key)) : null;
-    const label = shown?.kind === 'space' ? spaces().find(s => s.id === shown.key)?.name || o.label : o.label;
+    // A channel is a feed, not a Focus: the tab always names the agent (wizard-ux issue 1340).
+    const label = o.label;
     const caret = strip && on && o.kind === 'agent' ? '<i class="ch-focus-caret" aria-hidden="true">⌄</i>' : '';
     return `<button type="button" class="${strip ? 'ch-focus-tab' : 'ch-fopt'}${on ? ' on' : ''}" data-chfocusopt="${o.kind}:${esc(o.key)}" aria-pressed="${on}"${strip && o.kind === 'agent' ? ' aria-haspopup="dialog" aria-expanded="false"' : ''}${strip && o.kind === 'agent' ? ` style="--ch-agent-colour:${AGS()?.colour(agentRec(o.key)) || ''}"` : ''}${strip ? ` aria-label="${esc(label !== o.label ? o.label + ' · ' + label : o.label)}${o.unread ? ` · ${o.unread} unread` : ''}"` : ''}>${o.badge}<span>${esc(label)}</span>${caret}${strip ? o.unread ? '<i class="ch-focus-dot" aria-hidden="true"></i>' : '' : `<small>${o.unread || ''}</small>${on ? '<b>✓</b>' : ''}`}</button>`;
   }

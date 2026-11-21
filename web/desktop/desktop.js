@@ -418,7 +418,7 @@
       vFiles?.close(); vFiles = window.WosCaptureTools.take(CHATS.uploadFile, paintVoiceFiles); paintVoiceFiles();
       vTarget = (f?.app === 'chats' || (!forceNew && CHATS.isHosted(f?.id))) ? f.id : null;
       if (forceNew && vTarget) vSnapshot.thread = '__new__';
-      // A channel feed in front (wizard/chat-channels): the take is filed into that channel, wherever James is by Send.
+      // A channel feed in front: the take is filed into that channel, wherever James is by Send.
       vSpace = !forceNew && vTarget ? CHATS.chanSpaceOf?.(W[vTarget]) ?? null : null; vBox = typeof vSpace === 'string' ? CHATS.chanBox?.(vTarget) || '' : undefined;
       const capability = window.WizAppServices?.voiceInput, app = APP[f?.appId];
       vConversation = !forceNew && !CHATS.isHosted(f?.id) ? (capability ? capability.pin(winEl(f?.id)?.querySelector('iframe'), app?.id)

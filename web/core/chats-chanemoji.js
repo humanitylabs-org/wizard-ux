@@ -7,12 +7,12 @@
  * body below keeps chats.js's indentation so `git log -L` and patches port over. */
 window.WizCore = window.WizCore || {};
 window.WizCore.chatsParts = window.WizCore.chatsParts || {};
-window.WizCore.chatsParts.chanemoji = function ({ chanFace, channelsOn, chanRenameTo, esc, norm, openEmojiSheet, spaceAgent, spaces, toast }) {
+window.WizCore.chatsParts.chanemoji = function ({ chanFace, chanRenameTo, esc, norm, openEmojiSheet, spaceAgent, spaces, toast }) {
   /* Channel emoji (issue 1506): a row of emoji under the name field of New channel and Rename. A tap puts that emoji in
    * front of the name; a tap on the one already there takes it off (the list then shows 💬). Any other emoji: type it
    * first in the name, or Emoji… in the channel's actions (the full emoji sheet with search). */
   function chanEmojiPick(name) {
-    const L = window.WizCore?.CHANNEL_EMOJI; if (!Array.isArray(L) || !channelsOn()) return '';
+    const L = window.WizCore?.CHANNEL_EMOJI; if (!Array.isArray(L)) return '';
     const f = chanFace(String(name || '')), cur = f.own ? f.emoji : '';
     return `<div class="ch-emoji-pick" role="group" aria-label="Channel emoji">${L.map(e => `<button type="button" data-chemoji="${esc(e)}" aria-pressed="${e === cur}" aria-label="Emoji ${esc(e)}">${esc(e)}</button>`).join('')}</div>`;
   }

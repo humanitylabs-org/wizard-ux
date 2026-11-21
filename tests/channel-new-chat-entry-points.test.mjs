@@ -14,7 +14,7 @@ const j = x => JSON.parse(JSON.stringify(x)); // vm values are cross-realm
 const read = p => withShellParts(readFileSync(new URL('../' + p, import.meta.url), 'utf8'));
 const desktop = withDesktopParts(read('web/desktop/desktop.js'));
 const cut = (src, from, to) => { const a = src.indexOf(from); assert.ok(a >= 0, from); const b = src.indexOf(to, a); assert.ok(b > a, to); return src.slice(a, b); };
-const front = cut(desktop, '  function chanFront() {', '  // A take started in a channel (wizard/chat-channels)');
+const front = cut(desktop, '  function chanFront() {', '  // A take started in a channel re-reads');
 const talkNew = cut(desktop, '  function talkNew(', '  const generalVoice');
 const record = cut(desktop, '  async function recordReply(', '  // Dictation (Right');
 const chatsWinSrc = desktop.match(/^  const chatsWin = .+;$/m)?.[0];
@@ -145,5 +145,5 @@ test('chanCompose: only a feed with its own box takes a new chat', () => {
   vm.createContext(ctx); vm.runInContext(src, ctx);
   assert.equal(ctx.chanCompose('feed'), true); assert.deepEqual(ended, [['feed', true]], 'the feed goes to its end with its box focused');
   assert.equal(ctx.chanCompose('list'), false); assert.equal(ctx.chanCompose('none'), false);
-  assert.match(chats, /chanSpaceOf, chanCompose, chanView: \(\) => channelsOn\(\) \? chanView : '', chanBox:/, 'exported to the shells');
+  assert.match(chats, /chanSpaceOf, chanCompose, chanView: \(\) => chanView, chanBox:/, 'exported to the shells');
 });

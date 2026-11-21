@@ -1,4 +1,4 @@
-/* Wizard UX core: Chats › channel posts (switch wizard/chat-channels): a post's first message and its words, reply
+/* Wizard UX core: Chats › channel posts: a post's first message and its words, reply
  * counts, where a feed opens and stays, and seeing a post without reading it. Moved verbatim out of core/chats.js
  * (wizard-ux issue 1665: split the giant front-end files, no behaviour change). createChats (core/chats.js) calls this
  * once, where the code used to be, with the closure names it reads, and keeps the functions it returns under their
@@ -6,7 +6,7 @@
  * patches port over. */
 window.WizCore = window.WizCore || {};
 window.WizCore.chatsParts = window.WizCore.chatsParts || {};
-window.WizCore.chatsParts.posts = function ({ ch, CH, CHAN_TEXT_MAX, chanChanged, chanGenAgent, channelsOn, chanOpen, chanReadAt, chanReadFeed, chanReadKey, elOf, holdList, isWorking, LIVE, mediaOfFile, owner, paintFeedJump, rerenderList, rowAgent, toTurns, W }) {
+window.WizCore.chatsParts.posts = function ({ ch, CH, CHAN_TEXT_MAX, chanChanged, chanGenAgent, chanOpen, chanReadAt, chanReadFeed, chanReadKey, elOf, holdList, isWorking, LIVE, mediaOfFile, owner, paintFeedJump, rerenderList, rowAgent, toTurns, W }) {
   /* A post is the owner's first message (James, 10 Nov 2026: "the first message that I sent, truncated beyond a
    * certain length", with the pictures it carried as thumbnails). Agent Service list rows will carry it as
    * firstRequest / firstAttachments (wizard-agent-service issue 446); until then the shell reads the first page of
@@ -181,7 +181,7 @@ window.WizCore.chatsParts.posts = function ({ ch, CH, CHAN_TEXT_MAX, chanChanged
   // James's own touch, wheel, key or pointer on the feed: his scrolls from now (and a fling after it) move the place.
   const chanUser = wid => { if (wid) chanUserAt[wid] = Date.now(); };
   function chanScrolled(wid, sc) {
-    const w = W[wid], c = w && (W[owner(wid)] || w)?.chan; if (!c || !channelsOn() || !(Date.now() - (chanUserAt[wid] || 0) < CHAN_USER_MS)) return;
+    const w = W[wid], c = w && (W[owner(wid)] || w)?.chan; if (!c || !(Date.now() - (chanUserAt[wid] || 0) < CHAN_USER_MS)) return;
     const feed = sc.querySelector('.ch-chan-feed'); if (!feed || !sc.clientHeight || Math.abs(sc.scrollTop - (chanSetTop[wid] ?? -9)) < 1) return;
     chanUserAt[wid] = Date.now();
     chanReadFeed(wid, sc, feed); // his scroll moves the channel's watermark forward (issue 1316)

@@ -7,7 +7,7 @@
  * body below keeps chats.js's indentation so `git log -L` and patches port over. */
 window.WizCore = window.WizCore || {};
 window.WizCore.chatsParts = window.WizCore.chatsParts || {};
-window.WizCore.chatsParts.setup = function ({ AGS, attOf, ch, channelsOn, chanStoreMove, chanStoreSpaces, chatsBack, deferredOf, elOf, focusAgents, growTa, LIVE, norm, rerenderList, toast, W }) {
+window.WizCore.chatsParts.setup = function ({ AGS, attOf, ch, chanStoreMove, chanStoreSpaces, chatsBack, deferredOf, elOf, focusAgents, growTa, LIVE, norm, rerenderList, toast, W }) {
   let renderChats, snoozeLast; // late-bound: chats.js declares these after the call, see bindLate
   // Parsing, Markdown, local time, drafts, copy/share and the media viewer live in chat-kit.js.
   const KIT = window.WosChat;
@@ -92,7 +92,7 @@ window.WizCore.chatsParts.setup = function ({ AGS, attOf, ch, channelsOn, chanSt
   }
   // Focus belongs to the persisted owner window, never the transient desktop list pane / search state.
   // One UI vocabulary entry: rename this if the product term changes.
-  const SPACE = { one: 'Space', many: 'Spaces', get ch() { return typeof channelsOn === 'function' && channelsOn(); } }, // ch: Channels wording (wizard/chat-channels)
+  const SPACE = { one: 'Space', many: 'Spaces', ch: true }, // ch: Channels wording (on for everyone, wizard-ux issue 1258)
     SPACES_KEY = 'wos.chats.spaces.v1';
   let spacesRaw = null, spacesCache = [], spaceThreads = new Map(), spacesStore = null;
   function spaces() {
@@ -102,7 +102,7 @@ window.WizCore.chatsParts.setup = function ({ AGS, attOf, ch, channelsOn, chanSt
       try { const v = JSON.parse(raw || '[]'); spacesCache = Array.isArray(v) ? v.filter(s => s && typeof s.id === 'string' && typeof s.name === 'string' && Array.isArray(s.threads)) : []; } catch (_) { spacesCache = []; }
       spaceThreads = new Map(spacesCache.map(s => [s.id, new Set(s.threads)]));
     }
-    // Channels on the Agent Service store (wizard/chat-channels, wizard-ux issue 1261): the store's channels, each with
+    // Channels on the Agent Service store (wizard-ux issue 1261): the store's channels, each with
     // its members, in the shape of a Space; else (switch off, store off, older service) the Spaces as before.
     spacesStore = typeof chanStoreSpaces === 'function' ? chanStoreSpaces(spacesCache) : null;
     return spacesStore ? spacesStore.list : spacesCache;

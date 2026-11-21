@@ -1,8 +1,8 @@
 // Move to channel… on Activity rows (wizard-ux issue 1292; James, 11 Nov 2026: "when I look at the chats list and I right
-// click a thread, I need an option to move it to a different channel"). With Channels on, the AI apps Activity rows
+// click a thread, I need an option to move it to a different channel"). The AI apps Activity rows
 // (sidebar on the desktop, drawer on the phone; Working, Snoozed, Ready, Archive and search) offer Move to channel…,
 // which opens Chats' OWN picker (the one a channel feed's row menu uses), General included; the move goes through the
-// shared channel store. With the switch off the menu is unchanged.
+// shared channel store (Channels are on for everyone, wizard-ux issue 1258).
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
@@ -23,14 +23,14 @@ function model() {
 const groups = () => ({ working: [{ id: 'w', status: 'running' }], ready: [{ id: 'r', status: 'completed' }], deferred: [{ id: 's', status: 'completed', deferred: true }], archive: [{ id: 'a', status: 'completed', archived: true }] });
 const facts = channelOf => ({ live: { isNew: () => false, cardAt: () => '' }, chats: { threadActions: s => s.archived ? ['restore'] : ['snooze', 'done'], stiKind: () => '', ...(channelOf ? { channelOf } : {}) }, pins: { has: () => false } });
 
-test('Channels on: every Activity row (Working, Snoozed, Ready, Archive) offers move, before the filing actions', () => {
+test('every Activity row (Working, Snoozed, Ready, Archive) offers move, before the filing actions', () => {
   const out = model().sessionList(groups(), facts(s => s.id === 'r' ? 'Launch' : 'General'));
   for (const k of ['working', 'ready', 'snoozed', 'archive']) for (const r of out[k]) assert.ok(r.actions.includes('move'), `${k}: ${r.id} offers move`);
   assert.deepEqual([...out.ready[0].actions], ['pin', 'rename', 'unread', 'move', 'snooze', 'done']);
   assert.deepEqual([...out.archive[0].actions], ['pin', 'rename', 'move', 'restore']);
 });
 
-test('Channels off: the menu is unchanged (no move)', () => {
+test('a row with no channel (channelOf empty or absent) offers no move', () => {
   const out = model().sessionList(groups(), facts(() => ''));
   for (const k of ['working', 'ready', 'snoozed', 'archive']) for (const r of out[k]) assert.ok(!r.actions.includes('move'), `${k}: ${r.id}`);
   assert.deepEqual([...model().sessionList(groups(), facts(null)).ready[0].actions], ['pin', 'rename', 'unread', 'snooze', 'done']);
@@ -62,7 +62,7 @@ test('both shells open Chats\' own picker through CHATS.moveToChannel, without t
 });
 
 // The real picker code from chats.js: General is a row, the current channel is marked, picks write the store.
-function picker({ on = true, inSpace = 'launch', session = null, pin = '' } = {}) {
+function picker({ inSpace = 'launch', session = null, pin = '' } = {}) {
   const sets = new Map([['launch', new Set(inSpace === 'launch' ? ['t1'] : [])], ['voice', new Set(inSpace === 'voice' ? ['t1'] : [])]]);
   const channels = [{ id: 'launch', agent: 'hermes', name: 'Launch' }, { id: 'voice', agent: 'hermes', name: 'Voice' }];
   const moves = [], toasts = [], body = [];
@@ -77,7 +77,7 @@ function picker({ on = true, inSpace = 'launch', session = null, pin = '' } = {}
     document: { createElement: () => new Node(), body: { appendChild: n => body.push(n) }, querySelector: s => s === '[data-chspacepicker]' ? body[0] || null : null },
     innerWidth: 1440, innerHeight: 900, requestAnimationFrame() {}, Date,
     W: { w: { id: 'w', thread: null } }, owner: id => id, elOf: () => null, CH: { w: {} },
-    SPACE: { one: 'Space', many: 'Spaces', get ch() { return on; } }, channelsOn: () => on,
+    SPACE: { one: 'Space', many: 'Spaces', ch: true },
     esc: s => String(s), norm: s => String(s).toLowerCase(), toast: (...a) => toasts.push(a[1]),
     AGS: () => ({ colour: () => '#fff', defaultId: () => 'hermes' }), agentRec: id => ({ id, label: 'Archimedes' }),
     focusAgents: () => [{ id: 'hermes' }, ...ROUTED.map(id => ({ id }))],
@@ -124,12 +124,6 @@ test('General moves it out of its channel (the store\'s move to no channel); a c
   const g = picker({ inSpace: '' }); g.moveToChannel('w', 't1');
   assert.match(g.body[0].innerHTML, /data-spgeneral aria-pressed="true"><span>General<\/span><small><\/small><b>✓<\/b>/);
   g.fire({ 'data-spgeneral': '' }); assert.deepEqual(g.moves, [], 'already there: nothing written'); assert.deepEqual(g.toasts, ['Already in General']);
-});
-
-test('Channels off: moveToChannel opens nothing, and the Spaces picker has no General row', () => {
-  const p = picker({ on: false });
-  assert.equal(p.moveToChannel('w', 't1'), false); assert.equal(p.body.length, 0);
-  assert.match(src, /const gen = p\.sid && SPACE\.ch \? /);
 });
 
 test('the picker is for the row\'s own agent: a main row whose id a routed agent also uses stays main', () => {

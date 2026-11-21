@@ -121,10 +121,10 @@ window.WizCore.chatsParts.focus = function ({ agentRec, AGS, androidDocument, ch
     window.addEventListener('resize', resizeDocument);
   }
   /* Pins, Boomerang, topic emojis, list layouts and the Focus; core/chats-setup.js. */
-  const { agoText, BOOM, byStatus, fileInGeneral, fileInSpace, focusedAgent, INC, isWorking, KIT, matchFilters, md, paintPins, PIN, PIN_SVG, PINS_KEY, pinsOn, SEC_OPEN_KEY, SECTIONS_DAY, SECTIONS_STATUS, setFilter, SPACE, spaceAgent, spaceContains, spaceMember, spaces, SPACES_KEY, spacesOf, STALE_LIST, STATUS, statusEntries, subjectOf, subjects, TOPIC, topicOn, toTurns, visibleSpaces, WORKING_ST, bindLate: setupLate } = window.WizCore.chatsParts.setup({ AGS: (...a) => AGS(...a), attOf: (...a) => attOf(...a), ch, channelsOn: (...a) => channelsOn(...a), chanStoreMove, chanStoreSpaces, chatsBack, deferredOf: (...a) => deferredOf(...a), elOf: (...a) => elOf(...a), focusAgents, growTa, LIVE, norm, rerenderList, toast, W });
+  const { agoText, BOOM, byStatus, fileInGeneral, fileInSpace, focusedAgent, INC, isWorking, KIT, matchFilters, md, paintPins, PIN, PIN_SVG, PINS_KEY, pinsOn, SEC_OPEN_KEY, SECTIONS_DAY, SECTIONS_STATUS, setFilter, SPACE, spaceAgent, spaceContains, spaceMember, spaces, SPACES_KEY, spacesOf, STALE_LIST, STATUS, statusEntries, subjectOf, subjects, TOPIC, topicOn, toTurns, visibleSpaces, WORKING_ST, bindLate: setupLate } = window.WizCore.chatsParts.setup({ AGS: (...a) => AGS(...a), attOf: (...a) => attOf(...a), ch, chanStoreMove, chanStoreSpaces, chatsBack, deferredOf: (...a) => deferredOf(...a), elOf: (...a) => elOf(...a), focusAgents, growTa, LIVE, norm, rerenderList, toast, W });
   // Move to channel… from a row a layout draws itself (the AI apps Activity rows): the same picker as a feed's row menu.
   function moveToChannel(wid, sid) {
-    const w = W[wid]; if (!w || !sid || typeof channelsOn !== 'function' || !channelsOn()) return false;
+    const w = W[wid]; if (!w || !sid) return false;
     // The row's own owner (Activity keeps the main row when a routed thread shares its id), not the id-global pin.
     const row = LIVE.session?.(sid), agent = row ? rowAgent(row) : LIVE.agentOf(sid) || AGS()?.defaultId() || 'hermes';
     openSpacePicker(w, agent, null, { sid }); return !!chatVars.spacePicker;
@@ -178,9 +178,8 @@ window.WizCore.chatsParts.focus = function ({ agentRec, AGS, androidDocument, ch
     save(); H.layout(o.id); return true;
   }
   function rememberedFocus(w, agent) {
-    // With channels on, the agent tab opens the agent (its label never names a channel, wizard-ux issue 1340).
-    const o = W[owner(w.id)] || w, m = typeof channelsOn === 'function' && channelsOn() ? null : o?.agentFocus?.[agent];
-    return m?.kind === 'space' && spaces().some(s => s.id === m.key && spaceAgent(s) === agent) ? m : { kind: 'agent', key: agent };
+    // The agent tab opens the agent (its label never names a channel, wizard-ux issue 1340).
+    return { kind: 'agent', key: agent };
   }
   function addFilter(w, f) { if (!f) return false; if (f.kind === 'space' || f.kind === 'agent') return setFocus(w, f); const c = ch(w.id); if (w.thread) chatsBack(w); c.filter = f.key; c.filterFrom = null; rerenderList(w); return true; }
   function rerenderList(w) { const el = elOf(w.id); if (el && !w.thread) { ch(w.id).listPlace = null; ch(w.id).listPending = null; renderChatList(w, el); const sc = el.querySelector('.ch-scroll'); if (sc) sc.scrollTop = 0; if (typeof chanHold === 'function') chanHold(w.id); } }
@@ -194,16 +193,15 @@ window.WizCore.chatsParts.focus = function ({ agentRec, AGS, androidDocument, ch
     rerenderList(w); return 'chip';
   }
   const hasFilter = w => { const c = ch(w.id); return !!c.filter; };
-  /* Channels view (switch wizard/chat-channels, off by default; wizard-ux issue 1254). A channel IS a Space (same
+  /* Channels view (wizard-ux issue 1254). A channel IS a Space (same
    * storage, same one-Space-per-chat rule); chats in no Space make a virtual General that is never stored. Activity
    * is today's list plus a muted "# channel" on each row. Channels lists the Spaces (pinned first, then A–Z or Z–A,
    * General last, archived ones in a folded Archive); opening one is a Space Focus drawn as a feed of posts, each the
    * owner's first message with its pictures, so the New chat button files into it through the Space-fixed-at-send path.
    * Back: thread → channel → list. James's review (10 Nov 2026) set the post, wording, order, sheet and Archive. */
-  const CHAN_SWITCH = 'wizard/chat-channels', CHAN_VIEW_KEY = 'wos.chats.view.v1', CHAN_GENERAL = '__general__', CHAN_DAY = 864e5;
+  const CHAN_VIEW_KEY = 'wos.chats.view.v1', CHAN_GENERAL = '__general__', CHAN_DAY = 864e5;
   // Sort, pins and archive live on this device until Agent Service has shared fields for them (wizard-agent-service
   // issue 447). An archived channel leaves Archive once nothing in it moved for this many days (a setting can come later).
   const CHAN_PREFS_KEY = 'wos.chats.channel-prefs.v1', CHAN_ARCHIVE_PRUNE_DAYS = 30, CHAN_CLAMP = 200, CHAN_TEXT_MAX = 4000;
-  const channelsOn = () => { try { return (document.documentElement.dataset.tweaks || '').split(' ').includes(CHAN_SWITCH); } catch (_) { return false; } };
-  return { addFilter, agoText, BOOM, byStatus, CHAN_ARCHIVE_PRUNE_DAYS, CHAN_CLAMP, CHAN_DAY, CHAN_GENERAL, CHAN_PREFS_KEY, CHAN_TEXT_MAX, CHAN_VIEW_KEY, channelsOn, clearFilter, fileInGeneral, fileInSpace, focusAgentId, focusAgents, focusedAgent, focusMatches, focusOf, focusRows, hasFilter, INC, isWorking, KIT, matchesFocus, matchFilters, md, moveToChannel, paintPins, PIN, PIN_SVG, PINS_KEY, pinsOn, rememberedFocus, rerenderList, scrollBox, SEC_OPEN_KEY, SECTIONS_DAY, SECTIONS_STATUS, setFilter, setFocus, setupLate, SPACE, spaceAgent, spaceContains, spaceMember, spaces, spacesOf, STALE_LIST, STATUS, statusEntries, subjectOf, subjects, syncDocumentThread, threadOnScreen, threadViewportTop, TOPIC, topicOn, toTurns, visibleSpaces, watchTracker, WORKING_ST, bindLate: v => { if ('attOf' in v) attOf = v.attOf; if ('chanHold' in v) chanHold = v.chanHold; if ('channelBack' in v) channelBack = v.channelBack; if ('chanOwnPost' in v) chanOwnPost = v.chanOwnPost; if ('closeSpacePicker' in v) closeSpacePicker = v.closeSpacePicker; if ('deferredOf' in v) deferredOf = v.deferredOf; if ('elOf' in v) elOf = v.elOf; if ('openSpacePicker' in v) openSpacePicker = v.openSpacePicker; if ('PAGE' in v) PAGE = v.PAGE; if ('PW' in v) PW = v.PW; if ('rowAgent' in v) rowAgent = v.rowAgent; } };
+  return { addFilter, agoText, BOOM, byStatus, CHAN_ARCHIVE_PRUNE_DAYS, CHAN_CLAMP, CHAN_DAY, CHAN_GENERAL, CHAN_PREFS_KEY, CHAN_TEXT_MAX, CHAN_VIEW_KEY, clearFilter, fileInGeneral, fileInSpace, focusAgentId, focusAgents, focusedAgent, focusMatches, focusOf, focusRows, hasFilter, INC, isWorking, KIT, matchesFocus, matchFilters, md, moveToChannel, paintPins, PIN, PIN_SVG, PINS_KEY, pinsOn, rememberedFocus, rerenderList, scrollBox, SEC_OPEN_KEY, SECTIONS_DAY, SECTIONS_STATUS, setFilter, setFocus, setupLate, SPACE, spaceAgent, spaceContains, spaceMember, spaces, spacesOf, STALE_LIST, STATUS, statusEntries, subjectOf, subjects, syncDocumentThread, threadOnScreen, threadViewportTop, TOPIC, topicOn, toTurns, visibleSpaces, watchTracker, WORKING_ST, bindLate: v => { if ('attOf' in v) attOf = v.attOf; if ('chanHold' in v) chanHold = v.chanHold; if ('channelBack' in v) channelBack = v.channelBack; if ('chanOwnPost' in v) chanOwnPost = v.chanOwnPost; if ('closeSpacePicker' in v) closeSpacePicker = v.closeSpacePicker; if ('deferredOf' in v) deferredOf = v.deferredOf; if ('elOf' in v) elOf = v.elOf; if ('openSpacePicker' in v) openSpacePicker = v.openSpacePicker; if ('PAGE' in v) PAGE = v.PAGE; if ('PW' in v) PW = v.PW; if ('rowAgent' in v) rowAgent = v.rowAgent; } };
 };

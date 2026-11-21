@@ -11,10 +11,10 @@ const start = src.indexOf('  function jumpOpened('), end = src.indexOf('  functi
 assert.ok(start > 0 && end > start, 'jump helpers sit in the Channels block');
 const block = src.slice(start, end);
 
-function harness({ on = true, rows = {}, seen = {} } = {}) {
+function harness({ rows = {}, seen = {} } = {}) {
   const CH = {};
   const ctx = {
-    W: {}, CH, ch: id => (CH[id] = CH[id] || {}), needsThreadOn: () => on,
+    W: {}, CH, ch: id => (CH[id] = CH[id] || {}),
     LIVE: {
       session: id => rows[id] || null,
       isNew: s => !!s.unread,
@@ -27,8 +27,7 @@ function harness({ on = true, rows = {}, seen = {} } = {}) {
   return ctx;
 }
 
-test('no pill markup with Channels off; two hidden pills with it on', () => {
-  assert.equal(harness({ on: false }).api.jumpPillsHtml(), '');
+test('two hidden pills', () => {
   const html = harness().api.jumpPillsHtml();
   assert.ok(html.includes('data-chjump="up" hidden') && html.includes('data-chjump="down" hidden'));
 });
@@ -71,10 +70,7 @@ for (const [agent, kind] of [['hermes', 'main'], ['host-ops', 'host-profile'], [
   });
 }
 
-test('a new chat and Channels off never mark green', () => {
-  const f = harness({ on: false, rows: { t1: { id: 't1', unread: true } }, seen: { t1: { seenAt: 1 } } });
-  f.api.jumpOpened('w1', 't1');
-  assert.ok(Number.isNaN(f.CH.w1.jumpSince));
+test('a new chat never marks green', () => {
   const g = harness();
   g.api.jumpOpened('w1', '__new__');
   assert.ok(Number.isNaN(g.CH.w1.jumpSince));
@@ -163,12 +159,12 @@ test('↓ Latest rises above the action row only when it would cover a button (i
 function watcher() {
   const at = src.indexOf('  let chanListSig'), end = src.indexOf('  /* How far the owner has read a feed', at);
   assert.ok(at > 0 && end > at, 'chats.js watches the store list');
-  let fn = null, paints = 0, st = null, on = true;
-  const ctx = { LIVE: { onChange: f => { fn = f; } }, channelsOn: () => on, chanStore: () => st, chanReadPaint: () => { paints++; }, chanReadPaintT: 0,
+  let fn = null, paints = 0, st = null;
+  const ctx = { LIVE: { onChange: f => { fn = f; } }, chanStore: () => st, chanReadPaint: () => { paints++; }, chanReadPaintT: 0,
     clearTimeout: () => {}, setTimeout: f => { f(); return 1; } };
   vm.createContext(ctx);
   vm.runInContext(src.slice(at, end), ctx);
-  return { tick: s => { st = s; fn(); return paints; }, off: () => { on = false; } };
+  return { tick: s => { st = s; fn(); return paints; } };
 }
 const ch1 = (id, extra = {}) => ({ id, agent: 'hermes', name: id, order: 0, createdAt: '', archived: false, pinned: false, count: 0, ...extra });
 test('the channel lists repaint when the box\'s channels change, from this or another device (issue 1380)', () => {

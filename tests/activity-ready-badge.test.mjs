@@ -1,6 +1,6 @@
 // wizard-ux issue 1504: the orb badge and Home's Ready card said 3 while Activity listed 6 ready (2 green, 4 amber).
 // The badges counted unread threads only, so a needs-you thread the owner had already opened dropped out of them.
-// With Channels on they now count Activity's own Ready (chats.js activityReady through workspace-navigation chatsCount).
+// They now count Activity's own Ready (chats.js activityReady through workspace-navigation chatsCount).
 // Real live.js grouping + visibleUnread, real chats.js rule lines, real list model, real chatsCount.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -20,10 +20,9 @@ const iso = h => new Date(NOW - h * H).toISOString();
 const row = (id, h, extra = {}) => ({ id, title: 'T ' + id, status: 'completed', updatedAt: iso(h), lastUserAt: iso(h + 1), previewAt: iso(h), ...extra });
 const amber = (id, h) => row(id, h, { attention: { state: 'needs_you', ask: 'Pick one' } });
 
-function harness(rows, { on = true, bellUnread = 0 } = {}) {
+function harness(rows, { bellUnread = 0 } = {}) {
   const fresh = new Set(rows.filter(s => s.fresh).map(s => s.id)), handled = new Set();
-  const c = modelContext({ Date, JSON, console, CHAN_SWITCH: 'wizard/chat-channels',
-    document: { documentElement: { dataset: { tweaks: on ? 'wizard/chat-channels' : '' } } }, localStorage: { getItem: () => null },
+  const c = modelContext({ Date, JSON, console, localStorage: { getItem: () => null },
     snoozeLast: () => false, seenKeyOf: s => s.id, assistantAt: s => s.previewAt, hasNew: s => fresh.has(s.id), WEEK: 7 * 864e5 });
   c.window = c; c.WizChatsListModel = c.WizChatsListModel; c.WizConfig = { dayStart: n => n - n % 864e5 }; c.WosSkinHost = { snoozeOrder: '' };
   c.WosBell = { unreadCount: () => bellUnread };
@@ -33,7 +32,7 @@ function harness(rows, { on = true, bellUnread = 0 } = {}) {
     isNew: s => hasNew(s), handled: s => handledSet.has(s.id), workGroups(r) { return groupWork(r || input); },
     ${block(live, "    groups(agent = '') {", '    async refresh() {')} ${line(live, '    visibleUnread(rows)')} };`, Object.assign(c, { handledSet: handled }));
   c.WizCore = {};
-  vm.runInContext(['const WORKING_ST =', 'const isWorking =', 'const channelsOn =', 'const markDoneOn =', 'const handledNow =', 'const deferredOf =', 'const attOf =',
+  vm.runInContext(['const WORKING_ST =', 'const isWorking =', 'const handledNow =', 'const deferredOf =', 'const attOf =',
     'const chanNeeds =', 'const chanUnread =', 'const actNeeds =', 'const actUnread =', 'const chanAt ='].map(t => line(chats, '  ' + t)).join('\n')
     + '\n' + block(chats, '  function activityReady(live) {', '  /* Activity with Channels on') + '\nthis.needs = actNeeds; this.unread = actUnread; this.chanAt = chanAt;', c);
   vm.runInContext(block(nav, '  function chatsCount(live) {', '  function refreshChats(') + '\nthis.badge = chatsCount; this.word = readyWord;', c);
@@ -71,13 +70,6 @@ test('issue 1504: notifications set to Chats still add their unread items on top
   assert.equal(c.badge(c.LIVE), 8);
 });
 
-test('issue 1504: with Channels off (no Activity view) the badge keeps the unread tally', () => {
-  const { c } = harness(robert(), { on: false });
-  assert.equal(c.WizCore.activityReady(c.LIVE), null);
-  assert.equal(c.badge(c.LIVE), c.LIVE.visibleUnread(c.LIVE.unified()).length);
-  assert.equal(c.word(c.LIVE), 'unread');
-});
-
 test('issue 1504: the shells read the one count (orb badge, desk marks, phone Home card, desktop Home line)', () => {
   assert.match(withAppParts(read('web/app.js')), /const ready = window\.WizCore\.workspaceNav\.chatsCount\(LIVE\);/);
   assert.match(withAppParts(read('web/app.js')), /workspaceNav\.refreshChats\(LIVE, CHATS_APP\.id\)/);
@@ -97,11 +89,6 @@ test('issue 1517: Home\'s need-you number and card follow Activity\'s amber rows
   assert.equal(h.c.LIVE.groups().needs.length, 0, 'the old Chats rule: the "0 need you" the reporter saw');
   h.markDone('y1');
   assert.equal(h.c.WizCore.activityHome(h.c.LIVE).needs.length, 3, 'Mark done takes it off Home too');
-});
-
-test('issue 1517: with Channels off Home keeps the Chats groups', () => {
-  const { c } = harness(robert(), { on: false });
-  assert.equal(c.WizCore.activityHome(c.LIVE), null);
 });
 
 test('issue 1517: desktop Home line, its card, the status bar and the phone Ready card read activityHome', () => {

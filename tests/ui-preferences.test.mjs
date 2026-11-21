@@ -55,12 +55,9 @@ test('chat-list layout: By day is the default and keeps Yesterday / Past week; B
   assert.match(live, /localStorage\.getItem\(LAYOUT_KEY\) === 'status' \? 'status' : 'day'/);
   assert.match(live, /else if \(layout === 'status'\) g\.ready\.push\(s\);[^\n]*\n\s*else if \(!isFinite\(t\) \|\| t < yB\) g\.pastWeek\.push\(s\);/);
   assert.match(chats, /\(byStatus\(\) \? SECTIONS_STATUS : SECTIONS_DAY\)\.map/);
-  assert.match(chats, /data-chlayout=/);
-  // Group by day switch: only when a tweak or skin sets --wos-chats-group-switch; it then replaces
-  // the Layout picker and writes the same saved choice.
-  assert.match(chats, /\$\{LIVE\.groupSwitch \? '' : `<h5>Layout<\/h5>/);
-  assert.match(chats, /\$\{LIVE\.groupSwitch \? `<button type="button" class="ch-fopt\$\{byStatus\(\) \? '' : ' on'\}" data-chgroupday aria-pressed="\$\{!byStatus\(\)\}">Group by day/);
-  assert.match(chats, /closest\('\[data-chgroupday\]'\)\) \{ LIVE\.chatLayout = byStatus\(\) \? 'day' : 'status';/);
+  // The Filter sheet's Layout picker and Group by day button showed only with Channels off; Channels are on for
+  // everyone since wizard-ux issue 1258, so the sheet draws neither. The saved choice still writes through.
+  assert.doesNotMatch(chats, /data-chgroupday|data-chlayout/, 'the Layout and Group by day taps went with the Channels switch (issue 1258)');
 });
 test('a repainted Chats list shows the saved auto-archive age, not the picker value it was first painted with', () => {
   // WosMorph keeps every form field's live value, so a <select> painted with "1 week" kept saying so after the

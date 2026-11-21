@@ -175,7 +175,7 @@ window.WizCore.desktopParts.boot = function ({ $$, APP, appAt, appOf, APPS, ask,
     // a New chat in it.
     showChats: () => !!skinShowChats(),
     newChat: () => { const w = skinShowChats(); if (!w) return false; newChat(); return true; },
-    /* The AI apps sidebar's Channels pane (wizard/chat-channels, wizard-ux issue 1256): the main Chats window's own list
+    /* The AI apps sidebar's Channels pane (wizard-ux issue 1256): the main Chats window's own list
      * drawn into the layout's node as id::side (tabs, channels, a feed and its box; empty with the switch off). Its
      * clicks go through Chats' own handler; a post opens in the main Chats window like a sidebar row. */
     chatChannels: host => {

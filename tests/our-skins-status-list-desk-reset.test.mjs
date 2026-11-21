@@ -31,9 +31,9 @@ test('every skin keeps the stored layout and the By day default (an old miguel/l
   }
 });
 
-test('the Filter sheet always offers the Layout picker and the Yesterday filter', () => {
+test('the Filter sheet always offers the Yesterday filter (its Layout picker went with the Channels switch, issue 1258)', () => {
   const src = withParts(read('../web/core/chats.js'));
-  assert.match(src, /\$\{LIVE\.groupSwitch \? '' : `<h5>Layout<\/h5>/);
+  assert.doesNotMatch(src, /<h5>Layout<\/h5>/, 'Channels are on for everyone: the Filter sheet has no Layout picker');
   assert.match(src, /statusEntries = \(\) => Object\.entries\(STATUS\)\.filter\(\(\[k\]\) => !\(snoozeLast\(\) && k === 'deferred'\)\);/);
   assert.doesNotMatch(src, /Object\.entries\(STATUS\)\.map/, 'every status list goes through statusEntries');
 });

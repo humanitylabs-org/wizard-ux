@@ -43,7 +43,7 @@ test('native composer unions safe-bottom with the already covered keyboard/dock 
    const expression=bottom.replace(/ !important$/,'').replace('var(--safe-b, 0px)',String(safe)).replace('var(--wos-doc-bottom, 0px)',String(covered)).replace('max(','Math.max(');
    assert.equal(new Function('return '+expression)(),expected);
  }
- assert.equal((css.match(/max\(var\(--safe-b, 0px\), var\(--wos-doc-bottom, 0px\)\)/g)||[]).length,4,'composer, switch, Latest and document reserve share one inset');
+ assert.equal((css.match(/max\(var\(--safe-b, 0px\), var\(--wos-doc-bottom, 0px\)\)/g)||[]).length,5,'composer, switch, Latest, document reserve and the Channels jump pill (chats.css since issue 1258) share one inset');
  assert.doesNotMatch(css,/var\(--safe-b, 0px\) \+ var\(--wos-doc-bottom, 0px\)/);
 });
 test('header/composer and skin animation cannot acquire a document-sized fixed containing block',()=>{

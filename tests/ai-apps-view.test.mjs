@@ -240,7 +240,7 @@ test('desktop: a sidebar (open apps, All apps, the Archive / Working / Ready sec
   assert.deepEqual(w.qa('.vc-pick .vc-app[data-app]').map(b => b.dataset.app), ['mail', 'music', 'money', 'notes', 'maps', 'movies'], 'desktop app search includes installed, open and pinned apps');
   assert.equal(w.q('.vc-pick .vc-fold'), null, 'no Already open row');
   assert.ok(w.q('.vc-pick .vc-more'), '+ Get more last');
-  assert.deepEqual(w.qa('.aad-sec').map(h => `${h.dataset.sec}:${h.getAttribute('aria-expanded')}`), ['working:false', 'ready:true', 'archive:false'], 'round 18 item 4: Snoozed only when it holds chats (as on the rail); Archive last (James, 6 Nov 2026)');
+  assert.deepEqual(w.qa('.aad-sec').map(h => `${h.dataset.sec}:${h.getAttribute('aria-expanded')}`), ['working:false', 'ready:true', 'recent:true', 'snoozed:false', 'archive:false'], 'Activity (Channels on for everyone, issue 1258): Working, Ready, Recent, then Snoozed and Archived folded at the bottom');
   assert.deepEqual(w.qa('.aad-rw').map(r => `${r.dataset.sid}:${r.dataset.kind}`), ['r1:ready', 'r2:ready']);
   assert.equal(w.q('.aad-viewall'), null, 'no View all: the sidebar is the chat list');
   w.q('.aad-sec[data-sec="working"]').dispatchEvent(new FakePointerEvent('click'));
@@ -1050,17 +1050,17 @@ const deskWorld = () => {
   w.api.apps.inset = () => () => {};
   return { w, store, keys };
 };
-test('round 7 + 15 desktop: a chat docks beside the sidebar (✕, Esc and ⌥W back Home); tallies; the rail by status in the expanded order', async () => {
+test('round 7 + 15 desktop: a chat docks beside the sidebar (✕, Esc and ⌥W back Home); counts; the rail in the expanded order', async () => {
   const { w, keys } = deskWorld();
   const stage = new El('div'); stage.id = 'stage'; const chatDesk = new El('div'); chatDesk.className = 'wsp'; const dchats = new El('div'); dchats.className = 'dchats';
   chatDesk.append(dchats); stage.append(chatDesk); w.html.children[0].append(stage);
   w.st.sessions.ready[0].state = 'needs'; w.st.sessions.ready[1].state = 'done';
-  w.api.storage.set('groupReady', true);   // (round 20 item 9: grouped is the Settings choice now; flat is the default)
   (await layout()).default(w.api);
-  // folded tallies: Working 1 (a spinner), Archive none (quieter, no tally)
-  assert.equal(w.q('.aad-sec[data-sec="working"] .aad-tally').getAttribute('data-n'), '1');
-  assert.equal(w.q('.aad-sec[data-sec="archive"] .aad-tally'), null);
-  assert.equal(w.q('.aad-sec[data-sec="ready"] .aad-tally'), null, 'an open section shows its rows, no tally');
+  // Activity (Channels on for everyone, wizard-ux issue 1258): each folded header carries its count, Ready the pill
+  assert.equal(w.q('.aad-sec[data-sec="working"] .aad-sec-m').textContent, '1');
+  assert.equal(w.q('.aad-sec[data-sec="archive"] .aad-sec-m').textContent, '1');
+  assert.equal(w.q('.aad-sec[data-sec="ready"] .aad-sec-n').textContent, '2', 'Ready: what waits on the owner');
+  assert.deepEqual(w.qa('#aad-sec-ready .aad-rw').map(r => r.dataset.sid), ['r1', 'r2'], 'an open section shows its rows');
   // a thread: round 15 (round 7's column) docked beside the sidebar, its title and ✕ over it; Esc / ⌥W / ✕ back Home
   w.st.route = { home: false, view: 'thread', thread: 'r1', desk: 1 }; w.emit('route', w.st.route);
   assert.equal(w.html.dataset.aadChat, 'on', 'the docked column'); assert.equal(w.q('.aad-cx').hidden, false);
@@ -1073,24 +1073,17 @@ test('round 7 + 15 desktop: a chat docks beside the sidebar (✕, Esc and ⌥W b
   assert.equal(keys[1].down({ altKey: true, code: 'KeyW' }), true, '⌥W too'); assert.equal(w.st.newChats, n0 + 2);
   w.st.route = { home: false, view: 'thread', thread: 'r1', desk: 1 }; w.emit('route', w.st.route);
   w.q('.aad-cx').dispatchEvent(new FakePointerEvent('click')); assert.equal(w.st.newChats, n0 + 3, 'and its ✕');
-  // the rail (round 12; round 13: the expanded list's order, Working, Snoozed, Ready and its statuses)
+  // the rail (round 12; round 13: the expanded list's order): Working, then Ready as one list
   w.q('.aad-tog').dispatchEvent(new FakePointerEvent('click'));
-  assert.deepEqual(w.q('.aad-rlist').children.map(n => (n.className.includes('is-sub') ? '  ' : '') + n.querySelector('.aad-rk-w').textContent + ' ' + n.querySelector('.aad-rk-n').dataset.n),
-    ['Working 1', '  Needs you 1', '  Done 0'], 'By status keeps read-only groups navigable but counts only unread');
-  w.st.setting[1].querySelector('[data-aad-group="none"]').dispatchEvent(new FakePointerEvent('click'));
-  assert.deepEqual(w.q('.aad-rlist').children.map(n => n.querySelector('.aad-rk-w').textContent + ' ' + n.querySelector('.aad-rk-n').dataset.n), ['Working 1', 'Ready 2'], 'round 22: One list = Ready alone on the rail too');
-  w.st.setting[1].querySelector('[data-aad-group="status"]').dispatchEvent(new FakePointerEvent('click'));
-  // round 19 item 1: a status opens its first chat in the docked column, the rail staying folded (only ◫ expands)
+  assert.deepEqual(w.q('.aad-rlist').children.map(n => n.querySelector('.aad-rk-w').textContent + ' ' + n.querySelector('.aad-rk-n').dataset.n), ['Working 1', 'Ready 2'], 'One list = Ready alone on the rail too');
+  // round 19 item 1: a rail item opens its first chat in the docked column, the rail staying folded (only ◫ expands)
   w.st.route = { home: false, view: 'thread', thread: '__new__', desk: 1 }; w.emit('route', w.st.route);
-  assert.match(w.q('.aad-rk[data-k="needs"]').getAttribute('aria-label'), /^Needs you, 1 unread\. Click opens the first; hover lists them$/);
-  w.q('.aad-rk[data-k="needs"]').dispatchEvent(new FakePointerEvent('click'));
+  w.q('.aad-rk[data-k="ready"]').dispatchEvent(new FakePointerEvent('click'));
   assert.equal(w.html.dataset.aadSide, 'rail', 'never expands'); assert.equal(w.st.opened.at(-1), 'thread:r1');
   w.st.route = { home: false, view: 'thread', thread: 'r1', desk: 1 }; w.emit('route', w.st.route);
   assert.equal(w.html.dataset.aadChat, 'on', 'the docked chat column beside the folded rail');
-  assert.ok(w.q('.aad-rk[data-k="needs"]').classList.contains('is-on'), 'its group marked');
-  w.q('.aad-rk[data-k="done"]').dispatchEvent(new FakePointerEvent('click')); assert.equal(w.st.opened.at(-1), 'thread:r2'); assert.equal(w.html.dataset.aadSide, 'rail');
+  assert.ok(w.q('.aad-rk[data-k="ready"]').classList.contains('is-on'), 'its group marked');
   w.q('.aad-tog').dispatchEvent(new FakePointerEvent('click')); assert.equal(w.html.dataset.aadSide, 'open', 'the toggle is the only thing that expands');
-  assert.deepEqual(w.qa('#aad-sec-ready .aad-grp').map(g => g.dataset.state + ':' + g.textContent), ['needs:Needs you1', 'done:Done'], 'status subheaders hide the count for read groups');
   const css = read('web/layouts/ai-apps/desktop.css'), P = 'html[data-shell="desktop"][data-layout="ai-apps"]';
   assert.ok(css.includes(P + ' .aad-sec[data-sec="archive"] > :is(span, .aad-sec-c) { opacity: .85; }'), 'Archive a step quieter');
   assert.match(css, /\.aad-tally::after \{ content: attr\(data-n\);/);
@@ -1579,11 +1572,9 @@ test('round 13: Snoozed from the stock snooze state, with and without the snooze
   const { w, store } = deskWorld();
   w.st.sessions.snoozed = [{ id: 'z1', title: 'Later one', kind: 'snoozed', unread: false, pinned: false, actions: ['restore', 'done'] }, { id: 'z2', title: 'Later two', kind: 'snoozed', unread: false, pinned: false, actions: ['restore'] }];
   (await layout()).default(w.api);
-  assert.deepEqual(w.qa('.aad-sec').map(h => `${h.dataset.sec}:${h.getAttribute('aria-expanded')}`), ['working:false', 'snoozed:false', 'ready:true', 'archive:false'], 'Working, Snoozed, Ready, Archive last; Snoozed folded');
-  { const d2 = deskWorld(); d2.w.html.dataset.tweaks = 'miguel/archive-top'; (await layout()).default(d2.w.api);
-    assert.deepEqual(d2.w.qa('.aad-sec').map(h => h.dataset.sec), ['archive', 'working', 'ready'], 'archive-top: Archive first in the desktop sidebar'); }
+  assert.deepEqual(w.qa('.aad-sec').map(h => `${h.dataset.sec}:${h.getAttribute('aria-expanded')}`), ['working:false', 'ready:true', 'recent:true', 'snoozed:false', 'archive:false'], 'Activity (issue 1258): Working, Ready, Recent, then Snoozed and Archived folded at the bottom');
   assert.equal(w.q('.aad-sec[data-sec="snoozed"] .aad-sec-w').textContent, 'Snoozed');
-  assert.equal(w.q('.aad-sec[data-sec="snoozed"] .aad-tally').getAttribute('data-n'), '2', 'its count when folded');
+  assert.equal(w.q('.aad-sec[data-sec="snoozed"] .aad-sec-m').textContent, '2', 'its count when folded');
   w.q('.aad-sec[data-sec="snoozed"]').dispatchEvent(new FakePointerEvent('click'));
   assert.deepEqual(w.qa('.aad-rw[data-kind="snoozed"]').map(r => r.dataset.sid), ['z1', 'z2']); assert.equal(store.sections.snoozed, true);
   w.q('.aad-tog').dispatchEvent(new FakePointerEvent('click'));
@@ -1768,12 +1759,11 @@ test('round 18 parts: Ready sorts (stock Priority / Newest / Oldest), grouped li
   assert.equal(P.tidyWords(3, '24h'), 'Closed 3 apps you hadn\'t used in 24 hours');
 });
 
-test('round 18 item 3b + 4e desktop (round 19: Newest / Oldest inside each group, chosen in Settings): ⌥↓ / ⌥↑ walk exactly the drawn Ready, wrapping', async () => {
+test('round 18 item 3b + 4e desktop (Activity since issue 1258: the one sort, chosen in Settings): ⌥↓ / ⌥↑ walk exactly the drawn Ready, wrapping', async () => {
   const at = h => new Date(Date.UTC(2026, 10, 3, h)).toISOString();
   const row = (id, title, state, h, extra = {}) => ({ id, title, kind: 'ready', state, at: at(h), unread: false, pinned: false, actions: ['snooze', 'done'], ...extra });
   for (const order of ['priority', 'subject', 'newest', 'oldest']) {
     const { w, keys } = deskWorld();
-    w.api.storage.set('groupReady', true);   // (round 20 item 9: the grouped look is the Settings switch)
     let saved = order, sets = [];
     w.api.sessions.order = () => saved; w.api.sessions.setOrder = o => { sets.push(o); saved = o; return true; };
     w.st.sessions.ready = [row('c1', 'Old fyi', 'fyi', 1), row('c2', 'Needs me', 'needs', 2), row('notif:n1', 'Urgent note', '', 5, { note: true, needs: true }), row('c3', 'Plain', 'none', 6),
@@ -1781,10 +1771,10 @@ test('round 18 item 3b + 4e desktop (round 19: Newest / Oldest inside each group
     (await layout()).default(w.api);
     const drawn = w.qa('#aad-sec-ready .aad-rw').map(n => n.dataset.sid);
     assert.equal(drawn.length, 8, order + ': every Ready row drawn');
-    assert.deepEqual(w.qa('#aad-sec-ready .aad-grp').map(g => g.dataset.state), ['needs', 'approval', 'fyi', 'deferred', 'none'], order + ': grouped like the rail');
-    assert.ok(w.q('.aad-sech .aad-sortb'), 'round 22: the sort / group control always on Ready\'s header');
-    const want = order === 'oldest' ? 'oldest' : 'newest';
-    assert.equal(w.q('[data-aad-order][aria-checked="true"]').dataset.aadOrder, want, order + ': the stock choice in Settings (Priority reads as Newest)');
+    assert.equal(w.q('#aad-sec-ready .aad-grp'), null, order + ': Activity draws Ready as one list (Channels do the grouping)');
+    assert.ok(w.q('.aad-sech .aad-act-orderb'), 'the one sort always on Ready\'s header');
+    const want = globalThis.WizChatsListModel.activitySortOf(order);
+    assert.equal(w.q('[data-aad-act-order][aria-checked="true"]').dataset.aadActOrder, want, order + ': the stock choice in Settings (By subject reads as Newest)');
     const alt = code => keys.find(h => h.down({ altKey: true, code, key: code }) === true);
     const seq = [];
     for (let i = 0; i < drawn.length; i++) {
@@ -1798,8 +1788,8 @@ test('round 18 item 3b + 4e desktop (round 19: Newest / Oldest inside each group
     w.st.route = { home: false, view: 'thread', thread: drawn[0], desk: 1 };
     alt('ArrowUp'); assert.equal(w.st.opened.at(-1), 'thread:' + drawn.at(-1), order + ': ⌥↑ from the top wraps to the bottom');
     // the choice goes through the stock Filter's saved order (api.sessions.setOrder)
-    const other = want === 'newest' ? 'oldest' : 'newest';
-    w.q(`[data-aad-order="${other}"]`).dispatchEvent(new FakePointerEvent('click'));
+    const other = want === 'oldest' ? 'newest' : 'oldest';
+    w.q(`[data-aad-act-order="${other}"]`).dispatchEvent(new FakePointerEvent('click'));
     assert.deepEqual(sets, [other], 'saved through the stock order (api.sessions.setOrder)');
     const again = w.qa('#aad-sec-ready .aad-rw').map(n => n.dataset.sid);
     w.st.route = { home: true, view: 'desk', thread: null, desk: 1 }; alt('ArrowDown');
@@ -1923,7 +1913,8 @@ test('round 19 parts: the order inside each group (Newest / Oldest; stock Priori
   assert.equal(P.shortTime('', now), '');
 });
 
-test('round 19 item 1 desktop: the folded rail used as it is: first, next, wrap, the group marked with its place; the hover flyout (300 ms), a pick, Esc; nothing expands', async () => {
+test('round 19 item 1 desktop: the folded rail used as it is: first, next, wrap, the item marked with its place; the hover flyout (300 ms), a pick, Esc; nothing expands', async () => {
+  // Activity (Channels on for everyone, wizard-ux issue 1258): the rail is Working, Snoozed, then Ready as one list.
   const { w, keys } = deskWorld();
   let order = 'newest';
   w.api.sessions.order = () => order; w.api.sessions.setOrder = o => { order = o; return true; };
@@ -1933,86 +1924,67 @@ test('round 19 item 1 desktop: the folded rail used as it is: first, next, wrap,
   w.st.sessions.snoozed = [{ id: 's1', title: 'Later', kind: 'snoozed', at: at(0), actions: [] }];
   const stage = new El('div'); stage.id = 'stage'; const chatDesk = new El('div'); chatDesk.className = 'wsp'; const dchats = new El('div'); dchats.className = 'dchats';
   chatDesk.append(dchats); stage.append(chatDesk); w.html.children[0].append(stage);
-  w.api.storage.set('groupReady', true);   // (round 22: the rail shows the statuses only when grouped)
   (await layout()).default(w.api);
   w.q('.aad-tog').dispatchEvent(new FakePointerEvent('click')); assert.equal(w.html.dataset.aadSide, 'rail');
-  assert.deepEqual(w.q('.aad-rlist').children.map(n => n.dataset.k), ['working', 'snoozed', 'needs', 'fyi', 'none'], 'round 22: grouped, plain chats as Other, no Ready row');
-  assert.equal(w.q('.aad-rk[data-k="none"] .aad-rk-w').textContent, 'Other');
+  assert.deepEqual(w.q('.aad-rlist').children.map(n => n.dataset.k), ['working', 'snoozed', 'ready'], 'One list on the rail');
   const go = id => { w.st.route = id.startsWith('notif:') ? { home: false, view: 'thread', thread: '__new__', desk: 1 } : { home: false, view: 'thread', thread: id, desk: 1 }; w.emit('route', w.st.route); };
   const click = k => { w.q(`.aad-rk[data-k="${k}"]`).dispatchEvent(new FakePointerEvent('click')); const id = w.st.opened.at(-1).replace(/^thread:/, ''); go(id); return id; };
-  assert.deepEqual([click('needs'), click('needs'), click('needs'), click('needs')], ['n3', 'n2', 'n1', 'n3'], 'first (Newest inside the group), then the next, wrapping');
+  assert.equal(click('ready'), 'p1', 'its first chat (One list = Newest across statuses)');
   assert.equal(w.html.dataset.aadSide, 'rail', 'the rail stays folded'); assert.equal(w.html.dataset.aadChat, 'on', 'the chat in the docked column');
-  const needs = w.q('.aad-rk[data-k="needs"]');
-  assert.ok(needs.classList.contains('is-on') && needs.getAttribute('aria-current') === 'true', 'the current group marked');
-  assert.equal(needs.querySelector('.aad-rk-p').textContent, '1/3', 'its place, under the word');
-  w.st.setting[1].querySelector('[data-aad-group="none"]').dispatchEvent(new FakePointerEvent('click'));   // One list
-  assert.deepEqual(w.q('.aad-rlist').children.map(n => n.dataset.k), ['working', 'snoozed', 'ready'], 'round 22: One list on the rail');
-  assert.equal(w.q('.aad-rk[data-k="ready"]').classList.contains('is-on'), true, 'switching grouping keeps the current chat marked on the visible Ready row');
-  assert.equal(click('ready'), 'p1', 'another item: its first chat (One list = Newest across statuses)');
-  assert.equal(w.q('.aad-rk[data-k="ready"] .aad-rk-p').textContent, '1/5'); assert.equal(click('ready'), 'f1');
+  const ready = w.q('.aad-rk[data-k="ready"]');
+  assert.ok(ready.classList.contains('is-on') && ready.getAttribute('aria-current') === 'true', 'the current item marked');
+  assert.equal(w.q('.aad-rk[data-k="ready"] .aad-rk-p').textContent, '1/5', 'its place, under the word'); assert.equal(click('ready'), 'f1');
   assert.equal(w.q('.aad-rk[data-k="ready"] .aad-rk-p').textContent, '2/5');
   assert.deepEqual([click('ready'), click('ready'), click('ready'), click('ready')], ['n3', 'n2', 'n1', 'p1'], 'One list walks Newest, then wraps to the newest chat');
   for (const [sort, want] of [['oldest', ['n1', 'n2', 'n3', 'f1', 'p1']], ['newest', ['p1', 'f1', 'n3', 'n2', 'n1']]]) {
-    w.st.setting[1].querySelector(`[data-aad-order="${sort}"]`).dispatchEvent(new FakePointerEvent('click'));
+    w.st.setting[1].querySelector(`[data-aad-act-order="${sort}"]`).dispatchEvent(new FakePointerEvent('click'));
     w.st.timers.length = 0; w.q('.aad-rk[data-k="ready"]').dispatchEvent(new FakePointerEvent('pointerenter'));
     w.st.timers.find(h => h.ms === 300 && !h.dead).fn();
-    assert.deepEqual(w.qa('.aad-fly-i').map(n => n.dataset.sid), want, `One list flyout follows ${sort}, not priority groups`);
+    assert.deepEqual(w.qa('.aad-fly-i').map(n => n.dataset.sid), want, `the flyout follows ${sort}`);
     w.q(`.aad-fly-i[data-sid="${want[0]}"]`).dispatchEvent(new FakePointerEvent('click')); go(want[0]);
+    assert.equal(w.q('.aad-fly'), null, 'closed after the pick'); assert.equal(w.html.dataset.aadSide, 'rail');
     assert.equal(w.q('.aad-rk[data-k="ready"] .aad-rk-p').textContent, '1/5');
-    assert.deepEqual(want.map(() => click('ready')), [...want.slice(1), want[0]], `One list rail follows ${sort}, including wrap`);
+    assert.deepEqual(want.map(() => click('ready')), [...want.slice(1), want[0]], `the rail follows ${sort}, including wrap`);
   }
   assert.equal(click('snoozed'), 's1'); assert.equal(w.q('.aad-rk[data-k="snoozed"] .aad-rk-p'), null, 'one chat: no 1/1');
-  // ⌥↓ still walks the whole Ready
+  // ⌥↓ still walks the whole Ready, in the order the sidebar draws it (Activity: the session list's own order)
   const alt = code => keys.find(h => h.down({ altKey: true, code, key: code }) === true);
-  go('n3'); alt('ArrowDown'); assert.equal(w.st.opened.at(-1), 'thread:n2');
-  // hover: a flyout after 300 ms listing the group's chats (title, time); a pick opens one, rail still folded
-  w.st.setting[1].querySelector('[data-aad-group="status"]').dispatchEvent(new FakePointerEvent('click'));   // By status again
-  w.st.route = { home: false, view: 'thread', thread: '__new__', desk: 1 }; w.emit('route', w.st.route);
+  go('n3'); alt('ArrowDown'); assert.equal(w.st.opened.at(-1), 'thread:f1');
+  // hover: a flyout after 300 ms listing the item's chats (title, time); Esc closes it (before closing the chat)
   w.st.timers.length = 0;
-  w.q('.aad-rk[data-k="needs"]').dispatchEvent(new FakePointerEvent('pointerenter'));
+  w.q('.aad-rk[data-k="ready"]').dispatchEvent(new FakePointerEvent('pointerenter'));
   assert.equal(w.q('.aad-fly'), null, 'not at once');
   const t = w.st.timers.find(h => h.ms === 300); assert.ok(t, 'a 300 ms hover delay'); t.fn();
-  assert.deepEqual(w.qa('.aad-fly-i').map(n => n.dataset.sid), ['n3', 'n2', 'n1'], 'the group\'s chats, in order');
-  assert.equal(w.q('.aad-fly .aad-pop-h').textContent, 'Needs you · 3');
-  assert.equal(w.q('.aad-fly-i .aad-fly-t').textContent, 'Needs new'); assert.ok(w.q('.aad-fly-i .aad-fly-at'), 'and its time');
-  w.q('.aad-fly-i[data-sid="n1"]').dispatchEvent(new FakePointerEvent('click'));
-  assert.equal(w.st.opened.at(-1), 'thread:n1'); assert.equal(w.q('.aad-fly'), null, 'closed after the pick'); assert.equal(w.html.dataset.aadSide, 'rail');
-  go('n1'); assert.equal(w.q('.aad-rk[data-k="needs"] .aad-rk-p').textContent, '3/3');
-  // Esc closes it (before closing the chat)
-  w.st.timers.length = 0; w.q('.aad-rk[data-k="fyi"]').dispatchEvent(new FakePointerEvent('pointerenter')); w.st.timers.find(h => h.ms === 300 && !h.dead).fn();
-  assert.ok(w.q('.aad-fly')); assert.equal(w.escape(), true);
+  assert.equal(w.q('.aad-fly .aad-pop-h').textContent, 'Ready · 5');
+  assert.equal(w.q('.aad-fly-i .aad-fly-t').textContent, 'Plain'); assert.ok(w.q('.aad-fly-i .aad-fly-at'), 'and its time');
+  assert.equal(w.escape(), true);
   assert.equal(w.q('.aad-fly'), null, 'Esc closes the flyout'); assert.equal(w.html.dataset.aadChat, 'on', 'and only the flyout');
   // no rail item expands the sidebar; the source never calls the old openSection
   assert.ok(!/openSection\(/.test(noComments(read('web/layouts/ai-apps/desktop.js'))), 'no rail item expands the sidebar');
   assert.ok(!/sessions\.open[^\n]*send|leaveAfterSend/.test(noComments(read('web/layouts/ai-apps/desktop.js'))), 'nothing advances on send');
 });
 
-test('round 19 item 2 / round 22 desktop: Sort (Newest / Oldest, the stock key) and Group (By status / By project / One list) as two drop-downs on Ready\'s header, always shown; Settings follows', async () => {
-  const { w, store } = deskWorld();
-  let saved = 'priority'; const sets = [];
+test('round 19 item 2 / round 22 desktop (Activity since issue 1258): one Sort (Newest / Oldest / Needs you first, the stock key) as a drop-down on Ready\'s header, always shown, no Group; Settings follows', async () => {
+  const { w } = deskWorld();
+  let saved = 'subject'; const sets = [];
   w.api.sessions.order = () => saved; w.api.sessions.setOrder = o => { sets.push(o); saved = o; return true; };
   (await layout()).default(w.api);
   assert.equal(w.st.setting[0], 'ai-apps-order', 'this view\'s group in Settings');
   const node = w.st.setting[1];
   assert.equal(node.children[0].tagName + ':' + node.children[0].textContent, 'H4:AI apps view');
-  assert.deepEqual(node.querySelectorAll('[data-aad-order]').map(b => b.querySelector('b').textContent + ':' + b.getAttribute('aria-checked')), ['Newest first:true', 'Oldest first:false'], 'stock Priority reads as Newest');
+  assert.deepEqual(node.querySelectorAll('[data-aad-act-order]').map(b => b.querySelector('b').textContent + ':' + b.getAttribute('aria-checked')), ['Newest first:true', 'Oldest first:false', 'Needs you first:false'], 'stock By subject reads as Newest');
+  assert.equal(node.querySelector('[data-aad-group]'), null, 'no grouping: Channels do the grouping now');
   assert.equal(node.querySelector('[data-aad-sortshown]'), null, 'round 22: no "Show sort control" switch any more'); assert.equal(w.q('.aad-sort'), null, 'no native select anywhere');
-  const b = w.q('.aad-sech .aad-orderb'); assert.ok(b, 'shown on Ready\'s header from the start'); assert.equal(b.querySelector('.aad-sortb-w').textContent, 'Newest');
-  const g = w.q('.aad-sech .aad-groupb'); assert.ok(g, 'round 25: grouping is its own drop-down'); assert.equal(g.querySelector('.aad-sortb-w').textContent, 'One list');
-  assert.deepEqual(w.qa('.aad-sech .aad-sortb').filter(n => !n.classList.contains('aad-working-orderb')).map(n => n.classList.contains('aad-groupb') ? 'group' : 'sort'), ['group', 'sort'], 'Group, then Sort');
+  const b = w.q('.aad-sech .aad-act-orderb'); assert.ok(b, 'shown on Ready\'s header from the start'); assert.equal(b.querySelector('.aad-sortb-w').textContent, 'Newest');
+  assert.equal(w.q('.aad-sech .aad-groupb'), null, 'no Group drop-down');
   b.dispatchEvent(new FakePointerEvent('click'));
-  assert.deepEqual(w.qa('.aad-sortmenu .aad-pop-h').map(n => n.textContent), ['Sort'], 'round 25: the sort menu holds only the order');
-  assert.deepEqual(w.qa('.aad-sortmenu .aad-pop-i').map(n => n.textContent + ':' + n.getAttribute('aria-checked')), ['Newest first:true', 'Oldest first:false']);
-  w.q('.aad-sortmenu [data-order="oldest"]').dispatchEvent(new FakePointerEvent('click'));
+  assert.deepEqual(w.qa('.aad-sortmenu .aad-pop-h').map(n => n.textContent), ['Sort'], 'the sort menu holds only the order');
+  assert.deepEqual(w.qa('.aad-sortmenu .aad-pop-i').map(n => n.textContent + ':' + n.getAttribute('aria-checked')), ['Newest first:true', 'Oldest first:false', 'Needs you first:false']);
+  w.q('.aad-sortmenu [data-act-order="oldest"]').dispatchEvent(new FakePointerEvent('click'));
   assert.deepEqual(sets, ['oldest']); assert.equal(w.q('.aad-sortmenu'), null);
-  assert.equal(w.q('.aad-orderb .aad-sortb-w').textContent, 'Oldest'); assert.equal(node.querySelector('[data-aad-order="oldest"]').getAttribute('aria-checked'), 'true', 'Settings follows');
-  w.q('.aad-groupb').dispatchEvent(new FakePointerEvent('click'));
-  assert.deepEqual(w.qa('.aad-sortmenu .aad-pop-h').map(n => n.textContent), ['Group'], 'round 25: the group menu holds only the grouping');
-  assert.deepEqual(w.qa('.aad-sortmenu .aad-pop-i').map(n => n.textContent + ':' + n.getAttribute('aria-checked')), ['By status:false', 'By project:false', 'One list:true']);
-  w.q('.aad-sortmenu [data-group="status"]').dispatchEvent(new FakePointerEvent('click'));
-  assert.equal(store.groupReady, true, 'grouping from the sidebar'); assert.equal(node.querySelector('[data-aad-group="status"]').getAttribute('aria-checked'), 'true', 'Settings follows');
-  assert.equal(w.q('.aad-groupb .aad-sortb-w').textContent, 'By status');
-  node.querySelector('[data-aad-order="newest"]').dispatchEvent(new FakePointerEvent('click')); assert.deepEqual(sets, ['oldest', 'newest']);
+  assert.equal(w.q('.aad-act-orderb .aad-sortb-w').textContent, 'Oldest'); assert.equal(w.st.setting[1].querySelector('[data-aad-act-order="oldest"]').getAttribute('aria-checked'), 'true', 'Settings follows');
+  w.st.setting[1].querySelector('[data-aad-act-order="priority"]').dispatchEvent(new FakePointerEvent('click')); assert.deepEqual(sets, ['oldest', 'priority']);
+  assert.equal(w.q('.aad-act-orderb .aad-sortb-w').textContent, 'Needs you', 'the header follows Settings');
   const css = read('web/layouts/ai-apps/desktop.css');
   assert.match(css, /\.aad-sortb \{[^}]*font: 400 0\.6875rem \/ 1 var\(--wz-font-ui\)/, 'the control in the shell\'s font token');
   assert.match(css, /\.aad-sortmenu \.aad-pop-i \{/, 'its menu is the view\'s own menu (the shell type), not a native list');
@@ -2123,40 +2095,39 @@ test('round 20 item 1 / round 21: ⌥H Home folds both sides away, closes the ch
   assert.match(js, /cc && ids\.includes\(cc\) \? cc : null;/);
 });
 
-test('round 20 item 9 / round 22: Ready defaults to One list following the chosen Sort (each row its time since the last message, no status tags); By status keeps priority groups', async t => {
+test('round 20 item 9 / round 22 (Activity since issue 1258): Ready is one list in the chosen Sort (each row its time since the last message, no status tags), never status groups', async t => {
   t.mock.method(Date, 'now', () => new Date(2026, 10, 4, 15).getTime());
-  const { w, store, keys } = deskWorld();
-  let order = 'newest';
+  const { w, keys } = deskWorld();
+  let order = 'newest'; const asked = [];
   w.api.sessions.order = () => order; w.api.sessions.setOrder = o => { order = o; return true; };
   w.st.sessions.ready[0].state = 'fyi'; w.st.sessions.ready[1].state = 'needs';
   w.st.sessions.ready[0].at = new Date(Date.now() - 5 * 60e3).toISOString(); w.st.sessions.ready[1].at = new Date(Date.now() - 3 * 3600e3).toISOString();
   w.st.sessions.ready.push({ id: 'r3', title: 'Plain middle', kind: 'ready', state: 'none', at: new Date(Date.now() - 3600e3).toISOString(), actions: [] });
+  // Chats' own session list sorts Activity (core/chats-list-model.js activitySort); the layout draws what it returns.
+  const list = w.api.sessions.list;
+  w.api.sessions.list = opts => { asked.push(opts); const s = list(opts); s.ready.sort((x, y) => (order === 'oldest' ? 1 : -1) * (Date.parse(x.at) - Date.parse(y.at))); return s; };
   (await layout()).default(w.api);
+  assert.ok(asked.every(o => o?.activity === true), 'the sidebar asks Chats for the Activity list');
   assert.equal(w.q('.aad-grp'), null, 'no sub-headers');
   const ready = () => w.qa('.aad-rw[data-kind="ready"]').map(r => r.dataset.sid);
-  assert.deepEqual(ready(), ['r1', 'r3', 'r2'], 'One list, Newest: newer FYI and plain chat before older Needs you');
+  assert.deepEqual(ready(), ['r1', 'r3', 'r2'], 'Newest: newer FYI and plain chat before older Needs you');
   assert.equal(w.q('.aad-tag'), null, 'round 22: no status tags');
   const times = w.qa('.aad-rw[data-kind="ready"] .aad-time'); assert.equal(times.length, 3, 'round 22: each Ready row shows how long ago');
   assert.deepEqual(times.map(t => t.textContent), ['5m', '1h', '3h'], 'its time since the last message (newest first)');
   for (const [sort, want] of [['oldest', ['r2', 'r3', 'r1']], ['newest', ['r1', 'r3', 'r2']]]) {
-    w.q('.aad-orderb').dispatchEvent(new FakePointerEvent('click'));
-    w.q(`.aad-sortmenu [data-order="${sort}"]`).dispatchEvent(new FakePointerEvent('click'));
-    assert.deepEqual(ready(), want, `One list follows ${sort} from the sidebar Sort control`);
+    w.q('.aad-act-orderb').dispatchEvent(new FakePointerEvent('click'));
+    w.q(`.aad-sortmenu [data-act-order="${sort}"]`).dispatchEvent(new FakePointerEvent('click'));
+    assert.deepEqual(ready(), want, `Ready follows ${sort} from the sidebar Sort control`);
     assert.equal(w.q('.aad-grp'), null, 'sorting never adds status groups');
     for (const code of ['ArrowDown', 'ArrowUp']) for (let i = 0; i < want.length; i++) {
       w.st.route = { home: false, view: 'thread', thread: want[i], desk: 1 }; w.emit('route', w.st.route);
       assert.ok(keys.some(h => h.down({ altKey: true, code, key: code }) === true));
       const step = code === 'ArrowDown' ? 1 : -1;
-      assert.equal(w.st.opened.at(-1), 'thread:' + want[(i + step + want.length) % want.length], `${sort}: ⌥${code} walks the drawn One list, wrapping`);
+      assert.equal(w.st.opened.at(-1), 'thread:' + want[(i + step + want.length) % want.length], `${sort}: ⌥${code} walks the drawn list, wrapping`);
     }
   }
   assert.match(read('web/layouts/ai-apps/desktop.css'), /\.aad-rw:focus-within\) \.aad-time \{ visibility: hidden; \}/, 'the ⋯ takes its place on hover');
-  const sw = w.q('[data-aad-group="status"]'); assert.ok(sw, 'the Settings choice'); assert.equal(sw.getAttribute('aria-checked'), 'false', 'off at first'); assert.equal(w.q('[data-aad-group="none"]').getAttribute('aria-checked'), 'true', 'One list at first');
-  sw.dispatchEvent(new FakePointerEvent('click'));
-  assert.equal(store.groupReady, true);
-  assert.deepEqual(w.qa('.aad-grp').map(g => g.dataset.state), ['needs', 'fyi', 'none'], 'grouped: the sub-headers');
-  assert.deepEqual(ready(), ['r2', 'r1', 'r3'], 'By status still puts Needs you before FYI and plain chats, even with Newest selected');
-  assert.equal(w.qa('.aad-rw[data-kind="ready"] .aad-time').length, 3, 'grouped: the times too');
+  assert.equal(w.q('[data-aad-group]'), null, 'no By status choice in Settings');
 });
 
 test('notification stack (Miguel, 4 Nov 2026): one stable newest-first list, the open one expanded in place with its own buttons', () => {
@@ -2592,7 +2563,7 @@ test('plain keys belong to the app in front (Miguel, 4 Nov 2026: Space for Music
   assert.ok(bar);
 });
 
-test('round 24c (Miguel, 4 Nov 2026: "just use project"): Group By project: one sub-header per title project (WizardOS, Messenger, …), waiting ones first, Other last; ⌥↓ walks it; the folded rail shows each project', async () => {
+test('round 24c (Miguel, 4 Nov 2026: "just use project") parts: Group By project: one group per title project (WizardOS, Messenger, …), waiting ones first, Other last; the walk and the rail follow it', async () => {
   const P = await import(new URL('web/layouts/ai-apps/parts.js', root).href);
   const at = m => new Date(Date.now() - m * 60e3).toISOString();
   const rows = [
@@ -2608,21 +2579,11 @@ test('round 24c (Miguel, 4 Nov 2026: "just use project"): Group By project: one 
   assert.deepEqual(P.railActive({ ready: rows }, 'c', null, 'newest', 'projects'), { key: 'proj:WizardOS', i: 1, n: 2 });
   for (const f of ['web/desktop/desktop.js', 'web/app.js']) assert.doesNotMatch(read(f), /attention\?\.subject \|\| ''\)\.trim\(\)/, f + ': one name only, the title\'s project');
 
-  const { w, store } = deskWorld();
-  w.st.sessions.ready[0].title = 'Messenger · A'; w.st.sessions.ready[1].title = 'WizardOS · B';
-  (await layout()).default(w.api);
-  w.q('.aad-groupb').dispatchEvent(new FakePointerEvent('click'));
-  w.q('.aad-sortmenu [data-group="project"]').dispatchEvent(new FakePointerEvent('click'));
-  assert.equal(store.groupBy, 'project'); assert.equal(store.groupReady, false);
-  assert.deepEqual(w.qa('.aad-grp').map(x => x.dataset.state + ':' + x.querySelector('.aad-grp-w').textContent).sort(), ['project:Messenger', 'project:WizardOS']);
-  assert.deepEqual(w.qa('#aad-sec-ready .aad-row-t').map(n => n.textContent).sort(), ['A', 'B'], 'round 26: rows drop the project the header already says');
-  assert.equal(w.q('#aad-sec-ready .aad-row-t').title.includes(' · '), true, 'the full title stays as its tip');
+  // (The sidebar's Group By project drop-down showed only with Channels off; Activity, on for everyone since
+  // wizard-ux issue 1258, draws Ready as one list. The parts stay for the rail model.)
   assert.equal(P.titleInProject({ title: 'WizardOS · Hotkeys' }), 'Hotkeys'); assert.equal(P.titleInProject({ title: 'No project here' }), 'No project here');
   assert.equal(P.titleInProject({ title: 'Mail · x', note: true }), 'Mail · x', 'notifications keep their title');
-  w.q('.aad-tog').dispatchEvent(new FakePointerEvent('click'));
-  assert.deepEqual(w.qa('.aad-rk').map(n => n.dataset.k).filter(k => k.startsWith('proj:')).sort(), ['proj:Messenger', 'proj:WizardOS'], 'folded: one rail row per project');
-  assert.ok(!w.qa('.aad-rk').some(n => n.dataset.k === 'ready'), 'no Ready total over them');
-  store.groupBy = 'subject'; assert.equal(P.groupMode('subject'), 'none');
+  assert.equal(P.groupMode('subject'), 'none');
 });
 
 test('a remembered rail key cannot hide the current chat marker after switching grouping', async () => {
@@ -2635,7 +2596,8 @@ test('a remembered rail key cannot hide the current chat marker after switching 
 });
 
 
-for (const order of ['newest', 'oldest']) for (const mode of ['none', 'status', 'project']) test(`shared model: ${order}/${mode} sidebar, rail flyouts and keyboard draw exactly its IDs; phone uses the same Sort`, async () => {
+// Activity (Channels on for everyone, wizard-ux issue 1258): the sidebar always draws Ready as one list (mode none).
+for (const order of ['newest', 'oldest']) for (const mode of ['none']) test(`shared model: ${order}/${mode} sidebar, rail flyouts and keyboard draw exactly its IDs; phone uses the same Sort`, async () => {
   const P = await import('../web/layouts/ai-apps/parts.js');
   const M = globalThis.WizChatsListModel;
   const at = h => `2026-11-05T${String(h).padStart(2, '0')}:00:00Z`;
@@ -2653,9 +2615,10 @@ for (const order of ['newest', 'oldest']) for (const mode of ['none', 'status', 
   w.api.sessions.order = () => order;
   w.api.storage.set('groupBy', mode);
   w.api.storage.set('groupReady', mode === 'status');
-  w.st.sessions = { ready: rows, working: [], snoozed: [], archive: [] };
-  (await layout()).default(w.api);
   const drawn = M.visibleIds(rows, order, mode);
+  // Chats' own session list hands Activity its rows already in the chosen order; the layout draws them as given.
+  w.st.sessions = { ready: drawn.map(id => rows.find(r => r.id === id)), working: [], snoozed: [], archive: [] };
+  (await layout()).default(w.api);
   assert.deepEqual(w.qa('#aad-sec-ready .aad-rw').map(n => n.dataset.sid), drawn, 'sidebar');
   // Walk via the real layout key handler; notifications route through the same row identity.
   let cur = null;
@@ -2795,29 +2758,16 @@ const agentsWorld = async (agents, focus = { id: '' }) => {
 };
 const TWO = [{ id: 'hermes', label: 'Oscar', colour: '#7aa2ff', private: false, main: true }, { id: 'philosopher', label: 'Philosopher', colour: '#c58bff', private: false, main: false }];
 
-test('agent choices: with a second agent the sidebar offers All + each agent under the header; All is on', async () => {
+// The All + agent chips under the header showed only with Channels off. Activity (on for everyone since wizard-ux
+// issue 1258) lists every agent's chats with no chips: the agents live in the Channels list.
+test('agent choices: with a second agent the Activity sidebar draws no agent chips; it lists every agent\'s chats', async () => {
   const w = await agentsWorld(TWO);
   const row = w.q('.aad-agents');
-  assert.ok(row && !row.hidden, 'shown');
-  assert.deepEqual(row.children.map(b => b.textContent), ['All', 'Oscar', 'Philosopher']);
-  assert.deepEqual(row.children.map(b => b.getAttribute('aria-pressed')), ['true', 'false', 'false'], 'All is the one on');
-  const panel = w.q('.aad-panel').children.map(c => c.className.split(' ')[0]);
-  assert.ok(panel.indexOf('aad-sh') < panel.indexOf('aad-agents') && panel.indexOf('aad-agents') < panel.indexOf('aad-scroll'), 'between the header and the list');
-  assert.ok(w.sessionsSeen.some(o => o?.focused === true), 'the sidebar reads the list Focus decides (the stock Chats rule)');
-});
-
-test('agent choices: a tap sets Chats\' Focus on that agent, the list follows it, All returns; the same one again does nothing', async () => {
-  const w = await agentsWorld(TWO);
-  const tap = name => w.q('.aad-agents').children.find(b => b.textContent === name).dispatchEvent(new FakePointerEvent('click'));
-  tap('Philosopher');
-  assert.deepEqual(w.calls, ['philosopher'], 'one setFocus with that agent, through the shell API (no routing of its own)');
-  assert.deepEqual(w.q('.aad-agents').children.map(b => b.getAttribute('aria-pressed')), ['false', 'false', 'true'], 'painted on the same tap');
-  assert.match(w.q('.aad-scroll').textContent, /Philosopher chat/, 'its chats are listed');
-  assert.doesNotMatch(w.q('.aad-scroll').textContent, /Busy one|Ready one/, 'and not the other agents\'');
-  tap('Philosopher'); assert.equal(w.calls.length, 1, 'again = no-op');
-  tap('All'); assert.deepEqual(w.calls, ['philosopher', ''], 'All clears the Focus');
-  assert.deepEqual(w.q('.aad-agents').children.map(b => b.getAttribute('aria-pressed')), ['true', 'false', 'false']);
-  assert.match(w.q('.aad-scroll').textContent, /Ready one/, 'the normal list is back');
+  assert.ok(!row || row.hidden, 'no chips');
+  assert.equal(row?.children.length || 0, 0);
+  assert.equal(w.calls.length, 0, 'no Focus set by the sidebar');
+  assert.ok(w.sessionsSeen.length && w.sessionsSeen.every(o => o?.activity === true), 'the sidebar reads the Activity list');
+  assert.match(w.q('.aad-scroll').textContent, /Ready one/, 'the chats are listed');
 });
 
 test('agent choices: one agent (or none known) = no control at all', async () => {

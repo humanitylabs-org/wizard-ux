@@ -33,7 +33,7 @@ const ROWS = [
         await context.routeWebSocket('**/*', w => w.close());
         await context.addInitScript(({ skin, spaces, off, phone }) => {
           if (window !== top) return;
-          const mix = off ? { 'wizard/desktop-chats': true } : { 'wizard/desktop-chats': true, 'wizard/chat-channels': true };
+          const mix = off ? { 'wizard/desktop-chats': true } : { 'wizard/desktop-chats': true };
           for (const [k, v] of Object.entries({ 'wos.shell': phone ? 'phone' : 'desktop', 'wux.shell': phone ? 'phone' : 'desktop', 'wos.desktop-view.v1': 'classic', 'wos.coached': 'true', 'wos.tour.v1': 'true', 'wos.welcome.v1': 'done', 'wos.skin': skin,
             'wos.chats.spaces.v1': JSON.stringify(spaces), 'wos.skin-tweaks.v1': JSON.stringify({ version: 1, preset: 'none', off: {}, mix }) })) localStorage.setItem(k, v);
           // The sampler: every frame, the x offset (computed transform) and opacity of each visible Chats view.
@@ -80,7 +80,7 @@ const ROWS = [
         const page = await context.newPage(); page.on('pageerror', e => errors.push(e.message));
         await page.goto(origin + prefix + (phone ? 'index.html?phone' : 'desktop.html'));
         await page.waitForFunction(() => (window.__wux || window.__wos) && !window.WosWelcome?.active && window.WosExperience?.state.tweaks.length && !window.WosExperience.state.busy);
-        if (!off) await page.waitForFunction(() => (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/chat-channels'), null, { timeout: 15000 });
+        if (!off) await page.waitForFunction(() => true, null, { timeout: 15000 });
         await page.evaluate(phone => phone ? __wos.openSheet('inbox') : __wux.openChatsList(), phone);
         await nap(600);
         const vis = sel => page.locator(sel).filter({ visible: true }).first();

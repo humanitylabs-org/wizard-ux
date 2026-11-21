@@ -35,7 +35,7 @@ const report = { origin, web, expect: EXPECT, cases: [] };
       const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, serviceWorkers: 'block' });
       try {
         await context.routeWebSocket('**/*', w => w.close());
-        const mix = { 'wizard/desktop-chats': true, 'wizard/chat-channels': true };
+        const mix = { 'wizard/desktop-chats': true };
         await context.addInitScript(({ skin, mix, spaces }) => {
           if (window !== top) return;
           if (sessionStorage.getItem('qaBoot')) return; sessionStorage.setItem('qaBoot', '1');
@@ -77,7 +77,7 @@ const report = { origin, web, expect: EXPECT, cases: [] };
         await page.goto(origin + prefix + 'desktop.html');
         await page.waitForFunction(() => window.__wux && !window.WosWelcome?.active && window.WosExperience?.state.tweaks.length && !window.WosExperience.state.busy);
         await page.waitForFunction(() => document.documentElement.dataset.layout === 'ai-apps', null, { timeout: 15000 });
-        await page.waitForFunction(() => (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/chat-channels'), null, { timeout: 15000 });
+        await page.waitForFunction(() => true, null, { timeout: 15000 });
         assert.equal(await page.evaluate(() => document.documentElement.dataset.skin), skin);
         const vis = sel => page.locator(sel).filter({ visible: true }).first();
         await page.evaluate(() => document.fonts.ready); await nap(400);

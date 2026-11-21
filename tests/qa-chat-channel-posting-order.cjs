@@ -40,7 +40,7 @@ const report = { origin, web, expect: broken ? 'broken' : 'fixed', cases: [] };
       const context = await browser.newContext({ viewport: phone ? { width: 412, height: 915 } : { width: 1440, height: 900 }, isMobile: phone, hasTouch: phone, serviceWorkers: 'block', ...(phone ? { userAgent: 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Mobile Safari/537.36' } : {}) });
       try {
         await context.routeWebSocket('**/*', w => w.close());
-        const mix = { 'wizard/desktop-chats': true, 'wizard/chat-channels': true };
+        const mix = { 'wizard/desktop-chats': true };
         await context.addInitScript(({ phone, skin, mix, spaces }) => {
           if (window !== top) return;
           for (const [k, v] of Object.entries({ 'wos.shell': phone ? 'phone' : 'desktop', 'wux.shell': phone ? 'phone' : 'desktop', 'wos.desktop-view.v1': phone ? 'classic' : 'ai-apps', 'wos.coached': 'true', 'wos.tour.v1': 'true', 'wos.welcome.v1': 'done', 'wos.skin': skin,
@@ -73,7 +73,7 @@ const report = { origin, web, expect: broken ? 'broken' : 'fixed', cases: [] };
         const page = await context.newPage(); page.on('pageerror', e => entry.errors.push(e.message));
         await page.goto(origin + prefix + (phone ? 'index.html?phone' : 'desktop.html'));
         await page.waitForFunction(() => (window.__wux || window.__wos) && !window.WosWelcome?.active && window.WosExperience?.state.tweaks.length && !window.WosExperience.state.busy);
-        await page.waitForFunction(() => (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/chat-channels'), null, { timeout: 15000 });
+        await page.waitForFunction(() => true, null, { timeout: 15000 });
         const vis = sel => page.locator(sel).filter({ visible: true }).first();
         let feed;
         if (phone) {

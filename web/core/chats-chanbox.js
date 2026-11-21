@@ -7,7 +7,7 @@
  * body below keeps chats.js's indentation so `git log -L` and patches port over. */
 window.WizCore = window.WizCore || {};
 window.WizCore.chatsParts = window.WizCore.chatsParts || {};
-window.WizCore.chatsParts.chanbox = function ({ AGS, ch, CH, CHAN_TEXT_MAX, chanArchived, channelsOn, chanOpen, chanRepaint, chanTitle, elOf, esc, FIRST, firstAgent, focusAgentId, growTa, H, KIT, OUTBOX, owner, renderChatList, spaceContains, toast, viewContext, W, winAgent }) {
+window.WizCore.chatsParts.chanbox = function ({ AGS, ch, CH, CHAN_TEXT_MAX, chanArchived, chanOpen, chanRepaint, chanTitle, elOf, esc, FIRST, firstAgent, focusAgentId, growTa, H, KIT, OUTBOX, owner, renderChatList, spaceContains, toast, viewContext, W, winAgent }) {
   let attachTray, CLIP_SVG, fileUrl, hasContent, pendRef, PREVIEW, PW, sendChat, syncSend; // late-bound: chats.js declares these after the call, see bindLate
   /* The channel's message box (wizard-ux issue 1258; James, 10 Nov 2026: "I should be able to have a text box at the
    * bottom … use the orb or type something and send a new message, and then that gets picked up by the agent as a new
@@ -77,7 +77,7 @@ window.WizCore.chatsParts.chanbox = function ({ AGS, ch, CH, CHAN_TEXT_MAX, chan
    * or had opened at its New line. Only posts sent from here call this: other people's and agents' posts never move it.
    * space: the channel's id, '' = General; agent: the post's agent ('' = the default one). */
   function chanOwnPost(space, agent = '') {
-    if (typeof space !== 'string' || !channelsOn()) return 0;
+    if (typeof space !== 'string') return 0;
     const ag = a => a || AGS()?.defaultId?.() || 'hermes'; let n = 0;
     for (const id of Object.keys(CH)) {
       const w = W[id], open = w && !w.thread ? chanOpen(w) : null; if (!open) continue;
