@@ -44,7 +44,8 @@
     "wizard/phone-app-notifications",
     "wizard/lock-screen-player",
     "wizard/runtipi-cli-key",
-    "wizard/settings-search"
+    "wizard/settings-search",
+    "wizard/github-signin"
   ],
   "defaults": [
     "wizard/unified-inbox",
