@@ -416,7 +416,7 @@ a.fchip { color: inherit; text-decoration: none; }
 .ch-compose .ch-stop svg { fill: var(--red); stroke: none; }
 .ch-compose .ch-stop.is-stopping { opacity: .5; cursor: progress; }
 /* Media viewer: full-screen overlay inside the app (Back closes it). */
-.mviewer { position: absolute; inset: 0; z-index: 68; display: flex; flex-direction: column; background: rgba(2, 1, 8, calc(.96 * var(--fade, 1))); opacity: 0; transition: opacity 180ms var(--ease); touch-action: none; }
+.mviewer { position: absolute; inset: 0; z-index: 68; display: flex; flex-direction: column; background: rgba(2, 1, 8, calc(.96 * var(--fade, 1))); opacity: 0; touch-action: none; }
 /* Stage/file text keeps light ink on the dark photo backdrop; only opaque
  * chrome adopts Appearance tokens. Standalone chrome falls back to dark UA ink. */
 .mviewer { --ink: color-mix(in srgb, white 94%, violet); --ink-2: color-mix(in srgb, var(--ink) 72%, transparent); --ink-3: color-mix(in srgb, var(--ink) 50%, transparent); --line: color-mix(in srgb, var(--ink) 13%, transparent); --line-2: color-mix(in srgb, var(--ink) 24%, transparent); color: var(--ink); color-scheme: dark; }
