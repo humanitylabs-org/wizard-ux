@@ -36,7 +36,7 @@ window.WizCore.chatsParts.feed = function ({ agentName, agentRec, ago, AGS, CHAN
       const fresh = un ? `<span class="ch-post-st new"><i class="ch-chan-dot new" aria-hidden="true"></i>${nn ? `${nn} new ${nn === 1 ? 'reply' : 'replies'}` : byAgent && !n ? 'New' : 'New reply'}</span>` : '';
       const state = (isWorking(s) ? '<span class="ch-post-st working"><i class="ch-spin" aria-hidden="true"></i>Working</span>' : chanNeeds(s) ? '<span class="ch-post-st needs"><i class="ch-chan-dot" aria-hidden="true"></i>Needs you</span>' : s.archived ? '<span class="ch-post-st">Done</span>' : '') + fresh;
       const marks = state ? `<span class="ch-post-sts">${state}</span>` : ''; // one unit: it wraps whole, never split
-      // A thread whose reply box holds a saved, unsent draft (direct:<id>; switch wizard/draft-marks, wizard-ux issue
+      // A thread whose reply box holds a saved, unsent draft (direct:<id>; wizard-ux issue 1604 made it always on; issue
       // 1709) says "✎ Draft" on its reply line, the same mark as its Activity row. It never moves or recounts the post.
       const dft = typeof rowDraft === 'function' && rowDraft(s) ? '<span class="ch-post-draft ch-draft-tag"><span aria-hidden="true">✎</span> Draft</span>' : '';
       const mk = !isWorking(s) && chanNeeds(s) ? 'needs' : un ? 'new' : ''; // what the feed's jump pills count (issue 1440)

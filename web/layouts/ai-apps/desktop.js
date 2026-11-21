@@ -889,7 +889,7 @@ export default function desktop(api) {
     if (s.channel && typeof chanTitle === 'function') title.lastChild.textContent = chanTitle({ name: s.channel, general: s.channel === 'General' }); // (issue 1506: its emoji, not #)
     // (issue 1336: another agent's thread names it after the channel, "# WizardOS Chats · Philosopher")
     if (s.channel && s.agentName) title.lastChild?.append?.(` · ${s.agentName}`);
-    // A saved, unsent draft (switch wizard/draft-marks, wizard-ux issue 1445): "✎ Draft" leads the second line (its CSS)
+    // A saved, unsent draft (wizard-ux issue 1445, on for everyone since 1604): "✎ Draft" leads the second line (core/chats.css)
     if (s.draft) { wrap.dataset.draft = ''; if (!s.channel) title.append(el('span', 'aad-chan-line aad-draft-line')); }
     b.append(title);
     const dots = ttDots(s.id) ? globalThis.WosThreadTracker.dotsNode(s.id, ttAgent(s.id)) : null;

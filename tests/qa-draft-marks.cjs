@@ -1,11 +1,11 @@
 'use strict';
 // wizard-ux issue 1445 in a real browser: the saved-draft mark on Activity rows and Channels lines, behind
-// wizard/draft-marks (with wizard/chat-channels on). Phone 412x915 (classic Chats), desktop 1440x900 (Classic Chats
+// no switch since issue 1604 (it was wizard/draft-marks; Channels are on for everyone). Phone 412x915 (classic Chats), desktop 1440x900 (Classic Chats
 // window and the AI apps view), Nebula + Grove. Disposable synthetic transport only (no box is reached). Steps: type into
 // a thread's box -> its Activity row says "✎ Draft" (live where the list shows beside the thread), rows keep their order;
 // open the channel -> the thread's card in its feed says "✎ Draft" on its reply line (issue 1709);
 // type into a channel's box -> its Channels line wears ✎ Draft; reload -> both still there; empty the box -> gone.
-// QA_FEED_ONLY=1 stops after the feed shot (with QA_WEB=<main worktree>/web: the before shot). QA_ONLY_OFF=1 runs the switch-off pass only (no mark anywhere); QA_OUT=<dir> keeps the screenshots.
+// QA_FEED_ONLY=1 stops after the feed shot (with QA_WEB=<main worktree>/web: the before shot). QA_OUT=<dir> keeps the screenshots.
 const assert = require('node:assert/strict');
 const { chromium } = require('../tools/qa-playwright.cjs');
 const { ownerRead } = require('../tools/qa-desktop-frame-fixture.cjs');
@@ -27,17 +27,17 @@ const cases = (process.env.QA_CASES || 'phone,classic,ai-apps').split(',');
 (async () => {
   const browser = await chromium.launch(), report = [];
   try {
-    for (const shell of cases) for (const skin of ['nebula', 'grove']) for (const on of process.env.QA_ONLY_OFF ? [false] : [true, false]) {
+    for (const shell of cases) for (const skin of ['nebula', 'grove']) for (const on of [true]) {
       const phone = shell === 'phone', ai = shell === 'ai-apps', stem = `${shell}-${skin}-${on ? 'on' : 'off'}`, entry = { stem, errors: [] }; report.push(entry);
       const context = await browser.newContext({ viewport: phone ? { width: 412, height: 915 } : { width: 1440, height: 900 }, isMobile: phone, hasTouch: phone, serviceWorkers: 'block',
         ...(phone ? { userAgent: 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Mobile Safari/537.36' } : {}) });
       try {
         await context.routeWebSocket('**/*', w => w.close());
-        const mix = { 'wizard/desktop-chats': true, 'wizard/draft-marks': on }; // on by default since issue 1604: off is a defaultsOff choice
+        const mix = { 'wizard/desktop-chats': true }; // the marks have no switch since issue 1604
         await context.addInitScript(({ shell, skin, mix, spaces, ai }) => {
           if (window !== top || sessionStorage.getItem('qa.seeded')) return; sessionStorage.setItem('qa.seeded', '1');
           for (const [k, v] of Object.entries({ 'wos.shell': shell === 'phone' ? 'phone' : 'desktop', 'wos.desktop-view.v1': ai ? 'ai-apps' : 'classic', 'wos.coached': 'true', 'wos.tour.v1': 'true', 'wos.welcome.v1': 'done', 'wos.skin': skin,
-            'wos.chats.spaces.v1': JSON.stringify(spaces), 'wos.skin-tweaks.v1': JSON.stringify({ version: 1, preset: 'none', off: {}, mix, defaultsOff: mix['wizard/draft-marks'] ? [] : ['wizard/draft-marks'] }) })) localStorage.setItem(k, v);
+            'wos.chats.spaces.v1': JSON.stringify(spaces), 'wos.skin-tweaks.v1': JSON.stringify({ version: 1, preset: 'none', off: {}, mix, defaultsOff: [] }) })) localStorage.setItem(k, v);
         }, { shell, skin, mix, spaces: SPACES, ai });
         const prefs = { migrations: { 'launcher-seed-v1': true }, spaces: structuredClone(SPACES) };
         await context.route('**/*', async r => {
@@ -66,7 +66,6 @@ const cases = (process.env.QA_CASES || 'phone,classic,ai-apps').split(',');
         const boot = async () => {
           await page.waitForFunction(() => (window.__wux || window.__wos) && !window.WosWelcome?.active && window.WosExperience?.state.tweaks.length && !window.WosExperience.state.busy);
           if (ai) await page.waitForFunction(() => document.documentElement.dataset.layout === 'ai-apps', null, { timeout: 15000 });
-          await page.waitForFunction(on => { const t = (document.documentElement.dataset.tweaks || '').split(' '); return t.includes('wizard/draft-marks') === on; }, on, { timeout: 15000 });
           await page.waitForFunction(() => window.WizLive?.ok && WizLive.sessions.length === 3, null, { timeout: 15000 });
           if (!ai) await page.evaluate(phone => phone ? __wos.openSheet('inbox') : __wux.openChatsList(), phone);
           await page.evaluate(() => document.fonts.ready); await nap(700);

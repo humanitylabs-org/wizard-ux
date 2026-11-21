@@ -1,4 +1,4 @@
-// Draft marks (switch wizard/draft-marks, wizard-ux issue 1445): an Activity row whose thread has a saved, unsent draft
+// Draft marks (wizard-ux issue 1445; on for everyone since issue 1604, the wizard/draft-marks switch is gone): an Activity row whose thread has a saved, unsent draft
 // says "✎ Draft" ahead of its preview, and a Channels line whose box holds one wears the same pencil. This runs the real
 // drafts store (core/chat-kit.js), the real Activity renderer (chats.js activityBody -> chatRow) over the real live.js
 // list read, the real Channels list (chats.js channelsBody) and the real list model rows the AI apps sidebar draws.
@@ -15,7 +15,7 @@ const RAW = JSON.parse(read('tests/fixtures/sessions-list-1360.json'));
 const SHIFT = Date.now() - 5 * 60e3 - Math.max(...RAW.data.map(s => Date.parse(s.activityAt)));
 const shift = v => typeof v === 'string' && /^\d{4}-\d\d-\d\dT[\d:.]+Z$/.test(v) ? new Date(Date.parse(v) + SHIFT).toISOString() : Array.isArray(v) ? v.map(shift) : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, shift(x)])) : v;
 const PAYLOAD = shift(RAW);
-const ON = 'wizard/draft-marks', OFF = ''; // the draft-marks switch on / off (Channels are on for everyone, issue 1258)
+const ON = '', OTHER = 'wizard/sidebar-chats-view'; // no switch any more (issue 1604): marks show whatever data-tweaks holds
 const GREEN = 'synthetic_1360_green', NEEDS = 'synthetic_1360_needs';
 
 // One device: its localStorage survives a "reload" (a new context on the same storage).
@@ -108,13 +108,14 @@ test('Activity: a draft that is only a file or only a reply card counts', async 
   assert.deepEqual(drafted(d), ['green']);
 });
 
-test('switch off: no marks, and the draft store is unchanged', async () => {
-  const d = device(new Map(), { tweaks: OFF }); await d.L.refresh();
-  d.drafts.set('direct:' + GREEN, 'words', []);
-  assert.deepEqual(drafted(d), [], 'off: no Draft tag');
-  assert.equal(d.c.rowDraft({ id: GREEN }), false);
-  assert.equal(d.drafts.get('direct:' + GREEN).text, 'words', 'drafts work as before');
-  assert.doesNotMatch(marks(d).html, /ch-draft-tag/);
+test('no switch (issue 1604): marks show with any or no data-tweaks, and the draft store is unchanged', async () => {
+  for (const tweaks of ['', OTHER, 'wizard/draft-marks']) {
+    const d = device(new Map(), { tweaks }); await d.L.refresh();
+    d.drafts.set('direct:' + GREEN, 'words', []);
+    assert.deepEqual(drafted(d), ['green'], JSON.stringify(tweaks) + ': marked');
+    assert.equal(d.c.rowDraft({ id: GREEN }), true);
+    assert.equal(d.drafts.get('direct:' + GREEN).text, 'words', 'drafts work as before');
+  }
 });
 
 test('live: a draft appearing or going repaints the lists, never the window whose channel box is being typed in', async () => {
@@ -125,8 +126,8 @@ test('live: a draft appearing or going repaints the lists, never the window whos
   assert.deepEqual(d.repaints, ['list'], 'no repaint per keystroke');
   d.drafts.clear('chan:hermes:launch');
   assert.deepEqual(d.repaints, ['list', 'list']);
-  d.dataset.tweaks = OFF; d.drafts.set('chan:hermes:launch', 'q', []);
-  assert.deepEqual(d.repaints, ['list', 'list'], 'switch off: no repaints');
+  d.dataset.tweaks = OTHER; d.drafts.set('chan:hermes:launch', 'q', []);
+  assert.deepEqual(d.repaints, ['list', 'list', 'list'], 'no switch gates the repaint (issue 1604)');
 });
 
 test('issue 1709: a thread\'s draft repaints the open channel feed too (its post card follows); a channel box\'s draft still waits; the event names the keys', async () => {
@@ -165,7 +166,7 @@ test('Channels: the pencil follows the box key of every agent kind (main, host, 
   }
 });
 
-test('AI apps sidebar: Activity rows from the list model carry draft only while the switch is on', async () => {
+test('AI apps sidebar: Activity rows from the list model carry draft (no switch since issue 1604)', async () => {
   const d = device(); await d.L.refresh();
   const M = d.c.WizChatsListModel, chatsApi = { activityNeeds: () => false, activityUnread: () => false, activityDraft: s => d.c.rowDraft(s), threadActions: () => [], channelOf: () => 'launch', stiKind: () => '' };
   const list = () => M.activityList(d.L.workGroups(), { live: d.L, chats: chatsApi }, { now: Date.now() });
@@ -173,22 +174,22 @@ test('AI apps sidebar: Activity rows from the list model carry draft only while 
   assert.ok(flat(list()).every(r => !('draft' in r)), 'no draft: no key (row shape unchanged)');
   d.drafts.set('direct:' + GREEN, 'w', []);
   assert.deepEqual(flat(list()).filter(r => r.draft).map(r => r.id), [GREEN]);
-  d.dataset.tweaks = OFF;
-  assert.deepEqual(flat(list()).filter(r => r.draft).map(r => r.id), [], 'off');
+  d.dataset.tweaks = OTHER;
+  assert.deepEqual(flat(list()).filter(r => r.draft).map(r => r.id), [GREEN], 'no switch gates it');
 });
 
-test('the switch is a listed tweak package, on by default for everyone (issue 1604) and still switchable', () => {
+test('issue 1604: the wizard/draft-marks switch is gone everywhere; its CSS lives in core/chats.css', () => {
   const cat = JSON.parse(read('web/tweaks/catalog.json')), prof = JSON.parse(read('web/tweaks/wizard/profile.json'));
-  assert.ok(cat.tweaks.includes('wizard/draft-marks'));
-  assert.ok(cat.defaults.includes('wizard/draft-marks'));
-  assert.ok(cat.promotedDefaults.includes('wizard/draft-marks'), 'an off chosen before the promotion is kept');
-  assert.ok(!(prof.off || []).includes('wizard/draft-marks') && !(cat.lookOnlyOff || []).includes('wizard/draft-marks'));
-  assert.match(read('web/core/settings.js'), /register\(\{ id: 'chats-draft-marks', page: 'chats', html: \(\) => \{ const r = settingRow\('wizard\/draft-marks'\)/);
-  const m = JSON.parse(read('web/tweaks/wizard/draft-marks/manifest.json'));
-  assert.equal(m.id, 'wizard/draft-marks'); assert.match(m.description, /issue 1445/);
-  const css = read('web/tweaks/wizard/draft-marks/tweak.css');
-  for (const rule of css.split('}').map(r => r.trim()).filter(r => r && !r.startsWith('/*'))) assert.match(rule.replace(/^\/\*[^]*?\*\/\s*/, ''), /^html\[data-tweaks~="wizard\/draft-marks"\]/, rule);
-  assert.doesNotMatch(css.replace(/var\(--wz-[a-z-]+, #[0-9a-f]+\)/g, ''), /#[0-9a-f]{3,6}\b/i, 'colours only through --wz-* tokens (with a dark fallback)');
+  for (const k of ['tweaks', 'defaults', 'promotedDefaults', 'lookOnlyOff']) assert.ok(!(cat[k] || []).includes('wizard/draft-marks'), k);
+  assert.ok(!Object.keys(cat.aliases || {}).includes('wizard/draft-marks') && !(prof.off || []).includes('wizard/draft-marks') && !(prof.tweaks || []).includes?.('wizard/draft-marks'));
+  assert.doesNotMatch(read('web/core/settings.js'), /draft-marks/, 'no Settings row');
+  assert.doesNotMatch(read('web/core/chats-daily.js'), /draftMarksOn|DRAFT_MARKS/, 'no gate');
+  assert.throws(() => read('web/tweaks/wizard/draft-marks/manifest.json'), 'package deleted');
+  const css = read('web/core/chats.css'), i = css.indexOf('/* Draft marks (wizard-ux issue 1445)');
+  assert.ok(i > 0); const block = css.slice(i);
+  assert.doesNotMatch(block, /data-tweaks/, 'unscoped');
+  for (const sel of ['.ch-draft-tag', '.ch-chan-draft', '.ch-post-draft', '.aad-rw[data-draft] .aad-chan-line::before', '.aad-draft-line::before']) assert.ok(block.includes(sel), sel);
+  assert.doesNotMatch(block.replace(/var\(--wz-[a-z-]+, #[0-9a-f]+\)/g, ''), /#[0-9a-f]{3,6}\b/i, 'colours only through tokens');
 });
 
 test('on by default, main and routed rows alike: a thread of the main agent, host, container or restricted is marked by the same draft key its box saves under (direct:<id>)', async () => {

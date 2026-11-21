@@ -243,7 +243,7 @@ function activityList(groups, facts, opts = {}) {
   const needs = s => !!c.activityNeeds?.(s), unread = s => !!c.activityUnread?.(s);
   const g = activityGroups(groups, { needs, unread, at }, opts); if (!g) return null;
   const rows = (list, kind) => list.slice(0, 200).map(s => ({ ...sessionRow(s, kind, facts), mark: activityMark({ working: kind === 'working', needs: needs(s), unread: unread(s) }),
-    ...(c.activityDraft?.(s) ? { draft: true } : {}) })); // a saved, unsent draft (switch wizard/draft-marks, wizard-ux issue 1445)
+    ...(c.activityDraft?.(s) ? { draft: true } : {}) })); // a saved, unsent draft (wizard-ux issue 1445, on for everyone since 1604)
   return splitSaved({ working: rows(g.working, 'working'), ready: rows(g.ready, 'ready'), recent: rows(g.recent, 'ready'), older: g.older,
     snoozed: rows(g.snoozed, 'snoozed'), archive: rows(g.archive, 'archive') });
 }
