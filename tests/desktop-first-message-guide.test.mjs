@@ -5,7 +5,8 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { withDesktopParts } from './fixtures/desktop-parts.mjs';
-const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
+import { withShellParts } from './fixtures/shell-parts.mjs';
+const read = p => withShellParts(readFileSync(new URL('../' + p, import.meta.url), 'utf8'));
 const SRC = read('web/core/tour.js');
 
 test('the desktop shell loads the tour module and its styles, before setup-launch and desktop.js', () => {

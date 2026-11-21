@@ -4,7 +4,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { withSettingsParts } from './fixtures/settings-parts.mjs'; // settings.js parts moved out verbatim (issue 1665)
-const read = p => readFileSync(process.env.QA_SETTINGS_SOURCE ? process.env.QA_SETTINGS_SOURCE + '/' + p : new URL('../' + p, import.meta.url), 'utf8');
+import { withShellParts } from './fixtures/shell-parts.mjs';
+const read = p => withShellParts(readFileSync(process.env.QA_SETTINGS_SOURCE ? process.env.QA_SETTINGS_SOURCE + '/' + p : new URL('../' + p, import.meta.url), 'utf8'));
 const css = read('web/core/settings.css'), desktop = read('web/desktop/desktop.js');
 const slice = (s, a, b) => { const start = s.indexOf(a); assert.ok(start >= 0, a); const end = s.indexOf(b, start); assert.ok(end > start, b); return s.slice(start, end); };
 const rule = (s, selector) => { const at = s.indexOf(selector + ' {'); assert.ok(at >= 0, selector); return s.slice(at, s.indexOf('}', at)); };

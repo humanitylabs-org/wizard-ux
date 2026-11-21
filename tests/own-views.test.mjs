@@ -4,7 +4,8 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { withAppParts } from './fixtures/app-parts.mjs';
-const source = readFileSync(new URL('../web/core/own-views.js', import.meta.url), 'utf8');
+import { withShellParts } from './fixtures/shell-parts.mjs';
+const source = withShellParts(readFileSync(new URL('../web/core/own-views.js', import.meta.url), 'utf8'));
 const module = { exports:{} }; vm.runInNewContext(source, { module });
 const { own, frameUrl, marker } = module.exports;
 const a = { id:'habits', name:'Habits', source:'apps.json', originalUrl:'/habits/', url:'/wizard/views/habits/', view:{ mode:'own', url:'/wizard/views/habits/' } };
@@ -71,7 +72,7 @@ test('synthetic shell clicks and app messages cannot authorize revert', async ()
 
 test('both renderers use the same frame and marker helpers without a new history/Back stack', () => {
   for (const path of ['web/app.js', 'web/desktop/desktop.js']) {
-    const text = withAppParts(readFileSync(new URL('../' + path, import.meta.url), 'utf8'));
+    const text = withAppParts(withShellParts(readFileSync(new URL('../' + path, import.meta.url), 'utf8')));
     assert.match(text, /WosOwnViews\?\.frameUrl/); assert.match(text, /WosOwnViews\?\.marker/);
     assert.match(text, /data-own-app=/);
   }

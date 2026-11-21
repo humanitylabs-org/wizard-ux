@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { withSettingsParts } from './fixtures/settings-parts.mjs'; // settings.js parts moved out verbatim (issue 1665)
-const read = f => readFileSync(new URL('../' + f, import.meta.url), 'utf8');
+import { withShellParts } from './fixtures/shell-parts.mjs';
+const read = f => withShellParts(readFileSync(new URL('../' + f, import.meta.url), 'utf8'));
 const deferred = () => { let resolve; const promise = new Promise(r => { resolve = r; }); return { promise, resolve }; };
 const flush = async () => { for (let i = 0; i < 8; i++) await Promise.resolve(); };
 for (const ok of [true, false]) test(`recording custody deletion acknowledges the tap before storage; rollback=${!ok}`, async () => {

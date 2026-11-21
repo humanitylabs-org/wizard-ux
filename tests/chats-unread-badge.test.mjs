@@ -6,7 +6,8 @@ import vm from 'node:vm';
 import path from 'node:path';
 import { withAppParts } from './fixtures/app-parts.mjs';
 import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
-const source = f => withAppParts(fs.readFileSync(process.env.QA_TREE ? path.join(process.env.QA_TREE, f) : new URL('../' + f, import.meta.url), 'utf8'));
+import { withShellParts } from './fixtures/shell-parts.mjs';
+const source = f => withAppParts(withShellParts(fs.readFileSync(process.env.QA_TREE ? path.join(process.env.QA_TREE, f) : new URL('../' + f, import.meta.url), 'utf8')));
 const live = withLiveParts(source('web/live.js')), nav = source('web/core/workspace-navigation.js');
 
 function harness(shell = 'web/app.js') {

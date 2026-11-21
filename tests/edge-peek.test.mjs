@@ -4,7 +4,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
-const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
+import { withShellParts } from './fixtures/shell-parts.mjs';
+const read = p => withShellParts(readFileSync(new URL('../' + p, import.meta.url), 'utf8'));
 
 class El {
   constructor() { this.handlers = {}; this.attrs = {}; const c = this.cls = new Set(); this.classList = { add: k => c.add(k), remove: k => c.delete(k), contains: k => c.has(k), toggle: (k, on = !c.has(k)) => (on ? c.add(k) : c.delete(k), on) }; }

@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
-const source=readFileSync(new URL('../web/app.js',import.meta.url),'utf8');
+import { withShellParts } from './fixtures/shell-parts.mjs';
+const source=withShellParts(readFileSync(new URL('../web/app.js',import.meta.url),'utf8'));
 const render=source.slice(source.indexOf('  function renderLauncher('),source.indexOf('  // This desk\'s windows',source.indexOf('  function renderLauncher(')));
 function paint(recent,APPS){
  const APP=Object.fromEntries(APPS.map(a=>[a.id,a]));APP.retired=APP.alpha;

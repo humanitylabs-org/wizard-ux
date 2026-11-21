@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
+import { withShellParts } from './fixtures/shell-parts.mjs';
 
 // James, 7 Nov 2026: his desktop stayed on an afternoon build through ten releases because the interface only
 // reloaded on a tap. The desktop now applies a pending update by itself when its window is hidden or quiet, and
@@ -22,7 +23,7 @@ function fixture({ autoApply = true } = {}) {
     fetch: async () => ({ ok: true, text: async () => f.revision, json: async () => ({ updates: [] }) }),
     setInterval(fn, ms) { const n = ++id; intervals.set(n, { fn, ms }); return n; }, clearInterval(n) { intervals.delete(n); },
     setTimeout(fn, ms) { timeouts.push({ fn, ms }); return ++id; }, clearTimeout() {}, addEventListener() {} };
-  vm.runInNewContext(readFileSync(new URL('../web/core/web-update.js', import.meta.url), 'utf8'), context);
+  vm.runInNewContext(withShellParts(readFileSync(new URL('../web/core/web-update.js', import.meta.url), 'utf8')), context);
   f.web = window.WizWebUpdate; f.doc = document; f.session = session;
   f.web.init({ shell: 'desktop', autoApply, mount: () => body, prepend: true, busy: () => f.busy, beforeReload: () => { f.saved++; f.onBeforeReload?.(); }, toast() {} });
   f.advance = ms => { now += ms; };
@@ -98,6 +99,6 @@ test('phone (no autoApply) still reloads only when tapped', async () => {
 });
 
 test('desktop host opts in', () => {
-  const src = readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8');
+  const src = withShellParts(readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8'));
   assert.match(src, /WizWebUpdate\?\.init\(\{[\s\S]{0,200}autoApply: true/);
 });

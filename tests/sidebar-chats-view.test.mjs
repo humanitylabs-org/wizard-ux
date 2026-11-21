@@ -6,7 +6,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
-const source = fs.readFileSync(new URL('../web/core/chats-view.js', import.meta.url), 'utf8');
+import { withShellParts } from './fixtures/shell-parts.mjs';
+const source = withShellParts(fs.readFileSync(new URL('../web/core/chats-view.js', import.meta.url), 'utf8'));
 const VERSION = 'wizard.chats-view/1';
 const entry = id => ({ id, name: 'Look ' + id, source: 'apps.json', url: `/${id}/`, provides: ['chats'], chats_view: { contract: VERSION, module: 'view.js' } });
 function harness(H = {}, sessions = [{ id: 'one', title: 'One' }]) {
@@ -112,19 +113,19 @@ test('a Default Chats change asks layouts to repaint, only when it changes', () 
 });
 
 test('the switch ships off: listed in the catalog, never a default, scoped CSS', () => {
-  const cat = JSON.parse(fs.readFileSync(new URL('../web/tweaks/catalog.json', import.meta.url), 'utf8'));
+  const cat = JSON.parse(withShellParts(fs.readFileSync(new URL('../web/tweaks/catalog.json', import.meta.url), 'utf8')));
   assert.ok(cat.tweaks.includes('wizard/sidebar-chats-view'));
   assert.ok(!cat.defaults.includes('wizard/sidebar-chats-view'));
-  const css = fs.readFileSync(new URL('../web/tweaks/wizard/sidebar-chats-view/tweak.css', import.meta.url), 'utf8');
+  const css = withShellParts(fs.readFileSync(new URL('../web/tweaks/wizard/sidebar-chats-view/tweak.css', import.meta.url), 'utf8'));
   for (const rule of css.replace(/\/\*[\s\S]*?\*\//g, '').split('}').map(r => r.trim()).filter(Boolean)) for (const sel of rule.split('{')[0].split(',')) assert.match(sel.trim(), /^html\[data-tweaks~="wizard\/sidebar-chats-view"\]/);
-  const dj = fs.readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8'), lj = fs.readFileSync(new URL('../web/layouts/ai-apps/desktop.js', import.meta.url), 'utf8');
+  const dj = withShellParts(fs.readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8')), lj = withShellParts(fs.readFileSync(new URL('../web/layouts/ai-apps/desktop.js', import.meta.url), 'utf8'));
   assert.match(dj, /includes\('wizard\/sidebar-chats-view'\)/); assert.match(lj, /includes\('wizard\/sidebar-chats-view'\)/);
 });
 
 // wizard-ux issue 1460: with the switch OFF and another look picked, the AI apps desktop must still treat its docked
 // Chats window as the main chat (drawn as standard Chats), or sidebar taps open a hidden second Chats window.
 test('AI apps + another Default Chats, switch off: the docked Chats window is the main chat (issue 1460)', () => {
-  const dj = fs.readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8');
+  const dj = withShellParts(fs.readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8'));
   const lines = dj.split('\n');
   const from = lines.findIndex(l => l.startsWith('  function sideViewOn()')), to = lines.findIndex((l, i) => i > from && l.startsWith('  const sideWin = id =>'));
   const main = lines.find(l => l.startsWith('  const mainChats = w =>')), look = lines.find(l => l.startsWith('    mainLook: w =>'));

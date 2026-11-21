@@ -3,8 +3,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import { withShellParts } from './fixtures/shell-parts.mjs';
 const root = process.env.QA_SETTINGS_SOURCE || new URL('../', import.meta.url).pathname;
-const source = fs.readFileSync(new URL('web/app.js', new URL(`file://${root.replace(/\/$/, '')}/`)), 'utf8');
+const source = withShellParts(fs.readFileSync(new URL('web/app.js', new URL(`file://${root.replace(/\/$/, '')}/`)), 'utf8'));
 function dispatch(overlay = '') {
   const state = { page: 'about', closed: 0, paused: 0, cancelled: 0 };
   const window = {};
@@ -18,7 +19,7 @@ function dispatch(overlay = '') {
     sheet: 'settings', rvCoach: null, settingsReturn: '', settingsView: { back: () => { if (!state.page) return false; state.page = ''; return true; } },
     closeSheets: () => { s.sheet = null; state.closed++; }, toast: () => {} };
   vm.createContext(s);
-  vm.runInContext(fs.readFileSync(new URL('../web/core/escape-back.js',import.meta.url),'utf8'),s);
+  vm.runInContext(withShellParts(fs.readFileSync(new URL('../web/core/escape-back.js',import.meta.url),'utf8')),s);
   s.phoneBack=window.WizEscapeBack.create();
   vm.runInContext(source.match(/  phoneBack.watch\(\(\) => sheet,[^\n]+/)[0],s);
   Object.assign(window.WosWelcome,{active:overlay==='WosWelcome'});

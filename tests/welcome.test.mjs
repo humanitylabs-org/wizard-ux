@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
-const read = p => fs.readFileSync(new URL('../' + p, import.meta.url), 'utf8');
+import { withShellParts } from './fixtures/shell-parts.mjs';
+const read = p => withShellParts(fs.readFileSync(new URL('../' + p, import.meta.url), 'utf8'));
 
 test('Welcome: Claude is listed first and recommended, then ChatGPT', () => {
   const js = read('web/core/welcome.js');

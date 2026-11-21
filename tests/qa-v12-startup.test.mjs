@@ -3,8 +3,9 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import { withShellParts } from './fixtures/shell-parts.mjs';
 const require = createRequire(import.meta.url), fx = require('../tools/qa-proof-fixture.cjs');
-const read = name => readFileSync(new URL('../' + name, import.meta.url), 'utf8');
+const read = name => withShellParts(readFileSync(new URL('../' + name, import.meta.url), 'utf8'));
 
 test('synthetic bootstrap enables the real desktop mic capability rule before hit testing', async () => {
  const ctx = { Date, Intl, performance, URL, CustomEvent: class {}, document: { addEventListener() {} },

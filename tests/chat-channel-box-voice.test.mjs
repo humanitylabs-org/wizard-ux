@@ -8,8 +8,9 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { withAppParts } from './fixtures/app-parts.mjs';
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
-const kit = readFileSync(new URL('../web/core/chat-kit.js', import.meta.url), 'utf8');
-const power = readFileSync(new URL('../web/core/chat-power.js', import.meta.url), 'utf8');
+import { withShellParts } from './fixtures/shell-parts.mjs';
+const kit = withShellParts(readFileSync(new URL('../web/core/chat-kit.js', import.meta.url), 'utf8'));
+const power = withShellParts(readFileSync(new URL('../web/core/chat-power.js', import.meta.url), 'utf8'));
 
 function harness({ agent = '', thread = null, chan = { id: 'launch', name: 'Launch', agent: agent || 'hermes' } } = {}) {
   const sent = [], filed = [], recorded = [], privAsked = [], state = {};
@@ -70,7 +71,7 @@ test('the box model label opens the new-chat model menu without private-agent mo
 
 // The real composer seal helpers from core/chats.js: a take pinned to channel A's box takes A's box (never channel B's
 // in front by Send, never the New chat draft) and gives it back to A when the take is dropped.
-const chats = withParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'));
+const chats = withParts(withShellParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8')));
 function seals(d = {}) {
   const a = chats.indexOf('  const composerKey = sid =>'), b = chats.indexOf('  // Typed words first, then what was said');
   assert.ok(a > 0 && b > a);
@@ -106,7 +107,7 @@ test('a channel take seals the box of the channel it started in, and gives the w
 // The model is still read at Send (wizard-ux#1218), but a channel take keeps the agent it started with: by Send another
 // agent's channel may be in front, and its chat is filed into the channel it started in (Codex P1).
 test('phone and desktop: a channel take never re-routes to the agent of the channel in front by Send', () => {
-  const app = withAppParts(readFileSync(new URL('../web/app.js', import.meta.url), 'utf8')), desk = readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8');
+  const app = withAppParts(withShellParts(readFileSync(new URL('../web/app.js', import.meta.url), 'utf8'))), desk = withShellParts(readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8'));
   const tap = app.slice(app.indexOf('  function sendTapRoute('), app.indexOf('  // A take that sends nothing'));
   let live = { model: 'b-model', provider: 'b', agent: 'container' };
   const ctx = { CHATS: { modelRoute: () => live }, window: { WosModels: { snapshot: () => null } } };
@@ -131,7 +132,7 @@ test('a box-mic take resumed after a reload (no tap pin left) still files into t
   const h = harness(); // no mic tap in this page: the pin comes with the take (phone replyTake, desktop vReply)
   const it = await h.api.sendVoiceTo('win', '__new__', new Blob(['a']), [], false, null, null, null, undefined, '', 'launch');
   assert.equal(h.sent[0].space, false); assert.deepEqual(h.filed, [['launch', it.sessionId, true]]);
-  const app = withAppParts(readFileSync(new URL('../web/app.js', import.meta.url), 'utf8'));
+  const app = withAppParts(withShellParts(readFileSync(new URL('../web/app.js', import.meta.url), 'utf8')));
   assert.match(app, /\.\.\.\(typeof r\.box === 'string' \? \{ box: r\.box \} : \{\}\), \.\.\.\(typeof r\.space === 'string' \? \{ space: r\.space \} : \{\}\)/, 'the reply-take record keeps box and Space over a reload');
   assert.match(app, /CHATS\.sendVoiceTo\(rt\.wid, rt\.sid, audio, files, snap\.seal \|\| false, snap\.route, snap\.custodyId, null, undefined, '', rt\.space\)/);
 });

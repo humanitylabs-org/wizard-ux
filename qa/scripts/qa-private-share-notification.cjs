@@ -1,7 +1,7 @@
 const QA_ROOT = require('node:path').resolve(__dirname, '../..'); // repo root (this script lives in qa/scripts/)
 // Existing Android 0.9.15 share intents contain thread_id, not agent. Run actual web handoff functions.
 const vm=require('node:vm'),fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
-const source=fs.readFileSync(path.join(process.env.QA_WEB_DIR||QA_ROOT,'web/app.js'),'utf8');
+const source=require('../../tools/shell-source.cjs').shellSource(process.env.QA_WEB_DIR||QA_ROOT,'web/app.js'); // parts put back (issue 1665)
 const start=source.indexOf('  function openWizardThread(');
 const open=source.slice(start,source.indexOf('  /* ---------------- review',start));
 const hs=source.indexOf('  let threadHandoffGeneration = 0;');

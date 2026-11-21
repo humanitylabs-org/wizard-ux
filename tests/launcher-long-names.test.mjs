@@ -3,8 +3,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-const js = fs.readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8');
-const css = fs.readFileSync(new URL('../web/desktop/desktop.css', import.meta.url), 'utf8');
+import { withShellParts } from './fixtures/shell-parts.mjs';
+const js = withShellParts(fs.readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8'));
+const css = withShellParts(fs.readFileSync(new URL('../web/desktop/desktop.css', import.meta.url), 'utf8'));
 test('app picker tiles mark long one-word names', () => {
   const marks = js.match(/<span class="nm\$\{\/\\S\{13,\}\/\.test\(it\.name\) \? ' long' : ''\}">/g) || [];
   assert.equal(marks.length, 1, 'the picker renderer marks long names');

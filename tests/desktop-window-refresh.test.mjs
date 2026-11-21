@@ -2,8 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
+import { withShellParts } from './fixtures/shell-parts.mjs';
 
-const js = readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8');
+const js = withShellParts(readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8'));
 const kinds = ['main', 'host-profile', 'container', 'restricted'];
 
 test('every desktop window bar has a Refresh button wired to reloadWin', () => {

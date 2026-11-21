@@ -5,10 +5,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import { withShellParts } from './fixtures/shell-parts.mjs';
 
-const app = fs.readFileSync(new URL('../web/app.js', import.meta.url), 'utf8');
-const syncSrc = fs.readFileSync(new URL('../web/core/workspace-sync.js', import.meta.url), 'utf8');
-const features = fs.readFileSync(new URL('../web/core/features.js', import.meta.url), 'utf8');
+const app = withShellParts(fs.readFileSync(new URL('../web/app.js', import.meta.url), 'utf8'));
+const syncSrc = withShellParts(fs.readFileSync(new URL('../web/core/workspace-sync.js', import.meta.url), 'utf8'));
+const features = withShellParts(fs.readFileSync(new URL('../web/core/features.js', import.meta.url), 'utf8'));
 const grab = (re, what) => { const m = app.match(re); assert.ok(m, `${what} not found in app.js`); return m[0]; };
 const helper = grab(/const sharedDeskOrder = [^\n]+\n  function insertPos\(\) \{[^\n]+\n/, 'sharedDeskOrder + insertPos');
 const bring = grab(/function bringBeside\(id\) \{[\s\S]*?\n  \}\n/, 'bringBeside');

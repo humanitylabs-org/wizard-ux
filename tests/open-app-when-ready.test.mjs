@@ -4,8 +4,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { withShellParts } from './fixtures/shell-parts.mjs';
 
-const read = f => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8');
+const read = f => withShellParts(readFileSync(new URL(`../${f}`, import.meta.url), 'utf8'));
 const appsJs = read('web/core/apps.js');
 
 // A fake clock: setTimeout fires in time order, instantly, so a minute of waiting runs in milliseconds.

@@ -11,9 +11,10 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { withSkinHostParts } from './fixtures/skin-host-parts.mjs';
+import { withShellParts } from './fixtures/shell-parts.mjs';
 
 const root = new URL('../', import.meta.url);
-const read = p => readFileSync(new URL(p, root), 'utf8');
+const read = p => withShellParts(readFileSync(new URL(p, root), 'utf8'));
 const settle = () => new Promise(r => setTimeout(r, 15));
 
 function page({ layout = null, search = '' } = {}) {

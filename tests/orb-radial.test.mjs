@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import coreContract from './orb-core-contract.mjs';
-const read = f => readFileSync(new URL('../' + f, import.meta.url), 'utf8');
+import { withShellParts } from './fixtures/shell-parts.mjs';
+const read = f => withShellParts(readFileSync(new URL('../' + f, import.meta.url), 'utf8'));
 function moduleFixture(saved, host = {}) {
   const storage=new Map(saved ? [['wos.orbSwitcher.v1',JSON.stringify(saved)]]:[]), listeners=new Map();
   const window={addEventListener:(k,fn)=>listeners.set(k,fn),removeEventListener:(k,fn)=>{if(listeners.get(k)===fn)listeners.delete(k);},dispatchEvent(){}};

@@ -7,8 +7,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
+import { withShellParts } from './fixtures/shell-parts.mjs';
 
-const read = p => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
+const read = p => withShellParts(readFileSync(new URL(`../${p}`, import.meta.url), 'utf8'));
 const between = (src, a, b) => { const i = src.indexOf(a), j = src.indexOf(b, i + a.length); assert.ok(i >= 0 && j > i, `${a} .. ${b}`); return src.slice(i, j); };
 const ROUTE = { words: ['music', 'shazam'], open: '?view=identify&listen=1', rest_param: 'q' };
 const music = (confirmed, routes = [ROUTE]) => ({ id: 'wizard-music', name: 'Music', url: '/wizard-music/', voice_routes: routes, voice_routes_confirmed: confirmed });

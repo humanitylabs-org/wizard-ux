@@ -7,8 +7,9 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { launcherFixture } from './launcher-fixture.mjs';
+import { withShellParts } from './fixtures/shell-parts.mjs';
 
-const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
+const read = p => withShellParts(readFileSync(new URL('../' + p, import.meta.url), 'utf8'));
 const SWITCH = 'wizard/app-windows';
 const ORIGIN = 'https://wizard.example';
 const APPS = [

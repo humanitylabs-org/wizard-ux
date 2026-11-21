@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
 import {launcherFixture} from './launcher-fixture.mjs';
-const read = p => readFileSync(new URL('../web/' + p, import.meta.url), 'utf8');
+import { withShellParts } from './fixtures/shell-parts.mjs';
+const read = p => withShellParts(readFileSync(new URL('../web/' + p, import.meta.url), 'utf8'));
 const tick = () => new Promise(resolve => setImmediate(resolve));
 function fixture() {
   const events = {}, nodes = new Map(), timers = new Map(), storage = new Map();

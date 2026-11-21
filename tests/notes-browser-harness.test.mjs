@@ -2,8 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import { withShellParts } from './fixtures/shell-parts.mjs';
 const { assertReadOnlyFixture } = createRequire(import.meta.url)('./notes-fixture-write-policy.cjs');
-const read = p => readFileSync(new URL(p, import.meta.url), 'utf8');
+const read = p => withShellParts(readFileSync(new URL(p, import.meta.url), 'utf8'));
 
 test('Notes browser entry matches the production Alt+KeyO apps shortcut', () => {
   const desktop = read('../web/desktop/desktop.js');

@@ -1,8 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
+import { withShellParts } from './fixtures/shell-parts.mjs';
 const web = new URL('../web/', import.meta.url);
-const read = f => readFileSync(new URL(f, web), 'utf8');
+const read = f => withShellParts(readFileSync(new URL(f, web), 'utf8'));
 
 test('the pill Desks panel is never core CSS; skin rules that paint it stay skin-scoped', () => {
   for (const [dir, pre] of [['obsidian', 'html[data-skin^="obsidian"]'], ['landscapes', 'html[data-skin^="landscapes"]']]) {

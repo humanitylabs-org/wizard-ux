@@ -2,8 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
+import { withShellParts } from './fixtures/shell-parts.mjs';
 
-const read = path => readFileSync(new URL('../' + path, import.meta.url), 'utf8');
+const read = path => withShellParts(readFileSync(new URL('../' + path, import.meta.url), 'utf8'));
 const chats = withParts(read('web/core/chats.js'));
 const desktop = read('web/desktop/desktop.js');
 const css = read('web/core/chats.css');

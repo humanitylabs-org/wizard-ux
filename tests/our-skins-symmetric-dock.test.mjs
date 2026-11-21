@@ -4,8 +4,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { withoutApprovedOrbIcon } from './approved-orb-icon-css.mjs';
+import { withShellParts } from './fixtures/shell-parts.mjs';
 const web = new URL('../web/', import.meta.url);
-const read = p => readFileSync(new URL(p, web), 'utf8');
+const read = p => withShellParts(readFileSync(new URL(p, web), 'utf8'));
 
 test('renderDots builds the stock dock on every skin', () => {
   const app = read('app.js');

@@ -6,8 +6,9 @@ import { modelContext } from './fixtures/chats-list-model.mjs';
 import '../web/core/chats-list-model.js';
 import { withParts } from './fixtures/chats-parts.mjs';
 import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
+import { withShellParts } from './fixtures/shell-parts.mjs';
 const M = globalThis.WizChatsListModel;
-const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
+const read = p => withShellParts(readFileSync(new URL('../' + p, import.meta.url), 'utf8'));
 const at = n => `2026-11-05T${String(n).padStart(2, '0')}:00:00Z`;
 const rows = [
   { id: 'needs', title: 'Alpha · needs', at: at(1), state: 'needs' },

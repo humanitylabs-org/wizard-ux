@@ -5,9 +5,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
-const apps = readFileSync(new URL('../web/core/apps.js', import.meta.url), 'utf8');
-const kindsJs = readFileSync(new URL('../web/core/app-kinds.js', import.meta.url), 'utf8');
-const appJs = readFileSync(new URL('../web/app.js', import.meta.url), 'utf8');
+import { withShellParts } from './fixtures/shell-parts.mjs';
+const apps = withShellParts(readFileSync(new URL('../web/core/apps.js', import.meta.url), 'utf8'));
+const kindsJs = withShellParts(readFileSync(new URL('../web/core/app-kinds.js', import.meta.url), 'utf8'));
+const appJs = withShellParts(readFileSync(new URL('../web/app.js', import.meta.url), 'utf8'));
 
 const pageless = { id: 'tg-style', name: 'TG style', desc: 'Telegram look', source: 'apps.json', type: 'view', category: 'app' };
 const withPage = { ...pageless, url: '/tg-style/' };

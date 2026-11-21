@@ -10,9 +10,10 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import vm from 'node:vm';
+import { withShellParts } from './fixtures/shell-parts.mjs';
 
 const root = new URL('../', import.meta.url);
-const read = p => readFileSync(new URL(p, root), 'utf8');
+const read = p => withShellParts(readFileSync(new URL(p, root), 'utf8'));
 const OWNER = ['nebula', 'grove', 'tide', 'ember', 'signal'];
 
 /* ---------- the real SKINS table, read from core/skins.js ---------- */

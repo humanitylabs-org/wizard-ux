@@ -2,9 +2,10 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
+import { withShellParts } from './fixtures/shell-parts.mjs';
 
-const js = readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8');
-const css = readFileSync(new URL('../web/desktop/desktop.css', import.meta.url), 'utf8');
+const js = withShellParts(readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8'));
+const css = withShellParts(readFileSync(new URL('../web/desktop/desktop.css', import.meta.url), 'utf8'));
 
 test('desktops reorder by stable desk, keeping the one in front and the last one', () => {
   const body = js.match(/function moveDesk\(from, to\) \{([\s\S]*?)\n  \}/)?.[1] || '';

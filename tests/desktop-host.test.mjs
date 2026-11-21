@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
-const read = file => readFileSync(new URL('../' + file, import.meta.url), 'utf8');
+import { withShellParts } from './fixtures/shell-parts.mjs';
+const read = file => withShellParts(readFileSync(new URL('../' + file, import.meta.url), 'utf8'));
 function fixture() {
   const jobs = [], framesQueue = [], calls = [], errors = [];
   const window = {};
@@ -131,7 +132,7 @@ test('desktop loads the adapter before boot; Classic controls and skin adapter r
 
 test('desktop host: layout toolbars never crash a shell whose app services lack titlebar.render (James, 6 Nov 2026)', async () => {
   const { readFile } = await import('node:fs/promises');
-  const src = await readFile(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8');
+  const src = withShellParts(await readFile(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8'));
   assert.match(src, /renderTools: \(frame, slot\) => window\.WizAppServices\?\.titlebar\?\.render\?\.\(frame, slot\) === true/);
 });
 

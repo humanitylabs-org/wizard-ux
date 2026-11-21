@@ -2,10 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
+import { withShellParts } from './fixtures/shell-parts.mjs';
 // Composer mic (#13) while Mizel records (James, 18 Oct 2026: "the orb works … shouldn't the microphone button be
 // triggering the same pathway"): recordReply has no admission logic of its own. It hands the reply pin to startVoice,
 // the orb's recorder, which borrows the meeting's mic through WosOrbHandoff exactly as an orb tap does.
-const phone=readFileSync(new URL('../web/app.js',import.meta.url),'utf8');
+const phone=withShellParts(readFileSync(new URL('../web/app.js',import.meta.url),'utf8'));
 const section=(s,a,b)=>s.slice(s.indexOf(a),s.indexOf(b,s.indexOf(a)));
 const reply=section(phone,'  function recordReply(','  async function startVoice(');
 function harness({shared=null,admitting=false,admitReply=null}={}) {

@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import fs from 'node:fs';
 import { withDesktopParts } from './fixtures/desktop-parts.mjs';
-const read=p=>fs.readFileSync(new URL('../web/'+p,import.meta.url),'utf8');
+import { withShellParts } from './fixtures/shell-parts.mjs';
+const read=p=>withShellParts(fs.readFileSync(new URL('../web/'+p,import.meta.url),'utf8'));
 function grammar(){
  const events=[],norm=s=>String(s||'').toLowerCase().replace(/[^a-z0-9 ]/g,'').trim();
  const app={id:'wizard-music',name:'Music'},box={console,Map,Set,URL,location:{href:'https://fixture.invalid/',origin:'https://fixture.invalid',hostname:'fixture.invalid'}};box.window=box;
@@ -83,7 +84,7 @@ test('phone non-recorded review feedback resolves only its original thread, or s
 });
 
 test('finite audit has all 72 capabilities and complete 163-row crosswalk, without unclosed browser gaps',()=>{
- const d=JSON.parse(fs.readFileSync(new URL('../docs/responsive-capability-coverage.json',import.meta.url),'utf8'));
+ const d=JSON.parse(withShellParts(fs.readFileSync(new URL('../docs/responsive-capability-coverage.json',import.meta.url),'utf8')));
  assert.equal(d.features.length,72);const ids=new Set(d.features.map(f=>f.id));assert.equal(ids.size,72);assert.equal(d.legacy_crosswalk.length,163);for(const row of d.legacy_crosswalk)assert(ids.has(row.feature_id));
  for(const f of d.features.filter(f=>f.scope==='browser-common'))assert(['shared-implemented','shared-delivered-pr31','inherited-shared'].includes(f.status),f.id);
  const counts={};for(const f of d.features)counts[f.status]=(counts[f.status]||0)+1;assert.deepEqual(counts,d.counts);

@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
-const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
+import { withShellParts } from './fixtures/shell-parts.mjs';
+const read = p => withShellParts(readFileSync(new URL('../' + p, import.meta.url), 'utf8'));
 const tick = () => new Promise(r => setTimeout(r, 0));
 
 /* A shell document holding same-origin app frames, each with its own window, document and HTMLMediaElement. */

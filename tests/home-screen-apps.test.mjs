@@ -3,9 +3,10 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import { launcherFixture } from './launcher-fixture.mjs';
+import { withShellParts } from './fixtures/shell-parts.mjs';
 
 const root = process.env.HOME_SCREEN_SOURCE || new URL('../',import.meta.url).pathname;
-const read = path => fs.readFileSync(root + '/web/' + path,'utf8');
+const read = path => withShellParts(fs.readFileSync(root + '/web/' + path,'utf8'));
 function policy(search='') {
   const attributes = {}, window = {};
   const ctx = vm.createContext({ window, document:{documentElement:{setAttribute:(k,v)=>attributes[k]=v}}, location:{origin:'https://box.example',search}, URL, URLSearchParams, Object, Proxy, Reflect });
@@ -194,7 +195,7 @@ test('pinned app keeps Android status bar and navigation buttons; content starts
   vm.runInContext(read('core/single-app-session.js'),ctx);
   assert.deepEqual(calls,[false],'never asks Android to hide its bars');
   assert.equal(typeof window.__wosTop,'function'); window.__wosTop(40);
-  const java=fs.readFileSync(root+'android/app/src/main/java/ai/wizards/os/AppSessionActivity.java','utf8');
+  const java=withShellParts(fs.readFileSync(root+'android/app/src/main/java/ai/wizards/os/AppSessionActivity.java','utf8'));
   assert.doesNotMatch(java,/applyImmersive\(true\)/); assert.match(java,/super\.applyImmersive\(false\)/);
 });
 
@@ -218,7 +219,7 @@ test('Desks overview hold-and-release offers Add to home screen; drag keeps reor
 // A home-screen app window is not "WizardOS in front": the floating orb stays over it (James, 24 Oct).
 test('Pinned home-screen apps keep the floating orb', async () => {
   const { readFileSync } = await import('node:fs');
-  const j = f => readFileSync(new URL('../android/app/src/main/java/ai/wizards/os/' + f, import.meta.url), 'utf8');
+  const j = f => withShellParts(readFileSync(new URL('../android/app/src/main/java/ai/wizards/os/' + f, import.meta.url), 'utf8'));
   assert.match(j('device/AppState.java'), /static synchronized boolean shellFront\(\)[\s\S]{0,160}instanceof ai\.wizards\.os\.AppSessionActivity/);
   assert.equal((j('MainActivity.java').match(/setAppInFront\(this, ai\.wizards\.os\.device\.AppState\.shellFront\(\)\)/g) || []).length, 2);
 });

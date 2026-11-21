@@ -1,6 +1,7 @@
 import test from 'node:test'; import assert from 'node:assert/strict'; import vm from 'node:vm'; import fs from 'node:fs';
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
-const read=p=>fs.readFileSync(new URL('../'+p,import.meta.url),'utf8');
+import { withShellParts } from './fixtures/shell-parts.mjs';
+const read=p=>withShellParts(fs.readFileSync(new URL('../'+p,import.meta.url),'utf8'));
 const context=vm.createContext({window:{WosChat:{esc:s=>String(s??'')}},fetch:()=>{},Set,Map,console});
 vm.runInContext(read('web/core/chat-models.js'),context);
 const M=context.window.WosModels;

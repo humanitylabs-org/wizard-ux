@@ -4,7 +4,8 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { shortTime } from '../web/layouts/ai-apps/parts.js';
 import { withParts } from './fixtures/chats-parts.mjs';
-const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
+import { withShellParts } from './fixtures/shell-parts.mjs';
+const read = p => withShellParts(readFileSync(new URL('../' + p, import.meta.url), 'utf8'));
 const now = Date.UTC(2026, 10, 3, 5);
 function core(zone = 'UTC') {
   const fmt = new Intl.DateTimeFormat('en-US', { timeZone: zone, weekday: 'short', day: 'numeric' });

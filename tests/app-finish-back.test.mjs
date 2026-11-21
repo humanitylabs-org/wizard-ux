@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import { withServicesParts } from './fixtures/app-services-parts.mjs';
-const read=p=>readFileSync(new URL('../web/'+p,import.meta.url),'utf8');
+import { withShellParts } from './fixtures/shell-parts.mjs';
+const read=p=>withShellParts(readFileSync(new URL('../web/'+p,import.meta.url),'utf8'));
 test('apps return through the shared Back step and hidden frames cannot navigate the owner',()=>{
  assert.match(read('core/app-client.js'),/back: \(\) => \{ try \{ return service\?\.nav\?\.back\?\.\(\) === true/);
  assert.match(withServicesParts(read('core/app-services.js')),/back\(\) \{ check\(\); return navBack\(st\); \}/);

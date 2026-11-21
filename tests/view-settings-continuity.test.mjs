@@ -3,7 +3,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
-const source = readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8');
+import { withShellParts } from './fixtures/shell-parts.mjs';
+const source = withShellParts(readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8'));
 const start = source.indexOf('  function leaveHome() {');
 const leave = source.slice(start, source.indexOf('\n  function goHome()', start));
 test('view mount preserves the same Settings modal/page while classic navigation still closes it', () => {
@@ -23,7 +24,7 @@ test('view mount preserves the same Settings modal/page while classic navigation
   }
 });
 test('AI apps sets the everywhere-modal contract before preparing its Home chat', () => {
-  const ai=readFileSync(new URL('../web/layouts/ai-apps/desktop.js', import.meta.url),'utf8');
+  const ai=withShellParts(readFileSync(new URL('../web/layouts/ai-apps/desktop.js', import.meta.url),'utf8'));
   const at=ai.indexOf('const releaseSettings = host?.settings.overlay();');
   assert.match(source, /settingsOverlay: \(\) => \{/);
   assert.ok(at>=0 && at<ai.lastIndexOf('if (api.route().home) soon(() => { if (api.route().home) api.sessions.newChat(); });'));
