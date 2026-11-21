@@ -489,14 +489,14 @@
     return go();
   };
   // An app the Store just installed may still be starting: core/apps.js waits for its page, saying so (issue 1651).
-  const whenOpenable = id => window.WizCore.whenOpenable(id, { openable: hostedOpenable, name: id => APP[id]?.name, say: t => toast('◌', t, 4000) });
+  const whenOpenable = (id, hint) => window.WizCore.whenOpenable(id, { openable: hostedOpenable, name: id => APP[id]?.name || (typeof hint === 'string' ? hint.slice(0, 80) : ''), say: t => toast('◌', t, 4000) });
   // Only trusted system windows may ask; check the actual sender frame, never a claimed app id.
   addEventListener('message', async e => {
     const d = e.data; if (e.origin !== location.origin || !d || d.type !== 'wizard:open-app' || typeof d.id !== 'string') return;
     const host = [...document.querySelectorAll('iframe')].find(f => f.contentWindow === e.source)?.closest('[data-win]');
     const w = host && W[host.dataset.win]; if (!w || !['app-store', 'agents', 'setup'].includes(w.appId)) return;
     // A just-installed app may still be starting: say so and open it once the registry has its page.
-    const a = await whenOpenable(d.id); if (!a) return;
+    const a = await whenOpenable(d.id, d.name); if (!a) return;
     const here = host.isConnected && W[host.dataset.win] === w;
     if (openApp(a) !== false && here && d.replace === true && w.appId === 'app-store') closeWin(host.dataset.win);   // Get more: the app takes the Store's place
   });

@@ -77,8 +77,14 @@ for (const file of ['web/app.js', 'web/desktop/desktop.js']) {
     const src = read(file);
     const i = src.indexOf("d.type !== 'wizard:open-app'");
     const handler = src.slice(i, src.indexOf('});', i));
-    assert.match(handler, /await whenOpenable\(d\.id\)/);
+    assert.match(handler, /await whenOpenable\(d\.id, d\.name\)/);
     assert.doesNotMatch(handler, /refreshApps/);
-    assert.match(src, /const whenOpenable = id => window\.WizCore\.whenOpenable\(id, \{ openable: hostedOpenable/);
+    assert.match(src, /const whenOpenable = \(id, hint\) => window\.WizCore\.whenOpenable\(id, \{ openable: hostedOpenable, name: id => APP\[id\]\?\.name \|\| /);
   });
 }
+
+test('the Store names the app in its open-app message, so the starting note says which app', () => {
+  const src = read('web/store/store.js');
+  assert.match(src, /type: 'wizard:open-app', id, name \}/);
+  assert.match(src, /type: 'wizard:open-app', id: openId\(a\), name: a\.name, replace: true/);
+});

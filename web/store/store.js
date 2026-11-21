@@ -524,7 +524,7 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
       else {
         say(successMessage(access), true);
         // Asked from the Orb / Apps views' "Get more" (?open=1): open it at once, in place of this Store window.
-        if (framed && new URLSearchParams(location.search).get('open') === '1' && openId(a)) parent.postMessage({ type: 'wizard:open-app', id: openId(a), replace: true }, location.origin);
+        if (framed && new URLSearchParams(location.search).get('open') === '1' && openId(a)) parent.postMessage({ type: 'wizard:open-app', id: openId(a), name: a.name, replace: true }, location.origin);
       }
     } catch (err) { if(a.install_link && S.link) S.link.error=err.message || 'Install failed.'; say(err.message || 'Install failed.'); }
     finally { S.busy.delete(a.id); S.busyAt.delete(a.id); refresh(); }
@@ -563,12 +563,13 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
 
   // Open after the Starting… wait: read the shell's list once more, and say so if the app still can't open.
   async function openInShell(id) {
+    const name = S.apps.find(x => openId(x) === id)?.name || '';
+    const post = () => parent.postMessage({ type: 'wizard:open-app', id, name }, location.origin);
     const shellCan = () => { try { return typeof parent.WizCanOpen !== 'function' || !!parent.WizCanOpen(id); } catch (_) { return true; } };
-    if (!S.late.has(id) || shellCan()) { parent.postMessage({ type: 'wizard:open-app', id }, location.origin); return; }
+    if (!S.late.has(id) || shellCan()) { post(); return; }
     try { await parent.WizCore?.refreshApps?.(); } catch (_) {}
-    if (shellCan()) { parent.postMessage({ type: 'wizard:open-app', id }, location.origin); return; }
-    const name = S.apps.find(x => openId(x) === id)?.name || 'This app';
-    toast(`<b>${esc(name)} is still starting.</b><span>Try Open again in a moment.</span>`);
+    if (shellCan()) { post(); return; }
+    toast(`<b>${esc(name || 'This app')} is still starting.</b><span>Try Open again in a moment.</span>`);
   }
   document.addEventListener('click', e => {
     const mine = e.target.closest('[data-my-apps]');
