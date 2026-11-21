@@ -827,7 +827,7 @@
     },
     "core/os-update-flow.js": {
       "loadedBy": ["phone", "desktop"],
-      "note": "Direct entrypoint import; WizardOS update banner, sheets and Updating panel on a Mac's Wizard (App Manager by_host); elsewhere only the waiting sheets, when the App Manager says waits_for_work"
+      "note": "Direct entrypoint import; WizardOS update banner, sheets and Updating panel on a Mac's Wizard (App Manager by_host); elsewhere only the waiting sheets"
     },
     "core/own-views.js": {
       "loadedBy": [

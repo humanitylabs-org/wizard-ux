@@ -49,10 +49,9 @@
  * "Updating WizardOS" panel, the result). Here the card says "WizardOS x is ready" / "Updating WizardOS…", Update now
  * opens that flow's confirm sheet, and the Home pop-up stays away. Other boxes are unchanged.
  *
- * Updates that wait for running work (App Manager `waits_for_work`: always on a Mac, elsewhere the off-by-default
- * switch wizard/os-update-waits, read by the App Manager): Install can answer `waiting` with what Wizard is working on;
- * the flow's sheet names it and offers Update when it finishes / Update anyway, and while that request waits the card
- * says so, with Options. Without `waits_for_work` the card is as before (a `waiting` answer still gets the sheet).
+ * Updates wait for running work on every box (wizard-app-manager#696): Install can answer `waiting` with what Wizard
+ * is working on; the flow's sheet names it and offers Update when it finishes / Update anyway, and while that request
+ * waits the card says so, with Options.
  *
  * Home pop-up: when the card says Update, Try again or Reload, Home shows the same words and the same button in a
  * small card clear of the dock, with a ×. × hides it for that exact state (keyed by the release or the web build)
@@ -73,7 +72,6 @@
   // Updates install by themselves on Automatic, and always on the one App Manager (0.3.107) that says always_auto.
   const isAuto = () => st?.always_auto === true || st?.mode === 'auto';
   const mac = () => st?.by_host === true;
-  const waits = () => mac() || st?.waits_for_work === true;
   const CHANNEL_NAME = { stable: 'For everyone', latest: 'For testers' };
   function changed() { try { window.WosSettings?.refresh(); } catch (_) {} try { popup(); } catch (_) {} }
   // A status check that brings nothing new must not redraw Settings: a redraw resets its scroll, and a Mac's Wizard
@@ -323,7 +321,7 @@
     if (st.installing) return { state: 'building', title: `Updating ${OS()}…`, line: st.quick === true ? takes : `${takes} · Wizard reconnects by itself`, action: 'apply', label: auto ? 'Install now' : 'Install', disabled: true };
     if (st.unpinned || !st.update_available) return null;
     // "Update when it finishes" is waiting for Wizard's work (core/os-update-flow.js): Options asks again.
-    if (waits() && st.when_idle && window.WosUpdateFlow) return { state: 'waiting', title: `${OS()} update waiting`, line: 'Updates when Wizard finishes', action: 'waitopts', label: 'Options', disabled: !!busy };
+    if (st.when_idle && window.WosUpdateFlow) return { state: 'waiting', title: `${OS()} update waiting`, line: 'Updates when Wizard finishes', action: 'waitopts', label: 'Options', disabled: !!busy };
     // WizardOS: the box itself. Automatic waits for a quiet night; the button is the "now" escape, like macOS.
     const start = busy === 'apply' ? 'Starting…' : '';
     if (st.interrupted) return { state: 'failed', title: `${OS()} update didn’t finish`, line: auto ? 'Tries again tonight' : takes, action: 'apply', label: start || 'Try again', disabled: !!busy };
@@ -487,7 +485,7 @@
   const IDLE = 10 * FRESH;
   // A Mac's Wizard looks every minute (the heads-up is 5 minutes; core/os-update-flow.js polls faster while updating).
   // An update waiting for Wizard's work looks every minute too, so the card and the 6-hour ask follow it.
-  const tick = () => { if (!st || document.hidden) return; if (st.installing || mac() || (waits() && st.when_idle) || Date.now() - at >= IDLE) load(true); };
+  const tick = () => { if (!st || document.hidden) return; if (st.installing || mac() || st.when_idle || Date.now() - at >= IDLE) load(true); };
   const timer = typeof setInterval === 'function' ? setInterval(tick, FRESH) : 0;
   timer?.unref?.();
   document.addEventListener?.('visibilitychange', () => { if (!document.hidden && st && Date.now() - at >= FRESH) load(true); });

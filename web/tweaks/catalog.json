@@ -23,7 +23,6 @@
     "wizard/failure-reason",
     "wizard/skins-look-only",
     "wizard/app-updates-list",
-    "wizard/os-update-waits",
     "wizard/update-bug-reports",
     "wizard/link-token-repair",
     "wizard/chat-channels",
