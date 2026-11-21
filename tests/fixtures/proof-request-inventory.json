@@ -599,13 +599,13 @@
       "status": "not-exercised",
       "source": "web/core/os-updates.js",
       "kind": "read",
-      "note": "Only read while the off-by-default wizard/app-updates-list switch is on (Settings > About & updates > Apps); the QA harnesses run with it off. Refused and collected, never answered, if a flow reaches it."
+      "note": "Read by Settings > About & updates > Apps (on for everyone since wizard-ux#1191); the QA harnesses don't open that page. Refused and collected, never answered, if a flow reaches it."
     },
     "/wizard-os-home/store-install/_app-updates": {
       "status": "not-exercised",
       "source": "web/core/os-updates.js",
       "kind": "read",
-      "note": "Only read, and only posted to by the Apps buttons (Update now, Retry, Hold, Unhold, Automatic / Ask me), while the off-by-default wizard/app-updates-list switch is on (Settings > About & updates > Apps); the QA harnesses run with it off. Refused and collected, never answered, if a flow reaches it."
+      "note": "Only read, and only posted to by the Apps buttons (Update now, Retry, Hold, Unhold, Automatic / Ask me), in Settings > About & updates > Apps (on for everyone since wizard-ux#1191); the QA harnesses don't open that page. Refused and collected, never answered, if a flow reaches it."
     },
     "/wizard-os-home/store-install/_feature-switches": {
       "status": "not-exercised",

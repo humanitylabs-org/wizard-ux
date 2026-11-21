@@ -21,7 +21,6 @@
     "wizard/background-continue",
     "wizard/failure-reason",
     "wizard/skins-look-only",
-    "wizard/app-updates-list",
     "wizard/update-bug-reports",
     "wizard/link-token-repair",
     "wizard/graceful-restart",
