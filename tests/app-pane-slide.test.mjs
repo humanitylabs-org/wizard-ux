@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
+import { withWebParts } from './fixtures/web-parts.mjs';
+const read = p => withWebParts(readFileSync(new URL('../' + p, import.meta.url), 'utf8'));
 
 test('AI apps pane: only the common desk slides; its title/window/body/frame never ease independently', () => {
  const css = read('web/layouts/ai-apps/desktop.css');

@@ -132,7 +132,7 @@ window.WizCore.chats = function createChats(H) {
   shimsLate({ isHosted });
   let docOwner = null, docFrame = 0, docResize = null, docObserved = [], visibleThreads = new Set();
   /* A thread as the page, move to a channel, the Space in front, Focus agents; core/chats-focus.js. */
-  const { addFilter, agoText, BOOM, byStatus, CHAN_ARCHIVE_PRUNE_DAYS, CHAN_CLAMP, CHAN_DAY, CHAN_GENERAL, CHAN_PREFS_KEY, CHAN_TEXT_MAX, CHAN_VIEW_KEY, clearFilter, fileInGeneral, fileInSpace, focusAgentId, focusAgents, focusedAgent, focusMatches, focusOf, focusRows, hasFilter, INC, isWorking, KIT, matchesFocus, matchFilters, md, moveToChannel, paintPins, PIN, PIN_SVG, PINS_KEY, pinsOn, rememberedFocus, rerenderList, scrollBox, SEC_OPEN_KEY, SECTIONS_DAY, SECTIONS_STATUS, setFilter, setFocus, setupLate, SPACE, spaceAgent, spaceContains, spaceMember, spaces, spacesOf, STALE_LIST, STATUS, statusEntries, subjectOf, subjects, syncDocumentThread, threadOnScreen, threadViewportTop, TOPIC, topicOn, toTurns, visibleSpaces, watchTracker, WORKING_ST, bindLate: focusLate } = window.WizCore.chatsParts.focus({ agentRec, AGS: (...a) => AGS(...a), androidDocument, ch, chanStoreMove, chanStoreSpaces, chatsBack, chatVars, growTa, H, LIVE, norm, OUTBOX, owner: (...a) => owner(...a), renderChatList, renderThread, save, toast, W, winAgent });
+  const { addFilter, agoText, BOOM, byStatus, CHAN_ARCHIVE_PRUNE_DAYS, CHAN_CLAMP, CHAN_DAY, CHAN_GENERAL, CHAN_PREFS_KEY, CHAN_TEXT_MAX, CHAN_VIEW_KEY, clearFilter, fileInGeneral, fileInSpace, focusAgentId, focusAgents, focusedAgent, focusMatches, focusOf, focusRows, hasFilter, INC, isWorking, KIT, matchesFocus, matchFilters, md, moveToChannel, paintPins, PIN, PIN_SVG, PINS_KEY, pinsOn, rememberedFocus, rerenderList, scrollBox, SEC_OPEN_KEY, SECTIONS_DAY, SECTIONS_STATUS, setFilter, setFocus, setupLate, SPACE, spaceAgent, spaceContains, spaceMember, spaces, spacesOf, STALE_LIST, STATUS, statusEntries, subjectOf, subjects, syncDocumentThread, threadOnScreen, threadViewportTop, TOPIC, topicOn, toTurns, visibleSpaces, watchTracker, WORKING_ST, bindLate: focusLate } = window.WizCore.chatsParts.focus({ agentRec, AGS: (...a) => AGS(...a), androidDocument, ch, chanStoreMove, chanStoreSpaces, chatsBack, chatVars, growTa, H, LIVE, norm, OUTBOX, owner: (...a) => owner(...a), renderChatList: (...a) => renderChatList(...a), renderThread: (...a) => renderThread(...a), save, toast, W, winAgent });
   hostedLate({ KIT });
   let chanView = (() => { try { return localStorage.getItem(CHAN_VIEW_KEY) === 'channels' ? 'channels' : 'activity'; } catch (_) { return 'activity'; } })();
   const chanExpanded = new Set(), chanMore = new Set();
@@ -252,7 +252,7 @@ window.WizCore.chats = function createChats(H) {
     return true;
   }
   /* Daily follow and claim, agents in the Channels list; core/chats-agentrows.js. */
-  const { actAllAgents, actMark, actNeeds, actRowMark, actUnread, agentLabelOf, CHAN_AGENT, chanDraftMark, chanUnread, chanUnreadN, dailyClaim, dailyClick, dailyFollow, dailyHtml, dailyLate, dailyLinkTo, dailyTarget, dailyWatch, draftTag, rowDraft, bindLate: agentrowsLate } = window.WizCore.chatsParts.agentrows({ agentName: (...a) => agentName(...a), AGS: (...a) => AGS(...a), ch, CH, chanElsewhere, chanNeeds, chanOpen, chatVars, clip, DAILY_HIST, DAILY_OPEN, dailyHead, dailyLast, dailyOn, dailyPin, dailyState, draftKey: (...a) => draftKey(...a), esc, isWorking, KIT, LIVE, loadDraft, openChat, owner: (...a) => owner(...a), renderChatList, renderThread, rowAgent, save, saveDraft, toTurns, W });
+  const { actAllAgents, actMark, actNeeds, actRowMark, actUnread, agentLabelOf, CHAN_AGENT, chanDraftMark, chanUnread, chanUnreadN, dailyClaim, dailyClick, dailyFollow, dailyHtml, dailyLate, dailyLinkTo, dailyTarget, dailyWatch, draftTag, rowDraft, bindLate: agentrowsLate } = window.WizCore.chatsParts.agentrows({ agentName: (...a) => agentName(...a), AGS: (...a) => AGS(...a), ch, CH, chanElsewhere, chanNeeds, chanOpen, chatVars, clip, DAILY_HIST, DAILY_OPEN, dailyHead, dailyLast, dailyOn, dailyPin, dailyState, draftKey: (...a) => draftKey(...a), esc, isWorking, KIT, LIVE, loadDraft, openChat, owner: (...a) => owner(...a), renderChatList: (...a) => renderChatList(...a), renderThread: (...a) => renderThread(...a), rowAgent, save, saveDraft, toTurns, W });
   let chanAgentsOpen = false;
   const chanAgentId = id => typeof id === 'string' && id.startsWith(CHAN_AGENT) ? id.slice(CHAN_AGENT.length) : '';
   function chanAgentsList() {
@@ -272,14 +272,14 @@ window.WizCore.chats = function createChats(H) {
   const { actRestore, actUndo, CHAN_READ_KEY, CHAN_READ_MAX, CHAN_READ_MS, CHAN_READ_UP_MS, chanActs } = window.WizCore.chatsParts.undo({ esc, LIVE, paintListsNow, toast, vib });
   let chanReadDoc = null, chanReadT = 0, chanReadPaintT = 0;
   /* A channel's read place and new-post counts; core/chats-chanread.js. */
-  const { chanChanged, chanGenAgent, chanNewCount, chanReadAt, chanReadFeed, chanReadKey, chanReadPaint, chanReadTo, chanSeenRow, bindLate: chanreadLate } = window.WizCore.chatsParts.chanread({ CH, CHAN_GENERAL, CHAN_READ_KEY, CHAN_READ_MAX, CHAN_READ_MS, CHAN_READ_UP_MS, chanActs, chanAt, chanOpen, chanStore, chatVars, focusAgentId, handledNow, isWorking, LIVE, owner: (...a) => owner(...a), renderChatList, rowOf: (...a) => rowOf(...a), storeAgent, W });
+  const { chanChanged, chanGenAgent, chanNewCount, chanReadAt, chanReadFeed, chanReadKey, chanReadPaint, chanReadTo, chanSeenRow, bindLate: chanreadLate } = window.WizCore.chatsParts.chanread({ CH, CHAN_GENERAL, CHAN_READ_KEY, CHAN_READ_MAX, CHAN_READ_MS, CHAN_READ_UP_MS, chanActs, chanAt, chanOpen, chanStore, chatVars, focusAgentId, handledNow, isWorking, LIVE, owner: (...a) => owner(...a), renderChatList: (...a) => renderChatList(...a), rowOf: (...a) => rowOf(...a), storeAgent, W });
   function chanSeenPaint() {
     // Activity too (issue 1336): an opened green thread leaves Ready at once, also in the list pane beside the thread
     // that the desktop's Live repaint skips while focus is inside it.
     for (const id of Object.keys(CH)) { const x = W[id]; if (!x || x.thread || !(chanOpen(x) || chanView === 'activity') || holdList(id)) continue; const el = elOf(id); if (el) renderChatList(x, el); }
   }
   /* New channel, channel list body and head, channel sheet, Rename, Mark read; core/chats-chanui.js. */
-  const { boxModel, chanboxLate, chanCompose, chanComposer, chanDraftKey, chanDropSending, chanEditUnsent, chanEmojiPick, chanEmojiSync, chanEmojiTap, chanHead, chanHold, chanKey, chanMark, chanModel, channelClick, channelFeed, channelsBody, channelSend, chanOwnPost, chanRepaint, chanScrolled, chanSetEmoji, chanSpaceOf, chanToEnd, chanUser, clearAll, feedLate, openChannelSheet, SEC_DEFAULT, setChanModel, setQuery, submitChannelRename, bindLate: chanuiLate } = window.WizCore.chatsParts.chanui({ agentName: (...a) => agentName(...a), agentRec, ago, AGS: (...a) => AGS(...a), ch, CH, CHAN_CLAMP, CHAN_DAY, CHAN_GENERAL, CHAN_TEXT_MAX, CHAN_VIEW_KEY, chanActs, chanAgentsSec, chanArchived, chanAt, chanCarry, chanChanged, chanDraftMark, chanElsewhere, chanExpanded, chanFace, chanGenAgent, chanMore, chanNeeds, channelBack, channelsFor, channelsLate, chanNewCount, chanOpen, chanPostOrder, chanPrefEdit, chanPrefs, chanPruned, chanReadAt, chanReadFeed, chanReadKey, chanReadPaint, chanReadTo, chanStore, chanTarget, chanTitle, chanUnread, chanUnreadN, chatsBack, chatVars, closeRowSheet, doneLate, esc, focusAgentId, focusAgents, focusedAgent, focusOf, growTa, H, inChannel, isWorking, jumpGo, KIT, LIVE, MARK_DONE_SVG, norm, openChannel, openChat, openEmojiSheet, OUTBOX, owner: (...a) => owner(...a), paintFeedJump, paintListsNow, PIN_SVG, renderChatList, rerenderList, rowAgent, rowDraft, spaceAgent, spaceContains, spaces, toast, toTurns, track, vib, viewContext, W, winAgent });
+  const { boxModel, chanboxLate, chanCompose, chanComposer, chanDraftKey, chanDropSending, chanEditUnsent, chanEmojiPick, chanEmojiSync, chanEmojiTap, chanHead, chanHold, chanKey, chanMark, chanModel, channelClick, channelFeed, channelsBody, channelSend, chanOwnPost, chanRepaint, chanScrolled, chanSetEmoji, chanSpaceOf, chanToEnd, chanUser, clearAll, feedLate, openChannelSheet, SEC_DEFAULT, setChanModel, setQuery, submitChannelRename, bindLate: chanuiLate } = window.WizCore.chatsParts.chanui({ agentName: (...a) => agentName(...a), agentRec, ago, AGS: (...a) => AGS(...a), ch, CH, CHAN_CLAMP, CHAN_DAY, CHAN_GENERAL, CHAN_TEXT_MAX, CHAN_VIEW_KEY, chanActs, chanAgentsSec, chanArchived, chanAt, chanCarry, chanChanged, chanDraftMark, chanElsewhere, chanExpanded, chanFace, chanGenAgent, chanMore, chanNeeds, channelBack, channelsFor, channelsLate, chanNewCount, chanOpen, chanPostOrder, chanPrefEdit, chanPrefs, chanPruned, chanReadAt, chanReadFeed, chanReadKey, chanReadPaint, chanReadTo, chanStore, chanTarget, chanTitle, chanUnread, chanUnreadN, chatsBack, chatVars, closeRowSheet, doneLate, esc, focusAgentId, focusAgents, focusedAgent, focusOf, growTa, H, inChannel, isWorking, jumpGo, KIT, LIVE, MARK_DONE_SVG, norm, openChannel, openChat, openEmojiSheet, OUTBOX, owner: (...a) => owner(...a), paintFeedJump, paintListsNow, PIN_SVG, renderChatList: (...a) => renderChatList(...a), rerenderList, rowAgent, rowDraft, spaceAgent, spaceContains, spaces, toast, toTurns, track, vib, viewContext, W, winAgent });
   focusLate({ chanHold, chanOwnPost });
   let secOpen = (() => { try { return { ...SEC_DEFAULT, ...JSON.parse(localStorage.getItem(SEC_OPEN_KEY) || '{}') }; } catch (e) { return { ...SEC_DEFAULT }; } })();
   /* Status marks, loading placeholders and the New chat face; core/chats-status.js. */
@@ -300,228 +300,18 @@ window.WizCore.chats = function createChats(H) {
     return 'newest';
   })();
   /* Ready and Working orders, notifications in Ready, Back to Newest; core/chats-readylist.js. */
-  const { archSel, CHEV_SVG, COG_SVG, COMPACT_KEY, compactOn, discardDraft, draftRow, draftsLate, eventsLate, filterSheet, focusLabel, focusOptions, focusStrip, jumpToMessage, keepThreadOpen, leadText, listTitle, moveSubject, newDrafts, nextOrder, noteAt, noteIcon, noteMoreHtml, notePlain, noteQuiet, noteRouteHtml, noteRow, notes, noteSiblings, noteSrcName, noteStackHtml, noteTactsHtml, notifAct, notifDoneAll, notifOf, notifRoute, openContextDraft, openNewDraft, orderBar, quoteMessage, readyBack, readyBody, readyOrdered, regenOn, replyBubble, replyCard, sendPill, setSummaryOpen, showBoomMessage, snoozeLast, summaryOf, summaryStartsOpen, syncListTitle, trackerLate, WORKING_ORDERS, workingOrderBar, workingOrdered, workLabel, bindLate: readylistLate } = window.WizCore.chatsParts.readylist({ agentName: (...a) => agentName(...a), agentRec, ago, AGS: (...a) => AGS(...a), attOf, byStatus, ch, CH, chanArchived, chanOpen, chatsBack, chatVars, clip, dailyLate, deferredOf, draftKey: (...a) => draftKey(...a), esc, focusAgents, focusedAgent, focusOf, H, isWorking, KIT, leaveFinishedThread, LIVE, matchesFocus, openChat, OUTBOX, owner: (...a) => owner(...a), pinsOn, reachLabel, READY_ORDER_KEY, READY_ORDER_LABEL, READY_ORDERS, rememberedFocus, renderChatList, renderThread, renderThreadLive, renderThreadNow, saveDraft, scrollBox, setFocus, setupLate, spaceAgent, spaces, statusEntries, statusLate, stiKind, syncDocumentThread, threadViewportTop, toast, TOPIC, topicOn, toTurns, track, troubleshoot, vib, visibleSpaces, W, winAgent });
+  const { archSel, CHEV_SVG, COG_SVG, COMPACT_KEY, compactOn, discardDraft, draftRow, draftsLate, eventsLate, filterSheet, focusLabel, focusOptions, focusStrip, jumpToMessage, keepThreadOpen, leadText, listTitle, moveSubject, newDrafts, nextOrder, noteAt, noteIcon, noteMoreHtml, notePlain, noteQuiet, noteRouteHtml, noteRow, notes, noteSiblings, noteSrcName, noteStackHtml, noteTactsHtml, notifAct, notifDoneAll, notifOf, notifRoute, openContextDraft, openNewDraft, orderBar, quoteMessage, readyBack, readyBody, readyOrdered, regenOn, replyBubble, replyCard, sendPill, setSummaryOpen, showBoomMessage, snoozeLast, summaryOf, summaryStartsOpen, syncListTitle, trackerLate, WORKING_ORDERS, workingOrderBar, workingOrdered, workLabel, bindLate: readylistLate } = window.WizCore.chatsParts.readylist({ agentName: (...a) => agentName(...a), agentRec, ago, AGS: (...a) => AGS(...a), attOf, byStatus, ch, CH, chanArchived, chanOpen, chatsBack, chatVars, clip, dailyLate, deferredOf, draftKey: (...a) => draftKey(...a), esc, focusAgents, focusedAgent, focusOf, H, isWorking, KIT, leaveFinishedThread, LIVE, matchesFocus, openChat, OUTBOX, owner: (...a) => owner(...a), pinsOn, reachLabel, READY_ORDER_KEY, READY_ORDER_LABEL, READY_ORDERS, rememberedFocus, renderChatList: (...a) => renderChatList(...a), renderThread: (...a) => renderThread(...a), renderThreadLive, renderThreadNow, saveDraft, scrollBox, setFocus, setupLate, spaceAgent, spaces, statusEntries, statusLate, stiKind, syncDocumentThread, threadViewportTop, toast, TOPIC, topicOn, toTurns, track, troubleshoot, vib, visibleSpaces, W, winAgent });
   chanreadLate({ snoozeLast });
   chanuiLate({ orderBar });
   rowsLate({ snoozeLast, workLabel });
   // One local picker, rendered through the same Focus options as the filter sheet.
   let spacePicker = null, focusHoldUntil = 0;
   /* Space picker, Focus strip, Activity list and order; core/chats-spaces.js. */
-  const { activityBody, activityClick, actSetOrder, anchorListPlace, bindFocusStrip, closeSpacePicker, holdListPlace, listPlace, listSaveT, openSpacePicker, queueListPlace, restoreListPlace, storedListPlace, bindLate: spacesLate } = window.WizCore.chatsParts.spaces({ actNeeds, actUnread, agentRec, AGS: (...a) => AGS(...a), ch, CH, CHAN_STORE_MAX, chanAt, chanEmojiPick, chanEmojiSync, chanEmojiTap, chanOpen, chanStore, chanTarget, chanToEnd, chatRow, chatVars, esc, fileInGeneral, fileInSpace, focusAgents, focusOf, focusOptions, H, LIVE, norm, noteAt, noteRow, openChannel, owner: (...a) => owner(...a), READY_ORDER_KEY, renderChatList, rerenderList, runningOpen, SEC_PAGE, setFocus, SPACE, spaceAgent, spaceContains, spaceMember, spaces, spacesOf, storeAgent, toast, W, winAgent });
+  const { activityBody, activityClick, actSetOrder, anchorListPlace, bindFocusStrip, closeSpacePicker, holdListPlace, listPlace, listSaveT, openSpacePicker, queueListPlace, restoreListPlace, storedListPlace, bindLate: spacesLate } = window.WizCore.chatsParts.spaces({ actNeeds, actUnread, agentRec, AGS: (...a) => AGS(...a), ch, CH, CHAN_STORE_MAX, chanAt, chanEmojiPick, chanEmojiSync, chanEmojiTap, chanOpen, chanStore, chanTarget, chanToEnd, chatRow, chatVars, esc, fileInGeneral, fileInSpace, focusAgents, focusOf, focusOptions, H, LIVE, norm, noteAt, noteRow, openChannel, owner: (...a) => owner(...a), READY_ORDER_KEY, renderChatList: (...a) => renderChatList(...a), rerenderList, runningOpen, SEC_PAGE, setFocus, SPACE, spaceAgent, spaceContains, spaceMember, spaces, spacesOf, storeAgent, toast, W, winAgent });
   focusLate({ closeSpacePicker, openSpacePicker });
   chanuiLate({ openSpacePicker });
-  function renderChatList(w, el) {
-    if (globalThis.WosThreadTracker?.on()) globalThis.WosThreadTracker.loadCounts();
-    // A layout which owns the list supplies its own sidebar. Do not paint a
-    // second, CSS-covered list underneath it (including a thread returning Back).
-    // The AI apps sidebar's Channels pane (wizard-ux issue 1256) is this same list for the main Chats window, drawn
-    // into the sidebar as the id::side window: tabs, the channel list, a feed and its box.
-    const side = typeof chanSide === 'function' && chanSide(w);
-    if (!side) {
-      if (H.ownsChatList?.()) { el?.replaceChildren(); return; }
-    }
-    syncListTitle(w);
-    closeStream(ch(w.id));
-    if (!el) return;
-    if (el.dataset) delete el.dataset.draftFor; // a list holds no thread's box: the next thread paint reads its own draft (issue 1444)
-    if (H.renderView?.(w, el, () => renderChatList(w, el), 'list')) return;
-    ch(w.id).heldList = false;
-    H.threadShown?.(w.id, null); // the list is showing: nothing is bound to this window
-    if (typeof actAllAgents === 'function') actAllAgents(w, side); // Activity shows every agent (issue 1336)
-    const c = ch(w.id), n = norm(c.q);
-    const AGID = winAgent(w), LST = LIVE.statusFor ? LIVE.statusFor(AGID) : { ok: LIVE.ok, error: LIVE.error };
-    rowListAgent = AGID;
-    // (the AI apps sidebar's pane opens its channels in the main column: it never draws a feed, wizard-ux issue 1256)
-    // Channels are on for everyone (wizard-ux issue 1258); chanOn is false only where tests slice this renderer without
-    // the Channels block.
-    const chanOn = typeof chanHead === 'function', feed = chanOn && !(typeof chanElsewhere === 'function' && chanElsewhere(w)) ? chanOpen(w) : null;
-    // The main column's feed window draws a feed or nothing (never the tabs or the channel list: those stay in the sidebar).
-    if (side && !feed && typeof chanElsewhere === 'function' && typeof H.channelsElsewhere === 'function' && !chanElsewhere(w)) { el.replaceChildren(); return; }
-    rowChan = chanOn && !feed;
-    const runView = !side && typeof runningOpen === 'function' && runningOpen(w), runRow = !side && !runView && !feed && typeof runningRow === 'function' ? runningRow(w) : ''; // wizard-ux issue 1569
-    if (!AGID) window.WizAppExtensions?.poll();
-    const F = c.filter && STATUS[c.filter] ? STATUS[c.filter] : null, focus = focusOf(w);
-    const fids = F?.ids ? F.ids(AGID) : null;
-    const space = focus?.kind === 'space' ? spaces().find(s => s.id === focus.key) : null;
-    const members = space && LST.ok ? LIVE.spaceSessions?.(space.threads, { agent: spaceAgent(space) }) : null;
-    const all = (LST.ok ? (members ? members.rows : n && LIVE.searchRows ? LIVE.searchRows(AGID) : LIVE.sessionsFor ? LIVE.sessionsFor(AGID) : LIVE.sessions).filter(s => !s.hidden) : []).filter(s => (!F || (fids ? fids.has(s.id) : F.test(s))) && focusMatches(w, s));
-    const filtered = !!(F || focus);
-    // The default main-agent Focus is still the owner's inbox. Spaces and other agents are not.
-    // Subscribe before the empty-list branch: notifications can be the only Ready rows.
-    const listNotes = !n && !F && !AGID && focus?.kind !== 'space' ? notes() : null;
-    const listNotesN = listNotes ? listNotes.awake.length + listNotes.later.length : 0;
-    const titleHit = n ? all.filter(s => window.WizCore.chatSearch.relevance(s, n).coverage) : all;
-    // Message bodies: searched lazily in the background (core/chat-search.js); hits stream in with a snippet.
-    // Search is scoped to this window's agent, including routed agents and indexed body-only rows.
-    const BS = window.WizCore.chatSearch, queryAt = c.q, searchNav = c.readNav;
-    const bs = n && BS ? BS.query(w.id, queryAt, () => {
-      const current = W[w.id], e2 = elOf(w.id); if (current && !current.thread && winAgent(current) === AGID && c.readNav === searchNav && e2 && ch(w.id).q === queryAt && e2.querySelector('.ch-list') && !holdList(w.id)) renderChatList(w, e2);
-    }, AGID) : null;
-    if (!n && BS) BS.cancel(w.id);
-    const snips = bs ? bs.hits : new Map();
-    const seen = new Set(titleHit.map(s => s.id));
-    const hit = titleHit.concat(all.filter(s => !seen.has(s.id) && snips.has(s.id)));
-    const hitIds = new Set(hit.map(s=>s.id));
-    for (const s of bs?.rows?.values() || []) if (!hitIds.has(s.id) && !s.hidden && (!F || (fids ? fids.has(s.id) : F.test(s))) && focusMatches(w, s)) { hit.push(s); hitIds.add(s.id); }
-    // Pinned live chats get one fixed section at the top (archived pins stay in Archive); search and filters still
-    // decide which rows are eligible first.
-    const split = n ? { pinned: [], rest: hit } : PIN.partition(hit, s => !s.archived && !(snoozeLast() && deferredOf(s))), pinnedRows = split.pinned;
-    const groups = LIVE.workGroups(split.rest);
-    // Sends a graceful restart holds get their own Saved heading, never counted as Working (wizard-ux issue 1362).
-    const heldRow = s => !!globalThis.WizReach?.restartHeld?.(s);
-    if (groups.working?.some(heldRow)) { groups.saved = groups.working.filter(heldRow); groups.working = groups.working.filter(s => !heldRow(s)); }
-    // SEARCH_RELEVANCE (chat-search.js): coverage → relevance × bounded recency; Archive/pins are neutral.
-    const ranked = n ? BS.rank(hit, n, LIVE.cardAt, snips) : [];
-    // Reuse groupWork's classification (including automatic Archive and snooze), not a second status policy.
-    const searchLabels = { errors: 'Error', working: 'Working', saved: 'Saved', ready: 'Ready', yesterday: 'Ready', pastWeek: 'Ready', deferred: 'Snoozed', archive: 'Archive' };
-    const searchStatus = new Map(n ? Object.entries(groups).flatMap(([k, rows]) => rows.map(s => [s.id, k !== 'archive' && deferredOf(s) && !isWorking(s) ? 'Snoozed' : searchLabels[k]])) : []);
-    const hitCount = () => hit.length;
-    const coachLine = () => c.coach ? '<span class="ch-coach">Filtered. Tap ✕ to see all chats.</span>' : '';
-    const ownerId = owner(w.id), curThread = W[ownerId]?.thread;
-    const drafts = focus ? [] : newDrafts().filter(d => !n || norm(d.text).includes(n));
-    c.more = c.more || {};
-    const chip = (k, label) => `<span class="ch-chip ${k}" data-chchip="${k}"><i class="ch-fdot ${k === 'status' ? c.filter : 'subject'}"></i>${esc(label)}<button type="button" data-chchipx="${k}" aria-label="Remove filter ${esc(label)}">✕</button></span>`;
-    const chips = (F ? chip('status', F.label) : '');
-    const ph = filtered ? 'Search within' : 'Search chats and messages';
-    const head = side ? chanHead(w, feed) : `<div class="ch-top"><label class="ch-search${filtered ? ' has-chips' : ''}"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>${chips}<input data-chsearch placeholder="${ph}" aria-label="Search chats and messages" value="${esc(c.q)}" enterkeyhint="search" spellcheck="false">${c.q ? '<button type="button" class="ch-sclear" data-chsclear aria-label="Clear search">×</button>' : ''}<button type="button" class="ch-fbtn${filtered ? ' on' : ''}" data-chfbtn aria-label="Filter chats" aria-expanded="${c.sheet ? 'true' : 'false'}"><svg viewBox="0 0 24 24"><path d="M4 6h16M7 12h10M10 18h4"/></svg></button></label>${AGID ? '' : (window.WosBell?.html?.() || '')}</div>`
-      // Switching Focus (agent/Space) never pushes the list down with a count line (James, 25 Oct 2026); only a status filter says how many matched.
-      + (chanOn ? chanHead(w, feed) : '')
-      + (F && LIVE.ok ? `<div class="ch-count">${hitCount()} ${hitCount() === 1 ? 'chat' : 'chats'}${coachLine()}</div>` : '');
-    // Suggestions while typing (or focused on an empty field): filters that match the words, then a new chat.
-    const sug = !c.sugOff && (c.q || c.focus) ? matchFilters(c.q, 3).filter(f => !(f.kind === 'status' && f.key === c.filter) && !(f.kind === focus?.kind && f.key === focus.key)) : [];
-    // Filter suggestions only. New chat lives in one place, the bottom-right button (James, 24 Oct 2026: no second New chat in search).
-    const sugHtml = sug.length ? `<div class="ch-sug">${sug.map(f => `<button type="button" class="ch-sugrow" data-chsug="${f.kind}:${esc(f.key)}"><span class="ch-sugic">⌯</span><span>Filter: <b>${esc(f.label)}</b></span></button>`).join('')}</div>` : '';
-    let body;
-    const draftSec = drafts.length ? `<section class="ch-sec open" data-sec="drafts"><div class="ch-sec-h static"><span>Drafts</span><small>${drafts.length}</small></div><div class="ch-sec-b">${drafts.map(d => draftRow(d, d.key === 'new' && curThread === '__new__')).join('')}</div></section>` : '';
-    // Messages still on the phone (the window went back to the list on send), new chats and replies: shown until
-    // Wizard takes them. Local recovery is independent of list/search/server availability.
-    const outNew = OUTBOX ? OUTBOX.unsent().filter(it => OUTBOX.isMessage(it) && (it.agent || '') === AGID && (it.kind === 'new' || it.kind === 'reply')) : [];
-    // A message still leaving the phone already shows as its thread's "Sending…" row in Working; the pill is only
-    // for trouble (offline / not sent) or a thread that isn't in the list.
-    const pill = sendPill(outNew.filter(it => ['failed', 'waiting', 'unconfirmed'].includes(it.state) || (it.state === 'held' && it.lateHeld) || OUTBOX?.quarantined(it.id) || !LIVE.session(it.sessionId)), w);
-    // Everything else still on the phone (orb commands and dictation, held takes, side-button takes): one row at the
-    // top, the only Chats-side sign of something that could be lost. It replaces the old notifications panel's Unsent.
-    const others = !AGID && H.openUnsent && window.WosSettings?.unsentAll ? window.WosSettings.unsentAll({ outbox: OUTBOX }).filter(it => !(it.origin === 'app' && (it.kind === 'new' || it.kind === 'reply'))) : [];
-    const otherFail = others.filter(it => ['failed', 'empty', 'unconfirmed'].includes(it.state)).length;
-    const unsentRow = others.length ? `<button type="button" class="ch-unsent${otherFail ? ' fail' : ''}" data-chunsent><span class="pip"></span><span class="tx"><b>${others.length === 1 ? '1 voice take' : others.length + ' voice takes'} ${otherFail ? 'not sent' : 'waiting to send'}</b><small>${esc(clip(others[others.length - 1].recoveryText || others[others.length - 1].text || 'Voice note', 60))}</small></span><span class="go">View</span></button>` : '';
-    if (false) {}
-    else if (!LST.ok && !LST.error) body = draftSec + skelRows(AGID ? `Connecting to ${agentName(AGID)}` : 'Connecting to Wizard');
-    else if (!LST.ok) body = draftSec + `<div class="ch-empty">${esc(window.WizReach?.failure().message || 'Checking the connection to Wizard…')}</div>`;
-    // Channels: the live window only (James, 9 Nov 2026: older chats are reached by asking the agent).
-    else if (feed && !n && !F) { const live = new Set((LIVE.sessionsFor ? LIVE.sessionsFor(AGID) : LIVE.sessions).map(s => s.id)), mine = all.filter(s => live.has(s.id)); body = channelFeed(w, feed, typeof chanFeedRows === 'function' ? chanFeedRows(feed, mine) : mine); }
-    else if (chanOn && chanView === 'channels' && !n && !F) body = channelsBody(w, all);
-    // Activity as a short what-needs-me list (issue 1336): Working, Ready, Recent, then folded Snoozed and Archived.
-    else if (chanOn && !side && !feed && !n && !F && typeof activityBody === 'function') body = draftSec + activityBody(w, all, listNotes);
-    else if (focus?.kind === 'space' && !hit.length && !n && !F) body = `<div class="ch-empty">${esc(agentRec(focusedAgent(focus)).label)} is filling this ${SPACE.ch ? 'channel' : 'Space'}…</div>`;
-    else if (AGID && !all.length && !n && !F) body = `<div class="ch-empty"><b>No chats with ${esc(agentName(AGID))} yet</b><br><button type="button" class="ch-fclear" data-chnew data-chemptynew>Start a new chat</button><br> ${agentRec(AGID).privacy === 'private' ? 'They stay with this agent: the main agent can’t search or read them.' : 'They stay in this agent’s chats.'}</div>`;
-    else if (filtered && !hit.length && !listNotesN) body = `<div class="ch-empty">${n ? 'No chats match' : F ? F.empty : `No chats in ${esc(focusLabel(w))}`}<br><button type="button" class="ch-fclear" ${n || F ? 'data-chfclear' : 'data-chfbtn'}>${n || F ? 'Clear filter' : 'Change focus'}</button></div>`;
-    else if (!hit.length && !drafts.length && !listNotesN) body = `<div class="ch-empty">${bs && (bs.busy || bs.scanned < Math.min(bs.want, bs.total || 0)) ? `No titles match “${esc(c.q)}” · searching messages…` : `No threads match “${esc(c.q)}”.`}</div>`;
-    else if (n) {
-      const shown = c.more.search ? ranked : ranked.slice(0, SEC_PAGE);
-      body = `<div class="ch-search-results" data-search-results="flat">${filtered ? '' : drafts.map(d => draftRow(d, d.key === 'new' && curThread === '__new__')).join('')}${shown.map(s => chatRow(s, snips.get(s.id), searchStatus.get(s.id))).join('')}${ranked.length > shown.length ? `<button class="ch-more" data-secmore="search">Show all ${ranked.length}</button>` : ''}</div>`;
-    }
-    else body = (filtered ? '' : draftSec)
-      + (pinnedRows.length ? `<section class="ch-sec ch-pinned open" data-sec="pinned"><div class="ch-sec-h static"><span>Pinned</span><small>${pinnedRows.length}</small></div><div class="ch-sec-b">${pinnedRows.map(s => chatRow(s, n ? snips.get(s.id) : null)).join('')}</div></section>` : '')
-      + (byStatus() ? SECTIONS_STATUS : SECTIONS_DAY).map(([k, label]) => {
-      const list0 = PW && k === 'errors' ? PW.errorsFilter(groups[k]) : groups[k] || [];
-      // Ready's order is chosen before paging, so Priority never pages a needs-you row out of the first page.
-      const dayOrdered = !n && (k === 'ready' || (!byStatus() && (k === 'yesterday' || k === 'pastWeek')));
-      const list = k === 'working' ? workingOrdered(list0) : dayOrdered ? readyOrdered(list0) : k === 'archive' && !n && !filtered && Object.keys(LIVE.windows || {}).length ? list0.slice(0,50) : list0;
-      // Errors also holds failed background work and voice notes that didn't send (chat-power.js #12).
-      const extra = PW && k === 'errors' && !n ? PW.errorsExtra() : { n: 0, html: '' };
-      const nt = k === 'ready' ? listNotes : null, notesN = nt ? nt.awake.length + nt.later.length : 0;
-      if (!list.length && !extra.n && (k === 'errors' || k === 'saved' || k === 'deferred' || k === 'yesterday' || k === 'pastWeek' || n || filtered) && !notesN) return '';
-      // While searching, every section with a hit opens so nothing is buried.
-      const open = n ? true : secOpen[k];
-      // Counts are unread only (James, 8 Nov 2026): a finished thread already read adds nothing, so Ready is never an inventory.
-      // Working, Snoozed and Archive keep their place counts; they are not messages waiting.
-      const unreadSec = k === 'errors' || k === 'ready' || k === 'yesterday' || k === 'pastWeek';
-      const secN = unreadSec ? window.WizChatsListModel.unreadThreads(list, s => LIVE.isNew(s) && !(snoozeLast() && deferredOf(s) && !isWorking(s)), nt?.awake) : list.length + extra.n + notesN;
-      const waitN = !byStatus() && (k === 'ready' || k === 'yesterday' || k === 'pastWeek') ? list.filter(s => !window.WizChatsListModel.isListWorking(s) && !(snoozeLast() && deferredOf(s) && !isWorking(s)) && (['waiting_for_approval', 'unknown'].includes(s.status) || (!deferredOf(s) && attOf(s)?.state === 'needs_you'))).length : 0;
-      const windowMeta = AGID ? LIVE.windows?.[AGID] : Object.values(LIVE.windows || {}).length ? {archiveTotal:Object.values(LIVE.windows).reduce((n,x)=>n+(x.archiveTotal||0),0)} : null;
-      const archiveNote = k === 'archive' && !n && !filtered && windowMeta ? `<span class="ch-none">Newest ${list.length} of ${windowMeta.archiveTotal} · search to find older chats</span>` : '';
-      const shown = c.more[k] ? list : list.slice(0, SEC_PAGE);
-      return `<section class="ch-sec${open ? ' open' : ''}" data-sec="${k}"><button class="ch-sec-h" data-sectoggle="${k}" aria-expanded="${open}"><span>${label}</span><small>${secN || ''}</small>${waitN ? `<b class="wait">${waitN} need you</b>` : ''}<i aria-hidden="true"></i></button>
-        ${open ? `<div class="ch-sec-b">${k === 'working' && list.length ? workingOrderBar() : ''}${k === 'archive' && !n && !filtered && !AGID ? '<div data-slot="archive-top"></div>' : ''}${k === 'archive' && !n && !filtered ? archSel() : ''}${archiveNote}${k === 'ready' && !n && !filtered && !AGID ? '<div data-slot="ready-top"></div>' + (window.WizAppExtensions?.html() || '') : ''}${list.length || extra.n || notesN ? (k === 'errors' && PW ? shown.map(s => PW.errorRow(s, chatRow(s, n ? snips.get(s.id) : null))).join('') + extra.html : dayOrdered ? readyBody(shown, s => chatRow(s, null), nt, k) : shown.map(s => chatRow(s, n ? snips.get(s.id) : null)).join('')) : '<span class="ch-none">None</span>'}${list.length > shown.length ? `<button class="ch-more" data-secmore="${k}">Show all ${list.length}</button>` : ''}${k === 'ready' && !n && !filtered && !AGID ? '<div data-slot="ready-end"></div>' : ''}</div>` : ''}</section>`;
-    }).join('');
-    if (runView) body = runningBody();
-    // Progress sits above the results (James, 25 Oct 2026: it was hidden below a long Archive); the final line stays under them.
-    if (bs && LST.ok) body = BS.scanning(bs) || bs.busy ? BS.footer(bs) + body : body + BS.footer(bs);
-    if (side && !feed && chanView !== 'channels') body = ''; // Activity: the tabs only; the sidebar draws its own rows
-    // An unlanded return bookmark outranks the scroller's own reading: that reading is the 0 it fell to.
-    // A fresh page has no scroller yet: fall back to the place this list last saved (once per page per window).
-    const fresh = !el.querySelector('.ch-scroll') && !c.listPlace && !c.listPending && !c.storedTried;
-    if (!el.querySelector('.ch-scroll')) c.storedTried = true;
-    const place = c.listPending || listPlace(el) || c.listPlace || (fresh ? storedListPlace(w) : null);
-    // Results stream in while typing: keep the search box focused with the caret where it was.
-    const inp0 = el.querySelector('[data-chsearch]'), had = inp0 && document.activeElement === inp0, sel = had ? [inp0.selectionStart, inp0.selectionEnd] : null;
-    // New chat: a thumb-reach button bottom-right of the list (James: never make the thumb reach the top).
-    // A channel's feed has its message box instead (wizard-ux issue 1258); an archived one takes no new posts (Restore
-    // first), as its sheet offers no New post.
-    // On the Channels list (none open) it starts a new chat too, as on Activity; only the list's + New channel row makes a
-    // channel (James, 17 Nov 2026, wizard-ux issue 1489).
-    const fab = feed ? (typeof chanComposer === 'function' ? chanComposer(w, feed) : '') : `<button type="button" class="ch-fab" data-chnew data-chfab aria-label="${AGID ? esc(`New chat with ${agentName(AGID)}`) : 'New chat'}"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>`;
-    // Opened on the stored snapshot: say so, with a spinner, until the first fresh read lands (live.js SNAP_KEY).
-    // Never let an old list pass for the latest (James, 21 Oct 2026): a failed or hung read, or a list older than a
-    // minute, says when it was last updated; a pull-to-refresh shows its own progress and an "Up to date" flash.
-    const lastAt = LST.at || LST.cachedAt || 0, age = lastAt ? Date.now() - lastAt : 0, since = lastAt ? `last updated ${agoText(lastAt)}` : '';
-    const spin = '<i class="ch-spin" aria-hidden="true"></i>';
-    // One quiet row, never a pill pushing the list down (James, 7 Nov 2026): a status dot, the line (ellipsis when long;
-    // the whole line stays in the row's title) and a compact "Troubleshoot" text action at its right end, which opens
-    // the Troubleshooter exactly like every other data-chtroubleshoot control.
-    const dot = '<i class="ch-sync-dot" aria-hidden="true"></i>';
-    const act = '<button type="button" class="ch-sync-act" data-chtroubleshoot aria-label="Open Troubleshooter">Troubleshoot</button>';
-    // The text's title carries the whole line as plain text (its parts are already escaped); the visible labels stay
-    // literal markup so app-parity-gate sees them.
-    const syncBar = (cls, lead, inner, extra = '', title = inner) => `<div class="ch-sync${cls ? ' ' + cls : ''}" role="status">${lead}<span title="${title}">${inner}</span>${extra}</div>`;
-    const notUp = (cls, lead, rest) => syncBar(cls, lead, `<b>Not up to date</b>${rest}`, act, `Not up to date${rest}`);
-    const sync = c.ptrState === 'busy' ? syncBar('', spin, `Refreshing…${LST.error || age > STALE_LIST ? ` · ${esc(since)}` : ''}`)
-      : LST.error ? notUp('off', dot, ` · ${esc(reachLabel('read'))}${since ? ` · ${esc(since)}` : ''}`)
-      : LST.cached ? syncBar('', spin, `Updating…${LST.cachedAt && Date.now() - LST.cachedAt > 120000 ? ` · from ${esc(agoText(LST.cachedAt))}` : ''}`)
-      : LST.ok && age > STALE_LIST ? notUp('stale', LST.loading ? spin : dot, ` · ${esc(since)}${LST.loading ? ' · updating…' : ''}`)
-      : c.ptrState === 'done' ? syncBar('ok', '', '<span>Up to date</span>', '', 'Up to date') : '';
-    const html = side ? `<div data-part="list" class="ch-list ch-side${feed ? ' ch-side-feed' : chanView === 'channels' ? ' ch-side-chan' : ''}">${head}<div class="ch-scroll">${body}</div>${feed && typeof jumpPillsHtml === 'function' ? jumpPillsHtml() : ''}${feed ? fab : ''}</div>`
-      : `<div data-part="list" class="ch-list${AGID ? ' agent' : ''}${compactOn() ? ' compact' : ''}${byStatus() ? ' by-status' : ''}"${focusedAgent(focus) ? ` style="--agc:${AGS()?.colour(agentRec(focusedAgent(focus))) || ''};--ch-agent-hue:${AGS()?.distinctHues().get(focusedAgent(focus)) ?? AGS()?.hue(agentRec(focusedAgent(focus)))}"` : ''}><div data-slot="list-top"></div>${runView ? runningHead() : head}${sync}<div class="ch-ptr" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 5v14M6 13l6 6 6-6"/></svg><span>Pull to refresh</span></div><div class="ch-scroll">${runView ? '' : sugHtml + unsentRow}${runRow}${body}</div>${feed && typeof jumpPillsHtml === 'function' ? jumpPillsHtml() : ''}${pill}${runView ? '' : fab}${feed || chanOn ? '' : focusStrip(w)}${c.sheet ? filterSheet(w, c) : ''}</div>`;
-    // Unchanged list reads keep the same nodes, caret, scroll and text selection.
-    // A thread/list remount invalidates the identity guard even when its HTML matches.
-    if (c.listHTML === html && c.listRoot === el.firstElementChild) { PW?.paint(w.id, el); return; }
-    // A live tick (a timer, a relative time, one Working row) patches only what changed: rows, spinners, scroll
-    // and any open sheet stay put (James, 23 Oct 2026: whole-list rebuilds flickered on every update).
-    const root = el.firstElementChild;
-    if (c.listRoot === root && root?.classList.contains('ch-list') && window.WosMorph?.morph(root, html)) {
-      clearReading(w.id); c.listHTML = html;
-      // The morph keeps a typed field's live value; a cleared search (×, Back, a chip) must empty the box too.
-      const box = root.querySelector('[data-chsearch]'); if (box && !c.q && box.value) box.value = '';
-      const cta = feed && root.querySelector('[data-chchanform] textarea'); if (cta && typeof growTa === 'function') growTa(cta); // the morph drops its measured height
-      // The auto-archive picker is a saved setting, not a draft: show the saved value after every repaint, or a
-      // window painted before the choice changed (another desk, another device, first paint) keeps saying "1 week".
-      const arch = root.querySelector('[data-archafter]'); if (arch && arch.value !== String(LIVE.archiveAfterDays)) arch.value = String(LIVE.archiveAfterDays);
-      const aso = root.querySelector('[data-chactorder]'), asv = aso && window.WizChatsListModel?.activitySortOf(readyOrder); if (aso && aso.value !== asv) aso.value = asv;
-      if (c.listPending) { if (restoreListPlace(el.querySelector('.ch-scroll'), place)) c.listPending = null; }
-      else anchorListPlace(el.querySelector('.ch-scroll'), place);
-    } else {
-      const keepSheet = keptSheet(el);
-      clearReading(w.id); el.innerHTML = html; c.listHTML = html; c.listRoot = el.firstElementChild;
-      // Back from the Android app's document-scrolled thread: leave document scroll now, in this paint, so the list is
-      // never drawn (or its place restored) at the thread's page offset first (wizard-ux issue 1564).
-      // (typeof: tests run this function cut out of the file, without the document-scroll adapter around it.)
-      if (typeof docOwner !== 'undefined' && docOwner && androidDocument && (docOwner === el || docOwner.contains(el))) syncDocumentThread();
-      restoreSheet(el, keepSheet);
-      if (restoreListPlace(el.querySelector('.ch-scroll'), place)) c.listPending = null;
-      // After a reload the rows come from the snapshot or the first read, which can take a few seconds.
-      else if (c.listPending !== place) holdListPlace(w, el, place, fresh ? 8000 : 3000);
-    }
-    PW?.paint(w.id, el);
-    if (chanOn && typeof chanHold === 'function') chanHold(w.id); // a channel's feed holds its place (issue 1263)
-    bindFocusStrip(el);
-    window.WosSkinHost?.rendered('list', el);
-    if (had) { const inp = el.querySelector('[data-chsearch]'); inp.focus(); try { inp.setSelectionRange(sel[0], sel[1]); } catch (e) {} }
-  }
-  function toggleSection(w, k) {
-    secOpen = { ...secOpen, [k]: !secOpen[k] };
-    try { localStorage.setItem(SEC_OPEN_KEY, JSON.stringify(secOpen)); } catch (e) {}
-    const el = track.querySelector(`[data-chats="${w.id}"]`); if (el) renderChatList(w, el);
-  }
+  /* Painting a Chats list and folding its sections; core/chats-listpaint.js. */
+  const { renderChatList, toggleSection, bindLate: listpaintLate } = window.WizCore.chatsParts.listpaint({ actAllAgents, activityBody, agentName: (...a) => agentName(...a), agentRec, agoText, AGS: (...a) => AGS(...a), anchorListPlace, androidDocument, archSel, attOf, bindFocusStrip, byStatus, ch, chanComposer, chanElsewhere, chanFeedRows, chanHead, chanHold, channelFeed, channelsBody, chanOpen, chanSide, chatRow, chatVars, clip, compactOn, deferredOf, draftRow, esc, filterSheet, focusedAgent, focusLabel, focusMatches, focusOf, focusStrip, growTa, H, holdListPlace, isWorking, jumpPillsHtml, listPlace, LIVE, matchFilters, newDrafts, norm, notes, OUTBOX, owner: (...a) => owner(...a), PIN, reachLabel, readyBody, readyOrdered, restoreListPlace, runningBody, runningHead, runningOpen, runningRow, SEC_OPEN_KEY, SEC_PAGE, SECTIONS_DAY, SECTIONS_STATUS, sendPill, skelRows, snoozeLast, SPACE, spaceAgent, spaces, STALE_LIST, STATUS, storedListPlace, syncDocumentThread, syncListTitle, track, W, winAgent, workingOrderBar, workingOrdered });
   /* Attachments and voice notes; core/chats-attach.js. */
   const { addFiles, attachTray, CHECK_SVG, CLIP_SVG, fileUrl, hasContent, mediaOfFile, MIC_SVG, PEND, pendRef, PREVIEW, refreshCompose, refreshReply, syncSend, timeTag, toggleVoice, turnAt, turnHtml, UPLOAD_ABORT, uploadFile, userMedia, bindLate: attachLate } = window.WizCore.chatsParts.attach({ ch, CHEV_SVG, clip, COG_SVG, draftKey: (...a) => draftKey(...a), draftsLate, elOf: (...a) => elOf(...a), esc, fileRef: (...a) => fileRef(...a), INC, KIT, leadText, md, regenOn, replyBubble, replyCard, saveDraft, summaryOf, summaryStartsOpen, sweepHtml, toast, track, W, winAgent });
   agentrowsLate({ hasContent });
@@ -682,6 +472,7 @@ window.WizCore.chats = function createChats(H) {
   }
   /* Rename sheet, sheets kept across repaints, length sheet; core/chats-sheets.js. */
   const { keptSheet, openLengthSheet, openRenameSheet, RENAME_SVG, restoreSheet, submitRename, bindLate: sheetsLate } = window.WizCore.chatsParts.sheets({ CH, chatVars, closeRowSheet, esc, H, LIVE, renderThreadNow, toast, track, W });
+  listpaintLate({ keptSheet, restoreSheet });
   chanuiLate({ RENAME_SVG });
   function closeRowSheet() {
     if (!rowSheet) return false;
@@ -695,6 +486,7 @@ window.WizCore.chats = function createChats(H) {
   function renderThreadNow(w) { const el = track.querySelector(`[data-chats="${w.id}"]`); if (el && w.thread) renderThread(w, el); }
   /* Selecting text in a working thread; core/chats-select.js. */
   const { clearReading, readGuard, readingIn, scheduleHeld, SCROLL_IDLE, SEL, selectingIn, TOUCH } = window.WizCore.chatsParts.select({ ch, CH, flushHeld, idOf: (...a) => idOf(...a) });
+  listpaintLate({ clearReading });
   function renderThreadLive(w) { const el = track.querySelector(`[data-chats="${w.id}"]`); if (el && w.thread) renderLive(w, el); }
   function renderLive(w, el) {
     const c = ch(w.id);
@@ -728,175 +520,9 @@ window.WizCore.chats = function createChats(H) {
   trackerLate({ PAGE });
   /* Thread streaming and a thread's working state; core/chats-stream.js. */
   const { closeStream, keepLoadedImages, syncStream, threadState, bindLate: streamLate } = window.WizCore.chatsParts.stream({ agentName, agentRec, ago, elOf: (...a) => elOf(...a), esc, isWorking, LIVE, md, renderThreadLive, snoozeLast, stiKind, W });
-  function renderThread(w, el, keep) {
-    if (INC?.render(w.id, el)) return;
-    if (H.renderView?.(w, el, () => renderThread(w, el, keep), 'thread')) return;
-    ch(w.id).held = false; // explicit actions/navigation may repaint immediately
-    const c = ch(w.id), isNew = w.thread === '__new__', s = isNew ? null : rowOf(w.id, w.thread);
-    // The thread's own agent (pinned at creation); a new chat belongs to the window's agent.
-    const TAG = isNew ? (winAgent(w) || (AGS()?.isOther(c.newModel?.agent) ? c.newModel.agent : '')) : (LIVE.agentOf ? LIVE.agentOf(w.thread) : '');
-    // Unified Chats: a private agent's thread opened from the owner's main list says so in its header.
-    const incognitoAction = isNew && INC && window.WizCore.incognitoOptIn?.enabled(agentRec(TAG)) ? '<button type="button" class="pbtn ch-incog-toggle" role="switch" aria-checked="false" data-incog-start aria-label="Incognito"><span>Incognito</span><span class="sw" aria-hidden="true"><i></i></span></button>' : '';
-    const privTag = !winAgent(w) && TAG && AGS()?.isPrivate(agentRec(TAG)) ? `<span class="ch-privtag" data-wiz-private="" title="Private agent: ${esc(agentName(TAG))}">${AGS().lock()}<span>Private</span></span>` : '';
-    const state = threadState(s, TAG), working = state.working, held = working && !!globalThis.WizReach?.restartHeld?.(s);
-    const sub = isNew ? `Starts a new thread with ${agentName(TAG)}` : state.sub;
-    const storedTurns = (c.loadedFor === w.thread || c.cachedFor === w.thread) && turnsCurrent(c, s) ? c.turns || [] : null;
-    const turns = storedTurns && reconcileSent(storedTurns, OUTBOX ? OUTBOX.forThread(w.thread) : [], s);
-    c.media = []; c.texts = [];
-    let msgs;
-    // A message the transcript on screen already shows is never drawn again below it as pending: reopening a thread
-    // painted the cached transcript (your message, then the reply) and the outbox copy still "Sending…" under both
-    // until the server read retired it (James, 23 Oct 2026).
-    const pend = pendingFor(w).filter(p => !(turns && (localSent(turns, p) || echoed(turns, p) || retryShown(turns, p))));
-    const carry = isNew && c.carry && TAG ? `<div class="ch-carry" role="note"><b>${AGS()?.lock?.() || ''}Continues “${esc(clip(c.carry.title, 60))}” privately</b><span>Your first message takes the last ${c.carry.n === 1 ? 'message' : `${c.carry.n} messages`} with it as quoted context. That thread stays as it is.</span><button type="button" data-chcarryx>Don’t include</button></div>` : '';
-    const NV = isNew && !pend.length ? notifOf(w) : null;
-    const noteBox = NV && el.dataset.notificationId === NV.id ? el.querySelector('.ch-msgs') : null;
-    const notificationScroll = noteBox ? scrollBox(noteBox).scrollTop : 0;
-    const NQ = !!NV && noteQuiet();
-    if (NV) msgs = `<div class="msg a ch-notif" data-morph-key="notif:${esc(NV.id)}"><div class="bub">${md(NV.item?.message ?? NV.reply.message)}</div>${NV.item?.details && NV.item.details !== NV.item.message ? `<section class="ch-notif-details" aria-label="Original alert"><h2>Original alert</h2><div class="ch-notif-original">${esc(NV.item.details)}</div></section>` : ''}<div class="mmeta">${NV.item?.time ? timeTag(NV.item.time * 1000) : ''}<span class="ch-notif-src">${NV.item?.source === 'cron' ? 'Scheduled job' : NV.item?.app ? esc(NV.item.appName || NV.item.app) : 'Notification'}</span></div></div>`;
-    if (NQ) msgs = noteStackHtml(NV, `<div class="bub">${md(NV.item?.message ?? NV.reply.message)}</div>${NV.item?.details && NV.item.details !== NV.item.message ? `<section class="ch-notif-details" aria-label="Original alert"><h2>Original alert</h2><div class="ch-notif-original">${esc(NV.item.details)}</div></section>` : ''}`, noteTactsHtml(NV, true));
-    // The rest waiting from the same app, under it (its row in the list was one fold), with Done all.
-    if (NV) msgs += noteMoreHtml(NV);
-    // The same Badge | Chats picker as Settings › Notifications, above the notification.
-    if (NV) msgs = noteRouteHtml(NV) + msgs;   // (quiet: its own line already sits under the note)
-    else if (isNew && !pend.length) msgs = newChatHtml(TAG) + `<div class="ch-empty nc-classic"><b>${TAG && AGS()?.isPrivate(agentRec(TAG)) ? `New private chat` : 'New chat'}</b><br>${esc(H.newChatHint || 'Type below.')}</div>${carry}`;
-    // A thread answered 404 in this open is gone: that verdict wins over cached turns and queued sends.
-    else if (!isNew && c.goneFor === w.thread && c.goneNav === c.readNav && !threadAlive(w, w.thread)) msgs = threadErrHtml(c);
-    else if (!turns && !isNew && !pend.length) msgs = c.err && (c.failN > 1 || c.err !== 'Couldn’t load this thread') ? threadErrHtml(c) : skelThread();
-    else {
-      const all = turns || [];
-      if (c.showFor !== w.thread) {
-        const shown = PW?.RP.read(w.thread)?.shown;
-        c.show = Number.isInteger(shown) ? Math.max(PAGE, Math.min(all.length, shown)) : PAGE; c.showFor = w.thread;
-      }
-      const from = Math.max(0, all.length - c.show), shown = all.slice(from);
-      let day = '';
-      // A named failure reason (wizard/failure-reason tweak) is a notice in the failed panel, not a Wizard reply:
-      // it hides Hermes' generic failed_turn bubble and the duplicate "Reply not sent" line.
-      const runErr = !working && !!window.WosModels?.runError?.(s);
-      // Issue 1500: a send that failed on a signed-out/expired subscription shows the Reconnect card only, never Hermes'
-      // generic "not processed… send it again" line above it.
-      const signedOut = !working && !!PW?.signedOutFail?.(s);
-      // Issue 1235: a chat another app owns (Telegram, Slack …) refuses every reply, so its Not sent bubble has no
-      // Retry and the clear card shows at once: on a failed thread or a Not sent message, without waiting for the
-      // Service's words (they used to land about a minute after the generic Needs retry panel).
-      const foreign = window.WosModels?.foreignApp?.(s) || '';
-      const refused = !working && !!foreign && (['failed', 'interrupted'].includes(s?.status) || !!s?.safeError
-        || shown.some(tn => ['failed', 'interrupted'].includes(tn.u?.queue?.status)));
-      c.retryRunId = !working && !foreign && s?.retryRunId || ''; // the saved request a Not sent bubble's Retry sends (turnHtml)
-      // Renames show where they happened ("Renamed from …"), so the old name still finds its place in the thread.
-      const firstAt = shown.length ? turnAt(shown[0]) : Infinity;
-      const rns = (s?.renames || []).map(r => ({ ...r, ms: r.at * 1000 })).filter(r => from === 0 || !(r.ms < firstAt)).sort((a, b) => a.ms - b.ms);
-      const rnHtml = r => `<div class="ch-renamed"><span>${r.by === 'you' ? 'You renamed this from' : 'Renamed from'} “${esc(r.from)}”</span></div>`;
-      const rnBefore = at => { let out = ''; while (rns.length && isFinite(at) && rns[0].ms <= at) out += rnHtml(rns.shift()); return out; };
-      const need = typeof needsMark === 'function' && !isNew && s ? needsMark(w.id, w.thread, s, shown) : { k: -1, html: '' }; // issue 1331
-      c.restartHeld = held; // turnHtml: a held send's last turn is not live (wizard-ux issue 1362)
-      c.stopping = s?.status === 'stopping'; // turnHtml: the live work line says Stopping… from the tap (issue 1576)
-      msgs = (from > 0 ? `<button type="button" class="ch-earlier" data-chearlier>Load earlier messages · ${from} more</button>` : '')
-        + shown.map((tn, k, arr) => {
-          const at = turnAt(tn), dk = KIT.time.dayKey(at);
-          const div = dk && dk !== day ? `<div class="ch-day"><span>${esc(KIT.time.day(at))}</span></div>` : '';
-          if (dk) day = dk;
-          return rnBefore(at) + div + turnHtml(c, tn, k === arr.length - 1, working, s?.helperStatus, s?.reconnect || !!runErr || signedOut, !!globalThis.WosThreadTracker?.onFor?.(TAG) || (typeof replyStd === 'function' && replyStd(TAG)), k === need.k ? need.html : '');
-        }).join('')
-        + rns.splice(0).map(rnHtml).join('')
-        + (refused ? `<div class="appr" role="status" data-chrefused><b>Reply not sent</b><p>${esc(window.WosModels.refusal(s))}</p>${['failed', 'interrupted'].includes(s?.status) ? '<div class="appr-b"><button type="button" class="no" data-chdismiss>Dismiss</button></div>' : ''}</div>`
-          : (!runErr && !signedOut && s?.safeError && !s?.reconnect && s?.queueReason !== 'provider_access' ? `<div class="appr" role="status"><b>Reply not sent</b><p>${esc(s.safeError)}</p></div>` : ''))
-        + approvalHtml(c, s)
-        + pend.map(p => pendingHtml(p, c, s)).join('')
-        // A send a graceful restart holds: one quiet saved line, never a Working timer (wizard-ux issue 1362).
-        + (held ? `<div class="ch-held-line" role="status" data-restart-held>${STI.held}<span>Saved · sends after Wizard restarts</span></div>` : '')
-        + (pend.some(p => ['queued', 'sending', 'waiting'].includes(p.state)) && !working ? `<details class="steps live"><summary><i class="dots"><b></b><b></b><b></b></i> ${pend.some(p => p.state === 'waiting') ? 'Waiting for Wizard · will retry' : 'Sending'}</summary></details>` : '');
-    }
-    // The Daily view (issue 1469): earlier days folded above the open day, an empty Today under it before today's first post.
-    const DL = !NV && typeof dailyHtml === 'function' ? dailyHtml(w, c) : null;
-    if (DL) msgs = isNew && !pend.length ? DL.above + DL.below : DL.above + msgs + DL.below;
-    msgs += syncStream(w, c, turns, TAG);
-    // A saved copy painted after a failed read says so, so it never passes for a fresh one.
-    // Only within the open whose read failed; the next good read clears it.
-    if (!isNew && turns && c.savedFor === w.thread && c.savedNav === c.readNav)
-      msgs += `<div class="ch-renamed ch-saved" role="status"><span>Saved copy${c.savedAt ? ' from ' + esc(new Date(c.savedAt).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' })) : ''} · can’t reach Wizard right now</span></div>`;
-    const acts = isNew ? [] : threadActions(s, turns);
-    const box = el.querySelector('.ch-msgs');
-    PW?.capture(box); // save the shared eye-line record before rows above it change
-    const dkey = draftKey(w);
-    // Only the thread's own box counts: a channel feed's box left in this element (Back from a post lands on its feed)
-    // holds that channel's words, never this thread's (wizard-ux issue 1444: the thread's draft showed as the emptied box).
-    const ta0 = el.querySelector('textarea'), oldTa = ta0 && !ta0.closest?.('[data-chchanform]') ? ta0 : null;
-    const draft = oldTa && el.dataset.draftFor === dkey ? oldTa.value : (c.draftFor === dkey ? c.draft || '' : loadDraft(w));
-    const hadFocus = el.contains(document.activeElement) && document.activeElement.tagName === 'TEXTAREA';
-    // Live status/model paints must not replace a sealed dictation target in this same composer.
-    // Navigation to another thread still destroys it: never transfer a seal to the new draft.
-    // Same draft = same textarea: live repaints (new steps in a working thread) reuse the owner's field so the caret,
-    // selection, undo history and scroll stay put. James, 21 Oct 2026: typing at the bottom of a long reply in a working
-    // thread, every repaint threw the box back to the top. Navigation to another thread still gets a fresh field.
-    const keepTa = oldTa && el.dataset.draftFor === dkey ? oldTa : null;
-    const keepRange = keepTa && [keepTa.selectionStart, keepTa.selectionEnd, keepTa.selectionDirection];
-    const keepScroll = keepTa ? keepTa.scrollTop : 0;
-    // Stop shows the moment a send is pending (Sending…/Starting…, upload, transcription), not only once the run
-    // id arrives: before the run exists it withdraws the send (LIVE.cancelSend), after that it stops the run.
-    const canStop = working && !held && s.status !== 'stopping' && (!!s.runId || s.pend !== undefined); // a send a restart holds is saved, not running (issue 1432)
-    const rpl = !(isNew && TAG) ? KIT.drafts.get(dkey).reply : null; // an app item (Notifications, Wisdom passage) waiting with this draft
-    PW?.ensureModels();
-    // The model lives in the message box, bottom-right (James 18 Oct 2026); the header keeps the whole width for the title.
-    // Miguel's skins (Dark, Light, Landscapes): a slide switch row above the composer replaces the in-box label.
-    const msw = PW?.modelSwitch && s !== undefined ? PW.modelSwitch(w, s) : '';
-    const mlabel = PW?.modelLabel && !msw ? PW.modelLabel(w, s) : '';
-    const chip = PW && !PW.modelLabel ? PW.modelChip(w, s) : '';
-    const fail = PW && !isNew && turns ? PW.failureHtml(w, s) : '';
-    const tacts = NV ? (NQ ? '' : noteTactsHtml(NV, false))
-      : acts.length && turns && !pend.length ? `<div class="ch-tacts" data-part="thread-actions">${typeof needsAsk === 'function' && needsAsk(s) && canMarkDone(s) ? `<button type="button" class="ch-tact-md" data-chmarkdone aria-label="Mark done: clear Needs you" title="Mark done">${MARK_DONE_SVG}<span>Mark done</span></button>` : ''}${acts.map(a => `<button type="button" data-chact="${a}" aria-label="${ACT[a].hint}" title="${ACT[a].hint}">${ACT[a].icon}<span>${actionLabel(s, a, true)}</span></button>`).join('')}</div>` : '';
-    clearReading(w.id);
-    // Live repaints rebuild the thread. Keep each already-loaded photo node so it doesn't blank and reload (flicker).
-    const keepImgs = keepLoadedImages(el);
-    const keepSheet = keptSheet(el);
-    const openContexts = el.dataset.draftFor === dkey ? new Set([...el.querySelectorAll('[data-run-original][open]')].map(e => e.dataset.runOriginal)) : new Set();
-    const threadHTML = `<div data-part="thread" class="ch-thread${TAG ? ' agent' : ''}${NV ? ' ch-notif-thread' : ''}"${TAG ? ` style="--agc:${AGS()?.colour(agentRec(TAG)) || ''}"` : ''}>
-      <div class="ch-head"><button class="ch-back" data-chback aria-label="Back to threads"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>${s && !isNew && stiKind(s) !== 'none' ? stiBadge(s, ' ch-head-sti') : ''}<div class="ti" title="${esc(sub)}">${s && !DL ? `<button type="button" class="ti-b" data-chrename aria-label="Rename thread"><b>${esc(winTitle(w))}</b></button>` : `<b>${esc(NV ? NV.reply.title || NV.item?.title || 'Notification' : DL ? (typeof chanTitle === 'function' ? chanTitle(dailyName(w)) : '# ' + dailyName(w)) : winTitle(w))}</b>${NQ ? `<span class="ch-notif-hsrc"><span class="ch-notif-hic" aria-hidden="true">${NV.item ? noteIcon(NV.item) : window.WosBell?.icon || ''}</span>${esc(NV.item?.source === 'cron' ? 'Scheduled job' : NV.item?.appName || NV.item?.app || 'Notifications')}${NV.item?.time ? ` · ${timeTag(NV.item.time * 1000)}` : ''}</span>` : ''}`}${privTag}</div>${chip}${incognitoAction}${typeof inboxHeadHtml === 'function' && s && !isNew ? inboxHeadHtml(w, s) : ''}<span data-slot="thread-header-actions"></span></div>
-      ${s && !isNew && globalThis.WosThreadTracker?.on() ? globalThis.WosThreadTracker.stripHtml(s.id, TAG) : ''}${s && BOOM() ? BOOM().banner(s.id) : ''}<div class="ch-msgs">${msgs}${tacts}${fail}</div>${PW ? PW.latestBtn() : ''}${s && !isNew && typeof jumpPillsHtml === 'function' ? jumpPillsHtml() : ''}
-      ${msw ? `<div class="ch-swrow">${msw}<span data-slot="thread-switch-row-end"></span></div>` : '<div data-slot="thread-switch-row-end"></div>'}<form data-slot="composer-end" data-part="composer" class="ch-compose${hasContent(draft, c.files || []) ? ' has-text' : ''}${rpl ? ' has-reply' : ''}" data-chform>${replyBubble(rpl)}${attachTray(c)}<div class="ch-row2"><button type="button" class="ch-attach" data-chattach aria-label="Attach photos or files">${CLIP_SVG}</button><div class="ch-field"><textarea rows="1" placeholder="${!isNew && window.WosModels?.foreignApp?.(s) ? `This chat lives in ${esc(window.WosModels.foreignApp(s))} · reply there` : working && !held ? `Steer ${esc(agentName(TAG))}…` : `Message ${esc(agentName(TAG))}`}" enterkeyhint="enter">${esc(draft)}</textarea>${mlabel}</div>${PW ? PW.micBtn(w.id) : ''}${canStop ? `<button type="button" class="ch-stop" data-chstop aria-label="Stop ${esc(window.WizConfig.agent())}"><svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2"/></svg></button>` : ''}<button type="submit" class="ch-send" aria-label="Send"><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button></div></form>
-    </div>`;
-    // A focused composer must never leave the page during a live repaint: iPhone Safari closes the keyboard the
-    // moment a focused field is detached and will not reopen it from script, so the owner saw a caret and no
-    // keyboard in any working thread (Miguel, 22 Oct 2026). Rebuild everything around the field instead.
-    // A live repaint of the same thread (new step, helper timer, streamed words) patches only what changed: messages,
-    // photos, the composer field (focus, caret, keyboard) and the reading place stay exactly as they are
-    // (James, 23 Oct 2026: whole-thread rebuilds flickered while a reply was working).
-    const troot = el.firstElementChild;
-    const morphed = !!keepTa && troot?.dataset.part === 'thread' && troot.contains(keepTa) && !!window.WosMorph?.morph(troot, threadHTML, {
-      keep: (n, f) => { if (n !== keepTa) return false; const ph = f.getAttribute('placeholder'); if (ph !== null && n.placeholder !== ph) n.placeholder = ph; return true; },
-    });
-    if (!morphed) {
-      if (!(keepTa && hadFocus && rebuildAround(el, threadHTML, keepTa))) {
-        el.innerHTML = threadHTML;
-        if (keepTa) { const fresh = el.querySelector('.ch-compose textarea'); keepTa.placeholder = fresh.placeholder; fresh.replaceWith(keepTa); }
-      }
-      restoreSheet(el, keepSheet);
-    }
-    for (const detail of el.querySelectorAll('[data-run-original]')) if (detail.open !== openContexts.has(detail.dataset.runOriginal)) detail.open = openContexts.has(detail.dataset.runOriginal);
-    if (!morphed) keepImgs(el);
-    el.dataset.draftFor = dkey; c.draft = draft; c.draftFor = dkey;
-    el.dataset.notificationId = NV?.id || '';
-    syncDocumentThread();
-    const nb = el.querySelector('.ch-msgs');
-    PW?.position(w, el, nb, { turns, working, notification: NV?.id, notificationScroll });
-    watchTracker(w, nb);
-    if (hadFocus) { const ta = el.querySelector('textarea'); ta.focus({ preventScroll: true }); ta.setSelectionRange(...(keepRange || [ta.value.length, ta.value.length])); }
-    growTa(el.querySelector('textarea'));
-    // Re-attaching a field resets its scroll to the top; put the owner's view back where it was.
-    if (keepTa && !morphed) keepTa.scrollTop = keepScroll;
-    // Desktop renders before revealing its thread pane. Measure once it is visible,
-    // retaining a usable first layout even before the user types or a live repaint runs.
-    const field = el.querySelector('textarea');
-    requestAnimationFrame(() => { if (field?.isConnected && field === el.querySelector('textarea')) growTa(field); });
-    PW?.paint(w.id, el);
-    if (DL && typeof dailyWatch === 'function') dailyWatch(w, el);
-    // A returned message Boomerang opens on its message, once.
-    if (s && turns && !keep) { const r = BOOM()?.focusFor(s.id); if (r && showBoomMessage(el, r.anchor_at)) BOOM().focusedOn(r.id); }
-    // The shell may bind the view this thread's latest reply links (phone: bound views beside the thread).
-    if (!isNew && turns) H.threadShown?.(w.id, el);
-    window.WosSkinHost?.rendered('thread', el);
-  }
+  listpaintLate({ closeStream });
+  /* Painting a thread; core/chats-threadpaint.js. */
+  const { renderThread, bindLate: threadpaintLate } = window.WizCore.chatsParts.threadpaint({ ACT, actionLabel, agentName, agentRec, AGS, approvalHtml, attachTray, BOOM, canMarkDone, ch, chanTitle, clearReading, clip, CLIP_SVG, dailyHtml, dailyName, dailyWatch, draftKey: (...a) => draftKey(...a), esc, growTa, H, hasContent, inboxHeadHtml, INC, jumpPillsHtml, keepLoadedImages, keptSheet, KIT, LIVE, loadDraft, MARK_DONE_SVG, md, needsAsk, needsMark, newChatHtml, noteIcon, noteMoreHtml, noteQuiet, noteRouteHtml, noteStackHtml, noteTactsHtml, notifOf, OUTBOX, PAGE, rebuildAround, replyBubble, replyStd, restoreSheet, rowOf, scrollBox, showBoomMessage, skelThread, STI, stiBadge, stiKind, syncDocumentThread, syncStream, threadActions, threadState, timeTag, turnAt, turnHtml, watchTracker, winAgent, winTitle });
   /* ---- drafts: one per thread (and one for a new chat), kept across reloads ---- */
   // An agent's new chat keeps its own slot ('agentnew:<id>'), so it never shows in (or takes) the main Drafts.
   const draftKey = w => w.thread === '__new__' ? (winAgent(w) ? 'agentnew:' + winAgent(w) : 'new') : (!w.thread && typeof chanDraftKey === 'function' && chanDraftKey(w)) || 'direct:' + w.thread;
@@ -919,6 +545,7 @@ window.WizCore.chats = function createChats(H) {
   let swipeOpen = null; // { wid, sid, wrap }
   /* Swipe and long-press on a thread row; core/chats-swipe.js. */
   const { bindGestures, closeSwipe, echoed, loadThread, localSent, pendingFor, pendingHtml, reconcileSent, renderChats, retryShown, threadAlive, threadErrHtml, turnsCurrent, bindLate: swipeLate } = window.WizCore.chatsParts.swipe({ ACT, addFiles, BOOM, ch, CH, chanScrolled, chatVars, CHECK_SVG, esc, eventsLate, flushHeld, H, INC, isWorking, KIT, LIVE, loadApproval, md, MIC_SVG, needsLand, openRowSheet, OUTBOX, paintFeedJump, PEND, queueListPlace, reach, reachLabel, readGuard, renderChatList, renderLive, renderThread, renderThreadLive, repaintList, replyCard, ROW_MENU, rowactsLate, rowMenu, rowOf, scheduleHeld, SCROLL_IDLE, SEL, setupLate, streamLate, syncListTitle, threadAct, threadActions, toast, toTurns, TOUCH, track, troubleshoot, userMedia, vib, W });
+  threadpaintLate({ echoed, localSent, pendingFor, pendingHtml, reconcileSent, retryShown, threadAlive, threadErrHtml, turnsCurrent });
   readylistLate({ renderChats });
   spacesLate({ renderChats });
   sheetsLate({ renderChats });
@@ -1009,6 +636,7 @@ window.WizCore.chats = function createChats(H) {
   }
   /* Presence, clicks inside a Chats window, composer events, text from outside, forget; core/chats-bind.js. */
   const { bind, click, closeFilterSheet, closeOverlay, elOf, forget, holdList, idOf, insertText, justPressed, markVisibleThreadsSeen, registerBack, bindLate: bindLate } = window.WizCore.chatsParts.bind({ activityClick, actSetOrder, AGS, alertFeedback, bindGestures, bindPull, BOOM, byStatus, ch, CH, chanDropSending, chanEditUnsent, channelClick, channelSend, chanRepaint, chanRowAgent, chanSeenRow, chanSetEmoji, chatsBack, chatVars, chooseApproval, clearAll, clearReading, closeHosted, closeRowSheet, closeSpacePicker, closeStream, closeSwipe, COMPACT_KEY, compactOn, dailyClick, desks, discardDraft, draftKey, focusAgents, focusedAgent, focusOf, growTa, H, idx, inboxMove, INC, isHosted, jumpGo, jumpToMessage, keepThreadOpen, KIT, listSaveT, LIVE, loadThread, markDone, moveSubject, nextOrder, noteRowAct, notifDoneAll, notifRoute, openChat, openEmojiSheet, openLengthSheet, openMedia, openNewDraft, openRenameSheet, openSpacePicker, OUTBOX, owner, PAGE, paintPins, PHONE, picker, PIN, PINS_KEY, pinsOn, quoteMessage, readingIn, READY_ORDER_KEY, READY_ORDERS, refreshCompose, refreshReply, rememberedFocus, renderChatList, renderChats, renderEmojiSearch, renderThread, renderThreadLive, renderThreadNow, replyStd, rerenderList, resumeTracked, ROW_MENU, rowMenu, runningBack, runningGo, runningOn, saveDraft, sendChat, setDraft, setFocus, setSummaryOpen, showBoomMessage, SPACE, spaceMember, spaces, stopPendingSend, stopTapped, submitChannelRename, submitRename, sweepAnswer, sweepLater, sweepYesToAll, syncSend, threadAct, threadBack, toast, toggleSection, toggleVoice, TOPIC, topicOn, typedInto, UPLOAD_ABORT, vib, W, winAgent, WORKING_ORDERS });
+  listpaintLate({ elOf, holdList });
   focusLate({ elOf });
   agentrowsLate({ elOf, holdList });
   chanreadLate({ elOf, holdList });
@@ -1027,6 +655,8 @@ window.WizCore.chats = function createChats(H) {
   }
   // Models, Errors actions, composer mic, work receipts, reading position, Files (core/chat-power.js).
   const PW = window.WosChatPower ? window.WosChatPower({ CH, ch, toast, H, md, KIT, MIC_SVG, WORKING_ST, isWorking, scrollBox, threadOnScreen, threadViewportTop, elOf, owner, vib, renderChats, renderThreadNow, renderThreadLive, openChat, refreshCompose, saveDraft, closeRowSheet, leaveAfterSend, takeComposer, continueInAgent, winAgent, chanOpen, paintJump, chanSpaceOf, spaceMember, chanOwnPost, chanBox: wid => (W[wid] && chanDraftKey(W[wid])) || '', chanModel: wid => chanModel(W[wid]), setChanModel }) : null;
+  listpaintLate({ PW });
+  threadpaintLate({ PW });
   focusLate({ PW });
   bindLate({ PW });
   chanboxLate({ PW });

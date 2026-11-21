@@ -5,7 +5,8 @@ import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 import { withShellParts } from './fixtures/shell-parts.mjs';
-const read = p => withShellParts(readFileSync(new URL('../' + p, import.meta.url), 'utf8'));
+import { withWebParts } from './fixtures/web-parts.mjs';
+const read = p => withShellParts(withWebParts(readFileSync(new URL('../' + p, import.meta.url), 'utf8')));
 const src = withParts(read('web/core/chats.js'));
 const slice = (a, b) => { const start = src.indexOf(a), end = src.indexOf(b, start); assert.ok(start >= 0 && end > start); return src.slice(start, end); };
 function actions() {

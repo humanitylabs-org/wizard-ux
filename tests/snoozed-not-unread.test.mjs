@@ -4,11 +4,12 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
+import { withWebParts } from './fixtures/web-parts.mjs';
 
 // wizard-os issue 510 (Miguel, 10 Nov 2026): "nothing is in my Ready, yet I see a notification for three". With Snooze =
 // bottom of Ready (miguel/snooze-someday) three unread snoozed chats lit the Ready badge while the AI apps view listed
 // them under Snoozed and Ready was empty. Snoozed chats are never unread for any Ready / Chats count.
-const src = f => fs.readFileSync(new URL('../' + f, import.meta.url), 'utf8');
+const src = f => withWebParts(fs.readFileSync(new URL('../' + f, import.meta.url), 'utf8'));
 const live = withLiveParts(src('web/live.js')), nav = src('web/core/workspace-navigation.js');
 
 function harness(snoozeLast) {

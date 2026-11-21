@@ -6,10 +6,11 @@ import { modelContext } from './fixtures/chats-list-model.mjs';
 import '../web/core/chats-list-model.js';
 import { withParts } from './fixtures/chats-parts.mjs';
 import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
+import { withWebParts } from './fixtures/web-parts.mjs';
 const M = globalThis.WizChatsListModel;
 const at = n => `2026-11-06T${String(n).padStart(2, '0')}:00:00Z`;
 const ids = rows => Array.from(rows, r => r.id);
-const read = file => fs.readFileSync(new URL('../' + file, import.meta.url), 'utf8');
+const read = file => withWebParts(fs.readFileSync(new URL('../' + file, import.meta.url), 'utf8'));
 const rows = [{ id: 'z', title: 'Zulu', at: at(9) }, { id: 'a-old', title: 'alpha', at: at(1) },
   { id: 'b', title: 'Beta', at: at(8) }, { id: 'a-new', title: 'ALPHA', at: at(7) },
   { id: 'untitled', title: '', at: at(2) }, { id: 'pin', title: 'ZZ pin', pinned: true, at: at(3) }];

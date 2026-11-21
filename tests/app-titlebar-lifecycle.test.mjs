@@ -2,8 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
-const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
-const source = readFileSync(process.env.TITLEBAR_SOURCE || new URL('../web/layouts/ai-apps/desktop.js', import.meta.url), 'utf8');
+import { withWebParts } from './fixtures/web-parts.mjs';
+const read = p => withWebParts(readFileSync(new URL('../' + p, import.meta.url), 'utf8'));
+const source = withWebParts(readFileSync(process.env.TITLEBAR_SOURCE || new URL('../web/layouts/ai-apps/desktop.js', import.meta.url), 'utf8'));
 // Execute the production header projection and host subscription unchanged.
 const block = source.slice(source.indexOf('  function paintTools()'), source.indexOf('  let winsDesk'));
 const subscription = source.split('\n').find(l => l.includes('const offHost ='));

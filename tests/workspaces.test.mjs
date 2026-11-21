@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { randomUUID } from 'node:crypto';
-const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
+import { withWebParts } from './fixtures/web-parts.mjs';
+const read = p => withWebParts(readFileSync(new URL('../' + p, import.meta.url), 'utf8'));
 const source = read('web/core/workspaces.js');
 const plain = x => JSON.parse(JSON.stringify(x));
 class El extends EventTarget {

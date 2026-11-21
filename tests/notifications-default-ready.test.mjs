@@ -4,7 +4,8 @@ import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
 import { withAppParts } from './fixtures/app-parts.mjs';
 import { withShellParts } from './fixtures/shell-parts.mjs';
-const read = p => withAppParts(withShellParts(readFileSync(new URL('../'+p, import.meta.url), 'utf8')));
+import { withWebParts } from './fixtures/web-parts.mjs';
+const read = p => withAppParts(withShellParts(withWebParts(readFileSync(new URL('../'+p, import.meta.url), 'utf8'))));
 
 test('notification-only Ready survives an empty default main-agent Chats list', () => {
   const src = read('web/core/chats.js');

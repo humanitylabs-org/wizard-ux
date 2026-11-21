@@ -5,7 +5,8 @@ import { readFileSync } from 'node:fs';
 import { withDesktopParts } from './fixtures/desktop-parts.mjs';
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 import { withShellParts } from './fixtures/shell-parts.mjs';
-const read = p => withShellParts(readFileSync(new URL('../web/'+p,import.meta.url),'utf8'));
+import { withWebParts } from './fixtures/web-parts.mjs';
+const read = p => withShellParts(withWebParts(readFileSync(new URL('../web/'+p,import.meta.url),'utf8')));
 const core=read('core/escape-back.js'),desktop=withDesktopParts(read('desktop/desktop.js')),phone=read('app.js'),chats=withParts(read('core/chats.js'));
 function fixture() {
  const hits=[], state={open:'',voice:false};

@@ -459,6 +459,13 @@
       ],
       "note": "Chats channel feed: every post of a channel in order moved out of chats.js (issue 1665); called by createChats"
     },
+    "core/chats-listpaint.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Chats painting a list and folding its sections, moved out of chats.js (issue 1665); called by createChats (core/chats.js)"
+    },
     "core/chats-notes.js": {
       "loadedBy": [
         "phone",
@@ -549,6 +556,13 @@
         "desktop"
       ],
       "note": "Chats thread actions (Snooze / Archive on a settled thread) and the action icons moved out of chats.js (issue 1665); called by createChats"
+    },
+    "core/chats-threadpaint.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Chats painting a thread, moved out of chats.js (issue 1665); called by createChats (core/chats.js)"
     },
     "core/chats-tracker.js": {
       "loadedBy": [
@@ -995,12 +1009,33 @@
       ],
       "note": "Shared validated skin frame foundations, loaded before skin composition"
     },
+    "core/skin-host-api.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "What a skin script receives, and loading and disposing it, moved out of skin-host.js (issue 1665); called by core/skin-host.js"
+    },
     "core/skin-host-boot.js": {
       "loadedBy": [
         "phone",
         "desktop"
       ],
       "note": "Skin host first things (built-in gestures, release stamp, orb stand-in, skin stylesheet, error fallback), moved out of skin-host.js (issue 1665); called by core/skin-host.js"
+    },
+    "core/skin-host-host.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "The skin host object the shells call, moved out of skin-host.js (issue 1665); called by core/skin-host.js"
+    },
+    "core/skin-host-layout.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Events, the route and the layout layer (loading, booting and painting a layout), moved out of skin-host.js (issue 1665); called by core/skin-host.js"
     },
     "core/skin-host-logos.js": {
       "loadedBy": [
@@ -1023,12 +1058,26 @@
       ],
       "note": "Skin host Add to home screen app, notification rows in sessions.list() and the orb swipe map, moved out of skin-host.js (issue 1665); called by core/skin-host.js"
     },
+    "core/skin-host-shellapi.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Where the view's orb goes, the inset sync and the shell API a layout receives, moved out of skin-host.js (issue 1665); called by core/skin-host.js"
+    },
     "core/skin-host-summary.js": {
       "loadedBy": [
         "phone",
         "desktop"
       ],
       "note": "Skin host owner-script lint and the box-wide reply summary setting, moved out of skin-host.js (issue 1665); called by core/skin-host.js"
+    },
+    "core/skin-host-tweaks.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "A tweak's stylesheet, the API a tweak receives and loading every tweak, moved out of skin-host.js (issue 1665); called by core/skin-host.js"
     },
     "core/skin-host.js": {
       "loadedBy": [
@@ -1625,6 +1674,7 @@
     "core/chats-focus.js",
     "core/chats-hosted.js",
     "core/chats-list-model.js",
+    "core/chats-listpaint.js",
     "core/chats-notes.js",
     "core/chats-outbox.js",
     "core/chats-places.js",
@@ -1645,6 +1695,7 @@
     "core/chats-stream.js",
     "core/chats-swipe.js",
     "core/chats-threadacts.js",
+    "core/chats-threadpaint.js",
     "core/chats-tracker.js",
     "core/chats-undo.js",
     "core/chats-view.css",
@@ -1721,11 +1772,16 @@
     "core/sigils.js",
     "core/skin-frame.css",
     "core/skin-frame.js",
+    "core/skin-host-api.js",
     "core/skin-host-boot.js",
+    "core/skin-host-host.js",
+    "core/skin-host-layout.js",
     "core/skin-host-logos.js",
     "core/skin-host-orbbar.js",
     "core/skin-host-rows.js",
+    "core/skin-host-shellapi.js",
     "core/skin-host-summary.js",
+    "core/skin-host-tweaks.js",
     "core/skin-host.js",
     "core/skins.css",
     "core/skins.js",

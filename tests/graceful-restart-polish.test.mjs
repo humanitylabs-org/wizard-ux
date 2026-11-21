@@ -8,8 +8,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { withWebParts } from './fixtures/web-parts.mjs';
 
-const read = p => readFileSync(new URL('../web/' + p, import.meta.url), 'utf8');
+const read = p => withWebParts(readFileSync(new URL('../web/' + p, import.meta.url), 'utf8'));
 const SWITCH = 'wizard/graceful-restart';
 
 test('the note has an opaque panel wherever it sits, not only when it floats', () => {

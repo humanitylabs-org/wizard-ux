@@ -6,8 +6,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import { withWebParts } from './fixtures/web-parts.mjs';
 
-const js = fs.readFileSync(new URL('../web/layouts/ai-apps/desktop.js', import.meta.url), 'utf8');
+const js = withWebParts(fs.readFileSync(new URL('../web/layouts/ai-apps/desktop.js', import.meta.url), 'utf8'));
 const block = (a, b) => { const i = js.indexOf(a), j = js.indexOf(b, i + 1); assert.ok(i >= 0 && j > i, a); return js.slice(i, j); };
 
 function boot(saved, { desks = [{ desk: 0, id: 'chats' }, { desk: 1, id: 'wizard-music' }], drawn = [0, 1] } = {}) {

@@ -8,8 +8,9 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { withParts } from './fixtures/chats-parts.mjs';
+import { withWebParts } from './fixtures/web-parts.mjs';
 
-const read = f => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8');
+const read = f => withWebParts(readFileSync(new URL(`../${f}`, import.meta.url), 'utf8'));
 const js = read('web/layouts/ai-apps/desktop.js'), css = read('web/layouts/ai-apps/desktop.css');
 const between = (s, a, b) => { const i = s.indexOf(a); assert.ok(i >= 0, a); const j = s.indexOf(b, i); assert.ok(j > i, b); return s.slice(i, j); };
 

@@ -1,5 +1,6 @@
 // Shell source for text checks (wizard-ux issue 1665): web/app.js and web/desktop/desktop.js call parts in
-// web/app-*.js and web/desktop/desktop-*.js. shellSource(root, file) returns a shell's text with every part body put
+// web/app-*.js and web/desktop/desktop-*.js (and core/skin-host.js and core/chats.js theirs in core/skin-host-*.js and
+// core/chats-*.js). shellSource(root, file) returns a shell's text with every part body put
 // back where its call line is, the late-bound hand-overs and the accessor block dropped, and `appVars.x` /
 // `desktopVars.x` read as plain `x` again, so a check sees the code exactly as it was before the move. Same recipe as
 // tests/fixtures/app-parts.mjs and desktop-parts.mjs (for CommonJS scripts). Any other file comes back unchanged.
@@ -9,13 +10,15 @@ const fs = require('node:fs'), path = require('node:path');
 const SHELLS = [
   { ns: 'appParts', vars: 'appVars', file: part => `web/app-${part}.js` },
   { ns: 'desktopParts', vars: 'desktopVars', file: part => `web/desktop/desktop-${part}.js` },
+  { ns: 'skinHostParts', vars: 'skinHostVars', file: part => `web/core/skin-host-${part}.js`, what: 'file' },
+  { ns: 'chatsParts', vars: 'chatVars', file: part => `web/core/chats-${part}.js`, what: 'closure' },
 ];
 const LATE_LINE = /^ {2}let [^\n]*; \/\/ late-bound: [^\n]*\n/m;
 
 function withShellParts(root, src) {
   src = String(src);
   for (const s of SHELLS) {
-    const VARS = new RegExp(`^ {2}\\/\\* Values this shell changes over time[^\\n]*\\n(?: {3}\\*[^\\n]*\\n)* {2}const ${s.vars} = \\{\\n(?: {4}get [^\\n]*\\n)* {2}\\};\\n`, 'm');
+    const VARS = new RegExp(`^ {2}\\/\\* Values this ${s.what || 'shell'} changes over time[^\\n]*\\n(?: {3}\\*[^\\n]*\\n)* {2}const ${s.vars} = \\{\\n(?: {4}get [^\\n]*\\n)* {2}\\};\\n`, 'm');
     const CALL = new RegExp(`^ {2}(?:const \\{[^\\n]*\\} = )?window\\.WizCore\\.${s.ns}\\.([a-z]+)\\([^\\n]*\\);$`, 'gm');
     const body = part => {
       const text = fs.readFileSync(path.join(root, s.file(part)), 'utf8');

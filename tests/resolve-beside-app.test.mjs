@@ -12,8 +12,9 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 import { withShellParts } from './fixtures/shell-parts.mjs';
+import { withWebParts } from './fixtures/web-parts.mjs';
 
-const read = p => withShellParts(readFileSync(new URL('../web/' + p, import.meta.url), 'utf8'));
+const read = p => withShellParts(withWebParts(readFileSync(new URL('../web/' + p, import.meta.url), 'utf8')));
 const chats = withParts(read('core/chats.js')), desk = read('desktop/desktop.js'), aad = read('layouts/ai-apps/desktop.js');
 
 function slice(src, start) {
