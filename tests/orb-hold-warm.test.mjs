@@ -5,8 +5,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { withAppParts } from './fixtures/app-parts.mjs';
 
-const app = readFileSync(new URL('../web/app.js', import.meta.url), 'utf8');
+const app = withAppParts(readFileSync(new URL('../web/app.js', import.meta.url), 'utf8'));
 const between = (a, b) => { const i = app.indexOf(a), j = app.indexOf(b, i + 1); assert.ok(i >= 0 && j > i, a); return app.slice(i, j); };
 
 function world({ granted = true, native = false, state = 'idle', capture = null } = {}) {

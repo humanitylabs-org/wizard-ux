@@ -1064,6 +1064,66 @@
       "classification": "adapter",
       "reason": "Phone layout, orb/gesture input, shell navigation; shared feature rendering forbidden here."
     },
+    "app-choice.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone shell part moved verbatim out of app.js (issue 1665): the choice card after a held command and the native bridge events."
+    },
+    "app-dictation.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone shell part moved verbatim out of app.js (issue 1665): orb voice takes, their recovery and which recorder a take uses."
+    },
+    "app-edge.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone shell part moved verbatim out of app.js (issue 1665): edge to edge: camera cutout, status bar and frame insets."
+    },
+    "app-frame.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone shell part moved verbatim out of app.js (issue 1665): an app's window frame, the refused-frame card and Back-stack taming."
+    },
+    "app-home.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone shell part moved verbatim out of app.js (issue 1665): how the Home desk is drawn."
+    },
+    "app-inbox.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone shell part moved verbatim out of app.js (issue 1665): the shade: recording strips, notification rows and the orb moons."
+    },
+    "app-mic.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone shell part moved verbatim out of app.js (issue 1665): the microphone for a take and the pre-warmed mic."
+    },
+    "app-opening.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone shell part moved verbatim out of app.js (issue 1665): opening an app: placement in a new tab and the instant tap answer."
+    },
+    "app-transcribe.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone shell part moved verbatim out of app.js (issue 1665): transcribing a dictation and the quick command."
+    },
+    "app-unsent.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone shell part moved verbatim out of app.js (issue 1665): the settings cog and the unsent card."
+    },
+    "app-voicefiles.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone shell part moved verbatim out of app.js (issue 1665): the orb's voice state and the files that ride along with a take."
+    },
+    "app-voicesend.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone shell part moved verbatim out of app.js (issue 1665): sending a take: route, composer hand-back, capture pause."
+    },
     "desktop/desktop.js": {
       "shell": "desktop",
       "classification": "adapter",

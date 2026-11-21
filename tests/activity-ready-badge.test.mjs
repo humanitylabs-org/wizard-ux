@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import { modelContext } from './fixtures/chats-list-model.mjs';
+import { withAppParts } from './fixtures/app-parts.mjs';
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
 const read = p => fs.readFileSync(new URL('../' + p, import.meta.url), 'utf8');
@@ -77,8 +78,8 @@ test('issue 1504: with Channels off (no Activity view) the badge keeps the unrea
 });
 
 test('issue 1504: the shells read the one count (orb badge, desk marks, phone Home card, desktop Home line)', () => {
-  assert.match(read('web/app.js'), /const ready = window\.WizCore\.workspaceNav\.chatsCount\(LIVE\);/);
-  assert.match(read('web/app.js'), /workspaceNav\.refreshChats\(LIVE, CHATS_APP\.id\)/);
+  assert.match(withAppParts(read('web/app.js')), /const ready = window\.WizCore\.workspaceNav\.chatsCount\(LIVE\);/);
+  assert.match(withAppParts(read('web/app.js')), /workspaceNav\.refreshChats\(LIVE, CHATS_APP\.id\)/);
   assert.match(read('web/desktop/desktop.js'), /C\.workspaceNav\.refreshChats\(LIVE, /);
   assert.match(chats, /window\.WizCore\.activityReady = activityReady;/);
 });
@@ -103,7 +104,7 @@ test('issue 1517: with Channels off Home keeps the Chats groups', () => {
 });
 
 test('issue 1517: desktop Home line, its card, the status bar and the phone Ready card read activityHome', () => {
-  const desk = read('web/desktop/desktop.js'), app = read('web/app.js');
+  const desk = read('web/desktop/desktop.js'), app = withAppParts(read('web/app.js'));
   const home = block(desk, '  function homeHtml(i) {', '  stage.addEventListener(');
   assert.match(home, /C\.activityHome\?\.\(LIVE\)/);
   assert.match(home, /\$\{L\.needs\.length\} need/);

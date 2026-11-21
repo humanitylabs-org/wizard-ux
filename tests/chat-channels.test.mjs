@@ -4,10 +4,11 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { modelContext } from './fixtures/chats-list-model.mjs';
+import { withAppParts } from './fixtures/app-parts.mjs';
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
 const src = withParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'));
-const app = readFileSync(new URL('../web/app.js', import.meta.url), 'utf8');
+const app = withAppParts(readFileSync(new URL('../web/app.js', import.meta.url), 'utf8'));
 const cut = (a, b) => { const i = src.indexOf(a); assert.ok(i >= 0, a); return src.slice(i, src.indexOf(b, i)); };
 const block = withParts(cut('  /* Channels view (switch wizard/chat-channels', '  function clearAll(w)'));
 
@@ -2489,7 +2490,7 @@ test('issue 1523: Mark channel read says the channel by its emoji; the voice pin
   // Channels off: Mark channel read is not offered at all.
   f.setOn(false); assert.equal(read(f.w, 'launch'), false);
   // The voice view of a channel's feed (app.js viewOf) and the orb's hint name it by its title.
-  const app = readFileSync(new URL('../web/app.js', import.meta.url), 'utf8');
+  const app = withAppParts(readFileSync(new URL('../web/app.js', import.meta.url), 'utf8'));
   assert.match(app, /if \(chan\) return \{ id, mode: 'auto', \.\.\.pin, name: `\$\{window\.WizCore\?\.channelFace\?\.\(chan\.name, !!chan\.general\)\?\.title \|\| '# ' \+ chan\.name\} channel` \};/);
   assert.match(app, /channelFace\?\.\(V\.snap\.view\.channel, V\.snap\.view\.channel === 'General'\)\?\.title/);
   const C = emojiCore(), pinName = c => `${C.channelFace(c.name, !!c.general)?.title || '# ' + c.name} channel`;
