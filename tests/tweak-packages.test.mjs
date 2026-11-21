@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { fixture, contract, read } from './fixtures/tweaks.mjs';
+import { withSkinHostParts } from './fixtures/skin-host-parts.mjs';
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 const catalog = JSON.parse(read('web/tweaks/catalog.json'));
 // Capability-gate fixtures: a package id that asks for exactly these capabilities (no shipped package needed).
@@ -112,7 +113,7 @@ test('a saved legacy two-orb layout or framed composition turns nothing on now i
     const f = wizardExperience(storage); await f.E.refresh();
     assert.deepEqual(f.active(), []); assert.equal(f.E.state.error, '');
     // The layout itself is gone (wizard-ux issue 1338): skin-host's boot treats a stored 'two-orb' as unknown (tests/stale-layout-boot).
-    assert.ok(!/id: 'two-orb'/.test(read('web/core/skin-host.js')));
+    assert.ok(!/id: 'two-orb'/.test(withSkinHostParts(read('web/core/skin-host.js'))));
     assert.equal(storage.has('wos.two-orbs.migrated.v1') || storage.has('wos.app-borders.migrated.v1'), false, 'no migration ran');
   }
 });
@@ -191,7 +192,7 @@ test('disposed foundation capability cannot change windows', async () => {
 
 test('slot lookup prefers a visible instance over hidden Chats copies (desktop)', async () => {
   const { readFile } = await import('node:fs/promises');
-  const src = await readFile(new URL('../web/core/skin-host.js', import.meta.url), 'utf8');
+  const src = withSkinHostParts(await readFile(new URL('../web/core/skin-host.js', import.meta.url), 'utf8'));
   assert.match(src, /getClientRects\(\)\.length > 0\)/);
   assert.match(src, /querySelectorAll\(selector\)\]\.find\(seen\)/);
 });

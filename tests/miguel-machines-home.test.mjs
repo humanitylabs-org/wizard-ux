@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { fixture, read } from './fixtures/tweaks.mjs';
 import { withAppParts } from './fixtures/app-parts.mjs';
+import { withSkinHostParts } from './fixtures/skin-host-parts.mjs';
 import { withSettingsParts } from './fixtures/settings-parts.mjs'; // settings.js parts moved out verbatim (issue 1665)
 
 // Miguel's Machines-on-Home tweak and the two narrow host hooks it needs (home-main mount + api.on('home'),
@@ -42,7 +43,7 @@ test("api.on('home') needs layout; data.read.app is trusted-only, GET-only and p
   await g.clear();
 });
 test('stock Home markup carries an empty home-main slot that takes no space; core never names the package', () => {
-  const app = withAppParts(read('web/app.js')), desk = read('web/desktop/desktop.js'), host = read('web/core/skin-host.js');
+  const app = withAppParts(read('web/app.js')), desk = read('web/desktop/desktop.js'), host = withSkinHostParts(read('web/core/skin-host.js'));
   assert.match(app, /<div class="home"><div data-slot="home-main" hidden><\/div><nav class="home-tools"/);
   assert.match(desk, /<div class="home-in"><div data-slot="home-main" hidden><\/div>/);
   assert.doesNotMatch(app + desk, /\.innerHTML = (renderHome|homeHtml)\(/, 'every Home paint goes through paintHome');
@@ -73,7 +74,7 @@ test('api.back.push: newest package overlay closes first on shell Back; released
   const app = withAppParts(read('web/app.js')), desk = read('web/desktop/desktop.js');
   assert.match(app, /escapeOverlay: close => phoneBack\.push\(close\)/);
   assert.match(desk, /escapeOverlay: close => escapeBack\.push\(close\)/);
-  assert.match(read('web/core/skin-host.js'), /shell\?\.escapeOverlay\?\.\(entry.close\)/);
+  assert.match(withSkinHostParts(read('web/core/skin-host.js')), /shell\?\.escapeOverlay\?\.\(entry.close\)/);
 });
 
 test('machines-home: one inline map, the same on every workspace', () => {
@@ -91,7 +92,7 @@ test('machines-home: one inline map, the same on every workspace', () => {
   assert.match(css, /:is\(\.home, \.home-in\):has\(\[data-slot="home-main"\] > \.mh-root\) \.constellation \{ display: none; \}/);
   assert.doesNotMatch(css, /mh-orbit|mh-spin|rotate\(360/, 'nothing spins');
   for (const b of ['setTimeout', 'setInterval', 'requestAnimationFrame', 'innerHTML', 'localStorage', 'querySelector']) assert.ok(!src.includes(b), b);
-  const host = read('web/core/skin-host.js'), app = withAppParts(read('web/app.js')), desk = read('web/desktop/desktop.js');
+  const host = withSkinHostParts(read('web/core/skin-host.js')), app = withAppParts(read('web/app.js')), desk = read('web/desktop/desktop.js');
   assert.match(host, /\.\.\.\(trusted \? \{ sessions: Object\.freeze/, 'sessions is trusted-only');
   for (const s of [app, desk]) { assert.match(s, /sessions: \(\) => \{/); assert.match(s, /openSessions: kind =>/); }
 });
@@ -138,7 +139,7 @@ test('machines-home: calm repaints (last readings first, motion once, parts redr
   assert.match(css, /html\[data-tweaks~="miguel\/machines-home"\] \.home > :is\(\.home-top, \.home-gap, \[data-home-resources\]\)/, 'stock Home is hidden as soon as the package is listed');
 });
 test('tweak stylesheets are listed and loaded from the first frame; reapplying keeps them; a failed package drops out', async () => {
-  const host = read('web/core/skin-host.js');
+  const host = withSkinHostParts(read('web/core/skin-host.js'));
   assert.match(host, /const EXPECT_KEY = 'wos\.tweaks\.expect'/);
   assert.match(host, /l\.setAttribute\('blocking', 'render'\)/);
   assert.match(host, /for \(const id of want\) tweakCss\(id\);\n    expected\.clear\(\); for \(const id of want\) expected\.add\(id\);\n    for \(const a of \[\.\.\.tweaks\.values\(\)\]\) dispose\(a, 'replace'\);/, 'new links before old ones go');
@@ -192,14 +193,14 @@ test('Home buttons that ask the agent open Chats with the draft even when no Cha
 
 test('Settings › Network & security fills even before Home has been shown', () => {
   const src = read('web/tweaks/miguel/machines-home/tweak.js');
-  const host = read('web/core/skin-host.js'), res = read('web/core/resources.js');
+  const host = withSkinHostParts(read('web/core/skin-host.js')), res = read('web/core/resources.js');
   assert.match(host, /slot\.append\(node\); window\.WosResources\?\.watch\?\.\(node\);/, 'a shown System page keeps readings fresh');
   assert.match(res, /\[\.\.\.S\.watch\]\.some\(h=>h\.isConnected&&h\.getClientRects\(\)\.length>0&&getComputedStyle\(h\)\.visibility!=='hidden'\)/, 'watched pages count as viewing only while on screen');
   assert.match(src, /netBox\.replaceChildren\(why \? h\('span', \{ cls: 'mh-more-info', text: why \}\) : h\('span', \{ cls: 'mh-wait'/, 'a loading placeholder instead of a blank page');
 });
 
 test('review fixes: one Home map at a time, boot guess expires, unreadable usage is not "signed out"', () => {
-  const exp = read('web/core/experience.js'), host = read('web/core/skin-host.js');
+  const exp = read('web/core/experience.js'), host = withSkinHostParts(read('web/core/skin-host.js'));
   const cat = JSON.parse(read('web/tweaks/catalog.json'));
   // James, 31 Oct 2026: the network Home is Miguel's alone; no stock copy, nothing on by default for every skin.
   assert.equal(cat.oneOf, undefined, 'no stock Home map to choose between');
@@ -387,7 +388,7 @@ test('fourteenth review: only Wizard machines are helpers; a stale probe is a la
 });
 
 test('fifteenth review: the desktop bar keeps its readings live over open windows', () => {
-  assert.match(read('web/core/skin-host.js'), /live: el => \{ if \(!a\.dead && el\?\.nodeType === 1\) window\.WosResources\?\.watch\?\.\(el\); \},/);
+  assert.match(withSkinHostParts(read('web/core/skin-host.js')), /live: el => \{ if \(!a\.dead && el\?\.nodeType === 1\) window\.WosResources\?\.watch\?\.\(el\); \},/);
   for (const who of ['miguel']) {
     const src = read(`web/tweaks/${who}/machines-home/tweak.js`);
     assert.match(src, /const back = !barBox\.isConnected; if \(api\.slot\.mount\('dock-end', barBox, -1\) && back\) api\.data\.read\.resources\.live\?\.\(barBox\);/, who);
@@ -512,7 +513,7 @@ test('every Back path cancels a waiting System link', () => {
 });
 
 test('machines-home: Home is one glance; the full views live in Settings › System', () => {
-  const src = read('web/tweaks/miguel/machines-home/tweak.js'), host = read('web/core/skin-host.js'), set = withSettingsParts(read('web/core/settings.js'));
+  const src = read('web/tweaks/miguel/machines-home/tweak.js'), host = withSkinHostParts(read('web/core/skin-host.js')), set = withSettingsParts(read('web/core/settings.js'));
   const man = JSON.parse(read('web/tweaks/miguel/machines-home/manifest.json'));
   assert.ok(man.capabilities.includes('settings'));
   for (const page of ['overview', 'ai', 'network', 'storage']) assert.match(src, new RegExp(`api\\.settings\\?\\.section\\('[a-z]+', '${page}'`), page);

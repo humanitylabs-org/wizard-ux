@@ -897,6 +897,41 @@
       ],
       "note": "Shared validated skin frame foundations, loaded before skin composition"
     },
+    "core/skin-host-boot.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Skin host first things (built-in gestures, release stamp, orb stand-in, skin stylesheet, error fallback), moved out of skin-host.js (issue 1665); called by core/skin-host.js"
+    },
+    "core/skin-host-logos.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Skin host app logos and the App Store listing of apps not installed yet, moved out of skin-host.js (issue 1665); called by core/skin-host.js"
+    },
+    "core/skin-host-orbbar.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Skin host orb bar: an app's bottom tab bar laid out around the orb, and the orb's room in app windows, moved out of skin-host.js (issue 1665); called by core/skin-host.js"
+    },
+    "core/skin-host-rows.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Skin host Add to home screen app, notification rows in sessions.list() and the orb swipe map, moved out of skin-host.js (issue 1665); called by core/skin-host.js"
+    },
+    "core/skin-host-summary.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Skin host owner-script lint and the box-wide reply summary setting, moved out of skin-host.js (issue 1665); called by core/skin-host.js"
+    },
     "core/skin-host.js": {
       "loadedBy": [
         "phone",
@@ -1339,6 +1374,11 @@
     "core/sigils.js",
     "core/skin-frame.css",
     "core/skin-frame.js",
+    "core/skin-host-boot.js",
+    "core/skin-host-logos.js",
+    "core/skin-host-orbbar.js",
+    "core/skin-host-rows.js",
+    "core/skin-host-summary.js",
     "core/skin-host.js",
     "core/skins.css",
     "core/skins.js",

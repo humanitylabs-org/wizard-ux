@@ -14,9 +14,10 @@ const baseline = {};
 for (const f of changed) baseline[f] = execFileSync('git', ['show', baselineRef + ':web/' + f], { cwd: repo });
 // The pinned old desktop.html runs today's core/chats.js, which now calls the Chats parts split out of it (issue 1665:
 // core/chats-*.js, loaded just before chats.js; the same for core/app-services.js and its core/app-services-*.js, and
-// core/settings.js and its core/settings-*.js, and live.js and its live-*.js).
+// core/settings.js and its core/settings-*.js, live.js and its live-*.js, and core/skin-host.js and its
+// core/skin-host-*.js).
 // Give the old page the same script tags it lacks; nothing else changes.
-for (const host of ['core/chats', 'core/app-services', 'core/settings', 'live']) {
+for (const host of ['core/chats', 'core/app-services', 'core/settings', 'live', 'core/skin-host']) {
  const tag = `  <script src="${host}.js"></script>`, old = String(baseline['desktop.html']);
  const parts = [...fs.readFileSync(path.join(repo, 'web/desktop.html'), 'utf8').matchAll(new RegExp(`<script src="${host}-[a-z-]+\\.js"></script>`, 'g'))].map(m => m[0]).filter(t => !old.includes(t));
  assert.ok(old.includes(tag), `the pinned desktop.html loads ${host}.js`);

@@ -7,6 +7,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
+import { withSkinHostParts } from './fixtures/skin-host-parts.mjs';
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 
 const read = f => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8');
@@ -38,7 +39,7 @@ test('the AI apps menus draw it as "Move to channel…" (filing still last); the
   const parts = read('web/layouts/ai-apps/parts.js');
   assert.match(parts, /export const ACTS = \[\['pin', 'Pin'\], \['rename', 'Rename'\], \['markdone', 'Mark done'\], \['unread', 'Mark unread'\], \['move', 'Move to channel…'\], \['snooze', 'Snooze'\], \['restore', 'Restore'\], \['done', 'Archive'\]\];/);
   assert.match(parts, /\n  move: \[/, 'its own icon');
-  assert.match(read('web/core/skin-host.js'), /const SESSION_ACTS = Object\.freeze\(\[[^\]]*'move'[^\]]*\]\)/);
+  assert.match(withSkinHostParts(read('web/core/skin-host.js')), /const SESSION_ACTS = Object\.freeze\(\[[^\]]*'move'[^\]]*\]\)/);
   assert.match(read('web/layouts/ai-apps/layout.js'), /if \(k === 'rename' \|\| k === 'move'\) closeDrawer\(\);/, 'the phone drawer steps aside for the picker');
 });
 
