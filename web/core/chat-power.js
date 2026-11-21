@@ -425,6 +425,8 @@ window.WosChatPower = function chatPower(A) {
    * only while the wizard/background-continue tweak is on. Showing the panel starts nothing; only the tap does. */
   const BG_TWEAK = 'wizard/background-continue';
   const backgroundOn = () => { try { return (document.documentElement.dataset.tweaks || '').split(' ').includes(BG_TWEAK); } catch (_) { return false; } };
+  // The main agent's own threads: rows carry no agent, or (since the shell names every agent) the main id hermes.
+  const mainThread = s => !!s && (!s.agent || s.agent === 'hermes');
   function backgroundHtml(w, s) {
     const busy = ch(w.id)?.continuing === s.backgroundResult.id;
     return `<section class="ch-fail ch-bg-result" role="status" data-bg-result="${esc(s.backgroundResult.id)}"><span class="lb">Background result ready</span>
@@ -434,7 +436,7 @@ window.WosChatPower = function chatPower(A) {
   async function continueBackground(id, sid, rid, button) {
     const c = ch(id);
     const own = LIVE.session(sid);
-    if (c.continuing || !own || own.agent || own.backgroundResult?.id !== rid) return;
+    if (c.continuing || !mainThread(own) || own.backgroundResult?.id !== rid) return;
     c.continuing = rid; if (button) { button.disabled = true; button.textContent = 'Continuing…'; }
     const ended = ['failed', 'cancelled', 'interrupted'];
     try {
@@ -461,7 +463,7 @@ window.WosChatPower = function chatPower(A) {
   const signedOutFail = (s, busy = '') => (s && M?.signedOutFail ? M.signedOutFail({ ...s, ...failedRoute(s) }, busy || (retrying.has(s.id) ? 'retry' : '')) : null);
   function failureHtml(w, s) {
     // Main agent only: the Service's discovery and Continue routes are scoped to it (agent_id hermes).
-    if (s?.backgroundResult && !s.agent && backgroundOn()) return backgroundHtml(w, s);
+    if (s?.backgroundResult && mainThread(s) && backgroundOn()) return backgroundHtml(w, s);
     // Issue 1235: another app owns this chat, so no retry can ever deliver; the thread shows the clear card instead.
     if (!M || !failedShown(s) || M.foreignApp?.(s)) return '';
     const busy = retrying.has(s.id) ? 'retry' : E?.busy.get(s.id) || '';
