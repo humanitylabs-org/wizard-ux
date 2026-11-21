@@ -28,8 +28,14 @@ public final class ShellToken {
     // Same owner routes as web/core/shell-token.js (OWNER).
     private static final Pattern OWNER = Pattern.compile("^/(?:wizard/|api/|v1/|wizard-os-home/(?:api|store-install)/|wizard-ux/(?:api|store-install)/).*");
 
+    /** The box and its token, always read and replaced together (one immutable pair), so a call never mixes two boxes. */
+    private static final class Pair {
+        final String origin, token;
+        Pair(String origin, String token) { this.origin = origin; this.token = token; }
+    }
+    private static final Pair NONE = new Pair("", "");
     private static volatile boolean loaded;
-    private static volatile String origin = "", token = "";
+    private static volatile Pair current = NONE;
 
     private ShellToken() {}
 
@@ -42,7 +48,7 @@ public final class ShellToken {
         String o = p.getString("origin", ""), t = p.getString("token", "");
         synchronized (ShellToken.class) {
             if (loaded) return;
-            if (valid(t) && o != null && !o.isEmpty()) { origin = o; token = t; }
+            if (valid(t) && o != null && !o.isEmpty()) current = new Pair(o, t);
             loaded = true;
         }
     }
@@ -51,21 +57,22 @@ public final class ShellToken {
     public static void set(Context c, String boxOrigin, String t) {
         boxOrigin = normalize(boxOrigin);
         if (!valid(t) || boxOrigin.isEmpty()) return;
-        synchronized (ShellToken.class) { origin = boxOrigin; token = t; loaded = true; }
+        synchronized (ShellToken.class) { current = new Pair(boxOrigin, t); loaded = true; }
         c.getApplicationContext().getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
                 .putString("origin", boxOrigin).putString("token", t).apply();
     }
 
     /** The box says the boundary is off (or this phone moved to another Wizard): forget the token. */
     public static void clear(Context c) {
-        synchronized (ShellToken.class) { origin = ""; token = ""; loaded = true; }
+        synchronized (ShellToken.class) { current = NONE; loaded = true; }
         c.getApplicationContext().getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().clear().apply();
     }
 
     /** Adds the header to a call to an owner route on the token's own box; anything else goes out unchanged. */
     public static void apply(URLConnection c) {
         if (c == null) return;
-        String t = forUrl(origin, token, c.getURL());
+        Pair p = current;
+        String t = forUrl(p.origin, p.token, c.getURL());
         if (t != null) c.setRequestProperty(HEADER, t);
     }
 
