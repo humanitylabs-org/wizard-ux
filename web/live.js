@@ -46,15 +46,16 @@
       if (slim && p.list_version === 1 && p.window !== 'archive-50') { LIST_SUPPORT.set(agent,false); snapshot=''; out.length=0; offset=0; continue; }
       if (p.list_version === 1) LIST_SUPPORT.set(agent,true);
       if (!snapshot && typeof p.snapshot === 'string') snapshot = p.snapshot;
-      if (!build && typeof p.build === 'string') build = p.build;
+      // The slim title index is re-read only when the list's build moved (wizard-ux issue 1693): the window
+      // hashes the same selection for both shapes, so an unchanged build means an unchanged index. Checked on the
+      // first page, so a head-only poll of a long list also refreshes search when something changed.
+      if (!build && typeof p.build === 'string') { build = p.build; if (TITLE_INDEX.get(agent)?.build !== build) setTimeout(()=>{void fetchTitleIndex(agent)},0); }
       if (p.window === 'archive-50') meta = { archiveTotal:p.archive_total, archiveReturned:p.archive_returned, cursor:p.archive_cursor };
       const rows = p.data || p.sessions || p.items || [];
       out.push(...rows.map(normalize).filter(Boolean));
       offset += rows.length;
       const more = typeof p.has_more === 'boolean' ? p.has_more : typeof p.pagination?.has_more === 'boolean' ? p.pagination.has_more : rows.length >= 100;
-      // The slim title index is re-read only when the list's build moved (wizard-ux issue 1693): the window
-      // hashes the same selection for both shapes, so an unchanged build means an unchanged index.
-      if (!more) { if (build && TITLE_INDEX.get(agent)?.build !== build) setTimeout(()=>{void fetchTitleIndex(agent)},0); return { sessions:out, complete:true, meta, titleRead:read }; }
+      if (!more) return { sessions:out, complete:true, meta, titleRead:read };
       if (!rows.length) throw new Error('Incomplete session window');
       if (!full) return { sessions:out, complete:false, meta, titleRead:read };
       if (onFirst && offset === rows.length) await onFirst({ sessions:out.slice(), complete:false, meta, titleRead:read });

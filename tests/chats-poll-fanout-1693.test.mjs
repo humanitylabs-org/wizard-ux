@@ -89,6 +89,11 @@ test('issue 1693: the title index is re-read only for the list whose build moved
   const p = await h.poll();
   assert.deepEqual(p.filter(r => r.slim).map(r => r.agent), ['a1']);
   assert.equal(by(await h.poll(), r => r.slim), 0, 'and not again once it holds the new build');
+  // a3 has 230 rows, so its poll reads only the head page: a moved build there still refreshes its index.
+  h.box.builds.a3 = 'b-a3-2';
+  const head = await h.poll();
+  assert.deepEqual(head.filter(r => r.slim).map(r => r.agent), ['a3']);
+  assert.equal(by(head, r => r.agent === 'a3' && !r.slim), 1, 'still only its head page');
   const walk = await h.poll(3 * MIN);
   assert.equal(by(walk, r => r.agent === 'a3' && !r.slim), 3, 'after FULL_EVERY a3 is walked whole again');
 });
