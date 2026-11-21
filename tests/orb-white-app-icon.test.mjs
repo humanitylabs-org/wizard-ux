@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import { withShellParts } from './fixtures/shell-parts.mjs';
-const source = withShellParts(fs.readFileSync(process.env.ORB_SOURCE || new URL('../web/core/sigils.js', import.meta.url),'utf8'));
+import { withWebParts } from './fixtures/web-parts.mjs';
+const source = withShellParts(withWebParts(fs.readFileSync(process.env.ORB_SOURCE || new URL('../web/core/sigils.js', import.meta.url),'utf8')));
 const expose = source.replace('  window.WizSigil =', '  window.whitePixels = whitePixels; window.WizSigil =');
 function load() {
   const window = { WizCore: { appLogo: id => `/wizard-os-home/store-data/app-logo/${id}?v=0123456789abcdef` } };
@@ -47,14 +48,14 @@ test('ordinary launcher/logo icons retain their exact colour markup',()=>{
 });
 test('orb normalizer is available and scoped to phone orb plus desktop app identity',()=>{
   assert.equal(typeof load().WizSigil.orb,'function');
-  const phone=withShellParts(fs.readFileSync(new URL('../web/app.js',import.meta.url),'utf8'));
+  const phone=withShellParts(withWebParts(fs.readFileSync(new URL('../web/app.js',import.meta.url),'utf8')));
   assert.match(phone,/el\.innerHTML = h; window\.WizSigil\.orb\(el\)/);
-  const desktop=withShellParts(fs.readFileSync(new URL('../web/layouts/ai-apps/desktop.js',import.meta.url),'utf8'));
+  const desktop=withShellParts(withWebParts(fs.readFileSync(new URL('../web/layouts/ai-apps/desktop.js',import.meta.url),'utf8')));
   assert.match(desktop,/paintOrbIdentity\(h\.app\)/);
   assert.match(desktop,/S\.orb\(micG\)/);
 });
 test('regenerated sigil renderer retains the orb correction',()=>{
-  const template=withShellParts(fs.readFileSync(new URL('../tools/sigils/sigils.template.js',import.meta.url),'utf8'));
+  const template=withShellParts(withWebParts(fs.readFileSync(new URL('../tools/sigils/sigils.template.js',import.meta.url),'utf8')));
   const start='  // Orb identity is a white glyph';
   assert.equal(source.slice(source.indexOf(start)),template.slice(template.indexOf(start)));
 });

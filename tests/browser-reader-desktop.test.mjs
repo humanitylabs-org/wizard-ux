@@ -4,9 +4,10 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { withShellParts } from './fixtures/shell-parts.mjs';
-const desktop = withShellParts(readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8'));
-const layout = withShellParts(readFileSync(new URL('../web/layouts/ai-apps/desktop.js', import.meta.url), 'utf8'));
-const links = withShellParts(readFileSync(new URL('../web/core/links.js', import.meta.url), 'utf8'));
+import { withWebParts } from './fixtures/web-parts.mjs';
+const desktop = withShellParts(withWebParts(readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8')));
+const layout = withShellParts(withWebParts(readFileSync(new URL('../web/layouts/ai-apps/desktop.js', import.meta.url), 'utf8')));
+const links = withShellParts(withWebParts(readFileSync(new URL('../web/core/links.js', import.meta.url), 'utf8')));
 const fn = (source, name) => { const start = source.indexOf(`  function ${name}(`); assert.ok(start >= 0); return source.slice(start, source.indexOf('\n  }', start) + 4); };
 function desktopReader({existing = false, checkedLink = false, reader = true} = {}) {
   const location = new URL('https://wizard.example/wizard-os-home/desktop.html');

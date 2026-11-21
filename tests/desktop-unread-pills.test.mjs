@@ -7,7 +7,8 @@ import { modelContext } from './fixtures/chats-list-model.mjs';
 import { withAppParts } from './fixtures/app-parts.mjs';
 import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
 import { withShellParts } from './fixtures/shell-parts.mjs';
-const source = p => withAppParts(withShellParts(readFileSync(process.env.QA_TREE ? path.join(process.env.QA_TREE, p) : new URL('../' + p, import.meta.url), 'utf8')));
+import { withWebParts } from './fixtures/web-parts.mjs';
+const source = p => withAppParts(withShellParts(withWebParts(readFileSync(process.env.QA_TREE ? path.join(process.env.QA_TREE, p) : new URL('../' + p, import.meta.url), 'utf8'))));
 const desktop = source('web/layouts/ai-apps/desktop.js');
 const classic = source('web/desktop/desktop.js');
 const phone = source('web/layouts/ai-apps/layout.js');

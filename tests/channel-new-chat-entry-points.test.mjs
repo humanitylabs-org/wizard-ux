@@ -9,9 +9,10 @@ import vm from 'node:vm';
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 import { withDesktopParts } from './fixtures/desktop-parts.mjs';
 import { withShellParts } from './fixtures/shell-parts.mjs';
+import { withWebParts } from './fixtures/web-parts.mjs';
 
 const j = x => JSON.parse(JSON.stringify(x)); // vm values are cross-realm
-const read = p => withShellParts(readFileSync(new URL('../' + p, import.meta.url), 'utf8'));
+const read = p => withShellParts(withWebParts(readFileSync(new URL('../' + p, import.meta.url), 'utf8')));
 const desktop = withDesktopParts(read('web/desktop/desktop.js'));
 const cut = (src, from, to) => { const a = src.indexOf(from); assert.ok(a >= 0, from); const b = src.indexOf(to, a); assert.ok(b > a, to); return src.slice(a, b); };
 const front = cut(desktop, '  function chanFront() {', '  // A take started in a channel re-reads');

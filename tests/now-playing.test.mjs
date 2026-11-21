@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { withShellParts } from './fixtures/shell-parts.mjs';
-const read = p => withShellParts(readFileSync(new URL('../' + p, import.meta.url), 'utf8'));
+import { withWebParts } from './fixtures/web-parts.mjs';
+const read = p => withShellParts(withWebParts(readFileSync(new URL('../' + p, import.meta.url), 'utf8')));
 const tick = () => new Promise(r => setTimeout(r, 0));
 
 /* A shell document holding same-origin app frames, each with its own window, document and HTMLMediaElement. */

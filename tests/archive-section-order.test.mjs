@@ -4,9 +4,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
+import { withWebParts } from './fixtures/web-parts.mjs';
 
 const root = new URL('../', import.meta.url);
-const read = f => readFileSync(new URL(f, root), 'utf8');
+const read = f => withWebParts(readFileSync(new URL(f, root), 'utf8'));
 
 test('stock Chats: Archive is the last section in By status and By day', () => {
   const js = withParts(read('web/core/chats.js'));

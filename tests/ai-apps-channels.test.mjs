@@ -10,8 +10,9 @@ import { readFileSync } from 'node:fs';
 import { modelContext } from './fixtures/chats-list-model.mjs';
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 import { withShellParts } from './fixtures/shell-parts.mjs';
+import { withWebParts } from './fixtures/web-parts.mjs';
 
-const read = f => withShellParts(readFileSync(new URL(`../${f}`, import.meta.url), 'utf8'));
+const read = f => withShellParts(withWebParts(readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')));
 const slice = (js, a, b) => { const i = js.indexOf(a), j = js.indexOf(b, i + 1); assert.ok(i >= 0 && j > i, a); return js.slice(i, j); };
 const kinds = ['main', 'host-profile', 'container', 'restricted'];
 

@@ -4,8 +4,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { withWebParts } from './fixtures/web-parts.mjs';
 
-const read = path => readFileSync(new URL('../' + path, import.meta.url), 'utf8');
+const read = path => withWebParts(readFileSync(new URL('../' + path, import.meta.url), 'utf8'));
 const shell = read('web/core/shell.js');
 
 function run({ mac = false, ua = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/605.1.15' } = {}) {
