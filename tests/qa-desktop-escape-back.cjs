@@ -60,9 +60,11 @@ let currentPage;
   assert.equal(await field.inputValue(),'unsent');
   // Recording beats both app focus and a newer menu, with no sending.
   await p.evaluate(()=>__wux.talk('start')); await p.waitForFunction(()=>__wux.voiceState==='listen');
-  await p.evaluate(()=>WosContextMenu.open({anchor:document.body,label:'QA menu',items:[{label:'Keep',action(){}}]}));
+  // stay: a list or feed repaint that restores its scroll place (Channels, on for everyone since wizard-ux issue 1258)
+  // fires a scroll event, which would close a plain menu; this case is about Escape order, not scrolling.
+  await p.evaluate(()=>{window.__menuEvents=[];for(const t of ['scroll','blur','resize','pagehide'])addEventListener(t,e=>__menuEvents.push(t+':'+(e.target?.className||e.target?.nodeName||'win')),{capture:true});WosContextMenu.open({anchor:document.body,stay:true,label:'QA menu',items:[{label:'Keep',action(){}}]});});
   await p.keyboard.press('Escape'); await p.waitForFunction(()=>__wux.voiceState==='idle');
-  assert.equal(await p.evaluate(()=>WosContextMenu.isOpen),true,'voice cancellation leaves menu and surfaces open');
+  assert.equal(await p.evaluate(()=>WosContextMenu.isOpen),true,'voice cancellation leaves menu and surfaces open: '+await p.evaluate(()=>__menuEvents.slice(0,12).join(' ')));
   assert.equal(await field.evaluate(()=>window.backs),2);
   await p.keyboard.press('Escape'); assert.equal(await p.evaluate(()=>WosContextMenu.isOpen),false,'next Escape dismisses menu only');
   assert.equal(await p.evaluate(()=>Object.values(__wux.wins).some(w=>w.thread==='qa-thread')),true);
