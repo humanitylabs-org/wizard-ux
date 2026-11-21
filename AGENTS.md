@@ -16,11 +16,11 @@ Never commit personal paths or tailnet hostnames. `npm test` runs the tracked-fi
 guard in `tests/portable-mobile-config.test.mjs`; Android and iOS configuration, sources, tests and docs
 are covered. See `android/README.md` and `ios/README.md` for local configuration.
 
-- **`main` is what James runs.** Until 19 Oct 2026 it was named `daily`. Older notes, `BRANCHES.md` rows and QA comments that say `daily` mean `main`.
+- **`main` is what James runs.** Until 19 Oct 2026 it was named `daily`. Older notes, `docs/notes/BRANCHES.md` rows and QA comments that say `daily` mean `main`.
 - **Checks:**
   - `npm test` must pass.
   - PRs need the `gitleaks` and `validate` checks green.
-  - For any change touching `web/core/` or the phone shell, run the matching `qa-*.cjs` browser suite and report both baseline and candidate results.
+  - For any change touching `web/core/` or the phone shell, run the matching `qa/scripts/qa-*.cjs` browser suite (run it from the repo root) and report both baseline and candidate results.
 - **Publishing:** merging to `main` triggers the **Publish public image** workflow, which publishes `ghcr.io/humanitylabs-org/wizard-ux`. Confirm the run succeeded.
 - **Android:**
   - Native changes need a version bump above the published update feed.
@@ -50,7 +50,7 @@ New cross-platform UX belongs in `web/core/`. Register it once, and both shells 
 - **Styles:** shared control styles live in `web/core/settings.css`. Responsive geometry belongs in media or container rules. Keep `polish.css` free of desktop copies and `styles.css` free of phone copies.
 - **Parity guard:** `npm test` runs it. It checks both entrypoints and the full core-module inventory, and exercises a synthetic feature registered once in two mounts. Adding a general-purpose module to only one entrypoint fails the test.
 - **Exceptions:** existing exceptions and open gaps are recorded in `docs/responsive-feature-inventory.json`. An exception is not proof of parity, and it does not waive a newly requested cross-platform feature.
-- **Browser QA:** run `qa-responsive-parity.cjs` against live GET APIs plus `QA_SOURCE`, with every production write blocked. Verify:
+- **Browser QA:** run `qa/scripts/qa-responsive-parity.cjs` against live GET APIs plus `QA_SOURCE`, with every production write blocked. Verify:
   - phone touch and desktop;
   - keyboard and focus;
   - nested and root Back;

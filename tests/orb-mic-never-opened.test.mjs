@@ -6,8 +6,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
+import { withAppParts } from './fixtures/app-parts.mjs';
 
-const APP = readFileSync(new URL('../web/app.js', import.meta.url), 'utf8');
+const APP = withAppParts(readFileSync(new URL('../web/app.js', import.meta.url), 'utf8'));
 const CSS = readFileSync(new URL('../web/styles.css', import.meta.url), 'utf8');
 const TOUR_CSS = readFileSync(new URL('../web/core/tour.css', import.meta.url), 'utf8');
 const fn = (start, end) => { const a = APP.indexOf(start); assert.ok(a >= 0, start + ' exists'); return APP.slice(a, APP.indexOf(end, a)); };

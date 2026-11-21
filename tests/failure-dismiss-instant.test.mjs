@@ -8,6 +8,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { withParts } from './fixtures/chats-parts.mjs';
 
 const read = p => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
 const KINDS = [['main', ''], ['host-ops', 'host'], ['box', 'container'], ['locked', 'restricted']];
@@ -100,7 +101,7 @@ test('a routed dismissal never hides a main thread with the same id (and the oth
 });
 
 test('the shell hides the card and the header warning from the same record, and never toasts on Dismiss', () => {
-  const power = read('web/core/chat-power.js'), chats = read('web/core/chats.js');
+  const power = read('web/core/chat-power.js'), chats = withParts(read('web/core/chats.js'));
   assert.match(power, /function dismissThread\(wid, sid\) \{ E\?\.dismissFailure\(sid, rowFor\(wid, sid\)\); rerenderAll\(\); \}/);
   assert.match(power, /if \(t\.closest\('\[data-chdismiss\]'\) && w\?\.thread\) \{ dismissThread\(id, w\.thread\); return true; \}/);
   assert.match(power, /const ed = t\.closest\('\[data-errdismiss\]'\); if \(ed\) \{ dismissThread\(id, ed\.dataset\.errdismiss\); return true; \}/);

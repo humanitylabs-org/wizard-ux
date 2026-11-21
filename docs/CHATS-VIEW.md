@@ -124,7 +124,7 @@ Without opt-in none of these development providers or overrides is admitted.
 ## Verification
 
 Run `node --test tests/*.test.mjs`, the existing Chats browser suites, and
-`qa-chats-view-slot.cjs` against `tools/qa-origin.cjs`. The new suite refuses **every
+`qa/scripts/qa-chats-view-slot.cjs` against `tools/qa-origin.cjs`. The new suite refuses **every
 non-GET** in the browser; qa-origin independently refuses backend writes. Run
 browser suites on Thales with evidence/profile scratch on the external volume.
 Keep screenshots private: they contain real conversation labels. See PR evidence

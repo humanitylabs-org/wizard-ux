@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import { helperWorkingHarness, liveSource } from './helpers/helper-working-harness.mjs';
 import { historyRevision, assessCache } from '../tools/ready-thread-speed/cache-evidence.mjs';
 import { sampleId } from '../tools/ready-thread-speed/batch-preparation.mjs';
-const source=readFileSync(new URL('../web/core/chats.js',import.meta.url),'utf8');
+const source=readFileSync(new URL('../web/core/chats-outbox.js',import.meta.url),'utf8'); // loadThread / turnsCurrent moved there (issue 1665)
 const start=source.indexOf('  async function loadThread('),end=source.indexOf('\n  }\n',start)+5;
 const deferred=()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b});return {promise,resolve,reject}};
 function harness({pending=[],messages=async()=>['answer'],approval=async()=>false,detail=async()=>({}),live}={}){

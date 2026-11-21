@@ -2,8 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 const source = readFileSync(new URL('../web/outbox.js', import.meta.url), 'utf8');
-const chats = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
+const chats = withParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8')) + readFileSync(new URL('../web/core/chats-outbox.js', import.meta.url), 'utf8');
 function client(rows = new Map(), broken = false) {
   const calls = [], timers = new Set();
   const indexedDB = { open() {
@@ -31,7 +32,7 @@ function client(rows = new Map(), broken = false) {
 const item = (id, extra = {}) => ({ id, kind: 'reply', state: 'failed', sessionId: 'test-thread', text: 'Switch', error: 'No confirmed model route', createdAt: Date.now(), ...extra });
 const tick = () => new Promise(r => setTimeout(r, 25));
 // This is an outbox custody unit, not routed UI parity. Actual Focus/list/thread coverage:
-// QA_DISMISS_ONLY=1 node qa-voice-custody-callers.cjs (qa-failed-send-dismiss.cjs).
+// QA_DISMISS_ONLY=1 node qa/scripts/qa-voice-custody-callers.cjs (qa-failed-send-dismiss.cjs).
   test('outbox custody: selected failure persisted; no admission/stop and original retained', async t => {
     const rows = new Map(), p = client(rows); t.after(p.close); await tick();
     const failed = item('failed', { audio: new Blob(['original']) });

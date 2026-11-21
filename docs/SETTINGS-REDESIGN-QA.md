@@ -39,10 +39,10 @@ Voice/update state and the additional Chats app are explicit QA fixtures. The se
 ## Existing assertion changes
 
 - `tests/responsive-features.test.mjs`: route the synthetic feature to About before asserting both mounted bodies; route Android controls to Phone before checking disabled bridge gating. Registry/action/parity assertions remain.
-- `qa-responsive-parity.cjs`: visit the owning pages before checking controls; tap Phone rather than using an unsupported assistant deep link; explicitly assert phone Escape's new page → root step before closing; retain Help/Files return, live generated reviews, skin sync, private scope, recovery, cancellation and reload checks. Use a 21-second cancellation fixture because recordings below 20 seconds are intentionally discarded. Guard init-script storage in opaque hosted frames.
-- `qa-chat-polish.cjs`: select Voice before asserting its card and wait for data; assert today's agent-identity titlebar plus exact thread heading instead of obsolete titlebar text; use body-search's own fetch counter so unrelated thread refreshes do not masquerade as refetches; navigate out of cold-start Home and refocus the list between list-key actions; use current Alt+Down from the composer. Offline fixtures now actually abort service and diagnosis reads, instead of returning successful fake responses while the context says offline. The unmodified baseline already had seven failures in these unrelated assumptions; no product changes were made to conceal them.
-- `qa-empty-voice.cjs`: return to the actual phone desk after cold reload before real Dismiss taps; custody/bytes/retry assertions are unchanged. Both this module and `qa-voice-recovery.cjs` now document their required harness invocation; running the export alone is not a test run.
-- `qa-skin-palettes.cjs`: strengthen card/colour hit-target assertions from 44px to 48px. Palette identity and persistence assertions are unchanged.
+- `qa/scripts/qa-responsive-parity.cjs`: visit the owning pages before checking controls; tap Phone rather than using an unsupported assistant deep link; explicitly assert phone Escape's new page → root step before closing; retain Help/Files return, live generated reviews, skin sync, private scope, recovery, cancellation and reload checks. Use a 21-second cancellation fixture because recordings below 20 seconds are intentionally discarded. Guard init-script storage in opaque hosted frames.
+- `qa/scripts/qa-chat-polish.cjs`: select Voice before asserting its card and wait for data; assert today's agent-identity titlebar plus exact thread heading instead of obsolete titlebar text; use body-search's own fetch counter so unrelated thread refreshes do not masquerade as refetches; navigate out of cold-start Home and refocus the list between list-key actions; use current Alt+Down from the composer. Offline fixtures now actually abort service and diagnosis reads, instead of returning successful fake responses while the context says offline. The unmodified baseline already had seven failures in these unrelated assumptions; no product changes were made to conceal them.
+- `qa/scripts/qa-empty-voice.cjs`: return to the actual phone desk after cold reload before real Dismiss taps; custody/bytes/retry assertions are unchanged. Both this module and `qa/scripts/qa-voice-recovery.cjs` now document their required harness invocation; running the export alone is not a test run.
+- `qa/scripts/qa-skin-palettes.cjs`: strengthen card/colour hit-target assertions from 44px to 48px. Palette identity and persistence assertions are unchanged.
 - `qa-my-skin-script`, `qa-own-views`, `qa-chats-view-slot`: assertions unchanged.
 
 ## Reproduction and private evidence
@@ -52,11 +52,11 @@ Run the QA origin on an unused port in 9450–9470. Set `WIZARD_UX_FALLBACK_WEB`
 On the browser worker, set `QA_PLAYWRIGHT`, `QA_CHROME`, `CHROMIUM`, `TMPDIR`, `WIZARD_ORIGIN` and each suite's evidence variable to that worker's paths. Keep source, profiles and evidence on its external work volume. In particular:
 
 ```sh
-QA_SHOTS="$EVIDENCE/settings" node qa-settings-redesign.cjs "$QA_URL"
-QA_EMPTY_ONLY=1 QA_OUT="$EVIDENCE/empty" node qa-voice-custody-callers.cjs
-QA_RECOVERY_ONLY=1 QA_OUT="$EVIDENCE/recovery" node qa-voice-custody-callers.cjs
-QA_SOURCE="$PWD" QA_OUT="$EVIDENCE/parity" node qa-responsive-parity.cjs "$QA_URL"
-QA_APP_VIEWS_MODULE="$SERVICE_SOURCE/server/app-views.mjs" QA_PORT=9453 QA_OUT="$EVIDENCE/own" node qa-own-views.cjs
+QA_SHOTS="$EVIDENCE/settings" node qa/scripts/qa-settings-redesign.cjs "$QA_URL"
+QA_EMPTY_ONLY=1 QA_OUT="$EVIDENCE/empty" node qa/scripts/qa-voice-custody-callers.cjs
+QA_RECOVERY_ONLY=1 QA_OUT="$EVIDENCE/recovery" node qa/scripts/qa-voice-custody-callers.cjs
+QA_SOURCE="$PWD" QA_OUT="$EVIDENCE/parity" node qa/scripts/qa-responsive-parity.cjs "$QA_URL"
+QA_APP_VIEWS_MODULE="$SERVICE_SOURCE/server/app-views.mjs" QA_PORT=9453 QA_OUT="$EVIDENCE/own" node qa/scripts/qa-own-views.cjs
 ```
 
 The three skin/slot suites use **QA_SHOTS**, not QA_OUT. Stop QA servers and tunnels after collecting receipts. Screenshots remain private because the shell behind Settings can contain owner data; they are not committed. Evidence file names include:

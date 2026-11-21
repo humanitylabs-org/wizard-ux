@@ -10,9 +10,10 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 
 const read = p => readFileSync(new URL('../web/' + p, import.meta.url), 'utf8');
-const chats = read('core/chats.js'), desk = read('desktop/desktop.js'), aad = read('layouts/ai-apps/desktop.js');
+const chats = withParts(read('core/chats.js')), desk = read('desktop/desktop.js'), aad = read('layouts/ai-apps/desktop.js');
 
 function slice(src, start) {
   const at = src.indexOf(start); assert.ok(at >= 0, 'missing ' + start);

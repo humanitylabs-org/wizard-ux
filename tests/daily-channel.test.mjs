@@ -6,9 +6,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
+import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 
-const live = readFileSync(new URL('../web/live.js', import.meta.url), 'utf8');
-const chats = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
+const live = withLiveParts(readFileSync(new URL('../web/live.js', import.meta.url), 'utf8'));
+const chats = withParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'));
 const cut = (src, a, b) => { const i = src.indexOf(a); assert.ok(i >= 0, a); const j = src.indexOf(b, i); assert.ok(j > i, b); return src.slice(i, j); };
 const clone = v => JSON.parse(JSON.stringify(v));
 const settle = () => new Promise(r => setTimeout(r, 0));

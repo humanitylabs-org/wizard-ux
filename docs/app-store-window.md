@@ -48,7 +48,7 @@ From an exact committed source snapshot on Thales:
 ```
 SOURCE_SHA=<full SHA> QA_OUT=<absolute evidence directory> \
 /usr/bin/lockf -k $WIZARD_WORK_ROOT/AndroidBuilds/worker.lock \
-/bin/sh -c '/opt/homebrew/bin/node --test tests/store-data.test.mjs && /opt/homebrew/bin/node qa-store-system.cjs'
+/bin/sh -c '/opt/homebrew/bin/node --test tests/store-data.test.mjs && /opt/homebrew/bin/node qa/scripts/qa-store-system.cjs'
 ```
 
 The browser suite uses actual peer HTTPS, real index/installed data, actual Meta+k and touch My Apps/Get apps. Every context intercepts all unsafe requests. Real top/frame popstate observers are registered before product handlers. It verifies bounded routing, read-only controls, catalog/search/tags, regular window reuse, Back card/query/scroll retention, parent/root/reload history, normal controls, Home smoke, and exact served asset hashes. Browser/Chromium-touch evidence is not a physical Android Back receipt; parent owns the final live/device promotion gate.

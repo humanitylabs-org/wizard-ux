@@ -7,10 +7,11 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 
 const j = x => JSON.parse(JSON.stringify(x));
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
-const chats = read('web/core/chats.js'), desktop = read('web/desktop/desktop.js'), aad = read('web/layouts/ai-apps/desktop.js');
+const chats = withParts(read('web/core/chats.js')), desktop = read('web/desktop/desktop.js'), aad = read('web/layouts/ai-apps/desktop.js');
 const cut = (src, from, to) => { const a = src.indexOf(from); assert.ok(a >= 0, from); const b = src.indexOf(to, a + from.length); assert.ok(b > a, to); return src.slice(a, b); };
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 
@@ -26,7 +27,7 @@ function list({ agents = [{ id: 'hermes' }], view = 'channels', open = null, q =
     openSpacePicker: (w, a, tab, o) => { calls.push(['picker', w.id, a, j(o)]); ctx.spacePicker = { o }; }, spacePicker: null,
   };
   vm.createContext(ctx);
-  vm.runInContext(cut(chats, '  const chanNewAgent = w =>', '  /* A post is the owner') + '\nthis.channelsBody = channelsBody; this.chanNewForm = chanNewForm;', ctx);
+  vm.runInContext(cut(chats, '  const chanNewAgent = w =>', '  /* Channel posts (switch wizard/chat-channels)') + '\nthis.channelsBody = channelsBody; this.chanNewForm = chanNewForm;', ctx);
   return ctx;
 }
 

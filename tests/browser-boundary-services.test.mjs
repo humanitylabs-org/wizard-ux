@@ -5,8 +5,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
+import { withServicesParts } from './fixtures/app-services-parts.mjs';
 
-const source = readFileSync(new URL('../web/core/app-services.js', import.meta.url), 'utf8');
+const source = withServicesParts(readFileSync(new URL('../web/core/app-services.js', import.meta.url), 'utf8'));
 class El {
   constructor(tag) { this.tagName = tag.toUpperCase(); this.children = []; this.dataset = {}; this.attrs = {}; this.listeners = {}; this.className = ''; this.textContent = '';
     this.classList = { s: new Set(), add: (...c) => c.forEach(x => this.classList.s.add(x)), remove: (...c) => c.forEach(x => this.classList.s.delete(x)), contains: c => this.classList.s.has(c) }; }

@@ -5,6 +5,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
+import { withServicesParts } from './fixtures/app-services-parts.mjs';
 
 const read = p => readFileSync(new URL('../web/' + p, import.meta.url), 'utf8');
 const SWITCH = 'wizard/clear-chat-notifications';
@@ -39,7 +40,7 @@ function fixture({ on = false, access = false, visible = true, native = true, pr
     chatNotifyRead: j => { calls.push(['read', JSON.parse(j)]); return 1; },
   };
   c.window = c; vm.createContext(c);
-  vm.runInContext(read('core/app-services.js'), c); vm.runInContext(read('core/android-relay.js'), c);
+  vm.runInContext(withServicesParts(read('core/app-services.js')), c); vm.runInContext(read('core/android-relay.js'), c);
   const view = { visible };
   c.WizAppServices.attach(frame, { appId: app.id, path: app.url, isVisible: () => view.visible });
   const service = c.WizAppServices.connect(source, {});
@@ -140,6 +141,6 @@ test('the switch is in the catalog, off by default, and every host serves notify
   assert.equal(m.id, SWITCH); assert.match(m.description, /Notification access/);
   assert.match(read('core/browser-boundary.js'), /'notify\.chatRead'\]/);
   assert.match(read('core/browser-boundary-client.js'), /'notify\.chatRead'\], STICKY/);
-  assert.match(read('core/app-services.js'), /'notify\.chatRead'\]\);/);
+  assert.match(withServicesParts(read('core/app-services.js')), /'notify\.chatRead'\]\);/);
   assert.match(read('core/app-client.js'), /request\('notify\.chatRead', data\)/);
 });

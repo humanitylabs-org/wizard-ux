@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
-const source = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
+const source = withParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'));
 const cut = (a,b) => source.slice(source.indexOf(a), source.indexOf(b, source.indexOf(a)));
 function fixture(phone, after, siblings = []) {
  const w = {id:'chat',app:'chats',thread:'__new__'}, state = {draft:'Keep typed words',trail:['parent']}, calls = [], toasts = [], draft = {text:'Keep typed words',files:[],reply:{key:'notifications:synthetic'}};

@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import http from 'node:http';
 import { schedulerFixture } from './fixtures/scheduler.mjs';
+import { withSettingsParts } from './fixtures/settings-parts.mjs'; // settings.js parts moved out verbatim (issue 1665)
 const read = f => fs.readFileSync(new URL('../' + f, import.meta.url), 'utf8');
 const settle = async f => { const until = Date.now() + 3000; while (!f()) { if (Date.now() > until) throw Error('Fixture did not settle'); await new Promise(r => setTimeout(r, 5)); } };
 async function harness(t, { missing = false, shell = 'phone', timeZone = 'Europe/London', now = '2026-10-21T12:00:00Z' } = {}) {
@@ -18,7 +19,7 @@ async function harness(t, { missing = false, shell = 'phone', timeZone = 'Europe
   const s = { console, Map, Set, WeakMap, Date, String, CSS: { escape: String }, setTimeout, requestAnimationFrame: f => f(), document: { activeElement: null }, navigator: { userAgent: 'Fixture' }, location: { host: 'example.test' }, localStorage: { getItem: () => null }, fetch: (url, opts) => fetch(origin + url, opts) };
   s.Date = class extends Date { constructor(...args) { super(...(args.length ? args : [now])); } static now() { return Date.parse(now); } };
   s.window = s; s.WizCore = {}; s.WizBrand = { html: 'W' }; s.WizConfig = { timeZone: () => timeZone };
-  vm.runInNewContext(read('web/core/settings.js'), s);
+  vm.runInNewContext(withSettingsParts(read('web/core/settings.js')), s);
   vm.runInNewContext(read('web/core/schedules.js'), s);
   const roots = [];
   function mount() {

@@ -5,7 +5,7 @@ import {readFileSync} from 'node:fs';
 import {listFixture,sectionKeys} from './fixtures/chats-list-render.mjs';
 const read=f=>readFileSync(new URL('../'+f,import.meta.url),'utf8');
 test('routed search selects the actual list root, never the whole desktop window',()=>{
- const s=read('qa-search-archive-routed.cjs');
+ const s=read('qa/scripts/qa-search-archive-routed.cjs');
  const def=s.match(/const rootOf = id => [^;]+;/)[0];
  for(const shell of ['phone','desktop']){
   const root=vm.runInNewContext(`${def}\nrootOf('routed')`,{shell});
@@ -17,7 +17,7 @@ test('routed search selects the actual list root, never the whole desktop window
  assert.ok(sectionKeys(fx.render('')).includes('archive'),'negative control retains normal Archive section');
 });
 test('Wisdom case and top-level failures emit useful stderr before nonzero exit',()=>{
- const s=read('qa-wisdom-pinned-thread.cjs'),logs=[];
+ const s=read('qa/scripts/qa-wisdom-pinned-thread.cjs'),logs=[];
  const def=s.slice(s.indexOf('function reportFailure('),s.indexOf('\nfunction sourceError'));
  vm.runInNewContext(`${def}\nreportFailure({width:390,skin:'signal',action:'selection-ask-ai'},new Error('synthetic timeout')); reportFailure(null,new Error('launch failed'));`,{console:{error:(...a)=>logs.push(a.join(' '))}});
  assert.equal(logs.length,2);assert.match(logs[0],/390.*signal.*selection-ask-ai.*synthetic timeout/);assert.match(logs[1],/launch failed/);

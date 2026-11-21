@@ -138,8 +138,9 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         String origin = ai.wizards.os.device.AppState.primaryOrigin(this);
         NativeGate.remember(this, origin, on);
         // Turning off needs nothing now: the gate keeps working, and the next WebView registers the bridges as before.
+        // The native calls' shell token goes at once (ShellToken).
         // Turning on: every open window gates now, not only the one whose shell said so.
-        if (!on) return;
+        if (!on) { ai.wizards.os.device.ShellToken.clear(this); return; }
         for (MainActivity a : new java.util.ArrayList<>(LIVE)) a.gateNow(origin);
     }
 
@@ -148,6 +149,16 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
      * frames already open keep the old bridges until then. At most once per WebView (after that the gate is in place),
      * so a page can never make it reload again.
      */
+    /**
+     * The shell page hands over the box's shell token so the app's own native calls to owner routes carry it
+     * (ShellToken). Taken only while this WebView's bridges are gated: then only the shell origin's own page can call
+     * here (NativeGate), never an app frame, so no page can plant a token of its own.
+     */
+    private void shellToken(String token) {
+        if (web == null || gate == null || !ai.wizards.os.device.ShellToken.valid(token)) return;
+        ai.wizards.os.device.ShellToken.set(this, ai.wizards.os.device.AppState.primaryOrigin(this), token);
+    }
+
     private void gateNow(String origin) {
         if (web == null || gate != null || isFinishing() || isDestroyed()) return;
         if (!origin.equals(ai.wizards.os.device.AppState.primaryOrigin(this))) return;
@@ -487,6 +498,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
                 pendingFiles = cb;
                 pendingChooser = null;
                 if (PageCamera.galleryType(params.getAcceptTypes(), params.isCaptureEnabled()) == null
+                        && !PageCamera.plainFile(params.getAcceptTypes(), params.isCaptureEnabled())
                         && PageCamera.wantsImages(params.getAcceptTypes()) && PageCamera.needsPermission(MainActivity.this)) {
                     pendingChooser = params;
                     requestPermissions(new String[]{Manifest.permission.CAMERA}, REQ_CAMERA);
@@ -507,7 +519,8 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         String[] accept = params.getAcceptTypes();
         if (openGallery(params)) return true;
         Intent cam = null;
-        if (camera && PageCamera.wantsImages(accept)) {
+        // File (accept "*/*", wizard-ux issue 1634): the file picker straight away, no Camera/Files chooser.
+        if (camera && PageCamera.wantsImages(accept) && !PageCamera.plainFile(accept, params.isCaptureEnabled())) {
             try {
                 pendingPhoto = PageCamera.newPhoto(this);
                 cam = PageCamera.captureIntent(PageCamera.uriOf(this, pendingPhoto));
@@ -1322,6 +1335,10 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         /** Browser owner boundary on or off for this box (core/shell-token.js); see installNativeBridges. */
         @JavascriptInterface public void browserBoundary(boolean on) {
             main.post(() -> MainActivity.this.browserBoundary(on));
+        }
+        /** The box's shell token for the app's own owner calls (core/shell-token.js, gated bridge only; see shellToken). */
+        @JavascriptInterface public void shellToken(String token) {
+            main.post(() -> MainActivity.this.shellToken(token));
         }
 
         /** Long-press › Open in your browser, also for this Wizard's own pages: the phone's default browser, never this app. */

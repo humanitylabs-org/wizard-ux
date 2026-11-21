@@ -4,7 +4,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
-const source = fs.readFileSync(new URL('../web/core/settings.js', import.meta.url), 'utf8');
+import { withSettingsParts } from './fixtures/settings-parts.mjs'; // settings.js parts moved out verbatim (issue 1665)
+const source = withSettingsParts(fs.readFileSync(new URL('../web/core/settings.js', import.meta.url), 'utf8'));
 
 function look(shell, ownSkins = false) {
   const picked = [], familyPicked = [], last = { wizard: 'grove', mizel: 'obsidian-light' };
@@ -204,4 +205,62 @@ for (const shell of ['phone', 'desktop']) test(`${shell}: New skin shares Look's
   h.act('data-skin-create', '');
   assert.deepEqual(h.s.WosMySkin.created.tweaks, { ...defaults, 'miguel/orb-shell': false });
   h.view.destroy();
+});
+
+// Skins are look only (wizard-ux issue 1190, switch wizard/skins-look-only): with it on, New skin offers no tweak
+// switches and a new skin saves no feature choices, so a skin can never decide what runs. Off: unchanged (tests above).
+for (const shell of ['phone', 'desktop']) test(`${shell}: with Skins are look only on, a new skin is a look only`, async () => {
+  const h = look(shell, true);
+  h.s.WosExperience.lookOnly = true;
+  h.act('data-newskin', '');
+  for (let tick = 0; tick < 10 && !h.view.context.skinDraft.items.length; tick++) await Promise.resolve();
+  assert.doesNotMatch(h.root.innerHTML, /data-draft-tweak=/, 'no tweak switches in the draft');
+  assert.doesNotMatch(h.root.innerHTML, /<h4>Tweaks<\/h4>/);
+  assert.match(h.root.innerHTML, /data-newskin-look-only/);
+  assert.match(h.root.innerHTML, /<h4>Color<\/h4>/, 'colours are still chosen');
+  h.input('data-skin-name', 'Just a look');
+  h.act('data-skin-create', '');
+  assert.deepEqual(h.s.WosMySkin.created, { name: 'Just a look', base: 'nebula', tweaks: {} });
+  h.view.destroy();
+});
+
+for (const shell of ['phone', 'desktop']) test(`${shell}: with Skins are look only on, a recovered device skin keeps only its own saved choices`, async () => {
+  const h = look(shell, true), M = h.s.WosMySkin;
+  h.s.WosExperience.lookOnly = true;
+  M.previews = [{ id: 'device-old', name: 'Old preview', base: 'obsidian-light', tweaks: { sample: false } }]; M.dismissPreview = () => { M.previews = []; };
+  h.view.focus('look');
+  h.act('data-skin-preview', 'device-old'); for (let i = 0; i < 10; i++) await Promise.resolve();
+  h.act('data-skin-create', '');
+  assert.deepEqual(M.created, { name: 'Old preview', base: 'obsidian-light', tweaks: { sample: false } }, 'nothing the device runs now is added');
+  h.view.destroy();
+});
+
+test('WosExperience.lookOnly follows the wizard/skins-look-only switch (real experience.js)', async () => {
+  for (const on of [false, true]) {
+    const storage = new Map([['wos.channel.v1', 'latest'], ['wos.skin-tweaks.v1', JSON.stringify({ version: 1, off: {}, preset: 'none', mix: on ? { 'wizard/skins-look-only': true } : {}, machinesHomeMoved: true })]]);
+    const w = { WosSkin: { current: 'nebula', families: [], familyOf: () => 'wizard' }, WosSkinHost: { personalState: { ready: false }, tweakState: [], loadTweaks: async () => {} }, addEventListener() {}, dispatchEvent() {} };
+    vm.runInNewContext(fs.readFileSync(new URL('../web/core/experience.js', import.meta.url), 'utf8'), { window: w, Event, URL, AbortSignal, setTimeout() {},
+      document: { baseURI: 'https://wizard.test/wizard-os-home/', addEventListener() {} },
+      localStorage: { getItem: k => storage.get(k), setItem: (k, v) => storage.set(k, v) },
+      fetch: async url => ({ ok: true, json: async () => JSON.parse(fs.readFileSync(new URL('../web/' + url.pathname.split('/wizard-os-home/')[1], import.meta.url), 'utf8')) }) });
+    await w.WosExperience.refresh();
+    assert.equal(w.WosExperience.lookOnly, on);
+  }
+});
+
+for (const shell of ['phone', 'desktop']) test(`${shell}: with Skins are look only on, New skin can be created while the tweak list is loading or failed to load`, async () => {
+  for (const fail of [false, true]) {
+    const h = look(shell, true);
+    h.s.WosExperience.lookOnly = true; h.s.WosExperience.installedReady = false;
+    h.s.WosExperience.installed = () => fail ? Promise.reject(new Error('offline')) : new Promise(() => {});
+    h.act('data-newskin', '');
+    for (let n = 0; n < 10; n++) await Promise.resolve();
+    assert.equal(!!h.view.context.skinDraft.error, fail);
+    assert.doesNotMatch(h.root.innerHTML, /data-skinretry|role="alert"/, 'no tweak-loading error in a look-only draft');
+    assert.doesNotMatch(h.root.innerHTML, /data-skin-create disabled/);
+    h.input('data-skin-name', 'Colour only');
+    h.act('data-skin-create', '');
+    assert.deepEqual(h.s.WosMySkin.created, { name: 'Colour only', base: 'nebula', tweaks: {} });
+    h.view.destroy();
+  }
 });

@@ -41,7 +41,7 @@ function harness({ status = 'running', pending = false, transcript = rows } = {}
   };
   win.WizConfig = { agent: () => 'Fixture Wizard', timeZone: () => 'Asia/Tokyo', dayStart: now => Math.floor(now / 86400000) * 86400000 };
   win.WizBrand = { html: '' };
-  for (const file of ['core/core.js', 'core/chat-kit.js', 'core/chats-list-model.js', 'live.js', 'core/chats.js']) win.eval(source(file));
+  for (const file of ['core/core.js', 'core/chat-kit.js', 'core/chats-list-model.js', 'live-channels.js', 'live-seen.js', 'live-streams.js', 'live-work.js', 'live.js', 'core/chats-approvals.js', 'core/chats-attach.js', 'core/chats-chanbox.js', 'core/chats-chanemoji.js', 'core/chats-chanline.js', 'core/chats-channels.js', 'core/chats-daily.js', 'core/chats-done.js', 'core/chats-drafts.js', 'core/chats-events.js', 'core/chats-feed.js', 'core/chats-notes.js', 'core/chats-outbox.js', 'core/chats-places.js', 'core/chats-posts.js', 'core/chats-ready.js', 'core/chats-rowacts.js', 'core/chats-running.js', 'core/chats-select.js', 'core/chats-send.js', 'core/chats-setup.js', 'core/chats-status.js', 'core/chats-stream.js', 'core/chats-threadacts.js', 'core/chats-tracker.js', 'core/chats-undo.js', 'core/chats.js']) win.eval(source(file));
   const live = win.WizLive;
   live.sessions = [{ id: SID, runtime: 'direct', title: 'Old replay fixture', status, runId: pending ? 'run-B' : 'run-A', updatedAt: new Date().toISOString() }];
   const items = pending ? [{ id: 'old-send', kind: 'reply', state: 'sent', runId: 'run-A', sessionId: SID, text: 'What is that file?', files: [], sentAt: Date.now() - 30000, createdAt: Date.now() - 35000 }] : [];

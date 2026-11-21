@@ -9,6 +9,7 @@ import { readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import vm from 'node:vm';
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
 const source = process.env.OUTBOX_TEST_SOURCE ? readFileSync(process.env.OUTBOX_TEST_SOURCE, 'utf8') : read('web/outbox.js');
@@ -130,12 +131,12 @@ test('the outbox has no attachment count refusal', () => {
 });
 
 test('no surface caps files per message', () => {
-  for (const p of ['web/core/chats.js', 'web/core/chat-power.js', 'web/core/capture-tools.js', 'web/app.js', 'web/core/share-wizard.js', 'web/core/chat-kit.js'])
+  for (const p of ['web/core/chats.js', 'web/core/chats-attach.js', 'web/core/chat-power.js', 'web/core/capture-tools.js', 'web/app.js', 'web/core/share-wizard.js', 'web/core/chat-kit.js'])
     assert.doesNotMatch(read(p), /files per message|MAX_FILES|Use up to \d+ files/, p);
 });
 
 test('composer accepts more than ten picks at once', async () => {
-  const src = read('web/core/chats.js'), start = src.indexOf('  async function addFiles('), end = src.indexOf('  const UPLOAD_ABORT', start);
+  const src = withParts(read('web/core/chats.js')), start = src.indexOf('  async function addFiles('), end = src.indexOf('  const UPLOAD_ABORT', start);
   const c = { files: [] }, toasts = [];
   const sandbox = { INC: null, ch: () => c, toast: (...a) => toasts.push(a), refreshCompose() {}, saveDraft() {}, paintUpload() {}, PEND: null, PREVIEW: {},
     UPLOAD_ABORT: new Map(), URL: { createObjectURL: () => 'blob:x' }, AbortController, performance, Math,

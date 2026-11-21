@@ -4,9 +4,10 @@ import { readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import vm from 'node:vm';
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 
 const source = readFileSync(process.env.OUTBOX_TEST_SOURCE || new URL('../web/outbox.js', import.meta.url), 'utf8');
-const chats = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
+const chats = withParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'));
 const SIX_HOURS = 6 * 60 * 60 * 1000;
 const recorded = Date.parse('2026-10-22T08:33:00Z');
 const row = (extra = {}) => ({ id: 'late-voice', kind: 'reply', intent: 'message', deliveryRequested: true,
@@ -180,7 +181,8 @@ function uiHarness(api) {
     Promise, window: {}, esc: s => s, reach: () => ({}), troubleshoot: '' };
   const back = chats.slice(chats.indexOf('  function threadBack(w) {'), chats.indexOf('  /* Opt-in Send and go steps back'));
   const click = chats.slice(chats.indexOf('  function click(e, id) {'), chats.indexOf("    const recovery = e.target.closest('[data-obrecover]');")) + '\n return false; }';
-  const pending = chats.slice(chats.indexOf('  function pendingState(p, s) {'), chats.indexOf('  function pendingHtml('));
+  const outbox = readFileSync(new URL('../web/core/chats-outbox.js', import.meta.url), 'utf8'); // pendingState moved there (issue 1665)
+  const pending = outbox.slice(outbox.indexOf('  function pendingState(p, s) {'), outbox.indexOf('  function pendingHtml('));
   vm.runInNewContext(back + click + pending + '\nthis.click = click; this.pendingState = pendingState; this.threadBack = threadBack;', ctx);
   return { ...ctx, w, c, opened, notices };
 }

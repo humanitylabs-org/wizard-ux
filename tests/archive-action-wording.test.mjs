@@ -3,8 +3,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
-const src = read('web/core/chats.js');
+const src = withParts(read('web/core/chats.js'));
 const slice = (a, b) => { const start = src.indexOf(a), end = src.indexOf(b, start); assert.ok(start >= 0 && end > start); return src.slice(start, end); };
 function actions() {
   const ctx = vm.createContext({ followUpActive: s => !!s?.followUp?.active });

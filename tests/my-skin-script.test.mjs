@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { createHash, webcrypto } from 'node:crypto';
+import { withSkinHostParts } from './fixtures/skin-host-parts.mjs';
 const source = p => readFileSync(new URL('../web/core/' + p, import.meta.url), 'utf8');
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 const tick = () => new Promise(r => setTimeout(r, 10));
@@ -79,7 +80,7 @@ function hostPage() {
     requestAnimationFrame: () => 1, cancelAnimationFrame() {},
     WosSkin: { current: 'fixture', pkgOf: () => ({ dir: 'fixture', js: true, when: 'always' }), list: [] },
   };
-  ctx.window = ctx; vm.runInNewContext(source('skin-host.js'), ctx);
+  ctx.window = ctx; vm.runInNewContext(withSkinHostParts(source('skin-host.js')), ctx);
   const H = ctx.WosSkinHost, order = [];
   let personalApi;
   H._test.setImporter(async url => {

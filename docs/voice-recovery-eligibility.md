@@ -23,8 +23,8 @@ This does not invent a destination/model for old recordings. Where intent cannot
 Run on the designated browser QA host with isolated browser storage and all agent writes intercepted:
 
 ```sh
-QA_RECOVERY_ONLY=1 QA_OUT="$EVIDENCE/recovery" node qa-voice-custody-callers.cjs
-QA_OUT="$EVIDENCE/outbox" node qa-voice-custody.cjs
+QA_RECOVERY_ONLY=1 QA_OUT="$EVIDENCE/recovery" node qa/scripts/qa-voice-custody-callers.cjs
+QA_OUT="$EVIDENCE/outbox" node qa/scripts/qa-voice-custody.cjs
 ```
 
 Use `PLAYWRIGHT_MODULE` and `CHROMIUM` for installed tools. The recovery suite covers both real shell renderers, Settings clicks, filtered/empty/disconnected lists, mixed eligibility, touch targets, double tap, lost receipt/reload/reconnect, original envelopes, held transcription persistence and no replay of unknown steering. Empty/disconnected view branches include explicit local live-state injection; admission/upload/STT are intercepted fixtures. These are browser tests, not a handset acceptance claim. They cannot identify the cause or reconcile receipts for an owner's inaccessible local recordings.

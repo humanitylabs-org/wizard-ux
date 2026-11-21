@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
+import { withServicesParts } from './fixtures/app-services-parts.mjs';
 const read = name => readFileSync(new URL('../web/core/' + name + '.js', import.meta.url), 'utf8');
 function fixture(mobile = true) {
   const frames = new Map(), events = {}, listeners = {}, wins = {}, desks = [{ id: 'home', home: true, wins: [] }, { id: 'chat', wins: ['chat'], focus: 'chat' }];
@@ -30,7 +31,7 @@ function fixture(mobile = true) {
   const window = { [mobile ? '__wos' : '__wux']: s, dispatchEvent(e) { for (const fn of events[e.type] || []) fn(e); }, WizCore: { apps: () => ({ APPS: [{ id: 'sketch', kind: 'wizard', url: '/sketch/' }] }) } };
   const document = { hidden: false, readyState: 'loading', addEventListener() {}, querySelector(sel) { const id = sel.match(/data-win="([^"]+)"/)?.[1]; return frames.get(id); } };
   const context = vm.createContext({ window, document, location, URL, console, setInterval() {}, setTimeout, clearTimeout, CustomEvent: class { constructor(type, opts) { this.type = type; this.detail = opts?.detail; } }, addEventListener(type, fn) { (events[type] ||= []).push(fn); } });
-  vm.runInContext(read('app-services'), context); vm.runInContext(read('companion-pane'), context);
+  vm.runInContext(withServicesParts(read('app-services')), context); vm.runInContext(read('companion-pane'), context);
   const owner = add({ app: 'frame', appId: 'sketch', url: '/sketch/' });
   const ownerFrame = frames.get(owner.id), service = window.WizAppServices.connect(ownerFrame.contentWindow, { back: () => false });
   return { s, frames, owner, ownerFrame, service, pane: window.WizCompanionPane, host: window.WizAppServices, listeners, events, context };

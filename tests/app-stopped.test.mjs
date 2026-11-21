@@ -3,7 +3,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
-const source=readFileSync(new URL('../web/core/app-services.js',import.meta.url),'utf8');
+import { withServicesParts } from './fixtures/app-services-parts.mjs';
+const source=withServicesParts(readFileSync(new URL('../web/core/app-services.js',import.meta.url),'utf8'));
 class El {
  constructor(tag){this.tagName=tag.toUpperCase();this.children=[];this.attrs={};this.listeners={};this.textContent='';this.parentElement=null;}
  setAttribute(k,v){this.attrs[k]=v;} getAttribute(k){return this.attrs[k]??null;}

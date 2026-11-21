@@ -7,6 +7,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
+import { withParts } from './fixtures/chats-parts.mjs';
 
 const read = f => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8');
 const js = read('web/layouts/ai-apps/desktop.js'), css = read('web/layouts/ai-apps/desktop.css');
@@ -70,7 +71,7 @@ test('an older post opened from the feed shows its own title beside Back', () =>
   assert.match(js, /chatThread \? feedTitle\(chatThread\) \|\| titleOf\(chatThread\) : '';\n    tt\.textContent = docked \? t : '';/);
   assert.match(js, /\n  function feedTitle\(sid\) \{/);
   // the feed's posts carry their title
-  assert.match(read('web/core/chats.js'), /data-chrow="\$\{esc\(chanKey\(s\)\)\}" data-chtitle="\$\{esc\(s\.title \|\| ''\)\}">/);
+  assert.match(withParts(read('web/core/chats.js')), /data-chrow="\$\{esc\(chanKey\(s\)\)\}" data-chtitle="\$\{esc\(s\.title \|\| ''\)\}">/);
 });
 
 test('a thread opened from Activity or the sidebar has no Back; another chat spends the post\'s Back', () => {

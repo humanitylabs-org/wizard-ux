@@ -8,9 +8,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
+import { withParts } from './fixtures/chats-parts.mjs';
 
-const live = readFileSync(new URL('../web/live.js', import.meta.url), 'utf8');
-const chats = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
+const live = withLiveParts(readFileSync(new URL('../web/live.js', import.meta.url), 'utf8'));
+const chats = withParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'));
+const running = readFileSync(new URL('../web/core/chats-running.js', import.meta.url), 'utf8'); // the agent inbox parts (issue 1665)
 const kitSrc = readFileSync(new URL('../web/core/chat-kit.js', import.meta.url), 'utf8');
 const clone = v => JSON.parse(JSON.stringify(v));
 const slice = (src, a, b) => { const i = src.indexOf(a), j = src.indexOf(b, i); assert.ok(i > 0 && j > i, `${a} is in the file`); return src.slice(i, j); };
@@ -132,7 +135,7 @@ function block({ on = true, channels = [{ id: 'chan_alerts', kind: 'alerts' }, {
     LIVE: { sessions, agentInbox: reader.inbox },
   };
   vm.createContext(ctx);
-  vm.runInContext(slice(chats, '  const SWEEP = new Map();', '  /* Ready has three orders') + '\nthis.api = { sweepHtml, sweepLater, alertsHtml, alertFeedback, ALFB };', ctx);
+  vm.runInContext(slice(running, '  const SWEEP = new Map();', '  return { alertFeedback') + '\nthis.api = { sweepHtml, sweepLater, alertsHtml, alertFeedback, ALFB };', ctx);
   const flip = v => { sw.on = v; for (const fn of listeners['wos:experience'] || []) fn(); };
   return { api: ctx.api, toasts, paints, flip, b, reader };
 }

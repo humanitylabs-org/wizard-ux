@@ -2,9 +2,10 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 
 // Exercise the production renderer, not a second implementation of its branches.
-const source = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
+const source = withParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'));
 const reachSource = readFileSync(new URL('../web/core/reach.js', import.meta.url), 'utf8');
 const reachCtx = { navigator: { onLine: true }, location: { hostname: 'synthetic.test' }, AbortController, Event, setTimeout, clearTimeout, dispatchEvent() {}, fetch: async () => { throw new Error('not used'); } };
 reachCtx.window = reachCtx; vm.runInNewContext(reachSource, reachCtx);

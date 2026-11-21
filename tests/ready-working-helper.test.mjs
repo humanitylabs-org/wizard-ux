@@ -3,8 +3,10 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import { modelContext } from './fixtures/chats-list-model.mjs';
-const live = fs.readFileSync(new URL('../web/live.js', import.meta.url), 'utf8');
-const chats = fs.readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
+import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
+const live = withLiveParts(fs.readFileSync(new URL('../web/live.js', import.meta.url), 'utf8'));
+const chats = withParts(fs.readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'));
 const nav = fs.readFileSync(new URL('../web/core/workspace-navigation.js', import.meta.url), 'utf8');
 const block = (text, a, b) => text.slice(text.indexOf(a), text.indexOf(b, text.indexOf(a)));
 const line = (text, token) => text.split('\n').find(l => l.includes(token));
@@ -102,7 +104,7 @@ test('real chat row keeps the amber ask (tracker off) with no helper badge, for 
     topicOn: () => false, privRow: () => false, PIN: { has: () => false, on: () => false }, BOOM: () => null,
     STI: { needs: '!', working: '~' }, STI_TIP: {}, STI_LAB: { needs: 'Needs you' },
     ATT: { needs_you: { cls: 'needs', label: 'Needs you' } }, stiKind: s => s.status === 'running' ? 'working' : 'needs' });
-  vm.runInContext(block(chats, '  function chatRow(', '  /* Ready has three orders') + '\nthis.renderRow = chatRow;', c);
+  vm.runInContext(block(chats, '  function chatRow(', '  /* Agent inbox (switch wizard/agent-inbox)') + '\nthis.renderRow = chatRow;', c);
   for (const status of ['completed', 'running']) {
     const html = c.renderRow(row({ status, background: 'helper' }));
     assert.doesNotMatch(html, /Helper still working|ch-background/, 'the Working spinner says it (James, 7 Nov 2026)');

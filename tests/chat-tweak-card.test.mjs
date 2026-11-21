@@ -6,9 +6,11 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
+import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
 
 const read = p => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
-const chats = read('web/core/chats.js'), settings = read('web/core/settings.js');
+const chats = withParts(read('web/core/chats.js')), settings = read('web/core/settings.js');
 const between = (src, a, b) => { const i = src.indexOf(a), j = src.indexOf(b, i); assert.ok(i >= 0 && j > i, `${a} .. ${b}`); return src.slice(i, j); };
 
 const kitCtx = { window: null, URL, Intl, Date, navigator: {}, location: { origin: 'https://wizard.example', href: 'https://wizard.example/' },
@@ -43,7 +45,7 @@ test('marker: a card-only reply still lands, and a later message in the same tur
 });
 
 test('marker: stripped from the Chats preview (live.js) and from a streaming answer, also while half typed', () => {
-  const live = read('web/live.js');
+  const live = withLiveParts(read('web/live.js'));
   const ctx = { chipLabel: () => ' ' };
   vm.runInNewContext(between(live, '  const clean = s =>', '\n\n') + '\nglobalThis.clean = clean;', ctx);
   assert.equal(ctx.clean(reply), 'Shipped the phone list. It starts off. Say if it reads right.');
@@ -154,7 +156,7 @@ test('marker: a reply cut off inside an unterminated marker never shows the prot
   for (const t of [tn.a.text, tn.a.plainText]) { assert.doesNotMatch(t, /WIZARD_TWEAK|wizard\/desk/); assert.match(t, /starts off\./); }
   assert.equal([...(tn.a.tweaks || [])].length, 0, 'no card from a half marker');
   const ctx = { chipLabel: () => ' ' };
-  vm.runInNewContext(between(read('web/live.js'), '  const clean = s =>', '\n\n') + '\nglobalThis.clean = clean;', ctx);
+  vm.runInNewContext(between(withLiveParts(read('web/live.js')), '  const clean = s =>', '\n\n') + '\nglobalThis.clean = clean;', ctx);
   assert.equal(ctx.clean(cut), 'Shipped the phone list. It starts off.');
 });
 
@@ -165,7 +167,7 @@ test('marker: a reply cut off inside an unterminated marker never shows the prot
 const ROUTES = { main: ['wizard_1793157258294_34b4a71ae61a', ''], 'host-profile': ['20261028_101500_ab12cd', 'qa-host-profile'],
   container: ['agent-research:20261028_101501_ef34', 'agent-research'], restricted: ['restricted.vault_20261028-101502', 'restricted.vault'] };
 function listNormalizer() {
-  const live = read('web/live.js'), a = live.indexOf('  const READY_OR_ATTENTION'), b = live.indexOf('  /* ---- thread-seen');
+  const live = withLiveParts(read('web/live.js')), a = live.indexOf('  const READY_OR_ATTENTION'), b = live.indexOf('  /* ---- thread-seen');
   assert.ok(a > 0 && b > a, 'live.js normalizer block found');
   const context = modelContext({});
   vm.runInContext(`${live.slice(a, b)}\nthis.normalize = normalize;`, context);

@@ -5,6 +5,7 @@ import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { launcherFixture } from './launcher-fixture.mjs';
+import { withServicesParts } from './fixtures/app-services-parts.mjs';
 const read = p => readFileSync(new URL('../'+p,import.meta.url),'utf8');
 const source=read('web/core/chats.js');
 function scene(kind, seed={}) {
@@ -19,7 +20,7 @@ function scene(kind, seed={}) {
  env.W={w:{id:'w',appId:'wisdom'}};env.hosted=hosted;
  env.LIVE={pinAgent:(...a)=>calls.push(['pin',...a])};env.closeHosted=()=>{throw Error('must not replace existing thread')};env.getComputedStyle=()=>({position:'relative'});env.openChat=(...a)=>calls.push(['open',...a]);env.requestAnimationFrame=fn=>fn();
  launcherFixture(env);vm.runInContext(source.slice(source.indexOf('  function openHosted('),source.indexOf('  function closeHosted('))+';this.openHosted=openHosted;',env);
- vm.runInContext(read('web/core/app-services.js'),env);
+ vm.runInContext(withServicesParts(read('web/core/app-services.js')),env);
  let visible=true;
  window.WizAppServices.attach(frame,{appId:'wisdom',path:'/wisdom/',isVisible:()=>visible,openThread:(id,opts)=>env.openHosted('w',frame,id,opts)});
  return {env,window,store,calls,sid,agent,frame,hosted,hide:()=>visible=false,nav:window.WizAppServices.connect(child,{back:()=>false}).nav};

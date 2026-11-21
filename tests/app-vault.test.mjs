@@ -2,8 +2,9 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
+import { withServicesParts } from './fixtures/app-services-parts.mjs';
 const read = path => readFileSync(new URL('../' + path, import.meta.url), 'utf8');
-const services = read('web/core/app-services.js'), client = read('web/core/app-client.js'), bridge = read('web/core/bridge.js');
+const services = withServicesParts(read('web/core/app-services.js')), client = read('web/core/app-client.js'), bridge = read('web/core/bridge.js');
 
 function nativeFixture({modern = false} = {}) {
   const sent = [], timers = new Map(), listeners = []; let serial = 0;

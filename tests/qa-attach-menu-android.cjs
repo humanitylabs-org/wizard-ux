@@ -6,6 +6,8 @@
 // ux#1635) and File. Outside the Android app (no WizardOSNative) + keeps the plain file dialog.
 // Phone 412x915, Android user agent, skins nebula + grove. QA_EXPECT=broken (QA_WEB=<main>/web) asserts the old
 // direct empty-accept dialog instead. Synthetic transport only; every write is answered locally.
+// Round 3 (James, 19 Nov, 23:46 Bangkok: "photo should be first ... clicking files repeats the same problem"): the
+// order is Photo or video, Camera, File, and File asks for */* so the app opens its file picker with no camera sheet.
 const assert = require('node:assert/strict');
 const { chromium } = require('../tools/qa-playwright.cjs');
 const { ownerRead } = require('../tools/qa-desktop-frame-fixture.cjs');
@@ -106,15 +108,15 @@ async function run(browser, skin, native) {
         continue;
       }
       assert.equal(app.direct, null, 'Android app: + opens no dialog straight away');
-      assert.deepEqual(app.menu.items, ['Camera', 'Photo or video', 'File']);
+      assert.deepEqual(app.menu.items, ['Photo or video', 'Camera', 'File']);
       assert.ok(app.menu.inView && app.menu.bottom <= app.menu.plusTop, 'menu sits above the + on screen');
       assert.deepEqual(app.photo, { accept: 'image/*,video/*', capture: false, multiple: true }, 'Photo or video asks for the photo grid');
       assert.deepEqual(app.camera, { accept: 'image/*', capture: true, multiple: false }, 'Camera asks for the camera');
-      assert.deepEqual(app.file, { accept: '', capture: false, multiple: true }, 'File asks for any file');
+      assert.deepEqual(app.file, { accept: '*/*', capture: false, multiple: true }, 'File asks for any file as */* (no Camera/Files sheet in the app)');
       assert.ok(app.outsideClosed, 'an outside tap closes the menu');
       assert.ok(app.backClosed && app.stillInThread, 'Back closes the menu and stays in the thread');
       assert.equal(app.newDirect, null, 'New chat: + opens no dialog straight away');
-      assert.deepEqual(app.newMenu, ['Camera', 'Photo or video', 'File'], 'New chat: the same menu');
+      assert.deepEqual(app.newMenu, ['Photo or video', 'Camera', 'File'], 'New chat: the same menu');
       assert.equal(web.menu, null, 'phone browser: no menu');
       assert.deepEqual(web.direct, { accept: '', capture: false, multiple: true }, 'phone browser keeps the plain file dialog');
       assert.deepEqual(app.errors, []); assert.deepEqual(web.errors, []);

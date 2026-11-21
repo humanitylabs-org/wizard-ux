@@ -115,6 +115,7 @@ final class ScrollCaptureDiagnostics {
                 conn.setInstanceFollowRedirects(false); conn.setConnectTimeout(8000); conn.setReadTimeout(8000);
                 conn.setRequestMethod("POST"); conn.setDoOutput(true);
                 conn.setRequestProperty("Content-Type","application/json"); conn.setRequestProperty("Origin",origin);
+                ai.wizards.os.device.ShellToken.apply(conn);
                 if(cookie!=null)conn.setRequestProperty("Cookie",cookie);
                 byte[] bytes=body.getBytes(java.nio.charset.StandardCharsets.UTF_8);
                 conn.setFixedLengthStreamingMode(bytes.length);

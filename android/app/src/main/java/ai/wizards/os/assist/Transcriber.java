@@ -46,6 +46,7 @@ public final class Transcriber {
             c.setRequestMethod("POST");
             c.setRequestProperty("Content-Type", mp.contentType());
             c.setRequestProperty("Origin", origin);
+            ai.wizards.os.device.ShellToken.apply(c);
             c.setFixedLengthStreamingMode(body.length);
             try (OutputStream os = c.getOutputStream()) { os.write(body); }
             int code = c.getResponseCode();

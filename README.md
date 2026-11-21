@@ -12,10 +12,10 @@ npm install --no-save playwright  # or playwright-core + an installed browser
 # Browser installation/extended QA belongs on the configured build worker.
 node tools/qa-origin.cjs         # local /wizard-os-home/ on port 9371
 # In another terminal:
-WIZARD_ORIGIN=http://127.0.0.1:9371 node qa-brand.cjs
+WIZARD_ORIGIN=http://127.0.0.1:9371 node qa/scripts/qa-brand.cjs
 # Standalone prototype (served at / rather than /wizard-os-home/):
 python3 server.py                # http://127.0.0.1:9271/
-node qa.cjs http://127.0.0.1:9271/
+node qa/scripts/qa.cjs http://127.0.0.1:9271/
 ```
 
 - `WIZARD_ORIGIN`: QA defaults to `http://127.0.0.1:9371` (the local QA origin). Live QA selects an owner's origin explicitly, e.g. `https://wizard.example.ts.net`. Preview suites retain their existing required `QA_ORIGIN` admission; this variable does not bypass isolation. `server.py` keeps localhost origins and reads additional allowed POST origins from comma-separated `WIZARD_ORIGIN`; configure it in the launching service **before adopting this change**. QA expects one origin, not a comma-separated list.
@@ -99,15 +99,15 @@ android/        Android app ai.wizards.os
                   SideButton    one-tap side-button setup
                   assist/       hold-the-side-button assistant (lock screen + corner orb)
 tools/          Thales QA helpers
-qa-*.cjs        Playwright and Android QA suites
-BRANCHES.md     Feature branch map, verification evidence, build history
+qa/scripts/     Playwright and Android QA suites (qa-*.cjs); run them from the repo root
+docs/notes/     Feature branch map (BRANCHES.md), verification evidence, build history
 ```
 
 ## Branches
 
 - `daily` is what James runs on his phone. It is the default branch and merges every feature branch.
 - `master` is the web shell baseline that feature branches start from.
-- `feature/*` and `fix/*`: one feature per branch, each reviewable on its own. See [BRANCHES.md](BRANCHES.md) for what each one adds and how it was verified.
+- `feature/*` and `fix/*`: one feature per branch, each reviewable on its own. See [docs/notes/BRANCHES.md](docs/notes/BRANCHES.md) for what each one adds and how it was verified.
 
 ## Running it
 
@@ -151,16 +151,16 @@ Package `ai.wizards.os`, currently 0.4.0. Builds run on Thales (the Mac mini bui
 ## Testing
 
 ```bash
-node qa-os.cjs            # shell: Back, desks, windows, voice routing
-node qa-chats-parity.cjs  # Chats against the live Wizard Agent Service (writes intercepted)
-node qa-new-chat-first-paint.cjs "$QA_ORIGIN/wizard-os-home/" # empty composer, resize/reload, phone Back
-node qa-live.cjs; node qa-livemode.cjs; node qa-motion.cjs; node qa-recordings.cjs
-node qa-android-*.cjs     # on Thales, against the emulator
+node qa/scripts/qa-os.cjs            # shell: Back, desks, windows, voice routing
+node qa/scripts/qa-chats-parity.cjs  # Chats against the live Wizard Agent Service (writes intercepted)
+node qa/scripts/qa-new-chat-first-paint.cjs "$QA_ORIGIN/wizard-os-home/" # empty composer, resize/reload, phone Back
+node qa/scripts/qa-live.cjs; node qa/scripts/qa-motion.cjs; node qa/scripts/qa-recordings.cjs
+node qa/scripts/qa-android-*.cjs     # on Thales, against the emulator
 ```
 
-The current pass counts per suite are in [BRANCHES.md](BRANCHES.md).
+The current pass counts per suite are in [BRANCHES.md](docs/notes/BRANCHES.md).
 
-Composer layout changes must run `qa-new-chat-first-paint.cjs` before and after deployment.
+Composer layout changes must run `qa/scripts/qa-new-chat-first-paint.cjs` before and after deployment.
 It checks the actual New chat action synchronously before the first animation frame, then
 before and after typing, at four desktop sizes, in browser/native-like modes, plus phone smoke checks.
 Set `QA_PLAYWRIGHT` and `QA_CHROME` for the worker's installed tools; `QA_WEB=<candidate>/web`

@@ -7,9 +7,11 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { withAppParts } from './fixtures/app-parts.mjs';
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 const kit = readFileSync(new URL('../web/core/chat-kit.js', import.meta.url), 'utf8');
 const power = readFileSync(new URL('../web/core/chat-power.js', import.meta.url), 'utf8');
-const chats = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
+const chats = withParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'));
 const OPTS = [{ value: 'claude-opus', provider: 'anthropic', name: 'Opus' }, { value: 'claude-sonnet', provider: 'anthropic', name: 'Sonnet', isGlobalDefault: true }];
 
 // pane: the id the box is drawn in; thread: what the window behind it has open on its right (classic desktop).
@@ -124,7 +126,7 @@ test('a take keeps the box it started in: modelRoute by box key, whatever channe
   assert.equal(f.boxModel('chan::voice')?.model, 'claude-haiku');
   f.setChanModel('win', { model: 'p', provider: 'p', agent: 'restricted' }); assert.equal(f.boxModel('chan::voice')?.model, 'claude-haiku', 'never another agent\'s model');
   assert.match(chats, /modelRoute: \(wid, sid, box\) => \{ const nm = sid !== '__new__' \? null : box \? boxModel\(box\)/);
-  const app = readFileSync(new URL('../web/app.js', import.meta.url), 'utf8'), desk = readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8');
+  const app = withAppParts(readFileSync(new URL('../web/app.js', import.meta.url), 'utf8')), desk = readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8');
   assert.match(app, /CHATS\.modelRoute\(pin\.wid, pin\.sid, pin\.box \|\| undefined\)/); assert.match(app, /CHATS\.modelRoute\(V\.replyTo\.wid,V\.replyTo\.sid,V\.replyTo\.box\|\|undefined\)/);
   assert.match(desk, /forceNew \? undefined : vBox \|\| undefined\);/); assert.match(desk, /CHATS\.modelRoute\(wid,sid,box \|\| undefined\)/);
 });

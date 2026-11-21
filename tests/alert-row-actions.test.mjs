@@ -3,8 +3,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
-const src = read('web/core/chats.js');
+const src = withParts(read('web/core/chats.js'));
 const cut = (from, to) => { const a = src.indexOf(from), b = src.indexOf(to, a); assert.ok(a >= 0 && b > a, from); return src.slice(a, b); };
 const plain = x => JSON.parse(JSON.stringify(x));
 const flush = () => new Promise(r => setImmediate(r));

@@ -21,8 +21,11 @@ final class AudioHttp extends BaseDataSource {
     private long remaining;
     private boolean opened;
     AudioHttp(String origin) { super(true); this.origin = origin; }
-    static HttpURLConnection connect(String url, String origin, String kind) throws IOException {
-        if (!AudioPolicy.trusted(url, origin, kind)) throw new IOException("Untrusted audio URL");
+    static HttpURLConnection connect(String url, String origin, String kind) throws IOException { return connect(url, origin, kind, AudioPolicy.MUSIC); }
+    /** kind "media" = stream or artwork of any admitted app (the shared player); other kinds are checked for that one app. */
+    static HttpURLConnection connect(String url, String origin, String kind, String appId) throws IOException {
+        boolean ok = "media".equals(kind) ? AudioPolicy.mediaKind(url, origin) != null : AudioPolicy.trusted(url, origin, kind, appId);
+        if (!ok) throw new IOException("Untrusted audio URL");
         HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
         c.setInstanceFollowRedirects(false); c.setConnectTimeout(20000); c.setReadTimeout(60000);
         c.setRequestProperty("User-Agent", "WizardBackgroundAudio/1");
@@ -30,8 +33,9 @@ final class AudioHttp extends BaseDataSource {
         if (cookies != null && !cookies.isEmpty()) c.setRequestProperty("Cookie", cookies);
         return c;
     }
-    static JSONObject json(String url, String origin, String kind, JSONObject body) throws Exception {
-        HttpURLConnection c = connect(url, origin, kind);
+    static JSONObject json(String url, String origin, String kind, JSONObject body) throws Exception { return json(url, origin, kind, body, AudioPolicy.MUSIC); }
+    static JSONObject json(String url, String origin, String kind, JSONObject body, String appId) throws Exception {
+        HttpURLConnection c = connect(url, origin, kind, appId);
         try {
             c.setRequestProperty("Accept", "application/json");
             if (body != null) {
@@ -49,8 +53,8 @@ final class AudioHttp extends BaseDataSource {
     }
     @Override public long open(DataSpec d) throws IOException {
         spec = d; transferInitializing(d);
-        String url = d.uri.toString(); String kind = url.contains("/art/") ? "art" : "stream";
-        connection = connect(url, origin, kind);
+        String url = d.uri.toString();
+        connection = connect(url, origin, "media");
         if (d.position > 0 || d.length != C.LENGTH_UNSET) {
             String range = "bytes=" + d.position + "-" + (d.length == C.LENGTH_UNSET ? "" : Long.toString(d.position + d.length - 1));
             connection.setRequestProperty("Range", range);

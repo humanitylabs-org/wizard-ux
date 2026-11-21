@@ -4,10 +4,13 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { modelContext } from './fixtures/chats-list-model.mjs';
-const src = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
-const app = readFileSync(new URL('../web/app.js', import.meta.url), 'utf8');
+import { withAppParts } from './fixtures/app-parts.mjs';
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
+import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
+const src = withParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'));
+const app = withAppParts(readFileSync(new URL('../web/app.js', import.meta.url), 'utf8'));
 const cut = (a, b) => { const i = src.indexOf(a); assert.ok(i >= 0, a); return src.slice(i, src.indexOf(b, i)); };
-const block = cut('  /* Channels view (switch wizard/chat-channels', '  function clearAll(w)');
+const block = withParts(cut('  /* Channels view (switch wizard/chat-channels', '  function clearAll(w)'));
 
 const H = 3600e3, NOW = Date.UTC(2026, 10, 10, 12);
 function fixture({ on = true, rows = [], spacesList, agents = {}, history = {}, full = {}, sessions = {}, owner = 'James de Fleur', marksAt = null } = {}) {
@@ -1579,7 +1582,7 @@ test('issue 1316 review: an agent-focused General has its own mark; reading it n
 // wizard-agent-service issue 471: with Channels on (its own wizard/channel-read-sync switch until wizard-ux issue 1358), the watermark is also kept on the box
 // (/wizard/v1/channels/read, forward only), so reading a channel on one device clears it on the owner's others.
 // The real LIVE.chanReads (web/live.js channelReads) runs against a fake box shared by two fixtures.
-const liveSrc = readFileSync(new URL('../web/live.js', import.meta.url), 'utf8');
+const liveSrc = withLiveParts(readFileSync(new URL('../web/live.js', import.meta.url), 'utf8'));
 const readsBlock = (() => { const a = liveSrc.indexOf('  /* ---- channel reads'), b = liveSrc.indexOf('  /* ---- end channel reads ---- */'); assert.ok(a > 0 && b > a); return liveSrc.slice(a, b); })();
 function fakeBox({ on = true } = {}) {
   const box = { at: {}, on, calls: [] };
@@ -2018,9 +2021,10 @@ test('issue 1331: opening a thread with an open Needs you lands on that message 
   f.env.document.documentElement.dataset.tweaks = MD_ON; f.env._c.w.readNav = 5; f.land(w, 5);
   assert.equal(scrolled.length, 3, 'switch off: the thread opens where it always did');
   // Both opens call it: a fresh history read and a reopen inside the 60-second history cache (Codex P2).
-  const load = src.slice(src.indexOf('  async function loadThread('), src.indexOf('    // Every read owns a captured thread AND navigation generation.'));
+  const outboxSrc = readFileSync(new URL('../web/core/chats-outbox.js', import.meta.url), 'utf8'); // loadThread lives in core/chats-outbox.js (issue 1665)
+  const load = outboxSrc.slice(outboxSrc.indexOf('  async function loadThread('), outboxSrc.indexOf('    // Every read owns a captured thread AND navigation generation.'));
   assert.match(load, /if \(fresh && !force\) \{\n      c\.loadedNav = nav;[^\n]*\n      if \(typeof needsLand === 'function'\) needsLand\(w, nav\);/);
-  assert.match(src, /if \(typeof needsLand === 'function' && current\(\)\) needsLand\(w, nav\);/);
+  assert.match(outboxSrc, /if \(typeof needsLand === 'function' && current\(\)\) needsLand\(w, nav\);/);
 });
 
 test('issue 1331: the landing becomes the reading place for main and routed threads alike (second AI review)', () => {
@@ -2486,7 +2490,7 @@ test('issue 1523: Mark channel read says the channel by its emoji; the voice pin
   // Channels off: Mark channel read is not offered at all.
   f.setOn(false); assert.equal(read(f.w, 'launch'), false);
   // The voice view of a channel's feed (app.js viewOf) and the orb's hint name it by its title.
-  const app = readFileSync(new URL('../web/app.js', import.meta.url), 'utf8');
+  const app = withAppParts(readFileSync(new URL('../web/app.js', import.meta.url), 'utf8'));
   assert.match(app, /if \(chan\) return \{ id, mode: 'auto', \.\.\.pin, name: `\$\{window\.WizCore\?\.channelFace\?\.\(chan\.name, !!chan\.general\)\?\.title \|\| '# ' \+ chan\.name\} channel` \};/);
   assert.match(app, /channelFace\?\.\(V\.snap\.view\.channel, V\.snap\.view\.channel === 'General'\)\?\.title/);
   const C = emojiCore(), pinName = c => `${C.channelFace(c.name, !!c.general)?.title || '# ' + c.name} channel`;

@@ -10,6 +10,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { withSkinHostParts } from './fixtures/skin-host-parts.mjs';
 
 const root = new URL('../', import.meta.url);
 const read = p => readFileSync(new URL(p, root), 'utf8');
@@ -25,7 +26,7 @@ function hostWorld() {
     document: { baseURI: 'https://wizard.test/wizard-os-home/', documentElement: { dataset: { shell: 'desktop' } }, createElement: el, head: { appendChild() {} }, querySelector: () => null, getElementById: () => null, addEventListener() {} },
   };
   ctx.window = ctx; ctx.window.WosSkin = { current: 'obsidian', list: [], pkgOf: () => null }; ctx.module = { exports: {} };
-  vm.runInNewContext(read('web/core/skin-host.js'), ctx);
+  vm.runInNewContext(withSkinHostParts(read('web/core/skin-host.js')), ctx);
   const host = ctx.window.WosSkinHost, calls = []; let api = null;
   host._test.setImporter(async () => ({ default: a => { api = a; return () => calls.push(['teardown']); } }));
   const adapter = {

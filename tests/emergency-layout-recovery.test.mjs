@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { fixture, read } from './fixtures/tweaks.mjs';
+import { withSkinHostParts } from './fixtures/skin-host-parts.mjs';
 
 test('three callback faults retain the mounted AI apps sidebar and choice', async () => {
  const f=fixture({shell:'desktop',initialStorage:{'wos.desktop-view.v1':'ai-apps'}});await f.host.whenLayoutReady();
@@ -26,6 +27,6 @@ test('a transient import failure recovers on a cache-busted retry without enteri
  assert.equal(calls,3);assert.equal(f.host.layoutState.active,true);assert.equal(recovery.includes(true),false);assert.equal(f.host.layout,'ai-apps');
 });
 test('recovery uses shared Chats and hides the Classic bar; no render guard/backoff is shipped',()=>{
- const s=read('web/core/skin-host.js');assert.match(s,/const guard = \(a, where, fn\) => function \(\) \{ if \(a.dead\) return; try \{ return fn.apply\(this, arguments\); \} catch \(e\) \{ fault\(a, where, e\); \} \};/);
+ const s=withSkinHostParts(read('web/core/skin-host.js'));assert.match(s,/const guard = \(a, where, fn\) => function \(\) \{ if \(a.dead\) return; try \{ return fn.apply\(this, arguments\); \} catch \(e\) \{ fault\(a, where, e\); \} \};/);
  assert.match(read('web/desktop/desktop.js'),/layoutRecovery\(on\)[\s\S]*CHATS.renderChatList/);assert.match(read('web/desktop/desktop.css'),/data-layout-recovery="chats"\] \.bar/);
 });

@@ -7,8 +7,10 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { modelContext } from './fixtures/chats-list-model.mjs';
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
+import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
-const kitSrc = read('web/core/chat-kit.js'), live = read('web/live.js'), chats = read('web/core/chats.js');
+const kitSrc = read('web/core/chat-kit.js'), live = withLiveParts(read('web/live.js')), chats = withParts(read('web/core/chats.js'));
 const RAW = JSON.parse(read('tests/fixtures/sessions-list-1360.json'));
 const SHIFT = Date.now() - 5 * 60e3 - Math.max(...RAW.data.map(s => Date.parse(s.activityAt)));
 const shift = v => typeof v === 'string' && /^\d{4}-\d\d-\d\dT[\d:.]+Z$/.test(v) ? new Date(Date.parse(v) + SHIFT).toISOString() : Array.isArray(v) ? v.map(shift) : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, shift(x)])) : v;
@@ -50,7 +52,7 @@ function device(storage = new Map(), dataset = { tweaks: ON }) {
   vm.runInContext(['const WORKING_ST =', 'const isWorking =', 'const channelsOn =', 'const markDoneOn =', 'const handledNow =', 'const chanNeeds =',
     'const chanUnread =', 'const actNeeds =', 'const actUnread =', 'const actMark =', 'const chanAt =', 'const ATT =', 'const attOf =', 'const STI_LAB =', 'const STI_TIP ='].map(line).join('\n')
     + '\nconst WosThreadTracker = { on: () => false, onFor: () => false };\n'
-    + block('/* Draft marks (wizard-ux issue 1445', '// A row\'s marker, drawn just left') + block('function actRowMark(s)', '// A thread of an agent other') + block('function stiKind(s)', 'const stiBadge =') + block('function chatRow(s', '/* Ready has three orders')
+    + block('/* Draft marks (wizard-ux issue 1445', '// A row\'s marker, drawn just left') + block('function actRowMark(s)', '// A thread of an agent other') + block('function stiKind(s)', 'const stiBadge =') + block('function chatRow(s', '/* Agent inbox (switch wizard/agent-inbox)')
     + block('const ACT_SORTS = () =>', '// The sort and Show older taps').replace('let actOlder = false;', 'let actOlder = false, rowChan = true;')
     + '\nthis.activityBody = activityBody; this.rowDraft = rowDraft; this.chanLineDraft = chanLineDraft;', c);
   return { c, L: c.WizLive, drafts: c.WosChat.drafts, events, repaints, storage, dataset };

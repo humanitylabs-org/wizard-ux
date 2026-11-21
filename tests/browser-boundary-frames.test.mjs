@@ -4,6 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { withAppParts } from './fixtures/app-parts.mjs';
 
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
 const SHELL_SRC = read('web/core/browser-boundary.js');
@@ -269,7 +270,7 @@ test('wiring: pages load the boundary right after shell-token.js; app frames get
     assert.ok(b < html.indexOf('<script src="core/appearance-host.js"></script>') && b < html.indexOf('<script src="core/app-services.js"></script>'), page);
   }
   const gate = v => "${window.WizBrowserBoundary?.enabled ? ' ' + window.WizBrowserBoundary.frameAttributes(" + v + ") : ''}";
-  assert.ok(read('web/app.js').includes('<iframe class="appframe"' + gate('frameUrl, a.id')), 'phone app frames');
+  assert.ok(withAppParts(read('web/app.js')).includes('<iframe class="appframe"' + gate('frameUrl, a.id')), 'phone app frames');
   assert.ok(read('web/desktop/desktop.js').includes(`<iframe data-own-app="\${esc(a.id || '')}"` + gate('url, a.id')), 'desktop app frames');
   const services = read('web/core/app-services.js');
   assert.match(services, /if \(window\.WizBrowserBoundary\?\.owns\(frame\)\) return window\.WizBrowserBoundary\.back\(frame, onRoot\);/);
@@ -396,7 +397,7 @@ test('dictation: a rich-text region in a sandboxed app is offered and the words 
 });
 
 test('dictation wiring: phone and desktop await the insert (a sandboxed insert answers later)', () => {
-  assert.match(read('web/app.js'), /const inserted = await FIELDS\.insert\(target, text\);/);
+  assert.match(withAppParts(read('web/app.js')), /const inserted = await FIELDS\.insert\(target, text\);/);
   assert.match(read('web/desktop/desktop.js'), /if \(await fields\(\)\.insert\(target, text\)\)/);
 });
 

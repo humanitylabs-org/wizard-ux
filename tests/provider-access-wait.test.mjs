@@ -3,8 +3,9 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
 import {helperWorkingHarness, liveSource} from './helpers/helper-working-harness.mjs';
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 const read=f=>readFileSync(new URL('../'+f,import.meta.url),'utf8');
-const chats=read('web/core/chats.js');
+const chats=withParts(read('web/core/chats.js'));
 
 test('a failed provider start is actionable, not a running thread or passive sign-in notice',()=>{
  const start=chats.indexOf('  function threadState(s, agent) {'),end=chats.indexOf('  function renderThread(',start);

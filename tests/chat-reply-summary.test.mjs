@@ -4,6 +4,8 @@ import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
 import vm from 'node:vm';
 import { fixture } from './fixtures/tweaks.mjs';
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
+import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
 
 // Reply summary (miguel/reply-summary, --wos-reply-summary: on): a long reply shows only the agent's own plain-words
 // ask (its hidden status line, served by the Agent Service as wizard_ask) as one tappable block; tapping it shows the
@@ -14,7 +16,7 @@ const kitCtx = { window: null, URL, Intl, Date, navigator: {}, location: { origi
   document: { addEventListener() {}, querySelector() { return null; } }, addEventListener() {} };
 kitCtx.window = kitCtx; modelContext(kitCtx); vm.runInContext(read('web/core/chat-kit.js'), kitCtx);
 const KIT = kitCtx.WosChat;
-const chats = read('web/core/chats.js');
+const chats = withParts(read('web/core/chats.js'));
 const line = start => { const a = chats.indexOf(start); assert.ok(a >= 0, start); return chats.slice(a, chats.indexOf('\n', a) + 1); };
 const slice = (start, end) => { const a = chats.indexOf(start), b = chats.indexOf(end, a); assert.ok(a >= 0 && b > a, `${start} .. ${end}`); return chats.slice(a, b); };
 
@@ -121,7 +123,7 @@ test('the host: choices are box-wide prefs; the package marks the view on while 
   assert.match(src, /'Short answers start collapsed'/);
   assert.match(src, /'Applies to new replies; earlier ones keep theirs\.'/);
   assert.deepEqual(JSON.parse(read('web/tweaks/miguel/reply-summary/manifest.json')).capabilities, ['layout', 'settings']);
-  assert.match(read('web/live.js'), /replySummary: \['wos\.chats\.replySummary\.v1'/, 'live.js caches the box-wide choice');
+  assert.match(withLiveParts(read('web/live.js')), /replySummary: \['wos\.chats\.replySummary\.v1'/, 'live.js caches the box-wide choice');
 });
 
 test('Look lists a tweak\'s own options under its switch only while it is on; other rows are unchanged', () => {

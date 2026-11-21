@@ -64,7 +64,7 @@ avoids navigation/request stalls through a multiplexed all-assets SSH tunnel.
 
 Run each script with its header's environment (Playwright via `PW` / `NODE_PATH`,
 Chrome via `QA_CHROME`, private screenshots via `QA_OUT` / `QA_SHOTS`).
-`qa-own-views.cjs` also needs `QA_APP_VIEWS_MODULE` naming the companion Agent
+`qa/scripts/qa-own-views.cjs` also needs `QA_APP_VIEWS_MODULE` naming the companion Agent
 Service's `server/app-views.mjs`; it starts its own isolated origin and fixture
 files. Companion reader revision used: `d7d08d4` (unmodified).
 

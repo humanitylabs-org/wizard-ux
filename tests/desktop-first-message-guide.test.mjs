@@ -4,6 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
+import { withDesktopParts } from './fixtures/desktop-parts.mjs';
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
 const SRC = read('web/core/tour.js');
 
@@ -15,7 +16,7 @@ test('the desktop shell loads the tour module and its styles, before setup-launc
   assert.ok(i('src="core/tour.js"') < i('src="core/setup-launch.js"') && i('src="core/setup-launch.js"') < i('src="desktop/desktop.js"'));
 });
 test('desktop adapter: first-run guide, ?view=tour and the Keys sheet replay all reach WosTour.desk', () => {
-  const js = read('web/desktop/desktop.js');
+  const js = withDesktopParts(read('web/desktop/desktop.js'));
   // First run is the Welcome modal now; the guide stays reachable from ?view=tour and the Keys sheet.
   assert.match(js, /window\.WosWelcome\?\.boot\(\{/);
   assert.doesNotMatch(js, /WosSetupLaunch\?\.boot\(/);
@@ -76,7 +77,7 @@ test('Skip this step shows the end card; Skip tour ends it, remembers and says w
   assert.equal(u.D.active, false); assert.equal(u.T.done(), true); assert.ok(u.calls.some(c => /Keys and help/.test(c)));
 });
 test('Esc / Back registers the desktop guide above surface navigation; newer sheets win by recency', () => {
-  const js = read('web/desktop/desktop.js'), shared = read('web/core/escape-back.js');
+  const js = withDesktopParts(read('web/desktop/desktop.js')), shared = read('web/core/escape-back.js');
   assert.match(js, /WizEscapeBack\.installOwners\(escapeBack/);
   assert.match(shared, /add\('tour',[^\n]+desk\.finish\('skip'\)/);
   assert.ok(shared.indexOf('if (top)') < shared.indexOf('if (surface?.())'));
