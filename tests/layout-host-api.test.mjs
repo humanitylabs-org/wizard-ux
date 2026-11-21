@@ -9,6 +9,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
 import vm from 'node:vm';
 import { fixture } from './fixtures/tweaks.mjs';
+import { withSkinHostParts } from './fixtures/skin-host-parts.mjs';
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 
 const root = new URL('../', import.meta.url);
@@ -28,7 +29,7 @@ function desk({ layout = null } = {}) {
     document: { baseURI: 'https://wizard.test/wizard-os-home/', documentElement: { dataset: { shell: 'desktop' } }, createElement: el, head: { appendChild(n) { links.push(n); } }, querySelector: () => null, getElementById: () => null, addEventListener() {} },
   };
   ctx.window = ctx; ctx.window.WosSkin = { current: 'obsidian', list: [], pkgOf: () => null }; ctx.module = { exports: {} };
-  runWithChatsModel(read('web/core/skin-host.js'), ctx);
+  runWithChatsModel(withSkinHostParts(read('web/core/skin-host.js')), ctx);
   const host = ctx.window.WosSkinHost; let api = null;
   host._test.setImporter(async () => ({ default: a => { api = a; return () => calls.push(['teardown']); } }));
   const rows = { working: [{ id: 'w1', title: 'Working one', kind: 'working', actions: [] }], ready: [{ id: 'r1', title: 'Ready one', kind: 'ready', needs: true, actions: ['snooze', 'done'] }] };
@@ -174,7 +175,7 @@ test('apps.logo: the same installed logo the Desks view shows (WizCore.appLogo),
 test('a trusted tweak may switch only its own author\'s tweaks, through the device tweak mix (api.settings.toggleTweak)', async () => {
   assert.equal(JSON.parse(read('web/tweaks/miguel/ai-apps/manifest.json')).name, 'Different shell view - AI apps');
   assert.equal(JSON.parse(read('web/tweaks/miguel/ai-apps/manifest.json')).view, 'AI apps', 'a shell view');
-  const host = read('web/core/skin-host.js');
+  const host = withSkinHostParts(read('web/core/skin-host.js'));
   assert.match(host, /toggleTweak\(id\) \{\n\s+if \(!trusted \|\| a\.dead\) throw/);
   assert.match(host, /!id\.startsWith\(a\.id\.split\('\/'\)\[0\] \+ '\/'\)\) return Promise\.resolve\(false\)/, 'own author only');
   assert.match(host, /window\.WosExperience\?\.toggle\?\.\(id\)/);
@@ -211,7 +212,7 @@ test('Orbs view apps ARE desks (Miguel, v8): one app per desk, saved and synced 
   const r = globalThis.WosWorkspaceSync.reconcile(local, W, JSON.parse(JSON.stringify(shared)), { fresh: id => ({ id, wins: [], focus: null }) });
   assert.deepEqual(r.removed, []); assert.deepEqual(r.desks.map(d => d.wins), [['wa'], ['wb']]);
   // a tweak reload (dispose + re-run every tweak) never blinks the panel off: that dropped every running app
-  const host = read('web/core/skin-host.js');
+  const host = withSkinHostParts(read('web/core/skin-host.js'));
   assert.match(host, /if \(!on && panelOn && panelHold\) return;/);
   assert.match(host, /panelHold\+\+;\n    try \{ return await loadTweaksNow\(\.\.\.args\); \} finally \{ panelHold--; panelSync\(\); \}/);
   assert.match(host, /panelHold\+\+;\n    try \{ return await loadLayoutNow\(id\); \} finally \{ panelHold--; panelSync\(\); \}/, 'and while the layout itself loads again');

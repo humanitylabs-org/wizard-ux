@@ -34,7 +34,7 @@
     ['c', 'core/links.css'], ['c', 'core/downloads.css'], ['c', 'core/appearance-host.css'],
     ['c', 'core/resources.css'], ['c', 'core/home-surfaces.css'], ['c', 'core/sigils.css'], ['c', 'core/app-route.css'],
     ['c', 'core/desks.css'], ['c', 'core/tour.css'], ['c', 'core/welcome.css'], ['c', 'core/skins.css'],
-    ['c', 'core/orb-switcher.css'], ['e', 'core/escape-back.js'], ['x', 'core/skin-host.js'],
+    ['c', 'core/orb-switcher.css'], ['e', 'core/escape-back.js'], ['x', 'core/skin-host-boot.js'], ['x', 'core/skin-host-logos.js'], ['x', 'core/skin-host-orbbar.js'], ['x', 'core/skin-host-rows.js'], ['x', 'core/skin-host-summary.js'], ['x', 'core/skin-host.js'],
     ['m', 'core/thread-swipe-back.js'], ['x', 'core/edge-peek.js'], ['c', 'core/skin-frame.css'],
     ['c', 'kit/shell-tokens.css'], ['c', 'kit/controls.css'], ['e', 'core/my-skin.js'], ['x', 'core/experience.js'],
     ['x', 'core/look-sync.js'], ['e', 'core/core.js'], ['e', 'core/config.js'], ['x', 'core/reach.js'],

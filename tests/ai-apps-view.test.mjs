@@ -16,6 +16,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { fixture } from './fixtures/tweaks.mjs';
+import { withSkinHostParts } from './fixtures/skin-host-parts.mjs';
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 
 const root = new URL('../', import.meta.url);
@@ -175,7 +176,7 @@ test('packaging: an ordinary Miguel view tweak, off by default; the desktop wear
   await d.mount('miguel/ai-apps'); await settle();
   assert.equal(d.host.layout, 'ai-apps', 'the desktop wears it too (desktop.js)'); assert.equal(d.doc.documentElement.dataset.layout, 'ai-apps');
   await d.clear(); assert.equal(d.host.layout, 'classic'); assert.ok(!d.doc.head.children.some(l => /layouts\//.test(l.href || '')));
-  const host = read('web/core/skin-host.js');
+  const host = withSkinHostParts(read('web/core/skin-host.js'));
   assert.match(host, /Object\.freeze\(\{ id: 'ai-apps', name: 'AI apps',/);
   assert.match(host, /const VIEW_LAYOUTS = new Set\(\['ai-apps'\]\);/);
   assert.match(host, /if \(VIEW_LAYOUTS\.has\(layoutId\) && standardLayout !== layoutId && !\(layoutHolder && tweaks\.has\(layoutHolder\)\)\) setLayout\('classic'\);/, 'only unowned stale layouts go back to Desks; a standard desktop layout stays');
@@ -669,7 +670,7 @@ test('round 4: the composer: no voice button of its own (the orb talks), the mic
 });
 
 test('core hooks: the phone adapter lists chats with Chats\' own actions and acts through Chats; the layout API passes only known actions', () => {
-  const app = read('web/app.js'), host = read('web/core/skin-host.js');
+  const app = read('web/app.js'), host = withSkinHostParts(read('web/core/skin-host.js'));
   const fn = app.match(/sessionList: (\(\) => window\.WizChatsListModel\.sessionList\([^\n]+\)),\n    sessionAct/)[1];
   const s = (id, extra = {}) => ({ id, title: id.toUpperCase(), status: 'completed', ...extra });
   const LIVE = { ok: true, workGroups: () => ({ working: [s('w')], ready: [s('r'), s('n')], archive: [s('a')] }), isNew: x => x.id === 'n', cardAt: () => '' };
@@ -813,7 +814,7 @@ test('round 5: home button in the middle, the switcher on Home only, the Ready c
   assert.match(css, /\.aa-count \{[^}]*background: var\(--amber, var\(--aa-ink\)\);/, 'the Ready count in Chats\' amber');
   assert.ok(!/\.aa-viewall|\.aa-dot \{|\.aa-mid \{/.test(css), 'View all, the bare dot and the name are gone');
   // the dock orb's swipe up: a New chat with the cursor in its composer, focused within the swipe (the keyboard comes up)
-  const app = read('web/app.js'), host = read('web/core/skin-host.js');
+  const app = read('web/app.js'), host = withSkinHostParts(read('web/core/skin-host.js'));
   const fn = app.match(/function orbSwipeNew\(\) \{[\s\S]*?\n  \}/)[0];
   assert.match(fn, /const w = showChats\(\); if \(!w\) return;\n    CHATS\.openChat\(w\.id, '__new__'\);/);
   assert.match(fn, /winEl\(w\.id\)\?\.querySelector\('\.ch-compose textarea'\)/); assert.match(fn, /ta\.focus\(\{ preventScroll: true \}\)/);
@@ -859,7 +860,7 @@ test('round 5: notifications in the list: Chats\' own items as plain rows with a
   assert.match(css, /\.aa-row\[data-note\] \.aa-bell \{ color: var\(--amber/); assert.match(css, /\.aad-rw\[data-note\] \.aad-bell \{ color: var\(--amber/);
   assert.match(css, /\.aad-rw\[data-note\] \.aad-st\.is-new \{ background: var\(--amber/); assert.match(css, /\.aad-fly-i\[data-note\] \.aad-bell \{[^}]*var\(--amber/);
   // the shell side: sessions.list() adds the inbox's items (while a package lists them), open / act go to its handler
-  const host = read('web/core/skin-host.js');
+  const host = withSkinHostParts(read('web/core/skin-host.js'));
   const src = host.match(/  const NOTE_ID = [\s\S]*?\n  function inboxAct\(action, id\) \{[^\n]*\n/)[0];
   const calls = [], items = [{ id: 'a', title: '**Pay** card', time: 300, read: false, app: 'money', priority: 4 }, { id: 'b', message: 'Backup done\nok', time: 100, read: true }, { id: 'c', title: 'old', time: 50, archived: true }];
   const ctx = { isDoc: true, window: { WosBell: { items: () => items } }, inboxThreads: new Map([['wizard/unified-inbox', { list: true, act: (a, i) => calls.push([a, i]) }]]) };
@@ -1031,7 +1032,7 @@ test('the Settings cog carries the System count (WosBell.attention through api.d
     for (const c of cogs) { const n = c.querySelector('.' + (shell === 'phone' ? 'aa' : 'aad') + '-setn'); assert.ok(n.hidden && n.textContent === '', shell + ': none, no number'); assert.equal(c.getAttribute('aria-label'), 'Settings'); }
     if (typeof off === 'function') off();
   }
-  const host = read('web/core/skin-host.js');
+  const host = withSkinHostParts(read('web/core/skin-host.js'));
   assert.match(host, /attention\(watch\) \{[\s\S]*?window\.WosBell\?\.attention\?\.\(\)[\s\S]*?'wizard:notify-attention'/, 'the layout API reads WosBell.attention and its change event');
 });
 
@@ -1203,7 +1204,7 @@ test('round 7: a hold (phone) or a right click (desktop) on a Home app icon offe
     assert.deepEqual(offered, ['money'], 'the stock sheet (from its menu; a build without the shared menu offers it at once)');
     const go = w.st.gone.length; money.dispatchEvent(new FakePointerEvent('click')); assert.equal(w.st.gone.length, go, 'the hold does not also open it');
   }
-  const host = read('web/core/skin-host.js');
+  const host = withSkinHostParts(read('web/core/skin-host.js'));
   assert.match(host, /offer: id => \{ const x = live\(\) \? homeScreenApp\(id\) : null; return x \? !!window\.WizHomeScreenApps\.offer\(x\) : false; \},/, 'the stock sheet, not a copy');
   assert.match(host, /if \(x && !x\.system && H\.canOffer\(x\)\) return x;/, 'the Desks\' own checks (no system apps)');
   const dh = read('web/desktop.html');
@@ -1550,7 +1551,7 @@ test('round 15 desktop: the open apps as vertical tabs on the right (1:1 with th
   assert.match(js, /if \(pane && !chatOn && chat && !chat\.querySelector\('\.pane-main \.ch-compose'\) && !fixingBehind\) \{/, 'the Chats desk behind the panel never shows its bare list');
   assert.ok(css.includes('--aad-chat-w: var(--aad-pane-chat-width)') && css.includes('--aad-app-w: var(--aad-pane-app-width)'), 'both docked widths come from the tested core geometry');
   assert.ok(css.includes(`${P}[data-vc-sheet] .aad-orb { opacity: 0; visibility: hidden; }`), 'the orb steps aside under the picker');
-  const host = read('web/core/skin-host.js'), dj = read('web/desktop/desktop.js');
+  const host = withSkinHostParts(read('web/core/skin-host.js')), dj = read('web/desktop/desktop.js');
   assert.match(host, /close: desk => live\(\) && Number\.isInteger\(desk\) && desk >= 0 \? !!shell\.closeDesk\?\.\(desk\) : false,/);
   assert.match(dj, /closeDesk: i => Number\.isInteger\(i\) && i >= 0 && i < ws\.length \? closeDesktop\(i\) : false,/, 'the desktop\'s own closeDesktop (its ✕)');
 });
@@ -1629,7 +1630,7 @@ test('round 14: Archive stays quieter but readable on the light skins (sidebar, 
   assert.match(p, /\.aa-sec\[data-sec="archive"\] > :is\(span, \.aa-sec-c\) \{ opacity: \.85; \}/);
 });
 test('round 14: a full-width footer along an app\'s bottom is lifted clear of the orb even when its body covers the probe point (Wisdom\'s page count)', () => {
-  const host = read('web/core/skin-host.js');
+  const host = withSkinHostParts(read('web/core/skin-host.js'));
   assert.match(host, /querySelectorAll\('nav, footer, \[role="navigation"\], \[role="tablist"\]'\)\]\.find\(n => \{ const r = n\.getBoundingClientRect\(\); return r\.width >= vw \* \.8 && r\.height > 0 && r\.height < 160 && r\.bottom >= vh - 2 && r\.bottom <= vh \+ 2 && shownIn\(d, n\); \}\)/);
   const i = host.indexOf("querySelectorAll('nav, footer"), j = host.indexOf('bar = bottomBar(d, vw, vh)');
   assert.ok(i > 0 && i < j, 'looked for before the controls-block fallback (a footer of plain text has no controls)');
@@ -1712,7 +1713,7 @@ test('round 16: drag to rearrange the right column: within Pinned, within the op
     (await layout()).default(x.w.api);
     assert.deepEqual(x.w.qa('.aad-vtab').map(r => r.dataset.app), want, manualOn ? 'his order (the badge stays on its row)' : 'badged first by default');
   }
-  const host = read('web/core/skin-host.js'), dj = read('web/desktop/desktop.js');
+  const host = withSkinHostParts(read('web/core/skin-host.js')), dj = read('web/desktop/desktop.js');
   assert.match(host, /move: \(from, to\) => live\(\) && Number\.isInteger\(from\) && Number\.isInteger\(to\) && from >= 0 && to >= 0 \? !!shell\.moveDesk\?\.\(from, to\) : false,/, 'the layout hook');
   assert.match(dj, /moveDesk: \(from, to\) => Number\.isInteger\(from\) && Number\.isInteger\(to\) \? moveDesk\(from, to\) : false,/, 'the stock arrange (desk drag on the bar, ⌥⇧[ ])');
   const css = read('web/layouts/ai-apps/desktop.css');
@@ -1846,7 +1847,7 @@ test('round 18 phone: the tidy line under + opens the sentence sheet; the tidy t
 });
 
 test('round 18 core: Ready\'s order is the stock Chats Filter choice (its key, the box preferences); rows carry the stock Priority rank', () => {
-  const host = read('web/core/skin-host.js');
+  const host = withSkinHostParts(read('web/core/skin-host.js'));
   assert.match(host, /READY_ORDER_KEY = 'wos\.chats\.readyOrder\.v1'/, 'the stock key (core/chats.js)');
   assert.match(host, /setOrder: o => \{[\s\S]*?localStorage\.setItem\(READY_ORDER_KEY, o\)[\s\S]*?WizLive\?\.putPrefs\?\.\(\{ readyOrder: o \}\)[\s\S]*?'wos:prefs'/, 'saved where Chats saves it, shared, and Chats repaints');
   assert.match(withParts(read('web/core/chats.js')), /const READY_ORDER_KEY = 'wos\.chats\.readyOrder\.v1'/, 'Chats reads the same key');
@@ -2014,7 +2015,7 @@ test('round 19 item 2 / round 22 desktop: Sort (Newest / Oldest, the stock key) 
   const css = read('web/layouts/ai-apps/desktop.css');
   assert.match(css, /\.aad-sortb \{[^}]*font: 400 0\.6875rem \/ 1 var\(--wz-font-ui\)/, 'the control in the shell\'s font token');
   assert.match(css, /\.aad-sortmenu \.aad-pop-i \{/, 'its menu is the view\'s own menu (the shell type), not a native list');
-  const host = read('web/core/skin-host.js');
+  const host = withSkinHostParts(read('web/core/skin-host.js'));
   assert.match(host, /setting\(id, node\) \{[\s\S]*?W\.register\(\{ id: 'layout-' \+ id, page: 'chats',[\s\S]*?a\.offs\.add\(off\); return off;/, 'core: a layout\'s group in Settings › Chats & app screens, released on teardown');
 });
 
@@ -2037,7 +2038,7 @@ test('round 19 item 3 desktop: a quieter expanded sidebar (small muted normal-we
 test('round 21: no legend card anywhere: the shell draws only the view\'s keycaps (no desktop chips, no footer line)', async () => {
   const { keyLegend } = await import(new URL('web/layouts/ai-apps/parts.js', root).href);
   assert.equal(keyLegend, undefined, 'no legend helper');
-  const desk = read('web/desktop/desktop.js'), host = read('web/core/skin-host.js');
+  const desk = read('web/desktop/desktop.js'), host = withSkinHostParts(read('web/core/skin-host.js'));
   assert.doesNotMatch(desk, /keysCard|kh-keys|keyLegend/, 'no legend card in the shell');
   assert.doesNotMatch(host, /legend\(fn\)|keyLegend/, 'no api.keys.legend');
   assert.doesNotMatch(read('web/desktop/desktop.css'), /\.kh-keys/); assert.doesNotMatch(read('web/layouts/ai-apps/desktop.css'), /\.kh-keys/);
@@ -2831,7 +2832,7 @@ test('agent choices: one agent (or none known) = no control at all', async () =>
 });
 
 test('agent choices: the shell side reuses Chats\' Focus (no second router) and the layout API exposes it', () => {
-  const host = noComments(read('web/core/skin-host.js')), desk = noComments(read('web/desktop/desktop.js')), chats = withParts(read('web/core/chats.js'));
+  const host = noComments(withSkinHostParts(read('web/core/skin-host.js'))), desk = noComments(read('web/desktop/desktop.js')), chats = withParts(read('web/core/chats.js'));
   assert.match(host, /setFocus: id => shell\?\.agentFocusSet \? !!shell\.agentFocusSet\(/);
   assert.match(desk, /agentFocusSet: id => \{ if \(id\) \{ void openAgentChats\(id\); return true; \} const w = findWin\(mainChats\); return !!w && CHATS\.setFocus\(w, null\); \}/, 'picking = openAgentChats (CHATS.setFocus), All = setFocus(null)');
   assert.match(chats, /function focusRows\(w\) \{\s*if \(!focusOf\(w\)\) return null;[\s\S]*?focusMatches\(w, s\)/, 'the list is Chats\' own focusMatches');
@@ -2847,7 +2848,7 @@ test('agent choices: the shell side reuses Chats\' Focus (no second router) and 
  * evaluates the real `agents: Object.freeze({ ... })` block of makeApi() with only the names that block may use
  * (shell, need): any other free identifier is a ReferenceError the moment the method is called. */
 const agentsBlock = () => {
-  const src = read('web/core/skin-host.js'), at = src.indexOf('agents: Object.freeze({');
+  const src = withSkinHostParts(read('web/core/skin-host.js')), at = src.indexOf('agents: Object.freeze({');
   assert.ok(at > 0, 'agents block found');
   let i = src.indexOf('{', at), depth = 0, j = i;
   for (; j < src.length; j++) { if (src[j] === '{') depth++; else if (src[j] === '}' && --depth === 0) break; }

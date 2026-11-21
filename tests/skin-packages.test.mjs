@@ -127,7 +127,7 @@ function page({ stored = 'nebula', touch = true } = {}) {
     pkgOf: id => { const s = S.find(x => x.id === id); return s && s.pkg ? { ...s.pkg } : null; },
   };
   ctx.module = { exports: {} };
-  vm.runInNewContext(read('web/core/skin-host.js'), ctx);
+  vm.runInNewContext(withSkinHostParts(read('web/core/skin-host.js')), ctx);
   const host = ctx.window.WosSkinHost;
   const imported = [];
   host._test.setImporter(async u => { imported.push(u); const d = u.split('/skins/')[1].split('/')[0]; return import(d === 'fixture' ? new URL('tests/fixtures/skins/fixture/skin.js', root) : new URL(`web/skins/${d}/skin.js`, root)); });
@@ -271,3 +271,4 @@ test('the shell wires the host: head order, adapter, dock claim, render hooks', 
 
 // Tweaks share the package lint surface; behaviour belongs in web/tweaks, not new skin scripts.
 import './fixtures/tweak-lint.mjs';
+import { withSkinHostParts } from './fixtures/skin-host-parts.mjs';

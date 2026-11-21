@@ -5,7 +5,8 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { fixture, read } from './fixtures/tweaks.mjs';
-const hostSource = process.env.QA_SETTINGS_SOURCE ? readFileSync(process.env.QA_SETTINGS_SOURCE + '/web/core/skin-host.js', 'utf8') : read('web/core/skin-host.js');
+import { withSkinHostParts } from './fixtures/skin-host-parts.mjs';
+const hostSource = process.env.QA_SETTINGS_SOURCE ? readFileSync(process.env.QA_SETTINGS_SOURCE + '/web/core/skin-host.js', 'utf8') : withSkinHostParts(read('web/core/skin-host.js'));
 const boot = options => fixture({ hostSource, ...options });
 const cases = {
   stored: { initialStorage: { 'wos.layout': 'ai-apps' } },

@@ -3,6 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { fixture, read } from './fixtures/tweaks.mjs';
+import { withSkinHostParts } from './fixtures/skin-host-parts.mjs';
 
 const VIEW = 'wos.desktop-view.v1';
 
@@ -81,7 +82,7 @@ test('layout CSS keeps Classic hidden through boot and the layout clears the vei
 
 test('Classic shell reads the early claim, and releasing a reloading layout never re-opens the list', () => {
   assert.match(read('web/desktop/desktop.js'), /var ownsChatList = !!globalThis\.WosSkinHost\?\.chatsClaimed\?\.\(\)/);
-  assert.match(read('web/core/skin-host.js'), /shell\.ownsChatList\(chatsClaimed\(\)\)/);
+  assert.match(withSkinHostParts(read('web/core/skin-host.js')), /shell\.ownsChatList\(chatsClaimed\(\)\)/);
 });
 
 // Issue 1556: on a slow load (cold cache, tailnet, Mac app) the veil used to drop on a 5 s timer and Classic Desks drew

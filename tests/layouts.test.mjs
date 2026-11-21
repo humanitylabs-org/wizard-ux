@@ -10,6 +10,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { withSkinHostParts } from './fixtures/skin-host-parts.mjs';
 
 const root = new URL('../', import.meta.url);
 const read = p => readFileSync(new URL(p, root), 'utf8');
@@ -37,7 +38,7 @@ function page({ layout = null, search = '' } = {}) {
   ctx.window = ctx;
   ctx.window.WosSkin = { current: 'nebula', list: [{ id: 'nebula', name: 'Nebula' }], pkgOf: () => null };
   ctx.module = { exports: {} };
-  vm.runInNewContext(read('web/core/skin-host.js'), ctx);
+  vm.runInNewContext(withSkinHostParts(read('web/core/skin-host.js')), ctx);
   const host = ctx.window.WosSkinHost, imported = [];
   let mod = { default: api => { const n = el('button'); api.mount(n); api.orb.onTap(() => true); } };
   host._test.setImporter(async u => { imported.push(u); return mod; });

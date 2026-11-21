@@ -7,10 +7,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { withSkinHostParts } from './fixtures/skin-host-parts.mjs';
 
 const root = new URL('../', import.meta.url);
 const read = p => readFileSync(new URL(p, root), 'utf8');
-const host = read('web/core/skin-host.js');
+const host = withSkinHostParts(read('web/core/skin-host.js'));
 
 /* a tiny DOM: enough for orbTabs (tags, a few attribute selectors, rects, closest, contains) */
 class N {
