@@ -2,8 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
+import { withDesktopParts } from './fixtures/desktop-parts.mjs';
 const read = p => readFileSync(new URL('../web/'+p,import.meta.url),'utf8');
-const core=read('core/escape-back.js'),desktop=read('desktop/desktop.js'),phone=read('app.js'),chats=read('core/chats.js');
+const core=read('core/escape-back.js'),desktop=withDesktopParts(read('desktop/desktop.js')),phone=read('app.js'),chats=read('core/chats.js');
 function fixture() {
  const hits=[], state={open:'',voice:false};
  const w={}, c={window:w,document:{documentElement:{}},MutationObserver:class {observe(){} disconnect(){}},queueMicrotask(){},hits,state,log(){}};

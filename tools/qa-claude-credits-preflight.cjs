@@ -7,7 +7,7 @@ assert.match(read('web/desktop.html'),/<button id="logo"[^>]*aria-label="Home"/)
 assert.ok(read('web/desktop/desktop.js').includes("$('#logo').addEventListener('click', () => goHome());"));
 assert.match(read('web/desktop/desktop.js'),/homeOpen = true; store\.set\('homeOpen', true\); render\(\);/);
 assert.match(read('web/desktop/desktop.js'),/home\.hidden = !homeOpen;\s+if \(homeOpen\) paintHome\(home, homeHtml\(null\)\);/);
-assert.ok(read('web/desktop/desktop.js').includes("window.WosResources?.home() || ''"));
+assert.ok(read('web/desktop/desktop-home.js').includes("window.WosResources?.home() || ''")); // homeHtml moved out verbatim (issue 1665)
 assert.ok(read('web/core/skin-host.js').includes("else if (!explicit && chosen === 'classic') chosen = 'ai-apps';"));
 assert.match(read('web/layouts/ai-apps/desktop.css'),/#bar :is\(#logo,[^\n]*display: none !important/);
 assert.ok(!/outerHTML\s*=|dataset\.tweaks\s*=/.test(source),'no widget/dataset injection');

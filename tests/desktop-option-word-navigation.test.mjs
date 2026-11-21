@@ -3,11 +3,12 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import vm from 'node:vm';
+import { withDesktopParts } from './fixtures/desktop-parts.mjs';
 
 // The very same assertions can run against the exact serving donor, without editing it.
 const root = process.env.QA_SOURCE_ROOT || new URL('../', import.meta.url).pathname;
 const read = file => readFileSync(resolve(root, file), 'utf8');
-const desktop = read('web/desktop/desktop.js');
+const desktop = withDesktopParts(read('web/desktop/desktop.js'));
 const layout = read('web/layouts/ai-apps/desktop.js');
 function between(src, start, end) {
   const a = src.indexOf(start), b = src.indexOf(end, a + start.length);

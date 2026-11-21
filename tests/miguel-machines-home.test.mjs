@@ -4,6 +4,7 @@ import { fixture, read } from './fixtures/tweaks.mjs';
 import { withAppParts } from './fixtures/app-parts.mjs';
 import { withSkinHostParts } from './fixtures/skin-host-parts.mjs';
 import { withSettingsParts } from './fixtures/settings-parts.mjs'; // settings.js parts moved out verbatim (issue 1665)
+import { withDesktopParts } from './fixtures/desktop-parts.mjs';
 
 // Miguel's Machines-on-Home tweak and the two narrow host hooks it needs (home-main mount + api.on('home'),
 // data.read.app). Stock Home stays plain markup: the slot is empty and takes no space without a package.
@@ -43,7 +44,7 @@ test("api.on('home') needs layout; data.read.app is trusted-only, GET-only and p
   await g.clear();
 });
 test('stock Home markup carries an empty home-main slot that takes no space; core never names the package', () => {
-  const app = withAppParts(read('web/app.js')), desk = read('web/desktop/desktop.js'), host = withSkinHostParts(read('web/core/skin-host.js'));
+  const app = withAppParts(read('web/app.js')), desk = withDesktopParts(read('web/desktop/desktop.js')), host = withSkinHostParts(read('web/core/skin-host.js'));
   assert.match(app, /<div class="home"><div data-slot="home-main" hidden><\/div><nav class="home-tools"/);
   assert.match(desk, /<div class="home-in"><div data-slot="home-main" hidden><\/div>/);
   assert.doesNotMatch(app + desk, /\.innerHTML = (renderHome|homeHtml)\(/, 'every Home paint goes through paintHome');
@@ -71,7 +72,7 @@ test('api.back.push: newest package overlay closes first on shell Back; released
   r1(); assert.equal(f.host.back(), false); r1();
   api.back.push(() => closed.push(3)); await f.clear();
   assert.equal(f.host.back(), false, 'teardown removes open entries'); assert.deepEqual(closed, [2]);
-  const app = withAppParts(read('web/app.js')), desk = read('web/desktop/desktop.js');
+  const app = withAppParts(read('web/app.js')), desk = withDesktopParts(read('web/desktop/desktop.js'));
   assert.match(app, /escapeOverlay: close => phoneBack\.push\(close\)/);
   assert.match(desk, /escapeOverlay: close => escapeBack\.push\(close\)/);
   assert.match(withSkinHostParts(read('web/core/skin-host.js')), /shell\?\.escapeOverlay\?\.\(entry.close\)/);
@@ -92,7 +93,7 @@ test('machines-home: one inline map, the same on every workspace', () => {
   assert.match(css, /:is\(\.home, \.home-in\):has\(\[data-slot="home-main"\] > \.mh-root\) \.constellation \{ display: none; \}/);
   assert.doesNotMatch(css, /mh-orbit|mh-spin|rotate\(360/, 'nothing spins');
   for (const b of ['setTimeout', 'setInterval', 'requestAnimationFrame', 'innerHTML', 'localStorage', 'querySelector']) assert.ok(!src.includes(b), b);
-  const host = withSkinHostParts(read('web/core/skin-host.js')), app = withAppParts(read('web/app.js')), desk = read('web/desktop/desktop.js');
+  const host = withSkinHostParts(read('web/core/skin-host.js')), app = withAppParts(read('web/app.js')), desk = withDesktopParts(read('web/desktop/desktop.js'));
   assert.match(host, /\.\.\.\(trusted \? \{ sessions: Object\.freeze/, 'sessions is trusted-only');
   for (const s of [app, desk]) { assert.match(s, /sessions: \(\) => \{/); assert.match(s, /openSessions: kind =>/); }
 });
@@ -186,7 +187,7 @@ test('api.nav.ask: trusted only, namespaced home: key, sends through the shell c
 });
 
 test('Home buttons that ask the agent open Chats with the draft even when no Chats window is on this desk', () => {
-  const phone = withAppParts(read('web/app.js')), desk = read('web/desktop/desktop.js');
+  const phone = withAppParts(read('web/app.js')), desk = withDesktopParts(read('web/desktop/desktop.js'));
   assert.match(phone, /contextDraft: \(key, item, words, draft\) => \{ let w = skinChatsWin\(\); if \(!w\) \{ openChatsList\(\); w = skinChatsWin\(\); \}/, 'phone: Home opens Chats first');
   assert.match(desk, /contextDraft: \(key, item, words, draft\) => \{ let w = homeOpen \? null : skinChatsWin\(\); if \(!w\) \{ openChatsList\(\); w = skinChatsWin\(\); \}/, 'desktop: Home and the Settings panel open Chats first');
 });
@@ -238,7 +239,7 @@ test('second review: no unverified all-clear, stock loading state, Settings dial
     assert.match(src, /Not every machine has been checked from the internet yet/, who);
     assert.match(src, /netBox\.replaceChildren\(why \? h\('span', \{ cls: 'mh-more-info', text: why \}\) : h\('span', \{ cls: 'mh-wait'/, who + ': loading mark on the Security page');
   }
-  const desk = read('web/desktop/desktop.js');
+  const desk = withDesktopParts(read('web/desktop/desktop.js'));
   assert.match(desk, /if \(!settingsModal \|\| e\.key !== 'Tab'\) return;/, 'Tab stays inside the Home Settings dialog');
   assert.match(desk, /watchEscape\('voice-menu', \(\) => !voiceMenu.hidden, \(\) => closeVoiceMenu\(\)\)/, 'voice menu participates in the shared recency stack');
   assert.match(desk, /watchEscape\('palette', \(\) => !pal.hidden/);
@@ -258,7 +259,7 @@ test('third review: AI page offers sign-in with no accounts, backup read failure
 });
 
 test('fourth review: sign-in state survives normalisation, managed workspaces get honest System pages, Dictate keeps its field through the mic menu', () => {
-  const usage = read('web/core/usage.js'), desk = read('web/desktop/desktop.js');
+  const usage = read('web/core/usage.js'), desk = withDesktopParts(read('web/desktop/desktop.js'));
   assert.match(usage, /const signedOut = \['signed_out', 'auth', 'reauth'\]\.includes\(p\.status\)/);
   assert.match(usage, /\['stale', 'unavailable', 'signed_out', 'auth', 'reauth'\]\.includes\(p\.status\) \? p\.status : a\.status, signedOut:childOut \|\| a\.signedOut === true \|\| p\.signedOut === true/, 'a group sign-out reaches its accounts');
   for (const who of ['miguel']) {
@@ -295,7 +296,7 @@ test('sixth review: stale AI and backup readings say so; the AI page is scoped o
 });
 
 test('seventh review: one switch per Home map group; desktop Ready leaves the open thread', () => {
-  const exp = read('web/core/experience.js'), desk = read('web/desktop/desktop.js');
+  const exp = read('web/core/experience.js'), desk = withDesktopParts(read('web/desktop/desktop.js'));
   assert.match(exp, /\.filter\(\(\[id\]\) => shownInGroup\(id\)\)/, 'Settings lists one switch per group');
   assert.match(exp, /on: groupOf\(id\) \? groupOn\(id\) : enabled\(id\)/, 'and it shows what actually loads');
   assert.match(exp, /if \(item\.on\) await setOne\(id, false\);\n      else for \(const m of groupOf\(id\) \|\| \[id\]\) if \(m === id \|\| explicitOff\(m\)\) await setOne\(m, true\);/, 'one tap back on clears every member');
@@ -327,7 +328,7 @@ test('ninth review: failed first reads say so (AI accounts, network); availabili
 });
 
 test('tenth review: Miguel\'s Home opens Settings as the panel; the glance counts only this Wizard\'s people', () => {
-  const desk = read('web/desktop/desktop.js');
+  const desk = withDesktopParts(read('web/desktop/desktop.js'));
   assert.match(desk, /if \(homeOpen(?: \|\| settingsOver\(\))?\) \{  \/\/ from Home it is always the centred panel/, 'with Miguel\'s Home too');
   assert.match(desk, /if \(settingsWin\(\)\) hostSettings\(\);  \/\/ back into its desk window/, 'the desk window gets its panel back');
   for (const who of ['miguel']) {
@@ -349,7 +350,7 @@ test('eleventh review: the Home map keeps one shared store; a cancelled hold nev
   f.lsMap.set('wos.skin.wizard/machines-home.nick', JSON.stringify({ a: 'old' }));
   assert.equal(JSON.stringify(apis.m.storage.get('nick')), '{"a":"old"}', 'a copy kept by the retired stock package is found');
   await f.clear?.();
-  const desk = read('web/desktop/desktop.js');
+  const desk = withDesktopParts(read('web/desktop/desktop.js'));
   assert.match(desk, /for \(const ev of \['pointerleave', 'pointercancel'\]\) mic\.addEventListener\(ev, \(\) => \{ clearTimeout\(holdT\); held = false; \}\);/);
 });
 
@@ -508,7 +509,7 @@ test('final review 2: exposure dates must be real; an open warning from a last r
 test('every Back path cancels a waiting System link', () => {
   // #880 adds outside-dismiss options; every Back still cancels pending navigation.
   assert.match(withAppParts(read('web/app.js')), /function backStep\([^\n]+\n    window\.WosSettings\?\.cancelWait\?\.\(\);/);
-  assert.match(read('web/desktop/desktop.js'), /function desktopBack\(event\) \{\n    window\.WosSettings\?\.cancelWait\?\.\(\);/);
+  assert.match(withDesktopParts(read('web/desktop/desktop.js')), /function desktopBack\(event\) \{\n    window\.WosSettings\?\.cancelWait\?\.\(\);/);
   assert.match(withSettingsParts(read('web/core/settings.js')), /register, mount, route, cancelWait,/);
 });
 

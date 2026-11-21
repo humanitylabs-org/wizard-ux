@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import { withSettingsParts } from './fixtures/settings-parts.mjs'; // settings.js parts moved out verbatim (issue 1665)
+import { withDesktopParts } from './fixtures/desktop-parts.mjs';
 const read = p => fs.readFileSync(new URL('../' + p, import.meta.url), 'utf8');
 const assetList = html => [...html.matchAll(/<(?:script[^>]*src|link[^>]*href)="([^"]+)"/g)].map(m => m[1]);
 const inventory = JSON.parse(read('docs/responsive-feature-inventory.json'));
@@ -36,7 +37,7 @@ test('new entrypoint-exclusive features fail the parity guard (all current modul
 
 test('shell adapters cannot retain a second Settings renderer, picker, or hardcoded route list', () => {
   for (const f of ['web/app.js', 'web/desktop/desktop.js']) {
-    const s = read(f);
+    const s = withDesktopParts(read(f));
     assert.match(s, /WosSettings\.mount\(/);
     assert.match(s, /WosSettings\.route\(v, openSettings\)/);
     assert.doesNotMatch(s, /function (?:lookGroup|pickSkin)\(/);
