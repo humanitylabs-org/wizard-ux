@@ -270,8 +270,13 @@ class PhoneReleaseTests(unittest.TestCase):
     def test_codeowners_cover_the_release_pipeline(self):
         owners = (Path(release.__file__).parent.parent / '.github/CODEOWNERS').read_text()
         rules = dict(line.split(None, 1) for line in owners.splitlines() if line.strip() and not line.startswith('#'))
-        for path in ('/.github/**', '/tools/phone_release.py', '/.github/CODEOWNERS'):
-            self.assertEqual(rules.get(path), '@jdefleur', path)
+        # James must own every release path; CODEOWNERS itself stays James only.
+        # Other owners James approved (Oscar, 20 Nov 2026, ux#1667) may sit beside him.
+        for path in ('/.github/**', '/tools/phone_release.py'):
+            owners_for_path = (rules.get(path) or '').split()
+            self.assertIn('@jdefleur', owners_for_path, path)
+            self.assertTrue(set(owners_for_path) <= {'@jdefleur', '@oscarhenrycollins'}, path)
+        self.assertEqual(rules.get('/.github/CODEOWNERS'), '@jdefleur')
 
     def test_signing_env_cannot_undo_isolated_gradle_home(self):
         import subprocess
