@@ -31,6 +31,7 @@ public final class ShareHttp implements ShareClient.Transport {
         c.setRequestMethod(method); // Android's HttpURLConnection (OkHttp) accepts PATCH
         c.setRequestProperty("Origin", origin);
         c.setRequestProperty("Accept", "application/json");
+        ai.wizards.os.device.ShellToken.apply(c);
         return c;
     }
 
