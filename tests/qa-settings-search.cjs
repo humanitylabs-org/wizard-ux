@@ -8,13 +8,13 @@ const {chromium}=require('../tools/qa-playwright.cjs');
 const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
 const root=path.resolve(process.env.QA_WEB||path.join(__dirname,'../web')),origin='https://settings-search.test',prefix='/wizard-os-home/';
 const out=process.env.QA_OUT||'';if(out)fs.mkdirSync(out,{recursive:true});
-const ID='wizard/settings-search',WORD=process.env.QA_WORD||'skin';
+const ID='wizard/settings-search',WORD=process.env.QA_WORD||'skin',DEEPS={desktop:process.env.QA_DEEP||'Moonrise',phone:process.env.QA_DEEP||'opacity'};
 const type=f=>f.endsWith('.js')||f.endsWith('.mjs')?'text/javascript':f.endsWith('.css')?'text/css':f.endsWith('.html')?'text/html':f.endsWith('.json')?'application/json':'application/octet-stream';
 (async()=>{
  const browser=await chromium.launch({headless:true});const results=[];
  try{
   for(const on of process.env.QA_ONLY_OFF==='1'?[false]:[false,true])for(const v of [{shell:'desktop',w:1280,h:760},{shell:'desktop',w:2400,h:900},{shell:'phone',w:390,h:844}]){
-   const phone=v.shell==='phone',label=`${v.shell} ${v.w} ${on?'on':'off'}`;
+   const phone=v.shell==='phone',DEEP=DEEPS[v.shell],label=`${v.shell} ${v.w} ${on?'on':'off'}`;
    const ctx=await browser.newContext({viewport:{width:v.w,height:v.h},isMobile:phone,hasTouch:phone,serviceWorkers:'block'});
    await ctx.routeWebSocket('**/*',ws=>ws.close());
    const mix=on?{[ID]:true}:{};
@@ -68,6 +68,27 @@ const type=f=>f.endsWith('.js')||f.endsWith('.mjs')?'text/javascript':f.endsWith
     if(out)await pg.screenshot({path:path.join(out,`settings-search-${v.shell}-${v.w}-on-after.png`)});
     if(r.stacked){await pg.locator('[data-st-back]').click();await pg.waitForTimeout(300);r.backKept=await pg.evaluate(()=>document.querySelector('[data-st-search]')?.value);assert.equal(r.backKept,WORD,`${label}: Back to the list keeps the words`);}
     await pg.waitForFunction(()=>{if(window.WosWelcome?.active)window.WosWelcome.close?.();return !window.WosWelcome?.active;});
+    // A word that is not on the default page, typed letter by letter: the page beside the list follows the matches
+    // on every keystroke (it used to fall back to Appearance on every other letter).
+    await pg.locator('[data-st-search]').fill('');await pg.waitForTimeout(200);
+    r.typed=[];
+    for(const ch of 'voice'){await pg.locator('[data-st-search]').press(ch);await pg.waitForTimeout(150);r.typed.push(await pg.evaluate(()=>{const st=[...document.querySelectorAll('.st-root')].find(x=>x.querySelector('[data-st-search]'));return {q:st.querySelector('[data-st-search]').value,head:st.querySelector('.st-page-head h3')?.textContent,marks:st.querySelectorAll('.st-page mark.st-hit').length,cats:[...st.querySelectorAll('.st-index [data-st-page]')].map(b=>b.dataset.stPage)};}));}
+    if(!r.stacked)for(const t of r.typed.slice(1))assert.ok(t.marks>0&&t.cats.length>0,`${label}: "${t.q}" shows a matching page with marks ${JSON.stringify(t)}`);
+    if(!r.stacked)assert.equal(r.typed.at(-1).head,'Voice & typing',`${label}: typing "voice" shows Voice & typing ${JSON.stringify(r.typed)}`);
+    if(out)await pg.screenshot({path:path.join(out,`settings-search-${v.shell}-${v.w}-on-voice.png`)});
+    // Esc right after typing clears at the first press.
+    await pg.locator('[data-st-search]').press('Escape');await pg.waitForTimeout(250);
+    r.escOnce=await pg.evaluate(()=>[...document.querySelectorAll('[data-st-search]')].map(i=>i.value).join('|'));
+    assert.equal(r.escOnce,'',`${label}: one Esc clears the words`);
+    // A word far down the page (a background's name): the page opens scrolled to it, not at the top.
+    await pg.locator('[data-st-search]').fill(DEEP);await pg.waitForTimeout(300);
+    r.deepPages=await cats();
+    assert.ok(r.deepPages.length>0,`${label}: some page mentions "${DEEP}"`);
+    if(r.stacked){await pg.locator('.st-index [data-st-page]').first().click();await pg.waitForTimeout(400);}
+    r.deep=await pg.evaluate(()=>{const st=[...document.querySelectorAll('.st-root')].find(x=>x.querySelector('[data-st-search]')),pane=st.querySelector('.st-page'),f=pane.querySelector('mark.st-hit-first');const fr=f?.getBoundingClientRect(),pr=pane.getBoundingClientRect();return {scrollTop:pane.scrollTop,overflow:pane.scrollHeight>pane.clientHeight,first:!!f,firstVisible:!!fr&&fr.bottom>Math.max(0,pr.top)&&fr.top<Math.min(innerHeight,pr.bottom)};});
+    assert.ok(r.deep.first&&r.deep.firstVisible,`${label}: the first "${DEEP}" is in view ${JSON.stringify(r.deep)}`);
+    if(out)await pg.screenshot({path:path.join(out,`settings-search-${v.shell}-${v.w}-on-deep.png`)});
+    if(r.stacked){await pg.locator('[data-st-back]').click();await pg.waitForTimeout(300);}
     await pg.locator('[data-st-search]').press('Escape');await pg.waitForTimeout(300);
     r.cleared=await cats();r.stillOpen=await pg.locator('.st-inner').count();
     assert.deepEqual(r.cleared,all,`${label}: Esc clears the search and brings every category back`);

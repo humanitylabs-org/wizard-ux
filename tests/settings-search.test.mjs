@@ -26,7 +26,7 @@ function harness({ on = true, shell = 'desktop' } = {}) {
   s.WosSettings.register({ id: 'zz-probe', page: 'voice', html: () => '<p>Push to talk &amp; dictation <b>Hotkey</b></p>' });
   const root = { innerHTML: '', scrollTop: 0, dataset: {}, classList: { add() {} }, contains: () => false, querySelector: () => null, querySelectorAll: () => [], addEventListener: (t, f) => { (listeners[t] ||= []).push(f); }, removeEventListener() {} };
   const view = s.WosSettings.mount(root, { shell, live: { ok: true }, helpSub: 'Help', toast() {} });
-  const type = value => { for (const f of listeners.input || []) f({ target: { value, matches: sel => sel === '[data-st-search]', closest: () => null } }); };
+  const type = (value, kind = 'input', isComposing = false) => { for (const f of listeners[kind] || []) f({ isComposing, target: { value, matches: sel => sel === '[data-st-search]', closest: () => null } }); };
   const cats = () => [...root.innerHTML.matchAll(/data-st-page="([^"]+)"/g)].map(m => m[1]);
   return { s, root, view, type, cats, documentElement, winListeners };
 }
@@ -73,6 +73,15 @@ test('an explicitly opened page that does not match moves to the first match; tu
   for (const f of h.winListeners['wos:tweak-choice']) f();
   await new Promise(r => setTimeout(r, 5));
   assert.doesNotMatch(h.root.innerHTML, /data-st-search/);
+});
+test('an IME composing in the box is left alone until compositionend (no repaint replaces the box mid-word)', () => {
+  const h = harness();
+  const all = h.cats(), before = h.root.innerHTML;
+  h.type('hotk', 'input', true);
+  assert.equal(h.root.innerHTML, before, 'no repaint while composing');
+  h.type('hotkey', 'compositionend');
+  assert.deepEqual(h.cats(), ['voice']);
+  assert.ok(all.length > 1);
 });
 test('the switch is a listed tweak package linked to this issue', () => {
   const cat = JSON.parse(fs.readFileSync(new URL('../web/tweaks/catalog.json', import.meta.url), 'utf8'));

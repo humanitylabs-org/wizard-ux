@@ -64,11 +64,12 @@ window.WizCore.settingsParts.view = function ({ attention, cardHtml, chatsHost, 
       root.__stHtml = html;
       root.innerHTML = html;
       for (const f of fs) if (f.painted) { try { f.painted(ctx, root.querySelector(`[data-settings-feature="${CSS.escape(f.id)}"]`)); } catch (e) { console.error(e); } }
-      if (hits) markHits(q, selected);
       root.scrollTop = top;
       const pane = root.querySelector('.st-page'); if (pane) pane.scrollTop = paneTop;
       const index = root.querySelector('.st-index'); if (index) index.scrollTop = indexTop;
       const importStatus = root.querySelector('[data-skinimport-status]'); if (importStatus) importStatus.textContent = skinImportMessage;
+      // After the scroll positions are put back, so the jump to the first hit isn't undone.
+      if (hits) markHits(q, selected);
       if (attrs.length) { const scope = record ? root.querySelector(`[data-ubid="${CSS.escape(record)}"]`) : root; const sel = attrs.map(a => `[${a.name}="${CSS.escape(a.value)}"]`).join(''); const target = scope?.querySelector(sel); target?.focus({ preventScroll: true }); if (target && selection) target.setSelectionRange(...selection); }
       const U = window.WosUsage;
       if (U && !U.loading && (!U.snap || Date.now() - U.at > 60000)) U.load().then(ctx.paintUsage);
@@ -134,7 +135,8 @@ window.WizCore.settingsParts.view = function ({ attention, cardHtml, chatsHost, 
       if (q && desktop) {
         const shown = PAGES.filter(p => !p.available || p.available(ctx)), hits = searchHits(shown, q);
         const next = shown.find(p => hits.has(p.id))?.id;
-        if (next && !hits.has(page || before)) { if (page) page = next; else searchPage = next; }
+        // Compare with the page that shows without a search pick: an earlier pick never counts as "already open".
+        if (next && !hits.has(effectivePage())) { if (page) page = next; else searchPage = next; }
       }
       if (openPage() !== before) {
         for (const f of features.values()) if (pageOf(f) === before) f.leave?.(ctx);
@@ -150,15 +152,19 @@ window.WizCore.settingsParts.view = function ({ attention, cardHtml, chatsHost, 
       for (const f of features.values()) if (pageOf(f) === openPage()) f.enter?.(ctx);
       confirm = null; render(); root.scrollTop = 0;
       const pane = root.querySelector('.st-page'); if (pane) pane.scrollTop = 0;
+      // Searching: a page opened from the filtered list starts at its first hit, not at the top.
+      if (!id || !f) root.querySelector('.st-page mark.st-hit-first')?.scrollIntoView?.({ block: 'center' });
       const g = id ? root.querySelector(`[data-settings-feature="${CSS.escape(f?.id || id)}"]`) : null;
       g?.scrollIntoView?.({ block: 'nearest' });
       (g?.querySelector('button:not(:disabled)') || root.querySelector(page ? '.st-page-head h3' : '.st-title'))?.focus({ preventScroll: true });
     }
     function back() {
+      const inBox = document.activeElement?.matches?.('[data-st-search]') && root.contains(document.activeElement);
+      // Search: Esc/Back in the box, or at the list, clears the words first (a page goes back to the list, words kept).
+      if (searchOn() && query && inBox) { search(''); root.querySelector('[data-st-search]')?.focus({ preventScroll: true }); return true; }
       for (const f of features.values()) if (pageOf(f) === openPage() && f.back?.(ctx)) return true;
       if (confirm) { if (!ctx.chatsBusy) { confirm = null; render(); root.querySelector('[data-chats-choice][aria-checked="true"]')?.focus(); } return true; }
-      // Search: Esc/Back in the box, or at the list, clears the words first (a page goes back to the list, words kept).
-      if (searchOn() && query && (!page || document.activeElement?.matches?.('[data-st-search]'))) { search(''); root.querySelector('[data-st-search]')?.focus({ preventScroll: true }); return true; }
+      if (searchOn() && query && !page) { search(''); root.querySelector('[data-st-search]')?.focus({ preventScroll: true }); return true; }
       if (!page) return false;
       const previous = page; focus(); root.querySelector(`[data-st-page="${previous}"]`)?.focus({ preventScroll: true }); return true;
     }
@@ -197,7 +203,9 @@ window.WizCore.settingsParts.view = function ({ attention, cardHtml, chatsHost, 
       return !!f?.act?.(ctx, el, event);
     }
     const click = e => dispatch(e.target, e);
-    const searchInput = e => { if (searchOn() && e.target.matches?.('[data-st-search]')) search(e.target.value); };
+    // An IME composes text in the box: wait for compositionend, or a repaint would replace the box mid-word.
+    const searchInput = e => { if (searchOn() && !e.isComposing && e.target.matches?.('[data-st-search]')) search(e.target.value); };
+    const searchComposed = e => { if (searchOn() && e.target.matches?.('[data-st-search]')) search(e.target.value); };
     const searchSwitch = () => setTimeout(() => { if (!searchOn()) { query = ''; searchPage = ''; } render(true); }, 0);
     const featureInput = e => { const id = e.target.closest('[data-settings-feature]')?.dataset.settingsFeature; features.get(id)?.input?.(ctx, e.target); };
     const change = async e => {
@@ -251,9 +259,9 @@ window.WizCore.settingsParts.view = function ({ attention, cardHtml, chatsHost, 
     const unsubscribe = ctx.live?.onChange?.(() => render());
     const appsChanged = () => render();
     window.addEventListener?.('wos:prefs', appsChanged); window.addEventListener?.('wizard:apps', appsChanged); window.addEventListener?.('wizard:notify-route', appsChanged); window.addEventListener?.('wizard:notify-attention', appsChanged);
-    function destroy() { for (const f of features.values()) f.leave?.(ctx); root.removeEventListener('input', featureInput); if (typeof unsubscribe === 'function') unsubscribe(); window.removeEventListener?.('wos:prefs', appsChanged); window.removeEventListener?.('wizard:apps', appsChanged); window.removeEventListener?.('wizard:notify-route', appsChanged); window.removeEventListener?.('wizard:notify-attention', appsChanged); window.removeEventListener?.('wos:tweak-choice', searchSwitch); root.removeEventListener('input', searchInput); mounts.delete(api); root.removeEventListener('click', click); root.removeEventListener('keydown', key); root.removeEventListener('change', change); }
+    function destroy() { for (const f of features.values()) f.leave?.(ctx); root.removeEventListener('input', featureInput); if (typeof unsubscribe === 'function') unsubscribe(); window.removeEventListener?.('wos:prefs', appsChanged); window.removeEventListener?.('wizard:apps', appsChanged); window.removeEventListener?.('wizard:notify-route', appsChanged); window.removeEventListener?.('wizard:notify-attention', appsChanged); window.removeEventListener?.('wos:tweak-choice', searchSwitch); root.removeEventListener('input', searchInput); root.removeEventListener('compositionend', searchComposed); mounts.delete(api); root.removeEventListener('click', click); root.removeEventListener('keydown', key); root.removeEventListener('change', change); }
     window.addEventListener?.('wos:tweak-choice', searchSwitch);
-    root.addEventListener('input', searchInput); root.addEventListener('input', featureInput); root.addEventListener('click', click); root.addEventListener('keydown', key); root.addEventListener('change', change); mounts.add(api); render(); return api;
+    root.addEventListener('input', searchInput); root.addEventListener('compositionend', searchComposed); root.addEventListener('input', featureInput); root.addEventListener('click', click); root.addEventListener('keydown', key); root.addEventListener('change', change); mounts.add(api); render(); return api;
   }
   // One deferred System link at a time: a newer link, Back, or anything the user does first cancels the wait.
   let waiting = null;
