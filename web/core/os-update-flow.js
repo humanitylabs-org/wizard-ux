@@ -28,9 +28,8 @@
  *   WosUpdateFlow.updating   {target, phase} while updating, else null
  *   WosUpdateFlow.paused     true while sending is paused (the Updating panel is up); WosOutbox holds delivery
  *
- * Waiting for running work (App Manager `waits_for_work`, true on a Mac and, elsewhere, with the off-by-default
- * switch wizard/os-update-waits): the "Wizard is still working on …" sheet (Update when it finishes / Update anyway)
- * and the 6-hour ask work on every box that says it. Everything else here (the banner, heads-up, Updating panel,
+ * Waiting for running work (on every box since wizard-app-manager#696): the "Wizard is still working on …" sheet
+ * (Update when it finishes / Update anyway) and the 6-hour ask work on every box. Everything else here (the banner, heads-up, Updating panel,
  * backup step) stays Mac only; elsewhere Install and Update anyway go through core/os-updates.js as before.
  *   WosUpdateFlow.waiting(target, answer)  the sheet for an apply that answered `waiting`
  *   WosUpdateFlow.options()                 the waiting update's options (Update now / Stop reminding me / Cancel)
@@ -42,7 +41,6 @@
   const U = () => window.WosUpdates;
   const st = () => U()?.state || null;
   const mac = () => st()?.by_host === true;
-  const waits = () => mac() || st()?.waits_for_work === true;
   const OS = 'WizardOS';
   const TAKES = 'Usually 5–15 minutes';
   const FLOW = 'wos.osu.flow.v1', LATER = 'wos.osu.later.v1', SEEN = 'wos.osu.result.v1', HEADS = 'wos.osu.heads.v1', ASKED = 'wos.osu.asked.v1', WAITING = 'wos.osu.waiting.v1', MIN = 'wos.osu.min.v1';
@@ -200,7 +198,7 @@
   // Asked again after 6 hours of waiting (once per request): the owner's three answers.
   function askAgainSheet(force = false) {
     const s = st(), w = s?.when_idle;
-    if (!w || !waits() || s.installing || updating() || (!force && (!w.asked || ls.get(ASKED) === w.requested_at))) return;
+    if (!w || s.installing || updating() || (!force && (!w.asked || ls.get(ASKED) === w.requested_at))) return;
     ls.set(ASKED, w.requested_at);
     const names = work(s);
     ask({ title: `Wizard is still busy`,
@@ -402,7 +400,7 @@
   function fastPoll() { clearTimeout(fastT); fastT = setTimeout(() => { if (updating() || flow()) U()?.load(true).finally(() => { render(); fastPoll(); }); }, 4000); }
   function render() {
     if (!U() || !st()) return;
-    if (!mac()) { renderPanel(null); renderBanner(); if (waits()) askAgainSheet(); return; }
+    if (!mac()) { renderPanel(null); renderBanner(); askAgainSheet(); return; }
     const u = updating();
     renderPanel(u); renderBanner(); headsUpSheet(); askAgainSheet();
     if (u && !fastT) fastPoll();
