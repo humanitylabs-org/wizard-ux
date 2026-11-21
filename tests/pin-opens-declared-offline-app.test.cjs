@@ -63,7 +63,8 @@ test('an app that did not declare offline gets nothing from the worker, online o
 
 test('the shell worker and its generated config name no app',()=>{
   const h=['web/core/offline-session-config.js','web/core/offline-sw.js','web/core/offline-session.js','tools/build-offline-session.py','web/app-session.html'];
-  for(const f of h)assert(!/wisdom|mizel|notes|outline|movies|messenger/i.test(readFileSync(f,'utf8')),f+' must stay app-agnostic');
+  // core/chats-notes.js is the shell's own Chats notes part (loaded by the one-app page since issue 1694), not an app id.
+  for(const f of h)assert(!/wisdom|mizel|notes|outline|movies|messenger/i.test(readFileSync(f,'utf8').replaceAll('core/chats-notes.js','')),f+' must stay app-agnostic');
   const src=readFileSync('web/core/apps.js','utf8');
   const policy=src.slice(src.indexOf('window.WizCore.appMigrations ='),src.indexOf('const PALETTE'));
   // #892 P1: this historical migration remains until the companion declaration reaches each box.

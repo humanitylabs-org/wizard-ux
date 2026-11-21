@@ -56,8 +56,32 @@ test('pin-doc.js runs right after shell-token.js (which must run once, first), b
   const scripts = [...headSrc.matchAll(/<script\b[^>]*src="([^"]+)"/g)].map(m => m[1]);
   assert.deepEqual(scripts.slice(0, 2), ['core/shell-token.js', 'core/pin-doc.js']);
   assert.equal(page({ search: '' }).FILES.filter(([k]) => k === 'h').map(([, f]) => f).join(), 'core/shell-token.js', 'only what ran above it is marked h');
-  assert.doesNotMatch(read('app-session.html'), /pin-doc/, 'the offline host stays exactly as it is');
+  assert.doesNotMatch(read('app-session.html'), /src="core\/pin-doc\.js"/, 'the offline host never runs the slim page');
   assert.doesNotMatch(read('desktop.html'), /pin-doc/);
+});
+
+// wizard-ux issue 1694: the one-app page (app-session.html) gave an app on its own none of the chat/live services
+// (WizLive, WosChat, the Chats host...), so TG style showed 'Open Telegram from Wizard'. It now loads the same
+// stylesheets and scripts a pinned app gets in the shell (FILES kinds c, e, x, m), in index.html order.
+test('app-session.html loads every stylesheet and script a pinned app gets in the shell, in order', () => {
+  const html = read('app-session.html');
+  const loaded = [...html.matchAll(/<(script|link)\b[^>]*?\b(?:src|href)="([^"]+)"[^>]*>/g)].map(m => m[2]);
+  const { FILES } = page({ search: '' });
+  // Never the phone/desktop choice (a one-app page is always this page), and never what does nothing in a session.
+  const NEVER = new Set(['core/shell.js']);
+  const want = FILES.filter(([k, f]) => 'cexm'.includes(k) && !NEVER.has(f)).map(([, f]) => f);
+  for (const f of want) assert.ok(loaded.includes(f), `app-session.html must load ${f} (it is in core/pin-doc.js FILES)`);
+  for (const [k, f] of FILES) if (k === 's' || k === 'h' || NEVER.has(f)) assert.ok(!loaded.includes(f), `app-session.html must not load ${f}`);
+  assert.equal(new Set(loaded).size, loaded.length, 'each file once');
+  // Scripts in the shell's order, apart from the few the offline host runs first in its head (kept as they were).
+  const HEAD = ['core/browser-boundary.js', 'core/home-screen-capabilities.js', 'core/home-screen-policy.js', 'core/offline-session.js', 'core/offline-kit.js', 'core/skin-frame.js', 'core/skins.js'];
+  const js = loaded.filter(f => f.endsWith('.js') && !HEAD.includes(f));
+  assert.deepEqual(js, want.filter(f => f.endsWith('.js') && !HEAD.includes(f)), 'scripts in index.html order');
+  assert.ok(js.indexOf('live.js') < js.indexOf('core/single-app-session.js') && js.indexOf('core/chats.js') < js.indexOf('core/single-app-session.js'),
+    'WizLive and the Chats host exist before the app frame is made');
+  const tag = f => { const at = html.indexOf(`src="${f}"`); return html.slice(html.lastIndexOf('<script', at), html.indexOf('>', at) + 1); };
+  assert.match(tag('core/thread-swipe-back.js'), /type="module"/);
+  assert.match(tag('core/experience.js'), /\bdefer\b/);
 });
 
 test('switched off, or not a pinned session, or another address: nothing happens', () => {
