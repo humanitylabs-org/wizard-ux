@@ -1,4 +1,4 @@
-/* Wizard UX core: Chats › fitting a long label into its button.
+/* Wizard UX core: Chats › fitting a long label into its button, and handing picked files to the window that asked.
  * Moved verbatim out of core/chats.js
  * (wizard-ux issue 1665: split the giant front-end files, no behaviour change). createChats (core/chats.js) calls
  * this once, where the code used to be, with the closure names it reads, and keeps the names it returns under
@@ -10,8 +10,8 @@
 'use strict';
 window.WizCore = window.WizCore || {};
 window.WizCore.chatsParts = window.WizCore.chatsParts || {};
-window.WizCore.chatsParts.fitlabel = function ({ addFiles, picker, pickFor, W }) {
-  picker.addEventListener('change', () => { const list = [...picker.files]; picker.value = ''; if (pickFor && W[pickFor] && list.length) addFiles(pickFor, list); });
+window.WizCore.chatsParts.fitlabel = function ({ addFiles, chatVars, picker, W }) {
+  picker.addEventListener('change', () => { const list = [...picker.files]; picker.value = ''; if (chatVars.pickFor && W[chatVars.pickFor] && list.length) addFiles(chatVars.pickFor, list); });
   // Empty composers keep the model name in the free bottom-right corner. As soon as there is a draft, the name gets
   // its own strip below the textarea so its 40px tap target can never intercept text selection or editing. The mirror
   // still catches placeholder collisions and scrolling states where the editable area cannot safely share the corner.

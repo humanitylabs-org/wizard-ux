@@ -10,7 +10,7 @@
 'use strict';
 window.WizCore = window.WizCore || {};
 window.WizCore.chatsParts = window.WizCore.chatsParts || {};
-window.WizCore.chatsParts.agentrows = function ({ agentName, AGS, ch, CH, chanElsewhere, chanNeeds, channelsOn, chanOpen, chanView, chatVars, clip, DAILY_HIST, DAILY_OPEN, dailyHead, dailyLast, dailyOn, dailyPin, dailyState, draftKey, esc, isWorking, KIT, LIVE, loadDraft, openChat, owner, renderChatList, renderThread, rowAgent, save, saveDraft, toTurns, W }) {
+window.WizCore.chatsParts.agentrows = function ({ agentName, AGS, ch, CH, chanElsewhere, chanNeeds, channelsOn, chanOpen, chatVars, clip, DAILY_HIST, DAILY_OPEN, dailyHead, dailyLast, dailyOn, dailyPin, dailyState, draftKey, esc, isWorking, KIT, LIVE, loadDraft, openChat, owner, renderChatList, renderThread, rowAgent, save, saveDraft, toTurns, W }) {
   let deferredOf, elOf, hasContent, holdList; // late-bound: chats.js declares these after the call, see bindLate
   // The days read after a Daily view opened on the kept copy: a newer day there moves every window still showing that
   // view on the thread it opened, words in its box going along.
@@ -73,7 +73,7 @@ window.WizCore.chatsParts.agentrows = function ({ agentName, AGS, ch, CH, chanEl
   // Activity always shows every agent (the agent chips left it): a list still focused on one agent or a Space from
   // before goes back to All, unless a channel's or an agent's feed is open in it. A window opened for one agent keeps it.
   function actAllAgents(w, side = false) {
-    if (!channelsOn() || side || chanView !== 'activity' || !w || chanOpen(w)) return false;
+    if (!channelsOn() || side || chatVars.chanView !== 'activity' || !w || chanOpen(w)) return false;
     const o = W[owner(w.id)] || w; if (!o || !o.focus || o.agent) return false;
     o.focus = null; save(); return true;
   }

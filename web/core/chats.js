@@ -252,7 +252,7 @@ window.WizCore.chats = function createChats(H) {
     return true;
   }
   /* Daily follow and claim, agents in the Channels list; core/chats-agentrows.js. */
-  const { actAllAgents, actMark, actNeeds, actRowMark, actUnread, agentLabelOf, CHAN_AGENT, chanDraftMark, chanUnread, chanUnreadN, dailyClaim, dailyClick, dailyFollow, dailyHtml, dailyLate, dailyLinkTo, dailyTarget, dailyWatch, draftTag, rowDraft, bindLate: agentrowsLate } = window.WizCore.chatsParts.agentrows({ agentName: (...a) => agentName(...a), AGS: (...a) => AGS(...a), ch, CH, chanElsewhere, chanNeeds, channelsOn, chanOpen, chanView, chatVars, clip, DAILY_HIST, DAILY_OPEN, dailyHead, dailyLast, dailyOn, dailyPin, dailyState, draftKey: (...a) => draftKey(...a), esc, isWorking, KIT, LIVE, loadDraft, openChat, owner: (...a) => owner(...a), renderChatList, renderThread, rowAgent, save, saveDraft, toTurns, W });
+  const { actAllAgents, actMark, actNeeds, actRowMark, actUnread, agentLabelOf, CHAN_AGENT, chanDraftMark, chanUnread, chanUnreadN, dailyClaim, dailyClick, dailyFollow, dailyHtml, dailyLate, dailyLinkTo, dailyTarget, dailyWatch, draftTag, rowDraft, bindLate: agentrowsLate } = window.WizCore.chatsParts.agentrows({ agentName: (...a) => agentName(...a), AGS: (...a) => AGS(...a), ch, CH, chanElsewhere, chanNeeds, channelsOn, chanOpen, chatVars, clip, DAILY_HIST, DAILY_OPEN, dailyHead, dailyLast, dailyOn, dailyPin, dailyState, draftKey: (...a) => draftKey(...a), esc, isWorking, KIT, LIVE, loadDraft, openChat, owner: (...a) => owner(...a), renderChatList, renderThread, rowAgent, save, saveDraft, toTurns, W });
   let chanAgentsOpen = false;
   const chanAgentId = id => typeof id === 'string' && id.startsWith(CHAN_AGENT) ? id.slice(CHAN_AGENT.length) : '';
   function chanAgentsList() {
@@ -999,8 +999,8 @@ window.WizCore.chats = function createChats(H) {
   spacesLate({ sendChat });
   chanboxLate({ sendChat });
   let pickFor = '';
-  /* Fitting a long label into its button; core/chats-fitlabel.js. */
-  const { fitLabel } = window.WizCore.chatsParts.fitlabel({ addFiles, picker, pickFor, W });
+  /* Fitting a long label into its button, picked files; core/chats-fitlabel.js. */
+  const { fitLabel } = window.WizCore.chatsParts.fitlabel({ addFiles, chatVars, picker, W });
   function growTa(ta) {
     if (!ta) return;
     const top = ta.scrollTop; // collapsing to 'auto' to measure clamps the scroll; keep the owner's view
