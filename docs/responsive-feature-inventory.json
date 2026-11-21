@@ -1154,6 +1154,51 @@
       "classification": "adapter",
       "reason": "Phone shell part moved verbatim out of app.js (issue 1665): sending a take: route, composer hand-back, capture pause."
     },
+    "desktop/desktop-boundarykeys.js": {
+      "shell": "desktop",
+      "classification": "adapter",
+      "reason": "Desktop shell part moved verbatim out of desktop/desktop.js (issue 1665): the window keys and the keys a sandboxed app passes on (browser boundary)."
+    },
+    "desktop/desktop-cog.js": {
+      "shell": "desktop",
+      "classification": "adapter",
+      "reason": "Desktop shell part moved verbatim out of desktop/desktop.js (issue 1665): the Settings cog count, the top bar's hover tips and opening the keys guide."
+    },
+    "desktop/desktop-divider.js": {
+      "shell": "desktop",
+      "classification": "adapter",
+      "reason": "Desktop shell part moved verbatim out of desktop/desktop.js (issue 1665): the Chats list/thread divider (drag, arrow keys, reset, one width for every Chats window)."
+    },
+    "desktop/desktop-generalvoice.js": {
+      "shell": "desktop",
+      "classification": "adapter",
+      "reason": "Desktop shell part moved verbatim out of desktop/desktop.js (issue 1665): the top bar's New voice chat button."
+    },
+    "desktop/desktop-home.js": {
+      "shell": "desktop",
+      "classification": "adapter",
+      "reason": "Desktop shell part moved verbatim out of desktop/desktop.js (issue 1665): how Home (the root or an empty workspace) is drawn."
+    },
+    "desktop/desktop-links.js": {
+      "shell": "desktop",
+      "classification": "adapter",
+      "reason": "Desktop shell part moved verbatim out of desktop/desktop.js (issue 1665): links into installed apps open as their window; deep links on start."
+    },
+    "desktop/desktop-recovery.js": {
+      "shell": "desktop",
+      "classification": "adapter",
+      "reason": "Desktop shell part moved verbatim out of desktop/desktop.js (issue 1665): the retained recordings card (outbox takes to send again or discard)."
+    },
+    "desktop/desktop-tapkeys.js": {
+      "shell": "desktop",
+      "classification": "adapter",
+      "reason": "Desktop shell part moved verbatim out of desktop/desktop.js (issue 1665): Right ⌘ / Right ⌥ as tap keys (talk and dictate)."
+    },
+    "desktop/desktop-voicemenu.js": {
+      "shell": "desktop",
+      "classification": "adapter",
+      "reason": "Desktop shell part moved verbatim out of desktop/desktop.js (issue 1665): the bar mic's voice menu."
+    },
     "desktop/desktop.js": {
       "shell": "desktop",
       "classification": "adapter",

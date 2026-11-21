@@ -4,8 +4,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { withDesktopParts } from './fixtures/desktop-parts.mjs';
 
-const desktop = readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8');
+const desktop = withDesktopParts(readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8'));
 const css = readFileSync(new URL('../web/desktop/desktop.css', import.meta.url), 'utf8');
 
 function recoveryBlock() {

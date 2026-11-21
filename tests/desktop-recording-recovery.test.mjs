@@ -1,8 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { withDesktopParts } from './fixtures/desktop-parts.mjs';
 
-const desktop = readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8');
+const desktop = withDesktopParts(readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8'));
 
 function recordingRecoverySource() {
   const start = desktop.indexOf("  // Recovery is a view of the existing outbox");

@@ -2,8 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { withDesktopParts } from './fixtures/desktop-parts.mjs';
 
-const js = readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8');
+const js = withDesktopParts(readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8'));
 const html = readFileSync(new URL('../web/desktop.html', import.meta.url), 'utf8');
 
 test('holding ⌥ is the one keys guide: speak keys named and explained, no separate sheet', () => {

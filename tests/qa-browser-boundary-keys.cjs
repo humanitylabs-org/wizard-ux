@@ -28,8 +28,8 @@ const SHELL = `<!doctype html><html><head><meta charset="utf-8">
   // Hostile run: the frame gets focus from script (no user input), and the shell notes its activation when the app posts.
   if (location.search === '?hostile') { f.addEventListener('load', () => f.focus()); addEventListener('message', () => { window.activationAtForge = navigator.userActivation.isActive; }); }
 </script></body></html>`;
-// The desktop's real list of keys it takes from a sandboxed app.
-const KEYS = /WizBrowserBoundary\.keys\((\[[^\]]*\])\)/.exec(fs.readFileSync(path.join(WEB, 'desktop', 'desktop.js'), 'utf8'))[1];
+// The desktop's real list of keys it takes from a sandboxed app (moved to desktop-boundarykeys.js, issue 1665).
+const KEYS = /WizBrowserBoundary\.keys\((\[[^\]]*\])\)/.exec(['desktop.js', 'desktop-boundarykeys.js'].map(f => fs.readFileSync(path.join(WEB, 'desktop', f), 'utf8')).join('\n'))[1];
 const server = http.createServer((req, res) => {
   const u = new URL(req.url, 'http://x');
   if (u.pathname === '/') { const shell = SHELL.replace('__KEYS__', KEYS); res.setHeader('content-type', 'text/html'); return res.end(u.search === '?hostile' ? shell.replace('src="/notes/"', 'src="/notes/?hostile"') : shell); }

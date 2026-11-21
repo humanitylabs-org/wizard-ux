@@ -6,6 +6,7 @@ import vm from 'node:vm';
 import { existsSync } from 'node:fs';
 import { read } from './fixtures/tweaks.mjs';
 import { withSettingsParts } from './fixtures/settings-parts.mjs'; // settings.js parts moved out verbatim (issue 1665)
+import { withDesktopParts } from './fixtures/desktop-parts.mjs';
 
 const catalog = JSON.parse(read('web/tweaks/catalog.json'));
 const between = (s, a, b) => { const i = s.indexOf(a); assert.ok(i >= 0, a); return s.slice(i, s.indexOf(b, i + a.length)); };
@@ -105,7 +106,7 @@ test('James: default Settings keeps the current AI page and has no "Your network
 });
 
 test('James: desktop Home opens Settings as the centred panel over Home, never a window beside Chats', () => {
-  const desk = read('web/desktop/desktop.js');
+  const desk = withDesktopParts(read('web/desktop/desktop.js'));
   assert.match(desk, /    if \(homeOpen(?: \|\| settingsOver\(\))?\) \{  \/\/ from Home/, 'from Home: always the panel, whatever the skin');
   assert.doesNotMatch(desk, /homeOpen && \(settingsModal \|\| window\.WosSettings\.hasSystem/, 'no classic-Home window path');
   assert.match(withSettingsParts(read('web/core/settings.js')), /hasSystem: \(\) => PAGES\.some\(p => p\.group === 'System' && p\.available\(\)\)/);
@@ -119,7 +120,7 @@ test('James: the default desktop bar has no AI fuel, security, backup or machine
   assert.match(html, /<div class="bar-start" data-slot="bar-start"><\/div>/, 'the workspace slot is empty unless a package fills it');
   // One mic by default: New voice chat, Tell the computer and Dictate fold into the mic's menu (right-click or hold),
   // keep their keys, and Settings › Voice & typing puts them back.
-  const desk = read('web/desktop/desktop.js'), css = read('web/desktop/desktop.css'), s = withSettingsParts(read('web/core/settings.js'));
+  const desk = withDesktopParts(read('web/desktop/desktop.js')), css = read('web/desktop/desktop.css'), s = withSettingsParts(read('web/core/settings.js'));
   assert.match(css, /\.one-mic #generalVoice, \.one-mic #commandBtn, \.one-mic #dictateBtn \{ display: none !important; \}/);
   assert.match(desk, /const allMics = \(\) => store\.get\('allMics', false\) === true;/, 'folded unless the owner asks');
   assert.match(desk, /document\.documentElement\.classList\.toggle\('one-mic', !allMics\(\)\)/);

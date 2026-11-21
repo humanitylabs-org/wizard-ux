@@ -4,6 +4,7 @@ import vm from 'node:vm';
 import { fixture, contract, read } from './fixtures/tweaks.mjs';
 import { withSkinHostParts } from './fixtures/skin-host-parts.mjs';
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
+import { withDesktopParts } from './fixtures/desktop-parts.mjs';
 const catalog = JSON.parse(read('web/tweaks/catalog.json'));
 // Capability-gate fixtures: a package id that asks for exactly these capabilities (no shipped package needed).
 const asking = (id, capabilities) => ({ id, name: id, version: '1.0.0', author: id.split('/')[0], apiVersion: 1, capabilities, description: 'test fixture' });
@@ -272,11 +273,11 @@ test('chats.js shows a notification draft as its thread only while notification 
   assert.match(src, /function notifOf\(w\) \{\n    if \(!w \|\| w\.thread !== '__new__' \|\| winAgent\(w\) \|\| !window\.WosSkinHost\?\.inboxThreads\) return null;/);
   assert.match(src, /const NV = isNew && !pend\.length \? notifOf\(w\) : null;/);
   assert.match(src, /if \(sid === '__new__'\) \{ notifAct\(wid, a\); return; \}/);
-  assert.match(read('web/desktop/desktop.js'), /f\.thread === '__new__' && !CHATS\.notifOpen\?\.\(f\.id\)/, 'remaining Resolve action rejects an empty new chat but reaches an open notification');
+  assert.match(withDesktopParts(read('web/desktop/desktop.js')), /f\.thread === '__new__' && !CHATS\.notifOpen\?\.\(f\.id\)/, 'remaining Resolve action rejects an empty new chat but reaches an open notification');
 });
 
 test('desktop keys: ⌥↓ walks notification rows with Ready, ⌥X resolves an open notification', () => {
-  const d = read('web/desktop/desktop.js');
+  const d = withDesktopParts(read('web/desktop/desktop.js'));
   assert.match(d, /\.ch-sec\[data-sec="ready"\] \[data-chnotif\]', document\)/, 'Ready walk includes [data-chnotif] rows');
   assert.match(d, /code === 'KeyX'\) return hit\(\(\) => \{ if \(!e\.repeat\) chatAct\('resolve', 'X'\)/);
   assert.match(read('web/tweaks/wizard/unified-inbox/tweak.js'), /b\.dataset\.chnotif = it\.id/, 'the package marks its rows');

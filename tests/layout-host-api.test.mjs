@@ -11,6 +11,7 @@ import vm from 'node:vm';
 import { fixture } from './fixtures/tweaks.mjs';
 import { withSkinHostParts } from './fixtures/skin-host-parts.mjs';
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
+import { withDesktopParts } from './fixtures/desktop-parts.mjs';
 
 const root = new URL('../', import.meta.url);
 const read = p => readFileSync(new URL(p, root), 'utf8');
@@ -97,7 +98,7 @@ test('skins and tweaks never get the layout-only lists or the command take', asy
 });
 
 test('the desktop adapter routes Snooze / Done through Chats\' own threadAct and feeds the orb voice and level', () => {
-  const src = read('web/desktop/desktop.js');
+  const src = withDesktopParts(read('web/desktop/desktop.js'));
   assert.match(src, /sessionAct: \(sid, act\) => \{[^}]*CHATS\.threadAct\(/);
   assert.match(src, /sessionList: \(\) => window\.WizChatsListModel\.sessionList\(/, 'one row projection');
   assert.match(read('web/core/chats-list-model.js'), /chats\.threadActions\(s, null\)\.filter\(a => \['snooze', 'done', 'restore'\]\.includes\(a\)\)/, 'Snooze / Done / Restore remain the Chats actions');
@@ -108,7 +109,7 @@ test('the desktop adapter routes Snooze / Done through Chats\' own threadAct and
 });
 
 test('no desks: while a layout holds the panel everything opens in panels over Home; desks stay put', () => {
-  const src = read('web/desktop/desktop.js'), css = read('web/desktop/desktop.css');
+  const src = withDesktopParts(read('web/desktop/desktop.js')), css = read('web/desktop/desktop.css');
   const ND = 'globalThis.WosSkinHost?.panelMode';
   const fn = name => src.slice(src.indexOf(`  function ${name}(`), src.indexOf('\n  }', src.indexOf(`  function ${name}(`)) + 4);
   assert.ok(fn('newWin').includes(`if (${ND}) return panelOpen(obj);`), 'a new window goes to the panel, never to a desk');
@@ -191,7 +192,7 @@ test('bar-center: a core slot in the middle of the desktop bar; the clock steps 
 });
 
 test('Orbs view apps ARE desks (Miguel, v8): one app per desk, saved and synced like desks, so looking away or a reload never closes them', async () => {
-  const src = read('web/desktop/desktop.js');
+  const src = withDesktopParts(read('web/desktop/desktop.js'));
   const fn = name => src.slice(src.indexOf(`  function ${name}(`), src.indexOf('\n  }', src.indexOf(`  function ${name}(`)) + 4);
   assert.match(src, /const panelDeskApp = w => !!w && \(w\.app === 'frame' \|\| w\.app === 'pages'\);/);
   assert.match(fn('panelOpen'), /if \(isApp && panelDeskApp\(obj\)\) \{/, 'an app opened over the orb goes to a desk');
@@ -220,7 +221,7 @@ test('Orbs view apps ARE desks (Miguel, v8): one app per desk, saved and synced 
 });
 
 test('bound views: the Orb panel\'s chat counts as visible (a linked page opens beside it)', () => {
-  const js = readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8');
+  const js = withDesktopParts(readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8'));
   const shown = js.slice(js.indexOf('  function threadShown(wid,el) {'), js.indexOf('boundManager.shown(wid,el);'));
   assert.match(shown, /visible:id=>\(globalThis\.WosSkinHost\?\.panelMode&&panelHas\(id\)\)\|\|\(!homeOpen&&wsOf\(id\)===cur\)/);
   const visible = new Function('globalThis', 'panelHas', 'homeOpen', 'wsOf', 'cur', 'return ' + shown.match(/visible:(id=>.*?), close:/)[1]);
@@ -244,7 +245,7 @@ test('layout keys (layouts/orb/keys.js, used by AI apps): hold the LEFT ⌥ for 
   assert.equal(keyOf({ code: 'KeyE' }), 'E'); assert.equal(keyOf({ code: 'Digit1' }), null);
   assert.equal(isLeftAlt({ code: 'AltLeft', key: 'Alt' }), true); assert.equal(isLeftAlt({ code: 'AltRight', key: 'Alt' }), false, 'Right ⌥ never shows them');
   assert.equal(HOLD_MS, 300);
-  const desk = read('web/desktop/desktop.js');
+  const desk = withDesktopParts(read('web/desktop/desktop.js'));
   // the layout sees keys before the desktop's own ⌥ bindings (app frames too), and owns the hold overlay
   assert.match(desk, /if \(globalThis\.WosSkinHost\?\.key\?\.\(e\)\) \{ e\.preventDefault\(\); e\.stopPropagation\(\); return; \}/);
   assert.match(desk, /e\.code !== 'AltLeft' \|\| e\.metaKey \|\| e\.ctrlKey \|\| e\.shiftKey \|\| window\.WosSkinHost\?\.holdKeys\) return;/);
