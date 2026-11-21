@@ -62,14 +62,14 @@ test('pin-doc.js runs right after shell-token.js (which must run once, first), b
 
 // wizard-ux issue 1694: the one-app page (app-session.html) gave an app on its own none of the chat/live services
 // (WizLive, WosChat, the Chats host...), so TG style showed 'Open Telegram from Wizard'. It now loads the same
-// stylesheets and scripts a pinned app gets in the shell (FILES kinds c, e, x, m), in index.html order.
+// stylesheets and scripts a pinned app gets in the shell (FILES kinds c, e, a, x, m), in index.html order.
 test('app-session.html loads every stylesheet and script a pinned app gets in the shell, in order', () => {
   const html = read('app-session.html');
   const loaded = [...html.matchAll(/<(script|link)\b[^>]*?\b(?:src|href)="([^"]+)"[^>]*>/g)].map(m => m[2]);
   const { FILES } = page({ search: '' });
   // Never the phone/desktop choice (a one-app page is always this page), and never what does nothing in a session.
   const NEVER = new Set(['core/shell.js']);
-  const want = FILES.filter(([k, f]) => 'cexm'.includes(k) && !NEVER.has(f)).map(([, f]) => f);
+  const want = FILES.filter(([k, f]) => 'caexm'.includes(k) && !NEVER.has(f)).map(([, f]) => f);
   for (const f of want) assert.ok(loaded.includes(f), `app-session.html must load ${f} (it is in core/pin-doc.js FILES)`);
   for (const [k, f] of FILES) if (k === 's' || k === 'h' || NEVER.has(f)) assert.ok(!loaded.includes(f), `app-session.html must not load ${f}`);
   assert.equal(new Set(loaded).size, loaded.length, 'each file once');
@@ -127,12 +127,33 @@ test('switched on: the rest arrives once asked, after the first scripts, once', 
   await p.runAll();
   assert.equal(await a, true); assert.equal(arrived, true);
   const rest = files(p).slice(n);
-  assert.deepEqual(rest, [...p.FILES.filter(([k]) => k === 'x'), ...p.FILES.filter(([k]) => k === 'm')].map(([, f]) => f),
+  assert.deepEqual(rest, [...p.FILES.filter(([k]) => k === 'a'), ...p.FILES.filter(([k]) => k === 'x'), ...p.FILES.filter(([k]) => k === 'm')].map(([, f]) => f),
     'classic scripts in order, then the module (it reads WosSkinHost from skin-host.js when it runs)');
   assert.ok(p.FILES.some(([k]) => k === 'm'));
   assert.ok(rest.includes('core/chats.js') && rest.includes('live.js') && rest.includes('core/chats-view.js'));
   for (const f of ['app.js', 'device.js', 'pwa-install.js']) assert.ok(!files(p).includes(f), f + ' never runs in a pinned session');
   assert.equal(p.scripts.find(s => s.src.includes('thread-swipe-back')).type, 'module');
+});
+
+// wizard-ux issue 1696: an app reads parent.WizLive (and WosChat, WosModels, WizUploads, WosBell) from its first script.
+test('switched on: the services an app reads at load come first when asked, then the rest, in the same order', async () => {
+  const p = page();
+  await p.runAll();
+  const n = p.scripts.length;
+  let done = false; const s = p.P.services(); s.then(() => { done = true; });
+  assert.equal(p.P.services(), s, 'asked twice, loaded once');
+  await p.runAll();
+  assert.equal(done, true);
+  const kind = k => p.FILES.filter(([x]) => x === k).map(([, f]) => f);
+  const first = files(p).slice(n);
+  assert.deepEqual(first, kind('a'), 'the app services, in FILES order');
+  for (const f of ['live.js', 'core/chat-kit.js', 'core/chat-models.js', 'core/uploads.js', 'core/notif-bell.js']) {
+    assert.ok(first.includes(f), f + ' before the app frame');
+    assert.equal(p.FILES.find(([, x]) => x === f)[0], 'a', f + ' is kind a');
+  }
+  for (const f of ['core/chats.js', 'core/settings.js', 'core/skin-host.js', 'core/chat-topic-emojis-data.js', 'core/chat-power.js']) assert.ok(!first.includes(f), f + ' waits until after the app');
+  const e = p.P.extras(); await p.runAll(); assert.equal(await e, true);
+  assert.deepEqual(files(p).slice(n), [...kind('a'), ...kind('x'), ...kind('m')], 'then the rest, each once');
 });
 
 test('switched on: bootstrap starts at once from the page head (fetch is already the owner-header one), taken once', async () => {
@@ -179,24 +200,30 @@ function session({ slim, host }) {
   const html = el('html'); html.dataset.tweaks = 'wizard/pin-fast-open';
   let attached = null, arrive;
   const arrived = new Promise(ok => { arrive = ok; });
-  let asked = 0;
+  let asked = 0, served = 0, serve;
+  const services = new Promise(ok => { serve = ok; });
   const WizChatsHost = { create: () => ({ bind() {}, forget() {}, isHosted: () => false, openHosted: (...a) => { opened.push(a); return true; } }) };
   const window = { WizHomeScreenPolicy: pwin.WizHomeScreenPolicy, WizCore: { apps: () => apps, appsLoaded: () => new Promise(() => {}) },
     WizAppServices: { attach: (f, o) => { attached = o; return () => {}; }, guardBack() {} },
     requestIdleCallback: fn => idle.push(fn),
     ...(host ? { WizChatsHost } : {}),
-    ...(slim ? { WizPinDoc: { active: true, extras: () => { asked++; return arrived; }, arrived: () => arrived } } : {}) };
+    ...(slim ? { WizPinDoc: { active: true, services: () => { served++; return services; }, extras: () => { asked++; return arrived; }, arrived: () => arrived } } : {}) };
   const document = { documentElement: html, getElementById: () => el('host'), addEventListener() {}, createElement: el, title: '' };
   vm.runInContext(read('core/single-app-session.js'), vm.createContext({ window, document, localStorage: { getItem: () => null, setItem() {} },
     location: { origin: 'https://box.example' }, URL, addEventListener: (t, fn) => { (listeners[t] ||= []).push(fn); }, setInterval() {}, setTimeout }));
-  return { frames, opened, idle, attached: () => attached, asked: () => asked,
+  return { frames, opened, idle, attached: () => attached, asked: () => asked, served: () => served,
+    serve: async () => { serve(true); await new Promise(setImmediate); },
     arrive: async () => { window.WizChatsHost = WizChatsHost; arrive(true); await new Promise(setImmediate); } };
 }
 
-test('slim page: the app mounts at once; the rest is asked for when the app has loaded', async () => {
+test('slim page: the app frame is made once the services it reads at load have run; the rest after it loaded (issue 1696)', async () => {
   const s = session({ slim: true, host: false });
   await new Promise(setImmediate);
-  assert.equal(s.frames.length, 1, 'mounted without the Chats host');
+  assert.ok(s.served() >= 1, 'the app services are asked for at once');
+  assert.equal(s.frames.length, 0, 'no frame before parent.WizLive and the rest are there');
+  assert.equal(s.asked(), 0, 'not the whole rest');
+  await s.serve();
+  assert.equal(s.frames.length, 1, 'mounted once they have run');
   assert.equal(s.asked(), 0, 'nothing more while the app is loading');
   s.frames[0].on.load();
   assert.equal(s.idle.length, 1); s.idle[0]();
@@ -205,7 +232,7 @@ test('slim page: the app mounts at once; the rest is asked for when the app has 
 
 test('slim page: a thread the app asks for before the Chats host arrived opens once it is there', async () => {
   const s = session({ slim: true, host: false });
-  await new Promise(setImmediate);
+  await s.serve();
   assert.equal(s.attached().openThread('t1', { reply: true }), true, 'accepted');
   assert.equal(s.asked(), 1, 'first use asks for the rest');
   assert.deepEqual(s.opened, []);

@@ -46,8 +46,11 @@
     chats?.bind(win);
   }
   /* Slim pin page (wizard-ux issue 1584, switch wizard/pin-slim-doc): core/pin-doc.js loads the Chats host after the
-   * app has loaded (or on first use), so the host is made when it arrives. In the full shell it is here already. */
+   * app has loaded (or on first use), so the host is made when it arrives. In the full shell it is here already.
+   * The services an app reads from its first script (parent.WizLive...) are asked for now, and mount() makes the frame
+   * only once they have run (issue 1696). */
   const slim = window.WizPinDoc?.active === true;
+  if (slim) window.WizPinDoc.services?.();
   hostChats();
   if (slim && !chats) window.WizPinDoc.arrived().then(hostChats);
   // A thread the app asks for before the Chats host has arrived opens once it has (same frame, same thread).
@@ -160,6 +163,11 @@
       await policy.preparePresentation();
       if (generation !== mountGeneration) return;
       if (window.WizOfflineSession) await window.WizOfflineSession.ready(registry.APPS);
+      if (generation !== mountGeneration) return;
+    }
+    // Slim pin page: the services an app frame reads at load are there before the frame is made (issue 1696).
+    if (slim) {
+      await window.WizPinDoc.services?.();
       if (generation !== mountGeneration) return;
     }
     const next = registry.APP[id];
