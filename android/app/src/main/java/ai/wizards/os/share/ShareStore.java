@@ -15,7 +15,6 @@ import java.util.UUID;
  * only limit is the phone's free space. Resumable shares live in {@link ShareQueue} instead.
  */
 public final class ShareStore {
-    public static final int MAX_ITEMS = 8;
     private static ShareStore instance;
     private final File root;
 

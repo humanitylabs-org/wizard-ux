@@ -29,8 +29,7 @@ public final class ShareClient {
     public static final String NO_SPACE_WIZARD = "Not enough space on your Wizard";
     public static final String TOO_LARGE = "File too large for this Wizard";
     public static final String EXPIRED = "The upload expired on your Wizard · share it again";
-    /** The Agent Service takes this many files per share (uploads.mjs SHARE_FILE_LIMIT). */
-    public static final int MAX_FILES = 8;
+    // No file count limit per share (James, 6 Nov 2026: "don't impose arbitrary limits on the user").
 
     /** HTTP answer. code 0 never appears: a lost connection is an IOException. */
     public static final class Resp {
@@ -228,7 +227,7 @@ public final class ShareClient {
             case "agent_unavailable": return "That agent isn’t available · share again to Wizard";
             case "thread_not_found": return "That chat is no longer there · share again";
             case "client_share_id_conflict": case "client_upload_id_conflict": return "This share clashed with an earlier one · share it again";
-            case "too_many_files": return "Wizard takes up to " + MAX_FILES + " files at a time · share fewer";
+            case "too_many_files": return "This Wizard is out of date for big shares · update it and share again";
             default:
                 if (e.contains("stopped")) return "That agent is stopped · start it and share again";
                 if (e.contains("thread")) return "That chat is no longer there · share again";

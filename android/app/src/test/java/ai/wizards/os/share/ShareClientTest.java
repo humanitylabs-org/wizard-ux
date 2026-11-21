@@ -272,7 +272,7 @@ public class ShareClientTest {
         failsWith(409, "agent_unavailable", "That agent isn’t available · share again to Wizard");
         failsWith(404, "thread_not_found", "That chat is no longer there · share again");
         failsWith(409, "client_share_id_conflict", "This share clashed with an earlier one · share it again");
-        failsWith(400, "too_many_files", "Wizard takes up to 8 files at a time · share fewer");
+        failsWith(400, "too_many_files", "This Wizard is out of date for big shares · update it and share again");
     }
 
     @Test public void aWizardWithItsUploadStoreOffHandsOffToTheApp() throws Exception {
