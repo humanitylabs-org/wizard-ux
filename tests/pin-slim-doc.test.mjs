@@ -79,7 +79,7 @@ test('app-session.html loads every stylesheet and script a pinned app gets in th
   assert.deepEqual(js, want.filter(f => f.endsWith('.js') && !HEAD.includes(f)), 'scripts in index.html order');
   assert.ok(js.indexOf('live.js') < js.indexOf('core/single-app-session.js') && js.indexOf('core/chats.js') < js.indexOf('core/single-app-session.js'),
     'WizLive and the Chats host exist before the app frame is made');
-  const tag = f => html.match(new RegExp(`<script[^>]*src="${f.replace(/[.]/g, '\\.')}"[^>]*>`))[0];
+  const tag = f => { const at = html.indexOf(`src="${f}"`); return html.slice(html.lastIndexOf('<script', at), html.indexOf('>', at) + 1); };
   assert.match(tag('core/thread-swipe-back.js'), /type="module"/);
   assert.match(tag('core/experience.js'), /\bdefer\b/);
 });
