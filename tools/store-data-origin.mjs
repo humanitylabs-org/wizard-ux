@@ -14,6 +14,7 @@ import { createRouterOwnerRoutes } from './store-router-owner.mjs';
 import { linkPreview } from './store-link-preview.mjs';
 import { createAppLogos, LOGO_VERSION } from './store-app-logos.mjs';
 import { createBetaSource } from './store-beta-source.mjs';
+import { cliSecret } from './runtipi-cli-key.mjs';
 export const PREFIX = '/wizard-os-home/store-data/';
 const APPS = process.env.WIZARD_STORE_APPS_JSON || join(homedir(), '.wizard-os/apps.json');
 const ENV = process.env.WIZARD_STORE_RUNTIPI_ENV || join(homedir(), 'runtipi/.env');
@@ -37,12 +38,13 @@ export function installedMetadata(doc) {
 }
 function runtipi() {
   const env = Object.fromEntries(readFileSync(ENV, 'utf8').split('\n').filter(l => l.includes('=') && !l.startsWith('#')).map(l => { const i=l.indexOf('='); return [l.slice(0,i).trim(),l.slice(i+1).trim().replace(/^["']|["']$/g,'')]; }));
-  if (!env.JWT_SECRET) throw new Error('credential_unavailable');
+  const secret = cliSecret(env);
+  if (!secret) throw new Error('credential_unavailable');
   const host = env.INTERNAL_IP || '127.0.0.1', port = env.NGINX_PORT || '80';
   if (!/^(127\.\d{1,3}\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3})$/.test(host) || !/^\d{1,5}$/.test(port)) throw new Error('runtipi_address_invalid');
   const b64 = o => Buffer.from(JSON.stringify(o)).toString('base64url');
   const now = Math.floor(Date.now()/1000), h=b64({alg:'HS256',typ:'JWT'}), p=b64({sub:'cli',iat:now,nbf:now,exp:now+60});
-  return { base:`http://${host}:${port}`, token:`${h}.${p}.${createHmac('sha256',env.JWT_SECRET).update(`${h}.${p}`).digest('base64url')}` };
+  return { base:`http://${host}:${port}`, token:`${h}.${p}.${createHmac('sha256',secret).update(`${h}.${p}`).digest('base64url')}` };
 }
 // Only installation identity is exposed. Never project config, environment, health or MCP URLs.
 export function wamMetadata(doc) {

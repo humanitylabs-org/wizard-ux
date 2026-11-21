@@ -42,7 +42,8 @@
     "wizard/agent-inbox",
     "wizard/pin-reach-answer",
     "wizard/phone-app-notifications",
-    "wizard/lock-screen-player"
+    "wizard/lock-screen-player",
+    "wizard/runtipi-cli-key"
   ],
   "defaults": [
     "wizard/unified-inbox",
