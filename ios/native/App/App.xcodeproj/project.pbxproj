@@ -19,6 +19,8 @@
 		A1D0C0DE0000000000000002 /* WizardViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1D0C0DE0000000000000001 /* WizardViewController.swift */; };
 		A1D0C0DE0000000000000012 /* WizardOrigin.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1D0C0DE0000000000000011 /* WizardOrigin.swift */; };
 		A1D0C0DE0000000000000014 /* QRScannerViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1D0C0DE0000000000000013 /* QRScannerViewController.swift */; };
+		A1D0C0DE0000000000001664 /* WizardAudioPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1D0C0DE0000000000001663 /* WizardAudioPolicy.swift */; };
+		A1D0C0DE0000000000001666 /* WizardAudioPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1D0C0DE0000000000001665 /* WizardAudioPlayer.swift */; };
 		A1D0C0DE0000000000000004 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = A1D0C0DE0000000000000003 /* PrivacyInfo.xcprivacy */; };
 /* End PBXBuildFile section */
 
@@ -37,6 +39,8 @@
 		A1D0C0DE0000000000000001 /* WizardViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WizardViewController.swift; sourceTree = "<group>"; };
 		A1D0C0DE0000000000000011 /* WizardOrigin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WizardOrigin.swift; sourceTree = "<group>"; };
 		A1D0C0DE0000000000000013 /* QRScannerViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QRScannerViewController.swift; sourceTree = "<group>"; };
+		A1D0C0DE0000000000001663 /* WizardAudioPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WizardAudioPolicy.swift; sourceTree = "<group>"; };
+		A1D0C0DE0000000000001665 /* WizardAudioPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WizardAudioPlayer.swift; sourceTree = "<group>"; };
 		A1D0C0DE0000000000000003 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		A1D0C0DE0000000000000005 /* App.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = App.entitlements; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -79,6 +83,8 @@
 				A1D0C0DE0000000000000001 /* WizardViewController.swift */,
 				A1D0C0DE0000000000000011 /* WizardOrigin.swift */,
 				A1D0C0DE0000000000000013 /* QRScannerViewController.swift */,
+				A1D0C0DE0000000000001663 /* WizardAudioPolicy.swift */,
+				A1D0C0DE0000000000001665 /* WizardAudioPlayer.swift */,
 				50379B222058CBB4000EE86E /* capacitor.config.json */,
 				504EC3071FED79650016851F /* AppDelegate.swift */,
 				504EC30B1FED79650016851F /* Main.storyboard */,
@@ -178,6 +184,8 @@
 				A1D0C0DE0000000000000002 /* WizardViewController.swift in Sources */,
 				A1D0C0DE0000000000000012 /* WizardOrigin.swift in Sources */,
 				A1D0C0DE0000000000000014 /* QRScannerViewController.swift in Sources */,
+				A1D0C0DE0000000000001664 /* WizardAudioPolicy.swift in Sources */,
+				A1D0C0DE0000000000001666 /* WizardAudioPlayer.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

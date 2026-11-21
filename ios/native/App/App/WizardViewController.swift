@@ -77,6 +77,8 @@ final class WizardViewController: CAPBridgeViewController {
     private var unreachableTimer: Timer?
     private var loadingCover: WKWebView?
     private var foregroundObserver: NSObjectProtocol?
+    /// The phone's own media player for Music and Podcasts (switch wizard/lock-screen-player, wizard-ux issue 1664).
+    private var audioBridge: WizardAudioBridge?
 
     override func instanceDescriptor() -> InstanceDescriptor {
         let descriptor = super.instanceDescriptor()
@@ -113,6 +115,7 @@ final class WizardViewController: CAPBridgeViewController {
         }
 
         injectPluginProxies(into: web)
+        if !connectMode { audioBridge = WizardAudioBridge.install(on: web) }
         if !connectMode { watchUnreachable(web) }
 
         foregroundObserver = NotificationCenter.default.addObserver(

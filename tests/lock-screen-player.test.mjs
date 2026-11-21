@@ -107,7 +107,7 @@ test('the switch is listed, off by default, linked to its issue', () => {
   assert.ok(!cat.defaults.includes(SWITCH));
   const m = JSON.parse(read('web/tweaks/wizard/lock-screen-player/manifest.json'));
   assert.equal(m.id, SWITCH);
-  assert.deepEqual(m.issues, ['humanitylabs-org/wizard-ux#1661']);
+  assert.ok(m.issues.includes('humanitylabs-org/wizard-ux#1661'));
   const profile = read('web/tweaks/wizard/profile.json');
   assert.ok(!profile.includes(SWITCH));
 });
