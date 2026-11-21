@@ -26,10 +26,11 @@ ${links.map(h=>`<link rel="stylesheet" href="/${h}">`).join('\n')}
 <textarea id="ta">a text field</textarea>
 </div></div></div>
 </body></html>`;
+const ROUTES=['host-profile','container','restricted'];
 const MIME={'.css':'text/css','.js':'text/javascript','.svg':'image/svg+xml','.woff2':'font/woff2','.png':'image/png'};
 const server=http.createServer((req,res)=>{
   const u=new URL(req.url,'http://x'),p=u.pathname;
-  if(p==='/'){res.setHeader('Content-Type','text/html; charset=utf-8');return res.end(PAGE(u.searchParams.get('skin')==='grove'?'grove':'nebula',u.searchParams.get('route')||''));}
+  if(p==='/'){res.setHeader('Content-Type','text/html; charset=utf-8');return res.end(PAGE(u.searchParams.get('skin')==='grove'?'grove':'nebula',ROUTES.find(r=>r===u.searchParams.get('route'))||''));}
   const file=path.join(WEB,p);
   if(file.startsWith(WEB+path.sep)&&fs.existsSync(file)&&fs.statSync(file).isFile()){res.setHeader('Content-Type',MIME[path.extname(file)]||'application/octet-stream');return res.end(fs.readFileSync(file));}
   res.statusCode=404;res.end();
