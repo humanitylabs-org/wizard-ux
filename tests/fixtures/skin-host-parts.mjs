@@ -5,22 +5,27 @@
 // move. Same recipe as tests/fixtures/app-parts.mjs. Text without skinHostParts calls comes back unchanged, so a
 // test that reads several files may pass each one through.
 import { readFileSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
 
 const LATE_LINE = /^ {2}let [^\n]*; \/\/ late-bound: [^\n]*\n/m;
 const CALL = /^ {2}const \{[^\n]*\} = window\.WizCore\.skinHostParts\.([a-z]+)\([^\n]*\);$/gm;
 
-export function skinHostPartBody(part) {
-  const file = readFileSync(new URL(`../../web/core/skin-host-${part}.js`, import.meta.url), 'utf8');
+// root: another checkout's top folder (a test that runs a selected tree, e.g. QA_SETTINGS_SOURCE), so its parts
+// come from the same tree as its skin-host.js; this repo's when left out.
+export function skinHostPartBody(part, root) {
+  const at = root ? new URL(`web/core/skin-host-${part}.js`, pathToFileURL(root.endsWith('/') ? root : root + '/'))
+    : new URL(`../../web/core/skin-host-${part}.js`, import.meta.url);
+  const file = readFileSync(at, 'utf8');
   const head = file.indexOf(`window.WizCore.skinHostParts.${part} = function (`);
   const start = file.indexOf('\n', head) + 1, end = file.lastIndexOf('\n  return { ');
   if (head < 0 || end < start) throw new Error(`skin-host-${part}.js: part wrapper not found`);
   return file.slice(start, end).replace(LATE_LINE, '');
 }
 
-export function withSkinHostParts(src) {
+export function withSkinHostParts(src, root) {
   src = String(src);
   // Drop only the bindLate hand-overs a skinHostParts call names (`bindLate: rowsLate`), never another file's lines.
   const late = [...src.matchAll(CALL)].map(m => (m[0].match(/bindLate: ([a-z]+Late) \}/) || [])[1]).filter(Boolean);
-  const out = src.replace(CALL, (_, part) => skinHostPartBody(part));
+  const out = src.replace(CALL, (_, part) => skinHostPartBody(part, root));
   return late.length ? out.replace(new RegExp(`^ {2}(?:${late.join('|')})\\(\\{[^\\n]*\\}\\);\\n`, 'gm'), '') : out;
 }
