@@ -2209,14 +2209,46 @@ test('draft marks (issue 1445): a Channels line whose box holds a draft wears th
   const keys = new Set(['chan:hermes:launch', 'chan:host:host-ops', 'chan:restricted:locked']);
   f.env.KIT.drafts.keys = () => keys;
   const lines = () => Object.fromEntries(f.channelsBody(f.w, f.rows).split(/<div class="ch-chan(?=[ "])/).slice(1).map(h => [/data-chchan="([^"]+)"/.exec(h)?.[1], h.includes('class="ch-chan-draft"')]));
+  const word = () => /<span class="ch-chan-draft" title="Unsent draft"><span aria-hidden="true">✎<\/span> Draft<\/span>/.test(f.channelsBody(f.w, f.rows)); // issue 1709: the word too
   assert.ok(Object.values(lines()).every(v => !v), 'switch off: no pencil');
   f.env.document.documentElement.dataset.tweaks += ' wizard/draft-marks';
   const on = lines();
   assert.deepEqual({ launch: on.launch, voice: on.voice, host: on['host-ops'], box: on.box, locked: on.locked }, { launch: true, voice: false, host: true, box: false, locked: true });
+  assert.ok(word(), 'the pencil says Draft (issue 1709)');
   keys.delete('chan:hermes:launch'); keys.add('chan::__general__');
   const after = lines();
   assert.equal(after.launch, false, 'sent or discarded: gone');
   assert.equal(Object.entries(after).find(([k]) => /general/i.test(k))?.[1], true, 'General (main agent) box key chan::<id>');
+});
+
+test('issue 1709: a channel feed\'s thread card says ✎ Draft on its reply line while its thread (direct:<id>) holds a draft, main and routed alike, only with the switch on', async () => {
+  const f = fixture({ rows: [], history: { a: [{ role: 'user', text: 'Plan the launch' }, { role: 'assistant', text: 'ok' }], b: [{ role: 'user', text: 'Voice keys' }, { role: 'assistant', text: 'done' }] } });
+  // The real draft-mark read (core/chats-daily.js rowDraft: switch wizard/draft-marks, the drafts store's keys) is in the block.
+  assert.equal(vm.runInContext('typeof rowDraft', f.env), 'function');
+  const keys = new Set(); f.env.KIT.drafts.keys = () => keys;
+  f.openChannel(f.w, 'launch'); const open = f.chanOpen(f.w), rows = [row('a', 3), row('b', 2)];
+  f.channelFeed(f.w, open, rows); await new Promise(r => setImmediate(r));
+  const feed = () => f.channelFeed(f.w, open, rows);
+  const cards = h => Object.fromEntries(h.split(/<div class="ch-post(?=[ "])/).slice(1).map(p => [/data-morph-key="post:([^"]+)"/.exec(p)?.[1], p]).filter(([k]) => k));
+  const marked = h => Object.entries(cards(h)).filter(([, p]) => p.includes('class="ch-post-draft ch-draft-tag"')).map(([k]) => k);
+  const off = feed();
+  keys.add('direct:a'); keys.add('direct:h1');
+  assert.deepEqual(marked(feed()), [], 'switch off: no mark');
+  assert.equal(feed(), off, 'switch off: the feed is unchanged');
+  f.env.document.documentElement.dataset.tweaks += ' wizard/draft-marks';
+  const on = feed();
+  assert.deepEqual(marked(on), ['a'], 'the drafted thread is marked, the other is not');
+  assert.match(cards(on).a, /data-chopen="a">[^]*?<time>[^<]*<\/time><span class="ch-post-draft ch-draft-tag"><span aria-hidden="true">✎<\/span> Draft<\/span><\/button>/, 'on the reply line, right after its time');
+  assert.deepEqual(Object.keys(cards(on)), Object.keys(cards(off)), 'posts keep their order');
+  keys.delete('direct:a');
+  assert.deepEqual(marked(feed()), [], 'sent or discarded: gone');
+  keys.add('chan:hermes:launch');
+  assert.deepEqual(marked(feed()), [], 'the channel\'s own box draft marks no thread card');
+  // A routed agent's channel (host): its thread's box saves under the same direct:<id> key.
+  f.channelBack(f.w); f.openChannel(f.w, 'host-ops'); const hostOpen = f.chanOpen(f.w), hostRows = [row('h1', 1, { owner: 'host' })];
+  assert.deepEqual(marked(f.channelFeed(f.w, hostOpen, hostRows)), ['h1'], 'routed thread card marked');
+  keys.delete('direct:h1');
+  assert.deepEqual(marked(f.channelFeed(f.w, hostOpen, hostRows)), [], 'routed: gone');
 });
 
 // Issue 1506: a channel's emoji where the # was. The emoji is the start of the channel's own name; General is #️⃣ and a

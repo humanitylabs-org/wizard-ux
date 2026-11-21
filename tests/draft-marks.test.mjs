@@ -129,6 +129,21 @@ test('live: a draft appearing or going repaints the lists, never the window whos
   assert.deepEqual(d.repaints, ['list', 'list'], 'switch off: no repaints');
 });
 
+test('issue 1709: a thread\'s draft repaints the open channel feed too (its post card follows); a channel box\'s draft still waits; the event names the keys', async () => {
+  const d = device(); await d.L.refresh();
+  const seen = []; d.c.addEventListener('wos:drafts-keys', e => seen.push([...(e.detail?.keys || [])]));
+  d.drafts.set('direct:' + GREEN, 'h', []);
+  assert.deepEqual(d.repaints, ['list', 'feed'], 'the Activity list and the feed whose thread card shows it; never the open thread');
+  assert.deepEqual(seen.at(-1), ['direct:' + GREEN], 'the key that gained its draft');
+  d.drafts.set('direct:' + GREEN, 'he', []);
+  assert.deepEqual(d.repaints, ['list', 'feed'], 'no repaint per keystroke');
+  d.drafts.set('chan:hermes:launch', 'p', []);
+  assert.deepEqual(d.repaints, ['list', 'feed', 'list'], 'a channel box\'s draft leaves the feed being typed in alone');
+  d.drafts.clear('direct:' + GREEN);
+  assert.deepEqual(seen.at(-1), ['direct:' + GREEN], 'the key that lost its draft');
+  assert.deepEqual(d.repaints, ['list', 'feed', 'list', 'list', 'feed'], 'sent or discarded: the feed repaints and the mark goes');
+});
+
 test('Channels: the pencil follows the box key of every agent kind (main, host, container, restricted, General, agent feed)', () => {
   const d = device();
   const cases = [

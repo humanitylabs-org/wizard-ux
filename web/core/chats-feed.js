@@ -7,7 +7,7 @@
  * body below keeps chats.js's indentation so `git log -L` and patches port over. */
 window.WizCore = window.WizCore || {};
 window.WizCore.chatsParts = window.WizCore.chatsParts || {};
-window.WizCore.chatsParts.feed = function ({ agentName, agentRec, ago, AGS, CHAN_CLAMP, chanActs, chanArchived, chanAt, chanChanged, chanGenAgent, chanKey, chanMore, chanNeeds, chanNewN, chanPostOrder, chanPostText, chanReadKey, chanReplies, chanStart, chanUnread, esc, firstAgent, firstPost, firstWant, focusedAgent, focusOf, inChannel, isWorking, KIT, LIVE, pullFirst, replyWant }) {
+window.WizCore.chatsParts.feed = function ({ agentName, agentRec, ago, AGS, CHAN_CLAMP, chanActs, chanArchived, chanAt, chanChanged, chanGenAgent, chanKey, chanMore, chanNeeds, chanNewN, chanPostOrder, chanPostText, chanReadKey, chanReplies, chanStart, chanUnread, esc, firstAgent, firstPost, firstWant, focusedAgent, focusOf, inChannel, isWorking, KIT, LIVE, pullFirst, replyWant, rowDraft }) {
   let alertsHtml, chanSending; // late-bound: chats.js declares these after the call, see bindLate
   /* Issue 1440 (James, 13 Nov 2026): no Open / Needs you / All selector. The feed is every post of the channel; the
    * thread's own jump pills (issue 1359) point at posts that need you (amber) or have unread replies (green). */
@@ -36,6 +36,9 @@ window.WizCore.chatsParts.feed = function ({ agentName, agentRec, ago, AGS, CHAN
       const fresh = un ? `<span class="ch-post-st new"><i class="ch-chan-dot new" aria-hidden="true"></i>${nn ? `${nn} new ${nn === 1 ? 'reply' : 'replies'}` : byAgent && !n ? 'New' : 'New reply'}</span>` : '';
       const state = (isWorking(s) ? '<span class="ch-post-st working"><i class="ch-spin" aria-hidden="true"></i>Working</span>' : chanNeeds(s) ? '<span class="ch-post-st needs"><i class="ch-chan-dot" aria-hidden="true"></i>Needs you</span>' : s.archived ? '<span class="ch-post-st">Done</span>' : '') + fresh;
       const marks = state ? `<span class="ch-post-sts">${state}</span>` : ''; // one unit: it wraps whole, never split
+      // A thread whose reply box holds a saved, unsent draft (direct:<id>; switch wizard/draft-marks, wizard-ux issue
+      // 1709) says "✎ Draft" on its reply line, the same mark as its Activity row. It never moves or recounts the post.
+      const dft = typeof rowDraft === 'function' && rowDraft(s) ? '<span class="ch-post-draft ch-draft-tag"><span aria-hidden="true">✎</span> Draft</span>' : '';
       const mk = !isWorking(s) && chanNeeds(s) ? 'needs' : un ? 'new' : ''; // what the feed's jump pills count (issue 1440)
       const pics = media.length ? `<div class="ch-post-media">${media.slice(0, 6).map((m, i) => `<button type="button" class="ch-post-img" data-chpostimg="${esc(s.id)}" data-chpostag="${esc(firstAgent(s))}" data-i="${i}" aria-label="Open ${esc(m.name || 'photo')}"><img src="${esc(m.thumb || m.url)}" alt="" loading="lazy" decoding="async"></button>`).join('')}${media.length > 6 ? `<span class="ch-post-n">+${media.length - 6}</span>` : ''}</div>` : '';
       // An agent's words keep the chat bubble's inline markdown (wizard-ux issue 1287: bold, italics, links, code; a
@@ -53,8 +56,8 @@ window.WizCore.chatsParts.feed = function ({ agentName, agentRec, ago, AGS, CHAN
       // agent's avatar and name, and a Reply button until the thread has replies; then the usual reply line.
       const av = byAgent ? `<span class="ch-post-me ch-post-ag" aria-hidden="true">${AGS()?.sigil?.(agentRec(firstAgent(s) || open.agent || '')) || ''}</span>` : meAv;
       const who = byAgent ? (typeof agentName === 'function' ? agentName(firstAgent(s) || open.agent || '') : 'Wizard') : (me || 'You');
-      const foot = byAgent && !n ? `<span class="ch-post-rr"><button type="button" class="ch-post-reply" data-chreply="${esc(s.id)}" aria-label="Reply to ${esc(who)}">Reply</button>${marks}</span>`
-        : `<button type="button" class="ch-post-r${un ? ' unread' : ''}" data-chopen="${esc(s.id)}">${hat}${replies}<time>${esc(ago(LIVE.cardAt(s)))}</time>${marks}</button>`;
+      const foot = byAgent && !n ? `<span class="ch-post-rr"><button type="button" class="ch-post-reply" data-chreply="${esc(s.id)}" aria-label="Reply to ${esc(who)}">Reply</button>${dft}${marks}</span>`
+        : `<button type="button" class="ch-post-r${un ? ' unread' : ''}" data-chopen="${esc(s.id)}">${hat}${replies}<time>${esc(ago(LIVE.cardAt(s)))}</time>${dft}${marks}</button>`;
       return `<div class="ch-post${un ? ' unread' : ''}${byAgent ? ' by-agent' : ''}"${mk ? ` data-chmark="${mk}"` : ''} data-morph-key="post:${esc(s.id)}" data-chrow="${esc(chanKey(s))}" data-chtitle="${esc(s.title || '')}">${av}<div class="ch-post-c"><button type="button" class="ch-post-b" data-chopen="${esc(s.id)}" aria-label="Open thread: ${esc(s.title)}"><span class="ch-post-h"><b>${esc(who)}</b><time>${esc(ago(at))}</time></span>${byAgent ? '' : body}</button>${byAgent && body ? `<div class="ch-post-tb" data-chopen="${esc(s.id)}">${body}</div>` : ''}${long ? `<button type="button" class="ch-post-more" data-chpostmore="${esc(s.id)}" aria-expanded="${more}">${more ? 'less' : 'more'}</button>` : ''}${pics}${foot}</div></div>`;
     };
     // A post just sent from the channel's box: on screen from the Send tap, with the reply line saying it is on its way.
