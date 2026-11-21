@@ -828,7 +828,6 @@
   register({ id: 'chats-list-style', page: 'chats', html: () => { const r = settingRow('wizard/desktop-chats'); return r ? `<div class="st-group"><h4>Chats list</h4>${r}</div>` : ''; }, act: settingAct });
   register({ id: 'notifications-in-chats', page: 'chats', html: () => { const r = settingRow('wizard/unified-inbox'); return r ? `<div class="st-group"><h4>Notifications</h4>${r}</div>` : ''; }, act: settingAct });
   // Draft marks are on for everyone (wizard-ux issue 1604, James: "just ship this"); an owner can still turn them off here.
-  register({ id: 'chats-draft-marks', page: 'chats', html: () => { const r = settingRow('wizard/draft-marks'); return r ? `<div class="st-group"><h4>Drafts</h4>${r}</div>` : ''; }, act: settingAct });
   /* Settings › Notifications: one choice per app, Badge or Chats, never both (Miguel, 1 Nov 2026). Lists
    * Notifications and every installed app that has an inbox feed (only those can put items in Chats); every other app
    * shows a badge. Saved on this device. Chats needs Notifications in Chats (Settings › Chats) on. */

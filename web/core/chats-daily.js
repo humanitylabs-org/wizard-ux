@@ -88,23 +88,20 @@ window.WizCore.chatsParts.daily = function ({ agentName, AGS, CH, chanElsewhere,
   const actNeeds = s => !!s && chanNeeds(s);
   const actUnread = s => !!s && chanUnread(s);
   const actMark = s => window.WizChatsListModel.activityMark({ working: isWorking(s), needs: actNeeds(s), unread: actUnread(s) });
-  /* Draft marks (wizard-ux issue 1445, switch wizard/draft-marks): an Activity row whose thread has a saved, unsent draft
+  /* Draft marks (wizard-ux issue 1445; on for everyone since issue 1604, it was the wizard/draft-marks switch): an Activity row whose thread has a saved, unsent draft
    * (words, a file or a reply card: KIT.drafts.keys) says "✎ Draft" ahead of its preview, and a Channels line whose box has
    * one wears the same pencil. Shown and cleared live (chat-kit fires wos:drafts-keys when a key gains or loses its draft);
    * rows never move or count differently because of it. */
-  const DRAFT_MARKS = 'wizard/draft-marks';
-  const draftMarksOn = () => { try { return (document.documentElement.dataset.tweaks || '').split(' ').includes(DRAFT_MARKS); } catch (_) { return false; } };
   const draftAt = k => { try { return !!k && !!KIT.drafts.keys?.().has(k); } catch (_) { return false; } };
-  const rowDraft = s => !!s && draftMarksOn() && draftAt('direct:' + s.id);
+  const rowDraft = s => !!s && draftAt('direct:' + s.id);
   // A channel's box key is chanDraftKey's: chan:<the channel's agent, else the list's agent>:<channel id>.
-  const chanLineDraft = (c0, ag = '') => !!c0 && draftMarksOn() && draftAt(`chan:${c0.agent || ag || ''}:${c0.id}`);
+  const chanLineDraft = (c0, ag = '') => !!c0 && draftAt(`chan:${c0.agent || ag || ''}:${c0.id}`);
   const draftTag = s => rowDraft(s) ? '<span class="ch-draft-tag"><span aria-hidden="true">✎</span> Draft</span> · ' : '';
   // The pencil says "Draft" too (wizard-ux issue 1709), as the Activity rows do.
   const chanDraftMark = (c0, ag) => chanLineDraft(c0, ag) ? '<span class="ch-chan-draft" title="Unsent draft"><span aria-hidden="true">✎</span> Draft</span>' : '';
   // The lists repaint when a draft appears or goes. A window drawing a channel's feed (its box is the one being typed in)
   // waits for a channel box's draft; a thread's draft (direct:<id>) repaints it, so its post card follows (issue 1709).
   window.addEventListener?.('wos:drafts-keys', e => {
-    if (!draftMarksOn()) return;
     const thread = (e?.detail?.keys || []).some(k => String(k).startsWith('direct:'));
     for (const id of Object.keys(CH)) {
       const x = W[id]; if (!x || x.thread || (!thread && chanOpen(x) && !chanElsewhere(x)) || holdList(id)) continue;

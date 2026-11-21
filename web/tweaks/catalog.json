@@ -24,7 +24,6 @@
     "wizard/update-bug-reports",
     "wizard/link-token-repair",
     "wizard/graceful-restart",
-    "wizard/draft-marks",
     "wizard/app-updates-hourly",
     "wizard/clear-chat-notifications",
     "wizard/sidebar-chats-view",
@@ -43,12 +42,10 @@
   ],
   "defaults": [
     "wizard/unified-inbox",
-    "wizard/desktop-chats",
-    "wizard/draft-marks"
+    "wizard/desktop-chats"
   ],
   "promotedDefaults": [
-    "wizard/desktop-chats",
-    "wizard/draft-marks"
+    "wizard/desktop-chats"
   ],
   "aliases": {
     "miguel/unified-inbox": "wizard/unified-inbox",

@@ -2204,14 +2204,12 @@ test('issue 1336 (Codex P2): Undo waits for the archive still in flight, then re
   assert.deepEqual(order, ['restore:b', 'paint']); assert.equal(f.toasts.at(-1), 'Couldn’t undo · still archived');
 });
 
-test('draft marks (issue 1445): a Channels line whose box holds a draft wears the pencil, per agent, only with the switch on', () => {
+test('draft marks (issue 1445): a Channels line whose box holds a draft wears the pencil, per agent (no switch since issue 1604)', () => {
   const f = fixture({ rows: [row('a', 1), row('d', 2), row('h1', 1, { owner: 'host' }), row('k1', 1, { owner: 'container' }), row('r1', 1, { owner: 'restricted' })] });
   const keys = new Set(['chan:hermes:launch', 'chan:host:host-ops', 'chan:restricted:locked']);
   f.env.KIT.drafts.keys = () => keys;
   const lines = () => Object.fromEntries(f.channelsBody(f.w, f.rows).split(/<div class="ch-chan(?=[ "])/).slice(1).map(h => [/data-chchan="([^"]+)"/.exec(h)?.[1], h.includes('class="ch-chan-draft"')]));
   const word = () => /<span class="ch-chan-draft" title="Unsent draft"><span aria-hidden="true">✎<\/span> Draft<\/span>/.test(f.channelsBody(f.w, f.rows)); // issue 1709: the word too
-  assert.ok(Object.values(lines()).every(v => !v), 'switch off: no pencil');
-  f.env.document.documentElement.dataset.tweaks += ' wizard/draft-marks';
   const on = lines();
   assert.deepEqual({ launch: on.launch, voice: on.voice, host: on['host-ops'], box: on.box, locked: on.locked }, { launch: true, voice: false, host: true, box: false, locked: true });
   assert.ok(word(), 'the pencil says Draft (issue 1709)');
@@ -2221,9 +2219,9 @@ test('draft marks (issue 1445): a Channels line whose box holds a draft wears th
   assert.equal(Object.entries(after).find(([k]) => /general/i.test(k))?.[1], true, 'General (main agent) box key chan::<id>');
 });
 
-test('issue 1709: a channel feed\'s thread card says ✎ Draft on its reply line while its thread (direct:<id>) holds a draft, main and routed alike, only with the switch on', async () => {
+test('issue 1709: a channel feed\'s thread card says ✎ Draft on its reply line while its thread (direct:<id>) holds a draft, main and routed alike, (no switch since issue 1604)', async () => {
   const f = fixture({ rows: [], history: { a: [{ role: 'user', text: 'Plan the launch' }, { role: 'assistant', text: 'ok' }], b: [{ role: 'user', text: 'Voice keys' }, { role: 'assistant', text: 'done' }] } });
-  // The real draft-mark read (core/chats-daily.js rowDraft: switch wizard/draft-marks, the drafts store's keys) is in the block.
+  // The real draft-mark read (core/chats-daily.js rowDraft: the drafts store's keys) is in the block.
   assert.equal(vm.runInContext('typeof rowDraft', f.env), 'function');
   const keys = new Set(); f.env.KIT.drafts.keys = () => keys;
   f.openChannel(f.w, 'launch'); const open = f.chanOpen(f.w), rows = [row('a', 3), row('b', 2)];
@@ -2233,9 +2231,6 @@ test('issue 1709: a channel feed\'s thread card says ✎ Draft on its reply line
   const marked = h => Object.entries(cards(h)).filter(([, p]) => p.includes('class="ch-post-draft ch-draft-tag"')).map(([k]) => k);
   const off = feed();
   keys.add('direct:a'); keys.add('direct:h1');
-  assert.deepEqual(marked(feed()), [], 'switch off: no mark');
-  assert.equal(feed(), off, 'switch off: the feed is unchanged');
-  f.env.document.documentElement.dataset.tweaks += ' wizard/draft-marks';
   const on = feed();
   assert.deepEqual(marked(on), ['a'], 'the drafted thread is marked, the other is not');
   assert.match(cards(on).a, /data-chopen="a">[^]*?<time>[^<]*<\/time><span class="ch-post-draft ch-draft-tag"><span aria-hidden="true">✎<\/span> Draft<\/span><\/button>/, 'on the reply line, right after its time');

@@ -1081,3 +1081,14 @@ html:root .ch-rename .ch-emoji-pick { margin: 6px 10px 10px; }
 html:root :is(.ch-space-form, .ch-sheet-b) .ch-emoji-pick button { display: grid; place-items: center; width: auto; min-width: 0; min-height: 40px; padding: 0; border: 1px solid transparent; border-radius: var(--wz-radius, 10px); background: color-mix(in srgb, var(--wz-text, var(--ink)) 6%, transparent); color: inherit; font-size: var(--wz-text-lg, 1.25rem); font-weight: 400; line-height: 1; cursor: pointer; }
 html:root :is(.ch-space-form, .ch-sheet-b) .ch-emoji-pick button[aria-pressed="true"] { border-color: var(--wz-accent, var(--violet-2)); background: color-mix(in srgb, var(--wz-accent, var(--violet-2)) 18%, transparent); }
 html:root :is(.ch-space-form, .ch-sheet-b) .ch-emoji-pick button:focus-visible { outline: 2px solid var(--wz-accent, var(--violet-2)); outline-offset: 1px; }
+
+/* Draft marks (wizard-ux issue 1445), on for everyone since wizard-ux issue 1604 (it was the wizard/draft-marks switch's
+   tweak.css; html:root keeps that switch's selector weight): the pencil of a saved, unsent draft on Activity rows and Channels lines. */
+html:root .ch-draft-tag { color: var(--wz-warning, var(--amber)); font-weight: 500; white-space: nowrap; }
+html:root .ch-chan-draft { flex: none; margin-left: auto; padding-left: 8px; color: var(--wz-warning, var(--amber)); font-size: .875rem; font-weight: 500; line-height: 1; white-space: nowrap; }
+/* A channel feed's thread card (issue 1709): "✎ Draft" on its reply line, over the line's own word colours. */
+html:root :is(.ch-post-r, .ch-post-rr) span.ch-post-draft.ch-draft-tag:not(.ch-post-st), html:root :is(.ch-post-r, .ch-post-rr) span.ch-post-draft.ch-draft-tag:not(.ch-post-st) span { color: var(--wz-warning, var(--amber)); font-weight: 500; }
+html:root .ch-chan-draft + .ch-chan-ind { margin-left: 0; }
+/* AI apps sidebar: "✎ Draft" leads the row's second line (the channel), or is the line when the row has no channel. */
+html:root[data-layout="ai-apps"] .aad-rw[data-draft] .aad-chan-line::before { content: "✎ Draft · "; color: var(--wz-warning, var(--amber)); font-weight: 500; }
+html:root[data-layout="ai-apps"] .aad-rw[data-draft] .aad-draft-line::before { content: "✎ Draft"; }
