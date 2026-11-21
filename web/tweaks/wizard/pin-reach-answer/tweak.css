@@ -1,3 +1,0 @@
-/* Connecting only while Wizard hasn't answered (wizard-ux issue 1607): nothing in the shell changes; the connecting
- * screen is the Android app's own. This rule only marks the switch as present. */
-html[data-tweaks~="wizard/pin-reach-answer"] { --wos-pin-reach-answer: 1; }

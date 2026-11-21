@@ -33,7 +33,6 @@
     "wizard/private-first-setup",
     "wizard/chat-app-switches",
     "wizard/agent-inbox",
-    "wizard/pin-reach-answer",
     "wizard/phone-app-notifications",
     "wizard/lock-screen-player",
     "wizard/runtipi-cli-key",

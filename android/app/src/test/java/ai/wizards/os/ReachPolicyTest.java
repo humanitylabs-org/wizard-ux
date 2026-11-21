@@ -67,13 +67,12 @@ public class ReachPolicyTest {
     }
 
     @Test
-    public void anAnswerStopsConnectingOnlyWithTheSwitchOn() {
-        // wizard-ux issue 1607 (switch wizard/pin-reach-answer): the Wizard answered the load being watched.
-        assertTrue(ReachPolicy.answerDisarms(true, true, false, true));
-        assertFalse(ReachPolicy.answerDisarms(false, true, false, true));  // off: only a paint stops it, as before
-        assertFalse(ReachPolicy.answerDisarms(true, false, false, true));  // about:blank, data: and file pages are not answers
-        assertFalse(ReachPolicy.answerDisarms(true, true, true, true));    // this load already failed (5xx or error)
-        assertFalse(ReachPolicy.answerDisarms(true, true, false, false));  // a late answer from another Wizard's address
+    public void anAnswerStopsConnecting() {
+        // wizard-ux issue 1607: the Wizard answered the load being watched (always on since the switch was removed).
+        assertTrue(ReachPolicy.answerDisarms(true, false, true));
+        assertFalse(ReachPolicy.answerDisarms(false, false, true));  // about:blank, data: and file pages are not answers
+        assertFalse(ReachPolicy.answerDisarms(true, true, true));    // this load already failed (5xx or error)
+        assertFalse(ReachPolicy.answerDisarms(true, false, false));  // a late answer from another Wizard's address
     }
 
     @Test
