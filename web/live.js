@@ -30,7 +30,7 @@
   const listSignal = () => typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? { signal: AbortSignal.timeout(LIST_DEADLINE) } : {};
   async function fetchSessions(full, agent = '', onFirst = null) {
     const read = ++titleRead;
-    const out = []; let snapshot = '', meta = null, resets = 0;
+    const out = []; let snapshot = '', meta = null, resets = 0, build = '';
     const overrides = JSON.stringify(listOverrides(agent));
     for (let offset = 0; offset < 100000; ) {
       const slim = LIST_SUPPORT.get(agent) !== false;
@@ -46,12 +46,16 @@
       if (slim && p.list_version === 1 && p.window !== 'archive-50') { LIST_SUPPORT.set(agent,false); snapshot=''; out.length=0; offset=0; continue; }
       if (p.list_version === 1) LIST_SUPPORT.set(agent,true);
       if (!snapshot && typeof p.snapshot === 'string') snapshot = p.snapshot;
+      // The slim title index is re-read only when the list's build moved (wizard-ux issue 1693): the window
+      // hashes the same selection for both shapes, so an unchanged build means an unchanged index. Checked on the
+      // first page, so a head-only poll of a long list also refreshes search when something changed.
+      if (!build && typeof p.build === 'string') { build = p.build; if (TITLE_INDEX.get(agent)?.build !== build) setTimeout(()=>{void fetchTitleIndex(agent)},0); }
       if (p.window === 'archive-50') meta = { archiveTotal:p.archive_total, archiveReturned:p.archive_returned, cursor:p.archive_cursor };
       const rows = p.data || p.sessions || p.items || [];
       out.push(...rows.map(normalize).filter(Boolean));
       offset += rows.length;
       const more = typeof p.has_more === 'boolean' ? p.has_more : typeof p.pagination?.has_more === 'boolean' ? p.pagination.has_more : rows.length >= 100;
-      if (!more) { setTimeout(()=>{void fetchTitleIndex(agent)},0); return { sessions:out, complete:true, meta, titleRead:read }; }
+      if (!more) return { sessions:out, complete:true, meta, titleRead:read };
       if (!rows.length) throw new Error('Incomplete session window');
       if (!full) return { sessions:out, complete:false, meta, titleRead:read };
       if (onFirst && offset === rows.length) await onFirst({ sessions:out.slice(), complete:false, meta, titleRead:read });
@@ -151,6 +155,11 @@
   }
   window.addEventListener('wos:tweak-choice', e => { if (e?.detail?.id === 'wizard/background-continue') setTimeout(() => L.refresh(), 0); });
   const FULL_EVERY = 3 * 60 * 1000;
+  /* Other agents' list reads (wizard-ux issue 1693): every 15 s poll used to walk every agent's whole list, so a
+   * reload sent ~128 reads. Now each agent follows the main list's rule (a full walk every FULL_EVERY, the head page
+   * in between), one read per agent at a time, none to an agent whose status is error, and an agent whose list
+   * answers 404 waits FULL_EVERY before the next try. id -> { fullAt, holdUntil, holdStatus, read } */
+  const AGENT_POLL = new Map();
   /* work: moved to live-work.js (wizard-ux issue 1665), called once here */
   const { AG, AGENT_OF, AGENT_SEEN, AGENT_SEEN_KEY, AGENT_WAIT, aq, ARCH_KEY, archiveAfterDays, byOldest, byPriority, cardAt, chatLayout, DAY, fetchDispositions, fetchSeen, groupSwitch, groupWork, inWorking, isDeferred, isErr, LAYOUT_KEY, needsApproval, otherAgent, prefOps, putPrefs, putSeen, readyRank, rq, sectionTime, snoozeLast, STALE_AFTER, bindLate: workLate } = window.WizCore.liveParts.work({ J, req });
   seenLate({ otherAgent, putSeen });
@@ -574,29 +583,55 @@
     async refreshAgents(deferred = this.deferred, only = '') {
       const A = AG(); if (!A) return;
       if (!A.ready) await A.load().catch(() => {});
-      const known = A.others().map(a => a.id), ids = known.filter(id => !only || id === only);
+      const others = A.others(), known = others.map(a => a.id), now = Date.now();
       for (const k of Object.keys(this.agentSessions)) if (!known.includes(k)) { delete this.agentSessions[k]; delete this.agentStatus[k]; }
-      await Promise.all(ids.map(async id => {
-        try {
-          const got = await fetchSessions(true, id);
-          if (got.meta) this.windows[id] = got.meta;
-          const list = got.sessions.filter(s => !s.agent || s.agent === id).map(s => { s.agent = id; AGENT_OF.set(s.id, id); return s; });
-          for (const s of list) {
-            const d = deferred[seenKeyOf(s)];
-            delete s.deferred; delete s.deferredAt; delete s.restoredAt;
-            if (d) { if (d.deferred) { s.deferred = true; s.deferredAt = d.updatedAt; } else s.restoredAt = d.updatedAt; }
-            applyLocal(s, got.titleRead);
-          }
-          addSynthetic(list, id);
-          window.WosModels?.reconcile(list);
-          this.agentSessions[id] = list; this.agentStatus[id] = { ok: true, error: '', at: Date.now() };
-        } catch (e) {
-          // Same contract as the main list: a failed refresh keeps the threads already shown and marks them
-          // Not up to date (with the real last-read time); only an agent never read yet shows the connection card.
-          const prev = this.agentStatus[id], error = e.status === 403 ? 'access' : 'offline';
-          this.agentSessions[id] = this.agentSessions[id] || [];
-          this.agentStatus[id] = prev?.ok && error !== 'access' ? { ok: true, error, at: prev.at } : { ok: false, error, at: Date.now() };
+      for (const k of [...AGENT_POLL.keys()]) if (!known.includes(k)) AGENT_POLL.delete(k);
+      const due = others.filter(a => {
+        if (only && a.id !== only) return false;
+        const p = AGENT_POLL.get(a.id);
+        if (a.status === 'error') { // its list 404s: show it as not reachable, never poll it
+          const prev = this.agentStatus[a.id]; this.agentSessions[a.id] = this.agentSessions[a.id] || [];
+          this.agentStatus[a.id] = prev?.ok ? { ok: true, error: 'offline', at: prev.at } : { ok: false, error: 'offline', at: prev?.at || now };
+          return false;
         }
+        return only || !p?.holdUntil || now >= p.holdUntil || p.holdStatus !== (a.status || '');
+      });
+      await Promise.all(due.map(a => {
+        const id = a.id, p = AGENT_POLL.get(id) || {}; AGENT_POLL.set(id, p);
+        // One list read per agent at a time: a poll joins the read in flight; a read for this agent alone
+        // (a send just landed) waits for it, then reads again so it sees the new state.
+        if (p.read && !only) return p.read;
+        const before = p.read;
+        const mine = (async () => {
+          if (before) await before.catch(() => {});
+          const full = !p.fullAt || Date.now() - p.fullAt > FULL_EVERY;
+          try {
+            const got = await fetchSessions(full, id);
+            p.holdUntil = 0;
+            if (got.meta) this.windows[id] = got.meta;
+            let list = got.sessions.filter(s => !s.agent || s.agent === id).map(s => { s.agent = id; AGENT_OF.set(s.id, id); return s; });
+            if (got.complete) p.fullAt = Date.now();
+            else { const fresh = new Set(list.map(s => s.id)); list = list.concat((this.agentSessions[id] || []).filter(s => !fresh.has(s.id) && !s.optimistic)); }
+            for (const s of list) {
+              const d = deferred[seenKeyOf(s)];
+              delete s.deferred; delete s.deferredAt; delete s.restoredAt;
+              if (d) { if (d.deferred) { s.deferred = true; s.deferredAt = d.updatedAt; } else s.restoredAt = d.updatedAt; }
+              applyLocal(s, got.titleRead);
+            }
+            addSynthetic(list, id);
+            window.WosModels?.reconcile(list);
+            this.agentSessions[id] = list; this.agentStatus[id] = { ok: true, error: '', at: Date.now() };
+          } catch (e) {
+            // Same contract as the main list: a failed refresh keeps the threads already shown and marks them
+            // Not up to date (with the real last-read time); only an agent never read yet shows the connection card.
+            const prev = this.agentStatus[id], error = e.status === 403 ? 'access' : 'offline';
+            this.agentSessions[id] = this.agentSessions[id] || [];
+            this.agentStatus[id] = prev?.ok && error !== 'access' ? { ok: true, error, at: prev.at } : { ok: false, error, at: Date.now() };
+            // No list there (404): back off instead of re-asking on every poll; the retry tries the list shape again.
+            if (e.status === 404) { p.holdUntil = Date.now() + FULL_EVERY; p.holdStatus = a.status || ''; LIST_SUPPORT.delete(id); }
+          } finally { if (p.read === mine) p.read = null; }
+        })();
+        return (p.read = mine);
       }));
       let migrated = false, state = merge(readLocal(),this.seen) || {initializedAt:Date.now(),threads:{}};
       for (const s of Object.values(this.agentSessions).flat()) {
