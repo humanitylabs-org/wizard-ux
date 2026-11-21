@@ -77,7 +77,7 @@ Back: `WizEscapeBack`, `WosBack`; `WizChatsHost.registerBack`/back.push share re
 | App agent routing, private-app note + setup (incl. Store) | `WosAppRoute` (`app-route.js`) |
 | App icons, logos | `WizSigil` (`sigils.js`, `sigils.css`): aliases, registry/HOUSE glyphs first; unbranded fallback; `orb(node)` white glyphs; contain-fit pins. Tests: `app-icon-*.test.mjs` |
 | Launcher | `WizLauncher`, `WizLauncherDefaults`; 1s boot; `renderLauncher`: unique ids; `WizCore`: native path gate |
-| App groups | `WosAppKinds` (`app-kinds.js`) |
+| App tiles | `WosAppKinds` (`app-kinds.js`) |
 | Brand hat | `WizBrand` (`brand.js`) |
 | Links: outside→panel (Android; `links.panel:false`=off)/browser/`links.reader`; sheet/win/hold; `data-wizard-browse`=original | `WizLinks` (`links.js`; `openIn*`/`follow`) |
 | Downloads: in-app “Downloaded · Open” banner + recent-downloads sheet (Android only; inert without `wizardDownloadsPort`); Settings → Phone → Downloads | `WosDownloads` (`downloads.js`, `downloads.css`); native `downloads/*.java` (names, quiet DownloadManager; docs/android-downloads-port.md) |

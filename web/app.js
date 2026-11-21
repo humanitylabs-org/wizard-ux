@@ -1397,13 +1397,19 @@
     if (!window.WosSettings.moveDraft({ chats: CHATS, wid: wid, item: it, outbox: OUTBOX, toast })) return; renderChats(W[wid]);
     setTimeout(() => { const ta = track.querySelector(`[data-chats="${wid}"] textarea`); ta?.focus(); }, 50);
   }
+  // Empty desks (the New desk's app grid) drawn again, unless someone is typing in their search.
+  function repaintNewDesks(onlyChanged) {
+    desks.forEach((d, i) => { if (!d.wins.length && !d.home) { const g = secOf(i)?.querySelector('.glance'); if (g && !g.querySelector('[data-ndq]')?.value && document.activeElement?.closest('.glance') !== g) { const html = renderEmpty(i); if (!onlyChanged || g._wosNd !== html) { g.innerHTML = html; g._wosNd = html; } } } });
+  }
+  // ux#1646: a fresh app list redraws the New desk, so an app that gained its page leaves Agent apps for Apps.
+  window.addEventListener('wizard:apps', () => { try { repaintNewDesks(true); } catch (_) {} });
   let lastUnsentSig = '';
   function onUnsentChange() {
     readNativeUnsent();
     if (sheet === 'settings') renderSettings();
     if (sheet === 'inbox') renderInbox();
     refreshHome(); renderMoons();
-    desks.forEach((d, i) => { if (!d.wins.length && !d.home) { const g = secOf(i)?.querySelector('.glance'); if (g && !g.querySelector('[data-ndq]')?.value && document.activeElement?.closest('.glance') !== g) g.innerHTML = renderEmpty(i); } });
+    repaintNewDesks();
     for (const id of Object.keys(W)) { const w = W[id]; if ((w.app === 'chats' || CHATS.isHosted(id)) && w.thread) { const el = track.querySelector(`[data-chats="${id}"]`); if (el) renderThread(w, el); } }
     for (const id of Object.keys(W)) { const w = W[id]; if (w.app === 'chats' && !w.thread) { const el = track.querySelector(`[data-chats="${id}"]`); if (el && el.querySelector('.ch-list')) CHATS.renderChatList(w, el); } }
     // Tell Android how many app messages are stuck, so it can say so in a notification while the app is closed.
@@ -1477,7 +1483,8 @@
     e.stopPropagation(); const key = t.dataset.fatoggle || 'agents'; foldOpen[key] = !foldOpen[key];
     document.querySelectorAll(`.forag[data-fold="${key}"]`).forEach(el => { el.classList.toggle('open', foldOpen[key]); el.querySelector('[data-fatoggle]')?.setAttribute('aria-expanded', String(foldOpen[key])); });
   }, true);
-  function openAppInfo(el) { window.WosAppRoute?.open(el.dataset.appinfo, { name: el.dataset.name || '' }); }
+  // The tile was drawn as an agent app; the app may have gained its page since (ux#1646): decide at the tap.
+  function openAppInfo(el, fromSheet) { AK.pageOrSheet(APP, el.dataset.appinfo, el.dataset.name || '', a => tapOpen(a, el, fromSheet)); }
   function renderEmpty(i) {
     // Miguel's app kinds are every skin's New desk (James, 23 Oct 2026): Apps with system apps first and ringed, then
     // Wizard apps, Agents and Connectors folded under "For agents".
@@ -1867,7 +1874,7 @@
   launcher.addEventListener('click', e => {
     const sk = e.target.closest('[data-storekind]'); if (sk) return openStoreKind(sk.dataset.storekind);
     const a = e.target.closest('[data-app]'); if (a) return launch(APP[a.dataset.app], a);
-    const bi = e.target.closest('[data-appinfo]'); if (bi) { closeSheets(); return openAppInfo(bi); }
+    const bi = e.target.closest('[data-appinfo]'); if (bi) { closeSheets(); return openAppInfo(bi, true); }
     const t = e.target.closest('[data-thread]'); if (t) { closeSheets(); return openWizardThread(t.dataset.thread); }
     const dw = e.target.closest('[data-dw]');
     if (dw) {
