@@ -37,6 +37,13 @@ On:
   `NativeGateTest` (unit) and `DeviceBridgeE2eTest.boundaryKeepsNativeBridgesOutOfAppFrames` (emulator). The other
   Android WebViews (`WizardNative`, `EverywhereNative`, `ScreenNative`) load only the app's own
   `file:///android_asset/assist/` pages with network loads blocked, so no app page reaches them.
+- Android app's own calls: sharing to Wizard, Archimedes Anywhere, reply notifications, dictation, Wizard ID and the
+  scroll diagnostics call the box from Java, not from the page, so they get no token from the wrapper. With the
+  boundary on, the top-level shell page hands the token to the app (`WizardOSNative.shellToken`, from
+  `shell-token.js`), and the app takes it only while its bridges are gated, so only the shell origin's page can set it.
+  The app keeps it in its private storage (background jobs need it after a restart), adds it only to owner routes on
+  the box it came from (`ShellToken.apply`, the same route rule as the page) and forgets it when the box says `off`.
+  App paths (`/notifications/`, `/messenger/`, …) never get it. Proof: `ShellTokenTest` (unit).
 
 ## Sandboxed app frames (on only with the box switch)
 
@@ -327,6 +334,6 @@ Not covered yet (next slices, all on #133), so nobody should turn the box switch
   boxes run that Troubleshooter version.
 - `<img>`/`<video>`/download loads of attachments and saved files carry no header; the Agent Service lets exactly
   those browser-marked loads through without the token (wizard-agent-service#479).
-- Native bridges: on Android, `WizardOSNative` and `WizardOSDevice` (`addJavascriptInterface`) still reach every
-  frame, sandboxed app windows included (wizard-ux#1430; draft wizard-ux#871). On the Mac, native calls are already
-  main-frame only, but a reply can still reach a reloaded shell page (try-wizard#95; draft try-wizard#61).
+- Native bridges: done. Android keeps `WizardOSNative` / `WizardOSDevice` out of app frames (NativeGate, above;
+  wizard-ux#1430, merged in wizard-ux#1433), and Mac native replies go only to the shell page that asked
+  (try-wizard#95, merged in try-wizard#96).

@@ -621,6 +621,7 @@ public final class EverywhereOutbox {
             c.setReadTimeout(body != null && body.length > 200_000 ? 120_000 : 30_000);
             c.setRequestMethod(method);
             c.setRequestProperty("Origin", origin);
+            ai.wizards.os.device.ShellToken.apply(c);
             c.setRequestProperty("Accept", "application/json");
             if (headers != null) for (int i = 0; i + 1 < headers.length; i += 2) c.setRequestProperty(headers[i], headers[i + 1]);
             if (body != null) {
