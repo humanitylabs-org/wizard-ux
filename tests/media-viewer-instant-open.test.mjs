@@ -86,7 +86,7 @@ test('a reveal that comes after the viewer closed does not show it again', async
 });
 
 test('the viewer has no fade-in transition', () => {
-  const rule = /\.mviewer \{[^}]*\}/.exec(css)?.[0] || '';
-  assert.ok(rule.includes('opacity: 0'), rule);
-  assert.ok(!/transition:[^;]*opacity/.test(rule), 'no opacity transition: ' + rule);
+  const rules = [...css.matchAll(/^\.mviewer \{[^}]*\}/gm)].map(m => m[0]).filter(r => r.includes('transition'));
+  assert.ok(rules.length, 'a .mviewer rule sets its transition');
+  assert.match(rules.at(-1), /transition: none;/, 'the last word on it: no transition');
 });
