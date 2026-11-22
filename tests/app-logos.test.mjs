@@ -7,6 +7,9 @@ import path from 'node:path';
 import http from 'node:http';
 import vm from 'node:vm';
 import { createHash } from 'node:crypto';
+import { createDocument } from './fixtures/mini-dom.mjs';
+import { parseCss } from './fixtures/mini-css.mjs';
+import { skeleton, styles, wordAttrs } from './fixtures/w5-css.mjs';
 import { createAppLogos, sniffImage, PLACEHOLDER_LOGOS } from '../tools/store-app-logos.mjs';
 import { createStoreDataRoutes, PREFIX } from '../tools/store-data-origin.mjs';
 
@@ -127,11 +130,38 @@ test('every icon surface draws a shipped logo as a picture tile; no logo keeps t
 
 test('the logo tile is styled outside .sgi, so skins that recolour sigils never touch it', () => {
   const css = read('web/core/sigils.css');
-  assert.match(css, /\.sglogo \{[^}]*background: var\(--logo\) center \/ cover no-repeat/);
+  const url = '/wizard-os-home/store-data/app-logo/jet-lab?v=0123456789abcdef', S = sigils({ 'jet-lab': url });
+  const logoHtml = S.html({ id: 'jet-lab', name: 'Jet Lab' }), plainHtml = S.html({ id: 'zz-unknown', name: 'Zed' });
+  const doc0 = createDocument(); doc0.body.innerHTML = logoHtml;
+  const logo0 = doc0.body.querySelector('.sglogo');
+  assert.ok(logo0 && !logo0.classList.contains('sgi'), 'the logo is its own element, not a .sgi');
+  const own = styles(logo0, [css]);
+  assert.equal(own.background, 'var(--logo) center / cover no-repeat', 'the picture fills its box');
+  assert.equal(own['border-radius'], '24%');
+  let skinsChecked = 0, sigilRules = 0;
   for (const f of fs.readdirSync(root + 'web/skins')) {
     const p = `web/skins/${f}/skin.css`;
-    if (fs.existsSync(root + p)) assert.doesNotMatch(read(p), /\.sglogo/, `${p} restyles app logos`);
+    if (!fs.existsSync(root + p)) continue;
+    const skin = read(p); skinsChecked++;
+    // Every place this skin styles a sigil: draw that markup with the real logo where the sigil would be.
+    for (const rule of parseCss(wordAttrs(skin))) for (const sel of rule.selectors) {
+      if (!/\.sgi\b/.test(sel) || rule.media.length) continue;
+      const m = /^html((?:\[[^\]]+\]|:not\([^)]*\)|:is\([^)]*\))*)\s+(.+)$/.exec(sel); if (!m) continue;
+      const doc = createDocument(), html = doc.documentElement;
+      html.setAttribute('data-skin', f); html.setAttribute('data-shell', /desktop"\]\)/.test(m[1]) || !/desktop/.test(m[1]) ? 'phone' : 'desktop');
+      let built; try { built = skeleton(doc, m[2]); } catch (_) { continue; }
+      let sgi = built.el; while (sgi && !sgi.classList?.contains('sgi')) sgi = sgi.parentNode;
+      if (!sgi?.parentNode) continue;
+      const holder = doc.createElement('div'); holder.innerHTML = logoHtml; const logo = holder.firstElementChild;
+      sgi.replaceWith(logo);
+      const opts = { states: built.states, pseudo: built.el === sgi ? built.pseudo : '' };
+      assert.deepEqual(styles(logo, [css, skin], opts), styles(logo, [css], opts), `${p}: ${sel} reaches the logo`);
+      // The same place with a sigil: the skin does restyle that (so the check above is not vacuous).
+      if (built.el === sgi) { const h2 = doc.createElement('div'); h2.innerHTML = plainHtml; const g = h2.firstElementChild; logo.replaceWith(g); if (JSON.stringify(styles(g, [css, skin], opts)) !== JSON.stringify(styles(g, [css], opts))) sigilRules++; }
+    }
   }
+  assert.ok(skinsChecked >= 2, 'skins checked');
+  assert.ok(sigilRules > 5, `skins do recolour sigils in those places (${sigilRules})`);
 });
 
 // web/core/apps.js run whole in vm against a fake box: the app list and the logo list answer, images decode.
