@@ -134,7 +134,7 @@ export function world({ shell = 'phone', route = { home: false, view: 'thread', 
     settings: () => { const n = doc.querySelector('#dsettings'); return { isOpen: !!n && !n.hidden && n.parentNode === body, closePart: n?.querySelector('.st-close') }; },
     closeSettings: () => { const b = doc.querySelector('#dsettings .st-close'); b?.click?.(); return !!b; },
     settingsOverlay: () => { html.dataset.settingsOver = ''; return () => { delete html.dataset.settingsOver; }; },
-    focus: id => { (st.hostFocus ||= []).push(id); return true; }, renderTools: (_, slot) => { slot.replaceChildren(); return false; } });
+    focus: id => { (st.hostFocus ||= []).push(id); return true; }, renderTools: (id, slot) => { if (st.renderTools) return st.renderTools(id, slot); slot.replaceChildren(); return false; } });   // st.renderTools: a test's own tools
   globalThis.WizDesktop = hostWindow.WizDesktop;
   st.hostChanged = hostController.changed;
   const run = () => { const t = st.timers.splice(0); for (const h of t) if (!h.dead) h.fn(); };
