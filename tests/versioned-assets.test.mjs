@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import vm from 'node:vm';
 import { withSkinHostParts } from './fixtures/skin-host-parts.mjs';
+import { createDocument } from './fixtures/mini-dom.mjs';
 
 // Robert's iPhone (24 Oct 2026) started a new shell against a cached old notif-bell.js and died at boot.
 // The image build stamps every local script/stylesheet with its file hash so a release only ever loads its own files.
@@ -91,20 +92,69 @@ test('a layered hotfix restamps an already-stamped tree with one new release tok
   assert.match(readFileSync(join(d, 'core/thread-swipe-back.js'), 'utf8'), new RegExp(`from './swipe-intent\\.js\\?v=${after}'`));
 });
 
-test('the image build runs the stamp over the shipped web tree', () => {
-  const df = readFileSync(new URL('../Dockerfile', import.meta.url), 'utf8');
-  assert.match(df, /stamp-assets\.sh \/usr\/share\/nginx\/wizard-ux/);
-  assert.ok(df.indexOf('COPY web ') < df.indexOf('stamp-assets.sh /usr/share'), 'stamps after copying web/');
+// The Dockerfile's own file steps, run in order into a temp image root: each COPY copies, each RUN that only touches
+// files runs in sh with its absolute paths moved under that root (package installs are skipped).
+function imageRoot(t) {
+  const root = mkdtempSync(join(tmpdir(), 'image-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const repo = new URL('..', import.meta.url).pathname;
+  const under = p => join(root, p);
+  for (const line of readFileSync(new URL('../Dockerfile', import.meta.url), 'utf8').split('\n')) {
+    const copy = /^COPY (.+) (\S+)$/.exec(line);
+    if (copy) {
+      const srcs = copy[1].split(/\s+/), dest = copy[2];
+      for (const src of srcs) cpSync(join(repo, src), dest.endsWith('/') ? join(under(dest), src.split('/').pop()) : under(dest), { recursive: true });
+      continue;
+    }
+    if (/^RUN /.test(line) && !/\bapk\b/.test(line)) {
+      const cmd = line.slice(4).replace(/(^|[\s"'=>])\/(usr|tmp|etc)\//g, (_, pre, top) => `${pre}${root}/${top}/`);
+      execFileSync('sh', ['-c', cmd], { env: { PATH: process.env.PATH, WIZARD_UX_COMMIT: '' } });
+    }
+  }
+  return join(root, 'usr/share/nginx/wizard-ux');
+}
+
+test('the image build runs the stamp over the shipped web tree', t => {
+  const web = imageRoot(t);
+  for (const page of ['index.html', 'desktop.html']) {
+    const h = readFileSync(join(web, page), 'utf8'), v = tokenOf(h);
+    assert.match(v || '', RE, `${page} in the image carries its release`);
+    assert.match(h, /src="[^"]*core\/[a-z-]+\.js\?v=[0-9a-f]{12}"/, `${page}: its scripts are stamped`);
+  }
+  assert.equal(readFileSync(join(web, 'data.js'), 'utf8').startsWith('// owner-generated'), true, 'the later steps still ran');
 });
 
-test('skin packages still find core/skins.css once its link carries ?v=', () => {
-  assert.match(withSkinHostParts(readFileSync(new URL('../web/core/skin-host.js', import.meta.url), 'utf8')), /link\[href\*="core\/skins\.css"\]/);
+// The real skin-host boot part on a page parsed from a stamped index.html head (tests/fixtures/mini-dom.mjs).
+function bootOn(t, { stampedPage = true } = {}) {
+  const d = stampedPage ? stamped(t) : WEB;
+  const html = readFileSync(join(d, 'index.html'), 'utf8');
+  const doc = createDocument({ url: 'https://box.test/wizard-os-home/' });
+  doc.head.innerHTML = html.slice(html.indexOf('<head>') + 6, html.indexOf('</head>'));
+  const window = { WizCore: { skinHostParts: {} }, WosSkin: { pkgOf: id => ({ dir: id, css: true }) } };
+  vm.runInNewContext(readFileSync(new URL('../web/core/skin-host-boot.js', import.meta.url), 'utf8'), { window, document: doc, URL });
+  const requested = [], cssLinks = new Map();
+  return { doc, token: tokenOf(html), requested, part: window.WizCore.skinHostParts.boot({ cssLinks, isDoc: true, requested }) };
+}
+
+test('skin packages still find core/skins.css once its link carries ?v=', t => {
+  const { doc, part } = bootOn(t);
+  const core = doc.head.querySelector('link[href*="core/skins.css"]');
+  assert.match(core.getAttribute('href'), /core\/skins\.css\?v=[0-9a-f]{12}$/, 'the stamped page links it with ?v=');
+  const l = part.ensureCss('nebula');
+  assert.equal(core.nextSibling, l, 'the skin\'s stylesheet goes right after core/skins.css (its old cascade slot)');
+  const l2 = part.ensureCss('sepia');
+  assert.equal(l.nextSibling, l2, 'later packages stack after earlier ones');
 });
-test('skin and layout files loaded on demand carry the page release token', () => {
-  const src = withSkinHostParts(readFileSync(new URL('../web/core/skin-host.js', import.meta.url), 'utf8'));
-  assert.match(src, /meta\[name="wos-release"\]/);
-  assert.match(src, /const url = \(dir, file\) => isDoc \? stamp\(/);
-  assert.match(src, /const layoutUrl = \(id, file\) => isDoc \? stamp\(/);
+test('skin and layout files loaded on demand carry the page release token', t => {
+  const { token, part } = bootOn(t);
+  assert.equal(part.url('nebula', 'skin.js'), `https://box.test/wizard-os-home/skins/nebula/skin.js?v=${token}`);
+  assert.equal(part.stamp('https://box.test/x.js?a=1'), `https://box.test/x.js?a=1&v=${token}`);
+  const layout = readFileSync(new URL('../web/core/skin-host-layout.js', import.meta.url), 'utf8');
+  const line = layout.slice(layout.indexOf('  const layoutUrl = '), layout.indexOf('\n', layout.indexOf('  const layoutUrl = ')));
+  const layoutUrl = vm.runInNewContext(`${line}\nlayoutUrl`, { isDoc: true, stamp: part.stamp, URL, document: { baseURI: 'https://box.test/wizard-os-home/' } });
+  assert.equal(layoutUrl('ai-apps', 'layout.js'), `https://box.test/wizard-os-home/layouts/ai-apps/layout.js?v=${token}`);
+  const plain = bootOn(t, { stampedPage: false });   // a page without its release meta (a dev checkout) adds nothing
+  assert.equal(plain.part.url('nebula', 'skin.js'), 'https://box.test/wizard-os-home/skins/nebula/skin.js');
 });
 // Backstop: a boot error reloads once (fresh files) before the "couldn't start" card; never loops.
 function boot({ shell = false, seen = null } = {}) {

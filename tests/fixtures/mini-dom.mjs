@@ -23,6 +23,9 @@ class Element {
   get lastElementChild() { return this.children.at(-1) || null; }
   get parentElement() { return this.parentNode?.nodeType === 1 ? this.parentNode : null; }
   get nextElementSibling() { const s = this.parentNode?.children || []; return s[s.indexOf(this) + 1] || null; }
+  get nextSibling() { const s = this.parentNode?.childNodes || []; const i = s.indexOf(this); return i < 0 ? null : s[i + 1] || null; }
+  get previousSibling() { const s = this.parentNode?.childNodes || []; const i = s.indexOf(this); return i < 1 ? null : s[i - 1]; }
+  get content() { return this.localName === 'meta' ? this.getAttribute('content') : undefined; }
   get previousElementSibling() { const s = this.parentNode?.children || []; return s[s.indexOf(this) - 1] || null; }
   get isConnected() { let n = this; while (n.parentNode) n = n.parentNode; return n === this.ownerDocument?.documentElement || n === this.ownerDocument; }
   getAttribute(k) { return this.attrs.has(k) ? this.attrs.get(k) : null; }
