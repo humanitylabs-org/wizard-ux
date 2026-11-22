@@ -19,7 +19,8 @@ const builtin = catalog.defaults[0];
 // The real drop list emptied when its tweaks were removed (wizard-ux issue 1239). The mechanism stays, so these tests
 // serve a stand-in list of kept tweaks in place of catalog `lookOnlyOff`.
 const DROP = ['wizard/failure-reason', 'wizard/link-token-repair', 'miguel/now-playing'];
-const served = path => path === 'tweaks/catalog.json' ? { ...catalog, lookOnlyOff: DROP } : JSON.parse(read('web/' + path));
+let realCatalog = false; // one test serves the shipped catalog as it is
+const served = path => path === 'tweaks/catalog.json' && !realCatalog ? { ...catalog, lookOnlyOff: DROP } : JSON.parse(read('web/' + path));
 const PATH = '/wizard/v1/pages/wizard-look/look.json';
 
 function lookSync() { const window = {}; vm.runInNewContext(read('web/core/look-sync.js'), { window, JSON, Object, Date, Math, Number, Error, setTimeout, clearTimeout }); return window.WosLookSync; }
@@ -80,10 +81,20 @@ const mixOn = mix => Object.keys(mix).filter(id => mix[id] === true).sort();
 const OLD_MIX = { 'miguel/send-and-go': true, 'wizard/failure-reason': true, 'wizard/link-token-repair': true };
 const OLD_RECIPE = { 'miguel/archive-top': true, 'miguel/reply-summary': true, 'miguel/send-and-go': false, [builtin]: false, 'miguel/now-playing': true };
 
-test('the drop list (catalog lookOnlyOff) is empty now its tweaks are removed; any entry must be a real catalog tweak', () => {
+test('the drop list (catalog lookOnlyOff) is empty now its tweaks are removed; any entry must be a real catalog tweak', async () => {
   assert.deepEqual(catalog.lookOnlyOff, []);
   for (const id of [...catalog.lookOnlyOff, ...DROP]) { assert.ok(catalog.tweaks.includes(id), id); assert.ok(!catalog.defaults.includes(id), id); }
   assert.ok(!DROP.includes(ID));
+  // the real experience.js on the shipped catalog: turning the switch on drops nothing the owner had on
+  realCatalog = true;
+  try {
+    const d = device(null, { mix: OLD_MIX }); await d.E.refresh();
+    const before = d.running();
+    await d.E.toggle(ID);
+    const after = d.running().filter(id => id !== ID);
+    assert.deepEqual(after, before, 'no tweak is switched off by an empty drop list');
+    assert.ok(after.includes('wizard/failure-reason') && after.includes('wizard/link-token-repair'));
+  } finally { realCatalog = false; }
 });
 
 test('switch off (today): nothing changes, the skin still decides and drop-list tweaks still run', async () => {

@@ -7,6 +7,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import { withShellParts } from './fixtures/shell-parts.mjs';
+import { lookBox } from './fixtures/r5A-experience.mjs';
+import { parseCss } from './fixtures/mini-css.mjs';
 const source = withShellParts(fs.readFileSync(new URL('../web/core/chats-view.js', import.meta.url), 'utf8'));
 const VERSION = 'wizard.chats-view/1';
 const entry = id => ({ id, name: 'Look ' + id, source: 'apps.json', url: `/${id}/`, provides: ['chats'], chats_view: { contract: VERSION, module: 'view.js' } });
@@ -112,12 +114,16 @@ test('a Default Chats change asks layouts to repaint, only when it changes', () 
   assert.deepEqual(h.events, ['wos:chats-view', 'wos:chats-view'], 'uninstalled: back to built-in, repaint');
 });
 
-test('the switch ships off: listed in the catalog, never a default, scoped CSS', () => {
-  const cat = JSON.parse(withShellParts(fs.readFileSync(new URL('../web/tweaks/catalog.json', import.meta.url), 'utf8')));
-  assert.ok(cat.tweaks.includes('wizard/sidebar-chats-view'));
-  assert.ok(!cat.defaults.includes('wizard/sidebar-chats-view'));
-  const css = withShellParts(fs.readFileSync(new URL('../web/tweaks/wizard/sidebar-chats-view/tweak.css', import.meta.url), 'utf8'));
-  for (const rule of css.replace(/\/\*[\s\S]*?\*\//g, '').split('}').map(r => r.trim()).filter(Boolean)) for (const sel of rule.split('{')[0].split(',')) assert.match(sel.trim(), /^html\[data-tweaks~="wizard\/sidebar-chats-view"\]/);
+test('the switch ships off: listed in the catalog, never a default, scoped CSS', async () => {
+  const SW = 'wizard/sidebar-chats-view';
+  // the real Settings › Look list on the real catalog, on the desktop: listed and off until chosen
+  const fresh = await lookBox({ shell: 'desktop' });
+  const row = fresh.row(SW);
+  assert.ok(row, 'listed'); assert.equal(row.on, false, 'never a default'); assert.ok(!fresh.active().includes(SW));
+  await fresh.E.toggle(SW); assert.ok(fresh.active().includes(SW), 'the switch turns it on');
+  // every rule of its stylesheet (parsed) is scoped to the switch
+  const rules = parseCss(withShellParts(fs.readFileSync(new URL('../web/tweaks/wizard/sidebar-chats-view/tweak.css', import.meta.url), 'utf8')));
+  for (const r of rules) for (const sel of r.selectors) assert.match(sel, /^html\[data-tweaks~="wizard\/sidebar-chats-view"\]/);
   // The shell's sideLook reads the switch: covered by tests/sidebar-chats-view.test.mjs 'AI apps + another Default Chats, switch off: ...'.
 });
 

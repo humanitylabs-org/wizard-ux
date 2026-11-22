@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import vm from 'node:vm';
 import { withShellParts } from './fixtures/shell-parts.mjs';
+import { block, runRecording } from './fixtures/source-slice.mjs';
 
 const root = process.env.QA_SOURCE || new URL('..', import.meta.url).pathname;
 const source = withShellParts(readFileSync(resolve(root, 'web/desktop/desktop.js'), 'utf8'));
@@ -50,13 +51,29 @@ for (const state of ['listen', 'paused', 'think']) {
   });
 }
 
-test('contextual recorder freezes thread, active run and model route before voice capture', () => {
+test('contextual recorder freezes thread, active run and model route before voice capture', async () => {
   const start = source.indexOf('  async function talk(');
   const body = source.slice(start, source.indexOf('  // Composer mic:', start));
-  const capture = body.indexOf('await VOICE.start()');
-  for (const token of ['vSnapshot = commandSnapshot()', 'vReply = !forceNew', 'steerRunId:', 'vRoute = vConversation ? null : resolveRoute()']) {
-    assert.ok(body.indexOf(token) >= 0 && body.indexOf(token) < capture, token);
-  }
+  // run the real talk() on the desktop with a working Chats thread in front; the microphone start reads what is frozen
+  const route = { model: 'm1', provider: 'p1' }, frozen = {};
+  const ctx = runRecording(block(source, '  async function talk(') + '\nglobalThis.talk = talk;', {
+    MOD: '⌥', dictationFinishing: false, vMode: 'talk', vConversation: null, vFeedback: null, W: { w1: {} }, APP: {},
+    focused: () => ({ id: 'w1', app: 'chats', thread: 't1' }), chanFront: () => null, commandSnapshot: () => ({ thread: 't1', view: 'chats' }),
+    viewContext: () => 'the open thread', $: () => ({}), toast: (...a) => ctx.calls.push(['toast', ...a]),
+    LIVE: { session: id => (id === 't1' ? { runId: 'run_7' } : null) },
+    CHATS: { incognitoActive: () => false, isHosted: () => false, chanSpaceOf: () => null, isWorking: () => true, modelRoute: (wid, sid) => { ctx.calls.push(['modelRoute', wid, sid]); return route; }, uploadFile() {} },
+    window: { WosCaptureTools: { take: () => ({ close() {} }) }, WosModels: { snapshot: () => null } },
+    VOICE: { state: 'idle', start: async () => { Object.assign(frozen, JSON.parse(JSON.stringify({ snapshot: ctx.vSnapshot, reply: ctx.vReply, route: ctx.vRoute }))); throw Object.assign(new Error('stop here'), { code: 'test' }); } },
+  });
+  assert.equal(await ctx.talk('toggle'), 'none');
+  assert.deepEqual(frozen.snapshot, { thread: 't1', view: 'chats' }, 'the thread is frozen before capture');
+  assert.deepEqual(frozen.reply, { wid: 'w1', sid: 't1', steerRunId: 'run_7' }, 'the active run is frozen before capture');
+  assert.deepEqual(frozen.route, route, 'the model route is frozen before capture');
+  assert.deepEqual(JSON.parse(JSON.stringify(ctx.calls.find(c => c[0] === 'modelRoute'))), ['modelRoute', 'w1', 't1']);
+  // a forced new chat freezes no reply target
+  ctx.VOICE.state = 'idle'; Object.keys(frozen).forEach(k => delete frozen[k]);
+  await ctx.talk('toggle', true);
+  assert.equal(frozen.reply, null); assert.equal(frozen.snapshot.thread, '__new__');
   assert.match(body, /const aimSid = vFeedback\?\.thread \|\| rp\?\.sid/);
   assert.match(body, /CHATS\.sendVoiceTo\(rp\.wid, rp\.sid/);
   assert.match(body, /OUTBOX\.handOff\?\.\(stagedId\)/);
