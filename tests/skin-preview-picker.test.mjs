@@ -2,20 +2,36 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
+import { settingsView, skinsRuntime } from './fixtures/skin-palettes-harness.mjs';
 const read = f => readFileSync(new URL('../' + f, import.meta.url), 'utf8');
 
-test('skin picker renders preview cards for every skin, names in each skin\'s own face', () => {
-  const s = read('web/core/settings.js');
-  assert.match(s, /class="skp-all\$\{facesReady \? '' : ' skp-wait'\}"/);
-  assert.doesNotMatch(s, /class="sk-dot"/, 'no dot swatches left');
+// The real Settings › Look over the real skins.js table; document.fonts holds the faces until the test lets them load.
+test('skin picker renders preview cards for every skin, names in each skin\'s own face', async () => {
+  const { S } = skinsRuntime();
+  let loaded; const fontsLoad = new Promise(r => { loaded = r; }), asked = [];
+  const document = { activeElement: null, fonts: { load: spec => (asked.push(spec), fontsLoad) } };
+  const h = settingsView({ WosSkin: S, document, timer: () => 0 }); // the 2.5 s face deadline never fires here
+  const html = h.html(), cls = [];
+  h.root.querySelectorAll = sel => (sel === '.skp-wait' ? [{ classList: { remove: c => cls.push(c) } }] : []);
+  assert.match(html, /class="skp-all skp-wait"/, 'names hidden until the faces load');
+  assert.doesNotMatch(html, /class="sk-dot"/, 'no dot swatches left');
   // James, 31 Oct / 1 Nov 2026 (#801/#803): a skin and its color are separate choices; #755 flattening is superseded.
-  assert.match(s, /data-skinfamily=/, 'Skin has its own family controls');
-  assert.match(s, /aria-label="Skins"/);
-  assert.match(s, /<h4>Colors<\/h4>/, 'Color has its own scoped group');
-  assert.doesNotMatch(s, /S\.list\.map\(k => skinCard/, 'never flatten colors into skins');
-  const k = read('web/core/skins.js');
-  assert.match(k, /face: FACES\[s\.id\] \|\| null, t: \{ \.\.\.s\.t \}/);
-  for (const id of ['nebula', 'grove', 'tide', 'ember', 'signal']) assert.match(k, new RegExp(`\\n    ${id}: \\{ family:`));
+  const families = html.match(/aria-label="Skins">([\s\S]*?)<div class="skp-colours">/)?.[1] || '';
+  for (const f of S.families) assert.match(families, new RegExp(`data-skinfamily="${f.id}"`), 'Skin has its own family controls');
+  assert.doesNotMatch(families, /data-skinpick=/, 'never flatten colors into skins');
+  assert.match(html, /<h4>Colors<\/h4>/, 'Color has its own scoped group');
+  // Each Wizard colour is a preview card (its own tokens) with the name set in its own face.
+  for (const id of ['nebula', 'grove', 'tide', 'ember', 'signal']) {
+    const k = S.list.find(x => x.id === id);
+    assert.ok(k.face, id + ' has a face');
+    const card = html.match(new RegExp(`<button type="button" class="skp-card" data-skinpick="${id}"[^>]*>(.*?)</button>`))?.[1] || '';
+    assert.match(card, new RegExp(`<span class="skp-mini" data-skp="${id}" style="--p-bg:`), id + ' preview from its tokens');
+    assert.ok(card.includes(`<span class="skp-nm" style="font-family:${k.face.family.replace(/"/g, '&quot;')};font-weight:${k.face.weight}`), id + ' name in its face');
+  }
+  assert.equal(asked.length, S.list.filter(k => k.face).length, 'every face is asked for');
+  loaded(); await new Promise(r => setTimeout(r, 0));
+  assert.deepEqual(cls, ['skp-wait'], 'names show once the faces are in');
+  h.view.destroy();
 });
 
 test('preview card styles are shell-wide (not gated to one skin) and the Landscapes preview image ships', () => {

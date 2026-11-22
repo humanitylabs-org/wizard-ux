@@ -46,9 +46,36 @@ test('issue 1652: an installed app the shell cannot open yet shows Starting… a
   assert.match(render('installed', {installed:true, framed:true, kind:'agent-apps'}), /✓ Installed/);
   assert.match(render('installed', {installed:true}), /✓ Installed/);
 });
-test('issue 1652: Starting… polls the shell registry with backoff and stops once the app opens or the wait ends', () => {
-  assert.match(src, /async function checkStarting\(\) \{[\s\S]*?parent\.WizCore\?\.refreshApps\?\.\(\)[\s\S]*?if \(canOpen\(w\.a\)\) \{ S\.starting\.delete\(id\)[\s\S]*?S\.late\.add\(id\)[\s\S]*?refresh\(\)/);
-  assert.match(src, /const START_WAIT = 120000/);
+// watchOpen/checkStarting from store.js with manual timers and clock, a fake shell registry and repaint counter.
+function starting({ opensAfter = Infinity } = {}) {
+  const body = src.slice(src.indexOf('  const openId = a =>'), src.indexOf('  /* ---------------- pieces'));
+  const timers = [], ctx = { now: 0, refreshes: 0, appRefreshes: 0, timers };
+  Object.assign(ctx, { framed: true, key: a => a.id, document: { hidden: false }, refresh: () => { ctx.refreshes++; },
+    Date: { now: () => ctx.now }, setTimeout: (fn, ms) => { timers.push({ fn, ms }); return timers.length; },
+    S: { installed: new Map([['fixture', { id: 'fixture' }]]), starting: new Map(), late: new Set(), loaded: true, startT: 0, startN: 0, snapshot: null },
+    parent: { WizCanOpen: () => ctx.appRefreshes >= opensAfter, WizCore: { refreshApps: async () => { ctx.appRefreshes++; } } } });
+  Function('ctx', `with (ctx) { ${body}; ctx.watchOpen = watchOpen; }`)(ctx);
+  const fire = async () => { const t = timers.shift(); ctx.now += t.ms; await t.fn(); return t.ms; };
+  return { ctx, fire };
+}
+test('issue 1652: Starting… polls the shell registry with backoff and stops once the app opens or the wait ends', async () => {
+  const a = { id: 'fixture' };
+  const opens = starting({ opensAfter: 3 });
+  opens.ctx.watchOpen(a); opens.ctx.watchOpen(a);
+  assert.equal(opens.ctx.timers.length, 1, 'one watch per app');
+  const delays = [await opens.fire(), await opens.fire(), await opens.fire()];
+  assert.deepEqual(delays, [2000, 3000, 5000], 'backoff');
+  assert.equal(opens.ctx.appRefreshes, 3, 'each check re-reads the shell registry');
+  assert.equal(opens.ctx.S.starting.size, 0, 'the app opened: the watch ends');
+  assert.equal(opens.ctx.refreshes, 1, 'and the Store repaints to Open');
+  assert.equal(opens.ctx.timers.length, 0, 'no more polling');
+  // Never opens: after the two-minute wait it is late (Open after the wait) and polling stops.
+  const never = starting();
+  never.ctx.watchOpen(a);
+  let n = 0; while (never.ctx.timers.length && n++ < 40) await never.fire();
+  assert.ok(never.ctx.now > 120000 && never.ctx.now < 135000, 'gives up after START_WAIT');
+  assert.deepEqual([...never.ctx.S.late], ['fixture']);
+  assert.equal(never.ctx.S.starting.size, 0);
   // Codex P2: a removed (or reinstalled) app never inherits an old wait.
   assert.match(src, /for \(const id of \[\.\.\.S\.late\]\) if \(!live\.has\(id\)\) S\.late\.delete\(id\)/);
   assert.match(src, /S\.starting\.delete\(id\); S\.late\.delete\(id\); \}   \/\/ a new install waits afresh/);

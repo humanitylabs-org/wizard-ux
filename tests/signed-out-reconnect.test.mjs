@@ -106,10 +106,38 @@ test('Home AI zone and Resources › AI accounts show a working Reconnect button
   assert.match(read('web/core/resources.js'), /si\.hasAttribute\('data-res-reconnect'\)&&RECONNECT_APPS\.has\(app\)\?`\/\$\{app\}\/\?reconnect=1`/);
 });
 
-test('Reconnect on the card opens the Claude app at Connect when there is no saved run to recover', () => {
+// openReconnect, rerenderAll and the wos:ai-signin listener from chat-power.js, plus its [data-chreconnect] click line.
+function reconnectCard({ opens = false } = {}) {
   const src = read('web/core/chat-power.js');
-  assert.match(src, /if \(!runId && \(RECONNECT_APPS\.has\(appId\) \|\| appId === 'wizard-tinfoil'\)\) \{ const path = .*: `\/\$\{appId\}\/\?reconnect=1`; if \(!window\.WizOpenApp\?\.\(appId, path\)\) location\.assign\(path\); return true; \}/);
-  assert.match(src, /addEventListener\?\.\('wos:ai-signin', \(\) => rerenderAll\(\)\)/);
+  const cut = (x, y) => { const i = src.indexOf(x), j = src.indexOf(y, i); assert.ok(i >= 0 && j > i, x); return src.slice(i, j); };
+  const click = src.split('\n').find(l => l.startsWith("    const rc = t.closest('[data-chreconnect]');"));
+  assert.ok(click, 'click line');
+  const opened = [], assigned = [], links = [], listeners = {}, painted = [];
+  const ctx = { opened, assigned, links, painted, location: { assign: p => assigned.push(p) },
+    A: { CH: { w1: {}, w2: {} }, renderChats: w => painted.push(w.id) }, H: { win: id => ({ id }), openLink: (u, t) => (links.push([u, t]), true), changed() {} } };
+  ctx.window = { WizOpenApp: (id, path) => (opened.push([id, path]), opens), addEventListener: (t, f) => { listeners[t] = f; } };
+  vm.createContext(ctx);
+  vm.runInContext(`${cut('  const RECONNECT_APPS = ', '  // Issue 1488:')}${cut('  function rerenderAll()', '\n\n  /* Errors section extras')}\nfunction click(t) {\n${click}\n  return false;\n}\nthis.click = click;`, ctx);
+  const tap = (app, run = '') => ctx.click({ closest: sel => (sel === '[data-chreconnect]' ? { dataset: { chreconnect: app, recoveryRun: run } } : null) });
+  return { ...ctx, tap, listeners };
+}
+test('Reconnect on the card opens the Claude app at Connect when there is no saved run to recover', () => {
+  const r = reconnectCard({ opens: true });
+  assert.equal(r.tap('wizard-claude'), true);
+  assert.equal(r.tap('wizard-chatgpt'), true);
+  assert.equal(r.tap('wizard-tinfoil'), true);
+  assert.deepEqual(r.opened, [['wizard-claude', '/wizard-claude/?reconnect=1'], ['wizard-chatgpt', '/wizard-chatgpt/?reconnect=1'], ['wizard-tinfoil', '/wizard-tinfoil/?connect=1']]);
+  assert.deepEqual(r.assigned, []);
+  // A saved run goes to the troubleshooter's recovery that re-sends it.
+  r.tap('wizard-claude', 'run 1');
+  assert.deepEqual(r.opened.at(-1), ['troubleshooter', '/troubleshoot/?provider=claude&run_id=run%201']);
+  // No app window (WizOpenApp refuses): the page goes there itself.
+  const off = reconnectCard();
+  off.tap('wizard-claude');
+  assert.deepEqual(off.assigned, ['/wizard-claude/?reconnect=1']);
+  // A sign-in change repaints every Chats window, so cards switch between Reconnect and Retry.
+  off.listeners['wos:ai-signin']();
+  assert.deepEqual(off.painted, ['w1', 'w2']);
 });
 
 // Issue 1500: an expired sign-in, the desktop Errors row, the generic line above the card, the app's own sentence,
@@ -173,12 +201,33 @@ test('issue 1500: the Errors row (desktop sidebar) offers Reconnect and no Retry
   assert.match(errorRow(failed(SUB), ''), /data-errretry/);
 });
 
-test('issue 1500: the generic "not processed… send it again" line is hidden above a Reconnect card', () => {
+// The thread body block of chats.js (failed run → turns → Reply not sent line), run with the real turnHtml.
+function threadBody(s, { signedOut }) {
   const src = withParts(read('web/core/chats.js'));
-  assert.match(src, /const signedOut = !working && !!PW\?\.signedOutFail\?\.\(s\);/);
-  assert.match(src, /s\?\.helperStatus, s\?\.reconnect \|\| !!runErr \|\| signedOut, /);
-  assert.match(src, /\(!runErr && !signedOut && s\?\.safeError/);
-  assert.match(src, /if \(last && reconnect && tn\.a\?\.failed\) tn = \{ \.\.\.tn, a: null \};/);
+  const cut = (x, y) => { const i = src.indexOf(x), j = src.indexOf(y, i); assert.ok(i >= 0 && j > i, x); return src.slice(i, j); };
+  const ctx = { window: { WizConfig: { agent: () => 'Archimedes' }, WosModels: { runError: () => null, foreignApp: () => '' } }, document: {},
+    PW: { workHtml: () => '', signedOutFail: () => (signedOut ? { provider: 'claude' } : null) }, replyCard: () => '', userMedia: () => '', md: x => x, timeTag: () => '',
+    summaryOf: () => null, mediaBlock: () => '', regenOn: () => false, esc: x => x, quoteBtn: () => '', msgIds: () => '', COPY_SVG: '', SHARE_SVG: '', CHECK_SVG: '',
+    KIT: { time: { dayKey: () => '', day: () => '' } }, turnAt: () => 1, approvalHtml: () => '', pend: [], pendingHtml: () => '', held: false, STI: {}, isNew: false, w: { id: 'w', thread: 't' }, TAG: '' };
+  vm.createContext(ctx);
+  vm.runInContext(read('web/core/chat-kit.js'), ctx);
+  vm.runInContext(cut('function runContextHtml(', 'const turnAt ='), ctx);
+  const turns = ctx.window.WosChat.parseRows([{ role: 'user', content: 'What is virtue?', timestamp: 1 },
+    { role: 'assistant', content: 'Your request was not processed. Send it again if you still want me to carry it out.', timestamp: 2 }]);
+  assert.equal(turns.at(-1).a.failed, true);
+  Object.assign(ctx, { s, working: false, c: { texts: [], media: [] }, all: turns, from: 0, shown: turns, day: '' });
+  return vm.runInContext(`let msgs;\n${cut('      const runErr = !working', '    }\n    // The Daily view')}msgs`, ctx);
+}
+test('issue 1500: the generic "not processed… send it again" line is hidden above a Reconnect card', () => {
+  const s = { id: 't', status: 'failed', safeError: 'Claude is not signed in.' };
+  const out = threadBody(s, { signedOut: true });
+  assert.match(out, /What is virtue\?/, 'his message stays');
+  assert.doesNotMatch(out, /not processed|Send it again/, 'no generic failed bubble');
+  assert.doesNotMatch(out, /Reply not sent/, 'no duplicate Reply not sent line');
+  // A failure that is not a sign-out keeps both.
+  const plain = threadBody(s, { signedOut: false });
+  assert.match(plain, /not processed/);
+  assert.match(plain, /<b>Reply not sent<\/b><p>Claude is not signed in\.<\/p>/);
 });
 
 test('issue 1500: Hermes\' plain-text failure boundary (older Hermes, no display_kind) is marked like failed_turn', () => {
