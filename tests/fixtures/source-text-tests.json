@@ -137,10 +137,6 @@
   "a list paint over the document-scrolled thread leaves document scroll in the same paint"
  ],
  "chat-channels.test.mjs": [
-  "the phone Back hook goes through CHATS.channelBack",
-  "posting reuses the Space-fixed-at-send path: a new chat sent from a channel files into its Space Focus",
-  "the channel name shows once in an open feed: no focus strip, no title-bar label",
-  "long-press, right-click and Shift+F10 on a channel open the channel sheet through one rowMenu",
   "voice: the orb and the box mic in front of a channel start a new chat there, with the box riding along",
   "issue 1263: every list paint and every rerender put the feed back in its place",
   "issue 1291: every owner post path calls it (box mic, voice keys and the orb via sendChat\\'s channel); typed sends keep chanToEnd",
@@ -165,16 +161,6 @@
   "every swipe only reveals explicit accessible actions",
   "cancel, scroll, outside tap and Back close without invoking an action",
   "open swipe holds list repaints while stock and desktop gestures remain"
- ],
- "chat-topic-emojis-integration.test.mjs": [
-  "${page} loads topic emoji state before shared Chats",
-  "thread rows render a stable topic emoji and a separate existing status marker",
-  "desktop adapter gives an emoji tap to shared Chats before opening the row",
-  "draft rows use their durable draft key and can open the same picker",
-  "emoji picker renders categories lazily in a bounded independently scrollable region",
-  "emoji picker has an accessible non-autofocused search, clear action, and empty result",
-  "typing in emoji search is isolated from global chat keyboard shortcuts",
-  "topic emojis are a Novairecito skin feature; every other skin keeps stock status icons"
  ],
  "chats-bell-or-badge.test.mjs": [
   "both shells expose WizAppOpen and repaint the bell on window changes"

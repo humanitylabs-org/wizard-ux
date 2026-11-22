@@ -99,6 +99,9 @@ export function runRecording(code, ctx = {}, calls = (ctx.calls ||= [])) {
 export function block(src, marker, from = 0) {
   const at = src.indexOf(marker, from); assert.ok(at >= 0, `not found: ${marker}`);
   let i = src.indexOf('{', at), depth = 0;
+  // a function declaration: its body starts after the parameter list (defaults may hold braces)
+  const head = /^\s*(?:async\s+)?function\s*\*?\s*[\w$]*\s*\(/.exec(src.slice(at));
+  if (head) { let p = at + head[0].length, d = 1; for (; p < src.length && d; p++) { if (src[p] === '(') d++; else if (src[p] === ')') d--; } i = src.indexOf('{', p); }
   for (; i < src.length; i++) {
     const c = src[i];
     if (c === '/' && src[i + 1] === '/') { i = src.indexOf('\n', i); continue; }

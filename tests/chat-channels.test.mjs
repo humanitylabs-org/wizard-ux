@@ -7,8 +7,11 @@ import { readFileSync } from 'node:fs';
 import { modelContext } from './fixtures/chats-list-model.mjs';
 import { withAppParts } from './fixtures/app-parts.mjs';
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
-import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
+import { withLiveParts } from './fixtures/live-parts.mjs';
+import { createDocument } from './fixtures/mini-dom.mjs';
+import { block as fnBlock, expression, runRecording } from './fixtures/source-slice.mjs'; // live.js parts moved out verbatim (issue 1665)
 const src = withParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'));
+const srcLine = (from, k) => { const i = from.indexOf(k); assert.ok(i >= 0, k); return from.slice(from.lastIndexOf('\n', i) + 1, from.indexOf('\n', i)); };
 const app = withAppParts(readFileSync(new URL('../web/app.js', import.meta.url), 'utf8'));
 const cut = (a, b) => { const i = src.indexOf(a); assert.ok(i >= 0, a); return src.slice(i, src.indexOf(b, i)); };
 const block = withParts(cut('  /* Channels view (wizard-ux issue 1254)', '  function clearAll(w)'));
@@ -80,7 +83,15 @@ const row = (id, at, extra = {}) => ({ id, title: 'T ' + id, status: 'completed'
 const click = attrs => ({ target: { closest: sel => { const k = sel.slice(1, -1); return k in attrs ? { dataset: { [k.replace(/^data-/, '').replace(/-./g, m => m[1].toUpperCase())]: attrs[k] } } : null; } } });
 
 test('the phone Back hook goes through CHATS.channelBack', () => {
-  assert.match(app, /CHATS\.channelBack\?\.\(f\)\) return 'channel'/);
+  // the phone's real backStep, on a Chats list with an open channel feed
+  const back = (channelBack, c = { id: 'c1', app: 'chats', thread: null }) => {
+    const seen = [], ctx = runRecording(`${fnBlock(app, '  function backStep(skipHosted')}\nthis.back = backStep;`, { phoneBack: { run: () => false }, desks: [{ focus: 'c1' }], idx: 0, W: { c1: c }, rvCoach: false, window: {},
+      CHATS: { isHosted: () => false, hasFilter: () => false, ch: () => ({ q: '' }), threadBack: () => 'thread', channelBack: f => (seen.push(f.id), channelBack), readyBack: () => false } });
+    return [ctx.back(), seen];
+  };
+  assert.deepEqual(back(true), ['channel', ['c1']], 'a channel feed: Back goes to Channels');
+  assert.notEqual(back(false)[0], 'channel', 'no feed open: Back goes on');
+  assert.deepEqual(back(true, { id: 'c1', app: 'chats', thread: 't1' }), ['thread', []], 'an open thread steps back first');
 });
 
 test('Channels lists Spaces A–Z by default, General last, with one aggregate marker each', () => {
@@ -244,12 +255,27 @@ test('main vs routed: host-profile, container and restricted rows belong only to
   assert.match(f.channelFeed(f.w, f.chanOpen(f.w), [row('r1', 1, { status: 'running', messageCount: 3 })]), /data-agent="restricted"[^]*Working/);
 });
 
-test('posting reuses the Space-fixed-at-send path: a new chat sent from a channel files into its Space Focus', () => {
-  assert.match(src, /const spaceKey = isNew && typeof opts\.space === 'string' \? opts\.space : isNew && !opts\.away && focusOf\(w\)\?\.kind === 'space' \? focusOf\(w\)\.key : '';/);
+test('posting reuses the Space-fixed-at-send path: a new chat sent from a channel files into its Space Focus', async () => {
+  // the real sendChat with a fake outbox that gives the new chat its id and agent
+  const send = async (opts, focus) => {
+    const ctx = runRecording(`${fnBlock(src, '  async function sendChat(')}\nthis.sendChat = sendChat;`, {
+      W: { w1: { id: 'w1', app: 'chats', thread: null } }, ch: () => ({ draft: '', files: [] }), focusOf: () => focus, AGID: '', MAX_FILES: 10, window: {}, Promise, Date, Object, Array, String, JSON, Math, Error, Set, Map,
+      OUTBOX: { enqueue: async it => ({ ...it, sessionId: 's9', agent: 'merlin', durable: true }) }, joinWords: (a, b) => [a, b].filter(Boolean).join('\n\n'),
+      KIT: { drafts: { get: () => ({}), clear() {}, set() {} } }, isWorking: () => false, pendRef: f => f });
+    await ctx.sendChat('w1', 'hello', 'typing', null, opts);
+    return ctx.calls.filter(c => c[0] === 'spaceMember').map(c => c.slice(1));
+  };
   // Issue 1261: the send's own agent rides along, so the channel store files the chat by agent plus id.
-  assert.match(src, /if \(spaceKey && it\?\.sessionId\) spaceMember\(spaceKey, it\.sessionId, true, it\.agent \?\? AGID \?\? ''\);/);
+  assert.deepEqual(await send({ sid: '__new__', space: 'launch' }, null), [['launch', 's9', true, 'merlin']], 'a channel\'s box (opts.space)');
+  assert.deepEqual(await send({ sid: '__new__' }, { kind: 'space', key: 'voice' }), [['voice', 's9', true, 'merlin']], 'the Space in Focus');
+  assert.deepEqual(await send({ sid: '__new__', away: true }, { kind: 'space', key: 'voice' }), [], 'a send from elsewhere does not take the Focus');
+  assert.deepEqual(await send({ sid: 't1' }, { kind: 'space', key: 'voice' }), [], 'a reply files nothing');
   // Back on the desktop list goes through clearFilter, which closes a feed after search and chips.
-  assert.match(src, /if \(!c\.filter\) return typeof channelBack === 'function' && channelBack\(w\) \? 'channel' : false;/);
+  const clear = (c, channelBack) => runRecording(`${fnBlock(src, '  function clearFilter(w) {')}\nthis.clear = clearFilter;`, { ch: () => c, channelBack, window: { WizCore: {} } }).clear({ id: 'w1', thread: null });
+  assert.equal(clear({ q: 'x', filter: 'ready' }, () => true), 'search');
+  assert.equal(clear({ q: '', filter: 'ready' }, () => true), 'chip');
+  assert.equal(clear({ q: '', filter: '' }, () => true), 'channel');
+  assert.equal(clear({ q: '', filter: '' }, () => false), false);
 });
 
 const ids = html => [...html.matchAll(/data-chchan="([^"]+)"/g)].map(m => m[1]);
@@ -357,8 +383,12 @@ test('Archive: an archived channel moves to a folded Archive section, Restore br
 
 test('the channel name shows once in an open feed: no focus strip, no title-bar label', () => {
   // Issue 1336: with Channels on there is no focus strip at all (agents live in the Channels list's Agents row).
-  assert.match(src, /\$\{feed \|\| chanOn \? '' : focusStrip\(w\)\}/);
-  assert.match(src, /function listTitle\(w\) \{ return focusAgents\(\)\.length === 1 && focusOf\(w\)\?\.kind === 'space' && !\(typeof chanOpen === 'function' && chanOpen\(w\)\)/);
+  const strip = vm.runInNewContext(`(feed, chanOn) => \`${expression(src, "${feed || chanOn ? '' : focusStrip(w)}")}\``, { focusStrip: () => '<div class="ch-focus"></div>', w: {} });
+  assert.equal(strip(false, true), ''); assert.equal(strip(true, false), ''); assert.equal(strip(false, false), '<div class="ch-focus"></div>');
+  const title = (agents, kind, open) => runRecording(`${srcLine(src, 'function listTitle(w) {')}\nthis.title = listTitle;`, { focusAgents: () => agents, focusOf: () => ({ kind }), chanOpen: () => open, focusLabel: () => 'Launch' }).title({});
+  assert.equal(title(['hermes'], 'space', false), 'Launch');
+  assert.equal(title(['hermes'], 'space', true), '', 'an open feed shows its name once, in the feed');
+  assert.equal(title(['hermes', 'merlin'], 'space', false), '');
 });
 
 test('Channels wording: Move to channel, Remove from channel', () => {
@@ -376,9 +406,29 @@ test('Channels wording: Move to channel, Remove from channel', () => {
 });
 
 test('long-press, right-click and Shift+F10 on a channel open the channel sheet through one rowMenu', () => {
-  assert.match(src, /const ROW_MENU = '[^']*\.ch-list \[data-chchan\]';/);
-  assert.equal((src.match(/rowMenu\((lp\.wid, lp\.row|q\.wid, q\.row|idOf\(row\), row)\)/g) || []).length, 4);
-  assert.match(src, /justPressed\(\) && e\.target\.closest\('\[data-chopen\], \[data-chnotif\], \[data-chchan\]'\)/);
+  // the real gestures (bindGestures) and keys (bind's keydown) on a tiny Chats list with a channel row
+  const doc = createDocument(), root = doc.createElement('div'); doc.body.appendChild(root);
+  root.innerHTML = '<div data-chats="w1"><div class="ch-list"><div class="ch-row-wrap"><div class="ch-chan" data-chchan="launch" tabindex="0">Launch</div></div></div></div>';
+  const chan = root.querySelector('[data-chchan]'), timers = [];
+  const ctx = runRecording(`${srcLine(src, "const ROW_MENU = '")}\nlet lp = null, lpUntil = 0, rowSheet = null, swipeOpen = null;\n${fnBlock(src, '  function bindGestures(root) {')}\nthis.bindGestures = bindGestures;`,
+    { document: doc, window: { WizComposerInput: { bind() {} } }, Date, Math, setTimeout: (f, ms) => { timers.push([f, ms]); return timers.length; }, clearTimeout() {}, idOf: () => 'w1', SWIPE_W: 80, ownerSwipe: () => false, Object, Number, String });
+  ctx.bindGestures(root);
+  const menus = () => ctx.calls.filter(c => c[0] === 'rowMenu').map(c => [c[1], c[2] === chan]);
+  chan.dispatchEvent({ type: 'contextmenu', bubbles: true, target: chan, preventDefault() { this.prevented = true; } });
+  assert.deepEqual(menus(), [['w1', true]], 'right-click');
+  chan.dispatchEvent({ type: 'pointerdown', bubbles: true, target: chan, pointerId: 1, pointerType: 'touch', button: 0, clientX: 10, clientY: 10, isPrimary: true });
+  const press = timers.find(([, ms]) => ms >= 300); assert.ok(press, 'a long-press timer'); press[0]();
+  assert.equal(menus().length, 2, 'long-press'); assert.deepEqual(menus()[1], ['w1', true]);
+  const keyCode = fnBlock(src, "    root.addEventListener('keydown', e => {", src.indexOf("if (e.target.matches('[data-chemosearch]')) { e.stopPropagation();") - 200);
+  const k = runRecording(`${srcLine(src, "const ROW_MENU = '")}\nlet rowSheet = null;\nthis.key = ${keyCode.replace(/^\s*root\.addEventListener\('keydown', /, '')};`, { idOf: () => 'w1', globalThis: {}, document: doc });
+  for (const ev of [{ key: 'ContextMenu' }, { key: 'F10', shiftKey: true }]) {
+    const e = { ...ev, target: chan, preventDefault() { this.prevented = true; }, stopPropagation() {} }; k.key(e);
+    assert.ok(e.prevented, ev.key);
+  }
+  assert.deepEqual(k.calls.filter(c => c[0] === 'rowMenu').map(c => c[2] === chan), [true, true], 'ContextMenu and Shift+F10');
+  // right after a long-press, the lift's click never also opens the channel
+  const click = runRecording(`this.guard = e => { ${srcLine(src, "if (justPressed() && e.target.closest('[data-chopen], [data-chnotif], [data-chchan]')) return true;").trim().replace(/\s*\/\/[^'"]*$/, '')} return 'open'; };`, { justPressed: () => true });
+  assert.equal(click.guard({ target: chan }), true);
 });
 
 test('main vs routed: a restricted thread sharing a main thread\'s id never shows the other\'s first message', async () => {
