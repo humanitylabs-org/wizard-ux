@@ -9,7 +9,7 @@
 'use strict';
 window.WizCore = window.WizCore || {};
 window.WizCore.skinHostParts = window.WizCore.skinHostParts || {};
-window.WizCore.skinHostParts.host = function ({ backClaims, BOOT_GUESS_MS, bootGiveUp, booting, builtinDefs, builtins, chatArchiveOrders, chatListOwners, chatsClaimed, claims, clock, commandUis, cssLinks, disabled, dispose, emit, emitBeside, emitRoute, emptyHomes, ensureCss, env, escapeSurfaces, EXPECT_KEY, expected, homeHtml, inboxThreads, interceptors, isDoc, keyGuides, keyHandlers, layers, LAYOUT_KEY, layoutOf, LAYOUTS, levels, load, loadLayout, loadPersonal, loadTweaks, LOOK_ONLY, NOTE_ID, openRoutes, orbSwipeHolders, overlays, paintLayout, paintTweaks, panelHolders, preCss, release, REPLY_LENGTHS, replySummary, requested, safeTweakId, scriptProblem, setLayout, skinHostVars, snoozeLast, startBoot, startBuiltin, taps, tweakCss, tweaks, unload }) {
+window.WizCore.skinHostParts.host = function ({ backClaims, BOOT_GUESS_MS, bootGiveUp, booting, builtinDefs, builtins, chatArchiveOrders, chatListOwners, chatsClaimed, claims, clock, commandUis, cssLinks, disabled, dispose, emit, emitBeside, emitRoute, emptyHomes, ensureCss, env, escapeSurfaces, EXPECT_KEY, expected, homeHtml, inboxThreads, interceptors, isDoc, keyGuides, keyHandlers, layers, LAYOUT_KEY, layoutOf, LAYOUTS, levels, load, loadLayout, loadPersonal, loadTweaks, LOOK_ONLY, NOTE_ID, openRoutes, orbSwipeHolders, orbTaps, overlays, paintLayout, paintTweaks, panelHolders, preCss, release, REPLY_LENGTHS, replySummary, requested, safeTweakId, scriptProblem, setLayout, skinHostVars, snoozeLast, startBoot, startBuiltin, taps, tweakCss, tweaks, unload }) {
 
   const host = {
     loadTweaks, emit,
@@ -70,6 +70,9 @@ window.WizCore.skinHostParts.host = function ({ backClaims, BOOT_GUESS_MS, bootG
     /* desktop.js: a layout draws the command take (api.voice.onCommand); its result goes there, not to a toast. */
     get commandUi() { return commandUis.size > 0; },
     commandResult(ev) { for (const fn of [...commandUis]) fn(Object.freeze({ ...ev })); },
+    /* desktop.js: the orb tapped from outside the page (wizard:orb) or by Right ⌘: the layout's own orb tap (api.voice.onTap)
+     * decides where the take goes; undefined = no layout claims it (the shell's own talk). */
+    deskOrbTap() { for (const fn of [...orbTaps].reverse()) { const r = fn(); if (r !== undefined) return r; } return undefined; },
     /* desktop.js onKey / keyup: a layout's keys first (api.keys.on); true = used. holdKeys: it draws its own hold-⌥. */
     key(e) { for (const h of [...keyHandlers]) if (!h.a.dead && h.down && h.down(e) === true) return true; return false; },
     keyUp(e) { for (const h of [...keyHandlers]) if (!h.a.dead && h.up) h.up(e); },
