@@ -9,6 +9,7 @@ import { readFileSync } from 'node:fs';
 import { launcherFixture } from './launcher-fixture.mjs';
 import { withShellParts } from './fixtures/shell-parts.mjs';
 import { withWebParts } from './fixtures/web-parts.mjs';
+import { switchOnFreshDevice } from './fixtures/r6B-switch.mjs';
 
 const read = p => withShellParts(withWebParts(readFileSync(new URL('../' + p, import.meta.url), 'utf8')));
 const SWITCH = 'wizard/app-windows';
@@ -225,12 +226,12 @@ test('Android wiring: the switch is the main window\'s, launches need a tap, Bac
   assert.match(win, /new Intent\(c, AppSessionActivity\.class\)\.setAction\(Intent\.ACTION_VIEW\)\s+\.setData\(HomeScreenShortcuts\.taskUri\(c, appId\)\)\s+\.addFlags\(Intent\.FLAG_ACTIVITY_NEW_DOCUMENT \| Intent\.FLAG_ACTIVITY_NEW_TASK\)/, 'the same task the home-screen icon opens');
 });
 
-test('the switch is in the catalog, off by default, and names its issue', () => {
-  const cat = JSON.parse(read('web/tweaks/catalog.json'));
-  assert.ok(cat.tweaks.includes(SWITCH));
-  assert.ok(!cat.defaults.includes(SWITCH));
-  assert.ok(!(cat.promotedDefaults || []).includes(SWITCH));
-  const m = JSON.parse(read('web/tweaks/wizard/app-windows/manifest.json'));
-  assert.equal(m.id, SWITCH);
-  assert.deepEqual(m.issues, ['humanitylabs-org/wizard-os#650']);
+test('the switch is in the catalog, off by default, and names its issue', async () => {
+  // what Settings › Look lists on a fresh device (core/experience.js over the shipped catalog and manifest)
+  const l = await switchOnFreshDevice(SWITCH);
+  assert.equal(l.manifest?.id, SWITCH, 'listed');
+  assert.deepEqual(l.manifest.issues, ['humanitylabs-org/wizard-os#650']);
+  assert.equal(l.row?.on, false); assert.equal(l.running, false, 'off by default');
+  assert.deepEqual(l.presetsRunning, [], 'no author preset turns it on');
+  assert.equal(l.canTurnOn, true, 'the owner can switch it on');
 });
