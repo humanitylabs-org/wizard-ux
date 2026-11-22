@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { withParts } from './fixtures/chats-parts.mjs';
+import { block } from './fixtures/source-slice.mjs';
 import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
 
 const src = withLiveParts(readFileSync(new URL('../web/live.js', import.meta.url), 'utf8'));
@@ -71,12 +72,23 @@ test('a box without the inbox (404) is an empty list, not an error; a failed rea
 
 test('Chats reads the inbox only through the switch, and the Running view sits on the main Chats list', () => {
   const chats = withParts(['chats.js', 'chats-running.js'].map(f => readFileSync(new URL('../web/core/' + f, import.meta.url), 'utf8')).join('\n')); // the Running view moved to chats-running.js (issue 1665)
-  const on = chats.slice(chats.indexOf('  function inboxSwitchOn() {'), chats.indexOf('  function runningOpen(w)'));
-  assert.match(on, /includes\('wizard\/agent-inbox'\)/);
-  assert.match(on, /if \(!inboxSwitchOn\(\)\) return false;/, 'off: no Running row, no inbox read');
-  assert.match(chats, /addEventListener\('wos:experience', \(\) => \{ const on = inboxSwitchOn\(\); if \(runWas === on\) return;/, 'a switch flip repaints the lists at once');
-  assert.match(on, /!winAgent\(w\)/, 'the main agent only (the orb dump is main only)');
-  assert.match(chats, /if \(typeof runningBack === 'function' && runningBack\(w\)\) return true;/, 'Back from the Running view returns to Chats');
+  const part = chats.slice(chats.indexOf('  function inboxSwitchOn() {'), chats.indexOf('  function runningFor(ms)'));
+  const html = { dataset: { tweaks: '' } }, listeners = {}, repainted = [], fresh = [];
+  const W = { main: { id: 'main', thread: null }, routed: { id: 'routed', thread: null, agent: 'box' }, open: { id: 'open', thread: 't1' } };
+  const ctx = { document: { documentElement: html }, window: { addEventListener: (t, fn) => { (listeners[t] ||= []).push(fn); } }, winAgent: w => w.agent || '', ch: id => ({ running: id === 'main' }),
+    LIVE: { agentInbox: { fresh: () => fresh.push(1) } }, CH: { main: {}, routed: {}, open: {} }, H: { win: id => W[id] }, rerenderList: w => repainted.push(w.id) };
+  vm.createContext(ctx); vm.runInContext(part + '\nthis.api = { inboxSwitchOn, runningOn, runningOpen };', ctx);
+  const { api } = ctx, flip = t => { html.dataset.tweaks = t; for (const fn of listeners['wos:experience'] || []) fn(); };
+  assert.equal(api.inboxSwitchOn(), false); assert.equal(api.runningOn(W.main), false, 'off: no Running row, no inbox read'); assert.equal(api.runningOpen(W.main), false);
+  flip('wizard/other wizard/agent-inbox');
+  assert.equal(api.inboxSwitchOn(), true); assert.equal(api.runningOn(W.main), true); assert.equal(api.runningOpen(W.main), true, 'the Running view on the main Chats list');
+  assert.equal(api.runningOn(W.routed), false, 'the main agent only (the orb dump is main only)');
+  assert.deepEqual(repainted, ['main', 'routed'], 'a switch flip repaints the lists at once (not an open thread)'); assert.equal(fresh.length, 1, 'and reads the inbox fresh');
+  flip('wizard/other wizard/agent-inbox'); assert.equal(repainted.length, 2, 'no change: no repaint');
+  flip(''); assert.equal(repainted.length, 4); assert.equal(fresh.length, 1, 'off: no inbox read');
+  // Back from the Running view returns to Chats (channelBack asks runningBack first)
+  const back = vm.runInNewContext(`(${block(chats, '  function channelBack(w) {').trim()})`, { runningBack: w => w.id === 'main', W: {}, owner: x => x });
+  assert.equal(back({ id: 'main', thread: null }), true); assert.equal(back({ id: 'other', thread: null }), false);
   const catalog = JSON.parse(readFileSync(new URL('../web/tweaks/catalog.json', import.meta.url), 'utf8'));
   assert.ok(catalog.tweaks.includes('wizard/agent-inbox') && !catalog.defaults.includes('wizard/agent-inbox'), 'listed, off by default');
   const manifest = JSON.parse(readFileSync(new URL('../web/tweaks/wizard/agent-inbox/manifest.json', import.meta.url), 'utf8'));

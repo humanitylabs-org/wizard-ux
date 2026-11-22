@@ -7,6 +7,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
+import { createDocument } from './fixtures/mini-dom.mjs';
+import { cascade } from './fixtures/mini-css.mjs';
 import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
 
 const live = withLiveParts(readFileSync(new URL('../web/live.js', import.meta.url), 'utf8'));
@@ -239,16 +241,26 @@ test('Yes to all sends one request for the card and repaints from its answer (co
 });
 
 test('the buttons are wired in the click handler and every card rule is scoped to the switch with skin tokens', () => {
-  assert.match(chats, /closest\('\[data-chsweep\]'\); if \(swb\) \{ if \(!swb\.disabled\) sweepAnswer\(swb\.dataset\.card, swb\.dataset\.chsweep, swb\.dataset\.opt\)/);
-  assert.match(chats, /closest\('\[data-chsweepall\]'\); if \(swa\) \{ if \(!swa\.disabled\) sweepYesToAll\(swa\.dataset\.chsweepall\)/);
-  const css = readFileSync(new URL('../web/tweaks/wizard/agent-inbox/tweak.css', import.meta.url), 'utf8');
+  // the drawn card, tapped through the real click lines of core/chats-bind.js
+  const bind = readFileSync(new URL('../web/core/chats-bind.js', import.meta.url), 'utf8');
+  const lines = [slice(bind, "    const swb = e.target.closest('[data-chsweep]');", '\n'), slice(bind, "    const swa = e.target.closest('[data-chsweepall]');", '\n')].join('\n');
+  const calls = [], ctx = { sweepAnswer: (...a) => calls.push(['answer', ...a]), sweepYesToAll: (...a) => calls.push(['all', ...a]) };
+  vm.createContext(ctx); const click = vm.runInContext(`(e => {\n${lines}\nreturn false;\n})`, ctx);
+  const doc = createDocument(); doc.documentElement.setAttribute('data-tweaks', 'wizard/agent-inbox');
+  doc.body.innerHTML = cardBlock().api.sweepHtml(card());
+  const tap = n => click({ target: n });
+  assert.equal(tap(doc.querySelector(`[data-chsweep="${A}"][data-opt="late"]`)), true);
+  assert.equal(tap(doc.querySelector('[data-chsweepall]')), true);
+  assert.deepEqual(calls, [['answer', CARD, A, 'late'], ['all', CARD]], 'a token answers its item; Yes to all the card');
+  const off = doc.querySelector(`[data-chsweep="${A}"][data-opt="early"]`); off.disabled = true; assert.equal(tap(off), true); assert.equal(calls.length, 2, 'a disabled button sends nothing');
+  assert.equal(click({ target: doc.body }), false, 'anything else is not the card\'s');
+  // the styles: the switch's own sheet on the drawn card; nothing without the switch
+  const css = readFileSync(new URL('../web/tweaks/wizard/agent-inbox/tweak.css', import.meta.url), 'utf8'), panel = doc.querySelector('.appr.ch-sweep');
+  assert.equal(cascade(panel, css).background?.value, 'var(--wz-panel, #17131f)', 'opaque panel with the dark fallback');
+  doc.documentElement.removeAttribute('data-tweaks');
+  for (const n of [panel, ...panel.querySelectorAll('*')]) assert.deepEqual(Object.keys(cascade(n, css)), [], 'scoped to the switch: ' + n.className);
   const rules = css.replace(/\/\*[\s\S]*?\*\//g, '').split('}').filter(r => r.includes('ch-sweep'));
-  assert.ok(rules.length > 5);
-  for (const rule of rules) {
-    for (const sel of rule.split('{')[0].split(',')) assert.match(sel.trim(), /^html\[data-tweaks~="wizard\/agent-inbox"\]/, 'scoped to the switch');
-    for (const c of rule.match(/var\(--[a-z0-9-]+/g) || []) assert.match(c, /^var\(--wz-/, 'skin tokens only');
-  }
-  assert.match(rules.find(r => r.includes('.appr.ch-sweep {')), /background: var\(--wz-panel, #17131f\)/, 'opaque panel with the dark fallback');
+  for (const rule of rules) for (const c of rule.match(/var\(--[a-z0-9-]+/g) || []) assert.match(c, /^var\(--wz-/, 'skin tokens only');
 });
 
 test('switch turned off while the Daily thread is open: the thread repaints (markdown again) and a tap sends nothing', async () => {
