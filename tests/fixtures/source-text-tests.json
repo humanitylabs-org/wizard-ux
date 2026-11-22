@@ -52,10 +52,6 @@
   "desktop app panel: an app with its companion pane (Video Editor video + Feedback) shows side-by-side CSS columns and a wider panel, never two windows stacked in one box, even when the shell has not re-tiled that desk (James, 6 Nov 2026)",
   "agent choices: the shell side reuses Chats\\' Focus (no second router) and the layout API exposes it"
  ],
- "ai-reconnect-one-tap.test.mjs": [
-  "an empty model-switch slot is tappable and opens its app at the fix",
-  "Home reconnect rows open the connection app at Reconnect"
- ],
  "alert-thread-select.test.mjs": [
   "alert thread surfaces are drawn by chats.js"
  ],
