@@ -132,11 +132,24 @@ const hasClass = (el, c) => (el.classList?.contains ? el.classList.contains(c) :
 // state: a set of pseudo-classes the caller says are on (':hover', ':focus-visible', ...); others are off.
 let STATE = null;
 export function withState(states, fn) { const was = STATE; STATE = new Set(states || []); try { return fn(); } finally { STATE = was; } }
-function simple(el, s) {
+// Selector text is parsed once per distinct string (pure), then matched against many elements.
+const SIMPLE = new Map(), PARTS = new Map();
+function simpleTokens(s) {
+  let toks = SIMPLE.get(s);
+  if (toks) return toks;
+  toks = [];
   const re = /^([a-zA-Z*][\w-]*)|#([\w-]+)|\.([\w-]+)|\[([^\]=~^$*|]+)(?:([~^$*|]?=)\s*(?:"([^"]*)"|'([^']*)'|([^\]\s]*))\s*(i)?)?\]|:(not|is|where|has)\(((?:[^()]|\((?:[^()]|\([^()]*\))*\))*)\)|:([\w-]+)(?:\(([^)]*)\))?/y;
   let i = 0;
   while (i < s.length) {
-    re.lastIndex = i; const m = re.exec(s); if (!m) throw new Error(`mini-dom: unsupported selector ${s}`); i = re.lastIndex;
+    re.lastIndex = i; const m = re.exec(s); if (!m) { toks.push(null); break; } i = re.lastIndex; // null: unsupported, thrown when reached
+    toks.push(m);
+  }
+  SIMPLE.set(s, toks);
+  return toks;
+}
+function simple(el, s) {
+  for (const m of simpleTokens(s)) {
+    if (!m) throw new Error(`mini-dom: unsupported selector ${s}`);
     if (m[1] && m[1] !== '*' && tagOf(el) !== m[1].toLowerCase()) return false;
     if (m[2] && attrOf(el, 'id') !== m[2]) return false;
     if (m[3] && !hasClass(el, m[3])) return false;
@@ -182,12 +195,19 @@ function compound(el, parts, scope) {
   return false;
 }
 export function splitSelectors(sel) { return splitTop(sel, /,/).map(x => x.trim()).filter(Boolean); }
-export function matches(el, sel, scope) {
-  return splitSelectors(sel).some(one => {
+function selectorParts(sel) {
+  let all = PARTS.get(sel);
+  if (all) return all;
+  all = splitSelectors(sel).map(one => {
     const tokens = splitTop(one.replace(/\s*([>+~])\s*(?![^(]*\))(?![^[]*\])/g, ' $1 '), /\s/).filter(Boolean), parts = []; let comb = ' ';
     for (const t of tokens) { if (t === '>' || t === '+' || t === '~') { comb = t; continue; } parts.push({ sel: t, comb }); comb = ' '; }
-    return parts.length && compound(el, parts, scope);
+    return parts;
   });
+  PARTS.set(sel, all);
+  return all;
+}
+export function matches(el, sel, scope) {
+  return selectorParts(String(sel)).some(parts => parts.length && compound(el, parts, scope));
 }
 
 export function createDocument({ url = 'https://box.test/wizard-os-home/' } = {}) {

@@ -26,6 +26,17 @@ const require = createRequire(path.join(QA, 'x.cjs'));
 
 // codeOnly: the script's own check that watchFrame never uses postMessage reads the shell source with its comments
 // blanked (the shipped check also trips on a comment that names postMessage; see tests/DesktopFrameHotkeysFixture.test.mjs).
+// The synthetic page's markup without its <script> blocks (the test drives the page itself; nothing here is sanitising).
+function withoutScripts(html) {
+  let out = '', at = 0;
+  for (;;) {
+    const open = html.toLowerCase().indexOf('<script', at);
+    if (open < 0) return out + html.slice(at);
+    const close = html.toLowerCase().indexOf('</script', open);
+    const end = close < 0 ? html.length : html.indexOf('>', close) + 1 || html.length;
+    out += html.slice(at, open); at = end;
+  }
+}
 export async function runFrameHotkeys({ stranded = false, appMisses = false, welcomeActive = false, codeOnly = false, noSwitch = false, env = {} } = {}) {
   const out = fs.mkdtempSync(path.join(process.env.TMPDIR || '/tmp', 'r8A-hotkeys-'));
   const clicks = [], errors = [];
@@ -115,7 +126,7 @@ export async function runFrameHotkeys({ stranded = false, appMisses = false, wel
       on: () => {}, goto: async u => {
         if (u.endsWith('/qa-desktop-frame/')) { // the script's own synthetic app page, served by its own route
           const body = await new Promise(res => ctxRoute({ request: () => ({ url: () => u, method: () => 'GET' }), fulfill: res, abort: () => res(null) }));
-          const doc = createDocument(); doc.documentElement.innerHTML = body.body.split(/<script\b[\s\S]*?<\/script\s*>/i).join('');
+          const doc = createDocument(); doc.documentElement.innerHTML = withoutScripts(body.body);
           standalone = { doc, css: [...body.body.matchAll(/<style>([\s\S]*?)<\/style>/g)].map(m => m[1]).join('\n') };
         }
       },

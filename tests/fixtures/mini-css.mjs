@@ -49,20 +49,38 @@ function specificity(sel) {
 }
 
 // The declarations that reach `el`, best first per property: { prop: { value, important, selector, media } }.
+// Parsing and selector prep are pure, so they are cached: tests cascade the same page sheets for many elements.
+const parsed = new Map();
+function parsedOnce(css) {
+  let r = parsed.get(css);
+  if (!r) { r = parseCss(css); if (parsed.size > 64) parsed.delete(parsed.keys().next().value); parsed.set(css, r); }
+  return r;
+}
+const prepped = new WeakMap();
+function prep(r) {
+  let p = prepped.get(r);
+  if (!p) {
+    p = r.selectors.map(sel => {
+      const pe = /::?(before|after|placeholder|marker|selection|backdrop|-webkit-[\w-]+)\s*$/.exec(sel);
+      return { want: pe ? '::' + pe[1] : '', base: pe ? sel.slice(0, pe.index) || '*' : sel, spec: specificity(sel) };
+    });
+    prepped.set(r, p);
+  }
+  return p;
+}
+
 export function cascade(el, sheets, { pseudo = '', states = [], media = () => false } = {}) {
-  const rules = (Array.isArray(sheets) ? sheets : [sheets]).flatMap(s => (typeof s === 'string' ? parseCss(s) : s));
+  const rules = (Array.isArray(sheets) ? sheets : [sheets]).flatMap(s => (typeof s === 'string' ? parsedOnce(s) : s));
   const won = {};
   withState(states, () => {
     for (const r of rules) {
       if (r.media.length && !r.media.every(m => media(m))) continue;
       let best = -1;
-      for (const sel of r.selectors) {
-        const pe = /::?(before|after|placeholder|marker|selection|backdrop|-webkit-[\w-]+)\s*$/.exec(sel);
-        const want = pe ? '::' + pe[1] : '';
+      for (const { want, base, spec } of prep(r)) {
         if (want !== (pseudo || '')) continue;
-        const base = pe ? sel.slice(0, pe.index) || '*' : sel;
+        if (spec <= best) continue;
         let ok = false; try { ok = matches(el, base); } catch (_) { ok = false; }
-        if (ok) best = Math.max(best, specificity(sel));
+        if (ok) best = spec;
       }
       if (best < 0) continue;
       for (const [prop, d] of Object.entries(r.decls)) {
