@@ -114,7 +114,9 @@ test('colors and tweaks are separate: onboarding offers every color; Look offers
   assert.match(html, /data-tweak-toggle="miguel\/send-and-go" role="switch" aria-checked="false"/, 'everything else starts off');
   assert.doesNotMatch(html, /data-tweakauthor=|data-tweakpreset/, 'one flat list: no per-author quick button, no preset sets');
   assert.ok(html.indexOf('data-tweak-toggle') > html.indexOf('<h4>Colors</h4>'), 'tweaks sit apart from colour');
-  for (const who of ['wizard', 'miguel']) assert.equal(typeof JSON.parse(read(`web/tweaks/${who}/profile.json`)).name, 'string', who + ' set has a display name');
+  // Each tweak set shows its author's display name (real experience.js reading the real profiles), not the id.
+  const names = Object.fromEntries((await experienceRuntime().E.authors()).map(a => [a.id, a.name]));
+  for (const who of ['wizard', 'miguel']) assert.ok(names[who] && names[who] !== who, `${who} set has a display name: ${names[who]}`);
   h.view.destroy();
 });
 
