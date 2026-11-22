@@ -5,6 +5,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { onSkin } from './fixtures/w5-css.mjs';
 
 const read = p => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
 const rule = (css, sel) => {
@@ -27,13 +28,26 @@ for (const [dir, pre] of [['obsidian', 'html[data-skin^="obsidian"]'], ['landsca
   });
 }
 
+// The real cascade (core chat-power.css, then the skin) on a skeleton of the composer markup chats.js draws: once
+// core's chats-fitlabel.js marks the field .lab-row, the field carries the paint the textarea had before.
+const SHEETS = skin => [read('web/core/chat-power.css'), read(`web/skins/${skin}/skin.css`)];
+const paint = (skin, name, selector, shell) => {
+  const won = onSkin(SHEETS(skin), selector, { skin: name, shell });
+  return won.background ?? won['background-color'] ?? '';
+};
 test('landscapes-light: label-row field matches its light textarea', () => {
-  const css = read('web/skins/landscapes/skin.css');
-  const L = 'html[data-skin="landscapes-light"]:is([data-shell="desktop"], :not([data-shell="desktop"]))';
-  assert.equal(bg(rule(css, `${L} .ch-compose .ch-field.lab-row`)), bg(rule(css, `${L} .ch-compose textarea`)));
+  for (const shell of ['desktop', 'phone']) {
+    const before = paint('landscapes', 'landscapes-light', '.ch-compose .ch-field > textarea', shell);
+    const field = paint('landscapes', 'landscapes-light', '.ch-compose .ch-field.lab-row', shell);
+    assert.ok(before && before !== 'transparent', `${shell}: the skin paints its textarea (${before})`);
+    assert.equal(field, before, `${shell}: the label-row field wears the textarea's paint`);
+    assert.equal(paint('landscapes', 'landscapes-light', '.ch-compose .ch-field.lab-row > textarea', shell), 'transparent', `${shell}: one colour, no second box`);
+  }
 });
 
 test('obsidian: the model label never wears the skin button fill', () => {
-  const css = read('web/skins/obsidian/skin.css');
-  assert.equal(bg(rule(css, 'html[data-skin^="obsidian"] .ch-compose .ch-field > button.ch-mlabel')), 'transparent');
+  for (const shell of ['desktop', 'phone']) {
+    assert.equal(paint('obsidian', 'obsidian', '.ch-compose .ch-field > button.ch-mlabel', shell), 'transparent', shell);
+    assert.equal(paint('obsidian', 'obsidian', '.ch-compose .ch-field.lab-row > button.ch-mlabel', shell), 'transparent', shell + ' label row');
+  }
 });

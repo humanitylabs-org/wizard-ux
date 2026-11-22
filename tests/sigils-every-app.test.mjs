@@ -6,6 +6,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import os from 'node:os';
+import path from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { between } from './fixtures/source-slice.mjs';
+import { parsePage } from './fixtures/w1-pages.mjs';
+import { createDocument } from './fixtures/mini-dom.mjs';
+import { cascade, styleOf } from './fixtures/mini-css.mjs';
 
 const root = new URL('../', import.meta.url).pathname;
 const read = p => fs.readFileSync(root + p, 'utf8');
@@ -54,17 +61,31 @@ test('Home keeps its previous house artwork and app icons never select Hermes', 
   assert.equal(S.brand['wizard-youtube-music'], 'youtube-music');
 });
 
+// The real phone dock paint (web/app-desks.js paintOrbApp + renderDots) into the real phone page (web/index.html),
+// then the real desks.css cascade on the marks it drew.
+function phoneDockMarks({ corner = false } = {}) {
+  const doc = parsePage('index.html');
+  if (corner) doc.querySelector('#device').classList.add('orb-corner');
+  const ctx = { appVars: { idx: 1, desks: [0, 1, 2].map(i => ({ wins: i ? ['w'] : [], home: !i })) }, $: q => doc.querySelector(q), document: doc,
+    window: { WizSigil: { orb() {} } }, deskSigil: i => `<span class="dsg">${i}</span>`, deskName: i => `Desk ${i}`, isReviewDesk: () => false, atPickerEnd: () => false, esc: String };
+  vm.createContext(ctx);
+  vm.runInContext(`${between(read('web/app-desks.js'), '  let orbAppHtml = null;', '  /* Dots: tap = jump to that desk.')}\nthis.renderDots = renderDots;`, ctx);
+  ctx.renderDots();
+  return { inactive: doc.querySelector('.ddot.sig[data-goto] .dsg'), active: doc.querySelector('#orbApp .dsg'), plus: doc.querySelector('.ddot.dplus .dsg') };
+}
 test('phone navigation keeps active and inactive app marks smaller and inside the orb', () => {
-  const css = read('web/core/desks.css');
-  const nav = css.match(/#device:not\(\.orb-corner\) \.dock :is\(\.ddot\.sig\[data-goto\], #orbApp\) \.dsg\s*\{([^}]*)\}/s);
-  assert.ok(nav, 'one shell rule sizes active and inactive app marks without shrinking New desk');
-  assert.match(nav[1], /scale:\s*\.9;/, 'both navigation states step down by ten percent');
-  const active = css.match(/#device:not\(\.orb-corner\) \.dock #orbApp \.dsg\s*\{([^}]*)\}/s);
-  assert.ok(active, 'the active app has an explicit orb containment cap');
-  const cap = Number(active[1].match(/max-width:\s*([\d.]+)%/)?.[1]);
+  const css = read('web/core/desks.css'), m = phoneDockMarks();
+  assert.ok(m.inactive && m.active && m.plus, 'the dock drew app marks, the orb mark and New desk');
+  assert.equal(styleOf(m.inactive, css, 'scale'), '.9', 'inactive marks step down by ten percent');
+  assert.equal(styleOf(m.active, css, 'scale'), '.9', 'the active mark too');
+  assert.equal(styleOf(m.plus, css, 'scale'), '', 'New desk is not shrunk');
+  const cap = parseFloat(styleOf(m.active, css, 'max-width'));
   assert.equal(cap, 54, 'the active mark is capped before the shared optical scale');
   assert.ok(cap * .9 < 50, 'the active mark remains inside the visible half-diameter of the orb');
-  assert.match(active[1], /max-height:\s*54%;/);
+  assert.equal(styleOf(m.active, css, 'max-height'), '54%');
+  assert.equal(styleOf(m.inactive, css, 'max-width'), '', 'only the orb mark gets the containment cap');
+  const corner = phoneDockMarks({ corner: true });
+  assert.equal(styleOf(corner.active, css, 'scale'), '', 'the corner orb keeps its own sizing');
 });
 
 test('Cloudflare wears the warm cloud', () => {
@@ -120,25 +141,35 @@ test('an app\'s own same-origin icon file is used as its silhouette; anything el
 });
 
 test('the fallback CSS keeps the mask: no rule turns a letter mark back into a painted box', () => {
-  const css = read('web/core/sigils.css');
-  const rule = css.match(/\.sgi\.sgl\s*\{([^}]*)\}/);
-  assert.ok(rule, '.sgi.sgl rule exists');
-  assert.doesNotMatch(rule[1], /mask\s*:\s*none|background\s*:\s*none|width\s*:\s*auto/, rule[1]);
-  assert.match(rule[1], /font-size:\s*0/);
-  // Skins may restyle .sgi (colour, filter) but must never drop the mask on letter marks.
-  for (const f of fs.readdirSync(root + 'web/skins')) {
-    const p = `web/skins/${f}/skin.css`; if (!fs.existsSync(root + p)) continue;
-    for (const m of read(p).matchAll(/([^{}]*\.sgl[^{}]*)\{([^}]*)\}/g))
-      assert.doesNotMatch(m[2], /mask(-image)?\s*:\s*none/, `${p}: ${m[1].trim()}`);
+  // the mark sigils.js draws for an app's own icon file is the letter-mark box (.sgi.sgl), drawn as a mask
+  const S = sigil(), html = S.html({ id: 'own', name: 'Own', icon: '/own/icon.svg' });
+  const base = read('web/core/sigils.css');
+  const skins = fs.readdirSync(root + 'web/skins').filter(f => fs.existsSync(root + `web/skins/${f}/skin.css`));
+  assert.ok(skins.length >= 3, 'the built-in skins');
+  for (const skin of ['', ...skins]) {
+    const doc = createDocument(); if (skin) doc.documentElement.setAttribute('data-skin', skin);
+    doc.body.innerHTML = `<div class="dock">${html}</div>`;
+    const mark = doc.querySelector('.sgi.sgl'); assert.ok(mark, html);
+    const won = cascade(mark, [base, skin ? read(`web/skins/${skin}/skin.css`) : ''].join('\n'));
+    const label = skin || 'no skin';
+    assert.equal(won['font-size']?.value, '0', `${label}: the letter itself is never painted`);
+    for (const prop of ['mask', 'mask-image', '-webkit-mask', '-webkit-mask-image']) assert.notEqual(won[prop]?.value, 'none', `${label}: ${prop}`);
+    assert.ok(/var\(--sg\)/.test(won['mask-image']?.value || won['-webkit-mask-image']?.value || won.mask?.value || won['-webkit-mask']?.value || ''), `${label}: drawn through the --sg mask`);
+    assert.notEqual(won.background?.value, 'none', label); assert.notEqual(won.width?.value, 'auto', label);
   }
 });
 
+// Rebuild with the real tools/sigils/build.py in a scratch tree (its glyph library comes from the committed
+// tools/sigils/sigils.json: skia-pathops, which draws the glyphs, is not needed to emit them) and compare the outputs.
 test('the generated files are in sync with the template (rebuild with tools/sigils/build.py)', () => {
-  const tpl = read('tools/sigils/sigils.template.js'), js = read('web/core/sigils.js');
-  const strip = s => s.replace(/\/\*NAMES\*\/|\/\*HOUSE\*\/|\/\*BRAND\*\/|\/\*FALLBACK\*\//g, '');
-  for (const line of strip(tpl).split('\n').filter(l => l.trim() && !/NAMES|HOUSE|BRAND = |FALLBACK/.test(l)))
-    assert.ok(js.includes(line), 'web/core/sigils.js is stale; rerun tools/sigils/build.py. Missing: ' + line.trim());
-  const house = JSON.parse(js.match(/const HOUSE = [^{]*(\{.*?\})[);]/)[1]);
-  const src = read('tools/sigils/build.py');
-  for (const id of Object.keys(house)) assert.ok(src.includes(`'${id}'`), `HOUSE ${id} not in build.py`);
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'r6B-sigils-'));
+  try {
+    const tools = path.join(tmp, 'tools', 'sigils'); fs.mkdirSync(tools, { recursive: true }); fs.mkdirSync(path.join(tmp, 'web', 'core'), { recursive: true });
+    for (const f of fs.readdirSync(root + 'tools/sigils')) if (f !== 'glyphs.py' && /\.(py|js|css|json)$/.test(f)) fs.copyFileSync(root + 'tools/sigils/' + f, path.join(tools, f));
+    fs.writeFileSync(path.join(tools, 'glyphs.py'), "import json, os\ndef build():\n    return json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sigils.json')))\n");
+    fs.symlinkSync(root + 'web/brand', path.join(tmp, 'web', 'brand'));
+    execFileSync('python3', [path.join(tools, 'build.py')], { stdio: 'pipe' });
+    for (const f of ['sigils.js', 'sigils.css'])
+      assert.ok(fs.readFileSync(path.join(tmp, 'web', 'core', f), 'utf8') === read('web/core/' + f), `web/core/${f} is stale; rerun tools/sigils/build.py`);
+  } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
 });
