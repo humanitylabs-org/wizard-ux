@@ -36,13 +36,29 @@ test('agent completion status still says Done', () => {
     assert.equal(name === 'ATT' ? ctx.value.done.label : name === 'PRI_LABEL' ? ctx.value[4] : ctx.value.done, 'Done', name);
   }
 });
+const cut = (file, a, b) => { const t = read(file), i = t.indexOf(a), j = t.indexOf(b, i); assert.ok(i >= 0 && j > i, a); return t.slice(i, j + b.length); };
 test('remaining action labels say Archive; removed arrow hints stay absent and AI apps keeps E', () => {
   const desktop = read('web/desktop/desktop.js');
-  const layout = read('web/layouts/ai-apps/desktop.js');
   assert.doesNotMatch(desktop, /\['\[data-chact="done"\]', '→', 'Archive'\]/);
-  assert.match(layout, /KeyZ: 'snooze', KeyE: 'done'/);
-  assert.match(layout, /\['done', 'E'\]/);
-  assert.match(desktop, /act === 'done' \? 'Archive'/);
   assert.doesNotMatch(desktop, /'Archive \/ Snooze'/);
   assert.doesNotMatch(desktop, /\['\[data-chact="done"\]', '→', 'Done'\]|act === 'done' \? 'Done'/);
+  // Desktop ⌥E (chatAct, in its part desktop/desktop-pickany.js) names the action Archive in what it tells the owner.
+  const toasts = [], acted = [];
+  const d = vm.createContext({ MOD: '⌥', toasts, desktopVars: { homeOpen: true, cur: 0, ws: [{ wins: [] }], W: {} }, focused: () => ({ id: 'w1', app: 'chats', thread: 's1' }),
+    mainChats: () => true, panelHas: () => false, panelWins: () => [], toast: (i, t) => toasts.push(t), winEl: () => ({ querySelector: () => null }), CHATS: { threadAct: (...x) => acted.push(x) }, globalThis: {} });
+  vm.runInContext(cut('web/desktop/desktop-pickany.js', '    function chatAct(act, keyName) {', '\n    }\n') + '\nthis.chatAct = chatAct;', d);
+  d.chatAct('done', 'E');
+  assert.deepEqual(toasts, ['Open a chat first, then ⌥E = Archive']);
+  d.desktopVars.homeOpen = false; d.chatAct('done', 'E');
+  assert.equal(toasts[1], 'Archive appears once the reply is in');
+  d.winEl = () => ({ querySelector: () => ({}) }); d.chatAct('done', 'E');
+  assert.deepEqual(acted, [['w1', 's1', 'done']]);
+  // AI apps (layouts/ai-apps/desktop-keys.js): ⌥E presses the open chat's Archive button and its keycap says E.
+  const clicked = [], caps = [];
+  const k = vm.createContext({ aadVars: { docked: true }, typing: () => false, sh: false, e: { repeat: false }, chatBtn: a => ({ click: () => clicked.push(a), a }),
+    putIn: (b, key) => caps.push([b.a, key]), frontNote: () => false, routeBtn: () => null });
+  vm.runInContext(`this.key = code => { ${cut('web/layouts/ai-apps/desktop-keys.js', '    const act = !sh && aadVars.docked', 'return true; }')} return false; };\nthis.caps = () => { ${cut('web/layouts/ai-apps/desktop-keys.js', '    if (aadVars.docked) {\n      for (const [a, k] of', 'putIn(chatBtn(a), k);')} } };`, k);
+  assert.equal(k.key('KeyE'), true); assert.equal(k.key('KeyZ'), true); assert.equal(k.key('KeyQ'), false);
+  assert.deepEqual(clicked, ['done', 'snooze']);
+  k.caps(); assert.deepEqual(caps.find(([a]) => a === 'done'), ['done', 'E']);
 });
