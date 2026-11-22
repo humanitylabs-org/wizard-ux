@@ -7,6 +7,7 @@ import { withWebParts } from './fixtures/web-parts.mjs';
 import { root as ROOT, world, deskWorld, layout, FakePointerEvent } from './fixtures/ai-apps-world.mjs';
 import { createDocument } from './fixtures/mini-dom.mjs';
 import { cascade } from './fixtures/mini-css.mjs';
+import { block, runRecording } from './fixtures/source-slice.mjs';
 const root = ROOT;
 const read = p => withWebParts(readFileSync(new URL('../' + p, import.meta.url), 'utf8'));
 const source = read('web/core/workspaces.js');
@@ -208,13 +209,28 @@ test('switching carries a safe way back; the target saves it once and strips the
   assert.equal(bad.data.get('wos.workspaces.v1'), '[]');
   const junk = boot({ hash: '#wzfrom=%E0%A4%A' }); assert.equal(junk.data.get('wos.workspaces.v1'), '[]');
 });
-test('both shells load module; bridge.handle preserves native capability; Miguel reuses only core switcher', () => {
-  for (const f of ['web/index.html', 'web/desktop.html']) assert.match(read(f), /core\/workspaces.js/);
-  assert.match(read('web/core/bridge.js'), /window.wizardUX = \{ \.\.\.window.wizardUX,/);
+test('both shells load module; bridge.handle preserves native capability; Miguel reuses only core switcher', async () => {
+  for (const f of ['web/index.html', 'web/desktop.html']) {
+    const h = read(f), d = createDocument(); d.documentElement.innerHTML = h.slice(h.indexOf('<head'), h.lastIndexOf('</html>'));
+    assert.ok(d.querySelectorAll('script[src]').some(x => x.getAttribute('src') === 'core/workspaces.js'), f);
+  }
+  // the bridge adds its fields beside what the native side already put on window.wizardUX
+  const bridge = read('web/core/bridge.js'), bl = bridge.slice(bridge.indexOf('window.wizardUX = { ...window.wizardUX,'), bridge.indexOf('\n', bridge.indexOf('window.wizardUX = { ...window.wizardUX,')));
+  const win = { wizardUX: { native: 'android', handle: 'kept' }, WIZ_SHELL: 'phone' };
+  vm.runInNewContext(bl, { window: win, VERSION: 'v', EVENTS: [] });
+  assert.equal(win.wizardUX.native, 'android'); assert.equal(win.wizardUX.handle, 'kept'); assert.equal(win.wizardUX.shell, 'phone');
+  // Miguel's Home taps go to the core switcher (switch / add), never a copy of it
   const tweak = read('web/tweaks/miguel/machines-home/tweak.js');
-  assert.match(tweak, /api.workspaces.switch\(d.ws\)/); assert.match(tweak, /api.workspaces.add\(\)/);
   assert.doesNotMatch(tweak, /wizMenu|wizBtn|wsmBack|renderWiz/);
-  assert.match(source, /api\?\.back.push\(close\)/);
+  const tap = (dataset, managed) => {
+    const used = [], top = {}, target = { dataset, parentNode: top };
+    const ctx = runRecording(`${block(tweak, '  const onTap = e => {').replace(/^\s*const onTap = /, 'this.onTap = ')};`,
+      { api: { workspaces: { switch: id => (used.push(['switch', id]), Promise.resolve()), add: () => (used.push(['add']), Promise.resolve()) }, toast() {}, storage: { set() {}, get() {} } }, managedOf: () => managed, S: {}, drawn: {} });
+    ctx.onTap({ currentTarget: top, target }); return used;
+  };
+  assert.deepEqual(tap({ ws: 'g1' }, { url: 'https://carlos.example' }), [['switch', 'g1']]);
+  assert.deepEqual(tap({ ws: 'g2' }, { url: '' }), [], 'not reachable yet: shows its page instead');
+  assert.deepEqual(tap({ act: 'add-managed' }, null), [['add']]);
 });
 test('the AI-apps sidebar/phone workspace lists offer a switch for a Wizard with an address', async () => {
   for (const shell of ['desktop', 'phone']) {
