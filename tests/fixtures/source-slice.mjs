@@ -64,3 +64,49 @@ export function retryWithStubs(build, rounds = 60) {
   }
   assert.fail('too many unknown names');
 }
+
+// A stand-in for a name a slice uses but the test does not care about: calling it (or any property of it, to any
+// depth) records [name, ...args] in `calls` and returns undefined; reading it is never a thenable or a primitive.
+export function recorder(name, calls) {
+  const fn = function () {};
+  return new Proxy(fn, {
+    apply: (_, __, args) => { calls.push([name, ...args]); return undefined; },
+    get: (_, k) => (k === 'then' || typeof k === 'symbol' ? undefined : k === 'length' ? 0 : recorder(`${name}.${String(k)}`, calls)),
+    has: () => false,
+  });
+}
+
+const KEYWORDS = new Set(('break case catch class const continue debugger default delete do else export extends finally for function if import in '
+  + 'instanceof let new return super switch this throw try typeof var void while with yield async await of null true false undefined NaN Infinity arguments get set static').split(' '));
+// Run `code` in `ctx`. Every identifier in it (outside strings and comments, not after a dot) that is neither a JS
+// global, a keyword nor already in ctx becomes a recorder() first, so names a slice only reaches when called are
+// covered too; names the slice declares itself shadow them. Returns ctx.
+export function runRecording(code, ctx = {}, calls = (ctx.calls ||= [])) {
+  vm.createContext(ctx);
+  const bare = code.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:\\])\/\/[^\n]*/g, '$1 ')
+    .replace(/'(?:\\.|[^'\\\n])*'|"(?:\\.|[^"\\\n])*"/g, "''");
+  const globals = new Set(vm.runInContext('Object.getOwnPropertyNames(globalThis)', ctx));
+  for (const m of bare.matchAll(/(?<![\w$.])([A-Za-z_$][\w$]*)\b/g)) {
+    const n = m[1];
+    if (KEYWORDS.has(n) || globals.has(n) || n in ctx || n in globalThis) continue;
+    ctx[n] = recorder(n, calls);
+  }
+  vm.runInContext(code, ctx);
+  return ctx;
+}
+
+// The whole of one function (or block) in `src` that starts at `marker`: up to the brace matching its first '{'.
+// Strings, template literals and comments are skipped while counting braces.
+export function block(src, marker, from = 0) {
+  const at = src.indexOf(marker, from); assert.ok(at >= 0, `not found: ${marker}`);
+  let i = src.indexOf('{', at), depth = 0;
+  for (; i < src.length; i++) {
+    const c = src[i];
+    if (c === '/' && src[i + 1] === '/') { i = src.indexOf('\n', i); continue; }
+    if (c === '/' && src[i + 1] === '*') { i = src.indexOf('*/', i) + 1; continue; }
+    if (c === "'" || c === '"' || c === '`') { for (i++; i < src.length && src[i] !== c; i++) if (src[i] === '\\') i++; continue; }
+    if (c === '{') depth++;
+    else if (c === '}' && --depth === 0) return src.slice(at, i + 1);
+  }
+  assert.fail(`unbalanced: ${marker}`);
+}

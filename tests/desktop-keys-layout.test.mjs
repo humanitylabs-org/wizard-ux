@@ -3,52 +3,98 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { withDesktopParts } from './fixtures/desktop-parts.mjs';
+import { desktopKeys } from './fixtures/desktop-keys-harness.mjs';
+import { keysGuide } from './fixtures/keys-guide-harness.mjs';
+import { block, runRecording } from './fixtures/source-slice.mjs';
 
 const js = withDesktopParts(readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8'));
 const html = readFileSync(new URL('../web/desktop.html', import.meta.url), 'utf8');
 
+// The real key handler and the real keys guide run here (tests/fixtures/desktop-keys-harness.mjs and
+// keys-guide-harness.mjs; wizard-ux issue 1674: tests run the code).
+const fn = (marker, ctx = {}, name = /function (\w+)/.exec(marker)?.[1]) => runRecording(`${block(js, marker)}\nthis.${name} = ${name};`, ctx);
+const lineOf = k => { const i = js.indexOf(k); assert.ok(i >= 0, k); return js.slice(js.lastIndexOf('\n', i) + 1, js.indexOf('\n', i)); };
+
 test('holding ⌥ is the one keys guide: speak keys named and explained, no separate sheet', () => {
   assert.doesNotMatch(js, /const KEYS = \[/);
-  for (const name of ['Talk about this', 'New voice chat', 'Tell the computer', 'Type with your voice']) assert.ok(js.includes(name), name);
-  assert.match(js, /function toggleKeys\(on\) \{[^\n]*keyHints\.show\(true\)/);
-  assert.match(js, /watchEscape\('keys', \(\) => keyHints\.pinned\(\), \(\) => \{ toggleKeys\(false\)/);
+  const g = keysGuide();
+  for (const [sel, key, name] of [['#micBtn', 'S', 'Talk about this'], ['#commandBtn', 'C', 'Tell the computer'], ['#dictateBtn', 'D', 'Type with your voice']])
+    assert.deepEqual(g.show(false).filter(c => c.on?.matches(sel)).map(c => c.label), [`⌥ ${key}: ${name}`], sel);
+  // ⌥/ (toggleKeys) pins that same guide; Escape (its watchEscape entry) closes it and returns to Settings
+  const t = fn('function toggleKeys(on) {', { keyHints: g.keyHints, window: {} });
+  t.toggleKeys(true);
+  const el = g.document.querySelector('#keyHints');
+  assert.equal(g.keyHints.pinned(), true); assert.equal(el.hidden, false); assert.ok(el.classList.contains('pinned'));
+  let esc = null; const back = [];
+  vm.runInNewContext(lineOf("watchEscape('keys', () => keyHints.pinned()"), { watchEscape: (...a) => { esc = a; }, keyHints: g.keyHints, toggleKeys: t.toggleKeys, returnToSettings: () => back.push('settings') });
+  assert.equal(esc[0], 'keys'); assert.equal(esc[1](), true);
+  esc[2](); assert.equal(g.keyHints.pinned(), false); assert.equal(el.hidden, true); assert.deepEqual(back, ['settings']);
 });
 
 test('⌥S speaks about the screen, ⌥C speaks a command, ⌥D dictates', () => {
-  assert.match(js, /code === 'KeyS' \|\| code === 'KeyC' \|\| code === 'KeyD'/);
-  assert.match(js, /code === 'KeyS' \? speakScreen\(\) : commandVoice\(\)/);
-  assert.match(js, /if \(code === 'KeyD'\) \{[\s\S]*?return dictate\(\);/);
-  for (const [id, key] of [['micBtn', 'Alt\\+S'], ['commandBtn', 'Alt\\+C'], ['dictateBtn', 'Alt\\+D']]) assert.match(html, new RegExp(`id="${id}"[^>]*aria-keyshortcuts="${key}"`));
+  for (const [code, does] of [['KeyS', 'speakScreen'], ['KeyC', 'commandVoice'], ['KeyD', 'dictate']]) {
+    const k = desktopKeys(), e = k.key(code);
+    assert.ok(e.defaultPrevented, code); assert.equal(k.names().at(-1), does, code);
+  }
+  const page = keysGuide().document;
+  for (const [id, key] of [['micBtn', 'Alt+S'], ['commandBtn', 'Alt+C'], ['dictateBtn', 'Alt+D']]) assert.equal(page.getElementById(id).getAttribute('aria-keyshortcuts'), key, id);
 });
 
 test('holding left ⌥ alone shows key hints; any other key or release hides them', () => {
-  assert.match(js, /if \(pinned \|\| e\.repeat \|\| e\.code !== 'AltLeft'/);
-  assert.match(js, /keyHints\.down\(e\)/);
-  assert.match(js, /addEventListener\('keyup', e => \{ keyHints\.up\(e\); window\.WosSkinHost\?\.keyUp\?\.\(e\); \}, true\)/);
-  assert.match(js, /frameWindow\.addEventListener\('keyup', e => \{ keyHints\.up\(e\); window\.WosSkinHost\?\.keyUp\?\.\(e\); \}, true\)/);
+  const timers = [], g = keysGuide({ setTimeout: (f, ms) => { timers.push([f, ms]); return timers.length; } }), el = g.document.querySelector('#keyHints');
+  const ev = (code, x = {}) => ({ code, key: /^Alt/.test(code) ? 'Alt' : code, altKey: true, preventDefault() { this.prevented = true; }, ...x });
+  g.keyHints.down(ev('AltLeft'));
+  assert.equal(timers.at(-1)[1], 300); timers.at(-1)[0](); assert.equal(el.hidden, false, 'held: the hints show');
+  g.keyHints.down(ev('KeyA')); assert.equal(el.hidden, true, 'another key hides them');
+  g.keyHints.down(ev('AltLeft')); timers.at(-1)[0](); const up = ev('AltLeft'); g.keyHints.up(up);
+  assert.equal(el.hidden, true); assert.ok(up.prevented, 'release hides them');
+  const n = timers.length;
+  for (const x of [ev('AltRight'), ev('AltLeft', { repeat: true }), ev('AltLeft', { shiftKey: true }), ev('AltLeft', { metaKey: true })]) g.keyHints.down(x);
+  assert.equal(timers.length, n, 'only the left ⌥, alone and not repeating');
+  // the page and every app frame hand their keyup to the guide (and the layout)
+  for (const line of ["  addEventListener('keyup', e => { keyHints.up(e); window.WosSkinHost?.keyUp?.(e); }, true);", "frameWindow.addEventListener('keyup', e => { keyHints.up(e); window.WosSkinHost?.keyUp?.(e); }, true);"]) {
+    const on = {}, ups = [], target = { addEventListener: (t, f, c) => { on[t] = [f, c]; } };
+    vm.runInNewContext(lineOf(line).trim(), { addEventListener: target.addEventListener, frameWindow: target, keyHints: { up: e => ups.push(e) }, window: { WosSkinHost: { keyUp: e => ups.push('layout') } } });
+    assert.equal(on.keyup[1], true, 'capture'); on.keyup[0]('e'); assert.deepEqual(ups, ['e', 'layout']);
+  }
 });
 
 test('⌥S only sends its own kind of take', () => {
-  assert.match(js, /function speakScreen\(\) \{[\s\S]*?vMode === 'talk' && !vNewChat && !commandTake\) return talk\('send'\)/);
+  const run = (state, extra = {}) => { const c = fn('function speakScreen() {', { VOICE: { state }, vMode: 'talk', vNewChat: false, commandTake: false, ...extra }); c.speakScreen(); return c.calls.map(x => x.join(':')); };
+  assert.deepEqual(run('idle'), ['talk']);
+  assert.deepEqual(run('listen'), ['talk:send'], 'its own take: sent');
+  assert.deepEqual(run('paused'), ['talk:send']);
+  for (const x of [{ vNewChat: true }, { commandTake: true }, { vMode: 'dictate' }]) assert.match(run('listen', x)[0], /^toast/, JSON.stringify(x));
 });
 
 test('⌥↓/⌥↑ walk Ready chats from anywhere into the message box; no ⌥←/⌥→ list hop', () => {
-  assert.match(js, /\.ch-sec\[data-sec="ready"\] \.ch-row\[data-chopen\]/);
-  assert.match(js, /chatsUpDown\(code === 'ArrowDown' \? 1 : -1\)/);
-  assert.match(js, /function chatsUpDown\(dir\) \{ return stepReady\(dir\); \}/);
-  assert.doesNotMatch(js, /code === 'ArrowRight'\)[^\n]*chatsSide/); // the arrows never hop sides; ⌥[ ⌥] do
-  assert.match(js, /focusInside\(f\.id\); \}, 30\); \/\/ straight into the message box/);
-  assert.ok(js.includes("'Next ready chat'"));
+  for (const [code, dir] of [['ArrowDown', 1], ['ArrowUp', -1]]) { const k = desktopKeys(); k.key(code); assert.deepEqual(k.calls.at(-1), ['chatsUpDown', dir], code); }
+  for (const code of ['ArrowLeft', 'ArrowRight']) { const k = desktopKeys(); const e = k.key(code); assert.deepEqual(k.calls, [], `${code}: the field's word jump`); assert.ok(!e.defaultPrevented); }
+  assert.deepEqual(fn('function chatsUpDown(dir) {', {}).chatsUpDown(1), undefined);
+  const up = fn('function chatsUpDown(dir) {', { stepReady: d => `step:${d}` }); assert.equal(up.chatsUpDown(-1), 'step:-1');
+  // the Ready rows it walks: only the Ready section's openable rows
+  const g = keysGuide(); const win = g.add('<div class="win"><div class="pane-list"><div class="ch-sec" data-sec="ready"><div class="ch-row" data-chopen="r1"></div><div class="ch-row" data-chopen="r2"></div><div class="ch-row"></div></div><div class="ch-sec" data-sec="working"><div class="ch-row" data-chopen="w1"></div></div></div></div>');
+  const rows = runRecording(`${block(js, '  const readyRows = id => {')}\nthis.readyRows = readyRows;`, { winEl: () => win, document: g.document, $$: (q, r) => r.querySelectorAll(q), byTop: () => 0, CSS: { escape: String } }).readyRows('c1');
+  assert.deepEqual([...rows].map(r => r.dataset.chopen), ['r1', 'r2']);
+  // the guide: ↓ on the next Ready chat, named
+  const c = { id: 'c1', app: 'chats', thread: 'r1' };
+  const g2 = keysGuide({ focused: () => c, ws: [{ id: 'd1', wins: ['c1'] }], W: { c1: c }, rect: el => (el.classList.contains('pane-list') ? { top: 0, bottom: 900, height: 900 } : null) });
+  const w2 = g2.add('<div class="win"><div class="pane-list"><div class="ch-sec" data-sec="ready"><div class="ch-row" data-chopen="r1"></div><div class="ch-row" data-chopen="r2"></div></div></div></div>');
+  g2.ctx.winEl = () => w2; g2.ctx.readyRows = () => w2.querySelectorAll('.ch-row');
+  const down = g2.show(false).filter(x => x.key === '↓');
+  assert.deepEqual(down.map(x => [x.on.dataset.chopen, x.label]), [['r2', '⌥ ↓: Next ready chat']]);
 });
 
 test('plain ⌥←/⌥→ never act on a chat; standard ⌥Z stays Back and no hidden ⌥E is added', () => {
-  assert.doesNotMatch(js, /code === 'KeyE'/);
-  assert.doesNotMatch(js, /code === 'KeyZ'\) return hit\(\(\) => \{[^\n]*chatAct/); // ⌥Z is Back to where you were, never Snooze
-  assert.match(js, /CHATS\.threadAct\(f\.id, f\.thread, act\)/);
-  assert.doesNotMatch(js, /chatAct\(code === 'ArrowRight'/);
+  for (const code of ['KeyE', 'ArrowLeft', 'ArrowRight']) { const k = desktopKeys({ focused: () => ({ id: 'c1', app: 'chats', thread: 't1' }) }); k.key(code); assert.ok(!k.names().some(n => /threadAct/.test(n)), code); }
+  const z = desktopKeys({ focused: () => ({ id: 'c1', app: 'chats', thread: 't1' }) }); z.key('KeyZ');
+  assert.deepEqual(z.names(), ['jumpBack'], '⌥Z is Back to where you were, never Snooze');
+  const held = desktopKeys(); held.key('KeyZ', { repeat: true }); assert.deepEqual(held.calls, [], 'once per press');
+  // ⌥X Resolve goes to the open chat's own action
+  const c = { id: 'c1', app: 'chats', thread: 't1' };
+  const x = desktopKeys({ focused: () => c, winEl: () => ({ querySelector: q => (q === '[data-chact="resolve"]' ? {} : null) }) }); x.key('KeyX');
+  assert.deepEqual(x.calls.filter(k => k[0] === 'CHATS.threadAct'), [['CHATS.threadAct', 'c1', 't1', 'resolve']]);
   assert.doesNotMatch(js, /\['\[data-chact="(?:done|snooze)"\]', '[←→]'/);
-  assert.match(js, /code === 'KeyZ'\) return hit\(\(\) => \{ if \(!e\.repeat\) jumpBack\(\)/);
-  assert.match(js, /chip\(next, '↓', 'inside'\)/);
 });
 
 test('desktop replies never schedule a new chat after sending', () => {
