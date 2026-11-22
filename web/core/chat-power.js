@@ -305,7 +305,7 @@ window.WosChatPower = function chatPower(A) {
     return M?.currentRoute(s?.id || '') || { model: '', provider: '' };
   }
   // Agents MVP: the agent a window or thread belongs to (null = the main agent).
-  const agentOfWin = (w, s) => { const AG = window.WosAgents; const id = s ? (LIVE.agentOf?.(s.id) || (typeof s.agent === 'string' ? s.agent : s.agent?.id) || '') : A.winAgent(w); return AG && id && AG.isOther(id) ? AG.get(id) || { id, label: id, missing: true } : null; };
+  const agentOfWin = (w, s) => { const AG = window.WosAgents; const id = s ? (LIVE.agentOf?.(s.id) || (typeof s.agent === 'string' ? s.agent : s.agent?.id) || '') : A.winAgent(w); return AG && id && AG.isOther(id) ? AG.get(id) || { id, label: id, missing: true } : AG?.mainRoute?.(id) || null; };
   function newModel(c, w) {
     if (c.newModel) return c.newModel;
     const ag = agentOfWin(w || H.win(Object.keys(A.CH).find(k => A.CH[k] === c) || ''), null);

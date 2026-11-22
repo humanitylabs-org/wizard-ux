@@ -72,7 +72,7 @@ Back: `WizEscapeBack`, `WosBack`; `WizChatsHost.registerBack`/back.push share re
 | Uploads of any size | `WizUploads` (`uploads.js`) |
 | Files browse, preview, attach | `WosFiles` (`files.js`) |
 | Settings in both shells | `WosSettings.register` (`settings.js`: Skin/Colors, Background/Mode, shared About/fail-closed updates, package `hasSystem`), `focus(id)`; same-HTML `refresh()` no-op; Home/AI rehost; Look/New skin shell filter (keeps hidden defaults); reply tweak `tweakCard`; narrow Back; `WosFeatures`; `WizConfig.responseStyle`; Try new features |
-| Agent identity, glyph, hue; which agents an app joins (`appAgents`: privacy, needs_private_agent) | `WosAgents` (`agents.js`) |
+| Agent identity, glyph, hue; default-agent route (`routeAgent`); app's agents (`appAgents`) | `WosAgents` (`agents.js`) |
 | Store | `storeKind,sourceLabel,parseInstallLink,removeInstalledApp,githubSheet` |
 | App agent routing, private-app note + setup (incl. Store) | `WosAppRoute` (`app-route.js`) |
 | App icons, logos | `WizSigil` (`sigils.js`, `sigils.css`): aliases, registry/HOUSE glyphs first; unbranded fallback; `orb(node)` white glyphs; contain-fit pins. Tests: `app-icon-*.test.mjs` |

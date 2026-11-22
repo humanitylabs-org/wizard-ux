@@ -32,7 +32,7 @@ window.WizCore.appParts.viewvoice = function ({ agentApp, agentWin, appVars, CHA
     // Issue 1523: the channel by its emoji and words ("🚀 Launch channel"), as the Chats list shows it.
     if (chan) return { id, mode: 'auto', ...pin, name: `${window.WizCore?.channelFace?.(chan.name, !!chan.general)?.title || '# ' + chan.name} channel` };
     // Unified Chats: a private agent's thread open in the main Chats is named like its own Chats, never by title.
-    if (w.app === 'chats' && w.thread && LIVE?.isPrivate?.(w.thread)) { const ag = window.WosAgents?.get(LIVE.agentOf(w.thread)) || { id: LIVE.agentOf(w.thread), label: 'Private' };
+    if (w.app === 'chats' && w.thread && LIVE?.isPrivate?.(w.thread)) { const ag = window.WosAgents?.get(LIVE.agentOf(w.thread) || window.WosAgents.defaultId?.()) || { id: LIVE.agentOf(w.thread), label: 'Private' };
       return { id, mode: 'auto', kind: 'chat thread', thread: w.thread, agent: ag.id, agentLabel: ag.label, private: true, name: `${ag.label} thread (private agent)` }; }
     // A new chat on a Private model in the main Chats: what is said here goes to that agent (never the router).
     if (mainChats(w) && w.thread === '__new__') { const nm = CHATS.ch?.(id)?.newModel, AGx = window.WosAgents, ag = nm?.agent && AGx?.isOther(nm.agent) ? AGx.get(nm.agent) : null;
