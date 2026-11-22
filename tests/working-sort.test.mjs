@@ -8,6 +8,8 @@ import { withParts } from './fixtures/chats-parts.mjs';
 import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
 import { withWebParts } from './fixtures/web-parts.mjs';
 import { listFixture } from './fixtures/chats-list-render.mjs';
+import { withSettingsParts } from './fixtures/settings-parts.mjs';
+import { createDocument } from './fixtures/mini-dom.mjs';
 const M = globalThis.WizChatsListModel;
 const at = n => `2026-11-06T${String(n).padStart(2, '0')}:00:00Z`;
 const ids = rows => Array.from(rows, r => r.id);
@@ -48,13 +50,25 @@ test('Working time sort falls back for sessions without request clocks, without 
   assert.equal(M.workingAt({ requestAt: at(2), updatedAt: at(9) }, live), at(2), 'request clock remains authoritative');
 });
 test('every surface has a separate Working control, and Settings uses the shared registry', () => {
-  assert.match(read('web/layouts/ai-apps/desktop.js'), /openSortMenu\(sort, 'working-sort'\)/);
-  assert.match(read('web/layouts/ai-apps/layout.js'), /'aria-label': 'Sort Working'/);
-  assert.match(read('web/core/settings.js'), /id: 'working-order', page: 'chats'/);
-  assert.match(withParts(read('web/core/chats.js')), /function workingOrderBar\(\)/);
-  assert.doesNotMatch(withParts(read('web/core/chats.js')), /<select data-working-order|Sort Working <select|ch-working-sort/, 'no native select in the Chats list');
-  assert.doesNotMatch(read('web/core/chats.css'), /ch-working-sort/);
-  assert.match(withLiveParts(read('web/live.js')), /workingOrder: \['wos.chats.workingOrder.v1'/);
+  // (the phone AI apps drawer's own "Sort Working" control: ai-apps-view.test.mjs; the stock Chats pills: below; the
+  // saved, box-synced choice: working-order-two-devices.test.mjs)
+  // Settings › Chats: the real registry entry draws the shared WORKING_SORTS and saves through WizLive.setWorkingOrder
+  const doc = createDocument(), sets = [];
+  const s = { console, URL, setTimeout, clearTimeout, CSS: { escape: String }, navigator: { userAgent: 'Desktop' }, document: doc, location: { host: 'x.test' }, WizCore: {},
+    WizChatsListModel: M, WizLive: { workingOrder: () => 'newest', setWorkingOrder: o => sets.push(o) }, addEventListener() {}, removeEventListener() {} };
+  s.window = s;
+  vm.runInNewContext(withSettingsParts(read('web/core/settings.js')), s);
+  const root = doc.createElement('div'); doc.body.appendChild(root);
+  s.WosSettings.mount(root, { shell: 'phone', live: { ok: true } }).focus('chats');
+  const sel = root.querySelector('select[data-settings-working-order]');
+  assert.ok(sel, 'on the Chats page'); assert.equal(sel.getAttribute('aria-label'), 'Sort Working');
+  assert.deepEqual(sel.querySelectorAll('option').map(o => [o.getAttribute('value'), o.textContent]), M.WORKING_SORTS.map(([v, w]) => [v, w]), 'the shared registry');
+  assert.equal(sel.querySelector('option[selected]').getAttribute('value'), 'newest', 'the saved choice');
+  sel.value = 'oldest'; sel.dispatchEvent({ type: 'input', bubbles: true });
+  assert.deepEqual(sets, ['oldest']);
+  // the stock Chats list draws its Working pills (workingOrderBar), never a native select
+  const html = listFixture({}).render('');
+  assert.doesNotMatch(html, /<select/, 'no native select in the Chats list');
 });
 
 // The Chats list Working control is Ready's order bar (James, 6 Nov 2026: the native select looked foreign on phone).

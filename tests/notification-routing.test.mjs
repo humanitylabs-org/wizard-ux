@@ -4,6 +4,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
+import { createDocument } from './fixtures/mini-dom.mjs';
+import { block } from './fixtures/source-slice.mjs';
 import { readFileSync } from 'node:fs';
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 import { withSettingsParts } from './fixtures/settings-parts.mjs'; // settings.js parts moved out verbatim (issue 1665)
@@ -144,18 +146,35 @@ test('without the inbox in Chats everything is a badge, and Chats\' own count is
   assert.equal(N.counts.notifications || 0, 0);
 });
 
-test('Settings has a Notifications page with Badge | Chats per app, and Chats rows for app items open the app', () => {
-  const s = withSettingsParts(read('web/core/settings.js'));
-  assert.match(s, /\{ id: 'notifications', title: 'Notifications', available: /);
-  assert.match(s, /register\(\{ id: 'notification-routing', page: 'notifications'/);
-  assert.match(read('web/core/notif-bell.js'), /data-notify-route="\$\{escH\(id\)\}" data-notify-to="\$\{to\}"/);
-  assert.match(s, /window\.WosBell\?\.setRoute\?\.\(b\.dataset\.notifyRoute, b\.dataset\.notifyTo\)/);
-  const c = withParts(read('web/core/chats.js'));
-  assert.match(c, /<span class="ch-notif-from">\$\{esc\(clip\(from, 40\)\)\}<\/span>/, 'an app item names its app in the row');
-  assert.match(c, /it\?\.app && !it\.archived && window\.WizCanOpen\?\.\(it\.app\) \? \['app'\]/, 'Open is offered for an app item');
-  assert.match(read('web/core/skin-host.js'), /open\(id\) \{\n        if \(a\.dead\) return false;/);
-  assert.match(read('web/tweaks/wizard/unified-inbox/tweak.js'), /action === 'app'/);
-  assert.doesNotMatch(read('web/tweaks/wizard/unified-inbox/tweak.css'), /\[data-chbell\] \{ display: none/, 'the bell follows the routing, not the tweak');
+test('Settings has a Notifications page with Badge | Chats per app, and Chats rows for app items open the app', async () => {
+  // the real Settings over the real WosBell: one Badge | Chats choice per app with a feed; a tap moves that app
+  const w = boot(), B = w.WosBell; await B.discover(); await settle();
+  const doc = createDocument(), root = doc.createElement('div'); doc.body.appendChild(root);
+  // Settings keeps the focused control's data-* across a repaint (element.attributes, which the mini DOM spells as attrs)
+  if (!('attributes' in root)) Object.defineProperty(Object.getPrototypeOf(root), 'attributes', { configurable: true, get() { return [...this.attrs].map(([name, value]) => ({ name, value })); } });
+  const s = { console, URL, setTimeout, clearTimeout, CSS: { escape: String }, navigator: { userAgent: 'Desktop' }, document: doc, location: { host: 'x.test' }, WizCore: {}, WosBell: B, addEventListener() {}, removeEventListener() {} };
+  s.window = s;
+  vm.runInNewContext(withSettingsParts(read('web/core/settings.js')), s);
+  s.WosSettings.mount(root, { shell: 'desktop', live: { ok: true } }).focus('notifications');
+  const page = root.querySelector('[data-notify-app="messenger"]')?.closest('.st-page');
+  assert.equal(page?.querySelector('.st-page-head h3')?.textContent, 'Notifications', 'on its own Notifications page');
+  const seg = app => root.querySelectorAll(`[data-notify-app="${app}"] [data-notify-route]`).map(b => `${b.dataset.notifyTo}:${b.getAttribute('aria-checked')}`);
+  const two = app => seg(app).filter(x => /^(badge|chats):/.test(x));
+  assert.deepEqual(two('notifications'), ['chats:true', 'badge:false']); assert.deepEqual(two('messenger'), ['chats:true', 'badge:false']);
+  assert.deepEqual(seg('money'), [], 'no feed, no choice');
+  root.querySelector('[data-notify-app="messenger"] [data-notify-to="badge"]').click();
+  assert.equal(B.route('messenger'), 'badge', 'saved through WosBell.setRoute'); assert.deepEqual(two('messenger'), ['chats:false', 'badge:true'], 'and drawn again');
+  // a Chats reply to an app's item offers Open (that app), only when the app can open here
+  const chats = withParts(read('web/core/chats.js'));
+  const notifOf = (item, canOpen) => {
+    const c = vm.createContext({ window: { WosSkinHost: { inboxThreads: true }, WosBell: { item: () => item }, WizCanOpen: id => canOpen.includes(id) }, winAgent: () => '',
+      KIT: { drafts: { get: () => ({ reply: { key: 'notifications:n1' } }) } }, NOTIF_KEY: /^notifications:(.+)$/ });
+    vm.runInContext(`${block(chats, '  function notifOf(w) {')}\nthis.notifOf = notifOf;`, c);
+    return [...c.notifOf({ thread: '__new__' }).acts];
+  };
+  assert.deepEqual(notifOf({ id: 'n1', app: 'messenger' }, ['messenger']), ['app', 'resolve', 'snooze', 'done']);
+  assert.deepEqual(notifOf({ id: 'n1', app: 'money' }, ['messenger']), ['resolve', 'snooze', 'done'], 'not here: no Open');
+  assert.deepEqual(notifOf({ id: 'n1', app: 'messenger', archived: true }, ['messenger']), ['restore']);
 });
 
 // One simple design everywhere (Miguel, 1 Nov 2026): the picker inside a notification in Chats is THE Settings picker.

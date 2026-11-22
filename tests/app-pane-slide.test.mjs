@@ -2,24 +2,30 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { createDocument } from './fixtures/mini-dom.mjs';
+import { cascade } from './fixtures/mini-css.mjs';
+import { styles, sheets } from './fixtures/w5-css.mjs';
 import { withWebParts } from './fixtures/web-parts.mjs';
 import { closingPart } from '../web/layouts/ai-apps/desktop-closing.js';
 const read = p => withWebParts(readFileSync(new URL('../' + p, import.meta.url), 'utf8'));
 const between = (src, a, b) => { const i = src.indexOf(a); assert.ok(i >= 0, a); const j = src.indexOf(b, i); assert.ok(j > i, b); return src.slice(i, j + b.length); };
 
 test('AI apps pane: only the common desk slides; its title/window/body/frame never ease independently', () => {
+ // an app desk as the AI apps view holds it on the stage, styled by the view's real CSS
  const css = read('web/layouts/ai-apps/desktop.css');
- const scoped = 'html[data-shell="desktop"][data-layout="ai-apps"] #stage > .wsp[data-aad-role="app"]';
- const rules = css.replace(/\/\*[\s\S]*?\*\//g, '').split('}').map(r => r.split('{'));
- for (const suffix of [' > .aad-ptop', ' > .win', ' > .win > :is(.wbar, .wbody)', ' > .win > .wbody > iframe']) {
-  const rule = rules.find(([selector]) => selector.split(',\n').some(s => s.trim() === scoped + suffix));
-  assert.ok(rule, 'explicit child motion contract: ' + suffix);
-  const transitions = rule[1].match(/transition:\s*([^;]+)/)?.[1];
-  assert.ok(transitions, suffix);
-  assert.doesNotMatch(transitions, /\b(all|transform|translate|left|right|width|inset)\b/, 'no independent positional transition');
+ const doc = createDocument(); doc.documentElement.setAttribute('data-shell', 'desktop'); doc.documentElement.setAttribute('data-layout', 'ai-apps');
+ doc.body.innerHTML = '<div id="stage"><div class="wsp" data-aad-role="app" data-aad-anim="app"><div class="aad-ptop" data-aad-anim="app"></div><div class="win"><div class="wbar"></div><div class="wbody"><iframe></iframe></div></div></div></div>';
+ const desk = doc.querySelector('.wsp'), parts = ['.aad-ptop', '.win', '.wbar', '.wbody', 'iframe'].map(q => [q, desk.querySelector(q)]);
+ for (const [q, el] of parts) {
+  const st = styles(el, css);
+  assert.ok(st.transition, `explicit child motion contract: ${q}`);
+  assert.doesNotMatch(st.transition, /\b(all|transform|translate|left|right|width|inset)\b/, `${q}: no independent positional transition`);
+  for (const k of ['transition-property', 'animation', 'animation-name']) assert.doesNotMatch(st[k] || '', /\b(all|transform|translate|left|right|width|inset|aad-[\w-]*)\b/, `${q} ${k}`);
  }
- assert.doesNotMatch(css, /\.aad-ptop\[data-aad-anim="app"\]\s*\{\s*animation:/, 'no separate title animation');
- assert.match(css, /prefers-reduced-motion: reduce[^}]*#stage > \.wsp[^}]*animation: none !important/s);
+ assert.match(styles(parts[0][1], css).animation || 'none', /^none/, 'no separate title animation');
+ // the desk is the one thing that slides in; with reduced motion, not even that
+ assert.match(styles(desk, css).animation || '', /^aad-in-right /, 'the common desk slides');
+ assert.match(cascade(desk, sheets(css), { media: m => /prefers-reduced-motion: reduce/.test(m) }).animation?.value || '', /^none/);
 });
 
 // The real hide/wide code (layouts/ai-apps/desktop-closing.js) with small stand-ins for the layout it is handed.

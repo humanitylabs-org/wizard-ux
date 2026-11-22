@@ -6,6 +6,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
+import { experienceRuntime } from './fixtures/skin-palettes-harness.mjs';
 
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
 const SWITCH = 'wizard/phone-app-notifications';
@@ -79,12 +80,13 @@ test('Android: the switch is off by default, only the main page sets it, and the
   assert.ok(read('android/app/src/main/AndroidManifest.xml').includes('android:name=".notify.AppNotifyJob"'));
 });
 
-test('the switch is in the catalog, off by default, and names its issue', () => {
-  const cat = JSON.parse(read('web/tweaks/catalog.json'));
-  assert.ok(cat.tweaks.includes(SWITCH));
-  assert.ok(!cat.defaults.includes(SWITCH));
-  assert.ok(!(cat.promotedDefaults || []).includes(SWITCH));
+test('the switch is in the catalog, off by default, and names its issue', async () => {
+  // the real experience.js over the real catalog: listed in Settings › Look, off on a fresh device
+  const { E, active } = experienceRuntime(); await E.refresh();
+  const row = E.state.tweaks.find(t => t.id === SWITCH);
+  assert.ok(row, 'listed'); assert.equal(row.on, false, 'off by default');
+  assert.equal((await E.defaults())[SWITCH], false); assert.ok(!active().includes(SWITCH), 'not loaded');
   const m = JSON.parse(read('web/tweaks/wizard/phone-app-notifications/manifest.json'));
-  assert.equal(m.id, SWITCH);
+  assert.equal(row.name, m.name); assert.equal(m.id, SWITCH);
   assert.deepEqual(m.issues, ['humanitylabs-org/wizard-ux#1567']);
 });

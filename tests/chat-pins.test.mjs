@@ -4,6 +4,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import vm from 'node:vm'
+import { sharedBox, liveDevice, tick } from './two-devices.mjs'
 import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
 import { withParts } from './fixtures/chats-parts.mjs'
 import { rowSheet } from './fixtures/row-sheet-harness.mjs'
@@ -109,10 +110,20 @@ test('taps made offline stay pinned locally and reach the service later', async 
   assert.equal(later.P.pending(), 0)
 })
 
-test('live.js syncs pinnedChats into the cache the pins read, and pulls when a phone comes back', () => {
-  const live = withLiveParts(read('web/live.js'))
-  assert.match(live, /pinnedChats: \['wos\.chats\.pinned\.v2'/)
-  assert.match(live, /visibilitychange', \(\) => \{ if \(document\.visibilityState === 'visible'\) pullPrefs\(\)/)
+test('live.js syncs pinnedChats into the cache the pins read, and pulls when a phone comes back', async () => {
+  // the real live.js preferences code against a fake box: the box's pins land in the key the pins read
+  const box = sharedBox({ pinnedChats: ['s2', 's1'] }), phone = liveDevice(box)
+  await tick(); await phone.pullPrefs(); await tick()
+  assert.deepEqual(JSON.parse(phone.store.get('wos.chats.pinned.v2')), ['s2', 's1'])
+  box.state.pinnedChats = ['bad', 3]; await phone.pullPrefs(); await tick()
+  assert.deepEqual(JSON.parse(phone.store.get('wos.chats.pinned.v2')), ['s2', 's1'], 'a malformed list never replaces them')
+  // the phone coming back to the screen pulls again
+  const live = withLiveParts(read('web/live.js')), at = live.indexOf("document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') pullPrefs()")
+  assert.ok(at >= 0)
+  const on = {}, pulls = [], document = { visibilityState: 'hidden', addEventListener: (t, f) => { on[t] = f } }
+  vm.runInNewContext(live.slice(at, live.indexOf('\n', at)), { document, pullPrefs: () => pulls.push(document.visibilityState) })
+  on.visibilitychange(); document.visibilityState = 'visible'; on.visibilitychange()
+  assert.deepEqual(pulls, ['visible'], 'only when it is visible again')
 })
 
 test('local pins from before sync are merged into the shared list once', async () => {
