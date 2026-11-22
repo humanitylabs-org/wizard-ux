@@ -6,6 +6,7 @@ import { readFileSync } from 'node:fs'
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
 import { withShellParts } from './fixtures/shell-parts.mjs';
+import { block, runRecording } from './fixtures/source-slice.mjs';
 const source = withShellParts(readFileSync(new URL('../web/core/incognito-chat.js', import.meta.url), 'utf8'))
 const chats = withParts(withShellParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'))) + withShellParts(readFileSync(new URL('../web/core/chats-outbox.js', import.meta.url), 'utf8'))
 function rig(extra = {}) {
@@ -108,17 +109,26 @@ test('leaving for another view confirms once and destroys only temporary chats',
   s.setConfirm(false); assert.equal(s.component.beforeNavigate([]), false); assert.equal(s.component.active('one'), true)
   s.setConfirm(true); assert.equal(s.component.beforeNavigate([]), true); assert.equal(s.component.active('one'), false)
 })
-test('Incognito blocks microphone admission before snapshots, custody or recorder access', () => {
+test('Incognito blocks microphone admission before snapshots, custody or recorder access', async () => {
+  // each shell's real voice entry, with an Incognito chat in front: refused before anything is touched
   const phone = withShellParts(readFileSync(new URL('../web/app.js', import.meta.url), 'utf8'))
   const desktop = withShellParts(readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8'))
-  const mobileAdmission = phone.slice(phone.indexOf('async function startVoice'), phone.indexOf('async function startVoice') + 600)
-  assert.ok(mobileAdmission.indexOf('CHATS.incognitoActive') < mobileAdmission.indexOf('V.onAt'))
-  for (const name of ['talk(', 'dictate(', 'recordReply(']) {
-    const start = desktop.indexOf('async function ' + name)
-    assert.match(desktop.slice(start, start + 400), /CHATS.incognitoActive/)
+  const run = async (src, marker, args, extra = {}) => {
+    const V = { state: 'idle' }, VOICE = { state: 'idle' }, name = /function (\w+)/.exec(marker)[1]
+    const ctx = runRecording(`${block(src, marker)}\nthis.f = ${name};`, { V, VOICE, window: {}, document: { activeElement: null }, performance: { now: () => 1 }, MOD: '⌥', CHATS: { incognitoActive: () => true }, ...extra })
+    const out = await ctx.f(...args)
+    return { out, V, touched: ctx.calls.map(c => c[0]).filter(n => n !== 'toast' && n !== 'focusedWin' && n !== 'focused') }
   }
-  assert.match(phone, /captureBusy:.*V.state !== 'idle'/)
-  assert.match(desktop, /captureBusy:.*VOICE.state !== 'idle'/)
+  const p = await run(phone, 'async function startVoice', ['dictation'])
+  assert.equal(p.out, 'busy'); assert.equal(p.V.onAt, undefined, 'phone: before the take starts'); assert.deepEqual(p.touched, [])
+  for (const [m, args] of [['async function talk(', []], ['async function dictate(', []], ['async function recordReply(', ['w1', 't1']]]) {
+    const d = await run(desktop, m, args, { dictationFinishing: false, vMode: 'talk', vReply: null })
+    assert.equal(d.out, 'busy', m); assert.deepEqual(d.touched, [], `${m}: nothing else touched`)
+  }
+  // the capture-busy hooks each shell hands Chats
+  const busy = (src, key, scope) => vm.runInNewContext(`({ ${src.slice(src.indexOf(key), src.indexOf('\n', src.indexOf(key))).trim().replace(/,$/, '')} }).captureBusy()`, { window: {}, ...scope })
+  assert.equal(busy(phone, 'captureBusy:', { V: { state: 'listen' } }), true); assert.equal(busy(phone, 'captureBusy:', { V: { state: 'idle' } }), false)
+  assert.equal(busy(desktop, 'captureBusy:', { VOICE: { state: 'listen' }, dictationFinishing: false }), true); assert.equal(busy(desktop, 'captureBusy:', { VOICE: { state: 'idle' }, dictationFinishing: false }), false)
   const chats = withParts(withShellParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'))) + withShellParts(readFileSync(new URL('../web/core/chats-outbox.js', import.meta.url), 'utf8'))
   assert.match(chats, /if \(H.captureBusy\?\.\(\)\)/)
 })
