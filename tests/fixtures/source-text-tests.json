@@ -1037,28 +1037,6 @@
  "web-update-quiet-desktop.test.mjs": [
   "desktop host opts in"
  ],
- "welcome-every-skin.test.mjs": [
-  "the real skin list has every shipped palette (guards the regex above)"
- ],
- "welcome-name.test.mjs": [
-  "Name your Wizard: the name field is in the keyboard focus trap"
- ],
- "welcome.test.mjs": [
-  "Welcome: Claude is listed first and recommended, then ChatGPT",
-  "Welcome: opens only without a signed-in provider, resumes after sign-in, never on a deep link",
-  "Welcome: three steps only, no uppercase eyebrows or em dashes in its copy",
-  "Welcome: every skin, drawn with the Settings preview cards (tests/welcome-every-skin.test.mjs)",
-  "Welcome: same first run on every install; finishing marks Setup seen",
-  "first message reuses one main Chats window and opens its thread",
-  "Welcome: branded, offers Claude (recommended), ChatGPT and Tinfoil, and opens the app straight into sign-in",
-  "Welcome: Back peels the sign-in, then steps back, and both shells ask it first",
-  "Welcome: finishes only after the first message is queued",
-  "Welcome: the server seen mark is retried until acknowledged; phone Setup tap ends its opening state",
-  "Welcome: Back can close during an install; the app-list wait is bounded",
-  "Welcome: works without AbortSignal.timeout; a late thread open never pulls the owner back",
-  "Welcome: a stale install completion never takes over a reopened Welcome",
-  "Welcome: a readiness reply for an earlier provider choice is ignored"
- ],
  "window-glass.test.mjs": [
   "Settings › Look carries the slider; CSS routes every window through the shared token only when chosen"
  ],
