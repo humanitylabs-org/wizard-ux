@@ -10,6 +10,7 @@ import { createDocument } from './fixtures/mini-dom.mjs';
 import { cascade } from './fixtures/mini-css.mjs';
 import { between } from './fixtures/source-slice.mjs';
 import { lookBox } from './fixtures/r5A-experience.mjs';
+import { manifest } from './fixtures/r8C-manifest.mjs';
 
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
 const SWITCH = 'wizard/assist-attach';
@@ -104,11 +105,15 @@ test('the corner orb shows Camera and Attach only when native says the switch is
   assert.match(session, /capture\.listening\(\) && !capture\.away\(\)\) capture\.finishOnDismiss/, 'opening the camera never ends the take');
 });
 
+// static-rule: AndroidManifest.xml is declarative config: exported=false and the missing permission are the behaviour
 test('the picker step and the camera file are private to WizardOS', () => {
-  const man = read('android/app/src/main/AndroidManifest.xml');
-  assert.match(man, /android:name="\.assist\.AssistPickActivity"\s+android:exported="false"/);
-  assert.match(man, /android:name="\.assist\.AssistCameraProvider"\s+android:authorities="\$\{applicationId\}\.assistcam"\s+android:exported="false"\s+android:grantUriPermissions="true"/);
-  assert.ok(!/android\.permission\.CAMERA"/.test(man), 'the camera app takes the photo; WizardOS never asks for the camera permission');
-  const main = read('android/app/src/main/java/ai/wizards/os/MainActivity.java');
-  assert.match(main, /public void assistAttachSwitch\(boolean on\) \{\s+if \(MainActivity\.this instanceof AppSessionActivity\) return;/);
+  const m = manifest();
+  const pick = m.find(e => e.tag === 'activity' && e.attrs['android:name'] === '.assist.AssistPickActivity');
+  assert.equal(pick?.attrs['android:exported'], 'false');
+  const cam = m.find(e => e.tag === 'provider' && e.attrs['android:name'] === '.assist.AssistCameraProvider');
+  assert.equal(cam?.attrs['android:authorities'], '${applicationId}.assistcam');
+  assert.equal(cam?.attrs['android:exported'], 'false');
+  assert.equal(cam?.attrs['android:grantUriPermissions'], 'true');
+  assert.ok(!m.some(e => e.tag === 'uses-permission' && e.attrs['android:name'] === 'android.permission.CAMERA'),
+    'the camera app takes the photo; WizardOS never asks for the camera permission');
 });

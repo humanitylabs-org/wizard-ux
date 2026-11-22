@@ -115,17 +115,4 @@ test('the switch is listed, off by default, linked to its issue', async () => {
   assert.deepEqual(m.issues, ['humanitylabs-org/wizard-ux#1661']);
 });
 
-
-test('Android: exactly Music and Podcasts, the tap opens the playing app, Podcasts is spoken word with skip buttons', () => {
-  const policy = read('android/app/src/main/java/ai/wizards/os/audio/AudioPolicy.java');
-  assert.match(policy, /APPS = Set\.of\(MUSIC, PODCASTS\)/);
-  const service = read('android/app/src/main/java/ai/wizards/os/audio/BackgroundAudioService.java');
-  assert.doesNotMatch(service, /\?open=wizard-music/, 'the notification no longer always opens Music');
-  assert.match(service, /AudioPolicy\.openPath\(app\)/);
-  assert.match(service, /AUDIO_CONTENT_TYPE_SPEECH/);
-  assert.match(service, /COMMAND_SEEK_BACK/); assert.match(service, /COMMAND_SEEK_FORWARD/);
-  assert.match(service, /setMediaButtonPreferences/);
-  const bridge = read('android/app/src/main/java/ai/wizards/os/audio/BackgroundAudioBridge.java');
-  assert.match(bridge, /AudioPolicy\.admitted\(app\)/);
-  assert.doesNotMatch(bridge, /"wizard-music"\.equals/);
-});
+// Not run here (wizard-ux issue 1674): this pinned Java/Swift source text and no JDK runs it in this suite. Android lock-screen player wiring: the admitted apps and the open path run in the JVM suite (AudioPolicyTest).

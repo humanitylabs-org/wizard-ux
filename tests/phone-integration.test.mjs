@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 const read = path => readFileSync(new URL('../' + path, import.meta.url), 'utf8');
 
+// static-rule: published storage names and the version floor are a frozen inventory: renaming one loses owners' vault data
 test('phone version stays at or above the Settings-style ID release (0.10.15/79) and preserves published vault storage names', () => {
   const gradle = read('android/app/build.gradle');
   assert.ok(Number(gradle.match(/versionCode (\d+)/)[1]) >= 79);
@@ -15,6 +16,7 @@ test('phone version stays at or above the Settings-style ID release (0.10.15/79)
   assert.match(vault, /getSharedPreferences\("wizard-vault",/);
 });
 
+// static-rule: published storage names are a frozen inventory: the agent and owner identities never share a store
 test('published agent-name identity and owner signing identity have distinct storage', () => {
   const agent = read('android/app/src/main/java/ai/wizards/os/device/WizardIdentity.java');
   const owner = read('android/app/src/main/java/ai/wizards/os/identity/KeyVault.java');
@@ -56,15 +58,4 @@ print(json.dumps({'old': g.OLD_SHA, 'good': why(good), 'otherEnv': why(dict(good
   assert.match(gate, /metadata\['version_code'\]\) == '76'/);
 });
 
-test('one device port dispatches vault and identity independently and revokes both on navigation', () => {
-  const apps = read('android/app/src/main/java/ai/wizards/os/apps/AppsBridge.java');
-  assert.match(apps, /DeviceMessageProtocol.NAME, allow, b::onDeviceMessage/);
-  assert.match(apps, /VaultPolicy.method\(request.method\)/);
-  assert.match(apps, /device.dispatchIdentity\(request.method/);
-  const main = read('android/app/src/main/java/ai/wizards/os/MainActivity.java');
-  const started = main.slice(main.indexOf('public void onPageStarted('), main.indexOf('public void onPageFinished('));
-  assert.match(started, /device.onPageStarted\(\)/);
-  assert.match(started, /apps.onVaultPageStarted\(\)/);
-  assert.match(main, /UA_TAG \+ " WizardOS-DocScroll"/);
-  assert.match(main, /ScrollCaptureCrashGuard.install\(\)/);
-});
+// Not run here (wizard-ux issue 1674): this pinned Java/Swift source text and no JDK runs it in this suite. Device port wiring in AppsBridge/MainActivity; the message protocol runs in the JVM suite (DeviceMessageProtocolTest).

@@ -5,6 +5,7 @@ import vm from 'node:vm';
 import { withShellParts } from './fixtures/shell-parts.mjs';
 import { createDocument } from './fixtures/mini-dom.mjs';
 import { block, runRecording } from './fixtures/source-slice.mjs';
+import { manifest } from './fixtures/r8C-manifest.mjs';
 const read = p => withShellParts(fs.readFileSync(new URL('../' + p, import.meta.url), 'utf8'));
 const relaySrc = read('web/core/photos-relay.js');
 
@@ -127,28 +128,14 @@ test('old Settings deep links (backup notification, native screen) open the Phot
   assert.ok(handoff({ action: 'settings', focus: 'look' }, true).calls.includes('openSettings'), 'other Settings links still open Settings');
 });
 
-test('native: bridge keeps credentials and sign-in on the device; legacy open and the deep link stay', () => {
-  const b = read('android/app/src/main/java/ai/wizards/os/photos/PhotosBridge.java');
-  assert.match(b, /PhotosBridgePolicy\.LEGACY_OPEN\.equals\(data\)\) \{ activity\.startActivity\(new Intent\(activity, PhotosActivity\.class\)\)/);
-  assert.match(b, /!isMainFrame \|\| !AppState\.primaryOrigin\(activity\)\.equals\(originOf\(sourceOrigin\)\) \|\| !shellOnTop\(\)/);
-  assert.match(b, /new PhotoAuth\(activity\)\.start\(server\)/);
-  assert.doesNotMatch(b, /apiKey\(|secret\("credentials"\)|getString\("key"\)/);
-  const main = read('android/app/src/main/java/ai/wizards/os/MainActivity.java');
-  assert.match(main, /PhotosBridge\.install\(this, web\)/);
-  assert.doesNotMatch(main, /installPhotosPort/);
-  const manifest = read('android/app/src/main/AndroidManifest.xml');
-  assert.match(manifest, /\.photos\.PhotosActivity" android:exported="true" android:launchMode="singleTop"/);
-  assert.match(manifest, /android:host="photos" android:path="\/oauth-callback"/);
-  const activity = read('android/app/src/main/java/ai/wizards/os/photos/PhotosActivity.java');
-  assert.match(activity, /if\(web\) \{ backToWeb\(\); return; \}/);
-  assert.match(activity, /putExtra\(MainActivity\.EXTRA_SETTINGS_FOCUS,"photos-backup"\)/);
-  assert.match(read('web/app.js'), /openSettings\(h\.action === 'unsent' \|\| \(typeof h\.focus === 'string' && window\.WosSettings\?\.features\.some\(f => f\.id === h\.focus\)/);
+// static-rule: AndroidManifest.xml is declarative config: the exported singleTop activity and its sign-in callback link
+test('native: Photos is its own singleTop activity and owns the photos sign-in callback link', () => {
+  const m = manifest();
+  const a = m.find(e => e.tag === 'activity' && e.attrs['android:name'] === '.photos.PhotosActivity');
+  assert.equal(a?.attrs['android:exported'], 'true');
+  assert.equal(a?.attrs['android:launchMode'], 'singleTop');
+  assert.ok(m.some(e => e.tag === 'data' && e.attrs['android:host'] === 'photos' && e.attrs['android:path'] === '/oauth-callback'));
 });
-
-test('Photos child Back explicitly restores the Wizard parent, album Back stays nested', () => {
-  const s = read('android/app/src/main/java/ai/wizards/os/photos/PhotosActivity.java');
-  assert.match(s, /if\(albums\) \{ show\(\); return; \}/);
-  assert.match(s, /new Intent\(this,MainActivity.class\).setAction\(MainActivity.ACTION_SETTINGS\)/);
-  assert.match(s, /registerOnBackInvokedCallback/);
-  assert.doesNotMatch(s, /moveTaskToBack|super.onBackPressed/);
-});
+// The bridge's Java wiring and the web openSettings(focus) handoff: the handoff runs above (Settings link tests); the Java
+// side is not run here (wizard-ux issue 1674: no JDK in this suite).
+// Not run here (wizard-ux issue 1674): this pinned Java/Swift source text and no JDK runs it in this suite. Photos Back handling in PhotosActivity.

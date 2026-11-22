@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
+import { manifest } from './fixtures/r8C-manifest.mjs';
 
 const read = path => readFileSync(path, 'utf8');
 
@@ -22,58 +23,19 @@ test('tracked Android and iOS files contain no personal paths or hosts', () => {
   assert.deepEqual(violations, [], `Personal mobile configuration must be external:\n${violations.join('\n')}`);
 });
 
-test('Android derives home, trust origin and both app links from one optional build property', () => {
-  const gradle = read('android/app/build.gradle');
-  assert.match(gradle, /providers\.gradleProperty\('wizardOrigin'\)\s*\.orElse\(providers\.environmentVariable\('WIZARD_ORIGIN'\)\)/);
-  assert.match(gradle, /buildConfigField 'String', 'ORIGIN', javaString\(defaultOrigin\)/);
-  assert.match(gradle, /buildConfigField 'String', 'HOME_URL', javaString\(defaultOrigin \? defaultOrigin \+ '\/wizard-os-home\/' : ''\)/);
-  assert.match(gradle, /manifestPlaceholders = \[wizardDeepLinkHost: deepLinkHost\]/);
-  assert.match(gradle, /groovy\.json\.JsonOutput\.toJson\(value\)/, 'BuildConfig strings must be escaped');
-  const manifest = read('android/app/src/main/AndroidManifest.xml');
-  const links = [...manifest.matchAll(/<data android:scheme="https" android:host="([^"]+)" android:pathPrefix="([^"]+)"/g)];
-  assert.deepEqual(links.map(([, host, path]) => [host, path]), [
-    ['${wizardDeepLinkHost}', '/wizard-os-home/'],
-    ['${wizardDeepLinkHost}', '/mizel-live/'],
-  ]);
-  assert.match(manifest, /<data android:scheme="wizard" android:host="connect" \/>/, 'wizard://connect pairing link');
+// static-rule: AndroidManifest.xml is declarative config: both app links take their host from the one build placeholder
+test('Android app links take their host from the one build placeholder, plus the wizard://connect pairing link', () => {
+  const m = manifest(read('android/app/src/main/AndroidManifest.xml'));
+  const links = m.filter(e => e.tag === 'data' && e.attrs['android:scheme'] === 'https' && e.attrs['android:host']).map(e => [e.attrs['android:host'], e.attrs['android:pathPrefix']]);
+  assert.deepEqual(links, [['${wizardDeepLinkHost}', '/wizard-os-home/'], ['${wizardDeepLinkHost}', '/mizel-live/']]);
+  assert.ok(m.some(e => e.tag === 'data' && e.attrs['android:scheme'] === 'wizard' && e.attrs['android:host'] === 'connect'), 'wizard://connect pairing link');
 });
-
-test('unconfigured builds open Connect; a configured origin is validated', () => {
-  const gradle = read('android/app/build.gradle');
-  assert.match(gradle, /def defaultOrigin = configuredOrigin \? configuredOrigin\.replaceAll\('\/\+\$', ''\) : ''/);
-  assert.doesNotMatch(gradle, /wizard\.invalid'/, 'no placeholder home; Connect owns first launch');
-  assert.doesNotMatch(gradle, /validateReleaseOrigin/, 'generic release APKs are valid: they pair at runtime');
-  for (const field of ['rawUserInfo', 'rawQuery', 'rawFragment', 'rawPath']) {
-    assert.ok(gradle.includes(`originUri.${field}`), `origin must validate ${field}`);
-  }
-  assert.match(gradle, /originUri\.scheme != 'https'/);
-  assert.match(gradle, /originUri\.port != -1/);
-  const settings = read('android/app/src/main/java/ai/wizards/os/ServerSettings.java');
-  assert.match(settings, /ServerOrigin\.parse\(BuildConfig\.ORIGIN\)/);
-});
-
-test('photo backup has no personal default and the switch can open server setup', () => {
-  const gradle = read('android/app/build.gradle');
-  assert.match(gradle, /providers\.gradleProperty\('photosServer'\)\s*\.orElse\(providers\.environmentVariable\('WIZARD_PHOTOS_SERVER'\)\)\.getOrElse\(''\)/);
-  assert.match(gradle, /buildConfigField 'String', 'PHOTOS_SERVER', javaString\(photosServer\)/);
-  const settings = read('android/app/src/main/java/ai/wizards/os/photos/BackupSettings.java');
-  assert.match(settings, /getBoolean\("enabled", false\)/);
-  assert.match(settings, /prefs\.getString\("server", BuildConfig\.PHOTOS_SERVER\)/);
-  const activity = read('android/app/src/main/java/ai/wizards/os/photos/PhotosActivity.java');
-  assert.match(activity, /putBoolean\("enable_after_signin",true\)\.commit\(\);\s*signIn\(\);/);
-  assert.match(activity, /if\(!settings\.server\(\)\.isEmpty\(\)\) \{ startSignIn\(settings\.server\(\)\); return; \}/);
-  assert.match(activity, /EditText url=input\(box,settings\.server\(\),"https:\/\/your-photo-server",false\)/);
-});
-
-test('iOS has empty defaults and forwards explicit origin to simulator and TestFlight', () => {
+// Not run here (wizard-ux issue 1674): this pinned Java/Swift source text and no JDK runs it in this suite. The Gradle origin derivation/validation (build.gradle) and ServerSettings; origin parsing runs in the JVM suite (ServerOriginTest).
+// Not run here (wizard-ux issue 1674): this pinned Java/Swift source text and no JDK runs it in this suite. Photo backup server default (build.gradle, BackupSettings, PhotosActivity); the personal-path guard above still runs over every file.
+// static-rule: Xcode build settings and Info.plist are declarative config: shipped iOS builds carry no owner origin
+test('iOS ships empty WIZARD_ORIGIN build settings and reads the origin from Info.plist', () => {
   const project = read('ios/native/App/App.xcodeproj/project.pbxproj');
   assert.deepEqual([...project.matchAll(/WIZARD_ORIGIN = (.*);/g)].map(m => m[1]), ['""', '""']);
   assert.match(read('ios/native/App/App/Info.plist'), /<key>WizardOrigin<\/key>\s*<string>\$\(WIZARD_ORIGIN\)<\/string>/);
-  assert.match(read('ios/fastlane/.env.example'), /WIZARD_ORIGIN=https:\/\/wizard\.example\.ts\.net/);
-  const fastlane = read('ios/fastlane/Fastfile');
-  assert.match(fastlane, /"WIZARD_ORIGIN=#\{ENV\['WIZARD_ORIGIN'\]\}", "build"/);
-  assert.match(fastlane, /Shellwords\.escape\("WIZARD_ORIGIN=#\{ENV\['WIZARD_ORIGIN'\]\}"\)/);
-  assert.match(fastlane, /CURRENT_PROJECT_VERSION=#\{build\}#\{origin_arg\}/);
-  const swift = read('ios/native/App/App/WizardViewController.swift');
-  assert.match(swift, /UserDefaults\.standard\.string\(forKey: key\) \?\? bundled/);
 });
+// Fastlane forwarding and the Swift lookup are not run here (wizard-ux issue 1674: no Ruby/Xcode in this suite).

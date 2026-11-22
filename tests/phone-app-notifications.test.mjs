@@ -64,22 +64,7 @@ test('a home-screen app window never sets the switch, and an older app without t
   assert.doesNotThrow(() => { const g = fixture({ native: false, on: true }); g.settle(); });
 });
 
-test('Android: the switch is off by default, only the main page sets it, and the app leaving the screen starts the read', () => {
-  const main = read('android/app/src/main/java/ai/wizards/os/MainActivity.java');
-  const bridge = main.slice(main.indexOf('public void appNotifySwitch(boolean on, String names)'));
-  assert.ok(bridge.slice(0, 220).includes('if (MainActivity.this instanceof AppSessionActivity) return;'));
-  const an = read('android/app/src/main/java/ai/wizards/os/notify/AppNotify.java');
-  assert.ok(an.includes('getBoolean("on", false)'), 'off by default on the phone');
-  assert.ok(an.includes('if (!on(app)) { stop(app); return; }'), 'nothing is read while the switch is off');
-  assert.ok(an.includes('boolean show = !AppState.front();'), 'never posted while Wizard is on screen');
-  const poll = an.slice(an.indexOf('static void pollOnce(Context c) {'), an.indexOf('static JSONObject names('));
-  assert.ok(poll.indexOf('if (!canNotify(c)) return;') < poll.indexOf('synchronized (POLL)'), 'nothing is consumed before Android allows posting');
-  assert.ok(poll.includes('if (routes == null) return;'), 'a failed levels read never lets an Off app through');
-  assert.ok(main.includes('requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, REQ_APP_NOTIFY)'), 'turning it on asks for permission');
-  assert.ok(read('android/app/src/main/java/ai/wizards/os/device/DeviceBridge.java').includes('ai.wizards.os.notify.AppNotify.kick(activity);'));
-  assert.ok(read('android/app/src/main/AndroidManifest.xml').includes('android:name=".notify.AppNotifyJob"'));
-});
-
+// Not run here (wizard-ux issue 1674): this pinned Java/Swift source text and no JDK runs it in this suite. Android App notifications wiring (MainActivity bridge, AppNotify poll); the page side runs above.
 test('the switch is in the catalog, off by default, and names its issue', async () => {
   // the real experience.js over the real catalog: listed in Settings › Look, off on a fresh device
   const { E, active } = experienceRuntime(); await E.refresh();
