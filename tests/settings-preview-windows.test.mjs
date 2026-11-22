@@ -88,8 +88,16 @@ test('desktop Settings keys: ⌥, toggles, Esc closes only the focused Settings 
 });
 
 test('desktop Settings window chrome: the panel fills the window, its own ✕ gives way to the title bar', () => {
-  assert.match(deskCss, /\.win \.dsettings \{ position: relative; inset: auto; width: auto; height: 100%;/);
-  assert.match(deskCss, /\.win \.dsettings > \.st-close \{ display: none; \}/);
+  // the Settings panel the desktop builds (a .dsettings with its own ✕), alone and inside a shell window, through the
+  // desktop page's settings.css then desktop.css cascade
+  const sheets = [fs.readFileSync(new URL('../web/core/settings.css', import.meta.url), 'utf8'), deskCss].join('\n');
+  const doc = createDocument();
+  doc.body.innerHTML = '<div class="dsettings" id="alone"><button class="st-close">✕</button></div><div class="win"><div class="wbody"><div class="dsettings" id="inwin"><button class="st-close">✕</button></div></div></div>';
+  const v = (q, p) => styleOf(doc.querySelector(q), sheets, p);
+  assert.equal(v('#alone', 'position'), 'fixed', 'on its own it is the side panel');
+  assert.notEqual(v('#alone > .st-close', 'display'), 'none', 'with its own ✕');
+  for (const [p, want] of [['position', 'relative'], ['inset', 'auto'], ['width', 'auto'], ['height', '100%']]) assert.equal(v('#inwin', p), want, `in a window: ${p}`);
+  assert.equal(v('#inwin > .st-close', 'display'), 'none', 'in a window the title bar\'s ✕ closes it');
 });
 
 test('Settings and previews are local windows: never synced to other devices', () => {
