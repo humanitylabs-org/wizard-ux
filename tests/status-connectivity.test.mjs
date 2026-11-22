@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
 
 const source = readFileSync(new URL('../web/core/status.js', import.meta.url), 'utf8');
 const failedProbe = async () => { throw new Error('probe unavailable'); };
@@ -197,9 +198,27 @@ test('a probe from before a newer failed live read cannot hide that failure', as
   await turn(); await turn();
   assert.equal(calls, 1); assert.equal(h.state(), 'reconnecting');
 });
-test('live.js stamps failed reads so status can order them against probes', () => {
-  const live = readFileSync(new URL('../web/live.js', import.meta.url), 'utf8');
-  assert.match(live, /this\.error = e\.status === 403 \? 'access' : 'offline'; this\.errorAt = Date\.now\(\);/);
+// The real live.js list read against a box that answers 503 or 403 (no DOM; timers inert).
+async function failedRead(status) {
+  const storage = new Map();
+  const c = { console, AbortSignal, AbortController, URL, URLSearchParams, document: { documentElement: { dataset: {} }, readyState: 'loading', hidden: false, addEventListener() {} }, navigator: {},
+    localStorage: { getItem: k => storage.get(k) ?? null, setItem: (k, v) => storage.set(k, v), removeItem: k => storage.delete(k) },
+    setInterval() {}, setTimeout() {}, clearTimeout() {}, addEventListener() {}, dispatchEvent() {}, CustomEvent: class { constructor(type, o) { this.type = type; this.detail = o?.detail; } },
+    WizConfig: { dayStart: n => n - n % 864e5 }, location: { origin: 'https://box.test', search: '' },
+    fetch: async () => ({ ok: false, status, json: async () => ({}), text: async () => '' }) };
+  c.window = c; modelContext(c);
+  vm.runInContext(withLiveParts(readFileSync(new URL('../web/live.js', import.meta.url), 'utf8')), c);
+  const L = c.WizLive; L.at = 5;
+  const before = Date.now();
+  await L.refresh(true);
+  return { L, before };
+}
+test('live.js stamps failed reads so status can order them against probes', async () => {
+  const { L, before } = await failedRead(503);
+  assert.equal(L.error, 'offline');
+  assert.ok(L.errorAt >= before, 'the failure carries its own time');
+  assert.equal(L.at, 5, 'the last success time is left alone');
+  assert.equal((await failedRead(403)).L.error, 'access');
 });
 test('a healthy probe survives later non-network live emits while the browser still says offline', async () => {
   const fetch = async () => ({ ok: true, json: async () => ({ overall: 'ok' }) });
