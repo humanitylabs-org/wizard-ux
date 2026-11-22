@@ -994,7 +994,7 @@ test('desktop ⌥ keys in the AI apps view (round 21): mnemonic letters, every k
   for (const [code, what] of [['KeyS', 'settings'], ['KeyN', 'plus'], ['KeyL', 'toggleSide'], ['KeyR', 'toggleTabs'], ['KeyA', 'openAll'], ['KeyT', 'openTidy']])
     assert.match(js, new RegExp(`if \\(code === '${code}' && !sh\\) return once\\(${what}\\);`), `⌥${code.slice(3)} = ${what}`);
   assert.match(js, /if \(code === 'KeyK' && !sh\) return once\(\(\) => setSearch\(true\)\);/, '⌥K search');
-  assert.match(js, /if \(code === 'Space' && !sh\) return once\(\(\) => api\.voice\.talk\(\)\);/, '⌥Space talks (the orb)');
+  assert.match(js, /if \(code === 'Space' && !sh\) return once\(talkFromOrb\);/, '⌥Space talks (the orb, as its click: wizard-ux issue 1547)');
   assert.match(js, /if \(code === 'KeyV' \|\| code === 'KeyC' \|\| code === 'KeyD'\) return false;/, '⌥V ⌥C ⌥D stay the shell\'s voice keys');
   assert.match(js, /if \(code === 'KeyW' && !sh && pane\) \{ if \(!e\.repeat\) \{ const d = desks\(\)\.find\(x => x\.desk === pane\.desk\); if \(d && !pins\.includes\(d\.id\)\) closeDesk\(d\); else hidePanel\(\); \} return true; \}/, '⌥W closes the panel\'s app (a pinned one hides)');
   assert.match(js, /if \(code === 'KeyW' && !sh && docked\) \{ if \(!e\.repeat\) closeChat\(\); return true; \}/, '⌥W: the docked chat back to Home');

@@ -10,7 +10,7 @@
 window.WizCore = window.WizCore || {};
 window.WizCore.skinHostParts = window.WizCore.skinHostParts || {};
 window.WizCore.skinHostParts.shellapi = function ({ appLogo, chatArchiveOrders, chatListOwners, chatsClaimed, emptyHomes, escapeSurfaces, frameSpots, guard, insetFrame, insetHolders, insetOrbs, insetPlaces, isDoc, openRoutes, panelSync, skinHostVars, storeApps }) {
-  let activityRows, commandUis, homeScreenApp, inboxAct, keyGuides, keyHandlers, NOTE_ACTS, NOTE_ID, NOTE_ID_OPEN, noteAct, orbSwipeHolders, orbSwipeMap, overlays, panelHolders, readReadyOrder, readWorkingOrder, READY_ORDER_KEY, SESSION_ACTS, withNoteRows; // late-bound: skin-host.js declares these after the call, see bindLate
+  let activityRows, commandUis, homeScreenApp, inboxAct, keyGuides, keyHandlers, NOTE_ACTS, NOTE_ID, NOTE_ID_OPEN, noteAct, orbSwipeHolders, orbSwipeMap, orbTaps, overlays, panelHolders, readReadyOrder, readWorkingOrder, READY_ORDER_KEY, SESSION_ACTS, withNoteRows; // late-bound: skin-host.js declares these after the call, see bindLate
   /* Where the view's orb goes (round 6): the spot the app in front gave it (the end of its bottom row), else its own
    * fixed spot (null). The app in front = the widest app frame that is on screen (a desk still sliding in is not yet). */
   let placed = null;
@@ -47,6 +47,14 @@ window.WizCore.skinHostParts.shellapi = function ({ appLogo, chatArchiveOrders, 
         // Layout-only: a layout-docked composer owns its mic even while a companion app has keyboard focus.
         reply: (wid, sid) => live() && typeof wid === 'string' && typeof sid === 'string' && sid && sid !== '__new__'
           ? skinHostVars.shell.recordReply?.(wid, sid) : false,
+        /* Layout-only: the orb's own tap, for the shell's other orb triggers (Wizard for Mac's orb and Right ⌘, sent as
+         * wizard:orb): the take goes where the layout's orb would send it, e.g. the thread whose message box holds it,
+         * not the window with keyboard focus (wizard-ux issue 1547). fn() returns the shell's answer; undefined = not mine. */
+        onTap(fn) {
+          if (!live() || typeof fn !== 'function') return () => {};
+          const g = guard(a, 'voice.onTap', fn); orbTaps.add(g);
+          const off = () => { orbTaps.delete(g); a.offs.delete(off); }; a.offs.add(off); return off;
+        },
         /* The layout draws the command take itself (its own orb state and caption): while held, a command take's
          * result comes to fn({ result: 'done' | 'miss' | 'silent' | 'kept', text, action, app, music }) instead of the
          * shell's toast, and the desktop's voice pill steps aside (html.voice-cmd). Released on teardown. */
@@ -355,5 +363,5 @@ window.WizCore.skinHostParts.shellapi = function ({ appLogo, chatArchiveOrders, 
       } }),
     };
   }
-  return { insetSync, placeSync, shellApi, bindLate: v => { if ('activityRows' in v) activityRows = v.activityRows; if ('commandUis' in v) commandUis = v.commandUis; if ('homeScreenApp' in v) homeScreenApp = v.homeScreenApp; if ('inboxAct' in v) inboxAct = v.inboxAct; if ('keyGuides' in v) keyGuides = v.keyGuides; if ('keyHandlers' in v) keyHandlers = v.keyHandlers; if ('NOTE_ACTS' in v) NOTE_ACTS = v.NOTE_ACTS; if ('NOTE_ID' in v) NOTE_ID = v.NOTE_ID; if ('NOTE_ID_OPEN' in v) NOTE_ID_OPEN = v.NOTE_ID_OPEN; if ('noteAct' in v) noteAct = v.noteAct; if ('orbSwipeHolders' in v) orbSwipeHolders = v.orbSwipeHolders; if ('orbSwipeMap' in v) orbSwipeMap = v.orbSwipeMap; if ('overlays' in v) overlays = v.overlays; if ('panelHolders' in v) panelHolders = v.panelHolders; if ('readReadyOrder' in v) readReadyOrder = v.readReadyOrder; if ('readWorkingOrder' in v) readWorkingOrder = v.readWorkingOrder; if ('READY_ORDER_KEY' in v) READY_ORDER_KEY = v.READY_ORDER_KEY; if ('SESSION_ACTS' in v) SESSION_ACTS = v.SESSION_ACTS; if ('withNoteRows' in v) withNoteRows = v.withNoteRows; } };
+  return { insetSync, placeSync, shellApi, bindLate: v => { if ('activityRows' in v) activityRows = v.activityRows; if ('commandUis' in v) commandUis = v.commandUis; if ('homeScreenApp' in v) homeScreenApp = v.homeScreenApp; if ('inboxAct' in v) inboxAct = v.inboxAct; if ('keyGuides' in v) keyGuides = v.keyGuides; if ('keyHandlers' in v) keyHandlers = v.keyHandlers; if ('NOTE_ACTS' in v) NOTE_ACTS = v.NOTE_ACTS; if ('NOTE_ID' in v) NOTE_ID = v.NOTE_ID; if ('NOTE_ID_OPEN' in v) NOTE_ID_OPEN = v.NOTE_ID_OPEN; if ('noteAct' in v) noteAct = v.noteAct; if ('orbSwipeHolders' in v) orbSwipeHolders = v.orbSwipeHolders; if ('orbSwipeMap' in v) orbSwipeMap = v.orbSwipeMap; if ('orbTaps' in v) orbTaps = v.orbTaps; if ('overlays' in v) overlays = v.overlays; if ('panelHolders' in v) panelHolders = v.panelHolders; if ('readReadyOrder' in v) readReadyOrder = v.readReadyOrder; if ('readWorkingOrder' in v) readWorkingOrder = v.readWorkingOrder; if ('READY_ORDER_KEY' in v) READY_ORDER_KEY = v.READY_ORDER_KEY; if ('SESSION_ACTS' in v) SESSION_ACTS = v.SESSION_ACTS; if ('withNoteRows' in v) withNoteRows = v.withNoteRows; } };
 };
