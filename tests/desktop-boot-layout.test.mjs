@@ -3,7 +3,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { fixture, read } from './fixtures/tweaks.mjs';
-import { withSkinHostParts } from './fixtures/skin-host-parts.mjs';
+import vm from 'node:vm';
+import { createDocument } from './fixtures/mini-dom.mjs';
+import { styleOf } from './fixtures/mini-css.mjs';
+import { between, runRecording } from './fixtures/source-slice.mjs';
+import { withDesktopParts } from './fixtures/desktop-parts.mjs';
 
 const VIEW = 'wos.desktop-view.v1';
 
@@ -70,19 +74,54 @@ test('a layout that cannot load gives Classic its list back and clears the boot 
   assert.equal(f.doc.documentElement.dataset.layoutBooting, undefined);
 });
 
+// The <html> the real skin-host boot painted, copied into a mini DOM over a Classic chat window skeleton, run through
+// desktop.css + the layout's blocking desktop-boot.css (mini-css cascade); the layout's real sheet-load hook (sliced
+// from web/layouts/ai-apps/desktop.js) then clears the veil on load and on error.
+function bootPage() {
+  const f = fixture({ shell: 'desktop', desktopView: null }), d = createDocument();
+  for (const [k, v] of Object.entries(f.doc.documentElement.dataset)) d.documentElement.setAttribute('data-' + k.replace(/[A-Z]/g, c => '-' + c.toLowerCase()), v);
+  d.body.innerHTML = '<div class="win"><div class="dchats" data-thread=""><div class="pane-list">list</div><div class="pane-split"></div><div class="pane-empty"></div><div class="pane-thread">t</div></div></div>';
+  return { f, d };
+}
+const BOOT_CSS = [read('web/desktop/desktop.css'), read('web/layouts/ai-apps/desktop-boot.css')].join('\n');
+function sheetHook(d) {
+  const listeners = {}, sheet = { tag: 'link' };
+  runRecording(between(read('web/layouts/ai-apps/desktop.js'), "  const css = el('link'", "\n  api.listen(css, 'error', endBoot);") + "\n  api.listen(css, 'error', endBoot);",
+    { el: () => sheet, doc: d, api: { asset: x => x, mount: () => () => {}, listen: (n, t, fn) => { assert.equal(n, sheet); (listeners[t] ||= []).push(fn); } }, Event: class { constructor(t) { this.type = t; } } });
+  return t => { for (const fn of listeners[t] || []) fn({}); };
+}
+
 test('layout CSS keeps Classic hidden through boot and the layout clears the veil when its sheet applies', () => {
-  const css = read('web/layouts/ai-apps/desktop-boot.css');
-  assert.doesNotMatch(read('web/layouts/ai-apps/layout.css'), /data-shell="desktop"/, "the phone's sheet carries no desktop rules");
-  assert.match(css, /\[data-chats-owner\] :is\(\.pane-list, \.pane-split, \.pane-empty\) \{ display: none !important/);
-  assert.match(css, /\[data-layout-booting\] body \{ opacity: 0 !important/);
-  const js = read('web/layouts/ai-apps/desktop.js');
-  assert.match(js, /api\.listen\(css, 'load', \(\) => \{ endBoot\(\)/);
-  assert.match(js, /api\.listen\(css, 'error', endBoot\)/);
+  for (const event of ['load', 'error']) {
+    const { d } = bootPage();
+    for (const sel of ['.pane-list', '.pane-split', '.pane-empty']) assert.equal(styleOf(d.querySelector(sel), BOOT_CSS, 'display'), 'none', sel + ': Classic list hidden from the first frame');
+    assert.notEqual(styleOf(d.querySelector('.pane-thread'), BOOT_CSS, 'display'), 'none');
+    assert.equal(styleOf(d.body, BOOT_CSS, 'opacity'), '0', 'veiled while booting');
+    const fire = sheetHook(d);
+    fire(event);
+    assert.equal(d.documentElement.hasAttribute('data-layout-booting'), false, `the sheet's ${event} clears the veil`);
+    assert.notEqual(styleOf(d.body, BOOT_CSS, 'opacity'), '0');
+  }
+});
+test("the phone's layout sheet carries no desktop rules", () => {
+  assert.doesNotMatch(read('web/layouts/ai-apps/layout.css'), /data-shell="desktop"/);
 });
 
-test('Classic shell reads the early claim, and releasing a reloading layout never re-opens the list', () => {
-  assert.match(read('web/desktop/desktop.js'), /var ownsChatList = !!globalThis\.WosSkinHost\?\.chatsClaimed\?\.\(\)/);
-  assert.match(withSkinHostParts(read('web/core/skin-host.js')), /shell\.ownsChatList\(chatsClaimed\(\)\)/);
+test('Classic shell reads the early claim, and releasing a reloading layout never re-opens the list', async () => {
+  // desktop.js's first read of the claim (before any list mounts), against the real host booted on AI apps / Classic.
+  const early = withDesktopParts(read('web/desktop/desktop.js'));
+  const line = between(early, '  var ownsChatList =', '\n');
+  for (const [view, claimed] of [[null, true], ['classic', false]]) {
+    const f = fixture({ shell: 'desktop', desktopView: view }), g = vm.createContext({});
+    g.WosSkinHost = f.host; vm.runInContext(line + '\nthis.out = ownsChatList;', g);
+    assert.equal(g.out, claimed);
+  }
+  // A layout that fails while (re)loading tells the shell exactly what the host claims now, not a stale value.
+  const f = fixture({ shell: 'desktop', desktopView: null }); await f.host.whenLayoutReady();
+  const told = []; f.adapter.ownsChatList = on => told.push(on); f.ctx.console = { warn() {} };
+  f.host._test.setImporter(async () => { throw new Error('layout bundle missing'); });
+  f.host.setLayout('ai-apps', false); await f.host.whenLayoutReady();
+  assert.deepEqual(told, [f.host.chatsClaimed()]);
 });
 
 // Issue 1556: on a slow load (cold cache, tailnet, Mac app) the veil used to drop on a 5 s timer and Classic Desks drew
