@@ -80,7 +80,7 @@ test('skin.css rules apply only under their own skin', () => {
   }
 });
 
-test('skin.js uses only the skin API', () => {
+test('skin.js uses only the skin API', async () => {
   const banned = ['addEventListener', 'setTimeout', 'setInterval', 'requestAnimationFrame', 'fetch(', 'XMLHttpRequest',
     '__wos', 'localStorage', 'sessionStorage', 'innerHTML', 'outerHTML', 'history.', 'document.cookie', 'eval(', 'new Function', 'import(', 'WebSocket'];
   const files = [...pkgDirs().keys()].map(d => `web/skins/${d}/skin.js`).filter(f => existsSync(new URL(f, root)));
@@ -89,6 +89,22 @@ test('skin.js uses only the skin API', () => {
     const src = read(f).replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
     for (const b of banned) assert.ok(!src.includes(b), `${f}: "${b}" is not allowed in a skin script; use the skin API (web/skins/README.md)`);
     assert.match(src, /export default function/, `${f}: export default function setup(api)`);
+  }
+  // And every packaged skin script (plus the fixture) runs through the real host on the API alone, leaving nothing behind.
+  const scripted = skinEntries().filter(s => s.pkg?.js).concat([{ id: 'fixture', pkg: { js: true, when: 'touch', dir: 'fixture' } }]);
+  assert.ok(scripted.length >= 2, 'a real package script plus the fixture');
+  for (const { id, pkg } of scripted) {
+    const P = page({ stored: 'nebula' });
+    P.ctx.window.WosSkin.pkgOf = x => (x === id ? { ...pkg } : null); // a family entry may share the skin's id
+    const warns = []; P.ctx.console.warn = (...a) => warns.push(a.map(String).join(' '));
+    P.host.attach(P.adapter); P.host.commit(id); await settle();
+    assert.deepEqual(warns, [], `${id}: its setup threw nothing`);
+    assert.equal(P.host.state.active, id, `${id}: its setup ran through the skin API`);
+    assert.deepEqual(plain(P.host.state.disabled), [], `${id}: no error turned it off`);
+    P.host.commit('grove'); await settle();
+    assert.equal(P.host.state.active, null);
+    assert.equal(P.live, 0, `${id}: no listener survives a switch`);
+    assert.equal(P.frames.size, 0, `${id}: no frame survives a switch`);
   }
 });
 
@@ -255,15 +271,50 @@ test('the API hands a skin no shell internals', async () => {
   assert.equal(P.ctx.localStorage._['wos.skin.fixture.x'], '{"a":1}', 'storage is namespaced per skin');
 });
 
+// The phone shell's skin adapter (app-agentorb.js) and its dock desk swipe (app-scrub.js), run with stubs.
+const braces = (src, head) => { const i = src.indexOf(head); assert.ok(i >= 0, head); let d = 0; for (let k = src.indexOf('{', i); k < src.length; k++) { if (src[k] === '{') d++; else if (src[k] === '}' && --d === 0) return src.slice(i, k + 1); } return ''; };
+function phoneAdapter() {
+  const calls = [];
+  let adapter = null;
+  const ctx = { overviewAdapter: {}, windowRefreshAdapter: {}, backStep: () => (calls.push('backStep'), 'thread'), openChatsList: () => calls.push('list'), goDesk: i => calls.push('desk ' + i),
+    appVars: { DS: null, desks: [{}, {}], idx: 0, W: {} } };
+  ctx.window = { WosSkinHost: { attach: a => { adapter = a; } } };
+  vm.runInNewContext(braces(withShellParts(readFileSync(new URL('web/app-agentorb.js', root), 'utf8')), '  window.WosSkinHost?.attach(') + ');', ctx);
+  return { adapter, calls, ctx };
+}
+function dockSwipe(claimed) {
+  const on = {}, dock = { addEventListener: (t, f) => { on[t] = f; }, setPointerCapture() {} }, seen = [];
+  const ctx = { $: () => dock, appVars: { DS: null, sheet: null, idx: 0, desks: [{ wins: [] }, { wins: [] }] }, window: { WosSkinHost: { claimed: id => claimed.includes(id) } },
+    innerHeight: 800, performance: { now: () => 0 }, endDotHold: () => seen.push('hold'), liftSettings() {}, barScrubLive: () => seen.push('live'), barScrubBack() {}, placeTrack() {},
+    barScrubAt: () => 1, barScrubPeek() {}, renderDots() {}, scLabel() {}, vib() {}, CHATS: { beforeNavigate: () => true } };
+  const src = withShellParts(readFileSync(new URL('web/app-scrub.js', root), 'utf8'));
+  vm.runInNewContext(braces(src, "  $('#dock').addEventListener('pointerdown',") + ');\n' + braces(src, "  $('#dock').addEventListener('pointermove',") + ');', ctx);
+  const swipe = id => { on.pointerdown({ target: { closest: () => null }, clientX: 100, clientY: 400, pointerId: id, pointerType: 'touch', timeStamp: 0 });
+    on.pointermove({ clientX: 160, clientY: 402, pointerId: id }); return ctx.appVars; };
+  return { swipe, seen };
+}
 test('the shell wires the host: head order, adapter, dock claim, render hooks', () => {
   for (const f of ['web/index.html', 'web/desktop.html']) {
     const h = read(f);
     assert.ok(h.indexOf('core/skins.js') < h.indexOf('core/skins.css') && h.indexOf('core/skins.css') < h.indexOf('core/skin-host.js'), `${f}: skins.js, then skins.css, then skin-host.js`);
   }
-  const app = read('web/app.js');
-  assert.match(app, /WosSkinHost\?\.attach\(\{/);
-  assert.match(app, /back: \(\) => backStep\(\)/, 'skins step back through the shell\'s own Back');
-  assert.match(app, /WosSkinHost\?\.claimed\(e\.pointerId\)/, 'dock desk swipe yields to a claimed finger');
+  // The phone shell attaches its adapter; a skin's Back is the shell's own Back step.
+  const A = phoneAdapter();
+  assert.ok(A.adapter, 'the shell attaches an adapter');
+  for (const k of ['route', 'back', 'openList', 'openThread', 'goDesk', 'deskCount', 'root', 'dock', 'locked', 'toast']) assert.equal(typeof A.adapter[k], 'function', k);
+  assert.equal(A.adapter.back(), 'thread');
+  assert.deepEqual(A.calls, ['backStep'], 'skins step back through the shell\'s own Back');
+  assert.equal(A.adapter.deskCount(), 2);
+  A.ctx.appVars.DS = { id: 4, h: true };
+  assert.equal(A.adapter.locked(4), true, 'a finger already swiping desks is locked from skins');
+  assert.equal(A.adapter.locked(5), false);
+  // The dock desk swipe yields to a finger a skin gesture claimed.
+  const claimedSwipe = dockSwipe([7]);
+  assert.equal(claimedSwipe.swipe(7).DS, null, 'dock desk swipe yields to a claimed finger');
+  assert.deepEqual(claimedSwipe.seen, []);
+  const free = dockSwipe([]);
+  assert.equal(free.swipe(8).DS.h, true, 'an unclaimed finger swipes desks');
+  // Chats calls the render hooks and marks its parts (thread/list paint need the whole Chats shell; pinned here).
   const chats = read('web/core/chats.js');
   assert.match(chats, /WosSkinHost\?\.rendered\('thread', el\)/);
   assert.match(chats, /WosSkinHost\?\.rendered\('list', el\)/);
