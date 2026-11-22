@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
+import { between as slice, block, runRecording } from './fixtures/source-slice.mjs';
 
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
 const src = withParts(read('web/core/chats.js'));
@@ -67,7 +68,18 @@ test('the open item lists the rest from its app (Done all clears them together)'
 });
 
 test('Ready lists the folds, and the Chats badge still counts every item', () => {
-  assert.match(src, /return \{ awake: fold\(all\.filter\(i => !i\.read\)\), later: fold\(all\.filter\(i => i\.read\)\) \};/);
-  const bell = read('web/core/notif-bell.js');
-  assert.match(bell, /const readyCount = \(\) => window\.WosSkinHost\?\.inboxList \? IN\.items\.filter\(i => !i\.archived\)\.length : 0;/, 'badge == items, not rows');
+  // Ready as Chats draws it (notes()), then the bell's own count over the same items
+  const items = [it('m1', 'money', 30), it('m2', 'money', 50, { read: true }), it('m3', 'money', 10, { read: true }), it('m4', 'money', 5), it('x1', 'messenger', 40), it('z9', 'money', 1, { archived: true })];
+  const { fold } = load(items);
+  const ctx = runRecording(block(src, '  function notes() {') + '\nglobalThis.notes = notes;',
+    { fold, notesOff: () => {}, window: { WosSkinHost: { inboxList: true }, WosBell: { items: () => items } } });
+  const { awake, later } = ctx.notes();
+  assert.deepEqual([...awake.map(r => r.group || r.id)], ['money', 'x1'], 'unread: Money folds, Messenger stays one row');
+  assert.deepEqual([...later.map(r => r.group || r.id)], ['money'], 'read ones fold apart');
+  assert.ok(![...awake, ...later].some(r => r.id === 'z9' || r.items?.some(i => i.id === 'z9')), 'never a completed one');
+  const bell = readFileSync(new URL('../web/core/notif-bell.js', import.meta.url), 'utf8');
+  const count = runRecording(slice(bell, '  const readyCount = () =>', '\n') + '\nglobalThis.count = readyCount;', { IN: { items }, window: { WosSkinHost: { inboxList: true } } });
+  assert.equal(count.count(), 5, 'badge == items (5), not rows (3)');
+  const off = runRecording(slice(bell, '  const readyCount = () =>', '\n') + '\nglobalThis.count = readyCount;', { IN: { items }, window: {} });
+  assert.equal(off.count(), 0, 'no inbox list: no Ready badge');
 });
