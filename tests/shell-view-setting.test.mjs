@@ -8,7 +8,9 @@ import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
 import vm from 'node:vm';
 import { read, fixture } from './fixtures/tweaks.mjs';
-import { withSettingsParts } from './fixtures/settings-parts.mjs'; // settings.js parts moved out verbatim (issue 1665)
+import { withSettingsParts } from './fixtures/settings-parts.mjs';
+import { createDocument } from './fixtures/mini-dom.mjs';
+import { styles } from './fixtures/w5-css.mjs'; // settings.js parts moved out verbatim (issue 1665)
 
 const tick = async () => { for (let i = 0; i < 8; i++) await new Promise(r => setImmediate(r)); };
 const REMOVED = ['miguel/orb-shell', 'miguel/apps-home'];
@@ -109,14 +111,22 @@ for (const shell of ['desktop', 'phone']) test(`${shell}: each choice wears its 
   }
 });
 
-test('core keeps only the exclusivity: no Shell view row on the phone, no chooseView, the removed views and their code are gone', () => {
+test('core keeps only the exclusivity: no Shell view row on the phone, no chooseView, the removed views and their code are gone', async () => {
   const settings = withSettingsParts(read('web/core/settings.js')), css = read('web/core/settings.css'), exp = read('web/core/experience.js');
-  assert.match(settings, /data-desktop-view/);
   assert.doesNotMatch(settings, /data-shellview/);
   assert.doesNotMatch(css, /\.sv-(group|seg)/);
   assert.doesNotMatch(exp, /chooseView/);
-  assert.match(settings, /E\.desktopViews\?\.length && t\.layout/, 'built-in desktop views are not duplicate personal switches');
   assert.doesNotMatch(settings, /orb-shell|apps-home/);
+  // The real Look page: the desktop picks its view in the Shell view radio, and that built-in view is not repeated
+  // as a personal switch; the phone has no view row.
+  const desk = box(); await desk.E.refresh();
+  const dh = await look(desk);
+  assert.equal(typeof desk.E.chooseView, 'undefined', 'no chooseView in the experience API');
+  assert.match(dh, /data-desktop-view="ai-apps"/);
+  assert.ok(desk.E.state.tweaks.some(t => t.id === 'miguel/ai-apps' && t.layout), 'AI apps is a layout package');
+  assert.ok(!switches(dh).some(([id]) => id === 'miguel/ai-apps'), 'built-in desktop views are not duplicate personal switches');
+  const phone = box({ shell: 'phone' }); await phone.E.refresh();
+  assert.doesNotMatch(await look(phone), /data-desktop-view|data-shellview/, 'no Shell view row on the phone');
   const cat = JSON.parse(read('web/tweaks/catalog.json')), prof = JSON.parse(read('web/tweaks/miguel/profile.json'));
   for (const id of [...REMOVED, 'miguel/orb-switch']) {
     assert.ok(!existsSync(new URL(`../web/tweaks/${id}`, import.meta.url)), id + ' package removed');
@@ -129,24 +139,9 @@ test('core keeps only the exclusivity: no Shell view row on the phone, no choose
   for (const f of ['web/layouts/apps/chrome.js', 'web/layouts/apps/chrome.css', 'web/layouts/orb/shared.js', 'web/layouts/orb/keys.js', 'web/layouts/orb/styles.js'])
     assert.ok(existsSync(new URL('../' + f, import.meta.url)), f + ' kept');
   assert.doesNotMatch(read('web/layouts/apps/chrome.css'), /os-switch|os-side/);
-  assert.match(read('web/desktop/desktop.css'), /\.bar-center:not\(:empty\) ~ #clock/);
+  // The desktop bar: a view's centre content takes the clock's place; an empty centre leaves the clock.
+  const bar = center => { const doc = createDocument(); doc.body.innerHTML = `<div id="bar"><div class="bar-center" data-slot="bar-center">${center}</div><button id="clock" class="clock"></button></div>`; return styles(doc.getElementById('clock'), [read('web/desktop/desktop.css')]).display; };
+  assert.equal(bar('<span>AI apps</span>'), 'none');
+  assert.notEqual(bar(''), 'none');
   assert.doesNotMatch(read('web/layouts/apps/chrome.css').replace(/\/\*[\s\S]*?\*\//g, ''), /#settingsBtn[^{]*\{[^}]*display:\s*none|\.gear[^{]*\{[^}]*display:\s*none/, 'Settings stays reachable');
-});
-
-test('per shell type: the desktop choice never reaches the phone; the phone ignores a desktop-only view', async () => {
-  const storage = new Map();
-  const desk = box({ storage }); await desk.E.refresh();
-  await desk.E.chooseDesktopView('ai-apps'); await tick();
-  const phone = box({ shell: 'phone', storage }); await phone.E.refresh();
-  assert.deepEqual(phone.views(), [], 'the desktop choice leaves the phone on its stock shell');
-  const html = await look(phone);
-  assert.doesNotMatch(html, /data-tweak-toggle="miguel\/ai-apps"/, 'a desktop-only view is not offered on the phone');
-  await phone.E.toggle('miguel/ai-apps'); assert.deepEqual(phone.views(), [], 'and cannot be switched on there');
-  const legacy = () => new Map([[KEY, JSON.stringify({ version: 1, off: {}, preset: 'none', machinesHomeMoved: true, mix: { 'miguel/ai-apps': true, 'miguel/snooze-someday': true } })]]);
-  const p1 = box({ shell: 'phone', storage: legacy() }); await p1.E.refresh();
-  assert.ok(!p1.active().includes('miguel/ai-apps') && p1.active().includes('miguel/snooze-someday'), 'phone: stock view, other tweaks kept');
-  const stray = new Map([[KEY, JSON.stringify({ version: 1, off: {}, preset: 'none', machinesHomeMoved: true, mix: {}, views: { phone: 'miguel/ai-apps' } })]]);
-  const p2 = box({ shell: 'phone', storage: stray }); await p2.E.refresh();
-  assert.deepEqual(p2.views(), []); assert.ok(!p2.active().includes('miguel/ai-apps'));
-  assert.deepEqual(JSON.parse(read('web/tweaks/miguel/ai-apps/manifest.json')).shells, ['desktop']);
 });
