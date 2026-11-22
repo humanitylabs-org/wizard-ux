@@ -110,58 +110,23 @@
   "the single-line field and its button are 44 px touch targets"
  ],
  "app-logos.test.mjs": [
-  "the logo tile is styled outside .sgi, so skins that recolour sigils never touch it",
-  "the shell reads logos with the app list and repaints when they change"
- ],
- "app-ls-shell-keys.test.mjs": [
-  "both carry-over modules use the same shell-key rule",
-  "every localStorage key the shell names is a shell key, so no app is ever handed one",
-  "app keys stay carriable: the rule does not swallow an app\\u2019s own names"
- ],
- "app-native-thread.test.mjs": [
-  "pinned host supplies the shared Chats callback and live visibility, not a custom composer"
- ],
- "app-orb.test.mjs": [
-  "orb.set is an admitted message op"
+  "the logo tile is styled outside .sgi, so skins that recolour sigils never touch it"
  ],
  "app-pane-slide.test.mjs": [
   "AI apps pane: only the common desk slides; its title/window/body/frame never ease independently"
  ],
- "app-setup.test.mjs": [
-  "both launchers put admission before window creation; Back peels setup before window/root handling",
-  "install links open the Store window synchronously so the link reaches its frame (both shells)"
- ],
- "app-share-wizard.test.mjs": [
-  "both shells load the same sheet and route Back to it, native imports reuse it without desktop device.js"
- ],
  "app-titlebar-tools.test.mjs": [
   "phone icon tools keep a 44px tap target over the slim skin bars"
  ],
- "app-vault.test.mjs": [
-  "vault uses the device envelope and retains the already-shipped legacy adapter"
- ],
- "app-voice-audio.test.mjs": [
-  "app-owned command registration is exposed by shared SDK without a second audio transport"
- ],
  "app-window-title-ink.test.mjs": [
-  "the phone marks a light measured heading (.edge-light) from the colour it paints",
   "browser acceptance cannot relax normal title contrast below 4.5:1"
  ],
  "app-windows.test.mjs": [
-  "every link path asks first: chat links, links in app frames, sandboxed app links, notification Open, ?open= intents",
   "Android wiring: the switch is the main window\\'s, launches need a tap, Back returns to the link once",
   "the switch is in the catalog, off by default, and names its issue"
  ],
- "archive-action-wording.test.mjs": [
-  "remaining action labels say Archive; removed arrow hints stay absent and AI apps keeps E"
- ],
- "archive-instant.test.mjs": [
-  "threadAct starts the write, paints every list, and only then awaits",
-  "Archive row action in the AI apps sidebar repaints before its 120 ms pass",
-  "a write that never answers cannot pin a thread out of its list"
- ],
  "archive-section-order.test.mjs": [
-  "stock Chats: Archive is the last section in By status and By day",
+  "stock Chats CSS: By status orders Archive last, and no skin moves it up",
   "archive-top tweak: still puts Archive first, and stays opt-in"
  ],
  "assist-attach.test.mjs": [
@@ -170,56 +135,16 @@
   "the picker step and the camera file are private to WizardOS"
  ],
  "background-continue.test.mjs": [
-  "the tweak is in the catalog and off by default for everyone",
-  "Chats re-renders the thread header when a result appears or clears"
- ],
- "badge-more.test.mjs": [
-  "apps pass { more } through the badge API; Chats reads it from routed feeds"
- ],
- "bar-scrub.test.mjs": [
-  "no switch: the scrub is the only bar path, in the catalogue and code there is no wizard/bar-scrub and no handle",
-  "the orb hands only its sideways drag to the scrub (tap, hold and up/down stay the orb\\'s)"
+  "the tweak is in the catalog and off by default for everyone"
  ],
  "boomerang.test.mjs": [
-  "phone and desktop load the shared Boomerang and pin assets once each",
-  "Back closes the picker before anything under it, on phone and desktop",
-  "one Snooze action replaces Defer and Boomerang, with no second Snooze under each reply"
+  "phone and desktop load the shared Boomerang and pin assets once each"
  ],
  "box-source.test.mjs": [
   "every published image is stamped with the commit it was built from"
  ],
  "box-switch-catalog.test.mjs": [
   "${id} is a switch the App Manager accepts, off by default"
- ],
- "browser-boundary-frames.test.mjs": [
-  "wiring: pages load the boundary right after shell-token.js; app frames get the sandbox only when it is on",
-  "dictation wiring: phone and desktop await the insert (a sandboxed insert answers later)",
-  "app keys wiring: the AI apps view presses app keys while it runs and reads a sandboxed app\\'s keys from the boundary"
- ],
- "browser-boundary-other-frames.test.mjs": [
-  "boundary on: link sheet and voice frames are covered by the box switch"
- ],
- "browser-boundary-services.test.mjs": [
-  "app backend: the shell\\'s owner route list is the same in shell-token.js and browser-boundary.js"
- ],
- "browser-reader-links.test.mjs": [
-  "an auxiliary links mount (App Setup) never replaces the shell Reader identity"
- ],
- "capture-storage-diagnostics.test.mjs": [
-  "recovery breadcrumbs name only fixed stages and counts, never row values"
- ],
- "channel-box-model-pick.test.mjs": [
-  "a typed channel post leaves the window\\'s New chat pick alone (review)",
-  "Send and the orb read the box\\'s pick (source contract)"
- ],
- "channel-general-main-agent.test.mjs": [
-  "phone viewOf pins the channel\\'s agent with the take"
- ],
- "channel-new-channel.test.mjs": [
-  "1489: + / ⌥N on the Channels list (AI apps sidebar or a classic Chats window) start a new chat, not a channel"
- ],
- "channel-new-chat-entry-points.test.mjs": [
-  "the orb / ⌥S path and New chat keys reach the channel: wiring in desktop, phone and both AI apps layouts"
  ],
  "chat-back-doc-scroll.test.mjs": [
   "a list paint over the document-scrolled thread leaves document scroll in the same paint"
@@ -868,10 +793,6 @@
   "Store, Agents and Setup load shell-token.js as their first script",
   "Store, Agents and Setup carry the `off` placeholder, so a top-level tab of them gets the token from nginx"
  ],
- "shell-web-compat.test.mjs": [
-  "shared app microphone admission and reload checks see the shell recorder",
-  "remote orb retains offline signed API and CSP without adding a full-app bridge"
- ],
  "sidebar-chats-view.test.mjs": [
   "the switch ships off: listed in the catalog, never a default, scoped CSS"
  ],
@@ -883,109 +804,27 @@
  "signal-chat-copy.test.mjs": [
   "Signal list copy leans toward white while preserving read and unread hierarchy"
  ],
- "signed-out-reconnect.test.mjs": [
-  "Reconnect on the card opens the Claude app at Connect when there is no saved run to recover",
-  "issue 1500: the generic \"not processed… send it again\" line is hidden above a Reconnect card"
- ],
- "skin-background-stable.test.mjs": [
-  "Landscapes: a real resize crops the same photo again, never the next one",
-  "scenery.js stars: a same-size resize keeps the same sky; a real one stretches it (never re-rolls)"
- ],
  "skin-owner-authority.test.mjs": [
   "owner correction is an existing instruction, not an unresolved opacity decision",
   "inherited fallback is weaker than explicit package and My skin selectors"
  ],
- "skin-packages.test.mjs": [
-  "skin.js uses only the skin API",
-  "the shell wires the host: head order, adapter, dock claim, render hooks"
- ],
- "skin-palettes.test.mjs": [
-  "the two skins hold the right palettes, and an unlisted skin becomes its own skin",
-  "the saved choice stays the palette id; the last palette per skin is remembered",
-  "Settings › Look separates family tiles from family-scoped Colours, without a Chats pairing",
-  "Appearance v1 adds the skin family without changing the palette field",
-  "colors and tweaks are separate: onboarding offers every color; Look offers tweak sets apart from color",
-  "features on for everyone are plain settings where they act, not tweaks",
-  "review: a new skin starts from the worn own skin\\'s choices; an upgraded device keeps the retired Home map CSS for its first frame"
- ],
  "skin-preview-picker.test.mjs": [
-  "skin picker renders preview cards for every skin, names in each skin\\'s own face",
   "preview card styles are shell-wide (not gated to one skin) and the Landscapes preview image ships"
- ],
- "skin-scripts-look-only.test.mjs": [
-  "My skin restarts its script on wos:look-only, and Settings shows it paused while on"
  ],
  "skins-look-only-migration.test.mjs": [
   "the drop list (catalog lookOnlyOff) is empty now its tweaks are removed; any entry must be a real catalog tweak"
  ],
- "skins-look-only.test.mjs": [
-  "the switch is a normal catalog tweak, off by default and never in a published profile"
- ],
- "snoozed-not-unread.test.mjs": [
-  "Chats list Ready header (snooze last) does not count the snoozed tail as unread",
-  "AI apps desktop rail: no Ready row (and no number) when Ready lists nothing"
- ],
  "status-connectivity.test.mjs": [
-  "live.js stamps failed reads so status can order them against probes",
   "calm offline opt-in stays off in author presets and its text panel is fully opaque"
  ],
- "stop-before-run.test.mjs": [
-  "composer shows Stop for a pending send without a run id; every Stop goes through cancelSend with the run id"
- ],
- "stop-feedback-fast.test.mjs": [
-  "Stop on a thread stops its known run before withdrawing queued sends (a steer in flight answers late)",
-  "the Stop button answers on the tap: disabled, greyed and labelled Stopping…"
- ],
- "store-install-my-apps-link.test.mjs": [
-  "the Store binds that renderer to success and reserves top navigation for plain primary activation"
- ],
- "store-kinds.test.mjs": [
-  "Store clean preserves strict view flag; all lists, query terms and detail labels share classifier"
- ],
  "store-status-colors.test.mjs": [
-  "issue 1652: Starting… polls the shell registry with backoff and stops once the app opens or the wait ends",
   "new status colour rules use tokens, not literal white or fixed washes"
- ],
- "synced-lists.test.mjs": [
-  "Chats never saves a whole Spaces or subject-order list from this device"
  ],
  "tap-outside-safe-insets.test.mjs": [
   "James universal standalone rule: host CSS unions env/native/cutout once and does not sum toast margin"
  ],
- "thread-draft-keep.test.mjs": [
-  "a thread paint never takes a channel box\\'s field as its own composer"
- ],
- "thread-follow-up-watchers.test.mjs": [
-  "active follow-ups keep Snooze, make Archive temporary, and expose explicit Stop watching",
-  "archived watcher checks stay out of Working while their silent run is active",
-  "Archive and Snooze remain presentation actions; only Stop watching hits the cancellation route",
-  "the full-list normalizer preserves the service watcher projection"
- ],
- "thread-no-scroll-yank.test.mjs": [
-  "Incognito keeps the reader’s place on repaint; only opening and his send go to the bottom"
- ],
- "thread-seen-resend-once.test.mjs": [
-  "LIVE.refresh uses the once-per-version re-send"
- ],
- "thread-title-project-hint.test.mjs": [
-  "rename sheet recommends a project home and preserves owner lock copy"
- ],
  "tour-copy-always-visible.test.mjs": [
   "the tour entrance (trIn) animates movement only: no opacity, visibility or blur in its keyframes"
- ],
- "tour-settings-handoff.test.mjs": [
-  "opening Settings mid-tour hands off: the tour finishes and stops guarding taps",
-  "a parked Settings sheet restored on its desk tells the tour too (not only openSheet)"
- ],
- "tour-skip-step.test.mjs": [
-  "Help sheet keeps commands and Practice again"
- ],
- "troubleshooter-provider-link.test.mjs": [
-  "phone and desktop give recovery the actual window URL"
- ],
- "ui-preferences.test.mjs": [
-  "all list preference actions write through Agent Service, including clearing filters/order moves",
-  "a repainted Chats list shows the saved auto-archive age, not the picker value it was first painted with"
  ],
  "unread-only-counts.test.mjs": [
   "Machines home / data.read.sessions: the Ready count is the unread pill, not the Ready inventory"
