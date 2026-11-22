@@ -55,9 +55,18 @@ test('phone persists the sign-in anchor through a successful frame load and remo
   }
 });
 
+// The recovery mount lines of the phone (app-cards.js watchFrames) and desktop (desktop.js window paint), run.
 test('phone and desktop give recovery the actual window URL', () => {
-  const phone = withShellParts(readFileSync(new URL('../web/app.js', import.meta.url), 'utf8'));
-  const desktop = withShellParts(readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8'));
-  assert.match(phone, /mountRecovery\(el,\s*W\[el\.closest\('\.win'\)\?\.dataset\.win\]\?\.url\)/);
-  assert.match(desktop, /mountRecovery\(el\.querySelector\('\[data-recovery\]'\),\s*w\.url\)/);
+  const url = '/troubleshoot/?provider=claude&run_id=run%2Fone#signin', mounted = [];
+  const WizReach = { mountRecovery: (el, u) => mounted.push([el.id, u]) };
+  const phone = withShellParts(readFileSync(new URL('../web/app-cards.js', import.meta.url), 'utf8')).split('\n').find(l => l.includes("$$('[data-recovery]', root).forEach("));
+  assert.ok(phone, 'phone recovery line');
+  const card = { id: 'phone-card', closest: s => (s === '.win' ? { dataset: { win: 'w1' } } : null) };
+  vm.runInNewContext(phone, { $$: (sel, root) => (sel === '[data-recovery]' && root === 'root' ? [card] : []), root: 'root', window: { WizReach }, appVars: { W: { w1: { url } } } });
+  const desktop = withShellParts(readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8')).split('\n').find(l => l.includes("mountRecovery(el.querySelector('[data-recovery]')"));
+  assert.ok(desktop, 'desktop recovery line');
+  const watched = [], el = { querySelector: s => (s === '[data-recovery]' ? { id: 'desk-card' } : s === 'iframe' ? { id: 'frame' } : null) };
+  vm.runInNewContext(`if (w.app === 'chats') {}\n${desktop}`, { w: { app: 'troubleshooter', url }, el, window: { WizReach }, watchFrame: f => watched.push(f.id) });
+  assert.deepEqual(mounted, [['phone-card', url], ['desk-card', url]], 'both shells pass the window\'s own URL, query and anchor intact');
+  assert.deepEqual(watched, ['frame']);
 });
