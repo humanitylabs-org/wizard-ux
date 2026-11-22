@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
+import { setupApp } from './fixtures/r7A-setup-harness.mjs';
 const src = readFileSync(new URL('../web/setup/recommended.js', import.meta.url), 'utf8');
 const selection = {source:'standard',repo:'org/cloudflare',commit:'a'.repeat(40),operation:'install'};
 const rows = [{id:'wizard-cloudflare',name:'Cloudflare',summary:'Publish sites',installed:false,selection},
@@ -68,10 +69,20 @@ test('prefetch asks only WAM policy; never browser URLs or install recipes',asyn
   assert.equal(post.url,'../store-install/_recommended');
   assert.deepEqual(JSON.parse(post.body),{});
 });
-test('Setup triggers prefetch only after successful seen or already-seen read',()=>{
-  const setup=readFileSync(new URL('../web/setup/setup.js',import.meta.url),'utf8');
-  assert.match(setup,/if \(r\.data\.first_run === false\) window\.WosRecommended\?\.prefetch\(\)/);
-  assert.match(setup,/if \(r\.kind !== 'ok'\) S\.seenPosted = false;[^\n]*\n    else window\.WosRecommended\?\.prefetch\(\)/);
+test('Setup triggers prefetch only after successful seen or already-seen read',async()=>{
+  const prefetched = r => r.recommended.filter(x => x === 'prefetch').length;
+  const already = await setupApp({ setup: { first_run: false, items: [] } });
+  assert.equal(prefetched(already), 1, 'already seen: prefetch on the read');
+  assert.ok(!already.calls.some(([m]) => m === 'POST'), 'no seen post');
+  const seen = await setupApp({ setup: { first_run: true, items: [] } });
+  assert.deepEqual(seen.calls.filter(([m]) => m === 'POST'), [['POST', '/wizard/v1/setup/seen']]);
+  assert.equal(prefetched(seen), 1, 'first run: prefetch once the seen post succeeded');
+  const failed = await setupApp({ setup: { first_run: true, items: [] }, seen: 500 });
+  assert.ok(failed.calls.some(([m, u]) => m === 'POST' && u === '/wizard/v1/setup/seen'));
+  assert.equal(prefetched(failed), 0, 'a failed seen post never prefetches');
+  assert.equal(failed.state().seenPosted, false, 'and is retried later');
+  const unknown = await setupApp({ setup: { items: [] } });
+  assert.equal(prefetched(unknown), 0, 'no first_run answer: nothing');
 });
 test('missing manager renders retry instead of hiding recommendations',async()=>{
   const {R}=await harness(()=>[404,{}]);

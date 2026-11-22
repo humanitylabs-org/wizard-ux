@@ -3,8 +3,12 @@
 // inherited from its ancestors and var(--x, fallback) resolved the way a browser would. No layout, no calc().
 import { styles } from './w5-css.mjs';
 
+// mini-css skips a rule whose head starts with '@', so a sheet's leading `@import url(...);` would hide its first rule.
+export const noImports = list => (Array.isArray(list) ? list : [list]).map(t => String(t).replace(/@import\s[^;]*;/g, ''));
+
 // The winning declarations on el plus every custom property it inherits (nearest ancestor wins).
 export function computed(el, list, opts = {}) {
+  list = noImports(list);
   const chain = [];
   for (let n = el; n && n.nodeType !== 9 && n.tagName !== '#FRAGMENT'; n = n.parentNode) chain.unshift(n);
   const out = {};
