@@ -43,6 +43,10 @@ On:
   `shell-token.js`), and the app takes it only while its bridges are gated, so only the shell origin's page can set it.
   The app keeps it in its private storage (background jobs need it after a restart), adds it only to owner routes on
   the box it came from (`ShellToken.apply`, the same route rule as the page) and forgets it when the box says `off`.
+  Proof: `ShellTokenTest` (unit) and `DeviceBridgeE2eTest.shellTokenComesOnlyFromTheShellPageAndGoesOnlyToOwnerRoutes`
+  (emulator, every Android PR): the shell page's token is taken only once the bridges are gated, a same-origin frame
+  before the gate and a sandboxed app frame through the gate cannot plant one, the app's native calls carry it only to
+  owner routes on that box (not app paths, `//` paths or another origin), and `off` forgets it.
   App paths (`/notifications/`, `/messenger/`, …) never get it. Proof: `ShellTokenTest` (unit).
 
 ## Sandboxed app frames (on only with the box switch)
