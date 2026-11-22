@@ -659,34 +659,63 @@ test('General posts unfiled (no Space); routed host-profile, container and restr
 });
 
 test('voice: the orb and the box mic in front of a channel start a new chat there, with the box riding along', () => {
-  // Phone orb: a channel feed is an auto view whose take goes to a new chat ('__new__'), never the cloud router.
-  assert.match(app, /const chan = w\.app === 'chats' && !w\.thread \? CHATS\.chanOpen\?\.\(w\) : null, pin = chan \? \{ kind: 'chat thread', thread: '__new__', channel: chan\.name, space: chan\.general \? '' : chan\.id, box: CHATS\.chanBox\?\.\(id\) \|\| '', chanAgent: CHATS\.winAgent\(w\) \|\| '' \} : \{\};/);
-  assert.match(app, /if \(chan\) return \{ id, mode: 'auto', \.\.\.pin, name:/);
+  const raw = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
+  const plain = v => JSON.parse(JSON.stringify(v));
+  const lineOf = (text, k) => text.split('\n').find(l => l.includes(k));
+  // Phone orb (real viewOf): a channel feed is an auto view whose take goes to a new chat ('__new__'), never the cloud
+  // router, pinned to the channel's Space, its box riding along.
+  const viewOfFn = fnBlock(raw('web/app-viewvoice.js'), '  function viewOf(id) {');
+  const orb = (w, { agent = '', chan = { id: 'launch', name: 'Launch' } } = {}) => runRecording(viewOfFn + '\nglobalThis.viewOf = viewOf;', {
+    appVars: { W: { w1: { id: 'w1', app: 'chats', thread: null, ...w } } }, window: { WizCore: { channelFace: (n, g) => ({ title: g ? 'General' : '🚀 ' + n }) } },
+    CHATS: { chanOpen: () => chan, chanBox: id => 'chan:' + id, winAgent: () => agent }, agentWin: () => false,
+    agentApp: x => ({ agent: x.agent, name: 'Scout', private: false }), winTitle: () => 'T' }).viewOf('w1');
+  assert.deepEqual(plain(orb({})), { id: 'w1', mode: 'auto', kind: 'chat thread', thread: '__new__', channel: 'Launch', space: 'launch', box: 'chan:w1', chanAgent: '', name: '🚀 Launch channel' });
+  assert.equal(orb({}, { chan: { id: 'general', name: 'General', general: true } }).space, '', 'General files into no Space');
   // A routed agent's channel (host-profile, container, restricted) keeps its agent's own voice path, pinned the same way.
-  const viewOf = app.slice(app.indexOf('function viewOf(id)'), app.indexOf('// Unified Chats: a private agent'));
-  assert.ok(viewOf.indexOf('const chan =') < viewOf.indexOf('if (agentWin(w)'), 'the channel is read before the routed-agent branch');
-  assert.match(viewOf, /: `\$\{a\.name\} chats`, \.\.\.pin \};/);
-  // The take's composer (words, photos) is this channel's box, not the New chat draft.
-  assert.match(src, /const chanBoxOf = \(wid, sid\) => sid === '__new__' && W\[wid\] && !W\[wid\]\.thread && typeof chanDraftKey === 'function' \? chanDraftKey\(W\[wid\]\) : '';/);
+  const routed = plain(orb({}, { agent: 'scout' }));
+  assert.equal(routed.agent, 'scout'); assert.equal(routed.name, 'Scout chats');
+  assert.equal(routed.thread, '__new__'); assert.equal(routed.space, 'launch'); assert.equal(routed.box, 'chan:w1'); assert.equal(routed.chanAgent, 'scout');
+  assert.equal(orb({ thread: 'sid9' }, { chan: null }).space, undefined, 'a thread in front: no channel pin');
+  // The take's composer (words, photos) is this channel's box, not the New chat draft (real chanBoxOf).
+  const box = runRecording(lineOf(raw('web/core/chats-send.js'), 'const chanBoxOf =').trim().replace('const chanBoxOf', 'globalThis.chanBoxOf'),
+    { W: { a: { thread: null }, b: { thread: 'x' } }, chanDraftKey: w => w === undefined ? '' : 'chan-box' }).chanBoxOf;
+  assert.equal(box('a', '__new__'), 'chan-box'); assert.equal(box('a', 'sid'), ''); assert.equal(box('b', '__new__'), ''); assert.equal(box('zz', '__new__'), '');
   assert.match(src, /const P = peekComposer\(wid, sid, box\), dkey = boxKey\(wid, sid, box\);/);
-  // ...the box of the channel the take STARTED in (Codex P1): phone sealTarget and desktop sealAt carry it.
-  assert.match(app, /return \{ wid: V\.replyTo\.wid, sid: V\.replyTo\.sid, box: V\.replyTo\.box \};/);
+  // ...the box of the channel the take STARTED in (Codex P1): phone sealTarget carries it.
+  const seal = V => runRecording(fnBlock(raw('web/app-sendgo.js'), '  function sealTarget() {') + '\nglobalThis.seal = sealTarget;', { V, appVars: { W: { w1: {} } } }).seal();
+  assert.deepEqual(plain(seal({ replyTo: { wid: 'w1', sid: '__new__', box: 'chan-box' } })), { wid: 'w1', sid: '__new__', box: 'chan-box' });
+  assert.deepEqual(plain(seal({ kind: 'tap', target: null, snap: { view: { kind: 'chat thread', id: 'w1', thread: '__new__', box: 'chan-box' } } })), { wid: 'w1', sid: '__new__', box: 'chan-box' });
   assert.match(app, /CHATS\.takeComposer\(sealAt\.wid, sealAt\.sid, sealAt\.box\)/);
   assert.match(app, /if \(typeof snap\.view\?\.space === 'string'\) \{\n\s*const want = typeof snap\.view\.chanAgent === 'string' \? snap\.view\.chanAgent : snap\.route\?\.agent \|\| '';/);
-  // The box mic records a new chat from this channel; the model label opens the new-chat model menu.
+  // The box mic records a new chat from this channel (real boxThread); the model label opens the new-chat model menu.
   const power = readFileSync(new URL('../web/core/chat-power.js', import.meta.url), 'utf8');
-  assert.match(power, /const boxThread = w => w\?\.thread \|\| \(w && A\.chanOpen\?\.\(w\) \? '__new__' : ''\);/);
+  const boxThread = runRecording(lineOf(power, 'const boxThread =').trim().replace('const boxThread', 'globalThis.boxThread'), { A: { chanOpen: w => w.feed ? {} : null } }).boxThread;
+  assert.equal(boxThread({ thread: 'sid1' }), 'sid1'); assert.equal(boxThread({ thread: null, feed: true }), '__new__'); assert.equal(boxThread({ thread: null }), ''); assert.equal(boxThread(null), '');
   assert.match(power, /const sid = boxThread\(w\); if \(!sid \|\| !H\.recordReply\) return true;/);
   assert.match(power, /openModels\(id, paneThread\(id\) === '__new__' \? 'new' : 'thread'/); // the pane's own box (issue 1309)
-  // An orb take is pinned to the channel it started in (Codex P1): phone viewOf carries its Space to every send path,
-  // the desktop orb keeps it from the start of the take.
-  assert.match(app, /const pinSpace = v => typeof v\?\.space === 'string' && v\.thread === '__new__' \? \{ space: v\.space \} : \{\};/);
+  // An orb take is pinned to the channel it started in (Codex P1): phone viewOf carries its Space to every send path
+  // (real pinSpace), the desktop orb keeps it from the start of the take.
+  const pinSpace = runRecording(lineOf(raw('web/app-routing.js'), 'const pinSpace =').trim().replace('const pinSpace', 'globalThis.pinSpace'), {}).pinSpace;
+  assert.deepEqual(plain(pinSpace({ space: 'launch', thread: '__new__' })), { space: 'launch' });
+  assert.deepEqual(plain(pinSpace({ space: '', thread: '__new__' })), { space: '' });
+  assert.deepEqual(plain(pinSpace({ space: 'launch', thread: 'sid1' })), {}); assert.deepEqual(plain(pinSpace(null)), {});
   assert.equal((app.match(/\.\.\.pinSpace\(s?v\)/g) || []).length, 4, 'the agent path, deliverToView, the take with files, and an interrupted take');
   const desk = readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8');
-  assert.match(desk, /vSpace = !forceNew && vTarget \? CHATS\.chanSpaceOf\?\.\(W\[vTarget\]\) \?\? null : null;/);
+  const vLine = lineOf(desk, 'vSpace = !forceNew && vTarget ?').trim();
+  const deskTake = (forceNew, vTarget, spaceOf) => runRecording('var vSpace, vBox;\n' + vLine + '\nglobalThis.out = { vSpace, vBox };', { forceNew, vTarget, W: { w1: {} }, CHATS: { chanSpaceOf: spaceOf, chanBox: id => 'box:' + id } }).out;
+  assert.deepEqual(plain(deskTake(false, 'w1', () => 'launch')), { vSpace: 'launch', vBox: 'box:w1' });
+  assert.deepEqual(plain(deskTake(false, 'w1', () => null)), { vSpace: null });
+  assert.deepEqual(plain(deskTake(true, 'w1', () => 'launch')), { vSpace: null }, 'a forced new chat is not a channel take');
   assert.match(desk, /\.\.\.\(aimSid === '__new__' && !rp && typeof vSpace === 'string' \? \{ space: vSpace \} : \{\}\)/);
-  // Those takes are filed into the channel the way every new chat from a Space in front is (outbox onNew).
-  assert.match(src, /const key = spaceInFront\(it\.agent \|\| ''\);\n\s*if \(key\) spaceMember\(key, it\.sessionId, true, it\.agent \|\| ''\);/); // issue 1261: with its agent
+  // Those takes are filed into the channel the way every new chat from a Space in front is (real outbox onNew).
+  const focus = raw('web/core/chats-focus.js');
+  const onNew = focus.slice(focus.indexOf('  OUTBOX?.onNew?.((it, o) => {'), focus.indexOf('\n  });', focus.indexOf('  OUTBOX?.onNew?.((it, o) => {')) + 6);
+  const hook = {};
+  const filed = runRecording(onNew, { OUTBOX: { onNew: f => { hook.cb = f; } }, spaceInFront: agent => agent === 'scout' ? 'launch' : '', chanOwnPost: undefined });
+  filed.calls.length = 0; hook.cb({ agent: 'scout', sessionId: 's1' }, {});
+  assert.deepEqual(plain(filed.calls.filter(c => c[0] === 'spaceMember')), [['spaceMember', 'launch', 's1', true, 'scout']]); // issue 1261: with its agent
+  filed.calls.length = 0; hook.cb({ agent: 'scout', sessionId: 's2' }, { space: false });
+  assert.deepEqual(filed.calls.filter(c => c[0] === 'spaceMember'), [], 'an explicit no-Space send is not filed');
 });
 
 test('a channel feed names the Space its new chats go to (General = none); no feed, no Space', () => {
