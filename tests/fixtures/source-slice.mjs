@@ -47,3 +47,20 @@ export function runWithStubs(code, ctx = {}, rounds = 60) {
   }
   assert.fail('too many unknown names');
 }
+
+// Like runWithStubs, for names a slice only reads when it is called: build(names) makes a fresh context (with a no-op
+// for every name in `names`) and returns { run }; each time run() trips over an unknown name, it is added and the
+// whole setup starts again, so every attempt runs from a clean state. Returns the env of the run that finished.
+export function retryWithStubs(build, rounds = 60) {
+  const names = new Set();
+  for (let n = 0; n < rounds; n++) {
+    const env = build(names);
+    try { env.run(); return env; }
+    catch (e) {
+      const m = /^(\w+) is not defined$/.exec(e?.message || '');
+      if (!m || e?.name !== 'ReferenceError') throw e;
+      names.add(m[1]);
+    }
+  }
+  assert.fail('too many unknown names');
+}

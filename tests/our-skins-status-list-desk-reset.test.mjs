@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
+import { retryWithStubs } from './fixtures/source-slice.mjs';
 import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
 import { withShellParts } from './fixtures/shell-parts.mjs';
 
@@ -39,8 +40,20 @@ test('the Filter sheet always offers the Yesterday filter (its Layout picker wen
 });
 
 test('leaving a desk keeps its Chats window on the open thread', () => {
-  const src = read('../web/app.js');
-  const go = src.slice(src.indexOf('  function goDesk('), src.indexOf('  function announce(html) {'));
-  assert.ok(go.length > 100, 'goDesk found');
-  assert.doesNotMatch(go, /chatsBack\(/);
+  // the real goDesk (app-desks.js) with a Chats window open on a thread on desk 1, then a move to desk 2
+  const desks = fs.readFileSync(new URL('../web/app-desks.js', import.meta.url), 'utf8');
+  const go = desks.slice(desks.indexOf('  function goDesk('), desks.indexOf('  function announce(html) {'));
+  const env = retryWithStubs(names => {
+    const W = { c1: { id: 'c1', app: 'chats', thread: 't9' } }, calls = [];
+    const ctx = { appVars: { idx: 1, desks: [{ home: true, wins: [] }, { wins: ['c1'] }, { wins: ['x'] }], W, sheet: null },
+      CHATS: { beforeNavigate: () => true, CH: { c1: {} }, setFilter() {} }, window: {}, HOME: 0,
+      chatsBack: () => calls.push('chatsBack'), threadBack: () => calls.push('threadBack') };
+    for (const n of names) ctx[n] = () => {};
+    vm.createContext(ctx); vm.runInContext(`${go}\nthis.goDesk = goDesk;`, ctx);
+    return { ctx, W, calls, run: () => ctx.goDesk(2) };
+  });
+  const { ctx, W, calls } = env;
+  assert.equal(ctx.appVars.idx, 2);
+  assert.equal(W.c1.thread, 't9', 'the Chats window is still on its thread');
+  assert.deepEqual(calls, []);
 });
