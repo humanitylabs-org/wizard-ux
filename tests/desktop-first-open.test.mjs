@@ -9,7 +9,6 @@ import vm from 'node:vm';
 import { nginxShell } from './fixtures/w1-nginx.mjs';
 
 const shellJs = fs.readFileSync(new URL('../web/core/shell.js', import.meta.url), 'utf8');
-const nginx = fs.readFileSync(new URL('../packaging/nginx.conf.template', import.meta.url), 'utf8');
 
 function runShell({ page = 'phone', search = '', ua = 'Mozilla/5.0 (X11; Linux x86_64)', touch = false, single, protocol = 'https:', stored } = {}) {
   const cookies = [], store = new Map(stored ? [['wux.shell', stored]] : []);
@@ -68,17 +67,4 @@ test('nginx sends only a remembered desktop asking for the plain phone page to d
   } finally { shell.done(); }
 });
 
-test('the map keys behave like nginx will match them', () => {
-  const rx = [...nginx.matchAll(/"~(\^desktop[^"]+)" "([^"]+)";/g)].map(m => [new RegExp(m[1].replace(/\\\\/g, '\\')), m[2]]);
-  const args = s => (/(?:^|&)(?:shell|app-session)(?:[=&]|$)/.test(s) ? 1 : 0);
-  const page = (cookie, uri, a = '', method = 'GET') => rx.find(([r]) => r.test(`${cookie}|${method}|${uri}|${args(a)}`))?.[1] || '';
-  assert.equal(page('desktop', '/wizard-os-home/'), '/wizard-os-home/desktop.html');
-  assert.equal(page('desktop', '/wizard-os-home/index.html', 'session=abc'), '/wizard-os-home/desktop.html');
-  assert.equal(page('desktop', '/wizard-ux/'), '/wizard-ux/desktop.html');
-  assert.equal(page('desktop', '/wizard-os-home/', 'shell=phone'), '');
-  assert.equal(page('desktop', '/wizard-os-home/', 'app-session=notes'), '');
-  assert.equal(page('desktop', '/wizard-os-home/desktop.html'), '');
-  assert.equal(page('desktop', '/wizard-os-home/', '', 'POST'), '');
-  assert.equal(page('phone', '/wizard-os-home/'), '');
-  assert.equal(page('', '/wizard-os-home/'), '');
-});
+// The map keys themselves: the test above serves every one of those cases through the real rendered nginx.
