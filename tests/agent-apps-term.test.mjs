@@ -9,7 +9,7 @@ import vm from 'node:vm';
 const src = f => readFileSync(new URL('../web/' + f, import.meta.url), 'utf8');
 const between = (s, a, b) => { const i = s.indexOf(a); assert.ok(i >= 0, a); const j = s.indexOf(b, i); assert.ok(j > i, b); return s.slice(i, j); };
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const words = html => html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+const words = html => html.split(/<[^>]*>/).join(' ').replace(/\s+/g, ' '); // the text between tags
 
 // The Agents app's permissions block and its Add sheet (web/agents/agents.js), with the real core/agents.js.
 function agentsPage({ apps = [] } = {}) {

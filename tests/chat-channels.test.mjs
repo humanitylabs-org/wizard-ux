@@ -1,5 +1,6 @@
 // Channels view (wizard-ux issue 1254; on for everyone since issue 1258): the real block from core/chats.js on fake Spaces/rows.
 import test from 'node:test';
+import { rowSheet } from './fixtures/row-sheet-harness.mjs';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
@@ -361,10 +362,17 @@ test('the channel name shows once in an open feed: no focus strip, no title-bar 
 });
 
 test('Channels wording: Move to channel, Remove from channel', () => {
-  assert.match(src, /SPACE\.ch \? 'Move to channel…' : spacesOf\(sid\)\.length \? `Move to \$\{SPACE\.one\}…` : `Add to a \$\{SPACE\.one\}…`/);
-  assert.match(src, /Remove from \$\{SPACE\.ch \? 'channel' : SPACE\.one\}/);
-  assert.match(src, /const SPACE = \{ one: 'Space', many: 'Spaces', ch: true \}/);
-  for (const w of ['New channel', 'Channel name', 'Already a channel', 'Maximum 50 channels', 'Couldn’t create channel']) assert.ok(src.includes(w), w);
+  // the real row menu (tests/fixtures/row-sheet-harness.mjs) with the real SPACE words from chats.js
+  const SPACE = vm.runInNewContext(`(() => { ${src.slice(src.indexOf('const SPACE = '), src.indexOf('}', src.indexOf('const SPACE = ')) + 1)}; return SPACE; })()`);
+  assert.equal(SPACE.ch, true, 'Channels wording is on for everyone');
+  const r = rowSheet({ spaces: { t1: [{ id: 'c1', name: 'Launch' }] } }); r.ctx.SPACE = SPACE;
+  r.open('t1');
+  const labels = r.buttons().map(b => b.label);
+  assert.ok(labels.includes('Move to channel…'), labels.join(', '));
+  assert.ok(labels.includes('Remove from channel · Launch'));
+  r.ctx.SPACE = { ...SPACE, ch: false }; r.open('t1');
+  assert.ok(r.buttons().some(b => b.label === 'Move to Space…'), 'the old Spaces words stay for Channels off');
+  // the new-channel sheet's own words ('Already a channel' …) are run by 'a name another channel of this agent has…' above
 });
 
 test('long-press, right-click and Shift+F10 on a channel open the channel sheet through one rowMenu', () => {

@@ -4,7 +4,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { existsSync, readFileSync } from 'node:fs';
-import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
+import { withParts } from './fixtures/chats-parts.mjs';
+import { rowSheet } from './fixtures/row-sheet-harness.mjs'; // chats.js parts moved out verbatim (issue 1665)
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
 const json = p => JSON.parse(read(p));
 const PIN = 'wizard/pin-buttons';
@@ -19,13 +20,20 @@ test('row pins are hidden by default and the Show pin buttons package is gone', 
 });
 
 test('right-click, long-press and swipe share the row menu: Pin/Unpin, never Open', () => {
-  const src = withParts(read('web/core/chats.js'));
-  const sheet = src.slice(src.indexOf('function openRowSheet'), src.indexOf('const emojiCategoryHtml'));
-  assert.match(sheet, /data-part="pin-action" data-rspin>\$\{PIN_SVG\}\$\{PIN\.has\(sid\) \? 'Unpin' : 'Pin'\}/);
-  assert.doesNotMatch(sheet, /data-part="pin-button"/, 'row pin styling never applies to the menu action');
-  assert.match(sheet, /\$\{nid \? '<button type="button" data-rsopen/,'only alerts offer Open; the thread menu still omits it');
-  assert.match(src, /closest\('\[data-rsopen\]'\) && rowSheet\?\.nid/);
-  assert.match(src, /contextmenu/); assert.match(src, /openRowSheet\(/);
+  // the real openRowSheet from chats.js (tests/fixtures/row-sheet-harness.mjs)
+  const r = rowSheet({ rows: { t1: { id: 't1', title: 'Plans' }, t2: { id: 't2', title: 'Trip' } }, pinned: ['t1'] });
+  r.open('t1');
+  const labels = r.buttons().map(b => b.label);
+  assert.ok(labels.includes('Unpin'), labels.join(', '));
+  assert.ok(!labels.includes('Open'), 'a thread menu never offers Open');
+  assert.match(r.html(), /data-part="pin-action" data-rspin>Unpin</);
+  assert.doesNotMatch(r.html(), /data-part="pin-button"/, 'row pin styling never applies to the menu action');
+  r.open('t2'); assert.ok(r.buttons().some(b => b.label === 'Pin'));
+  // an alert's menu (a notification row) is the one that offers Open
+  r.ctx.window.WosBell = { item: id => (id === 'n1' ? { id: 'n1', title: 'Build finished' } : null) };
+  r.ctx.NOTE_ACT.done = { icon: '', label: 'Done' }; r.ctx.NOTE_ACT.snooze = { icon: '', label: 'Snooze' };
+  r.open('t1', 'n1');
+  assert.equal(r.buttons()[0].label, 'Open');
 });
 
 test('Pins off gives rows back the pin room (the retired hidden-pin tweak, now a setting)', () => {
