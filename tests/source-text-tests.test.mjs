@@ -52,6 +52,17 @@ test('inventory', () => { assert.match(src, /core\\.js/); });`), ['rule']);
 test('local', () => { assert.equal(f(' a '), 'a'); });`), ['other']);
 });
 
+test('source text read through a spread, a second declarator or a block-local const is still read', () => {
+  assert.deepEqual(kinds(`${HEAD}const css = readFileSync('web/core/chats.css', 'utf8');
+test('spread', () => { assert.deepEqual([...css.matchAll(/--x/g)].length, 1); });`), ['text']);
+  assert.deepEqual(kinds(`${HEAD}const a = 1, shared = readFileSync('web/core/share.js', 'utf8');
+test('second', () => { assert.match(shared, /dest = /); });`), ['text']);
+  assert.deepEqual(kinds(`${HEAD}for (const dir of ['a', 'b']) {
+  const css = readFileSync('web/skins/' + dir + '/skin.css', 'utf8');
+  test('looped', () => { assert.match(css, /background/); });
+}`), ['text']);
+});
+
 test('strings, comments, regex and template text never look like code to the scanner', () => {
   assert.deepEqual(kinds(`${HEAD}const src = readFileSync('web/app.js', 'utf8');
 test('words', () => { assert.match(src, /vm\\.runInContext\\(|import\\(/); assert.ok(src.includes('new Function(')); /* eval( */ assert.ok(\`\${'spawn('}\`); });`), ['text']);

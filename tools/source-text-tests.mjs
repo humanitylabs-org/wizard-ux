@@ -82,7 +82,7 @@ const EXEC = [
 ];
 const reEsc = t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 // Does code text mention the name as a whole identifier (not as a property)?
-const mentions = (name, text) => new RegExp(`(^|[^\\w$.])${reEsc(name)}(?![\\w$])`).test(text);
+const mentions = (name, text) => new RegExp(`(^|[^\\w$.]|\\.\\.\\.)${reEsc(name)}(?![\\w$])`).test(text); // `...name` (a spread) counts
 const isParts = spec => /(^|\/)[\w-]*parts\.mjs$/.test(spec); // fixtures that only join moved-out source text back
 // an imported file reader or source string is not running code, wherever it comes from
 const READER = /^(read\w*|root|\w*(Source|Src))$/;
@@ -113,6 +113,17 @@ function topStatements(code) { // rough top-level statements, split at depth-0 '
   return out;
 }
 
+function declarators(t) { // split `a = 1, { b, c } = f(x, y), d` at depth-0 commas
+  const out = []; let d = 0; let a = 0;
+  for (let k = 0; k < t.length; k++) {
+    const c = t[k];
+    if (c === '{' || c === '(' || c === '[') d++; else if (c === '}' || c === ')' || c === ']') d--;
+    else if (!d && c === ',') { out.push(t.slice(a, k)); a = k + 1; }
+  }
+  out.push(t.slice(a));
+  return out.map(x => x.trim()).filter(Boolean);
+}
+
 // Top-level declarations: name -> code text of the declaration.
 function topDecls(code) {
   const decls = new Map(); let depth = 0;
@@ -131,9 +142,10 @@ function topDecls(code) {
       else if (!d && (ch === ';' || (ch === '\n' && /^\n(?:export\s|async\s|function\s|const\s|let\s|var\s|class\s|test\s*\(|it\s*\(|describe\s*\(|import\s)/.test(code.slice(e, e + 12))))) break;
     }
     const text = code.slice(k, e);
-    const names = m[1] || m[2] ? [m[1] || m[2]]
-      : [...text.slice(m[0].length).split('=')[0].matchAll(/[\w$]+/g)].map(x => x[0]);
-    for (const nm of names) decls.set(nm, text);
+    if (m[1] || m[2]) decls.set(m[1] || m[2], text);
+    else for (const one of declarators(text.slice(m[0].length))) { // `const a = x, b = read(...)`: each name gets its own text
+      for (const nm of one.split('=')[0].matchAll(/[\w$]+/g)) decls.set(nm[0], one);
+    }
     k = e;
   }
   return decls;
@@ -149,10 +161,20 @@ export function classifyFile(src) {
   // top-level statements that run code (vm.runInNewContext(text, sandbox)) make the names they touch run code
   for (const stmt of topStatements(code)) if (!/^(?:export\s+)?(?:async\s+)?(?:function|class|const|let|var|import|test|it|describe)\b/.test(stmt) && EXEC.some(r => r.test(stmt))) for (const nm of ident(stmt)) if (decls.has(nm)) runs.add(nm);
   const reads = new Set(importedReaders); // an imported reader / source string reads source text
+  // Source text can also sit in a declaration inside a block (`for (...) { const css = read(...); test(...) }`): for
+  // reading, every declaration at any depth counts (stricter: it can only turn 'other' into 'text' or 'absence').
+  const anyDecls = new Map(decls);
+  for (const m of code.matchAll(/(?<![\w$.])(?:const|let|var)\s+/g)) {
+    let e = m.index + m[0].length; let d = 0;
+    for (; e < code.length; e++) { const ch = code[e];
+      if (ch === '{' || ch === '(' || ch === '[') d++; else if (ch === '}' || ch === ')' || ch === ']') { if (!d) break; d--; }
+      else if (!d && (ch === ';' || ch === '\n')) break; }
+    for (const one of declarators(code.slice(m.index + m[0].length, e))) for (const nm of one.split('=')[0].matchAll(/[\w$]+/g)) if (!anyDecls.has(nm[0])) anyDecls.set(nm[0], one);
+  }
   const READ = /\b(readFileSync|readFile|readdirSync|readdir)\s*\(/;
   for (let changed = true; changed;) {
     changed = false;
-    for (const [nm, text] of decls) {
+    for (const [nm, text] of anyDecls) {
       if (reads.has(nm)) continue;
       if (READ.test(text) || [...reads].some(r => mentions(r, text.replace(/^[^=({]*/, '')))) { reads.add(nm); changed = true; }
     }
