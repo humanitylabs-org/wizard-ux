@@ -16,6 +16,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { cascade } from './fixtures/mini-css.mjs';
+import { createDocument } from './fixtures/mini-dom.mjs';
 import { fixture } from './fixtures/tweaks.mjs';
 import { withSkinHostParts } from './fixtures/skin-host-parts.mjs';
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
@@ -198,6 +199,8 @@ test('standard AI apps and the personal tweak are idempotent and release cannot 
   assert.equal(d.ctx.localStorage.getItem('wos.layout'), 'orb', 'desktop changes preserve an existing phone choice');
 });
 
+// static-rule: every layout.css and tweak.css rule is scoped to the worn phone layout, colours are skin tokens, type is
+// in rem, and layout.js keeps no timers, markup strings, storage or fetches of its own (a lint over the whole files)
 test('scoped and quiet: every rule needs the worn layout on the phone; skin tokens only; no timers or storage of its own', () => {
   const css = read('web/layouts/ai-apps/layout.css').replace(/\/\*[\s\S]*?\*\//g, '').replace(/url\("[^"]*"\)/g, 'url()');
   const body = css.replace(/@keyframes[^{]*\{(?:[^{}]*\{[^{}]*\})*[^{}]*\}/g, '').replace(/@media[^{]*\{/g, '');
@@ -209,7 +212,6 @@ test('scoped and quiet: every rule needs the worn layout on the phone; skin toke
   for (const sel of [...tw.matchAll(/([^{}@]+)\{[^{}]*\}/g)].map(m => m[1].trim())) assert.ok(/^html\[data-shell="phone"\]\[data-layout="ai-apps"\]/.test(sel), `tweak.css reaches past the view: ${sel}`);
   const js = noComments(read('web/layouts/ai-apps/layout.js'));
   assert.ok(!/Math\.random|innerHTML|localStorage|setTimeout|setInterval|fetch\(/.test(js), 'no timers, markup strings, storage or fetches of its own');
-  assert.match(js, /import \{ viewChrome, openApps, realApps, matches, CHATS \} from '\.\.\/apps\/chrome\.js';/, 'the Orb and Apps views\' own chrome: one + sheet, one app list');
 });
 
 test('desktop: a sidebar (open apps, All apps, the Archive / Working / Ready sections, + New chat, cog) that folds to a rail; the top row; the orb', async () => {
@@ -322,6 +324,8 @@ test('desktop: a sidebar (open apps, All apps, the Archive / Working / Ready sec
   assert.equal(w.q('.aad'), null); assert.equal(w.html.dataset.aiApps, undefined); assert.equal(w.html.dataset.viewChrome, undefined); assert.equal(w.html.attrs['data-settings-over'], undefined);
 });
 
+// static-rule: every desktop.css rule is scoped to the worn layout, colours are skin tokens, type is in rem, and
+// desktop.js keeps no markup, timers, storage or fetches of its own (a lint over the whole files)
 test('desktop scoped and quiet: every rule needs the worn layout on the desktop; skin tokens only; measured sizes', () => {
   const css = read('web/layouts/ai-apps/desktop.css').replace(/\/\*[\s\S]*?\*\//g, '').replace(/url\("[^"]*"\)/g, 'url()');
   const body = css.replace(/@keyframes[^{]*\{(?:[^{}]*\{[^{}]*\})*[^{}]*\}/g, '').replace(/@media[^{]*\{/g, '');
@@ -329,21 +333,31 @@ test('desktop scoped and quiet: every rule needs the worn layout on the desktop;
     assert.ok(/^html\[data-shell="desktop"\]\[data-layout="ai-apps"\]/.test(part.trim()), `unscoped: ${part.trim()}`);
   assert.ok(!/#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(/i.test(css.replace(/#(bar|logo|wsList|clock|searchBtn|micBtn|status|settingsBtn|keysBtn|generalVoice|commandBtn|dictateBtn|stage|desktopHome)\b/g, '')), 'colours are skin tokens');
   assert.ok(!/font(-size)?\s*:[^;}]*\b\d+px/.test(css), 'type in rem');
-  const P = 'html\\[data-shell="desktop"\\]\\[data-layout="ai-apps"\\]';
-  assert.match(css, new RegExp(P + ' \\{\\s*--aad-side: 288px;'), 'a 288 px sidebar (Claude; ChatGPT\'s panel)');
-  assert.match(css, new RegExp(P + '\\[data-aad-side="rail"\\],\\s*' + P + '\\[data-aad-side="over"\\] \\{ --aad-side: 52px; \\}'), 'round 16: a 52 px rail (ChatGPT\'s collapsed rail)');
-  assert.match(css, /\.ch-compose \{\s*width: min\(768px, calc\(100% - 48px\)\); box-sizing: border-box; margin: 0 auto 24px;/, 'a 768 px column, the composer docked 24 px from the bottom (round 6: the orb is inside it)');
-  assert.match(css, /\.ch-compose:not\(\.has-text\) \.ch-row2 > \.ch-send \{ display: none !important; \}/, 'Send only with words; no voice button of its own');
-  assert.match(css, /:is\(\.ch-newchat, \.nc-classic\) \{ display: none !important; \}/, 'Home has no greeting');
-  assert.match(css, /\.ch-row2 \{\s*display: grid !important;[^}]*min-height: 52px;[^}]*border-radius: 26px;/, 'a 52 px pill composer (r 26)');
   const js = noComments(read('web/layouts/ai-apps/desktop.js'));
   // The orb identity reuses WizSigil's already-rendered glyph markup, not a
   // second renderer. Keep that narrow exception visible; forbid other sinks.
-  assert.match(js, /const html = a && S \? \(a\.sgh \|\| S\.html\(a\.sigil \|\| a\)\) : micMarkup;/);
   const withoutSigilMarkup = js.replace('micG.innerHTML', 'micGlyph').replace('micG.innerHTML = html', 'micGlyph = html');
   assert.ok(!/Math\.random|innerHTML|localStorage|setTimeout|setInterval|fetch\(/.test(withoutSigilMarkup), 'no independent markup, timers, storage or fetches beyond the shared sigil glyph');
-  assert.match(js, /import \{ viewChrome, openApps, realApps, matches, CHATS, MIC \} from '\.\.\/apps\/chrome\.js';/, 'the shared sheet and app list');
-  assert.match(js, /export const SIDE = 288, RAIL = 52, DOCKED_FROM = 680, CROWDED_FROM = 900;/);
+});
+
+test('desktop measured sizes: a 288 px sidebar, a 52 px rail, a 768 px column and a 52 px pill composer', async () => {
+  const { SIDE, RAIL, DOCKED_FROM, CROWDED_FROM } = await import(new URL('web/layouts/ai-apps/desktop.js', root).href);
+  assert.deepEqual([SIDE, RAIL, DOCKED_FROM, CROWDED_FROM], [288, 52, 680, 900]);
+  // the real desktop.css on the root and on a Chats window shaped like the one Chats draws
+  const css = read('web/layouts/ai-apps/desktop.css'), doc = createDocument(), html = doc.documentElement;
+  html.setAttribute('data-shell', 'desktop'); html.setAttribute('data-layout', 'ai-apps');
+  const side = () => cascade(html, css)['--aad-side']?.value;
+  assert.equal(side(), '288px', 'a 288 px sidebar (Claude; ChatGPT\'s panel)');
+  for (const v of ['rail', 'over']) { html.setAttribute('data-aad-side', v); assert.equal(side(), '52px', `round 16: a 52 px rail (ChatGPT's collapsed rail): ${v}`); }
+  html.removeAttribute('data-aad-side');
+  doc.body.innerHTML = '<div id="stage"><div class="wsp"><div class="win"><div class="dchats"><div class="pane-main"><div class="ch-thread"><div class="ch-newchat"></div><form class="ch-compose"><div class="ch-row2"><div class="ch-field"></div><button class="ch-send"></button></div></form></div></div></div></div></div></div>';
+  const st = (sel, ...p) => { const c = cascade(doc.querySelector(sel), css); return p.map(k => c[k]?.value ?? ''); };
+  assert.deepEqual(st('.ch-compose', 'width', 'box-sizing', 'margin'), ['min(768px, calc(100% - 48px))', 'border-box', '0 auto 24px'], 'a 768 px column, the composer docked 24 px from the bottom (round 6: the orb is inside it)');
+  assert.deepEqual(st('.ch-row2', 'display', 'min-height', 'border-radius'), ['grid', '52px', '26px'], 'a 52 px pill composer (r 26)');
+  assert.equal(st('.ch-send', 'display')[0], 'none', 'Send only with words; no voice button of its own');
+  doc.querySelector('.ch-compose').classList.add('has-text');
+  assert.notEqual(st('.ch-send', 'display')[0], 'none', 'Send shows with words');
+  assert.equal(st('.ch-newchat', 'display')[0], 'none', 'Home has no greeting');
 });
 
 // (from 12 Nov 2026 the window under 1100 px is one app at a time: the list stays beside the chat down to 680 px, then
