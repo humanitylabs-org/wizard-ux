@@ -7,6 +7,7 @@ import { withShellParts } from './fixtures/shell-parts.mjs';
 import { createDocument } from './fixtures/mini-dom.mjs';
 import { cascade } from './fixtures/mini-css.mjs';
 import { runRecording } from './fixtures/source-slice.mjs';
+import { overview } from './fixtures/r5A-overview.mjs';
 
 const root = process.env.HOME_SCREEN_SOURCE || new URL('../',import.meta.url).pathname;
 const read = path => withShellParts(fs.readFileSync(root + '/web/' + path,'utf8'));
@@ -238,12 +239,24 @@ test('Apps sheet and New desk grid both carry the Add to home screen long-press'
 });
 
 // Desks overview: hold a one-app desk and let go in place → the same sheet; a drag still reorders (James, 24 Oct).
-test('Desks overview hold-and-release offers Add to home screen; drag keeps reordering', () => {
-  const app = read('app.js');
-  assert.match(app, /OV\.drag && !OV\.reordered[\s\S]{0,900}WizHomeScreenApps\?\.offer\(a\)/);
-  assert.match(app, /insertBefore\(OV\.card, before\); OV\.reordered = true;/);
-  assert.match(read('core/home-screen-apps.js'), /Object\.freeze\(\{ attach, offer,/);
+// A phone with Notes alone on desk 1, Chats on desk 2, Health and Chats together on desk 3, and an empty desk 4.
+const ovWorld = (mode = {}) => ({ mode, desks: [{ id: 'd1', wins: ['a'] }, { id: 'd2', wins: ['b'] }, { id: 'd3', wins: ['c', 'e'] }, { id: 'd4', wins: [] }],
+  W: { a: { id: 'a', app: 'frame', appId: 'notes' }, b: { id: 'b', app: 'chats' }, c: { id: 'c', app: 'frame', appId: 'health' }, e: { id: 'e', app: 'chats' } },
+  APP: { notes: { id: 'notes', name: 'Notes', url: '/notes/' }, health: { id: 'health', name: 'Health', url: '/health/' } } });
+
+test('Desks overview hold-and-release offers Add to home screen; drag keeps reordering', async () => {
+  // The real overview: hold a one-app desk and let go in place: the Add to home screen offer for that app.
+  const o = await overview(ovWorld());
+  o.hold('d1'); assert.deepEqual(o.offers, ['notes']);
+  const chats = await overview(ovWorld()); chats.hold('d2'); assert.deepEqual(chats.offers, [], 'not for a desk without one frontend app');
+  const two = await overview(ovWorld()); two.hold('d3'); assert.deepEqual(two.offers, [], 'nor for a desk with two windows');
+  // Hold and drag onto another desk: it reorders, and offers nothing.
+  const r = await overview(ovWorld());
+  r.hold('d2', 'd3');
+  assert.deepEqual(r.offers, []);
+  assert.deepEqual([...r.appVars.desks.map(d => d.id)], ['d1', 'd3', 'd2', 'd4']);
 });
+
 
 // A home-screen app window is not "WizardOS in front": the floating orb stays over it (James, 24 Oct).
 test('Pinned home-screen apps keep the floating orb', async () => {
@@ -267,23 +280,38 @@ test('Pinned home-screen apps keep the floating orb', async () => {
 // Overview arrange mode (a package holds api.overview.use({hold:'arrange', appAction:'home-screen'})): hold = arrange
 // (drag to reorder, ✕ to close), never the copy-link sheet. A small download button beside ✕ (one-app desks only)
 // opens the same Add to home screen flow. The shared shell owns this; no shipped package asks for it now.
-test('Overview arrange mode: hold arranges desks; download button beside ✕ opens Add to home screen', () => {
-  const app = read('app.js');
-  assert.match(app, /if \(arrangeDesks\(\) && OV\.drag && !OV\.reordered\) \{ endDrag\(false\); el\.classList\.add\('editing'\);[^\n]*return; \}/);
-  const releaseHold = app.indexOf("if (arrangeDesks() && OV.drag && !OV.reordered)"), stockOffer = app.lastIndexOf('if (a) window.WizHomeScreenApps?.offer(a);');
-  assert.ok(releaseHold > 0 && releaseHold < stockOffer, 'release hold returns before the stock hold-to-offer path');
-  assert.match(app, /attach\(launcher, id => APP\[id\], \{ available: \(\) => overviewMode\(\)\.appHold !== false/);
-  assert.match(app, /attach\(track, id => APP\[id\], \{ available: \(\) => overviewMode\(\)\.appHold !== false/);
-  // Download only for a one-app desk whose window is a registered frontend that passes the pin policy.
-  assert.match(app, /function ovDeskApp\(d\) \{\s*const w = d && !d\.home && d\.wins\.length === 1 \? W\[d\.wins\[0\]\] : null, a = w\?\.app === 'frame' \? APP\[w\.appId\] : null;\s*return a && !a\.system && window\.WizHomeScreenApps\?\.canOffer\?\.\(a\) \? a : null;/);
-  assert.match(app, /aria-label="\$\{label\}"/); assert.match(app, /const label = `Add \$\{esc\(/);
-  // Both desk renderings (cards and pill cells) carry it next to ✕; its tap never starts a drag or closes the desk.
-  assert.equal((app.match(/\$\{ovDl\(d\)\}/g) || []).length, 2);
-  assert.match(app, /!e\.target\.closest\('\.ov-x, \.ov-dl'\)\) OV\.hold/);
-  const click = app.slice(app.indexOf("const dl = e.target.closest('[data-ovdl]')"));
-  assert.ok(click.indexOf('offer(a); return; }') < click.indexOf("closest('[data-ovx]')"), 'download handled before ✕');
-  assert.match(read('core/home-screen-apps.js'), /canOffer: a => pinnable\(a\)/);
+test('Overview arrange mode: hold arranges desks; download button beside ✕ opens Add to home screen', async () => {
+  const mode = { hold: 'arrange', appAction: 'home-screen' };
+  const o = await overview(ovWorld(mode));
+  // Download only for a one-app desk whose window is a registered frontend that passes the pin policy, beside ✕.
+  const dl = o.el.querySelector('[data-ovdl="d1"]');
+  assert.ok(dl); assert.equal(dl.getAttribute('aria-label'), 'Add Notes to home screen');
+  assert.equal(dl.nextSibling?.getAttribute?.('data-ovx') ?? dl.parentNode.querySelector('[data-ovx]')?.getAttribute('data-ovx'), 'd1', 'next to ✕');
+  for (const id of ['d2', 'd3', 'd4']) assert.equal(o.el.querySelector(`[data-ovdl="${id}"]`), null, id);
+  const blocked = await overview({ ...ovWorld(mode), canOffer: () => false });
+  assert.equal(blocked.el.querySelector('[data-ovdl]'), null, 'the pin policy decides');
+  assert.equal((await overview(ovWorld({ hold: 'arrange' }))).el.querySelector('[data-ovdl]'), null, 'only when the tweak asks for it');
+  // Hold and release in place arranges (editing), no sheet; the stock offer does not run.
+  o.hold('d1'); assert.deepEqual(o.offers, []); assert.ok(o.el.classList.contains('editing'));
+  // The download tap offers the app and neither closes the desk nor opens it.
+  o.appVars.ovTapBlock = 0;
+  o.tap('[data-ovdl="d1"]');
+  assert.deepEqual(o.offers, ['notes']); assert.deepEqual([...o.appVars.desks.map(d => d.id)], ['d1', 'd2', 'd3', 'd4']);
+  assert.ok(o.el.classList.contains('open'), 'the overview stays open');
+  // Its touch never starts a drag.
+  const t = await overview(ovWorld(mode));
+  const b = t.el.querySelector('[data-ovdl="d1"]');
+  b.dispatchEvent({ type: 'touchstart', bubbles: true, touches: [{ clientX: 1, clientY: 1 }] });
+  assert.equal(t.appVars.OV.hold, undefined, 'no hold timer from the download button');
+  // The launcher and the new-desk track keep their own hold-to-add, unless a layout turns app holds off.
+  const deskbar = read('app-deskbar.js');
+  const attached = [];
+  for (const line of deskbar.split('\n').filter(l => l.includes('window.WizHomeScreenApps?.attach('))) {
+    runRecording(line, { window: { WizHomeScreenApps: { attach: (el, find, o) => attached.push([el, o.available()]) } }, launcher: 'launcher', track: 'track', APP: {}, overviewMode: () => ({ appHold: false }) });
+  }
+  assert.deepEqual(attached, [['launcher', false], ['track', false]]);
 });
+
 test('canOffer accepts registered frontends only (multi-app/system/shell items get no download button)', () => {
   const f = pinFixture('ready', false), can = f.window.WizHomeScreenApps.canOffer;
   assert.equal(can({ id:'wisdom', name:'Wisdom', kind:'wizard', url:'/wisdom/' }), true);

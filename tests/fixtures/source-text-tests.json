@@ -17,25 +17,12 @@
  "app-identity.test.mjs": [
   "app-client loads the shared identity script for top-level documents only"
  ],
- "app-keys.test.mjs": [
-  "the shell: keycaps on a frame\\'s targets are offset by the frame and hit-tested in its own page, in Wizard\\'s own keycap; ⌥ keys in a frame reach the shell",
-  "docs: the App keys section app authors follow"
- ],
  "app-kit-sheet-touch-target.test.mjs": [
   "sheet close button hit area reaches 44px around its 36px circle"
- ],
- "app-kit-skin-layer.test.mjs": [
-  "kit is look-only and names the real chat",
-  "hosted apps swap the vendored kit and layer the active skin after their own styles",
-  "kit follows the app design rules: no frame cap, container columns, the one sheet"
  ],
  "app-kit-status-colours.test.mjs": [
   "every accepted skin defines its own success and warning colours",
   "status pills read the status colours, with a readable light-scheme variant"
- ],
- "app-kit-text-and-touch-sizes.test.mjs": [
-  "kit text is at least 13 px, labels and counters at least 11 px",
-  "the single-line field and its button are 44 px touch targets"
  ],
  "app-logos.test.mjs": [
   "the logo tile is styled outside .sgi, so skins that recolour sigils never touch it"
@@ -67,11 +54,6 @@
  "chat-file-download-preview.test.mjs": [
   "the card Download goes through the viewer save path (native, Android DownloadManager, browser)"
  ],
- "chat-pin-menu.test.mjs": [
-  "row pins are hidden by default and the Show pin buttons package is gone",
-  "Pins off gives rows back the pin room (the retired hidden-pin tweak, now a setting)",
-  "Novairecito and Sepia retain pins as skin styling, not as a device tweak/preset change"
- ],
  "chat-row-swipe.test.mjs": [
   "row action swipe is limited to Novairecito phone palettes",
   "every swipe only reveals explicit accessible actions",
@@ -87,10 +69,6 @@
  ],
  "companion-pane.test.mjs": [
   "both shells load the generic module, legacy adapter only names old app, and root Back calls the shared pair"
- ],
- "components-inventory.test.mjs": [
-  "every exported shell global has a COMPONENTS.md entry",
-  "COMPONENTS.md stays short enough to paste into a worker brief"
  ],
  "composer-label-row-one-colour.test.mjs": [
   "landscapes-light: label-row field matches its light textarea",
@@ -109,20 +87,11 @@
  "desktop-channel-back.test.mjs": [
   "wiring: the Back sits left of the title, every sidebar open clears it, the header repaints it; tokens only"
  ],
- "desktop-chats-default.test.mjs": [
-  "catalog: desktop-chats is a default, still listed, promoted once, never a profile off",
-  "desktop is unchanged: every rule is phone-only and the script returns at once on desktop",
-  "Settings › Chats has the plain switch, since a default is not listed under Try new features"
- ],
  "desktop-first-message-guide.test.mjs": [
   "the desktop shell loads the tour module and its styles, before setup-launch and desktop.js",
   "desktop adapter: first-run guide, ?view=tour and the Keys sheet replay all reach WosTour.desk",
   "Esc / Back registers the desktop guide above surface navigation; newer sheets win by recency",
   "both shells boot the Welcome modal and open it for the Setup app"
- ],
- "desktop-hidden-desk-size.test.mjs": [
-  "background fullscreen chrome is scoped to each desk, not the foreground body",
-  "Home hides every desktop host, including the mono desk"
  ],
  "desktop-host.test.mjs": [
   "desktop loads the adapter before boot; Classic controls and skin adapter reuse host lifecycle"
@@ -165,31 +134,9 @@
  "failure-reason.test.mjs": [
   "Errors row and thread use the reason in place of \"Error: <message>\" and the generic failed_turn bubble"
  ],
- "for-everyone-switches.test.mjs": [
-  "os-updates tells the shell the box channel after every verified read and channel change",
-  "Settings and the Tracker share one switch: \"Try new features\" only on For testers, written through WosLookSync",
-  "the New skin draft does not list feature switches, so it cannot flip one (only built-ins and views)"
- ],
- "foreign-chat-refusal.test.mjs": [
-  "no Needs retry panel, no Errors-list Retry, and Retry itself refuses in such a chat",
-  "the thread shows the clear card at once, with Dismiss and without Retry; the reply box says it up front",
-  "the chat-list send pill offers no Retry for a failed reply into such a chat"
- ],
- "home-screen-apps.test.mjs": [
-  "Desks overview hold-and-release offers Add to home screen; drag keeps reordering",
-  "Overview arrange mode: hold arranges desks; download button beside ✕ opens Add to home screen"
- ],
  "instant-capture-slow-save.test.mjs": [
   "the first-row save of an instant take (openDB + put) goes through the same quiet retry",
   "no instant-take storage failure anywhere emits the old notice, and getInfo carries no storage warning"
- ],
- "james-default-home.test.mjs": [
-  "James: Miguel\\'s Home keeps its phone widget, desktop glance and System pages",
-  "James: stock switcher stays hidden at one, icon-only at two; network Home remains a tweak",
-  "James: default Settings keeps the current AI page and has no \"Your network\" or \"Network & security\" page",
-  "James: desktop Home opens Settings as the centred panel over Home, never a window beside Chats",
-  "James: the default desktop bar has no AI fuel, security, backup or machines icons, and fewer icons on the right",
-  "#755 stays: tweaks are their own switches, labelled by author, in every skin; Welcome never switches skin"
  ],
  "landscapes-chat-contrast.test.mjs": [
   "Landscapes Light read previews clear the normal-text contrast floor"
@@ -205,18 +152,11 @@
   "own-page links: long-press offers your browser (native bridge) and Download for files; taps on files download"
  ],
  "lock-screen-player.test.mjs": [
-  "the switch is listed, off by default, linked to its issue",
   "Android: exactly Music and Podcasts, the tap opens the playing app, Podcasts is spoken word with skip buttons"
  ],
  "lookup-pop.test.mjs": [
   "Look up is hidden in private/Incognito threads and inside the popover itself; the tap paints before any request",
   "popover is opaque, skinned by --wz-* tokens, selectable, and owns one Back layer"
- ],
- "mac-bar-window-buttons.test.mjs": [
-  "inside the Mac app the desktop bar reserves the native window-button area",
-  "the measured inset only ever applies inside the Mac app",
-  "inside the Mac app the AI apps sidebar keeps its header and rail below the window buttons (wizard-os#543)",
-  "inside the Mac app the chat and app panel header buttons get click-through spots in #bar (wizard-os#548)"
  ],
  "manager-orb-route.test.mjs": [
   "phone start pins destination before asynchronous recording",
@@ -305,25 +245,9 @@
   "phone loads core radial synchronously before shell, independent of tweak state; desktop/corner unchanged",
   "pinned app releases use shared placement, never a cached desk; empty and settings copy stay pins-only"
  ],
- "orb-view-swipes.test.mjs": [
-  "app.js: the layout swipe runs before every stock swipe branch, and the stock branches are untouched",
-  "tap and hold are identical in all three views: the press, tap and hold paths never read the swipe map",
-  "skin-host: the orb swipe map stays generic (no view names in core); the shared chrome declares the dock swipes on the phone only"
- ],
  "orb-white-app-icon.test.mjs": [
   "regenerated sigil renderer retains the orb correction",
   "async image conversion cannot repaint a newer desk or leak an unconverted tile"
- ],
- "our-skins-app-kinds.test.mjs": [
-  "New desk wears the kinds on every skin; the Apps sheet keeps its Recent row",
-  "system apps lead each group",
-  "kind styles: Miguel\\'s packages keep their colours, the base stylesheet carries the layout for every skin",
-  "every kind ends in a \"+ Get\" tile for its App Store section; Agents also has Build agents"
- ],
- "our-skins-desks-pill.test.mjs": [
-  "the pill Desks panel is never core CSS; skin rules that paint it stay skin-scoped",
-  "no skin forces the pill desks panel or per-desk badges; the orb swipe-up still opens it when asked",
-  "any skin (or My skin) can send the orb swipe-up to Desks with --wos-orb-swipe-up: desks"
  ],
  "our-skins-model-switch.test.mjs": [
   "the switch row is gated on the skin in chat-power and chats"
@@ -388,16 +312,6 @@
   "Settings styles the bars in the skin\\'s own tokens (stock skins included), scoped to the Resources page",
   "a Settings host keeps the readings polling (not only Home), and the detail sheet returns focus to the bar that opened it"
  ],
- "responsive-features.test.mjs": [
-  "both entrypoints load shared feature surface, skin engine and CSS exactly once and in dependency order",
-  "new entrypoint-exclusive features fail the parity guard (all current module/style differences explicitly audited)",
-  "shell adapters cannot retain a second Settings renderer, picker, or hardcoded route list"
- ],
- "responsive-remainder.test.mjs": [
-  "explicit misses in phone never enter cloud routing; desktop command take is negative-send custody",
-  "both adapters mount common nonsettings views, command grammar and capture tools",
-  "finite audit has all 72 capabilities and complete 163-row crosswalk, without unclosed browser gaps"
- ],
  "route-opens.test.mjs": [
   "every shell entry point asks the layout first, with the stock path as its go (desktop)",
   "every shell entry point asks the layout first, with the stock path as its go (phone)"
@@ -433,12 +347,6 @@
  ],
  "settings-host-width.test.mjs": [
   "narrow desktop Settings follows its host container, never the desktop viewport"
- ],
- "settings-preview-windows.test.mjs": [
-  "desktop Settings opens as a window and every way of closing the window hides it",
-  "desktop Settings keys: ⌥, toggles, Esc closes only the focused Settings window, ⌥ window keys are not swallowed",
-  "desktop page previews open as a window; images still use the viewer and files still download",
-  "phone Settings sheet closes by swiping its grip down (×, Back and the scrim already close it)"
  ],
  "settings-redesign.test.mjs": [
   "settings.css: rows are hairline lines, not boxes",
@@ -492,14 +400,6 @@
  "tour-copy-always-visible.test.mjs": [
   "the tour entrance (trIn) animates movement only: no opacity, visibility or blur in its keyframes"
  ],
- "tweak-packages.test.mjs": [
-  "stock shell: no ↻ in window bars and pull-to-refresh stays unless a package holds window refresh",
-  "app.js tells the host when the bound view beside a thread changes, and reports it in route()",
-  "chats.js lists notifications among Ready chats only in list mode, in every Ready order",
-  "chats.js shows a notification draft as its thread only while notification threads are on",
-  "desktop keys: ⌥↓ walks notification rows with Ready, ⌥X resolves an open notification",
-  "Settings › Look: one flat Tweaks list, a switch per tweak labelled by author, no \"All of\" buttons, in every skin (Miguel, 1 Nov 2026)"
- ],
  "unread-only-counts.test.mjs": [
   "Machines home / data.read.sessions: the Ready count is the unread pill, not the Ready inventory"
  ],
@@ -508,11 +408,6 @@
  ],
  "update-freeze-recording.test.mjs": [
   "the orb refuses first, and the desktop toast says recording is paused (not \"Microphone unavailable\")"
- ],
- "versioned-assets.test.mjs": [
-  "the image build runs the stamp over the shipped web tree",
-  "skin packages still find core/skins.css once its link carries ?v=",
-  "skin and layout files loaded on demand carry the page release token"
  ],
  "view-settings-continuity.test.mjs": [
   "AI apps sets the everywhere-modal contract before preparing its Home chat"
@@ -544,18 +439,8 @@
   "the visual rewrite keeps native key custody, event-derived sentences and fresh crypto-bound authentication",
   "native QA covers nested Back and both dark/light Settings and form screenshots"
  ],
- "wizard-os-background.test.mjs": [
-  "every scene ships baked for night and day, desktop and phone",
-  "Landscapes stays the default and every WizardOS option is listed",
-  "twinned skins keep Colors alongside Background cards and separate Dark | Light mode"
- ],
  "wizardos-name.test.mjs": [
   "every product-name module spells WizardOS as a constant"
- ],
- "working-spinner-reduced-motion.test.mjs": [
-  "the global reduced-motion kill switch still exists (this test guards the exception, not the rule)",
-  "${selector}: reduced motion slows the spinner instead of freezing it",
-  ".wos-burst .wb-core: the \"Updating WizardOS\" ring keeps turning under reduced motion"
  ],
  "workspace-sync.test.mjs": [
   "the phone shell seeds starter apps only into a layout it just created, marked device-only"
