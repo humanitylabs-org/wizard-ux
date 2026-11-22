@@ -165,7 +165,30 @@ test('on: a thread that moved on (409) keeps its latest request in charge', asyn
   assert.ok(h.notices.some(x => /latest request stays in charge/.test(x[1])));
 });
 
-test('Chats re-renders the thread header when a result appears or clears', () => {
-  const js = read('web/core/chats.js') + read('web/core/chats-outbox.js');
-  assert.equal((js.match(/s2?\.backgroundResult\?\.id \|\| ''\]\.join\('\|'\)/g) || []).length, 2);
+test('Chats re-renders the thread header when a result appears or clears', async () => {
+  // The real thread reader (core/chats-outbox.js loadThread) against a fake LIVE: a quiet, cached thread.
+  const window = { WizCore: {} }, renders = [], el = {};
+  vm.runInNewContext(read('web/core/chats-outbox.js'), { window, globalThis: {}, Date, JSON, Number, Object, Promise, setTimeout, clearTimeout });
+  const session = { id: 's1', status: 'completed', messageCount: 2, backgroundResult: null };
+  const w = { id: 'w1', thread: 's1' }, c = { readNav: 1 };
+  const LIVE = { session: () => session, busy: () => false, messages: async () => [{ role: 'user', content: 'hi' }], cachedMessages: null, sessionInfo: async () => {} };
+  const part = window.WizCore.chatsParts.outbox({ ch: () => c, CH: { w1: c }, elOf: () => el, H: {}, INC: null, isWorking: () => false, KIT: {}, LIVE, loadApproval: async () => false,
+    needsLand: null, OUTBOX: { unsent: () => [], items: () => [], forThread: () => [] }, PEND: {}, renderLive: (x, e) => renders.push(e), renderChatList() {}, renderThread() {}, toTurns: rows => rows, syncListTitle() {},
+    track: { querySelector: () => el }, W: { w1: w }, rowOf: () => null, reach: null });
+  const tick = () => new Promise(r => setTimeout(r, 0));
+  await part.loadThread(w); await tick();
+  const first = renders.length;
+  assert.ok(first >= 1, 'the first read paints');
+  await part.loadThread(w); await tick();
+  assert.equal(renders.length, first, 'nothing changed: the cached thread is not repainted');
+  session.backgroundResult = { id: 'bg_1' };
+  await part.loadThread(w); await tick();
+  assert.equal(renders.length, first + 1, 'a result appearing repaints the header');
+  session.backgroundResult = null;
+  await part.loadThread(w); await tick();
+  assert.equal(renders.length, first + 2, 'and so does it clearing');
+  // A full (forced) read sees it too.
+  session.backgroundResult = { id: 'bg_2' };
+  await part.loadThread(w, true); await tick();
+  assert.ok(renders.length > first + 2, 'the read path compares the result too');
 });
