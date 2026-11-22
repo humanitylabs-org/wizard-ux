@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
 import { withServicesParts } from './fixtures/app-services-parts.mjs';
+import { appClient } from './fixtures/app-client-harness.mjs';
 const read=p=>readFileSync(new URL('../web/core/'+p,import.meta.url),'utf8');
 function fixture({id='wizard-music',provides=[],legacy=true,admitted=true}={}) {
   const origin='https://wizard.example',listeners={},sent=[],timers=new Map(),received=[];let seq=0;
@@ -54,6 +55,23 @@ test('a claim cannot survive navigation, handler replacement or removal',()=>{
     const f=fixture({id:'reader'}),claim=f.c.WizAppServices.voiceCommand('test provider grammar',{kind:'command'});alter(f);assert.equal(f.c.WizAppServices.runVoiceCommand(claim),false);assert.equal(f.received.length,0);
   }
 });
-test('app-owned command registration is exposed by shared SDK without a second audio transport',()=>{
-  const source=read('app-client.js');assert.match(source,/voice: Object.freeze\(\{ commands,/);assert.match(source,/get voiceCommands\(\)/);assert.match(source,/service.device.backgroundAudio.request\(method, params\)/);
+test('app-owned command registration is exposed by shared SDK without a second audio transport',async()=>{
+  // The SDK (core/app-client.js, run whole) registers the app's grammar on the client it hands the shell ...
+  const f=fixture({id:'reader'}),received=[];
+  const app=appClient({service:f.service});
+  const off=app.api.voice.commands.register({claims:t=>t==='reader grammar',receive:t=>{received.push(t);return true;}});
+  assert.throws(()=>app.api.voice.commands.register({claims(){},receive(){}}),/already registered/);
+  const client=app.client();assert.equal(typeof client.voiceCommands.claims,'function');
+  // ... and the shell's real voice routing (app-services.js) reaches it through that client.
+  f.c.WizAppServices.connect(f.win,client);
+  const claim=f.c.WizAppServices.voiceCommand('reader grammar',{kind:'command'});
+  assert.equal(claim.appId,'reader');assert.equal(f.c.WizAppServices.runVoiceCommand(claim),true);await Promise.resolve();
+  assert.deepEqual(received,['reader grammar']);
+  off();assert.equal(client.voiceCommands,null);
+  // Background audio from the SDK goes through the shell's one native audio port, never a second transport.
+  const m=fixture(),music=appClient({service:m.service});
+  const playing=music.api.device.backgroundAudio.request('play',{sessionId:'s'});
+  assert.equal(m.sent.length,1);assert.equal(m.sent[0].method,'play');assert.equal(m.sent[0].appId,'wizard-music');m.answer();await playing;
+  assert.deepEqual(music.posted.filter(([d])=>d?.op&&/audio/i.test(d.op)),[],'nothing posted around the port');
+  await assert.rejects(appClient().api.device.backgroundAudio.request('play'),/unavailable/);
 });
