@@ -2,6 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import { between, block, runRecording } from './fixtures/source-slice.mjs';
+import { withShellParts } from './fixtures/shell-parts.mjs';
+import { createDocument } from './fixtures/mini-dom.mjs';
 const root = new URL('../', import.meta.url);
 const source = process.env.IDENTITY_SIGILS || new URL('web/core/sigils.js', root);
 const logo = (id, hash = '0123456789abcdef') => `/wizard-os-home/store-data/app-logo/${id}?v=${hash}`;
@@ -63,14 +66,27 @@ test('all existing product brands keep their canonical masked artwork', () => {
     assert.doesNotMatch(S.html({ id }), /sglogo/);
   }
 });
+// Each shell's icon code, run with the real renderer: what it draws is exactly WizSigil's (Messenger's chats glyph,
+// never a package picture). Home-screen pins and the Store's icon() run in app-icon-consumers.test.mjs.
 test('all icon consumers resolve through shared renderer; Store has standalone source', () => {
-  for (const name of ['web/app.js', 'web/desktop/desktop.js', 'web/core/workspace-navigation.js', 'web/core/home-screen-apps.js', 'web/core/share-sheet.js']) {
-    assert.match(fs.readFileSync(new URL(name, root), 'utf8'), /WizSigil/, name);
+  const read = name => withShellParts(fs.readFileSync(new URL(name, root), 'utf8'));
+  const { S, logos } = load(); logos.set('messenger', logo('messenger'));
+  const a = { id: 'messenger', name: 'Messenger', icon: '💬', g: ['#000', '#111'] }, want = S.box('span', 'ic', a);
+  assert.match(want, /sg-chats/);
+  for (const name of ['web/app.js', 'web/desktop/desktop.js']) {
+    const c = runRecording(between(read(name), '  const ico = (tag, cls, a, extra) =>', '\n') + '\nglobalThis.ico = ico;', { window: { WizSigil: S } });
+    assert.equal(c.ico('span', 'ic', a), want, name);
   }
-  const store = fs.readFileSync(new URL('web/store/store.js', root), 'utf8');
-  assert.match(store, /parent\.WizSigil/);
-  assert.match(store, /sigils\.box\('span'/);
-  const index = fs.readFileSync(new URL('web/store/index.html', root), 'utf8');
-  assert.match(index, /core\/sigils\.js/);
-  assert.match(index, /core\/sigils\.css/);
+  const share = runRecording(block(read('web/core/share-sheet.js'), '  function appTile(appId) {') + '\nglobalThis.tile = appTile;', { window: { WizSigil: S }, appMeta: () => a });
+  assert.equal(share.tile('messenger').icon, S.box('span', 'shs-ic', a), 'share sheet');
+  const nav = runRecording(block(read('web/core/workspace-navigation.js'), '  function icon(desk, wins, appOf) {') + '\nglobalThis.icon = icon;', { window: { WizSigil: S }, deskCount: () => 0 });
+  assert.equal(nav.icon({ wins: ['w1'], focus: 'w1' }, { w1: {} }, () => a), `<span class="dsg" style="--c:${S.of(a).color}">${S.html(a)}</span>`, 'desk switcher');
+  // The Store page standalone loads the same renderer and its styles (parsed as the browser reads it)
+  const doc = createDocument(); doc.documentElement.innerHTML = read('web/store/index.html').replace(/^<!doctype[^>]*>/i, '');
+  const page = new URL('web/store/', root);
+  const scripts = doc.querySelectorAll('script[src]').map(s => new URL(s.getAttribute('src'), page).href);
+  const sheets = doc.querySelectorAll('link[rel="stylesheet"]').map(l => new URL(l.getAttribute('href'), page).href);
+  assert.ok(scripts.includes(new URL('web/core/sigils.js', root).href));
+  assert.ok(sheets.includes(new URL('web/core/sigils.css', root).href));
+  assert.ok(scripts.indexOf(new URL('web/core/sigils.js', root).href) < scripts.findIndex(u => u.endsWith('/store/store.js')), 'before the Store\'s own script');
 });
