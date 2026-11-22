@@ -7,9 +7,10 @@ import vm from 'node:vm';
 
 const read = p => readFileSync(new URL('../../' + p, import.meta.url), 'utf8');
 
-export function freshDevice({ channel = 'latest', mix = null, shell = 'phone' } = {}) {
+// mix: the device's own switches; preset: an author's published set the device wears (tweaks/<who>/profile.json).
+export function freshDevice({ channel = 'latest', mix = null, preset = null, shell = 'phone' } = {}) {
   const storage = new Map([['wos.skin', 'obsidian']]);
-  if (mix) storage.set('wos.skin-tweaks.v1', JSON.stringify({ version: 1, off: {}, preset: 'none', mix, machinesHomeMoved: true, miguelLayoutMoved: true }));
+  if (mix || preset) storage.set('wos.skin-tweaks.v1', JSON.stringify({ version: 1, off: {}, preset: preset || 'none', mix: mix || {}, machinesHomeMoved: true, miguelLayoutMoved: true }));
   if (channel) storage.set('wos.channel.v1', channel);
   const listeners = {}; let active = [];
   const window = { WosSkin: { current: 'obsidian', families: [], familyOf: () => 'mizel' },

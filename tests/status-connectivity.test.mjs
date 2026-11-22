@@ -3,6 +3,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { createDocument } from './fixtures/mini-dom.mjs';
+import { cascade } from './fixtures/w1-css.mjs';
+import { freshDevice } from './fixtures/w1-experience.mjs';
 import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
 
 const source = readFileSync(new URL('../web/core/status.js', import.meta.url), 'utf8');
@@ -286,14 +289,23 @@ test('calm offline card (miguel/calm-offline): one dotted path, one short next s
   h.clickPop('[data-wxoffcheck]'); assert.equal(h.ctx.WosOutbox.retries, 1, 'Check again still retries saved messages');
 });
 
-test('calm offline opt-in stays off in author presets and its text panel is fully opaque', () => {
-  const profile = JSON.parse(readFileSync(new URL('../web/tweaks/miguel/profile.json', import.meta.url), 'utf8'));
-  assert.ok(profile.off.includes('miguel/calm-offline'));
+test('calm offline opt-in stays off in author presets and its text panel is fully opaque', async () => {
+  // every author's published set, worn on a device (core/experience.js): the calm card never comes on with it
+  const { profiles } = JSON.parse(readFileSync(new URL('../web/tweaks/catalog.json', import.meta.url), 'utf8'));
+  for (const who of profiles) {
+    const d = freshDevice({ preset: who }); await d.E.refresh();
+    assert.ok(!d.active().includes('miguel/calm-offline'), who + "'s preset leaves it off");
+    if (who === 'miguel') assert.ok(d.active().includes('miguel/send-and-go'), 'while the rest of the preset runs');
+  }
+  // the card status.js really draws, under the switch, through the cascade
+  const h = setup(); h.ctx.clearInterval = () => {}; h.ctx.getComputedStyle = () => ({ getPropertyValue: k => k === '--wos-calm-offline' ? ' on' : '' });
+  h.success(); h.L.error = 'offline'; h.L.emit(); h.grace(); h.openPill(); await turn(); await turn();
+  const doc = createDocument(); doc.documentElement.setAttribute('data-tweaks', 'miguel/calm-offline');
+  doc.body.innerHTML = `<div class="wx-off">${h.pop().innerHTML}</div>`;
   const css = readFileSync(new URL('../web/tweaks/miguel/calm-offline/tweak.css', import.meta.url), 'utf8');
-  const panel = css.match(/\.wz-card\.wx-calm\s*\{([^}]+)\}/)[1];
-  assert.match(panel, /background: var\(--wz-base\)/);
-  assert.match(panel, /backdrop-filter: none/);
-  assert.doesNotMatch(panel.match(/background: ([^;]+)/)[1], /--sk-win|transparent|blur\(/);
+  const panel = cascade(doc.querySelector('.wz-card.wx-calm'), css);
+  assert.equal(panel.background.value, 'var(--wz-base)', 'an opaque skin base, never the window glass');
+  assert.equal(panel['backdrop-filter'].value, 'none'); assert.equal(panel['-webkit-backdrop-filter'].value, 'none');
 });
 
 test('calm card keeps keyboard focus when its asynchronous check repaints it', async () => {

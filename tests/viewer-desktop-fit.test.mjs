@@ -26,9 +26,18 @@ test('James correction, 6 Nov 2026: phone images always open contained within sc
       }
 });
 test('initial fit cannot re-enable the width-fit-on-open escape hatch', () => {
-  const fit = bounded('  function fit() {', '  function stopFling()');
-  assert.match(fit, /V\.long = false;/);
-  assert.doesNotMatch(fit, /dataset\.shell|d\.r\s*>/);
+  // A viewer left in long (width-fit) reading by the last item, zoomed and panned: the next fit is contain again,
+  // whatever the shell, the host size or the picture's ratio, and it reads neither the shell nor the ratio.
+  for (const doc of [{ documentElement: { dataset: { shell: 'desktop' } } }, {}]) for (const r of [20, 2.168, .3]) {
+    const toggles = [];
+    const V = { long: true, s: 3, x: 40, y: -900, el: { classList: { toggle: (c, on) => toggles.push([c, on]) } } };
+    const ctx = { V, document: doc, dims: () => ({ W: 720, H: 400, r }), clampPan() {}, paint() {} };
+    vm.runInNewContext(bounded('  function fit() {', '  function stopFling()'), ctx);
+    ctx.fit();
+    assert.equal(V.long, false, `ratio ${r}: back to contain`);
+    assert.deepEqual(toggles, [['long', false]], 'the long-reading class goes');
+    assert.deepEqual([V.s, V.x, V.y], [1, 0, 0], 'zoom and pan reset with it');
+  }
 });
 test('gallery arrows consume browser/default/shell propagation but leave Escape and modifiers to existing owners', () => {
   let key, calls=[]; const V={el:{classList:{contains:()=>false}},long:false};
