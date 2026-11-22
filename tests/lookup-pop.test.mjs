@@ -46,7 +46,7 @@ function popDom({ fetch } = {}) {
     fetch: fetch || ((url, o) => { const el = doc.querySelector('.wos-lookup'); asked.push({ url, painted: el && !el.hidden ? el.querySelector('.lk-body').textContent : null }); return new Promise(() => {}); }),
     AbortController, TextDecoder, setTimeout: () => 0, clearTimeout() {}, console };
   vm.createContext(ctx); vm.runInContext(popSrc, ctx);
-  return { L: w.WosLookup, doc, asked, w };
+  return { L: w.WosLookup, doc, asked, w, ctx };
 }
 test('Look up is hidden in private/Incognito threads and inside the popover itself; the tap paints before any request', () => {
   // the real lookupOk (sel-menu.js) over the thread scope Chats reports
@@ -82,13 +82,58 @@ test('Look up is hidden in private/Incognito threads and inside the popover itse
   void priv.run('lookup'); assert.ok(!opened.includes('private:x'));
 });
 
-test('popover contract: Wisdom endpoint shape, exact fast model, abort fences, no storage, no tokens', () => {
-  assert.match(popSrc, /\/wizard\/v1\/lookup\/stream/); assert.match(popSrc, /claude-haiku-4-5/);
-  assert.match(popSrc, /AbortController/); assert.match(popSrc, /serial\+\+/); assert.match(popSrc, /const current = \(\) => mine === serial/);
-  assert.match(popSrc, /r\.model === MODEL/); assert.match(popSrc, /split\(\/\\s\+\/\)\.length <= 70/);
-  assert.match(popSrc, /SIDE = 800/); assert.match(popSrc, /MAX_CHARS = 128, MAX_WORDS = 8/);
-  assert.ok(!/localStorage|sessionStorage|indexedDB|Authorization|Bearer|token/i.test(popSrc), 'nothing stored, no credentials in the browser');
-  assert.match(popSrc, /AI explanation/); assert.match(popSrc, /data-lk-retry/);
+// A Wisdom lookup stream the test controls: newline-delimited JSON events, sent when the test says so.
+function wisdom() {
+  const calls = [];
+  const fetch = (url, o) => new Promise(resolve => {
+    const call = { url, o, body: JSON.parse(o.body), aborted: false };
+    // an abort is recorded, but the answer may already be on its way: the popover's own fence must drop it
+    o.signal?.addEventListener('abort', () => { call.aborted = true; });
+    call.answer = (events, { ok = true, status = 200 } = {}) => {
+      const chunks = events.map(e => new TextEncoder().encode(JSON.stringify(e) + '\n'));
+      resolve({ ok, status, json: async () => ({}), body: { getReader: () => ({ read: async () => (chunks.length ? { value: chunks.shift(), done: false } : { done: true }) }) } });
+    };
+    calls.push(call);
+  });
+  return { fetch, calls };
+}
+const settleAll = async () => { for (let i = 0; i < 10; i++) await new Promise(r => setImmediate(r)); };
+
+test('popover contract: Wisdom endpoint shape, exact fast model, abort fences, no storage, no tokens', async () => {
+  const g = wisdom(), touched = [];
+  const p = popDom({ fetch: g.fetch });
+  for (const k of ['localStorage', 'sessionStorage', 'indexedDB']) for (const o of [p.w, p.ctx]) Object.defineProperty(o, k, { get() { touched.push(k); return {}; } });
+  const body = () => p.doc.querySelector('.wos-lookup .lk-body').textContent;
+  // one POST to the agent service's lookup stream, same-origin cookies only, no credentials of its own
+  p.L.open({ text: 'Timaeus', before: 'read the ', after: ' dialogue' });
+  assert.equal(g.calls.length, 1);
+  const c = g.calls[0];
+  assert.equal(c.url, '/wizard/v1/lookup/stream'); assert.equal(c.o.method, 'POST'); assert.equal(c.o.credentials, 'same-origin');
+  assert.deepEqual(Object.keys(c.o.headers), ['Content-Type'], 'no Authorization header');
+  assert.equal(c.body.text, 'Timaeus'); assert.equal(c.body.before, 'read the '); assert.equal(c.body.after, ' dialogue');
+  c.answer([{ type: 'delta', text: 'A dialogue ' }, { type: 'done', model: 'claude-haiku-4-5', text: 'A dialogue by Plato.' }]); await settleAll();
+  assert.equal(body(), 'A dialogue by Plato.', 'the fast model\'s answer is shown');
+  assert.match(p.doc.querySelector('.wos-lookup').textContent, /AI explanation/);
+  // any other model, or an answer longer than 70 words, is refused
+  for (const done of [{ type: 'done', model: 'claude-opus-4', text: 'Plato.' }, { type: 'done', model: 'claude-haiku-4-5', text: Array(71).fill('w').join(' ') }]) {
+    p.L.open({ text: 'Critias' }); g.calls.at(-1).answer([done]); await settleAll();
+    assert.equal(body().replace(/\s*Retry$/, ''), 'AI explanation unavailable.', JSON.stringify(done).slice(0, 60));
+    assert.ok(p.doc.querySelector('[data-lk-retry]'), 'with Retry');
+  }
+  // a newer lookup aborts the older request, and the older answer never paints over it
+  p.L.open({ text: 'Atlantis' }); const older = g.calls.at(-1);
+  p.L.open({ text: 'Solon' }); const newer = g.calls.at(-1);
+  assert.equal(older.aborted, true, 'the superseded request is aborted');
+  newer.answer([{ type: 'done', model: 'claude-haiku-4-5', text: 'An Athenian lawmaker.' }]); await settleAll();
+  older.answer([{ type: 'done', model: 'claude-haiku-4-5', text: 'A lost island.' }]); await settleAll();
+  assert.equal(body(), 'An Athenian lawmaker.');
+  // closing aborts too; a selection over 8 words or 128 characters is never sent
+  p.L.open({ text: 'Critias' }); const open = g.calls.at(-1); p.L.close(); assert.equal(open.aborted, true);
+  const n = g.calls.length;
+  p.L.open({ text: 'one two three four five six seven eight nine' }); p.L.open({ text: 'x'.repeat(129) });
+  assert.equal(g.calls.length, n, 'too long: nothing asked');
+  assert.equal(body(), 'Select a word or short phrase to explain.');
+  assert.deepEqual(touched, [], 'nothing stored in the browser');
 });
 
 test('popover is opaque, skinned by --wz-* tokens, selectable, and owns one Back layer', () => {
