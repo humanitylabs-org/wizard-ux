@@ -7,6 +7,7 @@ import vm from 'node:vm'
 import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 import { withShellParts } from './fixtures/shell-parts.mjs';
+import { pageAssets } from './fixtures/w1-pages.mjs';
 
 const read = p => withShellParts(readFileSync(new URL('../' + p, import.meta.url), 'utf8'))
 const store = () => { const m = new Map(); return { getItem: k => m.has(k) ? m.get(k) : null, setItem: (k, v) => m.set(k, String(v)), removeItem: k => m.delete(k) } }
@@ -23,9 +24,9 @@ function load(schedules = [], extra = {}) {
 }
 
 test('phone and desktop load the shared Boomerang and pin assets once each', () => {
-  for (const page of ['web/index.html', 'web/desktop.html']) {
-    const html = read(page)
-    for (const asset of ['core/scheduled-reminders.js', 'core/scheduled-reminders.css', 'core/chat-pins.js']) assert.equal(html.split(asset).length - 1, 1, `${page} ${asset}`)
+  for (const page of ['index.html', 'desktop.html']) {
+    const { all } = pageAssets(page)
+    for (const asset of ['core/scheduled-reminders.js', 'core/scheduled-reminders.css', 'core/chat-pins.js']) assert.equal(all.filter(a => a === asset).length, 1, `${page} ${asset}`)
   }
 })
 
