@@ -13,6 +13,7 @@ import vm from 'node:vm';
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 import { withShellParts } from './fixtures/shell-parts.mjs';
 import { withWebParts } from './fixtures/web-parts.mjs';
+import { between, runRecording } from './fixtures/source-slice.mjs';
 
 const read = p => withShellParts(withWebParts(readFileSync(new URL('../web/' + p, import.meta.url), 'utf8')));
 const chats = withParts(read('core/chats.js')), desk = read('desktop/desktop.js'), aad = read('layouts/ai-apps/desktop.js');
@@ -54,22 +55,64 @@ test('main and routed-agent New chats docked beside an app follow the same post-
   assert.doesNotMatch(slice(chats, 'function leaveAfterSend('), /agent/i, 'post-send navigation never branches on the agent route');
 });
 
+// The real lines, each run on its own: the desktop's Chats host options (desktop-sideview.js), its contextDraft hook
+// (desktop-boot.js), and the AI apps view's route `shows` and its notification-to-chat carry (desktop-keys.js,
+// desktop-home.js), with recorders for everything they call (tests/fixtures/source-slice.mjs).
+const raw = p => readFileSync(new URL('../web/' + p, import.meta.url), 'utf8');
+const sideview = raw('desktop/desktop-sideview.js'), boot = raw('desktop/desktop-boot.js'), keys = raw('layouts/ai-apps/desktop-keys.js'), home = raw('layouts/ai-apps/desktop-home.js');
+const valueAfter = (src, key, next) => between(src, key, next).slice(key.length).trim().replace(/,$/, '');
+
 test('desktop host keeps the New chat open only where a layout shows its desk beside an app', () => {
   // wizard-ux issue 1311 widened it: every desktop New chat stays open in its thread after its send.
-  assert.match(desk, /keepNewOpen: \(\) => true,/);
+  const keepNewOpen = runRecording(`globalThis.f = ${valueAfter(sideview, 'keepNewOpen:', '\n')};`, {}).f;
+  assert.equal(keepNewOpen(), true);
   // routeShows is the AI apps layout's "this desk is on screen beside the app panel" (docked chat + app panel)
-  assert.match(aad, /shows: desk => .*\(docked && !!pane && !!dockEl && deskOfNode\(dockEl\) === desk\)/);
+  const shows = (vars, slots = []) => runRecording(`globalThis.f = ${valueAfter(keys, 'shows:', '\n  });')};`,
+    { aadVars: vars, panes: { get: () => ({ slots }) }, deskOfNode: n => n.desk, Number }).f;
+  const dock = { desk: 2 };
+  assert.equal(shows({ docked: true, pane: { desk: 3 }, dockEl: dock })(2), true, 'the Chats desk while its chat is docked beside an open app');
+  assert.equal(shows({ docked: true, pane: null, dockEl: dock })(2), false, 'no app panel: not beside anything');
+  assert.equal(shows({ docked: false, pane: { desk: 3 }, dockEl: dock })(2), false, 'not docked');
+  assert.equal(shows({ docked: true, pane: { desk: 3 }, dockEl: dock })(1), false, 'another desk');
+  assert.equal(shows({ pane: { desk: 3 } }, ['app'])(3), true, 'the app panel\'s own desk');
 });
 
+function contextDraft({ notifOpen = 'n42', homeOpen = false } = {}) {
+  const calls = [], rec = name => (...a) => { calls.push([name, ...a]); };
+  const CHATS = { notifOpen: () => notifOpen, openContextDraft: rec('CHATS.openContextDraft'), renderChats: rec('CHATS.renderChats'), sendChat: rec('CHATS.sendChat') };
+  const ctx = runRecording(`globalThis.f = ${valueAfter(boot, 'contextDraft:', '\n    models:')};`,
+    { desktopVars: { homeOpen }, skinChatsWin: () => ({ id: 'w1' }), String, setTimeout: () => 0, CHATS, calls });
+  return { run: (...a) => { ctx.calls.length = 0; const r = ctx.f(...a); return { r, calls: ctx.calls.map(c => c[0]) }; }, ctx };
+}
+
 test('Resolve this on the notification the window shows sends in place (no list hop)', () => {
-  const line = desk.split('\n').find(l => l.includes('contextDraft: (key, item, words, draft) =>'));
-  assert.ok(line);
-  assert.match(line, /const inPlace = !!words && !draft && String\(key\)\.startsWith\('notifications:'\) && CHATS\.notifOpen\?\.\(w\.id\) === String\(key\)\.slice\(14\);/);
-  assert.match(line, /if \(!inPlace\) \{ CHATS\.openContextDraft\(w\.id, key, item, draft\);/);
-  assert.match(line, /if \(words\) CHATS\.sendChat\(w\.id, words, 'tapping Resolve this on a notification in Chats'\)/);
+  const c = contextDraft();
+  const shown = c.run('notifications:n42', { title: 'Disk' }, 'Resolve this', null);
+  assert.equal(shown.r, true);
+  assert.ok(!shown.calls.includes('CHATS.openContextDraft'), 'the notification already shown is not reopened as a draft');
+  const send = c.ctx.calls.find(x => x[0] === 'CHATS.sendChat');
+  assert.deepEqual(send, ['CHATS.sendChat', 'w1', 'Resolve this', 'tapping Resolve this on a notification in Chats'], 'sent in place');
+  const other = c.run('notifications:n7', { title: 'Other' }, 'Resolve this', null);
+  assert.deepEqual(other.calls.filter(n => n.startsWith('CHATS.') && n !== 'CHATS.notifOpen'), ['CHATS.openContextDraft', 'CHATS.renderChats', 'CHATS.sendChat'], 'another notification is opened, then sent');
+  const draft = c.run('notifications:n42', { title: 'Disk' }, 'Resolve this', { text: 'mine' });
+  assert.ok(draft.calls.includes('CHATS.openContextDraft'), 'a draft of its own is opened first');
+  const noWords = c.run('notifications:n42', { title: 'Disk' }, '', null);
+  assert.ok(!noWords.calls.includes('CHATS.sendChat'), 'no words: nothing sent');
 });
 
 test('AI apps: the docked notification carries over as a docked chat while its send is pending (app panel open only)', () => {
-  assert.match(aad, /if \(!h\.app && pane && chatThread === NOTE && !h\.thread && !h\.note && !h\.draft && !r\.home && r\.view === 'thread' && r\.thread === '__new__' && onMainChats\(r\)\) \{ draftWant = true; h\.draft = true; \}/);
-  assert.match(aad, /const newChat = \(\) => \{ draftWant = false; if \(chatThread === NOTE\) chatThread = null;/);
+  const line = between(keys, '    if (!h.app && aadVars.pane && aadVars.chatThread === NOTE', '\n');
+  const carry = ({ pane = { desk: 3 }, chatThread = 'NOTE', r = { home: false, view: 'thread', thread: '__new__' }, h = {} } = {}) => {
+    const ctx = runRecording(`${line}\nglobalThis.out = { h, aadVars };`, { h: { ...h }, r, aadVars: { pane, chatThread }, NOTE: 'NOTE', onMainChats: () => true });
+    return ctx.out;
+  };
+  const on = carry();
+  assert.equal(on.h.draft, true, 'the New chat it became shows as the docked chat'); assert.equal(on.aadVars.draftWant, true);
+  assert.notEqual(carry({ pane: null }).h.draft, true, 'no app panel: nothing to dock beside');
+  assert.notEqual(carry({ chatThread: 'thread-1' }).h.draft, true, 'only a notification carries over');
+  assert.notEqual(carry({ r: { home: true, view: 'thread', thread: '__new__' } }).h.draft, true, 'Home is Home');
+  // a New chat of its own drops the carried notification
+  const newChat = between(home, '  const newChat = () => {', '\n');
+  const n = runRecording(`${newChat}\nnewChat(); globalThis.out = aadVars;`, { aadVars: { draftWant: true, chatThread: 'NOTE' }, NOTE: 'NOTE', FEED: 'FEED', feedOn: () => false, api: { sessions: { newChat() {} } } });
+  assert.equal(n.out.draftWant, false); assert.equal(n.out.chatThread, null);
 });
