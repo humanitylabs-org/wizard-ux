@@ -1,6 +1,6 @@
 // What a skin really paints (wizard-ux issue 1674: tests run the code, CSS included). skinPage(skin, shell) runs the
 // real core/skins.js for that skin (the tokens it writes on <html> become an inline-strength rule), takes every
-// stylesheet the shell page links in <head> in order, puts the skin's package sheet (WosSkin.pkgOf) right after
+// stylesheet the shell page links in <head> in order (and the marks skins.js sets on <html>), puts the skin's package sheet (WosSkin.pkgOf) right after
 // core/skins.css where skin-host inserts it, and returns a mini-dom document plus `value(el, prop)` (the computed value,
 // custom properties inherited, var() resolved: tests/fixtures/r7A-css.mjs). colour(text) turns a resolved CSS colour
 // (hex, rgb(a), named white/black/transparent, color-mix(in srgb, ...), color(from X srgb r g b / a)) into [r, g, b, a];
@@ -8,14 +8,15 @@
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { createDocument } from './mini-dom.mjs';
-import { valueOf, noImports } from './r7A-css.mjs';
+import { resolveVars, noImports } from './r7A-css.mjs';
+import { styles } from './w5-css.mjs';
 
 const ROOT = new URL('../../', import.meta.url);
 const read = p => readFileSync(new URL(p, ROOT), 'utf8');
 
-export function skinsJs(saved = {}) {
+export function skinsJs(saved = {}, shell = 'phone') {
   const store = new Map(Object.entries(saved)), props = new Map();
-  const root = { dataset: {}, style: { setProperty: (k, v) => props.set(k, v), removeProperty: k => props.delete(k) } };
+  const root = { dataset: { shell }, style: { setProperty: (k, v) => props.set(k, v), removeProperty: k => props.delete(k) } };
   const ctx = { console, Math, performance: { now: () => 0 }, setTimeout() {}, addEventListener() {}, requestAnimationFrame() {},
     matchMedia: () => ({ matches: false, addEventListener() {} }), dispatchEvent() {}, CustomEvent: class { constructor(t) { this.type = t; } },
     localStorage: { getItem: k => store.get(k) ?? null, setItem: (k, v) => store.set(k, String(v)), removeItem: k => store.delete(k) },
@@ -38,20 +39,38 @@ function pageSheets(page, pkgDir) {
 }
 
 // skin null: no skins.js tokens and no data-skin (a page that only has base.css's defaults).
-export function skinPage(skin, shell = 'phone', body = '') {
+// opts.extra: stylesheets mounted after the page's (a layout's sheet); opts.attrs: more attributes on <html>.
+export function skinPage(skin, shell = 'phone', body = '', { extra = [], attrs = {} } = {}) {
   const page = shell === 'desktop' ? 'desktop.html' : 'index.html';
-  let inline = '', pkg = null;
+  let inline = '', pkg = null, marks = {};
   if (skin) {
-    const { S, props } = skinsJs({ 'wos.skin': skin });
+    const { S, props, root } = skinsJs({ 'wos.skin': skin }, shell);
+    marks = root.dataset;
     if (S.current !== skin) throw new Error('skins.js does not know ' + skin);
     pkg = S.pkgOf(skin); props.size && (inline = `#inline-style#inline-style { ${[...props].map(([k, v]) => `${k}: ${v};`).join(' ')} }`);
   }
-  const css = pageSheets(page, pkg?.css ? pkg.dir : null) + '\n' + inline;
+  const css = [pageSheets(page, pkg?.css ? pkg.dir : null), ...noImports(extra), inline].join('\n');
   const doc = createDocument(), html = doc.documentElement;
   html.setAttribute('id', 'inline-style'); html.setAttribute('data-shell', shell);
+  // what skins.js marked on <html> (data-skin, data-wizard-backgrounds, ...), then the caller's attributes
+  for (const [k, v] of Object.entries(marks)) html.setAttribute('data-' + k.replace(/[A-Z]/g, c => '-' + c.toLowerCase()), v);
   if (skin) html.setAttribute('data-skin', skin);
+  html.setAttribute('data-shell', shell);
+  for (const [k, v] of Object.entries(attrs)) html.setAttribute(k, v);
   doc.body.innerHTML = body;
-  return { doc, css, value: (el, prop) => valueOf(el, [css], prop) };
+  // valueOf (r7A-css.mjs) with each element's cascade memoised (build the markup first: later DOM changes are not seen).
+  const memo = new Map();
+  const computed = el => {
+    if (!el || el.nodeType === 9 || el.tagName === '#FRAGMENT') return { vars: {}, own: {} };
+    if (!memo.has(el)) {
+      const own = styles(el, [css]), vars = { ...computed(el.parentNode).vars };
+      for (const [k, v] of Object.entries(own)) if (k.startsWith('--')) vars[k] = v;
+      memo.set(el, { own, vars });
+    }
+    return memo.get(el);
+  };
+  const value = (el, prop) => { const c = computed(el); return resolveVars((prop.startsWith('--') ? c.vars[prop] : c.own[prop]) ?? '', c.vars); };
+  return { doc, css, value };
 }
 
 const split = s => { const out = []; let d = 0, cur = ''; for (const ch of s) { if (ch === '(') d++; if (ch === ')') d--; if (ch === ',' && !d) { out.push(cur.trim()); cur = ''; } else cur += ch; } out.push(cur.trim()); return out; };
