@@ -2,20 +2,27 @@
 // shell's catalog lists them: `set_switch` refuses any id that is not a catalog tweak. Keep each one listed, off by
 // default, with a manifest whose id matches. wizard-ux#974: wizard/link-token-repair was missing, so the agent's
 // gateway-token repair (wizard-app-manager#497) could never be turned on.
+// Runs the real Settings › Look switch list (web/core/experience.js on a fresh device, tests/fixtures/w1-experience.mjs):
+// the switch is one of this release's tweak ids, installed with its own manifest, offered as an off, non-built-in,
+// non-view row, not running, and turning it on runs it.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { freshDevice } from './fixtures/w1-experience.mjs';
 
-const root = new URL('../web/tweaks/', import.meta.url);
-const catalog = JSON.parse(readFileSync(new URL('catalog.json', root), 'utf8'));
 const BOX_SWITCHES = ['wizard/update-bug-reports', 'wizard/link-token-repair', 'wizard/graceful-restart', 'wizard/app-updates-hourly', 'wizard/private-first-setup', 'wizard/agent-inbox', 'wizard/runtipi-cli-key', 'wizard/github-signin'];
 
 for (const id of BOX_SWITCHES) {
-  test(`${id} is a switch the App Manager accepts, off by default`, () => {
-    assert.ok(catalog.tweaks.includes(id), `${id} missing from catalog.json tweaks`);
-    assert.ok(!(catalog.defaults || []).includes(id), `${id} must stay off by default`);
-    const manifest = JSON.parse(readFileSync(new URL(`${id}/manifest.json`, root), 'utf8'));
-    assert.equal(manifest.id, id);
+  test(`${id} is a switch the App Manager accepts, off by default`, async () => {
+    const d = freshDevice();
+    assert.ok((await d.E.tweakIds()).includes(id), `${id} is not a switch this release offers`);
+    assert.ok(!(id in d.E.defaultChoices), `${id} must not be a release-wide default`);
+    const { manifest, row, running } = await d.listing(id);
+    assert.equal(manifest?.id, id, 'installed with a manifest whose id matches');
     assert.ok(!manifest.view, 'a shell view is not a feature switch');
+    assert.ok(row, 'Settings › Look offers it');
+    assert.equal(row.on, false, 'off by default'); assert.equal(row.builtin, false); assert.equal(row.view, '');
+    assert.equal(running, false, 'not running on a fresh device');
+    await d.E.toggle(id);
+    assert.ok(d.active().includes(id), 'turned on, it runs');
   });
 }
