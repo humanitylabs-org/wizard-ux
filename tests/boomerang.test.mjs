@@ -140,12 +140,6 @@ test('Back closes the picker before anything under it, on phone and desktop', ()
   assert.equal(stack.run({ fallback: () => (roots++, 'root') }), 'boomerang'); assert.equal(backs, 1); assert.equal(roots, 0)
   assert.equal(stack.run({ fallback: () => (roots++, 'root') }), 'root')
 })
-  sandbox.document.createElement = node
-  sandbox.document.body = { appendChild() {}, append() {} }
-  B.open({ sessionId: 's1', title: 'T' })
-  assert.equal(B.isOpen(), true)
-  assert.equal(B.back(), 'boomerang'); assert.equal(B.isOpen(), false); assert.deepEqual(removed, [1]); assert.equal(B.back(), false)
-})
 
 test('one Snooze action replaces Defer and Boomerang, with no second Snooze under each reply', async () => {
   const js = withParts(read('web/core/chats.js'))
