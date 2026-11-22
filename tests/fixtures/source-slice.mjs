@@ -95,34 +95,47 @@ export function runRecording(code, ctx = {}, calls = (ctx.calls ||= [])) {
   return ctx;
 }
 
-// The whole of one function (or block) in `src` that starts at `marker`: up to the brace matching its first '{'.
-// Strings, template literals and comments are skipped while counting braces.
-export function block(src, marker, from = 0) {
-  const at = src.indexOf(marker, from); assert.ok(at >= 0, `not found: ${marker}`);
-  let i = src.indexOf('{', at), depth = 0;
-  // a function declaration: its body starts after the parameter list (defaults may hold braces)
-  const head = /^\s*(?:async\s+)?function\s*\*?\s*[\w$]*\s*\(/.exec(src.slice(at));
-  if (head) { let p = at + head[0].length, d = 1; for (; p < src.length && d; p++) { if (src[p] === '(') d++; else if (src[p] === ')') d--; } i = src.indexOf('{', p); }
+// A small JS scanner for block(): skips comments, strings, regex literals and template literals (with nested ${...}).
+function skipCode(src, i, close) { // from i, scan code until the brace that closes depth 0 (`close` = '}'), return its index
+  let depth = 0;
   for (; i < src.length; i++) {
     const c = src[i];
-    if (c === '/' && src[i + 1] === '/') { i = src.indexOf('\n', i); continue; }
-    if (c === '/' && src[i + 1] === '*') { i = src.indexOf('*/', i) + 1; continue; }
-    if (c === "'" || c === '"' || c === '`') { for (i++; i < src.length && src[i] !== c; i++) if (src[i] === '\\') i++; continue; }
-    if (c === '\\') { i++; continue; }
-    if (c === '/') { // a regex literal where an expression starts: skip it whole (classes may hold '/')
+    if (c === '/' && src[i + 1] === '/') { i = src.indexOf('\n', i); if (i < 0) return src.length; continue; }
+    if (c === '/' && src[i + 1] === '*') { i = src.indexOf('*/', i + 2) + 1; continue; }
+    if (c === "'" || c === '"') { for (i++; i < src.length && src[i] !== c && src[i] !== '\n'; i++) if (src[i] === '\\') i++; continue; }
+    if (c === '`') { i = skipTemplate(src, i); continue; }
+    if (c === '/') {
       let k = i - 1; while (k >= 0 && /\s/.test(src[k])) k--;
-      if (k < 0 || /[(,=:[!&|?{};+\-*%<>~^]/.test(src[k]) || /\b(return|typeof|case|in|of)$/.test(src.slice(Math.max(0, k - 6), k + 1))) {
+      if (k < 0 || /[(,=:[!&|?{};]/.test(src[k]) || /(^|[^\w$])(return|typeof|case|in|of|void)$/.test(src.slice(Math.max(0, k - 7), k + 1))) {
         let inClass = false;
         for (i++; i < src.length && src[i] !== '\n'; i++) { const r = src[i]; if (r === '\\') { i++; continue; } if (r === '[') inClass = true; else if (r === ']') inClass = false; else if (r === '/' && !inClass) break; }
         continue;
       }
     }
     if (c === '{') depth++;
-    else if (c === '}' && --depth === 0) return src.slice(at, i + 1);
+    else if (c === '}') { if (depth === 0 && close) return i; depth--; }
   }
-  // a regex literal can confuse the counting: fall back to the first closing brace at the marker's own indent
-  const lineStart = src.lastIndexOf('\n', at) + 1, indent = /^[ \t]*/.exec(src.slice(lineStart))[0];
-  const end = src.indexOf(`\n${indent}}`, at);
-  assert.ok(end > at, `unbalanced: ${marker}`);
-  return src.slice(at, end + indent.length + 2);
+  return src.length;
+}
+function skipTemplate(src, i) { // i at the opening backtick; returns the index of the closing one
+  for (i++; i < src.length; i++) {
+    const c = src[i];
+    if (c === '\\') { i++; continue; }
+    if (c === '`') return i;
+    if (c === '$' && src[i + 1] === '{') i = skipCode(src, i + 2, '}');
+  }
+  return src.length;
+}
+
+// The whole of one function (or block) in `src` that starts at `marker`: up to the brace matching its first '{'.
+// Strings, template literals, regex literals and comments are skipped while counting braces.
+export function block(src, marker, from = 0) {
+  const at = src.indexOf(marker, from); assert.ok(at >= 0, `not found: ${marker}`);
+  let i = src.indexOf('{', at);
+  // a function declaration: its body starts after the parameter list (defaults may hold braces)
+  const head = /^\s*(?:async\s+)?function\s*\*?\s*[\w$]*\s*\(/.exec(src.slice(at));
+  if (head) { let p = at + head[0].length, d = 1; for (; p < src.length && d; p++) { if (src[p] === '(') d++; else if (src[p] === ')') d--; } i = src.indexOf('{', p); }
+  const end = skipCode(src, i + 1, '}');
+  assert.ok(end < src.length, `unbalanced: ${marker}`);
+  return src.slice(at, end + 1);
 }
