@@ -2,6 +2,7 @@
 // read it as text). between() takes the source from one marker up to the next; expression() takes one whole
 // `${ ... }` part of a template literal, so a test can evaluate exactly what that part of the markup renders.
 import assert from 'node:assert/strict';
+import vm from 'node:vm';
 
 export function between(src, start, end, from = 0) {
   const i = src.indexOf(start, from); assert.ok(i >= 0, `missing: ${start}`);
@@ -30,4 +31,19 @@ export function expression(src, marker) {
     }
   }
   assert.fail(`unbalanced expression: ${marker}`);
+}
+
+// Run a slice whose free names the test does not care about: each missing name becomes a no-op function, then the
+// slice runs again (bounded). Only for wiring calls whose arguments are read lazily; the context is returned.
+export function runWithStubs(code, ctx = {}, rounds = 60) {
+  vm.createContext(ctx);
+  for (let n = 0; n < rounds; n++) {
+    try { vm.runInContext(code, ctx); return ctx; }
+    catch (e) {
+      const m = /^(\w+) is not defined$/.exec(e?.message || '');
+      if (!m || e?.name !== 'ReferenceError') throw e;
+      ctx[m[1]] = () => {};
+    }
+  }
+  assert.fail('too many unknown names');
 }
