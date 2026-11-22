@@ -85,7 +85,7 @@ const reEsc = t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const mentions = (name, text) => new RegExp(`(^|[^\\w$.]|\\.\\.\\.)${reEsc(name)}(?![\\w$])`).test(text); // `...name` (a spread) counts
 const isParts = spec => /(^|\/)[\w-]*parts\.mjs$/.test(spec); // fixtures that only join moved-out source text back
 // an imported file reader or source string is not running code, wherever it comes from
-const READER = /^(read\w*|root|\w*(Source|Src))$/;
+const READER = /^(?!(?:create|make|build|new|load|run)[A-Z])(read\w*|root|\w*(Source|Src))$/; // createBetaSource() is a factory, not text
 const EXTERNAL_OK = /^node:(test|assert|assert\/strict|fs|fs\/promises|path|url|crypto|os|util)$/;
 
 function imports(src, readers = new Set()) {
