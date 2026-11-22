@@ -8,6 +8,9 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { withSkinHostParts } from './fixtures/skin-host-parts.mjs';
+import { between, block, runRecording } from './fixtures/source-slice.mjs';
+import { createDocument } from './fixtures/mini-dom.mjs';
+import { styleOf } from './fixtures/mini-css.mjs';
 
 const root = new URL('../', import.meta.url);
 const read = p => readFileSync(new URL(p, root), 'utf8');
@@ -94,22 +97,108 @@ test('a bar with a date picker in its row (Morning Report: ‹ date › PDF) is 
   assert.equal(ctx.orbTabs(docOf(body), bar, 390), true);
 });
 
-test('the shell wiring: the CSS around the orb, gated on the orb being over the frame; the views hand over the dock orb', () => {
-  // the split rules apply only while html.wos-orb-bar is set; without it the old lift (room above the orb) stays
-  assert.match(host, /'html:not\(\.wos-orb-bar\):not\(\.wos-orb-end\) \[data-wos-inset-bar\]:not\(\[data-wos-lift="self"\]\)\{height:auto!important;padding-bottom:calc\(var\(--wos-inset-b,0px\) - 12px\)!important\}'/);
-  assert.match(host, /html\.wos-orb-bar \[data-wos-tabs\]::after\{content:""!important;display:block!important;position:static!important;order:2!important;flex:0 0 var\(--wos-orb-slot,80px\)!important/, 'an empty slot as wide as the orb in the middle');
-  assert.match(host, /min-height:calc\(2\*var\(--wos-orb-cy,40px\)\)!important/, 'the tabs sit on the orb\'s row');
-  assert.match(host, /html\.wos-orb-bar \[data-wos-tab\]\{order:1!important;flex:0 0 calc\(\(100% - var\(--wos-orb-slot,80px\)\)\/2\*var\(--wos-tab-f,1\)\)!important/, 'each side gets half the rest, shared by its tabs (tabFit\'s shares)');
-  assert.match(host, /html\.wos-orb-bar \[data-wos-fs\]\{white-space:nowrap!important;overflow:visible!important;text-overflow:clip!important;max-width:none!important/, 'a label is never cut or ellipsed');
-  assert.match(host, /if \(row\) fitTabs\(d, row\);/, 'the split bar is measured and shared by its labels');
-  assert.match(host, /if \(o && o\.d > 0 && cy > o\.d \/ 2 && cy < 160 && \(fr\.width >= vwTop \* \.9 && Math\.abs\(vwTop \/ 2 - o\.x\) < 8 \|\| fr\.width >= vwTop \* \.6 && Math\.abs\(fr\.left \+ fr\.width \/ 2 - o\.x\) < 8\)\) \{/, 'only a screen-wide frame with the orb centred over its bottom (or the desktop AI apps frame beside its sidebar, the orb centred over it)');
-  assert.match(host, /d\.documentElement\.style\.setProperty\('--wos-orb-slot', Math\.round\(o\.d \+ 16\) \+ 'px'\);/);
-  assert.match(host, /inset\(px, orb = null, place = null\) \{/, 'api.apps.inset(px, orb, place): the layout says where its orb is (and hears where the app wants it)');
-  assert.match(host, /new d\.defaultView\.MutationObserver\(/, 'an app that redraws its bar is laid out again');
-  const chrome = read('web/layouts/apps/chrome.js');
-  assert.match(chrome, /const rawSpot = orb \|\| \(shell === 'phone' \? orbSpot : null\);/, 'phone views hand over the dock orb; a view drawing its own orb says where it is (desktop AI apps); else the lift');
-  assert.match(chrome, /api\.apps\.inset\(inset \?\? FLOAT_INSET\[shell\], rawSpot \? home : null, s => \{ appSpot = s \|\| null; placeOrb\(\); \}\)/, 'the orb\'s own spot (untransformed) is what the bars go around; the app\'s spot moves it');
-  assert.match(chrome, /d = o\.offsetWidth \|\| r\.width;/, 'the untransformed size: pressing the orb never reflows the bar');
+/* The shell wiring, run: the layout's api.apps.inset(px, orb, place) -> insetSync -> insetFrame on each app frame
+ * (skin-host's real code, with a page of B nodes as the app's document), then the sheet it adopts into the app read
+ * through the cascade (tests/fixtures/mini-css.mjs) on markup carrying exactly the marks the real code set. */
+const orbWiring = between(host, '  let frameInset = 0, frameOrb = null;', '  // an app fills its page after it loads');
+const insetApi = block(host, 'inset(px, orb = null, place = null) {');
+function wiredFrame({ shell = 'phone', vw = 390, frame = R(0, 56, 390, 788) } = {}) {
+  const tabs = ['Review', 'Spending', 'Net worth', 'Accounts'].map((t, i) => new B('button', { role: 'tab', 'aria-label': t }, R(8 + i * 94, 740, 94, 44)));
+  const bar = new B('nav', { role: 'tablist' }, R(0, 735, 390, 53), tabs), d = pageWith([bar]), observed = [];
+  const html = d.documentElement; html.clientHeight = 788;
+  for (const n of [html, ...html.all()]) n.isConnected = true;
+  html.classList.toggle = (c, on) => { if (on ?? !d.cls.has(c)) d.cls.add(c); else d.cls.delete(c); };
+  d.querySelector = sel => (/^\./.test(sel) ? null : d.body.querySelector(sel)); d.adoptedStyleSheets = [];   // no kit scroll area (.wz-scroll) in this app
+  d.defaultView.MutationObserver = class { constructor(fn) { this.fn = fn; } observe(n, o) { observed.push([n, o]); } };
+  d.defaultView.CSSStyleSheet = class { replaceSync(t) { this.text = t; } };
+  const win = { classList: { toggle() {}, contains: () => false } };
+  const f = { contentDocument: d, isConnected: true, closest: s => (s === '.win' ? win : null),
+    getBoundingClientRect: () => ({ ...frame, x: frame.left, y: frame.top, right: frame.left + frame.width, bottom: frame.top + frame.height }) };
+  const ctx = { isDoc: true, innerWidth: vw, setTimeout, clearTimeout, getComputedStyle: () => ({ visibility: 'visible' }),
+    document: { documentElement: { dataset: { shell } }, querySelectorAll: sel => (sel === '.win iframe' ? [f] : []) },
+    live: () => true, guard: (a, where, fn) => fn, a: { offs: new Set() } };
+  runRecording(orbWiring + '\nglobalThis.apps = { ' + insetApi + ' };', ctx);
+  return { d, bar, tabs, observed, apps: ctx.apps, html };
+}
+// the marked page as markup (attributes only), for the cascade
+const markup = n => `<${n.tagName.toLowerCase()}${Object.entries(n.attrs).map(([k, v]) => ` ${k}="${v}"`).join('')}>${n.children.map(markup).join('')}</${n.tagName.toLowerCase()}>`;
+function cssOf(w) {
+  const doc = createDocument(); const sheet = w.d.adoptedStyleSheets.map(s => s.text).join('');
+  doc.documentElement.className = [...w.d.cls].join(' ');
+  doc.body.innerHTML = markup(w.bar);
+  return { sheet, q: sel => doc.querySelector(sel), css: (el, prop, pseudo) => styleOf(el, sheet, prop, { pseudo }) };
+}
+
+test('the shell wiring: an orb centred over a full-screen frame splits its tab bar around the orb, the CSS lays it out', () => {
+  const w = wiredFrame(), places = [];
+  const off = w.apps.inset(96, () => ({ x: 195, y: 806, d: 66 }), s => places.push(s));
+  assert.ok(w.d.cls.has('wos-orb-bar'), 'the split is on');
+  assert.equal(w.html.style.getPropertyValue('--wos-orb-slot'), '82px', 'a slot as wide as the orb plus 16');
+  assert.equal(w.html.style.getPropertyValue('--wos-orb-cy'), '38px', 'the orb\'s centre above the frame\'s bottom');
+  assert.equal(w.html.style.getPropertyValue('--wos-inset-b'), '96px');
+  assert.deepEqual(w.tabs.map(t => t.attrs['data-wos-tab']), ['l', 'l', 'r', 'r']);
+  assert.equal(w.observed[0]?.[0], w.d.body, 'an app that redraws its bar is laid out again');
+  const c = cssOf(w), nav = c.q('nav'), [l1, , r1] = c.q('nav').children;
+  assert.equal(c.css(nav, 'min-height'), 'calc(2*var(--wos-orb-cy,40px))', 'the tabs sit on the orb\'s row');
+  assert.equal(c.css(nav, 'padding-bottom'), '0', 'no lift while split');
+  assert.equal(c.css(nav, 'content', '::after'), '""', 'an empty slot in the middle');
+  assert.equal(c.css(nav, 'order', '::after'), '2');
+  assert.equal(c.css(nav, 'flex', '::after'), '0 0 var(--wos-orb-slot,80px)', 'as wide as the orb');
+  assert.equal(c.css(l1, 'order'), '1'); assert.equal(c.css(r1, 'order'), '3');
+  assert.equal(c.css(l1, 'flex'), '0 0 calc((100% - var(--wos-orb-slot,80px))/2*var(--wos-tab-f,1))', 'each side gets half the rest, shared by its tabs (tabFit\'s shares)');
+  const label = createDocument(); label.documentElement.className = 'wos-orb-bar'; label.body.innerHTML = '<nav data-wos-tabs="bar"><button data-wos-tab="l"><span data-wos-fs="14">Net worth</span></button></nav>';
+  const span = label.querySelector('[data-wos-fs]');
+  for (const [k, v] of [['white-space', 'nowrap'], ['overflow', 'visible'], ['text-overflow', 'clip'], ['max-width', 'none']]) assert.equal(styleOf(span, c.sheet, k), v, 'a label is never cut or ellipsed: ' + k);
+  off();
+  assert.equal(w.html.style.getPropertyValue('--wos-inset-b'), '0px', 'released: no room kept');
+  assert.ok(!w.d.cls.has('wos-orb-bar'));
+});
+
+test('the shell wiring: no orb centred over the frame (off-centre, none, desktop): the bar is lifted above it, never split', () => {
+  for (const [name, orb, opts] of [['off-centre', () => ({ x: 100, y: 806, d: 66 }), {}], ['no orb', null, {}], ['desktop', () => ({ x: 600, y: 800, d: 60 }), { shell: 'desktop', vw: 1200, frame: R(700, 60, 480, 700) }]]) {
+    const w = wiredFrame(opts);
+    w.apps.inset(84, orb, null);
+    assert.ok(!w.d.cls.has('wos-orb-bar'), name);
+    assert.deepEqual(w.tabs.map(t => t.attrs['data-wos-tab']), [undefined, undefined, undefined, undefined], name);
+    const c = cssOf(w), nav = c.q('nav');
+    if (name === 'desktop') { assert.equal(w.html.style.getPropertyValue('--wos-inset-b'), '0px', 'an orb below a desktop window takes no room'); continue; }
+    assert.equal(nav.getAttribute('data-wos-lift'), '', name);
+    assert.equal(c.css(nav, 'padding-bottom'), 'calc(var(--wos-inset-b,0px) - 12px)', name + ': room above the orb');
+    assert.equal(c.css(nav, 'height'), 'auto', name);
+    assert.equal(c.css(nav, 'content', '::after'), '', name + ': no slot');
+  }
+});
+
+test('the views hand over the dock orb: its untransformed spot goes to the shell, and the app\'s spot moves it', async () => {
+  const { viewChrome, FLOAT_INSET } = await import(new URL('web/layouts/apps/chrome.js', root).href);
+  const was = globalThis.document;
+  try {
+    const run = (shell, opts = {}) => {
+      const doc = createDocument(); globalThis.document = doc;
+      const st = {}; doc.documentElement.style = { setProperty: (k, v) => { st[k] = v; }, removeProperty: k => { delete st[k]; }, getPropertyValue: k => st[k] || '' };
+      let got = null;
+      // the dock orb pressed (scaled 1.2): its rect grows, its own size stays 66; a move shifts its rect with it
+      const rect = { left: 155.4, top: 766.4, width: 79.2, height: 79.2 };
+      const dock = { offsetWidth: 66, getBoundingClientRect: () => ({ ...rect }) };
+      const api = { env: { shell }, mount: () => () => {}, listen() {}, after() {}, phone: { orb: () => dock, swipes: () => null },
+        apps: { inset: (px, orb, place) => { got = { px, orb, place }; return () => {}; }, list: () => [] } };
+      viewChrome(api, { openIds: () => [], ...opts });
+      return { got, st, rect, root: doc.documentElement };
+    };
+    const p = run('phone');
+    assert.equal(p.got.px, FLOAT_INSET.phone);
+    assert.deepEqual(p.got.orb(), { x: 195, y: 806, d: 66 }, 'the dock orb\'s centre and its untransformed size: pressing it never reflows the bar');
+    p.got.place({ x: 360, y: 785, d: 52 });
+    assert.equal(p.st['--vc-orb-dx'], '165px'); assert.equal(p.st['--vc-orb-dy'], '-21px'); assert.equal(p.st['--vc-orb-k'], '0.788'); assert.equal(p.root.dataset.vcOrb, 'row');
+    p.rect.left += 165; p.rect.top -= 21;   // the moved orb's rect
+    assert.deepEqual(p.got.orb(), { x: 195, y: 806, d: 66 }, 'the bars still go around the orb\'s own spot');
+    p.got.place(null);
+    assert.equal(p.st['--vc-orb-dx'], undefined); assert.equal(p.root.dataset.vcOrb, undefined, 'back to its fixed spot');
+    const desk = run('desktop');
+    assert.equal(desk.got.px, FLOAT_INSET.desktop); assert.equal(desk.got.orb, null, 'no dock orb on the desktop: the lift');
+    const own = run('desktop', { orb: () => ({ x: 864, y: 780, d: 60 }) });
+    assert.deepEqual(own.got.orb(), { x: 864, y: 780, d: 60 }, 'a view drawing its own orb says where it is (desktop AI apps)');
+  } finally { globalThis.document = was; }
 });
 
 /* Every label whole (Miguel, 2 Nov 2026: Podcasts has three tabs, two share the left side, and 'Discover' read 'Dis…').
