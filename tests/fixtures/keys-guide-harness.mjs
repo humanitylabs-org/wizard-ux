@@ -15,7 +15,9 @@ const RECT = { left: 100, top: 100, right: 200, bottom: 140, width: 100, height:
 // opts.rect(el): a box for one element (else the shared on-screen box); other opts go in the guide's scope.
 export function keysGuide({ rect = () => null, ...opts } = {}) {
   const document = createDocument({ url: 'https://box.test/wizard-os-home/desktop.html' });
-  const body = PAGE.slice(PAGE.indexOf('>', PAGE.indexOf('<body')) + 1, PAGE.lastIndexOf('</body>')).replace(/<script[\s\S]*?<\/script>/g, '');
+  // the page's own scripts are not run here: cut every script element out (index walk, not a regex filter)
+  let body = PAGE.slice(PAGE.indexOf('>', PAGE.indexOf('<body')) + 1, PAGE.lastIndexOf('</body>'));
+  for (let i = body.indexOf('<script'); i >= 0; i = body.indexOf('<script')) { const end = body.indexOf('</script>', i); body = body.slice(0, i) + (end < 0 ? '' : body.slice(end + 9)); }
   document.body.innerHTML = body;
   let measured = null;
   const proto = Object.getPrototypeOf(document.body);

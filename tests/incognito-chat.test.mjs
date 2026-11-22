@@ -196,7 +196,7 @@ test('Incognito stream target accepts every registry agent id, including a leadi
   // the real openRunStream: a malformed target is refused before any stream opens
   const live = withLiveParts(withShellParts(readFileSync(new URL('../web/live.js', import.meta.url), 'utf8')))
   const fn = live.slice(live.indexOf('  L.openRunStream = function'), live.indexOf('\n', live.indexOf('if (target && !/^\\/wizard', live.indexOf('  L.openRunStream = function'))))
-  const open = base => vm.runInNewContext(`const L = {}; ${fn} return 'opened'; }; L.openRunStream('s1', '', 'r1', () => {}, { base: ${JSON.stringify(base)}, read: () => null })`, {})
+  const open = base => vm.runInNewContext(`const L = {}; ${fn} return 'opened'; }; L.openRunStream('s1', '', 'r1', () => {}, { base: BASE, read: () => null })`, { BASE: base })
   assert.equal(open('/wizard/v1/agents/1-private/incognito/incog_' + 'a'.repeat(32)), 'opened')
   assert.equal(open('/wizard/v1/agents/hermes/incognito/incog_' + 'a'.repeat(32)), 'opened')
   assert.equal(open('/wizard/v1/agents/-x/incognito/incog_' + 'a'.repeat(32)), null)

@@ -134,7 +134,7 @@ test('nginx: off renders no token and no sub_filter; on fills it for a top-level
     writeFileSync(join(bin, 'envsubst'), '#!/bin/sh\ncat\n'); writeFileSync(join(bin, 'python3'), `#!/bin/sh\necho started >> "${dir}/log"\n`);
     for (const f of ['nginx', 'envsubst', 'python3']) chmodSync(join(bin, f), 0o755);
     const script = join(dir, 'entrypoint.sh');
-    writeFileSync(script, read('packaging/entrypoint.sh').split('/etc/wizard-shell/').join(etc + '/').split('/tmp/').join(out + '/'));
+    writeFileSync(script, read('packaging/entrypoint.sh').split('/tmp/').join(out + '/').split('/etc/wizard-shell/').join(etc + '/'));
     const run = env => { rmSync(join(dir, 'log'), { force: true }); const r = spawnSync('sh', [script], { env: { PATH: `${bin}:/usr/bin:/bin`, ...env }, encoding: 'utf8' }); return { code: r.status, err: r.stderr, log: existsSync(join(dir, 'log')) ? readFileSync(join(dir, 'log'), 'utf8') : '' }; };
     const conf = f => readFileSync(join(out, f), 'utf8');
     // off (the default): every read maps to no token, and nothing is filtered into the page

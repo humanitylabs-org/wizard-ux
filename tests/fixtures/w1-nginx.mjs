@@ -23,7 +23,7 @@ export function render(env = {}) {
   for (const f of ['nginx.conf.template', 'static.conf', 'proxy.conf', 'proxy-mcp.conf']) copyFileSync(path.join(PKG, f), path.join(etc, f));
   writeFileSync(path.join(bin, 'nginx'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
   writeFileSync(path.join(bin, 'python3'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
-  const script = readFileSync(path.join(PKG, 'entrypoint.sh'), 'utf8').split('/etc/wizard-shell/').join(`${etc}/`).split('/tmp/').join(`${run}/`);
+  const script = readFileSync(path.join(PKG, 'entrypoint.sh'), 'utf8').split('/tmp/').join(`${run}/`).split('/etc/wizard-shell/').join(`${etc}/`); // /tmp first: the temp dir itself may sit under /tmp
   const out = spawnSync('sh', ['-c', script], { env: { PATH: `${bin}:${process.env.PATH}`, ...env }, encoding: 'utf8' });
   const files = p => path.join(run, p.replace(/^\/tmp\//, ''));
   return { dir, run, status: out.status, stderr: out.stderr, conf: path.join(run, 'nginx.conf'), files, done: () => rmSync(dir, { recursive: true, force: true }) };
