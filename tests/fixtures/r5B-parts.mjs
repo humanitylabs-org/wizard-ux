@@ -3,7 +3,7 @@
 // Every free name the file uses that the test does not give becomes a recorder (tests/fixtures/source-slice.mjs), and
 // every argument the part destructures that the test does not give is a recorder too, so a test hands over only the
 // names whose behaviour it reads. Returns { out, calls, ctx }: out is what the part returned.
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { recorder, runRecording } from './source-slice.mjs';
 
 export const read = p => readFileSync(new URL(`../../${p}`, import.meta.url), 'utf8');
@@ -11,12 +11,25 @@ export const read = p => readFileSync(new URL(`../../${p}`, import.meta.url), 'u
 export function loadFile(file, ctx = {}) {
   ctx.window ||= {};
   ctx.window.WizCore ||= {};
+  for (const k of ['addEventListener', 'removeEventListener', 'dispatchEvent']) ctx.window[k] ||= () => {}; // a window listens
   return runRecording(read(file), ctx);
 }
 
 // file: path under the repo; ns: 'appParts' | 'chatsParts' | ...; name: the part; given: its arguments.
-export function runPart(file, ns, name, given = {}, ctx = {}) {
+// A part that calls another part of the same shell (`window.WizCore.<ns>.<other>(...)`) gets that part's real file
+// loaded first (same folder and prefix: web/app-<other>.js, web/core/chats-<other>.js ...), recursively.
+function loadWithParts(file, ns, ctx, seen = new Set()) {
+  if (seen.has(file)) return; seen.add(file);
+  const prefix = file.slice(0, file.lastIndexOf('-') + 1);
+  for (const m of read(file).matchAll(new RegExp(`window\\.WizCore\\.${ns}\\.([a-z]+)\\(`, 'g'))) {
+    const other = `${prefix}${m[1]}.js`;
+    if (other !== file && existsSync(new URL(`../../${other}`, import.meta.url))) loadWithParts(other, ns, ctx, seen);
+  }
   loadFile(file, ctx);
+}
+
+export function runPart(file, ns, name, given = {}, ctx = {}) {
+  loadWithParts(file, ns, ctx);
   const calls = ctx.calls;
   const args = new Proxy(given, { get: (t, k) => (k in t ? t[k] : recorder(String(k), calls)), has: () => true });
   const out = ctx.window.WizCore[ns][name](args);
