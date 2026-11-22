@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import vm from 'node:vm';
 import { withAppParts } from './fixtures/app-parts.mjs';
 
 // Borderless app windows paint their heading in the app's colour (dark default, or the colour the phone measured along
@@ -34,10 +35,30 @@ test('a heading measured as light gets a dark ink; Settings keeps the skin ink',
   assert.ok(UNTHEMED.includes(':not(:has(> .wbody .st-embed iframe))'));
 });
 
+// The phone's real frameEdge (web/app.js), run in a vm against a fake app document and a canvas that reads back the
+// rgb() colour it was filled with.
+function edge({ bg = '', top = '' }) {
+  const i = app.indexOf('  function frameEdge(f) {'), body = app.slice(i, app.indexOf('\n  }\n', i) + 4);
+  const classes = {}, style = {};
+  const we = { classList: { toggle: (c, on) => { classes[c] = !!on; } }, style: { setProperty: (k, v) => { style[k] = v; }, removeProperty: k => { delete style[k]; } } };
+  const header = { tagName: 'HEADER', parentElement: null, getBoundingClientRect: () => ({ width: 400 }), bg: top };
+  const html = { tagName: 'HTML', clientWidth: 400, bg: '' };
+  const view = { __wosTopWatch: 1, getComputedStyle: el => ({ backgroundColor: el.bg || 'rgba(0, 0, 0, 0)', backgroundImage: 'none' }) };
+  const d = { documentElement: html, body: { bg }, styleSheets: [], defaultView: view, querySelector: () => null, elementFromPoint: () => header, addEventListener() {} };
+  const canvas = () => { let fill = ''; return { getContext: () => ({ set fillStyle(v) { fill = v; }, fillRect() {}, getImageData: () => ({ data: [...(fill.match(/\d+/g) || [0, 0, 0]).slice(0, 3).map(Number), 255] }) }) }; };
+  const ctx = vm.createContext({ document: { createElement: canvas }, setTimeout, clearTimeout });
+  vm.runInContext(body + '\nthis.frameEdge = frameEdge;', ctx);
+  ctx.frameEdge({ closest: () => we, contentDocument: d, isConnected: true });
+  return { light: classes['edge-light'], style };
+}
+
 test('the phone marks a light measured heading (.edge-light) from the colour it paints', () => {
-  const i = app.indexOf('function frameEdge(f)'), body = app.slice(i, app.indexOf('\n  }\n', i));
-  assert.match(body, /classList\.toggle\('edge-light'/);
-  assert.match(body, /top \|\| bg/, 'decided on the colour the heading actually shows (top, else bg)');
+  assert.equal(edge({ bg: 'rgb(10, 10, 10)', top: 'rgb(250, 250, 250)' }).light, true, 'a light header along the top: dark ink');
+  assert.equal(edge({ bg: 'rgb(250, 250, 250)', top: 'rgb(20, 20, 30)' }).light, false, 'decided on the colour the heading actually shows (top, else bg)');
+  assert.equal(edge({ bg: 'rgb(240, 240, 240)' }).light, true, 'no top colour: the page background decides');
+  assert.equal(edge({ bg: 'rgb(15, 16, 20)' }).light, false);
+  assert.equal(edge({}).light, false, 'nothing measured keeps the light ink on the dark fallback');
+  assert.equal(edge({ bg: 'rgb(10, 10, 10)', top: 'rgb(250, 250, 250)' }).style['--frame-top'], 'rgb(250, 250, 250)');
 });
 
 // Cover the switch boundary as well as near-white; a softened black failed midtone titles.
