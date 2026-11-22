@@ -8,6 +8,7 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { withShellParts } from './fixtures/shell-parts.mjs';
+import { block as sliceBlock, runRecording } from './fixtures/source-slice.mjs';
 
 const read = p => withShellParts(readFileSync(new URL(`../${p}`, import.meta.url), 'utf8'));
 const between = (src, a, b) => { const i = src.indexOf(a), j = src.indexOf(b, i + a.length); assert.ok(i >= 0 && j > i, `${a} .. ${b}`); return src.slice(i, j); };
@@ -66,13 +67,30 @@ test('no path skips confirmation: execute refuses an unconfirmed route', () => {
   assert.equal(opened, false);
 });
 
-test('apps.js: only a read of the box list confirms routes, and refreshApps says whether that read worked', () => {
-  const src = read('web/core/apps.js');
-  assert.match(src, /voice_routes_confirmed: trusted === true,/);
-  assert.match(src, /REMOTE = \(\(\) => \{ try \{ return \(JSON\.parse\(localStorage\.getItem\(REMOTE_KEY\)[^\n]*\.map\(toTile\)/, 'cache tiles are built untrusted');
-  assert.match(src, /REMOTE = list\.map\(a => toTile\(a, true\)\);/);
-  const body = between(src, '  async function readRemote() {', '  const firstLoad');
-  assert.match(body, /return true;/); assert.match(body, /if \(!r\.ok\) return false;/); assert.match(body, /catch \(e\) \{ return false; \}/);
+// core/apps.js booted on a device that cached the box's list earlier; fetch answers as the test says.
+function appsModule(answer) {
+  const store = new Map([['wux.apps.v1', JSON.stringify([music(true)])]]);
+  const win = { WizCore: { norm: s => String(s).toLowerCase() }, WizConfig: { endpoint: k => (k === 'apps' ? '/wizard/v1/apps' : '') }, location: { origin: 'http://x', pathname: '/' },
+    addEventListener() {}, removeEventListener() {}, dispatchEvent: () => true,
+    localStorage: { getItem: k => store.get(k) ?? null, setItem: (k, v) => store.set(k, String(v)), removeItem: k => store.delete(k) } };
+  const ctx = { window: win, document: { addEventListener() {}, hidden: false }, CustomEvent: class { constructor(type, o) { this.type = type; this.detail = o?.detail; } },
+    localStorage: win.localStorage, location: win.location, addEventListener() {}, setTimeout, clearTimeout, console, URL,
+    fetch: async url => { const a = await answer(url); if (a instanceof Error) throw a; return { ok: a.ok !== false, status: a.ok === false ? 503 : 200, json: async () => a.body }; } };
+  ctx.self = win; ctx.globalThis = ctx;
+  vm.createContext(ctx); vm.runInContext(readFileSync(new URL('../web/core/apps.js', import.meta.url), 'utf8'), ctx);
+  return { core: win.WizCore, tile: () => win.WizCore.apps('mobile').APP['wizard-music'] };
+}
+test('apps.js: only a read of the box list confirms routes, and refreshApps says whether that read worked', async () => {
+  let answer = new Error('offline');
+  const m = appsModule(() => answer);
+  assert.equal(m.tile().voice_routes_confirmed, false, 'a cached tile is built untrusted, whatever it said when cached');
+  assert.deepEqual(JSON.parse(JSON.stringify(m.tile().voice_routes)), [ROUTE], 'its routes still paint the take');
+  assert.equal(await m.core.refreshApps(), false, 'a failed read says so');
+  assert.equal(m.tile().voice_routes_confirmed, false);
+  for (const bad of [{ ok: false, body: { apps: [music(false)] } }, { body: { nope: true } }]) { answer = bad; assert.equal(await m.core.refreshApps(), false, JSON.stringify(bad)); assert.equal(m.tile().voice_routes_confirmed, false); }
+  answer = { body: { apps: [music(false)] } };
+  assert.equal(await m.core.refreshApps(), true, 'a fresh list from the box');
+  assert.equal(m.tile().voice_routes_confirmed, true, 'read from the box itself: confirmed');
 });
 
 // The phone shell's own openApp, source-executed with the shell's helpers stubbed.
@@ -123,13 +141,30 @@ test('phone: a plain tile tap is unchanged (no page, no refresh hook)', () => {
   assert.equal(k.placed[0].obj.url, undefined); assert.deepEqual(k.paged, []);
 });
 
-test('phone: tapped and held takes confirm the route before opening; an unconfirmed tap stays a message', () => {
-  const src = read('web/app.js');
-  const tap = between(src, '        // Paint now; act only once', "      if (target == null && (v?.kind === 'chat thread'");
-  assert.match(tap, /showRouted\('command'[^\n]*\n\s*const dr = await LOCAL_COMMANDS\.confirmRoute\(text\);\n\s*if \(dr\) return finishCmd\(dr, text, opts\);/);
-  assert.match(src, /const loc = await LOCAL_COMMANDS\.confirm\(localParse\(text, snap, kind, typed\), text, snap, kind, typed\);/);
-  assert.match(src, /const lc = await LOCAL_COMMANDS\.confirm\(localParse\(text, snap, kind\), text, snap, kind\);/);
-  assert.doesNotMatch(src, /openAppRoute: \(id, url\) => window\.WizOpenApp/, 'never the setup-skipping WizOpenApp');
+// app.js handleText (the phone's one entry for a spoken or typed take) with the real command parser above.
+function phoneTake(refresh) {
+  const APP = { 'wizard-music': music(false) };
+  const { parser, box } = commands({ APP, refresh: async () => refresh(APP) });
+  const src = read('web/app.js'), seen = { finished: [], agent: [], routed: [] };
+  const ctx = runRecording(between(src, '  const localParse = (text, snap, kind, typed = false) =>', '\n') + '\n' + sliceBlock(src, '  async function handleText(text, kind, typed, sttMs, target, snap) {') + '\nglobalThis.handleText = handleText;', {
+    $: () => ({}), LOCAL_COMMANDS: parser, window: { WosCommands: box.WosCommands, WizConfig: { agent: () => 'Wizard', endpoint: () => '' } }, performance, OUTBOX: { get: () => null }, takeFiles: () => [],
+    finishCmd: (c, text) => { seen.finished.push({ action: c.action, confirmed: c.confirmed, url: c.url, text }); return 'opened'; },
+    toAgent: (text, label) => { seen.agent.push(text); return 'sent'; }, showRouted: (k, label) => seen.routed.push(label) });
+  return { take: (text, kind) => ctx.handleText(text, kind, false, 0, null, { view: { kind: 'home' } }), seen };
+}
+test('phone: tapped and held takes confirm the route before opening; an unconfirmed tap stays a message', async () => {
+  const fresh = APP => { APP['wizard-music'] = music(true); return true; };
+  for (const kind of ['tap', 'command']) {
+    const p = phoneTake(fresh);
+    assert.equal(await p.take('music', kind), 'opened', kind);
+    assert.deepEqual(p.seen.finished.map(c => [c.action, c.confirmed]), [['open_app_route', 'fresh']], `${kind}: opens only the route the box confirmed`);
+    assert.deepEqual(p.seen.agent, [], `${kind}: nothing goes to the agent`);
+  }
+  const gone = phoneTake(APP => { APP['wizard-music'] = music(true, []); return true; });
+  assert.equal(await gone.take('music', 'tap'), 'sent');
+  assert.deepEqual(gone.seen.finished, [], 'the fresh list no longer declares it: nothing opens');
+  assert.deepEqual(gone.seen.agent, ['music'], 'the tap stays a message');
+  assert.doesNotMatch(read('web/app.js'), /openAppRoute: \(id, url\) => window\.WizOpenApp/, 'never the setup-skipping WizOpenApp');
 });
 
 test('desktop: a spoken route opens through openApp with the setup sheet; held takes confirm first', () => {
