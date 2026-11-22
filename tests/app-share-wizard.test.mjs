@@ -5,6 +5,7 @@ import {readFileSync} from 'node:fs';
 import { withServicesParts } from './fixtures/app-services-parts.mjs';
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 import { withShellParts } from './fixtures/shell-parts.mjs';
+import { appClient } from './fixtures/app-client-harness.mjs';
 const read = p => withShellParts(readFileSync(new URL('../'+p,import.meta.url),'utf8'));
 const source=withServicesParts(read('web/core/app-services.js')), shared=read('web/core/share-wizard.js');
 function fixture() {
@@ -86,10 +87,28 @@ test('share receipt toast names the actual destination agent, only after durable
  await sandbox.carry(w,{sendChat:async()=>({durable:true})},{target:'__new__',agentLabel:'Synthetic Agent',stay:true},[]);
  assert.equal(toasts.length,1);
 });
-test('both shells load the same sheet and route Back to it, native imports reuse it without desktop device.js',()=>{
+test('both shells load the same sheet and route Back to it, native imports reuse it without desktop device.js',async()=>{
  for(const p of ['index.html','desktop.html']){const s=read('web/'+p);assert.match(s,/core\/share-wizard.js/);assert.match(s,/core\/share-wizard.css/);}
  for(const p of ['app.js','desktop/desktop.js'])assert.match(read('web/'+p),/WizEscapeBack\.installOwners\(/);
- assert.match(read('web/core/escape-back.js'),/add\('share-wizard',[^\n]+WizShareWizard.back\(\)/);
- assert.match(read('web/device.js'),/await window.WizShareWizard.open/);assert.doesNotMatch(read('web/device.js'),/data-shareto/);
- assert.match(read('web/core/app-client.js'),/get wizard\(\)/);assert.doesNotMatch(withParts(read('web/core/chats.js')),/MAX_FILES|files per message/);
+ // Back: the shared owner catalog (core/escape-back.js) closes the sheet first, on both shells.
+ let open=true;const W={WizShareWizard:{get isOpen(){return open;},back:()=>{open=false;return 'share-wizard';}}};
+ vm.runInNewContext(read('web/core/escape-back.js'),{window:W,document:{addEventListener(){}},addEventListener(){},setTimeout,clearTimeout,queueMicrotask,MutationObserver:class{observe(){}disconnect(){}}});
+ const stack=W.WizEscapeBack.create();W.WizEscapeBack.installOwners(stack,{chats:()=>({}),links:()=>null});
+ assert.equal(stack.run({fallback:()=>'root'}),'share-wizard');assert.equal(open,false);assert.equal(stack.run({fallback:()=>'root'}),'root');
+ // A native (Android) import opens the same sheet (core/device.js onShare), and releases the share once it is sent.
+ const dev=read('web/device.js'),start=dev.indexOf('  async function onShare(id) {'),end=dev.indexOf("    log('share:result', id, result);\n  }",start);
+ assert.ok(start>0&&end>start);
+ const opened=[],done=[];
+ const ctx={window:{WizShareWizard:{open:async o=>(opened.push(o),'sent')}},J:x=>x,closeSheet(){},toast(){},log(){},readBlob:()=>null,
+  DEV:()=>({shareMeta:id=>({text:'hello',subject:'s',items:[{n:0,name:'a.png',mime:'image/png'}]}),shareDone:id=>done.push(id),shareRead(){}})};
+ vm.runInNewContext(dev.slice(start,end)+'}\nthis.onShare=onShare;',ctx);
+ await ctx.onShare('sh1');
+ assert.equal(opened.length,1);assert.equal(opened[0].durable,true);assert.equal(opened[0].android,true);assert.equal(opened[0].text,'hello');
+ assert.equal(opened[0].items.length,1);assert.equal(typeof opened[0].items[0].read,'function');assert.deepEqual(done,['sh1']);
+ assert.doesNotMatch(dev,/data-shareto/);
+ // Apps reach the same sheet through the SDK (WizardApp.share.wizard), which hands the batch to the shell's service.
+ const sent=[],c=appClient({service:{share:{wizard:async d=>(sent.push(d),'sent')}}});
+ const batch={text:'x'};assert.equal(await c.api.share.wizard(batch),'sent');assert.equal(sent[0],batch);
+ assert.equal(appClient().api.share.wizard,undefined,'no services and no transport: not offered');
+ assert.doesNotMatch(withParts(read('web/core/chats.js')),/MAX_FILES|files per message/);
 });
