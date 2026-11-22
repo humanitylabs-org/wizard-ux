@@ -6,6 +6,7 @@ import { listFixture } from './fixtures/chats-list-render.mjs';
 import { modelContext } from './fixtures/chats-list-model.mjs';
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 import { withShellParts } from './fixtures/shell-parts.mjs';
+import { unreadWorld, runIn, UNREAD } from './fixtures/r8B-unread.mjs';
 
 // James, 8 Nov 2026: every number beside Chats / Ready counts UNREAD threads only. A finished thread that is already
 // read adds nothing; the list itself still shows every thread. Working, Snoozed and Archive keep their place counts.
@@ -85,11 +86,15 @@ test('phone drawer: folded Ready tally is its unread count; Working/Snoozed keep
   assert.deepEqual(c.out, ['2', 'W, 2, folded']);
 });
 
+// Runs each shell's real data.read.sessions adapter entry (app-agentorb.js / desktop-boot.js) against the real
+// workspace-navigation projection, on a world whose Ready inventory (5) differs from its unread tally (3).
 test('Machines home / data.read.sessions: the Ready count is the unread pill, not the Ready inventory', () => {
-  for (const f of ['web/app.js', 'web/desktop/desktop.js']) {
-    const line = src(f).split('\n').find(l => /sessions: \(\) => \{ const G = /.test(l));
+  for (const f of ['web/app-agentorb.js', 'web/desktop/desktop-boot.js']) {
+    const line = readFileSync(new URL('../' + f, import.meta.url), 'utf8').split('\n').find(l => /^\s*sessions: \(\) => \{ const G = /.test(l));
     assert.ok(line, f);
-    assert.match(line, /ready: [\w.]*workspaceNav\.chatsCount\(LIVE\)/, f);
-    assert.doesNotMatch(line, /\(G\.ready \|\| \[\]\)\.length/, f);
+    const w = unreadWorld(), c = runIn(w, `globalThis.adapter = {\n${line}\n};`);
+    assert.deepEqual({ ...c.adapter.sessions() }, { working: 1, ready: UNREAD }, f);
+    const off = runIn(unreadWorld(), `globalThis.adapter = {\n${line}\n};`, { LIVE: { ok: false } });
+    assert.equal(off.adapter.sessions(), null, `${f}: nothing while Wizard is not connected`);
   }
 });
