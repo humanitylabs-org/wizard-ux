@@ -88,13 +88,31 @@ test('1308: creating a channel opens its empty feed with the box focused and sen
 });
 
 // --- the shell's + / ⌥N (desktop.js): never a new channel (issue 1489) ---
+const line = (src, from) => { const a = src.indexOf(from); assert.ok(a >= 0, from); return src.slice(a, src.indexOf('\n', a)); };
 test('1489: + / ⌥N on the Channels list (AI apps sidebar or a classic Chats window) start a new chat, not a channel', () => {
   assert.doesNotMatch(desktop, /function chanNew\(|chatChannelNew/);
-  assert.match(desktop, /code === 'KeyN'\) return hit\(\(\) => \{[^\n]*chanPost\(\) \|\| newChat\(\); \}\);/, '⌥N: channel box, else New chat');
-  assert.match(desktop, /chatChannelPost: \(\) => chanPost\(\),\n    chatChannelView: \(\) => CHATS\.chanView\?\.\(\) \|\| '',/);
-  const host = read('web/core/skin-host.js');
-  assert.match(host, /channelNew: \(\) => false,/, 'kept for layouts built against it, never a channel');
-  assert.match(host, /channelView: \(\) => live\(\) \? shell\.chatChannelView\?\.\(\) \|\| '' : '',/);
+  // ⌥N (desktop-pickany.js): the channel box in front takes it, else a New chat. Never a channel.
+  const keys = readFileSync(new URL('../web/desktop/desktop-pickany.js', import.meta.url), 'utf8');
+  const altN = post => {
+    const calls = [];
+    const ctx = { calls, menu: false, alt: true, shift: false, code: 'KeyN', e: { repeat: false }, hit: fn => (fn(), true), closePalette() {}, toggleKeys() {}, closeSettings() {}, closeUsage() {},
+      chanPost: () => (calls.push('chanPost'), post), newChat: () => calls.push('newChat') };
+    vm.runInNewContext(`(() => { ${line(keys, "    if ((menu || alt) && !shift && code === 'KeyN') return hit(")} return false; })()`, ctx);
+    return j(calls);
+  };
+  assert.deepEqual(altN(true), ['chanPost'], '⌥N with a channel box in front: its box');
+  assert.deepEqual(altN(false), ['chanPost', 'newChat'], '⌥N on the list: a New chat');
+  // The desktop shell hands the layouts its channel post and tab (desktop-boot.js) ...
+  const boot = readFileSync(new URL('../web/desktop/desktop-boot.js', import.meta.url), 'utf8');
+  const shell = vm.runInNewContext(`({ ${line(boot, '    chatChannelPost: () =>')}\n${line(boot, '    chatChannelView: () =>')} })`, { chanPost: () => 'posted', CHATS: { chanView: () => 'channels' } });
+  assert.equal(shell.chatChannelPost(), 'posted'); assert.equal(shell.chatChannelView(), 'channels');
+  // ... and the layout API (skin-host-shellapi.js) passes them on; channelNew never makes a channel.
+  const api = readFileSync(new URL('../web/core/skin-host-shellapi.js', import.meta.url), 'utf8');
+  const sessions = on => vm.runInNewContext(`({ ${line(api, '        channelPost: () =>')}\n${line(api, '        channelNew: () =>')}\n${line(api, '        channelView: () =>')} })`,
+    { live: () => on, skinHostVars: { shell: shell } });
+  assert.equal(sessions(true).channelNew(), false, 'kept for layouts built against it, never a channel');
+  assert.equal(sessions(true).channelView(), 'channels'); assert.equal(sessions(true).channelPost(), true);
+  assert.equal(sessions(false).channelView(), '', 'a layout that is not live gets nothing');
 });
 
 // --- the AI apps sidebar's + (layouts/ai-apps/desktop.js): its tab decides ---
