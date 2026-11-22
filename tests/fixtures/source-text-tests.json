@@ -34,12 +34,9 @@
   "browser acceptance cannot relax normal title contrast below 4.5:1"
  ],
  "app-windows.test.mjs": [
-  "Android wiring: the switch is the main window\\'s, launches need a tap, Back returns to the link once",
-  "the switch is in the catalog, off by default, and names its issue"
+  "Android wiring: the switch is the main window\\'s, launches need a tap, Back returns to the link once"
  ],
  "assist-attach.test.mjs": [
-  "the switch is in the catalog and off by default",
-  "the corner orb shows Camera and Attach only when native says the switch is on, and never on the lock screen",
   "the picker step and the camera file are private to WizardOS"
  ],
  "box-switch-catalog.test.mjs": [
@@ -54,12 +51,6 @@
  "chat-file-download-preview.test.mjs": [
   "the card Download goes through the viewer save path (native, Android DownloadManager, browser)"
  ],
- "chat-row-swipe.test.mjs": [
-  "row action swipe is limited to Novairecito phone palettes",
-  "every swipe only reveals explicit accessible actions",
-  "cancel, scroll, outside tap and Back close without invoking an action",
-  "open swipe holds list repaints while stock and desktop gestures remain"
- ],
  "chats-list-model.test.mjs": [
   "both shell adapters delegate one projection, preserving errors/day groups, actions, pins and routed-scope input",
   "notifications share time/priority/ties, never mutate inputs, and read notes stay last"
@@ -69,10 +60,6 @@
  ],
  "companion-pane.test.mjs": [
   "both shells load the generic module, legacy adapter only names old app, and root Back calls the shared pair"
- ],
- "composer-label-row-one-colour.test.mjs": [
-  "landscapes-light: label-row field matches its light textarea",
-  "obsidian: the model label never wears the skin button fill"
  ],
  "composer-mic-meeting-loan.test.mjs": [
   "startVoice sets the reply pin with the take itself, so it survives the asynchronous loan"
@@ -87,12 +74,6 @@
  "desktop-channel-back.test.mjs": [
   "wiring: the Back sits left of the title, every sidebar open clears it, the header repaints it; tokens only"
  ],
- "desktop-first-message-guide.test.mjs": [
-  "the desktop shell loads the tour module and its styles, before setup-launch and desktop.js",
-  "desktop adapter: first-run guide, ?view=tour and the Keys sheet replay all reach WosTour.desk",
-  "Esc / Back registers the desktop guide above surface navigation; newer sheets win by recency",
-  "both shells boot the Welcome modal and open it for the Setup app"
- ],
  "desktop-host.test.mjs": [
   "desktop loads the adapter before boot; Classic controls and skin adapter reuse host lifecycle"
  ],
@@ -104,10 +85,6 @@
  ],
  "desktop-recording-discard.test.mjs": [
   "the card paints with skin tokens and the shell kit (no literal colours: light skins stay readable)"
- ],
- "desktop-recording-recovery.test.mjs": [
-  "retained recordings identify their source, time and size",
-  "retained audio downloads through a connected link with visible feedback"
  ],
  "device-recording.test.mjs": [
   "app.js reaches the shell recorder only through DEV() and keeps the full app\\'s bridge first"
@@ -134,10 +111,6 @@
  "failure-reason.test.mjs": [
   "Errors row and thread use the reason in place of \"Error: <message>\" and the generic failed_turn bubble"
  ],
- "instant-capture-slow-save.test.mjs": [
-  "the first-row save of an instant take (openDB + put) goes through the same quiet retry",
-  "no instant-take storage failure anywhere emits the old notice, and getInfo carries no storage warning"
- ],
  "landscapes-chat-contrast.test.mjs": [
   "Landscapes Light read previews clear the normal-text contrast floor"
  ],
@@ -153,15 +126,6 @@
  ],
  "lock-screen-player.test.mjs": [
   "Android: exactly Music and Podcasts, the tap opens the playing app, Podcasts is spoken word with skip buttons"
- ],
- "lookup-pop.test.mjs": [
-  "Look up is hidden in private/Incognito threads and inside the popover itself; the tap paints before any request",
-  "popover is opaque, skinned by --wz-* tokens, selectable, and owns one Back layer"
- ],
- "manager-orb-route.test.mjs": [
-  "phone start pins destination before asynchronous recording",
-  "phone Manager audio branches before generic staging/STT fallback",
-  "outbox excludes Manager from generic delivery and uses same receipt identity"
  ],
  "meeting-update-wiring.test.mjs": [
   "both replacement receivers preserve the meeting before ordinary crash recovery",
@@ -275,7 +239,6 @@
  "phone-integration.test.mjs": [
   "phone version stays at or above the Settings-style ID release (0.10.15/79) and preserves published vault storage names",
   "published agent-name identity and owner signing identity have distinct storage",
-  "signed release gate pins the published upgrade baseline and WizardOS signing env",
   "one device port dispatches vault and identity independently and revokes both on navigation"
  ],
  "photos-backup.test.mjs": [
@@ -306,11 +269,6 @@
  ],
  "report-replies-unread.test.mjs": [
   "Ready keeps a thread whose only fresh news is a report (week cutoff and order use the same time)"
- ],
- "resources-bars-shared.test.mjs": [
-  "one group list feeds every bar host; Settings hosts count as viewers so readings stay fresh",
-  "Settings styles the bars in the skin\\'s own tokens (stock skins included), scoped to the Resources page",
-  "a Settings host keeps the readings polling (not only Home), and the detail sheet returns focus to the bar that opened it"
  ],
  "route-opens.test.mjs": [
   "every shell entry point asks the layout first, with the stock path as its go (desktop)",
@@ -372,11 +330,6 @@
  ],
  "sidebar-chats-view.test.mjs": [
   "the switch ships off: listed in the catalog, never a default, scoped CSS"
- ],
- "sigils-every-app.test.mjs": [
-  "phone navigation keeps active and inactive app marks smaller and inside the orb",
-  "the fallback CSS keeps the mask: no rule turns a letter mark back into a painted box",
-  "the generated files are in sync with the template (rebuild with tools/sigils/build.py)"
  ],
  "skin-owner-authority.test.mjs": [
   "owner correction is an existing instruction, not an unresolved opacity decision",
