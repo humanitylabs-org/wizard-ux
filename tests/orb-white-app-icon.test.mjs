@@ -65,7 +65,7 @@ const template = fs.readFileSync(new URL('../tools/sigils/sigils.template.js', i
 // mini-dom with the bits of CSSStyleDeclaration orb() uses (getPropertyValue reads the style attribute too).
 function styled(doc) {
   const fix = el => {
-    if (el.style.setProperty) return el;
+    if (el.style.own) return el;
     const own = new Map();
     el.style.setProperty = (k, v, p) => own.set(k, [v, p]);
     el.style.getPropertyValue = k => own.get(k)?.[0] ?? ((el.getAttribute('style') || '').split(';').map(d => d.split(/:(.*)/s)).find(([n]) => n.trim() === k)?.[1]?.trim() || '');

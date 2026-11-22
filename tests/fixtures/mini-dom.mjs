@@ -16,7 +16,7 @@ class Text {
 class Element {
   constructor(tag, doc) {
     this.nodeType = 1; this.tagName = tag.toUpperCase(); this.localName = tag.toLowerCase(); this.attrs = new Map(); this.childNodes = [];
-    this.parentNode = null; this.ownerDocument = doc; this.listeners = {}; this.style = styleObject(); this._value = null;
+    this.parentNode = null; this.ownerDocument = doc; this.listeners = {}; this.style = styleObject(this); this._value = null;
   }
   get children() { return this.childNodes.filter(n => n.nodeType === 1); }
   get firstElementChild() { return this.children[0] || null; }
@@ -122,13 +122,18 @@ export function parse(html, doc) {
   const out = [...root.childNodes]; for (const n of out) n.parentNode = null; return out;
 }
 
-// element.style: a plain object of the properties set, plus the CSSStyleDeclaration methods (not enumerable).
-function styleObject() {
+// element.style: a plain object of the properties set, plus the CSSStyleDeclaration methods (not enumerable);
+// getPropertyValue also reads the element's style attribute, as a browser does.
+function styleObject(el) {
   const st = {};
   Object.defineProperties(st, {
-    setProperty: { value(k, v) { st[k] = String(v); } },
-    removeProperty: { value(k) { const v = st[k]; delete st[k]; return v ?? ''; } },
-    getPropertyValue: { value(k) { return st[k] ?? ''; } },
+    setProperty: { writable: true, configurable: true, value(k, v) { st[k] = String(v); } },
+    removeProperty: { writable: true, configurable: true, value(k) { const v = st[k]; delete st[k]; return v ?? ''; } },
+    getPropertyValue: { writable: true, configurable: true, value(k) {
+      if (k in st) return st[k];
+      const d = String(el.getAttribute?.('style') || '').split(';').map(x => x.split(/:(.*)/s)).find(([n]) => n.trim() === k); // the style attribute
+      return d?.[1]?.trim() ?? '';
+    } },
   });
   return st;
 }
