@@ -32,7 +32,7 @@ export function listFixture({ status = false, query = '', busy = false, footer =
   const render = source.slice(source.indexOf('  function renderChatList('), source.indexOf('  /* Attachments and voice notes; core/chats-attach.js.'));
   vm.runInContext(`${constants}\n${render}\nthis.render = renderChatList; this.toggle = toggleSection;`, ctx);
   return {
-    state, writes,
+    ctx, state, writes,
     render(q = state.q) { state.q = q; ctx.render(w, el); return el.innerHTML; },
     toggle(k) { ctx.toggle(w, k); return el.innerHTML; },
   };
