@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import { withShellParts } from './fixtures/shell-parts.mjs';
+import { createDocument } from './fixtures/mini-dom.mjs';
+import { block, runRecording } from './fixtures/source-slice.mjs';
 const read = p => withShellParts(fs.readFileSync(new URL('../' + p, import.meta.url), 'utf8'));
 const relaySrc = read('web/core/photos-relay.js');
 
@@ -38,10 +40,11 @@ test('Settings holds no Photos row: no feature, no page mapping, no styles, no m
   assert.doesNotMatch(settings, /photos/i);
   assert.doesNotMatch(read('web/core/settings.css'), /\.ph-|photos/i);
   assert.equal(fs.existsSync(new URL('../web/core/photos-settings.js', import.meta.url)), false);
+  // both shells load the relay (and no Photos settings module), as the browser reads the page
   for (const f of ['web/index.html', 'web/desktop.html']) {
-    const h = read(f);
-    assert.doesNotMatch(h, /photos-settings\.js/, f);
-    assert.match(h, /<script src="core\/photos-relay\.js"><\/script>/, f);
+    const h = read(f), d = createDocument(); d.documentElement.innerHTML = h.slice(h.indexOf('<head'), h.lastIndexOf('</html>'));
+    const src = d.querySelectorAll('script[src]').map(x => x.getAttribute('src'));
+    assert.ok(src.includes('core/photos-relay.js'), f); assert.ok(!src.some(x => /photos-settings/.test(x)), f);
   }
 });
 
@@ -97,16 +100,31 @@ test('relay accepts desktop window frames as well as phone app frames', () => {
 });
 
 test('relay method list matches the native allowlist (plus legacy open)', () => {
+  // the Java allowlist (data), against what the real relay forwards when the Photos frame asks
   const policy = read('android/app/src/main/java/ai/wizards/os/photos/PhotosBridgePolicy.java');
   const nativeMethods = policy.match(/METHODS = [^;]*asList\(\s*([^)]*)\)/s)[1].match(/"(\w+)"/g).map(x => x.slice(1, -1));
-  const relay = relaySrc.match(/new Set\(\[([^\]]*)\]\)/)[1].match(/'(\w+)'/g).map(x => x.slice(1, -1));
-  assert.deepEqual(relay.filter(m => m !== 'open').sort(), nativeMethods.sort());
+  const forwards = method => { const port = nativePort(), sh = shell({ port, frames: ['/photos/'] }); call(sh, sh.iframes[0].contentWindow, method, {}); return port.sent.length === 1; };
+  for (const m of nativeMethods) assert.ok(forwards(m), `${m} reaches the native bridge`);
+  assert.ok(forwards('open'), 'and the legacy open');
+  for (const m of ['deleteEverything', 'exportKeys', 'constructor', '__proto__']) assert.ok(!forwards(m), `${m} is refused`);
 });
 
 test('old Settings deep links (backup notification, native screen) open the Photos app instead', () => {
-  const app = read('web/app.js');
-  assert.match(app, /h\.action === 'settings' && \(h\.focus === 'photos-backup' \|\| h\.focus === 'photos'\)\) \{ if \(!window\.WizOpenApp\?\.\('photos'\)\)/);
-  assert.ok(app.indexOf("h.focus === 'photos-backup'") < app.indexOf("if (h.action === 'unsent' || h.action === 'settings')"));
+  // the phone's real hand-off (window.__wosHandoff), with and without the Photos app installed
+  const app = read('web/app.js'), at = app.indexOf('  window.__wosHandoff = h => {');
+  const handoff = (h, installed) => {
+    const ctx = runRecording(`${block(app, '  window.__wosHandoff = h => {', at).replace(/^\s*window\.__wosHandoff = /, 'this.handoff = ')};`,
+      { window: { WizOpenApp: id => (ctx0.opened.push(id), installed), WosSettings: { features: [{ id: 'photos-backup' }, { id: 'look' }] } }, APP: {}, opened: [] });
+    const ctx0 = ctx; ctx.opened = [];
+    ctx.handoff(h); return { opened: ctx.opened, calls: ctx.calls.map(c => c[0]) };
+  };
+  for (const focus of ['photos-backup', 'photos']) {
+    const r = handoff({ action: 'settings', focus }, true);
+    assert.deepEqual(r.opened, ['photos'], focus); assert.ok(!r.calls.includes('openSettings'), `${focus}: never Settings`);
+  }
+  const missing = handoff({ action: 'settings', focus: 'photos-backup' }, false);
+  assert.ok(missing.calls.includes('toast') && !missing.calls.includes('openSettings'), 'not installed: says where it lives');
+  assert.ok(handoff({ action: 'settings', focus: 'look' }, true).calls.includes('openSettings'), 'other Settings links still open Settings');
 });
 
 test('native: bridge keeps credentials and sign-in on the device; legacy open and the deep link stay', () => {
