@@ -137,10 +137,7 @@
   "a list paint over the document-scrolled thread leaves document scroll in the same paint"
  ],
  "chat-channels.test.mjs": [
-  "voice: the orb and the box mic in front of a channel start a new chat there, with the box riding along",
-  "issue 1263: every list paint and every rerender put the feed back in its place",
-  "issue 1291: every owner post path calls it (box mic, voice keys and the orb via sendChat\\'s channel); typed sends keep chanToEnd",
-  "issue 1336: the renderer draws Activity, archive toasts offer Undo, and Activity takes its own taps"
+  "voice: the orb and the box mic in front of a channel start a new chat there, with the box riding along"
  ],
  "chat-file-download-preview.test.mjs": [
   "the card Download goes through the viewer save path (native, Android DownloadManager, browser)"

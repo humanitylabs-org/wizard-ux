@@ -9,8 +9,16 @@ import { withAppParts } from './fixtures/app-parts.mjs';
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 import { withLiveParts } from './fixtures/live-parts.mjs';
 import { createDocument } from './fixtures/mini-dom.mjs';
+import { listFixture } from './fixtures/chats-list-render.mjs';
 import { block as fnBlock, expression, runRecording } from './fixtures/source-slice.mjs'; // live.js parts moved out verbatim (issue 1665)
 const src = withParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'));
+// The real list renderer (tests/fixtures/chats-list-render.mjs) with the Channels block loaded: names the Channels
+// code reaches that the fixture does not have render nothing ('').
+function channelsList(extra) {
+  const f = listFixture(); Object.assign(f.ctx, { chanHead: () => '', chanOpen: () => null, chanHold() {} }, extra);
+  const render = q => { for (let n = 0; n < 40; n++) { try { return f.render(q); } catch (e) { const m = /^(\w+) is not defined$/.exec(e.message); if (!m) throw e; f.ctx[m[1]] = () => ''; } } throw new Error('too many'); };
+  return { f, render };
+}
 const srcLine = (from, k) => { const i = from.indexOf(k); assert.ok(i >= 0, k); return from.slice(from.lastIndexOf('\n', i) + 1, from.indexOf('\n', i)); };
 const app = withAppParts(readFileSync(new URL('../web/app.js', import.meta.url), 'utf8'));
 const cut = (a, b) => { const i = src.indexOf(a); assert.ok(i >= 0, a); return src.slice(i, src.indexOf(b, i)); };
@@ -930,9 +938,23 @@ test('issue 1263: the first unread follows each row\'s own agent (main vs routed
 });
 
 test('issue 1263: every list paint and every rerender put the feed back in its place', () => {
-  assert.match(src, /if \(sc\) sc\.scrollTop = 0; if \(typeof chanHold === 'function'\) chanHold\(w\.id\); \} \}/, 'rerenderList');
-  assert.match(src, /if \(chanOn && typeof chanHold === 'function'\) chanHold\(w\.id\);/, 'renderChatList, where the Channels block is loaded');
-  assert.match(src, /if \(typeof chanScrolled === 'function'\) chanScrolled\(id, e\.target\)/, 'the list scroll listener');
+  // rerenderList: the list repaints from the top, then the open feed takes its place back
+  const doc = createDocument(), el = doc.createElement('div'); el.innerHTML = '<div class="ch-scroll"></div>';
+  const sc = el.querySelector('.ch-scroll'); sc.scrollTop = 120;
+  const r = runRecording(`${fnBlock(src, '  function rerenderList(w) {')}\nthis.rerender = rerenderList;`, { elOf: () => el, ch: () => ({}) });
+  r.rerender({ id: 'w1', thread: null });
+  assert.equal(sc.scrollTop, 0); assert.deepEqual(r.calls.map(c => c[0]), ['renderChatList', 'chanHold'], 'rerenderList');
+  assert.equal(r.calls[1][1], 'w1');
+  // renderChatList, where the Channels block is loaded (tests/fixtures/chats-list-render.mjs runs the real renderer)
+  const held = [], { render } = channelsList({ chanHold: id => held.push(id) });
+  render(''); assert.deepEqual(held, ['synthetic'], 'renderChatList');
+  // the list's scroll listener tells the feed it moved
+  const root = doc.createElement('div'); root.innerHTML = '<div class="ch-list"><div class="ch-scroll"></div></div>'; doc.body.appendChild(root);
+  const g = runRecording(`${fnBlock(src, '  function bindGestures(root) {')}\nthis.bind = bindGestures;`, { document: doc, window: { WizComposerInput: { bind() {} } }, idOf: () => 'w1', readGuard: () => ({ touches: new Set() }), Date, Math, Object });
+  g.bind(root);
+  const list = root.querySelector('.ch-list > .ch-scroll');
+  root.listeners.scroll.filter(l => String(l.f).includes('chanScrolled')).forEach(l => l.f({ target: list }));
+  assert.deepEqual(g.calls.filter(c => c[0] === 'chanScrolled').map(c => [c[1], c[2] === list]), [['w1', true]], 'the list scroll listener');
 });
 
 test('issue 1263: the tap that opens an unread channel and the hold\'s own scroll never replace the New line as the place', () => {
@@ -1480,12 +1502,28 @@ test('issue 1291: General\'s feed follows the owner\'s General posts: every agen
   assert.equal(f.chanOwnPost('', ''), 1); assert.deepEqual({ ...f.w.chan.at }, { end: true });
 });
 
-test('issue 1291: every owner post path calls it (box mic, voice keys and the orb via sendChat\'s channel); typed sends keep chanToEnd', () => {
-  assert.match(src, /if \(isNew && typeof opts\.space === 'string' && it\?\.sessionId && typeof chanOwnPost === 'function'\) chanOwnPost\(opts\.space, it\.agent \?\? AGID \?\? ''\);/);
+test('issue 1291: every owner post path calls it (box mic, voice keys and the orb via sendChat\'s channel); typed sends keep chanToEnd', async () => {
+  // sendChat with a channel's Space: the owner's own post moves that channel's read mark
+  const ctx = runRecording(`${fnBlock(src, '  async function sendChat(')}\nthis.sendChat = sendChat;`, {
+    W: { w1: { id: 'w1', app: 'chats', thread: null } }, ch: () => ({ draft: '', files: [] }), focusOf: () => null, AGID: '', MAX_FILES: 10, window: {}, Promise, Date, Object, Array, String, JSON, Math, Error, Set, Map,
+    OUTBOX: { enqueue: async it => ({ ...it, sessionId: 's9', agent: 'merlin', durable: true }) }, joinWords: (a, b) => [a, b].filter(Boolean).join('\n\n'),
+    KIT: { drafts: { get: () => ({}), clear() {}, set() {} } }, isWorking: () => false, pendRef: f => f });
+  await ctx.sendChat('w1', 'hello', 'voice', null, { sid: '__new__', space: 'launch', away: true });
+  assert.deepEqual(ctx.calls.filter(c => c[0] === 'chanOwnPost').map(c => c.slice(1)), [['launch', 'merlin']]);
+  // chat-power's box mic: a recorded post pinned to a channel calls it too
   const power = readFileSync(new URL('../web/core/chat-power.js', import.meta.url), 'utf8');
-  assert.match(power, /if \(typeof pinned === 'string' && it\?\.sessionId\) A\.chanOwnPost\?\.\(pinned, it\.agent \|\| ''\);/);
-  assert.match(src, /spaceMember, chanOwnPost, chanBox: [^\n]*setChanModel \}\) : null;/, 'handed to chat-power');
-  assert.match(cut('  async function channelSend(', '  function chanDropSending'), /renderChatList\(w, elOf\(wid\)\); chanToEnd\(wid\);[\s\S]*chanRepaint\(\); chanToEnd\(wid\);/);
+  const line = srcLine(power, "if (typeof pinned === 'string' && it?.sessionId) A.chanOwnPost?.(pinned, it.agent || '');").trim();
+  const own = [], A = { chanOwnPost: (...a) => own.push(a) };
+  vm.runInNewContext(line, { pinned: 'voice', it: { sessionId: 's1', agent: 'hermes' }, A }); vm.runInNewContext(line, { pinned: null, it: { sessionId: 's2' }, A });
+  assert.deepEqual(own, [['voice', 'hermes']]);
+  // a typed channel post: on screen and at the end on this frame, and again once sent
+  const form = { querySelector: () => ({ value: 'typed' }) };
+  const cs = runRecording(`${fnBlock(src, '  async function channelSend(')}\nthis.send = channelSend;`, { W: { w1: { id: 'w1' } }, chanDraftKey: () => 'chan:launch', chanOpen: () => ({ id: 'launch', name: 'Launch' }), ch: () => ({ files: [] }),
+    H: {}, CHAN_SENDING: [], Date, Math, String, sendChat: async () => ({ sessionId: 's3' }), winAgent: () => '', AGS: () => null, KIT: { drafts: { clear() {} } } });
+  await cs.send('w1', form);
+  const order = cs.calls.map(c => c[0]).filter(n => n === 'renderChatList' || n === 'chanToEnd' || n === 'chanRepaint');
+  assert.deepEqual(order.slice(0, 2), ['renderChatList', 'chanToEnd'], 'typed sends keep chanToEnd');
+  assert.deepEqual(order.slice(-2), ['chanRepaint', 'chanToEnd']);
 });
 
 // wizard-ux issue 1316 (James, 12 Nov 2026, supersedes the opening place and New line of 1263 and 1269): a Slack-style
@@ -2239,11 +2277,26 @@ test('issue 1336: Undo after an archive (about 5 s) restores; Activity shows eve
   f.w.chan = null;
 });
 
-test('issue 1336: the renderer draws Activity, archive toasts offer Undo, and Activity takes its own taps', () => {
-  assert.match(src, /else if \(chanOn && !side && !feed && !n && !F && typeof activityBody === 'function'\) body = draftSec \+ activityBody\(w, all, listNotes\);/);
+test('issue 1336: the renderer draws Activity, archive toasts offer Undo, and Activity takes its own taps', async () => {
   assert.doesNotMatch(src, /<h5>Layout<\/h5>|data-chgroupday aria-pressed/, 'the By day / By status layout choices went with the switch (issue 1258)');
-  assert.match(src, /if \(!\(a === 'done' && typeof actUndo === 'function' && actUndo\(msg\[1\],[^\n]+\n\s+toast\(msg\[0\], msg\[1\], 1600\);/);
-  assert.match(src, /function activityClick\(e, w\) \{\n\s+if \(!w \|\| w\.thread\) return false;/);
+  // the real list renderer with Channels loaded draws Activity in place of the sections
+  const { render } = channelsList({ activityBody: () => '<div class="ch-activity">Activity</div>' });
+  assert.match(render(''), /<div class="ch-activity">Activity<\/div>/);
+  assert.doesNotMatch(render('match'), /ch-activity/, 'a search shows its results instead');
+  // threadAct: an archive offers Undo (actUndo) in place of the plain toast
+  const act = async (undo) => {
+    const ctx = runRecording(`${fnBlock(src, '  async function threadAct(wid, sid, a) {')}\nthis.act = threadAct;`, { W: { w1: { id: 'w1', thread: null } }, owner: id => id, rowOf: () => ({ id: 't1' }), ACT: { done: 1 }, keepThreadOpen: () => true, followUpActive: () => false, actUndo: undo, window: {}, Promise, Date, Object });
+    try { await ctx.act('w1', 't1', 'done'); } catch (_) { /* the write after the toast is not under test */ }
+    return ctx.calls.filter(c => c[0] === 'toast' && c[2] === 'Archived').map(c => c[0]);
+  };
+  const offered = [];
+  assert.ok(!(await act((m, fn) => { offered.push(m); return true; })).includes('toast'), 'Undo replaces the plain toast');
+  assert.deepEqual(offered, ['Archived']);
+  assert.ok((await act(undefined)).includes('toast'), 'no Undo (Channels not loaded): the plain toast');
+  // Activity's taps: never on an open thread
+  const ac = runRecording(`${fnBlock(src, '  function activityClick(e, w) {')}\nthis.click = activityClick;`, {});
+  assert.equal(ac.click({ target: { closest: () => null } }, { id: 'w1', thread: 't1' }), false);
+  assert.equal(ac.click({ target: { closest: () => null } }, null), false);
 });
 
 test('issue 1336 (Codex P2): Undo waits for the archive still in flight, then restores; a refused restore says so', async () => {
