@@ -82,9 +82,17 @@ test("Hermes' failed_turn notice is marked, and hidden only when a reconnect pan
   assert.match(chats, /s\?\.safeError && !s\?\.reconnect && s\?\.queueReason !== 'provider_access' \?/);
 });
 
-test('the reconnect click is handled before Retry in the panel and in Errors rows', () => {
+test('the reconnect click is handled before Retry in the panel and in Errors rows', async () => {
   const power = read('web/core/chat-power.js');
-  const at = power.indexOf("t.closest('[data-chreconnect]')");
-  assert.ok(at > 0 && at < power.indexOf("t.closest('[data-chretry]')") && at < power.indexOf("t.closest('[data-errretry]')"));
+  const { block, runRecording } = await import('./fixtures/source-slice.mjs');
   assert.match(power, /data-chreconnect="\$\{esc\(s\.reconnect\.appId\)\}"/);
+  const sign = { dataset: { chreconnect: 'wizard-claude', recoveryRun: 'run_1' } };
+  // the click (real chat-power click): a press on Sign in inside a panel that also has Retry opens the app, never retries
+  const click = runRecording(block(power, '  function click(e, id) {') + '\nglobalThis.click = click;', { H: { win: () => ({ id: 'w1', thread: 't1' }) }, A: { owner: id => id }, W: {} });
+  const nest = { closest: sel => (sel === '[data-chreconnect]' ? sign : sel === '[data-chretry]' || sel === '[data-errretry]' ? { dataset: { errretry: 't1' } } : null) };
+  click.calls.length = 0;
+  click.click({ target: nest, preventDefault() {}, stopPropagation() {} }, 'w1');
+  const did = click.calls.map(c => c[0]).filter(n => n === 'openReconnect' || n === 'retryThread');
+  assert.deepEqual(did, ['openReconnect'], 'reconnect wins over Retry');
+  assert.deepEqual(JSON.parse(JSON.stringify(click.calls.find(c => c[0] === 'openReconnect'))), ['openReconnect', 'wizard-claude', true, 'run_1']);
 });
