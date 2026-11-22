@@ -4,6 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { colours, linkOrder, onSkin } from './fixtures/w5-css.mjs';
 
 const read = p => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
 const obsidian = read('web/skins/obsidian/skin.css');
@@ -17,39 +18,41 @@ const VIOLET = /var\(--violet|143,\s*99,\s*255|122,\s*77,\s*255|185,\s*155,\s*25
 const O = 'html[data-skin^="obsidian"][data-shell="desktop"]';
 const L = 'html[data-skin^="landscapes"][data-shell="desktop"]';
 
+// The real cascade on the desktop (desktop.html's own sheets in its order, then the skin package) over a skeleton of
+// each element (tests/fixtures/w5-css.mjs).
+const order = linkOrder(read('web/desktop.html'));
+const CORE = ['core/skins.css', 'core/chats.css', 'desktop/desktop.css'].sort((a, b) => order.indexOf(a) - order.indexOf(b)).map(f => read('web/' + f));
+const sheetsFor = skin => [...CORE, skin.startsWith('landscapes') ? landscapes : obsidian];
+const on = (skin, sel) => onSkin(sheetsFor(skin), sel, { skin, shell: 'desktop' });
+const tint = (skin, sel) => colours(sheetsFor(skin), sel, { skin, shell: 'desktop' });
+
 test('the desktop voice button is a flat disc in skin colours with the mic visible', () => {
-  for (const [css, p, fill] of [[obsidian, O, /var\(--ob-tint\)/], [landscapes, L, /rgba\(255, 255, 255/]]) {
-    const disc = rule(css, `${p} .ch-compose button.ch-mic:not(.on)`);
-    assert.ok(disc, `${p} styles the voice disc`);
-    assert.match(disc, fill);
-    assert.doesNotMatch(disc, /radial-gradient/, 'no glossy sphere');
-    assert.doesNotMatch(disc, VIOLET);
-    assert.match(rule(css, `${p} .ch-compose button.ch-mic:not(.on) svg`) || '', /opacity:\s*1/, 'mic icon shows');
+  for (const [skin, fill] of [['obsidian', /var\(--ob-tint\)/], ['obsidian-light', /var\(--ob-tint\)/], ['landscapes', /rgba\(255, 255, 255/]]) {
+    const disc = on(skin, '.dchats .ch-compose button.ch-mic');
+    assert.match(disc.background || '', fill, `${skin}: the skin's own fill`);
+    assert.doesNotMatch(disc.background || '', /radial-gradient/, 'no glossy sphere');
+    assert.doesNotMatch(tint(skin, '.dchats .ch-compose button.ch-mic'), VIOLET);
+    assert.equal(on(skin, '.dchats .ch-compose button.ch-mic svg').opacity, '1', 'mic icon shows');
   }
 });
 
 test('the desktop + New chat button is a round skin button with no glow', () => {
-  const o = rule(obsidian, `${O} .dchats .ch-fab`) || '';
-  assert.match(o, /border-radius:\s*50%/);
-  assert.match(o, /background:\s*var\(--ob-fill\)/);
-  assert.match(o, /box-shadow:\s*none/);
-  const l = rule(landscapes, `${L} .dchats .ch-fab`) || '';
-  assert.match(l, /border-radius:\s*50%/);
-  assert.match(l, /background:\s*rgba\(255, 255, 255/);
-  assert.doesNotMatch(l, VIOLET);
-  assert.doesNotMatch(l, /0 10px 26px/, 'no coloured drop glow');
+  const o = on('obsidian', '.dchats .ch-fab');
+  assert.equal(o['border-radius'], '50%'); assert.equal(o.background, 'var(--ob-fill)'); assert.equal(o['box-shadow'], 'none');
+  const l = on('landscapes', '.dchats .ch-fab');
+  assert.equal(l['border-radius'], '50%'); assert.match(l.background || '', /^rgba\(255, 255, 255/);
+  assert.doesNotMatch(tint('landscapes', '.dchats .ch-fab'), VIOLET); assert.doesNotMatch(l['box-shadow'] || '', /0 10px 26px/, 'no coloured drop glow');
 });
 
 test('Landscapes desktop accents are frosted white, not core violet', () => {
   for (const sel of ['.ch-rdy-bar button.on', '.dchats .ch-row.cur', '.ws.cur', '.ch-compose textarea', '.ch-compose textarea:focus', '.msg.u .bub', '.win.focus', '.ch-row.unread .tp time', '.st.unread']) {
-    const r = rule(landscapes, `${L} ${sel}`);
-    assert.ok(r, `Landscapes styles ${sel}`);
-    assert.doesNotMatch(r, VIOLET, `${sel} has no violet`);
+    const c = tint('landscapes', sel);
+    assert.doesNotMatch(c, VIOLET, `${sel} has no violet`);
     // Owner bubbles use the opaque owner token, which Landscapes sets from its white ink (James, 8 Nov 2026).
-    assert.match(r, /rgba\(255, 255, 255|#fff|rgba\(0, 0, 0|var\(--wz-owner-message\)/, `${sel} uses white glass or ink`);
+    assert.match(c, /rgba\(255, 255, 255|#fff|rgba\(0, 0, 0|var\(--wz-owner-message\)/, `${sel} uses white glass or ink`);
   }
 });
 
 test('the private Kimi K3 slot keeps its purple', () => {
-  assert.match(landscapes, /html\[data-skin\^="landscapes"\] \.ms-o\.secure \{ color: var\(--secure\); \}/);
+  for (const skin of ['landscapes', 'landscapes-light']) assert.equal(on(skin, '.ms-o.secure').color, 'var(--secure)', skin);
 });
