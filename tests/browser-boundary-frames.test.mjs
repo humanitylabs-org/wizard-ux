@@ -2,6 +2,7 @@
 // web/core/browser-boundary-client.js (app), talking through a fake postMessage bus with real origin/source checks.
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { deskWorld, layout as aiAppsLayout } from './fixtures/ai-apps-world.mjs';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { withAppParts } from './fixtures/app-parts.mjs';
@@ -561,13 +562,20 @@ test('layout keys: a running layout adds its own ⌥ window keys; they reach the
 });
 
 test('layout keys wiring: the AI apps view takes its own window keys from a sandboxed app while it runs, never voice, send or chat keys', async () => {
-  const layout = read('web/layouts/ai-apps/desktop.js');
-  assert.match(layout, /const offFrameKeys = globalThis\.WizBrowserBoundary\?\.layoutKeys\?\.\(FRAME_KEYS\) \|\| null;/);
-  assert.match(layout, /return \(\) => \{\n    offAppKeys\?\.\(\);\n    offFrameKeys\?\.\(\);/, 'the view lets go when it is torn down');
-  const keys = JSON.parse(/export const FRAME_KEYS = Object\.freeze\((\[[^\]]*\])\)/.exec(layout)[1].replace(/'/g, '"'));
-  assert.ok(keys.includes('KeyH') && keys.includes('KeyK'), '⌥H Home and ⌥K search come across');
-  for (const k of ['KeyN', 'KeyS', 'KeyW', 'KeyD', 'KeyV', 'KeyC', 'Space', 'KeyE', 'KeyX', 'KeyZ', 'KeyB', 'KeyP', 'ArrowUp', 'ArrowDown', 'KeyU', 'KeyI'])
-    assert.equal(keys.includes(k), false, k + ' stays the app\'s while it has the keyboard');
+  // the real AI apps desktop view (tests/fixtures/ai-apps-world.mjs deskWorld) with a boundary that records the claim
+  const { w } = deskWorld(), claims = [], released = [];
+  globalThis.WizBrowserBoundary = { layoutKeys: keys => { const list = [...keys]; claims.push(list); return () => released.push(list); } };
+  try {
+    const off = (await aiAppsLayout()).default(w.api);
+    assert.equal(claims.length, 1, 'the view claims its window keys once it runs');
+    const keys = claims[0];
+    assert.ok(keys.includes('KeyH') && keys.includes('KeyK'), '⌥H Home and ⌥K search come across');
+    for (const k of ['KeyN', 'KeyS', 'KeyW', 'KeyD', 'KeyV', 'KeyC', 'Space', 'KeyE', 'KeyX', 'KeyZ', 'KeyB', 'KeyP', 'ArrowUp', 'ArrowDown', 'KeyU', 'KeyI'])
+      assert.equal(keys.includes(k), false, k + ' stays the app\'s while it has the keyboard');
+    assert.deepEqual(released, [], 'held while the view runs');
+    off?.();
+    assert.deepEqual(released, [keys], 'the view lets go when it is torn down');
+  } finally { delete globalThis.WizBrowserBoundary; }
 });
 
 test('keys: the claimed list reaches an app that is already connected', async () => {
