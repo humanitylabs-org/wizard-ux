@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { lookBox } from './fixtures/r5A-experience.mjs';
 
 const read = path => readFileSync(new URL('../' + path, import.meta.url), 'utf8');
 const SWITCH = 'wizard/lock-screen-player';
@@ -101,16 +102,19 @@ test('the off edge of the switch (wos:tweak-choice) triggers the release; other 
   assert.equal(calls, 1);
 });
 
-test('the switch is listed, off by default, linked to its issue', () => {
-  const cat = JSON.parse(read('web/tweaks/catalog.json'));
-  assert.ok(cat.tweaks.includes(SWITCH));
-  assert.ok(!cat.defaults.includes(SWITCH));
+test('the switch is listed, off by default, linked to its issue', async () => {
+  // The real Settings › Look list on the real catalog: listed, off on a fresh device and with the Wizard profile; the switch turns it on.
+  const fresh = await lookBox();
+  const row = fresh.row(SWITCH);
+  assert.ok(row, 'listed'); assert.equal(row.on, false, 'off by default'); assert.ok(!fresh.active().includes(SWITCH));
+  const wizard = await lookBox({ saved: { version: 1, off: {}, preset: 'wizard' } });
+  assert.ok(!wizard.active().includes(SWITCH), 'not in the Wizard profile');
+  await fresh.E.toggle(SWITCH); assert.ok(fresh.active().includes(SWITCH), 'the switch turns it on');
   const m = JSON.parse(read('web/tweaks/wizard/lock-screen-player/manifest.json'));
   assert.equal(m.id, SWITCH);
   assert.deepEqual(m.issues, ['humanitylabs-org/wizard-ux#1661']);
-  const profile = read('web/tweaks/wizard/profile.json');
-  assert.ok(!profile.includes(SWITCH));
 });
+
 
 test('Android: exactly Music and Podcasts, the tap opens the playing app, Podcasts is spoken word with skip buttons', () => {
   const policy = read('android/app/src/main/java/ai/wizards/os/audio/AudioPolicy.java');
