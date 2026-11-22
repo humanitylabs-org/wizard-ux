@@ -1,12 +1,12 @@
 // The app SDK (web/core/app-client.js) run whole in a vm, as an app page framed by the shell. `service` is what the
 // shell's WizAppServices.connect hands back (same-origin), or null for an app whose parent has no services (then
-// requests go by postMessage to the parent and are recorded in `posted`). Small stand-ins only: no real DOM. Its timers never hold the test process open.
+// requests go by postMessage to the parent and are recorded in `posted`). opaque: a sandboxed frame (origin 'null'). Small stand-ins only: no real DOM. Its timers never hold the test process open.
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 
 const SRC = readFileSync(new URL('../../web/core/app-client.js', import.meta.url), 'utf8');
 
-export function appClient({ service = null, path = '/wizard-music/' } = {}) {
+export function appClient({ service = null, path = '/wizard-music/', opaque = false } = {}) {
   if (service && !service.ready) service = { ready: () => true, ...service };
   const origin = 'https://wizard.example', posted = [], listeners = {}, connected = [], delays = [];
   const el = tag => ({ tag, style: {}, dataset: {}, children: [], attrs: {}, classList: { add() {}, remove() {}, toggle() {}, contains: () => false },
@@ -23,7 +23,7 @@ export function appClient({ service = null, path = '/wizard-music/' } = {}) {
     MutationObserver: class { observe() {} disconnect() {} }, matchMedia: () => ({ matches: false, addEventListener() {} }), getComputedStyle: () => ({ getPropertyValue: () => '' }),
     addEventListener: (t, fn) => (listeners[t] ||= []).push(fn), removeEventListener() {}, dispatchEvent: () => true,
     localStorage: { getItem: () => null, setItem() {}, removeItem() {} }, sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} } };
-  ctx.window = ctx; ctx.self = ctx; ctx.globalThis = ctx; ctx.origin = origin; ctx.top = parent;
+  ctx.window = ctx; ctx.self = ctx; ctx.globalThis = ctx; ctx.origin = opaque ? 'null' : origin; ctx.top = parent;
   vm.createContext(ctx);
   vm.runInContext(SRC, ctx);
   // The shell's answer to a request the app posted (by postMessage, no same-origin services).
