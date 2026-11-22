@@ -15,6 +15,14 @@ test('a test that reads source text and asserts a regex is in it, running nothin
 test('pins a line', () => { assert.match(src, /export const ACTS = \\[/); assert.ok(src.includes('move')); });`), ['text']);
 });
 
+test('a file reader or source string imported from a fixture is still only reading text', () => {
+  assert.deepEqual(kinds(`${HEAD}import { read, desktopSource } from './fixtures/some-harness.mjs';
+test('a', () => { assert.match(read('web/app.js'), /x/); assert.ok(desktopSource.includes('y')); });`), ['text']);
+  assert.deepEqual(kinds(`${HEAD}import { world } from './fixtures/some-harness.mjs';
+const src = readFileSync('web/app.js', 'utf8');
+test('b', () => { const w = world(); assert.ok(w.q('.x')); assert.match(src, /x/); });`), ['runs']);
+});
+
 test('importing the module, running it in node:vm or through Function counts as running code', () => {
   assert.deepEqual(kinds(`${HEAD}import { plan } from '../web/core/plan.js';
 test('a', () => { assert.equal(plan(1), 2); });`), ['runs']);

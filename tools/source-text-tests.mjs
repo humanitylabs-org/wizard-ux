@@ -84,9 +84,11 @@ const reEsc = t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 // Does code text mention the name as a whole identifier (not as a property)?
 const mentions = (name, text) => new RegExp(`(^|[^\\w$.])${reEsc(name)}(?![\\w$])`).test(text);
 const isParts = spec => /(^|\/)[\w-]*parts\.mjs$/.test(spec); // fixtures that only join moved-out source text back
+// an imported file reader or source string is not running code, wherever it comes from
+const READER = /^(read\w*|root|\w*(Source|Src))$/;
 const EXTERNAL_OK = /^node:(test|assert|assert\/strict|fs|fs\/promises|path|url|crypto|os|util)$/;
 
-function imports(src) {
+function imports(src, readers = new Set()) {
   const names = new Set();
   const re = /(^|\n)\s*import\s+([^'";]*?)\s*from\s*['"]([^'"]+)['"]/g;
   for (const m of src.matchAll(re)) {
@@ -94,7 +96,7 @@ function imports(src) {
     if (/^node:vm$|^vm$/.test(spec)) continue; // vm itself is matched by EXEC
     for (const part of m[2].replace(/[{}]/g, ',').split(',')) {
       const nm = part.trim().split(/\s+as\s+/).pop().replace(/^\*\s*as\s*/, '').trim();
-      if (/^[\w$]+$/.test(nm)) names.add(nm);
+      if (/^[\w$]+$/.test(nm)) (READER.test(nm) ? readers : names).add(nm);
     }
   }
   return names;
@@ -142,11 +144,11 @@ const POSITIVE = /\bassert\s*\.\s*(match|ok|equal|strictEqual|deepEqual|deepStri
 export function classifyFile(src) {
   const code = codeOnly(src);
   const decls = topDecls(code);
-  const runs = new Set(imports(src));
+  const importedReaders = new Set(), runs = new Set(imports(src, importedReaders));
   const ident = t => new Set([...t.matchAll(/(?<![\w$.])[A-Za-z_$][\w$]*/g)].map(x => x[0]));
   // top-level statements that run code (vm.runInNewContext(text, sandbox)) make the names they touch run code
   for (const stmt of topStatements(code)) if (!/^(?:export\s+)?(?:async\s+)?(?:function|class|const|let|var|import|test|it|describe)\b/.test(stmt) && EXEC.some(r => r.test(stmt))) for (const nm of ident(stmt)) if (decls.has(nm)) runs.add(nm);
-  const reads = new Set();
+  const reads = new Set(importedReaders); // an imported reader / source string reads source text
   const READ = /\b(readFileSync|readFile|readdirSync|readdir)\s*\(/;
   for (let changed = true; changed;) {
     changed = false;

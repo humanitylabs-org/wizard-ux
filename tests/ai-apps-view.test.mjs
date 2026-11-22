@@ -23,7 +23,12 @@ import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved 
 import { withShellParts } from './fixtures/shell-parts.mjs';
 import { withWebParts } from './fixtures/web-parts.mjs';
 
-import { root, read, settle, noComments, El, FakePointerEvent, world, deskWorld, layout, matchesSel } from './fixtures/ai-apps-world.mjs';
+import { El, FakePointerEvent, world, deskWorld, layout, matchesSel } from './fixtures/ai-apps-world.mjs';
+// file readers stay local (a reader is not running code: tools/source-text-tests.mjs counts fixture imports as running)
+const root = new URL('../', import.meta.url);
+const read = p => withShellParts(withWebParts(readFileSync(new URL(p, root), 'utf8')));
+const settle = () => new Promise(r => setTimeout(r, 15));
+const noComments = s => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/[^\n]*/g, '$1');
 
 test('packaging: an ordinary Miguel view tweak, off by default; the desktop wears AI apps, the phone keeps its stock view', async () => {
   const man = JSON.parse(read('web/tweaks/miguel/ai-apps/manifest.json'));
