@@ -115,7 +115,7 @@ export async function runFrameHotkeys({ stranded = false, appMisses = false, wel
       on: () => {}, goto: async u => {
         if (u.endsWith('/qa-desktop-frame/')) { // the script's own synthetic app page, served by its own route
           const body = await new Promise(res => ctxRoute({ request: () => ({ url: () => u, method: () => 'GET' }), fulfill: res, abort: () => res(null) }));
-          const doc = createDocument(); doc.documentElement.innerHTML = body.body.replace(/<script[\s\S]*?<\/script>/g, '');
+          const doc = createDocument(); doc.documentElement.innerHTML = body.body.split(/<script\b[\s\S]*?<\/script\s*>/i).join('');
           standalone = { doc, css: [...body.body.matchAll(/<style>([\s\S]*?)<\/style>/g)].map(m => m[1]).join('\n') };
         }
       },

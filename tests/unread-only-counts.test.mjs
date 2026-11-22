@@ -77,7 +77,7 @@ test('phone drawer: folded Ready tally is its unread count; Working/Snoozed keep
   const line = layout.slice(layout.indexOf('const tallyN ='), layout.indexOf('api.listen(h,', layout.indexOf('const tallyN =')));
   const c = { WizChatsListModel: modelContext({}).WizChatsListModel, out: [] };
   c.globalThis = c; vm.createContext(c);
-  const run = (k, rows) => vm.runInContext(`(() => { const k = ${JSON.stringify(k)}, rows = ${JSON.stringify(rows)}, on = false, word0 = 'W', h = { append(n) { out.push(n); }, setAttribute(a, v) { out.push(v); } }, el = (t, cls, a) => a['data-n'];\n${line}\n})()`, c);
+  const run = (k, rows) => { c.tallyKey = k; c.tallyRows = rows; return vm.runInContext(`(() => { const k = tallyKey, rows = tallyRows, on = false, word0 = 'W', h = { append(n) { out.push(n); }, setAttribute(a, v) { out.push(v); } }, el = (t, cls, a) => a['data-n'];\n${line}\n})()`, c); };
   c.out.length = 0; run('ready', [{ id: 1, unread: true }, { id: 2 }, { id: 3 }, { id: 4 }]);
   assert.deepEqual(c.out, ['1', 'W, 1 unread, folded']);
   c.out.length = 0; run('ready', [{ id: 1 }, { id: 2 }]);
