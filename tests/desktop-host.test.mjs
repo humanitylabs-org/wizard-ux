@@ -3,6 +3,9 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { withShellParts } from './fixtures/shell-parts.mjs';
+import { desktopPartBody } from './fixtures/desktop-parts.mjs';
+import { pageAssets } from './fixtures/w1-pages.mjs';
+import { block, runRecording } from './fixtures/source-slice.mjs';
 const read = file => withShellParts(readFileSync(new URL('../' + file, import.meta.url), 'utf8'));
 function fixture() {
   const jobs = [], framesQueue = [], calls = [], errors = [];
@@ -120,13 +123,40 @@ test('companion membership follows host group identity/count, ignores inactive w
   context.pane={desk:3,id:'other'}; context.watch(); assert.deepEqual(calls,['size','tile'],'same count on a new group is still a change'); calls.length=0;
   context.pane=null; context.watch(); assert.deepEqual(calls,['size','tile'],'minimize releases the group');
 });
+// The real host (fixture above) driven through the real Classic code that reaches it: the page's script order
+// (tests/fixtures/w1-pages.mjs parses desktop.html), the skin adapter desktop-boot.js hands WosSkinHost, the frame
+// hook in desktop-frames.js and the window close button in desktop-steps.js (slices run in node:vm).
 test('desktop loads the adapter before boot; Classic controls and skin adapter reuse host lifecycle', () => {
-  const html = read('web/desktop.html'), desktop = read('web/desktop/desktop.js');
-  assert.ok(html.indexOf('core/desktop-host.js') < html.indexOf('desktop/desktop.js'));
-  assert.equal(html.split('core/desktop-host.js').length, 2); assert.doesNotMatch(read('web/index.html'), /desktop-host/);
-  assert.match(desktop, /openApp: id => desktopHost\.openApp\(id\)/);
-  assert.match(desktop, /doc\.addEventListener\('pointerdown', \(\) => desktopHost\.focus\(el\.dataset\.win, \{ scroll: false \}\), true\)/);
-  assert.match(desktop, /if \(act === 'close'\) return desktopHost\.close\(id\)/);
+  const desk = pageAssets('desktop.html').srcs;
+  assert.equal(desk.filter(s => s === 'core/desktop-host.js').length, 1, 'desktop.html loads the host once');
+  assert.ok(desk.indexOf('core/desktop-host.js') < desk.indexOf('desktop/desktop.js'), 'before the shell boots');
+  assert.ok(!pageAssets('index.html').srcs.includes('core/desktop-host.js'), 'the phone has no desktop host');
+  const f = fixture();
+  // Skin adapter: WosSkinHost.attach({ openApp }) opens through the host.
+  let skinAdapter;
+  runRecording(block(desktopPartBody('boot'), '  window.WosSkinHost?.attach({') + ');', { window: { WosSkinHost: { attach: a => { skinAdapter = a; } } }, desktopHost: f.host });
+  assert.equal(skinAdapter.openApp('recorder'), true); assert.equal(skinAdapter.openApp('missing'), false);
+  assert.deepEqual(JSON.parse(JSON.stringify(f.calls.filter(c => c[0] === 'open'))), [['open', 'recorder'], ['open', 'missing']]);
+  // A click inside a same-origin app frame focuses its window through the host, without scrolling.
+  const w = { WizCore: {} };
+  vm.runInNewContext(read('web/desktop/desktop-frames.js'), { window: w });
+  const { watchFrame } = w.WizCore.desktopParts.frames({ APP: {}, desktopHost: f.host, desktopVars: { W: { app: { id: 'app', appId: 'recorder' } } }, fields: () => ({ bind() {} }) });
+  const listeners = {}, doc = { URL: 'https://box.test/recorder/', addEventListener: (t, fn) => { (listeners[t] ||= []).push(fn); }, defaultView: { addEventListener() {} } };
+  let load; watchFrame({ addEventListener: (t, fn) => { if (t === 'load') load = fn; }, getAttribute: () => '/recorder/', hasAttribute: () => false, contentDocument: doc, contentWindow: { location: {} } }, { dataset: { win: 'app' }, querySelector: () => null });
+  load(); f.calls.length = 0;
+  for (const fn of listeners.pointerdown) fn({});
+  assert.deepEqual(JSON.parse(JSON.stringify(f.calls)), [['focus', 'app', { scroll: false }]]);
+  assert.equal(f.state[0].focused, true);
+  // The window's close button closes through the host (which keeps the adapter's refusal).
+  let click;
+  runRecording(block(desktopPartBody('steps'), "  stage.addEventListener('click', e => {\n    const el = e.target.closest('.win')") + ');',
+    { stage: { addEventListener: (t, fn) => { click = fn; } }, desktopHost: f.host, W: { app: f.state[0] }, hud: null });
+  const target = { closest: sel => sel === '.win' ? { dataset: { win: 'app' } } : sel === '[data-wact]' ? { dataset: { wact: 'close' } } : null };
+  f.calls.length = 0; assert.equal(click({ target }), true);
+  assert.deepEqual(JSON.parse(JSON.stringify(f.calls)), [['close', 'app']]);
+  assert.equal(f.host.windows().some(x => x.id === 'app'), false);
+});
+test('desktop host reads no page, storage or network on its own', () => {
   assert.doesNotMatch(read('web/core/desktop-host.js'), /querySelector|localStorage|fetch\(/);
 });
 
