@@ -130,5 +130,14 @@ test('native draft admission precedes agent pin/navigation and conflicts do not 
 });
 
 test('Manager-only link ownership is unchanged', () => {
-  assert.match(services, /function managerAuthorized\(st\) \{\n    if \(!st \|\| st\.appId !== 'wizard-manager'/);
+  // the real managerAuthorized (app-services): thread links belong to the installed Manager window only, never Wisdom
+  const auth = runRecording(`${block(services, '  function managerAuthorized(st) {')}\nglobalThis.auth = managerAuthorized;`,
+    { valid: () => true, apps: () => [{ id: 'wizard-manager', kind: 'wizard', url: '/wizard-manager/' }, { id: 'wisdom', kind: 'wizard', url: '/wisdom/' }],
+      location: new URL('https://box.test/wizard-os-home/'), URL }).auth;
+  const st = (appId, path, extra = {}) => ({ appId, doc: {}, url: new URL(path, 'https://box.test/'), openThread() {}, ...extra });
+  assert.equal(auth(st('wizard-manager', '/wizard-manager/')), true, 'the installed Manager');
+  assert.equal(auth(st('wisdom', '/wisdom/')), false, 'Wisdom hosts a thread but never owns thread links');
+  assert.equal(auth(st('wizard-manager', '/elsewhere/')), false, 'a frame that is not the installed Manager page');
+  assert.equal(auth(st('wizard-manager', '/wizard-manager/', { openThread: null })), false, 'no thread opener');
+  assert.equal(auth(null), false);
 });
