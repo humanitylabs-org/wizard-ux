@@ -37,13 +37,39 @@ function fixture() {
  vm.runInContext(desktop.slice(desktop.indexOf('  function onKey('),desktop.indexOf("  addEventListener('keydown', e => onKey(e), true);")),c);
  return {state,hits,stack,c,w,press:()=>c.onKey({key:'Escape',preventDefault(){},stopPropagation(){},stopImmediatePropagation(){}})};
 }
-test('phone history/native Back and desktop Escape install the identical shared owner catalog',()=>{
- assert.match(phone,/WizEscapeBack\.installOwners\(phoneBack/);
- assert.match(desktop,/WizEscapeBack\.installOwners\(escapeBack/);
- assert.match(phone,/const transient = phoneBack\.run\(/);
- assert.match(phone,/escapeOverlay: close => phoneBack\.push\(close\)/);
- assert.match(desktop,/escapeOverlay: close => escapeBack\.push\(close\)/);
+// Each shell's own install call, run for real: the phone's Back part (web/app-back.js) and the desktop's install line
+// (web/desktop/desktop-pickany.js), both over the real core/escape-back.js. A spy on installOwners records which
+// owners each shell's stack holds right after the shared catalog went in.
+function installedBy(run) {
+  const w = {}, c = { window: w, document: { documentElement: {}, querySelector: () => null }, MutationObserver: class { observe() {} disconnect() {} }, queueMicrotask() {} };
+  vm.createContext(c); vm.runInContext(core, c);
+  const EB = w.WizEscapeBack, seen = [];
+  w.WizEscapeBack = { ...EB, installOwners: (stack, opts) => { const r = EB.installOwners(stack, opts); seen.push(Array.from(stack.names())); return r; } };
+  const out = run(c, w);
+  return { seen, out, w };
+}
+const anything = new Proxy({}, { get: (_, k) => (k === 'appVars' || k === 'V' ? {} : () => null) });
+
+test('phone history/native Back and desktop Escape install the identical shared owner catalog', () => {
+  const p = installedBy((c, w) => { vm.runInContext(read('app-back.js'), c); return w.WizCore.appParts.back(anything); });
+  const d = installedBy((c, w) => {
+    const pick = read('desktop/desktop-pickany.js'), line = pick.slice(pick.indexOf('  window.WizEscapeBack.installOwners(escapeBack,'), pick.indexOf("  watchEscape('pick'"));
+    c.escapeBack = w.WizEscapeBack.create(); c.CHATS = {}; c.LINKS = null; c.desktopVars = {};
+    vm.runInContext(line, c); return c.escapeBack;
+  });
+  assert.equal(p.seen.length, 1, 'the phone installs the shared owners once'); assert.equal(d.seen.length, 1, 'so does the desktop');
+  assert.ok(p.seen[0].length > 10, 'the catalog is the shared one'); assert.deepEqual(p.seen[0], d.seen[0], 'the same owners, in the same order');
+  // the phone's Back step asks that same stack first: an open shared owner (Lookup) takes the phone Back
+  let open = true, hits = 0;
+  const q = installedBy((c, w) => {
+    w.WosLookup = { get isOpen() { return open; }, back() { hits++; open = false; return true; } };
+    vm.runInContext(read('app-back.js'), c); return w.WizCore.appParts.back(anything);
+  });
+  assert.equal(q.out.phoneBack.names().includes('lookup'), true);
+  assert.ok(q.out.backStep(), 'Back was taken'); assert.equal(hits, 1, 'by the open owner, through the shared stack');
 });
+// The layouts' escapeOverlay hook (phoneBack.push / escapeBack.push) runs in layout-host tests (layout-host-*.test.mjs).
+
 test('enumerate EVERY registered shared Back handler: actual desktop Escape reaches each exactly once',()=>{
  const f=fixture(),expected=['welcome','orb-picker','share-wizard','pin-sheet','tour','share','lookup','selection','context','route','setup','reminder','viewer','viewer-menu','link-menu','links','downloads','row-swipe','space-picker','filter-sheet','thread-actions','chat-sheet','status','device','update-list','resources','os-update','os-update-sheet'];
  assert.deepEqual(Array.from(f.stack.names()).sort(),expected.sort());
