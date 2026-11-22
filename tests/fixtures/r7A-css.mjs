@@ -41,3 +41,30 @@ export function valueOf(el, list, prop, opts) {
   const c = computed(el, list, opts);
   return resolveVars(c[prop] ?? '', c);
 }
+
+// A resolved length in px: numbers in px, max()/min()/calc() with + and -, env(name, fallback) as its fallback.
+// NaN for anything else (%, vh, unknown functions). Enough to check how insets add up, not a layout engine.
+export function px(value) {
+  const s = String(value ?? '').trim();
+  let i = 0;
+  const ws = () => { while (s[i] === ' ') i++; };
+  const args = () => { const out = []; for (;;) { ws(); out.push(sum()); ws(); if (s[i] === ',') { i++; continue; } if (s[i] === ')') { i++; return out; } return [NaN]; } };
+  const atom = () => {
+    ws();
+    const fn = /^(max|min|calc|env)\(/.exec(s.slice(i));
+    if (fn) {
+      i += fn[0].length;
+      if (fn[1] === 'env') { const c = s.indexOf(',', i), e = s.indexOf(')', i); if (c < 0 || c > e) { i = e + 1; return NaN; } i = c + 1; const v = sum(); ws(); i++; return v; }
+      const a = args();
+      return fn[1] === 'max' ? Math.max(...a) : fn[1] === 'min' ? Math.min(...a) : a[0];
+    }
+    if (s[i] === '(') { i++; const v = sum(); ws(); i++; return v; }
+    const n = /^(-?\d*\.?\d+)(px)?/.exec(s.slice(i));
+    if (!n) { i = s.length; return NaN; }
+    i += n[0].length;
+    return n[2] || Number(n[1]) === 0 ? Number(n[1]) : NaN;
+  };
+  const sum = () => { let v = atom(); for (;;) { ws(); const op = s[i]; if ((op === '+' || op === '-') && s[i + 1] === ' ') { i++; const b = atom(); v = op === '+' ? v + b : v - b; } else return v; } };
+  const v = sum(); ws();
+  return i >= s.length ? v : NaN;
+}
