@@ -323,7 +323,7 @@ test('wizard-ux#1670: a failed switch in the Android app marks that Wizard unrea
   await b.w.switch('up'); b.win.dispatchEvent(new Event('pagehide'));
   html = b.win.settings.html();
   assert.match(html, /data-saved-wizard="up"><span class="st-tx"><b>Up<\/b><small>up\.test · Last reached today/);
-  assert.ok(Object.keys(JSON.parse(b.data.get('wos.workspaces.reach.v1'))).includes('https://up.test'));
+  assert.ok(Object.hasOwn(JSON.parse(b.data.get('wos.workspaces.reach.v1')), 'https://up.test'));
 });
 test('wizard-ux#1670: arriving from another Wizard marks it reached; managed and native entries keep their own rules', async () => {
   const hash = '#wzfrom=' + encodeURIComponent(JSON.stringify({ name: 'Studio', url: 'https://studio.test/wizard-os-home/' }));
