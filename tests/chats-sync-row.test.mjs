@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { between, block, runRecording } from './fixtures/source-slice.mjs';
 import { createDocument } from './fixtures/mini-dom.mjs';
+import { styles } from './fixtures/w5-css.mjs';
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 
 // The Chats "Not up to date" notice is one quiet row (James, 7 Nov 2026: "a single row instead of a big pill button
@@ -72,18 +73,22 @@ test('quiet states stay single lines with no action', () => {
 });
 
 test('CSS: one line, ellipsis, a text action (no pill) with a 44px touch target inside a ≤32px row', () => {
-  const rule = sel => { const i = css.indexOf(sel + ' {'); assert.ok(i >= 0, sel); return css.slice(i, css.indexOf('}', i)); };
-  assert.doesNotMatch(css, /\.ch-sync\.off\s*\{\s*flex-wrap:\s*wrap/, 'the notice never wraps onto a second row');
-  assert.doesNotMatch(css, /\.ch-sync \[data-chtroubleshoot\]/, 'the old pill rule is gone');
-  const span = rule('.ch-sync > span');
-  for (const d of ['white-space: nowrap', 'text-overflow: ellipsis', 'overflow: hidden', 'min-width: 0']) assert.ok(span.includes(d), d);
-  const row = rule('.ch-sync:has(.ch-sync-act)');
-  assert.match(row, /min-height: 32px/); assert.doesNotMatch(row, /flex-wrap/);
-  const act = rule('.ch-sync .ch-sync-act');
-  assert.match(act, /position: relative; z-index: 1;/, 'the 44px action paints above the .ch-scroll list it overhangs, so edge taps reach it');
-  for (const d of ['height: 44px', 'margin: -6px 0 -6px auto', 'background: none', 'border: 0', 'border-radius: 0', 'white-space: nowrap']) assert.ok(act.includes(d), d);
-  assert.match(act, /color: var\(--violet-2, var\(--wz-accent/);
-  assert.match(rule('.ch-sync-dot'), /var\(--wz-warning/);
+  // the drawn notice in the real chats.css cascade (tests/fixtures/w5-css.mjs)
+  for (const [state, o] of Object.entries(STATES)) {
+    const doc = createDocument(); doc.body.innerHTML = `<div class="ch-pane">${bar(o)}</div>`;
+    const row = doc.querySelector('.ch-sync'), act = doc.querySelector('.ch-sync-act'), span = doc.querySelector('.ch-sync > span');
+    assert.ok(row && act && span, state);
+    const on = el => styles(el, css), r = on(row), a = on(act), t = on(span);
+    assert.notEqual(r['flex-wrap'], 'wrap', `${state}: the notice never wraps onto a second row`);
+    assert.equal(r['min-height'], '32px', state);
+    for (const [k, v] of [['white-space', 'nowrap'], ['text-overflow', 'ellipsis'], ['overflow', 'hidden'], ['min-width', '0']]) assert.equal(t[k], v, `${state}: line ${k}`);
+    assert.equal(a.position, 'relative', 'the 44px action paints above the .ch-scroll list it overhangs, so edge taps reach it');
+    assert.equal(a['z-index'], '1');
+    for (const [k, v] of [['height', '44px'], ['margin', '-6px 0 -6px auto'], ['background', 'none'], ['border', '0'], ['border-radius', '0'], ['white-space', 'nowrap']]) assert.equal(a[k], v, `${state}: action ${k}`);
+    assert.match(a.color, /^var\(--violet-2, var\(--wz-accent/);
+    const dot = doc.querySelector('.ch-sync-dot');
+    if (dot) assert.match(on(dot).background || '', row.classList.contains('stale') ? /var\(--wz-text-muted/ : /var\(--wz-warning/, `${state}: dot`);
+  }
 });
 
 test('the action opens the Troubleshooter exactly as before', () => {
