@@ -134,9 +134,37 @@ test('the logo tile is styled outside .sgi, so skins that recolour sigils never 
   }
 });
 
-test('the shell reads logos with the app list and repaints when they change', () => {
-  const js = read('web/core/apps.js');
-  assert.match(js, /LOGO_BASE \+ 'wizard\/v1\/app-logos'/);
-  assert.match(js, /logoLoad = readLogos\(\)/);
-  assert.match(js, /window\.WizCore\.appLogo = /);
+// web/core/apps.js run whole in vm against a fake box: the app list and the logo list answer, images decode.
+async function shellApps(logos, { decode = true } = {}) {
+  const storage = new Map(), events = [], reads = [];
+  const localStorage = { getItem: k => storage.get(k) ?? null, setItem: (k, v) => storage.set(k, String(v)) };
+  const window = { WizCore: { norm: s => String(s).toLowerCase() }, WizConfig: { endpoint: () => '/apps' }, localStorage,
+    dispatchEvent: e => events.push(e) };
+  class Image { set src(u) { this._src = u; setTimeout(() => (decode ? this.onload() : this.onerror()), 0); } get src() { return this._src; } }
+  const ctx = { window, URL, location: new URL('https://wizard.example/'), localStorage, Image, AbortSignal, setTimeout, clearTimeout, setInterval() {},
+    CustomEvent: class { constructor(type, init) { this.type = type; this.detail = init?.detail; } },
+    addEventListener() {}, document: { addEventListener() {}, visibilityState: 'visible' },
+    fetch: async url => { reads.push(String(url)); return String(url).includes('/app-logos') ? { ok: true, json: async () => ({ logos }) } : { ok: true, json: async () => ({ apps: [{ id: 'jet', name: 'Jet', url: '/jet/' }] }) }; } };
+  vm.runInNewContext(read('web/core/apps.js'), ctx);
+  await window.WizCore.appsLoaded();
+  return { window, storage, events, reads, settle: async () => { for (let i = 0; i < 5; i++) await new Promise(r => setTimeout(r, 0)); } };
+}
+
+test('the shell reads logos with the app list and repaints when they change', async () => {
+  const s = await shellApps({ jet: '0123456789abcdef', 'Bad Id': '0123456789abcdef', other: 'nothex' });
+  const R = s.window.WizCore.apps('desktop');   // a registry is listening, so a changed logo list repaints it
+  const before = s.events.filter(e => e.type === 'wizard:apps').length;
+  await s.settle();
+  assert.ok(s.reads.includes('/wizard-os-home/store-data/wizard/v1/app-logos'), 'the logo list is read beside the app list');
+  assert.ok(s.reads.includes('/apps'));
+  assert.equal(s.window.WizCore.appLogo('jet'), '/wizard-os-home/store-data/app-logo/jet?v=0123456789abcdef');
+  assert.equal(s.window.WizCore.appLogo('Bad Id'), '', 'only well-formed ids and hashes are kept');
+  assert.equal(s.window.WizCore.appLogo('other'), '');
+  assert.deepEqual(JSON.parse(s.storage.get('wux.applogos.v1')), { jet: '/wizard-os-home/store-data/app-logo/jet?v=0123456789abcdef' });
+  assert.ok(s.events.filter(e => e.type === 'wizard:apps').length > before, 'the registry is rebuilt when logos change');
+  assert.ok(R.APP.jet);
+  // a logo the browser cannot decode never shows as a blank tile
+  const broken = await shellApps({ jet: '0123456789abcdef' }, { decode: false });
+  await broken.settle();
+  assert.equal(broken.window.WizCore.appLogo('jet'), '');
 });
