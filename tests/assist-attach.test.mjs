@@ -6,6 +6,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
+import { createDocument } from './fixtures/mini-dom.mjs';
+import { cascade } from './fixtures/mini-css.mjs';
+import { between } from './fixtures/source-slice.mjs';
+import { lookBox } from './fixtures/r5A-experience.mjs';
 
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
 const SWITCH = 'wizard/assist-attach';
@@ -55,18 +59,38 @@ test('a browser or an older APK without the bridge is left alone', () => {
   assert.deepEqual(f.calls, []);
 });
 
-test('the switch is in the catalog and off by default', () => {
-  const cat = JSON.parse(read('web/tweaks/catalog.json'));
-  assert.ok(cat.tweaks.includes(SWITCH));
-  assert.ok(!cat.defaults.includes(SWITCH));
-  assert.ok(!(cat.promotedDefaults || []).includes(SWITCH));
-  const m = JSON.parse(read('web/tweaks/wizard/assist-attach/manifest.json'));
-  assert.equal(m.id, SWITCH);
-  assert.match(m.description, /lock screen/);
+test('the switch is in the catalog and off by default', async () => {
+  // The real Settings › Look switch list (core/experience.js) on the real catalog: listed, off, not loaded, not promoted.
+  const box = await lookBox();
+  const row = box.row(SWITCH);
+  assert.ok(row, 'Settings › Look lists the switch');
+  assert.equal(row.on, false, 'a fresh device has it off');
+  assert.match(row.description, /lock screen/);
+  assert.ok(!box.active().includes(SWITCH), 'and never loads it');
+  assert.ok(!box.E.promotedDefaults.includes(SWITCH));
 });
 
 test('the corner orb shows Camera and Attach only when native says the switch is on, and never on the lock screen', () => {
   const html = read('android/app/src/main/assets/assist/surface.html');
+  // The real orb page: its stylesheet, its buttons, canAttach() and the two click handlers, run on a mini-dom.
+  const css = between(html, '<style>', '</style>').slice(7);
+  const doc = createDocument(); doc.body.innerHTML = between(html, '<button class="chip" id="camC"', '<b id="pickN">') + '</b></button>';
+  const asks = [], N = { attachOn: () => N.on, camera: () => asks.push('camera'), pick: () => asks.push('pick'), on: true };
+  const ctx = { document: doc, N, S: { state: 'listen' }, $: id => doc.getElementById(id), setTimeout: () => 0 };
+  vm.createContext(ctx);
+  vm.runInContext(`var MODE='full';\n${between(html, 'function canAttach()', '/* ---------- called by native')}\n${between(html, "$('camC').addEventListener", "\n", 0)}\n${between(html, "$('pickC').addEventListener", "\n")}`, ctx);
+  const shown = () => ['camC', 'pickC'].map(id => cascade(doc.getElementById(id), css).display.value);
+  doc.body.classList.add('corner');
+  assert.equal(vm.runInContext('canAttach()', ctx), false, 'full-screen orb: never');
+  vm.runInContext("MODE='corner'", ctx);
+  N.on = false; assert.equal(vm.runInContext('canAttach()', ctx), false); assert.deepEqual(shown(), ['none', 'none'], 'switch off: hidden');
+  N.on = true; assert.equal(vm.runInContext('canAttach()', ctx), true); assert.deepEqual(shown(), ['flex', 'flex'], 'switch on in the corner: shown');
+  delete N.attachOn; assert.equal(vm.runInContext('canAttach()', ctx), false, 'an older APK without attachOn: hidden'); assert.deepEqual(shown(), ['none', 'none']);
+  N.attachOn = () => { throw new Error('gone'); }; assert.equal(vm.runInContext('canAttach()', ctx), false);
+  doc.getElementById('camC').dispatchEvent({ type: 'click', bubbles: true }); doc.getElementById('pickC').dispatchEvent({ type: 'click', bubbles: true });
+  assert.deepEqual(asks, ['camera', 'pick'], 'while listening the buttons ask native');
+  ctx.S.state = 'think'; doc.getElementById('camC').dispatchEvent({ type: 'click', bubbles: true });
+  assert.deepEqual(asks, ['camera', 'pick'], 'never outside a take');
   assert.match(html, /#camC,#pickC\{display:none\}/);
   assert.match(html, /body\.corner\.canattach #camC,body\.corner\.canattach #pickC\{display:flex\}/);
   assert.match(html, /MODE==='corner'&&typeof N\.attachOn==='function'&&!!N\.attachOn\(\)/);
