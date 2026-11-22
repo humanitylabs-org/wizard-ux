@@ -26,22 +26,7 @@
   "phone Chats parts reach the layout as shared WizChatsHost surfaces through the skin host"
  ],
  "ai-apps-view.test.mjs": [
-  "round 7 + 15 desktop: the app panel and the docked chat are back (Arc), calm transitions, the fuel gauge in the sidebar, the orb in the middle of the main area",
-  "desktop ⌥ keys in the AI apps view (round 21): mnemonic letters, every key on its target, no app letters, no legend",
-  "desktop app panel: an app\\'s title-bar tools (Morning Report\\'s ‹ date › PDF) show in the panel\\'s header; its own title bar stays laid out (titlebar.shown is true), out of sight",
-  "round 9 desktop: no veil over the skin\\'s background (Home, beside a panel); only panels and the composer have surfaces",
-  "round 10 phone: on light skins the Home icons are full colour (the app colour plate, a white glyph) with readable names; dark skins untouched",
-  "round 14: Archive stays quieter but readable on the light skins (sidebar, rail, phone drawer)",
-  "round 14: a full-width footer along an app\\'s bottom is lifted clear of the orb even when its body covers the probe point (Wisdom\\'s page count)",
-  "auto-tidy runs hourly, not on every 10 s timer beat (api.after is capped)",
-  "round 18 core: Ready\\'s order is the stock Chats Filter choice (its key, the box preferences); rows carry the stock Priority rank",
-  "round 19 item 3 desktop: a quieter expanded sidebar (small muted normal-weight headers, Ready\\'s amber count kept, Archive quietest); rows unchanged",
-  "notification stack (Miguel, 4 Nov 2026): one stable newest-first list, the open one expanded in place with its own buttons",
-  "round 20 items 7 + 8: a quiet notification thread (source in the header, a thin amber edge, one muted routing line with a menu, Resolve); the open item\\'s keys",
-  "round 21: the views keep the open model to themselves: the shared chrome never holds it; the stock paths stay in core",
-  "AI apps view: Now playing is only small bars on the playing app\\'s own icon (no pill, no list, no slot); hover = pause, a click pauses without opening the app; ⌥P on that icon",
-  "desktop app panel: an app with its companion pane (Video Editor video + Feedback) shows side-by-side CSS columns and a wider panel, never two windows stacked in one box, even when the shell has not re-tiled that desk (James, 6 Nov 2026)",
-  "agent choices: the shell side reuses Chats\\' Focus (no second router) and the layout API exposes it"
+  "auto-tidy runs hourly, not on every 10 s timer beat (api.after is capped)"
  ],
  "alert-thread-select.test.mjs": [
   "alert thread surfaces are drawn by chats.js"
@@ -291,11 +276,8 @@
   "the chat-list send pill offers no Retry for a failed reply into such a chat"
  ],
  "home-screen-apps.test.mjs": [
-  "normal app-services storage stays sessionStorage unless caller selects durable storage",
-  "Apps sheet and New desk grid both carry the Add to home screen long-press",
   "Desks overview hold-and-release offers Add to home screen; drag keeps reordering",
-  "Overview arrange mode: hold arranges desks; download button beside ✕ opens Add to home screen",
-  "pinned single-app session keeps the shared media viewer visible over the app (#1520)"
+  "Overview arrange mode: hold arranges desks; download button beside ✕ opens Add to home screen"
  ],
  "instant-capture-slow-save.test.mjs": [
   "the first-row save of an instant take (openDB + put) goes through the same quiet retry",
@@ -761,12 +743,5 @@
  ],
  "workspace-sync.test.mjs": [
   "the phone shell seeds starter apps only into a layout it just created, marked device-only"
- ],
- "workspaces.test.mjs": [
-  "both shells load module; bridge.handle preserves native capability; Miguel reuses only core switcher",
-  "the AI-apps sidebar/phone workspace lists offer a switch for a Wizard with an address",
-  "AI apps view: no stock bar icon over the chat title; the rail carries the shared switcher button",
-  "AI apps header name opens the shared switcher menu with two or more Wizards, so a box without the devices registry still lists its way back",
-  "wizard-ux#1209: ⌥O opens the same shared menu as the header name, and Manage workspaces opens Settings › Connections"
  ]
 }
