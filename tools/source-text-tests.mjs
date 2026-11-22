@@ -80,6 +80,9 @@ const EXEC = [
   /\b(spawnSync|execFileSync|execSync|spawn|execFile|exec|fork)\s*\(/, /\bnew\s+Worker\s*\(/,
   /\b(chromium|firefox|webkit|launch)\s*\(/, /\bcreateServer\s*\(/, /\bfetch\s*\(/, /\brequire\s*\(/,
 ];
+const reEsc = t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+// Does code text mention the name as a whole identifier (not as a property)?
+const mentions = (name, text) => new RegExp(`(^|[^\\w$.])${reEsc(name)}(?![\\w$])`).test(text);
 const isParts = spec => /(^|\/)[\w-]*parts\.mjs$/.test(spec); // fixtures that only join moved-out source text back
 const EXTERNAL_OK = /^node:(test|assert|assert\/strict|fs|fs\/promises|path|url|crypto|os|util)$/;
 
@@ -149,7 +152,7 @@ export function classifyFile(src) {
     changed = false;
     for (const [nm, text] of decls) {
       if (reads.has(nm)) continue;
-      if (READ.test(text) || [...reads].some(r => new RegExp(`(^|[^\\w$.])${r.replace(/\$/g, '\\$')}(?![\\w$])`).test(text.replace(/^[^=({]*/, '')))) { reads.add(nm); changed = true; }
+      if (READ.test(text) || [...reads].some(r => mentions(r, text.replace(/^[^=({]*/, '')))) { reads.add(nm); changed = true; }
     }
   }
   // Mark file-level helpers that run code, to a fixed point.
@@ -157,7 +160,7 @@ export function classifyFile(src) {
     changed = false;
     for (const [nm, text] of decls) {
       if (runs.has(nm)) continue;
-      if (EXEC.some(r => r.test(text)) || [...runs].some(r => new RegExp(`(^|[^\\w$.])${r.replace(/\$/g, '\\$')}(?![\\w$])`).test(text.replace(/^[^=({]*/, '')))) { runs.add(nm); changed = true; }
+      if (EXEC.some(r => r.test(text)) || [...runs].some(r => mentions(r, text.replace(/^[^=({]*/, '')))) { runs.add(nm); changed = true; }
     }
   }
   const tests = [];
@@ -169,9 +172,9 @@ export function classifyFile(src) {
     const body = code.slice(open, end);
     const nameMatch = /^\(\s*(['"`])/.exec(src.slice(open, open + 4)) ? src.slice(open + 1).match(/^\s*(['"`])((?:\\.|(?!\1)[^\\])*)\1/) : null;
     const name = nameMatch ? nameMatch[2] : `(line ${src.slice(0, at).split('\n').length})`;
-    const ran = EXEC.some(r => r.test(body)) || [...runs].some(r => new RegExp(`(^|[^\\w$.])${r.replace(/\$/g, '\\$')}(?![\\w$])`).test(body));
+    const ran = EXEC.some(r => r.test(body)) || [...runs].some(r => mentions(r, body));
     let kind = 'runs';
-    const touches = READ.test(body) || [...reads].some(r => new RegExp(`(^|[^\\w$.])${r.replace(/\$/g, '\\$')}(?![\\w$])`).test(body));
+    const touches = READ.test(body) || [...reads].some(r => mentions(r, body));
     const before = src.slice(0, at).split('\n').slice(-6, -1).reverse();
     let rule = false; for (const l of before) { if (/^\s*\/\/\s*static-rule:\s*\S/.test(l)) { rule = true; break; } if (!/^\s*\/\//.test(l)) break; }
     if (!ran && rule) kind = 'rule';
