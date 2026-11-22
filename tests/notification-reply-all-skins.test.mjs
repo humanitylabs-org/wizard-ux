@@ -113,7 +113,7 @@ test("Miguel's skins keep their flat quote line (square, untinted) over the new 
   const look = (skin, sheet) => {
     const doc = createDocument(); doc.documentElement.setAttribute('data-skin', skin);
     doc.body.innerHTML = `<form class="ch-compose">${bubble}</form><div class="msg u"><div class="bub">${card}</div></div>`;
-    const sheets = [css, ...(sheet ? [read(sheet)] : [])];
+    const sheets = [css, ...(sheet ? [read(sheet)] : [])].join('\n'); // one text: source order across sheets
     const pick = (el, ...ps) => Object.fromEntries(ps.map(p => [p, cascade(el, sheets)[p]?.value]));
     return { bubble: pick(doc.querySelector('.ch-compose .ch-reply'), 'background', 'border-radius'), card: pick(doc.querySelector('.msg.u .bub .ch-rq'), 'background', 'border-radius') };
   };

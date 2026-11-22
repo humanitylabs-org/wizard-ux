@@ -11,7 +11,7 @@ const core = read('web/core/chats.css')
 const toggle = (skin, sheets) => {
   const doc = createDocument(); doc.documentElement.setAttribute('data-skin', skin)
   doc.body.innerHTML = '<div class="ch-list"><div class="ch-row-wrap"><button class="ch-row" data-chopen="t1"></button><button class="ch-pin-toggle" aria-pressed="false"></button></div></div>'
-  return cascade(doc.querySelector('.ch-pin-toggle'), sheets)
+  return cascade(doc.querySelector('.ch-pin-toggle'), sheets.join('\n')) // one text: source order across sheets
 }
 for (const [file, skin] of [['web/skins/obsidian/skin.css', 'obsidian'], ['web/skins/landscapes/skin.css', 'landscapes']]) {
   const css = read(file)
