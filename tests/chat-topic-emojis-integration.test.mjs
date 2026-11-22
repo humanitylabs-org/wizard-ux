@@ -79,7 +79,7 @@ test('desktop adapter gives an emoji tap to shared Chats before opening the row'
 });
 
 test('draft rows use their durable draft key and can open the same picker', () => {
-  const d = { key: 'k-42', text: 'Draft about the budget', files: [] };
+  const d = { key: 'k-42', text: 'Draft about the budget', files: [], at: 1763700000000 };
   const h = row('  function draftRow(d, cur) {', [d, null]);
   assert.match(h, /data-chpick="draft:k-42"/);
   assert.ok(/class="ch-topic-emoji"/.test(h));
@@ -141,7 +141,7 @@ test('topic emojis are a Novairecito skin feature; every other skin keeps stock 
   const off = row("  function chatRow(s, snip, searchStatus = '') {", [s, ''], { skin: 'obsidian' });
   assert.doesNotMatch(off, /ch-topic-emoji|data-chpick/, 'other skins: the stock status icon only');
   assert.match(off, /class="emo sti ready/);
-  const offDraft = row('  function draftRow(d, cur) {', [{ key: 'k', text: 'x', files: [] }, null], { skin: 'obsidian' });
+  const offDraft = row('  function draftRow(d, cur) {', [{ key: 'k', text: 'x', files: [], at: 1763700000000 }, null], { skin: 'obsidian' });
   assert.doesNotMatch(offDraft, /ch-topic-emoji|data-chpick/);
   assert.match(chats, /attributeFilter: \['data-skin'\]/, 'a skin change repaints');
 });

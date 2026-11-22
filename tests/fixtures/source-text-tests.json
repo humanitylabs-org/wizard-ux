@@ -205,14 +205,6 @@
  "desktop-channel-back.test.mjs": [
   "wiring: the Back sits left of the title, every sidebar open clears it, the header repaints it; tokens only"
  ],
- "desktop-chat-hud.test.mjs": [
-  "Chats windows get a float button beside ✕; other windows do not",
-  "the HUD window lives outside the desks: never pruned at boot, never synced, never tiled",
-  "render keeps the HUD above every desk and Home; the open HUD counts as visible and keeps polling",
-  "two controls only: float over every desk, and back to desktop 1 (Miguel: no minimize, no orb, no put-back-here)",
-  "keys, voice and chat actions follow the keyboard into the HUD; desk routes never reuse it (Codex P1/P2)",
-  "⌥P floats the chat over every desk and, floating, puts it back on desktop 1; the 1 button does the same"
- ],
  "desktop-chats-default.test.mjs": [
   "catalog: desktop-chats is a default, still listed, promoted once, never a profile off",
   "desktop is unchanged: every rule is phone-only and the script returns at once on desktop",
@@ -322,15 +314,6 @@
  "landscapes-glass.test.mjs": [
   "Landscapes window glass is 85%"
  ],
- "landscapes-light-dark.test.mjs": [
-  "Mizel offers Landscapes Dark and Landscapes Light, both from the one Landscapes package",
-  "each palette rotates only its own photos, split by overall brightness, and together they cover all sixteen",
-  "the Landscapes package and Miguel\\'s shell rules cover both palettes",
-  "Landscapes Light: 85% window glass, white send arrow, full-colour marks, bright badges",
-  "skin names in the picker wrap to two lines instead of cutting off",
-  "Landscapes Light: the Latest pill and the small in-thread notes read as ink on light glass",
-  "Landscapes Light resource sheet draws capacity bars in ink, not white"
- ],
  "launcher-long-names.test.mjs": [
   "long labels fit the tile and never split a word bare"
  ],
@@ -350,14 +333,6 @@
  "lock-screen-player.test.mjs": [
   "the switch is listed, off by default, linked to its issue",
   "Android: exactly Music and Podcasts, the tap opens the playing app, Podcasts is spoken word with skip buttons"
- ],
- "look-last-row-clearance.test.mjs": [
-  "phone Settings ends above the actual dock plus browser/native safe inset",
-  "phone scroll owner has edge padding without counting dock/safe area twice",
-  "desktop constrains the grid track and the actual page scroller",
-  "last full row and caption can scroll above the padded page boundary",
-  "both real shells retain the shared Settings stylesheet and renderer",
-  "the floating desktop Settings panel keeps an opaque base"
  ],
  "lookup-pop.test.mjs": [
   "Look up is hidden in private/Incognito threads and inside the popover itself; the tap paints before any request",

@@ -76,6 +76,7 @@ export function recorder(name, calls) {
   });
 }
 
+const JS_GLOBALS = new Set(vm.runInNewContext('Object.getOwnPropertyNames(globalThis)'));
 const KEYWORDS = new Set(('break case catch class const continue debugger default delete do else export extends finally for function if import in '
   + 'instanceof let new return super switch this throw try typeof var void while with yield async await of null true false undefined NaN Infinity arguments get set static').split(' '));
 // Run `code` in `ctx`. Every identifier in it (outside comments, not after a dot; words inside strings too, harmlessly) that is neither a JS
@@ -84,7 +85,7 @@ const KEYWORDS = new Set(('break case catch class const continue debugger defaul
 export function runRecording(code, ctx = {}, calls = (ctx.calls ||= [])) {
   vm.createContext(ctx);
   const bare = code.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:\\])\/\/[^\n]*/g, '$1 ');
-  const globals = new Set(vm.runInContext('Object.getOwnPropertyNames(globalThis)', ctx));
+  const globals = JS_GLOBALS; // from a fresh context: a test may give the slice its own globalThis
   for (const m of bare.matchAll(/(?<![\w$.])([A-Za-z_$][\w$]*)\b/g)) {
     const n = m[1];
     if (KEYWORDS.has(n) || globals.has(n) || n in ctx) continue; // Node-only globals (setTimeout, queueMicrotask...) are recorders too
