@@ -108,8 +108,21 @@ export function block(src, marker, from = 0) {
     if (c === '/' && src[i + 1] === '/') { i = src.indexOf('\n', i); continue; }
     if (c === '/' && src[i + 1] === '*') { i = src.indexOf('*/', i) + 1; continue; }
     if (c === "'" || c === '"' || c === '`') { for (i++; i < src.length && src[i] !== c; i++) if (src[i] === '\\') i++; continue; }
+    if (c === '\\') { i++; continue; }
+    if (c === '/') { // a regex literal where an expression starts: skip it whole (classes may hold '/')
+      let k = i - 1; while (k >= 0 && /\s/.test(src[k])) k--;
+      if (k < 0 || /[(,=:[!&|?{};+\-*%<>~^]/.test(src[k]) || /\b(return|typeof|case|in|of)$/.test(src.slice(Math.max(0, k - 6), k + 1))) {
+        let inClass = false;
+        for (i++; i < src.length && src[i] !== '\n'; i++) { const r = src[i]; if (r === '\\') { i++; continue; } if (r === '[') inClass = true; else if (r === ']') inClass = false; else if (r === '/' && !inClass) break; }
+        continue;
+      }
+    }
     if (c === '{') depth++;
     else if (c === '}' && --depth === 0) return src.slice(at, i + 1);
   }
-  assert.fail(`unbalanced: ${marker}`);
+  // a regex literal can confuse the counting: fall back to the first closing brace at the marker's own indent
+  const lineStart = src.lastIndexOf('\n', at) + 1, indent = /^[ \t]*/.exec(src.slice(lineStart))[0];
+  const end = src.indexOf(`\n${indent}}`, at);
+  assert.ok(end > at, `unbalanced: ${marker}`);
+  return src.slice(at, end + indent.length + 2);
 }

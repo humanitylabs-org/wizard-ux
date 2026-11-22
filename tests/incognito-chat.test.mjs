@@ -7,6 +7,7 @@ import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved 
 import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
 import { withShellParts } from './fixtures/shell-parts.mjs';
 import { block, runRecording } from './fixtures/source-slice.mjs';
+import { createDocument } from './fixtures/mini-dom.mjs';
 const source = withShellParts(readFileSync(new URL('../web/core/incognito-chat.js', import.meta.url), 'utf8'))
 const chats = withParts(withShellParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'))) + withShellParts(readFileSync(new URL('../web/core/chats-outbox.js', import.meta.url), 'utf8'))
 function rig(extra = {}) {
@@ -133,14 +134,25 @@ test('Incognito blocks microphone admission before snapshots, custody or recorde
   assert.match(chats, /if \(H.captureBusy\?\.\(\)\)/)
 })
 
-test('every persistent Chats adapter has an Incognito early return; both shells load the same core', () => {
+test('every persistent Chats adapter has an Incognito early return; both shells load the same core', async () => {
+  // each real adapter, called on an Incognito window: it hands off to Incognito (or stops) and touches nothing durable
   for (const method of ['saveDraft', 'addFiles', 'toggleVoice', 'refreshCompose', 'loadThread', 'takeComposer', 'sendChat', 'peekComposer', 'setDraft']) {
-    const start = chats.indexOf('function ' + method + '('); assert.ok(start >= 0, method)
-    assert.match(chats.slice(start, start + 350), /INC\?\.active/, method)
+    const marker = chats.includes('  async function ' + method + '(') ? '  async function ' + method + '(' : '  function ' + method + '('
+    const ctx = runRecording(`${block(chats, marker)}\nthis.f = ${method};`, { INC: { active: () => true, send: () => 'inc', input() {}, draft: () => '' }, W: { w1: { id: 'w1', thread: '__new__' } }, window: {}, Promise, Object, String, Array })
+    let out; try { out = await ctx.f('w1', 'words', 'typing', null, {}) } catch (e) { out = 'threw: ' + e.message }
+    const durable = ctx.calls.map(c => c[0]).filter(n => /^(KIT|OUTBOX|LIVE|localStorage|sessionStorage|H\.|renderChats|ch$)/.test(n))
+    assert.deepEqual(durable, [], `${method}: ${JSON.stringify(ctx.calls.slice(0, 4))} (${out})`)
   }
-  assert.match(chats, /const incognitoAction = isNew &&/); assert.ok(chats.includes('${chip}${incognitoAction}')); assert.match(chats, /w.thread !== '__new__'/)
-  assert.match(chats, /beforeLeave: \(id, checkOnly = false\) => !INC\?\.active/)
-  for (const file of ['index.html', 'desktop.html']) assert.match(withShellParts(readFileSync(new URL('../web/' + file, import.meta.url), 'utf8')), /core\/incognito-chat.js/)
+  // leaving a window holding an Incognito chat asks first (beforeLeave)
+  const bl = chats.slice(chats.indexOf('beforeLeave: (id, checkOnly = false) =>'), chats.indexOf(', incognitoActive:', chats.indexOf('beforeLeave: (id, checkOnly = false) =>')))
+  const asked = [], leave = vm.runInNewContext(`({ ${bl} })`, { INC: { active: id => id === 'w1', close: (id, force, checkOnly) => (asked.push([id, force, checkOnly]), false) } })
+  assert.equal(leave.beforeLeave('w2'), true, 'no Incognito chat: leave freely')
+  assert.equal(leave.beforeLeave('w1', true), false, 'an Incognito chat asks first'); assert.deepEqual(asked, [['w1', false, true]])
+  for (const file of ['index.html', 'desktop.html']) {
+    const h = withShellParts(readFileSync(new URL('../web/' + file, import.meta.url), 'utf8')), d = createDocument()
+    d.documentElement.innerHTML = h.slice(h.indexOf('<head'), h.lastIndexOf('</html>'))
+    assert.ok(d.querySelectorAll('script[src]').some(x => x.getAttribute('src') === 'core/incognito-chat.js'), file)
+  }
   for (const file of ['app.js', 'desktop/desktop.js']) assert.match(withShellParts(readFileSync(new URL('../web/' + file, import.meta.url), 'utf8')), /CHATS.beforeLeave\(id(?:, checkOnly)?\)/)
 })
 test('preflight of a desktop close never destroys an earlier accepted chat', async () => {
@@ -156,10 +168,23 @@ test('preflight of a desktop close never destroys an earlier accepted chat', asy
   assert.equal(s.calls.filter(c=>c.method==='DELETE').length,2);
 });
 test('Settings registration follows dependency and scrub checks before active index mutation', () => {
-  for(const f of ['index.html','desktop.html']) {const s=withShellParts(readFileSync(new URL('../web/'+f,import.meta.url),'utf8'));assert.ok(s.indexOf('core/settings.js')<s.indexOf('core/incognito-chat.js'));}
-  const phone=withShellParts(readFileSync(new URL('../web/app.js',import.meta.url),'utf8'));
-  assert.match(phone,/if \(n !== DS\.at && !CHATS.beforeNavigate\(desks\[n\]\?\.wins \|\| \[\]\)\) return;\s*if \(n !== DS\.at\)/);
-});
+  // the page loads Settings before Incognito registers with it
+  for (const f of ['index.html', 'desktop.html']) {
+    const h = withShellParts(readFileSync(new URL('../web/' + f, import.meta.url), 'utf8')), d = createDocument()
+    d.documentElement.innerHTML = h.slice(h.indexOf('<head'), h.lastIndexOf('</html>'))
+    const src = d.querySelectorAll('script[src]').map(x => x.getAttribute('src'))
+    assert.ok(src.indexOf('core/settings.js') >= 0 && src.indexOf('core/settings.js') < src.indexOf('core/incognito-chat.js'), f)
+  }
+  // the phone's desk switch asks Chats first and keeps its place when refused
+  const phone = withShellParts(readFileSync(new URL('../web/app.js', import.meta.url), 'utf8'))
+  const i = phone.indexOf('if (n !== DS.at && !CHATS.beforeNavigate(desks[n]?.wins || [])) return;')
+  const line = phone.slice(phone.lastIndexOf('\n', i) + 1, phone.indexOf('\n', i)).trim()
+  for (const ok of [false, true]) {
+    const DS = { at: 0 }, asked = []
+    vm.runInNewContext(`(n => { ${line} DS.moved = n; })(2)`, { DS, desks: [{ wins: [] }, {}, { wins: ['x'] }], CHATS: { beforeNavigate: w => (asked.push([...w]), ok) } })
+    assert.deepEqual(asked, [['x']]); assert.equal(DS.moved, ok ? 2 : undefined, `allowed=${ok}`)
+  }
+})
 test('terminal reply uses the final run output, not a partial stream', async () => {
   const s = rig({ manualStream: true, fetchImpl: async path => path.endsWith('/incognito') ? { ok: true, json: async () => ({ session_id: 'incog_' + 'c'.repeat(32) }) } : { ok: true, json: async () => ({ run_id: 'synthetic-run' }) } })
   await s.component.start('one', s.agent); await s.component.send('one', 'synthetic-final-canary')
@@ -168,13 +193,27 @@ test('terminal reply uses the final run output, not a partial stream', async () 
   s.component.close('one', true)
 })
 test('Incognito stream target accepts every registry agent id, including a leading digit', () => {
+  // the real openRunStream: a malformed target is refused before any stream opens
   const live = withLiveParts(withShellParts(readFileSync(new URL('../web/live.js', import.meta.url), 'utf8')))
-  const re = new RegExp(live.match(/target && !(\/\^\\\/wizard.*?\$\/)\.test/)[1].slice(1, -1))
-  assert.ok(re.test('/wizard/v1/agents/1-private/incognito/incog_' + 'a'.repeat(32)))
-  assert.ok(!re.test('/wizard/v1/agents/-x/incognito/incog_' + 'a'.repeat(32)))
+  const fn = live.slice(live.indexOf('  L.openRunStream = function'), live.indexOf('\n', live.indexOf('if (target && !/^\\/wizard', live.indexOf('  L.openRunStream = function'))))
+  const open = base => vm.runInNewContext(`const L = {}; ${fn} return 'opened'; }; L.openRunStream('s1', '', 'r1', () => {}, { base: ${JSON.stringify(base)}, read: () => null })`, {})
+  assert.equal(open('/wizard/v1/agents/1-private/incognito/incog_' + 'a'.repeat(32)), 'opened')
+  assert.equal(open('/wizard/v1/agents/hermes/incognito/incog_' + 'a'.repeat(32)), 'opened')
+  assert.equal(open('/wizard/v1/agents/-x/incognito/incog_' + 'a'.repeat(32)), null)
+  assert.equal(open('/wizard/v1/agents/hermes/incognito/incog_short'), null)
+  assert.equal(open('/wizard/v1/sessions/x'), null)
 })
 test('desktop HUD title-bar close asks before ending an Incognito chat', () => {
   const desktop = withShellParts(readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8'))
-  assert.match(desktop, /act === 'close' && hud\?\.id === id\) return canLeave\(id\) && hudClose\(\)/)
-  assert.equal(desktop.match(/if \(!internal && !canLeave\(id\)\) return;/g).length, 1)
+  const close = (leave, hudId) => {
+    const c = runRecording(`this.click = ${block(desktop, "  stage.addEventListener('click', e => {", desktop.indexOf('/* ---------------- window interactions')).replace(/^\s*stage\.addEventListener\('click', /, '')};`,
+      { W: { c1: { id: 'c1', app: 'chats' } }, hud: hudId ? { id: hudId } : null, canLeave: () => leave, CHATS: { isHosted: () => false } })
+    c.click({ target: { closest: q => (q === '.win' ? { dataset: { win: 'c1' } } : q === '[data-wact]' ? { dataset: { wact: 'close' } } : null) }, stopPropagation() {} })
+    return c.calls.map(x => x[0]).filter(n => /^(hudClose|desktopHost\.close)$/.test(n))
+  }
+  assert.deepEqual(close(false, 'c1'), [], 'the floating chat asks first and stays')
+  assert.deepEqual(close(true, 'c1'), ['hudClose'])
+  // closeWin asks once (internal closes skip it)
+  const cw = (leave, internal) => { const c = runRecording(`${block(desktop, 'function closeWin(id, internal = false) {')}\nthis.f = closeWin;`, { canLeave: () => leave, hud: { id: 'c1' }, globalThis: {} }); c.f('c1', internal); return c.calls.map(x => x[0]) }
+  assert.deepEqual(cw(false, false), []); assert.deepEqual(cw(false, true), ['hudClose']); assert.deepEqual(cw(true, false), ['hudClose'])
 })
