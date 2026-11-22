@@ -130,18 +130,42 @@ test('wall-clock time in the chosen zone becomes the right instant', () => {
 
 test('Back closes the picker before anything under it, on phone and desktop', () => {
   const phone = read('web/app.js'), desktop = read('web/desktop/desktop.js')
-  for (const src of [phone,desktop]) assert.match(src, /WizEscapeBack\.installOwners\(/)
-  assert.match(read('web/core/escape-back.js'), /add\('reminder',[^\n]+WosBoomerang.back\(\)/)
+  for (const src of [phone, desktop]) assert.match(src, /WizEscapeBack\.installOwners\(/)
+  // The one owner catalog both shells install (core/escape-back.js) peels the picker first.
+  let open = true, backs = 0
+  const W = { WosBoomerang: { isOpen: () => open, back: () => { backs++; open = false; return 'boomerang' } } }
+  vm.runInNewContext(read('web/core/escape-back.js'), { window: W, document: { addEventListener() {} }, addEventListener() {}, setTimeout, clearTimeout, queueMicrotask, MutationObserver: class { observe() {} disconnect() {} } })
+  const stack = W.WizEscapeBack.create(); W.WizEscapeBack.installOwners(stack, { chats: () => ({}), links: () => null })
+  let roots = 0
+  assert.equal(stack.run({ fallback: () => (roots++, 'root') }), 'boomerang'); assert.equal(backs, 1); assert.equal(roots, 0)
+  assert.equal(stack.run({ fallback: () => (roots++, 'root') }), 'root')
+})
+  sandbox.document.createElement = node
+  sandbox.document.body = { appendChild() {}, append() {} }
+  B.open({ sessionId: 's1', title: 'T' })
+  assert.equal(B.isOpen(), true)
+  assert.equal(B.back(), 'boomerang'); assert.equal(B.isOpen(), false); assert.deepEqual(removed, [1]); assert.equal(B.back(), false)
 })
 
-test('one Snooze action replaces Defer and Boomerang, with no second Snooze under each reply', () => {
+test('one Snooze action replaces Defer and Boomerang, with no second Snooze under each reply', async () => {
   const js = withParts(read('web/core/chats.js'))
-  assert.match(js, /watching \? \['snooze', 'stop_watch', 'done'\] : \['snooze', 'done'\]/)
+  // The real thread actions (core/chats-threadacts.js): one Snooze beside Archive on a settled thread.
+  const window = { WizCore: {} }
+  vm.runInNewContext(read('web/core/chats-threadacts.js'), { window })
+  const T = window.WizCore.chatsParts.threadacts({ isWorking: () => false, LIVE: { busy: () => false, workGroups: () => ({ archive: [] }) }, WORKING_ST: new Set(['running']) })
+  const turns = [{ a: 'answer', media: [] }]
+  assert.deepEqual([...T.threadActions({ id: 's', status: 'completed' }, turns)], ['snooze', 'done'])
+  assert.deepEqual([...T.threadActions({ id: 's', status: 'completed', followUp: { active: true, count: 1 } }, turns)], ['snooze', 'stop_watch', 'done'])
+  for (const a of Object.values(T.ACT)) assert.doesNotMatch(a.label, /^(Defer|Boomerang)$|🪃/)
   assert.doesNotMatch(js, /label: '(Defer|Boomerang)'|🪃/)
-  assert.match(read('web/core/scheduled-reminders.js'), /live\(\)\.defer\(opts.sessionId\)/)
   assert.doesNotMatch(js, /data-mboom/)
+  // Someday in the picker is the existing Defer (WizLive.defer), with no schedule.
+  const deferred = []
+  const { B, calls } = load([], { WizLive: { defer: async id => (deferred.push(id), true), session: () => ({}) } })
+  await new Promise(r => setTimeout(r, 5)); const before = calls.length
+  await B.someday({ sessionId: 's1' })
+  assert.deepEqual(deferred, ['s1']); assert.equal(calls.filter(c => c.method === 'POST').length, 0); assert.equal(calls.length, before)
 })
-
 
 test('Snooze confirms the actual Bangkok time, independent of device timezone', () => {
   const { B } = load()
