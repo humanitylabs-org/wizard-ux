@@ -83,7 +83,8 @@ async function voiceFrames(boundary) {
   const window = { WizCore: { apps: () => ({ APPS: [{ id: 'radio', kind: 'wizard', url: '/radio/', provides: ['voice-commands'] }] }) }, dispatchEvent() {},
     WizBrowserBoundary: boundary ? { enabled: true, sandbox: SANDBOX, attach: () => () => {}, owns: () => false } : undefined };
   const el = () => ({ dataset: {}, style: {}, attrs: {}, setAttribute(k, v) { this.attrs[k] = v; }, addEventListener() {}, removeEventListener() {}, remove() {}, hasAttribute: () => false, isConnected: true, tagName: 'IFRAME', contentWindow: {} });
-  vm.runInNewContext(withServicesParts(read('core/app-services.js')), { window, location, URL, addEventListener() {}, setInterval() {}, setTimeout, clearTimeout,
+  const quiet = (f, ms, ...a) => { const t = setTimeout(f, ms, ...a); t.unref?.(); return t; }; // never holds the test process open
+  vm.runInNewContext(withServicesParts(read('core/app-services.js')), { window, location, URL, addEventListener() {}, setInterval() {}, setTimeout: quiet, clearTimeout,
     document: { hidden: false, readyState: 'complete', addEventListener() {}, createElement: el, body: { appendChild: f => added.push(f) } }, MutationObserver: class { observe() {} }, CustomEvent: class {}, navigator: {} });
   await new Promise(r => setTimeout(r, 5));
   return added;

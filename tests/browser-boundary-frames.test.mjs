@@ -266,6 +266,8 @@ test('badge and title bar: served by the one registered server; taps come back; 
   sh.B.attach(f.el)(); assert.equal(sh.B.tool(f.el, 'older'), false);
 });
 
+// Timers of the shell code run in these tests never hold the test process open.
+const quiet = (f, ms, ...a) => { const t = setTimeout(f, ms, ...a); t.unref?.(); return t; };
 const sliceFn = (src, start, end = '\n  }\n') => { const i = src.indexOf(start); assert.ok(i >= 0, start); const j = src.indexOf(end, i); assert.ok(j > i, start); return src.slice(i, j + end.length); };
 
 test('wiring: pages load the boundary right after shell-token.js; app frames get the sandbox only when it is on', async () => {
@@ -299,7 +301,7 @@ test('wiring: pages load the boundary right after shell-token.js; app frames get
   const el = { tagName: 'IFRAME', src: child.location.href, isConnected: true, contentWindow: child, hasAttribute: () => true, getAttribute: () => 'allow-scripts', addEventListener() {}, removeEventListener() {} };
   const window = { WizCore: { apps: () => ({ APPS: [{ id: 'notes', kind: 'wizard', url: '/notes/' }] }) }, dispatchEvent() {},
     WizBrowserBoundary: { enabled: true, attach: (f, o) => { calls.push(['attach', o.home]); return () => calls.push(['detach']); }, owns: f => f === el, back: (f, onRoot) => (calls.push(['back', typeof onRoot]), 'pending') } };
-  vm.runInNewContext(withServicesParts(read('web/core/app-services.js')), { window, location, URL, addEventListener() {}, setInterval() {}, setTimeout, clearTimeout,
+  vm.runInNewContext(withServicesParts(read('web/core/app-services.js')), { window, location, URL, addEventListener() {}, setInterval() {}, setTimeout: quiet, clearTimeout,
     document: { hidden: false, readyState: 'loading', addEventListener() {} }, CustomEvent: class {}, navigator: {} });
   const detach = window.WizAppServices.attach(el, { appId: 'notes', path: '/notes/', isVisible: () => true });
   assert.deepEqual(clone(calls), [['attach', '/notes/']], 'attached through the boundary, with the app\'s home');
@@ -432,7 +434,7 @@ test('dictation wiring: phone and desktop await the insert (a sandboxed insert a
   // Phone (app-transcribe.js, the real part): a later "not inserted" keeps the words, a later "inserted" finishes.
   for (const answer of [false, true]) {
     const log = [], window = { WizCore: {}, WosCancelled: { retainWeb: async () => (log.push('retained'), true) }, WizConfig: { transcribe: async () => ({ text: 'hello there' }), voicePrompt: () => '' } };
-    vm.runInNewContext(read('web/app-transcribe.js'), { window, setTimeout, clearTimeout, AbortController, Blob, Promise, String });
+    vm.runInNewContext(read('web/app-transcribe.js'), { window, setTimeout: quiet, clearTimeout, AbortController, Blob, Promise, String });
     const V = { captureEpoch: 1, acc: 2000, field: { release: () => log.push('release') } };
     const T = window.WizCore.appParts.transcribe({ V, FIELDS: { insert: () => later(answer) }, OUTBOX: { TRANSCRIBE_TIMEOUT_MS: 1000, remove: async () => {} }, recDone: () => log.push('done'),
       setVoice: v => log.push('voice:' + v), showDictationCopy: () => log.push('copy'), toast() {}, txHide: () => log.push('hide') });
