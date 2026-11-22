@@ -4,6 +4,7 @@ import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
 import path from 'node:path';
 import { shareSheet, flush } from './fixtures/share-sheet-harness.mjs';
+import { cascade } from './fixtures/mini-css.mjs';
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 const root = process.env.SHARE_TEST_TREE || path.resolve(import.meta.dirname, '..');
 const read = p => readFileSync(path.join(root,p),'utf8');
@@ -71,12 +72,20 @@ test('James: outside tap closes the top layer like Back; picker is opaque and sk
   assert.match(css,/\.dv-picker \{[^}]*linear-gradient\(var\(--dv-raised\),var\(--dv-raised\)\), linear-gradient\(var\(--dv-base\),var\(--dv-base\)\) black/s); // opaque backstop without literal colours (style ratchet)
   assert.match(css,/var\(--wz-base/); assert.match(css,/var\(--wz-accent/);
 });
-test('James: every share panel uses opaque panel tokens; pixel guard includes rows, cards and options', () => {
+test('James: every share panel uses opaque panel tokens; pixel guard includes rows, cards and options', async () => {
   const css=read('web/core/share-wizard.css'), guard=read('tools/qa-opaque-overlays.cjs');
-  assert.match(css,/--dv-base: var\(--wz-panel/);
-  for (const cls of ['dv-row','dv-picker button']) {
-    const block=css.slice(css.indexOf('.wz-share .'+cls+' {')).split('}')[0];
-    assert.doesNotMatch(block,/background:transparent|backdrop-filter/);
+  // the real sheet with its chooser open, asked what wins on what it drew
+  const h = shareSheet(); h.S.open({ text: 'hi' }); await flush();
+  h.tap('.dv-chat');
+  const root = cascade(h.q('.wz-share'), css);
+  assert.match(root['--dv-base']?.value || '', /^var\(--wz-panel/, 'the sheet base is the opaque panel role');
+  const rows = h.all('.wz-share .dv-row'), opts = h.all('.wz-share .dv-picker button');
+  assert.ok(rows.length && opts.length, 'rows and chooser options are drawn');
+  for (const el of [...rows, ...opts]) {
+    const got = cascade(el, css);
+    assert.ok(got.background?.value, 'a background of its own');
+    assert.notEqual(got.background.value.trim(), 'transparent', el.className);
+    assert.equal(got['backdrop-filter'], undefined, 'no see-through blur');
   }
   for (const name of ['share-compose','share-destination','share-agent-row','share-chat-row','share-message','share-attachment','share-picker','share-option','share-backhint']) assert.ok(guard.includes(name));
 });
