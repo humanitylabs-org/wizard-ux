@@ -118,8 +118,20 @@ test('the switch ships off: listed in the catalog, never a default, scoped CSS',
   assert.ok(!cat.defaults.includes('wizard/sidebar-chats-view'));
   const css = withShellParts(fs.readFileSync(new URL('../web/tweaks/wizard/sidebar-chats-view/tweak.css', import.meta.url), 'utf8'));
   for (const rule of css.replace(/\/\*[\s\S]*?\*\//g, '').split('}').map(r => r.trim()).filter(Boolean)) for (const sel of rule.split('{')[0].split(',')) assert.match(sel.trim(), /^html\[data-tweaks~="wizard\/sidebar-chats-view"\]/);
-  const dj = withShellParts(fs.readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8')), lj = withShellParts(fs.readFileSync(new URL('../web/layouts/ai-apps/desktop.js', import.meta.url), 'utf8'));
-  assert.match(dj, /includes\('wizard\/sidebar-chats-view'\)/); assert.match(lj, /includes\('wizard\/sidebar-chats-view'\)/);
+  // The shell's sideLook reads the switch: covered by tests/sidebar-chats-view.test.mjs 'AI apps + another Default Chats, switch off: ...'.
+});
+
+test('the AI apps layout mounts the look only while the switch is in the tweak list', () => {
+  const lj = withShellParts(fs.readFileSync(new URL('../web/layouts/ai-apps/desktop.js', import.meta.url), 'utf8'));
+  const line = lj.split('\n').find(l => l.startsWith('  const viewOn = () =>'));
+  assert.ok(line, 'viewOn found');
+  const viewOn = tweaks => vm.runInNewContext(`${line}\nviewOn()`, { root: { dataset: { tweaks } }, String });
+  assert.equal(viewOn('wizard/sidebar-chats-view'), true);
+  assert.equal(viewOn('james/dense wizard/sidebar-chats-view'), true);
+  assert.equal(viewOn(''), false);
+  assert.equal(viewOn(undefined), false);
+  assert.equal(viewOn('wizard/sidebar-chats-view-old'), false, 'a whole word, not a prefix');
+  assert.equal(vm.runInNewContext(`${line}\nviewOn()`, { root: null, String }), false, 'no root: off');
 });
 
 // wizard-ux issue 1460: with the switch OFF and another look picked, the AI apps desktop must still treat its docked
