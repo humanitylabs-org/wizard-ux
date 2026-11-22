@@ -17,6 +17,7 @@ function sources() {
   return out;
 }
 
+// static-rule: inventory: every exported shell global has a docs/COMPONENTS.md entry
 test('every exported shell global has a COMPONENTS.md entry', () => {
   const missing = [];
   for (const f of sources()) {
@@ -36,6 +37,7 @@ test('every path COMPONENTS.md names exists', () => {
   assert.deepEqual(gone, [], 'COMPONENTS.md names missing files');
 });
 
+// static-rule: inventory: the components doc stays short enough for a worker brief
 test('COMPONENTS.md stays short enough to paste into a worker brief', () => {
   assert.ok(Buffer.byteLength(doc) < 14800, `COMPONENTS.md is ${Buffer.byteLength(doc)} bytes`);
 });
