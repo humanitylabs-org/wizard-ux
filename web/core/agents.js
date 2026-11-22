@@ -116,6 +116,9 @@
     defaultId() { return (A.list.find(a => a.is_default) || {}).id || 'hermes'; },
     // A non-default agent: its threads, sends and models never go through the main agent's route.
     isOther(id) { return !!id && id !== A.defaultId(); },
+    // Private first (wizard-ux issue 1728): a main-agent route ('' or the default's id) when the default is not hermes
+    // is that agent's own route (its allowed models, its provider), like any agent's. Null on a hermes-default box.
+    mainRoute(id = '') { const r = A.routeAgent?.(); return r && (!id || id === r) ? A.get(r) : null; },
     visible() { return A.list.filter(a => !a.hidden); },
     others() { return A.visible().filter(a => !a.is_default); },
     hue(a) {

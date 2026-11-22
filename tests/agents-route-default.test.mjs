@@ -91,3 +91,25 @@ test('no Agent Service (404): routes stay unscoped', async () => {
   await ctx.fetch('/wizard/hermes/api/sessions')
   assert.ok(calls.includes('/wizard/hermes/api/sessions'))
 })
+
+test('private first: a main-agent send routes as the private agent (its own provider, not custom:tinfoil-operator)', async () => {
+  const { A, ctx } = boot(PRIVATE_FIRST)
+  await A.load()
+  assert.equal(A.mainRoute('')?.id, 'private')
+  assert.equal(A.mainRoute('private')?.id, 'private')
+  assert.equal(A.mainRoute('philosopher'), null)
+  Object.assign(ctx, { localStorage: { getItem: () => null, setItem() {} }, addEventListener() {}, WizLive: { session: () => null, agentOf: () => '' } })
+  ctx.document.addEventListener = () => {}
+  vm.runInNewContext(readFileSync(new URL('../web/core/chat-models.js', import.meta.url), 'utf8'), ctx)
+  const M = ctx.WosModels
+  const snap = M.snapshot('', null, '')
+  assert.deepEqual({ ...snap }, { model: 'glm-5-3', provider: 'tinfoil', agent: 'private' })
+  assert.deepEqual({ ...(await M.resolveRoute(snap)) }, { model: 'glm-5-3', provider: 'tinfoil', agent: 'private' })
+  assert.equal(M.agentFor('', '')?.id, 'private')
+})
+
+test('regression: hermes default has no main route agent', async () => {
+  const { A } = boot([{ id: 'hermes', label: 'Hermes', is_default: true }])
+  await A.load()
+  assert.equal(A.mainRoute(''), null)
+})
