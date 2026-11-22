@@ -29,11 +29,8 @@ test('notification opens the meeting Activity directly, not a receiver trampolin
   assert.match(s, /setContentIntent\(openMeeting\(c, id, 6\)\)/);
   assert.match(s, /PendingIntent.getActivity\(c, req, i,/);
 });
-test('server origin and the user stop fence recovery', () => {
-  assert.match(java('mizel/MizelUpdatePolicy'), /j.stopReason == null && !j.stopSent/);
-  assert.match(java('mizel/MizelUpdatePolicy'), /j.uploadOrigin.equals\(origin\)/);
-  assert.match(java('mizel/MizelStore'), /j.recording = false;\s*j.resumeAfterUpdate = false;/);
-});
+// server origin and the user stop fence recovery: run in the JVM suite, android/app/src/test/java/ai/wizards/os/mizel/
+// MizelUpdateResumeTest (userPausedAndStoppedMeetingsNeverResume, resumeIsBoundToTheExistingOriginAndMeeting).
 test('updater only bypasses the meeting hold after durable preparation', () => {
   const s = java('update/Updater');
   assert.match(s, /if \(tapped && ok && app.getPackageManager\(\).canRequestPackageInstalls\(\)/);
