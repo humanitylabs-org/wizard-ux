@@ -131,15 +131,65 @@ test('a take keeps the box it started in: modelRoute by box key, whatever channe
   assert.match(desk, /forceNew \? undefined : vBox \|\| undefined\);/); assert.match(desk, /CHATS\.modelRoute\(wid,sid,box \|\| undefined\)/);
 });
 
-test('a typed channel post leaves the window\'s New chat pick alone (review)', () => {
-  assert.match(chats, /const chanPost = isNew && typeof opts\.space === 'string';[^\n]*\n    if \(nm && !chanPost\) c\.newModel = null;/);
-  assert.match(chats, /if \(nm && !chanPost\) c\.newModel = nm;/);
+// The real sendChat (core/chats-send.js, as tests/app-share-wizard.test.mjs runs it) with a window's New chat pick.
+async function send({ space, route, fail = false }) {
+  const start = chats.indexOf('  async function sendChat('), end = chats.indexOf('  const picker =', start);
+  const c = { draft: '', files: [], newModel: { model: 'claude-sonnet', provider: 'anthropic' } }, enqueued = [];
+  const sandbox = { window: {}, INC: null, W: { w1: { id: 'w1', app: 'chats', thread: '__new__' } }, ch: () => c, joinWords: (a, b) => [a, b].filter(Boolean).join('\n\n'), focusOf: () => null,
+    PW: { newModel: x => x.newModel, follow() {} }, winAgent: () => '', AGS: () => null, KIT: { drafts: { get: () => ({}), clear() {}, set() {}, setReply() {} } }, LIVE: {}, setDraft() {}, toast() {},
+    OUTBOX: { async enqueue(it) { if (fail) throw new Error('disk full'); enqueued.push(it); return { durable: true, sessionId: 'wizard_n1' }; } }, spaceMember() {}, openChat() {},
+    viewContext: () => '', isWorking: () => false, pendRef: f => f, renderChats() {}, applyLayout() {}, deskOf: () => 0, leaveAfterSend: () => false };
+  vm.runInNewContext(chats.slice(start, end) + ';this.sendChat=sendChat;', sandbox);
+  await sandbox.sendChat('w1', 'Ship it', 'typing', null, { sid: '__new__', away: true, ...(space !== undefined ? { space } : {}), ...(route ? { route } : {}) }).catch(() => null);
+  return { c, enqueued };
+}
+
+test('a typed channel post leaves the window\'s New chat pick alone (review)', async () => {
+  const opus = { model: 'claude-opus', provider: 'anthropic' };
+  const post = await send({ space: 'launch', route: opus });
+  assert.equal(post.enqueued[0].model, 'claude-opus', 'the post goes on the box\'s pick');
+  assert.equal(post.c.newModel?.model, 'claude-sonnet', 'the window\'s New chat pick is kept');
+  const failed = await send({ space: 'launch', route: opus, fail: true });
+  assert.equal(failed.c.newModel?.model, 'claude-sonnet', 'a failed post never puts the box pick on the window');
+  // A plain New chat send uses the window's pick once (cleared), and gets it back if the save fails.
+  const plain = await send({ route: opus });
+  assert.equal(plain.c.newModel, null);
+  const plainFail = await send({ route: opus, fail: true });
+  assert.equal(plainFail.c.newModel?.model, 'claude-opus');
 });
 
-test('Send and the orb read the box\'s pick (source contract)', () => {
-  assert.match(chats, /const route = chanModel\(w\);\n/, 'channelSend: the box pick');
-  assert.match(chats, /box \? boxModel\(box\) : chanDraftKey\(W\[wid\]\) \? chanModel\(W\[wid\]\) : PW\?\.newModel\(ch\(wid\)\);/, 'the orb / ⌥V route');
-  assert.match(chats, /PW\.modelLabel\(\{ \.\.\.w, thread: '__new__' \}, null, chanModel\(w\)\)/, 'the label');
+// The real channel block with channelSend (core/chats-chanbox.js) and the shell's modelRoute (the createChats export).
+function sendRoutes() {
+  const a = chats.indexOf('  function chanDraftKey(w) {'), b = chats.indexOf('  // The feed\'s newest post sits at the bottom');
+  const sa = chats.indexOf('  async function channelSend(wid, form) {'), sb = chats.indexOf('  // A Not sent channel post taken back', sa);
+  const ma = chats.indexOf('modelRoute: (wid, sid, box) =>'), mb = chats.indexOf('}, winAgent,', ma);
+  assert.ok(a > 0 && b > a && sa > 0 && sb > sa && ma > 0 && mb > ma);
+  const wins = { win: { id: 'win', thread: null }, plain: { id: 'plain', thread: null } }, open = { cur: { id: 'launch', name: 'Launch' } }, sent = [], c = { draft: '', files: [] };
+  const ctx = { W: wins, CH: { win: c, plain: {} }, ch: id => (id === 'plain' ? { newModel: { model: 'claude-haiku' } } : c), chanOpen: w => (w.id === 'win' ? open.cur : null), chanArchived: () => false, winAgent: () => '',
+    elOf: id => ({ id, querySelector: () => null }), renderChatList() {}, KIT: { drafts: { get: () => ({ text: '', files: [] }), set() {}, clear() {} } }, PREVIEW: {}, fileUrl: String, CLIP_SVG: '', esc: String,
+    hasContent: () => false, attachTray: () => '', H: {}, pendRef: f => f, AGS: () => null, CHAN_SENDING: [], growTa() {}, syncSend() {}, chanToEnd() {}, chanRepaint() {}, FIRST: new Map(), CHAN_TEXT_MAX: 4000,
+    viewContext: () => '', sendChat: async (wid, text, how, a, opts) => { sent.push(opts); return { sessionId: 's1' }; },
+    PW: { ensureModels() {}, modelLabel: (w, s, pick) => `<b class="ch-mlabel">${pick ? pick.model : 'default'}</b>`, micBtn: () => '', newModel: x => x.newModel },
+    window: { WosModels: { snapshot: (sid, nm, agent) => ({ sid, model: nm?.model || null, agent }) } }, Map };
+  vm.createContext(ctx);
+  vm.runInContext(chats.slice(a, b) + chats.slice(sa, sb) + `;const routes = { ${chats.slice(ma, mb + 1)} };this.api={chanDraftKey,boxModel,chanModel,setChanModel,chanComposer,channelSend,modelRoute:routes.modelRoute};`, ctx);
+  return { ...ctx.api, wins, open, sent };
+}
+
+test('Send and the orb read the box\'s pick', async () => {
+  const f = sendRoutes();
+  f.setChanModel('win', { model: 'claude-opus', provider: 'anthropic' });
+  // Send in the box: the post rides on the box's pick, filed into its channel.
+  const form = { querySelector: () => ({ value: 'Ship it' }) };
+  await f.channelSend('win', form);
+  assert.equal(f.sent[0].route?.model, 'claude-opus', 'channelSend: the box pick'); assert.equal(f.sent[0].space, 'launch');
+  // The orb / ⌥V route: a take for a box, the window's channel, or a plain New chat's own pick.
+  assert.equal(f.modelRoute('win', '__new__', 'chan::launch').model, 'claude-opus');
+  assert.equal(f.modelRoute('win', '__new__').model, 'claude-opus', 'the window shows the channel: its box pick');
+  assert.equal(f.modelRoute('plain', '__new__').model, 'claude-haiku', 'a plain New chat: its own pick');
+  assert.equal(f.modelRoute('win', 't1').model, null, 'a reply keeps its thread\'s model');
+  // The label in the box.
+  assert.match(f.chanComposer(f.wins.win, f.open.cur), />claude-opus</, 'the label');
   // The whole export is one line: a // comment inside it would silently drop every later entry.
   const exp = chats.slice(chats.indexOf('  return { beforeNavigate'), chats.indexOf('\n', chats.indexOf('  return { beforeNavigate')));
   assert.doesNotMatch(exp, /\/\/ /); assert.match(exp, /renderChatList,[^\n]*chanModel: wid => chanModel\(W\[wid\]\), boxModel, setChanModel,[^\n]*sendChat,/);
