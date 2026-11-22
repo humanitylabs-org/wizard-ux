@@ -87,7 +87,7 @@ function world({ shell = 'phone', route = { home: false, view: 'thread', thread:
   globalThis.document = doc; globalThis.PointerEvent = FakePointerEvent; globalThis.performance ||= { now: () => Date.now() };
   const st = { route: { ...route }, on: {}, acts: [], opened: [], gone: [], lists: [], chats: 0, newChats: 0, settings: [], backs: [], timers: [], orbDown: [], sheet: 0, swipes: null, inset: null, store: {},
     sessions: { working: [{ id: 'w1', title: 'Busy one', kind: 'working', unread: false, pinned: false, actions: ['pin', 'rename'] }],
-      ready: [{ id: 'r1', title: 'Ready one', kind: 'ready', unread: true, pinned: true, actions: ['pin', 'rename', 'snooze', 'done'] }, { id: 'r2', title: 'Seen one', kind: 'ready', unread: false, pinned: false, actions: ['pin', 'rename', 'unread', 'snooze', 'done'] }],
+      ready: [{ id: 'r1', title: 'Ready one', kind: 'ready', unread: true, pinned: true, actions: ['pin', 'rename', 'snooze', 'done'] }, { id: 'r2', title: 'Seen one', kind: 'ready', unread: false, pinned: false, actions: ['pin', 'rename', 'unread', 'move', 'snooze', 'done'] }],
       archive: [{ id: 'a1', title: 'Old money talk', kind: 'archive', unread: false, pinned: false, actions: ['pin', 'rename', 'restore', 'snooze'] }] },
     desks: [{ desk: 1, id: 'wizard', name: 'Chats' }, ...['mail', 'music', 'money', 'notes', 'maps'].map((id, i) => ({ desk: i + 2, id, name: id[0].toUpperCase() + id.slice(1) }))] };
   const apps = ['mail', 'music', 'money', 'notes', 'maps', 'movies'].map(id => ({ id, name: id[0].toUpperCase() + id.slice(1) }));
@@ -262,7 +262,7 @@ test('desktop: a sidebar (open apps, All apps, the Archive / Working / Ready sec
   assert.equal(w.html.dataset.aadTabs, 'rail'); keys[1].down({ altKey: true, code: 'KeyR' }); assert.equal(w.html.dataset.aadTabs, 'open');
   // ⋯ on a row: the same menu as the phone's long press, through Chats' own actions
   w.q('.aad-rw[data-sid="r2"] .aad-more').dispatchEvent(new FakePointerEvent('click'));
-  assert.deepEqual(w.qa('.aad-pop-i').map(b => b.textContent), ['Pin', 'Rename', 'Mark unread', 'Snooze', 'Archive']);
+  assert.deepEqual(w.qa('.aad-pop-i').map(b => b.textContent), ['Pin', 'Rename', 'Mark unread', 'Move to channel…', 'Snooze', 'Archive']);
   w.q('.aad-pop-i[data-act="done"]').dispatchEvent(new FakePointerEvent('click')); assert.deepEqual(w.st.acts, [['r2', 'done']]); assert.equal(w.q('.aad-pop'), null);
   w.q('.aad-rw[data-sid="r1"] .aad-row').dispatchEvent(new FakePointerEvent('click')); assert.deepEqual(w.st.opened.at(-1), 'thread:r1');
   // fold to the rail with ◫ or Ctrl / ⌘ + Shift + S; kept on this device
@@ -510,7 +510,7 @@ test('phone search still covers chats (archive too) and apps; a chat row opens i
   const row = w.q('.aa-chat[data-sid="r2"]');
   row.dispatchEvent(new FakePointerEvent('pointerdown', { pointerId: 3, clientX: 50, clientY: 300, button: 0 }));
   const lp = w.st.timers.find(t => t.ms === 450); assert.ok(lp, 'a 450 ms still press'); lp.fn();
-  assert.deepEqual(w.qa('.aa-pop-i').map(b => b.textContent), ['Pin', 'Rename', 'Mark unread', 'Snooze', 'Archive'], 'their order, Wizard\'s actions, filing last');
+  assert.deepEqual(w.qa('.aa-pop-i').map(b => b.textContent), ['Pin', 'Rename', 'Mark unread', 'Move to channel…', 'Snooze', 'Archive'], 'their order, Wizard\'s actions, filing last');
   assert.ok(row.classList.contains('is-held'));
   // the lift right after the press never closes it or picks an item
   w.q('.aa-menu-scrim').dispatchEvent(new FakePointerEvent('click')); assert.ok(w.q('.aa-pop'), 'still open after the lift');
@@ -527,6 +527,12 @@ test('phone search still covers chats (archive too) and apps; a chat row opens i
     w.q('.aa-pop-i[data-act="rename"]').dispatchEvent(new FakePointerEvent('click'));
   } finally { Date.now = realNow; }
   assert.deepEqual(w.st.acts.at(-1), ['r1', 'rename']); assert.equal(w.html.dataset.aaDrawer, undefined);
+  // Move to channel… also steps the drawer aside, for Chats' own channel picker (wizard-ux issue 1292)
+  w.q('.aa-menu').dispatchEvent(new FakePointerEvent('click'));
+  w.q('.aa-chat[data-sid="r2"]').dispatchEvent(new FakePointerEvent('pointerdown', { pointerId: 6, button: 0 })); w.st.timers.filter(t => t.ms === 450).at(-1).fn();
+  Date.now = () => realNow() + 6000;
+  try { w.q('.aa-pop-i[data-act="move"]').dispatchEvent(new FakePointerEvent('click')); } finally { Date.now = realNow; }
+  assert.deepEqual(w.st.acts.at(-1), ['r2', 'move']); assert.equal(w.html.dataset.aaDrawer, undefined, 'the drawer closed for the picker');
   // a working thread offers only what Chats allows on it
   w.q('.aa-menu').dispatchEvent(new FakePointerEvent('click'));
   w.q('.aa-sec[data-sec="working"]').dispatchEvent(new FakePointerEvent('click'));

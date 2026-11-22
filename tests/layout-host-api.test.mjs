@@ -69,6 +69,7 @@ test('the layout gets the shell\'s own threads, actions, apps and Home; nothing 
   const L = api.sessions.list(); assert.equal(L.ready[0].id, 'r1'); L.ready[0].title = 'changed';
   assert.equal(api.sessions.list().ready[0].title, 'Ready one', 'a copy, never the shell\'s rows');
   assert.equal(api.sessions.act('r1', 'snooze'), true); assert.equal(api.sessions.act('r1', 'done'), true);
+  assert.equal(api.sessions.act('r1', 'move'), true, 'Move to channel… reaches the shell');
   assert.equal(api.sessions.act('r1', 'delete'), false, 'only the row sheet\'s own actions (Snooze, Done, Mark unread, Restore, Pin, Rename)'); assert.equal(api.sessions.act('', 'done'), false);
   api.sessions.open('r1'); api.sessions.openList('ready'); api.sessions.openList('archive');
   assert.deepEqual({ ...api.apps.badges() }, {}, 'no counts without the shell nav'); assert.ok(Object.isFrozen(api.apps.badges()));
@@ -77,7 +78,7 @@ test('the layout gets the shell\'s own threads, actions, apps and Home; nothing 
   assert.equal(D.host.emptyHome, false); api.desk.emptyHome(); assert.equal(D.host.emptyHome, true, 'closing a desk\'s last window goes Home');
   assert.equal(api.route().home, true);
   const mount = { nodeType: 1, remove() { D.mounted.splice(D.mounted.indexOf(this), 1); } }; api.mount(mount); assert.equal(D.mounted.length, 1, 'mounted on the desktop stage');
-  assert.deepEqual(D.calls, [['snooze', 'r1'], ['done', 'r1'], ['open', 'r1'], ['list', 'ready'], ['app', 'files'], ['picker'], ['home'], ['settings', 'look'], ['command'], ['talk']]);
+  assert.deepEqual(D.calls, [['snooze', 'r1'], ['done', 'r1'], ['move', 'r1'], ['open', 'r1'], ['list', 'ready'], ['app', 'files'], ['picker'], ['home'], ['settings', 'look'], ['command'], ['talk']]);
   D.host.setLayout('classic'); await settle();
   assert.equal(D.mounted.length, 0, 'own nodes removed'); assert.deepEqual(D.calls.slice(-2), [['teardown'], ['panelMode', false]], 'the desks come back once it is off');
   assert.equal(D.host.panelMode, false);
