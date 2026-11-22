@@ -862,13 +862,17 @@ test('round 5: home button in the middle, the switcher on Home only, the Ready c
   assert.deepEqual(calls, [['c1', '__new__'], [2, 2]]); assert.equal(JSON.stringify(focused), '[{"preventScroll":true}]');
 });
 
-test('round 5 + 7 desktop: no home button in the top row (round 7), the switcher on Home only, the sections, the count on ◫', () => {
+test('round 5 + 7 desktop: no home button in the top row (round 7), the switcher on Home only, the sections, the count on ◫', async () => {
+  // the real desktop view (deskWorld): what the top row and the sidebar header hold, in order
+  const { w } = deskWorld();
+  (await layout()).default(w.api);
+  assert.equal(w.qa('.aad-home').length, 0, 'round 7: the top row has no home button (Home = its tab, +, ⌥1)');
+  assert.equal(w.qa('.aad-tname, .aad-viewall').length, 0, 'the name in the top row and View all are gone');
+  assert.deepEqual(w.q('.aad-top').children.map(e => e.className), ['aad-ctop', 'aad-ptop'], 'round 15: no tab strip; the docked chat\'s title and the app panel\'s header');
+  assert.deepEqual(w.q('.aad-sh').children.map(e => e.className.split(' ').at(-1)), ['aad-ws', 'aad-find', 'aad-search', 'aad-cancel', 'aad-tog'], 'round 7: the switcher is the sidebar header; round 16: no ⌂');
+  assert.match(w.q('.aad-orbbtn').getAttribute('aria-label'), /drag up for a new chat to type in/);
   const css = read('web/layouts/ai-apps/desktop.css'), js = noComments(read('web/layouts/ai-apps/desktop.js'));
-  assert.ok(!/\.aad-home\b|\btHome\b/.test(css + js), 'round 7: the top row has no home button (Home = its tab, +, ⌥1)');
-  assert.ok(!/aad-tname|aad-viewall/.test(css + js), 'the name in the top row and View all are gone');
-  assert.match(js, /top\.append\(cTop, pTop\);/, 'round 15: no tab strip; the docked chat\'s title and the app panel\'s header');
-  assert.match(js, /head\.append\(wsBtn, findBtn, searchBox, cancelBtn, togBtn\);/, 'round 7: the switcher is the sidebar header; round 16: no ⌂');
-  assert.match(js, /drag up for a new chat to type in/);
+  assert.ok(!/\.aad-home\b|\btHome\b/.test(css + js) && !/aad-tname|aad-viewall/.test(css), 'and no styles or code left for them');
 });
 test('round 5: notifications in the list: Chats\' own items as plain rows with a small bell, their actions kept', async () => {
   // the layout: a notification row = the same row shape, a bell before the title, no card; its menu = the inbox's actions
@@ -982,17 +986,24 @@ test('round 6: the composer\'s orb slot is read from the grid\'s real tracks (on
 });
 
 test('round 6: a tidy composer: the model chip is a control on the right (never a centred label), the orb in the mic\'s slot, Snooze / Archive never clipped', () => {
-  for (const [file, P, slot] of [['web/layouts/ai-apps/layout.css', 'html[data-shell="phone"][data-layout="ai-apps"] .win.app-chats', '44px'], ['web/layouts/ai-apps/desktop.css', 'html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main', '40px']]) {
-    const css = read(file);
-    const rule = sel => { const i = css.indexOf(P + ' ' + sel + ' {'); assert.ok(i >= 0, `${file}: ${sel}`); return css.slice(i, css.indexOf('}', i)); };
-    assert.match(rule('.ch-row2'), new RegExp(`display: grid !important; grid-template-columns: auto minmax\\(0, 1fr\\) auto ${slot} auto auto; grid-template-areas: "att field chip orb stop send";`), `${file}: one line: + · words · chip · orb`);
-    assert.match(rule('.ch-compose.has-text .ch-row2'), /grid-template-areas: "field field field field field field" "att \. chip orb stop send";/, `${file}: with words: the words on top, the controls under them, chip · orb · Send on the right`);
-    assert.match(rule('.ch-row2 > .ch-field'), /display: contents !important;/, `${file}: the field's box steps aside, so the chip is a control of the row`);
-    assert.match(rule('.ch-field .ch-mlabel'), /grid-area: chip; position: static !important; justify-self: end;/, `${file}: the chip in its column on the right`);
-    assert.match(rule('.ch-row2::after'), /grid-area: orb;/, `${file}: the orb's slot`);
-    assert.ok(css.includes(P + ' .ch-row2 > .ch-mic { display: none !important; }'), `${file}: the orb replaces the mic`);
-    assert.match(rule('.ch-msgs > .ch-tacts'), /position: sticky; bottom: 0;/, `${file}: Snooze / Archive: a row right above the composer, never half under it`);
-    assert.match(rule('.ch-thread > .ch-latest'), /position: relative !important; inset: auto !important;[^}]*margin: (?:calc\()?-46px/, `${file}: ↓ Latest just above the composer, never on it`);
+  // each shell's real stylesheet on a Chats composer shaped like the one Chats draws (tests/fixtures/mini-css.mjs)
+  for (const [file, shell, slot] of [['web/layouts/ai-apps/layout.css', 'phone', '44px'], ['web/layouts/ai-apps/desktop.css', 'desktop', '40px']]) {
+    const css = read(file), doc = createDocument();
+    doc.documentElement.setAttribute('data-shell', shell); doc.documentElement.setAttribute('data-layout', 'ai-apps');
+    doc.body.innerHTML = '<div class="win app-chats"><div class="dchats"><div class="pane-main"><div class="ch-thread"><div class="ch-msgs"><div class="ch-tacts"></div></div><div class="ch-latest"></div>'
+      + '<form class="ch-compose"><div class="ch-row2"><div class="ch-field"><span class="ch-mlabel"></span></div><button class="ch-mic"></button><button class="ch-send"></button></div></form></div></div></div></div>';
+    const st = (sel, opts) => { const el = doc.querySelector(sel); assert.ok(el, sel); const c = cascade(el, css, opts); return k => c[k]?.value ?? ''; };
+    let r = st('.ch-row2');
+    assert.deepEqual([r('display'), r('grid-template-columns'), r('grid-template-areas')], ['grid', `auto minmax(0, 1fr) auto ${slot} auto auto`, '"att field chip orb stop send"'], `${file}: one line: + · words · chip · orb`);
+    doc.querySelector('.ch-compose').classList.add('has-text');
+    assert.equal(st('.ch-row2')('grid-template-areas'), '"field field field field field field" "att . chip orb stop send"', `${file}: with words: the words on top, the controls under them, chip · orb · Send on the right`);
+    assert.equal(st('.ch-field')('display'), 'contents', `${file}: the field's box steps aside, so the chip is a control of the row`);
+    r = st('.ch-mlabel'); assert.deepEqual([r('grid-area'), r('position'), r('justify-self')], ['chip', 'static', 'end'], `${file}: the chip in its column on the right`);
+    assert.equal(st('.ch-row2', { pseudo: '::after' })('grid-area'), 'orb', `${file}: the orb's slot`);
+    assert.equal(st('.ch-mic')('display'), 'none', `${file}: the orb replaces the mic`);
+    r = st('.ch-tacts'); assert.deepEqual([r('position'), r('bottom')], ['sticky', '0'], `${file}: Snooze / Archive: a row right above the composer, never half under it`);
+    r = st('.ch-latest'); assert.equal(r('position'), 'relative'); assert.equal(r('inset'), 'auto');
+    assert.match(r('margin'), /^(?:calc\()?-46px/, `${file}: ↓ Latest just above the composer, never on it`);
   }
 });
 
