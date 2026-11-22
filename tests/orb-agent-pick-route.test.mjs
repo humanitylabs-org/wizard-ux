@@ -4,6 +4,8 @@ import { createServer } from 'node:http';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { randomUUID } from 'node:crypto';
+import { block, runRecording } from './fixtures/source-slice.mjs';
+import { withShellParts } from './fixtures/shell-parts.mjs';
 
 // (fixture copied from outbox-voice-reload-handoff) Reload waited 5-10 s behind a six-minute voice note's upload + transcription. A tap take whose
 // destination is fixed is handed to the outbox; a reload mid-send must finish that SAME send on the new page, once.
@@ -63,9 +65,26 @@ test('an orb-picked agent survives staging and enqueue of a general take', async
   assert.ok(calls.some(x => x.path === '/wizard/hermes/api/sessions?agent=archimedes-new'), 'session created in the agent store');
 });
 
-test('the voice finish path keeps a general take\'s route agent when there is no view', () => {
-  const app = readFileSync(new URL('../web/app.js', import.meta.url), 'utf8');
-  assert.match(app, /agent: sv\?\.agent \|\| snap\.route\?\.agent \|\| ''/);
+// Runs the real phone onRecStop (app.js) on a finished general take up to the outbox stage call it makes.
+async function finishTake(snap) {
+  const app = withShellParts(readFileSync(new URL('../web/app.js', import.meta.url), 'utf8'));
+  const staged = [], STOP = new Error('staged');
+  const V = { kind: 'general', parts: [], chunks: [new Blob([new Uint8Array(2000)], { type: 'audio/webm' })], mime: 'audio/webm', acc: 5000, cancelled: false, snap, seal: null, replyTo: null, target: null, custodyCapture: null, meetingLoan: null };
+  const ctx = runRecording(block(app, '  async function onRecStop(nblob, nid) {') + '\nglobalThis.onRecStop = onRecStop;', { V, Blob, takeFiles: () => [], quickTake: () => false,
+    OUTBOX: { stage: async it => { staged.push(JSON.parse(JSON.stringify({ ...it, audio: undefined }))); throw STOP; } } });
+  await assert.rejects(ctx.onRecStop(), e => e === STOP);
+  assert.equal(staged.length, 1, 'the take is staged once');
+  return staged[0];
+}
+
+test('the voice finish path keeps a general take\'s route agent when there is no view', async () => {
+  const general = await finishTake({ route: { agent: 'archimedes-new', model: 'm', provider: 'p' }, view: null, general: true });
+  assert.equal(general.agent, 'archimedes-new', 'the orb-picked agent rides with the staged take');
+  assert.equal(general.kind, 'new'); assert.equal(general.sessionId, '');
+  const viewed = await finishTake({ route: { agent: 'archimedes-new', model: 'm' }, view: { id: 'w1', thread: '', agent: 'host-ops' } });
+  assert.equal(viewed.agent, 'host-ops', 'a view\'s own agent still decides when there is one');
+  const plain = await finishTake({ route: { model: 'm' }, view: null });
+  assert.equal(plain.agent, '', 'no pick, no view: the main agent');
 });
 
 // James, 22 Oct 2026, after the routing fix: the note reached Archimedes (new) but failed "agent_files_disabled",

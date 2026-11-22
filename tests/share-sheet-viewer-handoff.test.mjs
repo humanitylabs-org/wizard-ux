@@ -5,6 +5,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { runRecording } from './fixtures/source-slice.mjs';
 const sheetSrc = readFileSync(new URL('../web/core/share-sheet.js', import.meta.url), 'utf8');
 const kitSrc = readFileSync(new URL('../web/core/chat-kit.js', import.meta.url), 'utf8');
 const store = () => { const m = new Map(); return { getItem: k => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)), removeItem: k => m.delete(k) }; };
@@ -42,12 +43,23 @@ test('an app that cannot open leaves the viewer as it was and is not a handoff',
   }
 });
 
-test('the viewer does not toast Shared when the sheet only handed the file to an app', () => {
-  const at = kitSrc.indexOf('const share = it => {');
-  const body = kitSrc.slice(at, kitSrc.indexOf('\n  }); };', at));
-  assert.ok(at > 0 && body.length > 0);
-  const gate = body.indexOf("if (result === 'shared' && (sheet?.handoffs?.() || 0) !== handed) return;");
-  assert.ok(gate > 0, 'a handoff returns before any toast');
-  assert.ok(gate < body.indexOf("K.notify('↗', 'Shared')"), 'and before the Shared toast');
-  assert.ok(body.indexOf('handed = sheet?.handoffs?.()') < body.indexOf('await shareFileOpen'), 'counted before the sheet opens');
+// Runs the real viewer Share (chat-kit.js `share`, reached the way its Share button reaches it) with a share sheet that
+// either hands the file to an app (its handoffs() count moves) or really shares it.
+async function viewerShare(handoff) {
+  const notes = [];
+  let handoffs = 2; // earlier handoffs this session: only one during this share counts
+  const sheet = { handoffs: () => handoffs, show: async () => { if (handoff) handoffs++; return 'shared'; } };
+  const hooked = kitSrc.replace('  window.WosChat = {', '  window.__viewerShare = share;\n  window.WosChat = {');
+  assert.notEqual(hooked, kitSrc, 'the viewer share is reachable');
+  const window = { WosShareSheet: sheet };
+  runRecording(hooked, { window, document: { addEventListener() {} }, navigator: { userAgent: '' }, location: new URL('https://box.test/wizard-os-home/'), URL, File, Blob, AbortController, setTimeout, clearTimeout, console,
+    fetch: async () => ({ ok: true, status: 200, headers: { get: () => null }, blob: async () => new Blob(['# Trip notes\n'], { type: 'text/markdown' }) }) });
+  window.WosChat.K.notify = (icon, text) => notes.push(text);
+  await window.__viewerShare({ url: '/wizard/files/f1/content', name: 'trip-notes.md', mime: 'text/markdown' });
+  return notes;
+}
+
+test('the viewer does not toast Shared when the sheet only handed the file to an app', async () => {
+  assert.deepEqual(await viewerShare(true), [], 'a handoff to Messenger: its own picker confirms, the viewer says nothing');
+  assert.deepEqual(await viewerShare(false), ['Shared'], 'a real share still says Shared');
 });
