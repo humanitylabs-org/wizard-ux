@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { parseCsp, nginxCsp, serverPyCsp } from './fixtures/w1-csp.mjs';
 const source = readFileSync(new URL('../web/core/reach.js', import.meta.url), 'utf8');
 const DERP = 'https://derp1.tailscale.com/', DIRECT = 'https://wizard.example-tailnet.ts.net:9691/troubleshoot/api/ping';
 const response = (body = { checks: [], overall: 'ok' }, status = 200) => ({ ok: status < 400, status, json: async () => body });
@@ -218,9 +219,9 @@ test('a blocked public check is unknown even if the host answers with 502; it ne
   assert.doesNotMatch(c.help, /device.*offline|Tailscale app/);
 });
 test('primary nginx policy and generator retain the narrow public probe allowlist', () => {
-  const csp = readFileSync(new URL('../packaging/static.conf', import.meta.url), 'utf8').match(/Content-Security-Policy "([^"]+)"/)[1];
-  assert.deepEqual(csp.match(/connect-src ([^;]+)/)[1].split(' '), ["'self'", 'blob:', 'data:', 'https://derp1.tailscale.com/generate_204', '$wizard_troubleshoot_direct']);
-  assert.match(readFileSync(new URL('../packaging/entrypoint.sh', import.meta.url), 'utf8'), /cp \/etc\/wizard-shell\/static.conf \/tmp\/wizard-static.conf/);
+  // the image's entrypoint writes the policy nginx serves; a Tailscale Host gets its own :9691, any other the old allowance
+  assert.deepEqual(parseCsp(nginxCsp({ host: 'wizard.example-tailnet.ts.net' }))['connect-src'], ["'self'", 'blob:', 'data:', 'https://derp1.tailscale.com/generate_204', 'https://wizard.example-tailnet.ts.net:9691']);
+  assert.deepEqual(parseCsp(nginxCsp({ host: 'proxy.example' }))['connect-src'], ["'self'", 'blob:', 'data:', 'https://derp1.tailscale.com/generate_204', 'https://*.ts.net:9691']);
 });
 test('Troubleshoot decides on a current diagnosis, not one from before the disconnect', async () => {
   let up = true;
@@ -250,10 +251,12 @@ test('gateway route down but the direct line answers: the Tailscale row and the 
   const [, options] = h.calls.find(([url]) => url === DIRECT);
   assert.equal(options.mode, 'no-cors'); assert.equal(options.credentials, 'omit');
 });
-test('the shell CSP lets the window frame and ping only Troubleshooter’s own line on a Tailscale address', () => {
-  for (const csp of [readFileSync(new URL('../packaging/static.conf', import.meta.url), 'utf8').match(/Content-Security-Policy "([^"]+)"/)[1], readFileSync(new URL('../server.py', import.meta.url), 'utf8')]) {
-    // This address's own :9691 only (nginx $wizard_troubleshoot_direct, server.py {direct}); see browser-boundary-paste-csp.
-    assert.match(csp, /frame-src 'self' blob: (?:\$wizard_troubleshoot_direct|\{direct\});/);
-    assert.match(csp, /connect-src [^;]*(?:\$wizard_troubleshoot_direct|\{direct\});/);
+test('the shell CSP lets the window frame and ping only Troubleshooter’s own line on a Tailscale address', async () => {
+  const own = 'https://wizard.example-tailnet.ts.net:9691';
+  const served = [['nginx', nginxCsp({ host: 'wizard.example-tailnet.ts.net' })], ['server.py', await serverPyCsp({ origin: 'https://wizard.example-tailnet.ts.net' })]];
+  for (const [name, header] of served) {
+    const csp = parseCsp(header);
+    assert.deepEqual(csp['frame-src'], ["'self'", 'blob:', own], name);
+    assert.equal(csp['connect-src'].filter(s => /:9691$/.test(s)).join(), own, name);
   }
 });

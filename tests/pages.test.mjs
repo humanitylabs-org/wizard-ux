@@ -2,6 +2,11 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
+import http from 'node:http';
+import {spawn} from 'node:child_process';
+import {once} from 'node:events';
+import {nginxShell} from './fixtures/w1-nginx.mjs';
+const listen=async server=>{server.listen(0,'127.0.0.1');await once(server,'listening');return server.address().port;};
 const source = readFileSync(new URL('../web/core/pages.js',import.meta.url),'utf8');
 const settle = async () => {for(let i=0;i<12;i++) await new Promise(r=>setImmediate(r));};
 function boot(fetcher = () => ({pages:[]})) {
@@ -78,11 +83,26 @@ test('typing during an in-flight save stays dirty and is never marked as the sav
  b.window.confirm=()=>false;c.back();assert.match(b.root.innerHTML,/new unsaved words/);
 });
 
-test('nginx /pages/ pass-through preserves upstream sandbox CSP; QA forwards page reads',()=>{
- const nginx=readFileSync(new URL('../packaging/nginx.conf.template',import.meta.url),'utf8');const proxy=readFileSync(new URL('../packaging/proxy.conf',import.meta.url),'utf8');
- assert.match(nginx,/location \/ \{ proxy_pass \$wizard_api\$request_uri; include \/tmp\/wizard-proxy.conf;/);
- assert.doesNotMatch(nginx+proxy,/(?:proxy_hide_header|add_header)\s+(?:Content-Security-Policy|content-security-policy)/);
- assert.match(readFileSync(new URL('../tools/qa-origin.cjs',import.meta.url),'utf8'),/u.pathname.startsWith\('\/pages\/'\)/);
+test('nginx /pages/ pass-through preserves upstream sandbox CSP; QA forwards page reads',async()=>{
+ const shell=nginxShell(), csp=['Content-Security-Policy',"sandbox allow-scripts; default-src 'none'"];
+ try {
+  const r=shell.request({uri:'/pages/report/',upstream:{status:200,headers:[csp,['Content-Type','text/html']]}});
+  assert.equal(r.proxy,'http://wizard-agent-service:8787/pages/report/');
+  assert.deepEqual(r.header('content-security-policy'),[csp[1]],'the page keeps the upstream policy, alone');
+  const doc=shell.request({uri:'/pages/report/doc.md',args:'v=1',upstream:{status:200,headers:[csp]}});
+  assert.equal(doc.proxy,'http://wizard-agent-service:8787/pages/report/doc.md?v=1');assert.deepEqual(doc.header('content-security-policy'),[csp[1]]);
+ } finally {shell.done();}
+ // tools/qa-origin.cjs forwards the same read to the backend with its headers
+ const reads=[];const backend=http.createServer((req,res)=>{reads.push([req.method,req.url]);res.setHeader('content-security-policy',csp[1]);res.end('page');});
+ const port=await listen(backend),reserve=http.createServer(),qaPort=await listen(reserve);await new Promise(r=>reserve.close(r));
+ const child=spawn(process.execPath,[new URL('../tools/qa-origin.cjs',import.meta.url).pathname,String(qaPort)],{env:{...process.env,QA_BACKEND_PORT:String(port)},stdio:['ignore','pipe','pipe']});
+ try {
+  await once(child.stdout,'data');
+  const res=await fetch(`http://127.0.0.1:${qaPort}/pages/report/`);
+  assert.equal(await res.text(),'page');assert.equal(res.headers.get('content-security-policy'),csp[1]);
+  assert.deepEqual(reads,[['GET','/pages/report/']]);
+  assert.equal((await fetch(`http://127.0.0.1:${qaPort}/pages/report/doc.md`,{method:'PUT',body:'x'})).status,403);assert.equal(reads.length,1);
+ } finally {child.kill();await once(child,'exit');await new Promise(r=>backend.close(r));}
 });
 
 test('a document the frame navigated to (no nonce, or an old one) gets no bridge',async()=>{
