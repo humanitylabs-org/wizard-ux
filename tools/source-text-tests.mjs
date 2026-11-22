@@ -160,6 +160,8 @@ export function classifyFile(src) {
   const ident = t => new Set([...t.matchAll(/(?<![\w$.])[A-Za-z_$][\w$]*/g)].map(x => x[0]));
   // top-level statements that run code (vm.runInNewContext(text, sandbox)) make the names they touch run code
   for (const stmt of topStatements(code)) if (!/^(?:export\s+)?(?:async\s+)?(?:function|class|const|let|var|import|test|it|describe)\b/.test(stmt) && EXEC.some(r => r.test(stmt))) for (const nm of ident(stmt)) if (decls.has(nm)) runs.add(nm);
+  // `import '../web/core/x.js'` runs the module for its globals: a top-level name taken from globalThis / window runs code
+  if (/(^|\n)\s*import\s*['"]\.\.?\/[^'"]+['"]/.test(src)) for (const [nm, text] of decls) if (/=\s*(globalThis|window)\.[\w$]+/.test(text)) runs.add(nm);
   const reads = new Set(importedReaders); // an imported reader / source string reads source text
   // Source text can also sit in a declaration inside a block (`for (...) { const css = read(...); test(...) }`): for
   // reading, every declaration at any depth counts (stricter: it can only turn 'other' into 'text' or 'absence').

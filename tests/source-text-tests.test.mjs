@@ -34,6 +34,9 @@ function load() { return new Function('window', src)({}); }
 const helper = () => load();
 test('c', () => { assert.ok(helper()); });`), ['runs'], 'through a helper that calls a helper');
   assert.deepEqual(kinds(`${HEAD}test('d', async () => { const m = await import('../web/core/x.js'); assert.ok(m); });`), ['runs']);
+  assert.deepEqual(kinds(`${HEAD}import '../web/core/model.js';
+const M = globalThis.WizModel; const src = readFileSync('web/core/model.js', 'utf8');
+test('e', () => { const s = 1; assert.deepEqual(M.sort([s]), [1]); });`), ['runs'], 'a module imported for its globals');
 });
 
 test('the parts joiners only put moved-out source back together, so they do not count as running code', () => {
