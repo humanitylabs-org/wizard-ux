@@ -6,6 +6,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { freshDevice } from './fixtures/w1-experience.mjs';
 import { modelContext } from './fixtures/chats-list-model.mjs';
 import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
 
@@ -13,13 +14,15 @@ const read = p => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
 const ID = 'wizard/background-continue';
 const RID = 'bg_' + 'a'.repeat(32), RID2 = 'bg_' + 'b'.repeat(32);
 
-test('the tweak is in the catalog and off by default for everyone', () => {
-  const catalog = JSON.parse(read('web/tweaks/catalog.json'));
-  const profile = JSON.parse(read('web/tweaks/wizard/profile.json'));
-  assert.ok(catalog.tweaks.includes(ID));
-  assert.equal(catalog.defaults.includes(ID), false);
-  assert.equal(profile.tweaks.includes(ID), false);
-  assert.equal(JSON.parse(read(`web/tweaks/${ID}/manifest.json`)).id, ID);
+test('the tweak is in the catalog and off by default for everyone', async () => {
+  // what Settings › Look lists on a fresh device (core/experience.js over the shipped catalog), and on every author's preset
+  const fresh = freshDevice(), l = await fresh.listing(ID);
+  assert.equal(l.manifest?.id, ID, 'listed');
+  assert.equal(l.row?.on, false); assert.equal(l.running, false, 'off by default');
+  const { profiles } = JSON.parse(read('web/tweaks/catalog.json'));
+  for (const who of profiles) { const d = freshDevice({ preset: who }); await d.E.refresh(); assert.ok(!d.active().includes(ID), who); }
+  await fresh.E.toggle(ID); await fresh.E.whenReady();
+  assert.ok(fresh.active().includes(ID), 'and the owner can switch it on');
 });
 
 // The real live.js list normalizer (same extraction as ready-open-ask.test.mjs).
