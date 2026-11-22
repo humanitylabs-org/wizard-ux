@@ -200,8 +200,6 @@ test('the shell: keycaps on a frame\'s targets are offset by the frame and hit-t
 });
 
 // static-rule: the App keys section of docs/ai-apps-view.md must agree with the contract app authors follow
-
-
 test('docs: the App keys section app authors follow', () => {
   const doc = read('docs/ai-apps-view.md');
   const sec = doc.slice(doc.indexOf('## App keys'), doc.indexOf('## How it is built'));
