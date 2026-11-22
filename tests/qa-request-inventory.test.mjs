@@ -6,6 +6,7 @@ import { mkdtempSync, readFileSync, readdirSync, rmSync, existsSync, mkdirSync, 
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 const require = createRequire(import.meta.url);
+import { harnessRoutes, fx as rfx } from './fixtures/r8A-qa-route-harness.mjs';
 const root = new URL('../', import.meta.url).pathname;
 const fx = require('../tools/qa-proof-fixture.cjs');
 const { scan } = require('../tools/qa-request-inventory.cjs');
@@ -72,14 +73,27 @@ test('a run with refusals continues, then exits non-zero with the full list and 
  } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('all three harnesses use the shared collect-all fence and never answer unknown paths with a silent success', () => {
+// Each harness runs in node:vm against a fake Chromium (tests/fixtures/r8A-qa-route-harness.mjs) until its request
+// router is installed; then the router itself is asked for paths no fixture knows.
+test('all three harnesses use the shared collect-all fence and never answer unknown paths with a silent success', async () => {
  for (const name of HARNESSES) {
-  const src = readFileSync(path.join(QA_DIR, name), 'utf8');
-  assert.match(src, /fx\.failAtExit\(/, name);
-  assert.doesNotMatch(src, /Uncatalogued/, name);
+  rfx.resetRefusals();
+  const h = await harnessRoutes(name);
+  try {
+   assert.equal(h.failAtExit.length, 1, name + ': installs the collect-all fence once');
+   assert.ok(h.routes.length >= 1, name + ': routes every request');
+   for (const [method, p] of [['GET', '/totally/unknown'], ['GET', '/wizard/never/seen-r8a'], ['POST', '/wizard/never/seen-r8a']]) {
+    const answer = await h.ask(method, h.origin + p);
+    assert.ok(answer && typeof answer === 'object' && answer.status >= 400, `${name}: ${method} ${p} is refused, never a silent success (${JSON.stringify(answer)})`);
+   }
+   const refused = rfx.refused().map(r => r.request);
+   assert.ok(refused.includes('GET /totally/unknown') && refused.includes('GET /wizard/never/seen-r8a'), `${name}: unknown reads are collected for the exit report: ${refused}`);
+  } finally { h.done(); rfx.resetRefusals(); }
  }
- const instant = readFileSync(path.join(QA_DIR, HARNESSES[0]), 'utf8');
- assert.doesNotMatch(instant, /return json\(\{\}\);/);
+});
+test('no harness keeps its own uncatalogued handling or a disabled copy', () => {
+ for (const name of HARNESSES) assert.doesNotMatch(readFileSync(path.join(QA_DIR, name), 'utf8'), /Uncatalogued/, name);
+ assert.doesNotMatch(readFileSync(path.join(QA_DIR, HARNESSES[0]), 'utf8'), /return json\(\{\}\);/);
  assert.ok(!existsSync(path.join(QA_DIR, 'qa-hosted-notes-read.cjs.disabled')));
 });
 
