@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import { withAppParts } from './fixtures/app-parts.mjs';
+import { runTitleContrast } from './fixtures/r8A-title-contrast.mjs';
 
 // Borderless app windows paint their heading in the app's colour (dark default, or the colour the phone measured along
 // the app's top), so the title and buttons there must not use the skin's ink: Landscapes Light put its dark ink on the
@@ -70,8 +71,17 @@ test('both title inks meet 4.5:1 throughout the neutral painted colour range', (
     assert.ok(ratio(lum(bg) > .18 ? dark : light, bg) >= 4.5, bg);
   }
 });
-test('browser acceptance cannot relax normal title contrast below 4.5:1', () => {
-  const qa = fs.readFileSync(new URL('../tools/qa-app-window-title-contrast.cjs', import.meta.url), 'utf8');
-  assert.match(qa, /Math.max\(4\.5,/);
-  assert.match(qa, /synthetic-translucent/);
+// The browser check itself (tools/qa-app-window-title-contrast.cjs) run against a fake Chromium whose titles measure a
+// chosen contrast (tests/fixtures/r8A-title-contrast.mjs).
+test('browser acceptance cannot relax normal title contrast below 4.5:1', async () => {
+  const ok = await runTitleContrast({ text: [255, 255, 255], behind: [5, 3, 12], env: { QA_SKINS: 'nebula' } });
+  assert.equal(ok.exitCode, 0, ok.logs.join('\n')); assert.equal(ok.results.min, 4.5);
+  // the phone opens the translucent synthetic apps (the measured top colour over the dark fallback), one at a time
+  for (const app of ['synthetic-translucent-dark', 'synthetic-translucent-light']) assert.ok(ok.opened.phone.includes(app), app);
+  assert.ok(ok.results.rows.some(r => r.shell === 'phone' && r.app === '/synthetic-translucent-light/'));
+  // 4.43:1 fails even when the run asks for 3:1
+  const low = await runTitleContrast({ text: [115, 115, 115], behind: [0, 0, 0], env: { QA_SKINS: 'nebula', QA_MIN_CONTRAST: '3' } });
+  assert.equal(low.results.min, 4.5);
+  assert.equal(low.exitCode, 1); assert.equal(low.results.bad.length, low.results.rows.length);
+  assert.match(low.logs.at(-1), /FAIL \d+ title\(s\) under 4.5:1/);
 });
