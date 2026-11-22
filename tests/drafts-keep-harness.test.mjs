@@ -7,6 +7,7 @@ import {tmpdir} from 'node:os';
 import path from 'node:path';
 const require=createRequire(import.meta.url);
 const {createFixture,host,frame,messenger,utf8Type}=require('../tools/drafts-keep/fixture.cjs');
+import {runDraftsKeep} from './fixtures/r8A-drafts-browser.mjs';
 
 test('synthetic registered-frame HTML declares UTF-8 before scripts',()=>{
   for(const html of [host('phone'),host('desktop'),frame,messenger]){
@@ -50,13 +51,23 @@ test('all text/script/JSON responses carry UTF-8, binary does not',async()=>{
     assert.equal(utf8Type('image/png'),'image/png');
   }finally{await new Promise(r=>server.close(r));rmSync(dir,{recursive:true,force:true});}
 });
-test('browser keeps exact owner, mojibake, two-palette and contrast assertions',()=>{
-  const b=readFileSync(new URL('../tools/drafts-keep/browser.cjs',import.meta.url),'utf8');
-  assert(b.includes("WosSkin.set(s)"));assert(b.includes("['nebula','grove']"));
-  assert(b.includes("b.appId==='messenger'"));assert(b.includes('Messenger has a voice note that isn’t sent yet.'));
-  assert(b.includes('p.contrast>=4.5'));assert(b.includes('noMojibake(notice)'));
-  assert(b.includes('transparent-negative-'));assert(b.includes("isMobile:true,hasTouch:true"));
+// tools/drafts-keep/browser.cjs run in node:vm against a fake Chromium whose page world runs the real skins.js
+// (tests/fixtures/r8A-drafts-browser.mjs); the fake page then misbehaves once per oracle and the run must fail there.
+test('browser keeps exact owner, mojibake, two-palette and contrast assertions', async () => {
+  const ok = await runDraftsKeep();
+  assert.equal(ok.exitCode, undefined, JSON.stringify(ok.failure?.error)); assert.equal(ok.result?.pass, true);
+  for (const shell of ['phone', 'desktop']) assert.deepEqual(ok.skinSets.filter(s => s.startsWith(shell + ':')), [shell + ':nebula', shell + ':grove', shell + ':nebula', shell + ':grove'], 'both palettes, before and after the voice hold');
+  const palettes = ok.result.results.filter(r => r.palette).map(r => [r.width, r.palette.current, r.palette.root]);
+  assert.deepEqual(palettes, [[412, 'nebula', 'nebula'], [412, 'grove', 'grove'], [1365, 'nebula', 'nebula'], [1365, 'grove', 'grove']], 'the real WosSkin applied each palette');
+  assert.deepEqual([ok.contexts[0].isMobile, ok.contexts[0].hasTouch, ok.contexts[1].isMobile], [true, true, false], 'the phone run is a touch phone');
+  assert.deepEqual(ok.result.pixelPairs.filter(p => !p.expectEqual).map(p => p.a), ['transparent-negative-412-loud.png', 'transparent-negative-1365-loud.png'], 'the pixel oracle is calibrated on a transparent notice');
+  for (const [knob, why] of [[{ contrast: 4.4 }, /contrast/], [{ blockerApp: 'wisdom' }, /messenger/], [{ reason: 'Wisdom has a voice note that isn’t sent yet.' }, /isn’t sent yet/], [{ notice: ' isnâ€™t' }, /notice encoding/]]) {
+    const bad = await runDraftsKeep(knob);
+    assert.equal(bad.result, null, JSON.stringify(knob));
+    assert.match(String(bad.failure?.error || bad.errors[0]?.message || ''), why, JSON.stringify(knob));
+  }
 });
+
 test('QA packet has no image operations, PNG decoder verifies actual pixels and rejects CRC drift',()=>{
   const runner=new URL('../tools/drafts-keep/run-packet.py',import.meta.url);
   const source=readFileSync(runner,'utf8');
