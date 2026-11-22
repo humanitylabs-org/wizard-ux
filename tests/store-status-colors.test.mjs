@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
+import { createDocument } from './fixtures/mini-dom.mjs';
+import { cascade } from './fixtures/mini-css.mjs';
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
 const src = read('web/store/store.js');
 const action = src.slice(src.indexOf('  function action('), src.indexOf('  const row ='));
@@ -90,8 +92,23 @@ test('a fresh installed-app snapshot exposes Open before the parent registry fin
 });
 test('new status colour rules use tokens, not literal white or fixed washes', () => {
   const css = read('web/store/store.css');
-  const rules = css.slice(css.indexOf('/* One colour per meaning:'), css.indexOf('/* list layer */'));
-  assert.match(rules, /--wz-on-accent/);
-  assert.doesNotMatch(rules, /#[0-9a-f]{3,8}\b|rgba?\(/i);
-  assert.doesNotMatch(css, /\.get\.open, \.get\.big \{ color:/, 'later rule must not override semantic foregrounds');
+  // each status pill the real action() draws, on mini-dom, under the Store stylesheet
+  const literal = /#[0-9a-f]{3,8}\b|rgba?\(|\bwhite\b/i;
+  const seen = {};
+  for (const [state, options] of [['get', {}], ['installed', {installed: true, open: true}], ['installed', {installed: true}], ['update', {}],
+    ['unknown', {}], ['get', {reason: 'arm64 only'}]]) {
+    const doc = createDocument(), list = doc.createElement('div'); list.className = 'row'; doc.body.appendChild(list);
+    list.innerHTML = render(state, options);
+    const pill = list.querySelector('.get'); assert.ok(pill, state);
+    const won = cascade(pill, css);
+    for (const prop of ['color', 'background']) {
+      assert.ok(won[prop], `${pill.className}: ${prop} is set`);
+      assert.doesNotMatch(won[prop].value, literal, `${pill.className} ${prop}: tokens only`);
+    }
+    seen[pill.className] = won.color.value;
+  }
+  assert.match(seen['get big'], /^var\(--(wz|s)-on-accent/, 'Get text is an on-accent token');
+  const doc = createDocument(), small = doc.createElement('button'); small.className = 'get'; doc.body.appendChild(small);
+  assert.equal(cascade(small, css).color.value, 'var(--wz-on-accent, var(--s-on-accent))', 'a list-row Get follows the skin on-accent token');
+  assert.equal(seen['get open big'], 'var(--wz-base, var(--bg))', 'a later rule never overrides the Open foreground');
 });
