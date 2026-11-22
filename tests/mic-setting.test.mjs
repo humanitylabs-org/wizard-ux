@@ -3,6 +3,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { settingsWorld } from './fixtures/r5A-settings.mjs';
+import { pageAssets } from './fixtures/w1-pages.mjs';
 
 const src = readFileSync(new URL('../web/core/mic.js', import.meta.url), 'utf8');
 
@@ -55,9 +57,23 @@ test('any connected mic and back to phone', () => {
   M.act(btn('phone'), ctx()); assert.equal(saved.at(-1).mode, 'phone');
 });
 
+// The real Settings (tests/fixtures/r5A-settings.mjs) with the real mic.js on this page: the Voice page shows the
+// Microphone group right after the Voice card, and a tap on it reaches the phone's mic policy. Both shells load mic.js.
+function settingsWithMic({ device = true } = {}) {
+  const w = settingsWorld({ shell: 'phone', scope: { WizCore: { voiceStatus: { card: () => '<div class="st-group" data-voice-card><h4>Voice</h4></div>', state: { ready: true } } } } });
+  const saved = [];
+  if (device) w.s.WizardOSDevice = { micPolicy: () => JSON.stringify({ v: 1, policy: { v: 1, mode: 'phone' }, inputs }), setMicPolicy: j => { saved.push(JSON.parse(j)); return j; } };
+  new Function('window', src)(w.s);
+  w.W.refresh();
+  return { w, saved, groups: () => w.open('voice').querySelectorAll('.st-group').map(g => g.querySelector('h4') ? w.text(g.querySelector('h4')) : w.text(g).slice(0, 20)) };
+}
+
 test('Settings registers the Microphone group next to Voice', () => {
-  const s = readFileSync(new URL('../web/core/settings.js', import.meta.url), 'utf8');
-  assert.ok(s.indexOf("id: 'microphone'") > s.indexOf("id: 'voice'"));
-  assert.ok(s.indexOf("id: 'microphone'") < s.indexOf("id: 'cancelled'"));
-  for (const f of ['index.html', 'desktop.html']) assert.match(readFileSync(new URL(`../web/${f}`, import.meta.url), 'utf8'), /core\/mic\.js/);
+  const m = settingsWithMic();
+  assert.deepEqual(m.groups(), ['Voice', 'Microphone'], 'Microphone sits right after the Voice card on the Voice page');
+  assert.equal(m.w.W.features.find(f => f.id === 'microphone')?.page, 'voice');
+  m.w.root.querySelector('[data-mic="any"]').click();
+  assert.deepEqual(m.saved, [{ v: 1, mode: 'any' }], 'a tap in Settings sets the phone\'s mic policy');
+  assert.deepEqual(settingsWithMic({ device: false }).groups(), ['Voice'], 'no Microphone group where the shell cannot choose');
+  for (const f of ['index.html', 'desktop.html']) { const { srcs } = pageAssets(f); assert.ok(srcs.includes('core/mic.js') && srcs.includes('core/settings.js'), `${f} loads mic.js with Settings`); }
 });
