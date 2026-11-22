@@ -35,7 +35,12 @@ test('every skin keeps the stored layout and the By day default (an old miguel/l
 test('the Filter sheet always offers the Yesterday filter (its Layout picker went with the Channels switch, issue 1258)', () => {
   const src = withParts(read('../web/core/chats.js'));
   assert.doesNotMatch(src, /<h5>Layout<\/h5>/, 'Channels are on for everyone: the Filter sheet has no Layout picker');
-  assert.match(src, /statusEntries = \(\) => Object\.entries\(STATUS\)\.filter\(\(\[k\]\) => !\(snoozeLast\(\) && k === 'deferred'\)\);/);
+  // the real statusEntries: every status filter (Yesterday included); Snoozed drops out only while snooze sorts last
+  const i = src.indexOf('statusEntries = () =>'), line = src.slice(i, src.indexOf(';', i) + 1);
+  const STATUS = { errors: {}, working: {}, ready: {}, yesterday: {}, deferred: {} };
+  const keys = last => vm.runInNewContext(`(() => { const ${line} return statusEntries().map(([k]) => k); })()`, { STATUS, snoozeLast: () => last, Object });
+  assert.deepEqual([...keys(false)], ['errors', 'working', 'ready', 'yesterday', 'deferred']);
+  assert.deepEqual([...keys(true)], ['errors', 'working', 'ready', 'yesterday']);
   assert.doesNotMatch(src, /Object\.entries\(STATUS\)\.map/, 'every status list goes through statusEntries');
 });
 

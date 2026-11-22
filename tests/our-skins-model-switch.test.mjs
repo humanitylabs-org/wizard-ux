@@ -49,5 +49,11 @@ test('the switch row is gated on the skin in chat-power and chats', () => {
 test('the compact chat list is off until chosen in Filter, on every skin', () => {
   const cj = withParts(read('web/core/chats.js'));
   assert.doesNotMatch(cj, /ourSkin|miguel\/layout/);
-  assert.match(cj, /const compactOn = \(\) => \{ try \{ const v = localStorage\.getItem\(COMPACT_KEY\); return v === '1'; \}/);
+  // the real compactOn: off until the owner picks Compact in Filter (stored '1'), whatever the skin
+  const i = cj.indexOf('const compactOn = () =>'), j = cj.indexOf('\n', i);
+  for (const [stored, on] of [[null, false], ['0', false], ['1', true]]) {
+    const store = new Map(stored == null ? [] : [['k', stored]]);
+    const got = vm.runInNewContext(`(() => { ${cj.slice(i, j)}\n return compactOn(); })()`, { COMPACT_KEY: 'k', localStorage: { getItem: k => store.get(k) ?? null } });
+    assert.equal(got, on, String(stored));
+  }
 });
