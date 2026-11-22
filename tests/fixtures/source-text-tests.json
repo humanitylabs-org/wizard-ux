@@ -55,10 +55,6 @@
  "alert-thread-select.test.mjs": [
   "alert thread surfaces are drawn by chats.js"
  ],
- "american-color-copy.test.mjs": [
-  "${file}: user-visible copy says \"color\", never \"colour\"",
-  "Welcome: no \"colour\" anywhere outside comments, and the step says \"Pick a skin\""
- ],
  "android-connect.test.mjs": [
   "QR scanner follows the phone orientation (zxing CaptureActivity is landscape by default)"
  ],
@@ -153,7 +149,6 @@
   "the phone Back hook goes through CHATS.channelBack",
   "posting reuses the Space-fixed-at-send path: a new chat sent from a channel files into its Space Focus",
   "the channel name shows once in an open feed: no focus strip, no title-bar label",
-  "Channels wording: Move to channel, Remove from channel",
   "long-press, right-click and Shift+F10 on a channel open the channel sheet through one rowMenu",
   "voice: the orb and the box mic in front of a channel start a new chat there, with the box riding along",
   "issue 1263: every list paint and every rerender put the feed back in its place",
@@ -165,18 +160,11 @@
  ],
  "chat-pin-menu.test.mjs": [
   "row pins are hidden by default and the Show pin buttons package is gone",
-  "right-click, long-press and swipe share the row menu: Pin/Unpin, never Open",
   "Pins off gives rows back the pin room (the retired hidden-pin tweak, now a setting)",
   "Novairecito and Sepia retain pins as skin styling, not as a device tweak/preset change"
  ],
- "chat-pins-setting.test.mjs": [
-  "Pins switch sits beside Compact in the Filter sheet and is saved on the device",
-  "with Pins off nothing pin-shaped renders, and saved pins are kept",
-  "the hidden-pin tweak is retired into the setting"
- ],
  "chat-pins.test.mjs": [
-  "live.js syncs pinnedChats into the cache the pins read, and pulls when a phone comes back",
-  "rows carry a pin control and the long-press / right-click sheet offers Pin"
+  "live.js syncs pinnedChats into the cache the pins read, and pulls when a phone comes back"
  ],
  "chat-regenerate.test.mjs": [
   "Regenerate renders only for a skin that opts in with --wos-reply-regenerate: on"
@@ -186,9 +174,6 @@
   "every swipe only reveals explicit accessible actions",
   "cancel, scroll, outside tap and Back close without invoking an action",
   "open swipe holds list repaints while stock and desktop gestures remain"
- ],
- "chat-search-copy.test.mjs": [
-  "the chat-list field describes search while the dedicated plus starts chats"
  ],
  "chat-topic-emojis-integration.test.mjs": [
   "${page} loads topic emoji state before shared Chats",
@@ -239,10 +224,6 @@
  "declared-route-admission.test.mjs": [
   "apps.js: only a read of the box list confirms routes, and refreshApps says whether that read worked",
   "phone: tapped and held takes confirm the route before opening; an unconfirmed tap stays a message"
- ],
- "desktop-arrange-desks.test.mjs": [
-  "desktops reorder by stable desk, keeping the one in front and the last one",
-  "drag, hold, keys and right-click are all wired on the desk list"
  ],
  "desktop-bar-tip-wrap.test.mjs": [
   "top-bar hover tips wrap long text instead of clipping it"
@@ -321,11 +302,6 @@
  "desktop-voice-single-stt.test.mjs": [
   "desktop voice send hands one retained take directly to the outbox transcription lane"
  ],
- "desktop-window-refresh.test.mjs": [
-  "every desktop window bar has a Refresh button wired to reloadWin",
-  "⌥R refreshes what is in front; Home when no window is focused",
-  "Refresh is listed in the keys sheet and the command palette"
- ],
  "device-recording.test.mjs": [
   "app.js reaches the shell recorder only through DEV() and keeps the full app\\'s bridge first"
  ],
@@ -354,9 +330,6 @@
  ],
  "failure-reason.test.mjs": [
   "Errors row and thread use the reason in place of \"Error: <message>\" and the generic failed_turn bubble"
- ],
- "focused-field-native-insert.test.mjs": [
-  "contenteditable insert tries execCommand insertText before any manual DOM edit"
  ],
  "for-everyone-switches.test.mjs": [
   "os-updates tells the shell the box channel after every verified read and channel change",
@@ -402,11 +375,7 @@
   "Landscapes Light resource sheet draws capacity bars in ink, not white"
  ],
  "launcher-long-names.test.mjs": [
-  "app picker tiles mark long one-word names",
   "long labels fit the tile and never split a word bare"
- ],
- "launcher-page-tile.test.mjs": [
-  "${shell}: a launcher tile pointing at /pages/<slug>/ opens the Pages window"
  ],
  "layout-host-api.test.mjs": [
   "the desktop adapter routes Snooze / Done through Chats\\' own threadAct and feeds the orb voice and level",
@@ -467,9 +436,6 @@
  "mobile-update-banner-placement.test.mjs": [
   "the shared phone update banner stays under the status bar"
  ],
- "model-sheet-revalidate.test.mjs": [
-  "model sheet revalidates the catalogue on every open"
- ],
  "my-skin-script.test.mjs": [
   "production and QA CSP support byte-verified Blob modules without inline/eval permission"
  ],
@@ -485,14 +451,8 @@
  "needs-you-jump.test.mjs": [
   "the pills are wired: markup after ↓ Latest, the tap, the open and every chat-power paint"
  ],
- "needs-you-landing.test.mjs": [
-  "needsLand hands the placed line to PW.landAt"
- ],
  "no-brand-guide-override.test.mjs": [
   "Nebula keeps the base palette: no stylesheet re-tokens it"
- ],
- "notes-browser-harness.test.mjs": [
-  "Notes browser entry matches the production Alt+KeyO apps shortcut"
  ],
  "notification-reply-all-skins.test.mjs": [
   "the Reply bridge and bubble are not gated on a skin",
@@ -585,8 +545,7 @@
   "Miguel skins: bare gear, round Ready/Working, see-through dock"
  ],
  "our-skins-model-switch.test.mjs": [
-  "the switch row is gated on the skin in chat-power and chats",
-  "the compact chat list is off until chosen in Filter, on every skin"
+  "the switch row is gated on the skin in chat-power and chats"
  ],
  "our-skins-no-pins-list-spacer.test.mjs": [
   "${file}: row pins are opt-in and the menu Pin stays available",
@@ -598,23 +557,10 @@
   "phone polish never reaches desktop and keeps the private purple",
   "Mizel skins keep the violet orb on Dark, Light and Landscapes"
  ],
- "our-skins-pill-dock.test.mjs": [
-  "core mirrors the current desk icon into a hidden #orbApp"
- ],
  "our-skins-selection-colors.test.mjs": [
   "each of Miguel\\'s skins paints its own selection highlight with readable text",
   "the selection menu uses skin ink on a skin surface, not core violet",
   "Light keeps the New chat hat crisp white; Landscapes uses glass instead of the violet tile"
- ],
- "our-skins-slim-bars-burst.test.mjs": [
-  "the update burst runs on every skin"
- ],
- "our-skins-status-list-desk-reset.test.mjs": [
-  "the Filter sheet always offers the Yesterday filter (its Layout picker went with the Channels switch, issue 1258)",
-  "leaving a desk keeps its Chats window on the open thread"
- ],
- "our-skins-symmetric-dock.test.mjs": [
-  "renderDots builds the stock dock on every skin"
  ],
  "outbox-unreadable-recording.test.mjs": [
   "a slow local read stays retryable instead of being marked unreadable"
@@ -635,9 +581,6 @@
  "phone-app-notifications.test.mjs": [
   "Android: the switch is off by default, only the main page sets it, and the app leaving the screen starts the read",
   "the switch is in the catalog, off by default, and names its issue"
- ],
- "phone-archive-to-list.test.mjs": [
-  "phone Archive leaves the thread for the list regardless of the After-actions setting"
  ],
  "phone-integration.test.mjs": [
   "phone version stays at or above the Settings-style ID release (0.10.15/79) and preserves published vault storage names",
@@ -778,10 +721,6 @@
   "media viewer never falls back to sharing a private file link"
  ],
  "share-sheet-comment-separate.test.mjs": [
-  "James: compose comment is first, empty by default, with exact optional placeholder",
-  "James: Agent row is unconditional; one Chat picker starts with New chat, no radios",
-  "James: changing agent resets Chat before a scoped fetch and guards stale responses",
-  "James: outside tap closes the top layer like Back; picker is opaque and skin-driven",
   "James: every share panel uses opaque panel tokens; pixel guard includes rows, cards and options"
  ],
  "share-sheet-viewer-handoff.test.mjs": [
@@ -859,9 +798,6 @@
   "the phone dock voice discs use the skin panel and ink on every skin but Nebula, out-ranking the navy dock rule",
   "the desktop recording pill and its tray use the skin panel and ink on every skin but Nebula"
  ],
- "web-update-quiet-desktop.test.mjs": [
-  "desktop host opts in"
- ],
  "window-glass.test.mjs": [
   "Settings › Look carries the slider; CSS routes every window through the shared token only when chosen"
  ],
@@ -895,9 +831,7 @@
   "every product-name module spells WizardOS as a constant"
  ],
  "working-sort.test.mjs": [
-  "every surface has a separate Working control, and Settings uses the shared registry",
-  "Working tap handler writes the shared preference through setWorkingOrder (which repaints synchronously)",
-  "collapsing Working hides its order bar too (James, 6 Nov 2026: minimised Working shows no A to Z)"
+  "every surface has a separate Working control, and Settings uses the shared registry"
  ],
  "working-spinner-reduced-motion.test.mjs": [
   "the global reduced-motion kill switch still exists (this test guards the exception, not the rule)",
