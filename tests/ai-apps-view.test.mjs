@@ -15,6 +15,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { cascade } from './fixtures/mini-css.mjs';
 import { fixture } from './fixtures/tweaks.mjs';
 import { withSkinHostParts } from './fixtures/skin-host-parts.mjs';
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
@@ -704,21 +705,35 @@ test('core hooks: the phone adapter lists chats with Chats\' own actions and act
   assert.deepEqual(JSON.parse(JSON.stringify(list)), [{ id: 'this', name: 'Miguel', org: '', current: true, owner: 'Miguel' }, { id: 'g', name: 'Carlos', org: 'Acme', current: false }]);
 });
 
-test('round 2 shapes: rounded like the native apps (measured), icon-only drawer foot, an icon grid for the open apps', () => {
-  const css = read('web/layouts/ai-apps/layout.css'), P = 'html\\[data-shell="phone"\\]\\[data-layout="ai-apps"\\] ';
-  const rule = sel => (css.match(new RegExp(P + sel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' \\{([^}]*)\\}')) || [])[1] || '';
-  assert.match(rule('.aa-tb::before'), /border-radius: 50%;/, 'top-bar buttons are round discs (ChatGPT)');
-  assert.match(rule('.aa-drawer'), /border-radius: 0 16px 16px 0;/, 'the drawer\'s end corners (Claude, 16 dp)');
-  assert.match(rule('.aa-row'), /border-radius: 12px;/, 'row and selection pills (Claude, 11 dp)');
-  assert.match(rule('.aa-pop'), /border-radius: 18px;/, 'menus (ChatGPT long-press menu, 16–18 dp)');
-  assert.match(rule('.aa-sh-card'), /border-radius: 28px 28px 0 0;/, 'sheets');
-  assert.match(rule('.aa-search'), /height: 44px;[^}]*border-radius: 22px;/, 'search is a full pill');
-  assert.match(rule('.aa-new'), /width: 56px; height: 56px;[^}]*border-radius: 50%;/, 'New chat = a big round +');
-  assert.match(rule('.aa-set'), /width: 48px; height: 48px;[^}]*border-radius: 50%;/, 'Settings = a round cog');
-  assert.match(rule('.aa-tile'), /width: 64px; height: 64px;[^}]*border-radius: 15px;/, 'round 6: big app icons, rounded squares (≈ 23 %, the iPhone\'s)');
-  assert.match(rule('.aa-grid'), /grid-template-columns: repeat\(4, minmax\(0, 1fr\)\);/, 'round 6: four a row, like the iPhone home screen');
-  assert.match(rule('.aa-gt'), /width: 64px; height: 64px;/, 'cells stay >= 44 px targets');
-  assert.ok(!/\.aa-acct|\.aa-av\b|aa-more/.test(css + read('web/layouts/ai-apps/layout.js')), 'the avatar letter, the Settings word and "N more open" are gone');
+test('round 2 shapes: rounded like the native apps (measured), icon-only drawer foot, an icon grid for the open apps', async () => {
+  // the real phone view, drawn by layout.js, styled by the real layout.css (tests/fixtures/mini-css.mjs)
+  const w = world();
+  (await layout()).default(w.api);
+  w.html.setAttribute('data-shell', 'phone'); w.html.setAttribute('data-layout', 'ai-apps');
+  const css = read('web/layouts/ai-apps/layout.css');
+  const st = (sel, ...props) => { const el = w.q(sel); assert.ok(el, `drawn: ${sel}`); const c = cascade(el, css); return props.map(p => c[p]?.value ?? '').join(' / '); };
+  w.q('.aa-menu').dispatchEvent(new FakePointerEvent('click'));
+  assert.equal(cascade(w.q('.aa-tb'), css, { pseudo: '::before' })['border-radius']?.value, '50%', 'top-bar buttons are round discs (ChatGPT)');
+  assert.equal(st('.aa-drawer', 'border-radius'), '0 16px 16px 0', 'the drawer\'s end corners (Claude, 16 dp)');
+  assert.equal(st('.aa-row', 'border-radius'), '12px', 'row and selection pills (Claude, 11 dp)');
+  assert.equal(st('.aa-search', 'height', 'border-radius'), '44px / 22px', 'search is a full pill');
+  assert.equal(st('.aa-new', 'width', 'height', 'border-radius'), '56px / 56px / 50%', 'New chat = a big round +');
+  assert.equal(st('.aa-set', 'width', 'height', 'border-radius'), '48px / 48px / 50%', 'Settings = a round cog');
+  assert.equal(st('.aa-set', 'font-size') || 'icon only', 'icon only'); assert.equal(w.q('.aa-set').textContent, '', 'the drawer foot is icon-only');
+  w.q('.aa-find').dispatchEvent(new FakePointerEvent('click'));
+  const f = w.q('.aa-q'); f.value = 'mo'; f.dispatchEvent(new FakePointerEvent('input'));
+  assert.equal(st('.aa-grid', 'grid-template-columns'), 'repeat(4, minmax(0, 1fr))', 'round 6: four a row, like the iPhone home screen');
+  assert.equal(st('.aa-gt', 'width', 'height'), '64px / 64px', 'cells stay >= 44 px targets');
+  assert.equal(st('.aa-tile', 'width', 'height', 'border-radius'), '64px / 64px / 15px', 'round 6: big app icons, rounded squares (≈ 23 %, the iPhone\'s)');
+  w.q('.aa-cancel').dispatchEvent(new FakePointerEvent('click'));
+  // a long press menu and a sheet
+  const row = w.q('.aa-chat[data-sid="r2"]');
+  row.dispatchEvent(new FakePointerEvent('pointerdown', { pointerId: 3, clientX: 50, clientY: 300, button: 0 })); w.st.timers.find(t => t.ms === 450).fn();
+  assert.equal(st('.aa-pop', 'border-radius'), '18px', 'menus (ChatGPT long-press menu, 16–18 dp)');
+  assert.equal(w.qa('.aa-acct, .aa-av, .aa-more').length, 0, 'the avatar letter, the Settings word and "N more open" are gone');
+  const card = new El('div'); card.className = 'aa-sh-card'; w.html.append(card);
+  assert.equal(cascade(card, css)['border-radius']?.value, '28px 28px 0 0', 'sheets');
+  // the shared app sheet (layouts/apps/chrome.css) matches
   const chrome = read('web/layouts/apps/chrome.css');
   assert.match(chrome, /max-height: 88%; border-radius: 28px 28px 0 0;/, 'the shared app sheet matches');
 });

@@ -121,35 +121,68 @@ export function parse(html, doc) {
 
 // --- selectors ---
 function splitTop(s, sep) { const out = []; let d = 0, q = '', cur = ''; for (const c of s) { if (q) { if (c === q) q = ''; } else if (c === '"' || c === "'") q = c; else if (c === '(' || c === '[') d++; else if (c === ')' || c === ']') d--; if (!q && !d && sep.test(c)) { out.push(cur); cur = ''; continue; } cur += c; } out.push(cur); return out; }
+const tagOf = el => (el.localName || String(el.tagName || '').toLowerCase());
+const attrOf = (el, k) => (el.getAttribute ? el.getAttribute(k) : null);
+const kidsOf = el => (el?.children ? [...el.children].filter(n => n && (n.nodeType === undefined || n.nodeType === 1)) : []);
+const isEl = n => !!n && (n.nodeType === 1 || (n.nodeType === undefined && !!n.tagName));
+const hasClass = (el, c) => (el.classList?.contains ? el.classList.contains(c) : String(attrOf(el, 'class') || '').split(/\s+/).includes(c));
+// state: a set of pseudo-classes the caller says are on (':hover', ':focus-visible', ...); others are off.
+let STATE = null;
+export function withState(states, fn) { const was = STATE; STATE = new Set(states || []); try { return fn(); } finally { STATE = was; } }
 function simple(el, s) {
-  const re = /^([a-zA-Z*][\w-]*)|#([\w-]+)|\.([\w-]+)|\[([^\]=~^$*|]+)(?:([~^$*|]?=)\s*(?:"([^"]*)"|'([^']*)'|([^\]]*)))?\]|:not\(((?:[^()]|\([^()]*\))*)\)|:([\w-]+)(?:\(([^)]*)\))?/y;
+  const re = /^([a-zA-Z*][\w-]*)|#([\w-]+)|\.([\w-]+)|\[([^\]=~^$*|]+)(?:([~^$*|]?=)\s*(?:"([^"]*)"|'([^']*)'|([^\]\s]*))\s*(i)?)?\]|:(not|is|where|has)\(((?:[^()]|\((?:[^()]|\([^()]*\))*\))*)\)|:([\w-]+)(?:\(([^)]*)\))?/y;
   let i = 0;
   while (i < s.length) {
     re.lastIndex = i; const m = re.exec(s); if (!m) throw new Error(`mini-dom: unsupported selector ${s}`); i = re.lastIndex;
-    if (m[1] && m[1] !== '*' && el.localName !== m[1].toLowerCase()) return false;
-    if (m[2] && el.id !== m[2]) return false;
-    if (m[3] && !el.classList.contains(m[3])) return false;
-    if (m[4]) { const k = m[4].trim(), v = el.getAttribute(k); if (v == null) return false; const want = m[6] ?? m[7] ?? m[8];
+    if (m[1] && m[1] !== '*' && tagOf(el) !== m[1].toLowerCase()) return false;
+    if (m[2] && attrOf(el, 'id') !== m[2]) return false;
+    if (m[3] && !hasClass(el, m[3])) return false;
+    if (m[4]) { const k = m[4].trim(); let v = attrOf(el, k); if (v == null) return false; let want = m[6] ?? m[7] ?? m[8];
+      if (m[9] && want != null) { v = v.toLowerCase(); want = want.toLowerCase(); }
       if (m[5] === '=' && v !== want) return false; if (m[5] === '~=' && !v.split(/\s+/).includes(want)) return false;
-      if (m[5] === '^=' && !v.startsWith(want)) return false; if (m[5] === '$=' && !v.endsWith(want)) return false; if (m[5] === '*=' && !v.includes(want)) return false; }
-    if (m[9] != null && matches(el, m[9])) return false;
-    if (m[10]) { const p = m[10]; if (p === 'disabled' && !el.disabled) return false; if (p === 'checked' && !el.hasAttribute('checked')) return false;
-      if (p === 'first-child' && el.parentNode?.children[0] !== el) return false; if (p === 'last-child' && el.parentNode?.children.at(-1) !== el) return false; }
+      if (m[5] === '^=' && !v.startsWith(want)) return false; if (m[5] === '$=' && !v.endsWith(want)) return false; if (m[5] === '*=' && !v.includes(want)) return false;
+      if (m[5] === '|=' && v !== want && !v.startsWith(want + '-')) return false; }
+    if (m[10]) {
+      const arg = m[11];
+      if (m[10] === 'not' && matches(el, arg)) return false;
+      if ((m[10] === 'is' || m[10] === 'where') && !matches(el, arg)) return false;
+      if (m[10] === 'has') { const rel = arg.trim().startsWith('>'); const sel = rel ? arg.trim().slice(1) : arg;
+        const pool = rel ? kidsOf(el) : (function all(e) { return kidsOf(e).flatMap(c => [c, ...all(c)]); })(el);
+        if (!pool.some(n => matches(n, sel))) return false; }
+    }
+    if (m[12]) { const p = m[12], sib = kidsOf(el.parentNode);
+      if (p === 'disabled') { if (!(el.disabled || el.hasAttribute?.('disabled'))) return false; }
+      else if (p === 'checked') { if (!(el.checked || el.hasAttribute?.('checked'))) return false; }
+      else if (p === 'first-child') { if (sib[0] !== el) return false; }
+      else if (p === 'last-child') { if (sib.at(-1) !== el) return false; }
+      else if (p === 'only-child') { if (sib.length !== 1) return false; }
+      else if (p === 'empty') { if (kidsOf(el).length || String(el.textContent || '').length) return false; }
+      else if (p === 'root') { if (tagOf(el) !== 'html') return false; }
+      else if (p === 'nth-child') { const n = sib.indexOf(el) + 1, a = (m[13] || '').trim();
+        if (a === 'odd' ? n % 2 !== 1 : a === 'even' ? n % 2 !== 0 : /^\d+$/.test(a) ? n !== +a : true) return false; }
+      else if (!(STATE && STATE.has(':' + p))) return false; // :hover, :focus, :focus-visible, :active ... off unless asked
+    }
   }
   return true;
 }
 function compound(el, parts, scope) {
   const last = parts.at(-1); if (!simple(el, last.sel)) return false;
   if (parts.length === 1) return true;
-  const rest = parts.slice(0, -1);
-  if (last.comb === '>') { const p = el.parentNode; return !!p && p.nodeType === 1 && p !== scope?.parentNode && compound(p, rest, scope); }
-  for (let p = el.parentNode; p && p.nodeType === 1; p = p.parentNode) { if (compound(p, rest, scope)) return true; if (p === scope) break; }
+  const rest = parts.slice(0, -1), up = n => (isEl(n?.parentNode) ? n.parentNode : null);
+  if (last.comb === '>') { const p = up(el); return !!p && compound(p, rest, scope); }
+  if (last.comb === '+' || last.comb === '~') {
+    const sib = kidsOf(el.parentNode), at = sib.indexOf(el);
+    const pool = last.comb === '+' ? sib.slice(Math.max(0, at - 1), at) : sib.slice(0, at);
+    return pool.some(n => compound(n, rest, scope));
+  }
+  for (let p = up(el); p; p = up(p)) { if (compound(p, rest, scope)) return true; if (p === scope) break; }
   return false;
 }
+export function splitSelectors(sel) { return splitTop(sel, /,/).map(x => x.trim()).filter(Boolean); }
 export function matches(el, sel, scope) {
-  return splitTop(sel, /,/).some(one => {
-    const tokens = splitTop(one.trim().replace(/\s*>\s*/g, ' > '), /\s/).filter(Boolean), parts = []; let comb = ' ';
-    for (const t of tokens) { if (t === '>') { comb = '>'; continue; } parts.push({ sel: t, comb }); comb = ' '; }
+  return splitSelectors(sel).some(one => {
+    const tokens = splitTop(one.replace(/\s*([>+~])\s*(?![^(]*\))/g, ' $1 '), /\s/).filter(Boolean), parts = []; let comb = ' ';
+    for (const t of tokens) { if (t === '>' || t === '+' || t === '~') { comb = t; continue; } parts.push({ sel: t, comb }); comb = ' '; }
     return parts.length && compound(el, parts, scope);
   });
 }
