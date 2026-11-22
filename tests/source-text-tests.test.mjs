@@ -61,6 +61,8 @@ test('second', () => { assert.match(shared, /dest = /); });`), ['text']);
   const css = readFileSync('web/skins/' + dir + '/skin.css', 'utf8');
   test('looped', () => { assert.match(css, /background/); });
 }`), ['text']);
+  assert.deepEqual(kinds(`${HEAD}const css = readFileSync('web/core/chats.css', 'utf8');
+test('regexp exec', () => { const r = /\\.mv \\{[^}]*\\}/.exec(css); assert.match(r[0], /color/); });`), ['text'], 'RegExp .exec( is not a child process');
 });
 
 test('strings, comments, regex and template text never look like code to the scanner', () => {

@@ -77,7 +77,7 @@ function closeOf(code, open) { // index just past the bracket that closes code[o
 const EXEC = [
   /\bvm\s*\.\s*\w+/, /\b(runInContext|runInNewContext|runInThisContext|createContext|compileFunction)\s*\(/,
   /\bnew\s+(vm\.)?Script\s*\(/, /(^|[^\w$.])Function\s*\(/, /(^|[^\w$.])eval\s*\(/, /(^|[^\w$.])import\s*\(/,
-  /\b(spawnSync|execFileSync|execSync|spawn|execFile|exec|fork)\s*\(/, /\bnew\s+Worker\s*\(/,
+  /(^|[^\w$.])(spawnSync|execFileSync|execSync|spawn|execFile|exec|fork)\s*\(/, /\.(spawnSync|execFileSync|execSync|spawn|execFile|fork)\s*\(/ /* not RegExp .exec( */, /\bnew\s+Worker\s*\(/,
   /\b(chromium|firefox|webkit|launch)\s*\(/, /\bcreateServer\s*\(/, /\bfetch\s*\(/, /\brequire\s*\(/,
 ];
 const reEsc = t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
