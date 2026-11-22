@@ -47,6 +47,7 @@ export class El {
   replaceChildren(...n) { for (const c of this.children) c.parentNode = null; this.children = []; this._text = ''; this.append(...n); }
   remove() { if (this.parentNode) { this.parentNode.children.splice(this.parentNode.children.indexOf(this), 1); this.parentNode = null; } }
   get childElementCount() { return this.children.length; }
+  get lastChild() { return this.children.at(-1) || null; }
   contains(n) { return n === this || this.all().includes(n); }
   get isConnected() { let n = this; while (n.parentNode) n = n.parentNode; return n.tagName === 'HTML'; }
   all() { return this.children.flatMap(c => [c, ...c.all()]); }
