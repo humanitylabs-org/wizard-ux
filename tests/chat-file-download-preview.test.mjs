@@ -7,6 +7,8 @@ import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved 
 import { between, runRecording } from './fixtures/source-slice.mjs';
 import { createDocument } from './fixtures/mini-dom.mjs';
 import { cascade } from './fixtures/mini-css.mjs';
+import { valueOf } from './fixtures/r7A-css.mjs';
+import { parseCsp, nginxCsp, serverPyCsp } from './fixtures/w1-csp.mjs';
 
 const read = p => readFileSync(new URL(p, import.meta.url), 'utf8');
 const chats = withParts(read('../web/core/chats.js')), kit = read('../web/core/chat-kit.js'), css = read('../web/core/chats.css');
@@ -73,28 +75,57 @@ test('the card Download goes through the viewer save path (native, Android Downl
   assert.equal(rule.position?.value, 'absolute');
 });
 
-test('PDFs preview in a typed blob: frame, with a Download fallback where browsers have no PDF reader', () => {
-  assert.match(kit, /navigator\.pdfViewerEnabled === true && !appDownloads\(\)/);
-  assert.match(kit, /new Blob\(\[b\], \{ type: 'application\/pdf' \}\)/);
-  assert.match(kit, /<iframe class="mv-pdf" src=/);
-  assert.doesNotMatch(kit, /<iframe class="mv-pdf"[^>]*sandbox/, 'sandboxed frames cannot host the PDF reader');
-  assert.match(kit, /URL\.revokeObjectURL\(V\.pdf\)/);
-  assert.match(kit, /class="mv-dl" data-mv="save">⤓ Download</);
-  assert.doesNotMatch(kit, /Share or save it to open it in a PDF app/);
+// The real media viewer (chat-kit.js WosChat.viewer) on the tiny DOM, opening a PDF attachment.
+async function viewerPdf({ pdfViewer = true, ua = '', type = 'application/pdf' } = {}) {
+  const document = createDocument(), blobs = [], revoked = [];
+  class U extends URL { static createObjectURL(b) { blobs.push(b); return 'blob:https://box.test/' + blobs.length; } static revokeObjectURL(u) { revoked.push(u); } }
+  const window = {};
+  runRecording(kit, { window, document, navigator: { userAgent: ua, pdfViewerEnabled: pdfViewer }, location: new URL('https://box.test/wizard-os-home/'),
+    URL: U, File, Blob, AbortController, setTimeout, clearTimeout, console, requestAnimationFrame: f => f(), getComputedStyle: () => ({}),
+    fetch: async () => ({ ok: true, status: 200, headers: { get: () => type }, blob: async () => new Blob(['%PDF-1.4'], { type }) }) });
+  const V = window.WosChat.viewer;
+  V.open([{ kind: 'file', name: 'report.pdf', mime: 'application/pdf', url: '/wizard/attachments/abc' }]);
+  for (let i = 0; i < 10; i++) await new Promise(r => setImmediate(r));
+  return { V, blobs, revoked, stage: document.querySelector('.mv-stage') };
+}
+
+test('PDFs preview in a typed blob: frame, with a Download fallback where browsers have no PDF reader', async () => {
+  const r = await viewerPdf();
+  const frame = r.stage.querySelector('iframe.mv-pdf');
+  assert.ok(frame, 'a browser with a PDF reader shows the PDF in the viewer');
+  assert.equal(frame.getAttribute('src'), 'blob:https://box.test/1');
+  assert.equal(frame.hasAttribute('sandbox'), false, 'sandboxed frames cannot host the PDF reader');
+  assert.deepEqual(r.blobs.map(b => b.type), ['application/pdf'], 'from a typed blob');
+  r.V.close();
+  assert.deepEqual(r.revoked, ['blob:https://box.test/1'], 'closing the viewer frees the blob');
+  for (const o of [{ pdfViewer: false }, { ua: 'Mozilla/5.0 WizardOS-Android/0.10.15' }]) {
+    const n = await viewerPdf(o);
+    assert.equal(n.stage.querySelector('iframe'), null, JSON.stringify(o));
+    const dl = n.stage.querySelector('.mv-dl');
+    assert.equal(dl?.dataset.mv, 'save'); assert.equal(dl?.textContent, '⤓ Download', 'a Download fallback');
+    assert.doesNotMatch(n.stage.textContent, /Share or save it to open it in a PDF app/);
+    assert.equal(n.blobs.length, 0, 'nothing fetched into a blob');
+  }
 });
 
-test('the shell CSP lets the viewer frame blob: PDFs and nothing else cross-origin', () => {
-  const csp = /Content-Security-Policy "([^"]+)"/.exec(read('../packaging/static.conf'))[1];
-  const frame = /(?:^|; )frame-src ([^;]+)/.exec(csp)?.[1].trim().split(/\s+/);
+test('the shell CSP lets the viewer frame blob: PDFs and nothing else cross-origin', async () => {
+  // the headers the image's nginx (rendered by the real entrypoint) and the dev server.py really send
   // The one other frame: Troubleshooter's own line on this Tailscale address (wizard-troubleshooter issue 37).
-  // nginx fills it with this address's own https://<host>:9691 (packaging/nginx.conf.template, wizard-os#133).
-  assert.deepEqual(frame, ["'self'", 'blob:', '$wizard_troubleshoot_direct']);
-  assert.match(csp, /object-src 'none'/);
-  assert.match(read('../server.py'), /frame-src 'self' blob:/);
+  const nginx = parseCsp(nginxCsp({ host: 'wizard.example-tailnet.ts.net' }));
+  assert.deepEqual(nginx['frame-src'], ["'self'", 'blob:', 'https://wizard.example-tailnet.ts.net:9691']);
+  assert.deepEqual(nginx['object-src'], ["'none'"]);
+  const dev = parseCsp(await serverPyCsp());
+  assert.ok(dev['frame-src'].includes('blob:'), 'the dev server frames blob: PDFs too');
 });
 
 test('the viewer keeps light ink on its dark backdrop for light skins', () => {
-  const rule = /\n\.mviewer \{ --ink: color-mix\(in srgb, white[^}]*\}/.exec(css)?.[0] || '';
-  assert.match(rule, /--ink-2: color-mix\(in srgb, var\(--ink\) 72%, transparent\)/);
-  assert.match(rule, /color: var\(--ink\)/);
+  // a light skin sets dark ink on the page; inside the viewer the ink is light again
+  const doc = createDocument();
+  doc.body.innerHTML = '<main><div class="mviewer"><div class="mv-stage"><div class="mv-file"><b class="mv-name">report.pdf</b></div></div></div></main>';
+  const light = 'main { --ink: #111111; --wz-ink: #111111; }';
+  const name = doc.querySelector('.mv-name'), viewer = doc.querySelector('.mviewer');
+  const ink = valueOf(name, [css, light], '--ink'), ink2 = valueOf(name, [css, light], '--ink-2');
+  assert.match(ink, /^color-mix\(in srgb, white/, 'the viewer ink is white-based, not the skin\'s dark ink');
+  assert.equal(ink2, `color-mix(in srgb, ${ink} 72%, transparent)`, 'secondary ink follows it');
+  assert.equal(valueOf(viewer, [css, light], 'color'), ink);
 });

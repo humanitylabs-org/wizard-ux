@@ -16,7 +16,7 @@ class Text {
 class Element {
   constructor(tag, doc) {
     this.nodeType = 1; this.tagName = tag.toUpperCase(); this.localName = tag.toLowerCase(); this.attrs = new Map(); this.childNodes = [];
-    this.parentNode = null; this.ownerDocument = doc; this.listeners = {}; this.style = {}; this._value = null;
+    this.parentNode = null; this.ownerDocument = doc; this.listeners = {}; this.style = styleObject(); this._value = null;
   }
   get children() { return this.childNodes.filter(n => n.nodeType === 1); }
   get firstElementChild() { return this.children[0] || null; }
@@ -120,6 +120,17 @@ export function parse(html, doc) {
     if (m[5] && !/^<!--/.test(m[0])) top.appendChild(new Text(decode(m[5]), doc));
   }
   const out = [...root.childNodes]; for (const n of out) n.parentNode = null; return out;
+}
+
+// element.style: a plain object of the properties set, plus the CSSStyleDeclaration methods (not enumerable).
+function styleObject() {
+  const st = {};
+  Object.defineProperties(st, {
+    setProperty: { value(k, v) { st[k] = String(v); } },
+    removeProperty: { value(k) { const v = st[k]; delete st[k]; return v ?? ''; } },
+    getPropertyValue: { value(k) { return st[k] ?? ''; } },
+  });
+  return st;
 }
 
 // --- selectors ---
