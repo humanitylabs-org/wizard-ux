@@ -1,7 +1,11 @@
 // Browser owner boundary, shell side (wizard-os#133): web/core/shell-token.js and its nginx/entrypoint wiring.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdtempSync, mkdirSync, rmSync, chmodSync, existsSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { spawnSync } from 'node:child_process';
+import { createDocument } from './fixtures/mini-dom.mjs';
 import vm from 'node:vm';
 
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
@@ -91,28 +95,70 @@ test('a framed shell page never arms the wrapper', () => {
   assert.equal(b.meta.removed, true);
 });
 
-test('both shell pages carry the `off` placeholder and load the script first', () => {
-  for (const page of ['web/index.html', 'web/desktop.html']) {
-    const html = read(page);
-    const metaAt = html.indexOf('<meta name="wizard-shell-token" content="off">');
-    const scriptAt = html.indexOf('<script src="core/shell-token.js"></script>');
-    assert.ok(metaAt > 0 && scriptAt > metaAt, page);
-    assert.equal(html.indexOf('<script'), scriptAt, page + ': shell-token.js is the first script');
+// A shell page as the browser loads it: parsed into a mini DOM; its first script must be core/shell-token.js, which
+// then runs over that same document (the page's own meta, as shipped or as nginx's sub_filter filled it).
+const SUB = ['<meta name="wizard-shell-token" content="off">', '<meta name="wizard-shell-token" content="$wizard_shell_token">'];
+function loadPage(page, { token = null, path } = {}) {
+  let html = read(page); if (token !== null) html = html.split(SUB[0]).join(SUB[1].replace('$wizard_shell_token', token));
+  const doc = createDocument(); doc.documentElement.innerHTML = html.slice(html.indexOf('<head'), html.lastIndexOf('</html>'));
+  const scripts = doc.querySelectorAll('script'), first = scripts[0], meta = doc.querySelector('meta[name="wizard-shell-token"]');
+  const all = doc.documentElement.descendants(), seenFirst = !!meta && all.indexOf(meta) < all.indexOf(first);
+  const calls = [], fetch = (input, init) => { calls.push({ input, init }); return Promise.resolve('ok'); };
+  const window = { fetch, XMLHttpRequest: class { open() {} setRequestHeader() {} send() {} } }; window.top = window;
+  const localStorage = store({ 'wos.browser-boundary.v1': '1' });
+  vm.runInNewContext(SRC, { window, document: doc, localStorage, location: { href: ORIGIN + path, origin: ORIGIN }, URL, Headers, Request });
+  return { src: first?.getAttribute('src'), metaBeforeScript: seenFirst, metaLeft: !!doc.querySelector('meta[name="wizard-shell-token"]'), window, calls, localStorage, nativeFetch: fetch };
+}
+async function ownerCall(p, url) { await p.window.fetch(url); return sent(p.calls.at(-1)); }
+
+test('both shell pages carry the `off` placeholder and load the script first', async () => {
+  for (const [page, path] of [['web/index.html', '/wizard-os-home/'], ['web/desktop.html', '/wizard-os-home/desktop.html']]) {
+    const off = loadPage(page, { path });
+    assert.equal(off.src, 'core/shell-token.js', page + ': shell-token.js is the first script');
+    assert.ok(off.metaBeforeScript, page + ': the meta is parsed before it runs');
+    assert.equal(off.window.fetch, off.nativeFetch, page + ': off: nothing wrapped'); assert.equal(off.localStorage.data.has('wos.browser-boundary.v1'), false, 'and the box says off');
+    assert.equal(off.metaLeft, false, 'the meta leaves the page');
+    const on = loadPage(page, { path, token: TOKEN });
+    assert.equal(await ownerCall(on, '/wizard/v1/bootstrap'), TOKEN, page + ': nginx\'s value reaches the owner calls');
   }
 });
 
 test('nginx: off renders no token and no sub_filter; on fills it for a top-level page load only, never stored', () => {
-  const entry = read('packaging/entrypoint.sh'), tpl = read('packaging/nginx.conf.template'), stat = read('packaging/static.conf');
-  assert.match(tpl, /include \/tmp\/wizard-boundary\.conf;\n\s*map \$wizard_shell_token \$wizard_doc_cache \{ "" \$wizard_cache_ok; default "no-store"; \}/);
-  assert.match(stat, /add_header Cache-Control \$wizard_doc_cache always;/);
-  assert.match(stat, /include \/tmp\/wizard-boundary-static\.conf;/);
-  assert.match(entry, /printf 'map "\$http_sec_fetch_mode:\$http_sec_fetch_dest" \$wizard_shell_token \{ default ""; \}\\n' > \/tmp\/wizard-boundary\.conf\n\s*: > \/tmp\/wizard-boundary-static\.conf/);
-  // Only navigations: top-level (navigate:document) or passed on by the service worker (navigate:empty); never a frame.
-  assert.match(entry, /\$wizard_shell_token \{ "navigate:document" "%s"; "navigate:empty" "%s"; default ""; \}/);
-  assert.doesNotMatch(entry, /iframe" "%s"/);
-  assert.match(entry, /sub_filter '<meta name="wizard-shell-token" content="off">' '<meta name="wizard-shell-token" content="\$wizard_shell_token">';/);
-  assert.match(entry, /grep -Eqx '\[0-9a-f\]\{64\}'/);
-  assert.ok(entry.indexOf('/tmp/wizard-boundary.conf') < entry.indexOf('nginx -t'), 'written before nginx -t');
+  // the real entrypoint.sh under sh, with its /tmp and /etc/wizard-shell paths in a scratch folder and nginx,
+  // envsubst and the process runner stubbed (each stub records that it ran)
+  const dir = mkdtempSync(join(tmpdir(), 'wos-entry-')), bin = join(dir, 'bin'), etc = join(dir, 'etc'), out = join(dir, 'tmp');
+  try {
+    for (const d of [bin, etc, out]) mkdirSync(d);
+    for (const f of ['static.conf', 'proxy.conf', 'proxy-mcp.conf', 'nginx.conf.template']) writeFileSync(join(etc, f), read('packaging/' + f));
+    writeFileSync(join(bin, 'nginx'), `#!/bin/sh\n[ -f "${out}/wizard-boundary.conf" ] && [ -f "${out}/wizard-boundary-static.conf" ] && echo nginx-t-after-conf >> "${dir}/log"\n`);
+    writeFileSync(join(bin, 'envsubst'), '#!/bin/sh\ncat\n'); writeFileSync(join(bin, 'python3'), `#!/bin/sh\necho started >> "${dir}/log"\n`);
+    for (const f of ['nginx', 'envsubst', 'python3']) chmodSync(join(bin, f), 0o755);
+    const script = join(dir, 'entrypoint.sh');
+    writeFileSync(script, read('packaging/entrypoint.sh').split('/etc/wizard-shell/').join(etc + '/').split('/tmp/').join(out + '/'));
+    const run = env => { rmSync(join(dir, 'log'), { force: true }); const r = spawnSync('sh', [script], { env: { PATH: `${bin}:/usr/bin:/bin`, ...env }, encoding: 'utf8' }); return { code: r.status, err: r.stderr, log: existsSync(join(dir, 'log')) ? readFileSync(join(dir, 'log'), 'utf8') : '' }; };
+    const conf = f => readFileSync(join(out, f), 'utf8');
+    // off (the default): every read maps to no token, and nothing is filtered into the page
+    let r = run({}); assert.equal(r.code, 0, r.err); assert.equal(r.log, 'nginx-t-after-conf\nstarted\n', 'written before nginx -t');
+    assert.equal(conf('wizard-boundary.conf'), 'map "$http_sec_fetch_mode:$http_sec_fetch_dest" $wizard_shell_token { default ""; }\n');
+    assert.equal(conf('wizard-boundary-static.conf'), '');
+    // on: the token only for a real top-level navigation (and the service worker passing one on), never a frame
+    writeFileSync(join(dir, 'token'), TOKEN + '\n');
+    r = run({ WIZARD_BROWSER_BOUNDARY: '1', WIZARD_SHELL_TOKEN_FILE: join(dir, 'token') }); assert.equal(r.code, 0, r.err);
+    assert.equal(conf('wizard-boundary.conf'), `map "$http_sec_fetch_mode:$http_sec_fetch_dest" $wizard_shell_token { "navigate:document" "${TOKEN}"; "navigate:empty" "${TOKEN}"; default ""; }\n`);
+    const filter = conf('wizard-boundary-static.conf'), m = /^sub_filter '([^']+)' '([^']+)';$/m.exec(filter);
+    assert.ok(m, 'one sub_filter'); assert.deepEqual([m[1], m[2]], SUB, 'it fills exactly the shipped placeholder');
+    assert.ok(read('web/index.html').includes(m[1]) && read('web/desktop.html').includes(m[1]), 'the pages carry the string it looks for');
+    // a token that is not 64 lowercase hex: the shell refuses to start
+    for (const bad of ['', 'AB'.repeat(32), 'ab'.repeat(31)]) {
+      writeFileSync(join(dir, 'token'), bad); r = run({ WIZARD_BROWSER_BOUNDARY: '1', WIZARD_SHELL_TOKEN_FILE: join(dir, 'token') });
+      assert.equal(r.code, 2, `refused: ${JSON.stringify(bad)}`); assert.equal(r.log, '', 'nginx never starts');
+    }
+    // nginx reads what the entrypoint wrote: the http block's map and the static location's filter
+    assert.ok(read('packaging/nginx.conf.template').includes('include /tmp/wizard-boundary.conf;') && read('packaging/static.conf').includes('include /tmp/wizard-boundary-static.conf;'));
+    // never stored: a page with a token is no-store (the map in the http block), an off page keeps its cache rule
+    const map = /map \$wizard_shell_token \$wizard_doc_cache \{ "" \$wizard_cache_ok; default "no-store"; \}/.test(read('packaging/nginx.conf.template'));
+    assert.ok(map && /add_header Cache-Control \$wizard_doc_cache always;/.test(read('packaging/static.conf')));
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
 test('the device remembers the box\'s boundary (never the token): set on, cleared only by the box\'s `off`', () => {
@@ -185,18 +231,17 @@ test('the top shell arms only its own pages in a frame below it, never an app pa
 });
 
 test('Store, Agents and Setup load shell-token.js as their first script', () => {
-  for (const page of ['web/store/index.html', 'web/agents/index.html', 'web/setup/index.html']) {
-    const html = read(page);
-    assert.equal(html.indexOf('<script'), html.indexOf('<script src="../core/shell-token.js"></script>'), page);
-  }
+  for (const [page, path] of [['web/store/index.html', '/wizard-os-home/store/'], ['web/agents/index.html', '/wizard-os-home/agents/'], ['web/setup/index.html', '/wizard-os-home/setup/']])
+    assert.equal(loadPage(page, { path }).src, '../core/shell-token.js', page);
 });
 
-test('Store, Agents and Setup carry the `off` placeholder, so a top-level tab of them gets the token from nginx', () => {
-  for (const page of ['web/store/index.html', 'web/agents/index.html', 'web/setup/index.html']) {
-    const html = read(page);
-    const metaAt = html.indexOf('<meta name="wizard-shell-token" content="off">');
-    const scriptAt = html.indexOf('<script src="../core/shell-token.js"></script>');
-    assert.ok(metaAt > 0 && scriptAt > metaAt, page);
+test('Store, Agents and Setup carry the `off` placeholder, so a top-level tab of them gets the token from nginx', async () => {
+  for (const [page, path] of [['web/store/index.html', '/wizard-os-home/store/'], ['web/agents/index.html', '/wizard-os-home/agents/'], ['web/setup/index.html', '/wizard-os-home/setup/']]) {
+    const off = loadPage(page, { path });
+    assert.ok(off.metaBeforeScript, page); assert.equal(off.window.fetch, off.nativeFetch, `${page}: as shipped, off`);
+    assert.equal(off.localStorage.data.has('wos.browser-boundary.v1'), false, `${page}: the shipped value is the box's off`);
+    const on = loadPage(page, { path, token: TOKEN });
+    assert.equal(await ownerCall(on, '/wizard/v1/bootstrap'), TOKEN, `${page}: nginx's value arms it`);
   }
 });
 
