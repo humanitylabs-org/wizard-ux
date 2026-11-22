@@ -11,9 +11,6 @@
  "app-id-renames.test.mjs": [
   "Android Food handoff emits the current app id while retaining the old intent alias"
  ],
- "app-kit-sheet-touch-target.test.mjs": [
-  "sheet close button hit area reaches 44px around its 36px circle"
- ],
  "app-window-title-ink.test.mjs": [
   "browser acceptance cannot relax normal title contrast below 4.5:1"
  ],
@@ -48,9 +45,6 @@
  "failure-dismiss-instant.test.mjs": [
   "the shell hides the card and the header warning from the same record, and never toasts on Dismiss"
  ],
- "launcher-long-names.test.mjs": [
-  "long labels fit the tile and never split a word bare"
- ],
  "lock-screen-player.test.mjs": [
   "Android: exactly Music and Podcasts, the tap opens the playing app, Podcasts is spoken word with skip buttons"
  ],
@@ -72,9 +66,6 @@
  "my-skin.test.mjs": [
   "CSS stays non-executable, loads last in both shells, and scripts use the shared host",
   "Look offers named recipes, New skin and a Wizard edit hint, never Reset or a missing files id"
- ],
- "no-brand-guide-override.test.mjs": [
-  "Nebula keeps the base palette: no stylesheet re-tokens it"
  ],
  "notifications-default-ready.test.mjs": [
   "Home and both shells use the shared unread projection, never the notification Ready inventory"
@@ -138,21 +129,11 @@
  "served-csp.test.mjs": [
   "the served check runs on the built image in CI, not on static.conf alone"
  ],
- "settings-redesign.test.mjs": [
-  "settings.css: rows are hairline lines, not boxes",
-  "arrows reach every tile without silently wearing or opening it"
- ],
- "settings-text-follows-skin.test.mjs": [
-  "Settings root text follows the skin text token"
- ],
  "share-sheet-viewer-handoff.test.mjs": [
   "the viewer does not toast Shared when the sheet only handed the file to an app"
  ],
  "skin-palettes.test.mjs": [
   "colors and tweaks are separate: onboarding offers every color; Look offers tweak sets apart from color"
- ],
- "store-status-colors.test.mjs": [
-  "new status colour rules use tokens, not literal white or fixed washes"
  ],
  "unread-only-counts.test.mjs": [
   "Machines home / data.read.sessions: the Ready count is the unread pill, not the Ready inventory"
