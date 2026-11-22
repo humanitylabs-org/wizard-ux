@@ -181,7 +181,7 @@ function compound(el, parts, scope) {
 export function splitSelectors(sel) { return splitTop(sel, /,/).map(x => x.trim()).filter(Boolean); }
 export function matches(el, sel, scope) {
   return splitSelectors(sel).some(one => {
-    const tokens = splitTop(one.replace(/\s*([>+~])\s*(?![^(]*\))/g, ' $1 '), /\s/).filter(Boolean), parts = []; let comb = ' ';
+    const tokens = splitTop(one.replace(/\s*([>+~])\s*(?![^(]*\))(?![^[]*\])/g, ' $1 '), /\s/).filter(Boolean), parts = []; let comb = ' ';
     for (const t of tokens) { if (t === '>' || t === '+' || t === '~') { comb = t; continue; } parts.push({ sel: t, comb }); comb = ' '; }
     return parts.length && compound(el, parts, scope);
   });
