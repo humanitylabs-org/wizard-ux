@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
 import { withParts } from './fixtures/chats-parts.mjs';
+import { between, block, runRecording } from './fixtures/source-slice.mjs';
 const chats = withParts(fs.readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'));
 const css = fs.readFileSync(new URL('../web/core/chats.css', import.meta.url), 'utf8');
 const live = withLiveParts(fs.readFileSync(new URL('../web/live.js', import.meta.url), 'utf8'));
@@ -14,12 +15,30 @@ test('no helper badge on any row, and its pill styling is gone', () => {
   assert.doesNotMatch(css, /\.ch-background \{/);
 });
 test('full list and slim list preserve the server background field without inventing Ready state', () => {
-  assert.match(live, /background: \['helper', 'heavy'\]\.includes\(item\.wizard_background\)/);
-  assert.match(live, /item\.listVersion === 1/);
+  const { normalize } = pipeline();
+  for (const bg of ['helper', 'heavy']) {
+    const full = normalize({ id: 'f-' + bg, status: 'completed', wizard_background: bg });
+    assert.equal(full.background, bg, 'full list row');
+    assert.equal(full.attention, null, 'no attention from the server: no Ready state made up');
+    const slim = normalize({ listVersion: 1, id: 's-' + bg, title: 'Slim', status: 'completed', background: bg, updatedAt: '2026-11-07T10:00:00.000Z' });
+    assert.equal(slim.background, bg, 'slim list row (listVersion 1) keeps the field as sent');
+    assert.equal(slim.attention, null);
+  }
+  assert.equal(normalize({ id: 'x', status: 'completed', wizard_background: 'root' }).background, '');
 });
 test('Working helper rows keep their waiting label while preferring the latest reply preview', () => {
-  assert.match(chats, /helperLabel\(s\.helperStatus\)/);
-  assert.ok(live.includes('item.wizard_helper_status ? (latestText || clean(text(item.preview)) || userText)'));
+  const { normalize } = pipeline();
+  const at = Date.UTC(2026, 10, 7, 10) / 1000;
+  const row = helper => normalize({ id: 'h', status: 'running', wizard_waiting_on: 'helper', ...(helper ? { wizard_helper_status: { phase: 'running', pending: 2, since: at } } : {}),
+    latest_message: { role: 'assistant', content: 'Two helpers are checking flights' }, last_user_message: { role: 'user', content: 'Find me a flight to Lisbon' } });
+  assert.equal(row(true).preview, 'Two helpers are checking flights', 'with helpers out, the latest reply leads');
+  assert.equal(row(false).preview, 'Find me a flight to Lisbon', 'a plain working row shows the request');
+  // the Working row's label (core/chats-drafts.js workLabel) with the real chat-work.js helper label
+  const work = vm.createContext({ window: {}, Date: { now: () => at * 1000 + 3 * 60000 } });
+  vm.runInContext(fs.readFileSync(new URL('../web/core/chat-work.js', import.meta.url), 'utf8'), work);
+  const label = runRecording(between(chats, '  const PEND_LABEL =', '\n') + '\n' + block(chats, '  function workLabel(s) {') + '\nglobalThis.label = workLabel;', { window: work.window });
+  assert.match(label.label(row(true)), /^Waiting on 2 helpers · 3m/);
+  assert.equal(label.label(row(false)), 'Waiting on a helper');
 });
 // Parity (AGENTS.md): run the real list normalizer and row badge for a main thread and every routed runtime kind.
 function pipeline() {
