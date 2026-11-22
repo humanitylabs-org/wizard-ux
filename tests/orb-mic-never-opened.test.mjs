@@ -7,6 +7,8 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { withAppParts } from './fixtures/app-parts.mjs';
+import { createDocument } from './fixtures/mini-dom.mjs';
+import { styles } from './fixtures/w5-css.mjs';
 
 const APP = withAppParts(readFileSync(new URL('../web/app.js', import.meta.url), 'utf8'));
 const CSS = readFileSync(new URL('../web/styles.css', import.meta.url), 'utf8');
@@ -150,7 +152,20 @@ test('a browser bar over the bottom of the page lifts the dock, orb and Cancel a
 });
 
 test('during a take in the first-run tour, the orb and its controls sit above everything the tour draws', () => {
-  const z = sel => Number((TOUR_CSS.match(new RegExp('\\.device\\.touring:is\\(\\[data-voice="listen"\\], \\[data-voice="paused"\\], \\[data-voice="command"\\]\\) ' + sel + ' \\{ z-index: (\\d+); \\}')) || [])[1]);
-  assert.ok(z('#dock') > 90 && z('#voice') > z('#dock'), 'dock above the tour, the Cancel/Pause arcs above the dock (as without the tour)');
-  assert.match(TOUR_CSS, /^\.tour \{ position: absolute; inset: 0; z-index: 90; pointer-events: none;/m);
+  // The phone page while the tour shows, with the orb dock, the take's Cancel/Pause arcs and the tour layer.
+  const page = voice => {
+    const doc = createDocument();
+    doc.body.innerHTML = `<div id="device" class="device touring" data-voice="${voice}"><div id="dock"></div><div id="voice"></div><div class="tour"></div></div>`;
+    const z = sel => Number(styles(doc.querySelector(sel), [CSS, TOUR_CSS])['z-index']);
+    return { tour: z('.tour'), dock: z('#dock'), voice: z('#voice'), tourCss: styles(doc.querySelector('.tour'), [CSS, TOUR_CSS]) };
+  };
+  for (const voice of ['listen', 'paused', 'command']) {
+    const p = page(voice);
+    assert.equal(p.tour, 90);
+    assert.ok(p.dock > p.tour && p.voice > p.dock, `${voice}: dock above the tour, the Cancel/Pause arcs above the dock (as without the tour): ${JSON.stringify(p)}`);
+  }
+  const idle = page('idle');
+  assert.ok(!(idle.dock > idle.tour), 'no take: the tour stays on top of the dock');
+  const t = idle.tourCss;
+  assert.equal(t.position, 'absolute'); assert.equal(t.inset, '0'); assert.equal(t['pointer-events'], 'none');
 });
