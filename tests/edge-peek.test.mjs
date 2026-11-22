@@ -5,6 +5,9 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { withShellParts } from './fixtures/shell-parts.mjs';
+import { createDocument } from './fixtures/mini-dom.mjs';
+import { styles } from './fixtures/w5-css.mjs';
+import { block, runRecording } from './fixtures/source-slice.mjs';
 const read = p => withShellParts(readFileSync(new URL('../' + p, import.meta.url), 'utf8'));
 
 class El {
@@ -98,14 +101,42 @@ test('keyboard Enter (a click with no pointer) moves across; desktop shell mount
 });
 
 test('wired for everyone: both shells load it, core CSS is unscoped with reduced motion, the hint names the edge', () => {
-  for (const f of ['web/index.html', 'web/desktop.html']) assert.match(read(f), /<script type="module" src="core\/thread-swipe-back\.js"><\/script>\n  <script src="core\/edge-peek\.js"><\/script>/);
+  // Both shells load it right after the thread swipe-back module.
+  for (const f of ['web/index.html', 'web/desktop.html']) {
+    const doc = createDocument(); doc.documentElement.innerHTML = readFileSync(new URL('../' + f, import.meta.url), 'utf8').replace(/^<!doctype html>/i, '');
+    const scripts = doc.querySelectorAll('script[src]'), i = scripts.findIndex(s => s.getAttribute('src') === 'core/edge-peek.js');
+    assert.ok(i > 0, `${f} loads core/edge-peek.js`);
+    assert.equal(scripts[i - 1].getAttribute('src'), 'core/thread-swipe-back.js'); assert.equal(scripts[i - 1].getAttribute('type'), 'module');
+  }
+  // The handle the real built-in drew, on a phone page with no skin, tweak or flag: core desks.css styles it.
   const css = read('web/core/desks.css');
-  assert.match(css, /^\.bound-grab \{ position: absolute; z-index: 40;/m, 'not scoped to a skin, tweak or flag');
-  assert.match(css, /#device:has\(> \.bound-grab\.right\.glow\) #dotsR > \.ddot:first-child \.dsg/);
-  assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{ \.bound-grab\.glow::after, #device:has\(> \.bound-grab\.glow\) \.ddot \.dsg \{ animation: none; \} \}/);
-  const app = read('web/app.js');
-  assert.match(app, /is open beside this thread · tap or swipe the right edge to look/);
-  assert.match(app, /<b>Tap the left edge<\/b> or swipe right on the bottom bar to return to the thread/);
+  const t = load({ beside: 1 });
+  const doc = createDocument();
+  doc.body.innerHTML = '<div id="device"><div id="dotsR"><i class="ddot"><i class="dsg"></i></i><i class="ddot"><i class="dsg"></i></i></div></div>';
+  const grab = doc.createElement('button'); grab.className = [t.el.className, ...t.el.cls].join(' '); // (the fake El keeps className and classList apart)
+  doc.getElementById('device').appendChild(grab);
+  assert.ok(grab.classList.contains('bound-grab') && grab.classList.contains('glow'));
+  const g = styles(grab, [css]);
+  assert.equal(g.position, 'absolute'); assert.equal(g['z-index'], '40'); assert.equal(g.right, '0');
+  assert.match(styles(grab, [css], { pseudo: '::after' }).animation, /^edgePeekGlow /, 'it glows');
+  const dot = doc.querySelector('#dotsR > .ddot .dsg'), second = doc.querySelectorAll('#dotsR .dsg')[1];
+  assert.match(styles(dot, [css]).animation || '', /^edgePeekDot /, 'the desk dot it leads to glows with it');
+  assert.equal(styles(second, [css]).animation, undefined);
+  const reduced = { media: m => /prefers-reduced-motion: reduce/.test(m) };
+  assert.equal(styles(grab, [css], { ...reduced, pseudo: '::after' }).animation, 'none', 'reduced motion: no glow');
+  // (The desk dot's reduced-motion rule, `#device:has(> .bound-grab.glow) .ddot .dsg`, is weaker than the dot's glow
+  // rule (two ids, six classes), so with reduced motion the dot still animates: reported on wizard-ux#1674, not pinned.)
+  // The hints: the bound tip (app-bound.js) and the review coach (app-search.js) name the edge.
+  const toasts = [], store = new Map();
+  const tip = runRecording(block(readFileSync(new URL('../web/app-bound.js', import.meta.url), 'utf8'), '  function boundTip(wid)') + '\nthis.boundTip = boundTip;',
+    { store: { get: (k, d) => store.get(k) ?? d, set: (k, v) => store.set(k, v) }, boundOf: () => ({ id: 'b' }), winTitle: () => 'Money', esc: String, clip: x => x, toast: (...a) => toasts.push(a) });
+  tip.boundTip('w1');
+  assert.equal(toasts[0][1], '<b>Money</b> is open beside this thread · tap or swipe the right edge to look');
+  const cdoc = createDocument(), appVars = {};
+  const coach = runRecording(block(readFileSync(new URL('../web/app-search.js', import.meta.url), 'utf8'), '  function showReviewCoach(f)') + '\nthis.showReviewCoach = showReviewCoach;',
+    { document: cdoc, appVars, store: { get: () => false, set() {} }, esc: String, clip: x => x, LIVE: null, device: cdoc.body });
+  coach.showReviewCoach({ bound: true, from: { sid: '', title: 'Plan' } });
+  assert.match(appVars.rvCoach.textContent, /Tap the left edge or swipe right on the bottom bar to return to the thread\./);
   assert.doesNotMatch(read('web/tweaks/catalog.json'), /edge-peek/, 'the Miguel tweak retires once core has it');
   const src = read('web/core/edge-peek.js').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
   assert.doesNotMatch(src, /addEventListener|preventDefault|setTimeout|dataset\.(mine|skin)|miguel/, 'host-tracked listeners, no default prevented, no gate');
