@@ -9,6 +9,9 @@ import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { withParts } from './fixtures/chats-parts.mjs';
 import { withWebParts } from './fixtures/web-parts.mjs';
+import { deskWorld, layout } from './fixtures/ai-apps-world.mjs';
+import { cascade, parseCss } from './fixtures/mini-css.mjs';
+import { runRecording } from './fixtures/source-slice.mjs';
 
 const read = f => withWebParts(readFileSync(new URL(`../${f}`, import.meta.url), 'utf8'));
 const js = read('web/layouts/ai-apps/desktop.js'), css = read('web/layouts/ai-apps/desktop.css');
@@ -88,23 +91,45 @@ test('a thread opened from Activity or the sidebar has no Back; another chat spe
   const n = world(); n.c.open = null; n.post('s1'); n.paint('s1'); assert.equal(n.cBack.hidden, true, 'no feed open: none');
 });
 
-test('wiring: the Back sits left of the title, every sidebar open clears it, the header repaints it; tokens only', () => {
-  assert.match(js, /const cBack = el\('button', 'aad-cback', \{ type: 'button' \}\); cBack\.hidden = true;\n  cTop\.append\(cBack, tt, cX\);/);
+test('wiring: the Back sits left of the title, every sidebar open clears it, the header repaints it; tokens only', async () => {
+  // the real desktop AI apps view, drawn on the small DOM
+  const d = deskWorld(), { w } = d;
+  w.html.setAttribute('data-shell', 'desktop'); w.html.setAttribute('data-layout', 'ai-apps');
+  (await layout()).default(w.api);
+  const cBack = w.q('.aad-cback');
+  assert.ok(cBack, 'the chat header has a Back');
+  const top = cBack.parentNode.children;
+  assert.equal(top[0], cBack, 'left of everything');
+  assert.ok(top[1].classList.contains('aad-tt'), 'then the title');
+  assert.ok(top.at(-1).classList.contains('aad-cx'), 'the close stays last');
+  assert.equal(cBack.tagName, 'BUTTON'); assert.equal(cBack.getAttribute('type'), 'button');
+  assert.equal(cBack.hidden, true, 'hidden until a thread is opened from a feed');
+  // its look: tokens only, and hidden means gone
+  const sheet = parseCss(css), look = cascade(cBack, sheet);
+  for (const k of ['color', 'background', 'border-color']) if (look[k]) assert.doesNotMatch(look[k].value.replace(/var\([^)]*\)/g, ''), /#[0-9a-f]{3,8}\b|rgb/i, `${k} from tokens`);
+  cBack.setAttribute('hidden', '');
+  assert.equal(cascade(cBack, sheet).display?.value, 'none');
+  // every sidebar open clears it (Activity row, the rail, ⌥↓ / ⌥↑) and the header repaints it
   assert.match(js, /tt\.textContent = docked \? t : ''; tt\.title = t; paintBack\(\);/);
   assert.match(js, /stepAt = s\.id; fromFeed = null; api\.sessions\.open\(s\.id\);/, 'an Activity row');
   assert.match(js, /noteWant = id\.startsWith\('notif:'\); fromFeed = null; api\.sessions\.open\(id\);/, 'the rail');
   assert.match(js, /noteWant = nx\.id\.startsWith\('notif:'\); fromFeed = null; api\.sessions\.open\(nx\.id\);/, '⌥↓ / ⌥↑');
   // Back never exits (AGENTS.md): the button is the in-page Esc path only; closeChat swaps the column, no history step.
   assert.match(js, /api\.listen\(cBack, 'click', \(\) => chatBack\(\)\);/);
-  const up = between(js, '  function chatBack() {', '\n  }\n');
-  assert.match(up, /if \(!closeChat\(\)\) return false;/, 'Back is closeChat first (the post to its feed, the feed or a chat closed)');
-  assert.doesNotMatch(up, /history\.|location\.|\.back\(\)/, 'no history navigation in the list Back either');
-  const close = js.slice(js.indexOf('  function closeChat() {'), js.indexOf('\n  }\n', js.indexOf('  function closeChat() {')));
-  assert.doesNotMatch(close, /history\.|location\.|\.back\(/, 'no history navigation in the Back path');
-  assert.match(close, /if \(chatThread === FEED\)[^\n]*channelBack\?\.\(\)/, 'Esc on the feed itself still closes the feed');
-  const rule = css.match(/\.aad-cback \{([^}]+)\}/)[1];
-  assert.doesNotMatch(rule.replace(/var\([^)]*\)/g, ''), /#[0-9a-f]{3,8}\b|rgb/i, 'colours from tokens');
-  assert.match(css, /\.aad-cback\[hidden\] \{ display: none; \}/);
+  const up = between(js, '  function chatBack() {', '\n  }\n') + '\n  }';
+  const back = env => runRecording(up + '\nglobalThis.back = chatBack;', { one: () => false, peekable: () => false, FEED: '__feed__', chatThread: null, ...env });
+  const refused = back({ listBack: () => '', closeChat: () => false });
+  assert.equal(refused.back(), false, 'Back is closeChat first: nothing closed, Back goes on');
+  const closed = back({ listBack: () => '', closeChat: () => true });
+  assert.equal(closed.back(), true);
+  for (const c of [refused, closed]) assert.ok(!c.calls.some(([n]) => /^(history|location)\b|\.back$/.test(n)), 'no history navigation in the list Back either');
+  const close = js.slice(js.indexOf('  function closeChat() {'), js.indexOf('\n  }\n', js.indexOf('  function closeChat() {'))) + '\n  }';
+  const shut = runRecording(close + '\nglobalThis.close = closeChat;', { docked: true, FEED: '__feed__', chatThread: '__feed__', feedBack: () => false });
+  assert.equal(shut.close(), true);
+  assert.equal(shut.chatThread, null, 'Esc on the feed itself still closes the feed');
+  assert.ok(shut.calls.some(([n]) => n === 'api.sessions.channelBack'), 'through Chats\' own channel Back');
+  assert.ok(!shut.calls.some(([n]) => /^(history|location)\b/.test(n)), 'no history navigation in the Back path');
+  assert.equal(runRecording(close + '\nglobalThis.close = closeChat;', { docked: false }).close(), false, 'not docked: nothing to close');
   assert.doesNotMatch(read('web/layouts/ai-apps/layout.js'), /aad-cback|fromFeed/, 'the phone is unchanged');
 });
 
