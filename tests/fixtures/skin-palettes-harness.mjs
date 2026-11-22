@@ -23,8 +23,8 @@ export function skinsRuntime(saved = {}, source = read('web/core/skins.js')) {
 }
 
 // The real Settings renderer mounted on a fake root, with the WosSkin/WosExperience/WosMySkin the caller gives.
-export function settingsView({ shell = 'phone', WosSkin, WosExperience, WosMySkin, page = 'look' } = {}) {
-  const s = { console, URL, setTimeout, CSS: { escape: String }, navigator: { userAgent: 'Desktop' }, document: { activeElement: null },
+export function settingsView({ shell = 'phone', WosSkin, WosExperience, WosMySkin, page = 'look', document = { activeElement: null }, timer = setTimeout } = {}) {
+  const s = { console, URL, setTimeout: timer, CSS: { escape: String }, navigator: { userAgent: 'Desktop' }, document,
     location: { host: 'example.test' }, WizCore: {}, WosSkin, WosExperience, WosMySkin };
   s.window = s;
   vm.runInNewContext(withSettingsParts(read('web/core/settings.js')), s);
