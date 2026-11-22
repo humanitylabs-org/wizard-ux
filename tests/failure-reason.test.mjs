@@ -8,7 +8,9 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { modelContext } from './fixtures/chats-list-model.mjs';
 import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
-import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
+import { withParts } from './fixtures/chats-parts.mjs';
+import { between, runRecording } from './fixtures/source-slice.mjs';
+import { onSkin } from './fixtures/w5-css.mjs'; // chats.js parts moved out verbatim (issue 1665)
 
 const read = p => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
 const TWEAK = 'wizard/failure-reason';
@@ -82,16 +84,47 @@ test('a sign-out with a connection app keeps its Sign in panel; working and retr
   assert.match(M.runError(failed('provider_auth')).line, /^ChatGPT isn’t available: signed out or sign-in expired$/);
 });
 
-test('Errors row and thread use the reason in place of "Error: <message>" and the generic failed_turn bubble', () => {
+// The Errors row's preview line (core/chats-rows.js) and the failed thread's turns and notice (core/chats-threadpaint.js),
+// cut from the real chats.js (parts put back) and run with the real WosModels.
+function rowPreview(M, s) {
   const chats = withParts(read('web/core/chats.js'));
-  assert.match(chats, /const rerr = needs && !working \? window\.WosModels\?\.runError\?\.\(s\) : null;/);
-  assert.match(chats, /: rerr \? esc\(rerr\.line\) : working \?/);
-  assert.match(chats, /const runErr = !working && !!window\.WosModels\?\.runError\?\.\(s\);/);
-  assert.match(chats, /\(!runErr && (?:!signedOut && )?s\?\.safeError && !s\?\.reconnect/);
+  const code = between(chats, '    const rerr = needs && !working', '    const priv = privRow(s)');
+  const ctx = runRecording(code + '\nthis.pv = pv;', { window: { WosModels: M }, s, needs: true, working: false, trackedAsk: false, at: null, A: null, def: false,
+    lab: '<em class="att error">Error:</em> ', esc: String, clip: x => x, LIVE: {}, globalThis: {} });
+  return ctx.pv;
+}
+function threadMsgs(M, s) {
+  const chats = withParts(read('web/core/chats.js'));
+  const code = between(chats, '      const runErr = !working && !!window.WosModels?.runError?.(s);', '\n    }\n    // The Daily view');
+  const turns = [];
+  const ctx = runRecording('let msgs;\n' + code + '\nthis.msgs = msgs;', { window: { WosModels: M }, s, working: false, held: false, pend: [], shown: [{ u: { text: 'How is your day' } }], all: [], from: 0,
+    c: { show: 20 }, isNew: false, w: { id: 'w1', thread: s.id }, TAG: '', esc: String, PW: null, needsMark: undefined, replyStd: undefined, turnAt: () => 0, KIT: { time: { dayKey: () => '', day: () => '' } },
+    turnHtml: (c, tn, last, working, helper, quiet) => { turns.push(quiet); return `<div class="turn">${quiet ? '' : '<div class="failed_turn">Your request was not processed.</div>'}</div>`; },
+    approvalHtml: () => '', pendingHtml: () => '', STI: {}, globalThis: {} });
+  return { html: ctx.msgs, quiet: turns };
+}
+
+test('Errors row and thread use the reason in place of "Error: <message>" and the generic failed_turn bubble', () => {
+  const s = failed('provider_billing', { safeError: 'Your request was not processed.' });
+  const on = models(), off = models('');
+  const line = on.runError(s).line;
+  assert.match(line, /ChatGPT/);
+  // The row: the reason, not "Error: <your message>"; without the tweak, the old line.
+  assert.equal(rowPreview(on, s), line);
+  assert.equal(rowPreview(off, s), '<em class="att error">Error:</em> How is your day');
+  // The thread: the reason quiets the generic failed_turn bubble and the duplicate "Reply not sent" notice.
+  const t = threadMsgs(on, s);
+  assert.deepEqual(t.quiet, [true]); assert.doesNotMatch(t.html, /failed_turn|Reply not sent/);
+  const o = threadMsgs(off, s);
+  assert.deepEqual(o.quiet, [false]); assert.match(o.html, /<b>Reply not sent<\/b><p>Your request was not processed\.<\/p>/);
+  // The switch: listed, its own id, its CSS scoped to it.
   const tw = 'web/tweaks/wizard/failure-reason/';
   assert.equal(JSON.parse(read(tw + 'manifest.json')).id, TWEAK);
   assert.ok(JSON.parse(read('web/tweaks/catalog.json')).tweaks.includes(TWEAK));
-  assert.match(read(tw + 'tweak.css'), /html\[data-tweaks~="wizard\/failure-reason"\]/);
+  const css = read(tw + 'tweak.css');
+  const label = attrs => onSkin([css], '.ch-fail.reason .lb', { skin: '', attrs })['text-transform'];
+  assert.equal(label({ 'data-tweaks': 'wizard/desktop-chats wizard/failure-reason' }), 'none', 'the reason label, with the switch on');
+  assert.equal(label({ 'data-tweaks': 'wizard/desktop-chats' }), undefined, 'nothing without it');
 });
 
 // Agent chat parity (AGENTS.md): the same failed run on the main agent and on a routed host-profile, container and
