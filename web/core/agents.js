@@ -276,6 +276,55 @@
     return { app_id: id, label: String(v.label || v.name || id).slice(0, 60), purpose: String(v.purpose || '').slice(0, 160), required: v.required === true,
       agent: typeof v.agent === 'string' && v.agent ? v.agent : (v.agent?.id || 'hermes'), is_default: v.is_default === true, problem: String(v.problem || '') };
   }
+  /* The route agent (wizard-ux issue 1728). A Hermes route that names no agent means `hermes` (wizard-os spec/AGENTS.md),
+   * but the shell sends the main agent's requests unscoped. When the Agent Service makes another agent the default
+   * (private first: `private`, with `hermes` hidden), those requests reached the hidden standard agent: the model menu
+   * showed its Claude catalogue and the first chat failed with "Not sent". One rule here, not per caller: every
+   * same-origin /wizard/hermes/api|v1 request (fetch and EventSource) that names no agent names the default agent
+   * when it is not `hermes`. A box whose default is `hermes` keeps today's unscoped routes. */
+  A.routeAgent = () => { const d = A.defaultId(); return d && d !== 'hermes' && ID.test(d) ? d : ''; };
+  const HERMES_ROUTE = /^\/wizard\/hermes\/(?:api|v1)\//;
+  A.scopeUrl = (url, agent = A.routeAgent()) => {
+    if (!agent || (typeof url !== 'string' && !(typeof URL === 'function' && url instanceof URL))) return url;
+    const s = String(url), origin = globalThis.location?.origin || '';
+    const rel = origin && s.startsWith(origin + '/') ? s.slice(origin.length) : s;
+    if (!HERMES_ROUTE.test(rel)) return url;
+    const q = rel.indexOf('?'), h = rel.indexOf('#'), end = h >= 0 ? h : rel.length;
+    const query = q >= 0 && q < end ? rel.slice(q + 1, end) : '';
+    if (query.split('&').some(p => p.split('=')[0] === 'agent')) return url;
+    const head = q >= 0 && q < end ? rel.slice(0, end) + (query ? '&' : '') : rel.slice(0, end) + '?';
+    return (rel === s ? '' : origin) + head + 'agent=' + encodeURIComponent(agent) + rel.slice(end);
+  };
+  const isHermesRoute = input => {
+    if (typeof input !== 'string' && !(typeof URL === 'function' && input instanceof URL)) return false;
+    const s = String(input), origin = globalThis.location?.origin || '';
+    return HERMES_ROUTE.test(origin && s.startsWith(origin + '/') ? s.slice(origin.length) : s);
+  };
+  if (typeof window.fetch === 'function' && !window.fetch.wosRouteAgent) {
+    const base = window.fetch;
+    // Until the agent list has answered (bounded, so an Agent Service that hangs never stalls chats), a Hermes request
+    // waits for it: the first model menu and the first send then already go to the right agent.
+    const settled = () => A.ready ? null : Promise.race([A.load(), new Promise(r => setTimeout(r, 3000))]);
+    const wrapped = function fetch(input, init) {
+      if (!isHermesRoute(input)) return base.call(this, input, init);
+      const wait = settled();
+      return wait ? wait.then(() => base.call(this, A.scopeUrl(input), init)) : base.call(this, A.scopeUrl(input), init);
+    };
+    wrapped.wosRouteAgent = true;
+    window.fetch = wrapped;
+  }
+  if (typeof window.EventSource === 'function' && !window.EventSource.wosRouteAgent) {
+    const ES = window.EventSource;
+    const Scoped = function EventSource(url, init) { return new ES(A.scopeUrl(url), init); };
+    Scoped.prototype = ES.prototype; Object.setPrototypeOf(Scoped, ES); Scoped.wosRouteAgent = true;
+    window.EventSource = Scoped;
+  }
+  // The default agent changed under a cached model menu (it loaded before the list answered): reload it.
+  let lastRoute = '';
+  listeners.add(() => {
+    const now = A.routeAgent(); if (now === lastRoute) return; lastRoute = now;
+    const M = window.WosModels; if (M?.ready && typeof M.load === 'function') M.load(true).then(() => window.dispatchEvent?.(new Event('wos:models'))).catch(() => {});
+  });
   window.WosAgents = A;
   // The shells refresh the list in the background; the Agents app loads it on demand.
   if (document.documentElement.dataset.leaving) return;
