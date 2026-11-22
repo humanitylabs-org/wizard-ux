@@ -22,3 +22,13 @@ export function runPart(file, kind, part, args, ctx = partScope()) {
   vm.runInContext(readWeb(file), ctx);
   return { ctx, out: ctx.WizCore[kind][part](args) };
 }
+
+// Like runPart, but every name the part takes that `named` does not give is a recorder, and so is every free global
+// the file reads (source-slice runRecording); calls land in ctx.calls as [name, ...args].
+export async function runPartRecording(file, kind, part, named, ctx = partScope()) {
+  const { recorder, runRecording } = await import('./source-slice.mjs');
+  const calls = (ctx.calls ||= []);
+  runRecording(readWeb(file), ctx, calls);
+  const args = new Proxy(named, { get: (t, k) => (k in t ? t[k] : recorder(String(k), calls)), has: () => true });
+  return { ctx, calls, out: ctx.WizCore[kind][part](args) };
+}
