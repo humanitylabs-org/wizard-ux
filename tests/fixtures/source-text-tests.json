@@ -297,13 +297,6 @@
   "Overview arrange mode: hold arranges desks; download button beside ✕ opens Add to home screen",
   "pinned single-app session keeps the shared media viewer visible over the app (#1520)"
  ],
- "incognito-chat.test.mjs": [
-  "Incognito blocks microphone admission before snapshots, custody or recorder access",
-  "every persistent Chats adapter has an Incognito early return; both shells load the same core",
-  "Settings registration follows dependency and scrub checks before active index mutation",
-  "Incognito stream target accepts every registry agent id, including a leading digit",
-  "desktop HUD title-bar close asks before ending an Incognito chat"
- ],
  "instant-capture-slow-save.test.mjs": [
   "the first-row save of an instant take (openDB + put) goes through the same quiet retry",
   "no instant-take storage failure anywhere emits the old notice, and getInfo carries no storage warning"
@@ -520,9 +513,6 @@
   "one device port dispatches vault and identity independently and revokes both on navigation"
  ],
  "photos-backup.test.mjs": [
-  "Settings holds no Photos row: no feature, no page mapping, no styles, no module",
-  "relay method list matches the native allowlist (plus legacy open)",
-  "old Settings deep links (backup notification, native screen) open the Photos app instead",
   "native: bridge keeps credentials and sign-in on the device; legacy open and the deep link stay",
   "Photos child Back explicitly restores the Wizard parent, album Back stays nested"
  ],
