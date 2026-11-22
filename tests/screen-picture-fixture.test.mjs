@@ -15,14 +15,16 @@ function bridge() {
   setup({jpeg: '', read: {lines: []}, mapping: {'ข้าจะไปออกรบ': "I'm heading to battle"}, chromeLabels: ['Copy translation','Select text','Ask Wizard']});
   return {translate: context.window.ScreenNative.translate, replies};
 }
-test('verdict matchers accept the real multiline pill and reject unrelated verdicts', () => {
-  const patterns = [...text.matchAll(/\/(Already[^/]+)\//g)].map(m => new RegExp(m[1]));
-  assert.equal(patterns.length, 1, 'only the installed87 baseline is expected to give the false verdict');
-  for (const pattern of patterns) {
-    assert.ok(pattern.test('Already in\nEnglish\n▾'));
-    assert.ok(pattern.test('Already in English'));
-    assert.ok(!pattern.test('Thai → English'));
+test('verdict matchers accept the real multiline pill and reject unrelated verdicts', async () => {
+  // the whole QA run (fake Chromium): the baseline page's false English verdict is recognised from its real pill text
+  for (const pill of ['Already in\nEnglish\n▾', 'Already in English']) {
+    const r = await runPictureQa({ baselinePill: pill });
+    assert.equal(r.thrown, null, JSON.stringify(pill)); assert.notEqual(r.exitCode, 1, JSON.stringify(pill));
+    assert.ok(r.checks.some(c => /^baseline .*: false English verdict bypasses vision$/.test(c)), JSON.stringify(pill));
   }
+  const other = await runPictureQa({ baselinePill: 'Thai → English' });
+  assert.ok(other.thrown || other.exitCode === 1, 'a translated pill on the baseline is not taken for its false verdict');
+  assert.ok(!other.checks.some(c => /false English verdict/.test(c)));
 });
 test('synthetic English chrome returns identity, without inventing inference', () => {
   const h = bridge(); h.translate('1', JSON.stringify(['Copy translation','Select text','Ask Wizard']), 'English');

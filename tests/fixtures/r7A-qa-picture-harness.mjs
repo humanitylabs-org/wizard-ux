@@ -31,7 +31,8 @@ function fixtureDir({ geometry = true, plainBoxes = false } = {}) {
 }
 
 // invent: the page under test paints lines that have no recorded box (what the replay must catch).
-export async function runPictureQa({ metricsOnly = false, geometry = true, plainBoxes = false, failWait = false, invent = false } = {}) {
+// baselinePill: what the installed 0.10.x baseline page's language pill reads (the real one wraps onto three lines).
+export async function runPictureQa({ metricsOnly = false, geometry = true, plainBoxes = false, failWait = false, invent = false, baselinePill = 'Already in\nEnglish\n▾' } = {}) {
   const fixture = fixtureDir({ geometry, plainBoxes }), out = path.join(fixture, 'out');
   const actions = [], shots = [], pages = [], roles = [];
   // What the page shows once settled: lines with a recorded box are painted over the picture, the rest stay unplaced.
@@ -53,13 +54,18 @@ export async function runPictureQa({ metricsOnly = false, geometry = true, plain
   };
   const page = () => {
     let state = stateFor(null); const calls = [], view = {};
-    const p = { on() {}, async addInitScript(fn, arg) { state = stateFor(arg.read); }, async goto(u) { actions.push(['goto', path.basename(u)]); },
+    const p = { on() {}, async addInitScript(fn, arg) { state = stateFor(arg.read); },
+      async goto(u) { actions.push(['goto', path.basename(u)]); if (path.basename(u) === 'baseline-screen.html') state.pill = baselinePill; },
       async evaluate(fn, arg) {
         if (fn === hit.outsideTarget) return { point: { x: 33, y: 444 }, hit: 'layer', obstacles: [] };
         if (fn === hit.hitTarget) return { ok: true, x: 77, y: 820, hit: arg };
         return vm.runInContext(`(${fn})(${arg === undefined ? '' : JSON.stringify(arg)})`, pageWorld(state, calls, view));
       },
-      async waitForFunction() { if (failWait) throw new Error('timeout'); },
+      // a wait on the page's own state (S.peek()) is really evaluated there: false until the timeout means it times out
+      async waitForFunction(fn, arg) {
+        if (failWait) throw new Error('timeout');
+        if (arg == null && String(fn).includes('S.peek()') && !vm.runInContext(`(${fn})()`, pageWorld(state, calls, view))) throw new Error('timeout');
+      },
       locator: sel => ({ click: async () => { actions.push(['click', sel]); if (sel === '#tCopy') calls.push({ kind: 'copy', text: EN }); if (sel === '#orig') view.original = !view.original; }, evaluate: async () => 'rgb(0, 0, 0)' }),
       touchscreen: { tap: async (x, y) => { actions.push(['tap', x, y]); if (x === 77) calls.push({ kind: 'copy', text: EN }); const hitLine = state.painted.find(e => e.c[0] === x && e.c[1] === y); state.sheet = !!hitLine; } },
       async screenshot({ path: f }) { shots.push(path.basename(f)); }, async close() {} };
