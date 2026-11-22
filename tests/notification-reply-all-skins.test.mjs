@@ -78,20 +78,30 @@ test('the Reply bridge and bubble are not gated on a skin', () => {
 });
 
 test('core draws a real bubble (rounded, tinted, accent rule) from skin tokens only', () => {
-  const bubble = rule('.ch-reply');
-  assert.match(bubble, /border-radius:\s*12px/);
-  assert.match(bubble, /background:\s*color-mix\(in srgb, var\(--violet\) 12%, transparent\)/);
-  assert.match(bubble, /border-left:\s*3px solid var\(--violet-2/);
-  const card = rule('.ch-rq');
-  assert.match(card, /border-radius:\s*10px/);
-  const start = css.indexOf('/* Reply to a notification');
-  // The reply section runs to the Channels block appended at the end (wizard-ux issue 1258), which is not part of it.
-  const end = css.indexOf('/* Channels in Chats (wizard-ux issue 1254)', start);
-  const reply = css.slice(start, end > start ? end : undefined);
-  assert.ok(start > 0);
-  assert.doesNotMatch(reply, /#[0-9a-f]{3,8}\b|rgba?\(/i, 'reply styles use skin tokens, not literal colours');
-  assert.doesNotMatch(reply, /font-family|data-skin/, 'no fonts and no per-skin rules in core');
-  assert.ok(rule('.ch-compose button.ch-reply-x').includes('width: 44px'));
+  // the bubble and quote card the real Reply drew, through core chats.css
+  const item = { title: 'Disk almost full', message: 'Root volume at 93%.' };
+  for (const skin of JAMES) {
+    const r = replyOn(skin);
+    r.ctx.api.openContextDraft('w1', 'notifications:n42', item); r.ctx.api.refreshReply('w1');
+    const bubble = r.doc.querySelector('[data-chreply]');
+    const form = r.doc.querySelector('[data-chform]'), compose = r.doc.createElement('div'); compose.className = 'ch-compose';
+    form.parentNode.appendChild(compose); compose.appendChild(form); // where the composer sits in the drawn Chats
+    const holder = r.doc.createElement('div'); holder.className = 'msg'; holder.innerHTML = r.ctx.api.replyCard(r.KIT.drafts.get('new').reply); r.doc.body.appendChild(holder);
+    const card = holder.querySelector('.ch-rq');
+    const won = el => cascade(el, css), b = won(bubble), c = won(card);
+    assert.ok(bubble.classList.contains('ch-reply'), skin);
+    assert.equal(b['border-radius']?.value, '12px', `${skin}: rounded`);
+    assert.equal(b.background?.value, 'color-mix(in srgb, var(--violet) 12%, transparent)', `${skin}: tinted with the skin accent`);
+    assert.match(b['border-left']?.value || '', /^3px solid var\(--violet-2/, `${skin}: accent rule`);
+    assert.equal(c['border-radius']?.value, '10px', `${skin}: the sent quote card is rounded`);
+    assert.equal(won(bubble.querySelector('.ch-reply-x')).width?.value, '44px', `${skin}: a 44px remove target`);
+    for (const el of [bubble, ...bubble.querySelectorAll('*'), card, ...card.querySelectorAll('*')]) for (const [prop, d] of Object.entries(won(el))) {
+      if (!/\.ch-reply|\.ch-rq/.test(d.selector)) continue; // the reply rules themselves
+      assert.doesNotMatch(d.value, /#[0-9a-f]{3,8}\b|rgba?\(/i, `${skin} ${el.className} ${prop}: skin tokens, not literal colours`);
+      assert.notEqual(prop, 'font-family', `${skin}: no fonts in core reply styles`);
+      assert.doesNotMatch(d.selector, /data-skin/, 'no per-skin rules in core');
+    }
+  }
 });
 
 test("James's skins have no rule that hides or flattens the reply bubble", () => {
