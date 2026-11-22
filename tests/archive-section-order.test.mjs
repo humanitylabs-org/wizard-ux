@@ -1,22 +1,24 @@
 // Archive is the last Chats section again on desktop and phone (James, 6 Nov 2026); Miguel's "Archive on top" tweak
-// (miguel/archive-top) is the only way to put it first. Source-level guard; qa-archive-top.cjs renders it in a browser.
+// (miguel/archive-top) is the only way to put it first. The JS renders the real list; qa-archive-top.cjs renders it in a browser.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
-import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
+import { listFixture, sectionKeys } from './fixtures/chats-list-render.mjs';
 import { withWebParts } from './fixtures/web-parts.mjs';
 
 const root = new URL('../', import.meta.url);
 const read = f => withWebParts(readFileSync(new URL(f, root), 'utf8'));
 
 test('stock Chats: Archive is the last section in By status and By day', () => {
-  const js = withParts(read('web/core/chats.js'));
-  for (const name of ['SECTIONS_DAY', 'SECTIONS_STATUS']) {
-    const m = js.match(new RegExp(`const ${name} = (\\[\\[.*?\\]\\]);`));
-    assert.ok(m, name);
-    const keys = [...m[1].matchAll(/\['(\w+)'/g)].map(x => x[1]);
-    assert.equal(keys.at(-1), 'archive', `${name} ends with Archive`);
+  // The real list renderer (tests/fixtures/chats-list-render.mjs) with a row in every section.
+  for (const status of [false, true]) {
+    const keys = sectionKeys(listFixture({ status }).render(''));
+    assert.ok(keys.length >= 5, keys.join());
+    assert.equal(keys.at(-1), 'archive', `${status ? 'By status' : 'By day'} ends with Archive`);
   }
+});
+
+test('stock Chats CSS: By status orders Archive last, and no skin moves it up', () => {
   const css = read('web/core/chats.css');
   const orders = Object.fromEntries([...css.matchAll(/^\.ch-list\.by-status \.ch-sec\[data-sec="(\w+)"\] \{ order: (-?\d+); \}$/gm)].map(m => [m[1], +m[2]]));
   assert.ok('archive' in orders, 'By status gives Archive an explicit order');
