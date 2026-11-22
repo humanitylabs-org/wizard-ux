@@ -88,7 +88,7 @@ export function runRecording(code, ctx = {}, calls = (ctx.calls ||= [])) {
   const globals = new Set(vm.runInContext('Object.getOwnPropertyNames(globalThis)', ctx));
   for (const m of bare.matchAll(/(?<![\w$.])([A-Za-z_$][\w$]*)\b/g)) {
     const n = m[1];
-    if (KEYWORDS.has(n) || globals.has(n) || n in ctx || n in globalThis) continue;
+    if (KEYWORDS.has(n) || globals.has(n) || n in ctx) continue; // Node-only globals (setTimeout, queueMicrotask...) are recorders too
     ctx[n] = recorder(n, calls);
   }
   vm.runInContext(code, ctx);

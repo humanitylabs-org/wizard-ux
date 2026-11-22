@@ -21,7 +21,7 @@ export function keysGuide({ rect = () => null, ...opts } = {}) {
   const proto = Object.getPrototypeOf(document.body);
   const box = function () { measured = this; return { ...RECT, ...(rect(this) || {}) }; };
   const make = document.createElement;
-  document.createElement = tag => { const n = make(tag); n.getBoundingClientRect = box; n.getClientRects = () => [RECT]; if (tag === 'b') n.target = measured; return n; };
+  document.createElement = tag => { const n = make(tag); n.offsetWidth = 20; n.offsetHeight = 16; n.getBoundingClientRect = box; n.getClientRects = () => [RECT]; if (tag === 'b') { n.target = measured; n.getBoundingClientRect = function () { const left = parseFloat(this.style.left) || 0, top = parseFloat(this.style.top) || 0; return { left, top, right: left + 20, bottom: top + 16, width: 20, height: 16 }; }; } return n; };
   for (const n of [document.documentElement, ...document.documentElement.descendants()]) { n.getBoundingClientRect = box; n.getClientRects = () => [RECT]; }
   const patch = root => { for (const n of [root, ...root.descendants()]) { n.getBoundingClientRect = box; n.getClientRects = () => [RECT]; } };
   document.elementFromPoint = () => document.body;

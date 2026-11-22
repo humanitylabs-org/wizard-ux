@@ -260,23 +260,6 @@
  "desktop-host.test.mjs": [
   "desktop loads the adapter before boot; Classic controls and skin adapter reuse host lifecycle"
  ],
- "desktop-keys-layout.test.mjs": [
-  "holding ⌥ is the one keys guide: speak keys named and explained, no separate sheet",
-  "⌥S speaks about the screen, ⌥C speaks a command, ⌥D dictates",
-  "holding left ⌥ alone shows key hints; any other key or release hides them",
-  "⌥S only sends its own kind of take",
-  "⌥↓/⌥↑ walk Ready chats from anywhere into the message box; no ⌥←/⌥→ list hop",
-  "plain ⌥←/⌥→ never act on a chat; standard ⌥Z stays Back and no hidden ⌥E is added",
-  "desktop replies never schedule a new chat after sending",
-  "the keys guide is chips in place, no boxes: ↓ on the next Ready chat, F W R on window buttons, no H J K L (retired for ⌥L light), words only on Speak",
-  "guide: Resolve stays above its button; no removed action arrows or \"/\" chip on chat search",
-  "guide extras: ↓ on Home, [ ] on neighbour desks, ↑ on the previous Ready chat, I on chat search; ⌥I again searches chats",
-  "⌥[ ⌥] never wrap: left of desktop 1 is Home, nothing left of Home or right of the last desk; Speak words sit in the bar",
-  "[ ] chips are their own second-row chips, never merged into the neighbour key",
-  "⌥N opens a New chat on this desk beside the app in front, and holding ⌥ shows it there",
-  "Omarchy-style keys: ⌥− / ⌥= resize, ⌥⇧W reopens, ⌥Z jumps back, each shown where it acts",
-  "⌥L flips Dark / Light within the same skin, shown on the Settings gear; closed windows survive a reload"
- ],
  "desktop-option-word-navigation.test.mjs": [
   "help and hints cannot advertise the removed arrow actions or Someday chord"
  ],
@@ -414,7 +397,6 @@
   "visible activity resumes before WebView native-resume events",
   "update pause is a journal field and paused bridge state, not an ended meeting",
   "notification opens the meeting Activity directly, not a receiver trampoline",
-  "server origin and the user stop fence recovery",
   "updater only bypasses the meeting hold after durable preparation",
   "every post-preparation exit rolls back unless the installer accepted custody",
   "installer reports failed custody on missing/hash-changed files, late holds and exceptions",

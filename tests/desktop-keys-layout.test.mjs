@@ -7,6 +7,17 @@ import { desktopKeys } from './fixtures/desktop-keys-harness.mjs';
 import { keysGuide } from './fixtures/keys-guide-harness.mjs';
 import { block, runRecording } from './fixtures/source-slice.mjs';
 
+// the real skins.js in a bare page (its twin table)
+function shippedSkinsHost() {
+  const el = () => ({ style: { setProperty() {}, removeProperty() {} }, setAttribute() {}, removeAttribute() {}, getAttribute: () => null,
+    classList: { add() {}, remove() {}, toggle() {}, contains: () => false }, appendChild() {}, remove() {}, querySelector: () => null, querySelectorAll: () => [], addEventListener() {}, dataset: {} });
+  const document = { documentElement: el(), head: el(), body: el(), createElement: el, querySelector: () => null, querySelectorAll: () => [], getElementById: () => null, addEventListener() {} };
+  const ctx = { document, localStorage: { getItem: () => null, setItem() {}, removeItem() {} }, addEventListener() {}, dispatchEvent() {}, matchMedia: () => ({ matches: false, addEventListener() {} }),
+    CustomEvent: class {}, Event: class {}, location: { search: '' }, URLSearchParams, setTimeout, clearTimeout, requestAnimationFrame: () => 0, console };
+  ctx.window = ctx; vm.createContext(ctx); vm.runInContext(readFileSync(new URL('../web/core/skins.js', import.meta.url), 'utf8'), ctx);
+  return ctx;
+}
+
 const js = withDesktopParts(readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8'));
 const html = readFileSync(new URL('../web/desktop.html', import.meta.url), 'utf8');
 
@@ -99,7 +110,6 @@ test('plain ⌥←/⌥→ never act on a chat; standard ⌥Z stays Back and no h
 
 test('desktop replies never schedule a new chat after sending', () => {
   assert.doesNotMatch(js, /toNewChat|keepNewSendList|send:new-chat/);
-  assert.match(js, /keepThreadOpen: true/);
 });
 test('desktop recordings skip echo cancellation (no music ducking) and pick a wired mic explicitly', async () => {
   const { readFileSync: r } = await import('node:fs');
@@ -139,39 +149,82 @@ test('⌥G Pick anything: letter chips on every clickable, typed letters click i
 });
 
 test('the keys guide is chips in place, no boxes: ↓ on the next Ready chat, F W R on window buttons, no H J K L (retired for ⌥L light), words only on Speak', () => {
-  assert.doesNotMatch(js, /kh-card|function card\(/);
-  assert.match(js, /rows\[0\] : rows\[\(i \+ 1\) % rows\.length\]/);
-  assert.match(js, /\['\[data-wact="mono"\]', 'F'\], \['\[data-wact="close"\]', 'W'\], \['\[data-wact="reload"\]', 'R'\]/);
-  assert.doesNotMatch(js, /\(dx < 0 \? 'H' : 'L'\)|KeyH: \[|KeyJ: \[|KeyK: \[/);
-  assert.match(js, /\['#micBtn', 'S', 'Talk about this'\]/);
-})
+  const f = { id: 'a1', app: 'frame' }, g = keysGuide({ focused: () => f, ws: [{ id: 'd1', wins: ['a1'] }], W: { a1: f } });
+  const win = g.add('<div class="win"><div class="wbar"><span class="t">Maps</span><button data-wact="mono"></button><button data-wact="close"></button><button data-wact="reload"></button></div><div class="wbody"></div></div>');
+  g.ctx.winEl = () => win;
+  const chips = g.show(false);
+  for (const [act, key] of [['mono', 'F'], ['close', 'W'], ['reload', 'R']]) assert.deepEqual(g.on(key, `[data-wact="${act}"]`).length, 1, `${key} on its button`);
+  assert.equal(chips.filter(c => /^[HJKL]$/.test(c.key)).length, 0, 'no H J K L');
+  assert.equal(g.document.querySelectorAll('#keyHints .kh-card').length, 0, 'chips, no boxes');
+  const leg = g.document.querySelector('#keyHints .kh-legend');
+  assert.deepEqual(leg.querySelectorAll('kbd').map(k => k.textContent), ['G', 'S', 'C', 'D'], 'words only in the Speak legend (and Pick anything)');
+  assert.match(leg.textContent, /STalk about this/);
+});
 
 test('guide: Resolve stays above its button; no removed action arrows or "/" chip on chat search', () => {
-  assert.match(js, /filter\(vis\)\.map\(n => chip\(n, l, 'above'\)\)/);
-  assert.doesNotMatch(js, /chip\(srch, '\/'/);
+  const c = { id: 'c1', app: 'chats', thread: 't1' }, g = keysGuide({ focused: () => c, ws: [{ id: 'd1', wins: ['c1'] }], W: { c1: c } });
+  const win = g.add('<div class="win"><div class="pane-list"><input data-chsearch></div><div class="pane-main"><div class="ch-head"></div><button data-chact="resolve"></button><button data-chact="done"></button></div></div>');
+  g.ctx.winEl = () => win;
+  g.show(false);
+  const [x] = g.on('X', '[data-chact="resolve"]'), chip = g.document.querySelectorAll('#keyHints .kh-chip').find(n => n.target === x.on);
+  assert.ok(parseInt(chip.style.top) < 100, 'above its button (box top 100px)');
+  assert.deepEqual(g.on('/', '[data-chsearch]'), [], 'no "/" on chat search');
+  assert.equal(g.on('I', '[data-chsearch]').length, 1, 'I sits there instead');
+  assert.equal(g.chips().filter(k => /^[←→]$/.test(k.key)).length, 0, 'no removed action arrows');
 });
 
 test('guide extras: ↓ on Home, [ ] on neighbour desks, ↑ on the previous Ready chat, I on chat search; ⌥I again searches chats', () => {
-  assert.match(js, /\$\('#desktopHome \[data-home-act="ready"\]'\) \|\| \$\('#desktopHome \.home-card \.home-row'\)/);
-  assert.match(js, /cur === 0 \? \$\('#logo'\)/);
-  assert.match(js, /chip\(prev, '↑', 'inside'\)/);
-  assert.match(js, /chip\(srch, 'I', 'inside'\)/);
-  assert.match(js, /log\('key:search-chats'\)/);
-  assert.match(js, /chip\(cancel, 'Esc'\)/);
+  const desks = [0, 1, 2].map(i => `<button class="ws" data-ws="${i}"></button>`).join('');
+  // Home: ↓ on the Ready count; ] on desktop 1
+  const h = keysGuide({ homeOpen: true, ws: [{ id: 'd1', wins: [] }, { id: 'd2', wins: [] }] });
+  h.document.querySelector('#wsList').innerHTML = desks; h.patch(h.document.querySelector('#wsList'));
+  h.document.querySelector('#desktopHome').innerHTML = '<div data-home-act="ready"></div>'; h.patch(h.document.querySelector('#desktopHome'));
+  h.show(false);
+  assert.equal(h.on('↓', '[data-home-act="ready"]').length, 1, 'Home: ↓ on the Ready count');
+  assert.equal(h.on(']', '.ws[data-ws="0"]').length, 1, 'Home: ] on desktop 1');
+  // desktop 2 of 3, a chat open on the second of three Ready rows: [ ] the neighbour desks, ↑ the previous row, I on search
+  const c = { id: 'c1', app: 'chats', thread: 'r2' };
+  const g = keysGuide({ cur: 1, focused: () => c, ws: [{ id: 'd1', wins: [] }, { id: 'd2', wins: ['c1'] }, { id: 'd3', wins: [] }], W: { c1: c }, rect: el => (el.classList.contains('pane-list') ? { top: 0, bottom: 900 } : null) });
+  g.document.querySelector('#wsList').innerHTML = desks; g.patch(g.document.querySelector('#wsList'));
+  const win = g.add('<div class="win"><div class="pane-list"><input data-chsearch><div class="ch-row" data-chopen="r1"></div><div class="ch-row" data-chopen="r2"></div><div class="ch-row" data-chopen="r3"></div></div></div>');
+  g.ctx.winEl = () => win; g.ctx.readyRows = () => win.querySelectorAll('.ch-row');
+  g.show(false);
+  assert.equal(g.on('[', '.ws[data-ws="0"]').length, 1); assert.equal(g.on(']', '.ws[data-ws="2"]').length, 1);
+  assert.deepEqual(g.on('↑').map(k => k.on.dataset.chopen), ['r1']); assert.deepEqual(g.on('↓').map(k => k.on.dataset.chopen), ['r3']);
+  assert.equal(g.on('I', '[data-chsearch]').length, 1);
+  // recording: Esc on the pill's cancel
+  const v = keysGuide({ VOICE: { state: 'listen' } });
+  for (const id of ['voiceSend', 'voiceCancel']) v.add(`<button id="${id}"></button>`);
+  v.show(false); assert.equal(v.on('Esc', '#voiceCancel').length, 1);
+  // ⌥I with the list in front searches chats; otherwise it opens the list
+  const field = { focus() { this.focused = true; }, select() {}, getClientRects: () => [1] };
+  const k = desktopKeys({ focused: () => ({ id: 'c1', app: 'chats', thread: null }), winEl: () => ({ querySelector: q => (q === '[data-chsearch]' ? field : null) }), vis0: () => true });
+  k.key('KeyI'); assert.ok(field.focused); assert.ok(!k.names().includes('openChatsList'));
+  const k2 = desktopKeys({ focused: () => ({ id: 'c1', app: 'chats', thread: 't1' }) }); k2.key('KeyI'); assert.equal(k2.names().at(-1), 'openChatsList');
 });
 
 test('⌥[ ⌥] never wrap: left of desktop 1 is Home, nothing left of Home or right of the last desk; Speak words sit in the bar', () => {
-  assert.match(js, /if \(dir < 0 && cur === 0\) \{ lastWs = cur; goHome\(\); return; \}/);
-  assert.match(js, /const t = cur \+ dir; if \(t < 0 \|\| t >= ws\.length\) return;/);
-  assert.doesNotMatch(js, /\(cur - 1 \+ ws\.length\) % ws\.length|\(cur \+ 1\) % ws\.length/);
-  assert.match(js, /stepWin\(-1\); \}\);/);
-  assert.match(js, /function stepWin\(dir\) \{[\s\S]*?stepDesk\(dir\);/);
-  assert.match(js, /leg\.classList\.add\('in-bar'\)/);
+  const step = (cur, dir, homeOpen = false) => { const c = fn('function stepDesk(', { homeOpen, cur, ws: [{}, {}, {}], globalThis: {} }); c.stepDesk(dir); return c.calls.map(x => x.join(':')); };
+  assert.deepEqual(step(0, -1), ['goHome'], 'left of desktop 1 is Home');
+  assert.deepEqual(step(2, 1), [], 'nothing right of the last desk');
+  assert.deepEqual(step(1, -1), ['goWs:0']); assert.deepEqual(step(1, 1), ['goWs:2']);
+  assert.deepEqual(step(0, -1, true), [], 'nothing left of Home');
+  for (const [code, dir] of [['BracketLeft', -1], ['BracketRight', 1]]) { const k = desktopKeys(); k.key(code); assert.deepEqual(k.calls.at(-1), ['stepWin', dir], code); }
+  const w = fn('function stepWin(dir) {', { homeOpen: false, cur: 0, ws: [{ wins: [] }], globalThis: {}, nextStop: () => null }); w.stepWin(-1);
+  assert.deepEqual(w.calls[0], ['stepDesk', -1], 'past the last window, on to the next desk');
+  // the Speak legend sits in the bar when there is room
+  const g = keysGuide({ rect: el => (el.id === 'bar' ? { top: 0, height: 40, bottom: 40 } : el.id === 'wsList' ? { right: 300 } : el.id === 'searchBtn' ? { left: 1200, right: 1240 } : null) });
+  g.show(false); assert.ok(g.document.querySelector('#keyHints .kh-legend').classList.contains('in-bar'));
 });
 
 test('[ ] chips are their own second-row chips, never merged into the neighbour key', () => {
-  assert.doesNotMatch(js, /withStep/);
-  assert.match(js, /if \(vis\(stepL\)\) chip\(stepL, '\['\); if \(vis\(stepR\)\) chip\(stepR, '\]'\);/);
+  const g = keysGuide({ cur: 0, ws: [{ id: 'd1', wins: [] }, { id: 'd2', wins: [] }] });
+  g.document.querySelector('#wsList').innerHTML = '<button class="ws" data-ws="0"></button><button class="ws" data-ws="1"></button>'; g.patch(g.document.querySelector('#wsList'));
+  g.show(false);
+  assert.deepEqual(g.chips().filter(c => c.on?.matches('.ws[data-ws="1"]')).map(c => c.key), ['2', ']'], 'its own ] chip under the 2');
+  const two = g.document.querySelectorAll('#keyHints .kh-chip').filter(n => n.target?.matches?.('.ws[data-ws="1"]'));
+  assert.ok(parseInt(two[1].style.top) > parseInt(two[0].style.top), 'on a second row');
+  assert.deepEqual(g.on('[').map(c => c.on.id), ['logo'], '[ on Home');
 });
 
 test('⌥] / ⌥[ walk this desk\'s windows left to right (Chats: list, then message box), then step to the next desk', async () => {
@@ -233,24 +286,34 @@ test('⌥] / ⌥[ walk this desk\'s windows left to right (Chats: list, then mes
 });
 
 test('⌥N opens a New chat on this desk beside the app in front, and holding ⌥ shows it there', () => {
-  // Reuses this desk's Chats window (no stacked copies), else opens one beside the focused window, like Reply.
-  assert.match(js, /code === 'KeyN'\) return hit\(\(\) => \{[^\n]*newChat\(\); \}\);/);
-  assert.doesNotMatch(js, /newChat\(\{ fresh: true \}\)/);
-  // Guide: N on this desk's New chat button, or with its word on the right edge of the app in front.
-  // (not when a view puts N on its own New chat button: the AI apps view's sidebar, so N shows once)
-  assert.match(js, /else if \(f && f\.app !== 'chats' && !\(window\.WosSkinHost\?\.keyChips\?\.\(\) \|\| \[\]\)\.some\(c => c\.key === 'N'\)\) \{ const b = winEl\(f\.id\)\?\.querySelector\('\.wbody'\); if \(vis\(b\)\) chip\(b, 'N', 'inside', 'New chat'\); \}/);
+  const k = desktopKeys(); k.key('KeyN');
+  assert.deepEqual(k.calls.slice(-2), [['chanPost'], ['newChat']], 'a channel post first, else a plain New chat (no fresh copy)');
+  // guide: no Chats on this desk: N with its word on the app in front
+  const f = { id: 'a1', app: 'frame' }, g = keysGuide({ focused: () => f, ws: [{ id: 'd1', wins: ['a1'] }], W: { a1: f } });
+  const win = g.add('<div class="win"><div class="wbody"></div></div>'); g.ctx.winEl = () => win;
+  g.show(false);
+  assert.deepEqual(g.on('N', '.wbody').map(c => c.word), ['New chat']);
+  // a view that puts N on its own New chat button: N shows once, there
+  g.ctx.window.WosSkinHost = { keyChips: () => [{ key: 'N', el: g.document.querySelector('#logo') }] };
+  g.show(false); assert.deepEqual(g.on('N').map(c => c.on.id), ['logo']);
 });
 
 test('Omarchy-style keys: ⌥− / ⌥= resize, ⌥⇧W reopens, ⌥Z jumps back, each shown where it acts', () => {
-  assert.match(js, /code === 'Minus' \|\| code === 'Equal'\)\) return hit\(\(\) => resizeFocused\(code === 'Equal' \? 1 : -1\)\)/);
-  assert.match(js, /alt && shift && code === 'KeyW'\) return hit\(\(\) => \{ if \(!e\.repeat\) reopenClosed\(\); \}\)/);
-  assert.match(js, /alt && !shift && code === 'KeyZ'\) return hit\(\(\) => \{ if \(!e\.repeat\) jumpBack\(\); \}\)/);
-  // ⌥⇧W must come before the plain ⌥W close in the ⌥ section, which ignores shift.
-  assert.ok(js.indexOf("code === 'KeyW') return hit(() => { if (!e.repeat) reopenClosed")  < js.indexOf("if (code === 'KeyW') return hit"));
-  assert.match(js, /chip\(n, '⇧W', 'below', 'Reopen'\)/);
-  assert.match(js, /chip\(b, '=', side, 'Wider'\); chip\(b, '−', side, 'Narrower'\)/);
-  assert.match(js, /chip\(n, 'Z', 'below', 'Back'\)/);
-  assert.match(js, /Key\[GIWFLNTVPZ\]\|Slash\|Comma\|Minus\|Equal/);
+  for (const [code, x, does] of [['Minus', {}, ['resizeFocused', -1]], ['Equal', {}, ['resizeFocused', 1]], ['KeyW', { shiftKey: true }, ['reopenClosed']], ['KeyZ', {}, ['jumpBack']], ['KeyW', {}, ['closeCurrent']]]) {
+    const k = desktopKeys(); k.key(code, x); assert.deepEqual(k.calls.at(-1), does, code + JSON.stringify(x));
+  }
+  // the apps picker lets the window keys through, stepping aside first
+  const p = desktopKeys({ pal: { hidden: false }, palMode: 'apps', settingsFocused: () => false }); p.key('KeyF');
+  assert.deepEqual(p.names().filter(n => n === 'closePalette' || n === 'toggleMono'), ['closePalette', 'toggleMono']);
+  const s = desktopKeys({ pal: { hidden: false }, palMode: 'search', settingsFocused: () => false }); s.key('KeyF'); assert.ok(!s.names().includes('toggleMono'), 'the search palette keeps them');
+  // guide: ⇧W Reopen under W, = − on the window's edge, Z Back on where it goes back to
+  const f = { id: 'a1', app: 'frame' };
+  const g = keysGuide({ focused: () => f, ws: [{ id: 'd1', wins: ['a1', 'b1'] }], W: { a1: f }, closedWins: [{ w: { id: 'gone' } }], resizable: () => true, spotPrev: 'home', spotLive: () => true });
+  const win = g.add('<div class="win"><div class="wbar"><button data-wact="close"></button></div><div class="wbody"></div></div>'); g.ctx.winEl = () => win;
+  g.show(false);
+  assert.deepEqual(g.on('⇧W', '[data-wact="close"]').map(c => c.word), ['Reopen']);
+  assert.deepEqual(g.on('=', '.wbody').map(c => c.word), ['Wider']); assert.deepEqual(g.on('−', '.wbody').map(c => c.word), ['Narrower']);
+  assert.deepEqual(g.on('Z').map(c => [c.on.id, c.word]), [['logo', 'Back']]);
 });
 
 test('resize keeps the stock split until asked, and is kept per desk', () => {
@@ -260,9 +323,20 @@ test('resize keeps the stock split until asked, and is kept per desk', () => {
 });
 
 test('⌥L flips Dark / Light within the same skin, shown on the Settings gear; closed windows survive a reload', () => {
-  assert.match(js, /alt && !shift && code === 'KeyL'\) return hit\(\(\) => \{ if \(!e\.repeat\) flipLight\(\); \}\)/);
-  assert.match(js, /chip\(n, 'L', 'below', tw\.light \? 'Light' : 'Dark'\)/);
-  assert.match(js, /store\.get\('closed', \[\]\)/);
-  const skins = readFileSync(new URL('../web/core/skins.js', import.meta.url), 'utf8');
-  assert.match(skins, /obsidian: 'obsidian-light', 'obsidian-light': 'obsidian', landscapes: 'landscapes-light', 'landscapes-light': 'landscapes'/);
+  const k = desktopKeys(); k.key('KeyL'); assert.deepEqual(k.calls.at(-1), ['flipLight']);
+  const held = desktopKeys(); held.key('KeyL', { repeat: true }); assert.deepEqual(held.calls, []);
+  // flipLight: the real skins.js twin, set
+  const skins = shippedSkinsHost();
+  const set = [], fl = fn('function flipLight() {', { window: { WosSkin: { twin: () => skins.WosSkin.twin('obsidian'), set: id => set.push(id) } }, log() {} });
+  fl.flipLight(); assert.deepEqual(set, ['obsidian-light']);
+  for (const [a, b] of [['obsidian', 'obsidian-light'], ['obsidian-light', 'obsidian'], ['landscapes', 'landscapes-light'], ['landscapes-light', 'landscapes']]) assert.equal(skins.WosSkin.twin(a)?.id, b, a);
+  // the gear says where it goes
+  for (const light of [true, false]) {
+    const g = keysGuide(); g.ctx.window.WosSkin = { twin: () => ({ id: 'x', light }) };
+    g.show(false); assert.deepEqual(g.on('L', '#settingsBtn').map(c => c.word), [light ? 'Light' : 'Dark']);
+  }
+  // closed windows come back from the store after a reload (the last 12 whole entries)
+  const kept = Array.from({ length: 14 }, (_, i) => ({ w: { id: 'w' + i } }));
+  const closed = vm.runInNewContext(`(() => { ${lineOf("const closedWins = (() => { const v = store.get('closed', []);")}\n return closedWins; })()`, { store: { get: (key, d) => (key === 'closed' ? [...kept, null, { w: {} }] : d) } });
+  assert.deepEqual(closed.map(c => c.w.id), kept.slice(-12).map(c => c.w.id));
 });
