@@ -2,10 +2,6 @@
  "DesktopFrameHotkeysFixture.test.mjs": [
   "real browser oracle remains exact; no force clicks or alternate expected desktop indexes"
  ],
- "activity-move-to-channel.test.mjs": [
-  "the AI apps menus draw it as \"Move to channel…\" (filing still last); the host passes it to the shell",
-  "both shells open Chats\\' own picker through CHATS.moveToChannel, without taking the owner to Chats"
- ],
  "activity-ready-badge.test.mjs": [
   "issue 1504: the shells read the one count (orb badge, desk marks, phone Home card, desktop Home line)",
   "issue 1517: desktop Home line, its card, the status bar and the phone Ready card read activityHome"
@@ -30,11 +26,6 @@
   "phone Chats parts reach the layout as shared WizChatsHost surfaces through the skin host"
  ],
  "ai-apps-view.test.mjs": [
-  "scoped and quiet: every rule needs the worn layout on the phone; skin tokens only; no timers or storage of its own",
-  "desktop scoped and quiet: every rule needs the worn layout on the desktop; skin tokens only; measured sizes",
-  "round 2 shapes: rounded like the native apps (measured), icon-only drawer foot, an icon grid for the open apps",
-  "round 5 + 7 desktop: no home button in the top row (round 7), the switcher on Home only, the sections, the count on ◫",
-  "round 6: a tidy composer: the model chip is a control on the right (never a centred label), the orb in the mic\\'s slot, Snooze / Archive never clipped",
   "round 7 + 15 desktop: the app panel and the docked chat are back (Arc), calm transitions, the fuel gauge in the sidebar, the orb in the middle of the main area",
   "desktop ⌥ keys in the AI apps view (round 21): mnemonic letters, every key on its target, no app letters, no legend",
   "desktop app panel: an app\\'s title-bar tools (Morning Report\\'s ‹ date › PDF) show in the panel\\'s header; its own title bar stays laid out (titlebar.shown is true), out of sight",
