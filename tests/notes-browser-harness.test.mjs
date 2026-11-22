@@ -1,15 +1,22 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import vm from 'node:vm';
 import { createRequire } from 'node:module';
 import { withShellParts } from './fixtures/shell-parts.mjs';
 const { assertReadOnlyFixture } = createRequire(import.meta.url)('./notes-fixture-write-policy.cjs');
 const read = p => withShellParts(readFileSync(new URL(p, import.meta.url), 'utf8'));
 
 test('Notes browser entry matches the production Alt+KeyO apps shortcut', () => {
-  const desktop = read('../web/desktop/desktop.js');
+  // the production key line, run: Alt+O (no Shift) opens the apps picker once per press
+  const keys = readFileSync(new URL('../web/desktop/desktop-pickany.js', import.meta.url), 'utf8');
+  const i = keys.indexOf("    if (alt && !shift && code === 'KeyO')"), line = keys.slice(i, keys.indexOf('\n', i));
+  const opened = [], key = vm.runInNewContext(`(alt, shift, code, e) => { ${line} return 'none'; }`, { hit: f => (f(), true), palToggle: k => opened.push(k) });
+  assert.equal(key(true, false, 'KeyO', {}), true); assert.deepEqual(opened, ['apps']);
+  assert.equal(key(true, true, 'KeyO', {}), 'none', 'Alt+Shift+O is something else');
+  key(true, false, 'KeyO', { repeat: true }); assert.deepEqual(opened, ['apps'], 'a held key opens it once');
+  // the browser harness presses that same key
   const harness = read('./qa-notes-sigil.cjs');
-  assert.match(desktop, /if \(alt && !shift && code === 'KeyO'\).*palToggle\('apps'\)/);
   assert.match(harness, /page\.keyboard\.press\('Alt\+o'\)/);
   assert.doesNotMatch(harness, /keyboard\.press\('(?:Control|Meta)\+o'\)/);
   assert.match(harness, /locator\('#palette:not\(\[hidden\]\)'\)\.waitFor/);
