@@ -2,6 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { between, block, runRecording } from './fixtures/source-slice.mjs';
+import { createDocument } from './fixtures/mini-dom.mjs';
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 
 // The Chats "Not up to date" notice is one quiet row (James, 7 Nov 2026: "a single row instead of a big pill button
@@ -85,7 +87,15 @@ test('CSS: one line, ellipsis, a text action (no pill) with a 44px touch target 
 });
 
 test('the action opens the Troubleshooter exactly as before', () => {
-  assert.match(chats, /if \(e\.target\.closest\('\[data-chtroubleshoot\]'\)\) \{ window\.WizReach\?\.open\(\); return true; \}/);
-  // The send pill and the thread read error keep their own Open Troubleshooter button (only this notice changed).
-  assert.match(chats, /const troubleshoot = '<button type="button" class="pbtn" data-chtroubleshoot>Open Troubleshooter<\/button>';/);
+  // the real Chats click handler (core/chats-bind.js) on the drawn notice, and on the send pill's own button
+  const pill = runRecording(between(chats, "  const troubleshoot = '<button", '\n') + '\nglobalThis.html = troubleshoot;', {}).html;
+  const doc = createDocument(); doc.body.innerHTML = bar(STATES.off) + pill;
+  let opened = 0;
+  const ctx = runRecording(block(chats, '  function click(e, id) {') + '\nglobalThis.click = click;', { INC: null, W: {}, window: { WizReach: { open: () => opened++ } }, H: { win: () => null } });
+  for (const sel of ['.ch-sync-act', '.pbtn']) {
+    const before = opened;
+    assert.equal(ctx.click({ target: doc.querySelector(sel) }, 'w1'), true, sel);
+    assert.equal(opened, before + 1, sel + ' opens the Troubleshooter');
+  }
+  assert.equal(doc.querySelector('.pbtn').textContent, 'Open Troubleshooter', 'the pill keeps its own button');
 });
