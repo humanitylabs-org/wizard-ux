@@ -30,6 +30,7 @@ test('every exported shell global has a COMPONENTS.md entry', () => {
   assert.deepEqual([...new Set(missing)], [], 'Add a row (or a Shell plumbing entry) to docs/COMPONENTS.md for: ' + missing.join(', '));
 });
 
+// static-rule: inventory: every file path the components doc names is a real file (a dead link check over the doc)
 test('every path COMPONENTS.md names exists', () => {
   const paths = [...ticks].filter(t => /^(web|android|docs|tools|tests)\//.test(t));
   assert.ok(paths.length > 20);
