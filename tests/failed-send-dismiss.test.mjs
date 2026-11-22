@@ -1,34 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import vm from 'node:vm';
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
-const source = readFileSync(new URL('../web/outbox.js', import.meta.url), 'utf8');
+import { client } from './fixtures/outbox-client.mjs';
 const chats = withParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8')) + readFileSync(new URL('../web/core/chats-outbox.js', import.meta.url), 'utf8');
-function client(rows = new Map(), broken = false) {
-  const calls = [], timers = new Set();
-  const indexedDB = { open() {
-    const r = {};
-    queueMicrotask(() => {
-      r.result = { close() {}, objectStoreNames: { contains: () => true }, transaction() {
-        if (broken) throw new Error('storage unavailable');
-        const tx = { objectStore() { return {
-          getAll() { return { result: [...rows.values()].map(x => structuredClone(x)) }; },
-          put(value) { rows.set(value.id, structuredClone(value)); return {}; }, delete(id) { rows.delete(id); return {}; }
-        }; } }; setImmediate(() => tx.oncomplete?.()); return tx;
-      } }; r.onsuccess();
-    }); return r;
-  } };
-  const c = { console, Blob, AbortController, AbortSignal, indexedDB,
-    document: { documentElement: { dataset: {} }, body: null, addEventListener() {} },
-    localStorage: { getItem: () => null, removeItem() {}, setItem() { if (broken) throw new Error('quota'); } },
-    addEventListener() {}, clearTimeout,
-    setTimeout(fn, ms) { const t = setTimeout(fn, ms); t.unref(); timers.add(t); return t; },
-    fetch: async (...args) => { calls.push(args); throw new Error('network forbidden'); },
-    WosModels: { snapshot: (_, route) => route, resolveRoute: async route => route },
-  }; c.window = c; vm.runInNewContext(source, c);
-  return { api: c.WosOutbox, calls, close() { for (const t of timers) clearTimeout(t); } };
-}
 const item = (id, extra = {}) => ({ id, kind: 'reply', state: 'failed', sessionId: 'test-thread', text: 'Switch', error: 'No confirmed model route', createdAt: Date.now(), ...extra });
 const tick = () => new Promise(r => setTimeout(r, 25));
 // This is an outbox custody unit, not routed UI parity. Actual Focus/list/thread coverage:

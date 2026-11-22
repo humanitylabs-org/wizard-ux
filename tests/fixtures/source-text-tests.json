@@ -10,11 +10,6 @@
   "issue 1504: the shells read the one count (orb badge, desk marks, phone Home card, desktop Home line)",
   "issue 1517: desktop Home line, its card, the status bar and the phone Ready card read activityHome"
  ],
- "agent-apps-term.test.mjs": [
-  "agent page: sections, empty line, Add button, picker title and note say Apps, never Wizard apps",
-  "stock Apps sheet group is headed Apps",
-  "share sheet: People → Apps → Other apps"
- ],
  "agent-inbox-alert-feedback.test.mjs": [
   "the buttons are wired in the click handler and the new rules are scoped to the switch with skin tokens"
  ],
@@ -429,11 +424,6 @@
  ],
  "edge-peek.test.mjs": [
   "wired for everyone: both shells load it, core CSS is unscoped with reduced motion, the hint names the edge"
- ],
- "errors-voice-dismiss.test.mjs": [
-  "Errors voice rows are rendered inside [data-errob] with their own Dismiss",
-  "generic bubble Dismiss skips Errors voice rows so chat-power handles them",
-  "dismissBubble still refuses failed items (custody rule unchanged)"
  ],
  "failed-send-dismiss.test.mjs": [
   "thread bubble and single-message pill expose Dismiss; click uses item API, never run Stop"
