@@ -5,37 +5,6 @@
  "agent-inbox-open-send.test.mjs": [
   "the buttons are wired: the Running view row, the header, the row menu and the click handler"
  ],
- "agent-inbox-running.test.mjs": [
-  "Chats reads the inbox only through the switch, and the Running view sits on the main Chats list"
- ],
- "agent-inbox-sweep-card.test.mjs": [
-  "the buttons are wired in the click handler and every card rule is scoped to the switch with skin tokens"
- ],
- "ai-apps-channels.test.mjs": [
-  "Chats paints the side pane: tabs, then the channel list or a feed with its box; the layout wires it"
- ],
- "ai-apps-classic-boundary.test.mjs": [
-  "AI apps has no Classic-only selectors (the migration allowlist is empty)",
-  "phone Chats parts reach the layout as shared WizChatsHost surfaces through the skin host"
- ],
- "ai-apps-view.test.mjs": [
-  "round 7 + 15 desktop: the app panel and the docked chat are back (Arc), calm transitions, the fuel gauge in the sidebar, the orb in the middle of the main area",
-  "desktop ⌥ keys in the AI apps view (round 21): mnemonic letters, every key on its target, no app letters, no legend",
-  "desktop app panel: an app\\'s title-bar tools (Morning Report\\'s ‹ date › PDF) show in the panel\\'s header; its own title bar stays laid out (titlebar.shown is true), out of sight",
-  "round 9 desktop: no veil over the skin\\'s background (Home, beside a panel); only panels and the composer have surfaces",
-  "round 10 phone: on light skins the Home icons are full colour (the app colour plate, a white glyph) with readable names; dark skins untouched",
-  "round 14: Archive stays quieter but readable on the light skins (sidebar, rail, phone drawer)",
-  "round 14: a full-width footer along an app\\'s bottom is lifted clear of the orb even when its body covers the probe point (Wisdom\\'s page count)",
-  "auto-tidy runs hourly, not on every 10 s timer beat (api.after is capped)",
-  "round 18 core: Ready\\'s order is the stock Chats Filter choice (its key, the box preferences); rows carry the stock Priority rank",
-  "round 19 item 3 desktop: a quieter expanded sidebar (small muted normal-weight headers, Ready\\'s amber count kept, Archive quietest); rows unchanged",
-  "notification stack (Miguel, 4 Nov 2026): one stable newest-first list, the open one expanded in place with its own buttons",
-  "round 20 items 7 + 8: a quiet notification thread (source in the header, a thin amber edge, one muted routing line with a menu, Resolve); the open item\\'s keys",
-  "round 21: the views keep the open model to themselves: the shared chrome never holds it; the stock paths stay in core",
-  "AI apps view: Now playing is only small bars on the playing app\\'s own icon (no pill, no list, no slot); hover = pause, a click pauses without opening the app; ⌥P on that icon",
-  "desktop app panel: an app with its companion pane (Video Editor video + Feedback) shows side-by-side CSS columns and a wider panel, never two windows stacked in one box, even when the shell has not re-tiled that desk (James, 6 Nov 2026)",
-  "agent choices: the shell side reuses Chats\\' Focus (no second router) and the layout API exposes it"
- ],
  "android-connect.test.mjs": [
   "QR scanner follows the phone orientation (zxing CaptureActivity is landscape by default)"
  ],
@@ -268,38 +237,6 @@
  ],
  "mic-setting.test.mjs": [
   "Settings registers the Microphone group next to Voice"
- ],
- "miguel-machines-home.test.mjs": [
-  "stock Home markup carries an empty home-main slot that takes no space; core never names the package",
-  "machines-home: read-only, no owner data in the bundle",
-  "machines-home: one inline map, the same on every workspace",
-  "machines-home: simple at rest, more on tap (one AI gauge, storage size, one details toggle)",
-  "machines-home: calm repaints (last readings first, motion once, parts redraw only when they change)",
-  "Home buttons that ask the agent open Chats with the draft even when no Chats window is on this desk",
-  "Settings › Network & security fills even before Home has been shown",
-  "second review: no unverified all-clear, stock loading state, Settings dialog keeps focus, Back closes the mic menu",
-  "third review: AI page offers sign-in with no accounts, backup read failure is not \"no backup\", tab label never claims an unchecked all-clear",
-  "fourth review: sign-in state survives normalisation, managed workspaces get honest System pages, Dictate keeps its field through the mic menu",
-  "fifth review: System pages open by deep link; phone Ready opens the unfiltered list",
-  "sixth review: stale AI and backup readings say so; the AI page is scoped on managed workspaces",
-  "seventh review: one switch per Home map group; desktop Ready leaves the open thread",
-  "eighth review: only stamped assets are immutable; a child sign-out survives a stale group",
-  "ninth review: failed first reads say so (AI accounts, network); availability changes repaint",
-  "tenth review: Miguel\\'s Home opens Settings as the panel; the glance counts only this Wizard\\'s people",
-  "twelfth review: unread chat counts are unknown, not zero",
-  "thirteenth review: Resources stays in Settings; the owner\\'s meter pick holds through an outage; reachability is not claimed",
-  "fourteenth review: only Wizard machines are helpers; a stale probe is a last reading, not offline",
-  "fifteenth review: the desktop bar keeps its readings live over open windows",
-  "sixteenth review: an unavailable group reaches its accounts; a saved or aged AI reading is a last reading",
-  "seventeenth review: a new My skin shows one switch per replacement group and never saves the hidden member off",
-  "eighteenth review: machines from a saved or failed-read snapshot are last readings, not online",
-  "nineteenth review: a signed-out account is never a live usage reading; a vanished managed Wizard falls back before painting",
-  "twentieth review: a deferred System link is cancelled by a newer link, Back or the user moving on",
-  "twenty-first review: the default model\\'s credit accounts lead the meter; an aged in-memory device reading is not fresh",
-  "twenty-second review: the all-clear needs a dated check; any cached machine state is a last reading",
-  "final review: personal-device presence needs a fresh reading; meter edits keep unreadable picks; any provider can be the default",
-  "every Back path cancels a waiting System link",
-  "machines-home: Home is one glance; the full views live in Settings › System"
  ],
  "mobile-update-banner-placement.test.mjs": [
   "the shared phone update banner stays under the status bar"
