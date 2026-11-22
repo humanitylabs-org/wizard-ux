@@ -4,38 +4,49 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import { withAppParts } from './fixtures/app-parts.mjs';
 import { runTitleContrast } from './fixtures/r8A-title-contrast.mjs';
+import { createDocument } from './fixtures/mini-dom.mjs';
+import { valueOf } from './fixtures/r7A-css.mjs';
 
 // Borderless app windows paint their heading in the app's colour (dark default, or the colour the phone measured along
 // the app's top), so the title and buttons there must not use the skin's ink: Landscapes Light put its dark ink on the
 // dark default heading. Behaviour (real Chromium, every skin, both shells): tools/qa-app-window-title-contrast.cjs.
 const css = fs.readFileSync(new URL('../web/core/skin-frame.css', import.meta.url), 'utf8');
 const app = withAppParts(fs.readFileSync(new URL('../web/app.js', import.meta.url), 'utf8'));
-const rule = (sel) => { const i = css.indexOf(sel + ' {'); return i < 0 ? '' : css.slice(i, css.indexOf('}', i)); };
 // Named-colour inks (the style check bans rgb()/hex literals): white, or black mixed toward white by N%.
 const rgbOf = (v) => v.trim() === 'white' ? 'rgb(255, 255, 255)' : v.trim() === 'black' ? 'rgb(0, 0, 0)' : (/^color-mix\(in srgb, black (\d+)%, white\)$/.exec(v.trim()) || [])[1]
   ? `rgb(${Array(3).fill(Math.round(255 * (100 - /black (\d+)%/.exec(v)[1]) / 100)).join(', ')})` : v;
 const lum = (s) => { const [r, g, b] = rgbOf(s).match(/[\d.]+/g).map(Number), f = (c) => (c /= 255) <= .03928 ? c / 12.92 : ((c + .055) / 1.055) ** 2.4; return .2126 * f(r) + .7152 * f(g) + .0722 * f(b); };
 const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + .05) / (y + .05); };
-const UNTHEMED = 'html[data-skin-frame="borderless"] .win:has(> .wbody iframe):not(.wz-themed):not(:has(> .wbody .st-embed iframe)) > .wbar';
-const LIGHT = 'html[data-skin-frame="borderless"] .win.edge-light:has(> .wbody iframe):not(.wz-themed):not(:has(> .wbody .st-embed iframe)) > .wbar';
+
+// A borderless app window (and Settings, which embeds a page) through the real skin-frame.css cascade, var() resolved.
+function win({ shell = 'phone', light = false, settings = false } = {}) {
+  const doc = createDocument(), root = doc.documentElement;
+  root.setAttribute('data-skin-frame', 'borderless'); root.setAttribute('data-shell', shell);
+  root.setAttribute('style', '');
+  doc.body.innerHTML = `<div class="win${light ? ' edge-light' : ''}"><div class="wbar"><b class="wtitle">Notes</b></div><div class="wbody">${settings ? '<div class="st-embed"><iframe></iframe></div>' : '<iframe></iframe>'}</div></div>`;
+  // mini-dom reads `:has(> A B)` as "a child that is B": spell it as the equivalent `:has(> A:has(B))`
+  const real = css.replaceAll(':has(> .wbody iframe)', ':has(> .wbody:has(iframe))').replaceAll(':has(> .wbody .st-embed iframe)', ':has(> .wbody:has(.st-embed iframe))');
+  const sheet = 'html { --ink: #222222; }\n' + real; // a light skin's dark ink, which the heading must not inherit
+  const w = doc.querySelector('.win'), title = doc.querySelector('.wtitle');
+  return { ink: valueOf(title, sheet, '--ink'), bg: valueOf(w, sheet, 'background') };
+}
+const hex = v => (/^#([0-9a-f]{6})$/i.exec(v.trim()) ? `rgb(${[1, 3, 5].map(i => parseInt(v.trim().slice(i, i + 2), 16)).join(', ')})` : v);
 
 test('an unthemed app heading carries its own light ink, readable on the dark default heading', () => {
-  const r = rule(UNTHEMED);
-  assert.ok(r, 'skin-frame.css sets the ink of an unthemed app window heading');
-  const ink = /--ink:\s*([^;]+);/.exec(r)?.[1];
-  assert.ok(ink, 'the rule sets --ink (title and buttons read it)');
-  for (const bg of ['rgb(5, 3, 12)', 'rgb(15, 16, 20)']) // desktop and phone fallbacks in the same file
-    assert.ok(ratio(ink, bg) >= 4.5, `ink ${ink} on ${bg}: ${ratio(ink, bg).toFixed(2)}`);
-  assert.match(css, /#05030c/); assert.match(css, /#0f1014/);
+  for (const shell of ['phone', 'desktop']) {
+    const w = win({ shell });
+    assert.notEqual(w.ink, '#222222', `${shell}: the heading does not keep the skin's ink`);
+    assert.match(w.bg, /^#[0-9a-f]{6}$/i, `${shell}: the dark default heading (${w.bg})`);
+    assert.ok(ratio(w.ink, hex(w.bg)) >= 4.5, `${shell}: ink ${w.ink} on ${w.bg}: ${ratio(w.ink, hex(w.bg)).toFixed(2)}`);
+  }
 });
 
 test('a heading measured as light gets a dark ink; Settings keeps the skin ink', () => {
-  const ink = /--ink:\s*([^;]+);/.exec(rule(LIGHT))?.[1];
-  assert.ok(ink, 'skin-frame.css sets a dark --ink for .edge-light app headings');
-  assert.ok(ratio(ink, 'rgb(250, 250, 250)') >= 4.5);
-  assert.ok(UNTHEMED.includes(':not(:has(> .wbody .st-embed iframe))'));
+  const light = win({ light: true });
+  assert.ok(ratio(light.ink, 'rgb(250, 250, 250)') >= 4.5, `ink ${light.ink} on a light heading`);
+  assert.equal(win({ settings: true }).ink, '#222222', 'Settings (an embedded page) keeps the skin ink');
+  assert.equal(win({ settings: true, light: true }).ink, '#222222');
 });
-
 // The phone's real frameEdge (web/app.js), run in a vm against a fake app document and a canvas that reads back the
 // rgb() colour it was filled with.
 function edge({ bg = '', top = '' }) {
@@ -64,8 +75,7 @@ test('the phone marks a light measured heading (.edge-light) from the colour it 
 
 // Cover the switch boundary as well as near-white; a softened black failed midtone titles.
 test('both title inks meet 4.5:1 throughout the neutral painted colour range', () => {
-  const dark = /--ink:\s*([^;]+);/.exec(rule(LIGHT))[1];
-  const light = /--ink:\s*([^;]+);/.exec(rule(UNTHEMED))[1];
+  const dark = win({ light: true }).ink, light = win().ink;
   for (let c = 0; c <= 255; c++) {
     const bg = `rgb(${c}, ${c}, ${c})`;
     assert.ok(ratio(lum(bg) > .18 ? dark : light, bg) >= 4.5, bg);
