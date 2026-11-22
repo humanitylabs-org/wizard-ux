@@ -37,7 +37,7 @@ export function runPart(file, ns, name, given = {}, ctx = {}) {
 }
 
 // tests/fixtures/mini-dom.mjs answers no `:scope`; the shells ask `el.querySelector(':scope > .x')` for a direct child.
-// scoped(doc) teaches that document's elements `:scope > X` (X: a selector on the child itself) and `:scope X`.
+// scoped(doc) teaches that document's elements `:scope > X` (X: a selector on the child itself) and `:scope X`,
 import { matches } from './mini-dom.mjs';
 export function scoped(doc) {
   const proto = Object.getPrototypeOf(doc.body);
@@ -49,6 +49,8 @@ export function scoped(doc) {
   };
   proto.querySelectorAll = function (sel) { return pick(this, sel) ?? all.call(this, sel); };
   proto.querySelector = function (sel) { const p = pick(this, sel); return p ? p[0] || null : one.call(this, sel); };
+  // and el.after(...nodes), which mini-dom lacks
+  proto.after ||= function (...nodes) { const p = this.parentNode, next = p.childNodes[p.childNodes.indexOf(this) + 1] || null; for (const n of nodes) p.insertBefore(n, next); };
   proto.r5bScoped = true;
   return doc;
 }
