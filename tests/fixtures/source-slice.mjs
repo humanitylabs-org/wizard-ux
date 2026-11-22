@@ -78,13 +78,12 @@ export function recorder(name, calls) {
 
 const KEYWORDS = new Set(('break case catch class const continue debugger default delete do else export extends finally for function if import in '
   + 'instanceof let new return super switch this throw try typeof var void while with yield async await of null true false undefined NaN Infinity arguments get set static').split(' '));
-// Run `code` in `ctx`. Every identifier in it (outside strings and comments, not after a dot) that is neither a JS
+// Run `code` in `ctx`. Every identifier in it (outside comments, not after a dot; words inside strings too, harmlessly) that is neither a JS
 // global, a keyword nor already in ctx becomes a recorder() first, so names a slice only reaches when called are
 // covered too; names the slice declares itself shadow them. Returns ctx.
 export function runRecording(code, ctx = {}, calls = (ctx.calls ||= [])) {
   vm.createContext(ctx);
-  const bare = code.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:\\])\/\/[^\n]*/g, '$1 ')
-    .replace(/'(?:\\.|[^'\\\n])*'|"(?:\\.|[^"\\\n])*"/g, "''");
+  const bare = code.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:\\])\/\/[^\n]*/g, '$1 ');
   const globals = new Set(vm.runInContext('Object.getOwnPropertyNames(globalThis)', ctx));
   for (const m of bare.matchAll(/(?<![\w$.])([A-Za-z_$][\w$]*)\b/g)) {
     const n = m[1];
