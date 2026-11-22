@@ -136,13 +136,32 @@ test('a take stopped while the phone is still transcribing it is never enqueued 
   assert.equal(f.calls.length, 0, 'nothing reached Wizard');
 });
 
-test('composer shows Stop for a pending send without a run id; every Stop goes through cancelSend with the run id', () => {
+test('composer shows Stop for a pending send without a run id; every Stop goes through cancelSend with the run id', async () => {
   const line = chatsSrc.match(/const canStop = [^\n]+/)[0];
-  assert.doesNotMatch(line, /working && !!s\?\.runId/, 'Stop no longer waits for the run id');
-  assert.match(line, /s\.pend !== undefined/);
-  const click = chatsSrc.slice(chatsSrc.indexOf("if (e.target.closest('[data-chstop]'))")).slice(0, 700);
-  assert.match(click, /stopPendingSend\(w, w\.thread, s\.runId \|\| ''\)/);
-  assert.match(click, /LIVE\.stop\(s\.runId\)/, 'fallback: the plain run stop is kept');
+  const canStop = (s, working = true, held = false) => vm.runInNewContext(`${line}\ncanStop`, { s, working, held });
+  assert.equal(canStop({ status: 'running', pend: 0 }), true, 'a pending send (no run id yet) already shows Stop');
+  assert.equal(canStop({ status: 'running', runId: 'r1' }), true);
+  assert.equal(canStop({ status: 'running' }), false, 'nothing pending, no run: no Stop');
+  assert.equal(canStop({ status: 'stopping', runId: 'r1' }), false, 'already stopping');
+  assert.equal(canStop({ status: 'running', pend: 0 }, true, true), false, 'a send a restart holds is saved, not running');
+  assert.equal(canStop({ status: 'idle', pend: 0 }, false), false);
+  // The thread's [data-chstop] click line, with a stub LIVE.
+  const click = chatsSrc.split('\n').find(l => l.includes("if (e.target.closest('[data-chstop]'))"));
+  const tap = (LIVE) => {
+    const calls = [], w = { id: 'w1', thread: 't1' };
+    const ctx = { LIVE, w, calls, stopTapped: b => calls.push(['tapped', b.id]), stopPendingSend: (...a) => calls.push(['stopPendingSend', a[0].id, a[1], a[2]]),
+      toast: (...a) => calls.push(['toast', a[1]]), renderThreadNow() {} };
+    vm.runInNewContext(`function click(e) {\n${click}\n  return false;\n}\nthis.ok = click({ target: { closest: s => (s === '[data-chstop]' ? { id: 'stop' } : null) } });`, ctx);
+    assert.equal(ctx.ok, true);
+    return calls;
+  };
+  const stops = [];
+  assert.deepEqual(tap({ session: () => ({ id: 't1' }), cancelSend() {}, stop: async id => stops.push(id) }), [['tapped', 'stop'], ['stopPendingSend', 'w1', 't1', '']], 'no run id yet: withdraw the send');
+  assert.deepEqual(tap({ session: () => ({ id: 't1', runId: 'r9' }), cancelSend() {}, stop: async id => stops.push(id) }), [['tapped', 'stop'], ['stopPendingSend', 'w1', 't1', 'r9']]);
+  assert.deepEqual(stops, [], 'every Stop goes through cancelSend');
+  // Fallback: a LIVE without cancelSend keeps the plain run stop.
+  assert.deepEqual(tap({ session: () => ({ id: 't1', runId: 'r9' }), stop: async id => { stops.push(id); } }), [['tapped', 'stop'], ['toast', 'Stopping…']]);
+  assert.deepEqual(stops, ['r9']);
 });
 
 // The real cancelSend block from live.js, in a vm with a stub outbox and L.stop. One synthetic thread per agent kind.
