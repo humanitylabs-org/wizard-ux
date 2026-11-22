@@ -4,6 +4,9 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
 import { withWebParts } from './fixtures/web-parts.mjs';
+import { createDocument } from './fixtures/mini-dom.mjs';
+import { cascade } from './fixtures/mini-css.mjs';
+import { block, runRecording } from './fixtures/source-slice.mjs';
 const read=p=>withWebParts(readFileSync(new URL('../'+p,import.meta.url),'utf8'));
 async function project(item){
  const window={WosSkinHost:{inboxList:true},WizCore:{backendApps:()=>[{id:'notifications'}]},dispatchEvent(){}};
@@ -46,9 +49,27 @@ test('legacy short alerts render once but long original bodies remain complete',
  }
 });
 test('opened alert original uses the shared scroller without bottom sticking or losing its place',()=>{
- const power=read('web/core/chat-power.js'),chats=read('web/core/chats.js'),css=read('web/core/chats.css');
- assert.ok(power.indexOf('if (o.notification)')<power.indexOf("if (sid === '__new__' || !o.turns)"));
- assert.match(power,/c\.placeOptions\.notificationScroll = scrollBox\(nb\)\.scrollTop/);
- assert.match(chats,/el\.dataset\.notificationId === NV\.id/);
- assert.match(css,/\.ch-notif-original\s*\{[^}]*white-space: pre-wrap;[^}]*overflow-wrap: anywhere;/);
+ const raw=f=>readFileSync(new URL('../web/core/'+f,import.meta.url),'utf8');
+ const power=raw('chat-power.js'),paint=raw('chats-threadpaint.js'),css=read('web/core/chats.css');
+ // placing an opened alert (real position): its own reading place, never the bottom of an empty New chat
+ const C={};
+ const place=runRecording(block(power,'  function position(w, el, nb, o) {')+'\nglobalThis.position=position;',{ch:()=>C,onScreen:()=>true});
+ assert.equal(place.position({id:'w1',thread:'__new__'},{}, {}, {notification:true,notificationScroll:420}),true);
+ const restored=place.calls.filter(c=>c[0]==='restore').map(c=>JSON.parse(JSON.stringify(c[2])));
+ assert.deepEqual(restored,[{scrollTop:420}],'restored to where he was reading, not atBottom');
+ place.calls.length=0; place.position({id:'w1',thread:'__new__'},{}, {}, {});
+ assert.deepEqual(place.calls.filter(c=>c[0]==='restore').map(c=>JSON.parse(JSON.stringify(c[2]))),[{atBottom:true}],'a plain New chat still sits at the bottom');
+ // scrolling it (real capture) records that place through the shared scroll box
+ const cc={placeOptions:{notification:true}};
+ const cap=runRecording(block(power,'  function capture(nb) {')+'\nglobalThis.capture=capture;',{onScreen:()=>true,H:{win:()=>({id:'w1'})},ch:()=>cc,scrollBox:()=>({scrollTop:333})});
+ cap.capture({closest:sel=>sel==='[data-chats]'?{dataset:{chats:'w1'}}:null});
+ assert.equal(cc.placeOptions.notificationScroll,333);
+ // a repaint of the same alert keeps its scroll box (real threadpaint lines); another alert starts at the top
+ const lines=paint.split('\n').filter(l=>l.includes('const noteBox = NV &&')||l.includes('const notificationScroll = noteBox')).join('\n');
+ const keep=(id,nvId)=>runRecording(`globalThis.f=()=>{ ${lines}\n return notificationScroll; };`,{NV:{id:nvId},el:{dataset:{notificationId:id},querySelector:()=>({})},scrollBox:()=>({scrollTop:77})}).f();
+ assert.equal(keep('n1','n1'),77); assert.equal(keep('n1','n2'),0);
+ // the original body wraps and keeps its paragraphs
+ const doc=createDocument(); doc.body.innerHTML='<div class="msg a ch-notif"><section class="ch-notif-details"><div class="ch-notif-original">Line one\n\nLine two</div></section></div>';
+ const look=cascade(doc.querySelector('.ch-notif-original'),css);
+ assert.equal(look['white-space']?.value,'pre-wrap'); assert.equal(look['overflow-wrap']?.value,'anywhere');
 });
