@@ -3,6 +3,9 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 import { settingsView, skinsRuntime } from './fixtures/skin-palettes-harness.mjs';
+import { createDocument } from './fixtures/mini-dom.mjs';
+import { styles } from './fixtures/w5-css.mjs';
+import { noImports } from './fixtures/r7A-css.mjs';
 const read = f => readFileSync(new URL('../' + f, import.meta.url), 'utf8');
 
 // The real Settings › Look over the real skins.js table; document.fonts holds the faces until the test lets them load.
@@ -35,9 +38,19 @@ test('skin picker renders preview cards for every skin, names in each skin\'s ow
 });
 
 test('preview card styles are shell-wide (not gated to one skin) and the Landscapes preview image ships', () => {
-  const css = read('web/core/skins.css');
-  assert.match(css, /\n\.st-root \.skp \{ display: grid;/);
-  assert.match(css, /\n\.st-root \.skp-wait \.skp-nm \{ visibility: hidden; \}/);
+  const [css] = noImports(read('web/core/skins.css'));
+  const { S } = skinsRuntime();
+  const h = settingsView({ WosSkin: S, document: { activeElement: null, fonts: { load: () => new Promise(() => {}) } }, timer: () => 0 });
+  const html = h.html(); h.view.destroy();
+  // The picker as drawn (names still waiting for their faces), inside Settings, under every skin and none.
+  for (const skin of ['', ...S.list.map(k => k.id)]) {
+    const doc = createDocument(); if (skin) doc.documentElement.setAttribute('data-skin', skin);
+    doc.body.innerHTML = `<div class="st-root">${html}</div>`;
+    const grid = doc.querySelector('.skp'), name = doc.querySelector('.skp-wait .skp-nm');
+    assert.ok(grid && name, 'the picker and a waiting name are drawn');
+    assert.equal(styles(grid, [css]).display, 'grid', `${skin || 'no skin'}: preview cards laid out`);
+    assert.equal(styles(name, [css]).visibility, 'hidden', `${skin || 'no skin'}: names hidden until their faces load`);
+  }
   assert.doesNotMatch(css, /html\[data-skin[^\n]*\.skp/, 'no skin gate on the picker');
   assert.ok(readFileSync(new URL('../web/skins/landscapes/preview.webp', import.meta.url)).length > 1000);
 });
