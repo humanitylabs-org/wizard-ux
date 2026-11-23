@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 import { createDocument } from './fixtures/mini-dom.mjs';
 import { cascade } from './fixtures/mini-css.mjs';
 import { pageAssets } from './fixtures/w1-pages.mjs';
-import { block, runRecording } from './fixtures/source-slice.mjs';
+import { between, block, runRecording } from './fixtures/source-slice.mjs';
 import { withParts } from './fixtures/chats-parts.mjs';
 import { withShellParts } from './fixtures/shell-parts.mjs';
 const read = p => readFileSync(new URL('../web/' + p, import.meta.url), 'utf8');
@@ -26,7 +26,11 @@ test('the selection menu offers Look up between Quote and Search/Select all, on 
   assert.deepEqual([...M.ITEMS.map(i => i.id)], ['copy', 'share', 'quote', 'lookup', 'search', 'all']);
   assert.deepEqual([...M.enabled()], ['copy', 'share', 'quote', 'lookup', 'search', 'all']);
   assert.equal(M.ITEMS.find(i => i.id === 'lookup').label, 'Look up');
-  assert.equal((menuSrc.match(/data-sm="\$\{id\}"/g) || []).length, 1, 'one control per action, one render path');
+  // the menu's real button row (show()'s render), on a page: one control per action, Look up among them
+  const row = runRecording(`this.f = ids => ''\n${between(menuSrc, '      + ids.map(id => {', ".join('');")}.join('');`, { ITEMS: M.ITEMS, svg: () => '<svg></svg>', esc: String });
+  const page = createDocument(); page.body.innerHTML = row.f([...M.enabled()]);
+  assert.deepEqual(page.querySelectorAll('[data-sm]').map(b => b.dataset.sm), ['copy', 'share', 'quote', 'lookup', 'search', 'all'], 'one control per action');
+  assert.equal(page.querySelector('[data-sm="lookup"]').textContent, 'Look up');
 });
 
 test('a menu saved before Look up existed gains it; a choice made after respects the toggle', () => {
