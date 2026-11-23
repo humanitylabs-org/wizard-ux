@@ -102,9 +102,9 @@ test('a bar with a date picker in its row (Morning Report: ‹ date › PDF) is 
  * through the cascade (tests/fixtures/mini-css.mjs) on markup carrying exactly the marks the real code set. */
 const orbWiring = between(host, '  let frameInset = 0, frameOrb = null;', '  // an app fills its page after it loads');
 const insetApi = block(host, 'inset(px, orb = null, place = null) {');
-function wiredFrame({ shell = 'phone', vw = 390, frame = R(0, 56, 390, 788) } = {}) {
+function wiredFrame({ shell = 'phone', vw = 390, frame = R(0, 56, 390, 788), kids = null } = {}) {
   const tabs = ['Review', 'Spending', 'Net worth', 'Accounts'].map((t, i) => new B('button', { role: 'tab', 'aria-label': t }, R(8 + i * 94, 740, 94, 44)));
-  const bar = new B('nav', { role: 'tablist' }, R(0, 735, 390, 53), tabs), d = pageWith([bar]), observed = [];
+  const bar = new B('nav', { role: 'tablist' }, R(0, 735, 390, 53), tabs), d = pageWith(kids || [bar]), observed = [];
   const html = d.documentElement; html.clientHeight = 788;
   for (const n of [html, ...html.all()]) n.isConnected = true;
   html.classList.toggle = (c, on) => { if (on ?? !d.cls.has(c)) d.cls.add(c); else d.cls.delete(c); };
@@ -121,6 +121,12 @@ function wiredFrame({ shell = 'phone', vw = 390, frame = R(0, 56, 390, 788) } = 
   return { d, bar, tabs, observed, apps: ctx.apps, html };
 }
 // the marked page as markup (attributes only), for the cascade
+// the sheet the real inset adopts into the app, cascaded over a page of the given markup and <html> classes
+function adopted() { const w = wiredFrame(); w.apps.inset(96, () => ({ x: 195, y: 806, d: 66 }), null); return w.d.adoptedStyleSheets.map(x => x.text).join(''); }
+function cascadeOn(html, body, sel, prop, pseudo) {
+  const doc = createDocument(); doc.documentElement.className = html; doc.body.innerHTML = body;
+  return styleOf(sel === 'html' ? doc.documentElement : doc.querySelector(sel), adopted(), prop, { pseudo });
+}
 const markup = n => `<${n.tagName.toLowerCase()}${Object.entries(n.attrs).map(([k, v]) => ` ${k}="${v}"`).join('')}>${n.children.map(markup).join('')}</${n.tagName.toLowerCase()}>`;
 function cssOf(w) {
   const doc = createDocument(); const sheet = w.d.adoptedStyleSheets.map(s => s.text).join('');
@@ -249,7 +255,10 @@ test('a bar of one tab: it sits left of the orb, the orb stays centred (the slot
   const only = new N('button', { 'aria-label': 'Inbox' }, R(150, 740, 90, 44)), bar = new N('nav', {}, R(0, 735, 390, 53), [only]);
   assert.equal(ctx.orbTabs(docOf(new N('body', {}, R(0, 0, 390, 788), [bar])), bar, 390), true);
   assert.equal(only.attrs['data-wos-tab'], 'l'); assert.equal(bar.attrs['data-wos-nl'], '1'); assert.equal(bar.attrs['data-wos-nr'], '0');
-  assert.match(host, /html\.wos-orb-bar \[data-wos-tabs\]\[data-wos-nr="0"\]::after\{flex-basis:calc\(var\(--wos-orb-slot,80px\) \+ \(100% - var\(--wos-orb-slot,80px\)\)\/2\)!important\}/);
+  // the slot (the bar's ::after) takes the orb and the empty right half, in the sheet the real inset adopts
+  const basis = nr => cascadeOn('wos-orb-bar', `<nav data-wos-tabs="bar" data-wos-nl="1" data-wos-nr="${nr}"><button data-wos-tab="l"></button></nav>`, 'nav', 'flex-basis', '::after');
+  assert.equal(basis(0), 'calc(var(--wos-orb-slot,80px) + (100% - var(--wos-orb-slot,80px))/2)');
+  assert.equal(basis(1), '', 'a tab on each side: the slot is the orb\'s width only');
 });
 
 /* Round 5 (Miguel, 2 Nov 2026: "the orb floats over Messenger"): an app's bottom controls are not always a kit tab bar.
@@ -323,11 +332,25 @@ test('round 5: content that scrolls is never the bar; a composer footer is lifte
   // Mail: a lone Load more under its list (nothing else along the bottom)
   const more = new B('button', { class: 'wz-button' }, R(12, 732, 366, 44)), mail = new B('section', {}, R(0, 0, 390, 788), [new B('div', {}, R(0, 150, 390, 582), [], { overflowY: 'auto', sh: 3000 }), more]);
   assert.equal(bctx.bottomBar(pageOf([mail]), 390, 788), more);
-  const host2 = host;
-  assert.match(host2, /bar\.setAttribute\('data-wos-lift', bar\.matches\(CONTROLS\) \? 'self' : 'block'\)/, 'found this way = lifted (a lone control by a margin)');
-  assert.match(host2, /split = !\/\^\(block\|self\)\$\/\.test\(bar\.getAttribute\('data-wos-lift'\) \|\| ''\) && isTabBar\(bar\) && !hasEntry\(d, bar\) && orbTabs\(/, 'only a real tab bar with no field splits');
-  assert.match(host2, /'html:not\(\.wos-orb-bar\):not\(\.wos-orb-end\) \[data-wos-float\]\{translate:0 calc\(-1 \* var\(--wos-lift,0px\)\)!important\}'/);
-  assert.match(host2, /\[data-wos-inset-scroll\]::after\{content:""/, 'a plain scroller under the orb gets room after its last item');
+  // the real inset over these pages: a bar found this way is lifted (a lone control by a margin), never split
+  const orb = () => ({ x: 195, y: 806, d: 66 });
+  const lone = new B('button', { class: 'wz-button' }, R(12, 732, 366, 44)), w1 = wiredFrame({ kids: [new B('section', {}, R(0, 0, 390, 788), [new B('div', {}, R(0, 150, 390, 582), [], { overflowY: 'auto', sh: 3000 }), lone])] });
+  w1.apps.inset(96, orb, null);
+  assert.equal(lone.attrs['data-wos-lift'], 'self', 'found this way = lifted (a lone control by a margin)');
+  const ftabs = [0, 1, 2, 3].map(i => new B('button', { role: 'tab' }, R(8 + i * 94, 730, 94, 44))), fblock = new B('footer', {}, R(0, 724, 390, 56), ftabs);   // a tab bar off the bottom edge
+  const w2 = wiredFrame({ kids: [new B('section', {}, R(0, 0, 390, 788), [new B('div', {}, R(0, 0, 390, 724), [], { overflowY: 'auto', sh: 3000 }), fblock])] });
+  w2.apps.inset(96, orb, null);
+  assert.equal(fblock.attrs['data-wos-lift'], 'block'); assert.ok(!w2.d.cls.has('wos-orb-bar'), 'a block found this way is never split, tabs or not');
+  assert.equal(ftabs[0].attrs['data-wos-tab'], undefined);
+  const fsend = new B('button', { role: 'tab' }, R(8, 740, 94, 44)), fta = new B('input', { type: 'search' }, R(8, 702, 374, 30)), ffoot = new B('nav', { role: 'tablist' }, R(0, 700, 390, 88), [fta, fsend, ...[1, 2, 3].map(i => new B('button', { role: 'tab' }, R(8 + i * 94, 740, 94, 44)))]);   // tabs under a search field
+  const w3 = wiredFrame({ kids: [ffoot] }); w3.apps.inset(96, orb, null);
+  assert.ok(!w3.d.cls.has('wos-orb-bar'), 'only a real tab bar with no field splits'); assert.equal(fsend.attrs['data-wos-tab'], undefined);
+  const w4 = wiredFrame(); w4.apps.inset(96, orb, null); assert.ok(w4.d.cls.has('wos-orb-bar'), 'a real tab bar does split');
+  // the adopted sheet: a button floating over a lifted bar rises with it; a plain scroller under the orb gets room after its last item
+  assert.equal(cascadeOn('', '<button data-wos-float=""></button>', 'button', 'translate'), 'calc(-1 * var(--wos-lift,0px))'.replace(/^/, '0 '));
+  assert.equal(cascadeOn('wos-orb-end', '<button data-wos-float=""></button>', 'button', 'translate'), '', 'the orb at a row\'s end: no lift');
+  assert.equal(cascadeOn('', '<div data-wos-inset-scroll=""></div>', 'div', 'content', '::after'), '""', 'a plain scroller under the orb gets room after its last item');
+  assert.equal(cascadeOn('', '<div data-wos-inset-scroll=""></div>', 'div', 'height', '::after'), 'var(--wos-inset-b,0px)');
 });
 
 /* Round 6 (Miguel, 2 Nov 2026: "never waste a whole band at the bottom of the phone screen"): a block that is not a tab
@@ -372,9 +395,18 @@ test('round 6: Messenger\'s composer: the orb at the row\'s end (no band, no lif
   const full = styled(live(null, new B('div', {}, R(0, 700, 390, 58), btns))), d2 = pageWith([full]);
   assert.equal(ectx.orbEnd(d2, full, o, fr), null);
   assert.equal(full.attrs['data-wos-end'], undefined); assert.ok(!d2.cls.has('wos-orb-end'));
-  assert.match(host, /if \(!split\) \{ try \{ spot = orbEnd\(d, bar, o, fr\); \} catch \(_\) \{ spot = null; \} \}/, 'every bar that is not split around the orb tries the row\'s end first');
-  assert.match(host, /'html\.wos-orb-end\{--wos-inset-b:0px!important\}'/, 'no room under the list either: the bar is the end of the page');
-  assert.match(host, /function placeSync\(\) \{/, 'the app in front decides where the orb goes');
+  // the real inset: every bar that is not split around the orb tries the row's end first, and the app in front
+  // places the orb there (placeSync hands the spot to the view)
+  const ca = live(null, new B('button', {}, R(8, 737, 44, 44))), cta = live(null, new B('textarea', {}, R(58, 737, 274, 44))), cmic = live(null, new B('button', {}, R(338, 737, 44, 44)));
+  const cform = styled(live(null, new B('form', {}, R(0, 730, 390, 58), [ca, cta, cmic])), (k, v) => { if (k !== '--wos-end-pad') return; const pad = v ? parseFloat(v) : 0; cta.rect = R(58, 737, 274 - pad, 44); cmic.rect = R(338 - pad, 737, 44, 44); });
+  const wf = wiredFrame({ kids: [new B('section', {}, R(0, 0, 390, 730), [], { overflowY: 'auto', sh: 3000 }), cform] }), placed = [];
+  wf.apps.inset(96, () => o, sp => placed.push(sp && JSON.parse(JSON.stringify(sp))));
+  assert.equal(cform.attrs['data-wos-inset-bar'], '', 'the composer along the bottom is the bar');
+  assert.equal(cform.attrs['data-wos-end'], 'row', 'the row\'s end, not the lift'); assert.ok(wf.d.cls.has('wos-orb-end'));
+  assert.deepEqual(placed.at(-1), { x: 360, y: 56 + 759, d: 52 }, 'the app in front decides where the orb goes');
+  // no room under the list either: the bar is the end of the page
+  assert.equal(cascadeOn('wos-orb-end', '', 'html', '--wos-inset-b'), '0px');
+  assert.equal(cascadeOn('', '', 'html', '--wos-inset-b'), '');
 });
 
 test('round 6: the desktop Messenger: its thread\'s composer beside its list (not page-wide) is found right under the orb', () => {
