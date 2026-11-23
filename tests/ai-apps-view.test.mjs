@@ -885,7 +885,7 @@ test('round 5: notifications in the list: Chats\' own items as plain rows with a
   assert.ok(f && f.id === 'notif:m2' && f.title === 'Money (3) · Villa · Apple · Grab', 'Money is one row: name, count, newest titles');
   assert.ok(folded.some(r => r.id === 'notif:a' && r.count === 1), 'priority 4 keeps its own row');
   runWithChatsModel('globalThis.noteAct = noteAct;', ctx); ctx.noteAct('notif:m2', 'done');
-  assert.deepEqual(marks.at(-1), [['m2', 'm3', 'm1'], { read: true, archived: true }]);
+  assert.deepEqual(marks.at(-1), [['m2', 'm3', 'm1'], { 'read': true, archived: true }]);
   // the layout API's sessions.open / act, run: a notification row goes to the inbox's handler, a chat to the shell
   const sess = runRecording(`${between(host, '  const NOTE_ID = ', ';\n')};\nthis.s = {\n${between(block(host, '  function shellApi(a, base) {'), '        open: id => {', '\n        openList:')}\n};`,
     { live: () => true, SESSION_ACTS: ['done'], noteAct: (...a) => { sess.calls.push(['noteAct', ...a]); return true; }, calls: [] });
@@ -913,13 +913,28 @@ test('round 6: the drawer grid lists real apps only (the sheet\'s Apps), never a
     ['money', 'movies'], 'not open: Notes (agent app), Music (in development) and Maps (system) stay out');
   const { realApps } = await import(new URL('web/layouts/apps/chrome.js', root).href);
   assert.deepEqual(realApps([{ id: 'a' }, { id: 'b', connector: true }, { id: 'c', dev: true }, { id: 'd', system: true }], null).map(a => a.id), ['a'], 'without kinds: the flags');
-  const dj = noComments(read('web/layouts/ai-apps/desktop.js'));
-  assert.match(dj, /chrome\.open\(\{ includeOpen: true, people: 'For people' \}\);/, 'round 16 item 7: the + remains the shared picker (no All apps grid), now including open and pinned apps');
-  const css = read('web/layouts/ai-apps/layout.css'), dcss = read('web/layouts/ai-apps/desktop.css');
-  assert.match(css, /\.aa-tile\.is-logo \{ background: none; box-shadow: 0 1px 3px/, 'a logo fills its tile: no plate');
-  assert.match(css, /\.aa-logo \{ width: 100%; height: 100%; object-fit: cover;/);
-  assert.match(dcss, /\.aad-tile \{\s*--c:[^}]*width: 52px; height: 52px;/, 'desktop: 52 px icons four a row');
-  assert.match(dcss, /\.aad-tile\.is-logo \{ background: none;/);
+  // (the desktop + = the shared picker with open and pinned apps: 'desktop: a sidebar ...' and 'round 16 item 7: layer membership ...')
+  // a logo fills its tile: no plate (the real layout.css / desktop.css on the tiles the real views drew, a logo loaded)
+  const css = read('web/layouts/ai-apps/layout.css');
+  const p = world(); p.api.apps.logo = id => Promise.resolve(id === 'money' ? '/wizard-os-home/store-data/app-logo/money?v=0123456789abcdef' : null);
+  p.html.setAttribute('data-shell', 'phone'); p.html.setAttribute('data-layout', 'ai-apps');
+  (await layout()).default(p.api);
+  p.q('.aa-menu').dispatchEvent(new FakePointerEvent('click')); p.q('.aa-find').dispatchEvent(new FakePointerEvent('click'));
+  const q = p.q('.aa-q'); q.value = 'mo'; q.dispatchEvent(new FakePointerEvent('input')); await settle();
+  const tile = p.q('.aa-tile.is-logo'), plain = p.qa('.aa-tile').find(t => !t.classList.contains('is-logo'));
+  assert.ok(tile && plain, 'one logo tile, the rest sigils');
+  const tc = cascade(tile, css), lc = cascade(tile.querySelector('.aa-logo'), css);
+  assert.deepEqual([tc.background?.value, tc['box-shadow']?.value.startsWith('0 1px 3px')], ['none', true], 'a logo fills its tile: no plate');
+  assert.notEqual(cascade(plain, css).background?.value, 'none', 'a sigil keeps its tinted tile');
+  assert.deepEqual(['width', 'height', 'object-fit'].map(k => lc[k]?.value), ['100%', '100%', 'cover']);
+  // the desktop: an app opening (not open yet) shows its icon in the app panel's placeholder
+  const { w: d } = await panelDesk({ before: ({ w, store }) => { store.pins = ['movies']; w.api.apps.logo = id => Promise.resolve(id === 'movies' ? '/wizard-os-home/store-data/app-logo/movies?v=0123456789abcdef' : null); } });
+  d.q('.aad-vtab.is-closed[data-app="movies"]').dispatchEvent(new FakePointerEvent('click'));   // a pin not open yet: it opens as the panel
+  const dtile = d.q('.aad-pload .aad-tile'), before = cascade(dtile, DESK_CSS);
+  assert.deepEqual(['width', 'height'].map(k => before[k]?.value), ['52px', '52px'], 'desktop: a 52 px icon');
+  assert.notEqual(before.background?.value, 'none', 'its tinted tile until the logo loads');
+  await settle(); assert.ok(dtile.classList.contains('is-logo'), 'the logo loaded');
+  assert.equal(cascade(dtile, DESK_CSS).background?.value, 'none', 'desktop: a logo is the icon, no plate');
 });
 
 test('round 6: the orb moves to the spot it is given (an app\'s row) and back; its own spot reads through the move', async () => {
@@ -937,12 +952,25 @@ test('round 6: the orb moves to the spot it is given (an app\'s row) and back; i
   assert.equal(w.html.dataset.vcOrb, 'row');
   assert.equal(st.getPropertyValue('--vc-orb-dx'), '161px'); assert.equal(st.getPropertyValue('--vc-orb-dy'), '-16px'); assert.equal(st.getPropertyValue('--vc-orb-k'), '0.667');
   assert.deepEqual(home(), { x: 195, y: 806, d: 66 }, 'the bars still go around its own spot');
+  // the real chrome.css on the shell's dock orb (#dock > #orbWrap) while it is moved, and on its microphone
+  const css = read('web/layouts/apps/chrome.css'), MOVE = ['var(--vc-orb-dx, 0px) var(--vc-orb-dy, 0px)', 'var(--vc-orb-k, 1)'];
+  w.orbWrap.id = 'orbWrap'; w.orbWrap.parentNode.id = 'dock';
+  const moved = n => { const c = cascade(n, css); return [c.translate?.value, c.scale?.value]; };
+  assert.deepEqual(moved(w.orbWrap), MOVE, 'the dock orb is drawn where the move puts it, at its size');
+  const mic = w.orbWrap.children.find(c => c.className === 'vc-mic'), micOn = () => cascade(mic, css).opacity?.value ?? '1';
+  w.orbWrap.dataset.mode = 'idle'; assert.equal(micOn(), '1');
+  w.orbWrap.dataset.mode = 'listening'; assert.equal(micOn(), '0', 'a take shows the orb\'s own state');
   place(null);
   assert.equal(w.html.dataset.vcOrb, undefined); assert.equal(st.getPropertyValue('--vc-orb-dx'), '', 'back to its own spot');
-  const css = read('web/layouts/apps/chrome.css');
-  assert.match(css, /html\[data-view-chrome="phone"\]\[data-vc-orb\] #dock > #orbWrap \{ translate: var\(--vc-orb-dx, 0px\) var\(--vc-orb-dy, 0px\); scale: var\(--vc-orb-k, 1\); \}/);
-  assert.match(css, /#orbWrap\[data-mode\]:not\(\[data-mode="idle"\]\) > \.vc-mic \{ opacity: 0; \}/, 'a take shows the orb\'s own state');
-  assert.match(read('web/layouts/ai-apps/desktop.css'), /\[data-vc-orb\] \.aad-orb \{ translate: var\(--vc-orb-dx, 0px\) var\(--vc-orb-dy, 0px\); scale: var\(--vc-orb-k, 1\); \}/, 'the desktop orb moves the same way');
+  assert.deepEqual(moved(w.orbWrap), [undefined, undefined], 'no move left on it');
+  // the desktop orb moves the same way (the real desktop view and desktop.css)
+  let dplace = null;
+  const { w: d } = await panelDesk({ before: ({ w }) => { w.api.apps.inset = (px, orb, pl) => { dplace = pl; return () => {}; }; } });
+  assert.equal(typeof dplace, 'function');
+  const dmoved = () => { const c = cascade(d.q('.aad-orb'), DESK_CSS); return [c.translate?.value, c.scale?.value]; };
+  assert.deepEqual(dmoved(), [undefined, undefined]);
+  dplace({ x: 900, y: 700, d: 40 }); assert.equal(d.html.dataset.vcOrb, 'row');
+  assert.deepEqual(dmoved(), MOVE, 'the desktop orb moves the same way');
 });
 
 test('round 6: the composer\'s orb slot is read from the grid\'s real tracks (one line, or words over the controls)', async () => {
@@ -952,10 +980,23 @@ test('round 6: the composer\'s orb slot is read from the grid\'s real tracks (on
   assert.deepEqual(gridSlot(row('44px 203px 67px 44px 0px 0px', '44px'), 3), { x: 12 + 4 + 44 + 203 + 67 + 22, y: 780 + 4 + 22, d: 44 }, 'one line: right of the model chip');
   assert.deepEqual(gridSlot(row('44px 170px 56px 44px 0px 44px', '40px 44px'), 3), { x: 12 + 4 + 44 + 170 + 56 + 22, y: 780 + 4 + 40 + 22, d: 44 }, 'two lines: on the controls\' line, Send to its right');
   assert.equal(gridSlot(row('none', 'none'), 3), null, 'not a grid: no slot');
-  const js = noComments(read('web/layouts/ai-apps/layout.js'));
-  assert.match(js, /return gridSlot\(row, 3\);/); assert.match(js, /chrome\.orbIn\(orbSlot\(\)\)/);
-  assert.match(js, /if \(\(api\.voice\?\.state\?\.\(\)\?\.state \|\| 'idle'\) !== 'idle'\) return null;/, 'a take: the orb back in its own spot, among the stock voice controls');
-  assert.match(js, /micGlyph: true/);
+  // the real phone view: the dock orb moves into the composer's slot (read from its grid), and back during a take
+  // (the orb's microphone, micGlyph: 'round 6: the orb moves to the spot it is given ...')
+  const had = globalThis.innerWidth; globalThis.innerWidth = 390;
+  try {
+    const w = world(), st = w.html.style; let voice = 'idle';
+    w.orbWrap.getBoundingClientRect = () => { const dx = parseFloat(st.getPropertyValue('--vc-orb-dx')) || 0, dy = parseFloat(st.getPropertyValue('--vc-orb-dy')) || 0; return { left: 162 + dx, top: 773 + dy, width: 66, height: 66, x: 162 + dx, y: 773 + dy, right: 228 + dx, bottom: 839 + dy }; };
+    w.orbWrap.offsetWidth = 66; w.api.voice.state = () => ({ state: voice });
+    (await layout()).default(w.api);
+    const win = node('div', 'win app-chats', w.device), form = node('form', 'ch-compose', win), r2 = Object.assign(node('div', 'ch-row2', form), row('44px 203px 67px 44px 0px 0px', '44px')), ta = node('textarea', '', r2);
+    assert.equal(w.html.dataset.aiFront, 'chat');
+    w.fire('input', ta);
+    assert.equal(w.html.dataset.vcOrb, 'composer', 'the orb sits in the composer');
+    assert.deepEqual(['--vc-orb-dx', '--vc-orb-dy', '--vc-orb-k'].map(k => st.getPropertyValue(k)), ['157px', '0px', '0.667'], 'in the mic\'s slot, right of the model chip, at its size');
+    voice = 'recording'; w.fire('input', ta);
+    assert.equal(w.html.dataset.vcOrb, undefined, 'a take: the orb back in its own spot, among the stock voice controls');
+    voice = 'idle'; w.fire('input', ta); assert.equal(w.html.dataset.vcOrb, 'composer');
+  } finally { if (had === undefined) delete globalThis.innerWidth; else globalThis.innerWidth = had; }
 });
 
 test('round 6: a tidy composer: the model chip is a control on the right (never a centred label), the orb in the mic\'s slot, Snooze / Archive never clipped', () => {
@@ -1086,8 +1127,18 @@ test('the Settings cog carries the System count (WosBell.attention through api.d
     for (const c of cogs) { const n = c.querySelector('.' + (shell === 'phone' ? 'aa' : 'aad') + '-setn'); assert.ok(n.hidden && n.textContent === '', shell + ': none, no number'); assert.equal(c.getAttribute('aria-label'), 'Settings'); }
     if (typeof off === 'function') off();
   }
-  const host = withSkinHostParts(read('web/core/skin-host.js'));
-  assert.match(host, /attention\(watch\) \{[\s\S]*?window\.WosBell\?\.attention\?\.\(\)[\s\S]*?'wizard:notify-attention'/, 'the layout API reads WosBell.attention and its change event');
+  // the layout API's desk.attention (the real skin host): WosBell.attention, then each 'wizard:notify-attention'
+  const f = fixture({ shell: 'desktop' }), heard = [], ls = {};
+  let api = null, at = { n: 3, label: 'new from Wizard' }; f.host._test.setImporter(async () => ({ default: a => { api = a; return () => {}; } }));
+  Object.assign(f.ctx.window, { addEventListener: (t, fn) => (ls[t] ||= []).push(fn), removeEventListener: (t, fn) => { ls[t] = (ls[t] || []).filter(x => x !== fn); } });
+  f.ctx.window.WosBell.attention = () => at;
+  f.host.setStandardLayout('ai-apps'); await settle();
+  const fire = () => { for (const fn of [...(ls['wizard:notify-attention'] || [])]) fn(); };
+  assert.deepEqual({ ...api.desk.attention(v => heard.push(v && { ...v })) }, { n: 3, label: 'new from Wizard' }, 'the layout API reads WosBell.attention');
+  at = { n: 5000, label: 7 }; fire(); at = null; fire();
+  assert.deepEqual(heard, [{ n: 999, label: '7' }, null], 'and follows its change event');
+  f.host.setStandardLayout('classic'); await settle();
+  assert.equal((ls['wizard:notify-attention'] || []).length, 0, 'released with the layout');
 });
 
 /* Round 7 (Miguel, 2 Nov 2026): the switcher is the sidebar / drawer header; the fuel gauge between cog (left) and +
@@ -1128,9 +1179,13 @@ test('round 7 + 15 desktop: a chat docks beside the sidebar (✕, Esc and ⌥W b
   assert.equal(w.html.dataset.aadChat, 'on', 'the docked chat column beside the folded rail');
   assert.ok(w.q('.aad-rk[data-k="ready"]').classList.contains('is-on'), 'its group marked');
   w.q('.aad-tog').dispatchEvent(new FakePointerEvent('click')); assert.equal(w.html.dataset.aadSide, 'open', 'the toggle is the only thing that expands');
-  const css = read('web/layouts/ai-apps/desktop.css'), P = 'html[data-shell="desktop"][data-layout="ai-apps"]';
-  assert.ok(css.includes(P + ' .aad-sec[data-sec="archive"] > :is(span, .aad-sec-c) { opacity: .85; }'), 'Archive a step quieter');
-  assert.match(css, /\.aad-tally::after \{ content: attr\(data-n\);/);
+  // the real desktop.css on the section headers the view drew: Archive a step quieter; a folded section's tally drawn
+  w.html.setAttribute('data-shell', 'desktop'); w.html.setAttribute('data-layout', 'ai-apps');
+  const op = sel => cascade(w.q(sel), DESK_CSS).opacity?.value;
+  assert.equal(op('.aad-sec[data-sec="archive"] > .aad-sec-w'), '.85', 'Archive a step quieter'); assert.equal(op('.aad-sec[data-sec="archive"] > .aad-sec-c'), '.85');
+  assert.equal(op('.aad-sec[data-sec="working"] > .aad-sec-w'), undefined, 'the other headers as they are');
+  // (a folded header's count: its .aad-sec-m number, checked above; desktop.css's older .aad-tally is never drawn while
+  // Activity is on, desktop.js actOn)
 });
 test('round 7: a notification opens as a chat (never Home), its route choice in the action row, a bell on its message', async () => {
   const { w } = deskWorld();
@@ -1154,10 +1209,16 @@ test('round 7: a notification opens as a chat (never Home), its route choice in 
   tacts.insertBefore = (n, ref) => { n.remove(); n.parentNode = tacts; tacts.children.splice(tacts.children.indexOf(ref), 0, n); };
   w.emit('render');
   assert.equal(route.parentNode, tacts); assert.equal(tacts.children[0], route, 'first in the action row');
-  for (const [file, scope] of [['web/layouts/ai-apps/desktop.css', '.win .dchats .pane-main'], ['web/layouts/ai-apps/layout.css', '.win.app-chats']]) {
-    const css = read(file);
-    assert.ok(css.includes(`${scope} .ch-notif-thread .ch-tacts > .ch-notif-route { flex: 1 0 100%;`), `${file}: Badge | Chats on the action row's first line`);
-    assert.ok(css.includes(`${scope} .ch-notif-thread .msg.a.ch-notif::before {`), `${file}: a bell on that message only`);
+  // each shell's real stylesheet on that thread: Badge | Chats on the action row's first line, a bell on its message only
+  w.html.setAttribute('data-shell', 'desktop'); w.html.setAttribute('data-layout', 'ai-apps');
+  p.html.setAttribute('data-shell', 'phone'); p.html.setAttribute('data-layout', 'ai-apps');
+  const pmsgs = node('div', 'ch-msgs', pt), proute = node('div', 'ch-notif-route', node('div', 'ch-tacts', pmsgs));
+  for (const [file, thread, row] of [['web/layouts/ai-apps/desktop.css', th, route], ['web/layouts/ai-apps/layout.css', pt, proute]]) {
+    const css = read(file), msgs2 = thread.querySelector('.ch-msgs'), note = node('div', 'msg a ch-notif', msgs2), plain = node('div', 'msg a', msgs2);
+    assert.equal(cascade(row, css).flex?.value, '1 0 100%', `${file}: Badge | Chats on the action row's first line`);
+    const bell = cascade(note, css, { pseudo: '::before' });
+    assert.equal(bell.content?.value, '""', `${file}: a bell on that message`); assert.match(bell.mask?.value || '', /^url\("data:image\/svg\+xml/, `${file}: the bell's mark`);
+    assert.equal(cascade(plain, css, { pseudo: '::before' }).content, undefined, `${file}: on that message only`);
   }
 });
 test('round 7 phone: the drawer header is the switcher, cog · gauge · +, tallies; parts: statuses, the gauge copy; core: stiKind on rows', async () => {
@@ -1168,8 +1229,12 @@ test('round 7 phone: the drawer header is the switcher, cog · gauge · +, talli
   assert.equal(w.q('.aa-dh').children[0].className, 'aa-dws', 'the switcher where the name was');
   assert.equal(w.q('.aa-sec[data-sec="working"] .aa-tally').getAttribute('data-n'), '2');
   assert.equal(w.q('.aa-sec[data-sec="working"]').textContent, 'Working', 'the tally is drawn, not read out twice');
-  const css = read('web/layouts/ai-apps/layout.css'), P = 'html[data-shell="phone"][data-layout="ai-apps"]';
-  assert.ok(css.includes(P + ' .aa-sec[data-sec="archive"] > :is(span, .aa-sec-c) { opacity: .85; }'));
+  // the real layout.css on the drawer's headers: Archive a step quieter, the others as they are
+  const css = read('web/layouts/ai-apps/layout.css');
+  w.html.setAttribute('data-shell', 'phone'); w.html.setAttribute('data-layout', 'ai-apps');
+  const op = sel => { const n = w.q(sel); assert.ok(n, sel); return cascade(n, css).opacity?.value; };
+  assert.equal(op('.aa-sec[data-sec="archive"] > span'), '.85', 'Archive a step quieter'); assert.equal(op('.aa-sec[data-sec="archive"] > .aa-sec-c'), '.85');
+  assert.notEqual(op('.aa-sec[data-sec="working"] > span'), '.85');
   const { stateOf, stateGroups, gaugeInto } = await import(new URL('web/layouts/ai-apps/parts.js', root).href);
   assert.equal(stateOf({ state: 'check' }), 'check'); assert.equal(stateOf({ needs: true }), 'needs'); assert.equal(stateOf({ note: true }), 'fyi'); assert.equal(stateOf({ state: 'odd' }), 'none');
   assert.deepEqual(stateGroups([{ id: 'a', state: 'done' }, { id: 'b', state: 'needs' }, { id: 'c' }]).map(g => g.state + ':' + g.rows.map(r => r.id)), ['needs:b', 'done:a', 'none:c']);
@@ -1199,11 +1264,24 @@ test('round 7 phone: the drawer header is the switcher, cog · gauge · +, talli
     box2.children[0].dispatchEvent(new FakePointerEvent('click')); assert.deepEqual(pages, ['usage']);
     assert.equal(gaugeInto(w.doc, box2, sig2, () => {}, () => null), '', 'nothing readable: hidden'); assert.ok(box2.hidden);
     // Codex P1: the phone foot is hidden at setup, so opening the drawer / sidebar re-arms the usage feed
-    for (const f of ['web/layouts/ai-apps/layout.js', 'web/layouts/ai-apps/desktop.js']) assert.ok((read(f).match(/api\.aiUsage\?\.live\?\.\(foot\)/g) || []).length >= 2, f);
+    const lives = [], usage = { live: n => lives.push(n) };
+    const pv = world(); pv.api.aiUsage = usage; (await layout()).default(pv.api);
+    assert.equal(lives.length, 1, 'phone: armed at setup');
+    pv.q('.aa-menu').dispatchEvent(new FakePointerEvent('click'));
+    assert.equal(lives.length, 2, 'phone: opening the drawer re-arms it'); assert.equal(lives[1], lives[0], 'for the drawer\'s foot');
+    const { w: dv } = deskWorld(); dv.api.aiUsage = usage; (await layout()).default(dv.api);
+    assert.equal(lives.length, 3, 'desktop: armed at setup');
+    dv.q('.aad-tog').dispatchEvent(new FakePointerEvent('click')); dv.q('.aad-rtog').dispatchEvent(new FakePointerEvent('click'));
+    assert.equal(lives.length, 5, 'desktop: each fold / unfold of the sidebar re-arms it'); assert.equal(lives[4], lives[2], 'for the sidebar\'s foot');
   }
-  assert.match(withParts(read('web/core/chats.js')), /KIT, threadAct, threadActions, stiKind, notifOpen:/);
-  for (const f of ['web/desktop/desktop.js', 'web/app.js']) assert.match(read(f), /sessionList: \(\) => window\.WizChatsListModel\.sessionList\(/);
-  assert.match(read('web/core/chats-list-model.js'), /needs: s\.status === 'waiting_for_approval' \|\| s\.attention\?\.state === 'needs_you', state,/);
+  // core: Chats hands the adapters its own threadAct / threadActions / stiKind (chats.js's public object, run)
+  const own = { threadAct() {}, threadActions() {}, stiKind() {} };
+  const pub = runRecording(`this.pub = (function () {\n${block(withParts(read('web/core/chats.js')), '  return { beforeNavigate:')}\n})();`, { ...own }).pub;
+  for (const k of Object.keys(own)) assert.equal(pub[k], own[k], `CHATS.${k} is Chats' own`);
+  // (both shell adapters' sessionList hands Chats' rows to WizChatsListModel.sessionList: run in 'desktop core hooks' and
+  // 'core hooks: the phone adapter ...'); a row needs the owner when its run waits for approval or asks for them
+  const needs = runWithChatsModel(`window.WizChatsListModel.sessionList({ ready: [{ id: 'a', status: 'waiting_for_approval' }, { id: 'b', status: 'completed', attention: { state: 'needs_you' } }, { id: 'c', status: 'completed', attention: { state: 'check' } }] }, { live: {}, chats: { stiKind: () => 'none', threadActions: () => [] }, pins: null }).ready.map(r => [r.id, r.needs, r.state])`, { window: {} });
+  assert.deepEqual(JSON.parse(JSON.stringify(needs)), [['a', true, 'none'], ['b', true, 'none'], ['c', false, 'none']]);
 });
 test('round 7: a hold (phone) or a right click (desktop) on a Home app icon offers it for the home screen through the stock Desks sheet', async () => {
   {
