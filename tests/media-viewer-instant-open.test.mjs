@@ -43,7 +43,7 @@ function fixture({ complete = true, decode = 'resolve' } = {}) {
   }
   stage = new Node('mv-stage');
   const body = new Node('body');
-  const context = vm.createContext({ window: { addEventListener() {} }, document: { documentElement: { dataset: { shell: 'phone' } }, body, activeElement: body, createElement: () => (viewer = new Node('mviewer')), getElementById: () => null }, navigator: {}, performance: { now: () => 0 }, setTimeout: fn => { timers.set(++timerId, fn); return timerId; }, clearTimeout: id => timers.delete(id), requestAnimationFrame: () => 1, cancelAnimationFrame() {}, addEventListener() {}, Image: undefined, K: { onChange() {}, notify() {} }, esc: x => x });
+  const context = vm.createContext({ window: { addEventListener() {} }, document: { documentElement: { dataset: { shell: 'phone' } }, body, activeElement: body, createElement: () => (viewer = new Node('mviewer')), getElementById: () => null }, navigator: {}, performance: { now: () => 0 }, setTimeout: fn => { timers.set(++timerId, fn); return timerId; }, clearTimeout: id => timers.delete(id), requestAnimationFrame: () => 1, cancelAnimationFrame() {}, addEventListener() {}, Image: undefined, K: { onChange() {}, notify() {} }, esc: x => x, macSaver: () => Promise.resolve(null) });
   vm.runInContext(media + '\nglobalThis.api = viewer;', context);
   return { api: context.api, viewer: () => viewer, timers, decoded: () => decoded?.(), resolver: () => decoded, flush: () => new Promise(r => setImmediate(r)) };
 }
