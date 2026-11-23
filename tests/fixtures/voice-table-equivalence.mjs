@@ -118,6 +118,8 @@ export async function compareShard(shard,shards) {
   for(const text of seeds)old.parser.parse(text,{view:{kind:'home'}},'command');
   const sources=['commands.js','music-voice.js','usuals.js','apps.js'].flatMap(p=>literalPatterns(baseline(p)));
   const patterns=[...new Set([...sources,...old.patterns])].filter(s=>s.startsWith('^'));
+  // the dynamic tables are captured: the ~1M parses below use the plain RegExp again (recording each one is slow)
+  for(const f of [old,current])vm.runInContext('RegExp=OriginalRegExp',f.c);
   const phrases=new Set(seeds);
   for(const pattern of patterns)for(const phrase of expand(pattern))phrases.add(phrase);
   // Every baseline literal open alias, plus every installed app's name and all
