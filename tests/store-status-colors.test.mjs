@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import { createDocument } from './fixtures/mini-dom.mjs';
 import { cascade } from './fixtures/mini-css.mjs';
+import { between, block, runRecording } from './fixtures/source-slice.mjs';
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
 const src = read('web/store/store.js');
 const action = src.slice(src.indexOf('  function action('), src.indexOf('  const row ='));
@@ -33,7 +34,13 @@ test('Open replaces Installed once the installed app is openable', () => {
   const html = render('installed', {installed:true, open:true});
   assert.match(html, /class="get open big"[^>]*data-open="fixture"[^>]*>Open<\/button>/);
   assert.doesNotMatch(html, /Installed|install-actions/);
-  assert.match(src, /\$\{action\(a, 'big'\)\}/, 'the detail renderer uses the same exclusive action');
+  // the real showDetail draws the same exclusive action, big
+  const detail = { innerHTML: '' }, app = { id: 'fixture', name: 'Fixture', releases: [] };
+  const D = runRecording(`${block(src, '  function showDetail(id) {')}\nthis.showDetail = showDetail;`, { find: () => app, selected: a => a, kindOf: () => ({ one: 'App' }), hue: () => ['#000', '#111'],
+    S: { apps: [app] }, esc: x => String(x ?? ''), $: id => (id === 'detail' ? detail : { innerHTML: '', classList: { add() {}, remove() {}, toggle() {} }, scrollTop: 0, hidden: false, querySelector: () => null }),
+    action: (a, size) => `<ACTION ${a.id} ${size}>`, icon: () => '', badge: () => '', removable: () => false, provenance: () => ({ label: '' }), cap: x => x });
+  try { D.showDetail('fixture'); } catch (_) { /* after the hero is drawn */ }
+  assert.ok(detail.innerHTML.includes('<ACTION fixture big>'), 'the detail renderer uses the same exclusive action');
 });
 test('issue 1652: an installed app the shell cannot open yet shows Starting… and is watched, then Open after the wait', () => {
   const watched = [];
@@ -79,13 +86,20 @@ test('issue 1652: Starting… polls the shell registry with backoff and stops on
   assert.deepEqual([...never.ctx.S.late], ['fixture']);
   assert.equal(never.ctx.S.starting.size, 0);
   // Codex P2: a removed (or reinstalled) app never inherits an old wait.
-  assert.match(src, /for \(const id of \[\.\.\.S\.late\]\) if \(!live\.has\(id\)\) S\.late\.delete\(id\)/);
-  assert.match(src, /S\.starting\.delete\(id\); S\.late\.delete\(id\); \}   \/\/ a new install waits afresh/);
-  assert.match(src, /if \(framed\) openInShell\(o\.dataset\.open\)/);
+  const waits = () => ({ installed: new Map([['k1', { id: 'kept' }]]), starting: new Map([['kept', 1], ['gone', 1]]), late: new Set(['kept', 'gone']) });
+  const S1 = waits(); runRecording(between(src, '    const live = new Set(', '    // First-run shell discovery'), { S: S1 });
+  assert.deepEqual([...S1.late], ['kept'], 'a removed app forgets its late wait'); assert.deepEqual([...S1.starting.keys()], ['kept']);
+  const S2 = waits(); runRecording(`const a = { id: 'kept' };\n${between(src, '    for (const id of new Set([a.id, openId(a)])) {', '\n')}`, { S: S2, openId: x => x.id });
+  assert.equal(S2.late.has('kept'), false, 'a new install waits afresh'); assert.equal(S2.starting.has('kept'), false); assert.ok(S2.late.has('gone'));
+  // Open in the Store: the shell opens it when framed
+  for (const framed of [true, false]) {
+    const O = runRecording(`this.f = e => {\n${between(src, "    const o = e.target.closest('[data-open]');", "\n    const k = e.target.closest('[data-kind]')")}\n};`, { framed });
+    O.f({ target: { closest: sel => (sel === '[data-open]' ? { dataset: { open: 'fixture' } } : null) }, stopPropagation() {} });
+    assert.deepEqual(O.calls.filter(c => c[0] === 'openInShell'), framed ? [['openInShell', 'fixture']] : [], framed ? 'framed: opens in the shell' : 'alone: no shell');
+  }
 });
 test('a fresh installed-app snapshot exposes Open before the parent registry finishes refreshing', () => {
   const declaration = src.match(/^  const canOpen = a => .*;$/m)?.[0];
-  assert.ok(declaration, 'canOpen declaration');
   const result = Function('S', 'framed', 'parent', 'openId', 'a', `${declaration}; return canOpen(a);`)(
     {snapshot:{shell:[{id:'fixture',url:'/fixture/'}]}}, true, {WizCanOpen:() => false}, () => 'fixture', {id:'fixture'});
   assert.equal(result, true);
