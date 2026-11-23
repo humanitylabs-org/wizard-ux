@@ -10,11 +10,7 @@ const tick = async (n = 10) => { for (let i = 0; i < n; i++) await Promise.resol
 // owner-correction: humanitylabs-org/wizard-ux#990 · 2026-11-05 · "Keep people's skins named the way they named their skins."
 test('the two skins hold the right palettes, and an unlisted skin becomes its own skin', () => {
   const s = read('web/core/skins.js');
-  assert.match(s, /\{ id: 'wizard', name: 'Wizard', [^\n]*palettes: \['nebula', 'grove', 'tide', 'ember', 'signal'\] \}/);
-  assert.match(s, /\{ id: 'mizel', name: 'Mizel', [^\n]*palettes: \['obsidian', 'obsidian-light', 'landscapes', 'landscapes-light'\] \}/);
-  assert.match(s, /\{ id: 'novairecito', name: 'Novairecito', [^\n]*palettes: \['novairecito', 'sepia'\] \}/, 'Novaire’s looks are colours of one skin');
-  assert.match(s, /if \(!f\) f = \{ id: s\.id, name: s\.name, who: s\.who, palettes: \[s\.id\] \};/);
-  assert.match(s, /families: FAMS,/);
+  // (the skin table is checked as it runs, below: names, palettes and families, not its source lines)
   // The running table: each skin keeps the name its owner gave it, with its palettes.
   const { S } = skinsRuntime();
   const fams = Object.fromEntries(S.families.map(f => [f.id, { name: f.name, palettes: [...f.palettes] }]));
