@@ -5,6 +5,8 @@ import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { withAppParts } from './fixtures/app-parts.mjs';
 import { withShellParts } from './fixtures/shell-parts.mjs';
+import { createDocument } from './fixtures/mini-dom.mjs';
+import { block, runRecording } from './fixtures/source-slice.mjs';
 const source = withShellParts(readFileSync(new URL('../web/core/own-views.js', import.meta.url), 'utf8'));
 const module = { exports:{} }; vm.runInNewContext(source, { module });
 const { own, frameUrl, marker } = module.exports;
@@ -71,11 +73,25 @@ test('synthetic shell clicks and app messages cannot authorize revert', async ()
 });
 
 test('both renderers use the same frame and marker helpers without a new history/Back stack', () => {
-  for (const path of ['web/app.js', 'web/desktop/desktop.js']) {
-    const text = withAppParts(withShellParts(readFileSync(new URL('../' + path, import.meta.url), 'utf8')));
-    assert.match(text, /WosOwnViews\?\.frameUrl/); assert.match(text, /WosOwnViews\?\.marker/);
-    assert.match(text, /data-own-app=/);
+  // Each shell's real frame and window-bar markup (phone app-frame.js / app-windows.js, desktop desktop-resize.js),
+  // drawn with the real own-views helpers: the own screen's URL, its marker and the frame's data-own-app.
+  const raw = p => withAppParts(withShellParts(readFileSync(new URL('../' + p, import.meta.url), 'utf8')));
+  const OV = { frameUrl, marker, noteHtml: () => '' }, esc = v => String(v ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const w = { id: 'w1', app: 'frame', appId: 'habits', url: '/habits/today' }; // saved on the original screen
+  const drawn = (code, call, extra = {}) => { const doc = createDocument(); doc.body.innerHTML = runRecording(code + `\nthis.out = ${call};`, { window: { WosOwnViews: OV, WosBoundView: { badge: () => '' }, WosAgents: {} }, esc, a, w, appOf: () => a, winApp: () => a, winTitle: () => 'Habits', ico: () => '', desktopVars: { hud: null }, globalThis: {}, MOD: '⌥', reloadable: () => false, ...extra }).out; return doc; };
+  const phoneFrame = drawn(block(raw('web/app-frame.js'), '  function renderFrameCore('), 'renderFrameCore(w, a)');
+  const deskFrame = drawn(block(raw('web/desktop/desktop-resize.js'), '  function bodyHtml('), 'bodyHtml(w)');
+  for (const [shell, doc] of [['phone', phoneFrame], ['desktop', deskFrame]]) {
+    const f = doc.querySelector('iframe'); assert.ok(f, shell);
+    assert.equal(f.getAttribute('data-own-app'), 'habits', `${shell}: the frame names its app`);
+    assert.equal(f.getAttribute('src'), '/wizard/views/habits/', `${shell}: the own screen's URL, not the saved original page`);
   }
+  const bar = drawn(block(raw('web/desktop/desktop-resize.js'), '  function barHtml('), 'barHtml(w)', { panelHas: () => false });
+  assert.equal(bar.querySelector('.own-view-marker')?.getAttribute('data-own-original'), 'habits', 'desktop bar: Your version');
+  const made = runRecording(block(raw('web/app-windows.js'), '  function makeWin(') + '\nthis.el = makeWin(w);', { document: createDocument(), window: { WosOwnViews: OV, WosAgents: {}, WosBoundView: { badge: () => '' } }, esc, w, winApp: () => a, winTitle: () => 'Habits', ico: () => '', agentWin: () => false, winBody: () => '', refreshModes: [], RELOAD_BTN: '' }).el;
+  assert.equal(made.querySelector('.own-view-marker')?.getAttribute('data-own-original'), 'habits', 'phone bar: Your version');
+  const chatsWin = { ...w, app: 'chats', appId: 'wizard' };
+  assert.equal(drawn(block(raw('web/desktop/desktop-resize.js'), '  function barHtml('), 'barHtml(cw)', { panelHas: () => false, cw: chatsWin, window: { WosOwnViews: OV, WosBoundView: { badge: () => '' }, WosAgents: { titlebar: () => '' } } }).querySelector('.own-view-marker'), null, 'only app frames wear it');
   assert.doesNotMatch(source, /history\.(?:pushState|replaceState|back)/);
   assert.match(source, /!e\.isTrusted/);
   assert.match(source, /e\.view !== window/);
