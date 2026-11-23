@@ -81,11 +81,19 @@ test('the HUD window lives outside the desks: never pruned at boot, never synced
 });
 
 test('render keeps the HUD above every desk and Home; the open HUD counts as visible and keeps polling', () => {
-  const i = js.indexOf("$$('.wsp', stage).forEach(");
-  assert.ok(js.slice(i, js.indexOf('\n', js.indexOf('\n', i) + 1)).includes('hudMount();'), 'mounted after the desks');
+  // the real render(): the HUD is mounted after every desk is drawn (its layer stays on top)
+  const rd = createDocument(), stage = rd.createElement('div'), order = []; rd.body.appendChild(stage);
+  const home = rd.createElement('div'); home.id = 'desktopHome'; rd.body.appendChild(home);
+  const hosts = [0, 1].map(i => { const h = rd.createElement('div'); h.className = 'wsp'; h.dataset.desk = 'd' + i; stage.appendChild(h); return h; });
+  const R = runRecording(`${block(js, '  function render() {')}\nthis.render = render;`, { W: { a1: { id: 'a1' }, a2: { id: 'a2' } }, ws: [{ id: 'd0', wins: ['a1'] }, { id: 'd1', wins: ['a2'] }], cur: 0, homeOpen: false,
+    stage, document: rd, pal: { hidden: true }, window: {}, globalThis: {}, $: q => rd.querySelector(q), $$: (q, r = rd) => r.querySelectorAll(q), wsEl: i => hosts[i],
+    mountWin: (w, to) => { order.push('mount:' + w.id); const el = rd.createElement('div'); el.className = 'win'; el.dataset.win = w.id; to.appendChild(el); return el; },
+    hudMount: () => order.push('hud'), queueMicrotask: () => {} });
+  R.render();
+  assert.deepEqual(order, ['mount:a1', 'mount:a2', 'hud'], 'mounted after the desks');
   const visible = (homeOpen, hud) => vm.runInNewContext(`({ ${lineOf('visible: () => [...(homeOpen ? [] : ws[cur].wins)').trim().replace(/,$/, '')} }).visible()`, { homeOpen, hud, ws: [{ wins: ['a1'] }], cur: 0, globalThis: {}, shownBeside: () => [] });
-  assert.deepEqual([...visible(false, { id: 'h', open: true })], ['a1', 'h']); assert.deepEqual([...visible(true, { id: 'h', open: true })], ['h'], 'over Home too');
-  assert.deepEqual([...visible(false, { id: 'h', open: false })], ['a1']);
+  assert.equal(JSON.stringify(visible(false, { id: 'h', open: true })), '["a1","h"]'); assert.equal(JSON.stringify(visible(true, { id: 'h', open: true })), '["h"]', 'over Home too');
+  assert.equal(JSON.stringify(visible(false, { id: 'h', open: false })), '["a1"]');
   let tick = null; const loaded = [];
   vm.runInNewContext(lineOf("setInterval(() => { if (document.hidden) return; for (const id of [...ws[cur].wins").trim(), { setInterval: f => { tick = f; }, document: { hidden: false }, ws: [{ wins: [] }], cur: 0, hud: { id: 'h', open: true }, W: { h: { app: 'chats', thread: 't1' } }, CHATS: { isHosted: () => false, loadThread: w => loaded.push(w.thread) } });
   tick(); assert.deepEqual(loaded, ['t1'], 'the open HUD keeps polling');
