@@ -422,7 +422,8 @@ export default function setup(api) {
     tsTab.hidden = S.ws !== 'mine'; tsTab.setAttribute('aria-expanded', String(open));
     const checked = allClear();
     tsTab.setAttribute('aria-label', `Tailscale, ${bad ? bad + ' open to the internet' + (S.devFresh ? '' : ' at the last reading') : checked ? 'the only way in' : 'not every machine checked yet'}. ${open ? 'Hide' : 'Show'} details`);
-    tsTab.replaceChildren(h('span', { text: 'Tailscale' }), bad ? h('b', { cls: 'mh-ts-n' + (S.devFresh ? '' : ' is-stale'), text: `${bad} open` }) : null, chev(open));
+    // replaceChildren turns null into the text "null", so the count is only passed when there is one (#1722).
+    tsTab.replaceChildren(h('span', { text: 'Tailscale' }), ...(bad ? [h('b', { cls: 'mh-ts-n' + (S.devFresh ? '' : ' is-stale'), text: `${bad} open` })] : []), chev(open));
   }
   const devOpen = p => p.devices ? S.open.has('devs') : S.open.has('p:' + p.id);
   function personNode(p) {
