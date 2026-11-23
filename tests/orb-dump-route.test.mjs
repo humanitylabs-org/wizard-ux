@@ -10,7 +10,7 @@ import vm from 'node:vm';
 import { withShellParts } from './fixtures/shell-parts.mjs';
 import { createDocument } from './fixtures/mini-dom.mjs';
 import { cascade } from './fixtures/mini-css.mjs';
-import { block as fnBlock, runRecording } from './fixtures/source-slice.mjs';
+import { block as fnBlock, between, runRecording } from './fixtures/source-slice.mjs';
 
 const source = withShellParts(readFileSync(new URL('../web/outbox.js', import.meta.url), 'utf8'));
 const app = withShellParts(readFileSync(new URL('../web/app.js', import.meta.url), 'utf8'));
@@ -166,10 +166,20 @@ test('phone: only a plain take away from any thread is marked, and only with the
   assert.equal(phoneDumpTake(SWITCH, { files: [{ id: 'f' }] })(home, null, null, 'auto'), false, 'attached files');
 });
 
-test('phone and desktop mark the staged take and say Got it; the list never shows a dump', () => {
+test('phone and desktop mark the staged take and say Got it; the list never shows a dump', async () => {
   const raw = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
   const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  assert.match(app, /\.\.\.\(typeof dumpTake === 'function' && dumpTake\(snap, rt, aimAt, kind\) \? \{ dump: true \} : \{\}\),/);
+  // phone (real app.js): the staged take carries dump: true exactly when dumpTake(snap, rt, aimAt, kind) says so
+  const stageCode = between(app, '    const it = await OUTBOX.stage({ ...(snap.route', '    V.custodyCapture = null;');
+  const staged = async (verdict, asked = []) => {
+    const r = runRecording(`this.run = async () => {\n${stageCode}\nreturn it; };`, { snap: { route: { model: 'm' } }, rt: { wid: 'w1', sid: 's1', steerRunId: '' }, aimAt: 2, kind: 'auto', sid: '__new__', sv: null, nid: 'n1', audio: 'A',
+      V: { custodyCapture: 'cap' }, takeFiles: () => [], viewContext: () => '', dumpTake: (...a) => (asked.push(a), verdict), OUTBOX: { stage: async o => o }, CHATS: { isWorking: () => false }, LIVE: { session: () => null } });
+    return JSON.parse(JSON.stringify(await r.run()));
+  };
+  const askedWith = [];
+  assert.equal((await staged(true, askedWith)).dump, true, 'a dump candidate is marked');
+  assert.deepEqual(JSON.parse(JSON.stringify(askedWith[0].slice(1))), [{ wid: 'w1', sid: 's1', steerRunId: '' }, 2, 'auto'], 'asked with the take, its reply target, its aim and kind');
+  assert.equal('dump' in (await staged(false)), false, 'anything else is not');
   // phone (real app-routing.js): a dump the box took says "Got it · <title>" on the got-it toast
   const routing = raw('web/app-routing.js'), at = routing.indexOf('  function gotIt(title) {');
   const phoneCode = routing.slice(at, routing.indexOf('\n', routing.indexOf('OUTBOX?.onDump?.(', at)));
@@ -185,8 +195,26 @@ test('phone and desktop mark the staged take and say Got it; the list never show
   hooks.desk({ dumped: { title: 'Lisbon' } }); hooks.desk({});
   assert.deepEqual(desk.calls.filter(c => c[0] === 'toast').map(c => c[2]), ['Got it · Lisbon', 'Got it']);
   // A quick take asks once: its command call carries accept_dump, and the outbox is told not to ask again.
-  assert.match(app, /\.\.\.\(dumpAsk \? \{ accept_dump: true \} : \{\}\) \}\) \}\);\n[^\n]*\n\s*if \(dumpAsk && r\.ok\) snap\.dumpAsked = true;[^\n]*\n\s*if \(dumpAsk && c\.route === 'dump' && c\.record_id\) \{ setVoice\('idle'\); txHide\(0\); gotIt\(c\.title\); return \{ outcome: 'local' \}; \}/);
-  assert.match(app, /\.\.\.\(opts\.snap\?\.dumpAsked \? \{ dump: false \} : \{\}\) \}\);/);
+  // (real app-routing.js quick take): the router call carries accept_dump; a dump the box took says Got it and ends there
+  const quick = async ({ marked = true, answer = { cmd: { route: 'dump', record_id: 'r1', title: 'Lisbon' } }, ok = true } = {}) => {
+    const bodies = [], snap = { view: null, custodyId: 'c1' };
+    const r = runRecording(`this.run = async () => {\n${fnBlock(routing, "    if (kind === 'quick') {")}\nreturn 'continued'; };`, { kind: 'quick', target: null, text: 'book lisbon', snap, sttNote: '', APPS: [],
+      localParse: () => null, isPill: () => true, tx: { dataset: {} }, AbortSignal: {}, window: { WizConfig: { endpoint: () => '/route' } },
+      OUTBOX: { get: id => (id === 'c1' && marked ? { dump: true } : null) }, fetch: async (u, o) => { bodies.push(JSON.parse(o.body)); return { ok, json: async () => answer }; } });
+    const out = await r.run();
+    return { out: JSON.parse(JSON.stringify(out)), bodies, snap, got: r.calls.filter(c => c[0] === 'gotIt').map(c => c[1]) };
+  };
+  const took = await quick();
+  assert.equal(took.bodies[0].accept_dump, true, 'asked once, in the router call'); assert.equal(took.snap.dumpAsked, true, 'and the outbox is told not to ask again');
+  assert.deepEqual(took.out, { outcome: 'local' }); assert.deepEqual(took.got, ['Lisbon']);
+  const plain = await quick({ marked: false });
+  assert.equal('accept_dump' in plain.bodies[0], false, 'an unmarked take never asks'); assert.equal(plain.snap.dumpAsked, undefined); assert.deepEqual(plain.got, []);
+  const noAnswer = await quick({ ok: false });
+  assert.equal(noAnswer.snap.dumpAsked, undefined, 'no answer: the outbox may still ask'); assert.equal(noAnswer.out, 'continued');
+  // then the ordinary send of that take (real app-routing.js) tells the outbox it was asked already
+  const enqueueCode = between(routing, '    const item = await OUTBOX.enqueue({ sealKey: opts.snap?.seal?.key', '\n');
+  const enq = async snap => { const r = runRecording(`this.run = async () => {\n${enqueueCode}\nreturn item; };`, { opts: { snap }, text: 'hi', ctx: '', OUTBOX: { enqueue: async o => o } }); return JSON.parse(JSON.stringify(await r.run())); };
+  assert.equal((await enq({ dumpAsked: true })).dump, false); assert.equal('dump' in (await enq({})), false);
   // desktop: only a bare take with no thread aimed (or a forced New chat outside a channel) is a dump candidate
   const dumpLine = raw('web/desktop/desktop.js').split('\n').find(l => l.includes('const dumpIt = '));
   const dumpIt = (env) => runRecording(`globalThis.f = () => { ${dumpLine.trim()}\n return dumpIt; };`, { sealed: false, extraFiles: [], aimSid: '', vNewChat: false, vSpace: null, rp: null, dumpTake: () => true, ...env }).f();
@@ -196,7 +224,13 @@ test('phone and desktop mark the staged take and say Got it; the list never show
   assert.equal(dumpIt({ extraFiles: [{}] }), false, 'attached files');
   assert.equal(dumpIt({ aimSid: '__new__', vNewChat: true }), true, 'a forced New chat');
   assert.equal(dumpIt({ aimSid: '__new__', vNewChat: true, vSpace: 'launch' }), false, 'a channel take');
-  assert.match(desktop, /if \(dumpIt\) \{ await OUTBOX\.enqueue\(\{ \.\.\.modelRoute, dump: true, custodyId: stagedId, captureId: stagedId \? null : r\.captureId, kind: 'new', sessionId: '',[^\n]*return 'sent'; \}\n    if \(w && aimSid\) CHATS\.sendChat\(/, 'a dump candidate goes through the outbox, never opened in a window');
+  // (real desktop.js): a dump candidate goes through the outbox and stops there, never opened in a window
+  const dumpSend = between(raw('web/desktop/desktop.js'), '    if (dumpIt) { await OUTBOX.enqueue(', '\n');
+  const send = async on => { const queued = []; const r = runRecording(`this.run = async () => {\n${dumpSend}\nreturn 'on to a window'; };`, { dumpIt: on, modelRoute: { model: 'm' }, stagedId: 's1', r: { blob: 'B', captureId: 'x' }, transcript: 't', vContext: '', OUTBOX: { enqueue: async o => queued.push(o) } }); return { out: await r.run(), queued: JSON.parse(JSON.stringify(queued)) }; };
+  const dumped = await send(true);
+  assert.equal(dumped.out, 'sent'); assert.equal(dumped.queued.length, 1);
+  assert.deepEqual([dumped.queued[0].dump, dumped.queued[0].kind, dumped.queued[0].sessionId, dumped.queued[0].custodyId], [true, 'new', '', 's1']);
+  const other = await send(false); assert.equal(other.out, 'on to a window'); assert.deepEqual(other.queued, []);
   // the list (real live.js syncPending): a take still asking, or one the box took, never shows as Working
   const liveSrc = raw('web/live.js');
   const PEND = new Map();
