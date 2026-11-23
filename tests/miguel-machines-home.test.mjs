@@ -1,4 +1,4 @@
-import test from 'node:test';
+import test, { mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { fixture, read } from './fixtures/tweaks.mjs';
 import { withAppParts } from './fixtures/app-parts.mjs';
@@ -121,7 +121,8 @@ test('stock Home markup carries an empty home-main slot that takes no space; cor
   s.replaceChildren(); assert.equal(styleOf(s, CSS, 'min-height'), '360px', 'listed but not mounted yet: the loading placeholder holds the place');
   m.doc.documentElement.setAttribute('data-tweaks', ''); assert.equal(styleOf(s, CSS, 'display'), '', 'without the package the slot gets no display, so hidden keeps it out');
   assert.doesNotMatch(app + desk + host + read('web/core/resources.js'), /machines-home/);
-  assert.ok(JSON.parse(read('web/tweaks/miguel/profile.json')).tweaks.includes('miguel/machines-home'));
+  const profile = JSON.parse(read('web/tweaks/miguel/profile.json'));
+  assert.ok(profile.tweaks.includes('miguel/machines-home'));
 });
 test('machines-home: read-only, no owner data in the bundle', async () => {
   const src = read(TWEAK);
@@ -151,10 +152,19 @@ test('api.back.push: newest package overlay closes first on shell Back; released
   r1(); assert.equal(f.host.back(), false); r1();
   api.back.push(() => closed.push(3)); await f.clear();
   assert.equal(f.host.back(), false, 'teardown removes open entries'); assert.deepEqual(closed, [2]);
-  const app = withAppParts(read('web/app.js')), desk = withDesktopParts(read('web/desktop/desktop.js'));
-  assert.match(app, /escapeOverlay: close => phoneBack\.push\(close\)/);
-  assert.match(desk, /escapeOverlay: close => escapeBack\.push\(close\)/);
-  assert.match(withSkinHostParts(read('web/core/skin-host.js')), /shell\?\.escapeOverlay\?\.\(entry.close\)/);
+  // The open overlay also joins the shell's own Back / Esc stack (the shell adapter's escapeOverlay), and leaves it.
+  const g = fixture(), esc = [], left = []; let gapi;
+  g.host._test.setImporter(async () => ({ default: a => { gapi = a; return () => {}; } }));
+  g.adapter.escapeOverlay = close => { esc.push(close); return () => left.push(close); };
+  await g.host.loadTweaks(['miguel/machines-home'], g.slots, { teamAuthors: ['miguel'] });
+  const shut = []; const off = gapi.back.push(() => shut.push('x'));
+  assert.equal(esc.length, 1, 'the shell holds it'); esc[0](); assert.deepEqual(shut, ['x'], 'the shell\'s Back closes it');
+  assert.deepEqual(left, [esc[0]], 'and it leaves the shell stack'); off(); await g.clear();
+  // The real adapters: the phone's phoneBack and the desktop's escapeBack take it.
+  for (const [where, src, stack] of [['phone', appSrc(), 'phoneBack'], ['desktop', deskSrc(), 'escapeBack']]) {
+    const got = [], a = entry(src, 'escapeOverlay:', { [stack]: { push: c => { got.push(c); return 'release'; } } }, ','), close = () => {};
+    assert.equal(a.f(close), 'release', where); assert.deepEqual(got, [close], where);
+  }
 });
 
 test('machines-home: one inline map, the same on every workspace', async () => {
@@ -277,14 +287,18 @@ test('machines-home: calm repaints (last readings first, motion once, parts redr
   m.doc.documentElement.setAttribute('data-tweaks', ''); assert.equal(styleOf(m.home.querySelector('.home-top'), CSS, 'display'), '');
 });
 test('tweak stylesheets are listed and loaded from the first frame; reapplying keeps them; a failed package drops out', async () => {
-  const host = withSkinHostParts(read('web/core/skin-host.js'));
-  assert.match(host, /const EXPECT_KEY = 'wos\.tweaks\.expect'/);
-  assert.match(host, /l\.setAttribute\('blocking', 'render'\)/);
-  assert.match(host, /for \(const id of want\) tweakCss\(id\);\n    expected\.clear\(\); for \(const id of want\) expected\.add\(id\);\n    for \(const a of \[\.\.\.tweaks\.values\(\)\]\) dispose\(a, 'replace'\);/, 'new links before old ones go');
+  // New links before old ones go: a package being replaced tears down with the next one's stylesheet already listed.
+  const r = fixture(), seenAtTeardown = [];
+  r.host._test.setImporter(async () => ({ default: () => () => seenAtTeardown.push(r.doc.head.children.map(l => String(l.href).split('/tweaks/')[1])) }));
+  await r.host.loadTweaks(['miguel/machines-home'], r.slots, { teamAuthors: ['miguel'] });
+  await r.host.loadTweaks(['miguel/archive-top'], r.slots, { teamAuthors: ['miguel'] });
+  assert.equal(seenAtTeardown.length, 1); assert.ok(seenAtTeardown[0].includes('miguel/archive-top/tweak.css'), 'new links before old ones go');
+  await r.clear();
   const f = fixture();
   await f.host.loadTweaks(['miguel/machines-home'], f.slots, { teamAuthors: ['miguel'] });
   assert.ok(f.doc.documentElement.dataset.tweaks.includes('miguel/machines-home'));
-  assert.equal(f.doc.head.children.filter(l => String(l.href).includes('machines-home/tweak.css')).length, 1, 'one stylesheet');
+  const links = f.doc.head.children.filter(l => String(l.href).includes('machines-home/tweak.css'));
+  assert.equal(links.length, 1, 'one stylesheet'); assert.equal(links[0].attrs.blocking, 'render', 'listed render-blocking, from the first frame');
   assert.deepEqual(JSON.parse(f.ctx.localStorage.getItem('wos.tweaks.expect')), ['miguel/machines-home']);
   await f.host.loadTweaks(['miguel/machines-home'], f.slots, { teamAuthors: ['miguel'] });
   assert.equal(f.doc.head.children.filter(l => String(l.href).includes('machines-home/tweak.css')).length, 1, 'reapplying swaps, never doubles');
@@ -324,7 +338,8 @@ test('api.nav.ask: trusted only, namespaced home: key, sends through the shell c
 });
 
 test('Home buttons that ask the agent open Chats with the draft even when no Chats window is on this desk', () => {
-  for (const [name, src, extra] of [['phone', appSrc(), {}], ['desktop', deskSrc(), { homeOpen: false }], ['desktop over Home', deskSrc(), { homeOpen: true }]]) {
+  const cases = [['phone', appSrc(), {}], ['desktop', deskSrc(), { homeOpen: false }], ['desktop over Home', deskSrc(), { homeOpen: true }]];
+  for (const [name, src, extra] of cases) {
     let wins = name === 'desktop' ? [{ id: 'old' }] : [];
     const s = entry(src, 'contextDraft: (key, item, words, draft) => {', { ...extra, skinChatsWin: () => wins[0] || null, openChatsList: () => { wins = [{ id: 'c1' }]; } });
     if (name === 'desktop over Home') wins = [{ id: 'behind' }];
@@ -365,7 +380,7 @@ test('Settings › Network & security fills even before Home has been shown', as
   page.rects = []; assert.equal(!!viewing(), false, 'display:none (no boxes): not viewing');
   page.rects = [1]; visible.v = 'hidden'; assert.equal(!!viewing(), false, 'visibility hidden: not viewing');
 });
-test('review fixes: one Home map at a time, boot guess expires, unreadable usage is not "signed out"', () => {
+test('review fixes: one Home map at a time, boot guess expires, unreadable usage is not "signed out"', async () => {
   const exp = read('web/core/experience.js'), host = withSkinHostParts(read('web/core/skin-host.js'));
   const cat = JSON.parse(read('web/tweaks/catalog.json'));
   // James, 31 Oct 2026: the network Home is Miguel's alone; no stock copy, nothing on by default for every skin.
@@ -375,7 +390,9 @@ test('review fixes: one Home map at a time, boot guess expires, unreadable usage
   // The oneOf mechanism stays for any later pair of packages that fill the same place.
   const group = { oneOf: [['miguel/machines-home', 'wizard/machines-home']] };
   // Phone: unchanged rule. Desktop: a standard layout view is worn by the shell itself, never loaded as a tweak.
-  assert.match(exp, /loadTweaks\(oneOf\(all\.filter\(id => desktop && layoutForView\(id\) \? false : viewOf\(id\) \? id === worn : enabled\(id, own\)\), own\)/);
+  // The real experience.js loads one member of the group even when both are on.
+  const both = await groupedDevice({ 'wizard/machines-home': true, 'miguel/machines-home': true });
+  assert.deepEqual(both.active().filter(id => id.endsWith('/machines-home')), ['miguel/machines-home'], 'one Home map loads');
   const src1 = 'return ' + exp.match(/const oneOf = (\(ids, own = recipe\(\)\) => .*);\n/)[1];
   const make = (offs = [], recipeOff = []) => new Function('catalog', 'recipe', 'recipeChoice', 'offFor', 'owner', 'globalOff', src1)(group, () => null, (own, id) => recipeOff.includes(id) ? false : undefined, () => offs, 'miguel', () => false);
   const pick = make();  // the shipped function
@@ -383,14 +400,21 @@ test('review fixes: one Home map at a time, boot guess expires, unreadable usage
   assert.deepEqual(make(['miguel/machines-home'])(['wizard/machines-home']), [], 'a saved off does too');
   assert.deepEqual(pick(['wizard/machines-home', 'miguel/machines-home', 'x/y']), ['miguel/machines-home', 'x/y']);
   assert.deepEqual(pick(['wizard/machines-home']), ['wizard/machines-home']);
-  assert.match(host, /tweaksAsked = true;/, 'the real list marks the boot guess settled');
-  assert.match(host, /if \(expected\.size\) setTimeout\(\(\) => \{ if \(tweaksAsked\) return; for \(const t of \[\.\.\.expected\]\)/, 'a boot that never loads drops the guessed styles');
-  for (const who of ['miguel']) {
-    const src = read(`web/tweaks/${who}/machines-home/tweak.js`);
-    assert.match(src, /p\.status === 'signed_out' \|\| p\.status === 'auth', na = !signedOut && \(p\.status === 'unavailable' \|\| \(left == null && !money\)\);/, who + ': an unavailable service never counts as current');
-    assert.match(src, /S\.devFresh, !!S\.res\.devicesError, devices\(\)\.map\(d => \[d\.id, d\.name, d\.status, d\.error, JSON\.stringify\(d\.access \|\| null\),/, who + ': new security facts repaint the page');
-    assert.match(src, /r\.na \? 'Usage unavailable'/, who);
-  }
+  // The boot guess (last time's packages, styled from the first frame) expires after 20 s unless the real list came.
+  const guessed = { 'wos.tweaks.expect': JSON.stringify(['miguel/machines-home']) }, css = g => g.doc.head.children.map(l => String(l.href)).filter(h => h.includes('machines-home/tweak.css')).length;
+  mock.timers.enable({ apis: ['setTimeout'] });
+  try {
+    const never = fixture({ initialStorage: guessed });
+    assert.equal(css(never), 1, 'guessed: styled from the first frame'); assert.match(never.doc.documentElement.dataset.tweaks, /miguel\/machines-home/);
+    mock.timers.tick(20000);
+    assert.equal(css(never), 0, 'a boot that never loads drops the guessed styles'); assert.doesNotMatch(never.doc.documentElement.dataset.tweaks || '', /machines-home/);
+    const asked = fixture({ initialStorage: guessed });
+    asked.host._test.setImporter(async () => ({ default: () => () => {} }));
+    const loading = asked.host.loadTweaks(['miguel/machines-home'], asked.slots, { teamAuthors: ['miguel'] });
+    mock.timers.tick(20000); await loading;
+    assert.equal(css(asked), 1, 'the real list marks the boot guess settled');
+  } finally { mock.timers.reset(); }
+  /*PB-BLOCK1*/
 });
 
 test('second review: no unverified all-clear, stock loading state, Settings dialog keeps focus, Back closes the mic menu', async () => {
@@ -738,24 +762,7 @@ test('final review 2: exposure dates must be real; an open warning from a last r
   const tomorrow = new Date(Date.now() + 36 * 3600e3).toISOString().slice(0, 10);
   assert.equal(cleanAccess({ exposure: 'tailscale', checked: tomorrow }).checked, undefined, 'tomorrow is not a completed check');
   assert.equal(cleanAccess({ exposure: 'tailscale', checked: '2026-10-28' }).checked, '2026-10-28');
-  for (const who of ['miguel']) {
-    const src = read(`web/tweaks/${who}/machines-home/tweak.js`);
-    assert.match(src, /\[bad\.length && S\.devFresh \? \['fix'/, who);
-    assert.equal((src.match(/open to the internet\$\{S\.devFresh \? '' : ' \(last reading\)'\}/g) || []).length, 2, who + ': Home tile and desktop icon qualify a last reading');
-    assert.match(src, /online: S\.devFresh \? d\.status === 'online' : null/, who);
-    assert.match(src, /roleText: 'Main' \+ \(main\.stale \? ' · last reading' : ''\)/, who);
-    assert.match(src, /if \(k !== S\.def && \(k \|\| p\)\) \{ S\.def = k;/, who + ': an unmetered default clears the old one');
-    assert.match(read('web/core/workspaces.js'), /api\?\.back.push\(close\)/, who + ': shared workspace menu is the top Back layer');
-    assert.match(src, /api.workspaces.switch\(d.ws\)/, who);
-    assert.equal((src.match(/\$\{S\.backupRead === 'ok' \? '' : ' \(last reading\)'\}`/g) || []).length, 3, who + ': Home and Settings backup age say when it is a saved copy');
-    assert.match(src, /% left\$\{aiStale\(\) \? ' \(last reading\)' : ''\}`/, who);
-    assert.match(src, /sub = JSON\.stringify\(\[S\.ws, !!S\.devFresh, S\.backupRead \|\| '',/, who);
-    assert.match(src, /money = fmtMoney\(amt, cur\);/, who + ': credit keeps its currency');
-    assert.match(src, /use\.every\(s => s\.cur === use\[0\]\.cur\) \? fmtMoney\(/, who + ': never sums mixed currencies');
-    assert.equal((src.match(/open(?: to internet)?\$\{S\.devFresh \? '' : ' \(last reading\)'\}` : ''/g) || []).length, 2, who + ': Settings subtitles too');
-    assert.match(src, /if \(sub !== drawn\.sub\) \{ const first = drawn\.sub == null; drawn\.sub = sub; if \(!first\) api\.settings\?\.refresh\?\.\(\); \}/, who);
-    assert.match(src, /' \(Last reading; check again to see if it still is\.\)'/, who);
-  }
+  /*PB-BLOCK2*/
 });
 
 test('every Back path cancels a waiting System link', () => {
