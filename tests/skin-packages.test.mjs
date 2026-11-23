@@ -12,6 +12,9 @@ import { createRequire } from 'node:module';
 import vm from 'node:vm';
 import { withShellParts } from './fixtures/shell-parts.mjs';
 import { withWebParts } from './fixtures/web-parts.mjs';
+import { createDocument } from './fixtures/mini-dom.mjs';
+import { listFixture } from './fixtures/chats-list-render.mjs';
+import { block, runRecording } from './fixtures/source-slice.mjs';
 
 const root = new URL('../', import.meta.url);
 const read = p => withShellParts(withWebParts(readFileSync(new URL(p, root), 'utf8')));
@@ -88,7 +91,7 @@ test('skin.js uses only the skin API', async () => {
   for (const f of files) {
     const src = read(f).replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
     for (const b of banned) assert.ok(!src.includes(b), `${f}: "${b}" is not allowed in a skin script; use the skin API (web/skins/README.md)`);
-    assert.match(src, /export default function/, `${f}: export default function setup(api)`);
+    assert.equal(typeof (await import(new URL(f, root).href)).default, 'function', `${f}: export default function setup(api)`);
   }
   // And every packaged skin script (plus the fixture) runs through the real host on the API alone, leaving nothing behind.
   const scripted = skinEntries().filter(s => s.pkg?.js).concat([{ id: 'fixture', pkg: { js: true, when: 'touch', dir: 'fixture' } }]);
@@ -294,9 +297,12 @@ function dockSwipe(claimed) {
   return { swipe, seen };
 }
 test('the shell wires the host: head order, adapter, dock claim, render hooks', () => {
+  const parsed = f => { const doc = createDocument(); doc.documentElement.innerHTML = read(f).replace(/^<!doctype html>/i, ''); return doc; };
   for (const f of ['web/index.html', 'web/desktop.html']) {
-    const h = read(f);
-    assert.ok(h.indexOf('core/skins.js') < h.indexOf('core/skins.css') && h.indexOf('core/skins.css') < h.indexOf('core/skin-host.js'), `${f}: skins.js, then skins.css, then skin-host.js`);
+    // the order the browser loads them in: the parsed page's scripts and stylesheets, in document order
+    const order = parsed(f).querySelectorAll('script[src], link[rel="stylesheet"][href]').map(e => (e.getAttribute('src') || e.getAttribute('href')).split('?')[0].replace(/^\.\//, ''));
+    const at = n => { const i = order.indexOf(n); assert.ok(i >= 0, `${f} loads ${n}`); return i; };
+    assert.ok(at('core/skins.js') < at('core/skins.css') && at('core/skins.css') < at('core/skin-host.js'), `${f}: skins.js, then skins.css, then skin-host.js`);
   }
   // The phone shell attaches its adapter; a skin's Back is the shell's own Back step.
   const A = phoneAdapter();
@@ -314,12 +320,21 @@ test('the shell wires the host: head order, adapter, dock claim, render hooks', 
   assert.deepEqual(claimedSwipe.seen, []);
   const free = dockSwipe([]);
   assert.equal(free.swipe(8).DS.h, true, 'an unclaimed finger swipes desks');
-  // Chats calls the render hooks and marks its parts (thread/list paint need the whole Chats shell; pinned here).
-  const chats = read('web/core/chats.js');
-  assert.match(chats, /WosSkinHost\?\.rendered\('thread', el\)/);
-  assert.match(chats, /WosSkinHost\?\.rendered\('list', el\)/);
-  for (const p of ['thread', 'list', 'composer']) assert.match(chats, new RegExp(`data-part="${p}"`));
-  assert.match(read('web/index.html'), /id="dock" data-part="dock"/);
+  // Chats calls the render hooks on the parts it marks: the real list paint (chats-list-render.mjs) ...
+  const hooks = [];
+  const list = listFixture(); list.ctx.window.WosSkinHost = { rendered: (part, el) => hooks.push([part, el]) };
+  const ld = createDocument(); ld.body.innerHTML = list.render();
+  assert.equal(hooks.length, 1); assert.equal(hooks[0][0], 'list'); assert.ok(ld.querySelector('[data-part="list"]'), 'the list part is marked');
+  // ... and the real end of the thread paint (chats-threadpaint.js, from its markup on), on a mini-dom element.
+  const chats = read('web/core/chats.js'), td = createDocument(), el = td.createElement('div'); td.body.appendChild(el);
+  const paint = runRecording('this.paint = function () {\n' + (t => t.slice(t.indexOf('    const threadHTML = `')))(block(chats, '  function renderThread(')), {
+    el, TAG: '', NV: null, s: { id: 't1' }, isNew: false, msgs: '', keepTa: null, hadFocus: false, PW: null, msw: '', draft: '', c: { files: [] }, DL: false, keep: false, turns: null,
+    dkey: 'k', openContexts: new Set(), esc: String, window: { WizConfig: { agent: () => 'Wizard' }, WosSkinHost: { rendered: (part, at) => hooks.push([part, at]) } }, globalThis: {} });
+  paint.paint();
+  assert.deepEqual(hooks.slice(1).map(([part, at]) => [part, at === el]), [['thread', true]], 'the thread hook gets the painted element');
+  assert.ok(el.querySelector('[data-part="thread"] form[data-part="composer"]'), 'the thread and its composer are marked');
+  // The phone dock is marked in the shell page itself.
+  assert.ok(parsed('web/index.html').querySelector('#dock[data-part="dock"]'), 'the phone dock is a part');
 });
 
 // Tweaks share the package lint surface; behaviour belongs in web/tweaks, not new skin scripts.
