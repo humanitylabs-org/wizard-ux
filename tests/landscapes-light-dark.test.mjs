@@ -60,7 +60,9 @@ test('each palette rotates only its own photos, split by overall brightness, and
   const dayFiles = new Set(r.L.light.FILES);
   assert.ok(r.loads.slice(0, 4).every(u => dayFiles.has(u.split('/').pop().replace('.webp', ''))), 'Light loads only day photos');
   // the skin table hands each palette its own rotation
-  assert.match(js, /landscapes: LANDSCAPES\.dark,\s*'landscapes-light': LANDSCAPES\.light,/);
+  const table = runRecording(`${block(js, '  const BG = {')};\nthis.BG = BG;`, { LANDSCAPES: r.L, Math }).BG;
+  assert.equal(table.landscapes, r.L.dark, 'Landscapes Dark draws the dark rotation');
+  assert.equal(table['landscapes-light'], r.L.light, 'Landscapes Light draws the day rotation');
 });
 
 test('the Landscapes package and Miguel\'s shell rules cover both palettes', () => {
