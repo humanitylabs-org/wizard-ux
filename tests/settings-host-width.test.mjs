@@ -7,6 +7,7 @@ import { withSettingsParts } from './fixtures/settings-parts.mjs'; // settings.j
 import { withShellParts } from './fixtures/shell-parts.mjs';
 import { settingsWorld } from './fixtures/r5A-settings.mjs';
 import { styles } from './fixtures/w5-css.mjs';
+import { between, runRecording } from './fixtures/source-slice.mjs';
 const read = p => withShellParts(readFileSync(process.env.QA_SETTINGS_SOURCE ? process.env.QA_SETTINGS_SOURCE + '/' + p : new URL('../' + p, import.meta.url), 'utf8'));
 const css = read('web/core/settings.css'), desktop = read('web/desktop/desktop.js');
 const slice = (s, a, b) => { const start = s.indexOf(a); assert.ok(start >= 0, a); const end = s.indexOf(b, start); assert.ok(end > start, b); return s.slice(start, end); };
@@ -96,8 +97,14 @@ test('Apps/Orb keep their normal Settings window; closed Settings is never opene
     assert.equal(s.settingsModal, false); assert.equal(setEl.parentNode, options.open === false ? body : host);
     if (options.open === false) assert.equal(setEl.hidden, true);
   }
-  assert.match(desktop, /new MutationObserver\(\(\) => hostSettings\(\)\)/);
-  assert.match(desktop, /settingsHostObserver.observe\(document.documentElement, \{ attributes: true, attributeFilter: \['data-settings-over'\] \}\)/);
+  // a view turning data-settings-over on or off re-hosts Settings (the real observer lines of desktop-settings.js)
+  const seen = [], root = { id: 'html' };
+  const part = readFileSync(new URL('../web/desktop/desktop-settings.js', import.meta.url), 'utf8');
+  const O = runRecording(`${between(part, '  const settingsHostObserver = ', "data-settings-over'] });")}data-settings-over'] });`,
+    { document: { documentElement: root }, MutationObserver: class { constructor(f) { this.f = f; } observe(n, o) { seen.push({ n, o, f: this.f }); } } });
+  assert.equal(seen.length, 1); assert.equal(seen[0].n, root, 'watches <html>');
+  assert.deepEqual(JSON.parse(JSON.stringify(seen[0].o)), { attributes: true, attributeFilter: ['data-settings-over'] });
+  seen[0].f(); assert.equal(O.calls.filter(x => x[0] === 'hostSettings').length, 1, 'a change re-hosts Settings');
 });
 test('Orb panel takeover keeps Look visible through on → off → on without a new Settings open', () => {
   const { s, setEl, host, body, closed } = hostHarness({ over: false });
