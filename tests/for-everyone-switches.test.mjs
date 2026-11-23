@@ -137,10 +137,18 @@ test('Settings and the Tracker share one switch: "Try new features" only on For 
   for (const type of ['focus', 'online', 'pageshow']) assert.ok(listeners[type]?.length, type + ': a Tracker flip shows when the shell comes back');
 });
 
-test('os-updates stores the channel before it broadcasts it, so a deferred experience.js that missed the event still reads it', () => {
-  const src = read('web/core/os-updates.js');
-  const store = src.indexOf("localStorage.setItem('wos.channel.v1', d.channel)"), send = src.indexOf("window.dispatchEvent(new CustomEvent('wos:channel', { detail: { channel: d.channel } }))");
-  assert.ok(store > 0 && send > store, 'persisted, then broadcast');
+test('os-updates stores the channel before it broadcasts it, so a deferred experience.js that missed the event still reads it', async () => {
+  // the real os-updates.js reads the box's update status; the order it writes and tells is recorded
+  const log = [], status = { mode: 'auto', chosen: true, installed: '0.3.15', latest: '0.3.15', update_available: false, unpinned: false, checked: true, installing: false, channel: 'stable' };
+  const window = { WosSettings: { register() {}, refresh() {} }, addEventListener() {}, dispatchEvent: e => log.push(['event', e.type, e.detail?.channel]) };
+  const document = { currentScript: { src: 'https://box.ts.net/wizard-os-home/core/os-updates.js' }, documentElement: { dataset: { tweaks: '' } } };
+  const localStorage = { getItem: () => null, setItem: (k, v) => log.push(['store', k, v]), removeItem() {} };
+  const fetch = async () => ({ ok: true, status: 200, json: async () => status });
+  class CustomEvent { constructor(type, o) { this.type = type; this.detail = o?.detail; } }
+  new Function('window', 'document', 'fetch', 'location', 'localStorage', 'CustomEvent', read('web/core/os-updates.js'))(window, document, fetch, { href: 'https://box.ts.net/wizard-os-home/' }, localStorage, CustomEvent);
+  await window.WosUpdates.load(true);
+  const told = log.filter(x => x[1] === 'wos.channel.v1' || x[1] === 'wos:channel');
+  assert.deepEqual(told, [['store', 'wos.channel.v1', 'stable'], ['event', 'wos:channel', 'stable']], 'persisted, then broadcast');
   const b = box('stable');   // experience.js starting after the read sees the stored channel on its first frame
   assert.equal(b.E.state.locked, true);
 });
