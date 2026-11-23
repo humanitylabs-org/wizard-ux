@@ -7,6 +7,7 @@ import '../web/core/chats-list-model.js';
 import { withParts } from './fixtures/chats-parts.mjs';
 import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
 import { withWebParts } from './fixtures/web-parts.mjs';
+import { withSkinHostParts } from './fixtures/skin-host-parts.mjs';
 import { listFixture } from './fixtures/chats-list-render.mjs';
 import { withSettingsParts } from './fixtures/settings-parts.mjs';
 import { createDocument } from './fixtures/mini-dom.mjs';
@@ -157,6 +158,14 @@ test('main and routed-agent Working threads share one order on the stock rendere
       assert.deepEqual(ids(c.sort(only)), ids(M.workingSort(only, order)), `${order}: ${ag}-only list`);
     }
   }
-  const host = read('web/core/skin-host.js');
-  assert.match(host, /o\.working = window\.WizChatsListModel\.workingSort\(o\.working, readWorkingOrder\(\)/, 'the layout list sorts every Working row, routed ones included');
+  // the layout list (the real skin-host sessions list()) sorts every Working row, routed ones included, in the saved order
+  const host = withSkinHostParts(fs.readFileSync(new URL('../web/core/skin-host.js', import.meta.url), 'utf8'));
+  const from = host.indexOf('        list: opts =>'), prop = host.slice(from, host.indexOf('        open: id =>', from));
+  for (const order of ['alphabetical', 'newest', 'oldest']) {
+    const c = { structuredClone, live: () => true, shell: { sessionList: () => ({ working: mixed, ready: [] }) }, withNoteRows: r => r, readWorkingOrder: () => order, window: { WizChatsListModel: M } };
+    vm.createContext(c); vm.runInContext(`this.api = ({ ${prop} });`, c);
+    const o = c.api.list();
+    assert.deepEqual(ids(o.working), ids(M.workingSort(mixed, order)), `${order}: the layout list's Working order`);
+    assert.deepEqual(o.working.map(r => r.agent || ''), ids(o.working).map(id => mixed.find(r => r.id === id).agent || ''), 'rows keep their agent');
+  }
 });
