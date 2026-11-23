@@ -160,11 +160,14 @@ test('⌥P floats the Chats window on this desk whichever agent it belongs to; i
 });
 
 test('Back / Esc in the floating chat leaves its thread even with Home or a full-screen desk behind it (Codex P2)', () => {
-  const esc = js.slice(js.indexOf('function escStep('), js.indexOf('function escStep(') + 4000);
-  assert.ok(esc.indexOf('const hb = hudBack(); if (hb) return hb;') > 0);
-  assert.ok(esc.indexOf('hudBack()') < esc.indexOf("if (homeOpen) return '';"));
-  assert.ok(esc.indexOf('hudBack()') < esc.indexOf('if (ws[cur].mono)'));
-  assert.ok(esc.indexOf('hudBack()') < esc.indexOf('WizAppServices?.back'), 'floating chat focus wins over the app behind it');
+  // the real desktop escStep: while the floating chat answers Back, Home, a full-screen desk or the app behind never do
+  const step = (hb, env) => { const calls = []; const ctx = runRecording(`${block(js, '  function escStep() {')}\nthis.step = escStep;`, { hudBack: () => hb, globalThis: {}, ...env }, calls); return { out: ctx.step(), calls }; };
+  for (const env of [{ homeOpen: true }, { homeOpen: false, ws: [{ mono: true, wins: ['a'] }], cur: 0, focused: () => ({ id: 'a', app: 'frame' }) }]) {
+    const r = step('hud-thread', env);
+    assert.equal(r.out, 'hud-thread', 'the floating chat walks back first');
+    assert.deepEqual(r.calls.filter(c => /back|close|exit/i.test(String(c[0]))), [], 'nothing behind it moves');
+  }
+  assert.equal(step(null, { homeOpen: true }).out, '', 'no floating chat: Home keeps Esc as before');
   const src = js.slice(js.indexOf('function hudBack('), js.indexOf('function hudClose('));
   for (const kind of ['main', 'host-profile', 'container', 'restricted']) {
     const w = { id: 'h', app: 'chats', thread: 't-' + kind, ...(kind === 'main' ? {} : { agent: kind }) }, other = { id: 'd', app: 'chats', thread: 'desk' }, calls = [];
