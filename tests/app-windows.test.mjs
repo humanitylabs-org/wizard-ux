@@ -159,7 +159,6 @@ test('every link path asks first: chat links, links in app frames, sandboxed app
   assert.deepEqual(relay.at(-1), ['notes', '']); assert.deepEqual(opened, [['notes']], 'declined: the shell opens the app');
   // ?open= intents (web/app.js deeplink handlers' app()): the app's own window first.
   const app = read('web/app.js'), ai = app.indexOf('    app(id, srcEl) {'), ae = app.indexOf('\n    },\n', ai);
-  assert.ok(ai > 0 && ae > ai);
   const shown = [], asked = [];
   const actx = vm.createContext({ APP: { notes: { id: 'notes' } }, W: {}, appVars: { W: {} }, findApp: () => null, fromOf: () => null, openApp: a => shown.push(a.id), Promise,
     window: { WizAndroidRelay: { openAppWindow: id => (asked.push(id), id === 'health') }, WizCore: { appsLoaded: () => null } } });

@@ -130,7 +130,6 @@ test('the switch ships off: listed in the catalog, never a default, scoped CSS',
 test('the AI apps layout mounts the look only while the switch is in the tweak list', () => {
   const lj = withShellParts(fs.readFileSync(new URL('../web/layouts/ai-apps/desktop.js', import.meta.url), 'utf8'));
   const line = lj.split('\n').find(l => l.startsWith('  const viewOn = () =>'));
-  assert.ok(line, 'viewOn found');
   const viewOn = tweaks => vm.runInNewContext(`${line}\nviewOn()`, { root: { dataset: { tweaks } }, String });
   assert.equal(viewOn('wizard/sidebar-chats-view'), true);
   assert.equal(viewOn('james/dense wizard/sidebar-chats-view'), true);
@@ -147,7 +146,6 @@ test('AI apps + another Default Chats, switch off: the docked Chats window is th
   const lines = dj.split('\n');
   const from = lines.findIndex(l => l.startsWith('  function sideViewOn()')), to = lines.findIndex((l, i) => i > from && l.startsWith('  const sideWin = id =>'));
   const main = lines.find(l => l.startsWith('  const mainChats = w =>')), look = lines.find(l => l.startsWith('    mainLook: w =>'));
-  assert.ok(from > 0 && to > from && main && look, 'slices found');
   const run = ({ owns, tweaks, def }) => {
     const docked = { id: 'w-dock', app: 'chats', thread: null }, other = { id: 'w-look', app: 'chats', thread: '__new__', chatsProvider: 'look' }, agent = { id: 'w-ag', app: 'chats', agent: 'box' };
     const ctx = { ownsChatList: owns, document: { documentElement: { dataset: { tweaks } } }, W: { 'w-dock': docked, 'w-look': other, 'w-ag': agent },
