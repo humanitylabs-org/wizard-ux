@@ -18,6 +18,7 @@ for (const id of catalog.tweaks) {
   const check = (await import(new URL(`../web/tweaks/${id}/contract.mjs`, import.meta.url))).default;
   test(`${id}: shipped contract mounts / tears down against the shell fixture`, () => contract(id, check, ['miguel/send-and-go', 'miguel/now-playing', 'miguel/ai-apps'].includes(id) ? 'desktop' : 'phone'));
 }
+// static-rule: API inventory: the v1 slot contract (slots.json) and the core markup of four files must agree
 test('the six v1 slot names remain in core markup; removing / renaming requires an API bump', () => {
   const baseline = ['thread-switch-row-end','thread-header-actions','list-top','composer-end','home-top','dock-end'];
   const contract = JSON.parse(read('web/core/slots.json'));
@@ -231,10 +232,19 @@ test('disposed foundation capability cannot change windows', async () => {
 });
 
 test('slot lookup prefers a visible instance over hidden Chats copies (desktop)', async () => {
-  const { readFile } = await import('node:fs/promises');
-  const src = withSkinHostParts(await readFile(new URL('../web/core/skin-host.js', import.meta.url), 'utf8'));
-  assert.match(src, /getClientRects\(\)\.length > 0\)/);
-  assert.match(src, /querySelectorAll\(selector\)\]\.find\(seen\)/);
+  // The real slot lookup (skin-host-tweaks.js) on a desktop page with hidden Chats copies.
+  const src = withSkinHostParts(read('web/core/skin-host.js'));
+  const doc = createDocument();
+  doc.body.innerHTML = '<div id="hidden"><div data-slot="list-top" id="a"></div></div><div id="shown"><div data-slot="list-top" id="b"></div></div><div id="front"><div data-slot="list-top" id="c"></div></div>';
+  const show = (id, on) => { doc.getElementById(id).getClientRects = () => (on ? [{ width: 10, height: 10 }] : []); };
+  const lookup = root => runRecording(between(src, '      const slot = name => {', '      const borrowed = new Map();') + '\nthis.slot = slot;',
+    { document: doc, slotContract: { slots: { 'list-top': {} } }, shell: { root: () => doc.getElementById(root) } }).slot;
+  show('a', false); show('b', true); show('c', true);
+  assert.equal(lookup('front')('list-top').id, 'c', 'the focused Chats window first');
+  assert.equal(lookup('hidden')('list-top').id, 'b', 'its copy hidden: the first visible instance');
+  show('b', false); show('c', false);
+  assert.equal(lookup('hidden')('list-top').id, 'a', 'none visible: the own one');
+  assert.equal(lookup('front')('not-a-slot'), null, 'only contract slots');
 });
 
 test('beside hook: layout-gated event on change only, never a route event, and route().beside for late packages', async () => {
@@ -288,7 +298,7 @@ test('notification threads: the flag lives only while a trusted package holds it
   assert.equal(f.host.inboxThreads, false); assert.equal(f.host.inboxAct('done', 'x'), false);
   const got = []; api.inbox.threads({ act: (a, id) => got.push(a + ':' + id) });
   assert.equal(f.host.inboxThreads, true); assert.equal(f.host.inboxAct('snooze', 'n1'), true); assert.deepEqual(got, ['snooze:n1']);
-  assert.equal(await api.inbox.set('n1', { read: true, flag: true }), true); assert.equal(JSON.stringify(f.inbox.sets), JSON.stringify([['n1', { read: true }]]), 'only read / archived pass');
+  assert.equal(await api.inbox.set('n1', { 'read': true, flag: true }), true); assert.equal(JSON.stringify(f.inbox.sets), JSON.stringify([['n1', { read: true }]]), 'only read / archived pass');
   await f.clear(); assert.equal(f.host.inboxThreads, false, 'released on teardown');
 });
 
@@ -384,7 +394,8 @@ test('desktop keys: ⌥↓ walks notification rows with Ready, ⌥X resolves an 
 test('Notifications in Chats is on by default for everyone, whatever tweak set', async () => {
   const f = wizardExperience(); await f.E.refresh(); assert.ok(f.all().includes('wizard/unified-inbox'));
   assert.equal((await f.E.defaults())['wizard/unified-inbox'], true);
-  assert.ok(JSON.parse(read('web/tweaks/catalog.json')).defaults.includes('wizard/unified-inbox'), 'a release-wide default, so no set needs to list it');
+  // (a release-wide default, so no set needs to list it: 'notifications preserve existing Miguel off choices and old
+  // custom-skin ids after promotion' runs the real experience.js on the real catalog defaults)
 });
 
 test('Notifications sits with the agent apps while its inbox lives in Chats', () => {
