@@ -43,6 +43,11 @@ public final class ProcessExits {
                 e.reason = i.getReason(); e.status = i.getStatus(); e.importance = i.getImportance();
                 e.pssKb = i.getPss(); e.rssKb = i.getRss();
                 e.description = i.getDescription() == null ? "" : i.getDescription();
+                // An ANR comes with Android's own thread dump: keep the main thread's frames (wizard-ux#1762).
+                if (e.reason == ApplicationExitInfo.REASON_ANR && e.timestamp > l.lastSeen()) {
+                    try (java.io.InputStream in = i.getTraceInputStream()) { e.frames.addAll(HangLog.mainFrames(in)); }
+                    catch (java.io.IOException | RuntimeException x) { Log.w(TAG, "could not read the ANR trace", x); }
+                }
                 got.add(e);
             }
         } catch (RuntimeException e) { Log.w(TAG, "could not read process exit reasons", e); return l; }

@@ -53,6 +53,29 @@ public class DeviceBridgeE2eTest {
     }
 
     /**
+     * wizard-ux#1762: "WizardOS isn't responding" reached no diagnostics. A UI thread blocked past 4 s is saved with its
+     * stack while it is still blocked (the ANR dialog may close the process next), and with its real length after.
+     */
+    @Test public void hangWatchSavesTheBlockedUiThreadsStack() throws Exception {
+        Context c = InstrumentationRegistry.getInstrumentation().getTargetContext();
+        HangLog log = HangWatch.log(c);
+        int before = log.hangs().size();
+        HangWatch.start(c);
+        try {
+            Thread.sleep(1500);
+            InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> android.os.SystemClock.sleep(6000));
+            Thread.sleep(2000);
+        } finally { HangWatch.stop(); }
+        java.util.List<HangLog.Hang> hangs = log.hangs();
+        assertEquals("one blocked stretch is one hang", before + 1, hangs.size());
+        HangLog.Hang h = hangs.get(0);
+        assertEquals("main", h.kind);
+        assertTrue("its real length is kept: " + h.ms, h.ms >= 5500);
+        assertTrue("the stack names what blocked it: " + h.frames, String.join(" ", h.frames).contains("SystemClock.sleep"));
+        assertTrue(new HangLog(new java.io.File(new java.io.File(c.getFilesDir(), "diagnostics"), "hangs.json")).hangs().size() > before);
+    }
+
+    /**
      * Browser owner boundary (wizard-os#133, wizard-ux issue 1430): once the shell says the box has it on, the shell page
      * keeps WizardOSNative/WizardOSDevice with working answers, and a sandboxed app frame sees neither and gets nothing
      * from the gate.

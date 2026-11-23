@@ -91,7 +91,7 @@ Back: `WizEscapeBack`, `WosBack`; `WizChatsHost.registerBack`/back.push share re
 | Reload notices/keep | `WizWebUpdate`, `WizAppUpdates` (`web-update.js`), `WizAppVersions`, `WosUpdates`/`WosUpdateFlow` (`os-updates.js`, `wos:channel`; APK `UpdatePolicy`); `WizAppCapture.rescueTake` / `pageAudioFree` |
 | Provider login (Claude, ChatGPT) for agents and apps | installed login apps (`wizard-claude`, `wizard-chatgpt`; skill `app-owned-codex-connections`) |
 | Now playing | `WosMediaWatch` (`media-watch.js`), `WosSkinHost` `api.media`: same-origin media only, inert until watched |
-| Native mic/meeting | `NoteRecorder`, `MicRoute` (`audio/*.java`): `NOTE_SOURCES` notes / `SOURCES` STT; `MeetingRecorderService`: update/process-death pause/resume/rollback; `ProcessExits` |
+| Native mic/meeting | `NoteRecorder`, `MicRoute` (`audio/*.java`): `NOTE_SOURCES` notes / `SOURCES` STT; `MeetingRecorderService`: update/death pause/resume/rollback; `ProcessExits`/`HangWatch` |
 | Android shell capabilities | `WosDevicePort`, `WosDeviceRecording`, `WosDeviceOrb` (`device-{port,recording,orb}.js`); `wizardDevicePort` v1 (`device/DeviceMessageProtocol.java`); page Camera `PageCamera` |
 | Home-screen apps / safe top | `WizHomeScreenApps.attach/offer/canOffer/pinWidget`; host: cutout, child inset 0 |
 | Home-screen declaration | `WizHomeScreenCapabilities` (`home-screen-capabilities.js`): sanitize/matcher/replicaPrefix |

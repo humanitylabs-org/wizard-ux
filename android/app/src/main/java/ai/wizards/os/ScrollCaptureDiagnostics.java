@@ -97,7 +97,16 @@ final class ScrollCaptureDiagnostics {
         Context c=context.getApplicationContext(); init(c);
         // A new process-exit record (wizard-ux#1724) is reason enough to send the report again.
         if(ProcessExits.refresh(c).takeUnreported()) arm("process-exit");
+        // A saved freeze (wizard-ux#1762), also one from a process that was then closed from the ANR dialog.
+        if(HangWatch.log(c).takeUnreported()) arm("hang");
         // Focus-only OEM overlays do not necessarily cause onResume; focus gain calls this too.
+        MAIN.postDelayed(()->upload(c),750);
+    }
+    /** The UI thread or the page process answered again after a freeze: send the report with its stack. */
+    static void hang(Context context) {
+        if(context==null)return;
+        Context c=context.getApplicationContext(); init(c);
+        if(HangWatch.log(c).takeUnreported()) arm("hang");
         MAIN.postDelayed(()->upload(c),750);
     }
     private static synchronized void upload(Context c) {
@@ -110,6 +119,7 @@ final class ScrollCaptureDiagnostics {
         try {
             session.put("processExits",ProcessExits.log(c).json(5));
             session.put("batteryExempt",ProcessExits.batteryExempt(c));
+            session.put("hangs",HangWatch.log(c).json(5));
         } catch (org.json.JSONException ignored) { }
         final String body=RING.json(session);
         final String cookie=android.webkit.CookieManager.getInstance().getCookie(origin);

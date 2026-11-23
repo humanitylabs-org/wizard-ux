@@ -392,6 +392,12 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         // A WebView cannot save files. Anything it is asked to download (an APK, a PDF, an export) goes to
         // Android's download manager, so the file lands in Downloads with a notification you can tap to open or install.
         web.setDownloadListener((url, userAgent, disposition, mime, length) -> downloadOutside(url, userAgent, disposition, mime));
+        // A page process that stops answering is saved with the UI-thread freezes (wizard-ux#1762), so a frozen screen
+        // tells us whether page JS or native code was stuck.
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) web.setWebViewRenderProcessClient(new android.webkit.WebViewRenderProcessClient() {
+            @Override public void onRenderProcessUnresponsive(WebView v, android.webkit.WebViewRenderProcess p) { HangWatch.webviewUnresponsive(MainActivity.this); }
+            @Override public void onRenderProcessResponsive(WebView v, android.webkit.WebViewRenderProcess p) { HangWatch.webviewResponsive(MainActivity.this); }
+        });
         web.setWebViewClient(new WebViewClient() {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest req) {
@@ -1103,6 +1109,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
     @Override
     protected void onResume() {
         super.onResume();
+        HangWatch.start(this); // saves the UI thread's stack if it freezes while WizardOS is in front (wizard-ux#1762)
         ScrollCaptureDiagnostics.record("Activity.onResume",ScrollCaptureDiagnostics.fields());
         if (web == null) return; // Connect owns the screen until an origin is set
         ScrollCaptureDiagnostics.resumed(this);
@@ -1187,6 +1194,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         resumed = false;
         ai.wizards.os.downloads.Downloads.removeListener(downloadsListener);
         main.removeCallbacks(reachRetry);
+        HangWatch.stop();
         super.onPause();
     }
 
