@@ -6,6 +6,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { block, runRecording } from './fixtures/source-slice.mjs';
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 import { withDesktopParts } from './fixtures/desktop-parts.mjs';
 import { withShellParts } from './fixtures/shell-parts.mjs';
@@ -191,9 +192,12 @@ test('chanCompose: only a feed with its own box takes a new chat', () => {
   const src = cut(chats, '  function chanCompose(wid) {', '  // Posts still on their way');
   const ended = [];
   const box = { tag: 'ta' };
-  const ctx = { W: { feed: { id: 'feed' }, list: { id: 'list' } }, chanDraftKey: w => (w?.id === 'feed' ? 'chan:hermes:apps' : ''), elOf: id => ({ querySelector: () => (id === 'feed' ? box : null) }), chanToEnd: (...a) => ended.push(a) };
-  vm.createContext(ctx); vm.runInContext(src, ctx);
+  const ctx = vm.createContext({ W: { feed: { id: 'feed' }, list: { id: 'list' } }, chanDraftKey: w => (w?.id === 'feed' ? 'chan:hermes:apps' : ''), elOf: id => ({ querySelector: () => (id === 'feed' ? box : null) }), chanToEnd: (...a) => ended.push(a) });
+  vm.runInContext(src, ctx);
   assert.equal(ctx.chanCompose('feed'), true); assert.deepEqual(ended, [['feed', true]], 'the feed goes to its end with its box focused');
   assert.equal(ctx.chanCompose('list'), false); assert.equal(ctx.chanCompose('none'), false);
-  assert.match(chats, /chanSpaceOf, chanCompose, chanView: \(\) => chanView, chanBox:/, 'exported to the shells');
+  // exported to the shells: Chats' own API object (its return line, run) hands out this chanCompose
+  const ret = block(chats, '  return { beforeNavigate:');
+  const mine = () => 'composed', api = runRecording(`globalThis.api = (() => {\n${ret}\n})();`, { chanCompose: mine, window: {} }).api;
+  assert.equal(api.chanCompose, mine, 'exported to the shells');
 });

@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { join } from 'node:path';
-import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
+import { withParts } from './fixtures/chats-parts.mjs';
+import { createDocument } from './fixtures/mini-dom.mjs';
+import { block, runRecording } from './fixtures/source-slice.mjs'; // chats.js parts moved out verbatim (issue 1665)
 const read = p => readFileSync(process.env.QA_POLICY_TREE ? join(process.env.QA_POLICY_TREE, p) : new URL('../' + p, import.meta.url), 'utf8');
 const core = withParts(read('web/core/chats.js')), power = read('web/core/chat-power.js');
 function cut(src, from, to) { const a = src.indexOf(from), b = src.indexOf(to, a); assert(a >= 0 && b > a, from); return src.slice(a, b); }
@@ -64,8 +66,13 @@ for (const mode of ['text', 'voice']) for (const after of ['stay', 'list']) test
 });
 test('opt-in linked reply retains old one-step trail and manual Back is untouched', () => {
   const f = fixture({ after: 'list' }); f.c.trail = ['parent']; f.context.leaveAfterSend('chat', 'same', false); assert.equal(f.w.thread, 'parent');
-  assert.match(core, /if \(e.target.closest\('\[data-chback\]'\)\) \{ threadBack\(w\); return true; \}/);
-  assert.match(read('web/core/thread-swipe-back.js'), /api.nav.back\(\)/);
+  // the thread's ‹ (Chats' real click handler on its markup): one step back, nothing else
+  const doc = createDocument(); doc.body.innerHTML = '<div class="ch-thread"><button type="button" data-chback>‹</button></div>';
+  const w = { id: 'w1', thread: 'same' };
+  const ui = runRecording(block(core, '  function click(e, id) {') + '\nglobalThis.click = click;', { INC: null, W: { w1: w }, H: { win: () => w }, LIVE: {}, window: {}, replyStd: null, document: doc });
+  assert.equal(ui.click({ target: doc.querySelector('[data-chback]'), preventDefault() {}, stopPropagation() {} }, 'w1'), true);
+  assert.deepEqual(ui.calls.filter(([n]) => n === 'threadBack').map(([n, x]) => [n, x]), [['threadBack', w]]);
+  // (the swipe's Back is api.nav.back: thread-swipe-snapback.test.mjs runs the real swipe)
 });
 function configFixture({ supported = true, reject = false, mismatch = false } = {}) {
   const storage = new Map(), puts = [], events = [], preferences = supported ? { chatAfterAction: 'stay' } : {};

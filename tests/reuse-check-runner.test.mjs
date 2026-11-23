@@ -11,6 +11,13 @@ const workflow = readWorkflow(new URL('../.github/workflows/reuse-check-app.yml'
 const input = workflow.on.workflow_call.inputs.runner;
 const job = workflow.jobs.reuse;
 
+// Run the workflow's steps in order with the stub programs in `cwd`; each stub appends what it was started with to
+// cwd/ran (the run's own output).
+function runSteps(steps, opts) {
+  const outs = steps.map(st => runStep(workflow, st, opts));
+  return { outs, ran: readFileSync(join(opts.cwd, 'ran'), 'utf8').trim().split('\n') };
+}
+
 test('public app callers retain the GitHub-hosted default', () => {
   assert.equal(input.type, 'string');
   assert.equal(input.required, false);
@@ -36,12 +43,9 @@ test('runner selection preserves trusted, read-only gate execution', () => {
   try {
     for (const prog of ['node', 'python3', 'npm', 'pnpm', 'npx']) writeFileSync(join(dir, prog), `#!/bin/bash\necho "${prog} $*" >> "${dir}/ran"\n`, { mode: 0o755 });
     const ctx = { github: { workspace: '/w', event: { pull_request: { base: { sha: 'b'.repeat(40) }, head: { sha: 'h'.repeat(40) } } } } };
-    for (const s of job.steps.filter(s => s.run)) {
-      assert.equal(s.secrets, undefined, s.name);
-      const out = runStep(workflow, s, { ctx, cwd: dir, env: { PATH: `${dir}:/usr/bin:/bin` } });
-      assert.equal(out.status, 0, out.stderr);
-    }
-    const ran = readFileSync(join(dir, 'ran'), 'utf8').trim().split('\n');
+    for (const s of job.steps.filter(s => s.run)) assert.equal(s.secrets, undefined, s.name);
+    const { outs, ran } = runSteps(job.steps.filter(s => s.run), { ctx, cwd: dir, env: { PATH: `${dir}:/usr/bin:/bin` } });
+    for (const out of outs) assert.equal(out.status, 0, out.stderr);
     assert.deepEqual(ran, [
       'node wizard-shared/tools/reuse-check-app.mjs',
       `python3 wizard-shared/tools/style/check_style.py app --policy wizard-shared/tools/style/style-policy.json --base ${'b'.repeat(40)}`,

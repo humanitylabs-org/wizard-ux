@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { createDocument } from './fixtures/mini-dom.mjs';
 import { withShellParts } from './fixtures/shell-parts.mjs';
 import { desktopPartBody } from './fixtures/desktop-parts.mjs';
 import { pageAssets } from './fixtures/w1-pages.mjs';
@@ -163,8 +164,18 @@ test('desktop host reads no page, storage or network on its own', () => {
 test('desktop host: layout toolbars never crash a shell whose app services lack titlebar.render (James, 6 Nov 2026)', async () => {
   const { readFile } = await import('node:fs/promises');
   const src = withShellParts(await readFile(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8'));
-  assert.match(src, /renderTools: \(frame, slot\) => window\.WizAppServices\?\.titlebar\?\.render\?\.\(frame, slot\) === true/);
+  // the Classic adapter's own renderTools (its line in desktop.js, run): false without titlebar.render, never a throw
+  const tools = services => adapterProp(src, 'renderTools: (frame, slot) =>', { window: { WizAppServices: services } }).renderTools;
+  for (const s0 of [undefined, {}, { titlebar: {} }]) assert.equal(tools(s0)('f', 's'), false, JSON.stringify(s0));
+  const seen = []; assert.equal(tools({ titlebar: { render: (...a) => (seen.push(a), true) } })('f', 's'), true); assert.deepEqual(seen, [['f', 's']]);
 });
+
+// One property of the desktop shell's host adapter (a single line in desktop.js), run as an object literal in `scope`.
+function adapterProp(src, head, scope) {
+  const at = src.indexOf(head); assert.ok(at >= 0, head);
+  const line = src.slice(at, src.indexOf('\n', at)).replace(/,\s*$/, '');
+  return vm.runInNewContext(`({ ${line} })`, scope);
+}
 
 test('placement containers: the host hands a layout frozen { desk, node, shown } rows from the shell adapter, never its markup', () => {
   const f = fixture(); assert.deepEqual(JSON.parse(JSON.stringify(f.host.placements())), [], 'no adapter placements: none');
@@ -177,7 +188,9 @@ test('placement containers: the host hands a layout frozen { desk, node, shown }
   assert.equal(rows[1].node, b); assert.equal(rows[1].desk, null, 'an unnumbered container never matches a desk'); assert.equal(rows[1].shown, false);
   // the Classic adapter is where the shell's own container markup is read
   const desktop = read('web/desktop/desktop.js');
-  assert.match(desktop, /placements: \(\) => \[\.\.\.stage\.children\]\.filter\(n => n\.classList\?\.contains\('wsp'\)\)\.map\(n => \(\{ desk: Number\(n\.dataset\.ws\), node: n, shown: !n\.hidden \}\)\)/);
+  const doc = createDocument(); doc.body.innerHTML = '<div id="stage"><div class="wsp" data-ws="0"></div><div class="hud"></div><div class="wsp" data-ws="1" hidden></div></div>';
+  const stage = doc.querySelector('#stage'), got = adapterProp(desktop, 'placements: () =>', { stage }).placements();
+  assert.deepEqual(JSON.parse(JSON.stringify(got.map(r => [r.desk, r.node.className, r.shown]))), [[0, 'wsp', true], [1, 'wsp', false]], 'each desk container, its number and whether it shows');
   const ai = read('web/layouts/ai-apps/desktop.js');
   assert.doesNotMatch(ai, /dataset\.ws\b|#stage|\.wsp\b/, 'AI apps reads placement only from the host');
 });

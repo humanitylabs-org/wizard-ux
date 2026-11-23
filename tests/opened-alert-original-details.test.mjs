@@ -25,13 +25,20 @@ test('opened alert details keep the complete source body for legacy unedited not
 });
 test('opened alert renders original details directly as escaped text, never markdown or a collapsed control',()=>{
  const src=read('web/core/chats.js'),line=src.split('\n').find(l=>l.trim().startsWith('if (NV) msgs ='));
- assert.ok(line.includes('ch-notif-original'));assert.ok(line.includes('${esc(NV.item.details)}'));
  assert.doesNotMatch(line,/<details|md\(NV\.item\.details|slice\(|clip\(/);
  const details='<img src=x onerror="alert(1)">\n\n<script>bad()</script>';
  const esc=s=>String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
  const ctx={NV:{id:'test',item:{details,message:'summary'},reply:{}},esc,md:esc,timeTag:()=>'',msgs:''};
  vm.runInNewContext(line,ctx);assert.ok(ctx.msgs.includes(esc(details)));assert.doesNotMatch(ctx.msgs,/<img|<script/);
  assert.ok(ctx.msgs.indexOf('summary')<ctx.msgs.indexOf('Original alert'));
+ // drawn: the original block holds the details, whole, as plain text (never through md)
+ const long=details+'\n\n'+'more words '.repeat(2000)+'THE END';
+ const drawn={NV:{id:'test',item:{details:long,message:'summary'},reply:{}},esc,md:s=>`[md]${esc(s)}`,timeTag:()=>'',msgs:''};
+ vm.runInNewContext(line,drawn);
+ const doc=createDocument();doc.body.innerHTML=drawn.msgs;
+ const orig=doc.querySelector('.ch-notif-original');
+ assert.ok(orig,'the original block');assert.ok(orig.textContent.includes(long),'every word of the original, as text');
+ assert.ok(!orig.textContent.includes('[md]'),'never markdown');assert.equal(doc.querySelector('details'),null);
 });
 test('legacy short alerts render once but long original bodies remain complete',async()=>{
  const line=read('web/core/chats.js').split('\n').find(l=>l.trim().startsWith('if (NV) msgs ='));

@@ -12,12 +12,15 @@ import { createDocument } from './fixtures/mini-dom.mjs';
 // The image build stamps every local script/stylesheet with its file hash so a release only ever loads its own files.
 const STAMP = new URL('../tools/stamp-assets.sh', import.meta.url).pathname;
 const WEB = new URL('../web', import.meta.url).pathname;
-function stamped(t) {
+function stamped(t, edit = () => {}) { // (edit: a change to the copy before the stamp runs)
   const d = mkdtempSync(join(tmpdir(), 'stamp-'));
   t.after(() => rmSync(d, { recursive: true, force: true }));
-  cpSync(WEB, d, { recursive: true });
+  cpSync(WEB, d, { recursive: true }); edit(d);
   execFileSync('sh', [STAMP, d]); return d;
 }
+
+// a file of a tree the stamp (or the image build) just wrote: its output, not source
+const inTree = (dir, f) => readFileSync(join(dir, f), 'utf8');
 
 const RE = /^[0-9a-f]{12}$/;
 const tokenOf = h => h.match(/<meta name="wos-release" content="([0-9a-f]+)">/)?.[1];
@@ -25,7 +28,7 @@ const tokenOf = h => h.match(/<meta name="wos-release" content="([0-9a-f]+)">/)?
 test('every local script and stylesheet in both shells carries the release token', t => {
   const d = stamped(t);
   for (const page of ['index.html', 'desktop.html']) {
-    const h = readFileSync(join(d, page), 'utf8'), v = tokenOf(h);
+    const h = inTree(d, page), v = tokenOf(h);
     assert.match(v || '', RE, `${page} has its release meta`);
     const refs = [...h.matchAll(/(?:src|href)="((?:\/wizard-os-home\/)?[A-Za-z0-9._][A-Za-z0-9._/-]*\.(?:js|css))(?:\?v=([0-9a-f]+))?"/g)];
     assert.ok(refs.length > 40, `${page} has its links`);
@@ -37,59 +40,55 @@ test('every local script and stylesheet in both shells carries the release token
 });
 
 test('module imports carry the token too, so a changed dependency gets a new URL (Codex, #428)', t => {
-  const d = stamped(t), v = tokenOf(readFileSync(join(d, 'index.html'), 'utf8'));
-  const swipe = readFileSync(join(d, 'core/thread-swipe-back.js'), 'utf8');
+  const d = stamped(t), v = tokenOf(inTree(d, 'index.html'));
+  const swipe = inTree(d, 'core/thread-swipe-back.js');
   assert.ok(swipe.includes(`from './swipe-intent.js?v=${v}'`), 'thread-swipe-back imports a stamped swipe-intent');
-  const store = readFileSync(join(d, 'store/store.js'), 'utf8');
+  const store = inTree(d, 'store/store.js');
   assert.ok(store.includes(`from './store-status.js?v=${v}'`));
-  const obs = readFileSync(join(d, 'skins/obsidian/skin.js'), 'utf8');
+  const obs = inTree(d, 'skins/obsidian/skin.js');
   assert.ok(obs.includes(`from './intro.js?v=${v}'`));
-  const land = readFileSync(join(d, 'skins/landscapes/skin.js'), 'utf8');
+  const land = inTree(d, 'skins/landscapes/skin.js');
   assert.ok(land.includes(`from '../obsidian/intro.js?v=${v}'`));
 });
 
 // Live box, 18 Nov 2026: kit/controls.css came back as a 304 on every open because phone-connect.css @imports it
 // unstamped, so it never got the year-long cache the stamped files get (wizard-ux#1583).
 test('relative CSS @imports carry the token; other origins and absolute paths stay plain', t => {
-  const d = stamped(t), v = tokenOf(readFileSync(join(d, 'index.html'), 'utf8'));
-  assert.ok(readFileSync(join(d, 'core/phone-connect.css'), 'utf8').includes(`@import url("../kit/controls.css?v=${v}");`));
+  const d = stamped(t), v = tokenOf(inTree(d, 'index.html'));
+  assert.ok(inTree(d, 'core/phone-connect.css').includes(`@import url("../kit/controls.css?v=${v}");`));
   writeFileSync(join(d, 'probe.css'), '@import url("https://x.org/a.css");\n@import "/abs.css";\n@import \'./b.css\';\n');
   execFileSync('sh', [STAMP, d]);
-  const w = tokenOf(readFileSync(join(d, 'index.html'), 'utf8')), css = readFileSync(join(d, 'probe.css'), 'utf8');
+  const w = tokenOf(inTree(d, 'index.html')), css = inTree(d, 'probe.css');
   assert.ok(css.includes('@import url("https://x.org/a.css");') && css.includes('@import "/abs.css";'));
   assert.ok(css.includes(`@import './b.css?v=${w}';`));
-  const pc = readFileSync(join(d, 'core/phone-connect.css'), 'utf8');
+  const pc = inTree(d, 'core/phone-connect.css');
   assert.ok(pc.includes(`controls.css?v=${w}"`) && !/\?v=[0-9a-f]+\?v=/.test(pc), 'a restamp swaps the token, never adds a second');
 });
 
 test('any change anywhere in web/ moves the token; rerunning the stamp is a no-op', t => {
   const a = stamped(t);
-  const b = mkdtempSync(join(tmpdir(), 'stamp-'));
-  t.after(() => rmSync(b, { recursive: true, force: true }));
-  cpSync(WEB, b, { recursive: true });
-  writeFileSync(join(b, 'core/swipe-intent.js'), readFileSync(join(b, 'core/swipe-intent.js'), 'utf8') + '\n// next release\n');
+  const b = stamped(t, d => writeFileSync(join(d, 'core/swipe-intent.js'), inTree(d, 'core/swipe-intent.js') + '\n// next release\n'));
+  const once = inTree(b, 'index.html'), onceImp = inTree(b, 'core/thread-swipe-back.js');
   execFileSync('sh', [STAMP, b]);
-  const once = readFileSync(join(b, 'index.html'), 'utf8'), onceImp = readFileSync(join(b, 'core/thread-swipe-back.js'), 'utf8');
-  execFileSync('sh', [STAMP, b]);
-  assert.notEqual(tokenOf(readFileSync(join(a, 'index.html'), 'utf8')), tokenOf(once), 'a dependency-only change still moves the token');
-  assert.equal(readFileSync(join(b, 'core/thread-swipe-back.js'), 'utf8'), onceImp, 'imports are not stamped twice');
-  assert.doesNotMatch(readFileSync(join(b, 'index.html'), 'utf8'), /\?v=[0-9a-f]+\?v=/, 'links are not stamped twice');
-  assert.equal((readFileSync(join(b, 'index.html'), 'utf8').match(/name="wos-release"/g) || []).length, 1);
+  assert.notEqual(tokenOf(inTree(a, 'index.html')), tokenOf(once), 'a dependency-only change still moves the token');
+  assert.equal(inTree(b, 'core/thread-swipe-back.js'), onceImp, 'imports are not stamped twice');
+  assert.doesNotMatch(inTree(b, 'index.html'), /\?v=[0-9a-f]+\?v=/, 'links are not stamped twice');
+  assert.equal((inTree(b, 'index.html').match(/name="wos-release"/g) || []).length, 1);
 });
 
 test('a layered hotfix restamps an already-stamped tree with one new release token', t => {
   const d = stamped(t);
-  const before = tokenOf(readFileSync(join(d, 'index.html'), 'utf8'));
-  writeFileSync(join(d, 'core/agents.js'), readFileSync(join(d, 'core/agents.js'), 'utf8') + '\n// layered hotfix\n');
+  const before = tokenOf(inTree(d, 'index.html'));
+  writeFileSync(join(d, 'core/agents.js'), inTree(d, 'core/agents.js') + '\n// layered hotfix\n');
   execFileSync('sh', [STAMP, d]);
-  const index = readFileSync(join(d, 'index.html'), 'utf8'), after = tokenOf(index);
+  const index = inTree(d, 'index.html'), after = tokenOf(index);
   assert.notEqual(after, before, 'the layered change moves the release token');
   for (const page of ['index.html', 'desktop.html']) {
-    const html = readFileSync(join(d, page), 'utf8');
+    const html = inTree(d, page);
     assert.equal(tokenOf(html), after, `${page} carries the new release meta`);
     assert.doesNotMatch(html, new RegExp(`\\?v=${before}(?:["'])`), `${page} has no previous release URL`);
   }
-  assert.match(readFileSync(join(d, 'core/thread-swipe-back.js'), 'utf8'), new RegExp(`from './swipe-intent\\.js\\?v=${after}'`));
+  assert.match(inTree(d, 'core/thread-swipe-back.js'), new RegExp(`from './swipe-intent\\.js\\?v=${after}'`));
 });
 
 // The Dockerfile's own file steps, run in order into a temp image root: each COPY copies, each RUN that only touches
@@ -117,17 +116,17 @@ function imageRoot(t) {
 test('the image build runs the stamp over the shipped web tree', t => {
   const web = imageRoot(t);
   for (const page of ['index.html', 'desktop.html']) {
-    const h = readFileSync(join(web, page), 'utf8'), v = tokenOf(h);
+    const h = inTree(web, page), v = tokenOf(h);
     assert.match(v || '', RE, `${page} in the image carries its release`);
     assert.match(h, /src="[^"]*core\/[a-z-]+\.js\?v=[0-9a-f]{12}"/, `${page}: its scripts are stamped`);
   }
-  assert.equal(readFileSync(join(web, 'data.js'), 'utf8').startsWith('// owner-generated'), true, 'the later steps still ran');
+  assert.equal(inTree(web, 'data.js').startsWith('// owner-generated'), true, 'the later steps still ran');
 });
 
 // The real skin-host boot part on a page parsed from a stamped index.html head (tests/fixtures/mini-dom.mjs).
 function bootOn(t, { stampedPage = true } = {}) {
   const d = stampedPage ? stamped(t) : WEB;
-  const html = readFileSync(join(d, 'index.html'), 'utf8');
+  const html = inTree(d, 'index.html');
   const doc = createDocument({ url: 'https://box.test/wizard-os-home/' });
   doc.head.innerHTML = html.slice(html.indexOf('<head>') + 6, html.indexOf('</head>'));
   const window = { WizCore: { skinHostParts: {} }, WosSkin: { pkgOf: id => ({ dir: id, css: true }) } };

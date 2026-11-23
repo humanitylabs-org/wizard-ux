@@ -137,19 +137,21 @@ test('framed: the SDK never presses (the shell does, no double fire) but still l
   p.press('k', { altKey: false }); assert.equal(b.clicks, 0);
   assert.equal(typeof p.WizardApp.keys.list, 'function'); assert.equal(p.WizardApp.keys.list()[0].el, b);
   assert.ok(Object.isFrozen(p.WizardApp.keys));
-  assert.match(client, /if \(!framed\) addEventListener\('keydown', e => \{\n\s+const hit = keyMatch\(e\);/, 'the SDK\'s own ⌥ handler is standalone only');
+  // (the SDK's own ⌥ handler is standalone only: the framed presses above click nothing, the standalone tests do)
   assert.doesNotMatch(client, /keyDone|Arrow\(Up\|Down/, 'no plain-key click left');
 });
 
 test('the reserved list is one exported constant, and the SDK\'s letters agree with it', async () => {
-  const m = await import('../web/layouts/ai-apps/desktop.js').catch(() => null);
-  const src = read('web/layouts/ai-apps/desktop.js');
+  const m = await import('../web/layouts/ai-apps/desktop.js');
   const want = ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7', 'Digit8', 'Digit9', 'Digit0', 'BracketLeft', 'BracketRight', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyH', 'Backquote', 'KeyW', 'KeyS', 'Space', 'KeyD', 'KeyV', 'KeyC'];
-  const lit = /export const RESERVED_KEYS = Object\.freeze\((\[[^\]]*\])\);/.exec(src); assert.ok(lit, 'exported once');
-  assert.deepEqual(JSON.parse(lit[1].replace(/'/g, '"')), want);
+  assert.ok(Object.isFrozen(m.RESERVED_KEYS), 'one frozen exported constant');
+  // the SDK (standalone, run) offers every letter key except the shell's reserved ones
   const letters = want.filter(c => /^Key/.test(c)).map(c => c.slice(3).toLowerCase()).sort().join('');
-  assert.equal(/const RESERVED_LETTERS = '([a-z]+)';/.exec(client)[1].split('').sort().join(''), letters);
-  if (m) {
+  const page = load(), az = [...'abcdefghijklmnopqrstuvwxyz'];
+  add(page, ...az.map(k => el('button', { 'data-wz-key': k })));
+  const offered = new Set([...page.WizardApp.keys.list()].map(k => k.key));
+  assert.equal(az.filter(k => !offered.has(k)).join(''), letters, 'the SDK\'s letters agree with RESERVED_KEYS');
+  {
     assert.deepEqual([...m.RESERVED_KEYS], want);
     assert.deepEqual(['KeyJ', 'Slash', 'Comma', 'Period', 'Semicolon', 'KeyK', 'KeyH', 'KeyW', 'Space', 'Digit1', 'BracketLeft', 'ArrowDown', 'Enter', 'Quote'].map(m.appKeyOf), ['j', '/', ',', '.', ';', 'k', '', '', '', '', '', '', '', '']);
     assert.deepEqual(['j', '/', 'h', 's', 'Space', 'J', 'ArrowUp'].map(m.isAppKey), [true, true, false, false, false, false, false]);

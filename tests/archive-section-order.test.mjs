@@ -7,7 +7,7 @@ import { listFixture, sectionKeys } from './fixtures/chats-list-render.mjs';
 import { withWebParts } from './fixtures/web-parts.mjs';
 import { createDocument } from './fixtures/mini-dom.mjs';
 import { styles } from './fixtures/w5-css.mjs';
-import { experienceRuntime } from './fixtures/skin-palettes-harness.mjs';
+import { experienceRuntime, skinsRuntime } from './fixtures/skin-palettes-harness.mjs';
 
 const root = new URL('../', import.meta.url);
 const read = f => withWebParts(readFileSync(new URL(f, root), 'utf8'));
@@ -39,7 +39,7 @@ test('stock Chats CSS: By status orders Archive last, and no skin moves it up', 
   assert.ok(orders.archive > 0, 'after every unordered section (order 0) too');
   assert.ok(lastIsArchive(orders), JSON.stringify(orders));
   // no skin moves Archive up on its own (each skin's CSS on, as worn)
-  const skins = readdirSync(new URL('web/skins/', root)).filter(d => existsSync(new URL(`web/skins/${d}/skin.css`, root)));
+  const { S } = skinsRuntime(), skins = S.families.flatMap(f => [...f.palettes]).filter(d => existsSync(new URL(`web/skins/${d}/skin.css`, root)));
   assert.ok(skins.length >= 2, 'skins found');
   for (const d of skins) assert.ok(lastIsArchive(sectionOrders({ sheets: [`web/skins/${d}/skin.css`], skin: d }).orders), `${d} leaves Archive's position alone`);
 });
@@ -65,5 +65,23 @@ test('AI apps layout: Archive last in the desktop sidebar and phone drawer; firs
   assert.deepEqual(sectionsFor(html('wizard/unified-inbox miguel/archive-top')).map(x => x[0]), ['archive', 'working', 'snoozed', 'ready']);
   assert.equal(archiveTop(html('miguel/archive-topper')), false, 'exact tweak id only');
   assert.equal(archiveTop(null), false);
-  for (const f of ['web/layouts/ai-apps/desktop.js', 'web/layouts/ai-apps/layout.js']) assert.match(read(f), /for \(const \[k, word0\] of sectionsFor\(root\)\)/, `${f} draws sectionsFor(root)`);
+  // the phone drawer draws sectionsFor(root): ai-apps-view.test.mjs ('archive-top: Archive first') runs it; the desktop
+  // sidebar (the real view, drawn) keeps Archive last
+  const keys = await deskSections('wizard/unified-inbox');
+  assert.equal(keys.at(-1), 'archive', `desktop: Archive last (${keys})`);
+});
+
+// The real desktop AI apps view (tests/fixtures/ai-apps-world.mjs) with `tweaks` on <html>: its sidebar's section keys.
+async function deskSections(tweaks) {
+  const { deskWorld, layout } = await import('./fixtures/ai-apps-world.mjs');
+  const { w } = deskWorld(); w.html.setAttribute('data-shell', 'desktop'); w.html.setAttribute('data-layout', 'ai-apps'); w.html.dataset.tweaks = tweaks;
+  (await layout()).default(w.api);
+  return w.qa('.aad-sec').map(h => h.dataset.sec);
+}
+
+// The old text pin said the desktop sidebar draws sectionsFor(root); that loop sits behind actOn(), which desktop.js
+// fixes to true, so it never runs: the drawn sidebar ignores archive-top.
+test('AI apps desktop sidebar: archive-top puts Archive first', { todo: 'desktop sidebar ignores miguel/archive-top: its sectionsFor(root) branch is dead (actOn() is always true)' }, async () => {
+  const keys = await deskSections('wizard/unified-inbox miguel/archive-top');
+  assert.equal(keys[0], 'archive', `desktop with archive-top: ${keys}`);
 });

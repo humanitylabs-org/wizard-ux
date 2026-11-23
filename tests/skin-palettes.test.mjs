@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
+import { createDocument } from './fixtures/mini-dom.mjs';
+import { cascade } from './fixtures/mini-css.mjs';
 import { read, skinsRuntime, settingsView, experienceRuntime } from './fixtures/skin-palettes-harness.mjs';
 
 // wizard-os spec/SKINS_AND_VIEWS.md §1: palettes live inside skins. Each test runs the real skins.js, Settings,
@@ -158,6 +160,15 @@ test('review: a new skin starts from the worn own skin\'s choices; an upgraded d
   const cat = JSON.parse(read('web/tweaks/catalog.json'));
   for (const old of Object.keys(cat.aliases)) {
     assert.ok(!cat.tweaks.includes(old), old + ' is retired');
-    if (old === 'miguel/machines-home') assert.match(read(`web/tweaks/${old}/tweak.css`), /html\[data-tweaks~="miguel\/machines-home"\] \.home > :is\(\.home-top/, 'boot preload still hides stock Home');
   }
+  // the Home map an old id now names (its CSS still preloaded at boot) on stock Home's top row: hidden while listed
+  // (the old pin sat behind `old === 'miguel/machines-home'`, which no retired id ever is: it never ran)
+  { const id = cat.aliases['wizard/machines-home']; assert.equal(id, 'miguel/machines-home');
+    const doc = createDocument(), top = doc.createElement('div'), home = doc.createElement('div');
+    home.className = 'home'; top.className = 'home-top'; home.appendChild(top); doc.body.appendChild(home);
+    const css = read(`web/tweaks/${id}/tweak.css`);
+    doc.documentElement.setAttribute('data-tweaks', id);
+    assert.equal(cascade(top, css).display?.value, 'none', 'boot preload still hides stock Home');
+    doc.documentElement.setAttribute('data-tweaks', '');
+    assert.notEqual(cascade(top, css).display?.value, 'none'); }
 });

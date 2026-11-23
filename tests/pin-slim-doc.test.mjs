@@ -7,6 +7,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { createDocument } from './fixtures/mini-dom.mjs';
 
 const read = path => readFileSync(new URL('../web/' + path, import.meta.url), 'utf8');
 const WORN = 'wizard/sidebar-chats-view';
@@ -79,9 +80,11 @@ test('app-session.html loads every stylesheet and script a pinned app gets in th
   assert.deepEqual(js, want.filter(f => f.endsWith('.js') && !HEAD.includes(f)), 'scripts in index.html order');
   assert.ok(js.indexOf('live.js') < js.indexOf('core/single-app-session.js') && js.indexOf('core/chats.js') < js.indexOf('core/single-app-session.js'),
     'WizLive and the Chats host exist before the app frame is made');
-  const tag = f => { const at = html.indexOf(`src="${f}"`); return html.slice(html.lastIndexOf('<script', at), html.indexOf('>', at) + 1); };
-  assert.match(tag('core/thread-swipe-back.js'), /type="module"/);
-  assert.match(tag('core/experience.js'), /\bdefer\b/);
+  // how the page loads them (its markup parsed into the small DOM, as the browser reads it)
+  const doc = createDocument(); doc.documentElement.innerHTML = html.replace(/^[\s\S]*?<html[^>]*>/i, '').replace(/<\/html>[\s\S]*$/i, '');
+  const script = f => doc.querySelector(`script[src="${f}"]`);
+  assert.equal(script('core/thread-swipe-back.js').getAttribute('type'), 'module');
+  assert.ok(script('core/experience.js').hasAttribute('defer'));
 });
 
 test('not a pinned session, or another address: nothing happens', () => {

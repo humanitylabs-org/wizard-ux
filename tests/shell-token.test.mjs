@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { createDocument } from './fixtures/mini-dom.mjs';
+import { nginxShell } from './fixtures/w1-nginx.mjs';
 import vm from 'node:vm';
 
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
@@ -135,30 +136,58 @@ test('nginx: off renders no token and no sub_filter; on fills it for a top-level
     for (const f of ['nginx', 'envsubst', 'python3']) chmodSync(join(bin, f), 0o755);
     const script = join(dir, 'entrypoint.sh');
     writeFileSync(script, read('packaging/entrypoint.sh').split('/tmp/').join(out + '/').split('/etc/wizard-shell/').join(etc + '/'));
-    const run = env => { rmSync(join(dir, 'log'), { force: true }); const r = spawnSync('sh', [script], { env: { PATH: `${bin}:/usr/bin:/bin`, ...env }, encoding: 'utf8' }); return { code: r.status, err: r.stderr, log: existsSync(join(dir, 'log')) ? readFileSync(join(dir, 'log'), 'utf8') : '' }; };
-    const conf = f => readFileSync(join(out, f), 'utf8');
+    const run = env => { rmSync(join(dir, 'log'), { force: true }); const r = spawnSync('sh', [script], { env: { PATH: `${bin}:/usr/bin:/bin`, ...env }, encoding: 'utf8' }); return { code: r.status, err: r.stderr, log: existsSync(join(dir, 'log')) ? readFileSync(join(dir, 'log'), 'utf8') : '', conf: f => readFileSync(join(out, f), 'utf8') }; };
     // off (the default): every read maps to no token, and nothing is filtered into the page
     let r = run({}); assert.equal(r.code, 0, r.err); assert.equal(r.log, 'nginx-t-after-conf\nstarted\n', 'written before nginx -t');
-    assert.equal(conf('wizard-boundary.conf'), 'map "$http_sec_fetch_mode:$http_sec_fetch_dest" $wizard_shell_token { default ""; }\n');
-    assert.equal(conf('wizard-boundary-static.conf'), '');
+    assert.equal(r.conf('wizard-boundary.conf'), 'map "$http_sec_fetch_mode:$http_sec_fetch_dest" $wizard_shell_token { default ""; }\n');
+    assert.equal(r.conf('wizard-boundary-static.conf'), '');
     // on: the token only for a real top-level navigation (and the service worker passing one on), never a frame
     writeFileSync(join(dir, 'token'), TOKEN + '\n');
     r = run({ WIZARD_BROWSER_BOUNDARY: '1', WIZARD_SHELL_TOKEN_FILE: join(dir, 'token') }); assert.equal(r.code, 0, r.err);
-    assert.equal(conf('wizard-boundary.conf'), `map "$http_sec_fetch_mode:$http_sec_fetch_dest" $wizard_shell_token { "navigate:document" "${TOKEN}"; "navigate:empty" "${TOKEN}"; default ""; }\n`);
-    const filter = conf('wizard-boundary-static.conf'), m = /^sub_filter '([^']+)' '([^']+)';$/m.exec(filter);
+    assert.equal(r.conf('wizard-boundary.conf'), `map "$http_sec_fetch_mode:$http_sec_fetch_dest" $wizard_shell_token { "navigate:document" "${TOKEN}"; "navigate:empty" "${TOKEN}"; default ""; }\n`);
+    const filter = r.conf('wizard-boundary-static.conf'), m = /^sub_filter '([^']+)' '([^']+)';$/m.exec(filter);
     assert.ok(m, 'one sub_filter'); assert.deepEqual([m[1], m[2]], SUB, 'it fills exactly the shipped placeholder');
-    assert.ok(read('web/index.html').includes(m[1]) && read('web/desktop.html').includes(m[1]), 'the pages carry the string it looks for');
+    // (the pages carry the string it looks for: served() below finds the token in both served pages)
     // a token that is not 64 lowercase hex: the shell refuses to start
     for (const bad of ['', 'AB'.repeat(32), 'ab'.repeat(31)]) {
       writeFileSync(join(dir, 'token'), bad); r = run({ WIZARD_BROWSER_BOUNDARY: '1', WIZARD_SHELL_TOKEN_FILE: join(dir, 'token') });
       assert.equal(r.code, 2, `refused: ${JSON.stringify(bad)}`); assert.equal(r.log, '', 'nginx never starts');
     }
-    // nginx reads what the entrypoint wrote: the http block's map and the static location's filter
-    assert.ok(read('packaging/nginx.conf.template').includes('include /tmp/wizard-boundary.conf;') && read('packaging/static.conf').includes('include /tmp/wizard-boundary-static.conf;'));
-    // never stored: a page with a token is no-store (the map in the http block), an off page keeps its cache rule
-    const map = /map \$wizard_shell_token \$wizard_doc_cache \{ "" \$wizard_cache_ok; default "no-store"; \}/.test(read('packaging/nginx.conf.template'));
-    assert.ok(map && /add_header Cache-Control \$wizard_doc_cache always;/.test(read('packaging/static.conf')));
   } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+// A page served through the image's real nginx config (tests/fixtures/w1-nginx.mjs runs the real entrypoint.sh, then
+// walks the rendered config with its includes): the file, its Cache-Control, and the page after the location's
+// sub_filter with $wizard_shell_token as the http block's map gives it for this request.
+function served(shell, uri, dest) {
+  const headers = { 'Sec-Fetch-Mode': 'navigate', 'Sec-Fetch-Dest': dest }, r = shell.request({ uri, headers });
+  const http = shell.tree.find(d => d.name === 'http').children, server = http.find(d => d.name === 'server').children;
+  const map = http.find(d => d.name === 'map' && d.args[1] === '$wizard_shell_token');
+  const token = map ? (map.children.find(e => e.name === `navigate:${dest}`) || map.children.find(e => e.name === 'default')).args[0] : '';
+  let level = server, page = readFileSync(r.file, 'utf8');
+  for (const at of r.location) {
+    const loc = level.find(d => d.name === 'location' && d.args.join(' ') === at); level = loc.children;
+    for (const f of level.filter(d => d.name === 'sub_filter')) page = page.replace(f.args[0], f.args[1].split('$wizard_shell_token').join(token));
+  }
+  return { status: r.status, cache: r.header('Cache-Control'), page };
+}
+
+test('nginx serves the token into both pages for a top-level load only, never stored; off keeps the cache rule', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'wos-tok-')); writeFileSync(join(dir, 'token'), TOKEN + '\n');
+  const on = nginxShell({ WIZARD_BROWSER_BOUNDARY: '1', WIZARD_SHELL_TOKEN_FILE: join(dir, 'token') }), off = nginxShell({});
+  try {
+    for (const uri of ['/wizard-os-home/', '/wizard-os-home/desktop.html']) {
+      const top = served(on, uri, 'document');
+      assert.equal(top.status, 200);
+      assert.ok(top.page.includes(`<meta name="wizard-shell-token" content="${TOKEN}">`), `${uri}: the token in the page`);
+      assert.deepEqual(top.cache, ['no-store'], `${uri}: a page with a token is never stored`);
+      const framed = served(on, uri, 'iframe');
+      assert.ok(!framed.page.includes(TOKEN), `${uri}: a frame never gets it`); assert.notDeepEqual(framed.cache, ['no-store']);
+      const plain = served(off, uri, 'document');
+      assert.ok(plain.page.includes('<meta name="wizard-shell-token" content="off">'), `${uri}: off: the page as shipped`);
+      assert.notDeepEqual(plain.cache, ['no-store'], `${uri}: off keeps its cache rule`); assert.equal(plain.cache.length, 1);
+    }
+  } finally { on.done(); off.done(); rmSync(dir, { recursive: true, force: true }); }
 });
 
 test('the device remembers the box\'s boundary (never the token): set on, cleared only by the box\'s `off`', () => {

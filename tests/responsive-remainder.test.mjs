@@ -48,7 +48,7 @@ test('explicit misses in phone never enter cloud routing; desktop command take i
   appVars:{W:{}},$:()=>({})});
  const snap={view:{agent:'a1',agentLabel:'Ann',id:'w1',thread:'t1'}};
  assert.equal(await ph.handleText('do the thing','command',false,0,null,snap),'choices');
- const names=calls.map(c=>c[0]);
+ const names=calls.map(x=>x[0]);
  assert(names.includes('holdNoMatch'));assert(!names.includes('fetch'),'no cloud routing');assert(!names.includes('endpoint'));
  // Desktop: a command take is retained and transcribed locally, then finished; it is never queued as a message.
  const desk=withDesktopParts(read('desktop/desktop.js'));
@@ -58,7 +58,7 @@ test('explicit misses in phone never enter cloud routing; desktop command take i
  const d=runRecording('this.run=async()=>{'+take+'\n};',{calls:dcalls,commandTake:true,dictationFinishing:false,vSnapshot:{},window:{},OUTBOX:outbox,
   VOICE:{finish:async()=>({blob:'b',captureId:'c1'})},LOCAL_COMMANDS:{confirm:async()=>null,parse:()=>null},toast:()=>{},commandSaid:(ok)=>dcalls.push(['said',ok])});
  assert.equal(await d.run(),'none');
- assert.deepEqual(dcalls.map(c=>c[0]),['retain','transcribe','complete','said']);
+ assert.deepEqual(dcalls.map(x=>x[0]),['retain','transcribe','complete','said']);
  assert.equal(d.commandTake,false,'the take is over');
 });
 test('general bound-view lifecycle preserves origin and manual dismissal',()=>{

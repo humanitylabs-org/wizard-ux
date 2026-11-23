@@ -74,7 +74,11 @@ test('the Reply bridge and bubble are not gated on a skin', () => {
   assert.equal(rpl(false, 'agent').key, 'k', 'a pinned agent\'s thread shows its item');
   assert.equal(rpl(true, 'agent'), null, 'a New chat of a pinned agent carries none');
   assert.match(chats, /\$\{replyBubble\(rpl\)\}/);
-  assert.match(chats, /\$\{replyCard\(tn\.u\.reply\)\}/);
+  // a sent message's turn (the real turnHtml with the real replyCard) carries its quote card
+  const turn = runRecording([fn(chats, '  function turnHtml(c, tn, last, working, helperStatus, reconnect, tt = true, needs = \'\') {'), fn(chats, '  function replyCard(r) {'), 'globalThis.turn = turnHtml;'].join('\n'),
+    { esc, clip: (t, n) => String(t).slice(0, n), md: t => esc(t), userMedia: () => '', timeTag: () => '', quoteBtn: () => '', msgIds: () => '', window: {}, KIT: kit().KIT });
+  const sent = createDocument(); sent.body.innerHTML = turn.turn({}, { notes: [], media: [], tools: [], u: { text: 'Is it safe?', at: 5, reply: { key: 'notifications:n42', title: 'Disk almost full', message: 'Root volume at 93%.' } } }, true, false);
+  assert.equal(sent.querySelector('.msg.u.has-rq .bub .ch-rq b')?.textContent, 'Disk almost full', 'the sent message shows the quote card');
 });
 
 test('core draws a real bubble (rounded, tinted, accent rule) from skin tokens only', () => {
