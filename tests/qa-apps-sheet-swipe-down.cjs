@@ -98,7 +98,10 @@ async function openFromOrb(p, cdp) {
         await p.waitForTimeout(700); r.nudge = { ...(await state(p)), transform: await p.evaluate(() => document.getElementById('launcher').style.transform) };
         // 5. A tile tap still opens the app.
         await p.evaluate(() => document.querySelector('#launcherBody .lapp[data-app="qa-app-0"]').scrollIntoView({ block: 'center' }));
-        await p.waitForTimeout(300); await p.tap('#launcherBody .lapp[data-app="qa-app-0"]');
+        await p.waitForTimeout(300);
+        // (Chromium's touch emulation drops the click for any moved touch, also on main, so the tap-jitter slop is
+        // covered by the unit test in settings-preview-windows.test.mjs.)
+        await p.tap('#launcherBody .lapp[data-app="qa-app-0"]');
         await p.waitForTimeout(1000); r.tap = await state(p);
       }
       await ctx.close();

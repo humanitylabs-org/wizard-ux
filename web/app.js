@@ -510,14 +510,16 @@
     grip?.addEventListener('pointermove', e => d.move(e.clientY));
     grip?.addEventListener('pointerup', d.end); grip?.addEventListener('pointercancel', d.end); }
   /* Apps: a swipe down on the app grid when it is already at its top pulls the panel down too (issue 1734). A grid
-   * scrolled down only scrolls; up and sideways moves are left alone. Touch events, so the first downward move can stop
-   * the grid's own (empty) scroll before the browser commits to it. */
+   * scrolled down only scrolls; up and sideways moves are left alone. Touch events, so the first downward move past an
+   * 8 px tap slop can stop the grid's own (empty) scroll before the browser commits to it. */
   { const body = launcher?.querySelector('.launcher-body'), d = sheetDrag(launcher, 'launcher'); let x0 = 0, y0 = null;
     body?.addEventListener('touchstart', e => { const t = e.touches[0]; y0 = e.touches.length === 1 && body.scrollTop <= 0 ? t.clientY : null; x0 = t.clientX; }, { passive: true });
     body?.addEventListener('touchmove', e => {
       const t = e.touches[0]; if (!t) return;
-      if (!d.on()) { if (y0 == null) return; const dy = t.clientY - y0; if (!dy) return;
-        if (dy < 0 || Math.abs(t.clientX - x0) > dy || e.touches.length > 1 || !d.start(y0)) { y0 = null; return; } }
+      if (!d.on()) { if (y0 == null) return; const dy = t.clientY - y0, dx = Math.abs(t.clientX - x0);
+        if (dy < 0 || dx > 8 || e.touches.length > 1) { y0 = null; return; }
+        if (dy < 8) return; // tap slop (Android's 8 dp): a tile tap with a little jitter stays a tap
+        if (!d.start(y0)) { y0 = null; return; } }
       if (e.cancelable) e.preventDefault(); d.move(t.clientY);
     }, { passive: false });
     const end = () => { y0 = null; d.end(); }; body?.addEventListener('touchend', end); body?.addEventListener('touchcancel', end); }

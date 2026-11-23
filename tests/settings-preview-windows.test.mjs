@@ -194,6 +194,8 @@ test('phone Apps panel closes by swiping its grip down, or its app grid down onc
   a = make(300); const scrolled = a.pull(200, 300); assert.equal(a.t.closes, 0, 'scrolled grid: no close'); assert.ok(scrolled.every(e => !e.defaultPrevented), 'and it scrolls');
   a = make(); const up = a.pull(-200, 300); assert.equal(a.t.closes, 0, 'upward: no close'); assert.ok(up.every(e => !e.defaultPrevented));
   a = make(); a.pull(40, 300, 200); assert.equal(a.t.closes, 0, 'sideways: no close');
+  // A tap with a little downward jitter stays a tap: nothing is taken, nothing moves.
+  a = make(); const jitter = a.pull(4, 30); assert.equal(a.t.closes, 0); assert.ok(jitter.every(e => !e.defaultPrevented), 'tap jitter is left to the tile'); assert.ok(!a.launcher.style.transform);
   // Only while Apps is the open sheet.
   a = make(0, null); a.pull(200, 300); assert.equal(a.t.closes, 0, 'only while Apps is open'); assert.ok(!a.launcher.style.transform, 'not dragged');
 });
