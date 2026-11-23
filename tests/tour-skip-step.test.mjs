@@ -99,7 +99,12 @@ test('Reply leaves the shell free: no wrong-gesture nudges, Back is the shell\'s
   assert.ok(!['home', 'closeSheets', 'dismissVoice'].some(c => t.calls.includes(c)), JSON.stringify(t.calls));
   assert.equal(t.T.back(), '', 'Back inside Chats is the shell\'s, the beat stays');
   assert.equal(t.T.step, 2);
-  assert.match(SRC, /const guarded = t => active\(\) && step !== REPLY && !allowed\(t\);/, 'the tap guard is off during Reply');
+  // the tour's real tap guard: a tap outside the tour is swallowed during Talk, but not during Reply
+  const outside = { closest: () => null }, g = boot(); g.T.start('qa');
+  assert.equal(g.winEvent('pointerdown', outside), true, 'Talk: a stray tap is held back');
+  g.tap('[data-tnext]'); assert.equal(g.T.step, 2);
+  assert.equal(g.winEvent('pointerdown', outside), false, 'the tap guard is off during Reply');
+  assert.equal(g.winEvent('click', outside), false);
 });
 
 test('Reply: away from Home (Chats open) the card gets out of the way; back on Home it returns', () => {
@@ -144,8 +149,12 @@ test('Practice again replays all three beats from Talk', () => {
   const t = boot();
   t.T.start('qa'); t.tap('[data-tskip]'); assert.ok(!t.T.active);
   t.T.openHelp(); assert.ok(t.T.helpOpen);
-  assert.match(SRC, /data-hsgo>Practice again</);
-  assert.match(SRC, /if \(e\.target\.closest\('\[data-hsgo\]'\)\) \{ closeHelp\(\); return start\('help'\); \}/);
+  // the help sheet's own Practice again button, tapped: the sheet closes and the tour starts again from Talk
+  const sheet = t.created.find(e => /How Wizard works/.test(e.innerHTML));
+  assert.match(sheet.innerHTML, /data-hsgo>Practice again</);
+  sheet._l.click.forEach(f => f({ target: { closest: s => (s === '[data-hsgo]' ? {} : null) } }));
+  assert.ok(t.T.active && !t.T.helpOpen, 'Practice again closes Help and starts the tour');
+  assert.equal(t.T.step, 1); assert.equal(t.view().sub, 'Step 1 of 3 · Talk');
   assert.ok(t.T.start('help')); assert.equal(t.T.step, 1); assert.equal(t.view().sub, 'Step 1 of 3 · Talk');
 });
 

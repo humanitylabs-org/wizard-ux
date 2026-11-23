@@ -93,15 +93,26 @@ const isParts = spec => /(^|\/)[\w-]*parts\.mjs$/.test(spec); // fixtures that o
 const READER = /^(?!(?:create|make|build|new|load|run)[A-Z])(read\w*|root|\w*(Source|Src))$/; // createBetaSource() is a factory, not text
 const EXTERNAL_OK = /^node:(test|assert|assert\/strict|fs|fs\/promises|path|url|crypto|os|util)$/;
 
-function imports(src, readers = new Set()) {
+// A fixture's export that is source text itself (`export const SRC = readFileSync(...)`) is read, not run.
+const RAW_EXPORT = /^\s*(readFileSync|readFile|with\w*Parts|read\w*)\s*\(/;
+function rawExports(spec, file) {
+  if (!file || !/^\.\.?\//.test(spec)) return new Set();
+  let text = ''; try { text = fs.readFileSync(path.resolve(path.dirname(file), spec), 'utf8'); } catch { return new Set(); }
+  const out = new Set();
+  for (const m of text.matchAll(/(^|\n)\s*export\s+(?:const|let|var)\s+([\w$]+)\s*=\s*([^\n;]*)/g)) if (RAW_EXPORT.test(m[3])) out.add(m[2]);
+  return out;
+}
+function imports(src, readers = new Set(), file = null) {
   const names = new Set();
   const re = /(^|\n)\s*import\s+([^'";]*?)\s*from\s*['"]([^'"]+)['"]/g;
   for (const m of src.matchAll(re)) {
     const spec = m[3]; if (EXTERNAL_OK.test(spec) || isParts(spec)) continue;
     if (/^node:vm$|^vm$/.test(spec)) continue; // vm itself is matched by EXEC
+    const raw = rawExports(spec, file);
     for (const part of m[2].replace(/[{}]/g, ',').split(',')) {
-      const nm = part.trim().split(/\s+as\s+/).pop().replace(/^\*\s*as\s*/, '').trim();
-      if (/^[\w$]+$/.test(nm)) (READER.test(nm) ? readers : names).add(nm);
+      const [orig, alias] = part.trim().replace(/^\*\s*as\s*/, '').split(/\s+as\s+/).map(x => x.trim());
+      const nm = alias || orig;
+      if (/^[\w$]+$/.test(nm)) (READER.test(nm) || raw.has(orig) ? readers : names).add(nm);
     }
   }
   return names;
@@ -156,12 +167,14 @@ function topDecls(code) {
   return decls;
 }
 
+// `assert.deepEqual(src.match(/x/g) || [], [])`: nothing matched, an absence check
+const EMPTY_EQ = (fn, arg) => /^deep(Strict)?Equal$/.test(fn) && /,\s*(\[\s*\]|\{\s*\})\s*(,[\s\S]*)?$/.test(arg);
 const POSITIVE = /\bassert\s*\.\s*(match|ok|equal|strictEqual|deepEqual|deepStrictEqual|notEqual|notStrictEqual|throws|rejects)\s*\(|(^|[^\w$.])assert\s*\(/g;
 
-export function classifyFile(src) {
+export function classifyFile(src, file = null) {
   const code = codeOnly(src);
   const decls = topDecls(code);
-  const importedReaders = new Set(), runs = new Set(imports(src, importedReaders));
+  const importedReaders = new Set(), runs = new Set(imports(src, importedReaders, file));
   const ident = t => new Set([...t.matchAll(/(?<![\w$.])[A-Za-z_$][\w$]*/g)].map(x => x[0]));
   // top-level statements that run code (vm.runInNewContext(text, sandbox)) make the names they touch run code
   for (const stmt of topStatements(code)) if (!/^(?:export\s+)?(?:async\s+)?(?:function|class|const|let|var|import|test|it|describe)\b/.test(stmt) && EXEC.some(r => r.test(stmt))) for (const nm of ident(stmt)) if (decls.has(nm)) runs.add(nm);
@@ -192,6 +205,21 @@ export function classifyFile(src) {
     for (const [nm, text] of decls) {
       if (runs.has(nm)) continue;
       if (EXEC.some(r => r.test(text)) || [...runs].some(r => mentions(r, text.replace(/^[^=({]*/, '')))) { runs.add(nm); changed = true; }
+    }
+  }
+  // File-level helpers (not running code) that assert positively, to a fixed point through helpers they call.
+  const positiveHelpers = new Set();
+  const assertsPositively = text => { for (const a of text.matchAll(POSITIVE)) {
+    const fn = a[1] || 'assert'; const o = text.indexOf('(', a.index + a[0].length - 1), arg = text.slice(o + 1, closeOf(text, o) - 1).trim();
+    if ((fn === 'ok' || fn === 'assert') && /^\(?\s*!/.test(arg)) continue;
+    if ((fn === 'equal' || fn === 'strictEqual') && /,\s*(-1|false|0|null|undefined)\s*(,|$)/.test(arg)) continue;
+    if (fn === 'throws' || fn === 'rejects' || EMPTY_EQ(fn, arg)) continue;
+    return true; } return false; };
+  for (let changed = true; changed;) {
+    changed = false;
+    for (const [nm, text] of decls) {
+      if (positiveHelpers.has(nm) || runs.has(nm)) continue;
+      if (assertsPositively(text) || [...positiveHelpers].some(h => mentions(h, text.replace(/^[^=({]*/, '')))) { positiveHelpers.add(nm); changed = true; }
     }
   }
   // Source pins: what a name holds, resolved inside one test (its own declarations first, then the file's).
@@ -243,6 +271,7 @@ export function classifyFile(src) {
         if ((fn === 'ok' || fn === 'assert') && /^\(?\s*!/.test(arg)) continue;
         if ((fn === 'equal' || fn === 'strictEqual') && /,\s*(-1|false|0|null|undefined|''|"")\s*(,|$)/.test(arg)) continue;
         if (fn === 'throws' || fn === 'rejects') continue;
+        if (EMPTY_EQ(fn, arg)) continue;
         if (EXEC.some(r => r.test(argCode))) continue;
         let text = READ.test(argCode), run = false;
         for (const id of IDS(argCode)) { const k = kindOf(id, local); if (k === 'run') run = true; else if (k === 'text') text = true; }
@@ -259,8 +288,10 @@ export function classifyFile(src) {
         const arg = src.slice(argOpen + 1, closeOf(code, argOpen) - 1).trim();
         if (fn === 'ok' || fn === 'assert') { if (!/^!/.test(arg) && !/^\(?\s*!/.test(arg)) positive = true; }
         else if (fn === 'equal' || fn === 'strictEqual') { if (!/,\s*(-1|false|0|null|undefined|''|"")\s*(,|$)/.test(arg)) positive = true; }
-        else positive = true;
+        else if (!EMPTY_EQ(fn, arg)) positive = true;
       }
+      // a file-level helper the test calls that asserts positively counts as the test's own assertion
+      if (!positive && [...positiveHelpers].some(h => mentions(h, body))) positive = true;
       kind = positive ? 'text' : 'absence';
     }
     tests.push({ name, kind, line: src.slice(0, at).split('\n').length, pins, pinLines });
@@ -272,7 +303,7 @@ export function classifyFile(src) {
 export function scan(dir = path.join(ROOT, 'tests')) {
   const files = {};
   for (const f of fs.readdirSync(dir).filter(f => /\.test\.mjs$/.test(f)).sort()) {
-    files[f] = classifyFile(fs.readFileSync(path.join(dir, f), 'utf8'));
+    files[f] = classifyFile(fs.readFileSync(path.join(dir, f), 'utf8'), path.join(dir, f));
   }
   return files;
 }

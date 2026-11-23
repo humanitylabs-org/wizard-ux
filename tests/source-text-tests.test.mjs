@@ -57,6 +57,22 @@ test('inventory', () => { assert.match(src, /core\\.js/); });`), ['rule']);
 test('local', () => { assert.equal(f(' a '), 'a'); });`), ['other']);
 });
 
+test('a positive assert inside a file-level helper, a fixture\'s raw source export, and empty-list absence checks', () => {
+  // (Codex review on PR 1721) a helper that pins source text makes the test calling it a text test
+  assert.deepEqual(kinds(`${HEAD}const css = readFileSync('web/desktop/desktop.css', 'utf8');
+function check(text) { const r = /\\.sel \\{([^}]*)\\}/.exec(text); assert.ok(r); assert.equal(r[1].trim(), 'x'); }
+test('via helper', () => { check(css); });`), ['text']);
+  // a fixture that exports raw source text (tests/fixtures/tour-harness.mjs: export const SRC = readFileSync(...)) is read
+  const file = new URL('./probe.test.mjs', import.meta.url).pathname;
+  assert.deepEqual(classifyFile(`${HEAD}import { SRC } from './fixtures/tour-harness.mjs';
+test('raw export', () => { assert.match(SRC, /data-hsgo/); });`, file).map(t => t.kind), ['text']);
+  assert.deepEqual(classifyFile(`${HEAD}import { boot } from './fixtures/tour-harness.mjs';
+test('runs', () => { assert.ok(boot().T); });`, file).map(t => t.kind), ['runs'], 'its functions still run code');
+  // nothing matched: an absence check, not a pin
+  assert.deepEqual(kinds(`${HEAD}const src = readFileSync('web/app.js', 'utf8');
+test('none', () => { assert.deepEqual(src.match(/forbidden/g) || [], []); });`), ['absence']);
+});
+
 test('source text read through a spread, a second declarator or a block-local const is still read', () => {
   assert.deepEqual(kinds(`${HEAD}const css = readFileSync('web/core/chats.css', 'utf8');
 test('spread', () => { assert.deepEqual([...css.matchAll(/--x/g)].length, 1); });`), ['text']);

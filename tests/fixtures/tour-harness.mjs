@@ -25,7 +25,7 @@ export function boot({ noMic = false } = {}) {
   let timers = [];
   const store = new Map(), calls = [], created = [];
   const document = { createElement: () => { const e = mk(); created.push(e); return e; }, querySelector: () => null };
-  const window = { addEventListener() {}, WosOutbox: outbox };
+  const winL = {}, window = { addEventListener: (t, f) => (winL[t] ||= []).push(f), WosOutbox: outbox };
   const ctx = vm.createContext({
     window, document, console,
     getComputedStyle: () => ({ paddingTop: '64px', paddingBottom: '16px' }),
@@ -48,5 +48,8 @@ export function boot({ noMic = false } = {}) {
   const runTimers = () => { const t = timers; timers = []; t.forEach(x => x.fn()); };
   const view = () => ({ step: T.step, active: T.active, sub: q('small').textContent, copy: q('b').textContent, next: q('.tr-nx').innerHTML, alt: q('.tr-alt').innerHTML });
   const delivered = it => [...sentHooks].forEach(f => f(it, {}));
-  return { T, H, calls, store, tour, q, tap, runTimers, view, delivered, sentHooks, created };
+  // a window event as the browser sends it to the tour's capture listeners: returns whether the tour swallowed it
+  const winEvent = (type, target) => { let stopped = false; const e = { target, stopImmediatePropagation: () => { stopped = true; }, preventDefault() {} };
+    for (const f of winL[type] || []) f(e); return stopped; };
+  return { T, H, calls, store, tour, q, tap, runTimers, view, delivered, sentHooks, created, winEvent };
 }

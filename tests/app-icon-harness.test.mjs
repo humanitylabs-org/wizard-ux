@@ -81,20 +81,21 @@ test('Food follows actual platform admission instead of fabricating a picker row
 const desktopCss = readFileSync(new URL('../web/desktop/desktop.css', import.meta.url), 'utf8');
 const systemSkin = 'html:is([data-skin^="obsidian"], [data-skin^="landscapes"])';
 const selectedSystem = `${systemSkin} .pal-app.pal-sys.sel .ic`;
-const sharedShadow = 'box-shadow: 0 0 0 2px rgba(225, 214, 255, .8), 0 10px 24px -10px color-mix(in oklab, var(--c, #8f63ff) 60%, transparent);';
+// The real cascade on tiles under each system skin: a selected system tile wears exactly the shared selection ring
+// (the same value an ordinary selected tile gets), keeps the skin's idle identity (border), and the idle system
+// tile keeps its own approved look.
 function assertSystemSelection(css) {
-  const clean = css.replace(/\/\*[\s\S]*?\*\//g, '');
-  const rules = [...clean.matchAll(/([^{}]+)\{([^{}]*)\}/g)];
-  const shared = rules.find(([, selectors]) => selectors.trim().startsWith(`${selectedSystem},`));
-  assert.ok(shared, 'system selection must extend the shared rule, not copy or weaken it');
-  assert.equal(shared[1].trim(), `${selectedSystem},\n.pal-app.sel .ic`);
-  assert.equal(shared[2].trim(), sharedShadow, 'selection changes only the existing shadow');
-  // Same skin prefix and extra .sel give (0,5,1), above idle (0,4,1),
-  // independent of source order. Do not remove the approved system idle styling.
-  const idle = rules.find(([, selectors]) => selectors.trim() === `${systemSkin} .pal-app.pal-sys .ic`);
-  assert.ok(idle);
-  assert.equal(idle[2].trim(), 'border: 2.5px solid #8f63ff; background: linear-gradient(160deg, rgba(143, 99, 255, .34), rgba(143, 99, 255, .14)), #0f0c17; box-shadow: 0 4px 14px rgba(143, 99, 255, .28);');
-  assert.doesNotMatch(shared[0] + idle[0], /!important/);
+  for (const skin of ['obsidian', 'obsidian-light', 'landscapes', 'landscapes-light']) {
+    const doc = createDocument(); doc.documentElement.setAttribute('data-skin', skin);
+    doc.body.innerHTML = '<div class="pal-app pal-sys sel"><span class="ic"></span></div><div class="pal-app pal-sys"><span class="ic"></span></div><div class="pal-app sel"><span class="ic"></span></div>';
+    const [sel, idle, plain] = doc.querySelectorAll('.ic').map(el => cascade(el, css));
+    assert.match(plain['box-shadow']?.value || '', /^0 0 0 2px rgba\(225, 214, 255, \.8\), 0 10px 24px -10px /, `${skin}: the shared ring`);
+    assert.equal(sel['box-shadow']?.value, plain['box-shadow'].value, `${skin}: system selection reuses the shared ring exactly`);
+    assert.equal(sel['box-shadow'].important, false, `${skin}: without !important`);
+    assert.equal(idle['box-shadow']?.value, '0 4px 14px rgba(143, 99, 255, .28)', `${skin}: idle system tile keeps its glow`);
+    for (const p of ['border', 'background']) assert.equal(sel[p]?.value, idle[p]?.value, `${skin}: selection changes only the shadow (${p})`);
+    assert.equal(idle.border?.value, '2.5px solid #8f63ff');
+  }
 }
 test('selected system tiles reuse the exact shared ring without losing idle skin identity', () => {
   assertSystemSelection(desktopCss);
@@ -110,7 +111,7 @@ test('selection regression rejects the old cascade and a weakened outline contra
   assert.match(cascade(idle, desktopCss)['box-shadow'].value, /^0 4px 14px rgba\(143, 99, 255, \.28\)/, 'idle: the skin\'s own look');
   assert.equal(cascade(sel, desktopCss).border.value, '2.5px solid #8f63ff', 'selected keeps the idle skin identity');
   // the old cascade (the shared rule without the system tile) loses to the idle skin rule: no ring
-  const old = desktopCss.replace(`${selectedSystem},\n.pal-app.sel .ic`, '.pal-app.sel .ic');
+  const old = desktopCss.split(selectedSystem).join('.no-such-tile'); // the shared rule without the system tile
   assert.doesNotMatch(ring(old), /225, 214, 255/);
   assert.throws(() => assertSystemSelection(old));
   assert.throws(() => assertSystemSelection(desktopCss.replace('rgba(225, 214, 255, .8)', 'rgba(225, 214, 255, .4)')));
