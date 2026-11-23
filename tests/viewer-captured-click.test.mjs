@@ -53,7 +53,7 @@ function fixture({ phoneSquare = false } = {}) {
   }
   stage = new Node('mv-stage');
   const body = new Node('body');
-  const context = vm.createContext({ window: { addEventListener() {} }, document: { documentElement: { dataset: { shell: 'desktop' } }, body, activeElement: body, createElement: () => (viewer = new Node('mviewer')), getElementById: () => null }, navigator: {}, performance: { now: () => clock }, setTimeout: fn => { timers.set(++timerId, fn); return timerId; }, clearTimeout: id => timers.delete(id), requestAnimationFrame: () => 1, cancelAnimationFrame() {}, addEventListener() {}, K: { onChange() {}, notify() {} }, esc: x => x });
+  const context = vm.createContext({ window: { addEventListener() {} }, document: { documentElement: { dataset: { shell: 'desktop' } }, body, activeElement: body, createElement: () => (viewer = new Node('mviewer')), getElementById: () => null }, navigator: {}, performance: { now: () => clock }, setTimeout: fn => { timers.set(++timerId, fn); return timerId; }, clearTimeout: id => timers.delete(id), requestAnimationFrame: () => 1, cancelAnimationFrame() {}, addEventListener() {}, K: { onChange() {}, notify() {} }, esc: x => x, macSaver: () => Promise.resolve(null) });
   vm.runInContext(media + '\nglobalThis.api = viewer; globalThis.debug = V;', context);
   const api = context.api;
   const open = () => api.open([{ url: '/synthetic-a.svg', kind: 'image' }, { url: '/synthetic-b.svg', kind: 'image' }]);
