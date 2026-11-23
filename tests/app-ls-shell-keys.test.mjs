@@ -88,6 +88,7 @@ test('both carry-over modules use the same shell-key rule', () => {
   assert.deepEqual(n, ['wuxx', 'wizard-music.volume', 'notes.lastVault', 'wc.mode', 'theme', 'wizardly', 'wizardapp', 'wz', 'wizard']);
 });
 
+// static-rule: an inventory over every web/ file (each localStorage key the shell names); the two rules it feeds run
 test('every localStorage key the shell names is a shell key, so no app is ever handed one', () => {
   const keys = shellKeys();
   assert.ok(keys.size > 80, 'the scan finds the shell keys: ' + keys.size);

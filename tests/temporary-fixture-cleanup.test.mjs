@@ -15,5 +15,6 @@ test('logo, device, Customize and asset-stamping fixtures leave no temporary dir
     env: { ...process.env, TMPDIR: root, TMP: root, TEMP: root }, encoding: 'utf8', timeout: 60_000,
   });
   assert.equal(child.status, 0, child.error?.message || child.stdout + child.stderr);
-  assert.deepEqual(readdirSync(root), [], 'fixture hooks must delete their own files, not rely on a worker sweep');
+  const left = readdirSync(root);
+  assert.equal(left.length, 0, 'fixture hooks must delete their own files, not rely on a worker sweep: ' + left.join(', '));
 });

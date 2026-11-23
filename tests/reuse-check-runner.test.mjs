@@ -18,6 +18,7 @@ function runSteps(steps, opts) {
   return { outs, ran: readFileSync(join(opts.cwd, 'ran'), 'utf8').trim().split('\n') };
 }
 
+// static-rule: the workflow's declared input (parsed YAML, as Actions reads it) is config; runsOn below evaluates it
 test('public app callers retain the GitHub-hosted default', () => {
   assert.equal(input.type, 'string');
   assert.equal(input.required, false);
@@ -29,6 +30,7 @@ test('private app callers can select a self-hosted label array', () => {
   assert.deepEqual(labels, ['self-hosted', 'linux', 'forum', 'reuse-check']);
 });
 
+// static-rule: the declared permissions and checkouts (parsed YAML) are config; the run steps below are executed
 test('runner selection preserves trusted, read-only gate execution', () => {
   assert.deepEqual(workflow.permissions, { contents: 'read' });
   assert.equal(workflow.on.pull_request_target, undefined);

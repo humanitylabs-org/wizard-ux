@@ -137,7 +137,8 @@ test('every published image is stamped with the commit it was built from', () =>
     try {
       execFileSync('sh', ['-c', stamp.split('/usr/share/nginx/wizard-ux').join(dir)], { env: { PATH: process.env.PATH, WIZARD_UX_COMMIT: commit } });
       const f = join(dir, 'build.json');
-      assert.deepEqual(existsSync(f) ? JSON.parse(readFileSync(f, 'utf8')) : null, want, JSON.stringify(commit));
+      const stamped = existsSync(f) ? JSON.parse(readFileSync(f, 'utf8')) : null; // what the run wrote
+      assert.deepEqual(stamped, want, JSON.stringify(commit));
     } finally { rmSync(dir, { recursive: true, force: true }); }
   }
   // CI's PR build and publish (scripts/ci/ghcr_image.py) both hand the commit to the build, docker stubbed.

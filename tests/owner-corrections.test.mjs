@@ -184,7 +184,7 @@ test('this repo’s own owner-correction markers are well-formed and each guards
   assert.ok(files.length >= 3, 'the backfilled tests carry markers');
   for (const f of files) {
     const { found, malformed } = scan(f, readFileSync(join(root, f), 'utf8'));
-    assert.deepEqual(malformed, [], f);
+    assert.equal(malformed.length, 0, `${f}: ${JSON.stringify(malformed)}`);
     for (const m of found) assert.ok(m.asserts.length > 0, `${f}:${m.line} guards no assertion`);
   }
 });
