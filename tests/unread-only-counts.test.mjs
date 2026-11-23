@@ -7,6 +7,8 @@ import { modelContext } from './fixtures/chats-list-model.mjs';
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 import { withShellParts } from './fixtures/shell-parts.mjs';
 import { unreadWorld, runIn, UNREAD } from './fixtures/r8B-unread.mjs';
+import { createDocument } from './fixtures/mini-dom.mjs';
+import { block, runRecording } from './fixtures/source-slice.mjs';
 
 // James, 8 Nov 2026: every number beside Chats / Ready counts UNREAD threads only. A finished thread that is already
 // read adds nothing; the list itself still shows every thread. Working, Snoozed and Archive keep their place counts.
@@ -50,10 +52,18 @@ test('Ready sub-group numbers (subject and priority) count unread only', () => {
   assert.equal(model.unreadThreads(five, isNew, []), 2);
   assert.equal(model.unreadThreads(five, isNew, [{ read: false }, { read: true }]), 3, 'unread notifications count, read ones do not');
   assert.equal(model.unreadThreads([five[0], five[0]], isNew), 1, 'a thread counts once');
-  const body = chats.slice(chats.indexOf('  function readyBody('), chats.indexOf('  /* Priority shows its groups'));
-  assert.doesNotMatch(body, /\$\{g\.size\}/, 'subject header must not print the group size');
-  assert.match(body, /unreadThreads\(l, /);
-  const pri = chats.indexOf('  function priorityGroups('); assert.match(chats.slice(pri, pri + 700), /unreadThreads\(g\.rows, /);
+  // The real Ready body (chats-readylist.js readyBody, chats-notes.js priorityGroups) grouped by subject and by
+  // priority: each group's number is its unread threads, never its size.
+  const grouped = rows.filter(r => r.section === 'ready').map((r, i) => ({ ...r, subj: i < 3 ? 'Trips' : 'Bills', rank: i < 3 ? 1 : 2 }));
+  const numbers = order => {
+    const r = runRecording(block(chats, '  function readyBody(') + '\n' + block(chats, '  function priorityGroups(') + '\nthis.readyBody = readyBody;', {
+      window: { WizChatsListModel: model }, readyOrder: order, chatVars: { readyOrder: order }, LIVE: { isNew }, attOf: s => ({ subject: s.subj }), sesRank: s => s.rank,
+      waitsOn: () => false, subjOrder: () => [], snoozeLast: () => false, deferredOf: () => false, esc: String, PRI_LABEL: { 1: 'High', 2: 'Normal' }, withNotes: () => '', orderBar: () => '' });
+    const doc = createDocument(); doc.body.innerHTML = r.readyBody(grouped, () => '', null, 'ready');
+    return doc.querySelectorAll('.ch-subj').map(g => [g.querySelector('span').textContent, g.querySelector('small').textContent]);
+  };
+  assert.deepEqual(numbers('subject'), [['Trips', '2'], ['Bills', '']], 'subject headers: 2 unread of 3; none unread of 2: no number');
+  assert.deepEqual(numbers('priority'), [['High', '2'], ['Normal', '']], 'priority headers: the same');
 });
 
 test('Focus sheet and Space picker: All, Spaces and agents show unread, not how many threads they hold', () => {
@@ -69,7 +79,13 @@ test('Focus sheet and Space picker: All, Spaces and agents show unread, not how 
   const sheet = opts.map(o => env.focusOption({}, o)).join('');
   assert.deepEqual([...sheet.matchAll(/<small>([^<]*)<\/small>/g)].map(m => m[1]), ['2', '2', '2'], 'sheet shows unread');
   assert.doesNotMatch(sheet, /<small>(9|6)<\/small>/);
-  assert.match(cut(chats, 'data-spspace=', '</button>'), /<small>\$\{o\.unread \|\| ''\}<\/small>/, 'Space picker shows unread');
+  // The real Space picker (chats-spaces.js renderSpacePicker) on those same options, drawn into a mini-dom page.
+  const doc = createDocument();
+  runRecording(block(chats, '  function renderSpacePicker(') + '\nrenderSpacePicker();', { document: doc, spacePicker: { wid: 'w1', agent: 'hermes', sid: '' }, W: { w1: { id: 'w1' } },
+    focusOptions: () => opts, focusOf: () => null, focusAgents: () => [{ id: 'hermes' }], agentRec: id => ({ id, label: 'Wizard' }), spaces: () => [{ id: 'a', name: 'Launch', agent: 'hermes' }],
+    spaceAgent: s => s?.agent || 'hermes', SPACE: { ch: false, one: 'Space' }, esc: s => String(s ?? ''), AGS: () => null, innerHeight: 800, innerWidth: 400, requestAnimationFrame() {} });
+  const row = doc.querySelector('[data-spspace="a"]'); assert.ok(row, 'the Space is listed');
+  assert.equal(row.querySelector('small').textContent, '2', 'Space picker shows unread, not its 6 threads');
 });
 
 test('phone drawer: folded Ready tally is its unread count; Working/Snoozed keep theirs', () => {
@@ -91,7 +107,6 @@ test('phone drawer: folded Ready tally is its unread count; Working/Snoozed keep
 test('Machines home / data.read.sessions: the Ready count is the unread pill, not the Ready inventory', () => {
   for (const f of ['web/app-agentorb.js', 'web/desktop/desktop-boot.js']) {
     const line = readFileSync(new URL('../' + f, import.meta.url), 'utf8').split('\n').find(l => /^\s*sessions: \(\) => \{ const G = /.test(l));
-    assert.ok(line, f);
     const w = unreadWorld(), c = runIn(w, `globalThis.adapter = {\n${line}\n};`);
     assert.deepEqual({ ...c.adapter.sessions() }, { working: 1, ready: UNREAD }, f);
     const off = runIn(unreadWorld(), `globalThis.adapter = {\n${line}\n};`, { LIVE: { ok: false } });
