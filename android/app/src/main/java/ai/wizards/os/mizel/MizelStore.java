@@ -34,6 +34,8 @@ public final class MizelStore {
     private final File root;
     private final CaptureJournal custody;
     private final Map<String, MizelJournal> journals = new LinkedHashMap<>();
+    /** Meetings prune is deleting outside the lock; a new session on one waits until its files are gone. */
+    private final java.util.Set<String> pruning = new java.util.HashSet<>();
     public interface Log { void log(String msg); }
     private Log log = m -> { };
 
@@ -114,6 +116,9 @@ public final class MizelStore {
 
     /** Opens (or continues) a capture session. A stop not yet sent is superseded by the new session's own stop. */
     public synchronized MizelJournal beginSession(String id, long now) {
+        while (pruning.contains(id)) {
+            try { wait(); } catch (InterruptedException e) { Thread.currentThread().interrupt(); return null; }
+        }
         MizelJournal j = journals.get(id);
         if (j == null) {
             j = new MizelJournal();
@@ -477,12 +482,17 @@ public final class MizelStore {
                 if (j.recording || !j.pending.isEmpty()) continue;
                 if (!MizelPolicy.prunable(j.stopSent, j.readyAt, now, keepMs)) continue;
                 journals.remove(j.meetingId);
+                pruning.add(j.meetingId);
                 due.put(j.meetingId, j.readyAt);
             }
         }
         for (Map.Entry<String, Long> m : due.entrySet()) {
-            markReady(m.getKey(), m.getValue()); // a status check cut short before its custody write
-            deleteTree(meetingDir(m.getKey()), CaptureJournal.Reason.MEETING_PRUNE_AFTER_READY);
+            try {
+                markReady(m.getKey(), m.getValue()); // a status check cut short before its custody write
+                deleteTree(meetingDir(m.getKey()), CaptureJournal.Reason.MEETING_PRUNE_AFTER_READY);
+            } finally {
+                synchronized (this) { pruning.remove(m.getKey()); notifyAll(); }
+            }
         }
         return new ArrayList<>(due.keySet());
     }

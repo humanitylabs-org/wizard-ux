@@ -190,6 +190,34 @@ public class MizelTest {
     }
 
     @Test
+    public void aNewSessionWaitsForThePruneOfTheSameMeeting() throws Exception {
+        File root = tmp.newFolder("mizel");
+        MizelStore s = new MizelStore(root);
+        s.beginSession("mt_p", 1000);
+        writeChunk(s, "mt_p", 0, 16);
+        s.chunkDone("mt_p", 0, 16, 2000);
+        s.acked("mt_p", 0);
+        s.requestStop("mt_p", "user", 3000);
+        s.stopSent("mt_p", 3100);
+        s.statusChecked("mt_p", 4000, true);
+        ai.wizards.os.audio.CaptureJournal custody = ai.wizards.os.audio.CaptureJournal.at(root.getParentFile());
+        Thread pruner, starter;
+        synchronized (custody) { // the prune stops in its custody work, outside the store lock
+            pruner = new Thread(() -> s.prune(4000 + MizelPolicy.KEEP_AFTER_READY_MS));
+            pruner.start();
+            while (s.get("mt_p") != null) Thread.sleep(5);
+            starter = new Thread(() -> s.beginSession("mt_p", 9000));
+            starter.start();
+            Thread.sleep(300);
+            assertNull("the new session waits while its meeting is being deleted", s.get("mt_p"));
+        }
+        pruner.join(10_000);
+        starter.join(10_000);
+        assertNotNull(s.get("mt_p"));
+        assertTrue("the new session's journal survived the prune", new File(s.meetingDir("mt_p"), "journal.json").isFile());
+    }
+
+    @Test
     public void statusCheckedDoesNotHoldTheStoreWhileMarkingChunks() throws Exception {
         File root = tmp.newFolder("mizel");
         MizelStore s = new MizelStore(root);
