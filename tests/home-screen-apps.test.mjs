@@ -59,7 +59,7 @@ test('single-app entry never initializes workspace or honors sticky desktop pref
   vm.runInContext(read('core/shell.js'),ctx); assert.equal(ctx.window.WIZ_SHELL,'phone');assert.equal(ctx.localStorage.getItem('wux.shell'),'desktop');
   vm.runInContext(read('app.js'),ctx); assert.equal(ctx.window.__wos,undefined); assert.equal(ctx.localStorage.getItem('wos.wins4'),null);
 });
-test('normal app-services storage stays sessionStorage unless caller selects durable storage', () => {
+test('normal app-services storage stays sessionStorage unless caller selects durable storage', async () => {
   // the real reading-position module: an app frame's place is read from (and kept in) sessionStorage by default
   const readFrom = opts => {
     const reads = [], mk = name => ({ getItem: k => (reads.push(name), null), setItem: () => reads.push(name + ':write'), removeItem() {} });
@@ -80,8 +80,22 @@ test('normal app-services storage stays sessionStorage unless caller selects dur
     return got[0];
   };
   assert.equal('storage' in handed(undefined), false); assert.equal(handed('LS').storage, 'LS');
-  assert.match(read('core/single-app-session.js'), /readingStorage:localStorage/);
+  // the pinned single-app session (core/single-app-session.js run, its app mounted) asks for durable storage
+  const pinned = await pinnedAttach();
+  assert.equal(pinned.opts.readingStorage, pinned.store, 'the session\'s localStorage');
 });
+
+// core/single-app-session.js mounting Wisdom: the options it hands WizAppServices.attach, and its localStorage.
+async function pinnedAttach() {
+  const { p } = policy('?app-session=wisdom'), store = storage(), got = [];
+  function el(tag) { return { tag, dataset: {}, style: { setProperty() {} }, classList: { add() {}, remove() {} }, children: [], setAttribute() {}, appendChild(c) { this.children.push(c); }, replaceChildren() { this.children = []; }, addEventListener() {} }; }
+  const host = el('host'), document = { documentElement: el('html'), getElementById: () => host, addEventListener() {}, createElement: el };
+  const window = { WizHomeScreenPolicy: p, WizCore: { apps: () => ({ APP: { wisdom: { id: 'wisdom', name: 'Wisdom', kind: 'wizard', url: '/wisdom/' } } }), appsLoaded: () => Promise.resolve() },
+    WosSelMenu: { back: () => false }, WizAppServices: { attach: (f, o) => { got.push(o); return () => {}; }, guardBack() {} } };
+  vm.runInContext(read('core/single-app-session.js'), vm.createContext({ window, document, localStorage: store, location: { origin: 'https://box.example' }, URL, addEventListener() {}, setInterval() {}, setTimeout() {} }));
+  await new Promise(setImmediate);
+  return { opts: got[0], store };
+}
 
 test('unavailable session consumes repeated root Back; selection closes first',async()=>{
   const {p}=policy('?app-session=wisdom'); let mounted;
