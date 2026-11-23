@@ -11,12 +11,12 @@
   }
   // A failed send waits longer each time (issue 1762: a stale meeting answered 409 to the same PUT every 5 s for
   // 40 minutes). The wait is kept in the row, so a reload doesn't restart it. The meeting server refusing the same
-  // revision 4 times (a 4xx other than 408/429) parks it: it is sent again only once the row itself changes.
+  // revision 4 times (400, 409, 413 or 422; never a sign-in 401/403) parks it: it is sent again only once the row itself changes.
   const WAIT=[5e3,15e3,60e3,3*60e3,10*60e3,30*60e3,60*60e3], PARK_AFTER=4;
   function failed(row,status,error) {
     const rows=read(),cur=rows[row.id];if(!cur||cur.clientRevision!==row.clientRevision)return;
     const was=cur.retry?.rev===row.clientRevision?cur.retry:null,n=(was?.n||0)+1;
-    const refused=status>=400&&status<500&&status!==408&&status!==429,parked=refused&&n>=PARK_AFTER;
+    const refused=[400,409,413,422].includes(status),parked=refused&&n>=PARK_AFTER;
     cur.retry={rev:row.clientRevision,n,at:Date.now()+WAIT[Math.min(n,WAIT.length)-1],...(status?{status}:{}),error:String(error||'').slice(0,160),...(parked?{parked:true}:{})};
     localStorage.setItem(KEY,JSON.stringify(rows));
     if(parked)console.warn('Meeting marker refused by the meeting server; kept on this device',row.id,status,cur.retry.error);

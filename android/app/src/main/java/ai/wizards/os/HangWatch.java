@@ -82,7 +82,9 @@ public final class HangWatch {
 
     public static synchronized void stop() {
         if (users > 0) users--;
-        if (users > 0 || bg == null) return;
+        if (users > 0) return;
+        webview = null; // its WebView may be gone with no "responsive" callback: the next stall starts a new record
+        if (bg == null) return;
         bg.removeCallbacksAndMessages(null);
         MAIN.removeCallbacks(beat);
         thread.quitSafely();

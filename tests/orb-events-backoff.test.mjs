@@ -74,3 +74,13 @@ test('coming back online tries a waiting marker at once (but not a parked one)',
   assert.equal(h.puts.length,n+1,'only the waiting marker is retried');
   assert.equal(h.read()['orb-a'].acked,3);assert.equal(h.read()['orb-b'].retry.parked,true);
 });
+
+test('a sign-in answer (401/403) is never a refusal: it backs off and delivers once signed in again',async()=>{
+  for(const status of [401,403]){
+    let ok=false;const h=boot({rows:[row('orb-a')],answer:()=>ok?{status:200}:{status}});
+    await h.run(30*60e3);
+    assert.equal(h.read()['orb-a'].retry.parked,undefined,`${status} never parks a marker`);
+    ok=true;await h.run(65*60e3);
+    const a=h.read()['orb-a'];assert.equal(a.acked,a.clientRevision,`delivered after ${status}`);
+  }
+});
