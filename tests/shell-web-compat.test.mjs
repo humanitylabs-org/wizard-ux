@@ -1,5 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { parsePage } from './fixtures/w1-pages.mjs';
+import { parseCsp } from './fixtures/w1-csp.mjs';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { withAppParts } from './fixtures/app-parts.mjs';
@@ -95,8 +97,10 @@ function everywhere(port = { postMessage(m) { this.sent.push(JSON.parse(m)); }, 
 test('remote orb retains offline signed API and CSP without adding a full-app bridge', () => {
   const html = read('web/assist/everywhere.html');
   // The page's CSP denies the network and every script but its own files.
-  const csp = html.match(/http-equiv="Content-Security-Policy" content="([^"]+)"/)[1];
-  assert.match(csp, /default-src 'none'/); assert.match(csp, /connect-src 'none'/); assert.match(csp, /script-src 'self'(;|$)/);
+  // read as the browser reads it: the page's own meta policy, parsed into its directives
+  const page = parsePage('assist/everywhere.html'), csp = parseCsp(page.querySelector('meta[http-equiv="Content-Security-Policy"]')?.getAttribute('content') || '');
+  assert.deepEqual(csp['default-src'], ["'none'"]); assert.deepEqual(csp['connect-src'], ["'none'"]); assert.deepEqual(csp['script-src'], ["'self'"]);
+  assert.equal(page.querySelectorAll('script:not([src])').length, 0, 'no inline script');
   assert.doesNotMatch(html, /<script(?![^>]*\bsrc=)[^>]*>/);
   const o = everywhere();
   assert.deepEqual(Object.keys(o.w.WosShellOrb), ['v', 'status'], 'the shell orb API is status only: no start, send or read');
