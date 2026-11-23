@@ -111,10 +111,14 @@ const ownerPath = u => !u.startsWith('/hostile/') && !/^\/wizard-os-home\/(?!api
   console.log(JSON.stringify(result, null, 1));
 
   const fails = [];
+  // Real holes: the app read the shell, the box let an app owner call through, or it reached the agent.
+  // The boundary-off run must find one of these, not just an expected side effect such as "no token".
+  const exploits = [];
   const blocked = v => String(v).startsWith('blocked:');
   if (!sandbox || !/allow-scripts/.test(sandbox) || /allow-same-origin|allow-popups|allow-top-navigation/.test(sandbox)) fails.push('the app window is not an opaque sandbox: ' + sandbox);
   if (probe.origin !== 'null') fails.push('the app page is not opaque');
   for (const k of ['parentDoc', 'topDoc', 'parentStorage', 'parentBoundary', 'parentNative', 'parentCore']) if (!blocked(probe[k])) fails.push(`the app reached the shell's ${k}`);
+  for (const k of ['parentDoc', 'topDoc', 'parentStorage']) if (!blocked(probe[k]) && probe[k] !== 'undefined' && probe[k] !== 'null') exploits.push(`the app reached the shell's ${k}`);
   if (probe.ownNative !== 'undefined') fails.push('the app page has the native bridge');
   if (Array.isArray(probe.storageKeys) && probe.storageKeys.some(k => k.startsWith('wos'))) fails.push('the app read shell storage');
   if (!blocked(probe.cookie) && /wos_qa=/.test(probe.cookie)) fails.push("the app read the owner's cookies");
@@ -126,8 +130,9 @@ const ownerPath = u => !u.startsWith('/hostile/') && !/^\/wizard-os-home\/(?!api
   for (const e of fromApp) {
     if (e.t) fails.push(`the app sent the shell token: ${e.m} ${e.u}`);
     if (e.m !== 'OPTIONS' && !(e.s === 401 || e.s === 403)) fails.push(`the box did not refuse the app's ${e.m} ${e.u} (${e.s})`);
+    if (e.m !== 'OPTIONS' && e.s >= 200 && e.s < 300) exploits.push(`the box let the app's ${e.m} ${e.u} through (${e.s})`);
   }
-  if (hermesNew.length) fails.push('an app call reached the agent: ' + JSON.stringify(hermesNew));
+  if (hermesNew.length) { fails.push('an app call reached the agent: ' + JSON.stringify(hermesNew)); exploits.push('an app call reached the agent'); }
   if (popups > 0 || probe.popup !== 'null') fails.push('the app opened a window');
   if (/hostile=1/.test(shellUrl)) fails.push('the app navigated the shell');
   if (!shellOwnerOk.length) fails.push("the shell's own owner calls did not get through with the token");
@@ -137,8 +142,8 @@ const ownerPath = u => !u.startsWith('/hostile/') && !/^\/wizard-os-home\/(?!api
   if (errors.length) fails.push('page errors');
   await browser.close();
   if (EXPECT_BROKEN) {
-    if (!fails.length) { console.error('FAIL: expected the hole (boundary off), but every check passed'); process.exit(1); }
-    console.log('PASS (expected broken): with the boundary off the check finds the hole:', fails.slice(0, 6));
+    if (!exploits.length) { console.error('FAIL: expected a real hole (boundary off), but the app could not act as the owner:', fails); process.exit(1); }
+    console.log('PASS (expected broken): with the boundary off the check finds the hole:', exploits.slice(0, 6));
     return;
   }
   if (fails.length) { console.error('FAIL', fails); process.exit(1); }
