@@ -5,6 +5,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
+import { runRecording } from './fixtures/source-slice.mjs';
 import { readFileSync } from 'node:fs';
 import { withParts } from './fixtures/chats-parts.mjs';
 const kitSrc = readFileSync(new URL('../web/core/chat-kit.js', import.meta.url), 'utf8');
@@ -91,7 +92,14 @@ test('a device that refuses to store a draft says so (once a minute), never sile
   assert.equal(K.events.length, 1);
   assert.equal(K.events[0].type, 'wos:drafts-unsaved');
   assert.equal(K.events[0].detail.reason, 'QuotaExceededError');
-  assert.match(chatsSrc, /addEventListener\('wos:drafts-unsaved', \(\) => toast\(/, 'Chats tells the owner');
+  // Chats tells the owner: the real chats-events part listens for it and toasts
+  const on = {}, toasts = [];
+  const window = { WizCore: {}, addEventListener: (t, f) => { on[t] = f; } };
+  runRecording(readFileSync(new URL('../web/core/chats-events.js', import.meta.url), 'utf8'), { window, document: { documentElement: {}, addEventListener() {} } });
+  window.WizCore.chatsParts.events({ toast: (...a) => toasts.push(a), topicOn: () => false, CH: {}, W: {}, LIVE: {}, H: {}, ch: () => ({}) });
+  on['wos:drafts-unsaved'](K.events[0]);
+  assert.equal(toasts.length, 1, 'Chats tells the owner');
+  assert.match(toasts[0][1], /Couldn’t save your draft/);
 });
 
 // The thread paint's composer pick-up lines and the list paint's draftFor reset, cut from chats.js and run.
