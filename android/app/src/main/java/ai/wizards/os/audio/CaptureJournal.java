@@ -255,14 +255,6 @@ public final class CaptureJournal {
             commit(e);
             return !audio.exists() || audio.delete();
         }
-        JSONObject e = released(old, reason, audio);
-        if (e == null) return keep(old);
-        commit(e);
-        return !audio.exists() || audio.delete();
-    }
-
-    /** The entry as released for {@code reason}, or null when that reason does not let the audio go (keep it). */
-    private static JSONObject released(JSONObject old, Reason reason, File audio) {
         boolean delivered = "delivered".equals(old.optString("state"));
         boolean discard = reason == Reason.USER_DISCARD && old.has("discardMs")
                 && !CancelPolicy.keep(old.optLong("discardMs"), audio.length());
@@ -274,18 +266,18 @@ public final class CaptureJournal {
                 || (reason == Reason.WEB_OUTBOX_CUSTODY && "handed".equals(st) && "web-outbox".equals(old.optString("owner")));
         boolean gone = reason == Reason.NOTHING_RECORDED && !"recording".equals(st) && audio.length() < NOTHING_BYTES
                 || reason == Reason.USER_DELETE && !"recording".equals(st);
-        if (!(reason == Reason.SERVER_RECEIPT && delivered) && !discard && !prune && !onPhone && !gone) return null;
+        if (!(reason == Reason.SERVER_RECEIPT && delivered) && !discard && !prune && !onPhone && !gone) return keep(old);
         JSONObject e = copy(old);
         put(e, "state", discard || gone ? "discarded" : "delivered"); put(e, "bytes", audio.length());
-        put(e, "releaseReason", reason.name());
-        return e;
+        put(e, "releaseReason", reason.name()); commit(e);
+        return !audio.exists() || audio.delete();
     }
 
     /**
-     * {@link #releaseFile} for many files with one index write for every file the reason lets go (wizard-ux#1762:
-     * pruning a long meeting wrote the whole index once per chunk). Files the reason does not release take the usual
-     * single-file path (kept in Cancelled recordings). The index is committed before any audio is deleted. Returns
-     * true when every file was released or safely kept, as {@link #release} does.
+     * {@link #releaseFile} for many files (wizard-ux#1762: pruning a long meeting wrote the whole index once per chunk).
+     * Ready meeting chunks past their keep time ({@link #release}'s MEETING_PRUNE_AFTER_READY rule) go in one index
+     * write, committed before any audio is deleted; any other file takes {@link #release} (so anything not released
+     * is kept in Cancelled recordings). Returns true when every file was released or safely kept, as release does.
      */
     public synchronized boolean releaseFiles(java.util.List<File> files, String src, Reason reason) {
         java.util.List<File> present = new java.util.ArrayList<>();
@@ -293,20 +285,23 @@ public final class CaptureJournal {
         java.util.List<String> ids = idsFor(present);
         java.util.List<JSONObject> out = new java.util.ArrayList<>();
         java.util.List<File> drop = new java.util.ArrayList<>();
+        long now = System.currentTimeMillis();
         boolean all = true;
         for (int i = 0; i < present.size(); i++) {
             File f = present.get(i);
             String id = ids.get(i) != null ? ids.get(i) : adopt(f, src);
             JSONObject old = entries.get(id);
             if (old == null) { all = false; continue; }
-            if (reason == null || reason == Reason.SUPERSEDED_COPY || "kept".equals(old.optString("state")) || "discarded".equals(old.optString("state"))) {
-                all &= release(id, reason);
-                continue;
-            }
-            File audio = new File(old.optString("path"));
-            JSONObject e = released(old, reason, audio);
-            if (e == null) { all &= keep(old); continue; }
-            out.add(e); drop.add(audio);
+            // Only the meeting prune is batched; any other reason, or a chunk it doesn't release, takes release().
+            boolean prune = reason == Reason.MEETING_PRUNE_AFTER_READY && "delivered".equals(old.optString("state"))
+                    && "meeting_chunk".equals(old.optString("kind")) && old.optLong("readyAt") > 0
+                    && now - old.optLong("readyAt") >= old.optLong("keepMs", Long.MAX_VALUE)
+                    && f.getAbsolutePath().equals(old.optString("path"));
+            if (!prune) { all &= release(id, reason); continue; }
+            JSONObject e = copy(old);
+            put(e, "state", "delivered"); put(e, "bytes", f.length());
+            put(e, "releaseReason", reason.name());
+            out.add(e); drop.add(f);
         }
         commit(out);
         for (File audio : drop) all &= !audio.exists() || audio.delete();
