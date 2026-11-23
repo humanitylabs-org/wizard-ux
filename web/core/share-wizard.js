@@ -65,7 +65,9 @@
   }
   // durable (native shares sent by the web upload): resolve 'sent' only once the message has a receipt, so the caller
   // keeps its staged copy until then; a failed send resolves with whatever the owner does with the retry sheet.
-  function open(options = {}, authorize = () => true) {
+  function open(options = {}, authorize = () => true, waited = false) {
+    // A one-app page (an app opened from its own home-screen icon) may still be loading its Chats host: wait for it once.
+    if (!waited && !active && typeof host()?.chatsReady === 'function' && !host().chats) return Promise.resolve(host().chatsReady()).catch(() => false).then(() => open(options, authorize, true));
     const {items = [], title = '', from = '', skipped = 0, stay = false, comment = '', error = '', dest = '__new__', agent = '', nativeQueue, onPresented, onCancelled, durable = false} = options;
     const text = options.android ? sharedText(options) : String(options.text || '').trim(), w = host(), chats = w?.chats;
     if (!w || !chats?.uploadFile || !chats?.sendChat || !(w.openWizardThread || w.openThread) || active) return Promise.resolve('unsupported');

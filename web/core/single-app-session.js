@@ -24,6 +24,9 @@
   } });
   // EXTEND the single-app host, REUSE the real Chats host. No nested shell, workspace or second composer.
   const threadWindow = { id:wid, appId:id, app:'frame', thread:null };
+  // Send to Wizard (core/share-wizard.js, wizard-ux issue 1745): the app's Forward to Wizard sends through this real
+  // Chats host and its durable outbox, from a window of its own that is never drawn (so the app's frame stays put).
+  const shareWid = 'single-share', shareWindow = { id:shareWid, app:'chats', thread:null };
   let replyVoice = null, chats = null;
   function hostChats() {
     if (chats || !window.WizChatsHost) return;
@@ -35,7 +38,7 @@
     chats = window.WizChatsHost?.create({
       recordReply:(wid, sid) => replyVoice?.recordReply(wid, sid),
       recordingFor:() => replyVoice?.recordingFor(),
-      win: value => value === wid ? threadWindow : null,
+      win: value => value === wid ? threadWindow : value === shareWid ? shareWindow : null,
       root: () => win, save: () => checkpoint(), layout() {}, toast,
       title: () => policy.displayName(app || {id, name:'Thread'}),
       viewContext: () => ({kind:'thread', appId:threadWindow.appId}),
@@ -106,7 +109,11 @@
   try { window.WizardOSNative?.immersive?.(false); cut = +window.WizardOSNative?.cutoutTop?.() || 0; top = +window.WizardOSNative?.insetTop?.() || 0; } catch (_) {}
   safeInsets();
   window.__wosSessionCheckpoint = checkpoint;
-  window.__wos = { toast, links, get singleApp() { return id; }, get voice() { return 'idle'; } };
+  window.__wos = { toast, links, get singleApp() { return id; }, get voice() { return 'idle'; },
+    // What the Send to Wizard sheet needs (issue 1745); chatsReady waits for the slim page's late Chats host.
+    get chats() { return chats; }, get wins() { return chats ? { [shareWid]: shareWindow } : {}; },
+    openWizardThread: sid => { if (frame?.isConnected) chats?.openHosted(wid, frame, sid); },
+    chatsReady: () => chats || !slim ? Promise.resolve(!!chats) : window.WizPinDoc.extras().then(() => { hostChats(); return !!chats; }) };
   window.__wosNativeBack = () => {
     // Wizard's own share sheets sit above the app that opened them (a song shared from Now Playing): one Back closes the sheet
     // and leaves the app exactly where it was, as in the full shell (WizEscapeBack owners 'share-wizard', 'share').
