@@ -862,6 +862,9 @@
     if (!macShell() || typeof b?.call !== 'function') return Promise.resolve(null);
     return macSave || (macSave = b.call('app.info').then(i => (macSaveKnown = Array.isArray(i?.capabilities) && i.capabilities.includes('files.') ? b : null), () => { macSave = null; return null; }));
   };
+  // Ask as soon as the page (and its bridge) has loaded, so the first Save tap anywhere, the viewer's or a file card's
+  // ⤓, already knows the answer.
+  if (macShell()) window.addEventListener?.('DOMContentLoaded', () => macSaver(), { once: true });
   async function saveFile(item) {
     const n = native(), href = String(item.download || item.url || '');
     if (appDownloads() && !(n && typeof n.saveFile === 'function') && !/^(blob|data):/i.test(href)) { download(href, item.name); return 'downloading'; }

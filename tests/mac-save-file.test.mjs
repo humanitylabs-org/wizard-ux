@@ -11,7 +11,9 @@ assert.ok(start > 0 && end > start, 'saveFile block found');
 function load({ mac = true, caps = ['app.', 'meeting.', 'files.'], answer = { status: 'saved', name: 'Photo.jpg' }, top = true } = {}) {
   const calls = [], clicks = [];
   const bridge = { call: async (method, params) => { calls.push([method, params]); if (method === 'app.info') return { capabilities: caps }; if (method === 'files.save') return answer; throw new Error('unknown'); } };
-  const window = { WizCore: { bridge }, webkit: mac ? { messageHandlers: { wizardNative: { postMessage() {} } } } : undefined };
+  const loaded = [];
+  const window = { WizCore: { bridge }, webkit: mac ? { messageHandlers: { wizardNative: { postMessage() {} } } } : undefined,
+    addEventListener: (type, fn) => type === 'DOMContentLoaded' && loaded.push(fn) };
   window.top = top ? window : {};
   const ctx = {
     window, native: () => null, appDownloads: () => false, download: href => clicks.push(href), shareFileOpen: async () => 'opened',
@@ -21,7 +23,7 @@ function load({ mac = true, caps = ['app.', 'meeting.', 'files.'], answer = { st
     document: { createElement: () => ({ click() { clicks.push(this.href); }, remove() {} }), body: { appendChild() {} } },
   };
   vm.runInNewContext(kit.slice(start, end) + '\nthis.saveFile = saveFile; this.macSaver = macSaver;', ctx);
-  return { saveFile: ctx.saveFile, macSaver: ctx.macSaver, calls, clicks };
+  return { saveFile: ctx.saveFile, macSaver: ctx.macSaver, calls, clicks, loaded };
 }
 
 test('Mac app with files.save: the app saves the photo and the toast says where', async () => {
@@ -85,4 +87,19 @@ test('a Mac app with files.save is not changed by the early answer', async () =>
 
 test('the viewer asks the Mac app before a Save tap', () => {
   assert.match(kit, /macSaver\(\); \/\/ ask the Mac app now[^\n]*\n\s*dropPdf\(\);/);
+});
+
+test('an older Mac app: a file card ⤓ tapped before any viewer opened also downloads from the tap', async () => {
+  const { saveFile, calls, clicks, loaded } = load({ caps: ['app.'] });
+  assert.equal(loaded.length, 1, 'the Mac shell asks the app once the page has loaded');
+  loaded[0]();
+  await new Promise(r => setImmediate(r));
+  const pending = saveFile({ url: '/wizard/attachments/abc', name: 'notes.md' });
+  assert.deepEqual(clicks, ['https://box.example/wizard/attachments/abc']);
+  assert.equal(await pending, 'downloading');
+  assert.deepEqual(calls.map(c => c[0]), ['app.info']);
+});
+
+test('browsers never ask app.info on load', () => {
+  for (const opts of [{ mac: false }, { top: false }]) assert.equal(load(opts).loaded.length, 0);
 });
