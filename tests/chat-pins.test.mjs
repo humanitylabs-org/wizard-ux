@@ -119,7 +119,6 @@ test('live.js syncs pinnedChats into the cache the pins read, and pulls when a p
   assert.deepEqual(JSON.parse(phone.store.get('wos.chats.pinned.v2')), ['s2', 's1'], 'a malformed list never replaces them')
   // the phone coming back to the screen pulls again
   const live = withLiveParts(read('web/live.js')), at = live.indexOf("document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') pullPrefs()")
-  assert.ok(at >= 0)
   const on = {}, pulls = [], document = { visibilityState: 'hidden', addEventListener: (t, f) => { on[t] = f } }
   vm.runInNewContext(live.slice(at, live.indexOf('\n', at)), { document, pullPrefs: () => pulls.push(document.visibilityState) })
   on.visibilitychange(); document.visibilityState = 'visible'; on.visibilitychange()

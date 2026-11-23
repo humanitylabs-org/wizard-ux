@@ -4,6 +4,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import vm from 'node:vm';
+import { createDocument } from './fixtures/mini-dom.mjs';
+import { cascade } from './fixtures/mini-css.mjs';
 
 const read = f => readFileSync(new URL(`../web/desktop/${f}`, import.meta.url), 'utf8');
 const steps = read('desktop-steps.js'), pick = read('desktop-pickany.js');
@@ -82,5 +84,9 @@ test('drag, hold and keys all move the desk in the list', () => {
   k.ctx.key('BracketRight', true); assert.deepEqual([...k.ctx.desktopVars.ws], ['a', 'c', 'b']); assert.equal(k.ctx.desktopVars.cur, 2);
   k.ctx.key('BracketLeft', true); assert.deepEqual([...k.ctx.desktopVars.ws], ['a', 'b', 'c']);
   k.ctx.key('BracketLeft', false); assert.ok(k.log.includes('step:-1'));
-  assert.match(css, /\.ws\[data-ws\] \{ touch-action: none; \}/, 'touch drags are not taken by the page scroll');
+  // a desk button as the bar draws it (class ws, data-ws) gets touch-action: none from the real desktop.css
+  const doc = createDocument(); doc.body.innerHTML = '<nav id="wsList"><button class="ws cur used" data-ws="0"></button><button class="ws ws-add" data-newdesk>+</button></nav>';
+  const [desk, add] = doc.body.querySelectorAll('button');
+  assert.equal(cascade(desk, css)['touch-action']?.value, 'none', 'touch drags are not taken by the page scroll');
+  assert.notEqual(cascade(add, css)['touch-action']?.value, 'none', 'only desks, not the + button');
 });
