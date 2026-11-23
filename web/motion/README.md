@@ -28,7 +28,7 @@ The Live Mode feel (approved by James, 9 Oct 2026) as one small, dependency-free
 | `M.moons(orbHost, { radius: 50 }).set([{ id, title, state }])` | Lights orbiting the orb: `working` (violet), `done` (green), `failed` (red), `needs` (amber). |
 | `M.hint(el)` | One plain pulsing hint per step: `.show(text, key, holdMs, force)`, `.clear()`, `.text`. |
 | `M.haptic(name \| pattern)` | `tick`, `press`, `notice`, `sent`, `soft`, `error`. |
-| `M.chime(name \| freq, dur, vol)` | Soft three-partial tones: `notice`, `sent`, `open`, `tick`, `soft`. Audio unlocks on the first pointerdown. `M.sound.muted = true` silences it. |
+| `M.chime(name \| freq, dur, vol)` | Soft three-partial tones: `notice`, `sent`, `open`, `tick`, `soft`. The audio output opens only while a tone sounds and closes about 200 ms after it ends (a running AudioContext would take over a shared Bluetooth speaker). `M.sound.muted = true` silences it and opens nothing. |
 | `M.reduced()` | `prefers-reduced-motion`; the kit already honours it. |
 
 ## CSS classes

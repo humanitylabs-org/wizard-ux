@@ -12,26 +12,39 @@
   const HAPTIC = { tick: 6, press: 12, notice: 30, sent: [20, 40, 60], soft: 8, error: [40, 60, 40] };
   function haptic(p) { try { const v = typeof p === 'string' ? HAPTIC[p] : p; if (v != null && navigator.vibrate) navigator.vibrate(v); } catch (e) {} }
 
-  /* ---------------- soft tones (made on the first gesture) ---------------- */
-  let A = null, master = null;
-  function unlock() {
+  /* ---------------- soft tones (an audio output only while one sounds) ----------------
+   * A running AudioContext is an open output stream even when silent: a shared (multipoint) Bluetooth speaker
+   * switches to this phone and another phone's music stops (wizard-ux issue 1723). So the context is made by chime()
+   * itself and closed shortly after the last tone ends; nothing opens it on a tap. */
+  let A = null, master = null, endAt = 0, letGo = 0;
+  const RELEASE_MS = 200;
+  function open() {
     if (A) return A;
-    try { A = new (W.AudioContext || W.webkitAudioContext)(); master = A.createGain(); master.gain.value = .35; master.connect(A.destination); } catch (e) { A = null; }
+    try { A = new (W.AudioContext || W.webkitAudioContext)(); master = A.createGain(); master.gain.value = .35; master.connect(A.destination); } catch (e) { A = null; master = null; }
     return A;
   }
-  if (W.addEventListener) W.addEventListener('pointerdown', unlock, { once: true, capture: true });
+  function release() {
+    clearTimeout(letGo); letGo = 0;
+    const a = A; A = null; master = null; endAt = 0;
+    try { a && a.close().catch(() => {}); } catch (e) {}
+  }
+  // Kept for callers of the old API; there is nothing to unlock any more (the context is made when a tone plays).
+  function unlock() { return A; }
   const TONES = { notice: [523, 2.2, .12], sent: [784, 2.6, .18], open: [440, 1.6, .08], tick: [880, .25, .05], soft: [660, 1.2, .08] };
   function chime(f = 660, d = 1.6, v = .16) {
     if (Array.isArray(f)) [f, d, v] = f; else if (typeof f === 'string') [f, d, v] = TONES[f] || TONES.soft;
-    if (!A || sound.muted) return; if (A.state === 'suspended') A.resume().catch(() => {});
+    if (sound.muted || !open()) return; if (A.state === 'suspended') A.resume().catch(() => {});
     const t = A.currentTime;
     [1, 1.5, 2].forEach((m, i) => {
       const o = A.createOscillator(), g = A.createGain(); o.type = 'sine'; o.frequency.value = f * m;
       g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(v / (i + 1), t + .02); g.gain.exponentialRampToValueAtTime(.0001, t + d);
       o.connect(g).connect(master); o.start(t); o.stop(t + d);
     });
+    // Let the output go once the last tone (this one or a later one) has ended.
+    endAt = Math.max(endAt, Date.now() + d * 1000);
+    clearTimeout(letGo); letGo = setTimeout(release, Math.max(0, endAt - Date.now()) + RELEASE_MS);
   }
-  const sound = { unlock, chime, muted: false };
+  const sound = { unlock, chime, release, muted: false };
 
   /* ---------------- drifting words ----------------
    * words(canvas, { anchor: () => ({x, y}), lanes: [0.34..], max: 4, dim: () => bool })
