@@ -1267,8 +1267,17 @@
       V.items = items; V.i = Math.max(0, Math.min(items.length - 1, i));
       if (items.some(x => x.kind !== 'image')) window.WosShareSheet?.prime?.('file'); // its Share then knows who takes files
       const el = build(); if (el.hidden) V.focus = document.activeElement;
-      el.hidden = false; requestAnimationFrame(() => el.classList.add('open'));
-      show(); K.onChange(true); el.focus({ preventScroll: true }); return true;
+      // wizard-messenger issue 348: a picture is on screen at full strength as soon as it can be drawn, with no fade-in
+      // (that read as lag) and never a black first frame. Until the first picture is decoded (at most a few frames,
+      // capped at 150 ms) the viewer stays clear, so the app under it still shows; then it appears in one frame.
+      el.classList.remove('open'); el.hidden = false;
+      show();
+      const pic = V.items[V.i]?.kind === 'image' ? el.querySelector('.mv-stage img') : null;
+      const gen = V.gen = (V.gen || 0) + 1; // a reveal from an earlier open (closed, then reopened) must not show this one
+      const reveal = () => { if (V.gen === gen && V.el === el && !el.hidden) el.classList.add('open'); };
+      if (!pic || typeof pic.decode !== 'function' || !pic.src || (pic.complete && pic.naturalWidth)) reveal();
+      else { const cap = setTimeout(reveal, 150); pic.decode().then(reveal, reveal).finally(() => clearTimeout(cap)); }
+      K.onChange(true); el.focus({ preventScroll: true }); return true;
     },
     close() {
       if (!V.el || V.el.hidden) return false;
