@@ -8,6 +8,7 @@ import { withAppParts } from './fixtures/app-parts.mjs';
 import { withShellParts } from './fixtures/shell-parts.mjs';
 import { withServicesParts } from './fixtures/app-services-parts.mjs';
 import { appClient } from './fixtures/app-client-harness.mjs';
+import { block, runRecording } from './fixtures/source-slice.mjs';
 const read = p => withAppParts(withShellParts(readFileSync(new URL('../' + p, import.meta.url), 'utf8')));
 
 function nav() {
@@ -75,5 +76,16 @@ test('apps pass { more } through the badge API; Chats reads it from routed feeds
   unread = 0; W.refreshChats(live);
   assert.equal(W.label('wizard'), '3');
   assert.equal(W.deskMore({ wins: ['c'] }, { c: { app: 'chats' } }, () => ({ id: 'wizard' })), false, 'no unread routed items: an exact count');
-  for (const f of ['web/app.js', 'web/desktop/desktop.js']) assert.match(read(f), /workspaceNav\.refreshChats\(LIVE,/, f);
+  // Both shells feed that pill from their live Chats list: run the real phone renderMoons and desktop paintBar.
+  const LIVE = { ok: true, groups: () => ({ needs: [], ready: [], working: [] }), session: () => null };
+  const fed = [];
+  const workspaceNav = new Proxy({ refreshChats: (l, id) => fed.push([l, id]), slot: i => i + 1 }, { get: (t, k) => t[k] || (() => '') });
+  const el = () => ({ innerHTML: '', offsetWidth: 44, setAttribute() {}, classList: { contains: () => false } });
+  runRecording(`(${block(read('web/app.js'), '  function renderMoons() {')})()`, {
+    LIVE, CHATS_APP: { id: 'chats' }, live: () => ({ needs: [], working: [], ready: [] }), $: el, Math,
+    window: { WizCore: { workspaceNav } } });
+  runRecording(`(${block(read('web/desktop/desktop.js'), '  function paintBar() {')})()`, {
+    LIVE, APP: { wizard: { id: 'wizard' } }, C: { workspaceNav, activityHome: () => ({}) }, $: el, window: {}, MOD: '⌘',
+    homeOpen: true, ws: [{ wins: [] }], cur: 0, W: {} });
+  assert.deepEqual(fed.map(([l, id]) => [l === LIVE, id]), [[true, 'chats'], [true, 'wizard']]);
 });
