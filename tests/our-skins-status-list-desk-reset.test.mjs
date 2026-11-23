@@ -57,8 +57,8 @@ test('leaving a desk keeps its Chats window on the open thread', () => {
     vm.createContext(ctx); vm.runInContext(`${go}\nthis.goDesk = goDesk;`, ctx);
     return { ctx, W, calls, run: () => ctx.goDesk(2) };
   });
-  const { ctx, W, calls } = env;
-  assert.equal(ctx.appVars.idx, 2);
+  const { ctx: deskWorld, W, calls } = env;
+  assert.equal(deskWorld.appVars.idx, 2);
   assert.equal(W.c1.thread, 't9', 'the Chats window is still on its thread');
   assert.deepEqual(calls, []);
 });

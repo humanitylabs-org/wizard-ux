@@ -93,7 +93,9 @@ test('the switch is a listed tweak package linked to this issue', async () => {
   await fresh.E.toggle(ID); assert.ok(fresh.active().includes(ID), 'the switch turns it on');
   const m = JSON.parse(fs.readFileSync(new URL('../web/tweaks/wizard/settings-search/manifest.json', import.meta.url), 'utf8'));
   assert.equal(m.id, ID); assert.deepEqual(m.issues, ['humanitylabs-org/try-wizard#94']);
-  // every rule of its stylesheet (parsed) is scoped to the switch
+});
+// static-rule: every rule of the switch's own stylesheet must be scoped to the switch (a lint over the whole file)
+test('every rule of the settings-search stylesheet is scoped to its switch', () => {
   const rules = parseCss(fs.readFileSync(new URL('../web/tweaks/wizard/settings-search/tweak.css', import.meta.url), 'utf8'));
   assert.ok(rules.length);
   for (const r of rules) for (const sel of r.selectors) assert.ok(sel.startsWith(`html[data-tweaks~="${ID}"]`), sel);

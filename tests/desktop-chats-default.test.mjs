@@ -44,7 +44,8 @@ test('desktop is unchanged: the script returns at once on desktop', async () => 
     assert.equal(typeof off, 'function'); off();
   } finally { globalThis.document = saved; }
   assert.deepEqual(touched, [], 'nothing on the page or the api is touched on desktop');
-  assert.deepEqual(JSON.parse(read('web/tweaks/wizard/desktop-chats/manifest.json')).shells, ['phone']);
+  const manifest = JSON.parse(read('web/tweaks/wizard/desktop-chats/manifest.json'));
+  assert.deepEqual(manifest.shells, ['phone']);
 });
 
 function box(channel, saved, extra = {}) {

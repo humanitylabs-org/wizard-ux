@@ -9,7 +9,7 @@ import { withShellParts } from './fixtures/shell-parts.mjs';
 
 // (fixture copied from outbox-voice-reload-handoff) Reload waited 5-10 s behind a six-minute voice note's upload + transcription. A tap take whose
 // destination is fixed is handed to the outbox; a reload mid-send must finish that SAME send on the new page, once.
-const source = readFileSync(new URL('../web/outbox.js', import.meta.url), 'utf8');
+const outboxJs = readFileSync(new URL('../web/outbox.js', import.meta.url), 'utf8');
 const sessionId = 'wizard_philosopher';
 
 function client(origin, rows = new Map(), transcribe = async () => ({ text: 'six minutes of philosophy' })) {
@@ -37,7 +37,7 @@ function client(origin, rows = new Map(), transcribe = async () => ({ text: 'six
     WosAgents: { isOther: id => !!id && id !== 'hermes', get: id => ({ id, permissions: { files: id === 'archimedes-new' ? 'none' : 'own' } }) },
     WizConfig: { transcribe, voicePrompt: () => '' },
   };
-  ctx.window = ctx; vm.runInNewContext(source, ctx);
+  ctx.window = ctx; vm.runInNewContext(outboxJs, ctx);
   return { api: ctx.WosOutbox, rows, close: () => { for (const t of timers) clearTimeout(t); } };
 }
 
@@ -57,8 +57,8 @@ test('an orb-picked agent survives staging and enqueue of a general take', async
   const c = client(`http://127.0.0.1:${server.address().port}`); t.after(c.close);
   // the pre-fix staging path: route spread first, then agent overwritten with ''
   const staged = await c.api.stage({ kind: 'new', sessionId: '', model: 'm', provider: 'p', audio: new Blob(['aaaa'], { type: 'audio/aac' }), intent: 'auto', source: 'orb', agent: '' });
-  const it = await c.api.enqueue({ kind: 'new', custodyId: staged.id, agent: 'archimedes-new', model: 'm', provider: 'p', intent: 'auto', text: '' });
-  assert.equal(it.agent, 'archimedes-new');
+  const queued = await c.api.enqueue({ kind: 'new', custodyId: staged.id, agent: 'archimedes-new', model: 'm', provider: 'p', intent: 'auto', text: '' });
+  assert.equal(queued.agent, 'archimedes-new');
   const run = await (async () => { for (let i = 0; i < 400; i++) { const r = calls.find(x => x.path.startsWith('/wizard/hermes/v1/runs')); if (r) return r; await new Promise(r => setTimeout(r, 5)); } return null; })();
   assert.ok(run, 'a run was posted');
   assert.equal(run.path, '/wizard/hermes/v1/runs?agent=archimedes-new');

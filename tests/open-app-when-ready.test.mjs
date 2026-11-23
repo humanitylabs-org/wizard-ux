@@ -131,8 +131,8 @@ test('the Store names the app in its open-app message, so the starting note says
   // Get more (?open=1) right after an install: in place of the Store window.
   const line = between(store, "if (framed && new URLSearchParams(location.search).get('open') === '1' && openId(a))", '\n');
   vm.runInNewContext(line, { ...base, framed: true, a: { id: 'wizardos-tracker', name: 'WizardOS Tracker' }, openId: () => 'tracker' });
-  assert.deepEqual(posted, [{ type: 'wizard:open-app', id: 'tracker', name: 'WizardOS Tracker' },
-    { type: 'wizard:open-app', id: 'tracker', name: 'WizardOS Tracker', replace: true }]);
+  assert.equal(JSON.stringify(posted), '[{"type":"wizard:open-app","id":"tracker","name":"WizardOS Tracker"},'
+    + '{"type":"wizard:open-app","id":"tracker","name":"WizardOS Tracker","replace":true}]');
   // The shell's note then names it.
   const s = shell('web/app.js', { readyAfter: 3 });
   await s.post(posted[1]);

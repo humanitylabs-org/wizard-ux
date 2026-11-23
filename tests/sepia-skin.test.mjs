@@ -66,7 +66,7 @@ test('Sepia owns its paper treatment and light color scheme', () => {
   const { context } = runtime();
   const css = read('web/skins/sepia/skin.css');
   // Its own package stylesheet, and its description.
-  assert.deepEqual({ ...context.WosSkin.pkgOf('sepia') }, { css: true, dir: 'sepia' });
+  assert.equal(JSON.stringify(context.WosSkin.pkgOf('sepia')), '{"css":true,"dir":"sepia"}');
   assert.match(context.WosSkin.list.find(x => x.id === 'sepia').who, /vintage paper/i);
   assert.ok(fs.existsSync(new URL('web/skins/sepia/skin.css', root)));
   // Worn: a light colour scheme and its own clock face; any other skin: nothing from this sheet.
