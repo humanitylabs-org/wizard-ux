@@ -6,6 +6,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import vm from 'node:vm'
+import { fakeBox as trapBox, device as trapDevice } from './fixtures/welcome-harness.mjs'
 
 const welcome = readFileSync(new URL('../web/core/welcome.js', import.meta.url), 'utf8')
 const config = readFileSync(new URL('../web/core/config.js', import.meta.url), 'utf8')
@@ -184,6 +185,13 @@ test('two devices: simultaneous saves settle on one name that both devices read 
   assert.equal(fresh.ctx.WizConfig.agent(), box.settings.agent.name)
 })
 
-test('Name your Wizard: the name field is in the keyboard focus trap', () => {
-  assert.match(welcome, /querySelectorAll\('button:not\(\[disabled\]\),input:not\(\[disabled\]\),textarea/)
+test('Name your Wizard: the name field is in the keyboard focus trap', async () => {
+  const d = trapDevice(trapBox({ name: 'Wizard' }))
+  await d.boot()
+  assert.match(d.html(), /Name your Wizard/)
+  const [field, ...rest] = d.nodes.focusables
+  assert.equal(field.tag, 'input')
+  d.doc.activeElement = rest[rest.length - 1] // Skip this step
+  d.key('Tab'); assert.equal(d.doc.activeElement, field, 'Tab from the last control wraps to the name field')
+  d.key('Tab', { shiftKey: true }); assert.equal(d.doc.activeElement, rest[rest.length - 1])
 })

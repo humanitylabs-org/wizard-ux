@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { createHash } from 'node:crypto';
 import { read } from './fixtures/tweaks.mjs';
+import { pageAssets } from './fixtures/w1-pages.mjs';
 import lookFixture from '../tools/qa-look-file-fixture.cjs';
 
 const PATH = '/wizard/v1/pages/wizard-look/look.json';
@@ -354,13 +355,19 @@ test('experience.js: a fresh device adopting the shared set never adds its own o
     fetch: async url => ({ ok: true, json: async () => JSON.parse(read('web/' + url.pathname.split('/wizard-os-home/')[1])) }) });
   const E = window.WosExperience;
   await E.adopt({ 'miguel/calm-offline': true, 'miguel/send-and-go': true });
-  assert.deepEqual([...active].sort(), ['miguel/calm-offline', 'miguel/send-and-go', ...JSON.parse(read('web/tweaks/catalog.json')).defaults].sort());
+  const defaults = JSON.parse(read('web/tweaks/catalog.json')).defaults;
+  assert.deepEqual([...active].sort(), ['miguel/calm-offline', 'miguel/send-and-go', ...defaults].sort());
   assert.ok(!active.includes('miguel/machines-home'), 'no migration adds to the shared set');
 });
 
 test('both shells load look sync after experience.js; it lives in the owner\'s Files via the Pages file API', () => {
-  for (const f of ['web/index.html', 'web/desktop.html'])
-    assert.match(read(f), /<script defer src="core\/experience\.js"><\/script>\n  <script defer src="core\/look-sync\.js"><\/script>/, f);
+  // each page parsed as the browser reads it (tests/fixtures/w1-pages.mjs): look sync deferred, right after experience.js
+  for (const f of ['index.html', 'desktop.html']) {
+    const { scripts } = pageAssets(f), at = scripts.findIndex(x => x.src === 'core/look-sync.js');
+    assert.ok(at > 0, f + ' loads look sync');
+    assert.equal(scripts[at - 1].src, 'core/experience.js', f + ': right after experience.js');
+    assert.equal(scripts[at].defer && scripts[at - 1].defer, true, f + ': both deferred, so in that order');
+  }
   assert.equal(L.PATH, PATH);
   assert.doesNotMatch(read('web/core/look-sync.js'), /\/wizard\/v1\/skins|ui-preferences/, 'no other store, no skin folder writes');
 });

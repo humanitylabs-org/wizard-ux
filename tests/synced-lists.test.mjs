@@ -127,10 +127,22 @@ test('pins run through the same two-device helper (core/chat-pins.js keeps its o
   }
 })
 
-test('Chats never saves a whole Spaces or subject-order list from this device', () => {
-  assert.doesNotMatch(chats, /putPrefs\??\.?\(\{ spaces/)
-  assert.doesNotMatch(chats, /putPrefs\??\.?\(\{ subjectOrder/)
-  assert.match(chats, /LIVE\.prefOps\(\[\{ op: add \? 'add' : 'remove', key: `spaces\/\$\{key\}\/threads`, item: sid \}\]\)/)
-  assert.match(chats, /LIVE\.prefOps\(\[\{ op: 'front', key: 'subjectOrder', items: keys \}\]\)/)
+test('Chats never saves a whole Spaces or subject-order list from this device', async () => {
+  // Chats' real Space/subject edits against a LIVE that records what it is asked to write.
+  const m = new Map([[SPACES, JSON.stringify([space('work', ['wizard_a'])])], [SUBJ, '["Home","Work"]']]), calls = []
+  const dev = { prefs: { spaces: [space('work', ['wizard_a'])], subjectOrder: ['Home', 'Work'] }, emit() {}, onChange() {},
+    prefOps: async ops => { calls.push(['prefOps', JSON.parse(JSON.stringify(ops))]); return true }, putPrefs: async p => { calls.push(['putPrefs', p]); return true },
+    ctx: { localStorage: { getItem: k => m.has(k) ? m.get(k) : null, setItem: (k, v) => m.set(k, String(v)), removeItem: k => m.delete(k) }, window: { dispatchEvent() {} }, Event: class { constructor(t) { this.type = t } } } }
+  const c = chatsOn(dev)
+  c.spaceMember('work', 'wizard_b', true); c.spaceMember('work', 'wizard_a', false); c.moveSubject('Work', 'top', ['Home', 'Work'])
+  await tick()
+  assert.deepEqual(calls.map(x => x[0]).filter(n => n === 'putPrefs'), [], 'never a whole-list write')
+  const ops = calls.filter(x => x[0] === 'prefOps').flatMap(x => x[1])
+  assert.deepEqual(ops.filter(o => o.key === 'spaces/work/threads'), [{ op: 'add', key: 'spaces/work/threads', item: 'wizard_b' }, { op: 'remove', key: 'spaces/work/threads', item: 'wizard_a' }])
+  assert.deepEqual(ops.filter(o => o.key === 'subjectOrder').map(o => o.op), ['front'], 'a subject move is one front operation')
+})
+
+// static-rule: the repo's AGENTS.md keeps the synced-lists rule written down for builders (a docs check)
+test('AGENTS.md asks for the stale-device and simultaneous-edit test', () => {
   assert.match(read('AGENTS.md'), /stale-device and simultaneous-edit test/)
 })

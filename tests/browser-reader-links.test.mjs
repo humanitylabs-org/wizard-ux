@@ -27,7 +27,7 @@ function fixture({installed=true,native=false,appURL='/browser/',activation=true
    const e={button:0,target:{closest:()=>a},preventDefault(){this.defaultPrevented=true;},stopPropagation(){}};
    for(const fn of root.handlers.click || [])fn(e);return e;
  }
- return {calls,downloads,L,chat,doc,readerDoc,click,store,setActivation:v=>{activation=v;}};
+ return {calls,downloads,L,w,chat,doc,readerDoc,click,store,setActivation:v=>{activation=v;}};
 }
 test('chat tap synchronously opens installed Browser Reader, never the remote origin',()=>{const f=fixture();f.click(f.chat,'https://example.com/story?a=1#part');assert.deepEqual(f.calls,[['window','/browser/?url=https%3A%2F%2Fexample.com%2Fstory%3Fa%3D1%23part']]);});
 test('Search hosted result uses the same Browser Reader path',()=>{const f=fixture();f.click(f.doc,'https://example.com/story');assert.deepEqual(f.calls,[['window','/browser/?url=https%3A%2F%2Fexample.com%2Fstory']]);});
@@ -86,9 +86,19 @@ test('another app cannot use the Reader hand-off to remember hosts',()=>{
 });
 
 test('an auxiliary links mount (App Setup) never replaces the shell Reader identity', () => {
-  const src = readFileSync(new URL('../web/core/links.js', import.meta.url), 'utf8');
-  assert.match(src, /if \(arguments\[0\]\?\.readerApp\) readerHome = /);
-  assert.doesNotMatch(src, /^\s*readerHome = \(\) =>/m);
+  const f = fixture({ native: true }), href = 'https://www.reuters.com/world/story';
+  // App Setup mounts its own link sheet later, with no Reader of its own.
+  f.w.WizLinks.mount({ mode: 'sheet' });
+  f.click(f.chat, href); assert.deepEqual(f.calls, [READER(href)], 'chat links still go to the shell Reader');
+  // The Reader page's hand-off is still recognised as the Reader's: the original opens and the host is remembered.
+  const e = f.click(f.readerDoc, href, { 'data-wizard-browse': 'auto', 'data-wizard-reason': 'blocked', target: '_blank' });
+  assert.equal(e.defaultPrevented, true); assert.deepEqual(f.calls.at(-1), ['native-browser', href]);
+  assert.ok(JSON.parse(f.store['wos.readerDirect.v1'])['www.reuters.com'], 'the Reader identity survived the second mount');
+  // A second mount that names its own Reader does take over (the shell mounting again).
+  const g = fixture({ native: true });
+  g.w.WizLinks.mount({ mode: 'sheet', readerApp: () => ({ id: 'browser2', url: '/browser2/' }) });
+  g.click(g.readerDoc, href, { 'data-wizard-browse': 'auto', 'data-wizard-reason': 'blocked', target: '_blank' });
+  assert.equal(g.store['wos.readerDirect.v1'], undefined, 'the old Reader page is no longer the Reader');
 });
 
 // James, 9 Nov 2026: Reader took seconds where his browser takes one. With no `links.reader` setting (the default),

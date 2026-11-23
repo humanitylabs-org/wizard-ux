@@ -5,6 +5,7 @@ import { resolve } from 'node:path';
 import vm from 'node:vm';
 import { withDesktopParts } from './fixtures/desktop-parts.mjs';
 import { withWebParts } from './fixtures/web-parts.mjs';
+import { El, deskWorld, layout as aiAppsLayout } from './fixtures/ai-apps-world.mjs';
 
 // The very same assertions can run against the exact serving donor, without editing it.
 const root = process.env.QA_SOURCE_ROOT || new URL('../', import.meta.url).pathname;
@@ -108,11 +109,38 @@ test('AI apps: E Archive, Z Snooze, A All apps, S Settings and sheet Z close ret
   assert.deepEqual(w.calls, [['.boom-sheet [data-boom-close]']]);
   const field = ai({ typing: true }); assert.equal(field.key('KeyE'), false); assert.deepEqual(field.calls, [], 'Mac accent entry');
 });
-test('help and hints cannot advertise the removed arrow actions or Someday chord', () => {
+// The real AI apps desktop view (as tests/ai-apps-view.test.mjs mounts it) with a docked chat whose Snooze, Archive and
+// Resolve buttons are drawn, and the view's ⌥ keys guide as the shell asks for it while ⌥ is held.
+async function guideDesk() {
+  const d = deskWorld(), { w } = d, guides = [];
+  w.api.keys.guide = fn => { guides.push(fn); return () => {}; };
+  const node = (tag, cls, parent) => { const n = new El(tag); if (cls) n.className = cls; parent?.append(n); return n; };
+  const stage = node('div', ''); stage.id = 'stage';
+  const chatDesk = node('div', 'wsp', stage), chatWin = node('div', 'win', chatDesk), wbody = node('div', 'wbody', chatWin), dchats = node('div', 'dchats', wbody);
+  const thread = node('div', 'ch-thread', node('div', 'pane-main', dchats));
+  w.html.children[0].append(stage);
+  w.html.setAttribute('data-shell', 'desktop'); w.html.setAttribute('data-layout', 'ai-apps');
+  (await aiAppsLayout()).default(w.api);
+  const acts = {};
+  for (const act of ['done', 'snooze', 'resolve']) { const b = node('button', '', thread); b.dataset.chact = act; acts[act] = b; }
+  w.st.route = { home: false, view: 'thread', thread: 'r1', desk: 1 }; w.emit('route', w.st.route); w.run();
+  return { w, guide: () => guides[0](), acts, node };
+}
+
+test('help and hints cannot advertise the removed arrow actions or Someday chord', async () => {
   assert.doesNotMatch(desktop, /\['→  ←', 'Archive \/ Snooze'|\['\[data-chact="(?:done|snooze)"\]', '[←→]'/);
-  assert.match(layout, /\[\['snooze', 'Z'\], \['done', 'E'\], \['resolve', 'X'\]\]/);
-  assert.doesNotMatch(layout, /putIn\(doc\.querySelector\('\.boom-sheet \[data-boom-someday\]'\), '←'\)/);
-  assert.doesNotMatch(layout, /ArrowLeft: 'snooze'|ArrowRight: 'done'/);
+  const g = await guideDesk(), caps = g.guide();
+  const on = el => caps.filter(c => c.el === el).map(c => c.key);
+  assert.deepEqual(on(g.acts.snooze), ['Z']); assert.deepEqual(on(g.acts.done), ['E']); assert.deepEqual(on(g.acts.resolve), ['X']);
+  assert.ok(!caps.some(c => /[←→]/.test(c.key)), 'no keycap names a horizontal arrow: ' + caps.map(c => c.key).join(' '));
+  // The snooze sheet: its close is ⌥Z; its Someday button wears no ← keycap.
+  const sheet = g.node('div', 'boom-sheet', g.w.doc.body), x = g.node('button', '', sheet), someday = g.node('button', '', sheet);
+  x.setAttribute('data-boom-close', ''); someday.setAttribute('data-boom-someday', '');
+  const sheetCaps = g.guide();
+  assert.deepEqual(sheetCaps.filter(c => c.el === x).map(c => c.key), ['Z']);
+  assert.deepEqual(sheetCaps.filter(c => c.el === someday), [], 'no Someday chord');
+  // And the keys themselves: ⌥← / ⌥→ never snooze or archive the docked chat.
+  const w = ai(); assert.equal(w.key('ArrowLeft'), false); assert.equal(w.key('ArrowRight'), false); assert.deepEqual(w.calls, []);
 });
 
 // Issue 1279: ⌥⇧← / → in an app's text field (Messenger's composer inside its frame) selected nothing, because the

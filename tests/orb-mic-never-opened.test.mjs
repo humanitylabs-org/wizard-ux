@@ -7,7 +7,10 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { withAppParts } from './fixtures/app-parts.mjs';
-
+import { between, runRecording } from './fixtures/source-slice.mjs';
+import { createDocument } from './fixtures/mini-dom.mjs';
+import { styles } from './fixtures/w5-css.mjs';
+import { valueOf, px } from './fixtures/r7A-css.mjs';
 const APP = withAppParts(readFileSync(new URL('../web/app.js', import.meta.url), 'utf8'));
 const CSS = readFileSync(new URL('../web/styles.css', import.meta.url), 'utf8');
 const TOUR_CSS = readFileSync(new URL('../web/core/tour.css', import.meta.url), 'utf8');
@@ -105,11 +108,22 @@ test('a take that is really recording still sends on the second tap (unchanged)'
   assert.equal(rec.stopped, 1); assert.ok(calls.includes('setVoice:think')); assert.ok(!calls.includes('cancel:true'));
 });
 
-test('a microphone request the browser never answers times out into the same visible end', () => {
-  const start = fn('  async function startVoice(', '  async function openRec(');
-  assert.match(start, /const micWatch = setTimeout\(\(\) => \{[^}]*micNeverOpened\('timeout'\)/, 'startVoice arms a watchdog');
-  assert.match(start, /clearTimeout\(micWatch\)/, 'and clears it once the microphone opens or fails');
-  assert.match(APP, /const MIC_OPEN_TIMEOUT_MS = \d{4,5};/);
+test('a microphone request the browser never answers times out into the same visible end', async () => {
+  // startVoice's real watchdog around openRec (web/app.js), with a manual clock
+  const watch = async opens => {
+    const timers = [], cleared = [], V = { state: 'listen', captureEpoch: 3 };
+    const W = runRecording(`${between(APP, '  const MIC_OPEN_TIMEOUT_MS = ', '\n')}\nthis.ms = MIC_OPEN_TIMEOUT_MS;\nthis.f = async () => {\n${between(APP, '    const micWatch = setTimeout(', "      if (err?.code === 'external_mic')")}}\n};`,
+      { V, captureEpoch: 3, setTimeout: (f, ms) => { timers.push({ f, ms }); return timers.length; }, clearTimeout: id => cleared.push(id),
+        openRec: () => (opens === 'never' ? new Promise(() => {}) : opens === 'fail' ? Promise.reject(new Error('NotAllowed')) : Promise.resolve(true)) });
+    W.f(); await new Promise(r => setImmediate(r));
+    return { W, timers, cleared, V };
+  };
+  const never = await watch('never');
+  assert.equal(never.timers.length, 1, 'startVoice arms a watchdog'); assert.equal(never.timers[0].ms, never.W.ms);
+  assert.ok(never.W.ms >= 1000 && never.W.ms <= 99999, 'a few seconds');
+  never.timers[0].f(); assert.deepEqual(never.W.calls.filter(c => c[0] === 'micNeverOpened'), [['micNeverOpened', 'timeout']]);
+  for (const end of ['opens', 'fail']) { const w = await watch(end); assert.deepEqual(w.cleared, [1], `and clears it once the microphone ${end === 'opens' ? 'opens' : 'fails'}`); }
+  const late = await watch('never'); late.V.state = 'idle'; late.timers[0].f(); assert.equal(late.W.calls.filter(c => c[0] === 'micNeverOpened').length, 0, 'a take already ended is left alone');
   const V = { state: 'listen', kind: 'auto', rec: null, native: null, parts: [] };
   const { ctx, calls } = shell(V);
   ctx.micNeverOpened('timeout');
@@ -119,7 +133,11 @@ test('a microphone request the browser never answers times out into the same vis
 
 test('a browser bar over the bottom of the page lifts the dock, orb and Cancel above it (visual viewport)', () => {
   // The covered strip is measured from the shell's bottom, so it already includes the home indicator: a union, not a sum (Codex P2 on #567).
-  assert.match(CSS, /--safe-b: max\(env\(safe-area-inset-bottom, 0px\), var\(--vv-b, 0px\)\);/);
+  // styles.css turns the measured --vv-b into the page's bottom inset (the larger of it and the home indicator)
+  const doc = createDocument(), html = doc.documentElement;
+  const inset = extra => px(valueOf(html, [CSS + extra], '--safe-b'));
+  assert.equal(inset(''), 0, 'nothing covers the page');
+  assert.equal(inset('\n:root { --vv-b: 80px; }'), 80, 'Safari\'s 80 px bar lifts everything by 80 px');
   const body = fn('  function browserBarInset() {', '  // The microphone never opened');
   const listeners = {}, vvl = {}, style = {};
   const vv = { offsetTop: 0, height: 659, addEventListener: (t, f) => (vvl[t] = f) };
@@ -146,11 +164,25 @@ test('a browser bar over the bottom of the page lifts the dock, orb and Cancel a
     document: { documentElement: { style: { setProperty: (k, v) => (st[k] = v) }, dataset: {} }, activeElement: null }, device: { getBoundingClientRect: () => ({ bottom: 659 }) }, addEventListener() {}, setTimeout: f => f(), innerHeight: 659 });
   vm.runInContext(body + '\nbrowserBarInset();', c2);
   assert.deepEqual(st, {});
-  assert.match(APP, /buildDesks\(\); setVoice\('idle'\); armBack\(\);\n  browserBarInset\(\);/, 'runs at boot');
+  const boot = runRecording(between(APP, "  buildDesks(); setVoice('idle'); armBack();", '\n  /* Workspace sync'), {});
+  assert.ok(boot.calls.some(c => c[0] === 'browserBarInset'), 'runs at boot');
 });
 
 test('during a take in the first-run tour, the orb and its controls sit above everything the tour draws', () => {
-  const z = sel => Number((TOUR_CSS.match(new RegExp('\\.device\\.touring:is\\(\\[data-voice="listen"\\], \\[data-voice="paused"\\], \\[data-voice="command"\\]\\) ' + sel + ' \\{ z-index: (\\d+); \\}')) || [])[1]);
-  assert.ok(z('#dock') > 90 && z('#voice') > z('#dock'), 'dock above the tour, the Cancel/Pause arcs above the dock (as without the tour)');
-  assert.match(TOUR_CSS, /^\.tour \{ position: absolute; inset: 0; z-index: 90; pointer-events: none;/m);
+  // The phone page while the tour shows, with the orb dock, the take's Cancel/Pause arcs and the tour layer.
+  const page = voice => {
+    const doc = createDocument();
+    doc.body.innerHTML = `<div id="device" class="device touring" data-voice="${voice}"><div id="dock"></div><div id="voice"></div><div class="tour"></div></div>`;
+    const z = sel => Number(styles(doc.querySelector(sel), [CSS, TOUR_CSS])['z-index']);
+    return { tour: z('.tour'), dock: z('#dock'), voice: z('#voice'), tourCss: styles(doc.querySelector('.tour'), [CSS, TOUR_CSS]) };
+  };
+  for (const voice of ['listen', 'paused', 'command']) {
+    const p = page(voice);
+    assert.equal(p.tour, 90);
+    assert.ok(p.dock > p.tour && p.voice > p.dock, `${voice}: dock above the tour, the Cancel/Pause arcs above the dock (as without the tour): ${JSON.stringify(p)}`);
+  }
+  const idle = page('idle');
+  assert.ok(!(idle.dock > idle.tour), 'no take: the tour stays on top of the dock');
+  const t = idle.tourCss;
+  assert.equal(t.position, 'absolute'); assert.equal(t.inset, '0'); assert.equal(t['pointer-events'], 'none');
 });

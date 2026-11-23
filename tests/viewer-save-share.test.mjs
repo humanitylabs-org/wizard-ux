@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import { runRecording } from './fixtures/source-slice.mjs';
 
 // wizard-os issue 747: Save and Share in the media viewer did nothing. They now read the picture the viewer already
 // shows from the browser's cache, give up after a bounded wait, and keep the file's real name. Browser proof (real
@@ -66,14 +67,33 @@ test('a refused read is an error the viewer can fall back from', async () => {
   await assert.rejects(api.asFile({ url: '/x/api/media/1', name: 'a.jpg' }), /HTTP 403/);
 });
 
-test('the viewer falls back to a browser download and saves on Share where files cannot be shared', () => {
+test('the viewer falls back to a browser download and saves on Share where files cannot be shared', async () => {
   const viewer = source.slice(source.indexOf('  const busy = new Set();'), source.indexOf('  // Zooming out keeps your place'));
-  assert.match(viewer, /if \(!href \|\| native\(\)\) throw e;\n      download\(href, fileName\(/);
-  assert.match(viewer, /const done = working\('save', 'Saving…'\);/);
-  assert.match(viewer, /const done = working\('share', 'Sharing…'\);/);
-  // The bytes are read once: a share that can't happen saves those bytes (also an app's own blob: picture), and a
-  // read that already failed goes straight to the browser download, never a second 60 s wait.
-  assert.match(viewer, /try \{ file = await asFile\(it\); \} catch \(e\) \{ failed = e; \}\n\s+let result = file \? await shareFileOpen\(file, \{ direct \}\) : 'unsupported';/);
-  assert.match(viewer, /if \(file \|\| ownAddress\(it\.url\) \|\| privateMedia\(it\.url\)\) \{\n\s+const r = await \(file && !native\(\) \? Promise\.resolve\(saveBlob\(file\)\) : saveNow\(it, failed\)\)/);
-  assert.match(viewer, /async function saveNow\(it, failed\) \{\n    try \{ if \(failed\) throw failed; return await saveFile\(it\); \} catch \(e\) \{/);
+  // the real viewer Save/Share on a desktop browser that cannot share files
+  const world = ({ read = 'fails' } = {}) => {
+    const ctx = { calls: [], location: { href: 'https://box.test/wizard-os-home/', origin: 'https://box.test' }, URL, Promise, Set, setTimeout: () => 0,
+      V: { el: null }, directShareDepth: 0, macShell: () => false, native: () => null, privateMedia: () => false, window: {},
+      fileName: it => it.name, saveFile: async () => { ctx.reads++; throw new Error('read failed'); }, reads: 0,
+      asFile: async it => { ctx.reads++; if (read === 'fails') throw new Error('read failed'); return { name: it.name, type: 'image/jpeg' }; },
+      shareFileOpen: async () => 'unsupported', saveBlob: f => { ctx.calls.push(['saveBlob', f.name]); return 'saved'; } };
+    runRecording(viewer + '\nglobalThis.api = { save, share };', ctx);
+    const said = () => ctx.calls.filter(c => c[0] === 'K.notify').map(c => c[2]);
+    const downloads = () => ctx.calls.filter(c => c[0] === 'download').map(c => c.slice(1));
+    return { ctx, api: ctx.api, said, downloads };
+  };
+  const it = { url: '/wizard-os-home/api/media/7', name: 'beach.jpg', kind: 'image' };
+  // Save: the read fails, the browser's own download takes the address
+  const s1 = world(); await s1.api.save(it);
+  assert.deepEqual(s1.downloads(), [['https://box.test/wizard-os-home/api/media/7', 'beach.jpg']]);
+  assert.deepEqual(s1.said(), ['Saving to Downloads']);
+  // Share where files cannot be shared, read failed: straight to the browser download, no second read
+  const s2 = world(); await s2.api.share(it);
+  assert.equal(s2.ctx.reads, 1, 'the bytes are read once');
+  assert.deepEqual(s2.downloads(), [['https://box.test/wizard-os-home/api/media/7', 'beach.jpg']]);
+  assert.deepEqual(s2.said(), ['Sharing isn’t available here · saved to Downloads instead']);
+  // Share where files cannot be shared, read worked: those bytes are saved
+  const s3 = world({ read: 'works' }); await s3.api.share(it);
+  assert.deepEqual(s3.ctx.calls.filter(c => c[0] === 'saveBlob'), [['saveBlob', 'beach.jpg']]);
+  assert.deepEqual(s3.downloads(), []);
+  assert.deepEqual(s3.said(), ['Sharing isn’t available here · saved to Downloads instead']);
 });

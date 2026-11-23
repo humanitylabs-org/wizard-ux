@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
+import vm from 'node:vm'
 import { tmpdir } from 'node:os'
 import { setBlock, blocks, accentCss, run } from '../skills/wizard-customize/scripts/wizard-customize.mjs'
 import { startBox } from './fixtures/customize-box.mjs'
@@ -138,6 +139,13 @@ test('the Files fallback refuses "." and ".." as the skin folder', async t => {
 })
 
 test('phone skin toasts escape script text (file names, error messages), like the desktop', () => {
+  // the phone shell's own esc and the skin adapter's toast, run as they are
   const app = withShellParts(readFileSync(new URL('../web/app.js', import.meta.url), 'utf8'))
-  assert.match(app, /toast: text => toast\('◇', esc\(String\(text \?\? ''\)\), 2400\)/)
+  const line = k => app.split('\n').find(l => l.includes(k)).slice(app.split('\n').find(l => l.includes(k)).indexOf(k))
+  const shown = []
+  const ctx = vm.createContext({ toast: (icon, html, ms) => shown.push([icon, html, ms]) })
+  vm.runInContext(`${line('const esc = s =>')}\nthis.skinToast = ${line('toast: text => toast(').trim().replace(/^toast: /, '').replace(/,$/, '')};`, ctx)
+  ctx.skinToast('<img src=x onerror=alert(1)> "Q&A".png')
+  ctx.skinToast(undefined)
+  assert.deepEqual(shown, [['◇', '&lt;img src=x onerror=alert(1)&gt; &quot;Q&amp;A&quot;.png', 2400], ['◇', '', 2400]])
 })

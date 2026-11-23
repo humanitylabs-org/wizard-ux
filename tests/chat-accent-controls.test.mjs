@@ -1,27 +1,31 @@
+// Chats accent controls (the section count, the New chat button, the active sort) follow the palette the skin sets:
+// the real chats.css cascaded over those elements, with two made-up palettes, and var() resolved the way a browser does
+// (tests/fixtures/r7A-css.mjs). Wizard-ux issue 1674: tests run the code, CSS included.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { createDocument } from './fixtures/mini-dom.mjs';
+import { valueOf } from './fixtures/r7A-css.mjs';
 
 const chats = readFileSync(new URL('../web/core/chats.css', import.meta.url), 'utf8');
-const rule = (selector) => {
-  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const matches = [...chats.matchAll(new RegExp(`(?:^|\\n)${escaped}\\s*\\{([^}]*)\\}`, 'g'))];
-  return matches.at(-1)?.[1] || '';
-};
+const PALETTES = { a: { violet: '#123456', violet2: '#0a0b0c', base: '#fefdfc', bg: '#010203' }, b: { violet: '#e05a00', violet2: '#bb4400', base: '#111111', bg: '#222222' } };
+const palette = id => { const p = PALETTES[id]; return `html[data-pal="${id}"] { --violet: ${p.violet}; --violet-2: ${p.violet2}; --wz-base: ${p.base}; --bg: ${p.bg}; }`; };
 
-test('Chats accent controls follow each active palette and use its base as contrasting ink', () => {
-  const count = rule('.ch-sec-h b');
-  assert.match(count, /background:\s*var\(--violet\)/);
-  assert.match(count, /color:\s*var\(--wz-base,\s*var\(--bg/);
-  assert.doesNotMatch(count, /color:\s*#fff/);
+function page(id) {
+  const doc = createDocument();
+  doc.documentElement.setAttribute('data-pal', id);
+  doc.body.innerHTML = '<div class="ch-sec-h"><b>3</b></div><button class="ch-fab">+</button><div class="ch-rdy-bar"><button class="on">Newest</button></div>';
+  const v = (q, prop) => valueOf(doc.querySelector(q), [chats, palette(id)], prop).replace(/\s+/g, ' ').trim();
+  return { v };
+}
+const bgOf = (p, q) => p.v(q, 'background') || p.v(q, 'background-color');
 
-  const add = rule('.ch-fab');
-  assert.match(add, /var\(--violet\)/, 'New chat follows the active skin accent');
-  assert.match(add, /color:\s*var\(--wz-base,\s*var\(--bg/);
-  assert.doesNotMatch(add, /#9b6bff|#6d45e6|rgba\(70,\s*30,\s*160/);
-
-  const activeSort = rule('.ch-rdy-bar button.on');
-  assert.match(activeSort, /background:\s*color-mix\(in srgb,\s*var\(--violet\)\s*14%,\s*transparent\)/);
-  assert.match(activeSort, /border-color:\s*color-mix\(in srgb,\s*var\(--violet-2\)\s*45%,\s*transparent\)/);
-  assert.doesNotMatch(activeSort, /143,\s*99,\s*255|185,\s*155,\s*255/);
+for (const id of Object.keys(PALETTES)) test(`palette ${id}: Chats accent controls take its accent, with its base as ink`, () => {
+  const P = PALETTES[id], p = page(id);
+  assert.equal(bgOf(p, '.ch-sec-h b'), P.violet, 'the section count is filled with the accent');
+  assert.equal(p.v('.ch-sec-h b', 'color'), P.base, 'its number is the palette base');
+  assert.ok(bgOf(p, '.ch-fab').includes(P.violet), 'New chat follows the accent');
+  assert.equal(p.v('.ch-fab', 'color'), P.base);
+  assert.equal(bgOf(p, '.ch-rdy-bar button.on'), `color-mix(in srgb, ${P.violet} 14%, transparent)`, 'the active sort is a light accent tint');
+  assert.equal(p.v('.ch-rdy-bar button.on', 'border-color'), `color-mix(in srgb, ${P.violet2} 45%, transparent)`);
 });

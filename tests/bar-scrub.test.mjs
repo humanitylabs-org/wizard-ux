@@ -6,6 +6,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
 import vm from 'node:vm';
+import { createDocument } from './fixtures/mini-dom.mjs';
+import { cascade } from './fixtures/mini-css.mjs';
 import { withShellParts } from './fixtures/shell-parts.mjs';
 
 const read = f => withShellParts(readFileSync(new URL('../' + f, import.meta.url), 'utf8'));
@@ -133,10 +135,18 @@ test('no switch: the scrub is the only bar path, in the catalogue and code there
   assert.ok(!JSON.stringify(cat).includes('bar-scrub'), 'not in the catalogue');
   assert.equal(existsSync(new URL('../web/tweaks/wizard/bar-scrub', import.meta.url)), false, 'package folder is gone');
   assert.doesNotMatch(APP, /bar-scrub(?!bing)|barScrubOn|\bSC_?=|SC\.live/, 'no switch check and no handle gesture left in app.js');
-  assert.match(APP, /scrub\.innerHTML = '<span class="sc-label"><\/span>';/, 'the label box has no handle bar inside');
   assert.doesNotMatch(read('web/styles.css'), /\.scrub(\.on)? i\b/, 'no handle CSS');
-  assert.match(read('web/styles.css'), /\.scrub \{[^}]*pointer-events: none;/, 'the label box takes no touches, the bar under it scrubs');
   assert.doesNotMatch(BLOCK, /placeTrack\(d \* 1\.1|\.sc\b/, 'the old follow-the-finger one-desk swipe is gone');
+  // The label box the shell builds (app-overview.js) holds only the label, no handle bar.
+  const ov = readFileSync(new URL('../web/app-overview.js', import.meta.url), 'utf8'), at = ov.indexOf("  scrub.innerHTML = ");
+  const docked = [], made = { className: '', innerHTML: '' };
+  vm.runInNewContext(ov.slice(at, ov.indexOf('\n', at)), { scrub: made, $: () => ({ appendChild: n => docked.push(n) }) });
+  assert.equal(made.innerHTML, '<span class="sc-label"></span>', 'the label box has no handle bar inside');
+  assert.deepEqual(docked, [made], 'it sits on the dock');
+  // the label box takes no touches, the bar under it scrubs: the real styles.css cascaded on the box the shell docked
+  const doc = createDocument(), mk = ov.slice(ov.indexOf('  const scrub = document.createElement('), ov.indexOf('\n', ov.indexOf('  const scrub = document.createElement(')));
+  const box = vm.runInNewContext(`(() => { ${mk}\n return scrub; })()`, { document: doc }); doc.body.appendChild(box);
+  assert.equal(cascade(box, read('web/styles.css'))['pointer-events']?.value, 'none');
 });
 
 test('independent of Channels: the scrub block reads no switch, no Channels flag, DOM or state', () => {
@@ -249,10 +259,42 @@ test('an open sheet other than Settings keeps the orb\'s own gestures (the orb d
   const st = shell(); st.ctx.sheet = 'settings';
   assert.equal(vm.runInContext('barScrubJoin', st.ctx)({ pointerId: 1, clientX: 180, clientY: 870, timeStamp: 100 }, { x: 206, y: 870, t: 0, ts: 0 }), true, 'Settings never blocks a scrub');
 });
+// The orb's real pointermove and release code (web/app-orbswipe.js), with the scrub join recorded.
+function orbGesture() {
+  const src = readFileSync(new URL('../web/app-orbswipe.js', import.meta.url), 'utf8');
+  const a = src.indexOf("  orbWrap.addEventListener('pointermove', e => {"), b = src.indexOf('\n  });\n', a);
+  const c = src.indexOf('  function endGesture(e, cancelled) {'), d = src.indexOf("    if (g.mode === 'scrub') { if (cancelled) barScrubDrop(); return; }", c);
+  assert.ok(a > 0 && b > a && c > 0 && d > c);
+  const log = [], move = [];
+  const cls = { add() {}, remove() {}, toggle() {} };
+  const orbWrap = { dataset: {}, classList: cls, closest: q => (q === '#dock' ? {} : null), addEventListener: (t, fn) => { if (t === 'pointermove') move.push(fn); } };
+  const ctx = vm.createContext({ log, orbWrap, appVars: { G: null, idx: 2, desks: [{}, {}, {}, {}], sheet: null }, performance: { now: () => 1000 }, window: { WosOrbSwitcher: {} },
+    barScrubJoin: (e, g) => (log.push(['join', g.mode]), true), barScrubDrop: () => log.push(['drop']), placeTrack: () => log.push(['track']), liftSettings() {}, atPickerEnd: () => false,
+    orbSwipeAct: () => 'stock', cancelVoice() {}, clip: x => x, deskName: i => 'Desk ' + i, device: { classList: cls }, generalTarget: { classList: cls }, Orb: { press() {} }, dropWarm() {},
+    launcher: { classList: { add: c => log.push(['launcher', c]), remove() {} }, style: {}, _rendered: true }, renderLauncher() {}, aimFor: () => null, V: { state: 'idle' }, $: () => ({ style: {}, textContent: '' }),
+    queueMicrotask() {}, clearTimeout() {}, pillOvOpen: () => false, closeOverview: () => log.push(['overview']) });
+  vm.runInContext(src.slice(a, b + 6) + '\n' + src.slice(c, d) + "    if (g.mode === 'scrub') { if (cancelled) barScrubDrop(); return; }\n    log.push(['orb-release', g.mode]);\n  }\nthis.end = endGesture;", ctx);
+  const start = (extra = {}) => { ctx.appVars.G = { pointerId: 1, x: 200, y: 870, t: 0, mode: 'pending', ...extra }; };
+  const to = (dx, dy) => move[0]({ pointerId: 1, clientX: 200 + dx, clientY: 870 + dy });
+  return { ctx, get log() { return JSON.parse(JSON.stringify(log)); }, start, to, G: () => ctx.appVars.G };
+}
+
 test('the orb hands only its sideways drag to the scrub (tap, hold and up/down stay the orb\'s)', () => {
-  assert.match(APP, /G\.mode = Math\.abs\(G\.dx\) > Math\.abs\(G\.dy\) \? 'h' : 'v';[\s\S]{0,300}if \(G\.mode === 'h' && !G\.corner && !G\.ovWas && [^\n]*barScrubJoin\(e, G\)\) \{ G\.mode = 'scrub';/);
-  assert.match(APP, /if \(g\.mode === 'scrub'\) \{ if \(cancelled\) barScrubDrop\(\); return; \}/);
-  assert.match(APP, /if \(G\.mode === 'scrub'\) return;/);
+  const o = orbGesture();
+  o.start(); o.to(20, 3);
+  assert.equal(o.G().mode, 'scrub'); assert.deepEqual(o.log, [['join', 'h']], 'a sideways drag joins the scrub');
+  o.to(60, 3); assert.deepEqual(o.log, [['join', 'h']], 'after that, its moves are the dock\'s (no orb follow)');
+  o.ctx.end({ pointerId: 1 }, false); assert.deepEqual(o.log, [['join', 'h']], 'the dock\'s pointerup lands it');
+  o.start(); o.to(20, 0); o.ctx.end({ pointerId: 1 }, true); assert.deepEqual(o.log.at(-1), ['drop'], 'a cancelled scrub is dropped');
+  const v = orbGesture(); v.start(); v.to(2, -30);
+  assert.equal(v.G().mode, 'v'); assert.deepEqual(v.log, [['launcher', 'dragging']], 'up/down stays the orb\'s (it pulls the launcher)');
+  v.ctx.end({ pointerId: 1 }, false); assert.deepEqual(v.log.at(-1), ['orb-release', 'v']);
+  const t = orbGesture(); t.start(); t.to(3, 2); assert.equal(t.G().mode, 'pending', 'a tap never moves past the slop');
+  t.ctx.end({ pointerId: 1 }, false); assert.deepEqual(t.log, [['orb-release', 'pending']]);
+  const h = orbGesture(); h.start({ mode: 'hold', holdAt: 900 }); h.ctx.generalTarget.getBoundingClientRect = () => ({ left: 0, right: 0, top: 0, bottom: 0 });
+  h.ctx.voiceDestination = {}; h.ctx.window.WizConfig = { agent: () => 'Wizard' };
+  h.to(20, 0); assert.equal(h.G().mode, 'hold'); assert.deepEqual(h.log, [], 'a hold stays a hold');
+  const c = orbGesture(); c.start({ corner: true }); c.to(30, 0); assert.equal(c.G().mode, 'still'); assert.deepEqual(c.log, [], 'the corner orb never scrubs');
 });
 
 // wizard-ux issue 1601: a short quick flick that arrives as one or two merged move events moved 0 desks (the first move

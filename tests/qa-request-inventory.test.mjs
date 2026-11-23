@@ -6,12 +6,19 @@ import { mkdtempSync, readFileSync, readdirSync, rmSync, existsSync, mkdirSync, 
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 const require = createRequire(import.meta.url);
+import { harnessRoutes, fx as rfx } from './fixtures/r8A-qa-route-harness.mjs';
 const root = new URL('../', import.meta.url).pathname;
 const fx = require('../tools/qa-proof-fixture.cjs');
 const { scan } = require('../tools/qa-request-inventory.cjs');
 const inventory = JSON.parse(readFileSync(path.join(root, 'tests/fixtures/proof-request-inventory.json'), 'utf8'));
 const HARNESSES = ['qa-instant-ui-taps.cjs', 'qa-offline-popup.cjs', 'qa-search-archive-routed.cjs'];
 const QA_DIR = path.join(root, 'qa/scripts'); // where the QA harnesses live
+// A node run of `code` with the real fixture, then the refused-*.json files it left in `dir` (the run's own output).
+const fenceRun = (code, dir, env) => {
+  const r = spawnSync(process.execPath, ['-e', code], { encoding: 'utf8', env });
+  const files = readdirSync(dir).filter(f => f.startsWith('refused-'));
+  return { status: r.status, stdout: r.stdout, stderr: r.stderr, files, refused: files.map(f => JSON.parse(readFileSync(path.join(dir, f), 'utf8'))) };
+};
 
 test('every network path in web/ is classified in the committed inventory (and nothing stale)', () => {
  const found = scan(root), known = new Set(Object.keys(inventory.paths));
@@ -59,11 +66,11 @@ test('a run with refusals continues, then exits non-zero with the full list and 
  try {
   const tenv = { ...process.env, T_FIXTURE: path.join(root, 'tools/qa-proof-fixture.cjs'), T_DIR: dir, QA_OUT: '', QA_REFUSED_DIR: '' };
   const script = body => `const fx=require(process.env.T_FIXTURE);fx.failAtExit(process.env.T_DIR);${body}`;
-  const bad = spawnSync(process.execPath, ['-e', script(`fx.response('/wizard/one','GET');fx.response('/wizard/two','POST');console.log('still running');process.exit(0)`)], { encoding: 'utf8', env: tenv });
+  const bad = fenceRun(script(`fx.response('/wizard/one','GET');fx.response('/wizard/two','POST');console.log('still running');process.exit(0)`), dir, tenv);
   assert.equal(bad.status, 1); assert.match(bad.stdout, /still running/);
   assert.match(bad.stderr, /REFUSED 2 uncatalogued/); assert.match(bad.stderr, /GET \/wizard\/one/); assert.match(bad.stderr, /POST \/wizard\/two/);
-  const file = readdirSync(dir).find(f => f.startsWith('refused-'));
-  assert.deepEqual(JSON.parse(readFileSync(path.join(dir, file), 'utf8')).map(r => r.request), ['GET /wizard/one', 'POST /wizard/two']);
+  assert.equal(bad.files.length, 1);
+  assert.deepEqual(bad.refused[0].map(r => r.request), ['GET /wizard/one', 'POST /wizard/two']);
   const clean = spawnSync(process.execPath, ['-e', script(`fx.response('/wizard/v1/bootstrap','GET')`)], { encoding: 'utf8', env: tenv });
   assert.equal(clean.status, 0);
   // A harness that already failed keeps its own code.
@@ -72,28 +79,46 @@ test('a run with refusals continues, then exits non-zero with the full list and 
  } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('all three harnesses use the shared collect-all fence and never answer unknown paths with a silent success', () => {
+// Each harness runs in node:vm against a fake Chromium (tests/fixtures/r8A-qa-route-harness.mjs) until its request
+// router is installed; then the router itself is asked for paths no fixture knows.
+test('all three harnesses use the shared collect-all fence and never answer unknown paths with a silent success', async () => {
  for (const name of HARNESSES) {
-  const src = readFileSync(path.join(QA_DIR, name), 'utf8');
-  assert.match(src, /fx\.failAtExit\(/, name);
-  assert.doesNotMatch(src, /Uncatalogued/, name);
+  rfx.resetRefusals();
+  const h = await harnessRoutes(name);
+  try {
+   assert.equal(h.failAtExit.length, 1, name + ': installs the collect-all fence once');
+   assert.equal(typeof h.failAtExit[0], 'function', name + ': its output folder, resolved at exit');
+   assert.match(String(h.failAtExit[0]()), /\/out$/, name + ': the harness default output directory');
+   assert.ok(h.routes.length >= 1, name + ': routes every request');
+   for (const [method, p] of [['GET', '/totally/unknown'], ['GET', '/wizard/never/seen-r8a'], ['POST', '/wizard/never/seen-r8a']]) {
+    const answer = await h.ask(method, h.origin + p);
+    assert.ok(answer && typeof answer === 'object' && answer.status >= 400, `${name}: ${method} ${p} is refused, never a silent success (${JSON.stringify(answer)})`);
+   }
+   if (name === HARNESSES[2]) { // its writes are answered by the fixture itself: a catalogued write as catalogued
+    const seen = await h.ask('PUT', h.origin + '/wizard/thread-seen');
+    assert.equal(JSON.stringify(seen), JSON.stringify(rfx.response('/wizard/thread-seen', 'PUT')), 'a write gets the fixture\'s answer');
+   }
+   const refused = rfx.refused().map(r => r.request);
+   assert.ok(refused.includes('GET /totally/unknown') && refused.includes('GET /wizard/never/seen-r8a'), `${name}: unknown reads are collected for the exit report: ${refused}`);
+  } finally { h.done(); rfx.resetRefusals(); }
  }
- const instant = readFileSync(path.join(QA_DIR, HARNESSES[0]), 'utf8');
- assert.doesNotMatch(instant, /return json\(\{\}\);/);
+});
+test('no harness keeps its own uncatalogued handling or a disabled copy', () => {
+ for (const name of HARNESSES) assert.doesNotMatch(readFileSync(path.join(QA_DIR, name), 'utf8'), /Uncatalogued/, name);
+ assert.doesNotMatch(readFileSync(path.join(QA_DIR, HARNESSES[0]), 'utf8'), /return json\(\{\}\);/);
  assert.ok(!existsSync(path.join(QA_DIR, 'qa-hosted-notes-read.cjs.disabled')));
 });
 
 test('refused-*.json lands in the harness default output directory, resolved at exit, and writes are never silent successes', () => {
  const dir = mkdtempSync(path.join(tmpdir(), 'refused-default-'));
  try {
-  const cp = spawnSync(process.execPath, ['-e', "const fx=require(process.env.T_FIXTURE);fx.failAtExit(()=>OUT);const OUT=process.env.T_DIR;fx.response('/wizard/x','POST')"], { encoding: 'utf8', env: { ...process.env, T_FIXTURE: path.join(root, 'tools/qa-proof-fixture.cjs'), T_DIR: dir, QA_OUT: '', QA_REFUSED_DIR: '' } });
+  const cp = fenceRun("const fx=require(process.env.T_FIXTURE);fx.failAtExit(()=>OUT);const OUT=process.env.T_DIR;fx.response('/wizard/x','POST')", dir, { ...process.env, T_FIXTURE: path.join(root, 'tools/qa-proof-fixture.cjs'), T_DIR: dir, QA_OUT: '', QA_REFUSED_DIR: '' });
   assert.equal(cp.status, 1);
-  assert.equal(readdirSync(dir).filter(f => f.startsWith('refused-')).length, 1);
+  assert.equal(cp.files.length, 1);
  } finally { rmSync(dir, { recursive: true, force: true }); }
- for (const name of HARNESSES) assert.match(readFileSync(path.join(QA_DIR, name), 'utf8'), /failAtExit\(\(\) => (?:out|OUT)\)/, name);
+ // (each harness hands failAtExit its output folder as a function, read at exit: the harness-routes test runs them)
  const search = readFileSync(path.join(QA_DIR, HARNESSES[2]), 'utf8');
  assert.doesNotMatch(search, /ok: true, record/);
- assert.match(search, /writes\.push\(\{ method, path: u\.pathname \}\); return route\.fulfill\(fx\.response\(u\.pathname, method\)\)/);
  fx.resetRefusals();
  assert.equal(fx.response('/wizard/thread-seen', 'PUT').status, 200);
  assert.equal(fx.response('/wizard/hermes/api/sessions', 'DELETE').status, 451);

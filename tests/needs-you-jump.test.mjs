@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
+import { block as fnBlock, expression, runRecording } from './fixtures/source-slice.mjs';
 
 const src = withParts(fs.readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'));
 const start = src.indexOf('  function jumpOpened('), end = src.indexOf('  function chanPrefs()', start);
@@ -77,12 +78,33 @@ test('a new chat never marks green', () => {
 });
 
 test('the pills are wired: markup after ↓ Latest, the tap, the open and every chat-power paint', () => {
-  assert.ok(src.includes("${PW ? PW.latestBtn() : ''}${s && !isNew && typeof jumpPillsHtml === 'function' ? jumpPillsHtml() : ''}"));
-  assert.ok(src.includes("closest('[data-chjump]')"));
-  assert.ok(src.includes('jumpOpened(wid, sid,'));
-  assert.ok(src.includes('chanOpen, paintJump, chanSpaceOf,'));
+  const raw = f => fs.readFileSync(new URL('../web/core/' + f, import.meta.url), 'utf8');
+  const lineOf = (text, k) => { const l = text.split('\n').find(x => x.includes(k)); assert.ok(l, k); return l; };
+  // the thread markup: the pills right after ↓ Latest, on a thread (never a New chat)
+  const pair = expression(src, "${PW ? PW.latestBtn() : ''}") + expression(src, "${s && !isNew && typeof jumpPillsHtml === 'function' ? jumpPillsHtml() : ''}");
+  assert.ok(src.includes(pair), 'the pills come straight after ↓ Latest');
+  const paint = runRecording('globalThis.html = () => `' + pair + '`;', { PW: { latestBtn: () => '<b data-chlatest></b>' }, jumpPillsHtml: () => '<i data-chjump="up"></i>', s: { id: 't1' }, isNew: false });
+  assert.equal(paint.html(), '<b data-chlatest></b><i data-chjump="up"></i>');
+  paint.isNew = true; assert.equal(paint.html(), '<b data-chlatest></b>', 'no pills on a New chat');
+  // the tap (real chats-bind.js line): a pill in an open thread jumps
+  const tap = lineOf(raw('chats-bind.js'), "closest('[data-chjump]')");
+  const click = thread => { const c = runRecording(`globalThis.go = e => { ${tap}\n };`, { id: 'w1', w: { thread } }); const r = c.go({ target: { closest: sel => (sel === '[data-chjump]' ? { dataset: { chjump: 'down' } } : null) } }); return [r, c.calls.filter(x => x[0] === 'jumpGo')]; };
+  assert.deepEqual(JSON.parse(JSON.stringify(click('t1'))), [true, [['jumpGo', 'w1', 'down']]]);
+  { const [r, calls] = click(null); assert.equal(r, undefined); assert.equal(calls.length, 0, 'no thread: not a jump'); }
+  // the open (real chats.js line): every thread open tells the pills where reading starts
+  const open = runRecording(`globalThis.o = (wid, sid) => { ${lineOf(src, "if (typeof jumpOpened === 'function') jumpOpened(wid, sid,")}\n };`, { chanSeenRow: (w, s) => ({ seen: s }) });
+  open.o('w1', 't1'); open.o('w1', '__new__');
+  assert.deepEqual(JSON.parse(JSON.stringify(open.calls.filter(c => c[0] === 'jumpOpened'))), [['jumpOpened', 'w1', 't1', { seen: 't1' }], ['jumpOpened', 'w1', '__new__', null]]);
+  // chat power gets paintJump from Chats, and its every Latest paint repaints the pills
+  const handed = {};
+  runRecording(lineOf(src, 'chanOpen, paintJump, chanSpaceOf,').trim(), { window: { WosChatPower: o => { Object.assign(handed, { paintJump: o.paintJump }); return {}; } }, paintJump: function paintJump() {} });
+  assert.equal(handed.paintJump?.name, 'paintJump');
   const power = fs.readFileSync(new URL('../web/core/chat-power.js', import.meta.url), 'utf8');
-  assert.ok(power.includes('A.paintJump?.(el, nb);'));
+  const latest = runRecording(fnBlock(power, '  function paintLatest(el, nb) {') + '\nglobalThis.paint = paintLatest;', { bottomGap: () => 0, onScreen: () => true });
+  const el = { querySelector: () => null }, nb = {};
+  latest.paint(el, nb);
+  const jumps = latest.calls.filter(c => c[0] === 'A.paintJump');
+  assert.equal(jumps.length, 1); assert.equal(jumps[0][1], el); assert.equal(jumps[0][2], nb);
 });
 
 // Issue 1380: the target lands just under the ↑ pill while markers are left above it (else 8 px under the header).

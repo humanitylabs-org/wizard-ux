@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import { withSettingsParts } from './fixtures/settings-parts.mjs'; // settings.js parts moved out verbatim (issue 1665)
 const source = withSettingsParts(fs.readFileSync(new URL('../web/core/settings.js', import.meta.url), 'utf8'));
+import { manifest } from './fixtures/r8C-manifest.mjs';
 function feature(native) {
   const sandbox = { CSS: { escape: s => String(s) }, WizardOSNative: native, WizCore: {}, WizBrand: { html: 'W' }, location: { host: 'fixture.invalid' }, navigator: { userAgent: 'Android' }, document: {}, requestAnimationFrame() {} };
   sandbox.window = sandbox;
@@ -33,7 +34,11 @@ test('Change Wizard uses shared settings and only invokes native navigation', ()
   assert.equal(calls, 1);
 });
 
+// static-rule: AndroidManifest.xml is declarative config: the attribute is the behaviour Android applies
 test('QR scanner follows the phone orientation (zxing CaptureActivity is landscape by default)', () => {
-  const m = fs.readFileSync(new URL('../android/app/src/main/AndroidManifest.xml', import.meta.url), 'utf8');
-  assert.match(m, /com\.journeyapps\.barcodescanner\.CaptureActivity"\s+android:screenOrientation="fullSensor"\s+tools:replace="screenOrientation"/);
+  const m = manifest();
+  const a = m.find(e => e.tag === 'activity' && e.attrs['android:name'] === 'com.journeyapps.barcodescanner.CaptureActivity');
+  assert.ok(a, 'CaptureActivity is declared');
+  assert.equal(a.attrs['android:screenOrientation'], 'fullSensor');
+  assert.equal(a.attrs['tools:replace'], 'screenOrientation');
 });

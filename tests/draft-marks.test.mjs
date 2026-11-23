@@ -9,6 +9,8 @@ import { readFileSync } from 'node:fs';
 import { modelContext } from './fixtures/chats-list-model.mjs';
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
+import { createDocument } from './fixtures/mini-dom.mjs';
+import { cascade } from './fixtures/mini-css.mjs';
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
 const kitSrc = read('web/core/chat-kit.js'), live = withLiveParts(read('web/live.js')), chats = withParts(read('web/core/chats.js'));
 const RAW = JSON.parse(read('tests/fixtures/sessions-list-1360.json'));
@@ -185,11 +187,20 @@ test('issue 1604: the wizard/draft-marks switch is gone everywhere; its CSS live
   assert.doesNotMatch(read('web/core/settings.js'), /draft-marks/, 'no Settings row');
   assert.doesNotMatch(read('web/core/chats-daily.js'), /draftMarksOn|DRAFT_MARKS/, 'no gate');
   assert.throws(() => read('web/tweaks/wizard/draft-marks/manifest.json'), 'package deleted');
-  const css = read('web/core/chats.css'), i = css.indexOf('/* Draft marks (wizard-ux issue 1445)');
-  assert.ok(i > 0); const block = css.slice(i);
-  assert.doesNotMatch(block, /data-tweaks/, 'unscoped');
-  for (const sel of ['.ch-draft-tag', '.ch-chan-draft', '.ch-post-draft', '.aad-rw[data-draft] .aad-chan-line::before', '.aad-draft-line::before']) assert.ok(block.includes(sel), sel);
-  assert.doesNotMatch(block.replace(/var\(--wz-[a-z-]+, #[0-9a-f]+\)/g, ''), /#[0-9a-f]{3,6}\b/i, 'colours only through tokens');
+  // its CSS: core chats.css styles every mark with no switch on the page (a skeleton of each mark's markup), and
+  // colours come through tokens
+  const css = read('web/core/chats.css'), doc = createDocument();
+  doc.body.innerHTML = '<div class="ch-row"><span class="ch-draft-tag">✎ Draft</span></div><div class="ch-chan"><span class="ch-chan-draft">✎</span></div><div class="ch-post-r"><span class="ch-post-draft ch-draft-tag">✎ Draft</span></div>'
+    + '<div class="aad-rw" data-draft="1"><span class="aad-chan-line">#launch</span></div><div class="aad-rw" data-draft="1"><span class="aad-draft-line"></span></div>';
+  doc.documentElement.setAttribute('data-layout', 'ai-apps');
+  const marks = [['.ch-row .ch-draft-tag'], ['.ch-chan-draft'], ['.ch-post-draft'], ['.aad-rw[data-draft] .aad-chan-line', '::before'], ['.aad-draft-line', '::before']];
+  for (const [sel, pseudo] of marks) {
+    const got = cascade(doc.querySelector(sel), css, { pseudo });
+    assert.match(got.color?.value || got.content?.value || '', /wz-warning|✎/, `${sel}${pseudo || ''} is styled with no data-tweaks`);
+    for (const [k, d] of Object.entries(got)) if (/colou?r|background|border/.test(k)) assert.doesNotMatch(d.value.replace(/var\(--wz-[a-z-]+, #[0-9a-f]+\)/g, ''), /#[0-9a-f]{3,6}\b/i, `${sel} ${k}: colours only through tokens`);
+  }
+  const noDraft = createDocument(); noDraft.documentElement.setAttribute('data-layout', 'ai-apps'); noDraft.body.innerHTML = '<div class="aad-rw"><span class="aad-chan-line">#launch</span></div>';
+  assert.equal(cascade(noDraft.querySelector('.aad-chan-line'), css, { pseudo: '::before' }).content, undefined, 'a channel line without a draft has no pencil');
 });
 
 test('on by default, main and routed rows alike: a thread of the main agent, host, container or restricted is marked by the same draft key its box saves under (direct:<id>)', async () => {

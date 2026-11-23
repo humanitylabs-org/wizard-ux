@@ -78,7 +78,21 @@ test('landAt refuses a new chat, a hidden thread and a node with no message afte
 });
 
 test('needsLand hands the placed line to PW.landAt', () => {
-  const src = withParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'));
-  const body = src.slice(src.indexOf('  function needsLand(w, nav) {'), src.indexOf('  function chanPrefs() {'));
-  assert.ok(body.includes("if (typeof PW !== 'undefined') PW?.landAt?.(w.id, line);"));
+  // the real needsLand (chats-done.js) on a thread whose Needs you line sits 400px down
+  const done = readFileSync(new URL('../web/core/chats-done.js', import.meta.url), 'utf8');
+  const frames = [], landed = [], scrolled = [];
+  let top = 0;
+  const sc = { get scrollTop() { return top; }, scrollTo: o => { scrolled.push(o.top); top = o.top; } };
+  const line = { isConnected: true, closest: q => (q === '.ch-msgs' ? sc : null), getBoundingClientRect: () => ({ top: 500 - top }) };
+  const c = { readNav: 'n1', needsFor: 't1' }, w = { id: 'w1', thread: 't1' };
+  const ctx = { ch: () => c, elOf: () => ({ querySelector: q => (q === '.ch-msgs [data-needs-line]' ? line : null) }), scrollBox: nb => nb,
+    threadViewportTop: (nb, base) => base, requestAnimationFrame: f => frames.push(f), PW: { landAt: (id, l) => landed.push([id, l === line]) } };
+  sc.getBoundingClientRect = () => ({ top: 100 });
+  vm.createContext(ctx);
+  vm.runInContext(`${done.slice(done.indexOf('  function needsLand(w, nav) {'), done.indexOf('  /* Jump to Needs you'))}\nthis.needsLand = needsLand;`, ctx);
+  ctx.needsLand(w, 'n1');
+  while (frames.length) frames.shift()();
+  assert.deepEqual(scrolled, [392], 'the line lands 8px under the thread top');
+  assert.deepEqual(landed[0], ['w1', true], 'and becomes the reading place, so the opening restore keeps it');
+  ctx.needsLand(w, 'n1'); assert.equal(frames.length, 0, 'one landing per open');
 });

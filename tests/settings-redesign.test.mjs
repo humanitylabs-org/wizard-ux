@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import { settingsWorld } from './fixtures/r5A-settings.mjs';
+import { cascade } from './fixtures/mini-css.mjs';
 import { withSettingsParts } from './fixtures/settings-parts.mjs'; // settings.js parts moved out verbatim (issue 1665)
 const source = withSettingsParts(fs.readFileSync(new URL('../web/core/settings.js', import.meta.url), 'utf8'));
 const tick = () => new Promise(resolve => setImmediate(resolve));
@@ -180,13 +182,24 @@ test('About has no separate Check for updates; rows carry no icon tiles anywhere
 });
 test('settings.css: rows are hairline lines, not boxes', () => {
   const css = fs.readFileSync(new URL('../web/core/settings.css', import.meta.url), 'utf8');
-  const rule = sel => (css.match(new RegExp(`(?:^|\\n)${sel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} \\{([^}]*)\\}`)) || [])[1] || '';
-  for (const sel of ['.st-row', '.st-category', '.ub-row', '.cx-row', '.sc-row']) {
-    const r = rule(sel);
-    assert.ok(r, sel);
-    assert.match(r, /border-bottom: 1px solid var\(--wz-border\)/, sel);
-    assert.doesNotMatch(r, /background: var\(--wz-surface\)|border-radius: 1[2-9]px/, sel);
+  // The page list and Chats rows the real Settings draws, plus the row markup the updates list, Cancelled runs and
+  // Schedules renderers emit (settings.js ub-row, cancelled.js cx-row, schedules.js sc-row), inside a mounted Settings root.
+  const w = settingsWorld({ shell: 'phone' });
+  const rows = [...w.root.querySelectorAll('.st-category')];
+  w.open('chats'); rows.push(...w.root.querySelectorAll('.st-row'));
+  const body = w.root.querySelector('.st-inner') || w.root;
+  const host = w.doc.createElement('div'); body.appendChild(host);
+  host.innerHTML = '<div class="ub-row ok"></div><div class="cx-row"></div><article class="sc-row"></article>';
+  rows.push(...host.children);
+  const kinds = new Set();
+  for (const el of rows) {
+    const kind = el.className.split(' ')[0]; kinds.add(kind);
+    const won = cascade(el, css);
+    assert.equal(won['border-bottom']?.value, '1px solid var(--wz-border)', kind + ': a hairline under the row');
+    assert.notEqual(won.background?.value, 'var(--wz-surface)', kind + ': no card surface');
+    assert.doesNotMatch(won['border-radius']?.value || '', /^1[2-9]px/, kind + ': no card corners');
   }
+  assert.deepEqual([...kinds].sort(), ['cx-row', 'sc-row', 'st-category', 'st-row', 'ub-row']);
   assert.doesNotMatch(css, /\.st-ic \{|\.st-hero \{|\.st-suggestion \{/);
 });
 test('New skin is last; nested Back returns to Look on both shells, never leaves the app', async () => {
@@ -242,9 +255,23 @@ test('own skin Edit opens only registered Files IDs or shows the Wizard hint', (
   assert.equal(opened.length,2); assert.match(h.notices.at(-1)[1],/change my Quiet skin so/);
 });
 test('arrows reach every tile without silently wearing or opening it', () => {
-  assert.match(source,/\[data-ownskin\], \[data-newskin\]/);
-  assert.match(source,/buttons\[n\]\.focus\(\);/);
-  assert.doesNotMatch(source,/buttons\[n\]\.click/);
+  // The real Settings key handler (settings-view.js) on a skin picker row: arrows move focus over every tile kind, never click.
+  const w = settingsWorld({ shell: 'phone' });
+  const grid = w.doc.createElement('div'); grid.setAttribute('role', 'group'); w.root.appendChild(grid);
+  grid.innerHTML = '<button data-skinfamily="mizel">A</button><button data-skinpick="b">B</button><button data-ownskin="c">C</button><button data-newskin>+ New skin</button>';
+  const tiles = [...grid.querySelectorAll('button')], clicks = [];
+  for (const t of tiles) t.addEventListener('click', () => clicks.push(t.textContent));
+  const press = (el, key) => { const e = { type: 'keydown', key, bubbles: true }; el.dispatchEvent(e); return e; };
+  let at = tiles[0];
+  for (const want of [1, 2, 3, 0]) {
+    const e = press(at, 'ArrowRight');
+    assert.equal(w.doc.activeElement, tiles[want], 'ArrowRight reaches tile ' + want); assert.equal(e.defaultPrevented, true);
+    at = tiles[want];
+  }
+  press(tiles[0], 'ArrowLeft'); assert.equal(w.doc.activeElement, tiles[3], 'ArrowLeft wraps to New skin');
+  press(tiles[3], 'Home'); assert.equal(w.doc.activeElement, tiles[0]);
+  press(tiles[0], 'End'); assert.equal(w.doc.activeElement, tiles[3]);
+  assert.deepEqual(clicks, [], 'moving never wears or opens a tile');
 });
 test('Resources: the page shows the Home resource bars from the shared renderer; the index row stays quiet unless something is low', () => {
   const h = harness();

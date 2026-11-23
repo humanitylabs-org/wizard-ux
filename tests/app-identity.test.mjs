@@ -32,7 +32,17 @@ const MR = { name: 'Morning Report', start_url: '/morning-report/', scope: '/mor
   { src: '/wizard-os-home/install-icons/morning-report-180.png', sizes: '180x180' }] };
 
 test('app-client loads the shared identity script for top-level documents only', () => {
-  assert.match(client, /parent === window && !window\.WizardAppIdentity[\s\S]{0,200}\/wizard-os-home\/core\/app-identity\.js/);
+  // the real line of app-client.js, run as the top-level page, as a framed app and with the identity already loaded
+  const line = client.split('\n').find(l => l.includes('/wizard-os-home/core/app-identity.js') && l.includes('appendChild'));
+  const load = ({ framed = false, loaded = false } = {}) => {
+    const added = [], window = loaded ? { WizardAppIdentity: {} } : {};
+    const ctx = { window, parent: framed ? {} : window, document: { head: { appendChild: n => added.push(n) }, createElement: tag => ({ tag }) } };
+    vm.runInNewContext(line, ctx);
+    return added.map(n => `${n.tag} ${n.src}`);
+  };
+  assert.deepEqual(load(), ['script /wizard-os-home/core/app-identity.js'], 'a top-level app page loads it');
+  assert.deepEqual(load({ framed: true }), [], 'an app framed by the shell does not');
+  assert.deepEqual(load({ loaded: true }), [], 'never twice');
 });
 
 test('direct app page gets registry manifest, 180px touch icon and app-name title', async () => {

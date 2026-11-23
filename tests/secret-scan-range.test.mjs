@@ -4,29 +4,40 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync, rmSync, existsSync, mkdirSync, copyFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { createHash } from 'node:crypto';
 import { join } from 'node:path';
+import { readWorkflow, jobsFor, step, runStep } from './fixtures/w1-workflow.mjs';
 
 const root = new URL('..', import.meta.url).pathname;
 const script = join(root, 'tools/secret-scan-range.sh');
-const workflow = readFileSync(join(root, '.github/workflows/secret-scan.yml'), 'utf8');
+const workflow = readWorkflow(join(root, '.github/workflows/secret-scan.yml'));
 
-test('the required gitleaks job scans a computed range, never every fetched branch', () => {
-  const job = workflow.slice(workflow.indexOf('\n  gitleaks:'), workflow.indexOf('\n  history-audit:'));
-  assert.ok(job.length > 20, 'gitleaks job is present and the full-history scan is a separate job');
-  assert.match(job, /if: github\.event_name == 'push' \|\| github\.event_name == 'pull_request'/);
-  assert.match(job, /RANGE=\$\(sh tools\/secret-scan-range\.sh\)/);
-  const scans = job.split('\n').filter(l => /\.\/gitleaks git /.test(l));
-  assert.equal(scans.length, 1);
-  assert.match(scans[0], /--log-opts="\$RANGE"/, 'every gitleaks run in the required job is limited to the range');
-  // The full-history scan still exists, off the PR path (schedule / manual only).
-  const audit = workflow.slice(workflow.indexOf('\n  history-audit:'));
-  assert.match(audit, /if: github\.event_name == 'schedule' \|\| github\.event_name == 'workflow_dispatch'/);
-  assert.match(audit, /--log-opts="--all"/);
-  // The download is checked before it runs.
-  assert.match(workflow, /GITLEAKS_SHA256: [0-9a-f]{64}/);
-  assert.equal((workflow.match(/sha256sum -c -/g) || []).length, 2);
+test('the required gitleaks job runs on pushes and PRs; the full-history audit only on schedule or by hand', () => {
+  for (const event_name of ['push', 'pull_request']) assert.deepEqual(jobsFor(workflow, { github: { event_name } }), ['gitleaks'], event_name);
+  for (const event_name of ['schedule', 'workflow_dispatch']) assert.deepEqual(jobsFor(workflow, { github: { event_name } }), ['history-audit'], event_name);
+});
+
+test('the install step refuses a download whose checksum does not match, before unpacking it', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'scan-install-'));
+  try {
+    writeFileSync(join(dir, 'curl'), '#!/bin/sh\nwhile [ "$1" != "-o" ]; do shift; done\nprintf tampered > "$2"\n', { mode: 0o755 });
+    writeFileSync(join(dir, 'tar'), `#!/bin/sh\ntouch "${dir}/unpacked"\n`, { mode: 0o755 });
+    for (const name of ['gitleaks', 'history-audit']) {
+      const install = step(workflow.jobs[name], 'install gitleaks');
+      const out = runStep(workflow, install, { cwd: dir, env: { PATH: `${dir}:${process.env.PATH}` } });
+      assert.notEqual(out.status, 0, `${name}: a bad download fails the step`);
+      assert.ok(!existsSync(join(dir, 'unpacked')), `${name}: nothing is unpacked`);
+    }
+    // control: the same download checked against its own digest is unpacked, so the pinned GITLEAKS_SHA256 is what decides
+    const digest = createHash('sha256').update('tampered').digest('hex');
+    for (const name of ['gitleaks', 'history-audit']) {
+      rmSync(join(dir, 'unpacked'), { force: true });
+      const out = runStep(workflow, step(workflow.jobs[name], 'install gitleaks'), { cwd: dir, env: { PATH: `${dir}:${process.env.PATH}`, GITLEAKS_SHA256: digest } });
+      assert.ok(existsSync(join(dir, 'unpacked')), `${name}: a download matching GITLEAKS_SHA256 is unpacked (${out.stderr.trim().split('\n').pop()})`);
+    }
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
 function repo() {
@@ -58,6 +69,35 @@ test('pull_request: exactly the PR\'s own commits, not another branch\'s', () =>
     const got = r.commits(out.stdout.trim());
     assert.deepEqual(new Set(got), new Set([r.p1, r.p2]));
     assert.ok(!got.includes(r.leak) && !got.includes(r.m1));
+  } finally { r.done(); }
+});
+
+test('the required job hands gitleaks only the computed range; the audit scans every branch', () => {
+  const r = repo();
+  try {
+    r.git('remote', 'add', 'origin', r.dir);
+    r.git('config', 'user.name', 't'); r.git('config', 'user.email', 't@t');
+    mkdirSync(join(r.dir, 'tools')); copyFileSync(script, join(r.dir, 'tools/secret-scan-range.sh'));
+    // the fake gitleaks prints the arguments it was given (and leaves a mark that it ran)
+    writeFileSync(join(r.dir, 'gitleaks'), '#!/bin/sh\nprintf "%s\\n" "$@" | tee gitleaks.args | sed "s/^/ARG /"\n', { mode: 0o755 });
+    const argsOf = run => run.stdout.split('\n').filter(l => l.startsWith('ARG ')).map(l => l.slice(4));
+    const env = { GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' };
+    const scan = step(workflow.jobs.gitleaks, "gitleaks (this change's commits)");
+    const github = { event_name: 'pull_request', ref: 'refs/pull/1/merge', event: { pull_request: { base: { sha: r.m2 }, head: { sha: r.p2 } }, repository: { default_branch: 'main' } } };
+    let out = runStep(workflow, scan, { ctx: { github }, cwd: r.dir, env });
+    assert.equal(out.status, 0, out.stderr);
+    const opts = argsOf(out).filter(a => a.startsWith('--log-opts='));
+    assert.equal(opts.length, 1);
+    assert.deepEqual(new Set(r.commits(opts[0].slice('--log-opts='.length))), new Set([r.p1, r.p2]), 'only the PR\'s own commits');
+    // a deleted ref scans nothing and passes
+    rmSync(join(r.dir, 'gitleaks.args'));
+    out = runStep(workflow, scan, { ctx: { github: { event_name: 'push', ref: 'refs/heads/my-pr', event: { after: '0'.repeat(40), repository: { default_branch: 'main' } } } }, cwd: r.dir, env });
+    assert.equal(out.status, 0, out.stderr);
+    assert.ok(!existsSync(join(r.dir, 'gitleaks.args')), 'gitleaks never ran');
+    const audit = step(workflow.jobs['history-audit'], 'gitleaks (every branch, full history)');
+    out = runStep(workflow, audit, { cwd: r.dir, env });
+    assert.equal(out.status, 0, out.stderr);
+    assert.ok(argsOf(out).includes('--log-opts=--all'));
   } finally { r.done(); }
 });
 

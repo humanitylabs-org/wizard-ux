@@ -8,6 +8,10 @@ import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { withShellParts } from './fixtures/shell-parts.mjs';
 import { withWebParts } from './fixtures/web-parts.mjs';
+import { keysGuide } from './fixtures/keys-guide-harness.mjs';
+import { createDocument } from './fixtures/mini-dom.mjs';
+import { runRecording } from './fixtures/source-slice.mjs';
+import { partScope, runPartRecording } from './fixtures/r5A-parts.mjs';
 
 const read = p => withShellParts(withWebParts(readFileSync(new URL('../' + p, import.meta.url), 'utf8')));
 const client = read('web/core/app-client.js');
@@ -133,37 +137,71 @@ test('framed: the SDK never presses (the shell does, no double fire) but still l
   p.press('k', { altKey: false }); assert.equal(b.clicks, 0);
   assert.equal(typeof p.WizardApp.keys.list, 'function'); assert.equal(p.WizardApp.keys.list()[0].el, b);
   assert.ok(Object.isFrozen(p.WizardApp.keys));
-  assert.match(client, /if \(!framed\) addEventListener\('keydown', e => \{\n\s+const hit = keyMatch\(e\);/, 'the SDK\'s own ⌥ handler is standalone only');
+  // (the SDK's own ⌥ handler is standalone only: the framed presses above click nothing, the standalone tests do)
   assert.doesNotMatch(client, /keyDone|Arrow\(Up\|Down/, 'no plain-key click left');
 });
 
 test('the reserved list is one exported constant, and the SDK\'s letters agree with it', async () => {
-  const m = await import('../web/layouts/ai-apps/desktop.js').catch(() => null);
-  const src = read('web/layouts/ai-apps/desktop.js');
+  const m = await import('../web/layouts/ai-apps/desktop.js');
   const want = ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7', 'Digit8', 'Digit9', 'Digit0', 'BracketLeft', 'BracketRight', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyH', 'Backquote', 'KeyW', 'KeyS', 'Space', 'KeyD', 'KeyV', 'KeyC'];
-  const lit = /export const RESERVED_KEYS = Object\.freeze\((\[[^\]]*\])\);/.exec(src); assert.ok(lit, 'exported once');
-  assert.deepEqual(JSON.parse(lit[1].replace(/'/g, '"')), want);
+  assert.ok(Object.isFrozen(m.RESERVED_KEYS), 'one frozen exported constant');
+  // the SDK (standalone, run) offers every letter key except the shell's reserved ones
   const letters = want.filter(c => /^Key/.test(c)).map(c => c.slice(3).toLowerCase()).sort().join('');
-  assert.equal(/const RESERVED_LETTERS = '([a-z]+)';/.exec(client)[1].split('').sort().join(''), letters);
-  if (m) {
+  const page = load(), az = [...'abcdefghijklmnopqrstuvwxyz'];
+  add(page, ...az.map(k => el('button', { 'data-wz-key': k })));
+  const offered = new Set([...page.WizardApp.keys.list()].map(k => k.key));
+  assert.equal(az.filter(k => !offered.has(k)).join(''), letters, 'the SDK\'s letters agree with RESERVED_KEYS');
+  {
     assert.deepEqual([...m.RESERVED_KEYS], want);
     assert.deepEqual(['KeyJ', 'Slash', 'Comma', 'Period', 'Semicolon', 'KeyK', 'KeyH', 'KeyW', 'Space', 'Digit1', 'BracketLeft', 'ArrowDown', 'Enter', 'Quote'].map(m.appKeyOf), ['j', '/', ',', '.', ';', 'k', '', '', '', '', '', '', '', '']);
     assert.deepEqual(['j', '/', 'h', 's', 'Space', 'J', 'ArrowUp'].map(m.isAppKey), [true, true, false, false, false, false, false]);
   }
 });
 
-test('the shell: keycaps on a frame\'s targets are offset by the frame and hit-tested in its own page, in Wizard\'s own keycap; ⌥ keys in a frame reach the shell', () => {
-  const desk = read('web/desktop/desktop.js');
-  assert.match(desk, /const ox = fr \? fr\.left \+ \(f\.clientLeft \|\| 0\) : 0, oy = fr \? fr\.top \+ \(f\.clientTop \|\| 0\) : 0;/);
-  assert.match(desk, /if \(f\) \{ const inner = n\.ownerDocument\.elementFromPoint\(hx - ox, hy - oy\);/);
-  assert.match(desk, /opt\?\.app \? `\$\{ALT\} \$\{label\}: \$\{opt\.name \|\| label\}`/, 'an app key reads with ⌥ too');
+test('the shell: keycaps on a frame\'s targets are offset by the frame and hit-tested in its own page, in Wizard\'s own keycap; ⌥ keys in a frame reach the shell', async () => {
+  // skin-host's keyChips hands the frame and the app key's name through (the real method).
+  const hostSrc = read('web/core/skin-host-host.js');
+  const line = hostSrc.split('\n').find(l => l.trim().startsWith('keyChips() {'));
+  const frame = { tagName: 'IFRAME' }, target = { id: 'kick' };
+  const kc = runRecording('this.o = {' + line + '};', { keyGuides: new Set([() => [{ el: target, key: 'K', frame, app: true, name: 'Kick off' }, { el: target, key: 'J', frame: { tagName: 'DIV' } }]]) }).o.keyChips();
+  assert.deepEqual(JSON.parse(JSON.stringify(kc.map(c => [c.key, c.frame === frame, c.app || false, c.name || '']))), [['K', true, true, 'Kick off'], ['J', false, false, '']]);
+  // The real keys guide: a chip on a node inside a same-origin app frame.
+  const draw = innerHit => {
+    const hits = [];
+    const g = keysGuide({ window: { getComputedStyle: () => ({ visibility: 'visible' }), WosSkinHost: { keysOnly: true, keyChips: () => [{ el: n, key: 'K', at: 'tl', frame: f, app: true, name: 'Kick off' }] } } });
+    const f = g.add('<iframe class="app-frame"></iframe>'); f.getBoundingClientRect = () => ({ left: 300, top: 200, right: 900, bottom: 700, width: 600, height: 500 }); f.clientLeft = 2; f.clientTop = 3;
+    const inner = createDocument(); inner.body.innerHTML = '<button data-wz-key="K">Kick</button><div class="cover"></div>'; const n = inner.querySelector('button');
+    n.getBoundingClientRect = () => ({ left: 10, top: 20, right: 50, bottom: 40, width: 40, height: 20 }); n.getClientRects = () => [1];
+    inner.elementFromPoint = (x, y) => { hits.push([x, y]); return innerHit === 'self' ? n : inner.querySelector('.cover'); };
+    g.document.elementFromPoint = () => f;
+    const chips = g.show(), el = g.document.querySelector('#keyHints .kh-chip');
+    return { chips, hits, at: el && [el.style.left, el.style.top] };
+  };
+  const ok = draw('self');
+  assert.equal(ok.chips.length, 1);
+  assert.equal(ok.chips[0].label, '⌥ K: Kick off', 'an app key reads with ⌥ too');
+  // offset by the frame (left 300 + border 2, top 200 + border 3); hit-tested back in the frame's own page
+  assert.deepEqual(ok.hits, [[30, 30]]);
+  assert.deepEqual(ok.at, ['303px', '216px'], 'the keycap sits on the target\'s top-left corner, where the frame shows it');
+  assert.deepEqual(draw('other').chips, [], 'covered inside its own page: no chip');
   assert.doesNotMatch(read('web/layouts/ai-apps/desktop.css'), /\.kh-chip\.kh-app \{/, 'no second (outlined) keycap style');
-  assert.match(desk, /(doc|frameWindow)\.addEventListener\('keydown', e => onKey\(e, true\), true\);\s*(doc|frameWindow)\.addEventListener\('keyup', e => \{ keyHints\.up\(e\);/);
-  const host = read('web/core/skin-host.js');
-  assert.match(host, /c\.frame\?\.tagName === 'IFRAME' \? \{ frame: c\.frame \} : \{\}/, 'the frame passes through keyChips');
-  assert.match(host, /c\.app === true \? \{ app: true, name:/);
+  // ⌥ keys pressed inside a same-origin frame reach the shell's key handler (the real watchFrame).
+  const ctx = partScope();
+  const { out } = await runPartRecording('desktop/desktop-frames.js', 'desktopParts', 'frames', { desktopVars: { W: { w1: { id: 'w1', appId: 'x' } }, ws: [], cur: 0 }, APP: {}, fields: () => ({ bind() {} }) }, ctx);
+  const keys = [], ups = [], on = (store) => ({ addEventListener: (t, fn, cap) => { (store[t] ||= []).push([fn, cap]); } });
+  const winL = {}, docL = {}, frameL = {};
+  const frameDoc = { ...on(docL), URL: 'https://box.test/x/', defaultView: on(winL) };
+  const iframe = { ...on(frameL), contentDocument: frameDoc, contentWindow: {}, getAttribute: () => '/x/', hasAttribute: () => false };
+  out.bindLate({ onKey: (e, fromFrame) => keys.push([e.code, fromFrame]), keyHints: { up: e => ups.push(e.code), hide() {} }, LINKS: null, pal: { hidden: true } });
+  const el = ctx.document.createElement('div'); el.dataset.win = 'w1';
+  out.watchFrame(iframe, el);
+  for (const [fn] of frameL.load) fn();
+  assert.equal(winL.keydown?.[0][1], true, 'on the frame window, capture phase');
+  winL.keydown[0][0]({ code: 'KeyK', altKey: true }); winL.keyup[0][0]({ code: 'KeyK' });
+  assert.deepEqual(keys, [['KeyK', true]]); assert.deepEqual(ups, ['KeyK']);
 });
 
+// static-rule: the App keys section of docs/ai-apps-view.md must agree with the contract app authors follow
 test('docs: the App keys section app authors follow', () => {
   const doc = read('docs/ai-apps-view.md');
   const sec = doc.slice(doc.indexOf('## App keys'), doc.indexOf('## How it is built'));

@@ -7,10 +7,14 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
+import { createDocument } from './fixtures/mini-dom.mjs';
+import { rowSheet } from './fixtures/row-sheet-harness.mjs';
+import { block, expression, runRecording } from './fixtures/source-slice.mjs';
 
 const live = withLiveParts(readFileSync(new URL('../web/live.js', import.meta.url), 'utf8'));
 const chats = withParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'));
 const running = readFileSync(new URL('../web/core/chats-running.js', import.meta.url), 'utf8'); // the agent inbox parts (issue 1665)
+const bind = readFileSync(new URL('../web/core/chats-bind.js', import.meta.url), 'utf8');
 const clone = v => JSON.parse(JSON.stringify(v));
 const slice = (src, a, b) => { const i = src.indexOf(a), j = src.indexOf(b, i); assert.ok(i > 0 && j > i, `${a} is in the file`); return src.slice(i, j); };
 
@@ -159,11 +163,36 @@ test('the box\'s stay list is read with the running records and cleared on a 404
 });
 
 test('the buttons are wired: the Running view row, the header, the row menu and the click handler', () => {
-  assert.match(running, /typeof inboxListed === 'function' && !inboxListed\(x\.thread\) \? `<button type="button" class="ch-inbox-open" data-chinboxopen=/);
-  assert.ok(chats.includes("${chip}${incognitoAction}${typeof inboxHeadHtml === 'function' && s && !isNew ? inboxHeadHtml(w, s) : ''}"));
-  assert.match(slice(chats, 'function openRowSheet', 'const emojiCategoryHtml'), /inboxCanSend\(wid, s\) \? `<button type="button" data-rsinbox>\$\{INBOX_SVG\}Send to inbox<\/button>`/);
-  assert.match(chats, /closest\('\[data-chinboxopen\]'\); if \(io\) \{ inboxMove\('open'/);
-  assert.match(chats, /closest\('\[data-rsinbox\]'\) && rowSheet\?\.sid\) \{[^\n]*inboxMove\('send', sid/);
+  const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  // the Running view (real runningBody): Open shows on a row whose thread is not in the chat list yet
+  const recs = [{ id: 'inbox_a', thread: 'wizard_a', title: 'Lisbon flights', state: 'running', agent: 'hermes' }, { id: 'inbox_b', thread: 'wizard_b', title: 'Listed', state: 'running', agent: 'hermes' }];
+  const view = runRecording(block(running, '  function runningBody() {') + '\nglobalThis.body = runningBody;',
+    { LIVE: { agentInbox: { state: () => ({ ok: true }) } }, runningRecs: () => recs, inboxListed: t => t === 'wizard_b', esc, clip: (t, n) => String(t).slice(0, n), ago: () => '1 h', runningFor: () => '1 h', Date });
+  const doc = createDocument(); doc.body.innerHTML = view.body();
+  const opens = doc.querySelectorAll('[data-chinboxopen]');
+  assert.deepEqual(opens.map(b => b.getAttribute('data-chinboxopen')), ['wizard_a'], 'Open only on the unlisted thread');
+  assert.ok(opens[0].classList.contains('ch-inbox-open'));
+  // the thread header asks inboxHeadHtml for a thread that exists, never for a New chat
+  const head = expression(chats, "${typeof inboxHeadHtml === 'function' && s && !isNew ? inboxHeadHtml(w, s) : ''}");
+  const headCtx = runRecording(`globalThis.head = () => \`${head}\`;`, { inboxHeadHtml: (w, s) => `<i data-head="${s.id}"></i>`, w: {}, s: { id: 'wizard_x' }, isNew: false });
+  assert.equal(headCtx.head(), '<i data-head="wizard_x"></i>');
+  headCtx.isNew = true; assert.equal(headCtx.head(), '', 'no header button on a New chat');
+  headCtx.isNew = false; headCtx.s = null; assert.equal(headCtx.head(), '');
+  // the row menu (real openRowSheet) offers Send to inbox where the rules allow it
+  const sheet = rowSheet();
+  sheet.ctx.inboxCanSend = () => true; sheet.open('t1');
+  assert.ok(sheet.buttons().some(b => /data-rsinbox/.test(b.attrs) && b.label === 'Send to inbox'));
+  sheet.ctx.inboxCanSend = () => false; sheet.open('t1');
+  assert.ok(!sheet.buttons().some(b => /data-rsinbox/.test(b.attrs)));
+  // the click handler (real chats-bind.js lines): Open moves the tapped thread, Send moves the row-menu thread
+  const line = marker => bind.split('\n').find(l => l.includes(marker));
+  const tap = (code, el, extra = {}) => { const ctx = runRecording(`globalThis.go = e => { ${code}\n };`, { chatVars: { rowSheet: null }, ...extra }); const r = ctx.go({ target: { closest: sel => (sel === el.sel ? el : null) } }); return { r, calls: ctx.calls.filter(c => c[0] === 'inboxMove' || c[0] === 'closeRowSheet') }; };
+  const open = tap(line("closest('[data-chinboxopen]')"), { sel: '[data-chinboxopen]', dataset: { chinboxopen: 'wizard_a', title: 'Lisbon flights' } });
+  assert.equal(open.r, true);
+  assert.deepEqual(clone(open.calls), [['inboxMove', 'open', 'wizard_a', { title: 'Lisbon flights' }]]);
+  const send = tap(line("closest('[data-rsinbox]')"), { sel: '[data-rsinbox]' }, { chatVars: { rowSheet: { sid: 'wizard_v' } }, LIVE: { session: () => ({ title: 'Trip', firstRequest: '  ', request: 'Plan the trip' }) } });
+  assert.equal(send.r, true);
+  assert.deepEqual(clone(send.calls), [['closeRowSheet'], ['inboxMove', 'send', 'wizard_v', { title: 'Trip', utterance: 'Plan the trip' }]]);
   const css = readFileSync(new URL('../web/tweaks/wizard/agent-inbox/tweak.css', import.meta.url), 'utf8');
   for (const rule of css.replace(/\/\*[\s\S]*?\*\//g, '').split('}').filter(r => r.includes('ch-inbox'))) assert.match(rule.trim(), /^(?:@media[^{]*\{\s*)?html\[data-tweaks~="wizard\/agent-inbox"\]/, 'every rule is scoped to the switch');
 });

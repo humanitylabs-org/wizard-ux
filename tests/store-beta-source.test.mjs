@@ -4,7 +4,7 @@ import http from 'node:http';
 import {createBetaSource} from '../tools/store-beta-source.mjs';
 import {withPrivateCatalog} from '../tools/store-private-catalog.mjs';
 import {createStoreDataRoutes, PREFIX} from '../tools/store-data-origin.mjs';
-import {selectionSource} from '../web/store/store-install.js';
+import {selectionSource as installSourceFor} from '../web/store/store-install.js';
 import {sourceLabel} from '../web/store/store-source.js';
 const TOKEN='gho_TESTONLY'+'x'.repeat(24), SHA_A='a'.repeat(40), SHA_B='b'.repeat(40), SHA_C='c'.repeat(40);
 const manifest=(id,extra='')=>`---\nid: ${id}\nname: ${id.toUpperCase()}\nsummary: A friend's app.\ntype: view\nversion: 1.0.0\n${extra}config:\n  password: never-project\n---\n# ${id}`;
@@ -100,7 +100,7 @@ test('the token appears in no adapter response, log line or error text',async()=
   } finally { Object.assign(console,orig); s.close(); }
 });
 test('a Beta row installs through the existing link selection; an installed Beta app stays Beta',()=>{
-  assert.equal(selectionSource('beta'),'link'); for(const s of ['standard','wizard-alpha','link','owner-private']) assert.equal(selectionSource(s),s);
+  assert.equal(installSourceFor('beta'),'link'); for(const s of ['standard','wizard-alpha','link','owner-private']) assert.equal(installSourceFor(s),s);
   const app={source:'beta',repo:'friend/secret-app',private:true};
   assert.equal(sourceLabel(app,{source:'link',repo:'friend/secret-app'}).kind,'beta');
   assert.equal(sourceLabel(app,{source:'link',repo:'other/repo'}).kind,'link');

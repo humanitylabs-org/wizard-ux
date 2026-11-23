@@ -11,6 +11,8 @@ import { withAppParts } from './fixtures/app-parts.mjs';
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
 import { withDesktopParts } from './fixtures/desktop-parts.mjs';
+import { runRecording } from './fixtures/source-slice.mjs';
+import { createDocument } from './fixtures/mini-dom.mjs';
 const read = p => fs.readFileSync(new URL('../' + p, import.meta.url), 'utf8');
 const live = withLiveParts(read('web/live.js')), chats = withParts(read('web/core/chats.js')), nav = read('web/core/workspace-navigation.js');
 const block = (text, a, b) => { const i = text.indexOf(a); assert.ok(i >= 0, a); const j = text.indexOf(b, i); assert.ok(j > i, b); return text.slice(i, j); };
@@ -70,11 +72,28 @@ test('issue 1504: notifications set to Chats still add their unread items on top
   assert.equal(c.badge(c.LIVE), 8);
 });
 
+// The shells' own Home, orb and bar code over this harness: WizCore is what chats.js exported, workspace-navigation's count.
+function shellCtx(h, extra = {}) {
+  const C = { ...h.c.WizCore, workspaceNav: { chatsCount: h.c.badge, readyWord: h.c.word, refreshChats: (...a) => refreshed.push(a), slot: i => i + 1 } }, refreshed = [];
+  return { refreshed, scope: { LIVE: h.c.LIVE, C, window: { WizCore: C, WizConfig: { hm: () => '9:00', dayParts: () => ({ dow: 1, d: 2, m: 3 }), dateLabel: () => 'Monday' } },
+    DOWL: ['Sun', 'Mon'], MON: ['Jan', 'Feb', 'Mar'], esc: String, emoOf: () => '', ago: () => '1h', OUTBOX: null, APPS: [], APP: { wizard: { id: 'wizard' } }, CHATS_APP: { id: 'chats' },
+    unsentCard: () => '', sideCard: () => '', live: () => h.c.LIVE.groups(), ico: () => '', MOD: '⌥', ...extra } };
+}
+const appSrc = withAppParts(read('web/app.js')), deskSrc = withDesktopParts(read('web/desktop/desktop.js'));
 test('issue 1504: the shells read the one count (orb badge, desk marks, phone Home card, desktop Home line)', () => {
-  assert.match(withAppParts(read('web/app.js')), /const ready = window\.WizCore\.workspaceNav\.chatsCount\(LIVE\);/);
-  assert.match(withAppParts(read('web/app.js')), /workspaceNav\.refreshChats\(LIVE, CHATS_APP\.id\)/);
-  assert.match(withDesktopParts(read('web/desktop/desktop.js')), /C\.workspaceNav\.refreshChats\(LIVE, /);
-  assert.match(chats, /window\.WizCore\.activityReady = activityReady;/);
+  const h = harness(robert());
+  const phone = shellCtx(h), ph = runRecording(block(appSrc, '  function renderHome() {', '  setInterval(() =>') + '\nglobalThis.home = renderHome;', phone.scope);
+  const card = createDocument(); card.body.innerHTML = ph.home();
+  assert.equal(card.querySelector('[data-act="ready"]').getAttribute('aria-label'), 'Ready, 6 ready', 'phone Home Ready card = Activity Ready');
+  const moons = runRecording(block(appSrc, '  function renderMoons() {', '  function paintOrbBadge()') + '\nglobalThis.moons = renderMoons;', { ...phone.scope, $: () => ({ offsetWidth: 44 }), paintOrbBadge: () => {} });
+  moons.moons();
+  assert.deepEqual(phone.refreshed.map(([l, id]) => [l === h.c.LIVE, id]), [[true, 'chats']], 'the orb badge and desk marks repaint from the same LIVE');
+  const desk = shellCtx(h), d = runRecording(block(deskSrc, '  function homeHtml(i) {', '  stage.addEventListener(') + '\nglobalThis.home = homeHtml;', desk.scope);
+  const line = createDocument(); line.body.innerHTML = d.home(0);
+  assert.match(line.querySelector('.home-line').textContent, /, 6 ready, /, 'desktop Home line = Activity Ready');
+  const bar = runRecording(block(deskSrc, '  function paintBar() {', '  function tickClock()') + '\nglobalThis.bar = paintBar;', { ...desk.scope, homeOpen: false, $: () => ({ setAttribute() {} }) });
+  try { bar.bar(); } catch (_) { /* the rest of the bar needs the shell's DOM */ }
+  assert.deepEqual(desk.refreshed.map(([l, id]) => [l === h.c.LIVE, id]), [[true, 'wizard']], 'the desktop bar repaints the badges from LIVE');
 });
 
 // wizard-ux issue 1517: desktop Home said "0 need you" and its Needs you · Unread card listed only the 2 unread threads,
@@ -92,12 +111,20 @@ test('issue 1517: Home\'s need-you number and card follow Activity\'s amber rows
 });
 
 test('issue 1517: desktop Home line, its card, the status bar and the phone Ready card read activityHome', () => {
-  const desk = withDesktopParts(read('web/desktop/desktop.js')), app = withAppParts(read('web/app.js'));
-  const home = block(desk, '  function homeHtml(i) {', '  stage.addEventListener(');
-  assert.match(home, /C\.activityHome\?\.\(LIVE\)/);
-  assert.match(home, /\$\{L\.needs\.length\} need/);
-  assert.match(home, /rows\(L\.needs\.concat\(L\.ready\)\)/);
-  assert.match(block(desk, '  function paintBar() {', '  function tickClock()'), /C\.activityHome\?\.\(LIVE\)/);
-  assert.match(block(app, '  function renderHome() {', '  setInterval(() =>'), /WizCore\.activityHome\?\.\(LIVE\)/);
-  assert.match(chats, /window\.WizCore\.activityHome = activityHome;/);
+  const h = harness(robert());
+  h.open('y4');   // an amber thread already opened still needs you
+  const d = runRecording(block(deskSrc, '  function homeHtml(i) {', '  stage.addEventListener(') + '\nglobalThis.home = homeHtml;', shellCtx(h).scope);
+  const doc = createDocument(); doc.body.innerHTML = d.home(0);
+  assert.match(doc.querySelector('.home-line b').textContent, /^4 need you$/, 'the amber Activity rows, opened or not');
+  assert.deepEqual(doc.querySelector('.home-card').querySelectorAll('[data-thread]').map(b => b.dataset.thread).sort(), ['g1', 'g2', 'y1', 'y2', 'y3', 'y4'], 'Needs you · Unread = Activity Ready');
+  const ph = runRecording(block(appSrc, '  function renderHome() {', '  setInterval(() =>') + '\nglobalThis.home = renderHome;', shellCtx(h).scope);
+  const card = createDocument(); card.body.innerHTML = ph.home();
+  assert.match(card.querySelector('[data-act="ready"]').getAttribute('style'), /--c:var\(--amber\)/, 'phone Ready card is amber while Activity has needs');
+  for (const id of ['y1', 'y2', 'y3', 'y4']) h.markDone(id);
+  card.body.innerHTML = ph.home();
+  assert.match(card.querySelector('[data-act="ready"]').getAttribute('style'), /--c:var\(--green\)/, 'and green once they are done');
+  const bar = shellCtx(h), b = runRecording(block(deskSrc, '  function paintBar() {', '  function tickClock()') + '\nglobalThis.bar = paintBar;', { ...bar.scope, homeOpen: false, $: () => ({ setAttribute() {} }) });
+  let used = 0; const real = bar.scope.C.activityHome; bar.scope.C.activityHome = l => { used++; return real(l); };
+  try { b.bar(); } catch (_) { /* the rest of the bar needs the shell's DOM */ }
+  assert.equal(used, 1, 'the status bar asks activityHome');
 });

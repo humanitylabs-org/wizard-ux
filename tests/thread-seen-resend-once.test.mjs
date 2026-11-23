@@ -6,7 +6,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
-import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
+import { withLiveParts } from './fixtures/live-parts.mjs';
+import { modelContext } from './fixtures/chats-list-model.mjs'; // live.js parts moved out verbatim (issue 1665)
 const live = withLiveParts(readFileSync(new URL('../web/live.js', import.meta.url), 'utf8'));
 const cut = (a, b) => { const i = live.indexOf(a); assert.ok(i >= 0, a); const j = live.indexOf(b, i); assert.ok(j > i, b); return live.slice(i, j); };
 const seenBlock = cut('  /* ---- thread-seen', '  /* ---- network');
@@ -171,8 +172,31 @@ test('two devices that both hold a record the box drops each send it once', asyn
   assert.equal(box.puts.length, 2);
 });
 
-test('LIVE.refresh uses the once-per-version re-send', () => {
-  const refresh = cut('    async refresh() {', '    async refreshAgents(');
-  assert.match(refresh, /resendSeen\(this, merged, remote\);/);
-  assert.doesNotMatch(refresh, /some\(\(\[key,r\]\)=>r\.seenAt>/);
+// The whole live.js: LIVE.refresh against a box whose thread-seen store drops one record it is sent.
+test('LIVE.refresh uses the once-per-version re-send', async () => {
+  const storage = new Map(), puts = [];
+  let state = { initializedAt: 1, threads: {} };
+  const c = { console, AbortSignal, AbortController, URL, URLSearchParams, document: { documentElement: { dataset: {} }, readyState: 'loading', hidden: false, addEventListener() {} }, navigator: {},
+    localStorage: { getItem: k => storage.get(k) ?? null, setItem: (k, v) => storage.set(k, v), removeItem: k => storage.delete(k) },
+    setInterval() {}, setTimeout: () => 0, clearTimeout() {}, addEventListener() {}, dispatchEvent() {}, CustomEvent: class { constructor(t, o) { this.type = t; this.detail = o?.detail; } },
+    WizConfig: { dayStart: n => n - n % 864e5 }, location: { origin: 'https://box.test', search: '' },
+    fetch: async (url, init = {}) => {
+      let body = {};
+      if (String(url).startsWith('/wizard/thread-seen')) {
+        if (init.method === 'PUT') { const sent = JSON.parse(init.body); puts.push(sent); const { 'direct:gone': _, ...kept } = sent.threads; state = { ...sent, threads: kept }; }
+        body = { state: JSON.parse(JSON.stringify(state)) };
+      } else if (String(url).includes('/sessions')) body = { sessions: [] };
+      return { ok: true, status: 200, json: async () => body, text: async () => JSON.stringify(body), headers: { get: () => null } };
+    } };
+  c.window = c; modelContext(c);
+  vm.runInContext(live, c);
+  const L = c.WizLive, key = [...storage.keys()].find(k => k.startsWith('wizard.thread-seen.v1:')) || 'wizard.thread-seen.v1:wizard-account-local';
+  storage.set(key, JSON.stringify({ initializedAt: 1, threads: { 'direct:gone': rec(T) } }));
+  for (let i = 0; i < 6; i++) { await L.refresh(true); await settle(); await settle(); }
+  assert.equal(puts.length, 1, 'a record the box never keeps is sent once, not on every list read');
+  assert.ok(puts[0].threads['direct:gone']);
+  // A newer read of the same record is sent again, once.
+  const local = JSON.parse(storage.get(key)); local.threads['direct:gone'] = rec(T + 5000); storage.set(key, JSON.stringify(local)); L.seen = null;
+  for (let i = 0; i < 4; i++) { await L.refresh(true); await settle(); await settle(); }
+  assert.equal(puts.length, 2);
 });

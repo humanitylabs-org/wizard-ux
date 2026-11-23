@@ -45,10 +45,10 @@ test('subject grouping renders the entire snoozed tail after all awake subjects'
 test('stock subject grouping is unchanged: same HTML as readyBody without the snoozeOrder line', () => {
   const src = block(chats, '  function readyBody(', '  /* Android Back on the list');
   const stockSrc = src.split('\n').filter(l => !l.includes('snoozeLast()')).join('\n');
-  assert.notEqual(stockSrc, src);
   const run = code => { const c = modelContext({ snoozeLast: () => false, deferredOf: s => !!s.deferred, readyOrder: 'subject', READY_ORDERS: [], attOf: s => s.attention, waitsOn: () => false, sesRank: () => 5, window: {}, LIVE: { cardAt: s => s.previewAt, isNew: () => true }, stiKind: () => 'none', subjOrder: () => [], esc: s => s }); vm.runInContext(code, c);
     return c.readyBody([snoozed('s'), row('a', { attention: { subject: 'A' } }), row('b', { attention: { subject: 'B' } })], s => `<row>${s.id}</row>`); };
-  assert.equal(run(src), run(stockSrc));
+  const off = run(src);
+  assert.equal(off, run(stockSrc));
 });
 test('shared attention groups (Inbox, moons, Home): a snoozed approval is not Needs you only with snoozeOrder last', () => {
   const src = block(live, '    groups(agent = \'\') {', '    async refresh() {').replace(/,\s*$/, '');

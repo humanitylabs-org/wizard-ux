@@ -7,6 +7,8 @@ import vm from 'node:vm'
 import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 import { withShellParts } from './fixtures/shell-parts.mjs';
+import { pageAssets } from './fixtures/w1-pages.mjs';
+import { createDocument } from './fixtures/mini-dom.mjs';
 
 const read = p => withShellParts(readFileSync(new URL('../' + p, import.meta.url), 'utf8'))
 const store = () => { const m = new Map(); return { getItem: k => m.has(k) ? m.get(k) : null, setItem: (k, v) => m.set(k, String(v)), removeItem: k => m.delete(k) } }
@@ -23,15 +25,15 @@ function load(schedules = [], extra = {}) {
 }
 
 test('phone and desktop load the shared Boomerang and pin assets once each', () => {
-  for (const page of ['web/index.html', 'web/desktop.html']) {
-    const html = read(page)
-    for (const asset of ['core/scheduled-reminders.js', 'core/scheduled-reminders.css', 'core/chat-pins.js']) assert.equal(html.split(asset).length - 1, 1, `${page} ${asset}`)
+  for (const page of ['index.html', 'desktop.html']) {
+    const { all } = pageAssets(page)
+    for (const asset of ['core/scheduled-reminders.js', 'core/scheduled-reminders.css', 'core/chat-pins.js']) assert.equal(all.filter(a => a === asset).length, 1, `${page} ${asset}`)
   }
 })
 
 test('Boomerang reads and writes the one scheduler, never its own store or a run', async () => {
   const js = read('web/core/scheduled-reminders.js')
-  assert.match(js, /const API='\/wizard\/v1\/schedules'/)
+  // (the one scheduler's URL: the run below reads /wizard/v1/schedules)
   assert.doesNotMatch(js, /\/wizard\/v1\/boomerangs|\/v1\/runs['"`]|OUTBOX\.send/)
   const { calls } = load()
   await new Promise(r => setTimeout(r, 5))
@@ -130,18 +132,36 @@ test('wall-clock time in the chosen zone becomes the right instant', () => {
 
 test('Back closes the picker before anything under it, on phone and desktop', () => {
   const phone = read('web/app.js'), desktop = read('web/desktop/desktop.js')
-  for (const src of [phone,desktop]) assert.match(src, /WizEscapeBack\.installOwners\(/)
-  assert.match(read('web/core/escape-back.js'), /add\('reminder',[^\n]+WosBoomerang.back\(\)/)
+  for (const src of [phone, desktop]) assert.match(src, /WizEscapeBack\.installOwners\(/)
+  // The one owner catalog both shells install (core/escape-back.js) peels the picker first.
+  let open = true, backs = 0
+  const W = { WosBoomerang: { isOpen: () => open, back: () => { backs++; open = false; return 'boomerang' } } }
+  vm.runInNewContext(read('web/core/escape-back.js'), { window: W, document: { addEventListener() {} }, addEventListener() {}, setTimeout, clearTimeout, queueMicrotask, MutationObserver: class { observe() {} disconnect() {} } })
+  const stack = W.WizEscapeBack.create(); W.WizEscapeBack.installOwners(stack, { chats: () => ({}), links: () => null })
+  let roots = 0
+  assert.equal(stack.run({ fallback: () => (roots++, 'root') }), 'boomerang'); assert.equal(backs, 1); assert.equal(roots, 0)
+  assert.equal(stack.run({ fallback: () => (roots++, 'root') }), 'root')
 })
 
-test('one Snooze action replaces Defer and Boomerang, with no second Snooze under each reply', () => {
+test('one Snooze action replaces Defer and Boomerang, with no second Snooze under each reply', async () => {
   const js = withParts(read('web/core/chats.js'))
-  assert.match(js, /watching \? \['snooze', 'stop_watch', 'done'\] : \['snooze', 'done'\]/)
+  // The real thread actions (core/chats-threadacts.js): one Snooze beside Archive on a settled thread.
+  const window = { WizCore: {} }
+  vm.runInNewContext(read('web/core/chats-threadacts.js'), { window })
+  const T = window.WizCore.chatsParts.threadacts({ isWorking: () => false, LIVE: { busy: () => false, workGroups: () => ({ archive: [] }) }, WORKING_ST: new Set(['running']) })
+  const turns = [{ a: 'answer', media: [] }]
+  assert.deepEqual([...T.threadActions({ id: 's', status: 'completed' }, turns)], ['snooze', 'done'])
+  assert.deepEqual([...T.threadActions({ id: 's', status: 'completed', followUp: { active: true, count: 1 } }, turns)], ['snooze', 'stop_watch', 'done'])
+  for (const a of Object.values(T.ACT)) assert.doesNotMatch(a.label, /^(Defer|Boomerang)$|🪃/)
   assert.doesNotMatch(js, /label: '(Defer|Boomerang)'|🪃/)
-  assert.match(read('web/core/scheduled-reminders.js'), /live\(\)\.defer\(opts.sessionId\)/)
   assert.doesNotMatch(js, /data-mboom/)
+  // Someday in the picker is the existing Defer (WizLive.defer), with no schedule.
+  const deferred = []
+  const { B, calls } = load([], { WizLive: { defer: async id => (deferred.push(id), true), session: () => ({}) } })
+  await new Promise(r => setTimeout(r, 5)); const before = calls.length
+  await B.someday({ sessionId: 's1' })
+  assert.deepEqual(deferred, ['s1']); assert.equal(calls.filter(c => c.method === 'POST').length, 0); assert.equal(calls.length, before)
 })
-
 
 test('Snooze confirms the actual Bangkok time, independent of device timezone', () => {
   const { B } = load()
@@ -152,18 +172,67 @@ test('Snooze confirms the actual Bangkok time, independent of device timezone', 
   for (const [k, date] of [['2d', '2026-10-26'], ['3d', '2026-10-27'], ['5d', '2026-10-29'], ['1w', '2026-10-31']]) assert.deepEqual({ ...B._preset(k, 'Asia/Bangkok', Date.parse('2026-10-23T20:00:00Z')) }, { date, time: '09:00' }, k)
 })
 
-test('Snoozed preserves the deferred API and search aliases; Someday creates no schedule', () => {
-  const chats = withParts(read('web/core/chats.js')), picker = read('web/core/scheduled-reminders.js')
-  assert.match(chats, /label: 'Snoozed', syn: \['snooze', 'defer', 'deferred', 'later', 'boomerang'/)
-  assert.match(chats, /Snoozed · out of your list/)
-  assert.match(chats, /\['deferred', 'Snoozed'\], \['archive', 'Archive'\]/, 'Snoozed threads wait in their own section')
-  assert.match(picker, /void away\(opts\.sessionId\)/, 'a timed Snooze also takes the thread out of the list')
-  const live = withLiveParts(read('web/live.js'))
-  assert.match(live, /else if \(isDeferred\(s\)\) g\.deferred\.push\(s\);/, 'snoozed threads leave Ready')
-  for (const label of ['Later today', 'Tomorrow', 'In 2 days', 'In 3 days', 'In 5 days', 'Next week', 'Someday', 'Other date…', 'When should this come back?']) assert.ok(picker.includes(label), label)
+test('Snoozed preserves the deferred API and search aliases; Someday creates no schedule', async () => {
+  const picker = read('web/core/scheduled-reminders.js')
+  // Chats' own status filter and sections (core/chats-setup.js run): Snoozed answers the old words, and has its own
+  // section before Archive in both list layouts
+  const setup = chatsPart('setup', { deferredOf: s => !!s.deferred })
+  assert.equal(setup.STATUS.deferred.label, 'Snoozed')
+  for (const w of ['snooze', 'defer', 'deferred', 'later', 'boomerang']) assert.ok(setup.STATUS.deferred.syn.includes(w), w)
+  for (const list of [setup.SECTIONS_STATUS, setup.SECTIONS_DAY]) {
+    const keys = list.map(([k]) => k), at = keys.indexOf('deferred')
+    assert.deepEqual([...list[at]], ['deferred', 'Snoozed'], 'Snoozed threads wait in their own section')
+    assert.equal(keys[at + 1], 'archive')
+  }
+  // Someday's toast (core/chats-events.js run on wos:snooze-someday)
+  const toasts = [], ev = chatsPart('events', { toast: (...a) => toasts.push(a[1]), H: {}, holdList() {}, leaveFinishedThread() {} }, true)
+  ev.part.bindLate({ snoozeLast: () => false, renderChats() {} })
+  ev.fire('wos:snooze-someday', { session: 's1' })
+  assert.deepEqual(toasts, ['Snoozed · out of your list'])
+  // snoozed threads leave Ready: ready-working-helper.test.mjs runs live's groups with a snoozed row (deferred: 1)
+  // the real picker on a small DOM: its words, and a timed Snooze posts a "Snooze · " job and takes the thread out
+  const sheet = await pickerSheet()
+  for (const label of ['Later today', 'Tomorrow', 'In 2 days', 'In 3 days', 'In 5 days', 'Next week', 'Someday', 'Other date…', 'When should this come back?']) assert.ok(sheet.text.includes(label), label)
+  assert.doesNotMatch(sheet.text, /🪃|🪄/)
+  assert.equal(sheet.post.body.name, 'Snooze · Quote', 'new jobs use the current UI name')
+  assert.deepEqual(sheet.deferred, ['s1'], 'a timed Snooze also takes the thread out of the list')
   assert.doesNotMatch(picker, /🪃|🪄/)
-  assert.match(picker, /name:\('Snooze · '/, 'new jobs use the current UI name')
   const { B } = load()
   for (const name of ['Boomerang · Quote', 'Snooze · Quote']) assert.equal(B._fromJob({ id: 'a', kind: 'return', name, when: { once: '2099-01-01T00:00:00Z' } }).context, 'Quote')
   assert.doesNotMatch(picker.slice(picker.indexOf('async function someday'), picker.indexOf('function open(opts')), /method:'POST'/)
 })
+
+// One core/chats-<part>.js factory run with recorders for the Chats names it reads (fire: its window listeners).
+function chatsPart(name, deps, listen = false) {
+  const on = {}, window = { WizCore: {}, WosChat: {}, addEventListener: (t, fn) => { on[t] = fn } }
+  vm.runInNewContext(readFileSync(new URL(`../web/core/chats-${name}.js`, import.meta.url), 'utf8'), { window, localStorage: store() })
+  const any = new Proxy(deps, { get: (o, k) => (k in o ? o[k] : () => null), has: () => true })
+  const part = window.WizCore.chatsParts[name](any)
+  return listen ? { part, fire: (t, detail) => on[t]({ type: t, detail }) } : part
+}
+
+// core/scheduled-reminders.js's open() drawn on mini-dom (form fields by name, as a browser form has them), then a
+// timed Snooze submitted.
+async function pickerSheet() {
+  const doc = createDocument(), proto = Object.getPrototypeOf(doc.createElement('form')), deferred = []
+  const byName = (form, n) => { // (a select's value is its selected option, as in a browser)
+    const el = form.querySelector(`[name="${n}"]`)
+    if (el?.localName === 'select' && el._value == null) el.value = (el.querySelector('option[selected]') || el.querySelector('option'))?.getAttribute('value') ?? ''
+    return el
+  }
+  const field = n => function () { return this.localName === 'form' ? byName(this, n) : undefined }
+  const shim = { elements: { get() { return new Proxy({}, { get: (o, n) => byName(this, String(n)) }) } } }
+  for (const n of ['date', 'time', 'timezone', 'note']) shim[n] = { get: field(n) }
+  const had = Object.fromEntries(Object.keys(shim).map(k => [k, Object.getOwnPropertyDescriptor(proto, k)]))
+  for (const [k, d] of Object.entries(shim)) Object.defineProperty(proto, k, { ...d, configurable: true })
+  try {
+    const { B, calls } = load([], { document: doc, WizLive: { defer: async id => (deferred.push(id), true), session: id => ({ id }) } })
+    B.open({ sessionId: 's1', title: 'Quote' })
+    const form = doc.querySelector('form'), text = doc.querySelector('.boom-sheet').textContent
+    form.querySelector('[name="timezone"]').value = 'Asia/Bangkok'
+    form.querySelector('[name="date"]').value = '2099-01-02'; form.querySelector('[name="time"]').value = '09:00'
+    await form.onsubmit({ preventDefault() {} })
+    await new Promise(r => setTimeout(r, 5))
+    return { text, post: calls.find(c => c.method === 'POST'), deferred }
+  } finally { for (const [k, d] of Object.entries(had)) { if (d) Object.defineProperty(proto, k, d); else delete proto[k] } }
+}

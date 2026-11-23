@@ -51,6 +51,7 @@ if (process.env.OWNER_SKINS_PRINT) console.log(JSON.stringify(actual, null, 2));
 const want = JSON.parse(read('tests/fixtures/owner-skins.json')).hashes;
 
 for (const key of Object.keys(want)) {
+  // static-rule: an approval fingerprint over every core stylesheet's rules for James's skins and the base look, kept against tests/fixtures/owner-skins.json (hashes only James's approval may change)
   test(`James's ${key === 'base' ? 'base shell look (base.css palette and body font)' : key + ' skin'} is unchanged`, () => {
     assert.equal(actual[key], want[key],
       `${key} changed. Nebula, Grove, Tide, Ember and Signal belong to James: put this look in your own skin (a SKINS entry in web/core/skins.js + web/skins/<yours>/, see web/skins/README.md). Update tests/fixtures/owner-skins.json only with James's approval.`);

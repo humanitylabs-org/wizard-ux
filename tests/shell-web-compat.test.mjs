@@ -1,5 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { parsePage } from './fixtures/w1-pages.mjs';
+import { parseCsp } from './fixtures/w1-csp.mjs';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { withAppParts } from './fixtures/app-parts.mjs';
@@ -44,20 +46,74 @@ test('old companion without capability hides unsupported controls; full app reta
   assert.match(h.root.innerHTML, /data-st="side"/);
   h.view.dispatch(tap); assert.deepEqual(h.calls, ['full']);
 });
+// pageAudioFree / state / reloadCheck from app-capture.js, run with the shell recorder (WosDeviceRecording) as the only bridge.
+const capture = read('web/core/app-capture.js');
+const cut = (a, b) => { const i = capture.indexOf(a), j = capture.indexOf(b, i); assert.ok(i >= 0 && j > i, a); return capture.slice(i, j); };
+function capturePage(take) {
+  const W = { WosDeviceRecording: { device: () => ({ recActive: () => take }) } };
+  const ctx = { W, active: null, preparations: new Map(), memoryTakes: new Map(), attachedMeetingBridge: null, configuredNative: null,
+    ownedRows: new Map(), recoveryLive: new Set(), ownershipLoaded: true, recoveryError: null, recoveryLease: null, unknownMeetingActive: false, MEETING_APP: 'meetings' };
+  vm.createContext(ctx);
+  vm.runInContext(cut('  function state() {', '  function changed()') + cut('  function pageAudioFree() {', '  function cancelReloadRecovery()') +
+    cut('  function reloadCheck() {', '  /* Host-only rescue.') + 'this.api = { state, pageAudioFree, reloadCheck };', ctx);
+  return ctx.api;
+}
 test('shared app microphone admission and reload checks see the shell recorder', () => {
-  const s = read('web/core/app-capture.js');
-  // The host-only pageAudioFree proof adds one safety check through the same shell bridge.
-  assert.equal((s.match(/\(W\.WizardOSDevice \|\| W\.WosDeviceRecording\?\.device\(\)\)\?\.recActive/g) || []).length, 9);
+  const busy = capturePage('{"id":"shell-take","kind":"meeting"}'), idle = capturePage('null');
+  // A shell recorder take nobody in this page owns blocks the page proof, the recorder state and a reload.
+  assert.equal(busy.pageAudioFree(), false);
+  assert.equal(busy.state().recording, true);
+  assert.deepEqual([busy.reloadCheck().safe, busy.reloadCheck().reason], [false, 'device_recording']);
+  assert.equal(idle.pageAudioFree(), true);
+  assert.equal(idle.state().recording, false);
+  assert.equal(idle.reloadCheck().safe, true);
+  // An unreadable shell answer never proves quiet.
+  const bad = capturePage('{not json');
+  assert.equal(bad.pageAudioFree(), false);
+  assert.equal(bad.reloadCheck().reason, 'device_recording');
+  // The orb's Send never reads a take another app owns from the shell recorder.
   const app = withAppParts(read('web/app.js'));
-  const finish = app.slice(app.indexOf('function nativeFinish('), app.indexOf('const releasedTakes'));
-  assert.ok(finish.indexOf('nativeTakeAppOwned(id)') < finish.indexOf('shell.fetch(id)'));
+  const body = 'const nativeFetching = new Set();\n' + app.slice(app.indexOf('  function nativeFinish'), app.indexOf('    // Notification/Everywhere Send enters here directly')) + '\n}';
+  const seen = [], ctx = { DEV: () => ({ fetched: () => false, fetch: id => (seen.push('fetch ' + id), new Promise(() => {})) }), nativeTakeAppOwned: id => id === 'app-take',
+    setVoice: v => seen.push('voice ' + v), toast: (i, t) => seen.push(t), txHide() {}, V: {} };
+  vm.createContext(ctx); vm.runInContext(body, ctx);
+  ctx.nativeFinish('app-take', false);
+  assert.deepEqual(seen, ['voice paused', 'This recording belongs to another app']);
+  ctx.nativeFinish('orb-take', false);
+  assert.deepEqual(seen.slice(2), ['fetch orb-take']);
 });
+// The remote orb page (everywhere.js) with a fake document and a fake orb port.
+function everywhere(port = { postMessage(m) { this.sent.push(JSON.parse(m)); }, sent: [] }) {
+  const els = {}, el = id => (els[id] ||= { id, disabled: false, textContent: '', attrs: {}, on: {}, classList: { add() {}, remove() {}, toggle() {} }, style: {},
+    setAttribute(k, v) { this.attrs[k] = v; }, addEventListener(t, f) { this.on[t] = f; }, appendChild() {}, querySelector: () => null });
+  const bodyClasses = new Set();
+  const w = { console, setTimeout: () => 1, clearTimeout() {}, setInterval: () => 0, performance: { now: () => 0 }, Orb: { setMode() {}, setLevel() {} }, JSON, wizardOrbPort: port, EverywhereNative: { log() {} },
+    document: { getElementById: el, body: { classList: { add: c => bodyClasses.add(c), remove: c => bodyClasses.delete(c), toggle: (c, on) => (on ? bodyClasses.add(c) : bodyClasses.delete(c)), contains: c => bodyClasses.has(c) } }, documentElement: { dataset: {}, style: { setProperty() {} } }, querySelector: () => null } };
+  w.window = w;
+  vm.createContext(w);
+  vm.runInContext(read('web/assist/everywhere.js'), w);
+  return { w, els, port, bodyClasses };
+}
 test('remote orb retains offline signed API and CSP without adding a full-app bridge', () => {
-  const html = read('web/assist/everywhere.html'), js = read('web/assist/everywhere.js');
-  assert.match(html, /Content-Security-Policy/);
+  const html = read('web/assist/everywhere.html');
+  // The page's CSP denies the network and every script but its own files.
+  // read as the browser reads it: the page's own meta policy, parsed into its directives
+  const page = parsePage('assist/everywhere.html'), csp = parseCsp(page.querySelector('meta[http-equiv="Content-Security-Policy"]')?.getAttribute('content') || '');
+  assert.deepEqual(csp['default-src'], ["'none'"]); assert.deepEqual(csp['connect-src'], ["'none'"]); assert.deepEqual(csp['script-src'], ["'self'"]);
+  assert.equal(page.querySelectorAll('script:not([src])').length, 0, 'no inline script');
   assert.doesNotMatch(html, /<script(?![^>]*\bsrc=)[^>]*>/);
-  assert.match(js, /WosShellOrb/);
-  assert.match(js, /wizardOrbPort/);
-  assert.match(js, /command\('pause'/);
-  assert.match(js, /command\('cancel'/);
+  const o = everywhere();
+  assert.deepEqual(Object.keys(o.w.WosShellOrb), ['v', 'status'], 'the shell orb API is status only: no start, send or read');
+  assert.ok(o.bodyClasses.has('shell-orb'));
+  assert.ok(o.els.shellPause.disabled, 'nothing to pause before the host names a take');
+  o.w.WosShellOrb.status({ id: 'take-1', state: 'recording', ms: 1200 });
+  o.els.shellPause.on.click();
+  assert.deepEqual(o.port.sent, [{ v: 1, id: 'orb-1', method: 'device.recording.pause', params: { id: 'take-1', on: true } }]);
+  assert.ok(o.els.shellCancel.disabled, 'one command at a time');
+  o.port.onmessage({ data: JSON.stringify({ v: 1, id: 'orb-1', result: { id: 'take-1', state: 'paused' } }) });
+  assert.equal(o.els.shellPause.textContent, 'Resume');
+  o.els.shellCancel.on.click();
+  assert.deepEqual(o.port.sent[1], { v: 1, id: 'orb-2', method: 'device.recording.cancel', params: { id: 'take-1' } });
+  // Without the host port (full Android app, old hosts) the page adds nothing.
+  assert.equal(everywhere(null).w.WosShellOrb, undefined);
 });

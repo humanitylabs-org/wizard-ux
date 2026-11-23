@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import vm from 'node:vm';
+import { block as sliceBlock, runRecording } from './fixtures/source-slice.mjs';
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 
 const source = readFileSync(process.env.OUTBOX_TEST_SOURCE || new URL('../web/outbox.js', import.meta.url), 'utf8');
@@ -140,8 +141,15 @@ test('native web handoff preserves the original recording time', async t => {
   const it = await f.api.enqueue({ nativeId: 'old-native', createdAt: recorded, kind: 'reply', sessionId: 'original-thread', model: 'm', provider: 'p', text: 'native old note' });
   await until(() => it.state === 'held');
   assert.equal(it.createdAt, recorded); assert.equal(f.runs().length, 0);
+  // the native handoff's real sendTake (core/device-recording.js) passes the take's own start time to the outbox
   const device = readFileSync(new URL('../web/core/device-recording.js', import.meta.url), 'utf8');
-  assert.match(device, /createdAt: Number\(t.startedAt\)/);
+  const got = [], window = { WosOutbox: { enqueue: async o => { got.push(o); return { id: 'q1', ...o }; } }, WosModels: { snapshot: () => ({ model: 'm', provider: 'p' }) }, WizConfig: { owner: () => 'Owner' } };
+  const ctx = runRecording(`${sliceBlock(device, '  async function sendTake(t, blob) {')}\nthis.sendTake = sendTake;`, { window, Number });
+  await ctx.sendTake({ id: 'native-1', startedAt: String(recorded) }, new Blob(['a']));
+  assert.equal(got[0]?.createdAt, recorded, 'the recording time, not the handoff time');
+  assert.equal(got[0]?.nativeId, 'native-1');
+  await ctx.sendTake({ id: 'native-2' }, new Blob(['a']));
+  assert.equal(got[1]?.createdAt, undefined, 'no start time: the outbox stamps it');
 });
 
 for (const route of [

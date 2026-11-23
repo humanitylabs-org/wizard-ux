@@ -2,6 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { between, block, runRecording } from './fixtures/source-slice.mjs';
+import { createDocument } from './fixtures/mini-dom.mjs';
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 const kit=readFileSync(new URL('../web/core/chat-kit.js',import.meta.url),'utf8');
 const power=readFileSync(new URL('../web/core/chat-power.js',import.meta.url),'utf8');
@@ -26,7 +28,14 @@ test('Unavailable screenshot never degrades into a text-only regeneration',async
 for(const status of ['running','queued','stopping','waiting_for_approval','unknown'])test(`Regenerate refuses ${status} rather than steering or duplicating it`,async()=>{const h=harness({status});h.click();await finished(h);assert.equal(h.sent.length,0)});
 test('Regenerate renders only for a skin that opts in with --wos-reply-regenerate: on',()=>{
  const js=withParts(readFileSync(new URL('../web/core/chats.js',import.meta.url),'utf8'));
- assert.match(js,/getPropertyValue\('--wos-reply-regenerate'\)\.trim\(\) === 'on'/);
- assert.match(js,/last && !working && regenOn\(\) \? '<button type="button" data-mregen/);
- assert.equal((js.match(/data-mregen/g)||[]).length,1);
+ // chats.js's own turn renderer with the skin's custom property as getComputedStyle reads it
+ const draw=(prop,{last=true,working=false,text='Done.'}={})=>{
+  const ctx=runRecording(between(js,'  const regenOn = () =>','\n')+'\n'+block(js,'  function turnHtml(c, tn, last, working, helperStatus, reconnect, tt = true, needs = \'\') {')+'\nglobalThis.turnHtml=turnHtml;',
+   {getComputedStyle:()=>({getPropertyValue:k=>k==='--wos-reply-regenerate'?prop:''}),document:{documentElement:{}},esc:String,md:t=>t,window:{},sweepHtml:null});
+  const doc=createDocument();doc.body.innerHTML=ctx.turnHtml({texts:[]},{a:text?{text,at:5}:null,media:[],notes:[],steps:[],mediaAt:5},last,working,null,null);
+  return doc.querySelectorAll('[data-mregen]').length;
+ };
+ assert.equal(draw(' on'),1,'a skin that says on: the last finished reply offers it once');
+ for(const p of ['','off','on-ish'])assert.equal(draw(p),0,`--wos-reply-regenerate: ${JSON.stringify(p)}`);
+ assert.equal(draw('on',{last:false}),0,'only the last reply');assert.equal(draw('on',{working:true}),0,'never while it is working');
 });

@@ -1,12 +1,32 @@
 import test from 'node:test';
+import { withSkinHostParts } from './fixtures/skin-host-parts.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { randomUUID } from 'node:crypto';
 import { withWebParts } from './fixtures/web-parts.mjs';
+import { world, deskWorld, layout, FakePointerEvent } from './fixtures/ai-apps-world.mjs';
+import { createDocument } from './fixtures/mini-dom.mjs';
+import { cascade } from './fixtures/mini-css.mjs';
+import { block, runRecording } from './fixtures/source-slice.mjs';
+const root = new URL('../', import.meta.url);
 const read = p => withWebParts(readFileSync(new URL('../' + p, import.meta.url), 'utf8'));
 const source = read('web/core/workspaces.js');
 const plain = x => JSON.parse(JSON.stringify(x));
+// The AI apps view itself (tests/fixtures/ai-apps-world.mjs), with a shared switcher stand-in that records its use.
+const LIST = [{ id: 'this', name: 'Miguel', current: true }, { id: 'g1', name: 'Carlos', org: 'Acme', current: false, url: 'https://carlos.example' }, { id: 'g2', name: 'Ana', current: false }];
+async function aiView(shell, { visible = false } = {}) {
+  const made = shell === 'desktop' ? deskWorld() : { w: world() }, w = made.w, used = [];
+  w.api.workspaces.list = () => LIST.map(x => ({ ...x }));
+  globalThis.WizWorkspaces = { visible, openMenu: el => used.push(['menu', el.className]), switch: id => (used.push(['switch', id]), Promise.resolve()), subscribe: () => () => {}, close() {} };
+  (await layout()).default(w.api);
+  return { w, used, keys: made.keys };
+}
+const openList = (v, shell) => {
+  if (shell === 'desktop') v.w.q('.aad-ws').dispatchEvent(new FakePointerEvent('click'));
+  else { v.w.q('.aa-menu').dispatchEvent(new FakePointerEvent('click')); v.w.q('.aa-dws').dispatchEvent(new FakePointerEvent('click')); }
+};
+
 class El extends EventTarget {
   constructor(tag) { super(); this.tagName = tag.toUpperCase(); this.children = []; this.dataset = {}; this.attrs = {}; this.style = {}; this.textContent = ''; this.namespaceURI = 'http://www.w3.org/2000/svg'; this.className = ''; this.classList = { add: s => { this.className += ' ' + s; }, toggle: (s, on) => { this.className = this.className.split(' ').filter(x => x !== s).concat(on ? [s] : []).join(' '); } }; }
   append(...nodes) { for (const n of nodes) { n.remove(); n.parentNode = this; this.children.push(n); } }
@@ -190,19 +210,47 @@ test('switching carries a safe way back; the target saves it once and strips the
   assert.equal(bad.data.get('wos.workspaces.v1'), '[]');
   const junk = boot({ hash: '#wzfrom=%E0%A4%A' }); assert.equal(junk.data.get('wos.workspaces.v1'), '[]');
 });
-test('both shells load module; bridge.handle preserves native capability; Miguel reuses only core switcher', () => {
-  for (const f of ['web/index.html', 'web/desktop.html']) assert.match(read(f), /core\/workspaces.js/);
-  assert.match(read('web/core/bridge.js'), /window.wizardUX = \{ \.\.\.window.wizardUX,/);
-  const tweak = read('web/tweaks/miguel/machines-home/tweak.js');
-  assert.match(tweak, /api.workspaces.switch\(d.ws\)/); assert.match(tweak, /api.workspaces.add\(\)/);
-  assert.doesNotMatch(tweak, /wizMenu|wizBtn|wsmBack|renderWiz/);
-  assert.match(source, /api\?\.back.push\(close\)/);
-});
-test('the AI-apps sidebar/phone workspace lists offer a switch for a Wizard with an address', () => {
-  assert.match(read('web/core/skin-host.js'), /\.\.\.\(\/\^https\?:/);
-  for (const f of ['web/layouts/ai-apps/desktop.js', 'web/layouts/ai-apps/layout.js']) {
-    const src = read(f); assert.match(src, /globalThis\.WizWorkspaces\?\.switch\(w\.id\)/); assert.match(src, /Another Wizard · tap to switch/); assert.match(src, /e\.key === 'Enter' \|\| e\.key === ' '/); assert.match(src, /setAttribute\('tabindex', '0'\)/);
+test('both shells load module; bridge.handle preserves native capability; Miguel reuses only core switcher', async () => {
+  for (const f of ['web/index.html', 'web/desktop.html']) {
+    const h = read(f), d = createDocument(); d.documentElement.innerHTML = h.slice(h.indexOf('<head'), h.lastIndexOf('</html>'));
+    assert.ok(d.querySelectorAll('script[src]').some(x => x.getAttribute('src') === 'core/workspaces.js'), f);
   }
+  // the bridge adds its fields beside what the native side already put on window.wizardUX
+  const bridge = read('web/core/bridge.js'), bl = bridge.slice(bridge.indexOf('window.wizardUX = { ...window.wizardUX,'), bridge.indexOf('\n', bridge.indexOf('window.wizardUX = { ...window.wizardUX,')));
+  const win = { wizardUX: { native: 'android', handle: 'kept' }, WIZ_SHELL: 'phone' };
+  vm.runInNewContext(bl, { window: win, VERSION: 'v', EVENTS: [] });
+  assert.equal(win.wizardUX.native, 'android'); assert.equal(win.wizardUX.handle, 'kept'); assert.equal(win.wizardUX.shell, 'phone');
+  // Miguel's Home taps go to the core switcher (switch / add), never a copy of it
+  const tweak = read('web/tweaks/miguel/machines-home/tweak.js');
+  assert.doesNotMatch(tweak, /wizMenu|wizBtn|wsmBack|renderWiz/);
+  const tap = (dataset, managed) => {
+    const used = [], top = {}, target = { dataset, parentNode: top };
+    const ctx = runRecording(`${block(tweak, '  const onTap = e => {').replace(/^\s*const onTap = /, 'this.onTap = ')};`,
+      { api: { workspaces: { switch: id => (used.push(['switch', id]), Promise.resolve()), add: () => (used.push(['add']), Promise.resolve()) }, toast() {}, storage: { set() {}, get() {} } }, managedOf: () => managed, S: {}, drawn: {} });
+    ctx.onTap({ currentTarget: top, target }); return used;
+  };
+  assert.deepEqual(tap({ ws: 'g1' }, { url: 'https://carlos.example' }), [['switch', 'g1']]);
+  assert.deepEqual(tap({ ws: 'g2' }, { url: '' }), [], 'not reachable yet: shows its page instead');
+  assert.deepEqual(tap({ act: 'add-managed' }, null), [['add']]);
+});
+test('the AI-apps sidebar/phone workspace lists offer a switch for a Wizard with an address', async () => {
+  for (const shell of ['desktop', 'phone']) {
+    const v = await aiView(shell); openList(v, shell);
+    const rows = v.w.qa(shell === 'desktop' ? '.aad-wr' : '.aa-sh-row').filter(r => r.textContent.includes('Carlos') || r.textContent.includes('Ana'));
+    const carlos = rows.find(r => r.textContent.includes('Carlos')), ana = rows.find(r => r.textContent.includes('Ana'));
+    assert.ok(carlos && ana, shell);
+    assert.match(carlos.textContent, /Another Wizard · tap to switch/, `${shell}: a Wizard with an address can be switched to`);
+    assert.equal(carlos.getAttribute('tabindex'), '0'); assert.doesNotMatch(ana.textContent, /tap to switch/, `${shell}: no address, no switch`);
+    for (const key of ['Enter', ' ']) { const e = new FakePointerEvent('keydown', { key }); carlos.dispatchEvent(e); assert.ok(e.defaultPrevented, `${shell} ${JSON.stringify(key)}`); }
+    carlos.dispatchEvent(new FakePointerEvent('click'));
+    assert.deepEqual(v.used.filter(u => u[0] === 'switch').map(u => u[1]), ['g1', 'g1', 'g1'], `${shell}: Enter, Space and a tap switch`);
+  }
+  // the host hands the view an address only when it is a web address (the real skin-host workspaces list())
+  const host = withSkinHostParts(readFileSync(new URL('../web/core/skin-host.js', import.meta.url), 'utf8')), from = host.indexOf('      workspaces: Object.freeze({');
+  const managed = [{ id: 'g1', name: 'Carlos', url: 'https://carlos.example' }, { id: 'g2', name: 'Ana', url: 'javascript:alert(1)' }, { id: 'g3', name: 'Eve', url: 'carlos.example' }, { id: 'g4', name: 'Hal', url: 'HTTP://hal.example' }];
+  const c = { live: () => true, isDoc: true, window: { WosResources: { state: { devices: { this: { wizard: 'Mine' }, managed } } }, WizConfig: { owner: () => 'Owner' } } };
+  vm.createContext(c); vm.runInContext(`this.api = ({ ${host.slice(from, host.indexOf('      aiUsage: Object.freeze({', from))} });`, c);
+  assert.deepEqual(JSON.parse(JSON.stringify(c.api.workspaces.list().map(w => [w.id, w.url ?? null]))), [['this', null], ['g1', 'https://carlos.example'], ['g2', null], ['g3', null], ['g4', 'HTTP://hal.example']]);
 });
 test('Android app: the switcher asks the app to switch in place and never navigates the WebView to another origin', async () => {
   const asked = [];
@@ -224,29 +272,39 @@ test('Android app refusing an address keeps the old navigation fallback', async 
 
 // James, 9 Nov 2026: on the desktop AI apps view the stock bar icon sat over the chat's own title and hid in other arrangements, so
 // the switcher looked missing. The sidebar header name is the switcher while the sidebar shows; the collapsed rail has its own layers button.
-test('AI apps view: no stock bar icon over the chat title; the rail carries the shared switcher button', () => {
-  const css = read('web/layouts/ai-apps/desktop.css'), js = read('web/layouts/ai-apps/desktop.js');
-  assert.match(css, /\[data-layout="ai-apps"\] #bar \.wz-workspaces-control \{ display: none !important; \}/);
-  assert.match(js, /rail\.append\(rTog, rNew, rFind, rWs, rList, rSet\)/);
-  assert.match(js, /rWs\.hidden = !W\?\.visible/, 'icon only shows with two or more Wizards');
-  assert.match(js, /WizWorkspaces\?\.openMenu\?\.\(rWs\)/, 'the one shared menu, not a second implementation');
-  assert.match(read('web/layouts/ai-apps/parts.js'), /layers: \[/);
+test('AI apps view: no stock bar icon over the chat title; the rail carries the shared switcher button', async () => {
+  const d = createDocument(); d.documentElement.setAttribute('data-shell', 'desktop'); d.documentElement.setAttribute('data-layout', 'ai-apps');
+  d.body.innerHTML = '<div id="bar"><button class="wz-workspaces-control"></button></div>';
+  assert.equal(cascade(d.querySelector('.wz-workspaces-control'), read('web/layouts/ai-apps/desktop.css')).display?.value, 'none');
+  for (const visible of [false, true]) {
+    const v = await aiView('desktop', { visible }), rail = v.w.q('.aad-rail'), ws = rail && rail.children.find(c => /aad-rws/.test(c.className));
+    assert.ok(ws, 'the rail has the switcher button'); assert.equal(ws.hidden, !visible, 'icon only shows with two or more Wizards');
+    if (visible) { ws.dispatchEvent(new FakePointerEvent('click')); assert.deepEqual(v.used.filter(u => u[0] === 'menu').length, 1, 'the one shared menu, not a second implementation'); }
+  }
+  const P = await import(new URL('web/layouts/ai-apps/parts.js', root).href);
+  assert.ok(typeof P.appLayers === 'function');
 });
 
-test('AI apps header name opens the shared switcher menu with two or more Wizards, so a box without the devices registry still lists its way back', () => {
-  for (const f of ['desktop.js', 'layout.js']) {
-    const js = read('web/layouts/ai-apps/' + f);
-    assert.match(js, /W\?\.visible && W\.openMenu\) \{[^}]*W\.openMenu\(wsBtn\)/, f);
+test('AI apps header name opens the shared switcher menu with two or more Wizards, so a box without the devices registry still lists its way back', async () => {
+  for (const shell of ['desktop', 'phone']) {
+    const v = await aiView(shell, { visible: true });
+    if (shell === 'phone') v.w.q('.aa-menu').dispatchEvent(new FakePointerEvent('click'));
+    v.w.q(shell === 'desktop' ? '.aad-ws' : '.aa-dws').dispatchEvent(new FakePointerEvent('click'));
+    assert.equal(v.used.filter(u => u[0] === 'menu').length, 1, `${shell}: the shared menu`);
+    const solo = await aiView(shell, { visible: false });
+    openList(solo, shell); assert.equal(solo.used.length, 0, `${shell}: one Wizard: the view's own list`);
   }
 });
 
-test('wizard-ux#1209: ⌥O opens the same shared menu as the header name, and Manage workspaces opens Settings › Connections', () => {
-  const desk = read('web/layouts/ai-apps/desktop.js');
-  assert.match(desk, /code === 'KeyO'[^\n]*W\?\.visible && W\.openMenu\) \{ W\.openMenu\(wsBtn\); return; \} openWs\(\);/, 'the shortcut never opens the registry-only list over two or more Wizards');
-  for (const f of ['desktop.js', 'layout.js']) {
-    const js = read('web/layouts/ai-apps/' + f);
-    assert.match(js, /api\.desk\.settings\('connections'\)/, f);
-    assert.doesNotMatch(js, /api\.desk\.settings\('network'\)/, f + ': not Network & security');
+test('wizard-ux#1209: ⌥O opens the same shared menu as the header name, and Manage workspaces opens Settings › Connections', async () => {
+  const v = await aiView('desktop', { visible: true });
+  const down = v.keys.map(k => k.down({ altKey: true, code: 'KeyO', key: 'o' }));
+  assert.ok(down.includes(true));
+  assert.equal(v.used.filter(u => u[0] === 'menu').length, 1, 'the shortcut never opens the registry-only list over two or more Wizards');
+  for (const shell of ['desktop', 'phone']) {
+    const s1 = await aiView(shell); openList(s1, shell);
+    s1.w.q(shell === 'desktop' ? '.aad-wm' : '.aa-sh-manage').dispatchEvent(new FakePointerEvent('click'));
+    assert.equal(s1.w.st.settings.at(-1), 'connections', `${shell}: not Network & security`);
   }
 });
 

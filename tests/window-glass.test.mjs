@@ -3,6 +3,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { settingsWorld } from './fixtures/r5A-settings.mjs';
+import { createDocument } from './fixtures/mini-dom.mjs';
+import { cascade } from './fixtures/mini-css.mjs';
+import { noImports } from './fixtures/r7A-css.mjs';
 
 const read = f => readFileSync(new URL('../' + f, import.meta.url), 'utf8');
 
@@ -57,10 +61,27 @@ test('values clamp to 60–100 %, junk is ignored, and reset returns to the skin
   assert.equal(b.root.dataset.winGlass, undefined);
 });
 
+// The real Settings (mini-dom, tests/fixtures/r5A-settings.mjs) over the real skins.js above: Look's slider sets the
+// glass; the marker skins.js writes then goes through every page stylesheet (mini-css cascade) on a Nebula window.
 test('Settings › Look carries the slider; CSS routes every window through the shared token only when chosen', () => {
-  const s = read('web/core/settings.js');
-  assert.match(s, /'window-glass': 'appearance'/);
-  assert.match(s, /register\(\{ id: 'window-glass'/);
-  assert.match(s, /type="range"[^`]*data-wg-range/);
-  assert.match(read('web/core/skins.css'), /html\[data-win-glass\] \.win \{ background: var\(--sk-win\); \}/);
+  const b = boot({ 'wos.skin': 'nebula' });
+  const w = settingsWorld({ shell: 'desktop', scope: { WosSkin: b.S } });
+  w.open('appearance');
+  const range = w.root.querySelector('[data-settings-feature="window-glass"] input[data-wg-range]');
+  assert.ok(range, 'Look shows the window opacity slider');
+  assert.equal(range.getAttribute('type'), 'range');
+  const windowBg = (page, chosen) => {
+    const html = read('web/' + page), sheets = [...html.split('</head>')[0].matchAll(/<link rel="stylesheet" href="([^"]+)"/g)].map(m => m[1]);
+    const css = noImports(sheets.map(f => read('web/' + f))).join('\n');
+    const d = createDocument(); d.documentElement.setAttribute('data-skin', 'nebula');
+    d.documentElement.setAttribute('data-shell', page === 'desktop.html' ? 'desktop' : 'phone');
+    if (chosen) d.documentElement.setAttribute('data-win-glass', '');
+    d.body.innerHTML = '<div class="win"><div class="wbody"></div></div>';
+    return cascade(d.querySelector('.win'), css).background?.value || '';
+  };
+  for (const page of ['desktop.html', 'index.html']) assert.notEqual(windowBg(page, false), 'var(--sk-win)', page + ': untouched, Nebula keeps its own window');
+  range.value = '75'; range.dispatchEvent({ type: 'input', bubbles: true });
+  assert.equal(b.S.glass, 0.75, 'moving the slider sets the glass');
+  assert.equal(b.root.dataset.winGlass, '', 'skins.js marks the page');
+  for (const page of ['desktop.html', 'index.html']) assert.equal(windowBg(page, b.root.dataset.winGlass !== undefined), 'var(--sk-win)', page + ': chosen, every window uses the shared token');
 });

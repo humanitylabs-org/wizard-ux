@@ -3,9 +3,11 @@
 // Link sheet and hidden voice frames are proven in real Chromium by tests/qa-browser-boundary-other-frames.cjs.
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { pageAssets } from './fixtures/w1-pages.mjs';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import { launcherFixture } from './launcher-fixture.mjs';
+import { withServicesParts } from './fixtures/app-services-parts.mjs';
 
 const root = new URL('../', import.meta.url).pathname;
 const read = path => fs.readFileSync(root + 'web/' + path, 'utf8');
@@ -76,9 +78,37 @@ test('boundary off: the pinned app frame is exactly as before', async () => {
   assert.equal(s.document.title, 'Wisdom', 'the same-origin load path still runs');
 });
 
-test('boundary on: link sheet and voice frames are covered by the box switch', () => {
-  assert.match(read('core/links.js'), /if \(window\.WizBrowserBoundary\?\.enabled\) frame\.setAttribute\('sandbox', window\.WizBrowserBoundary\.sandbox\);/);
-  assert.match(read('core/app-services.js'), /const wanted = window\.WizBrowserBoundary\?\.enabled \? new Map\(\) :/);
+// The hidden voice-command frames (core/app-services.js warmVoice), run whole with a recorded document body.
+async function voiceFrames(boundary) {
+  const added = [], location = new URL('https://box.example/wizard-os-home/');
+  const window = { WizCore: { apps: () => ({ APPS: [{ id: 'radio', kind: 'wizard', url: '/radio/', provides: ['voice-commands'] }] }) }, dispatchEvent() {},
+    WizBrowserBoundary: boundary ? { enabled: true, sandbox: SANDBOX, attach: () => () => {}, owns: () => false } : undefined };
+  const el = () => ({ dataset: {}, style: {}, attrs: {}, setAttribute(k, v) { this.attrs[k] = v; }, addEventListener() {}, removeEventListener() {}, remove() {}, hasAttribute: () => false, isConnected: true, tagName: 'IFRAME', contentWindow: {} });
+  const quiet = (f, ms, ...a) => { const t = setTimeout(f, ms, ...a); t.unref?.(); return t; }; // never holds the test process open
+  vm.runInNewContext(withServicesParts(read('core/app-services.js')), { window, location, URL, addEventListener() {}, setInterval() {}, setTimeout: quiet, clearTimeout,
+    document: { hidden: false, readyState: 'complete', addEventListener() {}, createElement: el, body: { appendChild: f => added.push(f) } }, MutationObserver: class { observe() {} }, CustomEvent: class {}, navigator: {} });
+  await new Promise(r => setTimeout(r, 5));
+  return added;
+}
+
+test('boundary on: link sheet and voice frames are covered by the box switch', async () => {
+  // The link sheet's own frame: sandboxed with the switch on, untouched with it off.
+  const frames = [];
+  for (const on of [true, false]) {
+    const doc = []; class E { constructor() { this.attrs = {}; this.nodes = {}; this.style = {}; this.classList = { add() {}, remove() {}, contains: () => false, toggle: () => false }; this.contentWindow = { location: { replace() {} } }; doc.push(this); }
+      setAttribute(k, v) { this.attrs[k] = String(v); } getAttribute(k) { return this.attrs[k] ?? null; } hasAttribute(k) { return k in this.attrs; } appendChild() {} remove() {} addEventListener() {} querySelector(q) { return this.nodes[q] ||= new E(); } }
+    const w = { open() {}, WizConfig: { raw: {}, localURL: (h, b) => new URL(h, b) }, WizBrowserBoundary: on ? { enabled: true, sandbox: SANDBOX } : undefined };
+    vm.runInNewContext(read('core/links.js'), { window: w, location: new URL('https://box.example/wizard-os-home/'), navigator: { userAgent: 'fixture' }, localStorage: { getItem: () => null, setItem() {} },
+      document: { body: new E(), createElement: () => new E() }, URL, console, setTimeout, clearTimeout, performance: { now: () => 0 }, Date, JSON, Object, Set });
+    w.WizLinks.mount({ mode: 'sheet' });
+    const iframe = doc.map(d => d.nodes.iframe).find(Boolean);
+    assert.ok(iframe, 'the sheet has a frame');
+    frames.push(iframe.getAttribute('sandbox'));
+  }
+  assert.deepEqual(frames, [SANDBOX, null]);
+  // Hidden voice-command frames run app code out of sight: none with the switch on.
+  assert.equal((await voiceFrames(false)).length, 1, 'off: the provider\'s page is warmed as before');
+  assert.deepEqual(await voiceFrames(true), [], 'on: no hidden app frames');
 });
 
 // The offline copy of the shell or a pinned app (app-session.html) has no token. core/browser-boundary.js still turns on
@@ -101,8 +131,11 @@ test('offline copy: the remembered mark turns the frame sandbox on without a tok
   assert.equal(boundary({ mark: '0' }), undefined);
   assert.equal(boundary({ mark: 'throws' }), undefined);
   assert.equal(boundary({ mark: '1', framed: true }), undefined, 'never inside a frame');
-  const html = read('app-session.html');
-  assert.ok(html.indexOf('<script src="core/browser-boundary.js"></script>') > 0, 'the offline pinned-app page loads it');
-  assert.ok(html.indexOf('core/browser-boundary.js') < html.indexOf('core/single-app-session.js') && html.indexOf('core/browser-boundary.js') < html.indexOf('core/links.js'));
-  assert.match(read('core/offline-session-config.js'), /core\/browser-boundary\.js/, 'and it is in the offline copy');
+  // the offline pinned-app page as the browser loads it: the boundary before the session and the links
+  const { srcs } = pageAssets('app-session.html'), at = f => srcs.indexOf(f);
+  assert.ok(at('core/browser-boundary.js') >= 0, 'the offline pinned-app page loads it');
+  assert.ok(at('core/browser-boundary.js') < at('core/single-app-session.js') && at('core/browser-boundary.js') < at('core/links.js'));
+  // and the offline copy (the generated config, run) caches it
+  const cfg = { self: {}, importScripts() {} }; vm.runInNewContext(read('core/offline-session-config.js'), cfg);
+  assert.ok(cfg.self.WIZ_OFFLINE_CONFIG.shell.includes('core/browser-boundary.js'), 'and it is in the offline copy');
 });

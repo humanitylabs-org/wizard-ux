@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { webcrypto } from 'node:crypto';
 import { withAppParts } from './fixtures/app-parts.mjs';
+import { createDocument } from './fixtures/mini-dom.mjs';
 
 const portSrc = readFileSync(new URL('../web/core/device-port.js', import.meta.url), 'utf8');
 const src = readFileSync(new URL('../web/core/device-recording.js', import.meta.url), 'utf8');
@@ -120,10 +121,24 @@ test('a take is never acked while the outbox copy is not durable', async () => {
   assert.equal(h.sent.some(m => m.method === 'device.recording.ack'), false);
 });
 
-test('app.js reaches the shell recorder only through DEV() and keeps the full app\'s bridge first', () => {
+test('app.js reaches the shell recorder only through DEV() and keeps the full app\'s bridge first', async () => {
   const app = withAppParts(readFileSync(new URL('../web/app.js', import.meta.url), 'utf8'));
-  assert.match(app, /const DEV = \(\) => \{ const d = window\.WizardOSDevice; return d && typeof d\.recStart === 'function' \? d : window\.WosDeviceRecording\?\.device\(\) \|\| null; \};/);
-  const html = readFileSync(new URL('../web/index.html', import.meta.url), 'utf8');
-  assert.ok(html.indexOf('core/device-port.js') < html.indexOf('core/device-recording.js'));
-  assert.ok(html.indexOf('core/device-recording.js') < html.indexOf('"app.js"'));
+  const i = app.indexOf('  const DEV = () =>'), j = app.indexOf('};', i) + 2;
+  const DEV = window => vm.runInNewContext(app.slice(i, j) + '\nDEV', { window })();
+  // The shell recorder (the real device-recording.js over a port) is what DEV() hands out when the app has no bridge.
+  const h = harness(); await settle();
+  const shellRec = h.window.WosDeviceRecording.device();
+  assert.ok(shellRec && typeof shellRec.recStart === 'function', 'the shell recorder speaks the bridge\'s API');
+  assert.equal(DEV(h.window), shellRec);
+  // The full app's own bridge wins whenever it has a recorder; one without recStart does not count.
+  const bridge = { recStart() {} };
+  assert.equal(DEV({ ...h.window, WizardOSDevice: bridge, WosDeviceRecording: h.window.WosDeviceRecording }), bridge);
+  assert.equal(DEV({ WizardOSDevice: { other() {} }, WosDeviceRecording: h.window.WosDeviceRecording }), shellRec);
+  assert.equal(DEV({}), null, 'neither: no recorder');
+  // index.html loads the port, then the recorder, then app.js.
+  const doc = createDocument(); doc.documentElement.innerHTML = readFileSync(new URL('../web/index.html', import.meta.url), 'utf8').replace(/^<!doctype html>/i, '');
+  const order = doc.querySelectorAll('script[src]').map(s => s.getAttribute('src'));
+  const at = f => order.indexOf(f);
+  assert.ok(at('core/device-port.js') >= 0 && at('core/device-port.js') < at('core/device-recording.js'));
+  assert.ok(at('core/device-recording.js') < at('app.js'));
 });

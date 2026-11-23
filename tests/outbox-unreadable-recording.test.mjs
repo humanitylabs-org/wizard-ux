@@ -10,9 +10,11 @@ import { randomUUID } from 'node:crypto';
 // restored from device storage, and every failed local read was retried as if it were a network blip.
 const source = readFileSync(new URL('../web/outbox.js', import.meta.url), 'utf8');
 const sessionId = 'wizard_voice_thread';
+// A recording whose read never answers (a large take on busy storage): its bytes may still be there.
+const slowRead = () => ({ size: 4, type: 'audio/mp4', arrayBuffer: () => new Promise(() => {}) });
 const unreadable = () => ({ size: 4, type: 'audio/mp4', arrayBuffer: () => Promise.reject(Object.assign(new Error('The operation couldn’t be completed'), { name: 'NotReadableError' })) });
 
-function client(origin, rows, transcribe) {
+function client(origin, rows, transcribe, { readMs = null } = {}) {
   const timers = new Set();
   const indexedDB = { open() {
     const r = {};
@@ -20,7 +22,7 @@ function client(origin, rows, transcribe) {
       r.result = { close() {}, objectStoreNames: { contains: () => true }, transaction() {
         const tx = { objectStore() { return {
           // A real browser hands back a Blob whose bytes are gone; the fake store keeps a marker for it.
-          getAll() { return { result: [...rows.values()].map(x => { const v = structuredClone(x); if (v.brokenAudio) { v.audio = unreadable(); delete v.brokenAudio; } return v; }) }; },
+          getAll() { return { result: [...rows.values()].map(x => { const v = structuredClone(x); if (v.brokenAudio) { v.audio = unreadable(); delete v.brokenAudio; } if (v.slowAudio) { v.audio = slowRead(); delete v.slowAudio; } return v; }) }; },
           put(value) { const v = { ...value }; if (v.audio && !(v.audio instanceof Blob)) { v.audio = null; v.brokenAudio = true; } rows.set(v.id, structuredClone(v)); return {}; },
           delete(id) { rows.delete(id); return {}; },
         }; } };
@@ -32,7 +34,8 @@ function client(origin, rows, transcribe) {
     document: { documentElement: { dataset: {} }, body: null, addEventListener() {} },
     localStorage: { getItem: () => null, removeItem() {}, setItem() {} },
     addEventListener() {}, clearTimeout,
-    setTimeout(fn, ms) { const t = setTimeout(fn, ms); t.unref(); timers.add(t); return t; },
+    // readMs: the outbox's local-read timeout (15 s) runs after readMs instead, so a test can wait it out.
+    setTimeout(fn, ms) { const t = setTimeout(fn, readMs != null && ms === 15000 ? readMs : ms); t.unref(); timers.add(t); return t; },
     fetch: (path, init) => fetch(origin + path, init),
     WosModels: { snapshot: (_, route) => route, resolveRoute: async route => route },
     WizConfig: { transcribe, voicePrompt: () => '' },
@@ -134,9 +137,24 @@ test('a readable recording still retries automatically when Wizard is briefly un
   assert.equal(f.calls[0].body, 'aaaa');
 });
 
-test('a slow local read stays retryable instead of being marked unreadable', () => {
+// Runs the real outbox (web/outbox.js) on a take whose local read never answers, with and without Wizard's saved copy.
+test('a slow local read stays retryable instead of being marked unreadable', async t => {
   // Codex P2 on #439: a 15 s read timeout is not proof the bytes are gone.
-  assert.match(source, /slow = true; reject\(new Error\('read timed out'\)\)/);
-  assert.match(source, /if \(slow\) throw new HttpError\(0, 'Reading the recording took too long · original kept'\);/);
-  assert.ok(source.indexOf('if (slow) throw') < source.indexOf("never reached Wizard · nothing to retry"), 'checked before the permanent unreadable state');
+  const audioFile = { id: 'wf_saved', name: 'wizard-voice.m4a', mime: 'audio/mp4', bytes: 4 };
+  for (const extra of [{}, { audioFile, files: [audioFile] }]) {
+    const f = await fixture(t);
+    const rows = new Map([stuckRow({ brokenAudio: false, slowAudio: true, ...extra })]); const [id] = [...rows.keys()];
+    let stt = 0;
+    const page = client(f.origin, rows, async () => { stt++; return { text: 'never' }; }, { readMs: 20 }); t.after(page.close);
+    await page.api.load();
+    const it = await until(() => page.api.get(id)?.attempts === 4 && page.api.get(id)); // the read timed out once
+    await new Promise(r => setTimeout(r, 50));
+    const label = extra.audioFile ? 'with a saved copy' : 'never uploaded';
+    assert.equal(it.state, 'waiting', `${label}: still in the normal retry loop`);
+    assert.ok(it.nextAt > Date.now(), `${label}: another automatic try is scheduled`);
+    assert.doesNotMatch(it.error, /can’t be read/, `${label}: never the permanent unreadable message`);
+    assert.equal(it.audioUnreadable, undefined, `${label}: not marked unreadable`);
+    assert.equal(page.api.canRetry(id), true, `${label}: retryable`);
+    assert.equal(stt, 0); assert.deepEqual(f.calls, [], `${label}: Wizard is not asked for its copy`);
+  }
 });

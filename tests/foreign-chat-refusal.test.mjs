@@ -11,6 +11,7 @@ import vm from 'node:vm';
 import { modelContext } from './fixtures/chats-list-model.mjs';
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
+import { block, expression, runRecording } from './fixtures/source-slice.mjs';
 
 const read = p => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
 function models() {
@@ -42,29 +43,63 @@ test('the list row keeps the Hermes session source the shell decides on', () => 
   assert.equal(row.source, 'telegram');
 });
 
-test('no Needs retry panel, no Errors-list Retry, and Retry itself refuses in such a chat', () => {
-  const power = read('web/core/chat-power.js');
-  assert.match(power, /if \(!M \|\| !failedShown\(s\) \|\| M\.foreignApp\?\.\(s\)\) return '';/);
-  assert.match(power, /let s = LIVE\.session\(sid\); if \(!s \|\| !OUTBOX\) return false;\n.*\n    if \(M\?\.foreignApp\?\.\(s\)\) \{ toast\(.*\); return false; \}$/m);
-  const row = power.slice(power.indexOf('function errorRow('), power.indexOf('function errorsExtra('));
-  const foreignRow = row.slice(row.indexOf('M?.foreignApp?.(s)'), row.indexOf('\n', row.indexOf('M?.foreignApp?.(s)')));
-  assert.match(foreignRow, /data-errdismiss/);
+const TG = { id: 't1', title: 'From Telegram', source: 'telegram', status: 'failed' }, OWN = { id: 'w1', title: 'Mine', source: 'api_server', status: 'failed' };
+
+test('no Needs retry panel, no Errors-list Retry, and Retry itself refuses in such a chat', async () => {
+  const M = models(), power = read('web/core/chat-power.js');
+  // The thread's Needs retry panel (failureHtml, with the route helpers it reads).
+  const fail = runRecording(power.slice(power.indexOf('  const failedRoute'), power.indexOf('  function failureHtml(')) + block(power, '  function failureHtml('),
+    { M, failedShown: () => true, backgroundOn: () => false, retrying: new Map(), E: { busy: new Map() }, esc: String });
+  const failureHtml = vm.runInContext('failureHtml', fail);
+  assert.equal(failureHtml({ id: 'w' }, TG), '', 'no Needs retry panel in a Telegram chat');
+  assert.match(failureHtml({ id: 'w' }, OWN), /Needs retry/, 'a WizardOS chat still gets it');
+  // The Errors list row: Dismiss only.
+  const rows = runRecording(block(power, '  function errorRow('), { M, E: { busy: new Map() }, esc: String, signedOutFail: () => null });
+  const errorRow = vm.runInContext('errorRow', rows);
+  const foreignRow = errorRow(TG, '<row>');
+  assert.match(foreignRow, /data-errdismiss="t1"/);
   assert.doesNotMatch(foreignRow, /data-errretry/);
+  assert.match(errorRow(OWN, '<row>'), /data-errretry="w1"/);
+  // Retry itself: refuses with the clear words and sends nothing.
+  const toasts = [], sends = [];
+  const retry = runRecording(block(power, '  async function retryThread('), { M, LIVE: { session: id => (id === 't1' ? TG : null) },
+    OUTBOX: { unsent: () => [], retry: (...a) => sends.push(a), send: (...a) => sends.push(a) }, toast: (...a) => toasts.push(a), retrying: new Map() });
+  assert.equal(await vm.runInContext('retryThread', retry)('w', 't1', {}), false);
+  assert.deepEqual(toasts, [['!', 'This chat lives in Telegram · reply there', 2600]]);
+  assert.deepEqual(sends, []);
 });
 
 test('the thread shows the clear card at once, with Dismiss and without Retry; the reply box says it up front', () => {
-  const chats = withParts(read('web/core/chats.js')) + read('web/core/chats-outbox.js');
+  const M = models(), paint = read('web/core/chats-threadpaint.js'), outbox = read('web/core/chats-outbox.js');
   // Refused as soon as the thread failed or a message is marked Not sent, not only once the Service's words arrive.
-  assert.match(chats, /const refused = !working && !!foreign && \(\['failed', 'interrupted'\]\.includes\(s\?\.status\) \|\| !!s\?\.safeError\n\s*\|\| shown\.some\(tn => \['failed', 'interrupted'\]\.includes\(tn\.u\?\.queue\?\.status\)\)\);/);
-  // The Not sent bubble's Retry needs c.retryRunId, which a foreign chat never gets.
-  assert.match(chats, /c\.retryRunId = !working && !foreign && s\?\.retryRunId \|\| '';/);
-  const card = chats.slice(chats.indexOf('+ (refused ?'), chats.indexOf('+ approvalHtml(c, s)'));
-  assert.match(card, /<b>Reply not sent<\/b><p>\$\{esc\(window\.WosModels\.refusal\(s\)\)\}<\/p>/);
-  assert.match(card, /data-chdismiss>Dismiss/);
-  assert.doesNotMatch(card.slice(0, card.indexOf(': (!runErr')), /data-chretry|Choose another model/);
-  assert.match(card, /^\+ \(refused \? `[^\n]*\n\s*: \(!runErr && (?:!signedOut && )?s\?\.safeError/, 'refused wins: no second, generic Reply not sent card beside it');
-  assert.match(chats, /placeholder="\$\{!isNew && window\.WosModels\?\.foreignApp\?\.\(s\) \? `This chat lives in \$\{esc\(window\.WosModels\.foreignApp\(s\)\)\} · reply there`/);
-  assert.match(chats, /if \(p\.state === 'failed'\) return `[^`]*\$\{OUTBOX\.canRetry\(p\) && !window\.WosModels\?\.foreignApp\?\.\(s\) \?/);
+  const decide = paint.slice(paint.indexOf('      const foreign = window.WosModels?.foreignApp?.(s)'), paint.indexOf('      // Renames show where they happened'));
+  const run = (s, shown = [], working = false) => {
+    const c = {}; const r = runRecording(`${decide}\nthis.out = { refused, retryRunId: c.retryRunId };`, { window: { WosModels: M }, s, shown, working, c });
+    return { ...r.out };
+  };
+  assert.deepEqual(run({ ...TG, retryRunId: 'q1' }), { refused: true, retryRunId: '' }, 'failed: refused at once; the Not sent Retry has no run');
+  assert.equal(run({ ...TG, status: 'idle' }, [{ u: { queue: { status: 'failed' } } }]).refused, true, 'a Not sent message is enough');
+  assert.equal(run({ ...TG, status: 'idle', safeError: 'x' }).refused, true);
+  assert.equal(run({ ...TG, status: 'idle' }).refused, false, 'nothing failed: no card');
+  assert.equal(run(TG, [], true).refused, false, 'not while it works');
+  assert.deepEqual(run({ ...OWN, retryRunId: 'q1' }), { refused: false, retryRunId: 'q1' }, 'a WizardOS chat keeps its Retry');
+  // The card itself: the refusal words and Dismiss; refused wins over the generic Reply not sent card.
+  const cardSrc = paint.slice(paint.indexOf('(refused ? `'), paint.indexOf('\n        + approvalHtml(c, s)'));
+  const card = (s, refused) => runRecording(`this.out = ${cardSrc};`, { window: { WosModels: M }, esc: String, s, refused, runErr: false, signedOut: false }).out;
+  const shown = card({ ...TG, safeError: 'Generic words' }, true);
+  assert.equal(shown, `<div class="appr" role="status" data-chrefused><b>Reply not sent</b><p>${M.refusal(TG)}</p><div class="appr-b"><button type="button" class="no" data-chdismiss>Dismiss</button></div></div>`);
+  assert.doesNotMatch(shown, /data-chretry|Choose another model|Generic words/, 'no second, generic Reply not sent card beside it');
+  assert.match(card({ ...OWN, safeError: 'Generic words' }, false), /<b>Reply not sent<\/b><p>Generic words<\/p>/);
+  // The reply box says it up front.
+  const ph = expression(paint, '${!isNew && window.WosModels?.foreignApp?.(s)');
+  const place = (s, isNew = false) => runRecording(`this.out = \`${ph}\`;`, { window: { WosModels: M }, esc: String, s, isNew }).out;
+  assert.match(place(TG), /^This chat lives in Telegram · reply there/);
+  assert.doesNotMatch(place(OWN), /This chat lives in/);
+  // A pending Not sent line in the thread offers no Retry for such a chat.
+  const pendSrc = outbox.slice(outbox.indexOf("    if (p.state === 'failed') return `"), outbox.indexOf('\n', outbox.indexOf("    if (p.state === 'failed') return `")));
+  const pend = s => runRecording(`this.out = (() => { ${pendSrc} })();`, { window: { WosModels: M }, esc: String, s, p: { id: 'o1', state: 'failed', error: 'x' }, OUTBOX: { canRetry: () => true }, recover: '' }).out;
+  assert.doesNotMatch(pend(TG), /data-obretry/);
+  assert.match(pend(OWN), /data-obretry="o1"/);
 });
 
 test('a Not sent bubble without a retry run shows no Retry button (what a foreign chat gets)', () => {
@@ -86,9 +121,14 @@ test('a routed agent thread from Telegram is refused the same way: the decision 
 });
 
 test('the chat-list send pill offers no Retry for a failed reply into such a chat', () => {
-  const chats = withParts(read('web/core/chats.js'));
-  const pill = chats.slice(chats.indexOf('  function sendPill('), chats.indexOf('    } else if (waiting.length) {', chats.indexOf('  function sendPill(')));
-  assert.match(pill, /const foreign = it => it\.kind === 'reply' && !!it\.sessionId && !!window\.WosModels\?\.foreignApp\?\.\(LIVE\.session\(it\.sessionId\)\);/);
-  assert.match(pill, /btns = one \? `\$\{foreign\(one\) \? '' : `<button type="button" class="pbtn" data-obretry=/);
-  assert.match(pill, /: failed\.every\(foreign\) \? '' : `<button type="button" class="pbtn" data-obretryall>Retry all<\/button>`;/);
+  const M = models(), drafts = read('web/core/chats-drafts.js');
+  const sessions = { t1: TG, w1: OWN };
+  const pill = items => runRecording(`${block(drafts, '  function sendPill(')}\nthis.out = sendPill(items, { id: 'w' });`, {
+    window: { WosModels: M }, esc: String, clip: v => v, ch: () => ({}), LIVE: { ok: true, session: id => sessions[id] },
+    OUTBOX: { get: () => null, quarantined: () => false, canRetry: () => true }, troubleshoot: '', items }).out;
+  const item = (id, sessionId) => ({ id, kind: 'reply', sessionId, state: 'failed', text: 'hi' });
+  assert.doesNotMatch(pill([item('o1', 't1')]), /data-obretry/, 'one failed reply into Telegram: no Retry');
+  assert.match(pill([item('o1', 'w1')]), /data-obretry="o1"/, 'a WizardOS chat keeps Retry');
+  assert.doesNotMatch(pill([item('o1', 't1'), item('o2', 't1')]), /data-obretryall/, 'all foreign: no Retry all');
+  assert.match(pill([item('o1', 't1'), item('o2', 'w1')]), /data-obretryall>Retry all<\/button>/);
 });

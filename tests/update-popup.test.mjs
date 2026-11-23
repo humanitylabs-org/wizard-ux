@@ -3,6 +3,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { createDocument } from './fixtures/mini-dom.mjs';
+import { cascade } from './fixtures/mini-css.mjs';
+import { between, block, runRecording } from './fixtures/source-slice.mjs';
+import { fixture as webUpdate } from './fixtures/web-update-harness.mjs';
 
 const src = readFileSync(new URL('../web/core/os-updates.js', import.meta.url), 'utf8');
 const tick = () => new Promise(r => setTimeout(r, 0));
@@ -71,17 +75,26 @@ test('only one notice: the old web banner steps aside while the pop-up carries t
   const storage = new Map();
   const web = { pending: true, version: 'v:abc', render() {}, armed: false };
   const b = await boot({ status: ST({ update_available: false, latest: '0.3.32' }), web, storage }); b.U.popup();
+  const drawn = b.pop().className;
   assert.match(b.pop().innerHTML, /<b>Interface updated<\/b><span>Reload to see the changes<\/span>[^]*data-osu="reload" >Reload</);
   assert.equal(b.U.ownsReload(), true);
   tapX(b.pop()); assert.equal(storage.get('wos.osu.dismissed'), 'reload:v:abc');
   assert.equal(b.U.ownsReload(), true, 'dismissed: the old banner does not come back for the same build');
   const off = await boot({ status: ST({ update_available: false }), web, home: false }); off.U.popup();
   assert.equal(off.U.ownsReload(), false, 'off Home and not dismissed: the old banner keeps telling');
+  // the old banner's real render() step: while the pop-up owns the reload the banner goes and nothing is drawn
   const w = readFileSync(new URL('../web/core/web-update.js', import.meta.url), 'utf8');
-  assert.match(w, /if \(window\.WosUpdates\?\.ownsReload\?\.\(\)\) \{ document\.getElementById\('dvWeb'\)\?\.remove\(\)/);
-  assert.match(w, /get version\(\) \{ return printNow; \}/);
+  for (const owns of [true, false]) {
+    const gone = [];
+    const R = runRecording(`this.f = () => {\n${between(w, '    if (window.WosUpdates?.ownsReload?.())', '\n')}\n  return 'drawn';\n};`,
+      { window: { WosUpdates: { ownsReload: () => owns } }, document: { getElementById: id => ({ remove: () => gone.push(id) }) }, listOpen: true });
+    assert.equal(R.f(), owns ? undefined : 'drawn', owns ? 'owned: not drawn' : 'not owned: the banner draws'); assert.deepEqual(gone, owns ? ['dvWeb'] : []);
+  }
+  // the pop-up keys its dismiss on the build the banner would reload to (WizWebUpdate.version, the real file)
+  const wu = webUpdate(); await wu.update(); assert.equal(wu.web.version, 'v:' + 'b'.repeat(40), 'the new build (the same v:<build> the dismiss key above carries)');
   const css = readFileSync(new URL('../web/core/update-banner.css', import.meta.url), 'utf8');
-  assert.match(css, /\.osu-pop \{[^}]*--wz-text/, 'styled with --wz-* tokens');
+  const page = createDocument(), pop = page.createElement('div'); pop.className = drawn; page.body.appendChild(pop);
+  assert.match(cascade(pop, css)['--wz-text']?.value || '', /^var\(--ink/, 'the pop-up as drawn is styled with --wz-* tokens');
 });
 test('desktop: the pop-up never sits above an open overlay (palette, keys, Inbox, Usage, Settings)', async () => {
   for (const o of ['#palette', '#keys', '#inbox', '.usage-ov', '.dsettings']) {
@@ -110,11 +123,17 @@ test('words: the interface never says WizardOS; WizardOS says overnight (Automat
   const fs = await import('node:fs');
   const web = fs.readFileSync(new URL('../web/core/web-update.js', import.meta.url), 'utf8');
   const shown = (web.match(/'[^'\n]*'|`[^`\n]*`/g) || []).filter(x => /WizardOS/.test(x));
-  assert.deepEqual(shown, [], 'no interface notice string names WizardOS');
-  assert.match(web, /class="wb-text">Reloading<em>/);
-  const osu = fs.readFileSync(new URL('../web/core/os-updates.js', import.meta.url), 'utf8');
-  assert.match(osu, /title: 'Interface updated', line: 'Reload to see the changes', action: 'reload', label: 'Reload'/);
-  assert.match(osu, /line: auto \? 'Installs tonight when it’s quiet' : takes/);
-  assert.match(osu, /const takes = st\.quick === true \? 'Takes about 2 minutes' : 'Takes 10–20 minutes';/, 'Ask me says how long: about 2 minutes only when the App Manager says quick');
-  assert.match(osu, /auto \? 'Install now' : 'Install'/);
+  assert.ok(!shown.length, 'no interface notice string names WizardOS: ' + shown.join(', '));
+  // the reload burst the interface draws (real web-update.js burst()) says Reloading
+  const doc = createDocument();
+  runRecording(`${block(web, '  function burst() {')}\nburst();`, { document: doc, Array, Math });
+  assert.match(doc.querySelector('.wos-burst .wb-text')?.textContent || '', /^Reloading/);
+  // the real cards (core/os-updates.js card()) in each state
+  const cardOf = async (status, web) => (await boot({ status, web })).U.card();
+  const pick = c => c && { title: c.title, line: c.line, action: c.action, label: c.label };
+  assert.deepEqual(pick(await cardOf(ST(), { pending: true })), { title: 'Interface updated', line: 'Reload to see the changes', action: 'reload', label: 'Reload' }, 'the interface: a Reload, never WizardOS');
+  assert.deepEqual(pick(await cardOf(ST())), { title: 'WizardOS update', line: 'Takes 10–20 minutes', action: 'apply', label: 'Install' }, 'Ask me says how long');
+  assert.equal((await cardOf(ST({ quick: true }))).line, 'Takes about 2 minutes', 'about 2 minutes only when the App Manager says quick');
+  assert.equal((await cardOf(ST({ quick: 'yes' }))).line, 'Takes 10–20 minutes');
+  assert.deepEqual(pick(await cardOf(ST({ mode: 'auto' }))), { title: 'WizardOS update', line: 'Installs tonight when it’s quiet', action: 'apply', label: 'Install now' }, 'Automatic says when');
 });

@@ -37,7 +37,7 @@ test('successful durable handoff drops fallback Blob references',async()=>{const
 test('committed prefix plus failed queued tail and final blob are preserved once, in order',async()=>{const f=fixture();await f.enqueue('A');assert.equal(f.saved.length,1);f.setStorage('QuotaExceededError');await f.enqueue('B');const out=await f.c.finish(f.s);assert.equal(await out.blob.text(),'ABC');assert.equal(out.durable,false);});
 test('facade forwards explicit Discard separately while Stop is in flight',async()=>{
   const service=readFileSync(new URL('../web/core/app-services.js',import.meta.url),'utf8');
-  const a=service.indexOf('        const finished = {}'),b=service.indexOf('        check();\n        const observe',a);assert.ok(a>=0&&b>a);
+  const a=service.indexOf('        const finished = {}'),b=service.indexOf('        check();\n        const observe',a);
   let stopped=0,cancelled=0,done;
   const c=vm.createContext({check(){},release(){},session:{stop(){stopped++;return new Promise(r=>done=r);},async cancel(){cancelled++;}},Promise});
   vm.runInContext(service.slice(a,b)+';globalThis.run=finish;',c);

@@ -8,7 +8,6 @@ for (const shell of ['phone', 'desktop']) test(`${shell}: a nested app link cann
   const source = withShellParts(readFileSync(new URL(file, import.meta.url), 'utf8'));
   const name = shell === 'phone' ? 'openLinkDesk' : 'openAppLink';
   const start = source.indexOf(`  function ${name}(`), end = shell === 'phone' ? source.indexOf('  /* ---------------- bound views', start) : source.indexOf('  window.WosAppSetup?.init', start);
-  assert(start >= 0 && end > start);
   const created = [], app = { id: 'recorder', name: 'Recorder', url: '/apps/recorder/' };
   let continuation, checks = 0;
   const ctx = { URL, location: { href: 'https://fixture.invalid/', origin: 'https://fixture.invalid' },

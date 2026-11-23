@@ -4,6 +4,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import { withShellParts } from './fixtures/shell-parts.mjs';
+import { between, block, runRecording } from './fixtures/source-slice.mjs';
+import { partScope, runPartRecording } from './fixtures/r5A-parts.mjs';
 
 const features = withShellParts(fs.readFileSync(new URL('../web/core/features.js', import.meta.url), 'utf8'));
 const src = withShellParts(fs.readFileSync(new URL('../web/core/workspace-sync.js', import.meta.url), 'utf8'));
@@ -279,18 +281,50 @@ test('starter apps a fresh device opened by itself never reach the box or the ot
   assert.deepEqual(plain(S.norm({ desks: [D('t', app('t1', 'topics'))] })).desks, [D('t', app('t1', 'topics'))]);
 });
 
-test('the phone shell seeds starter apps only into a layout it just created, marked device-only', () => {
-  const app = withShellParts(fs.readFileSync(new URL('../web/app.js', import.meta.url), 'utf8'));
-  assert.match(app, /if \(!freshBoot \|\| joinedWorkspaces\(\)\) return;/, 'no seeding into an existing or already-synced layout');
-  assert.match(app, /W\[id\] = \{ id, app: 'frame', appId, seed: true \}/, 'seeded windows are marked');
-  assert.match(app, /W = \{\}; desks = \[blank\(\{ id: 'home', home: true \}\)\]; freshBoot = true;/);
-  assert.match(app, /if \(!here\) \{ const w = openWin\(obj, opts\); openingEnd\(\); return w; \}\n\s*delete W\[here\]\.seed;/, 'an explicit open adopts a starter app');
-  assert.match(app, /if \(o\.join && state\.desks\.length\) desks = desks\.filter/, 'joining the owner\'s workspaces drops this device\'s starter apps');
+// Runs the real phone seed part (app-seed.js) on a new, an existing and an already-joined device, the real placeApp
+// (app-search.js) adopting a starter app, and the real join step of the phone's workspace apply (app-boot.js).
+// late: the launcher settles only after boot, and its 'wizard:apps' arrives then (the shell's late layout pass).
+async function seedBoot({ strip = null, joined = false, late = false } = {}) {
+  const storeMap = new Map(joined ? [['wsync.v2.phone', { base: { desks: [] } }]] : []); let n = 0;
+  const appVars = strip ? JSON.parse(JSON.stringify(strip)) : { W: undefined, desks: undefined };
+  const launcher = { settled: !late, get: k => (k === 'autoOpen' ? ['topics'] : []) }, on = {};
+  const scope = partScope({ WizLauncher: launcher, WosFeatures: { pruneWindows() {} }, setTimeout: () => 0, addEventListener: (t, f) => (on[t] ||= []).push(f) });
+  scope.WizCore.migrateChatsFocus = (W, desks) => desks;
+  await runPartRecording('app-seed.js', 'appParts', 'seed', { APP: { topics: { id: 'topics' } }, appVars, MAXW: 4, newId: () => 'n' + ++n,
+    blank: o => ({ id: o.id || 'd' + ++n, wins: [], focus: null, full: false, ...o }), store: { get: (k, d) => (storeMap.has(k) ? storeMap.get(k) : d), set: (k, v) => storeMap.set(k, v) },
+    save() {}, syncDesks() {}, renderDesk() {}, winEl: () => null }, scope);
+  launcher.settled = true; for (const f of on['wizard:apps'] || []) f(); // the app list lands (late layout pass)
+  return Object.values(appVars.W).filter(w => w.app === 'frame').map(w => ({ appId: w.appId, seed: !!w.seed }));
+}
+test('the phone shell seeds starter apps only into a layout it just created, marked device-only', async () => {
+  assert.deepEqual(await seedBoot(), [{ appId: 'topics', seed: true }], 'a new device: the starter app, marked seed');
+  const existing = { W: { c1: { id: 'c1', app: 'chats', thread: null }, m1: { id: 'm1', app: 'frame', appId: 'messenger' } }, desks: [{ id: 'home', home: true, wins: [] }, { id: 'd1', wins: ['c1'] }, { id: 'd2', wins: ['m1'] }] };
+  assert.deepEqual(await seedBoot({ strip: existing }), [{ appId: 'messenger', seed: false }], 'no seeding into an existing layout');
+  assert.deepEqual(await seedBoot({ joined: true }), [], 'no seeding on a device that already joined the workspaces');
+  assert.deepEqual(await seedBoot({ late: true }), [{ appId: 'topics', seed: true }], 'a new device whose launcher settles late: seeded then, still marked');
+  assert.deepEqual(await seedBoot({ strip: existing, late: true }), [{ appId: 'messenger', seed: false }], 'the late pass never seeds into an existing layout');
+  // an explicit open adopts a starter app
+  const search = fs.readFileSync(new URL('../web/app-search.js', import.meta.url), 'utf8');
+  const place = (W, deskOf) => { const appVars = { W, desks: [{}, {}], idx: 1 };
+    const c = runRecording(block(search, '  function placeApp(mine, obj, opts = {}, refresh) {') + '\nglobalThis.placeApp = placeApp;', { appVars, deskOf, openWin: o => ({ ...o, id: 'new' }) });
+    return { w: c.placeApp(w => w.appId === 'topics', { app: 'frame', appId: 'topics' }), appVars }; };
+  { const { w, appVars } = place({ t1: { id: 't1', app: 'frame', appId: 'topics', seed: true } }, () => 1);
+    assert.equal(w, appVars.W.t1); assert.equal('seed' in appVars.W.t1, false, 'opened by the owner: one of his open apps now'); }
+  { const { w } = place({}, () => -1); assert.equal(w.id, 'new', 'not open yet: opened as usual'); assert.equal(w.seed, undefined); }
+  // joining the owner's workspaces drops this device's starter apps
+  const boot = fs.readFileSync(new URL('../web/app-boot.js', import.meta.url), 'utf8');
+  const join = between(boot, '      if (o.join && state.desks.length) appVars.desks = appVars.desks.filter(d => {', '      const r = window.WosWorkspaceSync.reconcile(');
+  const joinRun = (o, state) => { const appVars = { W: { t1: { id: 't1', seed: true }, c1: { id: 'c1', app: 'chats' }, t2: { id: 't2', seed: true } },
+    desks: [{ id: 'home', home: true, wins: [] }, { id: 's', wins: ['t1'], focus: 't1' }, { id: 'm', wins: ['c1', 't2'], focus: 't2' }] };
+    runRecording(join, { appVars, o, state }); return plain({ desks: appVars.desks.map(d => [d.id, d.wins, d.focus ?? null]), W: Object.keys(appVars.W) }); };
+  assert.deepEqual(joinRun({ join: true }, { desks: [D('x', chats('w1'))] }), { desks: [['home', [], null], ['m', ['c1'], 'c1']], W: ['c1'] });
+  assert.deepEqual(joinRun({}, { desks: [D('x', chats('w1'))] }).W, ['t1', 'c1', 't2'], 'an ordinary apply keeps them');
+  assert.deepEqual(joinRun({ join: true }, { desks: [] }).W, ['t1', 'c1', 't2'], 'nothing shared yet: nothing dropped');
 });
 
 test('upgrade: starter windows from the previous shell (no seed mark) on a not-yet-joined device are marked before the first join', async () => {
   const src = withShellParts(fs.readFileSync(new URL('../web/app.js', import.meta.url), 'utf8'));
-  const at = src.indexOf('  function markLegacyStarters('); assert.ok(at >= 0);
+  const at = src.indexOf('  function markLegacyStarters(');
   const body = src.slice(at, src.indexOf('\n  }\n', at) + 4);
   const mark = new Function(body + '\nreturn markLegacyStarters;')();
   const legacy = () => ({ t1: { id: 't1', app: 'frame', appId: 'topics' }, z1: { id: 'z1', app: 'frame', appId: 'mizel' },

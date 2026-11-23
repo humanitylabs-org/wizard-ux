@@ -7,6 +7,7 @@ import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { createHash, webcrypto } from 'node:crypto';
 import { withSkinHostParts } from './fixtures/skin-host-parts.mjs';
+import { settingsView } from './fixtures/skin-palettes-harness.mjs';
 
 const source = p => readFileSync(new URL('../web/' + p, import.meta.url), 'utf8');
 const tick = () => new Promise(r => setTimeout(r, 10));
@@ -83,13 +84,13 @@ test('only the shared switch fences scripts: other tweaks leave skin scripts alo
   assert.equal(p.H.state.active, 'fixture');
 });
 
-async function mySkin({ lookOnly = false } = {}) {
+async function mySkin({ lookOnly = false, doc = false } = {}) {
   const bytes = new TextEncoder().encode(CODE), sha = createHash('sha256').update(bytes).digest('hex');
   const store = new Map([['wos.myskin.js.ok', sha]]), loaded = [], listeners = {};
   const host = { lookOnly, personalState: { ready: true }, scriptProblem: () => null, stopPersonal() {}, async loadPersonal(b, allowed) { if (allowed()) loaded.push(b); return true; } };
   const ctx = { URLSearchParams, Uint8Array, TextDecoder, crypto: webcrypto, location: { search: '' },
     localStorage: { getItem: k => store.get(k) || null, setItem: (k, v) => store.set(k, String(v)), removeItem: k => store.delete(k) },
-    WosSkinHost: host,
+    WosSkinHost: host, addEventListener: (t, fn) => { listeners[t] = fn; }, dispatchEvent() {},
     fetch: async url => {
       if (url.endsWith('format=json')) return { ok: true, json: async () => ({ script: { exists: true, sha256: sha, bytes: bytes.length } }) };
       if (url.endsWith('/script')) return { ok: true, headers: { get: k => k.toLowerCase() === 'content-type' ? 'application/javascript' : sha }, arrayBuffer: async () => bytes.buffer };
@@ -97,9 +98,11 @@ async function mySkin({ lookOnly = false } = {}) {
     },
   };
   ctx.window = ctx;
+  // doc: a page (a document), so My skin also wires its page listeners (storage, wos:look-only, visibility).
+  if (doc) ctx.document = { addEventListener() {}, createElement: () => ({ dataset: {}, remove() {} }), head: { appendChild() {} }, documentElement: { toggleAttribute() {} }, visibilityState: 'visible' };
   vm.runInNewContext(source('core/my-skin.js'), ctx);
   await ctx.WosMySkin.refresh();
-  return { M: ctx.WosMySkin, host, loaded };
+  return { M: ctx.WosMySkin, host, loaded, listeners };
 }
 
 test('My skin does not start an approved personal script while skins are look only, and starts it once off', async () => {
@@ -110,10 +113,21 @@ test('My skin does not start an approved personal script while skins are look on
   assert.equal(b.loaded.length, 1);
 });
 
-test('My skin restarts its script on wos:look-only, and Settings shows it paused while on', () => {
-  const src = source('core/my-skin.js');
-  assert.match(src, /addEventListener\?\.\('wos:look-only', \(\) => \{ stopScript\(\); void startScript\(\); emit\(\); \}\)/);
-  const settings = source('core/settings.js');
-  assert.match(settings, /const paused = !!window\.WosSkinHost\?\.lookOnly;/);
-  assert.match(settings, /Skin script paused/);
+test('My skin restarts its script on wos:look-only, and Settings shows it paused while on', async () => {
+  const b = await mySkin({ lookOnly: true, doc: true }); await tick();
+  assert.equal(b.loaded.length, 0);
+  assert.equal(typeof b.listeners['wos:look-only'], 'function', 'My skin listens for the switch');
+  b.host.lookOnly = false; b.listeners['wos:look-only'](); await tick();
+  assert.equal(b.loaded.length, 1, 'the switch going off restarts the approved script at once');
+  // Settings › Look on the worn own skin: the script row says paused while the switch is on.
+  const S = { current: 'nebula', list: [{ id: 'nebula', name: 'Nebula', t: {} }], families: [{ id: 'wizard', name: 'Wizard', palettes: ['nebula'] }], familyOf: () => 'wizard', lastIn: () => 'nebula' };
+  const M = { recipes: [{ id: 'own-1', name: 'Quiet', base: 'nebula' }], active: { id: 'own-1', name: 'Quiet', base: 'nebula' }, on() {},
+    state: { script: { exists: true, approved: true }, off: false } };
+  const h = settingsView({ WosSkin: S, WosMySkin: M, timer: () => 0 });
+  h.s.WosSkinHost = { lookOnly: true }; h.view.focus('look');
+  assert.match(h.html(), /<b>Skin script paused<\/b><small>Skins\/own-1\/skin\.js · paused while Skins are look only is on<\/small>/);
+  h.s.WosSkinHost.lookOnly = false; h.view.focus('look');
+  assert.match(h.html(), /<b>Skin script on<\/b>/);
+  assert.doesNotMatch(h.html(), /paused/);
+  h.view.destroy();
 });

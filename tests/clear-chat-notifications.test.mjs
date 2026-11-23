@@ -6,6 +6,8 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { withServicesParts } from './fixtures/app-services-parts.mjs';
+import { boundaryPair } from './fixtures/r7A-boundary-harness.mjs';
+import { appClient } from './fixtures/app-client-harness.mjs';
 
 const read = p => readFileSync(new URL('../web/' + p, import.meta.url), 'utf8');
 const SWITCH = 'wizard/clear-chat-notifications';
@@ -19,7 +21,7 @@ function el(tag) {
 
 function fixture({ on = false, access = false, visible = true, native = true, provides = ['messaging'], appId = 'messenger' } = {}) {
   const origin = 'https://wizard.example', calls = [], winListeners = {}, docListeners = {}, timers = [], observers = [];
-  const source = { location: new URL(origin + '/messenger/'), document: { documentElement: {} }, addEventListener() {}, postMessage() {} };
+  const replies = [], source = { location: new URL(origin + '/messenger/'), document: { documentElement: {} }, addEventListener() {}, postMessage: (m, o) => replies.push([JSON.parse(JSON.stringify(m)), o]) };
   const frame = { tagName: 'IFRAME', isConnected: true, src: source.location.href, contentWindow: source, addEventListener() {}, removeEventListener() {}, hasAttribute: () => false, getAttribute: () => frame.src };
   const app = { id: appId, kind: 'wizard', name: 'Messenger', url: '/messenger/', source: 'apps.json', provides };
   const root = { dataset: { tweaks: on ? 'wizard/desktop-chats ' + SWITCH : 'wizard/desktop-chats' } };
@@ -47,7 +49,9 @@ function fixture({ on = false, access = false, visible = true, native = true, pr
   const flip = v => { root.dataset.tweaks = v ? 'wizard/desktop-chats ' + SWITCH : 'wizard/desktop-chats'; for (const o of observers) o.fn([]); };
   const settle = () => { for (const t of timers.filter(t => t.ms === 5000)) t.fn(); };
   const bar = () => body.children.find(k => k.id === 'wosChatNotify') || null;
-  return { c, calls, service, view, state, flip, settle, bar, docListeners };
+  // An app's request over the message transport (an app without same-origin services), and the shell's replies.
+  const post = async (op, args, id = 'r1') => { for (const fn of winListeners.message || []) await fn({ data: { type: 'wizard:app:request', version: 1, op, id, args }, origin, source }); };
+  return { c, calls, service, view, state, flip, settle, bar, docListeners, post, replies };
 }
 const reads = f => f.calls.filter(x => x[0] === 'read');
 
@@ -133,14 +137,34 @@ test('without the Android app (a browser, an older APK) nothing happens', () => 
   assert.equal(f.bar(), null);
 });
 
-test('the switch is in the catalog, off by default, and every host serves notify.chatRead', () => {
+test('the switch is in the catalog, off by default, and every host serves notify.chatRead', async () => {
   const cat = JSON.parse(read('tweaks/catalog.json'));
   assert.ok(cat.tweaks.includes(SWITCH));
   assert.ok(!cat.defaults.includes(SWITCH));
   const m = JSON.parse(read('tweaks/wizard/clear-chat-notifications/manifest.json'));
   assert.equal(m.id, SWITCH); assert.match(m.description, /Notification access/);
-  assert.match(read('core/browser-boundary.js'), /'notify\.chatRead'\]/);
-  assert.match(read('core/browser-boundary-client.js'), /'notify\.chatRead'\], STICKY/);
-  assert.match(withServicesParts(read('core/app-services.js')), /'notify\.chatRead'\]\);/);
-  assert.match(read('core/app-client.js'), /request\('notify\.chatRead', data\)/);
+  const data = { network: 'line', names: ['Mike'] };
+  // The shell's message transport (app-services.js) serves it, through the same checks.
+  const f = fixture({ on: true, access: true });
+  await f.post('notify.chatRead', data);
+  assert.deepEqual(f.replies.map(([r]) => [r.type, r.id, r.value]), [['wizard:app:reply', 'r1', true]]);
+  assert.deepEqual(reads(f), [['read', data]]);
+  // The browser boundary: a sandboxed app's request crosses both ends (client and shell method lists) to the server.
+  const served = [];
+  const pair = await boundaryPair((el, method, args) => { served.push([method, JSON.parse(JSON.stringify(args))]); return true; });
+  assert.equal(await pair.client.request('notify.chatRead', data, 2000), true);
+  assert.deepEqual(served, [['notify.chatRead', data]]);
+  await assert.rejects(pair.client.request('orb.set', {}, 2000), e => e.code === 'unavailable', 'an unlisted method never crosses');
+  // The app SDK asks over whichever host it has: same-origin services, or a request to the shell.
+  const got = [];
+  const same = appClient({ service: { notifications: { chatRead: d => { got.push(d); return true; } } } });
+  assert.equal(await same.api.notifications.chatRead(data), true); assert.equal(got.length, 1);
+  const msg = appClient();
+  await msg.hello();
+  const answer = msg.api.notifications.chatRead(data);
+  await new Promise(r => setTimeout(r, 0));
+  const req = msg.requests('notify.chatRead');
+  assert.equal(req.length, 1); assert.deepEqual(JSON.parse(JSON.stringify(req[0].args)), data);
+  msg.reply(req[0], true);
+  assert.equal(await answer, true);
 });

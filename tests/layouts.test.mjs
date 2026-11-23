@@ -12,6 +12,7 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { withSkinHostParts } from './fixtures/skin-host-parts.mjs';
 import { withShellParts } from './fixtures/shell-parts.mjs';
+import { between, block } from './fixtures/source-slice.mjs';
 
 const root = new URL('../', import.meta.url);
 const read = p => withShellParts(readFileSync(new URL(p, root), 'utf8'));
@@ -130,14 +131,38 @@ test('the agent API reaches the shell adapter (talk, tap, list, here)', async ()
 });
 
 test('the shell wires layouts: orb tap hook, Settings row, agent kept on recovered takes', () => {
-  const app = read('web/app.js');
-  assert.match(app, /window\.WosSkinHost\?\.orbTap\?\.\(\) \? undefined : startOrbVoice\(\)/);
-  assert.match(app, /talk: id => talkTo\(id\)/);
-  assert.match(app, /opt\.agent && window\.WosAgents\?\.isOther\(opt\.agent\)/, 'an agent pick routes only to that agent');
+  const app = read('web/app.js'), raw = p => readFileSync(new URL(p, root), 'utf8');
+  // The orb's tap (web/app-orbswipe.js): a layout that takes the tap (orbTap() true) gets it; otherwise the stock take.
+  const tapLine = between(raw('web/app-orbswipe.js'), "      if (V.state === 'idle') return window.WosSkinHost?.orbTap?.()", '\n');
+  const tap = orbTap => { const calls = []; vm.runInNewContext(`(() => {${tapLine}})()`, { V: { state: 'idle' }, window: { WosSkinHost: orbTap === undefined ? undefined : { orbTap } }, startOrbVoice: () => calls.push('stock') }); return calls; };
+  assert.deepEqual(tap(() => true), [], 'the layout took the tap');
+  assert.deepEqual(tap(() => false), ['stock']); assert.deepEqual(tap(undefined), ['stock'], 'no layout: the stock take');
+  // The layout API's talk(id) (web/app-agentorb.js) talks to that agent.
+  const talkLine = between(raw('web/app-agentorb.js'), '    talk: id => talkTo(id),', '\n');
+  const talked = []; const api = vm.runInNewContext(`({${talkLine}})`, { talkTo: id => talked.push(id) });
+  api.talk('philosopher'); assert.deepEqual(talked, ['philosopher']);
+  // startVoice (app.js): an agent pick routes only to that agent; the main agent and dictation keep their route.
+  const pick = block(app, "    if (initialSnap && kind === 'general' && opt.agent && window.WosAgents?.isOther(opt.agent)) {");
+  const route = (kind, agent) => {
+    const initialSnap = { route: { model: 'm', provider: 'p' } }, toasts = [];
+    const ctx = { initialSnap, kind, opt: { agent }, toast: (...a) => toasts.push(a), esc: String,
+      window: { WosAgents: { isOther: id => id !== 'hermes' }, WosModels: { snapshot: (sid, choice, ag) => ({ model: 'agent-m', provider: 'agent-p', agent: ag }) } } };
+    vm.runInNewContext(`(() => {${pick}})()`, ctx); return JSON.parse(JSON.stringify(initialSnap.route));
+  };
+  assert.deepEqual(route('general', 'philosopher'), { model: 'agent-m', provider: 'agent-p', agent: 'philosopher' });
+  assert.deepEqual(route('general', 'hermes'), { model: 'm', provider: 'p' });
+  assert.deepEqual(route('general', ''), { model: 'm', provider: 'p' });
   assert.doesNotMatch(read('web/core/settings.js'), /data-layoutpick|data-layout-row/);
-  const models = read('web/core/chat-models.js');
-  assert.match(models, /route\.agent \? \{ agent: route\.agent \}/);
-  assert.match(models, /M\.currentRoute\('', saved, saved\.agent \|\| ''\)/);
+  // A recovered take keeps its agent (core/chat-models.js keepVoiceRoute / voiceRoute).
+  const store = new Map(), window = {};
+  vm.runInNewContext(raw('web/core/chat-models.js'), { window, localStorage: { getItem: k => store.get(k) ?? null, setItem: (k, v) => store.set(k, String(v)), removeItem: k => store.delete(k) }, fetch: async () => ({}), console, document: { documentElement: { dataset: {} } } });
+  const M = window.WosModels, asked = [];
+  M.currentRoute = (sid, saved, agent) => { asked.push([sid, saved.model, agent]); return { ...saved }; };
+  M.keepVoiceRoute('take-1', { model: 'claude-opus', provider: 'anthropic', agent: 'philosopher' });
+  M.keepVoiceRoute('take-2', { model: 'claude-opus', provider: 'anthropic' });
+  assert.deepEqual(JSON.parse(store.get('wos.voice-model-routes.v1')), { 'take-1': { model: 'claude-opus', provider: 'anthropic', agent: 'philosopher' }, 'take-2': { model: 'claude-opus', provider: 'anthropic' } });
+  M.voiceRoute('take-1'); M.voiceRoute('take-2');
+  assert.deepEqual(asked, [['', 'claude-opus', 'philosopher'], ['', 'claude-opus', '']], 'the saved agent goes back into the route');
 });
 
 test('a ?layout= link turns a layout on or off and remembers it', async () => {

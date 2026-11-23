@@ -1,17 +1,29 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { withShellParts } from './fixtures/shell-parts.mjs';
+import vm from 'node:vm';
+import { between } from './fixtures/source-slice.mjs';
 
 // A launcher link (launcher.json) whose URL is one of the agent's Pages must open in the Pages window. In a plain app
 // frame the sandboxed, opaque-origin page is unreadable, so the frame watcher showed "can't show in a window".
-for (const [shell, file] of [['desktop', '../web/desktop/desktop.js'], ['phone', '../web/app.js']]) {
+// Both shells' real openApp runs here, up to its page route (wizard-ux issue 1674: tests run the code).
+const read = f => readFileSync(new URL(f, import.meta.url), 'utf8');
+const SHELLS = [
+  ['desktop', '../web/desktop/desktop-resize.js', 'function openApp(a, opts = {}) {', '    // a layout placing the shell'],
+  ['phone', '../web/app-search.js', 'function openApp(a, extra = {}, opts = {}) {', "    if (a.id !== 'troubleshooter' && a.kind === 'wizard'"],
+];
+for (const [shell, file, head, stop] of SHELLS) {
   test(`${shell}: a launcher tile pointing at /pages/<slug>/ opens the Pages window`, () => {
-    const src = withShellParts(readFileSync(new URL(file, import.meta.url), 'utf8'));
-    const open = src.slice(src.indexOf('function openApp('), src.indexOf('function openApp(') + 2500);
-    const route = open.indexOf('window.WosPages?.match(a.url)');
-    assert.ok(route > 0, 'openApp routes page URLs through WosPages.match');
-    assert.ok(route < open.indexOf("a.kind === 'chats'"), 'before any frame/chats handling');
-    assert.match(open.slice(route, route + 400), /app:\s*'pages',\s*appId:\s*'pages',\s*pageSlug/);
+    const made = [], placed = [], ctx = { made, placed,
+      window: { WosPages: { match: url => (/^\/pages\/([^/]+)\//.exec(url) || [])[1] || null } },
+      findWin: () => null, focusWin() {}, newWin: (w, o) => made.push(w), closeSheets() {}, openingEnd() {},
+      placeApp: (find, w) => placed.push({ w, mine: find({ app: 'pages', pageSlug: w.pageSlug }), other: find({ app: 'pages', pageSlug: 'x' }) }) };
+    vm.createContext(ctx);
+    vm.runInContext(`${between(read(file), head, stop)}    return 'not a page'; }\nthis.openApp = openApp;`, ctx);
+    assert.equal(ctx.openApp({ id: 'tile', url: '/pages/trip-plan/', kind: 'wizard' }), true);
+    const opened = shell === 'desktop' ? made : placed.map(p => p.w);
+    assert.deepEqual(JSON.parse(JSON.stringify(opened)), [{ app: 'pages', appId: 'pages', pageSlug: 'trip-plan' }]);
+    if (shell === 'phone') assert.deepEqual([placed[0].mine, placed[0].other], [true, false], 'reuses the Pages window showing that page');
+    assert.equal(ctx.openApp({ id: 'cal', url: '/calendar/', kind: 'wizard' }), 'not a page', 'other apps go on to their own frame');
   });
 }

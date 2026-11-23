@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
+import { block, runRecording } from './fixtures/source-slice.mjs';
 const source = readFileSync(new URL('../web/core/chat-models.js', import.meta.url), 'utf8');
 const power = readFileSync(new URL('../web/core/chat-power.js', import.meta.url), 'utf8');
 const SUB = 'claude-subscription-directsdk-experimental';
@@ -28,9 +29,17 @@ test('picker catalogue TTL remains ~15 s and every open revalidates sign-in' , a
   assert.equal(M.stale(), false);
   M.at = Date.now() - 16e3;
   assert.equal(M.stale(), true);
-  const open = power.slice(power.indexOf("openSheet({ type: 'model'"), power.indexOf('function openFiles'));
-  assert.match(open, /M\.load\(M\.ready\)/, 'every open revalidates, which includes stale catalogues');
-  assert.doesNotMatch(open, /if \(M\.stale|if \(!M\.ready\)/, 'fresh-cache opens must not hide a new sign-in');
+  // the real picker open (chat-power.js openModels): every open asks the catalogue again, also a fresh one
+  M.at = Date.now(); assert.equal(M.stale(), false, 'a fresh catalogue');
+  const loads = [], load = M.load.bind(M);
+  M.load = (...a) => { loads.push(a); return load(...a); };
+  const w = { id: 'w', thread: 't1' };
+  const ctx = runRecording(`${block(power, '  function openModels(pane, mode, pop) {')}\nthis.openModels = openModels;`, {
+    M, H: { win: () => w, overlay() {} }, A: { owner: () => 'w', winAgent: () => '', elOf: () => ({}) },
+    LIVE: { session: () => ({ id: 't1' }) }, chanPane: () => null, paneThread: () => 't1', agentOfWin: () => '' });
+  ctx.openModels('w', 'thread'); ctx.openModels('w', 'thread');
+  assert.equal(loads.length, 2, 'every open revalidates, which includes fresh catalogues');
+  assert.ok(loads.every(a => a.length === 1 && a[0] === M.ready), 'with the catalogue it already holds');
 });
 
 test('a Claude app that errors or times out is named in the picker', async () => {

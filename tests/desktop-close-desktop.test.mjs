@@ -3,6 +3,9 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import { withShellParts } from './fixtures/shell-parts.mjs';
+import { between, block, runRecording } from './fixtures/source-slice.mjs';
+import { cascade } from './fixtures/mini-css.mjs';
+import { createDocument } from './fixtures/mini-dom.mjs';
 const source = withShellParts(fs.readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8'));
 const css = withShellParts(fs.readFileSync(new URL('../web/desktop/desktop.css', import.meta.url), 'utf8'));
 function fn(name) {
@@ -26,19 +29,66 @@ function rig({ cur = 1, lastWs = 2, count = 3, homeOpen = false, refuse = '' } =
   return ctx;
 }
 test('hover ✕ closes a desktop', () => {
-  assert.match(source, /data-wsclose="\$\{i\}" tabindex="-1" aria-label="Close desktop/);
-  assert.match(css, /\.ws:hover \.ws-close, \.ws:focus-visible \.ws-close, \.ws:focus-within \.ws-close/);
-  assert.match(css, /\.ws-close \{[^}]*top: -3px; left: -3px;[^}]*visibility: hidden/s);
-  assert.ok(source.indexOf("const close = e.target.closest('[data-wsclose]')") < source.indexOf("const b = e.target.closest('[data-ws]'); if (b) goWs"));
+  // the real bar (paintBar) on the small DOM, and the real click handler of its desk list
+  const doc = createDocument(); doc.body.innerHTML = '<div id="logo"></div><nav id="wsList"></nav>';
+  const $ = sel => doc.querySelector(sel) || doc.createElement('div'), nav = new Proxy({ slot: i => i + 1 }, { get: (t, k) => t[k] || (() => '') }), taps = [];
+  runRecording(`(${block(source, '  function paintBar() {')})()`, { $, C: { workspaceNav: nav }, LIVE: null, window: {}, MOD: '⌘', APP: {},
+    homeOpen: false, cur: 0, W: { a: { app: 'frame' }, b: { app: 'frame' } }, ws: [{ wins: ['a'] }, { wins: ['b'] }], winTitle: w => w.app });
+  runRecording(block(source, "  $('#wsList').addEventListener('click', e => {") + ');', { $, closeDesktop: i => taps.push(['close', i]), newDesktop: () => taps.push(['new']), goWs: i => taps.push(['go', i]) });
+  const x = doc.querySelector('[data-ws="1"] [data-wsclose]');
+  assert.ok(x, 'each desk carries its ✕'); assert.equal(x.getAttribute('tabindex'), '-1'); assert.equal(x.getAttribute('aria-label'), 'Close desktop 2');
+  x.click(); doc.querySelector('[data-ws="0"]').click();
+  assert.deepEqual(taps, [['close', 1], ['go', 0]], 'the ✕ closes that desktop and never also switches to it');
+  // the ✕ sits on the desk's corner, hidden until the desk is hovered or focused
+  const look = st => cascade(x, css, { states: st });
+  assert.equal(look([]).visibility?.value, 'hidden');
+  assert.deepEqual([look([]).top?.value, look([]).left?.value], ['-3px', '-3px']);
+  for (const st of [':hover', ':focus-visible', ':focus-within']) assert.notEqual(look([st]).visibility?.value, 'hidden', st);
   const r = rig(); r.closeDesktop(1); assert.equal(r.ws.length, 2); assert.equal(r.W.w1, undefined);
 });
+// An event target that honours { signal } (the menu drops all its listeners with one abort).
+function target(base = {}) {
+  const ls = [];
+  return Object.assign(base, { ls,
+    addEventListener(t, f, o = {}) { const l = { t, f }; ls.push(l); o.signal?.addEventListener('abort', () => ls.splice(ls.indexOf(l), 1)); },
+    removeEventListener(t, f) { const i = ls.findIndex(l => l.t === t && l.f === f); if (i >= 0) ls.splice(i, 1); },
+    fire(t, e = {}) { for (const l of ls.filter(l => l.t === t)) l.f({ type: t, ...e }); } });
+}
 test('right-click offers Close desktop', () => {
-  assert.match(source, /addEventListener\('contextmenu',[\s\S]*desktopMenu\(b, e.clientX, e.clientY\)/);
-  assert.match(fn('desktopMenu'), /label: 'Close desktop'.*closeDesktop\(ws.indexOf\(d\)\)/);
-  assert.match(withShellParts(fs.readFileSync(new URL('../web/core/escape-back.js',import.meta.url),'utf8')), /add\('context',[^\n]+WosContextMenu.back\(\)/);
-  const menu = withShellParts(fs.readFileSync(new URL('../web/core/context-menu.js', import.meta.url), 'utf8'));
-  for (const event of ['pointerdown', 'blur', 'scroll', 'resize']) assert.ok(menu.includes(`addEventListener('${event}'`));
-  assert.match(menu, /abort.abort\(\)/);
+  // the desktop strip's real contextmenu wiring and desktopMenu, with the real shared menu
+  const doc = createDocument(); doc.body.innerHTML = '<div id="wsList"><button class="ws" data-ws="0"></button><button class="ws" data-ws="1"><span class="ws-n">2</span></button></div>';
+  const win = target({ innerWidth: 1200, innerHeight: 800 });
+  doc.defaultView = win; target(doc);
+  vm.runInNewContext(fs.readFileSync(new URL('../web/core/context-menu.js', import.meta.url), 'utf8'), { window: win, document: doc, AbortController, navigator: {} });
+  const list = target(doc.getElementById('wsList'));
+  const ws = [{ id: 'd0' }, { id: 'd1' }], closed = [];
+  vm.runInNewContext(between(source, '  function desktopMenu(b, x, y) {', "  $('#wsList').addEventListener('keydown'"), { ws, window: win, $: s => (s === '#wsList' ? list : null), closeDesktop: i => closed.push(i) });
+  let prevented = false;
+  list.fire('contextmenu', { target: doc.querySelector('.ws-n'), clientX: 40, clientY: 20, preventDefault() { prevented = true; } });
+  assert.ok(prevented, 'no browser menu');
+  const menu = doc.querySelector('.wos-context-menu');
+  assert.equal(menu.getAttribute('aria-label'), 'Desktop actions');
+  assert.deepEqual(menu.querySelectorAll('[role="menuitem"]').map(b => b.textContent), ['Close desktop']);
+  ws.unshift({ id: 'new' });   // the desks are reordered while the menu is open
+  menu.querySelector('button').click();
+  assert.deepEqual(closed, [2], 'the desk that was right-clicked, not its old index');
+  assert.equal(doc.querySelector('.wos-context-menu'), null);
+  // it closes on an outside press, a blur, a scroll and a resize, and then leaves no listener behind
+  for (const [where, type] of [[doc, 'pointerdown'], [win, 'blur'], [win, 'scroll'], [win, 'resize']]) {
+    list.fire('contextmenu', { target: doc.querySelector('[data-ws="0"]'), clientX: 1, clientY: 1, preventDefault() {} });
+    assert.ok(win.WosContextMenu.isOpen, type);
+    where.fire(type, { target: doc.body });
+    assert.equal(win.WosContextMenu.isOpen, false, type + ' closes it');
+    assert.equal(doc.querySelector('.wos-context-menu'), null);
+    assert.equal(doc.ls.length + win.ls.length, 0, type + ': every listener released');
+  }
+  // Escape / Back peels it first (core/escape-back.js owners)
+  const eb = {}; vm.runInNewContext(fs.readFileSync(new URL('../web/core/escape-back.js', import.meta.url), 'utf8'), { window: eb });
+  Object.assign(eb, { WosContextMenu: win.WosContextMenu });
+  const stack = eb.WizEscapeBack.create();
+  vm.runInNewContext('(' + eb.WizEscapeBack.installOwners.toString() + ')', { window: eb, MutationObserver: class { observe() {} disconnect() {} }, document: { documentElement: {} }, queueMicrotask })(stack, { chats: () => ({}), links: () => null });
+  list.fire('contextmenu', { target: doc.querySelector('[data-ws="0"]'), clientX: 1, clientY: 1, preventDefault() {} });
+  assert.equal(stack.run(), 'context'); assert.equal(win.WosContextMenu.isOpen, false);
 });
 test('closing a desktop lands on the one to its left', () => {
   const r = rig(); r.closeDesktop(); assert.equal(r.cur, 0); assert.equal(r.ws[r.cur].id, 'd0');

@@ -1,39 +1,60 @@
 // Archive is the last Chats section again on desktop and phone (James, 6 Nov 2026); Miguel's "Archive on top" tweak
-// (miguel/archive-top) is the only way to put it first. Source-level guard; qa-archive-top.cjs renders it in a browser.
+// (miguel/archive-top) is the only way to put it first. The JS renders the real list; qa-archive-top.cjs renders it in a browser.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
-import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
+import { listFixture, sectionKeys } from './fixtures/chats-list-render.mjs';
 import { withWebParts } from './fixtures/web-parts.mjs';
+import { createDocument } from './fixtures/mini-dom.mjs';
+import { styles } from './fixtures/w5-css.mjs';
+import { experienceRuntime, skinsRuntime } from './fixtures/skin-palettes-harness.mjs';
 
 const root = new URL('../', import.meta.url);
 const read = f => withWebParts(readFileSync(new URL(f, root), 'utf8'));
 
 test('stock Chats: Archive is the last section in By status and By day', () => {
-  const js = withParts(read('web/core/chats.js'));
-  for (const name of ['SECTIONS_DAY', 'SECTIONS_STATUS']) {
-    const m = js.match(new RegExp(`const ${name} = (\\[\\[.*?\\]\\]);`));
-    assert.ok(m, name);
-    const keys = [...m[1].matchAll(/\['(\w+)'/g)].map(x => x[1]);
-    assert.equal(keys.at(-1), 'archive', `${name} ends with Archive`);
+  // The real list renderer (tests/fixtures/chats-list-render.mjs) with a row in every section.
+  for (const status of [false, true]) {
+    const keys = sectionKeys(listFixture({ status }).render(''));
+    assert.ok(keys.length >= 5, keys.join());
+    assert.equal(keys.at(-1), 'archive', `${status ? 'By status' : 'By day'} ends with Archive`);
   }
-  const css = read('web/core/chats.css');
-  const orders = Object.fromEntries([...css.matchAll(/^\.ch-list\.by-status \.ch-sec\[data-sec="(\w+)"\] \{ order: (-?\d+); \}$/gm)].map(m => [m[1], +m[2]]));
-  assert.ok('archive' in orders, 'By status gives Archive an explicit order');
-  for (const [k, v] of Object.entries(orders)) if (k !== 'archive') assert.ok(orders.archive > v, `Archive after ${k}`);
-  assert.ok(orders.archive > 0, 'after every unordered section (order 0) too');
-  // no skin or default tweak moves Archive up on its own
-  const skins = readdirSync(new URL('web/skins/', root)).map(d => `web/skins/${d}/skin.css`).filter(f => existsSync(new URL(f, root)));
-  assert.ok(skins.length >= 2, 'skins found');
-  for (const f of skins) assert.doesNotMatch(read(f), /data-sec="archive"\][^{]*\{[^}]*\border\s*:/, `${f} leaves Archive's position alone`);
 });
 
-test('archive-top tweak: still puts Archive first, and stays opt-in', () => {
-  const tweak = read('web/tweaks/miguel/archive-top/tweak.css');
-  assert.match(tweak, /html\[data-tweaks~="miguel\/archive-top"\] \.ch-list \.ch-sec\[data-sec="archive"\] \{ order: -2; \}/);
-  assert.match(tweak, /html\[data-tweaks~="miguel\/archive-top"\] \.ch-list \.ch-scroll \{ display: flex; flex-direction: column; \}/, 'By day becomes a flex column so order applies');
-  const catalog = JSON.parse(read('web/tweaks/catalog.json'));
-  assert.ok(!catalog.defaults.includes('miguel/archive-top'), 'not a default');
+// The real list (By status or By day) in a mini DOM under the Chats list, styled by the real CSS: each section's order.
+function sectionOrders({ status = true, sheets = [], skin = '', tweaks = '' } = {}) {
+  const doc = createDocument();
+  if (skin) doc.documentElement.setAttribute('data-skin', skin);
+  if (tweaks) doc.documentElement.setAttribute('data-tweaks', tweaks);
+  doc.body.innerHTML = `<div class="ch-list${status ? ' by-status' : ''}"><div class="ch-scroll">${listFixture({ status }).render('')}</div></div>`;
+  const css = [read('web/core/chats.css'), ...sheets.map(read)];
+  const secs = doc.querySelectorAll('section[data-sec]');
+  assert.ok(secs.length >= 5, 'the list drew its sections');
+  return { orders: Object.fromEntries(secs.map(s => [s.dataset.sec, +(styles(s, css).order || 0)])), scroll: styles(doc.querySelector('.ch-scroll'), css) };
+}
+const lastIsArchive = orders => Object.entries(orders).every(([k, v]) => k === 'archive' || orders.archive > v);
+
+test('stock Chats CSS: By status orders Archive last, and no skin moves it up', () => {
+  const { orders } = sectionOrders();
+  assert.ok(orders.archive > 0, 'after every unordered section (order 0) too');
+  assert.ok(lastIsArchive(orders), JSON.stringify(orders));
+  // no skin moves Archive up on its own (each skin's CSS on, as worn)
+  const { S } = skinsRuntime(), skins = S.families.flatMap(f => [...f.palettes]).filter(d => existsSync(new URL(`web/skins/${d}/skin.css`, root)));
+  assert.ok(skins.length >= 2, 'skins found');
+  for (const d of skins) assert.ok(lastIsArchive(sectionOrders({ sheets: [`web/skins/${d}/skin.css`], skin: d }).orders), `${d} leaves Archive's position alone`);
+});
+
+test('archive-top tweak: still puts Archive first, and stays opt-in', async () => {
+  const sheets = ['web/tweaks/miguel/archive-top/tweak.css'];
+  for (const status of [true, false]) {
+    const on = sectionOrders({ status, sheets, tweaks: 'wizard/unified-inbox miguel/archive-top' });
+    assert.ok(Object.entries(on.orders).every(([k, v]) => k === 'archive' || on.orders.archive < v), `${status ? 'By status' : 'By day'}: Archive first`);
+    assert.equal(on.scroll.display, 'flex', 'a flex column, so order applies'); assert.equal(on.scroll['flex-direction'], 'column');
+    const off = sectionOrders({ status, sheets, tweaks: 'wizard/unified-inbox miguel/archive-topper' });
+    assert.ok(status ? lastIsArchive(off.orders) : off.orders.archive === 0, 'only with the switch on');
+  }
+  const { E } = experienceRuntime(); await E.refresh();
+  assert.equal((await E.defaults())['miguel/archive-top'], false, 'not a default');
 });
 
 test('AI apps layout: Archive last in the desktop sidebar and phone drawer; first only with archive-top', async () => {
@@ -44,5 +65,23 @@ test('AI apps layout: Archive last in the desktop sidebar and phone drawer; firs
   assert.deepEqual(sectionsFor(html('wizard/unified-inbox miguel/archive-top')).map(x => x[0]), ['archive', 'working', 'snoozed', 'ready']);
   assert.equal(archiveTop(html('miguel/archive-topper')), false, 'exact tweak id only');
   assert.equal(archiveTop(null), false);
-  for (const f of ['web/layouts/ai-apps/desktop.js', 'web/layouts/ai-apps/layout.js']) assert.match(read(f), /for \(const \[k, word0\] of sectionsFor\(root\)\)/, `${f} draws sectionsFor(root)`);
+  // the phone drawer draws sectionsFor(root): ai-apps-view.test.mjs ('archive-top: Archive first') runs it; the desktop
+  // sidebar (the real view, drawn) keeps Archive last
+  const keys = await deskSections('wizard/unified-inbox');
+  assert.equal(keys.at(-1), 'archive', `desktop: Archive last (${keys})`);
+});
+
+// The real desktop AI apps view (tests/fixtures/ai-apps-world.mjs) with `tweaks` on <html>: its sidebar's section keys.
+async function deskSections(tweaks) {
+  const { deskWorld, layout } = await import('./fixtures/ai-apps-world.mjs');
+  const { w } = deskWorld(); w.html.setAttribute('data-shell', 'desktop'); w.html.setAttribute('data-layout', 'ai-apps'); w.html.dataset.tweaks = tweaks;
+  (await layout()).default(w.api);
+  return w.qa('.aad-sec').map(h => h.dataset.sec);
+}
+
+// The old text pin said the desktop sidebar draws sectionsFor(root); that loop sits behind actOn(), which desktop.js
+// fixes to true, so it never runs: the drawn sidebar ignores archive-top.
+test('AI apps desktop sidebar: archive-top puts Archive first', { todo: 'desktop sidebar ignores miguel/archive-top: its sectionsFor(root) branch is dead (actOn() is always true)' }, async () => {
+  const keys = await deskSections('wizard/unified-inbox miguel/archive-top');
+  assert.equal(keys[0], 'archive', `desktop with archive-top: ${keys}`);
 });

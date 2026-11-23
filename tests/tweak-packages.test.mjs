@@ -5,6 +5,12 @@ import { fixture, contract, read } from './fixtures/tweaks.mjs';
 import { withSkinHostParts } from './fixtures/skin-host-parts.mjs';
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 import { withDesktopParts } from './fixtures/desktop-parts.mjs';
+import { createDocument } from './fixtures/mini-dom.mjs';
+import { block, between, runRecording } from './fixtures/source-slice.mjs';
+import { runPart, loadFile, scoped, read as readRaw } from './fixtures/r5B-parts.mjs';
+import { modelContext } from './fixtures/chats-list-model.mjs';
+import { desktopKeys } from './fixtures/desktop-keys-harness.mjs';
+import { listFixture } from './fixtures/chats-list-render.mjs';
 const catalog = JSON.parse(read('web/tweaks/catalog.json'));
 // Capability-gate fixtures: a package id that asks for exactly these capabilities (no shipped package needed).
 const asking = (id, capabilities) => ({ id, name: id, version: '1.0.0', author: id.split('/')[0], apiVersion: 1, capabilities, description: 'test fixture' });
@@ -12,6 +18,7 @@ for (const id of catalog.tweaks) {
   const check = (await import(new URL(`../web/tweaks/${id}/contract.mjs`, import.meta.url))).default;
   test(`${id}: shipped contract mounts / tears down against the shell fixture`, () => contract(id, check, ['miguel/send-and-go', 'miguel/now-playing', 'miguel/ai-apps'].includes(id) ? 'desktop' : 'phone'));
 }
+// static-rule: API inventory: the v1 slot contract (slots.json) and the core markup of four files must agree
 test('the six v1 slot names remain in core markup; removing / renaming requires an API bump', () => {
   const baseline = ['thread-switch-row-end','thread-header-actions','list-top','composer-end','home-top','dock-end'];
   const contract = JSON.parse(read('web/core/slots.json'));
@@ -140,14 +147,47 @@ test('window refresh is layout+nav gated, revoked on teardown, and stale handles
   await f.clear(); assert.equal(f.windowRefresh,null);
   api.windowRefresh.use({pull:false}); assert.equal(f.windowRefresh,null);
 });
+
+// The phone shell's real model and windows parts (web/app-model.js, web/app-windows.js) on a mini-dom track: the
+// window-refresh adapter, the Chats host's pullRefresh and the window bar markup are the shipped code.
+function phoneWindows() {
+  const doc = scoped(createDocument()), track = doc.createElement('div'); doc.body.appendChild(track); let host;
+  const model = runPart('web/app-model.js', 'appParts', 'model', { $: () => track, appVars: { idx: 0, desks: [{}], W: {} } },
+    { document: doc, window: { WizChatsHost: { create: o => { host = o; return {}; } } } }).out;
+  const wins = runPart('web/app-windows.js', 'appParts', 'windows', { refreshModes: model.refreshModes, RELOAD_BTN: model.RELOAD_BTN, esc: String, winApp: () => ({}), APP: {}, agentWin: () => false, ico: () => '', track, appVars: { desks: [], W: {} } },
+    { document: doc, window: { WosAgents: { titlebar: () => '' }, WosBoundView: { badge: () => '' } } }).out;
+  wins.bindLate({ renderApp: () => '<p class="app-body">app</p>', watchFrames: () => {} });
+  return { doc, track, model, wins, host, bar: el => [...el.querySelector('.wbar').children].map(c => c.dataset.wact).filter(Boolean) };
+}
+// The real Chats pull-to-refresh (web/core/chats-pull.js): a downward drag from the top of the list, let go.
+function pullOnce(allowed) {
+  const doc = scoped(createDocument()), root = doc.createElement('div'); doc.body.appendChild(root);
+  root.innerHTML = '<div class="ch-list"><div class="ch-ptr"><span></span></div><div class="ch-scroll"><p class="row">r</p></div></div>';
+  const refreshed = [], st = {};
+  const { out } = runPart('web/core/chats-pull.js', 'chatsParts', 'pull', { H: { pullRefresh: () => allowed, win: () => null }, ch: () => st, LIVE: { refresh: () => refreshed.push(1) }, vib: () => {}, winAgent: () => '', chatVars: {} }, { document: doc, setTimeout, clearTimeout });
+  out.bindLate({ idOf: () => 'w1', elOf: () => null, holdList: () => false }); out.bindPull(root);
+  const target = root.querySelector('.row'); root.querySelector('.ch-scroll').scrollTop = 0;
+  const at = y => ({ touches: [{ clientX: 10, clientY: y }] });
+  for (const [type, e] of [['touchstart', at(0)], ['touchmove', at(30)], ['touchmove', at(200)], ['touchend', { touches: [] }]]) target.dispatchEvent({ type, bubbles: true, target, ...e });
+  return refreshed.length;
+}
 test('stock shell: no ↻ in window bars and pull-to-refresh stays unless a package holds window refresh', () => {
-  const app=read('web/app.js'), chats=withParts(read('web/core/chats.js'));
-  assert.match(app,/\$\{refreshModes\.length \? RELOAD_BTN : ''\}<button class="wb" data-wact="full"/);
-  assert.equal((app.match(/data-wact="reload"/g)||[]).length,2,'only RELOAD_BTN markup and its sync selector');
-  assert.match(app,/pullRefresh: \(\) => !refreshModes\.some\(m => m\.pull === false\)/);
-  assert.match(app,/windowRefresh: windowRefreshAdapter/);
-  assert.match(app,/fresh\.style\.cssText = el\.style\.cssText; el\.replaceWith\(fresh\); mountWin\(w, fresh\); applyLayout\(deskOf\(id\)\);/,'a remounted window keeps its tile placement');
-  assert.match(chats,/if \(H\.pullRefresh\?\.\(\) === false\) return;/);
+  const p = phoneWindows(); const el = p.wins.makeWin({ id: 'w1', app: 'settings' }); p.track.appendChild(el);
+  assert.deepEqual(p.bar(el), ['full', 'close'], 'stock: no ↻');
+  assert.equal(p.host.pullRefresh(), true, 'stock: Chats keeps pull-to-refresh');
+  assert.equal(pullOnce(p.host.pullRefresh()), 1, 'a pull refreshes the list');
+  const release = p.model.windowRefreshAdapter.use({ pull: false });
+  assert.deepEqual(p.bar(el), ['reload', 'full', 'close'], 'an open window gets ↻ beside full screen');
+  assert.deepEqual(p.bar(p.wins.makeWin({ id: 'w2', app: 'settings' })), ['reload', 'full', 'close'], 'and so does a new one');
+  assert.equal(p.host.pullRefresh(), false); assert.equal(pullOnce(p.host.pullRefresh()), 0, 'Chats opts out of the pull');
+  release();
+  assert.deepEqual(p.bar(el), ['full', 'close'], 'released: ↻ goes'); assert.equal(p.host.pullRefresh(), true);
+  const keep = p.model.windowRefreshAdapter.use({ pull: true }); assert.deepEqual(p.bar(el), ['reload', 'full', 'close']); assert.equal(p.host.pullRefresh(), true, 'pull: true keeps the pull'); keep();
+  // ↻ on a built-in view remounts it where it was (web/app-deskbar.js reloadWin): its tile placement stays.
+  el.style.cssText = 'grid-area: 1 / 2'; el.className = 'win app-settings tile-b'; const laid = [];
+  const dk = runRecording(`${block(readRaw('web/app-deskbar.js'), 'function reloadWin(id) {')}\nthis.reloadWin = reloadWin;`, { appVars: { W: { w1: { id: 'w1', app: 'settings' } } }, winEl: () => el, CHATS: { isHosted: () => false }, makeWin: p.wins.makeWin, mountWin: () => {}, applyLayout: i => laid.push(i), deskOf: () => 3, window: { WizCore: {} } });
+  dk.reloadWin('w1'); const now = p.track.querySelector('.win');
+  assert.notEqual(now, el, 'a fresh window'); assert.equal(now.className, 'win app-settings tile-b'); assert.equal(now.style.cssText, 'grid-area: 1 / 2', 'a remounted window keeps its tile placement'); assert.deepEqual(laid, [3]);
 });
 test('layout handles become inert on disposal and their cleanup is idempotent', async () => {
   const f = fixture(); let api;
@@ -192,10 +232,19 @@ test('disposed foundation capability cannot change windows', async () => {
 });
 
 test('slot lookup prefers a visible instance over hidden Chats copies (desktop)', async () => {
-  const { readFile } = await import('node:fs/promises');
-  const src = withSkinHostParts(await readFile(new URL('../web/core/skin-host.js', import.meta.url), 'utf8'));
-  assert.match(src, /getClientRects\(\)\.length > 0\)/);
-  assert.match(src, /querySelectorAll\(selector\)\]\.find\(seen\)/);
+  // The real slot lookup (skin-host-tweaks.js) on a desktop page with hidden Chats copies.
+  const src = withSkinHostParts(read('web/core/skin-host.js'));
+  const doc = createDocument();
+  doc.body.innerHTML = '<div id="hidden"><div data-slot="list-top" id="a"></div></div><div id="shown"><div data-slot="list-top" id="b"></div></div><div id="front"><div data-slot="list-top" id="c"></div></div>';
+  const show = (id, on) => { doc.getElementById(id).getClientRects = () => (on ? [{ width: 10, height: 10 }] : []); };
+  const lookup = root => runRecording(between(src, '      const slot = name => {', '      const borrowed = new Map();') + '\nthis.slot = slot;',
+    { document: doc, slotContract: { slots: { 'list-top': {} } }, shell: { root: () => doc.getElementById(root) } }).slot;
+  show('a', false); show('b', true); show('c', true);
+  assert.equal(lookup('front')('list-top').id, 'c', 'the focused Chats window first');
+  assert.equal(lookup('hidden')('list-top').id, 'b', 'its copy hidden: the first visible instance');
+  show('b', false); show('c', false);
+  assert.equal(lookup('hidden')('list-top').id, 'a', 'none visible: the own one');
+  assert.equal(lookup('front')('not-a-slot'), null, 'only contract slots');
 });
 
 test('beside hook: layout-gated event on change only, never a route event, and route().beside for late packages', async () => {
@@ -212,12 +261,18 @@ test('beside hook: layout-gated event on change only, never a route event, and r
   await f.clear(); f.setRoute({ beside: -1 }); assert.deepEqual(seen, [1, -1, 0, 1], 'a torn-down package hears nothing');
 });
 test('app.js tells the host when the bound view beside a thread changes, and reports it in route()', () => {
-  const app = read('web/app.js');
-  const peek = app.slice(app.indexOf('function syncPeek()'), app.indexOf('function detachBound('));
-  assert.match(peek, /device\.classList\.toggle\('bound-view-peeking', left\);\s*window\.WosSkinHost\?\.beside\?\.\(\);/);
-  assert.match(read('web/index.html'), /<div id="device" class="device" data-slot="device-edge">/);
-  assert.ok(JSON.parse(read('web/core/slots.json')).slots['device-edge']);
-  assert.match(app, /beside: device\.classList\.contains\('bound-peeking'\) \? 1 : device\.classList\.contains\('bound-view-peeking'\) \? -1 : 0/);
+  const doc = createDocument(); doc.body.innerHTML = readRaw('web/index.html').split(/<body[^>]*>/)[1].split('</body>')[0];
+  const device = doc.querySelector('#device');
+  assert.equal(device.dataset.slot, 'device-edge', 'the device is the device-edge slot'); assert.ok(JSON.parse(readRaw('web/core/slots.json')).slots['device-edge']);
+  let told = 0, adapter;
+  const W = { t: { id: 't', app: 'chats', thread: 's1' }, v: { id: 'v', app: 'frame', bound: 't', bsid: 's1' } };
+  const appVars = { W, desks: [{ id: 'a', focus: 't', wins: ['t'] }, { id: 'b', focus: 'v', wins: ['v'] }], idx: 0 };
+  const peek = runRecording(`${block(readRaw('web/app-bound.js'), 'function syncPeek() {')}\nthis.syncPeek = syncPeek;`, { appVars, device, track: doc.body, boundOf: () => ({ id: 'v', bsid: 's1' }), deskOf: id => (id === 'v' ? 1 : 0), secOf: () => null, $$: () => [], window: { WosSkinHost: { beside: () => told++ } } });
+  runPart('web/app-agentorb.js', 'appParts', 'agentorb', { appVars, device, HOME: 0 }, { window: { WosSkinHost: { attach: o => { adapter = o; } }, WosAgents: {} } });
+  peek.syncPeek(); assert.equal(told, 1, 'the host hears every peek change'); assert.ok(device.classList.contains('bound-peeking')); assert.equal(adapter.route().beside, 1, 'on the thread: the view leans in from the right');
+  appVars.idx = 1; peek.syncPeek(); assert.equal(told, 2); assert.ok(device.classList.contains('bound-view-peeking')); assert.ok(!device.classList.contains('bound-peeking'));
+  assert.equal(adapter.route().beside, -1, 'on the bound view: its thread leans in from the left');
+  W.t.thread = 's2'; peek.syncPeek(); assert.equal(told, 3); assert.equal(adapter.route().beside, 0, 'nothing beside');
 });
 
 test('inbox capability is trusted-only, and its handles die with the package', async () => {
@@ -243,7 +298,7 @@ test('notification threads: the flag lives only while a trusted package holds it
   assert.equal(f.host.inboxThreads, false); assert.equal(f.host.inboxAct('done', 'x'), false);
   const got = []; api.inbox.threads({ act: (a, id) => got.push(a + ':' + id) });
   assert.equal(f.host.inboxThreads, true); assert.equal(f.host.inboxAct('snooze', 'n1'), true); assert.deepEqual(got, ['snooze:n1']);
-  assert.equal(await api.inbox.set('n1', { read: true, flag: true }), true); assert.equal(JSON.stringify(f.inbox.sets), JSON.stringify([['n1', { read: true }]]), 'only read / archived pass');
+  assert.equal(await api.inbox.set('n1', { 'read': true, flag: true }), true); assert.equal(JSON.stringify(f.inbox.sets), JSON.stringify([['n1', { read: true }]]), 'only read / archived pass');
   await f.clear(); assert.equal(f.host.inboxThreads, false, 'released on teardown');
 });
 
@@ -258,35 +313,89 @@ test('notification rows in the list: only a holder that asks for list mode turns
   await f.clear(); assert.equal(f.host.inboxList, false, 'released on teardown');
 });
 
+// The real Ready list parts (web/core/chats-readylist.js with its events, notes, drafts and tracker parts) in node:vm.
+function readyParts({ inboxList = true, inboxThreads = true, order = 'newest', draft = null, items = null, W = {} } = {}) {
+  items ||= [{ id: 'n1', title: 'Backup done', message: 'ok', time: 1500, read: false }, { id: 'n2', title: 'Old', message: 'x', time: 100, read: true }];
+  const ctx = { window: { WizCore: { chatsParts: {} }, WosSkinHost: { inboxList, inboxThreads, inboxAct: (...a) => ctx.acts.push(a) }, WosBell: { items: () => items, item: id => items.find(i => i.id === id) || null, watch: () => () => {} }, addEventListener() {} }, acts: [], setTimeout, clearTimeout, localStorage: { getItem: () => null } };
+  modelContext(ctx); ctx.window.WizChatsListModel = ctx.WizChatsListModel;
+  for (const p of ['events', 'notes', 'drafts', 'tracker']) loadFile(`web/core/chats-${p}.js`, ctx);
+  const { out } = runPart('web/core/chats-readylist.js', 'chatsParts', 'readylist', { chatVars: { readyOrder: order }, esc: String, clip: s => s, ago: () => 'now', LIVE: { cardAt: s => s.at, isNew: () => false },
+    READY_ORDERS: ['newest', 'priority', 'subject'], READY_ORDER_LABEL: { newest: 'Newest', priority: 'Priority', subject: 'By subject' }, deferredOf: () => false, attOf: () => null, CH: {}, W, owner: id => id, winAgent: () => '', vib: () => {},
+    KIT: { drafts: { all: () => ({}), get: () => ({ reply: draft }) }, reply: {} } }, ctx);
+  return { out, ctx };
+}
+const ROWS = [{ id: 's1', title: 'A', at: 2000 }, { id: 's2', title: 'B', at: 1000 }];
+const shown = html => { const doc = createDocument(); doc.body.innerHTML = html; return doc.body.querySelectorAll('[data-chopen], [data-chnotif], .ch-rdy-bar, .ch-subj > span:first-child').map(e => e.dataset.chopen || e.dataset.chnotif || (e.className === 'ch-rdy-bar' ? 'bar' : e.textContent)); };
 test('chats.js lists notifications among Ready chats only in list mode, in every Ready order', () => {
-  const src = withParts(read('web/core/chats.js'));
-  assert.match(src, /const on = !!window\.WosSkinHost\?\.inboxList;/, 'gated on the host list flag');
-  assert.match(src, /const nt = k === 'ready' \? listNotes : null/, 'eligible notifications join Ready');
-  assert.match(src, /const top = sec === 'ready' \? bar : ''/, 'only Ready owns the order controls');
-  assert.match(src, /return top \+ withNotes\(list, awake, rowFn\) \+ later;/, 'Newest, Oldest and Priority interleave in every dated section');
-  assert.match(src, /WizChatsListModel\.subjectGroups\(list, awake,/, 'By subject: one shared grouping owner');
-  assert.match(read('web/core/chats-list-model.js'), /const NOTES_PROJECT = 'Notifications'/, 'notifications keep their own subject');
-  assert.match(src, /\.ch-list \.ch-notif-row\[data-chnotif\]'\); if \(nr\) \{ window\.WosSkinHost\?\.inboxAct\?\.\('open'/, 'a tap goes to the package');
+  const row = s => `<div data-chopen="${s.id}"></div>`;
+  for (const [order, want] of [['newest', ['bar', 's1', 'n1', 's2', 'n2']], ['oldest', ['bar', 's2', 'n1', 's1', 'n2']], ['priority', ['bar', 'FYI', 'n1', 'No status', 's1', 's2', 'n2']], ['subject', ['bar', 'Notifications', 'n1']]]) {
+    const { out } = readyParts({ order }), nt = out.notes();
+    assert.deepEqual(shown(out.readyBody(ROWS, row, nt, 'ready')).slice(0, want.length), want, `${order}: notifications interleave with Ready`);
+    assert.ok(shown(out.readyBody(ROWS, row, nt, 'ready')).includes('n1'));
+    assert.ok(!shown(out.readyBody(ROWS, row, nt, 'yesterday')).includes('bar'), `${order}: only Ready owns the order controls`);
+  }
+  const off = readyParts({ inboxList: false }).out;
+  assert.equal(off.notes(), null, 'gated on the host list flag'); assert.deepEqual(shown(off.readyBody(ROWS, row, off.notes(), 'ready')), ['bar', 's1', 's2']);
+  // Only the Ready section is handed the notifications (web/core/chats-listpaint.js through the real list render).
+  const f = listFixture(), got = []; const nt = { awake: [{ id: 'n1' }], later: [] };
+  f.ctx.notes = () => nt; f.ctx.readyBody = (list, rowFn, n, sec) => { got.push([sec, n === nt]); return list.map(rowFn).join(''); }; f.render('');
+  assert.ok(got.some(([sec, has]) => sec === 'ready' && has), 'Ready gets them'); assert.ok(got.every(([sec, has]) => sec === 'ready' || !has), 'no other section does');
+  // A tap on a listed notification goes to the package (web/core/chats-bind.js click).
+  const doc = createDocument(); doc.body.innerHTML = '<div class="ch-list"><div class="ch-notif-row" data-chnotif="n7"><b>t</b></div></div>'; const acts = [];
+  const c = runRecording(`${block(readRaw('web/core/chats-bind.js'), 'function click(e, id) {')}\nthis.click = click;`, { window: { WosSkinHost: { inboxAct: (...a) => acts.push(a) } }, chatVars: {}, justPressed: () => false, topicOn: () => false, W: {}, H: { win: () => ({ id: 'w1' }) } });
+  assert.equal(c.click({ target: doc.body.querySelector('b') }, 'w1'), true); assert.deepEqual(acts, [['open', 'n7']]);
 });
 test('chats.js shows a notification draft as its thread only while notification threads are on', () => {
-  const src = withParts(read('web/core/chats.js'));
-  assert.match(src, /function notifOf\(w\) \{\n    if \(!w \|\| w\.thread !== '__new__' \|\| winAgent\(w\) \|\| !window\.WosSkinHost\?\.inboxThreads\) return null;/);
-  assert.match(src, /const NV = isNew && !pend\.length \? notifOf\(w\) : null;/);
-  assert.match(src, /if \(sid === '__new__'\) \{ notifAct\(wid, a\); return; \}/);
-  assert.match(withDesktopParts(read('web/desktop/desktop.js')), /f\.thread === '__new__' && !CHATS\.notifOpen\?\.\(f\.id\)/, 'remaining Resolve action rejects an empty new chat but reaches an open notification');
+  const draft = { key: 'notifications:n1', title: 'Backup done', message: 'ok' }, W = { w1: { id: 'w1', thread: '__new__' } };
+  assert.equal(readyParts({ draft, W }).out.notifOf(W.w1).id, 'n1', 'a New chat carrying a notification is its thread');
+  assert.equal(readyParts({ draft, W, inboxThreads: false }).out.notifOf(W.w1), null, 'only while notification threads are on');
+  assert.equal(readyParts({ draft, W }).out.notifOf({ id: 'w1', thread: 's1' }), null, 'a real thread is never one');
+  assert.equal(readyParts({ draft: { key: 'other:x' }, W }).out.notifOf(W.w1), null, 'a draft without a notification stays a New chat');
+  // The thread paints it only while nothing is pending (web/core/chats-threadpaint.js).
+  const nv = (isNew, pend) => runRecording(`${between(readRaw('web/core/chats-threadpaint.js'), 'const NV = isNew', '\n')}\nthis.NV = NV;`, { isNew, pend, notifOf: () => ({ id: 'n1' }) }).NV;
+  assert.deepEqual(nv(true, []), { id: 'n1' }); assert.equal(nv(true, [{}]), null); assert.equal(nv(false, []), null);
+  // Its row actions go to the notification, not a chat (web/core/chats-rowacts.js threadAct).
+  const routed = []; const ra = runPart('web/core/chats-rowacts.js', 'chatsParts', 'rowacts', { owner: id => id, notifAct: (...a) => routed.push(a), rowOf: () => null, ACT: {} }).out;
+  ra.threadAct('w1', '__new__', 'done'); assert.deepEqual(routed, [['w1', 'done']]);
+  const { out, ctx } = readyParts({ draft, W }); out.draftsLate({ PHONE: () => false, renderChats: () => {} }); out.notifAct('w1', 'resolve');
+  assert.deepEqual(ctx.acts[0], ['resolve', 'n1'], 'the package gets the act');
+  // Desktop ⌥X Resolve: an empty New chat is refused, an open notification reaches the thread act.
+  for (const open of [true, false]) {
+    const acted = []; const k = desktopKeys({ focused: () => ({ id: 'f', app: 'chats', thread: '__new__' }), CHATS: { notifOpen: () => open, threadAct: (...a) => acted.push(a) }, winEl: () => ({ querySelector: () => ({}) }), homeOpen: false });
+    k.key('KeyX');
+    if (open) assert.deepEqual(acted, [['f', '__new__', 'resolve']]);
+    else { assert.deepEqual(acted, []); assert.ok(k.calls.some(c => c[0] === 'toast' && /Open a chat first/.test(c[2])), 'an empty new chat is refused'); }
+  }
 });
 
-test('desktop keys: ⌥↓ walks notification rows with Ready, ⌥X resolves an open notification', () => {
-  const d = withDesktopParts(read('web/desktop/desktop.js'));
-  assert.match(d, /\.ch-sec\[data-sec="ready"\] \[data-chnotif\]', document\)/, 'Ready walk includes [data-chnotif] rows');
-  assert.match(d, /code === 'KeyX'\) return hit\(\(\) => \{ if \(!e\.repeat\) chatAct\('resolve', 'X'\)/);
-  assert.match(read('web/tweaks/wizard/unified-inbox/tweak.js'), /b\.dataset\.chnotif = it\.id/, 'the package marks its rows');
+// The real desktop Ready walk (web/desktop/desktop-divider.js readyRows) over a mini-dom page with on-screen rows.
+function readyWalk(html) {
+  const doc = createDocument(); doc.body.innerHTML = html;
+  for (const el of doc.body.querySelectorAll('[data-top]')) { const top = +el.dataset.top; el.getClientRects = () => [{ top }]; el.getBoundingClientRect = () => ({ top }); }
+  const { readyRows } = runPart('web/desktop/desktop-divider.js', 'desktopParts', 'divider', { $$: (sel, root) => [...root.querySelectorAll(sel)], winEl: () => doc.body.querySelector('.win'), store: { get: () => null } }, { document: doc }).out;
+  return [...readyRows('w')].map(r => r.dataset.chopen || r.dataset.chnotif);
+}
+test('desktop keys: ⌥↓ walks notification rows with Ready, ⌥X resolves an open notification', async () => {
+  const sec = rows => `<div class="pane-list" data-top="0"><section class="ch-sec" data-sec="ready">${rows}</section><section class="ch-sec" data-sec="working"><div class="ch-row" data-chopen="w1" data-top="1"></div></section></div>`;
+  assert.deepEqual(readyWalk(`<div class="win">${sec('<div class="ch-row" data-chopen="s1" data-top="10"></div><div class="ch-row ch-notif-row" data-chnotif="n1" data-top="20"></div><div class="ch-row" data-chopen="s2" data-top="30"></div>')}</div>`), ['s1', 'n1', 's2'], 'list rows walk in on-screen order with Ready (Working skipped)');
+  assert.deepEqual(readyWalk(`<div class="win">${sec('<div class="ch-row" data-chopen="s1" data-top="10"></div><div data-slot="ready-top"><button data-chnotif="t1" data-top="5"></button></div><div data-slot="ready-end"><button data-chnotif="t2" data-top="1"></button></div>')}</div>`), ['t1', 's1', 't2'], 'package rows: new ones first, snoozed (ready-end) last');
+  // ⌥↓ is wired to that walk; ⌥X hands Resolve to the thread act (an open notification), see the test above.
+  const k = desktopKeys({ focused: () => ({ id: 'f', app: 'chats' }) }); k.key('ArrowDown');
+  assert.ok(k.calls.some(c => c[0] === 'chatsUpDown' && c[1] === 1), '⌥↓ walks down');
+  // The package marks its own rows with [data-chnotif] (the real unified-inbox package in the shell fixture).
+  const f = fixture(); await f.mount('wizard/unified-inbox');
+  f.inbox.push([{ id: 'd1', title: 'Old', message: 'done', time: 0, read: true, archived: true }]);
+  const all = (n, out = []) => { if (n.dataset?.uiId) out.push(n); (n.children || []).forEach(c => all(c, out)); return out; };
+  const doneBtn = (function find(n) { return (n.className || '').split(' ').includes('ui-done-btn') ? n : (n.children || []).map(find).find(Boolean); })(f.doc.body);
+  doneBtn.fire('click', {});
+  assert.deepEqual(all(f.doc.body).map(r => r.dataset.chnotif), ['d1']); await f.clear();
 });
 
 test('Notifications in Chats is on by default for everyone, whatever tweak set', async () => {
   const f = wizardExperience(); await f.E.refresh(); assert.ok(f.all().includes('wizard/unified-inbox'));
   assert.equal((await f.E.defaults())['wizard/unified-inbox'], true);
-  assert.ok(JSON.parse(read('web/tweaks/catalog.json')).defaults.includes('wizard/unified-inbox'), 'a release-wide default, so no set needs to list it');
+  // (a release-wide default, so no set needs to list it: 'notifications preserve existing Miguel off choices and old
+  // custom-skin ids after promotion' runs the real experience.js on the real catalog defaults)
 });
 
 test('Notifications sits with the agent apps while its inbox lives in Chats', () => {
@@ -329,14 +438,26 @@ test('notifications preserve existing Miguel off choices and old custom-skin ids
 });
 
 
+// The real Settings › Look tweak list (web/core/settings.js tweakRows with its tweakSwitches), For testers.
+function lookTweaks(tweaks, own = null) {
+  const s = readRaw('web/core/settings.js');
+  const ctx = runRecording(`${between(s, '  const tweakSwitches =', '\n')}\n${block(s, '  function tweakRows(')}\nthis.tweakRows = tweakRows;`, { window: { WosExperience: { state: { tweaks, channel: 'latest', shell: 'phone' }, authors: async () => [] }, WosMySkin: { active: own } },
+    esc: v => String(v), shellTweaks: l => l, tweakOpts: new Map(), mounts: [], authorList: [{ id: 'miguel', name: 'Miguel' }, { id: 'wizard', name: 'Wizard' }] });
+  const doc = createDocument(); doc.body.innerHTML = ctx.tweakRows({}); return doc.body;
+}
 test('Settings › Look: one flat Tweaks list, a switch per tweak labelled by author, no "All of" buttons, in every skin (Miguel, 1 Nov 2026)', () => {
-  const s = read('web/core/settings.js'), rows = s.slice(s.indexOf('  function tweakRows('), s.indexOf('  let authorList = null;'));
-  assert.doesNotMatch(rows, /tw-author|data-tweakauthor|All of/, 'no author sections or quick buttons');
-  assert.match(rows, /\.sort\(\(a, b\) => String\(a\.name \|\| a\.id\)\.localeCompare/, 'A to Z by name');
-  assert.match(rows, /tweakSwitches\(\[t\], 'data-tweak-toggle', s\.busy, name\)/, 'one switch per tweak, with its author');
-  assert.doesNotMatch(read('web/core/experience.js'), /chooseAuthor/, 'the author mix is gone');
-  assert.doesNotMatch(rows, /if \(own\) return/, 'own skins get the same grouped list');
-  assert.doesNotMatch(rows, /<details/, 'nothing hidden behind a disclosure');
+  const tweaks = [{ id: 'wizard/zeta', name: 'Zeta', author: 'wizard', on: true }, { id: 'miguel/alpha', name: 'Alpha', author: 'miguel', on: false }, { id: 'miguel/mid', name: 'Mid', author: 'miguel', on: true }];
+  for (const own of [null, { id: 'quiet', tweaks: {} }]) {
+    const root = lookTweaks(tweaks, own), lists = root.querySelectorAll('.tw-list');
+    assert.equal(lists.length, 1, 'one flat list (own skins too)');
+    const sw = lists[0].querySelectorAll('[data-tweak-toggle]');
+    assert.deepEqual(sw.map(b => b.dataset.tweakToggle), ['miguel/alpha', 'miguel/mid', 'wizard/zeta'], 'A to Z by name, one switch each');
+    assert.deepEqual(sw.map(b => b.getAttribute('role')), ['switch', 'switch', 'switch']);
+    assert.deepEqual(sw.map(b => b.querySelector('.tw-by').textContent), ['by Miguel', 'by Miguel', 'by Wizard'], 'labelled by author');
+    assert.deepEqual(sw.map(b => b.getAttribute('aria-checked')), ['false', 'true', 'true']);
+    assert.equal(root.querySelectorAll('details, [data-tweakauthor], .tw-author').length, 0, 'no author sections, nothing behind a disclosure');
+    assert.doesNotMatch(root.textContent, /All of/, 'no quick buttons');
+  }
 });
 
 test('flat Tweaks list keeps a device mix exactly: whatever is on stays on, rendered as one switch each (Miguel, 1 Nov 2026)', async () => {

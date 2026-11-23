@@ -7,6 +7,9 @@ import path from 'node:path';
 import http from 'node:http';
 import vm from 'node:vm';
 import { createHash } from 'node:crypto';
+import { createDocument } from './fixtures/mini-dom.mjs';
+import { parseCss } from './fixtures/mini-css.mjs';
+import { skeleton, styles, wordAttrs } from './fixtures/w5-css.mjs';
 import { createAppLogos, sniffImage, PLACEHOLDER_LOGOS } from '../tools/store-app-logos.mjs';
 import { createStoreDataRoutes, PREFIX } from '../tools/store-data-origin.mjs';
 
@@ -127,16 +130,71 @@ test('every icon surface draws a shipped logo as a picture tile; no logo keeps t
 
 test('the logo tile is styled outside .sgi, so skins that recolour sigils never touch it', () => {
   const css = read('web/core/sigils.css');
-  assert.match(css, /\.sglogo \{[^}]*background: var\(--logo\) center \/ cover no-repeat/);
+  const url = '/wizard-os-home/store-data/app-logo/jet-lab?v=0123456789abcdef', S = sigils({ 'jet-lab': url });
+  const logoHtml = S.html({ id: 'jet-lab', name: 'Jet Lab' }), plainHtml = S.html({ id: 'zz-unknown', name: 'Zed' });
+  const doc0 = createDocument(); doc0.body.innerHTML = logoHtml;
+  const logo0 = doc0.body.querySelector('.sglogo');
+  assert.ok(logo0 && !logo0.classList.contains('sgi'), 'the logo is its own element, not a .sgi');
+  const own = styles(logo0, [css]);
+  assert.equal(own.background, 'var(--logo) center / cover no-repeat', 'the picture fills its box');
+  assert.equal(own['border-radius'], '24%');
+  let skinsChecked = 0, sigilRules = 0;
   for (const f of fs.readdirSync(root + 'web/skins')) {
     const p = `web/skins/${f}/skin.css`;
-    if (fs.existsSync(root + p)) assert.doesNotMatch(read(p), /\.sglogo/, `${p} restyles app logos`);
+    if (!fs.existsSync(root + p)) continue;
+    const skin = read(p); skinsChecked++;
+    // Every place this skin styles a sigil: draw that markup with the real logo where the sigil would be.
+    for (const rule of parseCss(wordAttrs(skin))) for (const sel of rule.selectors) {
+      if (!/\.sgi\b/.test(sel) || rule.media.length) continue;
+      const m = /^html((?:\[[^\]]+\]|:not\([^)]*\)|:is\([^)]*\))*)\s+(.+)$/.exec(sel); if (!m) continue;
+      const doc = createDocument(), html = doc.documentElement;
+      html.setAttribute('data-skin', f); html.setAttribute('data-shell', /desktop"\]\)/.test(m[1]) || !/desktop/.test(m[1]) ? 'phone' : 'desktop');
+      let built; try { built = skeleton(doc, m[2]); } catch (_) { continue; }
+      let sgi = built.el; while (sgi && !sgi.classList?.contains('sgi')) sgi = sgi.parentNode;
+      if (!sgi?.parentNode) continue;
+      const holder = doc.createElement('div'); holder.innerHTML = logoHtml; const logo = holder.firstElementChild;
+      sgi.replaceWith(logo);
+      const opts = { states: built.states, pseudo: built.el === sgi ? built.pseudo : '' };
+      assert.deepEqual(styles(logo, [css, skin], opts), styles(logo, [css], opts), `${p}: ${sel} reaches the logo`);
+      // The same place with a sigil: the skin does restyle that (so the check above is not vacuous).
+      if (built.el === sgi) { const h2 = doc.createElement('div'); h2.innerHTML = plainHtml; const g = h2.firstElementChild; logo.replaceWith(g); if (JSON.stringify(styles(g, [css, skin], opts)) !== JSON.stringify(styles(g, [css], opts))) sigilRules++; }
+    }
   }
+  assert.ok(skinsChecked >= 2, 'skins checked');
+  assert.ok(sigilRules > 5, `skins do recolour sigils in those places (${sigilRules})`);
 });
 
-test('the shell reads logos with the app list and repaints when they change', () => {
-  const js = read('web/core/apps.js');
-  assert.match(js, /LOGO_BASE \+ 'wizard\/v1\/app-logos'/);
-  assert.match(js, /logoLoad = readLogos\(\)/);
-  assert.match(js, /window\.WizCore\.appLogo = /);
+// web/core/apps.js run whole in vm against a fake box: the app list and the logo list answer, images decode.
+async function shellApps(logos, { decode = true } = {}) {
+  const storage = new Map(), events = [], reads = [];
+  const localStorage = { getItem: k => storage.get(k) ?? null, setItem: (k, v) => storage.set(k, String(v)) };
+  const window = { WizCore: { norm: s => String(s).toLowerCase() }, WizConfig: { endpoint: () => '/apps' }, localStorage,
+    dispatchEvent: e => events.push(e) };
+  class Image { set src(u) { this._src = u; setTimeout(() => (decode ? this.onload() : this.onerror()), 0); } get src() { return this._src; } }
+  const ctx = { window, URL, location: new URL('https://wizard.example/'), localStorage, Image, AbortSignal, setTimeout, clearTimeout, setInterval() {},
+    CustomEvent: class { constructor(type, init) { this.type = type; this.detail = init?.detail; } },
+    addEventListener() {}, document: { addEventListener() {}, visibilityState: 'visible' },
+    fetch: async url => { reads.push(String(url)); return String(url).includes('/app-logos') ? { ok: true, json: async () => ({ logos }) } : { ok: true, json: async () => ({ apps: [{ id: 'jet', name: 'Jet', url: '/jet/' }] }) }; } };
+  vm.runInNewContext(read('web/core/apps.js'), ctx);
+  await window.WizCore.appsLoaded();
+  return { window, storage, events, reads, settle: async () => { for (let i = 0; i < 5; i++) await new Promise(r => setTimeout(r, 0)); } };
+}
+
+test('the shell reads logos with the app list and repaints when they change', async () => {
+  const s = await shellApps({ jet: '0123456789abcdef', 'Bad Id': '0123456789abcdef', other: 'nothex' });
+  const R = s.window.WizCore.apps('desktop');   // a registry is listening, so a changed logo list repaints it
+  const before = s.events.filter(e => e.type === 'wizard:apps').length;
+  await s.settle();
+  assert.ok(s.reads.includes('/wizard-os-home/store-data/wizard/v1/app-logos'), 'the logo list is read beside the app list');
+  assert.ok(s.reads.includes('/apps'));
+  assert.equal(s.window.WizCore.appLogo('jet'), '/wizard-os-home/store-data/app-logo/jet?v=0123456789abcdef');
+  assert.equal(s.window.WizCore.appLogo('Bad Id'), '', 'only well-formed ids and hashes are kept');
+  assert.equal(s.window.WizCore.appLogo('other'), '');
+  assert.deepEqual(JSON.parse(s.storage.get('wux.applogos.v1')), { jet: '/wizard-os-home/store-data/app-logo/jet?v=0123456789abcdef' });
+  assert.ok(s.events.filter(e => e.type === 'wizard:apps').length > before, 'the registry is rebuilt when logos change');
+  assert.ok(R.APP.jet);
+  // a logo the browser cannot decode never shows as a blank tile
+  const broken = await shellApps({ jet: '0123456789abcdef' }, { decode: false });
+  await broken.settle();
+  assert.equal(broken.window.WizCore.appLogo('jet'), '');
 });

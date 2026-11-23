@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import path from 'node:path';
 import { withSettingsParts } from './fixtures/settings-parts.mjs'; // settings.js parts moved out verbatim (issue 1665)
+import { block } from './fixtures/source-slice.mjs';
 const root = process.env.QA_SETTINGS_SOURCE || new URL('../', import.meta.url).pathname;
 const read = p => fs.readFileSync(path.join(root, p), 'utf8');
 const tick = () => new Promise(resolve => setTimeout(resolve, 0));
@@ -49,8 +50,12 @@ test('desktop and phone show first-observed interface revision and installed ser
 test('native data is rendered by the same registered About owner, never a shell-specific markup callback', async () => {
   const { s, mounts } = await harness();
   assert.doesNotMatch(read('web/device.js'), /settingsHtml\(/);
-  assert.match(read('web/device.js'), /settingsState\(/);
-  s.WosDevice = { settingsState: () => ({ installed: '0.10.23', notificationsAllowed: true, updateDescription: 'Up to date' }) };
+  // the real device.js settingsState (native data only) over a phone reporting 0.10.23, notifications on, up to date
+  const dev = fs.readFileSync(path.join(root, 'web/device.js'), 'utf8');
+  const native = { notifications: () => JSON.stringify({ allowed: true }), updateState: () => JSON.stringify({ state: 'current', installed: '0.10.23' }) };
+  const state = vm.runInNewContext(`({ ${block(dev, '    settingsState() {')} })`, { DEV: () => native, J: x => { try { return JSON.parse(x); } catch (_) { return null; } }, upd: null, UPD_TEXT: {} });
+  assert.equal(JSON.stringify(state.settingsState()), '{"notificationsAllowed":true,"installed":"0.10.23","updateDescription":"Up to date"}');
+  s.WosDevice = { settingsState: () => state.settingsState() };
   for (const {root,view} of mounts) {
     view.focus('about');
     assert.match(root.innerHTML, /Phone app \(Android\) 0\.10\.23/);

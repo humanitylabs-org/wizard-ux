@@ -38,13 +38,7 @@ test('an unrenamed installation remains launchable and two real installations ar
   assert.notEqual(r.APP.movies,r.APP.cinequeue);
   assert.equal(w.WosVoiceLegacy.alias('cine queue',{cinequeue:r.APP.cinequeue}).id,'cinequeue');
 });
-test('Android Food handoff emits the current app id while retaining the old intent alias',()=>{
-  const activity=readFileSync(new URL('../android/app/src/main/java/ai/wizards/os/MainActivity.java',import.meta.url),'utf8');
-  const runner=readFileSync(new URL('../android/app/src/main/java/ai/wizards/os/usuals/UsualsRunner.java',import.meta.url),'utf8');
-  assert(activity.includes('(ACTION_FOOD.equals(act) || ACTION_USUALS.equals(act)) ? "{\\"action\\":\\"food\\"}"'));
-  assert(runner.includes('i.setAction(ai.wizards.os.MainActivity.ACTION_FOOD)'));
-  assert(!runner.includes('backToWizard("usuals")'));
-});
+// Not run here (wizard-ux issue 1674): this pinned Java/Swift source text and no JDK runs it in this suite. Android Food handoff wiring: MainActivity ACTION_FOOD / UsualsRunner (the box side, legacy-only installs, is run below).
 test('canonical app ids retain their old brand sigil and colour',()=>{
   const window={};vm.runInNewContext(read('sigils.js'),{window});
   for (const [old,id] of [['cinequeue','movies'],['usuals','food'],['meditation','meditate']]) {

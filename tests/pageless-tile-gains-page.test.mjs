@@ -52,9 +52,25 @@ test('an app that really has no page still shows its settings sheet', async () =
   assert.deepEqual(s.routed, [['tg-style', 'TG style']]);
 });
 
-test('the phone shell decides at the tap and redraws the New desk when the list changes', () => {
-  assert.match(appJs, /function openAppInfo\(el, fromSheet\) \{ AK\.pageOrSheet\(APP, el\.dataset\.appinfo/);
-  assert.match(appJs, /window\.addEventListener\('wizard:apps', \(\) => \{ try \{ repaintNewDesks\(true\); \} catch \(_\) \{\} \}\);/);
+test('the phone shell decides at the tap and redraws the New desk when the list changes', async () => {
+  const cards = readFileSync(new URL('../web/app-cards.js', import.meta.url), 'utf8');
+  const lineOf = k => cards.split('\n').find(x => x.includes(k)).trim();
+  // the tap (real openAppInfo) asks the real app-kinds pageOrSheet with the live list: a tile whose app has a page now opens it
+  const kinds = { window: {} }; vm.runInNewContext(kindsJs, { ...kinds, setTimeout, Promise });
+  const opened = [];
+  const APP = { 'tg-style': { id: 'tg-style', kind: 'wizard', url: '/tg-style/' } };
+  const tap = vm.runInNewContext(`(() => { ${lineOf('function openAppInfo(el, fromSheet)')}\n return openAppInfo; })()`, { AK: kinds.window.WosAppKinds, APP, tapOpen: (a, el, fromSheet) => opened.push([a.id, el.dataset.name, fromSheet]) });
+  tap({ dataset: { appinfo: 'tg-style', name: 'TG style' } }, true);
+  await new Promise(ok => setImmediate(ok));
+  assert.deepEqual(opened, [['tg-style', 'TG style', true]]);
+  // the list changing (wizard:apps) redraws the New desk at once, and a failed redraw never breaks the listener
+  const on = {}, redraws = [];
+  const listen = lineOf("window.addEventListener('wizard:apps',");
+  vm.runInNewContext(listen, { window: { addEventListener: (t, f) => { on[t] = f; } }, repaintNewDesks: force => redraws.push(force) });
+  on['wizard:apps']();
+  assert.deepEqual(redraws, [true]);
+  vm.runInNewContext(listen, { window: { addEventListener: (t, f) => { on.bad = f; } }, repaintNewDesks: () => { throw new Error('mid-paint'); } });
+  assert.doesNotThrow(() => on.bad());
 });
 
 test('a slow read shows the sheet first, then swaps it for the app when the page arrives (Codex review)', async () => {

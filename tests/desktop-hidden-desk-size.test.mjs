@@ -3,6 +3,9 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import test from 'node:test';
 import { withShellParts } from './fixtures/shell-parts.mjs';
+import { createDocument } from './fixtures/mini-dom.mjs';
+import { styleOf } from './fixtures/mini-css.mjs';
+import { runRecording, block } from './fixtures/source-slice.mjs';
 
 // Execute the production layout/tile functions. This is a geometry fixture, not browser acceptance.
 const js = withShellParts(readFileSync(process.env.QA_DESKTOP_JS || new URL('../web/desktop/desktop.js', import.meta.url), 'utf8'));
@@ -70,9 +73,19 @@ test('uses the measured bar height, not a fixed 34px assumption', () => {
   assert.equal(h.nodes.b.style.height, '832px');
 });
 test('background fullscreen chrome is scoped to each desk, not the foreground body', () => {
-  assert.match(css, /\.wsp \.win\.full \{[^}]*border: 0/);
-  assert.match(css, /\.wsp \.win\.full \.wbar \{ display: none; \}/);
+  // The real layout() decides which windows are full; desktop.css then paints each desk's own chrome.
+  const h = harness({ mono: [false, true] }); h.run();
+  const doc = createDocument();
+  doc.body.innerHTML = '<div class="wsp"><div class="win" data-win="a"><div class="wbar"></div></div></div><div class="wsp" hidden><div class="win" data-win="b"><div class="wbar"></div></div></div>';
+  for (const id of ['a', 'b']) doc.querySelector(`[data-win="${id}"]`).classList.toggle('full', h.nodes[id].classList.contains('full'));
+  doc.body.classList.toggle('desktop-fullscreen', h.body.classList.contains('desktop-fullscreen'));
+  const a = doc.querySelector('[data-win="a"]'), b = doc.querySelector('[data-win="b"]');
+  assert.equal(styleOf(b, css, 'border'), '0', 'the background full window has no frame');
+  assert.equal(styleOf(b.querySelector('.wbar'), css, 'display'), 'none', 'nor a title bar');
+  assert.notEqual(styleOf(a.querySelector('.wbar'), css, 'display'), 'none', 'the foreground window keeps its title bar');
+  assert.notEqual(styleOf(a, css, 'border'), '0');
 });
+
 test('multi-window monocle tracks the focused app and can leave fullscreen', () => {
   const h = harness({ mono: [false, true], wins: [['a'], ['b', 'c']] }); h.run();
   assert.equal(h.nodes.b.classList.contains('full'), true);
@@ -83,16 +96,37 @@ test('multi-window monocle tracks the focused app and can leave fullscreen', () 
   assert.equal(h.nodes.b.style.height, '850px');
 });
 test('Home hides every desktop host, including the mono desk', () => {
-  assert.match(js, /host\.hidden = homeOpen \|\| i !== cur/);
-  assert.match(css, /\.wsp\[hidden\] \{[^}]*visibility: hidden/);
+  // The real render(): each desk host is hidden at Home and when it is not the current desk.
+  const paint = ({ homeOpen, cur }) => {
+    const doc = createDocument(); doc.body.innerHTML = '<div id="stage"><div class="wsp"></div><div class="wsp"></div></div><div id="desktopHome"></div>';
+    const hosts = doc.querySelectorAll('.wsp');
+    runRecording(block(js, '  function render() {') + '\nrender();', {
+      ws: [{ id: 'd1', wins: ['a'], mono: true }, { id: 'd2', wins: ['b'] }], W: { a: { id: 'a' }, b: { id: 'b' } }, cur, homeOpen, document: doc, globalThis: {},
+      stage: doc.querySelector('#stage'), wsEl: i => hosts[i], $$: () => [], $: q => doc.querySelector(q), pal: { hidden: true }, palDesk: null });
+    return hosts.map(h => h.hidden);
+  };
+  assert.deepEqual(paint({ homeOpen: true, cur: 0 }), [true, true], 'Home hides every host, the mono desk too');
+  assert.deepEqual(paint({ homeOpen: false, cur: 0 }), [false, true]);
+  assert.deepEqual(paint({ homeOpen: false, cur: 1 }), [true, false]);
+  // A hidden host keeps its layout box (so background sizes stay) but is not seen or hit.
+  const doc = createDocument(); doc.body.innerHTML = '<div class="wsp" hidden></div>';
+  const host = doc.querySelector('.wsp');
+  assert.equal(styleOf(host, css, 'visibility'), 'hidden'); assert.equal(styleOf(host, css, 'display'), 'block'); assert.equal(styleOf(host, css, 'pointer-events'), 'none');
 });
+
 test('skin-frame and Appearance presentation use the same desk-local fullscreen state', () => {
   const skin = withShellParts(readFileSync(process.env.QA_SKIN_FRAME_CSS || new URL('../web/core/skin-frame.css', import.meta.url), 'utf8'));
   const appearance = withShellParts(readFileSync(process.env.QA_APPEARANCE_JS || new URL('../web/core/appearance-host.js', import.meta.url), 'utf8'));
-  assert.match(skin, /html\[data-skin-frame\] \.wsp \.win\.full \{ border: 0; border-radius: 0; padding: 0; \}/);
-  assert.match(skin, /html\[data-skin-frame\] \.wsp \.win\.full > \.wbar \{ display: none; \}/);
+  // the real skin-frame.css on a desk's full-screen window: no frame, no title bar (only under a skin frame)
+  const doc = createDocument(); doc.body.innerHTML = '<div class="wsp"><div class="win full"><div class="wbar"></div></div></div>';
+  const win = doc.querySelector('.win'), bar = doc.querySelector('.wbar');
+  doc.documentElement.setAttribute('data-skin-frame', '');
+  for (const [k, v] of [['border-radius', '0'], ['padding', '0']]) assert.equal(styleOf(win, skin, k), v, k);
+  assert.match(String(styleOf(win, skin, 'border')), /^0/);
+  assert.equal(styleOf(bar, skin, 'display'), 'none');
+  doc.documentElement.removeAttribute('data-skin-frame');
+  assert.notEqual(styleOf(bar, skin, 'display'), 'none', 'without a skin frame the bar stays');
   const block = appearance.match(/const IMMERSIVE = [\s\S]*?const presentation =[^;]+;/)?.[0];
-  assert.ok(block);
   const context = vm.createContext({}); vm.runInContext(block + '\nglobalThis.present = presentation;', context);
   for (const foregroundFull of [false, true]) for (const ownMono of [false, true]) {
     const frame = { closest: selectors => selectors.split(',').some(s => ownMono && (s.trim() === '.wsp .win.full' || (foregroundFull && s.trim() === 'body.desktop-fullscreen .win.full'))) ? {} : null };

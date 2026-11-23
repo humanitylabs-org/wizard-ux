@@ -2,6 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import { createDocument } from './fixtures/mini-dom.mjs';
+import { parseCss } from './fixtures/mini-css.mjs';
+import { skeleton, styles } from './fixtures/w5-css.mjs';
 
 const root = new URL('../', import.meta.url);
 const read = path => fs.readFileSync(new URL(path, root), 'utf8');
@@ -60,13 +63,33 @@ test('Sepia is a selectable, persisted warm-light skin without changing the exis
 });
 
 test('Sepia owns its paper treatment and light color scheme', () => {
-  const js = read('web/core/skins.js');
+  const { context } = runtime();
   const css = read('web/skins/sepia/skin.css');
-  assert.match(js, /id: 'sepia', pkg: \{ css: true, dir: 'sepia' \}/);
-  assert.match(js, /sepia:\s*\{/);
-  assert.match(js, /vintage paper/i);
-  assert.match(css, /html\[data-skin="sepia"\]\s*\{\s*color-scheme:\s*light/);
-  assert.match(css, /html\[data-skin="sepia"\]\s+\.home-time/);
-  assert.doesNotMatch(css, /(?:^|\})\s*(?:body|\.win|button)\s*\{[^}]*font(?:-family)?\s*:/m);
-  for (const m of css.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/([^{}]+)\{/g)) assert.match(m[1].trim(), /^html\[data-skin="sepia"\]/);
+  // Its own package stylesheet, and its description.
+  assert.equal(JSON.stringify(context.WosSkin.pkgOf('sepia')), '{"css":true,"dir":"sepia"}');
+  assert.match(context.WosSkin.list.find(x => x.id === 'sepia').who, /vintage paper/i);
+  assert.ok(fs.existsSync(new URL('web/skins/sepia/skin.css', root)));
+  // Worn: a light colour scheme and its own clock face; any other skin: nothing from this sheet.
+  const page = skin => { const doc = createDocument(); doc.documentElement.setAttribute('data-skin', skin); doc.body.innerHTML = '<div class="home"><div class="home-time">09:41</div></div><div class="win"><button>OK</button></div>'; return doc; };
+  const sepia = page('sepia'), grove = page('grove');
+  assert.equal(styles(sepia.documentElement, [css])['color-scheme'], 'light');
+  assert.match(styles(sepia.querySelector('.home-time'), [css])['font-family'] || '', /Sk Fraunces/);
+  for (const sel of ['body', '.win', 'button']) assert.equal(styles(sepia.querySelector(sel), [css])['font-family'], undefined, `${sel}: no shell-wide font`);
+  assert.deepEqual(styles(grove.documentElement, [css]), {});
+  assert.deepEqual(styles(grove.querySelector('.home-time'), [css]), {});
+  // Every rule reaches its markup only under Sepia: drawn under Sepia it applies, under Grove nothing does.
+  let rules = 0;
+  for (const rule of parseCss(css)) {
+    if (rule.media.length) continue;
+    for (const sel of rule.selectors) {
+      const m = /^html((?:\[[^\]]+\]|:not\([^)]*\)|:is\([^)]*\)|:where\([^)]*\))*)(?:\s+(.*))?$/.exec(sel);
+      assert.ok(m && /\[data-skin="sepia"\]/.test(m[1]), `scoped to Sepia: ${sel}`);
+      let built; try { const doc = createDocument(); built = m[2] ? skeleton(doc, m[2]) : { el: doc.documentElement, states: [], pseudo: /::[\w-]+$/.exec(sel)?.[0] || '' }; built.doc = doc; } catch (_) { continue; }
+      const { el, states, pseudo, doc } = built;
+      doc.documentElement.setAttribute('data-skin', 'grove');
+      assert.deepEqual(styles(el, [css], { states, pseudo }), {}, `nothing under another skin: ${sel}`);
+      rules++;
+    }
+  }
+  assert.ok(rules > 5, `rules drawn (${rules})`);
 });

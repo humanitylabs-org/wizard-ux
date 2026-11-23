@@ -31,7 +31,7 @@ test('tracked source has no machine-specific paths or hosts', () => {
     const buffer = readFileSync(new URL('../' + file, import.meta.url));
     return buffer.includes(0) ? [] : violations(file, buffer.toString('utf8'));
   });
-  assert.deepEqual(found, [], 'Machine-specific configuration belongs in env vars:\n' + found.join('\n'));
+  assert.equal(found.length, 0, 'Machine-specific configuration belongs in env vars:\n' + found.join('\n'));
 });
 test('portable-path guard detects literals and escaped hostnames, exempts receipts only', () => {
   for (const text of ['/home/' + 'telos/apps/app', '/Users/' + 'thales/project', '/Volumes/' + 'ThalesMedia/QA', 'wizard.tail' + 'c0f369.ts.net', 'wizard\\.tail' + 'c0f369\\.ts\\.net', 'ssh ' + 'thales cmd', 'ssh -o ConnectTimeout=8 ' + 'thales cmd', 'scp -q ' + 'tha' + 'les:/tmp/shot.png ./', JSON.stringify('tha' + 'les'), JSON.stringify('tha' + 'les.local')]) {

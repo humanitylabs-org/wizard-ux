@@ -1,10 +1,14 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
+import { pageAssets } from './fixtures/w1-pages.mjs';
+import { between, runRecording } from './fixtures/source-slice.mjs';
 import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
 import { withServicesParts } from './fixtures/app-services-parts.mjs';
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 import { withShellParts } from './fixtures/shell-parts.mjs';
+import { appClient } from './fixtures/app-client-harness.mjs';
+import { shareSheet, flush } from './fixtures/share-sheet-harness.mjs';
 const read = p => withShellParts(readFileSync(new URL('../'+p,import.meta.url),'utf8'));
 const source=withServicesParts(read('web/core/app-services.js')), shared=read('web/core/share-wizard.js');
 function fixture() {
@@ -61,19 +65,40 @@ test('real shared Chats send enqueues all 21 attachments once without consuming 
  const receipt=await sandbox.sendChat('w1','Forwarded words','shared to Wizard',null,{sid:'__new__',files,seal:false,away:true});
  assert.equal(receipt.durable,true);assert.equal(enqueued.length,1);assert.equal(enqueued[0].files.length,21);assert.equal(enqueued[0].text,'Forwarded words');assert.equal(draft.draft,'Keep my words');assert.equal(draft.files[0].id,'existing');
 });
-test('share destination wording keeps one Chat picker, a valid default and a decorative chevron',()=>{
- assert.match(shared,/class="dv-row dv-chat"[^>]*><span>Chat<\/span><strong>New chat<\/strong><span aria-hidden="true">⌄<\/span>/);
- assert.match(shared,/dest = '__new__'/, 'fresh imports default to New chat; explicit retries retain dest');
- assert.match(shared,/\[\{id:'__new__', title:'\+ New chat', on:target === '__new__'\}, \.\.\.threads\.map/);
- assert.match(shared,/else \{ target = opt\.dataset\.dvpick; a\.closePicker\(\); paint\(\); \}/);
- assert.doesNotMatch(shared,/role="radiogroup"|value="pick"/);
+test('share destination wording keeps one Chat picker, a valid default and a decorative chevron',async()=>{
+ // the real sheet on the tiny DOM (tests/fixtures/share-sheet-harness.mjs)
+ const h=shareSheet();h.S.open({text:'hi'});await flush();
+ const row=h.q('.dv-row.dv-chat');
+ assert.deepEqual(row.children.map(c=>[c.tagName.toLowerCase(),c.textContent,c.getAttribute('aria-hidden')]),[['span','Chat',null],['strong','New chat',null],['span','⌄','true']],'label, value, decorative chevron');
+ assert.equal(h.all('.dv-row.dv-chat').length,1,'one Chat picker');
+ assert.equal(h.all('[role="radiogroup"], input[value="pick"]').length,0);
+ h.tap('.dv-chat');assert.equal(row.getAttribute('aria-expanded'),'true');
+ h.tap(h.all('[data-dvpick]').find(b=>b.dataset.dvpick==='t1'));
+ assert.equal(h.q('.dv-chat strong').textContent,'Plans','picking a chat names it in the row');
+ assert.equal(h.all('[data-dvpick]').length,0,'and closes the picker');
 });
-test('share title names the chosen agent and text remains a separate read-only quote',()=>{
- assert.ok(shared.includes('textContent = `Send to ${label()}`'));
- assert.ok(shared.includes("setAttribute('aria-label', `Send to ${label()}`)"));
- assert.match(shared,/blockquote class="dv-quote" aria-label="Shared content \(not editable\)" tabindex="0">\$\{esc\(text\)\}/);
- assert.match(shared,/placeholder="Add a comment \(optional\)"/);
- assert.match(shared,/if \(!note && !chosen\.length\) \{ status\.textContent = 'Add a comment first'; return; \}/);
+test('a fresh import defaults to New chat; an explicit retry keeps its chat',async()=>{
+ const h=shareSheet();h.S.open({text:'hi'});await flush();
+ assert.equal(h.q('.dv-chat strong').textContent,'New chat');
+ const r=shareSheet();r.S.open({text:'hi',dest:'t1'});await flush();
+ assert.equal(r.q('.dv-chat strong').textContent,'Plans');
+});
+test('share title names the chosen agent and text remains a separate read-only quote',async()=>{
+ const h=shareSheet();h.S.open({text:'Shared <words>'});await flush();
+ assert.equal(h.q('.dv-title').textContent,'Send to Wizard');
+ assert.equal(h.q('[role=dialog]').getAttribute('aria-label'),'Send to Wizard');
+ h.tap('.dv-agent');h.tap(h.all('[data-dvpick]').find(b=>b.dataset.dvpick==='merlin'));await flush();
+ assert.equal(h.q('.dv-title').textContent,'Send to Merlin','the title follows the chosen agent');
+ assert.equal(h.q('[role=dialog]').getAttribute('aria-label'),'Send to Merlin');
+ const quote=h.q('.dv-quote');
+ assert.equal(quote.textContent,'Shared <words>','the shared text, escaped, as a quote');
+ assert.equal(quote.getAttribute('aria-label'),'Shared content (not editable)');assert.equal(quote.getAttribute('tabindex'),'0');
+ assert.equal(h.q('.dv-text').getAttribute('placeholder'),'Add a comment (optional)');
+ const e=shareSheet();e.S.open({});await flush();
+ const sent=[];e.window.__wos.chats.sendChat=async(...a)=>{sent.push(a);return {durable:true};};
+ e.tap('[data-sharesend]');await flush();
+ assert.equal(e.q('.dv-status').textContent,'Add a comment first','nothing to send asks for a comment');
+ assert.equal(sent.length,0);
 });
 test('share receipt toast names the actual destination agent, only after durable send',async()=>{
  const start=shared.indexOf('  async function carry('),end=shared.indexOf('  function wizard(',start),toasts=[];
@@ -86,10 +111,34 @@ test('share receipt toast names the actual destination agent, only after durable
  await sandbox.carry(w,{sendChat:async()=>({durable:true})},{target:'__new__',agentLabel:'Synthetic Agent',stay:true},[]);
  assert.equal(toasts.length,1);
 });
-test('both shells load the same sheet and route Back to it, native imports reuse it without desktop device.js',()=>{
- for(const p of ['index.html','desktop.html']){const s=read('web/'+p);assert.match(s,/core\/share-wizard.js/);assert.match(s,/core\/share-wizard.css/);}
- for(const p of ['app.js','desktop/desktop.js'])assert.match(read('web/'+p),/WizEscapeBack\.installOwners\(/);
- assert.match(read('web/core/escape-back.js'),/add\('share-wizard',[^\n]+WizShareWizard.back\(\)/);
- assert.match(read('web/device.js'),/await window.WizShareWizard.open/);assert.doesNotMatch(read('web/device.js'),/data-shareto/);
- assert.match(read('web/core/app-client.js'),/get wizard\(\)/);assert.doesNotMatch(withParts(read('web/core/chats.js')),/MAX_FILES|files per message/);
+test('both shells load the same sheet and route Back to it, native imports reuse it without desktop device.js',async()=>{
+ for(const p of ['index.html','desktop.html']){const {all}=pageAssets(p);assert.ok(all.includes('core/share-wizard.js'),p);assert.ok(all.includes('core/share-wizard.css'),p);}
+ // each shell's own Back stack gets the shared owners (the real app-back.js / desktop-pickany.js lines, run)
+ for(const [file,from,to] of [['app-back.js','  const phoneBack = window.WizEscapeBack.create();',"\n  phoneBack.watch("],['desktop/desktop-pickany.js','  window.WizEscapeBack.installOwners(escapeBack,','\n']]){
+  let up=true;const SW={WizShareWizard:{get isOpen(){return up;},back:()=>{up=false;return 'share-wizard';}}};
+  const env={window:SW,document:{addEventListener(){}},addEventListener(){},setTimeout,clearTimeout,queueMicrotask,MutationObserver:class{observe(){}disconnect(){}}};
+  vm.runInNewContext(read('web/core/escape-back.js'),env);
+  const own=runRecording(`${file.startsWith('app')?'':'var escapeBack = window.WizEscapeBack.create();\n'}${between(read('web/'+file),from,to)}\nthis.stack = ${file.startsWith('app')?'phoneBack':'escapeBack'};`,{window:SW,appVars:{LINKS:null},desktopVars:{},CHATS:{},LINKS:null});
+  assert.equal(own.stack.run({fallback:()=>'root'}),'share-wizard',file+': Back closes the share sheet first');
+ }
+ // Back: the shared owner catalog (core/escape-back.js) closes the sheet first, on both shells.
+ let open=true;const W={WizShareWizard:{get isOpen(){return open;},back:()=>{open=false;return 'share-wizard';}}};
+ vm.runInNewContext(read('web/core/escape-back.js'),{window:W,document:{addEventListener(){}},addEventListener(){},setTimeout,clearTimeout,queueMicrotask,MutationObserver:class{observe(){}disconnect(){}}});
+ const stack=W.WizEscapeBack.create();W.WizEscapeBack.installOwners(stack,{chats:()=>({}),links:()=>null});
+ assert.equal(stack.run({fallback:()=>'root'}),'share-wizard');assert.equal(open,false);assert.equal(stack.run({fallback:()=>'root'}),'root');
+ // A native (Android) import opens the same sheet (core/device.js onShare), and releases the share once it is sent.
+ const dev=read('web/device.js'),start=dev.indexOf('  async function onShare(id) {'),end=dev.indexOf("    log('share:result', id, result);\n  }",start);
+ const opened=[],done=[];
+ const ctx={window:{WizShareWizard:{open:async o=>(opened.push(o),'sent')}},J:x=>x,closeSheet(){},toast(){},log(){},readBlob:()=>null,
+  DEV:()=>({shareMeta:id=>({text:'hello',subject:'s',items:[{n:0,name:'a.png',mime:'image/png'}]}),shareDone:id=>done.push(id),shareRead(){}})};
+ vm.runInNewContext(dev.slice(start,end)+'}\nthis.onShare=onShare;',ctx);
+ await ctx.onShare('sh1');
+ assert.equal(opened.length,1);assert.equal(opened[0].durable,true);assert.equal(opened[0].android,true);assert.equal(opened[0].text,'hello');
+ assert.equal(opened[0].items.length,1);assert.equal(typeof opened[0].items[0].read,'function');assert.deepEqual(done,['sh1']);
+ assert.doesNotMatch(dev,/data-shareto/);
+ // Apps reach the same sheet through the SDK (WizardApp.share.wizard), which hands the batch to the shell's service.
+ const sent=[],c=appClient({service:{share:{wizard:async d=>(sent.push(d),'sent')}}});
+ const batch={text:'x'};assert.equal(await c.api.share.wizard(batch),'sent');assert.equal(sent[0],batch);
+ assert.equal(appClient().api.share.wizard,undefined,'no services and no transport: not offered');
+ assert.doesNotMatch(withParts(read('web/core/chats.js')),/MAX_FILES|files per message/);
 });

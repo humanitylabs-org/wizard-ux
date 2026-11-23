@@ -2,11 +2,15 @@
 // web/core/browser-boundary-client.js (app), talking through a fake postMessage bus with real origin/source checks.
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { deskWorld, layout as aiAppsLayout } from './fixtures/ai-apps-world.mjs';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { createDocument } from './fixtures/mini-dom.mjs';
 import { withAppParts } from './fixtures/app-parts.mjs';
 import { withShellParts } from './fixtures/shell-parts.mjs';
 import { withWebParts } from './fixtures/web-parts.mjs';
+import { appClient } from './fixtures/app-client-harness.mjs';
+import { withServicesParts } from './fixtures/app-services-parts.mjs';
 
 const read = p => withShellParts(withWebParts(readFileSync(new URL('../' + p, import.meta.url), 'utf8')));
 const SHELL_SRC = read('web/core/browser-boundary.js');
@@ -264,22 +268,53 @@ test('badge and title bar: served by the one registered server; taps come back; 
   sh.B.attach(f.el)(); assert.equal(sh.B.tool(f.el, 'older'), false);
 });
 
-test('wiring: pages load the boundary right after shell-token.js; app frames get the sandbox only when it is on', () => {
+// Timers of the shell code run in these tests never hold the test process open.
+const quiet = (f, ms, ...a) => { const t = setTimeout(f, ms, ...a); t.unref?.(); return t; };
+const sliceFn = (src, start, end = '\n  }\n') => { const i = src.indexOf(start); assert.ok(i >= 0, start); const j = src.indexOf(end, i); assert.ok(j > i, start); return src.slice(i, j + end.length); };
+
+test('wiring: pages load the boundary right after shell-token.js; app frames get the sandbox only when it is on', async () => {
   for (const page of ['web/index.html', 'web/desktop.html']) {
-    const html = read(page);
-    const t = html.indexOf('<script src="core/shell-token.js"></script>'), b = html.indexOf('<script src="core/browser-boundary.js"></script>');
-    assert.ok(t > 0 && b > t, page);
-    assert.ok(b < html.indexOf('<script src="core/appearance-host.js"></script>') && b < html.indexOf('<script src="core/app-services.js"></script>'), page);
+    // the scripts the browser runs, in the parsed page's document order
+    const doc = createDocument(); doc.documentElement.innerHTML = read(page).replace(/^<!doctype html>/i, '');
+    const order = doc.querySelectorAll('script[src]').map(e => e.getAttribute('src').split('?')[0]);
+    const at = n => { const i = order.indexOf(n); assert.ok(i >= 0, `${page} runs ${n}`); return i; };
+    assert.ok(at('core/browser-boundary.js') > at('core/shell-token.js'), `${page}: the boundary after shell-token.js`);
+    assert.ok(at('core/browser-boundary.js') < at('core/appearance-host.js') && at('core/browser-boundary.js') < at('core/app-services.js'), page);
   }
-  const gate = v => "${window.WizBrowserBoundary?.enabled ? ' ' + window.WizBrowserBoundary.frameAttributes(" + v + ") : ''}";
-  assert.ok(withAppParts(read('web/app.js')).includes('<iframe class="appframe"' + gate('frameUrl, a.id')), 'phone app frames');
-  assert.ok(read('web/desktop/desktop.js').includes(`<iframe data-own-app="\${esc(a.id || '')}"` + gate('url, a.id')), 'desktop app frames');
-  const services = read('web/core/app-services.js');
-  assert.match(services, /if \(window\.WizBrowserBoundary\?\.owns\(frame\)\) return window\.WizBrowserBoundary\.back\(frame, onRoot\);/);
-  assert.match(services, /window\.WizBrowserBoundary\?\.enabled \? window\.WizBrowserBoundary\.attach\(frame, \{ home: appHome\(url\) \}\) : null/);
-  const client = read('web/core/app-client.js');
-  assert.match(client, /const opaque = framed && globalThis\.origin === 'null';/);
-  assert.match(client, /\/wizard-os-home\/core\/browser-boundary-client\.js/);
+  // The phone's and the desktop's real app-frame markup (app-frame.js renderFrameCore, desktop-resize.js bodyHtml),
+  // with the real boundary's frame attributes when it is on.
+  const sh = shell(), esc = v => String(v ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const render = (on, which) => {
+    const window = { WizBrowserBoundary: on ? sh.B : undefined, WosOwnViews: null, WizReach: {} };
+    const ctx = vm.createContext({ window, esc, ico: () => '', MOD: '⌥', listW: () => 300, appOf: () => ({ id: 'notes', name: 'Notes', url: '/notes/' }) });
+    if (which === 'phone') { vm.runInContext(sliceFn(read('web/app-frame.js'), '  function renderFrameCore(w, a) {') + '\nthis.html = w => renderFrameCore(w, { id: "notes", name: "Notes", url: "/notes/" });', ctx); }
+    else vm.runInContext(sliceFn(read('web/desktop/desktop-resize.js'), '  function bodyHtml(w) {') + '\nthis.html = bodyHtml;', ctx);
+    return ctx.html({ app: 'frame', appId: 'notes', url: '/notes/' });
+  };
+  for (const which of ['phone', 'desktop']) {
+    const on = render(true, which), off = render(false, which);
+    const tag = h => /<iframe [^>]*>/.exec(h)[0];
+    assert.match(tag(on), /\bsandbox="allow-scripts[^"]*"/, `${which}: a sandboxed app frame with the boundary on`);
+    assert.ok(!/allow-same-origin/.test(tag(on)), `${which}: never same-origin under the boundary`);
+    assert.doesNotMatch(tag(off), /\bsandbox=/, `${which}: untouched with it off`);
+    assert.match(tag(off), /src="\/notes\/"/);
+  }
+  // app-services.js hands a sandboxed frame's attach and Back to the boundary.
+  const calls = [], location = new URL(ORIGIN + '/wizard-os-home/');
+  const child = { location: new URL('/notes/', location), document: {}, addEventListener() {}, postMessage() {} };
+  const el = { tagName: 'IFRAME', src: child.location.href, isConnected: true, contentWindow: child, hasAttribute: () => true, getAttribute: () => 'allow-scripts', addEventListener() {}, removeEventListener() {} };
+  const window = { WizCore: { apps: () => ({ APPS: [{ id: 'notes', kind: 'wizard', url: '/notes/' }] }) }, dispatchEvent() {},
+    WizBrowserBoundary: { enabled: true, attach: (f, o) => { calls.push(['attach', o.home]); return () => calls.push(['detach']); }, owns: f => f === el, back: (f, onRoot) => (calls.push(['back', typeof onRoot]), 'pending') } };
+  vm.runInNewContext(withServicesParts(read('web/core/app-services.js')), { window, location, URL, addEventListener() {}, setInterval() {}, setTimeout: quiet, clearTimeout,
+    document: { hidden: false, readyState: 'loading', addEventListener() {} }, CustomEvent: class {}, navigator: {} });
+  const detach = window.WizAppServices.attach(el, { appId: 'notes', path: '/notes/', isVisible: () => true });
+  assert.deepEqual(clone(calls), [['attach', '/notes/']], 'attached through the boundary, with the app\'s home');
+  assert.equal(window.WizAppServices.back(el, () => {}), 'pending'); assert.deepEqual(clone(calls.at(-1)), ['back', 'function']);
+  detach(); assert.deepEqual(clone(calls.at(-1)), ['detach']);
+  // The app SDK in a sandboxed (opaque) frame loads the boundary client; a same-origin one does not.
+  const scripts = c => c.ctx.document.head.children.map(n => n.src);
+  assert.ok(scripts(appClient({ opaque: true })).includes('/wizard-os-home/core/browser-boundary-client.js'));
+  assert.ok(!scripts(appClient()).includes('/wizard-os-home/core/browser-boundary-client.js'));
 });
 
 // A text input inside the app document (the fake client document).
@@ -398,9 +433,29 @@ test('dictation: a rich-text region in a sandboxed app is offered and the words 
   assert.equal(f.sent.filter(m => m.data.op === 'field.focus').at(-1).data.editable, false);
 });
 
-test('dictation wiring: phone and desktop await the insert (a sandboxed insert answers later)', () => {
-  assert.match(withAppParts(read('web/app.js')), /const inserted = await FIELDS\.insert\(target, text\);/);
-  assert.match(read('web/desktop/desktop.js'), /if \(await fields\(\)\.insert\(target, text\)\)/);
+test('dictation wiring: phone and desktop await the insert (a sandboxed insert answers later)', async () => {
+  const later = v => new Promise(r => setTimeout(() => r(v), 5));
+  // Phone (app-transcribe.js, the real part): a later "not inserted" keeps the words, a later "inserted" finishes.
+  for (const answer of [false, true]) {
+    const log = [], window = { WizCore: {}, WosCancelled: { retainWeb: async () => (log.push('retained'), true) }, WizConfig: { transcribe: async () => ({ text: 'hello there' }), voicePrompt: () => '' } };
+    vm.runInNewContext(read('web/app-transcribe.js'), { window, setTimeout: quiet, clearTimeout, AbortController, Blob, Promise, String });
+    const V = { captureEpoch: 1, acc: 2000, field: { release: () => log.push('release') } };
+    const T = window.WizCore.appParts.transcribe({ V, FIELDS: { insert: () => later(answer) }, OUTBOX: { TRANSCRIBE_TIMEOUT_MS: 1000, remove: async () => {} }, recDone: () => log.push('done'),
+      setVoice: v => log.push('voice:' + v), showDictationCopy: () => log.push('copy'), toast() {}, txHide: () => log.push('hide') });
+    await T.transcribeDictation([new Blob(['x'.repeat(2000)])], 'n1');
+    assert.deepEqual(log, answer ? ['release', 'done', 'voice:idle', 'hide'] : ['release', 'retained', 'done', 'voice:idle', 'copy'], `phone, inserted=${answer}`);
+  }
+  // Desktop (desktop.js dictate): a later "not inserted" falls back to the clipboard instead of claiming it landed.
+  const desktop = read('web/desktop/desktop.js');
+  for (const answer of [false, true]) {
+    const copied = [], removed = [];
+    const ctx = vm.createContext({ VOICE: { state: 'listen', finish: async () => ({ blob: {}, captureId: 'c' }) }, CHATS: { incognitoActive: () => false }, focused: () => null, document: { activeElement: null },
+      dictationFinishing: false, vMode: 'dictate', dictTarget: { release() {} }, toast() {}, clip: s => s, fields: () => ({ insert: () => later(answer) }), navigator: { clipboard: { writeText: async t => copied.push(t) } },
+      window: { WosOutbox: { retainDictation: async () => ({ id: 't1' }), transcribeDictation: async () => ({ text: 'hello there', durable: true, id: 't1' }), remove: id => removed.push(id) } } });
+    vm.runInContext(sliceFn(desktop, "  async function dictate(action = 'toggle') {").replace("async function dictate", "var dictationFinishing = false, vMode = 'dictate', dictTarget = { release() {} };\nasync function dictate") + '\nthis.dictate = dictate;', ctx);
+    assert.equal(await ctx.dictate(), answer ? 'inserted' : 'copied', `desktop, inserted=${answer}`);
+    assert.deepEqual(copied, answer ? [] : ['hello there']);
+  }
 });
 
 // Desktop keys and clicks from a sandboxed app (Esc, ⌥ chords, click-to-focus).
@@ -510,13 +565,20 @@ test('layout keys: a running layout adds its own ⌥ window keys; they reach the
 });
 
 test('layout keys wiring: the AI apps view takes its own window keys from a sandboxed app while it runs, never voice, send or chat keys', async () => {
-  const layout = read('web/layouts/ai-apps/desktop.js');
-  assert.match(layout, /const offFrameKeys = globalThis\.WizBrowserBoundary\?\.layoutKeys\?\.\(FRAME_KEYS\) \|\| null;/);
-  assert.match(layout, /return \(\) => \{\n    offAppKeys\?\.\(\);\n    offFrameKeys\?\.\(\);/, 'the view lets go when it is torn down');
-  const keys = JSON.parse(/export const FRAME_KEYS = Object\.freeze\((\[[^\]]*\])\)/.exec(layout)[1].replace(/'/g, '"'));
-  assert.ok(keys.includes('KeyH') && keys.includes('KeyK'), '⌥H Home and ⌥K search come across');
-  for (const k of ['KeyN', 'KeyS', 'KeyW', 'KeyD', 'KeyV', 'KeyC', 'Space', 'KeyE', 'KeyX', 'KeyZ', 'KeyB', 'KeyP', 'ArrowUp', 'ArrowDown', 'KeyU', 'KeyI'])
-    assert.equal(keys.includes(k), false, k + ' stays the app\'s while it has the keyboard');
+  // the real AI apps desktop view (tests/fixtures/ai-apps-world.mjs deskWorld) with a boundary that records the claim
+  const { w } = deskWorld(), claims = [], released = [];
+  globalThis.WizBrowserBoundary = { layoutKeys: keys => { const list = [...keys]; claims.push(list); return () => released.push(list); } };
+  try {
+    const off = (await aiAppsLayout()).default(w.api);
+    assert.equal(claims.length, 1, 'the view claims its window keys once it runs');
+    const keys = claims[0];
+    assert.ok(keys.includes('KeyH') && keys.includes('KeyK'), '⌥H Home and ⌥K search come across');
+    for (const k of ['KeyN', 'KeyS', 'KeyW', 'KeyD', 'KeyV', 'KeyC', 'Space', 'KeyE', 'KeyX', 'KeyZ', 'KeyB', 'KeyP', 'ArrowUp', 'ArrowDown', 'KeyU', 'KeyI'])
+      assert.equal(keys.includes(k), false, k + ' stays the app\'s while it has the keyboard');
+    assert.deepEqual(released, [], 'held while the view runs');
+    off?.();
+    assert.deepEqual(released, [keys], 'the view lets go when it is torn down');
+  } finally { delete globalThis.WizBrowserBoundary; }
 });
 
 test('keys: the claimed list reaches an app that is already connected', async () => {
@@ -888,13 +950,39 @@ test('app keys: forged or reserved keys are dropped; a press only reaches a key 
   void press;
 });
 
-test('app keys wiring: the AI apps view presses app keys while it runs and reads a sandboxed app\'s keys from the boundary', () => {
-  const layout = read('web/layouts/ai-apps/desktop.js'), client = read('web/core/app-client.js');
-  assert.match(layout, /var offAppKeys = globalThis\.WizBrowserBoundary\?\.pressAppKeys\?\.\(\(\) => \(appFront\(\) \? paneFrame\(\) : null\)\) \|\| null;/);
-  assert.match(layout, /offAppKeys\?\.sync\?\.\(\);/, 'the app in front is synced on every repaint');
-  assert.match(layout, /return \(\) => \{\n    offAppKeys\?\.\(\);/, 'the view lets go when it is torn down');
-  assert.match(layout, /if \(B\?\.owns\?\.\(f\)\) \{ try \{ return B\.appKeys\(f\)\.filter\(t => t && t\.el && isAppKey\(t\.key\)\);/);
-  assert.match(client, /keys: \(\) => keyList\(document\), press: key => keyPress\(key\)/, 'WizardApp hands its own key list and press to the boundary client');
+test('app keys wiring: the AI apps view presses app keys while it runs and reads a sandboxed app\'s keys from the boundary', async () => {
+  const layout = read('web/layouts/ai-apps/desktop.js'), keys = read('web/layouts/ai-apps/desktop-keys.js');
+  // desktop-keys.js: the view asks the boundary to press app keys for the app in front, and reads a sandboxed app's keys from it.
+  const asked = [];
+  let front = true;
+  const pane = { id: 'pane-frame' };
+  const B = { pressAppKeys: get => { asked.push(get()); const off = () => asked.push('off'); off.sync = () => asked.push(['sync', get()]); return off; },
+    owns: f => f === pane, appKeys: () => [{ el: {}, key: 'j' }, { el: null, key: 'k' }, { el: {}, key: '' }] };
+  const ctx = vm.createContext({ globalThis: { WizBrowserBoundary: B }, appFront: () => front, paneFrame: () => pane, isAppKey: k => !!k });
+  vm.runInContext(keys.slice(keys.indexOf('  var offAppKeys = '), keys.indexOf('\n', keys.indexOf('  var offAppKeys = '))) + '\nthis.off = () => offAppKeys;\n' + sliceFn(keys, '  function frameKeys(f) {') + '\nthis.frameKeys = frameKeys;', ctx);
+  assert.deepEqual(asked, [pane], 'pressed while the view runs, for the app in front');
+  front = false; ctx.off().sync(); assert.deepEqual(asked.at(-1), ['sync', null], 'the app in front is synced (none now)');
+  ctx.off()(); assert.equal(asked.at(-1), 'off');
+  assert.deepEqual(clone(ctx.frameKeys(pane).map(t => t.key)), ['j'], 'a sandboxed app\'s keys come from the boundary, only those with a control and a key');
+  // The whole real AI apps desktop view (ai-apps-world.mjs deskWorld): every repaint syncs, teardown lets go.
+  const { w } = deskWorld(), seen = [];
+  globalThis.WizBrowserBoundary = { pressAppKeys: () => { seen.push('press'); const off = () => seen.push('off'); off.sync = () => seen.push('sync'); return off; } };
+  try {
+    const offView = (await aiAppsLayout()).default(w.api);
+    assert.equal(seen[0], 'press', 'pressed once the view runs');
+    const synced = () => seen.filter(x => x === 'sync').length, before = synced();
+    w.st.route = { ...w.st.route, view: 'list', thread: null }; w.emit('route', w.st.route); w.run();
+    assert.ok(synced() > before, 'the app in front is synced on every repaint');
+    assert.ok(!seen.includes('off'), 'held while the view runs');
+    offView?.(); assert.equal(seen.filter(x => x === 'off').length, 1, 'the view lets go when it is torn down');
+  } finally { delete globalThis.WizBrowserBoundary; }
+  // The SDK hands its own key list and press to the boundary client (app-client.js boundaryHooks), in a sandboxed frame.
+  const app = appClient({ opaque: true });
+  let hooks = null; app.ctx.WizBoundaryClient = { connect: h => { hooks = h; } };
+  const script = app.ctx.document.head.children.find(n => n.src === '/wizard-os-home/core/browser-boundary-client.js');
+  script.onload();
+  assert.equal(typeof hooks.keys, 'function'); assert.equal(typeof hooks.press, 'function');
+  assert.deepEqual([...hooks.keys()], [], 'no keys on a page with none');
 });
 
 test('app keys: only the app in front holds back its ⌥ keys; another app window keeps its own shortcuts', async () => {

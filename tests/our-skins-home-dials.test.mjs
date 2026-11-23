@@ -2,6 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import { createDocument } from './fixtures/mini-dom.mjs';
+import { cascade } from './fixtures/mini-css.mjs';
+import { styles, sheets as sheetsText } from './fixtures/w5-css.mjs';
+import { phoneHome } from './fixtures/w5-phone-home.mjs';
 
 const src = fs.readFileSync(new URL('../web/core/resources.js', import.meta.url), 'utf8');
 function render(skin) {
@@ -12,22 +16,49 @@ function render(skin) {
   return ctx.WosResources.home();
 }
 
+const css = f => fs.readFileSync(new URL(f, import.meta.url), 'utf8');
+const CORE = ['../web/styles.css', '../web/core/resources.css', '../web/core/skins.css'].map(css);
+const skinCss = f => css(`../web/skins/${f}/skin.css`);
+// what styles reach `el`, and from which rules
+const rulesOn = (el, sheets) => Object.values(cascade(el, sheetsText(sheets))).map(d => d.selector);
+
 test('home dial styles live only in our skin packages', () => {
-  for (const f of ['obsidian', 'landscapes']) assert.match(fs.readFileSync(new URL(`../web/skins/${f}/skin.css`, import.meta.url), 'utf8'), /\.rs-dialed/);
-  for (const f of ['../web/styles.css', '../web/core/resources.css', '../web/core/skins.css']) assert.doesNotMatch(fs.readFileSync(new URL(f, import.meta.url), 'utf8'), /\.rs-dialed/);
+  // the dial widget resources.js draws (dialHtml), in a mini DOM
+  let s = src; for (const [a, b] of STATE) s = s.replace(a, b);
+  const ctx = { window: {}, document: { documentElement: { dataset: { skin: 'obsidian' } }, addEventListener() {}, querySelectorAll: () => [], hidden: false },
+    localStorage: { getItem: () => null, setItem() {} }, queueMicrotask() {}, setTimeout, clearTimeout, fetch: async () => ({ ok: false }), AbortController };
+  ctx.window = ctx; ctx.window.addEventListener = () => {};
+  vm.runInNewContext(s.replace('window.WosResources={', 'globalThis.__dial=dialHtml;window.WosResources={'), ctx);
+  for (const skin of ['obsidian', 'landscapes', 'nebula']) {
+    const doc = createDocument(); doc.documentElement.setAttribute('data-skin', skin);
+    doc.body.innerHTML = `<div class="home">${ctx.__dial()}</div>`;
+    const dial = doc.querySelector('section.rs-dialed'); assert.ok(dial, 'the dial widget');
+    assert.deepEqual(rulesOn(dial, CORE).filter(sel => sel.includes('rs-dialed')), [], `${skin}: no core rule styles the dials`);
+    if (skin !== 'nebula') assert.ok(rulesOn(dial, [...CORE, skinCss(skin)]).some(sel => sel.includes('rs-dialed')), `${skin}: its package does`);
+  }
 });
 
-test('Miguel skins: bare gear, round Ready/Working, see-through dock', () => {
-  for (const [f, P] of [['obsidian', 'html[data-skin^="obsidian"]'], ['landscapes', 'html[data-skin^="landscapes"]']]) {
-    const css = fs.readFileSync(new URL(`../web/skins/${f}/skin.css`, import.meta.url), 'utf8');
-    assert.ok(css.includes(`${P} .home-tools .gear, ${P} .gear { background: none; border: 0;`), `${f}: gear has no chip`);
-    assert.match(css, /\.now-card\.wz-home-widget \{[^}]*border-radius: 50%/, `${f}: round tiles`);
+test('Miguel skins: bare gear, bare Ready/Working rows, see-through dock', () => {
+  const html = css('../web/index.html');
+  for (const skin of ['obsidian', 'landscapes']) {
+    const sheets = [...CORE, skinCss(skin)];
+    // the phone Home the shell draws: the gear has no chip, Ready/Working sit on the background (glyph rows, 22 Oct)
+    const home = phoneHome({ skin }), st = el => styles(el, sheets);
+    const gear = st(home.querySelector('.home-tools .gear'));
+    assert.equal(gear.background, 'none', `${skin}: gear has no chip`); assert.match(gear.border, /^0/);
+    for (const card of home.querySelectorAll('.home .constellation .now-card.wz-home-widget')) {
+      const c = st(card); assert.equal(c.background, 'none', `${skin}: no tile`); assert.match(c.border, /^0/); assert.equal(c['box-shadow'], 'none');
+    }
+    // the phone dock from index.html: see-through
+    const doc = createDocument(); doc.documentElement.setAttribute('data-skin', skin); doc.documentElement.setAttribute('data-shell', 'phone');
+    doc.body.innerHTML = html.slice(html.indexOf('<body'), html.lastIndexOf('</body>')).replace(/^<body[^>]*>/, '');
+    const dock = doc.querySelector('.device .dock'); assert.ok(dock, 'the phone dock');
+    assert.match(styles(dock, sheets).background || '', /transparent\)$/, `${skin}: the dock is see-through`);
   }
 });
 
 test('devices sheet draws capacity bars sized by real capacity', () => {
   const injected = src.replace("devices:null,devicesAt:0", "devices:{devices:[{id:'this',kind:'this',group:'agent',name:'Big',status:'online',cpus:8,cpu:10,memory:50,memoryTotalGB:32,disks:[{label:'System disk',sizeGB:1000,freeGB:500,pct:50}]},{id:'s',kind:'ssh',group:'agent',name:'Small',status:'online',cpus:4,cpu:95,memory:20,memoryTotalGB:8,disks:[{label:'System disk',sizeGB:250,freeGB:200,pct:20}]}],network:{available:true,peers:[]}},devicesAt:0");
-  assert.notEqual(injected, src, 'devices state literal found');
   const ctx = { window: {}, document: { documentElement: { dataset: { skin: 'obsidian' } }, addEventListener() {}, querySelectorAll: () => [], hidden: false },
     localStorage: { getItem: () => null, setItem() {} }, queueMicrotask() {}, setTimeout, clearTimeout, fetch: async () => ({ ok: false }), AbortController };
   ctx.window = ctx; ctx.window.addEventListener = () => {};

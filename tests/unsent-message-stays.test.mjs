@@ -2,6 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { createDocument } from './fixtures/mini-dom.mjs';
+import { cascade } from './fixtures/mini-css.mjs';
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 // 9 Nov 2026 (James): "The message I sent is disappearing and being lost." A message Hermes never took in (three
 // resends that never started, a gateway restart, a thread another app owns) is served by the Agent Service as a user
@@ -71,8 +73,14 @@ test('this phone’s just-sent copy is matched to Wizard’s copy of the same ru
 });
 
 test('Not sent styling uses the skin’s warning token and keeps the bubble fully opaque', () => {
-  assert.match(css, /\.msg\.u\.unsent \.pst\.fail \{[^}]*var\(--wz-warning/);
-  assert.doesNotMatch(css.match(/\.msg\.u\.unsent \.bub \{[^}]*\}/)[0], /opacity/);
+  // the bubble the real renderer drew, styled by the real chats.css
+  const doc = createDocument(); doc.body.innerHTML = paint([...earlier, unsent()], [], { retryRunId: RUN }).html;
+  const msg = doc.querySelector('.msg.u.unsent'); assert.ok(msg, 'drawn as Not sent');
+  const fail = msg.querySelector('.pst.fail'), bub = msg.querySelector('.bub');
+  assert.ok(fail && bub);
+  assert.match(cascade(fail, css).color?.value || '', /^var\(--wz-warning/, 'the skin\'s warning token');
+  assert.equal(cascade(bub, css).opacity, undefined, 'fully opaque'); assert.equal(cascade(msg, css).opacity, undefined);
+  assert.equal(cascade(bub, css)['border-style']?.value, 'dashed', 'marked by its dashed edge instead');
 });
 
 test('a sent Retry is not retired from the outbox until a transcript row really carries it', () => {

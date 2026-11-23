@@ -4,6 +4,7 @@ import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { withServicesParts } from './fixtures/app-services-parts.mjs';
 import { withShellParts } from './fixtures/shell-parts.mjs';
+import { createDocument } from './fixtures/mini-dom.mjs';
 const read = name => withShellParts(readFileSync(new URL('../web/core/' + name + '.js', import.meta.url), 'utf8'));
 function fixture(mobile = true) {
   const frames = new Map(), events = {}, listeners = {}, wins = {}, desks = [{ id: 'home', home: true, wins: [] }, { id: 'chat', wins: ['chat'], focus: 'chat' }];
@@ -92,9 +93,30 @@ test('owner unload revokes pair and stale relay, restores previous width', () =>
 });
 test('both shells load the generic module, legacy adapter only names old app, and root Back calls the shared pair', () => {
   const pane = read('companion-pane'); assert.doesNotMatch(pane, /video-editor|Feedback|WizVideoDesks/);
-  for (const [entry, script] of [['index.html', 'app.js'], ['desktop.html', 'desktop/desktop.js']]) {
-    const html = withShellParts(readFileSync(new URL('../web/' + entry, import.meta.url), 'utf8'));
-    assert.match(html, /core\/companion-pane.js/); assert.match(html, /core\/companion-legacy.js/); assert.doesNotMatch(html, /video-desks/);
-    assert.match(withShellParts(readFileSync(new URL('../web/' + script, import.meta.url), 'utf8')), /WizCompanionPane\?\.back\(f.id\)/);
+  // each shell page (parsed) loads both scripts and no video desks
+  for (const entry of ['index.html', 'desktop.html']) {
+    const doc = createDocument(); doc.documentElement.innerHTML = readFileSync(new URL('../web/' + entry, import.meta.url), 'utf8');
+    const srcs = doc.querySelectorAll('script[src]').map(x => x.getAttribute('src'));
+    for (const want of ['core/companion-pane.js', 'core/companion-legacy.js']) assert.ok(srcs.some(x => x.split('?')[0].endsWith(want)), `${entry} loads ${want}`);
+    assert.ok(!srcs.some(x => /video-desks/.test(x)), entry);
+  }
+  // the legacy adapter (real companion-legacy.js) answers only the old Video Editor; any other app is ignored
+  const legacy = appId => {
+    const on = {}, opened = [], source = { document: {}, postMessage() {} };
+    const ctx = { location: { origin: 'https://w.example' }, addEventListener: (t, f) => { on[t] = f; }, WeakMap, Number, Math,
+      window: { WizAppServices: { connect: () => ({ appId, shell: { openCompanion: o => opened.push(o.path), closeCompanion() {}, postCompanion() {}, focusApp: () => true } }) } } };
+    vm.runInNewContext(readFileSync(new URL('../web/core/companion-legacy.js', import.meta.url), 'utf8'), ctx);
+    on.message({ origin: 'https://w.example', source, data: { type: 'video-editor:desk', action: 'context', hash: '#/project/p1/clip/c1/draft/v2', project: 'p1', clip: 'c1', draft: 'v2' } });
+    return opened;
+  };
+  assert.deepEqual(legacy('video-editor'), ['/video-editor/?pane=feedback']);
+  assert.deepEqual(legacy('notes'), [], 'another app cannot drive the legacy pane');
+  // root Back in each shell (real app-back.js / desktop-keys.js line) asks the shared pair first
+  for (const file of ['web/app-back.js', 'web/desktop/desktop-keys.js']) {
+    const line = readFileSync(new URL('../' + file, import.meta.url), 'utf8').split('\n').find(l => l.includes('WizCompanionPane?.back(f.id)'));
+    const asked = [], back = ok => vm.runInNewContext(`(() => { ${line}\n return 'next'; })()`, { f: { id: 'peer-1' }, window: { WizCompanionPane: { back: id => { asked.push(id); return ok; } } } });
+    assert.equal(back(true), 'companion-back', file);
+    assert.equal(back(false), 'next', file + ': no pair, Back goes on');
+    assert.deepEqual(asked, ['peer-1', 'peer-1'], file);
   }
 });

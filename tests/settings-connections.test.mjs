@@ -6,6 +6,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import { createDocument } from './fixtures/mini-dom.mjs';
+import { cascade } from './fixtures/mini-css.mjs';
 import { withSettingsParts } from './fixtures/settings-parts.mjs'; // settings.js parts moved out verbatim (issue 1665)
 const source = withSettingsParts(fs.readFileSync(new URL('../web/core/settings.js', import.meta.url), 'utf8'));
 const tick = async () => { for (let i = 0; i < 5; i++) await new Promise(r => setImmediate(r)); };
@@ -96,32 +98,69 @@ test('Back inside Connections closes its pop-up, then leaves the map, then leave
   assert.equal(h.view.back(), true); assert.equal(h.view.page, '', 'then out of the page, never out of Settings in one go');
 });
 
-test('Connections sits flush in the Settings page: the view in its Settings embed mode, no box around it', () => {
-  const css = fs.readFileSync(new URL('../web/core/settings.css', import.meta.url), 'utf8');
-  const rule = css.match(/^\.st-embed \{([^}]*)\}/m)?.[1] || '';
-  assert.ok(rule.includes('position: relative'), 'keeps its own box for the desktop .wbody iframe rule');
-  assert.doesNotMatch(rule, /border-radius|background|border:|box-shadow/, 'no framed box around the view');
-  assert.match(source, /\$\{esc\(CONNECTIONS\)\}\?embed=settings/, 'asks the App Manager for its Settings embed mode');
-  assert.match(source, /fetch\(CONNECTIONS,/, 'availability still asks the plain page');
+// The real Connections page the harness drew, in a mini-dom (a window body around the Settings root on the desktop).
+async function connectionsPage(shell, { wizards = false, attrs = {} } = {}) {
+  const h = harness({ shell }); await tick(); h.view.focus('connections');
+  const doc = createDocument();
+  for (const [k, v] of Object.entries({ 'data-shell': shell, ...attrs })) doc.documentElement.setAttribute(k, v);
+  doc.body.innerHTML = `<div class="win"><div class="wbody"><div class="st-root">${h.root.innerHTML}</div></div></div>`;
+  // the Wizards section the page keeps below the frame (Add a Wizard)
+  if (wizards) doc.querySelector('.st-page').insertAdjacentHTML('beforeend', '<section data-settings-feature="wizards"><h4>Wizards</h4></section>');
+  return { h, doc };
+}
+// mini-dom reads `:has(> A B)` as "a child that is B"; rewrite it to the same rule it means, `:has(> A:has(B))`
+// (a child A with a B inside), so the cascade answers what a browser does.
+const exactHas = css => css.replace(/:has\(>\s*([^\s()>+~,]+(?:\([^()]*\))?)\s+([^()]+?)\)/g, ':has(> $1:has($2))');
+const settingsCss = () => exactHas(fs.readFileSync(new URL('../web/core/settings.css', import.meta.url), 'utf8'));
+
+test('Connections sits flush in the Settings page: the view in its Settings embed mode, no box around it', async () => {
+  const css = settingsCss();
+  for (const shell of ['phone', 'desktop']) {
+    const { h, doc } = await connectionsPage(shell);
+    const embed = doc.querySelector('.st-embed');
+    assert.equal(embed.querySelector('iframe').getAttribute('src'), URL_ + '?embed=settings', 'asks the App Manager for its Settings embed mode');
+    assert.ok(h.reads.includes(URL_), 'availability still asks the plain page');
+    const got = cascade(embed, css);
+    assert.equal(got.position?.value, 'relative', 'keeps its own box for the desktop .wbody iframe rule');
+    for (const p of ['border-radius', 'background', 'border', 'box-shadow']) assert.equal(got[p], undefined, `${shell}: no ${p} around the view`);
+  }
   // A borderless skin frame paints an app window with the app's canvas; Settings is not an app window.
-  const frame = fs.readFileSync(new URL('../web/core/skin-frame.css', import.meta.url), 'utf8');
-  for (const shell of ['', '[data-shell="desktop"]']) {
-    const sel = `html${shell}[data-skin-frame="borderless"] .win:has(> .wbody .st-embed iframe):not(.wz-themed)`;
-    const app = frame.indexOf(`html${shell}[data-skin-frame="borderless"] .win:has(> .wbody iframe):not(.wz-themed)`), at = frame.indexOf(sel);
-    assert.ok(at > app && app >= 0, `Settings keeps the skin material after the app-canvas rule (${shell || 'phone'})`);
-    assert.match(frame.slice(at), /^[^{]*\{ background: var\(--sk-win\); \}/);
+  const frame = exactHas(fs.readFileSync(new URL('../web/core/skin-frame.css', import.meta.url), 'utf8'));
+  for (const shell of ['phone', 'desktop']) {
+    const { doc } = await connectionsPage(shell, { attrs: { 'data-skin-frame': 'borderless' } });
+    const won = cascade(doc.querySelector('.win'), frame).background;
+    assert.equal(won?.value, 'var(--sk-win)', `Settings keeps the skin material (${shell})`);
+    assert.match(won.selector, /\.st-embed iframe/, `the Settings rule wins over the app-canvas rule (${shell})`);
+    // an app window with a frame of its own gets the app canvas
+    const app = createDocument(); app.documentElement.setAttribute('data-skin-frame', 'borderless'); app.documentElement.setAttribute('data-shell', shell);
+    app.body.innerHTML = '<div class="win"><div class="wbody"><iframe></iframe></div></div>';
+    assert.notEqual(cascade(app.querySelector('.win'), frame).background?.value, 'var(--sk-win)', `an app window is not Settings (${shell})`);
   }
 });
 
 // Issue 1242: on a phone the frame and the Settings page both scrolled, so the page's Wizards › Add a Wizard section
 // below the frame could not be reached. The page around the frame is a fixed column now; the frame takes what is left.
 // Browser proof: tests/qa-settings-connections-scroll.cjs (phone and desktop, real shells).
-test('Connections page has one scroll area: the frame fills the room the Wizards section leaves, on every shell', () => {
-  const css = fs.readFileSync(new URL('../web/core/settings.css', import.meta.url), 'utf8');
-  assert.match(css, /\.st-page:not\(\[hidden\]\):has\(\.st-embed\) \{ display: flex; flex-direction: column; min-height: 0;/);
-  assert.match(css, /\.st-page:has\(\.st-embed\) > section \{ flex: none; \}/);
-  assert.match(css, /\.st-page:has\(\.st-embed\) > section:has\(\.st-embed\) \{ flex: 1; min-height: 0;/);
-  assert.match(css, /\.st-root:has\(> \.st-phone\.st-in-page \.st-embed\) \{ display: flex; flex-direction: column; \}/);
-  assert.match(css, /\.st-phone\.st-in-page:has\(\.st-embed\) \{ flex: 1; min-height: 0;/);
-  assert.doesNotMatch(css, /\.st-desktop \.st-page:has\(\.st-embed\) > section \{ flex: 1/, 'only the frame section grows, so Wizards keeps its own height');
+test('Connections page has one scroll area: the frame fills the room the Wizards section leaves, on every shell', async () => {
+  const css = settingsCss();
+  for (const shell of ['phone', 'desktop']) {
+    const { doc } = await connectionsPage(shell, { wizards: true });
+    const style = sel => cascade(doc.querySelector(sel), css), val = (sel, p) => style(sel)[p]?.value;
+    assert.equal(val('.st-page', 'display'), 'flex', shell);
+    assert.equal(val('.st-page', 'flex-direction'), 'column', shell);
+    assert.equal(val('.st-page', 'min-height'), '0', shell);
+    assert.equal(val('[data-settings-feature="wizards"]', 'flex'), 'none', `${shell}: Wizards keeps its own height`);
+    assert.equal(val('[data-settings-feature="connections"]', 'flex'), '1', `${shell}: the frame section takes what is left`);
+    // never shorter than the embed's own floor, so a taller Wizards section scrolls the page (issue 1670)
+    assert.equal(val('[data-settings-feature="connections"]', 'min-height'), shell === 'phone' ? '240px' : '360px', shell);
+    if (shell === 'phone') {
+      assert.equal(val('.st-root', 'display'), 'flex');
+      assert.equal(val('.st-root', 'flex-direction'), 'column');
+      assert.equal(val('.st-phone', 'flex'), '1');
+      assert.equal(val('.st-phone', 'min-height'), '0');
+    }
+  }
+  // a page without the frame keeps the normal scrolling page
+  const plain = createDocument(); plain.body.innerHTML = '<div class="st-root"><div class="st-inner st-phone st-in-page"><div class="st-page"><section></section></div></div></div>';
+  assert.notEqual(cascade(plain.querySelector('.st-page'), css).display?.value, 'flex');
 });

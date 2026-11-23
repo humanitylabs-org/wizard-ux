@@ -6,10 +6,14 @@ import vm from 'node:vm';
 import { existsSync } from 'node:fs';
 import { read } from './fixtures/tweaks.mjs';
 import { withSettingsParts } from './fixtures/settings-parts.mjs'; // settings.js parts moved out verbatim (issue 1665)
-import { withDesktopParts } from './fixtures/desktop-parts.mjs';
+import { machinesHome } from './fixtures/machines-home-harness.mjs';
+import { settingsWorld } from './fixtures/r5A-settings.mjs';
+import { partScope, runPart } from './fixtures/r5A-parts.mjs';
+import { createDocument } from './fixtures/mini-dom.mjs';
+import { styleOf } from './fixtures/mini-css.mjs';
+import { runRecording, between } from './fixtures/source-slice.mjs';
 
 const catalog = JSON.parse(read('web/tweaks/catalog.json'));
-const between = (s, a, b) => { const i = s.indexOf(a); assert.ok(i >= 0, a); return s.slice(i, s.indexOf(b, i + a.length)); };
 
 // The real experience.js on a fake skin list: which tweaks load for a worn skin.
 function experience(skin, saved) {
@@ -42,7 +46,8 @@ test('James: the default Wizard skins keep the classic Home: no network map, no 
 
 test('James: Miguel\'s network Home is his tweak, a separate switch any skin can turn on (#755 kept)', async () => {
   assert.ok(catalog.tweaks.includes('miguel/machines-home'));
-  assert.ok(JSON.parse(read('web/tweaks/miguel/profile.json')).tweaks.includes('miguel/machines-home'), 'in Miguel\'s quick button');
+  const miguel = JSON.parse(read('web/tweaks/miguel/profile.json')); // data: Miguel's quick-button preset
+  assert.ok(miguel.tweaks.includes('miguel/machines-home'), 'in Miguel\'s quick button');
   // A device wearing Miguel's tweaks gets it with any skin, James's colors included.
   for (const skin of ['obsidian', 'landscapes-light', 'nebula']) {
     const f = experience(skin, { version: 1, off: {}, preset: 'miguel' }); await f.E.refresh();
@@ -70,71 +75,136 @@ test('James: a device that ran the network Home keeps it only if it already wear
 });
 
 test('James: Miguel\'s Home keeps its phone widget, desktop glance and System pages', () => {
-  const src = read('web/tweaks/miguel/machines-home/tweak.js');
-  assert.match(src, /api\.slot\.mount\('home-main', root\)/, 'his Home replaces the stock one only where it is loaded');
-  for (const page of ['overview', 'ai', 'network', 'storage']) assert.match(src, new RegExp(`api\\.settings\\?\\.section\\('[a-z]+', '${page}',`), page + ' stays in his tweak');
+  // The real tweak on the stock Home skeleton: it mounts into the home-main slot and fills the four System pages.
+  const m = machinesHome({ desk: true });
+  assert.ok(m.root(), 'his Home is drawn');
+  assert.equal(m.root().closest('[data-slot="home-main"]'), m.slots['home-main'], 'his Home replaces the stock one only where it is loaded');
+  for (const page of ['overview', 'ai', 'network', 'storage']) assert.ok(m.page(page), page + ' stays in his tweak');
+  m.dispose?.();
 });
 
-test('James: stock switcher stays hidden at one, icon-only at two; network Home remains a tweak', () => {
-  const src = read('web/core/workspaces.js');
-  assert.match(src, /get visible\(\) \{ return state.items.length >= 2;/);
-  assert.match(src, /button.hidden = !W.visible/);
-  assert.match(src, /document.createElementNS/);
-  assert.match(src, /button.title = `Wizard:/);
-  assert.match(src, /'\+ Add a Wizard'/);
-  assert.match(src, /page: 'connections'/);
-  assert.doesNotMatch(src, /page: '(overview|ai|network|storage)'/);
+test('James: stock switcher stays hidden at one, icon-only at two; network Home remains a tweak', async () => {
+  // Hidden at one, icon only at two: tests/workspaces.test.mjs 'one Wizard: hidden stock control; two: icon only'
+  // runs the real core/workspaces.js. Manage workspaces opens Settings › Connections: the ⌥O test there.
+  assert.doesNotMatch(read('web/core/workspaces.js'), /page: '(overview|ai|network|storage)'/);
+  // Miguel's Home has no switcher menu of its own: its add button asks the shared switcher.
   const tweak = read('web/tweaks/miguel/machines-home/tweak.js');
   assert.doesNotMatch(tweak, /wizMenu|renderWiz/);
-  assert.match(tweak, /api.workspaces.add\(\)/);
+  const m = machinesHome({ desk: true, managed: [{ id: 'g1', kind: 'managed', name: 'Carlos', people: ['Bea'], peopleCount: 3, url: '' }] });
+  m.draw(); const add = m.page('overview').querySelector('[data-act="add-managed"]');
+  assert.ok(add, 'his Home offers Add a Wizard');
+  m.tap(add); await m.flush();
+  assert.equal(m.calls.adds, 1, 'through api.workspaces.add()');
 });
 
+// The real Settings with every page that can show, shown: which page list a default box gets.
+const fullSettings = (shell, more = {}) => settingsWorld({ shell, scope: { navigator: { userAgent: 'Android' }, WosBell: { routes: () => [] }, WosSchedules: { available: true },
+  WizPhoneConnect: { create: () => ({ status: 'ok', refresh() {} }) }, ...more } });
+
 test('James: default Settings keeps the current AI page and has no "Your network" or "Network & security" page', () => {
-  const s = withSettingsParts(read('web/core/settings.js'));
-  // The four System pages show only when a package fills them; nothing in core does.
-  for (const id of ['overview', 'ai', 'network', 'storage']) assert.match(s, new RegExp(`\\{ id: '${id}', title: '[^']+', group: 'System', available: filled\\('${id}'\\) \\}`), id);
   const core = ['web/core/settings.js', 'web/core/usage.js', 'web/core/resources.js', 'web/core/os-updates.js', 'web/core/schedules.js', 'web/core/workspace-sync.js', 'web/desktop/desktop.js', 'web/app.js'];
   for (const file of core) assert.doesNotMatch(read(file), /page: '(overview|ai|network|storage)'/, file + ' fills no System page');
-  assert.match(s, /\{ id: 'usage', get title\(\) \{ return window\.WosResources\?\.bars \? 'Resources' : 'AI usage'; \} \}/, 'the current AI usage / Resources page stays');
-  assert.match(s, /const effectivePage = \(\) => page \|\| \(desktop \? \(filled\('overview'\)\(\) \? 'overview' : 'appearance'\) : ''\);/, 'desktop opens on Appearance as before');
-  // Order unchanged from the classic list: Appearance first, then Chats, Voice, Phones… (Notifications, where each
-  // app's notifications go, sits right after Chats since 1 Nov 2026.)
-  const order = [...between(s, 'const PAGES = [', '];').matchAll(/\{ id: '([a-z]+)'/g)].map(m => m[1]).filter(id => !['overview', 'ai', 'network', 'storage'].includes(id));
-  assert.deepEqual(order, ['appearance', 'chats', 'notifications', 'voice', 'phones', 'phone', 'connections', 'recovery', 'usage', 'schedules', 'about']);
-  // Group labels (System / Preferences) appear only when there is more than one group.
-  assert.match(s, /pages\.some\(q => q\.group && q\.group !== p\.group\)/);
+  for (const shell of ['phone', 'desktop']) {
+    const w = fullSettings(shell);
+    w.W.register({ id: 'r5a-conn', page: 'connections', html: () => '<p>c</p>' }); w.W.refresh();
+    // Order unchanged from the classic list: Appearance first, then Chats, Notifications, Voice, Phones…
+    assert.deepEqual(w.pages(), ['appearance', 'chats', 'notifications', 'voice', 'phones', 'phone', 'connections', 'recovery', 'usage', 'schedules', 'about'], shell);
+    assert.deepEqual(w.groups(), [], 'one group: no group labels');
+    assert.equal(w.W.hasSystem(), false);
+    assert.equal(w.text(w.root.querySelector('[data-st-page="usage"] b')), 'AI usage', 'the current AI usage page stays');
+    if (shell === 'desktop') assert.equal(w.root.querySelector('[aria-current="page"]').dataset.stPage, 'appearance', 'desktop opens on Appearance as before');
+  }
+  // The Resources title when the shared bars are there.
+  const res = fullSettings('phone', { WosResources: { bars: () => '' } });
+  assert.equal(res.text(res.root.querySelector('[data-st-page="usage"] b')), 'Resources');
+  // A package that fills a System page brings that page (first, under System) and the group labels.
+  const w = fullSettings('desktop');
+  for (const id of ['overview', 'ai', 'network', 'storage']) w.W.register({ id: 'r5a-' + id, page: id, html: () => '<p>x</p>' });
+  w.W.refresh();
+  assert.deepEqual(w.pages().slice(0, 4), ['overview', 'ai', 'network', 'storage']);
+  assert.deepEqual(w.groups(), ['System', 'Preferences']);
+  assert.equal(w.root.querySelector('[aria-current="page"]').dataset.stPage, 'overview');
 });
 
 test('James: desktop Home opens Settings as the centred panel over Home, never a window beside Chats', () => {
-  const desk = withDesktopParts(read('web/desktop/desktop.js'));
-  assert.match(desk, /    if \(homeOpen(?: \|\| settingsOver\(\))?\) \{  \/\/ from Home/, 'from Home: always the panel, whatever the skin');
-  assert.doesNotMatch(desk, /homeOpen && \(settingsModal \|\| window\.WosSettings\.hasSystem/, 'no classic-Home window path');
-  assert.match(withSettingsParts(read('web/core/settings.js')), /hasSystem: \(\) => PAGES\.some\(p => p\.group === 'System' && p\.available\(\)\)/);
+  // The real desktop-settings.js part: openSettings from Home, from a desk, and with a Settings window on a desk.
+  const run = ({ homeOpen, win = null, over = false }) => {
+    const calls = [];
+    const ctx = partScope();
+    if (over) ctx.document.documentElement.setAttribute('data-settings-over', '');
+    ctx.WizCore.desktopParts = { cog: () => ({ nativeDesktop: () => false, toggleKeys: () => {}, bindLate: () => {} }) };
+    const setEl = ctx.document.createElement('div'); setEl.hidden = true;
+    const vars = { homeOpen, settingsModal: false };
+    const { out } = runPart('desktop/desktop-settings.js', 'desktopParts', 'settings', {
+      $: () => ctx.document.createElement('div'), C: {}, closePalette: () => {}, closeWin: id => calls.push(['closeWin', id]), desktopVars: vars, focusWin: id => calls.push(['focusWin', id]),
+      hostSettings: () => calls.push(['hostSettings']), newWin: o => calls.push(['newWin', o.app]), OUTBOX: {}, renderSettings: () => {}, scrim: {}, setEl,
+      settingsFocused: () => false, settingsView: { focus: () => {} }, settingsWin: () => win, showSettingsModal: () => calls.push(['modal']) }, ctx);
+    out.openSettings();
+    assert.equal(setEl.hidden, false);
+    return calls;
+  };
+  assert.deepEqual(run({ homeOpen: true }), [['modal']], 'from Home: the panel');
+  assert.deepEqual(run({ homeOpen: true, win: { id: 'w1' } }), [['modal']], 'from Home even with a Settings window on a desk');
+  assert.deepEqual(run({ homeOpen: false, over: true }), [['modal']], 'a layout without Home keeps the panel');
+  assert.deepEqual(run({ homeOpen: false }), [['newWin', 'settings']], 'on a desk: a window');
+  assert.deepEqual(run({ homeOpen: false, win: { id: 'w1' } }), [['focusWin', 'w1']]);
+  // hasSystem: only a filled System page counts.
+  const w = settingsWorld({ shell: 'desktop' }); assert.equal(w.W.hasSystem(), false);
+  w.W.register({ id: 'r5a-net', page: 'network', html: () => '' }); assert.equal(w.W.hasSystem(), true);
 });
 
 test('James: the default desktop bar has no AI fuel, security, backup or machines icons, and fewer icons on the right', () => {
-  const html = read('web/desktop.html'), bar = between(html, '<div class="bar-r" data-slot="dock-end">', '</header>');
-  const ids = [...bar.matchAll(/<button id="([A-Za-z]+)"/g)].map(m => m[1]);
-  assert.deepEqual(ids, ['searchBtn', 'micBtn', 'commandBtn', 'dictateBtn', 'status', 'settingsBtn', 'keysBtn'], 'no new buttons in the bar');
-  assert.doesNotMatch(bar, /fuel|backup|security|machines/i);
-  assert.match(html, /<div class="bar-start" data-slot="bar-start"><\/div>/, 'the workspace slot is empty unless a package fills it');
-  // One mic by default: New voice chat, Tell the computer and Dictate fold into the mic's menu (right-click or hold),
-  // keep their keys, and Settings › Voice & typing puts them back.
-  const desk = withDesktopParts(read('web/desktop/desktop.js')), css = read('web/desktop/desktop.css'), s = withSettingsParts(read('web/core/settings.js'));
-  assert.match(css, /\.one-mic #generalVoice, \.one-mic #commandBtn, \.one-mic #dictateBtn \{ display: none !important; \}/);
-  assert.match(desk, /const allMics = \(\) => store\.get\('allMics', false\) === true;/, 'folded unless the owner asks');
-  assert.match(desk, /document\.documentElement\.classList\.toggle\('one-mic', !allMics\(\)\)/);
-  assert.match(desk, /\[\['micBtn', 'Talk about this', `\$\{MOD\}S`\], \['generalVoice', 'New voice chat', `\$\{MOD\}V`\], \['dictateBtn', 'Dictate here', `\$\{MOD\}D`\], \['commandBtn', 'Tell the computer', `\$\{MOD\}C`\]\]/);
-  assert.match(desk, /shell: 'desktop', barMics: \(\) => barMics,/);
-  assert.match(s, /register\(\{ id: 'bar-voice-buttons', page: 'voice', available: ctx => !!ctx\?\.barMics\?\.\(\),/, 'the Settings switch, desktop only');
-  assert.match(s, /<b>Show every voice button<\/b>/);
+  const doc = createDocument(); const html = read('web/desktop.html');
+  doc.body.innerHTML = html.slice(html.indexOf('<body'), html.lastIndexOf('</body>')).replace(/^<body[^>]*>/, '');
+  const bar = doc.querySelector('.bar-r[data-slot="dock-end"]');
+  assert.deepEqual(bar.querySelectorAll('button[id]').map(b => b.id), ['searchBtn', 'micBtn', 'commandBtn', 'dictateBtn', 'status', 'settingsBtn', 'keysBtn'], 'no new buttons in the bar');
+  assert.doesNotMatch(bar.innerHTML, /fuel|backup|security|machines/i);
+  assert.equal(doc.querySelector('.bar-start[data-slot="bar-start"]').childNodes.length, 0, 'the workspace slot is empty unless a package fills it');
+  // One mic by default: the real generalvoice part folds the three other voice buttons out of the bar.
+  const mount = saved => {
+    const ctx = partScope(); const d = ctx.document; d.body.innerHTML = '<div class="bar-r"><button id="micBtn"></button><button id="commandBtn"></button><button id="dictateBtn"></button></div>';
+    const mic = d.querySelector('#micBtn'); mic.insertAdjacentElement = (_w, el) => mic.parentNode.insertBefore(el, mic.nextSibling);
+    const store = new Map(saved == null ? [] : [['allMics', saved]]);
+    const { out } = runPart('desktop/desktop-generalvoice.js', 'desktopParts', 'generalvoice', { mic, MOD: '⌥', store: { get: (k, def) => (store.has(k) ? store.get(k) : def) }, talkNew: () => {} }, ctx);
+    return { d, out };
+  };
+  const css = read('web/desktop/desktop.css');
+  const one = mount(null);
+  assert.equal(one.d.documentElement.classList.contains('one-mic'), true, 'folded unless the owner asks');
+  for (const id of ['generalVoice', 'commandBtn', 'dictateBtn']) assert.equal(styleOf(one.d.querySelector('#' + id), css, 'display'), 'none', id + ' folded');
+  assert.notEqual(styleOf(one.d.querySelector('#micBtn'), css, 'display'), 'none', 'the mic stays');
+  assert.deepEqual(one.out.voiceMenu.querySelectorAll('button').map(b => [b.dataset.voiceGo, b.querySelector('span').textContent, b.querySelector('kbd').textContent]),
+    [['micBtn', 'Talk about this', '⌥S'], ['generalVoice', 'New voice chat', '⌥V'], ['dictateBtn', 'Dictate here', '⌥D'], ['commandBtn', 'Tell the computer', '⌥C']]);
+  const all = mount(true);
+  assert.equal(all.d.documentElement.classList.contains('one-mic'), false, 'Settings puts them back');
+  assert.notEqual(styleOf(all.d.querySelector('#generalVoice'), css, 'display'), 'none');
+  // The Settings switch, desktop only (the desktop adapter hands barMics).
+  let on = false; const w = settingsWorld({ shell: 'desktop', adapter: { barMics: () => ({ get: () => on, set: v => { on = v; } }) } });
+  w.open('voice');
+  const row = w.root.querySelector('[data-bar-mics-set]');
+  assert.equal(w.text(row.querySelector('b')), 'Show every voice button'); assert.equal(row.getAttribute('aria-checked'), 'false');
+  row.click(); assert.equal(on, true);
+  assert.equal(w.root.querySelector('[data-bar-mics-set]').getAttribute('aria-checked'), 'true');
+  const phone = settingsWorld({ shell: 'phone' }); phone.open('voice');
+  assert.equal(phone.root.querySelector('[data-bar-mics]'), null, 'no switch without the desktop bar');
 });
 
-test('#755 stays: tweaks are their own switches, labelled by author, in every skin; Welcome never switches skin', () => {
+test('#755 stays: tweaks are their own switches, labelled by author, in every skin; Welcome never switches skin', async () => {
   const s = withSettingsParts(read('web/core/settings.js'));
   // Miguel, 1 Nov 2026: one flat list, no per-author "All of …" quick buttons.
   assert.doesNotMatch(s, /data-tweakauthor=|All of \$\{/, 'no per-author quick button');
-  assert.match(s, /<small class="tw-by">\$\{t\.where \? esc\(t\.where\) \+ ' · ' : ''\}by \$\{esc\(by\(t\.author\)\)\}<\/small>/, 'each tweak says who made it (a view also says which device type it is for)');
-  assert.match(read('web/core/experience.js'), /A color pick never changes tweaks/);
+  // Each tweak says who made it (a view also says which device type it is for): the real row renderer.
+  const line = between(s, '  const tweakSwitches = ', "join('');") + "join('');";
+  const f = runRecording(line + '\nthis.tweakSwitches = tweakSwitches;', { esc: x => String(x) });
+  const by = a => ({ miguel: 'Miguel' })[a] || a;
+  const doc = createDocument();
+  doc.body.innerHTML = f.tweakSwitches([{ id: 'miguel/a', name: 'A', author: 'miguel', on: true }, { id: 'miguel/b', name: 'B', author: 'miguel', where: 'Desktop only', on: false }], 'data-tweak-toggle', false, by);
+  assert.deepEqual(doc.querySelectorAll('.tw-row').map(r => [r.getAttribute('data-tweak-toggle'), r.getAttribute('aria-checked'), r.querySelector('.tw-by').textContent]),
+    [['miguel/a', 'true', 'by Miguel'], ['miguel/b', 'false', 'Desktop only · by Miguel']]);
+  // A color pick never changes tweaks: the real experience.js keeps the tweaks when the skin changes.
+  const e = experience('obsidian', { version: 1, off: {}, preset: 'miguel' }); await e.E.refresh();
+  const before = e.active();
+  await e.E.chooseSkin('nebula'); await e.E.refresh();
+  assert.deepEqual(e.active(), before);
   assert.ok(existsSync(new URL('../web/core/welcome.js', import.meta.url)));
 });

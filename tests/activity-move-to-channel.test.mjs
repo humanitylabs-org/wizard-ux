@@ -6,6 +6,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
+import { between, block, runRecording } from './fixtures/source-slice.mjs';
 import { readFileSync } from 'node:fs';
 import { withSkinHostParts } from './fixtures/skin-host-parts.mjs';
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
@@ -36,29 +37,52 @@ test('a row with no channel (channelOf empty or absent) offers no move', () => {
   assert.deepEqual([...model().sessionList(groups(), facts(null)).ready[0].actions], ['pin', 'rename', 'unread', 'snooze', 'done']);
 });
 
-test('the AI apps menus draw it as "Move to channel…" (filing still last); the host passes it to the shell', () => {
-  const parts = read('web/layouts/ai-apps/parts.js');
-  assert.match(parts, /export const ACTS = \[\['pin', 'Pin'\], \['rename', 'Rename'\], \['markdone', 'Mark done'\], \['unread', 'Mark unread'\], \['move', 'Move to channel…'\], \['snooze', 'Snooze'\], \['restore', 'Restore'\], \['done', 'Archive'\]\];/);
-  assert.match(parts, /\n  move: \[/, 'its own icon');
-  assert.match(withSkinHostParts(read('web/core/skin-host.js')), /const SESSION_ACTS = Object\.freeze\(\[[^\]]*'move'[^\]]*\]\)/);
-  assert.match(read('web/layouts/ai-apps/layout.js'), /if \(k === 'rename' \|\| k === 'move'\) closeDrawer\(\);/, 'the phone drawer steps aside for the picker');
+test('the AI apps menus draw it as "Move to channel…" (filing still last); the host passes it to the shell', async () => {
+  // The drawn menus are run in tests/ai-apps-view.test.mjs (phone drawer and desktop sidebar: "Move to channel…" before
+  // Snooze and Archive; the phone drawer closes for the picker) and the host passing 'move' to the shell in
+  // tests/layout-host-api.test.mjs. Here: the menu's own table and its icon.
+  const { ACTS, ICON } = await import('../web/layouts/ai-apps/parts.js');
+  const keys = ACTS.map(([k]) => k);
+  assert.deepEqual(ACTS.find(([k]) => k === 'move'), ['move', 'Move to channel…']);
+  assert.ok(keys.indexOf('move') < keys.indexOf('snooze') && keys.indexOf('move') < keys.indexOf('done'), 'filing still last');
+  assert.ok(Array.isArray(ICON.move) && ICON.move.length, 'its own icon');
 });
 
+// Each shell's real sessionAct, run with a fake Chats; what it opens and what it hands the picker.
+function sessionAct(file, ctx) {
+  const code = cut("    sessionAct: (sid, act) => {", "\n    },", read(file)).replace(/^    sessionAct: /, '');
+  const calls = ctx.calls = [];
+  ctx.CHATS = { moveToChannel: (w, sid) => (calls.push(['move', w, sid]), true), threadAct: () => calls.push(['threadAct']), openRenameSheet: () => calls.push(['rename']) };
+  ctx.window = {}; ctx.toast = () => {};
+  ctx.showChats = ctx.skinShowChats = () => (calls.push(['showChats']), { id: 'shown' });
+  return vm.runInNewContext(`(${code}\n    })`, ctx);
+}
+
 test('both shells open Chats\' own picker through CHATS.moveToChannel, without taking the owner to Chats', () => {
-  const dj = read('web/desktop/desktop.js'), aj = read('web/app.js');
-  const d = cut("    sessionAct: (sid, act) => {", "\n    },", dj), a = cut("    sessionAct: (sid, act) => {", "\n    },", aj);
-  // one brace-free line: tests/layout-host-api pins `sessionAct: (sid, act) => {[^}]*CHATS.threadAct(`
-  assert.match(d, /if \(act === 'move'\) return !!CHATS\.moveToChannel\?\.\(\(findWin\(mainChats\) \|\| sideMain\(\)\)\?\.id, sid\);/);
-  assert.ok(d.indexOf("act === 'move'") < d.indexOf('skinShowChats'), 'desktop: before any Chats navigation');
-  assert.match(a, /if \(act === 'move'\) \{ const find = \(\) => Object\.keys\(W\)\.find\(id => mainChats\(W\[id\]\) && deskOf\(id\) >= 0\); let here = find\(\);/);
-  // no Chats window yet: one opens beside, out of view (stay), never showChats() (which goes to its desk)
-  assert.match(a, /if \(!here\) \{ openApp\(APP\.wizard, \{\}, \{ stay: true \}\); here = find\(\); \}/);
-  assert.ok(!cut("if (act === 'move')", 'moveToChannel?.(here, sid)', a).includes('showChats'), 'phone: no navigation');
+  // desktop: the main Chats window, else the sidebar's stand-in
+  const dw = { main: { id: 'main', app: 'chats' } }, d = {}, desk = sessionAct('web/desktop/desktop.js', Object.assign(d, { findWin: f => Object.values(dw).find(f) || null, mainChats: w => w.app === 'chats', sideMain: () => ({ id: 'side' }) }));
+  assert.equal(desk('t1', 'move'), true); assert.deepEqual(d.calls, [['move', 'main', 't1']]);
+  delete dw.main; desk('t2', 'move'); assert.deepEqual(d.calls.at(-1), ['move', 'side', 't2'], 'the sidebar stand-in when there is no main Chats');
+  assert.ok(!d.calls.some(c => c[0] === 'showChats'), 'desktop: no Chats navigation');
+  // phone: a Chats window on a desk; with none, one opens beside, out of view (stay), never showChats()
+  const W = {}, p = {}, opened = [];
+  const phone = sessionAct('web/app.js', Object.assign(p, { W, mainChats: w => w.app === 'chats', deskOf: id => (id === 'gone' ? -1 : 2), APP: { wizard: { id: 'wizard' } },
+    openApp: (a, x, o) => { opened.push([a.id, o]); W.c9 = { id: 'c9', app: 'chats' }; } }));
+  W.gone = { id: 'gone', app: 'chats' };
+  assert.equal(phone('t3', 'move'), true);
+  assert.deepEqual(JSON.parse(JSON.stringify(opened)), [['wizard', { stay: true }]], 'a Chats window off a desk does not count; one opens out of view');
+  assert.deepEqual(p.calls, [['move', 'c9', 't3']]);
+  phone('t4', 'move'); assert.equal(opened.length, 1, 'then that one is reused');
+  assert.ok(!p.calls.some(c => c[0] === 'showChats'), 'phone: no navigation');
   // desktop with no main Chats: the sidebar's stand-in (sideMain) is not in W, but Chats resolves windows through
   // H.win = chatsWin, which knows the stand-in (sideWin), so the picker finds it
-  assert.match(dj, /const chatsWin = id => W\[id\] \|\| sideWin\(id\) \|\|/);
-  assert.match(dj, /\n    win: chatsWin,/);
-  assert.match(dj, /const sideWin = id => \(sideBase && sideBase\.id === id \? sideBase :/);
+  // (the real desktop-sideview.js: its window lookups and the host object it hands Chats)
+  const dj = read('web/desktop/desktop.js');
+  let host = null;
+  runRecording(`${between(dj, '  const sideWin = id =>', '\n')}\n${between(dj, '  const chatsWin = id =>', '\n')}\nconst CHATS = window.WizChatsHost.create(${block(dj, '  const CHATS = window.WizChatsHost.create({').replace('  const CHATS = window.WizChatsHost.create(', '')});`,
+    { W: { w1: { id: 'w1' } }, sideBase: { id: 'side' }, feedBase: null, viewBase: null, listWin: (id, k) => ({ id, k }), MOD: '⌥', window: { WizChatsHost: { create: h => { host = h; return {}; } } } });
+  const win = host.win;
+  assert.equal(win('side').id, 'side', 'Chats finds the sidebar stand-in'); assert.equal(win('w1').id, 'w1'); assert.equal(win('nope'), undefined);
 });
 
 // The real picker code from chats.js: General is a row, the current channel is marked, picks write the store.

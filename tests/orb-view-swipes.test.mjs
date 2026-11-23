@@ -11,6 +11,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { withShellParts } from './fixtures/shell-parts.mjs';
+import { createDocument } from './fixtures/mini-dom.mjs';
+import { runPart, scoped } from './fixtures/r5B-parts.mjs';
 
 const root = new URL('../', import.meta.url);
 const read = p => withShellParts(readFileSync(new URL(p, root), 'utf8'));
@@ -32,40 +34,91 @@ test('per-view orb swipe map: Desks = every stock swipe; Apps / Orb = up Home, s
   for (const mode of ['pending', 'hold', 'still']) assert.equal(act({ mode, dy: -90, swipes: ORB }), 'stock', mode);
 });
 
+// The phone dock orb's real gesture code (web/app-orbswipe.js) on a mini-dom orb: press, slide, release.
+// `swipes` is what WosSkinHost.orbSwipes() hands the press (a layout's map, or null = stock); timers are manual.
+function orb({ swipes = null, upDesks = false, corner = false, idx = 2, sheet = null } = {}) {
+  const doc = scoped(createDocument()), orbWrap = doc.createElement('div'), device = doc.createElement('div'), dockEl = doc.createElement('div');
+  dockEl.id = 'dock'; dockEl.appendChild(orbWrap); doc.body.append(device, dockEl); if (corner) device.classList.add('orb-corner');
+  let reads = 0; const timers = [], calls = [];
+  const appVars = { G: null, idx, sheet, desks: [{ id: 'home' }, { id: 'd1' }, { id: 'd2' }, { id: 'd3' }], W: {} };
+  const rec = name => (...a) => { calls.push([name, ...a]); };
+  const given = { $: sel => doc.querySelector(sel) || doc.createElement('div'), appVars, device, orbWrap, HOME: 0, V: { state: 'idle' }, generalTarget: doc.createElement('div'), launcher: doc.createElement('div'), inboxEl: doc.createElement('div'),
+    orbUpDesks: () => upDesks, pillOvOpen: () => false, mayHoldCommand: () => true, barScrubJoin: () => false, atPickerEnd: () => false, deskName: () => 'Desk', clip: s => s, FIELDS: { refresh: () => false },
+    Orb: { press() {} }, dropWarm() {}, vib() {}, tourEv() {}, closeMenu() {}, deskSigil: () => '', APPS: [] };
+  for (const n of ['swipeDesk', 'openSheet', 'setZen', 'startOrbVoice', 'startVoice', 'finishVoice', 'openOverview', 'placeTrack', 'closeSheets', 'closeOverview', 'liftSettings', 'renderLauncher', 'warmMic']) given[n] = rec(n);
+  given.goDesk = i => { calls.push(['goDesk', i]); appVars.idx = i; };
+  let clock = 0; // each pointer event is 100 ms after the last: a slow, deliberate finger
+  const ctx = { document: doc, performance: { now: () => clock }, queueMicrotask, setTimeout: (fn, ms) => timers.push({ fn, ms }), clearTimeout: () => {},
+    window: { WosSkinHost: { orbSwipes: () => { reads++; return swipes; } }, WosCreateOrbSwitcher() {}, WizConfig: { agent: () => 'Wizard' } } };
+  runPart('web/app-orbswipe.js', 'appParts', 'orbswipe', given, ctx);
+  const fire = (type, x, y) => (clock += 100, orbWrap.dispatchEvent({ type, pointerId: 1, isPrimary: true, clientX: x, clientY: y, timeStamp: clock }));
+  return {
+    calls, appVars, orbWrap, reads: () => reads,
+    // a swipe: press at (200, 700), slide by (dx, dy) in steps, let go
+    swipe(dx, dy) { fire('pointerdown', 200, 700); for (const k of [0.25, 0.5, 1]) fire('pointermove', 200 + dx * k, 700 + dy * k); fire('pointerup', 200 + dx, 700 + dy); return calls.map(c => c[0]); },
+    tap() { fire('pointerdown', 200, 700); fire('pointerup', 200, 700); return calls.map(c => c[0]); },
+    hold() { fire('pointerdown', 200, 700); timers.find(t => t.ms === 380).fn(); fire('pointerup', 200, 700); return calls.map(c => c[0]); },
+  };
+}
+const OWN = { up: 'home', side: null, down: null };
+const moved = names => names.filter(n => !['warmMic'].includes(n));
+
 test('app.js: the layout swipe runs before every stock swipe branch, and the stock branches are untouched', () => {
-  const end = app.slice(app.indexOf('function endGesture(e, cancelled)'), app.indexOf("orbWrap.addEventListener('pointerup', e => endGesture(e, false));"));
-  const own = end.indexOf("const own = orbSwipeAct(g);");
-  assert.ok(own > 0 && own < end.indexOf('if (g.upDesks && g.mode === \'v\' && !sheet)') && own < end.indexOf("if (g.mode === 'pending' && !cancelled)"), 'before the Desks panel and every stock branch');
-  assert.match(end, /if \(own !== 'stock'\) \{ if \(\(own === 'home' \|\| own === 'new'\) && !cancelled && \(g\.dy < -70 \|\| g\.dy \/ vt < -\.55\)\) \{ if \(own === 'new'\) orbSwipeNew\(\); else orbSwipeHome\(\); \} return; \}/);
-  // Desks keeps: sideways = swipeDesk, up = launcher / Desks panel, down = distraction-free
-  assert.match(end, /if \(g\.dx < -60 \|\| v < -\.5\) \{ swipeDesk\(1\);/);
-  assert.match(end, /if \(g\.dy < -70 \|\| v < -\.55\) openSheet\('launcher'\);\n\s+else if \(!cancelled && V\.state === 'idle' && \(g\.dy > 18 \|\| \(g\.dy > 8 && v > \.3\)\)\) setZen\(true\);/);
-  assert.match(end, /g\.upDesks && g\.mode === 'v' && !sheet\) \{ if \(g\.dy < -70 \|\| g\.dy \/ vt < -\.55\) openOverview\('pill'\); else if \(!cancelled && V\.state === 'idle' && \(g\.dy > 18 \|\| \(g\.dy > 8 && g\.dy \/ vt > \.3\)\)\) setZen\(true\); return; \}/);
-  // while moving: nothing follows the finger for a layout's own swipe (no track slide, no launcher, no dock nudge)
-  const move = app.slice(app.indexOf("orbWrap.addEventListener('pointermove'"), app.indexOf('function orbTapBusy()'));
-  const early = move.indexOf("if (G.swipes && orbSwipeAct(G) !== 'stock')");
-  assert.ok(early > 0 && early < move.indexOf("if (G.mode === 'h' && sheet === 'settings') liftSettings();") && early < move.indexOf('placeTrack(dx * 1.1, false)') && early < move.indexOf("openOverview('pill')"));
-  assert.match(app, /G\.upDesks = orbUpDesks\(\); G\.swipes = window\.WosSkinHost\?\.orbSwipes\?\.\(\) \|\| null;/, 'read once per press');
-  assert.match(move, /G\.corner && !G\.swipes\) \{ clearTimeout\(G\.hold\); G\.mode = 'still'; \}/, 'the Chats corner orb keeps its stock rule in Desks');
-  // Home from the orb: Home desk, sheets closed, and the iPhone swipe-home undo still applies
-  const home = app.match(/function orbSwipeHome\(\) \{[\s\S]*?\n  \}/)[0];
-  assert.match(home, /if \(idx !== HOME\) goDesk\(HOME\);/); assert.match(home, /lastMove = \{ from, at: Date\.now\(\) \}/);
+  // Desks (no map): sideways = desk step, up = the launcher (or the Desks panel), down = distraction-free.
+  assert.deepEqual(moved(orb().swipe(-120, 0)).filter(n => n !== 'placeTrack'), ['swipeDesk']); assert.deepEqual(orb().calls.length, 0);
+  let o = orb(); o.swipe(-120, 0); assert.deepEqual(o.calls.find(c => c[0] === 'swipeDesk'), ['swipeDesk', 1]);
+  o = orb(); o.swipe(120, 0); assert.deepEqual(o.calls.find(c => c[0] === 'swipeDesk'), ['swipeDesk', -1]);
+  o = orb(); o.swipe(0, -200); assert.deepEqual(o.calls.find(c => c[0] === 'openSheet'), ['openSheet', 'launcher']);
+  o = orb(); o.swipe(0, 40); assert.deepEqual(o.calls.find(c => c[0] === 'setZen'), ['setZen', true]);
+  o = orb({ upDesks: true }); o.swipe(0, -200); assert.ok(o.calls.some(c => c[0] === 'openOverview' && c[1] === 'pill'), 'our skins: up opens the Desks panel');
+  o = orb({ upDesks: true }); o.swipe(0, 40); assert.deepEqual(o.calls.find(c => c[0] === 'setZen'), ['setZen', true]);
+  // A layout's own map wins first: nothing follows the finger, up = Home, sideways and down nothing.
+  for (const upDesks of [false, true]) {
+    o = orb({ swipes: OWN, upDesks }); assert.deepEqual(moved(o.swipe(-120, 0)), [], 'sideways: no desk step, no track slide');
+    o = orb({ swipes: OWN, upDesks }); assert.deepEqual(moved(o.swipe(0, 40)), [], 'down: no distraction-free');
+    o = orb({ swipes: OWN, upDesks }); assert.deepEqual(moved(o.swipe(0, -200)), ['goDesk'], 'up: Home, nothing else (no launcher, no Desks panel)');
+    assert.deepEqual(o.calls[0], ['goDesk', 0]); assert.equal(o.appVars.lastMove.from, 'd2', 'the iPhone swipe-home undo still applies');
+  }
+  o = orb({ swipes: OWN }); assert.deepEqual(moved(o.swipe(0, -30)), [], 'a short swipe up is not Home');
+  o = orb({ swipes: OWN, idx: 0 }); o.swipe(0, -200); assert.equal(o.calls.length, 0, 'already Home: no move');
+  o = orb({ swipes: { up: 'home' } }); o.swipe(0, 40); assert.deepEqual(o.calls.find(c => c[0] === 'setZen'), ['setZen', true], 'a key a map leaves out keeps its stock swipe');
+  o = orb({ corner: true }); assert.deepEqual(moved(o.swipe(-120, 0)), [], 'the Chats corner orb keeps its stock rule in Desks: a slid finger never swipes the shell');
+  o = orb({ corner: true, swipes: OWN }); assert.deepEqual(moved(o.swipe(0, -200)), ['goDesk'], 'with a map the corner orb swipes Home');
+  o = orb({ swipes: OWN }); o.swipe(0, -200); o.swipe(-120, 0); assert.equal(o.reads(), 2, 'read once per press');
 });
 
 test('tap and hold are identical in all three views: the press, tap and hold paths never read the swipe map', () => {
-  const down = app.slice(app.indexOf("orbWrap.addEventListener('pointerdown', e => {\n    if (G || e.isPrimary === false) return;"), app.indexOf('// Slide-to-aim is retired'));
-  assert.match(down, /if \(mayHoldCommand\(\)\) G\.hold = setTimeout\(\(\) => \{ if \(G && G\.mode === 'pending'\) \{ G\.mode = 'hold';[^\n]*\}, 380\);/);
-  const end = app.slice(app.indexOf("if (g.mode === 'pending' && !cancelled) {"), app.indexOf("} else if (g.mode === 'h') {"));
-  assert.ok(!/swipes|orbSwipe/.test(end), 'tap / hold branches are the stock ones');
-  assert.match(end, /if \(V\.state === 'idle'\) return window\.WosSkinHost\?\.orbTap\?\.\(\) \? undefined : startOrbVoice\(\);/);
+  let touched = 0; const watched = () => new Proxy({ ...OWN }, { has: (t, k) => (touched++, k in t), get: (t, k) => (touched++, t[k]) });
+  for (const swipes of [null, watched(), { up: 'new', side: null, down: null }]) {
+    assert.deepEqual(orb({ swipes }).tap(), ['startOrbVoice'], 'tap: talk');
+    const o = orb({ swipes }); assert.deepEqual(o.hold(), ['startVoice', 'finishVoice'], 'hold: a command, released = sent');
+    assert.deepEqual(o.calls[0], ['startVoice', 'command']);
+  }
+  assert.equal(touched, 0, 'the map is never read on a tap or a hold');
 });
 
-test('skin-host: the orb swipe map stays generic (no view names in core); the shared chrome declares the dock swipes on the phone only', () => {
+test('skin-host: the orb swipe map stays generic (no view names in core); the shared chrome declares the dock swipes on the phone only', async () => {
   // The phone Apps and Orb views that wore a swipe map went in wizard-ux issue 1338; the generic api.phone.swipes stays.
-  const host = read('web/core/skin-host.js');
-  assert.ok(!/miguel|orb-shell|apps-home/.test(host.slice(host.indexOf('function orbSwipeMap'), host.indexOf('function orbSwipeMap') + 400)), 'core stays generic');
+  const { orbSwipeMap } = runPart('web/core/skin-host-rows.js', 'skinHostParts', 'rows', { isDoc: () => false }).out;
+  const map = m => ({ ...orbSwipeMap(m) });
+  assert.deepEqual(map({ up: 'home', side: null, down: null }), { up: 'home', side: null, down: null });
+  assert.deepEqual(map({ up: 'new' }), { up: 'new' }, 'a key left out keeps the stock swipe');
+  assert.deepEqual(map({ up: 'stock', side: 'desk', down: 'orb-shell', apps: 'home' }), { side: null, down: null }, 'only generic acts: anything else is inert, unknown keys dropped');
+  assert.deepEqual(map({ up: 'apps-home' }), { up: null }, 'no view names in core');
   // the desktop Apps orb is the layout's own button: chrome.js only declares the dock swipes on the phone
-  assert.match(read('web/layouts/apps/chrome.js'), /const offSwipes = shell === 'phone' && api\.phone\?\.swipes \? api\.phone\.swipes\(swipes \|\| ORB_SWIPES\) : null;/, 'the views\' swipes, or a view\'s own (AI apps: up = a New chat to type in)');
+  const { viewChrome, ORB_SWIPES } = await import(new URL('web/layouts/apps/chrome.js', root).href);
+  const was = globalThis.document;
+  try {
+    const run = (shell, opts = {}) => {
+      const doc = createDocument(); globalThis.document = doc; doc.documentElement.style = { setProperty() {}, removeProperty() {}, getPropertyValue: () => '' };
+      const asked = [], dock = { offsetWidth: 66, getBoundingClientRect: () => ({ left: 0, top: 0, width: 66, height: 66 }) };
+      viewChrome({ env: { shell }, mount: () => () => {}, listen() {}, after() {}, phone: { orb: () => dock, swipes: m => { asked.push(m); return () => {}; } }, apps: { inset: () => () => {}, list: () => [] } }, { openIds: () => [], ...opts });
+      return asked;
+    };
+    assert.deepEqual(run('phone'), [ORB_SWIPES], 'phone: the views\' swipes');
+    const own = { up: 'new', side: null, down: null }; assert.deepEqual(run('phone', { swipes: own }), [own], 'or a view\'s own (AI apps: up = a New chat to type in)');
+    assert.deepEqual(run('desktop'), [], 'desktop: none');
+  } finally { globalThis.document = was; }
 });
 
 test('no round Back button in the shared view chrome; its orb swipes: up = Home, sideways and down nothing', async () => {

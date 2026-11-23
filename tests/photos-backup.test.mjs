@@ -3,6 +3,9 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import { withShellParts } from './fixtures/shell-parts.mjs';
+import { createDocument } from './fixtures/mini-dom.mjs';
+import { block, runRecording } from './fixtures/source-slice.mjs';
+import { manifest } from './fixtures/r8C-manifest.mjs';
 const read = p => withShellParts(fs.readFileSync(new URL('../' + p, import.meta.url), 'utf8'));
 const relaySrc = read('web/core/photos-relay.js');
 
@@ -38,10 +41,11 @@ test('Settings holds no Photos row: no feature, no page mapping, no styles, no m
   assert.doesNotMatch(settings, /photos/i);
   assert.doesNotMatch(read('web/core/settings.css'), /\.ph-|photos/i);
   assert.equal(fs.existsSync(new URL('../web/core/photos-settings.js', import.meta.url)), false);
+  // both shells load the relay (and no Photos settings module), as the browser reads the page
   for (const f of ['web/index.html', 'web/desktop.html']) {
-    const h = read(f);
-    assert.doesNotMatch(h, /photos-settings\.js/, f);
-    assert.match(h, /<script src="core\/photos-relay\.js"><\/script>/, f);
+    const h = read(f), d = createDocument(); d.documentElement.innerHTML = h.slice(h.indexOf('<head'), h.lastIndexOf('</html>'));
+    const src = d.querySelectorAll('script[src]').map(x => x.getAttribute('src'));
+    assert.ok(src.includes('core/photos-relay.js'), f); assert.ok(!src.some(x => /photos-settings/.test(x)), f);
   }
 });
 
@@ -89,48 +93,55 @@ test('relay: older apps get the one legacy word; native resume reaches the app',
 });
 
 test('relay accepts desktop window frames as well as phone app frames', () => {
-  assert.match(relaySrc, /SHELL_FRAMES = 'iframe\.appframe, iframe\[data-own-app\]'/);
-  assert.match(read('web/desktop/desktop.js'), /<iframe data-own-app=/);
+  // the desktop window's real frame markup (desktop-resize.js bodyHtml) on a page: the relay finds it with its own selector
+  const D = runRecording(`${block(read('web/desktop/desktop-resize.js'), '  function bodyHtml(w) {')}\nthis.bodyHtml = bodyHtml;`, { appOf: () => ({ id: 'photos', name: 'Photos', url: '/photos/' }), esc: String, window: {} });
+  const page = createDocument(); page.body.innerHTML = `<div class="win">${D.bodyHtml({ id: 'w1', app: 'frame', appId: 'photos' })}</div><div id="ph"><iframe class="appframe" src="/photos/"></iframe></div>`;
+  const found = [], q = page.querySelectorAll.bind(page);
+  const desk = shell({ frames: [] });
+  desk.ctx.document.querySelectorAll = sel => { const list = q(sel); found.push(...list.map(f => f.getAttribute('src'))); return list.map(f => ({ contentWindow: { location: { pathname: f.getAttribute('src') } } })); };
+  desk.fire('message', { source: { location: { pathname: '/x/' } }, origin: 'https://box.example', data: { type: 'wizard-os:photos', id: 'a1', method: 'status' } });
+  assert.deepEqual(found, ['/photos/', '/photos/'], 'both the desktop window frame and the phone app frame are shell frames');
   const s = shell({ frames: ['/photos/'] }); const w = s.iframes[0].contentWindow;
   call(s, w, 'status');
   assert.deepEqual(w.got.at(-1).m, { type: 'wizard-os:photos', id: 'a1', ok: false, error: 'no-bridge' }, 'desktop gets the honest no-bridge answer');
 });
 
 test('relay method list matches the native allowlist (plus legacy open)', () => {
+  // the Java allowlist (data), against what the real relay forwards when the Photos frame asks
   const policy = read('android/app/src/main/java/ai/wizards/os/photos/PhotosBridgePolicy.java');
   const nativeMethods = policy.match(/METHODS = [^;]*asList\(\s*([^)]*)\)/s)[1].match(/"(\w+)"/g).map(x => x.slice(1, -1));
-  const relay = relaySrc.match(/new Set\(\[([^\]]*)\]\)/)[1].match(/'(\w+)'/g).map(x => x.slice(1, -1));
-  assert.deepEqual(relay.filter(m => m !== 'open').sort(), nativeMethods.sort());
+  const forwards = method => { const port = nativePort(), sh = shell({ port, frames: ['/photos/'] }); call(sh, sh.iframes[0].contentWindow, method, {}); return port.sent.length === 1; };
+  for (const m of nativeMethods) assert.ok(forwards(m), `${m} reaches the native bridge`);
+  assert.ok(forwards('open'), 'and the legacy open');
+  for (const m of ['deleteEverything', 'exportKeys', 'constructor', '__proto__']) assert.ok(!forwards(m), `${m} is refused`);
 });
 
 test('old Settings deep links (backup notification, native screen) open the Photos app instead', () => {
-  const app = read('web/app.js');
-  assert.match(app, /h\.action === 'settings' && \(h\.focus === 'photos-backup' \|\| h\.focus === 'photos'\)\) \{ if \(!window\.WizOpenApp\?\.\('photos'\)\)/);
-  assert.ok(app.indexOf("h.focus === 'photos-backup'") < app.indexOf("if (h.action === 'unsent' || h.action === 'settings')"));
+  // the phone's real hand-off (window.__wosHandoff), with and without the Photos app installed
+  const app = read('web/app.js'), at = app.indexOf('  window.__wosHandoff = h => {');
+  const handoff = (h, installed) => {
+    const ctx = runRecording(`${block(app, '  window.__wosHandoff = h => {', at).replace(/^\s*window\.__wosHandoff = /, 'this.handoff = ')};`,
+      { window: { WizOpenApp: id => (ctx0.opened.push(id), installed), WosSettings: { features: [{ id: 'photos-backup' }, { id: 'look' }] } }, APP: {}, opened: [] });
+    const ctx0 = ctx; ctx.opened = [];
+    ctx.handoff(h); return { opened: ctx.opened, calls: ctx.calls.map(c => c[0]) };
+  };
+  for (const focus of ['photos-backup', 'photos']) {
+    const r = handoff({ action: 'settings', focus }, true);
+    assert.deepEqual(r.opened, ['photos'], focus); assert.ok(!r.calls.includes('openSettings'), `${focus}: never Settings`);
+  }
+  const missing = handoff({ action: 'settings', focus: 'photos-backup' }, false);
+  assert.ok(missing.calls.includes('toast') && !missing.calls.includes('openSettings'), 'not installed: says where it lives');
+  assert.ok(handoff({ action: 'settings', focus: 'look' }, true).calls.includes('openSettings'), 'other Settings links still open Settings');
 });
 
-test('native: bridge keeps credentials and sign-in on the device; legacy open and the deep link stay', () => {
-  const b = read('android/app/src/main/java/ai/wizards/os/photos/PhotosBridge.java');
-  assert.match(b, /PhotosBridgePolicy\.LEGACY_OPEN\.equals\(data\)\) \{ activity\.startActivity\(new Intent\(activity, PhotosActivity\.class\)\)/);
-  assert.match(b, /!isMainFrame \|\| !AppState\.primaryOrigin\(activity\)\.equals\(originOf\(sourceOrigin\)\) \|\| !shellOnTop\(\)/);
-  assert.match(b, /new PhotoAuth\(activity\)\.start\(server\)/);
-  assert.doesNotMatch(b, /apiKey\(|secret\("credentials"\)|getString\("key"\)/);
-  const main = read('android/app/src/main/java/ai/wizards/os/MainActivity.java');
-  assert.match(main, /PhotosBridge\.install\(this, web\)/);
-  assert.doesNotMatch(main, /installPhotosPort/);
-  const manifest = read('android/app/src/main/AndroidManifest.xml');
-  assert.match(manifest, /\.photos\.PhotosActivity" android:exported="true" android:launchMode="singleTop"/);
-  assert.match(manifest, /android:host="photos" android:path="\/oauth-callback"/);
-  const activity = read('android/app/src/main/java/ai/wizards/os/photos/PhotosActivity.java');
-  assert.match(activity, /if\(web\) \{ backToWeb\(\); return; \}/);
-  assert.match(activity, /putExtra\(MainActivity\.EXTRA_SETTINGS_FOCUS,"photos-backup"\)/);
-  assert.match(read('web/app.js'), /openSettings\(h\.action === 'unsent' \|\| \(typeof h\.focus === 'string' && window\.WosSettings\?\.features\.some\(f => f\.id === h\.focus\)/);
+// static-rule: AndroidManifest.xml is declarative config: the exported singleTop activity and its sign-in callback link
+test('native: Photos is its own singleTop activity and owns the photos sign-in callback link', () => {
+  const m = manifest();
+  const a = m.find(e => e.tag === 'activity' && e.attrs['android:name'] === '.photos.PhotosActivity');
+  assert.equal(a?.attrs['android:exported'], 'true');
+  assert.equal(a?.attrs['android:launchMode'], 'singleTop');
+  assert.ok(m.some(e => e.tag === 'data' && e.attrs['android:host'] === 'photos' && e.attrs['android:path'] === '/oauth-callback'));
 });
-
-test('Photos child Back explicitly restores the Wizard parent, album Back stays nested', () => {
-  const s = read('android/app/src/main/java/ai/wizards/os/photos/PhotosActivity.java');
-  assert.match(s, /if\(albums\) \{ show\(\); return; \}/);
-  assert.match(s, /new Intent\(this,MainActivity.class\).setAction\(MainActivity.ACTION_SETTINGS\)/);
-  assert.match(s, /registerOnBackInvokedCallback/);
-  assert.doesNotMatch(s, /moveTaskToBack|super.onBackPressed/);
-});
+// The bridge's Java wiring and the web openSettings(focus) handoff: the handoff runs above (Settings link tests); the Java
+// side is not run here (wizard-ux issue 1674: no JDK in this suite).
+// Not run here (wizard-ux issue 1674): this pinned Java/Swift source text and no JDK runs it in this suite. Photos Back handling in PhotosActivity.

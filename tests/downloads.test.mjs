@@ -5,6 +5,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { createDocument } from './fixtures/mini-dom.mjs';
+import { cascade } from './fixtures/mini-css.mjs';
 
 const src = readFileSync(new URL('../web/core/downloads.js', import.meta.url), 'utf8');
 const css = readFileSync(new URL('../web/core/downloads.css', import.meta.url), 'utf8');
@@ -490,6 +492,7 @@ test('a script that swaps JSON.stringify / JSON.parse after load cannot rewrite 
   assert.ok(r.sent.every(m => m.method === 'open' && m.params.id === '12'), JSON.stringify(r.sent));
 });
 
+// static-rule: the docs must keep naming the same-origin residual; there is no code to run for what a document claims
 test('REMAINING same-origin residual, pinned so it cannot be forgotten or silently "fixed" on paper', () => {
   // A hosted app shares the shell's origin and realm. By design of this change it can no longer READ the list, OPEN or
   // CANCEL through WosDownloads or the port. It can still: read the sheet while it is open (names, not ids) from
@@ -502,15 +505,26 @@ test('REMAINING same-origin residual, pinned so it cannot be forgotten or silent
   assert.match(doc, /acceptance hold|stays open|remains open/i);
 });
 
-test('skin: the CSS uses only --wz-* roles (with shell fallbacks) and opaque panels, never a literal text colour or blur', () => {
-  assert.doesNotMatch(css, /backdrop-filter|filter:\s*blur/);
-  const decl = css.replace(/\/\*[\s\S]*?\*\//g, '');
-  // no hex/rgb colour as a text or panel colour outside of var() fallbacks, shadows and the scrim fallback
-  const bad = [...decl.matchAll(/(?:^|[;{\s])(color|background|background-color|border-color)\s*:\s*([^;}]+)/g)]
-    .map(m => m[2].trim()).filter(v => /#[0-9a-f]{3,8}\b|rgba?\(/i.test(v.replace(/var\([^)]*\)/g, '')));
-  assert.deepEqual(bad, []);
-  assert.match(css, /--wdl-raised: var\(--wz-panel-raised/);
-  assert.match(css, /\.wdl-banner \{[^}]*background: var\(--wdl-raised\)/);
-  assert.match(css, /\.wdl-panel \{[^}]*background: var\(--wdl-raised\)/);
-  assert.match(css, /\.wdl-open, \.wdl-act \{[^}]*background: var\(--wdl-accent\); color: var\(--wdl-on-accent\)/);
+test('skin: the CSS uses only --wz-* roles (with shell fallbacks) and opaque panels, never a literal text colour or blur', async () => {
+  // the banner and the sheet the real module draws, put in a mini DOM and styled by the real downloads.css
+  const items = [pdf(), pdf({ id: '13', name: 'Video.mp4', status: 'running', size: 1000, got: 250, finished: 0 }), pdf({ id: '14', name: 'Bad.zip', status: 'failed' })];
+  const B = load({ items }); pushEv(B.window, { type: 'done', item: pdf() }); await flush();
+  const S = load({ items }); S.W.show(); await flush();
+  const doc = createDocument(), mount = node => { const d = doc.createElement('div'); d.className = node.className; d.innerHTML = node.innerHTML; doc.body.appendChild(d); return d; };
+  const banner = mount(B.body.children[0]), sheet = mount(S.body.children[0]);
+  sheet.querySelector('.wdl-list').innerHTML = S.body.children[0].list.innerHTML;
+  const st = node => Object.fromEntries(Object.entries(cascade(node, css)).map(([k, v]) => [k, v.value]));
+  assert.equal(st(banner).background, 'var(--wdl-raised)', 'the banner is an opaque raised panel');
+  assert.match(st(banner)['--wdl-raised'] || '', /^var\(--wz-panel-raised/);
+  const panel = sheet.querySelector('.wdl-panel'); assert.equal(st(panel).background, 'var(--wdl-raised)', 'the sheet panel too');
+  for (const b of [banner.querySelector('.wdl-open'), sheet.querySelector('.wdl-act')]) {
+    assert.ok(b, 'a filled button is drawn'); assert.equal(st(b).background, 'var(--wdl-accent)'); assert.equal(st(b).color, 'var(--wdl-on-accent)');
+  }
+  // every element drawn: colours only through var() roles (literal fallbacks inside var() allowed), and no blur
+  for (const node of [banner, sheet, ...banner.descendants(), ...sheet.descendants()]) {
+    const s = st(node);
+    for (const k of ['color', 'background', 'background-color', 'border-color']) if (s[k])
+      assert.doesNotMatch(s[k].replace(/var\([^()]*(\([^()]*\)[^()]*)*\)/g, ''), /#[0-9a-f]{3,8}\b|rgba?\(/i, `${node.className} ${k}: ${s[k]}`);
+    for (const k of ['backdrop-filter', 'filter']) assert.doesNotMatch(s[k] || '', /blur/, `${node.className} ${k}`);
+  }
 });

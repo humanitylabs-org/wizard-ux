@@ -6,6 +6,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import { withSettingsParts } from './fixtures/settings-parts.mjs';
+import { lookBox } from './fixtures/r5A-experience.mjs';
+import { parseCss } from './fixtures/mini-css.mjs';
 const source = withSettingsParts(fs.readFileSync(new URL('../web/core/settings.js', import.meta.url), 'utf8'));
 const ID = 'wizard/settings-search';
 const text = html => String(html).split(/<[^>]*>/).join(' ').split('&amp;').join('&');
@@ -83,11 +85,18 @@ test('an IME composing in the box is left alone until compositionend (no repaint
   assert.deepEqual(h.cats(), ['voice']);
   assert.ok(all.length > 1);
 });
-test('the switch is a listed tweak package linked to this issue', () => {
-  const cat = JSON.parse(fs.readFileSync(new URL('../web/tweaks/catalog.json', import.meta.url), 'utf8'));
-  assert.ok(cat.tweaks.includes(ID)); assert.ok(!cat.defaults.includes(ID), 'off by default');
+test('the switch is a listed tweak package linked to this issue', async () => {
+  // the real Settings › Look list on the real catalog: listed, off on a fresh device, the switch turns it on
+  const fresh = await lookBox();
+  const row = fresh.row(ID);
+  assert.ok(row, 'listed'); assert.equal(row.on, false, 'off by default'); assert.ok(!fresh.active().includes(ID));
+  await fresh.E.toggle(ID); assert.ok(fresh.active().includes(ID), 'the switch turns it on');
   const m = JSON.parse(fs.readFileSync(new URL('../web/tweaks/wizard/settings-search/manifest.json', import.meta.url), 'utf8'));
   assert.equal(m.id, ID); assert.deepEqual(m.issues, ['humanitylabs-org/try-wizard#94']);
-  const css = fs.readFileSync(new URL('../web/tweaks/wizard/settings-search/tweak.css', import.meta.url), 'utf8');
-  for (const rule of css.split('\n').filter(l => l && !l.startsWith('/*'))) assert.ok(rule.startsWith(`html[data-tweaks~="${ID}"]`), rule);
+});
+// static-rule: every rule of the switch's own stylesheet must be scoped to the switch (a lint over the whole file)
+test('every rule of the settings-search stylesheet is scoped to its switch', () => {
+  const rules = parseCss(fs.readFileSync(new URL('../web/tweaks/wizard/settings-search/tweak.css', import.meta.url), 'utf8'));
+  assert.ok(rules.length);
+  for (const r of rules) for (const sel of r.selectors) assert.ok(sel.startsWith(`html[data-tweaks~="${ID}"]`), sel);
 });

@@ -7,10 +7,9 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
 import { withServicesParts } from './fixtures/app-services-parts.mjs';
-import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
 const services=withServicesParts(readFileSync(new URL('../web/core/app-services.js',import.meta.url),'utf8'));
 const client=readFileSync(new URL('../web/core/app-client.js',import.meta.url),'utf8');
-const live=withLiveParts(readFileSync(new URL('../web/live.js',import.meta.url),'utf8'));
+const streams=readFileSync(new URL('../web/live-streams.js',import.meta.url),'utf8');
 
 function host(id='wizard-calendar') {
  const posted=[],location=new URL('https://wizard.example/wizard-os-home/'),view={seen:true,front:false},doc={hidden:false,readyState:'loading',listeners:{},addEventListener(t,fn){(this.listeners[t]||=[]).push(fn);}};
@@ -64,8 +63,33 @@ test('an agent tool named for the app asks that open window to read again',()=>{
  h.view.seen=false; assert.equal(h.S.fresh.tool('calendar_update_event',t+=10_000),0,'out of view: it reads when it comes back');
 });
 
+// Runs the real live-streams part (L.openRunStream) on a fake EventSource and hands what it dispatches to the real
+// app-services listener, so a finished tool reaches the open Calendar window.
+function stream() {
+ const sources=[],events=[];
+ class ES{constructor(u){this.url=u;this.l={};sources.push(this);}addEventListener(n,f){(this.l[n]||=[]).push(f);}close(){}}
+ const window={EventSource:ES,dispatchEvent:e=>events.push(e),addEventListener(){},document:{addEventListener(){},removeEventListener(){}}};
+ const ctx={window,document:{readyState:'complete',hidden:false},CustomEvent:class{constructor(t,o){this.type=t;this.detail=o?.detail;}},setTimeout:()=>0,clearTimeout(){},requestAnimationFrame:()=>1,cancelAnimationFrame(){}};
+ vm.runInNewContext(streams,ctx);
+ const L={};
+ window.WizCore.liveParts.streams({AG:{},iso:x=>x,L,otherAgent:()=>false,PEND:new Map(),PEND_MAX:1,RELEASED:new Set(),req:async()=>({json:async()=>({})}),syncPending(){},unPend(){}});
+ assert.ok(L.openRunStream('s1',null,'run1',()=>{}));
+ assert.equal(sources.length,1);
+ const fire=(type,d)=>{for(const f of sources[0].l[type]||[]) f({type,data:JSON.stringify({session_id:'s1',run_id:'run1',...d})});};
+ return {fire,events};
+}
+
 test('the agent run stream announces each finished tool',()=>{
- assert.match(live,/type === 'tool\.completed'[\s\S]{0,600}dispatchEvent\(new CustomEvent\('wizard:agent-tool', \{ detail: \{ tool: String\(d\.tool\) \} \}\)\)/);
+ const s=stream();
+ s.fire('tool.started',{tool:'calendar_update_event'});
+ assert.deepEqual(s.events.map(e=>e.type),[],'a started tool is not announced');
+ s.fire('tool.completed',{tool:'calendar_update_event'});
+ assert.deepEqual(s.events.map(e=>[e.type,e.detail?.tool]),[['wizard:agent-tool','calendar_update_event']]);
+ s.fire('tool.completed',{tool:'terminal',session_id:'other'});
+ assert.equal(s.events.length,1,'another session\'s frame is not announced');
+ const h=host(); h.S.fresh.tick(Date.now()-10_000);
+ for(const fn of h.listeners['wizard:agent-tool']) fn(s.events[0]);
+ assert.deepEqual(h.asks(),['agent'],'the shell turns the announcement into a read of the named app');
 });
 
 function app({register}={}) {

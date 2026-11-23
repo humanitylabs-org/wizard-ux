@@ -2,7 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
-import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
+import { withParts } from './fixtures/chats-parts.mjs';
+import { createDocument } from './fixtures/mini-dom.mjs';
+import { styles } from './fixtures/w5-css.mjs';
+import { between, block, runRecording } from './fixtures/source-slice.mjs';
+import { cascade } from './fixtures/mini-css.mjs'; // chats.js parts moved out verbatim (issue 1665)
 
 const read = p => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
 
@@ -125,22 +129,80 @@ test('More models expands to the other families once each, above the short list'
   assert.equal(o.filter(x => /Fable/.test(x)).length, 1);
 });
 
+// The real chat-power.js (the model label and chip), as tests/channel-box-model-pick.test.mjs runs it.
+function power() {
+  const OPTS = [{ value: 'claude-opus', provider: 'anthropic', name: 'Opus', isGlobalDefault: true }];
+  const ctx = { console, URL, Intl, Date, File, Blob, Response, setTimeout, clearTimeout, location: { origin: 'https://fixture.invalid', href: 'https://fixture.invalid/', hostname: 'fixture.invalid' }, navigator: {},
+    localStorage: { getItem: () => null, setItem() {}, removeItem() {} }, document: { addEventListener() {}, querySelector: () => null, createElement: () => ({ style: {} }) }, addEventListener() {},
+    WizCore: { esc: String, clip: s => s }, WizConfig: { agent: () => 'Fixture' }, WizLive: { session: () => null },
+    WosAgents: { isOther: () => false, get: id => ({ id }), isPrivate: () => false },
+    WosModels: { ready: true, options: OPTS, load: async () => {}, currentRoute: () => ({ model: 'claude-opus', provider: 'anthropic' }), privateOptions: () => [],
+      defaultOption: () => OPTS[0], name: v => v, short: v => (OPTS.find(o => o.value === v) || {}).name || v, ours: () => false, sheetHtml: () => ({ list: OPTS, html: '' }) },
+    WosOutbox: { unsent: () => [] } };
+  ctx.window = ctx; vm.createContext(ctx); vm.runInContext(read('web/core/chat-kit.js'), ctx); vm.runInContext(read('web/core/chat-power.js'), ctx);
+  const w = { id: 'win', app: 'chats', thread: '__new__' };
+  const H = { root: () => ({ querySelectorAll: () => [] }), win: id => (id === 'win' ? w : null), recordReply: () => '', recordingFor: () => '', viewContext: () => '', overlay() {} };
+  const api = ctx.WosChatPower({ ch: () => ({}), CH: {}, toast() {}, H, renderChats() {}, renderThreadNow() {}, owner: id => id,
+    elOf: () => ({ querySelectorAll: () => [], querySelector: () => null, insertAdjacentHTML() {}, classList: { remove() {}, add() {} }, style: { removeProperty() {}, setProperty() {} } }),
+    MIC_SVG: '<svg ', closeRowSheet() {}, vib() {}, isWorking: () => false, takeComposer: () => ({ text: '', files: [], done() {}, putBack() {} }), leaveAfterSend: () => false, openChat() {},
+    winAgent: () => '', chanOpen: () => null, chanSpaceOf: () => null, spaceMember() {}, chanBox: () => '', chanModel: () => null, setChanModel: () => false });
+  return { api, w };
+}
+// The real fitLabel (core/chats-fitlabel.js) over a composer whose sizes the test sets (no layout here).
+function fitWorld({ value = '', placeholder = 'Message Wizard', lines = 1, lastEnd = 40, scrollHeight = 42 } = {}) {
+  const doc = createDocument();
+  doc.body.innerHTML = '<div class="ch-field"><textarea></textarea><button class="ch-mlabel ch-model">Opus</button></div>';
+  const field = doc.body.firstElementChild, ta = field.querySelector('textarea'), lab = field.querySelector('.ch-mlabel');
+  ta.value = value; ta.placeholder = placeholder;
+  Object.assign(ta, { clientWidth: 300, clientHeight: 42, scrollHeight }); lab.offsetWidth = 80;
+  const make = doc.createElement;
+  doc.createElement = t => { const e = make(t); if (t === 'span') Object.defineProperty(e, 'offsetLeft', { get: () => lastEnd }); else Object.defineProperty(e, 'offsetHeight', { get: () => lines * 20 }); return e; };
+  const ctx = { window: {}, document: doc, getComputedStyle: () => ({ paddingLeft: '12px', font: '16px x', letterSpacing: 'normal', lineHeight: '20px' }) };
+  vm.runInNewContext(read('web/core/chats-fitlabel.js'), ctx);
+  const { fitLabel } = ctx.window.WizCore.chatsParts.fitlabel({ addFiles() {}, chatVars: {}, picker: { addEventListener() {} }, W: {} });
+  fitLabel(field);
+  return { field, ta, row: field.classList.contains('lab-row') };
+}
+
 test('the thread header no longer carries the model; a draft keeps the label outside the editable rows', () => {
-  const chats = withParts(read('web/core/chats.js')), power = read('web/core/chat-power.js'), css = read('web/core/chat-power.css');
-  assert.match(chats, /<div class="ch-field"><textarea/);
-  assert.match(chats, /\$\{mlabel\}<\/div>/);
-  assert.match(chats, /const chip = PW && !PW\.modelLabel \? PW\.modelChip\(w, s\) : ''/);
-  assert.match(chats, /function fitLabel\(root\)/);
-  assert.match(chats, /const lineCount = lineHeight > 0 \? Math\.round\(mirror\.offsetHeight \/ lineHeight\) : 1;/);
-  assert.match(chats, /const hasDraft = ta\.value\.length > 0;/);
-  assert.match(chats, /classList\.toggle\('lab-row', hasDraft \|\| lineCount >= 3 \|\| lastEnd > room \|\| scrolls\)/);
-  assert.match(css, /\.ch-field\.lab-row \{ flex-direction: column; padding-bottom: 24px;/);
-  assert.match(chats, /'px';\n    fitLabel\(ta\);\n(    if \(ta\.scrollTop !== top\) ta\.scrollTop = top;\n)?  \}/); // measured after the height is set, so a full, scrolling box is detected
-  // Measuring collapses the box to 'auto'; the owner's scroll position is put back afterwards (James, 21 Oct 2026).
-  assert.match(chats, /const top = ta\.scrollTop;[^\n]*\n    ta\.style\.height = 'auto';/);
-  assert.match(power, /function modelLabel\(w, s, pick\)/); // pick: a channel box's own model (issue 1309)
-  assert.match(power, /pop: !!pop && mode !== 'retry'/);
-  assert.match(css, /\.ch-field > \.ch-mlabel \{ position: absolute; right: 4px; bottom: 1px;/);
+  const chats = withParts(read('web/core/chats.js')), css = read('web/core/chat-power.css');
+  const { api, w } = power();
+  // The label is the chip restyled for the box: no ▾, its own class.
+  const label = api.modelLabel(w, null), chip = api.modelChip(w, null);
+  assert.match(chip, /class="ch-model/); assert.match(chip, /▾/);
+  assert.match(label, /class="ch-mlabel ch-model/); assert.doesNotMatch(label, /▾/);
+  // Which one the thread paint draws, and where (core/chats-threadpaint.js, run on its own lines).
+  const pick = between(chats, '    const msw = PW?.modelSwitch && s !== undefined', '    const fail = PW &&');
+  const drawn = PW => { const c = { PW, s: null, w }; vm.runInNewContext(pick + 'this.r = { msw, mlabel, chip };', c); return c.r; };
+  const now = drawn({ modelLabel: api.modelLabel, modelChip: api.modelChip });
+  assert.equal(now.chip, '', 'the header carries no model');
+  assert.equal(now.mlabel, label, 'the label goes in the message box');
+  assert.equal(drawn({ modelChip: () => 'CHIP' }).chip, 'CHIP', 'only a power part without the box label keeps the header chip');
+  const field = between(chats, '<div class="ch-field"><textarea', '${mlabel}</div>', chats.indexOf('data-chform>')) + '${mlabel}</div>'; // the thread composer
+  const doc = createDocument();
+  doc.body.innerHTML = vm.runInNewContext('`' + field + '`', { isNew: true, s: null, window: {}, working: false, held: false, TAG: '', esc: String, agentName: () => 'Wizard', draft: 'half a thought', mlabel: label });
+  const box = doc.body.querySelector('.ch-field');
+  assert.deepEqual(box.children.map(e => e.localName + (e.className ? '.' + e.className.split(' ')[0] : '')), ['textarea', 'button.ch-mlabel'], 'the label sits beside the textarea, never inside it');
+  assert.equal(box.querySelector('textarea').textContent, 'half a thought');
+  // fitLabel: any draft moves the label to its own strip; an empty box shares the corner unless it would collide.
+  assert.equal(fitWorld().row, false, 'empty, short placeholder: the label stays in the corner');
+  assert.equal(fitWorld({ value: 'hi' }).row, true, 'a draft: the label gets its own strip');
+  assert.equal(fitWorld({ lines: 3 }).row, true, 'a three-line placeholder');
+  assert.equal(fitWorld({ lastEnd: 280 }).row, true, 'the last line would run under the label');
+  assert.equal(fitWorld({ scrollHeight: 90 }).row, true, 'a scrolling box');
+  assert.equal(fitWorld({ value: 'hi' }).ta.style.paddingRight, '14px');
+  // growTa: measured after the height is set, and the owner's scroll position put back.
+  const log = [], ta = { scrollTop: 37, clientWidth: 300, scrollHeight: 300, getClientRects: () => [1], style: {} };
+  let h = ''; Object.defineProperty(ta.style, 'height', { get: () => h, set: v => { log.push(['height', v]); h = v; ta.scrollTop = 0; } });
+  vm.runInNewContext(block(chats, '  function growTa(ta)') + '\ngrowTa(ta);', { ta, fitLabel: t => log.push(['fit', t === ta, h]) });
+  assert.deepEqual(log, [['height', 'auto'], ['height', '140px'], ['fit', true, '140px']]);
+  assert.equal(ta.scrollTop, 37, 'scroll position kept');
+  // The CSS on that markup: the strip is a column with room for the label; the label sits bottom-right of the box.
+  const sk = createDocument();
+  sk.body.innerHTML = '<form class="ch-compose"><div class="ch-field lab-row"><textarea></textarea><button class="ch-mlabel ch-model">Opus</button></div></form>';
+  const row = styles(sk.body.querySelector('.ch-field'), [css]), lab = styles(sk.body.querySelector('.ch-mlabel'), [css]);
+  assert.equal(row['flex-direction'], 'column'); assert.equal(row['padding-bottom'], '24px');
+  assert.equal(lab.position, 'absolute'); assert.equal(lab.right, '4px'); assert.equal(lab.bottom, '1px');
 });
 
 test('agent chats show the short family name, never the raw model id', () => {
@@ -148,8 +210,19 @@ test('agent chats show the short family name, never the raw model id', () => {
   assert.equal(M.short('claude-fable-5-1', 'anthropic'), 'Fable');
   assert.equal(M.short('claude-fable-5-1', 'claude-cli'), 'Fable');
   assert.equal(M.short('claude-opus-5-5', ''), 'Opus');
+  // The real thread-header chip (chat-power.js modelChip) on an agent's thread: the short name, the agent's provider.
   const power = read('web/core/chat-power.js');
-  assert.match(power, /const label = cur\?\.model \? \(M\.short\(cur\.model, cur\.provider \|\| ag\?\.model\?\.provider\) \|\| full\)/);
+  const chip = (model, provider, agentProvider) => {
+    const ag = { id: 'pi', model: { provider: agentProvider } };
+    const r = runRecording(block(power, '  function modelChip(') + '\nthis.modelChip = modelChip;', { M, esc: String, ch: () => ({}),
+      threadModel: () => ({ model, provider }), agentOfWin: () => ag, window: { WosAgents: { isOther: () => true, get: () => ag, isPrivate: () => false, modelName: (a, m) => m, lock: () => '' } } });
+    const doc = createDocument(); doc.body.innerHTML = r.modelChip({ id: 'w1', thread: 't1' }, { id: 't1' });
+    return doc.querySelector('[data-chmodel]').textContent.replace('▾', '').trim();
+  };
+  assert.equal(chip('claude-fable-5-1', '', 'anthropic'), 'Fable', 'the agent\'s provider names the family');
+  assert.equal(chip('claude-opus-5-5', 'anthropic', ''), 'Opus');
+  assert.equal(chip('glm-5-3', '', 'wizard-tinfoil'), 'GLM 5.3', 'a private agent on Tinfoil: its route\'s own name (GLM 5.3)');
+  assert.equal(chip('mystery-model-9', '', ''), 'Mystery Model 9', 'an unknown model: a readable name, not the raw id');
 });
 
 test('tall-draft model menu stays above composer and respects visible keyboard height (James correction)', () => {
@@ -173,11 +246,24 @@ test('tall-draft model menu stays above composer and respects visible keyboard h
       assert.ok(height > 40 && bottom - height >= 80, 'bounded scroll area stays below thread header');
     }
   }
+  // The card's CSS (real chat-power.css) on the picker's markup: bounded by placePop's height, opaque, above the
+  // document-scroll chrome.
   const css = read('web/core/chat-power.css');
-  assert.match(css, /max-height:\s*min\(var\(--mpop-h, 64%\), 440px\)/);
-  assert.match(css, /\.ch-sheet\.ch-mpop \.ch-sheet-b \{[^}]*background: linear-gradient\([^;]+var\(--wz-panel, var\(--bg,/);
-  assert.match(css, /html\.wos-doc-scroll \.wos-doc-thread \.ch-sheet\.ch-mpop \{ position: fixed; inset: 0; z-index: 52;/);
-  assert.match(src, /window\.visualViewport\?\.addEventListener\('resize', queue/);
+  const doc = createDocument();
+  doc.documentElement.className = 'wos-doc-scroll';
+  doc.body.innerHTML = '<div class="wos-doc-thread"><div class="ch-sheet ch-psheet ch-mpop"><div class="ch-sheet-b"></div></div></div>';
+  const card = cascade(doc.querySelector('.ch-sheet-b'), css), wrap = cascade(doc.querySelector('.ch-mpop'), css);
+  assert.equal(card['max-height']?.value, 'min(var(--mpop-h, 64%), 440px)', 'placePop\'s --mpop-h bounds the card');
+  assert.match(card.background?.value || '', /^linear-gradient\(.+\), var\(--wz-panel, var\(--bg,/, 'an opaque panel');
+  assert.deepEqual([wrap.position?.value, wrap.inset?.value, wrap['z-index']?.value], ['fixed', '0', '52'], 'above the native document-scroll chrome (z 50)');
+  // The open picker (real chat-power.js) re-places the card when the visible keyboard resizes the viewport.
+  const on = {}, placed = [];
+  const el = { classList: { add() {}, remove: c => placed.push(['remove', c]) }, style: { removeProperty: k => placed.push(['unset', k]) }, querySelector: () => null };
+  const win = { addEventListener() {}, visualViewport: { addEventListener: (t, f) => { on['vv:' + t] = f; } } };
+  const open = runRecording(block(src, '    if (sheet.pop) {'), { sheet: { pop: true }, el, window: win, placePop: () => placed.push(['place']),
+    requestAnimationFrame: f => (f(), 1), cancelAnimationFrame() {}, AbortController, ResizeObserver: class { observe() {} disconnect() {} } });
+  placed.length = 0; on['vv:resize'](); assert.deepEqual(placed, [['place']], 'a keyboard resize places the card again');
+  placed.length = 0; open.popOff(); assert.deepEqual(placed, [['remove', 'ch-model-picking'], ['unset', '--mpop-input-max']], 'closing gives the input back its height');
 });
 
 test('native keyboard leaves a usable picker above the temporarily shorter input', () => {
@@ -199,7 +285,7 @@ test('native keyboard leaves a usable picker above the temporarily shorter input
   assert.equal(inputHeight, 42, 'only the input viewport shrinks; its value is untouched');
   assert.ok(styles.get('--mpop-h') >= 90, 'at least one complete model row remains reachable');
   assert.ok(rect.bottom - styles.get('--mpop-b') < boxes['.ch-compose'].getBoundingClientRect().top);
-  assert.match(src, /el\.classList\.remove\('ch-model-picking'\); el\.style\.removeProperty\('--mpop-input-max'\)/);
+  // (closing the picker gives the input its height back: the test above runs popOff)
 });
 
 test('the composer scripts parse', () => {

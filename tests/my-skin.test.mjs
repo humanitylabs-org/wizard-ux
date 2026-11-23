@@ -5,6 +5,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { webcrypto } from 'node:crypto';
+import { createDocument } from './fixtures/mini-dom.mjs';
+import { skinsRuntime } from './fixtures/skin-palettes-harness.mjs';
 
 const root = new URL('../', import.meta.url);
 const read = p => readFileSync(new URL(p, root), 'utf8');
@@ -98,28 +100,56 @@ test('Reset empties My skin through the Agent Service and removes the layer', as
   assert.equal(b.style(), null);
 });
 
-test('CSS stays non-executable, loads last in both shells, and scripts use the shared host', () => {
+test('CSS stays non-executable', () => {
   assert.doesNotMatch(SRC, /\bimport\(|\beval\(|new Function|innerHTML|createElement\('script'\)/);
-  assert.match(SRC, /crypto\.subtle\.digest\('SHA-256', bytes\)/);
-  assert.match(SRC, /host\.loadPersonal\(v\.bytes/);
-  for (const f of ['web/index.html', 'web/desktop.html']) {
-    const head = read(f).split('</head>')[0];
-    const at = head.indexOf('core/my-skin.js');
-    assert.ok(at > 0, `${f} loads core/my-skin.js`);
-    assert.ok(at > head.lastIndexOf('stylesheet'), `${f}: My skin comes after every stylesheet in <head>`);
+});
+// The script side (SHA-256 of the fetched bytes, host.loadPersonal with those same bytes) is covered by
+// tests/my-skin-script.test.mjs 'approved hash imports the exact fetched UTF-8/CRLF bytes, once across refreshes, without a second URL import'.
+// Both shells sharing core/my-skin.js: tests/responsive-features.test.mjs checks the shared-asset inventory against both pages.
+
+// Parse each page's real <head> in a mini DOM element by element, running the real my-skin.js when its <script> is
+// reached (a cached My skin and a worn own skin, so it paints at once): its <style> must end up after every stylesheet.
+function headWithMySkin(page) {
+  const doc = createDocument(), box = doc.createElement('div');
+  box.innerHTML = read(page).split('<head>')[1].split('</head>')[0];
+  const store = new Map([['wos.myskin.v1', 'body { color: red; }'], ['wos.own-skins.v1', JSON.stringify({ version: 1, skins: [{ id: 'mine', name: 'Mine', base: 'nebula', tweaks: {} }], active: 'mine' })]]);
+  let ran = 0;
+  while (box.firstElementChild) {
+    const n = box.firstElementChild; doc.head.appendChild(n);
+    if (n.tagName.toLowerCase() !== 'script' || !/(^|\/)core\/my-skin\.js/.test(n.getAttribute('src') || '')) continue;
+    ran++;
+    const ctx = { document: doc, location: { search: '' }, URLSearchParams, Event, fetch: () => new Promise(() => {}), addEventListener() {}, dispatchEvent() {},
+      localStorage: { getItem: k => store.get(k) ?? null, setItem: (k, v) => store.set(k, String(v)), removeItem: k => store.delete(k) } };
+    ctx.window = ctx; vm.runInNewContext(SRC, ctx);
   }
-  const inv = JSON.parse(read('docs/responsive-feature-inventory.json'));
-  assert.ok(inv.sharedAssets.includes('core/my-skin.js'));
+  return { doc, ran };
+}
+
+test('My skin loads last in both shells: its style follows every stylesheet in <head>', () => {
+  for (const f of ['web/index.html', 'web/desktop.html']) {
+    const { doc, ran } = headWithMySkin(f);
+    assert.equal(ran, 1, `${f} loads core/my-skin.js once`);
+    const kids = doc.head.children, style = kids.findIndex(c => c.id === 'wosMySkin');
+    assert.ok(style >= 0, `${f}: the cached My skin paints from <head>`);
+    const lastSheet = kids.findLastIndex(c => c.tagName.toLowerCase() === 'link' && c.getAttribute('rel') === 'stylesheet');
+    assert.ok(style > lastSheet, `${f}: My skin comes after every stylesheet in <head>`);
+  }
 });
 
-test('Look offers named recipes, New skin and a Wizard edit hint, never Reset or a missing files id', () => {
+// New skin, Remove (nested confirmation) and Edit with your Wizard (registered Files ids only) are covered by
+// tests/settings-redesign.test.mjs 'New skin is last; nested Back returns to Look on both shells, never leaves the app',
+// 'own tiles use base preview; own panel shows colours, edit hint and a nested remove confirmation' and
+// 'own skin Edit opens only registered Files IDs or shows the Wizard hint'.
+test('Look never offers Reset or a skin store', () => {
   const s = read('web/core/settings.js');
-  assert.match(s, /data-newskin/); assert.match(s, /data-ownskin-remove/);
-  assert.match(s, /Edit with your Wizard/);
-  assert.match(s, /\['wizard-files', 'files'\]\.find/);
   assert.doesNotMatch(s, /data-myskin="reset"|data-myskin-tile/);
   assert.doesNotMatch(s, /browse skins|get skins|skin store|community skins/i);
-  assert.match(read('web/core/skins.js'), /const SKINS = \[\s*\{ id: 'nebula'/);
+});
+
+test('a fresh device wears Nebula, the first built-in skin (what a new own skin starts from)', () => {
+  const { S } = skinsRuntime();
+  assert.equal(S.list[0].id, 'nebula');
+  assert.equal(S.current, 'nebula');
 });
 
 test('recipes create multiple, wear immediately, isolate edits, reload and remove/Undo', async () => {

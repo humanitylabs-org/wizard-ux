@@ -127,7 +127,18 @@ test('skin-host: list({ activity: true }) reads the shell\'s activity list; unre
   const o = c.activityRows({ working: [], ready: [{ id: 'g', at: new Date(NOW - H).toISOString(), mark: 'new' }], recent: [{ id: 'r', at: new Date(NOW - 2 * H).toISOString(), mark: '' }], snoozed: [], archive: [], older: 0 });
   assert.deepEqual([...o.ready].map(r => [r.id, r.mark]), [['notif:x', 'needs'], ['g', 'new']]);
   assert.deepEqual([...o.recent].map(r => r.id), ['r', 'notif:y']);
-  assert.match(host, /list: opts => \{ if \(opts\?\.activity === true && live\(\) && shell\.activityList\) return activityRows\(shell\.activityList\(\{ order: readReadyOrder\(\), older: opts\.older === true \}\)\);/);
+  // the real host list(): { activity: true } asks the shell's activityList in the saved order and runs it through activityRows
+  const asked = [], l0 = { working: [], ready: [{ id: 'g', at: new Date(NOW - H).toISOString(), mark: 'new' }], recent: [], snoozed: [], archive: [], older: 0 };
+  c.live = () => true;
+  c.shell = { activityList: o => { asked.push(JSON.parse(JSON.stringify(o))); return structuredClone(l0); }, sessionList: () => null };
+  vm.runInContext(`this.api = ({ ${between(host, '        list: opts =>', '        open: id =>')} });`, c);
+  const a = c.api.list({ activity: true });
+  assert.deepEqual([...a.ready].map(r => r.id), ['notif:x', 'g'], 'unread alerts join Ready through activityRows');
+  c.api.list({ activity: true, older: true }); c.api.list({ activity: true, older: 'yes' });
+  assert.deepEqual(asked, [{ order: 'newest', older: false }, { order: 'newest', older: true }, { order: 'newest', older: false }]);
+  assert.equal(c.api.list({ activity: 1 }), null, 'only activity: true reads the activity list');
+  c.live = () => false; assert.equal(c.api.list({ activity: true }), null, 'nothing before the shell is live');
+  assert.equal(asked.length, 3);
 });
 
 // wizard-ux issue 1360: one "waiting on you" rule. The real chanNeeds / attOf / chanUnread from chats.js drive the real

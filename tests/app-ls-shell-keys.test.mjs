@@ -7,19 +7,48 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
+import vm from 'node:vm';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const WEB = path.join(ROOT, 'web');
 const read = p => fs.readFileSync(path.join(ROOT, p), 'utf8');
-const rule = (file, name) => {
-  const m = read(file).match(new RegExp(`const ${name} = (/.+/[a-z]*);`));
-  assert.ok(m, `${name} in ${file}`);
-  const src = m[1], end = src.lastIndexOf('/');
-  return new RegExp(src.slice(1, end), src.slice(end + 1));
+const cut = (src, from, to) => {
+  const a = src.indexOf(from), b = src.indexOf(to, a + 1);
+  assert.ok(a >= 0 && b > a, `slice ${from.slice(0, 40)} .. ${to.slice(0, 40)}`);
+  return src.slice(a, b);
 };
-const LS_SHELL = rule('web/core/app-services.js', 'LS_SHELL');
-const STORE_SHELL = rule('web/core/browser-boundary.js', 'STORE_SHELL');
+// The real noting (app-services.js noteLs) and carrying (browser-boundary.js storeCarry) code, sliced into a vm with a
+// stand-in localStorage, as in tests/app-ls-carry-off-on.test.mjs.
+const BB = read('web/core/browser-boundary.js'), AS = read('web/core/app-services.js');
+const carrySrc = cut(BB, "  const STORE = 'wos.app-storage.v1.'", '  function storeApply(')
+  + cut(BB, "  const LS_OWNERS = 'wos.app-ls-owners.v1'", "  // What a new app window starts with")
+  + cut(BB, '  const readJson = k =>', '  async function idbCarry(');
+const noteSrc = cut(AS, "  const LS_OWNERS = 'wos.app-ls-owners.v1'", "  // The page's localStorage.setItem notes the key");
+function storage() {
+  const m = new Map();
+  return { m, get length() { return m.size; }, key: i => [...m.keys()][i] ?? null, getItem: k => (m.has(k) ? m.get(k) : null),
+    setItem: (k, v) => m.set(k, String(v)), removeItem: k => m.delete(k), clear: () => m.clear() };
+}
+// Which of `keys` app-services.js notes as the app's own when the app's same-origin page writes them.
+function noted(keys) {
+  const ls = storage(), c = vm.createContext({ window: { localStorage: ls }, JSON, Set, Map, Object, Array });
+  vm.runInContext(noteSrc + '\nthis.noteLs = noteLs;', c);
+  for (const k of keys) c.noteLs('music', k);
+  return Object.keys(JSON.parse(ls.getItem('wos.app-ls-owners.v1') || '{}'));
+}
+// Which of `keys` browser-boundary.js copies into the app's own copy, given an owners note that names them all.
+function carried(keys) {
+  const ls = storage();
+  ls.setItem('wos.app-ls-owners.v1', JSON.stringify(Object.fromEntries(keys.map(k => [k, { app: 'music' }]))));
+  for (const k of keys) if (ls.getItem(k) === null) ls.setItem(k, 'v');
+  const c = vm.createContext({ localStorage: ls, JSON, Set, Map, Object, Array });
+  vm.runInContext(carrySrc + '\nthis.storeCarry = storeCarry;', c);
+  c.storeCarry('music');
+  return Object.keys(JSON.parse(ls.getItem('wos.app-storage.v1.music') || '{}'));
+}
+const SAMPLE = ['wos.theme', 'WOS.x', 'wosx', 'wux.desk.wins', 'wuxx', 'wz.troubleshoot.direct', 'wizard.thread-seen.v1:main', 'wizard-pwa-install:http://x/',
+  'wizardApp.launched:x', 'wizard-music.volume', 'notes.lastVault', 'wc.mode', 'theme', 'wizardly', 'wizardapp', 'wz', 'wizard'];
 
 // Strings the scan finds that are not storage keys (map keys, states, ids), so the rule need not cover them.
 const NOT_STORAGE = new Set(['done', 'fail', 'run', 'sum', 'home:', 'layout:', 'tap:']);
@@ -54,19 +83,25 @@ function shellKeys() {
 }
 
 test('both carry-over modules use the same shell-key rule', () => {
-  assert.equal(LS_SHELL.source, STORE_SHELL.source);
-  assert.equal(LS_SHELL.flags, STORE_SHELL.flags);
+  const n = noted(SAMPLE), c = carried(SAMPLE);
+  assert.deepEqual(n, c, 'what app-services.js notes is exactly what browser-boundary.js carries');
+  assert.deepEqual(n, ['wuxx', 'wizard-music.volume', 'notes.lastVault', 'wc.mode', 'theme', 'wizardly', 'wizardapp', 'wz', 'wizard']);
 });
 
+// static-rule: an inventory over every web/ file (each localStorage key the shell names); the two rules it feeds run
 test('every localStorage key the shell names is a shell key, so no app is ever handed one', () => {
   const keys = shellKeys();
   assert.ok(keys.size > 80, 'the scan finds the shell keys: ' + keys.size);
   for (const k of ['wos.app-storage.v1.', 'wux.apps.v1', 'wux.bootstrap.v1', 'wz.troubleshoot.direct', 'wizard.thread-emojis.v1', 'wizard.thread-seen.v1', 'wizard.mobile.reading-positions.v1']) assert.ok(keys.has(k), 'found ' + k);
-  const missed = [...keys].filter(([k]) => !NOT_STORAGE.has(k) && !/\$\{|\\u0000/.test(k) && !LS_SHELL.test(k)).map(([k, f]) => `${k} (${f})`);
-  assert.deepEqual(missed, [], 'shell keys outside LS_SHELL: add them to the rule in app-services.js and browser-boundary.js');
+  const shell = [...keys.keys()].filter(k => !NOT_STORAGE.has(k) && !/\$\{|\\u0000/.test(k));
+  const where = k => `${k} (${keys.get(k)})`;
+  assert.deepEqual(noted(shell).map(where), [], 'shell keys app-services.js would note as an app\u2019s: add them to LS_SHELL');
+  assert.deepEqual(carried(shell).map(where), [], 'shell keys browser-boundary.js would copy to an app: add them to STORE_SHELL');
 });
 
 test('app keys stay carriable: the rule does not swallow an app\u2019s own names', () => {
-  for (const k of ['wizard-music.identify.active.v1', 'wizard-music.volume', 'notes.lastVault', 'wc.mode', 'theme', 'wizardly']) assert.equal(LS_SHELL.test(k), false, k);
-  for (const k of ['wos.theme', 'WOS.x', 'wux.desk.wins', 'wz.troubleshoot.direct', 'wizard.thread-seen.v1:main', 'wizard-pwa-install:http://x/', 'wizardApp.launched:x']) assert.equal(LS_SHELL.test(k), true, k);
+  const apps = ['wizard-music.identify.active.v1', 'wizard-music.volume', 'notes.lastVault', 'wc.mode', 'theme', 'wizardly'];
+  const shell = ['wos.theme', 'WOS.x', 'wux.desk.wins', 'wz.troubleshoot.direct', 'wizard.thread-seen.v1:main', 'wizard-pwa-install:http://x/', 'wizardApp.launched:x'];
+  assert.deepEqual(noted([...apps, ...shell]), apps);
+  assert.deepEqual(carried([...apps, ...shell]), apps);
 });

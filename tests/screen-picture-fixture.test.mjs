@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import { createRequire } from 'node:module';
+import { runPictureQa } from './fixtures/r7A-qa-picture-harness.mjs';
 const text = fs.readFileSync(new URL('../tools/qa-screen-picture-translate.cjs', import.meta.url), 'utf8');
 const start = text.indexOf('await page.addInitScript(') + 'await page.addInitScript('.length;
 const end = text.indexOf('\n        }, {jpeg:', start) + '\n        }'.length;
@@ -14,14 +15,16 @@ function bridge() {
   setup({jpeg: '', read: {lines: []}, mapping: {'ข้าจะไปออกรบ': "I'm heading to battle"}, chromeLabels: ['Copy translation','Select text','Ask Wizard']});
   return {translate: context.window.ScreenNative.translate, replies};
 }
-test('verdict matchers accept the real multiline pill and reject unrelated verdicts', () => {
-  const patterns = [...text.matchAll(/\/(Already[^/]+)\//g)].map(m => new RegExp(m[1]));
-  assert.equal(patterns.length, 1, 'only the installed87 baseline is expected to give the false verdict');
-  for (const pattern of patterns) {
-    assert.ok(pattern.test('Already in\nEnglish\n▾'));
-    assert.ok(pattern.test('Already in English'));
-    assert.ok(!pattern.test('Thai → English'));
+test('verdict matchers accept the real multiline pill and reject unrelated verdicts', async () => {
+  // the whole QA run (fake Chromium): the baseline page's false English verdict is recognised from its real pill text
+  for (const pill of ['Already in\nEnglish\n▾', 'Already in English']) {
+    const r = await runPictureQa({ baselinePill: pill });
+    assert.equal(r.thrown, null, JSON.stringify(pill)); assert.notEqual(r.exitCode, 1, JSON.stringify(pill));
+    assert.ok(r.checks.some(c => /^baseline .*: false English verdict bypasses vision$/.test(c)), JSON.stringify(pill));
   }
+  const other = await runPictureQa({ baselinePill: 'Thai → English' });
+  assert.ok(other.thrown || other.exitCode === 1, 'a translated pill on the baseline is not taken for its false verdict');
+  assert.ok(!other.checks.some(c => /false English verdict/.test(c)));
 });
 test('synthetic English chrome returns identity, without inventing inference', () => {
   const h = bridge(); h.translate('1', JSON.stringify(['Copy translation','Select text','Ask Wizard']), 'English');
@@ -61,17 +64,35 @@ test('historical bridge rejects the exact synthetic English control', () => {
   vm.runInNewContext('(' + old + ')', context)({jpeg:'',read:{lines:[]},mapping:{},chromeLabels:['Copy translation']});
   assert.throws(() => context.window.ScreenNative.translate('1','["Copy translation"]','English'), /No recorded inference/);
 });
-test('replay contract is the overlay: no panel expectation, geometry required, no invented place', () => {
+test('replay contract is the overlay: no panel expectation, geometry required, no invented place', async () => {
   assert.doesNotMatch(text, /trans\?\.text|state\.pic\.some|scrollTop = sel\.scrollHeight/, 'the old panel contract is gone');
-  // two separate recordings: historical lines-only (plain names) and the geometry pair; no boxes are derived or faked
-  assert.match(text, /recorded\('live-read-image\.json', 'live-translate\.json'\)/);
-  assert.match(text, /recorded\('live-read-image-geometry\.json', 'live-translate-geometry\.json'\)/);
-  assert.match(text, /!\('boxes' in plain\.read\)/);
   assert.doesNotMatch(text, /_drop|linesOnly/);
-  assert.doesNotMatch(text, /touchscreen\.tap\(345, ?100\)/, 'outside tap is chosen and hit-tested, not fixed');
-  assert.match(text, /geometry recording present \(overlay acceptance requires it\)', false/);
-  assert.match(text, /no place invented/);
-  assert.match(text, /'--wz-text'/); assert.doesNotMatch(text, /--wz-ink/);
+  assert.doesNotMatch(text, /--wz-ink/);
+  // An honest page passes every check: baseline, lines-only (nothing placed) and the geometry candidate, both skins.
+  const ok = await runPictureQa();
+  assert.equal(ok.receipt.ok, true, JSON.stringify(ok.receipt.checks.filter(c => !c.ok)));
+  assert.equal(ok.receipt.geometry, true);
+  for (const skin of ['nebula', 'grove']) for (const v of ['baseline', 'lines-only', 'candidate']) assert.ok(ok.checks.includes(`${v} ${skin}: no runtime errors`), `${v} ${skin} ran`);
+  assert.ok(!ok.checks.some(c => /panel opens|text panel/.test(c) && !/no automatic panel/.test(c)), 'no check expects a panel');
+  // The skin roles it applies are the Appearance --wz-* roles.
+  assert.ok(ok.roles.includes('--wz-text') && ok.roles.includes('--wz-panel'));
+  // The outside tap is the hit-tested point outsideTarget chose, not a fixed spot.
+  assert.ok(ok.actions.some(a => a[0] === 'tap' && a[1] === 33 && a[2] === 444));
+  assert.ok(!ok.actions.some(a => a[0] === 'tap' && a[1] === 345 && a[2] === 100));
+  // A page that paints a line with no recorded box (an invented place) fails the lines-only check.
+  const invented = await runPictureQa({ invent: true });
+  assert.equal(invented.receipt.ok, false); assert.equal(invented.exitCode, 1);
+  assert.deepEqual(invented.receipt.checks.filter(c => !c.ok).map(c => c.name).filter(n => /no place invented/.test(n)),
+    ['lines-only nebula: no place invented (nothing painted for the picture)', 'lines-only grove: no place invented (nothing painted for the picture)']);
+  // No geometry recording: the candidate does not run and the run fails rather than claim the overlay.
+  const none = await runPictureQa({ geometry: false });
+  assert.equal(none.receipt.geometry, false); assert.equal(none.receipt.ok, false);
+  assert.ok(!none.checks.some(c => c.startsWith('candidate')));
+  assert.deepEqual(none.receipt.checks.at(-1), { name: 'geometry recording present (overlay acceptance requires it)', ok: false });
+  // The two recordings stay separate: a plain (lines-only) recording with boxes is refused before anything runs.
+  const mixed = await runPictureQa({ plainBoxes: true });
+  assert.match(String(mixed.thrown?.message), /historical plain recording is lines-only/);
+  assert.equal(mixed.actions.length, 0);
 });
 
 // The in-page touch helpers, against a small geometric DOM double (css px, 411x914 like qa-screen-page).
@@ -118,21 +139,24 @@ test('settle waits need three unchanged frames in the wanted state; copy target 
   const blocked = dom({ tCopy: { r: [16, 790, 140, 850] }, sheet: { r: [8, 701, 403, 858] } }); // a sheet on top
   assert.equal(run(hitTarget, blocked, 'tCopy').ok, false);
 });
-test('--metrics-only is opt-in: only the geometry candidate and the two layout checks; default runs unchanged', () => {
-  assert.match(text, /const METRICS_ONLY = process\.argv\.includes\('--metrics-only'\);/);
-  assert.match(text, /mode: METRICS_ONLY \? 'exact-layout-diagnostic' :/);
-  assert.match(text, /const runs = METRICS_ONLY \? \(hasGeometry \? \[\['candidate', geometry\]\] : \[\]\)\n\s+: \[\['baseline', plain\], \['lines-only', plain\], \.\.\.\(hasGeometry \? \[\['candidate', geometry\]\] : \[\]\)\];/);
-  const cand = text.slice(text.indexOf("} else {\n          await waitFor(settled);"));
-  const stop = cand.indexOf('if (METRICS_ONLY) {'), body = cand.slice(0, stop);
-  assert.ok(stop > 0, 'the diagnosis stops inside the candidate branch');
-  // before the stop: settle, metrics, and exactly the two layout checks; nothing interactive
-  assert.deepEqual([...body.matchAll(/check\('candidate '\+skin\+': ([^']+)'/g)].map(m => m[1]),
-    ['every painted line fits its own box (no clipped wrap)', 'no painted line covers another']);
-  assert.doesNotMatch(body, /touchscreen|\.click\(|locator\(|hitTarget|outsideTarget/);
-  const after = cand.slice(stop, cand.indexOf('}', stop) + 1);
-  assert.match(after, /await shot\('-overlay'\); await page\.close\(\); continue;/);
-  // every interaction and other candidate check still exists after it, for the default run
-  for (const kept of ["locator('#orig').click()", 'outsideTarget', "hitTarget, 'tCopy'", 'Original reveals the untouched picture'])
-    assert.ok(cand.indexOf(kept) > stop, kept);
-  assert.match(text, /fs\.writeFileSync\(path\.join\(out,'receipt\.json'\)/, 'receipt written in finally either way');
+test('--metrics-only is opt-in: only the geometry candidate and the two layout checks; default runs unchanged', async () => {
+  const m = await runPictureQa({ metricsOnly: true });
+  assert.equal(m.receipt.mode, 'exact-layout-diagnostic');
+  assert.deepEqual(m.checks, ['nebula', 'grove'].flatMap(skin => [`candidate ${skin}: every painted line fits its own box (no clipped wrap)`, `candidate ${skin}: no painted line covers another`]));
+  assert.deepEqual(m.actions.filter(a => a[0] !== 'goto'), [], 'nothing tapped or clicked');
+  assert.deepEqual(m.actions.map(a => a[1]), ['screen.html', 'screen.html'], 'only the current page, no baseline');
+  assert.deepEqual(m.shots, ['candidate-nebula-overlay.png', 'candidate-grove-overlay.png'], 'a settled overlay screenshot per skin');
+  // Default: every run and every interaction, as before.
+  const d = await runPictureQa();
+  assert.match(d.receipt.mode, /^recorded-installed-private-inference-replay/);
+  for (const kept of ['baseline nebula: false English verdict bypasses vision', 'lines-only grove: unplaced lines remain copyable',
+    'candidate nebula: Original reveals the untouched picture', 'candidate grove: real outside tap dismisses and keeps the overlay',
+    'candidate grove: Copy translation (hit-tested) has each recovered line exactly once']) assert.ok(d.checks.includes(kept), kept);
+  assert.ok(d.actions.some(a => a[0] === 'click' && a[1] === '#orig'));
+  assert.ok(d.actions.some(a => a[0] === 'tap' && a[1] === 77 && a[2] === 820), 'Copy tapped where hitTarget found it');
+  // The receipt is written in finally, even when a run fails part-way.
+  const failed = await runPictureQa({ failWait: true });
+  assert.equal(failed.receipt?.ok, false); assert.match(failed.receipt.error, /timeout/);
+  const failedMetrics = await runPictureQa({ metricsOnly: true, failWait: true });
+  assert.equal(failedMetrics.receipt?.mode, 'exact-layout-diagnostic');
 });

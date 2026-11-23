@@ -42,12 +42,31 @@ test('v11 refused startup paths have typed, stable synthetic answers; neighbours
  fx.resetRefusals();
 });
 
-test('offline proof requires the rendered mic and nonzero geometry without weakening pointer checks', () => {
- const source = read('qa/scripts/qa-offline-popup.cjs');
- assert.match(source, /WizConfig\.live && WizConfig\.has\('voice'\)/);
- assert.match(source, /locator\(phone \? '#orb' : '#micBtn'\)\.waitFor\(\{ state: 'visible' \}\)/);
- assert.match(source, /r\.width > 0 && r\.height > 0/);
- assert.match(source, /document\.elementFromPoint/);
- assert.match(source, /assert\.ok\(geometry\.orbHit/);
- assert.match(source, /page\.mouse\.click/);
+test('offline proof requires the rendered mic and nonzero geometry without weakening pointer checks', async () => {
+  // the proof script's own steps (qa/scripts/qa-offline-popup.cjs), run against a fake page
+  const source = readFileSync(new URL('../qa/scripts/qa-offline-popup.cjs', import.meta.url), 'utf8');
+  const lineOf = k => { const i = source.indexOf(k); if (i < 0) return `throw new Error(${JSON.stringify('missing step: ' + k)})`; return source.slice(source.lastIndexOf('\n', i) + 1, source.indexOf('\n', i)); };
+  const steps = (phone, page, WizConfig) => vm.runInNewContext(`(async () => {\n${lineOf('await page.waitForFunction(() => WizConfig.live')}\n${lineOf("await page.locator(phone ? '#orb' : '#micBtn').waitFor(")}\n${lineOf('await page.mouse.click(')}\n})()`, { phone, page, WizConfig });
+  for (const phone of [true, false]) {
+    const log = [], box = { x: 10, y: 20, width: 40, height: 60 };
+    const page = { waitForFunction: async fn => log.push(['ready', fn()]), locator: sel => ({ waitFor: async o => log.push(['wait', sel, o.state]), boundingBox: async () => box }), mouse: { click: async (x, y) => log.push(['click', x, y]) } };
+    await steps(phone, page, { live: true, has: k => k === 'voice' });
+    const sel = phone ? '#orb' : '#micBtn';
+    assert.deepEqual(log, [['ready', true], ['wait', sel, 'visible'], ['click', 30, 50]], 'the rendered mic, then a real pointer at its centre');
+    const off = []; await steps(phone, { ...page, waitForFunction: async fn => off.push(fn()) }, { live: true, has: () => false });
+    assert.deepEqual(off, [false], 'a box without voice is not ready');
+  }
+  // the hit test itself: nonzero geometry, the orb (or its wrap) under its own centre, never the offline card
+  const geo = source.slice(source.indexOf('const geometry = await page.evaluate(') + 'const geometry = await page.evaluate('.length, source.indexOf('}, phone);', source.indexOf('const geometry = await page.evaluate(')) + 1);
+  const run = ({ w = 40, h = 60, hit = 'orb', cardInWrap = false } = {}) => {
+    const el = (id, parent = null) => ({ id, tagName: 'DIV', parent, contains(n) { for (; n; n = n.parent) if (n === this) return true; return false; }, closest(s) { for (let n = this; n; n = n.parent) if ('#' + n.id === s) return n; return null; } });
+    const wrap = el('orbWrap'), orb = el('orb', wrap), card = el('card', cardInWrap ? wrap : null), inner = el('cardText', card); card.parentElement = { getAttribute: () => 'false' };
+    orb.getBoundingClientRect = () => ({ left: 0, top: 0, width: w, height: h, bottom: h });
+    card.getBoundingClientRect = () => ({ x: 0, y: 0, width: 100, height: 50, bottom: 50 });
+    const document = { querySelector: s => (s === '.wx-off-card' ? card : s === '#orb' || s === '#micBtn' ? orb : null), elementFromPoint: () => ({ orb, wrap, card: inner }[hit] || null) };
+    return vm.runInNewContext(`(${geo})(true)`, { document, getComputedStyle: () => ({ backgroundColor: 'rgb(0, 0, 0)' }), JSON }).orbHit;
+  };
+  assert.equal(run(), true); assert.equal(run({ hit: 'wrap' }), true, '#orbWrap legitimately owns the hit');
+  assert.equal(run({ w: 0 }), false, 'an unrendered orb fails'); assert.equal(run({ h: 0 }), false);
+  assert.equal(run({ hit: 'card' }), false, 'the card covering it fails'); assert.equal(run({ hit: 'card', cardInWrap: true }), false, 'even a card drawn inside the orb\'s wrap'); assert.equal(run({ hit: 'none' }), false);
 });

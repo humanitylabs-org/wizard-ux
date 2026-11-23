@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 import { withShellParts } from './fixtures/shell-parts.mjs';
+import { runRecording } from './fixtures/source-slice.mjs';
+import { partScope, runPartRecording } from './fixtures/r5A-parts.mjs';
 
 const source = withShellParts(readFileSync(new URL('../web/core/background-audio.js', import.meta.url),'utf8'));
 const shell = withShellParts(readFileSync(new URL('../web/app.js', import.meta.url),'utf8'));
@@ -76,7 +78,16 @@ test('closing the whole Music desk stops playback before deleting windows',()=>{
 test('automatic bound-view disposal preserves background playback',()=>{
   const {c,calls,W}=shellFixture();c.closeWin('music',true,true);
   assert.equal(calls.length,0);assert.equal(W.music,undefined);
-  assert.match(shell,/close: id => closeWin\(id, true, true\)/);
-  assert.match(shell,/if \(b\) closeWin\(b.id, true, true\)/);
-  assert.match(shell,/try \{ closeWin\(w.id, true, true\)/);
+});
+// Every automatic bound-view close in the real phone shell passes (quiet, automatic), so it never stops the playback.
+test('the bound manager, the desk re-check and unbind all close bound views as automatic disposal',async()=>{
+  const closes=[],closeWin=(...a)=>closes.push(a);
+  let made=null;const scope=partScope({WosBoundView:{create:o=>{made=o;return {shown(){}};}}});
+  const appVars={W:{music:{id:'music',bound:'chat',bsid:'t1'},chat:{id:'chat',app:'chats',thread:'t2'}},desks:[{focus:'music',wins:['music','chat']}],idx:0,boundBusy:false};
+  const B=(await runPartRecording('app-bound.js','appParts','bound',{appVars,closeWin,deskOf:()=>0,winEl:()=>null,CHATS:{ch:()=>({})},$$:()=>[],secOf:()=>null},scope)).out;
+  B.threadShown('chat',{});made.close('music');
+  B.syncBound();
+  const U=runRecording(`${functionSource('unbind')}\nthis.unbind=unbind;`,{boundOf:()=>({id:'music'}),closeWin});U.unbind('chat');
+  assert.deepEqual(closes,[['music',true,true],['music',true,true],['music',true,true]],'manager close, desk re-check, unbind');
+  assert.equal(appVars.boundBusy,false);
 });

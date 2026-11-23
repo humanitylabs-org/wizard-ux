@@ -4,7 +4,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import vm from 'node:vm';
 import { withShellParts } from './fixtures/shell-parts.mjs';
+import { between, block } from './fixtures/source-slice.mjs';
 
 const read = f => withShellParts(readFileSync(new URL(`../${f}`, import.meta.url), 'utf8'));
 const appsJs = read('web/core/apps.js');
@@ -30,7 +32,7 @@ function harness({ readyAfter = Infinity, stuck = false } = {}) {
   const DateStub = { now: c.now };
   new Function('window', 'loadRemote', 'setTimeout', 'clearTimeout', 'Date', body)(window, loadRemote, c.setT, c.clearT, DateStub);
   const opts = { openable: id => (APP[id]?.url ? APP[id] : null), name: id => APP[id]?.name, say: t => said.push(t) };
-  return { wait: id => window.WizCore.whenOpenable(id, opts), said, APP, reads: () => reads, pump: c.pump };
+  return { wait: id => window.WizCore.whenOpenable(id, opts), waitWith: (id, o) => window.WizCore.whenOpenable(id, o), said, APP, reads: () => reads, pump: c.pump };
 }
 
 test('an already openable app comes back at once, with no read and no note', async () => {
@@ -73,19 +75,66 @@ test('a read that never settles still shows Starting… and still ends', async (
   assert.match(h.said[1], /still starting/);
 });
 
+// The shell's real wizard:open-app handler (sliced from the phone or desktop shell, parts put back) over the real
+// WizCore.whenOpenable above: a Store frame posts, the shell waits for the app's page and opens it.
+function shell(file, { readyAfter = 4 } = {}) {
+  const src = read(file);
+  const from = src.indexOf('  const whenOpenable = (id, hint) =>');
+  const at = src.indexOf("d.type !== 'wizard:open-app'", from), to = src.indexOf('\n  });\n', at);
+  assert.ok(from > 0 && at > from && to > at, `${file}: the open-app handler`);
+  const h = harness({ readyAfter }), listeners = {}, toasts = [], opened = [], closed = [];
+  const store = { contentWindow: {}, closest: () => host }, host = { dataset: { win: 'w1' }, isConnected: true };
+  const ctx = {
+    window: { WizCore: {} },
+    APP: h.APP, hostedOpenable: id => (h.APP[id]?.url ? h.APP[id] : null), toast: (...a) => toasts.push(a), esc: v => String(v),
+    location: { origin: 'https://wizard.test' }, addEventListener: (t, f) => (listeners[t] ||= []).push(f),
+    document: { querySelectorAll: () => [store] }, W: { w1: { appId: 'app-store' } },
+    openApp: a => { opened.push(a.id); }, closeWin: id => { closed.push(id); },
+  };
+  ctx.window.WizCore.whenOpenable = (id, o) => h.waitWith(id, o);
+  vm.runInNewContext(src.slice(from, to + 6), ctx);
+  const post = async (data, source = store.contentWindow) => {
+    const done = Promise.all((listeners.message || []).map(f => f({ origin: 'https://wizard.test', source, data })));
+    await h.pump(); await done;
+  };
+  return { post, toasts, opened, closed, h, ctx };
+}
+
 for (const file of ['web/app.js', 'web/desktop/desktop.js']) {
-  test(`${file}: the Store's open-app message waits through WizCore.whenOpenable, not one refresh`, () => {
-    const src = read(file);
-    const i = src.indexOf("d.type !== 'wizard:open-app'");
-    const handler = src.slice(i, src.indexOf('});', i));
-    assert.match(handler, /await whenOpenable\(d\.id, d\.name\)/);
-    assert.doesNotMatch(handler, /refreshApps/);
-    assert.match(src, /const whenOpenable = \(id, hint\) => window\.WizCore\.whenOpenable\(id, \{ openable: hostedOpenable, name: id => APP\[id\]\?\.name \|\| /);
+  test(`${file}: the Store's open-app message waits through WizCore.whenOpenable, not one refresh`, async () => {
+    const s = shell(file, { readyAfter: 4 });
+    await s.post({ type: 'wizard:open-app', id: 'tracker', name: 'WizardOS Tracker', replace: true });
+    assert.equal(s.h.reads(), 4, 'kept re-reading the app list until the page was there');
+    assert.deepEqual(s.opened, ['tracker'], 'then opened it');
+    assert.deepEqual(s.closed, ['w1'], 'Get more: the app takes the Store window\'s place');
+    assert.deepEqual(s.toasts.map(t => t[1]), ['WizardOS Tracker is starting…']);
+    // Never ready: says so instead of doing nothing, and opens nothing.
+    const never = shell(file, { readyAfter: Infinity });
+    await never.post({ type: 'wizard:open-app', id: 'tracker', name: 'WizardOS Tracker' });
+    assert.deepEqual(never.opened, []);
+    assert.match(never.toasts.at(-1)[1], /^WizardOS Tracker is installed but still starting/);
+    // Only trusted system frames may ask.
+    const other = shell(file, { readyAfter: 1 });
+    await other.post({ type: 'wizard:open-app', id: 'tracker' }, {});
+    other.ctx.W.w1.appId = 'notes'; await other.post({ type: 'wizard:open-app', id: 'tracker' });
+    assert.deepEqual(other.opened, []); assert.equal(other.h.reads(), 0);
   });
 }
 
-test('the Store names the app in its open-app message, so the starting note says which app', () => {
-  const src = read('web/store/store.js');
-  assert.match(src, /type: 'wizard:open-app', id, name \}/);
-  assert.match(src, /type: 'wizard:open-app', id: openId\(a\), name: a\.name, replace: true/);
+test('the Store names the app in its open-app message, so the starting note says which app', async () => {
+  const store = read('web/store/store.js'), posted = [];
+  const base = { parent: { postMessage: m => posted.push(JSON.parse(JSON.stringify(m))) }, location: { origin: 'https://wizard.test', search: '?open=1' }, URLSearchParams, toast() {}, esc: v => String(v) };
+  // Open from My apps after the Starting… wait.
+  const c = { ...base, S: { apps: [{ id: 'tracker', name: 'WizardOS Tracker' }], late: new Set() }, openId: x => x.id };
+  vm.runInNewContext(block(store, '  async function openInShell(id)') + '\nthis.openInShell = openInShell;', c);
+  await c.openInShell('tracker');
+  // Get more (?open=1) right after an install: in place of the Store window.
+  const line = between(store, "if (framed && new URLSearchParams(location.search).get('open') === '1' && openId(a))", '\n');
+  vm.runInNewContext(line, { ...base, framed: true, a: { id: 'wizardos-tracker', name: 'WizardOS Tracker' }, openId: () => 'tracker' });
+  assert.equal(JSON.stringify(posted), '[{"type":"wizard:open-app","id":"tracker","name":"WizardOS Tracker"},'
+    + '{"type":"wizard:open-app","id":"tracker","name":"WizardOS Tracker","replace":true}]');
+  // The shell's note then names it.
+  const s = shell('web/app.js', { readyAfter: 3 });
+  await s.post(posted[1]);
+  assert.equal(s.toasts[0][1], 'WizardOS Tracker is starting…');
 });

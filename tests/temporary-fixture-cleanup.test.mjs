@@ -10,10 +10,11 @@ import { spawnSync } from 'node:child_process';
 test('logo, device, Customize and asset-stamping fixtures leave no temporary directories', t => {
   const root = mkdtempSync(join(tmpdir(), 'ux-fixture-cleanup-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
-  const files = ['app-logos', 'devices-groups', 'versioned-assets', 'wizard-customize'].map(name => new URL(`./${name}.test.mjs`, import.meta.url).pathname);
+  const files = ['app-logos', 'devices-groups', 'versioned-assets', 'versioned-assets-restamp', 'versioned-assets-boot', 'wizard-customize'].map(name => new URL(`./${name}.test.mjs`, import.meta.url).pathname);
   const child = spawnSync(process.execPath, ['--test', ...files], {
     env: { ...process.env, TMPDIR: root, TMP: root, TEMP: root }, encoding: 'utf8', timeout: 60_000,
   });
   assert.equal(child.status, 0, child.error?.message || child.stdout + child.stderr);
-  assert.deepEqual(readdirSync(root), [], 'fixture hooks must delete their own files, not rely on a worker sweep');
+  const left = readdirSync(root);
+  assert.equal(left.length, 0, 'fixture hooks must delete their own files, not rely on a worker sweep: ' + left.join(', '));
 });

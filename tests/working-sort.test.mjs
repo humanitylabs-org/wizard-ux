@@ -7,6 +7,10 @@ import '../web/core/chats-list-model.js';
 import { withParts } from './fixtures/chats-parts.mjs';
 import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
 import { withWebParts } from './fixtures/web-parts.mjs';
+import { withSkinHostParts } from './fixtures/skin-host-parts.mjs';
+import { listFixture } from './fixtures/chats-list-render.mjs';
+import { withSettingsParts } from './fixtures/settings-parts.mjs';
+import { createDocument } from './fixtures/mini-dom.mjs';
 const M = globalThis.WizChatsListModel;
 const at = n => `2026-11-06T${String(n).padStart(2, '0')}:00:00Z`;
 const ids = rows => Array.from(rows, r => r.id);
@@ -47,13 +51,25 @@ test('Working time sort falls back for sessions without request clocks, without 
   assert.equal(M.workingAt({ requestAt: at(2), updatedAt: at(9) }, live), at(2), 'request clock remains authoritative');
 });
 test('every surface has a separate Working control, and Settings uses the shared registry', () => {
-  assert.match(read('web/layouts/ai-apps/desktop.js'), /openSortMenu\(sort, 'working-sort'\)/);
-  assert.match(read('web/layouts/ai-apps/layout.js'), /'aria-label': 'Sort Working'/);
-  assert.match(read('web/core/settings.js'), /id: 'working-order', page: 'chats'/);
-  assert.match(withParts(read('web/core/chats.js')), /function workingOrderBar\(\)/);
-  assert.doesNotMatch(withParts(read('web/core/chats.js')), /<select data-working-order|Sort Working <select|ch-working-sort/, 'no native select in the Chats list');
-  assert.doesNotMatch(read('web/core/chats.css'), /ch-working-sort/);
-  assert.match(withLiveParts(read('web/live.js')), /workingOrder: \['wos.chats.workingOrder.v1'/);
+  // (the phone AI apps drawer's own "Sort Working" control: ai-apps-view.test.mjs; the stock Chats pills: below; the
+  // saved, box-synced choice: working-order-two-devices.test.mjs)
+  // Settings › Chats: the real registry entry draws the shared WORKING_SORTS and saves through WizLive.setWorkingOrder
+  const doc = createDocument(), sets = [];
+  const s = { console, URL, setTimeout, clearTimeout, CSS: { escape: String }, navigator: { userAgent: 'Desktop' }, document: doc, location: { host: 'x.test' }, WizCore: {},
+    WizChatsListModel: M, WizLive: { workingOrder: () => 'newest', setWorkingOrder: o => sets.push(o) }, addEventListener() {}, removeEventListener() {} };
+  s.window = s;
+  vm.runInNewContext(withSettingsParts(read('web/core/settings.js')), s);
+  const root = doc.createElement('div'); doc.body.appendChild(root);
+  s.WosSettings.mount(root, { shell: 'phone', live: { ok: true } }).focus('chats');
+  const sel = root.querySelector('select[data-settings-working-order]');
+  assert.ok(sel, 'on the Chats page'); assert.equal(sel.getAttribute('aria-label'), 'Sort Working');
+  assert.deepEqual(sel.querySelectorAll('option').map(o => [o.getAttribute('value'), o.textContent]), M.WORKING_SORTS.map(([v, w]) => [v, w]), 'the shared registry');
+  assert.equal(sel.querySelector('option[selected]').getAttribute('value'), 'newest', 'the saved choice');
+  sel.value = 'oldest'; sel.dispatchEvent({ type: 'input', bubbles: true });
+  assert.deepEqual(sets, ['oldest']);
+  // the stock Chats list draws its Working pills (workingOrderBar), never a native select
+  const html = listFixture({}).render('');
+  assert.doesNotMatch(html, /<select/, 'no native select in the Chats list');
 });
 
 // The Chats list Working control is Ready's order bar (James, 6 Nov 2026: the native select looked foreign on phone).
@@ -93,18 +109,37 @@ test("Ready's bar markup is byte-identical to the pre-reuse template", () => {
   for (const r of ['newest', 'oldest', 'priority', 'subject']) assert.equal(barContext('alphabetical', r).orderBar('Order Ready', 'data-rdyorder', ORDERS, r, o => LABEL[o]), legacy(r));
 });
 test('Working tap handler writes the shared preference through setWorkingOrder (which repaints synchronously)', () => {
-  const h = block("    const wo = e.target.closest('[data-workorder]');", "    const rg = e.target.closest('[data-rdyorder]');");
-  assert.match(h, /LIVE\.setWorkingOrder\?\.\(nextOrder\(cur, wo\.dataset\.workorder, WORKING_ORDERS\)\)/);
+  // the list's tap: Newest on an A-to-Z list asks live.js for Newest, Newest again for Oldest
+  const c = barContext('alphabetical'), asked = [];
+  c.LIVE.setWorkingOrder = o => (asked.push(o), true);
+  vm.runInContext(`this.tap = e => { ${block("    const wo = e.target.closest('[data-workorder]');", "    const rg = e.target.closest('[data-rdyorder]');")} };`, c);
+  const tap = o => c.tap({ target: { closest: q => (q === '[data-workorder]' ? { dataset: { workorder: o } } : null) } });
+  assert.equal(tap('newest'), true); assert.deepEqual(asked, ['newest']);
+  c.LIVE.workingOrder = () => 'newest'; tap('newest'); assert.deepEqual(asked, ['newest', 'oldest']);
+  // live.js: the list paints (wos:prefs) before the preference write goes out, and a repeat writes nothing
   const live = withLiveParts(read('web/live.js')), set = live.slice(live.indexOf('    setWorkingOrder: o =>'), live.indexOf('    prefOps,'));
-  assert.ok(set.indexOf("dispatchEvent(new Event('wos:prefs'))") < set.indexOf('putPrefs({ workingOrder: o })'), 'paint before the preference write');
-  assert.match(block('  window.addEventListener(\'wos:prefs\', () => {\n    try { const v = localStorage.getItem(READY_ORDER_KEY)', '  // Switching to or from Novairecito'), /renderChats\(W\[id\]\)/);
+  const order = [], store = new Map();
+  const L = vm.runInNewContext(`({ ${set} })`, { window: { WizChatsListModel: M, dispatchEvent: e => order.push('paint:' + e.type) }, Event: class { constructor(t) { this.type = t; } },
+    localStorage: { getItem: k => store.get(k) ?? null, setItem: (k, v) => store.set(k, v) }, putPrefs: p => order.push('write:' + p.workingOrder) });
+  assert.equal(L.setWorkingOrder('newest'), true);
+  assert.deepEqual(order, ['paint:wos:prefs', 'write:newest']);
+  L.setWorkingOrder('newest'); assert.equal(order.length, 2, 'the same choice again writes nothing');
+  assert.equal(L.setWorkingOrder('bogus'), false);
+  // chats.js: wos:prefs repaints every Chats window
+  const painted = [], on = {};
+  vm.runInNewContext(block("  window.addEventListener('wos:prefs', () => {\n    try { const v = localStorage.getItem(READY_ORDER_KEY)", '  // Switching to or from Novairecito'),
+    { window: { addEventListener: (t, f) => { on[t] = f; } }, localStorage: { getItem: () => null }, READY_ORDER_KEY: 'k', READY_ORDERS: [], readyOrder: 'newest',
+      CH: { a: {}, b: {} }, W: { a: { id: 'a' }, b: { id: 'b' } }, renderChats: w => painted.push(w.id) });
+  on['wos:prefs'](); assert.deepEqual(painted, ['a', 'b']);
 });
+
 test('collapsing Working hides its order bar too (James, 6 Nov 2026: minimised Working shows no A to Z)', () => {
-  const src = withParts(read('web/core/chats.js')), at = src.indexOf('workingOrderBar()', src.indexOf('function workingOrderBar') + 30);
-  const head = src.slice(Math.max(0, at - 400), at);
-  assert.ok(at > 0, 'the list draws the Working order bar');
-  assert.match(head, /\$\{open \? `<div class="ch-sec-b">\$\{k === 'working' && list\.length \? $/, 'drawn only inside the open section body');
+  // the real list renderer (tests/fixtures/chats-list-render.mjs): the bar is drawn only inside the open section body
+  const f = listFixture();
+  assert.match(f.render(''), /<section[^>]*data-sec="working"[\s\S]*?aria-label="Order Working"/);
+  assert.doesNotMatch(f.toggle('working'), /aria-label="Order Working"/);
 });
+
 // Main versus routed agents (host profile, container, restricted): one owner Working order for every thread, whichever
 // agent owns it — through the stock renderer and the layout list (skin-host api.sessions.list) alike; rows keep their agent.
 test('main and routed-agent Working threads share one order on the stock renderer and the layout list', () => {
@@ -123,6 +158,14 @@ test('main and routed-agent Working threads share one order on the stock rendere
       assert.deepEqual(ids(c.sort(only)), ids(M.workingSort(only, order)), `${order}: ${ag}-only list`);
     }
   }
-  const host = read('web/core/skin-host.js');
-  assert.match(host, /o\.working = window\.WizChatsListModel\.workingSort\(o\.working, readWorkingOrder\(\)/, 'the layout list sorts every Working row, routed ones included');
+  // the layout list (the real skin-host sessions list()) sorts every Working row, routed ones included, in the saved order
+  const host = withSkinHostParts(fs.readFileSync(new URL('../web/core/skin-host.js', import.meta.url), 'utf8'));
+  const from = host.indexOf('        list: opts =>'), prop = host.slice(from, host.indexOf('        open: id =>', from));
+  for (const order of ['alphabetical', 'newest', 'oldest']) {
+    const c = { structuredClone, live: () => true, shell: { sessionList: () => ({ working: mixed, ready: [] }) }, withNoteRows: r => r, readWorkingOrder: () => order, window: { WizChatsListModel: M } };
+    vm.createContext(c); vm.runInContext(`this.api = ({ ${prop} });`, c);
+    const o = c.api.list();
+    assert.deepEqual(ids(o.working), ids(M.workingSort(mixed, order)), `${order}: the layout list's Working order`);
+    assert.deepEqual(o.working.map(r => r.agent || ''), ids(o.working).map(id => mixed.find(r => r.id === id).agent || ''), 'rows keep their agent');
+  }
 });
