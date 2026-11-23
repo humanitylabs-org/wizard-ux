@@ -43,7 +43,7 @@ function fixture({ complete = true, decode = 'resolve' } = {}) {
   const body = new Node('body');
   const context = vm.createContext({ window: { addEventListener() {} }, document: { documentElement: { dataset: { shell: 'phone' } }, body, activeElement: body, createElement: () => (viewer = new Node('mviewer')), getElementById: () => null }, navigator: {}, performance: { now: () => 0 }, setTimeout: fn => { timers.set(++timerId, fn); return timerId; }, clearTimeout: id => timers.delete(id), requestAnimationFrame: () => 1, cancelAnimationFrame() {}, addEventListener() {}, Image: undefined, K: { onChange() {}, notify() {} }, esc: x => x });
   vm.runInContext(media + '\nglobalThis.api = viewer;', context);
-  return { api: context.api, viewer: () => viewer, timers, decoded: () => decoded?.(), flush: () => new Promise(r => setImmediate(r)) };
+  return { api: context.api, viewer: () => viewer, timers, decoded: () => decoded?.(), resolver: () => decoded, flush: () => new Promise(r => setImmediate(r)) };
 }
 
 test('a picture that can be drawn shows in the same call that opened it (no fade, no next frame)', () => {
@@ -83,6 +83,19 @@ test('a reveal that comes after the viewer closed does not show it again', async
   f.decoded(); await f.flush();
   assert.equal(f.viewer().hidden, true);
   assert.equal(f.viewer().classList.contains('open'), false);
+});
+
+test('a late reveal from an earlier open does not show the next photo before it is decoded', async () => {
+  const f = fixture({ complete: false });
+  f.api.open([{ url: '/a.jpg', kind: 'image' }]);
+  const first = f.resolver();
+  f.api.close();
+  f.api.open([{ url: '/b.jpg', kind: 'image' }]);
+  first(); await f.flush();
+  assert.equal(f.viewer().hidden, false);
+  assert.equal(f.viewer().classList.contains('open'), false, 'still clear: /b.jpg is not decoded yet');
+  f.decoded(); await f.flush();
+  assert.equal(f.viewer().classList.contains('open'), true);
 });
 
 test('the viewer has no fade-in transition', () => {

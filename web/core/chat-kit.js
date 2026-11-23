@@ -1273,7 +1273,8 @@
       el.classList.remove('open'); el.hidden = false;
       show();
       const pic = V.items[V.i]?.kind === 'image' ? el.querySelector('.mv-stage img') : null;
-      const reveal = () => { if (V.el === el && !el.hidden) el.classList.add('open'); };
+      const gen = V.gen = (V.gen || 0) + 1; // a reveal from an earlier open (closed, then reopened) must not show this one
+      const reveal = () => { if (V.gen === gen && V.el === el && !el.hidden) el.classList.add('open'); };
       if (!pic || typeof pic.decode !== 'function' || !pic.src || (pic.complete && pic.naturalWidth)) reveal();
       else { const cap = setTimeout(reveal, 150); pic.decode().then(reveal, reveal).finally(() => clearTimeout(cap)); }
       K.onChange(true); el.focus({ preventScroll: true }); return true;
