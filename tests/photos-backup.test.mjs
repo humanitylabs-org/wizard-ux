@@ -93,8 +93,14 @@ test('relay: older apps get the one legacy word; native resume reaches the app',
 });
 
 test('relay accepts desktop window frames as well as phone app frames', () => {
-  assert.match(relaySrc, /SHELL_FRAMES = 'iframe\.appframe, iframe\[data-own-app\]'/);
-  assert.match(read('web/desktop/desktop.js'), /<iframe data-own-app=/);
+  // the desktop window's real frame markup (desktop-resize.js bodyHtml) on a page: the relay finds it with its own selector
+  const D = runRecording(`${block(read('web/desktop/desktop-resize.js'), '  function bodyHtml(w) {')}\nthis.bodyHtml = bodyHtml;`, { appOf: () => ({ id: 'photos', name: 'Photos', url: '/photos/' }), esc: String, window: {} });
+  const page = createDocument(); page.body.innerHTML = `<div class="win">${D.bodyHtml({ id: 'w1', app: 'frame', appId: 'photos' })}</div><div id="ph"><iframe class="appframe" src="/photos/"></iframe></div>`;
+  const found = [], q = page.querySelectorAll.bind(page);
+  const desk = shell({ frames: [] });
+  desk.ctx.document.querySelectorAll = sel => { const list = q(sel); found.push(...list.map(f => f.getAttribute('src'))); return list.map(f => ({ contentWindow: { location: { pathname: f.getAttribute('src') } } })); };
+  desk.fire('message', { source: { location: { pathname: '/x/' } }, origin: 'https://box.example', data: { type: 'wizard-os:photos', id: 'a1', method: 'status' } });
+  assert.deepEqual(found, ['/photos/', '/photos/'], 'both the desktop window frame and the phone app frame are shell frames');
   const s = shell({ frames: ['/photos/'] }); const w = s.iframes[0].contentWindow;
   call(s, w, 'status');
   assert.deepEqual(w.got.at(-1).m, { type: 'wizard-os:photos', id: 'a1', ok: false, error: 'no-bridge' }, 'desktop gets the honest no-bridge answer');
