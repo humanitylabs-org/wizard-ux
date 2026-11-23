@@ -21,8 +21,8 @@ test('Manager and Wisdom use one synced launcher admission policy in both consum
   assert.equal(policy.hasHostedThread('wizard-manager'), true);
   assert.equal(policy.hasHostedThread('wisdom'), true);
   assert.equal(policy.hasHostedThread('other-app'), false);
-  assert.match(chats, /!window\.WizLauncher\?\.hasHostedThread\(w\.appId\)/);
-  assert.match(services, /!window\.WizLauncher\?\.hasHostedThread\(st\.appId\)/);
+  // both consumers run below: Chats' openHosted refuses an app outside the policy (the agent-aware test), and the
+  // shell's hostedThreadAuthorized refuses one ('not a hosted-thread app' in the reply-item test)
   policy.accept({ launcher: { hostedThreadApps: [] } });
   assert.equal(policy.hasHostedThread('wisdom'), false);
 });
@@ -111,8 +111,21 @@ test('agent-aware hosted navigation pins a known running non-main agent before o
   assert.deepEqual(effects, []);
   assert.equal(sandbox.openHosted('w',frame,'sid',{agent:'philosopher'}), true);
   assert.deepEqual(effects, [['pin','sid','philosopher'],['open','w','sid']]);
-  assert.match(services, /a\.status !== 'running' \|\| !window\.WosAgents\.isOther\(agent\)/);
-  assert.match(client, /get threadAgents\(\) \{ return service\?\.nav\?\.threadAgents === true \|\| shellNav\(\); \}/);
+  // an app outside the launcher's hosted-thread policy: nothing opens
+  w.appId = 'other-app'; assert.equal(sandbox.openHosted('w',frame,'sid',{agent:'philosopher'}), false); assert.equal(effects.length, 2);
+  // the shell's admission (app-services threadOpen): only a running agent other than the main one travels
+  const opened = [];
+  const svc = runRecording(between(services, '  const fault = message => new Error(message);', '\n') + '\n' + block(services, '  function threadOpen(st, id, opts, authorized) {') + '\nglobalThis.threadOpen = threadOpen;',
+    { window: { WosChat: { reply: { clean: r => r } }, WosAgents: A } });
+  const st = { appId: 'wisdom', isVisible: () => true, openThread: (id, o) => { opened.push([id, { ...o }]); return true; } };
+  assert.equal(svc.threadOpen(st, 'sid', { agent: 'philosopher' }, true), true);
+  for (const agent of ['stopped', 'hermes', 'unknown', {}]) assert.throws(() => svc.threadOpen(st, 'sid', { agent }, true), /Thread agent unavailable/, JSON.stringify(agent));
+  assert.deepEqual(opened, [['sid', { agent: 'philosopher' }]]);
+  // the app SDK says it can name an agent when the same-origin shell does
+  const said = nav => { const c = appClient({ service: { nav } }); c.api.ready(); return c.api.nav.threadAgents; };
+  assert.equal(said({ threadAgents: true }), true); assert.equal(said({}), false, 'an older shell: no');
+  assert.equal(said({ threadAgents: 'yes' }), false, 'only a real true');
+  const bare = appClient(); bare.api.ready(); assert.equal(bare.api.nav.threadAgents, false, 'no shell services, not sandboxed');
 });
 
 test('native draft admission precedes agent pin/navigation and conflicts do not open a layer',()=>{
