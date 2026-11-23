@@ -156,6 +156,24 @@ test('Welcome: finishes only after the first message is queued; a failed send ke
   assert.ok(!d.W.active); assert.ok(box.calls.includes(SEEN));
 });
 
+test('Welcome: Say hello sends the shown default when the box is empty or blank, typed words as typed (issue 1729)', async () => {
+  for (const [typed, want] of [['', 'Hi! What can you help me with?'], ['   ', 'Hi! What can you help me with?'], ['Hello', 'Hello']]) {
+    const sent = []; const box = fakeBox({ signedIn: true, firstRun: true });
+    const d = device(box, { send: async t => (sent.push(t), { sessionId: 's1' }) });
+    await d.boot();
+    assert.equal(title(d), 'Say hello');
+    assert.match(d.html(), /placeholder="Hi! What can you help me with\?"/, 'the box shows the default it sends');
+    await d.submit(typed); await flush();
+    assert.deepEqual(sent, [want], `typed ${JSON.stringify(typed)}`);
+    assert.ok(!d.W.active, 'Send is never a dead tap: the Welcome finishes');
+  }
+  // A failed send puts the words that went (here the default) back into the box as real text.
+  const box = fakeBox({ signedIn: true, firstRun: true });
+  const d = device(box, { send: async () => null });
+  await d.boot(); await d.submit(''); await flush();
+  assert.ok(d.W.active); assert.equal(d.nodes.textarea.value, 'Hi! What can you help me with?');
+});
+
 test('Welcome: never covers work already started, keeps keys and focus, Back cancels the auto-advance', async () => {
   // A tap or a key before the reads come back keeps it away, and so does a recording.
   const tapped = device(fakeBox());
