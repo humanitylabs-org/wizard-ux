@@ -143,5 +143,18 @@ test('topic emojis are a Novairecito skin feature; every other skin keeps stock 
   assert.match(off, /class="emo sti ready/);
   const offDraft = row('  function draftRow(d, cur) {', [{ key: 'k', text: 'x', files: [], at: 1763700000000 }, null], { skin: 'obsidian' });
   assert.doesNotMatch(offDraft, /ch-topic-emoji|data-chpick/);
-  assert.match(chats, /attributeFilter: \['data-skin'\]/, 'a skin change repaints');
+  // a skin change repaints: the real chats-events part watches data-skin and repaints the open lists when topics flip
+  const obs = [], painted = [];
+  let topic = false;
+  const window = { WizCore: {}, addEventListener() {} };
+  const docEl = {};
+  class MutationObserver { constructor(cb) { this.cb = cb; } observe(el, o) { obs.push({ el, o, cb: this.cb }); } }
+  runRecording(read('web/core/chats-events.js'), { window, document: { documentElement: docEl, addEventListener() {} }, MutationObserver });
+  const W = { list: { id: 'list', thread: null }, thread: { id: 'thread', thread: 't1' } };
+  const part = window.WizCore.chatsParts.events({ topicOn: () => topic, CH: { list: {}, thread: {} }, W, LIVE: {}, H: {}, ch: () => ({}) });
+  part.bindLate({ renderChats: w => painted.push(w.id) });
+  const skinWatch = obs.find(x => x.el === docEl && JSON.stringify(x.o.attributeFilter) === '["data-skin"]');
+  assert.ok(skinWatch, 'watches the page\'s data-skin');
+  skinWatch.cb(); assert.deepEqual(painted, [], 'same topic state: nothing repaints');
+  topic = true; skinWatch.cb(); assert.deepEqual(painted, ['list'], 'to Novairecito: the open list repaints, not the thread');
 });
