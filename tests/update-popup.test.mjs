@@ -3,6 +3,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { createDocument } from './fixtures/mini-dom.mjs';
+import { block, runRecording } from './fixtures/source-slice.mjs';
 
 const src = readFileSync(new URL('../web/core/os-updates.js', import.meta.url), 'utf8');
 const tick = () => new Promise(r => setTimeout(r, 0));
@@ -110,11 +112,17 @@ test('words: the interface never says WizardOS; WizardOS says overnight (Automat
   const fs = await import('node:fs');
   const web = fs.readFileSync(new URL('../web/core/web-update.js', import.meta.url), 'utf8');
   const shown = (web.match(/'[^'\n]*'|`[^`\n]*`/g) || []).filter(x => /WizardOS/.test(x));
-  assert.deepEqual(shown, [], 'no interface notice string names WizardOS');
-  assert.match(web, /class="wb-text">Reloading<em>/);
-  const osu = fs.readFileSync(new URL('../web/core/os-updates.js', import.meta.url), 'utf8');
-  assert.match(osu, /title: 'Interface updated', line: 'Reload to see the changes', action: 'reload', label: 'Reload'/);
-  assert.match(osu, /line: auto \? 'Installs tonight when it’s quiet' : takes/);
-  assert.match(osu, /const takes = st\.quick === true \? 'Takes about 2 minutes' : 'Takes 10–20 minutes';/, 'Ask me says how long: about 2 minutes only when the App Manager says quick');
-  assert.match(osu, /auto \? 'Install now' : 'Install'/);
+  assert.ok(!shown.length, 'no interface notice string names WizardOS: ' + shown.join(', '));
+  // the reload burst the interface draws (real web-update.js burst()) says Reloading
+  const doc = createDocument();
+  runRecording(`${block(web, '  function burst() {')}\nburst();`, { document: doc, Array, Math });
+  assert.match(doc.querySelector('.wos-burst .wb-text')?.textContent || '', /^Reloading/);
+  // the real cards (core/os-updates.js card()) in each state
+  const cardOf = async (status, web) => (await boot({ status, web })).U.card();
+  const pick = c => c && { title: c.title, line: c.line, action: c.action, label: c.label };
+  assert.deepEqual(pick(await cardOf(ST(), { pending: true })), { title: 'Interface updated', line: 'Reload to see the changes', action: 'reload', label: 'Reload' }, 'the interface: a Reload, never WizardOS');
+  assert.deepEqual(pick(await cardOf(ST())), { title: 'WizardOS update', line: 'Takes 10–20 minutes', action: 'apply', label: 'Install' }, 'Ask me says how long');
+  assert.equal((await cardOf(ST({ quick: true }))).line, 'Takes about 2 minutes', 'about 2 minutes only when the App Manager says quick');
+  assert.equal((await cardOf(ST({ quick: 'yes' }))).line, 'Takes 10–20 minutes');
+  assert.deepEqual(pick(await cardOf(ST({ mode: 'auto' }))), { title: 'WizardOS update', line: 'Installs tonight when it’s quiet', action: 'apply', label: 'Install now' }, 'Automatic says when');
 });
