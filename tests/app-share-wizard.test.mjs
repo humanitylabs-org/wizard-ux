@@ -1,5 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
+import { pageAssets } from './fixtures/w1-pages.mjs';
+import { between, runRecording } from './fixtures/source-slice.mjs';
 import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
 import { withServicesParts } from './fixtures/app-services-parts.mjs';
@@ -110,8 +112,15 @@ test('share receipt toast names the actual destination agent, only after durable
  assert.equal(toasts.length,1);
 });
 test('both shells load the same sheet and route Back to it, native imports reuse it without desktop device.js',async()=>{
- for(const p of ['index.html','desktop.html']){const s=read('web/'+p);assert.match(s,/core\/share-wizard.js/);assert.match(s,/core\/share-wizard.css/);}
- for(const p of ['app.js','desktop/desktop.js'])assert.match(read('web/'+p),/WizEscapeBack\.installOwners\(/);
+ for(const p of ['index.html','desktop.html']){const {all}=pageAssets(p);assert.ok(all.includes('core/share-wizard.js'),p);assert.ok(all.includes('core/share-wizard.css'),p);}
+ // each shell's own Back stack gets the shared owners (the real app-back.js / desktop-pickany.js lines, run)
+ for(const [file,from,to] of [['app-back.js','  const phoneBack = window.WizEscapeBack.create();',"\n  phoneBack.watch("],['desktop/desktop-pickany.js','  window.WizEscapeBack.installOwners(escapeBack,','\n']]){
+  let up=true;const SW={WizShareWizard:{get isOpen(){return up;},back:()=>{up=false;return 'share-wizard';}}};
+  const env={window:SW,document:{addEventListener(){}},addEventListener(){},setTimeout,clearTimeout,queueMicrotask,MutationObserver:class{observe(){}disconnect(){}}};
+  vm.runInNewContext(read('web/core/escape-back.js'),env);
+  const own=runRecording(`${file.startsWith('app')?'':'var escapeBack = window.WizEscapeBack.create();\n'}${between(read('web/'+file),from,to)}\nthis.stack = ${file.startsWith('app')?'phoneBack':'escapeBack'};`,{window:SW,appVars:{LINKS:null},desktopVars:{},CHATS:{},LINKS:null});
+  assert.equal(own.stack.run({fallback:()=>'root'}),'share-wizard',file+': Back closes the share sheet first');
+ }
  // Back: the shared owner catalog (core/escape-back.js) closes the sheet first, on both shells.
  let open=true;const W={WizShareWizard:{get isOpen(){return open;},back:()=>{open=false;return 'share-wizard';}}};
  vm.runInNewContext(read('web/core/escape-back.js'),{window:W,document:{addEventListener(){}},addEventListener(){},setTimeout,clearTimeout,queueMicrotask,MutationObserver:class{observe(){}disconnect(){}}});
