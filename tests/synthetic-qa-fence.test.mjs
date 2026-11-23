@@ -16,14 +16,17 @@ test('both entrypoints refuse owner origins before Playwright, requests, output 
  const owner = http.createServer((q,r) => { reached++; r.end('must never be read'); });
  owner.listen(0,'127.0.0.1'); await once(owner,'listening');
  const dir = mkdtempSync(path.join(tmpdir(),'qa-admission-'));
+ // a preload that says when anything loads the Playwright wrapper (tools/qa-playwright.cjs)
+ const spy = path.join(dir,'spy.cjs');
+ writeFileSync(spy,"const M=require('module'),o=M._load;M._load=function(r,...a){if(/qa-playwright\\.cjs$/.test(r))process.stderr.write('PLAYWRIGHT-LOADED\\n');return o.call(this,r,...a);};");
  try {
   for (const helper of ['qa/scripts/qa-hosted-notes-read.cjs','qa/scripts/qa-owner-shell-sync.cjs']) {
    const out = path.join(dir,path.basename(helper));
-   const cp = spawnSync(process.execPath,[path.join(root,helper)],{env:{...process.env,QA_BASE:`http://127.0.0.1:${owner.address().port}`,QA_OUT:out,QA_SHA:'synthetic',QA_FIXTURE:'/missing/catalogue.json'},encoding:'utf8'});
+   const cp = spawnSync(process.execPath,['--require',spy,path.join(root,helper)],{env:{...process.env,QA_BASE:`http://127.0.0.1:${owner.address().port}`,QA_OUT:out,QA_SHA:'synthetic',QA_FIXTURE:'/missing/catalogue.json'},encoding:'utf8'});
    assert.notEqual(cp.status,0); assert.match(cp.stderr,/owner\/network origins refused/);
    assert.equal(existsSync(out),false,'not even the output directory may exist before admission');
+   assert.doesNotMatch(cp.stderr,/PLAYWRIGHT-LOADED/,'refused before the Playwright wrapper is even loaded');
    const src=readFileSync(path.join(root,helper),'utf8');
-   assert.ok(src.indexOf('const fixture = admit(')<src.indexOf("require('../../tools/qa-playwright.cjs')"));
    assert.doesNotMatch(src,/route\.continue\(|r\.continue\(/);
   }
   // Give pending network events a chance to arrive, not merely zero POSTs.

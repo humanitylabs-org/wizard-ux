@@ -5,6 +5,7 @@ import vm from 'node:vm';
 import fixture from '../tools/qa-desktop-frame-fixture.cjs';
 import { withDesktopParts } from './fixtures/desktop-parts.mjs';
 import { runFrameHotkeys } from './fixtures/r8A-frame-hotkeys.mjs';
+import { fakeBox, device } from './fixtures/welcome-harness.mjs';
 const welcome = fs.readFileSync(new URL('../web/core/welcome.js', import.meta.url), 'utf8');
 const desktop = withDesktopParts(fs.readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8'));
 const harness = fs.readFileSync(new URL('../qa/scripts/qa-desktop-frame-hotkeys.cjs', import.meta.url), 'utf8');
@@ -38,9 +39,13 @@ async function boot(options, setup, state) {
 }
 test('actual Welcome boot diagnoses old empty options as disconnected despite DOM removal', async () => {
   const out = await boot({}, {}, ''); assert.deepEqual(out.opened, ['ai']); assert.deepEqual(out.log, ['boot:false::false']);
-  assert(welcome.includes('get active() { return !!el; }'));
-  // The old harness removed a node, not this lexical controller reference.
-  assert(welcome.includes('function close()')); assert(!harness.includes("document.getElementById('wosWelcome')?.remove()"));
+  // The old harness removed a node, not this lexical controller reference: the real Welcome stays active when its
+  // node is pulled out of the page, and only its own close (Back at the start) ends it.
+  const d = device(fakeBox()); await d.boot();
+  assert.equal(d.W.active, true, 'nothing signed in: the Welcome is open');
+  d.doc.overlay.remove(); assert.equal(d.W.active, true, 'DOM removal does not close it');
+  d.W.back(); assert.equal(d.W.active, false, 'its own close does');
+  assert(!harness.includes("document.getElementById('wosWelcome')?.remove()"));
 });
 test('actual Welcome boot accepts fixture schema with done + ready + first_run:false', async () => {
   const out = await boot(fixture.ownerRead('/wizard/hermes/api/model/options'), fixture.ownerRead('/wizard/v1/setup'), 'done');

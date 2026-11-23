@@ -45,7 +45,7 @@ test('v11 refused startup paths have typed, stable synthetic answers; neighbours
 test('offline proof requires the rendered mic and nonzero geometry without weakening pointer checks', async () => {
   // the proof script's own steps (qa/scripts/qa-offline-popup.cjs), run against a fake page
   const source = readFileSync(new URL('../qa/scripts/qa-offline-popup.cjs', import.meta.url), 'utf8');
-  const lineOf = k => { const i = source.indexOf(k); assert.ok(i >= 0, k); return source.slice(source.lastIndexOf('\n', i) + 1, source.indexOf('\n', i)); };
+  const lineOf = k => { const i = source.indexOf(k); if (i < 0) return `throw new Error(${JSON.stringify('missing step: ' + k)})`; return source.slice(source.lastIndexOf('\n', i) + 1, source.indexOf('\n', i)); };
   const steps = (phone, page, WizConfig) => vm.runInNewContext(`(async () => {\n${lineOf('await page.waitForFunction(() => WizConfig.live')}\n${lineOf("await page.locator(phone ? '#orb' : '#micBtn').waitFor(")}\n${lineOf('await page.mouse.click(')}\n})()`, { phone, page, WizConfig });
   for (const phone of [true, false]) {
     const log = [], box = { x: 10, y: 20, width: 40, height: 60 };
