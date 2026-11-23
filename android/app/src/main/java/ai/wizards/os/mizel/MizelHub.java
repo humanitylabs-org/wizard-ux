@@ -92,8 +92,12 @@ public final class MizelHub {
         MizelJournal last = null;
         for (MizelJournal j : store(c).all()) if (last == null || j.createdAt >= last.createdAt) last = j;
         if (last == null) return MizelProtocol.state(false, false, null, 0, 0, 0, "idle", timeout);
-        if (MizelUpdatePolicy.pending(last))
-            return MizelProtocol.state(true, true, last.meetingId, last.mediaMs(), last.pending.size(), 0, "paused_for_update", timeout);
+        if (MizelUpdatePolicy.pending(last)) {
+            boolean death = MizelUpdatePolicy.afterProcessDeath(last);
+            return MizelProtocol.state(true, true, last.meetingId, last.mediaMs(), last.pending.size(),
+                    death ? Math.max(0, System.currentTimeMillis() - last.pausedAt) : 0,
+                    death ? "paused_after_close" : "paused_for_update", timeout);
+        }
         boolean finishing = !last.pending.isEmpty() || last.stopPending();
         return MizelProtocol.state(false, false, last.meetingId, last.mediaMs(), last.pending.size(), 0,
                 finishing ? "finishing" : "done", timeout);

@@ -125,6 +125,8 @@ public final class MizelStore {
         meDir(id).mkdirs();
         j.recording = true;
         j.resumeAfterUpdate = false;
+        j.resumeCause = "";
+        j.exitReason = "";
         j.paused = false;
         j.pausedAt = 0;
         j.lastBeatAt = now;
@@ -166,6 +168,7 @@ public final class MizelStore {
         if (j == null || !j.recording || j.paused || j.stopReason != null || j.stopSent) return false;
         recover(id, now, false); // adopt the final partial WAV without sending /stop
         j.resumeAfterUpdate = true;
+        j.resumeCause = MizelUpdatePolicy.CAUSE_UPDATE;
         j.paused = true;
         j.pausedAt = now;
         j.captureVersion = version;
@@ -173,6 +176,33 @@ public final class MizelStore {
         // A failed save must never grant permission to commit a package update.
         if (save(j)) return true;
         j.resumeAfterUpdate = false;
+        j.resumeCause = "";
+        j.paused = false; j.pausedAt = 0;
+        return false;
+    }
+
+    /**
+     * The process died while this meeting was capturing. Adopt the chunk files already on disk (the torn last one
+     * included) and keep the same session as a durable pause instead of queueing /stop, so a visible Activity or a
+     * notification tap continues the same meeting with the next seq and media time. Returns false (and changes
+     * nothing but the adopted files) when the meeting can't continue: paused, stopped, or its audio ended longer than
+     * {@code limitMs} ago. The pause is dated at the last audio, so the pause limit counts from the death.
+     */
+    public synchronized boolean pauseForProcessDeath(String id, String origin, String exitReason, long now, long limitMs) {
+        MizelJournal j = journals.get(id);
+        if (MizelUpdatePolicy.pending(j)) return true;
+        if (j == null || !j.recording || j.paused || j.stopReason != null || j.stopSent) return false;
+        long diedAt = recover(id, now, false);
+        if (!MizelUpdatePolicy.resumableAfterDeath(j, diedAt, now, limitMs)) return false;
+        j.resumeAfterUpdate = true;
+        j.resumeCause = MizelUpdatePolicy.CAUSE_PROCESS_DEATH;
+        j.exitReason = exitReason == null ? "" : exitReason;
+        j.paused = true;
+        j.pausedAt = diedAt;
+        j.lastBeatAt = Math.max(j.lastBeatAt, diedAt);
+        if (j.uploadOrigin == null || j.uploadOrigin.isEmpty()) j.uploadOrigin = origin;
+        if (save(j)) return true;
+        j.resumeAfterUpdate = false; j.resumeCause = ""; j.exitReason = "";
         j.paused = false; j.pausedAt = 0;
         return false;
     }
@@ -194,13 +224,18 @@ public final class MizelStore {
     public synchronized boolean finishUpdateResume(String id, int version) {
         MizelJournal j = journals.get(id);
         if (!MizelUpdatePolicy.pending(j)) return false;
+        String cause = j.resumeCause;
+        long pausedAt = j.pausedAt;
         j.resumeAfterUpdate = false;
+        j.resumeCause = "";
         j.paused = false;
         j.pausedAt = 0;
         j.captureVersion = version;
         if (save(j)) return true;
         j.resumeAfterUpdate = true;
+        j.resumeCause = cause;
         j.paused = true;
+        j.pausedAt = pausedAt;
         return false;
     }
 
@@ -250,6 +285,7 @@ public final class MizelStore {
         if (j == null) return null;
         j.recording = false;
         j.resumeAfterUpdate = false;
+        j.resumeCause = "";
         j.paused = false;
         j.pausedAt = 0;
         j.stopReason = reason;
@@ -271,6 +307,7 @@ public final class MizelStore {
     private long recover(String id, long now, boolean close) {
         MizelJournal j = journals.get(id);
         if (j == null) return now;
+        // A process-death pause is dated at the death itself, so the meeting ends there, not when it was found.
         long endedAt = Math.max(j.lastBeatAt, j.paused ? j.pausedAt : 0);
         File[] files = meDir(id).listFiles();
         List<int[]> found = new ArrayList<>(); // {seq, isTmp}
@@ -319,6 +356,7 @@ public final class MizelStore {
         if (!close) { save(j); return endedAt; }
         j.recording = false;
         j.resumeAfterUpdate = false;
+        j.resumeCause = "";
         j.paused = false;
         j.pausedAt = 0;
         j.stopReason = MizelPolicy.REASON_PROCESS_DEATH;

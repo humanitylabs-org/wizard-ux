@@ -278,6 +278,20 @@ public final class DeviceBridge implements RecorderService.Listener {
     @JavascriptInterface
     public String captureJournal() { return CaptureJournal.get(activity).status(); }
 
+    /**
+     * Read-only: why earlier WizardOS processes ended (Android's exit records, newest first) and whether WizardOS is
+     * exempt from battery optimisation, so a meeting that stopped early can be explained (wizard-ux#1724).
+     */
+    @JavascriptInterface
+    public String processExits() {
+        org.json.JSONObject o = new org.json.JSONObject();
+        try {
+            o.put("batteryExempt", ai.wizards.os.ProcessExits.batteryExempt(activity))
+                    .put("exits", ai.wizards.os.ProcessExits.refresh(activity).json(ai.wizards.os.ProcessExitLog.KEEP));
+        } catch (org.json.JSONException ignored) { }
+        return o.toString();
+    }
+
     /** The page has the take safe in its durable outbox: release native custody (WEB_OUTBOX_CUSTODY), end the hold. */
     @JavascriptInterface
     public void recDone(String id) {

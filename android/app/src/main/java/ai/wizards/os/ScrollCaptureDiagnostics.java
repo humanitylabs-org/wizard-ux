@@ -95,6 +95,8 @@ final class ScrollCaptureDiagnostics {
     static synchronized boolean hasDeliveredForQa() { return delivered>0 && delivered==generation && !uploading; }
     static void resumed(Context context) {
         Context c=context.getApplicationContext(); init(c);
+        // A new process-exit record (wizard-ux#1724) is reason enough to send the report again.
+        if(ProcessExits.refresh(c).takeUnreported()) arm("process-exit");
         // Focus-only OEM overlays do not necessarily cause onResume; focus gain calls this too.
         MAIN.postDelayed(()->upload(c),750);
     }
@@ -105,6 +107,10 @@ final class ScrollCaptureDiagnostics {
         android.net.Uri u=android.net.Uri.parse(origin);
         if(!Origin.isPrivate(c,u) && !(BuildConfig.DEBUG && ai.wizards.os.device.AppState.isQaOrigin(origin))) return;
         final long sent=generation;
+        try {
+            session.put("processExits",ProcessExits.log(c).json(5));
+            session.put("batteryExempt",ProcessExits.batteryExempt(c));
+        } catch (org.json.JSONException ignored) { }
         final String body=RING.json(session);
         final String cookie=android.webkit.CookieManager.getInstance().getCookie(origin);
         uploading=true;

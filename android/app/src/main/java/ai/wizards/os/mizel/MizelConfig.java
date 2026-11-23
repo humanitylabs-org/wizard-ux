@@ -56,5 +56,8 @@ public final class MizelConfig {
     /** Debug builds: no ticking chronometer, so uiautomator can dump the notification shade (it never idles otherwise). */
     static boolean qaStaticNotification(Context c) { return qa(c, "staticNotification", 0, 0) == 1; }
 
+    /** Debug builds: {"noBatteryPrompt": 1} keeps the one-time battery dialog out of scripted QA runs. */
+    static boolean qaNoBatteryPrompt(Context c) { return qa(c, "noBatteryPrompt", 0, 0) == 1; }
+
     static long keepAfterReadyMs(Context c) { return qa(c, "keepAfterReadyMs", MizelPolicy.KEEP_AFTER_READY_MS, 0); }
 }

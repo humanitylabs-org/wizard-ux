@@ -141,10 +141,23 @@ Base: `https://box.example.ts.net` (release; debug `.qa` builds may be pointed a
 - **Stop:** queues the stop in the journal, releases the mic, keeps the service in front (notification
   "Saving meeting · Uploading N pieces") while uploads progress; if they stall for 90 s it hands over to a
   JobScheduler job (network-constrained, persisted) and the stop goes out after drain.
-- **Process death:** on service restart (START_STICKY), app open, boot/upgrade or the upload job, any journal
-  still marked `recording` is closed: complete-but-unjournalled files and the torn `.tmp` (header repaired) are
-  adopted in seq order, the stop is queued with `process_death`, and the notification "Recording ended
-  unexpectedly at HH:MM" is posted. The microphone is never reopened (Android 14+ forbids background mic starts).
+- **Process death (wizard-ux#1724):** on service restart (START_STICKY), app open or the upload job, a journal
+  still marked `recording` and not paused adopts its complete-but-unjournalled files and the torn `.tmp` (header
+  repaired) in seq order and stays open as a durable pause in the same meeting (`resumeCause: process_death`, no
+  `/stop`). A visible Activity (the app reopening, or a tap on "Recording stopped when the app was closed")
+  restarts capture with the next seq and media time and posts "Recording resumed after the app was closed". The
+  microphone is never reopened from the background (Android 14+ forbids background mic starts). The meeting is
+  closed with `process_death` and "Recording ended unexpectedly at HH:MM" when the mic permission is gone, Android
+  refuses the foreground service, nobody resumes it within the pause limit (a job checks even if the app never
+  opens), the last audio is older than that limit, the meeting was paused or lent, or the phone rebooted. Bridge
+  status: `recording:true, paused:true, phase:paused_after_close`.
+- **Why it died:** each start copies Android's new `ApplicationExitInfo` records (Android 11+) into
+  `filesDir/diagnostics/process-exits.json` (last 20; logcat tag `WizardExit`), names the reason in the notices and
+  the journal (`exitReason`), adds the last 5 to the phone diagnostics report (`processExits`, `batteryExempt`) and
+  answers `WizardOSDevice.processExits()`.
+- **Battery:** the first meeting start on a phone where WizardOS is still battery-optimised opens Android's "let the
+  app always run in the background" dialog once. A microphone foreground service is exempt from Doze and app
+  standby but not from OEM killers (Samsung sleeping apps), which respect only "Unrestricted".
 - **One mic owner:** `MicOwner` (in-process lock). A meeting start while the Everywhere orb or the side button
   is listening → `mic_busy` + toast; an orb/side-button start while a meeting records (not paused) → refused
   with a toast ("A meeting is recording. Pause or stop it first."). Paused meetings do not hold the mic.
