@@ -22,11 +22,6 @@ const cases = () => ['phone', 'desktop'].flatMap(shell => [null, ...SKINS].map(s
     reply: bg(a), ownerPaint: paint(u), replyPaint: paint(a) };
 }));
 let memo; const all = () => (memo ||= cases());
-// The real cascade disagrees with the old token-only check here: on the desktop, image skins paint every .win with
-// --wz-panel (core/skins.css, data-image-background), and Landscapes Light's owner bubble (ink 16%) sits on a window of
-// ink 10%: 1.14:1. Kept as a todo, see below.
-const KNOWN = new Set(['desktop landscapes-light']);
-
 test('the owner bubble is painted by the opaque --wz-owner-message token on every skin', () => {
   assert.ok(SKINS.length >= 11, 'every built-in skin');
   for (const c of all()) {
@@ -43,8 +38,11 @@ const check = c => {
   assert.ok(contrast(c.ownerPaint, c.replyPaint) >= 1.4, `${c.name}: owner vs reply surface ${contrast(c.ownerPaint, c.replyPaint).toFixed(2)}`);
 };
 test('every built-in skin and the dark fallback: distinct surface, AA text', () => {
-  for (const c of all()) if (!KNOWN.has(c.name)) check(c);
+  for (const c of all()) check(c);
 });
-test('desktop Landscapes Light: the owner bubble stands apart from the window it sits on', { todo: 'core/skins.css paints desktop image-skin windows with --wz-panel (ink 10%); the owner bubble is ink 16%: 1.14:1 < 1.4' }, () => {
-  for (const c of all()) if (KNOWN.has(c.name)) check(c);
+// ux#1725: on the desktop, image skins paint every .win with --wz-panel (core/skins.css, data-image-background), so
+// Landscapes Light's owner bubble must stand apart from a window of ink 10% (it was ink 16%: 1.14:1).
+test('desktop Landscapes Light: the owner bubble stands apart from the window it sits on', () => {
+  const c = all().find(x => x.name === 'desktop landscapes-light');
+  assert.ok(c, 'the case runs'); check(c);
 });

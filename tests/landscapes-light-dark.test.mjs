@@ -73,7 +73,7 @@ test('the Landscapes package and Miguel\'s shell rules cover both palettes', () 
     assert.equal(val(d.querySelector('.bub'), skinCss, 'background'), 'var(--wz-owner-message)', shell);
   }
   const d = page('landscapes-light', '');
-  assert.equal(val(d.documentElement, skinCss, '--wz-owner-message'), 'color-mix(in srgb, var(--ink) 16%, var(--bg))', 'Light owner bubble: opaque ink glass');
+  assert.equal(val(d.documentElement, skinCss, '--wz-owner-message'), 'color-mix(in srgb, var(--ink) 30%, var(--bg))', 'Light owner bubble: opaque ink glass, dark enough to stand apart from the desktop window (ux#1725)');
   // Skins are colours only (James, Miguel, 1 Nov 2026): no shell file asks which skin is worn to pick a layout.
   for (const f of ['web/app.js', 'web/live.js', 'web/core/chats.js', 'web/core/chat-models.js', 'web/desktop/desktop.js']) assert.doesNotMatch(read(f), /'landscapes', 'landscapes-light'/, f);
   assert.doesNotMatch(read('web/desktop/desktop.css'), /data-skin="landscapes"\]/);
