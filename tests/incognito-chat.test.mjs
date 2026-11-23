@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs'
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
 import { withShellParts } from './fixtures/shell-parts.mjs';
-import { block, runRecording } from './fixtures/source-slice.mjs';
+import { between, block, runRecording } from './fixtures/source-slice.mjs';
 import { createDocument } from './fixtures/mini-dom.mjs';
 import { cascade } from './fixtures/mini-css.mjs';
 const source = withShellParts(readFileSync(new URL('../web/core/incognito-chat.js', import.meta.url), 'utf8'))
@@ -139,7 +139,16 @@ test('Incognito blocks microphone admission before snapshots, custody or recorde
   assert.equal(busy(phone, 'captureBusy:', { V: { state: 'listen' } }), true); assert.equal(busy(phone, 'captureBusy:', { V: { state: 'idle' } }), false)
   assert.equal(busy(desktop, 'captureBusy:', { VOICE: { state: 'listen' }, dictationFinishing: false }), true); assert.equal(busy(desktop, 'captureBusy:', { VOICE: { state: 'idle' }, dictationFinishing: false }), false)
   const chats = withParts(withShellParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'))) + withShellParts(readFileSync(new URL('../web/core/chats-outbox.js', import.meta.url), 'utf8'))
-  assert.match(chats, /if \(H.captureBusy\?\.\(\)\)/)
+  // Chats' Incognito start (the real click line): a take in progress keeps the chat ordinary and says why
+  const bind = withShellParts(readFileSync(new URL('../web/core/chats-bind.js', import.meta.url), 'utf8'))
+  for (const recording of [true, false]) {
+    const tapped = runRecording(`this.f = (e, id) => {\n${between(bind, "    if (e.target.closest('[data-incog-start]')) {", '\n')}\n}`,
+      { W: { w1: { id: 'w1', thread: '__new__' } }, H: { captureBusy: () => recording }, window: { WizCore: { incognitoOptIn: { enabled: () => true } } }, INC: { start: (...x) => tapped.calls.push(['INC.start', ...x]) }, AGS: () => ({ get: () => ({ id: 'a' }) }), ch: () => ({}), winAgent: () => 'a' })
+    assert.equal(tapped.f({ target: { closest: q => (q === '[data-incog-start]' ? {} : null) } }, 'w1'), true)
+    const names = tapped.calls.map(x => x[0])
+    assert.equal(names.includes('INC.start'), !recording, recording ? 'busy: Incognito never starts' : 'idle: it starts')
+    assert.equal(names.includes('toast'), recording)
+  }
 })
 
 test('every persistent Chats adapter has an Incognito early return; both shells load the same core', async () => {
@@ -161,7 +170,16 @@ test('every persistent Chats adapter has an Incognito early return; both shells 
     d.documentElement.innerHTML = h.slice(h.indexOf('<head'), h.lastIndexOf('</html>'))
     assert.ok(d.querySelectorAll('script[src]').some(x => x.getAttribute('src') === 'core/incognito-chat.js'), file)
   }
-  for (const file of ['app.js', 'desktop/desktop.js']) assert.match(withShellParts(readFileSync(new URL('../web/' + file, import.meta.url), 'utf8')), /CHATS.beforeLeave\(id(?:, checkOnly)?\)/)
+  // both shells ask Chats before a window goes (the real phone closeWin and desktop canLeave)
+  const shellSrc = f => withShellParts(readFileSync(new URL('../web/' + f, import.meta.url), 'utf8'))
+  const asks = []
+  const ph = runRecording(`${block(shellSrc('app-overview.js'), '  function closeWin(id, quiet, preservePlayback = false) {')}\nthis.f = closeWin;`,
+    { appVars: { W: { w1: { id: 'w1', app: 'chats' } }, desks: [{ wins: ['w1'] }] }, deskOf: () => 0, winTitle: () => 'Chat', CHATS: { beforeLeave: id => (asks.push(['phone', id]), false) }, window: {} })
+  ph.f('w1'); assert.equal(ph.calls.some(x => x[0] === 'closeAppPlayback'), false, 'phone: a refused leave closes nothing')
+  const dk = runRecording(`${block(shellSrc('desktop/desktop-windows.js'), '  function canLeave(id, checkOnly = false) {')}\nthis.f = canLeave;`,
+    { desktopVars: { W: { w1: { id: 'w1', app: 'chats' } } }, CHATS: { beforeLeave: (id, c) => (asks.push(['desktop', id, c]), false) }, window: {} })
+  assert.equal(dk.f('w1', true), false)
+  assert.deepEqual(asks, [['phone', 'w1'], ['desktop', 'w1', true]])
 })
 test('preflight of a desktop close never destroys an earlier accepted chat', async () => {
   const s = rig(); await s.component.start('one', s.agent); await s.component.start('two', s.agent);
