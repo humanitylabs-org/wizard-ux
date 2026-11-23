@@ -38,11 +38,13 @@ public class MizelUploadJob extends JobService {
     /**
      * Runs recovery once {@code delayMs} has passed, network or not: a meeting kept open after a process death ends
      * (reason process_death) when nobody resumed it within the pause limit, even if WizardOS is never opened again.
+     * Always replaces the previous check: the caller passes the earliest deadline of every pause still waiting, so a
+     * later death never keeps an older meeting's (already resumed) deadline.
      */
     public static void scheduleCheck(Context c, long delayMs) {
         try {
             JobScheduler js = c.getSystemService(JobScheduler.class);
-            if (js == null || js.getPendingJob(CHECK_JOB_ID) != null) return;
+            if (js == null) return;
             js.schedule(new JobInfo.Builder(CHECK_JOB_ID, new ComponentName(c, MizelUploadJob.class))
                     .setMinimumLatency(Math.max(1_000, delayMs))
                     .setPersisted(true)
@@ -52,6 +54,12 @@ public class MizelUploadJob extends JobService {
 
     @Override
     public boolean onStartJob(JobParameters params) {
+        if (params.getJobId() == CHECK_JOB_ID) {
+            // Synchronous: end expired process-death pauses, hand any upload to the upload job, schedule the next check.
+            Log.i(MizelHub.TAG, "meeting check job started");
+            MeetingRecorderService.recover(this);
+            return false;
+        }
         Log.i(MizelHub.TAG, "upload job started");
         MeetingRecorderService.recover(this, false);
         MizelUploader up = MizelUploader.get(this);

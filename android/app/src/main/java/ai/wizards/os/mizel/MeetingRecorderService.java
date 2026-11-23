@@ -424,7 +424,7 @@ public class MeetingRecorderService extends Service {
             }
             if (!reboot && MizelUpdatePolicy.afterProcessDeath(snap) && !MizelUpdatePolicy.expiredAfterDeath(snap, now, limit)) {
                 notifyUpdatePaused(c, j.meetingId); // still waiting for a visible Activity or a tap
-                waitUntil = Math.max(waitUntil, snap.pausedAt + limit);
+                waitUntil = waitUntil == 0 ? snap.pausedAt + limit : Math.min(waitUntil, snap.pausedAt + limit);
                 continue;
             }
             String exitReason = "";
@@ -437,7 +437,7 @@ public class MeetingRecorderService extends Service {
                 Log.w(TAG, "process died while recording " + j.meetingId + " (" + (exit == null ? "no exit record" : ProcessExitLog.line(exit))
                         + "): kept open at seq " + p.nextSeq + " media_ms=" + p.mediaMs() + " for a resume");
                 notifyUpdatePaused(c, j.meetingId);
-                waitUntil = Math.max(waitUntil, p.pausedAt + limit);
+                waitUntil = waitUntil == 0 ? p.pausedAt + limit : Math.min(waitUntil, p.pausedAt + limit);
                 any = true;
                 continue;
             }
@@ -459,7 +459,8 @@ public class MeetingRecorderService extends Service {
         MizelUploader up = MizelUploader.get(c);
         up.kick();
         if (scheduleJob && (any || up.outstanding())) MizelUploadJob.schedule(c);
-        // Nobody may open the app again: a job ends a process-death pause once the pause limit has passed.
+        // Nobody may open the app again: a job ends a process-death pause once the pause limit has passed (the
+        // earliest one; that run schedules the next).
         if (waitUntil > 0) MizelUploadJob.scheduleCheck(c, waitUntil - System.currentTimeMillis() + 5_000);
         if (any) MizelHub.pushState(c);
     }
