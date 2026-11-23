@@ -8,6 +8,7 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { freshDevice } from './fixtures/w1-experience.mjs';
 import { modelContext } from './fixtures/chats-list-model.mjs';
+import { block } from './fixtures/source-slice.mjs';
 import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
 
 const read = p => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
@@ -84,8 +85,20 @@ test('on: a discovery read that lands after this device continued never brings C
   await ctx.merge(sessions);
   assert.equal(sessions.find(s => s.id === 'old').backgroundResult, null);
   assert.equal(sessions.filter(s => s.id === 'old').length, 1);
+  // the real L.backgroundSettled (a Continue tap): the id is remembered, so a later discovery read never brings it back
   const src = withLiveParts(read('web/live.js'));
-  assert.match(src, /backgroundSettled\(id\) \{ if \(typeof id === 'string' && id\) BACKGROUND_SETTLED\.add\(id\);/);
+  const method = block(src, '    backgroundSettled(id) {');
+  const fresh = discovery({ on: true, payload: listing }).ctx;
+  vm.runInContext(`this.L2 = { sessions: [], ${method} };`, fresh);
+  const rows = [{ id: 'old', status: 'completed', backgroundResult: { id: RID } }];
+  fresh.L2.sessions = rows;
+  fresh.L2.backgroundSettled(RID);
+  assert.equal(rows[0].backgroundResult, null, 'the tapped result hides at once');
+  assert.ok(fresh.settled.has(RID), 'and is remembered on this device');
+  fresh.L2.backgroundSettled(42); assert.equal(fresh.settled.has(42), false, 'only string ids are kept');
+  const later = [{ id: 'old', status: 'completed', backgroundResult: { id: RID } }];
+  await fresh.merge(later);
+  assert.equal(later.find(s => s.id === 'old').backgroundResult, null, 'a read landing after the tap keeps it hidden');
 });
 
 test('on: an older Agent Service without the route leaves Chats as it was', async () => {
