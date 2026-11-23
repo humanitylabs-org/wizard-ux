@@ -70,7 +70,8 @@ public class DeviceBridgeE2eTest {
         assertEquals("one blocked stretch is one hang", before + 1, hangs.size());
         HangLog.Hang h = hangs.get(0);
         assertEquals("main", h.kind);
-        assertTrue("its real length is kept: " + h.ms, h.ms >= 5500);
+        // Counted from the first heartbeat the block swallowed, so up to one tick shorter than the 6 s block.
+        assertTrue("its real length is kept: " + h.ms, h.ms >= 6000 - HangWatch.TICK_MS - 100);
         assertTrue("the stack names what blocked it: " + h.frames, String.join(" ", h.frames).contains("SystemClock.sleep"));
         assertTrue(new HangLog(new java.io.File(new java.io.File(c.getFilesDir(), "diagnostics"), "hangs.json")).hangs().size() > before);
     }
