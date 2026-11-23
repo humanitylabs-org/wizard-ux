@@ -85,12 +85,12 @@ test('fixture observer forwards identical event and this; uninstrumented lane le
 // desktop state machine, with the REAL Settings and skins.js behind its Settings clicks, refusing force clicks
 // (tests/fixtures/r8A-frame-hotkeys.mjs). A broken fake must fail at the exact oracle, never pass another way.
 test('real browser oracle remains exact; no force clicks or alternate expected desktop indexes', async () => {
-  const good = await runFrameHotkeys({ codeOnly: true });
+  const good = await runFrameHotkeys();
   assert.equal(good.report.failedCase, null, good.report.failure); assert.equal(good.report.passed.length, 17); assert.equal(good.exitCode, undefined);
   // Settings › Appearance in the real Settings, both skins picked there (the fake refuses force clicks and a shown intro)
   assert.deepEqual(good.clicks.filter(c => c.startsWith('#dsettings')), ['[data-st-page="appearance"]', '[data-skinfamily="wizard"]', '[data-skinpick="nebula"]', '[data-st-page="appearance"]', '[data-skinfamily="mizel"]', '[data-skinpick="landscapes"]'].map(s => '#dsettings ' + s));
   const fails = async (knobs, failedCase, message) => {
-    const r = await runFrameHotkeys({ codeOnly: true, ...knobs });
+    const r = await runFrameHotkeys(knobs);
     assert.equal(r.exitCode, 1, JSON.stringify(knobs)); assert.equal(r.report.failedCase, failedCase, JSON.stringify(knobs));
     assert.ok(r.report.failure.includes(message), `${JSON.stringify(knobs)}: ${r.report.failure.slice(0, 300)}`);
   };
@@ -103,7 +103,24 @@ test('real browser oracle remains exact; no force clicks or alternate expected d
   await fails({ env: { QA_NEGATIVE_CONTROL: '1' } }, REG, 'baseline Document adapter must specifically be stranded');
   await fails({ stranded: true, env: { QA_NEGATIVE_CONTROL: '1' } }, REG, 'Alt+2 from focused app input must switch without a desktop click');
 });
-test('the shipped sealed run passes end to end', { todo: 'qa-desktop-frame-hotkeys.cjs checks watchFrame for "postMessage" in the raw source; a comment in web/desktop/desktop-frames.js watchFrame names postMessage, so the opaque/nested-frames case fails' }, async () => {
+test('the shipped sealed run passes end to end', async () => {
   const shipped = await runFrameHotkeys();
-  assert.equal(shipped.report.failedCase, null, shipped.report.failure);
+  assert.equal(shipped.report.failedCase, null, shipped.report.failure); assert.equal(shipped.report.passed.length, 17);
+});
+// Issue 1726: the opaque/nested-frames source check reads watchFrame's code, not its comments.
+test('watchFrame source check ignores comments but still catches a message bridge', async () => {
+  const CASE = 'opaque/nested frames remain outside the shortcut bridge and cannot message-dispatch a chord';
+  for (const hookLine of ['// A comment may say postMessage or querySelectorAll; that is not code.',
+    "/* f.contentWindow.postMessage(x, '*'); window.addEventListener('message', go); */ // doc.querySelectorAll('iframe')"]) {
+    const ok = await runFrameHotkeys({ hookLine });
+    assert.equal(ok.report.failedCase, null, ok.report.failure);
+  }
+  for (const [hookLine, message] of [
+    ["f.contentWindow?.postMessage({ hello: 1 }, '*');", 'watchFrame must not post messages'],
+    ["window.addEventListener('message', e => onKey(e.data, true));", 'watchFrame must not listen for messages'],
+    ["f.contentDocument?.querySelectorAll('iframe');", 'watchFrame must not scan nested documents'],
+  ]) {
+    const r = await runFrameHotkeys({ hookLine });
+    assert.equal(r.report.failedCase, CASE, hookLine); assert.ok(r.report.failure.includes(message), r.report.failure.slice(0, 300));
+  }
 });

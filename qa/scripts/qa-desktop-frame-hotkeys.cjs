@@ -34,6 +34,19 @@ async function route(r, instrument = true) {
   return file ? r.fulfill({ path: file }) : r.fulfill({ status: 404, body: '' });
 }
 const wait = ms => new Promise(r => setTimeout(r, ms));
+// Source with its // and /* */ comments blanked (strings and template text kept), so a source check reads code only.
+function codeOnly(src) {
+  let out = '', q = '';
+  for (let i = 0; i < src.length; i++) {
+    const c = src[i], n = src[i + 1];
+    if (q) { out += c; if (c === '\\') out += src[++i] ?? ''; else if (c === q) q = ''; continue; }
+    if (c === '"' || c === "'" || c === '`') { q = c; out += c; continue; }
+    if (c === '/' && n === '/') { while (i < src.length && src[i] !== '\n') i++; out += '\n'; continue; }
+    if (c === '/' && n === '*') { const end = src.indexOf('*/', i + 2); i = end < 0 ? src.length : end + 1; out += ' '; continue; }
+    out += c;
+  }
+  return out;
+}
 async function settle(p) {
   await p.waitForFunction(() => window.WosWelcome?.log.some(s => s.startsWith('boot:')) && !window.WosExperience?.state?.busy);
   const owner = await p.evaluate(() => ({ active: WosWelcome.active, log: WosWelcome.log, welcome: !!document.getElementById('wosWelcome'), state: localStorage.getItem('wos.welcome.v1') }));
@@ -57,6 +70,9 @@ async function context(phone = false, instrument = true) {
   await c.route('**/*', r => route(r, instrument));
   await c.routeWebSocket('**/*', ws => ws.close());
   await c.addInitScript(seedOwner, { phone });
+  // These checks are for the classic desktop (desks, ⌥O = app picker). The AI apps view, now the desktop default,
+  // gives ⌥O and other letters its own meanings, so pin the classic view rather than assert its keys there (issue 1726).
+  await c.addInitScript(() => { if (window === window.top && localStorage.getItem('wos.desktop-view.v1') === null) localStorage.setItem('wos.desktop-view.v1', 'classic'); });
   return c;
 }
 const field = (p, i) => p.frameLocator(`.win[data-win="fixture${i}"] iframe`).locator('#field');
@@ -154,8 +170,12 @@ async function picker(p, chord, i = 0) {
         await outer.evaluate(f => f.contentDocument.querySelector('#nested').remove());
       }
       const code = require('../../tools/shell-source.cjs').shellSource(TREE, 'web/desktop/desktop.js'); // parts put back (issue 1665)
-      const hook = code.slice(code.indexOf('  function watchFrame(f, el)'), code.indexOf('\n  function render()'));
-      assert(!hook.includes('postMessage')); assert(!hook.includes('querySelectorAll'));
+      const hook = codeOnly(code.slice(code.indexOf('  function watchFrame(f, el)'), code.indexOf('\n  function render()')));
+      // Judge the hook by what it does, not by words in its comments (issue 1726): it must not post or listen
+      // for messages (no message-dispatched chord) and must not scan nested documents.
+      assert(!/\.postMessage\s*\(/.test(hook), 'watchFrame must not post messages');
+      assert(!/addEventListener\s*\(\s*['"`]message['"`]|\bonmessage\s*=/.test(hook), 'watchFrame must not listen for messages');
+      assert(!/querySelectorAll\s*\(/.test(hook), 'watchFrame must not scan nested documents');
     });
     await check('shell release reload preserves desks and established-owner boot', async () => {
       const before = await page.evaluate(() => ({ ws: __wux.ws, cur: __wux.cur }));
