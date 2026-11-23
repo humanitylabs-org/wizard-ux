@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { randomUUID } from 'node:crypto';
-const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
+import { withWebParts } from './fixtures/web-parts.mjs';
+const read = p => withWebParts(readFileSync(new URL('../' + p, import.meta.url), 'utf8'));
 const source = read('web/core/workspaces.js');
 const plain = x => JSON.parse(JSON.stringify(x));
 class El extends EventTarget {
@@ -20,8 +21,8 @@ class El extends EventTarget {
   querySelectorAll(s) { const all = this.children.flatMap(n => [n, ...n.querySelectorAll('*')]); return all.filter(n => s === '*' || s === n.tagName.toLowerCase() || (s.startsWith('.') && n.className.split(' ').includes(s.slice(1))) || (s.startsWith('[data-workspace-id=') && n.dataset.workspaceId === s.match(/="([^"]+)"/)[1])); }
   querySelector(s) { return this.querySelectorAll(s)[0] || null; }
 }
-function boot({ native = false, items = [], devices = { this: { wizard: 'Local Wizard' }, devices: [], managed: [] }, local = [], shell = 'desktop', call, hash = '' } = {}) {
-  const win = new EventTarget(), body = new El('body'), html = new El('html'), slot = new El('div'), data = new Map([['wos.workspaces.v1', JSON.stringify(local)]]), stack = [], toasts = [], calls = [], nav = [], replaced = [], hooks = {};
+function boot({ native = false, items = [], devices = { this: { wizard: 'Local Wizard' }, devices: [], managed: [] }, local = [], shell = 'desktop', call, hash = '', timers = null, reach = null } = {}) {
+  const win = new EventTarget(), body = new El('body'), html = new El('html'), slot = new El('div'), data = new Map([['wos.workspaces.v1', JSON.stringify(local)], ...(reach ? [['wos.workspaces.reach.v1', JSON.stringify(reach)]] : [])]), stack = [], toasts = [], calls = [], nav = [], replaced = [], hooks = {};
   const document = { body, documentElement: html, createElement: tag => new El(tag), createElementNS: (_ns, tag) => new El(tag), querySelector: () => slot, querySelectorAll: () => [], getElementById: () => body };
   const host = { env: { shell }, route: () => ({ view: 'desk', desk: 0 }), on: (k, fn) => { hooks[k] = fn; }, listen: (el, k, fn) => el.addEventListener(k, fn), mount: n => body.append(n), toast: x => toasts.push(x), back: { push(fn) { stack.push(fn); return () => { const at = stack.indexOf(fn); if (at >= 0) stack.splice(at, 1); }; } } };
   let setup;
@@ -33,7 +34,7 @@ function boot({ native = false, items = [], devices = { this: { wizard: 'Local W
   win.innerWidth = 1280;
   const storage = { getItem: k => data.get(k), setItem: (k, v) => data.set(k, v) };
   const custom = class extends Event { constructor(k, opts) { super(k); this.detail = opts.detail; } };
-  vm.runInNewContext(source, { window: win, document, localStorage: storage, location: { origin: 'https://here.test', hostname: 'here.test', pathname: '/wizard-os-home/', search: '', hash, assign: x => nav.push(x) }, history: { state: null, replaceState: (_s, _t, u) => { replaced.push(u); } }, URL, CustomEvent: custom, AbortController, AbortSignal, CSS: { escape: v => v }, crypto: { randomUUID }, fetch: () => { throw new Error('fixture must not fetch'); }, setTimeout: () => { throw new Error('no idle timers'); }, setInterval: () => { throw new Error('no polling'); } });
+  vm.runInNewContext(source, { window: win, document, localStorage: storage, location: { origin: 'https://here.test', hostname: 'here.test', pathname: '/wizard-os-home/', search: '', hash, assign: x => nav.push(x) }, history: { state: null, replaceState: (_s, _t, u) => { replaced.push(u); } }, URL, CustomEvent: custom, AbortController, AbortSignal, CSS: { escape: v => v }, crypto: { randomUUID }, fetch: () => { throw new Error('fixture must not fetch'); }, setTimeout: timers ? (fn, ms) => timers.push({ fn, ms }) : () => { throw new Error('no idle timers'); }, setInterval: () => { throw new Error('no polling'); } });
   return { w: win.WizWorkspaces, start: () => setup(host), win, body, slot, stack, toasts, calls, nav, data, hooks, replaced };
 }
 const remote = (id = 'other', extra = {}) => ({ id, name: 'Other Wizard', url: 'https://other.test', kind: 'remote', status: 'ready', ...extra });
@@ -247,4 +248,94 @@ test('wizard-ux#1209: ⌥O opens the same shared menu as the header name, and Ma
     assert.match(js, /api\.desk\.settings\('connections'\)/, f);
     assert.doesNotMatch(js, /api\.desk\.settings\('network'\)/, f + ': not Network & security');
   }
+});
+
+// Settings › Connections › Wizards (wizard-ux#1670). `act` gets the tapped element; this stands in for it.
+const tap = (attr, id) => ({ closest: s => s === `[${attr}]` ? { dataset: { [attr.replace(/^data-/, '').replace(/-(\w)/g, (_m, c) => c.toUpperCase())]: id } } : null });
+const sheetSubmit = async (b, values) => {
+  const panel = b.body.querySelector('.wz-workspaces-panel'), form = panel.querySelector('form');
+  for (const input of panel.querySelectorAll('input')) if (input.name in values) input.value = values[input.name];
+  form.dispatchEvent(new Event('submit', { cancelable: true })); for (let i = 0; i < 5; i++) await new Promise(r => setImmediate(r));
+  return panel;
+};
+// owner-correction: humanitylabs-org/wizard-ux#1670 · 2026-11-20 · "we should probably have a Manage Wizards section with an easy way to update these or manage them"
+test('wizard-ux#1670: Settings lists every saved Wizard; Rename, Change address and Remove (with Undo) work from there', async () => {
+  const timers = [], old = remote('old', { name: 'Forum', url: 'https://forum-old.test' }), dead = remote('dead', { name: 'Gone', url: 'https://gone.test' });
+  const b = boot({ local: [old, dead], timers, reach: { 'https://gone.test': { ok: Date.now() - 40 * 864e5 } } }); b.start(); await b.w.list();
+  const f = b.win.settings; assert.deepEqual(plain(f.aliases), ['saved-wizards', 'wizards']);
+  let html = f.html();
+  for (const v of ['Local Wizard', 'Forum', 'forum-old.test', 'Gone', 'gone.test', 'Add a Wizard']) assert.ok(html.includes(v), v);
+  assert.match(html, /data-saved-wizard="dead"[^>]*|is-stale[^>]*data-saved-wizard="dead"/);
+  assert.match(html, /class="st-row static wz-saved is-stale" data-saved-wizard="dead"/, 'a Wizard not reached for a long time is marked plainly');
+  assert.match(html, /Unreachable for a long time · last reached/);
+  assert.match(html, /Not reached from this device yet/, 'never reached from here says so');
+  for (const id of ['old', 'dead']) for (const a of ['rename', 'address', 'remove']) assert.ok(html.includes(`data-wizard-${a}="${id}"`), a + ' ' + id);
+  assert.ok(!html.includes('data-wizard-remove="this"'), 'the Wizard you are on has no Remove');
+  // Rename
+  assert.equal(f.act({}, tap('data-wizard-rename', 'old')), true);
+  let panel = b.body.querySelector('.wz-workspaces-panel'); assert.equal(panel.querySelectorAll('input')[0].value, 'Forum');
+  await sheetSubmit(b, { name: 'Forum (James)' });
+  assert.equal(b.body.querySelector('.wz-workspaces-panel'), null, 'the sheet closes once saved');
+  assert.equal(b.w.snapshot().items.find(v => v.id === 'old').name, 'Forum (James)');
+  // Change address: a bad one and a duplicate are refused in the sheet; a good one is saved under the same entry.
+  f.act({}, tap('data-wizard-address', 'old'));
+  panel = await sheetSubmit(b, { url: 'forum-new' });
+  assert.match(panel.querySelector('.wz-workspaces-error').textContent, /http/);
+  panel = await sheetSubmit(b, { url: 'https://gone.test' });
+  assert.match(panel.querySelector('.wz-workspaces-error').textContent, /already/);
+  await sheetSubmit(b, { url: 'https://forum-new.test' });
+  assert.equal(b.body.querySelector('.wz-workspaces-panel'), null);
+  const moved = b.w.snapshot().items.find(v => v.id === 'old');
+  assert.equal(moved.url, 'https://forum-new.test/'); assert.equal(moved.name, 'Forum (James)');
+  assert.ok(f.html().includes('forum-new.test') && !f.html().includes('forum-old.test'));
+  // Remove: one tap, no typed confirmation; Undo puts the same entry back.
+  f.act({}, tap('data-wizard-remove', 'dead')); for (let i = 0; i < 5; i++) await new Promise(r => setImmediate(r));
+  assert.ok(!b.w.snapshot().items.some(v => v.id === 'dead'), 'removed at once');
+  assert.ok(!f.html().includes('data-saved-wizard="dead"'));
+  const bar = b.body.querySelector('.wz-workspaces-undo'); assert.match(bar.querySelector('span').textContent, /Removed Gone/);
+  assert.equal(timers.at(-1).ms, 6000, 'the Undo bar goes after about six seconds');
+  bar.querySelector('button').dispatchEvent(new Event('click')); for (let i = 0; i < 5; i++) await new Promise(r => setImmediate(r));
+  assert.equal(b.body.querySelector('.wz-workspaces-undo'), null);
+  assert.deepEqual(plain(b.w.snapshot().items.find(v => v.id === 'dead')), plain({ ...dead, url: 'https://gone.test/', status: 'unknown', subtitle: '', role: '', org: '', source: 'local' }));
+  // Removed for good once the bar is gone: its timer drops it.
+  f.act({}, tap('data-wizard-remove', 'dead')); for (let i = 0; i < 5; i++) await new Promise(r => setImmediate(r));
+  timers.at(-1).fn(); assert.equal(b.body.querySelector('.wz-workspaces-undo'), null);
+  assert.deepEqual(JSON.parse(b.data.get('wos.workspaces.v1')).map(v => v.id), ['old']);
+});
+test('wizard-ux#1670: the switcher menu has Manage Wizards, which opens Settings › Connections › Wizards', async () => {
+  const b = boot({ local: [remote()] }), routed = []; b.start(); await b.w.list();
+  b.win.WizCore.deeplink = { route: href => { routed.push(href); return true; } };
+  b.w.openMenu(b.slot.querySelector('button'));
+  const man = b.body.querySelector('.wz-workspaces-manage'); assert.equal(man.textContent, 'Manage Wizards'); assert.equal(man.getAttribute('role'), 'menuitem');
+  man.dispatchEvent(new Event('click'));
+  assert.deepEqual(routed, ['https://here.test/wizard-os-home/?view=saved-wizards']);
+  assert.equal(b.body.querySelector('.wz-workspaces-panel'), null, 'the menu closes');
+  const c = boot({ local: [remote()] }); c.start(); await c.w.list(); c.w.manage();
+  assert.match(c.toasts.at(-1), /Settings › Connections/, 'without the deep link it says where to go');
+});
+test('wizard-ux#1670: a failed switch in the Android app marks that Wizard unreachable; a switch that went through marks it reached', async () => {
+  const b = boot({ local: [remote('gone', { name: 'Gone', url: 'https://gone.test' }), remote('up', { name: 'Up', url: 'https://up.test' })] }); b.start(); await b.w.list();
+  b.win.WizardOSNative = { switchWizard: () => 'started' };
+  await b.w.switch('gone'); b.w.switchFailed();
+  let html = b.win.settings.html();
+  assert.match(html, /class="st-row static wz-saved is-stale" data-saved-wizard="gone"/);
+  assert.match(html, /Unreachable · couldn’t reach it today/);
+  await b.w.switch('up'); b.win.dispatchEvent(new Event('pagehide'));
+  html = b.win.settings.html();
+  assert.match(html, /data-saved-wizard="up"><span class="st-tx"><b>Up<\/b><small>up\.test · Last reached today/);
+  assert.ok(Object.hasOwn(JSON.parse(b.data.get('wos.workspaces.reach.v1')), 'https://up.test'));
+});
+test('wizard-ux#1670: arriving from another Wizard marks it reached; managed and native entries keep their own rules', async () => {
+  const hash = '#wzfrom=' + encodeURIComponent(JSON.stringify({ name: 'Studio', url: 'https://studio.test/wizard-os-home/' }));
+  const b = boot({ hash }); b.start(); await b.w.list();
+  assert.ok(JSON.parse(b.data.get('wos.workspaces.reach.v1'))['https://studio.test'].ok > 0);
+  const m = boot({ devices: { this: { wizard: 'Local' }, managed: [managed({ status: 'offline', url: 'https://managed.test' })] }, local: [remote()] }); m.start(); await m.w.list();
+  const html = m.win.settings.html();
+  assert.ok(!html.includes('data-wizard-remove="managed"'), 'a Wizard listed by this Wizard’s devices is managed there');
+  assert.match(html, /is-stale" data-saved-wizard="managed"/); assert.ok(html.includes('data-wizard-remove="other"'));
+  const n = boot({ native: true, items: [remote('one'), remote('two')] }); n.start(); await n.w.list();
+  const nh = n.win.settings.html();
+  assert.ok(nh.includes('data-wizard-rename="two"') && nh.includes('data-wizard-remove="two"'));
+  assert.ok(!nh.includes('data-wizard-address='), 'the native app owns addresses in its own list');
+  await assert.rejects(n.w.move('two', 'https://x.test'), /app that owns/);
 });

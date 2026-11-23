@@ -8,7 +8,7 @@
 'use strict';
 window.WizCore = window.WizCore || {};
 window.WizCore.desktopParts = window.WizCore.desktopParts || {};
-window.WizCore.desktopParts.tapkeys = function ({ dictate, talk }) {
+window.WizCore.desktopParts.tapkeys = function ({ dictate, orbTap }) {
   let log; // late-bound: desktop.js declares these after the call, see bindLate
 
   // Right ⌘ / Right ⌥ as tap keys: press and release alone, quickly (a chord like ⌘C never counts).
@@ -30,7 +30,7 @@ window.WizCore.desktopParts.tapkeys = function ({ dictate, talk }) {
     const ok = !tapChord && performance.now() - tapAt < 450; tapKey = null;
     if (!ok) return;
     e.preventDefault();
-    if (e.code === 'MetaRight') { log('key:right-cmd'); talk(); } else { log('key:right-opt'); dictate(); }
+    if (e.code === 'MetaRight') { log('key:right-cmd'); orbTap(); } else { log('key:right-opt'); dictate(); }
   }, true);
   addEventListener('blur', () => { tapKey = null; });
 

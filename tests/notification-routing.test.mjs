@@ -7,7 +7,8 @@ import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 import { withSettingsParts } from './fixtures/settings-parts.mjs'; // settings.js parts moved out verbatim (issue 1665)
-const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
+import { withWebParts } from './fixtures/web-parts.mjs';
+const read = p => withWebParts(readFileSync(new URL('../' + p, import.meta.url), 'utf8'));
 
 function boot({ storage = new Map(), inboxList = true, notifications = true } = {}) {
   const calls = [], listeners = {};

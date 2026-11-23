@@ -25,7 +25,7 @@ Back: `WizEscapeBack`, `WosBack`; `WizChatsHost.registerBack`/back.push share re
 | Skin/tokens/mode | `WizardApp.theme.get/onChange`, `--wz-*` (`--wz-owner-message`); fresh: `view.onRefresh` |
 | Native Android skin | `WizardLook` (`android/app/src/main/java/ai/wizards/os/WizardLook.java`): saved roles, Nebula fallback |
 | Connect | `ReachScreen/ReachPolicy/TailscaleGuide`, `ConnectActivity/ServerSettings`; web `WizReach` (help/check/direct, sandboxed; pill/auto-open) |
-| Switch Wizard (Android) | `WizardSwitch` via `WizardOSNative.switchWizard`, from `WizWorkspaces.switch` |
+| Switch/edit Wizards | `WizardSwitch` via `WizardOSNative.switchWizard`, from `WizWorkspaces` (+move/restore) |
 | Refuse an Android Wizard switch while work is unfinished | `ServerSwitchGuard` (`android/app/src/main/java/ai/wizards/os/ServerSwitchGuard.java`) |
 | Transcribe audio | `WizardApp.voice.transcribe(blob, {language})` → `{text}` / `{unavailable:true}`; verified frame, 25 MB; `WizConfig.transcribe` (rechecks) |
 | Share out (people → apps → Other) | `WizardApp.share.text / file` |
@@ -59,7 +59,7 @@ Back: `WizEscapeBack`, `WosBack`; `WizChatsHost.registerBack`/back.push share re
 | Chats/Ready | `WizChatsHost` / `WizAppExtensions` (`chats-view.js`): surface/(views.)mount, placement, `replyRecorder`, draft admission; host `keepNewOpen(id)` keeps docked New open on send (`WosSkinHost.routeShows`); pills: `workspaceNav.chatsCount/refreshChats`; subgroups: `WizChatsListModel.unreadCount`; counts: `.unreadThreads` |
 | Bound-view handle (3 intro glows) | `WosSkinHost` built-in (`edge-peek.js`), host storage |
 | Repaint changed nodes without flicker | `WosMorph.morph` (`dom-morph.js`) |
-| Mic, retry, model, place/follow | `WosChatPower` (`chat-power.js`;`chanOwnPost`/`chanModel`/`landAt`/`paintJump`); `voice.reply`→`recordReply`; `WosModels` (`foreignApp`); `WosErrors`; `WosWork`; composer `WizCore` (`chats.js` `fitLabel`,`.css` `lab-row`) |
+| Mic, retry, model, place/follow | `WosChatPower` (`chat-power.js`;`chanOwnPost`/`chanModel`/`landAt`/`paintJump`); `voice.reply/onTap`→`recordReply`; `WosModels` (`foreignApp`); `WosErrors`; `WosWork`; composer `WizCore` (`chats.js` `fitLabel`,`.css` `lab-row`) |
 | Text/media | `WosChat` (`chat-kit.js`: `helm`, `tweakIds`, `md`, `copyRich`, `viewer`, `saveFile`, `drafts.keys`; zoom/keys/seek); Chats `mediaBlock` |
 | Spaces / Focus | `WizCore` Chats (`chats.js`), `WizLive.prefOps` (`spaces`; add = move, one Space per chat); `WizLive.spaceSessions(ids)`; `winAgent`/`modelRoute`; `WosOutbox.onNew`; restored Focus awaits census; hidden routes; AI apps pills (`.aad-agents`): `focusRows`, `agents.focus`; `WosAgents.colour`/`distinctHues` + `--ch-agent-hue` |
 | Pins: menu / opt-in row buttons | `WosChatPins` (`chat-pins.js`) |
@@ -72,7 +72,7 @@ Back: `WizEscapeBack`, `WosBack`; `WizChatsHost.registerBack`/back.push share re
 | Uploads of any size | `WizUploads` (`uploads.js`) |
 | Files browse, preview, attach | `WosFiles` (`files.js`) |
 | Settings in both shells | `WosSettings.register` (`settings.js`: Skin/Colors, Background/Mode, shared About/fail-closed updates, package `hasSystem`), `focus(id)`; same-HTML `refresh()` no-op; Home/AI rehost; Look/New skin shell filter (keeps hidden defaults); reply tweak `tweakCard`; narrow Back; `WosFeatures`; `WizConfig.responseStyle`; Try new features |
-| Agent identity, glyph, hue; which agents an app joins (`appAgents`: privacy, needs_private_agent) | `WosAgents` (`agents.js`) |
+| Agent identity, glyph, hue; default-agent route (`routeAgent`); app's agents (`appAgents`) | `WosAgents` (`agents.js`) |
 | Store | `storeKind,sourceLabel,parseInstallLink,removeInstalledApp,githubSheet` |
 | App agent routing, private-app note + setup (incl. Store) | `WosAppRoute` (`app-route.js`) |
 | App icons, logos | `WizSigil` (`sigils.js`, `sigils.css`): aliases, registry/HOUSE glyphs first; unbranded fallback; `orb(node)` white glyphs; contain-fit pins. Tests: `app-icon-*.test.mjs` |

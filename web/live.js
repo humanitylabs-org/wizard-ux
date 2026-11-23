@@ -377,8 +377,11 @@
       return v && v.schema === 1 && Array.isArray(v.sessions) && isFinite(v.at) ? v : null;
     } catch (e) { return null; }
   }
+  // Private first (wizard-ux issue 1728): the main list is the default private agent's, so it is never kept on disk.
+  const mainPrivate = () => { const A = AG(), d = A?.defaultId?.(); return !!d && !!A.isPrivate?.(A.get?.(d)); };
   function writeSnap(store) {
     if (!store.ok || store.cached) return;
+    if (mainPrivate()) { try { localStorage.removeItem(SNAP_KEY); } catch (_) {} return; }
     try {
       const act = s => Date.parse(s.activityAt || s.updatedAt || '') || 0;
       const rows = store.sessions.filter(s => s && s.id && !s.optimistic && !s.synthetic && !s.hidden && !(s.agent && otherAgent(s.agent)))
@@ -683,7 +686,8 @@
       return { rows, pending, failed };
     },
     // A private agent's thread (by id): its rows carry the lock and its words never enter another agent's context.
-    isPrivate(id) { const a = this.agentOf(id), A = AG(); return !!a && !!A && A.isPrivate(A.get(a)); },
+    // A main-list thread is private when the default agent is (private first, wizard-ux issue 1728: its rows are that agent's).
+    isPrivate(id) { const A = AG(); if (!A || !id || id === '__new__') return false; const a = this.agentOf(id) || A.defaultId?.() || ''; return !!a && !!A.isPrivate?.(A.get?.(a)); },
     statusFor(agent = '') { return otherAgent(agent) ? (this.agentStatus[agent] || { ok: false, error: '' }) : { ok: this.ok, error: this.error, cached: this.cached, cachedAt: this.cachedAt, loading: !!this.loading, at: this.at || 0 }; },
     // The non-default agent a thread is pinned to, or '' for the main agent.
     agentOf(id) { if (!id || id === '__new__') return ''; const a = AGENT_OF.get(id); return a && otherAgent(a) ? a : ''; },

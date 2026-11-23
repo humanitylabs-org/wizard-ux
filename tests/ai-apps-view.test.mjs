@@ -19,9 +19,10 @@ import { fixture } from './fixtures/tweaks.mjs';
 import { withSkinHostParts } from './fixtures/skin-host-parts.mjs';
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 import { withShellParts } from './fixtures/shell-parts.mjs';
+import { withWebParts } from './fixtures/web-parts.mjs';
 
 const root = new URL('../', import.meta.url);
-const read = p => withShellParts(readFileSync(new URL(p, root), 'utf8'));
+const read = p => withShellParts(withWebParts(readFileSync(new URL(p, root), 'utf8')));
 const settle = () => new Promise(r => setTimeout(r, 15));
 const noComments = s => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/[^\n]*/g, '$1');
 
@@ -993,7 +994,7 @@ test('desktop ⌥ keys in the AI apps view (round 21): mnemonic letters, every k
   for (const [code, what] of [['KeyS', 'settings'], ['KeyN', 'plus'], ['KeyL', 'toggleSide'], ['KeyR', 'toggleTabs'], ['KeyA', 'openAll'], ['KeyT', 'openTidy']])
     assert.match(js, new RegExp(`if \\(code === '${code}' && !sh\\) return once\\(${what}\\);`), `⌥${code.slice(3)} = ${what}`);
   assert.match(js, /if \(code === 'KeyK' && !sh\) return once\(\(\) => setSearch\(true\)\);/, '⌥K search');
-  assert.match(js, /if \(code === 'Space' && !sh\) return once\(\(\) => api\.voice\.talk\(\)\);/, '⌥Space talks (the orb)');
+  assert.match(js, /if \(code === 'Space' && !sh\) return once\(talkFromOrb\);/, '⌥Space talks (the orb, as its click: wizard-ux issue 1547)');
   assert.match(js, /if \(code === 'KeyV' \|\| code === 'KeyC' \|\| code === 'KeyD'\) return false;/, '⌥V ⌥C ⌥D stay the shell\'s voice keys');
   assert.match(js, /if \(code === 'KeyW' && !sh && pane\) \{ if \(!e\.repeat\) \{ const d = desks\(\)\.find\(x => x\.desk === pane\.desk\); if \(d && !pins\.includes\(d\.id\)\) closeDesk\(d\); else hidePanel\(\); \} return true; \}/, '⌥W closes the panel\'s app (a pinned one hides)');
   assert.match(js, /if \(code === 'KeyW' && !sh && docked\) \{ if \(!e\.repeat\) closeChat\(\); return true; \}/, '⌥W: the docked chat back to Home');
@@ -1716,7 +1717,7 @@ test('round 16: drag to rearrange the right column: within Pinned, within the op
 // Codex review (PR #888/#889): api.after caps every timer at 10 s, so an hourly tidy must count to its deadline.
 test('auto-tidy runs hourly, not on every 10 s timer beat (api.after is capped)', () => {
   for (const f of ['desktop.js', 'layout.js']) {
-    const js = withShellParts(readFileSync(new URL(`../web/layouts/ai-apps/${f}`, import.meta.url), 'utf8'));
+    const js = withShellParts(withWebParts(readFileSync(new URL(`../web/layouts/ai-apps/${f}`, import.meta.url), 'utf8')));
     assert.doesNotMatch(js, /api\.after\((TIDY_EVERY|3600e3),/, f + ': no hour-long api.after (it would fire after 10 s)');
     assert.match(js, /const tidyLoop = \(\) => \{ tidyOff = api\.after\(10e3, \(\) => \{ if \(Date\.now\(\) >= tidyAt\) \{ tidyAt = Date\.now\(\) \+ (TIDY_EVERY|3600e3); tidy\(\); \} tidyLoop\(\); \}\); \};/, f);
   }

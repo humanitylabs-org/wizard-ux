@@ -7,7 +7,8 @@ import { readFileSync } from 'node:fs';
 import { modelContext } from './fixtures/chats-list-model.mjs';
 import { withSkinHostParts } from './fixtures/skin-host-parts.mjs';
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
-const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
+import { withWebParts } from './fixtures/web-parts.mjs';
+const read = p => withWebParts(readFileSync(new URL('../' + p, import.meta.url), 'utf8'));
 const chats = withParts(read('web/core/chats.js')), aad = read('web/layouts/ai-apps/desktop.js'), host = withSkinHostParts(read('web/core/skin-host.js'));
 const between = (s, a, b) => { const i = s.indexOf(a); assert.ok(i >= 0, a); const j = s.indexOf(b, i); assert.ok(j > i, b); return s.slice(i, j); };
 const H = 3600e3, NOW = Date.now();

@@ -80,6 +80,6 @@ window.WizCore.skinHostParts.rows = function ({ isDoc }) {
     }
     return Object.freeze(o);
   }
-  const commandUis = new Set(), keyHandlers = new Set(), keyGuides = new Set();   // layout-only: api.voice.onCommand, api.keys
-  return { activityRows, commandUis, homeScreenApp, inboxAct, keyGuides, keyHandlers, NOTE_ACTS, NOTE_ID, NOTE_ID_OPEN, noteAct, orbSwipeHolders, orbSwipeMap, panelHolders, readReadyOrder, readWorkingOrder, READY_ORDER_KEY, SESSION_ACTS, withNoteRows, bindLate: v => { if ('inboxThreads' in v) inboxThreads = v.inboxThreads; } };
+  const commandUis = new Set(), orbTaps = new Set(), keyHandlers = new Set(), keyGuides = new Set();   // layout-only: api.voice.onCommand/onTap, api.keys
+  return { activityRows, commandUis, homeScreenApp, inboxAct, keyGuides, keyHandlers, NOTE_ACTS, NOTE_ID, NOTE_ID_OPEN, noteAct, orbSwipeHolders, orbSwipeMap, orbTaps, panelHolders, readReadyOrder, readWorkingOrder, READY_ORDER_KEY, SESSION_ACTS, withNoteRows, bindLate: v => { if ('inboxThreads' in v) inboxThreads = v.inboxThreads; } };
 };

@@ -5,7 +5,8 @@ import vm from 'node:vm';
 import { shortTime } from '../web/layouts/ai-apps/parts.js';
 import { withParts } from './fixtures/chats-parts.mjs';
 import { withShellParts } from './fixtures/shell-parts.mjs';
-const read = p => withShellParts(readFileSync(new URL('../' + p, import.meta.url), 'utf8'));
+import { withWebParts } from './fixtures/web-parts.mjs';
+const read = p => withShellParts(withWebParts(readFileSync(new URL('../' + p, import.meta.url), 'utf8')));
 const now = Date.UTC(2026, 10, 3, 5);
 function core(zone = 'UTC') {
   const fmt = new Intl.DateTimeFormat('en-US', { timeZone: zone, weekday: 'short', day: 'numeric' });

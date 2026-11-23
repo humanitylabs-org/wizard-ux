@@ -2,10 +2,11 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
-const ui = readFileSync(new URL('../web/layouts/ai-apps/desktop.js', import.meta.url), 'utf8');
-const css = readFileSync(new URL('../web/layouts/ai-apps/desktop.css', import.meta.url), 'utf8');
-const backSource = readFileSync(new URL('../web/core/escape-back.js', import.meta.url), 'utf8');
-const coreSource = readFileSync(new URL('../web/core/pane-layout.js', import.meta.url), 'utf8');
+import { withWebParts } from './fixtures/web-parts.mjs';
+const ui = withWebParts(readFileSync(new URL('../web/layouts/ai-apps/desktop.js', import.meta.url), 'utf8'));
+const css = withWebParts(readFileSync(new URL('../web/layouts/ai-apps/desktop.css', import.meta.url), 'utf8'));
+const backSource = withWebParts(readFileSync(new URL('../web/core/escape-back.js', import.meta.url), 'utf8'));
+const coreSource = withWebParts(readFileSync(new URL('../web/core/pane-layout.js', import.meta.url), 'utf8'));
 test('mode command changes only mode/focus, preserving tiled state and using one pane ancestor per window', () => {
  const window = { WizCore: {}, localStorage: { getItem: () => null, setItem() {} } };
  vm.runInNewContext(coreSource, { window }); const panes = window.WizCore.panes;
@@ -57,8 +58,8 @@ test('shifted mode shortcuts precede app dispatch but yield to existing modal gu
 // the base) instead of the skin colour. Resolve the real CSS for built-in skins: the floating panes must paint the
 // same opaque colour the tiled panes show (the window tint --aad-main over the skin base --aad-canvas).
 test('window modes keep the tiled panes\' skin colour, opaque, never the grey panel mix', () => {
- const skinsJs = readFileSync(new URL('../web/core/skins.js', import.meta.url), 'utf8');
- const shellTokens = readFileSync(new URL('../web/kit/shell-tokens.css', import.meta.url), 'utf8');
+ const skinsJs = withWebParts(readFileSync(new URL('../web/core/skins.js', import.meta.url), 'utf8'));
+ const shellTokens = withWebParts(readFileSync(new URL('../web/kit/shell-tokens.css', import.meta.url), 'utf8'));
  const decl = (src, sel, prop) => { const i = src.indexOf(sel); assert.ok(i >= 0, sel); const body = src.slice(src.indexOf('{', i) + 1, src.indexOf('}', i)); const m = body.match(new RegExp('(?:^|[;\\s])' + prop.replace(/[\\^$.*+?()[\]{}|-]/g, '\\$&') + ':\\s*([^;]+);')); assert.ok(m, sel + ' ' + prop); return m[1].replace(/\s*!important\s*$/, '').trim(); };
  const A = 'html[data-shell="desktop"][data-layout="ai-apps"]', NT = A + ':not([data-aad-mode="tiled"]) #stage > .wsp[data-aad-role]';
  const split = s => { const out = []; let d = 0, cur = ''; for (const ch of s) { if (ch === '(') d++; if (ch === ')') d--; if (ch === ',' && !d) { out.push(cur.trim()); cur = ''; } else cur += ch; } out.push(cur.trim()); return out; };

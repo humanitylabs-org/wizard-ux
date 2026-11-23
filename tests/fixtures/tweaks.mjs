@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { withSkinHostParts } from './skin-host-parts.mjs';
-import { withShellParts } from './shell-parts.mjs';
+import { withWebParts } from './web-parts.mjs';
 const root = new URL('../../', import.meta.url);
-export const read = path => withShellParts(readFileSync(new URL(path, root), 'utf8'));
+export const read = path => withWebParts(readFileSync(new URL(path, root), 'utf8'));
 class Element {
   constructor(tag = 'div') { this.tagName = tag; this.nodeType = 1; this.dataset = {}; this.attrs = {}; this.children = []; this.parentNode = null; this.handlers = new Map(); this.isConnected = true; const c = this.classes = new Set(); this.classList = { add: k => c.add(k), remove: k => c.delete(k), contains: k => c.has(k), toggle: (k, on = !c.has(k)) => (on ? c.add(k) : c.delete(k), on) }; }
   setAttribute(k, v) { this.attrs[k] = v; if (k.startsWith('data-')) this.dataset[k.slice(5).replace(/-([a-z])/g, (_, c) => c.toUpperCase())] = v; }

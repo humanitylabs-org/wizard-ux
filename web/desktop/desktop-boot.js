@@ -9,11 +9,11 @@
 'use strict';
 window.WizCore = window.WizCore || {};
 window.WizCore.desktopParts = window.WizCore.desktopParts || {};
-window.WizCore.desktopParts.boot = function ({ $$, APP, appAt, appOf, APPS, ask, C, chanPost, CHATS, closeCurrent, closeDesktop, closePalette, closeSettings, closeWin, commandSnapshot, commandText, commandVoice, desktopBack, desktopHost, desktopVars, dictate, escapeBack, feedCarry, feedOpen, feedOpened, fields, findApp, findWin, focused, focusInside, focusWin, framePage, freshDesk, goHome, goWs, hudClose, hudDock, hudKey, hudOn, ico, keyHints, leaveHome, listW, listWin, LIVE, localCommand, log, mainChats, mainStd, MOD, moveDesk, moveWin, newChat, newDesktop, newWin, openAgentChats, openApp, openAppLink, openChatsList, openFiles, openPalette, openPicker, openSearch, openSettings, openThread, openUsage, OUTBOX, pal, palToggle, paneClicks, panelAppW, panelBack, panelChat, panelClose, panelDock, panelKind, panelListW, panelMode, panelQuit, panelRunning, panelSlot, panelWin, panelWins, recordReply, render, save, setEl, setListW, sideMain, sideViewOn, stage, stepThread, syncChatsPane, talk, talkNew, toast, toggleKeys, uid, usageEl, viewContext, VOICE, winEl, winTitle }) {
+window.WizCore.desktopParts.boot = function ({ $$, APP, appAt, appOf, APPS, ask, C, chanPost, CHATS, closeCurrent, closeDesktop, closePalette, closeSettings, closeWin, commandSnapshot, commandText, commandVoice, desktopBack, desktopHost, desktopVars, dictate, escapeBack, feedCarry, feedOpen, feedOpened, fields, findApp, findWin, focused, focusInside, focusWin, framePage, freshDesk, goHome, goWs, hudClose, hudDock, hudKey, hudOn, ico, keyHints, leaveHome, listW, listWin, LIVE, localCommand, log, mainChats, mainStd, MOD, moveDesk, moveWin, newChat, newDesktop, newWin, openAgentChats, openApp, openAppLink, openChatsList, openFiles, openPalette, openPicker, openSearch, openSettings, openThread, openUsage, orbTap, OUTBOX, pal, palToggle, paneClicks, panelAppW, panelBack, panelChat, panelClose, panelDock, panelKind, panelListW, panelMode, panelQuit, panelRunning, panelSlot, panelWin, panelWins, recordReply, render, save, setEl, setListW, sideMain, sideViewOn, stage, stepThread, syncChatsPane, talk, talkNew, toast, toggleKeys, uid, usageEl, viewContext, VOICE, winEl, winTitle }) {
 
   /* ---------------- native bridge (Wizard for Mac drives this by events) ---------------- */
   C.bridge.handle({
-    orb: d => talk(d.action || 'toggle'),
+    orb: d => { const a = d.action || 'toggle'; return a === 'toggle' || a === 'start' ? orbTap(a) : talk(a); },
     open(path, d) {
       const sid = d.thread || (String(path).match(/[?&]session=([^&#]+)/) || [])[1];
       if (sid) return openThread(decodeURIComponent(sid));

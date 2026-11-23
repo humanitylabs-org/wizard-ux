@@ -2,8 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
-const source = fs.readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
-const outbox = fs.readFileSync(new URL('../web/core/chats-outbox.js', import.meta.url), 'utf8'); // pendingState moved there (issue 1665)
+import { withWebParts } from './fixtures/web-parts.mjs';
+const source = withWebParts(fs.readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'));
+const outbox = withWebParts(fs.readFileSync(new URL('../web/core/chats-outbox.js', import.meta.url), 'utf8')); // pendingState moved there (issue 1665)
 const start = outbox.indexOf('  function pendingState(');
 const end = outbox.indexOf('  // Failed thread reads retry', start);
 function receipt(p, s) {

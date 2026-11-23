@@ -3,7 +3,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
-const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
+import { withWebParts } from './fixtures/web-parts.mjs';
+const read=p=>withWebParts(readFileSync(new URL('../'+p,import.meta.url),'utf8'));
 async function project(item){
  const window={WosSkinHost:{inboxList:true},WizCore:{backendApps:()=>[{id:'notifications'}]},dispatchEvent(){}};
  const ctx={window,document:{querySelectorAll:()=>[],addEventListener(){}},location:{origin:'https://example.test'},addEventListener(){},setInterval(){},setTimeout(){},CustomEvent:class{},fetch:async()=>({ok:true,json:async()=>({items:[item]})})};

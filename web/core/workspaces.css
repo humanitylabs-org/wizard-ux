@@ -32,3 +32,10 @@ html[data-shell="phone"] .wz-workspaces-control.in-chats { position:static; flex
 .wz-workspaces-footer { display:flex; justify-content:flex-end; gap:12px; margin-top:16px; }
 .wz-workspaces-footer button { min-height:44px; padding:8px 12px; border:1px solid var(--wz-border); border-radius:var(--wz-radius); background:var(--wz-surface); }
 .wz-workspaces-footer button[type="submit"] { background:var(--wz-accent); color:var(--wz-on-accent); }
+/* Settings › Connections › Wizards (wizard-ux#1670): the saved list, its row buttons and the Remove undo bar. */
+.wz-saved .wz-saved-acts { margin-top:8px; gap:6px; }
+.wz-saved .wz-saved-acts button { padding:8px 12px; }
+.wz-saved.is-stale .st-tx small { color:var(--wz-danger); }
+.wz-workspaces-undo { position:fixed; z-index:10001; left:50%; bottom:calc(env(safe-area-inset-bottom, 0px) + 24px); transform:translateX(-50%); display:flex; align-items:center; gap:16px; box-sizing:border-box; max-width:calc(100vw - 24px); padding:8px 8px 8px 16px; border:1px solid var(--wz-border); border-radius:var(--wz-radius-tile); background:var(--wz-panel-raised, var(--wz-panel)); color:var(--wz-text); box-shadow:var(--wz-shadow-window); font:var(--wz-text-md)/1.4 var(--wz-font-ui); }
+.wz-workspaces-undo span { min-width:0; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+.wz-workspaces-undo button { min-height:44px; padding:8px 14px; border:0; border-radius:var(--wz-radius); background:none; color:var(--wz-accent); font:inherit; font-weight:600; cursor:pointer; }

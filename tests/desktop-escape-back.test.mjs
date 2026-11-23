@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { withShellParts } from './fixtures/shell-parts.mjs';
-const source = withShellParts(readFileSync(new URL('../web/core/escape-back.js', import.meta.url), 'utf8'));
+import { withWebParts } from './fixtures/web-parts.mjs';
+const source = withShellParts(withWebParts(readFileSync(new URL('../web/core/escape-back.js', import.meta.url), 'utf8')));
 function fixture() { const window = {}; vm.runInNewContext(source, { window }); return window.WizEscapeBack.create(); }
 test('recording cancels before app/chat focus and an open overlay, one action only', () => {
   for (const focus of ['app', 'chat']) { const d = fixture(), calls = []; d.push(() => calls.push('menu'));
@@ -40,9 +41,9 @@ test('bare desktop no-op makes no state/DOM changes; repeat/composition do not p
   assert.equal(calls, 0);
 });
 test('desktop Escape is dispatched before any layout key and legacy list has a core ownership gate', () => {
-  const desktop = withShellParts(readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8'));
+  const desktop = withShellParts(withWebParts(readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8')));
   const body = desktop.slice(desktop.indexOf('function onKey('));
   assert.ok(body.indexOf('escapeBack.run') < body.indexOf('WosSkinHost?.key'));
-  const chats = withShellParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'));
+  const chats = withShellParts(withWebParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8')));
   assert.match(chats, /if \(H\.ownsChatList\?\.\(\)\) \{ el\?\.replaceChildren\(\); return; \}/);
 });

@@ -11,9 +11,10 @@ import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import vm from 'node:vm';
 import { withShellParts } from './fixtures/shell-parts.mjs';
+import { withWebParts } from './fixtures/web-parts.mjs';
 
 const root = new URL('../', import.meta.url);
-const read = p => withShellParts(readFileSync(new URL(p, root), 'utf8'));
+const read = p => withShellParts(withWebParts(readFileSync(new URL(p, root), 'utf8')));
 const OWNER = ['nebula', 'grove', 'tide', 'ember', 'signal'];
 
 /* ---------- the real SKINS table, read from core/skins.js ---------- */

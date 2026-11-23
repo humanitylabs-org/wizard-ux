@@ -6,8 +6,9 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { withAppParts } from './fixtures/app-parts.mjs';
 import { withShellParts } from './fixtures/shell-parts.mjs';
+import { withWebParts } from './fixtures/web-parts.mjs';
 
-const read = p => withShellParts(readFileSync(new URL('../' + p, import.meta.url), 'utf8'));
+const read = p => withShellParts(withWebParts(readFileSync(new URL('../' + p, import.meta.url), 'utf8')));
 const SHELL_SRC = read('web/core/browser-boundary.js');
 const CLIENT_SRC = read('web/core/browser-boundary-client.js');
 const FIELD_SRC = read('web/core/focused-field.js');
