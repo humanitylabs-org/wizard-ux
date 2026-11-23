@@ -8,9 +8,12 @@ import { cascade } from './fixtures/mini-css.mjs';
 const { assertReadOnlyFixture } = createRequire(import.meta.url)('./notes-fixture-write-policy.cjs');
 const source = readFileSync(new URL('./qa-app-icon-identity.cjs', import.meta.url), 'utf8');
 test('icon browser fixture records real refused status before all dynamic handlers', () => {
-  assert.ok(source.indexOf("if(req.method!=='GET')") < source.indexOf("if(p==='/wizard/v1/bootstrap')"));
-  assert.match(source, /r\.status=status;res\.writeHead\(status/);
-  assert.match(source, /r\.refusedBeforeHandlers=true;return send\(.*405\)/);
+  // the fixture server's real request handler: a write is refused (405) before any route answers, and recorded so
+  const h = harness(), written = [];
+  const hit = (method, url) => { h.fns.serve({ method, url }, { writeHead: s => written.push(s), end() {} }); return JSON.parse(JSON.stringify(h.fns.requests.at(-1))); };
+  assert.deepEqual(hit('POST', '/wizard/v1/bootstrap'), { method: 'POST', path: '/wizard/v1/bootstrap', refusedBeforeHandlers: true, status: 405 }, 'refused before the bootstrap route');
+  assert.deepEqual(hit('GET', '/wizard/v1/bootstrap'), { method: 'GET', path: '/wizard/v1/bootstrap', status: 200 });
+  assert.deepEqual(written, [405, 200], 'the recorded status is the one written');
   const refused = (method,path) => ({method,path,status:405,refusedBeforeHandlers:true});
   const result = assertReadOnlyFixture([refused('POST','/wizard/v1/ui-preferences/seed'),refused('PUT','/wizard/thread-seen')]);
   assert.equal(result.acceptedMutations.length,0);
@@ -19,13 +22,15 @@ test('icon browser fixture records real refused status before all dynamic handle
 // The QA harness's own helpers (tests/qa-app-icon-identity.cjs) run here against a fake Playwright page: its browser
 // run (the IIFE at the end) is left out, the helpers it uses are real.
 const harnessCode = source.slice(0, source.lastIndexOf('\n(async()=>{'));
+let serve = null;
 function harness() {
   const files = { 'apps.json': [{ id: 'food', url: '/fixture-app/food/', phone_only: false }], 'logos.json': { logos: {} }, 'changed.json': [], 'inventory.json': [] };
   const fakeFs = { readFileSync: f => JSON.stringify(files[String(f).split('/').pop()]), mkdirSync() {}, writeFileSync() {} };
-  const mods = { '../tools/qa-playwright.cjs': { chromium: {} }, 'node:fs': fakeFs, 'node:path': { resolve: (...a) => a.join('/'), join: (...a) => a.join('/') }, 'node:http': { createServer: () => ({}) },
+  const mods = { '../tools/qa-playwright.cjs': { chromium: {} }, 'node:fs': fakeFs, 'node:path': { resolve: (...a) => a.join('/'), join: (...a) => a.join('/') }, 'node:http': { createServer: f => { serve = f; return {}; } },
     'node:assert/strict': assert, './notes-fixture-write-policy.cjs': { assertReadOnlyFixture } };
   const ctx = vm.createContext({ require: m => mods[m], __dirname: '/repo/tests', process: { env: { QA_FIXTURE: '/fx', QA_OUT: '/out' } }, console, URL, Error, Set, Object, JSON, RegExp, Promise });
-  vm.runInContext(`${harnessCode}\nthis.fns = { rowFor, foodDesktopAdmission, switchSkin };`, ctx);
+  vm.runInContext(`${harnessCode}\nthis.fns = { rowFor, foodDesktopAdmission, switchSkin, requests };`, ctx);
+  ctx.fns.serve = serve;
   return ctx;
 }
 // A Playwright page over a fake window: evaluate() runs the harness's callback with that window as the page's own.
@@ -100,12 +105,13 @@ test('selection regression rejects the old cascade and a weakened outline contra
   doc.body.innerHTML = '<div class="pal-app pal-sys sel"><span class="ic"></span></div><div class="pal-app pal-sys"><span class="ic"></span></div>';
   const [sel, idle] = doc.querySelectorAll('.ic');
   const ring = css => cascade(sel, css)['box-shadow']?.value || '';
-  assert.match(ring(desktopCss), /^0 0 0 2px rgba\(225, 214, 255, \.8\),/, 'selected: the shared ring');
+  const selectedRing = cascade(sel, desktopCss)['box-shadow']?.value || '';
+  assert.match(selectedRing, /^0 0 0 2px rgba\(225, 214, 255, \.8\),/, 'selected: the shared ring');
   assert.match(cascade(idle, desktopCss)['box-shadow'].value, /^0 4px 14px rgba\(143, 99, 255, \.28\)/, 'idle: the skin\'s own look');
   assert.equal(cascade(sel, desktopCss).border.value, '2.5px solid #8f63ff', 'selected keeps the idle skin identity');
   // the old cascade (the shared rule without the system tile) loses to the idle skin rule: no ring
   const old = desktopCss.replace(`${selectedSystem},\n.pal-app.sel .ic`, '.pal-app.sel .ic');
-  assert.notEqual(old, desktopCss); assert.doesNotMatch(ring(old), /225, 214, 255/);
+  assert.doesNotMatch(ring(old), /225, 214, 255/);
   assert.throws(() => assertSystemSelection(old));
   assert.throws(() => assertSystemSelection(desktopCss.replace('rgba(225, 214, 255, .8)', 'rgba(225, 214, 255, .4)')));
 });
