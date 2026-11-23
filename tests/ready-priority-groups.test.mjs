@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { withParts } from './fixtures/chats-parts.mjs';
+import { block as fnBlock } from './fixtures/source-slice.mjs';
 import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
 // Priority must actually reorder Ready: every status line ranks (Done below FYI, no status last), and the list
 // shows one header per group. Before: only needs you / check ranked, so a Ready of Done + FYI read like Newest.
@@ -42,5 +43,16 @@ test('Priority renders one header per group with its count; Newest/Oldest stay u
   const heads = [...html.matchAll(/<span>([^<]+)<\/span><small>(\d+)<\/small>/g)].map(m => `${m[1]} ${m[2]}`);
   assert.deepEqual(heads, ['Needs approval 1', 'Needs you 1', 'Your call 1', 'FYI 2', 'Done 2', 'No status 1']);
   assert.deepEqual([...html.matchAll(/<row (\w)>/g)].map(m => m[1]), ['h', 'g', 'd', 'b', 'f', 'a', 'e', 'c']);
-  assert.match(chats, /if \(readyOrder === 'priority'\) return top \+ priorityGroups\(list, awake, rowFn, sec\) \+ later;/);
+  // the real readyBody: Priority draws the bar then these groups; Newest draws the same rows with no group headers
+  Object.assign(c, { orderBar: () => '<bar>', READY_ORDERS: ['newest', 'priority'], READY_ORDER_LABEL: {} });
+  vm.runInContext(fnBlock(chats, '  function readyBody(') + '\nthis.readyBody = readyBody;', c);
+  const sorted = L.byPriority(rows), rowFn = s => `<row ${s.id}>`;
+  assert.equal(c.readyBody(sorted, rowFn), '<bar>' + c.priorityGroups(sorted, [], rowFn, 'ready'));
+  assert.ok(!c.readyBody(sorted, rowFn, null, 'yesterday').startsWith('<bar>'), 'the order bar only on Ready');
+  for (const order of ['newest', 'oldest']) {
+    c.readyOrder = order;
+    const flat = c.readyBody(sorted, rowFn);
+    assert.equal([...flat.matchAll(/<small>\d+<\/small>/g)].length, 0, `${order}: no group headers`);
+    assert.deepEqual([...flat.matchAll(/<row (\w)>/g)].map(m => m[1]).sort(), ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']);
+  }
 });
