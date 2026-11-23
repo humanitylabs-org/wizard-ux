@@ -5,7 +5,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createDocument } from './fixtures/mini-dom.mjs';
 import { cascade } from './fixtures/mini-css.mjs';
-import { block, runRecording } from './fixtures/source-slice.mjs';
+import { between, block, runRecording } from './fixtures/source-slice.mjs';
+import { fixture as webUpdate } from './fixtures/web-update-harness.mjs';
 
 const src = readFileSync(new URL('../web/core/os-updates.js', import.meta.url), 'utf8');
 const tick = () => new Promise(r => setTimeout(r, 0));
@@ -81,9 +82,16 @@ test('only one notice: the old web banner steps aside while the pop-up carries t
   assert.equal(b.U.ownsReload(), true, 'dismissed: the old banner does not come back for the same build');
   const off = await boot({ status: ST({ update_available: false }), web, home: false }); off.U.popup();
   assert.equal(off.U.ownsReload(), false, 'off Home and not dismissed: the old banner keeps telling');
+  // the old banner's real render() step: while the pop-up owns the reload the banner goes and nothing is drawn
   const w = readFileSync(new URL('../web/core/web-update.js', import.meta.url), 'utf8');
-  assert.match(w, /if \(window\.WosUpdates\?\.ownsReload\?\.\(\)\) \{ document\.getElementById\('dvWeb'\)\?\.remove\(\)/);
-  assert.match(w, /get version\(\) \{ return printNow; \}/);
+  for (const owns of [true, false]) {
+    const gone = [];
+    const R = runRecording(`this.f = () => {\n${between(w, '    if (window.WosUpdates?.ownsReload?.())', '\n')}\n  return 'drawn';\n};`,
+      { window: { WosUpdates: { ownsReload: () => owns } }, document: { getElementById: id => ({ remove: () => gone.push(id) }) }, listOpen: true });
+    assert.equal(R.f(), owns ? undefined : 'drawn', owns ? 'owned: not drawn' : 'not owned: the banner draws'); assert.deepEqual(gone, owns ? ['dvWeb'] : []);
+  }
+  // the pop-up keys its dismiss on the build the banner would reload to (WizWebUpdate.version, the real file)
+  const wu = webUpdate(); await wu.update(); assert.equal(wu.web.version, 'v:' + 'b'.repeat(40), 'the new build (the same v:<build> the dismiss key above carries)');
   const css = readFileSync(new URL('../web/core/update-banner.css', import.meta.url), 'utf8');
   const page = createDocument(), pop = page.createElement('div'); pop.className = drawn; page.body.appendChild(pop);
   assert.match(cascade(pop, css)['--wz-text']?.value || '', /^var\(--ink/, 'the pop-up as drawn is styled with --wz-* tokens');
