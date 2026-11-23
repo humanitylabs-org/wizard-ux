@@ -1,9 +1,6 @@
 {
  "DesktopFrameHotkeysFixture.test.mjs": 2,
  "SettingsParityFixture.test.mjs": 6,
- "activity-what-needs-me.test.mjs": 1,
- "agent-inbox-alert-feedback.test.mjs": 2,
- "agent-inbox-running.test.mjs": 2,
  "agent-inbox-sweep-card.test.mjs": 2,
  "android-document-scroll.test.mjs": 7,
  "app-icon-consumers.test.mjs": 1,
