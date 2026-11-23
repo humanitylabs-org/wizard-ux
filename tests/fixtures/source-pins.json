@@ -1,10 +1,4 @@
 {
- "SettingsParityFixture.test.mjs": 6,
- "android-document-scroll.test.mjs": 1,
- "assist-attach.test.mjs": 3,
- "home-screen-apps.test.mjs": 3,
- "orb-icon-core.test.mjs": 2,
  "sigils-every-app.test.mjs": 2,
- "skin-palettes.test.mjs": 5,
- "wizardos-name.test.mjs": 2
+ "skin-palettes.test.mjs": 5
 }
