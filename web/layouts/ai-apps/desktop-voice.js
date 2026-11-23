@@ -59,13 +59,21 @@ export function voicePart({ aadVars, api, appName, chrome, closeFly, closeMenu, 
   }
   // The orb is visually docked in the Chats composer, but lives outside its window.
   // A companion pane can own keyboard focus: reply to the composer, not that pane.
-  function talkFromOrb() {
-    if ((api.voice.state()?.state || 'idle') !== 'idle') return api.voice.talk();
+  const idle = () => (api.voice.state()?.state || 'idle') === 'idle';
+  // The Chats window whose thread's message box holds the orb, or null (New chat, Home, an app alone, the list).
+  function orbThread() {
     const wid = orbComposer()?.closest('[data-chats]')?.dataset.chats;
     const w = wid && host?.windows().find(w => w.id === wid && w.kind === 'chats');
-    if (w?.thread && w.thread !== '__new__') return api.voice.reply(w.id, w.thread);
-    return api.voice.talk();
+    return w?.thread && w.thread !== '__new__' ? w : null;
   }
+  function talkFromOrb() {
+    if (!idle()) return api.voice.talk();
+    const w = orbThread();
+    return w ? api.voice.reply(w.id, w.thread) : api.voice.talk();
+  }
+  // Wizard for Mac's orb and Right ⌘ (wizard:orb) start the same reply while an app beside the thread has keyboard focus
+  // (wizard-ux issue 1547); with no thread holding the orb they keep the shell's own action (undefined).
+  api.voice.onTap?.(() => { const w = idle() ? orbThread() : null; return w ? api.voice.reply(w.id, w.thread) : undefined; });
   api.listen(orbBtn, 'pointerdown', e => { if (!e.button) down(e, orbBtn, { drag: true }); });
   api.listen(orbBtn, 'pointermove', move);
   api.listen(orbBtn, 'pointerup', () => up(true)); api.listen(orbBtn, 'pointercancel', () => up(false));
@@ -136,5 +144,5 @@ export function voicePart({ aadVars, api, appName, chrome, closeFly, closeMenu, 
     const L = appLayers(desks(), aadVars.pins, { main: mainChats()?.desk ?? null, lit, manual: aadVars.manual, names: Object.fromEntries(aadVars.pins.map(id => [id, pinApps().find(a => a.id === id)?.name || appName(id) || id])), chats: CHATS });
     return { pinned: L.pinned, others: L.open };
   }
-  return { behindThread, chatsEl, mainChats, offRws, placeOrb, ro, syncOrb, vtTabs, wsps };
+  return { behindThread, chatsEl, mainChats, offRws, placeOrb, ro, syncOrb, talkFromOrb, vtTabs, wsps };
 }

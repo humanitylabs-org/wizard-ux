@@ -403,6 +403,14 @@
   const { chanFront, chanPost, chanRoute, chanTalk, closeVoiceMenu, commandVoice, loadVoiceModels, paintVoiceFiles, speakScreen, talkNew, VOICE, voiceMenu } = window.WizCore.desktopParts.voicekeys({ $, C, CHATS, chatsWin, clip, desktopVars, dictate, esc, feedOpen, fields, focused, glow, LIVE, mic, MOD, nativeDesktop, pill, recordReply, store, talk, toast, winTitle });
   sideviewLate({ VOICE });
   palpaintLate({ chanPost, talkNew });
+  /* The orb tapped from outside the page (Wizard for Mac's orb and Right ⌘ send wizard:orb) or by the page's own Right ⌘:
+   * when a layout's orb sits in a thread's message box, the new take is a reply there, as that orb's click makes it,
+   * even while an app beside it has keyboard focus (wizard-ux issue 1547). Otherwise the shell's talk, as before. */
+  async function orbTap(action = 'toggle') {
+    const r = VOICE.state === 'idle' ? window.WosSkinHost?.deskOrbTap?.() : undefined;
+    if (r === undefined) return talk(action);
+    const st = await r; return st === 'recording' ? 'voice' : st;
+  }
   async function talk(action = 'toggle', forceNew = false, newKey = `${MOD}V`) {
     if (VOICE.state === 'idle' && CHATS.incognitoActive(focused()?.id)) { toast('!', 'Incognito is text only · finish it before recording', 2600); return 'busy'; }
     if (dictationFinishing || VOICE.state === 'think') return 'busy';
@@ -582,7 +590,7 @@
     } finally { target?.release(); if(dictTarget===target)dictTarget=null;vMode = 'talk'; dictationFinishing = false; }
   }
   /* Right ⌘ / Right ⌥ tap keys: moved verbatim to desktop/desktop-tapkeys.js (issue 1665). */
-  const { keyField, textField, typing, bindLate: tapkeysLate } = window.WizCore.desktopParts.tapkeys({ dictate, talk });
+  const { keyField, textField, typing, bindLate: tapkeysLate } = window.WizCore.desktopParts.tapkeys({ dictate, orbTap });
   let lastWs = cur;
   /* Back, Esc, moving between windows and the keys guide; desktop/desktop-keys.js. */
   const { desktopBack, dirFocus, keyHints } = window.WizCore.desktopParts.keys({ $, $$, C, CHATS, closedWins, closeWin, closeWorkflow, cogLate, desktopVars, dictate, esc, escapeBack, focused, focusWin, hudBack, IS_MAC, listWin, mainChats, MOD, nativeDesktop, nextStop, panelEsc, panelWin, readyRows, replayTour, resizable, spotLive, syncChatsPane, talk, toggleMono, VOICE, winEl, wsOf });
@@ -600,7 +608,7 @@
   let toastT = 0;
   function toast(icon, text, ms = 2000) { const t = $('#toast'); t.classList.remove('got-it'); t.innerHTML = `<span>${window.WizBrand.icon(esc(icon))}</span><span>${esc(text)}</span>`; t.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('on'), ms); }
   /* The native bridge for Wizard for Mac, deep links, boot and workspace sync; desktop/desktop-boot.js. */
-  const { LINKS } = window.WizCore.desktopParts.boot({ $$, APP, appAt, appOf, APPS, ask, C, chanPost, CHATS, closeCurrent, closeDesktop, closePalette, closeSettings, closeWin, commandSnapshot, commandText, commandVoice, desktopBack, desktopHost, desktopVars, dictate, escapeBack, feedCarry, feedOpen, feedOpened, fields, findApp, findWin, focused, focusInside, focusWin, framePage, freshDesk, goHome, goWs, hudClose, hudDock, hudKey, hudOn, ico, keyHints, leaveHome, listW, listWin, LIVE, localCommand, log, mainChats, mainStd, MOD, moveDesk, moveWin, newChat, newDesktop, newWin, openAgentChats, openApp, openAppLink, openChatsList, openFiles, openPalette, openPicker, openSearch, openSettings, openThread, openUsage, OUTBOX, pal, palToggle, paneClicks, panelAppW, panelBack, panelChat, panelClose, panelDock, panelKind, panelListW, panelMode, panelQuit, panelRunning, panelSlot, panelWin, panelWins, recordReply, render, save, setEl, setListW, sideMain, sideViewOn, stage, stepThread, syncChatsPane, talk, talkNew, toast, toggleKeys, uid, usageEl, viewContext, VOICE, winEl, winTitle });
+  const { LINKS } = window.WizCore.desktopParts.boot({ $$, APP, appAt, appOf, APPS, ask, C, chanPost, CHATS, closeCurrent, closeDesktop, closePalette, closeSettings, closeWin, commandSnapshot, commandText, commandVoice, desktopBack, desktopHost, desktopVars, dictate, escapeBack, feedCarry, feedOpen, feedOpened, fields, findApp, findWin, focused, focusInside, focusWin, framePage, freshDesk, goHome, goWs, hudClose, hudDock, hudKey, hudOn, ico, keyHints, leaveHome, listW, listWin, LIVE, localCommand, log, mainChats, mainStd, MOD, moveDesk, moveWin, newChat, newDesktop, newWin, openAgentChats, openApp, openAppLink, openChatsList, openFiles, openPalette, openPicker, openSearch, openSettings, openThread, openUsage, orbTap, OUTBOX, pal, palToggle, paneClicks, panelAppW, panelBack, panelChat, panelClose, panelDock, panelKind, panelListW, panelMode, panelQuit, panelRunning, panelSlot, panelWin, panelWins, recordReply, render, save, setEl, setListW, sideMain, sideViewOn, stage, stepThread, syncChatsPane, talk, talkNew, toast, toggleKeys, uid, usageEl, viewContext, VOICE, winEl, winTitle });
   framesLate({ LINKS });
   stepsLate({ LINKS });
   pickanyLate({ LINKS });

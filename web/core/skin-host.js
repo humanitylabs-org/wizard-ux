@@ -275,8 +275,8 @@
   const { insetSync, placeSync, shellApi, bindLate: shellapiLate } = window.WizCore.skinHostParts.shellapi({ appLogo, chatArchiveOrders, chatListOwners, chatsClaimed, emptyHomes, escapeSurfaces, frameSpots, guard, insetFrame, insetHolders, insetOrbs, insetPlaces, isDoc, openRoutes, panelSync, skinHostVars, storeApps });
   layoutLate({ insetSync, placeSync });
   /* The Add to home screen app, notification rows and the orb swipe map: core/skin-host-rows.js (moved verbatim, wizard-ux issue 1665). */
-  const { activityRows, commandUis, homeScreenApp, inboxAct, keyGuides, keyHandlers, NOTE_ACTS, NOTE_ID, NOTE_ID_OPEN, noteAct, orbSwipeHolders, orbSwipeMap, panelHolders, readReadyOrder, readWorkingOrder, READY_ORDER_KEY, SESSION_ACTS, withNoteRows, bindLate: rowsLate } = window.WizCore.skinHostParts.rows({ isDoc });
-  shellapiLate({ activityRows, commandUis, homeScreenApp, inboxAct, keyGuides, keyHandlers, NOTE_ACTS, NOTE_ID, NOTE_ID_OPEN, noteAct, orbSwipeHolders, orbSwipeMap, panelHolders, readReadyOrder, readWorkingOrder, READY_ORDER_KEY, SESSION_ACTS, withNoteRows });
+  const { activityRows, commandUis, homeScreenApp, inboxAct, keyGuides, keyHandlers, NOTE_ACTS, NOTE_ID, NOTE_ID_OPEN, noteAct, orbSwipeHolders, orbSwipeMap, orbTaps, panelHolders, readReadyOrder, readWorkingOrder, READY_ORDER_KEY, SESSION_ACTS, withNoteRows, bindLate: rowsLate } = window.WizCore.skinHostParts.rows({ isDoc });
+  shellapiLate({ activityRows, commandUis, homeScreenApp, inboxAct, keyGuides, keyHandlers, NOTE_ACTS, NOTE_ID, NOTE_ID_OPEN, noteAct, orbSwipeHolders, orbSwipeMap, orbTaps, panelHolders, readReadyOrder, readWorkingOrder, READY_ORDER_KEY, SESSION_ACTS, withNoteRows });
   let panelOn = false, panelHold = 0;
   function panelSync() {
     const on = [...panelHolders].some(l => !l.dead);
@@ -417,5 +417,5 @@
     paintTweaks(); lastRoute = ''; emitRoute(); window.dispatchEvent?.(new Event('wos:prefs')); return true;
   }
   /* The skin host object the shells call; core/skin-host-host.js. */
-  window.WizCore.skinHostParts.host({ backClaims, BOOT_GUESS_MS, bootGiveUp, booting, builtinDefs, builtins, chatArchiveOrders, chatListOwners, chatsClaimed, claims, clock, commandUis, cssLinks, disabled, dispose, emit, emitBeside, emitRoute, emptyHomes, ensureCss, env, escapeSurfaces, EXPECT_KEY, expected, homeHtml, inboxThreads, interceptors, isDoc, keyGuides, keyHandlers, layers, LAYOUT_KEY, layoutOf, LAYOUTS, levels, load, loadLayout, loadPersonal, loadTweaks, LOOK_ONLY, NOTE_ID, openRoutes, orbSwipeHolders, overlays, paintLayout, paintTweaks, panelHolders, preCss, release, REPLY_LENGTHS, replySummary, requested, safeTweakId, scriptProblem, setLayout, skinHostVars, snoozeLast, startBoot, startBuiltin, taps, tweakCss, tweaks, unload });
+  window.WizCore.skinHostParts.host({ backClaims, BOOT_GUESS_MS, bootGiveUp, booting, builtinDefs, builtins, chatArchiveOrders, chatListOwners, chatsClaimed, claims, clock, commandUis, cssLinks, disabled, dispose, emit, emitBeside, emitRoute, emptyHomes, ensureCss, env, escapeSurfaces, EXPECT_KEY, expected, homeHtml, inboxThreads, interceptors, isDoc, keyGuides, keyHandlers, layers, LAYOUT_KEY, layoutOf, LAYOUTS, levels, load, loadLayout, loadPersonal, loadTweaks, LOOK_ONLY, NOTE_ID, openRoutes, orbSwipeHolders, orbTaps, overlays, paintLayout, paintTweaks, panelHolders, preCss, release, REPLY_LENGTHS, replySummary, requested, safeTweakId, scriptProblem, setLayout, skinHostVars, snoozeLast, startBoot, startBuiltin, taps, tweakCss, tweaks, unload });
 })();

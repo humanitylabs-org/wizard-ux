@@ -8,6 +8,9 @@
   // and edits it by item operation (WizLive.prefOps). KEY is only the list from before: uploaded once (MOVED), then
   // left alone. A service without the field never fills BOX, so this device keeps its own list as before.
   const BOX = 'wos.workspaces.box.v1', MOVED = 'wos.workspaces.moved.v1', AUTO = 'wos.workspaces.auto.v1';
+  // When this device last reached each saved Wizard, and when it last failed to (wizard-ux#1670): the page can't probe
+  // another origin (CSP), so this is what we know: arriving here from it, or the Android app switching to it or not.
+  const REACH = 'wos.workspaces.reach.v1', DAY = 864e5, STALE = 30 * DAY;
   const text = (v, n = 120) => typeof v === 'string' ? v.trim().slice(0, n) : '';
   const native = () => window.wizardUX?.native?.workspaces === true;
   function address(value) {
@@ -27,7 +30,7 @@
         subtitle: text(v.subtitle), role: text(v.role), org: text(v.org), source: text(v.source) }];
     });
   }
-  let state = { active: 'this', items: [] }, registry = {}, pending = '', handoff = '', loading = null, api = null, overlay = null;
+  let state = { active: 'this', items: [] }, registry = {}, pending = '', handoff = '', handoffTo = '', loading = null, api = null, overlay = null;
   const subscribers = new Set();
   const snapshot = () => ({ active: state.active, items: state.items.map(v => ({ ...v })), pending });
   function accept(value) {
@@ -47,6 +50,16 @@
     } catch (_) { return []; }
   }
   const origin = url => { try { return new URL(url).origin; } catch (_) { return ''; } };
+  function reaches() {
+    try { const v = JSON.parse(localStorage.getItem(REACH) || '{}'); return v && typeof v === 'object' && !Array.isArray(v) ? v : {}; } catch (_) { return {}; }
+  }
+  function stamp(url, ok) {
+    const at = origin(url); if (!at) return;
+    const all = reaches(), cur = all[at] && typeof all[at] === 'object' ? all[at] : {};
+    all[at] = { ...cur, [ok ? 'ok' : 'fail']: Date.now() };
+    const keep = Object.entries(all).sort((a, b) => Math.max(b[1]?.ok || 0, b[1]?.fail || 0) - Math.max(a[1]?.ok || 0, a[1]?.fail || 0)).slice(0, MAX);
+    try { localStorage.setItem(REACH, JSON.stringify(Object.fromEntries(keep))); } catch (_) {}
+  }
   const live = () => typeof window.WizLive?.prefOps === 'function' ? window.WizLive : null;
   // null until this box has answered with a savedWizards list (an older Agent Service never does).
   function boxSaved() {
@@ -141,7 +154,7 @@
       history.replaceState(history.state, '', location.pathname + location.search);
       const url = address(r?.url), name = text(r?.name, 60) || 'Wizard';
       if (!url || new URL(url).origin === location.origin) return;
-      arrived = { name, url };
+      arrived = { name, url }; stamp(url, true);
     } catch (_) { /* a malformed hash is ignored */ }
   }
   // Save a Wizard this device has been on (the one we came from, or one the Android app connected to) once, without
@@ -186,7 +199,9 @@
   }
   const toast = message => api?.toast(message);
   // The Android app could not switch (it says why itself): show the Wizard that is still open as the active one.
-  function switchFailed() { if (!handoff) return; state.active = handoff; handoff = ''; notify(); }
+  function switchFailed() { if (!handoff) return; stamp(handoffTo, false); state.active = handoff; handoff = handoffTo = ''; notify(); }
+  // The app checked the other Wizard answers before it reopens on it: this page going away mid-switch means it did.
+  window.addEventListener('pagehide', () => { if (handoff && handoffTo) stamp(handoffTo, true); });
   function close() {
     if (!overlay) return false;
     const old = overlay; overlay = null; old.release?.(); old.abort.abort(); old.root.remove();
@@ -212,16 +227,31 @@
         const dest = destination(item.url), droid = window.WizardOSNative;
         // The Android app owns one Wizard at a time: ask it to switch inside the app. Navigating its WebView to
         // another origin would be handed to the phone's browser. It answers "refused" for anything it won't switch to.
-        if (typeof droid?.switchWizard === 'function' && droid.switchWizard(new URL(dest).origin) === 'started') handoff = previous;
+        if (typeof droid?.switchWizard === 'function' && droid.switchWizard(new URL(dest).origin) === 'started') { handoff = previous; handoffTo = dest; }
         else location.assign(withReturn(dest));
       }
       return { ok: true };
     } catch (error) { state.active = previous; toast('Couldn’t open that Wizard. Please try again.'); throw error; }
     finally { pending = ''; notify(); }
   }
+  // A new address for a saved Wizard: a valid one that no other entry already uses.
+  function moveTo(params) {
+    const url = address(params.url);
+    if (!url) throw new Error('Use an http:// or https:// address, without a password.');
+    if (state.items.some(v => v.id !== params.id && v.url && origin(v.url) === origin(url))) throw new Error('That Wizard is already in your list.');
+    return url;
+  }
+  // Undo of a remove puts the same entry back, unless it (or its address) came back meanwhile.
+  function restorable(params, list) {
+    const url = address(params.url), name = text(params.name) || 'Wizard', id = text(params.id);
+    if (!url || !id) throw new Error('Couldn’t put that Wizard back.');
+    if (list.some(v => v.id === id) || state.items.some(v => v.url && origin(v.url) === origin(url))) return null;
+    return { id, name, url };
+  }
   async function mutate(action, params) {
     if (pending) throw new Error('Please wait for your Wizard to open.');
     if (native()) {
+      if (action === 'address' || action === 'restore') throw new Error('Change this Wizard in the app that owns the list.');
       const result = await window.WizCore.bridge.call('workspaces.' + action, params);
       if (result?.ok !== true) throw new Error('Couldn’t save that change.');
       await list(); return result;
@@ -238,10 +268,17 @@
         if (state.items.length >= MAX) throw new Error('Your Wizard list is full. Remove one first.');
         if (state.items.some(v => v.url === url) || all.some(v => origin(v.url) === origin(url))) throw new Error('That Wizard is already in your list.');
         ops = [op('add', { id: 'remote-' + crypto.randomUUID(), name, url })];
+      } else if (action === 'restore') {
+        const back = restorable(params, all); if (!back) return { ok: true };
+        ops = [op('add', back)];
       } else {
         if (!all.some(v => v.id === params.id)) throw new Error('Manage this entry on the computer that owns the list.');
         if (action === 'rename') { const name = text(params.name); if (!name) throw new Error('Give this Wizard a name.'); ops = [{ op: 'set', key: 'savedWizards/' + params.id + '/name', item: name }]; }
-        else ops = [op('remove', params.id)];
+        else if (action === 'address') {
+          const url = moveTo(params), was = all.find(v => v.id === params.id);
+          // The box has no per-field address edit: the same entry (id and name) goes out and back in with the new address.
+          ops = [op('remove', params.id), op('add', { id: params.id, name: was.name, url })];
+        } else ops = [op('remove', params.id)];
       }
       // Shown at once from the cached list; the box applies the same operation (queued while offline).
       void live().prefOps(ops).catch(() => {});
@@ -255,10 +292,14 @@
       if (state.items.length >= MAX) throw new Error('Your Wizard list is full. Remove one first.');
       if (state.items.some(v => v.url === url)) throw new Error('That Wizard is already in your list.');
       items.push({ id: 'remote-' + crypto.randomUUID(), name, url, kind: 'remote' });
+    } else if (action === 'restore') {
+      const back = restorable(params, items); if (!back) return { ok: true };
+      items.push({ ...back, kind: 'remote' });
     } else {
       const i = items.findIndex(v => v.id === params.id);
       if (i < 0) throw new Error('Manage this entry on the computer that owns the list.');
       if (action === 'rename') { const name = text(params.name); if (!name) throw new Error('Give this Wizard a name.'); items[i].name = name; }
+      if (action === 'address') items[i].url = moveTo(params);
       if (action === 'remove') items.splice(i, 1);
     }
     persist(items); merge(); publish(); return { ok: true };
@@ -326,24 +367,100 @@
     }
     const add = el('button', 'wz-workspaces-add', '+ Add a Wizard'); add.type = 'button'; add.setAttribute('role', 'menuitem');
     add.addEventListener('click', () => { close(); void addWizard().catch(e => toast(e.message)); }); panel.append(add);
+    const man = el('button', 'wz-workspaces-add wz-workspaces-manage', 'Manage Wizards'); man.type = 'button'; man.setAttribute('role', 'menuitem');
+    man.addEventListener('click', manage); panel.append(man);
     panel.querySelector('button')?.focus({ preventScroll: true });
   }
-  function addSheet() {
-    const panel = layer(null, 'Add a Wizard', true), form = el('form'); form.noValidate = true;
-    panel.append(el('h2', '', 'Add a Wizard'), el('p', '', 'Connect to a Wizard on another computer. Use its address on your private network, including http:// or https://. Keep Tailscale connected if that computer uses it.'));
-    const field = (label, name, type) => {
-      const l = el('label', '', label), input = el('input'); input.name = name; input.type = type; input.required = true; input.maxLength = name === 'url' ? 2048 : 120;
-      l.append(input); form.append(l); return input;
-    };
-    const url = field('Wizard address', 'url', 'url'), name = field('Name', 'name', 'text');
+  // One small form sheet for Add a Wizard, Rename and Change address: the same layer, fields, error line and footer.
+  function formSheet({ title, intro, fields, button, run, focus = fields[0].name }) {
+    const panel = layer(null, title, true), form = el('form'); form.noValidate = true;
+    panel.append(el('h2', '', title), el('p', '', intro));
+    const inputs = {};
+    for (const f of fields) {
+      const l = el('label', '', f.label), input = el('input'); input.name = f.name; input.type = f.type; input.required = true; input.maxLength = f.name === 'url' ? 2048 : 120;
+      if (f.value) input.value = f.value;
+      l.append(input); form.append(l); inputs[f.name] = input;
+    }
     const error = el('p', 'wz-workspaces-error'); error.setAttribute('role', 'alert'); form.append(error);
-    const footer = el('div', 'wz-workspaces-footer'), cancel = el('button', '', 'Cancel'), save = el('button', '', 'Add a Wizard');
+    const footer = el('div', 'wz-workspaces-footer'), cancel = el('button', '', 'Cancel'), save = el('button', '', button);
     cancel.type = 'button'; save.type = 'submit'; cancel.addEventListener('click', close); footer.append(cancel, save); form.append(footer); panel.append(form);
     form.addEventListener('submit', async e => {
       e.preventDefault(); error.textContent = ''; save.disabled = true; save.setAttribute('aria-busy', 'true');
-      try { await mutate('add', { url: url.value, name: name.value }); close(); }
+      try { await run(Object.fromEntries(Object.entries(inputs).map(([k, v]) => [k, v.value]))); close(); }
       catch (e) { error.textContent = e.message; save.disabled = false; save.removeAttribute('aria-busy'); }
-    }); url.focus();
+    }); inputs[focus]?.focus();
+    return panel;
+  }
+  function addSheet() {
+    formSheet({ title: 'Add a Wizard', intro: 'Connect to a Wizard on another computer. Use its address on your private network, including http:// or https://. Keep Tailscale connected if that computer uses it.',
+      fields: [{ label: 'Wizard address', name: 'url', type: 'url' }, { label: 'Name', name: 'name', type: 'text' }], button: 'Add a Wizard', run: v => mutate('add', v) });
+  }
+  // Settings › Connections › Wizards (wizard-ux#1670): every saved Wizard, with Rename, Change address and Remove.
+  const find = id => state.items.find(v => v.id === id);
+  function renameWizard(id) {
+    const v = find(id); if (!v) return;
+    formSheet({ title: 'Rename', intro: 'The name this Wizard shows in your switcher and here.', fields: [{ label: 'Name', name: 'name', type: 'text', value: v.name }], button: 'Save', run: x => mutate('rename', { id, name: x.name }) });
+  }
+  function moveWizard(id) {
+    const v = find(id); if (!v) return;
+    formSheet({ title: `Change address of ${v.name}`, intro: 'Its new address on your private network, including http:// or https://. Use this when that Wizard was reinstalled or moved and now answers somewhere else.',
+      fields: [{ label: 'Wizard address', name: 'url', type: 'url', value: v.url }], button: 'Save', run: x => mutate('address', { id, url: x.url }) });
+  }
+  // One tap removes; Undo (about six seconds) puts the same entry back.
+  let undoEl = null;
+  function dropUndo() { undoEl?.remove(); undoEl = null; }
+  async function removeWizard(id) {
+    const v = find(id); if (!v) return;
+    const back = { id: v.id, name: v.name, url: v.url };
+    await remove(id);
+    dropUndo(); if (native()) { toast(`Removed ${v.name}`); return; }
+    const bar = undoEl = el('div', 'wz-workspaces-undo'); bar.setAttribute('role', 'status');
+    const undo = el('button', '', 'Undo'); undo.type = 'button';
+    bar.append(el('span', '', `Removed ${v.name}`), undo); document.body.append(bar);
+    undo.addEventListener('click', () => { dropUndo(); void mutate('restore', back).catch(e => toast(e.message)); });
+    setTimeout(() => { if (undoEl === bar) dropUndo(); }, 6000);
+    undo.focus?.({ preventScroll: true });
+  }
+  const editable = v => v.id !== 'this' && v.id !== state.active && (native() ? v.kind !== 'managed' : v.source === 'box' || v.source === 'local');
+  function when(t) {
+    const days = Math.floor((Date.now() - t) / DAY);
+    return days < 1 ? 'today' : days < 2 ? 'yesterday' : days < 30 ? `${days} days ago` : new Date(t).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+  }
+  // What this device knows about reaching it; stale = it failed last, or was last reached over 30 days ago.
+  function reach(v) {
+    if (v.id === 'this') return { text: 'You’re on this Wizard', stale: false };
+    if (!native() && !v.url) return { text: 'Not connected', stale: true };
+    if (v.source === 'registry' || native()) return { text: v.status === 'unknown' ? '' : v.status === 'ready' ? 'Online' : v.status === 'offline' ? 'Offline' : 'Starting', stale: v.status === 'offline' };
+    const r = reaches()[origin(v.url)] || {}, ok = Number(r.ok) || 0, fail = Number(r.fail) || 0;
+    if (fail > ok) return { text: `Unreachable · couldn’t reach it ${when(fail)}${ok ? `, last reached ${when(ok)}` : ''}`, stale: true };
+    if (ok && Date.now() - ok > STALE) return { text: `Unreachable for a long time · last reached ${when(ok)}`, stale: true };
+    if (ok) return { text: `Last reached ${when(ok)}`, stale: false };
+    return { text: 'Not reached from this device yet', stale: false };
+  }
+  const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+  const hostOf = url => { try { return new URL(url).host; } catch (_) { return ''; } };
+  function settingsHtml() {
+    const rows = state.items.map(v => {
+      const r = reach(v), small = [hostOf(v.url), subtitle(v), r.text].filter(Boolean).join(' · '), id = esc(v.id);
+      const acts = editable(v) ? `<div class="ub-a wz-saved-acts"><button type="button" data-wizard-rename="${id}">Rename</button>${native() ? '' : `<button type="button" data-wizard-address="${id}">Change address</button>`}<button type="button" class="ghost" data-wizard-remove="${id}">Remove</button></div>` : '';
+      return `<div class="st-row static wz-saved${r.stale ? ' is-stale' : ''}" data-saved-wizard="${id}"><span class="st-tx"><b>${esc(v.name)}</b><small>${esc(small)}</small>${acts}</span></div>`;
+    }).join('');
+    return `<div class="st-group"><h4>Wizards</h4>${state.items.length > 1 ? rows : ''}<button class="st-row" type="button" data-workspaces-add><span class="st-tx"><b>Add a Wizard</b><small>Connect to a Wizard on another computer.</small></span></button></div>`;
+  }
+  function settingsAct(el) {
+    const add = el.closest('[data-workspaces-add]'), ren = el.closest('[data-wizard-rename]'), mv = el.closest('[data-wizard-address]'), rm = el.closest('[data-wizard-remove]');
+    if (add) void addWizard().catch(e => toast(e.message));
+    else if (ren) renameWizard(ren.dataset.wizardRename);
+    else if (mv) moveWizard(mv.dataset.wizardAddress);
+    else if (rm) void removeWizard(rm.dataset.wizardRemove).catch(e => toast(e.message));
+    else return false;
+    return true;
+  }
+  // The switcher's Manage Wizards: the Settings section above, through the shell's own deep link (both shells).
+  function manage() {
+    close();
+    const href = location.origin + location.pathname + '?view=saved-wizards';
+    if (!window.WizCore?.deeplink?.route?.(href)) toast('Open Settings › Connections to manage your Wizards.');
   }
   function addWizard(params) {
     if (params) return mutate('add', params);
@@ -351,7 +468,7 @@
     addSheet(); return Promise.resolve({ ok: true });
   }
   const W = window.WizWorkspaces = { list, snapshot, subscribe, switch: switchTo, add: addWizard,
-    rename: (id, name) => mutate('rename', { id, name }), remove, switchFailed, groups, subtitle, address, destination, openMenu, close, ingest,
+    rename: (id, name) => mutate('rename', { id, name }), move: (id, url) => mutate('address', { id, url }), restore: item => mutate('restore', item), remove, switchFailed, manage, groups, subtitle, address, destination, openMenu, close, ingest,
     get visible() { return state.items.length >= 2; } };
   settle(); merge();
   // live.js announces every change to the cached box preferences (a pull from the box, or an edit on this device).
@@ -389,7 +506,13 @@
     void list().catch(e => toast(e.message));
     return () => { off(); close(); button.remove(); api = null; document.documentElement.removeAttribute('data-workspace-control'); };
   }, { when: 'always', label: 'Wizard switcher', capabilities: ['layout'] });
-  window.WosSettings?.register({ id: 'saved-wizards', page: 'connections', order: 90,
-    html: () => '<div class="st-group"><h4>Wizards</h4><button class="st-row" type="button" data-workspaces-add><span class="st-tx"><b>Add a Wizard</b><small>Connect to a Wizard on another computer.</small></span></button></div>',
-    act: (_ctx, el) => { if (!el.closest('[data-workspaces-add]')) return false; void addWizard().catch(e => toast(e.message)); return true; } });
+  window.WosSettings?.register({ id: 'saved-wizards', page: 'connections', order: 90, aliases: ['saved-wizards', 'wizards'],
+    html: settingsHtml, act: (_ctx, el) => settingsAct(el) });
+  // The list changed (an edit here, another device, the box): repaint this section in place. Settings › Connections
+  // holds back whole-page repaints while its embedded Connections frame is open, so a refresh alone would not show it.
+  const painted = new WeakMap();
+  subscribe(() => {
+    const html = settingsHtml();
+    for (const n of globalThis.document?.querySelectorAll?.('[data-settings-feature="saved-wizards"]') || []) if (painted.get(n) !== html) { n.innerHTML = html; painted.set(n, html); }
+  });
 })();
