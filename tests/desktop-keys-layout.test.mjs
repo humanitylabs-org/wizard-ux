@@ -5,7 +5,8 @@ import vm from 'node:vm';
 import { withDesktopParts } from './fixtures/desktop-parts.mjs';
 import { desktopKeys } from './fixtures/desktop-keys-harness.mjs';
 import { keysGuide } from './fixtures/keys-guide-harness.mjs';
-import { block, runRecording } from './fixtures/source-slice.mjs';
+import { between, block, runRecording } from './fixtures/source-slice.mjs';
+import { createDocument } from './fixtures/mini-dom.mjs';
 
 // the real skins.js in a bare page (its twin table)
 function shippedSkinsHost() {
@@ -126,13 +127,17 @@ test('Home is ⌥` (again goes back); desktops are ⌥1…9 from the first desk'
   assert.deepEqual(C.workspaceNav.digitTarget(4, 3), { kind: 'new', index: 3 });
   assert.equal(C.workspaceNav.digitTarget(5, 3), null);
   assert.equal(C.workspaceNav.slot(0), 1);
-  assert.match(js, /code === 'Backquote'\) return hit\(\(\) => \{ if \(e\.repeat\) return; if \(homeOpen\) \{ leaveHome\(\)/);
+  // ⌥` (the real onKey): Home, again goes back; held down it does not flicker
+  const away = desktopKeys(); away.key('Backquote'); away.key('Backquote', { repeat: true }); assert.deepEqual(away.names(), ['goHome']);
+  const home = desktopKeys({ homeOpen: true }); home.key('Backquote'); assert.deepEqual(home.names(), ['leaveHome']);
   assert.doesNotMatch(js, /code === 'Digit1'\) return hit/);
-  assert.ok(js.includes("['`', 'Home', 'Again to go back']") && js.includes("['1–9', 'Desktop 1 to 9'"));
+  // the guide names it on the logo (its chip's label); ⌥1…9 is the digitTarget above
+  assert.deepEqual(keysGuide().show(false).filter(c => c.key === '`').map(c => c.label), ['⌥ `: Home']);
 });
 
 test('⌥G Pick anything: letter chips on every clickable, typed letters click it, guide lists it', () => {
-  assert.match(js, /code === 'KeyG'\) return hit\(\(\) => \{ if \(!e\.repeat\) pick\.start\(\); \}\)/);
+  { const started = [], k = desktopKeys({ pick: { active: () => false, start: () => started.push(1) } });
+    k.key('KeyG'); k.key('KeyG', { repeat: true }); assert.equal(started.length, 1, '⌥G starts Pick once, held or not'); }
   // Pick owns ordinary keys; Escape is dispatched once by core (repeat/IME inert).
   const start = js.indexOf('  function onKey(e, fromFrame = false)');
   const head = js.slice(start, js.indexOf('    keyHints.down(e);', start));
@@ -143,10 +148,28 @@ test('⌥G Pick anything: letter chips on every clickable, typed letters click i
     assert.equal(context.escaped,n+(Object.keys(flags).length ? 0 : 1));
     assert.equal(context.onKey({key:'g',target:{matches:()=>true},...flags}), 'picked');
   }
-  assert.match(js, /\[data-chopen\],\[data-chdraft\]/);
-  assert.match(js, /querySelectorAll\('iframe'\)/);
-  assert.ok(js.includes("['G', 'Pick anything',"));
+  // the real pick on a small page: chat rows (also one inside a button) and a same-origin app frame's buttons get
+  // letters; typing one clicks it. The guide's legend lists G (the keys guide test below reads its kbd list).
+  const p = pickPage();
+  assert.equal(p.pick.start(), true);
+  assert.deepEqual(p.chips(), ['A', 'S', 'D', 'F', 'J'], 'b1, the chat row, the button, the row inside it, the frame\'s button');
+  for (const [code, id] of [['KeyS', 'row'], ['KeyF', 'inner'], ['KeyJ', 'fbtn']]) { p.pick.start(); p.pick.key({ code, key: code.slice(3).toLowerCase(), preventDefault() {}, stopPropagation() {} }); assert.equal(p.clicked.at(-1), id, code); }
 });
+
+// desktop-pickany.js's pick (⌥G), run on mini-dom: one row per element (y = its order), an iframe holding a page.
+function pickPage() {
+  const doc = createDocument(), inner = createDocument(), clicked = [];
+  doc.body.innerHTML = '<button id="b1">One</button><div data-chopen="s1" id="row"><span>Chat</span></div><button id="outer"><span data-chopen="s2" id="inner">x</span></button><iframe id="f"></iframe>';
+  inner.body.innerHTML = '<button id="fbtn">In the app</button>';
+  const view = { getComputedStyle: () => ({ visibility: 'visible', opacity: '1', pointerEvents: 'auto' }) };
+  let y = 0;
+  for (const d of [doc, inner]) { d.defaultView = view; d.elementFromPoint = () => null;
+    for (const n of d.querySelectorAll('*')) { const top = (y += 30); n.getBoundingClientRect = () => ({ left: 10, top, right: 110, bottom: top + 20, width: 100, height: 20 }); n.addEventListener('click', e => { if (e.target === n) clicked.push(n.id); }); } }
+  const f = doc.querySelector('#f'); f.contentDocument = inner; f.clientLeft = 0; f.clientTop = 0;
+  const box = f.getBoundingClientRect; f.getBoundingClientRect = () => ({ ...box(), top: 0, bottom: 2000, height: 2000 });
+  const ctx = runRecording(`${block(js, '  const pick = (() => {')})();\nthis.pick = pick;`, { document: doc, innerWidth: 1000, innerHeight: 4000, addEventListener() {}, log() {}, toast() {} });
+  return { pick: ctx.pick, clicked, chips: () => doc.querySelectorAll('#pickHints .pick-chip').map(c => c.textContent) };
+}
 
 test('the keys guide is chips in place, no boxes: ↓ on the next Ready chat, F W R on window buttons, no H J K L (retired for ⌥L light), words only on Speak', () => {
   const f = { id: 'a1', app: 'frame' }, g = keysGuide({ focused: () => f, ws: [{ id: 'd1', wins: ['a1'] }], W: { a1: f } });
@@ -316,8 +339,12 @@ test('Omarchy-style keys: ⌥− / ⌥= resize, ⌥⇧W reopens, ⌥Z jumps back
 });
 
 test('resize keeps the stock split until asked, and is kept per desk', () => {
-  assert.match(js, /const splitOf = C\.panes\.splitOf;/);
-  const splitOf = vm.runInNewContext(readFileSync(new URL('../web/core/pane-layout.js', import.meta.url), 'utf8') + '\nWizCore.panes.splitOf;');
+  const panes = vm.runInNewContext(readFileSync(new URL('../web/core/pane-layout.js', import.meta.url), 'utf8') + '\nWizCore.panes;'), splitOf = panes.splitOf;
+  // the desktop's ⌥= (resizeFocused) steps from the shared stock split, and keeps the result on that desk
+  const resize = (wins, front, dir) => { const d = { wins }, r = runRecording(`${between(js, '  const SPLIT = [0.25, 0.75];', '  function focusWin(')}\nresizeFocused(${dir});`,
+    { C: { panes }, ws: [d], cur: 0, focused: () => ({ id: front }), homeOpen: false, W: {}, hud: null, globalThis: {}, clampN: (v, a, b) => Math.min(b, Math.max(a, v)) }); return d.split; };
+  assert.equal(resize(['a', 'b'], 'a', 1), 0.58); assert.equal(resize(['a', 'b', 'c'], 'a', 1), 0.64, 'three windows: from the stock 0.56');
+  assert.equal(resize(['a', 'b'], 'b', 1), 0.42, 'the other window wider');
   assert.equal(splitOf({}, 2), 0.5); assert.equal(splitOf({}, 3), 0.56); assert.equal(splitOf({ split: 0.66 }, 2), 0.66); assert.equal(splitOf({ split: 0.9 }, 2), 0.5);
 });
 
