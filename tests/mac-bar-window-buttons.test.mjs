@@ -7,6 +7,7 @@ import vm from 'node:vm';
 import { withWebParts } from './fixtures/web-parts.mjs';
 import { createDocument } from './fixtures/mini-dom.mjs';
 import { styleOf } from './fixtures/mini-css.mjs';
+import { deskWorld, layout, El, settle } from './fixtures/ai-apps-world.mjs';
 
 const read = path => withWebParts(readFileSync(new URL('../' + path, import.meta.url), 'utf8'));
 const shell = read('web/core/shell.js');
@@ -122,6 +123,20 @@ test('inside the Mac app the chat and app panel header buttons get click-through
   // repainted with the top row: soon() asks for one frame; removed when the layout goes.
   mac.macHoles.soon(); assert.equal(mac.frames.length, 1); mac.macHoles.soon(); assert.equal(mac.frames.length, 1);
   mac.macHoles.dispose(); assert.equal(bar.querySelector('.aad-mac-holes'), null);
-  const keys = read('web/layouts/ai-apps/desktop-keys.js'), js = read('web/layouts/ai-apps/desktop.js');
-  assert.ok(keys.includes('syncOrb(); macHoles?.soon();') && js.includes('macHoles?.dispose();'), 'the layout repaints and removes the spots');
+  // the whole AI apps desktop layout inside the Mac app: a new route repaints the spots, leaving it removes them
+  const d = deskWorld(), { w } = d;
+  for (const [k, v] of [['data-shell', 'desktop'], ['data-layout', 'ai-apps'], ['data-native-chrome', 'mac']]) w.html.setAttribute(k, v);
+  const deskBar = new El('div'); deskBar.setAttribute('id', 'bar'); w.html.children[0].append(deskBar);
+  w.doc.getElementById = id => w.html.querySelector('#' + id);
+  const asked = []; w.api.frame = f => { asked.push(f); return () => {}; };
+  const off = (await layout()).default(w.api);
+  const flush = () => { while (asked.length) asked.shift()(0); };
+  flush();
+  const holes = deskBar.querySelector('.aad-mac-holes'), drawn = holes.querySelectorAll('i').length;
+  assert.ok(drawn >= 3, 'the layout draws its spots');
+  holes.replaceChildren(); // emptied, and #bar moved: only a repaint draws them again
+  deskBar.getBoundingClientRect = () => ({ x: 0, y: 0, left: 0, top: 0, width: 400, height: 44, right: 400, bottom: 44 });
+  w.st.route = { ...w.st.route, view: 'list' }; w.emit('route', w.st.route); await settle(); flush();
+  assert.ok(deskBar.querySelector('.aad-mac-holes').querySelectorAll('i').length >= 3, 'a new route repaints the spots');
+  off(); assert.equal(deskBar.querySelector('.aad-mac-holes'), null, 'leaving the layout removes them');
 });

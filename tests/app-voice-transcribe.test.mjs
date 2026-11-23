@@ -2,9 +2,9 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
+import { appClient } from './fixtures/app-client-harness.mjs';
 import { withServicesParts } from './fixtures/app-services-parts.mjs';
 const source = withServicesParts(readFileSync(new URL('../web/core/app-services.js', import.meta.url), 'utf8'));
-const client = readFileSync(new URL('../web/core/app-client.js', import.meta.url), 'utf8');
 function fixture(config) {
   const calls = [], replies = [], location = new URL('https://wizard.example/wizard-os-home/'); let listener;
   const child = {location: new URL('/messenger/', location), document: {}, addEventListener(){}, postMessage(m){replies.push(m);}};
@@ -51,5 +51,12 @@ test('provider errors remain retryable and no_voice maps to unavailable', async 
 test('postMessage transport admits voice.transcribe and the client has a long-running request', async () => {
   const f = fixture(); await f.message({origin: 'https://wizard.example', source: f.child, data: {type: 'wizard:app:request', version: 1, id: 'test-1', op: 'voice.transcribe', args: {file: audio(), language: 'en'}}});
   assert.equal(f.calls.length, 1); assert.equal(f.replies.at(-1).value.text, 'A real transcript');
-  assert.match(client, /voice: Object\.freeze/); assert.match(client, /request\('voice.transcribe'.*180000/);
+  // the app SDK (real app-client.js, framed by a shell with no same-origin services) sends it as one long request
+  const app = appClient(); await app.hello();
+  assert.ok(Object.isFrozen(app.api.voice), 'apps cannot swap the voice API');
+  const file = audio(), asked = app.api.voice.transcribe(file, { language: 'en', prompt: 'not sent' });
+  const [req] = app.requests('voice.transcribe');
+  assert.equal(req.args.file, file); assert.equal(JSON.stringify(Object.keys(req.args)), '["file","language"]'); assert.equal(req.args.language, 'en');
+  assert.ok(app.delays.includes(180000), 'waits up to 3 minutes for a long recording');
+  app.reply(req, { text: 'words' }); assert.equal((await asked).text, 'words');
 });
