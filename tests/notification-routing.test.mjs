@@ -5,7 +5,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { createDocument } from './fixtures/mini-dom.mjs';
-import { block } from './fixtures/source-slice.mjs';
+import { between, block, runRecording } from './fixtures/source-slice.mjs';
+import { cascade } from './fixtures/mini-css.mjs';
+const createFrag = html => { const d = createDocument(); d.body.innerHTML = html; return d.body.firstElementChild; };
 import { readFileSync } from 'node:fs';
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 import { withSettingsParts } from './fixtures/settings-parts.mjs'; // settings.js parts moved out verbatim (issue 1665)
@@ -189,12 +191,25 @@ test('one picker (Chats · Badge · Morning report · Off): Settings and every n
   assert.match(html, /data-notify-to="daily" aria-checked="false" disabled title="Messenger would lose its point waiting for the Morning Report"/, 'an app\'s feed cannot wait a day');
   assert.match(B.picker('messenger', { off: true }), /data-notify-to="chats" aria-checked="false" disabled/, 'without Chats only Badge can be picked');
   const s = withSettingsParts(read('web/core/settings.js')), c = withParts(read('web/core/chats.js'));
-  assert.match(s, /const routeSeg = \(r, off\) => window\.WosBell\.picker\(r\.id, \{ name: r\.name, off \}\);/, 'Settings renders the shared picker');
-  assert.match(c, /\$\{B\.picker\(id, \{ name \}\)\}/, 'Chats renders the same shared picker');
-  assert.match(c, /if \(NV\) msgs = noteRouteHtml\(NV\) \+ msgs;/, 'on every notification opened in Chats');
+  // Settings › Notifications, its real html(): every row carries the shared picker
+  const feats = []; runRecording(`${between(s, '  const routeSeg = ', '\n')}\n${block(s, "  register({ id: 'notification-routing'")});`, { register: f => feats.push(f), esc: String, window: { WosBell: B } });
+  const page = createDocument(); page.body.innerHTML = feats[0].html();
+  const tos = r => [...page.querySelectorAll(`[data-notify-app="${r}"] [role="radiogroup"] [data-notify-to]`)].map(b => b.dataset.notifyTo);
+  assert.deepEqual(tos('notifications'), ['chats', 'badge', 'daily', 'off'], 'Settings renders the shared picker');
+  assert.equal(page.querySelector('[data-notify-app="notifications"] [role="radiogroup"]').outerHTML, createFrag(B.picker('notifications', { name: 'Notifications', off: !B.chatsAvailable })).outerHTML, 'exactly WosBell.picker');
+  // a notification opened in Chats: the thread paint puts the same picker above it (chats-threadpaint.js, chats-drafts.js)
+  const paint = runRecording(`${block(c, '  function noteRouteHtml(NV) {')}\n${between(c, '  const noteRoute = ', '\n')}\nthis.f = (NV, msgs) => {\n${between(c, '    if (NV) msgs += noteMoreHtml(NV);', '\n    else if (isNew && !pend.length)')};\nreturn msgs; };`,
+    { window: { WosBell: B }, esc: String, noteQuiet: () => false, noteMoreHtml: () => '', APP_NOTE: /^a-([a-z0-9-]+)-[0-9a-f]{16}$/ });
+  const thread = createDocument(); thread.body.innerHTML = paint.f({ id: 'n1', item: { id: 'n1', app: 'messenger' } }, '<div class="msg a ch-notif"></div>');
+  const route = thread.body.firstElementChild;
+  assert.equal(route.className, 'ch-notif-route', 'on every notification opened in Chats, above it');
+  assert.equal(route.querySelector('[role="radiogroup"]').outerHTML, createFrag(B.picker('messenger', { name: 'Messenger' })).outerHTML, 'Chats renders the same shared picker');
+  assert.equal(paint.f(null, '<p>x</p>'), '<p>x</p>', 'no notification: no picker');
   assert.doesNotMatch(s + c, /data-notify-to="\$\{to\}"/, 'nobody builds a second copy of the picker');
+  // styled once, for both places
   const css = read('web/core/settings.css');
-  assert.match(css, /\.st-nr-seg\.wos-route button \{/, 'styled once, for both places');
+  for (const [where, btn] of [['Settings', page.querySelector('[data-notify-app="notifications"] [data-notify-to="badge"]')], ['Chats', route.querySelector('[data-notify-to="badge"]')]])
+    assert.equal(cascade(btn, css)['min-height']?.value, '44px', where);
 });
 
 test('one saved setting: a pick in either place updates the other at once', async () => {
@@ -204,10 +219,19 @@ test('one saved setting: a pick in either place updates the other at once', asyn
   B.setRoute('notifications', 'badge');
   assert.equal(heard, 1, 'both Settings and Chats repaint on wizard:notify-route');
   assert.match(B.picker('notifications'), /data-notify-to="badge" aria-checked="true"/);
-  const c = withParts(read('web/core/chats.js')), s = withSettingsParts(read('web/core/settings.js'));
-  assert.match(c, /window\.addEventListener\('wizard:notify-route', \(\) => \{[^\n]*renderThreadNow\(x\)/, 'an open notification repaints its picker');
-  assert.match(s, /window\.addEventListener\?\.\('wizard:notify-route', appsChanged\)/, 'Settings repaints too');
-  assert.match(c, /notifRoute\(id, nrt\.dataset\.notifyRoute, nrt\.dataset\.notifyTo\)/, 'a tap in Chats writes the same route');
+  const c = withParts(read('web/core/chats.js')), view = read('web/core/settings-view.js');
+  // an open notification repaints its picker (the thread tracker's listener, run)
+  const on = {}, listen = { addEventListener: (t, f) => { on[t] = f; } };
+  const T = runRecording(between(c, "  window.addEventListener('wizard:notify-route'", '\n'), { window: listen, CH: { a: {}, b: {} }, W: { a: { id: 'a', thread: '__new__' }, b: { id: 'b', thread: 't1' } }, notifOf: x => x.id === 'a' });
+  on['wizard:notify-route'](); assert.deepEqual(T.calls.filter(x => x[0] === 'renderThreadNow').map(x => x[1].id), ['a'], 'an open notification repaints its picker');
+  // Settings repaints too (settings-view.js)
+  const S = runRecording(`${between(view, '    const appsChanged = ', '\n')}\n${between(view, "    window.addEventListener?.('wos:prefs', appsChanged);", '\n')}`, { window: listen });
+  on['wizard:notify-route'](); assert.equal(S.calls.filter(x => x[0] === 'render').length, 1, 'Settings repaints too');
+  // a tap in Chats writes the same route (the real click handler line, chats-bind.js)
+  const tap = runRecording(`this.f = (e, id, w) => {\n${between(c, "    const nrt = e.target.closest('.ch-notif-route [data-notify-route]');", '\n')}\nreturn false; };`, {});
+  const doc = createDocument(); doc.body.innerHTML = `<div class="ch-notif-route">${B.picker('messenger')}</div>`;
+  assert.equal(tap.f({ target: doc.querySelector('[data-notify-to="badge"]') }, 'w1', { thread: '__new__' }), true);
+  assert.deepEqual(tap.calls.filter(x => x[0] === 'notifRoute'), [['notifRoute', 'w1', 'messenger', 'badge']], 'a tap in Chats writes the same route');
 });
 
 test('Badge from inside a notification: out of Chats at once, toast "<App> moved to badges · Undo", Undo brings it back', async () => {
@@ -229,8 +253,14 @@ test('Badge from inside a notification: out of Chats at once, toast "<App> moved
   assert.equal(B.route('messenger'), 'chats', 'Undo restores Chats');
   assert.ok(B.items().some(i => i.app === 'messenger'), 'and its items are back');
   assert.ok(!t.classList.set.has('show'), 'the toast goes');
-  const c = withParts(read('web/core/chats.js'));
-  assert.match(c, /if \(to !== 'chats'\) \{[^]*chatsBack\(w\);[^]*B\.movedToast\?\.\(app, toast, 5000, from\);/, 'picking Badge in Chats closes the notification and shows the toast');
+  // picking Badge in Chats closes the notification and shows the toast (the real notifRoute, chats-drafts.js)
+  const c = withParts(read('web/core/chats.js')), cw = { id: 'w1', thread: '__new__' }, seen = [];
+  const R = runRecording(`${block(c, '  function notifRoute(wid, app, to) {')}\nthis.notifRoute = notifRoute;`, {
+    window: { WosBell: { route: () => 'chats', setRoute: () => true, movedToast: (...x) => seen.push(x) } }, W: { w1: cw }, CH: {}, owner: x => x, PHONE: () => false,
+    notifOf: () => ({ id: 'n1', item: { app: 'messenger' } }), noteRoute: () => 'messenger', ch: () => ({ draft: '' }), KIT: { drafts: { get: () => ({ text: '', files: [] }), clear() {}, setReply() {} } },
+    chatsBack: x => { x.thread = null; }, toast: 'TOAST' });
+  assert.equal(R.notifRoute('w1', 'messenger', 'badge'), true);
+  assert.equal(cw.thread, null, 'the notification closes'); assert.deepEqual(seen, [['messenger', 'TOAST', 5000, 'chats']], 'the toast shows');
 });
 
 // With Chats the default, an app's badge is hidden while its feed lists it in Chats. A feed that goes away (404) or
