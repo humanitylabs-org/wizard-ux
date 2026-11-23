@@ -74,7 +74,25 @@ test('contextual recorder freezes thread, active run and model route before voic
   ctx.VOICE.state = 'idle'; Object.keys(frozen).forEach(k => delete frozen[k]);
   await ctx.talk('toggle', true);
   assert.equal(frozen.reply, null); assert.equal(frozen.snapshot.thread, '__new__');
-  assert.match(body, /const aimSid = vFeedback\?\.thread \|\| rp\?\.sid/);
-  assert.match(body, /CHATS\.sendVoiceTo\(rp\.wid, rp\.sid/);
-  assert.match(body, /OUTBOX\.handOff\?\.\(stagedId\)/);
+  // ... and the send step (real talk('send') from `const rp = vReply;` on) goes to exactly that frozen thread.
+  const sendStep = source.slice(source.indexOf('    const rp = vReply;'), source.indexOf('  // Composer mic:', start));
+  const send = async (extra = {}) => {
+    const calls = [];
+    const OUTBOX = { stage: async o => { calls.push(['stage', JSON.parse(JSON.stringify(o))]); return { id: 'staged-1' }; }, handOff: async id => { calls.push(['handOff', id]); return true; }, enqueue: async o => { calls.push(['enqueue', o]); return { state: 'queued' }; } };
+    const c = runRecording(`this.send = async function () {\n${sendStep}`, {
+      vReply: null, vFeedback: null, vTarget: 'w1', vSnapshot: { view: { kind: 'chat thread' }, thread: 't1' }, vNewChat: false, vBox: undefined, vConversation: null, vFiles: null, vSpace: null,
+      vRoute: route, vRouteAt: () => route, vContext: '', vHandedOff: null, strictReply: false, forceNew: false, commandTake: false, dictationFinishing: false,
+      W: { w1: { id: 'w1', app: 'chats', thread: 't1' } }, OUTBOX, VOICE: { finish: async () => ({ blob: 'AUDIO', captureId: 'cap-1' }) },
+      CHATS: { takeComposer: () => null, sendChat: (...x) => calls.push(['sendChat', ...x]), sendVoiceTo: (...x) => calls.push(['sendVoiceTo', ...x]) },
+      window: { WizConfig: {}, WizUploads: null, WosBoundView: { feedback: async (...x) => (calls.push(['feedback', x[1]?.thread]), { state: 'sent' }) } }, toast() {}, ...extra }, calls);
+    await c.send(); return calls;
+  };
+  const replied = await send({ vReply: { wid: 'w1', sid: 't1', steerRunId: 'run_7' }, vSnapshot: { view: { kind: 'chat thread' }, thread: 't2' } }); // another thread in front by Send
+  const voiceTo = replied.find(c => c[0] === 'sendVoiceTo');
+  assert.deepEqual([voiceTo[1], voiceTo[2], voiceTo[3]], ['w1', 't1', 'AUDIO'], 'the frozen reply target gets the take');
+  assert.equal(voiceTo[7], 'staged-1', 'as the staged take'); assert.equal(voiceTo[9], 'run_7', 'steering the frozen run');
+  assert.deepEqual(replied.find(c => c[0] === 'handOff'), ['handOff', 'staged-1'], 'handed to the outbox before Reload');
+  assert.equal(replied.find(c => c[0] === 'stage')[1].sessionId, 't1');
+  const fed = await send({ vFeedback: { thread: 't9' } });
+  assert.equal(fed.find(c => c[0] === 'stage')[1].sessionId, 't9', 'a feedback take aims at its own thread');
 });
