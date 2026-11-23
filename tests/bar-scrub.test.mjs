@@ -6,6 +6,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
 import vm from 'node:vm';
+import { createDocument } from './fixtures/mini-dom.mjs';
+import { cascade } from './fixtures/mini-css.mjs';
 import { withShellParts } from './fixtures/shell-parts.mjs';
 
 const read = f => withShellParts(readFileSync(new URL('../' + f, import.meta.url), 'utf8'));
@@ -141,8 +143,10 @@ test('no switch: the scrub is the only bar path, in the catalogue and code there
   vm.runInNewContext(ov.slice(at, ov.indexOf('\n', at)), { scrub: made, $: () => ({ appendChild: n => docked.push(n) }) });
   assert.equal(made.innerHTML, '<span class="sc-label"></span>', 'the label box has no handle bar inside');
   assert.deepEqual(docked, [made], 'it sits on the dock');
-  // (the label box takes no touches, the bar under it scrubs: .scrub { pointer-events: none } in styles.css)
-  assert.match(read('web/styles.css'), /\.scrub \{[^}]*pointer-events: none;/);
+  // the label box takes no touches, the bar under it scrubs: the real styles.css cascaded on the box the shell docked
+  const doc = createDocument(), mk = ov.slice(ov.indexOf('  const scrub = document.createElement('), ov.indexOf('\n', ov.indexOf('  const scrub = document.createElement(')));
+  const box = vm.runInNewContext(`(() => { ${mk}\n return scrub; })()`, { document: doc }); doc.body.appendChild(box);
+  assert.equal(cascade(box, read('web/styles.css'))['pointer-events']?.value, 'none');
 });
 
 test('independent of Channels: the scrub block reads no switch, no Channels flag, DOM or state', () => {
