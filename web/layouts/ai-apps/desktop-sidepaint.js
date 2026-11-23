@@ -122,7 +122,9 @@ export function sidepaintPart({ aadVars, ACT_SECTIONS, actOn, actOrder, api, bad
         box.append(el('b', '', { text: 'No chats yet' }), el('span', '', { text: 'Type a message to Wizard, or tap the orb and talk.' }), go);
         out.push(box);
       }
-      for (const [k, word0] of ACT_SECTIONS) {
+      // Miguel's "Archive on top" (miguel/archive-top) puts Archived first here too, as on the phone drawer (issue 1741)
+      const actSections = archiveTop(root) ? [...ACT_SECTIONS.filter(([k]) => k === 'archive'), ...ACT_SECTIONS.filter(([k]) => k !== 'archive')] : ACT_SECTIONS;
+      for (const [k, word0] of actSections) {
         if (aadVars.sessions && has(k)) {
           const rows = s[k] || [], on = k === 'recent' ? secOpen.recent !== false : !!secOpen[k];
           const hd = el('button', 'aad-lab aad-sec', { type: 'button', 'data-sec': k, 'aria-expanded': String(on), 'aria-controls': 'aad-sec-' + k });
