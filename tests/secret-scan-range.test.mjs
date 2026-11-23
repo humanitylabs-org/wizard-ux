@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, writeFileSync, rmSync, existsSync, mkdirSync, copyFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import { readWorkflow, jobsFor, step, runStep } from './fixtures/w1-workflow.mjs';
 
@@ -29,7 +30,13 @@ test('the install step refuses a download whose checksum does not match, before 
       assert.notEqual(out.status, 0, `${name}: a bad download fails the step`);
       assert.ok(!existsSync(join(dir, 'unpacked')), `${name}: nothing is unpacked`);
     }
-    assert.match(workflow.env.GITLEAKS_SHA256, /^[0-9a-f]{64}$/);
+    // control: the same download checked against its own digest is unpacked, so the pinned GITLEAKS_SHA256 is what decides
+    const digest = createHash('sha256').update('tampered').digest('hex');
+    for (const name of ['gitleaks', 'history-audit']) {
+      rmSync(join(dir, 'unpacked'), { force: true });
+      const out = runStep(workflow, step(workflow.jobs[name], 'install gitleaks'), { cwd: dir, env: { PATH: `${dir}:${process.env.PATH}`, GITLEAKS_SHA256: digest } });
+      assert.ok(existsSync(join(dir, 'unpacked')), `${name}: a download matching GITLEAKS_SHA256 is unpacked (${out.stderr.trim().split('\n').pop()})`);
+    }
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -71,14 +78,15 @@ test('the required job hands gitleaks only the computed range; the audit scans e
     r.git('remote', 'add', 'origin', r.dir);
     r.git('config', 'user.name', 't'); r.git('config', 'user.email', 't@t');
     mkdirSync(join(r.dir, 'tools')); copyFileSync(script, join(r.dir, 'tools/secret-scan-range.sh'));
-    writeFileSync(join(r.dir, 'gitleaks'), '#!/bin/sh\nprintf "%s\\n" "$@" > gitleaks.args\n', { mode: 0o755 });
-    const args = () => readFileSync(join(r.dir, 'gitleaks.args'), 'utf8').trim().split('\n');
+    // the fake gitleaks prints the arguments it was given (and leaves a mark that it ran)
+    writeFileSync(join(r.dir, 'gitleaks'), '#!/bin/sh\nprintf "%s\\n" "$@" | tee gitleaks.args | sed "s/^/ARG /"\n', { mode: 0o755 });
+    const argsOf = run => run.stdout.split('\n').filter(l => l.startsWith('ARG ')).map(l => l.slice(4));
     const env = { GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' };
     const scan = step(workflow.jobs.gitleaks, "gitleaks (this change's commits)");
     const github = { event_name: 'pull_request', ref: 'refs/pull/1/merge', event: { pull_request: { base: { sha: r.m2 }, head: { sha: r.p2 } }, repository: { default_branch: 'main' } } };
     let out = runStep(workflow, scan, { ctx: { github }, cwd: r.dir, env });
     assert.equal(out.status, 0, out.stderr);
-    const opts = args().filter(a => a.startsWith('--log-opts='));
+    const opts = argsOf(out).filter(a => a.startsWith('--log-opts='));
     assert.equal(opts.length, 1);
     assert.deepEqual(new Set(r.commits(opts[0].slice('--log-opts='.length))), new Set([r.p1, r.p2]), 'only the PR\'s own commits');
     // a deleted ref scans nothing and passes
@@ -89,7 +97,7 @@ test('the required job hands gitleaks only the computed range; the audit scans e
     const audit = step(workflow.jobs['history-audit'], 'gitleaks (every branch, full history)');
     out = runStep(workflow, audit, { cwd: r.dir, env });
     assert.equal(out.status, 0, out.stderr);
-    assert.ok(args().includes('--log-opts=--all'));
+    assert.ok(argsOf(out).includes('--log-opts=--all'));
   } finally { r.done(); }
 });
 
