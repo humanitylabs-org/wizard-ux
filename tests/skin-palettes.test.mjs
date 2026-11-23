@@ -18,6 +18,10 @@ test('the two skins hold the right palettes, and an unlisted skin becomes its ow
   assert.deepEqual(fams.mizel, { name: 'Mizel', palettes: ['obsidian', 'obsidian-light', 'landscapes', 'landscapes-light'] });
   assert.deepEqual(fams.novairecito, { name: 'Novairecito', palettes: ['novairecito', 'sepia'] });
   assert.equal(S.familyOf('sepia'), 'novairecito');
+  assert.equal(S.familyOf('nebula'), 'wizard');
+  assert.equal(S.familyOf('obsidian-light'), 'mizel');
+  assert.equal(S.familyOf('landscapes-light'), 'mizel');
+  assert.ok(S.families.every(f => f.palettes.length >= 1 && f.palettes.every(id => S.familyOf(id) === f.id)), 'every palette belongs to exactly its skin');
   // A collaborator skin listed in no family is a skin of its own, under the name its author gave it.
   const own = "{ id: 'zz-quiet', name: 'Quiet Harbour', who: 'A collaborator skin.', orb: [0, 1, 1], t: T({ bg: '#101010', ink: '#ffffff', violet: '#8f63ff' }) },\n";
   const added = skinsRuntime({}, s.replace('const SKINS = [\n', 'const SKINS = [\n    ' + own)).S;
@@ -25,6 +29,7 @@ test('the two skins hold the right palettes, and an unlisted skin becomes its ow
   assert.ok(f, 'its own family');
   assert.deepEqual({ name: f.name, palettes: [...f.palettes] }, { name: 'Quiet Harbour', palettes: ['zz-quiet'] });
   assert.equal(added.familyOf('zz-quiet'), 'zz-quiet');
+  assert.equal(f.who, 'A collaborator skin.', 'with its author\'s description');
 });
 
 test('the saved choice stays the palette id; the last palette per skin is remembered', () => {
