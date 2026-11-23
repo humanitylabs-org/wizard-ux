@@ -14,7 +14,12 @@
 //   other    - it reads no source file at all (it checks test-local code or data).
 // tests/source-text-tests.test.mjs keeps the `text` list from growing (tests/fixtures/source-text-tests.json).
 //
-// Usage: node tools/source-text-tests.mjs [--json] [--list] [dir]
+// Each block also counts its source pins: positive assertions whose subject is source text (a regex or substring
+// matched against a file read as text), also inside a block that runs code. A pin fails on a harmless refactor and
+// can pass while the behaviour is broken; tests/fixtures/source-pins.json lists the files that still have them and
+// only shrinks.
+//
+// Usage: node tools/source-text-tests.mjs [--json] [--list] [--pins] [--pin-list] [dir]
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -189,6 +194,22 @@ export function classifyFile(src) {
       if (EXEC.some(r => r.test(text)) || [...runs].some(r => mentions(r, text.replace(/^[^=({]*/, '')))) { runs.add(nm); changed = true; }
     }
   }
+  // Source pins: what a name holds, resolved inside one test (its own declarations first, then the file's).
+  // 'text' = source text or something cut / matched out of it; 'run' = the result of running code; null = neither.
+  const IDS = t => new Set([...t.matchAll(/(?<![\w$.])[A-Za-z_$][\w$]*/g)].map(x => x[0]));
+  const kindOf = (nm, local, seen = new Set()) => {
+    if (seen.has(nm)) return null; seen.add(nm);
+    if (!local.has(nm)) { if (runs.has(nm)) return 'run'; if (importedReaders.has(nm)) return 'text'; }
+    const decl = local.get(nm) ?? decls.get(nm) ?? anyDecls.get(nm);
+    if (!decl) return null;
+    const rhs = decl.replace(/^[^=({]*/, '');
+    if (EXEC.some(r => r.test(rhs))) return 'run';
+    if (/\bJSON\.parse\s*\(/.test(rhs)) return null; // data (a catalog, a manifest), not source code
+    if (READ.test(rhs)) return 'text';
+    let text = false;
+    for (const id of IDS(rhs)) { if (id === nm) continue; const k = kindOf(id, local, seen); if (k === 'run') return 'run'; if (k === 'text') text = true; }
+    return text ? 'text' : null;
+  };
   const tests = [];
   const re = /(^|[^\w$.])(test|it)(\s*\.\s*(only|skip|todo))?\s*\(/g;
   let m; let until = -1;
@@ -203,6 +224,31 @@ export function classifyFile(src) {
     const touches = READ.test(body) || [...reads].some(r => mentions(r, body));
     const before = src.slice(0, at).split('\n').slice(-6, -1).reverse();
     let rule = false; for (const l of before) { if (/^\s*\/\/\s*static-rule:\s*\S/.test(l)) { rule = true; break; } if (!/^\s*\/\//.test(l)) break; }
+    // source pins: positive assertions on source text, also inside a test that runs code (a harmless refactor of
+    // the pinned line fails them, and they pass while the behaviour is broken)
+    let pins = 0; const pinLines = [];
+    if (!rule) {
+      const local = new Map();
+      for (const d of body.matchAll(/(?<![\w$.])(?:const|let|var)\s+/g)) {
+        let e = d.index + d[0].length; let dd = 0;
+        for (; e < body.length; e++) { const ch = body[e];
+          if (ch === '{' || ch === '(' || ch === '[') dd++; else if (ch === '}' || ch === ')' || ch === ']') { if (!dd) break; dd--; }
+          else if (!dd && (ch === ';' || ch === '\n')) break; }
+        for (const one of declarators(body.slice(d.index + d[0].length, e))) for (const n of one.split('=')[0].matchAll(/[\w$]+/g)) if (!local.has(n[0])) local.set(n[0], one);
+      }
+      for (const a of body.matchAll(POSITIVE)) {
+        const fn = a[1] || 'assert'; const argOpen = code.indexOf('(', open + a.index + a[0].length - 1);
+        const argCode = code.slice(argOpen + 1, closeOf(code, argOpen) - 1);
+        const arg = src.slice(argOpen + 1, closeOf(code, argOpen) - 1).trim();
+        if ((fn === 'ok' || fn === 'assert') && /^\(?\s*!/.test(arg)) continue;
+        if ((fn === 'equal' || fn === 'strictEqual') && /,\s*(-1|false|0|null|undefined|''|"")\s*(,|$)/.test(arg)) continue;
+        if (fn === 'throws' || fn === 'rejects') continue;
+        if (EXEC.some(r => r.test(argCode))) continue;
+        let text = READ.test(argCode), run = false;
+        for (const id of IDS(argCode)) { const k = kindOf(id, local); if (k === 'run') run = true; else if (k === 'text') text = true; }
+        if (text && !run) { pins++; pinLines.push(src.slice(0, argOpen).split('\n').length); }
+      }
+    }
     if (!ran && rule) kind = 'rule';
     else if (!ran && !touches) kind = 'other';
     else if (!ran) {
@@ -217,7 +263,7 @@ export function classifyFile(src) {
       }
       kind = positive ? 'text' : 'absence';
     }
-    tests.push({ name, kind, line: src.slice(0, at).split('\n').length });
+    tests.push({ name, kind, line: src.slice(0, at).split('\n').length, pins, pinLines });
     until = end;
   }
   return tests;
@@ -232,10 +278,11 @@ export function scan(dir = path.join(ROOT, 'tests')) {
 }
 
 export function summary(files) {
-  const s = { files: 0, textOnlyFiles: 0, filesRunningCode: 0, tests: 0, text: 0, runs: 0, absence: 0, rule: 0, other: 0 };
+  const s = { files: 0, textOnlyFiles: 0, filesRunningCode: 0, tests: 0, text: 0, runs: 0, absence: 0, rule: 0, other: 0, pins: 0, filesWithPins: 0 };
   for (const t of Object.values(files)) {
     s.files++; s.tests += t.length;
-    for (const x of t) s[x.kind]++;
+    for (const x of t) { s[x.kind]++; s.pins += x.pins; }
+    if (t.some(x => x.pins)) s.filesWithPins++;
     if (t.some(x => x.kind === 'runs')) s.filesRunningCode++;
     else if (t.some(x => x.kind === 'text')) s.textOnlyFiles++;
   }
@@ -249,10 +296,19 @@ export function textTests(files) {
   return out;
 }
 
+// Source pins per file, as { file: count } (the shape of tests/fixtures/source-pins.json).
+export function pinCounts(files) {
+  const out = {};
+  for (const [f, t] of Object.entries(files)) { const n = t.reduce((a, x) => a + x.pins, 0); if (n) out[f] = n; }
+  return out;
+}
+
 if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
   const args = process.argv.slice(2); const dir = args.find(a => !a.startsWith('--'));
   const files = scan(dir ? path.resolve(dir) : undefined);
   if (args.includes('--json')) console.log(JSON.stringify(textTests(files), null, 1));
+  else if (args.includes('--pins')) console.log(JSON.stringify(pinCounts(files), null, 1));
+  else if (args.includes('--pin-list')) { for (const [f, t] of Object.entries(files)) for (const x of t) for (const l of x.pinLines) console.log(`${f}:${l}\t${x.name}`); }
   else if (args.includes('--list')) { for (const [f, t] of Object.entries(files)) for (const x of t) if (x.kind === 'text') console.log(`${f}:${x.line}\t${x.name}`); }
   else console.log(JSON.stringify(summary(files)));
 }

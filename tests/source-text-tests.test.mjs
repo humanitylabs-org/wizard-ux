@@ -5,7 +5,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { classifyFile, scan, summary, textTests } from '../tools/source-text-tests.mjs';
+import { classifyFile, pinCounts, scan, summary, textTests } from '../tools/source-text-tests.mjs';
 
 const kinds = src => classifyFile(src).map(t => t.kind);
 const HEAD = "import test from 'node:test';\nimport assert from 'node:assert/strict';\nimport { readFileSync } from 'node:fs';\n";
@@ -90,4 +90,37 @@ test('no new text-only tests: tests/fixtures/source-text-tests.json lists the ol
     'tests/fixtures/source-text-tests.json (node tools/source-text-tests.mjs --json prints the current list).');
   const s = summary(scan());
   assert.equal(s.text, Object.values(base).flat().length);
+});
+
+const pins = src => classifyFile(src).map(t => t.pins);
+
+test('a source pin is a positive assertion on source text, also inside a test that runs code', () => {
+  assert.deepEqual(pins(`${HEAD}import { world } from './fixtures/some-harness.mjs';
+const src = readFileSync('web/app.js', 'utf8');
+test('mixed', () => { const w = world(); assert.ok(w.q('.x')); assert.match(src, /runningRecs\\(\\)/); const i = src.indexOf('x'); assert.ok(i > 0); });`), [2]);
+  assert.deepEqual(pins(`${HEAD}import { world } from './fixtures/some-harness.mjs';
+const src = readFileSync('web/app.js', 'utf8');
+test('runs it', () => { const w = world(src), row = w.q('.x'); assert.equal(row.textContent, 'Hi'); assert.equal(world(src).n, 1); });`), [0], 'results of running the text are not pins');
+  assert.deepEqual(pins(`${HEAD}import { world } from './fixtures/some-harness.mjs';
+const src = readFileSync('web/app.js', 'utf8');
+test('absent', () => { assert.doesNotMatch(src, /x/); assert.ok(!src.includes('y')); assert.equal(src.indexOf('z'), -1); });`), [0], 'absence rules stay');
+  assert.deepEqual(pins(`${HEAD}const cat = JSON.parse(readFileSync('web/tweaks/catalog.json', 'utf8'));
+test('data', () => { assert.ok(cat.tweaks.includes('a/b')); });`), [0], 'JSON data is not source code');
+  assert.deepEqual(pins(`${HEAD}const src = readFileSync('web/app.js', 'utf8');
+// static-rule: every entrypoint loads the shared module (an inventory, not a feature)
+test('inventory', () => { assert.match(src, /core\\.js/); });`), [0], 'a marked static rule');
+});
+
+test('no new source pins: tests/fixtures/source-pins.json lists the files that still have them and only shrinks', () => {
+  const now = pinCounts(scan());
+  const base = JSON.parse(readFileSync(new URL('./fixtures/source-pins.json', import.meta.url), 'utf8'));
+  const grew = [], shrank = [];
+  for (const f of new Set([...Object.keys(now), ...Object.keys(base)])) {
+    if ((now[f] || 0) > (base[f] || 0)) grew.push(`${f}: ${base[f] || 0} -> ${now[f]}`);
+    if ((now[f] || 0) < (base[f] || 0)) shrank.push(`${f}: ${base[f]} -> ${now[f] || 0}`);
+  }
+  assert.deepEqual(grew, [], 'These files gained assertions on source text (node tools/source-text-tests.mjs --pin-list shows ' +
+    'the lines). Assert what the code does when it runs instead (issue 1674).');
+  assert.deepEqual(shrank, [], 'Fewer source pins: update tests/fixtures/source-pins.json ' +
+    '(node tools/source-text-tests.mjs --pins > tests/fixtures/source-pins.json).');
 });
