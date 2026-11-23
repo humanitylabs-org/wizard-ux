@@ -113,7 +113,14 @@ test('a notification asks "<row> go to", never "Notifications notifications go t
   assert.equal(B.ask('notifications', 'Notifications'), 'Notifications go to');
   assert.equal(B.ask('system:app-updates', 'App updates'), 'App updates go to');
   assert.equal(B.ask('messenger', 'Messenger'), 'Messenger notifications go to');
-  assert.match(withParts(read('web/core/chats.js')), /ask = B\.ask\?\.\(id, name\) \|\| `\$\{name\} notifications go to`/);
+  // the thread's real "where these go" line (core/chats-drafts.js noteRouteHtml) asks the bell for its words
+  const drafts = read('web/core/chats-drafts.js');
+  const from = drafts.indexOf('  const APP_NOTE ='), code = drafts.slice(from, drafts.indexOf('  // "More from Money', from));
+  const words = (B2, NV) => { const c = { window: { WosBell: B2 }, esc: String, noteQuiet: () => false }; vm.createContext(c); vm.runInContext(code + '\nthis.f = noteRouteHtml;', c); return /<span>([^<]*)<\/span>/.exec(c.f(NV))?.[1]; };
+  const bell = { ...B, picker: () => '<picker>', chatsAvailable: true, nameOf: id => ({ notifications: 'Notifications', messenger: 'Messenger' })[id] };
+  assert.equal(words(bell, { id: 'x', item: { app: 'messenger' } }), 'Messenger notifications go to');
+  assert.equal(words(bell, { id: 'y', item: null }), 'Notifications go to');
+  assert.equal(words({ ...bell, ask: undefined }, { id: 'y', item: null }), 'Notifications notifications go to', 'an older bell without ask() keeps the old words');
 });
 
 test('unknown routes and ids are refused', () => {
