@@ -467,6 +467,11 @@ test('third review: AI page offers sign-in with no accounts, backup read failure
   const tab = m => { m.draw(); return m.page('overview').querySelector('.mh-ts-tab').getAttribute('aria-label'); };
   assert.equal(tab(machinesHome({ snapshot: world({}, [dev('this'), dev('h1', { access: { exposure: 'tailscale', checked: '2026-10-02' } })]) })), 'Tailscale, not every machine checked yet. Show details');
   assert.equal(tab(machinesHome({ snapshot: world({}, [dev('this', { access: { exposure: 'tailscale', checked: '2026-10-01' } })]) })), 'Tailscale, the only way in. Show details');
+  // The tab's words: no count (and never the word "null") when nothing is open, the count when something is (#1722).
+  const tabText = m => { m.draw(); return words(m.page('overview').querySelector('.mh-ts-tab')); };
+  assert.equal(tabText(machinesHome({ snapshot: world({}, [dev('this', { access: { exposure: 'tailscale', checked: '2026-10-01' } }), dev('h1', { access: { exposure: 'tailscale', checked: '2026-10-01' } })]) })), 'Tailscale');
+  assert.equal(tabText(machinesHome({ snapshot: world({}, [dev('this'), dev('h1')]) })), 'Tailscale');
+  assert.equal(tabText(machinesHome({ snapshot: world({}, [dev('this'), dev('h1', { access: { exposure: 'internet', details: ['ssh open'] } })]) })), 'Tailscale1 open');
 });
 test('fourth review: sign-in state survives normalisation, managed workspaces get honest System pages, Dictate keeps its field through the mic menu', () => {
   const norm = usage();
