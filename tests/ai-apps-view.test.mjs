@@ -1849,10 +1849,10 @@ test('round 14: the sidebar marks the chat in front without rebuilding; a fold n
     assert.match(p.style(p.w.q('.aad-scroll'))('-webkit-mask-image'), /^linear-gradient\(to bottom, transparent 0, black 10px, /, 'a long list fades under the header and above the foot');
   }
 });
-// (wizard-ux issue 1674: the old text pin promised `#stage > .wsp[hidden]:not([data-aad-role]) { left: var(--aad-side-w, 288px) }`;
-// cascaded on the real view, the later pane-geometry rule `[data-aad-pane-side] #stage > .wsp:not([data-aad-role]):not(:has(...))`
-// out-ranks it, so a hidden desk follows --aad-pane-main-x, which moves when the sidebar folds)
-test('round 14: desks out of sight keep their geometry when the sidebar folds', { todo: 'the pane-geometry rule (desktop.css [data-aad-pane-side] #stage > .wsp:not([data-aad-role])) out-ranks the hidden-desk rule; a fold moves hidden desks' }, async () => {
+// (wizard-ux issue 1742: the pane-geometry rule `[data-aad-pane-side] #stage > .wsp:not([data-aad-role])` out-ranked the
+// round 14 hidden-desk rule, so a hidden desk followed --aad-pane-main-x, which moves when the sidebar folds; hidden desks
+// now sit on --aad-pane-held-*, the open sidebar's main area)
+test('round 14: desks out of sight keep their geometry when the sidebar folds', async () => {
   const p = await panelDesk(); p.go({ view: 'desk', desk: 4 }); p.w.run();
   const hiddenDesk = node('div', 'wsp', p.stage); hiddenDesk.setAttribute('hidden', '');
   const left = () => px(resolveVars(p.style(hiddenDesk)('left'), { ...p.w.html.style }));

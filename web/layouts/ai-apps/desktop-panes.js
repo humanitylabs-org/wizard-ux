@@ -42,6 +42,12 @@ export function panesPart({ aadVars, api, COLS, doc, flip, one, ONE, panes, pane
       for (const [k, v] of Object.entries(b)) put(id + '-' + k, v);
       put(id + '-right', vw() - b.x - b.width); put(id + '-bottom', (globalThis.innerHeight || 900) - b.y - b.height);
     }
+    /* round 14 (wizard-ux issue 1742): desks out of sight keep the open sidebar's geometry, so a fold re-lays out only
+     * what shows. The main area as it is with the sidebar and the tab column open (the same model, the fold left out). */
+    const held = panes.geometry({ ...m, appSide: appSideOf(m), dock: { ...m.dock, edge } }, { width: vw(), height: globalThis.innerHeight || 900 }, {
+      sideWidth: s.side[0], dockWidth: bar ? ONE.barH : s.tabs[0], appWidth: s.app[0],
+    }).content;
+    put('held-x', held.x); put('held-right', vw() - held.x - held.width);
     for (const [slot, n] of [['chats', aadVars.dockEl], ['app', aadVars.pane?.el], ['app2', aadVars.secondEl]]) if (n) {
       const b = aadVars.paneGeometry.panes[slot];
       n.toggleAttribute('data-aad-mode-hidden', m.mode !== 'tiled' && (!b?.width || !b?.height));
