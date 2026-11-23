@@ -70,6 +70,9 @@
   const nextStep = () => { const all = order(), i = all.indexOf(step); return all[Math.min(all.length - 1, i + 1)] || 'hello'; };
   const prevStep = () => { const all = order(), i = all.indexOf(step); return i > 0 ? all[i - 1] : step; };
   const DEFAULT_NAME = 'Wizard', NAME_MAX = 40;
+  // Say hello: the words the box shows are the words an empty Send sends (James, 22 Nov 2026; wizard-ux issue 1729).
+  // One constant for both, so the placeholder and the default can never drift apart.
+  const HELLO = 'Hi! What can you help me with?';
   // Plain text, one line, at most 40 characters (the Agent Service trims the same way).
   const cleanName = v => String(v ?? '').replace(/[\u0000-\u001f\u007f<>]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, NAME_MAX).trim();
   // Only a live answer counts: an offline or cached reading never asks a box that may already have a name.
@@ -250,7 +253,7 @@
 
   function paintHello() {
     return `${brand()}${dots()}<header class="wl-head"><h2 tabindex="-1">Say hello</h2><p>Send your first message to ${esc(agent())}.</p></header>
-      <form class="wl-hello" data-wl-form><textarea rows="3" placeholder="Hi! What can you help me with?" aria-label="First message"></textarea>
+      <form class="wl-hello" data-wl-form><textarea rows="3" placeholder="${esc(HELLO)}" aria-label="First message"></textarea>
       ${sendError ? `<p class="wl-status err" role="alert">${esc(sendError)}</p>` : ''}<button type="submit" class="wl-primary"${sending ? ' disabled' : ''}>${sending ? 'Sending…' : 'Send'}</button></form>`;
   }
 
@@ -369,8 +372,8 @@
     e.preventDefault();
     if (step === 'name') { if (!saving) saveName(el.querySelector('.wl-naming input')?.value); return; }
     if (sending) return;
-    const text = el.querySelector('textarea')?.value.trim();
-    if (!text) { el.querySelector('textarea')?.focus(); return; }
+    // An empty or blank box sends the words it shows; typed words go as typed. Send is never a dead tap here.
+    const text = el.querySelector('textarea')?.value.trim() || HELLO;
     sending = true; sendError = ''; paint(false);
     let item = null;
     try { item = await H.send(text); } catch (err) { console.error(err); }
