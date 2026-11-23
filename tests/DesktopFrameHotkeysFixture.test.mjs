@@ -110,8 +110,11 @@ test('the shipped sealed run passes end to end', async () => {
 // Issue 1726: the opaque/nested-frames source check reads watchFrame's code, not its comments.
 test('watchFrame source check ignores comments but still catches a message bridge', async () => {
   const CASE = 'opaque/nested frames remain outside the shortcut bridge and cannot message-dispatch a chord';
-  const ok = await runFrameHotkeys({ hookLine: '// A comment may say postMessage or querySelectorAll; that is not code.' });
-  assert.equal(ok.report.failedCase, null, ok.report.failure);
+  for (const hookLine of ['// A comment may say postMessage or querySelectorAll; that is not code.',
+    "/* f.contentWindow.postMessage(x, '*'); window.addEventListener('message', go); */ // doc.querySelectorAll('iframe')"]) {
+    const ok = await runFrameHotkeys({ hookLine });
+    assert.equal(ok.report.failedCase, null, ok.report.failure);
+  }
   for (const [hookLine, message] of [
     ["f.contentWindow?.postMessage({ hello: 1 }, '*');", 'watchFrame must not post messages'],
     ["window.addEventListener('message', e => onKey(e.data, true));", 'watchFrame must not listen for messages'],

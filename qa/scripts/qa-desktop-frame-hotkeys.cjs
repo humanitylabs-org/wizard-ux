@@ -34,6 +34,19 @@ async function route(r, instrument = true) {
   return file ? r.fulfill({ path: file }) : r.fulfill({ status: 404, body: '' });
 }
 const wait = ms => new Promise(r => setTimeout(r, ms));
+// Source with its // and /* */ comments blanked (strings and template text kept), so a source check reads code only.
+function codeOnly(src) {
+  let out = '', q = '';
+  for (let i = 0; i < src.length; i++) {
+    const c = src[i], n = src[i + 1];
+    if (q) { out += c; if (c === '\\') out += src[++i] ?? ''; else if (c === q) q = ''; continue; }
+    if (c === '"' || c === "'" || c === '`') { q = c; out += c; continue; }
+    if (c === '/' && n === '/') { while (i < src.length && src[i] !== '\n') i++; out += '\n'; continue; }
+    if (c === '/' && n === '*') { const end = src.indexOf('*/', i + 2); i = end < 0 ? src.length : end + 1; out += ' '; continue; }
+    out += c;
+  }
+  return out;
+}
 async function settle(p) {
   await p.waitForFunction(() => window.WosWelcome?.log.some(s => s.startsWith('boot:')) && !window.WosExperience?.state?.busy);
   const owner = await p.evaluate(() => ({ active: WosWelcome.active, log: WosWelcome.log, welcome: !!document.getElementById('wosWelcome'), state: localStorage.getItem('wos.welcome.v1') }));
@@ -157,7 +170,7 @@ async function picker(p, chord, i = 0) {
         await outer.evaluate(f => f.contentDocument.querySelector('#nested').remove());
       }
       const code = require('../../tools/shell-source.cjs').shellSource(TREE, 'web/desktop/desktop.js'); // parts put back (issue 1665)
-      const hook = code.slice(code.indexOf('  function watchFrame(f, el)'), code.indexOf('\n  function render()'));
+      const hook = codeOnly(code.slice(code.indexOf('  function watchFrame(f, el)'), code.indexOf('\n  function render()')));
       // Judge the hook by what it does, not by words in its comments (issue 1726): it must not post or listen
       // for messages (no message-dispatched chord) and must not scan nested documents.
       assert(!/\.postMessage\s*\(/.test(hook), 'watchFrame must not post messages');
