@@ -9,7 +9,7 @@ import { readFileSync } from 'node:fs';
 import { withAppParts } from './fixtures/app-parts.mjs';
 import { createDocument } from './fixtures/mini-dom.mjs';
 import { styles } from './fixtures/w5-css.mjs';
-
+import { valueOf, px } from './fixtures/r7A-css.mjs';
 const APP = withAppParts(readFileSync(new URL('../web/app.js', import.meta.url), 'utf8'));
 const CSS = readFileSync(new URL('../web/styles.css', import.meta.url), 'utf8');
 const TOUR_CSS = readFileSync(new URL('../web/core/tour.css', import.meta.url), 'utf8');
@@ -121,7 +121,11 @@ test('a microphone request the browser never answers times out into the same vis
 
 test('a browser bar over the bottom of the page lifts the dock, orb and Cancel above it (visual viewport)', () => {
   // The covered strip is measured from the shell's bottom, so it already includes the home indicator: a union, not a sum (Codex P2 on #567).
-  assert.match(CSS, /--safe-b: max\(env\(safe-area-inset-bottom, 0px\), var\(--vv-b, 0px\)\);/);
+  // styles.css turns the measured --vv-b into the page's bottom inset (the larger of it and the home indicator)
+  const doc = createDocument(), html = doc.documentElement;
+  const inset = extra => px(valueOf(html, [CSS + extra], '--safe-b'));
+  assert.equal(inset(''), 0, 'nothing covers the page');
+  assert.equal(inset('\n:root { --vv-b: 80px; }'), 80, 'Safari\'s 80 px bar lifts everything by 80 px');
   const body = fn('  function browserBarInset() {', '  // The microphone never opened');
   const listeners = {}, vvl = {}, style = {};
   const vv = { offsetTop: 0, height: 659, addEventListener: (t, f) => (vvl[t] = f) };
