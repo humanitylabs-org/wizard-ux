@@ -340,7 +340,7 @@ $('camC').addEventListener('click',e=>{e.stopPropagation();if(S.state==='listen'
 $('pickC').addEventListener('click',e=>{e.stopPropagation();if(S.state==='listen'&&N.pick){S.picked='pickC';N.pick()}});
 M.spread(document.body,{onOut(){ if(inCorner())return; if(S.state==='list'){$('zl').classList.add('deep');return} if(S.state!=='listen'&&S.state!=='think')W.showList() },
   onIn(){ if(S.state==='list')W.back() }});
-document.addEventListener('pointerdown',()=>{M.sound.unlock()},{capture:true});
+// No audio unlock on taps: M.chime() opens the output only while a tone sounds (wizard-ux issue 1723).
 hint.show('hold the side button and talk','start',0,true);
 if(location.hash==='#corner')W.setMode('corner'); // browser preview of the corner shape
 </script>
