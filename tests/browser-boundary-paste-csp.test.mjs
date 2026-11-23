@@ -29,9 +29,9 @@ for o in [['https://wizard.example.ts.net'], ['http://127.0.0.1:9271', 'https://
   const served = parseCsp(await serverPyCsp({ origin: 'https://wizard.example.ts.net' }));
   assert.deepEqual(served['connect-src'].filter(x => /tailscale|9691/.test(x)), ['https://derp1.tailscale.com/generate_204', 'https://wizard.example.ts.net:9691']);
   assert.deepEqual(served['frame-src'].slice(0, 2), ["'self'", 'blob:']);
-  assert.ok(served['frame-src'].includes('https://wizard.example.ts.net:9691'), 'its own direct line, not the 127.0.0.1 Host it was asked on');
+  assert.ok(served['frame-src'].some(x => x === 'https://wizard.example.ts.net:9691'), 'its own direct line, not the 127.0.0.1 Host it was asked on');
   const none = parseCsp(await serverPyCsp({ origin: '' }));
-  assert.ok(none['connect-src'].includes('https://*.ts.net:9691') && !none['connect-src'].some(x => x.includes('127.0.0.1:9691')), 'unconfigured: the generic line');
+  assert.ok(none['connect-src'].some(x => x === 'https://*.ts.net:9691') && !none['connect-src'].some(x => x.includes('127.0.0.1:9691')), 'unconfigured: the generic line');
 });
 
 // 2. Android paste (wizard-ux#1480): the shell can't reach a sandboxed app document, so the app side nudges itself.
