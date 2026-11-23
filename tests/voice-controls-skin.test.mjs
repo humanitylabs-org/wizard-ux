@@ -48,13 +48,21 @@ test('the phone dock voice discs use the skin panel and ink on every skin but Ne
   assert.equal(look(phone('mine').getElementById('arcCancel'), [...sheets, mine]).background, 'var(--my-fill)');
 });
 
-// Found while converting (issue 1674): skins.css's shared `:where(...) :is(..., .arc, ..., .scrub .sc-label, ...)` panel
-// rule has the specificity of its most specific argument (0,2,0), so it out-ranks the (0,1,0) Cancel red and paused
-// amber rules below it in a browser. Kept as a todo so the run reports it until the stylesheet is fixed.
-test('the phone take discs: Cancel reads as the skin red and a paused Pause as amber', { todo: 'skins.css panel rule out-ranks the .arc-left / paused .arc-mid colours' }, () => {
+// Issue 1740: skins.css's shared `:where(...) :is(..., .scrub .sc-label, ...)` panel rule has the specificity of its
+// most specific argument (0,2,0); while it listed `.arc` it out-ranked the (0,1,0) Cancel red rule below it. The
+// stock paused rules in styles.css (0,3,0)/(0,5,0) out-ranked the skin's paused amber; they now sit in :where().
+test('the phone take discs: Cancel reads as the skin red and a paused Pause as amber', () => {
   const sheets = [styles, skins];
   assert.equal(look(phone('sepia').getElementById('arcCancel'), sheets).color, 'var(--red, var(--ink))');
-  assert.match(look(phone('sepia', { paused: true }).getElementById('arcPause'), sheets).color, /var\(--amber\)/);
+  for (const skin of ['sepia', 'grove', 'obsidian-light']) {
+    assert.equal(look(phone(skin).getElementById('arcCancel'), sheets).color, 'var(--red, var(--ink))', `${skin}: Cancel is red`);
+    const p = look(phone(skin, { paused: true }).getElementById('arcPause'), sheets);
+    assert.equal(p.color, 'var(--amber)', `${skin}: paused Pause is amber`);
+    assert.match(p.background, /^color-mix\(in srgb, var\(--amber\) 18%, var\(--wz-panel/, `${skin}: the skin amber over the opaque skin panel`);
+  }
+  // Nebula keeps its stock amber tint, and a paused Pause stays amber.
+  const neb = look(phone('nebula', { paused: true }).getElementById('arcPause'), sheets);
+  assert.equal(neb.background, 'rgba(255,190,85,.18)'); assert.equal(neb.color, 'var(--amber)');
 });
 
 test('the desktop recording pill and its tray use the skin panel and ink on every skin but Nebula', () => {

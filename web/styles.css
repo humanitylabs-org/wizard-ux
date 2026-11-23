@@ -244,7 +244,7 @@ body {
 .arc-mid .i-play { display: none; }
 .device[data-voice="paused"] .arc-mid .i-play { display: block; }
 .device[data-voice="paused"] .arc-mid .i-pause { display: none; }
-.device[data-voice="paused"] .arc-mid { background: rgba(255, 190, 85, .18); border-color: rgba(255, 190, 85, .5); color: var(--amber); }
+:where(.device[data-voice="paused"]) .arc-mid { background: rgba(255, 190, 85, .18); border-color: rgba(255, 190, 85, .5); color: var(--amber); }
 .voice.on .arc { pointer-events: auto; opacity: 1; }
 .voice.on .arc-left  { transform: translate(-86px, -66px) scale(1); transition-delay: 30ms; }
 .voice.on .arc-mid   { transform: translate(0, -106px) scale(1); }
@@ -629,7 +629,7 @@ body {
 .device:not(.orb-corner) .voice.on .arc-mid { transform: translate(-66px, 0) scale(1); }
 .device:not(.orb-corner) .voice.on .arc-screen { transform: translate(66px, 0) scale(1); }
 .device:not(.orb-corner) .voice.on .arc-right { transform: translate(124px, 0) scale(1); }
-.device:not(.orb-corner)[data-voice="paused"] .voice .arc-mid { background: rgba(255,190,85,.18); border-color: rgba(255,190,85,.5); color: var(--amber); }
+:where(.device:not(.orb-corner)[data-voice="paused"] .voice) .arc-mid { background: rgba(255,190,85,.18); border-color: rgba(255,190,85,.5); color: var(--amber); }
 .device:not(.orb-corner) .voice .arc small { display: none; }
 .device:is([data-voice="listen"], [data-voice="paused"]) .desk-dots { opacity: 0; pointer-events: none; }
 .device:not(.orb-corner) .timer { top: 44px; min-width: 0; font-size: 10px; line-height: 12px; padding: 0; border: 0; background: var(--wz-panel, var(--wz-base, var(--bg, #05030c))); }
