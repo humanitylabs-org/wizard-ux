@@ -17,6 +17,8 @@ const read = p => withShellParts(fs.readFileSync(new URL('../' + p, import.meta.
 const desk = read('web/desktop/desktop.js'), deskCss = read('web/desktop/desktop.css');
 const phone = read('web/app.js'), phoneCss = read('web/styles.css'), links = read('web/core/links.js');
 const slice = (s, from, to) => { const a = s.indexOf(from); assert.ok(a >= 0, from); const b = s.indexOf(to, a); assert.ok(b > a, to); return s.slice(a, b); };
+// The real sheet-drag code from app.js: the grips of Settings and Apps and the Apps grid pull (issue 1734).
+const gripCode = slice(phone, '  const sheetDrag = (el, which) =>', "  settingsEl.addEventListener('click', e => {") + '\n' + slice(phone, "  settingsEl.addEventListener('click', e => {", '  function appTile(a)');
 
 test('desktop Settings opens as a window and every way of closing the window hides it', () => {
   // On a desk: the real openSettings makes a Settings window and moves the panel into its body.
@@ -147,12 +149,12 @@ test('desktop page previews open as a window; images still use the viewer and fi
 
 test('phone Settings sheet closes by swiping its grip down (×, Back and the scrim already close it)', () => {
   // The real grip handler from app.js on a sheet with a grip: a long drag or a fast flick closes; a short slow drag springs back.
-  const code = slice(phone, "  { const grip = settingsEl.querySelector('.sheet-grip');", "  settingsEl.addEventListener('click', e => {") + '\n' + slice(phone, "  settingsEl.addEventListener('click', e => {", '  function appTile(a)');
+  const code = gripCode;
   const swipe = (dy, ms) => {
     const doc = createDocument(); doc.body.innerHTML = '<section id="settings"><div class="sheet-grip"></div><button data-stclose>×</button></section>';
     const settingsEl = doc.querySelector('#settings'), grip = settingsEl.querySelector('.sheet-grip'); grip.setPointerCapture = () => {};
     let now = 0, closes = 0;
-    runRecording(code, { settingsEl, sheet: 'settings', performance: { now: () => now }, closeSheets: () => { closes++; } });
+    runRecording(code, { settingsEl, launcher: null, sheet: 'settings', performance: { now: () => now }, closeSheets: () => { closes++; } });
     grip.dispatchEvent({ type: 'pointerdown', clientY: 100, pointerId: 1 });
     grip.dispatchEvent({ type: 'pointermove', clientY: 100 + dy }); now = ms;
     grip.dispatchEvent({ type: 'pointerup' });
@@ -164,6 +166,36 @@ test('phone Settings sheet closes by swiping its grip down (×, Back and the scr
   assert.equal(short.close(), 1, '× closes');
   // The grip takes the touch itself (no page scroll under the drag).
   assert.equal(styleOf(short.settingsEl.querySelector('.sheet-grip'), phoneCss, 'touch-action'), 'none');
+});
+
+test('phone Apps panel closes by swiping its grip down, or its app grid down once the grid is at its top (issue 1734)', () => {
+  const make = (scrollTop = 0, sheet = 'launcher') => {
+    const doc = createDocument(); doc.body.innerHTML = '<section id="settings"></section><section id="launcher"><div class="sheet-grip"></div><div class="launcher-body"></div></section>';
+    const launcher = doc.querySelector('#launcher'), grip = launcher.querySelector('.sheet-grip'), body = launcher.querySelector('.launcher-body'); grip.setPointerCapture = () => {};
+    body.scrollTop = scrollTop;
+    const t = { now: 0, closes: 0 };
+    runRecording(gripCode, { settingsEl: doc.querySelector('#settings'), launcher, sheet, performance: { now: () => t.now }, closeSheets: () => { t.closes++; } });
+    const touch = (type, x, y, extra = {}) => { const e = { type, cancelable: true, touches: type === 'touchend' ? [] : [{ clientX: x, clientY: y }], ...extra }; body.dispatchEvent(e); return e; };
+    const pull = (dy, ms, dx = 0) => { touch('touchstart', 100, 100); const moves = [1, 2, 3, 4].map(i => touch('touchmove', 100 + dx * i / 4, 100 + dy * i / 4)); t.now = ms; touch('touchend'); return moves; };
+    return { t, launcher, grip, body, pull };
+  };
+  // The grip, as in Settings: a long drag or a fast flick closes, a short slow one springs back.
+  for (const [dy, ms, want] of [[120, 1000, 1], [40, 20, 1], [40, 1000, 0], [8, 5, 0]]) {
+    const a = make();
+    a.grip.dispatchEvent({ type: 'pointerdown', clientY: 100, pointerId: 1 }); a.grip.dispatchEvent({ type: 'pointermove', clientY: 100 + dy }); a.t.now = ms;
+    a.grip.dispatchEvent({ type: 'pointerup' });
+    assert.equal(a.t.closes, want, `grip ${dy}px in ${ms}ms`); if (!want) assert.equal(a.launcher.style.transform, '', 'springs back');
+  }
+  // The grid at its top: a swipe down drags the panel (the grid does not scroll under it) and closes it.
+  let a = make(); const moves = a.pull(200, 300);
+  assert.equal(a.t.closes, 1, 'grid at its top: swipe down closes'); assert.ok(moves.every(e => e.defaultPrevented), 'the panel takes the swipe');
+  a = make(); a.pull(30, 900); assert.equal(a.t.closes, 0, 'a short slow pull springs back'); assert.equal(a.launcher.style.transform, '');
+  // A grid scrolled down only scrolls; up and sideways moves are the grid's own.
+  a = make(300); const scrolled = a.pull(200, 300); assert.equal(a.t.closes, 0, 'scrolled grid: no close'); assert.ok(scrolled.every(e => !e.defaultPrevented), 'and it scrolls');
+  a = make(); const up = a.pull(-200, 300); assert.equal(a.t.closes, 0, 'upward: no close'); assert.ok(up.every(e => !e.defaultPrevented));
+  a = make(); a.pull(40, 300, 200); assert.equal(a.t.closes, 0, 'sideways: no close');
+  // Only while Apps is the open sheet.
+  a = make(0, null); a.pull(200, 300); assert.equal(a.t.closes, 0, 'only while Apps is open'); assert.ok(!a.launcher.style.transform, 'not dragged');
 });
 
 test('a form in a window aimed at _top or _parent stays in its window (guardFrame), other targets are left alone', () => {

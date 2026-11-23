@@ -498,12 +498,29 @@
   settingsEl.setAttribute('role', 'dialog'); settingsEl.setAttribute('aria-modal', 'true');
   settingsEl.addEventListener('keydown', e => window.WosSettings.trap(e, settingsEl));
   $('#scrim').addEventListener('click', () => backStep(undefined, { outside: true }));
-  /* Swipe the grip down to close Settings, like every sheet (wizard-os#265 rule 7). Only the grip drags; the body scrolls. */
-  { const grip = settingsEl.querySelector('.sheet-grip'); let y0 = null, dy = 0, t0 = 0;
-    grip?.addEventListener('pointerdown', e => { if (sheet !== 'settings') return; y0 = e.clientY; dy = 0; t0 = performance.now(); settingsEl.style.transition = 'none'; try { grip.setPointerCapture(e.pointerId); } catch (_) {} });
-    grip?.addEventListener('pointermove', e => { if (y0 == null) return; dy = Math.max(0, e.clientY - y0); settingsEl.style.transform = `translateY(${dy}px)`; });
-    const end = () => { if (y0 == null) return; y0 = null; settingsEl.style.transition = ''; if (dy > 90 || dy / ((performance.now() - t0) || 1) > .6) closeSheets(); else settingsEl.style.transform = ''; };
-    grip?.addEventListener('pointerup', end); grip?.addEventListener('pointercancel', end); }
+  /* Swipe the grip down to close Settings or Apps, like every sheet (wizard-os#265 rule 7; Apps: wizard-ux issue 1734).
+   * Only the grip drags; the body scrolls. A long drag or a fast flick closes, a short slow one springs back. */
+  const sheetDrag = (el, which) => { let y0 = null, dy = 0, t0 = 0;
+    return { on: () => y0 != null,
+      start(y) { if (sheet !== which) return false; y0 = y; dy = 0; t0 = performance.now(); el.style.transition = 'none'; return true; },
+      move(y) { if (y0 == null) return; dy = Math.max(0, y - y0); el.style.transform = `translateY(${dy}px)`; },
+      end() { if (y0 == null) return; y0 = null; el.style.transition = ''; if (dy > 90 || (dy > 30 && dy / ((performance.now() - t0) || 1) > .6)) closeSheets(); else el.style.transform = ''; } }; };
+  for (const [el, which] of [[settingsEl, 'settings'], [launcher, 'launcher']]) { const grip = el?.querySelector('.sheet-grip'), d = sheetDrag(el, which);
+    grip?.addEventListener('pointerdown', e => { if (d.start(e.clientY)) try { grip.setPointerCapture(e.pointerId); } catch (_) {} });
+    grip?.addEventListener('pointermove', e => d.move(e.clientY));
+    grip?.addEventListener('pointerup', d.end); grip?.addEventListener('pointercancel', d.end); }
+  /* Apps: a swipe down on the app grid when it is already at its top pulls the panel down too (issue 1734). A grid
+   * scrolled down only scrolls; up and sideways moves are left alone. Touch events, so the first downward move can stop
+   * the grid's own (empty) scroll before the browser commits to it. */
+  { const body = launcher?.querySelector('.launcher-body'), d = sheetDrag(launcher, 'launcher'); let x0 = 0, y0 = null;
+    body?.addEventListener('touchstart', e => { const t = e.touches[0]; y0 = e.touches.length === 1 && body.scrollTop <= 0 ? t.clientY : null; x0 = t.clientX; }, { passive: true });
+    body?.addEventListener('touchmove', e => {
+      const t = e.touches[0]; if (!t) return;
+      if (!d.on()) { if (y0 == null) return; const dy = t.clientY - y0; if (!dy) return;
+        if (dy < 0 || Math.abs(t.clientX - x0) > dy || e.touches.length > 1 || !d.start(y0)) { y0 = null; return; } }
+      if (e.cancelable) e.preventDefault(); d.move(t.clientY);
+    }, { passive: false });
+    const end = () => { y0 = null; d.end(); }; body?.addEventListener('touchend', end); body?.addEventListener('touchcancel', end); }
   settingsEl.addEventListener('click', e => {
     if (e.target.closest('[data-stclose]')) return closeSheets();
 
