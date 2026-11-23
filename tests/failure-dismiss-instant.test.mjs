@@ -157,6 +157,23 @@ test('Retry still hides the old failure until the list catches up (WosErrors.cle
   assert.equal(app.E.dismissed(row), true);
   app.E.cleared.set(row.id, Date.now() - 121e3);
   assert.equal(app.E.dismissed(row), false);
-  const power = read('web/core/chat-power.js');
-  assert.match(power, /E\?\.cleared\.set\(sid, Date\.now\(\)\);/);
+});
+
+test('a Retry tap (the real chat-power retryThread) hides the old failure at once, and only once it is queued', async () => {
+  for (const queued of [true, false]) {
+    const row = failedRow('', { request: 'Book the flights' }), app = boot({ rows: [row] }), sent = [];
+    const w = { id: 'win', thread: row.id }, state = {};
+    const ctx = { console, URL, Intl, Date, setTimeout, clearTimeout, location: { origin: 'https://fixture.invalid' }, navigator: {},
+      localStorage: { getItem: () => null, setItem() {}, removeItem() {} }, document: { addEventListener() {}, querySelector: () => null }, addEventListener() {},
+      WizCore: { esc: String, clip: x => x }, WizConfig: { owner: () => 'Owner' }, WizLive: { session: () => row, sessionInfo: async () => row },
+      WosModels: { failureHtml: x => x, pending: new Map(), currentRoute: () => ({}) }, WosErrors: app.E,
+      WosOutbox: { unsent: () => [], enqueue: async it => { if (!queued) throw new Error('disk full'); sent.push(it); return it; } } };
+    ctx.window = ctx;
+    vm.runInNewContext(read('web/core/chat-power.js'), ctx);
+    const api = ctx.WosChatPower({ ch: () => state, toast() {}, H: { win: () => w }, CH: { win: state }, owner: () => w.id, winAgent: () => '', renderChats() {}, renderThreadNow() {} });
+    assert.equal(app.E.dismissed(row), false);
+    assert.equal(await api.retryThread('win', row.id), queued);
+    assert.equal(sent.length, queued ? 1 : 0);
+    assert.equal(app.E.dismissed(row), queued, queued ? 'queued: the failure card goes until the list catches up' : 'not queued: the failure stays');
+  }
 });
