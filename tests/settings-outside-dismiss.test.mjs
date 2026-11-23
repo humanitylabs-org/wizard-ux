@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import { withShellParts } from './fixtures/shell-parts.mjs';
+import { block, runRecording } from './fixtures/source-slice.mjs';
 const root = process.env.QA_SETTINGS_SOURCE || new URL('../', import.meta.url).pathname;
 const source = withShellParts(fs.readFileSync(new URL('web/app.js', new URL(`file://${root.replace(/\/$/, '')}/`)), 'utf8'));
 function dispatch(overlay = '') {
@@ -41,7 +42,14 @@ test('ordinary nested Back returns to Settings categories without closing', () =
   assert.equal(state.page, ''); assert.equal(s.sheet, 'settings'); assert.equal(state.closed, 0);
 });
 test('ordinary onBack used by Escape retains nested Settings navigation', () => {
-  assert.match(source, /e\.key === 'Escape'[^]*?onBack\(/);
+  // the phone shell's real keydown handler sends Escape to onBack (when no CloseWatcher does it)
+  const keydown = block(source, "  document.addEventListener('keydown', e => {") + ');';
+  for (const watcher of [false, true]) {
+    const backs = [], on = {};
+    runRecording(keydown, { document: { addEventListener: (t, f) => { on[t] = f; } }, window: watcher ? { CloseWatcher: class {} } : {}, onBack: () => backs.push(1) });
+    on.keydown({ key: 'Escape', target: { tagName: 'DIV' } });
+    assert.equal(backs.length, watcher ? 0 : 1, watcher ? 'CloseWatcher handles it' : 'Escape is onBack');
+  }
   const { s, state } = dispatch(); s.onBack();
   assert.equal(state.page, ''); assert.equal(s.sheet, 'settings'); assert.equal(s.window.__backLog.at(-1), 'settings-page');
 });
