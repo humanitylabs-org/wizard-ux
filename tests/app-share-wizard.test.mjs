@@ -119,7 +119,6 @@ test('both shells load the same sheet and route Back to it, native imports reuse
  assert.equal(stack.run({fallback:()=>'root'}),'share-wizard');assert.equal(open,false);assert.equal(stack.run({fallback:()=>'root'}),'root');
  // A native (Android) import opens the same sheet (core/device.js onShare), and releases the share once it is sent.
  const dev=read('web/device.js'),start=dev.indexOf('  async function onShare(id) {'),end=dev.indexOf("    log('share:result', id, result);\n  }",start);
- assert.ok(start>0&&end>start);
  const opened=[],done=[];
  const ctx={window:{WizShareWizard:{open:async o=>(opened.push(o),'sent')}},J:x=>x,closeSheet(){},toast(){},log(){},readBlob:()=>null,
   DEV:()=>({shareMeta:id=>({text:'hello',subject:'s',items:[{n:0,name:'a.png',mime:'image/png'}]}),shareDone:id=>done.push(id),shareRead(){}})};

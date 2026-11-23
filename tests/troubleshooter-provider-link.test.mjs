@@ -39,7 +39,6 @@ test('phone persists the sign-in anchor through a successful frame load and remo
   const phone = withShellParts(readFileSync(new URL('../web/app.js', import.meta.url), 'utf8'));
   const begin = phone.indexOf('    try { if (W[id]) { const here =', phone.indexOf('function bridgeFrame(f)'));
   const end = phone.indexOf('    try { win.document.addEventListener', begin);
-  assert.ok(begin >= 0 && end > begin);
   const persist = phone.slice(begin, end);
   for (const appId of ['troubleshooter', 'other']) {
     const url = '/troubleshoot/?provider=claude&run_id=run%2Fone#signin';

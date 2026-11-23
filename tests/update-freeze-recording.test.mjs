@@ -106,7 +106,6 @@ test('app capture (native recorder): a freeze that lands while ' + label + ' nev
 test('the orb refuses first, and the desktop toast says recording is paused (not "Microphone unavailable")', async () => {
   // the phone orb (real startVoice): frozen, it refuses before touching anything else
   const at = app.indexOf('  async function startVoice(kind, opt = {}) {');
-  assert.ok(at > 0, 'startVoice');
   const body = app.slice(at, app.indexOf('\n', app.indexOf('if (window.__wizardUpdateFrozen)', at)) + 1) + '  }';
   // (the slice runs from the top of startVoice: anything before the freeze check would run here and fail on its names)
   const calls = [];

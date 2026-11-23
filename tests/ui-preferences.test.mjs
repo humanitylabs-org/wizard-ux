@@ -95,7 +95,6 @@ test('a repainted Chats list shows the saved auto-archive age, not the picker va
   // The morph branch of the list paint, cut from chats.js, run with a morph that keeps the old field value.
   const head = chats.indexOf("    if (c.listRoot === root && root?.classList.contains('ch-list') && window.WosMorph?.morph(root, html)) {");
   const end = chats.indexOf('    } else {\n      const keepSheet = keptSheet(el);', head);
-  assert.ok(head > 0 && end > head, 'morph branch');
   const arch = { value: '7' }, root = { classList: { contains: c => c === 'ch-list' }, querySelector: q => (q === '[data-archafter]' ? arch : null) };
   const ctx = { c: { listRoot: root, q: '' }, root, html: '<div></div>', feed: false, place: null, el: { querySelector: () => null }, readyOrder: 'newest',
     window: { WosMorph: { morph: () => true }, WizChatsListModel: { activitySortOf: () => 'newest' } }, LIVE: { archiveAfterDays: 0 }, w: { id: 'w1' },

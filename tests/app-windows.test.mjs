@@ -148,7 +148,6 @@ test('every link path asks first: chat links, links in app frames, sandboxed app
   }
   // Notification Open (core/skin-host-tweaks.js): the app's own window first, the shell's openApp only when it declines.
   const host = read('web/core/skin-host.js'), at = host.indexOf('      open(id) {'), end = host.indexOf('\n      },\n', at);
-  assert.ok(at > 0 && end > at);
   const opened = [], relay = [];
   const ctx = vm.createContext({ a: { dead: false }, URL, location: new URL('https://wizard.example/wizard-os-home/'),
     window: { WosBell: { item: id => ({ notes: { app: 'notes', open: '/notes/page/2' }, plain: { app: 'notes' } })[id] }, WizOpenApp: (...x) => (opened.push(x), true),

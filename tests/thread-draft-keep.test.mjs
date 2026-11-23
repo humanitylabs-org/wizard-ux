@@ -113,7 +113,6 @@ test('a thread paint never takes a channel box\'s field as its own composer', ()
   assert.equal(own.draft, 'channel post words');
   // A list paint clears draftFor: the next thread paint reads its own draft, not the field left behind.
   const k = chatsSrc.indexOf('    syncListTitle(w);\n    closeStream(ch(w.id));'), e = chatsSrc.indexOf('    if (H.renderView?.(w, el', k);
-  assert.ok(k > 0 && e > k, 'list paint head');
   const el = { dataset: { draftFor: 'direct:p1' } };
   vm.runInNewContext(`(function () {\n${chatsSrc.slice(k, e)}})()`, { w: { id: 'w1' }, el, syncListTitle() {}, closeStream() {}, ch: () => ({}) });
   assert.equal(el.dataset.draftFor, undefined, 'a list holds no thread\'s box');

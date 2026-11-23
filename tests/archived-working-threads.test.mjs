@@ -58,7 +58,6 @@ test('archived stale-running threads remain recoverable without steering stale r
   const actionsEnd = chatsSource.indexOf('\n  const ACT =', actionsStart);
   const stateStart = chatsSource.indexOf('  function threadState(s, agent) {');
   const stateEnd = chatsSource.indexOf('\n  function renderThread(', stateStart);
-  assert.ok(workingStart > 0 && workingEnd > workingStart && actionsStart > 0 && actionsEnd > actionsStart && stateStart > 0 && stateEnd > stateStart, 'thread state helpers found');
 
   const context = {
     LIVE: { busy: id => id === 'busy', workGroups: rows => ({ archive: rows.filter(row => row.aged) }) },

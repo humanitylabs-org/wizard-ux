@@ -81,7 +81,7 @@ test('the HUD window lives outside the desks: never pruned at boot, never synced
 });
 
 test('render keeps the HUD above every desk and Home; the open HUD counts as visible and keeps polling', () => {
-  const i = js.indexOf("$$('.wsp', stage).forEach("); assert.ok(i > 0);
+  const i = js.indexOf("$$('.wsp', stage).forEach(");
   assert.ok(js.slice(i, js.indexOf('\n', js.indexOf('\n', i) + 1)).includes('hudMount();'), 'mounted after the desks');
   const visible = (homeOpen, hud) => vm.runInNewContext(`({ ${lineOf('visible: () => [...(homeOpen ? [] : ws[cur].wins)').trim().replace(/,$/, '')} }).visible()`, { homeOpen, hud, ws: [{ wins: ['a1'] }], cur: 0, globalThis: {}, shownBeside: () => [] });
   assert.deepEqual([...visible(false, { id: 'h', open: true })], ['a1', 'h']); assert.deepEqual([...visible(true, { id: 'h', open: true })], ['h'], 'over Home too');

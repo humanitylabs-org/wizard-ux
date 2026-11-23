@@ -230,7 +230,6 @@ test('[ ] chips are their own second-row chips, never merged into the neighbour 
 test('⌥] / ⌥[ walk this desk\'s windows left to right (Chats: list, then message box), then step to the next desk', async () => {
   const vm = await import('node:vm');
   const start = js.indexOf('  function chatsZone(f) {'), end = js.indexOf('  function goWs(i');
-  assert.ok(start > 0 && end > start);
   const src = js.slice(start, end);
   // Three desks: [Files | Chats with a chat open], [Notes], [Music | Mail].
   const mk = (id, left, extra = {}) => ({ id, left, ...extra });

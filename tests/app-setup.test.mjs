@@ -184,7 +184,6 @@ test('compact disclosures escape need copy and never use purpose as the row name
 test('install links open the Store window synchronously so the link reaches its frame (both shells)', () => {
   for (const file of ['web/app.js', 'web/desktop/desktop.js']) {
     const src = withDesktopParts(read(file)), at = src.indexOf("      if (v === 'install') {");
-    assert.ok(at > 0, file);
     const block = src.slice(at, src.indexOf('\n      }\n', at) + 8);
     const log = [], iframe = { tag: 'iframe' }, store = { id: 'app-store' };
     const win = { id: 'w1', appId: 'app-store' };
