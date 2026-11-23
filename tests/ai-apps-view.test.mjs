@@ -18,7 +18,7 @@ import vm from 'node:vm';
 import { cascade, parseCss } from './fixtures/mini-css.mjs';
 import { createDocument } from './fixtures/mini-dom.mjs';
 import { layoutApi } from './fixtures/q1-layout-host.mjs';
-import { prop } from './fixtures/q1-slice.mjs';
+import { desktopBoot } from './fixtures/q1-desktop-boot.mjs';
 import { keysGuide } from './fixtures/keys-guide-harness.mjs';
 import { resolveVars, px } from './fixtures/r7A-css.mjs';
 import { fixture } from './fixtures/tweaks.mjs';
@@ -1772,8 +1772,8 @@ test('round 15 desktop: the open apps as vertical tabs on the right (1:1 with th
   const shut = [], D = await layoutApi({ adapter: { closeDesk: i => { shut.push(i); return true; } } });
   assert.deepEqual([D.api.desks.close(2), D.api.desks.close(-1), D.api.desks.close(1.5), D.api.desks.close('2')], [true, false, false, false]); assert.deepEqual(shut, [2]);
   // the desktop's own closeDesk (desktop-boot.js) closes a real desk with its closeDesktop (its ✕), nothing else
-  const boot = read('web/desktop/desktop-boot.js'), deskClosed = [];
-  const { closeDesk } = runRecording('globalThis.closeDesk = (' + prop(boot, 'closeDesk') + ');', { desktopVars: { ws: [{}, {}, {}] }, closeDesktop: i => { deskClosed.push(i); return true; } });
+  const deskClosed = [], { adapter: shellAdapter } = desktopBoot({ desktopVars: { ws: [{}, {}, {}] }, closeDesktop: i => { deskClosed.push(i); return true; } });
+  const closeDesk = i => shellAdapter.closeDesk(i);
   assert.deepEqual([closeDesk(1), closeDesk(3), closeDesk(-1), closeDesk(0.5)], [true, false, false, false]); assert.deepEqual(deskClosed, [1], 'the desktop\'s own closeDesktop (its ✕)');
 });
 
@@ -1987,7 +1987,7 @@ test('round 16: drag to rearrange the right column: within Pinned, within the op
   // the layout hook (the real host) and the stock arrange underneath (desk drag on the bar, ⌥⇧[ ])
   const moved = [], D = await layoutApi({ adapter: { moveDesk: (a, b) => { moved.push([a, b]); return true; } } });
   assert.deepEqual([D.api.desks.move(1, 3), D.api.desks.move(-1, 2), D.api.desks.move(1, 2.5), D.api.desks.move('1', 2)], [true, false, false, false], 'the layout hook'); assert.deepEqual(moved, [[1, 3]]);
-  const arranged = [], { __moveDesk: moveDesk } = runRecording('globalThis.__moveDesk = (' + prop(read('web/desktop/desktop-boot.js'), 'moveDesk') + ');', { moveDesk: (a, b) => { arranged.push([a, b]); return true; } });
+  const arranged = [], { adapter: bootAdapter } = desktopBoot({ moveDesk: (a, b) => { arranged.push([a, b]); return true; } }), moveDesk = (a, b) => bootAdapter.moveDesk(a, b);
   assert.deepEqual([moveDesk(0, 2), moveDesk(0.5, 1)], [true, false]); assert.deepEqual(arranged, [[0, 2]], 'the stock arrange (desk drag on the bar, ⌥⇧[ ])');
   // the others slide while one is dragged (translate only): desktop.css on the column the view drew
   w.html.setAttribute('data-shell', 'desktop'); w.html.setAttribute('data-layout', 'ai-apps');
@@ -2405,11 +2405,11 @@ test('round 21: hold-⌥ chips per state: a keycap on each visible target, 1–9
   assert.ok(w.html.dataset.aadFocus !== undefined, 'Home (focus)'); assert.equal(on(w.q('.aad-hback'), 'display'), 'grid', 'Home shows one quiet ◫ to come back');
   keys[1].down({ altKey: true, code: 'KeyH' }); w.run(); assert.equal(w.html.dataset.aadFocus, undefined); assert.notEqual(on(w.q('.aad-hback'), 'display'), 'grid', 'and only at Home');
   const badge = w.q('.aad-vtb'), kh = raw().find(c => /aad-row/.test(c.el.className))?.el.closest('.aad-rw'), chip = node('b', 'kh-chip', w.html.children[0]);
-  assert.ok(kh?.dataset.aadKh, 'a ↓ / ↑ row marked'); const title = kh.querySelector('.aad-chat');
-  const pad0 = on(title, 'padding-left'), op0 = on(badge, 'opacity');
+  assert.ok(kh?.dataset.aadKh, 'a ↓ / ↑ row marked'); const khTitle = kh.querySelector('.aad-chat');
+  const pad0 = on(khTitle, 'padding-left'), op0 = on(badge, 'opacity');
   w.html.classList.add('key-hints-on');
   assert.equal(on(badge, 'opacity'), '.35', 'count badges step back while ⌥ is held'); assert.notEqual(op0, '.35');
-  assert.equal(on(title, 'padding-left'), '34px', 'the ↓ / ↑ row makes room: the keycap never touches its title'); assert.notEqual(pad0, '34px');
+  assert.equal(on(khTitle, 'padding-left'), '34px', 'the ↓ / ↑ row makes room: the keycap never touches its title'); assert.notEqual(pad0, '34px');
   assert.deepEqual([on(chip, 'background'), on(chip, 'border-bottom-width')], ['var(--aad-canvas)', '2px'], 'hints are keycaps (skin tokens), unlike the round amber count badges');
 });
 
@@ -2438,17 +2438,55 @@ test('round 20 item 1 / round 21: ⌥H Home folds both sides away, closes the ch
   assert.equal(w.html.dataset.aadFocus, undefined, 'a side by hand ends it');
   keys[1].down({ altKey: true, code: 'KeyH' }); assert.equal(w.html.dataset.aadFocus, '', '⌥H after that: Home again, not a stale restore');
   w.q('.aad-hback').dispatchEvent(new FakePointerEvent('click')); assert.equal(w.html.dataset.aadFocus, undefined, 'the ◫ at the top left comes back too');
-  const js = noComments(read('web/layouts/ai-apps/desktop.js'));
-  assert.match(js, /focusStash = \{ folded, vtFolded, thread: [^;]+, app: pane \? \{ id: pane\.id, desk: Number\(pane\.desk\) \} : null, wide, widths: \{ \.\.\.sized \} \};/, 'the stash: both sides, the chat, the app, wide, the widths');
-  assert.match(js, /if \(st\.thread\) \{[^}]*api\.sessions\.open\(st\.thread\); \}/); assert.match(js, /goApp\(st\.app\.id, d \? d\.desk : null\);/); assert.match(js, /if \(st\.wide\) api\.after\(500, \(\) => setWide\(true\)\);/);
-  assert.match(read('web/layouts/ai-apps/desktop.css'), /\[data-aad-focus\] \{ --aad-side: 0px; --aad-rs: 0px; \}/);
-  // Home / Focus hide the panel without leaving its desk first: it must not be taken back as the panel before the new
-  // chat lands (live: ⌥` and ⌥. left the app open)
-  assert.match(js, /if \(!goBack\) dropped = \{ id: was\.id, desk: Number\(was\.desk\) \};/);
-  assert.match(js, /if \(h\.app && !dropped && \(want === h\.app/);
-  // an app in front with a chat docked: ⌥↓ / ⌥↑ step from that chat, not from the top (live matrix, round 20)
-  assert.match(js, /\(h\.app && chatThread \? \(chatThread === NOTE \? stepAt : chatThread\) : null\)/);
-  assert.match(js, /cc && ids\.includes\(cc\) \? cc : null;/);
+  // Focus hides the side columns (desktop.css on <html>)
+  w.html.setAttribute('data-shell', 'desktop'); w.html.setAttribute('data-layout', 'ai-apps');
+  const v = k => cascade(w.html, DESK_CSS)[k]?.value ?? '';
+  keys[1].down({ altKey: true, code: 'KeyH' }); assert.deepEqual([v('--aad-side'), v('--aad-rs')], ['0px', '0px'], 'focus: no sidebar, no apps column');
+  keys[1].down({ altKey: true, code: 'KeyH' }); assert.notEqual(v('--aad-side'), '0px');
+  // the stash, run on a page with an app in front and a chat docked beside it (wizard-ux issue 1674): ⌥H puts back the
+  // chat, the app, wide and the widths; while hidden, the route still naming the app never takes it back as the panel
+  const mk = async () => {
+    const x = deskWorld(), xw = x.w;
+    const stage = new El('div'); stage.id = 'stage';
+    const chatDesk = new El('div'); chatDesk.className = 'wsp'; chatDesk.dataset.ws = '1'; const dchats = new El('div'); dchats.className = 'dchats'; dchats.dataset.thread = 'r1'; chatDesk.append(dchats);
+    const appDesk = new El('div'); appDesk.className = 'wsp'; appDesk.dataset.ws = '4'; stage.append(chatDesk, appDesk); xw.html.children[0].append(stage);
+    // the shell's go: a new chat or a thread lands in the main Chats desk (desk 1) and the route says so (now, or later)
+    const m = { x, xw, appDesk, later: null };
+    const land = id => { dchats.dataset.thread = id; xw.st.route = { home: false, view: 'thread', thread: id, desk: 1 }; xw.emit('route', xw.st.route); };
+    const newChat0 = xw.api.sessions.newChat, open0 = xw.api.sessions.open;
+    xw.api.sessions.newChat = (...a) => { const r = newChat0?.(...a); if (m.later) m.later.push(() => land('__new__')); else land('__new__'); return r; };
+    xw.api.sessions.open = id => { open0(id); land(id); return true; };
+    const go0 = xw.api.nav.goDesk; xw.api.nav.goDesk = d => { const r = go0(d); if (m.goes) { xw.st.route = { home: false, view: 'desk', thread: null, desk: d }; xw.emit('route', xw.st.route); } return r; };
+    xw.st.route = { home: false, view: 'desk', thread: null, desk: 4 };
+    (await layout()).default(xw.api); xw.emit('route', xw.st.route); xw.run();
+    assert.deepEqual([appDesk.dataset.aadRole, xw.html.dataset.aadChat], ['app', 'on'], 'Money in front, Ready one docked beside it');
+    return m;
+  };
+  { // Home hides the panel without leaving its desk first: a route still naming Money before the new chat lands never
+    // takes it back as the panel
+    const m = await mk(); m.later = [];
+    m.x.keys[1].down({ altKey: true, code: 'KeyH' }); assert.notEqual(m.appDesk.dataset.aadRole, 'app', 'the panel hidden');
+    m.xw.emit('route', { ...m.xw.st.route }); assert.notEqual(m.appDesk.dataset.aadRole, 'app', 'the route still naming Money does not take it back as the panel');
+    for (const f of m.later.splice(0)) f(); m.later = null; m.xw.run(); assert.notEqual(m.appDesk.dataset.aadRole, 'app', 'nor once the new chat lands');
+  }
+  const M = await mk(), { x, xw, appDesk } = M;
+  // ⌥↓ / ⌥↑ step from that docked chat, not from the top of Ready
+  assert.ok(x.keys.some(h => h.down({ altKey: true, code: 'ArrowDown', key: 'ArrowDown' }) === true));
+  assert.equal(xw.st.opened.at(-1), 'thread:r2', '⌥↓ from the docked chat (r1) opens the next one');
+  xw.st.route = { home: false, view: 'desk', thread: null, desk: 4 }; xw.emit('route', xw.st.route); xw.run();
+  const xk = x.keys[1];
+  xk.down({ altKey: true, code: 'KeyF' }); xw.run(); assert.equal(xw.html.dataset.aadWide, '', 'wide (⌥F)');
+  const g = xw.q('.aad-grip[data-grip="side"]'); g.dispatchEvent(new FakePointerEvent('keydown', { key: 'ArrowRight' })); const sideW = xw.html.style.getPropertyValue('--aad-side-w'); assert.equal(sideW, '304px');
+  const thread0 = xw.st.opened.at(-1); assert.equal(xw.html.dataset.aadChat, 'on');
+  xk.down({ altKey: true, code: 'KeyH' }); xw.run();
+  assert.equal(xw.html.dataset.aadFocus, '', 'focus'); assert.notEqual(appDesk.dataset.aadRole, 'app', 'the panel hidden'); assert.equal(xw.html.dataset.aadChat, undefined, 'the chat closed');
+  g.dispatchEvent(new FakePointerEvent('keydown', { key: 'ArrowRight' })); assert.equal(xw.html.dataset.aadFocus, '', 'a width nudged while away');
+  const opened = xw.st.opened.length, gone = xw.st.gone.length;
+  M.goes = true; xk.down({ altKey: true, code: 'KeyH' }); xw.run(); xw.run(); xw.run();
+  assert.equal(xw.html.dataset.aadFocus, undefined);
+  assert.deepEqual(xw.st.opened.slice(opened), [thread0], 'the chat that was docked opened again');
+  assert.ok(xw.st.gone.slice(gone).includes(4), 'the app back on its desk');
+  assert.equal(xw.html.dataset.aadWide, '', 'wide again'); assert.equal(xw.html.style.getPropertyValue('--aad-side-w'), sideW, 'the widths as they were');
 });
 
 test('round 20 item 9 / round 22 (Activity since issue 1258): Ready is one list in the chosen Sort (each row its time since the last message, no status tags), never status groups', async t => {
@@ -2482,7 +2520,13 @@ test('round 20 item 9 / round 22 (Activity since issue 1258): Ready is one list 
       assert.equal(w.st.opened.at(-1), 'thread:' + want[(i + step + want.length) % want.length], `${sort}: ⌥${code} walks the drawn list, wrapping`);
     }
   }
-  assert.match(read('web/layouts/ai-apps/desktop.css'), /\.aad-rw:focus-within\) \.aad-time \{ visibility: hidden; \}/, 'the ⋯ takes its place on hover');
+  { // desktop.css on a drawn row: its time steps aside for the ⋯ on hover, held or focused
+    w.html.setAttribute('data-shell', 'desktop'); w.html.setAttribute('data-layout', 'ai-apps');
+    const rw = w.q('.aad-rw'), tm = rw.querySelector('.aad-time'), vis = (o) => cascade(tm, DESK_CSS, o).visibility?.value ?? '';
+    assert.ok(tm, 'a row with its time'); assert.notEqual(vis(), 'hidden');
+    assert.equal(vis({ states: [':hover'] }), 'hidden', 'the ⋯ takes its place on hover'); assert.equal(vis({ states: [':focus-within'] }), 'hidden');
+    rw.classList.add('is-held'); assert.equal(vis(), 'hidden', 'and while held'); rw.classList.remove('is-held');
+  }
   assert.equal(w.q('[data-aad-group]'), null, 'no By status choice in Settings');
 });
 
@@ -2576,11 +2620,20 @@ test('round 21: a modal in front (the app picker, Settings) takes only its own �
   const guides = [];
   w.api.keys = { on: h => { keys.push(h); return () => {}; }, guide: g => { guides.push(g); return () => {}; } };
   (await layout()).default(w.api);
-  const js = noComments(read('web/layouts/ai-apps/desktop.js'));
-  assert.match(js, /if \(allOpenNow\(\)\) return code === 'KeyA' && !sh \? once\(closeAll\) : KEY_LIKE\.test\(code\);/, 'the picker: ⌥A closes it, every other ⌥ key is taken');
-  assert.match(js, /if \(settingsOpen\(\)\) return code === 'KeyS' && !sh \? once\(closeSettings\) : KEY_LIKE\.test\(code\);/, 'Settings: ⌥S closes it');
-  assert.match(js, /if \(allOpenNow\(\)\) \{ put\(doc\.querySelector\('\.vc-sheet \.vc-x'\), 'A'\); return out; \}/);
-  assert.match(js, /if \(settingsOpen\(\)\) \{ put\(host\?\.settings.closePart\(\), 'S'\); return out; \}/);
+  const chipKeys = () => guides.at(-1)().map(c => c.key + '@' + String(c.el?.className || ''));
+  // the picker open: its ✕ wears A and nothing else does; ⌥⇧A is taken but does not close it
+  keys[1].down({ altKey: true, code: 'KeyA' }); assert.equal(w.html.dataset.vcSheet, 'open');
+  assert.deepEqual(chipKeys(), ['A@vc-x'], 'the picker\'s ✕ wears ⌥A, nothing else');
+  assert.equal(keys[1].down({ altKey: true, shiftKey: true, code: 'KeyA' }), true); assert.equal(w.html.dataset.vcSheet, 'open', '⌥⇧A is not its key');
+  assert.equal(keys[1].down({ altKey: true, code: 'KeyS' }), true); assert.deepEqual(w.st.settings, [], 'no Settings over the picker');
+  keys[1].down({ altKey: true, code: 'KeyA' }); assert.equal(w.html.dataset.vcSheet, undefined, '⌥A closes it');
+  // Settings in front (the shared centred panel): ⌥S closes it, its ✕ wears S, the view's other keys are taken
+  const dset = node('div', '', w.html.children[0]); dset.id = 'dsettings'; const stx = node('button', 'st-close', dset); let shut = 0; stx.click = () => { shut++; dset.hidden = true; };
+  assert.deepEqual(chipKeys(), ['S@st-close'], 'Settings\' ✕ wears ⌥S, nothing else');
+  assert.equal(keys[1].down({ altKey: true, code: 'KeyL' }), true); assert.equal(w.html.dataset.aadSide, 'open', 'the sidebar stays as it is behind Settings');
+  assert.equal(keys[1].down({ altKey: true, code: 'KeyA' }), true); assert.equal(w.html.dataset.vcSheet, undefined, 'no picker over Settings');
+  assert.equal(keys[1].down({ altKey: true, code: 'KeyS' }), true); assert.equal(shut, 1, 'Settings: ⌥S closes it');
+  dset.remove();
   // the picker open: ⌥V (voice) is taken too; ⌥A again closes it
   assert.equal(keys[1].down({ altKey: true, code: 'KeyA' }), true); assert.equal(w.html.dataset.vcSheet, 'open');
   assert.equal(keys[1].down({ altKey: true, code: 'KeyV' }), true, 'voice waits until the picker is closed');
@@ -2625,15 +2678,22 @@ test('desktop cold Store opens synchronously in the app pane and deferred Home c
   w.run();
   assert.equal(w.st.newChats, drafts, 'the deferred mount-time Home task cannot steal the Store');
   assert.equal(w.doc.activeElement, frame, 'the opened app receives focus');
-  const shell = read('web/desktop/desktop.js');
-  const attach = shell.indexOf('window.WosSkinHost?.attach({');
-  assert.ok(attach >= 0);
-  assert.ok(shell.indexOf('await window.WosExperience?.whenReady?.();') > attach);
-  assert.ok(shell.indexOf('await window.WosSkinHost?.whenLayoutReady?.();') > attach);
-  assert.ok(shell.indexOf('C.deeplink.consume();') > shell.indexOf('await window.WosSkinHost?.whenLayoutReady?.();'), 'cold links wait for the same open router');
-  const css = read('web/layouts/ai-apps/desktop.css');
-  assert.match(css, /\.win:not\(\.gone\):not\(\.drag\) \.wbody iframe \{ pointer-events: auto;/);
-  assert.match(css, /\[data-aad-resizing\] iframe \{ pointer-events: none !important;/, 'resizing still shields app frames');
+  // the shell's boot (desktop.js, run): the skin host attached by the boot part, then the views ready, the layout ready,
+  // and only then the cold deep link (it waits for the same open router)
+  const order = [], gate = () => { let open; const p = new Promise(r => { open = r; }); return { p, open }; }, exp = gate(), lay = gate();
+  const realBoot = desktopBoot(); assert.ok(realBoot.adapter, 'the boot part attaches the shell to the skin host at once');
+  const shellSrc = readFileSync(new URL('web/desktop/desktop.js', root), 'utf8');
+  const bootRun = between(shellSrc, '  const { LINKS } = window.WizCore.desktopParts.boot(', '\n  // First run is the Welcome modal');
+  const bootCtx = runRecording('globalThis.__go = async () => {\n' + bootRun + '\n};', { $: () => null, $$: () => [], C: { deeplink: { consume: () => order.push('consume') } },
+    window: { WizCore: { desktopParts: { boot: () => { order.push('boot+attach'); return { LINKS: {} }; } } }, WosExperience: { whenReady: () => { order.push('views?'); return exp.p; } }, WosSkinHost: { whenLayoutReady: () => { order.push('layout?'); return lay.p; } } } });
+  const ran = bootCtx.__go();
+  await settle(); assert.deepEqual(order, ['boot+attach', 'views?'], 'nothing consumed while the views get ready');
+  exp.open(); await settle(); assert.deepEqual(order, ['boot+attach', 'views?', 'layout?'], 'nor while the layout loads');
+  lay.open(); await ran; assert.deepEqual(order, ['boot+attach', 'views?', 'layout?', 'consume'], 'cold links wait for the same open router');
+  // desktop.css on a real app window: frames take the pointer, except while a grip is held
+  const p = await panelDesk(), fr = p.appWins[0].querySelector('iframe');
+  assert.equal(p.style(fr)('pointer-events'), 'auto', 'an app frame takes the pointer');
+  p.w.html.dataset.aadResizing = 'side'; assert.equal(p.style(fr)('pointer-events'), 'none', 'resizing still shields app frames'); assert.ok(p.important(fr, 'pointer-events'));
 });
 
 test('round 21 desktop: one left/right model: apps and their links on the right (one window, taken to the page), other links in the same panel, no view beside a thread, an app\'s Reply in the left column with the app kept', async () => {
