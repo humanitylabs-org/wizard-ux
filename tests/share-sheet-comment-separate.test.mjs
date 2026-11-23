@@ -6,6 +6,7 @@ import path from 'node:path';
 import { shareSheet, flush } from './fixtures/share-sheet-harness.mjs';
 import { cascade } from './fixtures/mini-css.mjs';
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
+import { runOpaque } from './fixtures/r8A-opaque-overlays.mjs';
 const root = process.env.SHARE_TEST_TREE || path.resolve(import.meta.dirname, '..');
 const read = p => readFileSync(path.join(root,p),'utf8');
 const shared = read('web/core/share-wizard.js');
@@ -68,12 +69,17 @@ test('James: outside tap closes the top layer like Back; picker is opaque and sk
   h.S.back(); assert.equal(h.q('.dv-backhint').textContent, 'Press back again to cancel', 'a sheet with content warns once');
   h.tap('.dv-scrim'); assert.equal(h.q('.wz-share'), null, 'the scrim closes at once');
   assert.equal(await done, 'cancelled');
+  // the chooser the real sheet drew, cascaded with the real share-wizard.css: opaque, from the skin's tokens
   const css = read('web/core/share-wizard.css');
-  assert.match(css,/\.dv-picker \{[^}]*linear-gradient\(var\(--dv-raised\),var\(--dv-raised\)\), linear-gradient\(var\(--dv-base\),var\(--dv-base\)\) black/s); // opaque backstop without literal colours (style ratchet)
-  assert.match(css,/var\(--wz-base/); assert.match(css,/var\(--wz-accent/);
+  const again = shareSheet(); again.S.open({ text: 'hi' }); await flush(); again.tap('.dv-chat');
+  const bg = cascade(again.q('.dv-picker'), css).background?.value || '';
+  assert.match(bg, /^linear-gradient\(var\(--dv-raised\), ?var\(--dv-raised\)\), ?linear-gradient\(var\(--dv-base\), ?var\(--dv-base\)\) black$/, 'raised over base over a black backstop: never see-through (no literal colours: style ratchet)');
+  const tokens = cascade(again.q('.wz-share'), css);
+  assert.match(tokens['--dv-base']?.value || '', /var\(--wz-base\)/, 'the base follows the skin');
+  assert.equal(tokens['--dv-accent']?.value, 'var(--wz-accent)', 'the accent follows the skin');
 });
 test('James: every share panel uses opaque panel tokens; pixel guard includes rows, cards and options', async () => {
-  const css=read('web/core/share-wizard.css'), guard=read('tools/qa-opaque-overlays.cjs');
+  const css=read('web/core/share-wizard.css');
   // the real sheet with its chooser open, asked what wins on what it drew
   const h = shareSheet(); h.S.open({ text: 'hi' }); await flush();
   h.tap('.dv-chat');
@@ -87,7 +93,14 @@ test('James: every share panel uses opaque panel tokens; pixel guard includes ro
     assert.notEqual(got.background.value.trim(), 'transparent', el.className);
     assert.equal(got['backdrop-filter'], undefined, 'no see-through blur');
   }
-  for (const name of ['share-compose','share-destination','share-agent-row','share-chat-row','share-message','share-attachment','share-picker','share-option','share-backhint']) assert.ok(guard.includes(name));
+  // the real pixel guard (tools/qa-opaque-overlays.cjs, fake Chromium) checks each share surface on the real share CSS
+  for (const [name, cls] of [['share-compose','dv-compose'],['share-destination','dv-dest'],['share-agent-row','dv-row dv-agent'],['share-chat-row','dv-row dv-chat'],['share-message','dv-quote'],['share-attachment','ch-att'],['share-picker','dv-picker'],['share-option',''],['share-backhint','dv-backhint']]) {
+    const run = await runOpaque({ filter: name });
+    assert.ok(run.result?.checked > 0, `${name}: checked`);
+    const panel = run.pages[0].doc.querySelector('[data-qa-panel]');
+    assert.equal(panel.className, cls, name); assert.ok(panel.closest('.wz-share'), `${name}: inside the share sheet`);
+    if (name === 'share-option') assert.equal(panel.tagName.toLowerCase(), 'button'), assert.equal(panel.parentElement.className, 'dv-picker');
+  }
 });
 test('James: real Chats outbox receives explicit second-agent id for NEW and EXISTING chats, without inheriting another window route/model', async () => {
   const src = withParts(read('web/core/chats.js')), start = src.indexOf('  async function sendChat('), end = src.indexOf('  const picker =',start);
@@ -155,7 +168,7 @@ test('legacy async native file reads are awaited after close, never uploaded as 
   const start=shared.indexOf('  async function deliver('),end=shared.indexOf('  async function carry(',start);let reads=0;const uploads=[];
   const sandbox={jobs:0,File,blob:x=>x instanceof Blob,inLane:fn=>fn(),carry:async()=> 'sent'};
   vm.runInNewContext(shared.slice(start,end)+';this.deliver=deliver;',sandbox);
-  const job={authorize:()=>true,files:[{name:'x.pdf',type:'application/pdf',async read(){reads++;return new Blob(['exact native bytes']);}}]};
+  const job={authorize:()=>true,files:[{name:'x.pdf',type:'application/pdf',async 'read'(){reads++;return new Blob(['exact native bytes']);}}]};
   const result=await sandbox.deliver({}, {async uploadFile(file){uploads.push(file);assert.equal(await file.text(),'exact native bytes');return {id:'uploaded'};}},job);
   assert.equal(result,'sent');assert.equal(reads,1);assert.equal(uploads.length,1);assert.equal(uploads[0].name,'x.pdf');
 });

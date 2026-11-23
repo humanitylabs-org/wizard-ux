@@ -10,6 +10,7 @@ import { modelContext } from './fixtures/chats-list-model.mjs';
 import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
 import { withParts } from './fixtures/chats-parts.mjs';
 import { between, runRecording } from './fixtures/source-slice.mjs';
+import { lookBox } from './fixtures/r5A-experience.mjs';
 import { onSkin } from './fixtures/w5-css.mjs'; // chats.js parts moved out verbatim (issue 1665)
 
 const read = p => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
@@ -35,10 +36,8 @@ test('live.js keeps only known wizard_last_run_error codes, clipped', () => {
   assert.deepEqual({ ...of({ code: 'provider_billing', provider: 'openai-codex', message: '  Plan\n ended ' }) }, { code: 'provider_billing', provider: 'openai-codex', message: 'Plan ended' });
   assert.equal(of({ code: 'provider_quota', message: 'x'.repeat(500) }).message.length, 200);
   for (const bad of [null, 'provider_auth', {}, { code: 'evil' }, { code: 'provider_auth'.toUpperCase() }]) assert.equal(of(bad), null);
-  const live = withLiveParts(read('web/live.js'));
-  assert.match(live, /runError: runErrorOf\(item\.wizard_last_run_error\),/);
-  assert.match(live, /reconnect:null, runError:null,/);
-  assert.match(live, /\.\.\.item, runError: runErrorOf\(item\.runError\), status:/);
+  // Detail and compact rows through the real normalize(): 'main and routed threads (host-profile, container,
+  // restricted) carry and render the same reason' below.
 });
 
 test('switched off (default): no reason, the old panel exactly', () => {
@@ -104,7 +103,7 @@ function threadMsgs(M, s) {
   return { html: ctx.msgs, quiet: turns };
 }
 
-test('Errors row and thread use the reason in place of "Error: <message>" and the generic failed_turn bubble', () => {
+test('Errors row and thread use the reason in place of "Error: <message>" and the generic failed_turn bubble', async () => {
   const s = failed('provider_billing', { safeError: 'Your request was not processed.' });
   const on = models(), off = models('');
   const line = on.runError(s).line;
@@ -119,8 +118,10 @@ test('Errors row and thread use the reason in place of "Error: <message>" and th
   assert.deepEqual(o.quiet, [false]); assert.match(o.html, /<b>Reply not sent<\/b><p>Your request was not processed\.<\/p>/);
   // The switch: listed, its own id, its CSS scoped to it.
   const tw = 'web/tweaks/wizard/failure-reason/';
-  assert.equal(JSON.parse(read(tw + 'manifest.json')).id, TWEAK);
-  assert.ok(JSON.parse(read('web/tweaks/catalog.json')).tweaks.includes(TWEAK));
+  // (its manifest id matches its folder: the repo-wide tweak lint, tests/fixtures/tweak-lint.mjs)
+  // The real Settings › Look switch list (core/experience.js) on the real catalog: listed, off.
+  const box = await lookBox(), row = box.row(TWEAK);
+  assert.ok(row, 'Settings › Look lists the switch'); assert.equal(row.on, false, 'off by default'); assert.ok(!box.active().includes(TWEAK));
   const css = read(tw + 'tweak.css');
   const label = attrs => onSkin([css], '.ch-fail.reason .lb', { skin: '', attrs })['text-transform'];
   assert.equal(label({ 'data-tweaks': 'wizard/desktop-chats wizard/failure-reason' }), 'none', 'the reason label, with the switch on');

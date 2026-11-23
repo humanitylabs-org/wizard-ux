@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { deskWorld, layout as aiAppsLayout } from './fixtures/ai-apps-world.mjs';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { createDocument } from './fixtures/mini-dom.mjs';
 import { withAppParts } from './fixtures/app-parts.mjs';
 import { withShellParts } from './fixtures/shell-parts.mjs';
 import { withWebParts } from './fixtures/web-parts.mjs';
@@ -273,10 +274,12 @@ const sliceFn = (src, start, end = '\n  }\n') => { const i = src.indexOf(start);
 
 test('wiring: pages load the boundary right after shell-token.js; app frames get the sandbox only when it is on', async () => {
   for (const page of ['web/index.html', 'web/desktop.html']) {
-    const html = read(page);
-    const t = html.indexOf('<script src="core/shell-token.js"></script>'), b = html.indexOf('<script src="core/browser-boundary.js"></script>');
-    assert.ok(t > 0 && b > t, page);
-    assert.ok(b < html.indexOf('<script src="core/appearance-host.js"></script>') && b < html.indexOf('<script src="core/app-services.js"></script>'), page);
+    // the scripts the browser runs, in the parsed page's document order
+    const doc = createDocument(); doc.documentElement.innerHTML = read(page).replace(/^<!doctype html>/i, '');
+    const order = doc.querySelectorAll('script[src]').map(e => e.getAttribute('src').split('?')[0]);
+    const at = n => { const i = order.indexOf(n); assert.ok(i >= 0, `${page} runs ${n}`); return i; };
+    assert.ok(at('core/browser-boundary.js') > at('core/shell-token.js'), `${page}: the boundary after shell-token.js`);
+    assert.ok(at('core/browser-boundary.js') < at('core/appearance-host.js') && at('core/browser-boundary.js') < at('core/app-services.js'), page);
   }
   // The phone's and the desktop's real app-frame markup (app-frame.js renderFrameCore, desktop-resize.js bodyHtml),
   // with the real boundary's frame attributes when it is on.
@@ -947,7 +950,7 @@ test('app keys: forged or reserved keys are dropped; a press only reaches a key 
   void press;
 });
 
-test('app keys wiring: the AI apps view presses app keys while it runs and reads a sandboxed app\'s keys from the boundary', () => {
+test('app keys wiring: the AI apps view presses app keys while it runs and reads a sandboxed app\'s keys from the boundary', async () => {
   const layout = read('web/layouts/ai-apps/desktop.js'), keys = read('web/layouts/ai-apps/desktop-keys.js');
   // desktop-keys.js: the view asks the boundary to press app keys for the app in front, and reads a sandboxed app's keys from it.
   const asked = [];
@@ -961,8 +964,18 @@ test('app keys wiring: the AI apps view presses app keys while it runs and reads
   front = false; ctx.off().sync(); assert.deepEqual(asked.at(-1), ['sync', null], 'the app in front is synced (none now)');
   ctx.off()(); assert.equal(asked.at(-1), 'off');
   assert.deepEqual(clone(ctx.frameKeys(pane).map(t => t.key)), ['j'], 'a sandboxed app\'s keys come from the boundary, only those with a control and a key');
-  assert.match(keys, /offAppKeys\?\.sync\?\.\(\);/, 'the app in front is synced on every repaint');
-  assert.match(layout, /return \(\) => \{\n    offAppKeys\?\.\(\);/, 'the view lets go when it is torn down');
+  // The whole real AI apps desktop view (ai-apps-world.mjs deskWorld): every repaint syncs, teardown lets go.
+  const { w } = deskWorld(), seen = [];
+  globalThis.WizBrowserBoundary = { pressAppKeys: () => { seen.push('press'); const off = () => seen.push('off'); off.sync = () => seen.push('sync'); return off; } };
+  try {
+    const offView = (await aiAppsLayout()).default(w.api);
+    assert.equal(seen[0], 'press', 'pressed once the view runs');
+    const synced = () => seen.filter(x => x === 'sync').length, before = synced();
+    w.st.route = { ...w.st.route, view: 'list', thread: null }; w.emit('route', w.st.route); w.run();
+    assert.ok(synced() > before, 'the app in front is synced on every repaint');
+    assert.ok(!seen.includes('off'), 'held while the view runs');
+    offView?.(); assert.equal(seen.filter(x => x === 'off').length, 1, 'the view lets go when it is torn down');
+  } finally { delete globalThis.WizBrowserBoundary; }
   // The SDK hands its own key list and press to the boundary client (app-client.js boundaryHooks), in a sandboxed frame.
   const app = appClient({ opaque: true });
   let hooks = null; app.ctx.WizBoundaryClient = { connect: h => { hooks = h; } };

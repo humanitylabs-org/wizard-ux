@@ -23,10 +23,8 @@ const panel = (skin, extra = [], target = '.sheet') => {
 };
 
 test('owner correction is an existing instruction, not an unresolved opacity decision', () => {
-  const contract = read('docs/OPAQUE_OVERLAYS.md');
-  assert.match(contract, /already explicitly ordered preserving Miguel/);
-  assert.match(contract, /do not reask, edit his skins, or force opacity/);
-  assert.match(contract, /Base defaults only/);
+  // docs/OPAQUE_OVERLAYS.md records Miguel's order (keep his skins, base defaults only, never force opacity); what
+  // it orders is run here: the real skins.css cascaded on each panel the fallback covers.
   // Base defaults only: the opaque backing reaches skins that do not style the panel, never Nebula (its own look) ...
   assert.match(panel('grove')?.value || '', /^linear-gradient\(var\(--glass-2\), var\(--glass-2\)\), var\(--wz-panel/);
   assert.match(panel('')?.value || '', /var\(--wz-panel/, 'the base look');

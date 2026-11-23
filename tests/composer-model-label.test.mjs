@@ -5,7 +5,8 @@ import vm from 'node:vm';
 import { withParts } from './fixtures/chats-parts.mjs';
 import { createDocument } from './fixtures/mini-dom.mjs';
 import { styles } from './fixtures/w5-css.mjs';
-import { between, block } from './fixtures/source-slice.mjs'; // chats.js parts moved out verbatim (issue 1665)
+import { between, block, runRecording } from './fixtures/source-slice.mjs';
+import { cascade } from './fixtures/mini-css.mjs'; // chats.js parts moved out verbatim (issue 1665)
 
 const read = p => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
 
@@ -209,8 +210,19 @@ test('agent chats show the short family name, never the raw model id', () => {
   assert.equal(M.short('claude-fable-5-1', 'anthropic'), 'Fable');
   assert.equal(M.short('claude-fable-5-1', 'claude-cli'), 'Fable');
   assert.equal(M.short('claude-opus-5-5', ''), 'Opus');
+  // The real thread-header chip (chat-power.js modelChip) on an agent's thread: the short name, the agent's provider.
   const power = read('web/core/chat-power.js');
-  assert.match(power, /const label = cur\?\.model \? \(M\.short\(cur\.model, cur\.provider \|\| ag\?\.model\?\.provider\) \|\| full\)/);
+  const chip = (model, provider, agentProvider) => {
+    const ag = { id: 'pi', model: { provider: agentProvider } };
+    const r = runRecording(block(power, '  function modelChip(') + '\nthis.modelChip = modelChip;', { M, esc: String, ch: () => ({}),
+      threadModel: () => ({ model, provider }), agentOfWin: () => ag, window: { WosAgents: { isOther: () => true, get: () => ag, isPrivate: () => false, modelName: (a, m) => m, lock: () => '' } } });
+    const doc = createDocument(); doc.body.innerHTML = r.modelChip({ id: 'w1', thread: 't1' }, { id: 't1' });
+    return doc.querySelector('[data-chmodel]').textContent.replace('▾', '').trim();
+  };
+  assert.equal(chip('claude-fable-5-1', '', 'anthropic'), 'Fable', 'the agent\'s provider names the family');
+  assert.equal(chip('claude-opus-5-5', 'anthropic', ''), 'Opus');
+  assert.equal(chip('glm-5-3', '', 'wizard-tinfoil'), 'GLM 5.3', 'a private agent on Tinfoil: its route\'s own name (GLM 5.3)');
+  assert.equal(chip('mystery-model-9', '', ''), 'Mystery Model 9', 'an unknown model: a readable name, not the raw id');
 });
 
 test('tall-draft model menu stays above composer and respects visible keyboard height (James correction)', () => {
@@ -234,11 +246,24 @@ test('tall-draft model menu stays above composer and respects visible keyboard h
       assert.ok(height > 40 && bottom - height >= 80, 'bounded scroll area stays below thread header');
     }
   }
+  // The card's CSS (real chat-power.css) on the picker's markup: bounded by placePop's height, opaque, above the
+  // document-scroll chrome.
   const css = read('web/core/chat-power.css');
-  assert.match(css, /max-height:\s*min\(var\(--mpop-h, 64%\), 440px\)/);
-  assert.match(css, /\.ch-sheet\.ch-mpop \.ch-sheet-b \{[^}]*background: linear-gradient\([^;]+var\(--wz-panel, var\(--bg,/);
-  assert.match(css, /html\.wos-doc-scroll \.wos-doc-thread \.ch-sheet\.ch-mpop \{ position: fixed; inset: 0; z-index: 52;/);
-  assert.match(src, /window\.visualViewport\?\.addEventListener\('resize', queue/);
+  const doc = createDocument();
+  doc.documentElement.className = 'wos-doc-scroll';
+  doc.body.innerHTML = '<div class="wos-doc-thread"><div class="ch-sheet ch-psheet ch-mpop"><div class="ch-sheet-b"></div></div></div>';
+  const card = cascade(doc.querySelector('.ch-sheet-b'), css), wrap = cascade(doc.querySelector('.ch-mpop'), css);
+  assert.equal(card['max-height']?.value, 'min(var(--mpop-h, 64%), 440px)', 'placePop\'s --mpop-h bounds the card');
+  assert.match(card.background?.value || '', /^linear-gradient\(.+\), var\(--wz-panel, var\(--bg,/, 'an opaque panel');
+  assert.deepEqual([wrap.position?.value, wrap.inset?.value, wrap['z-index']?.value], ['fixed', '0', '52'], 'above the native document-scroll chrome (z 50)');
+  // The open picker (real chat-power.js) re-places the card when the visible keyboard resizes the viewport.
+  const on = {}, placed = [];
+  const el = { classList: { add() {}, remove: c => placed.push(['remove', c]) }, style: { removeProperty: k => placed.push(['unset', k]) }, querySelector: () => null };
+  const win = { addEventListener() {}, visualViewport: { addEventListener: (t, f) => { on['vv:' + t] = f; } } };
+  const open = runRecording(block(src, '    if (sheet.pop) {'), { sheet: { pop: true }, el, window: win, placePop: () => placed.push(['place']),
+    requestAnimationFrame: f => (f(), 1), cancelAnimationFrame() {}, AbortController, ResizeObserver: class { observe() {} disconnect() {} } });
+  placed.length = 0; on['vv:resize'](); assert.deepEqual(placed, [['place']], 'a keyboard resize places the card again');
+  placed.length = 0; open.popOff(); assert.deepEqual(placed, [['remove', 'ch-model-picking'], ['unset', '--mpop-input-max']], 'closing gives the input back its height');
 });
 
 test('native keyboard leaves a usable picker above the temporarily shorter input', () => {
@@ -260,7 +285,7 @@ test('native keyboard leaves a usable picker above the temporarily shorter input
   assert.equal(inputHeight, 42, 'only the input viewport shrinks; its value is untouched');
   assert.ok(styles.get('--mpop-h') >= 90, 'at least one complete model row remains reachable');
   assert.ok(rect.bottom - styles.get('--mpop-b') < boxes['.ch-compose'].getBoundingClientRect().top);
-  assert.match(src, /el\.classList\.remove\('ch-model-picking'\); el\.style\.removeProperty\('--mpop-input-max'\)/);
+  // (closing the picker gives the input its height back: the test above runs popOff)
 });
 
 test('the composer scripts parse', () => {

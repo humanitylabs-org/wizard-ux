@@ -370,9 +370,8 @@ test('Settings › Network & security fills even before Home has been shown', as
   ctx.window = ctx; ctx.addEventListener = () => {}; ctx.dispatchEvent = () => true; ctx.WosChat = { esc: s => String(s ?? '') };
   const visible = { v: 'visible' }; ctx.getComputedStyle = () => ({ visibility: visible.v });
   vm.runInNewContext(read('web/core/usage.js'), ctx);
-  const res = read('web/core/resources.js'); const at = res.indexOf('const viewing=');
+  const res = read('web/core/resources.js');
   vm.runInNewContext(res.replace('window.WosResources={', 'globalThis.__viewing=viewing;window.WosResources={'), ctx);
-  assert.ok(at > 0);
   const page = { isConnected: true, rects: [1], getClientRects() { return this.rects; } };
   ctx.WosResources.watch(page);
   const viewing = ctx.__viewing;
@@ -578,19 +577,36 @@ test('tenth review: Miguel\'s Home opens Settings as the panel; the glance count
   assert.match(m.glance().querySelector('[data-go="overview"]').getAttribute('title'), /^4 machines · 1 person$/, 'the glance counts only this Wizard\'s people');
 });
 test('eleventh review: the Home map keeps one shared store; a cancelled hold never swallows the next mic click', async () => {
-  for (const who of ['miguel']) assert.equal(JSON.parse(read(`web/tweaks/${who}/machines-home/manifest.json`)).storage, 'machines-home', who);
   const f = fixture(); const apis = {};
   f.host._test.setImporter(async url => ({ default: a => { apis.m = a; return () => {}; } }));
   await f.host.loadTweaks(['miguel/machines-home'], f.slots, { teamAuthors: ['miguel', 'wizard'] });
   apis.m.storage.set('ws', 'mine-x');
   await f.host.loadTweaks(['miguel/machines-home'], f.slots, { teamAuthors: ['miguel', 'wizard'] });
   assert.equal(apis.m.storage.get('ws'), 'mine-x', 'reloading keeps the choice');
+  assert.equal(JSON.parse(f.lsMap.get('wos.skin.shared:machines-home.ws')), 'mine-x', 'kept in the one shared machines-home store (its manifest storage)');
   // A device that wore the retired stock copy (wizard/machines-home) keeps those choices in Miguel's package.
   f.lsMap.set('wos.skin.wizard/machines-home.nick', JSON.stringify({ a: 'old' }));
   assert.equal(JSON.stringify(apis.m.storage.get('nick')), '{"a":"old"}', 'a copy kept by the retired stock package is found');
   await f.clear?.();
-  const desk = withDesktopParts(read('web/desktop/desktop.js'));
-  assert.match(desk, /for \(const ev of \['pointerleave', 'pointercancel'\]\) mic\.addEventListener\(ev, \(\) => \{ clearTimeout\(holdT\); held = false; \}\);/);
+  // The desktop mic's hold (real desktop-voicemenu.js): a hold that opened the menu swallows its own click, but a
+  // hold cancelled (pointer left / cancelled) never swallows the next click.
+  const press = () => {
+    const on = {}, timers = [], menu = { hidden: true, style: {}, addEventListener() {}, querySelector: () => null, querySelectorAll: () => [] };
+    const mic = { addEventListener: (t, fn) => { (on[t] ||= []).push(fn); }, setAttribute() {}, getBoundingClientRect: () => ({ bottom: 0, right: 0 }) };
+    const w = { WizCore: {} };
+    vm.runInNewContext(read('web/desktop/desktop-voicemenu.js'), { window: w, setTimeout: fn => (timers.push(fn), timers.length), clearTimeout: id => { timers[id - 1] = null; }, innerWidth: 1200, document: { addEventListener() {}, removeEventListener() {}, getElementById: () => null } });
+    w.WizCore.desktopParts.voicemenu({ mic, voiceMenu: menu, closeVoiceMenu() {}, fields: () => ({}), toast() {} });
+    const fire = (t, extra = {}) => { const e = { button: 0, preventDefault() { e.prevented = true; }, stopImmediatePropagation() { e.stopped = true; }, ...extra }; (on[t] || []).forEach(fn => fn(e)); return e; };
+    return { timers, menu, fire };
+  };
+  for (const [end, swallowed] of [[null, true], ['pointerleave', false], ['pointercancel', false]]) {
+    const m = press(); m.fire('pointerdown'); m.timers.forEach(fn => fn?.());
+    assert.equal(m.menu.hidden, false, 'the hold opened the menu');
+    if (end) m.fire(end);
+    assert.equal(!!m.fire('click').stopped, swallowed, end ? `${end}: the next mic click goes through` : 'the hold\'s own click is swallowed');
+  }
+  const quick = press(); quick.fire('pointerdown'); quick.fire('pointerup'); quick.timers.forEach(fn => fn?.());
+  assert.equal(quick.menu.hidden, true, 'a short press opens no menu'); assert.equal(!!quick.fire('click').stopped, false);
 });
 
 test('twelfth review: unread chat counts are unknown, not zero', () => {
