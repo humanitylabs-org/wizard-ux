@@ -46,7 +46,8 @@ test('James: the default Wizard skins keep the classic Home: no network map, no 
 
 test('James: Miguel\'s network Home is his tweak, a separate switch any skin can turn on (#755 kept)', async () => {
   assert.ok(catalog.tweaks.includes('miguel/machines-home'));
-  assert.ok(JSON.parse(read('web/tweaks/miguel/profile.json')).tweaks.includes('miguel/machines-home'), 'in Miguel\'s quick button');
+  const miguel = JSON.parse(read('web/tweaks/miguel/profile.json')); // data: Miguel's quick-button preset
+  assert.ok(miguel.tweaks.includes('miguel/machines-home'), 'in Miguel\'s quick button');
   // A device wearing Miguel's tweaks gets it with any skin, James's colors included.
   for (const skin of ['obsidian', 'landscapes-light', 'nebula']) {
     const f = experience(skin, { version: 1, off: {}, preset: 'miguel' }); await f.E.refresh();

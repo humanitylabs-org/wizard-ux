@@ -316,7 +316,13 @@ test('Original reveals the untouched picture; Translated brings the overlay back
   h.node('#orig').fire('click');
   assert.equal(body.classList.contains('orig'), false);
   assert.equal(h.painted().length, 3, 'overlay untouched by the toggle');
-  assert.match(page, /body\.orig #paint \{ display: none; \}/);
+  // the page's own stylesheet on its own markup: with body.orig the overlay is not drawn, without it it is
+  const css = page.split('<style>').slice(1).map(x => x.split('</style>')[0]).join('\n');
+  const doc = createDocument(); doc.body.innerHTML = page.slice(page.indexOf('>', page.indexOf('<body')) + 1, page.indexOf('</body>')).split('<script')[0];
+  const paint = doc.body.querySelector('#paint'); assert.ok(paint, 'the page has its #paint overlay');
+  assert.notEqual(cascade(paint, css).display?.value, 'none', 'Translated: the overlay shows');
+  doc.body.classList.add('orig');
+  assert.equal(cascade(paint, css).display?.value, 'none', 'Original: the overlay is hidden');
 });
 
 test('tap a painted picture line: its original + translation; outside tap and Back step off; Copy intact', async () => {
