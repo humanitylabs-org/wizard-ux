@@ -9,7 +9,7 @@ import vm from 'node:vm';
 import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { between } from './fixtures/source-slice.mjs';
+import { between, block, runRecording } from './fixtures/source-slice.mjs';
 import { parsePage } from './fixtures/w1-pages.mjs';
 import { createDocument } from './fixtures/mini-dom.mjs';
 import { cascade, styleOf } from './fixtures/mini-css.mjs';
@@ -57,6 +57,15 @@ test('Home keeps its previous house artwork and app icons never select Hermes', 
   assert.match(S.named('hermes'), /sg-hat/);
   assert.doesNotMatch(read('web/core/sigils.css'), /url\(["']?\/wizard-os-home\/brand\/apps\/hermes\.svg/);
   assert.match(read('web/core/agents.js'), /return A\.isPrivate\(a\) \? 'hat-private' : 'hat'/);
+  // run beside the pins above: the shells' real Home marks and the agents' real glyph
+  const home = createDocument(); home.body.innerHTML = runRecording(`this.f = desk => {\n${between(read('web/core/workspace-navigation.js'), '    if (desk.home) return ', '\n')}\n};`, {}).f({ home: true });
+  assert.ok(home.querySelector('.sgi.sg-home'), 'desktop desk strip: the house Home glyph');
+  const ov = runRecording(`this.f = d => { let body = '';\n${between(read('web/app.js'), '    if (d.home) body = ', '\n')}\nreturn body; };`, { primary: { color: '#000' } });
+  const ovDoc = createDocument(); ovDoc.body.innerHTML = ov.f({ home: true }); assert.ok(ovDoc.querySelector('.sgi.sg-home'), 'phone overview: the house Home glyph');
+  const page = createDocument(), html = read('web/desktop.html'); page.body.innerHTML = html.slice(html.indexOf('<body'), html.lastIndexOf('</body>')).replace(/^<body[^>]*>/, '');
+  assert.ok(page.querySelector('#logo .sgi.sg-home'), 'desktop Home button: the house Home glyph'); assert.equal(page.querySelector('#logo [class*="hermes"]'), null);
+  const G = runRecording(`this.g = { ${block(read('web/core/agents.js'), '    glyph(a) {')} };`, { A: { isPrivate: a => !!a.private } });
+  assert.equal(G.g.glyph({ id: 'hermes' }), 'hat'); assert.equal(G.g.glyph({ id: 'x', private: true }), 'hat-private'); assert.notEqual(G.g.glyph({ id: 'hermes', name: 'Hermes' }), 'hermes');
   assert.equal(S.brand['wizard-google'], 'google');
   assert.equal(S.brand['wizard-youtube-music'], 'youtube-music');
 });
@@ -104,11 +113,18 @@ test('real products carry their brand mark; a skin opts in, every other skin kee
   }
   // house apps (Files, Notifications…) never get a brand mark
   for (const id of ['files', 'notifications', 'morning-report', 'calendar']) assert.doesNotMatch(S.html({ id }), /sgb/);
-  // every mark has a recorded source
-  const readme = read('tools/sigils/README.md');
+  // every skin shows them: the brand rules live in the generated sigils.css, cascaded on the mark sigils.js draws
+  const bdoc = createDocument(), sheet = read('web/core/sigils.css');
+  for (const [id, mark] of Object.entries(want)) {
+    bdoc.body.innerHTML = S.html({ id });
+    assert.equal(cascade(bdoc.querySelector('.sgi'), sheet)['--sgb']?.value, `url("/wizard-os-home/brand/apps/${mark}.svg")`, id);
+  }
+});
+
+// static-rule: every brand mark in sigils.js agrees with a source row in tools/sigils/README.md (files that must agree)
+test('every brand mark has a recorded source', () => {
+  const S = sigil(), readme = read('tools/sigils/README.md');
   for (const mark of new Set(Object.values(S.brand))) assert.match(readme, new RegExp(`\\| \x60${mark}\x60 \\|`), `README source row for ${mark}`);
-  // every skin shows them: the brand rules live in the generated sigils.css
-  assert.match(read('web/core/sigils.css'), /\.sgi\.sgb-cloudflare/);
 });
 
 test('an app with no sigil never shows a letter: it gets the house glyph its id and name call for', () => {
@@ -145,7 +161,7 @@ test('the fallback CSS keeps the mask: no rule turns a letter mark back into a p
   const S = sigil(), html = S.html({ id: 'own', name: 'Own', icon: '/own/icon.svg' });
   const base = read('web/core/sigils.css');
   const skins = fs.readdirSync(root + 'web/skins').filter(f => fs.existsSync(root + `web/skins/${f}/skin.css`));
-  assert.ok(skins.length >= 3, 'the built-in skins');
+  let painted = 0;
   for (const skin of ['', ...skins]) {
     const doc = createDocument(); if (skin) doc.documentElement.setAttribute('data-skin', skin);
     doc.body.innerHTML = `<div class="dock">${html}</div>`;
@@ -156,11 +172,14 @@ test('the fallback CSS keeps the mask: no rule turns a letter mark back into a p
     for (const prop of ['mask', 'mask-image', '-webkit-mask', '-webkit-mask-image']) assert.notEqual(won[prop]?.value, 'none', `${label}: ${prop}`);
     assert.ok(/var\(--sg\)/.test(won['mask-image']?.value || won['-webkit-mask-image']?.value || won.mask?.value || won['-webkit-mask']?.value || ''), `${label}: drawn through the --sg mask`);
     assert.notEqual(won.background?.value, 'none', label); assert.notEqual(won.width?.value, 'auto', label);
+    painted++;
   }
+  assert.ok(painted >= 4, 'no skin and the built-in skins');
 });
 
 // Rebuild with the real tools/sigils/build.py in a scratch tree (its glyph library comes from the committed
 // tools/sigils/sigils.json: skia-pathops, which draws the glyphs, is not needed to emit them) and compare the outputs.
+// static-rule: the committed sigils.js / sigils.css must agree with what tools/sigils/build.py emits (generated files)
 test('the generated files are in sync with the template (rebuild with tools/sigils/build.py)', () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'r6B-sigils-'));
   try {
