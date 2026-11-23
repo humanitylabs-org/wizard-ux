@@ -32,7 +32,7 @@ test('two or more waiting items from one app fold into one row; needs-you items 
   const rows = fold([it('m1', 'money', 30), it('m2', 'money', 50), it('m3', 'money', 10), it('x1', 'messenger', 40), it('n1', '', 20), it('m4', 'money', 60, { priority: 4 })]);
   const g = rows.find(r => r.group === 'money');
   assert.ok(g, 'Money is one row');
-  assert.deepEqual([...g.items.map(i => i.id)], ['m2', 'm1', 'm3'], 'newest first inside the fold');
+  assert.deepEqual([...g.items.map(x => x.id)], ['m2', 'm1', 'm3'], 'newest first inside the fold');
   assert.equal(g.id, 'm2', 'the row opens the newest');
   assert.equal(g.time, 50);
   assert.ok(rows.some(r => r.id === 'm4' && !r.group), 'priority 4+ is never buried in a fold');
@@ -57,14 +57,25 @@ test('a folded row: app mark, app name label, count, newest first; a single row 
   assert.match(noteRow(it('n1', '', 20)), /<span class="ch-notif-from">Oscar<\/span>/, 'Wizard\'s own alerts carry the agent\'s name');
 });
 
-test('the open item lists the rest from its app (Done all clears them together)', () => {
+test('the open item lists the rest from its app (Done all clears them together)', async () => {
   const items = [it('m1', 'money', 30), it('m2', 'money', 50), it('m3', 'money', 10, { archived: true }), it('x1', 'messenger', 40), it('m4', 'money', 60, { priority: 5 })];
   const { noteSiblings } = load(items);
-  assert.deepEqual([...noteSiblings(items[1]).map(i => i.id)], ['m1'], 'same app, not archived, not needs-you, not itself');
+  assert.deepEqual([...noteSiblings(items[1]).map(x => x.id)], ['m1'], 'same app, not archived, not needs-you, not itself');
   assert.equal(noteSiblings(items[4]).length, 0, 'a needs-you item stands alone');
   assert.match(src, /if \(NV\) msgs \+= noteMoreHtml\(NV\);/, 'rendered under the open notification');
-  assert.match(src, /const ids = \[n\.id, \.\.\.noteSiblings\(n\.item\)\.map\(i => i\.id\)\];/, 'Done all = this one and the rest listed');
-  assert.match(src, /data-chnotif-doneall=/);
+  // the open item's "More from Money" list and its Done all (real chats-drafts.js noteMoreHtml / notifDoneAll)
+  const drafts = read('web/core/chats-drafts.js'), NV = { id: 'm2', item: items[1] };
+  const more = runRecording(`${block(drafts, '  function noteMoreHtml(NV) {')}\nthis.more = noteMoreHtml;`, { noteQuiet: () => false, noteSiblings, noteSrcName: () => 'Money', noteAt: x => (Number(x.time) || 0) * 1000, noteTitle: x => x.title, notePlain: String, esc: String, ACT: { done: { icon: '', label: 'Done all' } }, clip: x => x, ago: () => '' }).more(NV);
+  assert.match(more, /data-chnotif-doneall="m2"/, 'Done all sits under the open notification');
+  const marked = [], toasts = [];
+  const doneAll = runRecording(`${block(drafts, '  async function notifDoneAll(wid, nid) {')}\nthis.doneAll = notifDoneAll;`, {
+    W: { w: { id: 'w' } }, owner: id => id, notifOf: () => NV, noteSiblings, vib() {}, PHONE: () => false, CH: {}, H: {}, ch: () => ({}),
+    KIT: { drafts: { get: () => ({ text: '', files: [] }), clear() {}, setReply() {} } }, chatsBack() {}, renderChats() {},
+    window: { WosBell: { mark: async (ids, how) => { marked.push([[...ids], { ...how }]); return true; } } }, toast: (...a) => toasts.push(a[1]) }).doneAll;
+  assert.equal(await doneAll('w', 'm2'), true);
+  assert.equal(JSON.stringify(marked), '[[["m2","m1"],{"read":true,"archived":true}]]', 'Done all = this one and the rest listed, read and archived');
+  assert.deepEqual(toasts, ['2 done']);
+  assert.equal(await doneAll('w', 'other'), false, 'a stale tap does nothing');
 });
 
 test('Ready lists the folds, and the Chats badge still counts every item', () => {
