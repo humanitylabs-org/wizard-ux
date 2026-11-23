@@ -10,7 +10,7 @@ import { spawnSync } from 'node:child_process';
 test('logo, device, Customize and asset-stamping fixtures leave no temporary directories', t => {
   const root = mkdtempSync(join(tmpdir(), 'ux-fixture-cleanup-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
-  const files = ['app-logos', 'devices-groups', 'versioned-assets', 'wizard-customize'].map(name => new URL(`./${name}.test.mjs`, import.meta.url).pathname);
+  const files = ['app-logos', 'devices-groups', 'versioned-assets', 'versioned-assets-restamp', 'versioned-assets-boot', 'wizard-customize'].map(name => new URL(`./${name}.test.mjs`, import.meta.url).pathname);
   const child = spawnSync(process.execPath, ['--test', ...files], {
     env: { ...process.env, TMPDIR: root, TMP: root, TEMP: root }, encoding: 'utf8', timeout: 60_000,
   });
