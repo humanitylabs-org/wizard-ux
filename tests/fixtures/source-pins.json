@@ -28,7 +28,6 @@
  "desktop-host.test.mjs": 2,
  "desktop-keys-layout.test.mjs": 7,
  "desktop-signin-workflow.test.mjs": 3,
- "device-connect-one-flow.test.mjs": 5,
  "held-message-receipt.test.mjs": 1,
  "home-screen-apps.test.mjs": 4,
  "incognito-chat.test.mjs": 2,
