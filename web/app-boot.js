@@ -103,6 +103,10 @@ window.WizCore.appParts.boot = function ({ $, APP, APPS, appVars, armBack, backS
   void firstRun;
   window.WosWelcome?.boot({ app: id => APP[id] || null, openStore: () => { const a = APP['app-store']; if (a) openApp(a); },
     deeplinked: () => (window.__deeplinkLog || []).length > 0, busy: () => V.state !== 'idle',
+    // Say hello's mic (issue 1730): the orb's own dictation into the focused box (native mic in the Android app).
+    voice: () => ({ state: V.state, kind: V.kind || '' }),
+    dictate: () => { if (V.state === 'idle') { if (!FIELDS?.refresh()) return false; startVoice('dictation'); return true; } if (V.kind === 'dictation' && (V.state === 'listen' || V.state === 'paused')) { finishVoice(); return true; } return V.kind === 'dictation'; },
+    dictateCancel: () => { if (V.kind === 'dictation' && V.state !== 'idle' && V.state !== 'think') cancelVoice(); },
     // One main Chats window, and the new thread opens in it as soon as it is saved.
     send: async text => { closeSheets(true); const w = placeApp(mainChats, { app: 'chats', thread: null }); if (!w) throw new Error('Chats unavailable'); const it = await sendChat(w.id, text, 'the first message, from the Welcome screen', null, { sid: '__new__', away: true }); if (it?.sessionId) window.WosWelcome.whenThreadExists(it.sessionId, sid => openWizardThread(sid)); return it || null; } });
   // Native shell (WizardOS Android app): the app hands every hardware/gesture Back to the shell. A step that
