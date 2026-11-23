@@ -34,6 +34,8 @@ public final class MizelStore {
     private final File root;
     private final CaptureJournal custody;
     private final Map<String, MizelJournal> journals = new LinkedHashMap<>();
+    /** Meetings prune is deleting outside the lock; a new session on one waits until its files are gone. */
+    private final java.util.Set<String> pruning = new java.util.HashSet<>();
     public interface Log { void log(String msg); }
     private Log log = m -> { };
 
@@ -114,6 +116,9 @@ public final class MizelStore {
 
     /** Opens (or continues) a capture session. A stop not yet sent is superseded by the new session's own stop. */
     public synchronized MizelJournal beginSession(String id, long now) {
+        while (pruning.contains(id)) {
+            try { wait(); } catch (InterruptedException e) { Thread.currentThread().interrupt(); return null; }
+        }
         MizelJournal j = journals.get(id);
         if (j == null) {
             j = new MizelJournal();
@@ -434,32 +439,62 @@ public final class MizelStore {
         }
     }
 
-    public synchronized void statusChecked(String id, long now, boolean ready) {
-        MizelJournal j = journals.get(id);
-        if (j == null) return;
-        j.statusCheckedAt = now;
-        if (ready && j.readyAt == 0) j.readyAt = now;
-        // Only actual per-chunk acknowledgements can acquire a prune deadline.
-        if (ready) for (File f : files(meDir(id))) {
-            String captureId = custody.idFor(f);
-            if (captureId != null) custody.ready(captureId, j.readyAt, MizelPolicy.KEEP_AFTER_READY_MS);
+    /**
+     * The server answered a status check. The journal (readyAt) is saved first and the store lock is let go before
+     * the chunk files are marked ready in the custody index, in one write: done per chunk under the lock it took
+     * minutes for a long meeting, every UI call waited on the lock (an ANR), and readyAt was only saved at the end, so
+     * the app being killed restarted it on every open (wizard-ux#1762).
+     */
+    public void statusChecked(String id, long now, boolean ready) {
+        long readyAt;
+        synchronized (this) {
+            MizelJournal j = journals.get(id);
+            if (j == null) return;
+            j.statusCheckedAt = now;
+            if (ready && j.readyAt == 0) j.readyAt = now;
+            save(j);
+            readyAt = j.readyAt;
         }
-        save(j);
+        // Only actual per-chunk acknowledgements can acquire a prune deadline.
+        if (ready) markReady(id, readyAt);
+    }
+
+    /** Gives this meeting's delivered chunks their prune deadline; already-marked ones are skipped. */
+    private void markReady(String id, long readyAt) {
+        if (readyAt <= 0) return;
+        List<File> audio = new ArrayList<>();
+        audioFiles(meetingDir(id), audio);
+        custody.readyAll(custody.idsFor(audio), readyAt, MizelPolicy.KEEP_AFTER_READY_MS);
     }
 
     /** Deletes meetings whose audio the server has had (status ready) for a day. Returns the ids removed. */
-    public synchronized List<String> prune(long now) { return prune(now, MizelPolicy.KEEP_AFTER_READY_MS); }
+    public List<String> prune(long now) { return prune(now, MizelPolicy.KEEP_AFTER_READY_MS); }
 
-    public synchronized List<String> prune(long now, long keepMs) {
-        List<String> gone = new ArrayList<>();
-        for (MizelJournal j : new ArrayList<>(journals.values())) {
-            if (j.recording || !j.pending.isEmpty()) continue;
-            if (!MizelPolicy.prunable(j.stopSent, j.readyAt, now, keepMs)) continue;
-            journals.remove(j.meetingId);
-            deleteTree(meetingDir(j.meetingId), CaptureJournal.Reason.MEETING_PRUNE_AFTER_READY);
-            gone.add(j.meetingId);
+    /**
+     * The meetings are taken out of the store under its lock; their files are released afterwards, outside it, in one
+     * custody write per meeting (wizard-ux#1762). The journal file goes last, so a prune cut short is redone on the
+     * next start.
+     */
+    public List<String> prune(long now, long keepMs) {
+        Map<String, Long> due = new LinkedHashMap<>(); // meeting id -> readyAt
+        synchronized (this) {
+            for (MizelJournal j : new ArrayList<>(journals.values())) {
+                if (j.recording || !j.pending.isEmpty()) continue;
+                if (!MizelPolicy.prunable(j.stopSent, j.readyAt, now, keepMs)) continue;
+                journals.remove(j.meetingId);
+                pruning.add(j.meetingId);
+                due.put(j.meetingId, j.readyAt);
+            }
         }
-        return gone;
+        for (Map.Entry<String, Long> m : due.entrySet()) {
+            try {
+                markReady(m.getKey(), m.getValue()); // a status check cut short before its custody write
+                deleteTree(meetingDir(m.getKey()), CaptureJournal.Reason.MEETING_PRUNE_AFTER_READY);
+            } finally {
+                synchronized (this) { pruning.remove(m.getKey()); notifyAll(); }
+            }
+        }
+        return new ArrayList<>(due.keySet());
     }
 
     public synchronized int pendingCount(String id) {
@@ -479,13 +514,28 @@ public final class MizelStore {
 
     private static File[] files(File d) { File[] fs = d.listFiles(); return fs == null ? new File[0] : fs; }
 
+    private static void audioFiles(File f, List<File> out) {
+        if (CaptureJournal.isAudio(f)) { if (f.isFile()) out.add(f); return; }
+        File[] kids = files(f);
+        Arrays.sort(kids);
+        for (File k : kids) audioFiles(k, out);
+    }
+
     private void deleteTree(File f, CaptureJournal.Reason reason) {
-        if (CaptureJournal.isAudio(f)) {
-            custody.releaseFile(f, "meeting", reason);
-            return;
-        }
-        for (File k : files(f)) deleteTree(k, reason);
-        // Non-audio only: meeting JSON metadata and empty directories; audio always goes through custody above.
+        // Audio always goes through custody, all of it in one index write.
+        List<File> audio = new ArrayList<>();
+        audioFiles(f, audio);
+        if (!audio.isEmpty()) custody.releaseFiles(audio, "meeting", reason);
+        deleteRest(f);
+    }
+
+    private static void deleteRest(File f) {
+        if (CaptureJournal.isAudio(f)) return; // left only when custody kept it
+        File[] kids = files(f);
+        // journal.json last, so an interrupted delete still finds the meeting next time.
+        Arrays.sort(kids, (a, b) -> Boolean.compare("journal.json".equals(a.getName()), "journal.json".equals(b.getName())));
+        for (File k : kids) deleteRest(k);
+        // Non-audio only: meeting JSON metadata and empty directories.
         //noinspection ResultOfMethodCallIgnored
         f.delete();
     }
