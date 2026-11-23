@@ -60,9 +60,9 @@ test('the phone take discs: Cancel reads as the skin red and a paused Pause as a
     assert.equal(p.color, 'var(--amber)', `${skin}: paused Pause is amber`);
     assert.match(p.background, /^color-mix\(in srgb, var\(--amber\) 18%, var\(--wz-panel/, `${skin}: the skin amber over the opaque skin panel`);
   }
-  // Nebula keeps its stock amber tint, and a paused Pause stays amber.
+  // Nebula keeps its stock amber tint (its --amber is the old literal), and a paused Pause stays amber.
   const neb = look(phone('nebula', { paused: true }).getElementById('arcPause'), sheets);
-  assert.equal(neb.background, 'rgba(255,190,85,.18)'); assert.equal(neb.color, 'var(--amber)');
+  assert.equal(neb.background, 'color-mix(in srgb, var(--amber) 18%, transparent)'); assert.equal(neb.color, 'var(--amber)');
 });
 
 test('the desktop recording pill and its tray use the skin panel and ink on every skin but Nebula', () => {

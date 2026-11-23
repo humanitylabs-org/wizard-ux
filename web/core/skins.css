@@ -94,7 +94,7 @@ html[data-shell="desktop"][data-image-background]:not([data-wizard-backgrounds])
 }
 :where(html:not([data-skin="nebula"])) :is(.sheet, .wmenu, .pk-card, .ov-card, .dv-sheet, .ch-sheet-b, .ch-fcard, .wx-fcard, .ls-panel) { background: linear-gradient(var(--glass-2), var(--glass-2)), var(--wz-panel, var(--wz-base, var(--bg, #05030c))); color: var(--ink); }
 :where(html:not([data-skin="nebula"])) .ov-card.ov-home { background: linear-gradient(var(--glass-2), var(--glass-2)), var(--wz-panel, var(--wz-base, var(--bg, #05030c))); }
-:where(html:not([data-skin="nebula"])) :is(.desk-label, .timer, .transcript, .toast, .scrub .sc-label, .dv-update, .ch-pill, .wx-banner) { background: linear-gradient(var(--sk-tour), var(--sk-tour)), var(--wz-panel, var(--wz-base, var(--bg, #05030c))); color: var(--ink); }
+:where(html:not([data-skin="nebula"])) :is(.desk-label, .timer, .transcript, .toast, .scrub .sc-label, .dv-update, .ch-pill, .wx-banner) { background: linear-gradient(var(--sk-tour), var(--sk-tour)), var(--wz-panel, var(--wz-base, var(--bg))); color: var(--ink); }
 html:not([data-skin="nebula"]) .device { background: var(--bg); }
 /* A take's controls follow the skin too. The phone dock's Cancel / Pause / Screenshot / Attach discs (styles.css
    `.device:not(.orb-corner) .voice .arc`, a fixed navy) and the desktop's recording pill and its tray (desktop.css,
