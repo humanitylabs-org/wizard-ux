@@ -26,7 +26,7 @@ window.WizCore.servicesParts.windows = function ({ apps, changed, fault, frames,
       const ph = kind === 'image' && (it?.placeholderBlob != null || (typeof it?.placeholder === 'string' && it.placeholder)) ? url(it.placeholderBlob != null ? { blob: it.placeholderBlob } : { url: it.placeholder }, true) : null;
       // A sharper copy the app already holds (`preview`, wizard-messenger issue 348) passes the same check and shows
       // after the stand-in, before the original; it only rides with a stand-in.
-      const pv = ph && (it?.previewBlob != null || (typeof it?.preview === 'string' && it.preview)) ? url(it.previewBlob != null ? { blob: it.previewBlob } : { url: it.preview }, true) : null;
+      const pv = ph && (it?.previewBlob != null || (typeof it?.preview === 'string' && it.preview)) ? url(it.previewBlob != null ? { blob: it.previewBlob } : { url: it.preview }, 'preview') : null;
       clean.push({ url: href, kind, name: String(it?.name || '').slice(0, 200), mime: String(it?.mime || (kind === 'video' ? 'video/mp4' : 'image/jpeg')).slice(0, 100), ...(ph && ph !== href ? { placeholder: ph } : {}), ...(pv && pv !== href && pv !== ph ? { preview: pv } : {}) });
     }
     return clean.length ? window.WosChat.viewer.open(clean, Math.max(0, Math.min(clean.length - 1, i))) === true : false;
@@ -77,11 +77,12 @@ window.WizCore.servicesParts.windows = function ({ apps, changed, fault, frames,
   function boundaryMedia(st, args) {
     if (st.isVisible?.() !== true || !window.WosChat?.viewer || !Array.isArray(args?.items)) return false;
     let base = st.url; try { if (typeof args.base === 'string' && args.base.length <= 2048) { const u = new URL(args.base); if (within(u, st.url)) base = u; } } catch (_) {}
-    const made = [], count = [0, 0]; // pictures, stand-ins: each has its own quota, so stand-ins never crowd out a picture
+    const made = [], count = [0, 0, 0]; // pictures, stand-ins, previews: each has its own quota, so none crowds out another
     const shown = mediaView(st, args.items, args.index, (it, stand) => {
       if (it?.blob != null) {
-        if (!['[object Blob]', '[object File]'].includes(Object.prototype.toString.call(it.blob)) || count[stand ? 1 : 0] >= MEDIA_BLOBS) return null;
-        const href = URL.createObjectURL(it.blob); made.push(href); count[stand ? 1 : 0]++; return href;
+        const q = stand === 'preview' ? 2 : stand ? 1 : 0;
+        if (!['[object Blob]', '[object File]'].includes(Object.prototype.toString.call(it.blob)) || count[q] >= MEDIA_BLOBS) return null;
+        const href = URL.createObjectURL(it.blob); made.push(href); count[q]++; return href;
       }
       if (typeof it?.url !== 'string' || !it.url || it.url.length > 8192) return null;
       let u; try { u = new URL(it.url, base); } catch (_) { return null; }

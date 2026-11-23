@@ -1070,6 +1070,21 @@ test('media.view: a preview beside a stand-in passes the same rules; alone it is
   } finally { URL.createObjectURL = create; }
 });
 
+test('media.view: preview bytes never use up the stand-ins\' blob quota (Codex P2, wizard-messenger issue 348)', () => {
+  const opened = [];
+  const WosChat = { viewer: { open: items => { opened.push(JSON.parse(JSON.stringify(items))); return true; } } };
+  const f = fixture({ win: { WosChat } });
+  const create = URL.createObjectURL; let n = 0;
+  URL.createObjectURL = () => 'blob:https://wizard.example/r' + n++;
+  try {
+    const pic = new Blob(['x'], { type: 'image/jpeg' });
+    const items = Array.from({ length: 50 }, (_, k) => ({ url: 'm/' + k, placeholderBlob: pic, previewBlob: pic }));
+    assert.equal(f.call('media.view', { items }), true);
+    assert.equal(opened[0].filter(x => x.placeholder).length, 50, 'every picture keeps its stand-in');
+    assert.equal(opened[0].filter(x => x.preview).length, 50, 'and its preview');
+  } finally { URL.createObjectURL = create; }
+});
+
 test('media.view: stand-in bytes never use up the pictures\' own blob quota (Codex P2)', () => {
   const opened = [];
   const WosChat = { viewer: { open: (items, i) => { opened.push({ items: JSON.parse(JSON.stringify(items)), i }); return true; } } };
