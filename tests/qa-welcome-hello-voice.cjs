@@ -68,15 +68,17 @@ const SHELLS = {
   const base = `http://127.0.0.1:${server.address().port}`;
   const browser = await chromium.launch({ args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', '--autoplay-policy=no-user-gesture-required'] });
   const fails = [], notes = [];
-  async function helloPage(shell, skin, denyMic = false) {
+  async function helloPage(shell, skin, denyMic = false, slowMic = 0) {
     const ctx = await browser.newContext(SHELLS[shell].ctx);
     await ctx.grantPermissions(['microphone'], { origin: base });
-    await ctx.addInitScript(([s, deny]) => {
+    await ctx.addInitScript(([s, deny, slow]) => {
       if (window !== window.top) return;
       try { localStorage.setItem('wos.skin', s); localStorage.setItem('wos.coached', 'true'); localStorage.setItem('wos.tour.v1', 'true'); localStorage.setItem('wux.tour.v1', 'true'); } catch (e) {}
       // Denied permission, as a browser answers it once the owner said no.
       if (deny && navigator.mediaDevices) navigator.mediaDevices.getUserMedia = () => Promise.reject(Object.assign(new DOMException('Permission denied', 'NotAllowedError')));
-    }, [skin, denyMic]);
+      // A slow first microphone open (a permission prompt, a waking device).
+      if (slow && navigator.mediaDevices) { const real = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices); window.__qaStreams = []; navigator.mediaDevices.getUserMedia = c => new Promise(r => setTimeout(r, slow)).then(() => real(c)).then(st => (window.__qaStreams.push(st), st)); }
+    }, [skin, denyMic, slowMic]);
     const page = await ctx.newPage();
     page.on('pageerror', e => notes.push(`${shell}/${skin} pageerror: ${e.message}`));
     await page.goto(base + '/wizard-os-home/' + SHELLS[shell].page);
@@ -149,6 +151,26 @@ const SHELLS = {
     else notes.push(`${tag}: "${msg}" (mic aria-pressed=${pressed}); typing and Send still delivered "Typed instead"`);
     await ctx.close();
   }
+  // Codex P1 on the PR: a Stop tap while the mic is still opening must not leave a recorder running with no controls.
+  async function slowStop(shell) {
+    const { ctx, page } = await helloPage(shell, 'nebula', false, 2000);
+    const tag = `${shell}/slow-mic`;
+    await mic(page).click(); await page.waitForTimeout(300); await mic(page).click(); // Stop before the mic opened
+    await page.waitForTimeout(3000);
+    const live = await page.evaluate(() => JSON.stringify({ log: window.__welcomeLog, voice: document.querySelector('#device')?.dataset.voice || '', liveTracks: (window.__qaStreams || []).flatMap(x => x.getTracks()).filter(t => t.readyState === 'live').length, toast: document.querySelector('#toast,.toast')?.textContent || '' }));
+    const pressed = await mic(page).getAttribute('aria-pressed');
+    const box1 = await page.locator('.wl-hello textarea').inputValue();
+    // Either the take kept going (the card still says listening, so the owner can stop it) or it ended cleanly.
+    if (pressed === 'true') {
+      await page.waitForTimeout(800); await mic(page).click();
+      const landed = await page.waitForFunction(w => document.querySelector('.wl-hello textarea')?.value.trim() === w, SPOKEN, { timeout: 15000 }).then(() => true, () => false);
+      if (!landed) fails.push(`${tag}: after the late Stop the box holds ${JSON.stringify(await page.locator('.wl-hello textarea').inputValue())}`);
+      else notes.push(`${tag}: an early Stop waited for the mic; the card kept listening and the next tap put the words in the box`);
+    } else if (box1.trim() === SPOKEN) notes.push(`${tag}: the early Stop finished the take once the mic opened; the words landed in the box`);
+    else if (shell === 'phone' && JSON.parse(live).voice === 'idle' && !JSON.parse(live).liveTracks && /mic:end/.test(live)) notes.push(`${tag}: the early Stop ended the take before the mic opened (the shell's own rule: nothing recorded, the orb is idle, no hidden recording); the card says so`);
+    else fails.push(`${tag}: mic shows idle and the box holds ${JSON.stringify(box1)} (a recorder may be running with no controls) ${live}`);
+    await ctx.close();
+  }
   async function liveSkin(shell) {
     const { ctx, page } = await helloPage(shell, 'nebula');
     if (!(await mic(page).count())) { await ctx.close(); return; }
@@ -169,7 +191,7 @@ const SHELLS = {
         const r = await speak(shell, skin);
         if (BROKEN && r !== 'broken') fails.push(`${shell}/${skin}: expected no mic on the baseline`);
       }
-      if (!BROKEN) { await denied(shell); await liveSkin(shell); }
+      if (!BROKEN) { await denied(shell); await slowStop(shell); await liveSkin(shell); }
     }
   } catch (e) { fails.push('error: ' + (e && e.stack || e)); }
   await browser.close(); server.close();

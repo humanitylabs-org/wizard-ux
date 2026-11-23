@@ -619,11 +619,14 @@
   C.deeplink.consume();
   // First run is the Welcome modal (core/welcome.js): connect an AI, pick a look, send a first message. It replaces
   // the automatic Setup window and the composer guide (Miguel, 29 Oct 2026); ?view=tour still opens the guide.
+  let welcomeMicStart = null; // Say hello's mic: the desktop take it started, until its microphone has opened
   window.WosWelcome?.boot({ app: id => APP[id] || findApp(id, true) || null, openStore: () => openApp(APP['app-store']),
     deeplinked: () => (window.__deeplinkLog || []).length > 0, busy: () => VOICE.state !== 'idle',
     // Say hello's mic (issue 1730): the dictate key's own take, into the focused box.
     voice: () => ({ state: dictationFinishing ? 'think' : VOICE.state, kind: vMode === 'dictate' ? 'dictation' : '' }),
-    dictate: () => { if (VOICE.state !== 'idle' && vMode !== 'dictate') return false; if (VOICE.state === 'idle' && !fields().refresh()) return false; dictate(); return true; },
+    // A Stop tap while the mic is still opening waits (false): finishing a take with no recorder yet would leave the
+    // late recorder running with no controls. The Welcome keeps the take and the owner taps again once it listens.
+    dictate: () => { if (welcomeMicStart) return false; if (VOICE.state !== 'idle' && vMode !== 'dictate') return false; if (VOICE.state === 'idle') { if (!fields().refresh()) return false; const p = welcomeMicStart = Promise.resolve(dictate()).finally(() => { if (welcomeMicStart === p) welcomeMicStart = null; }); return true; } dictate(); return true; },
     dictateCancel: () => { if (vMode === 'dictate' && VOICE.state !== 'idle' && !dictationFinishing) dictate('cancel'); },
     // One main Chats window (reused wherever it is), and the new thread opens in it as soon as it is saved.
     send: async text => { const w = findWin(mainChats) || newWin({ app: 'chats', thread: null }); const it = await CHATS.sendChat(w.id, text, 'the first message, from the Welcome screen', null, { sid: '__new__', away: true }); if (!it) return null; focusWin(w.id); if (it.sessionId) window.WosWelcome.whenThreadExists(it.sessionId, sid => openThread(sid)); return it; } });

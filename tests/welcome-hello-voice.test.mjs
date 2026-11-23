@@ -17,7 +17,7 @@ function fakeVoice({ start = true } = {}) {
   const v = { state: 'idle', calls: [], cancels: 0 };
   v.hooks = {
     voice: () => ({ state: v.state, kind: v.state === 'idle' ? '' : 'dictation' }),
-    dictate: () => { v.calls.push(v.state); if (!start) return false; if (v.state === 'idle') v.state = 'listen'; else if (v.state === 'listen') v.state = 'think'; return true; },
+    dictate: () => { if (v.refuse) return false; v.calls.push(v.state); if (!start) return false; if (v.state === 'idle') v.state = 'listen'; else if (v.state === 'listen') v.state = 'think'; return true; },
     dictateCancel: () => { v.cancels++; v.state = 'idle'; },
   };
   return v;
@@ -87,6 +87,18 @@ test('a Wizard with no transcriber: the mic says voice is not set up, records no
   assert.deepEqual(sent, ['Hello']);
 });
 
+test('a Stop tap the shell can\'t take yet (mic still opening) keeps the take; the next tap stops it', async () => {
+  const v = fakeVoice(), { d } = await atHello(v);
+  d.press('mic'); await d.advance(300);
+  v.refuse = true; // the desktop's mic is still opening
+  d.press('mic');
+  assert.ok(d.log().includes('mic:stop-wait'));
+  v.refuse = false;
+  d.press('mic');
+  assert.deepEqual(v.calls, ['idle', 'listen'], 'the second, accepted Stop reached the shell');
+  assert.ok(d.log().includes('mic:stop'));
+});
+
 test('Back while listening cancels the take, so it never types into a box that is gone', async () => {
   const v = fakeVoice(), { d } = await atHello(v);
   d.press('mic'); await d.advance(500);
@@ -95,7 +107,7 @@ test('Back while listening cancels the take, so it never types into a box that i
   assert.equal(title(d), 'Pick a skin');
 });
 
-test('both shells hand Welcome their own dictation (no second recorder in Welcome)', () => {
+test('both shells hand Welcome their own dictation (no second recorder in Welcome)', async () => {
   const hooks = (file, env) => {
     const s = read(file), a = s.indexOf('window.WosWelcome?.boot({'), b = s.indexOf('} });', a) + 5;
     const ctx = { ...env, window: { WosWelcome: { boot: h => { ctx.h = h; } }, __deeplinkLog: [] } };
@@ -111,9 +123,16 @@ test('both shells hand Welcome their own dictation (no second recorder in Welcom
   assert.deepEqual(P.calls, ['start:dictation', 'finish', 'cancel']);
   // Desktop: the dictate key's own dictate().
   const D = { calls: [] };
-  const desk = hooks('web/desktop/desktop.js', { APP: {}, VOICE: { state: 'idle' }, vMode: 'talk', dictationFinishing: false, fields: () => ({ refresh: () => ({}) }), dictate: a => D.calls.push(a || 'toggle'), findApp: () => null, openApp() {} });
+  let opened; const E = { APP: {}, VOICE: { state: 'idle' }, vMode: 'dictate', dictationFinishing: false, welcomeMicStart: null, fields: () => ({ refresh: () => ({}) }),
+    dictate: a => { D.calls.push(a || 'toggle'); if (!a && E.VOICE.state === 'idle') { E.VOICE.state = 'listen'; E.vMode = 'dictate'; return new Promise(r => { opened = r; }); } return 'done'; }, findApp: () => null, openApp() {} };
+  const desk = hooks('web/desktop/desktop.js', E);
   assert.equal(desk.dictate(), true);
+  // Stop while the microphone is still opening: refused (the Welcome keeps listening), never a second dictate().
+  assert.equal(desk.dictate(), false);
   assert.deepEqual(D.calls, ['toggle']);
+  opened('dictating'); await new Promise(r => setTimeout(r, 0));
+  assert.equal(desk.dictate(), true, 'once the mic is open, Stop goes through');
+  assert.deepEqual(D.calls, ['toggle', 'toggle']);
   // The Welcome itself records nothing and transcribes nothing.
   const w = read('web/core/welcome.js');
   assert.doesNotMatch(w, /getUserMedia|MediaRecorder|transcribe\(/);

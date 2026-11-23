@@ -293,8 +293,8 @@
     const box = el.querySelector('textarea'); if (!box) return;
     if (take) { // a second tap stops the take; the shell transcribes it into the box
       if (take.stopped || voiceState() === 'think') return;
-      take.stopped = true; log('mic:stop');
-      try { H.dictate(); } catch (e) { console.error(e); }
+      let r = false; try { r = H.dictate(); } catch (e) { console.error(e); }
+      if (r !== false) { take.stopped = true; log('mic:stop'); } else log('mic:stop-wait'); // still opening: tap again
       return;
     }
     // The shell's dictation writes into the focused field: the box keeps (or takes) focus.
