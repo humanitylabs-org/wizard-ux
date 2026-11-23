@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { createDocument } from './fixtures/mini-dom.mjs';
+import { cascade } from './fixtures/mini-css.mjs';
 import { renderInstallResult, successMessage } from '../web/store/store-install-result.js';
 import { storeContext, cut } from './fixtures/store-slice-harness.mjs';
 
@@ -59,6 +61,9 @@ test('the Store binds that renderer to success and reserves top navigation for p
   assert.deepEqual(myAppsClick({ routes: false }), [['prevent'], ['route', 'https://box.test/wizard-os-home/?view=apps'], ['assign', 'https://box.test/wizard-os-home/?view=apps']]);
   // Modified clicks, other buttons and a standalone Store keep the browser's own behaviour.
   for (const e of [{ metaKey: true }, { ctrlKey: true }, { shiftKey: true }, { altKey: true }, { button: 1 }, { framed: false }]) assert.deepEqual(myAppsClick(e), [], JSON.stringify(e));
-  assert.match(css, /\.toast\s+a/);
+  // the link inside the finished-install toast is styled by the Store's CSS (readable ink, not the browser's blue)
+  const doc = createDocument(); doc.body.innerHTML = `<div id="toast" class="toast" role="status">${ok[0]}</div>`; // the Store page's own toast (index.html)
+  const link = doc.body.querySelector('[data-my-apps]');
+  assert.equal(cascade(link, css).color?.value, 'var(--ink)');
   assert.doesNotMatch(store, /wizard:open-apps/);
 });
