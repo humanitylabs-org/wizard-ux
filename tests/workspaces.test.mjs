@@ -1,4 +1,5 @@
 import test from 'node:test';
+import { withSkinHostParts } from './fixtures/skin-host-parts.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
@@ -244,8 +245,12 @@ test('the AI-apps sidebar/phone workspace lists offer a switch for a Wizard with
     carlos.dispatchEvent(new FakePointerEvent('click'));
     assert.deepEqual(v.used.filter(u => u[0] === 'switch').map(u => u[1]), ['g1', 'g1', 'g1'], `${shell}: Enter, Space and a tap switch`);
   }
-  // the host hands the view an address only when it is a web address
-  assert.match(read('web/core/skin-host.js'), /\.\.\.\(\/\^https\?:/);
+  // the host hands the view an address only when it is a web address (the real skin-host workspaces list())
+  const host = withSkinHostParts(readFileSync(new URL('../web/core/skin-host.js', import.meta.url), 'utf8')), from = host.indexOf('      workspaces: Object.freeze({');
+  const managed = [{ id: 'g1', name: 'Carlos', url: 'https://carlos.example' }, { id: 'g2', name: 'Ana', url: 'javascript:alert(1)' }, { id: 'g3', name: 'Eve', url: 'carlos.example' }, { id: 'g4', name: 'Hal', url: 'HTTP://hal.example' }];
+  const c = { live: () => true, isDoc: true, window: { WosResources: { state: { devices: { this: { wizard: 'Mine' }, managed } } }, WizConfig: { owner: () => 'Owner' } } };
+  vm.createContext(c); vm.runInContext(`this.api = ({ ${host.slice(from, host.indexOf('      aiUsage: Object.freeze({', from))} });`, c);
+  assert.deepEqual(JSON.parse(JSON.stringify(c.api.workspaces.list().map(w => [w.id, w.url ?? null]))), [['this', null], ['g1', 'https://carlos.example'], ['g2', null], ['g3', null], ['g4', 'HTTP://hal.example']]);
 });
 test('Android app: the switcher asks the app to switch in place and never navigates the WebView to another origin', async () => {
   const asked = [];
