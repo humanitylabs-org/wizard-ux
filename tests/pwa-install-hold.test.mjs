@@ -4,6 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
+import { block, runRecording } from './fixtures/source-slice.mjs';
 
 const SRC = readFileSync(new URL('../web/pwa-install.js', import.meta.url), 'utf8');
 const TOUR = readFileSync(new URL('../web/core/tour.js', import.meta.url), 'utf8');
@@ -26,9 +27,16 @@ function page() {
 }
 
 test('pwa-install exposes the hold() the tour calls', () => {
-  assert.match(TOUR, /window\.WizardPwaInstall\?\.hold\?\.\(true\)/);
   const { window } = page();
   assert.equal(typeof window.WizardPwaInstall?.hold, 'function');
+  // the real tour start() and finish() hold the banner, then let it go
+  const holds = [], cls = () => ({ add() {}, remove() {} });
+  const ctx = { window: { WizardPwaInstall: { hold: v => holds.push(v) } }, el: { classList: cls(), remove() {} }, H: { prepare() {}, noMic: () => false, device: { classList: cls() }, orbWrap: { classList: cls() }, toast() {} } };
+  runRecording(`${block(TOUR, '  function start(why) {')}\n${block(TOUR, '  function finish(how) {')}\nthis.start = start; this.finish = finish;`, ctx);
+  assert.equal(ctx.start('first'), true);
+  assert.deepEqual(holds, [true], 'held while the tour runs');
+  ctx.finish('done');
+  assert.deepEqual(holds, [true, false], 'released when it ends');
 });
 
 test('named holds do not release one another', () => {
