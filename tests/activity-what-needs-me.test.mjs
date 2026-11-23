@@ -186,6 +186,7 @@ test('phone Activity on a fresh box: one empty state, no sections, no None lines
   assert.deepEqual(secs(html), []);
   assert.match(html, /^<div class="ch-empty ch-act-empty"><b>No chats yet<\/b>[^]*<button type="button" class="ch-fclear" data-chnew data-chemptynew>New chat<\/button><\/div>$/);
   assert.doesNotMatch(html, /ch-none|<small>|data-chactorder/);
+  assert.equal(phone().activityBody({ id: 'w' }, [], null, 1), '', 'a draft alone: the Drafts section above stands in, no second New chat');
 });
 
 test('phone Activity: only the sections that hold a chat, with real counts (issue 1731)', () => {

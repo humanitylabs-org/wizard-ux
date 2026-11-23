@@ -134,7 +134,7 @@ window.WizCore.chatsParts.spaces = function ({ actNeeds, actUnread, agentRec, AG
   let actOlder = false;
   // Activity with nothing in it (a fresh box): one deliberate empty state, never a stack of empty sections (issue 1731).
   const actEmpty = () => '<div class="ch-empty ch-act-empty"><b>No chats yet</b><span>Tap + to start one, or tap the orb and talk.</span><button type="button" class="ch-fclear" data-chnew data-chemptynew>New chat</button></div>';
-  function activityBody(w, rows, nt) {
+  function activityBody(w, rows, nt, drafts = 0) {
     const M = window.WizChatsListModel, c = ch(w.id), order = M.activitySortOf(chatVars.readyOrder);
     const g = M.activityGroups(LIVE.workGroups(rows), { needs: actNeeds, unread: actUnread, at: chanAt }, { order, now: Date.now(), older: actOlder });
     // Alerts set to Chats: the unread ones wait in Ready with the chats (an urgent one counts as Needs you), read ones in Recent.
@@ -152,8 +152,8 @@ window.WizCore.chatsParts.spaces = function ({ actNeeds, actUnread, agentRec, AG
     // Sends a graceful restart holds: their own Saved heading, only while there are any (wizard-ux issue 1362).
     const heldRow = s => !!globalThis.WizReach?.restartHeld?.(s), saved = g.working.filter(heldRow), working = g.working.filter(s => !heldRow(s));
     // A section shows only while it holds something (wizard-ux issue 1731): no empty headers, lines, pills or sort menu.
-    // Nothing at all: one empty state with a way to start a chat.
-    if (!working.length && !saved.length && !ready.length && !recent.length && !g.older && !g.snoozed.length && !g.archive.length) return actEmpty();
+    // Nothing at all: one empty state with a way to start a chat; nothing but drafts: the Drafts section above says it.
+    if (!working.length && !saved.length && !ready.length && !recent.length && !g.older && !g.snoozed.length && !g.archive.length) return drafts ? '' : actEmpty();
     return (working.length ? sec('working', 'Working', working.length, () => working.map(s => chatRow(s, null)).join('')) : '')
       + (saved.length ? sec('saved', 'Saved', saved.length, () => saved.map(s => chatRow(s, null)).join(''), chatVars.secOpen.saved !== false) : '')
       + (ready.length ? sec('ready', 'Ready', ready.length, () => page('ready', ready), !!chatVars.secOpen.ready, sortSel) : '')
