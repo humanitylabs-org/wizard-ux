@@ -224,10 +224,30 @@ test('switch off: no alert block, no Later list read, a stale button sends nothi
   await f.api.alertFeedback(AL, 'not_urgent');
   await f.api.sweepLater(CARD);
   assert.deepEqual(f.reader.calls, [], 'nothing asks the box');
-  // channelFeed draws the block only through the guarded call; with nothing to show the feed is unchanged.
-  assert.match(chats, /const alertsNow = typeof alertsHtml === 'function' \? alertsHtml\(open\) : '';/);
-  assert.match(chats, /\$\{shown\.length \|\| sending\.length \? html : alertsNow \? '' : '<span class="ch-none">No posts in the last 30 days\.<\/span>'\}\$\{alertsNow\}\$\{archNote\}/);
+  // The real channel feed (core/chats-feed.js) draws the block only through the late-bound alertsHtml; with
+  // nothing to show (switch off: alertsHtml gives '') an empty channel reads exactly as before.
+  const feed = channelFeedPart();
+  const open = { id: 'alerts', agent: 'hermes' }, w = { id: 'w' };
+  const none = '<div class="ch-chan-feed"><span class="ch-none">No posts in the last 30 days.</span></div>';
+  assert.equal(feed.channelFeed(w, open, []), none, 'before alertsHtml is bound');
+  feed.bindLate({ alertsHtml: () => f.api.alertsHtml(alertsOpen) });
+  assert.equal(feed.channelFeed(w, open, []), none, 'switch off: the same empty feed');
+  const seen = [];
+  feed.bindLate({ alertsHtml: o => { seen.push(o); return '<div class="ch-al">A</div>'; } });
+  assert.equal(feed.channelFeed(w, open, []), '<div class="ch-chan-feed"><div class="ch-al">A</div></div>', 'with alerts: the block instead of the empty line');
+  assert.equal(seen[0], open, 'asked for this channel');
 });
+
+// core/chats-feed.js's part factory run with stand-ins for the Chats names it reads (an empty, unarchived channel).
+function channelFeedPart() {
+  const window = { WizCore: {}, WizConfig: { owner: () => 'James' } };
+  vm.runInNewContext(readFileSync(new URL('../web/core/chats-feed.js', import.meta.url), 'utf8'), { window });
+  return window.WizCore.chatsParts.feed({ agentName: () => 'Wizard', agentRec: id => ({ id }), ago: () => '', AGS: () => null, CHAN_CLAMP: 240,
+    chanActs: {}, chanArchived: () => false, chanAt: () => 0, chanChanged: () => false, chanGenAgent: () => '', chanKey: s => s.id, chanMore: new Set(),
+    chanNeeds: () => false, chanNewN: () => 0, chanPostOrder: () => 0, chanPostText: () => ({ text: '' }), chanReadKey: () => 'k', chanReplies: () => null,
+    chanStart: () => null, chanUnread: () => false, esc: String, firstAgent: () => '', firstPost: () => null, firstWant: new Set(), focusedAgent: () => '',
+    focusOf: () => null, inChannel: () => true, isWorking: () => false, KIT: null, LIVE: { cardAt: () => '' }, pullFirst() {}, replyWant: new Set(), rowDraft: () => false });
+}
 
 // The real Chats click handler (core/chats-bind.js) on the real markup the block above draws, parsed into the tiny DOM.
 function clicks(html) {
