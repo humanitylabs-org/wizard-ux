@@ -8,7 +8,9 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { withAppParts } from './fixtures/app-parts.mjs';
-import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
+import { withParts } from './fixtures/chats-parts.mjs';
+import { withDesktopParts } from './fixtures/desktop-parts.mjs';
+import { between, block, runRecording } from './fixtures/source-slice.mjs'; // chats.js parts moved out verbatim (issue 1665)
 const kit = readFileSync(new URL('../web/core/chat-kit.js', import.meta.url), 'utf8');
 const power = readFileSync(new URL('../web/core/chat-power.js', import.meta.url), 'utf8');
 const chats = withParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'));
@@ -125,10 +127,26 @@ test('a take keeps the box it started in: modelRoute by box key, whatever channe
   assert.equal(f.boxModel('chan::launch')?.model, 'claude-opus');
   assert.equal(f.boxModel('chan::voice')?.model, 'claude-haiku');
   f.setChanModel('win', { model: 'p', provider: 'p', agent: 'restricted' }); assert.equal(f.boxModel('chan::voice')?.model, 'claude-haiku', 'never another agent\'s model');
-  assert.match(chats, /modelRoute: \(wid, sid, box\) => \{ const nm = sid !== '__new__' \? null : box \? boxModel\(box\)/);
-  const app = withAppParts(readFileSync(new URL('../web/app.js', import.meta.url), 'utf8')), desk = readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8');
-  assert.match(app, /CHATS\.modelRoute\(pin\.wid, pin\.sid, pin\.box \|\| undefined\)/); assert.match(app, /CHATS\.modelRoute\(V\.replyTo\.wid,V\.replyTo\.sid,V\.replyTo\.box\|\|undefined\)/);
-  assert.match(desk, /forceNew \? undefined : vBox \|\| undefined\);/); assert.match(desk, /CHATS\.modelRoute\(wid,sid,box \|\| undefined\)/);
+  // the shell's modelRoute by box key: the box the take started in, whatever channel is in front now
+  const r = sendRoutes(); r.setChanModel('win', { model: 'claude-opus', provider: 'anthropic' });
+  r.open.cur = { id: 'voice', name: 'Voice' };
+  assert.equal(r.modelRoute('win', '__new__', 'chan::launch').model, 'claude-opus', 'the box it started in');
+  assert.notEqual(r.modelRoute('win', '__new__').model, 'claude-opus', 'without the box: the channel in front');
+  // every voice take hands its box to modelRoute (the real shell lines, run)
+  const app = (p => readFileSync(new URL('../web/' + p, import.meta.url), 'utf8'));
+  const desk = withDesktopParts(app('desktop/desktop.js'));
+  const asked = ctx => (ctx.calls || []).filter(c => c[0] === 'CHATS.modelRoute').map(c => c.slice(1));
+  const tap = runRecording(`${block(app('app-voicesend.js'), '  function sendTapRoute(snap, pin) {')}\nthis.f = sendTapRoute;`, { window: { WosModels: { snapshot: () => null } } });
+  tap.f({ route: {} }, { wid: 'w', sid: '__new__', box: 'chan::launch' }); tap.f({ route: {}, view: { id: 'w', thread: null, box: 'chan::voice' } }, null);
+  assert.deepEqual(asked(tap), [['w', '__new__', 'chan::launch'], ['w', '__new__', 'chan::voice']], 'phone orb Send: the pinned box, else the view\'s');
+  const reply = runRecording(`this.f = V => {\n${between(app('app-reply.js'), '      V.snap ||= sendSnap();', '\n')}\n};`, {});
+  reply.f({ snap: { route: {} }, replyTo: { wid: 'w', sid: '__new__', box: 'chan::launch' } });
+  assert.deepEqual(asked(reply), [['w', '__new__', 'chan::launch']], 'a parked reply keeps its box');
+  const dv = runRecording(`${between(desk, '        const resolveRoute = () =>', '\n')}\nthis.f = resolveRoute;`, { vFeedback: null, forceNew: false, f: null, vTarget: 'w', vSnapshot: { thread: null }, vBox: 'chan::launch' });
+  dv.f(); dv.forceNew = true; dv.f();
+  assert.deepEqual(asked(dv), [['w', '__new__', 'chan::launch'], ['w', '__new__', undefined]], 'desktop voice: the box, none for a forced New chat');
+  const dm = runRecording(`${between(desk, 'vRouteAt = () => CHATS.modelRoute(wid,sid,box || undefined);', ' vRoute = vRouteAt();')}\nvRouteAt();`, { wid: 'w', sid: '__new__', box: 'chan::launch' });
+  assert.deepEqual(asked(dm), [['w', '__new__', 'chan::launch']], 'desktop box mic: its box');
 });
 
 // The real sendChat (core/chats-send.js, as tests/app-share-wizard.test.mjs runs it) with a window's New chat pick.
@@ -191,6 +209,10 @@ test('Send and the orb read the box\'s pick', async () => {
   // The label in the box.
   assert.match(f.chanComposer(f.wins.win, f.open.cur), />claude-opus</, 'the label');
   // The whole export is one line: a // comment inside it would silently drop every later entry.
+  // The whole export is one line: a // comment inside it would silently drop every later entry. Run the real line.
   const exp = chats.slice(chats.indexOf('  return { beforeNavigate'), chats.indexOf('\n', chats.indexOf('  return { beforeNavigate')));
-  assert.doesNotMatch(exp, /\/\/ /); assert.match(exp, /renderChatList,[^\n]*chanModel: wid => chanModel\(W\[wid\]\), boxModel, setChanModel,[^\n]*sendChat,/);
+  assert.doesNotMatch(exp, /\/\/ /);
+  const E = runRecording(`this.api = (() => {\n${between(chats, '  return { beforeNavigate', '\n};')}\n})();`, { W: { w1: { id: 'w1' } } });
+  for (const k of ['renderChatList', 'chanModel', 'boxModel', 'setChanModel', 'sendChat', 'modelRoute']) assert.ok(k in E.api, k);
+  E.api.chanModel('w1'); assert.deepEqual(E.calls.filter(c => c[0] === 'chanModel').map(c => c[1].id), ['w1'], 'chanModel: by window id');
 });
