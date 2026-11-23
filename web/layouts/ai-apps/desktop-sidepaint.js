@@ -123,31 +123,32 @@ export function sidepaintPart({ aadVars, ACT_SECTIONS, actOn, actOrder, api, bad
         out.push(box);
       }
       for (const [k, word0] of ACT_SECTIONS) {
-        if (!aadVars.sessions || !has(k)) { if (k === 'working' && aadVars.sessions && typeof savedSec === 'function') out.push(...savedSec(s.saved, h.thread)); continue; }
-        const rows = s[k] || [], on = k === 'recent' ? secOpen.recent !== false : !!secOpen[k];
-        const hd = el('button', 'aad-lab aad-sec', { type: 'button', 'data-sec': k, 'aria-expanded': String(on), 'aria-controls': 'aad-sec-' + k });
-        hd.append(el('span', 'aad-sec-w', { text: word0 }));
-        // (Ready's count is what waits on the owner: the pill; the others a muted number)
-        if (rows.length && k !== 'recent') hd.append(el(k === 'ready' ? 'b' : 'span', k === 'ready' ? 'aad-sec-n' : 'aad-sec-m', { 'aria-hidden': 'true', text: rows.length > 99 ? '99+' : String(rows.length) }));
-        hd.append(icon('down', 'aad-ico aad-sec-c'));
-        hd.setAttribute('aria-label', `${word0}${rows.length && k !== 'recent' ? `, ${rows.length}` : ''}${on ? '' : ', folded'}`);
-        api.listen(hd, 'click', () => { secOpen[k] = !on; api.storage.set('sections', { ...secOpen }); paintList(true); });
-        const body = el('div', 'aad-sec-b', { id: 'aad-sec-' + k, role: 'group', 'aria-label': word0 }); body.hidden = !on;
-        if (on) {
-          body.append(...rows.map(r => chatRow(r, h.thread)));
-          if (k === 'recent' && s.older) {
-            const more = el('button', 'aad-more-older', { type: 'button', text: `Show older · ${s.older}` });
-            api.listen(more, 'click', () => { aadVars.actOlder = true; readSessions(); paintList(true); });
-            body.append(more);
+        if (aadVars.sessions && has(k)) {
+          const rows = s[k] || [], on = k === 'recent' ? secOpen.recent !== false : !!secOpen[k];
+          const hd = el('button', 'aad-lab aad-sec', { type: 'button', 'data-sec': k, 'aria-expanded': String(on), 'aria-controls': 'aad-sec-' + k });
+          hd.append(el('span', 'aad-sec-w', { text: word0 }));
+          // (Ready's count is what waits on the owner: the pill; the others a muted number)
+          if (rows.length && k !== 'recent') hd.append(el(k === 'ready' ? 'b' : 'span', k === 'ready' ? 'aad-sec-n' : 'aad-sec-m', { 'aria-hidden': 'true', text: rows.length > 99 ? '99+' : String(rows.length) }));
+          hd.append(icon('down', 'aad-ico aad-sec-c'));
+          hd.setAttribute('aria-label', `${word0}${rows.length && k !== 'recent' ? `, ${rows.length}` : ''}${on ? '' : ', folded'}`);
+          api.listen(hd, 'click', () => { secOpen[k] = !on; api.storage.set('sections', { ...secOpen }); paintList(true); });
+          const body = el('div', 'aad-sec-b', { id: 'aad-sec-' + k, role: 'group', 'aria-label': word0 }); body.hidden = !on;
+          if (on) {
+            body.append(...rows.map(r => chatRow(r, h.thread)));
+            if (k === 'recent' && s.older) {
+              const more = el('button', 'aad-more-older', { type: 'button', text: `Show older · ${s.older}` });
+              api.listen(more, 'click', () => { aadVars.actOlder = true; readSessions(); paintList(true); });
+              body.append(more);
+            }
           }
+          if (k === 'ready') {
+            const row = el('div', 'aad-sech'), word = (globalThis.WizChatsListModel.ACTIVITY_SORTS.find(([v]) => v === actOrder()) || globalThis.WizChatsListModel.ACTIVITY_SORTS[0])[1];
+            const sort = el('button', 'aad-sortb aad-act-orderb', { type: 'button', 'aria-haspopup': 'menu', 'aria-expanded': 'false', 'aria-label': `Sort: ${word}. Change`, title: 'Sort' });
+            sort.append(el('span', 'aad-sortb-w', { text: word.replace(' first', '') }), icon('down', 'aad-ico aad-sortb-c'));
+            api.listen(sort, 'click', e => { e.stopPropagation?.(); openSortMenu(sort, 'act-sort'); });
+            row.append(hd, sort); out.push(row, body);
+          } else out.push(hd, body);
         }
-        if (k === 'ready') {
-          const row = el('div', 'aad-sech'), word = (globalThis.WizChatsListModel.ACTIVITY_SORTS.find(([v]) => v === actOrder()) || globalThis.WizChatsListModel.ACTIVITY_SORTS[0])[1];
-          const sort = el('button', 'aad-sortb aad-act-orderb', { type: 'button', 'aria-haspopup': 'menu', 'aria-expanded': 'false', 'aria-label': `Sort: ${word}. Change`, title: 'Sort' });
-          sort.append(el('span', 'aad-sortb-w', { text: word.replace(' first', '') }), icon('down', 'aad-ico aad-sortb-c'));
-          api.listen(sort, 'click', e => { e.stopPropagation?.(); openSortMenu(sort, 'act-sort'); });
-          row.append(hd, sort); out.push(row, body);
-        } else out.push(hd, body);
         if (k === 'working' && typeof savedSec === 'function') out.push(...savedSec(s.saved, h.thread));
       }
     } else {
