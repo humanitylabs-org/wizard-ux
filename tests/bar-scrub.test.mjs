@@ -137,7 +137,6 @@ test('no switch: the scrub is the only bar path, in the catalogue and code there
   assert.doesNotMatch(BLOCK, /placeTrack\(d \* 1\.1|\.sc\b/, 'the old follow-the-finger one-desk swipe is gone');
   // The label box the shell builds (app-overview.js) holds only the label, no handle bar.
   const ov = readFileSync(new URL('../web/app-overview.js', import.meta.url), 'utf8'), at = ov.indexOf("  scrub.innerHTML = ");
-  assert.ok(at > 0);
   const docked = [], made = { className: '', innerHTML: '' };
   vm.runInNewContext(ov.slice(at, ov.indexOf('\n', at)), { scrub: made, $: () => ({ appendChild: n => docked.push(n) }) });
   assert.equal(made.innerHTML, '<span class="sc-label"></span>', 'the label box has no handle bar inside');

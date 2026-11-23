@@ -83,7 +83,6 @@ test('every product-name module spells WizardOS as a constant', () => {
   for (const file of ['web/core/welcome.js', 'web/core/tour.js', 'web/app.js', 'web/core/settings.js', 'web/device.js', 'web/core/sel-menu.js', 'web/core/os-updates.js']) {
     // each module's own OS() (its real line, run alone): a constant, no tweak or setting read
     const line = read(file).split('\n').find(l => /^\s*const OS = \(\) =>/.test(l));
-    assert.ok(line, file + ' names the product through OS()');
     assert.equal(vm.runInNewContext(`${line.trim()}\nOS()`, {}), 'WizardOS', file);
   }
 });

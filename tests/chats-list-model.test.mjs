@@ -75,7 +75,6 @@ test('both shell adapters delegate one projection, preserving errors/day groups,
   // run each shell's real adapter (phone web/app-agentorb.js, desktop web/desktop/desktop-boot.js) against the real model
   for (const file of ['web/app-agentorb.js', 'web/desktop/desktop-boot.js']) {
     const line = readFileSync(new URL('../' + file, import.meta.url), 'utf8').split('\n').find(l => l.includes('sessionList: () =>'));
-    assert.ok(line, file);
     const adapter = line.trim().replace(/^sessionList:\s*/, '').replace(/,\s*$/, '');
     const run = live => vm.runInContext(`(${adapter})()`, modelContext({ window: { WosChatPins: facts.pins }, LIVE: live, CHATS: facts.chats }));
     const shown = run({ ok: true, workGroups: () => groups, ...facts.live });

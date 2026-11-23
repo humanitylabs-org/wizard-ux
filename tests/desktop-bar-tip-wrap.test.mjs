@@ -13,7 +13,6 @@ const css = read('desktop.css');
 
 test('top-bar hover tips wrap long text instead of clipping it', () => {
   const src = read('desktop-cog.js'), at = src.indexOf("const tip = document.createElement('div'); tip.className = 'bar-tip';");
-  assert.ok(at >= 0, 'the shell makes its tip');
   const doc = createDocument();
   vm.runInNewContext(src.slice(at, src.indexOf('\n', at)), { document: doc });
   const tip = doc.querySelector('.bar-tip'); assert.ok(tip); assert.equal(tip.getAttribute('role'), 'tooltip');

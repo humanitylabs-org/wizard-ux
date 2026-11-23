@@ -114,7 +114,6 @@ test('both shells load the generic module, legacy adapter only names old app, an
   // root Back in each shell (real app-back.js / desktop-keys.js line) asks the shared pair first
   for (const file of ['web/app-back.js', 'web/desktop/desktop-keys.js']) {
     const line = readFileSync(new URL('../' + file, import.meta.url), 'utf8').split('\n').find(l => l.includes('WizCompanionPane?.back(f.id)'));
-    assert.ok(line, file);
     const asked = [], back = ok => vm.runInNewContext(`(() => { ${line}\n return 'next'; })()`, { f: { id: 'peer-1' }, window: { WizCompanionPane: { back: id => { asked.push(id); return ok; } } } });
     assert.equal(back(true), 'companion-back', file);
     assert.equal(back(false), 'next', file + ': no pair, Back goes on');
