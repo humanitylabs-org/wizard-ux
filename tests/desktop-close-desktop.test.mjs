@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import { withShellParts } from './fixtures/shell-parts.mjs';
-import { between } from './fixtures/source-slice.mjs';
+import { between, block, runRecording } from './fixtures/source-slice.mjs';
+import { cascade } from './fixtures/mini-css.mjs';
 import { createDocument } from './fixtures/mini-dom.mjs';
 const source = withShellParts(fs.readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8'));
 const css = withShellParts(fs.readFileSync(new URL('../web/desktop/desktop.css', import.meta.url), 'utf8'));
@@ -28,10 +29,21 @@ function rig({ cur = 1, lastWs = 2, count = 3, homeOpen = false, refuse = '' } =
   return ctx;
 }
 test('hover ✕ closes a desktop', () => {
-  assert.match(source, /data-wsclose="\$\{i\}" tabindex="-1" aria-label="Close desktop/);
-  assert.match(css, /\.ws:hover \.ws-close, \.ws:focus-visible \.ws-close, \.ws:focus-within \.ws-close/);
-  assert.match(css, /\.ws-close \{[^}]*top: -3px; left: -3px;[^}]*visibility: hidden/s);
-  assert.ok(source.indexOf("const close = e.target.closest('[data-wsclose]')") < source.indexOf("const b = e.target.closest('[data-ws]'); if (b) goWs"));
+  // the real bar (paintBar) on the small DOM, and the real click handler of its desk list
+  const doc = createDocument(); doc.body.innerHTML = '<div id="logo"></div><nav id="wsList"></nav>';
+  const $ = sel => doc.querySelector(sel) || doc.createElement('div'), nav = new Proxy({ slot: i => i + 1 }, { get: (t, k) => t[k] || (() => '') }), taps = [];
+  runRecording(`(${block(source, '  function paintBar() {')})()`, { $, C: { workspaceNav: nav }, LIVE: null, window: {}, MOD: '⌘', APP: {},
+    homeOpen: false, cur: 0, W: { a: { app: 'frame' }, b: { app: 'frame' } }, ws: [{ wins: ['a'] }, { wins: ['b'] }], winTitle: w => w.app });
+  runRecording(block(source, "  $('#wsList').addEventListener('click', e => {") + ');', { $, closeDesktop: i => taps.push(['close', i]), newDesktop: () => taps.push(['new']), goWs: i => taps.push(['go', i]) });
+  const x = doc.querySelector('[data-ws="1"] [data-wsclose]');
+  assert.ok(x, 'each desk carries its ✕'); assert.equal(x.getAttribute('tabindex'), '-1'); assert.equal(x.getAttribute('aria-label'), 'Close desktop 2');
+  x.click(); doc.querySelector('[data-ws="0"]').click();
+  assert.deepEqual(taps, [['close', 1], ['go', 0]], 'the ✕ closes that desktop and never also switches to it');
+  // the ✕ sits on the desk's corner, hidden until the desk is hovered or focused
+  const look = st => cascade(x, css, { states: st });
+  assert.equal(look([]).visibility?.value, 'hidden');
+  assert.deepEqual([look([]).top?.value, look([]).left?.value], ['-3px', '-3px']);
+  for (const st of [':hover', ':focus-visible', ':focus-within']) assert.notEqual(look([st]).visibility?.value, 'hidden', st);
   const r = rig(); r.closeDesktop(1); assert.equal(r.ws.length, 2); assert.equal(r.W.w1, undefined);
 });
 // An event target that honours { signal } (the menu drops all its listeners with one abort).
