@@ -16,7 +16,9 @@
  * prefilled, Continue keeps it as it is unless edited; the name is saved in the Agent Service settings
  * (WizConfig.agentName) and every later step says it. Skipped or kept, the box stays "Wizard".
  * Both shells call WosWelcome.boot({...}) once their deep link has been consumed.
- * Hooks: app(id) -> installed app record, send(text) -> Promise, openStore(), deeplinked() -> boolean. */
+ * Hooks: app(id) -> installed app record, send(text) -> Promise, openStore(), deeplinked() -> boolean; Say hello's mic
+ * (issue 1730): dictate() starts/stops the shell's own dictation into the focused field (false: no voice here),
+ * dictateCancel(), voice() -> { state: 'idle'|'listen'|'paused'|'think'|… }. */
 (() => {
   'use strict';
   const KEY = 'wos.welcome.v1', OPTIONS = '/wizard/hermes/api/model/options', SETUP = '/wizard/v1/setup', POLL_MS = 3000;
@@ -252,9 +254,81 @@
   }
 
   function paintHello() {
-    return `${brand()}${dots()}<header class="wl-head"><h2 tabindex="-1">Say hello</h2><p>Send your first message to ${esc(agent())}.</p></header>
-      <form class="wl-hello" data-wl-form><textarea rows="3" placeholder="${esc(HELLO)}" aria-label="First message"></textarea>
+    const mic = !!H?.dictate;
+    return `${brand()}${dots()}<header class="wl-head"><h2 tabindex="-1">Say hello</h2><p>${mic ? `Type or speak your first message to ${esc(agent())}.` : `Send your first message to ${esc(agent())}.`}</p></header>
+      <form class="wl-hello" data-wl-form><div class="wl-say"><textarea rows="3" placeholder="${esc(HELLO)}" aria-label="First message"></textarea>${mic ? `<button type="button" class="wl-mic" data-wl="mic" aria-pressed="false" aria-label="Speak your first message" title="Speak your first message"${sending ? ' disabled' : ''}>${MIC_SVG}</button>` : ''}</div>
+      ${mic ? `<p class="wl-voice${voiceMsg.err ? ' err' : ''}" role="status" aria-live="polite">${esc(voiceMsg.text)}</p>` : ''}
       ${sendError ? `<p class="wl-status err" role="alert">${esc(sendError)}</p>` : ''}<button type="submit" class="wl-primary"${sending ? ' disabled' : ''}>${sending ? 'Sending…' : 'Send'}</button></form>`;
+  }
+
+  /* Say hello by voice (wizard-ux issue 1730, James 22 Nov 2026: "there's no microphone button or orb they can use here").
+   * One recorder: the mic hands the box to the shell's own dictation (H.dictate: the phone's startVoice('dictation'),
+   * which takes the Android app's native mic when there is one, or the desktop's dictate()), the same take the orb and
+   * the dictate key make. Tap to start, tap again to stop: the shell's transcriber types the words into the box, and
+   * the owner sees them before Send. The shell's own recording pill sits under this card, so the card says what is
+   * happening, and says so plainly when the microphone can't start (typing and Send keep working). The box is never
+   * repainted while a take is open: the shell's dictation writes into that exact element. */
+  const MIC_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15a4 4 0 0 0 4-4V7a4 4 0 0 0-8 0v4a4 4 0 0 0 4 4Zm-7-4a7 7 0 0 0 14 0M12 18v4"/></svg>';
+  const VOICE_MSG = {
+    listen: 'Listening… tap the mic again when you are done.',
+    think: 'Writing down what you said…',
+    mic: 'The microphone could not start. Allow microphone access for WizardOS, or type your message.',
+    none: 'Voice isn\u2019t available here. Type your message instead.',
+    empty: 'Didn\u2019t catch that. Tap the mic and try again, or type your message.',
+  };
+  let voiceMsg = { text: '', err: false }, take = null;
+  const voiceState = () => { try { const s = H?.voice?.(); return s && typeof s.state === 'string' ? s.state : 'idle'; } catch (e) { return 'idle'; } };
+  function voiceShow(key) {
+    voiceMsg = key ? { text: VOICE_MSG[key], err: key === 'mic' || key === 'none' || key === 'empty' } : { text: '', err: false };
+    const m = el?.querySelector('.wl-voice'); if (m) { m.textContent = voiceMsg.text; m.classList.toggle('err', voiceMsg.err); }
+  }
+  function micPaint(on, busy) {
+    const b = el?.querySelector('.wl-mic'), send = el?.querySelector('.wl-hello [type=submit]');
+    if (b) { b.setAttribute('aria-pressed', String(!!on)); b.classList.toggle('on', !!on); b.classList.toggle('busy', !!busy); b.disabled = !!busy || sending;
+      const l = on ? 'Stop and write it in the box' : 'Speak your first message'; b.setAttribute('aria-label', l); b.title = l; }
+    if (send) send.disabled = !!(on || busy) || sending; // the words land in the box first; Send waits for them
+  }
+  function micTap() {
+    if (!el || step !== 'hello' || sending || !H?.dictate) return;
+    const box = el.querySelector('textarea'); if (!box) return;
+    if (take) { // a second tap stops the take; the shell transcribes it into the box
+      if (take.stopped || voiceState() === 'think') return;
+      take.stopped = true; log('mic:stop');
+      try { H.dictate(); } catch (e) { console.error(e); }
+      return;
+    }
+    // The shell's dictation writes into the focused field: the box keeps (or takes) focus.
+    if (document.activeElement !== box) box.focus({ preventScroll: true });
+    voiceShow('');
+    let r = false; try { r = H.dictate(); } catch (e) { console.error(e); }
+    if (r === false) { log('mic:none'); voiceShow('none'); return; }
+    const mine = take = { t0: Date.now(), seen: new Set(), stopped: false, before: box.value, box };
+    log('mic:start'); micPaint(true, false); voiceShow('listen');
+    const watch = () => {
+      if (take !== mine) return;
+      const s = voiceState();
+      if (s !== 'idle') {
+        mine.seen.add(s);
+        if (s === 'think') { micPaint(false, true); voiceShow('think'); } else { micPaint(true, false); voiceShow('listen'); }
+        mine.timer = setTimeout(watch, 150); return;
+      }
+      // Idle: give the shell a moment to open the mic before calling it a failure.
+      if (!mine.seen.size && !mine.stopped && Date.now() - mine.t0 < 1500) { mine.timer = setTimeout(watch, 150); return; }
+      take = null; micPaint(false, false);
+      if (!el || !mine.box.isConnected) return;
+      const changed = mine.box.value !== mine.before;
+      log('mic:end:' + [...mine.seen].join('+') + (changed ? ':words' : ''));
+      if (changed) { voiceShow(''); mine.box.focus({ preventScroll: true }); return; }
+      voiceShow(mine.seen.has('think') || mine.stopped ? 'empty' : 'mic');
+    };
+    mine.timer = setTimeout(watch, 150);
+  }
+  // Leaving Say hello (Back, close) with a take open: the take is cancelled, never typed into a box that is gone.
+  function micDrop() {
+    if (!take) return;
+    const t = take; take = null; clearTimeout(t.timer);
+    if (voiceState() !== 'idle' && voiceState() !== 'think') { try { H?.dictateCancel?.(); } catch (e) {} }
+    log('mic:drop');
   }
 
   function paint(focus = true) {
@@ -325,6 +399,8 @@
     document.documentElement.classList.add('wl-open');
     try { window.WizardPwaInstall?.hold(true); } catch (e) {}
     el.addEventListener('click', onClick);
+    // The mic never takes focus from the box: the shell's dictation writes into the focused field.
+    el.addEventListener('mousedown', e => { if (e.target.closest?.('.wl-mic')) e.preventDefault(); });
     el.addEventListener('submit', onSubmit);
     el.addEventListener('keydown', e => {
       if (e.key === 'Enter' && !e.shiftKey && e.target.matches('textarea')) { e.preventDefault(); el.querySelector('form')?.requestSubmit(); }
@@ -341,6 +417,7 @@
 
   function close() {
     clearTimeout(pollT);
+    micDrop(); voiceMsg = { text: '', err: false };
     frameOff(); frameOff = () => {};
     if (!el) return;
     el.remove(); el = null;
@@ -366,12 +443,13 @@
     else if (act === 'next') { step = nextStep(); bringOpen = false; log('step:' + step); paint(); }
     else if (act === 'bring' && step === 'bring') { bringOpen = true; log('bring:open'); paint(); }
     else if (act === 'skip-name' && step === 'name' && !saving) { log('name:skipped'); fromName(); }
+    else if (act === 'mic') micTap();
   }
 
   async function onSubmit(e) {
     e.preventDefault();
     if (step === 'name') { if (!saving) saveName(el.querySelector('.wl-naming input')?.value); return; }
-    if (sending) return;
+    if (sending || take) return; // a take still open: its words land in the box first
     // An empty or blank box sends the words it shows; typed words go as typed. Send is never a dead tap here.
     const text = el.querySelector('textarea')?.value.trim() || HELLO;
     sending = true; sendError = ''; paint(false);
@@ -390,7 +468,7 @@
     if (saving) return 'welcome'; // the name is being saved; it settles in a moment
     if (step === 'ai' && provider) { clearTimeout(pollT); provider = null; paint(); return 'welcome'; }
     if (step === 'bring' && bringOpen) { bringOpen = false; paint(); return 'welcome'; }
-    if (step === 'hello' || step === 'bring') { step = prevStep(); bringOpen = false; paint(); return 'welcome'; }
+    if (step === 'hello' || step === 'bring') { if (step === 'hello') { micDrop(); voiceMsg = { text: '', err: false }; } step = prevStep(); bringOpen = false; paint(); return 'welcome'; }
     if (asked && step === after && !saving) { clearTimeout(pollT); step = 'name'; paint(); return 'welcome'; } // back to the name
     close(); log('back:close'); return 'welcome';
   }

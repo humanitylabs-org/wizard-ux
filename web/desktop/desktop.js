@@ -621,6 +621,10 @@
   // the automatic Setup window and the composer guide (Miguel, 29 Oct 2026); ?view=tour still opens the guide.
   window.WosWelcome?.boot({ app: id => APP[id] || findApp(id, true) || null, openStore: () => openApp(APP['app-store']),
     deeplinked: () => (window.__deeplinkLog || []).length > 0, busy: () => VOICE.state !== 'idle',
+    // Say hello's mic (issue 1730): the dictate key's own take, into the focused box.
+    voice: () => ({ state: dictationFinishing ? 'think' : VOICE.state, kind: vMode === 'dictate' ? 'dictation' : '' }),
+    dictate: () => { if (VOICE.state !== 'idle' && vMode !== 'dictate') return false; if (VOICE.state === 'idle' && !fields().refresh()) return false; dictate(); return true; },
+    dictateCancel: () => { if (vMode === 'dictate' && VOICE.state !== 'idle' && !dictationFinishing) dictate('cancel'); },
     // One main Chats window (reused wherever it is), and the new thread opens in it as soon as it is saved.
     send: async text => { const w = findWin(mainChats) || newWin({ app: 'chats', thread: null }); const it = await CHATS.sendChat(w.id, text, 'the first message, from the Welcome screen', null, { sid: '__new__', away: true }); if (!it) return null; focusWin(w.id); if (it.sessionId) window.WosWelcome.whenThreadExists(it.sessionId, sid => openThread(sid)); return it; } });
   const f0 = focused(); if (f0) setTimeout(() => focusInside(f0.id), 50);

@@ -52,3 +52,18 @@ html[data-skin="obsidian"] .wl-primary,html[data-skin="obsidian"] .wl-tag{color:
 .wl-skip{display:block;margin:12px auto 0;min-height:44px;padding:0 16px;border:0;background:transparent;color:var(--ink-3);font:inherit;font-size:var(--wz-text-md);cursor:pointer}
 .wl-skip:hover,.wl-skip:focus-visible{color:inherit}
 @media (max-width:600px){.wl-overlay{padding:0;align-items:end}.wl-card{width:100%;max-height:92dvh;border-radius:22px 22px 0 0;padding:24px 20px calc(24px + env(safe-area-inset-bottom))}.wl-frame{height:calc(92dvh - 230px)}}
+/* Say hello's mic (issue 1730): beside the box, skin colours only; listening fills it with the accent. */
+.wl-say{position:relative}
+.wl-say textarea{padding-right:62px}
+.wl-mic{position:absolute;right:10px;bottom:10px;display:grid;place-items:center;width:44px;height:44px;padding:0;border-radius:50%;border:1px solid var(--line-2);background:var(--glass,transparent);color:var(--ink);cursor:pointer;transition:background .15s,border-color .15s,color .15s}
+.wl-mic svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.wl-mic:hover,.wl-mic:focus-visible{border-color:var(--violet);outline:none}
+.wl-mic.on{background:var(--violet);border-color:var(--violet);color:white;animation:wl-mic 1.4s ease-in-out infinite}
+html[data-skin="obsidian"] .wl-mic.on{color:black}
+.wl-mic.busy{opacity:.6;cursor:default}
+.wl-mic:disabled{cursor:default}
+@keyframes wl-mic{0%,100%{box-shadow:0 0 0 0 color-mix(in srgb,var(--violet) 45%,transparent)}50%{box-shadow:0 0 0 8px color-mix(in srgb,var(--violet) 0%,transparent)}}
+@media (prefers-reduced-motion:reduce){.wl-mic.on{animation:none}}
+.wl-voice{margin:8px 2px 0;min-height:1.3em;color:var(--ink-2);font-size:var(--wz-text-md)}
+.wl-voice:empty{display:none}
+.wl-voice.err{color:var(--wz-danger)}
