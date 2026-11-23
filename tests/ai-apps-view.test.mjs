@@ -19,7 +19,8 @@ import { cascade, parseCss } from './fixtures/mini-css.mjs';
 import { createDocument } from './fixtures/mini-dom.mjs';
 import { layoutApi } from './fixtures/q1-layout-host.mjs';
 import { prop } from './fixtures/q1-slice.mjs';
-import { resolveVars } from './fixtures/r7A-css.mjs';
+import { keysGuide } from './fixtures/keys-guide-harness.mjs';
+import { resolveVars, px } from './fixtures/r7A-css.mjs';
 import { fixture } from './fixtures/tweaks.mjs';
 import { withSkinHostParts } from './fixtures/skin-host-parts.mjs';
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
@@ -1794,7 +1795,7 @@ test('round 13: Snoozed from the stock snooze state, with and without the snooze
     const tweak = run({ working: [s('w')], ready: [s('r'), woke, z], archive: [s('a')] });
     assert.equal(JSON.stringify(tweak.snoozed.map(x => x.id)), '["z"]', `${f}: the tweak's Ready rows`); assert.equal(JSON.stringify(tweak.ready.map(x => x.id)), '["r","wk"]', `${f}: a chat woken by a reply is Ready`);
   }
-  assert.ok(read('web/tweaks/miguel/snooze-someday/tweak.js').length, 'the tweak exists (the view does not depend on it)');
+  { const t = fixture({ shell: 'desktop' }); await t.mount('miguel/snooze-someday'); assert.ok(t.host.tweakState.includes('miguel/snooze-someday'), 'the tweak exists and loads (the view does not depend on it)'); await t.clear(); }
   const { w, store } = deskWorld();
   w.st.sessions.snoozed = [{ id: 'z1', title: 'Later one', kind: 'snoozed', unread: false, pinned: false, actions: ['restore', 'done'] }, { id: 'z2', title: 'Later two', kind: 'snoozed', unread: false, pinned: false, actions: ['restore'] }];
   (await layout()).default(w.api);
@@ -1836,12 +1837,30 @@ test('round 14: the sidebar marks the chat in front without rebuilding; a fold n
   assert.ok(w.q('.aad-rw[data-sid="r1"]').classList.contains('is-cur')); assert.equal(w.q('.aad-rw[data-sid="r1"] .aad-row').getAttribute('aria-current'), 'page');
   w.st.route = { home: false, view: 'thread', thread: 'r2', desk: 1 }; w.emit('route', w.st.route);
   assert.equal(w.q('.aad-rw[data-sid="r1"]').classList.contains('is-cur'), false); assert.ok(w.q('.aad-rw[data-sid="r2"]').classList.contains('is-cur'));
-  const js = noComments(read('web/layouts/ai-apps/desktop.js')), css = read('web/layouts/ai-apps/desktop.css');
-  assert.match(js, /if \(needsTile\(\)\) globalThis\.dispatchEvent\?\.\(new Event\('resize'\)\);/, 'the shell re-tiles only when a desk tiles several windows');
-  const P = 'html\\[data-shell="desktop"\\]\\[data-layout="ai-apps"\\]';
-  assert.match(css, new RegExp(P + ' #stage > \\.wsp\\[hidden\\]:not\\(\\[data-aad-role\\]\\) \\{ left: var\\(--aad-side-w, 288px\\); \\}'), 'desks out of sight keep their geometry when the sidebar folds');
-  assert.match(css, new RegExp(P + ' \\.aad-scroll \\{ -webkit-mask-image: linear-gradient\\(to bottom, transparent 0, black 10px'), 'a long list fades under the header and above the foot');
+  // a fold re-tiles (a page resize) only when a desk tiles several windows
+  for (const [wins, want] of [[1, 0], [2, 1]]) {
+    const p = await panelDesk({ wins }); p.go({ view: 'desk', desk: 4 }); p.w.run();
+    let resizes = 0; const had = globalThis.dispatchEvent; globalThis.dispatchEvent = e => { if (e.type === 'resize') resizes++; return true; };
+    try { p.w.q('.aad-tog').dispatchEvent(new FakePointerEvent('click')); p.w.run(); } finally { globalThis.dispatchEvent = had; }
+    assert.equal(resizes, want, wins > 1 ? 'a desk tiling two windows: the shell re-tiles' : 'one window a desk: no page resize');
+    if (wins > 1) continue;
+    // desktop.css on what the view drew: desks out of sight keep their geometry; a long list fades at its ends
+    assert.match(p.style(p.w.q('.aad-scroll'))('-webkit-mask-image'), /^linear-gradient\(to bottom, transparent 0, black 10px, /, 'a long list fades under the header and above the foot');
+  }
 });
+// (wizard-ux issue 1674: the old text pin promised `#stage > .wsp[hidden]:not([data-aad-role]) { left: var(--aad-side-w, 288px) }`;
+// cascaded on the real view, the later pane-geometry rule `[data-aad-pane-side] #stage > .wsp:not([data-aad-role]):not(:has(...))`
+// out-ranks it, so a hidden desk follows --aad-pane-main-x, which moves when the sidebar folds)
+test('round 14: desks out of sight keep their geometry when the sidebar folds', { todo: 'the pane-geometry rule (desktop.css [data-aad-pane-side] #stage > .wsp:not([data-aad-role])) out-ranks the hidden-desk rule; a fold moves hidden desks' }, async () => {
+  const p = await panelDesk(); p.go({ view: 'desk', desk: 4 }); p.w.run();
+  const hiddenDesk = node('div', 'wsp', p.stage); hiddenDesk.setAttribute('hidden', '');
+  const left = () => px(resolveVars(p.style(hiddenDesk)('left'), { ...p.w.html.style }));
+  const before = left(); assert.ok(Number.isFinite(before), 'a length');
+  p.w.q('.aad-tog').dispatchEvent(new FakePointerEvent('click')); p.w.run();
+  assert.equal(p.w.html.dataset.aadSide, 'rail', 'folded');
+  assert.equal(left(), before, 'a hidden desk keeps its left edge when the sidebar folds');
+});
+
 test('round 14: Archive stays quieter but readable on the light skins (sidebar, rail, phone drawer)', async () => {
   const { w } = deskWorld(); w.html.setAttribute('data-shell', 'desktop'); w.html.setAttribute('data-layout', 'ai-apps'); w.html.dataset.skin = 'paper-light';
   (await layout()).default(w.api);
@@ -1965,11 +1984,17 @@ test('round 16: drag to rearrange the right column: within Pinned, within the op
     (await layout()).default(x.w.api);
     assert.deepEqual(x.w.qa('.aad-vtab').map(r => r.dataset.app), want, manualOn ? 'his order (the badge stays on its row)' : 'badged first by default');
   }
-  const host = withSkinHostParts(read('web/core/skin-host.js')), dj = read('web/desktop/desktop.js');
-  assert.match(host, /move: \(from, to\) => live\(\) && Number\.isInteger\(from\) && Number\.isInteger\(to\) && from >= 0 && to >= 0 \? !!shell\.moveDesk\?\.\(from, to\) : false,/, 'the layout hook');
-  assert.match(dj, /moveDesk: \(from, to\) => Number\.isInteger\(from\) && Number\.isInteger\(to\) \? moveDesk\(from, to\) : false,/, 'the stock arrange (desk drag on the bar, ⌥⇧[ ])');
-  const css = read('web/layouts/ai-apps/desktop.css');
-  assert.ok(css.includes('.aad-vtl[data-drag] :is(.aad-vtab:not(.is-drag), .aad-vtsep) { transition: translate 150ms'), 'the others slide (translate only)');
+  // the layout hook (the real host) and the stock arrange underneath (desk drag on the bar, ⌥⇧[ ])
+  const moved = [], D = await layoutApi({ adapter: { moveDesk: (a, b) => { moved.push([a, b]); return true; } } });
+  assert.deepEqual([D.api.desks.move(1, 3), D.api.desks.move(-1, 2), D.api.desks.move(1, 2.5), D.api.desks.move('1', 2)], [true, false, false, false], 'the layout hook'); assert.deepEqual(moved, [[1, 3]]);
+  const arranged = [], { __moveDesk: moveDesk } = runRecording('globalThis.__moveDesk = (' + prop(read('web/desktop/desktop-boot.js'), 'moveDesk') + ');', { moveDesk: (a, b) => { arranged.push([a, b]); return true; } });
+  assert.deepEqual([moveDesk(0, 2), moveDesk(0.5, 1)], [true, false]); assert.deepEqual(arranged, [[0, 2]], 'the stock arrange (desk drag on the bar, ⌥⇧[ ])');
+  // the others slide while one is dragged (translate only): desktop.css on the column the view drew
+  w.html.setAttribute('data-shell', 'desktop'); w.html.setAttribute('data-layout', 'ai-apps');
+  const vtl = w.q('.aad-vtl'), [dragged, other] = w.qa('.aad-vtab'), tr = n => cascade(n, DESK_CSS).transition?.value ?? '';
+  vtl.dataset.drag = ''; dragged.classList.add('is-drag');
+  assert.match(tr(other), /^translate 150ms/, 'the others slide (translate only)'); assert.doesNotMatch(tr(dragged), /^translate 150ms/, 'the dragged row follows the pointer');
+  delete vtl.dataset.drag; assert.doesNotMatch(tr(other), /^translate 150ms/, 'no slide when nothing is dragged');
 });
 
 
@@ -2268,11 +2293,22 @@ test('round 19 item 2 / round 22 desktop (Activity since issue 1258): one Sort (
   assert.equal(w.q('.aad-act-orderb .aad-sortb-w').textContent, 'Oldest'); assert.equal(w.st.setting[1].querySelector('[data-aad-act-order="oldest"]').getAttribute('aria-checked'), 'true', 'Settings follows');
   w.st.setting[1].querySelector('[data-aad-act-order="priority"]').dispatchEvent(new FakePointerEvent('click')); assert.deepEqual(sets, ['oldest', 'priority']);
   assert.equal(w.q('.aad-act-orderb .aad-sortb-w').textContent, 'Needs you', 'the header follows Settings');
-  const css = read('web/layouts/ai-apps/desktop.css');
-  assert.match(css, /\.aad-sortb \{[^}]*font: 400 0\.6875rem \/ 1 var\(--wz-font-ui\)/, 'the control in the shell\'s font token');
-  assert.match(css, /\.aad-sortmenu \.aad-pop-i \{/, 'its menu is the view\'s own menu (the shell type), not a native list');
-  const host = withSkinHostParts(read('web/core/skin-host.js'));
-  assert.match(host, /setting\(id, node\) \{[\s\S]*?W\.register\(\{ id: 'layout-' \+ id, page: 'chats',[\s\S]*?a\.offs\.add\(off\); return off;/, 'core: a layout\'s group in Settings › Chats & app screens, released on teardown');
+  // desktop.css on the control and the menu the view drew (wizard-ux issue 1674)
+  w.html.setAttribute('data-shell', 'desktop'); w.html.setAttribute('data-layout', 'ai-apps');
+  const ob = w.q('.aad-act-orderb'); assert.ok(ob.classList.contains('aad-sortb'));
+  assert.equal(cascade(ob, DESK_CSS).font?.value, '400 0.6875rem / 1 var(--wz-font-ui)', 'the control in the shell\'s font token');
+  ob.dispatchEvent(new FakePointerEvent('click'));
+  const mi = cascade(w.q('.aad-sortmenu .aad-pop-i'), DESK_CSS);
+  assert.deepEqual([mi.height?.value, mi.gap?.value], ['36px', '10px'], 'its menu is the view\'s own menu (the shell type), not a native list');
+  // core (the real host): a layout's group in Settings › Chats & app screens, released on teardown
+  const regs = [], unregs = [], slotKids = [];
+  const D = await layoutApi({ extra: ctx => { ctx.WosSettings = { register: r => { regs.push(r); return () => unregs.push(r.id); } }; } });
+  let removed = 0; const group = { parentNode: null, append() {}, remove() { removed++; }, contains: () => false };
+  D.api.desk.setting('ai-apps-order', group);
+  assert.deepEqual(regs.map(r => [r.id, r.page]), [['layout-ai-apps-order', 'chats']], 'one group on the Chats page');
+  regs[0].painted({}, { firstElementChild: { append: n => slotKids.push(n) } }); assert.deepEqual(slotKids, [group], 'its node painted into the group');
+  D.host.setLayout('classic'); await settle();
+  assert.deepEqual([unregs, removed], [['layout-ai-apps-order'], 1], 'released on teardown');
 });
 
 test('round 19 item 3 desktop: a quieter expanded sidebar (small muted normal-weight headers, Ready\'s amber count kept, Archive quietest); rows unchanged', async () => {
@@ -2291,7 +2327,7 @@ test('round 19 item 3 desktop: a quieter expanded sidebar (small muted normal-we
   const grp = node('div', 'aad-grp'); grp.dataset.state = 'needs'; w.q('#aad-sec-ready').insertBefore(grp, w.q('#aad-sec-ready .aad-rw'));
   assert.deepEqual([style(grp)('color'), style(grp)('font')], ['var(--aad-ink-3)', '400 0.6875rem / 1 var(--wz-font-ui)'], 'status sub-headers 11 px, muted');
   // rows unchanged: no round 19 rule reaches a drawn row or its title
-  assert.ok(r19.includes('.aad-grp {'), 'the round 19 block');
+  assert.ok(Object.keys(cascade(grp, r19)).length, 'the round 19 block (it styles the sub-header)');
   for (const sel of ['.aad-rw', '.aad-row', '.aad-row-t']) { const n = w.q(sel); assert.ok(n, 'drawn: ' + sel); assert.deepEqual(Object.keys(cascade(n, r19)), [], 'round 19 leaves ' + sel + ' as it was'); }
 });
 
@@ -2306,9 +2342,31 @@ test('round 21: no legend card anywhere: the shell draws only the view\'s keycap
   assert.doesNotMatch(desk, /keysCard|kh-keys|keyLegend/, 'no legend card in the shell');
   assert.doesNotMatch(host, /legend\(fn\)|keyLegend/, 'no api.keys.legend');
   assert.doesNotMatch(read('web/desktop/desktop.css'), /\.kh-keys/); assert.doesNotMatch(read('web/layouts/ai-apps/desktop.css'), /\.kh-keys/);
-  assert.match(host, /guide\(fn, \{ only = false \} = \{\}\) \{/); assert.match(host, /get keysOnly\(\) \{ return \[\.\.\.keyGuides\]\.some\(g => g\.only\); \}/);
-  assert.match(desk, /if \(window\.WosSkinHost\?\.keysOnly\) \{\n\s+for \(const h of window\.WosSkinHost\.keyChips\(\)\) if \(vis\(h\.el\)\) chip\(h\.el, h\.key, h\.at \|\| 'tl', h\.word \|\| '', h\);\n\s+document\.documentElement\.classList\.add\('key-hints-on'\); return;/, 'only the view\'s chips, then nothing else');
-  for (const at of ['tl', 'tr', 'bl', 'right', 'right-up', 'right-dn', 'mid']) assert.match(desk, new RegExp(`if \\(at === '${at}'\\) \\{`), `the keycap spot '${at}'`);
+  // the real host: a guide given { only: true } makes the shell draw only the layout's chips
+  const D = await layoutApi(), target = { tagName: 'BUTTON' };
+  const offPlain = D.api.keys.guide(() => [{ el: target, key: 'K' }]);
+  assert.equal(D.host.keysOnly, false, 'a plain guide adds to the shell\'s chips');
+  const offOnly = D.api.keys.guide(() => [{ el: target, key: 'N', at: 'tr' }], { only: true });
+  assert.equal(D.host.keysOnly, true, 'only the view\'s chips'); assert.deepEqual([...D.host.keyChips().map(c => c.key + (c.at || ''))], ['K', 'Ntr']);
+  offOnly(); assert.equal(D.host.keysOnly, false, 'released with its guide'); offPlain();
+  // the real desktop keys guide: keysOnly = the view's chips at their spots, then nothing else
+  const spots = ['tl', 'tr', 'bl', 'right', 'right-up', 'right-dn', 'mid'];
+  const box = i => { const left = 100 + (i % 4) * 350, top = 200 + Math.floor(i / 4) * 300; return { left, top, right: left + 200, bottom: top + 100, width: 200, height: 100, x: left, y: top }; };
+  let viewChips = [];
+  const g = keysGuide({ rect: n => /^aiT\d$/.test(n.id || '') ? box(+n.id.slice(3)) : null,
+    window: { getComputedStyle: () => ({ visibility: 'visible' }), WosSkinHost: { get keysOnly() { return viewChips.length > 0; }, keyChips: () => viewChips } } });
+  const own = g.show().length; assert.ok(own > 0, 'the shell\'s own chips without a view');
+  viewChips = spots.map((at, i) => ({ el: g.add(`<button id="aiT${i}">x</button>`), key: String(i), at }));
+  const drawn = g.show();
+  assert.deepEqual(drawn.map(c => c.key), spots.map((_, i) => String(i)), 'only the view\'s chips, then nothing else');
+  assert.ok(g.document.documentElement.classList.contains('key-hints-on'));
+  // each keycap spot where its name says, on its own target (chip 20 x 16)
+  const at = {}; for (const c of g.document.querySelectorAll('#keyHints .kh-chip')) { const i = +c.textContent.trim()[0], r = box(i), x = parseFloat(c.style.left), y = parseFloat(c.style.top); at[spots[i]] = { dx: x - r.left, dy: y - r.top, mx: x + 10 - (r.left + 100), my: y + 8 - (r.top + 50) }; }
+  const sp = at;
+  assert.ok(sp.tl.dx < 0 && sp.tl.dy < 0, 'tl: over the top-left corner'); assert.ok(sp.tr.mx > 80 && sp.tr.dy < 0, 'tr: over the top-right corner');
+  assert.ok(sp.bl.dx < 0 && sp.bl.my > 30, 'bl: over the bottom-left corner'); assert.ok(sp.right.mx > 100 && sp.right.my === 0, 'right: just right of it, centred');
+  assert.ok(sp['right-up'].mx > 100 && sp['right-up'].my < 0 && sp['right-dn'].mx > 100 && sp['right-dn'].my > 0, 'right-up / right-dn: the two keys right of it');
+  assert.deepEqual([sp.mid.mx, sp.mid.my], [0, 0], 'mid: on its middle');
 });
 
 test('round 21: hold-⌥ chips per state: a keycap on each visible target, 1–9 and 0 on the right column, [ ] on the neighbours, none on count badges; Home leaves the orb, the composer and ◫', async () => {
@@ -2341,11 +2399,18 @@ test('round 21: hold-⌥ chips per state: a keycap on each visible target, 1–9
   assert.equal(keys[1].down({ altKey: true, code: 'KeyH' }), true);
   assert.deepEqual(chips(), ['Space@aad-orbbtn', 'H@aad-hback', 'H@aad-hmid'], 'focus: ◫ and the middle wear H');
   assert.ok(raw().find(c => c.el.className === 'aad-hmid').free === true && raw().find(c => c.el.className === 'aad-hmid').at === 'mid', 'the middle spot is known empty (no hit test), centred');
-  const css = read('web/layouts/ai-apps/desktop.css');
-  assert.match(css, /\.key-hints-on :is\(\.aad-vtb, \.aad-rk-n\.is-badge\) \{ opacity: \.35; \}/, 'count badges step back while ⌥ is held');
-  assert.match(css, /\.key-hints-on \.aad-rw\[data-aad-kh\] \.aad-chat \{ padding-left: 34px; \}/, 'the ↓ / ↑ row makes room: the keycap never touches its title');
-  assert.match(css, /\[data-layout="ai-apps"\] \.kh-chip \{[^}]*background: var\(--aad-canvas\);[^}]*border-bottom-width: 2px;/, 'hints are keycaps (skin tokens), unlike the round amber count badges');
-  assert.match(css, /\[data-aad-focus\] \.aad-hback \{ display: grid;/, 'Home shows one quiet ◫ to come back');
+  // desktop.css on what the view drew, while ⌥ is held (wizard-ux issue 1674)
+  w.html.setAttribute('data-shell', 'desktop'); w.html.setAttribute('data-layout', 'ai-apps');
+  const on = (n, k) => { assert.ok(n, 'drawn'); return cascade(n, DESK_CSS)[k]?.value ?? ''; };
+  assert.ok(w.html.dataset.aadFocus !== undefined, 'Home (focus)'); assert.equal(on(w.q('.aad-hback'), 'display'), 'grid', 'Home shows one quiet ◫ to come back');
+  keys[1].down({ altKey: true, code: 'KeyH' }); w.run(); assert.equal(w.html.dataset.aadFocus, undefined); assert.notEqual(on(w.q('.aad-hback'), 'display'), 'grid', 'and only at Home');
+  const badge = w.q('.aad-vtb'), kh = raw().find(c => /aad-row/.test(c.el.className))?.el.closest('.aad-rw'), chip = node('b', 'kh-chip', w.html.children[0]);
+  assert.ok(kh?.dataset.aadKh, 'a ↓ / ↑ row marked'); const title = kh.querySelector('.aad-chat');
+  const pad0 = on(title, 'padding-left'), op0 = on(badge, 'opacity');
+  w.html.classList.add('key-hints-on');
+  assert.equal(on(badge, 'opacity'), '.35', 'count badges step back while ⌥ is held'); assert.notEqual(op0, '.35');
+  assert.equal(on(title, 'padding-left'), '34px', 'the ↓ / ↑ row makes room: the keycap never touches its title'); assert.notEqual(pad0, '34px');
+  assert.deepEqual([on(chip, 'background'), on(chip, 'border-bottom-width')], ['var(--aad-canvas)', '2px'], 'hints are keycaps (skin tokens), unlike the round amber count badges');
 });
 
 test('round 20 item 1 / round 21: ⌥H Home folds both sides away, closes the chat and the panel; ⌥H again restores exactly; memory only; Esc keeps it; ⌥` the same', async () => {
