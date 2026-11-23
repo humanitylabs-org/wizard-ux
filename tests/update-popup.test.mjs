@@ -4,6 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createDocument } from './fixtures/mini-dom.mjs';
+import { cascade } from './fixtures/mini-css.mjs';
 import { block, runRecording } from './fixtures/source-slice.mjs';
 
 const src = readFileSync(new URL('../web/core/os-updates.js', import.meta.url), 'utf8');
@@ -73,6 +74,7 @@ test('only one notice: the old web banner steps aside while the pop-up carries t
   const storage = new Map();
   const web = { pending: true, version: 'v:abc', render() {}, armed: false };
   const b = await boot({ status: ST({ update_available: false, latest: '0.3.32' }), web, storage }); b.U.popup();
+  const drawn = b.pop().className;
   assert.match(b.pop().innerHTML, /<b>Interface updated<\/b><span>Reload to see the changes<\/span>[^]*data-osu="reload" >Reload</);
   assert.equal(b.U.ownsReload(), true);
   tapX(b.pop()); assert.equal(storage.get('wos.osu.dismissed'), 'reload:v:abc');
@@ -83,7 +85,8 @@ test('only one notice: the old web banner steps aside while the pop-up carries t
   assert.match(w, /if \(window\.WosUpdates\?\.ownsReload\?\.\(\)\) \{ document\.getElementById\('dvWeb'\)\?\.remove\(\)/);
   assert.match(w, /get version\(\) \{ return printNow; \}/);
   const css = readFileSync(new URL('../web/core/update-banner.css', import.meta.url), 'utf8');
-  assert.match(css, /\.osu-pop \{[^}]*--wz-text/, 'styled with --wz-* tokens');
+  const page = createDocument(), pop = page.createElement('div'); pop.className = drawn; page.body.appendChild(pop);
+  assert.match(cascade(pop, css)['--wz-text']?.value || '', /^var\(--ink/, 'the pop-up as drawn is styled with --wz-* tokens');
 });
 test('desktop: the pop-up never sits above an open overlay (palette, keys, Inbox, Usage, Settings)', async () => {
   for (const o of ['#palette', '#keys', '#inbox', '.usage-ov', '.dsettings']) {
