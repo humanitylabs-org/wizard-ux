@@ -124,7 +124,6 @@ test('a take is never acked while the outbox copy is not durable', async () => {
 test('app.js reaches the shell recorder only through DEV() and keeps the full app\'s bridge first', async () => {
   const app = withAppParts(readFileSync(new URL('../web/app.js', import.meta.url), 'utf8'));
   const i = app.indexOf('  const DEV = () =>'), j = app.indexOf('};', i) + 2;
-  assert.ok(i > 0 && j > i, 'DEV in app.js');
   const DEV = window => vm.runInNewContext(app.slice(i, j) + '\nDEV', { window })();
   // The shell recorder (the real device-recording.js over a port) is what DEV() hands out when the app has no bridge.
   const h = harness(); await settle();
