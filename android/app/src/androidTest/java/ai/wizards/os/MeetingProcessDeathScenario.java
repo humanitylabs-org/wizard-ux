@@ -78,7 +78,11 @@ final class MeetingProcessDeathScenario {
             int last = stop.getJSONObject("final_seq").getInt("me");
             assertTrue(last >= 3);
             for (int seq = 0; seq <= last; seq++) assertTrue("seq " + seq + " missing before the stop", server.chunks.containsKey(seq));
+            // Leave nothing on screen for the next test: the recorder drains and leaves, its notices and toast go.
+            waitFor(() -> !MeetingRecorderService.serviceAlive(), 20_000);
+            Thread.sleep(4_000); // the LENGTH_LONG "resumed" toast
         } finally {
+            c.getSystemService(NotificationManager.class).cancelAll();
             //noinspection ResultOfMethodCallIgnored
             home.delete();
             //noinspection ResultOfMethodCallIgnored
