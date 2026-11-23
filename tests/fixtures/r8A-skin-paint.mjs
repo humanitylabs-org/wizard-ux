@@ -49,7 +49,7 @@ export function skinPage(skin, shell = 'phone', body = '', { extra = [], attrs =
     if (S.current !== skin) throw new Error('skins.js does not know ' + skin);
     pkg = S.pkgOf(skin); props.size && (inline = `#inline-style#inline-style { ${[...props].map(([k, v]) => `${k}: ${v};`).join(' ')} }`);
   }
-  const css = [pageSheets(page, pkg?.css ? pkg.dir : null), ...noImports(extra), inline].join('\n');
+  const list = [pageSheets(page, pkg?.css ? pkg.dir : null), ...noImports(extra), inline], css = list.join('\n');
   const doc = createDocument(), html = doc.documentElement;
   html.setAttribute('id', 'inline-style'); html.setAttribute('data-shell', shell);
   // what skins.js marked on <html> (data-skin, data-wizard-backgrounds, ...), then the caller's attributes
@@ -63,7 +63,7 @@ export function skinPage(skin, shell = 'phone', body = '', { extra = [], attrs =
   const computed = el => {
     if (!el || el.nodeType === 9 || el.tagName === '#FRAGMENT') return { vars: {}, own: {} };
     if (!memo.has(el)) {
-      const own = styles(el, [css]), vars = { ...computed(el.parentNode).vars };
+      const own = styles(el, list), vars = { ...computed(el.parentNode).vars };
       for (const [k, v] of Object.entries(own)) if (k.startsWith('--')) vars[k] = v;
       memo.set(el, { own, vars });
     }

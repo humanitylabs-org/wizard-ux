@@ -5,7 +5,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { classifyFile, pinCounts, scan, summary, textTests } from '../tools/source-text-tests.mjs';
+import { classifyFile, pinCounts, scan as scanAll, summary, textTests } from '../tools/source-text-tests.mjs';
+
+let scanned; const scan = () => scanned ??= scanAll(); // one pass over tests/ for all three checks
 
 const kinds = src => classifyFile(src).map(t => t.kind);
 const HEAD = "import test from 'node:test';\nimport assert from 'node:assert/strict';\nimport { readFileSync } from 'node:fs';\n";

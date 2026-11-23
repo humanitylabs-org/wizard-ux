@@ -57,14 +57,14 @@ function parsedOnce(css) {
   return r;
 }
 const prepped = new WeakMap();
-function prep(r) {
-  let p = prepped.get(r);
+function prep(r) { // keyed by the selector list, which a rule renumbered by w5-css (a copy) shares
+  let p = prepped.get(r.selectors);
   if (!p) {
     p = r.selectors.map(sel => {
       const pe = /::?(before|after|placeholder|marker|selection|backdrop|-webkit-[\w-]+)\s*$/.exec(sel);
       return { want: pe ? '::' + pe[1] : '', base: pe ? sel.slice(0, pe.index) || '*' : sel, spec: specificity(sel) };
     });
-    prepped.set(r, p);
+    prepped.set(r.selectors, p);
   }
   return p;
 }

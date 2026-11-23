@@ -18,10 +18,24 @@ export function wordAttrs(css) {
 const bareNodes = css => css.replace(/([\s,>+~(])(::[\w-]+)/g, '$1*$2');
 export const sheets = list => bareNodes(wordAttrs((Array.isArray(list) ? list : [list]).join('\n')));
 // The same, parsed once per distinct text (a test asks about many elements under one set of sheets).
-const PARSED = new Map();
+// Each sheet is parsed once (pages that share their big sheets and differ in one small inline sheet reuse them); the
+// list is then numbered on in source order, as if the sheets were one text, so a later sheet still wins a tie.
+const PIECES = new Map(), LISTS = new Map();
+const piece = text => {
+  let rules = PIECES.get(text);
+  if (!rules) { rules = parseCss(sheets(text)); PIECES.set(text, rules); if (PIECES.size > 80) PIECES.delete(PIECES.keys().next().value); }
+  return rules;
+};
+const BY_ARRAY = new WeakMap(); // a caller asking with the same list array (one page, many elements) skips the key
 export function parsed(list) {
-  const text = sheets(list); let rules = PARSED.get(text);
-  if (!rules) { rules = parseCss(text); PARSED.set(text, rules); if (PARSED.size > 40) PARSED.delete(PARSED.keys().next().value); }
+  if (Array.isArray(list) && BY_ARRAY.has(list)) return BY_ARRAY.get(list);
+  const all = Array.isArray(list) ? list : [list], key = all.join('\u0000');
+  let rules = LISTS.get(key);
+  if (rules) { if (Array.isArray(list)) BY_ARRAY.set(list, rules); return rules; }
+  if (all.length === 1) rules = piece(all[0]);
+  else { let at = 0; rules = all.flatMap(t => { const r = piece(t), off = at; at += r.length; return r.map(x => ({ ...x, order: x.order + off })); }); }
+  LISTS.set(key, rules); if (LISTS.size > 40) LISTS.delete(LISTS.keys().next().value);
+  if (Array.isArray(list)) BY_ARRAY.set(list, rules);
   return rules;
 }
 
