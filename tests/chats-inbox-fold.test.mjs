@@ -62,11 +62,16 @@ test('the open item lists the rest from its app (Done all clears them together)'
   const { noteSiblings } = load(items);
   assert.deepEqual([...noteSiblings(items[1]).map(x => x.id)], ['m1'], 'same app, not archived, not needs-you, not itself');
   assert.equal(noteSiblings(items[4]).length, 0, 'a needs-you item stands alone');
-  assert.match(src, /if \(NV\) msgs \+= noteMoreHtml\(NV\);/, 'rendered under the open notification');
   // the open item's "More from Money" list and its Done all (real chats-drafts.js noteMoreHtml / notifDoneAll)
   const drafts = read('web/core/chats-drafts.js'), NV = { id: 'm2', item: items[1] };
   const more = runRecording(`${block(drafts, '  function noteMoreHtml(NV) {')}\nthis.more = noteMoreHtml;`, { noteQuiet: () => false, noteSiblings, noteSrcName: () => 'Money', noteAt: x => (Number(x.time) || 0) * 1000, noteTitle: x => x.title, notePlain: String, esc: String, ACT: { done: { icon: '', label: 'Done all' } }, clip: x => x, ago: () => '' }).more(NV);
   assert.match(more, /data-chnotif-doneall="m2"/, 'Done all sits under the open notification');
+  // the thread paint (real chats-threadpaint.js) puts that list under the open notification, and only there
+  const paint = read('web/core/chats-threadpaint.js');
+  const under = paint.slice(paint.indexOf('    // The rest waiting from the same app'), paint.indexOf('    // The same Badge | Chats picker'));
+  const painted = open => runRecording(`let msgs = '<note/>';\n${under}\nthis.out = msgs;`, { NV: open, noteMoreHtml: x => (x === NV ? more : 'wrong item') }).out;
+  assert.equal(painted(NV), '<note/>' + more, 'rendered under the open notification');
+  assert.equal(painted(null), '<note/>', 'no open notification: no list');
   const marked = [], toasts = [];
   const doneAll = runRecording(`${block(drafts, '  async function notifDoneAll(wid, nid) {')}\nthis.doneAll = notifDoneAll;`, {
     W: { w: { id: 'w' } }, owner: id => id, notifOf: () => NV, noteSiblings, vib() {}, PHONE: () => false, CH: {}, H: {}, ch: () => ({}),

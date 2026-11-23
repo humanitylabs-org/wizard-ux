@@ -73,7 +73,15 @@ test('the Reply bridge and bubble are not gated on a skin', () => {
   assert.equal(rpl(true, null).key, 'k', 'a New chat on the main agent shows its item');
   assert.equal(rpl(false, 'agent').key, 'k', 'a pinned agent\'s thread shows its item');
   assert.equal(rpl(true, 'agent'), null, 'a New chat of a pinned agent carries none');
-  assert.match(chats, /\$\{replyBubble\(rpl\)\}/);
+  // the real thread template (chats-threadpaint.js) draws that item's bubble inside the composer, on every skin
+  const paintSrc = read('web/core/chats-threadpaint.js');
+  const tplAt = paintSrc.indexOf('    const threadHTML = `'), tpl = paintSrc.slice(tplAt, paintSrc.indexOf('</div>`;\n', tplAt) + 8);
+  const thread = item => runRecording(tpl.replace('const threadHTML', 'globalThis.out'), { rpl: item, esc: String, TAG: '', NV: null, s: null,
+    isNew: true, msw: '', c: { files: [] }, draft: '', NQ: false, DL: null, privTag: '', chip: '', incognitoAction: '', tacts: '', fail: '', msgs: '',
+    replyBubble: x => x ? `<div data-chreply="${x.key}"></div>` : '' }).out;
+  const drawn = createDocument(); drawn.body.innerHTML = thread({ key: 'k' });
+  assert.ok(drawn.querySelector('form[data-part="composer"] [data-chreply="k"]'), 'the bubble sits in the composer');
+  drawn.body.innerHTML = thread(null); assert.equal(drawn.querySelector('[data-chreply]'), null, 'no item: no bubble');
   // a sent message's turn (the real turnHtml with the real replyCard) carries its quote card
   const turn = runRecording([fn(chats, '  function turnHtml(c, tn, last, working, helperStatus, reconnect, tt = true, needs = \'\') {'), fn(chats, '  function replyCard(r) {'), 'globalThis.turn = turnHtml;'].join('\n'),
     { esc, clip: (t, n) => String(t).slice(0, n), md: t => esc(t), userMedia: () => '', timeTag: () => '', quoteBtn: () => '', msgIds: () => '', window: {}, KIT: kit().KIT });

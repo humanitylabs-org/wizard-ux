@@ -114,7 +114,7 @@ test('chat list preview/title text drops the framed block', () => {
   const clean = runWithChatsModel(`(chipLabel => s => String(s || '')${m[1]})(() => ' ')`);
   assert.equal(clean(K.reply.attach('Can you clean this up?', item)), 'Can you clean this up?');
 });
-test('every voice path carries the reply taken from the composer', () => {
+test('every voice path carries the reply taken from the composer', async () => {
   const plain = v => JSON.parse(JSON.stringify(v));
   const lineOf = (text, k) => { const l = text.split('\n').find(x => x.includes(k)); assert.ok(l, k); return l.trim(); };
   const frag = (text, k) => { assert.ok(text.includes(k), k); return k; };
@@ -145,8 +145,12 @@ test('every voice path carries the reply taken from the composer', () => {
   assert.deepEqual(spread(frag(powerSrc, '...(sealed.reply ? { reply: sealed.reply } : {})'), { sealed: { reply: { key: 'k' } } }), { reply: { key: 'k' } });
   assert.deepEqual(spread(frag(appSrc, "typed: snap.seal?.text || '', ...(snap.seal?.reply ? { reply: snap.seal.reply } : {})"), { snap: { seal: { text: 'hi', reply: { key: 'k' } } } }), { typed: 'hi', reply: { key: 'k' } });
   assert.deepEqual(spread(frag(appSrc, 'files: all, reply: seal?.reply || null'), { all: [], seal: { reply: { key: 'k' } } }), { files: [], reply: { key: 'k' } });
-  assert.deepEqual(spread(frag(deskSrc, '...(sealed?.reply ? { reply: sealed.reply } : {}), files: []'.replace(', files: []', '')), { sealed: { reply: { key: 'k' } } }), { reply: { key: 'k' } });
-  assert.match(deskSrc, /\.\.\.\(sealed\?\.reply \? \{ reply: sealed\.reply \} : \{\}\), files:/);
+  // the desktop voice send (real desktop.js enqueue line, run): the outbox item carries the reply
+  const enqAt = deskSrc.indexOf('      const item = await OUTBOX.enqueue({'), enq = deskSrc.slice(enqAt, deskSrc.indexOf('\n', enqAt));
+  const enqueued = [];
+  await runRecording(`globalThis.go = async () => { ${enq} };`, { OUTBOX: { enqueue: async o => { enqueued.push(plain(o)); return {}; } },
+    modelRoute: { model: 'm' }, stagedId: 's1', r: {}, sealed: { key: 'sk', text: '', reply: { key: 'k' } }, extraFiles: [] }).go();
+  assert.equal(enqueued.length, 1); assert.equal(JSON.stringify(enqueued[0].reply), '{"key":"k"}', 'the outbox item carries the reply');
   // the thread's own send (real chats line): a voice send takes the sealed reply, a typed one the box's
   const pick = (voice, here) => runRecording(`globalThis.f = () => { ${lineOf(chatsSrc, 'const reply = voice ? (sealed?.reply || null) : here ? KIT.drafts.get(rdkey).reply : null;')}\n return reply; };`,
     { voice, here, sealed: { reply: { key: 'sealed' } }, rdkey: 'd', KIT: { drafts: { get: () => ({ reply: { key: 'box' } }) } } }).f();

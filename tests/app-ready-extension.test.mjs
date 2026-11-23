@@ -61,7 +61,7 @@ test('Ready extensions remain root-only for default, host, container and restric
  const a=src.indexOf("${k === 'ready'"),b=src.indexOf('}${list.length',a);
  const expression=src.slice(a+2,b);const render=new Function('AGID','window',"const k='ready',n=0,filtered=false;return ("+expression+");");
  for(const agent of ['', 'host-agent','container-agent','restricted-agent'])assert.equal(render(agent,{WizAppExtensions:{html:()=>'<app-owned/>'}}).includes('<app-owned/>'),!agent);
- const poll=src.match(/if \(!AGID\) window\.WizAppExtensions\?\.poll\(\);/);assert.ok(poll);
+ const poll=src.match(/if \(!AGID\) window\.WizAppExtensions\?\.poll\(\);/);
  for(const agent of ['', 'host-agent','container-agent','restricted-agent']){let calls=0;new Function('AGID','window',poll[0])(agent,{WizAppExtensions:{poll:()=>calls++}});assert.equal(calls,agent?0:1);}
 });
 

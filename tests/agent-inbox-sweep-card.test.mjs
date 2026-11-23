@@ -168,7 +168,21 @@ test('an archived item reads Archived, not Done; the Running button goes to the 
   const html = cardBlock().api.sweepHtml(card({ waiting: { items: [{ ...card().waiting.items[0], state: 'archived' }], more: 0 } }));
   assert.match(html, /<small class="ch-sw-st">Archived<\/small>/);
   assert.doesNotMatch(html, /ch-sw-st">Done</);
-  assert.match(chats, /const o = W\[owner\(w\.id\)\] \|\| w, lw = W\[o\.id \+ '::list'\];\n\s+if \(lw && runningOn\(lw\)\) runningGo\(lw, true\); else if \(runningOn\(o\)\) \{ chatsBack\(o\); runningGo\(o, true\); \}/, 'desktop list pane, else back to the list');
+  // the real tap handler (chats-bind.js): the desktop list pane shows Running, else the one pane steps back first
+  const tap = slice(chats, "    if (e.target.closest('[data-chsweeprunning]')) {", "    const swa = e.target.closest('[data-chsweepall]')");
+  const press = ({ listOn, ownOn }) => {
+    const calls = [], w = { id: 'c1' }, lw = { id: 'c1::list' };
+    const W = { c1: w, ...(listOn === undefined ? {} : { 'c1::list': lw }) };
+    const ctx = { e: { target: { closest: q => q === '[data-chsweeprunning]' ? {} : null } }, w, W, owner: id => id,
+      runningOn: x => x === lw ? !!listOn : !!ownOn, runningGo: (x, on) => calls.push(['runningGo', x.id, on]),
+      chatsBack: x => calls.push(['chatsBack', x.id]), H: { toast: (...a) => calls.push(['toast', a[1]]) } };
+    vm.runInNewContext(`(() => {\n${tap}\n})()`, ctx);
+    return JSON.stringify(calls);
+  };
+  assert.equal(press({ listOn: true }), '[["runningGo","c1::list",true]]', 'desktop: the list pane beside the thread');
+  assert.equal(press({ ownOn: true }), '[["chatsBack","c1"],["runningGo","c1",true]]', 'one pane: back to the list, then Running');
+  assert.equal(press({ listOn: false, ownOn: true }), '[["chatsBack","c1"],["runningGo","c1",true]]');
+  assert.equal(press({}), '[["toast","The Running view is in the Chats window"]]', 'no Running view here: says where it is');
 });
 
 test('main versus routed: a routed agent\'s item answers by record id but never opens as a main-agent thread', () => {
@@ -184,7 +198,14 @@ test('main versus routed: a routed agent\'s item answers by record id but never 
 test('switch off (or not a card): no card, the markdown copy shows', () => {
   assert.equal(cardBlock({ on: false }).api.sweepHtml(card()), '');
   assert.equal(cardBlock().api.sweepHtml({ id: 'x' }), '');
-  assert.match(chats, /const sweep = tn\.a\?\.sweep && typeof sweepHtml === 'function' \? sweepHtml\(tn\.a\.sweep\) : '';\n\s+const body = sweep \|\| \(tn\.a \? md\(/);
+  // the real turn body (chats-attach.js turnHtml): a sweep card replaces the markdown copy, else the copy shows
+  const bodyOf = slice(chats, '      const sweep = tn.a?.sweep', '(url, marker) =>');
+  const turnBody = (tn, sweepHtml) => vm.runInNewContext(`${bodyOf}null) : ''); body`, { tn, sweepHtml, md: t => `<p>${t}</p>` });
+  const on = cardBlock().api.sweepHtml;
+  assert.equal(turnBody({ a: { text: 'copy', sweep: card() } }, on), on(card()), 'the card, not the copy');
+  assert.equal(turnBody({ a: { text: 'copy', sweep: card() } }, cardBlock({ on: false }).api.sweepHtml), '<p>copy</p>', 'switch off: the copy');
+  assert.equal(turnBody({ a: { text: 'copy' } }, on), '<p>copy</p>', 'no card: the copy');
+  assert.equal(turnBody({ a: { text: 'copy', sweep: card() } }, undefined), '<p>copy</p>', 'no card part loaded: the copy');
 });
 
 test('tapping a token posts the answer, the item shows as answered, and the card is read again', async () => {

@@ -168,8 +168,12 @@ test('popover is opaque, skinned by --wz-* tokens, selectable, and owns one Back
       assert.ok(styles.includes('core/lookup-pop.css'), page);
       assert.ok(srcs.indexOf('core/sel-menu.js') >= 0 && srcs.indexOf('core/sel-menu.js') < srcs.indexOf('core/lookup-pop.js'), page);
     }
-    assert.match(readFileSync(new URL('../docs/COMPONENTS.md', import.meta.url), 'utf8'), /`WosLookup` \(`lookup-pop\.js`\)/);
   });
+});
+
+// static-rule: the components inventory (docs/COMPONENTS.md) names the shared lookup popover (a docs check)
+test('docs/COMPONENTS.md lists WosLookup', () => {
+  assert.match(readFileSync(new URL('../docs/COMPONENTS.md', import.meta.url), 'utf8'), /`WosLookup` \(`lookup-pop\.js`\)/);
 });
 
 function popIn() {

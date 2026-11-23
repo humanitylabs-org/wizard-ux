@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
 
 import { settingsView, skinsRuntime } from './fixtures/skin-palettes-harness.mjs';
 import { createDocument } from './fixtures/mini-dom.mjs';
@@ -52,5 +52,5 @@ test('preview card styles are shell-wide (not gated to one skin) and the Landsca
     assert.equal(styles(name, [css]).visibility, 'hidden', `${skin || 'no skin'}: names hidden until their faces load`);
   }
   assert.doesNotMatch(css, /html\[data-skin[^\n]*\.skp/, 'no skin gate on the picker');
-  assert.ok(readFileSync(new URL('../web/skins/landscapes/preview.webp', import.meta.url)).length > 1000);
+  assert.ok(statSync(new URL('../web/skins/landscapes/preview.webp', import.meta.url)).size > 1000, 'the Landscapes preview image ships');
 });

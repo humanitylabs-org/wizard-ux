@@ -140,5 +140,9 @@ test('Chats never saves a whole Spaces or subject-order list from this device', 
   const ops = calls.filter(x => x[0] === 'prefOps').flatMap(x => x[1])
   assert.deepEqual(ops.filter(o => o.key === 'spaces/work/threads'), [{ op: 'add', key: 'spaces/work/threads', item: 'wizard_b' }, { op: 'remove', key: 'spaces/work/threads', item: 'wizard_a' }])
   assert.deepEqual(ops.filter(o => o.key === 'subjectOrder').map(o => o.op), ['front'], 'a subject move is one front operation')
+})
+
+// static-rule: the repo's AGENTS.md keeps the synced-lists rule written down for builders (a docs check)
+test('AGENTS.md asks for the stale-device and simultaneous-edit test', () => {
   assert.match(read('AGENTS.md'), /stale-device and simultaneous-edit test/)
 })
