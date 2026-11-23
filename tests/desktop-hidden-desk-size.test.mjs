@@ -117,10 +117,16 @@ test('Home hides every desktop host, including the mono desk', () => {
 test('skin-frame and Appearance presentation use the same desk-local fullscreen state', () => {
   const skin = withShellParts(readFileSync(process.env.QA_SKIN_FRAME_CSS || new URL('../web/core/skin-frame.css', import.meta.url), 'utf8'));
   const appearance = withShellParts(readFileSync(process.env.QA_APPEARANCE_JS || new URL('../web/core/appearance-host.js', import.meta.url), 'utf8'));
-  assert.match(skin, /html\[data-skin-frame\] \.wsp \.win\.full \{ border: 0; border-radius: 0; padding: 0; \}/);
-  assert.match(skin, /html\[data-skin-frame\] \.wsp \.win\.full > \.wbar \{ display: none; \}/);
+  // the real skin-frame.css on a desk's full-screen window: no frame, no title bar (only under a skin frame)
+  const doc = createDocument(); doc.body.innerHTML = '<div class="wsp"><div class="win full"><div class="wbar"></div></div></div>';
+  const win = doc.querySelector('.win'), bar = doc.querySelector('.wbar');
+  doc.documentElement.setAttribute('data-skin-frame', '');
+  for (const [k, v] of [['border-radius', '0'], ['padding', '0']]) assert.equal(styleOf(win, skin, k), v, k);
+  assert.match(String(styleOf(win, skin, 'border')), /^0/);
+  assert.equal(styleOf(bar, skin, 'display'), 'none');
+  doc.documentElement.removeAttribute('data-skin-frame');
+  assert.notEqual(styleOf(bar, skin, 'display'), 'none', 'without a skin frame the bar stays');
   const block = appearance.match(/const IMMERSIVE = [\s\S]*?const presentation =[^;]+;/)?.[0];
-  assert.ok(block);
   const context = vm.createContext({}); vm.runInContext(block + '\nglobalThis.present = presentation;', context);
   for (const foregroundFull of [false, true]) for (const ownMono of [false, true]) {
     const frame = { closest: selectors => selectors.split(',').some(s => ownMono && (s.trim() === '.wsp .win.full' || (foregroundFull && s.trim() === 'body.desktop-fullscreen .win.full'))) ? {} : null };
