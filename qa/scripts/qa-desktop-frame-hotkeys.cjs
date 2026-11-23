@@ -57,6 +57,9 @@ async function context(phone = false, instrument = true) {
   await c.route('**/*', r => route(r, instrument));
   await c.routeWebSocket('**/*', ws => ws.close());
   await c.addInitScript(seedOwner, { phone });
+  // These checks are for the classic desktop (desks, ⌥O = app picker). The AI apps view, now the desktop default,
+  // gives ⌥O and other letters its own meanings, so pin the classic view rather than assert its keys there (issue 1726).
+  await c.addInitScript(() => { if (window === window.top && localStorage.getItem('wos.desktop-view.v1') === null) localStorage.setItem('wos.desktop-view.v1', 'classic'); });
   return c;
 }
 const field = (p, i) => p.frameLocator(`.win[data-win="fixture${i}"] iframe`).locator('#field');
@@ -155,7 +158,11 @@ async function picker(p, chord, i = 0) {
       }
       const code = require('../../tools/shell-source.cjs').shellSource(TREE, 'web/desktop/desktop.js'); // parts put back (issue 1665)
       const hook = code.slice(code.indexOf('  function watchFrame(f, el)'), code.indexOf('\n  function render()'));
-      assert(!hook.includes('postMessage')); assert(!hook.includes('querySelectorAll'));
+      // Judge the hook by what it does, not by words in its comments (issue 1726): it must not post or listen
+      // for messages (no message-dispatched chord) and must not scan nested documents.
+      assert(!/\.postMessage\s*\(/.test(hook), 'watchFrame must not post messages');
+      assert(!/addEventListener\s*\(\s*['"`]message['"`]|\bonmessage\s*=/.test(hook), 'watchFrame must not listen for messages');
+      assert(!/querySelectorAll\s*\(/.test(hook), 'watchFrame must not scan nested documents');
     });
     await check('shell release reload preserves desks and established-owner boot', async () => {
       const before = await page.evaluate(() => ({ ws: __wux.ws, cur: __wux.cur }));

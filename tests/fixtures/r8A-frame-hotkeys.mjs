@@ -24,8 +24,8 @@ const QA = path.join(ROOT, 'qa/scripts');
 const SRC = fs.readFileSync(path.join(QA, 'qa-desktop-frame-hotkeys.cjs'), 'utf8');
 const require = createRequire(path.join(QA, 'x.cjs'));
 
-// codeOnly: the script's own check that watchFrame never uses postMessage reads the shell source with its comments
-// blanked (the shipped check also trips on a comment that names postMessage; see tests/DesktopFrameHotkeysFixture.test.mjs).
+// hookLine: one extra line put into watchFrame's source as the script reads it, to prove its source check judges code,
+// not comments (issue 1726).
 // The synthetic page's markup without its <script> blocks (the test drives the page itself; nothing here is sanitising).
 function withoutScripts(html) {
   let out = '', at = 0;
@@ -37,7 +37,7 @@ function withoutScripts(html) {
     out += html.slice(at, open); at = end;
   }
 }
-export async function runFrameHotkeys({ stranded = false, appMisses = false, welcomeActive = false, codeOnly = false, noSwitch = false, env = {} } = {}) {
+export async function runFrameHotkeys({ stranded = false, appMisses = false, welcomeActive = false, hookLine = '', noSwitch = false, env = {} } = {}) {
   const out = fs.mkdtempSync(path.join(process.env.TMPDIR || '/tmp', 'r8A-hotkeys-'));
   const clicks = [], errors = [];
   const { S, root: skinRoot } = skinsJs({ 'wos.skin': 'nebula' }, 'desktop');
@@ -151,8 +151,8 @@ export async function runFrameHotkeys({ stranded = false, appMisses = false, wel
   };
   const browser = { newContext: context, close: async () => {} };
   const shell = require('../../tools/shell-source.cjs');
-  const blankComments = src => src.replace(/\/\*[\s\S]*?\*\//g, m => m.replace(/[^\n]/g, ' ')).replace(/(^|[^:\\'"])\/\/[^\n]*/g, '$1');
-  const fakes = { '../../tools/shell-source.cjs': codeOnly ? { ...shell, shellSource: (...a) => blankComments(shell.shellSource(...a)) } : shell,
+  const withHook = src => src.replace('  function watchFrame(f, el) {\n', m => m + '    ' + hookLine + '\n');
+  const fakes = { '../../tools/shell-source.cjs': hookLine ? { ...shell, shellSource: (...a) => withHook(shell.shellSource(...a)) } : shell,
     '../../tools/qa-playwright.cjs': { chromium: { launch: async () => browser }, devices: { 'Pixel 7': { isMobile: true, viewport: { width: 412, height: 915 } } } } };
   const proc = { env: { QA_OUT: out, QA_TREE: ROOT, ...env }, exitCode: undefined };
   const ctx = { require: n => fakes[n] || require(n), process: proc, __dirname: QA, Buffer, URL, setTimeout: (f) => setTimeout(f, 0),
