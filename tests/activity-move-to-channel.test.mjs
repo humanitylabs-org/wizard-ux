@@ -6,6 +6,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
+import { between, block, runRecording } from './fixtures/source-slice.mjs';
 import { readFileSync } from 'node:fs';
 import { withSkinHostParts } from './fixtures/skin-host-parts.mjs';
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
@@ -75,11 +76,13 @@ test('both shells open Chats\' own picker through CHATS.moveToChannel, without t
   assert.ok(!p.calls.some(c => c[0] === 'showChats'), 'phone: no navigation');
   // desktop with no main Chats: the sidebar's stand-in (sideMain) is not in W, but Chats resolves windows through
   // H.win = chatsWin, which knows the stand-in (sideWin), so the picker finds it
-  const dj = read('web/desktop/desktop.js'), line = k => { const i = dj.indexOf(k); assert.ok(i >= 0, k); return dj.slice(i, dj.indexOf('\n', i)); };
-  const win = vm.runInNewContext(`(() => { ${line('const sideWin = id =>')}\n${line('const chatsWin = id =>')}\n return chatsWin; })()`,
-    { W: { w1: { id: 'w1' } }, sideBase: { id: 'side' }, feedBase: null, viewBase: null, listWin: (id, k) => ({ id, k }) });
-  assert.equal(win('side').id, 'side'); assert.equal(win('w1').id, 'w1'); assert.equal(win('nope'), undefined);
-  assert.ok(dj.includes('\n    win: chatsWin,'), 'Chats is handed chatsWin');
+  // (the real desktop-sideview.js: its window lookups and the host object it hands Chats)
+  const dj = read('web/desktop/desktop.js');
+  let host = null;
+  runRecording(`${between(dj, '  const sideWin = id =>', '\n')}\n${between(dj, '  const chatsWin = id =>', '\n')}\nconst CHATS = window.WizChatsHost.create(${block(dj, '  const CHATS = window.WizChatsHost.create({').replace('  const CHATS = window.WizChatsHost.create(', '')});`,
+    { W: { w1: { id: 'w1' } }, sideBase: { id: 'side' }, feedBase: null, viewBase: null, listWin: (id, k) => ({ id, k }), MOD: '⌥', window: { WizChatsHost: { create: h => { host = h; return {}; } } } });
+  const win = host.win;
+  assert.equal(win('side').id, 'side', 'Chats finds the sidebar stand-in'); assert.equal(win('w1').id, 'w1'); assert.equal(win('nope'), undefined);
 });
 
 // The real picker code from chats.js: General is a row, the current channel is marked, picks write the store.
