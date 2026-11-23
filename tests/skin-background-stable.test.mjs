@@ -13,9 +13,13 @@ const body = (src, head) => { const i = src.indexOf(head); assert.ok(i >= 0, hea
 test('skins.js: a resize that leaves the page its size touches nothing (no canvas wipe, no new state, no next photo)', () => {
   const src = read('web/core/skins.js'), size = body(src, '  function size() {');
   assert.ok(!/BGL\.st = \{\};/.test(size), 'never throws every skin\'s state away (Landscapes re-picked its photo, scenes re-rolled)');
-  assert.match(size, /if \(r\.width === BGL\.W && r\.height === BGL\.H && dpr === BGL\.dpr && [^\n]*\) return false;/, 'same size: nothing to do');
-  assert.match(size, /if \(R && R\.resize\) R\.resize\.call\(R, BGL\.st\[id\], BGL\.W, BGL\.H\); else delete BGL\.st\[id\];/, 'a real resize keeps a scene that can crop again');
-  assert.match(src, /addEventListener\('resize', \(\) => \{ if \(size\(\)\) wake\(\); \}\);/, 'repaints only when it did change');
+  // (same size: nothing to do; a real resize keeps a scene that can crop again: size() runs below)
+  // the page's resize listener (its own line in skins.js, run): repaints only when size() says it changed
+  const at = src.indexOf("addEventListener('resize',"), line = src.slice(at, src.indexOf('\n', at));
+  const on = {}, woke = [], changed = { v: false };
+  vm.runInNewContext(line, { addEventListener: (t, f) => { on[t] = f; }, size: () => changed.v, wake: () => woke.push(1) });
+  on.resize(); assert.equal(woke.length, 0, 'a same-size resize: no repaint');
+  changed.v = true; on.resize(); assert.equal(woke.length, 1, 'repaints only when it did change');
   // run size() for real against a fake canvas pair: a same-size resize leaves the canvases and states alone
   const fn = size;
   const cv = [{ width: 0, height: 0, parentElement: { getBoundingClientRect: () => ({ width: 1440, height: 900 }) } }, { width: 0, height: 0 }];
