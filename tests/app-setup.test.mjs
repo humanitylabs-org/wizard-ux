@@ -86,10 +86,10 @@ test('routerNeeds uses the shared owner proxy and handles an old Router 501', as
   finally { globalThis.fetch = previous; }
 });
 test('shared Store release transaction sends and verifies the exact qualified selection', async () => {
-  const previous = globalThis.fetch, a = { id: provider.id, source: 'standard', repo: 'https://github.com/qa/tinfoil', commit: 'a'.repeat(40) };
+  const previous = globalThis.fetch, a = { id: 'wizard-tinfoil', source: 'standard', repo: 'https://github.com/qa/tinfoil', commit: 'a'.repeat(40) };
   try {
     let calls = 0;
-    globalThis.fetch = async (url, opts) => { calls++; assert.match(url, /store-install\/wizard-tinfoil$/); assert.equal(opts.headers['X-Wizard-Store'], '1'); const selection = JSON.parse(opts.body); assert.deepEqual(selection, { source: a.source, repo: a.repo, commit: a.commit, operation: 'install' }); return { ok: true, status: 200, json: async () => ({ state: 'installed', selection }) }; };
+    globalThis.fetch = async (to, sent) => { calls++; assert.match(to, /store-install\/wizard-tinfoil$/); assert.equal(sent.headers['X-Wizard-Store'], '1'); const selection = JSON.parse(sent.body); assert.deepEqual(selection, { source: a.source, repo: a.repo, commit: a.commit, operation: 'install' }); return { ok: true, status: 200, json: async () => ({ state: 'installed', selection }) }; };
     await installRelease(a); assert.equal(calls, 1);
     globalThis.fetch = async () => ({ ok: true, status: 200, json: async () => ({ state: 'installed', selection: { ...a, operation: 'install', commit: 'b'.repeat(40) } }) });
     await assert.rejects(() => installRelease(a), /different release/);
@@ -128,17 +128,22 @@ test('both launchers put admission before window creation; Back peels setup befo
   // Back: the one owner catalog both shells install (WizEscapeBack.installOwners) peels setup with WosAppSetup.back().
   let open = true, backs = 0;
   const W = { WosAppSetup: { isOpen: () => open, back: () => { backs++; open = false; return 'setup'; } } };
-  const ctx = vm.createContext({ window: W, document: { addEventListener() {} }, addEventListener() {}, setTimeout, clearTimeout, queueMicrotask, MutationObserver: class { observe() {} disconnect() {} } });
-  vm.runInContext(read('web/core/escape-back.js'), ctx);
-  const stack = W.WizEscapeBack.create();
-  W.WizEscapeBack.installOwners(stack, { chats: () => ({}), links: () => null });
+  const EB = escapeBackOn(W), stack = EB.create();
+  EB.installOwners(stack, { chats: () => ({}), links: () => null });
   let roots = 0; const fallback = () => (roots++, 'root');
   assert.equal(stack.run({ fallback, surface: () => false }), 'setup');
   assert.equal(backs, 1); assert.equal(roots, 0, 'the window/root is not touched while setup is open');
   assert.equal(stack.run({ fallback, surface: () => false }), 'root');
   assert.equal(backs, 1);
-  for (const file of ['web/app.js', 'web/desktop/desktop.js']) assert.match(read(file), /WizEscapeBack\.installOwners\(/, `${file} installs the shared owners`);
+  // (both shells install that catalog: back-owners.test.mjs runs each shell's own installOwners call)
 });
+
+// the real core/escape-back.js on `window`
+function escapeBackOn(window) {
+  const ctx = vm.createContext({ window, document: { addEventListener() {} }, addEventListener() {}, setTimeout, clearTimeout, queueMicrotask, MutationObserver: class { observe() {} disconnect() {} } });
+  vm.runInContext(read('web/core/escape-back.js'), ctx);
+  return window.WizEscapeBack;
+}
 
 test('captured Recorder needs share one recommendation even before a signed-out provider lists its models', async () => {
   const setup = await harness({});
