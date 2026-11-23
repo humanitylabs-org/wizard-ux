@@ -90,13 +90,9 @@ test('the corner orb shows Camera and Attach only when native says the switch is
   N.attachOn = () => { throw new Error('gone'); }; assert.equal(vm.runInContext('canAttach()', ctx), false);
   doc.getElementById('camC').dispatchEvent({ type: 'click', bubbles: true }); doc.getElementById('pickC').dispatchEvent({ type: 'click', bubbles: true });
   assert.deepEqual(asks, ['camera', 'pick'], 'while listening the buttons ask native');
-  ctx.S.state = 'think'; doc.getElementById('camC').dispatchEvent({ type: 'click', bubbles: true });
+  ctx.S.state = 'think'; doc.getElementById('camC').dispatchEvent({ type: 'click', bubbles: true }); doc.getElementById('pickC').dispatchEvent({ type: 'click', bubbles: true });
   assert.deepEqual(asks, ['camera', 'pick'], 'never outside a take');
-  assert.match(html, /#camC,#pickC\{display:none\}/);
-  assert.match(html, /body\.corner\.canattach #camC,body\.corner\.canattach #pickC\{display:flex\}/);
-  assert.match(html, /MODE==='corner'&&typeof N\.attachOn==='function'&&!!N\.attachOn\(\)/);
-  assert.match(html, /\$\('camC'\)\.addEventListener\('click',e=>\{e\.stopPropagation\(\);if\(S\.state==='listen'&&N\.camera\)/);
-  assert.match(html, /\$\('pickC'\)\.addEventListener\('click',e=>\{e\.stopPropagation\(\);if\(S\.state==='listen'&&N\.pick\)/);
+  // (the hide/show rules, canAttach() and the listen-only click handlers: run and cascaded above)
   const lock = read('android/app/src/main/java/ai/wizards/os/assist/AssistLockActivity.java');
   assert.ok(!/attachOn|camera\(\)|AssistPickActivity/.test(lock), 'the lock-screen surface has no Camera/Attach bridge');
   const session = read('android/app/src/main/java/ai/wizards/os/assist/WizardSession.java');
