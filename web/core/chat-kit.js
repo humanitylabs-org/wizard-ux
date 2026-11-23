@@ -869,8 +869,9 @@
     const n = native(), href = String(item.download || item.url || '');
     if (appDownloads() && !(n && typeof n.saveFile === 'function') && !/^(blob|data):/i.test(href)) { download(href, item.name); return 'downloading'; }
     // A Mac app without files.save (0.8.2 and older, wizard-agent-service issue 586) drops a download that starts after
-    // the fetch, so this Wizard's own file is downloaded from the tap itself, before any wait, where the app keeps it.
-    const own = macShell() && macSaveKnown === null && !/^(blob|data):/i.test(href) ? ownAddress(href) : '';
+    // the fetch, so this Wizard's own file is downloaded from the tap itself, before any wait, where every Mac app keeps
+    // it. That is also the path while app.info has not answered yet: only a known files.save fetches first.
+    const own = macShell() && !macSaveKnown && !/^(blob|data):/i.test(href) ? ownAddress(href) : '';
     if (own) { download(own, item.name); return 'downloading'; }
     const mac = macSaver();
     const file = await asFile(item);

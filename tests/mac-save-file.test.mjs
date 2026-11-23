@@ -27,7 +27,8 @@ function load({ mac = true, caps = ['app.', 'meeting.', 'files.'], answer = { st
 }
 
 test('Mac app with files.save: the app saves the photo and the toast says where', async () => {
-  const { saveFile, calls, clicks } = load();
+  const { saveFile, macSaver, calls, clicks } = load();
+  await macSaver(); // asked on page load
   assert.equal(await saveFile({ url: '/messenger/api/unified/media/1', name: 'Photo.jpg' }), 'saved-downloads');
   assert.deepEqual(calls.map(c => c[0]), ['app.info', 'files.save']);
   assert.deepEqual(JSON.parse(JSON.stringify(calls[1][1])), { data: 'AAEC', name: 'Photo.jpg', mime: 'image/jpeg' });
@@ -36,7 +37,8 @@ test('Mac app with files.save: the app saves the photo and the toast says where'
 });
 
 test('a failed native save says it could not save, never Saved', async () => {
-  const { saveFile } = load({ answer: { status: 'failed', error: 'disk full' } });
+  const { saveFile, macSaver } = load({ answer: { status: 'failed', error: 'disk full' } });
+  await macSaver();
   await assert.rejects(saveFile({ url: '/m/1', name: 'Photo.jpg' }), /disk full/);
   assert.match(kit, /catch \(_\) \{ K\.notify\('!', 'Couldn’t save this file'\)/);
   assert.match(kit, /if \(macShell\(\)\) throw e;/, 'no silent address download on the Mac after a failed save');
@@ -44,7 +46,7 @@ test('a failed native save says it could not save, never Saved', async () => {
 
 test('an older Mac app without files. keeps the download path but makes no false Saved claim', async () => {
   const { saveFile, calls, clicks } = load({ caps: ['app.', 'meeting.'] });
-  assert.equal(await saveFile({ url: '/m/1', name: 'Photo.jpg' }), 'downloading');
+  assert.equal(await saveFile({ url: 'blob:m1', name: 'Photo.jpg' }), 'downloading');
   assert.deepEqual(calls.map(c => c[0]), ['app.info']);
   assert.equal(clicks.length, 1);
 });
@@ -102,4 +104,11 @@ test('an older Mac app: a file card ⤓ tapped before any viewer opened also dow
 
 test('browsers never ask app.info on load', () => {
   for (const opts of [{ mac: false }, { top: false }]) assert.equal(load(opts).loaded.length, 0);
+});
+
+test('a Mac app that has not answered app.info yet: an own file still downloads from the tap', async () => {
+  const { saveFile, clicks } = load({ caps: ['app.', 'files.'] });
+  const pending = saveFile({ url: '/wizard/attachments/slow', name: 'notes.md' });
+  assert.deepEqual(clicks, ['https://box.example/wizard/attachments/slow'], 'no fetch-then-blob that an older app would drop');
+  assert.equal(await pending, 'downloading');
 });
