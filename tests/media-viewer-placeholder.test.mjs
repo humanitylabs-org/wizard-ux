@@ -45,3 +45,18 @@ test('items without a stand-in are exactly as before', () => {
   f.service.media.view([{url: 'a.jpg', name: 'A'}], 0);
   assert.deepEqual(f.opened[0].items, [{url: 'https://wizard.example/messenger/a.jpg', kind: 'image', name: 'A', mime: 'image/jpeg'}]);
 });
+// wizard-messenger issue 348: a sharper copy the app already holds (`preview`) rides beside the stand-in, on the same
+// address check; it never rides alone, on a video, from another site, or when it is the picture or the stand-in.
+test('a preview beside a stand-in reaches the viewer; alone, foreign or duplicate it is left out', () => {
+  const f = fixture();
+  f.service.media.view([
+    {url: 'media/1', placeholder: 'media/1?kind=thumb', preview: 'blob:https://wizard.example/view-1'},
+    {url: 'media/2', preview: 'blob:https://wizard.example/view-2'},
+    {url: 'media/3', placeholder: 'media/3?kind=thumb', preview: 'https://evil.example/3.jpg'},
+    {url: 'media/4', placeholder: 'media/4?kind=thumb', preview: 'media/4'},
+    {url: 'media/5', placeholder: 'media/5?kind=thumb', preview: 'media/5?kind=thumb'},
+    {url: 'e.mp4', kind: 'video', placeholder: 'e.jpg', preview: 'e2.jpg'},
+  ], 0);
+  assert.deepEqual(f.opened[0].items.map(x => x.preview), ['blob:https://wizard.example/view-1', undefined, undefined, undefined, undefined, undefined]);
+  assert.equal(f.opened[0].items[0].placeholder, 'https://wizard.example/messenger/media/1?kind=thumb');
+});

@@ -1220,7 +1220,9 @@
   /* A picture never opens on an empty black stage (ux#1509): the app's stand-in (`placeholder`, the copy its bubble
    * already shows) is shown and fitted at once, the original loads beside it and takes its place (zoom and pan kept),
    * a quiet loading mark shows meanwhile, and a failed load says so with Retry. The pictures either side are fetched
-   * ahead so a swipe is quick too. */
+   * ahead so a swipe is quick too. wizard-messenger issue 348: an app can also hand a sharper copy it already holds
+   * (`preview`, e.g. a screen-size copy on the phone) beside a small stand-in: the stand-in draws in the tap's frame,
+   * the preview takes its place as soon as it is decoded, and the original still takes over last. */
   function picture(stage, it) {
     const want = it;
     stage.innerHTML = `<img src="${esc(it.placeholder || it.url)}" alt="${esc(it.name || 'Photo')}" draggable="false"><span class="mv-load" role="status" aria-label="Loading"></span>`;
@@ -1233,15 +1235,26 @@
       stage.insertAdjacentHTML('beforeend', '<div class="mv-fail" role="alert"><span>Couldn’t load this photo</span><button type="button" data-mv="retry">Retry</button></div>');
     };
     if (it.placeholder && typeof Image === 'function') {
-      img.onload = () => { if (live()) fit(); };
-      // A stand-in that fails is dropped quietly: the original is still on its way.
-      img.onerror = () => { if (live()) img.removeAttribute('src'); };
-      if (img.complete && img.naturalWidth) fit();
+      img.onload = () => { if (live()) { fit(); sharpen(); } };
+      // A stand-in that fails is dropped quietly: the original (and a preview) is still on its way.
+      img.onerror = () => { if (live()) { img.removeAttribute('src'); sharpen(); } };
+      // The loaded picture itself takes the stand-in's place (no second fetch), keeping zoom and pan; a preview never
+      // replaces the original once that is in.
+      let best = 0;
+      const swap = (next, rank) => { if (!live() || rank <= best) return; best = rank; next.alt = img.alt; next.setAttribute('draggable', 'false'); next.style.cssText = img.style.cssText; img.replaceWith(next); img = next; fit(); };
+      // The preview starts only once the stand-in is drawn, so reading and decoding it never delays the first frame.
+      let mid = null;
+      const sharpen = () => {
+        if (mid || !live() || best > 0 || !it.preview || it.preview === it.url || it.preview === it.placeholder || typeof requestAnimationFrame !== 'function') return;
+        mid = new Image(); mid.decoding = 'async';
+        mid.onload = () => { const go = () => swap(mid, 1); typeof mid.decode === 'function' ? mid.decode().then(go, go) : go(); };
+        requestAnimationFrame(() => setTimeout(() => { if (live() && best === 0) mid.src = it.preview; }, 0));
+      };
       const big = new Image(); V.big = big;
-      // The loaded original itself takes the stand-in's place (no second fetch), keeping zoom and pan.
-      big.onload = () => { if (!live()) return; big.alt = img.alt; big.setAttribute('draggable', 'false'); big.style.cssText = img.style.cssText; img.replaceWith(big); img = big; done(); fit(); };
+      big.onload = () => { if (!live()) return; swap(big, 2); done(); };
       big.onerror = () => { if (live()) fail(); };
       big.src = it.url;
+      if (img.complete && img.naturalWidth) { fit(); sharpen(); }
     } else {
       if (it.placeholder) img.src = it.url;
       img.onload = () => { if (!live()) return; done(); fit(); };

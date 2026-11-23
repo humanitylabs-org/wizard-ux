@@ -1263,11 +1263,16 @@
   // can't read) go as their bytes. Anything else is left out, and its place kept so the tapped item stays the one shown.
   // A picture's quick stand-in (`placeholder`, the copy the app already shows) goes the same way, so the viewer shows
   // it at once while the original loads (ux#1509); one that can't be sent is simply left out.
+  // A sharper copy beside it (`preview`, wizard-messenger issue 348) goes the same way, and only with a stand-in.
+  function standOne(src, key) {
+    let u; try { u = new URL(src, location.href); } catch (_) { return Promise.resolve({}); }
+    if (u.protocol === 'blob:') return fetch(u.href).then(r => r.blob()).then(b => ({ [key + 'Blob']: b }), () => ({}));
+    return Promise.resolve(/^https?:$/.test(u.protocol) && u.origin === location.origin ? { [key]: u.href } : {});
+  }
   function stand(it) {
     if (it?.kind === 'video' || typeof it?.placeholder !== 'string' || !it.placeholder) return Promise.resolve({});
-    let u; try { u = new URL(it.placeholder, location.href); } catch (_) { return Promise.resolve({}); }
-    if (u.protocol === 'blob:') return fetch(u.href).then(r => r.blob()).then(placeholderBlob => ({ placeholderBlob }), () => ({}));
-    return Promise.resolve(/^https?:$/.test(u.protocol) && u.origin === location.origin ? { placeholder: u.href } : {});
+    const pv = typeof it.preview === 'string' && it.preview ? standOne(it.preview, 'preview') : Promise.resolve({});
+    return Promise.all([standOne(it.placeholder, 'placeholder'), pv]).then(([ph, p]) => (ph.placeholder || ph.placeholderBlob ? { ...ph, ...p } : {}));
   }
   function shellMedia(items, index) {
     if (!Array.isArray(items)) return false;

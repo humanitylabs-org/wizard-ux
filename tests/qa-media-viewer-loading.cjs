@@ -16,10 +16,10 @@ const server = http.createServer((req, res) => {
   const u = new URL(req.url, 'http://x');
   if (u.pathname === '/') { res.writeHead(200, { 'content-type': 'text/html' }); return res.end(PAGE); }
   if (u.pathname.startsWith('/pic/')) {
-    const name = u.pathname.slice(5), thumb = u.searchParams.has('thumb');
+    const name = u.pathname.slice(5), thumb = u.searchParams.has('thumb'), view = u.searchParams.has('view');
     if (name === 'broken' && !thumb && failNext > 0) { failNext--; res.writeHead(500, { 'cache-control': 'no-store' }); return res.end('no'); }
-    const send = () => { res.writeHead(200, { 'content-type': 'image/svg+xml', 'cache-control': 'no-store' }); res.end(svg(thumb ? '#555' : '#2a9d8f', (thumb ? 'thumb ' : 'full ') + name)); };
-    return thumb ? send() : setTimeout(send, 2500);
+    const send = () => { res.writeHead(200, { 'content-type': 'image/svg+xml', 'cache-control': 'no-store' }); res.end(svg(thumb ? '#555' : view ? '#264653' : '#2a9d8f', (thumb ? 'thumb ' : view ? 'view ' : 'full ') + name)); };
+    return thumb ? send() : setTimeout(send, view ? 300 : 2500);
   }
   const file = path.join(WEB, u.pathname);
   if (!file.startsWith(WEB) || !fs.existsSync(file)) { res.writeHead(404); return res.end(); }
@@ -46,6 +46,17 @@ const server = http.createServer((req, res) => {
   ok(s.src === '/pic/a' && s.w > 0, `the original takes over once it is in (src=${s.src})`);
   ok(!s.loading, 'the loading mark goes when the original is in');
   if (SHOTS) await page.screenshot({ path: path.join(SHOTS, 'loaded.png') });
+  // 1b. wizard-messenger issue 348: a stand-in plus a sharper `preview`: stand-in first, then the preview, then the original.
+  await page.evaluate(() => { WosChat.viewer.close(); WosChat.viewer.open([{ url: '/pic/p', placeholder: '/pic/p?thumb', preview: '/pic/p?view', kind: 'image', name: 'P' }], 0); });
+  await page.waitForTimeout(150);
+  s = await stage();
+  ok(s.w > 0 && /thumb/.test(s.src), `with a preview the stand-in still shows first (src=${s.src})`);
+  await page.waitForFunction(() => /\?view$/.test(document.querySelector('.mv-stage img')?.src || ''), null, { timeout: 2000 }).catch(() => {});
+  s = await stage();
+  ok(/\?view$/.test(s.src) && s.w > 0 && s.loading, `the preview takes the stand-in's place while the original loads (src=${s.src})`);
+  await page.waitForFunction(() => /\/pic\/p$/.test(document.querySelector('.mv-stage img')?.src || ''), null, { timeout: 6000 }).catch(() => {});
+  s = await stage();
+  ok(s.src === '/pic/p' && !s.loading, `the original still takes over last (src=${s.src})`);
   // 2. No stand-in: a loading mark while the stage waits.
   await page.evaluate(() => { WosChat.viewer.close(); WosChat.viewer.open([{ url: '/pic/c', kind: 'image', name: 'C' }], 0); });
   await page.waitForTimeout(400);

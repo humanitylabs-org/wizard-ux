@@ -1049,6 +1049,27 @@ test('media.view: a picture\'s stand-in passes the same rules as the picture (ow
   } finally { URL.createObjectURL = create; }
 });
 
+// wizard-messenger issue 348: a sandboxed window's sharper copy (`preview` address or `previewBlob` bytes) rides beside
+// its stand-in on the same rules, and never alone.
+test('media.view: a preview beside a stand-in passes the same rules; alone it is left out', () => {
+  const opened = [], made = [];
+  const WosChat = { viewer: { open: items => { opened.push(JSON.parse(JSON.stringify(items))); return true; } } };
+  const f = fixture({ win: { WosChat } });
+  const create = URL.createObjectURL;
+  URL.createObjectURL = b => { const u = 'blob:https://wizard.example/v' + made.length; made.push(b); return u; };
+  try {
+    const pic = new Blob(['x'], { type: 'image/jpeg' });
+    assert.equal(f.call('media.view', { items: [
+      { url: 'm/1', placeholder: 'm/1?thumb', previewBlob: pic },
+      { url: 'm/2', placeholder: 'm/2?thumb', preview: 'm/2?view' },
+      { url: 'm/3', previewBlob: pic },
+      { url: 'm/4', placeholder: 'm/4?thumb', preview: 'https://example.com/v.jpg' }],
+      base: 'https://wizard.example/morning-report/' }), true);
+    assert.deepEqual(opened[0].map(x => x.preview), ['blob:https://wizard.example/v0', 'https://wizard.example/morning-report/m/2?view', undefined, undefined]);
+    assert.equal(made.length, 1);
+  } finally { URL.createObjectURL = create; }
+});
+
 test('media.view: stand-in bytes never use up the pictures\' own blob quota (Codex P2)', () => {
   const opened = [];
   const WosChat = { viewer: { open: (items, i) => { opened.push({ items: JSON.parse(JSON.stringify(items)), i }); return true; } } };

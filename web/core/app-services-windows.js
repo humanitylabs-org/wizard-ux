@@ -24,7 +24,10 @@ window.WizCore.servicesParts.windows = function ({ apps, changed, fault, frames,
       // A picture's quick stand-in (the copy the app already shows) passes the same address check as the picture,
       // so the viewer can show it at once while the original loads (ux#1509).
       const ph = kind === 'image' && (it?.placeholderBlob != null || (typeof it?.placeholder === 'string' && it.placeholder)) ? url(it.placeholderBlob != null ? { blob: it.placeholderBlob } : { url: it.placeholder }, true) : null;
-      clean.push({ url: href, kind, name: String(it?.name || '').slice(0, 200), mime: String(it?.mime || (kind === 'video' ? 'video/mp4' : 'image/jpeg')).slice(0, 100), ...(ph && ph !== href ? { placeholder: ph } : {}) });
+      // A sharper copy the app already holds (`preview`, wizard-messenger issue 348) passes the same check and shows
+      // after the stand-in, before the original; it only rides with a stand-in.
+      const pv = ph && (it?.previewBlob != null || (typeof it?.preview === 'string' && it.preview)) ? url(it.previewBlob != null ? { blob: it.previewBlob } : { url: it.preview }, true) : null;
+      clean.push({ url: href, kind, name: String(it?.name || '').slice(0, 200), mime: String(it?.mime || (kind === 'video' ? 'video/mp4' : 'image/jpeg')).slice(0, 100), ...(ph && ph !== href ? { placeholder: ph } : {}), ...(pv && pv !== href && pv !== ph ? { preview: pv } : {}) });
     }
     return clean.length ? window.WosChat.viewer.open(clean, Math.max(0, Math.min(clean.length - 1, i))) === true : false;
   }
