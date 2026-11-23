@@ -70,10 +70,11 @@ test('packaging: an ordinary Miguel view tweak, off by default; the desktop wear
   await d.mount('miguel/ai-apps'); await settle();
   assert.equal(d.host.layout, 'ai-apps', 'the desktop wears it too (desktop.js)'); assert.equal(d.doc.documentElement.dataset.layout, 'ai-apps');
   await d.clear(); assert.equal(d.host.layout, 'classic'); assert.ok(!d.doc.head.children.some(l => /layouts\//.test(l.href || '')));
-  const host = withSkinHostParts(read('web/core/skin-host.js'));
-  assert.match(host, /Object\.freeze\(\{ id: 'ai-apps', name: 'AI apps',/);
-  assert.match(host, /const VIEW_LAYOUTS = new Set\(\['ai-apps'\]\);/);
-  assert.match(host, /if \(VIEW_LAYOUTS\.has\(layoutId\) && standardLayout !== layoutId && !\(layoutHolder && tweaks\.has\(layoutHolder\)\)\) setLayout\('classic'\);/, 'only unowned stale layouts go back to Desks; a standard desktop layout stays');
+  const listed = d.host.layouts.find(l => l.id === 'ai-apps');
+  assert.equal(listed?.name, 'AI apps', 'the host lists the AI apps layout by name'); assert.deepEqual([...listed.shells], ['desktop']);
+  // a stale AI apps layout no live tweak wears (and not the standard one) goes back to Desks on the next tweak load
+  d.host.setLayout('ai-apps'); assert.equal(d.host.layout, 'ai-apps');
+  await d.clear(); assert.equal(d.host.layout, 'classic', 'only unowned stale layouts go back to Desks; a standard desktop layout stays');
 });
 
 test('standard AI apps and the personal tweak are idempotent and release cannot remove the standard view', async () => {
@@ -170,7 +171,9 @@ test('desktop: a sidebar (open apps, All apps, the Archive / Working / Ready sec
   assert.deepEqual(w.qa('.aad-rk[data-k="ready"] .aad-d').map(d => d.className), ['aad-d is-dot'], 'round 23c: Ready = ONE amber dot, not a dot per chat');
   assert.equal(w.q('.aad-rk[data-k="ready"] .aad-rk-wn').textContent, '2', 'round 23c: and its number');
   assert.doesNotMatch(read('web/layouts/ai-apps/desktop.js'), /DOTS_MAX|aad-dots/, 'round 23c: no tally of dots past four (looked weird)');
-  assert.match(read('web/layouts/ai-apps/desktop.css'), /\.aad-d\.is-spin \{[^}]*animation: aad-spin 900ms linear infinite;/, 'the same spin as the expanded Working tally');
+  w.html.setAttribute('data-shell', 'desktop'); w.html.setAttribute('data-layout', 'ai-apps');
+  const spin = cascade(w.q('.aad-rk[data-k="working"] .aad-d'), DESK_CSS).animation?.value || '';
+  assert.match(spin, /^aad-spin 900ms linear infinite$/, 'the same spin as the expanded Working tally');
   assert.equal(w.q('.aad-rail .aad-pins'), null, 'round 16: no pinned apps on the rail');
   assert.equal(w.q('.aad-rlist .aad-sti'), null, 'round 12: no status icons'); assert.equal(w.q('.aad-rc'), null); assert.equal(w.q('.aad-rg'), null, 'no coloured dots');
   assert.equal(keys.length, 2, 'Ctrl/⌘+Shift+S and the view’s ⌥ keys; Escape belongs to the core dispatcher');
@@ -282,9 +285,22 @@ test('desktop core hooks: the adapter lists chats with Chats\' own actions, show
   assert.deepEqual(JSON.parse(JSON.stringify(out.working[0].actions)), ['pin', 'rename']);
   assert.deepEqual(JSON.parse(JSON.stringify(out.ready.map(r => [r.id, r.pinned, r.unread, r.actions]))), [['r', true, false, ['pin', 'rename', 'unread', 'snooze', 'done']], ['n', false, true, ['pin', 'rename', 'snooze', 'done']]]);
   assert.deepEqual(JSON.parse(JSON.stringify(out.archive[0].actions)), ['pin', 'rename', 'restore', 'snooze']);
-  assert.match(dj, /showChats: \(\) => !!skinShowChats\(\),\n    newChat: \(\) => \{ const w = skinShowChats\(\); if \(!w\) return false; newChat\(\); return true; \},/);
-  assert.match(dj, /const settingsOver = \(\) => document\.documentElement\.hasAttribute\('data-settings-over'\);/); assert.match(dj, /if \(homeOpen \|\| settingsOver\(\)\) \{  \/\/ from Home/, 'a layout may keep Settings over the page');
-  assert.match(read('web/layouts/apps/chrome.js'), /const rawSpot = orb \|\| \(shell === 'phone' \? orbSpot : null\);/, 'a view drawing its own orb says where it is');
+  // the adapter's showChats / newChat, run: the Chats desk in front (its window), a New chat only when there is one
+  const hooks = win => runRecording(`this.h = {\n${between(dj, '    showChats: () => ', '\n    /* The AI apps sidebar')}\n};`, { skinShowChats: () => win });
+  const none = hooks(null), one = hooks({ id: 'c1' });
+  assert.equal(none.h.showChats(), false); assert.equal(none.h.newChat(), false, 'no Chats window, no New chat');
+  assert.deepEqual(none.calls.filter(c => c[0] === 'newChat'), []);
+  assert.equal(one.h.showChats(), true); assert.equal(one.h.newChat(), true);
+  assert.deepEqual(JSON.parse(JSON.stringify(one.calls.filter(c => c[0] === 'newChat'))), [['newChat']], 'a New chat in the Chats desk');
+  // openSettings, run: html[data-settings-over] keeps Settings the centred panel over the page, also off Home
+  const settings = (over, homeOpen = false) => {
+    const ctx = runRecording(`${between(dj, '  const settingsOver = ', ';\n')};\n${block(dj, '  function openSettings(focus) {')}\nthis.open = openSettings;`,
+      { homeOpen, document: { documentElement: { hasAttribute: k => over && k === 'data-settings-over' }, activeElement: null }, settingsWin: () => ({ id: 's1' }), setEl: { hidden: true } });
+    ctx.open(); return ctx.calls.filter(c => ['showSettingsModal', 'focusWin', 'newWin'].includes(c[0])).map(c => c[0]);
+  };
+  assert.deepEqual(settings(true), ['showSettingsModal'], 'a layout may keep Settings over the page');
+  assert.deepEqual(settings(false), ['focusWin'], 'without it, off Home, the Settings window comes forward');
+  assert.deepEqual(settings(false, true), ['showSettingsModal'], 'from Home always the centred panel');
 });
 
 test('nothing hidden: failed / interrupted chats and By day\'s Yesterday / Past week are in Ready (both adapters)', () => {
@@ -538,10 +554,16 @@ test('round 4: Home has no greeting: only the skin background, the composer and 
   assert.equal(w.html.dataset.aiNew, undefined, 'a thread is not Home');
   w.st.route = { home: false, view: 'thread', thread: '__new__', desk: 1, app: 'chats' }; w.emit('route', w.st.route);
   assert.equal(w.html.dataset.aiNew, 'on', 'a New chat is Home');
-  const css = read('web/layouts/ai-apps/layout.css'), P = 'html[data-shell="phone"][data-layout="ai-apps"]';
-  assert.ok(css.includes(P + ' .win.app-chats :is(.ch-newchat, .nc-classic) { display: none !important; }'), 'no greeting, no mark, no boxed hint');
+  const css = read('web/layouts/ai-apps/layout.css');
+  // the real layout.css on what the view drew and on a Chats window's New chat (a skeleton of Chats' markup)
+  w.html.setAttribute('data-shell', 'phone'); w.html.setAttribute('data-layout', 'ai-apps');
+  const chatsWin = node('div', 'win app-chats', w.device);
+  for (const cls of ['ch-newchat', 'nc-classic']) { const c = cascade(node('div', cls, chatsWin), css).display; assert.deepEqual([c?.value, c?.important], ['none', true], `no greeting, no mark, no boxed hint: .${cls}`); }
   assert.ok(!/\.nc-hi \{|\.nc-sub \{|\.nc-mark \{/.test(css), 'no greeting styles left');
-  assert.match(css, /\[data-ai-new\] \.aa-top \{ background: transparent !important;/, "Home lets the skin's background through");
+  const top = () => cascade(w.q('.aa-top'), css).background;
+  assert.deepEqual([top()?.value, top()?.important], ['transparent', true], "Home lets the skin's background through");
+  w.st.route = { home: false, view: 'thread', thread: 't9', desk: 1, app: 'chats' }; w.emit('route', w.st.route);
+  assert.notEqual(top()?.value, 'transparent', 'a thread keeps its top bar');
   assert.ok(!/:not\(\[data-ai-front="app"\]\) #device[^{]*#dock \{ opacity: 0/.test(css), 'the dock orb is no longer hidden over the chat');
   assert.ok(!/--aa-orb-room/.test(css + read('web/layouts/ai-apps/layout.js')), "round 6: no row of its own for the orb under the composer (it sits inside it)");
 });
@@ -573,17 +595,22 @@ test('round 4: the composer: no voice button of its own (the orb talks), the mic
   const c = w.fire('click', send, { detail: 1 }); assert.ok(!c.defaultPrevented);
   const js = noComments(read('web/layouts/ai-apps/layout.js'));
   assert.ok(!/new PointerEvent|api\.voice\.tap|Talk to /.test(js), 'no forwarding to the orb, no voice label on Send');
-  const css = read('web/layouts/ai-apps/layout.css'), P = 'html[data-shell="phone"][data-layout="ai-apps"]';
-  assert.ok(css.includes(P + ' .win.app-chats .ch-compose:not(.has-text) .ch-row2 > .ch-send { display: none !important; }'), 'the round Send is hidden with no words');
+  const css = read('web/layouts/ai-apps/layout.css');
+  // the real layout.css on the composer inside a Chats window (a skeleton of Chats' markup)
+  w.html.setAttribute('data-shell', 'phone'); w.html.setAttribute('data-layout', 'ai-apps');
+  const chatsWin = node('div', 'win app-chats', w.device), mic = node('button', 'ch-mic', row2); chatsWin.append(form);
+  const shown = n => { const c = cascade(n, css).display; return c?.value === 'none' && c.important ? 'hidden' : 'shown'; };
+  assert.equal(shown(send), 'hidden', 'the round Send is hidden with no words');
+  form.classList.add('has-text'); assert.equal(shown(send), 'shown', 'Send shows with words'); form.classList.remove('has-text');
   assert.ok(!/:not\(\.has-text\) \.ch-row2 > \.ch-send::before/.test(css), 'no voice-wave mark on an empty Send');
   // round 6 (Miguel): the orb replaces the microphone: the composer's mic gives way and the orb takes its slot; the orb
   // no longer steps aside while typing (it stays in the composer, Send to its right, like ChatGPT's mic + send)
-  assert.ok(css.includes(P + ' .win.app-chats .ch-row2 > .ch-mic { display: none !important; }'), 'the mic gives way to the orb');
+  assert.equal(shown(mic), 'hidden', 'the mic gives way to the orb');
   assert.ok(!/textarea:focus\) #device[^{]*#dock \{ opacity: 0/.test(css), 'the orb stays while typing');
 });
 
 test('core hooks: the phone adapter lists chats with Chats\' own actions and acts through Chats; the layout API passes only known actions', () => {
-  const app = read('web/app.js'), host = withSkinHostParts(read('web/core/skin-host.js'));
+  const app = read('web/app.js');
   const fn = app.match(/sessionList: (\(\) => window\.WizChatsListModel\.sessionList\([^\n]+\)),\n    sessionAct/)[1];
   const s = (id, extra = {}) => ({ id, title: id.toUpperCase(), status: 'completed', ...extra });
   const LIVE = { ok: true, workGroups: () => ({ working: [s('w')], ready: [s('r'), s('n')], archive: [s('a')] }), isNew: x => x.id === 'n', cardAt: () => '' };
@@ -598,11 +625,35 @@ test('core hooks: the phone adapter lists chats with Chats\' own actions and act
   const run = runWithChatsModel(`(${act})`, ctx);
   run('s1', 'pin'); run('s1', 'rename'); run('s1', 'done'); run('s1', 'unread');
   assert.deepEqual(calls, [['toast', 'Pinned'], ['rename', 'c1', 's1'], ['act', 'c1', 's1', 'done'], ['act', 'c1', 's1', 'unread']]);
-  assert.match(app, /showChats: \(\) => !!showChats\(\),\n    newChat: \(\) => \{ const w = showChats\(\); if \(!w\) return false; CHATS\.openChat\(w\.id, '__new__'\); return true; \},/);
-  assert.match(host, /const SESSION_ACTS = Object\.freeze\(\['snooze', 'done', 'unread', 'restore', 'pin', 'rename', 'move', 'markdone'\]\);/); // move: issue 1292, markdone: issue 1317
-  assert.match(host, /: SESSION_ACTS\.includes\(action\) \? !!shell\.sessionAct\?\.\(id, action\) : false,/);
-  assert.match(host, /chats: \(\) => live\(\) \? !!shell\.showChats\?\.\(\) : false,\n        newChat: \(\) => live\(\) \? !!shell\.newChat\?\.\(\) : false,/);
-  assert.match(host, /settings: page => \{ if \(live\(\)\) shell\.openSettings\?\.\(typeof page === 'string' && \/\^\[a-z-\]\{1,24\}\$\/\.test\(page\) \? page : undefined\); \},/);
+  // the adapter's showChats / newChat (app.js), run: the Chats window in front, a New chat in it only when there is one
+  const hooks = win => runRecording(`this.h = {\n${between(app, '    showChats: () => ', '\n    chatChannelPost:').replace(/\n\s*\/\/[^\n]*$/, '')}\n};`, { showChats: () => win });
+  const none = hooks(null), one = hooks({ id: 'c1' });
+  assert.equal(none.h.showChats(), false); assert.equal(none.h.newChat(), false); assert.deepEqual(none.calls, []);
+  assert.equal(one.h.showChats(), true); assert.equal(one.h.newChat(), true);
+  assert.deepEqual(JSON.parse(JSON.stringify(one.calls)), [['CHATS.openChat', 'c1', '__new__']], 'a New chat in the Chats window');
+});
+
+test('core hooks: the layout API passes only known session actions, chats / newChat while live, Settings by page id', async () => {
+  const f = fixture({ shell: 'desktop' }), acts = [], pages = []; let shown = 0, fresh = 0;
+  let api = null; f.host._test.setImporter(async () => ({ default: a => { api = a; return () => {}; } }));
+  Object.assign(f.adapter, { sessionAct: (id, a) => { acts.push([id, a]); return 1; }, showChats: () => ({ id: 'c' + ++shown }), newChat: () => ++fresh, openSettings: p => pages.push(p) });
+  f.host.setStandardLayout('ai-apps'); await settle();
+  assert.ok(api, 'the AI apps layout got its API');
+  const known = ['snooze', 'done', 'unread', 'restore', 'pin', 'rename', 'move', 'markdone'];   // move: issue 1292, markdone: issue 1317
+  for (const a of known) assert.equal(api.sessions.act('s1', a), true, a);
+  for (const a of ['stop_watch', 'delete', 'constructor', '']) assert.equal(api.sessions.act('s1', a), false, `${a}: never reaches the shell`);
+  assert.equal(api.sessions.act('', 'done'), false, 'a thread id is needed');
+  assert.deepEqual(acts, known.map(a => ['s1', a]), 'known actions only, through the shell adapter');
+  assert.equal(api.sessions.chats(), true); assert.equal(api.sessions.newChat(), true); assert.deepEqual([shown, fresh], [1, 1]);
+  api.desk.settings('connections'); api.desk.settings('Bad page!'); api.desk.settings(7); api.desk.settings();
+  assert.deepEqual(pages, ['connections', undefined, undefined, undefined], 'a page id, or Settings\' first page');
+  f.host.setStandardLayout('classic'); await settle();
+  assert.equal(api.sessions.chats(), false); assert.equal(api.sessions.newChat(), false); assert.equal(api.sessions.act('s1', 'done'), false, 'a disposed layout reaches nothing');
+  api.desk.settings('look'); assert.deepEqual([shown, fresh, acts.length, pages.length], [1, 1, known.length, 4]);
+});
+
+test('core hooks: the workspaces this Wizard first, then the managed ones', () => {
+  const host = withSkinHostParts(read('web/core/skin-host.js'));
   // workspaces: this Wizard first, then the managed ones from the devices registry
   const ws = host.match(/list: \(\) => \{\n          if \(!live\(\) \|\| !isDoc\) return \[\];([\s\S]*?)\n        \},\n        refresh/)[1];
   const list = runWithChatsModel(`(() => {${ws}})()`, { window: { WosResources: { state: { devices: { this: { wizard: 'Miguel' }, managed: [{ id: 'g', name: 'Carlos', org: 'Acme' }, null] } } }, WizConfig: { agent: () => 'Oscar', owner: () => 'Miguel' } } });
@@ -639,7 +690,9 @@ test('round 2 shapes: rounded like the native apps (measured), icon-only drawer 
   assert.equal(cascade(card, css)['border-radius']?.value, '28px 28px 0 0', 'sheets');
   // the shared app sheet (layouts/apps/chrome.css) matches
   const chrome = read('web/layouts/apps/chrome.css');
-  assert.match(chrome, /max-height: 88%; border-radius: 28px 28px 0 0;/, 'the shared app sheet matches');
+  w.q('.ah-plus').dispatchEvent(new FakePointerEvent('click'));
+  const vc = cascade(w.q('.vc-sheet .vc-card'), chrome);
+  assert.deepEqual(['max-height', 'border-radius'].map(k => vc[k]?.value), ['88%', '28px 28px 0 0'], 'the shared app sheet (the view\'s + picker) matches');
 });
 
 /* A swipe from the left of a chat is the drawer's alone (Miguel, 2 Nov 2026): it used to also run the thread swipe-back
@@ -735,21 +788,30 @@ test('round 5: home button in the middle, the switcher on Home only, the Ready c
   w.st.route = { home: false, view: 'desk', thread: null, desk: 3, app: 'music' }; w.emit('route', w.st.route);
   assert.equal(w.q('.aa-sheet'), null, 'an app: its sheet closes');
   w.q('.aa-home').dispatchEvent(new FakePointerEvent('click')); assert.equal(w.st.newChats, 1, 'the home button: Home');
-  const css = read('web/layouts/ai-apps/layout.css'), P = 'html[data-shell="phone"][data-layout="ai-apps"]';
-  assert.ok(css.includes(P + ' #dock :is(#orbBadge, #moons) { display: none !important; }'), 'no count and no moons on the orb');
-  assert.match(css, /\.aa-tb \{\s*position: relative; width: 48px; height: 48px;/, 'the home button is a 48 px target (>= 44)');
-  assert.match(css, /\.aa-count \{[^}]*background: var\(--amber, var\(--aa-ink\)\);/, 'the Ready count in Chats\' amber');
+  const css = read('web/layouts/ai-apps/layout.css');
+  // the real layout.css on what the view drew and on the shell's dock orb (#dock > #orbBadge, #moons)
+  w.html.setAttribute('data-shell', 'phone'); w.html.setAttribute('data-layout', 'ai-apps');
+  const dockN = node('div', '', w.device); dockN.id = 'dock';
+  for (const id of ['orbBadge', 'moons']) { const n = node('span', '', dockN); n.id = id; const d = cascade(n, css).display; assert.deepEqual([d?.value, d?.important], ['none', true], `no count and no moons on the orb: #${id}`); }
+  const home = cascade(w.q('.aa-home'), css);
+  assert.deepEqual(['position', 'width', 'height'].map(k => home[k]?.value), ['relative', '48px', '48px'], 'the home button is a 48 px target (>= 44)');
+  assert.equal(cascade(w.q('.aa-menu .aa-count'), css).background?.value, 'var(--amber, var(--aa-ink))', 'the Ready count in Chats\' amber');
   assert.ok(!/\.aa-viewall|\.aa-dot \{|\.aa-mid \{/.test(css), 'View all, the bare dot and the name are gone');
   // the dock orb's swipe up: a New chat with the cursor in its composer, focused within the swipe (the keyboard comes up)
   const app = read('web/app.js'), host = withSkinHostParts(read('web/core/skin-host.js'));
-  const fn = app.match(/function orbSwipeNew\(\) \{[\s\S]*?\n  \}/)[0];
-  assert.match(fn, /const w = showChats\(\); if \(!w\) return;\n    CHATS\.openChat\(w\.id, '__new__'\);/);
-  assert.match(fn, /winEl\(w\.id\)\?\.querySelector\('\.ch-compose textarea'\)/); assert.match(fn, /ta\.focus\(\{ preventScroll: true \}\)/);
-  assert.match(host, /const ORB_SWIPE_ACTS = \{ up: \['home', 'new'\], side: \[\], down: \[\] \};/);
-  const calls = []; const focused = []; const ta = { value: 'hi', focus: o => focused.push(o), setSelectionRange: (a, b) => calls.push([a, b]) };
-  const w0 = { id: 'c1' }; const ctx = { sheet: null, closeSheets() {}, pillOvOpen: () => false, closeOverview() {}, showChats: () => w0, CHATS: { openChat: (id, t) => calls.push([id, t]) }, winEl: id => ({ querySelector: () => (id === 'c1' ? ta : null) }) };
-  runWithChatsModel(fn + '; orbSwipeNew();', ctx);
-  assert.deepEqual(calls, [['c1', '__new__'], [2, 2]]); assert.equal(JSON.stringify(focused), '[{"preventScroll":true}]');
+  const fn = block(app, '  function orbSwipeNew() {');
+  const swipeNew = win => {
+    const calls = [], focused = [], ta = { value: 'hi', focus: o => focused.push(o), setSelectionRange: (a, b) => calls.push([a, b]) };
+    const ctx = { sheet: null, closeSheets() {}, pillOvOpen: () => false, closeOverview() {}, showChats: () => win, CHATS: { openChat: (id, t) => calls.push([id, t]) }, winEl: id => ({ querySelector: q => (id === 'c1' && q === '.ch-compose textarea' ? ta : null) }) };
+    runWithChatsModel(fn + '; orbSwipeNew();', ctx); return { calls, focused: JSON.stringify(focused) };
+  };
+  assert.deepEqual(swipeNew({ id: 'c1' }), { calls: [['c1', '__new__'], [2, 2]], focused: '[{"preventScroll":true}]' }, 'a New chat, the cursor at the end of its composer');
+  assert.deepEqual(swipeNew(null), { calls: [], focused: '[]' }, 'no Chats window: nothing');
+  // the host's swipe map (api.phone.swipes): up may be Home or a New chat, the rest only the stock swipe or nothing
+  const swipeMap = m => JSON.parse(JSON.stringify(runRecording(`${between(host, '  const ORB_SWIPE_ACTS = ', ';\n')};\n${block(host, '  function orbSwipeMap(map) {')}\nthis.map = orbSwipeMap;`, {}).map(m)));
+  assert.deepEqual(swipeMap({ up: 'new', side: null, down: null }), { up: 'new', side: null, down: null }, 'the view\'s own map');
+  assert.deepEqual(swipeMap({ up: 'home', side: 'home', down: 'new' }), { up: 'home', side: null, down: null }, 'only up may go somewhere');
+  assert.deepEqual(swipeMap({ up: 'launch', side: 'stock' }), { up: null }, 'an unknown action is nothing; stock is left to the dock');
 });
 
 test('round 5 + 7 desktop: no home button in the top row (round 7), the switcher on Home only, the sections, the count on ◫', async () => {
@@ -784,12 +846,26 @@ test('round 5: notifications in the list: Chats\' own items as plain rows with a
     assert.deepEqual(w.st.acts.at(-1), ['notif:n1', 'done']);
     w.q('.aa-chat[data-sid="notif:n2"]').dispatchEvent(new FakePointerEvent('click')); assert.equal(w.st.opened.at(-1), 'thread:notif:n2', 'a tap opens it');
   } finally { Date.now = realNow; }
-  const css = read('web/layouts/ai-apps/layout.css') + read('web/layouts/ai-apps/desktop.css');
-  assert.match(css, /\.aa-bell \{[^}]*color: var\(--aa-ink-2\);/); assert.match(css, /\.aad-bell \{[^}]*color: var\(--aad-ink-2\);/);
+  const phoneCss = read('web/layouts/ai-apps/layout.css'), css = phoneCss + read('web/layouts/ai-apps/desktop.css');
   assert.ok(!/\.aad?-bell[^{]*\{[^}]*(yellow|background)/.test(css), 'no card');
-  // round 20 item 6 (Miguel): a notification row stands out, subtly: an amber bell and an amber unread dot, nothing else
-  assert.match(css, /\.aa-row\[data-note\] \.aa-bell \{ color: var\(--amber/); assert.match(css, /\.aad-rw\[data-note\] \.aad-bell \{ color: var\(--amber/);
-  assert.match(css, /\.aad-rw\[data-note\] \.aad-st\.is-new \{ background: var\(--amber/); assert.match(css, /\.aad-fly-i\[data-note\] \.aad-bell \{[^}]*var\(--amber/);
+  // round 20 item 6 (Miguel): a notification row stands out, subtly: an amber bell and an amber unread dot, nothing else;
+  // the real layout.css / desktop.css on the rows the real views drew
+  const AMBER = 'var(--amber, var(--wz-warning))';
+  w.html.setAttribute('data-shell', 'phone'); w.html.setAttribute('data-layout', 'ai-apps');
+  const bell = w.q('.aa-chat[data-sid="notif:n2"] .aa-bell');
+  assert.equal(cascade(bell, phoneCss).color?.value, AMBER, 'phone: an amber bell');
+  delete bell.parentNode.dataset.note; assert.equal(cascade(bell, phoneCss).color?.value, 'var(--aa-ink-2)', 'phone: the bell itself in the quiet ink');
+  const { w: d } = deskWorld();
+  d.st.sessions.ready.unshift({ id: 'notif:n1', title: 'Card payment due', kind: 'ready', note: true, app: 'money', unread: true, snoozed: false, pinned: false, actions: ['snooze', 'done'] });
+  d.html.setAttribute('data-shell', 'desktop'); d.html.setAttribute('data-layout', 'ai-apps');
+  (await layout()).default(d.api);
+  const drow = d.q('.aad-rw[data-sid="notif:n1"]'), dst = k => cascade(drow.querySelector(k), DESK_CSS);
+  assert.equal(dst('.aad-bell').color?.value, AMBER, 'desktop: an amber bell'); assert.equal(dst('.aad-st.is-new').background?.value, AMBER, 'and an amber unread dot');
+  assert.equal(cascade(d.q('.aad-rw[data-sid="r1"] .aad-st.is-new'), DESK_CSS).background?.value, 'var(--wz-accent, var(--aad-ink))', 'a chat\'s dot stays the accent');
+  delete drow.dataset.note; assert.equal(dst('.aad-bell').color?.value, 'var(--aad-ink-2)', 'desktop: the bell itself in the quiet ink');
+  d.q('.aad-tog').dispatchEvent(new FakePointerEvent('click')); d.st.timers.length = 0;
+  d.q('.aad-rk[data-k="ready"]').dispatchEvent(new FakePointerEvent('pointerenter')); d.st.timers.find(h => h.ms === 300).fn();
+  assert.equal(cascade(d.q('.aad-fly-i[data-sid="notif:n1"] .aad-bell'), DESK_CSS).color?.value, AMBER, 'the rail\'s flyout: the amber bell too');
   // the shell side: sessions.list() adds the inbox's items (while a package lists them), open / act go to its handler
   const host = withSkinHostParts(read('web/core/skin-host.js'));
   const src = host.match(/  const NOTE_ID = [\s\S]*?\n  function inboxAct\(action, id\) \{[^\n]*\n/)[0];
@@ -810,9 +886,16 @@ test('round 5: notifications in the list: Chats\' own items as plain rows with a
   assert.ok(folded.some(r => r.id === 'notif:a' && r.count === 1), 'priority 4 keeps its own row');
   runWithChatsModel('globalThis.noteAct = noteAct;', ctx); ctx.noteAct('notif:m2', 'done');
   assert.deepEqual(marks.at(-1), [['m2', 'm3', 'm1'], { read: true, archived: true }]);
-  assert.match(host, /open: id => \{ if \(!live\(\) \|\| typeof id !== 'string' \|\| !id\) return; if \(id\.startsWith\(NOTE_ID\)\) inboxAct\(NOTE_ID_OPEN, id\.slice\(NOTE_ID\.length\)\); else shell\.openThread\(id\); \},/);
-  assert.match(host, /: id\.startsWith\(NOTE_ID\) \? NOTE_ACTS\.includes\(action\) && noteAct\(id, action\)/);
-  assert.match(read('web/layouts/ai-apps/layout.css'), /\.ch-notif-route \.wos-route button\[aria-checked="true"\] \{ background: var\(--wz-accent\) !important; color: var\(--wz-base\) !important; \}/, 'the picked place stays readable in the phone action row');
+  // the layout API's sessions.open / act, run: a notification row goes to the inbox's handler, a chat to the shell
+  const sess = runRecording(`${between(host, '  const NOTE_ID = ', ';\n')};\nthis.s = {\n${between(block(host, '  function shellApi(a, base) {'), '        open: id => {', '\n        openList:')}\n};`,
+    { live: () => true, SESSION_ACTS: ['done'], noteAct: (...a) => { sess.calls.push(['noteAct', ...a]); return true; }, calls: [] });
+  sess.s.open('notif:n7'); sess.s.open('t3'); sess.s.open(''); assert.equal(sess.s.act('notif:n7', 'done'), true); assert.equal(sess.s.act('notif:n7', 'rename'), false);
+  assert.deepEqual(JSON.parse(JSON.stringify(sess.calls)), [['inboxAct', 'open', 'n7'], ['shell.openThread', 't3'], ['noteAct', 'notif:n7', 'done']], 'open: the inbox\'s own open; act: only the inbox\'s actions');
+  // the picked place stays readable in the phone action row (the real layout.css on a skeleton of Chats' notification thread)
+  const route = ['div win app-chats', 'div ch-notif-thread', 'div ch-tacts', 'div ch-notif-route', 'div wos-route', 'button'].reduce((p, t) => node(t.split(' ')[0], t.split(' ').slice(1).join(' '), p), w.device);
+  route.setAttribute('aria-checked', 'true');
+  const picked = cascade(route, phoneCss);
+  assert.deepEqual(['background', 'color'].map(k => [picked[k]?.value, picked[k]?.important]), [['var(--wz-accent)', true], ['var(--wz-base)', true]], 'the picked place stays readable in the phone action row');
   ctx.inboxThreads.get('wizard/unified-inbox').list = false;
   assert.deepEqual(JSON.parse(JSON.stringify(ctx.withNoteRows([]))), [], 'none while no package lists the inbox in Chats');
 });
