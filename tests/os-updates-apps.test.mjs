@@ -3,6 +3,8 @@
 // the Store's installed list (the same Runtipi list wizard-app-manager's app updater compares). No switch: always shown.
 // Run: node --test tests/os-updates-apps.test.mjs
 import test from 'node:test';
+import { createDocument } from './fixtures/mini-dom.mjs';
+import { cascade } from './fixtures/mini-css.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
@@ -95,11 +97,15 @@ test('the switch is gone: no catalog entry, no package, the list shows with noth
   assert.ok(!JSON.stringify(cat).includes('app-updates-list'));
   assert.throws(() => read('web/tweaks/wizard/app-updates-list/manifest.json'));
   assert.doesNotMatch(src, /app-updates-list'|appsOn/);
-  assert.match(read('web/core/settings.css'), /^\[data-osu-apps\] \.osu-app-acts \{/m, 'the Apps styles live in Settings, unscoped');
   const { U, calls } = await load();
   U.html(); await tick(); await tick();
   assert.equal(calls.filter(u => u.endsWith('/apps/installed')).length, 1);
   assert.match(U.html(), /data-osu-app="wizard-messenger"/);
+  // the Apps styles live in Settings, unscoped: the list as drawn, on a page with no tweaks, gets its row actions laid out
+  const doc = createDocument(); doc.body.innerHTML = U.html();
+  const ready = doc.body.querySelector('[data-osu-apps] [data-osu-app="wizard-messenger"] .st-val');
+  assert.ok(ready, 'Messenger shows its new version');
+  assert.equal(cascade(ready, read('web/core/settings.css'))['font-weight']?.value, '600', 'styled by settings.css with nothing in data-tweaks');
 });
 
 // Slice 2: the App Manager's own app-update state (wizard-app-manager `_app-updates`).
