@@ -346,7 +346,8 @@
     const channel = ch ? `<div class="osu-sec"><span class="osu-lbl">Channel</span>${seg('Release channel', [['ch-latest', CHANNEL_NAME.latest, ch === 'latest'], ['ch-stable', CHANNEL_NAME.stable, ch === 'stable']])}<p class="st-hint">${ch === 'stable' ? 'Releases testers have used for about 3 days.' : `Every new release as soon as it’s out. Try new features in Appearance.`}</p></div>` : '';
     // Automatic / Ask me (wizard-app-manager#483). The 0.3.107 App Manager (always_auto) would not keep Ask me: no choice there.
     const choice = st.always_auto === true ? '' : seg('Updates', [['auto', 'Automatic', auto], ['ask', 'Ask me', !auto]]);
-    const install = `<div class="osu-sec" data-osu-auto><span class="osu-lbl">Updates</span>${choice}<p class="st-hint">${mac() ? (auto ? 'Install by themselves at night (1–5 am), after a 5-minute heads-up you can stop. Never during a chat.' : 'Nothing installs until you tap Update now. You’ll see when an update is ready.') : auto ? 'Install by themselves overnight, never during a chat.' : 'Nothing installs until you tap Install.'}</p></div>`;
+    // Mac + Automatic: For testers installs at any hour once Wizard is free (try-wizard OSUpdates.swift), For everyone at night.
+    const install = `<div class="osu-sec" data-osu-auto><span class="osu-lbl">Updates</span>${choice}<p class="st-hint">${mac() ? (auto ? `Install by themselves ${st.channel === 'latest' ? 'as soon as Wizard is free' : 'at night (1–5 am)'}, after a 5-minute heads-up you can stop. Never during a chat.` : 'Nothing installs until you tap Update now. You’ll see when an update is ready.') : auto ? 'Install by themselves overnight, never during a chat.' : 'Nothing installs until you tap Install.'}</p></div>`;
     return `<div class="st-group" data-osu-group>${cardHtml()}${quietHead()}${install}${channel}${appsHtml()}</div>`;
   }
   function pick(chan, ctx) {
