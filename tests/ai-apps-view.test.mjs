@@ -140,7 +140,7 @@ test('desktop: a sidebar (open apps, All apps, the Archive / Working / Ready sec
   assert.deepEqual(w.qa('.vc-pick .vc-app[data-app]').map(b => b.dataset.app), ['mail', 'music', 'money', 'notes', 'maps', 'movies'], 'desktop app search includes installed, open and pinned apps');
   assert.equal(w.q('.vc-pick .vc-fold'), null, 'no Already open row');
   assert.ok(w.q('.vc-pick .vc-more'), '+ Get more last');
-  assert.deepEqual(w.qa('.aad-sec').map(h => `${h.dataset.sec}:${h.getAttribute('aria-expanded')}`), ['working:false', 'ready:true', 'recent:true', 'snoozed:false', 'archive:false'], 'Activity (Channels on for everyone, issue 1258): Working, Ready, Recent, then Snoozed and Archived folded at the bottom');
+  assert.deepEqual(w.qa('.aad-sec').map(h => `${h.dataset.sec}:${h.getAttribute('aria-expanded')}`), ['working:false', 'ready:true', 'archive:false'], 'Activity (Channels on for everyone, issue 1258): Working, Ready, Recent, then Snoozed and Archived folded at the bottom; an empty one (here Recent and Snoozed) is not drawn (issue 1731)');
   assert.deepEqual(w.qa('.aad-rw').map(r => `${r.dataset.sid}:${r.dataset.kind}`), ['r1:ready', 'r2:ready']);
   assert.equal(w.q('.aad-viewall'), null, 'no View all: the sidebar is the chat list');
   w.q('.aad-sec[data-sec="working"]').dispatchEvent(new FakePointerEvent('click'));
@@ -1800,7 +1800,7 @@ test('round 13: Snoozed from the stock snooze state, with and without the snooze
   const { w, store } = deskWorld();
   w.st.sessions.snoozed = [{ id: 'z1', title: 'Later one', kind: 'snoozed', unread: false, pinned: false, actions: ['restore', 'done'] }, { id: 'z2', title: 'Later two', kind: 'snoozed', unread: false, pinned: false, actions: ['restore'] }];
   (await layout()).default(w.api);
-  assert.deepEqual(w.qa('.aad-sec').map(h => `${h.dataset.sec}:${h.getAttribute('aria-expanded')}`), ['working:false', 'ready:true', 'recent:true', 'snoozed:false', 'archive:false'], 'Activity (issue 1258): Working, Ready, Recent, then Snoozed and Archived folded at the bottom');
+  assert.deepEqual(w.qa('.aad-sec').map(h => `${h.dataset.sec}:${h.getAttribute('aria-expanded')}`), ['working:false', 'ready:true', 'snoozed:false', 'archive:false'], 'Activity (issue 1258): Working, Ready, Recent, then Snoozed and Archived folded at the bottom; an empty Recent is not drawn (issue 1731)');
   assert.equal(w.q('.aad-sec[data-sec="snoozed"] .aad-sec-w').textContent, 'Snoozed');
   assert.equal(w.q('.aad-sec[data-sec="snoozed"] .aad-sec-m').textContent, '2', 'its count when folded');
   w.q('.aad-sec[data-sec="snoozed"]').dispatchEvent(new FakePointerEvent('click'));
