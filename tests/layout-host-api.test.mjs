@@ -215,7 +215,8 @@ test('no desks: while a layout holds the panel everything opens in panels over H
   assert.match(anim(right), /^panel-in /); assert.equal(anim(el(list.id)), 'panel-in-left');
   const col = Q.stage.ownerDocument.createElement('div'); col.className = 'win panel'; col.dataset.side = 'beside'; layer.appendChild(col); assert.equal(anim(col), 'panel-in-beside');
   assert.match(cascade(right, css, { media: m => /prefers-reduced-motion: reduce/.test(m) }).animation.value, /^none/);
-  const kf = name => { const i = css.indexOf(`@keyframes ${name} {`); assert.ok(i >= 0, name); return parseCss(css.slice(css.indexOf('{', i) + 1, css.indexOf('}', css.indexOf('}', i) + 1) + 1)).find(r => r.selector === 'from').decls.transform.value; };
+  // the keyframes the cascade picked above, read from the parsed sheet (a missing one has no 'from' transform)
+  const kf = name => { const i = css.indexOf(`@keyframes ${name} {`); return i < 0 ? null : parseCss(css.slice(css.indexOf('{', i) + 1, css.indexOf('}', css.indexOf('}', i) + 1) + 1)).find(r => r.selector === 'from')?.decls.transform.value ?? null; };
   assert.equal(kf('panel-in'), 'translateX(calc(100% + 24px))'); assert.equal(kf('panel-in-left'), 'translateX(calc(-100% - 24px))'); assert.equal(kf('panel-in-beside'), 'translateX(-100%)');
 });
 
@@ -234,8 +235,9 @@ test('apps.logo: the same installed logo the Desks view shows (WizCore.appLogo),
 });
 
 test('a trusted tweak may switch only its own author\'s tweaks, through the device tweak mix (api.settings.toggleTweak)', async () => {
-  assert.equal(JSON.parse(read('web/tweaks/miguel/ai-apps/manifest.json')).name, 'Different shell view - AI apps');
-  assert.equal(JSON.parse(read('web/tweaks/miguel/ai-apps/manifest.json')).view, 'AI apps', 'a shell view');
+  const aiMan = JSON.parse(read('web/tweaks/miguel/ai-apps/manifest.json'));   // data, not source
+  assert.equal(aiMan.name, 'Different shell view - AI apps');
+  assert.equal(aiMan.view, 'AI apps', 'a shell view');
   // a package with the settings capability (the ai-apps view itself asks only for its layout)
   const manifests = { 'miguel/probe': { id: 'miguel/probe', name: 'Probe', version: '1.0.0', author: 'miguel', apiVersion: 1, capabilities: ['settings'], shells: ['desktop', 'phone'] } };
   const load = async teamAuthors => {
@@ -265,7 +267,8 @@ test('bar-center: a core slot in the middle of the desktop bar; the clock steps 
   const doc = createDocument(); doc.body.innerHTML = html.slice(html.indexOf('<body'), html.lastIndexOf('</body>')).replace(/^<body[^>]*>/, '');
   const slot = doc.querySelector('.bar-c > .bar-center[data-slot="bar-center"]'), clock = doc.querySelector('.bar-c > #clock');
   assert.ok(slot && clock, 'the slot and the clock share the middle of the bar'); assert.equal(slot.nextElementSibling, clock, 'the clock right after it');
-  assert.ok(JSON.parse(read('web/core/slots.json')).slots['bar-center'], 'in the slot contract');
+  const slots = JSON.parse(read('web/core/slots.json'));   // data, not source
+  assert.ok(slots.slots['bar-center'], 'in the slot contract');
   const shown = el => cascade(el, css).display?.value || '';
   assert.equal(shown(slot), 'none', 'empty: no gap in the bar'); assert.notEqual(shown(clock), 'none', 'the clock shows');
   slot.appendChild(doc.createElement('span'));
