@@ -18,13 +18,14 @@ import vm from 'node:vm';
 import { cascade, parseCss } from './fixtures/mini-css.mjs';
 import { createDocument } from './fixtures/mini-dom.mjs';
 import { layoutApi } from './fixtures/q1-layout-host.mjs';
-import { desktopBoot } from './fixtures/q1-desktop-boot.mjs';
+import { desktopBoot, desktopPart } from './fixtures/q1-desktop-boot.mjs';
 import { keysGuide } from './fixtures/keys-guide-harness.mjs';
 import { resolveVars, px } from './fixtures/r7A-css.mjs';
 import { fixture } from './fixtures/tweaks.mjs';
 import { withSkinHostParts } from './fixtures/skin-host-parts.mjs';
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 import { withShellParts } from './fixtures/shell-parts.mjs';
+import { withDesktopParts } from './fixtures/desktop-parts.mjs';
 import { withWebParts } from './fixtures/web-parts.mjs';
 import { between, block, runRecording } from './fixtures/source-slice.mjs';
 
@@ -614,8 +615,8 @@ test('round 4: the composer: no voice button of its own (the orb talks), the mic
 });
 
 test('core hooks: the phone adapter lists chats with Chats\' own actions and acts through Chats; the layout API passes only known actions', () => {
-  const app = read('web/app.js');
-  const fn = app.match(/sessionList: (\(\) => window\.WizChatsListModel\.sessionList\([^\n]+\)),\n    sessionAct/)[1];
+  const appJs = read('web/app.js');
+  const fn = appJs.match(/sessionList: (\(\) => window\.WizChatsListModel\.sessionList\([^\n]+\)),\n    sessionAct/)[1];
   const s = (id, extra = {}) => ({ id, title: id.toUpperCase(), status: 'completed', ...extra });
   const LIVE = { ok: true, workGroups: () => ({ working: [s('w')], ready: [s('r'), s('n')], archive: [s('a')] }), isNew: x => x.id === 'n', cardAt: () => '' };
   const CHATS = { threadActions: x => x.id === 'w' ? [] : x.id === 'a' ? ['restore', 'snooze'] : ['snooze', 'stop_watch', 'done'] };
@@ -623,14 +624,14 @@ test('core hooks: the phone adapter lists chats with Chats\' own actions and act
   assert.deepEqual(JSON.parse(JSON.stringify(out.working[0].actions)), ['pin', 'rename']);
   assert.deepEqual(JSON.parse(JSON.stringify(out.ready.map(r => [r.id, r.pinned, r.unread, r.actions]))), [['r', true, false, ['pin', 'rename', 'unread', 'snooze', 'done']], ['n', false, true, ['pin', 'rename', 'snooze', 'done']]]);
   assert.deepEqual(JSON.parse(JSON.stringify(out.archive[0].actions)), ['pin', 'rename', 'restore', 'snooze']);
-  const act = app.match(/sessionAct: (\(sid, act\) => \{[\s\S]*?\n    \}),\n    showChats/)[1];
+  const act = appJs.match(/sessionAct: (\(sid, act\) => \{[\s\S]*?\n    \}),\n    showChats/)[1];
   const calls = [], ctx = { window: { WosChatPins: { toggle: () => true } }, toast: (...a) => calls.push(['toast', a[1]]), showChats: () => ({ id: 'c1' }),
     CHATS: { openRenameSheet: (w, id) => calls.push(['rename', w, id]), threadAct: (w, id, a) => calls.push(['act', w, id, a]) } };
   const run = runWithChatsModel(`(${act})`, ctx);
   run('s1', 'pin'); run('s1', 'rename'); run('s1', 'done'); run('s1', 'unread');
   assert.deepEqual(calls, [['toast', 'Pinned'], ['rename', 'c1', 's1'], ['act', 'c1', 's1', 'done'], ['act', 'c1', 's1', 'unread']]);
   // the adapter's showChats / newChat (app.js), run: the Chats window in front, a New chat in it only when there is one
-  const hooks = win => runRecording(`this.h = {\n${between(app, '    showChats: () => ', '\n    chatChannelPost:').replace(/\n\s*\/\/[^\n]*$/, '')}\n};`, { showChats: () => win });
+  const hooks = win => runRecording(`this.h = {\n${between(appJs, '    showChats: () => ', '\n    chatChannelPost:').replace(/\n\s*\/\/[^\n]*$/, '')}\n};`, { showChats: () => win });
   const none = hooks(null), one = hooks({ id: 'c1' });
   assert.equal(none.h.showChats(), false); assert.equal(none.h.newChat(), false); assert.deepEqual(none.calls, []);
   assert.equal(one.h.showChats(), true); assert.equal(one.h.newChat(), true);
@@ -802,8 +803,8 @@ test('round 5: home button in the middle, the switcher on Home only, the Ready c
   assert.equal(cascade(w.q('.aa-menu .aa-count'), css).background?.value, 'var(--amber, var(--aa-ink))', 'the Ready count in Chats\' amber');
   assert.ok(!/\.aa-viewall|\.aa-dot \{|\.aa-mid \{/.test(css), 'View all, the bare dot and the name are gone');
   // the dock orb's swipe up: a New chat with the cursor in its composer, focused within the swipe (the keyboard comes up)
-  const app = read('web/app.js'), host = withSkinHostParts(read('web/core/skin-host.js'));
-  const fn = block(app, '  function orbSwipeNew() {');
+  const appJs = read('web/app.js'), host = withSkinHostParts(read('web/core/skin-host.js'));
+  const fn = block(appJs, '  function orbSwipeNew() {');
   const swipeNew = win => {
     const calls = [], focused = [], ta = { value: 'hi', focus: o => focused.push(o), setSelectionRange: (a, b) => calls.push([a, b]) };
     const ctx = { sheet: null, closeSheets() {}, pillOvOpen: () => false, closeOverview() {}, showChats: () => win, CHATS: { openChat: (id, t) => calls.push([id, t]) }, winEl: id => ({ querySelector: q => (id === 'c1' && q === '.ch-compose textarea' ? ta : null) }) };
@@ -2770,9 +2771,14 @@ test('a reload with an app in front: the thread the Chats desk holds docks besid
   (await layout()).default(fresh.api); fresh.emit('route', fresh.st.route); fresh.run();
   assert.equal(fresh.html.dataset.aadChat, undefined); assert.equal(fresh.html.dataset.aadSplit, 'on');
   // the desktop counts the windows of a desk a layout shows beside the current one as visible (Chats' one on-screen check)
-  const dj = noComments(read('web/desktop/desktop.js'));
-  assert.match(dj, /const shownBeside = \(\) => \{[^\n]*H0\.routeShows\(i\)[^\n]*\};/);
-  assert.match(dj, /visible: \(\) => \[\.\.\.\(homeOpen \? \[\] : ws\[cur\]\.wins\),[^\n]*\.\.\.\(homeOpen \? \[\] : shownBeside\(\)\)\],/);
+  // (run: desktop.js's shownBeside and the Chats host's visible() in desktop-sideview.js)
+  const ws = [{ wins: ['c1'] }, { wins: ['m1', 'm2'] }, { wins: [] }, { wins: ['x1'] }], shows = new Set([0, 1, 2]);
+  const beside = runRecording(block(withDesktopParts(read('web/desktop/desktop.js')), '    const shownBeside = () =>') + '\nthis.f = shownBeside;', { ws, cur: 1, WosSkinHost: { routeShows: i => shows.has(i) } }).f;
+  assert.deepEqual([...beside()], ['c1'], 'the windows of the desks a layout shows beside the current one (not the current, not empty desks)');
+  const vars = { homeOpen: false, ws, cur: 1, hud: null };
+  const { chatsHost } = desktopPart('sideview', { desktopVars: vars, shownBeside: () => ['c1'], panelWins: () => [] });
+  assert.deepEqual([...chatsHost.visible()], ['m1', 'm2', 'c1'], 'Chats counts them as on screen');
+  vars.homeOpen = true; assert.deepEqual([...chatsHost.visible()], [], 'nothing at Home');
 });
 
 /* James, 12 Nov 2026: the sidebar stays open down to 680 px. A chat docked beside an app panel keeps the old 900 px
@@ -2824,10 +2830,15 @@ test('after a reply in the docked chat, the app panel beside it stays clickable:
   console.log('QA second', JSON.stringify({ gone: w.st.gone.slice(g1), news: w.st.newChats - n1, role: appDesk.dataset.aadRole, split: w.html.dataset.aadSplit }));
   assert.ok(!w.st.gone.slice(g1).includes(4), 'the tab in front again: hidden (never re-opened)');
   // the panel's iframe is a pointer target while its desk is [hidden] to the shell and its window unfocused
-  const css = noComments(read('web/layouts/ai-apps/desktop.css')), P = 'html[data-shell="desktop"][data-layout="ai-apps"]';
-  assert.ok(css.includes(`${P} #stage > .wsp[data-aad-role]:not([data-aad-omitted]) > .win:not(.gone):not(.drag) .wbody iframe { pointer-events: auto; }`), 'a role pane\'s iframe takes the click');
-  assert.ok(css.indexOf('.wsp[data-aad-role]:not([data-aad-omitted]) > .win:not(.gone):not(.drag) .wbody iframe') < css.indexOf('[data-aad-resizing] iframe { pointer-events: none !important; }'), 'the resize guard still wins');
-  assert.match(read('web/desktop/desktop.css'), /\.win:not\(\.focus\) \.wbody iframe \{ pointer-events: none; \}/, 'the Classic rule this overrides (no !important)');
+  // (desktop.css of the shell, then the view's, cascaded on an unfocused window in the panel's desk)
+  w.html.setAttribute('data-shell', 'desktop'); w.html.setAttribute('data-layout', 'ai-apps');
+  w.st.route = { home: false, view: 'desk', thread: null, desk: 4 }; w.emit('route', w.st.route); w.run(); assert.equal(appDesk.dataset.aadRole, 'app');
+  const pwin = new El('div'); pwin.className = 'win'; const pbody = new El('div'); pbody.className = 'wbody'; const pf = new El('iframe'); pbody.append(pf); pwin.append(pbody); appDesk.append(pwin);
+  const shellCss = read('web/desktop/desktop.css'), both = [shellCss, read('web/layouts/ai-apps/desktop.css')].join('\n');
+  const pe = sheets => cascade(pf, sheets)['pointer-events'];
+  assert.equal(pe(shellCss)?.value, 'none', 'the Classic rule: an unfocused window\'s frame takes no click');
+  assert.deepEqual([pe(both)?.value, !!pe(both)?.important], ['auto', false], 'a role pane\'s iframe takes the click (no !important)');
+  w.html.dataset.aadResizing = 'app'; assert.equal(pe(both)?.value, 'none', 'the resize guard still wins'); delete w.html.dataset.aadResizing;
 });
 
 test('round 21 phone: an app (or its link) opens full screen on its own desk, taken to the page; an app\'s Reply opens the chat and Back returns to the app; other links stay stock', async () => {
@@ -2950,9 +2961,15 @@ test('AI apps view phone: Now playing = the same small bars on the playing app\'
   tell([{ key: 'k2', appId: 'notes', playing: false }]); assert.equal(w.qa('.ah-np').length, 0, 'paused before it was seen: nothing');
   tell([{ key: 'k2', appId: 'notes', playing: true }]);
   assert.ok(w.q('.ah-grid .ah-app[data-app="notes"] .ah-ic .ah-np'), 'an open app in the grid wears them too');
-  const home = read('web/layouts/ai-apps/home.js');
-  assert.match(home, /if \(layers\) api\.media\?\.watch\?\.\(list => \{[\s\S]*?\}, \{ passive: true \}\);/, 'the phone Home only (the desktop Home grid has no layers)');
-  assert.match(home, /if \(e\.button > 0 \|\| npAt\(e\)\) return;/); assert.match(home, /if \(Date\.now\(\) < swallow \|\| npAt\(e\)\)/);
+  // (run) a press on the bars never lifts the icon, nor a right button on it; the desktop Home never watches media
+  const np2 = w.q('.ah-grid .ah-app[data-app="notes"] .ah-np'), holdN = () => w.st.timers.filter(t => t.ms === 450 && !t.dead).length, h0 = holdN();
+  np2.dispatchEvent(new FakePointerEvent('pointerdown', { pointerId: 77, button: 0, clientX: 5, clientY: 5, pointerType: 'touch' }));
+  assert.equal(holdN(), h0, 'a press on the bars never starts the hold');
+  const notesIc = w.q('.ah-grid .ah-app[data-app="notes"]');
+  notesIc.dispatchEvent(new FakePointerEvent('pointerdown', { pointerId: 78, button: 2, clientX: 5, clientY: 5, pointerType: 'mouse' })); assert.equal(holdN(), h0, 'nor a right button');
+  notesIc.dispatchEvent(new FakePointerEvent('pointerdown', { pointerId: 79, button: 0, clientX: 5, clientY: 5, pointerType: 'touch' })); assert.equal(holdN(), h0 + 1, 'a press on the icon itself does');
+  const dw = deskWorld().w, dwatch = []; dw.api.media = { watch: (fn, o) => { dwatch.push(o); return () => {}; }, pause() {}, play() {} };
+  (await layout()).default(dw.api); dw.run(); assert.equal(dwatch.length, 1, 'the phone Home only (the desktop Home grid has no layers; its one watcher is the apps column\'s)');
   assert.doesNotMatch(read('web/layouts/ai-apps/layout.js'), /api\.media|ah-np/, 'inside an app: no new chrome');
 });
 
@@ -2967,8 +2984,8 @@ test('app keys (Miguel, 4 Nov 2026; one ⌥ anchor): the app picked by ⌥ digit
   // the app's page: Next (j) and Search (k), as WizardApp.keys.list() reports the live ones (an older app's Space / h marks are dropped)
   const clicks = []; const btn = (k, tag = 'button') => { const b = new El(tag); b.setAttribute('data-wz-key', k); b.click = () => clicks.push(k); return b; };
   const next = btn('j'), find = btn('k', 'input'), old = btn('Space'), mine = btn('h'); let fieldFocus = 0; find.focus = () => { fieldFocus++; };
-  let claimK = true, listed = 0, focused = 0;
-  frame.contentWindow = { focus() { focused++; }, WizardApp: { keys: { list: () => { listed++; return [{ el: next, key: 'j', label: 'Next' }, ...(claimK ? [{ el: find, key: 'k', label: 'Search' }] : []), { el: old, key: 'Space', label: '' }, { el: mine, key: 'h', label: '' }]; } } } };
+  let claimK = true, listed = 0, focused = 0, claimE = false; const editB = btn('e');
+  frame.contentWindow = { focus() { focused++; }, WizardApp: { keys: { list: () => { listed++; return [{ el: next, key: 'j', label: 'Next' }, ...(claimK ? [{ el: find, key: 'k', label: 'Search' }] : []), ...(claimE ? [{ el: editB, key: 'e', label: 'Edit' }] : []), { el: old, key: 'Space', label: '' }, { el: mine, key: 'h', label: '' }]; } } } };
   frame.contentDocument = { readyState: 'complete', URL: 'https://box.example/music/' };
   frame.focus = () => { focused++; w.doc.activeElement = frame; };
   (await layout()).default(w.api);
@@ -3010,12 +3027,22 @@ test('app keys (Miguel, 4 Nov 2026; one ⌥ anchor): the app picked by ⌥ digit
   for (const k of [{ key: ' ', code: 'Space' }, { key: 'j', code: 'KeyJ' }, { key: 'ArrowRight', code: 'ArrowRight' }, { key: 'Enter', code: 'Enter' }]) for (const h of keys) assert.notEqual(h.down({ ...k, altKey: false }), true, `${k.code} passes through`);
   assert.equal(clicks.length, 2, 'plain j does nothing');
   // a click on the row picks it the same way
-  const js = noComments(read('web/layouts/ai-apps/desktop.js'));
-  assert.match(js, /const goApp = \(id, desk = null, then = null, place = null\) => \{\n\s+unpeek\(\); closeAll\(\); wantAppFocus\(id === CHATS \? '' : id\);/, 'every pick (key, click, an Open) asks for the keyboard with a fresh retry generation');
-  assert.match(js, /f\.focus\?\.\(\{ preventScroll: true \}\); f\.contentWindow\?\.focus\?\.\(\);/);
   assert.doesNotMatch(read('web/layouts/ai-apps/desktop.css'), /\.kh-chip\.kh-app \{/, 'one keycap style: no outlined app keycaps');
-  assert.match(js, /if \(!sh && appFront\(\)\) \{ const t = appTarget\(appKeyOf\(code\)\); if \(t\) \{ if \(!e\.repeat\) pressApp\(t\); return true; \} \}/, 'app before the view\'s letters, after the modals, voice and the composer\'s accents');
-  assert.ok(js.indexOf('appFront()) { const t = appTarget') > js.indexOf("if (typing() && /^(KeyE|KeyU|KeyI|ArrowLeft|ArrowRight)$/.test(code)) return false;"));
+  // (run) a pick with the picker open closes it and gives the frame the keyboard without scrolling the page
+  const asked = [], cw0 = focused; frame.focus = o => { asked.push(o); w.doc.activeElement = frame; };
+  w.st.route = { home: false, view: 'thread', thread: '__new__', desk: 1 }; w.emit('route', w.st.route); w.run(); w.doc.activeElement = null;
+  keys[1].down({ altKey: true, code: 'KeyA' }); assert.equal(w.html.dataset.vcSheet, 'open');
+  w.q('.aad-vtab[data-app="music"]').dispatchEvent(new FakePointerEvent('click'));
+  assert.equal(w.html.dataset.vcSheet, undefined, 'the pick closes the picker'); assert.equal(w.st.gone.at(-1), 3);
+  w.st.route = { home: false, view: 'desk', thread: null, desk: 3 }; w.emit('route', w.st.route); for (let k = 0; k < 4 && !asked.length; k++) w.run();
+  assert.ok(asked.length && asked.every(o => o?.preventScroll === true), 'the frame focused without a scroll'); assert.ok(focused > cw0, 'and its window too');
+  // the app's own ⌥ key beats the view's letter, after the composer's accents (⌥E typed into a filled box stays an accent)
+  claimE = true; w.st.route = { ...w.st.route }; w.emit('route', w.st.route); w.run(); const c0 = clicks.length;
+  w.doc.activeElement = frame;
+  assert.equal(keys[1].down({ altKey: true, code: 'KeyE' }), true); assert.deepEqual(clicks.slice(c0), ['e'], 'the app\'s ⌥E, not the view\'s');
+  const box = new El('textarea'); box.value = 'caf'; w.doc.activeElement = box;
+  assert.notEqual(keys[1].down({ altKey: true, code: 'KeyE' }), true, 'typing: ⌥E is the accent'); assert.deepEqual(clicks.slice(c0), ['e'], 'the app not pressed');
+  w.doc.activeElement = frame; claimE = false;
 });
 
 test('plain keys belong to the app in front (Miguel, 4 Nov 2026: Space for Music started a voice take): the mouse never parks the keyboard on the orb, a focused orb talks on Enter and on Space only when Tab put it there; a click on the app bar gives the keyboard back to the app', async () => {
@@ -3299,7 +3326,7 @@ test('agent choices: the shell side reuses Chats\' Focus (no second router) and 
   // tokens only: the agent choices' css carries no literal colours, and is not a floating panel
   const css = read('web/layouts/ai-apps/desktop.css');
   const agentCss = css.split('\n').filter(l => /\.aad-ag/.test(l)).join('\n');
-  assert.ok(agentCss && !/#[0-9a-f]{3,8}\b|rgba?\(/i.test(agentCss.replace(/\/\*[\s\S]*?\*\//g, '')), 'tokens only, no literal colours');
+  assert.ok(!/#[0-9a-f]{3,8}\b|rgba?\(/i.test(agentCss.replace(/\/\*[\s\S]*?\*\//g, '')), 'tokens only, no literal colours');
   assert.ok(!/background:[^;]*transparent[^;]*;[^}]*\.aad-agents/.test(css), 'not a floating panel');
 });
 
@@ -3388,11 +3415,17 @@ test('desktop one app at a time: 1440 unchanged; 900 the bottom app bar, Chats f
     w.st.route = { home: false, view: 'desk', thread: null, desk: 5 }; w.emit('route', w.st.route); w.run();
     assert.equal(w.html.dataset.aadOne, 'app');
     // the bar's CSS: placed by the pane geometry's dock box, the orb at its centre, the stage ending at the bar
-    const css = read('web/layouts/ai-apps/desktop.css'), P = 'html[data-shell="desktop"][data-layout="ai-apps"][data-aad-tabs="bar"]';
-    assert.ok(css.includes(P + ' .aad-vchats { order: 1; }') && css.includes(P + ' .aad-vall { order: 5; }'), 'Chats first, All apps last');
-    assert.match(css, /\[data-aad-tabs="bar"\] \.aad-orb \{ width: var\(--aad-bar-orb\); height: var\(--aad-bar-orb\); left: calc\(var\(--aad-pane-dock-x\) \+ var\(--aad-pane-dock-width\) \/ 2 - var\(--aad-bar-orb\) \/ 2\)/);
-    // ux#1552: the orb sized to the bar (44 px), not the wide window's 60 px
-    assert.ok(css.includes(P + ' { --aad-bar-orb: 44px; }'), 'the bar orb is 44 px');
+    w.html.setAttribute('data-shell', 'desktop'); w.html.setAttribute('data-layout', 'ai-apps'); assert.equal(w.html.dataset.aadTabs, 'bar');
+    const bar = (n, k) => { assert.ok(n, 'drawn'); return cascade(n, DESK_CSS)[k]?.value ?? ''; };
+    const orders = [w.q('.aad-vchats'), ...w.qa('.aad-vtl .aad-vtab'), w.q('.aad-vall')].map(n => Number(bar(n, 'order') || 0));
+    assert.ok(orders[0] < Math.min(...orders.slice(1)) && orders.at(-1) > Math.max(...orders.slice(0, -1)), 'Chats first, All apps last: ' + orders);
+    // ux#1552: the orb sized to the bar (44 px), not the wide window's 60 px, centred on the pane geometry's dock box
+    const orbEl = w.q('.aad-orb'), vars = { ...cascade(w.html, DESK_CSS) && Object.fromEntries(Object.entries(cascade(w.html, DESK_CSS)).map(([k, v]) => [k, v.value])), ...w.html.style };
+    assert.equal(resolveVars(bar(orbEl, 'width'), vars), '44px', 'the bar orb is 44 px'); assert.equal(resolveVars(bar(orbEl, 'height'), vars), '44px');
+    const dx = parseFloat(w.html.style.getPropertyValue('--aad-pane-dock-x')), dwid = parseFloat(w.html.style.getPropertyValue('--aad-pane-dock-width'));
+    assert.ok(Number.isFinite(dx) && dwid > 0, 'the pane geometry gives the dock box');
+    const orbLeft = resolveVars(bar(orbEl, 'left'), vars).match(/^calc\(([\d.]+)px \+ ([\d.]+)px \/ 2 - ([\d.]+)px \/ 2\)$/);
+    assert.ok(orbLeft, 'left: ' + resolveVars(bar(orbEl, 'left'), vars)); assert.equal(+orbLeft[1] + orbLeft[2] / 2 - orbLeft[3] / 2, dx + dwid / 2 - 22, 'the orb at the bar\'s centre');
     // 720: Chats with its list beside the chat
     const m = await run(720);
     assert.equal(m.chat.one, 'chats'); assert.equal(m.chat.side, 'open', '720: the list beside the chat'); assert.ok(!m.chat.back || m.chat.back.hidden, 'no Back: the list is beside it');
