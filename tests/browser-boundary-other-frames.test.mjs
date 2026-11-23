@@ -3,6 +3,7 @@
 // Link sheet and hidden voice frames are proven in real Chromium by tests/qa-browser-boundary-other-frames.cjs.
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { pageAssets } from './fixtures/w1-pages.mjs';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import { launcherFixture } from './launcher-fixture.mjs';
@@ -130,8 +131,11 @@ test('offline copy: the remembered mark turns the frame sandbox on without a tok
   assert.equal(boundary({ mark: '0' }), undefined);
   assert.equal(boundary({ mark: 'throws' }), undefined);
   assert.equal(boundary({ mark: '1', framed: true }), undefined, 'never inside a frame');
-  const html = read('app-session.html');
-  assert.ok(html.indexOf('<script src="core/browser-boundary.js"></script>') > 0, 'the offline pinned-app page loads it');
-  assert.ok(html.indexOf('core/browser-boundary.js') < html.indexOf('core/single-app-session.js') && html.indexOf('core/browser-boundary.js') < html.indexOf('core/links.js'));
-  assert.match(read('core/offline-session-config.js'), /core\/browser-boundary\.js/, 'and it is in the offline copy');
+  // the offline pinned-app page as the browser loads it: the boundary before the session and the links
+  const { srcs } = pageAssets('app-session.html'), at = f => srcs.indexOf(f);
+  assert.ok(at('core/browser-boundary.js') >= 0, 'the offline pinned-app page loads it');
+  assert.ok(at('core/browser-boundary.js') < at('core/single-app-session.js') && at('core/browser-boundary.js') < at('core/links.js'));
+  // and the offline copy (the generated config, run) caches it
+  const cfg = { self: {}, importScripts() {} }; vm.runInNewContext(read('core/offline-session-config.js'), cfg);
+  assert.ok(cfg.self.WIZ_OFFLINE_CONFIG.shell.includes('core/browser-boundary.js'), 'and it is in the offline copy');
 });
