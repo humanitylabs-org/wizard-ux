@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { block } from './fixtures/source-slice.mjs';
+import { withParts } from './fixtures/chats-parts.mjs';
 import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
 
 const src = withLiveParts(readFileSync(new URL('../web/live.js', import.meta.url), 'utf8'));
