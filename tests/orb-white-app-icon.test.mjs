@@ -5,6 +5,7 @@ import vm from 'node:vm';
 import { createDocument } from './fixtures/mini-dom.mjs';
 import { withShellParts } from './fixtures/shell-parts.mjs';
 import { withWebParts } from './fixtures/web-parts.mjs';
+import { block, runRecording } from './fixtures/source-slice.mjs';
 const source = withShellParts(withWebParts(fs.readFileSync(process.env.ORB_SOURCE || new URL('../web/core/sigils.js', import.meta.url),'utf8')));
 const expose = source.replace('  window.WizSigil =', '  window.whitePixels = whitePixels; window.WizSigil =');
 function load() {
@@ -50,10 +51,19 @@ test('ordinary launcher/logo icons retain their exact colour markup',()=>{
 test('orb normalizer is available and scoped to phone orb plus desktop app identity',()=>{
   assert.equal(typeof load().WizSigil.orb,'function');
   const phone=withShellParts(withWebParts(fs.readFileSync(new URL('../web/app.js',import.meta.url),'utf8')));
-  assert.match(phone,/el\.innerHTML = h; window\.WizSigil\.orb\(el\)/);
+  // the phone's paintOrbApp (app-desks.js, run): the desk's sigil goes in, then the normalizer runs on it
+  const made=[],orbed=[],wrap={appendChild(){}};
+  const pc=runRecording(block(phone,'  function paintOrbApp() {')+'\npaintOrbApp();',{$:()=>wrap,appVars:{desks:[{}],idx:0},orbAppHtml:null,deskSigil:()=>'<svg class="sg"></svg>',
+    document:{getElementById:()=>null,createElement:()=>{const e={setAttribute(){}};made.push(e);return e;}},window:{WizSigil:{orb:e=>orbed.push(e.innerHTML)}}});
+  assert.deepEqual(orbed,['<svg class="sg"></svg>'],'the orb app icon is normalized');assert.equal(pc.orbAppHtml,'<svg class="sg"></svg>');
+  // the desktop AI apps view: paintTop paints the app in front into the orb, and paintOrbIdentity normalizes it
   const desktop=withShellParts(withWebParts(fs.readFileSync(new URL('../web/layouts/ai-apps/desktop.js',import.meta.url),'utf8')));
-  assert.match(desktop,/paintOrbIdentity\(h\.app\)/);
-  assert.match(desktop,/S\.orb\(micG\)/);
+  const top=runRecording(block(desktop,'  function paintTop(r = api.route()) {')+'\ntry { paintTop(); } catch (e) {}',{api:{route:()=>({view:'thread',thread:'__new__',desk:3})},here:()=>({app:'notes'}),noteOn:()=>false,chatWindows:()=>[]});
+  assert.deepEqual(top.calls.filter(c=>c[0]==='paintOrbIdentity').map(c=>[...c]),[['paintOrbIdentity','notes']]);
+  const ided=[],micG={innerHTML:'',children:[{style:{}}]};
+  runRecording(block(desktop,'  function paintOrbIdentity(appId) {')+"\npaintOrbIdentity('notes');",{micG,micMarkup:'<i class="mic"></i>',orbIdentityHtml:'<i class="mic"></i>',
+    api:{apps:{list:()=>[{id:'notes',name:'Notes'}]}},doc:{defaultView:{WizSigil:{html:a=>`<b>${a.id}</b>`,orb:e=>ided.push(e.innerHTML)}}}});
+  assert.deepEqual(ided,['<b>notes</b>'],'the app identity in the desktop orb is normalized');
 });
 // The sigil renderer the next tools/sigils/build.py run writes: the template with its data slots filled (build.py
 // needs skia-pathops, not here; the orb code does not depend on the data).
