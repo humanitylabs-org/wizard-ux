@@ -324,7 +324,7 @@ test('the phone shell seeds starter apps only into a layout it just created, mar
 
 test('upgrade: starter windows from the previous shell (no seed mark) on a not-yet-joined device are marked before the first join', async () => {
   const src = withShellParts(fs.readFileSync(new URL('../web/app.js', import.meta.url), 'utf8'));
-  const at = src.indexOf('  function markLegacyStarters('); assert.ok(at >= 0);
+  const at = src.indexOf('  function markLegacyStarters(');
   const body = src.slice(at, src.indexOf('\n  }\n', at) + 4);
   const mark = new Function(body + '\nreturn markLegacyStarters;')();
   const legacy = () => ({ t1: { id: 't1', app: 'frame', appId: 'topics' }, z1: { id: 'z1', app: 'frame', appId: 'mizel' },

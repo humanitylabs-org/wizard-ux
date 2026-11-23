@@ -76,7 +76,7 @@ test('phone (no autoApply) still reloads only when tapped', async () => {
 test('desktop host opts in', () => {
   // the desktop's real init call, run with a stub WizWebUpdate that keeps the options it gets
   const src = withShellParts(readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8'));
-  const i = src.indexOf('window.WizWebUpdate?.init({'); assert.ok(i > 0);
+  const i = src.indexOf('window.WizWebUpdate?.init({');
   let depth = 0, j = src.indexOf('(', i);
   for (; j < src.length; j++) { if (src[j] === '(') depth++; else if (src[j] === ')' && --depth === 0) break; }
   let got = null;

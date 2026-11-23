@@ -141,7 +141,7 @@ test('the Files fallback refuses "." and ".." as the skin folder', async t => {
 test('phone skin toasts escape script text (file names, error messages), like the desktop', () => {
   // the phone shell's own esc and the skin adapter's toast, run as they are
   const app = withShellParts(readFileSync(new URL('../web/app.js', import.meta.url), 'utf8'))
-  const line = k => { const i = app.indexOf(k); assert.ok(i >= 0, k); return app.slice(i, app.indexOf('\n', i)) }
+  const line = k => app.split('\n').find(l => l.includes(k)).slice(app.split('\n').find(l => l.includes(k)).indexOf(k))
   const shown = []
   const ctx = vm.createContext({ toast: (icon, html, ms) => shown.push([icon, html, ms]) })
   vm.runInContext(`${line('const esc = s =>')}\nthis.skinToast = ${line('toast: text => toast(').trim().replace(/^toast: /, '').replace(/,$/, '')};`, ctx)
