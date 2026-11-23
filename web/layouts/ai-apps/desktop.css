@@ -937,6 +937,14 @@ html[data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side] #stage > .
 html[data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side] #stage > .wsp:not([data-aad-role]):not(:has(> .win:not(.gone) ~ .win:not(.gone))) {
   left: calc(var(--aad-pane-main-x) - 8px); right: calc(var(--aad-pane-main-right) - 8px);
 }
+/* round 14 (wizard-ux issue 1742): a desk out of sight keeps the open sidebar's main area (--aad-pane-held-*), not the
+ * live one above, so folding the sidebar never moves or re-lays out hidden desks */
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side] #stage > .wsp[hidden]:not([data-aad-role]) {
+  left: var(--aad-pane-held-x, var(--aad-side-w, 288px)); right: var(--aad-pane-held-right, var(--aad-tabs-px, 200px));
+}
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side] #stage > .wsp[hidden]:not([data-aad-role]):not(:has(> .win:not(.gone) ~ .win:not(.gone))) {
+  left: calc(var(--aad-pane-held-x, var(--aad-side-w, 288px)) - 8px); right: calc(var(--aad-pane-held-right, var(--aad-tabs-px, 200px)) - 8px);
+}
 html[data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side][data-aad-split]:not([data-aad-chat]) #stage > .wsp[data-aad-role="chat"] {
   inset: var(--aad-pane-main-y) var(--aad-pane-main-right) var(--aad-pane-main-bottom) var(--aad-pane-main-x) !important;
 }
