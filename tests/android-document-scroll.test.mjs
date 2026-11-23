@@ -4,7 +4,8 @@ import assert from 'node:assert/strict';
 import {readFileSync,existsSync} from 'node:fs';
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 import vm from 'node:vm';
-import { between, runRecording } from './fixtures/source-slice.mjs';
+import { between, block, runRecording } from './fixtures/source-slice.mjs';
+import { px, valueOf } from './fixtures/r7A-css.mjs';
 import { createDocument } from './fixtures/mini-dom.mjs';
 import { cascade } from './fixtures/mini-css.mjs';
 const ch = withParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'));
@@ -17,15 +18,29 @@ test('Android capture uses stock WebView discovery, scrolling and default hint',
 });
 test('document scrolling requires the explicit native capability marker on every release line',()=>{
  const js=withParts(read('web/core/chats.js'));
- const m=/const androidDocument = ([^;]+);/.exec(js);assert.ok(m);
+ const m=/const androidDocument = ([^;]+);/.exec(js);
  const gate=ua=>new Function('navigator','return '+m[1])({userAgent:ua});
  for(const ua of ['Mozilla/5.0 Chrome/140','X WizardOS-Android/0.9.42','X WizardOS-Android/0.10.5','X WizardOS-Android/0.10.7'])assert.equal(gate(ua),false);
  assert.equal(gate('X WizardOS-Android/0.10.7 WizardOS-DocScroll'),true);
  assert.equal(gate('X WizardOS-Android/0.9.42 WizardOS-DocScroll'),true);
  assert.match(read('android/app/src/main/java/ai/wizards/os/MainActivity.java'),/setUserAgentString\(s.getUserAgentString\(\) \+ UA_TAG \+ " WizardOS-DocScroll"\)/);
- assert.match(js,/if \(!androidDocument\) return/);
- assert.match(js,/root.classList.toggle\('wos-doc-scroll', !!next\)/);
- assert.match(js,/const scrollBox = nb => nb && docOwner\?\.contains\(nb\) \? document.scrollingElement : nb/);
+ // the real syncDocumentThread: without the marker the thread keeps its own box; with it the page scrolls the thread
+ const sync=androidDocument=>{
+  const doc=createDocument();doc.body.innerHTML='<div class="win" data-chats="w1"><div class="ch-thread"><div class="ch-msgs"></div></div></div>';
+  const el=doc.querySelector('.win');el.getClientRects=()=>[{}];doc.scrollingElement={scrollTop:0};
+  const shown=['w1'];
+  const S=runRecording(`${block(js,'  function syncDocumentThread() {')}\nthis.sync=syncDocumentThread;`,{androidDocument,document:doc,docOwner:null,docResize:null,docObserved:[],visibleThreads:new Set(),H:{visible:()=>shown},elOf:()=>el,window:{scrollTo(){}},ResizeObserver:class{observe(){}disconnect(){}}});
+  return {S,doc,el,shown};
+ };
+ const off=sync(false);off.S.sync();
+ assert.equal(off.doc.documentElement.classList.contains('wos-doc-scroll'),false,'no marker: no document scrolling');
+ assert.equal(off.S.docOwner,null);assert.ok(off.S.calls.some(c=>c[0]==='restoreVisibleThreads'),'the box threads keep their own place');
+ const on=sync(true);on.S.sync();
+ assert.equal(on.doc.documentElement.classList.contains('wos-doc-scroll'),true,'marker: the document scrolls the thread');
+ assert.equal(on.S.docOwner,on.el);assert.ok(on.el.classList.contains('wos-doc-thread'));
+ on.shown.length=0;on.S.sync();
+ assert.equal(on.doc.documentElement.classList.contains('wos-doc-scroll'),false,'leaving the thread gives the box scrolling back');
+ // scrollBox (the document for the owner thread): run in 'reading place, jump latest, prepend and repaint share the document adapter'
 });
 // chat-power.js run with chats.js's real scrollBox: a thread that is the page scrolls the document, never its div.
 function documentThread() {
@@ -68,13 +83,19 @@ test('native composer unions safe-bottom with the already covered keyboard/dock 
  const css=read('web/core/chats.css');
  // The measured dock strip already includes --safe-b. Adding both lifted a 440px
  // viewport's compact composer to y=101 and left a 34px picker (James correction).
- const bottom=/html\.wos-doc-scroll \.wos-doc-thread \.ch-compose\s*\{[^}]*bottom:\s*([^;]+);/.exec(css)?.[1];
- assert.equal(bottom,'max(var(--safe-b, 0px), var(--wos-doc-bottom, 0px)) !important');
+ // the cascade on a document-scrolled thread: composer, switch, Latest, the thread's reserve and the Channels jump pill
+ // all sit on max(safe-bottom, covered strip), never their sum
+ const doc=createDocument();doc.documentElement.className='wos-doc-scroll';
+ doc.body.innerHTML='<div class="wos-doc-thread"><div class="ch-thread"><form class="ch-compose"></form><div class="ch-swrow"></div><button class="ch-latest"></button><button class="ch-jump down"></button></div></div>';
  for(const [safe,covered,expected] of [[92,159,159],[0,66,66],[300,300,300],[24,0,24]]){
-   const expression=bottom.replace(/ !important$/,'').replace('var(--safe-b, 0px)',String(safe)).replace('var(--wos-doc-bottom, 0px)',String(covered)).replace('max(','Math.max(');
-   assert.equal(new Function('return '+expression)(),expected);
+   const sheet=css+`\n.wos-doc-thread{--safe-b:${safe}px;--wos-doc-bottom:${covered}px;--wos-doc-compose:84px;--wos-doc-switch:10px}`;
+   const at=(sel,prop)=>px(valueOf(doc.querySelector(sel),sheet,prop).replace(/\s*!important$/,''));
+   assert.equal(at('.ch-compose','bottom'),expected,`composer ${safe}/${covered}`);
+   assert.equal(at('.ch-swrow','bottom'),expected+84,'switch');
+   assert.equal(at('.ch-latest','bottom'),84+10+expected+12,'Latest');
+   assert.equal(at('.ch-thread','padding-bottom'),84+10+expected+16,'document reserve');
+   assert.equal(at('.ch-jump','bottom'),84+10+expected+12,'the Channels jump pill');
  }
- assert.equal((css.match(/max\(var\(--safe-b, 0px\), var\(--wos-doc-bottom, 0px\)\)/g)||[]).length,5,'composer, switch, Latest, document reserve and the Channels jump pill (chats.css since issue 1258) share one inset');
  assert.doesNotMatch(css,/var\(--safe-b, 0px\) \+ var\(--wos-doc-bottom, 0px\)/);
 });
 test('header/composer and skin animation cannot acquire a document-sized fixed containing block',async()=>{
