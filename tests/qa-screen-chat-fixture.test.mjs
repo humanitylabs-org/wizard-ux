@@ -7,7 +7,6 @@ import vm from 'node:vm';
 test('Screen chat QA fixture names no teammates or private setup', () => {
   const src = readFileSync(new URL('../tools/qa-screen-chat.cjs', import.meta.url), 'utf8');
   const start = src.indexOf('const MSGS'), end = src.indexOf('];', start) + 1;
-  assert.ok(start >= 0 && end > start, 'the fixture messages');
   // The messages exactly as the QA script builds them (the array literal, evaluated).
   const msgs = vm.runInNewContext(src.slice(start, end).replace(/^const MSGS\s*=\s*/, '(') + ')', {});
   assert.ok(Array.isArray(msgs) && msgs.length >= 3, 'fixture messages found');

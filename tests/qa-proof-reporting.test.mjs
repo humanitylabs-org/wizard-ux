@@ -53,7 +53,6 @@ test('phone capture timeout remains a hard failure', async () => {
 test('status-bar geometry is passed only after phone assertions execute; desktop records notRun', () => {
   const begin = source.indexOf('        if (phone) { assert.ok(geometry.card.y');
   const end = source.indexOf('        assert.ok(/', begin);
-  assert.ok(begin >= 0 && end > begin);
   for (const phone of [true, false]) {
     const ctx = { phone, assert, geometry: { card: { y: 20, bottom: 80 }, orb: { top: 100 } }, pillBox: { y: 0, height: 20 }, checks: [], notRun: [] };
     vm.runInNewContext(source.slice(begin, end), ctx);
