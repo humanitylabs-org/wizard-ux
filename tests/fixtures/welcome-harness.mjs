@@ -9,7 +9,7 @@ const WELCOME = src('welcome.js'), CONFIG = src('config.js');
 export const flush = async (n = 6) => { for (let i = 0; i < n; i++) await new Promise(r => setImmediate(r)); };
 
 // providers: the model/options providers list; signedIn: shorthand for one authenticated Anthropic provider.
-export function fakeBox({ name = 'Oscar', signedIn = false, providers, firstRun = false, live = true, seen = [200],
+export function fakeBox({ name = 'Oscar', signedIn = false, providers, firstRun = !signedIn, live = true, seen = [200],
   threads = {}, optionsDown = false } = {}) {
   const box = { settings: { agent: { name, adapter: 'hermes-plugin' }, owner: { name: '' } }, calls: [], seenCodes: [...seen], threads, providers: providers || (signedIn ? [{ slug: 'anthropic', authenticated: true }] : []) };
   const ok = (body, status = 200) => ({ ok: status < 300, status, json: async () => JSON.parse(JSON.stringify(body)) });

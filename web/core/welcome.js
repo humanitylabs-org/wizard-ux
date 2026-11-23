@@ -58,7 +58,7 @@
     try { const c = new AbortController(); setTimeout(() => c.abort(), ms); return c.signal; } catch (e) { return undefined; } };
   const read = () => { try { return localStorage.getItem(KEY) || ''; } catch (e) { return ''; } };
   const write = v => { try { localStorage.setItem(KEY, v); } catch (e) {} };
-  let H = null, el = null, step = 'ai', provider = null, pollT = 0, connected = false, sending = false, booted = false, installing = '', installError = '', sendError = '';
+  let H = null, el = null, step = 'ai', provider = null, pollT = 0, connected = false, sending = false, booted = false, installing = '', installError = '', sendError = '', reconnect = false;
   // The name step: asked = this Welcome starts with it; after = the step it hands over to.
   let asked = false, after = 'ai', saving = false, nameError = '', prefill = '';
   // Bring your AI (wizard-ux issue 898, Miguel 4 Nov 2026): an optional step before Say hello, only on a Wizard that has the
@@ -162,6 +162,7 @@
   let frameOff = () => {};
 
   function dots() {
+    if (reconnect) return '';
     const all = order(), i = all.indexOf(step);
     return `<div class="wl-dots" aria-hidden="true">${all.map((x, n) => `<i class="${n === i ? 'on' : n < i ? 'done' : ''}"></i>`).join('')}</div>`;
   }
@@ -202,7 +203,7 @@
         <p class="wl-status${connected ? ' ok' : ''}" role="status">${connected ? `${esc(p.name)} is connected.` : `${privateFirst() && p.app !== PRIVATE ? esc(extraNote(p)) + ' ' : ''}This continues by itself once you are signed in.`}</p>`;
     }
     if (privateFirst()) return paintPrivateAI();
-    return `${brand()}${dots()}<header class="wl-head"><h2 tabindex="-1">Connect your AI</h2><p>${esc(agent())} thinks with your own AI subscription. Sign in once.</p></header>
+    return `${brand()}${dots()}<header class="wl-head"><h2 tabindex="-1">${reconnect ? 'Reconnect your AI' : 'Connect your AI'}</h2><p>${reconnect ? `Your AI isn\u2019t connected. Reconnect it so ${esc(agent())} can answer.` : `${esc(agent())} thinks with your own AI subscription. Sign in once.`}</p></header>
       <div class="wl-choices">${PROVIDERS.map(p => `<button type="button" class="wl-choice" data-wl="provider" data-app="${esc(p.app)}"${installing ? ' disabled' : ''}><span class="wl-mark"><img src="brand/apps/${esc(p.mark)}.svg" alt=""></span><span class="wl-name">${esc(p.name)}</span>${installing === p.app ? '<span class="wl-sub">Installing…</span>' : p.note ? `<span class="wl-tag${p.note === 'Recommended' ? '' : ' soft'}">${esc(p.note)}</span>` : ''}</button>`).join('')}</div>
       ${installError ? `<p class="wl-status err" role="alert">${esc(installError)}</p>` : ''}`;
   }
@@ -216,7 +217,7 @@
       return `<button type="button" class="wl-choice${lead ? '' : ' wl-extra'}" data-wl="provider" data-app="${esc(p.app)}"${installing || done ? ' disabled' : ''}><span class="wl-mark"><img src="brand/apps/${esc(p.mark)}.svg" alt=""></span><span class="wl-name">${esc(p.name)}${lead ? '<span class="wl-sub">Private</span>' : `<span class="wl-sub">${esc(extraNote(p))}</span>`}</span>${tag}</button>`;
     };
     const [lead, ...extras] = providers();
-    return `${brand()}${dots()}<header class="wl-head"><h2 tabindex="-1">Connect your AI</h2><p>${privateReady ? `Your private agent is ready. You can add a second agent now, or later.` : `${esc(agent())} thinks privately with Tinfoil: your chats and apps stay private. Sign in once.`}</p></header>
+    return `${brand()}${dots()}<header class="wl-head"><h2 tabindex="-1">${reconnect ? 'Reconnect your AI' : 'Connect your AI'}</h2><p>${reconnect ? `Your AI isn\u2019t connected. Reconnect it so ${esc(agent())} can answer.` : (privateReady ? `Your private agent is ready. You can add a second agent now, or later.` : `${esc(agent())} thinks privately with Tinfoil: your chats and apps stay private. Sign in once.`)}</p></header>
       <div class="wl-choices">${choice(lead, true)}</div>
       <p class="wl-extras-h">Optional: a second agent</p>
       <div class="wl-choices wl-extras">${extras.map(p => choice(p, false)).join('')}</div>
@@ -299,7 +300,13 @@
       }
       if (!el || el !== mine || step !== 'ai' || provider !== chosen) return;
       if (ok === true) {
-        connected = true; write('ai'); log('connected'); paint(false);
+        connected = true;
+        if (reconnect) {
+          write('done'); log('connected'); paint(false);
+          setTimeout(() => { if (el && step === 'ai' && provider === chosen) { close(); } }, 1200);
+          return;
+        }
+        write('ai'); log('connected'); paint(false);
         // The private agent is ready: back to Connect your AI, where a second agent is optional and Continue goes on.
         if (priv) { privateReady = true; setTimeout(() => { if (el === mine && step === 'ai' && provider === chosen) { provider = null; paint(); } }, 1200); return; }
 
@@ -310,9 +317,10 @@
     }, POLL_MS);
   }
 
-  function open(at = 'ai') {
+  function open(at = 'ai', opts = {}) {
     if (el) return;
-    asked = unnamed(); after = at; saving = false; nameError = ''; prefill = agent();
+    reconnect = Boolean(opts?.reconnect);
+    asked = !reconnect && unnamed(); after = at; saving = false; nameError = ''; prefill = agent();
     step = asked ? 'name' : at; provider = null; connected = false; sending = false; installing = ''; installError = ''; sendError = ''; bringOpen = false;
     privateReady = !!pf?.private_agent && privateFirst();
     el = document.createElement('div');
@@ -339,6 +347,7 @@
   function close() {
     clearTimeout(pollT);
     frameOff(); frameOff = () => {};
+    reconnect = false;
     if (!el) return;
     el.remove(); el = null;
     document.documentElement.classList.remove('wl-open');
@@ -412,7 +421,7 @@
       log('boot:' + ok + ':' + state + ':' + (setup?.first_run === true));
       try { removeEventListener('pointerdown', act, true); removeEventListener('keydown', act, true); } catch (e) {}
       if ((ok === false || ok === true) && (acted || h.busy?.() || h.deeplinked?.())) { log('boot:busy'); return; }
-      if (ok === false) return open('ai');
+      if (ok === false) return open('ai', { reconnect: setup?.first_run === false || state === 'done' });
       if (ok === true && state !== 'done' && (state === 'ai' || setup?.first_run === true)) return open('look');
     }, 0);
   }
@@ -440,5 +449,5 @@
     log('thread:timeout');
   }
 
-  window.WosWelcome = { whenThreadExists, aiConnected, boot, back, open: (at) => open(at || 'ai'), close, get active() { return !!el; }, get log() { return window.__welcomeLog || []; } };
+  window.WosWelcome = { whenThreadExists, aiConnected, boot, back, open: (at, opts) => open(at || 'ai', opts), close, get active() { return !!el; }, get log() { return window.__welcomeLog || []; } };
 })();

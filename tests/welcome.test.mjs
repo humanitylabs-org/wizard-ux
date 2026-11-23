@@ -287,3 +287,37 @@ test('Welcome: a readiness reply for an earlier provider choice is ignored', asy
   assert.equal(title(d), 'Sign in to ChatGPT');
   assert.doesNotMatch(d.html(), /is connected/);
 });
+
+test('Welcome: existing Wizard whose AI is signed out gets Reconnect your AI, no dots, and closes on connect', async () => {
+  const box = fakeBox({ firstRun: false });
+  const d = device(box, { skins: skins() });
+  await d.boot();
+  assert.ok(d.W.active);
+  assert.equal(title(d), 'Reconnect your AI');
+  assert.equal((d.html().match(/<i class/g) || []).length, 0, 'no dots for reconnect flow');
+  assert.match(d.html(), /Your AI isn['’]t connected\. Reconnect it so Oscar can answer\./);
+  assert.deepEqual(choices(d), [{ app: 'wizard-claude', tag: 'Recommended' }, { app: 'wizard-chatgpt', tag: '' }, { app: 'wizard-tinfoil', tag: 'Private' }]);
+
+  // Signing in connects and closes the modal by itself
+  box.providers = [{ slug: 'anthropic', authenticated: true }];
+  d.press('provider', { app: 'wizard-claude' });
+  await d.advance(3000 + 1200);
+  assert.ok(!d.W.active, 'modal closes by itself after connecting');
+  assert.equal(d.store.get('wos.welcome.v1'), 'done', 'writes done, not ai');
+
+  // Next reload shows nothing
+  const reloaded = device(box, { skins: skins() });
+  reloaded.store.set('wos.welcome.v1', 'done');
+  await reloaded.boot();
+  assert.ok(!reloaded.W.active, 'next reload shows nothing');
+});
+
+test('Welcome: existing Wizard identified by done in storage gets Reconnect your AI even if setup first_run is unknown', async () => {
+  const box = fakeBox({ name: 'Wizard' }); // default name
+  const d = device(box, { skins: skins() });
+  d.store.set('wos.welcome.v1', 'done');
+  await d.boot();
+  assert.ok(d.W.active);
+  assert.equal(title(d), 'Reconnect your AI', 'never asks Name your Wizard on reconnect');
+  assert.equal((d.html().match(/<i class/g) || []).length, 0, 'no dots');
+});
