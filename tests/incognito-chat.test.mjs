@@ -8,6 +8,7 @@ import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts move
 import { withShellParts } from './fixtures/shell-parts.mjs';
 import { block, runRecording } from './fixtures/source-slice.mjs';
 import { createDocument } from './fixtures/mini-dom.mjs';
+import { cascade } from './fixtures/mini-css.mjs';
 const source = withShellParts(readFileSync(new URL('../web/core/incognito-chat.js', import.meta.url), 'utf8'))
 const chats = withParts(withShellParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'))) + withShellParts(readFileSync(new URL('../web/core/chats-outbox.js', import.meta.url), 'utf8'))
 function rig(extra = {}) {
@@ -63,16 +64,23 @@ test('Incognito browser transcript and draft remain exclusively in memory; close
   assert.equal(s.calls.at(-1).method, 'DELETE')
 })
 test('James: Incognito reuses the skinned Settings switch, not a browser checkbox', async () => {
-  assert.match(chats, /class="pbtn ch-incog-toggle" role="switch" aria-checked="false"/)
-  assert.match(chats, /<span class="sw" aria-hidden="true"><i><\/i><\/span>/)
-  assert.ok(!chats.includes('type="checkbox" role="switch" data-incog-start'))
+  // the real new-chat action (chats-threadpaint.js incognitoAction), drawn: Settings' switch markup, off
+  const paint = readFileSync(new URL('../web/core/chats-threadpaint.js', import.meta.url), 'utf8')
+  const line = paint.split('\n').find(l => l.includes('const incognitoAction ='))
+  const action = (isNew, on) => vm.runInNewContext(`${line}\nincognitoAction`, { isNew, INC: {}, TAG: 'hermes', agentRec: id => ({ id }), window: { WizCore: { incognitoOptIn: { enabled: () => on } } } })
+  const doc = createDocument(); doc.body.innerHTML = action(true, true)
+  const toggle = doc.body.querySelector('[data-incog-start]')
+  assert.equal(toggle.tagName, 'BUTTON'); assert.equal(toggle.getAttribute('role'), 'switch'); assert.equal(toggle.getAttribute('aria-checked'), 'false')
+  assert.ok(toggle.classList.contains('pbtn') && toggle.classList.contains('ch-incog-toggle'))
+  assert.ok(toggle.querySelector('span.sw[aria-hidden="true"] > i'), 'the skinned Settings switch')
+  assert.equal(doc.body.querySelector('input'), null, 'no browser checkbox')
+  assert.equal(action(false, true), '', 'only on a new chat'); assert.equal(action(true, false), '', 'only once opted in')
+  const bridge = withShellParts(readFileSync(new URL('../web/core/chats-view.css', import.meta.url), 'utf8'))
+  assert.match(cascade(toggle, bridge)['--wz-text']?.value || '', /^var\(--ink/, 'the toggle gets the skin tokens from the bridge')
   const s = rig(); await s.component.start('one', s.agent)
   assert.match(s.el.innerHTML, /role="switch" aria-checked="true"/)
   assert.match(s.el.innerHTML, /class="sw on" aria-hidden="true"/)
   assert.ok(!s.el.innerHTML.includes('type="checkbox"'))
-  const bridge = withShellParts(readFileSync(new URL('../web/core/chats-view.css', import.meta.url), 'utf8'))
-  assert.match(bridge, /\.chats-view, \.ch-incog-toggle, \.ch-incognito \{/)
-  assert.match(bridge, /--wz-text: var\(--ink/)
   s.component.close('one', true)
 })
 test('reload/BFCache lifecycle ends the target and cannot restore a transcript', async () => {
