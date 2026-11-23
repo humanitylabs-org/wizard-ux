@@ -151,7 +151,8 @@ test('Connections page has one scroll area: the frame fills the room the Wizards
     assert.equal(val('.st-page', 'min-height'), '0', shell);
     assert.equal(val('[data-settings-feature="wizards"]', 'flex'), 'none', `${shell}: Wizards keeps its own height`);
     assert.equal(val('[data-settings-feature="connections"]', 'flex'), '1', `${shell}: the frame section takes what is left`);
-    assert.equal(val('[data-settings-feature="connections"]', 'min-height'), '0', shell);
+    // never shorter than the embed's own floor, so a taller Wizards section scrolls the page (issue 1670)
+    assert.equal(val('[data-settings-feature="connections"]', 'min-height'), shell === 'phone' ? '240px' : '360px', shell);
     if (shell === 'phone') {
       assert.equal(val('.st-root', 'display'), 'flex');
       assert.equal(val('.st-root', 'flex-direction'), 'column');
