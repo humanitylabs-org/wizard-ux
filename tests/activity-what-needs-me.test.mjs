@@ -28,7 +28,7 @@ function phone({ order = 'newest', open = {}, older = false } = {}) {
   vm.runInContext(between(chats, '  const ACT_SORTS = () =>', '  // The sort and Show older taps').replace('let actOlder = false;', ''), c);
   return c;
 }
-const secs = html => [...html.matchAll(/<section class="ch-sec ch-act( open)?" data-sec="([^"]+)">(?:<div class="ch-sec-hl">)?<button class="ch-sec-h" data-sectoggle="[^"]+" aria-expanded="(true|false)"><span>([^<]+)<\/span><small>([^<]*)<\/small>/g)].map(m => [m[4], m[5], m[3] === 'true']);
+const secs = html => [...html.matchAll(/<section class="ch-sec ch-act( open)?" data-sec="([^"]+)">(?:<div class="ch-sec-hl">)?<button class="ch-sec-h" data-sectoggle="[^"]+" aria-expanded="(true|false)"><span>([^<]+)<\/span>(?:<small>([^<]*)<\/small>)?/g)].map(m => [m[4], m[5] || '', m[3] === 'true']);
 const rowsIn = (html, k) => [...(html.split(`data-sec="${k}"`)[1] || '').split('</section>')[0].matchAll(/<row ([^>]+)>/g)].map(m => m[1]);
 
 test('phone / Classic Activity: Working, Ready, Recent, then folded Snoozed and Archived, with their counts', () => {
@@ -71,14 +71,14 @@ class Node {
   get childElementCount() { return this.children.length; }
   all() { return this.children.flatMap(n => [n, ...(n.all ? n.all() : [])]); }
 }
-function sidebar({ order = 'newest', agents = 3 } = {}) {
+function sidebar({ order = 'newest', agents = 3, rows = null } = {}) {
   const c = { console, Date, JSON, String, Object, Array };
   c.window = c; c.globalThis = c; modelContext(c);
   const M = c.WizChatsListModel, listens = [], set = [];
   const facts = { live: { cardAt: s => s.updatedAt, isNew: unread }, chats: { activityNeeds: needs, activityUnread: unread, threadActions: () => ['snooze', 'done'], channelOf: () => 'General', agentLabelOf: s => s.owner === 'host' ? 'Host' : '' } };
   const asked = [];
   const api = { listen: (n, k, fn) => listens.push([n, k, fn]), storage: { set: (k, v) => set.push([k, v]), get: () => undefined },
-    sessions: { order: () => order, list: o => { asked.push(o); return o?.activity ? M.activityList(groups([...ROWS(), row('h1', 1, { owner: 'host', fresh: true })]), facts, { order: M.activitySortOf(order), now: NOW, older: o.older }) : { working: [], snoozed: [], ready: [row('legacy', 1)], archive: [] }; } },
+    sessions: { order: () => order, list: o => { asked.push(o); return o?.activity ? M.activityList(groups(rows || [...ROWS(), row('h1', 1, { owner: 'host', fresh: true })]), facts, { order: M.activitySortOf(order), now: NOW, older: o.older }) : { working: [], snoozed: [], ready: [row('legacy', 1)], archive: [] }; } },
     agents: { focus: () => ({ id: '', agents: Array.from({ length: agents }, (_, i) => ({ id: 'a' + i, label: 'A' + i })) }) } };
   Object.assign(c, { api, root: { dataset: { aadSide: 'open' } }, scroll: new Node(), q: '', secOpen: { ready: true, working: false, snoozed: false, archive: false },
     sessions: null, drawn: '', KINDS: ['working', 'snoozed', 'ready', 'archive'], EMPTY: {}, sectionsFor: () => [['working', 'Working'], ['snoozed', 'Snoozed'], ['ready', 'Ready'], ['archive', 'Archive']],
@@ -176,4 +176,42 @@ test('issue 1360: one waiting-on-you rule for Ready and the amber marker; openin
   assert.deepEqual(marks(l), { ready: ['apr:needs'], recent: ['grn', 'chk', 'ny', 'fyi'] }, 'Mark done clears amber and moves the thread to Recent');
   noAmberInRecent(l);
   assert.equal(c.attOf(rows[0]), null, 'Mark done clears a Your call status too');
+});
+
+// wizard-ux issue 1731: a fresh box shows one empty state; a section appears only while it holds something; no empty
+// count, no Ready sort without Ready.
+// owner-correction: humanitylabs-org/wizard-ux#1731 · 2026-11-22 · "don't display these empty sections if there's nothing in them"
+test('phone Activity on a fresh box: one empty state, no sections, no None lines, no empty count, no sort (issue 1731)', () => {
+  const html = phone().activityBody({ id: 'w' }, [], null);
+  assert.deepEqual(secs(html), []);
+  assert.match(html, /^<div class="ch-empty ch-act-empty"><b>No chats yet<\/b>[^]*<button type="button" class="ch-fclear" data-chnew data-chemptynew>New chat<\/button><\/div>$/);
+  assert.doesNotMatch(html, /ch-none|<small>|data-chactorder/);
+});
+
+test('phone Activity: only the sections that hold a chat, with real counts (issue 1731)', () => {
+  const one = rows => phone().activityBody({ id: 'w' }, rows, null);
+  let html = one([row('w1', 0, { status: 'running' })]);
+  assert.deepEqual(secs(html), [['Working', '1', true]]); assert.doesNotMatch(html, /ch-none|<small><\/small>|data-chactorder|ch-act-empty/);
+  html = one([row('g1', 0, { fresh: true })]);
+  assert.deepEqual(secs(html), [['Ready', '1', true]]); assert.match(html, /data-chactorder/, 'the sort shows while Ready has a chat');
+  html = one([row('s1', 1, { deferred: true })]);
+  assert.deepEqual(secs(html), [['Snoozed', '1', false]]); assert.doesNotMatch(html, /data-chactorder/);
+  html = one([row('old', 10 * 24)]);
+  assert.deepEqual(secs(html), [['Recent', '', true]], 'Recent shows while Show older has chats');
+  assert.match(html, /data-chactolder>Show older · 1</);
+  html = phone({ open: { snoozed: true } }).activityBody({ id: 'w' }, [], { awake: [{ id: 'n1', time: (NOW - 0.5 * H) / 1000 }], later: [] });
+  assert.deepEqual(secs(html), [['Ready', '1', true]], 'an unread alert alone still shows Ready');
+});
+
+test('AI apps sidebar on a fresh box: one empty state with New chat, no sections; one chat shows only its section (issue 1731)', () => {
+  const { c, listens } = sidebar({ rows: [] }); let made = 0; c.api.sessions.newChat = () => { made++; };
+  c.readSessions(); c.paintList(true);
+  assert.deepEqual(heads(c.scroll), []);
+  assert.equal(c.scroll.all().filter(n => n.cls === 'aad-act-empty').length, 1);
+  assert.deepEqual(texts(c.scroll, 'aad-empty'), [], 'no per-section empty lines');
+  assert.equal(c.scroll.all().filter(n => /aad-act-orderb|aad-sec-n|aad-sec-m/.test(n.cls)).length, 0, 'no sort, no count');
+  listens.find(([n]) => n.cls === 'aad-act-new')[2](); assert.equal(made, 1, 'New chat starts one');
+  const one = sidebar({ rows: [row('s1', 1, { deferred: true })] }); one.c.readSessions(); one.c.paintList(true);
+  assert.deepEqual(heads(one.c.scroll), [['snoozed', 'false']]);
+  assert.equal(one.c.scroll.all().filter(n => n.cls === 'aad-act-empty').length, 0);
 });

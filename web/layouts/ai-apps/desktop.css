@@ -212,6 +212,11 @@ html[data-shell="desktop"][data-layout="ai-apps"] .aad-more:hover { background: 
 html[data-shell="desktop"][data-layout="ai-apps"] :is(.aad-rw:hover, .aad-rw.is-held, .aad-rw:focus-within) .aad-row { padding-right: 36px; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-chev { width: 14px; height: 14px; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-empty { margin: 6px 10px 8px; color: var(--aad-ink-2); font: 500 0.8125rem / 1.4 var(--wz-font-ui); }
+/* Activity with nothing in it (wizard-ux issue 1731): one deliberate empty state on an opaque panel, in every skin. */
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-act-empty { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; margin: 10px 8px; padding: 14px; border: 1px solid var(--aad-line); border-radius: 12px; background: var(--aad-surface); color: var(--aad-ink-2); font: 500 0.8125rem / 1.45 var(--wz-font-ui); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-act-empty b { color: var(--aad-ink); font-size: 0.9375rem; font-weight: 600; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-act-new { margin-top: 8px; padding: 6px 12px; border: 1px solid var(--aad-line); border-radius: 99px; background: var(--aad-canvas); color: var(--aad-ink); font: 600 0.8125rem / 1.2 var(--wz-font-ui); cursor: pointer; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-act-new:hover { background: linear-gradient(var(--aad-hover), var(--aad-hover)), var(--aad-canvas); }
 /* the foot: a round + (New chat) and a cog (Settings), icons only (the phone drawer's) */
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-foot { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px 14px; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-new {

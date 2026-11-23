@@ -1094,3 +1094,7 @@ html:root .ch-chan-draft + .ch-chan-ind { margin-left: 0; }
 /* AI apps sidebar: "✎ Draft" leads the row's second line (the channel), or is the line when the row has no channel. */
 html:root[data-layout="ai-apps"] .aad-rw[data-draft] .aad-chan-line::before { content: "✎ Draft · "; color: var(--wz-warning, var(--amber)); font-weight: 500; }
 html:root[data-layout="ai-apps"] .aad-rw[data-draft] .aad-draft-line::before { content: "✎ Draft"; }
+/* Activity with nothing in it (wizard-ux issue 1731): one deliberate empty state on an opaque panel, in every skin. */
+html:root .ch-act-empty { display: flex; flex-direction: column; align-items: center; gap: 6px; margin: 24px 16px; padding: 22px 18px; border: 1px solid var(--wz-border, var(--line)); border-radius: 16px; background-color: var(--wz-base, var(--bg)); background-image: linear-gradient(var(--wz-surface, transparent), var(--wz-surface, transparent)); color: var(--wz-text-secondary, var(--ink-2)); text-align: center; font-size: 0.875rem; line-height: 1.5; }
+html:root .ch-act-empty b { color: var(--wz-text, var(--ink)); font-size: 1rem; }
+html:root .ch-act-empty .ch-fclear { margin-top: 8px; background-color: var(--wz-base, var(--bg)); background-image: linear-gradient(var(--wz-surface-raised, transparent), var(--wz-surface-raised, transparent)); color: var(--wz-text, var(--ink)); }

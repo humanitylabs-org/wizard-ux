@@ -132,6 +132,8 @@ window.WizCore.chatsParts.spaces = function ({ actNeeds, actUnread, agentRec, AG
   /* Stored list places and Activity's Ready counts; core/chats-ready.js. */
   const { ACT_SORTS, listSaveT, queueListPlace, storedListPlace } = window.WizCore.chatsParts.ready({ actNeeds, actUnread, CH, chanAt, elOf: (...a) => elOf(...a), H, LIST_PLACE_KEY, LIST_PLACE_TTL, listPlace, listSig, LIVE, W });
   let actOlder = false;
+  // Activity with nothing in it (a fresh box): one deliberate empty state, never a stack of empty sections (issue 1731).
+  const actEmpty = () => '<div class="ch-empty ch-act-empty"><b>No chats yet</b><span>Tap + to start one, or tap the orb and talk.</span><button type="button" class="ch-fclear" data-chnew data-chemptynew>New chat</button></div>';
   function activityBody(w, rows, nt) {
     const M = window.WizChatsListModel, c = ch(w.id), order = M.activitySortOf(chatVars.readyOrder);
     const g = M.activityGroups(LIVE.workGroups(rows), { needs: actNeeds, unread: actUnread, at: chanAt }, { order, now: Date.now(), older: actOlder });
@@ -142,19 +144,22 @@ window.WizCore.chatsParts.spaces = function ({ actNeeds, actUnread, agentRec, AG
     const row = x => x.n ? noteRow(x.v) : chatRow(x.v, null);
     const page = (k, list) => { const shown = c.more?.[k] ? list : list.slice(0, SEC_PAGE); return shown.map(row).join('') + (list.length > shown.length ? `<button class="ch-more" data-secmore="${k}">Show all ${list.length}</button>` : ''); };
     // side = a control on the header line beside the fold button (a button cannot hold a select)
-    const sec = (k, label, n, inner, open = !!chatVars.secOpen[k], side = '') => { const h = `<button class="ch-sec-h" data-sectoggle="${k}" aria-expanded="${open}"><span>${label}</span><small>${n || ''}</small><i aria-hidden="true"></i></button>`;
+    const sec = (k, label, n, inner, open = !!chatVars.secOpen[k], side = '') => { const h = `<button class="ch-sec-h" data-sectoggle="${k}" aria-expanded="${open}"><span>${label}</span>${n ? `<small>${n}</small>` : ''}<i aria-hidden="true"></i></button>`;
       return `<section class="ch-sec ch-act${open ? ' open' : ''}" data-sec="${k}">${side ? `<div class="ch-sec-hl">${h}${side}</div>` : h}${open ? `<div class="ch-sec-b">${inner()}</div>` : ''}</section>`; };
     // The one sort is a compact menu on Ready's header line (wizard-ux issue 1354), like the AI apps sidebar's: no pill row.
     const sortSel = `<label class="ch-act-sort"><select data-chactorder aria-label="Sort Ready">${ACT_SORTS().map(([v, l]) => `<option value="${v}"${order === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label>`;
     const older = g.older ? `<button class="ch-more ch-act-older" data-chactolder>Show older · ${g.older}</button>` : '';
     // Sends a graceful restart holds: their own Saved heading, only while there are any (wizard-ux issue 1362).
     const heldRow = s => !!globalThis.WizReach?.restartHeld?.(s), saved = g.working.filter(heldRow), working = g.working.filter(s => !heldRow(s));
-    return sec('working', 'Working', working.length, () => working.length ? working.map(s => chatRow(s, null)).join('') : '<span class="ch-none">None</span>')
+    // A section shows only while it holds something (wizard-ux issue 1731): no empty headers, lines, pills or sort menu.
+    // Nothing at all: one empty state with a way to start a chat.
+    if (!working.length && !saved.length && !ready.length && !recent.length && !g.older && !g.snoozed.length && !g.archive.length) return actEmpty();
+    return (working.length ? sec('working', 'Working', working.length, () => working.map(s => chatRow(s, null)).join('')) : '')
       + (saved.length ? sec('saved', 'Saved', saved.length, () => saved.map(s => chatRow(s, null)).join(''), chatVars.secOpen.saved !== false) : '')
-      + sec('ready', 'Ready', ready.length, () => ready.length ? page('ready', ready) : '<span class="ch-none">Nothing needs you.</span>', !!chatVars.secOpen.ready, sortSel)
-      + sec('recent', 'Recent', 0, () => (recent.length ? page('recent', recent) : '<span class="ch-none">Nothing else this week.</span>') + older)
-      + sec('snoozed', 'Snoozed', g.snoozed.length, () => g.snoozed.length ? page('snoozed', g.snoozed.map(v => ({ id: v.id, v }))) : '<span class="ch-none">Nothing snoozed.</span>')
-      + sec('archived', 'Archived', g.archive.length, () => g.archive.length ? page('archived', g.archive.map(v => ({ id: v.id, v }))) : '<span class="ch-none">Nothing archived.</span>');
+      + (ready.length ? sec('ready', 'Ready', ready.length, () => page('ready', ready), !!chatVars.secOpen.ready, sortSel) : '')
+      + (recent.length || g.older ? sec('recent', 'Recent', 0, () => page('recent', recent) + older) : '')
+      + (g.snoozed.length ? sec('snoozed', 'Snoozed', g.snoozed.length, () => page('snoozed', g.snoozed.map(v => ({ id: v.id, v })))) : '')
+      + (g.archive.length ? sec('archived', 'Archived', g.archive.length, () => page('archived', g.archive.map(v => ({ id: v.id, v })))) : '');
   }
   // The sort and Show older taps (Activity with Channels on); false = not one of them.
   function activityClick(e, w) {

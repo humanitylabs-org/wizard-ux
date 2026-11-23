@@ -8,7 +8,7 @@
  * same modules. The body below keeps desktop.js's indentation so `git log -L` and patches port over. */
 import { archiveTop, EMPTY, GROUP_MODES, GROUP_ORDERS, KINDS, projectGroups, RAIL_WORDS, railActive, railNext, railRows, readyFlat, readyGroups, sectionsFor, stateGroups } from './parts.js';
 import { CHATS, matches } from '../apps/chrome.js';
-export function sidepaintPart({ aadVars, ACT_EMPTY, ACT_SECTIONS, actOn, actOrder, api, badgeText, chatRow, closeFly, closeMenu, el, flyLeave, flyWant, groupBy, icon, LKINDS, paintChan, paintFly, paintView, panes, readSessions, readyOrder, rList, root, scene, scroll, secOpen, setActOrder, setGroup, setOrder, setSearch, setWorkingOrder, workingOrder }) {
+export function sidepaintPart({ aadVars, ACT_SECTIONS, actOn, actOrder, api, badgeText, chatRow, closeFly, closeMenu, el, flyLeave, flyWant, groupBy, icon, LKINDS, paintChan, paintFly, paintView, panes, readSessions, readyOrder, rList, root, scene, scroll, secOpen, setActOrder, setGroup, setOrder, setSearch, setWorkingOrder, workingOrder }) {
   let here, NOTE; // late-bound: desktop.js declares these after the call, see bindLate
   /** round 19 item 2 / round 22 / round 25 (Miguel, 4 Nov 2026: sort and group right in the sidebar, as two separate
    * drop-downs, since they are two different choices): kind 'sort' lists Newest / Oldest first, kind 'group' lists
@@ -112,8 +112,18 @@ export function sidepaintPart({ aadVars, ACT_EMPTY, ACT_SECTIONS, actOn, actOrde
       if (!hitsC.length) out.push(el('p', 'aad-empty', { text: 'No chats by that name.' }));
     } else if ((typeof actOn === 'function' && actOn())) {
       // Activity with Channels on (issue 1336): Working, Ready (its one sort on the header), Recent with Show older,
-      // then Snoozed and Archived folded at the very bottom, each with its count.
+      // then Snoozed and Archived folded at the very bottom, each with its count. A section shows only while it holds
+      // something; nothing at all is one empty state with a way to start a chat (wizard-ux issue 1731).
+      const has = k => (s[k] || []).length > 0 || (k === 'recent' && !!s.older);
+      if (!aadVars.sessions) out.push(el('p', 'aad-empty', { text: 'Loading your chats…' }));
+      else if (!ACT_SECTIONS.some(([k]) => has(k)) && !(s.saved || []).length) {
+        const box = el('div', 'aad-act-empty', { role: 'status' }), go = el('button', 'aad-act-new', { type: 'button', text: 'New chat' });
+        api.listen(go, 'click', () => api.sessions.newChat());
+        box.append(el('b', '', { text: 'No chats yet' }), el('span', '', { text: 'Type a message to Wizard, or tap the orb and talk.' }), go);
+        out.push(box);
+      }
       for (const [k, word0] of ACT_SECTIONS) {
+        if (!aadVars.sessions || !has(k)) { if (k === 'working' && aadVars.sessions && typeof savedSec === 'function') out.push(...savedSec(s.saved, h.thread)); continue; }
         const rows = s[k] || [], on = k === 'recent' ? secOpen.recent !== false : !!secOpen[k];
         const hd = el('button', 'aad-lab aad-sec', { type: 'button', 'data-sec': k, 'aria-expanded': String(on), 'aria-controls': 'aad-sec-' + k });
         hd.append(el('span', 'aad-sec-w', { text: word0 }));
@@ -124,8 +134,7 @@ export function sidepaintPart({ aadVars, ACT_EMPTY, ACT_SECTIONS, actOn, actOrde
         api.listen(hd, 'click', () => { secOpen[k] = !on; api.storage.set('sections', { ...secOpen }); paintList(true); });
         const body = el('div', 'aad-sec-b', { id: 'aad-sec-' + k, role: 'group', 'aria-label': word0 }); body.hidden = !on;
         if (on) {
-          if (rows.length) body.append(...rows.map(r => chatRow(r, h.thread)));
-          else body.append(el('p', 'aad-empty', { text: !aadVars.sessions ? 'Loading your chats…' : ACT_EMPTY[k] }));
+          body.append(...rows.map(r => chatRow(r, h.thread)));
           if (k === 'recent' && s.older) {
             const more = el('button', 'aad-more-older', { type: 'button', text: `Show older · ${s.older}` });
             api.listen(more, 'click', () => { aadVars.actOlder = true; readSessions(); paintList(true); });

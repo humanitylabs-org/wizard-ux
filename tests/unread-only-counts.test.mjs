@@ -24,8 +24,9 @@ const rows = [
 ];
 const unread = new Set(['ready-a', 'ready-c']);
 const headerOf = (html, k) => {
-  const m = html.match(new RegExp(`data-sec="${k}"[^>]*>\\s*<button class="ch-sec-h"[^>]*><span>[^<]*</span><small>([^<]*)</small>`));
-  return m ? m[1] : null;
+  const m = html.match(new RegExp(`data-sec="${k}"[^>]*>\\s*<button class="ch-sec-h"[^>]*><span>[^<]*</span>(?:<small>([^<]*)</small>)?`));
+  // (an empty count draws no <small> at all: wizard-ux issue 1731)
+  return m ? m[1] || '' : null;
 };
 
 for (const status of [false, true]) {

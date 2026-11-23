@@ -215,7 +215,6 @@ export default function desktop(api) {
   // The sidebar's list by the owner's Default Chats look (Settings › Chats; wizard-ux issue 1443), off by default.
   const viewOn = () => { try { return String(root.dataset.tweaks || '').split(' ').includes('wizard/sidebar-chats-view'); } catch (_) { return false; } };
   const ACT_SECTIONS = [['working', 'Working'], ['ready', 'Ready'], ['recent', 'Recent'], ['snoozed', 'Snoozed'], ['archive', 'Archived']];
-  const ACT_EMPTY = { working: 'Nothing working.', ready: 'Nothing needs you.', recent: 'Nothing else this week.', snoozed: 'Nothing snoozed.', archive: 'Nothing archived.' };
   // (+ 'saved': sends a graceful restart holds, wizard-ux issue 1362; listed only while there are any)
   const LKINDS = [...KINDS, 'recent', 'saved'];
   let actOlder = false;
@@ -395,7 +394,7 @@ export default function desktop(api) {
     menu.card.remove(); menu.wrap.classList.remove('is-held'); if (menu.wrap.hasAttribute('aria-expanded')) menu.wrap.setAttribute('aria-expanded', 'false'); menu = null; offMenuBack?.(); offMenuBack = null;
   }
   /* The sort and group menu, the order in Settings and painting the sidebar; layouts/ai-apps/desktop-sidepaint.js. */
-  const { curChat, FLY_MS, FLY_OUT_MS, openChat, paintList, paintRail, paintSetting, railMode, railNow, bindLate: sidepaintLate } = sidepaintPart({ aadVars, ACT_EMPTY, ACT_SECTIONS, actOn, actOrder, api, badgeText, chatRow, closeFly, closeMenu, el, flyLeave, flyWant, groupBy, icon, LKINDS, paintChan, paintFly, paintView, panes, readSessions, readyOrder, rList, root, scene, scroll, secOpen, setActOrder, setGroup, setOrder, setSearch, setWorkingOrder, workingOrder });
+  const { curChat, FLY_MS, FLY_OUT_MS, openChat, paintList, paintRail, paintSetting, railMode, railNow, bindLate: sidepaintLate } = sidepaintPart({ aadVars, ACT_SECTIONS, actOn, actOrder, api, badgeText, chatRow, closeFly, closeMenu, el, flyLeave, flyWant, groupBy, icon, LKINDS, paintChan, paintFly, paintView, panes, readSessions, readyOrder, rList, root, scene, scroll, secOpen, setActOrder, setGroup, setOrder, setSearch, setWorkingOrder, workingOrder });
   sidetabsLate({ paintList, paintRail });
   sectionsLate({ paintList, paintRail, paintSetting });
   homeLate({ paintList });
