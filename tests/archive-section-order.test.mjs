@@ -79,9 +79,12 @@ async function deskSections(tweaks) {
   return w.qa('.aad-sec').map(h => h.dataset.sec);
 }
 
-// The old text pin said the desktop sidebar draws sectionsFor(root); that loop sits behind actOn(), which desktop.js
-// fixes to true, so it never runs: the drawn sidebar ignores archive-top.
-test('AI apps desktop sidebar: archive-top puts Archive first', { todo: 'desktop sidebar ignores miguel/archive-top: its sectionsFor(root) branch is dead (actOn() is always true)' }, async () => {
-  const keys = await deskSections('wizard/unified-inbox miguel/archive-top');
-  assert.equal(keys[0], 'archive', `desktop with archive-top: ${keys}`);
+// The desktop sidebar draws the Activity sections (actOn() is always true in desktop.js); archive-top puts Archived first
+// there too, as on the phone drawer (wizard-ux issue 1741), and the rest keep their stock order.
+test('AI apps desktop sidebar: archive-top puts Archive first', async () => {
+  const off = await deskSections('wizard/unified-inbox');
+  const on = await deskSections('wizard/unified-inbox miguel/archive-top');
+  assert.equal(on[0], 'archive', `desktop with archive-top: ${on}`);
+  assert.deepEqual(on.slice(1), off.filter(k => k !== 'archive'), 'the other sections keep their order');
+  assert.equal(off.at(-1), 'archive', `desktop without archive-top: Archive last (${off})`);
 });
