@@ -6,6 +6,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { block, runRecording } from './fixtures/source-slice.mjs';
 import { withAppParts } from './fixtures/app-parts.mjs';
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 
@@ -99,5 +100,11 @@ test('sendVoiceTo: a channel-pinned box take files under its route\'s agent', ()
   assert.equal(agent('', opus, opus, 'philosopher'), '', 'General: the main agent');
   assert.equal(agent('sp', { ...opus, agent: 'container' }, null, 'philosopher'), 'container');
   assert.equal(agent(undefined, opus, opus, 'philosopher'), 'philosopher', 'not a channel take: as before');
-  assert.match(power, /\.\.\.\(isNew && chanAgent \? \{ agent: chanAgent \} : \{\}\) \}\);/);
+  // the take's real enqueue call: a new channel take carries the channel's agent; a reply into a thread never does
+  const call = block(power, 'OUTBOX.enqueue({ captureId') + ')';
+  const queued = (isNew, chanAgent) => { const got = []; runRecording(`this.it = ${call};`, { OUTBOX: { enqueue: o => got.push(JSON.parse(JSON.stringify(o))) }, isNew, chanAgent,
+    sealed: { key: 'k', text: 'hi' }, transcript: '', all: [], nm: null, pinned: undefined, wid: 'w', sid: 's1', wasHere: true, instructions: '', captureId: 'c', custodyId: 'u', steerRunId: '' }); return got[0]; };
+  assert.equal(queued(true, 'container').agent, 'container', 'a new channel take files under the route\'s agent');
+  assert.equal('agent' in queued(true, ''), false, 'General: no agent named (the main agent)');
+  assert.equal('agent' in queued(false, 'container'), false, 'a reply goes to its thread\'s own agent');
 });
