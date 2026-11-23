@@ -855,15 +855,20 @@
   // Wizard for Mac (try-wizard#139): a blob <a download> clicked after the fetch carries no user gesture, so the app
   // drops it without a word. An app whose app.info lists `files.` writes the bytes to Downloads itself and answers.
   const macShell = () => { try { return window.top === window && !!window.webkit?.messageHandlers?.wizardNative; } catch (_) { return false; } };
-  let macSave = null;
+  // macSaveKnown: undefined until the app answered app.info, then the bridge (it saves files) or null (it can't).
+  let macSave = null, macSaveKnown;
   const macSaver = () => {
     const b = window.WizCore?.bridge;
     if (!macShell() || typeof b?.call !== 'function') return Promise.resolve(null);
-    return macSave || (macSave = b.call('app.info').then(i => (Array.isArray(i?.capabilities) && i.capabilities.includes('files.') ? b : null), () => { macSave = null; return null; }));
+    return macSave || (macSave = b.call('app.info').then(i => (macSaveKnown = Array.isArray(i?.capabilities) && i.capabilities.includes('files.') ? b : null), () => { macSave = null; return null; }));
   };
   async function saveFile(item) {
     const n = native(), href = String(item.download || item.url || '');
     if (appDownloads() && !(n && typeof n.saveFile === 'function') && !/^(blob|data):/i.test(href)) { download(href, item.name); return 'downloading'; }
+    // A Mac app without files.save (0.8.2 and older, wizard-agent-service issue 586) drops a download that starts after
+    // the fetch, so this Wizard's own file is downloaded from the tap itself, before any wait, where the app keeps it.
+    const own = macShell() && macSaveKnown === null && !/^(blob|data):/i.test(href) ? ownAddress(href) : '';
+    if (own) { download(own, item.name); return 'downloading'; }
     const mac = macSaver();
     const file = await asFile(item);
     if (n && typeof n.saveFile === 'function') { n.saveFile(await b64(file), file.name, file.type); return 'saved'; }
@@ -1180,6 +1185,7 @@
   function show() {
     const el = build(), it = V.items[V.i]; if (!it) return;
     clearGesture(); V.s = 1; V.x = 0; V.y = 0; V.text = ''; V.long = false; stopFling(); el.classList.remove('long'); menu(false);
+    macSaver(); // ask the Mac app now whether it saves files, so a Save tap knows without a wait
     dropPdf(); el.querySelector('.mv-bar [data-mv="save"]').textContent = it.kind === 'image' ? 'Save' : '⤓ Download';
     el.querySelector('.mv-bar [data-mv="share"]').textContent = 'Share';
     for (const b of el.querySelectorAll('.mv-bar [data-mv="save"], .mv-bar [data-mv="share"]')) { delete b.dataset.was; b._mvMark = null; } // a new item: no old outcome comes back
