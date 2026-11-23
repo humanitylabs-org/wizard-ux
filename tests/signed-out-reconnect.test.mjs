@@ -15,19 +15,21 @@ const claudeOk = { id: 'claude:two', provider: 'claude', name: 'Claude', status:
 const gptOk = { id: 'codex', name: 'ChatGPT', status: 'ok', fetchedAt: new Date().toISOString(), limits: [{ id: 'weekly', label: 'Weekly', remainingPercent: 40 }] };
 
 function boot() {
-  const events = [];
-  const ctx = { document: { documentElement: { dataset: { tweaks: '' } }, hidden: false, addEventListener() {}, querySelectorAll: () => [] },
+  const events = [], on = {}, opened = [];
+  const ctx = { document: { documentElement: { dataset: { tweaks: '' } }, hidden: false, addEventListener: (t, f) => { on[t] = f; }, querySelectorAll: () => [] },
     localStorage: { getItem: () => null, setItem() {} }, queueMicrotask() {}, setTimeout, clearTimeout, AbortController, console, Set, Map,
     CustomEvent: class { constructor(type, o) { this.type = type; this.detail = o?.detail; } },
     fetch: () => new Promise(() => {}) };
   ctx.window = ctx; ctx.addEventListener = () => {}; ctx.dispatchEvent = e => { events.push(e); return true; };
-  ctx.WosChat = { esc: s => String(s ?? '') };
+  ctx.WosChat = { esc: s => String(s ?? '') }; ctx.WizOpenApp = (app, path) => (opened.push([app, path]), true);
   vm.runInNewContext(read('web/core/usage.js'), ctx);
   const source = read('web/core/resources.js');
   vm.runInNewContext(source.replace('window.WosResources={', 'globalThis.__resourcesState=S;window.WosResources={'), ctx);
   vm.runInNewContext(read('web/core/chat-models.js'), ctx);
   const set = providers => { const snap = ctx.WosUsage.normalize({ providers }); ctx.__resourcesState.ai = snap; ctx.WosUsage.snap = snap; ctx.WosUsage.at = Date.now(); };
-  return { ctx, U: ctx.WosUsage, M: ctx.WosModels, set, events, home: () => ctx.WosResources.home(), details: () => ctx.WosUsage.html() };
+  return { ctx, U: ctx.WosUsage, M: ctx.WosModels, set, events, home: () => ctx.WosResources.home(), details: () => ctx.WosUsage.html(), opened,
+    // resources.js's real click listener on a [data-res-signin] button
+    tapSignin: (app, reconnect = true) => on.click({ preventDefault() {}, target: { closest: q => (q === '[data-res-signin]' ? { dataset: { resSignin: app }, hasAttribute: k => reconnect && k === 'data-res-reconnect' } : null) } }) };
 }
 const failed = (provider, model = 'claude-fable-5-1') => ({ id: 'philosopher', status: 'failed', model, provider });
 
@@ -61,8 +63,9 @@ test('Tinfoil signed out: Reconnect goes to its Connect step', () => {
   const b = boot(); b.set([{ id: 'tinfoil', name: 'Tinfoil', status: 'signed_out', limits: [] }]);
   assert.match(b.M.failureHtml({ s: failed('tinfoil', 'deepseek-v4-1-flash'), canRetry: true }), /data-chreconnect="wizard-tinfoil" data-recovery-run="">Reconnect Tinfoil/);
   assert.match(b.details(), /data-res-signin="wizard-tinfoil" data-res-reconnect="1">Reconnect Tinfoil/);
-  assert.match(read('web/core/resources.js'), /si\.hasAttribute\('data-res-reconnect'\)&&app==='wizard-tinfoil'\?'\/wizard-tinfoil\/\?connect=1'/);
-  assert.match(read('web/core/chat-power.js'), /appId === 'wizard-tinfoil' \? '\/wizard-tinfoil\/\?connect=1'/);
+  b.tapSignin('wizard-tinfoil'); b.tapSignin('wizard-tinfoil', false);
+  assert.deepEqual(b.opened, [['wizard-tinfoil', '/wizard-tinfoil/?connect=1'], ['wizard-tinfoil', '']], 'Reconnect opens Tinfoil at its Connect step');
+  // the card's Reconnect: run in 'Reconnect on the card opens the Claude app at Connect when there is no saved run to recover'
 });
 
 test('the same for ChatGPT; other providers and working subscriptions keep Retry', () => {
@@ -103,7 +106,7 @@ test('Home AI zone and Resources › AI accounts show a working Reconnect button
   b.set([claudeOk, gptOk]);
   assert.doesNotMatch(b.home(), /Reconnect/); assert.doesNotMatch(b.details(), /Reconnect/);
   // The tap: resources.js opens the app straight at its Reconnect step.
-  assert.match(read('web/core/resources.js'), /si\.hasAttribute\('data-res-reconnect'\)&&RECONNECT_APPS\.has\(app\)\?`\/\$\{app\}\/\?reconnect=1`/);
+  b.tapSignin('wizard-claude'); assert.deepEqual(b.opened, [['wizard-claude', '/wizard-claude/?reconnect=1']]);
 });
 
 // openReconnect, rerenderAll and the wos:ai-signin listener from chat-power.js, plus its [data-chreconnect] click line.
@@ -181,7 +184,6 @@ test('issue 1500: the Errors row (desktop sidebar) offers Reconnect and no Retry
   const src = read('web/core/chat-power.js');
   const body = src.slice(src.indexOf('  function errorRow(s, rowHtml) {'), src.indexOf('  function errorsExtra() {'));
   const helpers = src.slice(src.indexOf('  const failedRoute = s =>'), src.indexOf('  function failureHtml(w, s) {'));
-  assert.match(helpers, /const signedOutFail = /);
   // threadModel stands for the id-only lookup: with a routed id equal to a main one it reads the OTHER thread's
   // route (here a working OpenRouter model). The row's own model must win (Codex P1).
   const make = () => vm.runInNewContext(`(function(){ const esc = s => String(s ?? ''); const E = { busy: new Map() }; const M = window.WosModels;
