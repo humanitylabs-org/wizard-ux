@@ -94,14 +94,31 @@
       return p.slug !== SUB || current === SUB;
     });
   }
+  /* Signed in, but not (yet) the agent's AI: the provider being signed in to says authenticated, yet it does not count
+   * (the Claude subscription before it is the agent's model). Its app makes it the model when the agent has none that
+   * works (wizard-ux issue 1749); until then the step says so instead of "continues by itself". */
+  const signedIn = (j, slug) => !!slug && !aiConnected(j, slug) && (j?.providers || []).some(p => p && p.authenticated === true
+    && [].concat(slug).includes(p.slug) && p.auth_type !== 'virtual' && p.source !== 'virtual');
   // slug: only that provider counts (the one being signed in to); none: any signed-in provider.
+  // lastSigned: whether the last reading found that provider signed in without counting yet (null: no reading).
+  let lastSigned = null;
   async function aiReady(slug) {
+    lastSigned = null;
     try {
       const r = await fetch(OPTIONS, { credentials: 'same-origin', cache: 'no-store', signal: tsig(5000) });
       if (!r.ok) return null;
       const j = await r.json();
+      lastSigned = typeof signedIn === 'function' ? signedIn(j, slug) : null; // (typeof: tests vm-slice aiReady on its own)
       return aiConnected(j, slug);
     } catch (e) { return null; }
+  }
+  // When the sign-in was first seen not counting yet (Date.now), for the provider it was seen for; 0: not seen.
+  let signedAt = 0, signedFor = '', signedShown = 0; // signedShown: the line on screen (0 usual, 1 making, 2 not yet)
+  const SIGNED_WAIT_MS = 20000;
+  function waitLine(p) {
+    if (!signedAt || signedFor !== p.app) return '';
+    return Date.now() - signedAt < SIGNED_WAIT_MS ? `Signed in. Making ${p.name} your agent\u2019s AI\u2026`
+      : `${p.name} is signed in, but it isn\u2019t your agent\u2019s AI yet. Press Test on the page above to make it your agent\u2019s AI, or go Back and pick another.`;
   }
 
   async function setupState() {
@@ -204,7 +221,7 @@
       const p = PROVIDERS.find(x => x.app === provider), a = H.app(provider);
       return `${brand()}${dots()}<header class="wl-head wl-row"><button type="button" class="wl-back" data-wl="back" aria-label="Back">‹</button><h2 tabindex="-1">Sign in to ${esc(p.name)}</h2></header>
         <div class="wl-frame"><iframe src="${esc(signinUrl(a.url))}"${sbx(signinUrl(a.url), provider)} title="${esc(p.name)} sign-in"></iframe></div>
-        <p class="wl-status${connected ? ' ok' : ''}" role="status">${connected ? `${esc(p.name)} is connected.` : `${privateFirst() && p.app !== PRIVATE ? esc(extraNote(p)) + ' ' : ''}This continues by itself once you are signed in.`}</p>`;
+        <p class="wl-status${connected ? ' ok' : ''}" role="status">${connected ? `${esc(p.name)} is connected.` : `${privateFirst() && p.app !== PRIVATE ? esc(extraNote(p)) + ' ' : ''}${esc(waitLine(p) || 'This continues by itself once you are signed in.')}`}</p>`;
     }
     if (privateFirst()) return paintPrivateAI();
     return `${brand()}${dots()}<header class="wl-head"><h2 tabindex="-1">Connect your AI</h2><p>${esc(agent())} thinks with your own AI subscription. Sign in once.</p></header>
@@ -366,6 +383,7 @@
     const mine = el, chosen = provider; // a reply for an earlier choice (Back, then another provider) is ignored
     pollT = setTimeout(async () => {
       let ok = await aiReady(PROVIDERS.find(x => x.app === chosen)?.slug);
+      const signed = lastSigned;
       // Private first: Tinfoil is done once the Agent Service has the private agent (its record decides, not the
       // provider sign-in alone). A box that is not fresh never gets a default private agent recorded (wizard-agent-service
       // server/private-first.mjs), so a sign-in seen for PF_GRACE polls without one goes on; an older Agent Service
@@ -377,6 +395,7 @@
         else if (s && ok === true) { pfSeen++; ok = pfSeen >= PF_GRACE ? true : null; }
       }
       if (!el || el !== mine || step !== 'ai' || provider !== chosen) return;
+      if (ok !== true && signed !== null) waiting(chosen, signed);
       if (ok === true) {
         connected = true; write('ai'); log('connected'); paint(false);
         // The private agent is ready: back to Connect your AI, where a second agent is optional and Continue goes on.
@@ -387,6 +406,18 @@
       }
       poll();
     }, POLL_MS);
+  }
+
+  // The status line only (never a repaint: that would reload the provider's own page under the owner's finger).
+  function waiting(chosen, signed) {
+    if (!signed) { signedAt = 0; signedFor = ''; }
+    else if (!signedAt || signedFor !== chosen) { signedAt = Date.now(); signedFor = chosen; }
+    const level = signedAt ? (Date.now() - signedAt < SIGNED_WAIT_MS ? 1 : 2) : 0;
+    if (level === signedShown) return;
+    signedShown = level;
+    log(level === 1 ? 'signed:making' : level === 2 ? 'signed:not-agent' : 'signed:off');
+    const p = PROVIDERS.find(x => x.app === chosen), line = el?.querySelector('.wl-status');
+    if (p && line) line.textContent = (privateFirst() && p.app !== PRIVATE ? extraNote(p) + ' ' : '') + (waitLine(p) || 'This continues by itself once you are signed in.');
   }
 
   function open(at = 'ai') {
@@ -432,6 +463,7 @@
     const act = t.dataset.wl;
     if (act === 'provider') {
       const id = t.dataset.app; installError = ''; pfSeen = 0;
+      signedAt = 0; signedFor = ''; signedShown = 0;
       if (isInstalled(id)) { provider = id; connected = false; paint(); poll(); return; }
       installing = id; paint(false);
       const mine = el; // a Welcome closed and reopened meanwhile (or another install) must not be taken over
