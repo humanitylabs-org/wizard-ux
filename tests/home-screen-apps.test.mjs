@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import { java, method } from './fixtures/s1-java-slice.mjs';
 import { launcherFixture } from './launcher-fixture.mjs';
 import { withShellParts } from './fixtures/shell-parts.mjs';
 import { createDocument } from './fixtures/mini-dom.mjs';
@@ -232,8 +233,10 @@ test('pinned app keeps Android status bar and navigation buttons; content starts
   vm.runInContext(read('core/single-app-session.js'),ctx);
   assert.deepEqual(calls,[false],'never asks Android to hide its bars');
   assert.equal(typeof window.__wosTop,'function'); window.__wosTop(40);
-  const java=withShellParts(fs.readFileSync(root+'android/app/src/main/java/ai/wizards/os/AppSessionActivity.java','utf8'));
-  assert.doesNotMatch(java,/applyImmersive\(true\)/); assert.match(java,/super\.applyImmersive\(false\)/);
+  // the real AppSessionActivity.applyImmersive override, run: whatever the shell asks, Android keeps its bars
+  const asked=[]; const Main=class { applyImmersive(on){ asked.push(on); } };
+  for(const on of [true,false]) method(java('AppSessionActivity.java'),'void applyImmersive(boolean ignored)',{args:{ignored:on},base:Main});
+  assert.deepEqual(asked,[false,false]);
 });
 
 // Every surface that lists apps to open offers the same long-press. Miguel's skins replaced swipe-up Apps with
@@ -274,10 +277,21 @@ test('Desks overview hold-and-release offers Add to home screen; drag keeps reor
 
 // A home-screen app window is not "WizardOS in front": the floating orb stays over it (James, 24 Oct).
 test('Pinned home-screen apps keep the floating orb', async () => {
-  const { readFileSync } = await import('node:fs');
-  const j = f => withShellParts(readFileSync(new URL('../android/app/src/main/java/ai/wizards/os/' + f, import.meta.url), 'utf8'));
-  assert.match(j('device/AppState.java'), /static synchronized boolean shellFront\(\)[\s\S]{0,160}instanceof ai\.wizards\.os\.AppSessionActivity/);
-  assert.equal((j('MainActivity.java').match(/setAppInFront\(this, ai\.wizards\.os\.device\.AppState\.shellFront\(\)\)/g) || []).length, 2);
+  // the real AppState.shellFront and MainActivity.onStart/onStop, run: a pinned app window alone is not the shell in front
+  class AppSessionActivity {} class MainActivity {}
+  const visible = new Set();
+  const shellFront = () => method(java('device/AppState.java'), 'public static synchronized boolean shellFront()', { scope: { visible, ai: { wizards: { os: { AppSessionActivity } } } } }).value;
+  assert.equal(shellFront(), false, 'nothing visible');
+  visible.add(new AppSessionActivity()); assert.equal(shellFront(), false, 'only a pinned app window: the orb stays');
+  visible.add(new MainActivity()); assert.equal(shellFront(), true, 'the shell itself is visible');
+  // both lifecycle edges tell the floating orb what is in front, and say so with shellFront()
+  const main = java('MainActivity.java'), told = [];
+  const ai = { wizards: { os: { AppSessionActivity, device: { AppState: { shellFront } }, everywhere: { EverywhereService: { setAppInFront: (a, front) => told.push(front) }, EverywhereOutbox: { get: () => ({ pump() {} }) } }, mizel: { MeetingRecorderService: { recover() {} } } } } };
+  const Base = class { onStart() {} onStop() {} };
+  method(main, 'protected void onStart()', { scope: { ai, AppSessionActivity, device: { onStart() {} } }, base: Base });
+  visible.clear(); visible.add(new AppSessionActivity());
+  method(main, 'protected void onStop()', { scope: { ai, device: { onStop() {} } }, base: Base });
+  assert.deepEqual(told, [true, false]);
 });
 
  test('browser offer rejects unsafe destinations and preserves exact registered route',()=>{

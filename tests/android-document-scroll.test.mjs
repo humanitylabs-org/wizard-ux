@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {readFileSync,existsSync} from 'node:fs';
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 import vm from 'node:vm';
+import { java, constant, statement } from './fixtures/s1-java-slice.mjs';
 import { between, block, runRecording } from './fixtures/source-slice.mjs';
 import { px, valueOf } from './fixtures/r7A-css.mjs';
 import { createDocument } from './fixtures/mini-dom.mjs';
@@ -23,7 +24,12 @@ test('document scrolling requires the explicit native capability marker on every
  for(const ua of ['Mozilla/5.0 Chrome/140','X WizardOS-Android/0.9.42','X WizardOS-Android/0.10.5','X WizardOS-Android/0.10.7'])assert.equal(gate(ua),false);
  assert.equal(gate('X WizardOS-Android/0.10.7 WizardOS-DocScroll'),true);
  assert.equal(gate('X WizardOS-Android/0.9.42 WizardOS-DocScroll'),true);
- assert.match(read('android/app/src/main/java/ai/wizards/os/MainActivity.java'),/setUserAgentString\(s.getUserAgentString\(\) \+ UA_TAG \+ " WizardOS-DocScroll"\)/);
+ // the real MainActivity WebView setup line, run: the user agent it hands the page passes the real gate above
+ const main=java('MainActivity.java'),UA_TAG=constant(main,'UA_TAG',{BuildConfig:{VERSION_NAME:'0.10.7'}});
+ let ua='Mozilla/5.0 Chrome/140';const s={getUserAgentString:()=>ua,setUserAgentString:v=>{ua=v;}};
+ assert.equal(gate(ua+UA_TAG),false,'the app tag alone is not the marker');
+ statement(main,'s.setUserAgentString(',{s,UA_TAG});
+ assert.equal(gate(ua),true,ua);
  // the real syncDocumentThread: without the marker the thread keeps its own box; with it the page scrolls the thread
  const sync=androidDocument=>{
   const doc=createDocument();doc.body.innerHTML='<div class="win" data-chats="w1"><div class="ch-thread"><div class="ch-msgs"></div></div></div>';

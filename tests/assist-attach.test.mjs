@@ -5,6 +5,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
+import { java, method } from './fixtures/s1-java-slice.mjs';
 import { readFileSync } from 'node:fs';
 import { createDocument } from './fixtures/mini-dom.mjs';
 import { cascade } from './fixtures/mini-css.mjs';
@@ -95,10 +96,26 @@ test('the corner orb shows Camera and Attach only when native says the switch is
   // (the hide/show rules, canAttach() and the listen-only click handlers: run and cascaded above)
   const lock = read('android/app/src/main/java/ai/wizards/os/assist/AssistLockActivity.java');
   assert.ok(!/attachOn|camera\(\)|AssistPickActivity/.test(lock), 'the lock-screen surface has no Camera/Attach bridge');
-  const session = read('android/app/src/main/java/ai/wizards/os/assist/WizardSession.java');
-  assert.match(session, /public boolean attachOn\(\) \{ return AssistAttach\.on\(getContext\(\)\) && !keyguard\.isKeyguardLocked\(\); \}/);
-  assert.match(session, /if \(!AssistAttach\.on\(getContext\(\)\) \|\| keyguard\.isKeyguardLocked\(\)\) return;/);
-  assert.match(session, /capture\.listening\(\) && !capture\.away\(\)\) capture\.finishOnDismiss/, 'opening the camera never ends the take');
+  // the real WizardSession methods, run with stand-ins: the bridge, the picker and dismissal obey the switch and the lock
+  const session = java('assist/WizardSession.java');
+  const world = (on, locked, take = {}) => {
+    const log = [];
+    const capture = { listening: () => take.listening ?? true, away: () => take.away ?? false, attachedCount: () => 0, attachCap: () => 10,
+      beginAway: () => { log.push('away'); return true; }, finishOnDismiss: why => log.push('finish:' + why), detach() {}, noteDismissed() {}, pickDone() {} };
+    const scope = { capture, shotPending: false, AssistAttach: { on: c => { assert.equal(c, 'ctx'); return on; } }, getContext: () => 'ctx',
+      keyguard: { isKeyguardLocked: () => locked }, startAssistantActivity: () => log.push('picker'), AssistPickActivity: { intent: (c, k) => k } };
+    return { log, scope };
+  };
+  for (const [on, locked] of [[false, false], [true, false], [false, true], [true, true]]) {
+    const w = world(on, locked);
+    assert.equal(method(session, 'public boolean attachOn()', { scope: w.scope }).value, on && !locked, `attachOn on=${on} locked=${locked}`);
+    method(session, 'private void openPick(String kind)', { args: { kind: 'camera' }, scope: w.scope });
+    assert.deepEqual(w.log, on && !locked ? ['away', 'picker'] : [], `openPick on=${on} locked=${locked}`);
+  }
+  const hide = take => { const w = world(true, false, take); method(session, 'public void onHide()', { scope: w.scope, base: class { onHide() {} } }); return w.log; };
+  assert.deepEqual(hide({ away: true }), [], 'opening the camera never ends the take');
+  assert.deepEqual(hide({ away: false }), ['finish:dismiss'], 'a real dismissal still sends the take');
+  assert.deepEqual(hide({ listening: false }), []);
 });
 
 // static-rule: AndroidManifest.xml is declarative config: exported=false and the missing permission are the behaviour
