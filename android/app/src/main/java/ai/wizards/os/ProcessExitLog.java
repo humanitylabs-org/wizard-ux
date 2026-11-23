@@ -30,13 +30,17 @@ public final class ProcessExitLog {
         public int pid, reason, status, importance;
         public long pssKb, rssKb;
         public String process = "", description = "";
+        /** For an ANR: the main thread's frames from Android's trace ({@link HangLog#mainFrames}), else empty. */
+        public final List<String> frames = new ArrayList<>();
 
         public String reasonName() { return ProcessExitLog.reasonName(reason); }
 
         JSONObject json() throws JSONException {
-            return new JSONObject().put("timestamp", timestamp).put("pid", pid).put("process", process)
+            JSONObject o = new JSONObject().put("timestamp", timestamp).put("pid", pid).put("process", process)
                     .put("reason", reason).put("reasonName", reasonName()).put("status", status)
                     .put("importance", importance).put("pssKb", pssKb).put("rssKb", rssKb).put("description", description);
+            if (!frames.isEmpty()) { JSONArray f = new JSONArray(); for (String s : frames) f.put(s); o.put("frames", f); }
+            return o;
         }
 
         static Exit from(JSONObject o) {
@@ -44,6 +48,8 @@ public final class ProcessExitLog {
             e.timestamp = o.optLong("timestamp"); e.pid = o.optInt("pid"); e.process = o.optString("process", "");
             e.reason = o.optInt("reason"); e.status = o.optInt("status"); e.importance = o.optInt("importance");
             e.pssKb = o.optLong("pssKb"); e.rssKb = o.optLong("rssKb"); e.description = o.optString("description", "");
+            JSONArray f = o.optJSONArray("frames");
+            if (f != null) for (int i = 0; i < f.length() && e.frames.size() < HangLog.FRAMES; i++) { String s = HangLog.frame(f.optString(i)); if (!s.isEmpty()) e.frames.add(s); }
             return e;
         }
     }
@@ -147,6 +153,9 @@ public final class ProcessExitLog {
         save();
         return fresh;
     }
+
+    /** The newest exit already recorded; older ones from Android are not new. */
+    public synchronized long lastSeen() { return lastSeen; }
 
     /** Newest first. */
     public synchronized List<Exit> exits() { return new ArrayList<>(exits); }

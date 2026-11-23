@@ -34,7 +34,25 @@ def _capture_detail(d):
     return True
 
 
-EXIT_KEYS = {'timestamp', 'pid', 'process', 'reason', 'reasonName', 'status', 'importance', 'pssKb', 'rssKb', 'description'}
+EXIT_KEYS = {'timestamp', 'pid', 'process', 'reason', 'reasonName', 'status', 'importance', 'pssKb', 'rssKb', 'description',
+             'frames'}
+FRAME = re.compile(r'[A-Za-z0-9 ._$<>:(),#-]{1,200}')
+
+
+def _frames(v):
+    # Code locations only (class.method:line, lock lines) from the phone's hang watch or an ANR trace (wizard-ux#1762).
+    return isinstance(v, list) and len(v) <= 40 and all(isinstance(f, str) and FRAME.fullmatch(f) for f in v)
+
+
+def _hangs(v):
+    if not isinstance(v, list) or len(v) > 10:
+        return False
+    for h in v:
+        if not isinstance(h, dict) or set(h) != {'at', 'kind', 'ms', 'frames'}:
+            return False
+        if type(h['at']) is not int or type(h['ms']) is not int or h['kind'] not in ('main', 'webview') or not _frames(h['frames']):
+            return False
+    return True
 
 
 def _process_exits(v):
@@ -48,6 +66,8 @@ def _process_exits(v):
             if k in e and type(e[k]) is not int:
                 return False
         if 'reasonName' in e and not (isinstance(e['reasonName'], str) and re.fullmatch(r'[a-z_]{1,40}', e['reasonName'])):
+            return False
+        if 'frames' in e and not _frames(e['frames']):
             return False
         for k, n in (('process', 200), ('description', 200)):
             if k in e and not (isinstance(e[k], str) and len(e[k]) <= n):
@@ -65,7 +85,8 @@ def store(body, root=None):
         raise ValueError('schema')
     # The client never sends page content. Reject accidental additions rather than silently persisting them.
     session_keys = {'id', 'manufacturer', 'model', 'sdk', 'appVersion', 'versionCode', 'oneui',
-                    'webviewPackage', 'webviewVersion', 'accessibilityServices', 'processExits', 'batteryExempt'}
+                    'webviewPackage', 'webviewVersion', 'accessibilityServices', 'processExits', 'batteryExempt',
+                    'hangs'}
     data_keys = {'reason', 'direction', 'result', 'proxy', 'x', 'y', 'deltaX', 'deltaY', 'scrollY', 'rangeY',
                  'maxOverY', 'touch', 'present', 'scrollable', 'actions', 'childCount', 'virtualId', 'count',
                  'action', 'arguments', 'source', 'toolType', 'flags', 'deviceId', 'zeroDeviceId', 'downCount',
@@ -79,6 +100,8 @@ def store(body, root=None):
         raise ValueError('process exits')
     if 'batteryExempt' in payload['session'] and not isinstance(payload['session']['batteryExempt'], bool):
         raise ValueError('battery exempt')
+    if 'hangs' in payload['session'] and not _hangs(payload['session']['hangs']):
+        raise ValueError('hangs')
     for event in payload['events']:
         if not isinstance(event, dict) or set(event) - {'seq', 'uptimeMs', 'thread', 'method', 'data', 'callers'}:
             raise ValueError('event fields')
