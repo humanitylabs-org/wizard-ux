@@ -29,7 +29,7 @@ test('Phones & devices opens the one connect flow',async()=>{
  const made=[];const sctx={window:{WizPhoneConnect:{create:o=>{made.push(o);return pc;}}},document:{documentElement:{dataset:{shell:'phone'}},visibilityState:'visible'},fetch(){}};
  vm.runInNewContext(`${ph}\n${block(settings,'  function phones() {')}\nthis.phones=phones;this.PH=PH;`,sctx);
  assert.equal(sctx.phones(),pc);assert.equal(sctx.phones(),pc);assert.equal(made.length,1,'one connect flow, made once');
- const backLine=settings.split('\n').find(l=>l.trim().startsWith('back(ctx) { if (PH.pc?.back()) return true;'));
+ const backLine=settings.split('\n').find(l=>l.trim().startsWith('back(ctx) {')&&l.includes('PH.'));
  const page=vm.runInNewContext(`({ ${backLine.trim().replace(/,$/,'')} })`,{PH:sctx.PH,closePhonesSheet(){}});
  pc.connectAnother();assert.equal(page.back({}),true,'Back first leaves the connect step');assert.equal(pc.connecting,false);assert.equal(page.back({}),false,'then Settings goes back as usual');
  // Setup drives the same component: tests/device-setup-preservation.test.mjs runs the real Setup app (list-connect-device -> Before you scan).
