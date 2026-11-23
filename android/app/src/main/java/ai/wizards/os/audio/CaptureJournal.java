@@ -91,17 +91,26 @@ public final class CaptureJournal {
     private static File[] children(File dir) { File[] fs = dir.listFiles(); return fs == null ? new File[0] : fs; }
 
     /** Commit before any destructive action; failure leaves both the previous index and original audio intact. */
-    private void commit(JSONObject e) {
-        put(e, "updatedAt", System.currentTimeMillis());
+    private void commit(JSONObject e) { commit(java.util.Collections.singletonList(e)); }
+
+    /**
+     * Several entries in one index write (wizard-ux#1762): the index holds every chunk of a long meeting, so writing
+     * it once per chunk is quadratic and froze the app for minutes on a cold open.
+     */
+    private void commit(java.util.List<JSONObject> es) {
+        if (es.isEmpty()) return;
+        long now = System.currentTimeMillis();
+        Map<String, JSONObject> changed = new LinkedHashMap<>();
+        for (JSONObject e : es) { put(e, "updatedAt", now); changed.put(e.optString("id"), e); }
         JSONArray all = new JSONArray();
         java.util.List<String> spent = new java.util.ArrayList<>();
         for (JSONObject old : entries.values()) {
-            if (old.optString("id").equals(e.optString("id"))) continue;
+            if (changed.containsKey(old.optString("id"))) continue;
             // A finished entry whose audio no longer exists holds nothing; drop it so the index stays small.
             if (terminal(old.optString("state")) && !new File(old.optString("path")).exists()) { spent.add(old.optString("id")); continue; }
             all.put(old);
         }
-        all.put(e);
+        for (JSONObject e : changed.values()) all.put(e);
         File tmp = new File(root, "capture-journal.json.tmp");
         try {
             if (!root.isDirectory() && !root.mkdirs()) throw new IOException("Cannot create journal directory");
@@ -111,7 +120,7 @@ public final class CaptureJournal {
             if (!tmp.renameTo(index)) throw new IOException("Cannot commit capture journal");
         } catch (IOException ex) { throw new UncheckedIOException(ex); }
         for (String id : spent) entries.remove(id);
-        entries.put(e.optString("id"), e);
+        entries.putAll(changed);
     }
 
     public synchronized void register(String id, String source, String kind, File path, long startedAt) {
@@ -179,10 +188,32 @@ public final class CaptureJournal {
         if (serverReceipt == null || serverReceipt.isEmpty()) throw new IllegalArgumentException("Empty receipt");
         transition(id, "delivered", put(new JSONObject(), "server", serverReceipt));
     }
-    public synchronized void ready(String id, long at, long keepMs) {
-        JSONObject old = entries.get(id);
-        if (old == null || !"delivered".equals(old.optString("state"))) return;
-        JSONObject e = copy(old); put(e, "readyAt", at); put(e, "keepMs", Math.max(0, keepMs)); commit(e);
+    public synchronized void ready(String id, long at, long keepMs) { readyAll(java.util.Collections.singletonList(id), at, keepMs); }
+
+    /**
+     * Marks every delivered capture in {@code ids} ready in one index write. Entries already carrying this readyAt
+     * and keep time are left alone, so a repeat after a crash costs nothing. Returns how many changed.
+     */
+    public synchronized int readyAll(java.util.Collection<String> ids, long at, long keepMs) {
+        long keep = Math.max(0, keepMs);
+        java.util.List<JSONObject> out = new java.util.ArrayList<>();
+        for (String id : ids) {
+            JSONObject old = id == null ? null : entries.get(id);
+            if (old == null || !"delivered".equals(old.optString("state"))) continue;
+            if (old.optLong("readyAt") == at && old.has("keepMs") && old.optLong("keepMs") == keep) continue;
+            JSONObject e = copy(old); put(e, "readyAt", at); put(e, "keepMs", keep); out.add(e);
+        }
+        commit(out);
+        return out.size();
+    }
+
+    /** The capture ids of these files (null where a file has none), from one pass over the index. */
+    public synchronized java.util.List<String> idsFor(java.util.List<File> files) {
+        Map<String, String> byPath = new java.util.HashMap<>();
+        for (JSONObject e : entries.values()) byPath.put(e.optString("path"), e.optString("id"));
+        java.util.List<String> out = new java.util.ArrayList<>();
+        for (File f : files) out.add(byPath.get(f.getAbsolutePath()));
+        return out;
     }
     /** Called only by an explicit Cancel control; absence of this durable decision fails closed to kept. */
     public synchronized void userDiscard(String id, long ms) {
@@ -224,6 +255,14 @@ public final class CaptureJournal {
             commit(e);
             return !audio.exists() || audio.delete();
         }
+        JSONObject e = released(old, reason, audio);
+        if (e == null) return keep(old);
+        commit(e);
+        return !audio.exists() || audio.delete();
+    }
+
+    /** The entry as released for {@code reason}, or null when that reason does not let the audio go (keep it). */
+    private static JSONObject released(JSONObject old, Reason reason, File audio) {
         boolean delivered = "delivered".equals(old.optString("state"));
         boolean discard = reason == Reason.USER_DISCARD && old.has("discardMs")
                 && !CancelPolicy.keep(old.optLong("discardMs"), audio.length());
@@ -235,11 +274,43 @@ public final class CaptureJournal {
                 || (reason == Reason.WEB_OUTBOX_CUSTODY && "handed".equals(st) && "web-outbox".equals(old.optString("owner")));
         boolean gone = reason == Reason.NOTHING_RECORDED && !"recording".equals(st) && audio.length() < NOTHING_BYTES
                 || reason == Reason.USER_DELETE && !"recording".equals(st);
-        if (!(reason == Reason.SERVER_RECEIPT && delivered) && !discard && !prune && !onPhone && !gone) return keep(old);
+        if (!(reason == Reason.SERVER_RECEIPT && delivered) && !discard && !prune && !onPhone && !gone) return null;
         JSONObject e = copy(old);
         put(e, "state", discard || gone ? "discarded" : "delivered"); put(e, "bytes", audio.length());
-        put(e, "releaseReason", reason.name()); commit(e);
-        return !audio.exists() || audio.delete();
+        put(e, "releaseReason", reason.name());
+        return e;
+    }
+
+    /**
+     * {@link #releaseFile} for many files with one index write for every file the reason lets go (wizard-ux#1762:
+     * pruning a long meeting wrote the whole index once per chunk). Files the reason does not release take the usual
+     * single-file path (kept in Cancelled recordings). The index is committed before any audio is deleted. Returns
+     * true when every file was released or safely kept, as {@link #release} does.
+     */
+    public synchronized boolean releaseFiles(java.util.List<File> files, String src, Reason reason) {
+        java.util.List<File> present = new java.util.ArrayList<>();
+        for (File f : files) if (f != null && f.isFile()) present.add(f);
+        java.util.List<String> ids = idsFor(present);
+        java.util.List<JSONObject> out = new java.util.ArrayList<>();
+        java.util.List<File> drop = new java.util.ArrayList<>();
+        boolean all = true;
+        for (int i = 0; i < present.size(); i++) {
+            File f = present.get(i);
+            String id = ids.get(i) != null ? ids.get(i) : adopt(f, src);
+            JSONObject old = entries.get(id);
+            if (old == null) { all = false; continue; }
+            if (reason == null || reason == Reason.SUPERSEDED_COPY || "kept".equals(old.optString("state")) || "discarded".equals(old.optString("state"))) {
+                all &= release(id, reason);
+                continue;
+            }
+            File audio = new File(old.optString("path"));
+            JSONObject e = released(old, reason, audio);
+            if (e == null) { all &= keep(old); continue; }
+            out.add(e); drop.add(audio);
+        }
+        commit(out);
+        for (File audio : drop) all &= !audio.exists() || audio.delete();
+        return all;
     }
 
     private boolean keep(JSONObject old) {

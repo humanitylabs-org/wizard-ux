@@ -109,6 +109,40 @@ public class CaptureJournalTest {
         assertTrue(j.release("m/000000", CaptureJournal.Reason.MEETING_PRUNE_AFTER_READY)); assertFalse(f.exists());
     }
 
+    /** wizard-ux#1762: a long meeting's chunks are marked ready and pruned in one index write, not one per chunk. */
+    @Test public void readyAllMarksDeliveredChunksOnceAndSkipsRepeats() throws Exception {
+        File root = tmp.newFolder(); CaptureJournal j = new CaptureJournal(root);
+        List<String> ids = new ArrayList<>();
+        for (int i = 0; i < 3; i++) {
+            String id = "m/00000" + i; ids.add(id);
+            j.register(id, "meeting", "meeting_chunk", audio(root, "m/me/00000" + i + ".wav"), 1);
+            j.hand(id, "mizel-uploader");
+            if (i < 2) j.received(id, "mizel-chunk:m/" + i);
+        }
+        ids.add("missing"); ids.add(null);
+        assertEquals("only delivered chunks get a deadline", 2, j.readyAll(ids, 5, 10));
+        assertEquals("a repeat (after a crash) writes nothing", 0, j.readyAll(ids, 5, 10));
+        CaptureJournal again = new CaptureJournal(root);
+        assertEquals(5, again.entry("m/000000").getLong("readyAt"));
+        assertEquals(10, again.entry("m/000001").getLong("keepMs"));
+        assertFalse(again.entry("m/000002").has("readyAt"));
+        assertEquals(Arrays.asList("m/000001", null), j.idsFor(Arrays.asList(new File(root, "m/me/000001.wav"), new File(root, "nope.wav"))));
+    }
+
+    @Test public void releaseFilesPrunesReadyChunksAndKeepsTheRest() throws Exception {
+        File root = tmp.newFolder(); CaptureJournal j = new CaptureJournal(root);
+        File done = audio(root, "m/me/000000.wav"), handed = audio(root, "m/me/000001.wav");
+        byte[] bytes = Files.readAllBytes(handed.toPath());
+        j.register("m/000000", "meeting", "meeting_chunk", done, 1); j.hand("m/000000", "mizel-uploader");
+        j.received("m/000000", "mizel-chunk:m/0"); j.register("m/000001", "meeting", "meeting_chunk", handed, 1);
+        j.hand("m/000001", "mizel-uploader");
+        j.readyAll(Arrays.asList("m/000000", "m/000001"), System.currentTimeMillis() - 86_400_001L, 86_400_000L);
+        assertTrue(j.releaseFiles(Arrays.asList(done, handed), "meeting", CaptureJournal.Reason.MEETING_PRUNE_AFTER_READY));
+        assertFalse(done.exists());
+        assertEquals("MEETING_PRUNE_AFTER_READY", j.entry("m/000000").getString("releaseReason"));
+        kept(j, "m/000001", bytes); // never acknowledged by the server: kept, not deleted
+    }
+
     @Test public void meetingNotReadyIsKeptInsteadOfPruned() throws Exception {
         File root = tmp.newFolder(), f = audio(root, "chunk.wav"); byte[] bytes = Files.readAllBytes(f.toPath());
         CaptureJournal j = new CaptureJournal(root); j.register("chunk", "meeting", "meeting_chunk", f, 1);
@@ -277,8 +311,9 @@ public class CaptureJournalTest {
                 assertFalse(name + " bypasses File.delete guard", text.matches("(?s).*Files\\s*\\.\\s*delete(IfExists)?\\s*\\(.*"));
                 assertEquals(name, allowed.getOrDefault(name, Collections.emptyList()), deletes(text));
                 if (name.equals("mizel/MizelStore.java")) {
-                    assertTrue(text.contains("if (CaptureJournal.isAudio(f)) {"));
-                    assertTrue(text.contains("custody.releaseFile(f, \"meeting\", reason);\n            return;"));
+                    // Audio goes through custody (one batched release); the plain delete skips every audio file.
+                    assertTrue(text.contains("custody.releaseFiles(audio, \"meeting\", reason);\n        deleteRest(f);"));
+                    assertTrue(text.contains("private static void deleteRest(File f) {\n        if (CaptureJournal.isAudio(f)) return;"));
                 }
             }
         }
