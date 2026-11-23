@@ -167,7 +167,7 @@ test('phone: tapped and held takes confirm the route before opening; an unconfir
   assert.doesNotMatch(read('web/app.js'), /openAppRoute: \(id, url\) => window\.WizOpenApp/, 'never the setup-skipping WizOpenApp');
 });
 
-test('desktop: a spoken route opens through openApp with the setup sheet; held takes confirm first', () => {
+test('desktop: a spoken route opens through openApp with the setup sheet; held takes confirm first', async () => {
   const src = read('web/desktop/desktop.js');
   const made = [], paged = [], focused = [], gated = [];
   let resume = null, existing = null;
@@ -180,7 +180,6 @@ test('desktop: a spoken route opens through openApp with the setup sheet; held t
   };
   ctx.window.window = ctx.window;
   const lambda = /openAppRoute:(\(id,url\)=>\{[^\n]*?\}),musicDone/.exec(src);
-  assert.ok(lambda, 'desktop executor routes through openApp');
   vm.runInNewContext(`${between(src, '  function openApp(a, opts = {}) {', '  // Prefer this workspace, then any.')}\nthis.route = ${lambda[1]};`, ctx);
   const url = '/wizard-music/?view=identify&listen=1';
   assert.equal(ctx.route('wizard-music', url), true);
@@ -191,5 +190,17 @@ test('desktop: a spoken route opens through openApp with the setup sheet; held t
   resume();
   assert.deepEqual(focused, ['e1']); assert.deepEqual(paged, [['e1', url]], 'an open window goes to the declared page');
   assert.equal(ctx.route('wizard-music', '/elsewhere/'), false);
-  assert.match(src, /const cmd=await LOCAL_COMMANDS\.confirm\(LOCAL_COMMANDS\.parse\(it\.text,snap,'command'\),it\.text,snap,'command'\);/);
+  // a held command take (the real desktop finish): the parsed command is confirmed before anything runs
+  const take = async confirmed => {
+    const order = [];
+    const T = runRecording(`this.f = async (it, snap) => {\n${between(src, '        const cmd=await LOCAL_COMMANDS.confirm(', '      } finally {')}};`, {
+      LOCAL_COMMANDS: { parse: (text, snap, kind) => (order.push(['parse', text, kind]), { action: 'open_app', id: 'wizard-music' }), confirm: async (cmd, text, snap, kind) => (order.push(['confirm', cmd.action, kind]), confirmed ? cmd : null) },
+      executeCommand: cmd => (order.push(['execute', cmd.action]), true), OUTBOX: { completeLocal: async () => true }, commandSaid() {} });
+    const r = await T.f({ id: 'o1', text: 'open music' }, {});
+    return { r, order };
+  };
+  const yes = await take(true);
+  assert.deepEqual(yes.order, [['parse', 'open music', 'command'], ['confirm', 'open_app', 'command'], ['execute', 'open_app']], 'held takes confirm first'); assert.equal(yes.r, 'local');
+  const no = await take(false);
+  assert.deepEqual(no.order.map(x => x[0]), ['parse', 'confirm'], 'not confirmed: nothing runs'); assert.equal(no.r, 'none');
 });
