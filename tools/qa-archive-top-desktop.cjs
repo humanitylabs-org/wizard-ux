@@ -4,8 +4,8 @@
 const { chromium } = require('./qa-playwright.cjs');
 const { mount, service } = require('./qa-thread-tracker.cjs');
 const fx = require('./qa-proof-fixture.cjs');
-const fs = require('node:fs'), path = require('node:path');
-const OUT = path.resolve(process.argv[2] || process.env.TMPDIR + '/qa-archive-top-desktop');
+const fs = require('node:fs'), os = require('node:os'), path = require('node:path');
+const OUT = path.resolve(process.argv[2] || path.join(os.tmpdir(), 'qa-archive-top-desktop'));
 fs.mkdirSync(OUT, { recursive: true });
 (async () => {
   const browser = await chromium.launch({ headless: true, ...(process.env.QA_CHROME ? { executablePath: process.env.QA_CHROME } : {}) });
