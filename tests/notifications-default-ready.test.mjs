@@ -8,6 +8,7 @@ import { withWebParts } from './fixtures/web-parts.mjs';
 import { between, block } from './fixtures/source-slice.mjs';
 import { createDocument } from './fixtures/mini-dom.mjs';
 import { unreadWorld, runIn, UNREAD } from './fixtures/r8B-unread.mjs';
+import { listFixture, sectionKeys } from './fixtures/chats-list-render.mjs';
 const read = p => withAppParts(withShellParts(withWebParts(readFileSync(new URL('../'+p, import.meta.url), 'utf8'))));
 
 test('notification-only Ready survives an empty default main-agent Chats list', () => {
@@ -19,11 +20,15 @@ test('notification-only Ready survives an empty default main-agent Chats list', 
     ['',null,'other',{kind:'agent',key:'other'},false], ['',null,'',{kind:'space',key:'test'},false],
     ['query',null,'',null,false], ['',{label:'Working'},'',null,false],
   ]) assert.equal(!!vm.runInNewContext(expr,{n,F,AGID,focus,notes:()=>({awake:[{}],later:[]})}),visible);
-  assert.match(src,/else if \(filtered && !hit.length && !listNotesN\)/);
-  assert.match(src,/else if \(!hit.length && !drafts.length && !listNotesN\)/);
-  assert.match(src,/const nt = k === 'ready' \? listNotes : null/);
-  assert.match(src,/\|\| filtered\) && !notesN\) return ''/);
-  assert.ok(src.indexOf('const listNotes =') < src.indexOf('else if (filtered && !hit.length'));
+  // The real list renderer with no chats at all: notifications alone still draw Ready instead of the empty state.
+  const paint = (n, q = '') => { const f = listFixture({ inputRows: [] }); f.ctx.notes = () => ({ awake: Array.from({ length: n }, (_, i) => ({ id: 'notif:' + i })), later: [] }); const html = f.render(q); return { html, secs: sectionKeys(html), empty: /No threads match/.test(html) }; };
+  const only = paint(2);
+  assert.ok(only.secs.includes('ready'), 'notification-only Ready shows'); assert.equal(only.empty, false, 'no empty state over it');
+  assert.ok(!only.secs.includes('yesterday') && !only.secs.includes('pastWeek'), 'notifications sit in Ready only');
+  const none = paint(0);
+  assert.deepEqual(none.secs, []); assert.equal(none.empty, true, 'nothing at all: the empty state, as before');
+  const searched = paint(2, 'zz');
+  assert.ok(!searched.secs.includes('ready'), 'a search lists no notification-only Ready'); assert.equal(searched.empty, true, 'and says nothing matched');
 });
 
 test('Ready inventory retains unread and snoozed notification rows but not completed rows or an off inbox', async () => {
