@@ -471,22 +471,20 @@ public final class MizelStore {
      * next start.
      */
     public List<String> prune(long now, long keepMs) {
-        List<MizelJournal> due = new ArrayList<>();
+        Map<String, Long> due = new LinkedHashMap<>(); // meeting id -> readyAt
         synchronized (this) {
             for (MizelJournal j : new ArrayList<>(journals.values())) {
                 if (j.recording || !j.pending.isEmpty()) continue;
                 if (!MizelPolicy.prunable(j.stopSent, j.readyAt, now, keepMs)) continue;
                 journals.remove(j.meetingId);
-                due.add(j);
+                due.put(j.meetingId, j.readyAt);
             }
         }
-        List<String> gone = new ArrayList<>();
-        for (MizelJournal j : due) {
-            markReady(j.meetingId, j.readyAt); // a status check cut short before its custody write
-            deleteTree(meetingDir(j.meetingId), CaptureJournal.Reason.MEETING_PRUNE_AFTER_READY);
-            gone.add(j.meetingId);
+        for (Map.Entry<String, Long> m : due.entrySet()) {
+            markReady(m.getKey(), m.getValue()); // a status check cut short before its custody write
+            deleteTree(meetingDir(m.getKey()), CaptureJournal.Reason.MEETING_PRUNE_AFTER_READY);
         }
-        return gone;
+        return new ArrayList<>(due.keySet());
     }
 
     public synchronized int pendingCount(String id) {
