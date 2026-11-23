@@ -15,6 +15,9 @@ import { fixture } from './fixtures/tweaks.mjs';
 import { withSkinHostParts } from './fixtures/skin-host-parts.mjs';
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 import { withDesktopParts } from './fixtures/desktop-parts.mjs';
+import { desktopKeys } from './fixtures/desktop-keys-harness.mjs';
+import { keysGuide } from './fixtures/keys-guide-harness.mjs';
+import { desktopBoot, desktopPart } from './fixtures/q1-desktop-boot.mjs';
 
 const root = new URL('../', import.meta.url);
 const read = p => readFileSync(new URL(p, root), 'utf8');
@@ -146,7 +149,7 @@ function panels({ homeOpen = true, desks = [['a1', 'a3'], ['a2']] } = {}) {
 ${between(src, '  const PANEL_BACK = 6;', '  function paintFocus() {')}
 ${guards.map(g => block(src, `  function ${g}(`)).join('\n')}
 ${block(src, '  function syncChatsPane(id) {')}
-this.api = { ${guards.join(', ')}, panelMode, panelOpen, panelClose, panelBack, panelDock, panelMount, panelForward, panelThreadLeft, syncChatsPane, panelWins,
+this.api = { ${guards.join(', ')}, panelMode, panelOpen, panelParkedW, panelDeskClose, panelClose, panelBack, panelDock, panelMount, panelForward, panelThreadLeft, syncChatsPane, panelWins,
   state: () => ({ panel, panelApp, panelList, homeOpen, ws, W }) };`, {
     W, ws, cur: 0, lastWs: 0, homeOpen, hud: null, boundManager: null, document: doc, stage, WosSkinHost: { panelMode: true }, window: { WosAgents: { refreshTitlebars() {} } },
     store: { get: (k, d) => (saved.has(k) ? saved.get(k) : d), set: (k, v) => saved.set(k, v) }, uid: () => 'p' + ++n,
@@ -277,19 +280,52 @@ test('bar-center: a core slot in the middle of the desktop bar; the clock steps 
   assert.equal(cascade(slot, css).visibility?.value, 'hidden', 'out of the voice pill\'s way');
 });
 
-test('Orbs view apps ARE desks (Miguel, v8): one app per desk, saved and synced like desks, so looking away or a reload never closes them', async () => {
+// The desktop's real render() over a small desk state: where each window's element ends up (desk host or panel layer).
+function renderDesks(panelMode) {
   const src = withDesktopParts(read('web/desktop/desktop.js'));
-  const fn = name => src.slice(src.indexOf(`  function ${name}(`), src.indexOf('\n  }', src.indexOf(`  function ${name}(`)) + 4);
-  assert.match(src, /const panelDeskApp = w => !!w && \(w\.app === 'frame' \|\| w\.app === 'pages'\);/);
-  assert.match(fn('panelOpen'), /if \(isApp && panelDeskApp\(obj\)\) \{/, 'an app opened over the orb goes to a desk');
-  const show = fn('panelDeskShow');
-  assert.match(show, /ws\.push\(\{ \.\.\.freshDesk\(\), wins: \[id\], focus: id \}\)/, 'a new app = a new desk of its own');
-  assert.match(show, /Object\.values\(W\)\.find\(x => panelDeskApp\(x\) && wsOf\(x\.id\) >= 0 && same\(x\)\)/, 'an app already on a desk (any view, any device) comes back, never a second copy');
-  assert.match(show, /save\(\);/, 'saved (and so synced) like any desk change');
-  assert.match(src, /const panelParkedW = \(\) => globalThis\.WosSkinHost\?\.panelMode \? panelReps\(\)\.filter\(w => w\.id !== panelApp\?\.id\) : \[\];/, 'running = every desk\'s app, read from the desks (nothing in memory to lose)');
-  assert.match(fn('render'), /const to = rep\?\.id === id \? lay : host/, 'a desk\'s app lives in the panel layer while the Orbs view is on (never moved again: no frame reload)');
-  assert.match(fn('panelDeskClose'), /removeWin\(id\);/); assert.match(fn('panelDeskClose'), /ws\.splice\(ws\.indexOf\(d\), 1\)/, 'Close closes the desk');
-  assert.ok(!/homeOpen = false/.test(fn('panelDeskClose')), 'closing an app\'s desk keeps the orb in front');
+  const doc = createDocument(), stage = doc.createElement('div'); doc.body.appendChild(stage);
+  const home = doc.createElement('div'); home.id = 'desktopHome'; doc.body.appendChild(home);
+  const W = { wa: { id: 'wa', app: 'frame', appId: 'music' }, wc: { id: 'wc', app: 'chats' }, wb: { id: 'wb', app: 'pages', pageSlug: 'x' } };
+  const ws = [{ id: 'd0', wins: ['wc', 'wa'], focus: 'wc' }, { id: 'd1', wins: ['wb'], focus: 'wb' }];
+  const hosts = ws.map((d, i) => { const h = doc.createElement('div'); h.id = 'desk' + i; h.className = 'wsp'; h.dataset.desk = d.id; stage.appendChild(h); return h; });
+  const layer = doc.createElement('div'); layer.id = 'panelLayer'; stage.appendChild(layer);
+  const ctx = runRecording(`${between(src, '  const panelDeskApp = ', '\n')}
+${between(src, '    const panelDeskRep = ', '\n')}
+${block(src, '  function render() {')}
+this.render = render;`, {
+    W, ws, cur: 0, homeOpen: false, stage, document: doc, pal: { hidden: true }, WosSkinHost: { panelMode }, window: {},
+    $: s => doc.querySelector(s), $$: (s, r = doc) => r.querySelectorAll(s), wsEl: i => hosts[i], panelLayerEl: () => layer,
+    mountWin: (w, to) => { const el = doc.createElement('div'); el.className = 'win'; el.dataset.win = w.id; to.appendChild(el); return el; },
+    queueMicrotask: () => {} });
+  ctx.render();
+  return { parentOf: id => stage.querySelector(`[data-win="${id}"]`)?.parentNode?.id || null };
+}
+
+test('Orbs view apps ARE desks (Miguel, v8): one app per desk, saved and synced like desks, so looking away or a reload never closes them', async () => {
+  // the real panel code (no desks): an installed app's frame or a page opened over the orb becomes a desk of its own
+  const P = panels({ desks: [['a1']] });
+  P.ctx.removeWin = id => { delete P.state().W[id]; for (const d of P.state().ws) if (d.wins.includes(id)) d.wins.splice(d.wins.indexOf(id), 1); };   // the windows part's own cleanup, outside this slice
+  const desksN = () => P.state().ws.length;
+  const music = P.panelOpen({ app: 'frame', appId: 'music', url: '/music/' });
+  assert.equal(desksN(), 2, 'a new app = a new desk of its own');
+  assert.deepEqual(JSON.parse(JSON.stringify(P.state().ws[1])), { id: 'new', wins: [music.id], focus: music.id });
+  assert.ok(P.names().includes('save'), 'saved (and so synced) like any desk change');
+  const page = P.panelOpen({ app: 'pages', pageSlug: 'notes' }); assert.equal(desksN(), 3, 'a page is a desk too');
+  const settings = P.panelOpen({ app: 'settings' }); assert.equal(desksN(), 3, 'a built-in view is no desk');
+  assert.equal(P.state().panelApp.id, settings.id);
+  assert.equal(P.panelOpen({ app: 'frame', appId: 'music', url: '/music/' }), music, 'an app already on a desk comes back, never a second copy');
+  assert.equal(desksN(), 3);
+  // running = every desk's app but the one shown, read from the desks
+  assert.deepEqual(P.panelParkedW().map(x => x.id), [page.id]);
+  P.ctx.WosSkinHost.panelMode = false; assert.equal(P.panelParkedW().length, 0, 'no layout holding the panel: nothing kept running'); P.ctx.WosSkinHost.panelMode = true;
+  // Close closes the desk; the orb (Home) stays in front
+  P.panelDeskClose(page.id);
+  assert.equal(desksN(), 2, 'Close closes the desk'); assert.equal(P.state().W[page.id], undefined); assert.equal(P.state().homeOpen, true, 'closing an app\'s desk keeps the orb in front');
+  // render: a desk's app lives in the panel layer while a layout holds the panel; the desk's other windows stay put
+  const R = renderDesks(true), D0 = renderDesks(false);
+  assert.equal(R.parentOf('wa'), 'panelLayer'); assert.equal(R.parentOf('wc'), 'desk0', 'only the desk\'s app goes to the panel');
+  assert.equal(R.parentOf('wb'), 'panelLayer');
+  assert.equal(D0.parentOf('wa'), 'desk0', 'Desks view: on its desk');
   // a desks sync round keeps them: an app desk on the shared state is placed again, nothing removed
   globalThis.window = globalThis;
   await import(new URL('web/core/workspace-sync.js', root).href + '?v8');
@@ -299,17 +335,25 @@ test('Orbs view apps ARE desks (Miguel, v8): one app per desk, saved and synced 
   const r = globalThis.WosWorkspaceSync.reconcile(local, W, JSON.parse(JSON.stringify(shared)), { fresh: id => ({ id, wins: [], focus: null }) });
   assert.deepEqual(r.removed, []); assert.deepEqual(r.desks.map(d => d.wins), [['wa'], ['wb']]);
   // a tweak reload (dispose + re-run every tweak) never blinks the panel off: that dropped every running app
-  const host = withSkinHostParts(read('web/core/skin-host.js'));
-  assert.match(host, /if \(!on && panelOn && panelHold\) return;/);
-  assert.match(host, /panelHold\+\+;\n    try \{ return await loadTweaksNow\(\.\.\.args\); \} finally \{ panelHold--; panelSync\(\); \}/);
-  assert.match(host, /panelHold\+\+;\n    try \{ return await loadLayoutNow\(id\); \} finally \{ panelHold--; panelSync\(\); \}/, 'and while the layout itself loads again');
-  assert.match(host, /get panelMode\(\) \{ return panelOn && \(panelHold > 0 \|\| \[\.\.\.panelHolders\]\.some\(l => !l\.dead\)\); \},/);
+  const H = desk(), modes = () => H.calls.filter(c => c[0] === 'panelMode').map(c => c[1]);
+  let release = null;
+  H.host._test.setImporter(async () => ({ default: a => { H.api0 = a; release = a.panel.claim(); return () => {}; } }));
+  H.host.attach(H.adapter); H.host.setLayout('ai-apps'); await settle();
+  assert.deepEqual(modes(), [true]); assert.equal(H.host.panelMode, true);
+  // the layout loads again (dispose + setup): the panel holds through it
+  const again = H.host.setLayout('ai-apps'); assert.equal(again, 'ai-apps');
+  assert.equal(H.host.panelMode, true, 'held while the layout loads again'); await settle();
+  assert.deepEqual(modes(), [true], 'never blinked off while the layout itself loaded again');
+  // a tweak reload in flight: a release meanwhile turns the panel off only once the load has settled
+  const reload = H.host.loadTweaks([], {}, {}); release();
+  assert.deepEqual(modes(), [true], 'decided once the reload settles'); assert.equal(H.host.panelMode, true, 'held during the tweak reload');
+  await reload; await settle();
+  assert.deepEqual(modes(), [true, false], 'off once settled with no layout claiming it'); assert.equal(H.host.panelMode, false);
 });
 
 test('bound views: the Orb panel\'s chat counts as visible (a linked page opens beside it)', () => {
   const js = withDesktopParts(readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8'));
   const shown = js.slice(js.indexOf('  function threadShown(wid,el) {'), js.indexOf('boundManager.shown(wid,el);'));
-  assert.match(shown, /visible:id=>\(globalThis\.WosSkinHost\?\.panelMode&&panelHas\(id\)\)\|\|\(!homeOpen&&wsOf\(id\)===cur\)/);
   const visible = new Function('globalThis', 'panelHas', 'homeOpen', 'wsOf', 'cur', 'return ' + shown.match(/visible:(id=>.*?), close:/)[1]);
   const v = (panelMode, inPanel, home) => visible({ WosSkinHost: { panelMode } }, () => inPanel, home, () => 9, 0)('w');
   assert.equal(v(true, true, true), true, 'Orb: the panel chat over Home is in view');
@@ -331,10 +375,24 @@ test('layout keys (layouts/orb/keys.js, used by AI apps): hold the LEFT ⌥ for 
   assert.equal(keyOf({ code: 'KeyE' }), 'E'); assert.equal(keyOf({ code: 'Digit1' }), null);
   assert.equal(isLeftAlt({ code: 'AltLeft', key: 'Alt' }), true); assert.equal(isLeftAlt({ code: 'AltRight', key: 'Alt' }), false, 'Right ⌥ never shows them');
   assert.equal(HOLD_MS, 300);
-  const desk = withDesktopParts(read('web/desktop/desktop.js'));
-  // the layout sees keys before the desktop's own ⌥ bindings (app frames too), and owns the hold overlay
-  assert.match(desk, /if \(globalThis\.WosSkinHost\?\.key\?\.\(e\)\) \{ e\.preventDefault\(\); e\.stopPropagation\(\); return; \}/);
-  assert.match(desk, /e\.code !== 'AltLeft' \|\| e\.metaKey \|\| e\.ctrlKey \|\| e\.shiftKey \|\| window\.WosSkinHost\?\.holdKeys\) return;/);
-  assert.equal((desk.match(/keyHints\.up\(e\); window\.WosSkinHost\?\.keyUp\?\.\(e\);/g) || []).length, 3, 'releases from the page, from app frames and from sandboxed app frames (browser boundary)');
-  assert.match(desk, /openPalette: \(\) => palToggle\('all'\),/);
+  // the layout sees keys before the desktop's own ⌥ bindings (the real onKey), and owns the hold overlay
+  const take = desktopKeys({ WosSkinHost: { key: () => true } }), e1 = take.key('KeyN');
+  assert.ok(e1.defaultPrevented && e1.stopped, 'a key the layout took is spent'); assert.deepEqual(take.names(), [], 'the desktop does nothing with it');
+  const pass = desktopKeys({ WosSkinHost: { key: () => false } }); pass.key('KeyN');
+  assert.ok(pass.names().length > 0, 'a key the layout leaves goes on to the desktop\'s own ⌥ bindings');
+  const timers = [], g = keysGuide({ setTimeout: (f, ms) => { timers.push(ms); return timers.length; } });
+  g.ctx.window.WosSkinHost = { holdKeys: true };
+  g.keyHints.down({ code: 'AltLeft', key: 'Alt', altKey: true, preventDefault() {} }); assert.equal(timers.length, 0, 'a layout holding the keys owns the hold overlay');
+  g.ctx.window.WosSkinHost = { holdKeys: false };
+  g.keyHints.down({ code: 'AltLeft', key: 'Alt', altKey: true, preventDefault() {} }); assert.equal(timers.length, 1);
+  // releases from the page and from sandboxed app frames (browser boundary) reach the layout (app frames:
+  // desktop-keys-layout.test.mjs 'holding left ⌥ alone shows key hints')
+  const on = {}, ups = []; let input = null;
+  desktopPart('boundarykeys', { keyHints: { up: x => ups.push(['hints', x.code]), hide() {}, mine: () => false }, onKey: x => ups.push(['onKey', x.code]) },
+    { WosSkinHost: { keyUp: x => ups.push(['layout', x.code]) }, WizBrowserBoundary: { keys() {}, onInput: f => { input = f; } },
+      globals: { addEventListener: (t, f) => { on[t] = f; } } });
+  on.keyup({ code: 'AltLeft' });
+  input({ closest: () => ({ dataset: { win: 'w1' } }) }, { type: 'keyup', code: 'AltLeft', kind: 'key' });
+  assert.deepEqual(ups, [['hints', 'AltLeft'], ['layout', 'AltLeft'], ['hints', 'AltLeft'], ['layout', 'AltLeft']]);
+  assert.deepEqual(desktopBoot({ palToggle: (...x) => ['palette', ...x] }).adapter.openPalette(), ['palette', 'all'], 'the layout opens the stock search & launch');
 });
