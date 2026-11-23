@@ -341,3 +341,23 @@ Not covered yet (next slices, all on #133), so nobody should turn the box switch
 - Native bridges: done. Android keeps `WizardOSNative` / `WizardOSDevice` out of app frames (NativeGate, above;
   wizard-ux#1430, merged in wizard-ux#1433), and Mac native replies go only to the shell page that asked
   (try-wizard#95, merged in try-wizard#96).
+
+## The hostile-app check on a real box (CI)
+
+`.github/workflows/browser-boundary-box.yml` runs the hostile-app check from wizard-os#133 on every change to the
+shell's core, pages or packaging, on main, and daily. `tools/boundary-box.sh` starts a real box in Docker: this repo's
+shell image and the current Agent Service image (main's published image), both with `WIZARD_BROWSER_BOUNDARY=1` and the
+same token file, as `wam browser-boundary on` gives them, the Agent Service with `WIZARD_AUTH_MODE=none` (every caller
+is the owner by network path, the case an app page exploits), a stand-in for Tailscale Serve that puts the shell and an
+app on one origin and adds the owner's login, and a stand-in agent harness. `tests/qa-browser-boundary-box.cjs` opens
+the real shell in Chromium the way a home-screen icon does (`?app-session=hostile`), so the shell itself makes the app
+window, and the app page (`tests/fixtures/boundary-box/hostile/`) tries to act as the owner. It passes only when:
+the app window is an opaque sandbox; the app cannot reach the shell's page, storage, cookies, Wizard objects or native
+bridge, cannot open a window or navigate the shell, and cannot read the shell page loaded in its own frame (the box
+gives a framed load no token); the box itself refuses (its own log, 401/403) every owner call the app makes: read the
+chats, new chat, start a run, change settings, remove an app, with a forged token, and as no-cors requests; nothing
+reaches the agent; the shell's own owner calls carry the token and work; and Back, appearance and dictation into the
+app's field still work. The same check then runs on the box with the boundary off and must find the hole
+(`QA_EXPECT=broken`), so a check that stopped testing anything fails. Not covered here: the App Manager's own
+Store/Settings listener (its gate is wizard-app-manager `tests/test_browser_boundary.py`) and the Android app (the
+emulator check, `DeviceBridgeE2eTest`).
