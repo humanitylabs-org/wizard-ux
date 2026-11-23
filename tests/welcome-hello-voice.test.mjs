@@ -26,6 +26,7 @@ async function atHello(v, opts = {}) {
   const box = fakeBox({ signedIn: true, firstRun: true }), sent = [];
   const d = device(box, { skins: { list: [{ id: 'nebula', name: 'Nebula', t: {} }], current: 'nebula', set() {} }, send: async t => (sent.push(t), { sessionId: 's1' }), ...opts });
   await d.boot(v ? { ...d.hooks, ...v.hooks } : d.hooks);
+  d.ctx.WizConfig.has = cap => cap === 'voice'; // this box has a transcriber (bootstrap capabilities.voice)
   d.press('next');
   assert.equal(title(d), 'Say hello');
   return { d, sent };
@@ -72,6 +73,16 @@ test('no voice on this shell right now (dictate says no): it says so plainly, an
   const v = fakeVoice({ start: false }), { d, sent } = await atHello(v);
   d.press('mic');
   assert.ok(d.log().includes('mic:none'));
+  await d.submit('Hello');
+  assert.deepEqual(sent, ['Hello']);
+});
+
+test('a Wizard with no transcriber: the mic says voice is not set up, records nothing, and typing works', async () => {
+  const v = fakeVoice(), { d, sent } = await atHello(v);
+  d.ctx.WizConfig.has = cap => cap !== 'voice';
+  d.press('mic');
+  assert.deepEqual(v.calls, [], 'no take is started');
+  assert.ok(d.log().includes('mic:no-voice'));
   await d.submit('Hello');
   assert.deepEqual(sent, ['Hello']);
 });

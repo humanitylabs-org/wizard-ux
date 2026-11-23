@@ -273,8 +273,8 @@
     listen: 'Listening… tap the mic again when you are done.',
     think: 'Writing down what you said…',
     mic: 'The microphone could not start. Allow microphone access for WizardOS, or type your message.',
-    none: 'Voice isn\u2019t available here. Type your message instead.',
-    empty: 'Didn\u2019t catch that. Tap the mic and try again, or type your message.',
+    none: 'Voice isn\u2019t set up on this Wizard yet. Type your message instead.',
+    empty: 'No words came through: voice may not be working right now. Tap the mic to try again, or type your message.',
   };
   let voiceMsg = { text: '', err: false }, take = null;
   const voiceState = () => { try { const s = H?.voice?.(); return s && typeof s.state === 'string' ? s.state : 'idle'; } catch (e) { return 'idle'; } };
@@ -300,6 +300,8 @@
     // The shell's dictation writes into the focused field: the box keeps (or takes) focus.
     if (document.activeElement !== box) box.focus({ preventScroll: true });
     voiceShow('');
+    // No transcriber on this box (the same check that hides the desktop mic): say so instead of recording for nothing.
+    try { if (window.WizConfig?.has && !window.WizConfig.has('voice')) { log('mic:no-voice'); voiceShow('none'); return; } } catch (e) {}
     let r = false; try { r = H.dictate(); } catch (e) { console.error(e); }
     if (r === false) { log('mic:none'); voiceShow('none'); return; }
     const mine = take = { t0: Date.now(), seen: new Set(), stopped: false, before: box.value, box };
