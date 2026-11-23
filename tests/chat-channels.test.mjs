@@ -9,8 +9,11 @@ import { withAppParts } from './fixtures/app-parts.mjs';
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 import { withLiveParts } from './fixtures/live-parts.mjs';
 import { createDocument } from './fixtures/mini-dom.mjs';
+import { valueOf } from './fixtures/r7A-css.mjs';
+import { skinPage } from './fixtures/r8A-skin-paint.mjs';
 import { listFixture } from './fixtures/chats-list-render.mjs';
-import { block as fnBlock, expression, runRecording } from './fixtures/source-slice.mjs'; // live.js parts moved out verbatim (issue 1665)
+import { block as fnBlock, expression, runRecording } from './fixtures/source-slice.mjs';
+import { stmt, tap, plain } from './fixtures/pB-slice.mjs'; // live.js parts moved out verbatim (issue 1665)
 const src = withParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'));
 // The real list renderer (tests/fixtures/chats-list-render.mjs) with the Channels block loaded: names the Channels
 // code reaches that the fixture does not have render nothing ('').
@@ -25,7 +28,7 @@ const cut = (a, b) => { const i = src.indexOf(a); assert.ok(i >= 0, a); return s
 const block = withParts(cut('  /* Channels view (wizard-ux issue 1254)', '  function clearAll(w)'));
 
 const H = 3600e3, NOW = Date.UTC(2026, 10, 10, 12);
-function fixture({ rows = [], spacesList, agents = {}, history = {}, full = {}, sessions = {}, owner = 'James de Fleur', marksAt = null } = {}) {
+function fixture({ rows = [], spacesList, agents = {}, history = {}, full = {}, sessions = {}, owner = 'James de Fleur', marksAt = null, on = null } = {}) {
   const spacesData = spacesList || [
     { id: 'launch', name: 'Launch', threads: ['a', 'b', 'c'] },
     { id: 'voice', name: 'Voice', threads: ['d'] },
@@ -67,7 +70,7 @@ function fixture({ rows = [], spacesList, agents = {}, history = {}, full = {}, 
     toTurns: rows => rows.filter(r => r.role === 'user' || r.role === 'assistant').map(r => r.role === 'user' ? { u: { text: r.text || '', files: r.files || [], images: r.images || [], at: r.at } } : { a: { text: r.text, at: r.at } }),
     mediaOfFile: f => ({ id: f.id, name: f.name, mime: f.mime || '', kind: /^image\//.test(f.mime || '') ? 'image' : 'file', url: f.id ? `/wizard/files/${f.id}/content` : '' }),
     KIT: { viewer: { open: (g, i) => viewer.push([g, i]) }, drafts: { _d: {}, get(k) { return this._d[k] || { text: '', files: [] }; }, set(k, text, files = []) { this._d[k] = { text, files }; }, clear(k) { delete this._d[k]; } } }, H: { win: id => wins[id] }, CH: {}, holdList: () => false, setTimeout: fn => fn(), clearTimeout() {},
-    window: { WizConfig: { owner: () => owner } }, PIN_SVG: '<svg pin></svg>', RENAME_SVG: '<svg rn></svg>', ACT: { done: { icon: '<svg ar></svg>' } },
+    window: { WizConfig: { owner: () => owner }, ...(on ? { addEventListener: (t, fn) => { on[t] = fn; } } : {}) }, PIN_SVG: '<svg pin></svg>', RENAME_SVG: '<svg rn></svg>', ACT: { done: { icon: '<svg ar></svg>' } },
     track: { querySelector: () => sheetEl }, closeRowSheet() { env.rowSheet = null; }, vib() {}, toast: (...a) => toasts.push(a[1]), rowSheet: null,
     norm: s => String(s).toLowerCase().trim(), openNewDraft: (id, r) => drafts.push([id, r]),
     AGS: () => ({ defaultId: () => 'hermes', isOther: a => !!a && a !== 'hermes', isPrivate: a => a.id === 'restricted', sigil: a => `<i class="ag-sig" data-agent="${a.id}"></i>` }), agentRec: id => ({ id }),
@@ -474,13 +477,19 @@ test('an archived channel\'s feed takes no new posts until it is restored', () =
   f.openChannelSheet('w', 'voice'); f.channelClick(click({ 'data-rscharch': '' }), 'w', f.w);
   f.openChannel(f.w, 'voice');
   assert.match(f.channelFeed(f.w, f.chanOpen(f.w), []), /archived\. Restore it to post here/);
-  assert.match(src, /const fab = feed \? \(typeof chanComposer === 'function' \? chanComposer\(w, feed\) : ''\) :/);
+  // The real list renderer puts the channel's own box (chanComposer) in place of the New chat button under a feed.
+  const withFeed = channelsList({ chanOpen: () => ({ id: 'voice' }), channelFeed: () => '<p>feed</p>', chanComposer: (_w, feed) => `<form data-box="${feed.id}"></form>` }).render('');
+  assert.ok(withFeed.includes('<form data-box="voice"></form>') && !withFeed.includes('ch-fab'), 'a feed: its box, no New chat button');
+  assert.match(channelsList({}).render(''), /class="ch-fab" data-chnew/, 'no feed: the New chat button');
   assert.equal(f.chanComposer(f.w, f.chanOpen(f.w)), '', 'no message box on an archived channel');
 });
 
 // ---- wizard-ux issue 1258: a message box at the bottom of a channel posts straight into it ----
 const form = value => { const ta = { value }; return { ta, querySelector: () => ta }; };
 const settle = () => new Promise(r => setImmediate(r));
+// The real Chats click handler (core/chats-bind.js), every name it reaches but the test's a recorder.
+const bindText = readFileSync(new URL('../web/core/chats-bind.js', import.meta.url), 'utf8');
+const bindClick = ctx => runRecording(`${fnBlock(bindText, 'function click(e, id) {')}\nthis.click = click;`, { chatVars: {}, justPressed: () => false, topicOn: () => false, W: {}, Promise, ...ctx, H: { win: () => ({ id: 'w1' }), toast() {}, ...ctx.H } });
 
 test('an open channel has the thread composer at the bottom: attach, mic, model label, "Message # name"; none on the list', () => {
   const f = fixture(); f.openChannel(f.w, 'launch');
@@ -569,8 +578,15 @@ test('Dismiss on a Not sent channel post removes its Sending… post from the fe
   assert.equal(f.chanDropSending({ id: 'ob7', kind: 'new', sessionId: 'n7' }), 1);
   const html = f.channelFeed(f.w, open, []);
   assert.doesNotMatch(html, />will fail</); assert.match(html, /ch-post sending[^]*>still going</);
-  // The real Dismiss handler drops it after a saved dismissal, then repaints the feed.
-  assert.match(src, /const gone = OUTBOX\.get\?\.\(failedDismiss\.dataset\.obdismissfailed\);[^]*if \(ok && gone\?\.kind === 'new' && typeof chanDropSending === 'function' && chanDropSending\(gone\)\) chanRepaint\(\);/);
+  // The real Dismiss handler (core/chats-bind.js click) drops it after a saved dismissal, then repaints the feed.
+  const dismiss = async (gone, ok = true) => {
+    const dropped = [], c = bindClick({ OUTBOX: { get: () => gone, dismissFailed: () => Promise.resolve(ok) }, chanDropSending: g => (dropped.push(g.id), 1) });
+    assert.equal(c.click(tap({ '[data-obdismissfailed]': { disabled: false, dataset: { obdismissfailed: 'ob7' } } }), 'w1'), true);
+    await settle(); return [dropped, c.calls.filter(x => x[0] === 'chanRepaint').length];
+  };
+  assert.deepEqual(await dismiss({ id: 'ob7', kind: 'new' }), [['ob7'], 1], 'a dismissed new chat: dropped, feed repainted');
+  assert.deepEqual(await dismiss({ id: 'ob7', kind: 'new' }, false), [[], 0], 'a refused dismissal keeps the post');
+  assert.deepEqual(await dismiss({ id: 'ob8', kind: 'reply' }), [[], 0], 'a reply has no channel post');
 });
 
 test('issue 1293 main vs routed: Dismiss drops a host-profile, container or restricted channel\'s own Sending… post only', async () => {
@@ -634,7 +650,14 @@ test('Edit keeps words already in the channel box, and leaves replies and other 
   }
   const { f: m } = editFixture(); m.openChannel(m.w, 'launch');
   assert.equal(m.chanEditUnsent('w', failedPost('typing in the # Launch channel in Chats', { agent: 'host' })), false, 'a routed post never lands in a main channel');
-  assert.match(src, /if \(it && !\(typeof chanEditUnsent === 'function' && chanEditUnsent\(id, it\)\)\) H\.editUnsent\(it\)/);
+  // The real Edit tap (core/chats-bind.js click): the channel takes its own post back, else the shell's Edit.
+  const edit = took => {
+    const seen = [], shell = [], c = bindClick({ OUTBOX: { get: id => ({ id }) }, chanEditUnsent: (wid, it) => (seen.push([wid, it.id]), took), H: { editUnsent: it => shell.push(it.id) } });
+    assert.equal(c.click(tap({ '[data-obedit]': { dataset: { obedit: 'ob1' } } }), 'w1'), true);
+    return [seen, shell];
+  };
+  assert.deepEqual(plain(edit(true)), [[['w1', 'ob1']], []], 'the channel box took it: no shell Edit');
+  assert.deepEqual(plain(edit(false)), [[['w1', 'ob1']], ['ob1']], 'not a channel post: the shell\'s Edit');
 });
 
 test('General posts unfiled (no Space); routed host-profile, container and restricted channels keep their own agent', async () => {
@@ -680,19 +703,21 @@ test('voice: the orb and the box mic in front of a channel start a new chat ther
   const box = runRecording(lineOf(raw('web/core/chats-send.js'), 'const chanBoxOf =').trim().replace('const chanBoxOf', 'globalThis.chanBoxOf'),
     { W: { a: { thread: null }, b: { thread: 'x' } }, chanDraftKey: w => w === undefined ? '' : 'chan-box' }).chanBoxOf;
   assert.equal(box('a', '__new__'), 'chan-box'); assert.equal(box('a', 'sid'), ''); assert.equal(box('b', '__new__'), ''); assert.equal(box('zz', '__new__'), '');
-  assert.match(src, /const P = peekComposer\(wid, sid, box\), dkey = boxKey\(wid, sid, box\);/);
+  // (takeComposer keying the take by that box runs in chat-channel-box-voice.test.mjs: 'a channel take seals the box...')
   // ...the box of the channel the take STARTED in (Codex P1): phone sealTarget carries it.
   const seal = V => runRecording(fnBlock(raw('web/app-sendgo.js'), '  function sealTarget() {') + '\nglobalThis.seal = sealTarget;', { V, appVars: { W: { w1: {} } } }).seal();
   assert.deepEqual(plain(seal({ replyTo: { wid: 'w1', sid: '__new__', box: 'chan-box' } })), { wid: 'w1', sid: '__new__', box: 'chan-box' });
   assert.deepEqual(plain(seal({ kind: 'tap', target: null, snap: { view: { kind: 'chat thread', id: 'w1', thread: '__new__', box: 'chan-box' } } })), { wid: 'w1', sid: '__new__', box: 'chan-box' });
-  assert.match(app, /CHATS\.takeComposer\(sealAt\.wid, sealAt\.sid, sealAt\.box\)/);
-  assert.match(app, /if \(typeof snap\.view\?\.space === 'string'\) \{\n\s*const want = typeof snap\.view\.chanAgent === 'string' \? snap\.view\.chanAgent : snap\.route\?\.agent \|\| '';/);
+  // The phone's Send seals that box (the real statement in app.js finishVoice).
+  const sealLine = stmt(app, 'if (sealAt && !V.seal)'), took = [];
+  const sealed = runRecording(sealLine, { sealAt: { wid: 'w1', sid: '__new__', box: 'chan-box' }, V: {}, CHATS: { takeComposer: (...a) => (took.push(a), { text: 'hi', files: [] }) } });
+  assert.deepEqual(plain(took), [['w1', '__new__', 'chan-box']]); assert.equal(sealed.V.seal.text, 'hi');
+  // (sendTapRoute keeping the channel's agent runs in chat-channel-box-voice.test.mjs: 'phone and desktop: a channel take...')
   // The box mic records a new chat from this channel (real boxThread); the model label opens the new-chat model menu.
   const power = readFileSync(new URL('../web/core/chat-power.js', import.meta.url), 'utf8');
   const boxThread = runRecording(lineOf(power, 'const boxThread =').trim().replace('const boxThread', 'globalThis.boxThread'), { A: { chanOpen: w => w.feed ? {} : null } }).boxThread;
   assert.equal(boxThread({ thread: 'sid1' }), 'sid1'); assert.equal(boxThread({ thread: null, feed: true }), '__new__'); assert.equal(boxThread({ thread: null }), ''); assert.equal(boxThread(null), '');
-  assert.match(power, /const sid = boxThread\(w\); if \(!sid \|\| !H\.recordReply\) return true;/);
-  assert.match(power, /openModels\(id, paneThread\(id\) === '__new__' \? 'new' : 'thread'/); // the pane's own box (issue 1309)
+  // (the box mic and model label taps through the real chat-power.js click run in chat-channel-box-voice.test.mjs)
   // An orb take is pinned to the channel it started in (Codex P1): phone viewOf carries its Space to every send path
   // (real pinSpace), the desktop orb keeps it from the start of the take.
   const pinSpace = runRecording(lineOf(raw('web/app-routing.js'), 'const pinSpace =').trim().replace('const pinSpace', 'globalThis.pinSpace'), {}).pinSpace;
@@ -706,10 +731,15 @@ test('voice: the orb and the box mic in front of a channel start a new chat ther
   assert.deepEqual(plain(deskTake(false, 'w1', () => 'launch')), { vSpace: 'launch', vBox: 'box:w1' });
   assert.deepEqual(plain(deskTake(false, 'w1', () => null)), { vSpace: null });
   assert.deepEqual(plain(deskTake(true, 'w1', () => 'launch')), { vSpace: null }, 'a forced new chat is not a channel take');
-  assert.match(desk, /\.\.\.\(aimSid === '__new__' && !rp && typeof vSpace === 'string' \? \{ space: vSpace \} : \{\}\)/);
+  // The desktop's aimed send carries that Space on a new chat only (the real statement in desktop.js).
+  const aimed = stmt(desk, 'if (w && aimSid) CHATS.sendChat(');
+  const deskSend = (aimSid, rp, vSpace) => { const out = []; runRecording(aimed, { w: { id: 'w1' }, aimSid, rp, vSpace, r: {}, CHATS: { sendChat: (...a) => out.push(a) } }); return out[0]?.[4].space; };
+  assert.equal(deskSend('__new__', null, 'launch'), 'launch'); assert.equal(deskSend('__new__', null, ''), '', 'General');
+  assert.equal(deskSend('sid1', null, 'launch'), undefined, 'a reply to a thread'); assert.equal(deskSend('__new__', { id: 'q' }, 'launch'), undefined, 'a quoted reply');
+  assert.equal(deskSend('__new__', null, null), undefined, 'no channel take');
   // Those takes are filed into the channel the way every new chat from a Space in front is (real outbox onNew).
-  const focus = raw('web/core/chats-focus.js');
-  const onNew = focus.slice(focus.indexOf('  OUTBOX?.onNew?.((it, o) => {'), focus.indexOf('\n  });', focus.indexOf('  OUTBOX?.onNew?.((it, o) => {')) + 6);
+  const focusText = raw('web/core/chats-focus.js');
+  const onNew = focusText.slice(focusText.indexOf('  OUTBOX?.onNew?.((it, o) => {'), focusText.indexOf('\n  });', focusText.indexOf('  OUTBOX?.onNew?.((it, o) => {')) + 6);
   const hook = {};
   const filed = runRecording(onNew, { OUTBOX: { onNew: f => { hook.cb = f; } }, spaceInFront: agent => agent === 'scout' ? 'launch' : '', chanOwnPost: undefined });
   filed.calls.length = 0; hook.cb({ agent: 'scout', sessionId: 's1' }, {});
@@ -877,7 +907,11 @@ test('opening a post repaints every open feed at once (the desktop list pane bes
   f.chanSeenPaint(); assert.deepEqual(f.renders, ['list']);
   f.env.holdList = () => true; f.renders.length = 0;
   f.chanSeenPaint(); assert.deepEqual(f.renders, [], 'a held list keeps the hold (it repaints when let go)');
-  assert.match(src, /LIVE\.markSeen\(typeof chanSeenRow === 'function' \? chanSeenRow\(wid, sid\) : sid\); if \(typeof chanSeenPaint === 'function'\) chanSeenPaint\(\);/, 'openChat marks the window\'s own row, then paints');
+  // openChat (the real statement in chats.js) marks the window's own row, then paints.
+  const seenLine = stmt(src, "LIVE.markSeen(typeof chanSeenRow === 'function'"), order = [];
+  const openSeen = sid => { order.length = 0; runRecording(seenLine, { wid: 'w', sid, LIVE: { markSeen: r => order.push(['seen', r]) }, chanSeenRow: (wid, id) => ({ wid, id }), chanSeenPaint: () => order.push(['paint']) }); return plain(order); };
+  assert.deepEqual(openSeen('a'), [['seen', { wid: 'w', id: 'a' }], ['paint']], 'openChat marks the window\'s own row, then paints');
+  assert.deepEqual(openSeen('__new__'), [], 'a new chat has nothing to mark');
 });
 
 test('opening a routed post that shares its id with a main thread marks the routed row, not the main one', () => {
@@ -1172,27 +1206,45 @@ test('issue 1269 main vs routed: opening a routed post marks that row (host-prof
   }
 });
 
-test('issue 1266: unread is a green dot and needs-you an amber one in Channels, on every skin; Activity keeps its own dot', () => {
+// The real chats.css on markup the real Channels code rendered, with stand-in skin tokens (mini-dom + mini-css).
+const chatsCss = readFileSync(new URL('../web/core/chats.css', import.meta.url), 'utf8');
+const SKIN_TOKENS = 'html { --green: #3c9; --amber: #fb3; --ink: #eee; --ink-2: #bbb; --ink-3: #888; --violet: #93f; --violet-2: #a7f; --wz-accent: #48f; --wz-base: #012; --wz-text-secondary: #9ab; --wz-border: #345; }';
+const SUPPORTS = { media: m => m.startsWith('@supports') };
+function painted(html, { attrs = {} } = {}) {
+  const doc = createDocument(); for (const [k, v] of Object.entries(attrs)) doc.documentElement.setAttribute(k, v);
+  doc.body.innerHTML = html; const sheets = [SKIN_TOKENS + '\n' + chatsCss];
+  return { doc, q: sel => { const el = doc.querySelector(sel); if (!el) throw new Error('not rendered: ' + sel); return el; }, v: (el, prop, opts) => valueOf(el, sheets, prop, opts) };
+}
+
+test('issue 1266: unread is a green dot and needs-you an amber one in Channels, on every skin; Activity keeps its own dot', async () => {
   const f = fixture(); f.channelClick(click({ 'data-chchanx': 'launch' }), 'w', f.w);
   const html = f.channelsBody(f.w, [row('a', 1, { fresh: true }), row('b', 2, { attention: { state: 'needs_you' }, fresh: true })]);
   assert.match(html, /class="ch-chan-post unread" data-chopen="a"><span>T a<\/span><span class="ch-chan-ind"><i class="ch-chan-dot new" role="img" aria-label="Unread"><\/i><\/span>/);
   assert.match(html, /data-chopen="b"><span>T b<\/span><span class="ch-chan-ind"><i class="ch-chan-dot" role="img" aria-label="Needs you"><\/i><i class="ch-chan-dot new" role="img" aria-label="Unread"><\/i><\/span>/, 'amber, then green');
   const css = (s => s.slice(s.indexOf('/* Channels in Chats (wizard-ux issue 1254)')))(readFileSync(new URL('../web/core/chats.css', import.meta.url), 'utf8'));
-  const rules = css.split('\n').filter(l => /unread|ch-chan-ind|ch-chan-new|ch-chan-dot\.new|ch-post-st\.new|ch-post-r span/.test(l));
-  assert.ok(rules.length >= 5);
-  for (const l of rules) assert.doesNotMatch(l, /--violet/, 'no violet unread marks: ' + l.slice(0, 90));
-  assert.match(css, /--ch-new: var\(--green\)/, 'the skin\'s own green');
-  assert.match(css, /oklch\(from var\(--green\) l c 150\)/, 'held on a green hue where a skin\'s green is gold (Ember)');
-  assert.match(css, /\.ch-chan-dot\.new \{[^}]*background: var\(--ch-new\)/, 'the green dot: the skin\'s full green, never a dark mix');
-  assert.match(css, /\.ch-post-st\.new \{[^}]*color: var\(--ch-new\)/, 'the feed\'s "New reply" words in that green');
-  assert.match(css, /\.ch-chan-ind \{[^}]*margin-left: auto/, 'one right-aligned slot');
+  for (const l of css.split('\n').filter(l => /unread|ch-chan-ind|ch-chan-new|ch-chan-dot\.new|ch-post-st\.new|ch-post-r span/.test(l))) assert.doesNotMatch(l, /--violet/, 'no violet unread marks: ' + l.slice(0, 90));
+  // What the rendered Channels lines paint (the real chats.css on the real markup).
+  const P = painted(`<div class="ch-list">${html}</div>`), list = P.q('.ch-list');
+  const unreadDot = P.q('[data-chopen="a"] .ch-chan-dot.new'), needsDot = P.q('[data-chopen="b"] .ch-chan-dot:not(.new)');
+  assert.equal(P.v(list, '--ch-new'), '#3c9', 'the skin\'s own green');
+  assert.equal(P.v(list, '--ch-new', SUPPORTS), 'oklch(from #3c9 l c 150)', 'held on a green hue where a skin\'s green is gold (Ember)');
+  assert.equal(P.v(unreadDot, 'background'), '#3c9', 'the green dot: the skin\'s full green, never a dark mix');
+  assert.equal(P.v(needsDot, 'background'), '#fb3', 'needs you stays amber');
+  assert.equal(P.v(P.q('[data-chopen="a"] .ch-chan-ind'), 'margin-left'), 'auto', 'one right-aligned slot');
   assert.doesNotMatch(css, /\.ch-chan-n\b|\.ch-post-r \.st\.unread/, 'issue 1269: no number pill, no left-side dot');
-  assert.match(css, /\.ch-chan-dot \{[^}]*background: var\(--amber\)/, 'needs you stays amber');
-  assert.match(css, /\.ch-post-r\.unread span:not\(\.ch-post-st\) \{[^}]*color: var\(--ink\)/, '"N new replies" in ink');
-  assert.ok(css.split('\n').every(l => !/\.st\.unread/.test(l)), 'Activity\'s .st.unread is untouched');
-  // Grove's unread dot was gold like its needs-you dot; its green token is not.
-  const skins = readFileSync(new URL('../web/core/skins.js', import.meta.url), 'utf8'), grove = skins.slice(skins.indexOf("id: 'grove'"), skins.indexOf("id: 'tide'"));
-  assert.notEqual(grove.match(/ green: '([^']+)'/)[1], grove.match(/ amber: '([^']+)'/)[1]);
+  assert.doesNotMatch(css, /\.st\.unread/, 'Activity\'s .st.unread is untouched');
+  // The feed's unread post: "N new replies" in ink, the "New reply" words in that green.
+  const a = [{ role: 'user', text: 'q' }, { role: 'assistant', text: '1', at: 100 }, { role: 'assistant', text: '2', at: 200 }];
+  const g = fixture({ history: { a } }); g.openChannel(g.w, 'launch');
+  const rows = [row('a', 3, { fresh: true, messageCount: 2, readAt: 150 })];
+  g.channelFeed(g.w, g.chanOpen(g.w), rows); await settle();
+  const F = painted(`<div class="ch-list">${g.channelFeed(g.w, g.chanOpen(g.w), rows)}</div>`);
+  assert.equal(F.v(F.q('.ch-post-st.new'), 'color'), '#3c9', 'the feed\'s "New reply" words in that green');
+  assert.equal(F.v(F.q('.ch-post-r.unread > span:not(.ch-post-st):not(.ch-post-av):not(.ch-post-sts)'), 'color'), '#eee', '"N new replies" in ink');
+  // Grove's unread dot was gold like its needs-you dot; the real skins.js tokens it paints are not.
+  const grove = skinPage('grove', 'phone', `<div class="ch-list">${html}</div>`), gq = s => grove.doc.querySelector(s);
+  const groveNew = grove.value(gq('[data-chopen="a"] .ch-chan-dot.new'), 'background');
+  assert.match(groveNew, /^rgba?\(/, 'the unread dot paints a colour'); assert.notEqual(groveNew, grove.value(gq('[data-chopen="b"] .ch-chan-dot:not(.new)'), 'background'));
 });
 
 test('issue 1266: what a feed keeps for this open never goes into the saved window (a reload restores a plain o.chan)', () => {
@@ -1623,7 +1675,7 @@ test('issue 1316: a partial scroll reads only what passed the view, never a chan
 });
 
 test('issue 1316: the watermark only moves forward, is written at most once per ~2 s, and never writes a per-thread seen record', () => {
-  const f = fixture({ spacesList: longSpaces(40) }), rows = manyRows(40, 0), timers = [], writes = [];
+  const on = {}, f = fixture({ spacesList: longSpaces(40), on }), rows = manyRows(40, 0), timers = [], writes = [];
   f.env.setTimeout = (fn, ms) => { timers.push([fn, ms]); return timers.length; };
   const set = f.env.localStorage.setItem; f.env.localStorage.setItem = (k, v) => { if (k === READ_KEY) writes.push(JSON.parse(v)); return set(k, v); };
   f.openChannel(f.w, 'launch');
@@ -1646,7 +1698,15 @@ test('issue 1316: the watermark only moves forward, is written at most once per 
   f.chanUser('w'); d2.sc.scrollTop = 0; f.chanScrolled('w', d2.sc);
   assert.equal(f.chanReadAt('hermes|launch'), NOW + H, 'scrolling back up never moves it back');
   assert.deepEqual(f.marks, [], 'no per-thread seen write from the feed');
-  assert.match(src, /window\.addEventListener\('pagehide', \(\) => \{ if \(chanReadT\) chanReadSave\(true\); \}\)/, 'a pending write is flushed when the page goes');
+  // A pending write is flushed when the page goes (the block's own pagehide listener), not lost with the timer.
+  on.pagehide(); assert.equal(writes.length, 2, 'nothing pending: no write');
+  rows.push(row('p41', -2, { startedAt: new Date(NOW + 2 * H).toISOString() })); f.spacesData[0].threads.push('p41');
+  f.channelFeed(f.w, f.chanOpen(f.w), rows);
+  const d3 = feedDom(f.channelFeed(f.w, f.chanOpen(f.w), rows)); f.env.elOf = () => d3.el;
+  f.chanUser('w'); d3.sc.scrollTop = d3.sc.scrollHeight - d3.sc.clientHeight; f.chanScrolled('w', d3.sc);
+  assert.equal(writes.length, 2, 'throttled: waiting on its timer');
+  on.pagehide();
+  assert.equal(writes.length, 3, 'a pending write is flushed when the page goes'); assert.equal(writes[2].at['hermes|launch'], NOW + 2 * H);
 });
 
 test('issue 1316 review: an agent-focused General has its own mark; reading it never reads All\'s other agents', () => {
@@ -1788,18 +1848,29 @@ function doneFixture(opts = {}) {
 }
 const lineOf = (f, rows, id) => f.channelsBody(f.w, rows).split(/<div class="ch-chan(?=[ "])/).slice(1).find(c => c.includes(`data-chchan="${id}"`));
 
-test('issue 1317: Mark done is offered on a settled thread not already handled', () => {
+test('issue 1317: Mark done is offered on a settled thread not already handled', async () => {
   const s = row('b', 2, { fresh: true, attention: { state: 'needs_you', ask: 'Pick one' }, lastAssistantAt: new Date(NOW - 2 * H).toISOString() });
   const f = doneFixture({ sessions: { b: s } });
   assert.equal(f.canMarkDone(s), true, 'Mark done is always offered (issue 1358: no wizard/mark-done switch; issue 1258: no Channels switch)');
   assert.equal(f.canMarkDone({ ...s, status: 'running' }), false, 'a working thread');
   assert.equal(f.canMarkDone({ ...s, archived: true }), false, 'an archived thread');
   // The menus: Chats' row sheet (feed posts and Activity rows) and the AI apps sidebar's Activity rows.
-  const sheet = src.slice(src.indexOf('  function openRowSheet('), src.indexOf('  const emojiCategoryHtml'));
-  assert.match(sheet, /!nid && typeof canMarkDone === 'function' && canMarkDone\(s\) \? `<button type="button" data-rsmarkdone>\$\{MARK_DONE_SVG\}Mark done<\/button>`/);
-  assert.match(src, /if \(e\.target\.closest\('\[data-rsmarkdone\]'\) && rowSheet\?\.sid\) \{ const \{ wid: rw, sid \} = rowSheet; closeRowSheet\(\); markDone\(rw, sid\); return true; \}/);
-  assert.match(src, /if \(a === 'markdone'\) \{ markDone\(wid, sid\); return; \}/, 'the layouts\' sessionAct reaches it through threadAct');
-  assert.match(readFileSync(new URL('../web/core/chats-list-model.js', import.meta.url), 'utf8'), /\.\.\.\(chats\.canMarkDone\?\.\(s\) \? \['markdone'\] : \[\]\)/);
+  // The real row sheet offers it on a thread row (never on a notification row) as canMarkDone says.
+  const rs = rowSheet({ rows: { t1: s } }); rs.ctx.canMarkDone = f.canMarkDone;
+  assert.ok(rs.open('t1').includes('data-rsmarkdone'), 'the row sheet offers Mark done');
+  assert.ok(!rs.open('t1', 'n1').includes('data-rsmarkdone'), 'not on a notification row');
+  rs.ctx.canMarkDone = () => false; assert.ok(!rs.open('t1').includes('data-rsmarkdone'));
+  // Its tap (the real click handler) closes the sheet and marks that thread done.
+  const md = bindClick({ chatVars: { rowSheet: { wid: 'w1', sid: 'b' } } });
+  assert.equal(md.click(tap({ '[data-rsmarkdone]': {} }), 'w1'), true);
+  assert.deepEqual(plain(md.calls.filter(c => ['closeRowSheet', 'markDone'].includes(c[0]))), [['closeRowSheet'], ['markDone', 'w1', 'b']]);
+  // The layouts' sessionAct reaches it through the real threadAct.
+  const ta = runRecording(`${fnBlock(src, '  async function threadAct(wid, sid, a) {')}\nthis.act = threadAct;`, { W: { w1: { id: 'w1', thread: null } }, owner: id => id, rowOf: () => ({ id: 'b' }), window: {}, Promise, Date, Object });
+  await ta.act('w1', 'b', 'markdone');
+  assert.deepEqual(plain(ta.calls.filter(c => c[0] === 'markDone')), [['markDone', 'w1', 'b']], 'the layouts\' sessionAct reaches it through threadAct');
+  // The AI apps sidebar's rows (the real list model's sessionRow) carry it as an action.
+  const acts = x => f.env.WizChatsListModel.sessionRow(x, 'ready', { live: {}, chats: { canMarkDone: f.canMarkDone, threadActions: () => [] } }).actions;
+  assert.ok(acts(s).includes('markdone')); assert.ok(!acts({ ...s, archived: true }).includes('markdone'));
 });
 
 test('issue 1317: Mark done clears amber and green in the feed, Activity and the channel row; a new reply brings them back (main and routed)', async () => {
@@ -2060,7 +2131,7 @@ test('issue 1331: the agent\'s next status line that drops the ask clears it; on
   }
 });
 
-test('issue 1331: opening a thread with an open Needs you lands on that message once per open', () => {
+test('issue 1331: opening a thread with an open Needs you lands on that message once per open', async () => {
   const s = askRow('b'), f = needsFixture();
   // A phone: the document scrolls and the thread's header (56px) is fixed over it. The line starts 900px down.
   const doc = { scrollTop: 0, scrollTo(o) { scrolled.push(o); this.scrollTop = o.top; } };
@@ -2084,9 +2155,17 @@ test('issue 1331: opening a thread with an open Needs you lands on that message 
   assert.equal(line.getBoundingClientRect().top, 139, 'under whichever is lower: the box top or the header (it overlapped by 11px)');
   // Both opens call it: a fresh history read and a reopen inside the 60-second history cache (Codex P2).
   const outboxSrc = readFileSync(new URL('../web/core/chats-outbox.js', import.meta.url), 'utf8'); // loadThread lives in core/chats-outbox.js (issue 1665)
-  const load = outboxSrc.slice(outboxSrc.indexOf('  async function loadThread('), outboxSrc.indexOf('    // Every read owns a captured thread AND navigation generation.'));
-  assert.match(load, /if \(fresh && !force\) \{\n      c\.loadedNav = nav;[^\n]*\n      if \(typeof needsLand === 'function'\) needsLand\(w, nav\);/);
-  assert.match(outboxSrc, /if \(typeof needsLand === 'function' && current\(\)\) needsLand\(w, nav\);/);
+  // The real loadThread: a fresh read lands, then a reopen served from the 60-second cache lands too.
+  const lw = { id: 'w9', thread: 't1' }, lc = { readNav: 1 }, landed = [];
+  const lt = runRecording(`${fnBlock(outboxSrc, '  async function loadThread(w, force) {')}\nthis.load = loadThread;`, {
+    INC: null, ch: () => lc, CH: { w9: lc }, W: { w9: lw }, Date, JSON, Number, Object, Promise, globalThis: {},
+    LIVE: { session: () => ({ id: 't1', status: 'completed', messageCount: 2 }), busy: () => false, messages: async () => [] },
+    toTurns: () => [], turnsCurrent: () => true, isWorking: () => false, pendingFor: () => [], retireLanded: () => false, loadApproval: async () => false,
+    needsLand: (w, nav) => landed.push([w.id, nav]) });
+  await lt.load(lw); assert.deepEqual(landed, [['w9', 1]], 'a fresh history read lands');
+  assert.equal(lc.loadedFor, 't1');
+  lc.readNav = 2; await lt.load(lw);
+  assert.deepEqual(landed, [['w9', 1], ['w9', 2]], 'a reopen inside the history cache lands too (no second read)');
 });
 
 test('issue 1331: the landing becomes the reading place for main and routed threads alike (second AI review)', () => {
@@ -2139,9 +2218,20 @@ test('issue 1331: Reply on any message is standard for the main agent; the Threa
   assert.equal(onOf('wizard/thread-tracker'), false, 'retired, even with its own id saved');
   assert.equal(onOf('wizard/thread-tracker wizard/needs-you-in-thread'), false);
   // Its Reply and the thread's Mark done are handled by Chats.
-  assert.match(src, /if \(typeof replyStd === 'function' && replyStd\(LIVE\.agentOf && w\.thread \? LIVE\.agentOf\(w\.thread\) : ''\)\) \{ const mq = e\.target\.closest\('\[data-mquote\]'\); if \(mq\) \{ quoteMessage\(w, mq\.closest\('\.msg'\)\); return true; \} \}/);
-  assert.match(src, /if \(e\.target\.closest\('\[data-chmarkdone\]'\) && w\.thread\) \{ markDone\(id, w\.thread, true\); return true; \}/);
-  assert.match(src, /if \(!isNew && reply && typeof needsReplied === 'function'\) needsReplied\(wid, sid, reply\);/);
+  // (the real click handler, core/chats-bind.js)
+  const tw = { id: 'w1', thread: 't1' }, msgEl = { msg: true };
+  const quote = std => { const c = bindClick({ replyStd: () => std, LIVE: { agentOf: () => '' }, H: { win: () => tw } }); const r = c.click(tap({ '[data-mquote]': { closest: sel => sel === '.msg' ? msgEl : null } }), 'w1'); return [r, c.calls.filter(x => x[0] === 'quoteMessage').map(x => [x[1].thread, x[2] === msgEl])]; };
+  assert.deepEqual(plain(quote(true)), [true, [['t1', true]]], 'Reply quotes that message');
+  assert.deepEqual(plain(quote(false)[1]), [], 'another agent\'s thread: no Reply');
+  const mdc = bindClick({ H: { win: () => tw } });
+  assert.equal(mdc.click(tap({ '[data-chmarkdone]': {} }), 'w1'), true);
+  assert.deepEqual(plain(mdc.calls.filter(x => x[0] === 'markDone')), [['markDone', 'w1', 't1', true]], 'the thread\'s Mark done');
+  // A reply sent from the Needs you message clears it (the real statement in chats-send.js sendChat, after the save).
+  const sendText = readFileSync(new URL('../web/core/chats-send.js', import.meta.url), 'utf8');
+  const repliedLine = stmt(sendText, "typeof needsReplied === 'function') needsReplied(");
+  const replied = (isNew, reply) => { const got = []; runRecording(repliedLine, { isNew, reply, wid: 'w1', sid: 't1', needsReplied: (...a) => got.push(a) }); return plain(got); };
+  assert.deepEqual(replied(false, { id: 'm1' }), [['w1', 't1', { id: 'm1' }]]);
+  assert.deepEqual(replied(true, { id: 'm1' }), [], 'a new chat is no reply'); assert.deepEqual(replied(false, null), [], 'no quoted message');
 });
 
 test('issue 1331: Archive turns quiet; Mark done is the strong button, only while a Needs you is open', () => {
@@ -2149,12 +2239,17 @@ test('issue 1331: Archive turns quiet; Mark done is the strong button, only whil
   const all = (s => s.slice(s.indexOf('/* Channels in Chats (wizard-ux issue 1254)')))(readFileSync(new URL('../web/core/chats.css', import.meta.url), 'utf8'));
   const css = all.slice(all.indexOf('/* Needs you in the thread (wizard-ux issue 1331'));
   const S = 'html:root';
-  assert.ok(css.includes(S + ' .ch-tacts button[data-chact="done"] { color: var(--wz-text-secondary); border-color: var(--wz-border); background: transparent;'), 'Archive: neutral ink, no accent fill');
-  assert.match(css, /\.ch-tacts button\.ch-tact-md \{[^}]*background: var\(--wz-accent\); color: var\(--wz-base\);/, 'Mark done: the accent fill');
   for (const rule of css.split('\n').filter(l => l.includes('{'))) assert.ok(rule.startsWith(S), 'scoped: ' + rule.slice(0, 60));
-  const ta = src.indexOf('    const tacts = NV ?'), tacts = src.slice(ta, src.indexOf('    clearReading(w.id);', ta));
-  assert.match(tacts, /typeof needsAsk === 'function' && needsAsk\(s\) && canMarkDone\(s\) \? `<button type="button" class="ch-tact-md" data-chmarkdone/);
   const s = askRow('b'), f = needsFixture();
+  // The thread's action row (the real statement in core/chats-threadpaint.js) with the real needsAsk / canMarkDone.
+  const paintText = readFileSync(new URL('../web/core/chats-threadpaint.js', import.meta.url), 'utf8');
+  const tactsLine = stmt(paintText, 'const tacts = NV ?');
+  const tactsOf = row => runRecording(`${tactsLine}\nthis.out = tacts;`, { NV: null, acts: ['done'], turns: [{}], pend: [], s: row, needsAsk: vm.runInContext('needsAsk', f.env), canMarkDone: f.canMarkDone,
+    MARK_DONE_SVG: '', ACT: { done: { hint: 'Archive', icon: '' } }, actionLabel: () => 'Archive' }).out;
+  const T = painted(`<div class="ch-thread">${tactsOf(s)}</div>`), md = T.q('.ch-tacts button.ch-tact-md[data-chmarkdone]'), ar = T.q('.ch-tacts button[data-chact="done"]');
+  assert.deepEqual([T.v(ar, 'color'), T.v(ar, 'border-color'), T.v(ar, 'background')], ['#9ab', '#345', 'transparent'], 'Archive: neutral ink, no accent fill');
+  assert.deepEqual([T.v(md, 'background'), T.v(md, 'color')], ['#48f', '#012'], 'Mark done: the accent fill');
+  assert.ok(!tactsOf({ ...s, attention: { state: 'fyi', ask: 'x' } }).includes('data-chmarkdone'), 'no open Needs you: no Mark done');
   assert.ok(vm.runInContext('needsAsk', f.env)(s) && f.canMarkDone(s), 'shown on an open Needs you');
   assert.equal(vm.runInContext('needsAsk', f.env)({ ...s, attention: { state: 'fyi', ask: 'x' } }), null, 'nothing prominent otherwise');
   const cat = JSON.parse(readFileSync(new URL('../web/tweaks/catalog.json', import.meta.url), 'utf8'));
@@ -2198,9 +2293,11 @@ test('issue 1336: one marker per row, amber over green, spinner for working; the
   assert.equal(mark(row('r', 1)), '');
   assert.match(html(both), /^<span class="ch-act-ind"><i class="ch-chan-dot" role="img" aria-label="Needs you"><\/i><\/span>$/);
   assert.match(html(row('n', 1, { fresh: true })), /ch-chan-dot new" role="img" aria-label="Unread"/);
-  const css = (s => s.slice(s.indexOf('/* Channels in Chats (wizard-ux issue 1254)')))(readFileSync(new URL('../web/core/chats.css', import.meta.url), 'utf8'));
-  assert.ok(css.includes('html:root .ch-row.unread .tp time { color: var(--ink-3); font-weight: 400; }'), 'no violet unread time with the switch on');
-  assert.ok(css.includes('.aad-rw .aad-st.is-new { width: 8px; height: 8px; background: var(--ch-new); }'), 'the AI apps unread dot is green, not the accent');
+  // Painted (the real chats.css): an Activity row's unread time stays quiet ink, never violet; the AI apps unread dot is green.
+  const P = painted(`<div class="ch-list"><div class="ch-row unread">${html(row('n', 1, { fresh: true }))}<div class="tp"><time>1h</time></div></div></div>`);
+  assert.deepEqual([P.v(P.q('.ch-row.unread .tp time'), 'color'), P.v(P.q('.ch-row.unread .tp time'), 'font-weight')], ['#888', '400'], 'no violet unread time with the switch on');
+  const A = painted('<div class="aad-rw"><div class="aad-row"><span class="aad-st is-new"></span></div></div>', { attrs: { 'data-layout': 'ai-apps' } }), dot = A.q('.aad-st.is-new');
+  assert.deepEqual([A.v(dot, 'background'), A.v(dot, 'width')], ['#3c9', '8px'], 'the AI apps unread dot is green, not the accent');
 });
 
 test('issue 1497 main vs routed: every Activity row has one marker slot, drawn left of the title, for each agent kind', () => {
@@ -2212,8 +2309,11 @@ test('issue 1497 main vs routed: every Activity row has one marker slot, drawn l
     assert.equal(html(row(sid, 1)), '<span class="ch-act-ind" aria-hidden="true"></span>', `${kind}: no marker keeps an empty slot so titles line up`);
   }
   const css = (s => s.slice(s.indexOf('/* Channels in Chats (wizard-ux issue 1254)')))(readFileSync(new URL('../web/core/chats.css', import.meta.url), 'utf8'));
-  assert.match(css, /\.ch-row > \.ch-act-ind \{ order: -1;/, 'the marker sits before the title');
-  assert.match(css, /\.aad-rw \.aad-row > \.aad-st \{ order: -1;/, 'the AI apps marker leads the row');
+  // Painted (the real chats.css): the rendered marker sits before the title, in Chats and in the AI apps sidebar.
+  const P = painted(`<div class="ch-list"><div class="ch-row">${actFn(fixture({ agents }), 'actRowMark')(row('a', 1, { status: 'running' }))}<div class="tp"></div></div></div>`);
+  assert.equal(P.v(P.q('.ch-row > .ch-act-ind'), 'order'), '-1', 'the marker sits before the title');
+  const A = painted('<div class="aad-rw"><div class="aad-row"><span class="aad-st"></span><b>T</b></div></div>', { attrs: { 'data-layout': 'ai-apps' } });
+  assert.equal(A.v(A.q('.aad-row > .aad-st'), 'order'), '-1', 'the AI apps marker leads the row');
   assert.doesNotMatch(css, /\.ch-act-ind \{ order: 6;/, 'nothing puts it back at the right end');
 });
 
@@ -2471,15 +2571,15 @@ test('issue 1506: Rename has the emoji row; a tap puts that emoji in front, a ta
   assert.match(html, /data-chrnform[^]*value="🚀 Launch"[^]*class="ch-emoji-pick" role="group" aria-label="Channel emoji"/);
   assert.match(html, /data-chemoji="🚀" aria-pressed="true"/); assert.match(html, /data-chemoji="🎯" aria-pressed="false"/);
   // A fake form: the tap edits the field, fires input (the New channel form keeps its Create button in step) and rings the pick.
-  const fired = [], inp = { value: '🚀 Launch', disabled: false, dispatchEvent: e => fired.push(e.type) };
+  const fired = [], field = { value: '🚀 Launch', disabled: false, dispatchEvent: evt => fired.push(evt.type) };
   const btns = ['🚀', '🎯'].map(e => ({ dataset: { chemoji: e }, attrs: {}, setAttribute(k, v) { this.attrs[k] = v; }, closest: sel => sel === 'form' ? formEl : null }));
-  const formEl = { querySelector: () => inp, querySelectorAll: () => btns };
+  const formEl = { querySelector: () => field, querySelectorAll: () => btns };
   f.env.Event = class { constructor(t) { this.type = t; } };
   const tap = b => f.channelClick({ target: { closest: sel => sel === '[data-chemoji]' ? b : null } }, 'w', f.w);
-  assert.equal(tap(btns[1]), true); assert.equal(inp.value, '🎯 Launch'); assert.deepEqual(fired, ['input']);
-  assert.deepEqual(btns.map(b => b.attrs['aria-pressed']), ['false', 'true']);
-  tap(btns[1]); assert.equal(inp.value, 'Launch', 'the chosen one again: off (the list shows 💬)');
-  f.submitChannelRename({ querySelector: () => ({ value: inp.value, focus() {} }) });
+  assert.equal(tap(btns[1]), true); assert.equal(field.value, '🎯 Launch'); assert.deepEqual(fired, ['input']);
+  assert.deepEqual(btns.map(bt => bt.attrs['aria-pressed']), ['false', 'true']);
+  tap(btns[1]); assert.equal(field.value, 'Launch', 'the chosen one again: off (the list shows 💬)');
+  f.submitChannelRename({ querySelector: () => ({ value: field.value, focus() {} }) });
   assert.deepEqual(JSON.parse(JSON.stringify(f.ops.at(-1))), { op: 'set', key: 'spaces/launch/name', item: 'Launch' });
   // Emoji… = the existing emoji sheet (search + categories), keyed to this channel; its pick renames with that emoji.
   const opened = []; f.env.openEmojiSheet = (...a) => opened.push(a);
@@ -2519,12 +2619,12 @@ test('issue 1523: the picker clears an emoji-only name (💬 Channel), main vs r
   }
   // The Rename form's emoji row does the same to the field.
   f.env.rowSheet = { wid: 'w', chan: 'solo', rename: true };
-  const fired = [], inp = { value: '🚀', disabled: false, dispatchEvent: e => fired.push(e.type), focus() {} };
+  const fired = [], field = { value: '🚀', disabled: false, dispatchEvent: evt => fired.push(evt.type), focus() {} };
   const btn = { dataset: { chemoji: '🚀' }, setAttribute() {}, closest: sel => sel === 'form' ? formEl : null };
-  const formEl = { querySelector: () => inp, querySelectorAll: () => [btn] };
+  const formEl = { querySelector: () => field, querySelectorAll: () => [btn] };
   f.env.Event = class { constructor(t) { this.type = t; } };
   f.channelClick({ target: { closest: sel => sel === '[data-chemoji]' ? btn : null } }, 'w', f.w);
-  assert.equal(inp.value, 'Channel'); assert.deepEqual(fired, ['input']);
+  assert.equal(field.value, 'Channel'); assert.deepEqual(fired, ['input']);
 });
 
 test('issue 1523: clearing finds a free Channel N past 99 (Codex P2: 200 channels per agent)', () => {
@@ -2539,13 +2639,13 @@ test('issue 1523: a name with no room for the emoji is kept whole and the owner 
   assert.equal(f.chanSetEmoji('long', '🎯'), false);
   assert.equal(f.ops.length, 0, 'no rename');
   assert.match(f.toasts.at(-1), /too long for an emoji/);
-  const fired = [], inp = { value: long, disabled: false, dispatchEvent: e => fired.push(e.type), focus() { this.focused = true; } };
+  const fired = [], field = { value: long, disabled: false, dispatchEvent: evt => fired.push(evt.type), focus() { this.focused = true; } };
   const btn = { dataset: { chemoji: '🎯' }, setAttribute() {}, closest: sel => sel === 'form' ? formEl : null };
-  const formEl = { querySelector: () => inp, querySelectorAll: () => [btn] };
+  const formEl = { querySelector: () => field, querySelectorAll: () => [btn] };
   f.env.Event = class { constructor(t) { this.type = t; } };
   f.env.rowSheet = { wid: 'w', chan: 'long', rename: true };
   assert.equal(f.channelClick({ target: { closest: sel => sel === '[data-chemoji]' ? btn : null } }, 'w', f.w), true);
-  assert.equal(inp.value, long, 'the field keeps every character'); assert.deepEqual(fired, []); assert.ok(inp.focused);
+  assert.equal(field.value, long, 'the field keeps every character'); assert.deepEqual(fired, []); assert.ok(field.focused);
   // 60 characters with an emoji already in front: swapping it still fits.
   const full = emojiFixture({ spacesList: [{ id: 'full', name: '🚀 ' + 'x'.repeat(57), threads: [] }] });
   assert.equal(full.chanSetEmoji('full', '🎯'), true);
@@ -2562,10 +2662,16 @@ test('issue 1523: Mark channel read says the channel by its emoji; the voice pin
   assert.ok(!f.toasts.some(t => /^# /.test(t)), 'never #');
   // The voice view of a channel's feed (app.js viewOf) and the orb's hint name it by its title.
   const app = withAppParts(readFileSync(new URL('../web/app.js', import.meta.url), 'utf8'));
-  assert.match(app, /if \(chan\) return \{ id, mode: 'auto', \.\.\.pin, name: `\$\{window\.WizCore\?\.channelFace\?\.\(chan\.name, !!chan\.general\)\?\.title \|\| '# ' \+ chan\.name\} channel` \};/);
-  assert.match(app, /channelFace\?\.\(V\.snap\.view\.channel, V\.snap\.view\.channel === 'General'\)\?\.title/);
-  const C = emojiCore(), pinName = c => `${C.channelFace(c.name, !!c.general)?.title || '# ' + c.name} channel`;
-  assert.equal(pinName({ name: '🚀 Launch' }), '🚀 Launch channel');
-  assert.equal(pinName({ name: '🎯' }), '🎯 channel');
-  assert.equal(pinName({ name: 'General', general: true }), '#️⃣ General channel');
+  const C = emojiCore();
+  const viewOfFn = fnBlock(readFileSync(new URL('../web/app-viewvoice.js', import.meta.url), 'utf8'), '  function viewOf(id) {');
+  const pinName = chan => runRecording(viewOfFn + '\nglobalThis.viewOf = viewOf;', { appVars: { W: { w1: { id: 'w1', app: 'chats', thread: null } } }, window: { WizCore: C },
+    CHATS: { chanOpen: () => chan, chanBox: id => 'chan:' + id, winAgent: () => '' }, agentWin: () => false, winTitle: () => 'T' }).viewOf('w1').name;
+  assert.equal(pinName({ id: 'launch', name: '🚀 Launch' }), '🚀 Launch channel');
+  assert.equal(pinName({ id: 'solo', name: '🎯' }), '🎯 channel');
+  assert.equal(pinName({ id: 'general', name: 'General', general: true }), '#️⃣ General channel');
+  // The orb's hint while a channel take records (the real statement in app.js).
+  const hintLine = stmt(app, "const want = q === 'cmd'");
+  const hint = channel => runRecording(`${hintLine}\nthis.out = want;`, { q: '', agent: 'Wizard', V: { snap: { view: { channel } } }, window: { WizCore: C } }).out;
+  assert.equal(hint('🚀 Launch'), 'To 🚀 Launch · tap to send'); assert.equal(hint('Voice'), 'To 💬 Voice · tap to send');
+  assert.equal(hint('General'), 'To #️⃣ General · tap to send');
 });
