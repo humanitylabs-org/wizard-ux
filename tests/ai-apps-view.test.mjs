@@ -17,6 +17,9 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { cascade, parseCss } from './fixtures/mini-css.mjs';
 import { createDocument } from './fixtures/mini-dom.mjs';
+import { layoutApi } from './fixtures/q1-layout-host.mjs';
+import { prop } from './fixtures/q1-slice.mjs';
+import { resolveVars } from './fixtures/r7A-css.mjs';
 import { fixture } from './fixtures/tweaks.mjs';
 import { withSkinHostParts } from './fixtures/skin-host-parts.mjs';
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
@@ -1320,11 +1323,20 @@ test('round 7: a hold (phone) or a right click (desktop) on a Home app icon offe
     assert.deepEqual(offered, ['money'], 'the stock sheet (from its menu; a build without the shared menu offers it at once)');
     const go = w.st.gone.length; money.dispatchEvent(new FakePointerEvent('click')); assert.equal(w.st.gone.length, go, 'the hold does not also open it');
   }
-  const host = withSkinHostParts(read('web/core/skin-host.js'));
-  assert.match(host, /offer: id => \{ const x = live\(\) \? homeScreenApp\(id\) : null; return x \? !!window\.WizHomeScreenApps\.offer\(x\) : false; \},/, 'the stock sheet, not a copy');
-  assert.match(host, /if \(x && !x\.system && H\.canOffer\(x\)\) return x;/, 'the Desks\' own checks (no system apps)');
-  const dh = read('web/desktop.html');
-  assert.ok(dh.includes('<script src="core/home-screen-apps.js"></script>') && dh.includes('<script src="core/home-screen-policy.js"></script>') && dh.includes('href="core/home-screen-apps.css"'), 'the desktop loads the same sheet');
+  // the layout API's homeScreen is the stock sheet on the Desks' own checks (the real skin-host, wizard-ux issue 1674)
+  const offeredStock = [], APP = { files: { id: 'files', name: 'Files' }, sys: { id: 'sys', name: 'System', system: true }, web: { id: 'web', name: 'Web' } };
+  const D = await layoutApi({ extra: ctx => { ctx.WizHomeScreenApps = { canOffer: a => a.id !== 'web', offer: a => { offeredStock.push(a); return true; } }; ctx.WizCore = { apps: () => ({ APP }) }; } });
+  const hs = D.api.apps.homeScreen;
+  assert.deepEqual(['files', 'sys', 'web', 'nope'].map(hs.can), [true, false, false, false], 'the Desks\' own checks (no system apps, the sheet\'s canOffer)');
+  assert.equal(hs.offer('files'), true); assert.equal(offeredStock.at(-1), APP.files, 'the stock sheet gets the registered app itself, not a copy');
+  assert.equal(hs.offer('sys'), false); assert.equal(offeredStock.length, 1, 'a system app is never offered');
+  D.host.setLayout('classic'); await settle(); assert.equal(hs.offer('files'), false, 'dead with the layout');
+  // the desktop page loads the same sheet (its scripts, run, define the sheet the layout API calls)
+  const page = createDocument(); page.body.innerHTML = read('web/desktop.html');
+  const srcs = page.querySelectorAll('script[src]').map(n => n.getAttribute('src')), css = page.querySelectorAll('link[rel="stylesheet"]').map(n => n.getAttribute('href'));
+  assert.ok(srcs.includes('core/home-screen-policy.js') && srcs.includes('core/home-screen-apps.js') && css.includes('core/home-screen-apps.css'), 'the desktop loads the same sheet');
+  const sheetWin = {}; runRecording(read('web/core/home-screen-apps.js'), { window: sheetWin });
+  assert.equal(typeof sheetWin.WizHomeScreenApps?.offer, 'function', 'and that script is the sheet');
 });
 
 test('desktop app panel: an app\'s title-bar tools (Morning Report\'s ‹ date › PDF) show in the panel\'s header; its own title bar stays laid out (titlebar.shown is true), out of sight', async () => {
@@ -1365,8 +1377,7 @@ test('round 9 desktop: no veil over the skin\'s background (Home, beside a panel
 });
 
 test('round 9 desktop: the sidebar resizable by drag (round 13: the only panel; no chat column, no app panel), keyboard too, kept per device, within limits', async () => {
-  const { w, store } = deskWorld();
-  (await layout()).default(w.api);
+  const p = await panelDesk(), { w, store } = p;
   const g = id => w.q(`.aad-grip[data-grip="${id}"]`), st = w.html.style;
   assert.equal(g('apps'), null, 'round 10: no apps sidebar, no grip for it');
   assert.equal(g('chat'), null, 'the docked chat keeps its width'); assert.ok(g('app') && g('tabs'), 'round 15: the app panel and the open-apps column resize too');
@@ -1391,22 +1402,33 @@ test('round 9 desktop: the sidebar resizable by drag (round 13: the only panel; 
   // a double click (or Enter) goes back to the default
   g('side').dispatchEvent(new FakePointerEvent('dblclick')); assert.equal(st.getPropertyValue('--aad-side-w'), '288px'); assert.equal('side' in store.widths, false);
   g('side').dispatchEvent(new FakePointerEvent('keydown', { key: 'ArrowLeft' })); g('side').dispatchEvent(new FakePointerEvent('keydown', { key: 'Enter' })); assert.equal('side' in store.widths, false, 'Enter: back to the default');
-  const css = read('web/layouts/ai-apps/desktop.css'), P = 'html[data-shell="desktop"][data-layout="ai-apps"]';
-  assert.ok(css.includes(P + '[data-aad-side="open"] { --aad-side: var(--aad-side-w, 288px); }'), 'the rail keeps its own width');
+  // desktop.css on what the view drew (wizard-ux issue 1674)
+  const css = read('web/layouts/ai-apps/desktop.css');
   assert.ok(!css.includes('data-aad-apps') && !css.includes('.aad-apps'), 'round 10: no apps sidebar styles left');
-  assert.match(css, /\[data-aad-tabs="rail"\] \{ --aad-rs: 52px; \}/, 'round 15: the open apps on the right');
-  assert.match(css, /\.aad-grip \{\s*position: fixed;[^}]*cursor: col-resize;/, 'col-resize');
-  assert.match(css, /\.aad-grip:is\(:hover, \.is-drag\)::after \{ opacity: \.55; \}/, 'a hairline on hover');
-  assert.match(css, /\[data-aad-resizing\] iframe \{ pointer-events: none !important; \}/, 'apps never swallow the drag');
-  const js = noComments(read('web/layouts/ai-apps/desktop.js'));
-  assert.match(js, /export const SIZE_LIMITS = \{ side: \[220, 440\], tabs: \[160, 320\], app: \[360, 1400\] \};/);
+  const on = (n, k, opts) => cascade(n, DESK_CSS, opts)[k]?.value ?? '';
+  assert.equal(on(w.html, '--aad-side'), 'var(--aad-side-w, 288px)', 'the open sidebar follows the dragged width (288 by default)');
+  w.html.dataset.aadTabs = 'rail'; assert.equal(on(w.html, '--aad-rs'), '52px', 'round 15: the open apps on the right fold to a 52 px rail');
+  assert.deepEqual([on(g('side'), 'position'), on(g('side'), 'cursor')], ['fixed', 'col-resize'], 'col-resize');
+  assert.notEqual(on(g('side'), 'opacity', { pseudo: '::after' }), '.55');
+  assert.equal(on(g('side'), 'opacity', { pseudo: '::after', states: [':hover'] }), '.55', 'a hairline on hover');
+  g('side').classList.add('is-drag'); assert.equal(on(g('side'), 'opacity', { pseudo: '::after' }), '.55', 'and while dragged'); g('side').classList.remove('is-drag');
+  const frame = p.appWins[0].querySelector('iframe');
+  assert.notEqual(on(frame, 'pointer-events'), 'none');
+  w.html.dataset.aadResizing = 'side'; assert.equal(on(frame, 'pointer-events'), 'none', 'apps never swallow the drag'); assert.ok(p.important(frame, 'pointer-events'));
+  delete w.html.dataset.aadResizing;
+  // the other grips' limits, as the view sets them on its separators (1440 px wide)
+  assert.deepEqual([g('tabs').getAttribute('aria-valuemin'), g('tabs').getAttribute('aria-valuemax'), g('app').getAttribute('aria-valuemin')], ['160', '320', '360'], 'the open apps 160 to 320, the app panel from 360');
+  assert.ok(Number(g('app').getAttribute('aria-valuemax')) <= 1400, 'the app panel at most 1400');
 });
 
 test('round 10 desktop: a drag is smooth (one write a frame, no page resize, no storage until the release; windows follow by CSS)', async () => {
-  const { w, store } = deskWorld();
-  const frames = []; w.api.frame = fn => { frames.push(fn); return () => { const i = frames.indexOf(fn); if (i >= 0) frames.splice(i, 1); }; };
+  const frames = [], ros = [], hadRO = globalThis.ResizeObserver;
+  globalThis.ResizeObserver = class { constructor(cb) { ros.push(cb); } observe() {} disconnect() {} };
+  let p;
+  try { p = await panelDesk({ before: d => { d.w.api.frame = fn => { frames.push(fn); return () => { const i = frames.indexOf(fn); if (i >= 0) frames.splice(i, 1); }; }; } }); } finally { globalThis.ResizeObserver = hadRO; }
+  const { w, store } = p;
   const flush = () => { while (frames.length) frames.shift()(16 * (frames.length + 1)); };
-  (await layout()).default(w.api); flush();
+  flush();
   let resizes = 0; const had = globalThis.dispatchEvent; globalThis.dispatchEvent = e => { if (e.type === 'resize') resizes++; return true; };
   try {
     const g = w.q('.aad-grip[data-grip="side"]'), st = w.html.style;
@@ -1422,13 +1444,32 @@ test('round 10 desktop: a drag is smooth (one write a frame, no page resize, no 
     assert.equal(resizes, 1, 'one resize, on release'); assert.equal(store.widths.side, 352, 'kept on release');
     assert.equal(w.html.dataset.aadResizing, undefined);
   } finally { globalThis.dispatchEvent = had; }
-  const css = read('web/layouts/ai-apps/desktop.css'), P = 'html[data-shell="desktop"][data-layout="ai-apps"][data-aad-resizing]';
-  assert.ok(css.includes('html[data-shell="desktop"][data-layout="ai-apps"] #stage > .wsp:not([hidden]):not(:has(> .win:not(.gone) ~ .win:not(.gone))) > .win:not(.gone) {\n  left: 8px !important;'), 'a shown lone window follows its desk by CSS (round 11: always, not only while held)');
-  assert.match(css, /\[data-aad-resizing\] :is\([^)]*#stage > \.wsp > \.win\) \{ transition: none !important;/, 'windows never animate under the pointer');
-  assert.match(css, /\[data-aad-resizing\] :is\(\.aad-side, \.aad-top[^{]*\{ -webkit-backdrop-filter: none !important; backdrop-filter: none !important; \}/, 'no blur re-sampled per frame');
-  const js = noComments(read('web/layouts/ai-apps/desktop.js'));
-  assert.match(js, /const FRAME_FIT_MS = 120;/, 'app frames refitted a few times a second');
-  assert.match(js, /if \(roAsked \|\| root\.dataset\.aadResizing\) return;/, 'the orb waits for the release');
+  // desktop.css on what the view drew (wizard-ux issue 1674): a shown lone window follows its desk by CSS (round 11:
+  // always, not only while held); while held windows never animate and nothing re-samples a blur
+  const win = p.appWins[0], on = (n, k) => cascade(n, DESK_CSS)[k];
+  assert.deepEqual([on(win, 'left')?.value, on(win, 'left')?.important], ['8px', true], 'a shown lone window follows its desk by CSS');
+  const two = node('div', 'win', p.appDesk); assert.notEqual(on(win, 'left')?.value, '8px', 'not with two windows on the desk'); two.remove();
+  assert.notEqual(on(win, 'transition')?.value, 'none');
+  w.html.dataset.aadResizing = 'side';
+  assert.deepEqual([on(win, 'transition')?.value, on(win, 'transition')?.important], ['none', true], 'windows never animate under the pointer');
+  const side = w.q('.aad-side');
+  assert.deepEqual([on(side, 'backdrop-filter')?.value, on(side, '-webkit-backdrop-filter')?.value, on(side, 'backdrop-filter')?.important], ['none', 'none', true], 'no blur re-sampled per frame');
+  delete w.html.dataset.aadResizing;
+  // the app frames keep a fixed width while held, refitted a few times a second (not every frame), freed on release
+  p.go({ view: 'desk', desk: 4 }); flush();
+  const frame = win.querySelector('iframe'); let fw = 500; frame.getBoundingClientRect = () => ({ x: 0, y: 0, left: 0, top: 0, width: fw, height: 400, right: fw, bottom: 400 });
+  const g = w.q('.aad-grip[data-grip="side"]');
+  g.dispatchEvent(new FakePointerEvent('pointerdown', { clientX: 288, pointerId: 2 }));
+  assert.equal(frame.style.getPropertyValue('width'), '500px', 'held: the frame keeps its width');
+  fw = 520; g.dispatchEvent(new FakePointerEvent('pointermove', { clientX: 300 })); frames.shift()(60);
+  assert.equal(frame.style.getPropertyValue('width'), '500px', 'not refitted on every frame');
+  // the orb's resize watcher waits for the release, which places it
+  const queued = frames.length; for (const cb of ros) cb([]); assert.equal(frames.length, queued, 'the orb waits while a grip is held');
+  g.dispatchEvent(new FakePointerEvent('pointermove', { clientX: 310 })); frames.shift()(200);
+  assert.equal(frame.style.getPropertyValue('width'), '520px', 'refitted after a while');
+  g.dispatchEvent(new FakePointerEvent('pointerup', {})); assert.equal(frame.style.getPropertyValue('width'), '', 'freed on release');
+  flush(); assert.ok(ros.length, 'the orb watches the composer');
+  for (const cb of ros) cb([]); assert.ok(frames.length > 0, 'after the release a resize places the orb again');
 });
 
 test('round 10 phone: on light skins the Home icons are full colour (the app colour plate, a white glyph) with readable names; dark skins untouched', async () => {
@@ -1512,9 +1553,16 @@ test('round 16 item 7: layer membership (pinned / open / picker disjoint; a pinn
   fold.dispatchEvent(new FakePointerEvent('click'));
   assert.deepEqual(w.qa('.vc-pick .vc-sub-h > span').map(n => n.textContent), ['Agent apps', 'Agents', 'Connectors']);
   assert.ok(w.q('.vc-pick .vc-list-more .vc-more'), '+ Get more, last'); assert.equal(w.q('.vc-pick .vc-store'), null, 'no store text button');
-  const css = read('web/layouts/apps/chrome.css'), cj = read('web/layouts/apps/chrome.js');
-  assert.match(css, /\.vc-tile\.vc-tile-plus \{/);
-  assert.match(cj, /if \(open\.length && !pick\) \{/, 'the Orb / Apps sheet keeps its Already open row (opt-in picker only)');
+  // the + tile is drawn as a plain plate (chrome.css on the tile the sheet drew)
+  const plus = w.q('.vc-pick .vc-more .vc-tile-plus'), chromeCss = read('web/layouts/apps/chrome.css'), pc = cascade(plus, chromeCss);
+  assert.match(pc['box-shadow']?.value || '', /^inset 0 0 0 1px /, 'the + tile: a hairline plate'); assert.match(pc.background?.value || '', /^color-mix\(in srgb, var\(--wz-text, var\(--ink\)\) 7%, transparent\)$/, 'a faint ink plate');
+  // the same shared sheet opened without the picker options (the Orb / Apps +) keeps its Already open row
+  const { viewChrome } = await import('../web/layouts/apps/chrome.js');
+  const o = deskWorld().w; o.api.apps.kinds = w.api.apps.kinds; const vc = viewChrome(o.api, { openIds: () => ['mail', 'money'] });
+  vc.open();
+  const openFold = () => o.qa('.vc-sheet .vc-fold').find(b => !b.classList.contains('vc-fold-agents')) ?? null, openRow = openFold();
+  assert.equal(openRow?.querySelector('span')?.textContent, 'Already open', 'the Orb / Apps sheet keeps its Already open row (opt-in picker only)');
+  vc.close(); vc.open({ exclude: () => [] }); assert.equal(openFold(), null, 'the picker has none');
 });
 test('round 16 item 7 + round 19 item 4 phone: Home = the open apps not pinned, +, tidy; the pins in a dock above the composer (8 a page); hold and drag within and between them; the picker from +', async () => {
   const w = world();
@@ -1574,13 +1622,23 @@ test('round 16 item 7 + round 19 item 4 phone: Home = the open apps not pinned, 
   w.st.desks = w.st.desks.filter(d => !['mail', 'maps'].includes(d.id)); w.emit('render');
   assert.deepEqual(kids(), ['+', 'tidy']);
   const css = read('web/layouts/ai-apps/layout.css');
+  // layout.css on what Home drew (wizard-ux issue 1674)
+  w.html.setAttribute('data-shell', 'phone'); w.html.setAttribute('data-layout', 'ai-apps');
+  const PHONE_CSS = [parseCss(css)], ph = (n, k, opts) => { assert.ok(n, 'drawn'); return cascade(n, PHONE_CSS, opts)[k]?.value ?? ''; };
+  const dot = w.q('.ah-dock .ah-app .ah-run');
+  assert.deepEqual(['position', 'left', 'bottom', 'width', 'height', 'border-radius'].map(k => ph(dot, k)), ['absolute', '50%', '-6px', '4px', '4px', '50%'], 'the running dot, 4 px, centred under the name');
+  assert.match(ph(dot, 'background'), /^var\(--aa-ink-2/, 'muted');
+  const plate = w.q('.ah-dock');
+  assert.equal(ph(plate, 'border-radius'), '30px'); assert.equal(ph(plate, 'background'), 'color-mix(in srgb, var(--wz-panel, var(--wz-base, var(--bg))) 52%, transparent)', 'a subtle glass plate from skin tokens');
+  assert.match(ph(plate, 'backdrop-filter'), /^blur/);
+  const page = w.q('.ah-dock .ah-dpage');
+  assert.deepEqual([ph(page, 'scroll-snap-align'), ph(page, 'grid-template-columns')], ['start', 'repeat(4, minmax(0, 1fr))'], '4 a row, pages snap');
+  const chatWin = new El('div'); chatWin.className = 'win app-chats'; const comp = new El('div'); comp.className = 'ch-compose'; comp.append(new El('textarea')); chatWin.append(comp); w.html.children[0].append(chatWin);
+  assert.notEqual(ph(plate, 'display'), 'none'); assert.equal(ph(plate, 'display', { states: [':focus'] }), 'none', 'the dock steps away while typing');
+  chatWin.remove();
   assert.doesNotMatch(css, /\.ah-div\b|is-open-first|\.ah-cap\b|is-opensec/, 'no divider, chip, caption or smaller open icons');
-  assert.match(css, /\.ah-run \{ position: absolute; left: 50%; bottom: -6px; width: 4px; height: 4px;[^}]*border-radius: 50%; background: var\(--aa-ink-2/, 'the running dot, 4 px, muted, centred under the name');
-  assert.match(css, /\.ah-dock \{[^}]*border-radius: 30px;[^}]*background: color-mix\(in srgb, var\(--wz-panel, var\(--wz-base, var\(--bg\)\)\) 52%, transparent\);[^}]*backdrop-filter: blur/, 'a subtle glass plate from skin tokens');
-  assert.match(css, /\.ah-dpage \{[^}]*scroll-snap-align: start;[^}]*grid-template-columns: repeat\(4, minmax\(0, 1fr\)\)/, '4 a row, pages snap');
-  assert.match(css, /:has\(\.win\.app-chats \.ch-compose :focus\) \.ah-dock \{ display: none; \}/, 'the dock steps away while typing');
-  const dcss = read('web/layouts/ai-apps/desktop.css');
-  assert.match(dcss, /\.aad-vtab\.is-run::before \{[^}]*width: 4px; height: 4px;[^}]*border-radius: 50%; background: var\(--aad-ink-2\); \}/, 'the desktop column\'s dot: the same 4 px muted dot');
+  const dp = await panelDesk(), vt = dp.w.q('.aad-vtab.is-run'), vs = dp.style(vt, { pseudo: '::before' });
+  assert.deepEqual(['width', 'height', 'border-radius', 'background'].map(vs), ['4px', '4px', '50%', 'var(--aad-ink-2)'], 'the desktop column\'s dot: the same 4 px muted dot');
 });
 
 test('round 19 item 4 phone: more than 8 pins page the dock sideways (dots); parts: orderOpen, homeDrop, dockPages', async () => {
@@ -1685,18 +1743,37 @@ test('round 15 desktop: the open apps as vertical tabs on the right (1:1 with th
   // folds to a 52 px icon column, kept on this device
   w.q('.aad-vtog').dispatchEvent(new FakePointerEvent('click')); assert.equal(w.html.dataset.aadTabs, 'rail'); assert.equal(store.tabsFolded, true);
   w.q('.aad-vtog').dispatchEvent(new FakePointerEvent('click')); assert.equal(w.html.dataset.aadTabs, 'open');
-  const css = read('web/layouts/ai-apps/desktop.css'), P = 'html[data-shell="desktop"][data-layout="ai-apps"]';
-  assert.ok(css.includes(`${P}[data-aad-tabs="open"] { --aad-rs: var(--aad-tabs-px, 200px); }`) && css.includes(`${P}[data-aad-tabs="rail"] { --aad-rs: 52px; }`), '200 px, 52 px folded');
-  assert.ok(css.includes(`${P}[data-aad-split] #stage > .wsp[data-aad-role="app"] { z-index: 3; inset: 0 var(--aad-rs) 0 calc(100% - var(--aad-app-w) - var(--aad-rs)) !important;`), 'the panel docked left of the column');
+  // a desk the stock close refuses: the app's own close
+  const appClosed = []; w.api.apps.close = id => appClosed.push(id); w.api.desks.close = d => { closed.push(d); return false; };
+  w.q('.aad-vtab[data-desk="2"] .aad-vtx').dispatchEvent(new FakePointerEvent('click')); assert.deepEqual([closed.at(-1), appClosed], [2, ['maps']], '✕: the stock close of that desk, else the app\'s');
+  // desktop.css on what the view drew (wizard-ux issue 1674)
+  const css = read('web/layouts/ai-apps/desktop.css');
+  w.html.setAttribute('data-shell', 'desktop'); w.html.setAttribute('data-layout', 'ai-apps');
+  const on = (n, k) => cascade(n, DESK_CSS)[k]?.value ?? '';
+  assert.equal(on(w.html, '--aad-rs'), 'var(--aad-tabs-px, 200px)', '200 px open');
+  w.html.dataset.aadTabs = 'rail'; assert.equal(on(w.html, '--aad-rs'), '52px', '52 px folded'); w.html.dataset.aadTabs = 'open';
   assert.ok(!/transition:[^;]*\b(width|left|right|flex)\b/.test(css), 'no layout animation (transforms / colours only)');
-  const js = noComments(read('web/layouts/ai-apps/desktop.js'));
-  assert.match(js, /if \(!\(api\.desks\.close\?\.\(d\.desk\)\)\) api\.apps\.close\?\.\(d\.id\);/, '✕: the stock close of that desk');
-  assert.match(js, /if \(pane && !chatOn && chat && !chat\.querySelector\('\.pane-main \.ch-compose'\) && !fixingBehind\) \{/, 'the Chats desk behind the panel never shows its bare list');
-  assert.ok(css.includes('--aad-chat-w: var(--aad-pane-chat-width)') && css.includes('--aad-app-w: var(--aad-pane-app-width)'), 'both docked widths come from the tested core geometry');
-  assert.ok(css.includes(`${P}[data-vc-sheet] .aad-orb { opacity: 0; visibility: hidden; }`), 'the orb steps aside under the picker');
-  const host = withSkinHostParts(read('web/core/skin-host.js')), dj = read('web/desktop/desktop.js');
-  assert.match(host, /close: desk => live\(\) && Number\.isInteger\(desk\) && desk >= 0 \? !!shell\.closeDesk\?\.\(desk\) : false,/);
-  assert.match(dj, /closeDesk: i => Number\.isInteger\(i\) && i >= 0 && i < ws\.length \? closeDesktop\(i\) : false,/, 'the desktop\'s own closeDesktop (its ✕)');
+  assert.notEqual(on(w.q('.aad-orb'), 'visibility'), 'hidden');
+  w.html.dataset.vcSheet = 'open'; assert.deepEqual([on(w.q('.aad-orb'), 'opacity'), on(w.q('.aad-orb'), 'visibility')], ['0', 'hidden'], 'the orb steps aside under the picker'); delete w.html.dataset.vcSheet;
+  // the panel docked left of the column, the Chats desk behind it never on its bare list (a new chat there, then the app back)
+  const p = await panelDesk();
+  const chats0 = p.w.st.newChats; p.go({ view: 'desk', desk: 4 });
+  assert.equal(p.appDesk.dataset.aadRole, 'app'); assert.ok(p.w.st.newChats > chats0, 'the Chats desk behind the panel never shows its bare list: a new chat there');
+  const chats1 = p.w.st.newChats; p.go({ view: 'desk', desk: 4 }); assert.equal(p.w.st.newChats, chats1, 'once (not again while it is being fixed)');
+  const ins = cascade(p.appDesk, DESK_CSS), pv = k => parseFloat(p.w.html.style.getPropertyValue('--aad-pane-' + k));
+  const [top, right, bottom, left] = resolveVars(ins.inset?.value, { ...p.w.html.style }).split(' ').map(parseFloat);
+  assert.deepEqual([ins['z-index']?.value, ins.inset?.important], ['3', true], 'the panel desk above the chat, placed whatever the shell says');
+  assert.deepEqual([top, bottom, right, left + pv('app-width')], [0, 0, pv('dock-width'), pv('dock-x')], 'the panel docked left of the column (its right edge on the column\'s left)');
+  assert.ok(pv('dock-width') === 200 && pv('app-width') > 0);
+  assert.equal(on(p.w.html, '--aad-app-w'), 'var(--aad-pane-app-width)', 'the docked app width comes from the tested core geometry');
+  p.w.html.dataset.aadChat = ''; assert.equal(on(p.w.html, '--aad-chat-w'), 'var(--aad-pane-chat-width)', 'and the docked chat width');
+  // the stock close underneath: the layout API's desks.close is the shell's closeDesk for a whole desk index only
+  const shut = [], D = await layoutApi({ adapter: { closeDesk: i => { shut.push(i); return true; } } });
+  assert.deepEqual([D.api.desks.close(2), D.api.desks.close(-1), D.api.desks.close(1.5), D.api.desks.close('2')], [true, false, false, false]); assert.deepEqual(shut, [2]);
+  // the desktop's own closeDesk (desktop-boot.js) closes a real desk with its closeDesktop (its ✕), nothing else
+  const boot = read('web/desktop/desktop-boot.js'), deskClosed = [];
+  const { closeDesk } = runRecording('globalThis.closeDesk = (' + prop(boot, 'closeDesk') + ');', { desktopVars: { ws: [{}, {}, {}] }, closeDesktop: i => { deskClosed.push(i); return true; } });
+  assert.deepEqual([closeDesk(1), closeDesk(3), closeDesk(-1), closeDesk(0.5)], [true, false, false, false]); assert.deepEqual(deskClosed, [1], 'the desktop\'s own closeDesktop (its ✕)');
 });
 
 /* Round 13 item 4 (Miguel): a Snoozed section, Archive · Working · Snoozed · Ready, from the stock snooze state whether or
