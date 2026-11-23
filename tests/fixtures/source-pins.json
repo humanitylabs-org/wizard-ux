@@ -22,7 +22,7 @@
  "claude-picker-freshness.test.mjs": 1,
  "declared-route-admission.test.mjs": 2,
  "desktop-channel-back.test.mjs": 17,
- "desktop-chat-hud.test.mjs": 5,
+ "desktop-chat-hud.test.mjs": 4,
  "desktop-chats-default.test.mjs": 1,
  "desktop-hidden-desk-size.test.mjs": 3,
  "desktop-host.test.mjs": 2,
