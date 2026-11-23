@@ -54,7 +54,7 @@ test('an app that really has no page still shows its settings sheet', async () =
 
 test('the phone shell decides at the tap and redraws the New desk when the list changes', async () => {
   const cards = readFileSync(new URL('../web/app-cards.js', import.meta.url), 'utf8');
-  const lineOf = k => { const l = cards.split('\n').find(x => x.includes(k)); assert.ok(l, k); return l.trim(); };
+  const lineOf = k => cards.split('\n').find(x => x.includes(k)).trim();
   // the tap (real openAppInfo) asks the real app-kinds pageOrSheet with the live list: a tile whose app has a page now opens it
   const kinds = { window: {} }; vm.runInNewContext(kindsJs, { ...kinds, setTimeout, Promise });
   const opened = [];

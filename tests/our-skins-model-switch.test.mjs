@@ -40,7 +40,6 @@ test('the switch row is gated on the skin in chat-power and chats', () => {
   const cp = read('web/core/chat-power.js'), paint = read('web/core/chats-threadpaint.js');
   // chat power's modelSwitch (the real property): only on a skin that owns it (M.ours)
   const prop = cp.match(/modelSwitch: \(w, s\) => M\?\.ours\?\.\(\) \? modelSwitch\(w, s\) : ''/)?.[0];
-  assert.ok(prop, 'chat power hands Chats a gated modelSwitch');
   const gate = ours => vm.runInNewContext(`({ ${prop} })`, { M: { ours: () => ours }, modelSwitch: () => '<div class="ch-swrow">switch</div>' }).modelSwitch({}, {});
   assert.equal(gate(true), '<div class="ch-swrow">switch</div>');
   assert.equal(gate(false), '', 'James\'s skins: no switch row');

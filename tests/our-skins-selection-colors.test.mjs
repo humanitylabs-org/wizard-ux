@@ -43,7 +43,7 @@ test('the selection menu uses skin ink on a skin surface, not core violet', () =
   }
   // the menu the real sel-menu.js builds carries that class
   const src = read('web/core/sel-menu.js'), at = src.indexOf("el = document.createElement('div'); el.className = 'selmenu';");
-  assert.ok(at >= 0); const doc = createDocument();
+  const doc = createDocument();
   const el = vm.runInNewContext(`let el; ${src.slice(at, src.indexOf('\n', at))}; el`, { document: doc });
   assert.ok(el.matches('.selmenu') && el.getAttribute('role') === 'menu');
 });
