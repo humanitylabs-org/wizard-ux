@@ -16,7 +16,7 @@ import android.util.Log;
  * process alive until nothing is outstanding, and asks to be rescheduled if the server is still unreachable.
  */
 public class MizelUploadJob extends JobService {
-    static final int JOB_ID = 0x4d5a01;
+    static final int JOB_ID = 0x4d5a01, CHECK_JOB_ID = 0x4d5a02;
     private static final long MAX_RUN_MS = 8 * 60_000L;
     private final Handler main = new Handler(Looper.getMainLooper());
 
@@ -33,6 +33,21 @@ public class MizelUploadJob extends JobService {
                     .build();
             js.schedule(job);
         } catch (RuntimeException e) { Log.w(MizelHub.TAG, "could not schedule upload job", e); }
+    }
+
+    /**
+     * Runs recovery once {@code delayMs} has passed, network or not: a meeting kept open after a process death ends
+     * (reason process_death) when nobody resumed it within the pause limit, even if WizardOS is never opened again.
+     */
+    public static void scheduleCheck(Context c, long delayMs) {
+        try {
+            JobScheduler js = c.getSystemService(JobScheduler.class);
+            if (js == null || js.getPendingJob(CHECK_JOB_ID) != null) return;
+            js.schedule(new JobInfo.Builder(CHECK_JOB_ID, new ComponentName(c, MizelUploadJob.class))
+                    .setMinimumLatency(Math.max(1_000, delayMs))
+                    .setPersisted(true)
+                    .build());
+        } catch (RuntimeException e) { Log.w(MizelHub.TAG, "could not schedule the meeting check", e); }
     }
 
     @Override

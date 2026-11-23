@@ -19,6 +19,9 @@
     <uses-permission android:name="android.permission.USE_FINGERPRINT" />
     <!-- Mizel recorder: a partial wake lock keeps capture going with the screen off. -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- Meeting recorder (wizard-ux#1724): asked once, on a recording start, to leave WizardOS out of battery
+         optimisation so OEM app killers (Samsung sleeping apps) don't end a long meeting. Not a Play Store build. -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" tools:ignore="BatteryLife" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <!-- Wizard Everywhere: the floating button over other apps (switched on in Settings). -->

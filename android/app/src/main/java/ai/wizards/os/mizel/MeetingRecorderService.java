@@ -33,6 +33,7 @@ import java.util.TimeZone;
 
 import ai.wizards.os.MainActivity;
 import ai.wizards.os.MicOwner;
+import ai.wizards.os.ProcessExitLog;
 
 /**
  * Mizel meeting recorder: a microphone foreground service that writes 5-second 16 kHz mono PCM16 WAV chunks to
@@ -42,14 +43,17 @@ import ai.wizards.os.MicOwner;
  * Pause releases the microphone (AudioRecord stopped and released) and starts a 30-minute countdown; at zero the
  * meeting stops with reason pause_timeout. Stop queues {"final_seq":{"me":N},"reason":…}, which the uploader sends
  * only after every chunk up to N is acknowledged. After a process death the service never restarts the microphone
- * (Android 14 forbids a background mic start). Ordinary crashes close the meeting; package updates preserve
- * it for a visible Activity restart or a direct notification tap.
+ * from the background (Android 14 forbids a background mic start). A meeting that was capturing when the process died
+ * (or when a package update replaced it) becomes a durable pause in the same meeting: a visible Activity restart or a
+ * direct notification tap continues it with the next seq and media time (wizard-ux#1724). A process-death pause nobody
+ * resumes within the pause limit, or that can't restart (mic permission, foreground service refused), ends the meeting
+ * with reason process_death and a visible notice; a user pause, a mic loan or a reboot ends it as before.
  */
 public class MeetingRecorderService extends Service {
     static final String TAG = MizelHub.TAG;
     public static final String ACTION_START = "ai.wizards.os.mizel.START";
     private static final String ACTION_RESTORE = "ai.wizards.os.mizel.RESTORE_UPDATE";
-    private static final int N_UPDATE_PAUSED = 7319;
+    private static final int N_UPDATE_PAUSED = 7319, N_RESUMED = 7320;
     public static final String ACTION_PAUSE = "ai.wizards.os.mizel.PAUSE";
     public static final String ACTION_RESUME = "ai.wizards.os.mizel.RESUME";
     public static final String ACTION_STOP = "ai.wizards.os.mizel.STOP";
@@ -275,10 +279,34 @@ public class MeetingRecorderService extends Service {
         for (MizelJournal j : MizelHub.store(a).all()) {
             if (!MizelUpdatePolicy.canResume(j, MizelConfig.origin(a))) continue;
             if (live != null && (!live.meetingId.equals(j.meetingId) || !live.paused)) return;
-            if (canStart(a) != null) { notifyUpdatePaused(a, j.meetingId); return; }
+            String refuse = canStart(a);
+            if (refuse != null) {
+                // Without the microphone permission a process-death pause can never continue: end it visibly now.
+                if (MizelProtocol.E_MIC_PERMISSION.equals(refuse) && MizelUpdatePolicy.afterProcessDeath(j))
+                    endAfterDeath(a, j.meetingId, "Microphone permission is off, so it could not continue.");
+                else notifyUpdatePaused(a, j.meetingId);
+                return;
+            }
             send(a, ACTION_RESTORE, j.meetingId, null, 0, true);
             return;
         }
+    }
+
+    /** A process-death pause that can't continue ends here: queue /stop (process_death) and tell the owner why. */
+    static void endAfterDeath(Context ctx, String id, String why) {
+        Context c = ctx.getApplicationContext();
+        MizelStore s = MizelHub.store(c);
+        long endedAt;
+        synchronized (s) {
+            if (!MizelUpdatePolicy.afterProcessDeath(s.snapshot(id))) return;
+            endedAt = s.recover(id, System.currentTimeMillis());
+        }
+        Log.w(TAG, "process-death pause of " + id + " ended: " + why);
+        c.getSystemService(NotificationManager.class).cancel(N_UPDATE_PAUSED);
+        notifyEnded(c, id, endedAt, why);
+        MizelUploader.get(c).kick();
+        MizelUploadJob.schedule(c);
+        MizelHub.pushState(c);
     }
 
     private void restoreUpdate(String id, int req) {
@@ -290,7 +318,9 @@ public class MeetingRecorderService extends Service {
         if (created) { live = new Live(id, j.mediaSamples); live.paused = true; live.pausedAtWall = j.pausedAt; }
         if (!foreground()) {
             if (created) live = null;
-            notifyUpdatePaused(this, id); stopSelf(); return;
+            if (MizelUpdatePolicy.afterProcessDeath(j)) endAfterDeath(this, id, "Android did not let the recorder restart.");
+            else notifyUpdatePaused(this, id);
+            stopSelf(); return;
         }
         resume(req);
         if (created && live != null && live.paused) {
@@ -312,11 +342,22 @@ public class MeetingRecorderService extends Service {
 
     private static void notifyUpdatePaused(Context c, String id) {
         channels(c);
+        MizelJournal j = MizelHub.store(c).snapshot(id);
+        String title = "Recording paused for the app update", text = "Tap to resume the same meeting",
+                big = "Recording paused for the app update — tap to resume the same meeting.";
+        if (MizelUpdatePolicy.afterProcessDeath(j)) {
+            String ends = MizelPolicy.clock(j.pausedAt + MizelConfig.pauseTimeoutMs(c), TimeZone.getDefault());
+            String why = ProcessExitLog.plainName(j.exitReason);
+            title = "Recording stopped when the app was closed";
+            text = "Tap to resume the same meeting";
+            big = "Android closed WizardOS" + (why.isEmpty() ? "" : " (" + why + ")") + " during the meeting. Tap to resume the same meeting; "
+                    + "if you don't, it ends at " + ends + " and everything recorded is kept.";
+        }
         Notification n = new Notification.Builder(c, CH_ALERT)
                 .setSmallIcon(android.R.drawable.ic_btn_speak_now)
-                .setContentTitle("Recording paused for the app update")
-                .setContentText("Tap to resume the same meeting")
-                .setStyle(new Notification.BigTextStyle().bigText("Recording paused for the app update — tap to resume the same meeting."))
+                .setContentTitle(title)
+                .setContentText(text)
+                .setStyle(new Notification.BigTextStyle().bigText(big))
                 .setCategory(Notification.CATEGORY_REMINDER).setOnlyAlertOnce(true)
                 .setContentIntent(openMeeting(c, id, 6)).setAutoCancel(true).build();
         try { c.getSystemService(NotificationManager.class).notify(N_UPDATE_PAUSED, n); }
@@ -349,37 +390,77 @@ public class MeetingRecorderService extends Service {
     }
 
     /**
-     * Closes any session the journal says was open when the process died: adopt its chunk files, queue a stop with
-     * reason process_death, tell James. Never restarts the microphone. Safe to call from anywhere, any time.
+     * Handles any session the journal says was open when the process died. One that was capturing becomes a durable
+     * pause in the same meeting (adopted chunk files, no /stop) that a visible Activity resumes; any other (paused by
+     * the owner, a mic loan) is closed with reason process_death and a notice. Never restarts the microphone itself.
+     * Safe to call from anywhere, any time.
      */
-    public static void recover(Context ctx) { recover(ctx, true); }
+    public static void recover(Context ctx) { recover(ctx, true, false); }
 
     /** {@code scheduleJob} false from inside the upload job itself (rescheduling the running job would restart it). */
-    static void recover(Context ctx, boolean scheduleJob) {
+    static void recover(Context ctx, boolean scheduleJob) { recover(ctx, scheduleJob, false); }
+
+    /** After a reboot the meeting is over: close what was open (an app-update pause still waits for its tap). */
+    public static void recoverAfterReboot(Context ctx) { recover(ctx, true, true); }
+
+    private static void recover(Context ctx, boolean scheduleJob, boolean reboot) {
         Context c = ctx.getApplicationContext();
+        ProcessExitLog exits = ai.wizards.os.ProcessExits.refresh(c);
         if (live != null) return;
         MizelStore s = MizelHub.store(c);
+        long limit = MizelConfig.pauseTimeoutMs(c);
         boolean any = false;
+        long waitUntil = 0;
         synchronized (s) {
         for (MizelJournal j : s.all()) {
             if (!j.recording) continue;
+            long now = System.currentTimeMillis();
             if (MizelUpdatePolicy.interruptedByUpdate(j, ai.wizards.os.BuildConfig.VERSION_CODE))
-                s.pauseForUpdate(j.meetingId, j.captureVersion, j.uploadOrigin, System.currentTimeMillis());
-            if (MizelUpdatePolicy.pending(s.snapshot(j.meetingId))) {
+                s.pauseForUpdate(j.meetingId, j.captureVersion, j.uploadOrigin, now);
+            MizelJournal snap = s.snapshot(j.meetingId);
+            if (MizelUpdatePolicy.pending(snap) && !MizelUpdatePolicy.afterProcessDeath(snap)) {
                 notifyUpdatePaused(c, j.meetingId);
                 continue; // background jobs and either receiver must not queue /stop
             }
-            long endedAt = s.recover(j.meetingId, System.currentTimeMillis());
+            if (!reboot && MizelUpdatePolicy.afterProcessDeath(snap) && !MizelUpdatePolicy.expiredAfterDeath(snap, now, limit)) {
+                notifyUpdatePaused(c, j.meetingId); // still waiting for a visible Activity or a tap
+                waitUntil = Math.max(waitUntil, snap.pausedAt + limit);
+                continue;
+            }
+            String exitReason = "";
+            ProcessExitLog.Exit exit = exits.near(j.lastBeatAt);
+            if (exit != null) exitReason = exit.reasonName();
+            if (!reboot && !MizelUpdatePolicy.pending(snap)
+                    && s.pauseForProcessDeath(j.meetingId, MizelConfig.origin(c), exitReason, now, limit)) {
+                MizelJournal p = s.snapshot(j.meetingId);
+                MicOwner.release(MicOwner.MEETING);
+                Log.w(TAG, "process died while recording " + j.meetingId + " (" + (exit == null ? "no exit record" : ProcessExitLog.line(exit))
+                        + "): kept open at seq " + p.nextSeq + " media_ms=" + p.mediaMs() + " for a resume");
+                notifyUpdatePaused(c, j.meetingId);
+                waitUntil = Math.max(waitUntil, p.pausedAt + limit);
+                any = true;
+                continue;
+            }
+            boolean expired = !reboot && MizelUpdatePolicy.afterProcessDeath(snap);
+            String why = snap != null && snap.exitReason != null && !snap.exitReason.isEmpty() ? snap.exitReason : exitReason;
+            long endedAt = s.recover(j.meetingId, now);
             MicOwner.release(MicOwner.MEETING);
             Log.w(TAG, "recovered " + j.meetingId + " after process death: final_seq=" + s.get(j.meetingId).finalSeq
-                    + " pending=" + s.pendingCount(j.meetingId) + " ended=" + endedAt);
-            notifyEnded(c, j.meetingId, endedAt);
+                    + " pending=" + s.pendingCount(j.meetingId) + " ended=" + endedAt + " exit=" + why
+                    + (expired ? " (not resumed within the pause limit)" : reboot ? " (reboot)" : ""));
+            if (MizelUpdatePolicy.afterProcessDeath(snap)) c.getSystemService(NotificationManager.class).cancel(N_UPDATE_PAUSED);
+            String plain = ProcessExitLog.plainName(why);
+            notifyEnded(c, j.meetingId, endedAt, reboot ? "The phone restarted."
+                    : expired ? "Android closed WizardOS" + (plain.isEmpty() ? "" : " (" + plain + ")") + " and it wasn't resumed within " + MizelPolicy.spoken(limit) + "."
+                    : plain.isEmpty() ? null : "Android closed WizardOS: " + plain + ".");
             any = true;
         }
         }
         MizelUploader up = MizelUploader.get(c);
         up.kick();
         if (scheduleJob && (any || up.outstanding())) MizelUploadJob.schedule(c);
+        // Nobody may open the app again: a job ends a process-death pause once the pause limit has passed.
+        if (waitUntil > 0) MizelUploadJob.scheduleCheck(c, waitUntil - System.currentTimeMillis() + 5_000);
         if (any) MizelHub.pushState(c);
     }
 
@@ -496,6 +577,8 @@ public class MeetingRecorderService extends Service {
         acquireWake();
         Log.i(TAG, "recording " + id + " from seq " + j.nextSeq + " media_ms=" + l.mediaMs());
         MizelHub.done(req, null);
+        // Samsung and other OEM killers end even a microphone service unless WizardOS is "Unrestricted" (#1724).
+        if (!MizelConfig.qaNoBatteryPrompt(this)) ai.wizards.os.ProcessExits.askBatteryExemptionOnce(this);
         main.post(ticker);
         MizelHub.pushState(this);
     }
@@ -558,6 +641,8 @@ public class MeetingRecorderService extends Service {
         main.removeCallbacks(pauseTimeout);
         l.paused = false;
         l.pausedAtWall = 0;
+        MizelJournal before = store.snapshot(l.meetingId);
+        boolean afterDeath = MizelUpdatePolicy.afterProcessDeath(before);
         store.setPaused(l.meetingId, false, System.currentTimeMillis());
         if (MizelUpdatePolicy.pending(store.snapshot(l.meetingId))) {
             if (!store.finishUpdateResume(l.meetingId, ai.wizards.os.BuildConfig.VERSION_CODE)) {
@@ -567,9 +652,10 @@ public class MeetingRecorderService extends Service {
                 MizelHub.done(req, MizelProtocol.E_START_FAILED); return;
             }
             getSystemService(NotificationManager.class).cancel(N_UPDATE_PAUSED);
+            if (afterDeath) notifyResumed(this, before);
         }
         acquireWake();
-        Log.i(TAG, "resumed " + l.meetingId + " media_ms=" + l.mediaMs());
+        Log.i(TAG, "resumed " + l.meetingId + " media_ms=" + l.mediaMs() + (afterDeath ? " after the process died (" + before.exitReason + ")" : ""));
         refreshNotification(true);
         MizelHub.done(req, null);
         MizelHub.pushState(this);
@@ -881,8 +967,10 @@ public class MeetingRecorderService extends Service {
         if (l == null) return b.setContentTitle("Mizel").setContentText("Starting…").build();
         b.setContentIntent(openMeeting(this, l.meetingId, 1));
         boolean ticking = !MizelConfig.qaStaticNotification(this);
-        if (MizelUpdatePolicy.pending(store.snapshot(l.meetingId))) {
-            return b.setContentTitle("Recording paused for the app update")
+        MizelJournal waiting = store.snapshot(l.meetingId);
+        if (MizelUpdatePolicy.pending(waiting)) {
+            return b.setContentTitle(MizelUpdatePolicy.afterProcessDeath(waiting) ? "Resuming the meeting after the app was closed"
+                            : "Recording paused for the app update")
                     .setContentText("Tap to resume the same meeting")
                     .setContentIntent(openMeeting(this, l.meetingId, 6))
                     .addAction(new Notification.Action.Builder(null, "Stop", action(ACTION_STOP, 4)).build()).build();
@@ -941,13 +1029,39 @@ public class MeetingRecorderService extends Service {
         getSystemService(NotificationManager.class).notify(N_REC, n);
     }
 
-    static void notifyEnded(Context c, String id, long at) {
+    /** "Recording resumed after the app was closed": the same meeting continues; says how long the gap was. */
+    private static void notifyResumed(Context c, MizelJournal before) {
+        channels(c);
+        long gap = Math.max(0, System.currentTimeMillis() - before.pausedAt);
+        String why = ProcessExitLog.plainName(before.exitReason);
+        String text = "Same meeting. About " + MizelPolicy.spoken(gap) + " wasn't recorded"
+                + (why.isEmpty() ? "." : " (Android closed WizardOS: " + why + ").");
+        Notification n = new Notification.Builder(c, CH_ALERT)
+                .setSmallIcon(android.R.drawable.ic_btn_speak_now)
+                .setContentTitle("Recording resumed after the app was closed")
+                .setContentText(text)
+                .setStyle(new Notification.BigTextStyle().bigText(text))
+                .setContentIntent(openMeeting(c, before.meetingId, 7))
+                .setOnlyAlertOnce(true).setAutoCancel(true).setTimeoutAfter(60_000)
+                .build();
+        try { c.getSystemService(NotificationManager.class).notify(N_RESUMED, n); }
+        catch (RuntimeException e) { Log.w(TAG, "could not post the resumed notice", e); }
+        try { Toast.makeText(c, "Recording resumed after the app was closed", Toast.LENGTH_LONG).show(); }
+        catch (RuntimeException ignored) { }
+        Log.i(TAG, "notified: Recording resumed after the app was closed (" + before.meetingId + ", gap " + gap + " ms)");
+    }
+
+    static void notifyEnded(Context c, String id, long at) { notifyEnded(c, id, at, null); }
+
+    static void notifyEnded(Context c, String id, long at, String why) {
         channels(c);
         String hhmm = MizelPolicy.clock(at, TimeZone.getDefault());
+        String text = "Everything recorded until then is saved and uploading.";
         Notification n = new Notification.Builder(c, CH_ALERT)
                 .setSmallIcon(android.R.drawable.stat_notify_error)
                 .setContentTitle("Recording ended unexpectedly at " + hhmm)
-                .setContentText("Everything recorded until then is saved and uploading.")
+                .setContentText(text)
+                .setStyle(new Notification.BigTextStyle().bigText(why == null || why.isEmpty() ? text : why + " " + text))
                 .setContentIntent(openMeeting(c, id, 5))
                 .setAutoCancel(true)
                 .build();

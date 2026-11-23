@@ -34,6 +34,27 @@ def _capture_detail(d):
     return True
 
 
+EXIT_KEYS = {'timestamp', 'pid', 'process', 'reason', 'reasonName', 'status', 'importance', 'pssKb', 'rssKb', 'description'}
+
+
+def _process_exits(v):
+    # Android's own exit records (wizard-ux#1724): numbers plus short system strings, never page content.
+    if not isinstance(v, list) or len(v) > 20:
+        return False
+    for e in v:
+        if not isinstance(e, dict) or set(e) - EXIT_KEYS:
+            return False
+        for k in ('timestamp', 'pid', 'reason', 'status', 'importance', 'pssKb', 'rssKb'):
+            if k in e and type(e[k]) is not int:
+                return False
+        if 'reasonName' in e and not (isinstance(e['reasonName'], str) and re.fullmatch(r'[a-z_]{1,40}', e['reasonName'])):
+            return False
+        for k, n in (('process', 200), ('description', 200)):
+            if k in e and not (isinstance(e[k], str) and len(e[k]) <= n):
+                return False
+    return True
+
+
 def store(body, root=None):
     if not body or len(body) > LIMIT:
         raise ValueError('size')
@@ -44,7 +65,7 @@ def store(body, root=None):
         raise ValueError('schema')
     # The client never sends page content. Reject accidental additions rather than silently persisting them.
     session_keys = {'id', 'manufacturer', 'model', 'sdk', 'appVersion', 'versionCode', 'oneui',
-                    'webviewPackage', 'webviewVersion', 'accessibilityServices'}
+                    'webviewPackage', 'webviewVersion', 'accessibilityServices', 'processExits', 'batteryExempt'}
     data_keys = {'reason', 'direction', 'result', 'proxy', 'x', 'y', 'deltaX', 'deltaY', 'scrollY', 'rangeY',
                  'maxOverY', 'touch', 'present', 'scrollable', 'actions', 'childCount', 'virtualId', 'count',
                  'action', 'arguments', 'source', 'toolType', 'flags', 'deviceId', 'zeroDeviceId', 'downCount',
@@ -54,6 +75,10 @@ def store(body, root=None):
     # tile.result/tile.fail reuse left/top/right/bottom and reason.
     if set(payload['session']) - session_keys:
         raise ValueError('session fields')
+    if 'processExits' in payload['session'] and not _process_exits(payload['session']['processExits']):
+        raise ValueError('process exits')
+    if 'batteryExempt' in payload['session'] and not isinstance(payload['session']['batteryExempt'], bool):
+        raise ValueError('battery exempt')
     for event in payload['events']:
         if not isinstance(event, dict) or set(event) - {'seq', 'uptimeMs', 'thread', 'method', 'data', 'callers'}:
             raise ValueError('event fields')

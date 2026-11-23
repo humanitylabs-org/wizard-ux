@@ -24,7 +24,16 @@ import static org.junit.Assert.*;
 
 /** Real WebView request/reply against a disposable localhost Wizard, never an owner's server. */
 @RunWith(AndroidJUnit4.class)
+@org.junit.FixMethodOrder(org.junit.runners.MethodSorters.NAME_ASCENDING) // the meeting test must run first, see there
 public class DeviceBridgeE2eTest {
+    /**
+     * wizard-ux#1724: a meeting cut off by a process death resumes in the same meeting when WizardOS opens again.
+     * Named to run first in this process: the recorder's uploader keeps the origin it was created with.
+     */
+    @Test public void aMeetingCutOffByAProcessDeathResumesWhenTheAppOpens() throws Exception {
+        MeetingProcessDeathScenario.run();
+    }
+
     @Test public void genericPackagesAndLegacyCompatibility() throws Exception {
         Context c = InstrumentationRegistry.getInstrumentation().getTargetContext();
         UiDevice device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation());
