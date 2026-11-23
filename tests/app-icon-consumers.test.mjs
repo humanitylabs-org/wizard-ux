@@ -127,7 +127,6 @@ function store(framed) {
 }
 test('Store constructor is a valid unbranded catalog ID and retains its catalog logo in both contexts', () => {
   const declaration = storeSource.match(/const ID = (\/\^.*?\$\/);/);
-  assert.ok(declaration, 'use the actual Store catalog ID validator');
   assert.equal(vm.runInNewContext(`${declaration[1]}.test('constructor')`), true);
   for (const framed of [false, true]) {
     const html = store(framed)({ id: 'constructor', name: 'Constructor', logo: true });

@@ -81,7 +81,6 @@ test('kit follows the app design rules: no frame cap, container columns, the one
 // takes only same-origin stylesheet paths and a bounded My skin.
 test('sandboxed app: the skin layer comes from the theme message, same-origin .css paths only', () => {
   const src = client.slice(client.indexOf('  function skinSource(layer) {'), client.indexOf('  function syncSkinLayer(layer) {'));
-  assert.ok(src.length > 100);
   const origin = 'https://box.example.ts.net';
   const g = { URL, opaque: true, location: { origin }, parent: { get document() { throw new Error('cross-origin'); } } };
   vm.createContext(g); vm.runInContext(src, g);

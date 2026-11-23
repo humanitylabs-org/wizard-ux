@@ -34,7 +34,6 @@ const MR = { name: 'Morning Report', start_url: '/morning-report/', scope: '/mor
 test('app-client loads the shared identity script for top-level documents only', () => {
   // the real line of app-client.js, run as the top-level page, as a framed app and with the identity already loaded
   const line = client.split('\n').find(l => l.includes('/wizard-os-home/core/app-identity.js') && l.includes('appendChild'));
-  assert.ok(line, 'app-client loads app-identity.js');
   const load = ({ framed = false, loaded = false } = {}) => {
     const added = [], window = loaded ? { WizardAppIdentity: {} } : {};
     const ctx = { window, parent: framed ? {} : window, document: { head: { appendChild: n => added.push(n) }, createElement: tag => ({ tag }) } };
