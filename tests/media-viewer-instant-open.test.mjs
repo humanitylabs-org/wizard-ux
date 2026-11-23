@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import { createDocument } from './fixtures/mini-dom.mjs';
+import { cascade } from './fixtures/mini-css.mjs';
 
 // wizard-messenger issue 348: a photo opened in Wizard's media viewer is on screen at full strength in the frame its
 // picture can be drawn: no fade-in, and never a black first frame. The real viewer code runs against a small DOM
@@ -98,8 +100,14 @@ test('a late reveal from an earlier open does not show the next photo before it 
   assert.equal(f.viewer().classList.contains('open'), true);
 });
 
-test('the viewer has no fade-in transition', () => {
-  const rules = [...css.matchAll(/^\.mviewer \{[^}]*\}/gm)].map(m => m[0]).filter(r => r.includes('transition'));
-  assert.ok(rules.length, 'a .mviewer rule sets its transition');
-  assert.match(rules.at(-1), /transition: none;/, 'the last word on it: no transition');
+test('the viewer has no fade-in transition', async () => {
+  // the classes the real viewer carries once open, cascaded over the real chats.css (closed and open)
+  const f = fixture(); f.api.open([{ url: '/a.jpg', kind: 'image' }]); await f.flush();
+  const cls = [...f.viewer().classes].join(' ');
+  assert.match(cls, /\bmviewer\b/); assert.ok(f.viewer().classList.contains('open'));
+  const doc = createDocument(), el = doc.createElement('div'); el.className = cls; doc.body.appendChild(el);
+  assert.equal(cascade(el, css).transition?.value, 'none', 'open: no transition');
+  assert.equal(cascade(el, css).opacity?.value, '1', 'and at full strength');
+  el.className = 'mviewer';
+  assert.equal(cascade(el, css).transition?.value, 'none', 'closed: nothing fades either');
 });
