@@ -40,7 +40,8 @@
     "wizard/github-signin",
     "wizard/local-app-routes",
     "wizard/app-tap-home",
-    "wizard/messaging-chat-replies"
+    "wizard/messaging-chat-replies",
+    "wizard/download-swipe"
   ],
   "defaults": [
     "wizard/unified-inbox",

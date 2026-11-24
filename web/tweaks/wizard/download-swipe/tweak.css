@@ -1,0 +1,6 @@
+/* Swipe away downloads (wizard-ux issue 1343): core/downloads.js moves the banner and the sheet with the finger. */
+html[data-tweaks~="wizard/download-swipe"]:not([data-shell="desktop"]) .wdl-banner { touch-action: none; transition: opacity 150ms ease, translate 180ms var(--ease, ease), transform 180ms var(--ease, ease); }
+html[data-tweaks~="wizard/download-swipe"]:not([data-shell="desktop"]) .wdl-sheet .wdl-panel { transition: translate 190ms var(--ease, ease), transform 190ms var(--ease, ease); }
+html[data-tweaks~="wizard/download-swipe"]:not([data-shell="desktop"]) .wdl-sheet .wdl-scrim { transition: opacity 190ms ease; }
+html[data-tweaks~="wizard/download-swipe"]:not([data-shell="desktop"]) .wdl-grip, html[data-tweaks~="wizard/download-swipe"]:not([data-shell="desktop"]) .wdl-title { touch-action: none; }
+html[data-tweaks~="wizard/download-swipe"]:not([data-shell="desktop"]) .wdl-dragging.wdl-banner, html[data-tweaks~="wizard/download-swipe"]:not([data-shell="desktop"]) .wdl-dragging .wdl-panel, html[data-tweaks~="wizard/download-swipe"]:not([data-shell="desktop"]) .wdl-dragging .wdl-scrim { transition: none; }
