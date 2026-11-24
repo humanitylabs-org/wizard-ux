@@ -68,6 +68,22 @@ test('Tinfoil signed out: Reconnect goes to its Connect step', () => {
   // the card's Reconnect: run in 'Reconnect on the card opens the Claude app at Connect when there is no saved run to recover'
 });
 
+test('issue 1755: a Tinfoil thread on its real Hermes route (custom:wizard-tinfoil) also offers Reconnect Tinfoil', () => {
+  const b = boot(); b.set([{ id: 'tinfoil', name: 'Tinfoil', status: 'signed_out', limits: [] }]);
+  // main, host-profile, container and restricted rows (routed ids may equal a main id), as for Claude above.
+  for (const provider of ['custom:wizard-tinfoil', 'wizard-tinfoil', 'custom:tinfoil-operator', 'tinfoil']) for (const [kind, agent] of [['main', ''], ['host-ops', 'host'], ['box', 'container'], ['locked', 'restricted']]) {
+    const s = { id: 'same-id', status: 'failed', model: 'kimi-k2', provider, agent, agentKind: kind };
+    assert.equal(b.M.signedOutFail(s)?.appId, 'wizard-tinfoil', provider);
+    const html = b.M.failureHtml({ s, canRetry: true });
+    assert.match(html, /Tinfoil disconnected/, provider);
+    assert.match(html, /data-chreconnect="wizard-tinfoil" data-recovery-run="">Reconnect Tinfoil/, provider);
+    assert.doesNotMatch(html, /data-chretry |Needs retry/, provider);
+  }
+  // Tinfoil signed in: the same thread keeps Retry.
+  b.set([{ id: 'tinfoil', name: 'Tinfoil', status: 'ok', fetchedAt: new Date().toISOString(), limits: [] }]);
+  assert.equal(b.M.signedOutFail({ id: 'x', status: 'failed', model: 'kimi-k2', provider: 'custom:wizard-tinfoil' }), null);
+});
+
 test('the same for ChatGPT; other providers and working subscriptions keep Retry', () => {
   const b = boot(); b.set([{ ...gptOk, status: 'signed_out', limits: [] }, claudeOk]);
   assert.match(b.M.failureHtml({ s: failed('openai-codex', 'gpt-6.1-sol'), canRetry: true }), /Reconnect ChatGPT/);
