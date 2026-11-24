@@ -11,12 +11,10 @@
     "miguel/send-and-go",
     "miguel/snooze-someday",
     "miguel/machines-home",
-    "wizard/unified-inbox",
     "miguel/archive-top",
     "miguel/reply-summary",
     "miguel/now-playing",
     "miguel/calm-offline",
-    "miguel/ai-apps",
     "wizard/desktop-chats",
     "wizard/background-continue",
     "wizard/failure-reason",
@@ -45,14 +43,12 @@
     "wizard/capability-registry"
   ],
   "defaults": [
-    "wizard/unified-inbox",
     "wizard/desktop-chats"
   ],
   "promotedDefaults": [
     "wizard/desktop-chats"
   ],
   "aliases": {
-    "miguel/unified-inbox": "wizard/unified-inbox",
     "wizard/machines-home": "miguel/machines-home"
   },
   "lookOnlyOff": []

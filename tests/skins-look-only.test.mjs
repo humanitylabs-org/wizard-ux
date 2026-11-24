@@ -5,11 +5,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { builtinDefaults } from './fixtures/core-features.mjs';
 
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
 const ID = 'wizard/skins-look-only';
 const catalog = JSON.parse(read('web/tweaks/catalog.json'));
-const builtins = catalog.defaults || [];
+const builtins = builtinDefaults(catalog);
 // The shared switches: only Send and go is on. The own skin brings Archive first and turns Send and go off.
 const MIX = { 'miguel/send-and-go': true };
 const RECIPE = { 'miguel/archive-top': true, 'miguel/send-and-go': false };

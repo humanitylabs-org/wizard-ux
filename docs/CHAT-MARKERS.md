@@ -25,7 +25,8 @@ The Desktop-style Chats list is live on your phone. It starts off; switch it on 
 ```
 
 - Several at once: `{"ids":["wizard/desktop-chats","miguel/ai-apps"]}` (max 8). Ids are catalogue ids
-  (`web/tweaks/catalog.json`, `author/name`); anything else is dropped silently.
+  (`web/tweaks/catalog.json`, `author/name`) or the core features' ids (`web/core/core-features.json`); anything else
+  is dropped silently.
 - Wizard draws Settings › Look's own switch row (`WosSettings.tweakCard`, same `tweakSwitches` markup, name, "by" line,
   description) on an opaque card, bound to `WosExperience`: a tap flips it on that frame and calls
   `WosExperience.toggle(id)`, the one path Settings uses; every card and Look repaint on `wos:experience`. A failure
@@ -33,7 +34,8 @@ The Desktop-style Chats list is live on your phone. It starts off; switch it on 
 - A message is history: the card always shows the tweak's current state, never the state when it was sent.
 - Not installed on this Wizard: a quiet line, "This tweak isn't installed on this Wizard". A tweak whose manifest
   `shells` leaves out this shell shows disabled, labelled "Phone only" / "Desktop only".
-- Works for experiment tweaks and the release-wide settings that are tweaks underneath (e.g. `wizard/unified-inbox`).
+- Works for experiment tweaks and the release-wide settings (e.g. `wizard/unified-inbox`, Notifications in Chats, built
+  into the shell since wizard-ux issue 1352).
 - App feature switches (wizard-ux issue 1560, behind the off-by-default switch `wizard/chat-app-switches`): an id
   `<app id>:<switch id>` (the `wizard.app-switches/1` catalog, wizard-os docs/APP_SWITCHES.md) draws the same switch
   row, mixed freely with tweak ids in `ids`. Name, description and current state come from the App Manager's one

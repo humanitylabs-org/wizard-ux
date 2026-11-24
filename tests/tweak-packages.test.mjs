@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
+import { existsSync } from 'node:fs';
+import { coreFeatures, coreIds, builtinDefaults } from './fixtures/core-features.mjs';
 import { fixture, contract, read } from './fixtures/tweaks.mjs';
 import { withSkinHostParts } from './fixtures/skin-host-parts.mjs';
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
@@ -16,8 +18,11 @@ const catalog = JSON.parse(read('web/tweaks/catalog.json'));
 const asking = (id, capabilities) => ({ id, name: id, version: '1.0.0', author: id.split('/')[0], apiVersion: 1, capabilities, description: 'test fixture' });
 for (const id of catalog.tweaks) {
   const check = (await import(new URL(`../web/tweaks/${id}/contract.mjs`, import.meta.url))).default;
-  test(`${id}: shipped contract mounts / tears down against the shell fixture`, () => contract(id, check, ['miguel/send-and-go', 'miguel/now-playing', 'miguel/ai-apps'].includes(id) ? 'desktop' : 'phone'));
+  test(`${id}: shipped contract mounts / tears down against the shell fixture`, () => contract(id, check, ['miguel/send-and-go', 'miguel/now-playing'].includes(id) ? 'desktop' : 'phone'));
 }
+// Notifications in Chats is built into the shell (core/unified-inbox.js, wizard-ux issue 1352), same contract as the package had.
+const inboxCheck = (await import(new URL('./fixtures/unified-inbox-contract.mjs', import.meta.url))).default;
+test('wizard/unified-inbox (core): contract mounts / tears down against the shell fixture', () => contract('wizard/unified-inbox', inboxCheck, 'phone'));
 // static-rule: API inventory: the v1 slot contract (slots.json) and the core markup of four files must agree
 test('the six v1 slot names remain in core markup; removing / renaming requires an API bump', () => {
   const baseline = ['thread-switch-row-end','thread-header-actions','list-top','composer-end','home-top','dock-end'];
@@ -52,14 +57,14 @@ test('colors and tweaks are separate: a color pick never changes tweaks; a prese
   const storage = new Map([['wos.skin', 'obsidian']]); let skin = 'obsidian', active = [];
   const profiles = { miguel: { id: 'miguel', name: 'Miguel', version: 1, tweaks: ['miguel/send-and-go'] }, wizard: JSON.parse(read('web/tweaks/wizard/profile.json')) };
   const fams = [{ id: 'wizard', tweaks: 'wizard', palettes: ['grove'] }, { id: 'mizel', tweaks: 'miguel', palettes: ['obsidian', 'landscapes'] }];
-  const window = { WosSkin: { get current() { return skin; }, families: fams, familyOf: id => fams.find(f => f.palettes.includes(id)).id }, WosSkinHost: { personalState: { ready: false }, get tweakState() { return active; }, loadTweaks: async ids => { active = ids.filter(id => !JSON.parse(read('web/tweaks/catalog.json')).defaults.includes(id)); } }, addEventListener() {}, dispatchEvent() {} };
+  const window = { WosSkin: { get current() { return skin; }, families: fams, familyOf: id => fams.find(f => f.palettes.includes(id)).id }, WosSkinHost: { personalState: { ready: false }, get tweakState() { return active; }, loadTweaks: async ids => { active = ids.filter(id => !builtinDefaults(JSON.parse(read('web/tweaks/catalog.json'))).includes(id)); } }, addEventListener() {}, dispatchEvent() {} };
   const ctx = { window, setTimeout, document: { baseURI:'https://wizard.test/wizard-os-home/', addEventListener() {} }, Event, URL, AbortSignal, localStorage: { getItem:k=>storage.get(k), setItem:(k,v)=>storage.set(k,v) }, fetch: async url => ({ ok:true, json: async () => { const who = url.pathname.match(/tweaks\/([^/]+)\/profile\.json$/)?.[1]; return who ? profiles[who] : JSON.parse(read('web/'+url.pathname.split('/wizard-os-home/')[1])); } }) };
   vm.runInNewContext(read('web/core/experience.js'), ctx); const E = window.WosExperience;
   await E.refresh(); assert.deepEqual(Array.from(active), ['miguel/send-and-go'], 'a device from before keeps what its color brought');
   assert.deepEqual(JSON.parse(storage.get('wos.skin-tweaks.v1')).mix, { 'miguel/send-and-go': true }, 'written into its own switches once');
   skin = 'grove'; await E.chooseSkin(); assert.deepEqual(Array.from(active), ['miguel/send-and-go'], 'a color pick keeps the tweaks');
   const cat = JSON.parse(read('web/tweaks/catalog.json'));
-  assert.equal(E.state.tweaks.length, new Set([...cat.tweaks, ...cat.defaults]).size, 'every installed tweak is offered, whoever wrote it');
+  assert.equal(E.state.tweaks.length, new Set([...cat.tweaks, ...cat.defaults, ...coreIds]).size, 'every installed tweak is offered, whoever wrote it (and the core features)');
   await E.toggle('wizard/sidebar-chats-view'); assert.deepEqual(Array.from(active).sort(), ['miguel/send-and-go', 'wizard/sidebar-chats-view'], 'another author\'s tweak can be tried');
   await E.toggle('miguel/send-and-go'); assert.deepEqual(Array.from(active), ['wizard/sidebar-chats-view']);
   profiles.miguel = { ...profiles.miguel, version: 2, tweaks: ['miguel/snooze-someday', 'miguel/send-and-go'] }; await E.refresh();
@@ -104,7 +109,7 @@ function wizardExperience(storage = new Map()) {
   vm.runInNewContext(read('web/core/experience.js'), {window, document:{baseURI:'https://wizard.test/wizard-os-home/',addEventListener(){}}, Event, URL, AbortSignal,
     localStorage:{getItem:k=>storage.get(k),setItem:(k,v)=>storage.set(k,v)}, fetch:async url=>{ requests.push(url.pathname); return {ok:true,json:async()=>JSON.parse(read('web/'+url.pathname.split('/wizard-os-home/')[1]))}; }});
   // Notifications in Chats is on by default for the Wizard family; these older checks are about the other tweaks.
-  return { window, E:window.WosExperience, storage, requests, skin:id=>{skin=id;}, active:()=>Array.from(active).filter(id => !JSON.parse(read('web/tweaks/catalog.json')).defaults.includes(id)), all:()=>Array.from(active) };
+  return { window, E:window.WosExperience, storage, requests, skin:id=>{skin=id;}, active:()=>Array.from(active).filter(id => !builtinDefaults(JSON.parse(read('web/tweaks/catalog.json'))).includes(id)), all:()=>Array.from(active) };
 }
 test('profile default-off applies until the owner stores a deliberate choice, including an empty off list', async () => {
   let f = wizardExperience(); await f.E.refresh(); assert.ok(!f.all().some(id => id.endsWith('/machines-home')), 'James, 31 Oct 2026: the Wizard skins keep the classic Home (no network map by default)'); assert.deepEqual(f.active(), []); assert.equal(f.E.state.tweaks.find(t => t.id === 'wizard/sidebar-chats-view').on, false);
@@ -208,7 +213,7 @@ test('own recipes expose all installed tweaks, use published defaults and isolat
   await f.E.toggle('miguel/snooze-someday');
   const skin = {id:'quiet',tweaks:{...defaults,'miguel/snooze-someday':true}};
   f.window.WosMySkin = {active:skin,update(v){ Object.assign(skin.tweaks,v.tweaks); }};
-  await f.E.refresh(); const cat = JSON.parse(read('web/tweaks/catalog.json')); assert.equal(f.E.state.tweaks.length, cat.tweaks.length - (cat.oneOf || []).reduce((n, g) => n + g.length - 1, 0), 'one switch per oneOf group');
+  await f.E.refresh(); const cat = JSON.parse(read('web/tweaks/catalog.json')); assert.equal(f.E.state.tweaks.length, cat.tweaks.length + coreIds.length - (cat.oneOf || []).reduce((n, g) => n + g.length - 1, 0), 'one switch per oneOf group');
   assert.deepEqual(f.active(),['miguel/snooze-someday']);
   await f.E.toggle('wizard/failure-reason'); assert.ok(f.active().includes('wizard/failure-reason'));
   f.window.WosMySkin.active=null; await f.E.refresh(); assert.deepEqual(f.active(),[]);
@@ -391,9 +396,31 @@ test('desktop keys: ⌥↓ walks notification rows with Ready, ⌥X resolves an 
   assert.deepEqual(all(f.doc.body).map(r => r.dataset.chnotif), ['d1']); await f.clear();
 });
 
+test('core features: each id core/core-features.json describes loads from core/ or not at all, never from tweaks/ (issue 1352)', async () => {
+  for (const id of coreIds) {
+    const m = coreFeatures[id]; assert.equal(m.id, id); assert.equal(m.author, id.split('/')[0]); assert.equal(m.apiVersion, 1); assert.ok(Array.isArray(m.capabilities));
+    const f = fixture({ shell: m.shells?.[0] || 'phone' }); await f.mount(id);
+    assert.ok(!f.imports.some(u => u.includes('/tweaks/')) && !f.doc.head.children.some(l => /\/tweaks\//.test(l.href || '')), id + ': nothing from tweaks/');
+    if (m.view) assert.deepEqual([...f.host.tweakState], [], id + ': a view the desktop wears itself, no code');
+    else assert.ok(f.host.tweakState.includes(id) && f.imports.some(u => u.includes('/core/')), id + ': its code from core/');
+    await f.clear();
+  }
+});
 test('Notifications in Chats is on by default for everyone, whatever tweak set', async () => {
   const f = wizardExperience(); await f.E.refresh(); assert.ok(f.all().includes('wizard/unified-inbox'));
-  assert.equal((await f.E.defaults())['wizard/unified-inbox'], true);
+  assert.equal(f.E.state.tweaks.find(t => t.id === 'wizard/unified-inbox').on, true);
+  // Built into the shell since issue 1352: no tweak package, no catalog entry, no profile entry; New skin never lists it.
+  const cat = JSON.parse(read('web/tweaks/catalog.json'));
+  assert.ok(!cat.tweaks.includes('wizard/unified-inbox') && !cat.defaults.includes('wizard/unified-inbox') && !Object.values(cat.aliases).includes('wizard/unified-inbox'));
+  assert.ok(!JSON.parse(read('web/tweaks/wizard/profile.json')).tweaks.includes('wizard/unified-inbox'));
+  assert.ok(!existsSync(new URL('../web/tweaks/wizard/unified-inbox', import.meta.url)), 'the tweak package is gone');
+  assert.equal(coreFeatures['wizard/unified-inbox'].default, true);
+  assert.equal((await f.E.defaults())['wizard/unified-inbox'], undefined, 'a Settings › Chats setting, not a New skin switch');
+  // and it loads from core/, through the same loader (one API, one teardown)
+  const h = fixture(); await h.mount('wizard/unified-inbox'); assert.ok(h.host.tweakState.includes('wizard/unified-inbox'));
+  assert.ok(h.imports.some(u => /\/core\/unified-inbox\.js/.test(u)) && !h.imports.some(u => /tweaks\/wizard\/unified-inbox/.test(u)));
+  assert.ok(h.doc.head.children.some(l => /\/core\/unified-inbox\.css/.test(l.href || '')), 'its stylesheet from core/');
+  await h.clear();
   // (a release-wide default, so no set needs to list it: 'notifications preserve existing Miguel off choices and old
   // custom-skin ids after promotion' runs the real experience.js on the real catalog defaults)
 });
@@ -465,7 +492,7 @@ test('flat Tweaks list keeps a device mix exactly: whatever is on stays on, rend
   const storage = new Map([['wos.skin', 'obsidian'], ['wos.skin-tweaks.v1', JSON.stringify({ version: 1, off: {}, preset: 'none', mix, machinesHomeMoved: true, miguelLayoutMoved: true })]]); let active = [];
   const window = { WosSkin: { current: 'obsidian', families: [], familyOf: () => 'mizel' }, WosSkinHost: { personalState: { ready: false }, get tweakState() { return active; }, loadTweaks: async ids => { active = ids; } }, addEventListener() {}, dispatchEvent() {} };
   vm.runInNewContext(read('web/core/experience.js'), { window, setTimeout, document: { baseURI: 'https://wizard.test/wizard-os-home/', addEventListener() {} }, Event, URL, AbortSignal, localStorage: { getItem: k => storage.get(k), setItem: (k, v) => storage.set(k, v) }, fetch: async url => ({ ok: true, json: async () => JSON.parse(read('web/' + url.pathname.split('/wizard-os-home/')[1])) }) });
-  const E = window.WosExperience; await E.refresh(); const defs = JSON.parse(read('web/tweaks/catalog.json')).defaults || [];
+  const E = window.WosExperience; await E.refresh(); const defs = builtinDefaults(JSON.parse(read('web/tweaks/catalog.json')));
   assert.deepEqual(Array.from(active).filter(id => !defs.includes(id)).sort(), ['miguel/send-and-go', 'wizard/sidebar-chats-view'], 'the stored mix loads as it was');
   const saved = JSON.parse(storage.get('wos.skin-tweaks.v1')).mix;
   for (const [id, on] of Object.entries(mix)) assert.equal(saved[id], on, id + ' kept');

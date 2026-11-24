@@ -12,6 +12,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
 import vm from 'node:vm';
 import { fixture } from './fixtures/tweaks.mjs';
+import { coreFeatures } from './fixtures/core-features.mjs';
 import { withSkinHostParts } from './fixtures/skin-host-parts.mjs';
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 import { withDesktopParts } from './fixtures/desktop-parts.mjs';
@@ -97,9 +98,11 @@ test('the layout gets the shell\'s own threads, actions, apps and Home; nothing 
 });
 
 test('skins and tweaks never get the layout-only lists or the command take', async () => {
-  const f = fixture({ shell: 'desktop' }); let api;
+  // A team tweak asking only for the layout capability (as the AI apps view's package did before issue 1352).
+  const manifests = { 'miguel/layout-probe': { id: 'miguel/layout-probe', name: 'Probe', version: '1.0.0', author: 'miguel', apiVersion: 1, capabilities: ['layout'] } };
+  const f = fixture({ shell: 'desktop', manifests }); let api;
   f.host._test.setImporter(async () => ({ default: a => { api = a; return () => {}; } }));
-  await f.host.loadTweaks(['miguel/ai-apps'], f.slots, { teamAuthors: ['miguel'] });
+  await f.host.loadTweaks(['miguel/layout-probe'], f.slots, { teamAuthors: ['miguel'] });
   for (const k of ['sessions', 'apps', 'desk', 'voice', 'mount', 'panel', 'keys']) assert.equal(api[k], undefined, k);
   await f.clear();
 });
@@ -238,7 +241,7 @@ test('apps.logo: the same installed logo the Desks view shows (WizCore.appLogo),
 });
 
 test('a trusted tweak may switch only its own author\'s tweaks, through the device tweak mix (api.settings.toggleTweak)', async () => {
-  const aiMan = JSON.parse(read('web/tweaks/miguel/ai-apps/manifest.json'));   // data, not source
+  const aiMan = coreFeatures['miguel/ai-apps'];   // data, not source (built in since issue 1352)
   assert.equal(aiMan.name, 'Different shell view - AI apps');
   assert.equal(aiMan.view, 'AI apps', 'a shell view');
   // a package with the settings capability (the ai-apps view itself asks only for its layout)

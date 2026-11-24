@@ -1,0 +1,32 @@
+{
+  "wizard/unified-inbox": {
+    "id": "wizard/unified-inbox",
+    "name": "Notifications in Chats",
+    "version": "3.2.0",
+    "author": "wizard",
+    "apiVersion": 1,
+    "capabilities": [
+      "layout",
+      "nav",
+      "inbox"
+    ],
+    "default": true,
+    "description": "Chats is the inbox: Notifications’ alerts and every app with an inbox feed are yellow threads in Chats, labelled with their app; several from one app fold into one row. They open in the chat window with Open, Done, Snooze and Resolve this (the rest from that app listed under, with Done all); done ones under Archive."
+  },
+  "miguel/ai-apps": {
+    "id": "miguel/ai-apps",
+    "name": "Different shell view - AI apps",
+    "version": "1.0.0",
+    "author": "miguel",
+    "apiVersion": 1,
+    "capabilities": [
+      "layout"
+    ],
+    "description": "Like the ChatGPT, Claude and Perplexity desktop apps: your chats in a sidebar on the left that folds to a slim rail, the chat in a centred column, your apps in one column on the right (pinned, then open, then +), an app opening as a panel beside the chat. Desktop only: the phone keeps the standard phone view. Works with every skin. One view per device type (desktop, phone); all off = Desks",
+    "layout": "ai-apps",
+    "view": "AI apps",
+    "shells": [
+      "desktop"
+    ]
+  }
+}

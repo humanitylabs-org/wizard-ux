@@ -150,11 +150,13 @@ test('features on for everyone are plain settings where they act, not tweaks', a
 test('review: a new skin starts from the worn own skin\'s choices; an upgraded device keeps the retired Home map CSS for its first frame', async () => {
   const plain = experienceRuntime(); await plain.E.refresh();
   const base = await plain.E.defaults();
-  assert.equal(base['wizard/unified-inbox'], true); assert.equal(base['miguel/send-and-go'], false);
+  // Notifications in Chats is a Settings › Chats setting, not a tweak (issue 1352): a new skin never lists or saves it.
+  assert.equal(base['wizard/unified-inbox'], undefined); assert.equal(base['miguel/send-and-go'], false);
   const worn = experienceRuntime({ mySkin: { active: { id: 'own', tweaks: { 'wizard/unified-inbox': false, 'miguel/send-and-go': true } }, recipes: [] } });
   await worn.E.refresh();
   const d = await worn.E.defaults();
-  assert.equal(d['wizard/unified-inbox'], false, 'the worn skin\'s off');
+  assert.equal(d['wizard/unified-inbox'], undefined, 'not offered in New skin');
+  assert.equal(worn.E.state.tweaks.find(t => t.id === 'wizard/unified-inbox')?.on, false, 'an older skin\'s saved off still holds');
   assert.equal(d['miguel/send-and-go'], true, 'the worn skin\'s on');
   // Catalog policy: a retired id stays out of the list, and the boot preload CSS still hides stock Home.
   const cat = JSON.parse(read('web/tweaks/catalog.json'));

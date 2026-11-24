@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { createHash } from 'node:crypto';
 import { read } from './fixtures/tweaks.mjs';
+import { builtinDefaults } from './fixtures/core-features.mjs';
 import { pageAssets } from './fixtures/w1-pages.mjs';
 import lookFixture from '../tools/qa-look-file-fixture.cjs';
 
@@ -355,7 +356,7 @@ test('experience.js: a fresh device adopting the shared set never adds its own o
     fetch: async url => ({ ok: true, json: async () => JSON.parse(read('web/' + url.pathname.split('/wizard-os-home/')[1])) }) });
   const E = window.WosExperience;
   await E.adopt({ 'miguel/calm-offline': true, 'miguel/send-and-go': true });
-  const defaults = JSON.parse(read('web/tweaks/catalog.json')).defaults;
+  const defaults = builtinDefaults(JSON.parse(read('web/tweaks/catalog.json')));
   assert.deepEqual([...active].sort(), ['miguel/calm-offline', 'miguel/send-and-go', ...defaults].sort());
   assert.ok(!active.includes('miguel/machines-home'), 'no migration adds to the shared set');
 });

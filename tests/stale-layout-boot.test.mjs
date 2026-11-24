@@ -97,7 +97,7 @@ for (const shell of ['phone', 'desktop']) for (const id of ['orb', 'apps', 'two-
   });
 }
 test('host shell inventory agrees with the AI apps manifest; Settings uses manifest descriptions', async () => {
-  const f = boot(), item = f.host.layouts.find(l => l.id === 'ai-apps'), manifest = JSON.parse(read('web/tweaks/miguel/ai-apps/manifest.json'));
+  const f = boot(), item = f.host.layouts.find(l => l.id === 'ai-apps'), manifest = JSON.parse(read('web/core/core-features.json'))['miguel/ai-apps'];
   assert.deepEqual(Array.from(item.shells || []), manifest.shells); assert.match(item.desc, /desktop only/); assert.doesNotMatch(item.desc, /\(phone\)/);
   const settings = read('web/core/settings.js'), experience = read('web/core/experience.js');
   assert.doesNotMatch(settings, /\.layouts\b/);

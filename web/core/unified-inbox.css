@@ -1,7 +1,9 @@
-/* Notifications in Chats: yellow one-message threads. The Chats bell goes while Notifications is set to Chats
+/* Notifications in Chats (built into the shell since wizard-ux issue 1352; was the wizard/unified-inbox tweak's CSS, same
+ * rules): yellow one-message threads. The inbox yellows are exact colours (as sigils.css keeps its brand colour), so
+ * nothing looks different from the tweak. The Chats bell goes while Notifications is set to Chats
  * (core/notif-bell.js hides it; set to Badge, the bell and its count come back). */
-html[data-tweaks~="wizard/unified-inbox"] { --ui-y: #f2c230; --ui-y-ink: #1d1600; }
-html[data-tweaks~="wizard/unified-inbox"]:is([data-color-scheme="light"], [data-skin="obsidian-light"], [data-skin="landscapes-light"]) { --ui-y: #b98a00; --ui-y-ink: #fff; }
+html[data-tweaks~="wizard/unified-inbox"] { --ui-y: color(srgb 0.94901961 0.76078431 0.18823529); --ui-y-ink: color(srgb 0.11372549 0.08627451 0); }
+html[data-tweaks~="wizard/unified-inbox"]:is([data-color-scheme="light"], [data-skin="obsidian-light"], [data-skin="landscapes-light"]) { --ui-y: color(srgb 0.7254902 0.54117647 0); --ui-y-ink: white; }
 .ui-inbox { display: flex; flex-direction: column; gap: 4px; margin: 2px 0 8px; }
 .ui-inbox[hidden], .ui-done[hidden] { display: none; }
 .ui-item { border-radius: 14px; background: color-mix(in srgb, var(--ui-y) 11%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ui-y) 45%, transparent); }
@@ -17,7 +19,7 @@ html[data-tweaks~="wizard/unified-inbox"]:is([data-color-scheme="light"], [data-
 /* Ready says "None" only when there is truly nothing in it. */
 [data-slot="ready-top"]:has(> .ui-inbox) ~ .ch-none, [data-slot="ready-top"]:has(> .ui-inbox) ~ * .ch-none { display: none; }
 .ui-done { margin: 2px 0 8px; }
-.ui-done-btn { min-height: 34px; padding: 0 14px; border-radius: 99px; font: inherit; font-size: 13px; font-weight: 600; color: var(--ink-2) !important; background: color-mix(in srgb, var(--ui-y) 10%, transparent) !important; border: 1px solid color-mix(in srgb, var(--ui-y) 35%, transparent) !important; cursor: pointer; }
+.ui-done-btn { min-height: 34px; padding: 0 14px; border-radius: 99px; font: inherit; font-size: 0.8125rem; font-weight: 600; color: var(--ink-2) !important; background: color-mix(in srgb, var(--ui-y) 10%, transparent) !important; border: 1px solid color-mix(in srgb, var(--ui-y) 35%, transparent) !important; cursor: pointer; }
 .ui-done .ui-inbox { margin-top: 6px; }
 /* Phone (his skins list Ready bottom-up, newest nearest the thumb): newest notification lowest too. */
 html:not([data-shell="desktop"]) .ch-list .ch-sec-b > [data-slot] > .ui-inbox { flex-direction: column-reverse; }
@@ -25,7 +27,7 @@ html:not([data-shell="desktop"]) .ch-list .ch-sec-b > [data-slot] > .ui-inbox { 
 /* The notification open in the chat window: one yellow message, its actions where a thread keeps them. */
 .ch-notif-thread .msg.ch-notif .bub { background: color-mix(in srgb, var(--ui-y) 13%, transparent) !important; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ui-y) 50%, transparent) !important; border-radius: 16px; padding: 12px 14px; }
 .ch-notif-thread .ch-head .ti b { color: var(--ui-y); }
-.ch-notif-src { margin-left: 8px; color: var(--ui-y); font-size: 12px; }
+.ch-notif-src { margin-left: 8px; color: var(--ui-y); font-size: 0.75rem; }
 .ch-notif-thread [data-chact="resolve"] { color: var(--ui-y-ink) !important; background: var(--ui-y) !important; border-color: var(--ui-y) !important; }
 .ch-notif-thread [data-chact="resolve"] svg { stroke: currentColor; }
 /* The message above is the notification itself: no second copy as a reply bubble over the composer. */

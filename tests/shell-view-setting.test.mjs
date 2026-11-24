@@ -31,7 +31,7 @@ function box({ shell = 'desktop', storage = new Map() } = {}) {
   s.WosSkinHost = { layouts:[{id:'ai-apps', name:'AI apps', credit:'designed by Miguel'}], personalState: { ready: false }, get tweakState() { return active; }, layout: 'classic', setLayout() {}, setStandardLayout(id) { this.layout=id; }, loadTweaks: async ids => { active = [...ids]; loads.push([...ids]); } };
   s.fetch = async url => {
     const path = String(url.pathname || url).split('/wizard-os-home/')[1] || '';
-    if (/^tweaks\/|^core\/slots\.json/.test(path)) return { ok: true, status: 200, json: async () => JSON.parse(read('web/' + path.replace(/\?.*$/, ''))) };
+    if (/^tweaks\/|^core\/(slots|core-features)\.json/.test(path)) return { ok: true, status: 200, json: async () => JSON.parse(read('web/' + path.replace(/\?.*$/, ''))) };
     return { ok: false, status: 404, json: async () => ({}) };
   };
   vm.runInNewContext(read('web/core/experience.js'), s);
@@ -123,7 +123,7 @@ test('core keeps only the exclusivity: no Shell view row on the phone, no choose
   const dh = await look(desk);
   assert.equal(typeof desk.E.chooseView, 'undefined', 'no chooseView in the experience API');
   assert.match(dh, /data-desktop-view="ai-apps"/);
-  assert.ok(desk.E.state.tweaks.some(t => t.id === 'miguel/ai-apps' && t.layout), 'AI apps is a layout package');
+  assert.ok(desk.E.state.tweaks.some(t => t.id === 'miguel/ai-apps' && t.layout), 'AI apps is a built-in layout view (issue 1352)');
   assert.ok(!switches(dh).some(([id]) => id === 'miguel/ai-apps'), 'built-in desktop views are not duplicate personal switches');
   const phone = box({ shell: 'phone' }); await phone.E.refresh();
   assert.doesNotMatch(await look(phone), /data-desktop-view|data-shellview/, 'no Shell view row on the phone');
