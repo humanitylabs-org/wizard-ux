@@ -42,7 +42,8 @@
     "wizard/messaging-chat-replies",
     "wizard/download-swipe",
     "wizard/capability-registry",
-    "wizard/interface-manual"
+    "wizard/interface-manual",
+    "wizard/follow-main"
   ],
   "defaults": [
     "wizard/desktop-chats"
