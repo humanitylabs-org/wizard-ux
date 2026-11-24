@@ -1,0 +1,91 @@
+name: Browser boundary on a real box
+# wizard-os#133: the hostile-app check, automated. A real box in Docker (this repo's shell image, the current Agent
+# Service image, a stand-in for Tailscale Serve) with the browser owner boundary switched on, as
+# `wam browser-boundary on` does it. Real Chromium opens the real shell, the shell opens a hostile app, and the app
+# tries to act as the owner: the box must refuse every try, while Back, appearance and dictation keep working.
+# The same check then runs with the boundary off and must find the hole, so a check that can no longer fail fails.
+# Daily too, so a change in the Agent Service that opens the hole shows up without a wizard-ux change.
+on:
+  pull_request:
+    paths:
+      - 'web/core/**'
+      - 'web/index.html'
+      - 'web/desktop.html'
+      - 'web/app.js'
+      - 'web/desktop.js'
+      - 'packaging/**'
+      - 'Dockerfile'
+      - 'tools/boundary-box.sh'
+      - 'tests/qa-browser-boundary-box.cjs'
+      - 'tests/fixtures/boundary-box/**'
+      - '.github/workflows/browser-boundary-box.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'web/core/**'
+      - 'web/index.html'
+      - 'web/desktop.html'
+      - 'web/app.js'
+      - 'web/desktop.js'
+      - 'packaging/**'
+      - 'Dockerfile'
+      - 'tools/boundary-box.sh'
+      - 'tests/qa-browser-boundary-box.cjs'
+      - 'tests/fixtures/boundary-box/**'
+      - '.github/workflows/browser-boundary-box.yml'
+  schedule:
+    - cron: '17 5 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: browser-boundary-box-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  hostile-app:
+    name: Hostile app on a real box
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build this shell image
+        run: docker build -q -t wizard-shell-bb .
+      - name: The current Agent Service image (main's published image, else built from main)
+        run: |
+          sha=$(git ls-remote https://github.com/humanitylabs-org/wizard-agent-service refs/heads/main | cut -f1)
+          img=ghcr.io/humanitylabs-org/wizard-agent-service:sha-$sha
+          if ! docker pull -q "$img"; then
+            git clone -q --depth 1 https://github.com/humanitylabs-org/wizard-agent-service "$RUNNER_TEMP/as"
+            img=wizard-agent-service-bb; docker build -q -t "$img" "$RUNNER_TEMP/as"
+          fi
+          echo "AS_IMAGE=$img" >> "$GITHUB_ENV"
+          echo "Agent Service: $img (main $sha)"
+      - run: npm install --no-save --package-lock=false playwright@1.55.1
+      - run: npx playwright install --with-deps chromium
+      - name: 'Boundary on: a hostile app cannot act as the owner'
+        run: |
+          sh tools/boundary-box.sh up on wizard-shell-bb "$AS_IMAGE" 18133
+          QA_SHOT="$RUNNER_TEMP/boundary-on.png" node tests/qa-browser-boundary-box.cjs
+          sh tools/boundary-box.sh log > "$RUNNER_TEMP/box-on.log"
+      - name: 'Boundary off: the same check finds the hole'
+        run: |
+          sh tools/boundary-box.sh up off wizard-shell-bb "$AS_IMAGE" 18133
+          QA_EXPECT=broken node tests/qa-browser-boundary-box.cjs
+      - name: Box logs
+        if: always()
+        run: |
+          for n in wizbb-front wizbb-shell wizbb-as wizbb-hermes; do echo "== $n"; docker logs --tail 60 "$n" 2>&1 || true; done
+          sh tools/boundary-box.sh down
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: browser-boundary-box
+          path: |
+            ${{ runner.temp }}/boundary-on.png
+            ${{ runner.temp }}/box-on.log
+          if-no-files-found: ignore
