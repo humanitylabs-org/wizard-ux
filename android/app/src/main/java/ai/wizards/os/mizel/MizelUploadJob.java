@@ -56,16 +56,18 @@ public class MizelUploadJob extends JobService {
     @Override
     public boolean onStartJob(JobParameters params) {
         stopped = false;
+        ran = false;
         // The store opens off the UI thread first (wizard-ux#1769): a job can start this process just before the
         // owner opens WizardOS, and the shell must not wait for a long meeting's custody index.
         MizelHub.whenLoaded(this, () -> run(params));
         return true;
     }
 
-    private volatile boolean stopped;
+    private volatile boolean stopped, ran;
 
     private void run(JobParameters params) {
         if (stopped) return; // Android stopped the job while the store was still opening
+        ran = true;
         if (params.getJobId() == CHECK_JOB_ID) {
             // End expired process-death pauses, hand any upload to the upload job, schedule the next check.
             Log.i(TAG, "meeting check job started");
@@ -93,6 +95,8 @@ public class MizelUploadJob extends JobService {
     public boolean onStopJob(JobParameters params) {
         stopped = true;
         main.removeCallbacksAndMessages(null);
+        // Stopped before the store finished opening: ask again later rather than open it here, on the UI thread.
+        if (!ran) return true;
         return MizelUploader.get(this).outstanding();
     }
 }
