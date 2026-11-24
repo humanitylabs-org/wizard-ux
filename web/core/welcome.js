@@ -7,7 +7,8 @@
  *   3. Say hello         the first message; the Chats window opens with it once it is sent
  * Every install method gets the same first run: it opens whenever no AI provider is signed in, and on a brand-new
  * Wizard (Agent Service setup first_run) whose agent already has a provider it starts at step 2. Existing Wizards
- * (first_run false, a provider signed in) never see it. Finishing posts /wizard/v1/setup/seen.
+ * (first_run false, a provider signed in) never see it; one whose AI is signed out gets only Reconnect your AI
+ * (issue 1750). Finishing posts /wizard/v1/setup/seen.
  * Look offers every skin, drawn with the Settings preview cards, over a lighter dim so the real
  * interface shows through. A card sets only that skin (WosSkin.set): skins and tweaks are independent, so it never
  * applies or changes tweaks, and opening the step never switches the skin; an owner who never picks keeps the fresh
@@ -63,6 +64,11 @@
   let H = null, el = null, step = 'ai', provider = null, pollT = 0, connected = false, sending = false, booted = false, installing = '', installError = '', sendError = '';
   // The name step: asked = this Welcome starts with it; after = the step it hands over to.
   let asked = false, after = 'ai', saving = false, nameError = '', prefill = '';
+  /* Reconnect (wizard-ux issue 1750): an existing Wizard (the box says first_run false, or this device finished the
+   * Welcome) whose AI is signed out gets one screen, Reconnect your AI. Once the chosen provider is connected it saves
+   * done and closes, back to where the owner was: no name, no Pick a skin, no Say hello. Only boot opens it this way. */
+  let reconnect = false;
+  const RECONNECT_WORDS = () => `Your AI isn\u2019t connected. Reconnect it so ${agent()} can answer.`;
   // Bring your AI (wizard-ux issue 898, Miguel 4 Nov 2026): an optional step before Say hello, only on a Wizard that has the
   // Importer app. It embeds that app's own screen, like the provider sign-in step, so there is one Importer, two ways in.
   const IMPORTER = 'importer';
@@ -167,6 +173,7 @@
   let frameOff = () => {};
 
   function dots() {
+    if (reconnect) return '';
     const all = order(), i = all.indexOf(step);
     return `<div class="wl-dots" aria-hidden="true">${all.map((x, n) => `<i class="${n === i ? 'on' : n < i ? 'done' : ''}"></i>`).join('')}</div>`;
   }
@@ -207,7 +214,7 @@
         <p class="wl-status${connected ? ' ok' : ''}" role="status">${connected ? `${esc(p.name)} is connected.` : `${privateFirst() && p.app !== PRIVATE ? esc(extraNote(p)) + ' ' : ''}This continues by itself once you are signed in.`}</p>`;
     }
     if (privateFirst()) return paintPrivateAI();
-    return `${brand()}${dots()}<header class="wl-head"><h2 tabindex="-1">Connect your AI</h2><p>${esc(agent())} thinks with your own AI subscription. Sign in once.</p></header>
+    return `${brand()}${dots()}<header class="wl-head"><h2 tabindex="-1">${reconnect ? 'Reconnect your AI' : 'Connect your AI'}</h2><p>${reconnect ? esc(RECONNECT_WORDS()) : `${esc(agent())} thinks with your own AI subscription. Sign in once.`}</p></header>
       <div class="wl-choices">${PROVIDERS.map(p => `<button type="button" class="wl-choice" data-wl="provider" data-app="${esc(p.app)}"${installing ? ' disabled' : ''}><span class="wl-mark"><img src="brand/apps/${esc(p.mark)}.svg" alt=""></span><span class="wl-name">${esc(p.name)}</span>${installing === p.app ? '<span class="wl-sub">Installing…</span>' : p.note ? `<span class="wl-tag${p.note === 'Recommended' ? '' : ' soft'}">${esc(p.note)}</span>` : ''}</button>`).join('')}</div>
       ${installError ? `<p class="wl-status err" role="alert">${esc(installError)}</p>` : ''}`;
   }
@@ -221,7 +228,7 @@
       return `<button type="button" class="wl-choice${lead ? '' : ' wl-extra'}" data-wl="provider" data-app="${esc(p.app)}"${installing || done ? ' disabled' : ''}><span class="wl-mark"><img src="brand/apps/${esc(p.mark)}.svg" alt=""></span><span class="wl-name">${esc(p.name)}${lead ? '<span class="wl-sub">Private</span>' : `<span class="wl-sub">${esc(extraNote(p))}</span>`}</span>${tag}</button>`;
     };
     const [lead, ...extras] = providers();
-    return `${brand()}${dots()}<header class="wl-head"><h2 tabindex="-1">Connect your AI</h2><p>${privateReady ? `Your private agent is ready. You can add a second agent now, or later.` : `${esc(agent())} thinks privately with Tinfoil: your chats and apps stay private. Sign in once.`}</p></header>
+    return `${brand()}${dots()}<header class="wl-head"><h2 tabindex="-1">${reconnect ? 'Reconnect your AI' : 'Connect your AI'}</h2><p>${reconnect && !privateReady ? esc(RECONNECT_WORDS()) : privateReady ? `Your private agent is ready. You can add a second agent now, or later.` : `${esc(agent())} thinks privately with Tinfoil: your chats and apps stay private. Sign in once.`}</p></header>
       <div class="wl-choices">${choice(lead, true)}</div>
       <p class="wl-extras-h">Optional: a second agent</p>
       <div class="wl-choices wl-extras">${extras.map(p => choice(p, false)).join('')}</div>
@@ -378,6 +385,8 @@
       }
       if (!el || el !== mine || step !== 'ai' || provider !== chosen) return;
       if (ok === true) {
+        // Reconnect: this Wizard is set up already, so connected is the end; it closes by itself a moment later.
+        if (reconnect) { connected = true; write('done'); log('reconnected'); paint(false); setTimeout(() => { if (el === mine && step === 'ai' && provider === chosen) close(); }, 1200); return; }
         connected = true; write('ai'); log('connected'); paint(false);
         // The private agent is ready: back to Connect your AI, where a second agent is optional and Continue goes on.
         if (priv) { privateReady = true; setTimeout(() => { if (el === mine && step === 'ai' && provider === chosen) { provider = null; paint(); } }, 1200); return; }
@@ -389,14 +398,15 @@
     }, POLL_MS);
   }
 
-  function open(at = 'ai') {
+  function open(at = 'ai', opts = {}) {
     if (el) return;
-    asked = unnamed(); after = at; saving = false; nameError = ''; prefill = agent();
+    reconnect = !!opts.reconnect && at === 'ai';
+    asked = !reconnect && unnamed(); after = at; saving = false; nameError = ''; prefill = agent();
     step = asked ? 'name' : at; provider = null; connected = false; sending = false; installing = ''; installError = ''; sendError = ''; bringOpen = false;
     privateReady = !!pf?.private_agent && privateFirst();
     el = document.createElement('div');
     el.className = 'wl-overlay'; el.id = 'wosWelcome';
-    el.innerHTML = '<div class="wl-card" role="dialog" aria-modal="true" aria-label="Welcome"></div>';
+    el.innerHTML = `<div class="wl-card" role="dialog" aria-modal="true" aria-label="${reconnect ? 'Reconnect your AI' : 'Welcome'}"></div>`;
     document.body.appendChild(el);
     document.documentElement.classList.add('wl-open');
     try { window.WizardPwaInstall?.hold(true); } catch (e) {}
@@ -412,7 +422,7 @@
       }
       e.stopPropagation(); // the shell's own shortcuts wait until the welcome is done (desktop onKey also stands down)
     });
-    paint(); poll(); log('open:' + at + (asked ? ':name' : ''));
+    paint(); poll(); log('open:' + at + (asked ? ':name' : '') + (reconnect ? ':reconnect' : ''));
     // Opened from Settings or the Setup tile: read the private first answer if boot did not, then repaint Connect your AI.
     if (!pf && at === 'ai') { const mine = el; pfRead().then(s => { if (!s || el !== mine) return; privateReady = !!s.private_agent && privateFirst(); if (step === 'ai' && !provider) paint(false); }); }
   }
@@ -495,8 +505,11 @@
       log('boot:' + ok + ':' + state + ':' + (setup?.first_run === true));
       try { removeEventListener('pointerdown', act, true); removeEventListener('keydown', act, true); } catch (e) {}
       if ((ok === false || ok === true) && (acted || h.busy?.() || h.deeplinked?.())) { log('boot:busy'); return; }
-      if (ok === false) return open('ai');
-      if (ok === true && state !== 'done' && (state === 'ai' || setup?.first_run === true)) return open('look');
+      // A Wizard that is not new only needs its AI back (issue 1750). The box decides (a reset box says first_run true
+      // again, whatever this browser remembers); this device having finished counts only when the box gives no answer.
+      const existing = typeof setup?.first_run === 'boolean' ? !setup.first_run : state === 'done';
+      if (ok === false) return open('ai', { reconnect: existing });
+      if (ok === true && state !== 'done' && !existing && (state === 'ai' || setup?.first_run === true)) return open('look');
     }, 0);
   }
 
