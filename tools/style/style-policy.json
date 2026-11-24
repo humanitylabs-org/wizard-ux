@@ -40,6 +40,14 @@
     "controls.css": {
       "source": "style/controls.css",
       "sha256": "dd3f01c7c9f02f19a5d9f342c7a33b11ada5e029c8c54f9d7d34f81eada2caa9"
+    },
+    "try-features.js": {
+      "source": "style/try-features.js",
+      "sha256": "217b88e1e9f64bd8f159ec68a056ceecc8c6cb5c035ec812d521788367207025"
+    },
+    "wizard-try-features.js": {
+      "source": "style/try-features.js",
+      "sha256": "217b88e1e9f64bd8f159ec68a056ceecc8c6cb5c035ec812d521788367207025"
     }
   },
   "skin_layers": [
