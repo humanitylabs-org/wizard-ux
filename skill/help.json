@@ -469,8 +469,8 @@
       "where": "Settings › Appearance › Try new features › Stop write loops"
     },
     "wizard/follow-main": {
-      "help": "On a hand-deployed box, every merge to main whose checks pass goes live by itself, and Wizard tells you when the box falls behind.",
-      "where": "Settings › Appearance › Try new features › Merged fixes go live by themselves"
+      "help": "Green merges go live by themselves.",
+      "where": "Settings › Appearance › Try new features › Follow main"
     }
   },
   "screenOrder": [
