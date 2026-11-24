@@ -169,7 +169,7 @@ window.WizCore.chatsParts.outbox = function ({ ch, CH, CHECK_SVG, elOf, esc, H, 
     const age = isWorking(s) ? 3500 : quiet ? 60000 : 15000;
     const fresh = c.loadedFor === w.thread && Date.now() - c.at < age && c.readRevision === revision && turnsCurrent(c, s);
     // Status changes (Stopping…, Deferred, Archived) re-render the header even between message reads.
-    const hk = s ? [s.status, !!s.archived, !!s.deferred, s.runId, s.backgroundResult?.id || ''].join('|') : '';
+    const hk = s ? [s.status, !!s.archived, !!s.deferred, s.runId, s.backgroundResult?.id || '', s.backgroundResult?.reason || ''].join('|') : '';
     // Speed: a thread not yet read this page paints its last on-device copy at once (no skeleton);
     // the read below still runs and replaces it.
     // A stored copy also replaces turns from an earlier open that the list says are out of date (preload often has the newer one).
@@ -233,7 +233,7 @@ window.WizCore.chatsParts.outbox = function ({ ch, CH, CHECK_SVG, elOf, esc, H, 
       if (await loadApproval(w, LIVE.session(sid))) changed = true;
       await detail;
       if (!current()) return;
-      const s2 = LIVE.session(w.thread), hk2 = s2 ? [s2.status, !!s2.archived, !!s2.deferred, s2.runId, s2.backgroundResult?.id || ''].join('|') : '';
+      const s2 = LIVE.session(w.thread), hk2 = s2 ? [s2.status, !!s2.archived, !!s2.deferred, s2.runId, s2.backgroundResult?.id || '', s2.backgroundResult?.reason || ''].join('|') : '';
       if (hk2 !== c.hk) { c.hk = hk2; changed = true; }
       if (changed) { const el = track.querySelector(`[data-chats="${w.id}"]`); if (el && current()) renderLive(w, el); }
     } catch (e) {

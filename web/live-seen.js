@@ -129,8 +129,9 @@ window.WizCore.liveParts.seen = function ({  }) {
       background: ['helper', 'heavy'].includes(item.wizard_background) ? item.wizard_background : '',
       // A saved background result waiting for one-tap Continue (Agent Service background-results.mjs). Only the
       // off-by-default wizard/background-continue tweak shows it (chat-power.js) or discovers more (below).
+      // With wizard/needs-you-reason the Service adds its plain reason (wizard-agent-service issue 469).
       backgroundResult: /^bg_[0-9a-f]{32}$/.test(item.wizard_background_result?.id || '') && item.wizard_background_result?.session_id === id
-        ? { id: item.wizard_background_result.id } : null,
+        ? { id: item.wizard_background_result.id, ...(typeof item.wizard_background_result.reason === 'string' && item.wizard_background_result.reason ? { reason: item.wizard_background_result.reason.slice(0, 160) } : {}) } : null,
       // What the finished thread asks of James (the agent's hidden status line): needs_you / check / done / fyi.
       attention: attentionOf(item.wizard_attention),
       // A durable quiet one-shot checker bound to this thread. The prompt never reaches the list.
