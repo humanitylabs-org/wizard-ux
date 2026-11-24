@@ -35,7 +35,7 @@
     get voiceCommands() { return commandHandler; },
     get voiceInput() { return conversation; },
     get conversation() { return conversation; },
-    back, alive: () => true,
+    back, home, alive: () => true,
   });
   const framed = parent !== window;
   const detached = () => !service;
@@ -1246,7 +1246,7 @@
   }
   // What the boundary client hands back to WizardApp: Back, theme, title-bar taps, and the shell's update, fresh-data
   // and share-waiting notices (the same as wizard:app:update / wizard:app:refresh / wizard:app:share same-origin).
-  const boundaryHooks = () => ({ onNet: d => netNotice(d), onIdb: n => idbNotice(n), onBack: back, onTheme: applyTheme, onTool: boundaryTool, onUpdate: v => { updateAvailable = v; notify(updates, v); }, onRefresh: r => refreshNow(r), onShare: () => pullShares(),
+  const boundaryHooks = () => ({ onNet: d => netNotice(d), onIdb: n => idbNotice(n), onBack: back, onHome: home, onTheme: applyTheme, onTool: boundaryTool, onUpdate: v => { updateAvailable = v; notify(updates, v); }, onRefresh: r => refreshNow(r), onShare: () => pullShares(),
     onCapture: d => boundaryCapture.notice(d), onReady: () => { boundaryCapture.hello(); if (boundaryStorage && window.WizBoundaryClient) boundaryStorage.ready(window.WizBoundaryClient); }, keys: () => keyList(document), press: key => keyPress(key) });
   // A title-bar tap under the boundary arrives through the boundary client, not as a wizard:app:tool message.
   function boundaryTool(d) { if (!toolHandler || typeof d?.id !== 'string') return; try { toolHandler({ id: d.id, value: typeof d.value === 'string' ? d.value : undefined }); } catch (err) { console.warn('WizardApp tool', err); } }
@@ -1320,6 +1320,33 @@
       if (can) { const did = h.back(); if (typeof did !== 'boolean') throw new TypeError('back must return a synchronous boolean'); return did; }
     }
     return false;
+  }
+  /* Home (wizard-ux issue 1332): the shell asks the app for its first view, as if just opened, without a reload (the
+   * narrow desktop's tap on the app already in front, switch wizard/app-tap-home). The app's own WizardApp.nav.onHome
+   * handler answers first (true = it is there). Without one, or when it says false, every Back step the app has runs
+   * now: its overlays, its registered handlers, and a history adapter goes straight to its root entry in one
+   * traversal. true = something moved; false = it was already at its first view. */
+  let homeHandler = null;
+  function onHome(fn) {
+    if (typeof fn !== 'function') throw new TypeError('Home needs a synchronous callback');
+    const mine = homeHandler = { fn };
+    return () => { if (homeHandler === mine) homeHandler = null; };
+  }
+  function home() {
+    if (homeHandler) { let did = false; try { did = homeHandler.fn() === true; } catch (e) { console.warn('WizardApp home', e); } if (did) return true; }
+    let moved = false;
+    for (let i = 0; i < 24; i++) {
+      const top = overlays[overlays.length - 1];
+      if (top) { if (top.fn() === false) return moved; top.release(); moved = true; continue; }
+      let h = null;
+      for (let j = handlers.length - 1; j >= 0 && !h; j--) if (handlers[j].canGoBack() === true) h = handlers[j];
+      if (!h) return moved;
+      // a history adapter: one traversal to its root entry, then nothing below it can step until its popstate arrives
+      if (h.home) return h.home() === true || moved;
+      if (h.back() !== true) return moved;
+      moved = true;
+    }
+    return moved;
   }
   // Tapping outside a modal is Back (James, 28 Oct 2026). Capture before app/kit
   // click handlers: a drag out, or the lifting finger that opened a menu, is not a tap.
@@ -1517,9 +1544,9 @@
     return () => { if (shareRecv !== mine) return; shareRecv = null; shareOp('receive', { accepts: [] }).catch(() => {}); };
   }
   function shareTargets(list) { if (shareRecv && Array.isArray(list)) shareRecv.targets = list.slice(0, 24); return shareRecv && Array.isArray(list) ? shareOp('targets', { targets: list.slice(0, 24) }).then(v => v === true, () => false) : Promise.resolve(false); }
-  function register({ canGoBack, back: fn }) {
+  function register({ canGoBack, back: fn }, toRoot) {
     if (typeof canGoBack !== 'function' || typeof fn !== 'function') throw new TypeError('Back needs synchronous canGoBack/back callbacks');
-    const h = { canGoBack, back: fn }; handlers.push(h);
+    const h = { canGoBack, back: fn }; if (typeof toRoot === 'function') h.home = toRoot; handlers.push(h);
     return () => { const i = handlers.indexOf(h); if (i >= 0) handlers.splice(i, 1); };
   }
   function push(fn) {
@@ -1546,7 +1573,9 @@
     // popstate arrives. Reporting root while it is pending lets a rapid second
     // hardware callback collapse fullscreen or send the shell Home.
     const unregister = register({ canGoBack: () => pending || (!isRoot() && index > 0),
-      back: () => { if (pending) return true; if (isRoot() || index <= 0) return false; pending = true; history.back(); return true; } });
+      back: () => { if (pending) return true; if (isRoot() || index <= 0) return false; pending = true; history.back(); return true; } },
+      // Home (issue 1332): the whole way to this adapter's first entry in one traversal, never past it
+      () => { if (pending) return true; if (isRoot() || index <= 0) return false; pending = true; history.go(-index); return true; });
     return () => { unregister(); removeEventListener('popstate', pop); if (history.pushState === wrappedPush) history.pushState = priorPush; if (history.replaceState === wrappedReplace) history.replaceState = priorReplace; if (standaloneIsRoot === isRoot) standaloneIsRoot = null; };
   }
   const listen = (set, fn, value) => { if (typeof fn !== 'function') throw new TypeError('Subscriber must be a function'); set.add(fn); if (value) fn(value); return () => set.delete(fn); };
@@ -1864,7 +1893,9 @@
     view: Object.freeze({ isVisible: () => !document.hidden && (!framed || service?.view?.isVisible() === true), onRefresh }),
     nav: Object.freeze({ get threadAgents() { return service?.nav?.threadAgents === true || shellNav(); }, get threadDrafts() { return service?.nav?.threadDrafts === true || shellNav(); }, openThread: (id, opts) => service?.nav?.openThread(id, opts) === true || shellNav() && shellThread(id, opts),
       // Call after a finishing action (dismiss, archive, delete, save-and-close): returns the owner to the screen before the app.
-      back: () => { try { return service?.nav?.back?.() === true || shellNav() && shellAsk('nav.back'); } catch (_) { return false; } }, openContextDraft: data => { if (shellNav()) return shellDraft(data); if (!service?.nav?.openContextDraft) throw new Error('Context drafts need the verified Wizard host'); return service.nav.openContextDraft(data); } }),
+      back: () => { try { return service?.nav?.back?.() === true || shellNav() && shellAsk('nav.back'); } catch (_) { return false; } },
+      // The shell's "take me to your first view" (issue 1332): fn() resets the app's own views and returns true
+      onHome, openContextDraft: data => { if (shellNav()) return shellDraft(data); if (!service?.nav?.openContextDraft) throw new Error('Context drafts need the verified Wizard host'); return service.nav.openContextDraft(data); } }),
     theme: Object.freeze({ get: () => currentTheme || window.WizardTheme?.current || null, onChange: fn => listen(themes, fn, currentTheme || window.WizardTheme?.current) }),
     // Wizard's media viewer for the app's photos/videos ([{url, kind: 'image'|'video', name}], start index). Opened on
     // its own (no Wizard around it) the photo opens in a browser tab, which zooms natively.

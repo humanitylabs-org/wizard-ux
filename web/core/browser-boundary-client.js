@@ -4,6 +4,7 @@
  * nothing. The shell (core/browser-boundary.js) never reads this document. It sends `hello` with a per-load channel;
  * we answer `ready` and from then on take, on that channel only, from the parent window only:
  *  - `back`: run WizardApp's own Back (overlays, registered handlers); reply handled / atRoot.
+ *  - `home`: WizardApp's first view (its onHome, else every Back step at once; wizard-ux issue 1332); handled / atRoot.
  *  - `theme`: apply the Appearance v1 context (and the skin layer: stylesheet paths + My skin) through WizardApp's own
  *    validator; ack with `theme.applied`.
  *  - `field.pin` / `field.insert` / `field.release`: seal the focused text field or rich-text (contenteditable) region,
@@ -59,7 +60,7 @@
   // The shell's origin: our URL's own origin (the frame was loaded from the shell's host; only the document is opaque).
   const SHELL = location.origin;
   // home: this window's own app path from the shell's hello (e.g. /notes/), so app-client.js knows which links leave it.
-  let home = '', channel = '', back = null, applyTheme = null, onTool = null, onUpdate = null, onRefresh = null, onShare = null, onCapture = null, onReady = null, onNet = null, onIdb = null, serial = 0, claimed = new Set();
+  let home = '', channel = '', back = null, toHome = null, applyTheme = null, onTool = null, onUpdate = null, onRefresh = null, onShare = null, onCapture = null, onReady = null, onNet = null, onIdb = null, serial = 0, claimed = new Set();
   // App keys (data-wz-key): WizardApp's own live list and press (core/app-client.js keys), used only while the shell's
   // layout presses app keys (`app` in hello / keys).
   let appKeys = null, appPress = null, appOn = false, appSent = '', appQueued = false, appKeyNow = [];
@@ -291,6 +292,12 @@
       let did = false; try { did = back() === true; } catch (_) { return reply('refused'); }
       return reply(did ? 'handled' : 'atRoot');
     }
+    // Home (wizard-ux issue 1332): WizardApp's first view, every Back step at once; an older WizardApp has none
+    if (d.op === 'home') {
+      if (!toHome) return reply('refused');
+      let did = false; try { did = toHome() === true; } catch (_) { return reply('refused'); }
+      return reply(did ? 'handled' : 'atRoot');
+    }
     if (d.op === 'field.pin') {
       const el = field();
       if (!el || seals.size >= 4) return reply('refused');
@@ -396,11 +403,11 @@
   }
   window.WizBoundaryClient = Object.freeze({
     // WizardApp hands over its own Back and theme functions; then we ask the shell for a hello on a fresh channel.
-    connect({ onBack, onTheme, onTool: tap, onUpdate: upd, onRefresh: fresh, onShare: shared, onCapture: recording, onReady: hello, onNet: net, onIdb: idb, keys: listKeys, press } = {}) {
+    connect({ onBack, onHome, onTheme, onTool: tap, onUpdate: upd, onRefresh: fresh, onShare: shared, onCapture: recording, onReady: hello, onNet: net, onIdb: idb, keys: listKeys, press } = {}) {
       onNet = typeof net === 'function' ? net : null; onIdb = typeof idb === 'function' ? idb : null;
       appKeys = typeof listKeys === 'function' ? listKeys : null; appPress = typeof press === 'function' ? press : null;
       onCapture = typeof recording === 'function' ? recording : null; onReady = typeof hello === 'function' ? hello : null;
-      back = typeof onBack === 'function' ? onBack : null; applyTheme = typeof onTheme === 'function' ? onTheme : null;
+      back = typeof onBack === 'function' ? onBack : null; toHome = typeof onHome === 'function' ? onHome : null; applyTheme = typeof onTheme === 'function' ? onTheme : null;
       onTool = typeof tap === 'function' ? tap : null;
       onUpdate = typeof upd === 'function' ? upd : null; onRefresh = typeof fresh === 'function' ? fresh : null;
       onShare = typeof shared === 'function' ? shared : null;

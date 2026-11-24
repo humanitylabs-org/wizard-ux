@@ -1,0 +1,2 @@
+/* Tap the app in front for its first view (wizard-ux issue 1332): behaviour only, read inline by layouts/ai-apps/desktop-tabs.js. */
+html[data-tweaks~="wizard/app-tap-home"] { --wos-app-tap-home: 1; }

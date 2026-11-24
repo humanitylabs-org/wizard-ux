@@ -169,6 +169,22 @@ test('Back: handled stays in the app, atRoot runs the shell step, a timeout stay
   assert.deepEqual(steps, ['app', 'shell'], 'refused is neither handled nor at root');
 });
 
+test('Home (wizard-ux issue 1332): one ask, the app\'s own first view; an older app (refused) gets one Back', async () => {
+  const sh = shell(), f = frame(sh);
+  const steps = [];
+  f.a.WizBoundaryClient.connect({ onBack: () => { steps.push('back'); return true; }, onHome: () => { steps.push('home'); return true; } });
+  assert.equal(sh.B.home(f.el), 'stay', 'not attached yet');
+  sh.B.attach(f.el); await tick();
+  assert.equal(sh.B.home(f.el), 'pending');
+  assert.equal(sh.B.home(f.el), 'pending', 'a second tap while waiting is not a second ask');
+  await tick(); await tick();
+  assert.deepEqual(steps, ['home'], 'the app went home itself, no Back step');
+  // an app on a WizardApp without Home: the client refuses, and the shell asks for today's one Back
+  f.a.WizBoundaryClient.connect({ onBack: () => { steps.push('back'); return true; } });
+  sh.B.home(f.el); await tick(); await tick(); await tick(); await tick();
+  assert.deepEqual(steps, ['home', 'back']);
+});
+
 test('an app without the client is notReady (the shell keeps its own Back steps)', async () => {
   const sh = shell(), f = frame(sh, { client: false });
   sh.B.attach(f.el); await tick();
@@ -310,6 +326,8 @@ test('wiring: pages load the boundary right after shell-token.js; app frames get
   const detach = window.WizAppServices.attach(el, { appId: 'notes', path: '/notes/', isVisible: () => true });
   assert.deepEqual(clone(calls), [['attach', '/notes/']], 'attached through the boundary, with the app\'s home');
   assert.equal(window.WizAppServices.back(el, () => {}), 'pending'); assert.deepEqual(clone(calls.at(-1)), ['back', 'function']);
+  // Home (wizard-ux issue 1332): a boundary without it is unsupported (the layout steps Back instead)
+  assert.equal(window.WizAppServices.home(el), 'unsupported');
   detach(); assert.deepEqual(clone(calls.at(-1)), ['detach']);
   // The app SDK in a sandboxed (opaque) frame loads the boundary client; a same-origin one does not.
   const scripts = c => c.ctx.document.head.children.map(n => n.src);
