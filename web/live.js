@@ -1048,8 +1048,9 @@
     archive(id, { file = false } = {}) {
       // Done marks the thread read too, so it stays read on every client and if it is ever restored.
       if (this.session(id) && hasNew(this.session(id), this.seenOf(this.session(id)))) this.markSeen(id);
-      // Archive also clears a saved-result Needs you the Service added (issue 469), so restoring it brings no stale ask.
-      this.dismissSaved?.(this.session(id));
+      // Archive also clears a saved-result Needs you the Service added (issue 469), so restoring it brings no stale ask:
+      // only once the archive itself succeeded (a failed archive keeps the result Continue-able).
+      const saved = this.session(id);
       return this._act(id, { archived: true, deferred: false }, async s => {
         const all = readRestored(); if (all[id]) { delete all[id]; writeRestored(all); }
         if (!file) { await req(`/wizard/hermes/api/sessions/${encodeURIComponent(id)}${aq(id)}`, { method: 'PATCH', headers: J, body: JSON.stringify({ archived: true }) }); return; }
@@ -1061,7 +1062,7 @@
           r = await fetch(`/wizard/filings/${encodeURIComponent(id)}/status${aq(id)}`, { method: 'POST', cache: 'no-store', credentials: 'same-origin', headers: J, body: JSON.stringify({ runtime: s.runtime || 'direct' }) });
         }
         if (!r.ok || r.status === 202) { const e = new Error('HTTP ' + r.status); e.status = r.status; throw e; }
-      }, file ? 11 * 60000 : 60000);
+      }, file ? 11 * 60000 : 60000).then(ok => { if (ok) this.dismissSaved?.(saved); return ok; });
     },
     // Stop exactly the watcher on the row the owner pressed: `agent` is the window's agent scope ('' = main).
     async stopWatching(id, agent) {

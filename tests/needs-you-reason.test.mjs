@@ -125,7 +125,7 @@ test('off, or a routed agent thread: nothing is posted', async () => {
   }
 });
 
-test('Done (markHandled) and Archive call the dismiss for a saved-result thread', () => {
+test('Done (markHandled) and Archive call the dismiss for a saved-result thread', async () => {
   // Run the two real hooks against a LIVE that records what they call.
   const src = withLiveParts(read('web/live.js'));
   const done = block(src, '    markHandled(ids) {'), archive = between(src, '    archive(id, { file = false } = {}) {', '    // Stop exactly the watcher').trim().replace(/,$/, '');
@@ -138,8 +138,11 @@ test('Done (markHandled) and Archive call the dismiss for a saved-result thread'
   ctx.LIVE.rows = [{ id: 'old', backgroundResult: { id: RID } }, { id: 'plain', attention: { state: 'needs_you', ask: 'Approve' } }];
   ctx.LIVE.markHandled(['old', 'plain']);
   assert.deepEqual(called, ['old'], 'Done dismisses only the saved-result thread');
-  ctx.LIVE.archive('plain'); ctx.LIVE.archive('old');
-  assert.deepEqual(called, ['old', 'old'], 'Archive too');
+  await ctx.LIVE.archive('plain'); await ctx.LIVE.archive('old');
+  assert.deepEqual(called, ['old', 'old'], 'Archive too, once it succeeded');
+  ctx.LIVE._act = async () => false;
+  await ctx.LIVE.archive('old');
+  assert.deepEqual(called, ['old', 'old'], 'a failed archive keeps the result (nothing dismissed)');
 });
 
 // chat-power.js panel + taps.
@@ -189,4 +192,22 @@ test('off: the background-continue panel is unchanged and has no Dismiss; a stra
 for (const kind of ['host-profile', 'container', 'restricted']) test(`on: a routed ${kind} thread gets no panel (main agent only)`, () => {
   const h = power({ tweaks: ID, agent: `qa-${kind}` });
   assert.doesNotMatch(h.api.failureHtml(h.w, h.session), /data-background-dismiss/);
+});
+
+test('an open thread repaints when the Service reason arrives for a result it already shows', async () => {
+  // The real thread reader (core/chats-outbox.js loadThread), as in background-continue.test.mjs.
+  const window = { WizCore: {} }, renders = [], el = {};
+  vm.runInNewContext(read('web/core/chats-outbox.js'), { window, globalThis: {}, Date, JSON, Number, Object, Promise, setTimeout, clearTimeout });
+  const session = { id: 's1', status: 'completed', messageCount: 2, backgroundResult: { id: RID } };
+  const w = { id: 'w1', thread: 's1' }, c = { readNav: 1 };
+  const LIVE = { session: () => session, busy: () => false, messages: async () => [{ role: 'user', content: 'hi' }], cachedMessages: null, sessionInfo: async () => {} };
+  const part = window.WizCore.chatsParts.outbox({ ch: () => c, CH: { w1: c }, elOf: () => el, H: {}, INC: null, isWorking: () => false, KIT: {}, LIVE, loadApproval: async () => false,
+    needsLand: null, OUTBOX: { unsent: () => [], items: () => [], forThread: () => [] }, PEND: {}, renderLive: (x, e) => renders.push(e), renderChatList() {}, renderThread() {}, toTurns: rows => rows, syncListTitle() {},
+    track: { querySelector: () => el }, W: { w1: w }, rowOf: () => null, reach: null });
+  const tick = () => new Promise(r => setTimeout(r, 0));
+  await part.loadThread(w); await tick();
+  const first = renders.length;
+  session.backgroundResult = { id: RID, reason: REASON };
+  await part.loadThread(w); await tick();
+  assert.equal(renders.length, first + 1, 'the reason arriving repaints the panel');
 });
