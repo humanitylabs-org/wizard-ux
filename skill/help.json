@@ -352,6 +352,9 @@
     "wizard/background-continue": {
       "where": "Settings › Appearance › Try new features › Continue saved background results"
     },
+    "wizard/needs-you-reason": {
+      "where": "Settings › Appearance › Try new features › Say why a chat needs you"
+    },
     "wizard/failure-reason": {
       "where": "Settings › Appearance › Try new features › Why a reply failed"
     },
@@ -462,7 +465,7 @@
       "where": "Settings › Appearance › Try new features › Agent knows the Wizard interface"
     },
     "wizard/write-guard": {
-      "help": "Wizard stops a save it keeps repeating: the same save within 10 s is not resent, a burst over 20 a minute pauses, and the team gets a bug report.",
+      "help": "Stops repeated saves: an identical save within 10 s is not resent; over 20 a minute pauses.",
       "where": "Settings › Appearance › Try new features › Stop write loops"
     }
   },
