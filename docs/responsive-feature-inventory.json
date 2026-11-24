@@ -1128,6 +1128,13 @@
       ],
       "note": "Phone gesture tour (Talk, Hide) and the desktop first-message guide (WosTour.desk) share one module and one done flag."
     },
+    "core/unified-inbox.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Notifications in Chats (wizard-ux issue 1352): built into the shell, imported by the skin host's loader (core/core-features.json), never a script tag."
+    },
     "core/uploads.js": {
       "loadedBy": [
         "phone",
