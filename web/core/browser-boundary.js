@@ -784,6 +784,20 @@
       });
       return 'pending';
     },
+    // Home (wizard-ux issue 1332): the app's first view in one ask; an app on an older WizardApp (refused) gets one Back
+    home(frame) {
+      const st = sessions.get(frame);
+      if (!connected(st) || !visible(frame)) return 'stay';
+      if (!st.ready) return 'notReady';
+      if (st.backPending) return 'pending';
+      st.backPending = true; const channel = st.channel;
+      ask(st, 'home').then(answer => {
+        if (sessions.get(frame) !== st || st.channel !== channel) return;
+        st.backPending = false;
+        if (answer.status === 'refused') window.WizBrowserBoundary?.back(frame);
+      });
+      return 'pending';
+    },
     // Dictation: whether the app reported a focused text field (never which one, never its text), and the document
     // generation a seal belongs to. null = not attached or not ready.
     fieldState(frame) { const st = sessions.get(frame); return connected(st) && st.ready ? Object.freeze({ focused: st.field, gen: st.gen }) : null; },
