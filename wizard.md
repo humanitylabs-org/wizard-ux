@@ -26,6 +26,7 @@ needs:
 - notifications
 - files
 health: /shell-health
+skill: skill/SKILL.md
 ---
 
 # Wizard Shell

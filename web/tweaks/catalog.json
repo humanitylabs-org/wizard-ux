@@ -40,7 +40,8 @@
     "wizard/app-tap-home",
     "wizard/messaging-chat-replies",
     "wizard/download-swipe",
-    "wizard/capability-registry"
+    "wizard/capability-registry",
+    "wizard/interface-manual"
   ],
   "defaults": [
     "wizard/desktop-chats"
