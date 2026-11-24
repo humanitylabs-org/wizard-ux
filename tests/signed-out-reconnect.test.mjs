@@ -70,8 +70,9 @@ test('Tinfoil signed out: Reconnect goes to its Connect step', () => {
 
 test('issue 1755: a Tinfoil thread on its real Hermes route (custom:wizard-tinfoil) also offers Reconnect Tinfoil', () => {
   const b = boot(); b.set([{ id: 'tinfoil', name: 'Tinfoil', status: 'signed_out', limits: [] }]);
-  for (const provider of ['custom:wizard-tinfoil', 'wizard-tinfoil', 'custom:tinfoil-operator', 'tinfoil']) {
-    const s = { id: 'x', status: 'failed', model: 'kimi-k2', provider };
+  // main, host-profile, container and restricted rows (routed ids may equal a main id), as for Claude above.
+  for (const provider of ['custom:wizard-tinfoil', 'wizard-tinfoil', 'custom:tinfoil-operator', 'tinfoil']) for (const [kind, agent] of [['main', ''], ['host-ops', 'host'], ['box', 'container'], ['locked', 'restricted']]) {
+    const s = { id: 'same-id', status: 'failed', model: 'kimi-k2', provider, agent, agentKind: kind };
     assert.equal(b.M.signedOutFail(s)?.appId, 'wizard-tinfoil', provider);
     const html = b.M.failureHtml({ s, canRetry: true });
     assert.match(html, /Tinfoil disconnected/, provider);
