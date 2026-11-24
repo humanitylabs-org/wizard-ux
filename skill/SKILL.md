@@ -185,6 +185,7 @@ Settings › Appearance › Try new features lists unfinished features anyone ca
 - **Repair the agent's Wizard connection**: When the agent can't reach its Wizard app tools (unauthorized), running `wizard link` again puts this box's connection token back into the agent's settings; `wizard doctor` shows whether they match.
 - **Reply to Telegram and Slack chats**: Chats started on Telegram or Slack can be continued in Wizard; replies go through that app's own connection.
 - **Runtipi 4.12 sign-in key**: Server side: the App Manager signs in to Runtipi 4.12 with its own key. Nothing looks different.
+- **Say why a chat needs you**: When Wizard itself marks a chat Needs you (a helper finished after the chat closed), the chat says why, with Continue and Dismiss. Dismiss, Done or Archive clears it on every device.
 - **Search in Settings**: A search box at the top of the Settings list: keeps the pages that mention your words and marks them on the page; Esc clears, Enter opens the first.
 - **Send and go**: On desktop, sending opens a fresh chat.
 - **Short answer first**: A long agent reply shows only its one-line plain answer; tap it for the full reply. Choose whether replies start collapsed and how long the short answer is. Where: Settings › Appearance › Try new features › Short answer first; its options show under it when on.
