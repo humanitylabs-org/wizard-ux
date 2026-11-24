@@ -1,0 +1,14 @@
+{
+  "id": "wizard/download-swipe",
+  "name": "Swipe away downloads",
+  "version": "1.0.0",
+  "author": "wizard",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout"
+  ],
+  "issues": [
+    "humanitylabs-org/wizard-ux#1343"
+  ],
+  "description": "On the phone, swipe the Downloaded banner up or sideways to dismiss it, and swipe the Downloads sheet down to close it. Both follow the finger; a short drag springs back. Dismissing never cancels the download: it stays in Settings, Downloads."
+}

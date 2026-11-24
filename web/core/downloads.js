@@ -171,6 +171,103 @@
     nextFrame(() => setTimeout(() => { ask('remove', { id }); }, 0));
   }
 
+  /* ---- swipe to dismiss (switch wizard/download-swipe, wizard-ux issue 1343) ----
+   * James: the banner and the sheet must go away with a swipe. The banner follows the finger up or sideways once a press
+   * moves past the tap slop; the sheet's panel follows a pull down from its grip or title, or from the list while the list
+   * is at its top. On release a long drag or a fast flick dismisses (the shell's sheet rule, app.js sheetDrag: 90 px, or
+   * a flick past 30 px), anything shorter springs back. Dismissing only hides: no cancel or remove is ever sent, so the
+   * download keeps running and stays in Settings → Downloads. With the switch off no handler acts and no style changes. */
+  const SWIPE = 'wizard/download-swipe', SLOP = 8;
+  const swipeOn = () => { try { return (document.documentElement.dataset.tweaks || '').split(' ').includes(SWIPE); } catch (_) { return false; } };
+  const clock = () => { try { return performance.now(); } catch (_) { return Date.now(); } };
+  const flung = (d, ms) => d > 90 || (d > 30 && d / (ms || 1) > 0.6);
+  // Returns a check for the click handler: true once for the click that ends a drag (a drag is never also a tap).
+  function bannerSwipe(el) {
+    let g = null, dragged = false;
+    const paint = (dx, dy) => {
+      el.style.transform = dx || dy ? `translate(${dx}px, ${dy}px)` : '';
+      const far = Math.max(Math.abs(dx) / Math.max(1, el.offsetWidth || 320), -dy / 120);
+      el.style.opacity = dx || dy ? String(Math.max(0.25, 1 - far * 0.75)) : '';
+    };
+    el.addEventListener('pointerdown', e => {
+      dragged = false;
+      if (!swipeOn() || !trusted(e) || (e.button || 0) !== 0) { g = null; return; }
+      g = { id: e.pointerId, x: e.clientX, y: e.clientY, t: clock(), on: false, dx: 0, dy: 0 };
+    });
+    el.addEventListener('pointermove', e => {
+      if (!g || e.pointerId !== g.id) return;
+      const dx = e.clientX - g.x, dy = e.clientY - g.y;
+      if (!g.on) {
+        if (Math.hypot(dx, dy) < SLOP) return;
+        g.on = true; el.classList.add('wdl-dragging');
+        try { el.setPointerCapture(e.pointerId); } catch (_) {}
+      }
+      g.dx = dx; g.dy = Math.min(0, dy);                   // up or sideways: it never slides down over the dock
+      paint(g.dx, g.dy);                                   // on the frame of the move: the banner is under the finger
+    });
+    const end = e => {
+      if (!g || (e && e.pointerId !== g.id)) return;
+      const was = g; g = null;
+      if (!was.on) return;
+      dragged = true; el.classList.remove('wdl-dragging');
+      const side = Math.abs(was.dx) >= -was.dy, dist = side ? Math.abs(was.dx) : -was.dy;
+      if (e?.type !== 'pointercancel' && flung(dist, clock() - was.t)) {
+        const w = Math.max(window.innerWidth || 0, 400);
+        el.style.transform = side ? `translate(${was.dx < 0 ? -w : w}px, ${was.dy}px)` : `translate(${was.dx}px, ${was.dy - 160}px)`;
+        el.style.opacity = '0';
+        if (bannerEl === el) hideBanner();
+      } else paint(0, 0);                                  // springs back (the CSS eases it home)
+    };
+    el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end);
+    return () => { const d = dragged; dragged = false; return d; };
+  }
+  function sheetSwipe(el) {
+    const panel = el.querySelector('.wdl-panel'), scrim = el.querySelector('.wdl-scrim');
+    let g = null, pulled = false;
+    if (!panel) return () => false;
+    el.addEventListener('pointerdown', () => { pulled = false; });   // every new press starts clean (also on the scrim)
+    const handle = t => !!t?.closest?.('.wdl-grip, .wdl-title');
+    const begin = (x, y, fromHandle) => { pulled = false; g = swipeOn() ? { x, y, t: clock(), on: false, dy: 0, fromHandle } : null; };
+    const move = (x, y) => {
+      if (!g) return false;
+      const dx = x - g.x, dy = y - g.y;
+      if (!g.on) {
+        if (Math.hypot(dx, dy) < SLOP) return false;
+        // Only a pull DOWN, and from the list only while it is scrolled to its top: otherwise the list just scrolls.
+        if (dy <= 0 || Math.abs(dx) > dy || (!g.fromHandle && panel.scrollTop > 0)) { g = null; return false; }
+        g.on = true; el.classList.add('wdl-dragging');
+      }
+      g.dy = Math.max(0, dy);
+      panel.style.transform = g.dy ? `translateY(${g.dy}px)` : '';
+      if (scrim) scrim.style.opacity = g.dy ? String(Math.max(0, 1 - g.dy / Math.max(1, panel.offsetHeight || 400))) : '';
+      return true;
+    };
+    const end = cancelled => {
+      const was = g; g = null;
+      if (!was || !was.on) return;
+      pulled = true; el.classList.remove('wdl-dragging');
+      if (!cancelled && flung(was.dy, clock() - was.t)) {
+        panel.style.transform = 'translateY(100%)'; if (scrim) scrim.style.opacity = '0';
+        if (sheet === el) hide();
+      } else { panel.style.transform = ''; if (scrim) scrim.style.opacity = ''; }
+    };
+    // Touch: touch events, so a pull at the list's top can stop the list's own (empty) scroll once it is a pull.
+    panel.addEventListener('touchstart', e => { const t = e.touches?.[0]; if (!t || e.touches.length > 1) { g = null; return; } begin(t.clientX, t.clientY, handle(e.target)); }, { passive: true });
+    panel.addEventListener('touchmove', e => { const t = e.touches?.[0]; if (t && move(t.clientX, t.clientY) && e.cancelable) e.preventDefault(); }, { passive: false });
+    panel.addEventListener('touchend', () => end(false)); panel.addEventListener('touchcancel', () => end(true));
+    // A mouse drags the grip (phone shell in a desktop browser); touch pointers are handled above.
+    let mouse = null;
+    panel.addEventListener('pointerdown', e => {
+      if (e.pointerType !== 'mouse' || !trusted(e) || !handle(e.target)) return;
+      mouse = e.pointerId; begin(e.clientX, e.clientY, true);
+      try { panel.setPointerCapture(e.pointerId); } catch (_) {}
+    });
+    panel.addEventListener('pointermove', e => { if (e.pointerId === mouse) move(e.clientX, e.clientY); });
+    const up = e => { if (e.pointerId !== mouse) return; mouse = null; end(e.type === 'pointercancel'); };
+    panel.addEventListener('pointerup', up); panel.addEventListener('pointercancel', up);
+    return () => { const d = pulled; pulled = false; return d; };
+  }
+
   /* ---- banner ---- */
   function hideBanner() {
     clearTimeout(bannerTimer); bannerTimer = 0;
@@ -199,8 +296,10 @@
     const size = fmtSize(it.size);
     el.innerHTML = `<button type="button" class="wdl-main" aria-label="Downloads"><span class="wdl-ic">${ICON.file}</span><span class="wdl-tx"><b>Downloaded</b><small>${esc(it.name)}${size ? ' · ' + esc(size) : ''}</small></span></button><button type="button" class="wdl-open">Open</button>`;
     const openBtn = el.querySelector('.wdl-open'), mainBtn = el.querySelector('.wdl-main');   // the shell's own buttons, held here
+    const swiped = bannerSwipe(el);                         // switch wizard/download-swipe; inert while it is off
     el.addEventListener('click', e => {
       if (!trusted(e)) return;                              // only a real tap: never a script's dispatchEvent / click()
+      if (swiped()) return;                                 // the release of a drag is not a tap
       const b = e.target?.closest?.('button'); if (!b) return;
       if (b === openBtn) return openTap(b, it.id);
       if (b === mainBtn) { hideBanner(); show(); }
@@ -262,8 +361,10 @@
     let downOutside = false;
     el.addEventListener('pointerdown', e => { downOutside = !e.target.closest('.wdl-panel'); });
     el.addEventListener('pointercancel', () => { downOutside = false; });
+    const pulled = sheetSwipe(el);                           // switch wizard/download-swipe; inert while it is off
     el.addEventListener('click', e => {
       if (!trusted(e)) return;                              // only a real tap: never a script's dispatchEvent / click()
+      if (pulled()) return;                                 // the release of a pull is not a tap
       const b = e.target?.closest?.('.wdl-act');
       if (b) {
         const it = rowItem.get(b.closest('.wdl-row'));

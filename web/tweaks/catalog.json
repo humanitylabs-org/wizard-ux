@@ -39,7 +39,8 @@
     "wizard/settings-search",
     "wizard/github-signin",
     "wizard/local-app-routes",
-    "wizard/app-tap-home"
+    "wizard/app-tap-home",
+    "wizard/download-swipe"
   ],
   "defaults": [
     "wizard/unified-inbox",

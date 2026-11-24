@@ -38,13 +38,15 @@ function el(tag = 'div') {
     querySelector(sel) {
       if (sel === '.wdl-list') return this.list ||= fakeList();
       if (sel === '.wdl-open' || sel === '.wdl-main') return (this._b ||= {})[sel] ||= fakeButton(sel.slice(1));
+      if (sel === '.wdl-panel') return this.panel ||= Object.assign(el(), { scrollTop: 0, offsetHeight: 400 });
+      if (sel === '.wdl-scrim') return this.scrim ||= el();
       return null;
     }, closest() { return null } };
   e.classList = { add: c => e._cls.add(c), remove: c => e._cls.delete(c), contains: c => e._cls.has(c) };
   return e;
 }
 
-function load({ bridge = true, items = [], failOpen = null, legacy = false, grow = false } = {}) {
+function load({ bridge = true, items = [], failOpen = null, legacy = false, grow = false, tweaks = '' } = {}) {
   const calls = [], sent = [], toasts = [], timers = [], registered = [], refreshed = { n: 0 };
   const body = el('body'), store = new Map();
   // The Android app hands the SHELL main frame one message port (window.wizardDownloadsPort, protocol v1);
@@ -66,7 +68,7 @@ function load({ bridge = true, items = [], failOpen = null, legacy = false, grow
   const oldBridge = legacy ? { downloadsList: () => { calls.push(['legacy-list']); return '{"v":1,"items":[]}'; }, downloadsOpen: () => { calls.push(['legacy-open']); return 'ok'; } } : undefined;
   const window = { wizardDownloadsPort: port, WizardOSNative: oldBridge, __wos: { toast: (i, t) => toasts.push(t) }, requestAnimationFrame: f => f(), innerHeight: 800,
     WosSettings: { register: f => registered.push(f), refresh: () => { refreshed.n++; } }, WizCore: {} };
-  const ctx = { window, document: { createElement: el, body, documentElement: { dataset: { shell: 'phone' } }, querySelectorAll: () => [] },
+  const ctx = { window, document: { createElement: el, body, documentElement: { dataset: { shell: 'phone', tweaks } }, querySelectorAll: () => [] },
     localStorage: { getItem: k => (store.has(k) ? store.get(k) : null), setItem: (k, v) => store.set(k, String(v)) },
     setTimeout: (f, ms) => { timers.push({ f, ms }); return timers.length; }, clearTimeout() {}, setInterval: () => 1, clearInterval() {}, Date, JSON: { stringify: (...a) => JSON.stringify(...a), parse: (...a) => JSON.parse(...a) }, Number, String, Set, Map, Math, Promise };
   // The tests drive the module's private functions through a hook the HARNESS splices in. Production code exports only
@@ -527,4 +529,127 @@ test('skin: the CSS uses only --wz-* roles (with shell fallbacks) and opaque pan
       assert.doesNotMatch(s[k].replace(/var\([^()]*(\([^()]*\)[^()]*)*\)/g, ''), /#[0-9a-f]{3,8}\b|rgba?\(/i, `${node.className} ${k}: ${s[k]}`);
     for (const k of ['backdrop-filter', 'filter']) assert.doesNotMatch(s[k] || '', /blur/, `${node.className} ${k}`);
   }
+});
+
+// Swipe to dismiss (switch wizard/download-swipe, wizard-ux issue 1343). The gestures run on the real module through
+// its own listeners; the browser proof with real touches is tests/qa-download-swipe.cjs.
+const SWIPE = 'wizard/download-swipe';
+const fire = (node, type, ev) => (node.listeners[type] || []).forEach(f => f({ isTrusted: true, pointerId: 1, button: 0, pointerType: 'touch', ...ev, type }));
+const drag = (node, from, to, steps = 4) => {
+  fire(node, 'pointerdown', { clientX: from[0], clientY: from[1] });
+  for (let i = 1; i <= steps; i++) fire(node, 'pointermove', { clientX: from[0] + (to[0] - from[0]) * i / steps, clientY: from[1] + (to[1] - from[1]) * i / steps });
+  fire(node, 'pointerup', { clientX: to[0], clientY: to[1] });
+};
+const touchPull = (sheet, from, to, target = {}, steps = 4) => {
+  const p = sheet.panel, t = (x, y) => ({ clientX: x, clientY: y }), prevented = [];
+  const ev = (type, touches) => ({ type, target: { closest: s => (target.handle && /wdl-grip/.test(s) ? {} : null) }, touches, cancelable: true, preventDefault() { prevented.push(type); } });
+  fire(sheet, 'pointerdown', { target: { closest: () => ({}) } });
+  (p.listeners.touchstart || []).forEach(f => f(ev('touchstart', [t(...from)])));
+  for (let i = 1; i <= steps; i++) (p.listeners.touchmove || []).forEach(f => f(ev('touchmove', [t(from[0] + (to[0] - from[0]) * i / steps, from[1] + (to[1] - from[1]) * i / steps)])));
+  (p.listeners.touchend || []).forEach(f => f(ev('touchend', [])));
+  return prevented;
+};
+async function bannerUp(tweaks) {
+  const r = load({ items: [pdf(), pdf({ id: '13', status: 'running', finished: 0, got: 10 })], tweaks });
+  pushEv(r.window, { type: 'done', item: pdf() });
+  await flush();
+  return { r, b: r.body.children[0] };
+}
+
+test('swipe on: a swipe up dismisses the banner, the banner follows the finger, and nothing is cancelled', async () => {
+  const { r, b } = await bannerUp(SWIPE);
+  fire(b, 'pointerdown', { clientX: 100, clientY: 700 });
+  fire(b, 'pointermove', { clientX: 100, clientY: 650 });
+  assert.equal(b.style.transform, 'translate(0px, -50px)', 'on the frame of the move, under the finger');
+  assert.equal(r.W.bannerOpen(), true, 'still there mid-drag');
+  fire(b, 'pointermove', { clientX: 100, clientY: 580 });
+  fire(b, 'pointerup', { clientX: 100, clientY: 580 });
+  assert.equal(r.W.bannerOpen(), false, 'a 120 px swipe up dismisses it');
+  b.listeners.click.forEach(f => f({ target: b.querySelector('.wdl-main'), isTrusted: true }));
+  assert.equal(r.W.isOpen(), false, 'the click that ends the drag is not a tap on the banner');
+  r.timers.forEach(t => t.f()); await flush();
+  assert.deepEqual(r.calls, [], 'no cancel, no remove, no open');
+  assert.ok(r.sent.every(m => m.method === 'list'));
+});
+
+test('swipe on: sideways either way dismisses; downward never moves the banner over the dock', async () => {
+  for (const dx of [-160, 160]) {
+    const { r, b } = await bannerUp(SWIPE);
+    drag(b, [200, 700], [200 + dx, 706]);
+    assert.equal(r.W.bannerOpen(), false, `sideways ${dx}`);
+  }
+  const { r, b } = await bannerUp(SWIPE);
+  fire(b, 'pointerdown', { clientX: 100, clientY: 700 });
+  fire(b, 'pointermove', { clientX: 100, clientY: 820 });
+  assert.equal(b.style.transform, '', 'a pull down does not move it');
+  fire(b, 'pointerup', { clientX: 100, clientY: 820 });
+  assert.equal(r.W.bannerOpen(), true, 'and does not dismiss it');
+});
+
+test('swipe on: a short slow drag springs back, and plain taps on the banner and Open still work', async () => {
+  const { r, b } = await bannerUp(SWIPE);
+  const t0 = Date.now(); let now = t0; const real = Date.now; Date.now = () => now;
+  try {
+    fire(b, 'pointerdown', { clientX: 100, clientY: 700 });
+    now += 400; fire(b, 'pointermove', { clientX: 100, clientY: 660 });
+    now += 400; fire(b, 'pointerup', { clientX: 100, clientY: 660 });
+  } finally { Date.now = real; }
+  assert.equal(r.W.bannerOpen(), true, 'a 40 px slow drag is under the threshold');
+  assert.equal(b.style.transform, '', 'it springs back home');
+  b.listeners.click.forEach(f => f({ target: b.querySelector('.wdl-main'), isTrusted: true }));
+  assert.equal(r.W.isOpen(), false, 'the release of that drag is still not a tap');
+  // A plain tap (a press that never passes the 8 px slop) on Open.
+  fire(b, 'pointerdown', { clientX: 300, clientY: 700 }); fire(b, 'pointermove', { clientX: 303, clientY: 702 }); fire(b, 'pointerup', { clientX: 303, clientY: 702 });
+  b.listeners.click.forEach(f => f({ target: b.querySelector('.wdl-open'), isTrusted: true }));
+  r.timers.filter(t => t.ms === 0).forEach(t => t.f()); await flush();
+  assert.deepEqual(r.calls, [['open', '12']], 'Open still opens the file');
+  const again = await bannerUp(SWIPE);
+  fire(again.b, 'pointerdown', { clientX: 100, clientY: 700 }); fire(again.b, 'pointerup', { clientX: 100, clientY: 700 });
+  again.b.listeners.click.forEach(f => f({ target: again.b.querySelector('.wdl-main'), isTrusted: true }));
+  assert.equal(again.r.W.isOpen(), true, 'a plain tap on the banner opens the Downloads sheet');
+});
+
+test('swipe on: the Downloads sheet follows a pull down and closes; a short pull, an upward move or a scrolled list keep it', async () => {
+  const r = load({ items: [pdf(), pdf({ id: '13', status: 'running', finished: 0, got: 10 })], tweaks: SWIPE });
+  r.W.show(); await flush();
+  const sheet = r.body.children[0];
+  touchPull(sheet, [200, 500], [200, 515], { handle: true });
+  assert.equal(r.W.isOpen(), true, 'a 15 px pull springs back');
+  assert.equal(sheet.panel.style.transform, '');
+  touchPull(sheet, [200, 500], [200, 380]);
+  assert.equal(r.W.isOpen(), true, 'an upward move scrolls the list, it never closes');
+  sheet.panel.scrollTop = 120;
+  touchPull(sheet, [200, 500], [200, 700]);
+  assert.equal(r.W.isOpen(), true, 'a list scrolled down scrolls back first');
+  assert.equal(sheet.panel.style.transform, '');
+  sheet.panel.scrollTop = 0;
+  // Mid-pull: the panel is under the finger and the list's own scroll is stopped.
+  const p = sheet.panel, ev = (type, y) => ({ type, target: { closest: () => null }, touches: y == null ? [] : [{ clientX: 200, clientY: y }], cancelable: true, preventDefault() { this.stopped = true; } });
+  p.listeners.touchstart.forEach(f => f(ev('touchstart', 500)));
+  const mv = ev('touchmove', 560); p.listeners.touchmove.forEach(f => f(mv));
+  assert.equal(p.style.transform, 'translateY(60px)');
+  assert.equal(mv.stopped, true, 'the pull, not the list, owns the move');
+  p.listeners.touchmove.forEach(f => f(ev('touchmove', 700)));
+  p.listeners.touchend.forEach(f => f(ev('touchend')));
+  assert.equal(r.W.isOpen(), false, 'a 200 px pull closes the sheet');
+  r.timers.forEach(t => t.f()); await flush();
+  assert.deepEqual(r.calls, [], 'closing the sheet never cancels the running download');
+  // Still listed afterwards (Settings → Downloads opens the same sheet).
+  r.W.show(); await flush();
+  assert.match(r.body.children.at(-1).list.innerHTML, /Plan\.pdf[\s\S]*Downloading/);
+});
+
+test('swipe off: the same gestures move nothing and dismiss nothing (today\'s behaviour)', async () => {
+  const { r, b } = await bannerUp('');
+  drag(b, [100, 700], [100, 520]);
+  drag(b, [100, 700], [300, 700]);
+  assert.ok(!b.style.transform, 'never moved');
+  assert.equal(r.W.bannerOpen(), true);
+  b.listeners.click.forEach(f => f({ target: b.querySelector('.wdl-main'), isTrusted: true }));
+  assert.equal(r.W.isOpen(), true, 'a tap opens the sheet as before');
+  const sheet = r.body.children.at(-1);
+  const prevented = touchPull(sheet, [200, 500], [200, 760], { handle: true });
+  assert.deepEqual(prevented, [], 'the list keeps its own scroll');
+  assert.ok(!sheet.panel.style.transform, 'never moved');
+  assert.equal(r.W.isOpen(), true);
 });
