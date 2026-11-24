@@ -505,10 +505,11 @@
       log('boot:' + ok + ':' + state + ':' + (setup?.first_run === true));
       try { removeEventListener('pointerdown', act, true); removeEventListener('keydown', act, true); } catch (e) {}
       if ((ok === false || ok === true) && (acted || h.busy?.() || h.deeplinked?.())) { log('boot:busy'); return; }
-      // A Wizard that is not new (the box says so, or this device finished) only needs its AI back (issue 1750).
-      const existing = setup?.first_run === false || state === 'done';
+      // A Wizard that is not new only needs its AI back (issue 1750). The box decides (a reset box says first_run true
+      // again, whatever this browser remembers); this device having finished counts only when the box gives no answer.
+      const existing = typeof setup?.first_run === 'boolean' ? !setup.first_run : state === 'done';
       if (ok === false) return open('ai', { reconnect: existing });
-      if (ok === true && !existing && (state === 'ai' || setup?.first_run === true)) return open('look');
+      if (ok === true && state !== 'done' && !existing && (state === 'ai' || setup?.first_run === true)) return open('look');
     }, 0);
   }
 

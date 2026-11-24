@@ -70,6 +70,9 @@ test('Reconnect: a device that saved "ai" on an existing Wizard never reopens Pi
   await old.boot(); assert.ok(!old.W.active, 'reconnected on an older build: nothing');
   const fresh = device(fakeBox(), { skins: skins() }); await fresh.boot();
   assert.equal(title(fresh), 'Connect your AI'); assert.match(fresh.html(), /wl-dots/);
+  // A reset box (first_run true again) gets the whole Welcome even where this browser remembers done.
+  const reset = device(fakeBox(), { skins: skins() }); reset.store.set('wos.welcome.v1', 'done'); await reset.boot();
+  assert.equal(title(reset), 'Connect your AI'); assert.match(reset.html(), /wl-dots/);
   // The Setup tile and Settings open the whole Welcome on any Wizard.
   const tile = device(fakeBox({ signedIn: true, firstRun: false }), { skins: skins() }); await tile.boot();
   tile.W.open(); assert.equal(title(tile), 'Connect your AI'); assert.match(tile.html(), /wl-dots/);
