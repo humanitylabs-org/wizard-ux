@@ -46,7 +46,7 @@ function el(tag = 'div') {
   return e;
 }
 
-function load({ bridge = true, items = [], failOpen = null, legacy = false, grow = false, tweaks = '' } = {}) {
+function load({ bridge = true, items = [], failOpen = null, legacy = false, grow = false, tweaks = '', shell = 'phone' } = {}) {
   const calls = [], sent = [], toasts = [], timers = [], registered = [], refreshed = { n: 0 };
   const body = el('body'), store = new Map();
   // The Android app hands the SHELL main frame one message port (window.wizardDownloadsPort, protocol v1);
@@ -68,7 +68,7 @@ function load({ bridge = true, items = [], failOpen = null, legacy = false, grow
   const oldBridge = legacy ? { downloadsList: () => { calls.push(['legacy-list']); return '{"v":1,"items":[]}'; }, downloadsOpen: () => { calls.push(['legacy-open']); return 'ok'; } } : undefined;
   const window = { wizardDownloadsPort: port, WizardOSNative: oldBridge, __wos: { toast: (i, t) => toasts.push(t) }, requestAnimationFrame: f => f(), innerHeight: 800,
     WosSettings: { register: f => registered.push(f), refresh: () => { refreshed.n++; } }, WizCore: {} };
-  const ctx = { window, document: { createElement: el, body, documentElement: { dataset: { shell: 'phone', tweaks } }, querySelectorAll: () => [] },
+  const ctx = { window, document: { createElement: el, body, documentElement: { dataset: { shell, tweaks } }, querySelectorAll: () => [] },
     localStorage: { getItem: k => (store.has(k) ? store.get(k) : null), setItem: (k, v) => store.set(k, String(v)) },
     setTimeout: (f, ms) => { timers.push({ f, ms }); return timers.length; }, clearTimeout() {}, setInterval: () => 1, clearInterval() {}, Date, JSON: { stringify: (...a) => JSON.stringify(...a), parse: (...a) => JSON.parse(...a) }, Number, String, Set, Map, Math, Promise };
   // The tests drive the module's private functions through a hook the HARNESS splices in. Production code exports only
@@ -549,8 +549,8 @@ const touchPull = (sheet, from, to, target = {}, steps = 4) => {
   (p.listeners.touchend || []).forEach(f => f(ev('touchend', [])));
   return prevented;
 };
-async function bannerUp(tweaks) {
-  const r = load({ items: [pdf(), pdf({ id: '13', status: 'running', finished: 0, got: 10 })], tweaks });
+async function bannerUp(tweaks, shell = 'phone') {
+  const r = load({ items: [pdf(), pdf({ id: '13', status: 'running', finished: 0, got: 10 })], tweaks, shell });
   pushEv(r.window, { type: 'done', item: pdf() });
   await flush();
   return { r, b: r.body.children[0] };
@@ -650,6 +650,19 @@ test('swipe off: the same gestures move nothing and dismiss nothing (today\'s be
   const sheet = r.body.children.at(-1);
   const prevented = touchPull(sheet, [200, 500], [200, 760], { handle: true });
   assert.deepEqual(prevented, [], 'the list keeps its own scroll');
+  assert.ok(!sheet.panel.style.transform, 'never moved');
+  assert.equal(r.W.isOpen(), true);
+});
+
+test('swipe on, desktop shell: the banner and the Downloads dialog keep today\'s behaviour (the gesture is phone only)', async () => {
+  const { r, b } = await bannerUp(SWIPE, 'desktop');
+  drag(b, [100, 100], [100, -80]);
+  drag(b, [100, 100], [320, 100]);
+  assert.ok(!b.style.transform, 'never moved');
+  assert.equal(r.W.bannerOpen(), true);
+  r.W.hideBanner(); r.W.show(); await flush();
+  const sheet = r.body.children.at(-1);
+  touchPull(sheet, [200, 300], [200, 600], { handle: true });
   assert.ok(!sheet.panel.style.transform, 'never moved');
   assert.equal(r.W.isOpen(), true);
 });
