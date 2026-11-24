@@ -467,6 +467,10 @@
     "wizard/write-guard": {
       "help": "Stops repeated saves: an identical save within 10 s is not resent; over 20 a minute pauses.",
       "where": "Settings › Appearance › Try new features › Stop write loops"
+    },
+    "wizard/follow-main": {
+      "help": "Green merges go live by themselves.",
+      "where": "Settings › Appearance › Try new features › Follow main"
     }
   },
   "screenOrder": [

@@ -43,7 +43,8 @@
     "wizard/download-swipe",
     "wizard/capability-registry",
     "wizard/interface-manual",
-    "wizard/write-guard"
+    "wizard/write-guard",
+    "wizard/follow-main"
   ],
   "defaults": [
     "wizard/desktop-chats"
