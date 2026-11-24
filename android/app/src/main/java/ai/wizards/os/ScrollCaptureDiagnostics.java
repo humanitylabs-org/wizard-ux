@@ -96,11 +96,15 @@ final class ScrollCaptureDiagnostics {
     static void resumed(Context context) {
         Context c=context.getApplicationContext(); init(c);
         // A new process-exit record (wizard-ux#1724) is reason enough to send the report again.
-        if(ProcessExits.refresh(c).takeUnreported()) arm("process-exit");
         // A saved freeze (wizard-ux#1762), also one from a process that was then closed from the ANR dialog.
         if(HangWatch.log(c).takeUnreported()) arm("hang");
-        // Focus-only OEM overlays do not necessarily cause onResume; focus gain calls this too.
-        MAIN.postDelayed(()->upload(c),750);
+        // Android's exit records are read off the UI thread on a cold start (wizard-ux#1769); at once when this
+        // process already read them.
+        StartupWork.then(ProcessExits.refreshed(),()->ProcessExits.refresh(c),()->{
+            if(ProcessExits.refresh(c).takeUnreported()) arm("process-exit");
+            // Focus-only OEM overlays do not necessarily cause onResume; focus gain calls this too.
+            MAIN.postDelayed(()->upload(c),750);
+        });
     }
     /** The UI thread or the page process answered again after a freeze: send the report with its stack. */
     static void hang(Context context) {

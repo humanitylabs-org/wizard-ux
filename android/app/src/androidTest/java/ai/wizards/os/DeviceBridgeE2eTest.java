@@ -34,6 +34,16 @@ public class DeviceBridgeE2eTest {
         MeetingProcessDeathScenario.run();
     }
 
+    /** wizard-ux#1769: a start's disk loads run off the UI thread; the bookkeeping after them still runs on it. */
+    @Test public void startupLoadsRunOffTheUiThread() throws Exception {
+        LongMeetingStartupScenario.startupLoadsRunOffTheUiThread();
+    }
+
+    /** wizard-ux#1769: a 6.4 h meeting's upload backlog never keeps the UI thread waiting on the meeting store. */
+    @Test public void longMeetingUploadsDoNotHoldTheUiThread() throws Exception {
+        LongMeetingStartupScenario.longMeetingUploadsDoNotHoldTheUiThread();
+    }
+
     @Test public void genericPackagesAndLegacyCompatibility() throws Exception {
         Context c = InstrumentationRegistry.getInstrumentation().getTargetContext();
         UiDevice device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation());

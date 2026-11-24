@@ -16,6 +16,7 @@ import android.util.Log;
  * process alive until nothing is outstanding, and asks to be rescheduled if the server is still unreachable.
  */
 public class MizelUploadJob extends JobService {
+    private static final String TAG = MizelHub.TAG;
     static final int JOB_ID = 0x4d5a01, CHECK_JOB_ID = 0x4d5a02;
     private static final long MAX_RUN_MS = 8 * 60_000L;
     private final Handler main = new Handler(Looper.getMainLooper());
@@ -32,7 +33,7 @@ public class MizelUploadJob extends JobService {
                     .setPersisted(true)
                     .build();
             js.schedule(job);
-        } catch (RuntimeException e) { Log.w(MizelHub.TAG, "could not schedule upload job", e); }
+        } catch (RuntimeException e) { Log.w(TAG, "could not schedule upload job", e); }
     }
 
     /**
@@ -49,18 +50,30 @@ public class MizelUploadJob extends JobService {
                     .setMinimumLatency(Math.max(1_000, delayMs))
                     .setPersisted(true)
                     .build());
-        } catch (RuntimeException e) { Log.w(MizelHub.TAG, "could not schedule the meeting check", e); }
+        } catch (RuntimeException e) { Log.w(TAG, "could not schedule the meeting check", e); }
     }
 
     @Override
     public boolean onStartJob(JobParameters params) {
+        stopped = false;
+        // The store opens off the UI thread first (wizard-ux#1769): a job can start this process just before the
+        // owner opens WizardOS, and the shell must not wait for a long meeting's custody index.
+        MizelHub.whenLoaded(this, () -> run(params));
+        return true;
+    }
+
+    private volatile boolean stopped;
+
+    private void run(JobParameters params) {
+        if (stopped) return; // Android stopped the job while the store was still opening
         if (params.getJobId() == CHECK_JOB_ID) {
-            // Synchronous: end expired process-death pauses, hand any upload to the upload job, schedule the next check.
-            Log.i(MizelHub.TAG, "meeting check job started");
+            // End expired process-death pauses, hand any upload to the upload job, schedule the next check.
+            Log.i(TAG, "meeting check job started");
             MeetingRecorderService.recover(this);
-            return false;
+            jobFinished(params, false);
+            return;
         }
-        Log.i(MizelHub.TAG, "upload job started");
+        Log.i(TAG, "upload job started");
         MeetingRecorderService.recover(this, false);
         MizelUploader up = MizelUploader.get(this);
         up.kick();
@@ -68,17 +81,17 @@ public class MizelUploadJob extends JobService {
         main.postDelayed(new Runnable() {
             int idle;
             @Override public void run() {
-                if (!up.outstanding()) { Log.i(MizelHub.TAG, "upload job done"); jobFinished(params, false); return; }
-                if (System.currentTimeMillis() - t0 > MAX_RUN_MS) { Log.i(MizelHub.TAG, "upload job: still outstanding, reschedule"); jobFinished(params, true); return; }
+                if (!up.outstanding()) { Log.i(TAG, "upload job done"); jobFinished(params, false); return; }
+                if (System.currentTimeMillis() - t0 > MAX_RUN_MS) { Log.i(TAG, "upload job: still outstanding, reschedule"); jobFinished(params, true); return; }
                 up.kick();
                 main.postDelayed(this, 2000);
             }
         }, 2000);
-        return true;
     }
 
     @Override
     public boolean onStopJob(JobParameters params) {
+        stopped = true;
         main.removeCallbacksAndMessages(null);
         return MizelUploader.get(this).outstanding();
     }

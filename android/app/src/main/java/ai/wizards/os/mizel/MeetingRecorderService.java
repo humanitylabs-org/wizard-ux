@@ -262,7 +262,20 @@ public class MeetingRecorderService extends Service {
     }
 
     /** Called only by a resumed visible Activity, including a direct notification Activity PendingIntent. */
-    public static void resumeUpdateFromActivity(android.app.Activity a) { resumeUpdate(a); }
+    public static void resumeUpdateFromActivity(android.app.Activity a) {
+        // On a cold start the store opens off the UI thread first (wizard-ux#1769); an Activity gone by then leaves
+        // the decision to the visible-or-notify path.
+        MizelHub.whenLoaded(a, () -> {
+            if (a.isFinishing() || a.isDestroyed()) resumeAfterFailedUpdate(a.getApplicationContext());
+            else resumeUpdate(a);
+        });
+    }
+
+    /** {@link #recover(Context)} from an Activity start: the store and exit records load off the UI thread first. */
+    public static void recoverFromActivity(android.app.Activity a) {
+        Context c = a.getApplicationContext();
+        MizelHub.whenLoaded(c, () -> recover(c));
+    }
 
     /** Installation never took custody: resume only while visible, otherwise keep the tap-to-resume notice. */
     public static void resumeAfterFailedUpdate(Context c) {
