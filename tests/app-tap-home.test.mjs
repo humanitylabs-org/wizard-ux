@@ -4,11 +4,10 @@
 // Browser proof: tests/qa-desktop-one-app-home.cjs.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import { appClient } from './fixtures/app-client-harness.mjs';
+import { deskWorld, layout, El, FakePointerEvent } from './fixtures/ai-apps-world.mjs';
 
 const ID = 'wizard/app-tap-home';
-const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
 const shellSide = () => appClient({ service: { nav: {} } });
 
 test('Home with nothing open: false (already at its first view)', () => {
@@ -77,21 +76,47 @@ test('an onHome that throws is not home: the Back steps still run', () => {
   assert.equal(views, 0);
 });
 
-test('the narrow desktop tap: Home only while the switch is on; off (or no Home) = today\'s Back steps', () => {
-  const src = read('web/layouts/ai-apps/desktop-tabs.js');
-  assert.match(src, /if \(one\(\) && aadVars\.pane && Number\(aadVars\.pane\.desk\) === d\.desk\) \{ if \(!homeOn\(\) \|\| !appHome\(\)\) appTop\(\); return; \}/);
-  assert.ok(src.includes(`.split(' ').includes('${ID}')`), 'the switch is read inline');
-  assert.match(src, /return S\.home\(f\) !== 'unsupported';/);
-  const svc = read('web/core/app-services.js');
-  assert.match(svc, /version: VERSION, claimShare, attach, connect, back, home, guardBack,/);
+// The narrow desktop's tap on the app already in front, on the real AI apps desktop view (tests/fixtures/ai-apps-world).
+async function narrowTap({ on, answer = 'handled', width = 900 }) {
+  const had = globalThis.innerWidth, hadS = globalThis.WizAppServices;
+  globalThis.innerWidth = width;
+  try {
+    const { w } = deskWorld();
+    w.api.nav.goDesk = i => { w.st.gone.push(i); w.st.route = { home: false, view: 'desk', thread: null, desk: i }; w.emit('route', w.st.route); };
+    const stage = new El('div'); stage.id = 'stage';
+    const chatDesk = new El('div'); chatDesk.className = 'wsp'; chatDesk.dataset.ws = '1'; const dchats = new El('div'); dchats.className = 'dchats'; dchats.dataset.thread = 'r1'; chatDesk.append(dchats);
+    const appDesk = new El('div'); appDesk.className = 'wsp'; appDesk.dataset.ws = '5'; const frame = new El('iframe'); appDesk.append(frame);
+    stage.append(chatDesk, appDesk); w.html.children[0].append(stage);
+    const calls = [];
+    globalThis.WizAppServices = { home: f => { calls.push(['home', f === frame]); return answer; }, back: f => { calls.push(['back', f === frame]); return 'atRoot'; } };
+    if (on) w.html.dataset.tweaks = ID;
+    (await layout()).default(w.api);
+    w.st.route = { home: false, view: 'desk', thread: null, desk: 5 }; w.emit('route', w.st.route); w.run();
+    assert.equal(w.html.dataset.aadOne, width < 1100 ? 'app' : undefined);
+    const gone = w.st.gone.length;
+    w.qa('.aad-vtl .aad-vtab').find(t => t.dataset.app === 'notes').dispatchEvent(new FakePointerEvent('click'));
+    return { calls, moved: w.st.gone.slice(gone), front: w.html.dataset.aadOne };
+  } finally {
+    if (had === undefined) delete globalThis.innerWidth; else globalThis.innerWidth = had;
+    if (hadS === undefined) delete globalThis.WizAppServices; else globalThis.WizAppServices = hadS;
+  }
+}
+
+test('narrow desktop, switch on: tapping the app in front asks it for Home once, and it stays in front', async () => {
+  const r = await narrowTap({ on: true });
+  assert.deepEqual(r.calls, [['home', true]], 'Home on the app\'s own frame, no Back steps');
+  assert.deepEqual(r.moved, [], 'no desk change'); assert.equal(r.front, 'app');
+  const later = await narrowTap({ on: true, answer: 'pending' });
+  assert.deepEqual(later.calls, [['home', true]], 'a sandboxed app answers later: still no Back steps');
 });
 
-test('the switch is listed, off by default, linked to its issue', () => {
-  const cat = JSON.parse(read('web/tweaks/catalog.json'));
-  assert.ok(cat.tweaks.includes(ID));
-  assert.ok(!cat.defaults.includes(ID));
-  const m = JSON.parse(read('web/tweaks/wizard/app-tap-home/manifest.json'));
-  assert.equal(m.id, ID); assert.deepEqual(m.issues, ['humanitylabs-org/wizard-ux#1332']);
-  const css = read('web/tweaks/wizard/app-tap-home/tweak.css');
-  for (const rule of css.replace(/\/\*[\s\S]*?\*\//g, '').split('}').map(r => r.trim()).filter(Boolean)) assert.ok(rule.startsWith(`html[data-tweaks~="${ID}"]`), rule);
+test('narrow desktop, switch on, an app with no Home (older SDK, off-origin): today\'s Back steps', async () => {
+  const r = await narrowTap({ on: true, answer: 'unsupported' });
+  assert.deepEqual(r.calls.map(c => c[0]), ['home', 'back']);
+});
+
+test('switch off: the tap is today\'s Back steps, never Home', async () => {
+  const r = await narrowTap({ on: false });
+  assert.deepEqual(r.calls, [['back', true]]);
+  assert.deepEqual(r.moved, []); assert.equal(r.front, 'app');
 });
