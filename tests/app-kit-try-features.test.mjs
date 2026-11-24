@@ -11,6 +11,7 @@ const root = new URL('../', import.meta.url);
 const kit = readFileSync(new URL('web/kit/wizard-try-features.js', root));
 const policy = JSON.parse(readFileSync(new URL('tools/style/style-policy.json', root), 'utf8'));
 
+// static-rule: the kit mirror and the canonical style policy must agree byte for byte (files that must agree).
 test('kit copy matches the canonical hash in the style policy', () => {
   const pin = policy.assets['wizard-try-features.js'];
   assert.ok(pin, 'policy names the kit copy');
