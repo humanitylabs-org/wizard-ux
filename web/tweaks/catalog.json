@@ -39,7 +39,8 @@
     "wizard/local-app-routes",
     "wizard/app-tap-home",
     "wizard/messaging-chat-replies",
-    "wizard/download-swipe"
+    "wizard/download-swipe",
+    "wizard/capability-registry"
   ],
   "defaults": [
     "wizard/desktop-chats"
