@@ -513,7 +513,8 @@
       const p = String(s.provider || '').toLowerCase(), m = String(s.model || '').toLowerCase();
       // Issue 1500: the 'anthropic' provider is an API key, not the Claude subscription the app reconnects.
       const fam = p === SUB || p === 'claude' || (!p && /^claude-/.test(m)) ? 'claude'
-        : ['openai-codex', 'codex', 'chatgpt'].includes(p) ? 'chatgpt' : p === 'tinfoil' ? 'tinfoil' : '';
+        // Issue 1755: Tinfoil threads run on the Hermes route custom:wizard-tinfoil, not the bare 'tinfoil' label.
+        : ['openai-codex', 'codex', 'chatgpt'].includes(p) ? 'chatgpt' : isTinfoil(p) || p === 'tinfoil' || p === 'custom:tinfoil-operator' ? 'tinfoil' : '';
       if (!fam) return null;
       if (!U.snap || Date.now() - (U.at || 0) > 60e3) U.load?.();
       return U.signedOut(fam);
