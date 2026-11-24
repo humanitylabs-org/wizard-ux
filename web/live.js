@@ -120,7 +120,14 @@
    * Off by default: runs only while the wizard/background-continue tweak is on. Read-only discovery merged into
    * Chats; it never starts a model. A result older than the normal list window adds its original thread once.
    * While the Service reports it is still scanning, re-read briefly (bounded to one minute). */
-  function backgroundOn() { try { return (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/background-continue'); } catch (_) { return false; } }
+  // wizard/needs-you-reason (wizard-agent-service issue 469) shows the same saved result with its reason and Dismiss.
+  const REASON_TWEAK = 'wizard/needs-you-reason';
+  // The Service's reason on its own saved-result Needs you; Done/Archive on a row that says it also dismiss it.
+  const SAVED_RESULT_ASK = 'A helper finished after this chat closed';
+  const savedResultAsk = s => !!s && (!!s.backgroundResult || s.attention?.state === 'needs_you' && s.attention?.ask === SAVED_RESULT_ASK);
+  function tweakOn(id) { try { return (document.documentElement.dataset.tweaks || '').split(' ').includes(id); } catch (_) { return false; } }
+  function reasonOn() { return tweakOn(REASON_TWEAK); }
+  function backgroundOn() { return tweakOn('wizard/background-continue') || reasonOn(); }
   let backgroundPollTimer = null, backgroundPollUntil = 0;
   // Results this device already continued (or found stale). A discovery read that started before the tap can land
   // after it; it must never bring the Continue panel back. Ids are per result, so this only ever grows a little.
@@ -141,6 +148,8 @@
     if (p?.scanning) scheduleBackgroundPoll();
     else { if (backgroundPollTimer) clearTimeout(backgroundPollTimer); backgroundPollTimer = null; backgroundPollUntil = 0; }
     const pending = new Set((Array.isArray(p?.results) ? p.results : []).map(r => r?.id).filter(id => id && !BACKGROUND_SETTLED.has(id)));
+    const reasons = new Map((Array.isArray(p?.results) ? p.results : []).filter(r => typeof r?.reason === 'string' && r.reason).map(r => [r.id, r.reason.slice(0, 160)]));
+    const withReason = b => (b && reasons.has(b.id) ? { ...b, reason: reasons.get(b.id) } : b);
     // The listing is authoritative: a result continued elsewhere (another device) clears here too.
     for (const s of sessions) if (s.backgroundResult && (WORKING.has(s.status) || !pending.has(s.backgroundResult.id))) s.backgroundResult = null;
     // Only the main agent's threads: the Service route is scoped to the main agent (agent_id hermes).
@@ -149,11 +158,14 @@
       const s = normalize(raw); if (!s || !s.backgroundResult || !pending.has(s.backgroundResult.id)) continue;
       const current = byId.get(s.id);
       // A thread that is working again keeps its own run in charge; never replace it with a manufactured state.
-      if (current) { if (WORKING.has(current.status)) continue; current.backgroundResult = s.backgroundResult; current.attention = s.attention; }
-      else { sessions.push(s); byId.set(s.id, s); }
+      if (current) { if (WORKING.has(current.status)) continue; current.backgroundResult = withReason(s.backgroundResult); current.attention = s.attention; }
+      else { s.backgroundResult = withReason(s.backgroundResult); sessions.push(s); byId.set(s.id, s); }
     }
+    for (const s of sessions) if (s.backgroundResult && !s.backgroundResult.reason && reasons.has(s.backgroundResult.id)) s.backgroundResult = withReason(s.backgroundResult);
   }
-  window.addEventListener('wos:tweak-choice', e => { if (e?.detail?.id === 'wizard/background-continue') setTimeout(() => L.refresh(), 0); });
+  window.addEventListener('wos:tweak-choice', e => { if (['wizard/background-continue', REASON_TWEAK].includes(e?.detail?.id)) setTimeout(() => L.refresh(), 0); });
+  // A switch that arrives with the synced Look file (no tweak-choice event) reads its saved results at once, not at the next poll.
+  try { let was = backgroundOn(); new MutationObserver(() => { const now = backgroundOn(); if (now && !was) setTimeout(() => L.refresh(), 0); was = now; }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-tweaks'] }); } catch (_) {}
   const FULL_EVERY = 3 * 60 * 1000;
   /* Other agents' list reads (wizard-ux issue 1693): every 15 s poll used to walk every agent's whole list, so a
    * reload sent ~128 reads. Now each agent follows the main list's rule (a full walk every FULL_EVERY, the head page
@@ -513,6 +525,23 @@
       return { needs, ready, working };
     },
     // chat-power.js: a Continue tap settled this saved background result (#14); hide it for good on this device.
+    /* Dismiss the Service's saved-result Needs you (wizard-agent-service issue 469, wizard/needs-you-reason): kept on
+     * the box, so every device's next list read drops it. No id = every saved result of the thread (Done, Archive).
+     * Main agent's threads only (the Service route is the main agent's). Resolves true once the box has it. */
+    async dismissBackground(sid, id = '') {
+      const s = this.session(sid);
+      if (!reasonOn() || !s || otherAgent(this.ownerOf(s))) return false;
+      try {
+        const r = await fetch('/wizard/background-results/dismiss', { method: 'POST', cache: 'no-store', credentials: 'same-origin', headers: J, body: JSON.stringify({ session_id: sid, ...(id ? { id } : {}) }) });
+        const out = await r.json().catch(() => ({}));
+        if (!r.ok && r.status !== 409) return false;
+        for (const x of [id, ...(Array.isArray(out.ids) ? out.ids : [])]) if (typeof x === 'string' && x) BACKGROUND_SETTLED.add(x);
+        const c = this.session(sid); if (c?.backgroundResult && (!id || c.backgroundResult.id === id)) c.backgroundResult = null;
+        this.emit(); return true;
+      } catch (_) { return false; }
+    },
+    // Done and Archive on a thread whose Needs you the Service added (issue 469): dismiss it on the box too.
+    dismissSaved(s) { if (savedResultAsk(s)) void this.dismissBackground(s.id); },
     backgroundSettled(id) { if (typeof id === 'string' && id) BACKGROUND_SETTLED.add(id); for (const s of this.sessions || []) if (s.backgroundResult?.id === id) s.backgroundResult = null; },
     async refresh() {
       if (this.loading) return this.loading;
@@ -721,6 +750,8 @@
       }
       state = { ...state, threads };
       this.seen = state; writeLocal(state); this.emit();
+      // Done also clears a saved-result Needs you the Service added (issue 469), on the box for every device.
+      for (const s of list) this.dismissSaved?.(s);
       return putSeen(state).then(r => { this.seen = merge(this.seen, r); writeLocal(this.seen); this.emit(); return true; }).catch(() => false);
     },
     handled(s) { return !!s && handledOf(s, this.seen); },
@@ -1017,6 +1048,8 @@
     archive(id, { file = false } = {}) {
       // Done marks the thread read too, so it stays read on every client and if it is ever restored.
       if (this.session(id) && hasNew(this.session(id), this.seenOf(this.session(id)))) this.markSeen(id);
+      // Archive also clears a saved-result Needs you the Service added (issue 469), so restoring it brings no stale ask.
+      this.dismissSaved?.(this.session(id));
       return this._act(id, { archived: true, deferred: false }, async s => {
         const all = readRestored(); if (all[id]) { delete all[id]; writeRestored(all); }
         if (!file) { await req(`/wizard/hermes/api/sessions/${encodeURIComponent(id)}${aq(id)}`, { method: 'PATCH', headers: J, body: JSON.stringify({ archived: true }) }); return; }

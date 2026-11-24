@@ -1,0 +1,11 @@
+{
+  "id": "wizard/needs-you-reason",
+  "name": "Say why a chat needs you",
+  "version": "1.0.0",
+  "author": "wizard",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout"
+  ],
+  "description": "When Wizard itself marks a chat Needs you (a helper finished after the chat closed), the chat says why, with Continue and Dismiss. Dismiss, Done or Archive clears it on every device."
+}
