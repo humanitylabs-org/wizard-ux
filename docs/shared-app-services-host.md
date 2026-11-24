@@ -54,6 +54,8 @@ time updates the binding, and open-video focuses/replies to the bound owner. Del
 
 `back.register({canGoBack, back})` requires synchronous booleans. `back.push(fn)` supplies LIFO overlay release tokens. `back.useHistory({isRoot})` stamps real app entries and preserves object router state. The phone's history taming/pop bridge recognizes those entries instead of replacing them or taking another shell step. Host Back trusts the callback; the legacy DOM-signature and 180 ms double-step are deleted. Honest `__wizardCloseOverlay` is a temporary compatibility adapter.
 
+Home (wizard-ux issue 1332, used by the narrow desktop's tap on the app in front while `wizard/app-tap-home` is on): `WizAppServices.home(frame)` asks the app for its first view without a reload. `nav.onHome(fn)` runs first (`true` = it is there); otherwise every Back step runs at once (overlays, registered handlers, and a history adapter goes to its first entry in one `history.go`). Under the browser boundary it is the `home` op; an older client answers `refused` and gets one Back. `unsupported` (off-origin frame, older SDK) leaves the layout's own Back steps.
+
 Hosted apps have no independent root guard. Phone retains its host guard; desktop now guards browser/native Back as well. Shared standalone fallback uses CloseWatcher/history, stays at installed root, and offers the browser-tab two-press exit floor. Desktop Back no longer cancels a recording: its voice pill has an explicit Cancel button.
 
 ## Modal backdrop = Back

@@ -1,0 +1,14 @@
+{
+  "id": "wizard/local-app-routes",
+  "name": "Open apps without Tailscale",
+  "version": "1.0.0",
+  "author": "wizard",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout"
+  ],
+  "issues": [
+    "humanitylabs-org/wizard-app-manager#629"
+  ],
+  "description": "On a box that is not on Tailscale yet, app screens such as Files and Search open inside Wizard on the box's own address instead of being listed as backend-only. The Agent Service serves each app page at the same path Tailscale would give it, only to requests made on the box itself. Read by the Agent Service (server/local-app-routes.mjs); boxes on Tailscale are unchanged."
+}

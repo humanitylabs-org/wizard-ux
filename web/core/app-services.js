@@ -756,6 +756,18 @@
     } catch (_) { return 'stay'; }
     return 'notReady';
   }
+  /* Home (wizard-ux issue 1332): the app's first view, as if just opened, without a reload. 'handled' / 'atRoot' from a
+   * same-origin WizardApp, 'pending' when a sandboxed one answers later; 'unsupported' = no Home here (an off-origin
+   * frame, or an app on a WizardApp without it): the caller steps Back instead. */
+  function home(frame) {
+    const st = frames.get(frame); if (!st || !registered(st) || !frame.isConnected) return 'notReady';
+    if (window.WizBrowserBoundary?.owns(frame)) return window.WizBrowserBoundary.home ? window.WizBrowserBoundary.home(frame) : 'unsupported';
+    if (st.url.origin !== ORIGIN || !valid(st)) return 'unsupported';
+    try {
+      if (st.client && st.doc === frame.contentDocument && typeof st.client.home === 'function') return st.client.home() === true ? 'handled' : 'atRoot';
+    } catch (_) { return 'stay'; }
+    return 'unsupported';
+  }
   function busy() {
     reconcile();
     if ([...frames.values()].some(st => [...st.holds.keys()].some(id => !st.drafts?.get(id)?.kept))) return true;
@@ -1219,7 +1231,7 @@
   }
   // The shell is about to load a page in this window itself (location.replace keeps src as it was): see trackNav.
   const expectLoad = frame => { const st = frames.get(frame); if (st) st.navExpect = true; };
-  window.WizAppServices = Object.freeze({ expectLoad, fresh: Object.freeze({ tick: freshTick, tool: freshTool, look: lookTick }), voiceCommand, runVoiceCommand, authorized: frame => { const st = frames.get(frame); return valid(st, st?.doc); }, version: VERSION, claimShare, attach, connect, back, guardBack, ownsThreadLink, appsClosed, trackOpenApps,
+  window.WizAppServices = Object.freeze({ expectLoad, fresh: Object.freeze({ tick: freshTick, tool: freshTool, look: lookTick }), voiceCommand, runVoiceCommand, authorized: frame => { const st = frames.get(frame); return valid(st, st?.doc); }, version: VERSION, claimShare, attach, connect, back, home, guardBack, ownsThreadLink, appsClosed, trackOpenApps,
     titlebar: Object.freeze({ render: renderTools }),
     orb: Object.freeze({ of: orbOf, tap: orbTap, presenter(fn) { orbShown = typeof fn === 'function' ? fn : () => false; } }),
     voiceInput: Object.freeze({ pin: pinConversation, deliver: deliverConversation }),
