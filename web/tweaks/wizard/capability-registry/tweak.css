@@ -1,0 +1,2 @@
+/* Agents use what the box already does (wizard-agent-service issue 463): a box-side switch read by the Agent Service
+ * (server/capabilities.mjs) and the App Manager (wam/host_services.py). Nothing in the shell changes. */

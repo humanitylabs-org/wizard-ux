@@ -1,0 +1,14 @@
+{
+  "id": "wizard/capability-registry",
+  "name": "Agents use what the box already does",
+  "version": "1.0.0",
+  "author": "wizard",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout"
+  ],
+  "issues": [
+    "humanitylabs-org/wizard-agent-service#463"
+  ],
+  "description": "Every agent can look up what this box already does (transcription, reminders, scheduling, app jobs) with one tool, and an install of a known duplicate (Whisper, a speech model) is refused with the tool to use instead. Read by the Agent Service (server/capabilities.mjs, capability_guard.py) and the App Manager (wam/host_services.py: a healthy host voice service fills Voice and Transcription in wam slots). Nothing in the shell changes."
+}
