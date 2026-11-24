@@ -460,6 +460,10 @@
     "wizard/interface-manual": {
       "help": "Your agent gets this manual: every screen, Settings page and feature switch, so it can say where things are.",
       "where": "Settings › Appearance › Try new features › Agent knows the Wizard interface"
+    },
+    "wizard/write-guard": {
+      "help": "Wizard stops a save it keeps repeating: the same save within 10 s is not resent, a burst over 20 a minute pauses, and the team gets a bug report.",
+      "where": "Settings › Appearance › Try new features › Stop write loops"
     }
   },
   "screenOrder": [

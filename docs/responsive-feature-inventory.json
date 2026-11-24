@@ -26,6 +26,13 @@
       "loadedBy": ["desktop"],
       "note": "Pure pane placement and device-local API; Classic columns and AI apps geometry. Desktop only: the phone has no pane consumer, so it no longer downloads it."
     },
+    "core/write-guard.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import; the shell's write guard (wizard-ux issue 1439, switch wizard/write-guard)"
+    },
     "core/agents.js": {
       "loadedBy": [
         "phone",
@@ -1811,6 +1818,7 @@
     "core/workspace-sync.js",
     "core/workspaces.css",
     "core/workspaces.js",
+    "core/write-guard.js",
     "favicon.ico",
     "icon-192.png",
     "kit/controls.css",
