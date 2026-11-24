@@ -14,9 +14,9 @@ import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts move
 import { block, expression, runRecording } from './fixtures/source-slice.mjs';
 
 const read = p => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
-function models() {
+function models(tweaks = '') {
   const window = { WosAgents: { lock: () => '' } };
-  const document = { documentElement: { dataset: { tweaks: '' } } };
+  const document = { documentElement: { dataset: { tweaks } } };
   vm.runInContext(read('web/core/chat-models.js'), modelContext({ window, document, localStorage: { getItem: () => null, setItem() {} }, fetch: async () => ({}), console }));
   return window.WosModels;
 }
@@ -36,6 +36,44 @@ test('a chat started in a messaging app is named; WizardOS chats are not', () =>
   assert.equal(M.foreignApp(null), '');
   assert.equal(M.refusal({ source: 'telegram' }), 'This chat was started in Telegram, so WizardOS can’t add to it. Your message is saved. Reply in Telegram, or start a new chat.');
   assert.equal(M.refusal({ source: 'api_server' }), '');
+});
+
+// wizard-agent-service issue 427: with the switch on, the Service sends the reply through the chat's own connection, so
+// the chat takes replies (and Retry) like any other. Hermes' own refusal (an older chat on a Hermes that refuses API
+// turns into it, the Service's "started in another app" words) still gets the clear card with no Retry.
+test('switch wizard/messaging-chat-replies on: messaging chats take replies; a refusal still says so', () => {
+  const M = models('wizard/unified-inbox wizard/messaging-chat-replies');
+  assert.equal(M.foreignApp({ source: 'telegram' }), '');
+  assert.equal(M.foreignApp({ source: 'slack', status: 'failed', safeError: 'The AI provider couldn’t answer' }), '');
+  assert.equal(M.refusal({ source: 'telegram' }), '');
+  const refused = { source: 'telegram', status: 'failed', safeError: 'This chat was started in another app, such as Telegram, so WizardOS can’t add to it. Your message is saved. Reply in that app, or start a new chat.' };
+  assert.equal(M.foreignApp(refused), 'Telegram');
+  assert.match(M.refusal(refused), /started in Telegram/);
+  // Off (or another switch only): exactly as before.
+  assert.equal(models('wizard/unified-inbox').foreignApp({ source: 'telegram' }), 'Telegram');
+  // Main and routed threads (host-profile, container, restricted agents) follow the same rule: the decision reads the
+  // chat's Hermes source and the Service's refusal words, never the agent, and the Service sends every kind's reply
+  // through its own route (wizard-agent-service parity check messaging-chat-replies covers all four kinds).
+  for (const agent of [undefined, 'hermes', 'host-research', 'container-research', 'restricted-research']) {
+    assert.equal(M.foreignApp({ agent, source: 'telegram' }), '', String(agent));
+    assert.equal(M.foreignApp({ agent, source: 'api_server' }), '', String(agent));
+    assert.equal(M.foreignApp({ agent, ...refused }), 'Telegram', String(agent));
+    assert.equal(models().foreignApp({ agent, source: 'telegram' }), 'Telegram', String(agent));
+  }
+});
+
+test('switch on: a routed Telegram thread offers Retry and its Retry sends again', async () => {
+  const M = models('wizard/messaging-chat-replies'), power = read('web/core/chat-power.js');
+  for (const agent of ['hermes', 'host-research', 'container-research', 'restricted-research']) {
+    const s = { id: `tg-${agent}`, agent, title: 'From Telegram', source: 'telegram', status: 'failed' };
+    const rows = runRecording(block(power, '  function errorRow('), { M, E: { busy: new Map() }, esc: String, signedOutFail: () => null });
+    assert.match(vm.runInContext('errorRow', rows)(s, '<row>'), new RegExp(`data-errretry="tg-${agent}"`), agent);
+    const toasts = [];
+    const retry = runRecording(block(power, '  async function retryThread('), { M, LIVE: { session: id => (id === s.id ? s : null) },
+      OUTBOX: { unsent: () => [], retry: () => true, send: () => true }, toast: (...a) => toasts.push(a), retrying: new Map() });
+    await vm.runInContext('retryThread', retry)('w', s.id, {});
+    assert.ok(!toasts.some(t => /lives in Telegram/.test(t[1])), `${agent}: Retry is not refused`);
+  }
 });
 
 test('the list row keeps the Hermes session source the shell decides on', () => {

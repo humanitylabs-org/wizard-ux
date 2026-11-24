@@ -1,0 +1,2 @@
+/* Reply to Telegram and Slack chats (wizard-agent-service issue 427): a box-side switch read by the Agent Service
+ * (server/messaging-replies.mjs) and by Chats (core/chat-models.js), which then offers a normal reply box in those chats. */
