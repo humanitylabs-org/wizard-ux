@@ -111,7 +111,7 @@ Back: `WizEscapeBack`, `WosBack`; `WizChatsHost.registerBack`/back.push share re
 | Motion | `WizardMotion` (`web/motion/wizard-motion.js`) |
 | Tour/help, responsive Done, skip/exit; desktop `WosTour.desk` | `WosTour` (`tour.js`) |
 | Install prompt; `hold(on, owner?)` during tours/overlays | `WizardPwaInstall` (`web/pwa-install.js`) |
-| First run (Welcome, Setup), tour | `WosWelcome` (`welcome.js`); `WosSetupLaunch` (`setup-launch.js`); checklist `web/setup/setup.js`; phone: `WizPhoneConnect` (`phone-connect.js`) |
+| First run (Welcome, Setup), tour | `WosWelcome` (`welcome.js`, reconnect-only on existing); `WosSetupLaunch` (`setup-launch.js`); checklist `web/setup/setup.js`; phone: `WizPhoneConnect` (`phone-connect.js`) |
 
 ## App voice/audio
 
