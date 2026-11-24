@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Run the synthetic recording acceptance only on Thales, under the shared worker lock.
 Usage: python3 tools/qa-recording-thales.py SNAPSHOT_DIR SOURCE_COMMIT
-Snapshot contains web/, qa-recording-retention.cjs and this script from git archive.
+Snapshot contains web/, qa/scripts/qa-recording-retention.cjs and this script from git archive.
 No dependency installation, service access or production writes.
 """
 import fcntl
@@ -25,7 +25,7 @@ evidence = source / 'evidence'
 evidence.mkdir(exist_ok=True)
 manifest = {str(p.relative_to(source)): hashlib.sha256(p.read_bytes()).hexdigest()
             for p in sorted((source / 'web').rglob('*')) if p.is_file()}
-for name in ('qa-recording-retention.cjs', 'tools/qa-recording-thales.py'):
+for name in ('qa/scripts/qa-recording-retention.cjs', 'tools/qa-recording-thales.py'):
     manifest[name] = hashlib.sha256((source / name).read_bytes()).hexdigest()
 (evidence / 'source-manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
 lock_path = str(work_root() / 'AndroidBuilds/worker.lock')
@@ -35,7 +35,7 @@ with open(lock_path, 'a') as lock:
     started = time.time()
     print('LOCK_ACQUIRED', os.uname(), started, flush=True)
     with open(evidence / 'browser.log', 'w') as log:
-        run = subprocess.run(['node', str(source / 'qa-recording-retention.cjs'), str(source / 'web'), str(evidence)], stdout=log, stderr=subprocess.STDOUT)
+        run = subprocess.run(['node', str(source / 'qa/scripts/qa-recording-retention.cjs'), str(source / 'web'), str(evidence)], stdout=log, stderr=subprocess.STDOUT)
     receipt = {'host': os.uname().nodename, 'machine': os.uname().machine,
                'source_commit': commit, 'source_directory': str(source),
                'lock': lock_path, 'started': started, 'finished': time.time(),

@@ -21,8 +21,10 @@ Checks
   pause    pause releases the mic (appops/audio dumps), resume re-acquires it, media time excludes the pause;
            notification Pause action; pause_timeout with the QA-short timeout (b)
   owner    side-button and Everywhere borrow the mic from a recording meeting (0.9.24); a meeting refused while Everywhere listens (d)
-  death    kill -9 mid-recording → service restarts, sends stop process_death, notification, no chunk lost;
-           force-stop → next app open does the same (c)
+  death    kill -9 mid-recording with no app open → no /stop at first, "Recording stopped when the app was closed"
+           tap-to-resume notice, the mic stays closed; nobody resumes it → stop process_death after the pause limit,
+           no chunk lost; force-stop → the next app open resumes the SAME meeting (seq and start_ms continue,
+           "Recording resumed after the app was closed"), then a user stop (c, wizard-ux#1724)
   link     notification/deep link opens /mizel-live/#/m/<id> inside the app
   back     nested view + Back keeps the app open (g)
 """
@@ -459,7 +461,7 @@ with (BASE / 'worker.lock').open('a') as lock:
         summary.update(version=ver, uid=uid, api=sx('getprop ro.build.version.sdk').strip())
         sx(f'run-as {PKG} mkdir -p files')
         sx(f"run-as {PKG} sh -c 'echo http://10.0.2.2:{FAKE} > files/qa_origin.txt'")
-        qa_cfg = {'pauseTimeoutMs': 120000 if os.environ.get('QA_INTEGRATED_ONLY') == '1' or os.environ.get('QA_EVERYWHERE_MEETING_ONLY') == '1' else 20000, 'drainGraceMs': 30000, 'statusEveryMs': 3000, 'keepAfterReadyMs': 8000, 'fakeMic': 2 if os.environ.get('QA_PCM_ONLY') == '1' or os.environ.get('QA_HANDOFF_ONLY') == '1' or os.environ.get('QA_EVERYWHERE_MEETING_ONLY') == '1' or os.environ.get('QA_INTEGRATED_ONLY') == '1' else 1, 'staticNotification': 1}
+        qa_cfg = {'pauseTimeoutMs': 120000 if os.environ.get('QA_INTEGRATED_ONLY') == '1' or os.environ.get('QA_EVERYWHERE_MEETING_ONLY') == '1' else 20000, 'drainGraceMs': 30000, 'statusEveryMs': 3000, 'keepAfterReadyMs': 8000, 'fakeMic': 2 if os.environ.get('QA_PCM_ONLY') == '1' or os.environ.get('QA_HANDOFF_ONLY') == '1' or os.environ.get('QA_EVERYWHERE_MEETING_ONLY') == '1' or os.environ.get('QA_INTEGRATED_ONLY') == '1' else 1, 'staticNotification': 1, 'noBatteryPrompt': 1}
         (job / 'qa_mizel.json').write_text(json.dumps(qa_cfg))
         sh(ADB, '-s', S, 'push', job / 'qa_mizel.json', '/data/local/tmp/qa_mizel.json')
         sx(f'run-as {PKG} cp /data/local/tmp/qa_mizel.json files/qa_mizel.json')
@@ -771,10 +773,19 @@ with (BASE / 'worker.lock').open('a') as lock:
         sx(f'run-as {PKG} kill -9 {pid}'); t_k = time.time()
         pg.close(); pg = None
         time.sleep(4); ST['down'] = None
+        # No app open: Android forbids a background mic start, so the meeting waits (same meeting, no /stop) ...
+        time.sleep(8)
+        early = ST['stops'].get(D)
+        nn = notes()
+        check('death', 'after kill -9 with no app open the meeting is kept open (no /stop) with a tap-to-resume notice',
+              not early and 'Recording stopped when the app was closed' in nn, {'early_stop': early and early['body']})
+        check('death', 'the exit reason of the killed process is recorded (ApplicationExitInfo)',
+              'earlier process ended' in sx('logcat -d -s WizardExit:* | tail -5'), sx('logcat -d -s WizardExit:* | tail -3').strip()[-400:])
+        # ... and ends with process_death once the (QA-short) pause limit passes without a resume.
         got = wait_for(lambda: ST['stops'].get(D), 150, 2)
-        rs = sx('logcat -d | grep -E "Scheduling restart of crashed service|WizardMizel" | grep -E "restart|recovered|restarted|process death|notified|stop sent" | tail -8').strip()
+        rs = sx('logcat -d | grep -E "Scheduling restart of crashed service|WizardMizel" | grep -E "restart|recovered|restarted|process died|process death|notified|stop sent" | tail -8').strip()
         save('death-kill-logcat.txt', rs)
-        check('death', 'after kill -9 the service restarts and sends stop with reason process_death (no app open)', got and got['body'].get('reason') == 'process_death', {'after_s': got and round(got['t'] - t_k, 1), 'log': rs[-600:]})
+        check('death', 'not resumed within the pause limit → stop with reason process_death (no app open)', got and got['body'].get('reason') == 'process_death', {'after_s': got and round(got['t'] - t_k, 1), 'log': rs[-600:]})
         vD = verify_meeting('death', D, 'process_death', 3)
         check('death', 'no acked chunk lost; every chunk on disk before the kill reached the server (incl. the torn one)', set(acked_before) <= set(range(vD['seqs'])) and vD['seqs'] >= len([f for f in local_before if f.endswith('.wav')]), {'acked_before': len(acked_before), 'local_before': local_before[-4:], 'server_final': vD['final']})
         nn = notes()
@@ -782,22 +793,34 @@ with (BASE / 'worker.lock').open('a') as lock:
         msd = mic_state(uid)
         check('death', 'the restarted process did not reopen the microphone', not msd['held'] and 'synthetic microphone' not in sx('logcat -d -s WizardMizel:* | grep -E "AudioRecord open|synthetic"'), {'running': msd['running']})
 
-        # force-stop → next app open recovers
+        # force-stop → the next app open resumes the same meeting (wizard-ux#1724)
         E = 'qa_mz_forcestop'
         sx(f'am start -W -n {PKG}/ai.wizards.os.MainActivity'); time.sleep(6)
         pg = Page('' if not SHELL else 'wizard-os-home'); pg.pump(3); open_host(pg)
         r = mz(pg, 'start', E); pg.pump(13)
         pg.close(); pg = None
-        t_k = time.time(); sx(f'am force-stop {PKG}'); time.sleep(8)
+        with LOCK: seqs_before = sorted(ST['chunks'].get(E, {}))
+        t_k = time.time(); sx(f'am force-stop {PKG}'); time.sleep(5)
         early = ST['stops'].get(E)
-        dl = sx('logcat -d | grep -E "ai.wizards.os.qa|WizardMizel" | grep -vE "level|AudioRecord read" | tail -200')
+        sx('logcat -c')
+        t_o = time.time(); sx(f'am start -W -n {PKG}/ai.wizards.os.MainActivity')
+        resumed = wait_for(lambda: mlog(f'resumed {E} '), 30, 1)
+        time.sleep(12)
+        dl = sx('logcat -d | grep -E "ai.wizards.os.qa|WizardMizel|WizardExit" | grep -vE "level|AudioRecord read" | tail -200')
         save('death-forcestop-logcat.txt', dl)
         SCHED_ERR.append(dl.count('could not schedule upload job'))
-        t_o = time.time(); sx(f'am start -W -n {PKG}/ai.wizards.os.MainActivity')
+        with LOCK: seqs_after = sorted(ST['chunks'].get(E, {}))
+        nn = notes()
+        check('death', 'after force-stop the next app open resumes capture into the same meeting (no /stop)',
+              resumed and not early and not ST['stops'].get(E) and len(seqs_after) > len(seqs_before) + 1,
+              {'reopen_to_resume_s': round(time.time() - t_o, 1), 'seqs_before': len(seqs_before), 'seqs_after': len(seqs_after), 'early_stop': early and early['body']})
+        check('death', 'notice "Recording resumed after the app was closed"', 'Recording resumed after the app was closed' in nn, '')
+        pg = Page('' if not SHELL else 'wizard-os-home'); pg.pump(3); open_host(pg)
+        mz(pg, 'stop', E)
         got = wait_for(lambda: ST['stops'].get(E), 60, 1)
-        check('death', 'after force-stop the meeting is closed with process_death (by a restart or the next app open)', got and got['body'].get('reason') == 'process_death',
-              {'after_force_stop_s': got and round(got['t'] - t_k, 1), 'before_app_reopen': bool(early), 'reopen_to_stop_s': got and round(got['t'] - t_o, 1)})
-        verify_meeting('death', E, 'process_death', 2)
+        check('death', 'the resumed meeting ends normally on the owner\'s Stop', got and got['body'].get('reason') == 'user', {'stop': got and got['body']})
+        verify_meeting('death', E, 'user', 4)
+        pg.close(); pg = None
 
         # ------------------------------------------------ (g) Back: nested view → Back → still open
         time.sleep(4); pg = Page('' if not SHELL else 'wizard-os-home'); pg.pump(3)

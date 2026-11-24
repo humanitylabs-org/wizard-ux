@@ -583,7 +583,7 @@
     if (nativeActive?.id || nativeOwner || unknownMeetingActive) throw fail('busy', 'An existing native recorder is held.', { appId: nativeOwner?.appId || 'native-recording' });
     if (!navigator.mediaDevices?.getUserMedia) throw fail('unsupported', 'Microphone capture is unavailable.');
     s.stage = 'microphone permission';
-    s.stream = await navigator.mediaDevices.getUserMedia({ audio: s.opts.audio ?? { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+    s.stream = await navigator.mediaDevices.getUserMedia({ audio: micAudio(s.opts.audio) });
     if (s.timedOut) { s.stream.getTracks().forEach(t => t.stop()); s.stream = null; throw fail('start_abandoned', 'Capture start was abandoned.'); }
     s.stage = 'audio engine';
     // On the Android app the browser recorder skips the native phone-mic guard; ask Android where it really listens.
@@ -679,6 +679,18 @@
   }
   // Host-only microphone loan. Keep the capture row, chunk sequence, observers and
   // Web Lock; never make another app appear idle while the orb borrows its mic.
+  // Phones (ux#1705): echo cancellation, noise suppression or auto gain (and plain {audio:true}, which turns echo
+  // cancellation on) make Android/iOS open the mic as a voice call: music from other apps pauses or ducks and
+  // Bluetooth earbuds drop to call quality while the stream is held. On a phone every request goes out with all three off.
+  function phoneMic() {
+    const nav = W.navigator || globalThis.navigator || {}, ua = String(nav.userAgent || '');
+    return /Android|iPhone|iPad|iPod|Mobile/i.test(ua) || (/Macintosh/.test(ua) && (nav.maxTouchPoints || 0) > 1);
+  }
+  const PLAIN_MIC = Object.freeze({ echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: { ideal: 1 } });
+  function micAudio(asked) {
+    if (!phoneMic()) return asked ?? { echoCancellation: true, noiseSuppression: true, autoGainControl: true };
+    return asked && typeof asked === 'object' ? { ...asked, ...PLAIN_MIC, channelCount: asked.channelCount ?? PLAIN_MIC.channelCount } : { ...PLAIN_MIC };
+  }
   function beginVoiceBorrow(eventId) {
     const s=active;
     if (s?.borrowWork) return Promise.reject(fail('busy','A microphone handoff is already changing.'));
@@ -793,7 +805,7 @@
         let id = previous?.nativeId || d.recStart(opts.kind || 'app');
         if (!id) {
           hooks.stage?.('microphone permission');
-          const probe = await navigator.mediaDevices.getUserMedia({ audio: true }); probe.getTracks().forEach(t => t.stop());
+          const probe = await navigator.mediaDevices.getUserMedia({ audio: micAudio(true) }); probe.getTracks().forEach(t => t.stop());
           hooks.stage?.('native recorder');
           id = d.recStart(opts.kind || 'app');
         }
@@ -847,7 +859,7 @@
           if (previous && current?.recording) st = current;
           else {
             try { st = await b.start({ meetingId, includeSystemAudio: !!opts.systemAudio }); }
-            catch (e) { if (e.code !== 'mic_permission') throw e; hooks.stage?.('microphone permission'); const probe = await navigator.mediaDevices.getUserMedia({ audio: true }); probe.getTracks().forEach(t => t.stop()); hooks.stage?.('native recorder'); st = await b.start({ meetingId, includeSystemAudio: !!opts.systemAudio }); }
+            catch (e) { if (e.code !== 'mic_permission') throw e; hooks.stage?.('microphone permission'); const probe = await navigator.mediaDevices.getUserMedia({ audio: micAudio(true) }); probe.getTracks().forEach(t => t.stop()); hooks.stage?.('native recorder'); st = await b.start({ meetingId, includeSystemAudio: !!opts.systemAudio }); }
           }
           safeCall(opts.onNativeState, st);
           if (b.pcm && st?.livePcm) {

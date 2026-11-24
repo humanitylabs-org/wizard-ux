@@ -41,7 +41,7 @@ const SHELL = `<!doctype html><html><head><meta charset="utf-8">
   window.WizShareWizard = { valid: d => { if (!d?.files?.length && !d?.text?.trim()) throw new Error('Nothing to share'); return d; },
     wizard: (d, authorize) => new Promise(resolve => sheets.push({  text: d.text, title: d.title, files: (d.files || []).map(f => f.name + ':' + f.size),
       send() { const ok = authorize(); resolve(ok ? 'sent' : 'unsupported'); return ok; } })) };</script>
-<script src="/wizard-os-home/core/app-services.js"></script>
+<script src="/wizard-os-home/core/app-services-windows.js"></script><script src="/wizard-os-home/core/app-services-boundary.js"></script><script src="/wizard-os-home/core/app-services.js"></script>
 <style>iframe{width:400px;height:80px;border:0}</style></head>
 <body><button id="shellbtn">Shell button</button><div class="win" id="w1"><header class="wbar"><span>Notes</span></header>
 <iframe class="appframe" sandbox="allow-scripts allow-forms allow-downloads" src="/notes/"></iframe></div>

@@ -2,7 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
-const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
+import { withShellParts } from './fixtures/shell-parts.mjs';
+import { createDocument } from './fixtures/mini-dom.mjs';
+import { between } from './fixtures/source-slice.mjs';
+const read = p => withShellParts(readFileSync(new URL('../' + p, import.meta.url), 'utf8'));
 
 // Core loads before app.js, not through a per-device saved tweak membership or lazy import.
 function client(choice) {
@@ -23,7 +26,22 @@ test('independent clients with saved ON, OFF or missing radial membership all in
 test('no cached rejected lazy-import path or tweak teardown can strand the core handler', () => {
   assert.doesNotMatch(read('web/core/skin-host.js'), /orb-switcher\.js|api\.orb =|orbRetry/);
   assert.doesNotMatch(read('web/core/orb-switcher.js'), /import\(/);
-  const entry = read('web/index.html');
-  assert.ok(entry.indexOf('src="core/orb-switcher.js"') < entry.indexOf('src="app.js"'));
-  assert.match(read('web/app.js'), /WosCreateOrbSwitcher\(orbSwitcherHost\)/);
+  // The phone page loads the switcher as a plain script before app.js.
+  const doc = createDocument(); doc.documentElement.innerHTML = read('web/index.html').replace(/^<!doctype html>/i, '');
+  const order = doc.querySelectorAll('script[src]').map(x => x.getAttribute('src'));
+  assert.ok(order.includes('core/orb-switcher.js') && order.indexOf('core/orb-switcher.js') < order.indexOf('app.js'));
+  assert.equal(doc.querySelector('script[src="core/orb-switcher.js"]').getAttribute('type'), null, 'not a lazy module');
+  // app.js (its orb-swipe part) installs the core handler itself, with every saved radial membership.
+  const line = between(readFileSync(new URL('../web/app-orbswipe.js', import.meta.url), 'utf8'), '  window.WosCreateOrbSwitcher(orbSwitcherHost);', '\n');
+  for (const choice of [true, false, undefined]) {
+    const storage = new Map([['wos.skin-tweaks.v1', JSON.stringify({ version: 1, off: {}, mix: { 'wizard/orb-radial': choice } })]]);
+    const window = { addEventListener() {}, removeEventListener() {}, dispatchEvent() {} };
+    const ctx = { window, document: { querySelectorAll: () => [], body: { classList: { remove() {} } } }, localStorage: { getItem: k => storage.get(k), setItem: (k, v) => storage.set(k, v) }, CustomEvent: class {}, setTimeout, clearTimeout,
+      orbSwitcherHost: { apps: () => [], cancelGesture() {}, hover() {} } };
+    vm.createContext(ctx);
+    vm.runInContext(read('web/core/orb-switcher.js'), ctx);
+    vm.runInContext(line, ctx);
+    assert.equal(window.WosOrbSwitcher?.active(), true, `radial ${choice}: the core handler is installed and ready`);
+    window.WosOrbSwitcher.dispose();
+  }
 });

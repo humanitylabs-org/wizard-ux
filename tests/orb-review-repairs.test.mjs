@@ -3,8 +3,9 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
 import {webcrypto} from 'node:crypto';
+import { withAppParts } from './fixtures/app-parts.mjs';
 const read=p=>readFileSync(new URL('../web/'+p,import.meta.url),'utf8');
-const phone=read('app.js'),device=read('device.js');
+const phone=withAppParts(read('app.js')),device=read('device.js');
 const section=(s,a,b)=>s.slice(s.indexOf(a),s.indexOf(b,s.indexOf(a)));
 function storage(data={}) {return {getItem:k=>data[k]??null,setItem:(k,v)=>data[k]=v,removeItem:k=>delete data[k]};}
 function handoff(localStorage=storage(),device=null) {

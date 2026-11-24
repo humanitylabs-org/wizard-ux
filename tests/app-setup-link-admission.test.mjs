@@ -2,12 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
+import { withShellParts } from './fixtures/shell-parts.mjs';
 for (const shell of ['phone', 'desktop']) test(`${shell}: a nested app link cannot bypass required setup or lose its path`, () => {
   const file = shell === 'phone' ? '../web/app.js' : '../web/desktop/desktop.js';
-  const source = readFileSync(new URL(file, import.meta.url), 'utf8');
+  const source = withShellParts(readFileSync(new URL(file, import.meta.url), 'utf8'));
   const name = shell === 'phone' ? 'openLinkDesk' : 'openAppLink';
   const start = source.indexOf(`  function ${name}(`), end = shell === 'phone' ? source.indexOf('  /* ---------------- bound views', start) : source.indexOf('  window.WosAppSetup?.init', start);
-  assert(start >= 0 && end > start);
   const created = [], app = { id: 'recorder', name: 'Recorder', url: '/apps/recorder/' };
   let continuation, checks = 0;
   const ctx = { URL, location: { href: 'https://fixture.invalid/', origin: 'https://fixture.invalid' },

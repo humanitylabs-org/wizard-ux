@@ -7,7 +7,7 @@ Reuse:
 
 ## Base versus candidate
 
-The same expanded `qa-chats-focus.cjs` ran against base f742a293 and candidate on isolated read-only origins. Every mutation, transcription, session-create and run request was intercepted. Model options/audio/transcript fixtures are synthetic; no inference reached any agent. Checks inspect BOTH POST session-create/run query and body destination, not a mocked enqueue return.
+The same expanded `qa/scripts/qa-chats-focus.cjs` ran against base f742a293 and candidate on isolated read-only origins. Every mutation, transcription, session-create and run request was intercepted. Model options/audio/transcript fixtures are synthetic; no inference reached any agent. Checks inspect BOTH POST session-create/run query and body destination, not a mocked enqueue return.
 
 | New-chat entry point | Base finding | Candidate |
 |---|---|---|

@@ -1,10 +1,11 @@
 'use strict';
 // wizard-ux issue 1445 in a real browser: the saved-draft mark on Activity rows and Channels lines, behind
-// wizard/draft-marks (with wizard/chat-channels on). Phone 412x915 (classic Chats), desktop 1440x900 (Classic Chats
+// no switch since issue 1604 (it was wizard/draft-marks; Channels are on for everyone). Phone 412x915 (classic Chats), desktop 1440x900 (Classic Chats
 // window and the AI apps view), Nebula + Grove. Disposable synthetic transport only (no box is reached). Steps: type into
 // a thread's box -> its Activity row says "✎ Draft" (live where the list shows beside the thread), rows keep their order;
-// type into a channel's box -> its Channels line wears ✎; reload -> both still there; empty the box -> gone.
-// QA_ONLY_OFF=1 runs the switch-off pass only (no mark anywhere); QA_OUT=<dir> keeps the screenshots.
+// open the channel -> the thread's card in its feed says "✎ Draft" on its reply line (issue 1709);
+// type into a channel's box -> its Channels line wears ✎ Draft; reload -> both still there; empty the box -> gone.
+// QA_FEED_ONLY=1 stops after the feed shot (with QA_WEB=<main worktree>/web: the before shot). QA_OUT=<dir> keeps the screenshots.
 const assert = require('node:assert/strict');
 const { chromium } = require('../tools/qa-playwright.cjs');
 const { ownerRead } = require('../tools/qa-desktop-frame-fixture.cjs');
@@ -26,17 +27,17 @@ const cases = (process.env.QA_CASES || 'phone,classic,ai-apps').split(',');
 (async () => {
   const browser = await chromium.launch(), report = [];
   try {
-    for (const shell of cases) for (const skin of ['nebula', 'grove']) for (const on of process.env.QA_ONLY_OFF ? [false] : [true, false]) {
+    for (const shell of cases) for (const skin of ['nebula', 'grove']) for (const on of [true]) {
       const phone = shell === 'phone', ai = shell === 'ai-apps', stem = `${shell}-${skin}-${on ? 'on' : 'off'}`, entry = { stem, errors: [] }; report.push(entry);
       const context = await browser.newContext({ viewport: phone ? { width: 412, height: 915 } : { width: 1440, height: 900 }, isMobile: phone, hasTouch: phone, serviceWorkers: 'block',
         ...(phone ? { userAgent: 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Mobile Safari/537.36' } : {}) });
       try {
         await context.routeWebSocket('**/*', w => w.close());
-        const mix = { 'wizard/desktop-chats': true, 'wizard/chat-channels': true, ...(on ? { 'wizard/draft-marks': true } : {}) };
+        const mix = { 'wizard/desktop-chats': true }; // the marks have no switch since issue 1604
         await context.addInitScript(({ shell, skin, mix, spaces, ai }) => {
           if (window !== top || sessionStorage.getItem('qa.seeded')) return; sessionStorage.setItem('qa.seeded', '1');
           for (const [k, v] of Object.entries({ 'wos.shell': shell === 'phone' ? 'phone' : 'desktop', 'wos.desktop-view.v1': ai ? 'ai-apps' : 'classic', 'wos.coached': 'true', 'wos.tour.v1': 'true', 'wos.welcome.v1': 'done', 'wos.skin': skin,
-            'wos.chats.spaces.v1': JSON.stringify(spaces), 'wos.skin-tweaks.v1': JSON.stringify({ version: 1, preset: 'none', off: {}, mix }) })) localStorage.setItem(k, v);
+            'wos.chats.spaces.v1': JSON.stringify(spaces), 'wos.skin-tweaks.v1': JSON.stringify({ version: 1, preset: 'none', off: {}, mix, defaultsOff: [] }) })) localStorage.setItem(k, v);
         }, { shell, skin, mix, spaces: SPACES, ai });
         const prefs = { migrations: { 'launcher-seed-v1': true }, spaces: structuredClone(SPACES) };
         await context.route('**/*', async r => {
@@ -65,7 +66,6 @@ const cases = (process.env.QA_CASES || 'phone,classic,ai-apps').split(',');
         const boot = async () => {
           await page.waitForFunction(() => (window.__wux || window.__wos) && !window.WosWelcome?.active && window.WosExperience?.state.tweaks.length && !window.WosExperience.state.busy);
           if (ai) await page.waitForFunction(() => document.documentElement.dataset.layout === 'ai-apps', null, { timeout: 15000 });
-          await page.waitForFunction(on => { const t = (document.documentElement.dataset.tweaks || '').split(' '); return t.includes('wizard/chat-channels') && t.includes('wizard/draft-marks') === on; }, on, { timeout: 15000 });
           await page.waitForFunction(() => window.WizLive?.ok && WizLive.sessions.length === 3, null, { timeout: 15000 });
           if (!ai) await page.evaluate(phone => phone ? __wos.openSheet('inbox') : __wux.openChatsList(), phone);
           await page.evaluate(() => document.fonts.ready); await nap(700);
@@ -100,7 +100,7 @@ const cases = (process.env.QA_CASES || 'phone,classic,ai-apps').split(',');
         entry.orderAfter = (await activity()).map(r => r[0]);
         assert.deepEqual(entry.orderAfter.slice().sort(), entry.orderBefore.slice().sort(), 'same rows (opening a green thread moves it to Recent; the on/off order is compared at the end)');
         if (on && !ai) entry.preview = (await vis(`.ch-list [data-chopen="qa-g1"] ${phone ? '.ch-chan-line' : '.pv'}`).innerText()).replace(/\s+/g, ' ').trim();
-        if (on && !ai) assert.match(entry.preview, phone ? /^✎ Draft · # WizardOS Chats$/ : /^# WizardOS Chats · ✎ Draft · /);
+        if (on && !ai) assert.match(entry.preview, phone ? /^✎ Draft · (#|💬) WizardOS Chats$/ : /^(#|💬) WizardOS Chats · ✎ Draft · /);
         if (on) entry.tagColor = await page.evaluate(ai => getComputedStyle(document.querySelector(ai ? '.aad-rw[data-draft] .aad-chan-line' : '.ch-draft-tag'), ai ? '::before' : null).color, ai);
         await shot('activity');
         // 2. A channel's box: Channels tab, open the channel, type, back to the list.
@@ -108,6 +108,14 @@ const cases = (process.env.QA_CASES || 'phone,classic,ai-apps').split(',');
         else { await vis('[data-chview="channels"]').click(); await nap(400); }
         const chanLine = () => page.locator('.ch-chan-open[data-chchan="launch"]').filter({ visible: true }).first();
         await chanLine().click(); await nap(900);
+        // 2a. The channel's feed (issue 1709): the thread card of Weekend plans (its box holds a draft) says ✎ Draft on its
+        // reply line; the other card does not.
+        entry.feedMarks = await page.locator('.ch-chan-feed .ch-post[data-morph-key^="post:"]').filter({ visible: true }).evaluateAll(n => n.map(p => [p.dataset.morphKey.slice(5), [...p.querySelectorAll('.ch-post-r .ch-post-draft, .ch-post-rr .ch-post-draft')].some(t => t.getClientRects().length > 0 && /✎\s*Draft/.test(t.textContent))]));
+        await shot('feed');
+        if (process.env.QA_FEED_ONLY) { entry.pass = true; continue; } // QA_FEED_ONLY=1 QA_WEB=<main>/web: the feed shot before the fix
+        assert.deepEqual(entry.feedMarks.map(r => r[0]).sort(), ['qa-g1', 'qa-y1'], 'both posts in the feed');
+        assert.deepEqual(entry.feedMarks.filter(r => r[1]).map(r => r[0]), on ? ['qa-g1'] : [], 'the drafted thread\'s card says Draft');
+        if (on) entry.feedTagColor = await page.evaluate(() => getComputedStyle([...document.querySelectorAll('.ch-post-draft')].find(t => t.getClientRects().length)).color);
         const box = vis('[data-chchanform] textarea');
         await box.click(); await page.keyboard.type('Post idea'); await nap(500);
         if (ai) { entry.chanLive = await chanLine().evaluate(b => !!b.querySelector('.ch-chan-draft')); if (on) assert.equal(entry.chanLive, true, 'the sidebar line wears the pencil while typing'); await shot('channel-typing'); }

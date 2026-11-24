@@ -52,7 +52,7 @@ const SHELL = `<!doctype html><html><head><meta charset="utf-8">
 <script src="/wizard-os-home/core/browser-boundary.js"></script>
 <script>const APPS = [{ id: 'wizard-claude', kind: 'wizard', url: '/wizard-claude/', name: 'Claude' }, { id: 'importer', kind: 'wizard', url: '/importer/', name: 'Importer' }, { id: 'other', kind: 'wizard', url: '/other/', name: 'Other' }];
   window.WizCore = { apps: () => ({ APPS }), workspaceNav: { setCount() {} } }; window.WizConfig = { stripAddress: s => s };</script>
-<script src="/wizard-os-home/core/app-services.js"></script>
+<script src="/wizard-os-home/core/app-services-windows.js"></script><script src="/wizard-os-home/core/app-services-boundary.js"></script><script src="/wizard-os-home/core/app-services.js"></script>
 <script src="/wizard-os-home/core/welcome.js"></script>
 <style>body{margin:0;background:#16121f;font:14px system-ui;color:#fff}.wl-overlay{position:fixed;inset:0;display:grid;place-items:center}
 .wl-card{width:460px;background:#221c31;border-radius:16px;padding:16px}.wl-frame iframe{width:100%;height:230px;border:0;border-radius:10px;background:#fff}

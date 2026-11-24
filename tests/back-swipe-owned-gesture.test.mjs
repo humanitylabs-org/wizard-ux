@@ -7,8 +7,9 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { fixture } from './fixtures/tweaks.mjs';
+import { withShellParts } from './fixtures/shell-parts.mjs';
 
-const app = readFileSync(new URL('../web/app.js', import.meta.url), 'utf8');
+const app = withShellParts(readFileSync(new URL('../web/app.js', import.meta.url), 'utf8'));
 
 /* the shell's popstate handler and its Back watcher, run on their own with the shell's names stubbed */
 function backHandlers(claimed) {

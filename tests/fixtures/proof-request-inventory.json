@@ -346,28 +346,34 @@
       "note": "AI Look up: needs a text selection and the Look up tap, which the shell flows never make; tests/lookup-pop.browser.cjs covers it with a scripted local backend. Refused and collected, never answered, if a flow reaches it."
     },
     "/wizard/v1/channels": {
-      "status": "not-exercised",
+      "status": "catalogued",
       "source": "web/live.js",
       "kind": "read",
-      "note": "Chats channel store (wizard-ux issue 1261): read only while the off-by-default wizard/chat-channels switch is on, which none of the three flows turn on; tests/chat-channel-store.test.mjs covers it against a fake store. Refused and collected, never answered, if a flow reaches it."
+      "examples": [
+        {
+          "method": "GET",
+          "path": "/wizard/v1/channels"
+        }
+      ],
+      "note": "Chats channel store (wizard-ux issue 1261): Channels are on for everyone (wizard-ux issue 1258), so every flow reads it. The shared catalogue answers 404, a box without the store (an older Service), so Chats shows the Spaces as channels; tests/chat-channel-store.test.mjs covers a store that answers."
     },
     "/wizard/v1/channels/{}/days": {
       "status": "not-exercised",
       "source": "web/live.js",
       "kind": "read",
-      "note": "The Daily channel's day threads (wizard-ux issue 1469, wizard-agent-service issue 527): read only while the off-by-default wizard/chat-channels switch is on and the box has a channel of kind daily, which none of the three flows turn on; tests/daily-channel.test.mjs and tests/qa-chat-daily-channel.cjs cover it against a fake box. Refused and collected, never answered, if a flow reaches it."
+      "note": "The Daily channel's day threads (wizard-ux issue 1469, wizard-agent-service issue 527): read only when the box has a channel of kind daily (Channels are on for everyone, wizard-ux issue 1258), which none of the three flows' boxes have; tests/daily-channel.test.mjs and tests/qa-chat-daily-channel.cjs cover it against a fake box. Refused and collected, never answered, if a flow reaches it."
     },
     "/wizard/v1/channels/{}/today": {
       "status": "not-exercised",
       "source": "web/live.js",
       "kind": "write",
-      "note": "Today's Daily thread (wizard-ux issue 1469): asked only by a send from the Daily view with wizard/chat-channels on; tests/daily-channel.test.mjs and tests/qa-chat-daily-channel.cjs cover it against a fake box. Refused and collected, never answered, if a flow reaches it."
+      "note": "Today's Daily thread (wizard-ux issue 1469): asked only by a send from the Daily view; tests/daily-channel.test.mjs and tests/qa-chat-daily-channel.cjs cover it against a fake box. Refused and collected, never answered, if a flow reaches it."
     },
     "/wizard/v1/channels/membership": {
       "status": "not-exercised",
       "source": "web/live.js",
       "kind": "write",
-      "note": "Chats channel store move (wizard-ux issue 1261): only when a chat is filed with wizard/chat-channels on and the store answering; tests/chat-channel-store.test.mjs covers it. Refused and collected, never answered, if a flow reaches it."
+      "note": "Chats channel store move (wizard-ux issue 1261): only when a chat is filed with the store answering; tests/chat-channel-store.test.mjs covers it. Refused and collected, never answered, if a flow reaches it."
     },
     "/wizard/v1/agent-inbox": {
       "status": "not-exercised",
@@ -394,10 +400,16 @@
       "note": "Signal sweep card reread after a tap (wizard-ux issue 1586, wizard-agent-service issue 550): GET only after an owner tap on the card while the off-by-default wizard/agent-inbox switch is on, which none of the three flows turn on; tests/agent-inbox-sweep-card.test.mjs covers it against a fake box. Refused and collected, never answered, if a flow reaches it."
     },
     "/wizard/v1/channels/read": {
-      "status": "not-exercised",
+      "status": "catalogued",
       "source": "web/live.js",
       "kind": "write",
-      "note": "Channel read watermarks on the box (wizard-agent-service issue 471): read and written only while the off-by-default wizard/chat-channels switch is on, which none of the three flows turn on; tests/chat-channels.test.mjs (issue 471) covers it against a fake box. Refused and collected, never answered, if a flow reaches it."
+      "examples": [
+        {
+          "method": "GET",
+          "path": "/wizard/v1/channels/read"
+        }
+      ],
+      "note": "Channel read watermarks on the box (wizard-agent-service issue 471): Channels are on for everyone (wizard-ux issue 1258), so flows read it. The shared catalogue answers 404 (no read sync on the box: each device keeps its own marks); writes are refused and collected. tests/chat-channels.test.mjs (issue 471) covers the sync."
     },
     "/wizard/health": {
       "status": "not-exercised",
@@ -587,13 +599,13 @@
       "status": "not-exercised",
       "source": "web/core/os-updates.js",
       "kind": "read",
-      "note": "Only read while the off-by-default wizard/app-updates-list switch is on (Settings > About & updates > Apps); the QA harnesses run with it off. Refused and collected, never answered, if a flow reaches it."
+      "note": "Read by Settings > About & updates > Apps (on for everyone since wizard-ux#1191); the QA harnesses don't open that page. Refused and collected, never answered, if a flow reaches it."
     },
     "/wizard-os-home/store-install/_app-updates": {
       "status": "not-exercised",
       "source": "web/core/os-updates.js",
       "kind": "read",
-      "note": "Only read, and only posted to by the Apps buttons (Update now, Retry, Hold, Unhold, Automatic / Ask me), while the off-by-default wizard/app-updates-list switch is on (Settings > About & updates > Apps); the QA harnesses run with it off. Refused and collected, never answered, if a flow reaches it."
+      "note": "Only read, and only posted to by the Apps buttons (Update now, Retry, Hold, Unhold, Automatic / Ask me), in Settings > About & updates > Apps (on for everyone since wizard-ux#1191); the QA harnesses don't open that page. Refused and collected, never answered, if a flow reaches it."
     },
     "/wizard-os-home/store-install/_feature-switches": {
       "status": "not-exercised",

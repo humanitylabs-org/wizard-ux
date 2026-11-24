@@ -44,7 +44,7 @@ const SHELL = `<!doctype html><html><head><meta charset="utf-8">
     shareFile: async (f, o) => { shared.push({ kind: 'file', name: f.name, size: f.size, title: o?.title, direct: o?.direct }); return 'shared'; } };
   window.WizConfig = { stripAddress: s => s, ready: Promise.resolve(), voicePrompt: () => '',
     transcribe: async (file, o) => { heard.push({ size: file.size, language: o.language }); return { text: 'heard ' + file.size }; } };</script>
-<script src="/wizard-os-home/core/app-services.js"></script>
+<script src="/wizard-os-home/core/app-services-windows.js"></script><script src="/wizard-os-home/core/app-services-boundary.js"></script><script src="/wizard-os-home/core/app-services.js"></script>
 <style>iframe{width:400px;height:80px;border:0}</style></head>
 <body><button id="shellbtn">Shell button</button><div class="win" id="w1"><header class="wbar"><span>Notes</span></header>
 <iframe class="appframe" sandbox="allow-scripts allow-forms allow-downloads" src="/notes/"></iframe></div>

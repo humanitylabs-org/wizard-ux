@@ -1,11 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
-import {readFileSync,mkdtempSync,rmSync} from 'node:fs';
+import {readFileSync,mkdtempSync,rmSync,openAsBlob} from 'node:fs';
+import { between, block, runRecording } from './fixtures/source-slice.mjs';
 import stopEvidence from '../tools/qa-recorder-stop-evidence.cjs';
 import {randomUUID,createHash} from 'node:crypto';
 import path from 'node:path';
 import {createRequire} from 'node:module';
+import { withServicesParts } from './fixtures/app-services-parts.mjs';
 const require=createRequire(import.meta.url);
 const read = name => readFileSync(process.env.QA_REVIEW_CORE ? process.env.QA_REVIEW_CORE+'/'+name+'.js' : new URL('../web/core/'+name+'.js', import.meta.url),'utf8');
 const source = read('app-capture');
@@ -25,7 +27,7 @@ function service(cap,appId='mizel') {
   const sourceWindow={location:new URL('https://fixture.invalid/'+appId+'/'),document:{},addEventListener(){},postMessage(){}};
   const frame={tagName:'IFRAME',src:sourceWindow.location.href,isConnected:true,contentWindow:sourceWindow,hasAttribute:()=>false,addEventListener(){},removeEventListener(){}};
   const window={WizCore:{apps:()=>({APPS:[{id:appId,name:'Synthetic Recorder',kind:'wizard',url:'/'+appId+'/'}]})},WizAppCapture:{reloadCheck:()=>typeof cap==='function'?cap():cap},dispatchEvent(){}};
-  vm.runInNewContext(read('app-services'),{window,location:new URL('https://fixture.invalid/wizard-os-home/'),URL,crypto:{randomUUID},addEventListener(){},setInterval(){},setTimeout,clearTimeout,document:{readyState:'loading',addEventListener(){}},CustomEvent:class{},navigator:{}});
+  vm.runInNewContext(withServicesParts(read('app-services')),{window,location:new URL('https://fixture.invalid/wizard-os-home/'),URL,crypto:{randomUUID},addEventListener(){},setInterval(){},setTimeout,clearTimeout,document:{readyState:'loading',addEventListener(){}},CustomEvent:class{},navigator:{}});
   const host=window.WizAppServices;host.attach(frame,{appId,path:'/'+appId+'/'});
   return {host,window,frame,facade:host.connect(sourceWindow,{}),plan:()=>host.update.reloadPlan()};
 }
@@ -314,16 +316,15 @@ test('unknown native status cannot become an empty app-custody proof, but repair
   await assert.rejects(c.pending('fixture'),e=>e.code==='native_owner_uncertain');
   data=[row];c.ownedRows.set(row.id,row);assert.equal((await c.pending('fixture'))[0],row);
 });
-const runner=readFileSync(new URL('../qa-recorder-reload-recovery.cjs',import.meta.url),'utf8');
+const runner=readFileSync(new URL('../qa/scripts/qa-recorder-reload-recovery.cjs',import.meta.url),'utf8');
 test('browser Stop evidence callback sends the genuine blob without awaiting a dying page hash',async()=>{
-  const start=runner.indexOf('  await page.evaluate(()=>{void syntheticSession.stop()');
-  const end=runner.indexOf('\n  const kept=await stopped()',start);assert(start>=0&&end>start);
+  const stopCode=between(runner,'  await page.evaluate(()=>{void syntheticSession.stop()','\n  const kept=await stopped()');
   let stop,returned,sent,opened,stored;
   const blob=new Blob([Uint8Array.of(0,255,1,128,10,13)]),pending=new Promise(r=>{stop=r});
   const ctx={page:{evaluate:fn=>{returned=fn()}},syntheticSession:{stop:()=>pending},
     sessionStorage:{setItem:(key,value)=>{stored=[key,value]}},encodeURIComponent,
     XMLHttpRequest:class{status=204;open(...args){opened=args}setRequestHeader(){}send(body){sent=body}}};
-  await vm.runInNewContext('(async()=>{'+runner.slice(start,end)+'})()',ctx);
+  await vm.runInNewContext('(async()=>{'+stopCode+'})()',ctx);
   assert.equal(returned,undefined);assert.equal(sent,undefined,'dispatch completes before Stop resolves');
   stop({id:'aabb-0011',blob});await tick();
   assert.equal(sent,blob,'same exact Stop blob, not reconstructed or post-reload bytes');
@@ -331,18 +332,22 @@ test('browser Stop evidence callback sends the genuine blob without awaiting a d
   assert.deepEqual(stored,['syntheticCapture','aabb-0011']);
 });
 test('closed Stop evidence route continues genuine wire bytes at the same owned origin without URL rewriting',async()=>{
-  const start=runner.indexOf('   await c.route(u=>');
-  const end=runner.indexOf('\n   });',start)+7;assert(start>=0&&end>start);
+  const routeCode=between(runner,'   await c.route(u=>','\n   });')+'\n   });';
   let route,pattern,continued=false,options;const report={requests:[]};
   const ctx={c:{route:async(p,fn)=>{pattern=p;route=fn}},fixture:{report},assert,URL,sink:{url:'http://127.0.0.1:43210'}};
-  await vm.runInNewContext('(async()=>{'+runner.slice(start,end)+'})()',ctx);
+  await vm.runInNewContext('(async()=>{'+routeCode+'})()',ctx);
   const url='http://127.0.0.1:43210/fixture-capture-evidence?id=aabb-0011';
   assert(pattern(new URL(url)));assert(pattern(new URL(url.replace('aabb-0011','preflight'))));
   for(const bad of [url.replace('43210','43211'),url.replace('127.0.0.1','localhost'),url.replace('127.0.0.1:43210','owner.invalid'),url+'&extra=1',url.replace('aabb-0011','private')])assert(!pattern(new URL(bad)),bad);
   await route({request:()=>({method:()=> 'POST',url:()=>url}),continue:async v=>{continued=true;options=v}});
   assert(continued);assert.equal(options,undefined,'no URL/header/body rewriting or postDataBuffer dependency');
   await assert.rejects(route({request:()=>({method:()=> 'GET',url:()=>url})}),/POST/);
-  assert(runner.includes('},sink);'),'whole fixture uses the owned evidence origin');
+  // The runner's real load(): the closed shell boots on that same owned evidence origin.
+  const owned={url:'http://127.0.0.1:43210',close:async()=>{}};let booted=null;const sinks=[];
+  const loader=runRecording(block(runner,'async function load(phone){')+'\nthis.load=load;',{OUT:'/nowhere',evidenceSinks:sinks,
+    require:()=>({start:async()=>owned}),fixture:{report:{requests:[]},boot:(...a)=>{booted=a;return new Promise(()=>{});}},diagnoseR5Transport:async()=>{}});
+  loader.load(true);await tick();await tick();
+  assert.equal(booted?.[0],true);assert.equal(booted[2],owned,'whole fixture uses the owned evidence origin');assert.deepEqual(sinks,[owned]);
 });
 test('closed startup routes answer only pinned synthetic seed/inbox semantics and retain refusal/unknown logs',async()=>{
   let route,goto;const page={on(){},clock:{install:async()=>{}},goto:async u=>{goto=u},waitForFunction:async()=>{},evaluate:async fn=>fn.toString().includes('WosSkin.current')?'nebula':false};
@@ -397,8 +402,9 @@ test('wire evidence sink retains exact binary Blob bytes and rejects malformed r
     const response=await fetch(sink.url+'/fixture-capture-evidence?id=aabb-0011',{method:'POST',body:new Blob([bytes])});assert.equal(response.status,204);
     const kept=await sink.received();assert.equal(kept.id,'aabb-0011');assert.equal(kept.bytes,bytes.length);
     assert.equal(kept.hash,createHash('sha256').update(bytes).digest('hex'));
-    assert.deepEqual(readFileSync(path.join(out,'phone-stop.bin')),bytes);
-    assert.deepEqual(JSON.parse(readFileSync(path.join(out,'phone-stop.json'),'utf8')),kept);
+    // what the sink wrote (output bytes, not source): the exact Stop bytes and their record
+    assert.deepEqual(Buffer.from(await (await openAsBlob(path.join(out,'phone-stop.bin'))).arrayBuffer()),bytes);
+    assert.deepEqual(JSON.parse(await (await openAsBlob(path.join(out,'phone-stop.json'))).text()),kept);
     assert.deepEqual(report.evidenceRequests.slice(1).map(r=>[r.method,r.url,r.status,r.admitted]),[
       ['POST','/fixture-capture-evidence?id=preflight',204,'preflight'],['POST','/fixture-capture-evidence?id=aabb-0011',204,'stop']]);
     const denied=[['GET','/unexpected'],['GET','/favicon.ico?'],['GET','/favicon.ico?x=1'],['POST','/favicon.ico'],['GET','/favicon.ico/'],['GET','/']];
@@ -420,7 +426,7 @@ test('teardown wire requests serve only the exact pinned shell orb image',async(
   const sink=await stopEvidence.start({out,mode:'phone',report});
   try{
     const response=await fetch(sink.url+'/wizard-os-home/robert-thread-orb.png');assert.equal(response.status,200);
-    const expected=readFileSync(new URL('../web/robert-thread-orb.png',import.meta.url));
+    const expected=Buffer.from(await (await openAsBlob(new URL('../web/robert-thread-orb.png',import.meta.url))).arrayBuffer()); // the shipped image's bytes
     assert.deepEqual(Buffer.from(await response.arrayBuffer()),expected);
     assert.equal(report.evidenceRequests[0].hash,createHash('sha256').update(expected).digest('hex'));
     assert.equal(report.evidenceRequests[0].admitted,'source-orb-image');assert.equal(report.errors.length,0);

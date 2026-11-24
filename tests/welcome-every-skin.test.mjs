@@ -12,9 +12,21 @@ const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8')
 const welcome = read('web/core/welcome.js')
 const wait = async (n = 12) => { for (let i = 0; i < n; i++) await new Promise(r => setTimeout(r, 2)) }
 
-// The shell's own skin ids, in list order (each SKINS entry starts `{ id: '<id>', ... name: ...`).
-const skinsSrc = read('web/core/skins.js')
-const SHIPPED = [...skinsSrc.slice(skinsSrc.indexOf('const SKINS = [')).matchAll(/^\s*\{ id: '([a-z0-9-]+)',[^\n]*name: '/gm)].map(m => m[1])
+// The shell's own skin ids, in list order: the real web/core/skins.js, run in a bare page.
+function shippedSkins() {
+  const el = () => ({ style: { setProperty() {}, removeProperty() {} }, setAttribute() {}, removeAttribute() {}, getAttribute: () => null,
+    classList: { add() {}, remove() {}, toggle() {}, contains: () => false }, appendChild() {}, remove() {}, querySelector: () => null,
+    querySelectorAll: () => [], addEventListener() {}, dataset: {} })
+  const document = { documentElement: el(), head: el(), body: el(), createElement: el, querySelector: () => null, querySelectorAll: () => [], getElementById: () => null, addEventListener() {} }
+  const ctx = { document, localStorage: { getItem: () => null, setItem() {}, removeItem() {} }, addEventListener() {}, dispatchEvent() {},
+    matchMedia: () => ({ matches: false, addEventListener() {} }), CustomEvent: class {}, Event: class {}, location: { search: '' },
+    URLSearchParams, setTimeout, clearTimeout, requestAnimationFrame: () => 0, console }
+  ctx.window = ctx
+  vm.createContext(ctx)
+  vm.runInContext(read('web/core/skins.js'), ctx)
+  return ctx.WosSkin.list.map(k => k.id)
+}
+const SHIPPED = shippedSkins()
 
 function fakeSkin() {
   const ids = [...SHIPPED, 'aurora'] // 'aurora': a skin of its own, listed in no family
@@ -61,7 +73,7 @@ function device(skin) {
   return { ctx, press, boot, html: () => card._html }
 }
 
-test('the real skin list has every shipped palette (guards the regex above)', () => {
+test('the real skin list has every shipped palette', () => {
   for (const id of ['nebula', 'grove', 'tide', 'ember', 'signal', 'novairecito', 'sepia', 'obsidian', 'obsidian-light', 'landscapes', 'landscapes-light']) assert.ok(SHIPPED.includes(id), id)
 })
 

@@ -4,8 +4,11 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { modelContext } from './fixtures/chats-list-model.mjs';
 import '../web/core/chats-list-model.js';
-const M = globalThis.WizChatsListModel;
-const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
+import { withParts } from './fixtures/chats-parts.mjs';
+import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
+import { withShellParts } from './fixtures/shell-parts.mjs';
+const M = modelContext({}).WizChatsListModel; // the real model, loaded in node:vm
+const read = p => withShellParts(readFileSync(new URL('../' + p, import.meta.url), 'utf8'));
 const at = n => `2026-11-05T${String(n).padStart(2, '0')}:00:00Z`;
 const rows = [
   { id: 'needs', title: 'Alpha · needs', at: at(1), state: 'needs' },
@@ -19,6 +22,7 @@ const rows = [
   { id: 'read', title: 'Read', at: at(11), note: true, snoozed: true },
 ];
 const ids = rs => Array.from(rs, r => r.id);
+const plain = v => JSON.parse(JSON.stringify(v)); // values made in the vm realm, compared with literals
 const expected = {
   newest: ['approval', 'new', 'failed', 'note', 'tie-a', 'tie-b', 'needs', 'sleep', 'read'],
   oldest: ['approval', 'needs', 'tie-a', 'tie-b', 'note', 'failed', 'new', 'sleep', 'read'],
@@ -45,12 +49,12 @@ test('every group mode uses the same Sort inside groups; walk equals drawn IDs, 
   for (const order of ['newest', 'oldest']) for (const mode of ['none', 'status', 'project']) {
     const drawn = ids(M.readyFlat(rows, order, mode));
     assert.deepEqual(drawn, groups[order][mode], order + ':' + mode);
-    assert.deepEqual(M.visibleIds(rows, order, mode), drawn);
+    assert.deepEqual(plain(M.visibleIds(rows, order, mode)), drawn);
     let cur = null; const walked = [];
     for (let i = 0; i < drawn.length; i++) { cur = M.readyStep(drawn, cur, 1).id; walked.push(cur); }
     assert.deepEqual(walked, drawn);
-    assert.deepEqual(M.readyStep(drawn, cur, 1), { id: drawn[0], wrapped: true });
-    assert.deepEqual(M.readyStep(drawn, drawn[0], -1), { id: drawn.at(-1), wrapped: true });
+    assert.deepEqual(plain(M.readyStep(drawn, cur, 1)), { id: drawn[0], wrapped: true });
+    assert.deepEqual(plain(M.readyStep(drawn, drawn[0], -1)), { id: drawn.at(-1), wrapped: true });
   }
 });
 test('equal title and timestamp preserve input order; missing times are deterministic', () => {
@@ -66,15 +70,23 @@ test('both shell adapters delegate one projection, preserving errors/day groups,
   assert.deepEqual(ids(projected.snoozed), ['sleep']);
   assert.equal(projected.ready[0].rank, 1);
   assert.equal(projected.ready[0].pinned, true);
-  assert.deepEqual(projected.ready[0].actions, ['pin', 'rename', 'unread', 'snooze', 'done']);
-  assert.deepEqual(projected.ready[2].actions, ['pin', 'rename', 'snooze', 'done']);
-  for (const file of ['web/app.js', 'web/desktop/desktop.js']) {
-    const line = read(file).split('\n').find(l => l.includes('sessionList: () =>'));
-    assert.ok(line.includes('WizChatsListModel.sessionList(LIVE?.ok ? LIVE.workGroups() : null'), file);
+  assert.deepEqual(plain(projected.ready[0].actions), ['pin', 'rename', 'unread', 'snooze', 'done']);
+  assert.deepEqual(plain(projected.ready[2].actions), ['pin', 'rename', 'snooze', 'done']);
+  // run each shell's real adapter (phone web/app-agentorb.js, desktop web/desktop/desktop-boot.js) against the real model
+  for (const file of ['web/app-agentorb.js', 'web/desktop/desktop-boot.js']) {
+    const line = readFileSync(new URL('../' + file, import.meta.url), 'utf8').split('\n').find(l => l.includes('sessionList: () =>'));
+    const adapter = line.trim().replace(/^sessionList:\s*/, '').replace(/,\s*$/, '');
+    const run = live => vm.runInContext(`(${adapter})()`, modelContext({ window: { WosChatPins: facts.pins }, LIVE: live, CHATS: facts.chats }));
+    const shown = run({ ok: true, workGroups: () => groups, ...facts.live });
+    assert.deepEqual(ids(shown.ready), ['failed', 'approval', 'yesterday', 'week'], file);
+    assert.deepEqual(ids(shown.snoozed), ['sleep'], file);
+    assert.equal(shown.ready[0].pinned, true, file + ': pins come from window.WosChatPins');
+    assert.deepEqual([...shown.ready[0].actions], ['pin', 'rename', 'unread', 'snooze', 'done'], file + ': actions come from CHATS');
+    assert.equal(JSON.stringify(run({ ok: false, workGroups: () => { throw new Error('offline Live must not be read'); }, ...facts.live })), JSON.stringify(M.sessionList(null, facts)), file + ': offline Live projects nothing');
   }
 });
 test('core/classic desktop and stock phone use shared ordering/grouping while keeping original row markup', () => {
-  const src = read('web/core/chats.js');
+  const src = withParts(read('web/core/chats.js'));
   const block = (from, to) => src.slice(src.indexOf(from), src.indexOf(to, src.indexOf(from)));
   const c = modelContext({ window: {}, READY_ORDERS: [], readyOrder: 'newest', snoozeLast: () => false, deferredOf: s => s.deferred,
     attOf: s => s.attention, stiKind: () => 'none', waitsOn: s => s.attention?.state === 'needs_you', subjOrder: () => [], esc: String,
@@ -110,7 +122,7 @@ test('notifications share time/priority/ties, never mutate inputs, and read note
 });
 
 test('raw live time key remains cardAt, not updatedAt, for Newest/Oldest/Priority compatibility helpers', () => {
-  const src = read('web/live.js');
+  const src = withLiveParts(read('web/live.js'));
   const block = (from, to) => src.slice(src.indexOf(from), src.indexOf(to, src.indexOf(from)));
   const c = modelContext({ Date, document: { documentElement: { dataset: {} } }, localStorage: { getItem: () => null }, window: { WizConfig: { dayStart: n => n - n % 864e5 } } });
   vm.runInContext(block('  const DAY = 864e5;', '  // Agent Service owns box-wide preferences.') + block('  const sectionTime =', '  async function fetchDispositions()') + '\nthis.group = groupWork; this.priority = byPriority; this.oldest = byOldest;', c);
@@ -132,7 +144,7 @@ test('raw and projected tie keys agree even when display titles add a source or 
 });
 
 test('folded notifications have the same Priority in real core fold and host, even with omitted/mixed priorities', () => {
-  const src = read('web/core/chats.js'), c = modelContext({ window: {} });
+  const src = withParts(read('web/core/chats.js')), c = modelContext({ window: {} });
   vm.runInContext(src.slice(src.indexOf('  const noteSrc ='), src.indexOf('  const sesRank =')) + '\nthis.fold = fold;', c);
   const cases = [
     [{ id: 'n', title: 'Newest' }, { id: 'o', priority: 3 }],

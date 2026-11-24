@@ -2,10 +2,16 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import { java, method } from './fixtures/s1-java-slice.mjs';
 import { launcherFixture } from './launcher-fixture.mjs';
+import { withShellParts } from './fixtures/shell-parts.mjs';
+import { createDocument } from './fixtures/mini-dom.mjs';
+import { cascade } from './fixtures/mini-css.mjs';
+import { runRecording } from './fixtures/source-slice.mjs';
+import { overview } from './fixtures/r5A-overview.mjs';
 
 const root = process.env.HOME_SCREEN_SOURCE || new URL('../',import.meta.url).pathname;
-const read = path => fs.readFileSync(root + '/web/' + path,'utf8');
+const read = path => withShellParts(fs.readFileSync(root + '/web/' + path,'utf8'));
 function policy(search='') {
   const attributes = {}, window = {};
   const ctx = vm.createContext({ window, document:{documentElement:{setAttribute:(k,v)=>attributes[k]=v}}, location:{origin:'https://box.example',search}, URL, URLSearchParams, Object, Proxy, Reflect });
@@ -54,10 +60,43 @@ test('single-app entry never initializes workspace or honors sticky desktop pref
   vm.runInContext(read('core/shell.js'),ctx); assert.equal(ctx.window.WIZ_SHELL,'phone');assert.equal(ctx.localStorage.getItem('wux.shell'),'desktop');
   vm.runInContext(read('app.js'),ctx); assert.equal(ctx.window.__wos,undefined); assert.equal(ctx.localStorage.getItem('wos.wins4'),null);
 });
-test('normal app-services storage stays sessionStorage unless caller selects durable storage',()=>{
-  const source=read('core/app-reading-position.js'); assert.match(source,/storage = sessionStorage/); assert.doesNotMatch(source,/sessionStorage\.setItem/);
-  assert.match(read('core/single-app-session.js'),/readingStorage:localStorage/);
+test('normal app-services storage stays sessionStorage unless caller selects durable storage', async () => {
+  // the real reading-position module: an app frame's place is read from (and kept in) sessionStorage by default
+  const readFrom = opts => {
+    const reads = [], mk = name => ({ getItem: k => (reads.push(name), null), setItem: () => reads.push(name + ':write'), removeItem() {} });
+    const sessionStorage = mk('session'), localStorage = mk('local');
+    const body = {}, doc = { body, documentElement: {}, scrollingElement: null, querySelectorAll: () => [], addEventListener() {}, removeEventListener() {} };
+    const frame = { closest: () => null, isConnected: true, contentWindow: { document: doc, location: { pathname: '/notes/', search: '', hash: '' }, addEventListener() {}, removeEventListener() {} }, addEventListener() {}, removeEventListener() {} };
+    const ctx = runRecording(read('core/app-reading-position.js'), { sessionStorage, localStorage, window: {}, document: { addEventListener() {}, hidden: false }, addEventListener() {}, JSON, Object, Number, Array, Set, Math, Date });
+    ctx.window.WizAppReadingPosition.attach(frame, { appId: 'notes', authorize: () => true, ...opts(localStorage) });
+    return reads;
+  };
+  assert.ok(readFrom(() => ({})).includes('session') && !readFrom(() => ({})).includes('local'), 'sessionStorage unless asked');
+  assert.ok(readFrom(local => ({ storage: local })).includes('local'), 'durable when the caller asks');
+  // app-services hands its readingStorage through only when given; the pinned single-app session gives localStorage
+  const services = read('core/app-services.js');
+  const handed = given => {
+    const got = [], line = services.slice(services.indexOf('const detachReading = window.WizAppReadingPosition?.attach('), services.indexOf('\n', services.indexOf('const detachReading = window.WizAppReadingPosition?.attach(')));
+    vm.runInNewContext(line, { window: { WizAppReadingPosition: { attach: (f, o) => (got.push(o), () => {}) } }, frame: {}, appId: 'notes', valid: () => true, st: {}, readingStorage: given });
+    return got[0];
+  };
+  assert.equal('storage' in handed(undefined), false); assert.equal(handed('LS').storage, 'LS');
+  // the pinned single-app session (core/single-app-session.js run, its app mounted) asks for durable storage
+  const pinned = await pinnedAttach();
+  assert.equal(pinned.opts.readingStorage, pinned.store, 'the session\'s localStorage');
 });
+
+// core/single-app-session.js mounting Wisdom: the options it hands WizAppServices.attach, and its localStorage.
+async function pinnedAttach() {
+  const { p } = policy('?app-session=wisdom'), store = storage(), got = [];
+  function el(tag) { return { tag, dataset: {}, style: { setProperty() {} }, classList: { add() {}, remove() {} }, children: [], setAttribute() {}, appendChild(c) { this.children.push(c); }, replaceChildren() { this.children = []; }, addEventListener() {} }; }
+  const host = el('host'), document = { documentElement: el('html'), getElementById: () => host, addEventListener() {}, createElement: el };
+  const window = { WizHomeScreenPolicy: p, WizCore: { apps: () => ({ APP: { wisdom: { id: 'wisdom', name: 'Wisdom', kind: 'wizard', url: '/wisdom/' } } }), appsLoaded: () => Promise.resolve() },
+    WosSelMenu: { back: () => false }, WizAppServices: { attach: (f, o) => { got.push(o); return () => {}; }, guardBack() {} } };
+  vm.runInContext(read('core/single-app-session.js'), vm.createContext({ window, document, localStorage: store, location: { origin: 'https://box.example' }, URL, addEventListener() {}, setInterval() {}, setTimeout() {} }));
+  await new Promise(setImmediate);
+  return { opts: got[0], store };
+}
 
 test('unavailable session consumes repeated root Back; selection closes first',async()=>{
   const {p}=policy('?app-session=wisdom'); let mounted;
@@ -194,33 +233,65 @@ test('pinned app keeps Android status bar and navigation buttons; content starts
   vm.runInContext(read('core/single-app-session.js'),ctx);
   assert.deepEqual(calls,[false],'never asks Android to hide its bars');
   assert.equal(typeof window.__wosTop,'function'); window.__wosTop(40);
-  const java=fs.readFileSync(root+'android/app/src/main/java/ai/wizards/os/AppSessionActivity.java','utf8');
-  assert.doesNotMatch(java,/applyImmersive\(true\)/); assert.match(java,/super\.applyImmersive\(false\)/);
+  // the real AppSessionActivity.applyImmersive override, run: whatever the shell asks, Android keeps its bars
+  const asked=[]; const Main=class { applyImmersive(on){ asked.push(on); } };
+  for(const on of [true,false]) method(java('AppSessionActivity.java'),'void applyImmersive(boolean ignored)',{args:{ignored:on},base:Main});
+  assert.deepEqual(asked,[false,false]);
 });
 
 // Every surface that lists apps to open offers the same long-press. Miguel's skins replaced swipe-up Apps with
 // Desks → New desk on 22 Oct 2026 and the long-press silently vanished for their users; this pins both pickers.
 test('Apps sheet and New desk grid both carry the Add to home screen long-press', () => {
-  const app = read('app.js');
-  assert.match(app, /WizHomeScreenApps\?\.attach\(launcher,/);
-  assert.match(app, /WizHomeScreenApps\?\.attach\(track,[^\n]*rows: '\.new-desk \[data-app\]'/);
-  assert.match(read('core/home-screen-apps.js'), /function attach\(menu, appFor, opts = \{\}\)/);
+  // the phone's real wiring lines (app-deskbar.js), run: both menus are attached, the New desk grid by its rows
+  const bar = read('app-deskbar.js'), attached = [];
+  for (const line of bar.split('\n').filter(l => /window\.WizHomeScreenApps\?\.attach\((launcher|track),/.test(l)))
+    vm.runInNewContext(line, { window: { WizHomeScreenApps: { attach: (menu, appFor, opts) => attached.push({ menu, app: appFor('notes'), opts }) } }, launcher: 'launcher', track: 'track', APP: { notes: { id: 'notes' } }, overviewMode: () => ({}) });
+  assert.deepEqual(attached.map(a => a.menu), ['launcher', 'track']);
+  assert.ok(attached.every(a => a.app?.id === 'notes'), 'each resolves the app by id');
+  assert.equal(attached[1].opts.rows, '.new-desk [data-app]');
+  assert.ok(attached.every(a => a.opts.available() === true), 'offered unless the overview mode turns app holds off');
+  // the module's attach takes those three arguments
+  const ctx = runRecording(read('core/home-screen-apps.js'), { window: {}, document: { addEventListener() {} }, Object, Set, Map, Array, JSON, Promise });
+  assert.equal(typeof ctx.window.WizHomeScreenApps?.attach, 'function'); assert.equal(ctx.window.WizHomeScreenApps.attach.length, 2, 'attach(menu, appFor, opts = {})');
 });
 
 // Desks overview: hold a one-app desk and let go in place → the same sheet; a drag still reorders (James, 24 Oct).
-test('Desks overview hold-and-release offers Add to home screen; drag keeps reordering', () => {
-  const app = read('app.js');
-  assert.match(app, /OV\.drag && !OV\.reordered[\s\S]{0,900}WizHomeScreenApps\?\.offer\(a\)/);
-  assert.match(app, /insertBefore\(OV\.card, before\); OV\.reordered = true;/);
-  assert.match(read('core/home-screen-apps.js'), /Object\.freeze\(\{ attach, offer,/);
+// A phone with Notes alone on desk 1, Chats on desk 2, Health and Chats together on desk 3, and an empty desk 4.
+const ovWorld = (mode = {}) => ({ mode, desks: [{ id: 'd1', wins: ['a'] }, { id: 'd2', wins: ['b'] }, { id: 'd3', wins: ['c', 'e'] }, { id: 'd4', wins: [] }],
+  W: { a: { id: 'a', app: 'frame', appId: 'notes' }, b: { id: 'b', app: 'chats' }, c: { id: 'c', app: 'frame', appId: 'health' }, e: { id: 'e', app: 'chats' } },
+  APP: { notes: { id: 'notes', name: 'Notes', url: '/notes/' }, health: { id: 'health', name: 'Health', url: '/health/' } } });
+
+test('Desks overview hold-and-release offers Add to home screen; drag keeps reordering', async () => {
+  // The real overview: hold a one-app desk and let go in place: the Add to home screen offer for that app.
+  const o = await overview(ovWorld());
+  o.hold('d1'); assert.deepEqual(o.offers, ['notes']);
+  const chats = await overview(ovWorld()); chats.hold('d2'); assert.deepEqual(chats.offers, [], 'not for a desk without one frontend app');
+  const two = await overview(ovWorld()); two.hold('d3'); assert.deepEqual(two.offers, [], 'nor for a desk with two windows');
+  // Hold and drag onto another desk: it reorders, and offers nothing.
+  const r = await overview(ovWorld());
+  r.hold('d2', 'd3');
+  assert.deepEqual(r.offers, []);
+  assert.deepEqual([...r.appVars.desks.map(d => d.id)], ['d1', 'd3', 'd2', 'd4']);
 });
+
 
 // A home-screen app window is not "WizardOS in front": the floating orb stays over it (James, 24 Oct).
 test('Pinned home-screen apps keep the floating orb', async () => {
-  const { readFileSync } = await import('node:fs');
-  const j = f => readFileSync(new URL('../android/app/src/main/java/ai/wizards/os/' + f, import.meta.url), 'utf8');
-  assert.match(j('device/AppState.java'), /static synchronized boolean shellFront\(\)[\s\S]{0,160}instanceof ai\.wizards\.os\.AppSessionActivity/);
-  assert.equal((j('MainActivity.java').match(/setAppInFront\(this, ai\.wizards\.os\.device\.AppState\.shellFront\(\)\)/g) || []).length, 2);
+  // the real AppState.shellFront and MainActivity.onStart/onStop, run: a pinned app window alone is not the shell in front
+  class AppSessionActivity {} class MainActivity {}
+  const visible = new Set();
+  const shellFront = () => method(java('device/AppState.java'), 'public static synchronized boolean shellFront()', { scope: { visible, ai: { wizards: { os: { AppSessionActivity } } } } }).value;
+  assert.equal(shellFront(), false, 'nothing visible');
+  visible.add(new AppSessionActivity()); assert.equal(shellFront(), false, 'only a pinned app window: the orb stays');
+  visible.add(new MainActivity()); assert.equal(shellFront(), true, 'the shell itself is visible');
+  // both lifecycle edges tell the floating orb what is in front, and say so with shellFront()
+  const main = java('MainActivity.java'), told = [];
+  const ai = { wizards: { os: { AppSessionActivity, device: { AppState: { shellFront } }, everywhere: { EverywhereService: { setAppInFront: (a, front) => told.push(front) }, EverywhereOutbox: { get: () => ({ pump() {} }) } }, mizel: { MeetingRecorderService: { recoverFromActivity() {} } } } } };
+  const Base = class { onStart() {} onStop() {} };
+  method(main, 'protected void onStart()', { scope: { ai, AppSessionActivity, device: { onStart() {} } }, base: Base });
+  visible.clear(); visible.add(new AppSessionActivity());
+  method(main, 'protected void onStop()', { scope: { ai, device: { onStop() {} } }, base: Base });
+  assert.deepEqual(told, [true, false]);
 });
 
  test('browser offer rejects unsafe destinations and preserves exact registered route',()=>{
@@ -237,23 +308,38 @@ test('Pinned home-screen apps keep the floating orb', async () => {
 // Overview arrange mode (a package holds api.overview.use({hold:'arrange', appAction:'home-screen'})): hold = arrange
 // (drag to reorder, ✕ to close), never the copy-link sheet. A small download button beside ✕ (one-app desks only)
 // opens the same Add to home screen flow. The shared shell owns this; no shipped package asks for it now.
-test('Overview arrange mode: hold arranges desks; download button beside ✕ opens Add to home screen', () => {
-  const app = read('app.js');
-  assert.match(app, /if \(arrangeDesks\(\) && OV\.drag && !OV\.reordered\) \{ endDrag\(false\); el\.classList\.add\('editing'\);[^\n]*return; \}/);
-  const releaseHold = app.indexOf("if (arrangeDesks() && OV.drag && !OV.reordered)"), stockOffer = app.lastIndexOf('if (a) window.WizHomeScreenApps?.offer(a);');
-  assert.ok(releaseHold > 0 && releaseHold < stockOffer, 'release hold returns before the stock hold-to-offer path');
-  assert.match(app, /attach\(launcher, id => APP\[id\], \{ available: \(\) => overviewMode\(\)\.appHold !== false/);
-  assert.match(app, /attach\(track, id => APP\[id\], \{ available: \(\) => overviewMode\(\)\.appHold !== false/);
-  // Download only for a one-app desk whose window is a registered frontend that passes the pin policy.
-  assert.match(app, /function ovDeskApp\(d\) \{\s*const w = d && !d\.home && d\.wins\.length === 1 \? W\[d\.wins\[0\]\] : null, a = w\?\.app === 'frame' \? APP\[w\.appId\] : null;\s*return a && !a\.system && window\.WizHomeScreenApps\?\.canOffer\?\.\(a\) \? a : null;/);
-  assert.match(app, /aria-label="\$\{label\}"/); assert.match(app, /const label = `Add \$\{esc\(/);
-  // Both desk renderings (cards and pill cells) carry it next to ✕; its tap never starts a drag or closes the desk.
-  assert.equal((app.match(/\$\{ovDl\(d\)\}/g) || []).length, 2);
-  assert.match(app, /!e\.target\.closest\('\.ov-x, \.ov-dl'\)\) OV\.hold/);
-  const click = app.slice(app.indexOf("const dl = e.target.closest('[data-ovdl]')"));
-  assert.ok(click.indexOf('offer(a); return; }') < click.indexOf("closest('[data-ovx]')"), 'download handled before ✕');
-  assert.match(read('core/home-screen-apps.js'), /canOffer: a => pinnable\(a\)/);
+test('Overview arrange mode: hold arranges desks; download button beside ✕ opens Add to home screen', async () => {
+  const mode = { hold: 'arrange', appAction: 'home-screen' };
+  const o = await overview(ovWorld(mode));
+  // Download only for a one-app desk whose window is a registered frontend that passes the pin policy, beside ✕.
+  const dl = o.el.querySelector('[data-ovdl="d1"]');
+  assert.ok(dl); assert.equal(dl.getAttribute('aria-label'), 'Add Notes to home screen');
+  assert.equal(dl.nextSibling?.getAttribute?.('data-ovx') ?? dl.parentNode.querySelector('[data-ovx]')?.getAttribute('data-ovx'), 'd1', 'next to ✕');
+  for (const id of ['d2', 'd3', 'd4']) assert.equal(o.el.querySelector(`[data-ovdl="${id}"]`), null, id);
+  const blocked = await overview({ ...ovWorld(mode), canOffer: () => false });
+  assert.equal(blocked.el.querySelector('[data-ovdl]'), null, 'the pin policy decides');
+  assert.equal((await overview(ovWorld({ hold: 'arrange' }))).el.querySelector('[data-ovdl]'), null, 'only when the tweak asks for it');
+  // Hold and release in place arranges (editing), no sheet; the stock offer does not run.
+  o.hold('d1'); assert.deepEqual(o.offers, []); assert.ok(o.el.classList.contains('editing'));
+  // The download tap offers the app and neither closes the desk nor opens it.
+  o.appVars.ovTapBlock = 0;
+  o.tap('[data-ovdl="d1"]');
+  assert.deepEqual(o.offers, ['notes']); assert.deepEqual([...o.appVars.desks.map(d => d.id)], ['d1', 'd2', 'd3', 'd4']);
+  assert.ok(o.el.classList.contains('open'), 'the overview stays open');
+  // Its touch never starts a drag.
+  const t = await overview(ovWorld(mode));
+  const b = t.el.querySelector('[data-ovdl="d1"]');
+  b.dispatchEvent({ type: 'touchstart', bubbles: true, touches: [{ clientX: 1, clientY: 1 }] });
+  assert.equal(t.appVars.OV.hold, undefined, 'no hold timer from the download button');
+  // The launcher and the new-desk track keep their own hold-to-add, unless a layout turns app holds off.
+  const deskbar = read('app-deskbar.js');
+  const attached = [];
+  for (const line of deskbar.split('\n').filter(l => l.includes('window.WizHomeScreenApps?.attach('))) {
+    runRecording(line, { window: { WizHomeScreenApps: { attach: (el, find, o) => attached.push([el, o.available()]) } }, launcher: 'launcher', track: 'track', APP: {}, overviewMode: () => ({ appHold: false }) });
+  }
+  assert.deepEqual(attached, [['launcher', false], ['track', false]]);
 });
+
 test('canOffer accepts registered frontends only (multi-app/system/shell items get no download button)', () => {
   const f = pinFixture('ready', false), can = f.window.WizHomeScreenApps.canOffer;
   assert.equal(can({ id:'wisdom', name:'Wisdom', kind:'wizard', url:'/wisdom/' }), true);
@@ -262,10 +348,13 @@ test('canOffer accepts registered frontends only (multi-app/system/shell items g
   assert.equal(f.window.WizHomeScreenApps.state.open, false, 'canOffer never opens the sheet');
 });
 test('pinned single-app session keeps the shared media viewer visible over the app (#1520)',()=>{
-  const css = read('core/home-screen-apps.css');
-  const hide = css.split('\n').find(l => /^html\[data-app-session\] #device > /.test(l) && /display:\s*none/.test(l));
-  assert.ok(hide, 'the single-app hide rule exists');
-  assert.match(hide, /:not\(\.mviewer\)/, 'the hide rule must not hide .mviewer, or tapped photos open invisibly');
-  assert.match(hide, /:not\(#singleApp\)/); assert.match(hide, /:not\(#toast\)/);
-  assert.match(read('core/chats.css'), /\.mviewer\[hidden\] \{ display: none; \}/, 'a closed viewer still stays hidden');
+  // the real stylesheet on a pinned single-app page: the app, the toast and the photo viewer stay; the rest is hidden
+  const css = read('core/home-screen-apps.css'), d = createDocument();
+  d.documentElement.setAttribute('data-app-session', '');
+  d.body.innerHTML = '<div id="device"><div id="singleApp"></div><div id="toast"></div><div class="mviewer"></div><div class="dock"></div></div>';
+  const display = sel => cascade(d.querySelector(sel), css).display?.value;
+  assert.equal(display('.dock'), 'none', 'the shell is hidden');
+  for (const sel of ['#singleApp', '#toast', '.mviewer']) assert.notEqual(display(sel), 'none', `${sel} stays visible (tapped photos must not open invisibly)`);
+  const viewer = d.querySelector('.mviewer'); viewer.setAttribute('hidden', '');
+  assert.equal(cascade(viewer, read('core/chats.css')).display?.value, 'none', 'a closed viewer still stays hidden');
 });

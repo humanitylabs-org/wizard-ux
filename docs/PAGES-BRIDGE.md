@@ -65,7 +65,7 @@ With a checkout of Agent Service `feature/pages-api` and its dependencies:
 ```sh
 QA_SERVICE_DIR=/path/to/agent-service TMPDIR=/your/scratch PORT=8994 \
   QA_EVIDENCE=/your/evidence node tools/qa-pages-server.mjs
-QA_OUT=/your/evidence node qa-pages.cjs http://127.0.0.1:8994
+QA_OUT=/your/evidence node qa/scripts/qa-pages.cjs http://127.0.0.1:8994
 node --test tests/*.test.mjs
 ```
 

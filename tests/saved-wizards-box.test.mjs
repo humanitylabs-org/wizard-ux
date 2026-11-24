@@ -110,3 +110,31 @@ for (const patch of [true, false]) for (const [name, run] of [['stale device', s
     assert.deepEqual(plain(box.state.savedWizards).map(w => w.name).sort(), ['Archie', 'Bee', 'Desk', 'Phone'])
   })
 }
+
+test('wizard-ux#1670: changing a saved Wizard\'s address and removing one with Undo reach every device through the box', async () => {
+  const box = sharedBox({ savedWizards: [{ id: 'remote-f', name: 'Forum', url: 'https://forum-old.test/' }, archie] })
+  const phone = device(box); await phone.settle()
+  const desktop = device(box); await desktop.settle()
+  await phone.W.move('remote-f', 'https://forum-new.test'); await phone.settle()
+  assert.deepEqual(plain(box.state.savedWizards).map(w => [w.id, w.name, w.url]).sort(), [['remote-a', 'Archimedes', 'https://archimedes.test/'], ['remote-f', 'Forum', 'https://forum-new.test/']])
+  await desktop.dev.pullPrefs(); await tick()
+  assert.equal(desktop.W.snapshot().items.find(v => v.id === 'remote-f').url, 'https://forum-new.test/')
+  await assert.rejects(phone.W.move('remote-f', 'https://archimedes.test'), /already/)
+  await phone.W.remove('remote-a'); await phone.settle()
+  assert.deepEqual(plain(box.state.savedWizards).map(w => w.id), ['remote-f'])
+  await phone.W.restore(archie); await phone.settle()
+  assert.deepEqual(plain(box.state.savedWizards).map(w => w.id).sort(), ['remote-a', 'remote-f'])
+  await phone.W.restore(archie); await phone.settle()
+  assert.equal(box.state.savedWizards.length, 2, 'an Undo after it came back adds nothing twice')
+  assert.ok(!box.log.includes('PUT'), 'item operations only')
+})
+
+for (const patch of [true, false]) for (const [name, run] of [['stale device', stale], ['simultaneous edits', simultaneous]]) {
+  test(`wizard-ux#1670: address change, ${name}, ${patch ? 'service with item operations' : 'older service (PUT only)'}: both devices' changes survive`, async () => {
+    const other = { id: 'remote-b', name: 'Bee', url: 'https://bee.test/' }
+    const box = await run({ patch, initial: { savedWizards: [archie, other] }, local: { 'wos.workspaces.box.v1': JSON.stringify([archie, other]) },
+      first: async a => { await a.prefOps([{ op: 'remove', key: 'savedWizards', item: 'remote-a' }, { op: 'add', key: 'savedWizards', item: { ...archie, url: 'https://archie-new.test/' } }]) },
+      second: async b => { await b.prefOps([{ op: 'set', key: 'savedWizards/remote-b/name', item: 'Bea' }]) } })
+    assert.deepEqual(plain(box.state.savedWizards).map(w => [w.name, w.url]).sort(), [['Archimedes', 'https://archie-new.test/'], ['Bea', 'https://bee.test/']])
+  })
+}

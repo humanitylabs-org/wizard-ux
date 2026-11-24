@@ -51,6 +51,45 @@ class DiagnosticsTest(unittest.TestCase):
         payload['events'][0]['data']['detail'] = None
         diag.store(json.dumps(payload).encode(), self.root)
 
+    def test_process_exits_and_battery_state_in_the_phone_report(self):
+        # wizard-ux#1724: why the last WizardOS processes ended, as the phone sends it after a sudden close.
+        payload = json.loads(self.body)
+        payload['events'] = [{'seq': 1, 'uptimeMs': 1, 'thread': 'main', 'method': 'arm', 'data': {'reason': 'process-exit'}}]
+        payload['session'].update(batteryExempt=False, processExits=[
+            {'timestamp': 1795775905000, 'pid': 4242, 'process': 'ai.wizards.os', 'reason': 3, 'reasonName': 'low_memory',
+             'status': 0, 'importance': 125, 'pssKb': 312000, 'rssKb': 401000, 'description': 'lmk'}])
+        body = json.dumps(payload).encode()
+        name = diag.store(body, self.root)
+        self.assertEqual(body, (self.root / name).read_bytes())
+        for bad in ({'processExits': [{'reason': '3'}]}, {'processExits': [{'note': 'x'}]},
+                    {'processExits': [{'description': 'd' * 201}]}, {'processExits': [{}] * 21},
+                    {'processExits': [{'reasonName': 'Low Memory!'}]}, {'batteryExempt': 'no'}):
+            p = json.loads(self.body); p['session'].update(bad)
+            with self.assertRaises(ValueError, msg=str(bad)[:60]):
+                diag.store(json.dumps(p).encode(), self.root)
+
+    def test_hangs_and_anr_frames_in_the_phone_report(self):
+        # wizard-ux#1762: a frozen UI thread (or page process) arrives with the main thread's code locations.
+        payload = json.loads(self.body)
+        payload['events'] = [{'seq': 1, 'uptimeMs': 1, 'thread': 'WizardHangWatch', 'method': 'arm', 'data': {'reason': 'hang'}}]
+        frames = ['android.os.MessageQueue.nativePollOnce', 'ai.wizards.os.mizel.MizelStore.snapshot:110',
+                  '- waiting to lock <0x0a1b2c3d> (a ai.wizards.os.mizel.MizelStore) held by thread 27',
+                  'ai.wizards.os.MainActivity.onStart(MainActivity.java:1039)']
+        payload['session'].update(hangs=[{'at': 1795775905000, 'kind': 'main', 'ms': 7400, 'frames': frames},
+                                         {'at': 1795775900000, 'kind': 'webview', 'ms': 0, 'frames': []}],
+                                  processExits=[{'timestamp': 1795775905000, 'reason': 6, 'reasonName': 'anr', 'frames': frames}])
+        body = json.dumps(payload).encode()
+        name = diag.store(body, self.root)
+        self.assertEqual(body, (self.root / name).read_bytes())
+        hang = {'at': 1, 'kind': 'main', 'ms': 1, 'frames': []}
+        for bad in ({'hangs': [dict(hang, kind='js')]}, {'hangs': [dict(hang, note='x')]}, {'hangs': [hang] * 11},
+                    {'hangs': [dict(hang, frames=['https://box.example/chat?q=secret'])]},
+                    {'hangs': [dict(hang, frames=['x' * 201])]}, {'hangs': [dict(hang, frames=['a'] * 41)]},
+                    {'hangs': [dict(hang, ms='7s')]}, {'processExits': [{'frames': ['"quoted text"']}]}):
+            p = json.loads(self.body); p['session'].update(bad)
+            with self.assertRaises(ValueError, msg=str(bad)[:60]):
+                diag.store(json.dumps(p).encode(), self.root)
+
     def test_capture_render_pause_flag(self):
         ok = json.dumps({'schema': 1, 'session': {}, 'events': [
             {'seq': 1, 'uptimeMs': 1, 'thread': 'main', 'method': 'capture.render', 'data': {'pauseWanted': True}}]}).encode()

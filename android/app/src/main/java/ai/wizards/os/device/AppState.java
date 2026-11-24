@@ -31,12 +31,14 @@ public final class AppState {
      * so QA never writes to the real one. The shell page itself is then loaded from there too (homeUrl).
      */
     public static String origin(Context c) {
+        ShellToken.load(c);
         String qa = qaOrigin(c);
         return qa != null ? qa : ai.wizards.os.ServerSettings.origin(c);
     }
 
     /** This Wizard's own address (or the QA fake), ignoring any fallback: where carried state must land. */
     public static String primaryOrigin(Context c) {
+        ShellToken.load(c);
         String qa = qaOrigin(c);
         return qa != null ? qa : ai.wizards.os.ServerSettings.origin(c);
     }

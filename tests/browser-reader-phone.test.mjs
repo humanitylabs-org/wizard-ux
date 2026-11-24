@@ -3,7 +3,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
-const source = readFileSync(process.env.QA_BROWSER_PHONE_SOURCE || new URL('../web/app.js', import.meta.url), 'utf8');
+import { withShellParts } from './fixtures/shell-parts.mjs';
+const source = withShellParts(readFileSync(process.env.QA_BROWSER_PHONE_SOURCE || new URL('../web/app.js', import.meta.url), 'utf8'));
 const fn = name => { const start = source.indexOf(`  function ${name}(`); assert.ok(start >= 0); return source.slice(start, source.indexOf('\n  }', start) + 4); };
 function phone() {
   const location = new URL('https://wizard.example/wizard-os-home/index.html');
@@ -36,7 +37,7 @@ function phone() {
     setTimeout(){}, toast(){},
   };
   vm.createContext(c);
-  vm.runInContext(readFileSync(new URL('../web/core/escape-back.js',import.meta.url),'utf8'),c);
+  vm.runInContext(withShellParts(readFileSync(new URL('../web/core/escape-back.js',import.meta.url),'utf8')),c);
   c.phoneBack=window.WizEscapeBack.create();
   vm.runInContext(['fromOf','linkDesk','openLinkDesk','closeReviewCoach','hostedBack','backStep','onBack'].map(fn).join('\n'),c);
   vm.runInContext(source.match(/  phoneBack.watch\(\(\) => rvCoach,[^\n]+/)[0],c);

@@ -6,6 +6,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { runWithChatsModel } from './fixtures/chats-list-model.mjs';
+import { withShellParts } from './fixtures/shell-parts.mjs';
 const source = readFileSync(new URL('../web/core/chat-power.js', import.meta.url), 'utf8');
 function harness(doc = false, live = { status: 'running' }) {
   const state = { lid: 'reply', posFor: 'thread', show: 120 }, w = { id: 'win', thread: 'thread' }, latest = { hidden: true };
@@ -90,8 +92,31 @@ for (const doc of [false, true]) {
     h.sc.clientHeight = 300; h.api.reflow(h.nb); assert.equal(h.top(), 1700);
   });
 }
-test('Incognito keeps the reader’s place on repaint; only opening and his send go to the bottom', () => {
-  const src = readFileSync(new URL('../web/core/incognito-chat.js', import.meta.url), 'utf8');
-  assert.match(src, /box\.scrollTop = keep == null \? box\.scrollHeight : keep/);
-  assert.match(src, /s\.messages\.push\(\{ role: 'user', text \}\); s\.toBottom = true; paint\(wid\)/);
+// The real Incognito component (incognito-chat.js) on a fake element whose one message box has a scroll place.
+test('Incognito keeps the reader’s place on repaint; only opening and his send go to the bottom', async () => {
+  const src = withShellParts(readFileSync(new URL('../web/core/incognito-chat.js', import.meta.url), 'utf8'));
+  const box = { scrollTop: 0, scrollHeight: 2000 }, field = { value: '', disabled: false, focus() {}, setSelectionRange() {} };
+  const el = { innerHTML: '', querySelector(q) { const on = this.innerHTML.includes('data-incog-thread');
+    return q === '[data-incog-thread] .ch-msgs' || q === '.ch-msgs' ? (on ? box : null) : q === '[data-incog-field]' ? (on ? field : null) : q === '[data-incog-thread]' ? (on ? {} : null) : null; } };
+  const streams = [];
+  const context = { window: { WizCore: {}, WizLive: { openRunStream: (sid, agent, run, notify) => { const st = { notify, close() {} }; streams.push(st); return st; } } },
+    document: { activeElement: null }, addEventListener() {}, setInterval: () => 0, clearInterval() {}, setTimeout: () => 0, clearTimeout() {}, AbortController, Promise,
+    localStorage: { getItem: () => 'true' } };
+  runWithChatsModel(src, context);
+  const fetchImpl = async path => ({ ok: true, json: async () => path.endsWith('/incognito') ? { session_id: 'incog_' + 'a'.repeat(32) } : path.endsWith('/v1/runs') ? { run_id: 'run-1' } : {} });
+  let c; c = context.window.WizCore.incognitoChats({ win: () => ({ id: 'one', thread: '__new__' }), elOf: () => el, paint: () => c.render('one', el), grow() {}, toast() {},
+    kit: { esc: String, md: String }, fetchImpl, confirm: () => true });
+  await c.start('one', { id: 'private-synthetic', label: 'Private', privacy: 'private', incognito_available: true });
+  assert.equal(box.scrollTop, 2000, 'opening lands at the bottom');
+  const sent = c.send('one', 'first question');
+  assert.equal(box.scrollTop, 2000, 'his send goes to the bottom');
+  await sent; await new Promise(r => setImmediate(r));
+  box.scrollTop = 300; box.scrollHeight = 2600; // he scrolls up to read while the reply streams in
+  streams[0].notify({ terminal: false, text: 'partial answer', steps: [] });
+  assert.match(el.innerHTML, /partial answer/);
+  assert.equal(box.scrollTop, 300, 'a streaming repaint keeps his place');
+  streams[0].notify({ terminal: true, status: 'completed', text: 'whole answer', steps: [] });
+  assert.equal(box.scrollTop, 300, 'and so does the finished reply');
+  await c.send('one', 'next question');
+  assert.equal(box.scrollTop, 2600, 'his next send goes to the bottom again');
 });

@@ -35,7 +35,7 @@ const SHELL = `<!doctype html><html><head><meta charset="utf-8">
   window.WizCore = { apps: () => ({ APPS, APP }), workspaceNav: { setCount() {} } };
   window.WizConfig = { stripAddress: s => s };
   window.opened = []; window.WizOpenApp = id => { opened.push(id); return true; };</script>
-<script src="/wizard-os-home/core/app-services.js"></script>
+<script src="/wizard-os-home/core/app-services-windows.js"></script><script src="/wizard-os-home/core/app-services-boundary.js"></script><script src="/wizard-os-home/core/app-services.js"></script>
 <script src="/wizard-os-home/core/share-sheet.js"></script>
 <style>iframe{width:420px;height:90px;border:1px solid #888} .wos-share{position:fixed;right:8px;top:8px;background:#eee;padding:6px;border:1px solid #444;font:12px sans-serif} .wos-share button{display:block;margin:2px 0}</style></head>
 <body><div class="win" id="w1"><iframe class="appframe" sandbox="allow-scripts allow-forms allow-downloads" src="/notes/"></iframe></div>

@@ -69,7 +69,7 @@ const report = { origin, web, cases: [] };
         const page = await context.newPage(); page.on('pageerror', e => entry.errors.push(e.message));
         await page.goto(origin + prefix + (phone ? 'index.html?phone' : 'desktop.html'));
         await page.waitForFunction(() => (window.__wux || window.__wos) && !window.WosWelcome?.active && window.WosExperience?.state.tweaks.length && !window.WosExperience.state.busy);
-        if (on) await page.waitForFunction(() => (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/chat-channels'), null, { timeout: 15000 }).catch(() => {});
+        if (on) await page.waitForFunction(() => true, null, { timeout: 15000 }).catch(() => {});
         await page.evaluate(phone => phone ? __wos.openSheet('inbox') : __wux.openChatsList(), phone);
         const vis = sel => page.locator(sel).filter({ visible: true }).first();
         if (!on) {

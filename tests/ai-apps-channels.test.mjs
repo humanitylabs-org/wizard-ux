@@ -8,9 +8,25 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { modelContext } from './fixtures/chats-list-model.mjs';
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
+import { withShellParts } from './fixtures/shell-parts.mjs';
+import { withWebParts } from './fixtures/web-parts.mjs';
+import { block, runRecording } from './fixtures/source-slice.mjs';
+import { cascade, parseCss } from './fixtures/mini-css.mjs';
+import { fixture } from './fixtures/tweaks.mjs';
+import { El, deskWorld, layout } from './fixtures/ai-apps-world.mjs';
 
-const read = f => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8');
+const read = f => withShellParts(withWebParts(readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')));
 const slice = (js, a, b) => { const i = js.indexOf(a), j = js.indexOf(b, i + 1); assert.ok(i >= 0 && j > i, a); return js.slice(i, j); };
+const settle = () => new Promise(r => setTimeout(r, 15));
+// the desktop AI apps view on a small DOM, desktop.css asked what wins on what it drew
+const DESK_CSS = [parseCss(readFileSync(new URL('../web/layouts/ai-apps/desktop.css', import.meta.url), 'utf8'))];
+async function panelDesk({ before } = {}) {
+  const d = deskWorld(), { w } = d;
+  w.html.setAttribute('data-shell', 'desktop'); w.html.setAttribute('data-layout', 'ai-apps');
+  before?.(d); (await layout()).default(w.api);
+  return { ...d, style: n => { assert.ok(n, 'drawn'); const c = cascade(n, DESK_CSS); return k => c[k]?.value ?? ''; } };
+}
 const kinds = ['main', 'host-profile', 'container', 'restricted'];
 
 // The desktop adapter: the side pane, its clicks and its Back, with routed agents' Chats windows open (and found first).
@@ -208,9 +224,9 @@ test('Activity rows carry their "# channel" from CHATS.channelOf (main and route
   assert.ok(M.sessionList({ ready: rows }, facts).ready.every(r => !('channel' in r)), 'an adapter without Channels: the rows as today');
 });
 
-test('the real channelOf / chanSide: names per agent, only with the switch on; only id::side is a sidebar pane', () => {
-  const src = read('web/core/chats.js');
-  const block = slice(src, '  /* Channels view (switch wizard/chat-channels', '  function clearAll(w)');
+test('the real channelOf / chanSide: names per agent; only id::side is a sidebar pane', () => {
+  const src = withParts(read('web/core/chats.js'));
+  const block = slice(src, '  /* Channels view (wizard-ux issue 1254)', '  function clearAll(w)');
   // 'x' is both a main thread (in Launch) and a container agent's thread (in Box): the row's own owner decides.
   const spacesData = [{ id: 'launch', name: 'Launch', threads: ['a', 'x'] }, { id: 'box', name: 'Box', agent: 'container', threads: ['k1', 'x'] }, { id: 'ops', name: 'Ops', agent: 'host', threads: ['x'] }];
   const agents = { k1: 'container', r1: 'restricted', h1: 'host', x: 'container' }; // the id-only pin points at one of them
@@ -230,39 +246,36 @@ test('the real channelOf / chanSide: names per agent, only with the switch on; o
   assert.equal(channelOf({ id: 'h1' }), 'General', 'a host-profile agent\'s unfiled row is in General');
   assert.equal(chanSide({ id: 'w1::side' }), true);
   for (const id of ['w1', 'w1::list', 'side']) assert.equal(chanSide({ id }), false, id);
-  env.document.documentElement.dataset.tweaks = '';
-  assert.equal(channelOf({ id: 'a' }), '', 'switch off: no channel');
-  assert.equal(chanSide({ id: 'w1::side' }), false, 'switch off: the pane paints nothing');
 });
 
-test('Chats paints the side pane only with the switch on: tabs, then the channel list or a feed with its box; the layout wires it', () => {
-  const src = read('web/core/chats.js');
-  const r = slice(src, '  function renderChatList(w, el) {', '    syncListTitle(w);');
-  assert.match(r, /const side = typeof chanSide === 'function' && chanSide\(w\);\n\s+if \(!side\) \{[^]*if \(H\.ownsChatList\?\.\(\)\) \{ el\?\.replaceChildren\(\); return; \}\n\s+\}/, 'a layout-owned list stays empty unless it is the switched-on side pane');
-  assert.match(r, /chanSwitchedOff\(w\)\) H\.layout/, 'switched off inside a feed: the Focus returns');
-  assert.match(src, /const head = side \? chanHead\(w, feed\) :/, 'the pane\'s head is the Channels tabs or the feed\'s header only (no search: the sidebar has its own)');
-  assert.match(src, /if \(side && !feed && chanView !== 'channels'\) body = '';/, 'Activity: the sidebar draws its own rows');
-  assert.match(src, /const html = side \? `<div data-part="list" class="ch-list ch-side\$\{feed \? ' ch-side-feed' : chanView === 'channels' \? ' ch-side-chan' : ''\}">\$\{head\}<div class="ch-scroll">\$\{body\}<\/div>\$\{feed && typeof jumpPillsHtml === 'function' \? jumpPillsHtml\(\) : ''\}\$\{feed \? fab : ''\}<\/div>`/);
-  assert.match(src, /readyBack, channelBack, chanOpen, channelOf,/, 'channelOf is on the Chats API');
-  const host = read('web/core/skin-host.js');
-  assert.match(host, /channels: node => live\(\) && node\?\.nodeType === 1 && \[\.\.\.a\.mounts\]\.some\(m => m\.contains\(node\)\) \? !!shell\.chatChannels\?\.\(node\) : false,/, 'only the layout\'s own mounted nodes');
-  assert.match(host, /channelBack: \(\) => live\(\) \? !!shell\.chatChannelBack\?\.\(\) : false,/);
-  const js = read('web/layouts/ai-apps/desktop.js');
-  assert.match(js, /const chanBox = el\('div', 'aad-chan'\); chanBox\.hidden = true;/);
-  assert.match(js, /panel\.append\(head, agentsRow, chanBox, scroll, foot\)/);
-  assert.match(js, /const paintChan = \(\) => \{ const on = !q && !!api\.sessions\.channels\?\.\(chanBox\);/, 'hidden while the sidebar searches');
-  assert.match(js, /if \(s\.channel\) title\.append\(el\('span', 'aad-chan-line', \{ text: `# \$\{s\.channel\}` \}\)\);/);
-  assert.match(js, /else if \(docked\) chatBack\(\);\n\s+else if \(api\.sessions\?\.channelBack\?\.\(\)\) paintList\(\);/, 'Esc: a docked thread or feed first');
-  // The design change of 11 Nov 2026: the feed is a chat in the column (FEED), Back from a post lands on it, Esc closes it.
-  assert.match(js, /if \(!h\.app\) chatThread = h\.thread \|\| \(h\.note \? NOTE : h\.draft \? DRAFT : feedOn\(\) \? FEED : null\);/, 'no thread in the column and a channel open: its feed');
-  assert.match(js, /if \(chatThread === FEED\) \{ chatThread = null; anim\('undock'\); api\.sessions\.channelBack\?\.\(\); paintTop\(\); return true; \}/, 'Esc / ✕ on the feed: nothing open');
-  assert.match(js, /api\.listen\(globalThis, 'wos:channel-feed', e => feedOpened\(e\?\.detail\?\.open \|\| null\)\);/);
-  assert.match(js, /const open = on \? api\.sessions\.channelFeed\?\.\(feedBox\) : null;/);
-  assert.match(host, /channelFeed: node => live\(\) && node\?\.nodeType === 1 && \[\.\.\.a\.mounts\]\.some\(m => m\.contains\(node\)\) \? shell\.chatFeed\?\.\(node\) \|\| null : null,/, 'only the layout\'s own mounted nodes');
-  // Chats: the sidebar's pane never draws a feed (its channels open in the feed window), the feed window nothing else.
-  assert.match(src, /feed = chanOn && !\(typeof chanElsewhere === 'function' && chanElsewhere\(w\)\) \? chanOpen\(w\) : null;/, 'opening a channel never replaces the sidebar list');
-  assert.match(src, /if \(side && !feed && typeof chanElsewhere === 'function' && typeof H\.channelsElsewhere === 'function' && !chanElsewhere\(w\)\) \{ el\.replaceChildren\(\); return; \}/);
-  const css = read('web/layouts/ai-apps/desktop.css');
-  assert.match(css, /\.aad-panel:has\(\.aad-chan:not\(\[hidden\]\) :is\(\.ch-side-chan, \.ch-side-feed\)\) > \.aad-scroll \{ display: none; \}/, 'Channels and a feed take the rows\' place');
-  assert.match(css, /\.aad-row:has\(\.aad-chan-line\) \{ height: auto; min-height: 56px;/, 'two lines at 56 px');
+test('Chats paints the side pane: tabs, then the channel list or a feed with its box; the layout wires it', async () => {
+  // core: a layout-owned list stays empty unless it is the side pane; the main column's feed window draws a feed or nothing
+  const src = withParts(read('web/core/chats.js')), fn = block(src, '  function renderChatList(w, el) {') + '\nthis.render = renderChatList;';
+  const paint = scope => { const el = { dataset: {}, innerHTML: '<old>', replaceChildren() { this.cleared = (this.cleared || 0) + 1; } }; const c = runRecording(fn, scope); c.render({ id: 'w1' }, el); return { el, c }; };
+  const own = paint({ H: { ownsChatList: () => true }, chanSide: () => false });
+  assert.equal(own.el.cleared, 1, 'a layout-owned list stays empty'); assert.ok(!own.c.calls.some(x => x[0] === 'syncListTitle'), 'no list work under the layout');
+  const col = paint({ H: { ownsChatList: () => true, channelsElsewhere: () => true }, chanSide: () => true, chanHead: () => '', chanElsewhere: () => false, chanOpen: () => null, ch: () => ({}), norm: String, winAgent: () => '', LIVE: { ok: true }, chatVars: {} });
+  assert.equal(col.el.cleared, 1, 'the main column\'s feed window with no channel open: nothing (never the tabs or the list)');
+  assert.ok(col.c.calls.some(x => x[0] === 'syncListTitle'), 'the side pane is the switched-on one: it goes on painting');
+  // skin-host: the side pane and the feed only into the layout's own mounted nodes; Back goes to Chats
+  const f = fixture({ shell: 'desktop' }), got = []; let api = null;
+  f.host._test.setImporter(async () => ({ default: a => { api = a; return () => {}; } }));
+  Object.assign(f.adapter, { mountHost: () => ({ appendChild() {} }), chatChannels: n => { got.push('channels ' + n.id); return true; }, chatFeed: n => { got.push('feed ' + n.id); return { open: 'general' }; }, chatChannelBack: () => { got.push('back'); return true; } });
+  f.host.setStandardLayout('ai-apps'); await settle();
+  const mine = { nodeType: 1, id: 'mine', remove() {}, contains: n => n === mine || n === kid }, kid = { nodeType: 1, id: 'kid' }, other = { nodeType: 1, id: 'other' };
+  api.mount(mine);
+  assert.equal(api.sessions.channels(kid), true); assert.equal(api.sessions.channels(other), false, 'only the layout\'s own mounted nodes');
+  assert.deepEqual(api.sessions.channelFeed(kid), { open: 'general' }); assert.equal(api.sessions.channelFeed(other), null, 'only the layout\'s own mounted nodes');
+  assert.equal(api.sessions.channelBack(), true); assert.deepEqual(got, ['channels kid', 'feed kid', 'back']);
+  // the layout: its .aad-chan box gets the pane; Channels take the rows' place; a row's "# channel" makes it two lines
+  const backs = [];
+  const p = await panelDesk({ before: d => { d.w.st.sessions.ready[0].channel = 'general';
+    Object.assign(d.w.api.sessions, { channels: node => { node.replaceChildren(); const list = new El('div'); list.className = 'ch-list ch-side ch-side-chan'; node.append(list); return true; }, channelBack: () => { backs.push(1); return true; } }); } });
+  const { w, style } = p, box = w.q('.aad-chan');
+  assert.equal(box.hidden, false, 'the side pane is shown in the sidebar'); assert.equal(box.closest('.aad-panel') !== null, true);
+  assert.ok(box.querySelector('.ch-side-chan'), 'Chats painted its channel list into the layout\'s box');
+  assert.equal(style(w.q('.aad-panel > .aad-scroll'))('display'), 'none', 'Channels and a feed take the rows\' place');
+  assert.equal(w.q('.aad-rw[data-sid="r1"] .aad-chan-line').textContent, '# general', 'a row\'s channel under its title');
+  const row = style(w.q('.aad-rw[data-sid="r1"] .aad-row')); assert.deepEqual([row('height'), row('min-height')], ['auto', '56px'], 'two lines at 56 px');
+  assert.equal(w.escape(), true); assert.equal(backs.length, 1, 'Esc with no docked thread: Back in Channels (thread → channel → list)');
 });

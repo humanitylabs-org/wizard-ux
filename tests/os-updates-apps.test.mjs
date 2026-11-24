@@ -1,14 +1,15 @@
-// Settings > About & updates > Apps (wizard-ux#1191), behind the off-by-default switch wizard/app-updates-list:
+// Settings > About & updates > Apps (wizard-ux#1191), on for everyone (its switch wizard/app-updates-list was removed):
 // each installed Wizard Store app with its installed version, the App Store's latest and a plain status, read from
-// the Store's installed list (the same Runtipi list wizard-app-manager's app updater compares). Off: no request.
+// the Store's installed list (the same Runtipi list wizard-app-manager's app updater compares). No switch: always shown.
 // Run: node --test tests/os-updates-apps.test.mjs
 import test from 'node:test';
+import { createDocument } from './fixtures/mini-dom.mjs';
+import { cascade } from './fixtures/mini-css.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
 const src = read('web/core/os-updates.js');
-const ID = 'wizard/app-updates-list';
 const tick = () => new Promise(r => setTimeout(r, 0));
 const STATUS = { mode: 'auto', chosen: true, installed: '0.3.15', latest: '0.3.15', update_available: false, unpinned: false, checked: true, installing: false };
 const row = (id, version, latestVersion, extra = {}) => ({ info: { id, urn: `${id}:wizardapps`, name: extra.name || id }, app: { status: extra.status || 'running', version, ...(extra.ignoredVersion ? { ignoredVersion: extra.ignoredVersion } : {}) }, metadata: { latestVersion } });
@@ -22,7 +23,7 @@ const INSTALLED = { installed: [
   { info: { id: 'Bad/Id', name: '<x>' }, app: { version: 1 }, metadata: { latestVersion: 2 } },
 ] };
 
-async function load({ on, apps = () => [200, INSTALLED], updates = () => [200, STATUS], mgr = () => [404, { error: 'not found' }], hang = false, post = () => [200, {}] } = {}) {
+async function load({ apps = () => [200, INSTALLED], updates = () => [200, STATUS], mgr = () => [404, { error: 'not found' }], hang = false, post = () => [200, {}] } = {}) {
   const calls = [], listeners = {}, posts = [];
   let refreshes = 0;
   const fetch = async (url, opts = {}) => {
@@ -37,21 +38,14 @@ async function load({ on, apps = () => [200, INSTALLED], updates = () => [200, S
     return { ok: status >= 200 && status < 300, status, json: async () => body };
   };
   const window = { WosSettings: { register() {}, refresh: () => refreshes++ }, addEventListener: (t, f) => { listeners[t] = f; } };
-  const document = { currentScript: { src: 'https://box.ts.net/wizard-os-home/core/os-updates.js' }, documentElement: { dataset: { tweaks: on ? `wizard/pin-buttons ${ID}` : 'wizard/pin-buttons' } } };
+  const document = { currentScript: { src: 'https://box.ts.net/wizard-os-home/core/os-updates.js' }, documentElement: { dataset: { tweaks: '' } } };
   new Function('window', 'document', 'fetch', 'location', src)(window, document, fetch, { href: 'https://box.ts.net/wizard-os-home/' });
   await tick(); await tick();
   return { U: window.WosUpdates, calls, posts, document, listeners, refreshes: () => refreshes };
 }
 
-test('switch off: About & updates is unchanged and the apps list is never read', async () => {
-  const { U, calls } = await load({ on: false });
-  const h = U.html(); await tick(); await tick();
-  assert.doesNotMatch(h, /data-osu-apps|>Apps</);
-  assert.deepEqual(calls, ['https://box.ts.net/wizard-os-home/store-install/_updates']);
-});
-
-test('switch on: one read of the Store installed list, then every Wizard Store app with versions and status', async () => {
-  const { U, calls } = await load({ on: true });
+test('no switch needed: one read of the Store installed list, then every Wizard Store app with versions and status', async () => {
+  const { U, calls } = await load();
   assert.match(U.html(), /<div class="osu-sec" data-osu-apps><span class="osu-lbl">Apps<\/span><p class="st-note" role="status">Checking apps…<\/p><\/div>/);
   await tick(); await tick();
   assert.deepEqual(calls, ['https://box.ts.net/wizard-os-home/store-install/_updates', 'https://box.ts.net/wizard-os-home/store-install/_app-updates', 'https://box.ts.net/wizard-os-home/store-data/api/apps/installed']);
@@ -68,7 +62,7 @@ test('switch on: one read of the Store installed list, then every Wizard Store a
 });
 
 test('older App Manager without server update controls (404): the apps still show (Codex P2)', async () => {
-  const { U, calls } = await load({ on: true, updates: () => [404, { error: 'not found' }] });
+  const { U, calls } = await load({ updates: () => [404, { error: 'not found' }] });
   assert.match(U.html(), /Update controls are not available on this Wizard\./);
   await U.loadApps();
   const h = U.html();
@@ -77,7 +71,7 @@ test('older App Manager without server update controls (404): the apps still sho
 });
 
 test('appRows mirrors the App Manager comparison (latest > installed) and escapes names', async () => {
-  const { U } = await load({ on: false });
+  const { U } = await load();
   const rows = U.appRows({ installed: [row('a-app', '7', '7'), row('b-app', 7, 8, { name: '<b>B</b>' }), { info: { id: 'c-app' }, app: { version: 2 }, metadata: {} }] });
   assert.deepEqual(rows.map(r => [r.id, r.state, r.label]), [['b-app', 'ready', 'Update ready'], ['c-app', 'unknown', 'Couldn’t check'], ['a-app', 'current', 'Up to date']]);
   assert.equal(rows[0].name, '<b>B</b>');
@@ -85,7 +79,7 @@ test('appRows mirrors the App Manager comparison (latest > installed) and escape
 
 test('a failed read says so plainly and keeps the last good list', async () => {
   let fail = true;
-  const { U, calls } = await load({ on: true, apps: () => fail ? [502, { error: 'app_data_unavailable' }] : [200, INSTALLED] });
+  const { U, calls } = await load({ apps: () => fail ? [502, { error: 'app_data_unavailable' }] : [200, INSTALLED] });
   U.html(); await U.loadApps();
   assert.match(U.html(), /data-osu-apps><span class="osu-lbl">Apps<\/span><p class="st-note" role="status">Couldn’t read the installed apps\.<\/p>/);
   U.html(); U.html(); await U.loadApps();
@@ -98,35 +92,30 @@ test('a failed read says so plainly and keeps the last good list', async () => {
   assert.match(h, /data-osu-app="wizard-messenger"/);
 });
 
-test('turning the switch on repaints Settings and the list appears without a reload', async () => {
-  const { U, document, listeners, refreshes, calls } = await load({ on: false });
-  assert.equal(typeof listeners['wos:tweak-choice'], 'function');
-  document.documentElement.dataset.tweaks = ID;
-  const before = refreshes(); listeners['wos:tweak-choice']();
-  assert.ok(refreshes() > before);
+test('the switch is gone: no catalog entry, no package, the list shows with nothing in data-tweaks', async () => {
+  const cat = JSON.parse(read('web/tweaks/catalog.json'));
+  assert.ok(!JSON.stringify(cat).includes('app-updates-list'));
+  assert.throws(() => read('web/tweaks/wizard/app-updates-list/manifest.json'));
+  assert.doesNotMatch(src, /app-updates-list'|appsOn/);
+  const { U, calls } = await load();
   U.html(); await tick(); await tick();
   assert.equal(calls.filter(u => u.endsWith('/apps/installed')).length, 1);
   assert.match(U.html(), /data-osu-app="wizard-messenger"/);
+  // the Apps styles live in Settings, unscoped: the list as drawn, on a page with no tweaks, gets its row actions laid out
+  const doc = createDocument(); doc.body.innerHTML = U.html();
+  const ready = doc.body.querySelector('[data-osu-apps] [data-osu-app="wizard-messenger"] .st-val');
+  assert.ok(ready, 'Messenger shows its new version');
+  assert.equal(cascade(ready, read('web/core/settings.css'))['font-weight']?.value, '600', 'styled by settings.css with nothing in data-tweaks');
 });
 
-test('the switch is a catalogued tweak package, off by default', () => {
-  const cat = JSON.parse(read('web/tweaks/catalog.json'));
-  assert.ok(cat.tweaks.includes(ID));
-  assert.ok(!cat.defaults.includes(ID));
-  assert.doesNotMatch(read('web/tweaks/wizard/profile.json'), /app-updates-list/);
-  const m = JSON.parse(read('web/tweaks/wizard/app-updates-list/manifest.json'));
-  assert.equal(m.id, ID); assert.equal(m.author, 'wizard'); assert.equal(m.apiVersion, 1);
-  assert.match(read('web/tweaks/wizard/app-updates-list/tweak.css'), /html\[data-tweaks~="wizard\/app-updates-list"\]/);
-});
-
-// Slice 2: the App Manager's own app-update state (wizard-app-manager `_app-updates`, same switch).
+// Slice 2: the App Manager's own app-update state (wizard-app-manager `_app-updates`).
 const MGR = { app_mode: 'ask', holds: ['wizard-notes', 'wizard-music', 'wizard-photos-x'],
   failed: { 'wizard-messenger': { to: 97, at: 1762660000, reason: 'a container keeps restarting <b>' }, 'wizard-music': { to: 5, at: 1, reason: 'old' } },
   last: { at: '2026-11-09T04:31:07Z', updated: [], rolled_back: ['wizard-messenger'], failed: [] }, due: [], skipped: [] };
 
-test('switch on with the App Manager state: failed with its reason, rolled back, held, mode and last run', async () => {
+test('with the App Manager state: failed with its reason, rolled back, held, mode and last run', async () => {
   const INST = { installed: [...INSTALLED.installed, row('wizard-maps', 2, 3, { name: 'Maps' })] };
-  const { U } = await load({ on: true, apps: () => [200, INST], mgr: () => [200, { ...MGR, holds: ['wizard-maps', 'wizard-notes', 'wizard-messenger'] }] });
+  const { U } = await load({ apps: () => [200, INST], mgr: () => [200, { ...MGR, holds: ['wizard-maps', 'wizard-notes', 'wizard-messenger'] }] });
   await U.loadApps();
   const h = U.html();
   assert.match(h, /data-osu-app="wizard-messenger" data-osu-app-state="failed"><span class="st-tx"><b>Messenger<\/b><span>Version 93 · latest 97<\/span><span data-osu-app-why>Version 97: a container keeps restarting &lt;b&gt;<\/span><\/span><span class="st-val">Rolled back<\/span>/);
@@ -139,7 +128,7 @@ test('switch on with the App Manager state: failed with its reason, rolled back,
 });
 
 test('failed but not rolled back reads Update failed; never run reads not run yet', async () => {
-  const { U } = await load({ on: true, mgr: () => [200, { ...MGR, app_mode: 'auto', last: null }] });
+  const { U } = await load({ mgr: () => [200, { ...MGR, app_mode: 'auto', last: null }] });
   await U.loadApps();
   const h = U.html();
   assert.match(h, /data-osu-app-state="failed">.*<span class="st-val">Update failed</);
@@ -148,7 +137,7 @@ test('failed but not rolled back reads Update failed; never run reads not run ye
 
 test('older App Manager (404) or a bad answer: the list is as before, with no mode line', async () => {
   for (const mgr of [() => [404, { error: 'not found' }], () => [200, { app_mode: 'sometimes' }], () => { throw new Error('down'); }]) {
-    const { U } = await load({ on: true, mgr });
+    const { U } = await load({ mgr });
     await U.loadApps();
     const h = U.html();
     assert.match(h, /data-osu-app="wizard-messenger" data-osu-app-state="ready">/);
@@ -156,14 +145,8 @@ test('older App Manager (404) or a bad answer: the list is as before, with no mo
   }
 });
 
-test('switch off: the App Manager state is never read either', async () => {
-  const { U, calls } = await load({ on: false, mgr: () => [200, MGR] });
-  U.html(); await tick(); await tick();
-  assert.ok(!calls.some(u => u.endsWith('/_app-updates')));
-});
-
 test('a hung App Manager answer never holds up the list (Codex P2)', async () => {
-  const { U } = await load({ on: true, hang: true });
+  const { U } = await load({ hang: true });
   const t = Date.now(); await U.loadApps();
   assert.ok(Date.now() - t < 6000);
   const h = U.html();
@@ -172,14 +155,14 @@ test('a hung App Manager answer never holds up the list (Codex P2)', async () =>
 });
 
 // Slice 3: the buttons. Update now / Retry, Hold / Unhold and the app Automatic / Ask me choice, all POSTs to the
-// App Manager's `_app-updates` route (wizard-app-manager#527), only while the switch is on and that route answered.
+// App Manager's `_app-updates` route (wizard-app-manager#527), only once that route answered.
 const tap = (U, osu, ctx = {}) => U.act({ closest: sel => sel === '[data-osu]' ? { dataset: { osu } } : null }, ctx);
 const rowOf = (h, id) => (h.match(new RegExp(`<div class="st-row static" data-osu-app="${id}"[\\s\\S]*?</div>`)) || [''])[0];
 const buttons = (h, id) => [...rowOf(h, id).matchAll(/<button type="button" data-osu="([^"]+)"[^>]*>([^<]*)</g)].map(m => [m[1], m[2]]);
 
 test('buttons per row: Retry for a failure, Update now when ready, Hold / Unhold, none for system or busy apps', async () => {
   const INST = { installed: [...INSTALLED.installed, row('wizard-maps', 2, 3, { name: 'Maps' }), row('wizard-chess', 4, 5, { name: 'Chess' })] };
-  const { U } = await load({ on: true, apps: () => [200, INST], mgr: () => [200, { ...MGR, holds: ['wizard-notes', 'wizard-chess'] }] });
+  const { U } = await load({ apps: () => [200, INST], mgr: () => [200, { ...MGR, holds: ['wizard-notes', 'wizard-chess'] }] });
   await U.loadApps();
   const h = U.html();
   assert.deepEqual(buttons(h, 'wizard-messenger'), [['app-retry:wizard-messenger', 'Retry'], ['app-hold:wizard-messenger', 'Hold']]);
@@ -191,8 +174,8 @@ test('buttons per row: Retry for a failure, Update now when ready, Hold / Unhold
   assert.match(h, /<div class="st-seg" role="radiogroup" aria-label="App updates" data-osu-app-modes><button type="button" data-osu="app-mode:auto" role="radio" aria-checked="false">Automatic<\/button><button type="button" data-osu="app-mode:ask" role="radio" aria-checked="true">Ask me<\/button><\/div>/);
 });
 
-test('switch off, or an App Manager without the route: no buttons and no POST', async () => {
-  for (const opts of [{ on: false, mgr: () => [200, MGR] }, { on: true }]) {
+test('an App Manager without the route: no buttons and no POST', async () => {
+  for (const opts of [{}]) {
     const { U, posts } = await load(opts);
     await U.loadApps();
     const h = U.html();
@@ -205,7 +188,7 @@ test('switch off, or an App Manager without the route: no buttons and no POST', 
 
 test('Retry: one POST {action:"apply", app}, pending while it waits, then done and the row read again from GET', async () => {
   let answer; const toasts = [];
-  const { U, posts, calls } = await load({ on: true, mgr: () => [200, MGR], post: () => new Promise(ok => { answer = ok; }) });
+  const { U, posts, calls } = await load({ mgr: () => [200, MGR], post: () => new Promise(ok => { answer = ok; }) });
   await U.loadApps();
   const reads = calls.filter(u => u.endsWith('/_app-updates')).length;
   tap(U, 'app-retry:wizard-messenger', { toast: (...a) => toasts.push(a) });
@@ -224,7 +207,7 @@ test('Retry: one POST {action:"apply", app}, pending while it waits, then done a
 
 test('the App Manager refuses: the row says so in its own words', async () => {
   const toasts = [];
-  const { U } = await load({ on: true, mgr: () => [200, MGR], post: () => [409, { started: false, error: 'Failed to start transient service unit' }] });
+  const { U } = await load({ mgr: () => [200, MGR], post: () => [409, { started: false, error: 'Failed to start transient service unit' }] });
   await U.loadApps();
   tap(U, 'app-apply:wizard-maps');   // not a row here: nothing is sent
   tap(U, 'app-retry:wizard-messenger', { toast: (...a) => toasts.push(a) });
@@ -232,14 +215,14 @@ test('the App Manager refuses: the row says so in its own words', async () => {
   assert.match(rowOf(U.html(), 'wizard-messenger'), /<span data-osu-app-msg="failed" role="status">Failed to start transient service unit<\/span>/);
   assert.deepEqual(toasts, [['!', 'Failed to start transient service unit', 2600]]);
   // started:false with 200 is not a success either.
-  const b = await load({ on: true, mgr: () => [200, MGR], post: () => [200, { started: false }] });
+  const b = await load({ mgr: () => [200, MGR], post: () => [200, { started: false }] });
   await b.U.loadApps(); tap(b.U, 'app-retry:wizard-messenger'); await tick(); await tick(); await tick();
   assert.match(rowOf(b.U.html(), 'wizard-messenger'), /data-osu-app-msg="failed" role="status">The App Manager said 200</);
 });
 
 test('Hold and Unhold send {hold}/{unhold}; the row follows the App Manager on the next GET', async () => {
   let holds = [];
-  const { U, posts } = await load({ on: true, mgr: () => [200, { ...MGR, failed: {}, last: null, holds }], post: b => { holds = b.hold ? [b.hold] : []; return [200, { holds }]; } });
+  const { U, posts } = await load({ mgr: () => [200, { ...MGR, failed: {}, last: null, holds }], post: b => { holds = b.hold ? [b.hold] : []; return [200, { holds }]; } });
   await U.loadApps();
   tap(U, 'app-hold:wizard-messenger'); await tick(); await tick(); await tick(); await tick(); await tick();
   assert.deepEqual(posts.at(-1).body, { hold: 'wizard-messenger' });
@@ -256,7 +239,7 @@ test('Hold and Unhold send {hold}/{unhold}; the row follows the App Manager on t
 
 test('the app Automatic / Ask me choice sends {mode}; the current choice sends nothing', async () => {
   let mode = 'ask';
-  const { U, posts } = await load({ on: true, mgr: () => [200, { ...MGR, app_mode: mode }], post: b => { mode = b.mode; return [200, { chosen: true }]; } });
+  const { U, posts } = await load({ mgr: () => [200, { ...MGR, app_mode: mode }], post: b => { mode = b.mode; return [200, { chosen: true }]; } });
   await U.loadApps();
   tap(U, 'app-mode:ask'); tap(U, 'app-mode:sometimes'); await tick();
   assert.deepEqual(posts, []);
@@ -270,7 +253,7 @@ test('the app Automatic / Ask me choice sends {mode}; the current choice sends n
 });
 
 test('a forged button for an app or action the row does not offer is never sent', async () => {
-  const { U, posts } = await load({ on: true, mgr: () => [200, MGR] });
+  const { U, posts } = await load({ mgr: () => [200, MGR] });
   await U.loadApps();
   for (const k of ['app-apply:wizard-ux', 'app-apply:wizard-photos', 'app-hold:other-app', 'app-apply:../x', 'app-delete:wizard-notes', 'app-unhold:wizard-maps']) tap(U, k);
   await tick(); await tick();
@@ -285,7 +268,7 @@ test('What\u2019s new: one line for the version waiting and the version just ins
   const notes = { 'wizard-messenger': { version: 97, text: 'Replies stay in their <b>thread</b>.' }, 'wizard-notes': { version: 12, text: 'Pinned notes come first.' },
     'wizard-tasks': { version: 4, text: 'Not just installed, so not shown.' }, 'wizard-books': { version: 1, text: 'About an older version.' },
     'wizard-ux': { version: 41, text: 'System app.' } };
-  const { U } = await load({ on: true, apps: () => [200, INST], mgr: () => [200, { ...MGR, holds: [], failed: {}, notes,
+  const { U } = await load({ apps: () => [200, INST], mgr: () => [200, { ...MGR, holds: [], failed: {}, notes,
     last: { at: '2026-11-09T04:31:07Z', updated: ['wizard-notes', 'wizard-clock'], rolled_back: [], failed: [] } }] });
   await U.loadApps();
   const h = U.html();
@@ -300,22 +283,22 @@ test('What\u2019s new: one line for the version waiting and the version just ins
 
 test('What\u2019s new: held with a newer version shows it; an App Manager without notes shows no line at all', async () => {
   const INST = { installed: [row('wizard-maps', 2, 3, { name: 'Maps' })] };
-  const { U } = await load({ on: true, apps: () => [200, INST], mgr: () => [200, { ...MGR, holds: ['wizard-maps'], failed: {}, notes: { 'wizard-maps': { version: 3, text: 'Offline maps.' } } }] });
+  const { U } = await load({ apps: () => [200, INST], mgr: () => [200, { ...MGR, holds: ['wizard-maps'], failed: {}, notes: { 'wizard-maps': { version: 3, text: 'Offline maps.' } } }] });
   await U.loadApps();
   assert.match(U.html(), /data-osu-app-state="held">.*<span data-osu-app-news>What’s new in 3: Offline maps\.<\/span>/);
   for (const extra of [{}, { notes: ['bad'] }, { notes: 'bad' }]) {
-    const r = await load({ on: true, apps: () => [200, INST], mgr: () => [200, { ...MGR, holds: [], failed: {}, ...extra }] });
+    const r = await load({ apps: () => [200, INST], mgr: () => [200, { ...MGR, holds: [], failed: {}, ...extra }] });
     await r.U.loadApps();
     assert.doesNotMatch(r.U.html(), /data-osu-app-news/);
   }
-  const off = await load({ on: true, apps: () => [200, INST] });
+  const off = await load({ apps: () => [200, INST] });
   await off.U.loadApps();
   assert.doesNotMatch(off.U.html(), /data-osu-app-news/, 'older App Manager (404): nothing about notes');
 });
 
 test('What\u2019s new: an app updated through Update now while held keeps its hold and still shows the new version (Codex P2)', async () => {
   const INST = { installed: [row('wizard-maps', 3, 3, { name: 'Maps' }), row('wizard-books', 2, 2, { name: 'Books' })] };
-  const { U } = await load({ on: true, apps: () => [200, INST], mgr: () => [200, { ...MGR, holds: ['wizard-maps', 'wizard-books'], failed: {},
+  const { U } = await load({ apps: () => [200, INST], mgr: () => [200, { ...MGR, holds: ['wizard-maps', 'wizard-books'], failed: {},
     notes: { 'wizard-maps': { version: 3, text: 'Offline maps.' }, 'wizard-books': { version: 2, text: 'Not just installed.' } },
     last: { at: '2026-11-09T04:31:07Z', updated: ['wizard-maps'], rolled_back: [], failed: [] } }] });
   await U.loadApps();
@@ -324,19 +307,19 @@ test('What\u2019s new: an app updated through Update now while held keeps its ho
   assert.match(h, /<b>Books<\/b><span>Version 2<\/span><\/span>/, 'held and up to date but not just updated: no line');
 });
 
-// Slice 5: a failed row links to the bug wizard-app-manager#524 filed or found (`failed[id].bug`, same switch).
+// Slice 5: a failed row links to the bug wizard-app-manager#524 filed or found (`failed[id].bug`).
 test('a failed row links to its bug report; no link without one, for a bad URL, or for rows that are not failed', async () => {
   const url = 'https://github.com/humanitylabs-org/wizard-messenger/issues/12';
   const withBug = { ...MGR, failed: { ...MGR.failed, 'wizard-messenger': { ...MGR.failed['wizard-messenger'], bug: url },
     'wizard-music': { to: 5, at: 1, reason: 'old', bug: 'https://github.com/humanitylabs-org/wizard-music/issues/3' } } };
-  const { U } = await load({ on: true, mgr: () => [200, withBug] });
+  const { U } = await load({ mgr: () => [200, withBug] });
   await U.loadApps();
   const h = U.html();
   assert.match(h, /<span data-osu-app-why>Version 97: a container keeps restarting &lt;b&gt;<\/span><a data-osu-app-bug href="https:\/\/github\.com\/humanitylabs-org\/wizard-messenger\/issues\/12" target="_blank" rel="noopener noreferrer">Bug report<\/a>/);
   assert.equal([...h.matchAll(/data-osu-app-bug/g)].length, 1, 'an old failure for another version gets no link');
   for (const bug of [undefined, 'javascript:alert(1)', 'https://github.com/a/b/pull/3', 'https://evil.test/a/b/issues/1', `${url}" onclick="x`]) {
     const failed = { 'wizard-messenger': { to: 97, at: 1, reason: 'r', ...(bug === undefined ? {} : { bug }) } };
-    const r = await load({ on: true, mgr: () => [200, { ...MGR, failed }] });
+    const r = await load({ mgr: () => [200, { ...MGR, failed }] });
     await r.U.loadApps();
     const hh = r.U.html();
     assert.match(hh, /data-osu-app="wizard-messenger" data-osu-app-state="failed"/);
@@ -344,18 +327,10 @@ test('a failed row links to its bug report; no link without one, for a bad URL, 
   }
 });
 
-test('switch off: no bug link and no App Manager read, even when it would have one', async () => {
-  const failed = { 'wizard-messenger': { to: 97, at: 1, reason: 'r', bug: 'https://github.com/humanitylabs-org/wizard-messenger/issues/12' } };
-  const { U, calls } = await load({ on: false, mgr: () => [200, { ...MGR, failed }] });
-  const h = U.html(); await tick(); await tick();
-  assert.doesNotMatch(h, /data-osu-app-bug|Bug report/);
-  assert.ok(!calls.some(u => u.endsWith('/_app-updates')));
-});
-
 test('wizard-app-manager#764: an update asked for while another runs is queued; the row says Queued, not a refusal', async () => {
   const toasts = [];
   let queued = [];
-  const { U, posts } = await load({ on: true, mgr: () => [200, { ...MGR, queued }],
+  const { U, posts } = await load({ mgr: () => [200, { ...MGR, queued }],
     post: b => { queued = [{ app: b.app, at: 1762660000, name: 'Messenger' }]; return [200, { started: false, queued: [b.app], note: 'queued behind the update that is running' }]; } });
   await U.loadApps();
   tap(U, 'app-retry:wizard-messenger', { toast: (...a) => toasts.push(a) });
@@ -366,7 +341,7 @@ test('wizard-app-manager#764: an update asked for while another runs is queued; 
   assert.match(rowOf(h, 'wizard-messenger'), /data-osu-app-state="busy">.*data-osu-app-msg="done" role="status">Queued · Messenger: updates after the one running<\/span>.*<span class="st-val">Queued<\/span>/);
   assert.doesNotMatch(rowOf(h, 'wizard-messenger'), /data-osu="app-/, 'no second Update now while it waits');
   // "Update all" queued (app null): every app with an update ready waits too, up-to-date ones don't.
-  const all = await load({ on: true, mgr: () => [200, { ...MGR, holds: [], failed: {}, queued: [{ app: null, at: 1, name: 'All apps' }, 'junk'] }] });
+  const all = await load({ mgr: () => [200, { ...MGR, holds: [], failed: {}, queued: [{ app: null, at: 1, name: 'All apps' }, 'junk'] }] });
   await all.U.loadApps();
   const ha = all.U.html();
   assert.match(rowOf(ha, 'wizard-messenger'), /<span class="st-val">Queued<\/span>/);

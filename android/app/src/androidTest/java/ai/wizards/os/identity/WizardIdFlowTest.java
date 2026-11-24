@@ -207,7 +207,7 @@ public class WizardIdFlowTest {
         final ServerSocket socket=new ServerSocket(0,10,InetAddress.getByName("127.0.0.1")); volatile boolean running=true;
         final java.util.Map<String, byte[]> scripts = new java.util.HashMap<>();
         Fixture() throws Exception {
-            for (String name : new String[]{"bridge.js", "app-services.js", "app-client.js"}) {
+            for (String name : new String[]{"bridge.js", "app-services-windows.js", "app-services-boundary.js", "app-services.js", "app-client.js"}) {
                 try(InputStream in=InstrumentationRegistry.getInstrumentation().getContext().getAssets().open(name)){ scripts.put("/" + name, readBytes(in)); }
             }
             new Thread(()->{while(running)try{respond(socket.accept());}catch(IOException ignored){}},"IdentityFixture").start();
@@ -218,7 +218,7 @@ public class WizardIdFlowTest {
             try(Socket client=s){client.setSoTimeout(3000);BufferedReader in=new BufferedReader(new InputStreamReader(client.getInputStream(),StandardCharsets.UTF_8));String request=in.readLine();if(request==null)return;String line;while((line=in.readLine())!=null&&!line.isEmpty()){}
                 String path = request.split(" ")[1]; boolean script = scripts.containsKey(path);
                 String html="<!doctype html><html data-skin='nebula' style='--wz-base:#05030c;--wz-text:#f3efff;--wz-text-secondary:#b9b0d8;--wz-text-muted:#7d74a3;--wz-border:#cdbeff3d;--wz-accent:#b99bff;--wz-warning:#ffd080;--wz-overlay:#120c25'><title>WizardOS</title><!-- core/ isolated fixture --><meta name='viewport' content='width=device-width,initial-scale=1'><body style='background:#05030c;color:white;padding:100px 24px'><h1>Wizard ID isolated QA</h1><script>window.qaReplies={};</script><script src='/bridge.js'></script>"
-                    + "<script>WizCore.apps=()=>({APPS:[{id:'profiles',name:'Profiles',kind:'wizard',source:'apps.json',url:'/profiles/'}]});</script><script src='/app-services.js'></script>"
+                    + "<script>WizCore.apps=()=>({APPS:[{id:'profiles',name:'Profiles',kind:'wizard',source:'apps.json',url:'/profiles/'}]});</script><script src='/app-services-windows.js'></script><script src='/app-services-boundary.js'></script><script src='/app-services.js'></script>"
                     + "<iframe id='profiles' src='/profiles/'></iframe><script>WizAppServices.attach(document.getElementById('profiles'),{appId:'profiles',path:'/profiles/'});</script></body></html>";
                 if(path.equals("/profiles/")) html="<!doctype html><title>Profiles</title><script src='/app-client.js'></script><script>WizardApp.ready({name:'Profiles'});</script>";
                 if(request.startsWith("GET /child "))html="<script>wizardDevicePort.onmessage=()=>parent.postMessage('native-reply',location.origin);wizardDevicePort.postMessage(JSON.stringify({v:1,id:'child',method:'identity.info',params:{}}));</script>";

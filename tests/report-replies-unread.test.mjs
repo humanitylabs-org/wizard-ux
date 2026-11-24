@@ -3,7 +3,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
-const live = fs.readFileSync(new URL('../web/live.js', import.meta.url), 'utf8');
+import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
+const live = withLiveParts(fs.readFileSync(new URL('../web/live.js', import.meta.url), 'utf8'));
 // The read-state functions only (thread-seen block), with the helpers they lean on.
 function api() {
   const ctx = { otherAgent: a => !!a && a !== 'hermes', READY_OR_ATTENTION: new Set(['completed', 'failed', 'interrupted', 'waiting_for_approval', 'unknown']) };
@@ -35,6 +36,19 @@ test('a normal model reply still drives read state; an older preview never hides
   assert.equal(hasNew(s, seenBefore), true);
 });
 test('Ready keeps a thread whose only fresh news is a report (week cutoff and order use the same time)', () => {
-  assert.match(live, /const at = Date\.parse\(assistantAt\(s\) \|\| s\.activityAt \|\| s\.updatedAt\);/);
-  assert.match(live, /const t = s => Date\.parse\(assistantAt\(s\) \|\| s\.activityAt \|\| s\.updatedAt\) \|\| 0;/);
+  // the real Live groups() over the real read-state block, nine days after the last model reply
+  const NOW = Date.parse('2026-10-23T06:00:00Z');
+  class FixedDate extends Date { static now() { return NOW; } }
+  const ctx = { otherAgent: a => !!a && a !== 'hermes', READY_OR_ATTENTION: new Set(['completed', 'failed', 'interrupted', 'waiting_for_approval', 'unknown']), WEEK: 7 * 864e5, Date: FixedDate,
+    snoozeLast: () => false, isDeferred: () => false, seenKeyOf: s => 'direct:' + s.id };
+  modelContext(ctx);
+  const groups = live.slice(live.indexOf('    groups(agent = \'\') {'), live.indexOf('    // chat-power.js: a Continue tap settled'));
+  vm.runInContext(live.slice(live.indexOf('  const vis = v =>'), live.indexOf('  function later(')) + `\nthis.L = { ${groups} };`, ctx);
+  // an older plain reply read nine days ago would be past the week; the report keeps this thread in Ready
+  const older = { id: 'o', runtime: 'direct', status: 'completed', lastAssistantAt: '2026-10-22T08:00:00.000Z', previewRole: 'assistant', previewAt: '2026-10-22T08:00:00.000Z', messageCount: 4, updatedAt: '2026-10-22T08:00:00.000Z' };
+  const stale = { id: 's', runtime: 'direct', status: 'completed', lastAssistantAt: '2026-10-10T08:00:00.000Z', previewRole: 'assistant', previewAt: '2026-10-10T08:00:00.000Z', messageCount: 4, updatedAt: '2026-10-10T08:00:00.000Z' };
+  const list = [older, { ...topics, status: 'completed' }, stale];
+  Object.assign(ctx.L, { sessionsFor: () => list, deferred: {}, seenOf: s => (s.id === 't' ? seenBefore : { initializedAt: 1, threads: {} }) });
+  const g = ctx.L.groups();
+  assert.deepEqual([...g.ready].map(s => s.id), ['t', 'o'], 'the report is fresh news: in Ready, ordered by the report time; a thread past the week is not');
 });

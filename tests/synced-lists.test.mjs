@@ -5,9 +5,10 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import vm from 'node:vm'
 import { sharedBox, liveDevice, stale, simultaneous, tick } from './two-devices.mjs'
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8')
-const chats = read('web/core/chats.js')
+const chats = withParts(read('web/core/chats.js'))
 const cut = (from, to) => chats.slice(chats.indexOf(from), chats.indexOf(to))
 const SPACES = 'wos.chats.spaces.v1', SUBJ = 'wos.chats.subjectOrder.v1'
 const at = '2026-10-28T08:00:00.000Z'
@@ -126,10 +127,22 @@ test('pins run through the same two-device helper (core/chat-pins.js keeps its o
   }
 })
 
-test('Chats never saves a whole Spaces or subject-order list from this device', () => {
-  assert.doesNotMatch(chats, /putPrefs\??\.?\(\{ spaces/)
-  assert.doesNotMatch(chats, /putPrefs\??\.?\(\{ subjectOrder/)
-  assert.match(chats, /LIVE\.prefOps\(\[\{ op: add \? 'add' : 'remove', key: `spaces\/\$\{key\}\/threads`, item: sid \}\]\)/)
-  assert.match(chats, /LIVE\.prefOps\(\[\{ op: 'front', key: 'subjectOrder', items: keys \}\]\)/)
+test('Chats never saves a whole Spaces or subject-order list from this device', async () => {
+  // Chats' real Space/subject edits against a LIVE that records what it is asked to write.
+  const m = new Map([[SPACES, JSON.stringify([space('work', ['wizard_a'])])], [SUBJ, '["Home","Work"]']]), calls = []
+  const dev = { prefs: { spaces: [space('work', ['wizard_a'])], subjectOrder: ['Home', 'Work'] }, emit() {}, onChange() {},
+    prefOps: async ops => { calls.push(['prefOps', JSON.parse(JSON.stringify(ops))]); return true }, putPrefs: async p => { calls.push(['putPrefs', p]); return true },
+    ctx: { localStorage: { getItem: k => m.has(k) ? m.get(k) : null, setItem: (k, v) => m.set(k, String(v)), removeItem: k => m.delete(k) }, window: { dispatchEvent() {} }, Event: class { constructor(t) { this.type = t } } } }
+  const c = chatsOn(dev)
+  c.spaceMember('work', 'wizard_b', true); c.spaceMember('work', 'wizard_a', false); c.moveSubject('Work', 'top', ['Home', 'Work'])
+  await tick()
+  assert.deepEqual(calls.map(x => x[0]).filter(n => n === 'putPrefs'), [], 'never a whole-list write')
+  const ops = calls.filter(x => x[0] === 'prefOps').flatMap(x => x[1])
+  assert.deepEqual(ops.filter(o => o.key === 'spaces/work/threads'), [{ op: 'add', key: 'spaces/work/threads', item: 'wizard_b' }, { op: 'remove', key: 'spaces/work/threads', item: 'wizard_a' }])
+  assert.deepEqual(ops.filter(o => o.key === 'subjectOrder').map(o => o.op), ['front'], 'a subject move is one front operation')
+})
+
+// static-rule: the repo's AGENTS.md keeps the synced-lists rule written down for builders (a docs check)
+test('AGENTS.md asks for the stale-device and simultaneous-edit test', () => {
   assert.match(read('AGENTS.md'), /stale-device and simultaneous-edit test/)
 })

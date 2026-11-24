@@ -3,7 +3,8 @@ import { modelContext } from './fixtures/chats-list-model.mjs';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
-const src = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
+import { withParts } from './fixtures/chats-parts.mjs';
+const src = withParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'));
 const block = (from, to) => { const a = src.indexOf(from), b = src.indexOf(to, a); assert.ok(a >= 0 && b > a, from + ' → ' + to); return src.slice(a, b); };
 function fixture(personal) {
   const c = modelContext({ snoozeLast: () => personal, isWorking: s => s.status === 'running', deferredOf: s => !!s.deferred && !s.archived && !(Date.parse(s.lastUserAt) > Date.parse(s.deferredAt)), attOf: s => s.attention, window: {}, agentName: () => 'Agent', ago: () => 'now' });

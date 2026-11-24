@@ -4,6 +4,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
 
+import { createDocument } from './fixtures/mini-dom.mjs';
+import { pageAssets } from './fixtures/w1-pages.mjs';
+import { styles } from './fixtures/w5-css.mjs';
+import { noImports } from './fixtures/r7A-css.mjs';
+
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
 
 test('shell pages load no brand-guide stylesheet', () => {
@@ -12,8 +17,11 @@ test('shell pages load no brand-guide stylesheet', () => {
 });
 
 test('Nebula keeps the base palette: no stylesheet re-tokens it', () => {
-  for (const css of ['web/core/skins.css', 'web/core/base.css']) {
-    assert.doesNotMatch(read(css), /html\[data-skin="nebula"\]\s*\{[^}]*--bg:/, css);
+  // Every stylesheet each shell page links, in its order, cascaded onto <html data-skin="nebula">: the base --bg wins.
+  for (const [page, shell] of [['index.html', 'phone'], ['desktop.html', 'desktop']]) {
+    const list = pageAssets(page).styles.filter(p => !/^https?:/.test(p)).map(p => noImports(read('web/' + p))[0]);
+    const doc = createDocument(), html = doc.documentElement;
+    html.setAttribute('data-skin', 'nebula'); html.setAttribute('data-shell', shell);
+    assert.equal(styles(html, list)['--bg'], '#05030c', page);
   }
-  assert.match(read('web/core/base.css'), /--bg:\s*#05030c/);
 });

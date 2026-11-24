@@ -8,6 +8,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { between, block, runRecording } from './fixtures/source-slice.mjs';
+import { createDocument } from './fixtures/mini-dom.mjs';
 
 const read = p => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
 const KINDS = [['main', ''], ['host-ops', 'host'], ['box', 'container'], ['locked', 'restricted']];
@@ -99,16 +101,33 @@ test('a routed dismissal never hides a main thread with the same id (and the oth
   assert.equal(other.E.dismissed(routed), false);
 });
 
+// Runs the real chat-power click(), rowFor/dismissThread, failedShown and errorsFilter, and the real chats-status
+// stiKind (the header warning), all reading one real WosErrors record, on real Dismiss buttons in the mini DOM.
 test('the shell hides the card and the header warning from the same record, and never toasts on Dismiss', () => {
-  const power = read('web/core/chat-power.js'), chats = read('web/core/chats.js');
-  assert.match(power, /function dismissThread\(wid, sid\) \{ E\?\.dismissFailure\(sid, rowFor\(wid, sid\)\); rerenderAll\(\); \}/);
-  assert.match(power, /if \(t\.closest\('\[data-chdismiss\]'\) && w\?\.thread\) \{ dismissThread\(id, w\.thread\); return true; \}/);
-  assert.match(power, /const ed = t\.closest\('\[data-errdismiss\]'\); if \(ed\) \{ dismissThread\(id, ed\.dataset\.errdismiss\); return true; \}/);
-  assert.doesNotMatch(power, /Couldn’t dismiss · try again', ok \? 1400 : 2600/);
-  assert.match(power, /const failedShown = s => [^\n]*!\(E && E\.dismissed\(s\)\);/);
-  assert.match(power, /function errorsFilter\(list\) \{ return E \? list\.filter\(s => !E\.dismissed\(s\)\) : list; \}/);
-  const sti = chats.slice(chats.indexOf('  function stiKind(s) {'), chats.indexOf('  const stiBadge'));
-  assert.match(sti, /\(s\.status === 'failed' \|\| s\.status === 'interrupted' \|\| s\.queueReason === 'provider_access'\) && !window\.WosErrors\?\.dismissed\?\.\(s\) \? 'failed'/);
+  const power = read('web/core/chat-power.js'), status = read('web/core/chats-status.js');
+  for (const [tap, html] of [['card', '<button data-chdismiss>Dismiss</button>'], ['errors list', '<button data-errdismiss="wizard_1488">Dismiss</button>']]) {
+    const row = failedRow(''), app = boot({ rows: [row] }), paints = [];
+    const LIVE = { session: id => (id === row.id ? row : null) };
+    const win = { id: 'w1', thread: row.id };
+    const pw = runRecording([
+      "const FAILED = new Set(['failed', 'interrupted']);",
+      between(power, '  const failedShown = s =>', '  /* Saved background result'),
+      between(power, '  const rowFor = (wid, sid) =>', '  function rerenderAll()'),
+      between(power, '  function errorsFilter(list)', '  function errorRow('),
+      block(power, '  function click(e, id) {'),
+      'globalThis.api = { failedShown, errorsFilter, click };'].join('\n'),
+      { E: app.E, LIVE, sheet: null, H: { win: id => (id === 'w1' ? win : null) }, A: { owner: id => id, winAgent: () => '' }, rerenderAll: () => paints.push('paint') });
+    const st = runRecording(block(status, '  function stiKind(s) {') + '\nglobalThis.stiKind = stiKind;',
+      { window: { WosErrors: app.E }, isWorking: () => false, snoozeLast: () => false, deferredOf: () => null, attOf: () => null });
+    const shown = () => ({ card: pw.api.failedShown(row), list: pw.api.errorsFilter([row]).length, header: st.stiKind(row) });
+    assert.deepEqual(shown(), { card: true, list: 1, header: 'failed' }, `${tap}: the failure shows before Dismiss`);
+    const doc = createDocument(); doc.body.innerHTML = html;
+    pw.calls.length = 0;
+    assert.equal(pw.api.click({ target: doc.body.querySelector('button') }, 'w1'), true, `${tap}: Dismiss is handled`);
+    assert.deepEqual(shown(), { card: false, list: 0, header: 'none' }, `${tap}: card, Errors row and header warning go together`);
+    assert.deepEqual(paints, ['paint'], `${tap}: repainted at once`);
+    assert.deepEqual(pw.calls.filter(c => /toast/.test(c[0])), [], `${tap}: no toast on Dismiss`);
+  }
 });
 
 // Codex P2 on the PR: a Dismiss tap in a routed window must dismiss the row that window shows, not the id-first
@@ -138,6 +157,23 @@ test('Retry still hides the old failure until the list catches up (WosErrors.cle
   assert.equal(app.E.dismissed(row), true);
   app.E.cleared.set(row.id, Date.now() - 121e3);
   assert.equal(app.E.dismissed(row), false);
-  const power = read('web/core/chat-power.js');
-  assert.match(power, /E\?\.cleared\.set\(sid, Date\.now\(\)\);/);
+});
+
+test('a Retry tap (the real chat-power retryThread) hides the old failure at once, and only once it is queued', async () => {
+  for (const queued of [true, false]) {
+    const row = failedRow('', { request: 'Book the flights' }), app = boot({ rows: [row] }), sent = [];
+    const w = { id: 'win', thread: row.id }, state = {};
+    const ctx = { console, URL, Intl, Date, setTimeout, clearTimeout, location: { origin: 'https://fixture.invalid' }, navigator: {},
+      localStorage: { getItem: () => null, setItem() {}, removeItem() {} }, document: { addEventListener() {}, querySelector: () => null }, addEventListener() {},
+      WizCore: { esc: String, clip: x => x }, WizConfig: { owner: () => 'Owner' }, WizLive: { session: () => row, sessionInfo: async () => row },
+      WosModels: { failureHtml: x => x, pending: new Map(), currentRoute: () => ({}) }, WosErrors: app.E,
+      WosOutbox: { unsent: () => [], enqueue: async it => { if (!queued) throw new Error('disk full'); sent.push(it); return it; } } };
+    ctx.window = ctx;
+    vm.runInNewContext(read('web/core/chat-power.js'), ctx);
+    const api = ctx.WosChatPower({ ch: () => state, toast() {}, H: { win: () => w }, CH: { win: state }, owner: () => w.id, winAgent: () => '', renderChats() {}, renderThreadNow() {} });
+    assert.equal(app.E.dismissed(row), false);
+    assert.equal(await api.retryThread('win', row.id), queued);
+    assert.equal(sent.length, queued ? 1 : 0);
+    assert.equal(app.E.dismissed(row), queued, queued ? 'queued: the failure card goes until the list catches up' : 'not queued: the failure stays');
+  }
 });

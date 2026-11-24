@@ -6,12 +6,17 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { block, runRecording } from './fixtures/source-slice.mjs';
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
+import { withDesktopParts } from './fixtures/desktop-parts.mjs';
+import { withShellParts } from './fixtures/shell-parts.mjs';
+import { withWebParts } from './fixtures/web-parts.mjs';
 
 const j = x => JSON.parse(JSON.stringify(x)); // vm values are cross-realm
-const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
-const desktop = read('web/desktop/desktop.js');
+const read = p => withShellParts(withWebParts(readFileSync(new URL('../' + p, import.meta.url), 'utf8')));
+const desktop = withDesktopParts(read('web/desktop/desktop.js'));
 const cut = (src, from, to) => { const a = src.indexOf(from); assert.ok(a >= 0, from); const b = src.indexOf(to, a); assert.ok(b > a, to); return src.slice(a, b); };
-const front = cut(desktop, '  function chanFront() {', '  // A take started in a channel (wizard/chat-channels)');
+const front = cut(desktop, '  function chanFront() {', '  // A take started in a channel re-reads');
 const talkNew = cut(desktop, '  function talkNew(', '  const generalVoice');
 const record = cut(desktop, '  async function recordReply(', '  // Dictation (Right');
 const chatsWinSrc = desktop.match(/^  const chatsWin = .+;$/m)?.[0];
@@ -117,30 +122,82 @@ test('recordReply files a new post from the AI apps feed (no desk window) into t
   assert.equal(vm.runInContext('vChanKey', ctx), false, 'a box-mic take is not a key take until chanTalk says so');
 });
 
-test('the orb / ⌥S path and New chat keys reach the channel: wiring in desktop, phone and both AI apps layouts', () => {
+const lineOf = (src, from) => { const a = src.indexOf(from); assert.ok(a >= 0, from); return src.slice(a, src.indexOf('\n', a)); };
+const raw = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
+
+test('the orb / ⌥S path and New chat keys reach the channel: wiring in desktop, phone and both AI apps layouts', async () => {
+  // Desktop talk() (the orb, ⌥S, Right ⌘): a feed in the AI apps main column is the channel the take goes to.
   const talk = cut(desktop, '  async function talk(', '  // Composer mic:');
-  assert.match(talk, /action === 'toggle' && !forceNew\) \{ const c = chanFront\(\); if \(c && c\.wid !== focused\(\)\?\.id && c\.sid === '__new__'\) return chanTalk\(c, ''\);/);
-  assert.match(desktop, /code === 'KeyN'\) return hit\(\(\) => \{[^\n]*chanPost\(\) \|\| newChat\(\); \}\);/);
-  assert.match(desktop, /code === 'Enter'\) return hit\(\(\) => \{ if \(!e\.repeat\) chanPost\(\) \|\| newChat\(\); \}\);/);
-  assert.match(desktop, /name: 'New chat'[^\n]*run: \(\) => chanPost\(\) \|\| newChat\(\)/);
-  assert.match(desktop, /chatChannelPost: \(\) => chanPost\(\),/);
-  assert.match(read('web/core/skin-host.js'), /channelPost: \(\) => live\(\) \? !!shell\.chatChannelPost\?\.\(\) : false,/);
-  assert.match(read('web/app.js'), /chatChannelPost: \(\) => \{ const w = W\[desks\[idx\]\?\.focus\]; return w\?\.app === 'chats' && !w\.thread && !!CHATS\.chanCompose\?\.\(w\.id\); \},/);
-  assert.match(read('web/layouts/ai-apps/layout.js'), /api\.listen\(newBtn, 'click', \(\) => \{ if \(api\.sessions\.channelView\?\.\(\) !== 'activity' && api\.sessions\.channelPost\?\.\(\)\) \{ closeMenu\(\); closeSheet\(\); closeDrawer\(\); \} else goHome\(\); \}\);/, 'phone +: the drawer closes over the channel box');
-  const aad = read('web/layouts/ai-apps/desktop.js');
-  assert.match(aad, /api\.listen\(newBtn, 'click', plus\); api\.listen\(rNew, 'click', plus\);/);
-  assert.match(aad, /code === 'KeyN' && !sh\) return once\(plus\)/);
-  assert.match(aad, /const goHome = \(\) => \{[^\n]*newChat\(\); \};/, 'Home still leaves the channel');
+  const s = shell({ view: 'channels', foreground: { id: 'main', app: 'chats', thread: '__new__' }, feed: { id: 'apps', name: 'WizardOS Apps' }, feedShown: true });
+  vm.runInContext(`var dictationFinishing = false, chanTalk = (c, k) => (calls.push(['chanTalk', c.wid, c.sid, k]), 'channel');\n${talk}`, s);
+  s.CHATS.incognitoActive = () => false;
+  assert.equal(await s.talk('toggle'), 'channel');
+  assert.deepEqual(j(s.calls).at(-1), ['chanTalk', 'feed-1::side', '__new__', ''], 'the orb records into the feed\'s channel');
+  // Desktop ⌥N, ⌥Enter and the palette's New chat (desktop-pickany.js, desktop-palpaint.js): the channel box first.
+  const pick = raw('web/desktop/desktop-pickany.js'), pal = raw('web/desktop/desktop-palpaint.js');
+  const key = (code, post) => {
+    const calls = [];
+    vm.runInNewContext(`(() => { ${lineOf(pick, "    if ((menu || alt) && !shift && code === 'KeyN') return hit(")}\n${lineOf(pick, "    if (alt && !shift && code === 'Enter') return hit(")} })()`,
+      { calls, menu: false, alt: true, shift: false, code, e: { repeat: false }, hit: fn => fn(), closePalette() {}, toggleKeys() {}, closeSettings() {}, closeUsage() {}, chanPost: () => (calls.push('chanPost'), post), newChat: () => calls.push('newChat') });
+    return j(calls);
+  };
+  for (const code of ['KeyN', 'Enter']) { assert.deepEqual(key(code, true), ['chanPost'], code); assert.deepEqual(key(code, false), ['chanPost', 'newChat'], code); }
+  const palCalls = [];
+  const entry = vm.runInNewContext(`(${lineOf(pal, "      { kind: 'cmd', name: 'New chat',").trim().replace(/,$/, '')})`, { MOD: '⌥', chanPost: () => (palCalls.push('chanPost'), true), newChat: () => palCalls.push('newChat') });
+  entry.run(); assert.deepEqual(palCalls, ['chanPost']);
+  // The shells hand layouts their channel post: desktop (desktop-boot.js), phone (app-agentorb.js), the layout API.
+  const boot = raw('web/desktop/desktop-boot.js');
+  assert.equal(vm.runInNewContext(`({ ${lineOf(boot, '    chatChannelPost: () =>')} })`, { chanPost: () => 'posted' }).chatChannelPost(), 'posted');
+  const orbPart = raw('web/app-agentorb.js'), composed = [];
+  const phone = (w, ok = true) => vm.runInNewContext(`({ ${lineOf(orbPart, '    chatChannelPost: () =>')} })`, { appVars: { W: { f: w }, desks: [{ focus: 'f' }], idx: 0 }, CHATS: { chanCompose: id => (composed.push(id), ok) } }).chatChannelPost();
+  assert.equal(phone({ id: 'f', app: 'chats', thread: null }), true); assert.deepEqual(composed, ['f']);
+  assert.equal(phone({ id: 'f', app: 'chats', thread: 't1' }), false, 'an open thread is not a channel box');
+  assert.equal(phone({ id: 'f', app: 'frame' }), false);
+  const shellapi = raw('web/core/skin-host-shellapi.js');
+  const sess = on => vm.runInNewContext(`({ ${lineOf(shellapi, '        channelPost: () =>')} })`, { live: () => on, skinHostVars: { shell: { chatChannelPost: () => 1 } } });
+  assert.equal(sess(true).channelPost(), true); assert.equal(sess(false).channelPost(), false);
+  // Phone AI apps (layout.js): + over a channel closes the drawer onto its box; on Activity it goes Home.
+  const layout = raw('web/layouts/ai-apps/layout.js');
+  const phonePlus = (view, post) => {
+    const calls = []; let handler;
+    vm.runInNewContext(lineOf(layout, "  api.listen(newBtn, 'click', () => { if (api.sessions.channelView"), { newBtn: {}, api: { listen: (n, t, fn) => { handler = fn; }, sessions: { channelView: () => view, channelPost: () => (calls.push('post'), post) } },
+      closeMenu: () => calls.push('menu'), closeSheet: () => calls.push('sheet'), closeDrawer: () => calls.push('drawer'), goHome: () => calls.push('home') });
+    handler(); return j(calls);
+  };
+  assert.deepEqual(phonePlus('channels', true), ['post', 'menu', 'sheet', 'drawer'], 'phone +: the drawer closes over the channel box');
+  assert.deepEqual(phonePlus('activity', true), ['home']);
+  assert.deepEqual(phonePlus('channels', false), ['post', 'home']);
+  // Desktop AI apps (desktop-home.js, run as the module): + and the rail's + share plus; ⌥N is plus; Home leaves the channel.
+  const { homePart } = await import('../web/layouts/ai-apps/desktop-home.js');
+  const listens = [], calls = [], btn = n => ({ n, append() {}, setAttribute() {} });
+  const aadVars = { chatThread: '__feed__', pane: null };
+  const api = { listen: (t, ev, fn) => listens.push([t.n, ev, fn]), desk: { attention: () => null, settings() {} }, apps: { list: () => [] },
+    sessions: { channelView: () => 'channels', channelPost: () => (calls.push('post'), true), channelBack: () => calls.push('back'), newChat: () => calls.push('newChat') } };
+  const H = homePart({ aadVars, api, appName: x => x, cancelBtn: btn('cancel'), closeMenu: () => calls.push('closeMenu'), closeWs() {}, desks: () => [], el: () => ({ append() {}, setAttribute() {} }),
+    FEED: '__feed__', feedOn: () => (aadVars.chatThread === '__feed__' ? { id: 'apps' } : null), field: btn('field'), findBtn: btn('find'), loading() {}, newBtn: btn('new'), panes: { get: () => ({}) },
+    rFind: btn('rfind'), rNew: btn('rnew'), rSet: btn('rset'), scroll: {}, setBtn: btn('set'), setSearch() {}, unpeek() {} });
+  const click = n => listens.find(l => l[0] === n && l[1] === 'click')[2];
+  assert.equal(click('new'), H.plus); assert.equal(click('rnew'), H.plus);
+  click('new')(); assert.deepEqual(calls, ['post', 'closeMenu'], 'the feed\'s box takes the new chat');
+  const hidden = []; H.bindLate({ hidePanel: o => hidden.push(o), closeAll() {}, mainChats: () => null, NOTE: '__note__', paintList() {}, wantAppFocus() {} });
+  aadVars.pane = { id: 'notes' }; calls.length = 0; H.goHome();
+  assert.equal(aadVars.chatThread, null, 'Home still leaves the channel'); assert.deepEqual(hidden, [{ home: false }]); assert.ok(calls.includes('newChat'));
+  const keys = raw('web/layouts/ai-apps/desktop-keys.js'); let pressed = null;
+  vm.runInNewContext(`(() => { ${lineOf(keys, "    if (code === 'KeyN' && !sh) return once(plus);")} })()`, { code: 'KeyN', sh: false, plus: H.plus, once: fn => { pressed = fn; return true; } });
+  assert.equal(pressed, H.plus, '⌥N is the same +');
 });
 
 test('chanCompose: only a feed with its own box takes a new chat', () => {
-  const chats = read('web/core/chats.js');
+  const chats = withParts(read('web/core/chats.js'));
   const src = cut(chats, '  function chanCompose(wid) {', '  // Posts still on their way');
   const ended = [];
   const box = { tag: 'ta' };
-  const ctx = { W: { feed: { id: 'feed' }, list: { id: 'list' } }, chanDraftKey: w => (w?.id === 'feed' ? 'chan:hermes:apps' : ''), elOf: id => ({ querySelector: () => (id === 'feed' ? box : null) }), chanToEnd: (...a) => ended.push(a) };
-  vm.createContext(ctx); vm.runInContext(src, ctx);
+  const ctx = vm.createContext({ W: { feed: { id: 'feed' }, list: { id: 'list' } }, chanDraftKey: w => (w?.id === 'feed' ? 'chan:hermes:apps' : ''), elOf: id => ({ querySelector: () => (id === 'feed' ? box : null) }), chanToEnd: (...a) => ended.push(a) });
+  vm.runInContext(src, ctx);
   assert.equal(ctx.chanCompose('feed'), true); assert.deepEqual(ended, [['feed', true]], 'the feed goes to its end with its box focused');
   assert.equal(ctx.chanCompose('list'), false); assert.equal(ctx.chanCompose('none'), false);
-  assert.match(chats, /chanSpaceOf, chanCompose, chanView: \(\) => channelsOn\(\) \? chanView : '', chanBox:/, 'exported to the shells');
+  // exported to the shells: Chats' own API object (its return line, run) hands out this chanCompose
+  const ret = block(chats, '  return { beforeNavigate:');
+  const mine = () => 'composed', api = runRecording(`globalThis.api = (() => {\n${ret}\n})();`, { chanCompose: mine, window: {} }).api;
+  assert.equal(api.chanCompose, mine, 'exported to the shells');
 });

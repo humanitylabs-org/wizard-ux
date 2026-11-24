@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
+import { withServicesParts } from './fixtures/app-services-parts.mjs';
 const read=p=>readFileSync(new URL('../web/core/'+p,import.meta.url),'utf8');
 function fixture(id='usuals') {
   const origin='https://wizard.example', calls=[], listeners={};
@@ -12,7 +13,7 @@ function fixture(id='usuals') {
     navigator:{},dispatchEvent(){},CustomEvent:class{},setInterval(){},setTimeout(){},clearTimeout(){},addEventListener:(n,f)=>(listeners[n] ||= []).push(f),
     WizDeviceLegacy:[{appId:'usuals',path:'/usuals/',probe:'usuals',methods:['usuals','usualsTeach','usualsSave']}],
     WizardOSNative:{usuals:()=>{calls.push(['usuals']);return '{"list":[{"id":"same-native-id"}]}';},usualsTeach:(...a)=>{calls.push(['usualsTeach',...a]);return '';},usualsSave:(...a)=>{calls.push(['usualsSave',...a]);return true;}}};
-  c.window=c;vm.createContext(c);vm.runInContext(read('app-services.js'),c);vm.runInContext(read('android-relay.js'),c);
+  c.window=c;vm.createContext(c);vm.runInContext(withServicesParts(read('app-services.js')),c);vm.runInContext(read('android-relay.js'),c);
   c.WizAppServices.attach(frame,{appId:id,path:app.url});const service=c.WizAppServices.connect(source,{});
   return {c,frame,source,app,calls,service};
 }

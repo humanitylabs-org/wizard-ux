@@ -4,10 +4,12 @@ import { createServer } from 'node:http';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { randomUUID } from 'node:crypto';
+import { block, runRecording } from './fixtures/source-slice.mjs';
+import { withShellParts } from './fixtures/shell-parts.mjs';
 
 // (fixture copied from outbox-voice-reload-handoff) Reload waited 5-10 s behind a six-minute voice note's upload + transcription. A tap take whose
 // destination is fixed is handed to the outbox; a reload mid-send must finish that SAME send on the new page, once.
-const source = readFileSync(new URL('../web/outbox.js', import.meta.url), 'utf8');
+const outboxJs = readFileSync(new URL('../web/outbox.js', import.meta.url), 'utf8');
 const sessionId = 'wizard_philosopher';
 
 function client(origin, rows = new Map(), transcribe = async () => ({ text: 'six minutes of philosophy' })) {
@@ -35,7 +37,7 @@ function client(origin, rows = new Map(), transcribe = async () => ({ text: 'six
     WosAgents: { isOther: id => !!id && id !== 'hermes', get: id => ({ id, permissions: { files: id === 'archimedes-new' ? 'none' : 'own' } }) },
     WizConfig: { transcribe, voicePrompt: () => '' },
   };
-  ctx.window = ctx; vm.runInNewContext(source, ctx);
+  ctx.window = ctx; vm.runInNewContext(outboxJs, ctx);
   return { api: ctx.WosOutbox, rows, close: () => { for (const t of timers) clearTimeout(t); } };
 }
 
@@ -55,17 +57,34 @@ test('an orb-picked agent survives staging and enqueue of a general take', async
   const c = client(`http://127.0.0.1:${server.address().port}`); t.after(c.close);
   // the pre-fix staging path: route spread first, then agent overwritten with ''
   const staged = await c.api.stage({ kind: 'new', sessionId: '', model: 'm', provider: 'p', audio: new Blob(['aaaa'], { type: 'audio/aac' }), intent: 'auto', source: 'orb', agent: '' });
-  const it = await c.api.enqueue({ kind: 'new', custodyId: staged.id, agent: 'archimedes-new', model: 'm', provider: 'p', intent: 'auto', text: '' });
-  assert.equal(it.agent, 'archimedes-new');
+  const queued = await c.api.enqueue({ kind: 'new', custodyId: staged.id, agent: 'archimedes-new', model: 'm', provider: 'p', intent: 'auto', text: '' });
+  assert.equal(queued.agent, 'archimedes-new');
   const run = await (async () => { for (let i = 0; i < 400; i++) { const r = calls.find(x => x.path.startsWith('/wizard/hermes/v1/runs')); if (r) return r; await new Promise(r => setTimeout(r, 5)); } return null; })();
   assert.ok(run, 'a run was posted');
   assert.equal(run.path, '/wizard/hermes/v1/runs?agent=archimedes-new');
   assert.ok(calls.some(x => x.path === '/wizard/hermes/api/sessions?agent=archimedes-new'), 'session created in the agent store');
 });
 
-test('the voice finish path keeps a general take\'s route agent when there is no view', () => {
-  const app = readFileSync(new URL('../web/app.js', import.meta.url), 'utf8');
-  assert.match(app, /agent: sv\?\.agent \|\| snap\.route\?\.agent \|\| ''/);
+// Runs the real phone onRecStop (app.js) on a finished general take up to the outbox stage call it makes.
+async function finishTake(snap) {
+  const app = withShellParts(readFileSync(new URL('../web/app.js', import.meta.url), 'utf8'));
+  const staged = [], STOP = new Error('staged');
+  const V = { kind: 'general', parts: [], chunks: [new Blob([new Uint8Array(2000)], { type: 'audio/webm' })], mime: 'audio/webm', acc: 5000, cancelled: false, snap, seal: null, replyTo: null, target: null, custodyCapture: null, meetingLoan: null };
+  const ctx = runRecording(block(app, '  async function onRecStop(nblob, nid) {') + '\nglobalThis.onRecStop = onRecStop;', { V, Blob, takeFiles: () => [], quickTake: () => false,
+    OUTBOX: { stage: async it => { staged.push(JSON.parse(JSON.stringify({ ...it, audio: undefined }))); throw STOP; } } });
+  await assert.rejects(ctx.onRecStop(), e => e === STOP);
+  assert.equal(staged.length, 1, 'the take is staged once');
+  return staged[0];
+}
+
+test('the voice finish path keeps a general take\'s route agent when there is no view', async () => {
+  const general = await finishTake({ route: { agent: 'archimedes-new', model: 'm', provider: 'p' }, view: null, general: true });
+  assert.equal(general.agent, 'archimedes-new', 'the orb-picked agent rides with the staged take');
+  assert.equal(general.kind, 'new'); assert.equal(general.sessionId, '');
+  const viewed = await finishTake({ route: { agent: 'archimedes-new', model: 'm' }, view: { id: 'w1', thread: '', agent: 'host-ops' } });
+  assert.equal(viewed.agent, 'host-ops', 'a view\'s own agent still decides when there is one');
+  const plain = await finishTake({ route: { model: 'm' }, view: null });
+  assert.equal(plain.agent, '', 'no pick, no view: the main agent');
 });
 
 // James, 22 Oct 2026, after the routing fix: the note reached Archimedes (new) but failed "agent_files_disabled",

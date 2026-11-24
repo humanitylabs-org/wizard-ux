@@ -2,7 +2,8 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
-const app=readFileSync(new URL('../web/app.js',import.meta.url),'utf8');
+import { withShellParts } from './fixtures/shell-parts.mjs';
+const app=withShellParts(readFileSync(new URL('../web/app.js',import.meta.url),'utf8'));
 const park=app.slice(app.indexOf('  async function parkReply()'),app.indexOf('  function restoreReply()'));
 const cancel=app.slice(app.indexOf('  async function cancelVoice(quiet)'),app.indexOf('    cancelTakeFiles();',app.indexOf('  async function cancelVoice(quiet)')))+'\n}';
 for(const route of ['main','host-profile','container','restricted'])test(`async companion stop parks only the ${route} reply before ack`,async()=>{

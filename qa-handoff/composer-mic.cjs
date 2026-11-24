@@ -17,7 +17,7 @@ async function tones(p){await p.evaluate(()=>{window.tone=440;window.graphs=[];n
 (async()=>{
  await new Promise(r=>server.listen(0,'127.0.0.1',r));
  process.env.WIZARD_ORIGIN='http://127.0.0.1:'+server.address().port;
- const fixture=fs.readFileSync(path.join(__dirname,'..','qa-in-app-dictation.cjs'),'utf8').split('async function cases(browser)')[0].replace('?.slice(0, 500)','');
+ const fixture=fs.readFileSync(path.join(__dirname,'..','qa','scripts','qa-in-app-dictation.cjs'),'utf8').split('async function cases(browser)')[0].replace('?.slice(0, 500)','');
  ({boot,select,tap,contexts}=new Function('require','__dirname','process',fixture+'\nreturn {boot,select,tap,contexts};')(require('node:module').createRequire(path.join(root,'package.json')),root,process));
  browser=await chromium.launch({executablePath:process.env.CHROMIUM,headless:true,args:['--autoplay-policy=no-user-gesture-required','--use-fake-ui-for-media-stream','--use-fake-device-for-media-stream']});
  const f=await boot(browser,false),p=f.p;await tones(p);const events=[];

@@ -41,8 +41,12 @@ public final class MizelJournal {
     /** A capture session is open (recording or paused). True on disk after a process death → recovery. */
     public boolean recording;
     public boolean paused;
-    /** Durable update pause; never set by an ordinary user pause or stop. */
+    /** Durable resume pause (app update or process death); never set by an ordinary user pause or stop. */
     public boolean resumeAfterUpdate;
+    /** Why the durable pause exists: {@link MizelUpdatePolicy#CAUSE_UPDATE} or {@link MizelUpdatePolicy#CAUSE_PROCESS_DEATH}. */
+    public String resumeCause = "";
+    /** Android's own reason for the process death that interrupted this meeting (ApplicationExitInfo), if known. */
+    public String exitReason = "";
     public int captureVersion;
     public String uploadOrigin;
     public long pausedAt;
@@ -83,7 +87,7 @@ public final class MizelJournal {
         for (int s : dropped) d.put(s);
         return new JSONObject().put("v", 1).put("meetingId", meetingId).put("createdAt", createdAt).put("nextSeq", nextSeq)
                 .put("mediaSamples", mediaSamples).put("mediaMs", mediaMs()).put("recording", recording).put("paused", paused)
-                .put("resumeAfterUpdate", resumeAfterUpdate).put("captureVersion", captureVersion).put("uploadOrigin", uploadOrigin)
+                .put("resumeAfterUpdate", resumeAfterUpdate).put("resumeCause", resumeCause).put("exitReason", exitReason).put("captureVersion", captureVersion).put("uploadOrigin", uploadOrigin)
                 .put("pausedAt", pausedAt).put("lastBeatAt", lastBeatAt).put("pending", p).put("acked", acked)
                 .put("lastAckedSeq", lastAckedSeq).put("dropped", d).put("stopReason", stopReason == null ? JSONObject.NULL : stopReason)
                 .put("finalSeq", finalSeq).put("stopSent", stopSent).put("stopSentAt", stopSentAt).put("stopNextAt", stopNextAt)
@@ -99,6 +103,9 @@ public final class MizelJournal {
         j.recording = o.optBoolean("recording");
         j.paused = o.optBoolean("paused");
         j.resumeAfterUpdate = o.optBoolean("resumeAfterUpdate");
+        // Journals written before process-death resume existed only ever paused for an update.
+        j.resumeCause = o.optString("resumeCause", j.resumeAfterUpdate ? MizelUpdatePolicy.CAUSE_UPDATE : "");
+        j.exitReason = o.optString("exitReason", "");
         j.captureVersion = o.optInt("captureVersion");
         j.uploadOrigin = o.optString("uploadOrigin", "");
         j.pausedAt = o.optLong("pausedAt");

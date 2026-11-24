@@ -2,7 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
-const source = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
+const source = withParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'));
 const start = source.indexOf('  function mediaBtn(c, m) {');
 const end = source.indexOf('  function mediaBlock(', start);
 assert.ok(start >= 0 && end > start, 'exercise the actual shared renderer function');

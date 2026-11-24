@@ -6,9 +6,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
+import { createDocument } from './fixtures/mini-dom.mjs';
+import { cascade } from './fixtures/mini-css.mjs';
+import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
 
-const live = readFileSync(new URL('../web/live.js', import.meta.url), 'utf8');
-const chats = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
+const live = withLiveParts(readFileSync(new URL('../web/live.js', import.meta.url), 'utf8'));
+const chats = withParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'));
+const running = readFileSync(new URL('../web/core/chats-running.js', import.meta.url), 'utf8'); // the agent inbox parts (issue 1665)
 const kitSrc = readFileSync(new URL('../web/core/chat-kit.js', import.meta.url), 'utf8');
 const clone = v => JSON.parse(JSON.stringify(v));
 const slice = (src, a, b) => { const i = src.indexOf(a), j = src.indexOf(b, i); assert.ok(i > 0 && j > i, `${a} is in the file`); return src.slice(i, j); };
@@ -128,7 +133,7 @@ function cardBlock({ on = true, listed = [], answer, yesToAll, sweep } = {}) {
     LIVE: { agentInbox: { card: box.card, answer: answer || (async () => ({})), yesToAll: yesToAll || (async () => ({ answered: [], card: null })), sweep: sweep || (async () => null) } },
   };
   vm.createContext(ctx);
-  vm.runInContext(slice(chats, '  const SWEEP = new Map();', '  /* Ready has three orders') + '\nthis.api = { sweepHtml, sweepAnswer, sweepYesToAll, SWEEP };', ctx);
+  vm.runInContext(slice(running, '  const SWEEP = new Map();', '  return { alertFeedback') + '\nthis.api = { sweepHtml, sweepAnswer, sweepYesToAll, SWEEP };', ctx);
   const flip = v => { sw.on = v; for (const f of listeners['wos:experience'] || []) f(); };
   return { api: ctx.api, toasts, paints, flip };
 }
@@ -163,7 +168,21 @@ test('an archived item reads Archived, not Done; the Running button goes to the 
   const html = cardBlock().api.sweepHtml(card({ waiting: { items: [{ ...card().waiting.items[0], state: 'archived' }], more: 0 } }));
   assert.match(html, /<small class="ch-sw-st">Archived<\/small>/);
   assert.doesNotMatch(html, /ch-sw-st">Done</);
-  assert.match(chats, /const o = W\[owner\(w\.id\)\] \|\| w, lw = W\[o\.id \+ '::list'\];\n\s+if \(lw && runningOn\(lw\)\) runningGo\(lw, true\); else if \(runningOn\(o\)\) \{ chatsBack\(o\); runningGo\(o, true\); \}/, 'desktop list pane, else back to the list');
+  // the real tap handler (chats-bind.js): the desktop list pane shows Running, else the one pane steps back first
+  const tap = slice(chats, "    if (e.target.closest('[data-chsweeprunning]')) {", "    const swa = e.target.closest('[data-chsweepall]')");
+  const press = ({ listOn, ownOn }) => {
+    const calls = [], w = { id: 'c1' }, lw = { id: 'c1::list' };
+    const W = { c1: w, ...(listOn === undefined ? {} : { 'c1::list': lw }) };
+    const ctx = { e: { target: { closest: q => q === '[data-chsweeprunning]' ? {} : null } }, w, W, owner: id => id,
+      runningOn: x => x === lw ? !!listOn : !!ownOn, runningGo: (x, on) => calls.push(['runningGo', x.id, on]),
+      chatsBack: x => calls.push(['chatsBack', x.id]), H: { toast: (...a) => calls.push(['toast', a[1]]) } };
+    vm.runInNewContext(`(() => {\n${tap}\n})()`, ctx);
+    return JSON.stringify(calls);
+  };
+  assert.equal(press({ listOn: true }), '[["runningGo","c1::list",true]]', 'desktop: the list pane beside the thread');
+  assert.equal(press({ ownOn: true }), '[["chatsBack","c1"],["runningGo","c1",true]]', 'one pane: back to the list, then Running');
+  assert.equal(press({ listOn: false, ownOn: true }), '[["chatsBack","c1"],["runningGo","c1",true]]');
+  assert.equal(press({}), '[["toast","The Running view is in the Chats window"]]', 'no Running view here: says where it is');
 });
 
 test('main versus routed: a routed agent\'s item answers by record id but never opens as a main-agent thread', () => {
@@ -179,7 +198,14 @@ test('main versus routed: a routed agent\'s item answers by record id but never 
 test('switch off (or not a card): no card, the markdown copy shows', () => {
   assert.equal(cardBlock({ on: false }).api.sweepHtml(card()), '');
   assert.equal(cardBlock().api.sweepHtml({ id: 'x' }), '');
-  assert.match(chats, /const sweep = tn\.a\?\.sweep && typeof sweepHtml === 'function' \? sweepHtml\(tn\.a\.sweep\) : '';\n\s+const body = sweep \|\| \(tn\.a \? md\(/);
+  // the real turn body (chats-attach.js turnHtml): a sweep card replaces the markdown copy, else the copy shows
+  const bodyOf = slice(chats, '      const sweep = tn.a?.sweep', '(url, marker) =>');
+  const turnBody = (tn, sweepHtml) => vm.runInNewContext(`${bodyOf}null) : ''); body`, { tn, sweepHtml, md: t => `<p>${t}</p>` });
+  const on = cardBlock().api.sweepHtml;
+  assert.equal(turnBody({ a: { text: 'copy', sweep: card() } }, on), on(card()), 'the card, not the copy');
+  assert.equal(turnBody({ a: { text: 'copy', sweep: card() } }, cardBlock({ on: false }).api.sweepHtml), '<p>copy</p>', 'switch off: the copy');
+  assert.equal(turnBody({ a: { text: 'copy' } }, on), '<p>copy</p>', 'no card: the copy');
+  assert.equal(turnBody({ a: { text: 'copy', sweep: card() } }, undefined), '<p>copy</p>', 'no card part loaded: the copy');
 });
 
 test('tapping a token posts the answer, the item shows as answered, and the card is read again', async () => {
@@ -236,16 +262,26 @@ test('Yes to all sends one request for the card and repaints from its answer (co
 });
 
 test('the buttons are wired in the click handler and every card rule is scoped to the switch with skin tokens', () => {
-  assert.match(chats, /closest\('\[data-chsweep\]'\); if \(swb\) \{ if \(!swb\.disabled\) sweepAnswer\(swb\.dataset\.card, swb\.dataset\.chsweep, swb\.dataset\.opt\)/);
-  assert.match(chats, /closest\('\[data-chsweepall\]'\); if \(swa\) \{ if \(!swa\.disabled\) sweepYesToAll\(swa\.dataset\.chsweepall\)/);
-  const css = readFileSync(new URL('../web/tweaks/wizard/agent-inbox/tweak.css', import.meta.url), 'utf8');
+  // the drawn card, tapped through the real click lines of core/chats-bind.js
+  const bind = readFileSync(new URL('../web/core/chats-bind.js', import.meta.url), 'utf8');
+  const lines = [slice(bind, "    const swb = e.target.closest('[data-chsweep]');", '\n'), slice(bind, "    const swa = e.target.closest('[data-chsweepall]');", '\n')].join('\n');
+  const calls = [], ctx = { sweepAnswer: (...a) => calls.push(['answer', ...a]), sweepYesToAll: (...a) => calls.push(['all', ...a]) };
+  vm.createContext(ctx); const click = vm.runInContext(`(e => {\n${lines}\nreturn false;\n})`, ctx);
+  const doc = createDocument(); doc.documentElement.setAttribute('data-tweaks', 'wizard/agent-inbox');
+  doc.body.innerHTML = cardBlock().api.sweepHtml(card());
+  const tap = n => click({ target: n });
+  assert.equal(tap(doc.querySelector(`[data-chsweep="${A}"][data-opt="late"]`)), true);
+  assert.equal(tap(doc.querySelector('[data-chsweepall]')), true);
+  assert.deepEqual(calls, [['answer', CARD, A, 'late'], ['all', CARD]], 'a token answers its item; Yes to all the card');
+  const off = doc.querySelector(`[data-chsweep="${A}"][data-opt="early"]`); off.disabled = true; assert.equal(tap(off), true); assert.equal(calls.length, 2, 'a disabled button sends nothing');
+  assert.equal(click({ target: doc.body }), false, 'anything else is not the card\'s');
+  // the styles: the switch's own sheet on the drawn card; nothing without the switch
+  const css = readFileSync(new URL('../web/tweaks/wizard/agent-inbox/tweak.css', import.meta.url), 'utf8'), panel = doc.querySelector('.appr.ch-sweep');
+  assert.equal(cascade(panel, css).background?.value, 'var(--wz-panel, #17131f)', 'opaque panel with the dark fallback');
+  doc.documentElement.removeAttribute('data-tweaks');
+  for (const n of [panel, ...panel.querySelectorAll('*')]) assert.deepEqual(Object.keys(cascade(n, css)), [], 'scoped to the switch: ' + n.className);
   const rules = css.replace(/\/\*[\s\S]*?\*\//g, '').split('}').filter(r => r.includes('ch-sweep'));
-  assert.ok(rules.length > 5);
-  for (const rule of rules) {
-    for (const sel of rule.split('{')[0].split(',')) assert.match(sel.trim(), /^html\[data-tweaks~="wizard\/agent-inbox"\]/, 'scoped to the switch');
-    for (const c of rule.match(/var\(--[a-z0-9-]+/g) || []) assert.match(c, /^var\(--wz-/, 'skin tokens only');
-  }
-  assert.match(rules.find(r => r.includes('.appr.ch-sweep {')), /background: var\(--wz-panel, #17131f\)/, 'opaque panel with the dark fallback');
+  for (const rule of rules) for (const c of rule.match(/var\(--[a-z0-9-]+/g) || []) assert.match(c, /^var\(--wz-/, 'skin tokens only');
 });
 
 test('switch turned off while the Daily thread is open: the thread repaints (markdown again) and a tap sends nothing', async () => {

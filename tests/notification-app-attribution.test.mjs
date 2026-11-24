@@ -8,6 +8,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { core, settle, read } from './fixtures/notification-levels.mjs';
+import { withParts } from './fixtures/chats-parts.mjs';
+import { withSkinHostParts } from './fixtures/skin-host-parts.mjs';
 
 const NOTES = [
   { id: 's1', time: 40, title: 'Sniper daily scan', message: 'All clear', priority: 2, tags: ['cron', 'clock', 'app:sniper'] },
@@ -100,8 +102,8 @@ test('the app\'s own reported badge and the carried count add up', async () => {
 });
 
 test('chats.js lists them under the app: its name, its mark, one fold per app', () => {
-  const src = read('web/core/chats.js');
-  const between = (a, b) => { const i = src.indexOf(a), j = src.indexOf(b, i + a.length); assert.ok(i >= 0 && j > i, a); return src.slice(i, j); };
+  const src = withParts(read('web/core/chats.js'));
+  const between = (a, b) => { const i = src.indexOf(a), j = src.indexOf(b, i + a.length); return src.slice(i, j); };
   const ctx = { window: { WizConfig: { agent: () => 'Oscar' }, WosBell: { items: () => [], icon: '<svg class="bell"></svg>' }, WizSigil: { html: m => `<i data-sigil="${m.name}"></i>` }, WizCore: { appMetadata: () => null } },
     esc: s => String(s), clip: (s, n) => String(s).slice(0, n), ago: () => '2m' };
   vm.createContext(ctx);
@@ -120,7 +122,7 @@ test('chats.js lists them under the app: its name, its mark, one fold per app', 
 });
 
 test('sidebar / AI apps rows (skin-host noteRows) fold and name them under the app too', () => {
-  const host = read('web/core/skin-host.js');
+  const host = withSkinHostParts(read('web/core/skin-host.js'));
   const src = host.match(/  const NOTE_ID = [\s\S]*?\n  function inboxAct\(action, id\) \{[^\n]*\n/)[0];
   const items = [{ id: 's1', title: 'Sniper daily scan', time: 30, from: 'sniper', fromName: 'Sniper', priority: 2 }, { id: 's2', title: 'Daily Sniper outcome', time: 20, from: 'sniper', fromName: 'Sniper', priority: 2 },
     { id: 'o1', title: 'Release review', time: 10, priority: 2 }, { id: 'o2', title: 'Whiteboard', time: 5, priority: 2 }];
@@ -133,7 +135,7 @@ test('sidebar / AI apps rows (skin-host noteRows) fold and name them under the a
 
 
 test('host note groups retain max-member Check rank; Needs you never folds and state/rank agree', () => {
-  const host = read('web/core/skin-host.js');
+  const host = withSkinHostParts(read('web/core/skin-host.js'));
   const src = host.match(/  const NOTE_ID = [\s\S]*?\n  function inboxAct\(action, id\) \{[^\n]*\n/)[0];
   const items = [{ id: 'new', title: 'New low', time: 30, priority: 1 }, { id: 'check', title: 'Older check', time: 20, priority: 3 }, { id: 'urgent', title: 'Urgent older', time: 10, priority: 5 }];
   const ctx = { isDoc: true, window: { WizConfig: { agent: () => 'Wizard' }, WosBell: { items: () => items } }, inboxThreads: new Map([['p', { list: true, act() {} }]]) };

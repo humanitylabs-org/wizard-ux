@@ -42,6 +42,9 @@
   if (!/^[a-f0-9]{64}$/.test(token)) return;
   remember(true);
   tellNative(true);
+  // The Android app's own calls to owner routes (sharing, Archimedes Anywhere, reply notifications, dictation) need
+  // the token too. The app takes it only from this page through its gated bridge, never from an app frame (ShellToken).
+  try { window.WizardOSNative?.shellToken?.(token); } catch (_) {}
   const HEADER = 'X-Wizard-Shell-Token';
   // Owner routes on this origin: the Agent Service (everything it serves that is not a static shell file) and the
   // App Manager listener mounted beside the shell.

@@ -6,30 +6,35 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { freshDevice } from './fixtures/w1-experience.mjs';
 import { modelContext } from './fixtures/chats-list-model.mjs';
+import { block } from './fixtures/source-slice.mjs';
+import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
 
 const read = p => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
 const ID = 'wizard/background-continue';
 const RID = 'bg_' + 'a'.repeat(32), RID2 = 'bg_' + 'b'.repeat(32);
 
-test('the tweak is in the catalog and off by default for everyone', () => {
-  const catalog = JSON.parse(read('web/tweaks/catalog.json'));
-  const profile = JSON.parse(read('web/tweaks/wizard/profile.json'));
-  assert.ok(catalog.tweaks.includes(ID));
-  assert.equal(catalog.defaults.includes(ID), false);
-  assert.equal(profile.tweaks.includes(ID), false);
-  assert.equal(JSON.parse(read(`web/tweaks/${ID}/manifest.json`)).id, ID);
+test('the tweak is in the catalog and off by default for everyone', async () => {
+  // what Settings › Look lists on a fresh device (core/experience.js over the shipped catalog), and on every author's preset
+  const fresh = freshDevice(), l = await fresh.listing(ID);
+  assert.equal(l.manifest?.id, ID, 'listed');
+  assert.equal(l.row?.on, false); assert.equal(l.running, false, 'off by default');
+  const { profiles } = JSON.parse(read('web/tweaks/catalog.json'));
+  for (const who of profiles) { const d = freshDevice({ preset: who }); await d.E.refresh(); assert.ok(!d.active().includes(ID), who); }
+  await fresh.E.toggle(ID); await fresh.E.whenReady();
+  assert.ok(fresh.active().includes(ID), 'and the owner can switch it on');
 });
 
 // The real live.js list normalizer (same extraction as ready-open-ask.test.mjs).
 function normalizer() {
-  const live = read('web/live.js'), a = live.indexOf('  const READY_OR_ATTENTION'), b = live.indexOf('  /* ---- thread-seen');
+  const live = withLiveParts(read('web/live.js')), a = live.indexOf('  const READY_OR_ATTENTION'), b = live.indexOf('  /* ---- thread-seen');
   const context = modelContext({}); vm.runInContext(`${live.slice(a, b)}\nthis.normalize = normalize;`, context);
   return context.normalize;
 }
 // live.js discovery block, run against stub network helpers.
 function discovery({ on, payload, fail = false }) {
-  const src = read('web/live.js');
+  const src = withLiveParts(read('web/live.js'));
   const body = src.slice(src.indexOf('  /* Saved background results'), src.indexOf('  const FULL_EVERY'));
   const calls = [];
   const ctx = {
@@ -80,8 +85,20 @@ test('on: a discovery read that lands after this device continued never brings C
   await ctx.merge(sessions);
   assert.equal(sessions.find(s => s.id === 'old').backgroundResult, null);
   assert.equal(sessions.filter(s => s.id === 'old').length, 1);
-  const src = read('web/live.js');
-  assert.match(src, /backgroundSettled\(id\) \{ if \(typeof id === 'string' && id\) BACKGROUND_SETTLED\.add\(id\);/);
+  // the real L.backgroundSettled (a Continue tap): the id is remembered, so a later discovery read never brings it back
+  const src = withLiveParts(read('web/live.js'));
+  const method = block(src, '    backgroundSettled(id) {');
+  const fresh = discovery({ on: true, payload: listing }).ctx;
+  vm.runInContext(`this.L2 = { sessions: [], ${method} };`, fresh);
+  const rows = [{ id: 'old', status: 'completed', backgroundResult: { id: RID } }];
+  fresh.L2.sessions = rows;
+  fresh.L2.backgroundSettled(RID);
+  assert.equal(rows[0].backgroundResult, null, 'the tapped result hides at once');
+  assert.ok(fresh.settled.has(RID), 'and is remembered on this device');
+  fresh.L2.backgroundSettled(42); assert.equal(fresh.settled.has(42), false, 'only string ids are kept');
+  const later = [{ id: 'old', status: 'completed', backgroundResult: { id: RID } }];
+  await fresh.merge(later);
+  assert.equal(later.find(s => s.id === 'old').backgroundResult, null, 'a read landing after the tap keeps it hidden');
 });
 
 test('on: an older Agent Service without the route leaves Chats as it was', async () => {
@@ -141,6 +158,15 @@ test('on: the panel shows Continue; showing it posts nothing; a double tap posts
   assert.deepEqual(h.settled, [RID], 'the list will not resurrect it from an older read');
 });
 
+test('on: a main-agent thread the shell labels hermes gets the panel and posts once', async () => {
+  // The shell names the main agent on its own rows (agent hermes); the panel must not treat that as a routed agent.
+  const h = power({ on: true, agent: 'hermes' });
+  assert.match(h.api.failureHtml(h.w, h.session), new RegExp(`data-background-continue="${RID}"`));
+  h.click(); await settle(h);
+  assert.equal(h.posts.length, 1);
+  assert.deepEqual(JSON.parse(h.posts[0][2]), { session_id: 'old' });
+});
+
 for (const kind of ['host-profile', 'container', 'restricted']) test(`on: a routed ${kind} thread gets no panel and never posts (main-agent route only)`, async () => {
   const h = power({ on: true, agent: `qa-${kind}` });
   assert.doesNotMatch(h.api.failureHtml(h.w, h.session), /data-background-continue/);
@@ -155,7 +181,30 @@ test('on: a thread that moved on (409) keeps its latest request in charge', asyn
   assert.ok(h.notices.some(x => /latest request stays in charge/.test(x[1])));
 });
 
-test('Chats re-renders the thread header when a result appears or clears', () => {
-  const js = read('web/core/chats.js');
-  assert.equal((js.match(/s2?\.backgroundResult\?\.id \|\| ''\]\.join\('\|'\)/g) || []).length, 2);
+test('Chats re-renders the thread header when a result appears or clears', async () => {
+  // The real thread reader (core/chats-outbox.js loadThread) against a fake LIVE: a quiet, cached thread.
+  const window = { WizCore: {} }, renders = [], el = {};
+  vm.runInNewContext(read('web/core/chats-outbox.js'), { window, globalThis: {}, Date, JSON, Number, Object, Promise, setTimeout, clearTimeout });
+  const session = { id: 's1', status: 'completed', messageCount: 2, backgroundResult: null };
+  const w = { id: 'w1', thread: 's1' }, c = { readNav: 1 };
+  const LIVE = { session: () => session, busy: () => false, messages: async () => [{ role: 'user', content: 'hi' }], cachedMessages: null, sessionInfo: async () => {} };
+  const part = window.WizCore.chatsParts.outbox({ ch: () => c, CH: { w1: c }, elOf: () => el, H: {}, INC: null, isWorking: () => false, KIT: {}, LIVE, loadApproval: async () => false,
+    needsLand: null, OUTBOX: { unsent: () => [], items: () => [], forThread: () => [] }, PEND: {}, renderLive: (x, e) => renders.push(e), renderChatList() {}, renderThread() {}, toTurns: rows => rows, syncListTitle() {},
+    track: { querySelector: () => el }, W: { w1: w }, rowOf: () => null, reach: null });
+  const tick = () => new Promise(r => setTimeout(r, 0));
+  await part.loadThread(w); await tick();
+  const first = renders.length;
+  assert.ok(first >= 1, 'the first read paints');
+  await part.loadThread(w); await tick();
+  assert.equal(renders.length, first, 'nothing changed: the cached thread is not repainted');
+  session.backgroundResult = { id: 'bg_1' };
+  await part.loadThread(w); await tick();
+  assert.equal(renders.length, first + 1, 'a result appearing repaints the header');
+  session.backgroundResult = null;
+  await part.loadThread(w); await tick();
+  assert.equal(renders.length, first + 2, 'and so does it clearing');
+  // A full (forced) read sees it too.
+  session.backgroundResult = { id: 'bg_2' };
+  await part.loadThread(w, true); await tick();
+  assert.ok(renders.length > first + 2, 'the read path compares the result too');
 });

@@ -9,8 +9,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
+import { withParts } from './fixtures/chats-parts.mjs';
+import { runRecording } from './fixtures/source-slice.mjs'; // chats.js parts moved out verbatim (issue 1665)
 
-const src = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
+const src = withParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'));
 const body = src.slice(src.indexOf('  function syncDocumentThread() {'), src.indexOf('\n  {\n    const queueDocumentThread'));
 
 function fixture() {
@@ -68,10 +70,35 @@ test('leaving document scroll swaps the mode with every path transition held, th
   assert.equal(f.all[1].style.transition, '');
 });
 
+// The list paint's full-redraw branch of renderChatList (cut from the real chats.js), with every helper it calls
+// recorded in order.
+function listPaint({ owner = 'list', android = true } = {}) {
+  const start = src.indexOf('      const keepSheet = keptSheet(el);\n      clearReading(w.id); el.innerHTML = html;');
+  const endMark = "if (restoreListPlace(el.querySelector('.ch-scroll'), place)) c.listPending = null;";
+  const end = src.indexOf(endMark, start);
+  assert.ok(start > 0 && end > start, 'the list paint in renderChatList');
+  const el = { id: 'list-el', innerHTML: '', firstElementChild: { id: 'root' }, querySelector: sel => ({ sel }) };
+  const other = { contains: () => false }, parent = { contains: n => n === el };
+  const docOwner = owner === 'list' ? el : owner === 'parent' ? parent : owner === 'other' ? other : null;
+  const ctx = { el, html: '<div class="ch-scroll">list</div>', c: {}, w: { id: 'w1' }, place: { top: 5 }, docOwner, androidDocument: android };
+  runRecording(`{\n${src.slice(start, end + endMark.length)}\n}`, ctx);
+  return { names: ctx.calls.map(x => x[0]), el, ctx };
+}
+
 test('a list paint over the document-scrolled thread leaves document scroll in the same paint', () => {
-  const i = src.indexOf('clearReading(w.id); el.innerHTML = html; c.listHTML = html; c.listRoot = el.firstElementChild;');
-  assert.ok(i > 0);
-  const next = src.slice(i, src.indexOf('if (restoreListPlace(el.querySelector(\'.ch-scroll\'), place)) c.listPending = null;', i));
-  assert.match(next, /if \(typeof docOwner !== 'undefined' && docOwner && androidDocument && \(docOwner === el \|\| docOwner\.contains\(el\)\)\) syncDocumentThread\(\);/,
-    'the hand-back runs before the list restores its place');
+  for (const owner of ['list', 'parent']) {
+    const p = listPaint({ owner });
+    assert.equal(p.el.innerHTML, '<div class="ch-scroll">list</div>', 'the list is drawn');
+    const names = p.names;
+    assert.ok(names.includes('syncDocumentThread'), `${owner}: document scroll is handed back in this paint`);
+    assert.ok(names.indexOf('clearReading') < names.indexOf('syncDocumentThread'), 'after the new list is in');
+    assert.ok(names.indexOf('syncDocumentThread') < names.indexOf('restoreListPlace'), 'before the list restores its place');
+    assert.ok(names.indexOf('syncDocumentThread') < names.indexOf('restoreSheet'));
+  }
+  // Nothing to hand back: no owner, an unrelated owner, or not the Android document-scroll app.
+  for (const o of [{ owner: null }, { owner: 'other' }, { owner: 'list', android: false }]) {
+    const p = listPaint(o);
+    assert.ok(!p.names.includes('syncDocumentThread'), JSON.stringify(o));
+    assert.ok(p.names.includes('restoreListPlace'));
+  }
 });

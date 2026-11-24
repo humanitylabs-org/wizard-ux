@@ -57,7 +57,7 @@ const SHELL = `<!doctype html><html><head><meta charset="utf-8">
     throw new Error('unknown method');
   } } };
   window.WizConfig = { stripAddress: s => s };</script>
-<script src="/wizard-os-home/core/app-services.js"></script>
+<script src="/wizard-os-home/core/app-services-windows.js"></script><script src="/wizard-os-home/core/app-services-boundary.js"></script><script src="/wizard-os-home/core/app-services.js"></script>
 <style>body{font:14px system-ui}iframe{width:440px;height:60px;border:1px solid #888;display:block}</style></head>
 <body><div class="win" id="w1"><iframe class="appframe" sandbox="allow-scripts allow-forms allow-downloads" src="/notes/"></iframe></div>
 <div class="win" id="w2"><iframe class="appframe" sandbox="allow-scripts allow-forms allow-downloads" src="/evil/"></iframe></div>

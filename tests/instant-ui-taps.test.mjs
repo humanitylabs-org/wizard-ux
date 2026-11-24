@@ -2,7 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
-const read = f => readFileSync(new URL('../' + f, import.meta.url), 'utf8');
+import { withSettingsParts } from './fixtures/settings-parts.mjs'; // settings.js parts moved out verbatim (issue 1665)
+import { withShellParts } from './fixtures/shell-parts.mjs';
+const read = f => withShellParts(readFileSync(new URL('../' + f, import.meta.url), 'utf8'));
 const deferred = () => { let resolve; const promise = new Promise(r => { resolve = r; }); return { promise, resolve }; };
 const flush = async () => { for (let i = 0; i < 8; i++) await Promise.resolve(); };
 for (const ok of [true, false]) test(`recording custody deletion acknowledges the tap before storage; rollback=${!ok}`, async () => {
@@ -16,7 +18,7 @@ for (const ok of [true, false]) test(`recording custody deletion acknowledges th
 for (const ok of [true, false]) test(`Unsent delete registers before its promise and renders settled result=${ok}`, async () => {
   const gate=deferred(),notices=[],button={disabled:false,textContent:'Delete'};let renders=0,calls=0;
   const c={window:null,addEventListener(){},document:{},navigator:{userAgent:'Fixture'},location:{host:'fixture'},localStorage:{getItem:()=>null},setTimeout};c.window=c;
-  vm.runInNewContext(read('web/core/settings.js'),c);
+  vm.runInNewContext(withSettingsParts(read('web/core/settings.js')),c);
   const ctx={root:{querySelectorAll:()=>[{dataset:{ubid:'take'},querySelector:()=>button}]},outbox:{get:()=>({id:'take'}),remove:()=>{calls++;return gate.promise;}},render(){renders++;button.disabled=false;button.textContent='Delete';},toast:(...a)=>notices.push(a)};
   c.WosSettings.unsentAction(ctx,'take','local','delete');c.WosSettings.unsentAction(ctx,'take','local','delete');
   assert.equal(button.disabled,true);assert.equal(button.textContent,'Deleting…');assert.equal(calls,1);assert.equal(renders,0);

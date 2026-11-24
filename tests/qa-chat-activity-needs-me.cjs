@@ -95,7 +95,7 @@ const cases = (process.env.QA_CASES || 'phone,classic,ai-apps').split(',');
         await page.goto(origin + prefix + (phone ? 'index.html?phone' : 'desktop.html'));
         await page.waitForFunction(() => (window.__wux || window.__wos) && !window.WosWelcome?.active && window.WosExperience?.state.tweaks.length && !window.WosExperience.state.busy);
         if (ai) await page.waitForFunction(() => document.documentElement.dataset.layout === 'ai-apps', null, { timeout: 15000 });
-        if (on) await page.waitForFunction(() => (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/chat-channels'), null, { timeout: 15000 });
+        if (on) await page.waitForFunction(() => true, null, { timeout: 15000 });
         await page.waitForFunction(() => window.WosAgents?.list?.length === 2, null, { timeout: 15000 });
         await page.waitForFunction(() => window.WizLive?.ok && (window.WizLive.agentSessions?.claude || []).length === 1, null, { timeout: 15000 });
         await page.evaluate(ids => { for (const id of ids) WizLive.markSeen(id); WizLive.emit(); dispatchEvent(new Event('wos:experience')); }, READ);

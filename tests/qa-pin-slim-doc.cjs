@@ -1,12 +1,15 @@
 'use strict';
-// Slim pin page (wizard-ux issue 1584, switch wizard/pin-slim-doc). Real Chromium, synthetic transport (no box read or
-// written). A home-screen app session (index.html?app-session=wisdom) opens a stand-in app that uses the real
-// app-client.js. For the switch off and on, five cold opens each at 4x CPU slowdown: when the app's own page starts,
-// how many shell scripts the page holds by then, and that the page has no errors. Then, in one session each: the
+// Slim pin page (wizard-ux issue 1584, on for everyone: the switch wizard/pin-slim-doc is removed). Real Chromium,
+// synthetic transport (no box read or written). A home-screen app session (index.html?app-session=wisdom) opens a
+// stand-in app that uses the real app-client.js. Five cold opens at 4x CPU slowdown: when the app's own page starts,
+// how many shell scripts the page holds by then, and that the page has no errors. Then, in one session: the
 // app's Share opens Wizard's share sheet and Android Back (window.__wosNativeBack) closes the sheet first, then the
 // app's own layer; the app opens a hosted Chats thread (Wisdom may host threads) and Back leaves it; the app's own
-// page sees the shell's appearance tokens (--wz-*). QA_ONLY=off|on runs one side. QA_RUNS sets the open count.
+// page sees the shell's appearance tokens (--wz-*). QA_RUNS sets the open count. QA_WEB=<older checkout>/web with
+// QA_OLD=1 measures a tree from before the slim page (the full shell, no slim page expected).
 // Measured 18 Nov 2026 (QA_RUNS=3, 4x CPU): off 1253 ms / 119 scripts, on 758 ms / 34 scripts to the app's first script.
+// Since issue 1696 the app frame waits for the services an app reads at load (core/pin-doc.js kind 'a': live.js, chat-kit...):
+// 21 Nov 2026 on a busy 2-CPU box (QA_RUNS=5, 4x CPU): off 1823 ms / 197 scripts, on 1321 ms / 47 scripts.
 const assert = require('node:assert/strict');
 const { chromium } = require('../tools/qa-playwright.cjs');
 const { ownerRead } = require('../tools/qa-desktop-frame-fixture.cjs');
@@ -14,9 +17,7 @@ const fs = require('node:fs'), path = require('node:path');
 const repo = path.resolve(__dirname, '..'), origin = process.env.QA_ORIGIN || 'https://pin-slim.test', prefix = '/wizard-os-home/';
 const web = process.env.QA_WEB || path.join(repo, 'web'), out = process.env.QA_OUT || path.join(repo, 'pin-slim-evidence');
 const RUNS = +process.env.QA_RUNS || 5, CPU = +process.env.QA_CPU || 4;
-const SWITCH = 'wizard/pin-slim-doc';
-// QA_FAST=1 also wears wizard/pin-fast-open (issue 1558) on both sides.
-const BASE = process.env.QA_FAST === '1' ? ['wizard/pin-fast-open'] : [];
+const SLIM = !process.env.QA_OLD;
 const APP = { id: 'wisdom', name: 'Wisdom', url: '/wisdom/', source: 'apps.json', type: 'view', kind: 'wizard', status: 'running' };
 const MESSENGER = { id: 'messenger', name: 'Messenger', url: '/messenger/', source: 'apps.json', type: 'view', kind: 'wizard', status: 'running' };
 const PAGE = `<!doctype html><meta charset="utf-8"><title>Wisdom</title><body style="font:18px system-ui;padding:24px;background:#fff">
@@ -35,15 +36,14 @@ const nap = ms => new Promise(r => setTimeout(r, ms));
 const median = a => [...a].sort((x, y) => x - y)[Math.floor(a.length / 2)];
 const SESSION = { id: 'qa-thread-1', title: 'Synthetic thread', source: 'wizard', started_at: 1, last_active: 2, message_count: 0 };
 
-async function context(browser, on) {
+async function context(browser) {
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: 'block', isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
   await ctx.routeWebSocket('**/*', w => w.close());
-  await ctx.addInitScript(([apps, tweaks]) => {
+  await ctx.addInitScript(([apps]) => {
     if (window !== top) return;
     localStorage.setItem('wux.apps.v1', JSON.stringify(apps));
-    localStorage.setItem('wos.tweaks.expect', JSON.stringify(tweaks));
     for (const [k, v] of Object.entries({ 'wos.shell': 'phone', 'wux.shell': 'phone', 'wos.coached': 'true', 'wos.tour.v1': 'true', 'wos.welcome.v1': 'done', 'wos.skin': 'nebula' })) localStorage.setItem(k, v);
-  }, [[APP, MESSENGER], on ? [...BASE, SWITCH] : BASE]);
+  }, [[APP, MESSENGER]]);
   const reads = [];
   await ctx.route('**/*', async r => {
     const q = r.request(), u = new URL(q.url()), method = q.method(), p = u.pathname;
@@ -72,8 +72,8 @@ async function context(browser, on) {
   return { ctx, reads };
 }
 
-async function open(browser, on) {
-  const { ctx, reads } = await context(browser, on);
+async function open(browser) {
+  const { ctx, reads } = await context(browser);
   const page = await ctx.newPage(), errors = [];
   page.on('pageerror', e => errors.push(e.message));
   const cdp = await ctx.newCDPSession(page);
@@ -89,18 +89,17 @@ async function open(browser, on) {
 (async () => {
   const browser = await chromium.launch(), report = {};
   try {
-    for (const side of ['off', 'on']) {
-      if (process.env.QA_ONLY && process.env.QA_ONLY !== side) continue;
-      const on = side === 'on', times = [], scripts = [];
+    {
+      const side = SLIM ? 'on' : 'old', on = SLIM, times = [], scripts = [];
       for (let i = 0; i < RUNS; i++) {
-        const o = await open(browser, on);
+        const o = await open(browser);
         assert.equal(o.at.slim, on, `${side}: slim page ${on ? 'used' : 'not used'}`);
         times.push(Math.round(o.at.start)); scripts.push(o.at.scripts);
         assert.deepEqual(o.errors, [], `${side}: no page errors`);
         await o.ctx.close();
       }
       // One session: share + Back, hosted thread + Back, appearance tokens, the rest of the host arriving.
-      const o = await open(browser, on);
+      const o = await open(browser);
       const { page, app } = o;
       const frame = page.frames().find(f => f.url().includes(APP.url));
       await nap(on ? 2500 : 800);
@@ -137,7 +136,6 @@ async function open(browser, on) {
     }
     console.log(JSON.stringify(report, null, 1));
     fs.writeFileSync(path.join(out, 'pin-slim-report.json'), JSON.stringify(report, null, 1));
-    if (report.on && report.off) assert.ok(report.on.medianMs < report.off.medianMs, 'the slim page starts the app sooner');
     console.log('PASS');
   } finally { await browser.close(); }
 })().catch(e => { console.error(e); process.exit(1); });

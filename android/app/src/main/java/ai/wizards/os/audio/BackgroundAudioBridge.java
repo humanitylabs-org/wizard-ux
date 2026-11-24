@@ -34,8 +34,9 @@ public final class BackgroundAudioBridge {
         try {
             String value=raw.getData(); if(value==null || value.length()>250000) return;
             JSONObject r=new JSONObject(value); String id=r.optString("id"),method=r.optString("method");
-            if(!AudioPolicy.METHODS.contains(method) || r.optInt("v")!=1 || !"wizard-music".equals(r.optString("appId"))) { answer(reply,id,null,"Unknown audio capability"); return; }
-            if("capabilities".equals(method)) { answer(reply,id,new JSONObject().put("v",1).put("backgroundAudio",true).put("methods",new JSONArray(AudioPolicy.METHODS)),null); return; }
+            final String app=r.optString("appId");
+            if(!AudioPolicy.METHODS.contains(method) || r.optInt("v")!=1 || !AudioPolicy.admitted(app)) { answer(reply,id,null,"Unknown audio capability"); return; }
+            if("capabilities".equals(method)) { answer(reply,id,new JSONObject().put("v",1).put("backgroundAudio",true).put("methods",new JSONArray(AudioPolicy.METHODS)).put("apps",new JSONArray(new TreeSet<>(AudioPolicy.APPS))).put("skip",true),null); return; }
             if("detach".equals(method) && BackgroundAudioService.current()==null) { answer(reply,id,new JSONObject(),null); return; }
             if(pending>=16) { answer(reply,id,null,"Audio busy"); return; }
             pending++;
@@ -57,7 +58,7 @@ public final class BackgroundAudioBridge {
                     }
                     BackgroundAudioService s=BackgroundAudioService.current();
                     if(s==null) { if(controller==connected) { MediaController.releaseFuture(connected); controller=null; } throw new IllegalStateException(); }
-                    s.command(method,r); answer(reply,id,s.snapshot(r.optInt("knownQueueRevision",-1)),null);
+                    s.command(app,method,r); answer(reply,id,s.snapshot(app,r.optInt("knownQueueRevision",-1)),null);
                 } catch(Exception e) { answer(reply,id,null,"Music command failed"); }
             },activity.getMainExecutor());
         } catch(JSONException|RuntimeException ignored) { }

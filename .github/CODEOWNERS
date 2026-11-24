@@ -1,8 +1,8 @@
 # Release pipeline owners (ux#1551, wizard-os#680). The phone signing key lives in the phone-release
 # environment, and any workflow on main can name that environment, so changes to workflows and to the
 # publish script need a code owner's review once "require review from code owners" is on.
-# James only for now; @mistermizel joins once Miguel's agent has its own GitHub account.
+# James and Oscar (James approved Oscar, 20 Nov 2026); @mistermizel joins once Miguel's agent has its own GitHub account.
 # android/** is deliberately not covered: its Gradle code runs only in the unsigned build job.
-/.github/** @jdefleur
-/tools/phone_release.py @jdefleur
+/.github/** @jdefleur @oscarhenrycollins
+/tools/phone_release.py @jdefleur @oscarhenrycollins
 /.github/CODEOWNERS @jdefleur

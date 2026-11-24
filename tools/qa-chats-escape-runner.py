@@ -86,7 +86,7 @@ try:
   origin='http://127.0.0.1:'+str(server.server_port)+'/wizard-os-home/'
   try:
    env={'QA_WEB_DIR':str(tree),'QA_PLAYWRIGHT':a.playwright,'QA_CHROME':a.chrome,'QA_OUT':str(out/(name+'-browser')),'QA_ORIGIN':origin}
-   code,_=run(name+'-browser',['node',str(stage/'candidate/qa-chats-search-escape.cjs'),origin],env,200)
+   code,_=run(name+'-browser',['node',str(stage/'candidate/qa/scripts/qa-chats-search-escape.cjs'),origin],env,200)
   finally:
    server.shutdown();server.server_close();thread.join(timeout=5)
    summary.setdefault('servers',[]).append({'source':name,'origin':origin,'thread_alive':thread.is_alive(),'socket_closed':server.socket.fileno()==-1});save()

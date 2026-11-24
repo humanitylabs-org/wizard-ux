@@ -2,8 +2,10 @@ import { modelContext, runWithChatsModel } from './chats-list-model.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { withSkinHostParts } from './skin-host-parts.mjs';
+import { withWebParts } from './web-parts.mjs';
 const root = new URL('../../', import.meta.url);
-export const read = path => readFileSync(new URL(path, root), 'utf8');
+export const read = path => withWebParts(readFileSync(new URL(path, root), 'utf8'));
 class Element {
   constructor(tag = 'div') { this.tagName = tag; this.nodeType = 1; this.dataset = {}; this.attrs = {}; this.children = []; this.parentNode = null; this.handlers = new Map(); this.isConnected = true; const c = this.classes = new Set(); this.classList = { add: k => c.add(k), remove: k => c.delete(k), contains: k => c.has(k), toggle: (k, on = !c.has(k)) => (on ? c.add(k) : c.delete(k), on) }; }
   setAttribute(k, v) { this.attrs[k] = v; if (k.startsWith('data-')) this.dataset[k.slice(5).replace(/-([a-z])/g, (_, c) => c.toUpperCase())] = v; }
@@ -36,7 +38,7 @@ export function fixture({ shell = 'phone', manifests = {}, initialStorage = {}, 
     dispatchEvent() {}, WosResources: { sync() { refreshes++; } }, WosBoomerang: { someday: async ({ sessionId }) => { deferred = sessionId; } }, WosSwipeIntent: { intentional: (dx, dy) => Math.abs(dx) > 60 && Math.abs(dx) > dy } };
   window.WosSkin = { frame: { foundation: 'borderless' }, useFoundation(id) { this.frame.foundation = id; return () => { this.frame.foundation = 'borderless'; }; } };
   const ctx = { URLSearchParams, location: { search: query, origin: 'https://wizard.test' }, window, document: doc, URL, Event, console, setTimeout, clearTimeout, requestAnimationFrame: fn => setTimeout(fn, 0), cancelAnimationFrame: clearTimeout, performance, innerWidth: 390, structuredClone, localStorage: { removeItem: k => storage.delete(k), getItem: k => storage.get(k) ?? null, setItem: (k, v) => storage.set(k, v), get length() { return storage.size; }, key: i => [...storage.keys()][i] ?? null }, fetch: async url => { const id = url.split('/tweaks/')[1].split('/').slice(0, 2).join('/'); return { ok: true, json: async () => manifests[id] || JSON.parse(read(`web/tweaks/${id}/manifest.json`)) }; } };
-  runWithChatsModel(hostSource ?? read('web/core/skin-host.js'), ctx); const host = window.WosSkinHost;
+  runWithChatsModel(hostSource ?? withSkinHostParts(read('web/core/skin-host.js')), ctx); const host = window.WosSkinHost;
   const boot = { layout: host.layout, dataset: html.dataset.layout, css: head.children.map(l => l.href) };
   host._test.setImporter(async url => { imports.push(url); if (url.includes('/core/orb-switcher.js')) return { default: () => { const o = { dispose() { if (window.WosOrbSwitcher === o) delete window.WosOrbSwitcher; } }; window.WosOrbSwitcher = o; return o; } }; if (url.includes('/layouts/')) return { default: () => () => {} }; const src = read('web/tweaks/' + url.split('/tweaks/')[1].split('?')[0]); return runWithChatsModel(`(() => { ${src.replace('export default function setup', 'function setup')} ; return { default: setup }; })()`, ctx); });
   const adapter = { orbSwitcher: {}, overview: { use: options => { overview = options; return () => { if (overview === options) overview = null; }; } }, windowRefresh: { use: options => { windowRefresh = options; return () => { if (windowRefresh === options) windowRefresh = null; }; } }, route: () => route, root: () => body, dock: () => null, back: () => { if (route.view !== 'thread') return false; route = { view: 'list', thread: null, desk: 1 }; return true; }, newThread: () => { newThreads++; }, contextDraft: (key, item, words, draft) => { inbox.replies.push([key.replace(/^notifications:/, ''), words, ...(draft ? [draft] : [])]); return true; }, openThread: id => { route = { ...route, view: 'thread', thread: id }; }, deskCount: () => 3, goDesk(i) { gone.push(i); }, toast: t => toasts.push(t), models: async () => [{ value: 'test-model', provider: 'test', name: 'Test model' }], model: async choice => ({ model: choice?.id || 'test-model', provider: 'test' }) };

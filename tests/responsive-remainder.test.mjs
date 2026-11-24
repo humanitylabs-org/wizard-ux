@@ -2,7 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import fs from 'node:fs';
-const read=p=>fs.readFileSync(new URL('../web/'+p,import.meta.url),'utf8');
+import { withDesktopParts } from './fixtures/desktop-parts.mjs';
+import { withShellParts } from './fixtures/shell-parts.mjs';
+import { runRecording, block } from './fixtures/source-slice.mjs';
+const read=p=>withShellParts(fs.readFileSync(new URL('../web/'+p,import.meta.url),'utf8'));
 function grammar(){
  const events=[],norm=s=>String(s||'').toLowerCase().replace(/[^a-z0-9 ]/g,'').trim();
  const app={id:'wizard-music',name:'Music'},box={console,Map,Set,URL,location:{href:'https://fixture.invalid/',origin:'https://fixture.invalid',hostname:'fixture.invalid'}};box.window=box;
@@ -34,12 +37,29 @@ test('one grammar handles music, app, filter, search, help and future registrati
  assert.equal(parser.parse('this is not a command',{},'command'),null);
  assert.equal(parser.parse('my normal one word reply',{view:{kind:'chat thread'}},'auto'),null);
 });
-test('explicit misses in phone never enter cloud routing; desktop command take is negative-send custody',()=>{
- const phone=read('app.js'),desk=read('desktop/desktop.js');
- const h=phone.slice(phone.indexOf('  async function handleText'),phone.indexOf('  /* Hold-command'));
- assert(h.indexOf("if (kind === 'command' && !typed) return holdNoMatch")<h.indexOf("endpoint('route')"));
- const command=desk.slice(desk.indexOf('    if (commandTake)'),desk.indexOf('    if (vConversation)'));
- assert(command.includes('retainDictation'));assert(command.includes('transcribeDictation'));assert(!command.includes('enqueue('));
+test('explicit misses in phone never enter cloud routing; desktop command take is negative-send custody',async()=>{
+ // Phone (app-routing.js handleText): a held take in an agent's Chats with no on-device match offers the choices,
+ // never the cloud router.
+ const routing=read('app-routing.js');
+ const calls=[];
+ const ph=runRecording(block(routing,'  async function handleText(')+'\nthis.handleText=handleText;',{calls,
+  LOCAL_COMMANDS:{confirm:async()=>null},localParse:()=>null,holdNoMatch:(text)=>{calls.push(['holdNoMatch',text]);return 'choices';},
+  fetch:()=>{calls.push(['fetch']);throw new Error('no router');},sendSnap:()=>({}),window:{WizConfig:{endpoint:k=>{calls.push(['endpoint',k]);return '/route';}},WosCommands:{isMessageTake:()=>false},WosTour:{isHelp:()=>false}},
+  appVars:{W:{}},$:()=>({})});
+ const snap={view:{agent:'a1',agentLabel:'Ann',id:'w1',thread:'t1'}};
+ assert.equal(await ph.handleText('do the thing','command',false,0,null,snap),'choices');
+ const names=calls.map(x=>x[0]);
+ assert(names.includes('holdNoMatch'));assert(!names.includes('fetch'),'no cloud routing');assert(!names.includes('endpoint'));
+ // Desktop: a command take is retained and transcribed locally, then finished; it is never queued as a message.
+ const desk=withDesktopParts(read('desktop/desktop.js'));
+ const take=block(desk,'    if (commandTake) {');
+ const dcalls=[],outbox={retainDictation:async(blob,id)=>{dcalls.push(['retain',id]);return {id:'k1'};},transcribeDictation:async id=>{dcalls.push(['transcribe',id]);return {id,text:'nonsense words'};},
+  completeLocal:async id=>{dcalls.push(['complete',id]);return true;},enqueue:()=>dcalls.push(['enqueue'])};
+ const d=runRecording('this.run=async()=>{'+take+'\n};',{calls:dcalls,commandTake:true,dictationFinishing:false,vSnapshot:{},window:{},OUTBOX:outbox,
+  VOICE:{finish:async()=>({blob:'b',captureId:'c1'})},LOCAL_COMMANDS:{confirm:async()=>null,parse:()=>null},toast:()=>{},commandSaid:(ok)=>dcalls.push(['said',ok])});
+ assert.equal(await d.run(),'none');
+ assert.deepEqual(dcalls.map(x=>x[0]),['retain','transcribe','complete','said']);
+ assert.equal(d.commandTake,false,'the take is over');
 });
 test('general bound-view lifecycle preserves origin and manual dismissal',()=>{
  const {box}=grammar();vm.runInNewContext(read('core/bound-view.js'),box);
@@ -56,9 +76,10 @@ test('feedback rejects a missing route rather than targeting current focus',asyn
  const {box}=grammar();vm.runInNewContext(read('core/bound-view.js'),box);let calls=0;
  assert.equal(await box.WosBoundView.feedback({enqueue:()=>calls++},{thread:'original'},'words'),false);assert.equal(calls,0);
 });
+// static-rule: both shells' pages load the same shared core assets and call the same shared modules (files that must agree)
 test('both adapters mount common nonsettings views, command grammar and capture tools',()=>{
  for(const p of ['index.html','desktop.html'])for(const asset of ['views.css','commands.js','features.js','bound-view.js','capture-tools.js','voice-legacy.js','app-voice.js','screen-capture.js','sel-menu.js'])assert(read(p).includes('core/'+asset),p+': '+asset);
- for(const p of ['app.js','desktop/desktop.js']){const s=read(p);assert(s.includes('WosFeatures.install('));assert(s.includes('WosCommands.create('));assert(s.includes('WosCommands.execute('));assert(s.includes('WosBoundView.create('));assert(s.includes('WosCaptureTools.'));assert(!s.includes('function localParse('));assert(!s.includes('function renderLevel('));}
+ for(const p of ['app.js','desktop/desktop.js']){const s=withDesktopParts(read(p));assert(s.includes('WosFeatures.install('));assert(s.includes('WosCommands.create('));assert(s.includes('WosCommands.execute('));assert(s.includes('WosBoundView.create('));assert(s.includes('WosCaptureTools.'));assert(!s.includes('function localParse('));assert(!s.includes('function renderLevel('));}
 });
 
 
@@ -81,8 +102,9 @@ test('phone non-recorded review feedback resolves only its original thread, or s
  assert.equal(result.id,'kept');assert.equal(calls[0].sessionId,'private-original');assert.equal(calls[0].kind,'reply');assert.equal(calls[1][1],'held');
 });
 
+// static-rule: inventory: the responsive capability audit (docs JSON) stays complete and self-consistent
 test('finite audit has all 72 capabilities and complete 163-row crosswalk, without unclosed browser gaps',()=>{
- const d=JSON.parse(fs.readFileSync(new URL('../docs/responsive-capability-coverage.json',import.meta.url),'utf8'));
+ const d=JSON.parse(withShellParts(fs.readFileSync(new URL('../docs/responsive-capability-coverage.json',import.meta.url),'utf8')));
  assert.equal(d.features.length,72);const ids=new Set(d.features.map(f=>f.id));assert.equal(ids.size,72);assert.equal(d.legacy_crosswalk.length,163);for(const row of d.legacy_crosswalk)assert(ids.has(row.feature_id));
  for(const f of d.features.filter(f=>f.scope==='browser-common'))assert(['shared-implemented','shared-delivered-pr31','inherited-shared'].includes(f.status),f.id);
  const counts={};for(const f of d.features)counts[f.status]=(counts[f.status]||0)+1;assert.deepEqual(counts,d.counts);

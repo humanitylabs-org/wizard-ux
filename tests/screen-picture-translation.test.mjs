@@ -5,6 +5,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import { createDocument } from './fixtures/mini-dom.mjs';
+import { cascade } from './fixtures/mini-css.mjs';
 const page = fs.readFileSync(process.env.SCREEN_PAGE_SOURCE || new URL('../android/app/src/main/assets/assist/screen.html', import.meta.url), 'utf8');
 const scriptStart = page.indexOf('<script>') + '<script>'.length;
 const scriptEnd = page.indexOf('</script>', scriptStart);
@@ -314,7 +316,13 @@ test('Original reveals the untouched picture; Translated brings the overlay back
   h.node('#orig').fire('click');
   assert.equal(body.classList.contains('orig'), false);
   assert.equal(h.painted().length, 3, 'overlay untouched by the toggle');
-  assert.match(page, /body\.orig #paint \{ display: none; \}/);
+  // the page's own stylesheet on its own markup: with body.orig the overlay is not drawn, without it it is
+  const css = page.split('<style>').slice(1).map(x => x.split('</style>')[0]).join('\n');
+  const doc = createDocument(); doc.body.innerHTML = page.slice(page.indexOf('>', page.indexOf('<body')) + 1, page.indexOf('</body>')).split('<script')[0];
+  const paint = doc.body.querySelector('#paint'); assert.ok(paint, 'the page has its #paint overlay');
+  assert.notEqual(cascade(paint, css).display?.value, 'none', 'Translated: the overlay shows');
+  doc.body.classList.add('orig');
+  assert.equal(cascade(paint, css).display?.value, 'none', 'Original: the overlay is hidden');
 });
 
 test('tap a painted picture line: its original + translation; outside tap and Back step off; Copy intact', async () => {
@@ -489,12 +497,25 @@ test('two tight caption lines: each wrapped translation stays inside its own box
   assert.ok(a.bottom <= b.top + 0.01, 'painted lines do not overlap: ' + JSON.stringify([a, b]));
 });
 
-test('Appearance v1 roles with dark standalone fallbacks; text overlays are opaque', () => {
-  const css = page.slice(page.indexOf('<style>'), page.indexOf('</style>'));
-  for (const role of ['--wz-accent, #b99bff', '--wz-text, #f4f1ff', '--wz-text-secondary, #a79fc4', '--wz-panel, #120e24', '--wz-border,'])
-    assert.ok(css.includes('var(' + role), role);
+test('Appearance v1 roles with dark standalone fallbacks; text overlays are opaque', async () => {
+  const css = page.slice(page.indexOf('<style>') + '<style>'.length, page.indexOf('</style>'));
+  // the page's own roles (cascade on its root): Appearance v1 tokens with dark standalone fallbacks
+  const doc = createDocument();
+  doc.body.innerHTML = '<div id="hint">Tap a line</div><div class="sheet" id="sheet"></div>';
+  const root = cascade(doc.documentElement, css);
+  const roles = { '--acc': 'var(--wz-accent, #b99bff)', '--ink': 'var(--wz-text, #f4f1ff)', '--mut': 'var(--wz-text-secondary, #a79fc4)', '--card': 'var(--wz-panel, #120e24)' };
+  for (const [k, v] of Object.entries(roles)) assert.equal(root[k]?.value, v, k);
+  assert.match(root['--line']?.value || '', /^var\(--wz-border,/);
   assert.doesNotMatch(css, /--wz-ink|--wz-line\b/, 'not real Appearance v1 roles');
-  assert.match(css, /#hint \{[^}]*background: var\(--card\)/);
-  assert.doesNotMatch(css, /\.sheet \{[^}]*background: rgba/);
-  assert.match(source, /background: c\.bg, color: c\.fg/, 'painted text takes the sampled opaque colours');
+  // the hint and the sheet sit on the opaque panel role
+  assert.equal(cascade(doc.getElementById('hint'), css).background?.value, 'var(--card)');
+  assert.equal(cascade(doc.getElementById('sheet'), css).background?.value, 'var(--card)');
+  // painted text (the shipped renderer) takes the sampled opaque colours
+  const h = await harness(); h.identity(); h.thaiPicture(); h.thaiEnglish();
+  const els = h.node('#paint').children;
+  assert.equal(els.length, 3);
+  for (const e of els) {
+    assert.ok(e.style.background && e.style.color, 'painted with a background and an ink');
+    assert.doesNotMatch(String(e.style.background), /rgba\([^)]*,\s*0?\.\d+\)|transparent/, 'opaque: ' + e.style.background);
+  }
 });

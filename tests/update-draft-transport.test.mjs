@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
 import {randomUUID} from 'node:crypto';
-const code=readFileSync(new URL('../web/core/app-services.js',import.meta.url),'utf8');
+import { withServicesParts } from './fixtures/app-services-parts.mjs';
+const code=withServicesParts(readFileSync(new URL('../web/core/app-services.js',import.meta.url),'utf8'));
 const tick=async()=>{for(let i=0;i<30;i++)await Promise.resolve()};
 function fixture(){
  const listeners=new Set(),sent=[],origin='https://fixture.invalid';

@@ -4,16 +4,17 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
-const source=readFileSync(new URL('../web/core/app-services.js',import.meta.url),'utf8');
+import { withServicesParts } from './fixtures/app-services-parts.mjs';
+const source=withServicesParts(readFileSync(new URL('../web/core/app-services.js',import.meta.url),'utf8'));
 function fixture(id='mizel') {
- const posted=[],events=[],location=new URL('https://wizard.example/wizard-os-home/');
+ const posted=[],events=[],messages=[],location=new URL('https://wizard.example/wizard-os-home/');
  const child={location:new URL('/'+id+'/',location),document:{},addEventListener(){},postMessage:(m,o)=>posted.push([m,o])};
  const frame={tagName:'IFRAME',src:child.location.href,isConnected:true,contentWindow:child,hasAttribute:()=>false,addEventListener(){},removeEventListener(){}};
  const app={id,kind:'wizard',url:'/'+id+'/',name:'Mizel',colors:['#3fe0ff','#1a6bff']};
  const window={WizCore:{apps:()=>({APPS:[app]}),workspaceNav:{setCount(){}}},dispatchEvent:e=>events.push(e)};
- vm.runInNewContext(source,{window,location,URL,addEventListener(){},setInterval(){},setTimeout,clearTimeout,document:{hidden:false,readyState:'loading',addEventListener(){}},CustomEvent:class{constructor(t,o){this.type=t;this.detail=o?.detail;}},navigator:{}});
+ vm.runInNewContext(source,{window,location,URL,addEventListener:(t,fn)=>{if(t==='message')messages.push(fn);},setInterval(){},setTimeout,clearTimeout,document:{hidden:false,readyState:'loading',addEventListener(){}},CustomEvent:class{constructor(t,o){this.type=t;this.detail=o?.detail;}},navigator:{}});
  const detach=window.WizAppServices.attach(frame,{appId:id,path:app.url,isVisible:()=>true});
- return {child,frame,posted,events,detach,S:window.WizAppServices,service:window.WizAppServices.connect(child,{})};
+ return {child,frame,posted,events,messages,detach,S:window.WizAppServices,service:window.WizAppServices.connect(child,{})};
 }
 test('a claim shows the app icon, a clean label and the app colour only where the layout draws the orb',()=>{
  const f=fixture(); assert.equal(f.service.orb.set({icon:'plus',label:'New recording'}),false,'no presenter: not shown');
@@ -35,4 +36,13 @@ test('closing or reloading the app gives the orb back to the agent',()=>{
  const f=fixture(); f.service.orb.set({icon:'plus'}); f.detach(); assert.equal(f.S.orb.of(f.frame),null);
  const g=fixture(); g.service.orb.set({icon:'plus'}); g.child.document={}; assert.equal(g.S.orb.of(g.frame),null); assert.equal(g.S.orb.tap(g.frame),false);
 });
-test('orb.set is an admitted message op',()=>{ assert.match(source,/'orb\.set'/); assert.match(source,/d\.op === 'orb\.set'/); });
+test('orb.set is an admitted message op',async()=>{
+ const f=fixture(); f.S.orb.presenter(()=>true);
+ const send=async(op,args,id)=>{for(const fn of f.messages)await fn({origin:'https://wizard.example',source:f.child,data:{type:'wizard:app:request',version:1,op,id,args}});return f.posted.find(([m])=>m.type==='wizard:app:reply'&&m.id===id)?.[0];};
+ const r=await send('orb.set',{spec:{icon:'plus',label:'New recording'}},'r1');
+ assert.ok(r,'the shell replies to orb.set'); assert.equal(r.error,undefined); assert.equal(r.value,true);
+ assert.equal(f.S.orb.of(f.frame).icon,'plus'); assert.equal(f.S.orb.of(f.frame).label,'New recording');
+ assert.equal((await send('orb.set',{spec:null},'r2')).error,undefined,'a cleared claim is answered too'); assert.equal(f.S.orb.of(f.frame),null);
+ assert.equal(await send('orb.wear',{spec:{icon:'plus'}},'r3'),undefined,'an op outside the list is ignored');
+ assert.equal(f.S.orb.of(f.frame),null);
+});

@@ -4,7 +4,9 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import * as router from '../web/store/store-router.js';
 import { installRelease } from '../web/store/store-install.js';
-const read = p => fs.readFileSync(new URL('../' + p, import.meta.url), 'utf8');
+import { withDesktopParts } from './fixtures/desktop-parts.mjs';
+import { withShellParts } from './fixtures/shell-parts.mjs';
+const read = p => withShellParts(fs.readFileSync(new URL('../' + p, import.meta.url), 'utf8'));
 const provider = { id: 'wizard-tinfoil', name: 'Wizard Tinfoil', provides: ['live-transcription'], private: true, models: [{ id: 'flash', tier: 'fast' }] };
 const service = { slot: 'live-transcription', required: true, purpose: 'Words appear as you speak', recommend: provider.id, private_data: true, status: 'missing' };
 async function harness(result, store = new Map()) {
@@ -84,26 +86,64 @@ test('routerNeeds uses the shared owner proxy and handles an old Router 501', as
   finally { globalThis.fetch = previous; }
 });
 test('shared Store release transaction sends and verifies the exact qualified selection', async () => {
-  const previous = globalThis.fetch, a = { id: provider.id, source: 'standard', repo: 'https://github.com/qa/tinfoil', commit: 'a'.repeat(40) };
+  const previous = globalThis.fetch, a = { id: 'wizard-tinfoil', source: 'standard', repo: 'https://github.com/qa/tinfoil', commit: 'a'.repeat(40) };
   try {
     let calls = 0;
-    globalThis.fetch = async (url, opts) => { calls++; assert.match(url, /store-install\/wizard-tinfoil$/); assert.equal(opts.headers['X-Wizard-Store'], '1'); const selection = JSON.parse(opts.body); assert.deepEqual(selection, { source: a.source, repo: a.repo, commit: a.commit, operation: 'install' }); return { ok: true, status: 200, json: async () => ({ state: 'installed', selection }) }; };
+    globalThis.fetch = async (to, sent) => { calls++; assert.match(to, /store-install\/wizard-tinfoil$/); assert.equal(sent.headers['X-Wizard-Store'], '1'); const selection = JSON.parse(sent.body); assert.deepEqual(selection, { source: a.source, repo: a.repo, commit: a.commit, operation: 'install' }); return { ok: true, status: 200, json: async () => ({ state: 'installed', selection }) }; };
     await installRelease(a); assert.equal(calls, 1);
     globalThis.fetch = async () => ({ ok: true, status: 200, json: async () => ({ state: 'installed', selection: { ...a, operation: 'install', commit: 'b'.repeat(40) } }) });
     await assert.rejects(() => installRelease(a), /different release/);
   } finally { globalThis.fetch = previous; }
 });
+// The shells' real openApp, setup init and install-link code (app-search.js / desktop-resize.js, app-boot.js /
+// desktop-links.js), sliced out and run with small stand-ins for the shell names they use.
+const sliceFn = (src, start) => { const i = src.indexOf(start); assert.ok(i >= 0, start); const j = src.indexOf('\n  }\n', i); assert.ok(j > i); return src.slice(i, j + 4); };
+function launcher(file) {
+  const src = read(file), phone = file === 'web/app.js';
+  const log = [], gates = [], inits = [];
+  const ctx = vm.createContext({ log, APP: {}, appVars: { idx: 0, W: {} }, desktopVars: { ws: [] }, HOME: 0,
+    window: { WosAppSetup: { init: o => inits.push(o), gate: (a, open, o) => { gates.push({ a, open, o }); log.push('gate:' + a.id); return 'gated'; } } },
+    openingEnd: id => log.push('openingEnd:' + id), closeSheets() {}, framePage() {}, renderDesk() {}, go: () => true,
+    placeApp: (match, w) => { log.push('window:' + w.appId); }, newWin: w => log.push('window:' + w.appId), findWin: () => null, focusWin() {},
+    focusedWin: () => ({ appId: 'notes' }), focused: () => ({ appId: 'notes' }), CHATS: { views: { defaultId: () => 'c', providerFor: () => 'c' } } });
+  const init = phone ? "  window.WosAppSetup?.init({ getApp: id => APP[id], isFront: id => focusedWin()?.appId === id });" : "  window.WosAppSetup?.init({ getApp: id => APP[id], isFront: id => focused()?.appId === id });";
+  assert.ok(src.includes(init), file);
+  vm.runInContext(init + '\n' + sliceFn(src, phone ? '  function openApp(a, extra = {}, opts = {}) {' : '  function openApp(a, opts = {}) {') + '\nthis.openApp = openApp;', ctx);
+  return { ctx, log, gates, inits };
+}
+
 test('both launchers put admission before window creation; Back peels setup before window/root handling', () => {
   for (const file of ['web/app.js', 'web/desktop/desktop.js']) {
-    const src = read(file), start = src.indexOf('  function openApp('), gate = src.indexOf('WosAppSetup.gate', start), next = src.indexOf('\n  function ', start + 5);
-    assert.ok(gate > start && gate < next); assert.match(src.slice(start, gate + 140), /setupChecked: true/);
-    assert.match(src, /WizEscapeBack\.installOwners\(/);
-    assert.match(read('web/core/escape-back.js'), /add\('setup',[^\n]+WosAppSetup.back\(\)/);
+    const L = launcher(file), notes = { id: 'notes', kind: 'wizard', url: '/notes/' };
+    assert.equal(L.ctx.openApp(notes), 'gated', file);
+    assert.deepEqual(L.log, ['gate:notes'], `${file}: the setup check runs before any window exists`);
+    L.gates[0].open();
+    assert.deepEqual(L.log, ['gate:notes', 'window:notes'], `${file}: once admitted (setupChecked), the window opens without a second check`);
+    assert.equal(L.gates.length, 1);
     // A late setup sheet only lands on the app still in front, on the phone and on desktop.
-    assert.match(src, /WosAppSetup\?\.init\(\{[^}]*isFront: id =>/, `${file} passes isFront`);
+    assert.equal(L.inits.length, 1); assert.equal(L.inits[0].isFront('notes'), true); assert.equal(L.inits[0].isFront('recorder'), false, `${file} passes isFront`);
+    // Troubleshooter never waits for setup.
+    L.log.length = 0; L.ctx.openApp({ id: 'troubleshooter', kind: 'wizard', url: '/troubleshoot/' }); assert.deepEqual(L.log, ['window:troubleshooter']);
   }
-  const store = read('web/store/store.js'); assert.match(store, /Setup\.html\(routerId\(a\)/); assert.match(store, /Setup\.html\(id/); assert.match(store, /await installRelease\(/);
+  // Back: the one owner catalog both shells install (WizEscapeBack.installOwners) peels setup with WosAppSetup.back().
+  let open = true, backs = 0;
+  const W = { WosAppSetup: { isOpen: () => open, back: () => { backs++; open = false; return 'setup'; } } };
+  const EB = escapeBackOn(W), stack = EB.create();
+  EB.installOwners(stack, { chats: () => ({}), links: () => null });
+  let roots = 0; const fallback = () => (roots++, 'root');
+  assert.equal(stack.run({ fallback, surface: () => false }), 'setup');
+  assert.equal(backs, 1); assert.equal(roots, 0, 'the window/root is not touched while setup is open');
+  assert.equal(stack.run({ fallback, surface: () => false }), 'root');
+  assert.equal(backs, 1);
+  // (both shells install that catalog: back-owners.test.mjs runs each shell's own installOwners call)
 });
+
+// the real core/escape-back.js on `window`
+function escapeBackOn(window) {
+  const ctx = vm.createContext({ window, document: { addEventListener() {} }, addEventListener() {}, setTimeout, clearTimeout, queueMicrotask, MutationObserver: class { observe() {} disconnect() {} } });
+  vm.runInContext(read('web/core/escape-back.js'), ctx);
+  return window.WizEscapeBack;
+}
 
 test('captured Recorder needs share one recommendation even before a signed-out provider lists its models', async () => {
   const setup = await harness({});
@@ -147,9 +187,22 @@ test('compact disclosures escape need copy and never use purpose as the row name
 });
 
 test('install links open the Store window synchronously so the link reaches its frame (both shells)', () => {
-  for (const [file, call] of [['web/app.js', "openApp(APP['app-store'], {}, { setupChecked: true })"], ['web/desktop/desktop.js', "openApp(APP['app-store'], { setupChecked: true })"]]) {
-    const src = read(file), at = src.indexOf("if (v === 'install') {");
-    assert.ok(at > 0, file); assert.ok(src.slice(at, at + 400).includes(call), `${file} skips the async setup gate for the install link`);
-    assert.ok(src.slice(at, src.indexOf(call, at)).includes('WosAppSetup?.close()'), `${file} cancels an earlier pending setup gate first`);
+  for (const file of ['web/app.js', 'web/desktop/desktop.js']) {
+    const src = withDesktopParts(read(file)), at = src.indexOf("      if (v === 'install') {");
+    const block = src.slice(at, src.indexOf('\n      }\n', at) + 8);
+    const log = [], iframe = { tag: 'iframe' }, store = { id: 'app-store' };
+    const win = { id: 'w1', appId: 'app-store' };
+    const W = {}, ctx = vm.createContext({ log, APP: { 'app-store': store }, W, appVars: { W }, installQuery: 'id=x',
+      window: { WosAppSetup: { close: () => log.push('close') }, WizCore: { deeplink: { installInFrame: (f, q) => (log.push(['frame', f, q]), 'ok') } } },
+      C: { deeplink: { installInFrame: (f, q) => (log.push(['frame', f, q]), 'ok') } },
+      openApp: (a, x, y) => { log.push(['open', a.id, (y || x).setupChecked === true]); W.w1 = win; },
+      findWin: fn => (W.w1 && fn(win) ? win : null), winEl: () => ({ querySelector: () => iframe }),
+      document: { querySelector: s => (s === '[data-win="w1"] iframe' ? iframe : null) } });
+    vm.runInContext(`this.view = v => {\n${block}\n};`, ctx);
+    assert.equal(ctx.view('install'), 'ok', file);
+    assert.equal(log[0], 'close', `${file} cancels an earlier pending setup gate first`);
+    assert.deepEqual(log[1], ['open', 'app-store', true], `${file} skips the async setup gate for the install link`);
+    assert.equal(log[2][1], iframe, `${file}: the link reaches the Store frame opened in the same call`);
+    assert.equal(log[2][2], 'id=x');
   }
 });

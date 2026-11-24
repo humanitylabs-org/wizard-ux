@@ -5,10 +5,11 @@ import {readFileSync} from 'node:fs';
 import {createHmac} from 'node:crypto';
 import {homedir} from 'node:os';
 import {join} from 'node:path';
+import {cliSecret} from './runtipi-cli-key.mjs';
 const PORT=Number(process.argv[2]),UP=Number(process.argv[3]);
 const env=Object.fromEntries(readFileSync(join(homedir(),'runtipi/.env'),'utf8').split('\n').filter(l=>l.includes('=')&&!l.startsWith('#')).map(l=>{const i=l.indexOf('=');return [l.slice(0,i).trim(),l.slice(i+1).trim().replace(/^["']|["']$/g,'')];}));
 const origin=`http://${env.INTERNAL_IP||'127.0.0.1'}:${env.NGINX_PORT||80}`;
-function token(){const now=Math.floor(Date.now()/1000),b=j=>Buffer.from(JSON.stringify(j)).toString('base64url'),h=b({alg:'HS256',typ:'JWT'}),p=b({sub:'cli',iat:now,nbf:now,exp:now+60});return `${h}.${p}.${createHmac('sha256',env.JWT_SECRET).update(`${h}.${p}`).digest('base64url')}`;}
+function token(){const now=Math.floor(Date.now()/1000),b=j=>Buffer.from(JSON.stringify(j)).toString('base64url'),h=b({alg:'HS256',typ:'JWT'}),p=b({sub:'cli',iat:now,nbf:now,exp:now+60});return `${h}.${p}.${createHmac('sha256',cliSecret(env)).update(`${h}.${p}`).digest('base64url')}`;}
 let refused=0;
 http.createServer(async(req,res)=>{
  const u=new URL(req.url,'http://localhost');

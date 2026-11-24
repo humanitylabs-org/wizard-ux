@@ -5,8 +5,10 @@ import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { launcherFixture } from './launcher-fixture.mjs';
+import { withServicesParts } from './fixtures/app-services-parts.mjs';
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 const read = p => readFileSync(new URL('../'+p,import.meta.url),'utf8');
-const source=read('web/core/chats.js');
+const source=withParts(read('web/core/chats.js'));
 function scene(kind, seed={}) {
  const agent=kind==='main'?'':'synthetic-'+kind, sid=agent?'agent:'+agent+':synthetic':'synthetic-main';
  const calls=[],store=new Map([['wos.chat.drafts.v1',JSON.stringify(seed)]]), hosted=new Map(), app={id:'wisdom',kind:'wizard',url:'/wisdom/'};
@@ -19,7 +21,7 @@ function scene(kind, seed={}) {
  env.W={w:{id:'w',appId:'wisdom'}};env.hosted=hosted;
  env.LIVE={pinAgent:(...a)=>calls.push(['pin',...a])};env.closeHosted=()=>{throw Error('must not replace existing thread')};env.getComputedStyle=()=>({position:'relative'});env.openChat=(...a)=>calls.push(['open',...a]);env.requestAnimationFrame=fn=>fn();
  launcherFixture(env);vm.runInContext(source.slice(source.indexOf('  function openHosted('),source.indexOf('  function closeHosted('))+';this.openHosted=openHosted;',env);
- vm.runInContext(read('web/core/app-services.js'),env);
+ vm.runInContext(withServicesParts(read('web/core/app-services.js')),env);
  let visible=true;
  window.WizAppServices.attach(frame,{appId:'wisdom',path:'/wisdom/',isVisible:()=>visible,openThread:(id,opts)=>env.openHosted('w',frame,id,opts)});
  return {env,window,store,calls,sid,agent,frame,hosted,hide:()=>visible=false,nav:window.WizAppServices.connect(child,{back:()=>false}).nav};

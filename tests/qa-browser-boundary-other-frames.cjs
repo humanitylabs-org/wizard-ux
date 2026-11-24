@@ -25,7 +25,7 @@ ${on ? `<script>window.WizShellBoundary = Object.freeze({ on: true, header: 'X-W
 <script>const LIST = { APPS: [{ id: 'notes', name: 'Notes', url: '/notes/', provides: ['voice-commands'] }] };
   window.WizCore = { apps: () => LIST };</script>
 <script src="/wizard-os-home/core/links.js"></script>
-<script src="/wizard-os-home/core/app-services.js"></script></head>
+<script src="/wizard-os-home/core/app-services-windows.js"></script><script src="/wizard-os-home/core/app-services-boundary.js"></script><script src="/wizard-os-home/core/app-services.js"></script></head>
 <body><script>window.secretInShell = 'shell-only'; localStorage.setItem('shell', 'private');
   window.sheet = WizLinks.mount({ parent: document.body, mode: 'sheet' });</script></body></html>`;
 const server = http.createServer((req, res) => {

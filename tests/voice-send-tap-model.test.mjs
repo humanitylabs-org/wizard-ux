@@ -4,7 +4,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
-const phone = readFileSync(new URL('../web/app.js', import.meta.url), 'utf8');
+import { withAppParts } from './fixtures/app-parts.mjs';
+const phone = withAppParts(readFileSync(new URL('../web/app.js', import.meta.url), 'utf8'));
 const section = (a, b) => { const i = phone.indexOf(a); assert.ok(i >= 0, a); return phone.slice(i, phone.indexOf(b, i)); };
 const code = section('  function sealTarget() {', '  // A take that sends nothing') + section('  function finishVoice() {', '  async function cancelVoice(');
 

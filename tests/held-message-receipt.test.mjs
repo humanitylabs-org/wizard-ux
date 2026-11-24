@@ -2,14 +2,16 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
-const source = fs.readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
-const start = source.indexOf('  function pendingState(');
-const end = source.indexOf('  // Failed thread reads retry', start);
+import { withWebParts } from './fixtures/web-parts.mjs';
+const paint = fs.readFileSync(new URL('../web/core/chats-threadpaint.js', import.meta.url), 'utf8');
+const outbox = withWebParts(fs.readFileSync(new URL('../web/core/chats-outbox.js', import.meta.url), 'utf8')); // pendingState moved there (issue 1665)
+const start = outbox.indexOf('  function pendingState(');
+const end = outbox.indexOf('  // Failed thread reads retry', start);
 function receipt(p, s) {
   const c = vm.createContext({ OUTBOX: { quarantined: () => false }, H: {}, esc: String,
     window: { WizConfig: { agent: () => 'Wizard' } }, CHECK_SVG: '✓',
     KIT: { reply: { clean: () => null } }, replyCard: () => '', userMedia: () => '', md: String });
-  vm.runInContext(source.slice(start, end), c);
+  vm.runInContext(outbox.slice(start, end), c);
   return c.pendingHtml(p, { media: [] }, s);
 }
 const pending = { id: 'send', state: 'sent', runId: 'held-run', text: 'A saved request' };
@@ -17,7 +19,16 @@ test('held message says Waiting for sign-in, not Sent or Dismiss', () => {
   const html = receipt(pending, { reconnect: { runId: 'held-run' }, status: 'failed' });
   assert.match(html, /Waiting for sign-in/);
   assert.doesNotMatch(html, />Sent<|Dismiss/);
-  assert.match(source, /pend\.map\(p => pendingHtml\(p, c, s\)\)/);
+  // the thread paint (real chats-threadpaint.js) draws every pending send with that receipt
+  const tail = paint.slice(paint.indexOf('        + approvalHtml(c, s)'), paint.indexOf('        // A send a graceful restart holds'));
+  const c = vm.createContext({ OUTBOX: { quarantined: () => false }, H: {}, esc: String,
+    window: { WizConfig: { agent: () => 'Wizard' } }, CHECK_SVG: '✓',
+    KIT: { reply: { clean: () => null } }, replyCard: () => '', userMedia: () => '', md: String,
+    approvalHtml: () => '', pend: [pending], s: { reconnect: { runId: 'held-run' }, status: 'failed' } });
+  vm.runInContext(outbox.slice(start, end), c);
+  c.c = { media: [] };
+  const thread = vm.runInContext(`'' ${tail}`, c);
+  assert.equal(thread, html, 'the thread shows the held receipt for the pending send');
 });
 test('held receipt stays waiting until the automatic resend completes', () => {
   for (const status of ['queued', 'running', 'waiting_for_approval']) {

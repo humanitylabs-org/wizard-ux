@@ -158,6 +158,132 @@ public class MizelTest {
         assertFalse(s2.meetingDir("mt_a").exists());
     }
 
+    /**
+     * wizard-ux#1762: readyAt is saved before the chunks are marked in custody, so the app being killed half way no
+     * longer restarts the work on every open; prune finishes the marking, so a ready chunk is still deleted (not kept
+     * in Cancelled recordings).
+     */
+    @Test
+    public void readyIsSavedFirstAndPruneFinishesAnInterruptedReadyMark() throws Exception {
+        File root = tmp.newFolder("mizel");
+        MizelStore s = new MizelStore(root);
+        s.beginSession("mt_r", 1000);
+        for (int i = 0; i < 3; i++) {
+            writeChunk(s, "mt_r", i, Wav.CHUNK_SAMPLES);
+            s.chunkDone("mt_r", i, Wav.CHUNK_SAMPLES, 2000 + i);
+            s.acked("mt_r", i);
+        }
+        s.requestStop("mt_r", "user", 3000);
+        s.stopSent("mt_r", 3100);
+        // The status check's journal write landed, its custody write did not (process killed in between).
+        MizelJournal j = s.snapshot("mt_r");
+        j.readyAt = 4000; j.statusCheckedAt = 4000;
+        try (FileOutputStream o = new FileOutputStream(new File(s.meetingDir("mt_r"), "journal.json"))) {
+            o.write(j.json().toString().getBytes("UTF-8"));
+        }
+        MizelStore s2 = new MizelStore(root);
+        assertEquals(4000, s2.get("mt_r").readyAt);
+        assertTrue(s2.prune(4000 + MizelPolicy.KEEP_AFTER_READY_MS).contains("mt_r"));
+        assertFalse(s2.meetingDir("mt_r").exists());
+        File cancelled = new File(root.getParentFile(), "cancelled");
+        assertTrue("ready chunks are deleted, not kept as cancelled", !cancelled.isDirectory() || cancelled.list().length == 0);
+    }
+
+    @Test
+    public void aNewSessionWaitsForThePruneOfTheSameMeeting() throws Exception {
+        File root = tmp.newFolder("mizel");
+        MizelStore s = new MizelStore(root);
+        s.beginSession("mt_p", 1000);
+        writeChunk(s, "mt_p", 0, 16);
+        s.chunkDone("mt_p", 0, 16, 2000);
+        s.acked("mt_p", 0);
+        s.requestStop("mt_p", "user", 3000);
+        s.stopSent("mt_p", 3100);
+        s.statusChecked("mt_p", 4000, true);
+        ai.wizards.os.audio.CaptureJournal custody = ai.wizards.os.audio.CaptureJournal.at(root.getParentFile());
+        Thread pruner, starter;
+        synchronized (custody) { // the prune stops in its custody work, outside the store lock
+            pruner = new Thread(() -> s.prune(4000 + MizelPolicy.KEEP_AFTER_READY_MS));
+            pruner.start();
+            while (s.get("mt_p") != null) Thread.sleep(5);
+            starter = new Thread(() -> s.beginSession("mt_p", 9000));
+            starter.start();
+            Thread.sleep(300);
+            assertNull("the new session waits while its meeting is being deleted", s.get("mt_p"));
+        }
+        pruner.join(10_000);
+        starter.join(10_000);
+        assertNotNull(s.get("mt_p"));
+        assertTrue("the new session's journal survived the prune", new File(s.meetingDir("mt_p"), "journal.json").isFile());
+    }
+
+    @Test
+    public void statusCheckedDoesNotHoldTheStoreWhileMarkingChunks() throws Exception {
+        File root = tmp.newFolder("mizel");
+        MizelStore s = new MizelStore(root);
+        s.beginSession("mt_l", 1000);
+        for (int i = 0; i < 400; i++) {
+            writeChunk(s, "mt_l", i, 16);
+            s.chunkDone("mt_l", i, 16, 2000 + i);
+            s.acked("mt_l", i);
+        }
+        s.requestStop("mt_l", "user", 3000);
+        s.stopSent("mt_l", 3100);
+        ai.wizards.os.audio.CaptureJournal custody = ai.wizards.os.audio.CaptureJournal.at(root.getParentFile());
+        // Hold custody: statusChecked must still save readyAt and let go of the store lock (the UI's lock).
+        Thread t;
+        synchronized (custody) {
+            t = new Thread(() -> s.statusChecked("mt_l", 5000, true));
+            t.start();
+            long until = System.currentTimeMillis() + 5000;
+            while (new MizelStore(root).get("mt_l").readyAt == 0 && System.currentTimeMillis() < until) Thread.sleep(10);
+            assertEquals("readyAt is on disk before custody is touched", 5000, new MizelStore(root).get("mt_l").readyAt);
+            long start = System.nanoTime();
+            assertEquals(1, s.all().size());
+            assertTrue("the store lock is free while custody works", System.nanoTime() - start < 1_000_000_000L);
+        }
+        t.join(10_000);
+        assertEquals(5000, custody.entry("mt_l/000399").getLong("readyAt"));
+        assertEquals(5000, custody.entry("mt_l/000000").getLong("readyAt"));
+    }
+
+    @Test
+    public void ackedDoesNotHoldTheStoreWhileWritingCustody() throws Exception {
+        // wizard-ux#1769: each acknowledgement rewrites the whole custody index; with a long meeting's upload backlog
+        // the UI thread (recover in onStart/onResume, the page's status) kept waiting on the store lock at start.
+        File root = tmp.newFolder("mizel");
+        MizelStore s = new MizelStore(root);
+        s.beginSession("mt_k", 1000);
+        writeChunk(s, "mt_k", 0, 16);
+        s.chunkDone("mt_k", 0, 16, 2000);
+        ai.wizards.os.audio.CaptureJournal custody = ai.wizards.os.audio.CaptureJournal.at(root.getParentFile());
+        Thread t;
+        int[] seen = {-1, -1};
+        boolean free;
+        synchronized (custody) {
+            t = new Thread(() -> s.acked("mt_k", 0));
+            t.start();
+            Thread.sleep(100); // the uploader is now waiting on custody
+            // The UI's read, on its own thread so a held store lock fails the test instead of hanging it.
+            Thread ui = new Thread(() -> { seen[0] = s.all().size(); seen[1] = s.pendingCount("mt_k"); });
+            ui.start();
+            ui.join(1000);
+            free = !ui.isAlive();
+        }
+        t.join(10_000);
+        assertTrue("the store lock is free while custody works", free);
+        assertEquals(1, seen[0]);
+        assertEquals("not acknowledged before custody has the receipt", 1, seen[1]);
+        assertEquals(0, s.pendingCount("mt_k"));
+        assertEquals(1, s.get("mt_k").acked);
+        assertEquals("delivered", custody.entry("mt_k/000000").getString("state"));
+        MizelJournal again = new MizelStore(root).get("mt_k");
+        assertEquals(0, again.pending.size());
+        assertEquals(0, again.lastAckedSeq);
+        s.acked("mt_k", 0); // a repeat (the server answered twice) changes nothing
+        assertEquals(1, s.get("mt_k").acked);
+    }
+
     @Test
     public void recoverAfterProcessDeathAdoptsFilesAndQueuesProcessDeathStop() throws Exception {
         File root = tmp.newFolder("mizel");

@@ -310,8 +310,26 @@ a.st-row { color: inherit; text-decoration: none; }
 .st-page:not([hidden]):has(.st-embed) { display: flex; flex-direction: column; min-height: 0; padding-bottom: 0; }
 .st-page:has(.st-embed) > section { flex: none; }
 .st-page:has(.st-embed) > section:has(.st-embed) { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+/* Never shorter than the embed's own floor, so a taller section beside it (Wizards, wizard-ux issue 1670) scrolls the page
+ * instead of sliding under the frame. */
+.st-page:has(.st-embed) > section:has(.st-embed) { min-height: 240px; }
+.st-desktop .st-page:has(.st-embed) > section:has(.st-embed) { min-height: 360px; }
 .st-page .st-embed { flex: 1; block-size: auto; min-block-size: 240px; }
 .st-root:has(> .st-phone.st-in-page .st-embed) { display: flex; flex-direction: column; }
 .st-phone.st-in-page:has(.st-embed) { flex: 1; min-height: 0; inline-size: 100%; display: flex; flex-direction: column; }
 .st-phone.st-in-page:has(.st-embed) > .st-page { flex: 1; }
 .st-desktop .st-embed { min-block-size: 360px; }
+
+/* Settings > About & updates > Apps (wizard-ux#1191, on for everyone; was the wizard/app-updates-list switch). */
+[data-osu-apps] [data-osu-app-state="ready"] .st-val { color: var(--ink); font-weight: 600; }
+/* The row buttons (Update now / Retry / Hold / Unhold) and what they said, from core/os-updates.js. */
+/* The buttons get their own line under the name and status, so a narrow phone pane or large text never squeezes the
+ * app's name and version (Codex P2). */
+[data-osu-apps] [data-osu-app]:has(.osu-app-acts) { flex-wrap: wrap; row-gap: 8px; }
+[data-osu-apps] .osu-app-acts { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; flex: 1 0 100%; }
+[data-osu-apps] .osu-app-acts button { min-height: 44px; padding: 6px 14px; border: 1px solid var(--wz-border); border-radius: 99px; background: transparent; color: var(--wz-text); font-weight: 650; touch-action: manipulation; }
+[data-osu-apps] .osu-app-acts button:disabled { opacity: .6; }
+[data-osu-apps] [data-osu-app-msg="failed"] { color: var(--wz-danger); }
+[data-osu-apps] [data-osu-app-modes-lbl] { margin-top: 18px; }
+/* A failed row's link to the bug the App Manager filed or found for it (wizard-app-manager#524). */
+[data-osu-apps] [data-osu-app-bug] { align-self: flex-start; padding: 4px 0; color: inherit; text-decoration: underline; }

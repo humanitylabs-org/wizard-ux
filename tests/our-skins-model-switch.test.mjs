@@ -4,6 +4,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
+import { createDocument } from './fixtures/mini-dom.mjs';
+import { cascade } from './fixtures/mini-css.mjs';
 const read = p => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
 function models(skin) {
   const document = { documentElement: { dataset: { skin, tweaks: ['obsidian','obsidian-light','landscapes'].includes(skin) ? 'miguel/model-pills' : '' } } };
@@ -34,11 +37,27 @@ for (const skin of ['obsidian', 'obsidian-light', 'landscapes', 'nebula', 'grove
   });
 }
 test('the switch row is gated on the skin in chat-power and chats', () => {
-  const cp = read('web/core/chat-power.js'), cj = read('web/core/chats.js');
-  assert.match(cp, /modelSwitch: \(w, s\) => M\?\.ours\?\.\(\) \? modelSwitch\(w, s\) : ''/);
-  assert.match(cj, /const mlabel = PW\?\.modelLabel && !msw/);
-  for (const d of ['obsidian', 'landscapes']) assert.match(read(`web/skins/${d}/skin.css`), /\.ms-track/);
+  const cp = read('web/core/chat-power.js'), paint = read('web/core/chats-threadpaint.js');
+  // chat power's modelSwitch (the real property): only on a skin that owns it (M.ours)
+  const prop = cp.match(/modelSwitch: \(w, s\) => M\?\.ours\?\.\(\) \? modelSwitch\(w, s\) : ''/)?.[0];
+  const gate = ours => vm.runInNewContext(`({ ${prop} })`, { M: { ours: () => ours }, modelSwitch: () => '<div class="ch-swrow">switch</div>' }).modelSwitch({}, {});
+  assert.equal(gate(true), '<div class="ch-swrow">switch</div>');
+  assert.equal(gate(false), '', 'James\'s skins: no switch row');
+  // the thread paint (real lines): the switch row replaces the in-box label, the label shows without it
+  const lines = paint.split('\n').filter(l => /const (msw|mlabel) = /.test(l)).join('\n');
+  const paintWith = PW => vm.runInNewContext(`(() => { ${lines}\n return { msw, mlabel }; })()`, { PW, w: {}, s: {} });
+  assert.deepEqual({ ...paintWith({ modelSwitch: () => 'SW', modelLabel: () => 'LABEL' }) }, { msw: 'SW', mlabel: '' });
+  assert.deepEqual({ ...paintWith({ modelSwitch: () => '', modelLabel: () => 'LABEL' }) }, { msw: '', mlabel: 'LABEL' });
+  // the switch's look lives in Miguel's skins only
+  const doc = createDocument();
+  doc.body.innerHTML = '<div class="ch-swrow"><div class="ms-track"><span class="ms-thumb"></span></div></div>';
+  for (const d of ['obsidian', 'landscapes']) {
+    doc.documentElement.setAttribute('data-skin', d);
+    assert.equal(cascade(doc.querySelector('.ms-track'), read(`web/skins/${d}/skin.css`)).display?.value, 'grid', d);
+  }
   const css = read('web/core/chats.css') + read('web/core/chat-power.css');
+  doc.documentElement.setAttribute('data-skin', 'nebula');
+  assert.deepEqual(Object.keys(cascade(doc.querySelector('.ms-track'), css)), [], 'core never styles the switch');
   // Layout-only native document rules may anchor an existing skin-owned switch.
   // They must not create a switch or style one outside the Android document mode.
   assert.doesNotMatch(css.replace(/html\.wos-doc-scroll[^{}]*\{[^{}]*\}/g, ''), /\.ms-track|ch-swrow/);
@@ -46,7 +65,13 @@ test('the switch row is gated on the skin in chat-power and chats', () => {
 });
 
 test('the compact chat list is off until chosen in Filter, on every skin', () => {
-  const cj = read('web/core/chats.js');
+  const cj = withParts(read('web/core/chats.js'));
   assert.doesNotMatch(cj, /ourSkin|miguel\/layout/);
-  assert.match(cj, /const compactOn = \(\) => \{ try \{ const v = localStorage\.getItem\(COMPACT_KEY\); return v === '1'; \}/);
+  // the real compactOn: off until the owner picks Compact in Filter (stored '1'), whatever the skin
+  const i = cj.indexOf('const compactOn = () =>'), j = cj.indexOf('\n', i);
+  for (const [stored, on] of [[null, false], ['0', false], ['1', true]]) {
+    const store = new Map(stored == null ? [] : [['k', stored]]);
+    const got = vm.runInNewContext(`(() => { ${cj.slice(i, j)}\n return compactOn(); })()`, { COMPACT_KEY: 'k', localStorage: { getItem: k => store.get(k) ?? null } });
+    assert.equal(got, on, String(stored));
+  }
 });

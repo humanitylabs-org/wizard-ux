@@ -16,6 +16,11 @@
  * Drag to move (James, 12 Oct): press anywhere on the menu (the ⋮⋮ grip shows it) and slide it off the words you
  * want to read. It stays where it was dropped, clamped on screen, through scrolls and handle drags, until that
  * selection ends; the next selection places it above the words again. A press that moves under 6 px is still a tap.
+ *
+ * Any word starts a selection (issue 1708): Chrome only selects on a long-press that lands on a glyph, so a short word
+ * ("a", "it") or the space beside it selected nothing. A still touch hold on readable text that Chrome left alone
+ * selects the word under the finger (or the nearest word on that line) here, and dragging before lifting extends it
+ * word by word. Chrome's own selection always wins.
  */
 (() => {
   'use strict';
@@ -51,7 +56,7 @@
   }
   function setEnabled(list) { try { localStorage.setItem(KEY, JSON.stringify(list)); localStorage.setItem(KEY + '.known', JSON.stringify(ITEMS.map(i => i.id))); } catch (e) {} }
 
-  let el = null, cur = null, settleT = 0, down = false, scrolling = 0;
+  let el = null, cur = null, settleT = 0, down = false, scrolling = 0, selectionPress = null;
   let pos = null, drag = null, dragged = false; // pos: where the user dropped the menu for this selection
   const DRAG_PX = 6;
   function mount() {
@@ -190,11 +195,107 @@
     }
   }
 
-  function settle(ms) { clearTimeout(settleT); settleT = setTimeout(() => { if (!down && !scrolling) show(); }, ms); }
+  function settle(ms) { clearTimeout(settleT); settleT = setTimeout(() => { if (!down && !scrolling && !lp?.on) show(); }, ms); }
+
+  /* ---- Long-press on any word (issue 1708) ---- */
+  const LP_MS = 600, LP_SLOP = 8, LP_NEAR = 28;
+  const NOT_TEXT = EDIT + ', a[href], button, img, video, svg, canvas, [role="button"], .selmenu';
+  const BLOCK = 'p, li, pre, td, th, h1, h2, h3, h4, h5, h6, blockquote, .bub, .an-body, .rc-body, .note-line, .lk-body, .lk-term, .mv-doc';
+  let lp = null; // the touch hold being watched: { id, x, y, t, snap, on, a: anchor word, set: what we selected }
+  function readable(e) {
+    if (!e || e.closest(NOT_TEXT)) return false;
+    const cs = getComputedStyle(e), us = cs.userSelect || cs.webkitUserSelect;
+    return us === 'text' || us === 'all';
+  }
+  function caretAt(x, y) {
+    const r = document.caretRangeFromPoint?.(x, y);
+    if (r) return { node: r.startContainer, off: r.startOffset };
+    const p = document.caretPositionFromPoint?.(x, y);
+    return p ? { node: p.offsetNode, off: p.offset } : null;
+  }
+  let SEG = null;
+  function words(t) {
+    if (SEG === null) { try { SEG = new Intl.Segmenter(undefined, { granularity: 'word' }); } catch (e) { SEG = false; } }
+    if (SEG) return [...SEG.segment(t)].filter(g => g.isWordLike).map(g => ({ i: g.index, j: g.index + g.segment.length }));
+    return [...t.matchAll(/[\p{L}\p{N}\p{M}_'’]+/gu)].map(m => ({ i: m.index, j: m.index + m[0].length }));
+  }
+  // The word under (x, y), or the nearest word on that line within LP_NEAR px, in the readable block under the point.
+  function wordAt(x, y) {
+    const c = caretAt(x, y); if (!c) return null;
+    const host = elOfNode(c.node); if (!readable(host)) return null;
+    const block = host.closest(BLOCK) || host;
+    const r = document.createRange(), onLine = q => y >= q.top - 2 && y <= q.bottom + 2;
+    const walk = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);
+    let best = null;
+    for (let n; (n = walk.nextNode());) {
+      if (!n.data.trim() || !readable(n.parentElement)) continue;
+      r.selectNodeContents(n); if (![...r.getClientRects()].some(onLine)) continue;
+      for (const w of words(n.data)) {
+        r.setStart(n, w.i); r.setEnd(n, w.j);
+        for (const q of r.getClientRects()) {
+          if (!onLine(q)) continue;
+          const d = x < q.left ? q.left - x : x > q.right ? x - q.right : 0;
+          if (!best || d < best.d) best = { d, node: n, i: w.i, j: w.j };
+        }
+      }
+    }
+    return best && best.d <= LP_NEAR ? best : null;
+  }
+  const selSnap = () => { const s = window.getSelection?.(); return s && !s.isCollapsed ? [s.anchorNode, s.anchorOffset, s.focusNode, s.focusOffset].join('\u0000') + String(s) : ''; };
+  const sameSel = set => { const s = window.getSelection?.(); return !!s && s.anchorNode === set[0] && s.anchorOffset === set[1] && s.focusNode === set[2] && s.focusOffset === set[3]; };
+  function lpSelect(set) {
+    lp.set = set;
+    try { window.getSelection().setBaseAndExtent(set[0], set[1], set[2], set[3]); } catch (e) {}
+  }
+  function lpFire() {
+    const g = lp; if (!g || g.on) return;
+    const now = selSnap(); if (now && now !== g.snap) { lp = null; return; } // Chrome started its own selection: leave it
+    const w = wordAt(g.x, g.y); if (!w) { lp = null; return; }
+    g.on = true; g.a = w; selectionPress = null; // our selection must survive the lift
+    window.addEventListener('touchmove', lpDrag, { capture: true, passive: false });
+    lpSelect([w.node, w.i, w.node, w.j]); tell(3);
+  }
+  function lpDrag(e) {
+    const g = lp; if (!g?.on) return;
+    const t = [...e.touches].find(t => t.identifier === g.id); if (!t) return;
+    // The finger is selecting: no scroll, and no page gesture below (thread swipe-back would slide the thread away
+    // on a drag right along the line and close it on lift).
+    if (e.cancelable) e.preventDefault();
+    e.stopPropagation();
+    const w = wordAt(t.clientX, t.clientY); if (!w) return;
+    const a = g.a, before = w.node === a.node ? w.i < a.i : !!(a.node.compareDocumentPosition(w.node) & Node.DOCUMENT_POSITION_PRECEDING);
+    const set = before ? [a.node, a.j, w.node, w.i] : [a.node, a.i, w.node, w.j];
+    if (!sameSel(set)) lpSelect(set);
+  }
+  function lpEnd(show) {
+    const g = lp; lp = null; if (!g) return;
+    clearTimeout(g.t); window.removeEventListener('touchmove', lpDrag, true);
+    if (g.on && show) settle(120);
+  }
+  function bindHold() {
+    document.addEventListener('touchstart', e => {
+      lpEnd(false);
+      if (e.touches.length !== 1 || !own()) return;
+      const t = e.touches[0], tg = e.target?.nodeType === 1 ? e.target : e.target?.parentElement;
+      if (!tg || tg.closest(NOT_TEXT)) return;
+      lp = { id: t.identifier, x: t.clientX, y: t.clientY, snap: selSnap(), on: false, a: null, set: null };
+      lp.t = setTimeout(lpFire, LP_MS);
+    }, { capture: true, passive: true });
+    document.addEventListener('touchmove', e => {
+      const g = lp; if (!g || g.on) return;
+      const t = [...e.touches].find(t => t.identifier === g.id);
+      if (!t || e.touches.length > 1 || Math.hypot(t.clientX - g.x, t.clientY - g.y) > LP_SLOP) lpEnd(false);
+    }, { capture: true, passive: true });
+    document.addEventListener('touchend', () => lpEnd(true), true);
+    document.addEventListener('touchcancel', () => lpEnd(true), true);
+    document.addEventListener('scroll', () => { if (lp && !lp.on) lpEnd(false); }, true);
+    // Chrome took the selection over (its own long-press arrived late): stop steering it.
+    document.addEventListener('selectionchange', () => { if (lp?.on && lp.set && !sameSel(lp.set)) { window.removeEventListener('touchmove', lpDrag, true); lp.on = false; } });
+  }
 
   function bind() {
     if (bind.done) return; bind.done = true;
-    let selectionPress = null;
+    bindHold();
     document.addEventListener('pointerdown', e => {
       if (e.target.closest?.('.selmenu, .wos-lookup')) return; // the Look up popover keeps the words selected under it
       down = true;

@@ -122,10 +122,11 @@ test('apps with their own screen are Apps, never Agent apps: the main agent chat
   const rows = window.WosAppKinds.rows(APPS, APP, () => '');
   assert.ok(!rows.apps.some(r => r.id === 'wizard') && !rows.agents.some(r => r.id === 'wizard'));
   assert.ok(rows.apps.some(r => r.id === 'money') && !rows.wiz.some(r => r.id === 'money'));
-  // Its tile opens the app's settings sheet until the page is there.
+  // Its tile opens the app's settings sheet until the page is there (after one fresh read of the list, ux#1646).
   const opened = [];
   window.WosAppRoute = { open: id => opened.push(id) };
   assert.equal(window.WosAppKinds.openRow(APPS, APP, 'money', () => false), true);
+  await window.WizCore.refreshApps(); await new Promise(ok => setImmediate(ok));
   assert.deepEqual(opened, ['money']);
 });
 

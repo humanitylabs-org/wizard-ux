@@ -49,10 +49,9 @@
  * "Updating WizardOS" panel, the result). Here the card says "WizardOS x is ready" / "Updating WizardOS…", Update now
  * opens that flow's confirm sheet, and the Home pop-up stays away. Other boxes are unchanged.
  *
- * Updates that wait for running work (App Manager `waits_for_work`: always on a Mac, elsewhere the off-by-default
- * switch wizard/os-update-waits, read by the App Manager): Install can answer `waiting` with what Wizard is working on;
- * the flow's sheet names it and offers Update when it finishes / Update anyway, and while that request waits the card
- * says so, with Options. Without `waits_for_work` the card is as before (a `waiting` answer still gets the sheet).
+ * Updates wait for running work on every box (wizard-app-manager#696): Install can answer `waiting` with what Wizard
+ * is working on; the flow's sheet names it and offers Update when it finishes / Update anyway, and while that request
+ * waits the card says so, with Options.
  *
  * Home pop-up: when the card says Update, Try again or Reload, Home shows the same words and the same button in a
  * small card clear of the dock, with a ×. × hides it for that exact state (keyed by the release or the web build)
@@ -73,7 +72,6 @@
   // Updates install by themselves on Automatic, and always on the one App Manager (0.3.107) that says always_auto.
   const isAuto = () => st?.always_auto === true || st?.mode === 'auto';
   const mac = () => st?.by_host === true;
-  const waits = () => mac() || st?.waits_for_work === true;
   const CHANNEL_NAME = { stable: 'For everyone', latest: 'For testers' };
   function changed() { try { window.WosSettings?.refresh(); } catch (_) {} try { popup(); } catch (_) {} }
   // A status check that brings nothing new must not redraw Settings: a redraw resets its scroll, and a Mac's Wizard
@@ -85,20 +83,18 @@
     lastSig = sig; changed();
   }
 
-  /* ---- Apps (wizard-ux#1191, behind the off-by-default switch wizard/app-updates-list) ----
+  /* ---- Apps (wizard-ux#1191, on for everyone since James approved it; its switch wizard/app-updates-list is gone) ----
    * Every installed app: installed version, latest Store version and a plain status, read from the same Runtipi
    * list the App Manager's app updater reads (`wam app-updates` candidates): the Store's
    * `../store-data/api/apps/installed` (id, name, status, version, ignoredVersion, latestVersion). Read only; never
    * a copy of its own. Holds, failed versions (with the plain reason), rollbacks, the last run and the app
    * Automatic / Ask mode come from the App Manager's own app-update state, `../store-install/_app-updates`
-   * (owner only, same switch; an older App Manager answers 404 and the list stays as above). Fetched only while
-   * the switch is on. Only once that state has answered, each row also gets its buttons, all POSTs to the same
+   * (owner only; an older App Manager answers 404 and the list stays as above). Only once that state has answered, each row also gets its buttons, all POSTs to the same
    * route: Update now (ready, or held with a newer version) and Retry (failed) send {action:"apply", app}, which
    * the App Manager runs in the background and which overrides a hold or a past failure, never a system app;
    * Hold / Unhold send {hold}/{unhold}; the Automatic / Ask me choice sends {mode}. A button reads Starting… /
    * Holding… while it waits, then the row says what happened (or the App Manager's own words when it refused),
-   * and the list is read again from GET. Switch off: no buttons and no POST. */
-  const APPS_ID = 'wizard/app-updates-list';
+   * and the list is read again from GET. */
   const APPS_API = new URL('../store-data/api/apps/installed', document.currentScript?.src || location.href).href;
   const STORE_SLUG = 'wizardapps';   // wizard-app-manager cli.STORE: app updates only move this store's apps
   // wizard-app-manager app_updates.SYSTEM_APPS: these move with the WizardOS release, never one by one.
@@ -108,7 +104,6 @@
   let apps = null, appsAt = 0, appsBusy = null, appsIssue = '', au = null;
   let appAct = '', appMsg = {}, appsPoll = 0;   // the app button waiting for the App Manager; {id: {ok, text, at}} after it answered
   const APP_MSG_FOR = 120e3;      // how long a row keeps saying what its button did
-  function appsOn() { try { return String(document.documentElement?.dataset?.tweaks || '').split(' ').includes(APPS_ID); } catch (_) { return false; } }
   const num = v => (typeof v === 'number' || (typeof v === 'string' && /^\d{1,9}$/.test(v))) ? Number(v) : null;
   // One row per installed app of the Wizard store. Same comparison as the App Manager's candidates(): latest > have.
   const BUG_URL = /^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/issues\/[1-9][0-9]{0,9}$/;
@@ -166,7 +161,6 @@
     return out.sort((a, b) => rank[a.state] - rank[b.state] || a.name.localeCompare(b.name));
   }
   function loadApps(force) {
-    if (!appsOn()) return Promise.resolve(apps);
     if (!force && appsAt && Date.now() - appsAt < FRESH) return Promise.resolve(apps);
     if (appsBusy) return appsBusy;
     appsBusy = (async () => {
@@ -192,12 +186,11 @@
     appsPoll = setTimeout(() => {
       appsPoll = 0;
       let shown = false; try { shown = !!document.querySelector('[data-osu-apps]')?.getClientRects().length; } catch (_) {}
-      if (!appsOn() || !shown) return;
+      if (!shown) return;
       if (document.hidden) pollApps(); else void loadApps(true);
     }, 5000);
   }
   function appsHtml() {
-    if (!appsOn()) return '';
     // One read per minute at most, failed or not: a failed read must not refetch on every repaint.
     if (!appsAt || Date.now() - appsAt > FRESH) void loadApps(); else pollApps();
     const head = '<span class="osu-lbl">Apps</span>';
@@ -239,7 +232,7 @@
   // A tap on an app button. True when it was one (handled even while the server update controls are unavailable).
   function appTap(what, ctx) {
     const [key, arg] = what.split(':');
-    if (!appsOn() || !au || appAct) return true;
+    if (!au || appAct) return true;
     let body, done;
     if (key === 'app-mode') {
       if (!['auto', 'ask'].includes(arg) || arg === au.app_mode) return true;
@@ -323,7 +316,7 @@
     if (st.installing) return { state: 'building', title: `Updating ${OS()}…`, line: st.quick === true ? takes : `${takes} · Wizard reconnects by itself`, action: 'apply', label: auto ? 'Install now' : 'Install', disabled: true };
     if (st.unpinned || !st.update_available) return null;
     // "Update when it finishes" is waiting for Wizard's work (core/os-update-flow.js): Options asks again.
-    if (waits() && st.when_idle && window.WosUpdateFlow) return { state: 'waiting', title: `${OS()} update waiting`, line: 'Updates when Wizard finishes', action: 'waitopts', label: 'Options', disabled: !!busy };
+    if (st.when_idle && window.WosUpdateFlow) return { state: 'waiting', title: `${OS()} update waiting`, line: 'Updates when Wizard finishes', action: 'waitopts', label: 'Options', disabled: !!busy };
     // WizardOS: the box itself. Automatic waits for a quiet night; the button is the "now" escape, like macOS.
     const start = busy === 'apply' ? 'Starting…' : '';
     if (st.interrupted) return { state: 'failed', title: `${OS()} update didn’t finish`, line: auto ? 'Tries again tonight' : takes, action: 'apply', label: start || 'Try again', disabled: !!busy };
@@ -353,7 +346,8 @@
     const channel = ch ? `<div class="osu-sec"><span class="osu-lbl">Channel</span>${seg('Release channel', [['ch-latest', CHANNEL_NAME.latest, ch === 'latest'], ['ch-stable', CHANNEL_NAME.stable, ch === 'stable']])}<p class="st-hint">${ch === 'stable' ? 'Releases testers have used for about 3 days.' : `Every new release as soon as it’s out. Try new features in Appearance.`}</p></div>` : '';
     // Automatic / Ask me (wizard-app-manager#483). The 0.3.107 App Manager (always_auto) would not keep Ask me: no choice there.
     const choice = st.always_auto === true ? '' : seg('Updates', [['auto', 'Automatic', auto], ['ask', 'Ask me', !auto]]);
-    const install = `<div class="osu-sec" data-osu-auto><span class="osu-lbl">Updates</span>${choice}<p class="st-hint">${mac() ? (auto ? 'Install by themselves at night (1–5 am), after a 5-minute heads-up you can stop. Never during a chat.' : 'Nothing installs until you tap Update now. You’ll see when an update is ready.') : auto ? 'Install by themselves overnight, never during a chat.' : 'Nothing installs until you tap Install.'}</p></div>`;
+    // Mac + Automatic: For testers installs at any hour once Wizard is free (try-wizard OSUpdates.swift), For everyone at night.
+    const install = `<div class="osu-sec" data-osu-auto><span class="osu-lbl">Updates</span>${choice}<p class="st-hint">${mac() ? (auto ? `Install by themselves ${st.channel === 'latest' ? 'as soon as Wizard is free' : 'at night (1–5 am)'}, after a 5-minute heads-up you can stop. Never during a chat.` : 'Nothing installs until you tap Update now. You’ll see when an update is ready.') : auto ? 'Install by themselves overnight, never during a chat.' : 'Nothing installs until you tap Install.'}</p></div>`;
     return `<div class="st-group" data-osu-group>${cardHtml()}${quietHead()}${install}${channel}${appsHtml()}</div>`;
   }
   function pick(chan, ctx) {
@@ -478,7 +472,7 @@
   }
   window.WosUpdates = { html, act, load, card, cardHtml, popup, popKey, ownsReload, homeInView, appRows, loadApps, post, changed, apply, applied,
     get state() { return st; }, get issue() { return issue; }, set state(d) { if (valid(d)) { st = d; at = Date.now(); } } };
-  // Turning wizard/app-updates-list on or off repaints Settings (and reads the apps the first time).
+  // Turning a switch on or off repaints Settings (wizard/os-update-waits and the other update switches).
   try { window.addEventListener?.('wos:tweak-choice', () => changed()); } catch (_) {}
   window.WosSettings?.register({ id: 'updates', aliases: ['updates'], available: () => true, html: () => html(), act: (ctx, el) => act(el, ctx) });
   load();
@@ -487,7 +481,7 @@
   const IDLE = 10 * FRESH;
   // A Mac's Wizard looks every minute (the heads-up is 5 minutes; core/os-update-flow.js polls faster while updating).
   // An update waiting for Wizard's work looks every minute too, so the card and the 6-hour ask follow it.
-  const tick = () => { if (!st || document.hidden) return; if (st.installing || mac() || (waits() && st.when_idle) || Date.now() - at >= IDLE) load(true); };
+  const tick = () => { if (!st || document.hidden) return; if (st.installing || mac() || st.when_idle || Date.now() - at >= IDLE) load(true); };
   const timer = typeof setInterval === 'function' ? setInterval(tick, FRESH) : 0;
   timer?.unref?.();
   document.addEventListener?.('visibilitychange', () => { if (!document.hidden && st && Date.now() - at >= FRESH) load(true); });

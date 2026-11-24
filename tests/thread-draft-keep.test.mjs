@@ -5,9 +5,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
+import { runRecording } from './fixtures/source-slice.mjs';
 import { readFileSync } from 'node:fs';
+import { withParts } from './fixtures/chats-parts.mjs';
 const kitSrc = readFileSync(new URL('../web/core/chat-kit.js', import.meta.url), 'utf8');
-const chatsSrc = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
+const chatsSrc = withParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'));
 const KEY = 'wos.chat.drafts.v1', CHAN = 'chan:hermes:launch', THREAD = 'direct:philosopher';
 
 function kit(seed = {}, failure = '') {
@@ -90,13 +92,38 @@ test('a device that refuses to store a draft says so (once a minute), never sile
   assert.equal(K.events.length, 1);
   assert.equal(K.events[0].type, 'wos:drafts-unsaved');
   assert.equal(K.events[0].detail.reason, 'QuotaExceededError');
-  assert.match(chatsSrc, /addEventListener\('wos:drafts-unsaved', \(\) => toast\(/, 'Chats tells the owner');
+  // Chats tells the owner: the real chats-events part listens for it and toasts
+  const on = {}, toasts = [];
+  const window = { WizCore: {}, addEventListener: (t, f) => { on[t] = f; } };
+  runRecording(readFileSync(new URL('../web/core/chats-events.js', import.meta.url), 'utf8'), { window, document: { documentElement: {}, addEventListener() {} } });
+  window.WizCore.chatsParts.events({ toast: (...a) => toasts.push(a), topicOn: () => false, CH: {}, W: {}, LIVE: {}, H: {}, ch: () => ({}) });
+  on['wos:drafts-unsaved'](K.events[0]);
+  assert.equal(toasts.length, 1, 'Chats tells the owner');
+  assert.match(toasts[0][1], /Couldn’t save your draft/);
 });
 
+// The thread paint's composer pick-up lines and the list paint's draftFor reset, cut from chats.js and run.
+function paintDraft({ inChannelForm, draftFor, kept = 'kept words' }) {
+  const i = chatsSrc.indexOf('    const dkey = draftKey(w);\n'), j = chatsSrc.indexOf('\n', chatsSrc.indexOf('    const draft = ', i));
+  const ta = { value: 'channel post words', closest: sel => (sel === '[data-chchanform]' && inChannelForm ? {} : null) };
+  const el = { dataset: { draftFor }, querySelector: sel => (sel === 'textarea' ? ta : null) };
+  const ctx = { w: { id: 'w1', thread: 'p1' }, el, c: { draftFor: 'direct:p1', draft: kept }, draftKey: w => 'direct:' + w.thread, loadDraft: () => 'saved draft' };
+  vm.runInNewContext(chatsSrc.slice(i, j) + '\nthis.out = { draft, oldTa };', ctx);
+  return ctx.out;
+}
 test('a thread paint never takes a channel box\'s field as its own composer', () => {
-  const a = chatsSrc.indexOf('    const dkey = draftKey(w);\n'), part = chatsSrc.slice(a, a + 600);
-  assert.match(part, /oldTa = ta0 && !ta0\.closest\?\.\('\[data-chchanform\]'\) \? ta0 : null/);
-  assert.match(chatsSrc, /if \(el\.dataset\) delete el\.dataset\.draftFor; \/\/ a list holds no thread's box/);
+  // A channel feed's box left in the element (Back from a post) holds the channel's words, never the thread's draft.
+  const chan = paintDraft({ inChannelForm: true, draftFor: 'direct:p1' });
+  assert.equal(chan.oldTa, null);
+  assert.equal(chan.draft, 'kept words', 'the thread keeps its own draft');
+  // The thread's own box still keeps what is typed in it across a repaint.
+  const own = paintDraft({ inChannelForm: false, draftFor: 'direct:p1' });
+  assert.equal(own.draft, 'channel post words');
+  // A list paint clears draftFor: the next thread paint reads its own draft, not the field left behind.
+  const k = chatsSrc.indexOf('    syncListTitle(w);\n    closeStream(ch(w.id));'), e = chatsSrc.indexOf('    if (H.renderView?.(w, el', k);
+  const el = { dataset: { draftFor: 'direct:p1' } };
+  vm.runInNewContext(`(function () {\n${chatsSrc.slice(k, e)}})()`, { w: { id: 'w1' }, el, syncListTitle() {}, closeStream() {}, ch: () => ({}) });
+  assert.equal(el.dataset.draftFor, undefined, 'a list holds no thread\'s box');
 });
 
 // Main and routed agents (host profile, container, restricted): each agent's channel box, New chat box and thread box keep

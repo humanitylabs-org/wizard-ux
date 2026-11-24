@@ -3,6 +3,10 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { createDocument } from './fixtures/mini-dom.mjs';
+import { cascade } from './fixtures/w1-css.mjs';
+import { freshDevice } from './fixtures/w1-experience.mjs';
+import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
 
 const source = readFileSync(new URL('../web/core/status.js', import.meta.url), 'utf8');
 const failedProbe = async () => { throw new Error('probe unavailable'); };
@@ -197,9 +201,27 @@ test('a probe from before a newer failed live read cannot hide that failure', as
   await turn(); await turn();
   assert.equal(calls, 1); assert.equal(h.state(), 'reconnecting');
 });
-test('live.js stamps failed reads so status can order them against probes', () => {
-  const live = readFileSync(new URL('../web/live.js', import.meta.url), 'utf8');
-  assert.match(live, /this\.error = e\.status === 403 \? 'access' : 'offline'; this\.errorAt = Date\.now\(\);/);
+// The real live.js list read against a box that answers 503 or 403 (no DOM; timers inert).
+async function failedRead(status) {
+  const storage = new Map();
+  const c = { console, AbortSignal, AbortController, URL, URLSearchParams, document: { documentElement: { dataset: {} }, readyState: 'loading', hidden: false, addEventListener() {} }, navigator: {},
+    localStorage: { getItem: k => storage.get(k) ?? null, setItem: (k, v) => storage.set(k, v), removeItem: k => storage.delete(k) },
+    setInterval() {}, setTimeout() {}, clearTimeout() {}, addEventListener() {}, dispatchEvent() {}, CustomEvent: class { constructor(type, o) { this.type = type; this.detail = o?.detail; } },
+    WizConfig: { dayStart: n => n - n % 864e5 }, location: { origin: 'https://box.test', search: '' },
+    fetch: async () => ({ ok: false, status, json: async () => ({}), text: async () => '' }) };
+  c.window = c; modelContext(c);
+  vm.runInContext(withLiveParts(readFileSync(new URL('../web/live.js', import.meta.url), 'utf8')), c);
+  const L = c.WizLive; L.at = 5;
+  const before = Date.now();
+  await L.refresh(true);
+  return { L, before };
+}
+test('live.js stamps failed reads so status can order them against probes', async () => {
+  const { L, before } = await failedRead(503);
+  assert.equal(L.error, 'offline');
+  assert.ok(L.errorAt >= before, 'the failure carries its own time');
+  assert.equal(L.at, 5, 'the last success time is left alone');
+  assert.equal((await failedRead(403)).L.error, 'access');
 });
 test('a healthy probe survives later non-network live emits while the browser still says offline', async () => {
   const fetch = async () => ({ ok: true, json: async () => ({ overall: 'ok' }) });
@@ -267,14 +289,23 @@ test('calm offline card (miguel/calm-offline): one dotted path, one short next s
   h.clickPop('[data-wxoffcheck]'); assert.equal(h.ctx.WosOutbox.retries, 1, 'Check again still retries saved messages');
 });
 
-test('calm offline opt-in stays off in author presets and its text panel is fully opaque', () => {
-  const profile = JSON.parse(readFileSync(new URL('../web/tweaks/miguel/profile.json', import.meta.url), 'utf8'));
-  assert.ok(profile.off.includes('miguel/calm-offline'));
+test('calm offline opt-in stays off in author presets and its text panel is fully opaque', async () => {
+  // every author's published set, worn on a device (core/experience.js): the calm card never comes on with it
+  const { profiles } = JSON.parse(readFileSync(new URL('../web/tweaks/catalog.json', import.meta.url), 'utf8'));
+  for (const who of profiles) {
+    const d = freshDevice({ preset: who }); await d.E.refresh();
+    assert.ok(!d.active().includes('miguel/calm-offline'), who + "'s preset leaves it off");
+    if (who === 'miguel') assert.ok(d.active().includes('miguel/send-and-go'), 'while the rest of the preset runs');
+  }
+  // the card status.js really draws, under the switch, through the cascade
+  const h = setup(); h.ctx.clearInterval = () => {}; h.ctx.getComputedStyle = () => ({ getPropertyValue: k => k === '--wos-calm-offline' ? ' on' : '' });
+  h.success(); h.L.error = 'offline'; h.L.emit(); h.grace(); h.openPill(); await turn(); await turn();
+  const doc = createDocument(); doc.documentElement.setAttribute('data-tweaks', 'miguel/calm-offline');
+  doc.body.innerHTML = `<div class="wx-off">${h.pop().innerHTML}</div>`;
   const css = readFileSync(new URL('../web/tweaks/miguel/calm-offline/tweak.css', import.meta.url), 'utf8');
-  const panel = css.match(/\.wz-card\.wx-calm\s*\{([^}]+)\}/)[1];
-  assert.match(panel, /background: var\(--wz-base\)/);
-  assert.match(panel, /backdrop-filter: none/);
-  assert.doesNotMatch(panel.match(/background: ([^;]+)/)[1], /--sk-win|transparent|blur\(/);
+  const panel = cascade(doc.querySelector('.wz-card.wx-calm'), css);
+  assert.equal(panel.background.value, 'var(--wz-base)', 'an opaque skin base, never the window glass');
+  assert.equal(panel['backdrop-filter'].value, 'none'); assert.equal(panel['-webkit-backdrop-filter'].value, 'none');
 });
 
 test('calm card keeps keyboard focus when its asynchronous check repaints it', async () => {

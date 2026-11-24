@@ -5,8 +5,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { withAppParts } from './fixtures/app-parts.mjs';
+import { orbHold } from './fixtures/r8B-orbhold.mjs';
 
-const app = readFileSync(new URL('../web/app.js', import.meta.url), 'utf8');
+const app = withAppParts(readFileSync(new URL('../web/app.js', import.meta.url), 'utf8'));
 const between = (a, b) => { const i = app.indexOf(a), j = app.indexOf(b, i + 1); assert.ok(i >= 0 && j > i, a); return app.slice(i, j); };
 
 function world({ granted = true, native = false, state = 'idle', capture = null } = {}) {
@@ -45,19 +47,38 @@ test('never a permission prompt, never with the native recorder, never during a 
   }
 });
 
-test('wired into the dock orb: warm after a still moment, dropped when the press ends, taken by openRec; tap/hold unchanged', () => {
-  assert.match(app, /const MIC_WARM_MS = 90;/);
-  assert.match(app, /if \(V\.state === 'idle'\) G\.warm = setTimeout\(\(\) => \{ if \(G && G\.mode === 'pending'\) warmMic\(\); \}, MIC_WARM_MS\);\n(?:.*\n)*?    (?:else )?if \(mayHoldCommand\(\)\) G\.hold = setTimeout\(/);
-  assert.match(app, /clearTimeout\(g\.hold\); clearTimeout\(g\.warm\); queueMicrotask\(dropWarm\);/);
-  // the press really ends: the orb's pressed look and drag classes are code on that line, never swallowed by a comment
-  assert.match(app, /\n    clearTimeout\(g\.hold\); clearTimeout\(g\.warm\); queueMicrotask\(dropWarm\); Orb\.press\(false\); orbWrap\.classList\.remove\('dragging'\);/);
-  assert.match(app, /const stream = await \(takeWarm\(\) \|\| openMic\(\)\);/);
-  // the hold threshold and the tap rule stay as they were
-  assert.match(app, /G\.start=startVoice\('command'\);\}else\{G\.refused=true;toast\('⏸','Pause your reply before a command'\);\} \} \}, 380\);/);
-  assert.match(app, /if \(V\.state === 'idle'\) return window\.WosSkinHost\?\.orbTap\?\.\(\) \? undefined : startOrbVoice\(\);/);
-  // the take takes the warm stream synchronously (openRec's first await), before the press's microtask drops it
-  const open = between('  async function openRec(', '  function onRecInterrupted(');
-  assert.equal(open.indexOf('await'), open.indexOf('await (takeWarm() || openMic())'), 'nothing is awaited before the take claims the warm stream');
+// Runs the real dock orb press (app-orbswipe.js) with the real warm mic (app-mic.js), fake clock and getUserMedia
+// (tests/fixtures/r8B-orbhold.mjs).
+test('wired into the dock orb: warm after a still moment, dropped when the press ends, taken by openRec; tap/hold unchanged', async () => {
+  assert.equal((await orbHold()).mic.MIC_WARM_MS, 90);
+  // a still press: no mic before the still moment, one request at it
+  const tap = await orbHold();
+  tap.down(); await tap.advance(89); assert.deepEqual(tap.log, [], 'not before the still moment');
+  await tap.advance(1); assert.deepEqual(tap.log, ['gum:1'], 'warm after a still moment');
+  // the slow tap: still a message, and its take claims the warm stream before the press's microtask drops it
+  tap.up(); await tap.settle(); await tap.settle();
+  assert.deepEqual(tap.takes, ['tap'], 'a tap is a message');
+  assert.deepEqual(tap.log, ['gum:1'], 'the take took the warm stream: no second getUserMedia, never stopped');
+  assert.equal(tap.V.stream?.id, 1);
+  assert.deepEqual(tap.calls.filter(c => c[0] === 'Orb.press').map(c => c[1]), [true, false], 'the orb\'s pressed look ends with the press');
+  // a press that ends without a take (pointer cancelled): the warm mic is dropped
+  const gone = await orbHold();
+  gone.down(); await gone.advance(120); gone.cancel(); await gone.settle();
+  assert.deepEqual(gone.log, ['gum:1', 'stop:1']); assert.deepEqual(gone.takes, []);
+  // the hold: still 380 ms, then a command, which records on the stream warmed meanwhile
+  const hold = await orbHold();
+  hold.down(); await hold.advance(379); assert.deepEqual(hold.takes, [], 'no command before 380 ms');
+  await hold.advance(1); assert.deepEqual(hold.takes, ['command'], 'a 380 ms hold is a command');
+  hold.up(); await hold.settle();
+  assert.deepEqual(hold.log, ['gum:1'], 'the command took the warm stream'); assert.equal(hold.V.stream?.id, 1);
+  // a quick tap: no warm-up at all, the take opens its own mic as before
+  const quick = await orbHold();
+  quick.down(); await quick.advance(50); assert.deepEqual(quick.log, []);
+  quick.up(); await quick.settle(); assert.deepEqual(quick.takes, ['tap']); assert.deepEqual(quick.log, ['gum:1']);
+  // a layout's own orb tap still wins the tap, and the warm stream is released
+  const own = await orbHold({ orbTap: true });
+  own.down(); await own.advance(100); own.up(); await own.settle();
+  assert.deepEqual(own.takes, []); assert.deepEqual(own.log, ['gum:1', 'stop:1']);
 });
 
 test('never while an app or meeting holds the mic (startVoice hands it over first): no second stream', () => {

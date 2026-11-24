@@ -5,45 +5,101 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import { withShellParts } from './fixtures/shell-parts.mjs';
+import { withDesktopParts } from './fixtures/desktop-parts.mjs';
+import { settingsDesk } from './fixtures/r5A-settings-desk.mjs';
+import { desktopKeys } from './fixtures/desktop-keys-harness.mjs';
+import { runRecording, block } from './fixtures/source-slice.mjs';
+import { createDocument } from './fixtures/mini-dom.mjs';
+import { styleOf } from './fixtures/mini-css.mjs';
 
-const read = p => fs.readFileSync(new URL('../' + p, import.meta.url), 'utf8');
+const read = p => withShellParts(fs.readFileSync(new URL('../' + p, import.meta.url), 'utf8'));
 const desk = read('web/desktop/desktop.js'), deskCss = read('web/desktop/desktop.css');
 const phone = read('web/app.js'), phoneCss = read('web/styles.css'), links = read('web/core/links.js');
 const slice = (s, from, to) => { const a = s.indexOf(from); assert.ok(a >= 0, from); const b = s.indexOf(to, a); assert.ok(b > a, to); return s.slice(a, b); };
+// The real sheet-drag code from app.js: the grips of Settings and Apps and the Apps grid pull (issue 1734).
+const gripCode = slice(phone, '  const sheetDrag = (el, which) =>', "  settingsEl.addEventListener('click', e => {") + '\n' + slice(phone, "  settingsEl.addEventListener('click', e => {", '  function appTile(a)');
 
 test('desktop Settings opens as a window and every way of closing the window hides it', () => {
-  const open = slice(desk, '  function openSettings(focus) {', '  function closeSettings()');
-  assert.match(open, /if \(w\) focusWin\(w\.id\); else \{ settingsFocus = document\.activeElement; newWin\(\{ app: 'settings' \}\); \}/);
-  assert.match(desk, /    const w = settingsWin\(\); if \(w\) closeWin\(w\.id\); else hostSettings\(\);\n  \}/, 'on a desk Settings is a window');
+  // On a desk: the real openSettings makes a Settings window and moves the panel into its body.
+  const d = settingsDesk();
+  d.s.openSettings();
+  assert.deepEqual(d.calls, [['newWin', 'settings']]);
+  const id = d.settingsWin().id;
+  assert.equal(d.where(), id, 'the panel lives in the window body (.settings-host)');
+  assert.equal(d.setEl.hidden, false); assert.equal(d.setEl.getAttribute('aria-modal'), null, 'a window is not a dialog');
+  d.s.openSettings(); assert.deepEqual(d.calls.at(-1), ['focusWin', id], 'a second open focuses the same window');
+  // ✕ in the title bar, ⌥W and a synced desk all go through closeWin → render → hostSettings: the panel hides.
+  d.s.closeSettings();
+  assert.deepEqual(d.calls.at(-1), ['closeWin', id]); assert.equal(d.settingsWin(), null);
+  assert.equal(d.setEl.hidden, true); assert.equal(d.where(), 'body');
+  d.s.openSettings(); const id2 = d.settingsWin().id; d.vars.afterRender(); assert.equal(d.where(), id2);
   // From Home (any skin) it is a centred panel over Home; Esc, ✕ or a click outside closes it (James, 31 Oct 2026).
-  assert.match(open, /if \(homeOpen(?: \|\| settingsOver\(\))?\) \{  \/\/ from Home/);
-  assert.match(desk, /scrim\.addEventListener\('click', \(\) => closeSettings\(\)\);/);
-  assert.match(desk, /if \(settingsModal && !settingsOver\(\)\) closeSettings\(\);\n    homeOpen = false;/, 'only an everywhere-modal view keeps Settings while preparing its page');
-  // ✕ in the title bar, ⌥W and a synced desk all go through closeWin → render → hostSettings.
-  assert.match(desk, /queueMicrotask\(\(\) => window\.WosResources\?\.sync\(\)\);\n    afterRender\?\.\(\);/);
-  assert.match(desk, /afterRender = hostSettings;/);
-  const host = slice(desk, '  function hostSettings() {', '  afterRender = hostSettings;');
-  assert.match(host, /if \(host\) \{ moveSettingsTo\(host\); setEl\.hidden = false; return; \}/);
-  assert.match(desk, /host\.appendChild\(setEl\);\n    if \(keep && document\.activeElement !== active\) active\.focus\(\{ preventScroll: true \}\);/, 'rehosting preserves the focused descendant');
-  assert.match(host, /setEl\.hidden = true;/);
-  assert.match(desk, /if \(w\.app === 'settings'\) return '<div class="settings-host"><\/div>';/);
-  assert.match(desk, /if \(w\.app === 'settings'\) return \{ id: 'settings', name: 'Settings'/, 'title bar names it Settings');
-  assert.match(desk, /if \(w\?\.app === 'settings'\) delete W\[id\]; \/\/ Settings is a window, never restored/);
+  const h = settingsDesk({ homeOpen: true });
+  h.s.openSettings();
+  assert.equal(h.settingsWin(), null, 'no window over Home'); assert.equal(h.where(), 'body');
+  assert.equal(h.setEl.getAttribute('aria-modal'), 'true'); assert.equal(h.host.scrim.hidden, false);
+  h.host.scrim.click();
+  assert.equal(h.setEl.hidden, true); assert.equal(h.host.scrim.hidden, true); assert.equal(h.vars.settingsModal, false);
+  // Rehosting preserves the focused control inside Settings.
+  const f = settingsDesk(); f.s.openSettings(); const btn = f.doc.createElement('button'); f.setEl.append(btn); btn.focus();
+  const append = f.doc.body.appendChild.bind(f.doc.body);  // as in a browser, moving a node blurs its focused descendant
+  f.doc.body.appendChild = n => { f.doc.activeElement = f.doc.body; return append(n); };
+  f.host.showSettingsModal(true); assert.equal(f.doc.activeElement, btn); assert.equal(f.where(), 'body');
+  // The title bar names it Settings, and a saved Settings window is never restored.
+  const desk = withDesktopParts(read('web/desktop/desktop.js'));
+  const appOf = runRecording(block(desk, '  function appOf(w) {') + '\nthis.appOf = appOf;', { agentWin: () => false, APP: {} }).appOf;
+  assert.equal(appOf({ app: 'settings' }).name, 'Settings');
+  const W = { a: { app: 'settings' }, b: { app: 'chats' } };
+  runRecording(desk.split('\n').find(l => l.includes("if (w?.app === 'settings') delete W[id];")), { W });
+  assert.deepEqual(Object.keys(W), ['b']);
 });
 
 test('desktop Settings keys: ⌥, toggles, Esc closes only the focused Settings window, ⌥ window keys are not swallowed', () => {
-  assert.equal((desk.match(/return hit\(toggleSettings\)/g) || []).length, 2);
-  assert.match(desk, /function toggleSettings\(\) \{ if \(settingsFocused\(\)\) closeSettings\(\); else openSettings\(\); \}/);
-  assert.match(desk, /watchEscape\('settings', \(\) => settingsFocused\(\), \(\) => \{ if \(settingsView\.back\(\)\) return 'settings-page'; closeSettings\(\); return 'settings'; \}/);
-  assert.match(desk, /if \(settingsFocused\(\) && !e\.altKey\) return;/);
+  // ⌥, (and the native menu's ,) toggle Settings: the real key handler.
+  const k = desktopKeys({ pal: { hidden: true } }); k.key('Comma'); assert.ok(k.names().includes('toggleSettings'));
+  const mac = desktopKeys({ pal: { hidden: true }, NATIVE_MENU: true }); mac.key('Comma', { altKey: false, metaKey: true, key: ',' });
+  assert.ok(mac.names().includes('toggleSettings'), 'the Mac app menu ⌘, too');
+  // toggleSettings: open, then close when it is the focused window.
+  const d = settingsDesk(); d.s.toggleSettings(); assert.ok(d.settingsWin());
+  d.s.toggleSettings(); assert.equal(d.settingsWin(), null, 'a focused Settings window closes');
+  // A focused Settings window keeps its plain keys; ⌥ window keys work as in any window.
+  for (const focusedSettings of [false, true]) {
+    const p = desktopKeys({ settingsFocused: () => focusedSettings, pal: { hidden: true }, focused: () => ({ id: 'w1', app: 'chats' }) });
+    p.key('KeyJ', { altKey: false, key: 'j' });
+    assert.equal(p.names().includes('stepThread'), !focusedSettings);
+    const a = desktopKeys({ settingsFocused: () => focusedSettings, pal: { hidden: true }, focused: () => ({ id: 'w1', app: 'settings' }) });
+    a.key('KeyW'); assert.ok(a.names().includes('closeCurrent'), '⌥W is not swallowed');
+  }
+  // Esc: the real watchEscape line steps back a Settings page first, then closes Settings; only when it is focused.
+  const pick = read('web/desktop/desktop-pickany.js');
+  const watched = {};
+  const run = (back, isFocused) => {
+    const calls = [];
+    runRecording(pick.split('\n').find(l => l.includes("watchEscape('settings'")), { watchEscape: (n, when, fn) => { watched[n] = { when, fn }; },
+      settingsFocused: () => isFocused, settingsView: { back: () => back }, closeSettings: () => calls.push('close') });
+    return { when: watched.settings.when(), result: watched.settings.when() ? watched.settings.fn() : null, calls };
+  };
+  assert.deepEqual(run(true, true), { when: true, result: 'settings-page', calls: [] });
+  assert.deepEqual(run(false, true), { when: true, result: 'settings', calls: ['close'] });
+  assert.deepEqual(run(false, false), { when: false, result: null, calls: [] });
   assert.doesNotMatch(desk, /setEl && !setEl\.hidden && !\(e\.altKey && code === 'Comma'\)/, 'the old modal swallow of every ⌥ key is gone');
-  assert.equal((desk.match(/setEl\.setAttribute\('aria-modal'/g) || []).length, 1, 'only the Home panel is a dialog, never the window');
-  assert.match(desk, /settingsModal = true; setEl\.classList\.add\('is-modal'\); setEl\.setAttribute\('aria-modal', 'true'\)/);
+  // Only the Home panel is a dialog, never the window.
+  const h = settingsDesk({ homeOpen: true }); h.s.openSettings(); assert.equal(h.setEl.getAttribute('role'), 'dialog');
+  h.s.closeSettings(); assert.equal(h.setEl.getAttribute('aria-modal'), null); assert.equal(h.setEl.getAttribute('role'), 'region');
 });
 
 test('desktop Settings window chrome: the panel fills the window, its own ✕ gives way to the title bar', () => {
-  assert.match(deskCss, /\.win \.dsettings \{ position: relative; inset: auto; width: auto; height: 100%;/);
-  assert.match(deskCss, /\.win \.dsettings > \.st-close \{ display: none; \}/);
+  // the Settings panel the desktop builds (a .dsettings with its own ✕), alone and inside a shell window, through the
+  // desktop page's settings.css then desktop.css cascade
+  const sheets = [fs.readFileSync(new URL('../web/core/settings.css', import.meta.url), 'utf8'), deskCss].join('\n');
+  const doc = createDocument();
+  doc.body.innerHTML = '<div class="dsettings" id="alone"><button class="st-close">✕</button></div><div class="win"><div class="wbody"><div class="dsettings" id="inwin"><button class="st-close">✕</button></div></div></div>';
+  const v = (q, p) => styleOf(doc.querySelector(q), sheets, p);
+  assert.equal(v('#alone', 'position'), 'fixed', 'on its own it is the side panel');
+  assert.notEqual(v('#alone > .st-close', 'display'), 'none', 'with its own ✕');
+  for (const [p, want] of [['position', 'relative'], ['inset', 'auto'], ['width', 'auto'], ['height', '100%']]) assert.equal(v('#inwin', p), want, `in a window: ${p}`);
+  assert.equal(v('#inwin > .st-close', 'display'), 'none', 'in a window the title bar\'s ✕ closes it');
 });
 
 test('Settings and previews are local windows: never synced to other devices', () => {
@@ -57,21 +113,91 @@ test('Settings and previews are local windows: never synced to other devices', (
 });
 
 test('desktop page previews open as a window; images still use the viewer and files still download', () => {
-  const go = slice(links, '    function go(href, base, doc) {', '    function back() {');
-  const img = go.indexOf('viewImage(u, doc)'), file = go.indexOf('download(u, doc)'), win = go.indexOf('asWindow(');
-  assert.ok(img > 0 && file > img && win > file, 'asWindow only after the image and file branches');
-  assert.ok(win < go.indexOf('stack.push'), 'before the pane opens');
-  // (stock; a layout placing the shell's opens, apps.routeOpens, may put it in its own panel first)
-  assert.match(desk, /asWindow: \(url, title\) => \{ const o = appAt\(url\)(?:;|, go = (?:\(\)|desk) => \{) newWin\(\{ app: 'frame', url, title: o \? o\.name : title, preview: true,/);
-  assert.match(desk, /if \(f\.preview\) \{ closeWin\(f\.id\); return 'preview'; \}/, 'Esc closes a preview window');
+  // The real core/links.js: an image goes to the viewer, a file downloads, a page opens as a window.
+  const calls = [], origin = 'https://w.test';
+  class El {
+    constructor() { this.handlers = {}; this.nodes = {}; this.style = {}; this.classList = { add() {}, remove() {}, contains: () => false, toggle: () => false }; this.contentWindow = { location: { replace() {} } }; }
+    setAttribute() {} appendChild() {} remove() {} querySelector(q) { return this.nodes[q] ||= new El(); } querySelectorAll() { return []; } addEventListener(n, fn) { (this.handlers[n] ||= []).push(fn); } click() { calls.push(['download', this.href]); }
+  }
+  const document = { body: new El(), createElement: () => new El(), querySelectorAll: () => [] };
+  const w = { open: url => calls.push(['browser', url]), WizConfig: { raw: {}, localURL: (h, b) => new URL(h, b) }, WosChat: { viewer: { open: (items, i) => calls.push(['viewer', items[i ?? 0]?.url]) } } };
+  vm.runInNewContext(links, { window: w, location: new URL(origin + '/wizard-os-home/'), navigator: { userAgent: 'fixture', userActivation: { isActive: true } }, localStorage: { getItem: () => null, setItem() {} }, document, URL, console, setTimeout, clearTimeout, performance: { now: () => 0 }, Date, JSON, Object, Set });
+  const L = w.WizLinks.mount({ readerApp: () => null, asWindow: (path, title) => (calls.push(['window', path]), true) });
+  const chat = new El(); w.WizLinks.intercept(chat, L);
+  const click = href => { const a = { ownerDocument: document, getAttribute: k => (k === 'href' ? href : null), hasAttribute: () => false, closest: q => (q === '[data-mi]' || q === '[data-chats]' ? null : {}) };
+    for (const fn of chat.handlers.click || []) fn({ button: 0, target: { closest: () => a }, preventDefault() {}, stopPropagation() {} }); };
+  click('/notes/page.html'); click('/reports/file.pdf'); click('/files/a.png');
+  assert.deepEqual(calls.map(c => c[0]), ['window', 'download', 'viewer'], 'a page is a window; a file downloads; an image opens the viewer');
+  assert.equal(calls[0][1], '/notes/page.html');
+  // The desktop's asWindow (stock; a layout placing the shell's opens, apps.routeOpens, may put it in its own panel first).
+  const boot = read('web/desktop/desktop-boot.js');
+  const made = [];
+  const asWindow = runRecording('this.asWindow = ' + block(boot, '    asWindow: ').trim().slice('asWindow: '.length) + ';',
+    { appAt: u => (u.startsWith('/notes/') ? { id: 'notes', name: 'Notes' } : null), newWin: o => made.push(o), desktopVars: { ws: [{}] }, window: {} }).asWindow;
+  assert.equal(asWindow('/x/page.html', 'A page'), true);
+  assert.equal(asWindow('/notes/n.html', 'n'), true);
+  assert.deepEqual(JSON.parse(JSON.stringify(made)), [{ app: 'frame', url: '/x/page.html', title: 'A page', preview: true }, { app: 'frame', url: '/notes/n.html', title: 'Notes', preview: true, appId: 'notes' }]);
+  // Esc closes a preview window: the real desktop Back.
+  const keys = withDesktopParts(read('web/desktop/desktop-keys.js'));
+  const closed = [];
+  const step = runRecording(block(keys, '  function escStep() {') + '\nthis.escStep = escStep;', {
+    desktopVars: { homeOpen: false, ws: [{ mono: false }], cur: 0 }, focused: () => ({ id: 'p1', app: 'frame', preview: true }), closeWin: id => closed.push(id),
+    winEl: () => null, CHATS: { isHosted: () => false, clearFilter: () => '' }, document: { activeElement: null }, window: {}, globalThis: {}, hudBack: () => '' });
+  assert.equal(step.escStep(), 'preview'); assert.deepEqual(closed, ['p1']);
   assert.doesNotMatch(phone, /asWindow/, 'phone keeps its full-height link sheet');
 });
 
 test('phone Settings sheet closes by swiping its grip down (×, Back and the scrim already close it)', () => {
-  const sw = slice(phone, "  { const grip = settingsEl.querySelector('.sheet-grip');", "  settingsEl.addEventListener('click', e => {");
-  assert.match(sw, /if \(dy > 90 \|\| dy \/ \(\(performance\.now\(\) - t0\) \|\| 1\) > \.6\) closeSheets\(\)/);
-  assert.match(phoneCss, /#settings > \.sheet-grip \{[^}]*touch-action: none;/);
-  assert.match(phone, /if \(e\.target\.closest\('\[data-stclose\]'\)\) return closeSheets\(\);/);
+  // The real grip handler from app.js on a sheet with a grip: a long drag or a fast flick closes; a short slow drag springs back.
+  const code = gripCode;
+  const swipe = (dy, ms) => {
+    const doc = createDocument(); doc.body.innerHTML = '<section id="settings"><div class="sheet-grip"></div><button data-stclose>×</button></section>';
+    const settingsEl = doc.querySelector('#settings'), grip = settingsEl.querySelector('.sheet-grip'); grip.setPointerCapture = () => {};
+    let now = 0, closes = 0;
+    runRecording(code, { settingsEl, launcher: null, sheet: 'settings', performance: { now: () => now }, closeSheets: () => { closes++; } });
+    grip.dispatchEvent({ type: 'pointerdown', clientY: 100, pointerId: 1 });
+    grip.dispatchEvent({ type: 'pointermove', clientY: 100 + dy }); now = ms;
+    grip.dispatchEvent({ type: 'pointerup' });
+    return { closes, transform: settingsEl.style.transform, doc, settingsEl, close: () => { settingsEl.querySelector('[data-stclose]').click(); return closes; } };
+  };
+  assert.equal(swipe(120, 1000).closes, 1, 'a long drag closes');
+  assert.equal(swipe(40, 20).closes, 1, 'a fast flick closes');
+  const short = swipe(40, 1000); assert.equal(short.closes, 0); assert.equal(short.transform, '', 'springs back');
+  assert.equal(short.close(), 1, '× closes');
+  // The grip takes the touch itself (no page scroll under the drag).
+  assert.equal(styleOf(short.settingsEl.querySelector('.sheet-grip'), phoneCss, 'touch-action'), 'none');
+});
+
+test('phone Apps panel closes by swiping its grip down, or its app grid down once the grid is at its top (issue 1734)', () => {
+  const make = (scrollTop = 0, sheet = 'launcher') => {
+    const doc = createDocument(); doc.body.innerHTML = '<section id="settings"></section><section id="launcher"><div class="sheet-grip"></div><div class="launcher-body"></div></section>';
+    const launcher = doc.querySelector('#launcher'), grip = launcher.querySelector('.sheet-grip'), body = launcher.querySelector('.launcher-body'); grip.setPointerCapture = () => {};
+    body.scrollTop = scrollTop;
+    const t = { now: 0, closes: 0 };
+    runRecording(gripCode, { settingsEl: doc.querySelector('#settings'), launcher, sheet, performance: { now: () => t.now }, closeSheets: () => { t.closes++; } });
+    const touch = (type, x, y, extra = {}) => { const e = { type, cancelable: true, touches: type === 'touchend' ? [] : [{ clientX: x, clientY: y }], ...extra }; body.dispatchEvent(e); return e; };
+    const pull = (dy, ms, dx = 0) => { touch('touchstart', 100, 100); const moves = [1, 2, 3, 4].map(i => touch('touchmove', 100 + dx * i / 4, 100 + dy * i / 4)); t.now = ms; touch('touchend'); return moves; };
+    return { t, launcher, grip, body, pull };
+  };
+  // The grip, as in Settings: a long drag or a fast flick closes, a short slow one springs back.
+  for (const [dy, ms, want] of [[120, 1000, 1], [40, 20, 1], [40, 1000, 0], [8, 5, 0]]) {
+    const a = make();
+    a.grip.dispatchEvent({ type: 'pointerdown', clientY: 100, pointerId: 1 }); a.grip.dispatchEvent({ type: 'pointermove', clientY: 100 + dy }); a.t.now = ms;
+    a.grip.dispatchEvent({ type: 'pointerup' });
+    assert.equal(a.t.closes, want, `grip ${dy}px in ${ms}ms`); if (!want) assert.equal(a.launcher.style.transform, '', 'springs back');
+  }
+  // The grid at its top: a swipe down drags the panel (the grid does not scroll under it) and closes it.
+  let a = make(); const moves = a.pull(200, 300);
+  assert.equal(a.t.closes, 1, 'grid at its top: swipe down closes'); assert.ok(moves.every(e => e.defaultPrevented), 'the panel takes the swipe');
+  a = make(); a.pull(30, 900); assert.equal(a.t.closes, 0, 'a short slow pull springs back'); assert.equal(a.launcher.style.transform, '');
+  // A grid scrolled down only scrolls; up and sideways moves are the grid's own.
+  a = make(300); const scrolled = a.pull(200, 300); assert.equal(a.t.closes, 0, 'scrolled grid: no close'); assert.ok(scrolled.every(e => !e.defaultPrevented), 'and it scrolls');
+  a = make(); const up = a.pull(-200, 300); assert.equal(a.t.closes, 0, 'upward: no close'); assert.ok(up.every(e => !e.defaultPrevented));
+  a = make(); a.pull(40, 300, 200); assert.equal(a.t.closes, 0, 'sideways: no close');
+  // A tap with a little downward jitter stays a tap: nothing is taken, nothing moves.
+  a = make(); const jitter = a.pull(4, 30); assert.equal(a.t.closes, 0); assert.ok(jitter.every(e => !e.defaultPrevented), 'tap jitter is left to the tile'); assert.ok(!a.launcher.style.transform);
+  // Only while Apps is the open sheet.
+  a = make(0, null); a.pull(200, 300); assert.equal(a.t.closes, 0, 'only while Apps is open'); assert.ok(!a.launcher.style.transform, 'not dragged');
 });
 
 test('a form in a window aimed at _top or _parent stays in its window (guardFrame), other targets are left alone', () => {

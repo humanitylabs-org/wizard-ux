@@ -1,4 +1,6 @@
-qa/
+qa/*
+!qa/scripts/
+!qa/receipts/
 qa-live/
 __pycache__/
 node_modules/

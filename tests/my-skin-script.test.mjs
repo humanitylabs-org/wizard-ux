@@ -4,6 +4,8 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { createHash, webcrypto } from 'node:crypto';
+import { withSkinHostParts } from './fixtures/skin-host-parts.mjs';
+import { parseCsp, nginxCsp, qaOriginCsp, serverPyCsp } from './fixtures/w1-csp.mjs';
 const source = p => readFileSync(new URL('../web/core/' + p, import.meta.url), 'utf8');
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 const tick = () => new Promise(r => setTimeout(r, 10));
@@ -79,7 +81,7 @@ function hostPage() {
     requestAnimationFrame: () => 1, cancelAnimationFrame() {},
     WosSkin: { current: 'fixture', pkgOf: () => ({ dir: 'fixture', js: true, when: 'always' }), list: [] },
   };
-  ctx.window = ctx; vm.runInNewContext(source('skin-host.js'), ctx);
+  ctx.window = ctx; vm.runInNewContext(withSkinHostParts(source('skin-host.js')), ctx);
   const H = ctx.WosSkinHost, order = [];
   let personalApi;
   H._test.setImporter(async url => {
@@ -131,10 +133,10 @@ test('personal module lint enforces package banned APIs and disallows unapproved
   for (const code of ['fetch("/x")', 'window.localStorage.getItem("x")', 'api.part("dock").addEventListener("click", fn)', 'setTimeout(fn, 1)', 'requestAnimationFrame(fn)', 'eval("x")', 'history.back()', 'window.__wos', 'el.innerHTML = "x"', 'import("/x.js")', 'import x from "/x.js"', 'export {x} from "/x.js"']) assert.ok(p.H.scriptProblem(code), code);
 });
 
-test('production and QA CSP support byte-verified Blob modules without inline/eval permission', () => {
-  for (const file of ['packaging/static.conf', 'tools/qa-origin.cjs', 'server.py']) {
-    const text = readFileSync(new URL('../' + file, import.meta.url), 'utf8');
-    assert.match(text, /script-src 'self' blob:;/);
-    assert.doesNotMatch(text, /script-src[^;]*(?:unsafe-inline|unsafe-eval)/);
+test('production and QA CSP support byte-verified Blob modules without inline/eval permission', async () => {
+  for (const [name, header] of [['nginx', nginxCsp()], ['qa-origin', await qaOriginCsp()], ['server.py', await serverPyCsp()]]) {
+    const csp = parseCsp(header);
+    assert.deepEqual(csp['script-src'], ["'self'", 'blob:'], name);
+    assert.ok(!csp['default-src'].some(s => /unsafe-(inline|eval)/.test(s)), name);
   }
 });

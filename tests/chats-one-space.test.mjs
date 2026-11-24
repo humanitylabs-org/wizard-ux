@@ -1,14 +1,16 @@
 // A chat is in at most one Space of its agent (James, 29 Oct 2026: "A message should only be in one space. It should
 // read, move to space, if already in a space"). The row sheet (phone long-press/swipe and desktop right-click share
-// it) says "Add to a Space…" only for an unfiled chat and "Move to Space…" otherwise; choosing another Space moves it,
+// it) says "Move to channel…" (Channels are on for everyone, wizard-ux issue 1258; the Spaces-only "Add to a Space…"
+// wording went with the switch); choosing another Space moves it,
 // the same Space changes nothing, Remove leaves it unfiled, and another agent's Spaces are never touched.
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import vm from 'node:vm'
 import { sharedBox, liveDevice } from './two-devices.mjs'
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 
-const chats = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8')
+const chats = withParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'))
 const cut = (from, to) => { const a = chats.indexOf(from), b = chats.indexOf(to, a); assert.ok(a >= 0 && b > a, from); return chats.slice(a, b) }
 const SPACES = 'wos.chats.spaces.v1', at = '2026-10-29T00:00:00.000Z'
 const space = (id, threads = [], agent) => ({ id, name: 'Space ' + id, threads, createdAt: at, ...(agent ? { agent } : {}) })
@@ -32,13 +34,13 @@ function device(box, agents = { t1: 'hermes', fresh: 'hermes' }) {
   return { ...env.api, dev, toasts, sheet, done, local: () => members(JSON.parse(dev.store.get(SPACES))) }
 }
 const label = html => html.match(/data-rsspacepicker>([^<]*)</)[1]
-const removes = html => [...html.matchAll(/Remove from Space · ([^<]*)</g)].map(m => m[1])
+const removes = html => [...html.matchAll(/Remove from channel · ([^<]*)</g)].map(m => m[1])
 
-test('row sheet reads Add to a Space… only for an unfiled chat and Move to Space… once filed', () => {
+test('row sheet reads Move to channel… for an unfiled and a filed chat, and Remove lists only its own agent’s channel', () => {
   const d = device(sharedBox({ spaces: start() }))
-  assert.equal(label(d.sheet('fresh')), 'Add to a Space…'); assert.deepEqual(removes(d.sheet('fresh')), [])
+  assert.equal(label(d.sheet('fresh')), 'Move to channel…'); assert.deepEqual(removes(d.sheet('fresh')), [])
   const filed = d.sheet('t1')
-  assert.equal(label(filed), 'Move to Space…'); assert.doesNotMatch(filed, /Add to a Space/)
+  assert.equal(label(filed), 'Move to channel…'); assert.doesNotMatch(filed, /Add to a Space/)
   assert.deepEqual(removes(filed), ['Space a']) // the other agent's Space holding the same id is not this chat's
 })
 
@@ -49,16 +51,16 @@ test('moving A to B leaves only B on the box and this device, and survives a rel
   assert.deepEqual(d.local(), want); assert.deepEqual(members(box.state.spaces), want)
   assert.equal(d.toasts.at(-1), 'Moved to Space b')
   const reloaded = device(box); await reloaded.dev.pullPrefs()
-  assert.deepEqual(reloaded.local(), want); assert.equal(label(reloaded.sheet('t1')), 'Move to Space…'); assert.deepEqual(removes(reloaded.sheet('t1')), ['Space b'])
+  assert.deepEqual(reloaded.local(), want); assert.equal(label(reloaded.sheet('t1')), 'Move to channel…'); assert.deepEqual(removes(reloaded.sheet('t1')), ['Space b'])
 })
 
-test('the same Space again changes nothing; Remove leaves the chat unfiled and Add again', async () => {
+test('the same Space again changes nothing; Remove leaves the chat unfiled and filing again adds it', async () => {
   const box = sharedBox({ spaces: start() }), d = device(box), before = JSON.stringify(box.state)
   assert.equal(d.fileInSpace('a', 't1'), false); await d.done()
   assert.equal(JSON.stringify(box.state), before); assert.equal(d.toasts.at(-1), 'Already in Space a')
   assert.equal(d.spaceMember('a', 't1', false), true); await d.done()
   assert.deepEqual(members(box.state.spaces), { a: ['keep'], b: ['other'], phil: ['t1'] })
-  assert.equal(label(d.sheet('t1')), 'Add to a Space…')
+  assert.equal(label(d.sheet('t1')), 'Move to channel…'); assert.deepEqual(removes(d.sheet('t1')), [])
   assert.equal(d.fileInSpace('b', 't1'), true); await d.done(); assert.equal(d.toasts.at(-1), 'Added to Space b')
 })
 
@@ -68,9 +70,9 @@ test('a new Space created with a chat takes it from that agent’s other Spaces 
   assert.deepEqual(members(box.state.spaces), { a: ['keep'], b: ['other'], phil: ['t1'], c: ['t1'] })
 })
 
-test('a chat an older box left in two Spaces reads Move and lists both, and one move repairs it', async () => {
+test('a chat an older box left in two Spaces lists both, and one move repairs it', async () => {
   const box = sharedBox({ spaces: [space('a', ['t1']), space('b', ['t1']), space('c')] }), d = device(box)
-  assert.equal(label(d.sheet('t1')), 'Move to Space…'); assert.deepEqual(removes(d.sheet('t1')), ['Space a', 'Space b'])
+  assert.equal(label(d.sheet('t1')), 'Move to channel…'); assert.deepEqual(removes(d.sheet('t1')), ['Space a', 'Space b'])
   assert.equal(d.fileInSpace('a', 't1'), true); await d.done() // in two: choosing one of them is a real move, not "Already in"
   assert.deepEqual(members(box.state.spaces), { a: ['t1'], b: [], c: [] })
 })

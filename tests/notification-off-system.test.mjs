@@ -5,6 +5,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { core, settle, read } from './fixtures/notification-levels.mjs';
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
+import vm from 'node:vm';
+import { createDocument } from './fixtures/mini-dom.mjs';
+import { styles } from './fixtures/w5-css.mjs';
+import { settingsWorld } from './fixtures/r5A-settings.mjs';
 
 const NOTES = [
   { id: 'u1', time: 30, title: '1 app updated', message: 'Updated Notifications (2.29.0).', priority: 3, tags: [] },
@@ -108,7 +113,14 @@ test('a notification asks "<row> go to", never "Notifications notifications go t
   assert.equal(B.ask('notifications', 'Notifications'), 'Notifications go to');
   assert.equal(B.ask('system:app-updates', 'App updates'), 'App updates go to');
   assert.equal(B.ask('messenger', 'Messenger'), 'Messenger notifications go to');
-  assert.match(read('web/core/chats.js'), /ask = B\.ask\?\.\(id, name\) \|\| `\$\{name\} notifications go to`/);
+  // the thread's real "where these go" line (core/chats-drafts.js noteRouteHtml) asks the bell for its words
+  const drafts = read('web/core/chats-drafts.js');
+  const from = drafts.indexOf('  const APP_NOTE ='), code = drafts.slice(from, drafts.indexOf('  // "More from Money', from));
+  const words = (B2, NV) => { const c = { window: { WosBell: B2 }, esc: String, noteQuiet: () => false }; vm.createContext(c); vm.runInContext(code + '\nthis.f = noteRouteHtml;', c); return /<span>([^<]*)<\/span>/.exec(c.f(NV))?.[1]; };
+  const bell = { ...B, picker: () => '<picker>', chatsAvailable: true, nameOf: id => ({ notifications: 'Notifications', messenger: 'Messenger' })[id] };
+  assert.equal(words(bell, { id: 'x', item: { app: 'messenger' } }), 'Messenger notifications go to');
+  assert.equal(words(bell, { id: 'y', item: null }), 'Notifications go to');
+  assert.equal(words({ ...bell, ask: undefined }, { id: 'y', item: null }), 'Notifications notifications go to', 'an older bell without ask() keeps the old words');
 });
 
 test('unknown routes and ids are refused', () => {
@@ -131,21 +143,72 @@ test('core is the levels: four choices with no tweak worn, stored Morning report
   assert.equal(B.routeLabel('mail'), 'Chats', 'an app with no saved choice starts in Chats (#895)');
 });
 
-test('the retired tweak is gone: no package, not in the catalog or Miguel\'s profile', () => {
+test('the retired tweak is gone: no package, not in the catalog or Miguel\'s profile', async () => {
   const cat = JSON.parse(read('web/tweaks/catalog.json')), prof = JSON.parse(read('web/tweaks/miguel/profile.json'));
   assert.ok(!cat.tweaks.includes('miguel/notification-levels')); assert.ok(!prof.tweaks.includes('miguel/notification-levels'));
   assert.throws(() => read('web/tweaks/miguel/notification-levels/manifest.json'));
-  // Its styles live in core now.
-  assert.match(read('web/core/settings.css'), /\.st-sys-list li\.new b::before/);
-  assert.match(read('web/core/settings.css'), /\.st-seg\.st-nr-seg\.wos-route \{ width: auto; max-width: none; grid-auto-columns: auto; \}/);
-  assert.match(read('web/desktop/desktop.css'), /#settingsBtn \.cog-n \{/);
+  // Its styles live in core now: on what the real Settings page and desktop cog draw.
+  const settingsCss = read('web/core/settings.css'), deskCss = read('web/desktop/desktop.css');
+  const w = boot(), B = w.WosBell;
+  await B.refresh(true); await settle();
+  B.setRoute('system:app-updates', 'badge'); await settle();
+  const st = settingsWorld({ shell: 'desktop', scope: { WosBell: B } }); // desktop: where segmented controls are capped
+  const page = st.open('notifications');
+  const fresh = page.querySelector('.st-sys-list li.new b');
+  assert.ok(fresh, 'Settings › Notifications lists the unseen System notice');
+  const dot = styles(fresh, [settingsCss], { pseudo: '::before' });
+  assert.equal(dot.content, "''"); assert.equal(dot.width, '8px'); assert.equal(dot['border-radius'], '50%');
+  assert.equal(dot.background, 'var(--wz-accent)', 'an unseen notice carries the accent dot');
+  const seg = page.querySelector('.st-seg.st-nr-seg.wos-route');
+  assert.ok(seg, 'the four-choice picker on the page');
+  const segCss = styles(seg, [settingsCss]);
+  assert.equal(segCss.width, 'auto'); assert.equal(segCss['max-width'], 'none'); assert.equal(segCss['grid-auto-columns'], 'auto');
+  const cog = deskCog({ n: 3, label: 'new from Wizard' });
+  const count = cog.btn.querySelector('b.cog-n');
+  const cogCss = styles(count, [deskCss]);
+  assert.equal(cogCss.position, 'absolute', 'the count sits on the cog');
+  assert.equal(cogCss.background, 'var(--wz-accent)');
 });
 
+// The real phone gear (web/app-unsent.js), desktop cog (web/desktop/desktop-cog.js) and Settings attention list
+// (web/core/settings.js), each with a WosBell whose attention is `at`.
+function phoneGear(at, unsent = []) {
+  const s = { WosBell: { attention: () => at }, WosSettings: { unsentAll: () => unsent }, addEventListener() {} };
+  s.window = s; vm.runInNewContext(read('web/app-unsent.js'), s);
+  const esc = v => String(v).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  return s.WizCore.appParts.unsent({ clip: x => x, esc, NATIVE: () => false, refreshHome() {}, settingsContext: () => ({}) }).gearBtn();
+}
+function deskCog(at) {
+  const doc = createDocument(), listeners = {};
+  doc.body.innerHTML = '<div id="bar"><button id="settingsBtn" aria-label="Settings"></button></div><div id="keys"></div><div id="settings"></div>';
+  const bell = { at };
+  const s = { document: doc, WosBell: { attention: () => bell.at }, addEventListener: (t, f) => (listeners[t] ||= []).push(f) };
+  s.window = s; vm.runInNewContext(read('web/desktop/desktop-cog.js'), s);
+  s.WizCore.desktopParts.cog({ $: q => doc.querySelector(q), C: {}, closeSettings() {}, openSettings() {}, OUTBOX: null, renderSettings() {}, setEl: doc.getElementById('settings') });
+  const btn = doc.getElementById('settingsBtn');
+  return { btn, set: v => { bell.at = v; for (const f of listeners['wizard:notify-attention'] || []) f(); } };
+}
+
 test('cog and attention hooks: the phone gear, the desktop cog and the Settings row read WosBell.attention', () => {
-  const app = read('web/app.js'), desk = read('web/desktop/desktop.js'), st = read('web/core/settings.js');
-  assert.match(app, /at = window\.WosBell\?\.attention\?\.\(\)/);
-  assert.match(desk, /function paintCog\(\)[^]*window\.WosBell\?\.attention\?\.\(\)/);
-  assert.match(st, /if \(at\?\.n\) items\.push\(\{ title: `\$\{at\.n\} \$\{at\.label\}`, feature: 'notification-routing' \}\)/);
+  const at = { n: 2, label: 'new from Wizard', short: 'new' };
+  // Phone gear.
+  const gear = phoneGear(at);
+  assert.match(gear, /aria-label="Settings, 2 new from Wizard"/);
+  assert.match(gear, /<span class="gear-n">2<\/span>/);
+  assert.doesNotMatch(phoneGear(null), /gear-n|, \d/, 'nothing to say: a plain gear');
+  // Desktop cog, repainted when the bell says attention changed.
+  const cog = deskCog(at);
+  assert.equal(cog.btn.querySelector('.cog-n')?.textContent, '2');
+  assert.equal(cog.btn.getAttribute('aria-label'), 'Settings, 2 new from Wizard');
+  cog.set({ n: 120, label: 'new from Wizard' });
+  assert.equal(cog.btn.querySelector('.cog-n').textContent, '99+');
+  cog.set(null);
+  assert.equal(cog.btn.querySelector('.cog-n'), null); assert.equal(cog.btn.getAttribute('aria-label'), 'Settings');
+  // Settings' attention list (what the Settings row shows).
+  const st = settingsWorld({ scope: { WosBell: { attention: () => at, routes: () => [] } } });
+  assert.deepEqual(JSON.parse(JSON.stringify(st.W.attention({}))), [{ title: '2 new from Wizard', feature: 'notification-routing' }]);
+  const quiet = settingsWorld({ scope: { WosBell: { attention: () => null, routes: () => [] } } });
+  assert.deepEqual(JSON.parse(JSON.stringify(quiet.W.attention({}))), []);
   for (const f of ['web/app.js', 'web/desktop/desktop.js', 'web/core/settings.js', 'web/core/notif-bell.js', 'web/core/chats.js', 'web/core/skin-host.js'])
     assert.doesNotMatch(read(f), /notification-levels/, `${f} never names the tweak`);
 });

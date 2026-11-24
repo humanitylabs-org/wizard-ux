@@ -1,14 +1,20 @@
 // wizard-ux issue 1504: the orb badge and Home's Ready card said 3 while Activity listed 6 ready (2 green, 4 amber).
 // The badges counted unread threads only, so a needs-you thread the owner had already opened dropped out of them.
-// With Channels on they now count Activity's own Ready (chats.js activityReady through workspace-navigation chatsCount).
+// They now count Activity's own Ready (chats.js activityReady through workspace-navigation chatsCount).
 // Real live.js grouping + visibleUnread, real chats.js rule lines, real list model, real chatsCount.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import { modelContext } from './fixtures/chats-list-model.mjs';
+import { withAppParts } from './fixtures/app-parts.mjs';
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
+import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
+import { withDesktopParts } from './fixtures/desktop-parts.mjs';
+import { runRecording } from './fixtures/source-slice.mjs';
+import { createDocument } from './fixtures/mini-dom.mjs';
 const read = p => fs.readFileSync(new URL('../' + p, import.meta.url), 'utf8');
-const live = read('web/live.js'), chats = read('web/core/chats.js'), nav = read('web/core/workspace-navigation.js');
+const live = withLiveParts(read('web/live.js')), chats = withParts(read('web/core/chats.js')), nav = read('web/core/workspace-navigation.js');
 const block = (text, a, b) => { const i = text.indexOf(a); assert.ok(i >= 0, a); const j = text.indexOf(b, i); assert.ok(j > i, b); return text.slice(i, j); };
 const line = (text, token) => { const l = text.split('\n').find(x => x.includes(token)); assert.ok(l, token); return l; };
 const NOW = Date.now(), H = 3600e3;
@@ -16,10 +22,9 @@ const iso = h => new Date(NOW - h * H).toISOString();
 const row = (id, h, extra = {}) => ({ id, title: 'T ' + id, status: 'completed', updatedAt: iso(h), lastUserAt: iso(h + 1), previewAt: iso(h), ...extra });
 const amber = (id, h) => row(id, h, { attention: { state: 'needs_you', ask: 'Pick one' } });
 
-function harness(rows, { on = true, bellUnread = 0 } = {}) {
+function harness(rows, { bellUnread = 0 } = {}) {
   const fresh = new Set(rows.filter(s => s.fresh).map(s => s.id)), handled = new Set();
-  const c = modelContext({ Date, JSON, console, CHAN_SWITCH: 'wizard/chat-channels',
-    document: { documentElement: { dataset: { tweaks: on ? 'wizard/chat-channels' : '' } } }, localStorage: { getItem: () => null },
+  const c = modelContext({ Date, JSON, console, localStorage: { getItem: () => null },
     snoozeLast: () => false, seenKeyOf: s => s.id, assistantAt: s => s.previewAt, hasNew: s => fresh.has(s.id), WEEK: 7 * 864e5 });
   c.window = c; c.WizChatsListModel = c.WizChatsListModel; c.WizConfig = { dayStart: n => n - n % 864e5 }; c.WosSkinHost = { snoozeOrder: '' };
   c.WosBell = { unreadCount: () => bellUnread };
@@ -29,7 +34,7 @@ function harness(rows, { on = true, bellUnread = 0 } = {}) {
     isNew: s => hasNew(s), handled: s => handledSet.has(s.id), workGroups(r) { return groupWork(r || input); },
     ${block(live, "    groups(agent = '') {", '    async refresh() {')} ${line(live, '    visibleUnread(rows)')} };`, Object.assign(c, { handledSet: handled }));
   c.WizCore = {};
-  vm.runInContext(['const WORKING_ST =', 'const isWorking =', 'const channelsOn =', 'const markDoneOn =', 'const handledNow =', 'const deferredOf =', 'const attOf =',
+  vm.runInContext(['const WORKING_ST =', 'const isWorking =', 'const handledNow =', 'const deferredOf =', 'const attOf =',
     'const chanNeeds =', 'const chanUnread =', 'const actNeeds =', 'const actUnread =', 'const chanAt ='].map(t => line(chats, '  ' + t)).join('\n')
     + '\n' + block(chats, '  function activityReady(live) {', '  /* Activity with Channels on') + '\nthis.needs = actNeeds; this.unread = actUnread; this.chanAt = chanAt;', c);
   vm.runInContext(block(nav, '  function chatsCount(live) {', '  function refreshChats(') + '\nthis.badge = chatsCount; this.word = readyWord;', c);
@@ -67,18 +72,28 @@ test('issue 1504: notifications set to Chats still add their unread items on top
   assert.equal(c.badge(c.LIVE), 8);
 });
 
-test('issue 1504: with Channels off (no Activity view) the badge keeps the unread tally', () => {
-  const { c } = harness(robert(), { on: false });
-  assert.equal(c.WizCore.activityReady(c.LIVE), null);
-  assert.equal(c.badge(c.LIVE), c.LIVE.visibleUnread(c.LIVE.unified()).length);
-  assert.equal(c.word(c.LIVE), 'unread');
-});
-
+// The shells' own Home, orb and bar code over this harness: WizCore is what chats.js exported, workspace-navigation's count.
+function shellCtx(h, extra = {}) {
+  const C = { ...h.c.WizCore, workspaceNav: { chatsCount: h.c.badge, readyWord: h.c.word, refreshChats: (...a) => refreshed.push(a), slot: i => i + 1 } }, refreshed = [];
+  return { refreshed, scope: { LIVE: h.c.LIVE, C, window: { WizCore: C, WizConfig: { hm: () => '9:00', dayParts: () => ({ dow: 1, d: 2, m: 3 }), dateLabel: () => 'Monday' } },
+    DOWL: ['Sun', 'Mon'], MON: ['Jan', 'Feb', 'Mar'], esc: String, emoOf: () => '', ago: () => '1h', OUTBOX: null, APPS: [], APP: { wizard: { id: 'wizard' } }, CHATS_APP: { id: 'chats' },
+    unsentCard: () => '', sideCard: () => '', live: () => h.c.LIVE.groups(), ico: () => '', MOD: '⌥', ...extra } };
+}
+const appSrc = withAppParts(read('web/app.js')), deskSrc = withDesktopParts(read('web/desktop/desktop.js'));
 test('issue 1504: the shells read the one count (orb badge, desk marks, phone Home card, desktop Home line)', () => {
-  assert.match(read('web/app.js'), /const ready = window\.WizCore\.workspaceNav\.chatsCount\(LIVE\);/);
-  assert.match(read('web/app.js'), /workspaceNav\.refreshChats\(LIVE, CHATS_APP\.id\)/);
-  assert.match(read('web/desktop/desktop.js'), /C\.workspaceNav\.refreshChats\(LIVE, /);
-  assert.match(chats, /window\.WizCore\.activityReady = activityReady;/);
+  const h = harness(robert());
+  const phone = shellCtx(h), ph = runRecording(block(appSrc, '  function renderHome() {', '  setInterval(() =>') + '\nglobalThis.home = renderHome;', phone.scope);
+  const card = createDocument(); card.body.innerHTML = ph.home();
+  assert.equal(card.querySelector('[data-act="ready"]').getAttribute('aria-label'), 'Ready, 6 ready', 'phone Home Ready card = Activity Ready');
+  const moons = runRecording(block(appSrc, '  function renderMoons() {', '  function paintOrbBadge()') + '\nglobalThis.moons = renderMoons;', { ...phone.scope, $: () => ({ offsetWidth: 44 }), paintOrbBadge: () => {} });
+  moons.moons();
+  assert.deepEqual(phone.refreshed.map(([l, id]) => [l === h.c.LIVE, id]), [[true, 'chats']], 'the orb badge and desk marks repaint from the same LIVE');
+  const desk = shellCtx(h), d = runRecording(block(deskSrc, '  function homeHtml(i) {', '  stage.addEventListener(') + '\nglobalThis.home = homeHtml;', desk.scope);
+  const line = createDocument(); line.body.innerHTML = d.home(0);
+  assert.match(line.querySelector('.home-line').textContent, /, 6 ready, /, 'desktop Home line = Activity Ready');
+  const bar = runRecording(block(deskSrc, '  function paintBar() {', '  function tickClock()') + '\nglobalThis.bar = paintBar;', { ...desk.scope, homeOpen: false, $: () => ({ setAttribute() {} }) });
+  try { bar.bar(); } catch (_) { /* the rest of the bar needs the shell's DOM */ }
+  assert.deepEqual(desk.refreshed.map(([l, id]) => [l === h.c.LIVE, id]), [[true, 'wizard']], 'the desktop bar repaints the badges from LIVE');
 });
 
 // wizard-ux issue 1517: desktop Home said "0 need you" and its Needs you · Unread card listed only the 2 unread threads,
@@ -95,18 +110,21 @@ test('issue 1517: Home\'s need-you number and card follow Activity\'s amber rows
   assert.equal(h.c.WizCore.activityHome(h.c.LIVE).needs.length, 3, 'Mark done takes it off Home too');
 });
 
-test('issue 1517: with Channels off Home keeps the Chats groups', () => {
-  const { c } = harness(robert(), { on: false });
-  assert.equal(c.WizCore.activityHome(c.LIVE), null);
-});
-
 test('issue 1517: desktop Home line, its card, the status bar and the phone Ready card read activityHome', () => {
-  const desk = read('web/desktop/desktop.js'), app = read('web/app.js');
-  const home = block(desk, '  function homeHtml(i) {', '  stage.addEventListener(');
-  assert.match(home, /C\.activityHome\?\.\(LIVE\)/);
-  assert.match(home, /\$\{L\.needs\.length\} need/);
-  assert.match(home, /rows\(L\.needs\.concat\(L\.ready\)\)/);
-  assert.match(block(desk, '  function paintBar() {', '  function tickClock()'), /C\.activityHome\?\.\(LIVE\)/);
-  assert.match(block(app, '  function renderHome() {', '  setInterval(() =>'), /WizCore\.activityHome\?\.\(LIVE\)/);
-  assert.match(chats, /window\.WizCore\.activityHome = activityHome;/);
+  const h = harness(robert());
+  h.open('y4');   // an amber thread already opened still needs you
+  const d = runRecording(block(deskSrc, '  function homeHtml(i) {', '  stage.addEventListener(') + '\nglobalThis.home = homeHtml;', shellCtx(h).scope);
+  const doc = createDocument(); doc.body.innerHTML = d.home(0);
+  assert.match(doc.querySelector('.home-line b').textContent, /^4 need you$/, 'the amber Activity rows, opened or not');
+  assert.deepEqual(doc.querySelector('.home-card').querySelectorAll('[data-thread]').map(b => b.dataset.thread).sort(), ['g1', 'g2', 'y1', 'y2', 'y3', 'y4'], 'Needs you · Unread = Activity Ready');
+  const ph = runRecording(block(appSrc, '  function renderHome() {', '  setInterval(() =>') + '\nglobalThis.home = renderHome;', shellCtx(h).scope);
+  const card = createDocument(); card.body.innerHTML = ph.home();
+  assert.match(card.querySelector('[data-act="ready"]').getAttribute('style'), /--c:var\(--amber\)/, 'phone Ready card is amber while Activity has needs');
+  for (const id of ['y1', 'y2', 'y3', 'y4']) h.markDone(id);
+  card.body.innerHTML = ph.home();
+  assert.match(card.querySelector('[data-act="ready"]').getAttribute('style'), /--c:var\(--green\)/, 'and green once they are done');
+  const bar = shellCtx(h), b = runRecording(block(deskSrc, '  function paintBar() {', '  function tickClock()') + '\nglobalThis.bar = paintBar;', { ...bar.scope, homeOpen: false, $: () => ({ setAttribute() {} }) });
+  let used = 0; const real = bar.scope.C.activityHome; bar.scope.C.activityHome = l => { used++; return real(l); };
+  try { b.bar(); } catch (_) { /* the rest of the bar needs the shell's DOM */ }
+  assert.equal(used, 1, 'the status bar asks activityHome');
 });

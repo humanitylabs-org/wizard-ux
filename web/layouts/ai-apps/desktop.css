@@ -212,6 +212,11 @@ html[data-shell="desktop"][data-layout="ai-apps"] .aad-more:hover { background: 
 html[data-shell="desktop"][data-layout="ai-apps"] :is(.aad-rw:hover, .aad-rw.is-held, .aad-rw:focus-within) .aad-row { padding-right: 36px; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-chev { width: 14px; height: 14px; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-empty { margin: 6px 10px 8px; color: var(--aad-ink-2); font: 500 0.8125rem / 1.4 var(--wz-font-ui); }
+/* Activity with nothing in it (wizard-ux issue 1731): one deliberate empty state on an opaque panel, in every skin. */
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-act-empty { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; margin: 10px 8px; padding: 14px; border: 1px solid var(--aad-line); border-radius: 12px; background: var(--aad-surface); color: var(--aad-ink-2); font: 500 0.8125rem / 1.45 var(--wz-font-ui); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-act-empty b { color: var(--aad-ink); font-size: 0.9375rem; font-weight: 600; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-act-new { margin-top: 8px; padding: 6px 12px; border: 1px solid var(--aad-line); border-radius: 99px; background: var(--aad-canvas); color: var(--aad-ink); font: 600 0.8125rem / 1.2 var(--wz-font-ui); cursor: pointer; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-act-new:hover { background: linear-gradient(var(--aad-hover), var(--aad-hover)), var(--aad-canvas); }
 /* the foot: a round + (New chat) and a cog (Settings), icons only (the phone drawer's) */
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-foot { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px 14px; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-new {
@@ -932,6 +937,14 @@ html[data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side] #stage > .
 html[data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side] #stage > .wsp:not([data-aad-role]):not(:has(> .win:not(.gone) ~ .win:not(.gone))) {
   left: calc(var(--aad-pane-main-x) - 8px); right: calc(var(--aad-pane-main-right) - 8px);
 }
+/* round 14 (wizard-ux issue 1742): a desk out of sight keeps the open sidebar's main area (--aad-pane-held-*), not the
+ * live one above, so folding the sidebar never moves or re-lays out hidden desks */
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side] #stage > .wsp[hidden]:not([data-aad-role]) {
+  left: var(--aad-pane-held-x, var(--aad-side-w, 288px)); right: var(--aad-pane-held-right, var(--aad-tabs-px, 200px));
+}
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side] #stage > .wsp[hidden]:not([data-aad-role]):not(:has(> .win:not(.gone) ~ .win:not(.gone))) {
+  left: calc(var(--aad-pane-held-x, var(--aad-side-w, 288px)) - 8px); right: calc(var(--aad-pane-held-right, var(--aad-tabs-px, 200px)) - 8px);
+}
 html[data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side][data-aad-split]:not([data-aad-chat]) #stage > .wsp[data-aad-role="chat"] {
   inset: var(--aad-pane-main-y) var(--aad-pane-main-right) var(--aad-pane-main-bottom) var(--aad-pane-main-x) !important;
 }
@@ -995,7 +1008,7 @@ html[data-shell="desktop"][data-layout="ai-apps"][data-aad-mode="full"] :is(.aad
 /* (a chat's Back in full screen shows the list over it, still full screen: James, 12 Nov 2026) */
 html[data-shell="desktop"][data-layout="ai-apps"][data-aad-mode="full"]:not([data-aad-side="over"]) .aad-side { display: none !important; }
 html[data-shell="desktop"][data-layout="ai-apps"][data-aad-mode="full"][data-aad-side="over"] .aad-side { left: 0; top: 0; bottom: 0; }
-/* Channels (wizard/chat-channels, wizard-ux issue 1256): Chats' own Channels pane in the sidebar (api.sessions.channels).
+/* Channels (wizard-ux issue 1256): Chats' own Channels pane in the sidebar (api.sessions.channels).
  * Activity: its tabs over the sidebar's own rows, each row with a muted "# channel" second line (56 px, two lines).
  * Channels and a channel's feed: the pane fills the sidebar in place of the rows; the feed's message box at its foot. */
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-chan { position: relative; flex: none; display: flex; flex-direction: column; min-height: 0; }

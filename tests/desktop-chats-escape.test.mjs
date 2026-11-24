@@ -5,9 +5,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
 import {fileURLToPath} from 'node:url';
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
+import { withShellParts } from './fixtures/shell-parts.mjs';
 const root=process.env.QA_SOURCE_DIR||fileURLToPath(new URL('../',import.meta.url));
-const desktop=fs.readFileSync(path.join(root,'web/desktop/desktop.js'),'utf8');
-const core=fs.readFileSync(path.join(root,'web/core/chats.js'),'utf8');
+const desktop=withShellParts(fs.readFileSync(path.join(root,'web/desktop/desktop.js'),'utf8'));
+const core=withParts(withShellParts(fs.readFileSync(path.join(root,'web/core/chats.js'),'utf8')));
 const esc=desktop.slice(desktop.indexOf('  function escStep()'),desktop.indexOf('  /* ---------------- hold left',desktop.indexOf('  function escStep()')));
 const clear=core.slice(core.indexOf('  function clearFilter(w)'),core.indexOf('  const hasFilter',core.indexOf('  function clearFilter(w)')));
 function fixture({thread='selected',q='quokka',filter='unread',inList=true,mono=false}={}){
@@ -21,7 +23,7 @@ function fixture({thread='selected',q='quokka',filter='unread',inList=true,mono=
  CHATS:{KIT:{},isHosted:()=>false,closeOverlay:()=>'',threadBack:()=>{w.thread=null;calls.push('thread');return 'thread';}},
  closeWin:()=>calls.push('close')};
  vm.createContext(ctx);vm.runInContext(clear,ctx);ctx.CHATS.clearFilter=ctx.clearFilter;vm.runInContext(esc,ctx);
- vm.runInContext(fs.readFileSync(path.join(root,'web/core/escape-back.js'),'utf8'),ctx);
+ vm.runInContext(withShellParts(fs.readFileSync(path.join(root,'web/core/escape-back.js'),'utf8')),ctx);
  ctx.escapeBack=ctx.window.WizEscapeBack.create();ctx.VOICE={state:'idle'};
  ctx.escapeBack.watch(()=>!ctx.pal.hidden,()=>ctx.closePalette(),'palette');
  vm.runInContext(desktop.slice(desktop.indexOf('  function desktopBack('),desktop.indexOf('  // Navigation only.')),ctx);

@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 
 // ux#1477 / ux#1540 (Jan): hovering a message time shows the full date and time in the owner's zone
 // (WizConfig.timeZone, #635), but the label after it always said "Bangkok". An owner in Ljubljana saw their own
@@ -34,7 +35,7 @@ test('the full message time names the owner zone, never a fixed Bangkok', () => 
 // named after the owner's zone, for every non-Bangkok zone above.
 const ROUTES = { main: ['wizard_1793157258294_34b4a71ae61a', ''], 'host-profile': ['20261028_101500_ab12cd', 'qa-host-profile'],
   container: ['agent-research:20261028_101501_ef34', 'agent-research'], restricted: ['restricted.vault_20261028-101502', 'restricted.vault'] };
-const chats = read('web/core/chats.js');
+const chats = withParts(read('web/core/chats.js'));
 const line = start => { const a = chats.indexOf(start); assert.ok(a >= 0, start); return chats.slice(a, chats.indexOf('\n', a) + 1); };
 const slice = (start, end) => { const a = chats.indexOf(start), b = chats.indexOf(end, a); assert.ok(a >= 0 && b > a, `${start} .. ${end}`); return chats.slice(a, b); };
 function turnHtml(tn) {

@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import { withSettingsParts } from './fixtures/settings-parts.mjs'; // settings.js parts moved out verbatim (issue 1665)
 const read = p => fs.readFileSync(new URL('../web/core/' + p, import.meta.url), 'utf8');
 test('response style is an owner setting', async () => {
   const requests = [], saved = { response_style: 'summary' };
@@ -29,7 +30,7 @@ test('response style is an owner setting', async () => {
 test('both shells explain that reply style lives with each agent, with no Wizard-level picker', async () => {
   const box = { console, Map, Set, Date, String, navigator: { userAgent: 'Fixture' }, CSS: { escape: String }, document: { activeElement: null }, WizCore: {}, WizConfig: { responseStyle: async () => { throw Error('retired picker must not load'); } } };
   box.window = box;
-  vm.runInNewContext(read('settings.js'), box);
+  vm.runInNewContext(withSettingsParts(read('settings.js')), box);
   for (const shell of ['phone', 'desktop']) {
     const root = { innerHTML: '', dataset: {}, scrollTop: 0, classList: { add() {} }, contains: () => false, querySelector: () => null, addEventListener() {}, removeEventListener() {} };
     const view = box.WosSettings.mount(root, { shell });

@@ -5,7 +5,8 @@
   const TYPE = 'wizard:background-audio:v1', pending = new Map(), states = new Map();
   const METHODS = new Set(['capabilities','attach','state','load','play','pause','seek','next','previous','jump','enqueueNext','removeCurrent','removeUpcoming','volume','detach','stop']);
   let registry = () => ({}), admit = () => false, seq = 0, boundPort, owner = null;
-  const granted = (id, app) => !!app && (app.provides?.includes('background-audio') || window.WizBackgroundAudioLegacy?.granted(id, app));
+  const granted = (id, app) => !!app && (app.provides?.includes('background-audio') || window.WizBackgroundAudioLegacy?.granted(id, app))
+    && window.WizBackgroundAudioLegacy?.admitted?.(id) !== false;
   function frameApp(win, origin = location.origin) {
     if (!win || win === window || origin !== location.origin) return null;
     const f = [...document.querySelectorAll('iframe.appframe')].find(f => f.contentWindow === win);
@@ -24,7 +25,10 @@
   }
   const frameOk = (win, origin) => !!frameApp(win, origin);
   function port() { return window.wizardAudioPort?.postMessage ? window.wizardAudioPort : null; }
-  const nativeId = appId => window.WizBackgroundAudioLegacy?.nativeAppId(appId) || appId;
+  // An app that took the native player under its own id keeps that id until its session ends, so turning
+  // wizard/lock-screen-player off mid-play never strands it (wizard-ux issue 1661).
+  let ownNative = null;
+  const nativeId = appId => appId === ownNative ? appId : window.WizBackgroundAudioLegacy?.nativeAppId(appId) || appId;
   function listen(pt) {
     if (pt === boundPort) return;
     boundPort = pt;
@@ -45,7 +49,10 @@
       const id = 'audio-' + (++seq);
       const timer = setTimeout(() => { pending.delete(id); reject(new Error('Audio request timed out')); }, 20000);
       pending.set(id, {appId, timer, complete:m => m.ok ? resolve(m.result || {}) : reject(new Error(m.error || 'Audio request failed'))});
-      try { pt.postMessage(JSON.stringify({...params,id,v:1,appId:nativeId(appId),method})); }
+      const nid = nativeId(appId);
+      if (method === 'load') ownNative = nid === appId && nid !== window.WizBackgroundAudioLegacy?.nativeAppId('') ? appId : null;
+      else if (method === 'stop' && appId === ownNative) ownNative = null;
+      try { pt.postMessage(JSON.stringify({...params,id,v:1,appId:nid,method})); }
       catch (error) { pending.delete(id); clearTimeout(timer); reject(error); }
     });
   }
@@ -103,5 +110,11 @@
     });
     return duckChain.catch(() => false);
   }
-  window.WizBackgroundAudio = {init:(fn, grant) => {registry=fn;admit=grant;}, frameOk, request, canAttach:win => !!port() && frameOk(win), closeApp, duck, lastState:null};
+  // The switch went off while an app played under its own id: stop that session, so nothing plays on that nobody controls.
+  function releaseOwn() {
+    const id = ownNative;
+    if (!id || !port()) return Promise.resolve();
+    return send(id, 'state').then(s => s?.sessionId ? send(id, 'stop', {sessionId: s.sessionId}) : null).catch(() => null);
+  }
+  window.WizBackgroundAudio = {init:(fn, grant) => {registry=fn;admit=grant;}, frameOk, request, canAttach:win => !!port() && frameOk(win), closeApp, duck, releaseOwn, lastState:null};
 })();

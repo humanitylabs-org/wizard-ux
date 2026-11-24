@@ -1,3 +1,0 @@
-/* Pinned apps load a slim page (wizard-ux issue 1584): the work is in core/pin-doc.js.
- * This rule only marks the switch as present. */
-html[data-tweaks~="wizard/pin-slim-doc"] { --wos-pin-slim-doc: 1; }

@@ -225,6 +225,7 @@ public class ShareActivity extends Activity {
             c = (HttpURLConnection) new URL(AppState.live(origin) + path).openConnection();
             c.setConnectTimeout(5000); c.setReadTimeout(8000);
             c.setRequestProperty("Origin", origin); c.setRequestProperty("Accept", "application/json");
+            ai.wizards.os.device.ShellToken.apply(c);
             int code = c.getResponseCode();
             if (code == 404) return new JSONObject();
             if (code < 200 || code >= 300) return null;

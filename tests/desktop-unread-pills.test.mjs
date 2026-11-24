@@ -4,7 +4,11 @@ import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { modelContext } from './fixtures/chats-list-model.mjs';
-const source = p => readFileSync(process.env.QA_TREE ? path.join(process.env.QA_TREE, p) : new URL('../' + p, import.meta.url), 'utf8');
+import { withAppParts } from './fixtures/app-parts.mjs';
+import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
+import { withShellParts } from './fixtures/shell-parts.mjs';
+import { withWebParts } from './fixtures/web-parts.mjs';
+const source = p => withAppParts(withShellParts(withWebParts(readFileSync(process.env.QA_TREE ? path.join(process.env.QA_TREE, p) : new URL('../' + p, import.meta.url), 'utf8'))));
 const desktop = source('web/layouts/ai-apps/desktop.js');
 const classic = source('web/desktop/desktop.js');
 const phone = source('web/layouts/ai-apps/layout.js');
@@ -28,7 +32,7 @@ function harness() {
     WosAgents: { isOther: id => id !== 'hermes', get: id => ({ id, privacy: 'standard' }) },
     WosBell: { unreadCount: () => 0, readyMore: () => false, inChats: () => false, isOff: () => false },
     WizSigil: { of: () => ({ color: 'purple' }), html: () => '<i></i>' } };
-  c.window = c; modelContext(c); vm.runInContext(source('web/live.js'), c); vm.runInContext(source('web/core/workspace-navigation.js'), c);
+  c.window = c; modelContext(c); vm.runInContext(withLiveParts(source('web/live.js')), c); vm.runInContext(source('web/core/workspace-navigation.js'), c);
   const L = c.WizLive, N = c.WizCore.workspaceNav, M = c.WizChatsListModel;
   L.ok = true; L.seen = { initializedAt: 1, threads: {} };
   const stamp = new Date(Date.now() - 60000).toISOString();

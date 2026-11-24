@@ -4,7 +4,12 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import http from 'node:http';
 import { schedulerFixture } from './fixtures/scheduler.mjs';
-const read = f => fs.readFileSync(new URL('../' + f, import.meta.url), 'utf8');
+import { withSettingsParts } from './fixtures/settings-parts.mjs'; // settings.js parts moved out verbatim (issue 1665)
+import { withShellParts } from './fixtures/shell-parts.mjs';
+import { createDocument } from './fixtures/mini-dom.mjs';
+import { styles } from './fixtures/w5-css.mjs';
+import { between } from './fixtures/source-slice.mjs';
+const read = f => withShellParts(fs.readFileSync(new URL('../' + f, import.meta.url), 'utf8'));
 const settle = async f => { const until = Date.now() + 3000; while (!f()) { if (Date.now() > until) throw Error('Fixture did not settle'); await new Promise(r => setTimeout(r, 5)); } };
 async function harness(t, { missing = false, shell = 'phone', timeZone = 'Europe/London', now = '2026-10-21T12:00:00Z' } = {}) {
   const fixture = schedulerFixture(); fixture.missing = missing;
@@ -18,7 +23,7 @@ async function harness(t, { missing = false, shell = 'phone', timeZone = 'Europe
   const s = { console, Map, Set, WeakMap, Date, String, CSS: { escape: String }, setTimeout, requestAnimationFrame: f => f(), document: { activeElement: null }, navigator: { userAgent: 'Fixture' }, location: { host: 'example.test' }, localStorage: { getItem: () => null }, fetch: (url, opts) => fetch(origin + url, opts) };
   s.Date = class extends Date { constructor(...args) { super(...(args.length ? args : [now])); } static now() { return Date.parse(now); } };
   s.window = s; s.WizCore = {}; s.WizBrand = { html: 'W' }; s.WizConfig = { timeZone: () => timeZone };
-  vm.runInNewContext(read('web/core/settings.js'), s);
+  vm.runInNewContext(withSettingsParts(read('web/core/settings.js')), s);
   vm.runInNewContext(read('web/core/schedules.js'), s);
   const roots = [];
   function mount() {
@@ -40,12 +45,41 @@ async function harness(t, { missing = false, shell = 'phone', timeZone = 'Europe
   };
   return { ...h, s, fixture, opened, notices, mount, act, input };
 }
-test('one registration is loaded by both entrypoints; colours only use Appearance tokens', () => {
-  for (const f of ['web/index.html', 'web/desktop.html']) assert.match(read(f), /core\/schedules\.js/);
+test('one registration is loaded by both entrypoints; colours only use Appearance tokens', async t => {
+  for (const f of ['web/index.html', 'web/desktop.html']) {
+    const doc = createDocument(); doc.documentElement.innerHTML = read(f).replace(/^<!doctype html>/i, '');
+    assert.equal(doc.querySelectorAll('script[src]').filter(x => x.getAttribute('src') === 'core/schedules.js').length, 1, f);
+  }
+  // The Schedules page as Settings draws it (the real settings.js + schedules.js), its sheet open too.
   const css = read('web/core/settings.css').split('/* Shared approved')[0];
   assert.doesNotMatch(css, /#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(|var\(--(?!wz-)/i);
-  assert.match(css, /background: transparent/);
-  assert.match(read('web/desktop/desktop.js'), /if \(settingsView.back\(\)\) return 'settings-page'; closeSettings\(\)/, 'desktop browser Back uses the shared nested Settings stack before closing');
+  const h = await harness(t); h.view.focus('schedules');
+  const page = createDocument(); page.body.innerHTML = h.root.innerHTML;
+  h.act('new'); const sheet = createDocument(); sheet.body.innerHTML = h.root.innerHTML;
+  const drawn = [...page.body.descendants(), ...sheet.body.descendants()];
+  assert.ok(drawn.some(e => e.classList.contains('sc-row')) && drawn.some(e => e.classList.contains('sc-sheet')), 'list and sheet drawn');
+  const COLOUR = ['color', 'background', 'background-color', 'border', 'border-color', 'border-left', 'outline', 'box-shadow'];
+  let styled = 0;
+  for (const el of drawn) for (const states of [[], [':focus-visible']]) {
+    const won = styles(el, [css], { states });
+    for (const k of COLOUR) if (won[k] !== undefined) {
+      styled++;
+      const vars = [...won[k].matchAll(/var\((--[\w-]+)/g)].map(m => m[1]);
+      assert.ok(vars.every(v => v.startsWith('--wz-')) && !/#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(/i.test(won[k]), `${el.className || el.localName} ${k}: ${won[k]}`);
+    }
+  }
+  assert.ok(styled > 10, `colours checked on the drawn page (${styled})`);
+  const link = page.body.querySelector('.sc-chat button');
+  assert.ok(link, 'the chat link'); assert.equal(styles(link, [css]).background, 'transparent');
+  // Desktop browser Back uses the shared nested Settings stack before closing (web/desktop/desktop-pickany.js).
+  const line = between(read('web/desktop/desktop-pickany.js'), "  watchEscape('settings',", '\n');
+  const run = nested => {
+    const watched = {}, closed = [];
+    vm.runInNewContext(line, { watchEscape: (name, active, back) => { watched[name] = back; }, settingsFocused: () => true, settingsView: { back: () => nested }, closeSettings: () => closed.push(1) });
+    return [watched.settings(), closed.length];
+  };
+  assert.deepEqual(run(true), ['settings-page', 0], 'a nested page goes back a level');
+  assert.deepEqual(run(false), ['settings', 1], 'at the top, Back closes Settings');
 });
 test('404 older Agent Service hides the category and body in both layouts', async t => {
   for (const shell of ['phone', 'desktop']) {

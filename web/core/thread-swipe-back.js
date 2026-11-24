@@ -3,7 +3,7 @@
  * an intentional swipe (swipe-intent.js: long drag or deliberate level flick) runs the shell's own Back step (linked thread -> parent, thread -> list).
  * It never leaves or exits the app. Code blocks, tables, the composer, sliders, inputs and selected text keep their
  * own horizontal gestures. Runs as a WosSkinHost built-in, so it gets the skin hook API's guards and cleanup.
- * Channels pages (wizard-ux issue 1467, switch wizard/chat-channels; James, 15 Nov 2026: "channels on the left,
+ * Channels pages (wizard-ux issue 1467; James, 15 Nov 2026: "channels on the left,
  * activity on the right ... swipe anywhere on the screen to swipe back and forth"): the same gesture and threshold on
  * the Chats list, read from the list's own markup, so with the switch off the list has no swipe. On the Chats home the
  * list body follows the finger between the Channels page (left) and the Activity page (right), the header tabs follow
@@ -37,7 +37,6 @@ import { engages, commits, COMMIT_PX } from './swipe-intent.js';
       node.style.transform = `translateX(${side * 48}px)`; node.style.opacity = '.4';
       api.frame(() => api.frame(() => reset(node)));
     };
-    const chanOn = () => { try { return (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/chat-channels'); } catch (e) { return false; } };
     // Which view a Chats window shows: its thread, a channel's feed, the Channels | Activity home, or a plain list
     // (VIEWS: window -> { key, sid, trail }). The slide moves the window's own Chats container (stable across repaints: a thread paints a skeleton, then its
     // words, as new nodes), never the view node.
@@ -59,7 +58,7 @@ import { engages, commits, COMMIT_PX } from './swipe-intent.js';
       const was = VIEWS.get(el), sid = key === 'thread' ? threadId(el) : null;
       const trail = key === 'thread' && was?.key === 'thread' ? was.trail : [];
       VIEWS.set(el, { key, sid, trail });
-      if (!was || !chanOn()) return;
+      if (!was) return;
       let side = DEPTH[key] < DEPTH[was.key] ? -1 : DEPTH[key] > DEPTH[was.key] ? 1 : 0;
       if (!side && key === 'thread' && sid && was.sid && sid !== was.sid) {
         if (trail.at(-1) === sid) { trail.pop(); side = -1; } else { trail.push(was.sid); side = 1; }
@@ -148,8 +147,8 @@ import { engages, commits, COMMIT_PX } from './swipe-intent.js';
           return;
         }
         if (s.mode === 'page') preview(s, false);
-        if (go && s.on && chanOn()) {
-          // Back with Channels on: the leaving view stays where the finger put it; the repaint swaps it for the
+        if (go && s.on) {
+          // Back: the leaving view stays where the finger put it; the repaint swaps it for the
           // previous view, which slides in from the left (step). A view that is still on screen afterwards (Back did
           // nothing, or repaints later) eases back after a frame, as a cancelled swipe does.
           s.th.style.transition = 'none';
@@ -177,7 +176,7 @@ import { engages, commits, COMMIT_PX } from './swipe-intent.js';
     // Classic desktop draws the Chats list in its own pane, outside the shell's Chats root: with Channels on, bind
     // that pane too (list swipes only), so its feed and pages swipe as on the phone (wizard-ux issue 1548).
     const ensurePane = ({ part, el } = {}) => {
-      if (part !== 'list' || !el || bound.has(el) || !chanOn() || !viewOf('list', el)) return;
+      if (part !== 'list' || !el || bound.has(el) || !viewOf('list', el)) return;
       for (let i = refs.length - 1; i >= 0; i--) {
         const r = refs[i].deref(); if (!r) { refs.splice(i, 1); continue; }
         if (r.contains && (r.contains(el) || (el.contains && el.contains(r)))) return;

@@ -6,8 +6,12 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
-const kit = readFileSync(new URL('../web/core/chat-kit.js', import.meta.url), 'utf8');
-const power = readFileSync(new URL('../web/core/chat-power.js', import.meta.url), 'utf8');
+import { withAppParts } from './fixtures/app-parts.mjs';
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
+import { withShellParts } from './fixtures/shell-parts.mjs';
+import { between, block, runRecording } from './fixtures/source-slice.mjs';
+const kit = withShellParts(readFileSync(new URL('../web/core/chat-kit.js', import.meta.url), 'utf8'));
+const power = withShellParts(readFileSync(new URL('../web/core/chat-power.js', import.meta.url), 'utf8'));
 
 function harness({ agent = '', thread = null, chan = { id: 'launch', name: 'Launch', agent: agent || 'hermes' } } = {}) {
   const sent = [], filed = [], recorded = [], privAsked = [], state = {};
@@ -68,7 +72,7 @@ test('the box model label opens the new-chat model menu without private-agent mo
 
 // The real composer seal helpers from core/chats.js: a take pinned to channel A's box takes A's box (never channel B's
 // in front by Send, never the New chat draft) and gives it back to A when the take is dropped.
-const chats = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
+const chats = withParts(withShellParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8')));
 function seals(d = {}) {
   const a = chats.indexOf('  const composerKey = sid =>'), b = chats.indexOf('  // Typed words first, then what was said');
   assert.ok(a > 0 && b > a);
@@ -103,8 +107,8 @@ test('a channel take seals the box of the channel it started in, and gives the w
 
 // The model is still read at Send (wizard-ux#1218), but a channel take keeps the agent it started with: by Send another
 // agent's channel may be in front, and its chat is filed into the channel it started in (Codex P1).
-test('phone and desktop: a channel take never re-routes to the agent of the channel in front by Send', () => {
-  const app = readFileSync(new URL('../web/app.js', import.meta.url), 'utf8'), desk = readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8');
+test('phone and desktop: a channel take never re-routes to the agent of the channel in front by Send', async () => {
+  const app = withAppParts(withShellParts(readFileSync(new URL('../web/app.js', import.meta.url), 'utf8'))), desk = withShellParts(readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8'));
   const tap = app.slice(app.indexOf('  function sendTapRoute('), app.indexOf('  // A take that sends nothing'));
   let live = { model: 'b-model', provider: 'b', agent: 'container' };
   const ctx = { CHATS: { modelRoute: () => live }, window: { WosModels: { snapshot: () => null } } };
@@ -120,18 +124,44 @@ test('phone and desktop: a channel take never re-routes to the agent of the chan
   const d = {}; vm.createContext(d); vm.runInContext(line.replace('const chanRoute', 'this.chanRoute'), d);
   assert.equal(d.chanRoute(() => ({ model: 'b', agent: 'container' }), () => start)().model, 'a-model');
   assert.equal(d.chanRoute(() => ({ model: 'a2', agent: 'host' }), () => start)().model, 'a2');
-  assert.match(desk, /if \(vRouteAt && typeof vSpace === 'string'\) vRouteAt = chanRoute\(resolveRoute, \(\) => vRoute\);/);
-  assert.match(desk, /if \(box\) vRouteAt = chanRoute\(vRouteAt, \(\) => vRoute\);/);
-  assert.match(desk, /CHATS\.takeComposer\(sealAt\.wid, sealAt\.sid, sealAt\.box\)/);
+  // The desktop voice key (real desktop.js) started in a channel: by Send another agent is in front, the take keeps its own.
+  const route = { now: start };
+  const CHATS = { modelRoute: () => route.now, chanBox: () => 'chan:host:launch', takeComposer: (...took) => (route.took = took, null) };
+  const keyTake = runRecording(line + '\n' + between(desk, '        const resolveRoute = () => vFeedback', '\n        if (!vConversation && !vRoute)'), {
+    CHATS, window: { WosModels: { snapshot: () => null } }, vFeedback: null, forceNew: false, f: { id: 'win', app: 'chats' }, vTarget: 'win', vSnapshot: { thread: '__new__' }, vConversation: null, vSpace: 'launch' });
+  route.now = { model: 'b-model', agent: 'container' }; assert.equal(keyTake.vRouteAt().model, 'a-model', 'voice key: the starting agent\'s route');
+  route.now = { model: 'a2', agent: 'host' }; assert.equal(keyTake.vRouteAt().model, 'a2', 'voice key: same agent, the newer model');
+  keyTake.vSpace = null; route.now = start; vm.runInContext('{' + between(desk, '        const resolveRoute = () => vFeedback', '\n        if (!vConversation && !vRoute)') + '\n}', keyTake);
+  route.now = { model: 'b-model', agent: 'container' }; assert.equal(keyTake.vRouteAt().model, 'b-model', 'voice key outside a channel: read at Send, as before');
+  // The channel box's own mic (real desktop.js reply take): the same.
+  route.now = start;
+  const boxTake = runRecording(line + '\nthis.run = async () => {\n' + between(desk, "    const box = sid === '__new__' ? CHATS.chanBox", '    vFiles?.close();') + '};', { CHATS, wid: 'win', sid: '__new__', toast() {} });
+  await boxTake.run(); route.now = { model: 'b-model', agent: 'container' };
+  assert.equal(boxTake.vRouteAt().model, 'a-model', 'box mic: the starting agent\'s route');
+  // Send takes the words from the box the take started in.
+  const seal = runRecording(between(desk, '    const t = sealAt ? CHATS.takeComposer(', '\n'), { CHATS, sealAt: { wid: 'win', sid: '__new__', box: 'chan:host:launch' } });
+  assert.deepEqual([...route.took], ['win', '__new__', 'chan:host:launch'], 'the sealed words come from the take\'s own box'); assert.ok(seal);
 });
 
 test('a box-mic take resumed after a reload (no tap pin left) still files into the channel carried by the take', async () => {
   const h = harness(); // no mic tap in this page: the pin comes with the take (phone replyTake, desktop vReply)
   const it = await h.api.sendVoiceTo('win', '__new__', new Blob(['a']), [], false, null, null, null, undefined, '', 'launch');
   assert.equal(h.sent[0].space, false); assert.deepEqual(h.filed, [['launch', it.sessionId, true]]);
-  const app = readFileSync(new URL('../web/app.js', import.meta.url), 'utf8');
-  assert.match(app, /\.\.\.\(typeof r\.box === 'string' \? \{ box: r\.box \} : \{\}\), \.\.\.\(typeof r\.space === 'string' \? \{ space: r\.space \} : \{\}\)/, 'the reply-take record keeps box and Space over a reload');
-  assert.match(app, /CHATS\.sendVoiceTo\(rt\.wid, rt\.sid, audio, files, snap\.seal \|\| false, snap\.route, snap\.custodyId, null, undefined, '', rt\.space\)/);
+  const app = withAppParts(withShellParts(readFileSync(new URL('../web/app.js', import.meta.url), 'utf8')));
+  // The phone's reply-take record (real app.js replyTake) keeps box and Space over a reload ...
+  const store = new Map();
+  const rec = runRecording(block(app, '  function replyTake(') + '\nthis.replyTake = replyTake;', { W: { win: {} }, localStorage: { getItem: k => store.get(k) ?? null, setItem: (k, v) => store.set(k, v), removeItem: k => store.delete(k) } });
+  rec.replyTake('take-1', { wid: 'win', sid: '__new__', box: 'chan:hermes:launch', space: 'launch' });
+  const back = { ...rec.replyTake('take-1') };
+  assert.equal(back.box, 'chan:hermes:launch'); assert.equal(back.space, 'launch', 'the reply-take record keeps box and Space over a reload');
+  assert.equal(rec.replyTake('take-2'), null, 'another take: no pin');
+  // ... and the resumed take sends with that Space (real app.js reply branch).
+  const sends = [];
+  const resumed = runRecording(`this.run = async function () {\n${block(app, '    if (rt) {\n      const files = takeFiles();')}\n};`, {
+    rt: back, audio: 'AUDIO', snap: { seal: false, route: { model: 'm' }, custodyId: 'c1' }, takeFiles: () => [], V: {},
+    CHATS: { sendVoiceTo: async (...a) => { sends.push(a); } }, releaseNative() {}, unhold() {}, OUTBOX: { transition: async () => {} } });
+  await resumed.run();
+  assert.equal(sends.length, 1); assert.deepEqual([sends[0][0], sends[0][1], sends[0].at(-1)], ['win', '__new__', 'launch'], 'filed into the channel carried by the take');
 });
 
 // The real addFiles from core/chats.js: an upload that finishes after another channel opened is saved with its own

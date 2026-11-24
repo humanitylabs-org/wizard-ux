@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
+import { withServicesParts } from './fixtures/app-services-parts.mjs';
 const source = readFileSync(new URL('../web/core/bridge.js', import.meta.url), 'utf8');
 function fixture(extra = {}) {
   const timers = new Map(), messages = []; let seq = 0;
@@ -40,7 +41,7 @@ test('missing bridge refuses without pretending to create an ID', async () => {
   const f = fixture({ wizardDevicePort: undefined }); await assert.rejects(f.call('identity.setup'), /no native shell/);
 });
 
-const servicesSource = readFileSync(new URL('../web/core/app-services.js', import.meta.url), 'utf8');
+const servicesSource = withServicesParts(readFileSync(new URL('../web/core/app-services.js', import.meta.url), 'utf8'));
 function appFixture({ native = true, source = 'apps.json', kind = 'wizard' } = {}) {
   const location = new URL('https://wizard.example/wizard-os-home/'), calls = [], replies = [], listeners = {};
   const child = { location: new URL('/profiles/', location), document: {}, addEventListener() {}, postMessage(m) { replies.push(m); } };

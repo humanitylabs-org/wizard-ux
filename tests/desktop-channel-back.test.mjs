@@ -7,8 +7,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
+import { withParts } from './fixtures/chats-parts.mjs';
+import { withWebParts } from './fixtures/web-parts.mjs';
+import { deskWorld, layout } from './fixtures/ai-apps-world.mjs';
+import { cascade, parseCss } from './fixtures/mini-css.mjs';
+import { runRecording, block } from './fixtures/source-slice.mjs';
+import { createDocument } from './fixtures/mini-dom.mjs';
 
-const read = f => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8');
+const read = f => withWebParts(readFileSync(new URL(`../${f}`, import.meta.url), 'utf8'));
 const js = read('web/layouts/ai-apps/desktop.js'), css = read('web/layouts/ai-apps/desktop.css');
 const between = (s, a, b) => { const i = s.indexOf(a); assert.ok(i >= 0, a); const j = s.indexOf(b, i); assert.ok(j > i, b); return s.slice(i, j); };
 
@@ -66,12 +72,55 @@ test('an older post opened from the feed shows its own title beside Back', () =>
   const n = world(); n.post('old3'); n.paint('old3'); assert.equal(n.c.t.feedTitle('old3'), '', 'no title on the post: empty, as before');
   x.paint('a1'); assert.equal(x.c.t.feedTitle('old1'), '', 'spent once another chat is in the column');
   // the header takes the clicked post's title first (lists match by id alone: a routed post may share a main chat's
-  // id), then the lists; feedTitle is hoisted (paintTop can run before its line)
-  assert.match(js, /chatThread \? feedTitle\(chatThread\) \|\| titleOf\(chatThread\) : '';\n    tt\.textContent = docked \? t : '';/);
-  assert.match(js, /\n  function feedTitle\(sid\) \{/);
-  // the feed's posts carry their title
-  assert.match(read('web/core/chats.js'), /data-chrow="\$\{esc\(chanKey\(s\)\)\}" data-chtitle="\$\{esc\(s\.title \|\| ''\)\}">/);
+  // id), then the lists (the real paintTop); the wiring test mounts the real view, so a paintTop that ran before
+  // feedTitle exists would throw there
+  const top = paintTopRun({ feedTitle: sid => (sid === 'old1' ? 'Plan the launch' : '') });
+  assert.equal(top.tt.textContent, 'Plan the launch', 'the post\'s own title over the list\'s');
+  assert.equal(top.backAt, 'Plan the launch', 'then its Back repaints');
+  assert.equal(paintTopRun({ feedTitle: () => '' }).tt.textContent, 'Main chat', 'no post title: the lists');
+  assert.equal(paintTopRun({ feedTitle: () => 'x', docked: false }).tt.textContent, '', 'not docked: no title');
+  // the feed's real posts (core/chats-feed.js) carry their title, and a click on one hands it to the header
+  const doc = createDocument();
+  doc.body.innerHTML = channelFeedPart().channelFeed({ id: 'w' }, { id: 'apps', name: 'WizardOS Apps' }, [{ id: 'old9', title: 'Ship <it>' }]);
+  const f = world(); f.listeners.find(l => l.t === f.c.feedBox).fn({ target: doc.querySelector('[data-chopen]') }); f.paint('old9');
+  assert.equal(f.c.t.feedTitle('old9'), 'Ship <it>');
 });
+
+// core/chats-feed.js's part factory with stand-ins for the Chats names it reads (as agent-inbox-alert-feedback.test.mjs)
+function channelFeedPart() {
+  const window = { WizCore: {}, WizConfig: { owner: () => 'James' } };
+  vm.runInNewContext(readFileSync(new URL('../web/core/chats-feed.js', import.meta.url), 'utf8'), { window });
+  const esc = v => String(v).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[ch]);
+  return window.WizCore.chatsParts.feed({ agentName: () => 'Wizard', agentRec: id => ({ id }), ago: () => '', AGS: () => null, CHAN_CLAMP: 240,
+    chanActs: {}, chanArchived: () => false, chanAt: () => 0, chanChanged: () => false, chanGenAgent: () => '', chanKey: r => r.id, chanMore: new Set(),
+    chanNeeds: () => false, chanNewN: () => 0, chanPostOrder: () => 0, chanPostText: () => ({ text: 'hi' }), chanReadKey: () => 'k', chanReplies: () => null,
+    chanStart: () => null, chanUnread: () => false, esc, firstAgent: () => '', firstPost: () => null, firstWant: new Set(), focusedAgent: () => '',
+    focusOf: () => null, inChannel: () => true, isWorking: () => false, KIT: null, LIVE: { cardAt: () => '' }, pullFirst() {}, replyWant: new Set(), rowDraft: () => false });
+}
+
+// the real paintTop (desktop.js) on a thread in the column; everything it paints besides the title records
+function paintTopRun({ feedTitle, docked = true, app = '', thread = 'old1', chatThread = null, feedOn = () => null }) {
+  const c = { api: { route: () => ({ view: 'thread', thread, desk: 1 }) }, noteOn: () => false, chatWindows: () => [], focusOn: () => false,
+    here: () => ({ thread: app ? null : thread, app }), onMainChats: () => true, pane: app ? { id: app } : null, NOTE: '__note__', DRAFT: '__draft__', FEED: '__feed__',
+    feedOn, feedTitle, titleOf: () => 'Main chat', docked, tt: {}, root: { dataset: {} }, cX: { setAttribute() {} }, chatThread, frontApp: '', lastThread: undefined,
+    behindThread: () => 'behind', paintSplit() {}, anim() {} };
+  c.paintBack = () => { c.backAt = c.tt.textContent; };
+  c.feedGone = () => { (c.gone = (c.gone || 0) + 1); };
+  return runRecording(block(js, '  function paintTop(r = api.route()) {') + '\npaintTop();', c);
+}
+
+// The three sidebar opens in desktop.js (an Activity row's click, the rail's openChat, ⌥↓ / ⌥↑ stepReady), each run
+// with a post opened from the feed (fromFeed) and a feed brought in front of an app (feedFocus) before it.
+function sidebarOpens() {
+  const ctx = extra => { const c = { fromFeed: { sid: 'p1' }, feedFocus: 'app', opened: [], q: false, ...extra };
+    c.api = { sessions: { open: id => c.opened.push(id) }, listen: (t, type, fn) => { c.click = fn; }, route: () => ({}) }; return c; };
+  const at = js.indexOf("api.listen(b, 'click', () => { if (q) setSearch(false);");
+  const row = runRecording(js.slice(at, js.indexOf('\n', at)), ctx({ s: { id: 'x1', note: false } })); row.click();
+  const rail = runRecording(block(js, '  function openChat(id, key) {') + "\nopenChat('x1', 'ready');", ctx({ panes: { get: () => ({ focus: 'chats' }), set() {} } }));
+  const step = runRecording(block(js, '  function stepReady(dir) {') + '\nstepReady(1);', ctx({ readyIds: () => ['x1', 'x2'], here: () => ({}), stepAt: null,
+    readyStep: ids => ({ id: ids[0], wrapped: false }) }));
+  return { 'an Activity row': row, 'the rail': rail, '⌥↓ / ⌥↑': step };
+}
 
 test('a thread opened from Activity or the sidebar has no Back; another chat spends the post\'s Back', () => {
   const x = world();
@@ -86,23 +135,47 @@ test('a thread opened from Activity or the sidebar has no Back; another chat spe
   const n = world(); n.c.open = null; n.post('s1'); n.paint('s1'); assert.equal(n.cBack.hidden, true, 'no feed open: none');
 });
 
-test('wiring: the Back sits left of the title, every sidebar open clears it, the header repaints it; tokens only', () => {
-  assert.match(js, /const cBack = el\('button', 'aad-cback', \{ type: 'button' \}\); cBack\.hidden = true;\n  cTop\.append\(cBack, tt, cX\);/);
-  assert.match(js, /tt\.textContent = docked \? t : ''; tt\.title = t; paintBack\(\);/);
-  assert.match(js, /stepAt = s\.id; fromFeed = null; api\.sessions\.open\(s\.id\);/, 'an Activity row');
-  assert.match(js, /noteWant = id\.startsWith\('notif:'\); fromFeed = null; api\.sessions\.open\(id\);/, 'the rail');
-  assert.match(js, /noteWant = nx\.id\.startsWith\('notif:'\); fromFeed = null; api\.sessions\.open\(nx\.id\);/, '⌥↓ / ⌥↑');
-  // Back never exits (AGENTS.md): the button is the in-page Esc path only; closeChat swaps the column, no history step.
-  assert.match(js, /api\.listen\(cBack, 'click', \(\) => chatBack\(\)\);/);
-  const up = between(js, '  function chatBack() {', '\n  }\n');
-  assert.match(up, /if \(!closeChat\(\)\) return false;/, 'Back is closeChat first (the post to its feed, the feed or a chat closed)');
-  assert.doesNotMatch(up, /history\.|location\.|\.back\(\)/, 'no history navigation in the list Back either');
-  const close = js.slice(js.indexOf('  function closeChat() {'), js.indexOf('\n  }\n', js.indexOf('  function closeChat() {')));
-  assert.doesNotMatch(close, /history\.|location\.|\.back\(/, 'no history navigation in the Back path');
-  assert.match(close, /if \(chatThread === FEED\)[^\n]*channelBack\?\.\(\)/, 'Esc on the feed itself still closes the feed');
-  const rule = css.match(/\.aad-cback \{([^}]+)\}/)[1];
-  assert.doesNotMatch(rule.replace(/var\([^)]*\)/g, ''), /#[0-9a-f]{3,8}\b|rgb/i, 'colours from tokens');
-  assert.match(css, /\.aad-cback\[hidden\] \{ display: none; \}/);
+test('wiring: the Back sits left of the title, every sidebar open clears it, the header repaints it; tokens only', async () => {
+  // the real desktop AI apps view, drawn on the small DOM
+  const d = deskWorld(), { w } = d;
+  w.html.setAttribute('data-shell', 'desktop'); w.html.setAttribute('data-layout', 'ai-apps');
+  (await layout()).default(w.api);
+  const cBack = w.q('.aad-cback');
+  assert.ok(cBack, 'the chat header has a Back');
+  const top = cBack.parentNode.children;
+  assert.equal(top[0], cBack, 'left of everything');
+  assert.ok(top[1].classList.contains('aad-tt'), 'then the title');
+  assert.ok(top.at(-1).classList.contains('aad-cx'), 'the close stays last');
+  assert.equal(cBack.tagName, 'BUTTON'); assert.equal(cBack.getAttribute('type'), 'button');
+  assert.equal(cBack.hidden, true, 'hidden until a thread is opened from a feed');
+  // its look: tokens only, and hidden means gone
+  const sheet = parseCss(css), look = cascade(cBack, sheet);
+  for (const k of ['color', 'background', 'border-color']) if (look[k]) assert.doesNotMatch(look[k].value.replace(/var\([^)]*\)/g, ''), /#[0-9a-f]{3,8}\b|rgb/i, `${k} from tokens`);
+  cBack.setAttribute('hidden', '');
+  assert.equal(cascade(cBack, sheet).display?.value, 'none');
+  // every sidebar open clears it (Activity row, the rail, ⌥↓ / ⌥↑; sidebarOpens runs each) and the header repaints it
+  // (paintTop calls paintBack after the title: the older post test runs it)
+  for (const [how, o] of Object.entries(sidebarOpens())) {
+    assert.equal(o.fromFeed, null, `${how}: the post's Back is spent`);
+    assert.equal(o.feedFocus, null, `${how}: the feed's app hand-back is forgotten`);
+    assert.deepEqual(o.opened, ['x1'], `${how}: then the chat opens`);
+  }
+  // Back never exits (AGENTS.md): the button is the in-page Esc path only (the first test clicks it: closeChat);
+  // closeChat swaps the column, no history step.
+  const up = between(js, '  function chatBack() {', '\n  }\n') + '\n  }';
+  const back = env => runRecording(up + '\nglobalThis.back = chatBack;', { one: () => false, peekable: () => false, FEED: '__feed__', chatThread: null, ...env });
+  const refused = back({ listBack: () => '', closeChat: () => false });
+  assert.equal(refused.back(), false, 'Back is closeChat first: nothing closed, Back goes on');
+  const closed = back({ listBack: () => '', closeChat: () => true });
+  assert.equal(closed.back(), true);
+  for (const c of [refused, closed]) assert.ok(!c.calls.some(([n]) => /^(history|location)\b|\.back$/.test(n)), 'no history navigation in the list Back either');
+  const close = js.slice(js.indexOf('  function closeChat() {'), js.indexOf('\n  }\n', js.indexOf('  function closeChat() {'))) + '\n  }';
+  const shut = runRecording(close + '\nglobalThis.close = closeChat;', { docked: true, FEED: '__feed__', chatThread: '__feed__', feedBack: () => false });
+  assert.equal(shut.close(), true);
+  assert.equal(shut.chatThread, null, 'Esc on the feed itself still closes the feed');
+  assert.ok(shut.calls.some(([n]) => n === 'api.sessions.channelBack'), 'through Chats\' own channel Back');
+  assert.ok(!shut.calls.some(([n]) => /^(history|location)\b/.test(n)), 'no history navigation in the Back path');
+  assert.equal(runRecording(close + '\nglobalThis.close = closeChat;', { docked: false }).close(), false, 'not docked: nothing to close');
   assert.doesNotMatch(read('web/layouts/ai-apps/layout.js'), /aad-cback|fromFeed/, 'the phone is unchanged');
 });
 
@@ -133,8 +206,7 @@ test('closeChat: channel steps and a plain chat closing keep the view mode', () 
 // A channel opened with an app centred (wizard-ux issue 1344): its feed comes to the front the way a chat does (the
 // chat slot takes the focus), and closing the feed gives the front back to the app, in the same view.
 test('feedOpened brings the feed to the front; closing the feed gives it back to the app', () => {
-  const opened = between(js, '  function feedOpened(open) {', "  api.listen(globalThis, 'wos:channel-feed'");
-  assert.match(opened, /function feedGone\(\)/, 'the hand-back helper sits with feedOpened');
+  const opened = between(js, '  function feedOpened(open) {', "  api.listen(globalThis, 'wos:channel-feed'"); // (with feedGone: closeEvent runs it)
   const close = between(js, '  function closeChat() {', '  function setWide(on) {');
   const desk = ({ mode = 'centre', focus = 'app', app = 'pages', fromFeed = false } = {}) => {
     const c = { FEED: '__feed__', docked: true, chatThread: null, noteWant: false, draftWant: false, calls: [], mode, focus, pane: app ? { id: app } : null,
@@ -168,9 +240,12 @@ test('feedOpened brings the feed to the front; closing the feed gives it back to
   const own = desk(); own.open(); assert.equal(own.focus, 'chats'); own.closeEvent();
   assert.equal(own.focus, 'app', 'Back to channels gives the front back'); assert.equal(own.mode, 'centre');
   // opening a chat from the sidebar, the rail or ⌥↓ forgets the feed's app: that chat keeps the front
-  for (const re of [/noteWant = !!s\.note; feedFocus = null; stepAt = s\.id;/, /feedFocus = null; railLast = key; stepAt = id;/, /feedFocus = null; stepAt = nx\.id;/]) assert.match(js, re);
-  // the feed gone on a repaint (its channel closed while it was in the column): the same hand-back
-  assert.match(js, /else if \(chatThread === FEED \? !feedOn\(\) : !chatThread\) \{ if \(chatThread === FEED\) feedGone\(\); chatThread = !chatThread && feedOn\(\) \? FEED : behindThread\(\); \}/);
+  for (const [how, o] of Object.entries(sidebarOpens())) assert.equal(o.feedFocus, null, how);
+  // the feed gone on a repaint (its channel closed while it was in the column, an app in front): the same hand-back
+  const gone = paintTopRun({ feedTitle: () => '', app: 'pages', chatThread: '__feed__' });
+  assert.equal(gone.gone, 1, 'feedGone'); assert.equal(gone.chatThread, 'behind', 'the thread behind it docks');
+  const kept = paintTopRun({ feedTitle: () => '', app: 'pages', chatThread: '__feed__', feedOn: () => ({ id: 'launch', name: 'Launch' }) });
+  assert.equal(kept.gone, undefined, 'its channel still open: no hand-back'); assert.equal(kept.chatThread, '__feed__');
   // no app open: nothing to give the front back to
   const bare = desk({ app: '' }); bare.pane = null; bare.open(); bare.close(); assert.equal(bare.focus, 'chats');
 });
@@ -247,15 +322,38 @@ test('listBack: the list one level up whenever it is not beside the chat; chatBa
   // beside it: Back is closeChat alone (no peek), as Esc was
   const w = run({ side: 'open', narrow: false }); w.go(); assert.deepEqual(w.calls, ['closeChat']);
   const p = run({ fromFeed: true }); p.go(); assert.deepEqual(p.calls, ['closeChat'], 'a post to its feed, no list');
-  // the sidebar's mode follows peek wherever the list is not beside; paintSide repaints the Back
-  assert.match(js, /peek && peekable\(\) \? 'over' : narrow\(\) \|\| folded \? 'rail' : 'open';/);
-  assert.match(js, /if \(\(one\(\) \|\| !peekable\(\)\) && peek\)/);
-  assert.match(js, /applySizes\(\);\n    paintBack\(\); \/\/ \(the list beside the chat or not/);
-  // Esc is the same Back in every mode
-  assert.match(js, /if \(panes\.get\(\)\.focus === 'chats' && \(feedBack\(\) \|\| listBack\(\)\)\) \{ chatBack\(\); return true; \}/);
-  assert.match(js, /else if \(docked\) chatBack\(\);/);
-  // full screen shows the list over it when Back asks for it
-  assert.match(css, /\[data-aad-mode="full"\]:not\(\[data-aad-side="over"\]\) \.aad-side/);
+  // the sidebar's mode follows peek wherever the list is not beside (the real sideWant / syncSide)
+  const sides = between(js, '  const narrow = () => (globalThis.innerWidth', '  function paintSide(relayout = true) {');
+  const side = env => { const c = { innerWidth: 1440, one: () => false, oneSplit: () => false, oneList: false, pane: null, folded: false, peek: false, offPeek: null,
+    root: { dataset: { aadSide: 'open', aadChat: '', aadSplit: '' } }, CROWDED_FROM: 900, DOCKED_FROM: 900, mode: 'tiled', ...env };
+    c.panes = { get: () => ({ mode: c.mode }) }; c.paintSide = () => { c.painted = (c.painted || 0) + 1; };
+    return runRecording(sides + '\nglobalThis.want = sideWant; globalThis.sync = syncSide;', c); };
+  assert.equal(side({ peek: true, mode: 'full' }).want(), 'over', 'full screen: Back peeks the list over');
+  assert.equal(side({ peek: true, innerWidth: 600 }).want(), 'over', 'narrow too');
+  assert.equal(side({ innerWidth: 600 }).want(), 'rail'); assert.equal(side({ folded: true }).want(), 'rail');
+  assert.equal(side({ peek: true }).want(), 'open', 'wide, not folded: peek means nothing, the list is beside');
+  { const s1 = side({ peek: true, offPeek: () => { s1.released = true; } }); s1.sync(); assert.equal(s1.peek, false, 'the list beside again: peek ends'); assert.equal(s1.released, true); }
+  { const s2 = side({ peek: true, mode: 'full', root: { dataset: { aadSide: 'over' } } }); s2.sync(); assert.equal(s2.peek, true); assert.equal(s2.painted, undefined, 'full screen keeps it'); }
+  { const s3 = side({ peek: true, one: () => true, mode: 'full' }); s3.sync(); assert.equal(s3.peek, false, 'one app at a time: no peek'); }
+  // paintSide repaints the Back after the sizes
+  const ps = runRecording(block(js, '  function paintSide(relayout = true) {') + '\npaintSide(false);', { sideWant: () => 'over', root: { dataset: {} }, reduced: () => true });
+  const order = ps.calls.map(([n]) => n);
+  assert.ok(order.includes('paintBack') && order.indexOf('applySizes') < order.indexOf('paintBack'), order.join());
+  // Esc is the same Back in every mode: full screen is the Esc test below; tiled, docked: chatBack; else channel Back
+  const surf = block(js, '  api.back.surface?.(() => {');
+  const esc = env => { const c = { calls: [], doc: { activeElement: null }, pane: null, one: () => false, docked: true, panes: { get: () => ({ mode: 'tiled' }) },
+    chatBack: () => { c.calls.push('chatBack'); return true; }, paintList: () => c.calls.push('paintList'), lastSurface: 'chat', ...env };
+    c.api = { back: { surface: fn => { c.fn = fn; } }, sessions: { channelBack: () => { c.calls.push('channelBack'); return true; } } };
+    runRecording(surf + ');', c); return { ok: c.fn(), calls: c.calls }; };
+  assert.deepEqual(esc({}), { ok: true, calls: ['chatBack'] }, 'docked: Esc is the chat\'s Back');
+  assert.deepEqual(esc({ docked: false }), { ok: true, calls: ['channelBack', 'paintList'] }, 'nothing docked: Channels\' own Back');
+  // full screen shows the list over it when Back asks for it (the real desktop.css on the sidebar)
+  const sheet = parseCss(css), html = createDocument().documentElement;
+  for (const [k, v] of Object.entries({ 'data-shell': 'desktop', 'data-layout': 'ai-apps', 'data-aad-mode': 'full' })) html.setAttribute(k, v);
+  const sideEl = createDocument().createElement('div'); sideEl.className = 'aad-side'; html.appendChild(sideEl);
+  assert.equal(cascade(sideEl, sheet).display?.value, 'none', 'full screen: no sidebar');
+  html.setAttribute('data-aad-side', 'over');
+  assert.notEqual(cascade(sideEl, sheet).display?.value, 'none', 'Back asked for it: the list over the page');
 });
 
 // A narrow window (one app at a time, the list alone; wizard-ux issue 1452): a channel picked in the list shows its feed,

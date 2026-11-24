@@ -6,9 +6,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import { nginxShell } from './fixtures/w1-nginx.mjs';
 
 const shellJs = fs.readFileSync(new URL('../web/core/shell.js', import.meta.url), 'utf8');
-const nginx = fs.readFileSync(new URL('../packaging/nginx.conf.template', import.meta.url), 'utf8');
 
 function runShell({ page = 'phone', search = '', ua = 'Mozilla/5.0 (X11; Linux x86_64)', touch = false, single, protocol = 'https:', stored } = {}) {
   const cookies = [], store = new Map(stored ? [['wux.shell', stored]] : []);
@@ -48,26 +48,23 @@ test('a pinned-app session (always the phone page) leaves the device choice alon
 });
 
 test('nginx sends only a remembered desktop asking for the plain phone page to desktop.html', () => {
-  assert.match(nginx, /map \$args \$wizard_shell_args \{ default 0; "~\(\?:\^\|&\)\(\?:shell\|app-session\)\(\?:\[=&\]\|\$\)" 1; \}/);
-  assert.match(nginx, /map "\$cookie_wux_shell\|\$request_method\|\$uri\|\$wizard_shell_args" \$wizard_desktop_page \{/);
-  assert.match(nginx, /"~\^desktop\\\|\(\?:GET\|HEAD\)\\\|\/wizard-os-home\/\(\?:index\\\.html\)\?\\\|0\$" "\/wizard-os-home\/desktop\.html";/);
-  assert.match(nginx, /"~\^desktop\\\|\(\?:GET\|HEAD\)\\\|\/wizard-ux\/\(\?:index\\\.html\)\?\\\|0\$" "\/wizard-ux\/desktop\.html";/);
-  // Server level, before any location: deep links (?session=, ?open=) and the hash travel with it.
-  const server = nginx.slice(nginx.indexOf('  server {'));
-  assert.ok(server.indexOf('if ($wizard_desktop_page) { return 302 $wizard_desktop_page$is_args$args; }') < server.indexOf('location '));
+  const shell = nginxShell();
+  try {
+    const go = (cookie, uri, args = '', method = 'GET') => { const r = shell.request({ method, uri, args, cookies: cookie ? { wux_shell: cookie } : {} }); return r.status === 302 ? r.redirect : r.status; };
+    // Server level, before any location: deep links (?session=, ?open=) travel with it.
+    assert.equal(go('desktop', '/wizard-os-home/'), '/wizard-os-home/desktop.html');
+    assert.equal(go('desktop', '/wizard-os-home/index.html', 'session=abc&open=notes'), '/wizard-os-home/desktop.html?session=abc&open=notes');
+    assert.equal(go('desktop', '/wizard-os-home/', '', 'HEAD'), '/wizard-os-home/desktop.html');
+    assert.equal(go('desktop', '/wizard-ux/'), '/wizard-ux/desktop.html');
+    // the override, a pinned app, the desktop page itself, a write, a phone and no cookie are served as they are
+    assert.equal(go('desktop', '/wizard-os-home/', 'shell=phone'), 200);
+    assert.equal(go('desktop', '/wizard-os-home/', 'app-session=notes'), 200);
+    assert.equal(go('desktop', '/wizard-os-home/desktop.html'), 200);
+    assert.equal(go('desktop', '/wizard-os-home/', '', 'POST'), 403);
+    assert.equal(go('phone', '/wizard-os-home/'), 200);
+    assert.equal(go('', '/wizard-os-home/'), 200);
+    assert.equal(go('desktop', '/wizard-os-home/core/shell.js'), 200, 'the phone page\'s own files are never moved');
+  } finally { shell.done(); }
 });
 
-test('the map keys behave like nginx will match them', () => {
-  const rx = [...nginx.matchAll(/"~(\^desktop[^"]+)" "([^"]+)";/g)].map(m => [new RegExp(m[1].replace(/\\\\/g, '\\')), m[2]]);
-  const args = s => (/(?:^|&)(?:shell|app-session)(?:[=&]|$)/.test(s) ? 1 : 0);
-  const page = (cookie, uri, a = '', method = 'GET') => rx.find(([r]) => r.test(`${cookie}|${method}|${uri}|${args(a)}`))?.[1] || '';
-  assert.equal(page('desktop', '/wizard-os-home/'), '/wizard-os-home/desktop.html');
-  assert.equal(page('desktop', '/wizard-os-home/index.html', 'session=abc'), '/wizard-os-home/desktop.html');
-  assert.equal(page('desktop', '/wizard-ux/'), '/wizard-ux/desktop.html');
-  assert.equal(page('desktop', '/wizard-os-home/', 'shell=phone'), '');
-  assert.equal(page('desktop', '/wizard-os-home/', 'app-session=notes'), '');
-  assert.equal(page('desktop', '/wizard-os-home/desktop.html'), '');
-  assert.equal(page('desktop', '/wizard-os-home/', '', 'POST'), '');
-  assert.equal(page('phone', '/wizard-os-home/'), '');
-  assert.equal(page('', '/wizard-os-home/'), '');
-});
+// The map keys themselves: the test above serves every one of those cases through the real rendered nginx.

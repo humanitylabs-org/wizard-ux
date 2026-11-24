@@ -7,8 +7,11 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { launcherFixture } from './launcher-fixture.mjs';
+import { withShellParts } from './fixtures/shell-parts.mjs';
+import { withWebParts } from './fixtures/web-parts.mjs';
+import { switchOnFreshDevice } from './fixtures/r6B-switch.mjs';
 
-const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
+const read = p => withShellParts(withWebParts(readFileSync(new URL('../' + p, import.meta.url), 'utf8')));
 const SWITCH = 'wizard/app-windows';
 const ORIGIN = 'https://wizard.example';
 const APPS = [
@@ -108,18 +111,60 @@ test('openAppWindow (a notification\'s Open) checks the app and that the page li
   assert.deepEqual(f.opens, [['wizard-health', '', 'Health'], ['wizard-health', '/wizard-health/day', 'Health']]);
 });
 
+// The real link code (core/links.js) in a vm, with a stand-in Android relay that takes links to Health.
+function linkPaths() {
+  const calls = [], origin = 'https://wizard.example';
+  class El {
+    constructor() { this.handlers = {}; this.nodes = {}; this.style = {}; this.classList = { add() {}, remove() {}, contains: () => false, toggle: () => false }; this.contentWindow = { location: { replace() {} } }; }
+    setAttribute() {} appendChild() {} remove() {} querySelector(q) { return this.nodes[q] ||= new El(); } addEventListener(n, fn) { (this.handlers[n] ||= []).push(fn); } click() { calls.push(['download', this.href]); }
+  }
+  const document = { body: new El(), createElement: () => new El() };
+  const w = { open: url => calls.push(['browser', url]), WizConfig: { raw: {}, localURL: (h, b) => new URL(h, b) },
+    WizAndroidRelay: { appLink: href => (calls.push(['relay', href]), href.includes('/wizard-health/')) },
+    WizCore: { deeplink: { route: href => (calls.push(['route', href]), true), isOwn: () => false, parse: () => null } } };
+  vm.runInNewContext(readFileSync(new URL('../web/core/links.js', import.meta.url), 'utf8'), { window: w, location: new URL(origin + '/wizard-os-home/'), navigator: { userAgent: 'fixture', userActivation: { isActive: true } },
+    localStorage: { getItem: () => null, setItem() {} }, document, URL, console, setTimeout, clearTimeout, performance: { now: () => 0 }, Date, JSON, Object, Set });
+  const L = w.WizLinks.mount({ readerApp: () => null, asWindow: path => (calls.push(['window', path]), true) });
+  const chat = new El(); w.WizLinks.intercept(chat, L);
+  const doc = new El(); w.WizLinks.guardFrame({ document: doc, location: new URL(origin + '/search/'), open() {}, frameElement: {} }, '/search/', L);
+  const click = (root, href) => {
+    const a = { ownerDocument: document, getAttribute: k => (k === 'href' ? href : null), hasAttribute: () => false, closest: q => (q === '[data-mi]' || q === '[data-chats]' ? null : {}) };
+    const e = { button: 0, target: { closest: () => a }, preventDefault() { this.defaultPrevented = true; }, stopPropagation() {} };
+    for (const fn of root.handlers.click || []) fn(e);
+    return e;
+  };
+  return { calls, w, chat, doc, click, follow: href => w.WizLinks.follow(null, href) };
+}
+
 test('every link path asks first: chat links, links in app frames, sandboxed app links, notification Open, ?open= intents', () => {
-  const links = read('web/core/links.js');
-  const follow = links.slice(links.indexOf('function follow('), links.indexOf('function intercept('));
-  assert.ok(follow.indexOf('WizAndroidRelay?.appLink?.(u.href)') > 0 && follow.indexOf('WizAndroidRelay?.appLink') < follow.indexOf('DL.route'));
-  const intercept = links.slice(links.indexOf('function intercept('), links.indexOf('const linkMenus'));
-  assert.ok(intercept.indexOf('WizAndroidRelay?.appLink?.(u.href)') > 0 && intercept.indexOf('WizAndroidRelay?.appLink') < intercept.indexOf('DL.route'));
-  const guard = links.slice(links.indexOf('function guardFrame('));
-  assert.ok(guard.indexOf('WizAndroidRelay?.appLink?.(u.href)') > 0 && guard.indexOf('WizAndroidRelay?.appLink') < guard.indexOf('DL.route'));
-  const host = read('web/core/skin-host.js');
-  assert.match(host, /window\.WizAndroidRelay\?\.openAppWindow\?\.\(app, path \|\| ''\) === true \|\| /);
-  const app = read('web/app.js');
-  assert.match(app, /app\(id, srcEl\) \{[\s\S]{0,200}if \(window\.WizAndroidRelay\?\.openAppWindow\?\.\(id\)\) return;/);
+  const health = 'https://wizard.example/wizard-health/day', notes = 'https://wizard.example/notes/';
+  // A chat link, a link in an app frame and a followed link (a sandboxed app's link.open): the relay first ...
+  for (const [name, run] of [['chat', f => f.click(f.chat, '/wizard-health/day')], ['app frame', f => f.click(f.doc, '/wizard-health/day')], ['follow', f => f.follow(health)]]) {
+    const f = linkPaths(); run(f);
+    assert.deepEqual(f.calls, [['relay', health]], `${name}: the app's own window takes it, nothing else runs`);
+    // ... and a link it does not take goes on to the usual route.
+    const g = linkPaths(); if (name === 'chat') g.click(g.chat, '/notes/'); else if (name === 'app frame') g.click(g.doc, '/notes/'); else g.follow(notes);
+    assert.deepEqual(g.calls, [['relay', notes], ['route', notes]], `${name}: asked before the deeplink route`);
+  }
+  // Notification Open (core/skin-host-tweaks.js): the app's own window first, the shell's openApp only when it declines.
+  const host = read('web/core/skin-host.js'), at = host.indexOf('      open(id) {'), end = host.indexOf('\n      },\n', at);
+  const opened = [], relay = [];
+  const ctx = vm.createContext({ a: { dead: false }, URL, location: new URL('https://wizard.example/wizard-os-home/'),
+    window: { WosBell: { item: id => ({ notes: { app: 'notes', open: '/notes/page/2' }, plain: { app: 'notes' } })[id] }, WizOpenApp: (...x) => (opened.push(x), true),
+      WizAndroidRelay: { openAppWindow: (app, path) => (relay.push([app, path]), app === 'notes' && path === '/notes/page/2') }, WizCore: { apps: () => ({ APPS: [{ id: 'notes', url: '/notes/' }] }) } } });
+  vm.runInContext(`this.api = {\n${host.slice(at, end + 8)}\n};`, ctx);
+  assert.equal(ctx.api.open('notes'), true);
+  assert.deepEqual(relay, [['notes', '/notes/page/2']]); assert.deepEqual(opened, [], 'its own window took it');
+  assert.equal(ctx.api.open('plain'), true);
+  assert.deepEqual(relay.at(-1), ['notes', '']); assert.deepEqual(opened, [['notes']], 'declined: the shell opens the app');
+  // ?open= intents (web/app.js deeplink handlers' app()): the app's own window first.
+  const app = read('web/app.js'), ai = app.indexOf('    app(id, srcEl) {'), ae = app.indexOf('\n    },\n', ai);
+  const shown = [], asked = [];
+  const actx = vm.createContext({ APP: { notes: { id: 'notes' } }, W: {}, appVars: { W: {} }, findApp: () => null, fromOf: () => null, openApp: a => shown.push(a.id), Promise,
+    window: { WizAndroidRelay: { openAppWindow: id => (asked.push(id), id === 'health') }, WizCore: { appsLoaded: () => null } } });
+  vm.runInContext(`this.h = {\n${app.slice(ai, ae + 7)}\n};`, actx);
+  actx.h.app('health'); actx.h.app('notes');
+  assert.deepEqual(asked, ['health', 'notes']); assert.deepEqual(shown, ['notes']);
 });
 
 // The real single-app-session.js (an app's own window) in a vm, as tests/browser-boundary-other-frames.test.mjs runs it.
@@ -165,26 +210,13 @@ test('an open app window follows a later link to one of its pages, never to anyt
   assert.equal(w.frame().src, 'https://box.example/wisdom/book/9');
 });
 
-test('Android wiring: the switch is the main window\'s, launches need a tap, Back returns to the link once', () => {
-  const main = read('android/app/src/main/java/ai/wizards/os/MainActivity.java');
-  assert.match(main, /public void appWindowsSwitch\(boolean on\) \{\s+if \(MainActivity\.this instanceof AppSessionActivity\) return;/);
-  assert.match(main, /if \(!AppWindows\.on\(this\)\) return false;/);
-  assert.match(main, /if \(!AppWindows\.admitted\(now, tapUpAt, linkIntentAt, appWindowAt\)\) return false;/);
-  assert.match(main, /"root"\.equals\(r\) && this instanceof AppSessionActivity && \(\(AppSessionActivity\)this\)\.backToLink\(\)/);
-  const session = read('android/app/src/main/java/ai/wizards/os/AppSessionActivity.java');
-  assert.match(session, /if \(requested != null && AppWindows\.on\(this\)\) linked\(getIntent\(\)\);/, 'extras are read only with the switch on');
-  assert.match(session, /fromLink = false;\s+if \(!AppWindows\.on\(this\)\) return false;[^\n]*\s+return moveTaskToBack\(true\);/);
-  assert.match(session, /\} else \{ fromLink = false; linkPath = ""; \}/, 'an icon tap after the switch went off keeps today\'s Back');
-  const win = read('android/app/src/main/java/ai/wizards/os/AppWindows.java');
-  assert.match(win, /new Intent\(c, AppSessionActivity\.class\)\.setAction\(Intent\.ACTION_VIEW\)\s+\.setData\(HomeScreenShortcuts\.taskUri\(c, appId\)\)\s+\.addFlags\(Intent\.FLAG_ACTIVITY_NEW_DOCUMENT \| Intent\.FLAG_ACTIVITY_NEW_TASK\)/, 'the same task the home-screen icon opens');
-});
-
-test('the switch is in the catalog, off by default, and names its issue', () => {
-  const cat = JSON.parse(read('web/tweaks/catalog.json'));
-  assert.ok(cat.tweaks.includes(SWITCH));
-  assert.ok(!cat.defaults.includes(SWITCH));
-  assert.ok(!(cat.promotedDefaults || []).includes(SWITCH));
-  const m = JSON.parse(read('web/tweaks/wizard/app-windows/manifest.json'));
-  assert.equal(m.id, SWITCH);
-  assert.deepEqual(m.issues, ['humanitylabs-org/wizard-os#650']);
+// Not run here (wizard-ux issue 1674): this pinned Java/Swift source text and no JDK runs it in this suite. Android wiring of App windows: the admission rule itself runs in the JVM suite (AppWindowsPolicyTest).
+test('the switch is in the catalog, off by default, and names its issue', async () => {
+  // what Settings › Look lists on a fresh device (core/experience.js over the shipped catalog and manifest)
+  const l = await switchOnFreshDevice(SWITCH);
+  assert.equal(l.manifest?.id, SWITCH, 'listed');
+  assert.deepEqual(l.manifest.issues, ['humanitylabs-org/wizard-os#650']);
+  assert.equal(l.row?.on, false); assert.equal(l.running, false, 'off by default');
+  assert.deepEqual(l.presetsRunning, [], 'no author preset turns it on');
+  assert.equal(l.canTurnOn, true, 'the owner can switch it on');
 });

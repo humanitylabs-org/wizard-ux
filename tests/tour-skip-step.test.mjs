@@ -7,54 +7,7 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 
-const SRC = readFileSync(new URL('../web/core/tour.js', import.meta.url), 'utf8');
-
-function mk() {
-  const kids = new Map(), set = new Set();
-  return {
-    dataset: {}, style: { setProperty(k, v) { this[k] = v; } }, innerHTML: '', textContent: '', hidden: false, offsetWidth: 1, _l: {},
-    classList: { add: (...c) => c.forEach(x => set.add(x)), remove: (...c) => c.forEach(x => set.delete(x)), contains: c => set.has(c),
-      toggle: (c, on) => { if (on === undefined) on = !set.has(c); if (on) set.add(c); else set.delete(c); return on; } },
-    setAttribute() {}, appendChild: c => c, remove() {}, focus() {}, blur() {},
-    addEventListener(t, f) { (this._l[t] ||= []).push(f); },
-    querySelector(s) { if (!kids.has(s)) kids.set(s, mk()); return kids.get(s); },
-    querySelectorAll: () => [],
-    getBoundingClientRect: () => ({ left: 0, top: 0, width: 60, height: 60 }),
-  };
-}
-
-function boot({ noMic = false } = {}) {
-  const sentHooks = new Set();
-  const outbox = { onSent(fn) { sentHooks.add(fn); return () => sentHooks.delete(fn); } };
-  let timers = [];
-  const store = new Map(), calls = [], created = [];
-  const document = { createElement: () => { const e = mk(); created.push(e); return e; }, querySelector: () => null };
-  const window = { addEventListener() {}, WosOutbox: outbox };
-  const ctx = vm.createContext({
-    window, document, console,
-    getComputedStyle: () => ({ paddingTop: '64px', paddingBottom: '16px' }),
-    localStorage: { getItem: k => (store.has(k) ? store.get(k) : null), setItem: (k, v) => store.set(k, String(v)) },
-    setTimeout: (fn, ms) => { timers.push({ fn, ms }); return timers.length; }, clearTimeout() {},
-    requestAnimationFrame: fn => fn(),
-  });
-  vm.runInContext(SRC, ctx, { filename: 'tour.js' });
-  const T = window.WosTour;
-  const H = {
-    device: mk(), orbWrap: mk(), noMic: () => noMic, cmdExample: () => 'Open Calendar',
-    goHome: () => calls.push('home'), prepare: () => calls.push('prepare'), toast: (...a) => calls.push('toast:' + a[1]), vib() {},
-    closeSheets: () => calls.push('closeSheets'), setZen: on => { calls.push('zen:' + on); T.event('zen', { on }); },
-    dismissVoice: () => calls.push('dismissVoice'), say: (t, k) => calls.push(`say:${k}:${t}`), openChats: () => calls.push('openChats'),
-  };
-  T.attach(H);
-  const tour = () => created.find(e => e._l.click && /tr-copy/.test(e.innerHTML));
-  const q = s => (s === '.tr-stage' ? tour() : tour().querySelector('.tr-copy')).querySelector(s);
-  const tap = sel => tour()._l.click.forEach(f => f({ target: { closest: s => (s === sel ? {} : null) } }));
-  const runTimers = () => { const t = timers; timers = []; t.forEach(x => x.fn()); };
-  const view = () => ({ step: T.step, active: T.active, sub: q('small').textContent, copy: q('b').textContent, next: q('.tr-nx').innerHTML, alt: q('.tr-alt').innerHTML });
-  const delivered = it => [...sentHooks].forEach(f => f(it, {}));
-  return { T, H, calls, store, tour, q, tap, runTimers, view, delivered, sentHooks };
-}
-
+import { SRC, boot, mk } from './fixtures/tour-harness.mjs';
 
 const DONE_TEXT = 'You’re set. This is your own server, and your Wizard can do a lot on it. Apps add new skills, like Files, a web Browser, Calendar, Music or video editing. Ask your Wizard what apps you have, or what’s in the App Store.';
 const typedReply = (o = {}) => ({ kind: 'reply', source: 'chat', sessionId: 'thread-1', text: 'thanks!', createdAt: Date.now() + 1, ...o });
@@ -146,7 +99,12 @@ test('Reply leaves the shell free: no wrong-gesture nudges, Back is the shell\'s
   assert.ok(!['home', 'closeSheets', 'dismissVoice'].some(c => t.calls.includes(c)), JSON.stringify(t.calls));
   assert.equal(t.T.back(), '', 'Back inside Chats is the shell\'s, the beat stays');
   assert.equal(t.T.step, 2);
-  assert.match(SRC, /const guarded = t => active\(\) && step !== REPLY && !allowed\(t\);/, 'the tap guard is off during Reply');
+  // the tour's real tap guard: a tap outside the tour is swallowed during Talk, but not during Reply
+  const outside = { closest: () => null }, g = boot(); g.T.start('qa');
+  assert.equal(g.winEvent('pointerdown', outside), true, 'Talk: a stray tap is held back');
+  g.tap('[data-tnext]'); assert.equal(g.T.step, 2);
+  assert.equal(g.winEvent('pointerdown', outside), false, 'the tap guard is off during Reply');
+  assert.equal(g.winEvent('click', outside), false);
 });
 
 test('Reply: away from Home (Chats open) the card gets out of the way; back on Home it returns', () => {
@@ -191,12 +149,28 @@ test('Practice again replays all three beats from Talk', () => {
   const t = boot();
   t.T.start('qa'); t.tap('[data-tskip]'); assert.ok(!t.T.active);
   t.T.openHelp(); assert.ok(t.T.helpOpen);
-  assert.match(SRC, /data-hsgo>Practice again</);
-  assert.match(SRC, /if \(e\.target\.closest\('\[data-hsgo\]'\)\) \{ closeHelp\(\); return start\('help'\); \}/);
+  // the help sheet's own Practice again button, tapped: the sheet closes and the tour starts again from Talk
+  const sheet = t.created.find(e => /How Wizard works/.test(e.innerHTML));
+  assert.match(sheet.innerHTML, /data-hsgo>Practice again</);
+  sheet._l.click.forEach(f => f({ target: { closest: s => (s === '[data-hsgo]' ? {} : null) } }));
+  assert.ok(t.T.active && !t.T.helpOpen, 'Practice again closes Help and starts the tour');
+  assert.equal(t.T.step, 1); assert.equal(t.view().sub, 'Step 1 of 3 · Talk');
   assert.ok(t.T.start('help')); assert.equal(t.T.step, 1); assert.equal(t.view().sub, 'Step 1 of 3 · Talk');
 });
 
 test('Help sheet keeps commands and Practice again', () => {
-  assert.match(SRC, /a: 'Hold the orb', b: 'A command for the phone/);
-  assert.match(SRC, /data-hsgo>Practice again</);
+  const t = boot();
+  t.T.openHelp(); assert.ok(t.T.helpOpen);
+  const help = () => t.created.find(e => /How Wizard works/.test(e.innerHTML));
+  const h = help();
+  assert.match(h.innerHTML, /<b>Hold the orb<\/b><small>A command for the phone\. It opens on the desk next door\.<\/small>/);
+  assert.match(h.innerHTML, /data-hsay="Open Calendar"/, 'the hold row offers this phone\'s own command example');
+  assert.match(h.innerHTML, /<button type="button" class="hs-go" data-hsgo>Practice again<\/button>/);
+  // A suggested command says it for the owner; Practice again replays the tour from Talk.
+  const click = (sel, data = {}) => h._l.click.forEach(f => f({ target: { closest: s => (s === sel ? { dataset: data } : null) } }));
+  click('[data-hsay]', { hsay: 'Open Calendar', hkind: 'hold' });
+  assert.ok(t.calls.includes('say:hold:Open Calendar')); assert.ok(!t.T.helpOpen);
+  t.T.openHelp(); const h2 = t.created.filter(e => /How Wizard works/.test(e.innerHTML)).at(-1);
+  h2._l.click.forEach(f => f({ target: { closest: s => (s === '[data-hsgo]' ? {} : null) } }));
+  assert.ok(!t.T.helpOpen); assert.equal(t.T.step, 1); assert.equal(t.view().sub, 'Step 1 of 3 · Talk');
 });

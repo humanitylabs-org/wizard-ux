@@ -2,9 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
-const phone = readFileSync(new URL('../web/app.js', import.meta.url), 'utf8');
-const desktop = readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8');
-const outbox = readFileSync(new URL('../web/outbox.js', import.meta.url), 'utf8');
+import { withDesktopParts } from './fixtures/desktop-parts.mjs';
+import { withShellParts } from './fixtures/shell-parts.mjs';
+import { randomUUID } from 'node:crypto';
+import { block, runRecording } from './fixtures/source-slice.mjs';
+import { phoneVoice } from './fixtures/r6B-phone-voice.mjs';
+const phone = withShellParts(readFileSync(new URL('../web/app.js', import.meta.url), 'utf8'));
+const desktop = withDesktopParts(withShellParts(readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8')));
+const outbox = withShellParts(readFileSync(new URL('../web/outbox.js', import.meta.url), 'utf8'));
 function section(s, a, b) { return s.slice(s.indexOf(a), s.indexOf(b, s.indexOf(a))); }
 const pin = {appId:'wizard-manager',token:'sealed',label:'Manager conversation'};
 function desktopFixture(front) {
@@ -64,9 +69,74 @@ test('cold model request timeout releases the voice lock without opening or send
 });
 
 test('phone Manager bypass precedes local commands, files and router',async()=>{const calls=[];const ctx={OUTBOX:{sendConversation:async o=>{calls.push(o);return {state:'sent'}}},takeFiles:()=>[{id:'attachment'}],setVoice(){},txHide(){},toast(){}};vm.createContext(ctx);vm.runInContext(section(phone,'  async function handleText(','  /* Hold-command'),ctx);await ctx.handleText('help','auto',false,0,null,{conversation:pin});assert.equal(calls.length,1);assert.equal(calls[0].text,'help');assert.equal(calls[0].files[0].id,'attachment');});
-test('phone start pins destination before asynchronous recording',()=>{const s=section(phone,'  async function startVoice(','  function tick(');assert(s.indexOf('V.snap =')<s.indexOf('await openRec'));assert(s.includes("kind === 'command') V.snap.conversation = null"));});
-test('phone Manager audio branches before generic staging/STT fallback',()=>{const s=section(phone,'  async function onRecStop(','  /* ---------------- view-aware');assert(s.indexOf('OUTBOX.sendConversation')<s.indexOf('OUTBOX.stage'));assert(s.includes("kind !== 'command' && !rt && aimAt == null"));});
-test('outbox excludes Manager from generic delivery and uses same receipt identity',()=>{assert(outbox.includes("if (it.kind === 'conversation') throw"));assert(outbox.includes('request_id: it.id'));assert(outbox.includes('receipt.request_id !== it.id'));assert(outbox.includes("it.state = 'held'"));});
+test('phone start pins destination before asynchronous recording', async () => {
+  // the real startVoice: the destination the tap saw is on the take before the browser is asked for the mic
+  const v = phoneVoice({ snap: { conversation: pin, view: { id: 'mgr', kind: 'app', appId: 'wizard-manager' }, route: { model: 'm', provider: 'p' } } });
+  const started = v.ctx.startVoice('auto');
+  assert.equal(v.seen.length, 1, 'openRec was asked');
+  assert.equal(v.seen[0].snap.conversation.token, 'sealed', 'pinned before openRec resolves');
+  v.open(); await started;
+  assert.equal(v.V.snap.conversation.token, 'sealed');
+  // a command take never carries the app conversation
+  const c = phoneVoice({ snap: { conversation: pin, view: null, route: { model: 'm', provider: 'p' } } });
+  c.ctx.startVoice('command'); assert.equal(c.seen[0].snap.conversation, null); assert.equal(c.seen[0].kind, 'command');
+});
+function recStop(Vx) {
+  const calls = [];
+  const ctx = { Blob, window: {}, V: { parts: [], chunks: [new Blob(['x'.repeat(2000)])], acc: 5000, kind: 'auto', replyTo: null, target: null, seal: null, cancelled: false, ...Vx },
+    quickTake: () => false, takeFiles: () => [], setVoice() {}, txHide() {}, txPill() {}, toast: (...a) => calls.push(['toast', a[1]]), recDone() {}, dropHold() {},
+    OUTBOX: { sendConversation: async o => { calls.push(['sendConversation', o.conversation.token, o.audio instanceof Blob]); return { state: 'sent', durable: true }; },
+      stage: async o => { calls.push(['stage', o.intent]); return { id: 'st', durable: true }; }, protect: async () => {}, get: () => null, handOff: async () => false, transition: async () => {},
+      bounded: async () => { calls.push(['stt']); return { text: '' }; }, completeLocal: async () => true },
+    CHATS: { isWorking: () => false, sendVoiceTo: async () => calls.push(['sendVoiceTo']) }, LIVE: { session: () => null }, APPS: [], viewContext: () => '' };
+  ctx.window.WizConfig = { voicePrompt: () => '', transcribe: async () => ({ text: '' }) };
+  runRecording(block(phone, '  async function onRecStop(nblob, nid) {') + '\nglobalThis.onRecStop = onRecStop;', ctx);
+  return { ctx, calls };
+}
+test('phone Manager audio branches before generic staging/STT fallback', async () => {
+  const m = recStop({ snap: { conversation: pin, view: null } }); await m.ctx.onRecStop();
+  assert.deepEqual(m.calls.filter(c => c[0] !== 'toast'), [['sendConversation', 'sealed', true]], 'Manager audio: no staging, no STT');
+  assert.deepEqual(m.calls.find(c => c[0] === 'toast'), ['toast', 'Sent to Manager conversation']);
+  // a command, a thread reply or an aimed take is never Manager input: the generic stage path
+  for (const V of [{ kind: 'command' }, { replyTo: { wid: 'w', sid: 's' } }, { target: 2 }]) {
+    const g = recStop({ snap: { conversation: pin, view: null }, ...V }); await g.ctx.onRecStop();
+    assert.equal(g.calls[0][0], 'stage', JSON.stringify(V)); assert.ok(!g.calls.some(c => c[0] === 'sendConversation'));
+  }
+});
+// The real web/outbox.js over an in-memory IndexedDB, with the app conversation host the shell provides.
+function outboxClient({ receipt = body => ({ accepted: true, request_id: body.request_id }) } = {}) {
+  const rows = new Map(), delivered = [], fetches = [];
+  const indexedDB = { open() { const r = {}; queueMicrotask(() => { r.result = { close() {}, objectStoreNames: { contains: () => true }, transaction() {
+    const tx = { objectStore() { return { getAll() { return { result: [...rows.values()].map(x => structuredClone(x)) }; }, put(v) { rows.set(v.id, structuredClone(v)); return {}; }, delete(id) { rows.delete(id); return {}; } }; } };
+    setImmediate(() => tx.oncomplete?.()); return tx; } }; r.onsuccess(); }); return r; } };
+  const ctx = { console, Blob, AbortController, AbortSignal, indexedDB, crypto: { randomUUID },
+    document: { documentElement: { dataset: {} }, body: null, addEventListener() {}, querySelectorAll: () => [] },
+    localStorage: { getItem: () => null, removeItem() {}, setItem() {} }, addEventListener() {},
+    clearTimeout, setTimeout(fn, ms) { const t = setTimeout(fn, ms); t.unref(); return t; },
+    fetch: async (...a) => { fetches.push(a); throw new Error('no network in this test'); },
+    WosModels: { snapshot: (_, route) => route, resolveRoute: async route => route },
+    WizAppServices: { conversation: { deliver: async (conv, body) => { delivered.push(body); return receipt(body); } } } };
+  ctx.window = ctx; vm.runInNewContext(outbox, ctx);
+  return { api: ctx.WosOutbox, delivered, fetches, rows };
+}
+test('outbox excludes Manager from generic delivery and uses same receipt identity', async () => {
+  const c = outboxClient();
+  const it = await c.api.enqueue({ conversation: pin, text: 'turn the lights off', model: 'm', provider: 'p' });
+  assert.equal(it.kind, 'conversation'); assert.equal(it.state, 'sent');
+  assert.equal(c.delivered.length, 1); assert.equal(c.delivered[0].request_id, it.id, 'the receipt identity is the item id');
+  assert.equal(c.fetches.length, 0, 'never posted as an ordinary chat');
+  // a receipt for another request is uncertain: the take is held, never marked sent
+  const u = outboxClient({ receipt: () => ({ accepted: true, request_id: 'other' }) });
+  const held = await u.api.sendConversation({ conversation: pin, text: 'hello' });
+  assert.equal(held.state, 'held'); assert.match(held.error, /receipt uncertain/);
+  // after a reload, an unsent conversation item comes back held, and the generic pump never delivers it
+  const rows = new Map([...u.rows].map(([k, v]) => [k, { ...v, state: 'sending' }]));
+  const r = outboxClient(); for (const [k, v] of rows) r.rows.set(k, v);
+  await r.api.enqueue({ text: 'an ordinary message', model: 'm', provider: 'p' }); await new Promise(res => setTimeout(res, 30)); // the generic pump runs
+  const back = r.api.get(held.id);
+  assert.equal(back?.state, 'held'); assert.equal(r.delivered.length, 0);
+  assert.ok(r.fetches.every(([url, o]) => !String(o?.body || '').includes('hello')), 'the generic pump never posts the Manager take');
+});
 
 // wizard-ux#1218: the desktop orb, like the phone, sends to the model selected at the Send key; the thread stays pinned.
 test('desktop thread take uses the model picked while recording, still to the pinned thread',async()=>{

@@ -5,8 +5,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
+import { withServicesParts } from './fixtures/app-services-parts.mjs';
 
-const source = readFileSync(new URL('../web/core/app-services.js', import.meta.url), 'utf8');
+const source = withServicesParts(readFileSync(new URL('../web/core/app-services.js', import.meta.url), 'utf8'));
 class El {
   constructor(tag) { this.tagName = tag.toUpperCase(); this.children = []; this.dataset = {}; this.attrs = {}; this.listeners = {}; this.className = ''; this.textContent = '';
     this.classList = { s: new Set(), add: (...c) => c.forEach(x => this.classList.s.add(x)), remove: (...c) => c.forEach(x => this.classList.s.delete(x)), contains: c => this.classList.s.has(c) }; }
@@ -654,10 +655,19 @@ test('app backend: a redirect out of the app and a too large answer give the pag
   await assert.rejects(p, /document changed/);
 });
 test('app backend: the shell\'s owner route list is the same in shell-token.js and browser-boundary.js', () => {
-  const re = /const OWNER = (\/.*\/);/;
-  const a = readFileSync(new URL('../web/core/shell-token.js', import.meta.url), 'utf8').match(re)?.[1];
-  const b = readFileSync(new URL('../web/core/browser-boundary.js', import.meta.url), 'utf8').match(re)?.[1];
-  assert.ok(a && a === b, 'OWNER differs: ' + a + ' vs ' + b);
+  // Run both real rules: which addresses shell-token.js gives the token to, and which browser-boundary.js refuses to
+  // fetch for an app. Every owner route must be both (else a page could reach one, or the shell's own call fails).
+  const src = f => readFileSync(new URL('../web/core/' + f, import.meta.url), 'utf8');
+  const st = src('shell-token.js'), bb = src('browser-boundary.js');
+  const cutTo = (t, a, b) => { const i = t.indexOf(a), j = t.indexOf(b, i); assert.ok(i >= 0 && j > i, a); return t.slice(i, j + b.length); };
+  const location = { href: 'https://wizard.example/wizard-os-home/', origin: 'https://wizard.example' };
+  const tokenFor = vm.runInNewContext(cutTo(st, '  const OWNER = ', '    } catch (_) { return false; }\n  };') + '\nowner', { location, URL });
+  const refused = vm.runInNewContext(cutTo(bb, '  const OWNER = ', "catch (_) { return true; } };") + '\nownerRoute', { location, URL });
+  const owners = ['/wizard/v1/chats', '/api/sessions', '/v1/runs', '/wizard-os-home/api/x', '/wizard-os-home/store-install/a', '/wizard-ux/api/y', '/wizard-ux/store-install/z'];
+  const apps = ['/morning-report/api/x', '/wizard-os-home/index.html', '/wizard-ux/core/app.js', '/wizardx/v1', '/apix/', '/notes/wizard/v1'];
+  for (const p of owners) { assert.equal(tokenFor(p, location.href), true, 'token: ' + p); assert.equal(refused(p), true, 'refused: ' + p); }
+  for (const p of apps) { assert.equal(tokenFor(p, location.href), false, 'no token: ' + p); assert.equal(refused(p), false, 'allowed: ' + p); }
+  assert.equal(tokenFor('https://evil.example/wizard/v1/chats', location.href), false, 'never another site');
 });
 test('app backend: only GET and HEAD follow a redirect; a POST\'s redirect is never followed; net.abort stops the window\'s own call', async () => {
   const { f, asked } = netFixture((url, init) => {

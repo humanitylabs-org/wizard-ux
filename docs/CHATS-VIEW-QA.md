@@ -21,15 +21,15 @@ and their QA origin/upload helpers are byte-identical on main repair and candida
 
 | Suite | Main + repair (#267) | Chats slot (#256) |
 | --- | ---: | ---: |
-| `qa-chat-basics.cjs` | 112 / 0 | 112 / 0 |
-| `qa-chats-parity.cjs` | 31 / 0 | 31 / 0 |
-| `qa-unified-chats.cjs` | 47 / 0 | 47 / 0 |
-| `qa-desktop.cjs` | 55 / 0 | 55 / 0 |
-| `qa-thread-back-race.cjs` | 19 / 0 | 19 / 0 |
-| `qa-skin-palettes.cjs` | 28 / 0 | 28 / 0 |
-| `qa-my-skin-script.cjs` | 34 / 0 | 34 / 0 |
-| `qa-own-views.cjs` | 26 / 0 | 26 / 0 |
-| `qa-chats-view-slot.cjs` | n/a | 22 / 0 |
+| `qa/scripts/qa-chat-basics.cjs` | 112 / 0 | 112 / 0 |
+| `qa/scripts/qa-chats-parity.cjs` | 31 / 0 | 31 / 0 |
+| `qa/scripts/qa-unified-chats.cjs` | 47 / 0 | 47 / 0 |
+| `qa/scripts/qa-desktop.cjs` | 55 / 0 | 55 / 0 |
+| `qa/scripts/qa-thread-back-race.cjs` | 19 / 0 | 19 / 0 |
+| `qa/scripts/qa-skin-palettes.cjs` | 28 / 0 | 28 / 0 |
+| `qa/scripts/qa-my-skin-script.cjs` | 34 / 0 | 34 / 0 |
+| `qa/scripts/qa-own-views.cjs` | 26 / 0 | 26 / 0 |
+| `qa/scripts/qa-chats-view-slot.cjs` | n/a | 22 / 0 |
 | `node --test tests/*.test.mjs` | 468 / 0 | 475 / 0 |
 
 The seven candidate-only unit tests explain the unit-count difference. The

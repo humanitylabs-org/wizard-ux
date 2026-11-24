@@ -5,9 +5,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
+import { withParts } from './fixtures/chats-parts.mjs';
+import { block, runRecording } from './fixtures/source-slice.mjs';
 
 const live = readFileSync(new URL('../web/live.js', import.meta.url), 'utf8');
-const chats = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
+const chats = withParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'));
 const ROUTED = 'qa-routed';
 
 function slice(source, from, to) {
@@ -104,7 +106,7 @@ test('an in-flight Stop on one owner never blocks the same thread id on the othe
   assert.deepEqual(h.calls.map(c => ({ ...c.body })), [{ session_id: 'X', agent_id: ROUTED }, { session_id: 'X' }]);
 });
 
-test('Chats windows resolve their own row before acting and Stop scopes to that row\'s owner', () => {
+test('Chats windows resolve their own row before acting and Stop scopes to that row\'s owner', async () => {
   const winAgent = slice(chats, '  function winAgent(w) {', '  function agentRec(id) {');
   const W = { mainWin: { id: 'mainWin', app: 'chats' }, routedWin: { id: 'routedWin', app: 'chats', agent: ROUTED },
     focusedWin: { id: 'focusedWin', app: 'chats', focus: { kind: 'agent', key: ROUTED } } };
@@ -120,9 +122,21 @@ test('Chats windows resolve their own row before acting and Stop scopes to that 
   assert.equal(ctx.api.rowOf('focusedWin', 'X'), ctx.LIVE.agentSessions[ROUTED][0], 'an agent-focused window resolves the routed row');
   assert.equal(ctx.api.rowOf('focusedWin', 'M'), mainOnly, 'a main thread opened while an agent is focused keeps its main row');
   assert.equal(ctx.LIVE.ownerOf(ctx.api.rowOf('focusedWin', 'M')), '', 'so its Stop carries no routed scope');
-  // Every watcher-visible surface reads the window's row, and Stop carries that row's own owner.
-  assert.match(chats, /async function threadAct\(wid, sid, a\) \{\n    wid = owner\(wid\);\n    const s = rowOf\(wid, sid\);/);
-  assert.match(chats, /LIVE\.stopWatching\(sid, LIVE\.ownerOf \? LIVE\.ownerOf\(s\) : undefined\)/);
-  assert.match(chats, /function openRowSheet\(wid, sid, nid = ''\) \{\n    const s = nid \? window\.WosBell\?\.item\?\.\(nid\) : rowOf\(wid, sid\)/);
-  assert.match(chats, /s = isNew \? null : rowOf\(w\.id, w\.thread\)/);
+  // Every watcher-visible surface reads the window's row, and Stop carries that row's own owner: the real
+  // threadAct (Stop watching), openRowSheet (the row sheet's actions) and renderThread (the thread's header)
+  const asked = [], stops = [];
+  const rowOf = (wid, sid) => { const r = ctx.api.rowOf(wid, sid); asked.push([wid, r]); return r; };
+  const live = { ...ctx.LIVE, ownerOf: ctx.LIVE.ownerOf, stopWatching: async (...a) => { stops.push(a); return true; } };
+  const scope = extra => ({ owner: id => id, rowOf, W, CH: {}, LIVE: live, ACT: { stop_watch: {} }, H: {}, window: {}, INC: null, ...extra });
+  const act = runRecording(block(chats, '  async function threadAct(wid, sid, a) {') + '\nglobalThis.act = threadAct;', scope());
+  await act.act('routedWin', 'X', 'stop_watch'); await act.act('mainWin', 'X', 'stop_watch'); await act.act('focusedWin', 'M', 'stop_watch');
+  assert.deepEqual(stops, [['X', ROUTED], ['X', ''], ['M', '']], 'Stop scoped to the row the window shows');
+  const sheetRows = [], sheet = runRecording(block(chats, "  function openRowSheet(wid, sid, nid = '') {") + '\nglobalThis.sheet = openRowSheet;',
+    scope({ rowActions: r => { sheetRows.push(r); return []; }, track: { querySelector: () => ({ querySelectorAll: () => [], insertAdjacentHTML() {}, querySelector: () => null }) } }));
+  try { sheet.sheet('routedWin', 'X'); } catch {} // (only the row it acts on matters here)
+  assert.equal(sheetRows[0], ctx.LIVE.agentSessions[ROUTED][0], 'the row sheet acts on the routed row');
+  asked.length = 0;
+  const paint = runRecording(block(chats, '  function renderThread(w, el, keep) {') + '\nglobalThis.paint = renderThread;', scope({ ch: () => ({}) }));
+  try { paint.paint(W.routedWin && { ...W.routedWin, thread: 'X' }, {}); } catch {}
+  assert.deepEqual(asked[0], ['routedWin', ctx.LIVE.agentSessions[ROUTED][0]], 'the thread paints its window\'s row');
 });

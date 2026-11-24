@@ -327,7 +327,8 @@
     agentFor(sid, agent) {
       const AG = window.WosAgents; if (!AG) return null;
       const id = agent || (sid && window.WizLive?.agentOf?.(sid)) || '';
-      return id && AG.isOther(id) ? AG.get(id) || { id, missing: true } : null;
+      if (id && AG.isOther(id)) return AG.get(id) || { id, missing: true };
+      return AG.mainRoute?.(id) || null; // private first: the default private agent routes as itself (issue 1728)
     },
     agentRoute(a, sid, choice) {
       if (!a || a.missing) return null;
@@ -485,7 +486,7 @@
       const curated = o => up.includes(famOf(o)) && primaryFamilies().find(x => x.family === famOf(o))?.name;
       const label = (o, p) => own || p ? o.name : curated(o) || (isTinfoil(o.provider) ? M.short(o.value, o.provider) : PRIMARY.find(x => x.family === famOf(o))?.name || o.name || M.short(o.value, o.provider));
       const list = [], row = (o, cls = '') => { const i = list.push(o) - 1; const p = cls.includes('priv'); if (isTinfoil(o.provider)) cls += ' secure';
-        return `<button type="button" class="mrow${cls}${isCur(o) ? ' on' : ''}" data-mpick="${i}"${p ? ` data-mprivate="${esc(o.agent)}"` : ''} aria-pressed="${isCur(o)}"><span class="mn"><b>${p || isTinfoil(o.provider) ? lock : ''}${esc(label(o, p))}</b></span>${isCur(o) ? '<i class="mck" aria-hidden="true">✓</i>' : ''}</button>`; };
+        return `<button type="button" class="mrow${cls}${isCur(o) ? ' on' : ''}" data-mpick="${i}"${p ? ` data-mprivate="${esc(o.agent)}"` : ''} aria-pressed="${isCur(o)}"><span class="mn"><b>${p || isTinfoil(o.provider) || (own && agent?.privacy === 'private') ? lock : ''}${esc(label(o, p))}</b></span>${isCur(o) ? '<i class="mck" aria-hidden="true">✓</i>' : ''}</button>`; };
       const sec = (label, rows, cls = '') => rows ? `<div class="mpop-sec${cls}" role="group" aria-label="${esc(label)}"><div class="msheet-gh">${cls.includes('priv') ? lock : ''}<span>${esc(label)}</span></div>${rows}</div>` : '';
       const setupRow = `<button type="button" class="mrow" disabled aria-disabled="true" title="Set up Tinfoil in its connection app"><span class="mn"><b>Tinfoil</b></span></button><a class="mrow more" href="/wizard-tinfoil/" target="_blank" rel="noopener">Set up Tinfoil</a>`;
       // A same-Hermes route, never a Private agent or a new history. No model id is guessed.
@@ -512,7 +513,8 @@
       const p = String(s.provider || '').toLowerCase(), m = String(s.model || '').toLowerCase();
       // Issue 1500: the 'anthropic' provider is an API key, not the Claude subscription the app reconnects.
       const fam = p === SUB || p === 'claude' || (!p && /^claude-/.test(m)) ? 'claude'
-        : ['openai-codex', 'codex', 'chatgpt'].includes(p) ? 'chatgpt' : p === 'tinfoil' ? 'tinfoil' : '';
+        // Issue 1755: Tinfoil threads run on the Hermes route custom:wizard-tinfoil, not the bare 'tinfoil' label.
+        : ['openai-codex', 'codex', 'chatgpt'].includes(p) ? 'chatgpt' : isTinfoil(p) || p === 'tinfoil' || p === 'custom:tinfoil-operator' ? 'tinfoil' : '';
       if (!fam) return null;
       if (!U.snap || Date.now() - (U.at || 0) > 60e3) U.load?.();
       return U.signedOut(fam);

@@ -5,7 +5,8 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
-const src = process.env.QA_REF ? execFileSync('git', ['show', process.env.QA_REF + ':web/core/chats.js'], { encoding: 'utf8' }) : readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
+const src = process.env.QA_REF ? execFileSync('git', ['show', process.env.QA_REF + ':web/core/chats.js'], { encoding: 'utf8' }) : withParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'));
 const slice = (a, b) => { const i = src.indexOf(a), j = src.indexOf(b, i); assert.ok(i >= 0 && j > i, a); return src.slice(i, j); };
 function fixture({ ids = ['a', 'b', 'c'], open = 'b', keep = true, phone = !keep, after = 'stay', layout = null, pending = false, success = true } = {}) {
   const w = { id: 'qa', thread: open }, c = { trail: ['summary'], archiveOrder: ids }, toasts = [], calls = [], saved = [];

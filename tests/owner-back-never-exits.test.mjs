@@ -3,7 +3,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
-const src = fs.readFileSync(new URL('../web/app.js', import.meta.url), 'utf8');
+import { withShellParts } from './fixtures/shell-parts.mjs';
+const src = withShellParts(fs.readFileSync(new URL('../web/app.js', import.meta.url), 'utf8'));
 test('James: browser Back consumes one nested layer, then repeated root Back stays home', () => {
   const body = src.slice(src.indexOf('  function onBack() {'), src.indexOf('  function makeWatcher('));
   const steps = ['settings-page', 'sheet', 'thread', 'home', null, null, null];

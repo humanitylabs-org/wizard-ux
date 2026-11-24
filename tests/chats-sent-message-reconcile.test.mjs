@@ -2,10 +2,12 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
-const src = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
+const src = withParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'));
 const ctx = { window: { WizConfig: { agent: () => 'Archimedes' } }, document: {}, PW: { workHtml: () => '' }, replyCard: () => '', userMedia: () => '<i>Voice note</i>', md: s => s, timeTag: () => '', summaryOf: () => null, mediaBlock: () => '', regenOn: () => false, esc: s => s, COPY_SVG: '', SHARE_SVG: '', CHECK_SVG: '' };
 vm.runInNewContext(readFileSync(new URL('../web/core/chat-kit.js', import.meta.url), 'utf8'), ctx);
-vm.runInNewContext(src.slice(src.indexOf('function echoed(turns, p)'), src.indexOf('function retireLanded')), ctx);
+const outboxSrc = readFileSync(new URL('../web/core/chats-outbox.js', import.meta.url), 'utf8'); // echoed..retireLanded live in core/chats-outbox.js (issue 1665)
+vm.runInNewContext(outboxSrc.slice(outboxSrc.indexOf('function echoed(turns, p)'), outboxSrc.indexOf('function retireLanded')), ctx);
 vm.runInNewContext(src.slice(src.indexOf('function runContextHtml('), src.indexOf('const turnAt =')), ctx);
 const { parseRows } = ctx.window.WosChat;
 const at = 1793856846181, text = 'No dialogue. I double clicked it. It changed the focus and absolutely nothing happened.';

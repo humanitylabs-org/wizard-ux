@@ -5,8 +5,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import { withShellParts } from './fixtures/shell-parts.mjs';
 
-const js = fs.readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8');
+const js = withShellParts(fs.readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8'));
 const line = start => { const l = js.split('\n').find(x => x.startsWith(start)); assert.ok(l, start); return l; };
 const block = (a, b) => { const i = js.indexOf(a), j = js.indexOf(b, i + 1); assert.ok(i >= 0 && j > i, a); return js.slice(i, j); };
 

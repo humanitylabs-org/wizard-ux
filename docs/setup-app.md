@@ -11,7 +11,7 @@ the phone Setup page still offers its explicit tour button. Absent/unknown modes
 Host-managed phone access ready before a first recorded visit uses the checklist's `phone_ready` hint
 to say "Ready to open on your phone", without claiming that a phone connected.
 
-Regression: `node qa-alongside-launch.cjs` against `tools/fake-setup-api.cjs` exercises both shells,
+Regression: `node qa/scripts/qa-alongside-launch.cjs` against `tools/fake-setup-api.cjs` exercises both shells,
 manual Setup/tour and empty/populated historical sections. Companion Agent Service
 `qa/agent-parity/history-sections.mjs` uses real Service + UX with disposable main, host-profile,
 container and restricted gateways for the shared list-rendering behavior. These are synthetic fixtures,
@@ -81,7 +81,7 @@ New, self-contained:
 - `web/setup/index.html`, `web/setup/setup.js`, `web/setup/setup.css`
 - `web/setup/vendor/qrcode.js`, `web/setup/vendor/LICENSE-qrcode-generator`, `web/setup/provenance.json`
 - `web/core/setup-launch.js` (first-run open + held tour; `WosSetupLaunch.boot/desk`)
-- `tools/fake-setup-api.cjs` (fake Agent Service Setup API + static server), `qa-setup-app.cjs`,
+- `tools/fake-setup-api.cjs` (fake Agent Service Setup API + static server), `qa/scripts/qa-setup-app.cjs`,
   `tools/qa-setup-app-thales.sh`, `docs/setup-app.md`
 
 Registration hooks (one line each):
@@ -95,7 +95,7 @@ Dependencies on the base: `core/app-client.js` (WizardApp v1 Back/appearance), `
 `core/links.js` `guardFrame`, `core/deeplink.js` log, `WosTour.start/mark/done/active`, `__wosNativeBack`.
 
 ## QA
-`node tools/fake-setup-api.cjs 9473 & node qa-setup-app.cjs http://127.0.0.1:9473/wizard-os-home/`
+`node tools/fake-setup-api.cjs 9473 & node qa/scripts/qa-setup-app.cjs http://127.0.0.1:9473/wizard-os-home/`
 (`QA_JSQR` = path to `jsqr`, `QA_PLAYWRIGHT` = Playwright module path; on Thales use
 `tools/qa-setup-app-thales.sh <label>`). The runner stages a frozen source snapshot below
 `$WIZARD_WORK_ROOT/QA/phone-setup`, runs browser-only QA without the Android/VM worker lock,

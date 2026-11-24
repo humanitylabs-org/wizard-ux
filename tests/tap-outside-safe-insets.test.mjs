@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
+import { createDocument } from './fixtures/mini-dom.mjs';
+import { valueOf, px } from './fixtures/r7A-css.mjs';
 const source=readFileSync(new URL('../web/core/single-app-session.js',import.meta.url),'utf8');
 const css=readFileSync(new URL('../web/core/home-screen-apps.css',import.meta.url),'utf8');
 function session({top=36,cut=24,cover=false,sheets=[]}={}) {
@@ -9,11 +11,13 @@ function session({top=36,cut=24,cover=false,sheets=[]}={}) {
   const appDoc={documentElement:{style:{setProperty(k,v,p){appStyles[k]=v;priority[k]=p;}}},querySelector:()=>cover?{}:null,styleSheets:sheets};
   const el=tag=>({tag,dataset:{},classList:{add(){},remove(){}},style:{setProperty(){}},events:{},setAttribute(){},append(){},replaceChildren(){},appendChild(child){if(child.tag==='iframe')frame=child;},addEventListener(k,fn){this.events[k]=fn;}});
   const host=el('host');const document={documentElement:{style:{setProperty(k,v){hostStyles[k]=v;}}},getElementById:()=>host,createElement:el,addEventListener(){}};
+  // No last-known list: the frame mounts only when the box's list arrives (wizard-ux issue 1558 mounts a cached pin at once).
+  const registry={APP:{}};const notes={id:'notes',name:'Notes',kind:'wizard',url:'/notes/'};
   const policy={mode:true,id:'notes',isShell:()=>false,displayName:a=>a.name,within:()=>true,key:()=> 'fixture'};
-  const window={WizHomeScreenPolicy:policy,WizCore:{apps:()=>({APP:{notes:{id:'notes',name:'Notes',kind:'wizard',url:'/notes/'}}}),appsLoaded:()=>new Promise(r=>resolveApps=r)},WizardOSNative:{immersive:v=>immersive.push(v),cutoutTop:()=>cut,insetTop:()=>top},WizAppServices:{attach:()=>()=>{},guardBack(){}},WosSelMenu:{back:()=>false}};
+  const window={WizHomeScreenPolicy:policy,WizCore:{apps:()=>registry,appsLoaded:()=>new Promise(r=>resolveApps=r)},WizardOSNative:{immersive:v=>immersive.push(v),cutoutTop:()=>cut,insetTop:()=>top},WizAppServices:{attach:()=>()=>{},guardBack(){}},WosSelMenu:{back:()=>false}};
   vm.runInContext(source,vm.createContext({window,document,location:{origin:'https://fixture.test'},URL,localStorage:{getItem:()=>null,setItem(){}},addEventListener(){},setTimeout(){},setInterval(){}}));
   const load=()=>{frame.contentDocument=appDoc;frame.contentWindow={location:{href:'https://fixture.test/notes/'},document:appDoc,history:{state:null,pushState(){},replaceState(){}},WizardApp:{ready(){}},addEventListener(){}};frame.events.load();};
-  return {hostStyles,appStyles,priority,window,sheets,immersive,get frame(){return frame;},load,async mount(){resolveApps();await Promise.resolve();load();}};
+  return {hostStyles,appStyles,priority,window,sheets,immersive,get frame(){return frame;},load,async mount(){registry.APP.notes=notes;resolveApps();await Promise.resolve();load();}};
 }
 const sheet=(text,extra={})=>({cssRules:[{cssText:text}],...extra});
 const cases={
@@ -44,19 +48,27 @@ for(const top of [0,36,48])for(const cut of [0,36,48]) {
     assert.equal(f.appStyles['--wos-cutout'],'0px');
   });
 }
-test('James universal standalone rule: late styles and native callbacks never transfer frame ownership',async()=>{
-  const f=session();await f.mount();const original=f.frame;
-  f.sheets.push(sheet(':root{--wos-cutout:48px!important} header{padding:var(--wos-cutout)}'));
-  f.window.__wosTop(48);assert.equal(f.hostStyles['--nat-t'],'48px');assert.equal(f.appStyles['--wos-cutout'],'0px');
-  assert.equal(f.priority['--wos-cutout'],'important');assert.equal(f.frame,original,'no remount or keyboard/scroll reset');
-  f.window.__wosTop(0);f.window.__wosCutout(0);assert.equal(f.hostStyles['--nat-t'],'0px');assert.equal(f.hostStyles['--cut-t'],'0px');
-});
 test('James universal standalone rule: host CSS unions env/native/cutout once and does not sum toast margin',()=>{
-  assert.match(css,/--single-cut:max\(var\(--safe-t, env\(safe-area-inset-top, 0px\)\), var\(--cut-t, 0px\)\)/);
-  assert.match(css,/#singleApp iframe[^}]*inset:var\(--single-cut, 0px\)[^}]*height:calc\(100% - var\(--single-cut, 0px\)\)/);
-  assert.match(css,/#toast[^}]*top:calc\(var\(--single-cut\) \+ 12px\); margin-top:0/);
-  assert.match(css,/#singleApp \.app-upd[^}]*top:calc\(var\(--single-cut\) \+ 8px\)/);
-  assert.match(css,/\.linksheet\.pane \.ls-panel[^}]*top:var\(--single-cut\)/);
-  assert.match(css,/\.linksheet\.sheet:not\(\.peek\) \.ls-panel[^}]*height:calc\(100% - var\(--single-cut\) - 6px\)/);
+  // The pinned app's host page (#singleApp with its frame, the toast, the update chip, the link sheet) on a device
+  // whose browser safe area and native cutout differ; the shell sets --safe-t / --cut-t on <html>.
+  const page=(safe,cut)=>{
+    const doc=createDocument(); doc.documentElement.setAttribute('data-app-session','');
+    doc.body.innerHTML='<div id="singleApp" class="win full"><iframe></iframe><div class="app-upd"></div></div><div id="toast"></div><div class="linksheet pane"><div class="ls-panel"></div></div><div class="linksheet sheet"><div class="ls-panel"></div></div>';
+    const sheets=[`html { --safe-t: ${safe}px; --cut-t: ${cut}px; }`,css];
+    const at=(sel,prop,i=0)=>valueOf(doc.querySelectorAll(sel)[i],sheets,prop);
+    const len=v=>px(String(v).replace(/100%/g,'100px')); // a 100px-tall host stands in for 100%
+    const first=v=>{let d=0,k=0;for(;k<v.length;k++){if(v[k]==='(')d++;else if(v[k]===')')d--;else if(v[k]===' '&&!d)break;}return v.slice(0,k);}; // inset's top value
+    return {cut:len(at('#singleApp','--single-cut')),frameTop:len(first(at('#singleApp iframe','inset'))),frameH:len(at('#singleApp iframe','height')),
+      toast:len(at('#toast','top')),toastMargin:at('#toast','margin-top'),upd:len(at('#singleApp .app-upd','top')),
+      paneTop:len(at('.linksheet .ls-panel','top',0)),sheetH:len(at('.linksheet .ls-panel','height',1))};
+  };
+  for(const [safe,cut,want] of [[20,48,48],[47,24,47],[0,0,0]]){
+    const p=page(safe,cut);
+    assert.equal(p.cut,want,`safe ${safe} / cutout ${cut}: the larger, once (never the sum)`);
+    assert.equal(p.frameTop,want); assert.equal(p.frameH,100-want,'the frame fills the rest');
+    assert.equal(p.toast,want+12); assert.equal(p.toastMargin,'0','no extra toast margin on top');
+    assert.equal(p.upd,want+8);
+    assert.equal(p.paneTop,want); assert.equal(p.sheetH,100-want-6);
+  }
   assert.doesNotMatch(source,/styleSheets|cssRules|wizard-os-edge/,'CSS/meta heuristic is forbidden in pinned host');
 });

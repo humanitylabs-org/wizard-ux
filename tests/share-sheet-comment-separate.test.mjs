@@ -3,6 +3,10 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
 import path from 'node:path';
+import { shareSheet, flush } from './fixtures/share-sheet-harness.mjs';
+import { cascade } from './fixtures/mini-css.mjs';
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
+import { runOpaque } from './fixtures/r8A-opaque-overlays.mjs';
 const root = process.env.SHARE_TEST_TREE || path.resolve(import.meta.dirname, '..');
 const read = p => readFileSync(path.join(root,p),'utf8');
 const shared = read('web/core/share-wizard.js');
@@ -17,39 +21,89 @@ test('James: Emailing x.pdf and filename subject are not an owner comment or sha
   assert.equal(S.sharedText({text:'https://example.org',subject:'Link'}),'Link\nhttps://example.org');
   assert.equal(S.sharedText({text:'Same words',subject:'Same words'}),'Same words');
 });
-test('James: compose comment is first, empty by default, with exact optional placeholder', () => {
-  assert.match(shared,/comment = ''/); assert.match(shared,/placeholder="Add a comment \(optional\)"/);
-  assert.ok(shared.indexOf('class="dv-text"') < shared.indexOf('class="dv-sharing"'));
-  assert.doesNotMatch(shared,/textarea[^\n]*\$\{esc\(text\)\}/);
+test('James: compose comment is first, empty by default, with exact optional placeholder', async () => {
+  // the real sheet (tests/fixtures/share-sheet-harness.mjs): shared text is quoted below, never put in the comment
+  const h = shareSheet(); h.S.open({ text: 'https://example.org' }); await flush();
+  const box = h.q('.dv-text');
+  assert.equal(box.value, '', 'the comment starts empty');
+  assert.equal(box.getAttribute('placeholder'), 'Add a comment (optional)');
+  const compose = h.q('.dv-compose').children.map(e => e.className);
+  assert.deepEqual(compose, ['dv-text', 'dv-sharing'], 'the comment comes before what is shared');
+  assert.equal(h.q('.dv-quote').textContent, 'https://example.org');
 });
-test('James: Agent row is unconditional; one Chat picker starts with New chat, no radios', () => {
-  assert.match(shared,/class="dv-row dv-agent"/); assert.match(shared,/class="dv-row dv-chat"/);
-  assert.match(shared,/id:'__new__', title:'\+ New chat'/); assert.doesNotMatch(shared,/type="radio"|radiogroup/);
-  assert.match(shared,/g.status !== 'running'/); assert.doesNotMatch(shared,/filter\([^\n]*privacy/);
+test('James: Agent row is unconditional; one Chat picker starts with New chat, no radios', async () => {
+  const h = shareSheet({ agents: [{ id: 'hermes', label: 'Wizard', is_default: true, status: 'running' }, { id: 'merlin', label: 'Merlin', status: 'stopped', privacy: 'private' }] });
+  h.S.open({ text: 'hi' }); await flush();
+  assert.ok(h.q('.dv-row.dv-agent') && h.q('.dv-row.dv-chat'), 'both rows, whatever the agents');
+  h.tap('.dv-chat');
+  assert.deepEqual(h.all('[data-dvpick]').map(b => b.dataset.dvpick), ['__new__', 't1'], 'New chat first, then recent chats');
+  assert.match(h.all('[data-dvpick]')[0].textContent, /^\+ New chat/);
+  assert.equal(h.all('input[type="radio"], [role="radiogroup"]').length, 0);
+  h.tap('.dv-picker-scrim'); h.tap('.dv-agent');
+  const rows = h.all('[data-dvpick]');
+  assert.deepEqual(rows.map(b => [b.dataset.dvpick, b.disabled]), [['hermes', false], ['merlin', true]], 'every agent is listed (none hidden for privacy); stopped ones cannot be picked');
 });
-test('James: changing agent resets Chat before a scoped fetch and guards stale responses', () => {
-  assert.match(shared,/target = initial \? dest : '__new__'; threads = \[\]; loading = true/);
-  assert.match(shared,/&agent=\$\{encodeURIComponent\(agentId\)\}/);
-  assert.match(shared,/seq !== loadSeq/); assert.match(shared,/chosenAgent = g; status.textContent = ''; loadThreads\(\)/);
+test('James: changing agent resets Chat before a scoped fetch and guards stale responses', async () => {
+  const h = shareSheet({ hold: true }); h.S.open({ text: 'hi', dest: 't1' }); await flush(); await h.release();
+  assert.equal(h.q('.dv-chat strong').textContent, 'Plans', 'the retry destination is kept on first load');
+  h.tap('.dv-agent'); h.tap(h.all('[data-dvpick]').find(b => b.dataset.dvpick === 'merlin')); await flush();
+  assert.equal(h.q('.dv-chat strong').textContent, 'New chat', 'a new agent starts on New chat');
+  assert.equal(h.q('[data-sharesend]').disabled, true, 'Send waits for that agent\'s chats');
+  assert.match(h.fetches.at(-1), /&agent=merlin$/, 'its chats are asked for by agent id');
+  await h.release();
+  // a slow answer for the earlier agent must not replace the newer agent's chats
+  h.tap('.dv-agent'); h.tap(h.all('[data-dvpick]').find(b => b.dataset.dvpick === 'hermes')); await flush();
+  h.tap('.dv-agent'); h.tap(h.all('[data-dvpick]').find(b => b.dataset.dvpick === 'merlin')); await flush();
+  const [stale, fresh] = h.pending.splice(0); fresh(); await flush(); stale(); await flush();
+  h.tap('.dv-chat');
+  assert.deepEqual(h.all('[data-dvpick]').map(b => b.dataset.dvpick), ['__new__', 'm1'], 'only the chosen agent\'s chats');
+  assert.equal(h.q('[data-sharesend]').disabled, false);
 });
-test('James: outside tap closes the top layer like Back; picker is opaque and skin-driven', () => {
-  assert.match(shared,/data-dvclose/); assert.match(shared,/closest\('\[data-dvclose\]'\)\) return a\.picker \? a\.closePicker\(\) : finish\('cancelled'\)/); // explicit close is immediate
-  assert.match(shared,/act === SB\.Action\.CLOSE_CHOOSER\) a\.closePicker\(\)/); // system Back/Escape: chooser first, then the double-Back guard
+test('James: outside tap closes the top layer like Back; picker is opaque and skin-driven', async () => {
+  const h = shareSheet(); const done = h.S.open({ text: 'hi' }); await flush();
+  h.tap('.dv-chat'); assert.ok(h.q('.dv-picker'));
+  h.tap('.dv-sheet [data-dvclose]'); assert.equal(h.q('.dv-picker'), null, 'Cancel with a chooser open closes the chooser');
+  assert.ok(h.q('.wz-share'), 'and the sheet stays');
+  h.tap('.dv-chat'); assert.equal(h.S.back(), true); assert.equal(h.q('.dv-picker'), null, 'system Back closes the chooser first');
+  assert.ok(h.q('.wz-share'));
+  h.S.back(); assert.equal(h.q('.dv-backhint').textContent, 'Press back again to cancel', 'a sheet with content warns once');
+  h.tap('.dv-scrim'); assert.equal(h.q('.wz-share'), null, 'the scrim closes at once');
+  assert.equal(await done, 'cancelled');
+  // the chooser the real sheet drew, cascaded with the real share-wizard.css: opaque, from the skin's tokens
   const css = read('web/core/share-wizard.css');
-  assert.match(css,/\.dv-picker \{[^}]*linear-gradient\(var\(--dv-raised\),var\(--dv-raised\)\), linear-gradient\(var\(--dv-base\),var\(--dv-base\)\) black/s); // opaque backstop without literal colours (style ratchet)
-  assert.match(css,/var\(--wz-base/); assert.match(css,/var\(--wz-accent/);
+  const again = shareSheet(); again.S.open({ text: 'hi' }); await flush(); again.tap('.dv-chat');
+  const bg = cascade(again.q('.dv-picker'), css).background?.value || '';
+  assert.match(bg, /^linear-gradient\(var\(--dv-raised\), ?var\(--dv-raised\)\), ?linear-gradient\(var\(--dv-base\), ?var\(--dv-base\)\) black$/, 'raised over base over a black backstop: never see-through (no literal colours: style ratchet)');
+  const tokens = cascade(again.q('.wz-share'), css);
+  assert.match(tokens['--dv-base']?.value || '', /var\(--wz-base\)/, 'the base follows the skin');
+  assert.equal(tokens['--dv-accent']?.value, 'var(--wz-accent)', 'the accent follows the skin');
 });
-test('James: every share panel uses opaque panel tokens; pixel guard includes rows, cards and options', () => {
-  const css=read('web/core/share-wizard.css'), guard=read('tools/qa-opaque-overlays.cjs');
-  assert.match(css,/--dv-base: var\(--wz-panel/);
-  for (const cls of ['dv-row','dv-picker button']) {
-    const block=css.slice(css.indexOf('.wz-share .'+cls+' {')).split('}')[0];
-    assert.doesNotMatch(block,/background:transparent|backdrop-filter/);
+test('James: every share panel uses opaque panel tokens; pixel guard includes rows, cards and options', async () => {
+  const css=read('web/core/share-wizard.css');
+  // the real sheet with its chooser open, asked what wins on what it drew
+  const h = shareSheet(); h.S.open({ text: 'hi' }); await flush();
+  h.tap('.dv-chat');
+  const root = cascade(h.q('.wz-share'), css);
+  assert.match(root['--dv-base']?.value || '', /^var\(--wz-panel/, 'the sheet base is the opaque panel role');
+  const rows = h.all('.wz-share .dv-row'), opts = h.all('.wz-share .dv-picker button');
+  assert.ok(rows.length && opts.length, 'rows and chooser options are drawn');
+  for (const el of [...rows, ...opts]) {
+    const got = cascade(el, css);
+    assert.ok(got.background?.value, 'a background of its own');
+    assert.notEqual(got.background.value.trim(), 'transparent', el.className);
+    assert.equal(got['backdrop-filter'], undefined, 'no see-through blur');
   }
-  for (const name of ['share-compose','share-destination','share-agent-row','share-chat-row','share-message','share-attachment','share-picker','share-option','share-backhint']) assert.ok(guard.includes(name));
+  // the real pixel guard (tools/qa-opaque-overlays.cjs, fake Chromium) checks each share surface on the real share CSS
+  for (const [name, cls] of [['share-compose','dv-compose'],['share-destination','dv-dest'],['share-agent-row','dv-row dv-agent'],['share-chat-row','dv-row dv-chat'],['share-message','dv-quote'],['share-attachment','ch-att'],['share-picker','dv-picker'],['share-option',''],['share-backhint','dv-backhint']]) {
+    const run = await runOpaque({ filter: name });
+    assert.ok(run.result?.checked > 0, `${name}: checked`);
+    const panel = run.pages[0].doc.querySelector('[data-qa-panel]');
+    assert.equal(panel.className, cls, name); assert.ok(panel.closest('.wz-share'), `${name}: inside the share sheet`);
+    if (name === 'share-option') assert.equal(panel.tagName.toLowerCase(), 'button'), assert.equal(panel.parentElement.className, 'dv-picker');
+  }
 });
 test('James: real Chats outbox receives explicit second-agent id for NEW and EXISTING chats, without inheriting another window route/model', async () => {
-  const src = read('web/core/chats.js'), start = src.indexOf('  async function sendChat('), end = src.indexOf('  const picker =',start);
+  const src = withParts(read('web/core/chats.js')), start = src.indexOf('  async function sendChat('), end = src.indexOf('  const picker =',start);
   for (const [sid,agent] of [['__new__','synthetic-private'],['existing-synthetic','synthetic-private'],['__new__','']]) {
     const writes=[], draft={draft:'Keep me',files:[]};
     const sandbox={window:{},INC:null,MAX_FILES:10,W:{w1:{id:'w1',app:'chats',thread:'unrelated'}},ch:()=>draft,
@@ -114,7 +168,7 @@ test('legacy async native file reads are awaited after close, never uploaded as 
   const start=shared.indexOf('  async function deliver('),end=shared.indexOf('  async function carry(',start);let reads=0;const uploads=[];
   const sandbox={jobs:0,File,blob:x=>x instanceof Blob,inLane:fn=>fn(),carry:async()=> 'sent'};
   vm.runInNewContext(shared.slice(start,end)+';this.deliver=deliver;',sandbox);
-  const job={authorize:()=>true,files:[{name:'x.pdf',type:'application/pdf',async read(){reads++;return new Blob(['exact native bytes']);}}]};
+  const job={authorize:()=>true,files:[{name:'x.pdf',type:'application/pdf',async 'read'(){reads++;return new Blob(['exact native bytes']);}}]};
   const result=await sandbox.deliver({}, {async uploadFile(file){uploads.push(file);assert.equal(await file.text(),'exact native bytes');return {id:'uploaded'};}},job);
   assert.equal(result,'sent');assert.equal(reads,1);assert.equal(uploads.length,1);assert.equal(uploads[0].name,'x.pdf');
 });

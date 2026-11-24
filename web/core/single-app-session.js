@@ -24,6 +24,9 @@
   } });
   // EXTEND the single-app host, REUSE the real Chats host. No nested shell, workspace or second composer.
   const threadWindow = { id:wid, appId:id, app:'frame', thread:null };
+  // Send to Wizard (core/share-wizard.js, wizard-ux issue 1745): the app's Forward to Wizard sends through this real
+  // Chats host and its durable outbox, from a window of its own that is never drawn (so the app's frame stays put).
+  const shareWid = 'single-share', shareWindow = { id:shareWid, app:'chats', thread:null };
   let replyVoice = null, chats = null;
   function hostChats() {
     if (chats || !window.WizChatsHost) return;
@@ -35,7 +38,7 @@
     chats = window.WizChatsHost?.create({
       recordReply:(wid, sid) => replyVoice?.recordReply(wid, sid),
       recordingFor:() => replyVoice?.recordingFor(),
-      win: value => value === wid ? threadWindow : null,
+      win: value => value === wid ? threadWindow : value === shareWid ? shareWindow : null,
       root: () => win, save: () => checkpoint(), layout() {}, toast,
       title: () => policy.displayName(app || {id, name:'Thread'}),
       viewContext: () => ({kind:'thread', appId:threadWindow.appId}),
@@ -45,9 +48,12 @@
     }) || null;
     chats?.bind(win);
   }
-  /* Slim pin page (wizard-ux issue 1584, switch wizard/pin-slim-doc): core/pin-doc.js loads the Chats host after the
-   * app has loaded (or on first use), so the host is made when it arrives. In the full shell it is here already. */
+  /* Slim pin page (wizard-ux issue 1584): core/pin-doc.js loads the Chats host after the
+   * app has loaded (or on first use), so the host is made when it arrives. On app-session.html (the offline host) it is here already.
+   * The services an app reads from its first script (parent.WizLive...) are asked for now, and mount() makes the frame
+   * only once they have run (issue 1696). */
   const slim = window.WizPinDoc?.active === true;
+  if (slim) window.WizPinDoc.services?.();
   hostChats();
   if (slim && !chats) window.WizPinDoc.arrived().then(hostChats);
   // A thread the app asks for before the Chats host has arrived opens once it has (same frame, same thread).
@@ -103,7 +109,11 @@
   try { window.WizardOSNative?.immersive?.(false); cut = +window.WizardOSNative?.cutoutTop?.() || 0; top = +window.WizardOSNative?.insetTop?.() || 0; } catch (_) {}
   safeInsets();
   window.__wosSessionCheckpoint = checkpoint;
-  window.__wos = { toast, links, get singleApp() { return id; }, get voice() { return 'idle'; } };
+  window.__wos = { toast, links, get singleApp() { return id; }, get voice() { return 'idle'; },
+    // What the Send to Wizard sheet needs (issue 1745); chatsReady waits for the slim page's late Chats host.
+    get chats() { return chats; }, get wins() { return chats ? { [shareWid]: shareWindow } : {}; },
+    openWizardThread: sid => { if (frame?.isConnected) chats?.openHosted(wid, frame, sid); },
+    chatsReady: () => chats || !slim ? Promise.resolve(!!chats) : window.WizPinDoc.extras().then(() => { hostChats(); return !!chats; }) };
   window.__wosNativeBack = () => {
     // Wizard's own share sheets sit above the app that opened them (a song shared from Now Playing): one Back closes the sheet
     // and leaves the app exactly where it was, as in the full shell (WizEscapeBack owners 'share-wizard', 'share').
@@ -160,6 +170,11 @@
       await policy.preparePresentation();
       if (generation !== mountGeneration) return;
       if (window.WizOfflineSession) await window.WizOfflineSession.ready(registry.APPS);
+      if (generation !== mountGeneration) return;
+    }
+    // Slim pin page: the services an app frame reads at load are there before the frame is made (issue 1696).
+    if (slim) {
+      await window.WizPinDoc.services?.();
       if (generation !== mountGeneration) return;
     }
     const next = registry.APP[id];
@@ -231,13 +246,11 @@
       } catch (_) { unavailable('The app could not be loaded. Check your connection and try again.'); }
     });
   }
-  /* Fast pinned open (wizard-ux issue 1558, switch wizard/pin-fast-open): when this device's last-known app list
-   * already has the app, mount it now instead of waiting for bootstrap, preferences and the app list in a row. The
-   * fresh list still arrives through appsLoaded() and wizard:apps, and mount() follows a rename, a new URL or a
-   * removal from it. A first run with no cached entry waits as before. */
-  let fast = false;
-  try { fast = (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/pin-fast-open'); } catch (_) {}
-  const cached = fast ? registry.APP[id] : null;
+  /* Fast pinned open (wizard-ux issue 1558, on for everyone): when this device's last-known app list already has the
+   * app, mount it now instead of waiting for bootstrap, preferences and the app list in a row. The fresh list still
+   * arrives through appsLoaded() and wizard:apps, and mount() follows a rename, a new URL or a removal from it. A
+   * first run with no cached entry waits for the list. */
+  const cached = registry.APP[id];
   // The frame replaces this note in the same task, so a cached open never paints it (an offline-declared app still
   // shows it while its reading state is prepared).
   win.innerHTML = '<div class="single-unavailable" role="status">Loading app…</div>';

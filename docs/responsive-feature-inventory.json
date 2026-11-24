@@ -75,6 +75,20 @@
       ],
       "note": "Direct entrypoint import"
     },
+    "core/app-services-boundary.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Sandboxed app window services (vault, Wizard ID, recording, net.fetch, streams, WebSockets) moved out of app-services.js (issue 1665); called by app-services.js"
+    },
+    "core/app-services-windows.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "App window media viewer, Back, thread links and the Update ready reload plan moved out of app-services.js (issue 1665); called by app-services.js"
+    },
     "core/app-services.js": {
       "loadedBy": [
         "phone",
@@ -255,6 +269,104 @@
       "classification": "shared",
       "note": "Pure row projection, Sort/Group and visible-ID walk; all shells/layouts"
     },
+    "core/chats-agentrows.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Chats Daily follow and claim, and agents in the Channels list moved out of chats.js (issue 1665); called by createChats"
+    },
+    "core/chats-bind.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Chats presence and seen marks, clicks, delegated composer events, text from outside and forget moved out of chats.js (issue 1665); called by createChats"
+    },
+    "core/chats-chanread.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Chats channel read place on this device and on the box, and its new-post counts moved out of chats.js (issue 1665); called by createChats"
+    },
+    "core/chats-chanui.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Chats New channel, channel list body and head, channel sheet, Rename and Mark read moved out of chats.js (issue 1665); called by createChats"
+    },
+    "core/chats-fitlabel.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Chats fitting a long label into its button moved out of chats.js (issue 1665); called by createChats"
+    },
+    "core/chats-focus.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Chats thread shown as the page, move to a channel, the Space in front and the Focus agents moved out of chats.js (issue 1665); called by createChats"
+    },
+    "core/chats-hosted.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Chats app thread opened over its window, closing it, per-window state and the document-scrolling check moved out of chats.js (issue 1665); called by createChats"
+    },
+    "core/chats-pull.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Chats typing into a composer, opening media and pull to refresh moved out of chats.js (issue 1665); called by createChats"
+    },
+    "core/chats-readylist.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Chats Ready and Working orders, notifications in Ready and Back to Newest moved out of chats.js (issue 1665); called by createChats"
+    },
+    "core/chats-rows.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Chats thread row in a list moved out of chats.js (issue 1665); called by createChats"
+    },
+    "core/chats-sheets.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Chats Rename sheet, sheets kept across live repaints and the length sheet moved out of chats.js (issue 1665); called by createChats"
+    },
+    "core/chats-shims.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Chats shims: the original body's names backed by the shell's host moved out of chats.js (issue 1665); called by createChats"
+    },
+    "core/chats-spaces.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Chats Space picker, Focus strip and Activity list and order moved out of chats.js (issue 1665); called by createChats"
+    },
+    "core/chats-swipe.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Chats swipe and long-press on a thread row moved out of chats.js (issue 1665); called by createChats"
+    },
     "core/chats-view.js": {
       "loadedBy": [
         "phone",
@@ -269,6 +381,202 @@
       ],
       "classification": "shared",
       "note": "Optional in-memory temporary chat; strict server capability plus default-off preference"
+    },
+    "core/chats-approvals.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Chats Approve / Deny cards in a thread and repainting around a field being typed in moved out of chats.js (issue 1665); called by createChats"
+    },
+    "core/chats-attach.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Chats composer attachments, uploads, mic/send swap, voice notes and media turns moved out of chats.js (issue 1665); called by createChats"
+    },
+    "core/chats-chanbox.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Chats channel message box: its draft and model, the owner's own posts, Sending… and Edit on an unsent post, moved out of chats.js (issue 1665); called by createChats"
+    },
+    "core/chats-chanemoji.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Chats channel emoji row under New channel and Rename moved out of chats.js (issue 1665); called by createChats"
+    },
+    "core/chats-chanline.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Chats channel line in the list: its dot, recent posts and new-post agent moved out of chats.js (issue 1665); called by createChats"
+    },
+    "core/chats-channels.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Chats channel list, channel order, a row's channel and opening a channel moved out of chats.js (issue 1665); called by createChats"
+    },
+    "core/chats-daily.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Chats Daily view, channel and Activity unread marks, what-needs-me marks and draft marks moved out of chats.js (issue 1665); called by createChats"
+    },
+    "core/chats-done.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Chats Mark done, the waiting-on-owner rule, Needs you in the thread and Jump to Needs you moved out of chats.js (issue 1665); called by createChats"
+    },
+    "core/chats-drafts.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Chats By subject order, saved new-chat drafts and notification threads moved out of chats.js (issue 1665); called by createChats"
+    },
+    "core/chats-events.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Chats shell events (skin switch, pins, drafts storage, Snooze and Boomerang), after-actions and the Auto-archive picker moved out of chats.js (issue 1665); called by createChats"
+    },
+    "core/chats-feed.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Chats channel feed: every post of a channel in order moved out of chats.js (issue 1665); called by createChats"
+    },
+    "core/chats-listpaint.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Chats painting a list and folding its sections, moved out of chats.js (issue 1665); called by createChats (core/chats.js)"
+    },
+    "core/chats-notes.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Chats notification rows (one row per app) and Priority groups moved out of chats.js (issue 1665); called by createChats"
+    },
+    "core/chats-outbox.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Chats durable outbox and thread reading moved out of chats.js (issue 1665); called by createChats"
+    },
+    "core/chats-places.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Chats list places: the return bookmark of a list and putting it back after a repaint moved out of chats.js (issue 1665); called by createChats"
+    },
+    "core/chats-posts.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Chats channel posts (first message, words, reply counts, feed place) moved out of chats.js (issue 1665); called by createChats"
+    },
+    "core/chats-ready.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Chats list places kept on this device and Activity's Ready and Needs you counts moved out of chats.js (issue 1665); called by createChats"
+    },
+    "core/chats-rowacts.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Chats row actions sheet for threads, alerts and channel lines moved out of chats.js (issue 1665); called by createChats"
+    },
+    "core/chats-running.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Chats agent inbox parts moved out of chats.js (issue 1665); called by createChats"
+    },
+    "core/chats-select.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Chats text selection in a working thread (repaint held while selecting, touching or scrolling) moved out of chats.js (issue 1665); called by createChats"
+    },
+    "core/chats-send.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Chats Stop, Send and go and the one send carrying the whole composer (voice, files, sealed drafts) moved out of chats.js (issue 1665); called by createChats"
+    },
+    "core/chats-setup.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Chats setup: chat-kit names, incognito, Pins, Boomerang, topic emojis, list layouts and the Focus moved out of chats.js (issue 1665); called by createChats"
+    },
+    "core/chats-status.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Chats status marks, loading placeholders and the New chat face moved out of chats.js (issue 1665); called by createChats"
+    },
+    "core/chats-stream.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Chats thread streaming (an answer streaming into an open thread) and a thread's working state line moved out of chats.js (issue 1665); called by createChats"
+    },
+    "core/chats-threadacts.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Chats thread actions (Snooze / Archive on a settled thread) and the action icons moved out of chats.js (issue 1665); called by createChats"
+    },
+    "core/chats-threadpaint.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Chats painting a thread, moved out of chats.js (issue 1665); called by createChats (core/chats.js)"
+    },
+    "core/chats-tracker.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Chats thread tracker (Reply, go to a message), reply summary, Compact list and Filter sheet Focus moved out of chats.js (issue 1665); called by createChats"
+    },
+    "core/chats-undo.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Chats Undo after an archive and the channel read-mark names moved out of chats.js (issue 1665); called by createChats"
     },
     "core/chats.js": {
       "loadedBy": [
@@ -533,7 +841,7 @@
     },
     "core/os-update-flow.js": {
       "loadedBy": ["phone", "desktop"],
-      "note": "Direct entrypoint import; WizardOS update banner, sheets and Updating panel on a Mac's Wizard (App Manager by_host); elsewhere only the waiting sheets, when the App Manager says waits_for_work"
+      "note": "Direct entrypoint import; WizardOS update banner, sheets and Updating panel on a Mac's Wizard (App Manager by_host); elsewhere only the waiting sheets"
     },
     "core/own-views.js": {
       "loadedBy": [
@@ -619,6 +927,13 @@
       ],
       "note": "Direct entrypoint import"
     },
+    "core/settings-view.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Settings view, deep links and focus trap, moved verbatim out of core/settings.js (wizard-ux issue 1665)"
+    },
     "core/settings.js": {
       "loadedBy": [
         "phone",
@@ -685,7 +1000,7 @@
       "loadedBy": [
         "phone"
       ],
-      "note": "Slim pin page (switch wizard/pin-slim-doc): a pinned app session builds its host from the shell's own files"
+      "note": "Slim pin page (issue 1584): a pinned app session builds its host from the shell's own files"
     },
     "core/skin-frame.js": {
       "loadedBy": [
@@ -693,6 +1008,76 @@
         "desktop"
       ],
       "note": "Shared validated skin frame foundations, loaded before skin composition"
+    },
+    "core/skin-host-api.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "What a skin script receives, and loading and disposing it, moved out of skin-host.js (issue 1665); called by core/skin-host.js"
+    },
+    "core/skin-host-boot.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Skin host first things (built-in gestures, release stamp, orb stand-in, skin stylesheet, error fallback), moved out of skin-host.js (issue 1665); called by core/skin-host.js"
+    },
+    "core/skin-host-host.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "The skin host object the shells call, moved out of skin-host.js (issue 1665); called by core/skin-host.js"
+    },
+    "core/skin-host-layout.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Events, the route and the layout layer (loading, booting and painting a layout), moved out of skin-host.js (issue 1665); called by core/skin-host.js"
+    },
+    "core/skin-host-logos.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Skin host app logos and the App Store listing of apps not installed yet, moved out of skin-host.js (issue 1665); called by core/skin-host.js"
+    },
+    "core/skin-host-orbbar.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Skin host orb bar: an app's bottom tab bar laid out around the orb, and the orb's room in app windows, moved out of skin-host.js (issue 1665); called by core/skin-host.js"
+    },
+    "core/skin-host-rows.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Skin host Add to home screen app, notification rows in sessions.list() and the orb swipe map, moved out of skin-host.js (issue 1665); called by core/skin-host.js"
+    },
+    "core/skin-host-shellapi.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Where the view's orb goes, the inset sync and the shell API a layout receives, moved out of skin-host.js (issue 1665); called by core/skin-host.js"
+    },
+    "core/skin-host-summary.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Skin host owner-script lint and the box-wide reply summary setting, moved out of skin-host.js (issue 1665); called by core/skin-host.js"
+    },
+    "core/skin-host-tweaks.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "A tweak's stylesheet, the API a tweak receives and loading every tweak, moved out of skin-host.js (issue 1665); called by core/skin-host.js"
     },
     "core/skin-host.js": {
       "loadedBy": [
@@ -861,6 +1246,296 @@
       "classification": "adapter",
       "reason": "Phone layout, orb/gesture input, shell navigation; shared feature rendering forbidden here."
     },
+    "app-agentorb.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone shell part moved out of app.js (issue 1665, shared values through accessors): who the agent orb talks to, and the app window in front."
+    },
+    "app-arc.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone shell part moved out of app.js (issue 1665, shared values through accessors): the arc buttons around the orb while it records."
+    },
+    "app-back.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone shell part moved out of app.js (issue 1665, shared values through accessors): the phone Back step and its watchers."
+    },
+    "app-boot.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone shell part moved out of app.js (issue 1665, shared values through accessors): the Back guard, first run, the native shell bridge and deep links."
+    },
+    "app-bound.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone shell part moved out of app.js (issue 1665, shared values through accessors): views bound to a thread and the peek."
+    },
+    "app-cards.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone shell part moved out of app.js (issue 1665, shared values through accessors): Settings as a sheet, unsent items, Home repaints and the New desk app cards."
+    },
+    "app-choice.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone shell part moved verbatim out of app.js (issue 1665): the choice card after a held command and the native bridge events."
+    },
+    "app-deskbar.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone shell part moved out of app.js (issue 1665, shared values through accessors): the desk bar above search and the launcher grid."
+    },
+    "app-desks.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone shell part moved out of app.js (issue 1665, shared values through accessors): leaving an empty desk, going to a desk, the desk dots and the orb app mark."
+    },
+    "app-deskset.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone shell part moved out of app.js (issue 1665, shared values through accessors): Settings that belongs to a desk and opening a sheet."
+    },
+    "app-dictation.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone shell part moved verbatim out of app.js (issue 1665): orb voice takes, their recovery and which recorder a take uses."
+    },
+    "app-frame.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone shell part moved verbatim out of app.js (issue 1665): an app's window frame, the refused-frame card and Back-stack taming."
+    },
+    "app-home.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone shell part moved verbatim out of app.js (issue 1665): how the Home desk is drawn."
+    },
+    "app-inbox.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone shell part moved verbatim out of app.js (issue 1665): the shade: recording strips, notification rows and the orb moons."
+    },
+    "app-linkdesk.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone shell part moved out of app.js (issue 1665, shared values through accessors): full screen, clearing a desk, and links that open on a desk of their own."
+    },
+    "app-mic.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone shell part moved verbatim out of app.js (issue 1665): the microphone for a take and the pre-warmed mic."
+    },
+    "app-model.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone shell part moved out of app.js (issue 1665, shared values through accessors): saving the window model, live Wizard state, thread emojis and the reload buttons."
+    },
+    "app-opening.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone shell part moved verbatim out of app.js (issue 1665): opening an app: placement in a new tab and the instant tap answer."
+    },
+    "app-orbswipe.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone shell part moved out of app.js (issue 1665, shared values through accessors): swipes and holds on the orb, and the Orb switcher."
+    },
+    "app-overview.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone shell part moved out of app.js (issue 1665, shared values through accessors): the Desks overview and the pill panel."
+    },
+    "app-pinch.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone shell part moved out of app.js (issue 1665, shared values through accessors): pinching a window to fill the screen and the bottom edge in full screen."
+    },
+    "app-reply.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone shell part moved out of app.js (issue 1665, shared values through accessors): a voice reply from a composer mic and parking a reply."
+    },
+    "app-routing.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone shell part moved out of app.js (issue 1665, shared values through accessors): where a take goes: review mode, the view in front, commands and new requests."
+    },
+    "app-scrub.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone shell part moved out of app.js (issue 1665, shared values through accessors): scrubbing along the bottom bar to step between desks."
+    },
+    "app-search.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone shell part moved out of app.js (issue 1665, shared values through accessors): the Review coach, quick search and placing an app in a window."
+    },
+    "app-seed.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone shell part moved out of app.js (issue 1665, shared values through accessors): a fresh layout, starter apps on a new device and the late layout pass."
+    },
+    "app-sendgo.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone shell part moved out of app.js (issue 1665, shared values through accessors): send and go for the orb and the dictation copy."
+    },
+    "app-transcribe.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone shell part moved verbatim out of app.js (issue 1665): transcribing a dictation and the quick command."
+    },
+    "app-unsent.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone shell part moved verbatim out of app.js (issue 1665): the settings cog and the unsent card."
+    },
+    "app-viewvoice.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone shell part moved out of app.js (issue 1665, shared values through accessors): which view a voice take is for."
+    },
+    "app-voicefiles.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone shell part moved verbatim out of app.js (issue 1665): the orb's voice state and the files that ride along with a take."
+    },
+    "app-voicesend.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone shell part moved verbatim out of app.js (issue 1665): sending a take: route, composer hand-back, capture pause."
+    },
+    "app-windows.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone shell part moved out of app.js (issue 1665, shared values through accessors): window and desk titles, desk sections and making a window."
+    },
+    "desktop/desktop-boot.js": {
+      "shell": "desktop",
+      "classification": "adapter",
+      "reason": "Desktop shell part moved out of desktop/desktop.js (issue 1665, shared values through accessors): the native bridge for Wizard for Mac, deep links, boot and workspace sync."
+    },
+    "desktop/desktop-boundarykeys.js": {
+      "shell": "desktop",
+      "classification": "adapter",
+      "reason": "Desktop shell part moved verbatim out of desktop/desktop.js (issue 1665): the window keys and the keys a sandboxed app passes on (browser boundary)."
+    },
+    "desktop/desktop-cog.js": {
+      "shell": "desktop",
+      "classification": "adapter",
+      "reason": "Desktop shell part moved verbatim out of desktop/desktop.js (issue 1665): the Settings cog count, the top bar's hover tips and opening the keys guide."
+    },
+    "desktop/desktop-divider.js": {
+      "shell": "desktop",
+      "classification": "adapter",
+      "reason": "Desktop shell part moved verbatim out of desktop/desktop.js (issue 1665): the Chats list/thread divider (drag, arrow keys, reset, one width for every Chats window)."
+    },
+    "desktop/desktop-frames.js": {
+      "shell": "desktop",
+      "classification": "adapter",
+      "reason": "Desktop shell part moved out of desktop/desktop.js (issue 1665, shared values through accessors): watching an app frame for refusal and its services."
+    },
+    "desktop/desktop-generalvoice.js": {
+      "shell": "desktop",
+      "classification": "adapter",
+      "reason": "Desktop shell part moved verbatim out of desktop/desktop.js (issue 1665): the top bar's New voice chat button."
+    },
+    "desktop/desktop-home.js": {
+      "shell": "desktop",
+      "classification": "adapter",
+      "reason": "Desktop shell part moved verbatim out of desktop/desktop.js (issue 1665): how Home (the root or an empty workspace) is drawn."
+    },
+    "desktop/desktop-keys.js": {
+      "shell": "desktop",
+      "classification": "adapter",
+      "reason": "Desktop shell part moved out of desktop/desktop.js (issue 1665, shared values through accessors): Back, Esc, moving between windows and the keys guide."
+    },
+    "desktop/desktop-links.js": {
+      "shell": "desktop",
+      "classification": "adapter",
+      "reason": "Desktop shell part moved verbatim out of desktop/desktop.js (issue 1665): links into installed apps open as their window; deep links on start."
+    },
+    "desktop/desktop-lists.js": {
+      "shell": "desktop",
+      "classification": "adapter",
+      "reason": "Desktop shell part moved out of desktop/desktop.js (issue 1665, shared values through accessors): the Chats list window, its side pane and the channel feed pane."
+    },
+    "desktop/desktop-palopen.js": {
+      "shell": "desktop",
+      "classification": "adapter",
+      "reason": "Desktop shell part moved out of desktop/desktop.js (issue 1665, shared values through accessors): opening, toggling and closing the palette, and where focus rests."
+    },
+    "desktop/desktop-palpaint.js": {
+      "shell": "desktop",
+      "classification": "adapter",
+      "reason": "Desktop shell part moved out of desktop/desktop.js (issue 1665, shared values through accessors): painting the command palette and the agent name labels."
+    },
+    "desktop/desktop-pickany.js": {
+      "shell": "desktop",
+      "classification": "adapter",
+      "reason": "Desktop shell part moved out of desktop/desktop.js (issue 1665, shared values through accessors): Pick anything, live data and the orb dump."
+    },
+    "desktop/desktop-picker.js": {
+      "shell": "desktop",
+      "classification": "adapter",
+      "reason": "Desktop shell part moved out of desktop/desktop.js (issue 1665, shared values through accessors): the app selector list and its ranking."
+    },
+    "desktop/desktop-recovery.js": {
+      "shell": "desktop",
+      "classification": "adapter",
+      "reason": "Desktop shell part moved verbatim out of desktop/desktop.js (issue 1665): the retained recordings card (outbox takes to send again or discard)."
+    },
+    "desktop/desktop-resize.js": {
+      "shell": "desktop",
+      "classification": "adapter",
+      "reason": "Desktop shell part moved out of desktop/desktop.js (issue 1665, shared values through accessors): resizing and splitting windows, spots on a desk and the light/dark flip."
+    },
+    "desktop/desktop-settings.js": {
+      "shell": "desktop",
+      "classification": "adapter",
+      "reason": "Desktop shell part moved out of desktop/desktop.js (issue 1665, shared values through accessors): opening, closing and toggling Settings."
+    },
+    "desktop/desktop-settingshost.js": {
+      "shell": "desktop",
+      "classification": "adapter",
+      "reason": "Desktop shell part moved out of desktop/desktop.js (issue 1665, shared values through accessors): moving the Settings host between the modal and a window."
+    },
+    "desktop/desktop-sideview.js": {
+      "shell": "desktop",
+      "classification": "adapter",
+      "reason": "Desktop shell part moved out of desktop/desktop.js (issue 1665, shared values through accessors): the Default Chats look beside a layout that owns the chat list, and finding Chats windows."
+    },
+    "desktop/desktop-steps.js": {
+      "shell": "desktop",
+      "classification": "adapter",
+      "reason": "Desktop shell part moved out of desktop/desktop.js (issue 1665, shared values through accessors): stepping along desks and windows, the bar and usage."
+    },
+    "desktop/desktop-tapkeys.js": {
+      "shell": "desktop",
+      "classification": "adapter",
+      "reason": "Desktop shell part moved verbatim out of desktop/desktop.js (issue 1665): Right ⌘ / Right ⌥ as tap keys (talk and dictate)."
+    },
+    "desktop/desktop-tiling.js": {
+      "shell": "desktop",
+      "classification": "adapter",
+      "reason": "Desktop shell part moved out of desktop/desktop.js (issue 1665, shared values through accessors): tiling windows, full screen and the floating panel."
+    },
+    "desktop/desktop-voicekeys.js": {
+      "shell": "desktop",
+      "classification": "adapter",
+      "reason": "Desktop shell part moved out of desktop/desktop.js (issue 1665, shared values through accessors): the voice chords, screen speech and new voice chats."
+    },
+    "desktop/desktop-voicemenu.js": {
+      "shell": "desktop",
+      "classification": "adapter",
+      "reason": "Desktop shell part moved verbatim out of desktop/desktop.js (issue 1665): the bar mic's voice menu."
+    },
+    "desktop/desktop-windows.js": {
+      "shell": "desktop",
+      "classification": "adapter",
+      "reason": "Desktop shell part moved out of desktop/desktop.js (issue 1665, shared values through accessors): window titles, private agent names and opening a new window."
+    },
     "desktop/desktop.js": {
       "shell": "desktop",
       "classification": "adapter",
@@ -947,6 +1622,8 @@
     "core/app-reading-position.js",
     "core/app-route.css",
     "core/app-route.js",
+    "core/app-services-boundary.js",
+    "core/app-services-windows.js",
     "core/app-services.js",
     "core/app-setup.css",
     "core/app-setup.js",
@@ -978,7 +1655,49 @@
     "core/chat-topic-emojis-data.js",
     "core/chat-topic-emojis.js",
     "core/chat-work.js",
+    "core/chats-agentrows.js",
+    "core/chats-approvals.js",
+    "core/chats-attach.js",
+    "core/chats-bind.js",
+    "core/chats-chanbox.js",
+    "core/chats-chanemoji.js",
+    "core/chats-chanline.js",
+    "core/chats-channels.js",
+    "core/chats-chanread.js",
+    "core/chats-chanui.js",
+    "core/chats-daily.js",
+    "core/chats-done.js",
+    "core/chats-drafts.js",
+    "core/chats-events.js",
+    "core/chats-feed.js",
+    "core/chats-fitlabel.js",
+    "core/chats-focus.js",
+    "core/chats-hosted.js",
     "core/chats-list-model.js",
+    "core/chats-listpaint.js",
+    "core/chats-notes.js",
+    "core/chats-outbox.js",
+    "core/chats-places.js",
+    "core/chats-posts.js",
+    "core/chats-pull.js",
+    "core/chats-ready.js",
+    "core/chats-readylist.js",
+    "core/chats-rowacts.js",
+    "core/chats-rows.js",
+    "core/chats-running.js",
+    "core/chats-select.js",
+    "core/chats-send.js",
+    "core/chats-setup.js",
+    "core/chats-sheets.js",
+    "core/chats-shims.js",
+    "core/chats-spaces.js",
+    "core/chats-status.js",
+    "core/chats-stream.js",
+    "core/chats-swipe.js",
+    "core/chats-threadacts.js",
+    "core/chats-threadpaint.js",
+    "core/chats-tracker.js",
+    "core/chats-undo.js",
     "core/chats-view.css",
     "core/chats-view.js",
     "core/chats.css",
@@ -1038,6 +1757,7 @@
     "core/screen-text.js",
     "core/sel-menu.css",
     "core/sel-menu.js",
+    "core/settings-view.js",
     "core/settings.css",
     "core/settings.js",
     "core/setup-launch.js",
@@ -1052,6 +1772,16 @@
     "core/sigils.js",
     "core/skin-frame.css",
     "core/skin-frame.js",
+    "core/skin-host-api.js",
+    "core/skin-host-boot.js",
+    "core/skin-host-host.js",
+    "core/skin-host-layout.js",
+    "core/skin-host-logos.js",
+    "core/skin-host-orbbar.js",
+    "core/skin-host-rows.js",
+    "core/skin-host-shellapi.js",
+    "core/skin-host-summary.js",
+    "core/skin-host-tweaks.js",
     "core/skin-host.js",
     "core/skins.css",
     "core/skins.js",
@@ -1079,6 +1809,10 @@
     "kit/controls.css",
     "kit/shell-tokens.css",
     "kit/wizard-sheet.js",
+    "live-channels.js",
+    "live-seen.js",
+    "live-streams.js",
+    "live-work.js",
     "live.js",
     "manifest.webmanifest",
     "outbox.js"

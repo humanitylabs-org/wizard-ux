@@ -17,6 +17,6 @@ The existing durable outbox retains its `conversation` storage kind and original
 
 ## QA boundary and replay
 
-`qa-manager-orb.cjs` runs on Thales with real Chrome, fake microphone, candidate assets, live read-only shell/bootstrap/catalog data, and intercepted Manager state, STT, uploads and all writes. It injects a fixture catalog declaration for Manager because live installation is the parent's release task. `QA_GESTURES=1` exercises the latch and explicit general action. These results are not live backend admission or physical handset/native Android proof.
+`qa/scripts/qa-manager-orb.cjs` runs on Thales with real Chrome, fake microphone, candidate assets, live read-only shell/bootstrap/catalog data, and intercepted Manager state, STT, uploads and all writes. It injects a fixture catalog declaration for Manager because live installation is the parent's release task. `QA_GESTURES=1` exercises the latch and explicit general action. These results are not live backend admission or physical handset/native Android proof.
 
 Required environment: `PW` (Playwright module), `CHROME`, `QA_MANAGER_DIR`, `QA_URL` (shell URL ending in `/`), `QA_OUT`. Source tests: `node --test tests/app-conversation.test.mjs tests/manager-orb-route.test.mjs tests/voice-input-registry.test.mjs`. Companion Service change projects the capability from owner-controlled apps.json and launcher.json. Deployment, private trial registry flags, and live receiver verification remain separate release steps.

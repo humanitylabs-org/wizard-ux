@@ -58,7 +58,7 @@ const SHELL = `<!doctype html><html><head><meta charset="utf-8">
   window.open = (href) => { opened.push(String(href)); return null; };
   // The shell's media viewer.
   window.WosChat = { viewer: { open: (items, i) => { viewed.push({ items: items.map(x => x.url), i }); return true; }, isOpen: () => false, close() {} } };</script>
-<script src="/wizard-os-home/core/app-services.js"></script>
+<script src="/wizard-os-home/core/app-services-windows.js"></script><script src="/wizard-os-home/core/app-services-boundary.js"></script><script src="/wizard-os-home/core/app-services.js"></script>
 <script src="/wizard-os-home/core/links.js"></script>
 <style>body{font:13px system-ui;margin:8px;background:#120c24;color:#eee} iframe{width:640px;height:110px;border:1px solid #554;background:#fff}
  #log{white-space:pre-wrap;font:12px ui-monospace,monospace;margin-top:6px} .linksheet{display:none}</style></head>

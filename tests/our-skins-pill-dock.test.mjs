@@ -4,13 +4,22 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { withoutApprovedOrbIcon } from './approved-orb-icon-css.mjs';
+import { withShellParts } from './fixtures/shell-parts.mjs';
+import { phoneDock } from './fixtures/phone-dock-harness.mjs';
 const web = new URL('../web/', import.meta.url);
-const read = p => readFileSync(new URL(p, web), 'utf8');
+const read = p => withShellParts(readFileSync(new URL(p, web), 'utf8'));
 
 test('core mirrors the current desk icon into a hidden #orbApp', () => {
-  const app = read('app.js');
-  assert.match(app, /el\.id = 'orbApp'; el\.className = 'orb-app'; el\.hidden = true/);
-  assert.match(app, /paintOrbApp\(\);/);
+  const d = phoneDock({ idx: 2 });
+  d.render();
+  const el = d.els.orbApp;
+  assert.ok(el, 'the orb gets its #orbApp');
+  assert.equal(el.className, 'orb-app'); assert.equal(el.hidden, true, 'hidden unless a skin shows it');
+  assert.equal(el.attrs['aria-hidden'], 'true');
+  assert.equal(el.innerHTML, '<span class="dsg">2</span>', 'it shows the current desk');
+  d.ctx.appVars.idx = 3; d.render();
+  assert.equal(el.innerHTML, '<span class="dsg">3</span>', 'and follows the desk in view');
+  assert.equal(d.els.orbWrap.kids.length, 1, 'made once');
 });
 
 test('pill dock and #orbApp rules stay skin-scoped, never core; approved owner skins may show #orbApp', () => {

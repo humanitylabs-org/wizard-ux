@@ -77,6 +77,14 @@ public final class MizelPolicy {
         return s >= 3600 ? String.format(Locale.US, "%d:%02d:%02d", s / 3600, s / 60 % 60, s % 60) : String.format(Locale.US, "%d:%02d", s / 60, s % 60);
     }
 
+    /** Plain words for a short span: "12 seconds", "1 minute", "30 minutes". */
+    public static String spoken(long ms) {
+        long s = Math.max(0, ms) / 1000;
+        if (s < 60) return s + (s == 1 ? " second" : " seconds");
+        long m = (s + 30) / 60;
+        return m + (m == 1 ? " minute" : " minutes");
+    }
+
     /** Peak of a PCM16 buffer as 0…1. */
     public static float peak(short[] pcm, int n) {
         int p = 0;

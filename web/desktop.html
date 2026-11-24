@@ -50,6 +50,16 @@
   <link rel="stylesheet" href="core/app-route.css">
   <link rel="stylesheet" href="core/skins.css">
   <script src="core/escape-back.js"></script>
+  <script src="core/skin-host-api.js"></script>
+  <script src="core/skin-host-boot.js"></script>
+  <script src="core/skin-host-host.js"></script>
+  <script src="core/skin-host-layout.js"></script>
+  <script src="core/skin-host-logos.js"></script>
+  <script src="core/skin-host-orbbar.js"></script>
+  <script src="core/skin-host-rows.js"></script>
+  <script src="core/skin-host-shellapi.js"></script>
+  <script src="core/skin-host-summary.js"></script>
+  <script src="core/skin-host-tweaks.js"></script>
   <script src="core/skin-host.js"></script>
   <script type="module" src="core/thread-swipe-back.js"></script>
   <script src="core/edge-peek.js"></script>
@@ -129,6 +139,8 @@
   <script src="core/app-reading-position.js"></script>
   <link rel="stylesheet" href="core/share-wizard.css">
   <script src="core/sheetback.js"></script><script src="core/share-wizard.js"></script>
+  <script src="core/app-services-windows.js"></script>
+  <script src="core/app-services-boundary.js"></script>
   <script src="core/app-services.js"></script>
   <script src="core/app-versions.js"></script>
   <script src="core/agents.js"></script>
@@ -137,6 +149,10 @@
   <link rel="stylesheet" href="core/app-setup.css">
   <script src="core/web-update.js"></script>
   <script src="core/chats-list-model.js"></script>
+  <script src="live-channels.js"></script>
+  <script src="live-seen.js"></script>
+  <script src="live-streams.js"></script>
+  <script src="live-work.js"></script>
   <script src="live.js"></script>
   <script src="outbox.js"></script>
   <script src="core/share-sheet.js"></script>
@@ -159,12 +175,55 @@
   <script src="core/notif-bell.js"></script>
   <script src="core/scheduled-reminders.js"></script>
   <script src="core/dom-morph.js"></script>
+  <script src="core/chats-agentrows.js"></script>
+  <script src="core/chats-approvals.js"></script>
+  <script src="core/chats-attach.js"></script>
+  <script src="core/chats-bind.js"></script>
+  <script src="core/chats-chanbox.js"></script>
+  <script src="core/chats-chanemoji.js"></script>
+  <script src="core/chats-chanline.js"></script>
+  <script src="core/chats-channels.js"></script>
+  <script src="core/chats-chanread.js"></script>
+  <script src="core/chats-chanui.js"></script>
+  <script src="core/chats-daily.js"></script>
+  <script src="core/chats-done.js"></script>
+  <script src="core/chats-drafts.js"></script>
+  <script src="core/chats-events.js"></script>
+  <script src="core/chats-feed.js"></script>
+  <script src="core/chats-fitlabel.js"></script>
+  <script src="core/chats-focus.js"></script>
+  <script src="core/chats-hosted.js"></script>
+  <script src="core/chats-listpaint.js"></script>
+  <script src="core/chats-notes.js"></script>
+  <script src="core/chats-outbox.js"></script>
+  <script src="core/chats-places.js"></script>
+  <script src="core/chats-posts.js"></script>
+  <script src="core/chats-pull.js"></script>
+  <script src="core/chats-ready.js"></script>
+  <script src="core/chats-readylist.js"></script>
+  <script src="core/chats-rowacts.js"></script>
+  <script src="core/chats-rows.js"></script>
+  <script src="core/chats-running.js"></script>
+  <script src="core/chats-select.js"></script>
+  <script src="core/chats-send.js"></script>
+  <script src="core/chats-setup.js"></script>
+  <script src="core/chats-sheets.js"></script>
+  <script src="core/chats-shims.js"></script>
+  <script src="core/chats-spaces.js"></script>
+  <script src="core/chats-status.js"></script>
+  <script src="core/chats-stream.js"></script>
+  <script src="core/chats-swipe.js"></script>
+  <script src="core/chats-threadacts.js"></script>
+  <script src="core/chats-threadpaint.js"></script>
+  <script src="core/chats-tracker.js"></script>
+  <script src="core/chats-undo.js"></script>
   <script src="core/chats.js"></script>
   <script src="core/deeplink.js"></script>
   <script src="core/companion-pane.js"></script>
   <script src="core/companion-legacy.js"></script>
   <script src="core/voice-status.js"></script>
   <script src="core/phone-connect.js"></script>
+  <script src="core/settings-view.js"></script>
   <script src="core/settings.js"></script>
   <script src="core/incognito-chat.js"></script>
   <script src="core/workspace-sync.js"></script>
@@ -203,6 +262,31 @@
   <script src="core/setup-launch.js"></script>
   <script src="core/welcome.js"></script>
   <script src="core/desktop-host.js"></script>
+  <script src="desktop/desktop-boot.js"></script>
+  <script src="desktop/desktop-boundarykeys.js"></script>
+  <script src="desktop/desktop-cog.js"></script>
+  <script src="desktop/desktop-divider.js"></script>
+  <script src="desktop/desktop-frames.js"></script>
+  <script src="desktop/desktop-generalvoice.js"></script>
+  <script src="desktop/desktop-home.js"></script>
+  <script src="desktop/desktop-keys.js"></script>
+  <script src="desktop/desktop-links.js"></script>
+  <script src="desktop/desktop-lists.js"></script>
+  <script src="desktop/desktop-palopen.js"></script>
+  <script src="desktop/desktop-palpaint.js"></script>
+  <script src="desktop/desktop-pickany.js"></script>
+  <script src="desktop/desktop-picker.js"></script>
+  <script src="desktop/desktop-recovery.js"></script>
+  <script src="desktop/desktop-resize.js"></script>
+  <script src="desktop/desktop-settings.js"></script>
+  <script src="desktop/desktop-settingshost.js"></script>
+  <script src="desktop/desktop-sideview.js"></script>
+  <script src="desktop/desktop-steps.js"></script>
+  <script src="desktop/desktop-tapkeys.js"></script>
+  <script src="desktop/desktop-tiling.js"></script>
+  <script src="desktop/desktop-voicekeys.js"></script>
+  <script src="desktop/desktop-voicemenu.js"></script>
+  <script src="desktop/desktop-windows.js"></script>
   <script src="desktop/desktop.js"></script>
 </body>
 </html>

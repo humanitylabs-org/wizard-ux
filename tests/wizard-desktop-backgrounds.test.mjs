@@ -2,6 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { skinsRuntime, settingsView } from './fixtures/skin-palettes-harness.mjs';
+import { createDocument } from './fixtures/mini-dom.mjs';
+import { cascade } from './fixtures/mini-css.mjs';
+import { noImports } from './fixtures/r7A-css.mjs';
+import { between, block, runRecording } from './fixtures/source-slice.mjs';
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
 const KEY = 'wos.skin.wallpaper.wizard.desktop';
 
@@ -92,15 +97,40 @@ test('phone Wizard ignores a saved desktop image and has no new background picke
 
 test('invalid saved desktop images fall back without changing Mizel; renderer and picker are shared', () => {
   assert.equal(boot({[KEY]:'bogus'}).S.wallpaper,'living');
-  const s=read('web/core/settings.js'), r=read('web/core/skins.js');
-  assert.match(s,/S\.wizardBackgrounds \|\| twinned\(S, family\)/);
-  assert.match(s,/wizard \? card\('living', 'Living canvas', lk\)/);
-  assert.match(r,/image \? 'landscapes' : SKINS\[i\]\.id/);
-  assert.match(r,/image \? wizardWall : wall/);
-  const css=read('web/core/skins.css');
-  assert.match(css,/\[data-image-background\]:not\(\[data-wizard-backgrounds\]\) :is\(\.win/);
-  assert.match(css,/\[data-wizard-backgrounds\] \.win \{\s*background: color\(from var\(--sk-win\) srgb r g b \/ 1\)/);
-  assert.match(read('web/layouts/ai-apps/desktop.css'),/\[data-wizard-backgrounds\] \{\s*--aad-main: color\(from var\(--sk-win\) srgb r g b \/ 1\)/);
+  // The picker: the real Settings › Look on the real skins.js. A Wizard desktop gets Background (Living canvas, the
+  // shared scenes, Custom) even on a palette without twins; the phone does not.
+  const look = shell => {
+    const { S, documentElement } = skinsRuntime({ 'wos.skin': 'nebula' }); documentElement.dataset.shell = shell;
+    const doc = createDocument(); doc.body.innerHTML = settingsView({ shell, WosSkin: S }).html();
+    return { S, picks: doc.body.querySelectorAll('[data-bgpick]').map(b => b.dataset.bgpick), living: doc.body.querySelector('[data-bgpick="living"]')?.getAttribute('aria-label') };
+  };
+  const desk = look('desktop');
+  assert.deepEqual(desk.picks, ['living', ...Array.from(desk.S.wallpapers, w => w.id), 'custom']); assert.equal(desk.living, 'Living canvas');
+  assert.deepEqual(look('phone').picks, [], 'no Background picker for Wizard on the phone');
+  // The renderer: the real drawLayer draws a Wizard image with the shared Landscapes painter on the Wizard wall.
+  const skins = read('web/core/skins.js');
+  const layer = (wall, wizard) => {
+    const drawn = [];
+    const painter = id => ({ init() {}, draw: (...a) => drawn.push([id, a.at(-1)]) });
+    const r = runRecording(between(skins, '  const wizardImage =', '\n') + block(skins, '  function drawLayer(') + '\nthis.drawLayer = drawLayer;',
+      { BGL: { cv: [{ style: {} }], cx: [{ setTransform() {} }], st: {}, t: 0, W: 10, H: 10, dpr: 1 }, SKINS: [{ id: 'nebula' }], BG: { nebula: painter('nebula'), landscapes: painter('landscapes') },
+        wizardBackgrounds: () => wizard, wizardWall: wall, wall: 'clouds' });
+    r.drawLayer(0, 0, 1, 16); return drawn;
+  };
+  assert.deepEqual(layer('lake', true), [['landscapes', 'lake']], 'a Wizard image: the shared painter, the Wizard wall');
+  assert.deepEqual(layer('living', true), [['nebula', 'clouds']], 'the living canvas: the palette\'s own painter');
+  assert.deepEqual(layer('lake', false), [['nebula', 'clouds']], 'Mizel and others: unchanged');
+  // The material: skins.css and the AI apps sheet cascaded on a desktop window (mini-css).
+  const css = noImports(read('web/core/skins.css')).join('\n'), aad = noImports(read('web/layouts/ai-apps/desktop.css')).join('\n');
+  const win = attrs => {
+    const doc = createDocument();
+    for (const [k, v] of Object.entries({ 'data-shell': 'desktop', 'data-layout': 'ai-apps', 'data-skin': 'nebula', ...attrs })) doc.documentElement.setAttribute(k, v);
+    doc.body.innerHTML = '<div class="win"></div>';
+    return { bg: cascade(doc.querySelector('.win'), css).background?.value, main: cascade(doc.documentElement, aad)['--aad-main']?.value };
+  };
+  assert.deepEqual(win({ 'data-wizard-backgrounds': '', 'data-image-background': '' }), { bg: 'color(from var(--sk-win) srgb r g b / 1)', main: 'color(from var(--sk-win) srgb r g b / 1)' }, 'Wizard on an image: its opaque palette tint');
+  assert.deepEqual(win({ 'data-wizard-backgrounds': '' }), { bg: 'color(from var(--sk-win) srgb r g b / 1)', main: 'color(from var(--sk-win) srgb r g b / 1)' }, 'and on the living canvas');
+  assert.deepEqual(win({ 'data-image-background': '', 'data-skin': 'landscapes' }), { bg: 'var(--wz-panel, var(--wz-base, var(--bg)))', main: 'var(--wz-panel, var(--aad-canvas))' }, 'other image skins keep their panel material');
 });
 
 // Resolve the root-only material rules as well as skins.js's token writes. The old

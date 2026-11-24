@@ -11,8 +11,10 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { modelContext } from './fixtures/chats-list-model.mjs';
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
+import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
-const live = read('web/live.js'), chats = read('web/core/chats.js'), tracker = read('web/core/thread-tracker.js');
+const live = withLiveParts(read('web/live.js')), chats = withParts(read('web/core/chats.js')), tracker = read('web/core/thread-tracker.js');
 // The fixture's times move to "a few minutes ago", so Recent's one-week window never ages the test out.
 const RAW = JSON.parse(read('tests/fixtures/sessions-list-1360.json'));
 const SHIFT = Date.now() - 5 * 60e3 - Math.max(...RAW.data.map(s => Date.parse(s.activityAt)));
@@ -46,15 +48,15 @@ function harness(payload = PAYLOAD, box = { seen: { initializedAt: 1, threads: {
   const line = t => { const i = chats.indexOf('\n  ' + t); assert.ok(i >= 0, t); return chats.slice(i + 1, chats.indexOf('\n', i + 1)); };
   const block = (a, b) => { const i = chats.indexOf('\n  ' + a); assert.ok(i >= 0, a); const j = chats.indexOf('\n  ' + b, i); assert.ok(j > i, b); return chats.slice(i + 1, j); };
   const tline = t => { const i = tracker.indexOf('\n  ' + t); assert.ok(i >= 0, t); return tracker.slice(i + 1, tracker.indexOf('\n', i + 1)); };
-  Object.assign(c, { CHAN_SWITCH: 'wizard/chat-channels', LIVE: L, snoozeLast: () => false, deferredOf: s => !!s.deferred && !s.archived,
+  Object.assign(c, { LIVE: L, snoozeLast: () => false, deferredOf: s => !!s.deferred && !s.archived,
     readyOrder: 'newest', SEC_PAGE: 40, secOpen: { working: true, ready: true, recent: true }, ch: () => ({ more: {} }), noteRow: () => '', noteAt: () => 0,
     STI: new Proxy({}, { get: () => '' }), esc: v => String(v ?? '').replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[ch]),
     clip: (v, n) => String(v ?? '').slice(0, n), ago: () => '1m', workLabel: () => 'Working', privRow: () => false, AGS: () => null, topicOn: () => false,
     TOPIC: null, subjectOf: () => '', PIN: { has: () => false, on: () => true }, BOOM: () => null, PIN_SVG: '', chanName: () => 'launch', agentTail: () => '' });
-  vm.runInContext(['const WORKING_ST =', 'const isWorking =', 'const channelsOn =', 'const markDoneOn =', 'const handledNow =', 'const chanNeeds =',
+  vm.runInContext(['const WORKING_ST =', 'const isWorking =', 'const handledNow =', 'const chanNeeds =',
     'const chanUnread =', 'const actNeeds =', 'const actUnread =', 'const actMark =', 'const chanAt =', 'const ATT =', 'const attOf =', 'const STI_LAB =', 'const STI_TIP ='].map(line).join('\n')
-    + '\n' + ['const ID =', 'const RETIRED_BY =', 'const on ='].map(tline).join('\n')
-    + '\n' + block('function actRowMark(s)', '// A thread of an agent other') + block('function stiKind(s)', 'const stiBadge =') + block('function chatRow(s', '/* Ready has three orders')
+    + '\n' + ['const ID =', 'const on ='].map(tline).join('\n')
+    + '\n' + block('function actRowMark(s)', '// A thread of an agent other') + block('function stiKind(s)', 'const stiBadge =') + block('function chatRow(s', '/* Agent inbox (switch wizard/agent-inbox)')
     + block('const ACT_SORTS = () =>', '// The sort and Show older taps').replace('let actOlder = false;', 'let actOlder = false, rowChan = true;')
     + '\nthis.rule = { needs: actNeeds, unread: actUnread, mark: actMark, attOf, trackerOn: on }; this.activityBody = activityBody;', c);
   // The Thread tracker as chats.js sees it: its real on(); if it were on, every row would get a "waiting on you" dot.
@@ -80,7 +82,7 @@ test('issue 1360, real list payload: a Your call reply stays in Ready with amber
   const s = h.L.session(CHECK);
   assert.equal(s.listVersion, 1, 'the row came through the Service list projection');
   assert.deepEqual({ state: s.attention?.state, status: s.status }, { state: 'check', status: 'completed' }, 'the payload keeps the status line to the rule');
-  assert.equal(h.rule.trackerOn(), false, 'Channels on: the Thread tracker draws no dots of its own');
+  assert.equal(h.rule.trackerOn(), false, 'the Thread tracker is retired: it draws no dots of its own');
   assert.deepEqual(activity(h), { working: [], ready: ['check:needs', 'needs:needs', 'green:new', 'fyi:new'], recent: [] }, 'all unread to start: amber over green');
   for (const id of [CHECK, NEEDS, GREEN]) h.L.markSeen(id); // open these threads, then Back (FYI stays unread)
   await new Promise(r => setImmediate(r));
@@ -109,12 +111,4 @@ test('issue 1360, real list payload: Mark done moves Your call to Recent; a newe
   assert.equal(a.ready[0], 'check:needs', 'a newer Your call reply is amber again: ' + JSON.stringify(a));
   h.L.markSeen(CHECK);
   assert.equal(activity(h).ready[0], 'check:needs', 'and opening it keeps it in Ready');
-});
-
-test('issue 1360, real list payload: switch off leaves the status line and the Thread tracker as before', async () => {
-  const h = harness(); await h.L.refresh(); h.dataset.tweaks = 'wizard/thread-tracker';
-  assert.equal(h.rule.attOf(h.L.session(CHECK))?.state, 'check');
-  assert.equal(h.rule.trackerOn(), true, 'switch off: the Thread tracker keeps its own dots');
-  // and the markup reader really sees them (so its "no tracker dot in Recent" check above can fail)
-  assert.match(h.c.activityBody({ id: 'w' }, h.L.sessions, null), /data-morph-key="row:synthetic_1360_check">[^]*?tt-dot/);
 });

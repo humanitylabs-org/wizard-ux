@@ -56,7 +56,7 @@ const SHELL = `<!doctype html><html><head><meta charset="utf-8">
       for (const [n, x] of items.entries()) { const img = new Image(); img.src = x.url; img.title = x.name; if (n === i) img.className = 'cur';
         img.onload = () => v.loaded.push({ n, w: img.naturalWidth }); img.onerror = () => v.loaded.push({ n, error: true }); box.append(img); }
       return true; } } };</script>
-<script src="/wizard-os-home/core/app-services.js"></script>
+<script src="/wizard-os-home/core/app-services-windows.js"></script><script src="/wizard-os-home/core/app-services-boundary.js"></script><script src="/wizard-os-home/core/app-services.js"></script>
 <style>body{font:13px system-ui;margin:8px;background:#120c24;color:#eee} iframe{width:640px;height:70px;border:1px solid #554;background:#fff}
  #viewer img{height:80px;margin:4px;border:2px solid transparent} #viewer img.cur{border-color:#f4d35e} #log{white-space:pre-wrap;font:12px ui-monospace,monospace;margin-top:6px}</style></head>
 <body><div class="win" id="w1"><header class="wbar"><span>Notes</span></header>

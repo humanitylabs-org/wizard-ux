@@ -2,10 +2,15 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
-const read = p => fs.readFileSync(new URL('../' + p, import.meta.url), 'utf8');
+import { withSettingsParts } from './fixtures/settings-parts.mjs'; // settings.js parts moved out verbatim (issue 1665)
+import { withDesktopParts } from './fixtures/desktop-parts.mjs';
+import { withShellParts } from './fixtures/shell-parts.mjs';
+import { between, block, runRecording } from './fixtures/source-slice.mjs';
+const read = p => withShellParts(fs.readFileSync(new URL('../' + p, import.meta.url), 'utf8'));
 const assetList = html => [...html.matchAll(/<(?:script[^>]*src|link[^>]*href)="([^"]+)"/g)].map(m => m[1]);
 const inventory = JSON.parse(read('docs/responsive-feature-inventory.json'));
 
+// static-rule: an inventory of the two entrypoints' script and style tags (each once, in load order, every file present)
 test('both entrypoints load shared feature surface, skin engine and CSS exactly once and in dependency order', () => {
   for (const file of ['index.html', 'desktop.html']) {
     const assets = assetList(read('web/' + file));
@@ -19,6 +24,7 @@ test('both entrypoints load shared feature surface, skin engine and CSS exactly 
   }
 });
 
+// static-rule: the entrypoints and docs/responsive-feature-inventory.json must agree (every shell-only asset audited)
 test('new entrypoint-exclusive features fail the parity guard (all current module/style differences explicitly audited)', () => {
   const phone = new Set(assetList(read('web/index.html'))), desktop = new Set(assetList(read('web/desktop.html')));
   assert.deepEqual([...phone].filter(x => desktop.has(x)).sort(), inventory.sharedAssets, 'Update the full shared-asset inventory when registering a new module.');
@@ -34,27 +40,45 @@ test('new entrypoint-exclusive features fail the parity guard (all current modul
 });
 
 test('shell adapters cannot retain a second Settings renderer, picker, or hardcoded route list', () => {
+  // Both shells mount the one shared renderer on their Settings body (phone app-cards.js renderSettings, desktop.js).
+  const phone = read('web/app-cards.js'), desk = withDesktopParts(read('web/desktop/desktop.js'));
+  const mounted = [], view = { renders: 0, render() { this.renders++; } }, body = { id: 'settingsBody' };
+  const mount = (el, ctx) => { mounted.push([el, ctx]); return view; };
+  const p = runRecording(`${block(phone, '  function renderSettings() {')}\nthis.renderSettings = renderSettings;`, { appVars: {}, $: sel => (sel === '#settingsBody' ? body : null), settingsContext: () => ({ shell: 'phone' }), window: { WosSettings: { mount } } });
+  p.renderSettings(); p.renderSettings();
+  assert.equal(mounted.length, 1, 'phone: mounted once'); assert.equal(mounted[0][0], body); assert.equal(view.renders, 1, 'then re-rendered');
+  const d = runRecording(`${between(desk, '  const settingsView = window.WosSettings.mount(', '  function renderSettings() { settingsView.render(); }')}\n  function renderSettings() { settingsView.render(); }\nthis.renderSettings = renderSettings;`, { $: sel => (sel === '#settingsBody' ? body : null), window: { WosSettings: { mount } } });
+  d.renderSettings();
+  assert.equal(mounted.length, 2, 'desktop: the same renderer'); assert.equal(mounted[1][0], body); assert.equal(mounted[1][1].shell, 'desktop'); assert.equal(view.renders, 2);
+  // A deep link to a Settings page goes to the shared router before any shell fallback, in both shells.
+  for (const [file, src] of [['web/app-boot.js', read('web/app-boot.js')], ['web/desktop/desktop-links.js', read('web/desktop/desktop-links.js')]]) {
+    const routed = [];
+    const h = runRecording(`const H = { ${block(src, '    view(v, section, installQuery) {')} };\nthis.view = H.view;`, { APP: { wizard: { id: 'wizard' }, files: null }, appVars: { W: {}, desks: [] }, window: { WosFeatures: { open: () => false }, WosSettings: { route: (v, open) => { routed.push([v, typeof open]); return v === 'look'; } } } });
+    h.view('look');
+    assert.deepEqual(routed, [['look', 'function']], `${file}: Settings routes its own pages`);
+    assert.ok(!h.calls.some(c => c[0] === 'openApp'), `${file}: nothing else opens`);
+  }
+  // The deep-link parser asks the shared feature list, not a second route list (web/core/deeplink.js).
+  const ctx = { window: { WosSettings: { features: [{ aliases: ['look', 'zz-page'] }] }, WosFeatures: { has: () => false } }, location: new URL('https://box.test/wizard-os-home/'), URL, URLSearchParams };
+  runRecording(read('web/core/deeplink.js'), ctx);
+  const parse = href => ctx.window.WizCore.deeplink.parse(href)?.view;
+  assert.equal(parse('https://box.test/wizard-os-home/?view=zz-page'), 'zz-page'); assert.equal(parse('https://box.test/wizard-os-home/?view=look'), 'look');
+  ctx.window.WosSettings.features = []; assert.equal(parse('https://box.test/wizard-os-home/?view=zz-page'), undefined, 'a page Settings does not list is no route');
   for (const f of ['web/app.js', 'web/desktop/desktop.js']) {
-    const s = read(f);
-    assert.match(s, /WosSettings\.mount\(/);
-    assert.match(s, /WosSettings\.route\(v, openSettings\)/);
+    const s = withDesktopParts(read(f));
     assert.doesNotMatch(s, /function (?:lookGroup|pickSkin)\(/);
     assert.doesNotMatch(s, /data-skinpick|<div class="st-group"/);
   }
   assert.doesNotMatch(read('web/core/polish.css'), /html\[data-shell="desktop"\] \.st-/);
-  const settings = read('web/core/settings.js');
-  assert.doesNotMatch(settings, /data-layoutpick|data-layout-row/);
-  assert.match(settings, /data-skinfamily=/, 'skin families and their colours stay separate in the shared renderer');
-  assert.match(settings, /<h4>Skin<\/h4>/);
-  assert.match(settings, /data-newskin/);
-  assert.match(read('web/core/deeplink.js'), /WosSettings\?\.features\.some/);
+  // The shared renderer's skin families, colours and New skin are run in tests/look-skin-colour-separation.test.mjs.
+  assert.doesNotMatch(withSettingsParts(read('web/core/settings.js')), /data-layoutpick|data-layout-row/);
 });
 
 function harness() {
   const sandbox = { console, Map, Set, Date, String, navigator: { userAgent: 'Desktop fixture' }, location: { host: 'fixture.invalid' }, setTimeout: fn => fn(), CSS: { escape: String }, document: { activeElement: null } };
   sandbox.window = sandbox;
   sandbox.WizCore = {}; sandbox.WizBrand = { html: 'W' };
-  vm.runInNewContext(read('web/core/settings.js'), sandbox);
+  vm.runInNewContext(withSettingsParts(read('web/core/settings.js')), sandbox);
   const roots = [];
   for (const shell of ['phone', 'desktop']) {
     const handlers = {}, root = { innerHTML: '', scrollTop: 0, classList: { add() {} }, dataset: {}, contains: () => false, querySelector: () => null, addEventListener: (event, fn) => handlers[event] = fn, removeEventListener() {} };

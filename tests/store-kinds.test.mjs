@@ -6,6 +6,8 @@ import {readFileSync, mkdtempSync, writeFileSync, rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import vm from 'node:vm';
+import {storeContext, cut} from './fixtures/store-slice-harness.mjs';
+import { block, runRecording } from './fixtures/source-slice.mjs';
 
 const service={id:'screen-service',name:'Messenger-like',repo:'example/screen-service',type:'service',category:'app',has_view:true,commit:'a'.repeat(40)};
 test('normalized service with UX is Apps, screenless service alone is Agent apps',()=>{
@@ -54,7 +56,6 @@ test('legacy private views still work; explicit headless and connector records a
 test('detail behavior hint follows the shared UX kind, not service packaging',()=>{
  const s=readFileSync(new URL('../web/store/store.js',import.meta.url),'utf8');
  const expression=s.match(/const how = (\{[^\n]+\})\[k\.id\]/);
- assert.ok(expression,'detail hint must index the same kind as the Kind label');
  const hints=vm.runInNewContext('('+expression[1]+')');
  assert.equal(hints[status.storeKind(service)],'Opens in its own Wizard window.');
  assert.doesNotMatch(hints[status.storeKind(service)],/background|no screen/i);
@@ -63,10 +64,26 @@ test('detail behavior hint follows the shared UX kind, not service packaging',()
  assert.equal(hints[status.storeKind({...service,type:'external'})],'Connect an account once; every agent can use it.');
 });
 test('Store clean preserves strict view flag; all lists, query terms and detail labels share classifier',()=>{
+ // clean(), search() and openKind() from store.js over the real storeKind (tests/fixtures/store-slice-harness.mjs).
+ const shown=[];
+ const ctx=storeContext(cut('  function search(q) {','\n  const removable =')+cut('  function openKind(id, keep) {','  function openApp(id)')+'\nthis.clean=clean;this.search=search;this.openKind=openKind;this.kindOf=kindOf;',
+  {S:{apps:[],q:''},top:()=>'search',pop(){},push(){},window:{scrollTo(){}},showList:(title,list,sub)=>shown.push({title,ids:list.map(a=>a.id),sub})});
+ assert.equal(ctx.clean({...service,has_view:'true'}).has_view,false,'only a real true is a view');
+ assert.equal(ctx.clean(service).has_view,true);
+ const apps=[ctx.clean(service),ctx.clean({...service,id:'quiet-service',name:'Quiet',has_view:false}),ctx.clean({...service,id:'helper',name:'Helper',type:'agent'}),ctx.clean({...service,id:'mail-link',name:'Mail link',type:'external'})];
+ ctx.S.apps=apps;
+ assert.deepEqual(apps.map(a=>ctx.kindOf(a).id),apps.map(status.storeKind),'one classifier');
+ for(const k of ['apps','agent-apps','agents','connections']){ctx.openKind(k,true);assert.deepEqual(shown.at(-1).ids,apps.filter(a=>status.storeKind(a)===k).map(a=>a.id),k);}
+ // A kind's word is a query term: "agent app" finds the screenless service, never the one with a screen.
+ ctx.search('agent app');assert.deepEqual(shown.at(-1).ids,['quiet-service']);
+ ctx.search('connector');assert.deepEqual(shown.at(-1).ids,['mail-link']);
+ // the real showDetail: its Kind label and its hint come from the same kindOf as the lists
  const s=readFileSync(new URL('../web/store/store.js',import.meta.url),'utf8');
- assert.match(s,/has_view:\s*a\.has_view\s*===\s*true/);
- assert.match(s,/const kindOf = a =>.*storeKind\(a\)/);
- assert.match(s,/S\.apps\.filter\(a => kindOf\(a\) === k\)/);
- assert.match(s,/kindOf\(a\)\.one\]\.join/);
- assert.match(s,/const k = kindOf\(a\)/);
+ for(const a of apps){
+  const detail={innerHTML:''};
+  const D=runRecording(`${block(s,'  function showDetail(id) {')}\nthis.showDetail=showDetail;`,{find:()=>a,selected:x=>x,kindOf:ctx.kindOf,hue:()=>['#000','#111'],S:{apps},esc:x=>String(x??''),
+   $:id=>(id==='detail'?detail:{innerHTML:'',classList:{add(){},remove(){},toggle(){}},hidden:false,querySelector:()=>null}),action:()=>'',icon:()=>'',badge:()=>'',removable:()=>false,provenance:()=>({label:''}),cap:x=>x});
+  try{D.showDetail(a.id);}catch(_){/* after the detail is drawn */}
+  assert.ok(detail.innerHTML.includes(`<p>${ctx.kindOf(a).one}`),`${a.id}: the detail label reads the same kindOf`);
+ }
 });

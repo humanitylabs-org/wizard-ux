@@ -3,9 +3,12 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import fixture from '../tools/qa-desktop-frame-fixture.cjs';
+import { withDesktopParts } from './fixtures/desktop-parts.mjs';
+import { runFrameHotkeys } from './fixtures/r8A-frame-hotkeys.mjs';
+import { fakeBox, device } from './fixtures/welcome-harness.mjs';
 const welcome = fs.readFileSync(new URL('../web/core/welcome.js', import.meta.url), 'utf8');
-const desktop = fs.readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8');
-const harness = fs.readFileSync(new URL('../qa-desktop-frame-hotkeys.cjs', import.meta.url), 'utf8');
+const desktop = withDesktopParts(fs.readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8'));
+const harness = fs.readFileSync(new URL('../qa/scripts/qa-desktop-frame-hotkeys.cjs', import.meta.url), 'utf8');
 function slice(source, start, end) { const a = source.indexOf(start), b = source.indexOf(end, a); assert(a >= 0 && b > a); return source.slice(a, b); }
 function storage(phone = false) {
   const saved = new Map(), s = { localStorage: { getItem: k => saved.has(k) ? saved.get(k) : null, setItem: (k, v) => saved.set(k, String(v)) } };
@@ -36,9 +39,13 @@ async function boot(options, setup, state) {
 }
 test('actual Welcome boot diagnoses old empty options as disconnected despite DOM removal', async () => {
   const out = await boot({}, {}, ''); assert.deepEqual(out.opened, ['ai']); assert.deepEqual(out.log, ['boot:false::false']);
-  assert(welcome.includes('get active() { return !!el; }'));
-  // The old harness removed a node, not this lexical controller reference.
-  assert(welcome.includes('function close()')); assert(!harness.includes("document.getElementById('wosWelcome')?.remove()"));
+  // The old harness removed a node, not this lexical controller reference: the real Welcome stays active when its
+  // node is pulled out of the page, and only its own close (Back at the start) ends it.
+  const d = device(fakeBox()); await d.boot();
+  assert.equal(d.W.active, true, 'nothing signed in: the Welcome is open');
+  d.doc.overlay.remove(); assert.equal(d.W.active, true, 'DOM removal does not close it');
+  d.W.back(); assert.equal(d.W.active, false, 'its own close does');
+  assert(!harness.includes("document.getElementById('wosWelcome')?.remove()"));
 });
 test('actual Welcome boot accepts fixture schema with done + ready + first_run:false', async () => {
   const out = await boot(fixture.ownerRead('/wizard/hermes/api/model/options'), fixture.ownerRead('/wizard/v1/setup'), 'done');
@@ -74,12 +81,46 @@ test('fixture observer forwards identical event and this; uninstrumented lane le
     assert.equal(e.stopped, true); // only the intentionally blocking app listener consumes propagation
   }
 });
-test('real browser oracle remains exact; no force clicks or alternate expected desktop indexes', () => {
-  assert(harness.includes("'Alt+2 from focused app input must switch without a desktop click'"));
-  assert(harness.includes('trusted chord must reach the app')); assert(harness.includes('baseline Document adapter must specifically be stranded'));
-  assert(!harness.includes('force: true')); assert(harness.includes('real Welcome controller must be inactive'));
-  const settings = fs.readFileSync(new URL('../web/core/settings.js', import.meta.url), 'utf8');
-  assert(settings.includes("{ id: 'appearance', title: 'Appearance'"));
-  assert(harness.includes('[data-st-page="appearance"]')); assert(!harness.includes('[data-st-page="look"]'));
-  assert(harness.includes("page.locator('.mz-intro').waitFor({ state: 'detached' })"));
+// The sealed browser check itself (qa/scripts/qa-desktop-frame-hotkeys.cjs) run against a fake Chromium: a small
+// desktop state machine, with the REAL Settings and skins.js behind its Settings clicks, refusing force clicks
+// (tests/fixtures/r8A-frame-hotkeys.mjs). A broken fake must fail at the exact oracle, never pass another way.
+test('real browser oracle remains exact; no force clicks or alternate expected desktop indexes', async () => {
+  const good = await runFrameHotkeys();
+  assert.equal(good.report.failedCase, null, good.report.failure); assert.equal(good.report.passed.length, 17); assert.equal(good.exitCode, undefined);
+  // Settings › Appearance in the real Settings, both skins picked there (the fake refuses force clicks and a shown intro)
+  assert.deepEqual(good.clicks.filter(c => c.startsWith('#dsettings')), ['[data-st-page="appearance"]', '[data-skinfamily="wizard"]', '[data-skinpick="nebula"]', '[data-st-page="appearance"]', '[data-skinfamily="mizel"]', '[data-skinpick="landscapes"]'].map(s => '#dsettings ' + s));
+  const fails = async (knobs, failedCase, message) => {
+    const r = await runFrameHotkeys(knobs);
+    assert.equal(r.exitCode, 1, JSON.stringify(knobs)); assert.equal(r.report.failedCase, failedCase, JSON.stringify(knobs));
+    assert.ok(r.report.failure.includes(message), `${JSON.stringify(knobs)}: ${r.report.failure.slice(0, 300)}`);
+  };
+  const REG = 'REGRESSION: frame window capture cannot strand desktop switching';
+  await fails({ stranded: true }, REG, 'candidate forwards the original trusted event once');
+  await fails({ noSwitch: true }, REG, 'Alt+2 from focused app input must switch without a desktop click');
+  await fails({ appMisses: true }, REG, 'trusted chord must reach the app');
+  await fails({ welcomeActive: true }, 'setup', 'real Welcome controller must be inactive');
+  // negative control: the baseline must reach this exact oracle and fail there, not merely fail startup
+  await fails({ env: { QA_NEGATIVE_CONTROL: '1' } }, REG, 'baseline Document adapter must specifically be stranded');
+  await fails({ stranded: true, env: { QA_NEGATIVE_CONTROL: '1' } }, REG, 'Alt+2 from focused app input must switch without a desktop click');
+});
+test('the shipped sealed run passes end to end', async () => {
+  const shipped = await runFrameHotkeys();
+  assert.equal(shipped.report.failedCase, null, shipped.report.failure); assert.equal(shipped.report.passed.length, 17);
+});
+// Issue 1726: the opaque/nested-frames source check reads watchFrame's code, not its comments.
+test('watchFrame source check ignores comments but still catches a message bridge', async () => {
+  const CASE = 'opaque/nested frames remain outside the shortcut bridge and cannot message-dispatch a chord';
+  for (const hookLine of ['// A comment may say postMessage or querySelectorAll; that is not code.',
+    "/* f.contentWindow.postMessage(x, '*'); window.addEventListener('message', go); */ // doc.querySelectorAll('iframe')"]) {
+    const ok = await runFrameHotkeys({ hookLine });
+    assert.equal(ok.report.failedCase, null, ok.report.failure);
+  }
+  for (const [hookLine, message] of [
+    ["f.contentWindow?.postMessage({ hello: 1 }, '*');", 'watchFrame must not post messages'],
+    ["window.addEventListener('message', e => onKey(e.data, true));", 'watchFrame must not listen for messages'],
+    ["f.contentDocument?.querySelectorAll('iframe');", 'watchFrame must not scan nested documents'],
+  ]) {
+    const r = await runFrameHotkeys({ hookLine });
+    assert.equal(r.report.failedCase, CASE, hookLine); assert.ok(r.report.failure.includes(message), r.report.failure.slice(0, 300));
+  }
 });

@@ -2,7 +2,11 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
-const source = readFileSync(new URL('../web/core/escape-back.js', import.meta.url), 'utf8');
+import { withShellParts } from './fixtures/shell-parts.mjs';
+import { withWebParts } from './fixtures/web-parts.mjs';
+import { block, runRecording } from './fixtures/source-slice.mjs';
+import { desktopKeys, desktopSource } from './fixtures/desktop-keys-harness.mjs';
+const source = withShellParts(withWebParts(readFileSync(new URL('../web/core/escape-back.js', import.meta.url), 'utf8')));
 function fixture() { const window = {}; vm.runInNewContext(source, { window }); return window.WizEscapeBack.create(); }
 test('recording cancels before app/chat focus and an open overlay, one action only', () => {
   for (const focus of ['app', 'chat']) { const d = fixture(), calls = []; d.push(() => calls.push('menu'));
@@ -39,9 +43,23 @@ test('bare desktop no-op makes no state/DOM changes; repeat/composition do not p
   assert.equal(calls, 0);
 });
 test('desktop Escape is dispatched before any layout key and legacy list has a core ownership gate', () => {
-  const desktop = readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8');
-  const body = desktop.slice(desktop.indexOf('function onKey('));
-  assert.ok(body.indexOf('escapeBack.run') < body.indexOf('WosSkinHost?.key'));
-  const chats = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
-  assert.match(chats, /if \(H\.ownsChatList\?\.\(\)\) \{ el\?\.replaceChildren\(\); return; \}/);
+  // the desktop's real onKey: Escape goes to its Back step and never reaches a layout's own keys
+  const layout = [];
+  const k = desktopKeys({ globalThis: { WosSkinHost: { key: e => { layout.push(e.key); return true; } } } });
+  const esc = k.key('Escape', { altKey: false });
+  assert.ok(k.names().includes('desktopBack'), 'Escape: the shell\'s Back');
+  assert.equal(esc.defaultPrevented, true); assert.deepEqual(layout, [], 'before any layout key');
+  k.key('KeyJ'); assert.deepEqual(layout, ['KeyJ'], 'other keys still reach the layout first');
+  // desktopBack hands Escape to the shared registry (escape-back.js) with the recording, surface and fallback steps
+  const back = runRecording(block(desktopSource, '  function desktopBack(event) {') + '\nglobalThis.back = desktopBack;', { escapeBack: fixture(), VOICE: { state: 'idle' }, window: {} });
+  assert.equal(back.back({ key: 'Escape' }), '', 'a bare desktop: nothing to peel');
+  assert.ok(back.calls.some(c => c[0] === 'escStep'), 'the window step comes last');
+  // a layout that owns the list: the core list paints nothing under it (and empties what was there)
+  const chats = withShellParts(withWebParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8')));
+  let cleared = 0;
+  const el = { innerHTML: '<old list>', replaceChildren() { cleared++; } };
+  const list = runRecording(block(chats, '  function renderChatList(') + '\nglobalThis.render = renderChatList;', { H: { ownsChatList: () => true }, chanSide: null });
+  list.render({ id: 'w1', thread: null }, el);
+  assert.equal(cleared, 1); assert.equal(el.innerHTML, '<old list>', 'not painted');
+  assert.ok(!list.calls.some(c => c[0] === 'syncListTitle'), 'stops before any list work');
 });

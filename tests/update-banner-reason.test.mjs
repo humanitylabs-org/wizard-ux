@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
+import { phoneBanner } from './fixtures/r7A-update-banner.mjs';
+import { styles } from './fixtures/w5-css.mjs';
 
 // Synthetic documents only: no live chats, sends, Look writes or capture commands.
 function fixture(shell = 'phone') {
@@ -56,10 +58,29 @@ test('host hand-off becoming reload-safe does not waive another app hold', async
   f.plan = { ok: false, blocking: [{ kind: 'work', appId: 'recorder', reason: 'Saving' }] }; f.busy = false; f.tick();
   assert.match(f.html(), /Recorder is saving/); assert.equal(f.web.reload('tap'), false); assert.equal(f.reloads, 0);
 });
-test('shared reason has no separate panel; rescue controls retain pill shape and 44px targets', () => {
+test('shared reason has no separate panel; rescue controls retain pill shape and 44px targets', async () => {
   const css = readFileSync(new URL('../web/core/update-banner.css', import.meta.url), 'utf8');
-  assert.match(css, /\.wos-reload-detail \{ background: transparent/);
-  assert.match(css, /\.wos-reload-rescue button \{ min-height: 44px;[^}]*border-radius: 99px/);
-  assert.match(css, /#bar:has\(#dvWeb \.wos-reload-detail\) \.bar-r \{ align-self: start/);
-  assert.match(css, /background: var\(--wz-panel/); assert.match(css, /color: var\(--wz-text-secondary/);
+  // The real banner with a reason and its rescue buttons: an unsent take from an earlier session blocks the reload.
+  const blockedBy = { plan: { ok: false, blocking: [{ kind: 'capture', appId: 'recorder' }], capture: { safe: false } }, takes: [{ id: 't1', appId: 'recorder', startedAt: 0 }] };
+  for (const shell of ['phone', 'desktop']) {
+    const b = await phoneBanner({ shell, ...blockedBy });
+    const detail = b.banner.querySelector('.wos-reload-detail'), reason = detail?.querySelector('.wos-reload-reason');
+    assert.ok(detail && reason, `${shell}: the reason is drawn inside the banner`);
+    assert.match(reason.textContent, /unsent recording/);
+    assert.match(styles(b.banner, [css]).background, /^var\(--wz-panel/, 'the banner is the one panel');
+    assert.equal(styles(detail, [css]).background, 'transparent', 'no separate panel for the reason');
+    assert.match(styles(reason, [css]).color, /^var\(--wz-text-secondary/);
+    const buttons = detail.querySelectorAll('.wos-reload-rescue button');
+    assert.deepEqual(buttons.map(x => x.textContent), ['Save to Files and clear', 'Discard']);
+    for (const btn of buttons) {
+      const st = styles(btn, [css]);
+      assert.equal(st['min-height'], '44px', `${shell} ${btn.textContent}: 44px target`);
+      assert.equal(st['border-radius'], '99px', `${shell} ${btn.textContent}: pill`);
+    }
+    if (shell === 'desktop') {
+      assert.equal(styles(b.bar.querySelector('.bar-r'), [css])['align-self'], 'start', 'the top bar makes room for the taller banner');
+      const plain = await phoneBanner({ shell });
+      assert.notEqual(styles(plain.bar.querySelector('.bar-r'), [css])['align-self'], 'start', 'only while a reason shows');
+    }
+  }
 });

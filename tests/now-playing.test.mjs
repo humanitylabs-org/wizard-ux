@@ -2,7 +2,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
-const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
+import { withShellParts } from './fixtures/shell-parts.mjs';
+import { withWebParts } from './fixtures/web-parts.mjs';
+import { fixture } from './fixtures/tweaks.mjs';
+import { createDocument } from './fixtures/mini-dom.mjs';
+import { onSkin, styles } from './fixtures/w5-css.mjs';
+import { between } from './fixtures/source-slice.mjs';
+const read = p => withShellParts(withWebParts(readFileSync(new URL('../' + p, import.meta.url), 'utf8')));
 const tick = () => new Promise(r => setTimeout(r, 0));
 
 /* A shell document holding same-origin app frames, each with its own window, document and HTMLMediaElement. */
@@ -79,36 +85,67 @@ test('frame reload after teardown cannot rearm observation; re-enable still obse
   assert.equal(a.proto.play, original);
 });
 
-test('api.media: layouts and trusted tweaks that ask for it; both shells wire the app names and the watcher', () => {
-  const host = read('web/core/skin-host.js'), app = read('web/app.js'), desk = read('web/desktop/desktop.js');
-  assert.match(host, /if \(trusted && caps\.has\('media'\)\) api\.media = base\.media;/);
-  assert.match(host, /'settings',(?:'[a-z.]+',)*'media'\]\.includes\(c\)/);
-  for (const src of [app, desk]) { assert.match(src, /mediaApp: id => \{ const a = APP\[id\];/); assert.match(src, /mediaOpen: id => !!window\.WizOpenApp\?\.\(id\)/); }
-  for (const page of ['web/index.html', 'web/desktop.html']) assert.ok(read(page).includes('<script src="core/media-watch.js"></script>'), page);
+test('api.media: layouts and trusted tweaks that ask for it; both shells wire the app names and the watcher', async () => {
+  // skin-host: a trusted package that asks for media gets api.media; a stranger's, or one that did not ask, does not.
+  const man = (id, author, capabilities) => ({ id, name: 'x', version: '1.0.0', author, apiVersion: 1, capabilities, description: 'x' });
+  const f = fixture({ manifests: { 'stranger/np': man('stranger/np', 'stranger', ['media']), 'miguel/np-probe': man('miguel/np-probe', 'miguel', ['media']), 'miguel/np-none': man('miguel/np-none', 'miguel', []) } });
+  const got = {};
+  f.host._test.setImporter(async url => ({ default: api => { got[String(url).split('/tweaks/')[1].split('/tweak.js')[0]] = !!api.media && typeof api.media.watch === 'function'; return () => {}; } }));
+  await f.host.loadTweaks(['stranger/np', 'miguel/np-probe', 'miguel/np-none'], f.slots, { teamAuthors: ['miguel'] });
+  assert.deepEqual(got, { 'stranger/np': false, 'miguel/np-probe': true, 'miguel/np-none': false });
+  // Both shells name the app and open it for api.media (app-agentorb.js on the phone, desktop-boot.js on the desktop).
+  for (const file of ['web/app-agentorb.js', 'web/desktop/desktop-boot.js']) {
+    const src = readFileSync(new URL('../' + file, import.meta.url), 'utf8');
+    const lines = between(src, '    mediaApp: id => { const a = APP[id];', '\n') + '\n' + between(src, '    mediaOpen: id =>', '\n');
+    const opened = [];
+    const o = vm.runInNewContext(`({${lines}})`, { APP: { music: { id: 'music', name: 'Music' } }, ico: (tag, cls, a) => `<${tag} class="${cls}">${a.id}</${tag}>`, window: { WizOpenApp: id => (opened.push(id), id === 'music') } });
+    assert.deepEqual({ ...o.mediaApp('music') }, { name: 'Music', icon: '<span class="np-ic">music</span>' }, file);
+    assert.equal(o.mediaApp('nope'), null);
+    assert.equal(o.mediaOpen('music'), true); assert.equal(o.mediaOpen('gone'), false); assert.deepEqual(opened, ['music', 'gone']);
+  }
+  for (const page of ['web/index.html', 'web/desktop.html']) {
+    const doc = createDocument(); doc.documentElement.innerHTML = read(page).replace(/^<!doctype html>/i, '');
+    assert.ok(doc.querySelectorAll('script[src]').some(x => x.getAttribute('src') === 'core/media-watch.js'), page);
+  }
   const cat = JSON.parse(read('web/tweaks/catalog.json'));
   assert.ok(cat.tweaks.includes('miguel/now-playing')); assert.ok(!cat.defaults.includes('miguel/now-playing'), 'off by default');
   assert.equal(JSON.parse(read('web/core/slots.json')).slots['apps-top'], undefined, 'minimal: no pill, so no apps-column slot');
-  // minimal (Miguel, 4 Nov 2026): the package mounts nothing; it holds the watcher and styles the view's icon bars
+  // minimal (Miguel, 4 Nov 2026): the real package holds the watcher and mounts nothing
   const tw = read('web/tweaks/miguel/now-playing/tweak.js'), css = read('web/tweaks/miguel/now-playing/tweak.css');
+  const setup = vm.runInNewContext(`(() => { ${tw.replace('export default function setup', 'function setup')}; return setup; })()`, {});
+  let watching = 0, stopped = 0;
+  const off = setup({ media: { watch: fn => { watching++; assert.equal(typeof fn, 'function'); return () => { stopped++; }; } } });
+  assert.equal(watching, 1); off(); assert.equal(stopped, 1, 'its teardown is the watcher\'s');
+  assert.equal(typeof setup({}), 'function', 'without api.media: nothing, a no-op teardown');
   assert.doesNotMatch(tw, /slot|mount|createElement|pauseAll|np-pop/, 'no pill, no list, no Pause all, no top-bar control');
-  assert.match(tw, /return M\.watch\(\(\) => \{\}\);/);
   assert.doesNotMatch(css, /\.np\b|np-pop|np-all|apps-top|dock-end/, 'no pill / list css left');
-  assert.match(css, /\.aad-np:is\(:hover, :focus-visible\) \.aad-np-g \{ visibility: visible; \}/, 'hover: the bars become pause');
-  assert.match(css, /\.aad-np-g::after \{ content: ""; width: 2\.5px; height: 100%;/, 'the pause glyph has a height (a flex-end parent left it 0 px tall)');
-  assert.match(css, /\.aad-vtab\[data-media="paused"\] \.aad-np \{ animation: np-gone 250ms ease 4s both; \}/, 'paused: gone after a short grace');
-  assert.doesNotMatch(css.replace(/\/\*[\s\S]*?\*\//g, ''), /(^|\})\s*html\[data-tweaks~="miguel\/now-playing"\]\s*\{/, 'nothing styled at the root: idle is exactly tweak-off');
+  // The CSS on the view's bars (skeletons of the AI apps view's markup), with the package on.
+  const on = { 'data-tweaks': 'miguel/now-playing' };
+  const desk = sel => onSkin([css], sel, { skin: '', shell: 'desktop', attrs: { ...on, 'data-layout': 'ai-apps' } });
+  assert.equal(desk('.aad-np:hover .aad-np-g').visibility, 'visible', 'hover: the bars become pause');
+  assert.equal(desk('.aad-np-g::after').height, '100%', 'the pause glyph has a height (a flex-end parent left it 0 px tall)');
+  assert.equal(desk('.aad-np-g::after').width, '2.5px');
+  assert.match(desk('.aad-vtab[data-media="paused"] .aad-np').animation || '', /^np-gone 250ms ease 4s both$/, 'paused: gone after a short grace');
+  const rootEl = createDocument(); for (const [k, v] of Object.entries(on)) rootEl.documentElement.setAttribute(k, v);
+  assert.deepEqual(styles(rootEl.documentElement, [css]), {}, 'nothing styled at the root: idle is exactly tweak-off');
   for (const f of ['web/core/media-watch.js', 'web/core/skin-host.js', 'web/app.js', 'web/desktop/desktop.js']) assert.doesNotMatch(read(f), /now-playing/, f + ': core never names the package');
   // the phone (4 Nov 2026): the same bars on the AI apps Home icons; no hover, a 44 px invisible hit area, paused = a play mark that fades
   assert.doesNotMatch(tw, /env\.shell/, 'the phone watches too');
-  const P = 'html[data-tweaks~="miguel/now-playing"][data-shell="phone"]';
-  assert.ok(css.includes(P + ' .ah-np {'), 'phone badge rule');
-  assert.match(css, /\.ah-np \{[^}]*width: 20px; height: 20px;/, 'a small drawn badge');
-  const hit = css.match(/\.ah-np::before \{ content: ""; position: absolute; inset: (-?\d+)px (-?\d+)px (-?\d+)px (-?\d+)px;/);
-  assert.ok(hit, 'an invisible padded hit area'); const [t, r, b, l] = hit.slice(1).map(Number);
+  const phone = (sel, extra = {}) => onSkin([css], sel, { skin: '', shell: 'phone', attrs: { ...on, ...extra } });
+  const badge = phone('.ah-app .ah-np');
+  assert.equal(badge.width, '20px'); assert.equal(badge.height, '20px', 'a small drawn badge');
+  const hit = phone('.ah-app .ah-np::before');
+  const inset = (hit.inset || '').split(/\s+/).map(v => parseFloat(v));
+  assert.equal(hit.position, 'absolute'); assert.equal(inset.length, 4, 'an invisible padded hit area');
+  const [t, r, b, l] = inset;
   assert.ok(20 - t - b >= 44 && 20 - l - r >= 44, 'at least 44 px each way');
-  assert.doesNotMatch(css.match(/\.ah-np::before \{[^}]*\}/)[0], /background|border:|box-shadow/, 'the hit area is never drawn');
-  assert.doesNotMatch(css, /\[data-shell="phone"\][^{]*\.ah-np[^{]*:hover/, 'no hover on a phone');
-  assert.doesNotMatch(css.split('\n').filter(l => l.includes('[data-shell="phone"]') && /\.ah-np-[bg]/.test(l)).join('\n'), /visibility: visible/, 'no child turned visible: it would take taps after the badge fades');
-  assert.ok(css.includes(P + ' .ah-app[data-media="paused"] .ah-np { animation: np-gone 250ms ease 4s both; }'), 'paused: gone after the same grace');
-  assert.ok(css.includes(P + ' .ah-app:has(.ah-np:active) .ah-tile { transform: none; filter: none; }'), 'pressing the bars does not press the icon');
+  for (const k of ['background', 'background-color', 'border', 'box-shadow']) assert.equal(hit[k], undefined, 'the hit area is never drawn');
+  assert.equal(phone('.ah-app .ah-np:hover .ah-np-g').visibility, phone('.ah-app .ah-np .ah-np-g').visibility, 'no hover on a phone');
+  for (const sel of ['.ah-app .ah-np .ah-np-g', '.ah-app .ah-np .ah-np-b', '.ah-app[data-media="paused"] .ah-np .ah-np-g']) assert.notEqual(phone(sel).visibility, 'visible', `${sel}: no child turned visible (it would take taps after the badge fades)`);
+  assert.equal(phone('.ah-app[data-media="paused"] .ah-np').animation, 'np-gone 250ms ease 4s both', 'paused: gone after the same grace');
+  const pressed = createDocument(); for (const [k, v] of Object.entries({ ...on, 'data-shell': 'phone' })) pressed.documentElement.setAttribute(k, v);
+  pressed.body.innerHTML = '<div class="ah-app"><div class="ah-tile"></div><span class="ah-np"></span></div>';
+  const tile = pressed.body.querySelector('.ah-tile');
+  const active = styles(tile, [css], { states: [':active'] });
+  assert.equal(active.transform, 'none'); assert.equal(active.filter, 'none', 'pressing the bars does not press the icon');
 });

@@ -2,7 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
-const source=readFileSync(new URL('../web/core/app-services.js',import.meta.url),'utf8');
+import { createDocument } from './fixtures/mini-dom.mjs';
+import { cascade } from './fixtures/mini-css.mjs';
+import { withServicesParts } from './fixtures/app-services-parts.mjs';
+const source=withServicesParts(readFileSync(new URL('../web/core/app-services.js',import.meta.url),'utf8'));
 // Minimal DOM: a window with a bar, enough for the shell to render tools from data.
 class El { constructor(tag){this.tagName=tag.toUpperCase();this.children=[];this.dataset={};this.attrs={};this.listeners={};this.classList={s:new Set(),add:(...c)=>c.forEach(x=>this.classList.s.add(x)),remove:(...c)=>c.forEach(x=>this.classList.s.delete(x)),contains:c=>this.classList.s.has(c)};this.className='';this.textContent='';}
  append(...k){for(const c of k){c.parentNode=this;this.children.push(c);}} insertBefore(c,ref){c.parentNode=this;const i=ref?this.children.indexOf(ref):-1;if(i<0)this.children.push(c);else this.children.splice(i,0,c);}
@@ -84,7 +87,21 @@ test('search, QR and settings icons are shell-drawn, with an optional attention 
 });
 test('phone icon tools keep a 44px tap target over the slim skin bars',()=>{
  const css=readFileSync(new URL('../web/styles.css',import.meta.url),'utf8');
- assert.match(css,/html\[data-shell="phone"\] \.wbar > \.wtools > \.wtool\.wtool-ic\[data-tool\] \{ min-width: 44px; \}/);
- assert.match(css,/\.wtool-ic::before \{[^}]*height: 44px;/);
- assert.match(css,/\.wtool-dot::after \{[^}]*background: var\(--amber\)/);
+ // the bar the shell really drew, copied into a mini-dom page (tag, classes, attributes, data-*)
+ const f=fixture(); f.service.titlebar.set([{id:'search',kind:'button',icon:'search',label:'Search'},{id:'settings',kind:'button',icon:'settings',label:'Settings',dot:true}]);
+ const q=v=>String(v).replace(/&/g,'&amp;').replace(/"/g,'&quot;');
+ const html=el=>{ const cls=[...new Set([...(el.className?el.className.split(/\s+/):[]),...el.classList.s])].filter(Boolean).join(' ');
+  const attrs=[cls?` class="${q(cls)}"`:'',...Object.entries(el.attrs).map(([k,v])=>` ${k}="${q(v)}"`),...Object.entries(el.dataset).map(([k,v])=>` data-${k.replace(/[A-Z]/g,c=>'-'+c.toLowerCase())}="${q(v)}"`)].join('');
+  const t=el.tagName.toLowerCase(); return `<${t}${attrs}>${el.children.map(html).join('')}</${t}>`; };
+ const page=shell=>{ const doc=createDocument(); doc.documentElement.setAttribute('data-shell',shell); doc.body.innerHTML=`<article class="win">${html(f.bar)}</article>`; return doc; };
+ const doc=page('phone'), [search,settings]=doc.querySelectorAll('.wtools > *');
+ assert.ok(settings && settings.matches('.wtool.wtool-ic[data-tool]'),'the shell draws icon tools as .wtool.wtool-ic[data-tool]');
+ for(const b of [search,settings]){
+  assert.equal(cascade(b,css)['min-width']?.value,'44px');
+  assert.equal(cascade(b,css,{pseudo:'::before'}).height?.value,'44px','the tap area reaches 44px over a slim bar');
+ }
+ assert.equal(cascade(settings,css,{pseudo:'::after'}).background?.value,'var(--amber)','the attention dot');
+ assert.equal(cascade(search,css,{pseudo:'::after'}).background,undefined,'no dot without one');
+ const desk=page('desktop').querySelector('.wtools > *');
+ assert.notEqual(cascade(desk,css)['min-width']?.value,'44px','the desktop bar keeps its compact tools');
 });

@@ -5,27 +5,47 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { settingsWorld } from './fixtures/r5A-settings.mjs';
 
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
 const clone = x => JSON.parse(JSON.stringify(x));
 const ID = 'wizard/desktop-chats', INBOX = 'wizard/unified-inbox';
 const tick = async () => { for (let n = 0; n < 12; n++) await new Promise(r => setImmediate(r)); };
 
-test('catalog: desktop-chats is a default, still listed, promoted once, never a profile off', () => {
-  const cat = JSON.parse(read('web/tweaks/catalog.json')), prof = JSON.parse(read('web/tweaks/wizard/profile.json'));
-  assert.ok(cat.defaults.includes(ID)); assert.ok(cat.tweaks.includes(ID));
-  assert.ok(cat.promotedDefaults.includes(ID));
+test('catalog: desktop-chats is a default, still listed, promoted once, never a profile off', async () => {
+  const cat = JSON.parse(read('web/tweaks/catalog.json'));
   for (const id of cat.promotedDefaults) assert.ok(cat.defaults.includes(id), id + ' promoted must be a default');
-  assert.ok(!(prof.off || []).includes(ID));
-  assert.ok(!(cat.lookOnlyOff || []).includes(ID), 'the look-only drop list never turns the new default off');
+  // The real experience.js: a fresh device runs it, lists it as a switch, and counts it as promoted.
+  const b = box('latest'); await b.E.refresh();
+  assert.ok(b.active().includes(ID));
+  assert.equal(b.E.state.tweaks.find(x => x.id === ID)?.on, true, 'still listed');
+  assert.ok(clone(b.E.promotedDefaults).includes(ID));
+  // Wearing the Wizard profile (its quick button) never turns it off.
+  const w = box('latest', { version: 1, off: {}, preset: 'wizard', machinesHomeMoved: true, miguelLayoutMoved: true }); await w.E.refresh();
+  assert.ok(w.active().includes(ID), 'the Wizard profile keeps it');
+  // The look-only drop list never turns the new default off.
+  assert.ok(!(cat.lookOnlyOff || []).includes(ID));
 });
 
-test('desktop is unchanged: every rule is phone-only and the script returns at once on desktop', () => {
-  const css = read('web/tweaks/wizard/desktop-chats/tweak.css'), js = read('web/tweaks/wizard/desktop-chats/tweak.js');
+// static-rule: every rule in the tweak's stylesheet is scoped to the phone shell with the tweak on (a lint over the whole file)
+test('desktop is unchanged: every rule is phone-only', () => {
+  const css = read('web/tweaks/wizard/desktop-chats/tweak.css');
   for (const sel of css.replace(/\/\*[^]*?\*\//g, '').split('}').map(b => b.split('{')[0].trim()).filter(s => s && !s.startsWith('@')))
     for (const part of sel.split(',')) assert.match(part.trim(), /^html\[data-tweaks~="wizard\/desktop-chats"\]\[data-shell="phone"\]/, part);
-  assert.match(js, /if \(api\.env\.shell !== 'phone'\) return \(\) => \{\};/);
-  assert.deepEqual(JSON.parse(read('web/tweaks/wizard/desktop-chats/manifest.json')).shells, ['phone']);
+});
+
+test('desktop is unchanged: the script returns at once on desktop', async () => {
+  const { default: setup } = await import('../web/tweaks/wizard/desktop-chats/tweak.js');
+  const touched = [];
+  const api = new Proxy({ env: { shell: 'desktop' } }, { get: (t, k) => (k in t ? t[k] : (touched.push(k), () => {})) });
+  const saved = globalThis.document; globalThis.document = new Proxy({}, { get: (_, k) => { touched.push('document.' + String(k)); return () => {}; } });
+  try {
+    const off = setup(api);
+    assert.equal(typeof off, 'function'); off();
+  } finally { globalThis.document = saved; }
+  assert.deepEqual(touched, [], 'nothing on the page or the api is touched on desktop');
+  const manifest = JSON.parse(read('web/tweaks/wizard/desktop-chats/manifest.json'));
+  assert.deepEqual(manifest.shells, ['phone']);
 });
 
 function box(channel, saved, extra = {}) {
@@ -173,6 +193,15 @@ test('look sync, stale device: one synced long ago with the switch still on loca
 });
 
 test('Settings › Chats has the plain switch, since a default is not listed under Try new features', () => {
-  const s = read('web/core/settings.js');
-  assert.match(s, /register\(\{ id: 'chats-list-style', page: 'chats', html: \(\) => \{ const r = settingRow\('wizard\/desktop-chats'\); return r \? `<div class="st-group"><h4>Chats list<\/h4>\$\{r\}<\/div>` : ''; \}, act: settingAct \}\);/);
+  // The real Settings › Chats page with the built-in switch in the Look state.
+  const tweak = { id: ID, name: 'Desktop-style Chats list', description: 'x', author: 'wizard', on: true, builtin: true };
+  const w = settingsWorld({ shell: 'phone', scope: { WosExperience: { state: { tweaks: [tweak], busy: false } } } });
+  w.open('chats');
+  const row = w.root.querySelector(`[data-tweak-toggle="${ID}"]`);
+  assert.ok(row, 'the switch is on Settings › Chats');
+  assert.equal(w.text(row.closest('.st-group').querySelector('h4')), 'Chats list');
+  assert.equal(row.getAttribute('aria-checked'), 'true');
+  // Not built in (not a default): no plain switch there.
+  const v = settingsWorld({ shell: 'phone', scope: { WosExperience: { state: { tweaks: [{ ...tweak, builtin: false }], busy: false } } } });
+  v.open('chats'); assert.equal(v.root.querySelector(`[data-tweak-toggle="${ID}"]`), null);
 });

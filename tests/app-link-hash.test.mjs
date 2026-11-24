@@ -6,8 +6,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { withDesktopParts } from './fixtures/desktop-parts.mjs';
 
-const src = readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8');
+const src = withDesktopParts(readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8'));
 const from = src.indexOf('  if (LINKS) LINKS.route = href => {'), to = src.indexOf('  if (LINKS) window.WizLinks.intercept(', from);
 assert.ok(from > 0 && to > from, 'LINKS.route block found in desktop.js');
 const block = src.slice(from, to);

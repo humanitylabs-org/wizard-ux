@@ -8,6 +8,7 @@ import vm from 'node:vm'
 import { readFileSync } from 'node:fs'
 import { channelBox, channelDevice, tick } from './two-devices.mjs'
 import { modelContext } from './fixtures/chats-list-model.mjs'
+import { withParts } from './fixtures/chats-parts.mjs' // chats.js parts moved out verbatim (issue 1665)
 
 const clone = v => JSON.parse(JSON.stringify(v))
 const ch = (id, name, extra = {}) => ({ id, agent: 'hermes', name, order: 0, createdAt: '2026-11-01T00:00:00.000Z', archived: false, pinned: false, ...extra })
@@ -127,9 +128,9 @@ test('a new channel gets its id from the box', async () => {
 })
 
 // ---- Part 2: Chats' real Space code and Channels block on the store ----
-const src = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8')
+const src = withParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'))
 const cut = (a, b) => { const i = src.indexOf(a); assert.ok(i >= 0, a); return src.slice(i, src.indexOf(b, i)) }
-const code = cut("  const SPACE = { one: 'Space'", '  /* A Space open in front') + cut('  /* Channels view (switch wizard/chat-channels', '  function clearAll(w)')
+const code = cut("  const SPACE = { one: 'Space'", '  /* A Space open in front') + withParts(cut('  /* Channels view (wizard-ux issue 1254)', '  function clearAll(w)'))
 const H = 3600e3, NOW = Date.parse('2026-11-11T12:00:00.000Z')
 const AG = { t1: '', t2: '', h1: 'host', k1: 'container', r1: 'restricted' }
 
@@ -240,8 +241,8 @@ test('the feed adds the channel own list to the live rows, last 30 days, by agen
   assert.equal(s.spaceContains('launch', 'old1'), true, 'a feed row belongs to its channel')
 })
 
-test('store off (404) or the switch off: Spaces exactly as in phase 1', async () => {
-  for (const opts of [{ off: true }, { on: false }]) {
+test('store off (404): Spaces exactly as in phase 1', async () => {
+  for (const opts of [{ off: true }]) {
     const s = await shell({ ...opts, projection: [{ id: 'launch', name: 'Launch', threads: ['t1'] }] })
     assert.equal(s.chanStore(), null)
     assert.deepEqual(clone(s.spaces()).map(x => x.id), ['launch'])

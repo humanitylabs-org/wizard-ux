@@ -1,5 +1,7 @@
 import test from 'node:test'; import assert from 'node:assert/strict'; import vm from 'node:vm'; import fs from 'node:fs';
-const read=p=>fs.readFileSync(new URL('../'+p,import.meta.url),'utf8');
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
+import { withShellParts } from './fixtures/shell-parts.mjs';
+const read=p=>withShellParts(fs.readFileSync(new URL('../'+p,import.meta.url),'utf8'));
 const context=vm.createContext({window:{WosChat:{esc:s=>String(s??'')}},fetch:()=>{},Set,Map,console});
 vm.runInContext(read('web/core/chat-models.js'),context);
 const M=context.window.WosModels;
@@ -13,9 +15,9 @@ test('an undiagnosed failure keeps the existing Retry, model choice and Dismiss'
  const html=M.failureHtml({s:{id:'plain',status:'failed',model:'other'},canRetry:true});assert.match(html,/Needs retry/);for(const control of ['data-chretry','data-chretrymodel','data-chdismiss'])assert.ok(html.includes(control));
 });
 test('the held message reply is re-read after sign-in without an extra tap',()=>{
- const source=read('web/core/chats.js');assert.match(source,/const fresh = .*c.readRevision === revision && turnsCurrent/);assert.doesNotMatch(source,/!quiet \|\| c.readRevision === revision/);
+ const source=withParts(read('web/core/chats.js'))+read('web/core/chats-outbox.js');assert.match(source,/const fresh = .*c.readRevision === revision && turnsCurrent/);assert.doesNotMatch(source,/!quiet \|\| c.readRevision === revision/);
  const shell=read('web/app.js');assert.match(shell,/window.WizOpenApp = \(id, path = ''\)/);assert.match(shell,/appAt\(rel\)\?\.id !== id/);assert.match(shell,/url: rel, from: \{ \.\.\.fromOf\(desks\[idx\].focus\), sid: '' \}, workflow: true/);assert.match(shell,/w.from && !w.workflow/);
 });
 test('diagnosed list rows name the sign-in problem and open the same in-shell fix path',()=>{
- assert.match(read('web/core/chats.js'),/s.reconnect && needs \? esc\(s.reconnect.name\) \+ ' sign-in expired'/);const power=read('web/core/chat-power.js');assert.match(power,/Sign in<\/button>/);assert.match(power,/H.openLink\?\.\(`\/troubleshoot\/\?provider=/);assert.match(power,/if \(rc\) return/);
+ assert.match(withParts(read('web/core/chats.js')),/s.reconnect && needs \? esc\(s.reconnect.name\) \+ ' sign-in expired'/);const power=read('web/core/chat-power.js');assert.match(power,/Sign in<\/button>/);assert.match(power,/H.openLink\?\.\(`\/troubleshoot\/\?provider=/);assert.match(power,/if \(rc\) return/);
 });

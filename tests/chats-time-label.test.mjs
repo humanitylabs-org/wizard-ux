@@ -3,7 +3,11 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { shortTime } from '../web/layouts/ai-apps/parts.js';
-const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
+import { withParts } from './fixtures/chats-parts.mjs';
+import { withShellParts } from './fixtures/shell-parts.mjs';
+import { withWebParts } from './fixtures/web-parts.mjs';
+import { between, block, runRecording } from './fixtures/source-slice.mjs';
+const read = p => withShellParts(withWebParts(readFileSync(new URL('../' + p, import.meta.url), 'utf8')));
 const now = Date.UTC(2026, 10, 3, 5);
 function core(zone = 'UTC') {
   const fmt = new Intl.DateTimeFormat('en-US', { timeZone: zone, weekday: 'short', day: 'numeric' });
@@ -44,13 +48,31 @@ test('older labels follow the owner time zone, not the desktop midnight', () => 
   assert.equal(core('Asia/Bangkok')(now - 15 * 3600000, now), '15h');
   assert.equal(core('America/Los_Angeles')(now - 15 * 3600000, now), '15h');
 });
+// Each surface gets its label from the one core helper: give WizCore an ago that marks what it was asked, run the
+// surface's real code (its own destructure of WizCore included) and read the label it drew.
+const mark = t => `ago<${t}>`;
 test('all Chats surfaces delegate labels; message stamps and day dividers keep their existing meaning', () => {
-  assert.match(read('web/app.js'), /const ago = window\.WizCore\.ago;/);
-  assert.match(read('web/desktop/desktop.js'), /const \{ esc, clip, norm, ago, emoOf \} = C;/);
-  assert.match(read('web/core/chats.js'), /const \{ esc, clip, norm, ago, emoOf \} = window\.WizCore;/);
-  assert.match(read('web/core/chats.js'), /const sub = [^\n]+ago\(/, 'shared thread header');
-  const desktop = read('web/layouts/ai-apps/desktop.js');
-  assert.match(desktop, /shortTime\(s\.at, Date\.now\(\)\)/, 'sidebar');
-  assert.match(desktop, /shortTime\(r\.at, now\)/, 'rail flyout');
+  const t1 = { id: 's1', title: 'Plan trip', lastAssistantAt: '2026-11-03T01:00:00Z', updatedAt: '2026-11-02T01:00:00Z', status: 'idle' };
+  // phone (app.js): the launcher's thread hits
+  const app = read('web/app.js'), painted = [];
+  const phone = runRecording(between(app, '  const ago = window.WizCore.ago;', '\n') + '\n' + block(app, '  function renderLauncher(q, live) {') + '\nglobalThis.run = renderLauncher;',
+    { window: { WizCore: { ago: mark, isMaintenanceApp: () => false } }, $: () => ({ set innerHTML(h) { painted.push(h); }, get innerHTML() { return ''; } }), APPS: [], norm: x => String(x).toLowerCase(), esc: String, emoOf: () => '',
+      LIVE: { ok: true, sessions: [t1], isNew: () => false }, sig: () => '', searchUrl: () => '', appRow: () => '' });
+  phone.run('plan');
+  assert.match(painted.at(-1), /<small>ago<2026-11-03T01:00:00Z><\/small>/, 'phone launcher: the core label of the last reply');
+  // classic desktop (desktop.js): the palette's thread rows
+  const desk = read('web/desktop/desktop.js');
+  const d = runRecording(between(desk, '  const C = window.WizCore;', '\n') + '\n' + between(desk, '  const { esc, clip, norm, ago, emoOf } = C;', '\n') + '\n' + block(desk, '  function palBuild(q) {') + '\nglobalThis.run = palBuild;',
+    { window: { WizCore: { ago: mark, esc: String, clip: String, norm: x => String(x || '').toLowerCase(), emoOf: () => '', isMaintenanceApp: () => false }, WizConfig: { agent: () => 'Wizard' } },
+      APPS: [], searchApps: () => [], LIVE: { ok: true, sessions: [t1], cardAt: s => s.updatedAt, isNew: () => false }, WORKING_ST: new Set(), commands: () => [], searchUrl: () => '' });
+  const rows = d.run('plan').find(g => g.grp === 'Threads').items;
+  assert.equal(rows[0].sub, 'ago<2026-11-02T01:00:00Z>', 'desktop palette: the core label');
+  // shared Chats (core/chats.js): the thread header
+  const chats = withParts(read('web/core/chats.js'));
+  const c = runRecording(between(chats, '  const { esc, clip, norm, ago, emoOf } = window.WizCore;', '\n') + '\n' + block(chats, '  function threadState(s, agent) {') + '\nglobalThis.run = threadState;',
+    { window: { WizCore: { ago: mark, esc: String, clip: String, norm: String, emoOf: () => '' } }, isWorking: () => false, snoozeLast: () => false });
+  assert.equal(c.run(t1, 'wizard').sub, 'Updated ago<2026-11-03T01:00:00Z>', 'shared thread header');
+  // AI apps (layouts/ai-apps/parts.js): shortTime gives the core labels (the first test above); its sidebar and rail
+  // flyout draw them ('desktop AI apps sidebar and rail flyout keep phone hours across midnight', ai-apps-view.test.mjs)
   assert.doesNotMatch(read('web/layouts/ai-apps/parts.js'), /Yesterday|setHours\(0, 0, 0, 0\)/);
 });

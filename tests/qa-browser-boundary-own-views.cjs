@@ -42,7 +42,7 @@ const SHELL = `<!doctype html><html><head><meta charset="utf-8">
 const T = ${JSON.stringify(TILE)};
 window.WizCore = { apps: () => ({ APPS: [T] }), workspaceNav: { setCount() {} }, deeplink: { route() {} }, refreshApps: async () => {} };
 window.WosSettings = { register() {}, refresh() {} };</script>
-<script src="/wizard-os-home/core/browser-boundary.js"></script><script src="/wizard-os-home/core/app-services.js"></script>
+<script src="/wizard-os-home/core/browser-boundary.js"></script><script src="/wizard-os-home/core/app-services-windows.js"></script><script src="/wizard-os-home/core/app-services-boundary.js"></script><script src="/wizard-os-home/core/app-services.js"></script>
 <script src="/wizard-os-home/core/own-views.js"></script></head>
 <body style="background:#222;color:#ddd;font:13px system-ui;margin:8px"><div class="win"><div class="wbar">Habits</div>
 <iframe class="appframe" data-own-app="habits" sandbox="allow-scripts allow-forms allow-downloads" src="/wizard/views/habits/" style="width:640px;height:300px;border:0"></iframe></div>

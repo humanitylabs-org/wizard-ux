@@ -4,15 +4,21 @@
 //   - nobody holding it = stock: routeOpen() answers null and the shell runs its own go, byte for byte (Desks);
 //   - a holder sees (kind, detail, go), its go() result comes back as { value }; opens it starts while it runs are never
 //     routed again (no loop); teardown releases it; shows(desk) admits an app's Reply on a desk shown beside the chat;
-//   - every shell entry point asks it first on both shells, with the stock path as go (source pins);
+//   - every shell entry point asks it first on both shells, with the stock path as go (each entry point run);
 //   - bound-view: the auto-opened view beside a thread asks 'beside' first and opens nothing when told so.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { withSkinHostParts } from './fixtures/skin-host-parts.mjs';
+import { withShellParts } from './fixtures/shell-parts.mjs';
+import { between, block } from './fixtures/source-slice.mjs';
+import { holder, runHeld, callsOf } from './fixtures/r8B-route.mjs';
+import { withParts } from './fixtures/chats-parts.mjs';
+import { createDocument } from './fixtures/mini-dom.mjs';
 
 const root = new URL('../', import.meta.url);
-const read = p => readFileSync(new URL(p, root), 'utf8');
+const read = p => withShellParts(readFileSync(new URL(p, root), 'utf8'));
 const settle = () => new Promise(r => setTimeout(r, 15));
 
 function hostWorld() {
@@ -25,7 +31,7 @@ function hostWorld() {
     document: { baseURI: 'https://wizard.test/wizard-os-home/', documentElement: { dataset: { shell: 'desktop' } }, createElement: el, head: { appendChild() {} }, querySelector: () => null, getElementById: () => null, addEventListener() {} },
   };
   ctx.window = ctx; ctx.window.WosSkin = { current: 'obsidian', list: [], pkgOf: () => null }; ctx.module = { exports: {} };
-  vm.runInNewContext(read('web/core/skin-host.js'), ctx);
+  vm.runInNewContext(withSkinHostParts(read('web/core/skin-host.js')), ctx);
   const host = ctx.window.WosSkinHost, calls = []; let api = null;
   host._test.setImporter(async () => ({ default: a => { api = a; return () => calls.push(['teardown']); } }));
   const adapter = {
@@ -96,37 +102,140 @@ test('the layout API lists the new app hooks (and only layouts get them)', async
   H.host.setLayout('classic'); await settle();
 });
 
+// Runs each real desktop entry point (desktop-resize.js, desktop-boot.js, desktop-frames.js) with no holder, a holder
+// that runs the stock go it was given, and a holder that keeps the open (tests/fixtures/r8B-route.mjs).
+const raw = p => readFileSync(new URL(p, root), 'utf8');
+const rec = (calls, name, ret) => (...a) => { calls.push([name, ...a]); return typeof ret === 'function' ? ret(...a) : ret; };
+const apps = rel => (rel.startsWith('/files') ? { id: 'files', name: 'Files' } : rel.startsWith('/notes') ? { id: 'notes', name: 'Notes' } : null);
 test('every shell entry point asks the layout first, with the stock path as its go (desktop)', () => {
-  const src = read('web/desktop/desktop.js');
-  const R = "window.WosSkinHost?.routeOpen?.(";
-  // a notification's Open (inboxAct 'app' -> WizOpenApp), the Morning button, the launcher, commands: WizOpenApp / openApp
-  assert.match(src, /const go = \(\) => !!newWin\(\{ app: 'frame', appId: id, url: rel, workflow: true, returnWid: ws\[cur\]\.focus \}\);\n\s*\/\/[^\n]*\n\s*const r = window\.WosSkinHost\?\.routeOpen\?\.\('app', \{ id, path: rel \}, go\); if \(r\) return true;\n\s*return go\(\);/);
-  assert.ok(src.includes(`if (a.url && a.kind !== 'chats' && opts.ws == null && !opts.fresh && ${R}'app', { id: a.id, path: opts.path || '' }, desk => openApp(a, { ...opts, ...(Number.isInteger(desk) && ws[desk] ? { ws: desk } : {}) }))) return true;`), 'openApp: an app (never a given desk) where the layout shows apps, at a spoken route\'s page when given');
-  // a link tapped in a reply (chats.js H.openLink -> openAppLink)
-  assert.ok(src.includes(`const r = ${R}'link', { url, title: String(title || ''), app: a ? a.id : '' }, go); if (r) return true;`));
-  // a page link anywhere in the shell (core/links.js: a reply's link no app owns, a link inside an app)
-  assert.ok(src.includes(`return ${R}'link', { url, title: String(title || ''), app: o ? o.id : '' }, go) ? true : go(); },`));
-  // an app's Reply and its chats: the main Chats wherever it is; admitted on a desk the layout shows
-  assert.ok(src.includes(`const r = ${R}'draft', { from: a.id }, () => go(true));`));
-  assert.ok(src.includes(`const r = ${R}'thread', { sid, from: a.id }, () => threadFromApp(sid, opts)); return r ? r.value === true : CHATS.openHosted(w.id, f, sid, opts);`));
-  assert.ok(src.includes("|| (pal.hidden && !CHATS.isHosted(w.id) && !!window.WosSkinHost?.routeShows?.(wsOf(w.id)))"));
-  assert.match(src, /showAppPath: \(id, path\) =>[\s\S]{0,400}appAt\(rel\)\?\.id !== id\) return false;/, 'only a page the app itself owns');
-  assert.match(src, /openLinkDesk: \(url, title\) =>[\s\S]{0,300}u\.origin !== location\.origin\) return false;/, 'same-origin links only');
+  const resize = raw('web/desktop/desktop-resize.js'), boot = raw('web/desktop/desktop-boot.js'), frames = raw('web/desktop/desktop-frames.js');
+  const run = (mode, arg, code, more = {}) => { const h = holder(mode, arg), calls = []; const c = runHeld(code, { calls, newWin: rec(calls, 'newWin', { id: 'n1' }), appAt: apps, ...more(calls) }, h); return { h, c, calls, newWin: () => callsOf(c, 'newWin') }; };
+  // WizOpenApp at a page (a notification's Open, the Morning button)
+  const wiz = block(resize, "  window.WizOpenApp = (id, path = '') => {") + ';';
+  const wizCtx = calls => ({ hostedOpenable: id => ({ id }), openApp: rec(calls, 'openApp', true), desktopVars: { ws: [{ focus: 'w1' }], cur: 0 } });
+  const page = { app: 'frame', appId: 'files', url: '/files/b', workflow: true, returnWid: 'w1' };
+  for (const [mode, wins] of [['none', [[page]]], ['take', [[page]]], ['keep', []]]) {
+    const r = run(mode, undefined, wiz, wizCtx);
+    assert.equal(r.c.window.WizOpenApp('files', '/files/b'), true, `WizOpenApp ${mode}`);
+    assert.deepEqual(r.h.asked, [['app', { id: 'files', path: '/files/b' }]], `WizOpenApp ${mode}: asks first`);
+    assert.deepEqual(r.newWin(), wins, `WizOpenApp ${mode}: the stock window only when stock runs`);
+  }
+  // openApp (launcher, commands): an app where the layout shows apps; a desk the shell was given stays stock's
+  const open = block(resize, '  function openApp(a, opts = {}) {') + '\nglobalThis.openApp = openApp;';
+  const files = { id: 'files', url: '/files/', kind: 'wizard' };
+  for (const [mode, wins] of [['none', [[{ app: 'frame', appId: 'files' }, {}]]], ['take', [[{ app: 'frame', appId: 'files' }, { ws: 1 }]]], ['keep', []]]) {
+    const r = run(mode, 1, open, () => ({ desktopVars: { ws: [{}, {}], cur: 0 } }));
+    assert.equal(r.c.openApp(files), true);
+    assert.deepEqual(r.h.asked, [['app', { id: 'files', path: '' }]], `openApp ${mode}: asked once (the go never asks again)`);
+    assert.deepEqual(r.newWin(), wins, `openApp ${mode}`);
+  }
+  { const r = run('keep', 1, open, () => ({ desktopVars: { ws: [{}, {}], cur: 0 } }));
+    r.c.openApp(files, { ws: 0 }); r.c.openApp({ id: 'wizard', kind: 'chats' }, {}); r.c.openApp(files, { path: '/files/x', ws: 1 });
+    assert.deepEqual(r.h.asked, [], 'a given desk or Chats is never routed'); }
+  { const r = run('keep', 1, open, () => ({ desktopVars: { ws: [{}, {}], cur: 0 } })); r.c.openApp(files, { path: '/files/x' });
+    assert.deepEqual(r.h.asked, [['app', { id: 'files', path: '/files/x' }]], 'a spoken route\'s page rides along'); }
+  // a link tapped in a reply (openAppLink)
+  const link = block(resize, '  function openAppLink(url, title, setupChecked = false) {') + '\nglobalThis.openAppLink = openAppLink;';
+  for (const [mode, ws] of [['none', {}], ['take', { ws: 2 }]]) {
+    const r = run(mode, 2, link, () => ({ desktopVars: { ws: [{}, {}, {}] } }));
+    assert.equal(r.c.openAppLink('/files/x', 'Report'), true);
+    assert.deepEqual(r.h.asked, [['link', { url: '/files/x', title: 'Report', app: 'files' }]]);
+    assert.deepEqual(r.newWin(), [[{ app: 'frame', appId: 'files', url: '/files/x', title: 'Files' }, ws]], `openAppLink ${mode}`);
+  }
+  // a page link anywhere in the shell (core/links.js asWindow)
+  const links = between(boot, '  const LINKS = window.WizLinks ?', '  /* Links into installed apps') + '\nglobalThis.LINKS = LINKS;';
+  for (const [mode, ws] of [['none', {}], ['take', { ws: 1 }]]) {
+    const r = run(mode, 1, links, () => ({ window: { WizLinks: { mount: o => o } }, APP: {}, APPS: [], desktopVars: { ws: [{}, {}] } }));
+    assert.equal(r.c.LINKS.asWindow('/notes/n1', 'Note'), true);
+    assert.deepEqual(r.h.asked, [['link', { url: '/notes/n1', title: 'Note', app: 'notes' }]]);
+    assert.deepEqual(r.newWin(), [[{ app: 'frame', url: '/notes/n1', title: 'Notes', preview: true, appId: 'notes' }, ws]], `asWindow ${mode}`);
+  }
+  // an app's Reply and its chats (WizAppServices.attach options of an app window)
+  const attach = frames.split('\n').find(l => l.includes('f._appDetach = window.WizAppServices?.attach('));
+  const app = (mode, arg) => { const h = holder(mode, arg), calls = []; let o = null;
+    const CHATS = { openHosted: rec(calls, 'openHosted', true), openContextDraft: rec(calls, 'openContextDraft', { receipt: 1 }), renderChats() {}, isHosted: () => false };
+    runHeld(attach, { calls, a: { id: 'wisdom', url: '/wisdom/' }, f: { frame: 1 }, w: { id: 'w5' }, CHATS, pal: { hidden: true }, desktopVars: { homeOpen: true, ws: [{ wins: [] }], cur: 0, W: {} }, wsOf: () => 2,
+      threadFromApp: rec(calls, 'threadFromApp', true), findWin: rec(calls, 'findWin', { id: 'main' }), newWin: rec(calls, 'newWin', { id: 'c1' }), focusWin: rec(calls, 'focusWin'), setTimeout: () => 0,
+      window: { WizAppServices: { attach: (_, opts) => { o = opts; return () => {}; } } } }, h);
+    return { h, o, names: () => calls.map(c => c[0]).filter(n => ['newWin', 'findWin', 'focusWin', 'openContextDraft', 'openHosted', 'threadFromApp'].includes(n)) }; };
+  { const n = app('none'); assert.equal(n.o.openThread('s1', { k: 1 }), true); assert.deepEqual(n.names(), ['openHosted'], 'stock: the thread over the app window');
+    const t = app('take'); assert.equal(t.o.openThread('s1', { k: 1 }), true); assert.deepEqual(t.names(), ['threadFromApp'], 'held: the main Chats thread');
+    assert.deepEqual(t.h.asked, [['thread', { sid: 's1', from: 'wisdom' }]]); }
+  { const n = app('none'); assert.deepEqual({ ...n.o.openContextDraft('k', 'text') }, { receipt: 1 }); assert.deepEqual(n.names(), ['newWin', 'focusWin', 'openContextDraft'], 'stock: a Chats here');
+    const t = app('take'); t.o.openContextDraft('k', 'text'); assert.deepEqual(t.names(), ['findWin', 'focusWin', 'openContextDraft'], 'held: the main Chats wherever it is');
+    assert.deepEqual(t.h.asked, [['draft', { from: 'wisdom' }]]); }
+  assert.equal(app('none').o.isVisible(), false); assert.equal(app('take', 2).o.isVisible(), true, 'admitted on a desk the layout shows'); assert.equal(app('take', 3).o.isVisible(), false);
+  // the layout's own placers: only a page the app itself owns, same-origin links only
+  const ad = runHeld(`globalThis.ad = {\n${between(boot, '    showAppPath: (id, path) =>', '    // The Orb and Apps views\' app sheet')}\n};`,
+    { appAt: apps, framePage: () => true, findWin: () => ({ app: 'frame', appId: 'files' }), freshDesk: () => ({ wins: [] }), newWin: () => ({}), goWs() {}, desktopVars: { W: {}, ws: [{ wins: [], focus: '' }], cur: 0 } }, holder()).ad;
+  assert.equal(ad.showAppPath('files', '/files/x'), true); assert.equal(ad.showAppPath('files', '/notes/x'), false, 'only a page the app itself owns');
+  assert.equal(ad.showAppPath('files', 'https://elsewhere.test/files/x'), false);
+  assert.equal(ad.openLinkDesk('/notes/x', 'N'), true); assert.equal(ad.openLinkDesk('https://elsewhere.test/x', 'X'), false, 'same-origin links only');
 });
 
+// Runs each real phone entry point (app-search.js, app-model.js, app-linkdesk.js, app-cards.js, app-agentorb.js) and the
+// Chats helper an app's thread goes through (chats.js openHosted / prepThread), held and not.
 test('every shell entry point asks the layout first, with the stock path as its go (phone)', () => {
-  const src = read('web/app.js');
-  const R = "window.WosSkinHost?.routeOpen?.(";
-  assert.ok(src.includes(`return ${R}'app', { id, path: rel }, go) ? true : go();`), 'WizOpenApp with a page');
-  assert.ok(src.includes(`if (!path) { const r = ${R}'app', { id, path: '' }, () => openApp(x)); return r ? true : openApp(x); }`), 'WizOpenApp');
-  assert.ok(src.includes(`return ${R}'app', { id, path: '' }, go) ? true : go(); },`), "a chat's app button (H.openApp)");
-  assert.ok(src.includes(`const routed = ${R}'link', { url: rel, title: '', app: targetApp ? targetApp.id : '' }, () => linkDesk(u, rel, srcId));`));
-  assert.ok(src.includes(`const r = ${R}'draft', { from: a.id }, go);`)); assert.ok(src.includes(`const r = ${R}'thread', { sid, from: a.id },`));
-  assert.match(src, /showAppPath: \(id, path\) =>[\s\S]{0,400}appAt\(rel\)\?\.id !== id\) return false;/);
-  // chats.js: an app's thread brings its agent and item along wherever it opens (one helper, over the app or the main Chats)
-  const ch = read('web/core/chats.js');
-  assert.match(ch, /if \(!prepThread\(sid, opts\)\) return false;\n\s*if \(hosted\.has\(wid\)\) closeHosted\(wid\);/);
-  assert.match(ch, /openHosted, prepThread, closeHosted,/);
+  const search = raw('web/app-search.js'), model = raw('web/app-model.js'), linkdesk = raw('web/app-linkdesk.js'), cards = raw('web/app-cards.js'), orb = raw('web/app-agentorb.js');
+  const run = (mode, code, more) => { const h = holder(mode), calls = []; const c = runHeld(code, { calls, appAt: apps, ...more(calls) }, h); return { h, c, calls, of: n => callsOf(c, n) }; };
+  // WizOpenApp, with and without a page
+  const wiz = block(search, "  window.WizOpenApp = (id, path = '') => {") + ';';
+  const wizCtx = calls => ({ hostedOpenable: id => ({ id }), openApp: rec(calls, 'openApp', true), openWin: rec(calls, 'openWin', { id: 'n1' }), fromOf: () => ({ desk: 'd1', win: 'w1' }), appVars: { desks: [{ focus: 'w1' }], idx: 0 } });
+  for (const [mode, n] of [['none', 1], ['take', 1], ['keep', 0]]) {
+    const r = run(mode, wiz, wizCtx);
+    assert.equal(r.c.window.WizOpenApp('files'), true);
+    assert.equal(r.c.window.WizOpenApp('files', '/files/b'), true);
+    assert.deepEqual(r.h.asked, [['app', { id: 'files', path: '' }], ['app', { id: 'files', path: '/files/b' }]], `WizOpenApp ${mode}`);
+    assert.equal(r.of('openApp').length, n, `WizOpenApp ${mode}: the stock open only when stock runs`);
+    assert.deepEqual(r.of('openWin'), n ? [[{ app: 'frame', appId: 'files', url: '/files/b', from: { desk: 'd1', win: 'w1', sid: '' }, workflow: true }]] : []);
+  }
+  // a chat's app button (H.openApp)
+  const hOpen = `globalThis.ad = {\n${model.split('\n').find(l => /^\s+openApp: \(id, srcEl\) =>/.test(l))}\n};`;
+  for (const [mode, n] of [['none', 1], ['take', 1], ['keep', 0]]) {
+    const r = run(mode, hOpen, calls => ({ hostedOpenable: id => ({ id }), openApp: rec(calls, 'openApp', true), appVars: { W: {} } }));
+    assert.equal(r.c.ad.openApp('files', null), true); assert.deepEqual(r.h.asked, [['app', { id: 'files', path: '' }]]);
+    assert.equal(r.of('openApp').length, n, `H.openApp ${mode}`);
+  }
+  // a link tapped in a reply or an app (openLinkDesk)
+  const ld = block(linkdesk, '  function openLinkDesk(href, fromEl, setupChecked = false) {') + '\nglobalThis.openLinkDesk = openLinkDesk;';
+  for (const [mode, n] of [['none', 1], ['take', 1], ['keep', 0]]) {
+    const r = run(mode, ld, calls => ({ linkDesk: rec(calls, 'linkDesk', true), openWin: rec(calls, 'openWin', {}), appVars: { desks: [{ focus: 'w1' }], idx: 0, W: {} } }));
+    assert.equal(r.c.openLinkDesk('/files/x', null), true); assert.deepEqual(r.h.asked, [['link', { url: '/files/x', title: '', app: 'files' }]]);
+    assert.equal(r.of('linkDesk').length, n, `openLinkDesk ${mode}`); if (n) assert.equal(r.of('linkDesk')[0][1], '/files/x');
+  }
+  { const r = run('none', ld, calls => ({ linkDesk: rec(calls, 'linkDesk', true), appVars: { desks: [{ focus: 'w1' }], idx: 0, W: {} } }));
+    assert.equal(r.c.openLinkDesk('https://elsewhere.test/x', null), false); assert.deepEqual(r.h.asked, [], 'other origins never routed'); }
+  // an app's Reply and its chats (WizAppServices.attach options of an app window)
+  const attach = cards.split('\n').find(l => l.includes('f._appDetach = window.WizAppServices?.attach('));
+  const app = mode => { const h = holder(mode), calls = []; let o = null;
+    const CHATS = { openHosted: rec(calls, 'openHosted', true), prepThread: rec(calls, 'prepThread', true), openContextDraft: rec(calls, 'openContextDraft', { receipt: 1 }), renderChats() {}, isHosted: () => false };
+    runHeld(attach, { calls, a: { id: 'wisdom', url: '/wisdom/' }, f: { frame: 1 }, w: { id: 'w5' }, CHATS, appVars: { desks: [{ wins: ['w5'], focus: 'w5' }], idx: 0 }, device: { classList: { contains: () => false } },
+      closeSheets: rec(calls, 'closeSheets'), openWizardThread: rec(calls, 'openWizardThread'), placeApp: rec(calls, 'placeApp', { id: 'c1' }),
+      window: { WizAppServices: { attach: (_, opts) => { o = opts; return () => {}; } } } }, h);
+    return { h, o, names: () => calls.map(c => c[0]).filter(n => ['openHosted', 'prepThread', 'closeSheets', 'openWizardThread', 'placeApp', 'openContextDraft'].includes(n)) }; };
+  { const n = app('none'); assert.equal(n.o.openThread('s1', {}), true); assert.deepEqual(n.names(), ['openHosted'], 'stock: the thread over the app window');
+    const t = app('take'); assert.equal(t.o.openThread('s1', {}), true); assert.deepEqual(t.names(), ['prepThread', 'closeSheets', 'openWizardThread'], 'held: the main Chats thread, item and agent brought along');
+    assert.deepEqual(t.h.asked, [['thread', { sid: 's1', from: 'wisdom' }]]); }
+  for (const mode of ['none', 'take']) { const r = app(mode); assert.deepEqual({ ...r.o.openContextDraft('k', 'text') }, { receipt: 1 });
+    assert.deepEqual(r.names(), ['closeSheets', 'placeApp', 'openContextDraft'], `draft ${mode}`); }
+  assert.deepEqual(app('keep').h.asked, []); { const k = app('keep'); k.o.openContextDraft('k', 't'); assert.deepEqual(k.h.asked, [['draft', { from: 'wisdom' }]]); assert.deepEqual(k.names(), []); }
+  // the layout's placer: only a page the app itself owns
+  const ad = runHeld(`globalThis.ad = {\n${between(orb, '    showAppPath: (id, path) =>', '    phoneDesks:')}\n};`,
+    { appAt: apps, framePage: () => true, deskOf: () => 0, appVars: { W: { f1: { id: 'f1', app: 'frame', appId: 'files' } }, desks: [{ focus: 'f1' }], idx: 0 } }, holder()).ad;
+  assert.equal(ad.showAppPath('files', '/files/x'), true); assert.equal(ad.showAppPath('files', '/notes/x'), false); assert.equal(ad.showAppPath('files', 'https://elsewhere.test/files/x'), false);
+  // chats.js: the app's thread is prepared (item, agent) before anything else, over the app or the main Chats
+  const ch = withParts(read('web/core/chats.js'));
+  for (const ok of [false, true]) {
+    const calls = [], doc = createDocument(), container = doc.createElement('div'), frame = doc.createElement('iframe'); container.append(frame);
+    const win = doc.createElement('div'); win.dataset.win = 'w'; win.append(container); doc.body.append(win);
+    const c = runHeld(block(ch, '  function openHosted(wid, frame, sid, opts = {}) {') + '\nglobalThis.openHosted = openHosted;',
+      { calls, W: { w: { id: 'w', appId: 'wisdom' } }, hosted: new Map([['w', {}]]), prepThread: rec(calls, 'prepThread', ok), closeHosted: rec(calls, 'closeHosted'), document: doc, getComputedStyle: () => ({ position: 'relative' }),
+        window: { WizLauncher: { hasHostedThread: () => true } } }, holder());
+    c.openHosted('w', frame, 's1', { k: 1 });
+    assert.deepEqual(calls.map(x => x[0]).filter(n => n === 'prepThread' || n === 'closeHosted'), ok ? ['prepThread', 'closeHosted'] : ['prepThread'], `prepThread ${ok}: first, and a refusal opens nothing`);
+  }
+  const exp = runHeld(`globalThis.api = ${between(ch, '  return { beforeNavigate:', '\n};').replace(/^\s*return /, '')}`, { calls: [] }, holder()); // the slice ends with the object's own };
+  exp.api.prepThread('s1', { k: 1 }); assert.deepEqual(callsOf(exp, 'prepThread'), [['s1', { k: 1 }]], 'Chats hands the shells its prepThread');
 });
 
 test('bound view: asks the layout first; told so, nothing opens beside the thread; stock opens it as before', () => {

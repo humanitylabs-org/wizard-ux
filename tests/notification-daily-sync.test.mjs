@@ -7,6 +7,8 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { core, settle, read } from './fixtures/notification-levels.mjs';
 import { fixture } from './fixtures/tweaks.mjs';
+import { createDocument } from './fixtures/mini-dom.mjs';
+import { styles } from './fixtures/w5-css.mjs';
 
 function boot({ storage = new Map(), server = { routes: {}, saved: false }, up = true, feeds = {}, notes = [] } = {}) {
   const calls = [], listeners = {};
@@ -88,9 +90,18 @@ test('the fourth choice is called Morning report and wears its coffee cup', () =
 });
 
 test('the coffee cup is the Morning Report sigil from sigils.css', () => {
-  const css = read('web/core/sigils.css'), js = read('web/core/notif-bell.js');
-  const d = js.match(/const CUP = '([^']+)'/)[1];
-  assert.ok(css.includes(d.slice(0, 60)), 'same path as .sg-coffee');
+  // The cup the real picker draws on its Morning report choice ...
+  const doc = createDocument();
+  doc.body.innerHTML = boot().WosBell.picker('notifications');
+  const cup = doc.body.querySelector('[data-notify-to="daily"] svg.wos-route-mr path')?.getAttribute('d');
+  assert.ok(cup && cup.length > 60, 'the Morning report choice wears a drawn cup');
+  // ... is the path the .sg-coffee sigil paints (its --sg mask in sigils.css).
+  doc.body.innerHTML = '<i class="sgi sg-coffee"></i>';
+  const mask = styles(doc.body.firstElementChild, [read('web/core/sigils.css')])['--sg'] || '';
+  const svg = decodeURIComponent(mask.replace(/^url\('data:image\/svg\+xml,/, '').replace(/'\)$/, ''));
+  const d = /<path d="([^"]+)"/.exec(svg)?.[1];
+  assert.ok(d, '.sg-coffee is a drawn mask');
+  assert.equal(cup, d, 'same path as .sg-coffee');
 });
 
 test('one-time move: only a box with nothing saved takes a device\'s choices; an empty device uploads nothing', async () => {

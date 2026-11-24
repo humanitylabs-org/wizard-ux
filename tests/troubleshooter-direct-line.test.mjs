@@ -2,6 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { createDocument } from './fixtures/mini-dom.mjs';
+import { cascade } from './fixtures/mini-css.mjs';
 // Open Troubleshooter must show the repair page as soon as its own route answers, and open the Troubleshooter's
 // direct line in the same window when Wizard's usual address can't load it (8 Nov 2026: the button did nothing
 // while Wizard was stuck; 15 Nov, wizard-troubleshooter issue 37: a Connection help screen and a second tap first).
@@ -121,8 +123,16 @@ test('the recovery window carries the direct-line button, hidden until needed', 
   const html = h.context.WizReach.recoveryHtml();
   assert.match(html, /<p data-recovery-direct hidden><a class="wz-button" data-recovery-direct-link/);
   assert.match(html, /<section class="wz-recovery opening" data-recovery>/, 'the help stays out of sight while the repair page opens');
-  assert.match(readFileSync(new URL('../web/core/polish.css', import.meta.url), 'utf8'), /\.wz-recovery\.opening > details \{ display: none !important; \}/);
-  assert.match(readFileSync(new URL('../web/core/polish.css', import.meta.url), 'utf8'), /\[data-recovery-direct\]\[hidden\] \{ display: none !important; \}/);
+  // the real polish.css on that markup: the help and the hidden direct line take no room until needed
+  const polish = readFileSync(new URL('../web/core/polish.css', import.meta.url), 'utf8');
+  const doc = createDocument(); doc.body.innerHTML = html;
+  const help = doc.querySelector('[data-recovery] > details'), direct = doc.querySelector('[data-recovery-direct]');
+  assert.ok(help, 'the help sits in the window');
+  assert.equal(cascade(help, polish).display?.value, 'none', 'opening: the help out of sight');
+  assert.equal(cascade(direct, polish).display?.value, 'none', 'the direct line hidden');
+  doc.querySelector('[data-recovery]').classList.remove('opening'); direct.removeAttribute('hidden');
+  assert.notEqual(cascade(help, polish).display?.value, 'none', 'then the help shows');
+  assert.notEqual(cascade(direct, polish).display?.value, 'none', 'and the direct line when needed');
 });
 
 test('a fresh tap that reuses the open window tries again at once and opens the direct line once it answers', async () => {

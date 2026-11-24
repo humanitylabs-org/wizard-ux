@@ -2,15 +2,19 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { createDocument } from './fixtures/mini-dom.mjs';
+import { cascade } from './fixtures/mini-css.mjs';
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 // 9 Nov 2026 (James): "The message I sent is disappearing and being lost." A message Hermes never took in (three
 // resends that never started, a gateway restart, a thread another app owns) is served by the Agent Service as a user
 // row marked wizard_queue.status = failed. It must show as his message, marked Not sent, with Retry; and once Retry
 // lands it, the thread shows it once, never twice (this phone's retry copy plus Wizard's copy).
-const src = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
+const src = withParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'));
 const css = readFileSync(new URL('../web/core/chats.css', import.meta.url), 'utf8');
 const ctx = { window: { WizConfig: { agent: () => 'Archimedes' } }, document: {}, PW: { workHtml: () => '' }, replyCard: () => '', userMedia: (c, files) => (files || []).map(f => `<i data-file="${f.id}">${f.filename}</i>`).join(''), md: s => s, timeTag: () => '', summaryOf: () => null, mediaBlock: () => '', regenOn: () => false, esc: s => s, quoteBtn: () => '', msgIds: () => '', COPY_SVG: '', SHARE_SVG: '', CHECK_SVG: '' };
 vm.runInNewContext(readFileSync(new URL('../web/core/chat-kit.js', import.meta.url), 'utf8'), ctx);
-vm.runInNewContext(src.slice(src.indexOf('function echoed(turns, p)'), src.indexOf('function retireLanded')), ctx);
+const outboxSrc = readFileSync(new URL('../web/core/chats-outbox.js', import.meta.url), 'utf8'); // echoed..retireLanded live in core/chats-outbox.js (issue 1665)
+vm.runInNewContext(outboxSrc.slice(outboxSrc.indexOf('function echoed(turns, p)'), outboxSrc.indexOf('function retireLanded')), ctx);
 vm.runInNewContext(src.slice(src.indexOf('function runContextHtml('), src.indexOf('const turnAt =')), ctx);
 const { parseRows } = ctx.window.WosChat;
 const SID = 'wizard_1794122381681_0056d47f6f0e', RUN = 'wizardq_99bbcd4c7d7f4816982a709f412fe7f1';
@@ -69,8 +73,14 @@ test('this phone’s just-sent copy is matched to Wizard’s copy of the same ru
 });
 
 test('Not sent styling uses the skin’s warning token and keeps the bubble fully opaque', () => {
-  assert.match(css, /\.msg\.u\.unsent \.pst\.fail \{[^}]*var\(--wz-warning/);
-  assert.doesNotMatch(css.match(/\.msg\.u\.unsent \.bub \{[^}]*\}/)[0], /opacity/);
+  // the bubble the real renderer drew, styled by the real chats.css
+  const doc = createDocument(); doc.body.innerHTML = paint([...earlier, unsent()], [], { retryRunId: RUN }).html;
+  const msg = doc.querySelector('.msg.u.unsent'); assert.ok(msg, 'drawn as Not sent');
+  const fail = msg.querySelector('.pst.fail'), bub = msg.querySelector('.bub');
+  assert.ok(fail && bub);
+  assert.match(cascade(fail, css).color?.value || '', /^var\(--wz-warning/, 'the skin\'s warning token');
+  assert.equal(cascade(bub, css).opacity, undefined, 'fully opaque'); assert.equal(cascade(msg, css).opacity, undefined);
+  assert.equal(cascade(bub, css)['border-style']?.value, 'dashed', 'marked by its dashed edge instead');
 });
 
 test('a sent Retry is not retired from the outbox until a transcript row really carries it', () => {

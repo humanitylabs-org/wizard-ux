@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,rmSync,writeFileSync,readFileSync,mkdirSync,utimesSync} from 'node:fs';
+import {mkdtempSync,rmSync,writeFileSync,readFileSync,mkdirSync,utimesSync,statSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {spawn} from 'node:child_process';
@@ -29,9 +29,9 @@ test('legacy lock directory is not unsafely deleted without an owner identity',a
  const h=home(t);mkdirSync(join(h,'install.lock'));await assert.rejects(locked(h,'install',async()=>{}),/legacy_lock_requires_idle_cleanup/);
 });
 test('setup preserves both newer companion files and provisions missing ones',t=>{
- const h=home(t),name='store-index-views.mjs';writeFileSync(join(h,name),'newer deployment bytes');const changed=[];
+ const h=home(t),name='store-index-views.mjs';writeFileSync(join(h,name),'newer deployment bytes');utimesSync(join(h,name),1000,1000);const changed=[];
  preserveCompanions(h,(p,body)=>{changed.push(p);writeFileSync(p,body);});
- assert.equal(readFileSync(join(h,name),'utf8'),'newer deployment bytes');assert.deepEqual(changed,[join(h,'system-overview.mjs')]);
+ assert.equal(statSync(join(h,name)).mtimeMs,1000000,'the newer file is never rewritten');assert.deepEqual(changed,[join(h,'system-overview.mjs')]);
  preserveCompanions(h,()=>assert.fail('must preserve existing companion'));
 });
 

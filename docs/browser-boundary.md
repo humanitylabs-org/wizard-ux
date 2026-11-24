@@ -37,6 +37,17 @@ On:
   `NativeGateTest` (unit) and `DeviceBridgeE2eTest.boundaryKeepsNativeBridgesOutOfAppFrames` (emulator). The other
   Android WebViews (`WizardNative`, `EverywhereNative`, `ScreenNative`) load only the app's own
   `file:///android_asset/assist/` pages with network loads blocked, so no app page reaches them.
+- Android app's own calls: sharing to Wizard, Archimedes Anywhere, reply notifications, dictation, Wizard ID and the
+  scroll diagnostics call the box from Java, not from the page, so they get no token from the wrapper. With the
+  boundary on, the top-level shell page hands the token to the app (`WizardOSNative.shellToken`, from
+  `shell-token.js`), and the app takes it only while its bridges are gated, so only the shell origin's page can set it.
+  The app keeps it in its private storage (background jobs need it after a restart), adds it only to owner routes on
+  the box it came from (`ShellToken.apply`, the same route rule as the page) and forgets it when the box says `off`.
+  Proof: `ShellTokenTest` (unit) and `DeviceBridgeE2eTest.shellTokenComesOnlyFromTheShellPageAndGoesOnlyToOwnerRoutes`
+  (emulator, every Android PR): the shell page's token is taken only once the bridges are gated, a same-origin frame
+  before the gate and a sandboxed app frame through the gate cannot plant one, the app's native calls carry it only to
+  owner routes on that box (not app paths, `//` paths or another origin), and `off` forgets it.
+  App paths (`/notifications/`, `/messenger/`, …) never get it. Proof: `ShellTokenTest` (unit).
 
 ## Sandboxed app frames (on only with the box switch)
 
@@ -327,6 +338,26 @@ Not covered yet (next slices, all on #133), so nobody should turn the box switch
   boxes run that Troubleshooter version.
 - `<img>`/`<video>`/download loads of attachments and saved files carry no header; the Agent Service lets exactly
   those browser-marked loads through without the token (wizard-agent-service#479).
-- Native bridges: on Android, `WizardOSNative` and `WizardOSDevice` (`addJavascriptInterface`) still reach every
-  frame, sandboxed app windows included (wizard-ux#1430; draft wizard-ux#871). On the Mac, native calls are already
-  main-frame only, but a reply can still reach a reloaded shell page (try-wizard#95; draft try-wizard#61).
+- Native bridges: done. Android keeps `WizardOSNative` / `WizardOSDevice` out of app frames (NativeGate, above;
+  wizard-ux#1430, merged in wizard-ux#1433), and Mac native replies go only to the shell page that asked
+  (try-wizard#95, merged in try-wizard#96).
+
+## The hostile-app check on a real box (CI)
+
+`.github/workflows/browser-boundary-box.yml` runs the hostile-app check from wizard-os#133 on every change to the
+shell's core, pages or packaging, on main, and daily. `tools/boundary-box.sh` starts a real box in Docker: this repo's
+shell image and the current Agent Service image (main's published image), both with `WIZARD_BROWSER_BOUNDARY=1` and the
+same token file, as `wam browser-boundary on` gives them, the Agent Service with `WIZARD_AUTH_MODE=none` (every caller
+is the owner by network path, the case an app page exploits), a stand-in for Tailscale Serve that puts the shell and an
+app on one origin and adds the owner's login, and a stand-in agent harness. `tests/qa-browser-boundary-box.cjs` opens
+the real shell in Chromium the way a home-screen icon does (`?app-session=hostile`), so the shell itself makes the app
+window, and the app page (`tests/fixtures/boundary-box/hostile/`) tries to act as the owner. It passes only when:
+the app window is an opaque sandbox; the app cannot reach the shell's page, storage, cookies, Wizard objects or native
+bridge, cannot open a window or navigate the shell, and cannot read the shell page loaded in its own frame (the box
+gives a framed load no token); the box itself refuses (its own log, 401/403) every owner call the app makes: read the
+chats, new chat, start a run, change settings, remove an app, with a forged token, and as no-cors requests; nothing
+reaches the agent; the shell's own owner calls carry the token and work; and Back, appearance and dictation into the
+app's field still work. The same check then runs on the box with the boundary off and must find the hole
+(`QA_EXPECT=broken`), so a check that stopped testing anything fails. Not covered here: the App Manager's own
+Store/Settings listener (its gate is wizard-app-manager `tests/test_browser_boundary.py`) and the Android app (the
+emulator check, `DeviceBridgeE2eTest`).

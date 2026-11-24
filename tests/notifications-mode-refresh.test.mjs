@@ -3,8 +3,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
+import { withAppParts } from './fixtures/app-parts.mjs';
+import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
+import { withShellParts } from './fixtures/shell-parts.mjs';
 
-const read = path => readFileSync(new URL('../' + path, import.meta.url), 'utf8');
+const read = path => withShellParts(readFileSync(new URL('../' + path, import.meta.url), 'utf8'));
 // Extract complete, unchanged production declarations at named neighbouring declarations.
 // These are the actual shell count producers/listeners, not replacement count callbacks.
 function between(src, start, end) {
@@ -12,7 +15,7 @@ function between(src, start, end) {
   assert.ok(a >= 0 && b > a, `production boundaries: ${start}`);
   return src.slice(a, b);
 }
-const phone = read('web/app.js'), desktop = read('web/desktop/desktop.js');
+const phone = withAppParts(read('web/app.js')), desktop = read('web/desktop/desktop.js');
 async function load(shell, { mode = true, unread = 2, liveOK = true } = {}) {
   const listeners = new Map(), events = [], requests = [], nodes = new Map();
   const addEventListener = (type, fn) => {
@@ -49,7 +52,7 @@ async function load(shell, { mode = true, unread = 2, liveOK = true } = {}) {
     paintOrbBadge() {}, refreshHome() {}, paintFocus() {}, layout() {}, hudMount() {},
     stage: {}, ws: [], W: {}, appOf: w => w, MOD: 'Alt+', homeOpen: false, pal: { hidden: true }, afterRender: null,
   });
-  vm.runInContext(read('web/live.js'), context);
+  vm.runInContext(withLiveParts(read('web/live.js')), context);
   const LIVE = window.WizLive, at = new Date(Date.now() - 60000).toISOString();
   LIVE.ok = liveOK; LIVE.seen = { initializedAt: 1, threads: {} };
   LIVE.sessions = ['chat-a', 'chat-b'].map(id => ({ id, title: id, runtime: 'direct', status: 'completed',
@@ -59,7 +62,7 @@ async function load(shell, { mode = true, unread = 2, liveOK = true } = {}) {
   context.LIVE = LIVE; context.live = () => LIVE.groups();
   vm.runInContext(read('web/core/workspace-navigation.js'), context);
   context.C = window.WizCore;
-  vm.runInContext(process.env.NOTIF_SOURCE ? readFileSync(process.env.NOTIF_SOURCE, 'utf8') : read('web/core/notif-bell.js'), context);
+  vm.runInContext(process.env.NOTIF_SOURCE ? withShellParts(readFileSync(process.env.NOTIF_SOURCE, 'utf8')) : read('web/core/notif-bell.js'), context);
   if (shell === 'phone') {
     vm.runInContext(between(phone, '  function renderMoons() {', '  function paintOrbBadge() {'), context);
     vm.runInContext(phone.split('\n').find(line => line.includes("window.addEventListener('wizard:notifications'")), context);

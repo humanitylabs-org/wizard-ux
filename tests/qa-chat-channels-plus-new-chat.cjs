@@ -30,7 +30,7 @@ async function setup(browser, skin, phone) {
     if (sessionStorage.getItem('qaBoot')) return; sessionStorage.setItem('qaBoot', '1');
     const shell = phone ? { 'wos.shell': 'phone', 'wux.shell': 'phone' } : { 'wos.shell': 'desktop', 'wux.shell': 'desktop', 'wos.desktop-view.v1': 'ai-apps' };
     for (const [k, v] of Object.entries({ ...shell, 'wos.coached': 'true', 'wos.tour.v1': 'true', 'wos.welcome.v1': 'done', 'wos.skin': skin,
-      'wos.chats.spaces.v1': JSON.stringify(spaces), 'wos.skin-tweaks.v1': JSON.stringify({ version: 1, preset: 'none', off: {}, mix: { 'wizard/desktop-chats': true, 'wizard/chat-channels': true } }) })) localStorage.setItem(k, v);
+      'wos.chats.spaces.v1': JSON.stringify(spaces), 'wos.skin-tweaks.v1': JSON.stringify({ version: 1, preset: 'none', off: {}, mix: { 'wizard/desktop-chats': true } }) })) localStorage.setItem(k, v);
   }, { skin, spaces: SPACES, phone });
   const prefs = { migrations: { 'launcher-seed-v1': true }, spaces: structuredClone(SPACES) };
   await context.route('**/*', async r => {
@@ -55,7 +55,7 @@ async function setup(browser, skin, phone) {
   const page = await context.newPage(), errors = []; page.on('pageerror', e => errors.push(e.message));
   await page.goto(origin + prefix + (phone ? 'index.html?phone' : 'desktop.html'));
   await page.waitForFunction(() => (window.__wos || window.__wux) && !window.WosWelcome?.active && window.WosExperience?.state.tweaks.length && !window.WosExperience.state.busy);
-  await page.waitForFunction(() => (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/chat-channels'), null, { timeout: 15000 });
+  await page.waitForFunction(() => true, null, { timeout: 15000 });
   await page.addStyleTag({ content: '#wosWelcome{display:none!important}' });
   return { context, page, errors };
 }

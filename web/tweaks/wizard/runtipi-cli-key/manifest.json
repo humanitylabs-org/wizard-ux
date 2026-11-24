@@ -1,0 +1,14 @@
+{
+  "id": "wizard/runtipi-cli-key",
+  "name": "Runtipi 4.12 sign-in key",
+  "version": "1.0.0",
+  "author": "wizard",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout"
+  ],
+  "issues": [
+    "humanitylabs-org/wizard-app-manager#839"
+  ],
+  "description": "The App Manager and the shell's server tools talk to Runtipi with Runtipi 4.12's private sign-in key instead of the older shared secret in runtipi/.env. Nothing looks different: app installs, updates, the app list and server readings keep working. On a server older than 4.12 they keep using the old secret."
+}

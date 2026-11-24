@@ -244,7 +244,7 @@ body {
 .arc-mid .i-play { display: none; }
 .device[data-voice="paused"] .arc-mid .i-play { display: block; }
 .device[data-voice="paused"] .arc-mid .i-pause { display: none; }
-.device[data-voice="paused"] .arc-mid { background: rgba(255, 190, 85, .18); border-color: rgba(255, 190, 85, .5); color: var(--amber); }
+:where(.device[data-voice="paused"]) .arc-mid { background: color-mix(in srgb, var(--amber) 18%, transparent); border-color: color-mix(in srgb, var(--amber) 50%, transparent); color: var(--amber); }
 .voice.on .arc { pointer-events: auto; opacity: 1; }
 .voice.on .arc-left  { transform: translate(-86px, -66px) scale(1); transition-delay: 30ms; }
 .voice.on .arc-mid   { transform: translate(0, -106px) scale(1); }
@@ -313,6 +313,9 @@ body {
 .sheet-grip { flex: 0 0 auto; width: 40px; height: 4px; border-radius: 99px; background: rgba(205, 190, 255, .3); margin: 9px auto; }
 /* Settings' grip is a drag handle: a larger invisible hit area, same 4px bar and spacing. */
 #settings > .sheet-grip { box-sizing: content-box; padding: 10px 48px; margin: -1px auto; background-clip: content-box; touch-action: none; cursor: grab; }
+/* Apps' grip too (issue 1734); the hit area is a pseudo-element so the bar keeps its exact look. */
+#launcher > .sheet-grip { position: relative; touch-action: none; cursor: grab; }
+#launcher > .sheet-grip::before { content: ''; position: absolute; inset: -10px -48px; }
 .launcher { top: calc(44px + var(--safe-t)); bottom: calc(var(--dock-h) + var(--safe-b) - 12px); transform: translateY(calc(100% + 160px)); opacity: 0; }
 .launcher.open { transform: none; opacity: 1; }
 .inbox { top: calc(40px + var(--safe-t)); bottom: calc(var(--dock-h) + var(--safe-b) - 12px); transform: translateY(calc(-100% - 60px)); opacity: 0; }
@@ -327,6 +330,12 @@ body {
 .search input { flex: 1; min-width: 0; height: 100%; background: none; border: 0; outline: none; font-size: 16px; user-select: text; -webkit-user-select: text; }
 .search input::placeholder { color: var(--ink-3); }
 .search input::-webkit-search-cancel-button { display: none; }
+/* Apps footer: Search plus a visible close button at its right, in thumb reach (wizard-ux issue 1735). */
+.launcher-foot { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; margin: 6px 12px 12px; }
+.launcher-foot .search { flex: 1 1 auto; min-width: 0; margin: 0; }
+.launcher-close { flex: 0 0 auto; display: grid; place-items: center; width: 50px; height: 50px; padding: 0; border-radius: 50%; background: color-mix(in srgb, var(--ink) 7%, transparent); border: 1px solid var(--line-2); color: var(--ink-2); cursor: pointer; }
+.launcher-close svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }
+.launcher-close:active { background: color-mix(in srgb, var(--ink) 14%, transparent); }
 
 .lgroup { margin: 10px 0 4px; }
 .lgroup h4 { margin: 0 4px 8px; font-size: 11px; font-weight: 850; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-2); display: flex; justify-content: space-between; align-items: center; }
@@ -620,7 +629,7 @@ body {
 .device:not(.orb-corner) .voice.on .arc-mid { transform: translate(-66px, 0) scale(1); }
 .device:not(.orb-corner) .voice.on .arc-screen { transform: translate(66px, 0) scale(1); }
 .device:not(.orb-corner) .voice.on .arc-right { transform: translate(124px, 0) scale(1); }
-.device:not(.orb-corner)[data-voice="paused"] .voice .arc-mid { background: rgba(255,190,85,.18); border-color: rgba(255,190,85,.5); color: var(--amber); }
+:where(.device:not(.orb-corner)[data-voice="paused"] .voice) .arc-mid { background: color-mix(in srgb, var(--amber) 18%, transparent); border-color: color-mix(in srgb, var(--amber) 50%, transparent); color: var(--amber); }
 .device:not(.orb-corner) .voice .arc small { display: none; }
 .device:is([data-voice="listen"], [data-voice="paused"]) .desk-dots { opacity: 0; pointer-events: none; }
 .device:not(.orb-corner) .timer { top: 44px; min-width: 0; font-size: 10px; line-height: 12px; padding: 0; border: 0; background: var(--wz-panel, var(--wz-base, var(--bg, #05030c))); }

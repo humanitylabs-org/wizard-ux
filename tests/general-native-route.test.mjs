@@ -2,7 +2,8 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
-const app=fs.readFileSync(new URL('../web/app.js',import.meta.url),'utf8');
+import { withAppParts } from './fixtures/app-parts.mjs';
+const app=withAppParts(fs.readFileSync(new URL('../web/app.js',import.meta.url),'utf8'));
 const finish=app.slice(app.indexOf('  function nativeFinish(id, stopped) {'),app.indexOf('  const releasedTakes ='));
 const resume=app.slice(app.indexOf('  function nativeResume(a) {'),app.indexOf('  // Tell the native shell what the orb'));
 function setup(){

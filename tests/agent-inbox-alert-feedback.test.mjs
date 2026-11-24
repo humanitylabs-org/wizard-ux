@@ -8,9 +8,16 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
+import { withParts } from './fixtures/chats-parts.mjs';
+import { block as sliceBlock, runRecording } from './fixtures/source-slice.mjs';
+import { createDocument } from './fixtures/mini-dom.mjs';
+import { cascade } from './fixtures/w1-css.mjs';
+import { freshDevice } from './fixtures/w1-experience.mjs';
 
-const live = readFileSync(new URL('../web/live.js', import.meta.url), 'utf8');
-const chats = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
+const live = withLiveParts(readFileSync(new URL('../web/live.js', import.meta.url), 'utf8'));
+const chats = withParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'));
+const running = readFileSync(new URL('../web/core/chats-running.js', import.meta.url), 'utf8'); // the agent inbox parts (issue 1665)
 const kitSrc = readFileSync(new URL('../web/core/chat-kit.js', import.meta.url), 'utf8');
 const clone = v => JSON.parse(JSON.stringify(v));
 const slice = (src, a, b) => { const i = src.indexOf(a), j = src.indexOf(b, i); assert.ok(i > 0 && j > i, `${a} is in the file`); return src.slice(i, j); };
@@ -132,7 +139,7 @@ function block({ on = true, channels = [{ id: 'chan_alerts', kind: 'alerts' }, {
     LIVE: { sessions, agentInbox: reader.inbox },
   };
   vm.createContext(ctx);
-  vm.runInContext(slice(chats, '  const SWEEP = new Map();', '  /* Ready has three orders') + '\nthis.api = { sweepHtml, sweepLater, alertsHtml, alertFeedback, ALFB };', ctx);
+  vm.runInContext(slice(running, '  const SWEEP = new Map();', '  return { alertFeedback') + '\nthis.api = { sweepHtml, sweepLater, alertsHtml, alertFeedback, ALFB };', ctx);
   const flip = v => { sw.on = v; for (const fn of listeners['wos:experience'] || []) fn(); };
   return { api: ctx.api, toasts, paints, flip, b, reader };
 }
@@ -217,21 +224,62 @@ test('switch off: no alert block, no Later list read, a stale button sends nothi
   await f.api.alertFeedback(AL, 'not_urgent');
   await f.api.sweepLater(CARD);
   assert.deepEqual(f.reader.calls, [], 'nothing asks the box');
-  // channelFeed draws the block only through the guarded call; with nothing to show the feed is unchanged.
-  assert.match(chats, /const alertsNow = typeof alertsHtml === 'function' \? alertsHtml\(open\) : '';/);
-  assert.match(chats, /\$\{shown\.length \|\| sending\.length \? html : alertsNow \? '' : '<span class="ch-none">No posts in the last 30 days\.<\/span>'\}\$\{alertsNow\}\$\{archNote\}/);
+  // The real channel feed (core/chats-feed.js) draws the block only through the late-bound alertsHtml; with
+  // nothing to show (switch off: alertsHtml gives '') an empty channel reads exactly as before.
+  const feed = channelFeedPart();
+  const open = { id: 'alerts', agent: 'hermes' }, w = { id: 'w' };
+  const none = '<div class="ch-chan-feed"><span class="ch-none">No posts in the last 30 days.</span></div>';
+  assert.equal(feed.channelFeed(w, open, []), none, 'before alertsHtml is bound');
+  feed.bindLate({ alertsHtml: () => f.api.alertsHtml(alertsOpen) });
+  assert.equal(feed.channelFeed(w, open, []), none, 'switch off: the same empty feed');
+  const seen = [];
+  feed.bindLate({ alertsHtml: o => { seen.push(o); return '<div class="ch-al">A</div>'; } });
+  assert.equal(feed.channelFeed(w, open, []), '<div class="ch-chan-feed"><div class="ch-al">A</div></div>', 'with alerts: the block instead of the empty line');
+  assert.equal(seen[0], open, 'asked for this channel');
 });
 
-test('the buttons are wired in the click handler and the new rules are scoped to the switch with skin tokens', () => {
-  assert.match(chats, /closest\('\[data-chsweeplater\]'\); if \(swl\) \{ sweepLater\(swl\.dataset\.chsweeplater\)/);
-  assert.match(chats, /closest\('\[data-chalertfb\]'\); if \(afb\) \{ if \(!afb\.disabled\) alertFeedback\(afb\.dataset\.id, afb\.dataset\.chalertfb, !!afb\.closest\('\.ch-al-i\.collapsed'\)\)/);
+// core/chats-feed.js's part factory run with stand-ins for the Chats names it reads (an empty, unarchived channel).
+function channelFeedPart() {
+  const window = { WizCore: {}, WizConfig: { owner: () => 'James' } };
+  vm.runInNewContext(readFileSync(new URL('../web/core/chats-feed.js', import.meta.url), 'utf8'), { window });
+  return window.WizCore.chatsParts.feed({ agentName: () => 'Wizard', agentRec: id => ({ id }), ago: () => '', AGS: () => null, CHAN_CLAMP: 240,
+    chanActs: {}, chanArchived: () => false, chanAt: () => 0, chanChanged: () => false, chanGenAgent: () => '', chanKey: s => s.id, chanMore: new Set(),
+    chanNeeds: () => false, chanNewN: () => 0, chanPostOrder: () => 0, chanPostText: () => ({ text: '' }), chanReadKey: () => 'k', chanReplies: () => null,
+    chanStart: () => null, chanUnread: () => false, esc: String, firstAgent: () => '', firstPost: () => null, firstWant: new Set(), focusedAgent: () => '',
+    focusOf: () => null, inChannel: () => true, isWorking: () => false, KIT: null, LIVE: { cardAt: () => '' }, pullFirst() {}, replyWant: new Set(), rowDraft: () => false });
+}
+
+// The real Chats click handler (core/chats-bind.js) on the real markup the block above draws, parsed into the tiny DOM.
+function clicks(html) {
+  const doc = createDocument(); doc.body.innerHTML = html;
+  const ctx = runRecording(sliceBlock(chats, '  function click(e, id) {') + '\nglobalThis.click = click;',
+    { INC: null, W: {}, H: { win: () => ({ id: 'w1', thread: 'wizard_daily_1' }) }, LIVE: {}, window: {}, replyStd: null });
+  const tap = el => { ctx.calls.length = 0; ctx.click({ target: el }, 'w1'); return ctx.calls.filter(c => ['sweepLater', 'alertFeedback'].includes(c[0])).map(c => [...c]); };
+  return { doc, tap };
+}
+test('the buttons are wired in the click handler and the new rules are scoped to the switch with skin tokens', async () => {
+  const f = block(); await f.reader.inbox.readAlerts();
+  const c = clicks(f.api.alertsHtml(alertsOpen) + f.api.sweepHtml(card()));
+  const fb = (action, rid) => c.doc.querySelector(`[data-chalertfb="${action}"][data-id="${rid}"]`);
+  assert.deepEqual(c.tap(fb('not_urgent', AL)), [['alertFeedback', AL, 'not_urgent', false]], 'Not urgent on an alert');
+  assert.deepEqual(c.tap(fb('not_urgent', COL)), [['alertFeedback', COL, 'not_urgent', true]], 'the collapsed one says so');
+  assert.deepEqual(c.tap(fb('should_alert', W1)), [['alertFeedback', W1, 'should_alert', false]], 'Should have alerted on a sweep item');
+  assert.deepEqual(c.tap(c.doc.querySelector('[data-chsweeplater]')), [['sweepLater', CARD]], 'the Later list');
+  fb('should_alert', DN).setAttribute('disabled', ''); assert.deepEqual(c.tap(fb('should_alert', DN)), [], 'a sending button sends nothing');
+  // The new rules apply only with the switch on, and their colours are skin tokens
   const css = readFileSync(new URL('../web/tweaks/wizard/agent-inbox/tweak.css', import.meta.url), 'utf8');
-  const rules = css.replace(/\/\*[\s\S]*?\*\//g, '').split('}').filter(r => /ch-al|ch-sw-lb|ch-alerts/.test(r));
-  assert.ok(rules.length >= 5);
-  for (const rule of rules) {
-    for (const sel of rule.split('{')[0].split(',')) assert.match(sel.trim(), /^html\[data-tweaks~="wizard\/agent-inbox"\]/, 'scoped to the switch');
-    for (const c of rule.match(/var\(--[a-z0-9-]+/g) || []) assert.match(c, /^var\(--wz-/, 'skin tokens only');
+  const rows = ['.ch-alerts', '.ch-al-i', '.ch-al-n', '[data-chalertfb]', '.ch-sw-lb'].map(sel => c.doc.querySelector(sel)).filter(Boolean);
+  assert.ok(rows.length >= 4, 'the drawn alert block');
+  const seen = new Set();
+  for (const el of rows) {
+    assert.deepEqual(cascade(el, css), {}, 'switch off: no rule reaches ' + el.className);
+    c.doc.documentElement.setAttribute('data-tweaks', 'wizard/agent-inbox');
+    const on = cascade(el, css);
+    for (const [prop, d] of Object.entries(on)) { seen.add(prop); for (const v of d.value.match(/var\(--[a-z0-9-]+/g) || []) assert.match(v, /^var\(--wz-/, `${prop}: skin tokens only`); }
+    c.doc.documentElement.removeAttribute('data-tweaks');
   }
-  const manifest = JSON.parse(readFileSync(new URL('../web/tweaks/wizard/agent-inbox/manifest.json', import.meta.url), 'utf8'));
+  assert.ok(seen.size >= 3, 'switch on: the rules reach the block');
+  // The shell lists the switch with this issue (core/experience.js reads the catalog and manifest)
+  const { manifest } = await freshDevice().listing('wizard/agent-inbox');
   assert.ok(manifest.issues.includes('humanitylabs-org/wizard-ux#1589'));
 });

@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { createDocument } from './fixtures/mini-dom.mjs';
 const src = readFileSync(new URL('../web/core/chat-kit.js', import.meta.url), 'utf8');
 function fixture(fileResult = 'shared') {
   const listeners = new Map(), timers = new Map(), calls = [], tasks = [];
@@ -62,8 +63,24 @@ test('a private Wizard file link is never shared as text (issue 1621)', async ()
   assert.equal(await f.kit.sharePayload({url:'https://other.test/wizard/attachments/0123456789abcdef0123456789abcdef'}),'shared','another site keeps sharing');
   assert.equal(await f.kit.sharePayload({url:'https://wizard.test/movies/'}),'shared','an ordinary Wizard page link still shares');
 });
-test('media viewer never falls back to sharing a private file link', () => {
-  const at = src.indexOf('const share = it =>'), body = src.slice(at, src.indexOf('\n  };', at));
-  assert.ok(at > 0 && body.includes("result === 'unsupported'"));
-  assert.ok(body.indexOf('privateMedia(it.url)') > 0 && body.indexOf('privateMedia(it.url)') < body.indexOf('sharePayload('), 'checks the link before any text fallback');
+test('media viewer never falls back to sharing a private file link', async () => {
+  // The viewer's Share on a Wizard file whose bytes cannot be read (offline, expired) in a browser without file
+  // sharing: the file is saved to Downloads instead; the link itself never reaches the Wizard sheet or the native one.
+  const doc = createDocument({ url: 'https://wizard.test/wizard-os-home/' }), sheet = [], downloads = [], notes = [];
+  const window = { WosShareSheet: { show: p => { sheet.push(p); return 'shared'; }, prime() {}, handoffs: () => 0 } };
+  const realCreate = doc.createElement.bind(doc);
+  doc.createElement = tag => { const el = realCreate(tag); Object.assign(el.style, { setProperty() {}, removeProperty() {} }); if (tag === 'a') el.click = () => downloads.push([el.href, el.download]); return el; };
+  vm.runInNewContext(src, { window, document: doc, navigator: {}, location: { href: 'https://wizard.test/wizard-os-home/', origin: 'https://wizard.test' }, URL, Blob, File,
+    fetch: async () => { throw new TypeError('Failed to fetch'); }, setTimeout, clearTimeout, requestAnimationFrame: () => 0, performance, addEventListener() {}, removeEventListener() {} });
+  const kit = window.WosChat; kit.K.notify = (icon, text) => notes.push(text);
+  for (const url of ['/wizard/files/f1.md/content', 'https://wizard.test/wizard/attachments/0123456789abcdef0123456789abcdef']) {
+    assert.equal(kit.viewer.open([{ kind: 'file', url, name: 'notes.md', mime: 'text/markdown' }]), true);
+    const btn = doc.querySelector('.mviewer [data-mv="share"]');
+    btn.click();
+    for (let i = 0; i < 30; i++) await new Promise(r => setImmediate(r));
+    assert.deepEqual(sheet, [], 'the link never reaches the Wizard sheet');
+    assert.equal(downloads.at(-1)[0], new URL(url, 'https://wizard.test/').href, 'the file goes to Downloads instead');
+    assert.match(notes.at(-1), /saved to Downloads instead/);
+    kit.viewer.close();
+  }
 });

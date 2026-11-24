@@ -95,7 +95,22 @@ final class ScrollCaptureDiagnostics {
     static synchronized boolean hasDeliveredForQa() { return delivered>0 && delivered==generation && !uploading; }
     static void resumed(Context context) {
         Context c=context.getApplicationContext(); init(c);
-        // Focus-only OEM overlays do not necessarily cause onResume; focus gain calls this too.
+        // A new process-exit record (wizard-ux#1724) is reason enough to send the report again.
+        // A saved freeze (wizard-ux#1762), also one from a process that was then closed from the ANR dialog.
+        if(HangWatch.log(c).takeUnreported()) arm("hang");
+        // Android's exit records are read off the UI thread on a cold start (wizard-ux#1769); at once when this
+        // process already read them.
+        StartupWork.then(ProcessExits.refreshed(),()->ProcessExits.refresh(c),()->{
+            if(ProcessExits.refresh(c).takeUnreported()) arm("process-exit");
+            // Focus-only OEM overlays do not necessarily cause onResume; focus gain calls this too.
+            MAIN.postDelayed(()->upload(c),750);
+        });
+    }
+    /** The UI thread or the page process answered again after a freeze: send the report with its stack. */
+    static void hang(Context context) {
+        if(context==null)return;
+        Context c=context.getApplicationContext(); init(c);
+        if(HangWatch.log(c).takeUnreported()) arm("hang");
         MAIN.postDelayed(()->upload(c),750);
     }
     private static synchronized void upload(Context c) {
@@ -105,6 +120,11 @@ final class ScrollCaptureDiagnostics {
         android.net.Uri u=android.net.Uri.parse(origin);
         if(!Origin.isPrivate(c,u) && !(BuildConfig.DEBUG && ai.wizards.os.device.AppState.isQaOrigin(origin))) return;
         final long sent=generation;
+        try {
+            session.put("processExits",ProcessExits.log(c).json(5));
+            session.put("batteryExempt",ProcessExits.batteryExempt(c));
+            session.put("hangs",HangWatch.log(c).json(5));
+        } catch (org.json.JSONException ignored) { }
         final String body=RING.json(session);
         final String cookie=android.webkit.CookieManager.getInstance().getCookie(origin);
         uploading=true;
@@ -115,6 +135,7 @@ final class ScrollCaptureDiagnostics {
                 conn.setInstanceFollowRedirects(false); conn.setConnectTimeout(8000); conn.setReadTimeout(8000);
                 conn.setRequestMethod("POST"); conn.setDoOutput(true);
                 conn.setRequestProperty("Content-Type","application/json"); conn.setRequestProperty("Origin",origin);
+                ai.wizards.os.device.ShellToken.apply(conn);
                 if(cookie!=null)conn.setRequestProperty("Cookie",cookie);
                 byte[] bytes=body.getBytes(java.nio.charset.StandardCharsets.UTF_8);
                 conn.setFixedLengthStreamingMode(bytes.length);

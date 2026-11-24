@@ -44,7 +44,7 @@ const report = { origin, web, cases: [] };
       const context = await browser.newContext({ viewport: { width, height: 820 }, serviceWorkers: 'block' });
       try {
         await context.routeWebSocket('**/*', w => w.close());
-        const mix = { 'wizard/desktop-chats': true, 'wizard/chat-channels': true };
+        const mix = { 'wizard/desktop-chats': true };
         await context.addInitScript(({ skin, mix, spaces }) => {
           if (window !== top) return;
           if (sessionStorage.getItem('qaBoot')) return; sessionStorage.setItem('qaBoot', '1');
@@ -88,7 +88,7 @@ const report = { origin, web, cases: [] };
         await page.goto(origin + prefix + 'desktop.html');
         await page.waitForFunction(() => window.__wux && !window.WosWelcome?.active && window.WosExperience?.state.tweaks.length && !window.WosExperience.state.busy);
         await page.waitForFunction(() => document.documentElement.dataset.layout === 'ai-apps', null, { timeout: 15000 });
-        await page.waitForFunction(() => (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/chat-channels'), null, { timeout: 15000 });
+        await page.waitForFunction(() => true, null, { timeout: 15000 });
         await page.evaluate(() => document.fonts.ready); await nap(600);
         const startUrl = page.url(), hist = await page.evaluate(() => history.length);
         await page.evaluate(() => { window.__qaSameDocument = true; }); // a real navigation (Back leaving Wizard) drops it

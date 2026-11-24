@@ -3,8 +3,10 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import fixture from '../tools/qa-settings-fixture.cjs';
+import { runSettingsParity } from './fixtures/s1-settings-parity.mjs';
+let run;const parity=()=>run??=runSettingsParity();
 const welcome = fs.readFileSync(new URL('../web/core/welcome.js', import.meta.url), 'utf8');
-const harness = fs.readFileSync(new URL('../qa-settings-component-parity.cjs', import.meta.url), 'utf8');
+const harness = fs.readFileSync(new URL('../qa/scripts/qa-settings-component-parity.cjs', import.meta.url), 'utf8');
 function slice(start, end) { const a=welcome.indexOf(start),b=welcome.indexOf(end,a);assert(a>=0&&b>a);return welcome.slice(a,b); }
 async function boot(options, setup, state) {
   const tasks=[],opened=[],log=[],s={Promise,tsig:()=>({}),booted:false,H:null,acted:false,act(){},addEventListener(){},removeEventListener(){},seenPending:()=>false,markSeen(){},read:()=>state,log:x=>log.push(x),open:x=>opened.push(x),setTimeout:(f,ms)=>{if(!ms)tasks.push(f);},fetch:async url=>({ok:true,json:async()=>url.endsWith('/model/options')?options:setup})};
@@ -24,8 +26,28 @@ test('actual Welcome boot accepts setup first_run:false plus authenticated synth
   assert.deepEqual(r.opened,[]);assert.deepEqual(r.log,['boot:true:done:false']);
   const bad=await boot({}, {}, '');assert.deepEqual(bad.opened,['ai']);assert.deepEqual(bad.log,['boot:false::false']);
 });
-test('Settings browser keeps original paths, real boot oracle and re-resolving trusted input',()=>{
-  for(const text of ["ctx.addInitScript(seedOwner)","window.__welcomeLog?.includes('boot:true:done:false')","assert.equal(welcome.active,false)","assert.equal(welcome.overlay,false)","phone?await el.tap():await el.click()","['nebula','obsidian-light']",'data-skinfamily','data-skinpick','nearest Back returns to categories','one outside tap dismisses Settings to Home','#1552 Settings centred over Home','missing route visible and fail-closed','read-only retry recovers verified mode','existing native check action preserved','no Ask me, always automatic readback','For testers / For everyone names','original Install action intercepted'])assert(harness.includes(text),text);
+test('Settings browser keeps original paths, real boot oracle and re-resolving trusted input',async()=>{
+  const r=await parity();
+  // whole-script run (fake Chromium, tests/fixtures/s1-settings-parity.mjs): every check the script promises ran and passed
+  const names=r.report.checks.map(c=>c.name);
+  assert.equal(r.exitCode,undefined,r.errors.join('\n'));assert.equal(r.report.failed,0);assert.deepEqual(r.report.errors,[]);
+  for(const skin of ['nebula','obsidian-light']){
+    for(const kind of ['desktop','phone'])for(const name of ['live skin change','nearest Back returns to categories','missing route visible and fail-closed','read-only retry recovers verified mode','no Ask me, always automatic readback','For testers / For everyone names','original Install action intercepted'])assert(names.includes(`${kind} ${skin}: ${name}`),`${kind} ${skin}: ${name}`);
+    for(const name of ['existing native check action preserved','one outside tap dismisses Settings to Home','#1552 Settings centred over Home, no desk window'])assert(names.some(n=>n.startsWith(skin+': '+name)),skin+': '+name);
+  }
+  // the real seedOwner is the init script, and the real Welcome decision stays away because of it
+  assert.equal(r.initScripts.length,2);assert(r.initScripts.every(f=>f===fixture.seedOwner));
+  assert.deepEqual(r.report.contexts.map(c=>JSON.stringify(c.welcome)),Array(2).fill('{"log":["boot:true:done:false"],"active":false,"overlay":false}'));
+  // the phone taps, the desktop clicks (or Escape); the second skin is reached through its family
+  const how=phone=>[...new Set(r.actions.filter(a=>a.phone===phone).map(a=>a.how))].sort().join();
+  assert.equal(how(true),'tap');assert.equal(how(false),'click,key');
+  assert.deepEqual(r.actions.filter(a=>/skin(pick|family)/.test(a.sel)).map(a=>a.sel).join('|'),Array(2).fill('[data-skinfamily="obsidian"]:visible|[data-skinpick="obsidian-light"]:visible').join('|'));
+  // and each of those checks fails when the page misbehaves
+  const failed=async knob=>{const x=await runSettingsParity({[knob]:true});assert.equal(x.exitCode,1,knob);return x.report.checks.filter(c=>!c.pass).map(c=>c.name).join('|');};
+  assert.match(await failed('backStays'),/nearest Back returns to categories/);
+  assert.match(await failed('nativeDead'),/existing native check action preserved/);
+  assert.match(await failed('retryWrites'),/retry is read-only/);
+  await failed('dismissStuck');await failed('noTechnical');
   assert(!harness.includes('scrollIntoViewIfNeeded'));assert(!/wosWelcome[^\n]*remove\(/.test(harness));assert(!harness.includes('force:true'));assert(!harness.includes('force: true'));
   assert.equal(fixture.ownerRead('/wizard/v1/runs'),null);
 });
@@ -37,7 +59,17 @@ test('category oracle awaits canonical state, selected navigation and matching h
   assert.equal(ready(),true);root.dataset.settingsPage='look';assert.equal(ready(),false);root.dataset.settingsPage='about';
   heading.textContent='Look';assert.equal(ready(),false);heading.textContent=entry.label;pane.hidden=true;assert.equal(ready(),false);pane.hidden=false;
   const query=root.querySelector;root.querySelector=s=>s==='.st-page'?pane:null;assert.equal(ready(),false);root.querySelector=query;
-  assert(harness.includes('await p.waitForFunction(categoryReady,entry)'));assert(!harness.includes("getAttribute('data-page')"));
+  assert(!harness.includes("getAttribute('data-page')"));
+});
+test('the whole script waits on that category oracle for every category it opens',async()=>{
+  // whole-script run: each tapped category is awaited with its own menu entry (and About once more at the end)
+  const r=await parity();
+  for(const c of r.report.contexts)for(const [skin,pg] of Object.entries(c.pages)){
+    assert.deepEqual(Object.keys(c.pages),['nebula','obsidian-light'],skin);
+    const awaited=r.waits.filter(x=>x.phone===(c.kind==='phone')&&x.arg?.id).map(x=>x.arg.id+'='+x.arg.label);
+    for(const e of pg.menu)assert(awaited.includes(e.id+'='+e.label),c.kind+' '+e.id);
+  }
+  assert.equal(r.waits.filter(x=>x.arg?.id).length,2*(2+1)+2*(3+1),'desktop 2 categories, phone 3, plus About again, per skin');
 });
 test('phone outside dismissal sends one trusted tap and awaits closed sheet; nearest Back and native evidence remain',async()=>{
   // #880 supersedes the single-line model-only oracle with visual/interaction closure.
@@ -55,6 +87,11 @@ test('phone outside dismissal sends one trusted tap and awaits closed sheet; nea
     const before=visual[key];visual[key]=value;assert.equal(phoneDismissed(),false,key+' must be fully dismissed');visual[key]=before;
   }
   state.sheet='settings';assert.equal(phoneDismissed(),false,'model must be closed too');
-  assert(harness.includes("await back();ok(await p.locator('#settingsBody [data-st-page]:visible').count()>0"));
-  assert(harness.includes("await shot(skin+'-about')"));assert(harness.includes('[data-settings-version="phone"]'));assert(harness.includes("await shot(skin+'-about-native')"));
+  // whole-script run: nearest Back is checked after every category, and the About / native evidence is captured
+  const r=await parity();
+  for(const kind of ['desktop','phone'])for(const skin of ['nebula','obsidian-light'])assert.equal(r.report.checks.filter(c=>c.name===`${kind} ${skin}: nearest Back returns to categories`&&c.pass).length,kind==='phone'?3:2);
+  for(const skin of ['nebula','obsidian-light']){
+    for(const f of [`desktop-${skin}-about.png`,`phone-${skin}-about.png`,`phone-${skin}-about-native.png`,`phone-${skin}-native-row.png`])assert(r.files.includes(f),f);
+    assert(!r.files.includes(`desktop-${skin}-about-native.png`),'native evidence only on the phone');
+  }
 });

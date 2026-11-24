@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
-const src=readFileSync(new URL('../web/core/chats.js',import.meta.url),'utf8');
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
+const src=withParts(readFileSync(new URL('../web/core/chats.js',import.meta.url),'utf8'));
 function scene(){
   const listeners={};let closed=0;
   const env={rowSheet:{},root:{addEventListener(k,fn){listeners[k]=fn;}},closeRowSheet(){closed++;},justPressed:()=>true};

@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import vm from 'node:vm';
+import { java, swift, method, constant, JString } from './fixtures/s1-java-slice.mjs';
 
 const read = p => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
 const ID = 'wizard/wizardos-name';
@@ -81,7 +82,9 @@ test('app update banner says WizardOS with or without the old tweak', () => {
 
 test('every product-name module spells WizardOS as a constant', () => {
   for (const file of ['web/core/welcome.js', 'web/core/tour.js', 'web/app.js', 'web/core/settings.js', 'web/device.js', 'web/core/sel-menu.js', 'web/core/os-updates.js']) {
-    assert.match(read(file), /const OS = \(\) => 'WizardOS';/, file);
+    // each module's own OS() (its real line, run alone): a constant, no tweak or setting read
+    const line = read(file).split('\n').find(l => /^\s*const OS = \(\) =>/.test(l));
+    assert.equal(vm.runInNewContext(`${line.trim()}\nOS()`, {}), 'WizardOS', file);
   }
 });
 
@@ -107,6 +110,17 @@ test('update notices saved before the one-word name still route as Wizard update
   assert.ok(title.test('WizardOS updated'));
   assert.ok(title.test(`Wizard${' '}OS updated`));
   assert.ok(!title.test('Wizardly updated'));
-  assert.match(read('android/app/src/main/java/ai/wizards/os/WizardProbe.java'), /html\.contains\("WizardOS"\) \|\| html\.contains\(LEGACY_TITLE\)/);
-  assert.match(read('ios/native/App/App/WizardOrigin.swift'), /html\.contains\("WizardOS"\) \|\| html\.contains\("Wizard" \+ " OS"\)/);
+  // the real native probes (Android WizardProbe.looksLikeWizard, iOS WizardOrigin.looksLikeWizard), run: a shell with the
+  // one-word title or the old two-word one is a Wizard; anything else is not
+  const probe = java('WizardProbe.java'), LEGACY_TITLE = constant(probe, 'LEGACY_TITLE');
+  const android = html => method(probe, 'public static boolean looksLikeWizard', { args: { html: html == null ? null : new JString(html) }, scope: { LEGACY_TITLE } }).value;
+  const ios = html => method(swift('WizardOrigin.swift'), 'static func looksLikeWizard', { args: { html: new JString(html) }, expression: true }).value;
+  for (const looks of [android, ios]) {
+    assert.equal(looks('<title>WizardOS</title><script src="core/boot.js">'), true);
+    assert.equal(looks(`<title>Wizard${' '}OS</title><script src="core/boot.js">`), true, 'a shell from before the one-word name');
+    assert.equal(looks(`<title>Wizard${' '}OS</title>window.__wosNativeBack`), true);
+    assert.equal(looks('<title>Wizardly</title><script src="core/boot.js">'), false);
+    assert.equal(looks('<title>WizardOS</title> login page'), false, 'the title alone is not a shell');
+  }
+  assert.equal(android(null), false);
 });

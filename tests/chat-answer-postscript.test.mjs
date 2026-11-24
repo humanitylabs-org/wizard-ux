@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 
 // ux#1319: the agent writes its whole answer in a message that also carries a tool call (a notes patch), then ends
 // the turn with a short postscript. The answer must stay the visible reply, never fold into the work log.
@@ -74,7 +75,7 @@ test('inline images of both messages stay placed when their markers collide', ()
 // history in a main thread and in host-profile, container and restricted routed threads shows the same answer.
 const ROUTES = { main: ['wizard_1793157258294_34b4a71ae61a', ''], 'host-profile': ['20261028_101500_ab12cd', 'qa-host-profile'],
   container: ['agent-research:20261028_101501_ef34', 'agent-research'], restricted: ['restricted.vault_20261028-101502', 'restricted.vault'] };
-const chats = read('web/core/chats.js');
+const chats = withParts(read('web/core/chats.js'));
 const line = start => { const a = chats.indexOf(start); assert.ok(a >= 0, start); return chats.slice(a, chats.indexOf('\n', a) + 1); };
 const slice = (start, end) => { const a = chats.indexOf(start), b = chats.indexOf(end, a); assert.ok(a >= 0 && b > a, `${start} .. ${end}`); return chats.slice(a, b); };
 function turnHtml(tn) {

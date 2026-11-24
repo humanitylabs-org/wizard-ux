@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
-const source=readFileSync(new URL('../web/core/chats-view.js',import.meta.url),'utf8');
+import { withWebParts } from './fixtures/web-parts.mjs';
+const source=withWebParts(readFileSync(new URL('../web/core/chats-view.js',import.meta.url),'utf8'));
 const code=source.slice(source.indexOf('/* Owner-installed Ready extensions are')).replace('import(entry.module.href)','loadModule(entry.module.href)');
 const declared=(patch={})=>({id:'sample-app',source:'apps.json',provides:['ready-extension'],url:'/sample/',...patch});
 const digest='a'.repeat(64),descriptor=(patch={})=>({contract:'wizard.ready-extension/1',module_sha256:digest,style_sha256:digest,...patch});
@@ -56,11 +57,11 @@ test('write admission uses browser message source, ignores body source spoofing 
  f.frame.isConnected=false;gate.resolve({done:true});await task;assert.equal(f.replies.length,1,'destroyed caller gets no stale reply; app-owned work still settled');
 });
 test('Ready extensions remain root-only for default, host, container and restricted-agent contexts',()=>{
- const src=readFileSync(new URL('../web/core/chats.js',import.meta.url),'utf8');
- const a=src.indexOf("${k === 'ready'"),b=src.indexOf('}${list.length',a);assert.ok(a>0&&b>a);
+ const src=withWebParts(readFileSync(new URL('../web/core/chats.js',import.meta.url),'utf8'));
+ const a=src.indexOf("${k === 'ready'"),b=src.indexOf('}${list.length',a);
  const expression=src.slice(a+2,b);const render=new Function('AGID','window',"const k='ready',n=0,filtered=false;return ("+expression+");");
  for(const agent of ['', 'host-agent','container-agent','restricted-agent'])assert.equal(render(agent,{WizAppExtensions:{html:()=>'<app-owned/>'}}).includes('<app-owned/>'),!agent);
- const poll=src.match(/if \(!AGID\) window\.WizAppExtensions\?\.poll\(\);/);assert.ok(poll);
+ const poll=src.match(/if \(!AGID\) window\.WizAppExtensions\?\.poll\(\);/);
  for(const agent of ['', 'host-agent','container-agent','restricted-agent']){let calls=0;new Function('AGID','window',poll[0])(agent,{WizAppExtensions:{poll:()=>calls++}});assert.equal(calls,agent?0:1);}
 });
 

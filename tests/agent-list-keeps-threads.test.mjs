@@ -12,7 +12,7 @@ const body = src.slice(src.indexOf('    async refreshAgents('), src.indexOf('   
 function store(fail) {
   const L = { agentSessions: {}, agentStatus: {}, windows: {}, seen: null, emit() {} };
   const A = { ready: true, others: () => [{ id: 'private' }] };
-  const c = { L, AG: () => A, AGENT_OF: new Map(), AGENT_SEEN: { threads: {} }, AGENT_SEEN_KEY: 'k', Date, Object, Promise,
+  const c = { L, AG: () => A, AGENT_OF: new Map(), AGENT_POLL: new Map(), FULL_EVERY: 180000, LIST_SUPPORT: new Map(), AGENT_SEEN: { threads: {} }, AGENT_SEEN_KEY: 'k', Date, Object, Promise,
     keyOf: s => s.id, seenKeyOf: s => s.id, applyLocal() {}, addSynthetic() {}, merge: () => null, readLocal: () => null,
     later: a => a, writeLocal() {}, putSeen: async () => ({}), localStorage: { setItem() {} }, window: {},
     fetchSessions: async () => { if (fail.now) { const e = new Error('read failed'); e.status = fail.status; throw e; } return { sessions: [{ id: 't1' }] }; } };

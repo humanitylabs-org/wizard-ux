@@ -1,6 +1,12 @@
 <!doctype html>
-<!-- Offline app-session document only. Same shared runtime/Back/services as the online shell;
-     deliberately no desks, chats, recording runtime, launcher, or PWA install prompt. -->
+<!-- Offline app-session document: the one-app page (an app on its own, e.g. an Android home-screen icon offline).
+     The same shell services an app gets inside the full shell (wizard-ux issue 1694): every stylesheet and every
+     script core/pin-doc.js loads for a pinned app (kinds e, x, m), in index.html order, so WizLive, the Chats host,
+     uploads, the bell, the media viewer and the rest are there for app frames. Never the phone/desktop choice
+     (core/shell.js), the PWA prompt or the scripts that do nothing in a one-app session (kind s).
+     tests/pin-slim-doc.test.mjs keeps this list in step with core/pin-doc.js. data-offline-copy="no" files are kept
+     by the shell's own worker (sw.js) like the full shell's, not in the small pinned offline copy
+     (tools/build-offline-session.py), so the full shell's caching does not change. -->
 <html lang="en" data-shell="phone">
 <head>
   <meta charset="utf-8">
@@ -12,30 +18,209 @@
   <script src="core/offline-session.js"></script>
   <script src="core/offline-kit.js"></script>
   <link rel="stylesheet" href="core/base.css">
+  <link data-offline-copy="no" rel="stylesheet" href="core/brand.css">
+  <link data-offline-copy="no" rel="stylesheet" href="motion/wizard-motion.css">
+  <link data-offline-copy="no" rel="stylesheet" href="core/attach-chip.css">
+  <link data-offline-copy="no" rel="stylesheet" href="core/chats.css">
+  <link data-offline-copy="no" rel="stylesheet" href="core/scheduled-reminders.css">
+  <link data-offline-copy="no" rel="stylesheet" href="core/chats-view.css">
+  <link data-offline-copy="no" rel="stylesheet" href="core/sel-menu.css">
+  <link data-offline-copy="no" rel="stylesheet" href="core/lookup-pop.css">
+  <link data-offline-copy="no" rel="stylesheet" href="core/share-sheet.css">
+  <link data-offline-copy="no" rel="stylesheet" href="core/chat-power.css">
+  <link data-offline-copy="no" rel="stylesheet" href="core/thread-tracker.css">
+  <link data-offline-copy="no" rel="stylesheet" href="core/polish.css">
+  <link data-offline-copy="no" rel="stylesheet" href="core/context-menu.css">
   <link rel="stylesheet" href="styles.css">
-  <link rel="stylesheet" href="core/skins.css">
-  <link rel="stylesheet" href="core/skin-frame.css">
+  <link data-offline-copy="no" rel="stylesheet" href="core/views.css">
+  <link data-offline-copy="no" rel="stylesheet" href="core/settings.css">
+  <link data-offline-copy="no" rel="stylesheet" href="core/phone-connect.css">
+  <link data-offline-copy="no" rel="stylesheet" href="core/own-views.css">
+  <link data-offline-copy="no" rel="stylesheet" href="core/update-banner.css">
   <link rel="stylesheet" href="core/links.css">
   <link rel="stylesheet" href="core/downloads.css">
   <link rel="stylesheet" href="core/appearance-host.css">
+  <link data-offline-copy="no" rel="stylesheet" href="core/resources.css">
+  <link data-offline-copy="no" rel="stylesheet" href="core/home-surfaces.css">
+  <link data-offline-copy="no" rel="stylesheet" href="core/sigils.css">
+  <link data-offline-copy="no" rel="stylesheet" href="core/app-route.css">
+  <link data-offline-copy="no" rel="stylesheet" href="core/desks.css">
+  <link data-offline-copy="no" rel="stylesheet" href="core/tour.css">
+  <link data-offline-copy="no" rel="stylesheet" href="core/welcome.css">
+  <link rel="stylesheet" href="core/skins.css">
+  <link data-offline-copy="no" rel="stylesheet" href="core/orb-switcher.css">
+  <link rel="stylesheet" href="core/skin-frame.css">
+  <link data-offline-copy="no" rel="stylesheet" href="kit/shell-tokens.css">
+  <link data-offline-copy="no" rel="stylesheet" href="kit/controls.css">
+  <link data-offline-copy="no" rel="stylesheet" href="core/pages.css">
+  <link data-offline-copy="no" rel="stylesheet" href="core/share-wizard.css">
+  <link data-offline-copy="no" rel="stylesheet" href="core/app-setup.css">
+  <link data-offline-copy="no" rel="stylesheet" href="core/workspaces.css">
   <link rel="stylesheet" href="core/home-screen-apps.css">
   <script src="core/skin-frame.js"></script>
   <script src="core/skins.js"></script>
 </head>
 <body>
   <div id="device" class="device"><div id="toast" class="toast" role="status" aria-live="polite"></div></div>
+  <script data-offline-copy="no" src="core/scenery.js"></script>
+  <script data-offline-copy="no" src="core/brand.js"></script>
+  <script data-offline-copy="no" src="core/context-menu.js"></script>
+  <script data-offline-copy="no" src="core/escape-back.js"></script>
+  <script data-offline-copy="no" src="core/skin-host-api.js"></script>
+  <script data-offline-copy="no" src="core/skin-host-boot.js"></script>
+  <script data-offline-copy="no" src="core/skin-host-host.js"></script>
+  <script data-offline-copy="no" src="core/skin-host-layout.js"></script>
+  <script data-offline-copy="no" src="core/skin-host-logos.js"></script>
+  <script data-offline-copy="no" src="core/skin-host-orbbar.js"></script>
+  <script data-offline-copy="no" src="core/skin-host-rows.js"></script>
+  <script data-offline-copy="no" src="core/skin-host-shellapi.js"></script>
+  <script data-offline-copy="no" src="core/skin-host-summary.js"></script>
+  <script data-offline-copy="no" src="core/skin-host-tweaks.js"></script>
+  <script data-offline-copy="no" src="core/skin-host.js"></script>
+  <script data-offline-copy="no" type="module" src="core/thread-swipe-back.js"></script>
+  <script data-offline-copy="no" src="core/edge-peek.js"></script>
+  <script data-offline-copy="no" src="core/my-skin.js"></script>
+  <script data-offline-copy="no" defer src="core/experience.js"></script>
+  <script data-offline-copy="no" defer src="core/look-sync.js"></script>
   <script src="core/core.js"></script>
   <script src="core/config.js"></script>
+  <script data-offline-copy="no" src="core/reach.js"></script>
+  <script data-offline-copy="no" src="core/status.js"></script>
   <script src="core/sigils.js"></script>
+  <script data-offline-copy="no" src="core/workspace-navigation.js"></script>
+  <script data-offline-copy="no" src="core/chats-view.js"></script>
+  <script data-offline-copy="no" src="core/launcher-defaults.js"></script>
+  <script data-offline-copy="no" src="core/launcher.js"></script>
+  <script data-offline-copy="no" src="core/pages.js"></script>
   <script src="core/apps.js"></script>
+  <script data-offline-copy="no" src="core/app-kinds.js"></script>
   <script src="core/appearance-host.js"></script>
+  <script data-offline-copy="no" src="core/app-capture.js"></script>
   <script src="core/app-reading-position.js"></script>
+  <script data-offline-copy="no" src="core/sheetback.js"></script>
+  <script data-offline-copy="no" src="core/share-wizard.js"></script>
+  <script src="core/app-services-windows.js"></script>
+  <script src="core/app-services-boundary.js"></script>
   <script src="core/app-services.js"></script>
+  <script data-offline-copy="no" src="core/app-versions.js"></script>
   <script src="core/agents.js"></script>
   <script src="core/app-route.js"></script>
+  <script data-offline-copy="no" src="core/app-setup.js"></script>
+  <script data-offline-copy="no" src="core/chats-list-model.js"></script>
+  <script data-offline-copy="no" src="live-channels.js"></script>
+  <script data-offline-copy="no" src="live-seen.js"></script>
+  <script data-offline-copy="no" src="live-streams.js"></script>
+  <script data-offline-copy="no" src="live-work.js"></script>
+  <script data-offline-copy="no" src="live.js"></script>
+  <script data-offline-copy="no" src="outbox.js"></script>
+  <script data-offline-copy="no" src="core/orb-handoff.js"></script>
+  <script data-offline-copy="no" src="core/share-sheet.js"></script>
+  <script data-offline-copy="no" src="core/chat-kit.js"></script>
+  <script data-offline-copy="no" src="core/composer-input.js"></script>
+  <script data-offline-copy="no" src="core/attach-chip.js"></script>
+  <script data-offline-copy="no" src="core/chat-pins.js"></script>
+  <script data-offline-copy="no" src="core/thread-tracker.js"></script>
+  <script data-offline-copy="no" src="core/chat-topic-emojis-data.js"></script>
+  <script data-offline-copy="no" src="core/chat-topic-emojis.js"></script>
+  <script data-offline-copy="no" src="core/chat-models.js"></script>
+  <script data-offline-copy="no" src="core/chat-work.js"></script>
+  <script data-offline-copy="no" src="core/chat-errors.js"></script>
+  <script data-offline-copy="no" src="core/files.js"></script>
+  <script data-offline-copy="no" src="core/usage.js"></script>
+  <script data-offline-copy="no" src="core/resources.js"></script>
+  <script data-offline-copy="no" src="core/chat-power.js"></script>
+  <script data-offline-copy="no" src="core/chat-search.js"></script>
+  <script data-offline-copy="no" src="core/uploads.js"></script>
+  <script data-offline-copy="no" src="core/notif-bell.js"></script>
+  <script data-offline-copy="no" src="core/scheduled-reminders.js"></script>
+  <script data-offline-copy="no" src="core/dom-morph.js"></script>
+  <script data-offline-copy="no" src="core/chats-agentrows.js"></script>
+  <script data-offline-copy="no" src="core/chats-approvals.js"></script>
+  <script data-offline-copy="no" src="core/chats-attach.js"></script>
+  <script data-offline-copy="no" src="core/chats-bind.js"></script>
+  <script data-offline-copy="no" src="core/chats-chanbox.js"></script>
+  <script data-offline-copy="no" src="core/chats-chanemoji.js"></script>
+  <script data-offline-copy="no" src="core/chats-chanline.js"></script>
+  <script data-offline-copy="no" src="core/chats-channels.js"></script>
+  <script data-offline-copy="no" src="core/chats-chanread.js"></script>
+  <script data-offline-copy="no" src="core/chats-chanui.js"></script>
+  <script data-offline-copy="no" src="core/chats-daily.js"></script>
+  <script data-offline-copy="no" src="core/chats-done.js"></script>
+  <script data-offline-copy="no" src="core/chats-drafts.js"></script>
+  <script data-offline-copy="no" src="core/chats-events.js"></script>
+  <script data-offline-copy="no" src="core/chats-feed.js"></script>
+  <script data-offline-copy="no" src="core/chats-fitlabel.js"></script>
+  <script data-offline-copy="no" src="core/chats-focus.js"></script>
+  <script data-offline-copy="no" src="core/chats-hosted.js"></script>
+  <script data-offline-copy="no" src="core/chats-listpaint.js"></script>
+  <script data-offline-copy="no" src="core/chats-notes.js"></script>
+  <script data-offline-copy="no" src="core/chats-outbox.js"></script>
+  <script data-offline-copy="no" src="core/chats-places.js"></script>
+  <script data-offline-copy="no" src="core/chats-posts.js"></script>
+  <script data-offline-copy="no" src="core/chats-pull.js"></script>
+  <script data-offline-copy="no" src="core/chats-ready.js"></script>
+  <script data-offline-copy="no" src="core/chats-readylist.js"></script>
+  <script data-offline-copy="no" src="core/chats-rowacts.js"></script>
+  <script data-offline-copy="no" src="core/chats-rows.js"></script>
+  <script data-offline-copy="no" src="core/chats-running.js"></script>
+  <script data-offline-copy="no" src="core/chats-select.js"></script>
+  <script data-offline-copy="no" src="core/chats-send.js"></script>
+  <script data-offline-copy="no" src="core/chats-setup.js"></script>
+  <script data-offline-copy="no" src="core/chats-sheets.js"></script>
+  <script data-offline-copy="no" src="core/chats-shims.js"></script>
+  <script data-offline-copy="no" src="core/chats-spaces.js"></script>
+  <script data-offline-copy="no" src="core/chats-status.js"></script>
+  <script data-offline-copy="no" src="core/chats-stream.js"></script>
+  <script data-offline-copy="no" src="core/chats-swipe.js"></script>
+  <script data-offline-copy="no" src="core/chats-threadacts.js"></script>
+  <script data-offline-copy="no" src="core/chats-threadpaint.js"></script>
+  <script data-offline-copy="no" src="core/chats-tracker.js"></script>
+  <script data-offline-copy="no" src="core/chats-undo.js"></script>
+  <script data-offline-copy="no" src="core/chats.js"></script>
+  <script data-offline-copy="no" src="core/deeplink.js"></script>
+  <script data-offline-copy="no" src="core/companion-pane.js"></script>
+  <script data-offline-copy="no" src="core/companion-legacy.js"></script>
+  <script data-offline-copy="no" src="core/voice-status.js"></script>
+  <script data-offline-copy="no" src="core/phone-connect.js"></script>
+  <script data-offline-copy="no" src="core/settings-view.js"></script>
+  <script data-offline-copy="no" src="core/settings.js"></script>
+  <script data-offline-copy="no" src="core/incognito-chat.js"></script>
+  <script data-offline-copy="no" src="core/workspace-sync.js"></script>
+  <script data-offline-copy="no" src="core/photos-relay.js"></script>
+  <script data-offline-copy="no" src="core/cancelled.js"></script>
+  <script data-offline-copy="no" src="core/mic.js"></script>
+  <script data-offline-copy="no" src="core/os-updates.js"></script>
+  <script data-offline-copy="no" src="kit/wizard-sheet.js"></script>
+  <script data-offline-copy="no" src="core/os-update-flow.js"></script>
+  <script data-offline-copy="no" src="core/box-source.js"></script>
+  <script data-offline-copy="no" src="core/disk-status.js"></script>
+  <script data-offline-copy="no" src="core/schedules.js"></script>
+  <script data-offline-copy="no" src="core/own-views.js"></script>
+  <script data-offline-copy="no" src="core/screen-text.js"></script>
+  <script data-offline-copy="no" src="core/screen-capture.js"></script>
+  <script data-offline-copy="no" src="core/sel-menu.js"></script>
+  <script data-offline-copy="no" src="core/lookup-pop.js"></script>
   <script src="core/links.js"></script>
   <script src="core/downloads.js"></script>
   <script src="core/bridge.js"></script>
+  <script data-offline-copy="no" src="core/workspaces.js"></script>
+  <script data-offline-copy="no" src="core/focused-field.js"></script>
+  <script data-offline-copy="no" src="core/android-relay.js"></script>
+  <script data-offline-copy="no" src="core/background-audio-legacy.js"></script>
+  <script data-offline-copy="no" src="core/background-audio.js"></script>
+  <script data-offline-copy="no" src="core/media-watch.js"></script>
+  <script data-offline-copy="no" src="core/voice-legacy.js"></script>
+  <script data-offline-copy="no" src="core/app-voice.js"></script>
+  <script data-offline-copy="no" src="core/tour.js"></script>
+  <script data-offline-copy="no" src="core/commands.js"></script>
+  <script data-offline-copy="no" src="core/features.js"></script>
+  <script data-offline-copy="no" src="core/capture-tools.js"></script>
+  <script data-offline-copy="no" src="core/bound-view.js"></script>
+  <script data-offline-copy="no" src="core/home-screen-apps.js"></script>
   <script src="core/single-app-session.js"></script>
+  <script data-offline-copy="no" src="core/device-port.js"></script>
+  <script data-offline-copy="no" src="core/device-recording.js"></script>
+  <script data-offline-copy="no" src="core/device-orb.js"></script>
+  <script data-offline-copy="no" src="core/web-update.js"></script>
 </body>
 </html>

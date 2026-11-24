@@ -2,8 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
+import { withShellParts } from './fixtures/shell-parts.mjs';
 const root=process.env.SHARE_SOURCE_ROOT||new URL('../',import.meta.url).pathname;
-const read=p=>readFileSync(root+'/'+p,'utf8');
+const read=p=>withShellParts(readFileSync(root+'/'+p,'utf8'));
 const agents=[{id:'main-a',label:'Synthetic Main',is_default:true,status:'running',permissions:{}},{id:'other-b',label:'Synthetic Other',status:'running',permissions:{}},{id:'stopped-c',label:'Stopped',status:'stopped',permissions:{}}];
 function fixture(shell,registry=agents){
  let el,focus='',sent=0; const staged=[],files=[],store=new Map();

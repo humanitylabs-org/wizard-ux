@@ -6,7 +6,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
-const core = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
+const core = withParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'));
 function cut(from, to) { const a = core.indexOf(from), b = core.indexOf(to, a); assert(a >= 0 && b > a, from); return core.slice(a, b); }
 function fixture() {
   const w = { id: 'win', thread: null }, c = { readNav: 0, trail: [] }, opened = [];

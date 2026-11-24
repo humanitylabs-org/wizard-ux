@@ -1,7 +1,7 @@
 // Thales QA overlay for suites written against the live origin (qa-recordings, qa-mizel-desk): serve the shell
 // under test from QA_WEB_DIR/web for $WIZARD_ORIGIN/wizard-os-home/*, read everything else
 // from the live tailnet origin (GET/HEAD only; every write is answered locally and logged as SAFETY_BLOCK).
-// Usage: node -r ./qa-thales-loader.cjs -r ./tools/qa-thales-overlay.cjs <suite.cjs>
+// Usage: node -r ./qa/scripts/qa-thales-loader.cjs -r ./tools/qa-thales-overlay.cjs <suite.cjs>
 const fs = require('fs'), path = require('path');
 const { chromium } = require('./qa-playwright.cjs');
 const WEB = path.join(process.env.QA_WEB_DIR, 'web');

@@ -4,9 +4,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { withDesktopParts } from './fixtures/desktop-parts.mjs';
+import { skinPage, skinsJs, colour, over, contrast } from './fixtures/r8A-skin-paint.mjs';
 
-const desktop = readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8');
-const css = readFileSync(new URL('../web/desktop/desktop.css', import.meta.url), 'utf8');
+const desktop = withDesktopParts(readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8'));
 
 function recoveryBlock() {
   const start = desktop.indexOf('  // Recovery is a view of the existing outbox');
@@ -74,9 +75,26 @@ test('a take with no speech offers Discard first; one with words offers Retry fi
   assert.match(words, /class="wz-button quiet" data-record-discard/);
 });
 
+// The card the real recovery block renders (harness above), on every built-in skin: the real skins.js tokens and every
+// desktop.html stylesheet (tests/fixtures/r8A-skin-paint.mjs). A literal colour anywhere in its paint shows up as
+// unreadable text on the light or the dark skins.
 test('the card paints with skin tokens and the shell kit (no literal colours: light skins stay readable)', () => {
-  const rules = css.split('\n').filter(l => l.includes('.recording-recovery') && !l.includes('[hidden]'));
-  assert.ok(rules.length >= 4);
-  for (const r of rules) assert.doesNotMatch(r, /#[0-9a-f]{3,8}\b|rgba?\(/i, r);
-  assert.match(recoveryBlock(), /class="wz-card"/);
+  const card = harness({ ...take, state: 'failed', text: 'hello', error: 'Couldn’t reach Wizard' }).section();
+  assert.equal(card.className, 'recording-recovery');
+  for (const skin of skinsJs().S.list.map(s => s.id)) {
+    const p = skinPage(skin, 'desktop', `<section class="${card.className}">${card.innerHTML}</section>`);
+    const ink = el => { for (let n = el; n && n.nodeType === 1; n = n.parentNode) { const c = p.value(n, 'color'); if (c) return c; } return ''; };
+    const bgOf = el => p.value(el, 'background') || p.value(el, 'background-color');
+    const panel = p.doc.querySelector('.recording-recovery .wz-card');
+    assert.ok(panel, `${skin}: the card is a shell-kit .wz-card`);
+    const surface = over(colour(bgOf(panel)), colour(p.value(p.doc.documentElement, '--bg')));
+    const texts = p.doc.querySelectorAll('.wz-card strong, .wz-card p, .wz-card button');
+    assert.ok(texts.length >= 6);
+    for (const el of texts) {
+      const own = bgOf(el), under = own && own !== 'transparent' ? over(colour(own), surface) : surface;
+      const muted = /recording-(meta|store)/.test(el.getAttribute('class') || ''), min = muted ? 3 : 4.5;
+      const ratio = contrast(over(colour(ink(el)), under), under);
+      assert.ok(ratio >= min, `${skin}: ${el.tagName} ${el.getAttribute('class') || ''} ${ratio.toFixed(2)} < ${min}`);
+    }
+  }
 });

@@ -564,12 +564,15 @@
     return out;
   }
   // A key gained or lost its draft: lists showing draft marks repaint (wos:drafts-keys), never on each keystroke.
+  // The event names the keys that changed (detail.keys), so a list can tell a thread's draft from a channel box's.
   function keysMoved(all) {
-    const sig = [...draftKeys(all)].sort().join('\n');
+    const now = [...draftKeys(all)].sort(), sig = now.join('\n');
     if (keysSig === null) { keysSig = sig; return; }
     if (sig === keysSig) return;
+    const was = new Set(keysSig ? keysSig.split('\n') : []), is = new Set(now);
+    const keys = [...now.filter(k => !was.has(k)), ...[...was].filter(k => !is.has(k))];
     keysSig = sig;
-    try { window.dispatchEvent(new CustomEvent('wos:drafts-keys')); } catch (_) {}
+    try { window.dispatchEvent(new CustomEvent('wos:drafts-keys', { detail: { keys } })); } catch (_) {}
   }
   // Every draft is kept until its own send, discard or thread deletion: no count cap drops the oldest ones (wizard-ux
   // issue 1444). A device that can't store them says so once a minute (wos:drafts-unsaved; Chats shows it), while the
@@ -773,12 +776,46 @@
   }
   const b64 = blob => new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(String(fr.result).split(',')[1] || ''); fr.onerror = rej; fr.readAsDataURL(blob); });
   const extFor = mime => ({ 'image/png': '.png', 'image/jpeg': '.jpg', 'image/webp': '.webp', 'image/gif': '.gif' }[mime] || '');
+  const hasExt = name => /\.[a-z0-9]{2,5}$/i.test(name || '');
+  // The file name the server gave the bytes (Content-Disposition), e.g. a chat photo's original IMG-…-WA0003.jpg.
+  function dispositionName(header) {
+    const h = String(header || '');
+    const star = /filename\*\s*=\s*(?:UTF-8|utf-8)''([^;]+)/.exec(h);
+    let name = '';
+    if (star) { try { name = decodeURIComponent(star[1].trim()); } catch (_) { name = ''; } }
+    if (!name) { const m = /filename\s*=\s*(?:"([^"]*)"|([^;]+))/.exec(h); name = m ? (m[1] ?? m[2] ?? '').trim() : ''; }
+    name = name.replace(/[\\/\x00-\x1f]/g, '_').slice(0, 160);
+    return name && name !== 'file' && name !== 'media' ? name : '';
+  }
+  /* Save and Share read the very picture the viewer is showing (wizard-os issue 747). They take it from the browser's
+   * own cache when it is there (the server marks media private and immutable), so the tap answers at once instead of
+   * fetching the whole file from the box again, and the share sheet still opens while the tap counts as fresh. A read
+   * that never answers ends after SAVE_WAIT, so the buttons always say what happened. */
+  const SAVE_WAIT = 60000;
+  async function fetchMedia(url) {
+    if (url.startsWith('data:') || url.startsWith('blob:')) { const r = await fetch(url); return { blob: await r.blob(), name: '' }; }
+    const ctl = typeof AbortController === 'function' ? new AbortController() : null;
+    const timer = ctl ? setTimeout(() => ctl.abort(), SAVE_WAIT) : 0;
+    try {
+      const r = await fetch(url, { credentials: 'same-origin', cache: 'default', ...(ctl ? { signal: ctl.signal } : {}) });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return { blob: await r.blob(), name: dispositionName(r.headers.get('content-disposition')) };
+    } finally { clearTimeout(timer); }
+  }
+  // A sensible file name: the item's own name when it is a file name, else the server's (a chat photo's item is named
+  // after the person who sent it), else the item's name plus the type's extension.
+  function fileName(item, type, served) {
+    const given = item.name && item.name !== 'Image' ? String(item.name) : '';
+    if (hasExt(given)) return given;
+    if (hasExt(served)) return served;
+    let name = given || `wizard-image${extFor(type) || '.png'}`;
+    if (extFor(type) && !hasExt(name)) name += extFor(type); // a search title has no extension
+    return name;
+  }
   async function asFile(item) {
-    const blob = await fetchBlob(item.url);
+    const { blob, name } = await fetchMedia(String(item.url || ''));
     const type = blob.type || item.mime || 'application/octet-stream';
-    let name = item.name && item.name !== 'Image' ? item.name : `wizard-image${extFor(type) || '.png'}`;
-    if (extFor(type) && !/\.[a-z0-9]{2,5}$/i.test(name)) name += extFor(type); // a search title has no extension
-    return new File([blob], name, { type });
+    return new File([blob], fileName(item, type, name), { type });
   }
   // Apps keep the receipt contract ('opened' is not a receipt); the media viewer uses shareFileOpen directly.
   async function shareFile(item, opts) { const r = await shareFileOpen(item, opts); return r === 'opened' ? 'unsupported' : r; }
@@ -815,14 +852,43 @@
     a.addEventListener('click', e => e.stopPropagation()); // the shell's link handlers never see it: only the download happens
     document.body.appendChild(a); a.click(); a.remove();
   }
+  // Wizard for Mac (try-wizard#139): a blob <a download> clicked after the fetch carries no user gesture, so the app
+  // drops it without a word. An app whose app.info lists `files.` writes the bytes to Downloads itself and answers.
+  const macShell = () => { try { return window.top === window && !!window.webkit?.messageHandlers?.wizardNative; } catch (_) { return false; } };
+  // macSaveKnown: undefined until the app answered app.info, then the bridge (it saves files) or null (it can't).
+  let macSave = null, macSaveKnown;
+  const macSaver = () => {
+    const b = window.WizCore?.bridge;
+    if (!macShell() || typeof b?.call !== 'function') return Promise.resolve(null);
+    return macSave || (macSave = b.call('app.info').then(i => (macSaveKnown = Array.isArray(i?.capabilities) && i.capabilities.includes('files.') ? b : null), () => { macSave = null; return null; }));
+  };
+  // Ask as soon as the page (and its bridge) has loaded, so the first Save tap anywhere, the viewer's or a file card's
+  // ⤓, already knows the answer.
+  if (macShell()) window.addEventListener?.('DOMContentLoaded', () => macSaver(), { once: true });
   async function saveFile(item) {
     const n = native(), href = String(item.download || item.url || '');
     if (appDownloads() && !(n && typeof n.saveFile === 'function') && !/^(blob|data):/i.test(href)) { download(href, item.name); return 'downloading'; }
+    // A Mac app without files.save (0.8.2 and older, wizard-agent-service issue 586) drops a download that starts after
+    // the fetch, so this Wizard's own file is downloaded from the tap itself, before any wait, where every Mac app keeps
+    // it. That is also the path while app.info has not answered yet: only a known files.save fetches first.
+    const own = macShell() && !macSaveKnown && !/^(blob|data):/i.test(href) ? ownAddress(href) : '';
+    if (own) { download(own, item.name); return 'downloading'; }
+    const mac = macSaver();
     const file = await asFile(item);
     if (n && typeof n.saveFile === 'function') { n.saveFile(await b64(file), file.name, file.type); return 'saved'; }
     if (n) { const r = await shareFileOpen(item, { direct: true }); return r === 'opened' ? 'shared' : r; } // old app: the share sheet saves
-    const u = URL.createObjectURL(file); const a = document.createElement('a'); a.href = u; a.download = file.name; a.rel = 'noopener';
-    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(u), 60000);
+    const saver = await mac;
+    if (saver) {
+      const r = await saver.call('files.save', { data: await b64(file), name: file.name, mime: file.type });
+      if (r?.status === 'saved') return 'saved-downloads';
+      throw new Error(r?.error || 'not saved');
+    }
+    saveBlob(file);
+    return macShell() ? 'downloading' : 'saved'; // an older Mac app may drop this download: no false 'Saved'
+  }
+  // Bytes already in hand go to the browser's downloads under their own name.
+  function saveBlob(file) {
+    const u = URL.createObjectURL(file); download(u, file.name); setTimeout(() => URL.revokeObjectURL(u), 60000);
     return 'saved';
   }
 
@@ -1004,26 +1070,75 @@
   const busy = new Set();
   const heavy = it => it.kind === 'video' || it.kind === 'audio' || (it.bytes || 0) > 2 * 1048576;
   const once = (key, it, fn) => { if (busy.has(key + it.url)) return; busy.add(key + it.url); return Promise.resolve(fn()).finally(() => busy.delete(key + it.url)); };
-  const save = it => once('save', it, () => saveFile(it).then(r => r === 'downloading' ? K.notify('⤓', 'Saving to Downloads') : K.notify(r === 'unsupported' ? '!' : '⤓', r === 'saved' ? 'Saved' : r === 'shared' ? 'Choose where to save' : r === 'cancelled' ? 'Not saved' : 'Saving isn’t available here')).catch(() => K.notify('!', 'Couldn’t save this file')));
+  /* A tapped Save or Share never looks dead (wizard-os issue 747): the button itself says what it is doing
+   * ("Saving…") and then how it went, right where the owner is looking, as well as the usual notice. */
+  function working(key, text) {
+    const buttons = [...(V.el?.querySelectorAll?.(`[data-mv="${key}"]`) || [])], mark = {};
+    for (const b of buttons) { if (!b.dataset.was) b.dataset.was = b.textContent; b.textContent = text; b.setAttribute('aria-busy', 'true'); b.dataset.busy = '1'; b._mvMark = mark; }
+    return (outcome = '') => {
+      for (const b of buttons) {
+        b.removeAttribute('aria-busy'); delete b.dataset.busy;
+        if (b._mvMark !== mark) continue; // the viewer moved on to another item meanwhile
+        if (outcome) b.textContent = outcome;
+      }
+      setTimeout(() => { for (const b of buttons) if (b._mvMark === mark && !b.dataset.busy && b.dataset.was) { b.textContent = b.dataset.was; delete b.dataset.was; } }, outcome ? 1800 : 0);
+    };
+  }
+  // This Wizard's own address (http/https on this origin): the browser can fetch it as a download by itself.
+  const ownAddress = href => { try { const u = new URL(String(href), location.href); return /^https?:$/.test(u.protocol) && u.origin === location.origin ? u.href : ''; } catch (_) { return ''; } };
+  const saidSaved = { saved: 'Saved', 'saved-downloads': 'Saved to Downloads', shared: 'Choose where to save', cancelled: 'Not saved', downloading: 'Saving to Downloads' };
+  // `failed`: the bytes could already not be read (Share tried first), so no second wait for the same read.
+  async function saveNow(it, failed) {
+    try { if (failed) throw failed; return await saveFile(it); } catch (e) {
+      // The bytes could not be read here: hand the address itself to the browser's downloads, which show their own
+      // progress and result, instead of failing quietly.
+      if (macShell()) throw e; // the Mac app said it failed, and it drops a download started without a tap
+      const href = ownAddress(it.download || it.url);
+      if (!href || native()) throw e;
+      download(href, fileName(it, it.mime || '', ''));
+      return 'downloading';
+    }
+  }
+  const save = it => once('save', it, async () => {
+    const done = working('save', 'Saving…');
+    try {
+      const r = await saveNow(it);
+      K.notify(r === 'unsupported' ? '!' : '⤓', saidSaved[r] || 'Saving isn’t available here');
+      done(r === 'saved' || r === 'saved-downloads' || r === 'downloading' ? 'Saved ✓' : r === 'cancelled' ? 'Not saved' : r === 'shared' ? '' : 'Can’t save');
+    } catch (_) { K.notify('!', 'Couldn’t save this file'); done('Couldn’t save'); }
+  });
   const share = it => { const direct = directShareDepth > 0; return once('share', it, async () => {
+    const done = working('share', 'Sharing…');
+    let said = '';
     try {
       if (heavy(it) && native()) K.notify('↗', 'Preparing to share…');
       const sheet = window.WosShareSheet, handed = sheet?.handoffs?.() || 0;
-      let result = await shareFileOpen(it, { direct });
+      // Read the bytes once: the share and, where files can't be shared, the save below both use them.
+      let file = null, failed = null;
+      try { file = await asFile(it); } catch (e) { failed = e; }
+      let result = file ? await shareFileOpen(file, { direct }) : 'unsupported';
       // An old native bridge may already have opened the file chooser without an
       // outcome receipt. Never open a second text chooser or claim Shared then.
       if (result === 'unsupported' && typeof native()?.shareFile !== 'function') {
-        // A private file's link would reach the other person as a dead link: say so instead of pasting it.
-        if (privateMedia(it.url)) { K.notify('!', 'Couldn’t share this file from here. Download it, then send it.'); return; }
+        // No way to hand the file itself to another app here (a desktop browser without file sharing). A file on this
+        // Wizard opens only for its owner, so its link would reach anyone else as a dead link: save the file instead,
+        // so the owner can send it from Downloads, and say so (wizard-os issue 747).
+        if (file || ownAddress(it.url) || privateMedia(it.url)) {
+          const r = await (file && !native() ? Promise.resolve(saveBlob(file)) : saveNow(it, failed)).catch(() => 'failed');
+          if (r === 'saved' || r === 'downloading') { K.notify('⤓', 'Sharing isn’t available here · saved to Downloads instead'); said = 'Saved ✓'; }
+          else { K.notify('!', 'Couldn’t share this file from here. Download it, then send it.'); said = 'Can’t share'; }
+          return;
+        }
         result = await sharePayload({ url: new URL(it.url, location.href).href, title: it.name, direct });
       }
       // Handed to an app (Messenger): its own picker is on screen and confirms after Send; nothing is shared yet.
       if (result === 'shared' && (sheet?.handoffs?.() || 0) !== handed) return;
-      if (result === 'shared') K.notify('↗', 'Shared');
+      if (result === 'shared') { K.notify('↗', 'Shared'); said = 'Shared ✓'; }
       else if (result === 'opened') K.notify('↗', 'Share sheet opened');
-      else if (result === 'copied') K.notify('⧉', 'Link copied');
-      else if (result === 'unsupported') K.notify('!', 'Sharing unavailable or not confirmed');
-    } catch (_) { K.notify('!', 'Couldn’t share this file'); }
+      else if (result === 'copied') { K.notify('⧉', 'Link copied'); said = 'Link copied'; }
+      else if (result === 'unsupported') { K.notify('!', 'Sharing unavailable or not confirmed'); said = 'Can’t share'; }
+    } catch (_) { K.notify('!', 'Couldn’t share this file'); said = 'Couldn’t share'; }
+    finally { done(said); }
   }); };
   // Zooming out keeps your place in a long screenshot; a normal photo recentres.
   function reset() { const s = V.s; V.s = 1; V.x = 0; V.y = V.long ? V.y / s : 0; clampPan(); paint(); }
@@ -1074,7 +1189,10 @@
   function show() {
     const el = build(), it = V.items[V.i]; if (!it) return;
     clearGesture(); V.s = 1; V.x = 0; V.y = 0; V.text = ''; V.long = false; stopFling(); el.classList.remove('long'); menu(false);
+    macSaver(); // ask the Mac app now whether it saves files, so a Save tap knows without a wait
     dropPdf(); el.querySelector('.mv-bar [data-mv="save"]').textContent = it.kind === 'image' ? 'Save' : '⤓ Download';
+    el.querySelector('.mv-bar [data-mv="share"]').textContent = 'Share';
+    for (const b of el.querySelectorAll('.mv-bar [data-mv="save"], .mv-bar [data-mv="share"]')) { delete b.dataset.was; b._mvMark = null; } // a new item: no old outcome comes back
     const stage = el.querySelector('.mv-stage');
     for (const m of stage.querySelectorAll('video,audio')) { try { m.pause(); } catch (e) {} }
     el.dataset.kind = it.kind;
@@ -1159,8 +1277,17 @@
       V.items = items; V.i = Math.max(0, Math.min(items.length - 1, i));
       if (items.some(x => x.kind !== 'image')) window.WosShareSheet?.prime?.('file'); // its Share then knows who takes files
       const el = build(); if (el.hidden) V.focus = document.activeElement;
-      el.hidden = false; requestAnimationFrame(() => el.classList.add('open'));
-      show(); K.onChange(true); el.focus({ preventScroll: true }); return true;
+      // wizard-messenger issue 348: a picture is on screen at full strength as soon as it can be drawn, with no fade-in
+      // (that read as lag) and never a black first frame. Until the first picture is decoded (at most a few frames,
+      // capped at 150 ms) the viewer stays clear, so the app under it still shows; then it appears in one frame.
+      el.classList.remove('open'); el.hidden = false;
+      show();
+      const pic = V.items[V.i]?.kind === 'image' ? el.querySelector('.mv-stage img') : null;
+      const gen = V.gen = (V.gen || 0) + 1; // a reveal from an earlier open (closed, then reopened) must not show this one
+      const reveal = () => { if (V.gen === gen && V.el === el && !el.hidden) el.classList.add('open'); };
+      if (!pic || typeof pic.decode !== 'function' || !pic.src || (pic.complete && pic.naturalWidth)) reveal();
+      else { const cap = setTimeout(reveal, 150); pic.decode().then(reveal, reveal).finally(() => clearTimeout(cap)); }
+      K.onChange(true); el.focus({ preventScroll: true }); return true;
     },
     close() {
       if (!V.el || V.el.hidden) return false;

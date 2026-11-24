@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
-const source=readFileSync(new URL('../web/core/app-services.js',import.meta.url),'utf8');
+import { withServicesParts } from './fixtures/app-services-parts.mjs';
+const source=withServicesParts(readFileSync(new URL('../web/core/app-services.js',import.meta.url),'utf8'));
 function fixture(id='notifications', kind='wizard') {
  const calls=[],doc={},location=new URL('https://wizard.example/wizard-os-home/');
  const child={location:new URL('/'+id+'/',location),document:doc,addEventListener(){},postMessage(){}};

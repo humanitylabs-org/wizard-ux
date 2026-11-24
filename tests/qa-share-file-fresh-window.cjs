@@ -3,8 +3,9 @@
 // toast (#toast.toast with web/desktop/desktop.css) under the real media viewer.
 //  1. Messenger's own share-files switch on (App Manager switch catalog): the sheet lists Messenger without Messenger
 //     ever having run here; tapping it opens Messenger with the file waiting for it (pending, bytes intact).
-//  2. Same sheet, Other apps… on a desktop browser (no native bridge, no file share): a message shows ABOVE the viewer.
-//  3. Switch off: no receiver takes the file, and the owner is told so (visible above the viewer), never nothing.
+//  2. Same sheet, Other apps… on a desktop browser (no native bridge, no file share): the file is saved to Downloads
+//     instead (wizard-os issue 747) and a message saying so shows ABOVE the viewer.
+//  3. Switch off: no receiver takes the file; it is saved instead and the owner is told so (above the viewer).
 //   QA_PLAYWRIGHT=<path to playwright> node tests/qa-share-file-fresh-window.cjs
 //   QA_WEB=<another web/ dir, e.g. main's> QA_EXPECT=broken: the checks must fail there.
 //   QA_SHOTS=<dir>: screenshots of each step.
@@ -80,7 +81,7 @@ async function openShare(browser, base, tag) {
     if (other) { await other.click(); await page.waitForTimeout(800); }
     const seenOther = await toastSeen(page);
     if (SHOTS) await page.screenshot({ path: path.join(SHOTS, 'other-apps.png') });
-    ok(seenOther.top && /Download it, then send it/.test(seenOther.text), `Other apps… on desktop says what to do, visible above the viewer (${JSON.stringify(seenOther)})`);
+    ok(seenOther.top && /saved to Downloads instead/.test(seenOther.text), `Other apps… on desktop saves the file and says so, visible above the viewer (${JSON.stringify(seenOther)})`);
     await context.close(); server.close();
     // 3: switch off.
     server = serve(false); await new Promise(r => server.listen(0, '127.0.0.1', r));
@@ -90,7 +91,7 @@ async function openShare(browser, base, tag) {
     const seenOff = await toastSeen(page);
     if (SHOTS) await page.screenshot({ path: path.join(SHOTS, 'switch-off.png') });
     ok(!off, 'switch off: Messenger is not offered a file it would refuse');
-    ok(seenOff.top && /Download it, then send it/.test(seenOff.text), `no receiver: the owner is told, visible above the viewer (${JSON.stringify(seenOff)})`);
+    ok(seenOff.top && /saved to Downloads instead/.test(seenOff.text), `no receiver: the file is saved and the owner is told, visible above the viewer (${JSON.stringify(seenOff)})`);
     await context.close(); server.close();
   } finally { await browser.close(); }
   const broken = process.env.QA_EXPECT === 'broken';

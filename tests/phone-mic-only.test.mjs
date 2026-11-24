@@ -4,8 +4,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { withAppParts } from './fixtures/app-parts.mjs';
 
-const app = readFileSync(new URL('../web/app.js', import.meta.url), 'utf8');
+const app = withAppParts(readFileSync(new URL('../web/app.js', import.meta.url), 'utf8'));
 const capture = readFileSync(new URL('../web/core/app-capture.js', import.meta.url), 'utf8');
 
 function extract(src, name) {

@@ -7,9 +7,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
+import { withShellParts } from './fixtures/shell-parts.mjs';
 
 const kinds = ['main', 'host-profile', 'container', 'restricted'];
-const src = f => readFileSync(new URL(`../web/${f}`, import.meta.url), 'utf8');
+const src = f => withShellParts(readFileSync(new URL(`../web/${f}`, import.meta.url), 'utf8'));
 const slice = (js, a, b) => { const i = js.indexOf(a), j = js.indexOf(b, i + 1); assert.ok(i >= 0 && j > i, a); return js.slice(i, j); };
 
 function world(file, groups = {}) {

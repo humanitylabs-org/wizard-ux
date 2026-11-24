@@ -1,11 +1,32 @@
 import test from 'node:test';
+import { withSkinHostParts } from './fixtures/skin-host-parts.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { randomUUID } from 'node:crypto';
-const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
+import { withWebParts } from './fixtures/web-parts.mjs';
+import { world, deskWorld, layout, FakePointerEvent } from './fixtures/ai-apps-world.mjs';
+import { createDocument } from './fixtures/mini-dom.mjs';
+import { cascade } from './fixtures/mini-css.mjs';
+import { block, runRecording } from './fixtures/source-slice.mjs';
+const root = new URL('../', import.meta.url);
+const read = p => withWebParts(readFileSync(new URL('../' + p, import.meta.url), 'utf8'));
 const source = read('web/core/workspaces.js');
 const plain = x => JSON.parse(JSON.stringify(x));
+// The AI apps view itself (tests/fixtures/ai-apps-world.mjs), with a shared switcher stand-in that records its use.
+const LIST = [{ id: 'this', name: 'Miguel', current: true }, { id: 'g1', name: 'Carlos', org: 'Acme', current: false, url: 'https://carlos.example' }, { id: 'g2', name: 'Ana', current: false }];
+async function aiView(shell, { visible = false } = {}) {
+  const made = shell === 'desktop' ? deskWorld() : { w: world() }, w = made.w, used = [];
+  w.api.workspaces.list = () => LIST.map(x => ({ ...x }));
+  globalThis.WizWorkspaces = { visible, openMenu: el => used.push(['menu', el.className]), switch: id => (used.push(['switch', id]), Promise.resolve()), subscribe: () => () => {}, close() {} };
+  (await layout()).default(w.api);
+  return { w, used, keys: made.keys };
+}
+const openList = (v, shell) => {
+  if (shell === 'desktop') v.w.q('.aad-ws').dispatchEvent(new FakePointerEvent('click'));
+  else { v.w.q('.aa-menu').dispatchEvent(new FakePointerEvent('click')); v.w.q('.aa-dws').dispatchEvent(new FakePointerEvent('click')); }
+};
+
 class El extends EventTarget {
   constructor(tag) { super(); this.tagName = tag.toUpperCase(); this.children = []; this.dataset = {}; this.attrs = {}; this.style = {}; this.textContent = ''; this.namespaceURI = 'http://www.w3.org/2000/svg'; this.className = ''; this.classList = { add: s => { this.className += ' ' + s; }, toggle: (s, on) => { this.className = this.className.split(' ').filter(x => x !== s).concat(on ? [s] : []).join(' '); } }; }
   append(...nodes) { for (const n of nodes) { n.remove(); n.parentNode = this; this.children.push(n); } }
@@ -20,8 +41,8 @@ class El extends EventTarget {
   querySelectorAll(s) { const all = this.children.flatMap(n => [n, ...n.querySelectorAll('*')]); return all.filter(n => s === '*' || s === n.tagName.toLowerCase() || (s.startsWith('.') && n.className.split(' ').includes(s.slice(1))) || (s.startsWith('[data-workspace-id=') && n.dataset.workspaceId === s.match(/="([^"]+)"/)[1])); }
   querySelector(s) { return this.querySelectorAll(s)[0] || null; }
 }
-function boot({ native = false, items = [], devices = { this: { wizard: 'Local Wizard' }, devices: [], managed: [] }, local = [], shell = 'desktop', call, hash = '' } = {}) {
-  const win = new EventTarget(), body = new El('body'), html = new El('html'), slot = new El('div'), data = new Map([['wos.workspaces.v1', JSON.stringify(local)]]), stack = [], toasts = [], calls = [], nav = [], replaced = [], hooks = {};
+function boot({ native = false, items = [], devices = { this: { wizard: 'Local Wizard' }, devices: [], managed: [] }, local = [], shell = 'desktop', call, hash = '', timers = null, reach = null } = {}) {
+  const win = new EventTarget(), body = new El('body'), html = new El('html'), slot = new El('div'), data = new Map([['wos.workspaces.v1', JSON.stringify(local)], ...(reach ? [['wos.workspaces.reach.v1', JSON.stringify(reach)]] : [])]), stack = [], toasts = [], calls = [], nav = [], replaced = [], hooks = {};
   const document = { body, documentElement: html, createElement: tag => new El(tag), createElementNS: (_ns, tag) => new El(tag), querySelector: () => slot, querySelectorAll: () => [], getElementById: () => body };
   const host = { env: { shell }, route: () => ({ view: 'desk', desk: 0 }), on: (k, fn) => { hooks[k] = fn; }, listen: (el, k, fn) => el.addEventListener(k, fn), mount: n => body.append(n), toast: x => toasts.push(x), back: { push(fn) { stack.push(fn); return () => { const at = stack.indexOf(fn); if (at >= 0) stack.splice(at, 1); }; } } };
   let setup;
@@ -33,7 +54,7 @@ function boot({ native = false, items = [], devices = { this: { wizard: 'Local W
   win.innerWidth = 1280;
   const storage = { getItem: k => data.get(k), setItem: (k, v) => data.set(k, v) };
   const custom = class extends Event { constructor(k, opts) { super(k); this.detail = opts.detail; } };
-  vm.runInNewContext(source, { window: win, document, localStorage: storage, location: { origin: 'https://here.test', hostname: 'here.test', pathname: '/wizard-os-home/', search: '', hash, assign: x => nav.push(x) }, history: { state: null, replaceState: (_s, _t, u) => { replaced.push(u); } }, URL, CustomEvent: custom, AbortController, AbortSignal, CSS: { escape: v => v }, crypto: { randomUUID }, fetch: () => { throw new Error('fixture must not fetch'); }, setTimeout: () => { throw new Error('no idle timers'); }, setInterval: () => { throw new Error('no polling'); } });
+  vm.runInNewContext(source, { window: win, document, localStorage: storage, location: { origin: 'https://here.test', hostname: 'here.test', pathname: '/wizard-os-home/', search: '', hash, assign: x => nav.push(x) }, history: { state: null, replaceState: (_s, _t, u) => { replaced.push(u); } }, URL, CustomEvent: custom, AbortController, AbortSignal, CSS: { escape: v => v }, crypto: { randomUUID }, fetch: () => { throw new Error('fixture must not fetch'); }, setTimeout: timers ? (fn, ms) => timers.push({ fn, ms }) : () => { throw new Error('no idle timers'); }, setInterval: () => { throw new Error('no polling'); } });
   return { w: win.WizWorkspaces, start: () => setup(host), win, body, slot, stack, toasts, calls, nav, data, hooks, replaced };
 }
 const remote = (id = 'other', extra = {}) => ({ id, name: 'Other Wizard', url: 'https://other.test', kind: 'remote', status: 'ready', ...extra });
@@ -189,19 +210,47 @@ test('switching carries a safe way back; the target saves it once and strips the
   assert.equal(bad.data.get('wos.workspaces.v1'), '[]');
   const junk = boot({ hash: '#wzfrom=%E0%A4%A' }); assert.equal(junk.data.get('wos.workspaces.v1'), '[]');
 });
-test('both shells load module; bridge.handle preserves native capability; Miguel reuses only core switcher', () => {
-  for (const f of ['web/index.html', 'web/desktop.html']) assert.match(read(f), /core\/workspaces.js/);
-  assert.match(read('web/core/bridge.js'), /window.wizardUX = \{ \.\.\.window.wizardUX,/);
-  const tweak = read('web/tweaks/miguel/machines-home/tweak.js');
-  assert.match(tweak, /api.workspaces.switch\(d.ws\)/); assert.match(tweak, /api.workspaces.add\(\)/);
-  assert.doesNotMatch(tweak, /wizMenu|wizBtn|wsmBack|renderWiz/);
-  assert.match(source, /api\?\.back.push\(close\)/);
-});
-test('the AI-apps sidebar/phone workspace lists offer a switch for a Wizard with an address', () => {
-  assert.match(read('web/core/skin-host.js'), /\.\.\.\(\/\^https\?:/);
-  for (const f of ['web/layouts/ai-apps/desktop.js', 'web/layouts/ai-apps/layout.js']) {
-    const src = read(f); assert.match(src, /globalThis\.WizWorkspaces\?\.switch\(w\.id\)/); assert.match(src, /Another Wizard · tap to switch/); assert.match(src, /e\.key === 'Enter' \|\| e\.key === ' '/); assert.match(src, /setAttribute\('tabindex', '0'\)/);
+test('both shells load module; bridge.handle preserves native capability; Miguel reuses only core switcher', async () => {
+  for (const f of ['web/index.html', 'web/desktop.html']) {
+    const h = read(f), d = createDocument(); d.documentElement.innerHTML = h.slice(h.indexOf('<head'), h.lastIndexOf('</html>'));
+    assert.ok(d.querySelectorAll('script[src]').some(x => x.getAttribute('src') === 'core/workspaces.js'), f);
   }
+  // the bridge adds its fields beside what the native side already put on window.wizardUX
+  const bridge = read('web/core/bridge.js'), bl = bridge.slice(bridge.indexOf('window.wizardUX = { ...window.wizardUX,'), bridge.indexOf('\n', bridge.indexOf('window.wizardUX = { ...window.wizardUX,')));
+  const win = { wizardUX: { native: 'android', handle: 'kept' }, WIZ_SHELL: 'phone' };
+  vm.runInNewContext(bl, { window: win, VERSION: 'v', EVENTS: [] });
+  assert.equal(win.wizardUX.native, 'android'); assert.equal(win.wizardUX.handle, 'kept'); assert.equal(win.wizardUX.shell, 'phone');
+  // Miguel's Home taps go to the core switcher (switch / add), never a copy of it
+  const tweak = read('web/tweaks/miguel/machines-home/tweak.js');
+  assert.doesNotMatch(tweak, /wizMenu|wizBtn|wsmBack|renderWiz/);
+  const tap = (dataset, managed) => {
+    const used = [], top = {}, target = { dataset, parentNode: top };
+    const ctx = runRecording(`${block(tweak, '  const onTap = e => {').replace(/^\s*const onTap = /, 'this.onTap = ')};`,
+      { api: { workspaces: { switch: id => (used.push(['switch', id]), Promise.resolve()), add: () => (used.push(['add']), Promise.resolve()) }, toast() {}, storage: { set() {}, get() {} } }, managedOf: () => managed, S: {}, drawn: {} });
+    ctx.onTap({ currentTarget: top, target }); return used;
+  };
+  assert.deepEqual(tap({ ws: 'g1' }, { url: 'https://carlos.example' }), [['switch', 'g1']]);
+  assert.deepEqual(tap({ ws: 'g2' }, { url: '' }), [], 'not reachable yet: shows its page instead');
+  assert.deepEqual(tap({ act: 'add-managed' }, null), [['add']]);
+});
+test('the AI-apps sidebar/phone workspace lists offer a switch for a Wizard with an address', async () => {
+  for (const shell of ['desktop', 'phone']) {
+    const v = await aiView(shell); openList(v, shell);
+    const rows = v.w.qa(shell === 'desktop' ? '.aad-wr' : '.aa-sh-row').filter(r => r.textContent.includes('Carlos') || r.textContent.includes('Ana'));
+    const carlos = rows.find(r => r.textContent.includes('Carlos')), ana = rows.find(r => r.textContent.includes('Ana'));
+    assert.ok(carlos && ana, shell);
+    assert.match(carlos.textContent, /Another Wizard · tap to switch/, `${shell}: a Wizard with an address can be switched to`);
+    assert.equal(carlos.getAttribute('tabindex'), '0'); assert.doesNotMatch(ana.textContent, /tap to switch/, `${shell}: no address, no switch`);
+    for (const key of ['Enter', ' ']) { const e = new FakePointerEvent('keydown', { key }); carlos.dispatchEvent(e); assert.ok(e.defaultPrevented, `${shell} ${JSON.stringify(key)}`); }
+    carlos.dispatchEvent(new FakePointerEvent('click'));
+    assert.deepEqual(v.used.filter(u => u[0] === 'switch').map(u => u[1]), ['g1', 'g1', 'g1'], `${shell}: Enter, Space and a tap switch`);
+  }
+  // the host hands the view an address only when it is a web address (the real skin-host workspaces list())
+  const host = withSkinHostParts(readFileSync(new URL('../web/core/skin-host.js', import.meta.url), 'utf8')), from = host.indexOf('      workspaces: Object.freeze({');
+  const managed = [{ id: 'g1', name: 'Carlos', url: 'https://carlos.example' }, { id: 'g2', name: 'Ana', url: 'javascript:alert(1)' }, { id: 'g3', name: 'Eve', url: 'carlos.example' }, { id: 'g4', name: 'Hal', url: 'HTTP://hal.example' }];
+  const c = { live: () => true, isDoc: true, window: { WosResources: { state: { devices: { this: { wizard: 'Mine' }, managed } } }, WizConfig: { owner: () => 'Owner' } } };
+  vm.createContext(c); vm.runInContext(`this.api = ({ ${host.slice(from, host.indexOf('      aiUsage: Object.freeze({', from))} });`, c);
+  assert.deepEqual(JSON.parse(JSON.stringify(c.api.workspaces.list().map(w => [w.id, w.url ?? null]))), [['this', null], ['g1', 'https://carlos.example'], ['g2', null], ['g3', null], ['g4', 'HTTP://hal.example']]);
 });
 test('Android app: the switcher asks the app to switch in place and never navigates the WebView to another origin', async () => {
   const asked = [];
@@ -223,28 +272,128 @@ test('Android app refusing an address keeps the old navigation fallback', async 
 
 // James, 9 Nov 2026: on the desktop AI apps view the stock bar icon sat over the chat's own title and hid in other arrangements, so
 // the switcher looked missing. The sidebar header name is the switcher while the sidebar shows; the collapsed rail has its own layers button.
-test('AI apps view: no stock bar icon over the chat title; the rail carries the shared switcher button', () => {
-  const css = read('web/layouts/ai-apps/desktop.css'), js = read('web/layouts/ai-apps/desktop.js');
-  assert.match(css, /\[data-layout="ai-apps"\] #bar \.wz-workspaces-control \{ display: none !important; \}/);
-  assert.match(js, /rail\.append\(rTog, rNew, rFind, rWs, rList, rSet\)/);
-  assert.match(js, /rWs\.hidden = !W\?\.visible/, 'icon only shows with two or more Wizards');
-  assert.match(js, /WizWorkspaces\?\.openMenu\?\.\(rWs\)/, 'the one shared menu, not a second implementation');
-  assert.match(read('web/layouts/ai-apps/parts.js'), /layers: \[/);
+test('AI apps view: no stock bar icon over the chat title; the rail carries the shared switcher button', async () => {
+  const d = createDocument(); d.documentElement.setAttribute('data-shell', 'desktop'); d.documentElement.setAttribute('data-layout', 'ai-apps');
+  d.body.innerHTML = '<div id="bar"><button class="wz-workspaces-control"></button></div>';
+  assert.equal(cascade(d.querySelector('.wz-workspaces-control'), read('web/layouts/ai-apps/desktop.css')).display?.value, 'none');
+  for (const visible of [false, true]) {
+    const v = await aiView('desktop', { visible }), rail = v.w.q('.aad-rail'), ws = rail && rail.children.find(c => /aad-rws/.test(c.className));
+    assert.ok(ws, 'the rail has the switcher button'); assert.equal(ws.hidden, !visible, 'icon only shows with two or more Wizards');
+    if (visible) { ws.dispatchEvent(new FakePointerEvent('click')); assert.deepEqual(v.used.filter(u => u[0] === 'menu').length, 1, 'the one shared menu, not a second implementation'); }
+  }
+  const P = await import(new URL('web/layouts/ai-apps/parts.js', root).href);
+  assert.ok(typeof P.appLayers === 'function');
 });
 
-test('AI apps header name opens the shared switcher menu with two or more Wizards, so a box without the devices registry still lists its way back', () => {
-  for (const f of ['desktop.js', 'layout.js']) {
-    const js = read('web/layouts/ai-apps/' + f);
-    assert.match(js, /W\?\.visible && W\.openMenu\) \{[^}]*W\.openMenu\(wsBtn\)/, f);
+test('AI apps header name opens the shared switcher menu with two or more Wizards, so a box without the devices registry still lists its way back', async () => {
+  for (const shell of ['desktop', 'phone']) {
+    const v = await aiView(shell, { visible: true });
+    if (shell === 'phone') v.w.q('.aa-menu').dispatchEvent(new FakePointerEvent('click'));
+    v.w.q(shell === 'desktop' ? '.aad-ws' : '.aa-dws').dispatchEvent(new FakePointerEvent('click'));
+    assert.equal(v.used.filter(u => u[0] === 'menu').length, 1, `${shell}: the shared menu`);
+    const solo = await aiView(shell, { visible: false });
+    openList(solo, shell); assert.equal(solo.used.length, 0, `${shell}: one Wizard: the view's own list`);
   }
 });
 
-test('wizard-ux#1209: ⌥O opens the same shared menu as the header name, and Manage workspaces opens Settings › Connections', () => {
-  const desk = read('web/layouts/ai-apps/desktop.js');
-  assert.match(desk, /code === 'KeyO'[^\n]*W\?\.visible && W\.openMenu\) \{ W\.openMenu\(wsBtn\); return; \} openWs\(\);/, 'the shortcut never opens the registry-only list over two or more Wizards');
-  for (const f of ['desktop.js', 'layout.js']) {
-    const js = read('web/layouts/ai-apps/' + f);
-    assert.match(js, /api\.desk\.settings\('connections'\)/, f);
-    assert.doesNotMatch(js, /api\.desk\.settings\('network'\)/, f + ': not Network & security');
+test('wizard-ux#1209: ⌥O opens the same shared menu as the header name, and Manage workspaces opens Settings › Connections', async () => {
+  const v = await aiView('desktop', { visible: true });
+  const down = v.keys.map(k => k.down({ altKey: true, code: 'KeyO', key: 'o' }));
+  assert.ok(down.includes(true));
+  assert.equal(v.used.filter(u => u[0] === 'menu').length, 1, 'the shortcut never opens the registry-only list over two or more Wizards');
+  for (const shell of ['desktop', 'phone']) {
+    const s1 = await aiView(shell); openList(s1, shell);
+    s1.w.q(shell === 'desktop' ? '.aad-wm' : '.aa-sh-manage').dispatchEvent(new FakePointerEvent('click'));
+    assert.equal(s1.w.st.settings.at(-1), 'connections', `${shell}: not Network & security`);
   }
+});
+
+// Settings › Connections › Wizards (wizard-ux#1670). `act` gets the tapped element; this stands in for it.
+const tap = (attr, id) => ({ closest: s => s === `[${attr}]` ? { dataset: { [attr.replace(/^data-/, '').replace(/-(\w)/g, (_m, c) => c.toUpperCase())]: id } } : null });
+const sheetSubmit = async (b, values) => {
+  const panel = b.body.querySelector('.wz-workspaces-panel'), form = panel.querySelector('form');
+  for (const input of panel.querySelectorAll('input')) if (input.name in values) input.value = values[input.name];
+  form.dispatchEvent(new Event('submit', { cancelable: true })); for (let i = 0; i < 5; i++) await new Promise(r => setImmediate(r));
+  return panel;
+};
+// owner-correction: humanitylabs-org/wizard-ux#1670 · 2026-11-20 · "we should probably have a Manage Wizards section with an easy way to update these or manage them"
+test('wizard-ux#1670: Settings lists every saved Wizard; Rename, Change address and Remove (with Undo) work from there', async () => {
+  const timers = [], old = remote('old', { name: 'Forum', url: 'https://forum-old.test' }), dead = remote('dead', { name: 'Gone', url: 'https://gone.test' });
+  const b = boot({ local: [old, dead], timers, reach: { 'https://gone.test': { ok: Date.now() - 40 * 864e5 } } }); b.start(); await b.w.list();
+  const f = b.win.settings; assert.deepEqual(plain(f.aliases), ['saved-wizards', 'wizards']);
+  let html = f.html();
+  for (const v of ['Local Wizard', 'Forum', 'forum-old.test', 'Gone', 'gone.test', 'Add a Wizard']) assert.ok(html.includes(v), v);
+  assert.match(html, /data-saved-wizard="dead"[^>]*|is-stale[^>]*data-saved-wizard="dead"/);
+  assert.match(html, /class="st-row static wz-saved is-stale" data-saved-wizard="dead"/, 'a Wizard not reached for a long time is marked plainly');
+  assert.match(html, /Unreachable for a long time · last reached/);
+  assert.match(html, /Not reached from this device yet/, 'never reached from here says so');
+  for (const id of ['old', 'dead']) for (const a of ['rename', 'address', 'remove']) assert.ok(html.includes(`data-wizard-${a}="${id}"`), a + ' ' + id);
+  assert.ok(!html.includes('data-wizard-remove="this"'), 'the Wizard you are on has no Remove');
+  // Rename
+  assert.equal(f.act({}, tap('data-wizard-rename', 'old')), true);
+  let panel = b.body.querySelector('.wz-workspaces-panel'); assert.equal(panel.querySelectorAll('input')[0].value, 'Forum');
+  await sheetSubmit(b, { name: 'Forum (James)' });
+  assert.equal(b.body.querySelector('.wz-workspaces-panel'), null, 'the sheet closes once saved');
+  assert.equal(b.w.snapshot().items.find(v => v.id === 'old').name, 'Forum (James)');
+  // Change address: a bad one and a duplicate are refused in the sheet; a good one is saved under the same entry.
+  f.act({}, tap('data-wizard-address', 'old'));
+  panel = await sheetSubmit(b, { url: 'forum-new' });
+  assert.match(panel.querySelector('.wz-workspaces-error').textContent, /http/);
+  panel = await sheetSubmit(b, { url: 'https://gone.test' });
+  assert.match(panel.querySelector('.wz-workspaces-error').textContent, /already/);
+  await sheetSubmit(b, { url: 'https://forum-new.test' });
+  assert.equal(b.body.querySelector('.wz-workspaces-panel'), null);
+  const moved = b.w.snapshot().items.find(v => v.id === 'old');
+  assert.equal(moved.url, 'https://forum-new.test/'); assert.equal(moved.name, 'Forum (James)');
+  assert.ok(f.html().includes('forum-new.test') && !f.html().includes('forum-old.test'));
+  // Remove: one tap, no typed confirmation; Undo puts the same entry back.
+  f.act({}, tap('data-wizard-remove', 'dead')); for (let i = 0; i < 5; i++) await new Promise(r => setImmediate(r));
+  assert.ok(!b.w.snapshot().items.some(v => v.id === 'dead'), 'removed at once');
+  assert.ok(!f.html().includes('data-saved-wizard="dead"'));
+  const bar = b.body.querySelector('.wz-workspaces-undo'); assert.match(bar.querySelector('span').textContent, /Removed Gone/);
+  assert.equal(timers.at(-1).ms, 6000, 'the Undo bar goes after about six seconds');
+  bar.querySelector('button').dispatchEvent(new Event('click')); for (let i = 0; i < 5; i++) await new Promise(r => setImmediate(r));
+  assert.equal(b.body.querySelector('.wz-workspaces-undo'), null);
+  assert.deepEqual(plain(b.w.snapshot().items.find(v => v.id === 'dead')), plain({ ...dead, url: 'https://gone.test/', status: 'unknown', subtitle: '', role: '', org: '', source: 'local' }));
+  // Removed for good once the bar is gone: its timer drops it.
+  f.act({}, tap('data-wizard-remove', 'dead')); for (let i = 0; i < 5; i++) await new Promise(r => setImmediate(r));
+  timers.at(-1).fn(); assert.equal(b.body.querySelector('.wz-workspaces-undo'), null);
+  assert.deepEqual(JSON.parse(b.data.get('wos.workspaces.v1')).map(v => v.id), ['old']);
+});
+test('wizard-ux#1670: the switcher menu has Manage Wizards, which opens Settings › Connections › Wizards', async () => {
+  const b = boot({ local: [remote()] }), routed = []; b.start(); await b.w.list();
+  b.win.WizCore.deeplink = { route: href => { routed.push(href); return true; } };
+  b.w.openMenu(b.slot.querySelector('button'));
+  const man = b.body.querySelector('.wz-workspaces-manage'); assert.equal(man.textContent, 'Manage Wizards'); assert.equal(man.getAttribute('role'), 'menuitem');
+  man.dispatchEvent(new Event('click'));
+  assert.deepEqual(routed, ['https://here.test/wizard-os-home/?view=saved-wizards']);
+  assert.equal(b.body.querySelector('.wz-workspaces-panel'), null, 'the menu closes');
+  const c = boot({ local: [remote()] }); c.start(); await c.w.list(); c.w.manage();
+  assert.match(c.toasts.at(-1), /Settings › Connections/, 'without the deep link it says where to go');
+});
+test('wizard-ux#1670: a failed switch in the Android app marks that Wizard unreachable; a switch that went through marks it reached', async () => {
+  const b = boot({ local: [remote('gone', { name: 'Gone', url: 'https://gone.test' }), remote('up', { name: 'Up', url: 'https://up.test' })] }); b.start(); await b.w.list();
+  b.win.WizardOSNative = { switchWizard: () => 'started' };
+  await b.w.switch('gone'); b.w.switchFailed();
+  let html = b.win.settings.html();
+  assert.match(html, /class="st-row static wz-saved is-stale" data-saved-wizard="gone"/);
+  assert.match(html, /Unreachable · couldn’t reach it today/);
+  await b.w.switch('up'); b.win.dispatchEvent(new Event('pagehide'));
+  html = b.win.settings.html();
+  assert.match(html, /data-saved-wizard="up"><span class="st-tx"><b>Up<\/b><small>up\.test · Last reached today/);
+  assert.ok(Object.hasOwn(JSON.parse(b.data.get('wos.workspaces.reach.v1')), 'https://up.test'));
+});
+test('wizard-ux#1670: arriving from another Wizard marks it reached; managed and native entries keep their own rules', async () => {
+  const hash = '#wzfrom=' + encodeURIComponent(JSON.stringify({ name: 'Studio', url: 'https://studio.test/wizard-os-home/' }));
+  const b = boot({ hash }); b.start(); await b.w.list();
+  assert.ok(JSON.parse(b.data.get('wos.workspaces.reach.v1'))['https://studio.test'].ok > 0);
+  const m = boot({ devices: { this: { wizard: 'Local' }, managed: [managed({ status: 'offline', url: 'https://managed.test' })] }, local: [remote()] }); m.start(); await m.w.list();
+  const html = m.win.settings.html();
+  assert.ok(!html.includes('data-wizard-remove="managed"'), 'a Wizard listed by this Wizard’s devices is managed there');
+  assert.match(html, /is-stale" data-saved-wizard="managed"/); assert.ok(html.includes('data-wizard-remove="other"'));
+  const n = boot({ native: true, items: [remote('one'), remote('two')] }); n.start(); await n.w.list();
+  const nh = n.win.settings.html();
+  assert.ok(nh.includes('data-wizard-rename="two"') && nh.includes('data-wizard-remove="two"'));
+  assert.ok(!nh.includes('data-wizard-address='), 'the native app owns addresses in its own list');
+  await assert.rejects(n.w.move('two', 'https://x.test'), /app that owns/);
 });

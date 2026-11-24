@@ -197,10 +197,26 @@
     return it && !it.app && it.from && id === it.from ? route(id) === 'chats' && chatsReady() && installed() : inChats(id);
   }
   // Unread items Notifications carries for an app that are not in Chats (and not Off): they count on that app's badge.
+  const carriedHere = i => i.from && !i.read && !i.archived && routeIdOf(i) === i.from && !itemInChats(i) && !isOff(i.from);
   function carriedCounts() {
     const n = {};
-    for (const i of NOTES.all) if (i.from && !i.read && !i.archived && routeIdOf(i) === i.from && !itemInChats(i) && !isOff(i.from)) n[i.from] = (n[i.from] || 0) + 1;
+    for (const i of NOTES.all) if (carriedHere(i)) n[i.from] = (n[i.from] || 0) + 1;
     return n;
+  }
+  /* Looking at an app reads what its badge carries (issue 1701: Messenger showed 9 for days while its Inbox said "No
+   * unread chats"; the 9 were agent notes nothing inside Messenger shows). app-services.js calls this when an app's
+   * window comes into view in front. Needs-you items follow Notifications' own route, so they are never counted here
+   * and never touched. A look before Notifications' list has loaded is kept and settled on the first read. */
+  const LOOK = new Set();
+  function looked(id) {
+    id = String(id || ''); if (!appInstalled(id)) return 0;
+    if (!NOTES.loaded) { LOOK.add(id); return 0; }
+    const ids = NOTES.all.filter(i => i.from === id && carriedHere(i)).map(i => i.id);
+    if (!ids.length) return 0;
+    // The badge goes at once; a failed write brings it back on the reload mark() does.
+    NOTES.all = Object.freeze(NOTES.all.map(i => ids.includes(i.id) ? Object.freeze({ ...i, read: true }) : i));
+    paint(); void mark(ids, { read: true });
+    return ids.length;
   }
   function setRoute(id, to) {
     id = String(id || ''); if (id === 'wizard' || P.accepts(id, to) !== true) return false;
@@ -279,11 +295,12 @@
    * Only what is routed to Chats is listed: Notifications' items, and the items of apps set to Chats. */
   const IN = { items: [], all: [], subs: new Set(), seq: 0 };
   // Notifications' own list as last read (every item, not only what Chats lists), for the part's other sources.
-  const NOTES = { all: [] };
+  const NOTES = { all: [], loaded: false };
   const away = () => NOTES.all.reduce((n, i) => n + (!i.read && !i.archived && routeIdOf(i) !== 'notifications' ? 1 : 0), 0);
   function gotNotes(items) {
-    NOTES.all = Object.freeze(items.filter(i => i && i.id).map(cleanItem));
+    NOTES.all = Object.freeze(items.filter(i => i && i.id).map(cleanItem)); NOTES.loaded = true;
     P.notes(NOTES.all); paint(); attentionChanged();
+    if (LOOK.size) { const ids = [...LOOK]; LOOK.clear(); for (const id of ids) looked(id); }
   }
   const str = (v, n) => String(v == null ? '' : v).slice(0, n);
   // The editor's short message is a preview, not the source. Keep the complete original separately, including
@@ -544,7 +561,7 @@
   const routing = Object.freeze({ version: PART.version, replace: replaceRouting, get owner() { return PART.live?.owner || null; } });
   /** The label of where this source goes now (its picker's choice: Chats, Badge, Morning report, Off). */
   function routeLabel(id) { id = String(id || ''); const now = route(id), got = P.choices(id, nameOf(id)), list = Array.isArray(got) ? got : STOCK.choices(id, nameOf(id)); const c = list.find(x => x && String(x.to) === now); return c ? String(c.label || now).slice(0, 40) : ''; }
-  window.WosBell = { html, refresh, paint, watch, mark, readyCount, unreadCount, readyMore, route, setRoute, inChats, isOff, routeIdOf, itemInChats, routes, discover, picker, routeLabel, movedToast, nameOf, describe, ask, intro, groups, attention, routing,
+  window.WosBell = { html, refresh, paint, watch, mark, looked, readyCount, unreadCount, readyMore, route, setRoute, inChats, isOff, routeIdOf, itemInChats, routes, discover, picker, routeLabel, movedToast, nameOf, describe, ask, intro, groups, attention, routing,
     entered: () => { P.entered(); }, left: () => { P.left(); },
     get chatsAvailable() { return chatsReady(); }, item: id => IN.items.find(i => i.id === String(id)) || null, items: () => IN.items, icon: BELL, get state() { return { ...S }; } };
 })();

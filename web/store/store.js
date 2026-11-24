@@ -38,7 +38,7 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
   const hue = id => { let h = 0; for (const c of String(id)) h = (h * 31 + c.codePointAt(0)) >>> 0; return PALETTE[h % PALETTE.length]; };
   const cap = s => s ? s.charAt(0).toUpperCase() + s.slice(1) : '';
 
-  const S = { apps: [], installed: new Map(), complete:false, architecture:'', busy: new Set(), busyAt: new Map(), stack: [], q: '', loaded: false, error: '', sources: [], selections: new Map(), router: new Map(), mcBusy: new Set(), access: new Map(), removing: new Set(), remove: null,
+  const S = { apps: [], installed: new Map(), complete:false, architecture:'', busy: new Set(), busyAt: new Map(), stack: [], q: '', loaded: false, error: '', sources: [], selections: new Map(), router: new Map(), mcBusy: new Set(), access: new Map(), removing: new Set(), remove: null, starting: new Map(), late: new Set(), startT: 0, startN: 0,
     gh: { status: { state: 'unknown' }, loading: false, busy: '', error: '', copied: false, unreachable: false, seq: 0, sawPending: false, pollT: 0 } };
   const key = a => `${a.id}|${a.repo || ''}`;
   const find = id => S.apps.find(a => key(a) === id) || S.apps.find(a => a.id === id) || (S.link?.app && (key(S.link.app) === id || S.link.app.id === id) ? S.link.app : null);
@@ -102,6 +102,10 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
       // Never silently substitute a removed explicit release after Refresh.
       if(S.selections.has(key(a)) && !a.releases.some(r=>`${r.source}:${r.commit}`===S.selections.get(key(a)))) S.selections.set(key(a),'unavailable');
     }
+    // A removed app forgets its open wait, so a later reinstall waits afresh (issue 1652).
+    const live = new Set([...S.installed.values()].map(i => i?.id).filter(Boolean));
+    for (const id of [...S.starting.keys()]) if (!live.has(id)) S.starting.delete(id);
+    for (const id of [...S.late]) if (!live.has(id)) S.late.delete(id);
     // First-run shell discovery can finish after the Store's own reads.
     try { if(framed) await parent.WizCore?.appsLoaded?.(); } catch (_) {}
     S.loaded = true; paint(); resumeInstalls();
@@ -128,6 +132,25 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
   // so the same-origin installed-app snapshot is the safe bridge; the host refreshes again before opening.
   const openId = a => S.installed.get(key(a))?.id || '';
   const canOpen = a => { if (!framed) return false; const id=openId(a); try { if (typeof parent.WizCanOpen === 'function' && parent.WizCanOpen(id)) return true; } catch (_) {} return (S.snapshot?.shell || []).some(x => x?.id === id && x.url); };
+
+  // Starting… re-checks the shell's app list with backoff (2 s up to 10 s) for two minutes, then repaints to Open.
+  const START_WAIT = 120000, startDelay = n => [2000, 3000, 5000, 8000][n] || 10000;
+  function watchOpen(a) {
+    const id = openId(a); if (!id || S.starting.has(id)) return;
+    S.starting.set(id, { a, at: Date.now() });
+    if (!S.startT) { S.startN = 0; S.startT = setTimeout(checkStarting, startDelay(0)); }
+  }
+  async function checkStarting() {
+    S.startT = 0;
+    if (!document.hidden) { try { await parent.WizCore?.refreshApps?.(); } catch (_) {} }
+    let changed = false;
+    for (const [id, w] of S.starting) {
+      if (canOpen(w.a)) { S.starting.delete(id); changed = true; }
+      else if (Date.now() - w.at > START_WAIT) { S.starting.delete(id); S.late.add(id); changed = true; }
+    }
+    if (changed && S.loaded) refresh();
+    if (S.starting.size && !S.startT) S.startT = setTimeout(checkStarting, startDelay(++S.startN));
+  }
 
   /* ---------------- pieces ---------------- */
   // The App Manager reports only installing / installed, so the bar is indeterminate; the elapsed time shows it is alive.
@@ -156,6 +179,10 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
     if(['get','switch','update'].includes(state) && architectureReason(a,S.architecture)) return `<span class="get wait ${cls}" title="${esc(architectureReason(a,S.architecture))}">${S.architecture ? 'Not compatible' : 'Compatibility unavailable'}</span>`;
     if(state==='switch' || state==='update') return `<button class="get upd ${cls}" data-get="${esc(key(a))}">${state==='update'?'Update':'Switch release'}</button>`;
     if (isInstalled(a) && canOpen(a)) return `<button class="get open ${cls}" data-open="${esc(openId(a))}">Open</button>`;
+    // An app with its own window that the shell can't open yet is still starting (issue 1652): say so and keep
+    // checking until it opens; past the wait, offer Open anyway (the tap reads the shell's list again first).
+    if (isInstalled(a) && framed && kindOf(a)?.id === 'apps') return S.late.has(openId(a)) ? `<button class="get open ${cls}" data-open="${esc(openId(a))}">Open</button>`
+      : (watchOpen(a), `<span class="get wait ${cls}" data-starting="${esc(openId(a))}" role="status" aria-live="polite">Starting…</span>`);
     if (isInstalled(a)) return `<span class="get have ${cls}" aria-label="Installed">✓ Installed</span>`;
     return `<button class="get ${cls}" data-get="${esc(key(a))}">Get</button>`;
   }
@@ -446,7 +473,7 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
     if (was.t === 'sheet' && was.arg === '@github') { clearTimeout(S.gh.pollT); S.gh.pollT = 0; S.gh.copied = false; $('sheet').classList.remove('gh-sheet'); }
     if (was.t === 'search') { $('q').value = ''; S.q = ''; }
     const under = S.stack[S.stack.length - 1];
-    if (under?.t === 'detail') showDetail(under.arg); else if (under?.t === 'list') openKind(under.arg, true); else if (under?.t === 'sheet') showSheet(under.arg);
+    if (under?.t === 'detail') showDetail(under.arg); else if (under?.t === 'list') openKind(under.arg, true); else if (under?.t === 'search') search(S.q); else if (under?.t === 'sheet') showSheet(under.arg);
     // Leaving the removal review returns keyboard focus to the action that opened it.
     if (was.t === 'sheet' && String(was.arg).startsWith('@remove:') && under?.t === 'detail') $('detail').querySelector('[data-remove]')?.focus({preventScroll: true});
     const y = scrolls.pop() || 0; requestAnimationFrame(() => window.scrollTo(0, y));
@@ -479,7 +506,9 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
     if (!a || architectureReason(a,S.architecture) || S.busy.has(a.id) || S.removing.has(a.id) || !['get','update','switch'].includes(status(a))) return;
     const operation = status(a)==='get'?'install':status(a);
     if(a.install_link && S.link) S.link.error='';
-    S.busy.add(a.id); S.busyAt.set(a.id, Date.now()); refresh();
+    S.busy.add(a.id); S.busyAt.set(a.id, Date.now());
+    for (const id of new Set([a.id, openId(a)])) { S.starting.delete(id); S.late.delete(id); }   // a new install waits afresh
+    refresh();
     const say = (m, ok=false) => toast(renderInstallResult({ name: a.name, message: m, ok }));
     try {
       await installRelease({ ...a, operation });
@@ -495,7 +524,7 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
       else {
         say(successMessage(access), true);
         // Asked from the Orb / Apps views' "Get more" (?open=1): open it at once, in place of this Store window.
-        if (framed && new URLSearchParams(location.search).get('open') === '1' && openId(a)) parent.postMessage({ type: 'wizard:open-app', id: openId(a), replace: true }, location.origin);
+        if (framed && new URLSearchParams(location.search).get('open') === '1' && openId(a)) parent.postMessage({ type: 'wizard:open-app', id: openId(a), name: a.name, replace: true }, location.origin);
       }
     } catch (err) { if(a.install_link && S.link) S.link.error=err.message || 'Install failed.'; say(err.message || 'Install failed.'); }
     finally { S.busy.delete(a.id); S.busyAt.delete(a.id); refresh(); }
@@ -532,6 +561,16 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
     finally { S.busy.delete(a.id); S.busyAt.delete(a.id); refresh(); }
   }
 
+  // Open after the Starting… wait: read the shell's list once more, and say so if the app still can't open.
+  async function openInShell(id) {
+    const name = S.apps.find(x => openId(x) === id)?.name || '';
+    const post = () => parent.postMessage({ type: 'wizard:open-app', id, name }, location.origin);
+    const shellCan = () => { try { return typeof parent.WizCanOpen !== 'function' || !!parent.WizCanOpen(id); } catch (_) { return true; } };
+    if (!S.late.has(id) || shellCan()) { post(); return; }
+    try { await parent.WizCore?.refreshApps?.(); } catch (_) {}
+    if (shellCan()) { post(); return; }
+    toast(`<b>${esc(name || 'This app')} is still starting.</b><span>Try Open again in a moment.</span>`);
+  }
   document.addEventListener('click', e => {
     const mine = e.target.closest('[data-my-apps]');
     if (!mine || !framed || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
@@ -568,7 +607,7 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
     const setup = e.target.closest('[data-mc-approve],[data-mc-connect],[data-mc-another],[data-was-store],[data-was-back]');
     if (setup) { e.stopPropagation(); setupAction(setup); return; }
     const o = e.target.closest('[data-open]');
-    if (o) { e.stopPropagation(); if (framed) parent.postMessage({ type: 'wizard:open-app', id: o.dataset.open }, location.origin); else toast('<b>Open it from your apps.</b>'); return; }
+    if (o) { e.stopPropagation(); if (framed) openInShell(o.dataset.open); else toast('<b>Open it from your apps.</b>'); return; }
     const k = e.target.closest('[data-kind]'); if (k) return openKind(k.dataset.kind);
     const t = e.target.closest('[data-tag]'); if (t) return openKind('tag:' + t.dataset.tag);
     const a = e.target.closest('[data-app]'); if (a) return openApp(a.dataset.app);

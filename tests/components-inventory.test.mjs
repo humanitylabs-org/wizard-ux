@@ -17,6 +17,7 @@ function sources() {
   return out;
 }
 
+// static-rule: inventory: every exported shell global has a docs/COMPONENTS.md entry
 test('every exported shell global has a COMPONENTS.md entry', () => {
   const missing = [];
   for (const f of sources()) {
@@ -29,6 +30,7 @@ test('every exported shell global has a COMPONENTS.md entry', () => {
   assert.deepEqual([...new Set(missing)], [], 'Add a row (or a Shell plumbing entry) to docs/COMPONENTS.md for: ' + missing.join(', '));
 });
 
+// static-rule: inventory: every file path the components doc names is a real file (a dead link check over the doc)
 test('every path COMPONENTS.md names exists', () => {
   const paths = [...ticks].filter(t => /^(web|android|docs|tools|tests)\//.test(t));
   assert.ok(paths.length > 20);
@@ -36,6 +38,7 @@ test('every path COMPONENTS.md names exists', () => {
   assert.deepEqual(gone, [], 'COMPONENTS.md names missing files');
 });
 
+// static-rule: inventory: the components doc stays short enough for a worker brief
 test('COMPONENTS.md stays short enough to paste into a worker brief', () => {
   assert.ok(Buffer.byteLength(doc) < 14800, `COMPONENTS.md is ${Buffer.byteLength(doc)} bytes`);
 });

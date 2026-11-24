@@ -110,11 +110,11 @@ const acts = (process.env.QA_ACTS || 'look,send,send-go').split(',');
         await page.evaluate(phone => phone ? __wos.openSheet('inbox') : __wux.openChatsList(), phone);
         await page.evaluate(() => document.fonts.ready); await nap(600);
         const vis = sel => page.locator(sel).filter({ visible: true }).first();
-        if (routed) await page.waitForFunction(() => (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/chat-channels') && WizLive.agentOf?.('qa-a') === 'claude', null, { timeout: 15000 });
+        if (routed) await page.waitForFunction(() => WizLive.agentOf?.('qa-a') === 'claude', null, { timeout: 15000 });
         entry.unreadAtOpen = await page.evaluate(() => !!WizLive.isNew(WizLive.session('qa-a')));
         if (!routed) assert.equal(entry.unreadAtOpen, kind === 'unread', `${stem}: the first thread is ${kind === 'unread' ? '' : 'not '}unread in Ready before it opens`);
         if (daily) {
-          await page.waitForFunction(() => (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/chat-channels'), null, { timeout: 15000 });
+          await page.waitForFunction(() => true, null, { timeout: 15000 });
           await page.addStyleTag({ content: '#wosWelcome{display:none!important}' });
           if (!(await page.locator('.ch-chan-open[data-chchan="daily"]').filter({ visible: true }).count())) await vis('[data-chview="channels"]').click().catch(() => {});
           await page.screenshot({ path: path.join(out, `${stem}-0-channels.png`) });

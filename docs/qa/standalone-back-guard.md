@@ -19,7 +19,7 @@ Baseline client SHA-256: `c3dcb761af1ba10fa4f9334cf52c84b6342dbd29b31f2644d4ed6f
 Candidate client SHA-256: `6d152b0afcc9c54044bda95df3603ddc116192e03616dee35fb493f5c05aabc9`.
 
 - Supplied `root-edge.cjs` against the real Wisdom fixture: baseline leaves to `about:blank`; candidate stays on home.
-- `qa-app-standalone-back.cjs`: **43 checks passed**, including fresh/cold roots, no extra domain index/step, browser second-Back exit and timeout recovery, repeated installed/Android/Mac root Back, CloseWatcher overlay LIFO, and the real shared host's domain/root ownership with zero client guard pushes.
+- `qa/scripts/qa-app-standalone-back.cjs`: **43 checks passed**, including fresh/cold roots, no extra domain index/step, browser second-Back exit and timeout recovery, repeated installed/Android/Mac root Back, CloseWatcher overlay LIFO, and the real shared host's domain/root ownership with zero client guard pushes.
 - Real Wisdom root matrix: **8 cases passed** (fresh/cold × browser/installed/Android/Mac), including cold-to-home followed immediately by Back without another tap.
 - Wisdom companion revision: `3c1f93d53dfbbeb8d882f06388b1bfbc996c1561`. Remote `static/app.js`, `static/wisdom.js`, and `qa/browser_fixture.py` hashes match the untouched frozen source.
 - `node --check` for client and regression script; `git diff --check` passed.
@@ -30,7 +30,7 @@ Run the focused regression with:
 
 ```sh
 PLAYWRIGHT_DIR="$PLAYWRIGHT_DIR" QA_WEB_DIR="$PWD" QA_OUT="$EVIDENCE" \
-  node qa-app-standalone-back.cjs
+  node qa/scripts/qa-app-standalone-back.cjs
 ```
 
 ## Release-owner recipe — not executed by this patch

@@ -18,7 +18,7 @@ def verify():
     assert digest(pathlib.Path(__file__)) == manifest['runner_sha256'], 'Runner drift'
     for name, sha in manifest['tools'].items():
         assert digest(pathlib.Path(name)) == sha, 'Dependency drift: ' + name
-    assert (stage / 'candidate/qa-desktop-option-word-navigation.cjs').is_file()
+    assert (stage / 'candidate/qa/scripts/qa-desktop-option-word-navigation.cjs').is_file()
     assert (stage / 'candidate/tests/desktop-option-word-navigation.test.mjs').is_file()
 verify()
 if a.preflight:
@@ -66,7 +66,7 @@ try:
     failures = []
     for name in ['baseline', 'candidate']:
         env = {'QA_SOURCE_ROOT': str(stage / name), 'QA_OUT': str(out / (name + '-browser')), 'QA_PLAYWRIGHT': manifest['playwright'], 'QA_CHROME': manifest['chrome']}
-        code, _ = run(name + '-browser', ['node', str(stage / 'candidate/qa-desktop-option-word-navigation.cjs')], env, 300)
+        code, _ = run(name + '-browser', ['node', str(stage / 'candidate/qa/scripts/qa-desktop-option-word-navigation.cjs')], env, 300)
         report = json.loads((out / (name + '-browser/results.json')).read_text())
         rows = report['results']
         try:

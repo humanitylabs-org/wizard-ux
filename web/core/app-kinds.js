@@ -57,8 +57,30 @@
    * its settings sheet. Returns false for an unknown id. */
   function openRow(APPS, APP, id, openApp) {
     const a = APP[id] || (window.WizCore?.backendApps?.() || []).find(x => x.id === id); if (!a) return false;
-    if (APP[id] && (a.url || a.kind !== 'wizard')) return openApp(id) !== false;
-    window.WosAppRoute?.open(a.id, { name: a.name }); return true;
+    if (hasPage(APP, id)) return openApp(id) !== false;
+    pageOrSheet(APP, id, a.name, () => openApp(id)); return true;
   }
-  window.WosAppKinds = Object.freeze({ inChats, hasScreen, isSystem, isConnector, inDev, byName, kinds, sysFirst, rows, openRow, LABELS, GET, storeUrl });
+  /* ux#1646: a tile drawn while its app had no page yet (an install or a rename move) keeps saying "agent app" until
+   * the list is read again. Decide at the tap: an app that has a page now opens; otherwise read the box's list once
+   * and open the page if it appeared, else show the settings sheet. A slow read shows the sheet after WAIT ms; if the
+   * read then brings the page while that sheet is still up, the sheet gives way to the app. */
+  const hasPage = (APP, id) => !!APP[id] && (!!APP[id].url || APP[id].kind !== 'wizard');
+  const WAIT = 800;
+  function pageOrSheet(APP, id, name, open) {
+    if (hasPage(APP, id)) { open(APP[id]); return; }
+    const R = () => window.WosAppRoute;
+    const sheet = () => R()?.open(id, { name: name || APP[id]?.name || '' });
+    const read = window.WizCore?.refreshApps?.({ afterPending: true });
+    if (!read || typeof read.then !== 'function') { sheet(); return; }
+    let shown = false, settled = false;
+    Promise.resolve(read).catch(() => {}).then(() => {
+      settled = true;
+      if (!hasPage(APP, id)) { if (!shown) sheet(); shown = true; return; }
+      if (!shown) { open(APP[id]); return; }
+      // The sheet went up while the read was slow: swap it for the app only if the owner is still looking at it.
+      if (R()?.isOpen?.() && R()?.current?.appId === id) { R().close?.(); open(APP[id]); }
+    });
+    if (typeof setTimeout === 'function') setTimeout(() => { if (!settled && !shown) { shown = true; sheet(); } }, WAIT);
+  }
+  window.WosAppKinds = Object.freeze({ inChats, hasScreen, isSystem, isConnector, inDev, byName, kinds, sysFirst, rows, openRow, hasPage, pageOrSheet, LABELS, GET, storeUrl });
 })();

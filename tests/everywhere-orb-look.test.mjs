@@ -47,7 +47,7 @@ for (const [page, script] of [
     const box = html.slice(html.indexOf('<div id="orbBox">'), html.indexOf('</div>', html.indexOf('<div id="orbBox">')));
     assert.match(box, /<canvas id="orb"/);
     assert.match(box, /<span class="orb-app"[^>]*><svg/);
-    assert.match(html, /#orb,#orbFallback\{filter:var\(--sk-orb,none\)\}/);
+    assert.match(html, /#orb,#orbFallback,#orbDisc\{filter:var\(--sk-orb,none\)\}/);
     for (const id of ['nebula', 'grove', 'tide', 'ember', 'signal']) assert.ok(html.includes(`[data-skin="${id}"]`), id);
     assert.match(html, /body:is\(\.live,\.busy\) \.orb-app\{display:none\}/, 'while talking the icon steps aside, as in the app');
 
@@ -70,4 +70,29 @@ test('native keeps and replays the look, and checks it before it reaches the pag
   assert.match(svc, /pageReady = true; place\(\); pushLook\(\);/, 'every page load gets the saved look');
   const main = read('android/app/src/main/java/ai/wizards/os/MainActivity.java');
   assert.match(main, /public void everywhereLook\(String skin, String filter\)/);
+});
+
+// wizard-ux issue 1706: on James's phone the floating orb kept only its white icon, with no disc behind it.
+for (const [page, pic] of [
+  ['android/app/src/main/assets/assist/everywhere.html', 'robert-thread-orb.png'],
+  ['web/assist/everywhere.html', '../robert-thread-orb.png'],
+]) {
+  test(`${page} always has a skin-coloured disc under the canvas, independent of WebGL`, () => {
+    const html = read(page);
+    const box = html.slice(html.indexOf('<div id="orbBox">'));
+    assert.ok(box.indexOf('<span id="orbDisc"') >= 0 && box.indexOf('<span id="orbDisc"') < box.indexOf('<canvas id="orb"'),
+      'the disc is painted first, so the live canvas covers it when it draws');
+    const rule = html.match(/#orbDisc\{([^}]*)\}/)[1];
+    assert.ok(rule.includes(`url(${pic})`), 'the picture orb, from a path that exists for this page');
+    assert.ok(!/mask|hidden|display:none/.test(rule), 'no mask and nothing that hides it');
+    assert.match(rule, /border-radius:50%/);
+  });
+}
+
+test('orb.js shows the picture orb when the GPU context is gone without an event, and keeps fallback paths beside the page picture', () => {
+  for (const f of ['web/orb.js', 'android/app/src/main/assets/assist/orb.js']) {
+    const js = read(f);
+    assert.ok(js.includes('if (gl && gl.isContextLost?.() === true) { showFallback(); return; }'), f);
+    assert.match(js, /new URL\(pic, fallback\.getAttribute\('src'\) \? fallback\.src : document\.baseURI\)/, f);
+  }
 });

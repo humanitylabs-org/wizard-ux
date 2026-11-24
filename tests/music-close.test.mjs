@@ -2,9 +2,12 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
+import { withShellParts } from './fixtures/shell-parts.mjs';
+import { runRecording } from './fixtures/source-slice.mjs';
+import { partScope, runPartRecording } from './fixtures/r5A-parts.mjs';
 
-const source = readFileSync(new URL('../web/core/background-audio.js', import.meta.url),'utf8');
-const shell = readFileSync(new URL('../web/app.js', import.meta.url),'utf8');
+const source = withShellParts(readFileSync(new URL('../web/core/background-audio.js', import.meta.url),'utf8'));
+const shell = withShellParts(readFileSync(new URL('../web/app.js', import.meta.url),'utf8'));
 function fixture({native=true, known=true}={}) {
   const sent=[], replies=[], listeners={}, timers=new Map(); let seq=0;
   const origin='https://wizard.example';
@@ -14,7 +17,7 @@ function fixture({native=true, known=true}={}) {
   const c={location:{origin,href:origin+'/wizard-os-home/'},document:{querySelectorAll:()=>[frame]},URL,console,
     setTimeout:fn=>{const id=++seq;timers.set(id,fn);return id;},clearTimeout:id=>timers.delete(id),addEventListener:(name,fn)=>listeners[name]=fn};
   if(native)c.wizardAudioPort={postMessage:raw=>sent.push(JSON.parse(raw))};
-  c.window=c; vm.createContext(c); vm.runInContext(readFileSync(new URL('../web/core/background-audio-legacy.js',import.meta.url),'utf8'),c); vm.runInContext(source,c);
+  c.window=c; vm.createContext(c); vm.runInContext(withShellParts(readFileSync(new URL('../web/core/background-audio-legacy.js',import.meta.url),'utf8')),c); vm.runInContext(source,c);
   c.WizBackgroundAudio.init(()=>({'wizard-music':{url:'/wizard-music/'}}),()=>true);
   if(known)c.WizBackgroundAudio.lastState={...state};
   const answer=(command=sent.at(-1),ok=true)=>{
@@ -75,7 +78,16 @@ test('closing the whole Music desk stops playback before deleting windows',()=>{
 test('automatic bound-view disposal preserves background playback',()=>{
   const {c,calls,W}=shellFixture();c.closeWin('music',true,true);
   assert.equal(calls.length,0);assert.equal(W.music,undefined);
-  assert.match(shell,/close: id => closeWin\(id, true, true\)/);
-  assert.match(shell,/if \(b\) closeWin\(b.id, true, true\)/);
-  assert.match(shell,/try \{ closeWin\(w.id, true, true\)/);
+});
+// Every automatic bound-view close in the real phone shell passes (quiet, automatic), so it never stops the playback.
+test('the bound manager, the desk re-check and unbind all close bound views as automatic disposal',async()=>{
+  const closes=[],closeWin=(...a)=>closes.push(a);
+  let made=null;const scope=partScope({WosBoundView:{create:o=>{made=o;return {shown(){}};}}});
+  const appVars={W:{music:{id:'music',bound:'chat',bsid:'t1'},chat:{id:'chat',app:'chats',thread:'t2'}},desks:[{focus:'music',wins:['music','chat']}],idx:0,boundBusy:false};
+  const B=(await runPartRecording('app-bound.js','appParts','bound',{appVars,closeWin,deskOf:()=>0,winEl:()=>null,CHATS:{ch:()=>({})},$$:()=>[],secOf:()=>null},scope)).out;
+  B.threadShown('chat',{});made.close('music');
+  B.syncBound();
+  const U=runRecording(`${functionSource('unbind')}\nthis.unbind=unbind;`,{boundOf:()=>({id:'music'}),closeWin});U.unbind('chat');
+  assert.deepEqual(closes,[['music',true,true],['music',true,true],['music',true,true]],'manager close, desk re-check, unbind');
+  assert.equal(appVars.boundBusy,false);
 });

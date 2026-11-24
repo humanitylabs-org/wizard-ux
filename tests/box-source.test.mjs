@@ -4,6 +4,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, existsSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { createDocument } from './fixtures/mini-dom.mjs';
 
 const root = new URL('..', import.meta.url);
 const src = readFileSync(new URL('web/core/box-source.js', root), 'utf8');
@@ -121,10 +127,50 @@ test('plain words: up to date, ahead of main, unknown', async () => {
 });
 
 test('every published image is stamped with the commit it was built from', () => {
-  const docker = readFileSync(new URL('Dockerfile', root), 'utf8');
-  assert.match(docker, /^ARG WIZARD_UX_COMMIT=$/m);
-  assert.match(docker, /grep -Eqx '\[0-9a-f\]\{40\}'.*> \/usr\/share\/nginx\/wizard-ux\/build\.json/);
-  const ci = readFileSync(new URL('scripts/ci/ghcr_image.py', root), 'utf8');
-  assert.equal((ci.match(/"--build-arg", "WIZARD_UX_COMMIT=" \+ args\.sha/g) || []).length, 2, 'PR build and publish both pass it');
-  for (const page of ['web/index.html', 'web/desktop.html']) assert.match(readFileSync(new URL(page, root), 'utf8'), /<script src="core\/box-source\.js"><\/script>/);
+  // The Dockerfile's own stamp step, run as the image build runs it (ARG default, then the RUN line, into a temp web dir).
+  const docker = readFileSync(new URL('Dockerfile', root), 'utf8').split('\n');
+  const arg = docker.find(l => /^ARG WIZARD_UX_COMMIT(=|$)/.test(l));
+  assert.equal(arg.split('=')[1] ?? '', '', 'a local build passes no commit');
+  const stamp = docker.find(l => /^RUN .*build\.json/.test(l)).slice(4);
+  for (const [commit, want] of [[A, { commit: A }], ['', null], ['main', null], [A.slice(1), null], [A.toUpperCase(), null]]) {
+    const dir = mkdtempSync(join(tmpdir(), 'box-stamp-'));
+    try {
+      execFileSync('sh', ['-c', stamp.split('/usr/share/nginx/wizard-ux').join(dir)], { env: { PATH: process.env.PATH, WIZARD_UX_COMMIT: commit } });
+      const f = join(dir, 'build.json');
+      const stamped = existsSync(f) ? JSON.parse(readFileSync(f, 'utf8')) : null; // what the run wrote
+      assert.deepEqual(stamped, want, JSON.stringify(commit));
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  }
+  // CI's PR build and publish (scripts/ci/ghcr_image.py) both hand the commit to the build, docker stubbed.
+  const py = String.raw`
+import json, os, sys, tempfile, types, subprocess
+from pathlib import Path
+from unittest.mock import patch
+sys.path.insert(0, 'scripts/ci')
+import ghcr_image as ci
+calls = []
+def docker(command, env, **kw):
+    calls.append(command)
+    if '--metadata-file' in command: Path(command[command.index('--metadata-file') + 1]).write_text(json.dumps({'containerimage.digest': 'sha256:' + 'd' * 64}))
+    if command[:2] == ['image', 'inspect']: return subprocess.CompletedProcess(command, 0, stdout='amd64 ' + sys.argv[1] + '\n')
+    return subprocess.CompletedProcess(command, 0)
+class Reg:
+    def __init__(self, *a, **k): pass
+    def manifest(self, *a, **k): return None
+with tempfile.TemporaryDirectory() as t:
+    env = {'PATH': os.environ['PATH'], 'RUNNER_TEMP': t, 'DOCKER_CONFIG': t + '/docker', 'GITHUB_REPOSITORY': 'humanitylabs-org/wizard-ux', 'GITHUB_OUTPUT': t + '/out', 'GITHUB_STEP_SUMMARY': t + '/sum', 'GITHUB_ACTOR': 'a', 'GHCR_TOKEN': 'x'}
+    a = types.SimpleNamespace(image='ghcr.io/humanitylabs-org/wizard-ux', sha=sys.argv[1], platform='amd64', builder='b', tag='sha-' + sys.argv[1], release='', branch='main', expected_sha='', confirm='')
+    with patch.object(ci, 'docker', docker), patch.object(ci, 'Registry', Reg), patch.object(ci, 'platform_manifests', lambda *a: None):
+        with patch.dict(os.environ, {**env, 'GITHUB_EVENT_NAME': 'pull_request'}, clear=True): ci.build(a)
+        with patch.dict(os.environ, {**env, 'GITHUB_EVENT_NAME': 'push', 'GITHUB_REF': 'refs/heads/main', 'GITHUB_SHA': sys.argv[1]}, clear=True): ci.publish(a)
+print(json.dumps([c for c in calls if c[:2] == ['buildx', 'build']]))
+`;
+  const builds = JSON.parse(execFileSync('python3', ['-c', py, A], { cwd: fileURLToPath(root), encoding: 'utf8' }));
+  assert.equal(builds.length, 2, 'the PR build and the publish build');
+  for (const b of builds) assert.equal(b[b.indexOf('--build-arg') + 1], 'WIZARD_UX_COMMIT=' + A);
+  // both shell pages load the reader (parsed, as the browser reads them)
+  for (const page of ['web/index.html', 'web/desktop.html']) {
+    const doc = createDocument(); doc.documentElement.innerHTML = readFileSync(new URL(page, root), 'utf8').replace(/^<!doctype[^>]*>/i, '');
+    assert.ok(doc.querySelectorAll('script').some(s => s.getAttribute('src') === 'core/box-source.js'), page);
+  }
 });

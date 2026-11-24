@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
-const src = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
+const src = withParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'));
 const cut=(a,b)=>src.slice(src.indexOf(a),src.indexOf(b,src.indexOf(a)));
 function scene(agent, focus={kind:'agent',key:agent.id}) {
  const main={id:'hermes',is_default:true}, A={ready:false,available:false,error:'',list:[],get(id){return this.list.find(a=>a.id===id)},defaultId:()=> 'hermes',isOther:id=>id!=='hermes',others(){return this.list.filter(a=>!a.hidden&&!a.is_default)}};

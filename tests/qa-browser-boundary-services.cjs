@@ -32,7 +32,7 @@ const SHELL = `<!doctype html><html><head><meta charset="utf-8">
   const APPS = [{ id: 'notes', kind: 'wizard', url: '/notes/', name: 'Notes' }, { id: 'other', kind: 'wizard', url: '/other/', name: 'Other' }];
   window.WizCore = { apps: () => ({ APPS }), workspaceNav: { setCount: (k, n) => { counts[k] = n; } } };
   window.WizConfig = { stripAddress: s => s };</script>
-<script src="/wizard-os-home/core/app-services.js"></script>
+<script src="/wizard-os-home/core/app-services-windows.js"></script><script src="/wizard-os-home/core/app-services-boundary.js"></script><script src="/wizard-os-home/core/app-services.js"></script>
 <style>.wbar{display:flex;gap:8px;height:32px;align-items:center;background:#223;color:#fff;padding:0 8px}.wtool{min-width:28px;height:24px}iframe{width:400px;height:120px;border:0}</style></head>
 <body><div class="win" id="w1"><header class="wbar"><span>Notes</span><button class="wb">x</button></header>
 <iframe class="appframe" sandbox="allow-scripts allow-forms allow-downloads" src="/notes/"></iframe></div>

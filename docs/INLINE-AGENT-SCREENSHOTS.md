@@ -17,7 +17,7 @@ Private preview: use the current paired pull requests' staging link (`PREVIEW_UR
 
 This is a **sample reply**, not James's chat history. `tools/inline-images-preview.mjs` runs the paired service against a synthetic upstream, an explicit disposable state folder and two generated PNG illustrations. The outer origin rejects all non-GET/HEAD requests. It cannot send messages, forward writes to live Wizard, or use owner credentials. The staging banner is injected by the existing private staging router. No live release or merge is authorized.
 
-To reproduce locally, install the paired Agent Service dependencies and set `PREVIEW_SERVICE` (service checkout), `PREVIEW_STATE` (disposable folder), `PREVIEW_WEB` (optional shell web folder), and `PORT`. Run `node tools/inline-images-preview.mjs`. For browser evidence, set `PREVIEW_URL`, `OUT`, `PLAYWRIGHT_MODULE` if needed, and optionally `LEGACY_WEB` pointing to the base checkout's web folder, then run `node qa-inline-agent-screenshots.cjs`.
+To reproduce locally, install the paired Agent Service dependencies and set `PREVIEW_SERVICE` (service checkout), `PREVIEW_STATE` (disposable folder), `PREVIEW_WEB` (optional shell web folder), and `PORT`. Run `node tools/inline-images-preview.mjs`. For browser evidence, set `PREVIEW_URL`, `OUT`, `PLAYWRIGHT_MODULE` if needed, and optionally `LEGACY_WEB` pointing to the base checkout's web folder, then run `node qa/scripts/qa-inline-agent-screenshots.cjs`.
 
 ## Verified
 

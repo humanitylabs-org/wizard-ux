@@ -5,6 +5,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
+import { block } from './fixtures/source-slice.mjs';
 const source = readFileSync(new URL('../web/core/app-capture.js', import.meta.url), 'utf8');
 const tick = async () => { for (let i = 0; i < 30; i++) await Promise.resolve(); };
 function load(from, to, c) { const a = source.indexOf(from), b = source.indexOf(to, a); assert.ok(a >= 0 && b > a, from); vm.runInContext(source.slice(a, b), c); }
@@ -101,16 +102,40 @@ test('Discard during a backoff wait stops retrying', async () => {
   assert.ok(f.tries <= 2, 'no retries after Discard'); assert.deepEqual(f.warns, []);
 });
 
-test('the first-row save of an instant take (openDB + put) goes through the same quiet retry', () => {
+// The real first-row save of an instant take (the s.persistence block of start()), run in the fixture's context with
+// the real patiently(): openDB and put are stand-ins that fail the way a slow IndexedDB does.
+async function firstRowSave(f, { opens: failOpens = 0, never = false } = {}) {
   const at = source.indexOf('        s.persistence = (async () => {');
-  const block = source.slice(at, source.indexOf('        })();', at));
-  assert.match(block, /await patiently\(s, async \(\) => \{ await openDB\(\); if \(!s\.discard && !s\.memoryOnly\) await put\(s\.row\); \}\)/);
-  assert.doesNotMatch(block, /emit\(s, 'warn'/);
+  const code = source.slice(at, source.indexOf('        })();', at) + '        })();'.length);
+  const seen = { opens: 0, puts: 0, drains: 0 };
+  Object.assign(f.c, { s: f.s, openDB: async () => { seen.opens++; if (never || seen.opens <= failOpens) throw failure('timeout'); },
+    drain: async () => { seen.drains++; }, changed() {} });
+  f.c.put = async () => { seen.puts++; };
+  f.s.persistencePending = true;
+  vm.runInContext(code, f.c); await f.s.persistence; await f.s.writes;
+  return seen;
+}
+test('the first-row save of an instant take (openDB + put) goes through the same quiet retry', async () => {
+  const f = fixture({fast: true, write: () => null});
+  const seen = await firstRowSave(f, { opens: 2 });
+  assert.deepEqual(seen, { opens: 3, puts: 1, drains: 1 }, 'openDB is retried, then the row is put once and the chunks drain');
+  assert.deepEqual(f.waits, [500, 1500], 'the same backoff as a chunk write');
+  assert.equal(f.s.error, undefined); assert.equal(f.s.persistencePending, false); assert.deepEqual(f.warns, []);
 });
 
-test('no instant-take storage failure anywhere emits the old notice, and getInfo carries no storage warning', () => {
+test('no instant-take storage failure anywhere emits the old notice, and getInfo carries no storage warning', async () => {
   assert.doesNotMatch(source, /'On-device saving failed/);
-  assert.match(source, /warning:s\.instant&&s\.error\?\.code==='storage_failed'\?null:s\.error\?\.message\|\|null/);
+  // a store that never opens: the take keeps going from memory, quietly
+  const f = fixture({fast: true, write: () => failure('timeout')});
+  const seen = await firstRowSave(f, { never: true });
+  assert.equal(seen.puts, 0); assert.equal(f.s.error?.code, 'storage_failed'); assert.deepEqual(f.warns, [], 'no notice');
+  await f.enqueue('A'); await f.settle(); assert.deepEqual(f.warns, []);
+  // the real session(): getInfo reports the code but no warning text for an instant take; other takes keep it
+  vm.runInContext(block(source, '  function session(s) {'), Object.assign(f.c, { capabilities: () => ({}) }));
+  const info = f.c.session(f.s).getInfo();
+  assert.equal(info.error, 'storage_failed'); assert.equal(info.warning, null);
+  const slow = { ...f.s, instant: false, error: f.s.error };
+  assert.match(f.c.session(slow).getInfo().warning, /On-device audio storage failed/);
 });
 
 test('a long take (36 chunks, about 3 minutes) on a store that never works sends every piece from memory with no notice', async () => {

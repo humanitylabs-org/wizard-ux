@@ -4,7 +4,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
-const src = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
+import { withParts } from './fixtures/chats-parts.mjs';
+import { boomerang, openSheet } from './fixtures/s2-boom-picker.mjs';
+const src = withParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'));
 const rem = readFileSync(new URL('../web/core/scheduled-reminders.js', import.meta.url), 'utf8');
 const slice = (a, b) => { const i = src.indexOf(a), j = src.indexOf(b, i); assert.ok(i >= 0 && j > i, a); return src.slice(i, j); };
 function fixture({ desktop, after = 'stay', ids = ['a', 'b', 'c'], open = 'b' }) {
@@ -49,8 +51,16 @@ test('the picker announces the commit before any request returns (paint first)',
   const body = rem.slice(rem.indexOf('const chosen='), rem.indexOf('\n', rem.indexOf('const chosen=')));
   vm.runInContext(body + ';this.chosen=chosen', ctx); ctx.chosen('s1');
   assert.deepEqual(events, ['wos:snooze-chosen']);
-  const someday = rem.slice(rem.indexOf('async function someday('), rem.indexOf('// A timed Snooze also'));
-  assert.ok(/chosen\(opts\.sessionId\);/.test(someday) && someday.indexOf('chosen(') < someday.indexOf('await live().defer'), 'Someday announces before its first await');
-  const submit = rem.slice(rem.indexOf('form.onsubmit='), rem.indexOf("form.querySelector('[data-boom-close]').focus()"));
-  assert.ok(submit.indexOf('chosen(opts.sessionId)') > 0 && submit.indexOf('chosen(') < submit.indexOf('await req('), 'timed Snooze announces before its request');
+  // the whole picker (tests/fixtures/s2-boom-picker.mjs): Someday announces before its Defer answers
+  const never = () => new Promise(() => {});
+  const lazy = boomerang({ WizLive: { defer: never, session: id => ({ id }) } });
+  void lazy.B.someday({ sessionId: 's1' }); // (no await: what it did before its first await)
+  assert.deepEqual(lazy.events, ['wos:snooze-chosen'], 'Someday announces before its first await');
+  // a timed Snooze announces before its request returns
+  const posts = [], timed = boomerang({ WizLive: { defer: never, session: id => ({ id }) },
+    fetch: (url, init = {}) => init.method === 'POST' ? (posts.push(url), never()) : Promise.resolve({ ok: true, status: 200, json: async () => ({ schedules: [] }) }) });
+  const { form } = openSheet(timed, { sessionId: 's1', title: 'Quote' });
+  form.querySelector('[name="timezone"]').value = 'Asia/Bangkok'; form.querySelector('[name="date"]').value = '2099-01-02'; form.querySelector('[name="time"]').value = '09:00';
+  void form.onsubmit({ preventDefault() {} });
+  assert.equal(posts.length, 1, 'its request is out'); assert.deepEqual(timed.events, ['wos:snooze-chosen'], 'timed Snooze announces before its request');
 });

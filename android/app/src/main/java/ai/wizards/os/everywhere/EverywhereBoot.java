@@ -15,7 +15,7 @@ public class EverywhereBoot extends BroadcastReceiver {
             EverywhereOutbox.get(c).pump();
             if (Intent.ACTION_MY_PACKAGE_REPLACED.equals(a))
                 ai.wizards.os.mizel.MeetingRecorderService.afterPackageReplaced(c);
-            else ai.wizards.os.mizel.MeetingRecorderService.recover(c); // reboot is not an app update
+            else ai.wizards.os.mizel.MeetingRecorderService.recoverAfterReboot(c); // reboot is not an app update; the meeting is over
         }
     }
 }

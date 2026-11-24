@@ -60,7 +60,7 @@ document.documentElement.dataset.appSession=id;document.documentElement.dataset.
 document.getElementById('nativeStatus').style.height=Math.max(Number(q.get('top')||0),Number(q.get('cut')||0))+'px';
 window.nativeCalls=[];window.WizardOSNative={immersive:v=>nativeCalls.push(v),insetTop:()=>Number(q.get('top')||0),cutoutTop:()=>Number(q.get('cut')||0)};
 window.WizCore={apps:()=>({APPS:list,APP:Object.fromEntries(list.map(a=>[a.id,a]))}),appsLoaded:()=>q.has('delayed')?new Promise(r=>window.releaseApps=r):Promise.resolve(),esc:s=>String(s)};
-</script><script src="/core/skins.js"></script><script>WosSkin.set(q.get('skin')||'nebula');</script><script src="/core/home-screen-policy.js"></script><script src="/core/appearance-host.js"></script><script src="/core/app-services.js"></script><script src="/core/links.js"></script><script src="/core/single-app-session.js"></script>`;
+</script><script src="/core/skins.js"></script><script>WosSkin.set(q.get('skin')||'nebula');</script><script src="/core/home-screen-policy.js"></script><script src="/core/appearance-host.js"></script><script src="/core/app-services-windows.js"></script><script src="/core/app-services-boundary.js"></script><script src="/core/app-services.js"></script><script src="/core/links.js"></script><script src="/core/single-app-session.js"></script>`;
 let passed = 0;
 async function check(name, fn) { await fn(); passed++; console.log('PASS', name); }
 (async () => {

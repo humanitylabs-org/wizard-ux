@@ -3,31 +3,48 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
-const read = p => readFileSync(process.env.QA_SETTINGS_SOURCE ? process.env.QA_SETTINGS_SOURCE + '/' + p : new URL('../' + p, import.meta.url), 'utf8');
+import { withSettingsParts } from './fixtures/settings-parts.mjs'; // settings.js parts moved out verbatim (issue 1665)
+import { withShellParts } from './fixtures/shell-parts.mjs';
+import { settingsWorld } from './fixtures/r5A-settings.mjs';
+import { styles } from './fixtures/w5-css.mjs';
+import { between, runRecording } from './fixtures/source-slice.mjs';
+const read = p => withShellParts(readFileSync(process.env.QA_SETTINGS_SOURCE ? process.env.QA_SETTINGS_SOURCE + '/' + p : new URL('../' + p, import.meta.url), 'utf8'));
 const css = read('web/core/settings.css'), desktop = read('web/desktop/desktop.js');
 const slice = (s, a, b) => { const start = s.indexOf(a); assert.ok(start >= 0, a); const end = s.indexOf(b, start); assert.ok(end > start, b); return s.slice(start, end); };
 const rule = (s, selector) => { const at = s.indexOf(selector + ' {'); assert.ok(at >= 0, selector); return s.slice(at, s.indexOf('}', at)); };
 test('narrow desktop Settings follows its host container, never the desktop viewport', () => {
-  assert.match(css, /\.st-root \{ container: settings \/ inline-size;/);
-  const narrow = slice(css, '@container settings (max-width: 700px)', '\n\n.st-title:focus');
-  assert.match(rule(narrow, '.st-desktop'), /display: block;/);
-  assert.match(rule(narrow, '.st-desktop .st-index'), /height: 100%; padding-right: 0; border-right: 0;/);
-  assert.match(rule(narrow, '.st-desktop .st-page'), /height: 100%; padding-right: 0;/);
-  assert.match(rule(narrow, '.st-desktop.st-in-page .st-index'), /display: none;/);
-  assert.match(rule(narrow, '.st-desktop:not(.st-in-page) .st-page'), /display: none;/);
-  assert.match(rule(narrow, '.st-desktop .st-page-head button'), /display: block;/);
+  // The real desktop Settings view (core/settings.js in a vm, mini-dom root), at its index and inside a page.
+  const w = settingsWorld({ shell: 'desktop' });
+  const narrowQ = m => /^@container settings \(max-width: 700px\)$/.test(m);
+  const at = (sel, opts) => styles(w.root.querySelector(sel), [css], opts);
+  const host = w.root.closest('.st-root') || w.root.querySelector('.st-root') || w.root;
+  assert.equal(styles(host, [css]).container, 'settings / inline-size', 'the Settings root is the size container');
+  // Wide host: both panes.
+  assert.equal(at('.st-desktop')['grid-template-columns'], '280px minmax(0, 1fr)', 'wide Settings retains both panes');
+  // A narrow host (the container query, not a viewport media query): one pane at a time.
+  const narrow = { media: narrowQ }, vp = { media: m => /^@media \(max-width: 700px\)$/.test(m) };
+  assert.equal(at('.st-desktop', narrow).display, 'block');
+  const idx = at('.st-desktop .st-index', narrow);
+  assert.equal(idx.height, '100%'); assert.equal(idx['padding-right'], '0'); assert.equal(idx['border-right'], '0');
+  assert.equal(at('.st-desktop .st-page', narrow).display, 'none', 'at the index the page pane is hidden');
+  assert.notEqual(at('.st-desktop', vp).display, 'block', 'a narrow viewport alone changes nothing');
+  w.open('appearance');
+  assert.ok(w.root.querySelector('.st-desktop.st-in-page'), 'inside a page');
+  assert.equal(at('.st-desktop .st-index', narrow).display, 'none', 'inside a page the index is hidden');
+  const page = at('.st-desktop .st-page', narrow);
+  assert.notEqual(page.display, 'none'); assert.equal(page.height, '100%'); assert.equal(page['padding-right'], '0');
+  assert.equal(at('.st-desktop .st-page-head button', narrow).display, 'block', 'Back is shown');
   assert.doesNotMatch(css, /@media \(max-width: 700px\)/);
   // The CSS no longer subtracts a fixed 280px category column in a 470px app panel.
-  for (const host of [320, 360, 412, 470, 560, 700]) {
-    const row = host - 32; // existing st-inner horizontal padding, no category track
-    assert.ok(row >= 280, `${host}px host leaves a readable ${row}px row`);
+  for (const hostW of [320, 360, 412, 470, 560, 700]) {
+    const row = hostW - 32; // existing st-inner horizontal padding, no category track
+    assert.ok(row >= 280, `${hostW}px host leaves a readable ${row}px row`);
   }
-  assert.match(rule(css, '.st-desktop'), /grid-template-columns: 280px minmax\(0, 1fr\)/, 'wide Settings retains both panes');
 });
 test('same shared Settings DOM and dispatch provide category → Look → Back in either shell', () => {
   const s = { console, URL, Map, Set, Date, String, CSS: { escape: String }, navigator: { userAgent: 'fixture' }, location: { href: 'https://fixture.invalid/' }, document: { activeElement: null }, addEventListener() {} };
   s.window = s; s.WizCore = {};
-  vm.runInNewContext(read('web/core/settings.js'), s);
+  vm.runInNewContext(withSettingsParts(read('web/core/settings.js')), s);
   for (const shell of ['phone', 'desktop']) {
     const root = { innerHTML: '', scrollTop: 0, classList: { add() {} }, dataset: {}, contains: () => false, querySelector: () => null, addEventListener() {}, removeEventListener() {} };
     const view = s.WosSettings.mount(root, { shell, live: { ok: true } });
@@ -80,8 +97,14 @@ test('Apps/Orb keep their normal Settings window; closed Settings is never opene
     assert.equal(s.settingsModal, false); assert.equal(setEl.parentNode, options.open === false ? body : host);
     if (options.open === false) assert.equal(setEl.hidden, true);
   }
-  assert.match(desktop, /new MutationObserver\(\(\) => hostSettings\(\)\)/);
-  assert.match(desktop, /settingsHostObserver.observe\(document.documentElement, \{ attributes: true, attributeFilter: \['data-settings-over'\] \}\)/);
+  // a view turning data-settings-over on or off re-hosts Settings (the real observer lines of desktop-settings.js)
+  const seen = [], root = { id: 'html' };
+  const part = readFileSync(new URL('../web/desktop/desktop-settings.js', import.meta.url), 'utf8');
+  const O = runRecording(`${between(part, '  const settingsHostObserver = ', "data-settings-over'] });")}data-settings-over'] });`,
+    { document: { documentElement: root }, MutationObserver: class { constructor(f) { this.f = f; } observe(n, o) { seen.push({ n, o, f: this.f }); } } });
+  assert.equal(seen.length, 1); assert.equal(seen[0].n, root, 'watches <html>');
+  assert.deepEqual(JSON.parse(JSON.stringify(seen[0].o)), { attributes: true, attributeFilter: ['data-settings-over'] });
+  seen[0].f(); assert.equal(O.calls.filter(x => x[0] === 'hostSettings').length, 1, 'a change re-hosts Settings');
 });
 test('Orb panel takeover keeps Look visible through on → off → on without a new Settings open', () => {
   const { s, setEl, host, body, closed } = hostHarness({ over: false });

@@ -1,14 +1,13 @@
 // wizard-ux issue 1558: a pinned app (home-screen icon) waited on bootstrap -> ui-preferences -> apps in a row before
-// its frame mounted, behind "Loading app…". With switch wizard/pin-fast-open the pin mounts from this device's
-// last-known app list at once, the fresh list still re-validates (rename, new URL, removal), and the launcher reads
-// ui-preferences beside bootstrap. Switched off, nothing changes.
+// its frame mounted, behind "Loading app…". Now (on for everyone; the wizard/pin-fast-open switch is gone) the pin
+// mounts from this device's last-known app list at once, the fresh list still re-validates (rename, new URL,
+// removal), and the launcher reads ui-preferences beside bootstrap.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 
 const read = path => readFileSync(new URL('../web/' + path, import.meta.url), 'utf8');
-const SWITCH = 'wizard/pin-fast-open';
 
 function registry(apps) {
   const store = new Map([['wux.apps.v1', JSON.stringify(apps)]]);
@@ -51,8 +50,8 @@ function session(pinned, apps, tweaks) {
     apps: async () => { for (const fn of listeners['wizard:apps'] || []) fn(); await new Promise(setImmediate); } };
 }
 
-test('switched on, a pin whose app is in the last-known list mounts before the box answers', async () => {
-  const s = session('wizard-search', [search], SWITCH);
+test('a pin whose app is in the last-known list mounts before the box answers', async () => {
+  const s = session('wizard-search', [search], null);
   await new Promise(setImmediate);
   assert.equal(s.frames.length, 1, 'mounted without waiting for appsLoaded');
   assert.equal(s.frames[0].src, '/wizard-search/');
@@ -61,26 +60,25 @@ test('switched on, a pin whose app is in the last-known list mounts before the b
   assert.equal(s.frames.length, 1, 'the fresh list with the same URL keeps the mounted frame (no reload)');
 });
 
-test('switched off, the pin waits for the box list exactly as before', async () => {
+test('with no switch worn (it was removed), a cached pin still mounts at once', async () => {
   for (const tweaks of [null, '', 'wizard/app-windows']) {
     const s = session('wizard-search', [search], tweaks);
     await new Promise(setImmediate);
-    assert.equal(s.frames.length, 0, `no mount before appsLoaded (tweaks=${tweaks})`);
-    assert.ok(s.texts.some(t => String(t).includes('Loading app')));
+    assert.equal(s.frames.length, 1, `mounted without waiting for appsLoaded (tweaks=${tweaks})`);
     await s.release();
     assert.equal(s.frames.length, 1);
   }
 });
 
-test('switched on, a first run with no cached entry still waits for the list', async () => {
-  const s = session('wizard-search', [], SWITCH);
+test('a first run with no cached entry still waits for the list', async () => {
+  const s = session('wizard-search', [], null);
   await new Promise(setImmediate);
   assert.equal(s.frames.length, 0);
   assert.ok(!s.texts.includes('App unavailable'), 'no false "unavailable" before the box answered');
 });
 
-test('switched on, the fresh list still moves, renames and removes the cached mount', async () => {
-  const s = session('wizard-search', [search], SWITCH);
+test('the fresh list still moves, renames and removes the cached mount', async () => {
+  const s = session('wizard-search', [search], null);
   await new Promise(setImmediate);
   assert.equal(s.frames.length, 1);
   // The box now serves Search from a new URL: the next registry rebuild (wizard:apps) remounts it there.
@@ -94,14 +92,14 @@ test('switched on, the fresh list still moves, renames and removes the cached mo
   assert.ok(s.texts.includes('App unavailable'));
 });
 
-test('switched on, a pin under an old id (ux#1471 rename) mounts the renamed app from the cache', async () => {
-  const s = session('old-search', [{ ...search, renamed_from: ['old-search'] }], SWITCH);
+test('a pin under an old id (ux#1471 rename) mounts the renamed app from the cache', async () => {
+  const s = session('old-search', [{ ...search, renamed_from: ['old-search'] }], null);
   await new Promise(setImmediate);
   assert.equal(s.frames.length, 1);
   assert.equal(s.frames[0].src, '/wizard-search/');
 });
 
-// launcher.js: ui-preferences is read beside bootstrap only while the switch is on.
+// launcher.js: ui-preferences is read beside bootstrap, whatever is worn.
 async function launcher(tweaks) {
   const calls = [];
   let bootstrapDone; const ready = new Promise(ok => { bootstrapDone = ok; });
@@ -117,10 +115,10 @@ async function launcher(tweaks) {
   return { before, after: calls };
 }
 
-test('switched on, the launcher asks for ui-preferences before bootstrap has answered', async () => {
-  const on = await launcher(SWITCH);
-  assert.deepEqual(on.before, ['/wizard/v1/ui-preferences']);
-  const off = await launcher('');
-  assert.deepEqual(off.before, [], 'switched off it still waits for bootstrap');
-  assert.deepEqual(off.after, ['/wizard/v1/ui-preferences']);
+test('the launcher asks for ui-preferences before bootstrap has answered', async () => {
+  for (const tweaks of [null, '', 'wizard/pin-fast-open']) {
+    const r = await launcher(tweaks);
+    assert.deepEqual(r.before, ['/wizard/v1/ui-preferences'], `tweaks=${tweaks}`);
+    assert.deepEqual(r.after, ['/wizard/v1/ui-preferences']);
+  }
 });

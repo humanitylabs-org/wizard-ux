@@ -14,8 +14,8 @@ const builtins = catalog.defaults || [];
 const MIX = { 'miguel/send-and-go': true };
 const RECIPE = { 'miguel/archive-top': true, 'miguel/send-and-go': false };
 
-function box({ mix = MIX, channel = 'latest', recipe = RECIPE } = {}) {
-  const storage = new Map([['wos.skin', 'obsidian'], ['wos.skin-tweaks.v1', JSON.stringify({ version: 1, off: {}, preset: 'none', mix, machinesHomeMoved: true })]]);
+function box({ mix = MIX, channel = 'latest', recipe = RECIPE, preset = 'none' } = {}) {
+  const storage = new Map([['wos.skin', 'obsidian'], ['wos.skin-tweaks.v1', JSON.stringify({ version: 1, off: {}, preset, mix, machinesHomeMoved: true })]]);
   if (channel) storage.set('wos.channel.v1', channel);
   const listeners = {}, events = [], updates = []; let active = [];
   const own = recipe ? { id: 'skin-1', name: 'Mine', base: 'obsidian', tweaks: { ...recipe } } : null;
@@ -34,12 +34,22 @@ function box({ mix = MIX, channel = 'latest', recipe = RECIPE } = {}) {
   return { E: window.WosExperience, events, updates, saved, own, running: () => Array.from(active).filter(id => !builtins.includes(id)).sort() };
 }
 
-test('the switch is a normal catalog tweak, off by default and never in a published profile', () => {
-  assert.ok(catalog.tweaks.includes(ID));
-  assert.ok(!builtins.includes(ID), 'not a built-in default');
-  for (const who of catalog.profiles) assert.ok(!(JSON.parse(read(`web/tweaks/${who}/profile.json`)).tweaks || []).includes(ID), who);
-  const m = JSON.parse(read(`web/tweaks/${ID}/manifest.json`));
-  assert.equal(m.id, ID); assert.equal(m.author, 'wizard');
+test('the switch is a normal catalog tweak, off by default and never in a published profile', async () => {
+  // A fresh device on each published set (and on none): the switch is offered as an ordinary tweak, and off.
+  for (const preset of ['none', ...catalog.profiles]) {
+    const b = box({ mix: {}, recipe: null, preset }); await b.E.refresh();
+    const t = b.E.state.tweaks.find(x => x.id === ID);
+    assert.ok(t, preset + ': listed with the catalog tweaks');
+    assert.equal(t.builtin, false, preset + ': not a built-in default');
+    assert.equal(t.author, 'wizard');
+    assert.equal(t.on, false, preset + ': off by default');
+    assert.ok(!b.running().includes(ID), preset + ': not loaded');
+  }
+  // Switching it on is an ordinary toggle.
+  const b = box({ mix: {}, recipe: null }); await b.E.refresh();
+  await b.E.toggle(ID);
+  assert.equal(b.E.state.tweaks.find(x => x.id === ID).on, true);
+  assert.ok(b.running().includes(ID));
 });
 
 test('switch off (today): an own skin still decides which tweaks run', async () => {

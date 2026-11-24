@@ -3,7 +3,8 @@ import { modelContext, runWithChatsModel } from './chats-list-model.mjs';
 // Peripheral services and row markup are stubbed; section selection, collapse and footer assembly are production code.
 import fs from 'node:fs';
 import vm from 'node:vm';
-const source = fs.readFileSync(new URL('../../web/core/chats.js', import.meta.url), 'utf8');
+import { withParts } from './chats-parts.mjs';
+const source = withParts(fs.readFileSync(new URL('../../web/core/chats.js', import.meta.url), 'utf8')); // chats.js parts put back (issue 1665)
 export function listFixture({ status = false, query = '', busy = false, footer = true, inputRows = null, pinned = [], unread = () => false, reach = null } = {}) {
   const state = { q: query }, writes = [], groups = Object.fromEntries(['errors', 'working', 'ready', 'yesterday', 'pastWeek', 'deferred', 'archive'].map(k => [k, [{ id: k, title: 'match', section: k }]]));
   const rows = inputRows || Object.values(groups).flat(), el = { querySelector: () => null, innerHTML: '', firstElementChild: null };
@@ -28,10 +29,10 @@ export function listFixture({ status = false, query = '', busy = false, footer =
   vm.runInContext(fs.readFileSync(new URL('../../web/core/chat-search.js', import.meta.url), 'utf8'), ctx);
   Object.assign(ctx.window.WizCore.chatSearch, { query: () => footer ? bs : null, cancel: no, scanning: r => r.busy, footer: r => `<div class="ch-bodysearch${r.busy ? ' busy' : ''}" data-chbs="${r.busy ? 'busy' : 'done'}">Synthetic search status</div>` });
   const constants = source.slice(source.indexOf('  const SECTIONS_DAY ='), source.indexOf('\n', source.indexOf('  const SECTIONS_STATUS =')));
-  const render = source.slice(source.indexOf('  function renderChatList('), source.indexOf('  /* ---- attachments:'));
+  const render = source.slice(source.indexOf('  function renderChatList('), source.indexOf('  /* Attachments and voice notes; core/chats-attach.js.'));
   vm.runInContext(`${constants}\n${render}\nthis.render = renderChatList; this.toggle = toggleSection;`, ctx);
   return {
-    state, writes,
+    ctx, state, writes,
     render(q = state.q) { state.q = q; ctx.render(w, el); return el.innerHTML; },
     toggle(k) { ctx.toggle(w, k); return el.innerHTML; },
   };

@@ -66,6 +66,9 @@ fixture.responses['PUT /wizard/thread-dispositions']={status:200,body:JSON.strin
 fixture.responses['POST /wizard/v1/ui-preferences/seed']={status:200,body:JSON.stringify({preferences:bodies['/wizard/v1/ui-preferences']})};
 // Ready declaration for the registry's Morning record: this catalogue ships no app bytes, so the shell sees it as unavailable and installs no extension. Proofs that load Morning's real extension serve it themselves from the pinned checkout.
 for(const method of ['GET','HEAD'])fixture.responses[method+' /morning/ready.json']={status:404,body:JSON.stringify({error:'ready_declaration_unavailable'})};
+// Channels are on for everyone (wizard-ux issue 1258): this catalogue is a box without the channel store or read sync
+// (an older Service), so Chats shows the Spaces as channels and keeps read marks on the device.
+for(const p of ['/wizard/v1/channels','/wizard/v1/channels/read'])for(const method of ['GET','HEAD'])fixture.responses[method+' '+p]={status:404,body:JSON.stringify({error:'not_found'})};
 for(const method of ['GET','HEAD'])fixture.responses[method+' /favicon.ico']={status:204,body:'',contentType:'image/x-icon'};
 // CSS is typed separately: discovery must not apply a JSON object as a stylesheet.
 for(const method of ['GET','HEAD','OPTIONS'])fixture.responses[method+' /wizard/v1/my-skin']={status:200,body:'',contentType:'text/css'};

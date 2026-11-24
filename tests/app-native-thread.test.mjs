@@ -4,7 +4,8 @@ import vm from 'node:vm';
 import { launcherFixture } from './launcher-fixture.mjs';
 import {readFileSync} from 'node:fs';
 import {randomUUID} from 'node:crypto';
-const source=readFileSync(new URL('../web/core/app-services.js',import.meta.url),'utf8');
+import { withServicesParts } from './fixtures/app-services-parts.mjs';
+const source=withServicesParts(readFileSync(new URL('../web/core/app-services.js',import.meta.url),'utf8'));
 function fixture({id='wizard-manager',installed=true,path='/wizard-manager/'}={}){
  const calls=[],options=[],doc={},location=new URL('https://wizard.example/wizard-os-home/');
  const child={location:new URL(path,location),document:doc,addEventListener(){},postMessage(){}};
@@ -26,17 +27,63 @@ test('Wisdom uses the same verified nav.openThread with exact draft and app-keye
  f.state.visible=false;assert.throws(()=>f.service.nav.openThread('synthetic-thread',{draft:{text},reply}));
  assert.equal(f.calls.length,1);
 });
-test('pinned host supplies the shared Chats callback and live visibility, not a custom composer',()=>{
- const pinned=readFileSync(new URL('../web/core/single-app-session.js',import.meta.url),'utf8');
- assert.match(pinned,/window\.WizChatsHost\?\.create\(/);
- assert.match(pinned,/openThread: \(sid, opts\) => chats\?\.openHosted\(wid, frame, sid, opts\) === true/);
- assert.match(pinned,/isVisible: \(\) => !!frame\?\.isConnected && !chats\?\.isHosted\(wid\)/);
- assert.match(pinned,/chats\.threadBack\(threadWindow\)/);
- assert.match(pinned,/const wid = 'single-app'/);
- assert.match(pinned,/WizChatsHost\?\.replyRecorder\?\./);
- assert.match(pinned,/chats\?\.PW\?\.paintMic\(/);
- assert.match(pinned,/recordReply:\(wid, sid\) => replyVoice\?\.recordReply\(wid, sid\)/);
- assert.doesNotMatch(pinned,/<textarea|createElement\(['"]textarea/);
+// The real pinned host (core/single-app-session.js + core/home-screen-policy.js + core/apps.js) with a recording Chats
+// host and app-services attach, as in tests/pin-fast-open.test.mjs.
+function pinnedHost() {
+  const read = p => readFileSync(new URL('../web/' + p, import.meta.url), 'utf8');
+  const store = new Map([['wux.apps.v1', JSON.stringify([{ id: 'wisdom', name: 'Wisdom', url: '/wisdom/', source: 'apps.json' }])]]);
+  const ls = { getItem: k => store.get(k) ?? null, setItem: (k, v) => store.set(k, String(v)), removeItem: k => store.delete(k) };
+  const rwin = { WizCore: {}, location: { origin: 'https://box.example', pathname: '/' }, addEventListener() {}, removeEventListener() {}, dispatchEvent() { return true; }, localStorage: ls };
+  const rctx = vm.createContext({ window: rwin, document: { addEventListener() {}, hidden: false }, CustomEvent: class {}, localStorage: ls, location: rwin.location, addEventListener() {}, fetch: async () => ({ ok: false }), setTimeout, clearTimeout });
+  vm.runInContext(read('core/apps.js'), rctx);
+  const pwin = {};
+  vm.runInContext(read('core/home-screen-policy.js'), vm.createContext({ window: pwin, document: { documentElement: { setAttribute() {} } }, location: { origin: 'https://box.example', search: '?app-session=wisdom' }, URL, URLSearchParams, Object, Proxy, Reflect, localStorage: { getItem: () => null, setItem() {} } }));
+  const created = [], log = [];
+  const el = tag => { created.push(tag); return { tag, dataset: {}, style: { setProperty() {} }, classList: { add() {}, remove() {} }, children: [], isConnected: true, setAttribute() {}, addEventListener() {}, remove() {},
+    appendChild(c) { this.children.push(c); }, append(...c) { this.children.push(...c); }, replaceChildren() { this.children = []; } }; };
+  const host = el('host');
+  let hosted = false, opts = null, recorder = null;
+  const chats = { bind() {}, forget() {}, isHosted: () => hosted, closeOverlay: () => false, beforeLeave: () => true, PW: { paintMic: (...a) => log.push(['paintMic', ...a]) },
+    refreshCompose: w => log.push(['refreshCompose', w]), threadBack: w => log.push(['threadBack', w]),
+    openHosted: (...a) => { log.push(['openHosted', ...a]); return true; } };
+  let attached = null;
+  const window = { WizHomeScreenPolicy: pwin.WizHomeScreenPolicy, WizCore: { apps: () => rwin.WizCore.apps('mobile'), appsLoaded: () => new Promise(() => {}) }, WosSelMenu: { back: () => false },
+    WizAppServices: { attach: (frame, o) => { attached = { frame, o }; return () => {}; }, guardBack() {}, back: () => 'atRoot' },
+    WizChatsHost: { create: o => { opts = o; return chats; },
+      replyRecorder: o => { recorder = o; return { recordReply: (w, sid) => log.push(['recordReply', w, sid]), recordingFor: () => 'sid-r', back: () => false }; } } };
+  const document = { documentElement: el('html'), getElementById: () => host, addEventListener() {}, createElement: el, title: '', visibilityState: 'visible', hasFocus: () => true };
+  vm.runInContext(read('core/single-app-session.js'), vm.createContext({ window, document, localStorage: ls, location: { origin: 'https://box.example' }, URL, addEventListener() {}, setInterval() {}, setTimeout() {} }));
+  return { window, created, log, opts, recorder, attached: () => attached, setHosted: v => { hosted = v; } };
+}
+
+test('pinned host supplies the shared Chats callback and live visibility, not a custom composer', async () => {
+  const h = pinnedHost();
+  await new Promise(setImmediate);
+  // The real Chats host is made, keyed to the single-app window.
+  assert.ok(h.opts, 'WizChatsHost.create is called');
+  const tw = h.opts.win('single-app');
+  assert.equal(tw.id, 'single-app'); assert.equal(tw.appId, 'wisdom');
+  assert.equal(h.opts.win('other'), null);
+  assert.deepEqual([...h.opts.visible()], ['single-app']); assert.equal(h.opts.front(), 'single-app');
+  // Voice replies go through the shared reply recorder, repainting the shared mic.
+  h.opts.recordReply('single-app', 'sid-1');
+  assert.deepEqual(h.log.at(-1), ['recordReply', 'single-app', 'sid-1']);
+  h.recorder.repaint();
+  assert.deepEqual(h.log.slice(-2), [['refreshCompose', 'single-app'], ['paintMic', true, 'sid-r']]);
+  // The app frame's openThread opens the hosted thread in the shared Chats host.
+  const a = h.attached();
+  assert.ok(a && a.frame.tag === 'iframe');
+  assert.equal(a.o.openThread('sid-2', { draft: { text: 'q' } }), true);
+  assert.deepEqual(h.log.at(-1).slice(0, 3), ['openHosted', 'single-app', a.frame]);
+  assert.equal(h.log.at(-1)[3], 'sid-2');
+  // Visibility is live: the app is not visible while the hosted thread covers it.
+  assert.equal(a.o.isVisible(), true);
+  h.setHosted(true);
+  assert.equal(a.o.isVisible(), false);
+  // Back from the hosted thread uses the shared thread Back.
+  assert.equal(h.window.__wosNativeBack(), 'thread');
+  assert.deepEqual(h.log.at(-1), ['threadBack', tw]);
+  assert.ok(!h.created.includes('textarea'), 'no composer of its own');
 });
 test('Manager owns only marked canonical links, preserving ordinary link handling',()=>{const f=fixture(),a={href:'https://wizard.example/wizard-os-home/?session=thread%2Fone',dataset:{wizardNativeThread:'thread/one'}};assert(f.host.ownsThreadLink(f.child,a));a.dataset.wizardNativeThread='thread/two';assert.equal(f.host.ownsThreadLink(f.child,a),false);a.dataset={};assert.equal(f.host.ownsThreadLink(f.child,a),false);});
 for(const [name,alter] of [

@@ -1,4 +1,4 @@
-// Draft marks (switch wizard/draft-marks, wizard-ux issue 1445): an Activity row whose thread has a saved, unsent draft
+// Draft marks (wizard-ux issue 1445; on for everyone since issue 1604, the wizard/draft-marks switch is gone): an Activity row whose thread has a saved, unsent draft
 // says "✎ Draft" ahead of its preview, and a Channels line whose box holds one wears the same pencil. This runs the real
 // drafts store (core/chat-kit.js), the real Activity renderer (chats.js activityBody -> chatRow) over the real live.js
 // list read, the real Channels list (chats.js channelsBody) and the real list model rows the AI apps sidebar draws.
@@ -7,13 +7,17 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { modelContext } from './fixtures/chats-list-model.mjs';
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
+import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
+import { createDocument } from './fixtures/mini-dom.mjs';
+import { cascade } from './fixtures/mini-css.mjs';
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
-const kitSrc = read('web/core/chat-kit.js'), live = read('web/live.js'), chats = read('web/core/chats.js');
+const kitSrc = read('web/core/chat-kit.js'), live = withLiveParts(read('web/live.js')), chats = withParts(read('web/core/chats.js'));
 const RAW = JSON.parse(read('tests/fixtures/sessions-list-1360.json'));
 const SHIFT = Date.now() - 5 * 60e3 - Math.max(...RAW.data.map(s => Date.parse(s.activityAt)));
 const shift = v => typeof v === 'string' && /^\d{4}-\d\d-\d\dT[\d:.]+Z$/.test(v) ? new Date(Date.parse(v) + SHIFT).toISOString() : Array.isArray(v) ? v.map(shift) : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, shift(x)])) : v;
 const PAYLOAD = shift(RAW);
-const ON = 'wizard/chat-channels wizard/draft-marks', OFF = 'wizard/chat-channels';
+const ON = '', OTHER = 'wizard/sidebar-chats-view'; // no switch any more (issue 1604): marks show whatever data-tweaks holds
 const GREEN = 'synthetic_1360_green', NEEDS = 'synthetic_1360_needs';
 
 // One device: its localStorage survives a "reload" (a new context on the same storage).
@@ -38,7 +42,7 @@ function device(storage = new Map(), dataset = { tweaks: ON }) {
   const line = t => { const i = chats.indexOf('\n  ' + t); assert.ok(i >= 0, t); return chats.slice(i + 1, chats.indexOf('\n', i + 1)); };
   const block = (a, b) => { const i = chats.indexOf('\n  ' + a); assert.ok(i >= 0, a); const j = chats.indexOf('\n  ' + b, i); assert.ok(j > i, b); return chats.slice(i + 1, j); };
   const repaints = [];
-  Object.assign(c, { KIT: c.WosChat, CHAN_SWITCH: 'wizard/chat-channels', LIVE: c.WizLive, snoozeLast: () => false, deferredOf: s => !!s.deferred && !s.archived,
+  Object.assign(c, { KIT: c.WosChat, LIVE: c.WizLive, snoozeLast: () => false, deferredOf: s => !!s.deferred && !s.archived,
     readyOrder: 'newest', SEC_PAGE: 40, secOpen: { working: true, ready: true, recent: true }, ch: () => ({ more: {} }), noteRow: () => '', noteAt: () => 0,
     STI: new Proxy({}, { get: () => '' }), esc: v => String(v ?? '').replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[ch]),
     clip: (v, n) => String(v ?? '').slice(0, n), ago: () => '1m', workLabel: () => 'Working', privRow: () => false, AGS: () => null, topicOn: () => false,
@@ -47,10 +51,10 @@ function device(storage = new Map(), dataset = { tweaks: ON }) {
     CH: { list: {}, feed: {}, thread: {} }, W: { list: { id: 'list' }, feed: { id: 'feed', feedOpen: true }, thread: { id: 'thread', thread: 's1' } },
     chanOpen: w => w.feedOpen ? { id: 'launch' } : null, chanElsewhere: () => false, holdList: () => false, elOf: id => ({ id }),
     renderChatList: w => repaints.push(w.id) });
-  vm.runInContext(['const WORKING_ST =', 'const isWorking =', 'const channelsOn =', 'const markDoneOn =', 'const handledNow =', 'const chanNeeds =',
+  vm.runInContext(['const WORKING_ST =', 'const isWorking =', 'const handledNow =', 'const chanNeeds =',
     'const chanUnread =', 'const actNeeds =', 'const actUnread =', 'const actMark =', 'const chanAt =', 'const ATT =', 'const attOf =', 'const STI_LAB =', 'const STI_TIP ='].map(line).join('\n')
     + '\nconst WosThreadTracker = { on: () => false, onFor: () => false };\n'
-    + block('/* Draft marks (wizard-ux issue 1445', '// A row\'s marker, drawn just left') + block('function actRowMark(s)', '// A thread of an agent other') + block('function stiKind(s)', 'const stiBadge =') + block('function chatRow(s', '/* Ready has three orders')
+    + block('/* Draft marks (wizard-ux issue 1445', '// A row\'s marker, drawn just left') + block('function actRowMark(s)', '// A thread of an agent other') + block('function stiKind(s)', 'const stiBadge =') + block('function chatRow(s', '/* Agent inbox (switch wizard/agent-inbox)')
     + block('const ACT_SORTS = () =>', '// The sort and Show older taps').replace('let actOlder = false;', 'let actOlder = false, rowChan = true;')
     + '\nthis.activityBody = activityBody; this.rowDraft = rowDraft; this.chanLineDraft = chanLineDraft;', c);
   return { c, L: c.WizLive, drafts: c.WosChat.drafts, events, repaints, storage, dataset };
@@ -106,13 +110,14 @@ test('Activity: a draft that is only a file or only a reply card counts', async 
   assert.deepEqual(drafted(d), ['green']);
 });
 
-test('switch off: no marks, and the draft store is unchanged', async () => {
-  const d = device(new Map(), { tweaks: OFF }); await d.L.refresh();
-  d.drafts.set('direct:' + GREEN, 'words', []);
-  assert.deepEqual(drafted(d), [], 'off: no Draft tag');
-  assert.equal(d.c.rowDraft({ id: GREEN }), false);
-  assert.equal(d.drafts.get('direct:' + GREEN).text, 'words', 'drafts work as before');
-  assert.doesNotMatch(marks(d).html, /ch-draft-tag/);
+test('no switch (issue 1604): marks show with any or no data-tweaks, and the draft store is unchanged', async () => {
+  for (const tweaks of ['', OTHER, 'wizard/draft-marks']) {
+    const d = device(new Map(), { tweaks }); await d.L.refresh();
+    d.drafts.set('direct:' + GREEN, 'words', []);
+    assert.deepEqual(drafted(d), ['green'], JSON.stringify(tweaks) + ': marked');
+    assert.equal(d.c.rowDraft({ id: GREEN }), true);
+    assert.equal(d.drafts.get('direct:' + GREEN).text, 'words', 'drafts work as before');
+  }
 });
 
 test('live: a draft appearing or going repaints the lists, never the window whose channel box is being typed in', async () => {
@@ -123,8 +128,23 @@ test('live: a draft appearing or going repaints the lists, never the window whos
   assert.deepEqual(d.repaints, ['list'], 'no repaint per keystroke');
   d.drafts.clear('chan:hermes:launch');
   assert.deepEqual(d.repaints, ['list', 'list']);
-  d.dataset.tweaks = OFF; d.drafts.set('chan:hermes:launch', 'q', []);
-  assert.deepEqual(d.repaints, ['list', 'list'], 'switch off: no repaints');
+  d.dataset.tweaks = OTHER; d.drafts.set('chan:hermes:launch', 'q', []);
+  assert.deepEqual(d.repaints, ['list', 'list', 'list'], 'no switch gates the repaint (issue 1604)');
+});
+
+test('issue 1709: a thread\'s draft repaints the open channel feed too (its post card follows); a channel box\'s draft still waits; the event names the keys', async () => {
+  const d = device(); await d.L.refresh();
+  const seen = []; d.c.addEventListener('wos:drafts-keys', e => seen.push([...(e.detail?.keys || [])]));
+  d.drafts.set('direct:' + GREEN, 'h', []);
+  assert.deepEqual(d.repaints, ['list', 'feed'], 'the Activity list and the feed whose thread card shows it; never the open thread');
+  assert.deepEqual(seen.at(-1), ['direct:' + GREEN], 'the key that gained its draft');
+  d.drafts.set('direct:' + GREEN, 'he', []);
+  assert.deepEqual(d.repaints, ['list', 'feed'], 'no repaint per keystroke');
+  d.drafts.set('chan:hermes:launch', 'p', []);
+  assert.deepEqual(d.repaints, ['list', 'feed', 'list'], 'a channel box\'s draft leaves the feed being typed in alone');
+  d.drafts.clear('direct:' + GREEN);
+  assert.deepEqual(seen.at(-1), ['direct:' + GREEN], 'the key that lost its draft');
+  assert.deepEqual(d.repaints, ['list', 'feed', 'list', 'list', 'feed'], 'sent or discarded: the feed repaints and the mark goes');
 });
 
 test('Channels: the pencil follows the box key of every agent kind (main, host, container, restricted, General, agent feed)', () => {
@@ -148,7 +168,7 @@ test('Channels: the pencil follows the box key of every agent kind (main, host, 
   }
 });
 
-test('AI apps sidebar: Activity rows from the list model carry draft only while the switch is on', async () => {
+test('AI apps sidebar: Activity rows from the list model carry draft (no switch since issue 1604)', async () => {
   const d = device(); await d.L.refresh();
   const M = d.c.WizChatsListModel, chatsApi = { activityNeeds: () => false, activityUnread: () => false, activityDraft: s => d.c.rowDraft(s), threadActions: () => [], channelOf: () => 'launch', stiKind: () => '' };
   const list = () => M.activityList(d.L.workGroups(), { live: d.L, chats: chatsApi }, { now: Date.now() });
@@ -156,22 +176,31 @@ test('AI apps sidebar: Activity rows from the list model carry draft only while 
   assert.ok(flat(list()).every(r => !('draft' in r)), 'no draft: no key (row shape unchanged)');
   d.drafts.set('direct:' + GREEN, 'w', []);
   assert.deepEqual(flat(list()).filter(r => r.draft).map(r => r.id), [GREEN]);
-  d.dataset.tweaks = OFF;
-  assert.deepEqual(flat(list()).filter(r => r.draft).map(r => r.id), [], 'off');
+  d.dataset.tweaks = OTHER;
+  assert.deepEqual(flat(list()).filter(r => r.draft).map(r => r.id), [GREEN], 'no switch gates it');
 });
 
-test('the switch is a listed tweak package, on by default for everyone (issue 1604) and still switchable', () => {
+test('issue 1604: the wizard/draft-marks switch is gone everywhere; its CSS lives in core/chats.css', () => {
   const cat = JSON.parse(read('web/tweaks/catalog.json')), prof = JSON.parse(read('web/tweaks/wizard/profile.json'));
-  assert.ok(cat.tweaks.includes('wizard/draft-marks'));
-  assert.ok(cat.defaults.includes('wizard/draft-marks'));
-  assert.ok(cat.promotedDefaults.includes('wizard/draft-marks'), 'an off chosen before the promotion is kept');
-  assert.ok(!(prof.off || []).includes('wizard/draft-marks') && !(cat.lookOnlyOff || []).includes('wizard/draft-marks'));
-  assert.match(read('web/core/settings.js'), /register\(\{ id: 'chats-draft-marks', page: 'chats', html: \(\) => \{ const r = settingRow\('wizard\/draft-marks'\)/);
-  const m = JSON.parse(read('web/tweaks/wizard/draft-marks/manifest.json'));
-  assert.equal(m.id, 'wizard/draft-marks'); assert.match(m.description, /issue 1445/);
-  const css = read('web/tweaks/wizard/draft-marks/tweak.css');
-  for (const rule of css.split('}').map(r => r.trim()).filter(r => r && !r.startsWith('/*'))) assert.match(rule.replace(/^\/\*[^]*?\*\/\s*/, ''), /^html\[data-tweaks~="wizard\/draft-marks"\]/, rule);
-  assert.doesNotMatch(css.replace(/var\(--wz-[a-z-]+, #[0-9a-f]+\)/g, ''), /#[0-9a-f]{3,6}\b/i, 'colours only through --wz-* tokens (with a dark fallback)');
+  for (const k of ['tweaks', 'defaults', 'promotedDefaults', 'lookOnlyOff']) assert.ok(!(cat[k] || []).includes('wizard/draft-marks'), k);
+  assert.ok(!Object.keys(cat.aliases || {}).includes('wizard/draft-marks') && !(prof.off || []).includes('wizard/draft-marks') && !(prof.tweaks || []).includes?.('wizard/draft-marks'));
+  assert.doesNotMatch(read('web/core/settings.js'), /draft-marks/, 'no Settings row');
+  assert.doesNotMatch(read('web/core/chats-daily.js'), /draftMarksOn|DRAFT_MARKS/, 'no gate');
+  assert.throws(() => read('web/tweaks/wizard/draft-marks/manifest.json'), 'package deleted');
+  // its CSS: core chats.css styles every mark with no switch on the page (a skeleton of each mark's markup), and
+  // colours come through tokens
+  const css = read('web/core/chats.css'), doc = createDocument();
+  doc.body.innerHTML = '<div class="ch-row"><span class="ch-draft-tag">✎ Draft</span></div><div class="ch-chan"><span class="ch-chan-draft">✎</span></div><div class="ch-post-r"><span class="ch-post-draft ch-draft-tag">✎ Draft</span></div>'
+    + '<div class="aad-rw" data-draft="1"><span class="aad-chan-line">#launch</span></div><div class="aad-rw" data-draft="1"><span class="aad-draft-line"></span></div>';
+  doc.documentElement.setAttribute('data-layout', 'ai-apps');
+  const marks = [['.ch-row .ch-draft-tag'], ['.ch-chan-draft'], ['.ch-post-draft'], ['.aad-rw[data-draft] .aad-chan-line', '::before'], ['.aad-draft-line', '::before']];
+  for (const [sel, pseudo] of marks) {
+    const got = cascade(doc.querySelector(sel), css, { pseudo });
+    assert.match(got.color?.value || got.content?.value || '', /wz-warning|✎/, `${sel}${pseudo || ''} is styled with no data-tweaks`);
+    for (const [k, d] of Object.entries(got)) if (/colou?r|background|border/.test(k)) assert.doesNotMatch(d.value.replace(/var\(--wz-[a-z-]+, #[0-9a-f]+\)/g, ''), /#[0-9a-f]{3,6}\b/i, `${sel} ${k}: colours only through tokens`);
+  }
+  const noDraft = createDocument(); noDraft.documentElement.setAttribute('data-layout', 'ai-apps'); noDraft.body.innerHTML = '<div class="aad-rw"><span class="aad-chan-line">#launch</span></div>';
+  assert.equal(cascade(noDraft.querySelector('.aad-chan-line'), css, { pseudo: '::before' }).content, undefined, 'a channel line without a draft has no pencil');
 });
 
 test('on by default, main and routed rows alike: a thread of the main agent, host, container or restricted is marked by the same draft key its box saves under (direct:<id>)', async () => {

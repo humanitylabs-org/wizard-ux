@@ -1,13 +1,13 @@
 // Browser-free orchestration regression only; mocks never write screenshots.
 'use strict';
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),assert=require('node:assert/strict');
-const root=path.resolve(__dirname,'..'),source=fs.readFileSync(path.join(root,'qa-claude-credits.cjs'),'utf8');
-const read=p=>fs.readFileSync(path.join(root,p),'utf8');
+const root=path.resolve(__dirname,'..'),source=fs.readFileSync(path.join(root,'qa/scripts/qa-claude-credits.cjs'),'utf8');
+const read=p=>require('./shell-source.cjs').shellSource(root,p); // shells read whole again (issue 1665 parts)
 assert.match(read('web/desktop.html'),/<button id="logo"[^>]*aria-label="Home"/);
 assert.ok(read('web/desktop/desktop.js').includes("$('#logo').addEventListener('click', () => goHome());"));
 assert.match(read('web/desktop/desktop.js'),/homeOpen = true; store\.set\('homeOpen', true\); render\(\);/);
 assert.match(read('web/desktop/desktop.js'),/home\.hidden = !homeOpen;\s+if \(homeOpen\) paintHome\(home, homeHtml\(null\)\);/);
-assert.ok(read('web/desktop/desktop.js').includes("window.WosResources?.home() || ''"));
+assert.ok(read('web/desktop/desktop-home.js').includes("window.WosResources?.home() || ''")); // homeHtml moved out verbatim (issue 1665)
 assert.ok(read('web/core/skin-host.js').includes("else if (!explicit && chosen === 'classic') chosen = 'ai-apps';"));
 assert.match(read('web/layouts/ai-apps/desktop.css'),/#bar :is\(#logo,[^\n]*display: none !important/);
 assert.ok(!/outerHTML\s*=|dataset\.tweaks\s*=/.test(source),'no widget/dataset injection');
@@ -15,7 +15,7 @@ assert.ok(!source.includes("locator('.rs-sheet"),'optional details cannot block 
 
 async function exercise(code){
  const captures=[],contexts=[],failures=[],files=new Map(),events=[];
- const sandbox=vm.createContext({Buffer,URL,console:{log(){},error:e=>failures.push(String(e))},process:{env:{QA_PLAYWRIGHT_PATH:'mock-playwright',QA_OUT:'/mock-proof'},exitCode:0},__dirname:root});
+ const sandbox=vm.createContext({Buffer,URL,console:{log(){},error:e=>failures.push(String(e))},process:{env:{QA_PLAYWRIGHT_PATH:'mock-playwright',QA_OUT:'/mock-proof'},exitCode:0},__dirname:path.join(root,'qa/scripts')});
  const invoke=(context,fn,arg)=>{context.__arg=arg;return vm.runInContext(typeof fn==='function'?`(${fn.toString()})(__arg)`:fn,context);};
  const chromium={async launch(){return {async newContext(options){
   const shell=options.isMobile?'phone':'desktop',storage=new Map();let entered=shell==='phone',route,wsRoute;
@@ -31,8 +31,8 @@ async function exercise(code){
  },async close(){}};}};
  const mockfs={mkdirSync(){},writeFileSync:(p,v)=>files.set(p,v),existsSync:fs.existsSync,statSync:fs.statSync,readFileSync:fs.readFileSync};
  const fixture={ORIGIN:'https://wizard.test',refused:vm.runInContext('(()=>[])',sandbox),response:()=>{throw Error('unexpected fixture route in orchestration preflight');}};
- sandbox.require=id=>id==='node:fs'?mockfs:id==='node:path'?path:id==='node:assert/strict'?assert:id==='mock-playwright'?{chromium}:id==='./tools/qa-proof-fixture.cjs'?fixture:assert.fail('unexpected import '+id);
- await vm.runInContext(code,sandbox,{filename:'qa-claude-credits.cjs'});
+ sandbox.require=id=>id==='node:fs'?mockfs:id==='node:path'?path:id==='node:assert/strict'?assert:id==='mock-playwright'?{chromium}:id==='../../tools/qa-proof-fixture.cjs'?fixture:assert.fail('unexpected import '+id);
+ await vm.runInContext(code,sandbox,{filename:'qa/scripts/qa-claude-credits.cjs'});
  if(sandbox.process.exitCode||failures.length)throw Error(failures.join('\n'));
  assert.deepEqual(captures.map(c=>[c.shell,c.skin]),[['phone','nebula'],['phone','grove'],['desktop','nebula'],['desktop','grove']]);
  assert.deepEqual(JSON.parse(JSON.stringify(contexts.map(c=>c.options.viewport))),[{width:412,height:892},{width:1440,height:1000}]);

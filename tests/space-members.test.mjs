@@ -3,7 +3,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
-const src = readFileSync(new URL('../web/live.js', import.meta.url), 'utf8');
+import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
+const src = withLiveParts(readFileSync(new URL('../web/live.js', import.meta.url), 'utf8'));
 const settle = () => new Promise(r => setImmediate(r));
 
 function harness() {

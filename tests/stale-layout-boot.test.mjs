@@ -2,10 +2,14 @@
 // Full production host at boot; imports are logged/stubbed, not browser/pixel proof.
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { freshDevice } from './fixtures/w1-experience.mjs';
+import { between, runRecording } from './fixtures/source-slice.mjs';
+import { createDocument } from './fixtures/mini-dom.mjs';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { fixture, read } from './fixtures/tweaks.mjs';
-const hostSource = process.env.QA_SETTINGS_SOURCE ? readFileSync(process.env.QA_SETTINGS_SOURCE + '/web/core/skin-host.js', 'utf8') : read('web/core/skin-host.js');
+import { withSkinHostParts } from './fixtures/skin-host-parts.mjs';
+const hostSource = process.env.QA_SETTINGS_SOURCE ? withSkinHostParts(readFileSync(process.env.QA_SETTINGS_SOURCE + '/web/core/skin-host.js', 'utf8'), process.env.QA_SETTINGS_SOURCE) : withSkinHostParts(read('web/core/skin-host.js'));
 const boot = options => fixture({ hostSource, ...options });
 const cases = {
   stored: { initialStorage: { 'wos.layout': 'ai-apps' } },
@@ -92,11 +96,16 @@ for (const shell of ['phone', 'desktop']) for (const id of ['orb', 'apps', 'two-
     assert.ok(!f.imports.some(h => h.includes('/layouts/' + id + '/')), 'no script of the removed layout');
   });
 }
-test('host shell inventory agrees with the AI apps manifest; Settings uses manifest descriptions', () => {
+test('host shell inventory agrees with the AI apps manifest; Settings uses manifest descriptions', async () => {
   const f = boot(), item = f.host.layouts.find(l => l.id === 'ai-apps'), manifest = JSON.parse(read('web/tweaks/miguel/ai-apps/manifest.json'));
   assert.deepEqual(Array.from(item.shells || []), manifest.shells); assert.match(item.desc, /desktop only/); assert.doesNotMatch(item.desc, /\(phone\)/);
   const settings = read('web/core/settings.js'), experience = read('web/core/experience.js');
   assert.doesNotMatch(settings, /\.layouts\b/);
-  assert.match(experience, /description: m.description \|\| ''/); assert.match(settings, /esc\(t.description\)/);
+  // the real Look list (experience.js) carries the manifest's description, and the real switch row (settings.js) shows it
+  const look = await freshDevice({ shell: 'desktop' }).listing('miguel/ai-apps');
+  assert.equal(look.row?.description, manifest.description, 'Settings › Look lists the manifest description');
+  const rows = runRecording(`${between(settings, '  const tweakSwitches = ', '\n')}\nthis.rows = tweakSwitches;`, { esc: x => String(x ?? '').replace(/</g, '&lt;') });
+  const doc = createDocument(); doc.body.innerHTML = rows.rows([look.row], 'data-tw');
+  assert.ok(doc.body.textContent.includes(manifest.description), 'the row shows it');
   assert.match(manifest.description, /desktop/);
 });

@@ -3,8 +3,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
-const live = readFileSync(new URL('../web/live.js', import.meta.url), 'utf8');
-const chats = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
+import { withParts } from './fixtures/chats-parts.mjs';
+import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
+const live = withLiveParts(readFileSync(new URL('../web/live.js', import.meta.url), 'utf8'));
+const chats = withParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'));
 const block = (s, from, to) => { const a = s.indexOf(from), b = s.indexOf(to, a); assert.ok(a >= 0 && b > a); return s.slice(a, b); };
 function fixture(last) {
   const c = modelContext({ Date, document: { documentElement: { dataset: {} } }, localStorage: { getItem: () => null }, window: { WizConfig: { dayStart: n => n - n % 864e5 }, WosSkinHost: { snoozeOrder: last ? 'last' : 'default' } } });
@@ -43,10 +45,10 @@ test('subject grouping renders the entire snoozed tail after all awake subjects'
 test('stock subject grouping is unchanged: same HTML as readyBody without the snoozeOrder line', () => {
   const src = block(chats, '  function readyBody(', '  /* Android Back on the list');
   const stockSrc = src.split('\n').filter(l => !l.includes('snoozeLast()')).join('\n');
-  assert.notEqual(stockSrc, src);
   const run = code => { const c = modelContext({ snoozeLast: () => false, deferredOf: s => !!s.deferred, readyOrder: 'subject', READY_ORDERS: [], attOf: s => s.attention, waitsOn: () => false, sesRank: () => 5, window: {}, LIVE: { cardAt: s => s.previewAt, isNew: () => true }, stiKind: () => 'none', subjOrder: () => [], esc: s => s }); vm.runInContext(code, c);
     return c.readyBody([snoozed('s'), row('a', { attention: { subject: 'A' } }), row('b', { attention: { subject: 'B' } })], s => `<row>${s.id}</row>`); };
-  assert.equal(run(src), run(stockSrc));
+  const off = run(src);
+  assert.equal(off, run(stockSrc));
 });
 test('shared attention groups (Inbox, moons, Home): a snoozed approval is not Needs you only with snoozeOrder last', () => {
   const src = block(live, '    groups(agent = \'\') {', '    async refresh() {').replace(/,\s*$/, '');

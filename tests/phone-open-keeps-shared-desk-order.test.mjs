@@ -5,11 +5,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import { withShellParts } from './fixtures/shell-parts.mjs';
 
-const app = fs.readFileSync(new URL('../web/app.js', import.meta.url), 'utf8');
-const syncSrc = fs.readFileSync(new URL('../web/core/workspace-sync.js', import.meta.url), 'utf8');
-const features = fs.readFileSync(new URL('../web/core/features.js', import.meta.url), 'utf8');
-const grab = (re, what) => { const m = app.match(re); assert.ok(m, `${what} not found in app.js`); return m[0]; };
+const appJs = withShellParts(fs.readFileSync(new URL('../web/app.js', import.meta.url), 'utf8'));
+const syncSrc = withShellParts(fs.readFileSync(new URL('../web/core/workspace-sync.js', import.meta.url), 'utf8'));
+const features = withShellParts(fs.readFileSync(new URL('../web/core/features.js', import.meta.url), 'utf8'));
+const grab = (re, what) => { const m = appJs.match(re); assert.ok(m, `${what} not found in app.js`); return m[0]; };
 const helper = grab(/const sharedDeskOrder = [^\n]+\n  function insertPos\(\) \{[^\n]+\n/, 'sharedDeskOrder + insertPos');
 const bring = grab(/function bringBeside\(id\) \{[\s\S]*?\n  \}\n/, 'bringBeside');
 
@@ -58,7 +59,7 @@ test('why it matters: a phone-only reorder is replayed onto every device by the 
   const sb = { console, JSON, Map, Set, Math, Date, setTimeout() {}, clearTimeout() {}, addEventListener() {}, navigator: { userAgent: 'iPhone' }, localStorage: { getItem: () => null, setItem() {} } };
   vm.runInNewContext(features, { window: sb }); sb.window = sb; vm.runInNewContext(syncSrc, sb);
   const D = (id, appId) => ({ id, wins: [{ id: 'w' + id, app: 'frame', appId }] });
-  const box = { desks: [D('a', 'messenger'), D('b', 'money'), D('c', 'backup')] };
-  const phoneMoved = { desks: [D('c', 'backup'), D('a', 'messenger'), D('b', 'money')] };
-  assert.deepEqual(sb.WosWorkspaceSync.merge(box, phoneMoved, box).desks.map(d => d.id), ['c', 'a', 'b']);
+  const boxSide = { desks: [D('a', 'messenger'), D('b', 'money'), D('c', 'backup')] };
+  const phoneSide = { desks: [D('c', 'backup'), D('a', 'messenger'), D('b', 'money')] };
+  assert.deepEqual(sb.WosWorkspaceSync.merge(boxSide, phoneSide, boxSide).desks.map(d => d.id), ['c', 'a', 'b']);
 });

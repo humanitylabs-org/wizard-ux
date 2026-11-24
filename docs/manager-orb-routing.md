@@ -20,7 +20,7 @@ Manager does not support attachments. An attached file blocks the whole Manager 
 
 ## Verification
 
-All browser and sustained tests run on Thales. The `qa-manager-orb.cjs` harness uses the real HTTPS shell/installed registry, candidate asset overlay and Chrome's fake microphone. Manager state, transcription and ALL mutation requests are explicit intercepted fixtures. This proves shell/client routing and custody, not real production Manager admission, physical microphone capture or the Android bridge.
+All browser and sustained tests run on Thales. The `qa/scripts/qa-manager-orb.cjs` harness uses the real HTTPS shell/installed registry, candidate asset overlay and Chrome's fake microphone. Manager state, transcription and ALL mutation requests are explicit intercepted fixtures. This proves shell/client routing and custody, not real production Manager admission, physical microphone capture or the Android bridge.
 
 Evidence from the candidate implementation:
 
@@ -40,12 +40,12 @@ Browser suite requires explicit environment:
 PW=<playwright-module> CHROME=<chrome-executable> \
 QA_URL=<actual-tailnet-shell-url> QA_WEB_DIR=<candidate-ux-repo> \
 QA_MANAGER_DIR=<candidate-manager-repo> QA_OUT=<evidence-directory> \
-TMPDIR=<external-volume-scratch> node qa-manager-orb.cjs
+TMPDIR=<external-volume-scratch> node qa/scripts/qa-manager-orb.cjs
 ```
 
 Use `QA_BASELINE=1` and `QA_WEB_DIR=<untouched-baseline>` for reproduction. The harness uses real start-button clicks for the candidate foreground case, subsequent shell control entry points for deterministic failure cases, and real recovery-button clicks for retry.
 
-Existing suites run with `node -r ./qa-thales-loader.cjs <suite> "$QA_URL"`, explicit `PW`, `QA_CHROME`, `QA_WEB_DIR`, `QA_RESOLVE` (no incorrect loopback mapping), and `QA_BLOCK_WRITES=1`.
+Existing suites run with `node -r ./qa/scripts/qa-thales-loader.cjs <suite> "$QA_URL"`, explicit `PW`, `QA_CHROME`, `QA_WEB_DIR`, `QA_RESOLVE` (no incorrect loopback mapping), and `QA_BLOCK_WRITES=1`.
 
 Manager suite: `CORE_CLIENT=<candidate-ux>/web/core/app-client.js PLAYWRIGHT_MODULE=<module> CHROMIUM_EXECUTABLE=<chrome> node --test tests/frontend.test.cjs` from the Manager tree.
 

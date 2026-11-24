@@ -4,7 +4,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
-const source = fs.readFileSync(new URL('../web/core/settings.js', import.meta.url), 'utf8');
+import { withSettingsParts } from './fixtures/settings-parts.mjs'; // settings.js parts moved out verbatim (issue 1665)
+const source = withSettingsParts(fs.readFileSync(new URL('../web/core/settings.js', import.meta.url), 'utf8'));
 
 function look(shell, ownSkins = false) {
   const picked = [], familyPicked = [], last = { wizard: 'grove', mizel: 'obsidian-light' };
@@ -75,7 +76,7 @@ for (const shell of ['phone', 'desktop']) test(`${shell}: separate Skin/Color ch
     localStorage:{getItem:k=>storage.get(k),setItem:(k,v)=>storage.set(k,v)},
     fetch:async url=>({ok:true,json:async()=>JSON.parse(fs.readFileSync(new URL('../web/'+url.pathname.split('/wizard-os-home/')[1],import.meta.url),'utf8'))}),
   });
-  const E=h.s.WosExperience;await E.refresh();await E.toggle('wizard/thread-tracker');
+  const E=h.s.WosExperience;await E.refresh();await E.toggle('wizard/sidebar-chats-view');
   const before=JSON.stringify(JSON.parse(storage.get('wos.skin-tweaks.v1')).mix), beforeActive=JSON.stringify(active);
   let pending=Promise.resolve(), picks=0;const choose=E.chooseSkin.bind(E);
   E.chooseSkin=(...args)=>{picks++;return pending=choose(...args);};

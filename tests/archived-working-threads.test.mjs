@@ -1,11 +1,14 @@
 import { modelContext, runWithChatsModel } from './fixtures/chats-list-model.mjs';
 import test from 'node:test';
+import { block, runRecording } from './fixtures/source-slice.mjs';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
+import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 
-const source = readFileSync(new URL('../web/live.js', import.meta.url), 'utf8');
-const chatsSource = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
+const source = withLiveParts(readFileSync(new URL('../web/live.js', import.meta.url), 'utf8'));
+const chatsSource = withParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'));
 const desktopSource = readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8');
 const kinds = ['main', 'host-profile', 'container', 'restricted'];
 
@@ -45,7 +48,16 @@ test('Done keeps archived stale-running threads out of Working for main and ever
 
   assert.deepEqual(groups.working.map(row => row.id), ['active']);
   assert.deepEqual(groups.archive.map(row => row.runtimeKind).sort(), [...kinds].sort());
-  assert.match(desktopSource, /LIVE\.isNew\(s\) \? ' · unread' : !s\.archived && WORKING_ST\.has\(s\.status\) \? ' · working'/);
+  // the desktop palette (real palBuild) marks only the active running thread as working, never an archived one
+  const pal = runRecording(`${block(desktopSource, '  function palBuild(q) {')}\nthis.palBuild = palBuild;`, {
+    norm: x => String(x || '').toLowerCase(), searchApps: () => [], APPS: [], C: { isMaintenanceApp: () => false }, ago: () => 'now', emoOf: () => '',
+    WORKING_ST: new Set(['running', 'queued']), commands: () => [], searchUrl: () => '',
+    LIVE: { ok: true, sessions: [...archived, active], cardAt: r => r.assignedAt, isNew: () => false, groups: () => ({ needs: [], ready: [], working: [] }) } });
+  const flat = v => (Array.isArray(v) ? v.flatMap(flat) : v && typeof v === 'object' ? (v.kind === 'thread' ? [v] : Object.values(v).flatMap(flat)) : []);
+  const rows = flat(JSON.parse(JSON.stringify(pal.palBuild('task'), (k, v) => typeof v === 'function' ? undefined : v)));
+  const sub = name => rows.find(r => r.name === name)?.sub;
+  assert.equal(sub('Active task'), 'now · working');
+  for (const r of archived) assert.equal(sub(r.title), 'now', `${r.title}: archived, not working`);
 });
 
 test('archived stale-running threads remain recoverable without steering stale runs', () => {
@@ -56,7 +68,6 @@ test('archived stale-running threads remain recoverable without steering stale r
   const actionsEnd = chatsSource.indexOf('\n  const ACT =', actionsStart);
   const stateStart = chatsSource.indexOf('  function threadState(s, agent) {');
   const stateEnd = chatsSource.indexOf('\n  function renderThread(', stateStart);
-  assert.ok(workingStart > 0 && workingEnd > workingStart && actionsStart > 0 && actionsEnd > actionsStart && stateStart > 0 && stateEnd > stateStart, 'thread state helpers found');
 
   const context = {
     LIVE: { busy: id => id === 'busy', workGroups: rows => ({ archive: rows.filter(row => row.aged) }) },

@@ -211,3 +211,30 @@ test('the App Manager decides at Install time: a quick:false reply keeps the lon
   await tick(); await tick();
   assert.deepEqual(c.t[0].slice(0, 2), ['↻', 'Updating WizardOS · takes 10–20 minutes']);
 });
+
+test('Mac Automatic hint follows the channel: For testers any hour once Wizard is free, For everyone at night (#1748)', async () => {
+  let state = { ...STATUS, always_auto: undefined, chosen: true, update_available: false, latest: '0.3.15', by_host: true, channel: 'latest', stable: '0.3.15' };
+  const { U } = await load((method, body) => {
+    if (method === 'GET') return [200, state];
+    state = { ...state, ...body }; return [200, state];
+  });
+  const hint = () => U.html().match(/data-osu-auto>[^]*?<p class="st-hint">([^<]*)<\/p>/)[1];
+  assert.equal(hint(), 'Install by themselves as soon as Wizard is free, after a 5-minute heads-up you can stop. Never during a chat.');
+  U.act(btn('ch-stable'), ctx()); await tick(); await tick();
+  assert.equal(U.state.channel, 'stable');
+  assert.equal(hint(), 'Install by themselves at night (1–5 am), after a 5-minute heads-up you can stop. Never during a chat.');
+  U.act(btn('ch-latest'), ctx()); await tick(); await tick();
+  assert.match(hint(), /as soon as Wizard is free/, 'switching back to For testers re-renders the any-hour wording');
+});
+
+test('Linux boxes keep the overnight hint on both channels; Ask me keeps its wording (#1748)', async () => {
+  for (const channel of ['latest', 'stable']) {
+    const { U } = await load(() => [200, { ...STATUS, always_auto: undefined, chosen: true, channel, stable: '0.3.15' }]);
+    assert.match(U.html(), /<p class="st-hint">Install by themselves overnight, never during a chat\.<\/p>/);
+    assert.doesNotMatch(U.html(), /as soon as Wizard is free/);
+  }
+  for (const channel of ['latest', 'stable']) {
+    const { U } = await load(() => [200, { ...STATUS, always_auto: undefined, mode: 'ask', chosen: true, by_host: true, channel, stable: '0.3.15' }]);
+    assert.match(U.html(), /Nothing installs until you tap Update now\./);
+  }
+});

@@ -19,6 +19,8 @@ class Dependencies(HTMLParser):
         super().__init__(); self.urls = []
     def handle_starttag(self, tag, attrs):
         attrs = dict(attrs)
+        # Shell services the one-app page also loads (wizard-ux issue 1694): sw.js keeps those, like the full shell's.
+        if attrs.get('data-offline-copy') == 'no': return
         if tag == 'script' and attrs.get('src'): self.urls.append(attrs['src'])
         if tag == 'link' and attrs.get('rel') == 'stylesheet': self.urls.append(attrs['href'])
 

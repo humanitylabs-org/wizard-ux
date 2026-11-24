@@ -5,261 +5,8 @@
 (() => {
   'use strict';
   if (document.documentElement.dataset.leaving) return; // core/shell.js is switching to the other shell
-  const SEEN_BASE = 'wizard.thread-seen.v1';
-  const SCOPE = 'wizard-account-local';
-  const SEEN_KEY = `${SEEN_BASE}:${SCOPE}`;
-  const MAX = 500;
-  const READY_OR_ATTENTION = new Set(['completed', 'failed', 'interrupted', 'waiting_for_approval', 'unknown']);
-  const WORKING = new Set(['submitting', 'queued', 'running', 'stopping']);
-  const ALIASES = { started: 'running', accepted: 'queued', pending: 'queued', waiting: 'waiting_for_approval' };
-  const WEEK = 7 * 864e5;
-
-  const iso = v => {
-    if (typeof v === 'number' && isFinite(v)) return new Date(Math.abs(v) < 1e12 ? v * 1000 : v).toISOString();
-    const p = Date.parse(String(v ?? '')); return isFinite(p) ? new Date(p).toISOString() : new Date(0).toISOString();
-  };
-  const optIso = v => { if (v == null || v === '') return undefined; const s = iso(v); return s === new Date(0).toISOString() ? undefined : s; };
-  const text = v => {
-    if (typeof v === 'string') return v;
-    if (Array.isArray(v)) return v.map(p => typeof p === 'string' ? p : p?.text || '').join(' ');
-    if (v && typeof v === 'object') return text(v.content ?? v.text ?? '');
-    return '';
-  };
-  const chipLabel = raw => {
-    try {
-      const files = JSON.parse(raw);
-      if (!Array.isArray(files) || !files.length) return ' ';
-      const voice = files.every(f => /^audio\//.test(f.mime || '') || /^wizard-voice-/.test(f.filename || ''));
-      if (voice) return ' 🎙 Voice note ';
-      const img = files.every(f => /^image\//.test(f.mime || ''));
-      return img ? ` 🖼 ${files.length === 1 ? 'Photo' : files.length + ' photos'} ` : ` 📎 ${files.length === 1 ? (files[0].filename || 'File') : files.length + ' files'} `;
-    } catch (e) { return ' '; }
-  };
-  const clean = s => String(s || '')
-    .replace(/\n*^\[WIZARD_REPLY_V1\]\n[\s\S]*?\n^\[\/WIZARD_REPLY_V1\][ \t]*$/m, ' ') // a Notifications Reply's framed item (quoted lines can't close it)
-    .replace(/\n*\[WIZARD_REPLY_TO_V1\]\{[^\n]*?\}(?:\n[\s\S]*?)?\[\/WIZARD_REPLY_TO_V1\]/g, ' ') // a Thread tracker quote
-    .replace(/\[WIZARD_FILES_V1\]\s*([\s\S]*?)\s*\[\/WIZARD_FILES_V1\]/g, (_, j) => chipLabel(j))
-    .replace(/\[WIZARD_FILE_CHIPS_V1\]\s*([\s\S]*?)\s*\[\/WIZARD_FILE_CHIPS_V1\]/g, (_, j) => chipLabel(j))
-    .replace(/\[WIZARD_IMAGE_INTENT_V1\][\s\S]*?\[\/WIZARD_IMAGE_INTENT_V1\]/g, ' ')
-    .replace(/\[WIZARD_TWEAK_V1\](?:[\s\S]*?\[\/WIZARD_TWEAK_V1\]|[\s\S]*$)/g, ' ') // a tweak card (core/chat-kit.js tweakIds); unterminated: to the end
-    .replace(/^Please use the attached files?\.\s*/, '')
-    .replace(/<memory-context>[\s\S]*?<\/memory-context>/g, ' ')
-    .replace(/\[(?:Browser dogfooding|System note)[^\]]*\][\s\S]*$/m, ' ')
-    .replace(/[#*_`>]+/g, ' ').replace(/\s+/g, ' ').trim();
-
-  // Only the two connection apps Wizard knows; anything else in the field is ignored.
-  const RECONNECT = { claude: ['wizard-claude', 'Claude'], chatgpt: ['wizard-chatgpt', 'ChatGPT'] };
-  function reconnectOf(v) {
-    const app = v && typeof v === 'object' && v.kind === 'provider_signed_out' ? RECONNECT[v.provider] : null;
-    if (!app || v.app_id !== app[0]) return null;
-    return { provider: v.provider, appId: app[0], name: app[1], runId: String(v.run_id || ''), installed: v.installed !== false };
-  }
-  const ATTN = new Set(['needs_you', 'check', 'done', 'fyi']);
-  function attentionOf(v) {
-    if (!v || typeof v !== 'object' || !ATTN.has(v.state)) return null;
-    const ask = String(v.ask || '').replace(/\s+/g, ' ').trim().slice(0, 140); if (!ask) return null;
-    return { state: v.state, ask, subject: String(v.subject || '').replace(/\s+/g, ' ').trim().slice(0, 40) };
-  }
-  function followUpOf(v) {
-    if (!v || typeof v !== 'object' || v.active !== true || !Number.isSafeInteger(v.count) || v.count < 1) return null;
-    const names = Array.isArray(v.names) ? v.names.map(name => String(name).replace(/\s+/g, ' ').trim().slice(0, 160)).filter(Boolean).slice(0, 3) : [];
-    const nextRun = optIso(v.nextRun);
-    return { active: true, count: v.count, names, ...(nextRun ? { nextRun } : {}) };
-  }
-  // Why the last run failed (Agent Service wizard_last_run_error, wizard-ux#166): a known code plus the provider.
-  // Only the off-by-default wizard/failure-reason tweak shows it (core/chat-models.js runError).
-  const RUN_ERROR_CODES = new Set(['provider_auth', 'provider_billing', 'provider_quota', 'network', 'unknown']);
-  function runErrorOf(v) {
-    if (!v || typeof v !== 'object' || !RUN_ERROR_CODES.has(v.code)) return null;
-    const one = (x, n) => (typeof x === 'string' ? x : '').replace(/\s+/g, ' ').trim().slice(0, n);
-    return { code: v.code, provider: one(v.provider, 60), message: one(v.message, 200) };
-  }
-  function normalize(item) {
-    if (item.listVersion === 1) {
-      const s = { safeError:'', reconnect:null, runError:null, critical:false, waitingOn:'', helperStatus:null, attention:null, ...item, runError: runErrorOf(item.runError), status: globalThis.WizChatsListModel.executionStatus(item.status, item.runId, item.lastRunStatus), runtime: 'direct', request: '', renames: [], detailNeeded: true };
-      // Chats channels (wizard-ux issue 1261): the row's channel id and first owner request, checked after the spread.
-      if (!(typeof s.channel === 'string' && /^[a-z0-9-]{1,48}$/.test(s.channel))) delete s.channel;
-      if (typeof s.firstRequest === 'string') s.firstRequest = s.firstRequest.slice(0, 400); else delete s.firstRequest;
-      return s;
-    }
-    const id = item.id || item.session_id; if (!id) return null;
-    const raw = String(item.status || item.run_status || '');
-    const status = globalThis.WizChatsListModel.executionStatus(ALIASES[raw] || raw || undefined, item.wizard_run_id, ALIASES[item.wizard_last_run_status] || item.wizard_last_run_status);
-    const lastUserAt = optIso(item.wizard_last_user_at ?? item.last_user_at);
-    const lastAssistantAt = optIso(item.wizard_last_assistant_at ?? item.last_assistant_at);
-    const latest = item.latest_message && typeof item.latest_message === 'object' ? item.latest_message : null;
-    const lastUser = item.last_user_message && typeof item.last_user_message === 'object' ? item.last_user_message : null;
-    const working = WORKING.has(status) || status === 'waiting_for_approval';
-    const latestText = clean(text(latest?.content ?? latest?.text));
-    const userText = clean(text(lastUser?.content ?? lastUser?.text) || text(item.wizard_request_preview));
-    const preview = working ? (item.wizard_helper_status ? (latestText || clean(text(item.preview)) || userText) : (userText || latestText)) : (latestText || userText || clean(text(item.preview)));
-    const latestAt = optIso(latest?.timestamp ?? latest?.created_at);
-    const userAt = optIso(lastUser?.timestamp ?? lastUser?.created_at);
-    return {
-      id, runtime: 'direct',
-      title: String(item.title || item.name || 'Untitled chat'),
-      source: item.source || '',
-      status,
-      queueReason: item.queue_reason === 'provider_access' ? 'provider_access' : '',
-      safeError: typeof item.wizard_safe_error === 'string' ? item.wizard_safe_error : '',
-      // The AI provider's sign-in expired (Agent Service provider-reconnect.mjs): the connection app that fixes it.
-      reconnect: reconnectOf(item.wizard_reconnect),
-      runError: runErrorOf(item.wizard_last_run_error),
-      archived: !!item.archived, hidden: !!item.hidden,
-      messageCount: Number.isSafeInteger(item.message_count) ? item.message_count : undefined,
-      lastUserAt, lastAssistantAt,
-      updatedAt: lastUserAt ?? iso(item.wizard_started_at ?? item.updated_at ?? item.last_active ?? item.started_at),
-      activityAt: optIso(item.wizard_activity_at) || optIso(item.last_active),
-      // When the thread was started (never moves): a channel feed keeps its posts in this order (issue 1289).
-      startedAt: optIso(item.wizard_started_at ?? item.started_at),
-      runId: String(item.wizard_run_id || ''),
-      // The idempotency key of the newest run Wizard knows for this thread (= the outbox item id for our sends).
-      lastRunKey: String(item.wizard_last_run_idempotency_key || ''),
-      lastRunStatus: ALIASES[item.wizard_last_run_status] || String(item.wizard_last_run_status || ''),
-      preview, previewRole: latest?.role === 'assistant' ? 'assistant' : latest?.role === 'user' ? 'user' : undefined,
-      previewAt: latestAt,
-      requestAt: userAt || lastUserAt,
-      assignedAt: optIso(item.wizard_assigned_at),
-      critical: (item.wizard_attention_level || item.attention_level) === 'critical',
-      waitingOn: item.wizard_waiting_on === 'helper' ? 'helper' : '',
-      helperStatus: item.wizard_helper_status && typeof item.wizard_helper_status === 'object' ? item.wizard_helper_status : null,
-      background: ['helper', 'heavy'].includes(item.wizard_background) ? item.wizard_background : '',
-      // A saved background result waiting for one-tap Continue (Agent Service background-results.mjs). Only the
-      // off-by-default wizard/background-continue tweak shows it (chat-power.js) or discovers more (below).
-      backgroundResult: /^bg_[0-9a-f]{32}$/.test(item.wizard_background_result?.id || '') && item.wizard_background_result?.session_id === id
-        ? { id: item.wizard_background_result.id } : null,
-      // What the finished thread asks of James (the agent's hidden status line): needs_you / check / done / fyi.
-      attention: attentionOf(item.wizard_attention),
-      // A durable quiet one-shot checker bound to this thread. The prompt never reaches the list.
-      followUp: followUpOf(item.wizard_follow_up),
-      // Thread titles (Agent Service thread-titles.mjs): every rename with its time, so the thread shows
-      // "Renamed from …" right after the reply that renamed it. The list shows only the current title.
-      renames: Array.isArray(item.wizard_title_renames) ? item.wizard_title_renames.filter(r => r && typeof r.from === 'string' && isFinite(r.at)).slice(-6).map(r => ({ from: r.from.slice(0, 120), to: String(r.to || '').slice(0, 120), at: Number(r.at), by: r.by === 'you' ? 'you' : 'agent' })) : [],
-      // The thread's model route (chat-models.js shows and changes it).
-      model: typeof item.model === 'string' ? item.model : '', provider: typeof item.provider === 'string' ? item.provider : '',
-      modelLockAt: Number(item.wizard_model_lock_updated_at) || 0,
-      // The last thing asked (Retry on a failed thread sends it again: controller.ts retryServerFailedSession).
-      retryRunId: typeof item.wizard_retry_run_id === 'string' ? item.wizard_retry_run_id : '',
-      request: typeof item.wizard_retry_input === 'string' ? item.wizard_retry_input : userText,
-      // Agents MVP: the agent this thread is pinned to (server metadata). '' = the main agent.
-      agent: typeof item.agent === 'string' ? item.agent : item.agent && typeof item.agent === 'object' && typeof item.agent.id === 'string' ? item.agent.id : '',
-      ...(typeof item.channel === 'string' && /^[a-z0-9-]{1,48}$/.test(item.channel) ? { channel: item.channel } : {}),
-      ...(typeof item.firstRequest === 'string' ? { firstRequest: item.firstRequest.slice(0, 400) } : {}),
-    };
-  }
-
-  /* ---- thread-seen: exact port of wizard-mobile semantics ---- */
-  const vis = v => (typeof v === 'string' ? v : '').replace(/\s+/gu, ' ').trim().slice(0, 80).toLocaleLowerCase();
-  function fingerprint(v) { let h = 2166136261; for (const c of vis(v)) { h ^= c.codePointAt(0) ?? 0; h = Math.imul(h, 16777619); } return (h >>> 0).toString(36); }
-  const keyOf = s => `${s.runtime}:${s.id}`;
-  // Side state (seen, snoozed) for another agent's thread is keyed agent/<id>/<runtime>:<id> on the server; the
-  // dispositions route takes agent_id in the body and refuses any query string (so agent snoozes used to fail).
-  const seenKeyOf = s => s.agent && s.agent !== 'hermes' ? `agent/${s.agent}/${keyOf(s)}` : keyOf(s);
-  // The newest assistant message the list knows. lastAssistantAt counts model replies only; reports that apps and
-  // scheduled jobs append (Topics roundup, daily moves, audits) arrive as the latest message (previewAt) without moving
-  // it, so those threads came in already read (James, 23 Oct 2026). Take whichever is newer.
-  function assistantAt(s) {
-    const c = [s.lastAssistantAt, s.previewRole === 'assistant' ? s.previewAt : undefined].filter(v => isFinite(Date.parse(v ?? '')));
-    return c.length > 1 && Date.parse(c[1]) > Date.parse(c[0]) ? c[1] : c[0];
-  }
-  function recordFor(s, seenAt) {
-    const a = assistantAt(s);
-    return { ...(typeof s.messageCount === 'number' ? { messageCount: s.messageCount } : {}), ...(s.status && s.status !== 'submitting' ? { status: s.status } : {}),
-      updatedAt: s.updatedAt, previewFingerprint: s.agent && otherAgent(s.agent) ? 'private' : fingerprint(s.preview), ...(a ? { assistantActivityAt: a } : {}), seenAt };
-  }
-  function hasNew(s, state) {
-    if (!state) return false;
-    const r = state.threads[seenKeyOf(s)]; if (!r) return true;
-    if ((r.unreadAt ?? -1) > r.seenAt) return true;
-    const cur = Date.parse(assistantAt(s) ?? ''), seenA = Date.parse(r.assistantActivityAt ?? '');
-    const comparable = typeof s.messageCount === 'number' && typeof r.messageCount === 'number';
-    const previewChanged = !otherAgent(s.agent) && !comparable && fingerprint(s.preview) !== r.previewFingerprint;
-    const countUp = comparable && s.messageCount > r.messageCount;
-    const becameReady = !!s.status && s.status !== r.status && READY_OR_ATTENTION.has(s.status) && (!r.status || !READY_OR_ATTENTION.has(r.status));
-    if (isFinite(cur)) return isFinite(seenA) ? cur > seenA : cur > r.seenAt;
-    if (previewChanged || countUp || becameReady) return true;
-    if (s.preview || typeof s.messageCount === 'number') return false;
-    const u = Date.parse(s.updatedAt), su = Date.parse(r.updatedAt);
-    return isFinite(u) && (!isFinite(su) || u > su);
-  }
-  function later(l, r) {
-    if (!l) return r;
-    const lu = Date.parse(l.updatedAt), ru = Date.parse(r.updatedAt);
-    let pick;
-    if (lu !== ru) pick = ru > lu ? r : l;
-    else { const lc = l.messageCount ?? -1, rc = r.messageCount ?? -1; pick = lc !== rc ? (rc > lc ? r : l) : (r.seenAt > l.seenAt ? r : l); }
-    const seenAt = Math.max(l.seenAt, r.seenAt);
-    const unreadAt = Math.max(l.unreadAt ?? -1, r.unreadAt ?? -1);
-    const la = Date.parse(l.assistantActivityAt ?? ''), ra = Date.parse(r.assistantActivityAt ?? '');
-    const aa = !isFinite(la) ? r.assistantActivityAt : !isFinite(ra) ? l.assistantActivityAt : ra > la ? r.assistantActivityAt : l.assistantActivityAt;
-    // Mark done (wizard-ux issue 1317): the newer "handled through" of the two is kept, whichever record wins.
-    const lh = Date.parse(l.handledThrough ?? ''), rh = Date.parse(r.handledThrough ?? '');
-    const ht = !isFinite(lh) ? (isFinite(rh) ? r.handledThrough : '') : !isFinite(rh) ? l.handledThrough : rh > lh ? r.handledThrough : l.handledThrough;
-    return { ...pick, ...(aa ? { assistantActivityAt: aa } : {}), ...(ht ? { handledThrough: ht } : {}), seenAt, ...(unreadAt >= 0 ? { unreadAt } : {}) };
-  }
-  /* Marking a row read never forgets a newer revision this device already knows was read (wizard-ux issue 1266):
-   * the Channels feed can mark a row from a list read older than the record (a stale refresh, another device's
-   * write). The record keeps the newer of the two revisions, read as of now; replies newer than both stay unread. */
-  function seenRecord(prior, s, seenAt) {
-    const fresh = recordFor(s, seenAt); if (!prior) return fresh;
-    const { unreadAt, ...kept } = later(prior, fresh);
-    return { ...kept, seenAt: Math.max(seenAt, prior.seenAt || 0) };
-  }
-  /* Mark done (wizard-ux issue 1317): the revision a thread was handled through is its own newest reply time (else
-   * updatedAt), a server time, so device clocks never matter. A later reply moves past it and the markers come back. */
-  const handledRev = s => assistantAt(s) || s.updatedAt || '';
-  function handledOf(s, state) {
-    const r = state?.threads?.[seenKeyOf(s)], h = Date.parse(r?.handledThrough ?? ''), cur = Date.parse(handledRev(s));
-    return isFinite(h) && isFinite(cur) && cur <= h;
-  }
-  function merge(a, b) {
-    if (!a) return b; if (!b) return a;
-    const threads = { ...a.threads };
-    for (const [k, r] of Object.entries(b.threads)) threads[k] = later(threads[k], r);
-    // Same order as the box keeps its 500 (Agent Service thread-seen.mjs: the later of seenAt and unreadAt, then key), so
-    // both sides drop the same record at the cap. Ordering by seenAt alone kept a record here that the box had dropped,
-    // and the re-send below then never caught up (wizard-ux issue 1428).
-    const at = r => Math.max(r.seenAt, r.unreadAt ?? -1);
-    const entries = Object.entries(threads).sort((x, y) => at(y[1]) - at(x[1]) || x[0].localeCompare(y[0])).slice(0, MAX);
-    return { initializedAt: Math.min(a.initializedAt, b.initializedAt), threads: Object.fromEntries(entries) };
-  }
-  /* Re-sending reads the box does not have yet (after a reconnect or reload; a failed write must not strand a read).
-   * wizard-ux issue 1428: a record the box never keeps (past its cap, a private thread it withholds) made every list
-   * read PUT the whole 138 KB state again and repaint, about 6 times a second on a phone, and Chats never loaded.
-   * Now each record version is re-sent once, one write at a time; a failed write lets it try again on a later read.
-   * A reply that changes nothing here does not repaint. */
-  const SEEN_SENT = new Map(); // seen key -> the seenAt already re-sent
-  let seenSending = false;
-  function sameRecord(a, b) {
-    if (a === b) return true; if (!a || !b) return false;
-    const ka = Object.keys(a); return ka.length === Object.keys(b).length && ka.every(k => a[k] === b[k]);
-  }
-  function sameSeen(a, b) {
-    if (a === b) return true; if (!a || !b || a.initializedAt !== b.initializedAt) return false;
-    const ka = Object.keys(a.threads); return ka.length === Object.keys(b.threads).length && ka.every(k => sameRecord(a.threads[k], b.threads[k]));
-  }
-  function seenBehind(state, remote) {
-    return Object.entries(state?.threads || {}).filter(([k, r]) => r.seenAt > (remote?.threads?.[k]?.seenAt || 0) && SEEN_SENT.get(k) !== r.seenAt);
-  }
-  function resendSeen(store, state, remote) {
-    if (seenSending) return null;
-    const behind = seenBehind(state, remote); if (!behind.length) return null;
-    for (const [k, r] of behind) SEEN_SENT.set(k, r.seenAt);
-    if (SEEN_SENT.size > MAX * 4) for (const k of [...SEEN_SENT.keys()]) if (!state.threads[k]) SEEN_SENT.delete(k);
-    seenSending = true;
-    return putSeen(state).then(r => {
-      const next = merge(store.seen, r); if (sameSeen(next, store.seen)) return;
-      store.seen = next; writeLocal(next); store.emit();
-    }, () => { for (const [k, r] of behind) if (SEEN_SENT.get(k) === r.seenAt) SEEN_SENT.delete(k); }).finally(() => { seenSending = false; });
-  }
-  function readLocal() {
-    try {
-      const raw = localStorage.getItem(SEEN_KEY) ?? localStorage.getItem(SEEN_BASE); if (!raw) return null;
-      const v = JSON.parse(raw); return isFinite(v.initializedAt) && v.threads && typeof v.threads === 'object' ? v : null;
-    } catch (e) { return null; }
-  }
-  function writeLocal(state) { try { localStorage.setItem(SEEN_KEY, JSON.stringify(state)); } catch (e) {} }
-
+  /* seen: moved to live-seen.js (wizard-ux issue 1665), called once here */
+  const { assistantAt, fingerprint, handledOf, handledRev, hasNew, iso, keyOf, later, MAX, merge, normalize, readLocal, recordFor, resendSeen, SCOPE, SEEN_BASE, SEEN_KEY, seenKeyOf, seenRecord, WEEK, WORKING, writeLocal, bindLate: seenLate } = window.WizCore.liveParts.seen({  });
   /* ---- network ---- */
   const J = { 'Content-Type': 'application/json' };
   const THREAD_ROWS_MAX = 50000; // threadRows' ceiling: 100 pages of 500
@@ -283,7 +30,7 @@
   const listSignal = () => typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? { signal: AbortSignal.timeout(LIST_DEADLINE) } : {};
   async function fetchSessions(full, agent = '', onFirst = null) {
     const read = ++titleRead;
-    const out = []; let snapshot = '', meta = null, resets = 0;
+    const out = []; let snapshot = '', meta = null, resets = 0, build = '';
     const overrides = JSON.stringify(listOverrides(agent));
     for (let offset = 0; offset < 100000; ) {
       const slim = LIST_SUPPORT.get(agent) !== false;
@@ -299,12 +46,16 @@
       if (slim && p.list_version === 1 && p.window !== 'archive-50') { LIST_SUPPORT.set(agent,false); snapshot=''; out.length=0; offset=0; continue; }
       if (p.list_version === 1) LIST_SUPPORT.set(agent,true);
       if (!snapshot && typeof p.snapshot === 'string') snapshot = p.snapshot;
+      // The slim title index is re-read only when the list's build moved (wizard-ux issue 1693): the window
+      // hashes the same selection for both shapes, so an unchanged build means an unchanged index. Checked on the
+      // first page, so a head-only poll of a long list also refreshes search when something changed.
+      if (!build && typeof p.build === 'string') { build = p.build; if (TITLE_INDEX.get(agent)?.build !== build) setTimeout(()=>{void fetchTitleIndex(agent)},0); }
       if (p.window === 'archive-50') meta = { archiveTotal:p.archive_total, archiveReturned:p.archive_returned, cursor:p.archive_cursor };
       const rows = p.data || p.sessions || p.items || [];
       out.push(...rows.map(normalize).filter(Boolean));
       offset += rows.length;
       const more = typeof p.has_more === 'boolean' ? p.has_more : typeof p.pagination?.has_more === 'boolean' ? p.pagination.has_more : rows.length >= 100;
-      if (!more) { setTimeout(()=>{void fetchTitleIndex(agent)},0); return { sessions:out, complete:true, meta, titleRead:read }; }
+      if (!more) return { sessions:out, complete:true, meta, titleRead:read };
       if (!rows.length) throw new Error('Incomplete session window');
       if (!full) return { sessions:out, complete:false, meta, titleRead:read };
       if (onFirst && offset === rows.length) await onFirst({ sessions:out.slice(), complete:false, meta, titleRead:read });
@@ -404,272 +155,14 @@
   }
   window.addEventListener('wos:tweak-choice', e => { if (e?.detail?.id === 'wizard/background-continue') setTimeout(() => L.refresh(), 0); });
   const FULL_EVERY = 3 * 60 * 1000;
-  const AGENT_WAIT = 1200; // ms a snapshot reload waits for other agents' threads before its one repaint
-  const STALE_AFTER = 60 * 1000; // the list polls every 15 s, so a minute without a fresh read is worth saying
-  /* ---- agents (Agents MVP): each non-default agent's threads are read from its own list (agent=<id>), always
-   * through the owner's own Agent Service. Every thread/run call for such a thread names its agent, so a private
-   * agent's #59 seal still refuses id-only reads from anything else.
-   * Unified Chats (wizard-os spec/AGENTS.md, 18 Oct 2026): the owner's main Chats list (and its Ready/unread counts)
-   * merges every agent's threads by recency; `L.sessions` stays the main agent's own list (search, status, links). ---- */
-  const AG = () => window.WosAgents || null;
-  const otherAgent = id => { const a = AG(); return !!id && (a ? a.isOther(id) : id !== 'hermes'); };
-  const AGENT_OF = new Map(); // sessionId -> agent id, for threads of non-default agents (incl. not yet listed)
-  const AGENT_SEEN_KEY = 'wos.agentSeen.v1';
-  const AGENT_SEEN = (() => { try { const v = JSON.parse(localStorage.getItem(AGENT_SEEN_KEY) || 'null'); if (v && v.threads) return v; } catch (e) {} return { initializedAt: Date.now(), threads: {} }; })();
-  const aq = (sid, sep = '?') => { const a = L.agentOf(sid); return a ? `${sep}agent=${encodeURIComponent(a)}` : ''; };
-  const runAgent = runId => { for (const list of [L.sessions, ...Object.values(L.agentSessions)]) { const s = list.find(x => x.runId === runId); if (s) return L.agentOf(s.id); } return ''; };
-  const rq = (runId, sep = '?') => { const a = runAgent(runId); return a ? `${sep}agent=${encodeURIComponent(a)}` : ''; };
-
-  /* ---- Work sections: exact port of wizard-mobile src/workSections.ts ---- */
-  const DAY = 864e5;
-  // The owner's day: their time zone and day_starts_at from WizardOS settings (WizConfig).
-  const workDayStart = (now = Date.now()) => window.WizConfig.dayStart(now);
-  const WORKING_SECTION = new Set(['submitting', 'queued', 'running', 'waiting_for_approval', 'stopping']);
-  // A failure the owner dismissed on this device is no error any more (issue 1488; the Agent Service drops it too).
-  const isErr = s => (s.status === 'failed' || s.status === 'interrupted' || (s.status === 'queued' && s.queueReason === 'provider_access')) && !globalThis.WosErrors?.dismissed?.(s);
-  const needsApproval = s => ['waiting_for_approval', 'unknown'].includes(s.status);
-  const inWorking = s => window.WizChatsListModel.isListWorking(s);
-  const firstValid = (...v) => v.find(x => isFinite(Date.parse(x ?? ''))) ?? '';
-  const cardAt = s => (WORKING_SECTION.has(s.status) && !needsApproval(s) && !isErr(s)) || isErr(s)
-    ? firstValid(s.assignedAt, s.requestAt, s.lastUserAt, s.previewRole === 'user' ? s.previewAt : undefined)
-    : firstValid(s.previewAt, s.activityAt, s.lastUserAt, s.updatedAt);
-  const newestFirst = (l, r) => {
-    const a = Date.parse(cardAt(l)), b = Date.parse(cardAt(r));
-    if (isFinite(a) !== isFinite(b)) return isFinite(a) ? -1 : 1;
-    return (isFinite(a) ? b - a : 0) || l.title.localeCompare(r.title);
-  };
-  // Opinionated: auto-archive age is the owner's choice (Archive header selector); 0 = never. Default one week.
-  const ARCH_KEY = 'wos.chats.archiveAfter.v1';
-  // Chat-list layout: 'day' (Ready = today, then Yesterday, Past week; the default) or 'status' (Working / Ready / Archive).
-  const LAYOUT_KEY = 'wos.chats.layout.v1';
-  // A tweak asked the skin host for Snooze = lowest priority, bottom of Ready (api.nav.snoozeOrder('last'); docs/snooze-last.md).
-  const snoozeLast = () => { try { return window.WosSkinHost?.snoozeOrder === 'last'; } catch (e) { return false; } };
-  // A tweak can ask for one Group by day switch instead of the Layout picker: `html { --wos-chats-group-switch: on; }`.
-  // It then works identically on every skin and keeps the stored By day/By status choice.
-  const groupSwitch = () => { try { return getComputedStyle(document.documentElement).getPropertyValue('--wos-chats-group-switch').trim() === 'on'; } catch (e) { return false; } };
-  const chatLayout = () => { try { return localStorage.getItem(LAYOUT_KEY) === 'status' ? 'status' : 'day'; } catch (e) { return 'day'; } };
-  const archiveAfterDays = () => { try { const v = localStorage.getItem(ARCH_KEY); if (v != null && isFinite(+v)) return +v; } catch (e) {} return 7; };
-  // Agent Service owns box-wide preferences. localStorage is only an offline cache.
-  const PREFS_URL = '/wizard/v1/ui-preferences';
-  let prefsWrites = Promise.resolve(), prefsPending = 0, prefsRevision = 0;
-  const prefsFields = {
-    archiveAfterDays: ['wos.chats.archiveAfter.v1', v => Number.isInteger(v) && [0, 1, 3, 7, 14, 30].includes(v), String],
-    compact: ['wos.chats.compact.v1', v => typeof v === 'boolean', v => v ? '1' : '0'],
-    chatLayout: ['wos.chats.layout.v1', v => v === 'day' || v === 'status', String],
-    chatAfterAction: ['wos.chats.afterAction.v1', v => v === 'stay' || v === 'list', String],
-    workingOrder: ['wos.chats.workingOrder.v1', v => ['alphabetical', 'newest', 'oldest'].includes(v), String],
-    readyOrder: ['wos.chats.readyOrder.v1', v => ['newest', 'oldest', 'priority', 'subject'].includes(v), String],
-    subjectOrder: ['wos.chats.subjectOrder.v1', v => Array.isArray(v) && v.every(x => typeof x === 'string'), JSON.stringify],
-    // Pinned chats (core/chat-pins.js): the same pins on every device.
-    pinnedChats: ['wos.chats.pinned.v2', v => Array.isArray(v) && v.every(x => typeof x === 'string'), JSON.stringify],
-    spaces: ['wos.chats.spaces.v1', v => Array.isArray(v), JSON.stringify],
-    // Short answer first (skin-host replySummary): on, how long replies start, and the short answer's length.
-    replySummary: ['wos.chats.replySummary.v1', v => !!v && typeof v === 'object' && !Array.isArray(v) && typeof v.on === 'boolean', JSON.stringify],
-    // The owner's other Wizards for the switcher (core/workspaces.js): the same list on every device of this box.
-    savedWizards: ['wos.workspaces.box.v1', v => Array.isArray(v), JSON.stringify],
-  };
-  let prefsOff = false;
-  const putPrefs = (patch, { requireShared = false } = {}) => {
-    if (prefsOff) return Promise.resolve(!requireShared);
-    prefsPending++; prefsRevision++;
-    prefsWrites = prefsWrites.then(async () => {
-      try {
-        const r = await req(PREFS_URL, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) });
-        if (r.status === 404) { prefsOff = true; return !requireShared; } // this Agent Service has no shared preferences yet: keep the choice on this device, quietly
-        if (!r.ok) throw new Error('Preferences unavailable');
-        return true;
-      } catch (e) { window.dispatchEvent(new Event('wos:prefs-error')); return false; }
-      finally { prefsPending--; }
-    });
-    return prefsWrites;
-  };
-  // The shared preferences as this device shows them: the service's values plus this device's queued list edits.
-  const acceptPrefs = (j, only = null) => {
-    if (!only) window.WizLauncher?.accept(j);
-    const v = applyPrefOps(j, queuedOps());
-    let changed = false;
-    for (const [name, [key, valid, encode]] of Object.entries(prefsFields)) if ((!only || only.has(name)) && name === 'savedWizards' && !Array.isArray(j?.savedWizards)) {
-      // A box without saved Wizards (an older or rolled-back Agent Service): drop the cache, so the switcher keeps
-      // this device's own list instead of showing edits the box never stored.
-      if (localStorage.getItem(key) != null) { localStorage.removeItem(key); changed = true; }
-    } else if ((!only || only.has(name)) && valid(v[name])) {
-      const value = encode(v[name]);
-      if (localStorage.getItem(key) !== value) { localStorage.setItem(key, value); changed = true; }
-    }
-    if (changed) window.dispatchEvent(new Event('wos:prefs'));
-  };
-  const pullPrefs = async () => {
-    if (prefsPending || prefsOff) return;
-    const rev = prefsRevision;
-    try {
-      const r = await req(PREFS_URL, { cache: 'no-store' });
-      if (r.status === 404) { prefsOff = true; return; }
-      if (!r.ok) return;
-      const j = await r.json();
-      if (!j || prefsPending || rev !== prefsRevision) return;
-      acceptPrefs(j);
-    } catch (e) { /* Older/offline service: retain this device's cached choice, never reset it. */ }
-  };
-  /* Shared lists (Spaces and their members, subject order) change by item operation, never by saving this device's
-   * whole cached list: a device that hadn't pulled yet used to erase another device's or an agent's edit (same bug
-   * as pins, wizard-ux #670). Each edit is queued here (kept across reloads and offline spells), shown at once, and
-   * sent as Agent Service PATCH operations, applied atomically to the stored lists. An older service (405) gets the
-   * same operations replayed onto a fresh read, written and read back. Pins keep their own queue (core/chat-pins.js). */
-  const OPS_KEY = 'wos.prefs.ops.v1', SPACE_OP = /^spaces\/([a-z0-9-]{1,48})\/(threads|name)$/, WIZARD_OP = /^savedWizards\/([A-Za-z0-9._:-]{1,120})\/name$/;
-  const opField = o => SPACE_OP.test(o.key) ? 'spaces' : WIZARD_OP.test(o.key) ? 'savedWizards' : o.key;
-  const originOf = u => { try { return new URL(u).origin; } catch (e) { return ''; } };
-  // The same operations as Agent Service applies (server/ui-preferences.mjs applyUiPreferenceOps); each is idempotent.
-  function applyPrefOps(prefs, ops) {
-    const next = { ...prefs };
-    for (const { op, key, item, items } of ops) {
-      const sub = SPACE_OP.exec(key), list = Array.isArray(next[opField({ key })]) ? next[opField({ key })] : [];
-      const wiz = WIZARD_OP.exec(key);
-      // Saved Wizards: adding is a no-op for an id or address already saved; renaming a forgotten one is a no-op.
-      if (key === 'savedWizards') next.savedWizards = op === 'add' ? (list.some(w => w.id === item.id || (!!originOf(w.url) && originOf(w.url) === originOf(item.url))) ? list : list.concat(item)) : list.filter(w => w.id !== item);
-      else if (wiz) next.savedWizards = list.map(w => w.id === wiz[1] ? { ...w, name: item } : w);
-      else if (key === 'pinnedChats' || key === 'subjectOrder') next[key] = op === 'front' ? [...new Set(items)].concat(list.filter(x => !items.includes(x))).slice(0, 60)
-        : op === 'add' ? (list.includes(item) ? list : list.concat(item)) : list.filter(x => x !== item);
-      else if (key === 'spaces') next.spaces = op === 'add' ? (list.some(s => s.id === item.id) ? list : list.map(s => (s.agent || 'hermes') === (item.agent || 'hermes') && s.threads.some(t => item.threads.includes(t)) ? { ...s, threads: s.threads.filter(t => !item.threads.includes(t)) } : s).concat(item)) : list.filter(s => s.id !== item);
-      // One Space per chat (James, 29 Oct 2026), as the Agent Service applies it: adding moves the chat out of that
-      // agent's other Spaces in the same edit.
-      else if (sub) { const to = list.find(s => s.id === sub[1]), mine = s => (s.agent || 'hermes') === (to?.agent || 'hermes');
-        next.spaces = list.map(s => s.id !== sub[1] ? (to && sub[2] === 'threads' && op === 'add' && mine(s) && s.threads.includes(item) ? { ...s, threads: s.threads.filter(t => t !== item) } : s)
-          : sub[2] === 'name' ? { ...s, name: item }
-          : { ...s, threads: op === 'add' ? (s.threads.includes(item) ? s.threads : s.threads.concat(item)) : s.threads.filter(t => t !== item) }); }
-    }
-    return next;
-  }
-  const queuedOps = () => { try { const v = JSON.parse(localStorage.getItem(OPS_KEY) || '[]'); return Array.isArray(v) ? v.filter(o => o && typeof o.op === 'string' && typeof o.key === 'string') : []; } catch (e) { return []; } };
-  const setQueue = ops => { try { localStorage.setItem(OPS_KEY, JSON.stringify(ops.slice(-200))); } catch (e) {} };
-  const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
-  let patchOff = false, opsRetry = 0, opsTimer = 0;
-  // req() throws on any HTTP error; these answers decide what happens next, so read their status.
-  const ask = (url, init) => req(url, init).catch(e => { if (e?.status) return { ok: false, status: e.status }; throw e; });
-  async function sendOps(ops) {
-    if (!patchOff) {
-      const r = await ask(PREFS_URL, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ops }) });
-      if (r.status === 404) { prefsOff = true; return null; }
-      if (r.ok) return await r.json();
-      if (r.status === 400) return 'invalid';
-      if (r.status !== 405 && r.status !== 501) throw new Error('Preferences unavailable');
-      patchOff = true;
-    }
-    const fields = [...new Set(ops.map(opField))], get = async () => { const g = await ask(PREFS_URL, { cache: 'no-store' }); if (g.status === 404) prefsOff = true; if (!g.ok) throw new Error('Preferences unavailable'); return g.json(); };
-    // Two devices can both read before either writes: read back, and replay onto the newer list if ours didn't stick.
-    // This narrows the loss window to one read-to-write round trip; only the service's PATCH makes it atomic.
-    for (let pass = 0; pass < 6; pass++) {
-      const fresh = await get(), next = applyPrefOps(fresh, ops), patch = {};
-      for (const f of fields) if (!same(next[f], fresh[f])) patch[f] = next[f];
-      if (!Object.keys(patch).length) return fresh;
-      const w = await ask(PREFS_URL, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) });
-      if (w.status === 400) return 'invalid';
-      if (!w.ok) throw new Error('Preferences unavailable');
-      const back = await get(), again = applyPrefOps(back, ops);
-      if (fields.every(f => same(again[f], back[f]))) return back;
-    }
-    throw new Error('Preferences busy');
-  }
-  // direct: send these now without queueing (a new Space appears only once the box has it); else send the queue.
-  const syncOps = (direct = null) => {
-    prefsPending++; prefsRevision++;
-    prefsWrites = prefsWrites.then(async () => {
-      try {
-        const ops = direct || queuedOps();
-        if (!ops.length) return true; // an earlier pass already delivered this edit
-        if (prefsOff) return !direct;
-        const j = await sendOps(ops);
-        if (j === null) return !direct; // no shared preferences on this service: the edit stays on this device
-        // Drop only what this pass delivered; an edit made meanwhile stays queued.
-        if (!direct) { const now = queuedOps(); setQueue(same(now.slice(0, ops.length), ops) ? now.slice(ops.length) : now); }
-        opsRetry = 0;
-        const lists = new Set(ops.concat(queuedOps()).map(opField)); // only the lists: a newer scalar choice may still be on its way
-        if (j === 'invalid') { // the box can never take these: show its lists again
-          window.dispatchEvent(new Event('wos:prefs-error'));
-          try { const g = await req(PREFS_URL, { cache: 'no-store' }); if (g.ok) acceptPrefs(await g.json(), lists); } catch (e) {}
-          return false;
-        }
-        acceptPrefs(j, lists);
-        return true;
-      } catch (e) {
-        if (direct) { window.dispatchEvent(new Event('wos:prefs-error')); return false; }
-        opsRetry = Math.min(opsRetry + 1, 6); // offline or busy: the edit stays queued and shown; try again later
-        if (typeof setTimeout === 'function') { clearTimeout(opsTimer); opsTimer = setTimeout(() => syncOps(), 2000 * 2 ** opsRetry); }
-        return false;
-      } finally { prefsPending--; }
-    });
-    return prefsWrites;
-  };
-  const prefOps = (ops, { requireShared = false } = {}) => {
-    if (requireShared) return syncOps(ops);
-    if (!prefsOff) setQueue(queuedOps().concat(ops));
-    // Shown at once: this device's cached lists with the edit applied.
-    const fields = [...new Set(ops.map(opField))], local = {};
-    for (const f of fields) try { local[f] = JSON.parse(localStorage.getItem(prefsFields[f][0]) || '[]'); } catch (e) { local[f] = []; }
-    const next = applyPrefOps(local, ops);
-    for (const f of fields) try { localStorage.setItem(prefsFields[f][0], prefsFields[f][2](next[f])); } catch (e) {}
-    window.dispatchEvent(new Event('wos:prefs'));
-    return prefsOff ? Promise.resolve(true) : syncOps();
-  };
-  pullPrefs(); setInterval(pullPrefs, 30000);
-  if (queuedOps().length) syncOps();
-  // A phone coming back to the foreground fires visibilitychange/pageshow, rarely focus: pull then too, so pins and
-  // other shared choices made on another device show at once instead of up to 30s later.
-  try {
-    addEventListener('focus', pullPrefs); addEventListener('pageshow', pullPrefs); addEventListener('online', () => { if (queuedOps().length) syncOps(); pullPrefs(); });
-    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') pullPrefs(); });
-  } catch (e) {}
-  const sectionTime = s => Math.max(...[s.restoredAt, s.assignedAt, s.previewAt, s.requestAt, s.activityAt, s.lastUserAt, s.updatedAt].map(v => Date.parse(v ?? '')).filter(isFinite));
-  // Ready has two orders (James, 10 Oct 2026: "Newest … the newest appears at the top … another option, priority"):
-  //   Newest   = approvals pinned, then pure recency, status labels ignored (groupWork's default).
-  //   Priority = approvals, then needs you, then things to test, then everything else (newest first within each).
-  // Status labels never move a thread between days (James, 11 Oct 2026: Ready, Yesterday and Past week stay
-  // filtered by day in Newest and Priority); Priority reorders within each day: Ready, Yesterday and Past week
-  // (James, 23 Oct 2026).
-  // Snoozed (deferred) threads leave the list (James, 23 Oct 2026: "It doesn't remove the thread from my list,
-  // which is the purpose of snoozing it"; supersedes 10 Oct "bottom of today"). They wait in the collapsed Snoozed
-  // section until their return time, Restore or Done. A message James sends after snoozing brings the thread back.
-  const isDeferred = s => window.WizChatsListModel.deferred(s);
-  // Priority ranks every status line, so Done threads (nothing left to do) sink below FYI answers and unlabelled
-  // threads come last: with only needs you / check ranked, most of Ready tied and Priority read like Newest.
-  const readyRank = s => window.WizChatsListModel.sessionRank(s, { approval: needsApproval(s), snoozeLast: snoozeLast() });
-  const byPriority = list => window.WizChatsListModel.orderSessions(list, 'priority', { at: cardAt, rank: readyRank });
-  // Oldest (James, 23 Oct 2026: "oldest messages at the top … the newest one at the bottom"): Newest's pins kept
-  // (approvals first, deferred last), only time reversed in between. The same order applies to Yesterday and Past week.
-  // snoozeOrder('last'): Snooze is a lower place in Ready, ahead of no unsnoozed row (even approvals).
-  const byOldest = list => window.WizChatsListModel.orderSessions(list, 'oldest', { at: cardAt, rank: readyRank });
-  function groupWork(sessions, now = Date.now()) {
-    const g = { errors: [], working: [], ready: [], yesterday: [], pastWeek: [], deferred: [], archive: [] };
-    const readyB = workDayStart(now), yB = readyB - DAY, archDays = archiveAfterDays(), archB = archDays ? now - archDays * DAY : -Infinity;
-    const layout = chatLayout();   // once per pass, not per thread
-    for (const s of sessions) {
-      if (s.hidden) continue;
-      const t = sectionTime(s);
-      if (s.archived) g.archive.push(s);
-      else if (snoozeLast() && isDeferred(s) && !inWorking(s)) g.ready.push(s);
-      else if (inWorking(s)) g.working.push(s);
-      else if (needsApproval(s)) g.ready.push(s);
-      else if (isDeferred(s)) g.deferred.push(s);
-      else if (isErr(s)) g.errors.push(s);
-      else if (isFinite(t) && t <= archB) g.archive.push(s);
-      else if (layout === 'status') g.ready.push(s); // By status: everything not yet archived is Ready
-      else if (!isFinite(t) || t < yB) g.pastWeek.push(s);
-      else if (t < readyB) g.yesterday.push(s);
-      else g.ready.push(s);
-    }
-    for (const list of Object.values(g)) list.sort(newestFirst);
-    // Newest: approvals pinned, then recency; deferred threads always last (Priority re-sorts with readyRank).
-    g.ready = window.WizChatsListModel.orderSessions(g.ready, 'newest', { at: cardAt, rank: readyRank });
-    return g;
-  }
-  async function fetchDispositions() {
-    try { return (await (await req('/wizard/thread-dispositions')).json()).state || {}; } catch (e) { return {}; }
-  }
-  async function fetchSeen() { return (await (await req('/wizard/thread-seen')).json()).state || null; }
-  async function putSeen(state) {
-    const p = await (await req('/wizard/thread-seen', { method: 'PUT', headers: J, body: JSON.stringify(state) })).json();
-    return p.state || state;
-  }
-
+  /* Other agents' list reads (wizard-ux issue 1693): every 15 s poll used to walk every agent's whole list, so a
+   * reload sent ~128 reads. Now each agent follows the main list's rule (a full walk every FULL_EVERY, the head page
+   * in between), one read per agent at a time, none to an agent whose status is error, and an agent whose list
+   * answers 404 waits FULL_EVERY before the next try. id -> { fullAt, holdUntil, holdStatus, read } */
+  const AGENT_POLL = new Map();
+  /* work: moved to live-work.js (wizard-ux issue 1665), called once here */
+  const { AG, AGENT_OF, AGENT_SEEN, AGENT_SEEN_KEY, AGENT_WAIT, aq, ARCH_KEY, archiveAfterDays, byOldest, byPriority, cardAt, chatLayout, DAY, fetchDispositions, fetchSeen, groupSwitch, groupWork, inWorking, isDeferred, isErr, LAYOUT_KEY, needsApproval, otherAgent, prefOps, putPrefs, putSeen, readyRank, rq, sectionTime, snoozeLast, STALE_AFTER, bindLate: workLate } = window.WizCore.liveParts.work({ J, req });
+  seenLate({ otherAgent, putSeen });
   /* ---- thread actions: Done / Close & file / Defer / Restore (controller.ts fileSession, setThreadDeferred, restoreSession) ----
    * Applied to the list at once (optimistic) and kept over refreshes until the write settles; a failed write puts
    * the thread back. Restoring an archived thread remembers when, in the key Wizard uses, so it lands in Ready. */
@@ -884,8 +377,11 @@
       return v && v.schema === 1 && Array.isArray(v.sessions) && isFinite(v.at) ? v : null;
     } catch (e) { return null; }
   }
+  // Private first (wizard-ux issue 1728): the main list is the default private agent's, so it is never kept on disk.
+  const mainPrivate = () => { const A = AG(), d = A?.defaultId?.(); return !!d && !!A.isPrivate?.(A.get?.(d)); };
   function writeSnap(store) {
     if (!store.ok || store.cached) return;
+    if (mainPrivate()) { try { localStorage.removeItem(SNAP_KEY); } catch (_) {} return; }
     try {
       const act = s => Date.parse(s.activityAt || s.updatedAt || '') || 0;
       const rows = store.sessions.filter(s => s && s.id && !s.optimistic && !s.synthetic && !s.hidden && !(s.agent && otherAgent(s.agent)))
@@ -947,418 +443,8 @@
     }
     return out;
   }
-  /* ---- channel store (wizard-ux issue 1261) ----
-   * Chats channels on the Agent Service's own store (wizard-agent-service docs/chats-channels.md, its
-   * WIZARD_CHANNEL_STORE switch, issue 440 phase 2): the channel list with the shared sort, pins and archive, the
-   * atomic thread move, and one channel's own feed (view=list&channel=). Chats reads it only while its
-   * wizard/chat-channels switch is on. A 404 (store off, or an older service) means Spaces: Chats stays on
-   * ui-preferences as in phase 1 and asks again every few minutes. The last list read is kept on this device, so an
-   * offline reload stays on the store. Edits show at once (applied to the kept list), are sent one at a time, and are
-   * followed by a fresh read; a read that started before a later edit is dropped, so a slow answer never undoes a tap.
-   * Membership is keyed by the thread's agent plus its id ('hermes' = main), as the store keys it. */
-  const CHANNELS_URL = '/wizard/v1/channels', CHANNEL_MEMBERSHIP_URL = '/wizard/v1/channels/membership', CHANNELS_CACHE = 'wos.chats.channels.v1';
-  function channelStore({ req, emit, normalize = r => r, onRow = r => r, onError = () => {}, now = () => Date.now(), storage = null, every = 30e3, offEvery = 5 * 60e3, feedMax = 200, moveKeep = 120e3 } = {}) {
-    const ID = /^[a-z0-9-]{1,48}$/, AGENT = /^[a-z0-9][a-z0-9-]{0,47}$/;
-    const agentKey = a => a && AGENT.test(a) ? a : 'hermes';
-    const valid = c => !!c && typeof c.id === 'string' && ID.test(c.id) && typeof c.name === 'string' && typeof c.agent === 'string' && AGENT.test(c.agent);
-    const one = c => ({ id: c.id, agent: c.agent, name: c.name.slice(0, 60), order: Number(c.order) || 0, createdAt: typeof c.createdAt === 'string' ? c.createdAt : '', archived: !!c.archived,
-      ...(c.archived ? { archivedAt: typeof c.archivedAt === 'string' ? c.archivedAt : '' } : {}), pinned: !!c.pinned, ...(c.pinned ? { pinOrder: Number.isFinite(c.pinOrder) ? c.pinOrder : 0 } : {}),
-      ...(c.kind === 'alerts' ? { kind: 'alerts' } : c.kind === 'daily' ? { kind: 'daily', dayStartsAt: typeof c.dayStartsAt === 'string' ? c.dayStartsAt.slice(0, 5) : '05:00' } : {}), count: Number(c.count) || 0 });
-    const clean = d => d && typeof d === 'object' && Array.isArray(d.channels) ? { sort: d.sort === 'za' ? 'za' : 'az', channels: d.channels.filter(valid).map(one) } : null;
-    const store = storage || (() => { try { return globalThis.localStorage || null; } catch (_) { return null; } })();
-    let doc = null; try { doc = clean(JSON.parse(store?.getItem(CHANNELS_CACHE) || 'null')); } catch (_) {}
-    let rev = doc ? 1 : 0, off = false, readAt = 0, reading = null, edits = 0, pending = 0, writes = Promise.resolve();
-    const MOVES = new Map(), FEEDS = new Map();
-    const bump = () => { rev++; try { emit(); } catch (_) {} };
-    const keep = d => { doc = d; try { if (d) store?.setItem(CHANNELS_CACHE, JSON.stringify(d)); else store?.removeItem?.(CHANNELS_CACHE); } catch (_) {} bump(); };
-    function pull() {
-      if (reading) return reading;
-      const at = edits; readAt = now();
-      reading = (async () => {
-        try {
-          const d = clean(await (await req(CHANNELS_URL, { cache: 'no-store' })).json());
-          off = false;
-          if (!d || pending || at !== edits) return; // an edit made since this read began is newer than its answer
-          if (JSON.stringify(d) !== JSON.stringify(doc)) keep(d);
-        } catch (e) {
-          if (e?.status === 404) { const had = !!doc || !off; off = true; MOVES.clear(); FEEDS.clear(); if (had) keep(null); }
-          // Offline or busy: the list this device last read stays.
-        } finally { reading = null; }
-      })();
-      return reading;
-    }
-    // The store as Chats shows it, or null (unknown yet, store off, older service). Reading it keeps it fresh.
-    function state() {
-      if (!reading && now() - readAt >= (off ? offEvery : every)) pull();
-      return off || !doc ? null : { rev, sort: doc.sort, channels: doc.channels };
-    }
-    // Sent in order; after the last one settles the list is read again (also after a refusal, to show the box's own).
-    function send(url, method, body) {
-      pending++; edits++;
-      const p = writes.then(async () => {
-        try { const r = await req(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); let j = null; try { j = await r.json(); } catch (_) {} return { ok: true, body: j }; }
-        catch (e) { return { ok: false, status: e?.status || 0 }; }
-        finally { pending--; }
-      });
-      writes = p.then(() => {}, () => {});
-      // A read already running began before this edit: read again once it is done.
-      p.then(r => { if (!r.ok) onError(r); if (pending) return; const again = () => { readAt = 0; pull(); }; if (reading) reading.then(again); else again(); });
-      return p;
-    }
-    function edit(fn) { if (!doc) return false; const d = { sort: doc.sort, channels: doc.channels.map(c => ({ ...c })) }; fn(d); doc = d; edits++; bump(); return true; }
-    const nowIso = () => new Date(now()).toISOString();
-    // Same rules as the store (channel-store.mjs update/reorder/setSort): one of {sort} | {id, name?, archived?, pinned?}
-    // | {order:[ids]} | {pinOrder:[ids]}. Pinning appends to that agent's pin order.
-    function patch(body) {
-      if (!doc || !body || typeof body !== 'object') return Promise.resolve({ ok: false, status: 0 });
-      edit(d => {
-        if (body.sort === 'az' || body.sort === 'za') { d.sort = body.sort; return; }
-        const ids = Array.isArray(body.order) ? body.order : Array.isArray(body.pinOrder) ? body.pinOrder : null;
-        if (ids) {
-          const pin = Array.isArray(body.pinOrder), mine = d.channels.filter(c => ids.includes(c.id)), agent = mine[0]?.agent;
-          const rest = d.channels.filter(c => c.agent === agent && !ids.includes(c.id) && (!pin || c.pinned)).sort((a, b) => pin ? a.pinOrder - b.pinOrder : a.order - b.order);
-          ids.map(id => mine.find(c => c.id === id)).filter(Boolean).concat(rest).forEach((c, i) => { if (pin) { c.pinned = true; c.pinOrder = i; } else c.order = i; });
-          return;
-        }
-        const c = d.channels.find(x => x.id === body.id); if (!c) return;
-        if (typeof body.name === 'string') c.name = body.name.trim();
-        if (typeof body.archived === 'boolean' && body.archived !== c.archived) { c.archived = body.archived; if (body.archived) c.archivedAt = nowIso(); else delete c.archivedAt; }
-        if (body.pinned === true && !c.pinned) { c.pinned = true; c.pinOrder = d.channels.filter(x => x.agent === c.agent && x.pinned && x !== c).reduce((m, x) => Math.max(m, x.pinOrder), -1) + 1; }
-        if (body.pinned === false && c.pinned) { c.pinned = false; delete c.pinOrder; }
-      });
-      return send(CHANNELS_URL, 'PATCH', body);
-    }
-    // A new channel needs the box's id: it shows once the box answers (null = not made).
-    async function create(name, agent = '') {
-      const r = await send(CHANNELS_URL, 'POST', { name, ...(agentKey(agent) !== 'hermes' ? { agent: agentKey(agent) } : {}) });
-      const c = r.ok && valid(r.body) ? one(r.body) : null;
-      if (c && doc && !doc.channels.some(x => x.id === c.id)) edit(d => { d.channels.push(c); });
-      return c;
-    }
-    // The atomic move (PUT membership): into channelId, out of that agent's other channel; null unfiles. Shown at once
-    // and kept over list reads for a while, so a list read before the move landed never moves the chat back.
-    function move(sessionId, channelId, agent = '') {
-      const k = agentKey(agent) + '|' + sessionId, mark = { to: channelId || '', at: now() };
-      MOVES.set(k, mark); bump();
-      return send(CHANNEL_MEMBERSHIP_URL, 'PUT', { sessionId, channelId: channelId || null, agent: agentKey(agent) }).then(r => {
-        if (!r.ok && MOVES.get(k) === mark) { MOVES.delete(k); bump(); }
-        return r;
-      });
-    }
-    function moves() { const t = now(), out = []; for (const [k, m] of MOVES) { if (t - m.at > moveKeep) MOVES.delete(k); else out.push([k, m.to]); } return out; }
-    /* One channel's threads (view=list&channel=<id>, oldest first) on its agent's route: the newest feedMax of them,
-     * read once per open and every `every` while shown. A 404 means the channel is gone: the list is read again. */
-    function feed(id, agent = '') {
-      if (off || !doc || !ID.test(id)) return null;
-      let f = FEEDS.get(id);
-      if (!f || f.agent !== agentKey(agent)) { f = { id, agent: agentKey(agent), rows: [], at: 0, busy: false, gone: false, ok: false }; FEEDS.set(id, f); while (FEEDS.size > 8) FEEDS.delete(FEEDS.keys().next().value); }
-      if (!f.busy && now() - f.at >= every) readFeed(f);
-      return f;
-    }
-    async function readFeed(f) {
-      f.busy = true; f.at = now();
-      const a = f.agent !== 'hermes' ? `&agent=${encodeURIComponent(f.agent)}` : '';
-      const page = async (offset, snapshot) => (await req(`/wizard/hermes/api/sessions?view=list&channel=${encodeURIComponent(f.id)}&limit=100&offset=${offset}&include_children=false${snapshot ? `&snapshot=${encodeURIComponent(snapshot)}` : ''}${a}`, { cache: 'no-store' })).json();
-      try {
-        for (let tries = 0; ; tries++) {
-          try {
-            const first = await page(0, ''), total = Number(first.channel_total ?? 0), snapshot = typeof first.snapshot === 'string' ? first.snapshot : '';
-            let raw = (first.data || []).slice(), offset = raw.length, more = first.has_more === true;
-            if (more && total > feedMax) { raw = []; offset = total - feedMax; }
-            for (let n = 0; more && n < Math.ceil(feedMax / 100) + 1; n++) {
-              const p = await page(offset, snapshot), rows = p.data || [];
-              raw.push(...rows); offset += rows.length; more = p.has_more === true && rows.length > 0;
-            }
-            f.rows = raw.map(r => { const s = normalize(r); if (!s) return null; if (f.agent !== 'hermes') s.agent = f.agent; if (!s.channel) s.channel = f.id; return onRow(s, f.agent === 'hermes' ? '' : f.agent); }).filter(s => s && s.channel === f.id).slice(-feedMax);
-            f.ok = true; f.gone = false;
-            break;
-          } catch (e) { if (e?.status === 409 && tries < 1) continue; throw e; }
-        }
-      } catch (e) {
-        if (e?.status === 404) { f.gone = true; f.rows = []; readAt = 0; pull(); }
-        // Offline: the rows last read stay.
-      } finally { f.busy = false; bump(); }
-    }
-    const rows = () => [...FEEDS.values()].flatMap(f => f.rows);
-    // A feed row by id ('' = any agent, main first), for a post opened from the feed outside the live list.
-    function find(id, agent) {
-      const list = rows().filter(s => s.id === id);
-      if (agent === undefined) return list.find(s => !s.agent) || list[0] || null;
-      return list.find(s => agentKey(s.agent) === agentKey(agent)) || null;
-    }
-    // A window coming back to the front reads again at once (another device may have pinned or sorted meanwhile).
-    const fresh = () => { readAt = 0; for (const f of FEEDS.values()) f.at = 0; };
-    return { state, pull, patch, create, move, moves, feed, rows, find, fresh, get off() { return off; } };
-  }
-  /* ---- end channel store ---- */
-  /* ---- channel reads (wizard-agent-service issue 471) ----
-   * Each channel's read watermark on the box (GET/PUT /wizard/v1/channels/read, the Agent Service's
-   * WIZARD_CHANNEL_READ_SYNC switch), so reading a channel to the bottom on one device clears it on the owner's others.
-   * Chats asks for it only while its wizard/chat-channels switch is on (issue 1358). marks() is the box's marks (key -> ms) or
-   * null (unknown yet, switch off on the box, older service: the device's own marks stay the only ones; asked again
-   * every few minutes). The box keeps every mark forward only, and so does this copy: a read that answers late never
-   * moves a mark back. */
-  const CHANNEL_READS_URL = '/wizard/v1/channels/read';
-  function channelReads({ req, emit, now = () => Date.now(), every = 30e3, offEvery = 5 * 60e3 } = {}) {
-    const KEY = /^(?:general(?:\|[a-z0-9][a-z0-9-]{0,47})?|[a-z0-9][a-z0-9-]{0,47}\|[a-z0-9-]{1,48})$/;
-    let doc = null, off = false, readAt = 0, reading = null;
-    // Newer of each mark; true when something moved.
-    function merge(at) {
-      if (!at || typeof at !== 'object') return false;
-      let moved = false; doc = doc || {};
-      for (const [k, t] of Object.entries(at)) if (KEY.test(k) && Number.isFinite(t) && !(doc[k] >= t)) { doc[k] = t; moved = true; }
-      return moved;
-    }
-    const tell = moved => { if (moved) { try { emit(); } catch (_) {} } };
-    function pull() {
-      if (reading) return reading;
-      readAt = now();
-      reading = (async () => {
-        try { const j = await (await req(CHANNEL_READS_URL, { cache: 'no-store' })).json(); const was = !doc; off = false; tell(merge(j && j.at) || was); }
-        catch (e) { if (e?.status === 404) { const had = !!doc; off = true; doc = null; tell(had); } }
-        finally { reading = null; }
-      })();
-      return reading;
-    }
-    function marks() {
-      if (!reading && now() - readAt >= (off ? offEvery : every)) pull();
-      return off ? null : doc;
-    }
-    // Sends this device's newer marks (the caller already waits a couple of seconds between writes).
-    async function push(at) {
-      const body = {}; for (const [k, t] of Object.entries(at || {})) if (KEY.test(k) && Number.isFinite(t)) body[k] = Math.floor(t);
-      const keys = Object.keys(body).slice(0, 300); if (!keys.length || off) return false;
-      try {
-        const r = await req(CHANNEL_READS_URL, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ at: Object.fromEntries(keys.map(k => [k, body[k]])) }) });
-        let j = null; try { j = await r.json(); } catch (_) {}
-        tell(merge(j && j.at)); return true;
-      } catch (e) { if (e?.status === 404) { off = true; doc = null; } return false; }
-    }
-    const fresh = () => { readAt = 0; };
-    return { marks, pull, push, fresh, get off() { return off; } };
-  }
-  /* ---- end channel reads ---- */
-  /* ---- channel daily (wizard-ux issue 1469) ----
-   * The Daily channel's days (wizard-agent-service issue 527, docs/chats-channels.md, Daily channel): one real thread
-   * per day in a channel of kind 'daily'. read(id) is GET /wizard/v1/channels/<id>/days (newest first, 14 a page;
-   * `today` = today's thread id or null before the first post after the day boundary); more(id) reads the next older
-   * page; today(id) is POST /wizard/v1/channels/<id>/today, which names today's thread and makes it at the first send of
-   * the day (racing sends get the same one), so the box alone decides where the day starts. state(id) is the days this
-   * device knows (kept on the device, so an offline reload still opens Daily) and reads again every `every`. Chats asks
-   * only while its wizard/chat-channels switch is on. */
-  const CHANNEL_DAILY_CACHE = 'wos.chats.daily.v1';
-  function channelDaily({ req, emit, now = () => Date.now(), storage = null, every = 60e3, keepMax = 60 } = {}) {
-    const ID = /^[a-z0-9-]{1,48}$/, DAYRX = /^\d{4}-\d{2}-\d{2}$/, SID = /^[A-Za-z0-9_.:-]{1,200}$/;
-    const str = (v, n) => typeof v === 'string' ? v.slice(0, n) : '';
-    const day = d => d && typeof d === 'object' && DAYRX.test(d.day) && typeof d.sessionId === 'string' && SID.test(d.sessionId)
-      ? { day: d.day, sessionId: d.sessionId, title: str(d.title, 200), opener: str(d.opener, 200), count: Math.max(0, Number(d.count) || 0), lastAt: str(d.lastAt, 40) } : null;
-    const store = storage || (() => { try { return globalThis.localStorage || null; } catch (_) { return null; } })();
-    const S = new Map();
-    let kept = {}; try { const v = JSON.parse(store?.getItem(CHANNEL_DAILY_CACHE) || 'null'); if (v && typeof v === 'object' && !Array.isArray(v)) kept = v; } catch (_) {}
-    const tell = () => { try { emit(); } catch (_) {} };
-    const save = () => {
-      const out = {}; for (const [id, s] of S) if (s.days.length) out[id] = { today: s.today, days: s.days.slice(0, keepMax), end: s.end && s.days.length <= keepMax };
-      try { store?.setItem(CHANNEL_DAILY_CACHE, JSON.stringify(out)); } catch (_) {}
-    };
-    function entry(id) {
-      let s = S.get(id); if (s) return s;
-      const k = kept[id] && typeof kept[id] === 'object' ? kept[id] : null, days = Array.isArray(k?.days) ? k.days.map(day).filter(Boolean) : [];
-      s = { id, today: typeof k?.today === 'string' && SID.test(k.today) ? k.today : null, days, end: k?.end === true, next: null, at: 0, ok: false, busy: null, more: null, gone: false };
-      s.next = !s.end && days.length ? days[days.length - 1].day : null;
-      S.set(id, s); return s;
-    }
-    // A first page replaces those days (older days already read stay below it, unless the box says there are none);
-    // an older page joins below. next = the cursor of the next older page: the oldest day held, while the box has more.
-    function merge(s, page, older) {
-      const got = (Array.isArray(page.days) ? page.days : []).map(day).filter(Boolean), have = new Set(got.map(d => d.day));
-      const more = typeof page.next === 'string' && DAYRX.test(page.next);
-      const byDay = (a, b) => a.day < b.day ? 1 : a.day > b.day ? -1 : 0;
-      if (older) { s.days = s.days.filter(d => !have.has(d.day)).concat(got).sort(byDay); s.end = !more; }
-      else {
-        const last = got.length ? got[got.length - 1].day : '', below = more && last ? s.days.filter(d => !have.has(d.day) && d.day < last) : [];
-        s.days = got.concat(below).sort(byDay);
-        if (!below.length) s.end = !more;
-        s.today = typeof page.today === 'string' && SID.test(page.today) ? page.today : null;
-      }
-      s.next = !s.end && s.days.length ? s.days[s.days.length - 1].day : null;
-    }
-    function read(id) {
-      if (!ID.test(id)) return Promise.resolve(null);
-      const s = entry(id); if (s.busy) return s.busy;
-      s.at = now();
-      s.busy = (async () => {
-        try { const j = await (await req(`/wizard/v1/channels/${encodeURIComponent(id)}/days`, { cache: 'no-store' })).json(); merge(s, j || {}, false); s.ok = true; s.gone = false; save(); }
-        catch (e) { if (e?.status === 404) { s.gone = true; s.days = []; s.today = null; s.next = null; save(); } }
-        finally { s.busy = null; tell(); }
-        return s;
-      })();
-      return s.busy;
-    }
-    function more(id) {
-      const s = ID.test(id) ? entry(id) : null; if (!s || !s.next) return Promise.resolve(null);
-      if (s.more) return s.more;
-      const cursor = s.next;
-      s.more = (async () => {
-        try { const j = await (await req(`/wizard/v1/channels/${encodeURIComponent(id)}/days?cursor=${encodeURIComponent(cursor)}`, { cache: 'no-store' })).json(); merge(s, j || {}, true); save(); }
-        catch (_) { /* offline: the button stays */ }
-        finally { s.more = null; tell(); }
-        return s;
-      })();
-      tell();
-      return s.more;
-    }
-    // Today's thread, made by the box if this is the day's first send: { day, sessionId, created } (throws when unreachable).
-    async function today(id) {
-      if (!ID.test(id)) throw new Error('bad channel');
-      const r = await req(`/wizard/v1/channels/${encodeURIComponent(id)}/today`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
-      const j = await r.json(), d = day({ day: j?.day, sessionId: j?.sessionId });
-      if (!d) throw new Error('bad answer');
-      const s = entry(id), at = s.days.findIndex(x => x.day === d.day);
-      if (at >= 0) s.days[at] = { ...s.days[at], sessionId: d.sessionId };
-      else s.days = [d].concat(s.days.filter(x => x.day < d.day)).concat(s.days.filter(x => x.day > d.day)).sort((a, b) => a.day < b.day ? 1 : a.day > b.day ? -1 : 0);
-      if (s.days[0]?.day === d.day) s.today = d.sessionId;
-      save(); tell();
-      return { day: d.day, sessionId: d.sessionId, created: j.created === true };
-    }
-    // What this device knows of a channel's days; reading it keeps it fresh.
-    function state(id) {
-      if (!ID.test(id)) return null;
-      const s = entry(id);
-      if (!s.busy && now() - s.at >= every) read(id);
-      return s;
-    }
-    const fresh = () => { for (const s of S.values()) s.at = 0; };
-    return { state, read, more, today, fresh };
-  }
-  /* ---- end channel daily ---- */
-  /* ---- agent inbox (wizard-ux issue 1569) ----
-   * The box's agent inbox (wizard-agent-service issue 549, docs/agent-inbox.md): one record per background task.
-   * state().records are the tasks still working (state running) or gone quiet for 6 h (stale), newest news first, as
-   * GET /wizard/v1/agent-inbox?state=running,stale answers; reading state() keeps it fresh every `every`. A 404 (the box's
-   * switch is off, or an older box) is an empty list, asked again after `every`. Chats reads it only while its
-   * wizard/agent-inbox switch is on (the Running view). */
-  function agentInbox({ req, emit, now = () => Date.now(), every = 30e3 } = {}) {
-    const SID = /^[A-Za-z0-9_.:-]{1,200}$/, RID = /^inbox_[a-f0-9]{24}$/, AID = /^[a-z][a-z0-9-]{0,40}$/;
-    const str = (v, n) => typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, n) : '';
-    const num = v => { const n = Number(v); return Number.isFinite(n) && n > 0 ? n : 0; };
-    const rec = r => r && typeof r === 'object' && RID.test(r.id) && typeof r.thread_id === 'string' && SID.test(r.thread_id) && (r.state === 'running' || r.state === 'stale')
-      ? { id: r.id, agent: typeof r.agent === 'string' && AID.test(r.agent) ? r.agent : 'hermes', thread: r.thread_id, title: str(r.title, 120), update: str(r.last_update, 200), state: r.state, createdAt: num(r.created_at), updatedAt: num(r.updated_at) || num(r.created_at) } : null;
-    const s = { records: [], stay: new Set(), ok: false, gone: false, at: 0, busy: null };
-    const tell = () => { try { emit(); } catch (_) {} };
-    function read() {
-      if (s.busy) return s.busy;
-      s.at = now();
-      s.busy = (async () => {
-        try {
-          const j = await (await req('/wizard/v1/agent-inbox?state=running,stale&limit=200', { cache: 'no-store' })).json();
-          s.records = (Array.isArray(j?.records) ? j.records : []).map(rec).filter(Boolean).sort((a, b) => b.updatedAt - a.updatedAt || (a.id < b.id ? -1 : 1));
-          // The main agent's Daily and Alerts threads (issue 1569 review): Send to inbox is never offered for them.
-          s.stay = new Set((Array.isArray(j?.stay) ? j.stay : []).filter(id => typeof id === 'string' && SID.test(id)).slice(0, 1000));
-          s.ok = true; s.gone = false;
-        } catch (e) { if (e?.status === 404) { s.records = []; s.stay = new Set(); s.ok = true; s.gone = true; } }
-        finally { s.busy = null; tell(); }
-        return s;
-      })();
-      return s.busy;
-    }
-    function state() { if (!s.busy && now() - s.at >= every) read(); return s; }
-    // One agent's records ('hermes' = the main agent): a view opens a record's thread only in that agent's own Chats.
-    const records = agent => state().records.filter(r => r.agent === (agent || 'hermes'));
-    const fresh = () => { s.at = 0; al.at = 0; };
-    // Open / Send to inbox (wizard-ux issue 1570): POST /wizard/v1/agent-inbox/open|send moves one main-agent thread
-    // between the chat list and the background; the box answers with its record. The list is asked again right after.
-    async function move(kind, thread, extra = {}) {
-      if ((kind !== 'open' && kind !== 'send') || !SID.test(String(thread || ''))) throw Object.assign(new Error('invalid'), { status: 400 });
-      const body = { thread_id: thread };
-      const title = str(extra.title, 120), utterance = str(extra.utterance, 600);
-      if (title) body.title = title;
-      if (utterance) body.utterance = utterance;
-      try { return await (await req(`/wizard/v1/agent-inbox/${kind}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })).json(); }
-      finally { fresh(); read(); }
-    }
-    // True for a main-agent Daily or Alerts thread, which always stays in Chats.
-    const stays = id => state().stay.has(id);
-    /* Signal sweep card (wizard-ux issue 1586; box half wizard-agent-service issue 550, docs/agent-inbox.md). card()
-     * keeps only the fields the shell draws, checked: the history row's `agent_sweep` and GET .../sweep's `card` go
-     * through it alike. answer(): one tap on a token (PATCH <id> {action:'answer', option}; `later` snoozes).
-     * yesToAll(): POST <card id>/yes-to-all. sweep(): the newest card with each item's current state. */
-    const CID = /^sweep_[a-f0-9]{24}$/, TOK = /^[a-z][a-z0-9-]{0,19}$/, ISTATE = new Set(['running', 'new', 'surfaced', 'answered', 'parked', 'archived', 'stale']);
-    const href = v => typeof v === 'string' && /^\/(?![\/\\])\S{0,600}$/.test(v) ? v : '';
-    const cnt = v => { const n = Number(v); return Number.isFinite(n) && n > 0 ? Math.min(Math.floor(n), 1e6) : 0; };
-    function card(v) {
-      if (!v || typeof v !== 'object' || !CID.test(v.id)) return null;
-      const w = v.waiting && typeof v.waiting === 'object' ? v.waiting : {}, d = v.done && typeof v.done === 'object' ? v.done : {};
-      const box = (x, link) => ({ count: cnt(x?.count), link: href(x?.link) || link });
-      const items = (Array.isArray(w.items) ? w.items : []).slice(0, 7).map(i => {
-        if (!i || typeof i !== 'object' || !RID.test(i.id)) return null;
-        const options = [...new Set((Array.isArray(i.options) ? i.options : []).map(o => typeof o === 'string' ? o : o?.token).filter(t => typeof t === 'string' && TOK.test(t)))].slice(0, 8);
-        return { id: i.id, agent: typeof i.agent === 'string' && AID.test(i.agent) ? i.agent : 'hermes', thread: typeof i.thread_id === 'string' && SID.test(i.thread_id) ? i.thread_id : '',
-          title: str(i.title, 120), ask: str(i.ask, 300), recommendation: str(i.recommendation, 300), options,
-          def: typeof i.default_option === 'string' && options.includes(i.default_option) ? i.default_option : '', confirm: i.confirm === true,
-          seen: cnt(i.seen) || 1, state: ISTATE.has(i.state) ? i.state : 'surfaced', answer: typeof i.answer === 'string' && TOK.test(i.answer) ? i.answer : '', link: href(i.link) };
-      }).filter(Boolean);
-      const rf = v.rules_flag && typeof v.rules_flag === 'object' ? { day: str(v.rules_flag.day, 10), alerts: cnt(v.rules_flag.alerts), cap: cnt(v.rules_flag.cap), link: href(v.rules_flag.link) } : null;
-      return { id: v.id, at: num(v.at), thread: typeof v.thread_id === 'string' && SID.test(v.thread_id) ? v.thread_id : '',
-        waiting: { items, more: cnt(w.more), link: href(w.link) || '/wizard-os-home/?inbox=waiting' },
-        done: { items: (Array.isArray(d.items) ? d.items : []).slice(0, 10).map(i => i && RID.test(i.id) ? { id: i.id, title: str(i.title, 120), link: href(i.link) } : null).filter(Boolean), more: cnt(d.more), link: href(d.link) || '/wizard-os-home/?inbox=done' },
-        running: { ...box(v.running, '/wizard-os-home/?inbox=running'), stale: cnt(v.running?.stale) }, later: box(v.later, '/wizard-os-home/?inbox=later'), parked: box(v.parked, '/wizard-os-home/?inbox=parked'),
-        missing: cnt(v.missing), rules: rf && rf.alerts ? rf : null,
-        yes: { count: cnt(v.yes_to_all?.count), skipped: cnt(v.yes_to_all?.skipped) } };
-    }
-    const JSON_POST = body => ({ headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-    async function answer(id, option) {
-      if (!RID.test(String(id || '')) || !TOK.test(String(option || ''))) throw Object.assign(new Error('invalid'), { status: 400 });
-      return (await req(`/wizard/v1/agent-inbox/${id}`, { method: 'PATCH', ...JSON_POST({ action: 'answer', option }) })).json();
-    }
-    async function yesToAll(cardId) {
-      if (!CID.test(String(cardId || ''))) throw Object.assign(new Error('invalid'), { status: 400 });
-      const j = await (await req(`/wizard/v1/agent-inbox/${cardId}/yes-to-all`, { method: 'POST', ...JSON_POST({}) })).json();
-      return { answered: Array.isArray(j?.answered) ? j.answered.filter(a => a && RID.test(a.id)).map(a => ({ id: a.id, option: TOK.test(a.option) ? a.option : '' })) : [], card: card(j?.card) };
-    }
-    async function sweep() { return card((await (await req('/wizard/v1/agent-inbox/sweep', { cache: 'no-store' })).json())?.card); }
-    /* Alert rules feedback (wizard-ux issue 1589; box half wizard-agent-service issue 552, docs/agent-inbox.md).
-     * alerts(agent): the alert records still new or surfaced (GET ...?kind=alert&state=new,surfaced), kept fresh like
-     * the Running list; the day's collapsed "More alerts today" alert carries how many it holds (`extra`). later():
-     * the Later and FYI records (kinds fyi and note, new or surfaced) for the sweep card's Later list, read on demand.
-     * feedback(id, action): PATCH <id> {action: not_urgent | should_alert}; the box answers with the record and how many
-     * examples each kind now has. A 404 (the box's switch off, an older box) is an empty list. */
-    const FB = new Set(['not_urgent', 'should_alert']), LATER = new Set(['fyi', 'note']);
-    const alertRec = r => r && typeof r === 'object' && RID.test(r.id) && typeof r.kind === 'string'
-      ? { id: r.id, kind: r.kind, agent: typeof r.agent === 'string' && AID.test(r.agent) ? r.agent : 'hermes', thread: typeof r.thread_id === 'string' && SID.test(r.thread_id) ? r.thread_id : '',
-        title: str(r.title, 120), ask: str(r.ask || r.last_update, 300), severity: str(r.severity, 12), collapsed: r.alert_collapsed === true, extra: cnt(r.alert_extra),
-        feedback: FB.has(r.feedback) ? r.feedback : '', link: href(r.link), state: str(r.state, 12), updatedAt: num(r.updated_at) || num(r.created_at) } : null;
-    const al = { records: [], ok: false, gone: false, at: 0, busy: null };
-    function readAlerts() {
-      if (al.busy) return al.busy;
-      al.at = now();
-      al.busy = (async () => {
-        try {
-          const j = await (await req('/wizard/v1/agent-inbox?kind=alert&state=new,surfaced&limit=50', { cache: 'no-store' })).json();
-          al.records = (Array.isArray(j?.records) ? j.records : []).map(alertRec).filter(r => r && r.kind === 'alert').sort((a, b) => b.updatedAt - a.updatedAt || (a.id < b.id ? -1 : 1));
-          al.ok = true; al.gone = false;
-        } catch (e) { if (e?.status === 404) { al.records = []; al.ok = true; al.gone = true; } }
-        finally { al.busy = null; tell(); }
-        return al;
-      })();
-      return al.busy;
-    }
-    function alertState() { if (!al.busy && now() - al.at >= every) readAlerts(); return al; }
-    const alerts = agent => alertState().records.filter(r => r.agent === (agent || 'hermes'));
-    async function later() {
-      const j = await (await req('/wizard/v1/agent-inbox?state=new,surfaced&limit=200', { cache: 'no-store' })).json();
-      return (Array.isArray(j?.records) ? j.records : []).map(alertRec).filter(r => r && LATER.has(r.kind)).sort((a, b) => b.updatedAt - a.updatedAt || (a.id < b.id ? -1 : 1)).slice(0, 30);
-    }
-    async function feedback(id, action) {
-      if (!RID.test(String(id || '')) || !FB.has(action)) throw Object.assign(new Error('invalid'), { status: 400 });
-      try {
-        const j = await (await req(`/wizard/v1/agent-inbox/${id}`, { method: 'PATCH', ...JSON_POST({ action }) })).json();
-        // The alert left Alerts (it waits for the sweep now, or the collapsed one is cleared): gone on this frame.
-        if (action === 'not_urgent') al.records = al.records.filter(r => r.id !== id);
-        return { record: alertRec(j?.record), examples: { not_urgent: cnt(j?.examples?.not_urgent), should_alert: cnt(j?.examples?.should_alert) } };
-      } finally { al.at = 0; readAlerts(); }
-    }
-    return { state, records, read, fresh, move, stays, card, answer, yesToAll, sweep, alerts, alertState, readAlerts, later, feedback };
-  }
+  /* channels: moved to live-channels.js (wizard-ux issue 1665), called once here */
+  const { agentInbox, channelDaily, channelReads, channelStore } = window.WizCore.liveParts.channels({});
   /* ---- end agent inbox ---- */
   const L = {
     windows: {},
@@ -1500,29 +586,55 @@
     async refreshAgents(deferred = this.deferred, only = '') {
       const A = AG(); if (!A) return;
       if (!A.ready) await A.load().catch(() => {});
-      const known = A.others().map(a => a.id), ids = known.filter(id => !only || id === only);
+      const others = A.others(), known = others.map(a => a.id), now = Date.now();
       for (const k of Object.keys(this.agentSessions)) if (!known.includes(k)) { delete this.agentSessions[k]; delete this.agentStatus[k]; }
-      await Promise.all(ids.map(async id => {
-        try {
-          const got = await fetchSessions(true, id);
-          if (got.meta) this.windows[id] = got.meta;
-          const list = got.sessions.filter(s => !s.agent || s.agent === id).map(s => { s.agent = id; AGENT_OF.set(s.id, id); return s; });
-          for (const s of list) {
-            const d = deferred[seenKeyOf(s)];
-            delete s.deferred; delete s.deferredAt; delete s.restoredAt;
-            if (d) { if (d.deferred) { s.deferred = true; s.deferredAt = d.updatedAt; } else s.restoredAt = d.updatedAt; }
-            applyLocal(s, got.titleRead);
-          }
-          addSynthetic(list, id);
-          window.WosModels?.reconcile(list);
-          this.agentSessions[id] = list; this.agentStatus[id] = { ok: true, error: '', at: Date.now() };
-        } catch (e) {
-          // Same contract as the main list: a failed refresh keeps the threads already shown and marks them
-          // Not up to date (with the real last-read time); only an agent never read yet shows the connection card.
-          const prev = this.agentStatus[id], error = e.status === 403 ? 'access' : 'offline';
-          this.agentSessions[id] = this.agentSessions[id] || [];
-          this.agentStatus[id] = prev?.ok && error !== 'access' ? { ok: true, error, at: prev.at } : { ok: false, error, at: Date.now() };
+      for (const k of [...AGENT_POLL.keys()]) if (!known.includes(k)) AGENT_POLL.delete(k);
+      const due = others.filter(a => {
+        if (only && a.id !== only) return false;
+        const p = AGENT_POLL.get(a.id);
+        if (a.status === 'error') { // its list 404s: show it as not reachable, never poll it
+          const prev = this.agentStatus[a.id]; this.agentSessions[a.id] = this.agentSessions[a.id] || [];
+          this.agentStatus[a.id] = prev?.ok ? { ok: true, error: 'offline', at: prev.at } : { ok: false, error: 'offline', at: prev?.at || now };
+          return false;
         }
+        return only || !p?.holdUntil || now >= p.holdUntil || p.holdStatus !== (a.status || '');
+      });
+      await Promise.all(due.map(a => {
+        const id = a.id, p = AGENT_POLL.get(id) || {}; AGENT_POLL.set(id, p);
+        // One list read per agent at a time: a poll joins the read in flight; a read for this agent alone
+        // (a send just landed) waits for it, then reads again so it sees the new state.
+        if (p.read && !only) return p.read;
+        const before = p.read;
+        const mine = (async () => {
+          if (before) await before.catch(() => {});
+          const full = !p.fullAt || Date.now() - p.fullAt > FULL_EVERY;
+          try {
+            const got = await fetchSessions(full, id);
+            p.holdUntil = 0;
+            if (got.meta) this.windows[id] = got.meta;
+            let list = got.sessions.filter(s => !s.agent || s.agent === id).map(s => { s.agent = id; AGENT_OF.set(s.id, id); return s; });
+            if (got.complete) p.fullAt = Date.now();
+            else { const fresh = new Set(list.map(s => s.id)); list = list.concat((this.agentSessions[id] || []).filter(s => !fresh.has(s.id) && !s.optimistic)); }
+            for (const s of list) {
+              const d = deferred[seenKeyOf(s)];
+              delete s.deferred; delete s.deferredAt; delete s.restoredAt;
+              if (d) { if (d.deferred) { s.deferred = true; s.deferredAt = d.updatedAt; } else s.restoredAt = d.updatedAt; }
+              applyLocal(s, got.titleRead);
+            }
+            addSynthetic(list, id);
+            window.WosModels?.reconcile(list);
+            this.agentSessions[id] = list; this.agentStatus[id] = { ok: true, error: '', at: Date.now() };
+          } catch (e) {
+            // Same contract as the main list: a failed refresh keeps the threads already shown and marks them
+            // Not up to date (with the real last-read time); only an agent never read yet shows the connection card.
+            const prev = this.agentStatus[id], error = e.status === 403 ? 'access' : 'offline';
+            this.agentSessions[id] = this.agentSessions[id] || [];
+            this.agentStatus[id] = prev?.ok && error !== 'access' ? { ok: true, error, at: prev.at } : { ok: false, error, at: Date.now() };
+            // No list there (404): back off instead of re-asking on every poll; the retry tries the list shape again.
+            if (e.status === 404) { p.holdUntil = Date.now() + FULL_EVERY; p.holdStatus = a.status || ''; LIST_SUPPORT.delete(id); }
+          } finally { if (p.read === mine) p.read = null; }
+        })();
+        return (p.read = mine);
       }));
       let migrated = false, state = merge(readLocal(),this.seen) || {initializedAt:Date.now(),threads:{}};
       for (const s of Object.values(this.agentSessions).flat()) {
@@ -1574,7 +686,8 @@
       return { rows, pending, failed };
     },
     // A private agent's thread (by id): its rows carry the lock and its words never enter another agent's context.
-    isPrivate(id) { const a = this.agentOf(id), A = AG(); return !!a && !!A && A.isPrivate(A.get(a)); },
+    // A main-list thread is private when the default agent is (private first, wizard-ux issue 1728: its rows are that agent's).
+    isPrivate(id) { const A = AG(); if (!A || !id || id === '__new__') return false; const a = this.agentOf(id) || A.defaultId?.() || ''; return !!a && !!A.isPrivate?.(A.get?.(a)); },
     statusFor(agent = '') { return otherAgent(agent) ? (this.agentStatus[agent] || { ok: false, error: '' }) : { ok: this.ok, error: this.error, cached: this.cached, cachedAt: this.cachedAt, loading: !!this.loading, at: this.at || 0 }; },
     // The non-default agent a thread is pinned to, or '' for the main agent.
     agentOf(id) { if (!id || id === '__new__') return ''; const a = AGENT_OF.get(id); return a && otherAgent(a) ? a : ''; },
@@ -2013,6 +1126,7 @@
       followStop(this, runId, sid);
     },
   };
+  workLate({ L });
   // Wizard (in its desk, or another tab) writes the same key when a chat is opened.
   addEventListener('storage', e => { if (e.key === SEEN_KEY || e.key === SEEN_BASE) { L.seen = merge(L.seen, readLocal()); L.emit(); } });
   // Open on the last snapshot (see SNAP_KEY). at stays 0, so the connection banner never counts it as a live read.
@@ -2022,196 +1136,8 @@
   document.addEventListener('visibilitychange', () => { if (!document.hidden) L.refresh(); });
   setInterval(() => { if (!document.hidden) L.refresh(); }, 15000);
   // outbox.js loads after this file: follow it once every script has run.
-  /* Open-thread delta subscriptions. Read-only: a failed stream never replays a send.
-   * Hermes uses unnamed SSE data frames with data.event; other runtimes name events. */
-  const RUN_STREAMS = new Map();
-  L.openRunStream = function (sid, agent, runId, paint, target = null) {
-    // Explicit ephemeral target: reuse SSE/progress/Stop, never ordinary catalogs/outbox.
-    const base = target?.base;
-    if (target && !/^\/wizard\/v1\/agents\/[a-z0-9][a-z0-9-]{0,40}\/incognito\/incog_[a-f0-9]{32}$/.test(base || '')) return null;
-    const read = target?.read || req;
-    const registry = window.WosAgents;
-    const rec = registry?.get(agent || registry.defaultId());
-    if ((!target && ((agent && !rec) || rec?.privacy === 'private')) || !window.EventSource || !runId) return null;
-    const key = JSON.stringify([agent, sid, runId, base]);
-    let r = RUN_STREAMS.get(key);
-    if (!r) {
-      r = { text: '', steps: [], live: false, terminal: false, listeners: new Set(), frame: null, stopped: false };
-      RUN_STREAMS.set(key, r);
-      const url = base ? `${base}/v1/runs/${encodeURIComponent(runId)}` : `/wizard/hermes/v1/runs/${encodeURIComponent(runId)}${agent ? '?agent=' + encodeURIComponent(agent) : ''}`;
-      const notify = () => {
-        if (r.frame != null || r.stopped) return;
-        r.frame = requestAnimationFrame(() => { r.frame = null; for (const fn of r.listeners) fn(r); });
-      };
-      const close = () => { r.source?.close(); r.source = null; };
-      const terminal = async status => { if (r.terminal) return; r.terminal = true; r.status = status; close();
-        // One final read releases the ephemeral service busy latch and recovers non-delta output.
-        if (target) { try { r.result = await (await read(url)).json(); r.status = r.result.status || status; } catch (_) { r.status = 'failed'; } }
-        notify();
-      };
-      // Resume across drops (spotty wifi, a phone waking up): Hermes and the Agent Service number every frame (SSE id
-      // and data.seq) and replay the run on each new read, so a reconnect skips every frame this stream already showed.
-      // Unnumbered streams keep the old rule: reconnect only before any answer bytes, never duplicate text.
-      let retries = 0, lastSeq = -1, numbered = false;
-      const BACKOFF = [500, 1000, 2000, 4000, 8000, 15000, 30000], MAX_RETRIES = 20, STALL_MS = 90000;
-      const event = e => {
-        if (r.stopped || r.terminal) return;
-        let d; try { d = JSON.parse(e.data); } catch (_) { return; }
-        if ((d.session_id && d.session_id !== sid) || (d.run_id && d.run_id !== runId)) return;
-        const type = d.event || e.type;
-        r.seenAt = Date.now();
-        // The replay lost frames this stream never showed: the text would have a hole, so drop it and let the
-        // transcript read bring the answer (still reading steps and the end of the run).
-        if (type === 'replay.truncated') {
-          if (lastSeq >= 0 && Number(d.oldest_retained_seq) > lastSeq + 1 && !r.gap) { r.gap = true; r.text = ''; notify(); }
-          return;
-        }
-        const seq = Number.isInteger(d.seq) ? d.seq : /^\d+$/.test(e.lastEventId || '') ? Number(e.lastEventId) : null;
-        if (seq != null) { if (seq <= lastSeq) return; lastSeq = seq; numbered = true; retries = 0; }
-        if (type === 'message.delta' && typeof d.delta === 'string') { if (!r.gap) { r.text += d.delta; notify(); } }
-        // Live steps, like the CLI: the tool that is running and the ones just finished.
-        if (type === 'tool.started' && d.tool) { const id = d.tool_call_id || d.step_id || d.id; r.steps = [...r.steps, { ...(typeof id === 'string' && id ? { id } : {}), tool: String(d.tool), preview: typeof d.preview === 'string' ? d.preview : '', done: false }].slice(-4); notify(); }
-        if (type === 'tool.completed' && d.tool) {
-          const id = d.tool_call_id || d.step_id || d.id;
-          const i = r.steps.findLastIndex(s => !s.done && (typeof id === 'string' && id ? s.id === id : s.tool === String(d.tool)));
-          if (i >= 0) { r.steps = r.steps.map((s, n) => n === i ? { ...s, done: true, error: !!d.error } : s); notify(); }
-          // An open app window named by this tool reads its data again (WizAppServices fresh data, issue 1243).
-          try { window.dispatchEvent(new CustomEvent('wizard:agent-tool', { detail: { tool: String(d.tool) } })); } catch (_) {}
-        }
-        // reasoning.available is deliberately not answer text.
-        if (['run.completed', 'run.failed', 'run.cancelled', 'run.interrupted'].includes(type)) void terminal(type.slice(4));
-      };
-      const canResume = () => !r.stopped && !r.terminal && (numbered || !r.text);
-      const connect = () => {
-        clearTimeout(r.reconnect); r.reconnect = null;
-        if (r.stopped || r.terminal || r.source) return;
-        if (!numbered) r.steps = []; // an unnumbered reconnect replays the run from its first event
-        try {
-          r.seenAt = Date.now(); // a new read gets the full stall window to open, however slow the link
-          r.source = new window.EventSource(base ? `${url}/events` : `/wizard/hermes/v1/runs/${encodeURIComponent(runId)}/events${agent ? '?agent=' + encodeURIComponent(agent) : ''}`);
-          r.source.onmessage = event;
-          for (const name of ['message.delta', 'tool.started', 'tool.completed', 'run.completed', 'run.failed', 'run.cancelled', 'run.interrupted', 'replay.truncated']) r.source.addEventListener(name, event);
-          r.source.onopen = () => { r.live = true; r.seenAt = Date.now(); };
-          r.source.onerror = () => {
-            r.live = false;
-            close();
-            // Another read of the same run, never another admission/send. Offline waits for the network to return.
-            if (!canResume() || retries >= MAX_RETRIES) return;
-            if (window.navigator?.onLine === false) { r.waitingOnline = true; return; }
-            r.reconnect = setTimeout(connect, BACKOFF[Math.min(retries++, BACKOFF.length - 1)]);
-          };
-        } catch (_) { close(); }
-      };
-      // Back online or back in front: read again now instead of waiting out the backoff (a few more tries at most).
-      const resumeNow = () => {
-        if (window.document?.hidden || window.navigator?.onLine === false || r.source || !canResume()) return;
-        r.waitingOnline = false; retries = Math.min(retries, MAX_RETRIES - 3); connect();
-      };
-      window.addEventListener?.('online', resumeNow);
-      window.document?.addEventListener('visibilitychange', resumeNow);
-      connect();
-      const poll = async () => {
-        if (r.stopped || r.terminal) return;
-        try {
-          const d = await (await read(url)).json();
-          if (r.stopped) return;
-          if ((d.run_id || d.id) === runId && d.session_id === sid && ['completed', 'failed', 'cancelled', 'interrupted'].includes(d.status)) void terminal(d.status);
-          // Wizard answers but the stream has been silent past several keepalives: a half-open connection (plane wifi).
-          else if (r.source && r.live && numbered && Date.now() - (r.seenAt || 0) > STALL_MS) { r.live = false; close(); connect(); }
-          // Some systems never fire 'online': a status read that worked is proof enough.
-          else if (!r.source && r.waitingOnline) resumeNow();
-        } catch (_) { /* connectivity recovery is the ordinary read poll, never another send */ }
-        // The status read is only the safety net while the live stream is open.
-        if (!r.stopped && !r.terminal) r.timer = setTimeout(poll, r.live ? 10000 : 1500);
-      };
-      r.dispose = () => {
-        r.stopped = true; close(); clearTimeout(r.timer); clearTimeout(r.reconnect); if (r.frame != null) cancelAnimationFrame(r.frame);
-        window.removeEventListener?.('online', resumeNow); window.document?.removeEventListener('visibilitychange', resumeNow); RUN_STREAMS.delete(key);
-      };
-      r.timer = setTimeout(poll, 500);
-    }
-    r.listeners.add(paint);
-    return { snapshot: r, close() { r.listeners.delete(paint); if (!r.listeners.size) r.dispose(); } };
-  };
-  L.pendingRun = sid => PEND.get(sid)?.runId || (window.WosOutbox?.forThread(sid) || [])
-    .filter(it => it.state === 'sent' && it.runId && Date.now() - (it.sentAt || it.createdAt) < PEND_MAX)
-    .sort((a, b) => b.createdAt - a.createdAt)[0]?.runId || '';
-
-  function attachOutbox() {
-    const OB = window.WosOutbox; if (!OB || L._outbox) return; L._outbox = true;
-    const sync = () => { if (syncPending(OB)) L.emit(); };
-    OB.onChange(sync); OB.load().then(sync).catch(() => {});
-    // Separate-agent sessions are raw gateway rows, not the main agent's run
-    // queue. Follow the accepted receipt, rather than waiting 15 s for that list.
-    const watches = new Map();
-    const follow = it => {
-      if (!otherAgent(it.agent) || !it.runId || it.steered || !['new','reply'].includes(it.kind)) return;
-      const sid = it.sessionId, runId = it.runId;
-      if (watches.get(sid) === runId) return;
-      watches.set(sid, runId); L.pinAgent(sid, it.agent);
-      const tick = async () => {
-        if (watches.get(sid) !== runId) return;
-        try {
-          if (!document.hidden) {
-            const run = await (await req(`/wizard/hermes/v1/runs/${encodeURIComponent(runId)}?agent=${encodeURIComponent(it.agent)}`)).json();
-            if (watches.get(sid) !== runId) return;
-            if ((run.run_id || run.id) === runId && run.session_id === sid && ['completed','failed','cancelled','interrupted','expired'].includes(run.status)) {
-              await L.refreshAgents(L.deferred, it.agent);
-              if (watches.get(sid) !== runId) return;
-              // Older services list raw profile sessions without run keys/status.
-              // The exact terminal receipt still settles this send, never a newer one.
-              const pending = PEND.get(sid);
-              if (!pending || (pending.runId === runId && pending.key === it.id)) {
-                if (pending) { RELEASED.add(pending.key); PEND.delete(sid); }
-                const s = L.session(sid);
-                if (s && (!s.runId || s.runId === runId || s.pend)) {
-                  unPend(s); Object.assign(s, { status: run.status, lastRunStatus: run.status, lastRunKey: it.id, runId: '' });
-                  if (run.updated_at) s.lastAssistantAt = iso(run.updated_at);
-                }
-              }
-              L.emit(); if (watches.get(sid) === runId) watches.delete(sid); return;
-            }
-          }
-        } catch (_) { /* uncertain reads keep following the same receipt, never resend */ }
-        setTimeout(tick, document.hidden ? 3000 : 500);
-      };
-      tick();
-    };
-    // The receipt already carries the run id (PEND → s.runId, so Stop works at once); read Wizard's list soon after
-    // admission too, instead of waiting for the 15 s poll, so the thread's own status follows the real run.
-    const readSoon = it => { if (!it.steered && !otherAgent(it.agent) && ['new', 'reply'].includes(it.kind)) setTimeout(() => { if (!document.hidden) L.refresh(); }, 800); };
-    OB.onSent(it => { follow(it); readSoon(it); });
-    OB.load().then(() => { for (const it of OB._items.values()) if (it.state === 'sent' && Date.now() - it.sentAt < PEND_MAX) follow(it); }).catch(() => {});
-  }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', attachOutbox); else setTimeout(attachOutbox, 0);
-  // A new or changed agent: read its threads now (not at the next poll), then repaint.
-  const attachAgents = () => { const A = AG(); if (!A || L._agents) return; L._agents = true; A.onChange(() => { if (L.ok) L.refreshAgents().then(() => L.emit()); else L.emit(); }); };
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', attachAgents); else setTimeout(attachAgents, 0);
-  L.pending = id => PEND.get(id) || null;
-  /* Stop on a thread with a pending send (Miguel, 28 Oct 2026: the Stop button came only after upload, transcription
-   * and the next list read). Everything sent to the thread and not yet admitted is withdrawn from the outbox (also a
-   * reply queued to steer the live run, so a rejected steer never turns into a new turn); the live run and any run
-   * whose POST had already left (its receipt's id) are stopped. An orb take still being transcribed on the phone (only
-   * the send tap's hold so far) is withdrawn whenever it reaches the outbox: a stop mark outlasts phone transcription.
-   * Resolves { outcome: 'stopped' | 'cancelled' | 'none' | 'busy', runIds, items }. */
-  const STOPPABLE = ['preparing', 'processing', 'queued', 'waiting', 'sending'];
-  const STOP_MARKS = new Map(); // sessionId -> { at, until }: takes begun before this Stop are withdrawn on arrival
-  const STOP_MARK_MS = 5 * 60e3; // the outbox allows 195 s of transcription; phone-side routing comes on top
-  const pendingFor = (OB, sid, before = Infinity) => OB ? [...OB._items.values()].filter(it => it.sessionId === sid && ['new', 'reply'].includes(it.kind) &&
-    !it.compact && !it.cancelled && STOPPABLE.includes(it.state) && (it.createdAt || 0) <= before) : [];
-  async function withdrawSends(OB, list) {
-    const res = await Promise.all(list.map(it => OB.cancel(it.id)));
-    const items = res.filter(r => r?.outcome === 'cancelled').map(r => r.item);
-    for (const it of items) RELEASED.add(it.id);
-    return { items, started: res.filter(r => r?.outcome === 'started' && r.runId).map(r => r.runId) };
-  }
-  function applyStopMarks(OB) {
-    for (const [sid, m] of STOP_MARKS) {
-      if (Date.now() > m.until) { STOP_MARKS.delete(sid); continue; }
-      const late = pendingFor(OB, sid, m.at);
-      if (late.length) withdrawSends(OB, late).then(r => { for (const id of r.started) L.stop(id).catch(() => {}); L.emit(); }).catch(() => {});
-    }
-  }
+  /* streams: moved to live-streams.js (wizard-ux issue 1665), called once here */
+  const { applyStopMarks, pendingFor, STOP_MARK_MS, STOP_MARKS, withdrawSends } = window.WizCore.liveParts.streams({ AG, iso, L, otherAgent, PEND, PEND_MAX, RELEASED, req, syncPending, unPend });
   stopMarks = applyStopMarks;
   L.cancelSend = async (sid, runId = '') => {
     const OB = window.WosOutbox;
@@ -2351,18 +1277,6 @@
   L.chanReads = channelReads({ req, emit: () => L.emit() });
   L.chanDaily = channelDaily({ req, emit: () => L.emit() });
   L.agentInbox = agentInbox({ req, emit: () => L.emit() });
-  /* One Channels switch (wizard-ux issue 1358): the Agent Service reads the same switch from the synced Look file, so
-   * right after it turns on ask the box again a few times (the Look file write and the service's 3 s read take a moment)
-   * instead of waiting out the store's 5-minute off interval. */
-  try {
-    let chanFlip = [];
-    window.addEventListener('wos:tweak-choice', e => {
-      if (e?.detail?.id !== 'wizard/chat-channels') return;
-      chanFlip.forEach(clearTimeout);
-      // Off: Channels stop asking at once (the store and read marks are read only while the switch is on).
-      chanFlip = !e.detail.on ? [] : [1500, 5000, 12000].map(ms => setTimeout(() => { L.chanStore.fresh(); L.chanStore.pull(); L.chanReads.fresh(); L.chanReads.pull(); Promise.resolve(L.refresh()).catch(() => {}); }, ms));
-    });
-  } catch (e) {}
   try { addEventListener('focus', () => { L.chanStore.fresh(); L.chanReads.fresh(); }); document.addEventListener('visibilitychange', () => { if (!document.hidden) { L.chanStore.fresh(); L.chanReads.fresh(); } }); } catch (e) {}
 
   window.WizLive = L;

@@ -3,8 +3,14 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import vm from 'node:vm'
 import { readFileSync } from 'node:fs'
-const source = readFileSync(new URL('../web/core/incognito-chat.js', import.meta.url), 'utf8')
-const chats = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8')
+import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
+import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
+import { withShellParts } from './fixtures/shell-parts.mjs';
+import { between, block, runRecording } from './fixtures/source-slice.mjs';
+import { createDocument } from './fixtures/mini-dom.mjs';
+import { cascade } from './fixtures/mini-css.mjs';
+const source = withShellParts(readFileSync(new URL('../web/core/incognito-chat.js', import.meta.url), 'utf8'))
+const chats = withParts(withShellParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'))) + withShellParts(readFileSync(new URL('../web/core/chats-outbox.js', import.meta.url), 'utf8'))
 function rig(extra = {}) {
   const events = {}, calls = [], field = { value: '', selectionStart: 0, selectionEnd: 0 }, box = { scrollTop: 0, scrollHeight: 20 }
   const el = { innerHTML: '', querySelector(s) { if (s === '[data-incog-thread]') return this.innerHTML.includes('data-incog-thread') ? {} : null; if (s === '[data-incog-field]') return this.innerHTML.includes('data-incog-field') ? field : null; if (s === '.ch-msgs') return box; return null }, replaceChildren() { this.innerHTML = ''; field.value = '' } }
@@ -58,16 +64,23 @@ test('Incognito browser transcript and draft remain exclusively in memory; close
   assert.equal(s.calls.at(-1).method, 'DELETE')
 })
 test('James: Incognito reuses the skinned Settings switch, not a browser checkbox', async () => {
-  assert.match(chats, /class="pbtn ch-incog-toggle" role="switch" aria-checked="false"/)
-  assert.match(chats, /<span class="sw" aria-hidden="true"><i><\/i><\/span>/)
-  assert.ok(!chats.includes('type="checkbox" role="switch" data-incog-start'))
+  // the real new-chat action (chats-threadpaint.js incognitoAction), drawn: Settings' switch markup, off
+  const paint = readFileSync(new URL('../web/core/chats-threadpaint.js', import.meta.url), 'utf8')
+  const line = paint.split('\n').find(l => l.includes('const incognitoAction ='))
+  const action = (isNew, on) => vm.runInNewContext(`${line}\nincognitoAction`, { isNew, INC: {}, TAG: 'hermes', agentRec: id => ({ id }), window: { WizCore: { incognitoOptIn: { enabled: () => on } } } })
+  const doc = createDocument(); doc.body.innerHTML = action(true, true)
+  const toggle = doc.body.querySelector('[data-incog-start]')
+  assert.equal(toggle.tagName, 'BUTTON'); assert.equal(toggle.getAttribute('role'), 'switch'); assert.equal(toggle.getAttribute('aria-checked'), 'false')
+  assert.ok(toggle.classList.contains('pbtn') && toggle.classList.contains('ch-incog-toggle'))
+  assert.ok(toggle.querySelector('span.sw[aria-hidden="true"] > i'), 'the skinned Settings switch')
+  assert.equal(doc.body.querySelector('input'), null, 'no browser checkbox')
+  assert.equal(action(false, true), '', 'only on a new chat'); assert.equal(action(true, false), '', 'only once opted in')
+  const bridge = withShellParts(readFileSync(new URL('../web/core/chats-view.css', import.meta.url), 'utf8'))
+  assert.match(cascade(toggle, bridge)['--wz-text']?.value || '', /^var\(--ink/, 'the toggle gets the skin tokens from the bridge')
   const s = rig(); await s.component.start('one', s.agent)
   assert.match(s.el.innerHTML, /role="switch" aria-checked="true"/)
   assert.match(s.el.innerHTML, /class="sw on" aria-hidden="true"/)
   assert.ok(!s.el.innerHTML.includes('type="checkbox"'))
-  const bridge = readFileSync(new URL('../web/core/chats-view.css', import.meta.url), 'utf8')
-  assert.match(bridge, /\.chats-view, \.ch-incog-toggle, \.ch-incognito \{/)
-  assert.match(bridge, /--wz-text: var\(--ink/)
   s.component.close('one', true)
 })
 test('reload/BFCache lifecycle ends the target and cannot restore a transcript', async () => {
@@ -105,30 +118,68 @@ test('leaving for another view confirms once and destroys only temporary chats',
   s.setConfirm(false); assert.equal(s.component.beforeNavigate([]), false); assert.equal(s.component.active('one'), true)
   s.setConfirm(true); assert.equal(s.component.beforeNavigate([]), true); assert.equal(s.component.active('one'), false)
 })
-test('Incognito blocks microphone admission before snapshots, custody or recorder access', () => {
-  const phone = readFileSync(new URL('../web/app.js', import.meta.url), 'utf8')
-  const desktop = readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8')
-  const mobileAdmission = phone.slice(phone.indexOf('async function startVoice'), phone.indexOf('async function startVoice') + 600)
-  assert.ok(mobileAdmission.indexOf('CHATS.incognitoActive') < mobileAdmission.indexOf('V.onAt'))
-  for (const name of ['talk(', 'dictate(', 'recordReply(']) {
-    const start = desktop.indexOf('async function ' + name)
-    assert.match(desktop.slice(start, start + 400), /CHATS.incognitoActive/)
+test('Incognito blocks microphone admission before snapshots, custody or recorder access', async () => {
+  // each shell's real voice entry, with an Incognito chat in front: refused before anything is touched
+  const phone = withShellParts(readFileSync(new URL('../web/app.js', import.meta.url), 'utf8'))
+  const desktop = withShellParts(readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8'))
+  const run = async (src, marker, args, extra = {}) => {
+    const V = { state: 'idle' }, VOICE = { state: 'idle' }, name = /function (\w+)/.exec(marker)[1]
+    const ctx = runRecording(`${block(src, marker)}\nthis.f = ${name};`, { V, VOICE, window: {}, document: { activeElement: null }, performance: { now: () => 1 }, MOD: '⌥', CHATS: { incognitoActive: () => true }, ...extra })
+    const out = await ctx.f(...args)
+    return { out, V, touched: ctx.calls.map(c => c[0]).filter(n => n !== 'toast' && n !== 'focusedWin' && n !== 'focused') }
   }
-  assert.match(phone, /captureBusy:.*V.state !== 'idle'/)
-  assert.match(desktop, /captureBusy:.*VOICE.state !== 'idle'/)
-  const chats = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8')
-  assert.match(chats, /if \(H.captureBusy\?\.\(\)\)/)
+  const p = await run(phone, 'async function startVoice', ['dictation'])
+  assert.equal(p.out, 'busy'); assert.equal(p.V.onAt, undefined, 'phone: before the take starts'); assert.deepEqual(p.touched, [])
+  for (const [m, args] of [['async function talk(', []], ['async function dictate(', []], ['async function recordReply(', ['w1', 't1']]]) {
+    const d = await run(desktop, m, args, { dictationFinishing: false, vMode: 'talk', vReply: null })
+    assert.equal(d.out, 'busy', m); assert.deepEqual(d.touched, [], `${m}: nothing else touched`)
+  }
+  // the capture-busy hooks each shell hands Chats
+  const busy = (src, key, scope) => vm.runInNewContext(`({ ${src.slice(src.indexOf(key), src.indexOf('\n', src.indexOf(key))).trim().replace(/,$/, '')} }).captureBusy()`, { window: {}, ...scope })
+  assert.equal(busy(phone, 'captureBusy:', { V: { state: 'listen' } }), true); assert.equal(busy(phone, 'captureBusy:', { V: { state: 'idle' } }), false)
+  assert.equal(busy(desktop, 'captureBusy:', { VOICE: { state: 'listen' }, dictationFinishing: false }), true); assert.equal(busy(desktop, 'captureBusy:', { VOICE: { state: 'idle' }, dictationFinishing: false }), false)
+  const chats = withParts(withShellParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'))) + withShellParts(readFileSync(new URL('../web/core/chats-outbox.js', import.meta.url), 'utf8'))
+  // Chats' Incognito start (the real click line): a take in progress keeps the chat ordinary and says why
+  const bind = withShellParts(readFileSync(new URL('../web/core/chats-bind.js', import.meta.url), 'utf8'))
+  for (const recording of [true, false]) {
+    const tapped = runRecording(`this.f = (e, id) => {\n${between(bind, "    if (e.target.closest('[data-incog-start]')) {", '\n')}\n}`,
+      { W: { w1: { id: 'w1', thread: '__new__' } }, H: { captureBusy: () => recording }, window: { WizCore: { incognitoOptIn: { enabled: () => true } } }, INC: { start: (...x) => tapped.calls.push(['INC.start', ...x]) }, AGS: () => ({ get: () => ({ id: 'a' }) }), ch: () => ({}), winAgent: () => 'a' })
+    assert.equal(tapped.f({ target: { closest: q => (q === '[data-incog-start]' ? {} : null) } }, 'w1'), true)
+    const names = tapped.calls.map(x => x[0])
+    assert.equal(names.includes('INC.start'), !recording, recording ? 'busy: Incognito never starts' : 'idle: it starts')
+    assert.equal(names.includes('toast'), recording)
+  }
 })
 
-test('every persistent Chats adapter has an Incognito early return; both shells load the same core', () => {
+test('every persistent Chats adapter has an Incognito early return; both shells load the same core', async () => {
+  // each real adapter, called on an Incognito window: it hands off to Incognito (or stops) and touches nothing durable
   for (const method of ['saveDraft', 'addFiles', 'toggleVoice', 'refreshCompose', 'loadThread', 'takeComposer', 'sendChat', 'peekComposer', 'setDraft']) {
-    const start = chats.indexOf('function ' + method + '('); assert.ok(start >= 0, method)
-    assert.match(chats.slice(start, start + 350), /INC\?\.active/, method)
+    const marker = chats.includes('  async function ' + method + '(') ? '  async function ' + method + '(' : '  function ' + method + '('
+    const ctx = runRecording(`${block(chats, marker)}\nthis.f = ${method};`, { INC: { active: () => true, send: () => 'inc', input() {}, draft: () => '' }, W: { w1: { id: 'w1', thread: '__new__' } }, window: {}, Promise, Object, String, Array })
+    let out; try { out = await ctx.f('w1', 'words', 'typing', null, {}) } catch (e) { out = 'threw: ' + e.message }
+    const durable = ctx.calls.map(c => c[0]).filter(n => /^(KIT|OUTBOX|LIVE|localStorage|sessionStorage|H\.|renderChats|ch$)/.test(n))
+    assert.deepEqual(durable, [], `${method}: ${JSON.stringify(ctx.calls.slice(0, 4))} (${out})`)
   }
-  assert.match(chats, /const incognitoAction = isNew &&/); assert.ok(chats.includes('${chip}${incognitoAction}')); assert.match(chats, /w.thread !== '__new__'/)
-  assert.match(chats, /beforeLeave: \(id, checkOnly = false\) => !INC\?\.active/)
-  for (const file of ['index.html', 'desktop.html']) assert.match(readFileSync(new URL('../web/' + file, import.meta.url), 'utf8'), /core\/incognito-chat.js/)
-  for (const file of ['app.js', 'desktop/desktop.js']) assert.match(readFileSync(new URL('../web/' + file, import.meta.url), 'utf8'), /CHATS.beforeLeave\(id(?:, checkOnly)?\)/)
+  // leaving a window holding an Incognito chat asks first (beforeLeave)
+  const bl = chats.slice(chats.indexOf('beforeLeave: (id, checkOnly = false) =>'), chats.indexOf(', incognitoActive:', chats.indexOf('beforeLeave: (id, checkOnly = false) =>')))
+  const asked = [], leave = vm.runInNewContext(`({ ${bl} })`, { INC: { active: id => id === 'w1', close: (id, force, checkOnly) => (asked.push([id, force, checkOnly]), false) } })
+  assert.equal(leave.beforeLeave('w2'), true, 'no Incognito chat: leave freely')
+  assert.equal(leave.beforeLeave('w1', true), false, 'an Incognito chat asks first'); assert.deepEqual(asked, [['w1', false, true]])
+  for (const file of ['index.html', 'desktop.html']) {
+    const h = withShellParts(readFileSync(new URL('../web/' + file, import.meta.url), 'utf8')), d = createDocument()
+    d.documentElement.innerHTML = h.slice(h.indexOf('<head'), h.lastIndexOf('</html>'))
+    assert.ok(d.querySelectorAll('script[src]').some(x => x.getAttribute('src') === 'core/incognito-chat.js'), file)
+  }
+  // both shells ask Chats before a window goes (the real phone closeWin and desktop canLeave)
+  const shellSrc = f => withShellParts(readFileSync(new URL('../web/' + f, import.meta.url), 'utf8'))
+  const asks = []
+  const ph = runRecording(`${block(shellSrc('app-overview.js'), '  function closeWin(id, quiet, preservePlayback = false) {')}\nthis.f = closeWin;`,
+    { appVars: { W: { w1: { id: 'w1', app: 'chats' } }, desks: [{ wins: ['w1'] }] }, deskOf: () => 0, winTitle: () => 'Chat', CHATS: { beforeLeave: id => (asks.push(['phone', id]), false) }, window: {} })
+  ph.f('w1'); assert.equal(ph.calls.some(x => x[0] === 'closeAppPlayback'), false, 'phone: a refused leave closes nothing')
+  const dk = runRecording(`${block(shellSrc('desktop/desktop-windows.js'), '  function canLeave(id, checkOnly = false) {')}\nthis.f = canLeave;`,
+    { desktopVars: { W: { w1: { id: 'w1', app: 'chats' } } }, CHATS: { beforeLeave: (id, c) => (asks.push(['desktop', id, c]), false) }, window: {} })
+  assert.equal(dk.f('w1', true), false)
+  assert.deepEqual(asks, [['phone', 'w1'], ['desktop', 'w1', true]])
 })
 test('preflight of a desktop close never destroys an earlier accepted chat', async () => {
   const s = rig(); await s.component.start('one', s.agent); await s.component.start('two', s.agent);
@@ -143,10 +194,23 @@ test('preflight of a desktop close never destroys an earlier accepted chat', asy
   assert.equal(s.calls.filter(c=>c.method==='DELETE').length,2);
 });
 test('Settings registration follows dependency and scrub checks before active index mutation', () => {
-  for(const f of ['index.html','desktop.html']) {const s=readFileSync(new URL('../web/'+f,import.meta.url),'utf8');assert.ok(s.indexOf('core/settings.js')<s.indexOf('core/incognito-chat.js'));}
-  const phone=readFileSync(new URL('../web/app.js',import.meta.url),'utf8');
-  assert.match(phone,/if \(n !== DS\.at && !CHATS.beforeNavigate\(desks\[n\]\?\.wins \|\| \[\]\)\) return;\s*if \(n !== DS\.at\)/);
-});
+  // the page loads Settings before Incognito registers with it
+  for (const f of ['index.html', 'desktop.html']) {
+    const h = withShellParts(readFileSync(new URL('../web/' + f, import.meta.url), 'utf8')), d = createDocument()
+    d.documentElement.innerHTML = h.slice(h.indexOf('<head'), h.lastIndexOf('</html>'))
+    const src = d.querySelectorAll('script[src]').map(x => x.getAttribute('src'))
+    assert.ok(src.indexOf('core/settings.js') >= 0 && src.indexOf('core/settings.js') < src.indexOf('core/incognito-chat.js'), f)
+  }
+  // the phone's desk switch asks Chats first and keeps its place when refused
+  const phone = withShellParts(readFileSync(new URL('../web/app.js', import.meta.url), 'utf8'))
+  const i = phone.indexOf('if (n !== DS.at && !CHATS.beforeNavigate(desks[n]?.wins || [])) return;')
+  const line = phone.slice(phone.lastIndexOf('\n', i) + 1, phone.indexOf('\n', i)).trim()
+  for (const ok of [false, true]) {
+    const DS = { at: 0 }, asked = []
+    vm.runInNewContext(`(n => { ${line} DS.moved = n; })(2)`, { DS, desks: [{ wins: [] }, {}, { wins: ['x'] }], CHATS: { beforeNavigate: w => (asked.push([...w]), ok) } })
+    assert.deepEqual(asked, [['x']]); assert.equal(DS.moved, ok ? 2 : undefined, `allowed=${ok}`)
+  }
+})
 test('terminal reply uses the final run output, not a partial stream', async () => {
   const s = rig({ manualStream: true, fetchImpl: async path => path.endsWith('/incognito') ? { ok: true, json: async () => ({ session_id: 'incog_' + 'c'.repeat(32) }) } : { ok: true, json: async () => ({ run_id: 'synthetic-run' }) } })
   await s.component.start('one', s.agent); await s.component.send('one', 'synthetic-final-canary')
@@ -155,13 +219,27 @@ test('terminal reply uses the final run output, not a partial stream', async () 
   s.component.close('one', true)
 })
 test('Incognito stream target accepts every registry agent id, including a leading digit', () => {
-  const live = readFileSync(new URL('../web/live.js', import.meta.url), 'utf8')
-  const re = new RegExp(live.match(/target && !(\/\^\\\/wizard.*?\$\/)\.test/)[1].slice(1, -1))
-  assert.ok(re.test('/wizard/v1/agents/1-private/incognito/incog_' + 'a'.repeat(32)))
-  assert.ok(!re.test('/wizard/v1/agents/-x/incognito/incog_' + 'a'.repeat(32)))
+  // the real openRunStream: a malformed target is refused before any stream opens
+  const live = withLiveParts(withShellParts(readFileSync(new URL('../web/live.js', import.meta.url), 'utf8')))
+  const fn = live.slice(live.indexOf('  L.openRunStream = function'), live.indexOf('\n', live.indexOf('if (target && !/^\\/wizard', live.indexOf('  L.openRunStream = function'))))
+  const open = base => vm.runInNewContext(`const L = {}; ${fn} return 'opened'; }; L.openRunStream('s1', '', 'r1', () => {}, { base: BASE, read: () => null })`, { BASE: base })
+  assert.equal(open('/wizard/v1/agents/1-private/incognito/incog_' + 'a'.repeat(32)), 'opened')
+  assert.equal(open('/wizard/v1/agents/hermes/incognito/incog_' + 'a'.repeat(32)), 'opened')
+  assert.equal(open('/wizard/v1/agents/-x/incognito/incog_' + 'a'.repeat(32)), null)
+  assert.equal(open('/wizard/v1/agents/hermes/incognito/incog_short'), null)
+  assert.equal(open('/wizard/v1/sessions/x'), null)
 })
 test('desktop HUD title-bar close asks before ending an Incognito chat', () => {
-  const desktop = readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8')
-  assert.match(desktop, /act === 'close' && hud\?\.id === id\) return canLeave\(id\) && hudClose\(\)/)
-  assert.equal(desktop.match(/if \(!internal && !canLeave\(id\)\) return;/g).length, 1)
+  const desktop = withShellParts(readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8'))
+  const close = (leave, hudId) => {
+    const c = runRecording(`this.click = ${block(desktop, "  stage.addEventListener('click', e => {", desktop.indexOf('/* ---------------- window interactions')).replace(/^\s*stage\.addEventListener\('click', /, '')};`,
+      { W: { c1: { id: 'c1', app: 'chats' } }, hud: hudId ? { id: hudId } : null, canLeave: () => leave, CHATS: { isHosted: () => false } })
+    c.click({ target: { closest: q => (q === '.win' ? { dataset: { win: 'c1' } } : q === '[data-wact]' ? { dataset: { wact: 'close' } } : null) }, stopPropagation() {} })
+    return c.calls.map(x => x[0]).filter(n => /^(hudClose|desktopHost\.close)$/.test(n))
+  }
+  assert.deepEqual(close(false, 'c1'), [], 'the floating chat asks first and stays')
+  assert.deepEqual(close(true, 'c1'), ['hudClose'])
+  // closeWin asks once (internal closes skip it)
+  const cw = (leave, internal) => { const c = runRecording(`${block(desktop, 'function closeWin(id, internal = false) {')}\nthis.f = closeWin;`, { canLeave: () => leave, hud: { id: 'c1' }, globalThis: {} }); c.f('c1', internal); return c.calls.map(x => x[0]) }
+  assert.deepEqual(cw(false, false), []); assert.deepEqual(cw(false, true), ['hudClose']); assert.deepEqual(cw(true, false), ['hudClose'])
 })

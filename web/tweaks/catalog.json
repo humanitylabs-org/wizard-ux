@@ -17,40 +17,34 @@
     "miguel/now-playing",
     "miguel/calm-offline",
     "miguel/ai-apps",
-    "wizard/thread-tracker",
     "wizard/desktop-chats",
     "wizard/background-continue",
     "wizard/failure-reason",
     "wizard/skins-look-only",
-    "wizard/app-updates-list",
-    "wizard/os-update-waits",
     "wizard/update-bug-reports",
     "wizard/link-token-repair",
-    "wizard/chat-channels",
     "wizard/graceful-restart",
-    "wizard/draft-marks",
     "wizard/app-updates-hourly",
     "wizard/clear-chat-notifications",
     "wizard/sidebar-chats-view",
     "wizard/app-panel-left",
     "wizard/assist-attach",
     "wizard/app-windows",
-    "wizard/pin-fast-open",
-    "wizard/pin-slim-doc",
     "wizard/private-first-setup",
     "wizard/chat-app-switches",
     "wizard/agent-inbox",
-    "wizard/pin-reach-answer",
-    "wizard/phone-app-notifications"
+    "wizard/phone-app-notifications",
+    "wizard/lock-screen-player",
+    "wizard/runtipi-cli-key",
+    "wizard/settings-search",
+    "wizard/github-signin"
   ],
   "defaults": [
     "wizard/unified-inbox",
-    "wizard/desktop-chats",
-    "wizard/draft-marks"
+    "wizard/desktop-chats"
   ],
   "promotedDefaults": [
-    "wizard/desktop-chats",
-    "wizard/draft-marks"
+    "wizard/desktop-chats"
   ],
   "aliases": {
     "miguel/unified-inbox": "wizard/unified-inbox",

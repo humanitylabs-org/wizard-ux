@@ -422,6 +422,8 @@ a.fchip { color: inherit; text-decoration: none; }
 .mviewer { --ink: color-mix(in srgb, white 94%, violet); --ink-2: color-mix(in srgb, var(--ink) 72%, transparent); --ink-3: color-mix(in srgb, var(--ink) 50%, transparent); --line: color-mix(in srgb, var(--ink) 13%, transparent); --line-2: color-mix(in srgb, var(--ink) 24%, transparent); color: var(--ink); color-scheme: dark; }
 .mviewer .mv-top, .mviewer .mv-bar, .mviewer .mv-menu-b { --ink: var(--wz-text, CanvasText); --ink-2: var(--wz-text-secondary, CanvasText); --ink-3: var(--wz-text-muted, CanvasText); --line: var(--wz-border, currentColor); --line-2: var(--wz-border, currentColor); background: var(--wz-panel, var(--bg)); color: var(--ink); }
 .mviewer.open { opacity: 1; }
+/* It appears in one frame, without a fade-in (wizard-messenger issue 348: the fade read as lag). */
+.mviewer { transition: none; }
 .mviewer[hidden] { display: none; }
 .mv-top { flex: 0 0 auto; display: flex; align-items: center; gap: 6px; padding: calc(var(--sb, 0px) + var(--safe-t, 0px) + 8px) 10px 6px 6px; }
 .mv-x { width: 40px; height: 40px; border-radius: 50%; font-size: 28px; line-height: 1; color: var(--ink); background: rgba(205, 190, 255, .1); }
@@ -878,3 +880,221 @@ html[data-shell="phone"] .ch-msgs .bub table { font-size: 15px; }
 html[data-pins="off"] .ch-row-wrap > .ch-row.ch-row { padding-right: 12px; }
 html[data-pins="off"] .ch-row-wrap.diagnosed > .ch-row.ch-row { padding-right: 90px; }
 html[data-pins="off"] .ch-row-wrap .ch-row-signin { right: 10px; }
+
+/* Channels in Chats (wizard-ux issue 1254), on for everyone since wizard-ux issue 1258 (it was the wizard/chat-channels
+   switch's tweak.css; html:root keeps that switch's selector weight). */
+html:root .ch-chan-tabs { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+html:root .ch-chan-tabs .ch-rdy-bar { padding: 2px 10px 6px; }
+html:root .ch-chan-tag { color: var(--ink-3); opacity: .8; }
+/* the one-line phone list (desktop-style) has no preview, so the channel is its own muted second line */
+html:root .ch-row .ch-chan-line { display: none; }
+html:root[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-row .ch-chan-line { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: .75rem; line-height: 1.3; color: var(--ink-3); }
+
+/* Channels: one line per channel, a chevron to peek at its recent posts */
+html:root .ch-chan-list { display: flex; flex-direction: column; padding: 4px 0 96px; }
+html:root .ch-chan-r { display: flex; align-items: center; min-height: 44px; border-radius: 10px; }
+html:root .ch-chan-r:hover { background: color-mix(in srgb, var(--ink) 5%, transparent); }
+html:root .ch-chan-open { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 6px 0 12px; border: 0; background: transparent; color: var(--ink); font: inherit; font-size: .9375rem; text-align: left; }
+html:root .ch-chan-open b { flex: 0 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-weight: 500; }
+html:root .ch-chan-hash { color: var(--ink-3); font-weight: 400; margin-right: 2px; }
+/* + New channel (wizard-ux issue 1308): the list's last row, one line like a channel, in the skin's accent (an action) */
+html:root .ch-chan-add { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 12px; border: 0; border-radius: 10px; background: transparent; color: var(--wz-accent, var(--violet-2)); font: inherit; font-size: .9375rem; text-align: left; cursor: pointer; }
+html:root .ch-chan-add:hover { background: color-mix(in srgb, var(--wz-accent, var(--violet-2)) 10%, transparent); }
+html:root .ch-chan-add:focus-visible { outline: 2px solid var(--wz-accent, var(--violet-2)); outline-offset: -2px; }
+html:root .ch-chan-add .ch-chan-hash { color: inherit; font-weight: 600; }
+html:root .ch-chan-add b { font-weight: 600; }
+html:root .ch-chan-dot { flex: none; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--amber); }
+html:root .ch-chan-open .ch-spin, html:root .ch-chan-post .ch-spin { flex: none; }
+html:root .ch-chan-x { flex: none; width: 44px; height: 44px; display: grid; place-items: center; border: 0; background: transparent; }
+html:root .ch-chan-x i { width: 7px; height: 7px; border-right: 2px solid var(--ink-3); border-bottom: 2px solid var(--ink-3); transform: rotate(45deg); transition: transform .18s; }
+html:root .ch-chan-x[aria-expanded="true"] i { transform: rotate(-135deg); }
+html:root .ch-chan-recent { display: flex; flex-direction: column; padding: 0 0 6px 28px; }
+html:root .ch-chan-post { display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 12px 0 8px; border: 0; border-radius: 8px; background: transparent; color: var(--ink-2); font: inherit; font-size: .875rem; text-align: left; }
+html:root .ch-chan-post span { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+html:root .ch-chan-recent .ch-none { padding: 6px 8px; }
+
+/* a channel's feed: header with Back, then its posts oldest to newest, each with a slim reply line */
+html:root .ch-chan-h { display: flex; align-items: center; gap: 4px; min-height: 44px; padding: 0 8px 4px; }
+html:root .ch-chan-h b { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 1rem; font-weight: 600; color: var(--ink); }
+html:root .ch-chan-back { flex: none; width: 44px; height: 44px; display: grid; place-items: center; border: 0; background: transparent; color: var(--ink-2); }
+html:root .ch-chan-back svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+html:root .ch-chan-feed { display: flex; flex-direction: column; gap: 10px; padding: 0 8px 96px; }
+/* a post (James, 10 Nov 2026): the owner's first message as plain text on the list background, Slack-style — avatar,
+   name and time, the text clamped at 4 lines with "more", its pictures as small thumbnails, then the slim reply line */
+html:root .ch-post { display: flex; align-items: flex-start; gap: 10px; padding: 8px 6px 4px; border-radius: 10px; }
+@media (hover: hover) { html:root .ch-post:hover { background: color-mix(in srgb, var(--ink) 4%, transparent); } }
+html:root .ch-post-me { flex: none; width: 32px; height: 32px; margin-top: 2px; display: grid; place-items: center; border-radius: 9px; background: color-mix(in srgb, var(--violet) 22%, var(--wz-base, var(--bg))); color: var(--ink); font-size: .875rem; font-weight: 600; }
+html:root .ch-post-c { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; }
+html:root .ch-post-b { display: flex; flex-direction: column; gap: 2px; width: 100%; padding: 0; border: 0; background: transparent; color: var(--ink); font: inherit; text-align: left; }
+html:root .ch-post-h { display: flex; align-items: baseline; gap: 8px; }
+html:root .ch-post-h b { font-size: .875rem; font-weight: 600; color: var(--ink); }
+html:root .ch-post-h time { font-size: .75rem; color: var(--ink-3); }
+html:root .ch-post-t { font-size: .9375rem; line-height: 1.4; white-space: pre-wrap; overflow-wrap: anywhere; }
+html:root .ch-post-t.clamp { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; line-clamp: 4; overflow: hidden; }
+html:root .ch-post-tb { width: 100%; margin-top: 2px; color: var(--ink); cursor: pointer; }
+html:root .ch-post-t a { color: var(--violet-2); }
+html:root .ch-post-t code { font-size: .875em; padding: 1px 5px; border-radius: 6px; background: color-mix(in srgb, var(--violet-2) 10%, transparent); }
+html:root .ch-post-wait { display: block; width: 70%; }
+html:root .ch-post-wait .ch-sk { display: block; height: .75rem; margin: 4px 0; }
+html:root .ch-post-voice { color: var(--ink-3); font-style: italic; }
+html:root .ch-post-more { padding: 2px 0; border: 0; background: transparent; color: var(--violet-2); font: inherit; font-size: .8125rem; }
+html:root .ch-post-media { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 6px; }
+html:root .ch-post-img { width: 72px; height: 72px; padding: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--wz-base, var(--bg)); }
+html:root .ch-post-img img { display: block; width: 100%; height: 100%; object-fit: cover; }
+html:root .ch-post-n { font-size: .75rem; color: var(--ink-3); }
+html:root .ch-post-r { display: flex; align-items: center; gap: 8px; min-height: 32px; margin-top: 2px; padding: 0; border: 0; background: transparent; color: var(--ink-3); font: inherit; font-size: .75rem; }
+html:root .ch-post-av { display: inline-flex; }
+html:root .ch-post-av .ag-sig { width: 18px; height: 18px; border-radius: 6px; font-size: .625rem; }
+html:root .ch-post-r span:not(.ch-post-st) { color: var(--ink-2); font-weight: 500; }
+html:root .ch-post-st { display: inline-flex; align-items: center; gap: 5px; }
+html:root .ch-post-st.needs { color: var(--amber); }
+
+/* pinned channels show a small pin; the folded Archive section reuses the Activity sections' own .ch-sec style */
+html:root .ch-chan-pin { flex: none; display: inline-flex; width: 14px; height: 14px; color: var(--ink-3); }
+html:root .ch-chan-pin svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; }
+html:root .ch-chan-arch { margin-top: 8px; }
+
+/* a channel's message box (wizard-ux issue 1258): the thread composer at the foot of the feed, in place of + */
+html:root .ch-list:has(> .ch-chan-compose) .ch-chan-feed { padding-bottom: 8px; }
+html:root :is(#device, body) .ch-list:has(> .ch-chan-compose) > .ch-scroll { padding-bottom: 4px; }
+html:root .ch-post.sending .ch-post-img { display: inline-block; }
+html:root .ch-post.sending .ch-post-r { cursor: default; }
+/* Unread (wizard-ux issue 1259), read from Activity's per-chat state. Issue 1266: a green dot for unread (something new,
+   nothing to do) and the amber one for needs you; violet blended into the shell. --ch-new is the skin's green, held on
+   a green hue where a skin's green is gold (Ember), so the two dots stay apart on every skin. Activity's dot is unchanged. */
+html:root .ch-list { --ch-new: var(--green); }
+@supports (color: oklch(from red l c h)) { html:root .ch-list { --ch-new: oklch(from var(--green) l c 150); } }
+html:root .ch-chan-dot.new { background: var(--ch-new); box-shadow: 0 0 6px color-mix(in srgb, var(--ch-new) 55%, transparent); }
+/* Issue 1269: every marker in one slot at the right, before the chevron (spinner, amber, green); the feed's green dot
+   has words ("New reply") in the amber "Needs you" slot and style. No number pill. */
+html:root .ch-chan-ind { flex: none; margin-left: auto; display: inline-flex; align-items: center; gap: 6px; padding-left: 8px; }
+html:root .ch-chan-post .ch-chan-ind { overflow: visible; }
+html:root .ch-post-st.new { color: var(--ch-new); font-weight: 600; }
+html:root .ch-post-r { flex-wrap: wrap; row-gap: 2px; text-align: left; }
+html:root .ch-post-r > :is(span, time) { white-space: nowrap; }
+html:root .ch-post-r span.ch-post-sts, html:root .ch-post-r.unread span.ch-post-sts { display: inline-flex; align-items: center; gap: 8px; color: var(--ink-3); font-weight: 400; }
+html:root .ch-post-st.needs { font-weight: 600; }
+html:root .ch-chan.unread .ch-chan-open b { color: var(--ink); font-weight: 750; }
+html:root .ch-chan.unread .ch-chan-hash { color: var(--ink-2); }
+html:root .ch-chan-post.unread span { color: var(--ink); font-weight: 750; }
+html:root .ch-post-r.unread span:not(.ch-post-st) { color: var(--ink); font-weight: 600; }
+/* Where a channel opens (wizard-ux issue 1263): a slim "New" line above the first unread post, like a chat's unread line. */
+html:root .ch-chan-new { display: flex; align-items: center; gap: 8px; margin: 4px 0; color: var(--ch-new); font-size: .6875rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+html:root .ch-chan-new::before { content: ""; flex: 1; height: 1px; background: color-mix(in srgb, var(--ch-new) 55%, transparent); }
+/* a post the agent wrote (wizard-agent-service issue 441: Alerts): its sigil as the avatar, and a Reply button under it */
+html:root .ch-post-ag { background: transparent; }
+html:root .ch-post-ag .ag-sig { width: 100%; height: 100%; border-radius: inherit; }
+html:root .ch-post-rr { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: 32px; margin-top: 2px; color: var(--ink-3); font-size: .75rem; }
+html:root .ch-post-rr .ch-post-sts { display: inline-flex; align-items: center; gap: 8px; }
+html:root .ch-post-reply { min-height: 28px; padding: 0 12px; border: 1px solid var(--line); border-radius: 999px; background: transparent; color: var(--ink-2); font: inherit; font-size: .8125rem; font-weight: 500; }
+
+/* Activity as a short what-needs-me list (wizard-ux issue 1336). One marker per row, the same three meanings everywhere:
+   the spinner (working), amber (needs you, until addressed) and green (unread, until opened); the violet unread time and
+   dot go. Issue 1497 (James: "move the dots to the left of the title"): the marker sits just left of the title, after the
+   row's status icon where it has one, in a slot of its own width on every row (empty when there is no marker), so the
+   titles stay in one column. It lines up with the title's line. */
+html:root .ch-row > :is(.emo.sti, .ch-topic-mark) { order: -2; }
+html:root .ch-row > .ch-act-ind { order: -1; flex: none; align-self: flex-start; display: inline-flex; align-items: center; justify-content: center; width: 10px; height: 1.375rem; margin: 0 -3px 0 0; padding: 0; }
+html:root .ch-row.unread .tp time { color: var(--ink-3); font-weight: 400; }
+/* Ready's one sort: a compact "Newest first ⌄" menu on the header line, beside the fold arrow (issue 1354) */
+html:root .ch-sec-hl { position: relative; }
+html:root .ch-act-sort { position: absolute; right: 26px; top: 50%; transform: translateY(-50%); display: inline-flex; align-items: center; }
+html:root .ch-act-sort select { appearance: none; -webkit-appearance: none; field-sizing: content; min-height: 28px; max-width: 150px; padding: 0 22px 0 8px; border: 0; border-radius: 8px; background: transparent; color: var(--ink-3); font: inherit; font-size: .75rem; font-weight: 600; letter-spacing: 0; text-transform: none; cursor: pointer; }
+html:root .ch-act-sort select:hover { background: color-mix(in srgb, var(--ink) 8%, transparent); color: var(--ink-2); }
+html:root .ch-act-sort select:focus-visible { outline: 2px solid var(--wz-accent, var(--violet-2)); outline-offset: 0; }
+html:root .ch-act-sort select option { color: var(--ink); background: var(--bg); }
+html:root .ch-act-sort::after { content: ""; position: absolute; right: 9px; top: 50%; width: 5px; height: 5px; margin-top: -4px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; color: var(--ink-3); transform: rotate(45deg); pointer-events: none; }
+html:root .ch-act-older { display: block; width: 100%; }
+/* Agents in the Channels list: a folded row above Archive, each agent with its sigil */
+html:root .ch-chan-agents { margin-top: 8px; }
+html:root .ch-chan-sig { flex: none; display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; overflow: hidden; }
+html:root .ch-chan-sig .ag-sig, html:root .ch-chan-sig svg { width: 100%; height: 100%; }
+html:root .ch-chan-h .ch-chan-sig { margin-right: 6px; vertical-align: -4px; }
+/* Undo after an archive: opaque, above the bottom bar and the shell's toast, for about five seconds */
+html:root .ch-undo { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 88px); z-index: 2147483000; transform: translateX(-50%); display: flex; align-items: center; gap: 12px; max-width: calc(100vw - 32px); min-height: 44px; padding: 0 6px 0 16px; border: 1px solid var(--line, var(--wz-border)); border-radius: 12px; background: linear-gradient(var(--wz-surface, transparent), var(--wz-surface, transparent)), var(--wz-base, var(--bg)); color: var(--ink, var(--wz-text)); box-shadow: 0 8px 24px color-mix(in srgb, var(--ink, var(--wz-text)) 18%, transparent); font-size: .875rem; }
+html:root .ch-undo span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+html:root .ch-undo button { flex: none; min-height: 36px; padding: 0 12px; border: 0; border-radius: 8px; background: transparent; color: var(--wz-accent, var(--violet-2)); font: inherit; font-weight: 600; cursor: pointer; }
+html:root .ch-undo button:hover { background: color-mix(in srgb, var(--wz-accent, var(--violet-2)) 12%, transparent); }
+html:root .ch-undo button:focus-visible { outline: 2px solid var(--wz-accent, var(--violet-2)); outline-offset: -2px; }
+/* The AI apps sidebar's Activity rows: green replaces the accent (purple) unread dot; amber for needs you */
+html:root[data-layout="ai-apps"] .aad-rw { --ch-new: var(--green, var(--wz-success)); }
+@supports (color: oklch(from red l c h)) { html:root[data-layout="ai-apps"] .aad-rw { --ch-new: oklch(from var(--green, var(--wz-success)) l c 150); } }
+html:root[data-layout="ai-apps"] .aad-rw .aad-st.is-new { width: 8px; height: 8px; background: var(--ch-new); }
+html:root[data-layout="ai-apps"] .aad-rw .aad-st.is-needs { width: 8px; height: 8px; background: var(--amber, var(--wz-warning)); }
+/* (issue 1497) the marker leads the row, just left of the title, in a 12 px slot on every row (empty when it has none) */
+html:root[data-layout="ai-apps"] .aad-rw .aad-row > .aad-st { order: -1; margin: 0 -2px 0 0; }
+html:root[data-layout="ai-apps"] .aad-rw .aad-row > .aad-st:is(.is-new, .is-needs) { margin: 0 0 0 2px; }
+html:root[data-layout="ai-apps"] .aad-rw .aad-row:has(.aad-chan-line) > .aad-st { align-self: flex-start; margin-top: 4px; }
+html:root[data-layout="ai-apps"] .aad-rw .aad-row:has(.aad-chan-line) > .aad-st:is(.is-new, .is-needs) { margin-top: 6px; }
+html:root[data-layout="ai-apps"] .aad-rw .aad-chat:not(:has(> .aad-st))::before { content: ""; order: -1; flex: none; width: 12px; margin-right: -2px; }
+html:root[data-layout="ai-apps"] .aad-more-older { display: block; width: calc(100% - 16px); margin: 4px 8px; min-height: 32px; border: 0; border-radius: 8px; background: transparent; color: var(--wz-accent, currentColor); font: inherit; font-size: .8125rem; text-align: left; padding: 0 8px; cursor: pointer; }
+html:root[data-layout="ai-apps"] .aad-more-older:hover { background: color-mix(in srgb, currentColor 8%, transparent); }
+/* the one-line phone list (wizard/desktop-chats): the marker takes the accent unread dot's slot after the time; the
+   spinner shows only there (the other lists keep the row's own status icon at its left) */
+html:root .ch-row .ch-act-ind .ch-spin { display: none; }
+html:root[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-row > .ch-act-ind { order: -1; align-self: center; height: auto; margin: 0 -2px 0 0; padding: 0; }
+html:root[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-row .ch-act-ind .ch-spin { display: inline-block; width: 10px; height: 10px; box-sizing: border-box; }
+html:root[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-row.unread::after { background: transparent; }
+html:root[data-tweaks~="wizard/desktop-chats"][data-shell="phone"] .ch-row:has(.ch-act-ind)::after { content: none; }
+html:root[data-layout="ai-apps"] .aad-sec-m { margin-left: 6px; font-size: .75rem; opacity: .6; }
+/* Jump to Needs you (wizard-ux issue 1359): the pill at the top centre of a thread (and at the bottom for markers below),
+ * mirroring ↓ Latest. Opaque: the raised surface laid over the base colour. Its top is set from the header's bottom. */
+html:root .ch-jump { --ch-new: var(--green); position: absolute; left: 50%; top: 64px; z-index: 7; transform: translateX(-50%); display: inline-flex; align-items: center; gap: 10px; max-width: calc(100% - 24px); height: 32px; padding: 0 14px; border-radius: 16px; border: 1px solid var(--wz-border); background-color: var(--wz-base); background-image: linear-gradient(var(--wz-surface-raised), var(--wz-surface-raised)); color: var(--wz-text); font-size: 0.8125rem; font-weight: 700; white-space: nowrap; cursor: pointer; box-shadow: 0 6px 18px color-mix(in srgb, var(--wz-base) 70%, transparent); }
+@supports (color: oklch(from red l c h)) { html:root .ch-jump { --ch-new: oklch(from var(--green) l c 150); } }
+html:root .ch-jump[hidden] { display: none; }
+html:root .ch-jump.down { top: auto; bottom: 78px; }
+html:root .ch-jump-k { display: inline-flex; align-items: center; gap: 6px; }
+html:root .ch-jump-arr { font-size: 0.9375rem; line-height: 1; }
+html:root .ch-thread:has(.ch-reply.ch-reply-q) .ch-jump.down { bottom: 142px; }
+html:root.wos-doc-scroll .wos-doc-thread .ch-jump { position: fixed; z-index: 51; }
+html:root.wos-doc-scroll .wos-doc-thread .ch-jump.down { bottom: calc(var(--wos-doc-compose, 84px) + var(--wos-doc-switch, 0px) + max(var(--safe-b, 0px), var(--wos-doc-bottom, 0px)) + 12px); }
+/* Needs you in the thread (wizard-ux issue 1331, part of Channels since issue 1358): the amber line above the message that asks, with Mark done beside
+ * it; Mark done is the strong button only where a Needs you is open, and Archive turns quiet (a rare action now). */
+html:root .ch-needs-line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 12px 0 6px; padding: 4px 0 4px 10px; border-left: 2px solid var(--amber); font-size: 0.8125rem; line-height: 1.35; }
+html:root .ch-needs-line .ch-post-st.needs { flex: none; }
+html:root .ch-needs-ask { flex: 1 1 12em; min-width: 0; color: var(--ink-2); overflow-wrap: anywhere; }
+html:root .ch-needs-done, html:root .ch-tacts button.ch-tact-md { display: inline-flex; align-items: center; gap: 6px; border: 0; border-radius: 99px; background: var(--wz-accent); color: var(--wz-base); font-weight: 700; cursor: pointer; }
+html:root .ch-needs-done { flex: none; min-height: 30px; padding: 0 12px; font-size: 0.8125rem; }
+html:root .ch-needs-done svg, html:root .ch-tacts button.ch-tact-md svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+html:root .ch-tacts button[data-chact="done"] { color: var(--wz-text-secondary); border-color: var(--wz-border); background: transparent; font-weight: 600; }
+/* The Daily channel (wizard-ux issue 1469): earlier days fold above the open day in the thread view. Each day's header is
+ * opaque (the raised surface over the panel colour, dark fallback), so messages scrolling under it never show through. */
+html:root .ch-dday { margin: 6px 0; border: 1px solid var(--wz-border, var(--line)); border-radius: 14px; background: linear-gradient(var(--wz-surface, transparent), var(--wz-surface, transparent)), var(--wz-panel, var(--wz-base, var(--bg))); color: var(--wz-text, var(--ink)); }
+html:root .ch-dday-h { display: grid; grid-template-columns: auto minmax(0, 1fr) auto 14px; align-items: center; gap: 4px 10px; width: 100%; min-height: 44px; padding: 8px 12px; border: 0; border-radius: 14px; background: linear-gradient(var(--wz-surface-raised, transparent), var(--wz-surface-raised, transparent)), var(--wz-panel, var(--wz-base, var(--bg))); color: inherit; font: inherit; font-size: var(--wz-text-sm, 0.8125rem); text-align: left; cursor: pointer; }
+html:root .ch-dday-h b { font-weight: 750; white-space: nowrap; }
+html:root .ch-dday-o { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--wz-text-secondary, var(--ink-2)); }
+html:root .ch-dday-h small { color: var(--wz-text-muted, var(--ink-3)); white-space: nowrap; }
+html:root .ch-dday-h i { width: 8px; height: 8px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(45deg); opacity: .6; justify-self: center; }
+html:root .ch-dday.open .ch-dday-h i { transform: rotate(-135deg); }
+html:root .ch-dday.open .ch-dday-h { position: sticky; top: 0; z-index: 2; border-radius: 14px 14px 0 0; border-bottom: 1px solid var(--wz-border, var(--line)); }
+html:root .ch-dday-b { display: flex; flex-direction: column; gap: 10px; padding: 10px 10px 12px; }
+html:root .ch-dday-none { margin: 4px 2px; color: var(--wz-text-muted, var(--ink-3)); font-size: var(--wz-text-sm, 0.8125rem); }
+html:root :is(.ch-dday-more, .ch-dday-retry) { align-self: center; min-height: 36px; padding: 0 14px; border: 1px solid var(--wz-border, var(--line)); border-radius: 99px; background: var(--wz-panel, var(--wz-base, var(--bg))); color: var(--wz-accent, var(--ink-2)); font: inherit; font-size: var(--wz-text-sm, 0.8125rem); font-weight: 650; cursor: pointer; }
+html:root .ch-dday-more { display: block; margin: 4px auto 8px; }
+html:root .ch-dday-more[disabled] { opacity: .6; cursor: default; }
+html:root .ch-dday-today { margin-top: 14px; }
+/* Channel emoji (wizard-ux issue 1506): the channel's emoji where the # was, and the emoji row under the name field of
+ * New channel and Rename (selected = ringed in the accent). */
+html:root .ch-chan-emo { flex: none; display: inline-grid; place-items: center; width: 1.375em; margin-right: 0; color: var(--wz-text, var(--ink)); font-weight: 400; line-height: 1; }
+html:root .ch-chan-h .ch-chan-emo { margin-right: 6px; }
+html:root .ch-sheet-emo { display: inline-grid; place-items: center; width: 20px; font-size: var(--wz-text-md, 1rem); line-height: 1; }
+html:root .ch-emoji-pick { display: grid; grid-template-columns: repeat(auto-fill, minmax(40px, 1fr)); gap: 4px; margin: 8px 6px 4px; }
+html:root .ch-rename .ch-emoji-pick { margin: 6px 10px 10px; }
+html:root :is(.ch-space-form, .ch-sheet-b) .ch-emoji-pick button { display: grid; place-items: center; width: auto; min-width: 0; min-height: 40px; padding: 0; border: 1px solid transparent; border-radius: var(--wz-radius, 10px); background: color-mix(in srgb, var(--wz-text, var(--ink)) 6%, transparent); color: inherit; font-size: var(--wz-text-lg, 1.25rem); font-weight: 400; line-height: 1; cursor: pointer; }
+html:root :is(.ch-space-form, .ch-sheet-b) .ch-emoji-pick button[aria-pressed="true"] { border-color: var(--wz-accent, var(--violet-2)); background: color-mix(in srgb, var(--wz-accent, var(--violet-2)) 18%, transparent); }
+html:root :is(.ch-space-form, .ch-sheet-b) .ch-emoji-pick button:focus-visible { outline: 2px solid var(--wz-accent, var(--violet-2)); outline-offset: 1px; }
+
+/* Draft marks (wizard-ux issue 1445), on for everyone since wizard-ux issue 1604 (it was the wizard/draft-marks switch's
+   tweak.css; html:root keeps that switch's selector weight): the pencil of a saved, unsent draft on Activity rows and Channels lines. */
+html:root .ch-draft-tag { color: var(--wz-warning, var(--amber)); font-weight: 500; white-space: nowrap; }
+html:root .ch-chan-draft { flex: none; margin-left: auto; padding-left: 8px; color: var(--wz-warning, var(--amber)); font-size: .875rem; font-weight: 500; line-height: 1; white-space: nowrap; }
+/* A channel feed's thread card (issue 1709): "✎ Draft" on its reply line, over the line's own word colours. */
+html:root :is(.ch-post-r, .ch-post-rr) span.ch-post-draft.ch-draft-tag:not(.ch-post-st), html:root :is(.ch-post-r, .ch-post-rr) span.ch-post-draft.ch-draft-tag:not(.ch-post-st) span { color: var(--wz-warning, var(--amber)); font-weight: 500; }
+html:root .ch-chan-draft + .ch-chan-ind { margin-left: 0; }
+/* AI apps sidebar: "✎ Draft" leads the row's second line (the channel), or is the line when the row has no channel. */
+html:root[data-layout="ai-apps"] .aad-rw[data-draft] .aad-chan-line::before { content: "✎ Draft · "; color: var(--wz-warning, var(--amber)); font-weight: 500; }
+html:root[data-layout="ai-apps"] .aad-rw[data-draft] .aad-draft-line::before { content: "✎ Draft"; }
+/* Activity with nothing in it (wizard-ux issue 1731): one deliberate empty state on an opaque panel, in every skin. */
+html:root .ch-act-empty { display: flex; flex-direction: column; align-items: center; gap: 6px; margin: 24px 16px; padding: 22px 18px; border: 1px solid var(--wz-border, var(--line)); border-radius: 16px; background-color: var(--wz-base, var(--bg)); background-image: linear-gradient(var(--wz-surface, transparent), var(--wz-surface, transparent)); color: var(--wz-text-secondary, var(--ink-2)); text-align: center; font-size: 0.875rem; line-height: 1.5; }
+html:root .ch-act-empty b { color: var(--wz-text, var(--ink)); font-size: 1rem; }
+html:root .ch-act-empty .ch-fclear { margin-top: 8px; background-color: var(--wz-base, var(--bg)); background-image: linear-gradient(var(--wz-surface-raised, transparent), var(--wz-surface-raised, transparent)); color: var(--wz-text, var(--ink)); }

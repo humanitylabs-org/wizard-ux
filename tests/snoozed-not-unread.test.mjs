@@ -3,12 +3,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
+import { withWebParts } from './fixtures/web-parts.mjs';
 
 // wizard-os issue 510 (Miguel, 10 Nov 2026): "nothing is in my Ready, yet I see a notification for three". With Snooze =
 // bottom of Ready (miguel/snooze-someday) three unread snoozed chats lit the Ready badge while the AI apps view listed
 // them under Snoozed and Ready was empty. Snoozed chats are never unread for any Ready / Chats count.
-const src = f => fs.readFileSync(new URL('../' + f, import.meta.url), 'utf8');
-const live = src('web/live.js'), nav = src('web/core/workspace-navigation.js');
+const src = f => withWebParts(fs.readFileSync(new URL('../' + f, import.meta.url), 'utf8'));
+const live = withLiveParts(src('web/live.js')), nav = src('web/core/workspace-navigation.js');
 
 function harness(snoozeLast) {
   const storage = new Map();
@@ -65,15 +67,39 @@ for (const last of [false, true]) for (const agent of ['host-profile', 'containe
   });
 }
 
-test('Chats list Ready header (snooze last) does not count the snoozed tail as unread', () => {
+// The Ready section header count line of the Chats list, run with the real list model.
+function readyHeader(list, snoozeLastOn) {
   const chats = src('web/core/chats.js');
   const line = chats.split('\n').find(l => l.includes('const secN = unreadSec ?'));
-  assert.match(line, /LIVE\.isNew\(s\) && !\(snoozeLast\(\) && deferredOf\(s\) && !isWorking\(s\)\)/);
+  assert.ok(line, 'secN line');
+  const h = harness(snoozeLastOn);
+  const ctx = { window: { WizChatsListModel: h.c.WizChatsListModel }, unreadSec: true, list, nt: null, extra: { n: 0 }, notesN: 0,
+    LIVE: { isNew: s => !!s.unread }, snoozeLast: () => snoozeLastOn, deferredOf: s => !!s.deferred, isWorking: s => s.status === 'running' };
+  return vm.runInNewContext(`${line}\nsecN`, ctx);
+}
+test('Chats list Ready header (snooze last) does not count the snoozed tail as unread', () => {
+  const list = [{ id: 'a', unread: true }, { id: 'z1', unread: true, deferred: true }, { id: 'z2', unread: true, deferred: true }, { id: 'w', unread: true, deferred: true, status: 'running' }];
+  assert.equal(readyHeader(list, true), 2, 'the awake chat and the snoozed one that is working again; never the snoozed tail');
+  assert.equal(readyHeader(list, false), 4, 'stock Snooze: rows in Ready are not snoozed there, so each unread counts');
+  assert.equal(readyHeader([{ id: 'z', unread: true, deferred: true }], true), 0);
 });
 
-test('AI apps desktop rail: no Ready row (and no number) when Ready lists nothing', () => {
+// paintRail from the AI apps desktop layout, with a fake rail list and plain row stubs.
+function rail({ ready = [], snoozed = [], working = [], unread = 0 }) {
   const d = src('web/layouts/ai-apps/desktop.js');
-  const paint = d.slice(d.indexOf('  function paintRail('), d.indexOf('  /* the hover flyout'));
-  assert.match(paint, /else if \(ready\.length\) out\.push\(railRow\('ready', unread, 'Ready'/);
-  assert.doesNotMatch(paint, /ready\.length \|\| unread/);
+  const i = d.indexOf('  function paintRail('), j = d.indexOf('  /* the hover flyout', i);
+  assert.ok(i >= 0 && j > i, 'paintRail');
+  const rows = [];
+  const ctx = { root: { dataset: { aadSide: 'rail' } }, sessions: { ready, snoozed, working }, readSessions: () => ({}), groupBy: () => 'none', projectGroups: () => [], stateGroups: () => [],
+    readyOrder: () => [], railNow: () => '', badgeMap: { chats: unread }, CHATS: 'chats', badgeText: () => (unread ? String(unread) : ''), railDrawn: '', fly: null, globalThis: { WizChatsListModel: { unreadCount: () => 0 } },
+    railRow: (kind, n, word) => `${kind}:${n}:${word}`, rList: { childElementCount: 0, replaceChildren: (...r) => { rows.push(...r); } } };
+  vm.runInNewContext(d.slice(i, j) + '\npaintRail(true);', ctx);
+  return rows;
+}
+test('AI apps desktop rail: no Ready row (and no number) when Ready lists nothing', () => {
+  // Three snoozed chats, nothing in Ready, a stale unread count of 3: the rail shows Snoozed only.
+  assert.deepEqual(rail({ snoozed: [{}, {}, {}], unread: 3 }), ['snoozed:3:Snoozed']);
+  assert.deepEqual(rail({ working: [{}], unread: 2 }), ['working:1:Working']);
+  // Something ready: its Ready row carries the unread count.
+  assert.deepEqual(rail({ ready: [{ id: 'a' }], snoozed: [{}], unread: 1 }), ['snoozed:1:Snoozed', 'ready:1:Ready']);
 });

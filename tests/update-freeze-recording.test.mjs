@@ -103,9 +103,22 @@ test('app capture (native recorder): a freeze that lands while ' + label + ' nev
   assert.equal(nativeStarts, 0); assert.deepEqual(removed, ['synthetic']); assert.equal(released, 1);
 });
 
-test('the orb refuses first, and the desktop toast says recording is paused (not "Microphone unavailable")', () => {
-  assert.match(app, /async function startVoice\(kind, opt = \{\}\) \{\n(?:\s*\/\/[^\n]*\n)*\s*if \(window\.__wizardUpdateFrozen\) \{ toast\([^)]*'Wizard is preparing an update; recording is paused'/);
-  const toasts = desktop.match(/await VOICE\.start\(\); \} catch \(e\) \{[^\n]*/g) || [];
-  assert.ok(toasts.length >= 3);
-  for (const line of toasts) assert.match(line, /e\.code === 'update_busy' \? e\.message :/);
+test('the orb refuses first, and the desktop toast says recording is paused (not "Microphone unavailable")', async () => {
+  // the phone orb (real startVoice): frozen, it refuses before touching anything else
+  const at = app.indexOf('  async function startVoice(kind, opt = {}) {');
+  const body = app.slice(at, app.indexOf('\n', app.indexOf('if (window.__wizardUpdateFrozen)', at)) + 1) + '  }';
+  // (the slice runs from the top of startVoice: anything before the freeze check would run here and fail on its names)
+  const calls = [];
+  const start = vm.runInNewContext(`(() => { ${body}\n return startVoice; })()`, { window: { __wizardUpdateFrozen: true }, toast: (...a) => calls.push(a) });
+  assert.equal(await start('tap'), 'busy');
+  assert.deepEqual(calls, [['…', MSG, 2200]]);
+  // every desktop take start (real desktop.js lines): an update_busy refusal says so, anything else is the microphone
+  const lines = desktop.split('\n').filter(l => l.includes('try { await VOICE.start(); } catch (e) {'));
+  for (const line of lines) {
+    const said = [];
+    const run = err => vm.runInNewContext(`(async () => { ${line.trim()}\n return 'started'; })()`, { VOICE: { start: async () => { throw err; } }, toast: (...a) => said.push(a[1]), vReply: null, vMode: '' });
+    assert.equal(await run(Object.assign(new Error(MSG), { code: 'update_busy' })), 'none');
+    await run(new Error('NotAllowedError'));
+    assert.deepEqual(said, [MSG, 'Microphone unavailable: NotAllowedError'], line.trim().slice(0, 60));
+  }
 });

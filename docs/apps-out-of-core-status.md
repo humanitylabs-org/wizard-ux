@@ -43,7 +43,7 @@ Reuse:
 - Isolated service with a read-only copy of owner preferences: seed once; repeat is a
   no-op with identical whole-file bytes and mtime; all existing fields' JSON encodings
   identical; all seven old fields round-trip. No live write or deployment.
-- `qa-launcher-from-registry.cjs` records phone/desktop at two skins, fresh defaults and
+- `qa/scripts/qa-launcher-from-registry.cjs` records phone/desktop at two skins, fresh defaults and
   exported owner workspaces, all app/grid/native/recents/quick/window/sigil/name lists,
   screenshots and page errors. It compares whole lists with an origin/main baseline.
   Registry/preferences are real HTTP; exported workspaces/agent catalogue are replayed

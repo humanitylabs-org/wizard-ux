@@ -1,6 +1,6 @@
 # Delivered-but-unanswered helper recovery regression
 
-`qa-helper-delivered-recovery.cjs` runs the unchanged UX against the actual Agent Service HTTP list and Continue handlers. It uses a small, explicit SQLite fixture and a mock Hermes transport; this is **not live agent execution or deployment evidence**.
+`qa/scripts/qa-helper-delivered-recovery.cjs` runs the unchanged UX against the actual Agent Service HTTP list and Continue handlers. It uses a small, explicit SQLite fixture and a mock Hermes transport; this is **not live agent execution or deployment evidence**.
 
 The fixture reproduces a completed, `delivered` delegation, a genuine owner steer before completion, its completion message, a later assistant FYI, and no active lease/run. The upstream list deliberately says `completed` so the service must correct it rather than the test manufacturing a Working row.
 
@@ -13,7 +13,7 @@ export TMPDIR=$WIZARD_WORK_ROOT/wizard-qa/helper-status-release-20261012/tmp
 export WAS_ROOT=$WIZARD_WORK_ROOT/wizard-qa/helper-status-release-20261012/delivered-recovery
 export QA_WEB_DIR=$WIZARD_WORK_ROOT/wizard-qa/helper-status-release-20261012/delivered-ux/web
 export QA_OUT=$WIZARD_WORK_ROOT/wizard-qa/helper-status-release-20261012/evidence/delivered-native-green
-node qa-helper-delivered-recovery.cjs
+node qa/scripts/qa-helper-delivered-recovery.cjs
 ```
 
 Both phone and desktop must:
