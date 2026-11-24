@@ -6,7 +6,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
-const source = fs.readFileSync(new URL('../web/core/settings.js', import.meta.url), 'utf8');
+import { withSettingsParts } from './fixtures/settings-parts.mjs';
+const source = withSettingsParts(fs.readFileSync(new URL('../web/core/settings.js', import.meta.url), 'utf8'));
 
 function harness({ lookOnly, channel = 'latest', own = false, shell = 'desktop' }) {
   const picked = [], toggled = [], updated = [];
