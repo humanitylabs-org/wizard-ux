@@ -463,6 +463,10 @@
     "wizard/interface-manual": {
       "help": "Your agent gets this manual: every screen, Settings page and feature switch, so it can say where things are.",
       "where": "Settings › Appearance › Try new features › Agent knows the Wizard interface"
+    },
+    "wizard/follow-main": {
+      "help": "On a hand-deployed box, every merge to main whose checks pass goes live by itself, and Wizard tells you when the box falls behind.",
+      "where": "Settings › Appearance › Try new features › Merged fixes go live by themselves"
     }
   },
   "screenOrder": [
