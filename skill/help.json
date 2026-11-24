@@ -352,6 +352,9 @@
     "wizard/background-continue": {
       "where": "Settings › Appearance › Try new features › Continue saved background results"
     },
+    "wizard/needs-you-reason": {
+      "where": "Settings › Appearance › Try new features › Say why a chat needs you"
+    },
     "wizard/failure-reason": {
       "where": "Settings › Appearance › Try new features › Why a reply failed"
     },
