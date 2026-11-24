@@ -1,0 +1,2 @@
+/* Open apps without Tailscale (wizard-app-manager issue 629): a box-side switch read by the Agent Service
+ * (server/local-app-routes.mjs). Nothing in the shell changes; the launcher gets the app's local path from the service. */
