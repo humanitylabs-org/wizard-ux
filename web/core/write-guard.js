@@ -21,6 +21,8 @@
   const PAUSE_MS = 30000, PAUSE_MAX = 15 * 60000, CALM_MS = 15 * 60000, RETRY_MAX = 60 * 60000, LANES_MAX = 500;
   const KEY = 'wos.write-guard.v1', KEPT_MAX = 20;
   const WRITES = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+  // Picking many files starts one upload each at once: never a loop, so uploads skip the breaker (Retry-After still holds).
+  const UPLOADS = /^\/wizard\/(?:v1\/uploads(?:\/|$)|files\/upload$)/;
   const base = window.fetch;
   const now = () => Date.now();
   const on = () => { try { return String(document.documentElement.dataset.tweaks || '').split(/\s+/).includes(ID); } catch (_) { return false; } };
@@ -56,7 +58,7 @@
       const text = isRequest && body === undefined ? null : body == null ? '' : typeof body === 'string' ? body
         : typeof URLSearchParams === 'function' && body instanceof URLSearchParams ? body.toString() : null;
       const sig = text == null ? null : text + '\u0000' + headerOf(init, input, 'idempotency-key');
-      return { method, endpoint: method + ' ' + u.pathname, target: method + ' ' + u.pathname + u.search, sig };
+      return { method, endpoint: method + ' ' + u.pathname, target: method + ' ' + u.pathname + u.search, sig, upload: UPLOADS.test(u.pathname) };
     } catch (_) { return null; }
   }
 
@@ -73,8 +75,10 @@
     const at = Date.parse(v); return Number.isFinite(at) ? Math.min(RETRY_MAX, Math.max(0, at - now())) : 0;
   }
 
-  // Ids in a path (session ids, run ids) never leave the device in a report.
-  const redact = p => p.split('/').map(s => s.length > 24 || /\d/.test(s) && s.length > 6 ? ':id' : s).join('/');
+  // Ids in a path (session, run, agent, record ids) never leave the device in a report: a segment stays only when it
+  // is a plain lowercase route word (or v1) and does not follow a collection that takes ids.
+  const ID_PARENTS = new Set(['sessions', 'runs', 'agents', 'channels', 'items', 'uploads', 'apps', 'files', 'records', 'threads', 'devices', 'notes', 'jobs']);
+  const redact = p => p.split('/').map((s, i, all) => !s || /^v\d{1,2}$/.test(s) || (/^[a-z]+(?:[-.][a-z]+)*$/.test(s) && s.length <= 24 && !ID_PARENTS.has(all[i - 1])) ? s : ':id').join('/');
   const shell = () => { try { return String(document.documentElement.dataset.shell || ''); } catch (_) { return ''; } };
   // The web build: ux-version.txt's tree id on a box; without that file web-update falls back to a long list of file
   // sizes, which becomes a short fingerprint here (Feedback keeps 60 characters).
@@ -131,12 +135,13 @@
       const age = t - last.at;
       if (last.pending || age < SAME_MS || (last.resent && age < HOLD_MS)) {
         e.counts.dropped++;
-        return (last.pending || Promise.resolve(last.kept)).then(k => k ? k.clone() : base.call(self, input, init));
+        // The earlier one failed after all: try again through the guard, so waiters queue behind one retry and count.
+        return (last.pending || Promise.resolve(last.kept)).then(k => k ? k.clone() : guarded(self, input, init, d));
       }
       resend = !last.resent;
     }
     e.sent = e.sent.filter(x => t - x < WINDOW_MS);
-    if (e.sent.length >= PER_MINUTE) return paused(e, trip(e, d.endpoint, e.sent.length + 1));
+    if (e.sent.length >= PER_MINUTE && !d.upload) return paused(e, trip(e, d.endpoint, e.sent.length + 1));
     e.sent.push(t); e.counts.sent++;
     const entry = d.sig == null ? null : { sig: d.sig, at: t, resent: resend, ok: null, kept: null, pending: null };
     if (entry) { targets.delete(d.target); cap(targets, d.target, () => entry); }

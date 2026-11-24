@@ -168,3 +168,50 @@ test('the switch is read on every write: turning it off mid-run lets everything 
   await f.put('/wizard/thread-seen', '{"a":1}');
   assert.equal(f.calls.length, 2);
 });
+
+test('identical writes waiting on one that fails retry one at a time through the guard', async () => {
+  let n = 0, release; const gate = new Promise(r => { release = r; });
+  const f = load({ answer: () => { n++; return n === 1 ? gate.then(() => new Response('{}', { status: 503 })) : new Response('{"ok":true}', { status: 200 }); } });
+  const waiting = Array.from({ length: 6 }, () => f.put('/wizard/thread-seen', '{"s":1}'));
+  release();
+  const statuses = await Promise.all(waiting.map(p => p.then(r => r.status)));
+  assert.equal(statuses[0], 503, 'the first caller sees its own failure');
+  assert.deepEqual(statuses.slice(1), [200, 200, 200, 200, 200], 'the others share one retry');
+  assert.equal(f.calls.length, 2, 'one failed send and one retry, not five at once');
+  assert.equal(f.guard.stats()['PUT /wizard/thread-seen'].sent, 2, 'the retry is counted');
+});
+
+test('picking many files is not a loop: uploads skip the breaker', async () => {
+  const f = load();
+  for (let i = 0; i < 30; i++) await f.window.fetch('/wizard/v1/uploads', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: `p${i}.jpg`, size: i }) });
+  for (let i = 0; i < 30; i++) await f.window.fetch('/wizard/files/upload', { method: 'POST', body: new Blob([String(i)]) });
+  assert.equal(f.calls.length, 60);
+  assert.equal(f.events.length, 0, 'no breaker trip');
+});
+
+test('the report names the route, never an id', async () => {
+  const f = load({ apps: [{ id: 'feedback', url: '/feedback/' }] });
+  for (const p of ['/wizard/hermes/api/sessions/abc123/messages', '/wizard/agents/research/notes', '/wizard/v1/records/123', '/wizard/hermes/v1/runs/r1/stop']) {
+    for (let i = 0; i < 21; i++) await f.window.fetch(p, { method: 'POST', body: `{"i":${i}}` });
+  }
+  const texts = f.calls.filter(c => c.url.endsWith('/feedback/api/feedback')).map(c => JSON.parse(c.init.body).text.split('\n')[2]);
+  assert.deepEqual(texts, ['Endpoint: POST /wizard/hermes/api/sessions/:id/messages', 'Endpoint: POST /wizard/agents/:id/notes', 'Endpoint: POST /wizard/v1/records/:id', 'Endpoint: POST /wizard/hermes/v1/runs/:id/stop']);
+});
+
+test('main and routed chats (host-profile, container, restricted) are guarded the same way, each on its own route', async () => {
+  const f = load();
+  const ROUTES = ['', '?agent=host-profile', '?agent=container', '?agent=restricted'];
+  const send = (q, key, words = 'yes') => f.window.fetch('/wizard/hermes/v1/runs' + q, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': key }, body: JSON.stringify({ input: words, session_id: 's1' }) });
+  for (const q of ROUTES) { await send(q, 'k-' + q + '-1'); await send(q, 'k-' + q + '-2'); }
+  assert.equal(f.calls.length, 8, 'two real sends of the same words go out on every route');
+  for (const q of ROUTES) await send(q, 'k-' + q + '-2');
+  assert.equal(f.calls.length, 8, 'a double tap (same key) is one send on every route');
+  // the same seen write to main and to a routed agent are different writes
+  for (const q of ROUTES) await f.put('/wizard/thread-seen' + q, '{"threads":{}}');
+  assert.equal(f.calls.length, 12);
+  for (const q of ROUTES) await f.put('/wizard/thread-seen' + q, '{"threads":{}}');
+  assert.equal(f.calls.length, 12, 'and each repeat is dropped on its own route');
+  const g = load({ on: false });
+  for (const q of ROUTES) { await g.put('/wizard/thread-seen' + q, '{"threads":{}}'); await g.put('/wizard/thread-seen' + q, '{"threads":{}}'); }
+  assert.equal(g.calls.length, 8, 'switch off: every route unchanged');
+});
