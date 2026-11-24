@@ -7,7 +7,7 @@
 // finger and settling on release; a short drag snaps back; taps on the banner and on Open still work; nothing is
 // cancelled or removed and the file is still listed from Settings → Downloads.
 // With it off (QA_ONLY_OFF=1, or the off pass of every run): the same swipes leave the banner and the sheet in place.
-// QA_OUT=<dir> saves screenshots. QA_WEB=<checkout>/web points at another build. QA_EXPECT=broken expects today's
+// QA_OUT=<dir> saves screenshots (also mid-swipe frames). QA_WEB=<checkout>/web points at another build. QA_EXPECT=broken expects today's
 // behaviour also with the switch on (to show the cause on main).
 const {chromium}=require('../tools/qa-playwright.cjs');
 const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
@@ -55,12 +55,13 @@ function fakePort(){
    const pg=await ctx.newPage();pg.on('pageerror',e=>errors.push(e.message));
    const cdp=await ctx.newCDPSession(pg);
    // A finger: down, `steps` moves (one per frame), up. Returns where the element was halfway (it follows the finger).
-   const swipe=async(x,y,dx,dy,{steps=12,ms=16,probe=null}={})=>{
+   const swipe=async(x,y,dx,dy,{steps=12,ms=16,probe=null,shot=''}={})=>{
     await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x,y}]});
     let mid=null;
     for(let i=1;i<=steps;i++){
      await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:x+dx*i/steps,y:y+dy*i/steps}]});
      await pg.waitForTimeout(ms);
+     if(shot&&out&&i===Math.round(steps/2))await pg.screenshot({path:path.join(out,shot)});
      if(probe&&i===Math.round(steps/2))mid=await pg.evaluate(s=>{const e=document.querySelector(s);if(!e)return null;const r=e.getBoundingClientRect();return {x:r.left,y:r.top};},probe);
     }
     await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
@@ -83,7 +84,7 @@ function fakePort(){
    await showBanner();
    const b0=await rect('.wdl-banner');
    if(out)await pg.screenshot({path:path.join(out,`download-swipe-${skin}-${on?'on':'off'}-banner.png`)});
-   const midUp=await swipe(b0.x+60,b0.cy,0,-140,{probe:'.wdl-banner'});
+   const midUp=await swipe(b0.x+60,b0.cy,0,-140,{probe:'.wdl-banner',shot:`download-swipe-${skin}-${on?'on':'off'}-banner-mid.png`});
    r.upFollowed=midUp&&Math.round(b0.y-midUp.y);
    await pg.waitForTimeout(450);
    r.upGone=!(await banner());
@@ -119,7 +120,7 @@ function fakePort(){
    await tap(openBtn.cx,openBtn.cy);await pg.waitForTimeout(400);
    r.sheetOpenTap=(await calls()).includes('open:12');
    assert.ok(r.sheetOpenTap,`${label}: Open in the sheet still opens the file`);
-   const midDown=await swipe(p0.cx,p0.y+20,0,260,{probe:'.wdl-panel'});
+   const midDown=await swipe(p0.cx,p0.y+20,0,260,{probe:'.wdl-panel',shot:`download-swipe-${skin}-${on?'on':'off'}-sheet-mid.png`});
    r.downFollowed=midDown&&Math.round(midDown.y-p0.y);
    await pg.waitForTimeout(450);
    r.sheetClosed=!(await sheetOpen());

@@ -187,7 +187,7 @@
     const paint = (dx, dy) => {
       el.style.transform = dx || dy ? `translate(${dx}px, ${dy}px)` : '';
       const far = Math.max(Math.abs(dx) / Math.max(1, el.offsetWidth || 320), -dy / 120);
-      el.style.opacity = dx || dy ? String(Math.max(0.25, 1 - far * 0.75)) : '';
+      el.style.opacity = dx || dy ? String(Math.max(0.4, 1 - far * 0.5)) : '';
     };
     el.addEventListener('pointerdown', e => {
       dragged = false;
