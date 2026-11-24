@@ -350,7 +350,18 @@
   rowsLate({ inboxThreads });
   let tweakSeq = 0, slotContract = null;
   const safeTweakId = id => /^[a-z0-9][a-z0-9-]*\/[a-z0-9][a-z0-9-]*$/.test(id);
-  const tweakUrl = (id, file) => stamp(new URL(`tweaks/${id}/${file}`, document.baseURI).href);
+  /* Built into the shell, not tweak packages (wizard-ux issue 1352): Notifications in Chats is an ordinary setting
+   * (Settings › Chats, on by default) and AI apps a desktop Shell view. Their ids stay the keys owners' saved choices
+   * live under (look sync `defaults` and `views`), so nothing an owner chose changes. What they are (name, capabilities,
+   * view) is core/core-features.json, which core/experience.js reads too; a core feature with code loads through the
+   * same loader as a tweak (one API, one teardown when switched off) from core/, never from tweaks/. These paths are
+   * synchronous because the first frame preloads the stylesheet before anything is read; tests keep both in step. */
+  const CORE_FILES = Object.freeze({
+    'wizard/unified-inbox': Object.freeze({ 'tweak.js': 'core/unified-inbox.js', 'tweak.css': 'core/unified-inbox.css' }),
+    'miguel/ai-apps': Object.freeze({}),   // a view: the desktop wears layouts/ai-apps itself (setStandardLayout)
+  });
+  const coreFeature = id => Object.hasOwn(CORE_FILES, id);
+  const tweakUrl = (id, file) => { const path = !coreFeature(id) ? `tweaks/${id}/${file}` : file === 'manifest.json' ? 'core/core-features.json' : CORE_FILES[id][file]; return path ? stamp(new URL(path, document.baseURI).href) : ''; };
   /* Tweaks paint once, not twice: the ids this device last wore are listed on <html> and their stylesheets are in <head>
    * (render-blocking) from the first frame, so stock Home never flashes before a package's own view. A package that
    * does not come back drops out of the list. Reapplying adds the new <link> before the old one goes (no unstyled gap). */
@@ -373,9 +384,11 @@
     // Fetch every package at once (a slow network pays one wait, not one per package), and give a package that timed
     // out a second, longer try before turning it off: a slow wifi must not silently drop half of an owner's tweaks.
     const fetchPkg = async (id, ms) => {
+      if (coreFeature(id) && !tweakUrl(id, 'tweak.js')) throw new Error('Nothing to load');
       const response = await bounded(fetch(tweakUrl(id, 'manifest.json')), ms);  // release-stamped: cacheable
       if (!response.ok) throw new Error('Manifest unavailable');
-      const m = await response.json();
+      const m = coreFeature(id) ? (await response.json())?.[id] : await response.json();
+      if (!m || typeof m !== 'object') throw new Error('Invalid manifest');
       if (m.id !== id || m.author !== id.split('/')[0] || typeof m.version !== 'string' || !Array.isArray(m.capabilities) || m.capabilities.some(c => !['layout','nav','models','data.read','inbox','settings','notify','media'].includes(c))) throw new Error('Invalid manifest');
       if (m.apiVersion !== contract.apiVersion) throw new Error('Incompatible API version');
       const mod = await bounded(importer(tweakUrl(id, 'tweak.js')), ms);

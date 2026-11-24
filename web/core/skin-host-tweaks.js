@@ -14,7 +14,8 @@ window.WizCore.skinHostParts.tweaks = function ({ fault, guard, inboxThreads, in
   function tweakCss(id) {
     if (!isDoc) return null;
     let l = preCss.get(id); if (l) return l;
-    l = document.createElement('link'); l.rel = 'stylesheet'; l.href = tweakUrl(id, 'tweak.css'); l.setAttribute('blocking', 'render');
+    const href = tweakUrl(id, 'tweak.css'); if (!href) return null;   // a core feature without a stylesheet
+    l = document.createElement('link'); l.rel = 'stylesheet'; l.href = href; l.setAttribute('blocking', 'render');
     document.head.append(l); preCss.set(id, l); return l;
   }
   // Wait (briefly) for a package's stylesheet before its setup runs, so its view never shows unstyled.

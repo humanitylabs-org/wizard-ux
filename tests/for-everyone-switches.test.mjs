@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { block, runRecording } from './fixtures/source-slice.mjs';
+import { builtinDefaults } from './fixtures/core-features.mjs';
 
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
 const tick = () => new Promise(r => setTimeout(r, 0));
@@ -23,7 +24,7 @@ function box(channel) {
   const emit = (k, detail) => Promise.all((listeners[k] || []).map(f => f({ detail })));
   return { E: window.WosExperience, storage, emit, active: () => Array.from(active) };
 }
-const defaults = JSON.parse(read('web/tweaks/catalog.json')).defaults || [];
+const defaults = builtinDefaults(JSON.parse(read('web/tweaks/catalog.json')));
 
 test('For everyone (stable): experimental switches load off, are marked locked and cannot be switched; built-ins stay', async () => {
   const b = box('stable'); await b.E.refresh();

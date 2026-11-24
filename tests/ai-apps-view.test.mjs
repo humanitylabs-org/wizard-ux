@@ -1,8 +1,8 @@
 import { modelContext, runWithChatsModel } from './fixtures/chats-list-model.mjs';
 // AI apps view (Miguel, 2 Nov 2026): the ChatGPT / Claude / Perplexity phone layout as a third shell view beside Orb
 // and Apps (miguel/ai-apps, off by default; the views are mutually exclusive; all off = Desks). Guards:
-//   - packaging: an ordinary Miguel tweak named 'Different shell view - AI apps', manifest view, never a default, off in
-//     his profile; phone wears layout 'ai-apps'; the desktop wears nothing (stock desktop until its layout comes);
+//   - packaging: a view built into the shell (web/core/core-features.json, issue 1352), named 'Different shell view - AI apps',
+//     never a default; the desktop wears layout 'ai-apps', the phone keeps its stock view;
 //   - the layout: a top bar (☰ · the Wizard's name · workspaces), a drawer (open apps, All apps = the shared three-level
 //     sheet, Recents = Working then Ready, View all, Settings, New chat), a long-press row menu mapped to Chats' own
 //     actions, Home and the bare list become the chat; round 4: Home = a New chat with no greeting (the skin's
@@ -13,7 +13,7 @@ import { modelContext, runWithChatsModel } from './fixtures/chats-list-model.mjs
 //   - Desks / Orb / Apps untouched: every rule is scoped to the worn layout, no literal colours, no timers of its own.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import vm from 'node:vm';
 import { cascade, parseCss } from './fixtures/mini-css.mjs';
 import { createDocument } from './fixtures/mini-dom.mjs';
@@ -22,6 +22,7 @@ import { desktopBoot, desktopPart } from './fixtures/q1-desktop-boot.mjs';
 import { keysGuide } from './fixtures/keys-guide-harness.mjs';
 import { resolveVars, px } from './fixtures/r7A-css.mjs';
 import { fixture } from './fixtures/tweaks.mjs';
+import { coreFeatures } from './fixtures/core-features.mjs';
 import { withSkinHostParts } from './fixtures/skin-host-parts.mjs';
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 import { withShellParts } from './fixtures/shell-parts.mjs';
@@ -59,22 +60,21 @@ async function panelDesk({ wins = 1, before } = {}) {
   return { ...d, off, guides, go, style, important, bar, gauge, stage, chatDesk, chatWin, wbody, dchats, paneMain, thread, msgs, appDesk, appWins };
 }
 
-test('packaging: an ordinary Miguel view tweak, off by default; the desktop wears AI apps, the phone keeps its stock view', async () => {
-  const man = JSON.parse(read('web/tweaks/miguel/ai-apps/manifest.json'));
-  assert.equal(man.name, 'Different shell view - AI apps'); assert.equal(man.view, 'AI apps'); assert.deepEqual(man.capabilities, ['layout']);
+test('packaging: AI apps is a view built into the shell (wizard-ux issue 1352), desktop only, never a tweak package', async () => {
+  const man = coreFeatures['miguel/ai-apps'];
+  assert.equal(man.name, 'Different shell view - AI apps'); assert.equal(man.view, 'AI apps'); assert.equal(man.layout, 'ai-apps'); assert.deepEqual(man.shells, ['desktop']);
+  assert.notEqual(man.default, true, 'a view, not a release-wide default');
   const cat = JSON.parse(read('web/tweaks/catalog.json')), prof = JSON.parse(read('web/tweaks/miguel/profile.json'));
-  assert.ok(cat.tweaks.includes('miguel/ai-apps') && !cat.defaults.includes('miguel/ai-apps'), 'listed, never a default');
-  assert.ok(prof.tweaks.includes('miguel/ai-apps') && prof.off.includes('miguel/ai-apps'), 'off in his profile until he turns it on');
+  assert.ok(!cat.tweaks.includes('miguel/ai-apps') && !cat.defaults.includes('miguel/ai-apps'), 'no longer a tweak in the catalog');
+  assert.ok(!prof.tweaks.includes('miguel/ai-apps') && !prof.off.includes('miguel/ai-apps'), 'nor in his profile');
+  assert.ok(!existsSync(new URL('../web/tweaks/miguel/ai-apps', import.meta.url)), 'the tweak package is gone');
   assert.ok(!/miguel\/ai-apps/.test(read('web/core/experience.js')), 'the standard desktop choice never depends on a personal tweak');
   const p = fixture({ shell: 'phone' });
   await p.mount('miguel/ai-apps'); await settle();
   assert.equal(p.host.layout, 'classic', 'desktop only (Miguel, 4 Nov 2026): the phone keeps its stock view');
-  assert.ok(!p.doc.head.children.some(l => /layouts\//.test(l.href || '')), 'no layout css on the phone');
+  assert.ok(!p.doc.head.children.some(l => /layouts\/|tweaks\//.test(l.href || '')), 'nothing loads on the phone');
   await p.clear(); assert.equal(p.host.layout, 'classic');
   const d = fixture({ shell: 'desktop' });
-  await d.mount('miguel/ai-apps'); await settle();
-  assert.equal(d.host.layout, 'ai-apps', 'the desktop wears it too (desktop.js)'); assert.equal(d.doc.documentElement.dataset.layout, 'ai-apps');
-  await d.clear(); assert.equal(d.host.layout, 'classic'); assert.ok(!d.doc.head.children.some(l => /layouts\//.test(l.href || '')));
   const listed = d.host.layouts.find(l => l.id === 'ai-apps');
   assert.equal(listed?.name, 'AI apps', 'the host lists the AI apps layout by name'); assert.deepEqual([...listed.shells], ['desktop']);
   // a stale AI apps layout no live tweak wears (and not the standard one) goes back to Desks on the next tweak load
@@ -86,8 +86,6 @@ test('standard AI apps and the personal tweak are idempotent and release cannot 
   const d = fixture({ shell: 'desktop' });
   d.host.setStandardLayout('ai-apps'); await settle();
   assert.ok(!d.ctx.localStorage.getItem('wos.layout'), 'desktop default must not leak into the phone legacy layout key');
-  await d.mount('miguel/ai-apps'); await settle();
-  assert.equal(d.host.layout, 'ai-apps');
   await d.clear(); assert.equal(d.host.layout, 'ai-apps');
   d.ctx.localStorage.setItem('wos.layout', 'orb');
   d.host.setStandardLayout('classic'); assert.equal(d.host.layout, 'classic');
@@ -104,8 +102,6 @@ test('scoped and quiet: every rule needs the worn layout on the phone; skin toke
     assert.ok(/^html\[data-shell="phone"\]\[data-layout="ai-apps"\]/.test(part.trim()) || /^html\[data-shell="desktop"\]\[data-layout="ai-apps"\]\[data-(chats-owner|layout-booting)\]/.test(part.trim()), `unscoped: ${part.trim()}`);   // the desktop's two first-frame rules (core/skin-host.js boot)
   assert.ok(!/#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(/i.test(css), 'colours are skin tokens');
   assert.ok(!/font(-size)?\s*:[^;}]*\b\d+px/.test(css), 'type in rem');
-  const tw = read('web/tweaks/miguel/ai-apps/tweak.css').replace(/\/\*[\s\S]*?\*\//g, '');
-  for (const sel of [...tw.matchAll(/([^{}@]+)\{[^{}]*\}/g)].map(m => m[1].trim())) assert.ok(/^html\[data-shell="phone"\]\[data-layout="ai-apps"\]/.test(sel), `tweak.css reaches past the view: ${sel}`);
   const js = noComments(read('web/layouts/ai-apps/layout.js'));
   assert.ok(!/Math\.random|innerHTML|localStorage|setTimeout|setInterval|fetch\(/.test(js), 'no timers, markup strings, storage or fetches of its own');
 });

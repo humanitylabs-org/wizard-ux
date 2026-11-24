@@ -9,6 +9,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import vm from 'node:vm';
+import { builtinDefaults } from './fixtures/core-features.mjs';
 
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
 const clone = v => JSON.parse(JSON.stringify(v));
@@ -69,7 +70,7 @@ function device(box, { mix = {}, recipe = null, channel = 'latest', defaultsOff 
     later: (f, ms) => { const t = { f, ms }; timers.push(t); return t; }, cancel: t => { const i = timers.indexOf(t); if (i >= 0) timers.splice(i, 1); } });
   const flush = async () => { while (timers.length) { await timers.shift().f(); await tick(); } };
   const saved = () => JSON.parse(storage.get('wos.skin-tweaks.v1'));
-  const running = () => Array.from(active).filter(id => !catalog.defaults.includes(id)).sort();
+  const running = () => Array.from(active).filter(id => !builtinDefaults(catalog).includes(id)).sort();
   return { E, sync, flush, events, updates, own, saved, running, builtinOn: () => Array.from(active).includes(builtin) };
 }
 const sharedOn = doc => Object.keys(doc?.tweaks || {}).filter(id => doc.tweaks[id].on).sort();

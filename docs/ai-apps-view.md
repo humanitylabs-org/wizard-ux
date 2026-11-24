@@ -6,10 +6,10 @@ they switch it on, and switching it off brings the stock shell (Desks) back exac
 
 ## Switching it on
 
-Settings › Look › Tweaks › **Different shell view - AI apps** (tweak id `miguel/ai-apps`, by Miguel). It is an
-ordinary off-by-default tweak, so anyone can turn it on, on any skin, with no other tweak needed. Shell views are one
-at a time: turning it on turns Orb and Apps off; turning it off goes back to Desks. The choice follows the owner's Look
-(per owner when look sync is present, per device otherwise).
+Settings › Look › **Shell view** on a desktop: Desks or **AI apps** (the standard desktop view since 4 Nov 2026). It is
+built into the shell (wizard-ux issue 1352: `web/core/core-features.json`, id `miguel/ai-apps`, no tweak package); the
+id stays the key a saved choice lives under (look sync `views.desktop`). The phone keeps its stock view. The choice
+follows the owner's Look (per owner when look sync is present, per device otherwise).
 
 ## What it looks like
 
@@ -146,8 +146,8 @@ keys yet.
 
 ## How it is built
 
-- The tweak only calls `api.layout.use('ai-apps')` (`web/tweaks/miguel/ai-apps/tweak.js`); everything else is the
-  layout, loaded only while worn (`html[data-layout="ai-apps"]`).
+- The desktop wears it as its standard layout (`WosSkinHost.setStandardLayout`, chosen in `core/experience.js`); everything
+  else is the layout, loaded only while worn (`html[data-layout="ai-apps"]`).
 - It reads the shell through the layout API in `core/skin-host.js` (adapters in `web/app.js` and
   `web/desktop/desktop.js`): `sessions.*` (list, open, newChat, act), `apps.*` (list, kinds, logo, badgeText, open,
   openDesk, close, inset, store, get, homeScreen), `desks.*` (list, close, move), `workspaces.*`, `voice.*`, `orb.*`,

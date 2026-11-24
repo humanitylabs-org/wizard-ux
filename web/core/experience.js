@@ -84,8 +84,22 @@
   const dropped = id => (catalog?.lookOnlyOff || []).includes(id);
   const retiring = id => lookOnly() && dropped(id);
   // Release-wide defaults are independent of skin. Saved offs and recipe choices keep their meaning across renames.
-  const canonical = id => catalog?.aliases?.[id] || id;
-  const globalIds = () => catalog?.defaults || [];
+  /* Built into the shell, not tweak packages (wizard-ux issue 1352): Notifications in Chats (a release-wide default,
+   * Settings › Chats) and the AI apps desktop view, described in core/core-features.json (core/skin-host.js loads their
+   * code from core/). Their ids keep every saved choice. Read with the catalog, and like it an unreadable one fails this
+   * load (which retries once). */
+  let core = null;
+  const CORE = () => core || {};
+  const readCore = async () => { if (!core) try { const v = await read('core/core-features.json'); core = v && typeof v === 'object' && !Array.isArray(v) ? v : {}; } catch (e) { core = null; throw e; } return core; };
+  const coreIds = () => Object.keys(CORE()).filter(id => ID.test(id) && CORE()[id]?.id === id);
+  const CORE_ALIASES = { 'miguel/unified-inbox': 'wizard/unified-inbox' };
+  const aliases = () => ({ ...CORE_ALIASES, ...(catalog?.aliases || {}) });
+  // Every id an owner can choose: the core features, then the catalog's switches (the order things load in: Notifications
+  // in Chats stays ahead of the switches it came before when it was the catalog's, so the defaults load as they did).
+  const switchIds = () => [...new Set([...coreIds(), ...(catalog?.tweaks || [])])];
+  const manifestOf = id => Object.hasOwn(CORE(), id) ? Promise.resolve(copy(CORE()[id])) : read(`tweaks/${id}/manifest.json`);
+  const canonical = id => aliases()[id] || id;
+  const globalIds = () => [...new Set([...(catalog?.defaults || []), ...coreIds().filter(id => CORE()[id].default === true)])];
   const globalOff = id => (state.defaultsOff || []).includes(id);
   function migrateDefaults() {
     if (state.defaultsMigrated) return;
@@ -109,7 +123,7 @@
   const recipeChoice = (own, id) => {
     if (!own) return undefined;
     if (Object.hasOwn(own.tweaks, id)) return own.tweaks[id];
-    for (const [old, current] of Object.entries(catalog?.aliases || {})) if (current === id && Object.hasOwn(own.tweaks, old)) return own.tweaks[old];
+    for (const [old, current] of Object.entries(aliases())) if (current === id && Object.hasOwn(own.tweaks, old)) return own.tweaks[old];
     return undefined;
   };
   // A worn own skin decides only the switches it saved a choice for; every other switch follows the owner's own
@@ -134,7 +148,7 @@
       return;
     }
     if (recipe() && id !== LOOK_ONLY) { await window.WosMySkin.update({ tweaks: { [id]: on } }); return; }
-    if (!catalog?.tweaks.includes(id)) return;
+    if (!switchIds().includes(id)) return;
     const mix = { ...(state.mix || {}) }; if (on === presetOn(id)) delete mix[id]; else mix[id] = on;
     state.mix = mix; Store.write(state);
     // An owner's own switch (not a migration): core/look-sync.js shares it with his other devices.
@@ -166,7 +180,7 @@
   let installedP = null;
   function installed() {
     installedP ||= (async () => {
-      catalog ||= await read('tweaks/catalog.json');
+      catalog ||= await read('tweaks/catalog.json'); await readCore();
       for (const who of catalog.profiles || []) void profile(who).catch(() => {});
       return Promise.all(catalog.tweaks.map(async id => ({ id, ...await read(`tweaks/${id}/manifest.json`) })));
     })().then(v => { installedP.settled = true; return v; }, e => { installedP = null; throw e; });
@@ -180,10 +194,10 @@
   }
   // Authors with tweaks here, for the quick buttons: display name from their profile, else the id.
   async function authors() {
-    catalog ||= await read('tweaks/catalog.json');
+    catalog ||= await read('tweaks/catalog.json'); await readCore();
     const names = new Map(await Promise.all((catalog.profiles || []).map(async who => { try { const p = await profile(who); return [who, typeof p.name === 'string' ? p.name : who]; } catch (_) { return [who, who]; } })));
     const out = new Map();
-    for (const id of catalog.tweaks) { if (globalIds().includes(id)) continue; const who = id.split('/')[0]; if (!out.has(who)) out.set(who, { id: who, name: names.get(who) || who, ids: [] }); out.get(who).ids.push(id); }
+    for (const id of switchIds()) { if (globalIds().includes(id)) continue; const who = id.split('/')[0]; if (!out.has(who)) out.set(who, { id: who, name: names.get(who) || who, ids: [] }); out.get(who).ids.push(id); }
     return [...out.values()];
   }
   let applying = Promise.resolve();
@@ -198,11 +212,11 @@
         try { desktopMigration.materializedLayout = localStorage.getItem('wos.layout'); localStorage.setItem(DESKTOP_SEED, JSON.stringify(desktopMigration)); } catch (_) {}
       }
       const who = wornOwner();
-      catalog ||= await read('tweaks/catalog.json'); slots ||= await read('core/slots.json'); migrateDefaults(); migratePromoted();
+      catalog ||= await read('tweaks/catalog.json'); await readCore(); slots ||= await read('core/slots.json'); migrateDefaults(); migratePromoted();
       // A preset pick uses the profile the installed list already warmed; other refreshes re-read it for news.
       const next = who ? await (warm === true && profileReads.has(who) ? profileReads.get(who) : read(`tweaks/${who}/profile.json`)) : null;
       if (seq !== generation) return;
-      if (next && (next.id !== who || !Array.isArray(next.tweaks) || next.tweaks.some(id => !ID.test(id) || !catalog.tweaks.includes(id)) || (next.off !== undefined && (!Array.isArray(next.off) || next.off.some(id => !next.tweaks.includes(id)))))) throw new Error('This skin’s tweaks could not be read');
+      if (next && (next.id !== who || !Array.isArray(next.tweaks) || next.tweaks.some(id => !ID.test(id) || !switchIds().includes(id)) || (next.off !== undefined && (!Array.isArray(next.off) || next.off.some(id => !next.tweaks.includes(id)))))) throw new Error('This skin’s tweaks could not be read');
       owner = who; set = next;
       if (Array.isArray(state.carry)) {
         const mix = {}; for (const id of next?.tweaks || []) { const on = !state.carry.includes(id); if (on !== presetOn(id)) mix[id] = on; }
@@ -211,12 +225,12 @@
       // Flatten once: what the old set turned on becomes the owner's own switches; from now on everything starts off.
       if (who) {
         const mix = {};
-        for (const id of catalog.tweaks) if (!globalIds().includes(id) && (mixOf(id) ?? presetOn(id))) mix[id] = true;
+        for (const id of switchIds()) if (!globalIds().includes(id) && (mixOf(id) ?? presetOn(id))) mix[id] = true;
         state.mix = mix; state.preset = 'none'; Store.write(state); owner = null; set = null;
       }
       if (who) profileReads.set(who, Promise.resolve(next));
       // A renamed or merged tweak keeps the device's own switch: an old id's saved on/off moves to its new id once.
-      for (const [old, current] of Object.entries(catalog.aliases || {})) if (state.mix && Object.hasOwn(state.mix, old)) {
+      for (const [old, current] of Object.entries(aliases())) if (state.mix && Object.hasOwn(state.mix, old)) {
         const mix = { ...state.mix }; if (!Object.hasOwn(mix, current)) mix[current] = mix[old]; delete mix[old]; state.mix = mix; Store.write(state);
       }
       // 31 Oct 2026 (James): the network Home left the release-wide defaults and is now Miguel's tweak. A device that ran it
@@ -229,8 +243,8 @@
       }
       const own = recipe();
       // Every installed tweak is offered, whoever wrote it; the preset only sets which start on.
-      const all = [...new Set([...catalog.tweaks, ...globalIds()])];
-      manifests = new Map(await Promise.all(all.map(async id => [id, await read(`tweaks/${id}/manifest.json`)])));
+      const all = [...new Set([...switchIds(), ...globalIds()])];
+      manifests = new Map(await Promise.all(all.map(async id => [id, await manifestOf(id)])));
       if (seq !== generation) return;
       if (desktop && !desktopView) migrateDesktopView(desktopMigration);
       const worn = wornView(own);
@@ -313,13 +327,13 @@
     // The view chosen per shell type ({ desktop, phone }: a view id, '' = Desks; a missing type = no choice yet).
     get views() { return cleanViews(state.views); },
     // Tweaks this release offers as switches (retired ids in an old device mix are not counted as choices).
-    async tweakIds() { catalog ||= await read('tweaks/catalog.json'); return catalog.tweaks.filter(id => !globalIds().includes(id)); },
+    async tweakIds() { catalog ||= await read('tweaks/catalog.json'); await readCore(); return switchIds().filter(id => !globalIds().includes(id)); },
     // The shared set is complete: every tweak here is on or off, so this device's one-time migrations never add to it.
     // `views` (look sync): the owner's view per shell type; a type left out has no choice yet. Left out = untouched.
     async adopt(mix, views, defaults = {}) {
-      catalog ||= await read('tweaks/catalog.json');
+      catalog ||= await read('tweaks/catalog.json'); await readCore();
       const grouped = new Set((catalog.oneOf || []).flat()), next = {};
-      for (const id of catalog.tweaks) if (!globalIds().includes(id) && !grouped.has(id)) next[id] = false;
+      for (const id of switchIds()) if (!globalIds().includes(id) && !grouped.has(id)) next[id] = false;
       for (const [id, on] of Object.entries(mix || {})) if (on === true && ID.test(id)) next[canonical(id)] = true;
       // Old files omit defaults: retain local offs until the upgrade seeds them.
       const off = new Set(state.defaultsOff || []);
