@@ -9,7 +9,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { freshDevice } from './fixtures/w1-experience.mjs';
 
-const BOX_SWITCHES = ['wizard/update-bug-reports', 'wizard/link-token-repair', 'wizard/graceful-restart', 'wizard/app-updates-hourly', 'wizard/private-first-setup', 'wizard/agent-inbox', 'wizard/runtipi-cli-key', 'wizard/github-signin'];
+const BOX_SWITCHES = ['wizard/update-bug-reports', 'wizard/link-token-repair', 'wizard/graceful-restart', 'wizard/app-updates-hourly', 'wizard/private-first-setup', 'wizard/agent-inbox', 'wizard/runtipi-cli-key', 'wizard/github-signin', 'wizard/messaging-chat-replies'];
 
 for (const id of BOX_SWITCHES) {
   test(`${id} is a switch the App Manager accepts, off by default`, async () => {

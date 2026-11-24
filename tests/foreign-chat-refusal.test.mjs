@@ -14,9 +14,9 @@ import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts move
 import { block, expression, runRecording } from './fixtures/source-slice.mjs';
 
 const read = p => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
-function models() {
+function models(tweaks = '') {
   const window = { WosAgents: { lock: () => '' } };
-  const document = { documentElement: { dataset: { tweaks: '' } } };
+  const document = { documentElement: { dataset: { tweaks } } };
   vm.runInContext(read('web/core/chat-models.js'), modelContext({ window, document, localStorage: { getItem: () => null, setItem() {} }, fetch: async () => ({}), console }));
   return window.WosModels;
 }
@@ -36,6 +36,21 @@ test('a chat started in a messaging app is named; WizardOS chats are not', () =>
   assert.equal(M.foreignApp(null), '');
   assert.equal(M.refusal({ source: 'telegram' }), 'This chat was started in Telegram, so WizardOS can’t add to it. Your message is saved. Reply in Telegram, or start a new chat.');
   assert.equal(M.refusal({ source: 'api_server' }), '');
+});
+
+// wizard-agent-service issue 427: with the switch on, the Service sends the reply through the chat's own connection, so
+// the chat takes replies (and Retry) like any other. Hermes' own refusal (an older chat on a Hermes that refuses API
+// turns into it, the Service's "started in another app" words) still gets the clear card with no Retry.
+test('switch wizard/messaging-chat-replies on: messaging chats take replies; a refusal still says so', () => {
+  const M = models('wizard/unified-inbox wizard/messaging-chat-replies');
+  assert.equal(M.foreignApp({ source: 'telegram' }), '');
+  assert.equal(M.foreignApp({ source: 'slack', status: 'failed', safeError: 'The AI provider couldn’t answer' }), '');
+  assert.equal(M.refusal({ source: 'telegram' }), '');
+  const refused = { source: 'telegram', status: 'failed', safeError: 'This chat was started in another app, such as Telegram, so WizardOS can’t add to it. Your message is saved. Reply in that app, or start a new chat.' };
+  assert.equal(M.foreignApp(refused), 'Telegram');
+  assert.match(M.refusal(refused), /started in Telegram/);
+  // Off (or another switch only): exactly as before.
+  assert.equal(models('wizard/unified-inbox').foreignApp({ source: 'telegram' }), 'Telegram');
 });
 
 test('the list row keeps the Hermes session source the shell decides on', () => {

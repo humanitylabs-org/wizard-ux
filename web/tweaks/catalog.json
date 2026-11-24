@@ -37,7 +37,8 @@
     "wizard/lock-screen-player",
     "wizard/runtipi-cli-key",
     "wizard/settings-search",
-    "wizard/github-signin"
+    "wizard/github-signin",
+    "wizard/messaging-chat-replies"
   ],
   "defaults": [
     "wizard/unified-inbox",
