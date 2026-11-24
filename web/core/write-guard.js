@@ -76,6 +76,14 @@
   // Ids in a path (session ids, run ids) never leave the device in a report.
   const redact = p => p.split('/').map(s => s.length > 24 || /\d/.test(s) && s.length > 6 ? ':id' : s).join('/');
   const shell = () => { try { return String(document.documentElement.dataset.shell || ''); } catch (_) { return ''; } };
+  // The web build: ux-version.txt's tree id on a box; without that file web-update falls back to a long list of file
+  // sizes, which becomes a short fingerprint here (Feedback keeps 60 characters).
+  function buildId() {
+    const v = String(window.WizWebUpdate?.version || 'unknown');
+    if (v.length <= 60) return v;
+    let h = 2166136261; for (let i = 0; i < v.length; i++) { h ^= v.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
+    return 'web-' + h.toString(16).padStart(8, '0');
+  }
   function feedbackUrl() {
     try {
       const apps = JSON.parse(localStorage.getItem('wux.apps.v1') || '[]') || [];
@@ -90,7 +98,7 @@
     s.reported = s.reported || {};
     if (s.reported[endpoint] === day) return null;
     s.reported[endpoint] = day;
-    const [method, path] = endpoint.split(' '), where = method + ' ' + redact(path), build = String(window.WizWebUpdate?.version || 'unknown');
+    const [method, path] = endpoint.split(' '), where = method + ' ' + redact(path), build = buildId();
     const text = `Wizard paused a write loop: ${where} went out ${rate} times in one minute on this ${shell() || 'device'}.\n\n`
       + `Endpoint: ${where}\nRate: ${rate} writes in 60 s (the limit is ${PER_MINUTE})\nPaused for: ${Math.round(pauseMs / 1000)} s\nBuild: ${build}\nShell: ${shell()}\n\n`
       + 'Filed by the shell\'s write guard (wizard-ux issue 1439), at most once a day per endpoint.';
