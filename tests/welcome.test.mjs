@@ -28,7 +28,7 @@ test('Welcome: opens only without a signed-in provider, resumes after sign-in, n
   const none = device(fakeBox()); await none.boot();
   assert.ok(none.W.active, 'nothing signed in: Connect your AI');
 
-  const ready = device(fakeBox({ signedIn: true })); await ready.boot();
+  const ready = device(fakeBox({ signedIn: true, firstRun: false })); await ready.boot();
   assert.ok(!ready.W.active, 'an existing Wizard with a provider never sees it');
 
   const resumed = device(fakeBox({ signedIn: true }), { skins: skins() });
@@ -39,6 +39,40 @@ test('Welcome: opens only without a signed-in provider, resumes after sign-in, n
   const linked = device(fakeBox(), { deeplinked: () => true }); await linked.boot();
   assert.ok(!linked.W.active, 'a deep link wins');
   assert.ok(linked.log().includes('deeplink'));
+});
+
+// wizard-ux issue 1750: an existing Wizard whose AI is signed out gets one screen, Reconnect your AI. Once the chosen
+// provider is connected it saves done and closes; no name, no Pick a skin, no Say hello, and the next launch shows nothing.
+test('Reconnect: an existing Wizard with its AI signed out sees only Reconnect your AI, then it closes by itself', async () => {
+  for (const [why, firstRun, saved] of [['the box says it is not new', false, ''], ['this device finished the Welcome (no answer from the box)', undefined, 'done']]) {
+    const box = fakeBox({ name: 'Wizard', firstRun, providers: [{ slug: 'openai-codex', authenticated: false }] });
+    if (firstRun === undefined) box.fetch = (f => async (u, i) => String(u).endsWith('/wizard/v1/setup') ? { ok: false, status: 503, json: async () => ({}) } : f(u, i))(box.fetch);
+    const d = device(box, { skins: skins() }); if (saved) d.store.set('wos.welcome.v1', saved);
+    await d.boot();
+    assert.ok(d.W.active, why); assert.equal(title(d), 'Reconnect your AI', `${why}: no name step, straight to the AI`);
+    assert.match(d.html(), /<p>Your AI isn\u2019t connected\. Reconnect it so Wizard can answer\.<\/p>/);
+    assert.doesNotMatch(d.html(), /wl-dots/, 'no first-run step dots');
+    assert.deepEqual(choices(d).map(c => c.app), ['wizard-claude', 'wizard-chatgpt', 'wizard-tinfoil'], 'the same provider choices');
+    d.press('provider', { app: 'wizard-chatgpt' }); assert.equal(title(d), 'Sign in to ChatGPT');
+    box.providers = [{ slug: 'openai-codex', authenticated: true }];
+    await d.advance(3000); assert.match(d.html(), /ChatGPT is connected\./);
+    await d.advance(1200);
+    assert.ok(!d.W.active, `${why}: closed by itself, no Pick a skin or Say hello`);
+    assert.equal(d.store.get('wos.welcome.v1'), 'done');
+    assert.ok(!box.calls.includes(SEEN), 'markSeen stays with Say hello');
+    const next = device(box, { skins: skins() }); next.store.set('wos.welcome.v1', 'done'); await next.boot();
+    assert.ok(!next.W.active, `${why}: the next launch shows nothing`);
+  }
+});
+
+test('Reconnect: a device that saved "ai" on an existing Wizard never reopens Pick a skin; a fresh Wizard still does', async () => {
+  const old = device(fakeBox({ signedIn: true, firstRun: false }), { skins: skins() }); old.store.set('wos.welcome.v1', 'ai');
+  await old.boot(); assert.ok(!old.W.active, 'reconnected on an older build: nothing');
+  const fresh = device(fakeBox(), { skins: skins() }); await fresh.boot();
+  assert.equal(title(fresh), 'Connect your AI'); assert.match(fresh.html(), /wl-dots/);
+  // The Setup tile and Settings open the whole Welcome on any Wizard.
+  const tile = device(fakeBox({ signedIn: true, firstRun: false }), { skins: skins() }); await tile.boot();
+  tile.W.open(); assert.equal(title(tile), 'Connect your AI'); assert.match(tile.html(), /wl-dots/);
 });
 
 test('Welcome: three steps only (AI, skin, hello), no uppercase eyebrows or em dashes in what it shows', async () => {
