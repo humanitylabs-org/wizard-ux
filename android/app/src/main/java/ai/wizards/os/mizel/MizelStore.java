@@ -376,17 +376,26 @@ public final class MizelStore {
 
     /* ------------------------------------------------------------------ uploads */
 
-    public synchronized void acked(String id, int seq) {
-        MizelJournal j = journals.get(id);
-        if (j == null) return;
-        MizelJournal.Chunk c = j.chunk(seq);
-        if (c == null) return;
+    /**
+     * The server has this chunk. The custody receipt is written first and outside the store lock: it rewrites the
+     * whole custody index (one entry per chunk of every meeting kept), so under the lock every acknowledgement of a
+     * long meeting's upload backlog kept the UI thread waiting on the store at start (wizard-ux#1769). A kill between
+     * the two writes leaves the chunk pending, so it is sent again, as before.
+     */
+    public void acked(String id, int seq) {
+        synchronized (this) {
+            MizelJournal j = journals.get(id);
+            if (j == null || j.chunk(seq) == null) return;
+        }
         trackChunk(id, seq, chunkFile(id, seq));
         custody.received(CaptureJournal.chunkId(id, seq), "mizel-chunk:" + id + "/" + seq);
-        j.pending.remove(c);
-        j.acked++;
-        j.lastAckedSeq = Math.max(j.lastAckedSeq, seq);
-        save(j);
+        synchronized (this) {
+            MizelJournal j = journals.get(id);
+            if (j == null || !j.pending.remove(j.chunk(seq))) return; // gone meanwhile, or acknowledged twice
+            j.acked++;
+            j.lastAckedSeq = Math.max(j.lastAckedSeq, seq);
+            save(j);
+        }
     }
 
     /** The server refused this chunk for good (e.g. 404 meeting gone): it no longer blocks the queue or the stop. */

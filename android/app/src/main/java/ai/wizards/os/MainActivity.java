@@ -1042,7 +1042,8 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         device.onStart();
         ai.wizards.os.everywhere.EverywhereService.setAppInFront(this, ai.wizards.os.device.AppState.shellFront());
         ai.wizards.os.everywhere.EverywhereOutbox.get(this).pump();
-        ai.wizards.os.mizel.MeetingRecorderService.recover(this); // a meeting cut off by a process death is closed and uploaded
+        // A meeting cut off by a process death is closed and uploaded; the store opens off the UI thread (wizard-ux#1769).
+        ai.wizards.os.mizel.MeetingRecorderService.recoverFromActivity(this);
     }
 
     @Override

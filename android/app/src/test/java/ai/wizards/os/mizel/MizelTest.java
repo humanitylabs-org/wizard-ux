@@ -248,6 +248,43 @@ public class MizelTest {
     }
 
     @Test
+    public void ackedDoesNotHoldTheStoreWhileWritingCustody() throws Exception {
+        // wizard-ux#1769: each acknowledgement rewrites the whole custody index; with a long meeting's upload backlog
+        // the UI thread (recover in onStart/onResume, the page's status) kept waiting on the store lock at start.
+        File root = tmp.newFolder("mizel");
+        MizelStore s = new MizelStore(root);
+        s.beginSession("mt_k", 1000);
+        writeChunk(s, "mt_k", 0, 16);
+        s.chunkDone("mt_k", 0, 16, 2000);
+        ai.wizards.os.audio.CaptureJournal custody = ai.wizards.os.audio.CaptureJournal.at(root.getParentFile());
+        Thread t;
+        int[] seen = {-1, -1};
+        boolean free;
+        synchronized (custody) {
+            t = new Thread(() -> s.acked("mt_k", 0));
+            t.start();
+            Thread.sleep(100); // the uploader is now waiting on custody
+            // The UI's read, on its own thread so a held store lock fails the test instead of hanging it.
+            Thread ui = new Thread(() -> { seen[0] = s.all().size(); seen[1] = s.pendingCount("mt_k"); });
+            ui.start();
+            ui.join(1000);
+            free = !ui.isAlive();
+        }
+        t.join(10_000);
+        assertTrue("the store lock is free while custody works", free);
+        assertEquals(1, seen[0]);
+        assertEquals("not acknowledged before custody has the receipt", 1, seen[1]);
+        assertEquals(0, s.pendingCount("mt_k"));
+        assertEquals(1, s.get("mt_k").acked);
+        assertEquals("delivered", custody.entry("mt_k/000000").getString("state"));
+        MizelJournal again = new MizelStore(root).get("mt_k");
+        assertEquals(0, again.pending.size());
+        assertEquals(0, again.lastAckedSeq);
+        s.acked("mt_k", 0); // a repeat (the server answered twice) changes nothing
+        assertEquals(1, s.get("mt_k").acked);
+    }
+
+    @Test
     public void recoverAfterProcessDeathAdoptsFilesAndQueuesProcessDeathStop() throws Exception {
         File root = tmp.newFolder("mizel");
         MizelStore s = new MizelStore(root);

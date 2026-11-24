@@ -53,7 +53,7 @@ public final class MizelHub {
             }
         });
     }
-    private static MizelStore store;
+    private static volatile MizelStore store;
 
     private MizelHub() {}
 
@@ -63,6 +63,19 @@ public final class MizelHub {
             store.setLog(m -> Log.i(TAG, m));
         }
         return store;
+    }
+
+    /**
+     * Runs {@code then} on the main thread once the meeting store is open and Android's exit records are read, both
+     * off the UI thread on a cold start: for a long meeting they take seconds, and onStart/onResume used to do them
+     * before the shell could draw (wizard-ux#1769). When both are already loaded, {@code then} runs at once.
+     */
+    public static void whenLoaded(Context c, Runnable then) {
+        Context app = c.getApplicationContext();
+        ai.wizards.os.StartupWork.then(store != null && ai.wizards.os.ProcessExits.refreshed(), () -> {
+            store(app);
+            ai.wizards.os.ProcessExits.refresh(app);
+        }, then);
     }
 
     public static void addListener(Listener l) { onMain(() -> { if (!listeners.contains(l)) listeners.add(l); }); }

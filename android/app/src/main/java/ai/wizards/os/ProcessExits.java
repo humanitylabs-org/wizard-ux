@@ -20,6 +20,7 @@ public final class ProcessExits {
     private static final String TAG = "WizardExit";
     private static ProcessExitLog log;
     private static boolean read;
+    private static volatile boolean done;
 
     private ProcessExits() {}
 
@@ -28,8 +29,18 @@ public final class ProcessExits {
         return log;
     }
 
-    /** Reads Android's exit records once per process. Cheap and safe to call from every start path. */
+    /** True once this process has read Android's exit records, so {@link #refresh} returns at once. */
+    public static boolean refreshed() { return done; }
+
+    /**
+     * Reads Android's exit records once per process; later calls return at once. The first read can take a while
+     * (an ANR's thread dump), so a start reads it off the UI thread first ({@link StartupWork}, wizard-ux#1769).
+     */
     public static synchronized ProcessExitLog refresh(Context c) {
+        try { return read(c); } finally { done = true; }
+    }
+
+    private static ProcessExitLog read(Context c) {
         ProcessExitLog l = log(c);
         if (read) return l;
         read = true;
