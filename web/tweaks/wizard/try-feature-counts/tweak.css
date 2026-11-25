@@ -1,2 +1,2 @@
-/* Share Try new features counts (wizard-app-manager issue 701): a box-side switch read by the App Manager
- * (wam/switch_feedback.py). Nothing in the shell changes. */
+/* Share feature counts (wizard-app-manager issue 701): tweak.js reads the apps' Try new features state for the App
+ * Manager (wam/switch_feedback.py). Nothing on screen changes. */
