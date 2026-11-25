@@ -365,7 +365,7 @@
       "where": "Settings › Appearance › Try new features › Tell the team about failed updates"
     },
     "wizard/link-token-repair": {
-      "help": "When the agent can't reach its Wizard app tools (unauthorized), `wizard link` puts the box's connection token back in the agent's settings; `wizard doctor` shows if they match.",
+      "help": "If the agent's Wizard app tools say unauthorized, `wizard link` restores the box's connection token; `wizard doctor` checks it.",
       "where": "Settings › Appearance › Try new features › Repair the agent's Wizard connection"
     },
     "wizard/graceful-restart": {
@@ -432,7 +432,7 @@
       "where": "Settings › Appearance › Try new features › Runtipi 4.12 sign-in key"
     },
     "wizard/settings-search": {
-      "help": "A search box at the top of the Settings list: keeps the pages that mention your words and marks them on the page; Esc clears, Enter opens the first.",
+      "help": "Search box atop Settings: keeps the pages matching your words and marks them; Esc clears, Enter opens the first.",
       "where": "Settings › Appearance › Try new features › Search in Settings"
     },
     "wizard/github-signin": {
@@ -477,7 +477,7 @@
       "where": "Settings › Appearance › Try new features › Undated chat titles"
     },
     "wizard/try-feature-counts": {
-      "help": "Anonymous thumbs counts.",
+      "help": "Hourly: which app test features you tried and your thumbs, with a random box id. Nothing else.",
       "where": "Settings › Appearance › Try new features › Share feature counts"
     }
   },
