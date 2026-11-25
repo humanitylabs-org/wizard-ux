@@ -1,6 +1,6 @@
-// Links open the app's own window (wizard-os issue 650, switch wizard/app-windows, off by default).
+// Links open the app's own window (wizard-os issue 650, on for everyone: the switch wizard/app-windows is removed).
 // The real home-screen-policy.js, deeplink.js and android-relay.js run in a vm with a stand-in Android bridge: which
-// links open an app's own window, with which page, and that the main page copies the switch to the Android app. The
+// links open an app's own window, with which page, and that older Android apps are told it is on. The
 // native rules are JVM tests (android/app/src/test/.../AppWindowsPolicyTest.java); the wiring is checked from source.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -9,10 +9,8 @@ import { readFileSync } from 'node:fs';
 import { launcherFixture } from './launcher-fixture.mjs';
 import { withShellParts } from './fixtures/shell-parts.mjs';
 import { withWebParts } from './fixtures/web-parts.mjs';
-import { switchOnFreshDevice } from './fixtures/r6B-switch.mjs';
 
 const read = p => withShellParts(withWebParts(readFileSync(new URL('../' + p, import.meta.url), 'utf8')));
-const SWITCH = 'wizard/app-windows';
 const ORIGIN = 'https://wizard.example';
 const APPS = [
   { id: 'wizard-health', name: 'Health', kind: 'wizard', url: '/wizard-health/' },
@@ -22,9 +20,9 @@ const APPS = [
   { id: 'wizard', name: 'Chats', kind: 'wizard', url: '/wizard-os-home/chats/' },
 ];
 
-function fixture({ on = false, native = true, answer = true, session = '' } = {}) {
+function fixture({ native = true, answer = true, session = '', oldApk = true } = {}) {
   const switches = [], opens = [], timers = [], observers = [], winListeners = {};
-  const root = { dataset: { tweaks: on ? 'wizard/desktop-chats ' + SWITCH : 'wizard/desktop-chats' }, setAttribute() {} };
+  const root = { dataset: { tweaks: 'wizard/desktop-chats' }, setAttribute() {} };
   const href = ORIGIN + '/wizard-os-home/' + (session ? '?app-session=' + session : '');
   const c = { URL, URLSearchParams, console, JSON, Date, Proxy, Reflect, location: new URL(href),
     document: { readyState: 'complete', hidden: false, documentElement: root, body: { appendChild() {} }, querySelectorAll: () => [],
@@ -35,35 +33,43 @@ function fixture({ on = false, native = true, answer = true, session = '' } = {}
     addEventListener: (n, f) => (winListeners[n] ||= []).push(f) };
   c.window = c;
   c.WizCore = { apps: () => ({ APPS, APP: Object.fromEntries(APPS.map(a => [a.id, a])) }) };
-  if (native) c.WizardOSNative = { appWindowsSwitch: v => switches.push(v), openAppWindow: (id, path, name) => { opens.push([id, path, name]); return answer; } };
+  if (native) c.WizardOSNative = { openAppWindow: (id, path, name) => { opens.push([id, path, name]); return answer; } };
+  if (native && oldApk) c.WizardOSNative.appWindowsSwitch = v => switches.push(v);
   vm.createContext(c);
   for (const f of ['web/core/home-screen-policy.js', 'web/core/deeplink.js', 'web/core/android-relay.js']) vm.runInContext(read(f), c);
-  const flip = v => { root.dataset.tweaks = v ? 'wizard/desktop-chats ' + SWITCH : 'wizard/desktop-chats'; for (const o of observers) o.fn([]); };
   const settle = () => { for (const t of timers.filter(t => t.ms === 5000)) t.fn(); };
   const experience = () => { for (const f of winListeners['wos:experience'] || []) f(); };
-  return { c, R: c.WizAndroidRelay, switches, opens, flip, settle, experience };
+  return { c, R: c.WizAndroidRelay, switches, opens, settle, experience };
 }
 
-test('the main page copies the switch to the Android app: off only once the switches settle, on at once', () => {
-  const off = fixture();
-  assert.deepEqual(off.switches, []);
-  off.settle();
-  assert.deepEqual(off.switches, [false]);
-  const on = fixture({ on: true });
-  assert.deepEqual(on.switches, [true]);
-  on.flip(false); assert.deepEqual(on.switches, [true]);
-  on.experience(); assert.deepEqual(on.switches, [true, false]);
-  on.flip(true); assert.deepEqual(on.switches, [true, false, true]);
+test('an older Android app (it kept a copy of the removed switch) is told once that app windows are on, never off', () => {
+  const old = fixture();
+  assert.deepEqual(old.switches, [true], 'told at once, without waiting for the switches to settle');
+  old.settle(); old.experience();
+  assert.deepEqual(old.switches, [true], 'never turned off');
+  const current = fixture({ oldApk: false });
+  current.settle(); current.experience();
+  assert.deepEqual(current.switches, []);
+  assert.equal(current.R.appLink('/wizard-health/'), true, 'a current Android app opens app windows with no switch at all');
 });
 
-test('an app window never sets the switch (it never sees the shell switches)', () => {
+test('an app window never tells the Android app anything (only the main page does)', () => {
   const f = fixture({ session: 'wizard-health' });
   f.settle(); f.experience();
   assert.deepEqual(f.switches, []);
 });
 
+test('no switch is left: not in the catalog, the help or the shell code', () => {
+  const catalog = JSON.parse(readFileSync(new URL('../web/tweaks/catalog.json', import.meta.url), 'utf8'));
+  assert.equal(JSON.stringify(catalog).includes('wizard/app-windows'), false);
+  const help = JSON.parse(readFileSync(new URL('../skill/help.json', import.meta.url), 'utf8'));
+  assert.equal(JSON.stringify(help).includes('wizard/app-windows'), false);
+  const relay = readFileSync(new URL('../web/core/android-relay.js', import.meta.url), 'utf8');
+  assert.equal(/dataset\.tweaks[^\n]*WINDOWS|WINDOWS_SWITCH/.test(relay), false, 'the relay no longer reads a switch');
+});
+
 test('a link to a page of an installed Wizard app asks for that app\'s window at that page', () => {
-  const f = fixture({ on: true });
+  const f = fixture();
   assert.equal(f.R.appLink(ORIGIN + '/wizard-health/day?d=1#sleep'), true);
   assert.equal(f.R.appLink('/messenger/'), true);
   assert.equal(f.R.appLink('/messenger/labs/x'), true, 'the longest app address wins');
@@ -71,20 +77,20 @@ test('a link to a page of an installed Wizard app asks for that app\'s window at
 });
 
 test('a shell link naming an app (…/wizard-os-home/?open=<id>) opens that app at its own start', () => {
-  const f = fixture({ on: true });
+  const f = fixture();
   assert.equal(f.R.appLink('/wizard-os-home/?open=wizard-health'), true);
   assert.deepEqual(f.opens, [['wizard-health', '', 'Health']]);
 });
 
 test('Wizard\'s own pages, other sites, system apps and unknown pages are left to the old way', () => {
-  const f = fixture({ on: true });
+  const f = fixture();
   for (const href of ['/wizard-os-home/', '/wizard-os-home/?session=abc', '/wizard-os-home/?view=chats', '/wizard-os-home/chats/x',
     '/wizard-os-home/?open=files', '/wizard-os-home/?open=nope', 'https://elsewhere.example/wizard-health/', '/files/x', '/not-an-app/',
     '/wizard-health%2f../x', 'javascript:alert(1)']) assert.equal(f.R.appLink(href), false, href);
   assert.deepEqual(f.opens, []);
 });
 
-test('switch off (the Android app answers false) or no bridge: the link keeps its old way', () => {
+test('the Android app declines (answers false) or no bridge: the link keeps its old way', () => {
   const off = fixture({ answer: false });
   assert.equal(off.R.appLink('/wizard-health/'), false);
   assert.equal(off.opens.length, 1);
@@ -94,14 +100,14 @@ test('switch off (the Android app answers false) or no bridge: the link keeps it
 });
 
 test('inside an app\'s own window, its own links stay in it; other apps open their windows', () => {
-  const f = fixture({ on: true, session: 'messenger' });
+  const f = fixture({ session: 'messenger' });
   assert.equal(f.R.appLink('/messenger/chat/1'), false);
   assert.equal(f.R.appLink('/wizard-health/'), true);
   assert.deepEqual(f.opens, [['wizard-health', '/wizard-health/', 'Health']]);
 });
 
 test('openAppWindow (a notification\'s Open) checks the app and that the page lies inside it', () => {
-  const f = fixture({ on: true });
+  const f = fixture();
   assert.equal(f.R.openAppWindow('wizard-health'), true);
   assert.equal(f.R.openAppWindow('wizard-health', '/wizard-health/day'), true);
   assert.equal(f.R.openAppWindow('wizard-health', '/messenger/'), false, 'a page of another app');
@@ -208,15 +214,4 @@ test('an open app window follows a later link to one of its pages, never to anyt
   assert.equal(w.frame().src, 'https://box.example/wisdom/book/9');
   for (const bad of ['/messenger/', '/wizard-os-home/', 'https://elsewhere.example/wisdom/', '/wisdom%2f../x', 42]) assert.equal(w.go(bad), false, String(bad));
   assert.equal(w.frame().src, 'https://box.example/wisdom/book/9');
-});
-
-// Not run here (wizard-ux issue 1674): this pinned Java/Swift source text and no JDK runs it in this suite. Android wiring of App windows: the admission rule itself runs in the JVM suite (AppWindowsPolicyTest).
-test('the switch is in the catalog, off by default, and names its issue', async () => {
-  // what Settings › Look lists on a fresh device (core/experience.js over the shipped catalog and manifest)
-  const l = await switchOnFreshDevice(SWITCH);
-  assert.equal(l.manifest?.id, SWITCH, 'listed');
-  assert.deepEqual(l.manifest.issues, ['humanitylabs-org/wizard-os#650']);
-  assert.equal(l.row?.on, false); assert.equal(l.running, false, 'off by default');
-  assert.deepEqual(l.presetsRunning, [], 'no author preset turns it on');
-  assert.equal(l.canTurnOn, true, 'the owner can switch it on');
 });

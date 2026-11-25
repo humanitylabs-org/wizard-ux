@@ -1,3 +1,0 @@
-/* Links open the app's own window (wizard-os issue 650): nothing in the shell changes; the windows are the Android
- * app's own. This rule only marks the switch as present. */
-html[data-tweaks~="wizard/app-windows"] { --wos-app-windows: 1; }

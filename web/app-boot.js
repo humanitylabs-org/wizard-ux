@@ -271,7 +271,7 @@ window.WizCore.appParts.boot = function ({ $, APP, APPS, appVars, armBack, backS
       showSection(section);
     },
     app(id, srcEl) {
-      // Android, switch wizard/app-windows (wizard-os issue 650): a link to an app (also one this app was opened with) opens its own window.
+      // Android (wizard-os issue 650): a link to an app (also one this app was opened with) opens its own window.
       if (window.WizAndroidRelay?.openAppWindow?.(id)) return;
       // A tapped link inside a window (a Chats thread) remembers where it came from.
       const srcId = srcEl && srcEl.closest ? srcEl.closest('.win')?.dataset.win : '';

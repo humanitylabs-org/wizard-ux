@@ -173,26 +173,12 @@
   setTimeout(() => { chatSettled = true; noteSync(); }, 5000);
   noteSync();
 
-  /* App windows (wizard-os issue 650, switch wizard/app-windows, off by default). In the Android app, a link to a Wizard
-   * app (a chat link, a link inside another app, a notification's Open) opens that app's own Android window: the one
-   * its home-screen icon opens, pinned or not. Back at the app's start returns to where the link was. Links to Wizard's
-   * own pages (home, chats, threads) stay in the main window. The main page copies the switch to the Android app (an
-   * app window's page never sees the shell's switches); off, the app answers false and every link keeps its old way. */
-  const WINDOWS_SWITCH = 'wizard/app-windows';
-  let windowsWas = null;
-  function windowsSync() {
-    const n = window.WizardOSNative; if (!n || typeof n.appWindowsSwitch !== 'function' || window.WizHomeScreenPolicy?.mode) return;
-    let on = false; try { on = (document.documentElement.dataset.tweaks || '').split(' ').includes(WINDOWS_SWITCH); } catch (_) {}
-    if (!on && !chatSettled) return;
-    if (on === windowsWas) return;
-    windowsWas = on; try { n.appWindowsSwitch(on); } catch (_) {}
-  }
-  if (typeof MutationObserver === 'function' && document.documentElement) {
-    new MutationObserver(() => windowsSync()).observe(document.documentElement, { attributes: true, attributeFilter: ['data-tweaks'] });
-  }
-  window.addEventListener('wos:experience', () => { chatSettled = true; windowsSync(); });
-  setTimeout(() => { chatSettled = true; windowsSync(); }, 5000);
-  windowsSync();
+  /* App windows (wizard-os issue 650, on for everyone). In the Android app, a link to a Wizard app (a chat link, a link
+   * inside another app, a notification's Open) opens that app's own Android window: the one its home-screen icon
+   * opens, pinned or not. Back at the app's start returns to where the link was. Links to Wizard's own pages (home,
+   * chats, threads) stay in the main window. Android apps 0.10.50 to 0.10.64 still wait to be told it is on (they
+   * kept a copy of the old switch wizard/app-windows), so the main page tells them; newer ones have no such call. */
+  try { const n = window.WizardOSNative; if (n && typeof n.appWindowsSwitch === 'function' && !window.WizHomeScreenPolicy?.mode) n.appWindowsSwitch(true); } catch (_) {}
 
   /* Phone notifications per app (wizard-ux issue 1567, switch wizard/phone-app-notifications, off by default). The
    * Android app reads the Notifications app and posts each new item under its own app, on an Android channel per app.
