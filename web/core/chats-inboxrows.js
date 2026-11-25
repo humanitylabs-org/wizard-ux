@@ -43,10 +43,12 @@ window.WizCore.chatsParts.inboxrows = function ({ actMark, actNeeds, actUnread, 
   // (Guarded: tests run slices of createChats in a bare vm without window.)
   try { window.WizCore.inboxRowsFacts = () => inboxRowsOn() ? { ...ibFacts(), extra: rows => ibRecs({}, rows).length } : null; } catch (_) {}
   const ibSig = ag => `<span class="ch-ib-av ch-ib-ag" aria-hidden="true">${AGS()?.sigil?.(agentRec(ag)) || ''}</span>`;
-  function ibFace(s) {
-    const t = ibTags(s)[0], f = t ? chanFace(t.name) : null, ag = rowAgent(s);
-    return { av: f && f.own ? `<span class="ch-ib-av" aria-hidden="true">${esc(f.emoji)}</span>` : ibSig(ag), from: f ? (f.label || t.name) : agentName(ag === (AGS()?.defaultId?.() || 'hermes') ? '' : ag) };
+  // The avatar and sender line for a tag name, else the agent (Sent rows name their first tag the same way: issue 1814).
+  function ibTagFace(name, ag = AGS()?.defaultId?.() || 'hermes') {
+    const f = name ? chanFace(name) : null;
+    return { av: f && f.own ? `<span class="ch-ib-av" aria-hidden="true">${esc(f.emoji)}</span>` : ibSig(ag), from: f ? (f.label || name) : agentName(ag === (AGS()?.defaultId?.() || 'hermes') ? '' : ag) };
   }
+  function ibFace(s) { return ibTagFace(ibTags(s)[0]?.name, rowAgent(s)); }
   function ibMark(m) {
     return m === 'working' ? '<span class="ch-ib-mk"><i class="ch-spin" role="img" aria-label="Working"></i></span>'
       : m === 'needs' ? '<span class="ch-ib-mk"><i class="ch-chan-dot" role="img" aria-label="Needs you"></i></span>'
@@ -62,18 +64,28 @@ window.WizCore.chatsParts.inboxrows = function ({ actMark, actNeeds, actUnread, 
   }
   const IB_ARCH_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16v3H4zM6 10v9h12v-9M10 14h4"/></svg>';
   const IB_PIN_MARK = '<span class="ch-ib-pin" aria-label="Pinned">📌</span>';
+  /* The one Signal-style row: Inbox's threads and waiting tasks, and Sent's sends (wizard-ux issue 1814, switch
+   * wizard/sent-rows: James, 25 Nov 2026, "let's give the same design to sent"), so the two can't drift apart. Every
+   * part comes in as HTML the caller escaped: `key` the morph key, `wrap` / `cls` extra classes, `open` the row button's
+   * attributes, `tip` its title, `av` the avatar, `from` the sender, `time`, `title`, `mark`, `line` the one line under
+   * the title, `after` what follows the row button (Archive). */
+  function ibRow({ key, wrap = '', cls = '', open, tip, av, from, pin = 0, time, title, mark, line, after = '' }) {
+    return `<div class="ch-row-wrap ch-ib-wrap${wrap}" data-morph-key="${key}"><button type="button" data-part="thread-row" class="ch-row ch-ib-row${cls}" ${open} title="${tip}">${av}`
+      + `<span class="ch-ib-bd"><span class="ch-ib-l1"><span class="ch-ib-from">${pin ? IB_PIN_MARK : ''}${from}</span><time>${time}</time></span>`
+      + `<span class="ch-ib-l2"><b class="ch-ib-t">${title}</b>${mark}</span><span class="ch-ib-pv">${line}</span></span></button>`
+      + `${after}</div>`;
+  }
   function ibThreadRow(s, pin) {
     const m = actMark(s), f = ibFace(s), unread = m === 'new';
-    return `<div class="ch-row-wrap ch-ib-wrap${pin ? ' pinned' : ''}" data-morph-key="row:${esc(s.id)}"><button type="button" data-part="thread-row" class="ch-row ch-ib-row${unread ? ' unread' : ''}${m === 'needs' ? ' needs' : ''}" data-chopen="${esc(s.id)}" aria-haspopup="dialog" aria-keyshortcuts="Shift+F10" title="Open thread · hold or open the context menu for actions">${f.av}`
-      + `<span class="ch-ib-bd"><span class="ch-ib-l1"><span class="ch-ib-from">${pin ? IB_PIN_MARK : ''}${esc(f.from)}</span><time>${esc(ago(LIVE.cardAt(s)))}</time></span>`
-      + `<span class="ch-ib-l2"><b class="ch-ib-t">${esc(s.title || 'New chat')}</b>${ibMark(m)}</span><span class="ch-ib-pv">${esc(clip(ibLine(s), 160))}</span></span></button>`
-      + `<button type="button" class="ch-ib-arch" data-chibarch="${esc(s.id)}" aria-label="Archive: ${esc(s.title || 'New chat')}" title="Archive">${IB_ARCH_SVG}</button></div>`;
+    return ibRow({ key: `row:${esc(s.id)}`, wrap: pin ? ' pinned' : '', cls: `${unread ? ' unread' : ''}${m === 'needs' ? ' needs' : ''}`, open: `data-chopen="${esc(s.id)}" aria-haspopup="dialog" aria-keyshortcuts="Shift+F10"`, tip: 'Open thread · hold or open the context menu for actions',
+      av: f.av, from: esc(f.from), pin, time: esc(ago(LIVE.cardAt(s))), title: esc(s.title || 'New chat'), mark: ibMark(m), line: esc(clip(ibLine(s), 160)),
+      after: `<button type="button" class="ch-ib-arch" data-chibarch="${esc(s.id)}" aria-label="Archive: ${esc(s.title || 'New chat')}" title="Archive">${IB_ARCH_SVG}</button>` });
   }
   function ibRecRow(r) {
-    return `<div class="ch-row-wrap ch-ib-wrap" data-morph-key="ibrec:${esc(r.id)}"><button type="button" data-part="thread-row" class="ch-row ch-ib-row needs" data-chrunopen="${esc(r.thread)}" title="Open thread">${ibSig(r.agent)}`
-      + `<span class="ch-ib-bd"><span class="ch-ib-l1"><span class="ch-ib-from">${esc(agentName(r.agent === (AGS()?.defaultId?.() || 'hermes') ? '' : r.agent))}</span><time>${esc(r.updatedAt ? ago(new Date(r.updatedAt).toISOString()) : '')}</time></span>`
-      + `<span class="ch-ib-l2"><b class="ch-ib-t">${esc(r.title || 'Background task')}</b>${ibMark('needs')}</span><span class="ch-ib-pv">${r.failed ? '<em class="att failed">Failed:</em> ' : ''}${esc(clip(r.ask || '', 160))}</span></span></button>`
-      + `<button type="button" class="ch-ib-arch" data-chibrec="${esc(r.id)}" aria-label="Archive: ${esc(r.title || 'Background task')}" title="Archive">${IB_ARCH_SVG}</button></div>`;
+    return ibRow({ key: `ibrec:${esc(r.id)}`, cls: ' needs', open: `data-chrunopen="${esc(r.thread)}"`, tip: 'Open thread', av: ibSig(r.agent),
+      from: esc(agentName(r.agent === (AGS()?.defaultId?.() || 'hermes') ? '' : r.agent)), time: esc(r.updatedAt ? ago(new Date(r.updatedAt).toISOString()) : ''),
+      title: esc(r.title || 'Background task'), mark: ibMark('needs'), line: `${r.failed ? '<em class="att failed">Failed:</em> ' : ''}${esc(clip(r.ask || '', 160))}`,
+      after: `<button type="button" class="ch-ib-arch" data-chibrec="${esc(r.id)}" aria-label="Archive: ${esc(r.title || 'Background task')}" title="Archive">${IB_ARCH_SVG}</button>` });
   }
   /* The list body with the switch on: Inbox (pinned first, then threads, waiting tasks and Chats alerts in the one sort),
    * then Snoozed and Archived folded at the bottom as before. Working threads that never got an answer are in Sent. */
@@ -114,5 +126,5 @@ window.WizCore.chatsParts.inboxrows = function ({ actMark, actNeeds, actUnread, 
   }
   // The list model's inbox facts for a layout that draws its own list (CHATS.inboxRows), null with the switch off.
   function inboxRowsFacts() { return inboxRowsOn() ? ibFacts() : null; }
-  return { inboxRowsOn, inboxRowsBody, inboxRowsClick, inboxRowsFacts };
+  return { ibMark, ibRow, ibTagFace, inboxRowsOn, inboxRowsBody, inboxRowsClick, inboxRowsFacts };
 };
