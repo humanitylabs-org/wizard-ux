@@ -43,11 +43,11 @@
     },
     "try-features.js": {
       "source": "style/try-features.js",
-      "sha256": "217b88e1e9f64bd8f159ec68a056ceecc8c6cb5c035ec812d521788367207025"
+      "sha256": "85c8edc9e8bd884d18b6155f02425e3de69736f9ae0d95a1da00b002249542ab"
     },
     "wizard-try-features.js": {
       "source": "style/try-features.js",
-      "sha256": "217b88e1e9f64bd8f159ec68a056ceecc8c6cb5c035ec812d521788367207025"
+      "sha256": "85c8edc9e8bd884d18b6155f02425e3de69736f9ae0d95a1da00b002249542ab"
     }
   },
   "skin_layers": [

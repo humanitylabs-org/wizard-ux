@@ -26,3 +26,39 @@ test('kit copy defines WzTryFeatures and does nothing on its own', () => {
   const api = window.WzTryFeatures;
   assert.ok(api && typeof api.mount === 'function', 'exposes WzTryFeatures.mount');
 });
+
+// wizard-os#916: a re-read sent before a save (or while it is in flight) never paints the old state over the save.
+test('an older re-read answering after a save does not show the switch reverted', async () => {
+  const window = {};
+  vm.runInNewContext(kit.toString('utf8'), { window, globalThis: window, document: undefined });
+  const T = window.WzTryFeatures;
+  let box = { contract: 'wizard.app-switches/1', switches: [{ id: 'drag-events', name: 'Drag events', on: false, vote: null }] };
+  const res = data => ({ ok: true, status: 200, json: async () => data });
+  const snap = () => res(JSON.parse(JSON.stringify(box)));
+  const gets = [], posts = [];
+  const fetch = (path, init = {}) => {
+    if (init.method === 'POST') return new Promise(r => posts.push(() => { const b = JSON.parse(init.body); Object.assign(box.switches[0], 'on' in b ? { on: b.on } : { vote: b.vote }); r(snap()); }));
+    const s = snap(); return new Promise(r => gets.push(() => r(s)));
+  };
+  const listeners = {};
+  const doc = { head: { appendChild() {} }, visibilityState: 'visible', getElementById: () => null, createElement: () => ({}),
+    addEventListener: (n, fn) => { (listeners[n] = listeners[n] || []).push(fn); } };
+  const el = { innerHTML: '', hidden: false, classList: { add() {} }, addEventListener() {}, querySelectorAll: () => [] };
+  const checked = () => /data-try-id="drag-events"[\s\S]*?aria-checked="(true|false)"/.exec(el.innerHTML)[1];
+  const m = T.mount(el, { fetch, document: doc }); gets.shift()(); await m.ready;
+  assert.equal(checked(), 'false');
+
+  const stale = m.reload();                          // sent while the box still says Off
+  const save = m.send('drag-events', 'toggle');      // the flip
+  listeners.visibilitychange.forEach(fn => fn());    // page visible again during the save
+  assert.equal(gets.length, 1, 'no new read while the save is in flight');
+  posts.shift()(); await save;
+  assert.equal(checked(), 'true');
+  gets.shift()(); await stale;                       // the older read answers last
+  assert.equal(checked(), 'true', 'switch does not look reverted');
+  assert.equal(m.listing.switches[0].on, true);
+
+  box.switches[0].on = false;                        // flipped from the Tracker: a later read still shows it
+  const later = m.reload(); gets.shift()(); await later;
+  assert.equal(checked(), 'false');
+});
