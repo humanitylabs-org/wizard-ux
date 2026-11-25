@@ -1,5 +1,5 @@
 // wizard-app-manager#839: the shell's Runtipi loopback tools sign with Runtipi 4.12's CLI key when the App Manager
-// left a private copy (switch wizard/runtipi-cli-key on), and with the .env JWT_SECRET otherwise.
+// left a private copy, and with the .env JWT_SECRET otherwise.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, writeFileSync, chmodSync, symlinkSync } from 'node:fs';
