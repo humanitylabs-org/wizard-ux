@@ -52,7 +52,7 @@ html:root[data-shell="phone"] .ch-sec[data-sec="ready"] .ch-sec-h b { order: 4; 
 html:root[data-shell="phone"] .ch-sec-h b { padding: 2px 7px; border-radius: 9px; font: 600 0.6875rem / 1 var(--wz-font-ui, inherit); letter-spacing: 0; color: color-mix(in srgb, black 88%, var(--dc-accent)); background: var(--dc-accent); }
 html:root[data-shell="phone"] .ch-sec-h b.wait { color: color-mix(in srgb, black 88%, var(--amber, var(--dc-ink))); background: var(--amber, var(--dc-ink)); }
 html:root[data-shell="phone"] .ch-sec[data-sec="archive"] .ch-sec-h { font-size: 0.75rem; }
-html:root[data-shell="phone"] .ch-sec[data-sec="errors"] .ch-sec-h { color: var(--wz-danger, #ff8f8f); }
+html:root[data-shell="phone"] .ch-sec[data-sec="errors"] .ch-sec-h { color: var(--wz-danger); }
 html:root[data-shell="phone"] .ch-working-sort { padding: 0 10px 4px; font-size: 0.75rem; color: var(--dc-ink-3); }
 html:root[data-shell="phone"] .ch-working-sort select { padding: 4px 6px; border: 0; background: var(--dc-hover); color: var(--dc-ink-2); border-radius: 10px; font-size: 0.75rem; }
 
