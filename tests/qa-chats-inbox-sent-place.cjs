@@ -128,9 +128,9 @@ const report = { origin, web, cases: [] };
         await vis('.ch-tabbar').waitFor({ timeout: 15000 });
         await vis(rowSel('qa-mac')).waitFor({ timeout: 15000 });
         await nap(800); await openSecs();
-        const place = async () => {
-          await tab('inbox'); await openSecs(); const i = await inbox(); await shot('inbox');
-          await tab('sent'); await vis('[data-morph-key^="sent:"]').waitFor({ timeout: 8000 }).catch(() => {}); const s = await sentThreads(); await shot('sent');
+        const place = async (tag = '1') => {
+          await tab('inbox'); await openSecs(); const i = await inbox(); await shot(tag + '-inbox');
+          await tab('sent'); await vis('[data-morph-key^="sent:"]').waitFor({ timeout: 8000 }).catch(() => {}); const s = await sentThreads(); await shot(tag + '-sent');
           await tab('inbox');
           const inInbox = Object.entries(i).filter(([, k]) => ['ready', 'working', 'recent', 'saved'].includes(k)).map(([id]) => id).sort();
           return { inbox: i, inInbox, sent: s, both: inInbox.filter(id => s.includes(id)) };
@@ -155,7 +155,7 @@ const report = { origin, web, cases: [] };
           await page.evaluate(() => { window.WizLive?.refresh?.(); window.WizLive?.sentLog?.fresh?.(); });
           await tab('inbox'); await openSecs();
           await page.waitForFunction(sel => [...document.querySelectorAll(sel)].some(n => n.getClientRects().length), rowSel('qa-quiet'), { timeout: 20000 });
-          entry.moved = await place();
+          entry.moved = await place('2');
           assert.deepEqual(entry.moved.both, [], 'never in both after the move: ' + JSON.stringify(entry.moved));
           assert.ok(entry.moved.inInbox.includes('qa-quiet'), 'needs you now: in Inbox ' + JSON.stringify(entry.moved));
           assert.ok(!entry.moved.sent.includes('qa-quiet'), 'needs you now: gone from Sent ' + JSON.stringify(entry.moved));
