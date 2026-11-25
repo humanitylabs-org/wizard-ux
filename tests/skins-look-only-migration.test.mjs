@@ -40,15 +40,15 @@ function pagesBox(doc = null) {
 }
 
 // One device: its own storage, the real experience.js, an own skin (or none), and the real look sync on `box`.
-function device(box, { mix = {}, recipe = null, channel = 'latest', defaultsOff = [], extra = {} } = {}) {
+function device(box, { mix = {}, recipe = null, channel = 'latest', defaultsOff = [], extra = {}, wornAtStart = true } = {}) {
   const storage = new Map([['wos.skin', 'obsidian'], ['wos.channel.v1', channel],
     ['wos.skin-tweaks.v1', JSON.stringify({ version: 1, off: {}, preset: 'none', mix, defaultsOff, defaultsMigrated: true, machinesHomeMoved: true, ...extra })]]);
   const events = [], updates = [], timers = []; let active = [], sync = null;
-  const own = recipe ? { id: 'skin-1', name: 'Mine', base: 'obsidian', tweaks: { ...recipe } } : null;
+  const own = recipe ? { id: 'skin-1', name: 'Mine', base: 'obsidian', tweaks: { ...recipe } } : null; let worn = wornAtStart;
   const window = {
     WosSkin: { current: 'obsidian', families: [], familyOf: () => 'mizel' },
     WosSkinHost: { personalState: { ready: false }, get tweakState() { return active; }, layout: 'classic', setLayout() {}, loadTweaks: async ids => { active = ids; } },
-    WosMySkin: { get active() { return own; }, update: async v => { updates.push(clone(v)); Object.assign(own.tweaks, v.tweaks); } },
+    WosMySkin: { get active() { return worn ? own : null; }, update: async v => { updates.push(clone(v)); Object.assign(own.tweaks, v.tweaks); } },
     addEventListener() {},
     // What look-sync.js listens to in the shell: an owner's switch becomes a shared choice.
     dispatchEvent: e => { if (e.type !== 'wos:tweak-choice') return; events.push(clone(e.detail)); if (!sync) return; e.detail.scope === 'default' ? sync.defaultChoice(e.detail.id, e.detail.on) : sync.tweakChoice(e.detail.id, e.detail.on); },
@@ -64,7 +64,7 @@ function device(box, { mix = {}, recipe = null, channel = 'latest', defaultsOff 
   const flush = async () => { while (timers.length) { await timers.shift().f(); await tick(); } };
   const saved = () => JSON.parse(storage.get('wos.skin-tweaks.v1'));
   const running = () => Array.from(active).filter(id => !builtinDefaults(catalog).includes(id)).sort();
-  return { E, sync, flush, events, updates, own, saved, running, builtinOn: () => Array.from(active).includes(builtin) };
+  return { E, sync, flush, events, updates, own, saved, running, wear: () => { worn = true; }, builtinOn: () => Array.from(active).includes(builtin) };
 }
 const sharedOn = doc => Object.keys(doc?.tweaks || {}).filter(id => doc.tweaks[id].on).sort();
 const mixOn = mix => Object.keys(mix).filter(id => mix[id] === true).sort();
@@ -125,6 +125,16 @@ test('no own skin, or one with no choices, carries nothing and changes nothing',
     assert.deepEqual(d.events, []);
     assert.deepEqual(d.running(), mixOn(OLD_MIX));
   }
+});
+
+test('wearing an old own skin later changes no feature: only the skin worn at the first load is carried', async () => {
+  const d = device(null, { mix: OLD_MIX, recipe: OLD_RECIPE, wornAtStart: false }); await d.E.refresh();
+  assert.equal(d.saved().recipeCarried, true, 'marked at the first load, own skin worn or not');
+  assert.deepEqual(d.running(), mixOn(OLD_MIX));
+  d.wear(); await d.E.refresh();
+  assert.deepEqual(d.events, [], 'nothing shared');
+  assert.deepEqual(d.running(), mixOn(OLD_MIX), 'the same features run');
+  assert.equal(d.builtinOn(), true);
 });
 
 test('For everyone: nothing experimental runs, whatever the skin chose', async () => {

@@ -146,13 +146,15 @@
   }
   /* The one-time quiet migration (wizard-ux#1190): what an own skin worn on this device used to choose becomes the
    * owner's shared feature switches (look sync carries them to look.json, so every device and the Tracker show them),
-   * so the device keeps running what it ran instead of silently stopping. Once per device, marked recipeCarried (also
-   * set where the old switch was already on, which carried it then). The recipe itself is left as it was. Views are not
-   * carried. */
+   * so the device keeps running what it ran instead of silently stopping. Once per device, at its first load after the
+   * update, marked recipeCarried (also set where the old switch was already on, which carried it then). The recipe
+   * itself is left as it was. Views are not carried. */
   async function carryRecipe() {
-    const own = window.WosMySkin?.active;
-    if (state.recipeCarried || !own?.tweaks || typeof own.tweaks !== 'object' || !Object.keys(own.tweaks).length) return;
+    // Only the skin worn here at the first load after the update (my-skin.js has its cached recipes by then): wearing
+    // an old own skin later changes no feature, so the device is marked whether or not it wears one.
+    const M = window.WosMySkin; if (state.recipeCarried || !M) return;
     state.recipeCarried = true; Store.write(state);
+    const own = M.active; if (!own?.tweaks || typeof own.tweaks !== 'object') return;
     for (const id of [...manifests.keys()]) {
       if (id === LOOK_ONLY || viewOf(id)) continue;
       const choice = recipeChoice(own, id); if (typeof choice !== 'boolean') continue;
