@@ -429,10 +429,6 @@
       "help": "Narrow desktop window: tapping the icon of the app in front takes it back to its first view.",
       "where": "Settings › Appearance › Try new features › Tap the app in front for its first view"
     },
-    "wizard/messaging-chat-replies": {
-      "help": "Chats started on Telegram or Slack can be continued in Wizard; replies go through that app's own connection.",
-      "where": "Settings › Appearance › Try new features › Reply to Telegram and Slack chats"
-    },
     "wizard/download-swipe": {
       "help": "Phone: swipe the Downloaded banner away and swipe the Downloads sheet down to close it.",
       "where": "Settings › Appearance › Try new features › Swipe away downloads",
@@ -686,6 +682,7 @@
     "Channels in Chats": "on for everyone now, nothing to turn on: open Chats and use the Channels / Activity tabs at the top. Channels lists your Spaces one per line, plus General; open one to see its chats as posts with a reply line.",
     "Thread tracker": "retired: Needs you now shows in the thread itself, on the reply that needs the owner (with Mark done), and in Activity; Reply works on any message.",
     "Apps in Updates": "on for everyone: Settings › About & updates › Apps.",
+    "Reply to Telegram and Slack chats": "on for everyone: reply in Chats to a chat started on Telegram or Slack; it goes through that app's own connection and shows there too.",
     "Models from your connectors": "removed: the model menu in Chats lists the models of every AI connection you connected."
   }
 }

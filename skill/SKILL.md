@@ -187,7 +187,6 @@ Settings › Appearance › Try new features lists unfinished features anyone ca
 - **Phone notifications per app**: Android app: what any app sends to Notifications shows as a phone notification under that app's name, one Android channel per app.
 - **Private first setup**: New installs start private: Welcome leads with Tinfoil; Claude and ChatGPT are optional extras.
 - **Repair the agent's Wizard connection**: When the agent can't reach its Wizard app tools (unauthorized), `wizard link` puts the box's token back in the agent's settings; `wizard doctor` shows if they match.
-- **Reply to Telegram and Slack chats**: Chats started on Telegram or Slack can be continued in Wizard; replies go through that app's own connection.
 - **Runtipi 4.12 sign-in key**: App Manager uses its own Runtipi 4.12 key.
 - **Say why a chat needs you**: When Wizard itself marks a chat Needs you (a helper finished after the chat closed), the chat says why, with Continue and Dismiss. Dismiss, Done or Archive clears it on every device.
 - **Send and go**: On desktop, sending opens a fresh chat.
@@ -213,6 +212,7 @@ No longer switches (owners and old chats may still name them):
 - **Channels in Chats**: on for everyone now, nothing to turn on: open Chats and use the Channels / Activity tabs at the top. Channels lists your Spaces one per line, plus General; open one to see its chats as posts with a reply line.
 - **Thread tracker**: retired: Needs you now shows in the thread itself, on the reply that needs the owner (with Mark done), and in Activity; Reply works on any message.
 - **Apps in Updates**: on for everyone: Settings › About & updates › Apps.
+- **Reply to Telegram and Slack chats**: on for everyone: reply in Chats to a chat started on Telegram or Slack; it goes through that app's own connection and shows there too.
 - **Models from your connectors**: removed: the model menu in Chats lists the models of every AI connection you connected.
 
 ## How do I…
