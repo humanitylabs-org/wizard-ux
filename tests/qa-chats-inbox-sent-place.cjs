@@ -9,7 +9,7 @@
 //   qa-run    had an answer, then he sent again and it is working now                            → Sent only (Working)
 //   qa-alert  a scheduled report he didn't start (no Sent row)                                   → Inbox only
 // Then qa-quiet's newest outcome turns needs you: it moves from Sent to Inbox live, no reload. Opening an Inbox thread
-// keeps it in Inbox. QA_SWITCH=off: inbox-until-archived off, today's lists (qa-quiet in Recent, Working on top).
+// keeps it in Inbox. QA_SENT_ROWS=on adds wizard/sent-rows (#1814's Sent rows). QA_SWITCH=off: inbox-until-archived off, today's lists (qa-quiet in Recent, Working on top).
 const assert = require('node:assert/strict');
 const { chromium } = require('../tools/qa-playwright.cjs');
 const { ownerRead } = require('../tools/qa-desktop-frame-fixture.cjs');
@@ -55,7 +55,7 @@ const report = { origin, web, cases: [] };
       const context = await browser.newContext({ viewport: phone ? { width: 412, height: 915 } : { width: 1440, height: 960 }, isMobile: phone, hasTouch: phone, serviceWorkers: 'block', ...(phone ? { userAgent: 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Mobile Safari/537.36' } : {}) });
       try {
         await context.routeWebSocket('**/*', w => w.close());
-        const mix = { 'wizard/desktop-chats': true, ...(SW ? { 'wizard/inbox-until-archived': true } : {}), ...(SW && ROWS ? { 'wizard/inbox-rows': true } : {}) };
+        const mix = { 'wizard/desktop-chats': true, ...(SW ? { 'wizard/inbox-until-archived': true } : {}), ...(SW && ROWS ? { 'wizard/inbox-rows': true } : {}), ...(process.env.QA_SENT_ROWS === 'on' ? { 'wizard/sent-rows': true } : {}) };
         await context.addInitScript(({ shell, mix }) => {
           if (window !== top) return;
           if (sessionStorage.getItem('qaBoot')) return; sessionStorage.setItem('qaBoot', '1');
