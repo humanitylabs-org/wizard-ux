@@ -59,7 +59,7 @@ Back: `WizEscapeBack`, `WosBack`; `WizChatsHost.registerBack`/back.push share re
 | Chats/Ready | `WizChatsHost`/`WizAppExtensions` (`chats-view.js`): surface/(views.)mount, placement, `replyRecorder`, draft admission; host `keepNewOpen(id)` keeps docked New open on send (`WosSkinHost.routeShows`); pills: `workspaceNav.chatsCount/refreshChats`; subgroups: `WizChatsListModel.unreadCount`; counts: `.unreadThreads` |
 | Bound-view handle (3 intro glows) | `WosSkinHost` built-in (`edge-peek.js`), host storage |
 | Repaint changed nodes without flicker | `WosMorph.morph` (`dom-morph.js`) |
-| Mic, retry, model, place/follow | `WosChatPower` (`chat-power.js`;`chanOwnPost`/`chanModel`/`landAt`/`paintJump`); `voice.reply/onTap`→`recordReply`; `WosModels` (`foreignApp`); `WosErrors`; `WosWork`; composer `WizCore` (`chats.js` `fitLabel`,`.css` `lab-row`) |
+| Mic, retry, model, place/follow | `WosChatPower` (`chat-power.js`;`chanOwnPost`/`chanModel`/`landAt`/`paintJump`); `voice.reply/onTap`→`recordReply`; `WosModels` (`foreignApp`, `failureHtml`, `reconnect`: a stored sign-in diagnosis only while the live reading says signed out); `WosErrors`; `WosWork`; composer `WizCore` (`chats.js` `fitLabel`,`.css` `lab-row`) |
 | Text/media | `WosChat` (`chat-kit.js`: `helm`, `tweakIds`, `actionIds`→`WosActionCards`, `md`, `copyRich`, `viewer`, `saveFile`, `drafts.keys`) |
 | Spaces / Focus | `WizCore` Chats (`chats.js`), `WizLive.prefOps` (`spaces`; add = move, one Space per chat); `WizLive.spaceSessions(ids)`; `winAgent`/`modelRoute`; `WosOutbox.onNew`; restored Focus awaits census; hidden routes; AI apps pills (`.aad-agents`): `focusRows`, `agents.focus`; `WosAgents.colour`/`distinctHues` + `--ch-agent-hue` |
 | Pins: menu / opt-in row buttons | `WosChatPins` (`chat-pins.js`) |
@@ -125,5 +125,5 @@ Back: `WizEscapeBack`, `WosBack`; `WizChatsHost.registerBack`/back.push share re
 
 `WizCompanionPane`, `WizardApp`, `WizAppCapture`, `WizComposerInput`, `WizAttachChip`, `WosSkinFrame`, `WosDevice`, `WizAppServices` (`app-services.js`; stopped), `WizCore` (`core.js`, `bridge.js`), `WizConfig`, `WosWriteGuard` (write loops), `WizReach`, `WizAndroidRelay` (`android-relay.js`), `WizBackgroundAudio` (`background-audio.js`), `WizHomeScreenPolicy`/`WizPinDoc` (`home-screen-policy.js`), `WosOwnViews` (`own-views.js`), `WosOrbHandoff` (`orb-handoff.js`), `WosShareSheet` (`share-sheet.js`), `WosBell` (`notif-bell.js`), `WosResources` (`resources.js`), `WosUsage`, `WizPhotosRelay` (`photos-relay.js`), `WosMusic`, `WizDeviceLegacy` (`voice-legacy.js`), openers `WizAppOpen`, `WizCanOpen`, `WizOpenApp`, `WizOpenAgentChats` (`app.js`), `WosBoundView` (`bound-view.js`), `WosWorkspaceSync` (`workspace-sync.js`), `WosMedia`, `WizWorkspaces` ([contract](workspaces.md)), `WizShellBoundary`, `WizBrowserBoundary` (keys/layout/wz-keys/svc/skin/link/own-tab/same-origin), `WizBoundaryClient`.
 
-AI usage: EXTEND `WosResources`/`WosUsage`: extra, sign-in ([details](component-contract-details.md)).
+AI usage: EXTEND `WosResources`/`WosUsage`: extra, sign-in, `signedIn(provider)` + `wos:ai-signin` `detail.signedIn` ([details](component-contract-details.md)).
 
