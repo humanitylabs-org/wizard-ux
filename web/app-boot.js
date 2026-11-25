@@ -122,6 +122,24 @@ window.WizCore.appParts.boot = function ({ $, APP, APPS, appVars, armBack, backS
   // Assistant handoff (side-key app → WizardOS). 'listen' opens the orb listening; 'say' shows the words as a
   // draft that James sends with one tap — another app can never make Archimedes act on its own.
   let threadHandoffGeneration = 0;
+  // Messenger at its pinned Agent chat (`#chat=agent:notes`, Messenger's own link). On a cold start the app list may
+  // still be loading, so wait for it once. Without Messenger the button keeps today's listening orb: never a dead press.
+  const AGENT_NOTE_APPS = ['messenger', 'wizard-messenger'];
+  function agentNote() {
+    const log = s => { window.__backLog = (window.__backLog || []).concat('handoff:agent-note:' + s).slice(-30); };
+    const open = () => {
+      const id = AGENT_NOTE_APPS.find(x => window.WizCanOpen?.(x)); if (!id) return false;
+      let u; try { u = new URL(APP[id].url, location.href); u.hash = 'chat=agent:notes'; } catch (_) { return false; }
+      const ok = window.WizOpenApp?.(id, u.href) === true; log(ok ? 'open:' + id : 'refused:' + id); return ok;
+    };
+    if (open()) return;
+    Promise.resolve(window.WizCore?.appsLoaded?.()).catch(() => {}).then(() => {
+      if (open()) return;
+      log('no-messenger');
+      toast('◉', 'The Agent chat is in Messenger · get it from the App Store', 3200);
+      if (V.state === 'idle') startVoice('auto');
+    });
+  }
   window.__wosHandoff = h => {
     // A side-button handoff means James already knows the gestures: clear the first-run coach so the draft is visible.
     if (window.WosTour?.active) window.WosTour.finish('handoff');
@@ -142,6 +160,9 @@ window.WizCore.appParts.boot = function ({ $, APP, APPS, appVars, armBack, backS
       }).catch(() => { if (generation === threadHandoffGeneration) toast('◉', 'Could not locate that chat · reconnect and tap again'); });
       return true;
     }
+    // Side button opens the Agent chat (wizard-ux issue 1528, switch wizard/assist-agent-note): the Android app sends
+    // this instead of starting a Wizard take. Messenger's pinned Agent chat takes the typed or voice note and ticks it.
+    if (h.action === 'agent-note') { agentNote(); return true; }
     if (APP[h.action]?.kind === 'wizard') return openApp(APP[h.action]);
     // Photos is its own app: older WizardOS builds still ask for Settings › photos-backup (notification, native screen).
     if (h.action === 'settings' && (h.focus === 'photos-backup' || h.focus === 'photos')) { if (!window.WizOpenApp?.('photos')) toast('▣', 'Photos backup lives in the Photos app · install it from the App Store', 3200); return true; }

@@ -154,6 +154,25 @@
   setTimeout(() => { chatSettled = true; attachSync(); }, 5000);
   attachSync();
 
+  /* Side button opens the Agent chat (wizard-ux issue 1528, switch wizard/assist-agent-note, off by default). The
+   * corner orb decides at the button press, before any shell page runs, so the shell copies this switch to the Android
+   * app too (assist/AssistNote). An off is applied only once the switches have settled, as above. */
+  const NOTE_SWITCH = 'wizard/assist-agent-note';
+  let noteWas = null;
+  function noteSync() {
+    const n = window.WizardOSNative; if (!n || typeof n.assistNoteSwitch !== 'function') return;
+    let on = false; try { on = (document.documentElement.dataset.tweaks || '').split(' ').includes(NOTE_SWITCH); } catch (_) {}
+    if (!on && !chatSettled) return;
+    if (on === noteWas) return;
+    noteWas = on; try { n.assistNoteSwitch(on); } catch (_) {}
+  }
+  if (typeof MutationObserver === 'function' && document.documentElement) {
+    new MutationObserver(() => noteSync()).observe(document.documentElement, { attributes: true, attributeFilter: ['data-tweaks'] });
+  }
+  window.addEventListener('wos:experience', () => { chatSettled = true; noteSync(); });
+  setTimeout(() => { chatSettled = true; noteSync(); }, 5000);
+  noteSync();
+
   /* App windows (wizard-os issue 650, switch wizard/app-windows, off by default). In the Android app, a link to a Wizard
    * app (a chat link, a link inside another app, a notification's Open) opens that app's own Android window: the one
    * its home-screen icon opens, pinned or not. Back at the app's start returns to where the link was. Links to Wizard's

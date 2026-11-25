@@ -80,6 +80,17 @@ public class AssistLockActivity extends Activity implements VoiceCapture.View {
         if (Build.VERSION.SDK_INT >= 30) getWindow().setDecorFitsSystemWindows(false);
         keyguard = (KeyguardManager) getSystemService(Context.KEYGUARD_SERVICE);
         capture = VoiceCapture.get(this);
+        // Side button opens the Agent chat (wizard-ux issue 1528, switch wizard/assist-agent-note): an assistant press that
+        // lands here on an unlocked phone opens WizardOS on Messenger's Agent chat, like the corner orb. Locked: this surface.
+        if (Intent.ACTION_ASSIST.equals(getIntent().getAction())
+                && AssistNote.opensAgentChat(AssistNote.on(this), keyguard.isKeyguardLocked(), false, capture.listening())) {
+            ai.wizards.os.SideButton.markUsed(this);
+            Log.i(TAG, "assist: opening the Agent chat");
+            handingOff = true; // nothing was said here: onDestroy must not touch the take
+            startActivity(AssistNote.intent(this));
+            finish();
+            return;
+        }
         if (Intent.ACTION_ASSIST.equals(getIntent().getAction())) ai.wizards.os.SideButton.markUsed(this);
         capture.attach(this);
 

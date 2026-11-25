@@ -151,6 +151,15 @@ final class WizardSession extends VoiceInteractionSession implements VoiceCaptur
             hide();
             return;
         }
+        // Side button opens the Agent chat (wizard-ux issue 1528, switch wizard/assist-agent-note): no take, no new Wizard
+        // chat; WizardOS opens on Messenger's Agent chat for a typed or voice note. Off: the orb below, as before.
+        if (AssistNote.opensAgentChat(AssistNote.on(getContext()), keyguard.isKeyguardLocked(), handoff, capture.listening())) {
+            ai.wizards.os.SideButton.markUsed(getContext());
+            Log.i(TAG, "side button: opening the Agent chat");
+            startAssistantActivity(AssistNote.intent(getContext()));
+            hide();
+            return;
+        }
         capture.attach(this);
         ai.wizards.os.SideButton.markUsed(getContext()); // the side button really reached WizardOS
         Log.i(TAG, "corner shown handoff=" + handoff + " listening=" + capture.listening());
