@@ -10,7 +10,7 @@
 'use strict';
 window.WizCore = window.WizCore || {};
 window.WizCore.chatsParts = window.WizCore.chatsParts || {};
-window.WizCore.chatsParts.spaces = function ({ actNeeds, actUnread, agentRec, AGS, ch, CH, CHAN_STORE_MAX, chanAt, chanEmojiPick, chanEmojiSync, chanEmojiTap, chanOpen, chanStore, chanTarget, chanToEnd, chatRow, chatVars, esc, fileInGeneral, fileInSpace, focusAgents, focusOf, focusOptions, H, LIVE, norm, noteAt, noteRow, openChannel, owner, READY_ORDER_KEY, renderChatList, rerenderList, runningOpen, SEC_PAGE, setFocus, SPACE, spaceAgent, spaceContains, spaceMember, spaces, spacesOf, storeAgent, toast, W, winAgent }) {
+window.WizCore.chatsParts.spaces = function ({ actNeeds, actUnread, inboxRowsBody, inboxRowsClick, inboxRowsOn, agentRec, AGS, ch, CH, CHAN_STORE_MAX, chanAt, chanEmojiPick, chanEmojiSync, chanEmojiTap, chanOpen, chanStore, chanTarget, chanToEnd, chatRow, chatVars, esc, fileInGeneral, fileInSpace, focusAgents, focusOf, focusOptions, H, LIVE, norm, noteAt, noteRow, openChannel, owner, READY_ORDER_KEY, renderChatList, rerenderList, runningOpen, SEC_PAGE, setFocus, SPACE, spaceAgent, spaceContains, spaceMember, spaces, spacesOf, storeAgent, toast, W, winAgent }) {
   let elOf, idOf, renderChats, sendChat; // late-bound: chats.js declares these after the call, see bindLate
   function closeSpacePicker() {
     if (!chatVars.spacePicker) return false;
@@ -135,6 +135,8 @@ window.WizCore.chatsParts.spaces = function ({ actNeeds, actUnread, agentRec, AG
   // Activity with nothing in it (a fresh box): one deliberate empty state, never a stack of empty sections (issue 1731).
   const actEmpty = () => '<div class="ch-empty ch-act-empty"><b>No chats yet</b><span>Tap + to start one, or tap the orb and talk.</span><button type="button" class="ch-fclear" data-chnew data-chemptynew>New chat</button></div>';
   function activityBody(w, rows, nt, drafts = 0) {
+    // Inbox rows (wizard-ux issue 1779, switch wizard/inbox-rows): only what needs him, as Signal-style rows.
+    if (typeof inboxRowsOn === 'function' && inboxRowsOn(w)) return inboxRowsBody(w, rows, nt, drafts);
     const M = window.WizChatsListModel, c = ch(w.id), order = M.activitySortOf(chatVars.readyOrder);
     const keep = typeof inboxKeep === 'function' && inboxKeep(); // Inbox until archived (wizard-ux issue 1810)
     const g = M.activityGroups(LIVE.workGroups(rows), { needs: actNeeds, unread: actUnread, at: chanAt }, { order, now: Date.now(), older: actOlder, keep });
@@ -167,6 +169,7 @@ window.WizCore.chatsParts.spaces = function ({ actNeeds, actUnread, agentRec, AG
   // The sort and Show older taps (Activity with Channels on); false = not one of them.
   function activityClick(e, w) {
     if (!w || w.thread) return false;
+    if (typeof inboxRowsClick === 'function' && inboxRowsClick(e, w)) return true;   // a row's Archive (issue 1779)
     if (e.target.closest('[data-chactorder]')) return true;   // the sort menu: its change event picks (actSetOrder)
     if (e.target.closest('[data-chactolder]')) { actOlder = true; renderChatList(w, elOf(w.id)); return true; }
     return false;

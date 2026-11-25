@@ -323,7 +323,7 @@ window.WizCore.liveParts.channels = function () {
     function state() { if (!s.busy && now() - s.at >= every) read(); return s; }
     // One agent's records ('hermes' = the main agent): a view opens a record's thread only in that agent's own Chats.
     const records = agent => state().records.filter(r => r.agent === (agent || 'hermes'));
-    const fresh = () => { s.at = 0; al.at = 0; };
+    const fresh = () => { s.at = 0; al.at = 0; nd.at = 0; };
     // Open / Send to inbox (wizard-ux issue 1570): POST /wizard/v1/agent-inbox/open|send moves one main-agent thread
     // between the chat list and the background; the box answers with its record. The list is asked again right after.
     async function move(kind, thread, extra = {}) {
@@ -385,7 +385,7 @@ window.WizCore.liveParts.channels = function () {
     const alertRec = r => r && typeof r === 'object' && RID.test(r.id) && typeof r.kind === 'string'
       ? { id: r.id, kind: r.kind, agent: typeof r.agent === 'string' && AID.test(r.agent) ? r.agent : 'hermes', thread: typeof r.thread_id === 'string' && SID.test(r.thread_id) ? r.thread_id : '',
         title: str(r.title, 120), ask: str(r.ask || r.last_update, 300), severity: str(r.severity, 12), collapsed: r.alert_collapsed === true, extra: cnt(r.alert_extra),
-        feedback: FB.has(r.feedback) ? r.feedback : '', link: href(r.link), state: str(r.state, 12), updatedAt: num(r.updated_at) || num(r.created_at) } : null;
+        feedback: FB.has(r.feedback) ? r.feedback : '', link: href(r.link), state: str(r.state, 12), updatedAt: num(r.updated_at) || num(r.created_at), ...(r.failed === true ? { failed: true } : {}) } : null;
     const al = { records: [], ok: false, gone: false, at: 0, busy: null };
     function readAlerts() {
       if (al.busy) return al.busy;
@@ -407,6 +407,33 @@ window.WizCore.liveParts.channels = function () {
       const j = await (await req('/wizard/v1/agent-inbox?state=new,surfaced&limit=200', { cache: 'no-store' })).json();
       return (Array.isArray(j?.records) ? j.records : []).map(alertRec).filter(r => r && LATER.has(r.kind)).sort((a, b) => b.updatedAt - a.updatedAt || (a.id < b.id ? -1 : 1)).slice(0, 30);
     }
+    /* Inbox rows (wizard-ux issue 1779, switch wizard/inbox-rows): the records waiting on the owner (kind needs_you,
+     * state new; `failed` when the task failed or stalled), read only while the switch asks for them, kept fresh like
+     * the Running list. archive(id): PATCH <id> {action: archive}, gone from the list on this frame. A 404 is none. */
+    const nd = { records: [], ok: false, gone: false, at: 0, busy: null };
+    function readNeeds() {
+      if (nd.busy) return nd.busy;
+      nd.at = now();
+      nd.busy = (async () => {
+        try {
+          const j = await (await req('/wizard/v1/agent-inbox?state=new&kind=needs_you&limit=50', { cache: 'no-store' })).json();
+          nd.records = (Array.isArray(j?.records) ? j.records : []).map(alertRec).filter(r => r && r.kind === 'needs_you' && r.thread && (!r.state || r.state === 'new')).sort((a, b) => b.updatedAt - a.updatedAt || (a.id < b.id ? -1 : 1));
+          nd.ok = true; nd.gone = false;
+        } catch (e) { if (e?.status === 404) { nd.records = []; nd.ok = true; nd.gone = true; } }
+        finally { nd.busy = null; tell(); }
+        return nd;
+      })();
+      return nd.busy;
+    }
+    function needsState() { if (!nd.busy && now() - nd.at >= every) readNeeds(); return nd; }
+    const needs = agent => needsState().records.filter(r => r.agent === (agent || 'hermes'));
+    async function archive(id) {
+      if (!RID.test(String(id || ''))) throw Object.assign(new Error('invalid'), { status: 400 });
+      const was = nd.records; nd.records = nd.records.filter(r => r.id !== id); tell();
+      try { return await (await req(`/wizard/v1/agent-inbox/${id}`, { method: 'PATCH', ...JSON_POST({ action: 'archive' }) })).json(); }
+      catch (e) { nd.records = was; tell(); throw e; }
+      finally { nd.at = 0; readNeeds(); }
+    }
     async function feedback(id, action) {
       if (!RID.test(String(id || '')) || !FB.has(action)) throw Object.assign(new Error('invalid'), { status: 400 });
       try {
@@ -416,7 +443,7 @@ window.WizCore.liveParts.channels = function () {
         return { record: alertRec(j?.record), examples: { not_urgent: cnt(j?.examples?.not_urgent), should_alert: cnt(j?.examples?.should_alert) } };
       } finally { al.at = 0; readAlerts(); }
     }
-    return { state, records, read, fresh, move, stays, card, answer, yesToAll, sweep, alerts, alertState, readAlerts, later, feedback };
+    return { state, records, read, fresh, move, stays, card, answer, yesToAll, sweep, alerts, alertState, readAlerts, later, feedback, needs, needsState, readNeeds, archive };
   }
   /* ---- sent log (wizard-ux issue 1778) ----
    * The box's Sent log (wizard-agent-service issue 607, same switch as the agent inbox): one row per capture the owner

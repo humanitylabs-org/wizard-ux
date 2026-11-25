@@ -32,12 +32,19 @@ window.WizCore.chatsParts.ready = function ({ actNeeds, actUnread, CH, chanAt, e
    * same rows and rule activityBody draws for the main list (needs you OR unread, never snoozed), so the badges can never
    * disagree with the list. Notifications set to Chats are added by the badge itself (WosBell.unreadCount). Null with
    * Channels off: the badges keep their unread tally there. */
-  function activityReady(live) { const r = activityReadyRows(live); return r ? r.length : null; }
+  function activityReady(live) { const r = activityReadyRows(live); return r ? r.length + inboxExtra(live) : null; }
   function activityReadyRows(live) {
     const L = live || LIVE, M = window.WizChatsListModel;
     if (!L?.ok || !M?.activityGroups) return null;
     const rows = (L.sessionsFor ? L.sessionsFor('') : L.unified()).filter(s => !s.hidden);
-    return M.activityGroups(L.workGroups(rows), { needs: actNeeds, unread: actUnread, at: chanAt }, { keep: inboxKeep() }).ready;
+    // Inbox rows (wizard-ux issue 1779, switch wizard/inbox-rows): the Inbox's own rule, plus the waiting background tasks.
+    const ib = window.WizCore.inboxRowsFacts?.() || null;
+    return M.activityGroups(L.workGroups(rows), { needs: actNeeds, unread: actUnread, at: chanAt }, { keep: inboxKeep(), inbox: ib }).ready;
+  }
+  // The waiting background tasks the Inbox shows as rows of their own (issue 1779): they count as well.
+  function inboxExtra(live) {
+    const ib = window.WizCore.inboxRowsFacts?.(), L = live || LIVE; if (!ib?.extra || !L?.ok) return 0;
+    try { return ib.extra((L.sessionsFor ? L.sessionsFor('') : L.unified()).filter(s => !s.hidden)); } catch (_) { return 0; }
   }
   /* Home's "N need you" and its Needs you · Unread card (wizard-ux issue 1517): with Channels on, the same split as
    * Activity's Ready (amber = actNeeds, the rest green), so an amber thread already opened still counts as needing you.
@@ -48,7 +55,8 @@ window.WizCore.chatsParts.ready = function ({ actNeeds, actUnread, CH, chanAt, e
   }
   /* Inbox until archived (wizard-ux issue 1810, switch wizard/inbox-until-archived): every thread stays in Inbox until it
    * is archived, so Ready, its count and the badges are the Inbox. Read from the root's data-tweaks (the list model is pure). */
-  function inboxKeep() { try { return !!window.WizChatsListModel?.inboxKeep?.(document.documentElement.dataset.tweaks); } catch (_) { return false; } }
+  // Inbox rows (wizard-ux issue 1779) keep every Inbox row until it is archived too, so the shells read it as Inbox.
+  function inboxKeep() { try { const t = document.documentElement.dataset.tweaks, M = window.WizChatsListModel; return !!(M?.inboxKeep?.(t) || M?.inboxRowsOn?.(t)); } catch (_) { return false; } }
   window.WizCore.inboxKeep = inboxKeep;
   window.WizCore.activityReady = activityReady;
   window.WizCore.activityHome = activityHome;

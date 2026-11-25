@@ -232,9 +232,42 @@ function activitySort(rows, order, { at = r => msOf(r?.at), needs = r => r?.mark
 const INBOX_KEEP = 'wizard/inbox-until-archived';
 /** Whether the switch is on, from the root's data-tweaks string (the adapter reads the DOM, not this model). */
 const inboxKeep = tweaks => String(tweaks || '').split(' ').includes(INBOX_KEEP);
-function activityGroups(groups, { needs, unread, at }, { order = 'newest', now = 0, days = ACTIVITY_RECENT_DAYS, older = false, keep = false } = {}) {
+/* Inbox rows (wizard-ux issue 1779, switch wizard/inbox-rows; James and Miguel, 24 Nov 2026: "only what needs you",
+ * Signal / Telegram rows): Inbox holds only what needs the owner, and a row stays until he archives it. A thread waits
+ * there when it needs him (amber: needs you, check, approval) or failed; otherwise when the agent answered in it (a new
+ * reply, read or not), unless that answer was a quiet one (the box's quiet-reply mark: it needed nothing, it is in Sent).
+ * A thread that never got an answer (his own send still working, a hidden worker's background run) is not here: Sent
+ * shows it. Pinned rows (today's Daily, #priority, said urgent) lead, in pin order. */
+const INBOX_ROWS = 'wizard/inbox-rows';
+const inboxRowsOn = tweaks => String(tweaks || '').split(' ').includes(INBOX_ROWS);
+const inboxFailed = s => ['failed', 'interrupted'].includes(s?.status);
+// The agent answered in it: the list's last-reply time, its newest message is the agent's, or it holds more than one message.
+const inboxReplied = s => !!(s && (Date.parse(s.lastAssistantAt ?? '') || s.previewRole === 'assistant' || Number(s.messageCount) >= 2));
+/** Whether one thread waits in Inbox. needs(s) / unread(s) are the shell's markers, quiet(s) the quiet-reply mark. Pure. */
+function inboxWants(s, { needs = () => false, unread = () => false, quiet = () => false } = {}) {
+  if (!s || s.archived || s.hidden) return false;
+  if (needs(s) || inboxFailed(s)) return true;
+  if (quiet(s)) return false;
+  return !!(unread(s) || inboxReplied(s));
+}
+function activityGroups(groups, { needs, unread, at }, { order = 'newest', now = 0, days = ACTIVITY_RECENT_DAYS, older = false, keep = false, inbox = null } = {}) {
   if (!groups) return null;
   const snoozed = s => deferred(s) && !['waiting_for_approval', 'unknown'].includes(s.status);
+  // Inbox rows (issue 1779): inbox = { quiet(s), pin(s) → 0 or its pin rank }. Ready is the Inbox: what inboxWants keeps,
+  // a working thread that already had an answer included (its spinner shows on the row), pinned rows first. No Recent.
+  if (inbox) {
+    const pin = s => Number(inbox.pin?.(s)) || 0, want = s => pin(s) > 0 || inboxWants(s, { needs, unread, quiet: inbox.quiet });
+    const aged = (groups.archive || []).filter(s => !s.archived), live = [...(groups.errors || []), ...(groups.ready || []), ...(groups.yesterday || []), ...(groups.pastWeek || []), ...aged];
+    const ready = [], snz = [...(groups.deferred || [])], seen = new Set();
+    for (const s of [...(groups.working || []), ...live]) {
+      if (!s || seen.has(s.id)) continue; seen.add(s.id);
+      if (snoozed(s)) snz.push(s); else if (want(s)) ready.push(s);
+    }
+    const inReady = new Set(ready.map(s => s.id)), sorted = activitySort(ready, order, { at, needs });
+    const pinned = sorted.filter(s => pin(s) > 0).sort((a, b) => pin(a) - pin(b));
+    return { working: activitySort((groups.working || []).filter(s => !inReady.has(s.id)), order === 'priority' ? 'newest' : order, { at }), ready: [...pinned, ...sorted.filter(s => !(pin(s) > 0))],
+      pinned: pinned.length, recent: [], older: 0, snoozed: activitySort(snz, 'newest', { at }), archive: activitySort((groups.archive || []).filter(s => s.archived), 'newest', { at }) };
+  }
   // keep: a thread only aged past "archive after" (not archived by the owner) stays in Inbox too.
   const aged = keep ? (groups.archive || []).filter(s => !s.archived) : [];
   const rest = [...(groups.errors || []), ...(groups.ready || []), ...(groups.yesterday || []), ...(groups.pastWeek || []), ...aged];
@@ -250,7 +283,8 @@ function activityList(groups, facts, opts = {}) {
   const c = facts.chats, at = s => msOf(facts.live.cardAt?.(s)) || msOf(s.updatedAt) || msOf(s.createdAt);
   const needs = s => !!c.activityNeeds?.(s), unread = s => !!c.activityUnread?.(s);
   // keep: Inbox until archived (wizard-ux issue 1810), from the shell's own switch read unless the caller says.
-  const g = activityGroups(groups, { needs, unread, at }, { ...opts, keep: opts.keep ?? !!c.inboxKeep?.() }); if (!g) return null;
+  // inbox: Inbox rows (wizard-ux issue 1779), the shell's { quiet, pin } facts while its switch is on.
+  const g = activityGroups(groups, { needs, unread, at }, { ...opts, keep: opts.keep ?? !!c.inboxKeep?.(), inbox: opts.inbox ?? (c.inboxRows?.() || null) }); if (!g) return null;
   const rows = (list, kind) => list.slice(0, 200).map(s => ({ ...sessionRow(s, kind, facts), mark: activityMark({ working: kind === 'working', needs: needs(s), unread: unread(s) }),
     ...(c.activityDraft?.(s) ? { draft: true } : {}) })); // a saved, unsent draft (wizard-ux issue 1445, on for everyone since 1604)
   return splitSaved({ working: rows(g.working, 'working'), ready: rows(g.ready, 'ready'), recent: rows(g.recent, 'ready'), older: g.older,
@@ -263,5 +297,5 @@ const unreadThreads = (rows, isNew, notes) => new Set((rows || []).filter(s => i
 const unreadCount = rows => new Set((rows || []).filter(r => r.unread).map(r => r.id)).size;
 root.WizChatsListModel = Object.freeze({ STATES, stateOf, stateGroups, WORKING_SORTS, workingOrderOf, workingAt, workingSort, READY_SORTS, sortOf, PRIORITY_TIP, rankOf, readySort, executionStatus, isListWorking,
   readyGroups, NOTES_PROJECT, NO_PROJECT, projectOf, titleInProject, projectGroups, GROUP_MODES, groupMode, readyFlat,
-  readyStep, visibleIds, INBOX_KEEP, inboxKeep, ACTIVITY_SORTS, activitySortOf, ACTIVITY_RECENT_DAYS, activityMark, activitySort, activityGroups, activityList, unreadCount, unreadThreads, compareTime, deferred, sessionRow, sessionList, sessionRank, orderSessions, notificationRow, sortNotes, mixedRows, subjectGroups, priorityGroups });
+  readyStep, visibleIds, INBOX_KEEP, inboxKeep, INBOX_ROWS, inboxRowsOn, inboxWants, inboxReplied, ACTIVITY_SORTS, activitySortOf, ACTIVITY_RECENT_DAYS, activityMark, activitySort, activityGroups, activityList, unreadCount, unreadThreads, compareTime, deferred, sessionRow, sessionList, sessionRank, orderSessions, notificationRow, sortNotes, mixedRows, subjectGroups, priorityGroups });
 })(globalThis);

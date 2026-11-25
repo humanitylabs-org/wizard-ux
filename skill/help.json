@@ -466,6 +466,10 @@
       "help": "Chats stay in Inbox until archived.",
       "where": "Settings › Appearance › Try new features › Inbox until archived"
     },
+    "wizard/inbox-rows": {
+      "help": "Inbox: only what needs you.",
+      "where": "Settings › Appearance › Try new features › Inbox: only what needs you"
+    },
     "wizard/capture-inbox": {
       "help": "Agent files your Files Inbox drops.",
       "where": "Settings › Appearance › Try new features › Capture inbox"
