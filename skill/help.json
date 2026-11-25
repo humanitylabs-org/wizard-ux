@@ -254,7 +254,7 @@
       }
     },
     "updates": {
-      "help": "WizardOS (server): the installed version and whether it is up to date. Updates: Automatic installs WizardOS updates by themselves overnight, never during a chat; Ask me installs nothing until you tap Install. Channel: For everyone gets releases testers have used for about 3 days; For testers gets every release at once and shows Try new features in Appearance. When an update is ready a card at the top of Settings offers Install (or Install now).",
+      "help": "WizardOS (server): the installed version and whether it is up to date. Updates: Automatic installs them overnight, never during a chat; Ask me installs nothing until you tap Install. Channel: For everyone gets releases testers have used for about 3 days; For testers gets every release at once and shows Try new features in Appearance. When an update is ready a card at the top of Settings offers Install (or Install now).",
       "controls": {
         "WizardOS (server) {version}": "the installed server version",
         "Updates": null,
@@ -267,7 +267,7 @@
       }
     },
     "wizard": {
-      "help": "Wizard: whether this device is connected to your Wizard (Connected, Connecting…, Sign-in needed) and its address; the interface and the server update separately. Technical details shows the interface revision. Gestures & help opens How Wizard works on the phone (orb, desks, Back, Practice again) and the keys guide on the desktop. On Android it also shows Recording, Reply notifications and the app's version (tap it to update).",
+      "help": "Wizard: whether this device is connected to your Wizard (Connected, Connecting…, Sign-in needed) and its address; interface and server update separately. Technical details shows the interface revision. Gestures & help opens How Wizard works on the phone (orb, desks, Back, Practice again) and the keys guide on the desktop. On Android also Recording, Reply notifications and the app's version (tap it to update).",
       "controls": {
         "Wizard": null,
         "Connected": "this device's connection to your Wizard",
@@ -489,7 +489,7 @@
       "where": "Settings › Appearance › Try new features › Undated chat titles"
     },
     "wizard/capture-inbox": {
-      "help": "Your agent files what you drop in Files Inbox.",
+      "help": "Agent files your Files Inbox drops.",
       "where": "Settings › Appearance › Try new features › Capture inbox"
     },
     "wizard/app-wake": {

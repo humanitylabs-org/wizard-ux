@@ -7,7 +7,8 @@ window.WizCore.chatsParts.sent = function ({ ago, ch, CH, CHAN_VIEW_KEY, chanEls
   /* The main agent's Chats list gets three tabs at the bottom: Inbox (today's Activity list, until wizard-ux issue 1779
    * gives it its own rows), Tags (today's Channels view, until wizard-agent-service issue 608) and Sent. Sent lists every
    * capture the owner sent, newest first (LIVE.sentLog: GET /wizard/v1/sent): the first line of his words, when, where
-   * it went (Background / Thread / Command / Reminder), its state (running, done, needs you, failed) and why ("you said
+   * it went (Background / Thread / Command / Reminder, or Reply for a message typed in a thread he had, with the
+   * agent's one-line answer: wizard-ux issue 1808), its state (running, done, needs you, failed) and why ("you said
    * reply", "model", "your earlier correction", "fallback"). A tap opens the thread it ran in (a hidden worker thread
    * opens by id, as from the Running view); Should have replied / Didn't need a reply correct the routing in place
    * (POST /wizard/v1/sent/<id>/correct). Working is Sent's filter for what still runs; the Running row above Ready goes
@@ -31,11 +32,14 @@ window.WizCore.chatsParts.sent = function ({ ago, ch, CH, CHAN_VIEW_KEY, chanEls
     const cur = sentTab(w), tab = (k, label) => `<button type="button" role="tab" data-chtab="${k}" aria-selected="${cur === k}"${cur === k ? ' class="on"' : ''}><svg viewBox="0 0 24 24" aria-hidden="true">${TAB_SVG[k]}</svg><span>${label}</span></button>`;
     return `<nav class="ch-tabbar" role="tablist" aria-label="Chats" data-morph-key="tabbar">${tab('inbox', 'Inbox')}${tab('tags', 'Tags')}${tab('sent', 'Sent')}</nav>`;
   }
-  const ROUTE = { dump: 'Background', agent: 'Thread', command: 'Command', reminder: 'Reminder' };
+  // `thread`: a reply he typed inside a thread he already had (wizard-ux issue 1808).
+  const ROUTE = { dump: 'Background', agent: 'Thread', command: 'Command', reminder: 'Reminder', thread: 'Reply' };
   const STATE = { routing: ['Routing', '…'], running: ['Running', ''], done: ['Done', '✓'], needs_you: ['Needs you', '!'], failed: ['Failed', '✕'], unknown: ['', '·'] };
   const FALLBACK = { router_not_configured: 'no router', router_timeout: 'router timed out', router_error: 'router error', capture_failed: 'couldn’t start in the background', unsure: 'model unsure', no_answer: 'no answer' };
   // Why the row went where it went, in a few plain words.
   function sentWhy(r) {
+    // A reply: whether his words asked for an answer; a quiet one needed nothing and stayed out of Inbox.
+    if (r.route === 'thread') return r.quiet ? 'nothing needed from you' : r.wantsReply ? 'you asked' : '';
     const first = r.rules[0] || '';
     let why = '';
     if (r.decidedBy === 'owner_words') {
@@ -58,8 +62,9 @@ window.WizCore.chatsParts.sent = function ({ ago, ch, CH, CHAN_VIEW_KEY, chanEls
       + `<span class="ch-sent-st" role="img" aria-label="${esc(label || 'State unknown')}" title="${esc(label)}">${r.state === 'running' ? '<i class="ch-spin" aria-hidden="true"></i>' : esc(mark)}</span>`
       + `<span class="bd"><span class="tp"><b>${esc(clip(line, 120))}</b><time>${esc(r.at ? ago(r.at) : '')}</time></span>`
       + `<span class="ch-sent-meta"><span class="ch-sent-route">${esc(route)}</span>${label && r.state !== 'unknown' ? ` · <span class="ch-sent-state">${esc(label)}</span>` : ''}${why ? ` · <span class="ch-sent-why">${esc(why)}</span>` : ''}${r.urgent ? ' · <span class="ch-sent-urgent">urgent</span>' : ''}${tags ? ' · ' + tags : ''}</span>`
-      + `${would ? `<span class="ch-sent-would">${esc(would)}</span>` : ''}</span></button>`
-      + `<div class="ch-sent-fix" role="group" aria-label="Correct the routing"><button type="button" data-chsentfix="reply" data-id="${esc(r.id)}" aria-pressed="${fixed === 'reply'}"${busy ? ' disabled' : ''}>Should have replied</button><button type="button" data-chsentfix="quiet" data-id="${esc(r.id)}" aria-pressed="${fixed === 'quiet'}"${busy ? ' disabled' : ''}>Didn’t need a reply</button></div></div>`;
+      + `${would ? `<span class="ch-sent-would">${esc(would)}</span>` : ''}${r.route === 'thread' && r.answer ? `<span class="ch-sent-answer">${esc(clip(r.answer, 140))}</span>` : ''}</span></button>`
+      // A reply stays in the thread it was typed in: nothing to move, so no correction.
+      + (r.route === 'thread' ? '' : `<div class="ch-sent-fix" role="group" aria-label="Correct the routing"><button type="button" data-chsentfix="reply" data-id="${esc(r.id)}" aria-pressed="${fixed === 'reply'}"${busy ? ' disabled' : ''}>Should have replied</button><button type="button" data-chsentfix="quiet" data-id="${esc(r.id)}" aria-pressed="${fixed === 'quiet'}"${busy ? ' disabled' : ''}>Didn’t need a reply</button></div>`) + '</div>';
   }
   function sentHead(w) {
     const st = LIVE.sentLog?.state(), n = st?.ok ? st.rows.filter(r => r.state === 'running').length : 0, f = ch(w.id).sentFilter === 'working' ? 'working' : 'all';
@@ -72,7 +77,7 @@ window.WizCore.chatsParts.sent = function ({ ago, ch, CH, CHAN_VIEW_KEY, chanEls
     if (!st?.ok) return '<div class="ch-empty">Checking what you sent…</div>';
     if (st.gone) return '<div class="ch-empty">Your Wizard keeps no Sent log yet.</div>';
     const rows = working ? st.rows.filter(r => r.state === 'running') : st.rows;
-    if (!rows.length) return `<div class="ch-empty">${working ? 'Nothing is running.' : 'Nothing sent yet. What you say to the orb or start in a new chat shows here.'}</div>`;
+    if (!rows.length) return `<div class="ch-empty">${working ? 'Nothing is running.' : 'Nothing sent yet. What you say to the orb, start in a new chat or reply in a thread shows here.'}</div>`;
     return `<section class="ch-sec open ch-sent" data-sec="sent"><div class="ch-sec-b">${rows.map(sentRow).join('')}</div></section>${st.next && !working ? '<button type="button" class="ch-more" data-chsentmore>Show older</button>' : ''}`;
   }
   function sentGo(w, tab) {

@@ -30,6 +30,8 @@ html[data-tweaks~="wizard/chats-inbox"] .ch-sent-route { font-weight: 700; color
 html[data-tweaks~="wizard/chats-inbox"] .ch-sent-urgent { font-weight: 700; color: var(--wz-warning, #ffbe55); }
 html[data-tweaks~="wizard/chats-inbox"] .ch-sent-tags { color: var(--wz-accent, #b99bff); }
 html[data-tweaks~="wizard/chats-inbox"] .ch-sent-would { font-size: .75rem; font-style: italic; color: var(--wz-text-muted, #a59cb3); }
+/* A reply's one-line answer from the agent (wizard-ux issue 1808). */
+html[data-tweaks~="wizard/chats-inbox"] .ch-sent-answer { display: block; font-size: .8rem; color: var(--wz-text-muted, #a59cb3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* The state mark: a spinner while it runs, ✓ done, ! needs you, ✕ failed. */
 html[data-tweaks~="wizard/chats-inbox"] .ch-sent-st { flex: none; width: 24px; height: 24px; margin-top: 1px; display: grid; place-items: center; border-radius: 50%; font-size: .8125rem; font-weight: 800; color: var(--wz-text-secondary, #c9c1d6); background: var(--wz-surface, #221c2c); }
 html[data-tweaks~="wizard/chats-inbox"] .st-running .ch-sent-st { color: var(--wz-accent, #b99bff); }

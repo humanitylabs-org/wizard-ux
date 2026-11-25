@@ -426,7 +426,7 @@ window.WizCore.liveParts.channels = function () {
    * in place, so the row changes on that frame. Chats reads it only while wizard/chats-inbox is on (the Sent tab). */
   function sentLog({ req, emit, now = () => Date.now(), every = 15e3 } = {}) {
     const ID = /^sent_[a-f0-9]{24}$/, SID = /^[A-Za-z0-9_.:-]{1,200}$/, RID = /^inbox_[a-f0-9]{24}$/;
-    const ROUTES = new Set(['dump', 'agent', 'command', 'reminder']), BY = new Set(['owner_words', 'model', 'correction', 'fallback']);
+    const ROUTES = new Set(['dump', 'agent', 'command', 'reminder', 'thread']), BY = new Set(['owner_words', 'model', 'correction', 'fallback']);
     const STATES = new Set(['routing', 'running', 'done', 'needs_you', 'failed', 'unknown']);
     const str = (v, n) => typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, n) : '';
     const num = v => { const n = Number(v); return Number.isFinite(n) && n > 0 ? n : 0; };
@@ -438,6 +438,9 @@ window.WizCore.liveParts.channels = function () {
       record: typeof r.record_id === 'string' && RID.test(r.record_id) ? r.record_id : null, tags: list(r.tags, 8), urgent: r.urgent === true,
       wouldRoute: ROUTES.has(r.would_route) ? r.would_route : null, corrected: r.corrected && typeof r.corrected.should_reply === 'boolean' ? { shouldReply: r.corrected.should_reply, at: num(r.corrected.at) } : null,
       error: str(r.error, 80),
+      // A reply inside a thread (wizard-ux issue 1808): did his words ask for an answer, the agent's one-line answer,
+      // and quiet (it needed nothing from him, so it stayed out of Inbox).
+      wantsReply: r.wants_reply !== false, answer: str(r.answer, 200), quiet: r.quiet === true,
     } : null;
     const s = { rows: [], next: null, ok: false, gone: false, at: 0, busy: null, deep: false };
     const tell = () => { try { emit(); } catch (_) {} };

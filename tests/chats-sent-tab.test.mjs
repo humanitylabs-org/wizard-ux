@@ -27,7 +27,7 @@ test('reads the Sent log newest first as the box lists it, and keeps only well-f
   const s = await f.log.read();
   assert.equal(f.calls.at(-1).path, '/wizard/v1/sent?limit=100');
   assert.deepEqual(clone(s.rows.map(r => r.id)), [sid('a'), sid('b'), sid('c')]);
-  assert.deepEqual(clone(s.rows[0]), { id: sid('a'), at: 1000, source: 'orb', text: 'Words a', route: 'dump', decidedBy: 'owner_words', rules: ['no_reply:note to self'], state: 'running', thread: 'thread_a', record: 'inbox_' + 'a'.repeat(24), tags: [], urgent: false, wouldRoute: null, corrected: null, error: '' });
+  assert.deepEqual(clone(s.rows[0]), { id: sid('a'), at: 1000, source: 'orb', text: 'Words a', route: 'dump', decidedBy: 'owner_words', rules: ['no_reply:note to self'], state: 'running', thread: 'thread_a', record: 'inbox_' + 'a'.repeat(24), tags: [], urgent: false, wouldRoute: null, corrected: null, error: '', wantsReply: true, answer: '', quiet: false });
   assert.deepEqual([s.rows[2].thread, s.rows[2].route, s.rows[2].state], [null, null, 'unknown'], 'a bad thread id, route or state is dropped, never trusted');
   assert.equal(s.next, sid('c'));
   assert.ok(f.emits() >= 1, 'Chats repaints when the answer lands');
