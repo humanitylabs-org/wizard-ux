@@ -43,7 +43,8 @@
     const content = box(area.x + (m.side === 'start' ? sw : 0), area.y, area.width - sw, area.height);
     const chatOn = !!env.chatOn, appOn = !!env.appOn;
     // The app panel at the start of the main area, the chat after it (wizard-os#639): mirrored like side 'end', the sidebar stays.
-    const appFirst = m.side === 'end' || m.appSide === 'start';
+    // With the sidebar at the end (wizard-ux issue 1526) appSide 'start' mirrors too: the app next to the sidebar, on the right.
+    const appFirst = (m.side === 'end') !== (m.appSide === 'start');
     // The chat keeps at least its old column (a third, 30% beside an app) and takes all the room the app leaves, so
     // its messages fill the main area up to the 768px reading column, never a narrow strip with empty canvas beside
     // it (issue 1233).

@@ -89,7 +89,8 @@ export function splitPart({ aadVars, anim, api, applySizes, appName, appSideOf, 
     sTop.hidden = !aadVars.secondEl; sName.textContent = second ? appName(second.id) : '';
     for (const { bar } of modeBars) for (const b of bar.querySelectorAll('[data-mode]')) b.setAttribute('aria-pressed', String(b.dataset.mode === model.mode));
     pTop.hidden = !aadVars.pane || !model.slots.includes('app'); cX.hidden = !aadVars.docked;
-    { const left = appSideOf(model) === 'start', t = left ? 'Move the app to the right (⌥⇧M)' : 'Move the app to the left (⌥⇧M)';
+    // (as seen: with the sides swapped, wizard-ux issue 1526, the panel next to the chats sidebar is on the right)
+    { const left = (root.dataset.aadPaneSide === 'end') !== (appSideOf(model) === 'start'), t = left ? 'Move the app to the right (⌥⇧M)' : 'Move the app to the left (⌥⇧M)';
       pSide.hidden = !leftOn() || one(); pSide.setAttribute('aria-label', t); pSide.title = t; pSide.setAttribute('aria-pressed', String(left)); }
     paintFeed(chat);
     if (aadVars.pane) { pName.textContent = appName(aadVars.pane.id); pIcon.replaceChildren(appTile(aadVars.pane.id, 'aad-tile is-xs')); pX.setAttribute('aria-label', `Hide ${appName(aadVars.pane.id)} (Esc), it keeps running`); }

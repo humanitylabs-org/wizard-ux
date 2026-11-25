@@ -77,8 +77,9 @@ export function sizesPart({ aadVars, api, COLS, el, FLIP_MS, host, paneWins, pla
   for (const id of ['side', 'tabs', 'app']) {
     const g = el('div', 'aad-grip', { role: 'separator', 'aria-orientation': 'vertical', tabindex: '0', 'aria-label': GRIP_NAMES[id], title: GRIP_NAMES[id] + ' · double-click: back to default', 'data-grip': id });
     grips.append(g); grip[id] = g;
-    // the sidebar grows to the right, the open-apps column and the app panel to the left
-    const sign = () => id === 'tabs' ? (root.dataset.aadDockEdge === 'start' ? 1 : -1) : (id === 'side' ? 1 : -1) * (root.dataset.aadPaneSide === 'end' || (id === 'app' && root.dataset.aadAppSide === 'start') ? -1 : 1);
+    // the sidebar grows to the right, the open-apps column and the app panel to the left; each the other way when it sits
+    // on the other side (data-aad-app-side is the side the panel is on as seen, also with the sides swapped, issue 1526)
+    const sign = () => id === 'tabs' ? (root.dataset.aadDockEdge === 'start' ? 1 : -1) : id === 'side' ? (root.dataset.aadPaneSide === 'end' ? -1 : 1) : (root.dataset.aadAppSide === 'start' ? 1 : -1);
     let drag = null, cancelFrame = null;
     // (the pointer's latest x, applied once a frame: a fast mouse sends several moves a frame)
     const step = t => {
