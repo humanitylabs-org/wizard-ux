@@ -19,8 +19,10 @@
   let netOpen = false;
   /* Connection trouble is a small pill at the top, after a grace so a momentary blip shows nothing. The checks open
    * only when the owner taps the pill, and a voice or capture starting tucks them away again (James, 1 Nov: no pop-up
-   * for a short outage). Past the grace the Troubleshooter itself pops up, once per outage (James, 15 Nov, issue 1472:
-   * "It should pop up"); closed, it stays closed, and Troubleshoot on the pill opens it again. */
+   * for a short outage). After a minute of real outage the Troubleshooter itself pops up, once per outage (James,
+   * 15 Nov, issue 1472: "It should pop up"); closed, it stays closed, and Troubleshoot on the pill opens it again.
+   * A routine Agent Service deploy (~25-50 s) never pops it (issue 1828): it waits AUTO_OPEN_MS of failure the owner
+   * could see (hidden time is not counted) and is skipped while the Troubleshooter's own status says ok. */
   function captureBusy() {
     const shared = window.WizAppCapture?.getState?.();
     const voice = window.__wos?.voice || window.__wux?.voice;
@@ -40,18 +42,52 @@
   let netAlerted = false; // An online hint cannot retract feedback already shown in this outage.
   // Once per outage, and not again for 10 minutes even if Wizard flaps, so a closed Troubleshooter stays closed.
   const AUTO_AGAIN_MS = 10 * 60e3;
-  let autoDone = false, autoAt = 0;
+  // A deploy restarts the Agent Service for ~20 s plus a slow first read: only a failure past a minute is an outage.
+  const AUTO_OPEN_MS = 60e3;
+  let autoDone = false, autoAt = 0, autoProbe = null, autoProbeAt = 0;
   function autoTroubleshoot() {
-    if (autoDone || document.hidden || captureBusy() || fatalOpen) return;
+    if (autoDone || autoProbe || document.hidden || captureBusy() || fatalOpen || downFor() < AUTO_OPEN_MS) return;
     if (autoAt && Date.now() - autoAt < AUTO_AGAIN_MS) { autoDone = true; return; }
     // Only as a window inside the shell: never leave the shell for the bare page by itself.
     if (typeof window.WizOpenApp !== 'function' || !window.WizReach?.open) return;
-    autoDone = true; autoAt = Date.now(); log('net:troubleshooter');
-    try { window.WizReach.open({ auto: true }); } catch (_) {}
+    if (Date.now() - autoProbeAt < 5000) return;
+    // Ask the Troubleshooter first: when it says everything is ok, the owner has nothing to fix (issue 1828).
+    autoProbeAt = Date.now(); const since = downSince;
+    autoProbe = statusOk().then(okNow => {
+      autoProbe = null;
+      if (okNow) { log('net:troubleshooter-skip'); return; }
+      if (autoDone || since !== downSince || !(net === 'offline' || net === 'reconnecting')) return;
+      if (document.hidden || captureBusy() || fatalOpen || downFor() < AUTO_OPEN_MS) return;
+      autoDone = true; autoAt = Date.now(); log('net:troubleshooter');
+      try { window.WizReach.open({ auto: true }); } catch (_) {}
+    });
+  }
+  async function statusOk() {
+    const ctl = typeof AbortController === 'function' ? new AbortController() : null;
+    const timer = ctl ? setTimeout(() => ctl.abort(), 5000) : 0;
+    try {
+      const r = await fetch('/troubleshoot/api/status?source=connection-banner', { cache: 'no-store', credentials: 'same-origin', signal: ctl?.signal });
+      return !!(r.ok && (await r.json())?.overall === 'ok');
+    } catch (_) { return false; } finally { if (timer) clearTimeout(timer); }
   }
   let offReturn = null, downSince = 0, graceT = 0, offDismissed = false, offOpen = false, offChecks = null, offBusy = false, offT = 0, offN = 0, offHappy = 0;
   let H = {}, net = navigator.onLine === false ? 'offline' : 'online', restoredT = 0, critHidden = '', fatalMsg = '', fatalOpen = false;
   if (net === 'offline') downSince = Date.now(); // the device said offline at boot: the grace runs from now (render re-checks)
+  /* Outage time counts only while the page is in front (issue 1828): a phone that comes back to Wizard after a read
+   * failed in the background starts the grace from its return, instead of popping things up on the first render. */
+  let hiddenAt = document.hidden ? Date.now() : 0, downHidden = 0;
+  const hiddenPart = () => (downSince && document.hidden && hiddenAt ? Date.now() - Math.max(hiddenAt, downSince) : 0);
+  const downFor = () => (downSince ? Date.now() - downSince - downHidden - hiddenPart() : 0);
+  function armGrace() {
+    clearTimeout(graceT); graceT = 0;
+    const left = graceMs() - downFor();
+    if (downSince && !netAlerted && left > 0) graceT = setTimeout(() => { graceT = 0; render(); }, left + 50);
+  }
+  document.addEventListener?.('visibilitychange', () => {
+    if (document.hidden) { hiddenAt = Date.now(); return; }
+    if (downSince && hiddenAt) downHidden += Date.now() - Math.max(hiddenAt, downSince);
+    hiddenAt = 0; armGrace(); render();
+  });
   const log = s => { window.__statusLog = (window.__statusLog || []).concat(s).slice(-40); };
 
   /* ---------- boot errors → fatal card ---------- */
@@ -112,11 +148,11 @@
     }
     net = n; log('net:' + n);
     const down = n === 'offline' || n === 'reconnecting';
-    if (down && !downSince) { downSince = Date.now(); clearTimeout(graceT); graceT = setTimeout(() => { graceT = 0; render(); }, graceMs() + 50); }
-    if (!down) { downSince = 0; netAlerted = false; autoDone = false; clearTimeout(graceT); graceT = 0; offDismissed = false; if (offOpen) recovered(); }
+    if (down && !downSince) { downSince = Date.now(); downHidden = 0; armGrace(); }
+    if (!down) { downSince = 0; downHidden = 0; netAlerted = false; autoDone = false; clearTimeout(graceT); graceT = 0; offDismissed = false; if (offOpen) recovered(); }
     render();
   }
-  const alerted = () => downSince && (netAlerted || (netAlerted = Date.now() - downSince >= graceMs()));
+  const alerted = () => downSince && (netAlerted || (netAlerted = downFor() >= graceMs()));
   // Browser connectivity is a hint: Android/VPN networks can report offline while
   // Wizard is reachable. Only fresh evidence may overrule an offline event:
   // a new successful live read, or a healthy same-origin Wizard status probe.
