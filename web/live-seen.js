@@ -56,7 +56,9 @@ window.WizCore.liveParts.seen = function ({  }) {
   function reconnectOf(v) {
     const app = v && typeof v === 'object' && v.kind === 'provider_signed_out' ? RECONNECT[v.provider] : null;
     if (!app || v.app_id !== app[0]) return null;
-    return { provider: v.provider, appId: app[0], name: app[1], runId: String(v.run_id || ''), installed: v.installed !== false };
+    // app_status: what the connection app reads now (Agent Service decorateReconnect); core/chat-models.js reconnect.
+    return { provider: v.provider, appId: app[0], name: app[1], runId: String(v.run_id || ''), installed: v.installed !== false,
+      appStatus: ['connected', 'signed_out', 'expired'].includes(v.app_status) ? v.app_status : 'unknown' };
   }
   const ATTN = new Set(['needs_you', 'check', 'done', 'fyi']);
   function attentionOf(v) {

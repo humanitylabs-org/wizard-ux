@@ -101,10 +101,26 @@
       body: 'Tap Retry, or choose another model.' }),
   };
   function runError(s) {
-    if (!reasonOn() || !s || s.reconnect || !['failed', 'interrupted'].includes(s.status)) return null;
+    if (!reasonOn() || !s || reconnect(s) || !['failed', 'interrupted'].includes(s.status)) return null;
     const e = s.runError, make = e && REASONS[e.code];
     if (!make) return null;
+    // Issue 1799: a sign-in failure whose subscription reads signed in again is a plain failed send (Retry).
+    if (e.code === 'provider_auth' && (s.reconnect || window.WosUsage?.signedIn?.({ Claude: 'claude', ChatGPT: 'chatgpt' }[providerName(e.provider || s.provider)]) === true)) return null;
     return { code: e.code, message: e.message || '', ...make(providerName(e.provider || s.provider)) };
+  }
+  /* Issue 1799: the Agent Service's stored sign-in diagnosis (s.reconnect, from the failed run) counts only while that
+   * subscription isn't read as signed in right now. The live reading (WosUsage, what Home shows) decides; before it
+   * arrives, the box's own reading of the connection app (app_status). Signed back in, the thread, its Chats row and
+   * the Errors row show the ordinary Retry; the sign-in card's promise to send on its own is kept by chat-power.js. */
+  function reconnect(s) {
+    const rc = s?.reconnect; if (!rc) return null;
+    const U = typeof window !== 'undefined' ? window.WosUsage : null;
+    if (U?.signedIn) {
+      if (!U.snap || Date.now() - (U.at || 0) > 60e3) U.load?.();
+      const now = U.signedIn(rc.provider);
+      if (now !== null && now !== undefined) return now ? null : rc;
+    }
+    return rc.appStatus === 'connected' ? null : rc;
   }
   // Issue 1235: a chat started in a messaging app (its Hermes session `source`) belongs to that app's connection.
   const FOREIGN_APPS = { telegram: 'Telegram', slack: 'Slack', discord: 'Discord', whatsapp: 'WhatsApp', whatsapp_cloud: 'WhatsApp',
@@ -311,7 +327,7 @@
     defaultOption() { return M.options.find(o => o.isGlobalDefault) || null; },
     find(model, provider) { if (!model) return null; return M.options.find(o => o.value === model && (!provider || o.provider === provider)) || null; },
     visible(model, provider, keep = true) { return visibleChoices(shown(M.options, model, provider, keep), model, provider); },
-    runError,
+    runError, reconnect,
     foreignApp,
     refusal,
     name(model, provider) { const o = M.find(model, provider); return o ? o.name : model ? (claudeName(model, provider || 'anthropic') || friendly(model)) : ''; },
@@ -530,7 +546,7 @@
      * and Retry comes back. A failure the Agent Service already named (network, quota, …) keeps its own card.
      * One rule for the thread card, the Errors row (desktop sidebar) and the hidden generic failed-turn line. */
     signedOutFail(s, busy = '') {
-      return s && !s.reconnect && (!s.runError || s.runError.code === 'provider_auth') && ['failed', 'interrupted'].includes(s.status) && s.queueReason !== 'provider_access' && busy !== 'retry' ? M.signedOutFor(s) : null;
+      return s && !reconnect(s) && (!s.runError || s.runError.code === 'provider_auth') && ['failed', 'interrupted'].includes(s.status) && s.queueReason !== 'provider_access' && busy !== 'retry' ? M.signedOutFor(s) : null;
     },
     /* A failed thread: what happened, on which model, and the ways out (Retry · Choose another model · Dismiss). */
     failureHtml({ s, busy, retryLabel, canRetry }) {
@@ -544,7 +560,7 @@
         <div class="ch-fail-b"><button type="button" data-chreconnect="${esc(out.appId)}" data-recovery-run="">Reconnect ${esc(out.name)}</button><button type="button" data-chretrymodel ${busy || !canRetry ? 'disabled' : ''}>Choose another model</button><button type="button" class="ghost" data-chdismiss ${busy ? 'disabled' : ''}>${busy === 'dismiss' ? 'Dismissing…' : 'Dismiss'}</button></div></section>`;
       }
       // The provider's sign-in expired: Retry can't fix that, the provider's connection app can.
-      const rc = s.reconnect;
+      const rc = reconnect(s);
       if (rc && s.queueReason !== 'provider_access' && busy !== 'retry') {
         const target = M.short(s.model, s.provider) || model || rc.name;
         return `<section class="ch-fail diagnosed" role="alert" data-chfail="${esc(s.id)}"><span class="lb">${esc(rc.name)} sign-in expired</span>

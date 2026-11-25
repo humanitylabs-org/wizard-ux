@@ -19,5 +19,5 @@ test('the held message reply is re-read after sign-in without an extra tap',()=>
  const shell=read('web/app.js');assert.match(shell,/window.WizOpenApp = \(id, path = ''\)/);assert.match(shell,/appAt\(rel\)\?\.id !== id/);assert.match(shell,/url: rel, from: \{ \.\.\.fromOf\(desks\[idx\].focus\), sid: '' \}, workflow: true/);assert.match(shell,/w.from && !w.workflow/);
 });
 test('diagnosed list rows name the sign-in problem and open the same in-shell fix path',()=>{
- assert.match(withParts(read('web/core/chats.js')),/s.reconnect && needs \? esc\(s.reconnect.name\) \+ ' sign-in expired'/);const power=read('web/core/chat-power.js');assert.match(power,/Sign in<\/button>/);assert.match(power,/H.openLink\?\.\(`\/troubleshoot\/\?provider=/);assert.match(power,/if \(rc\) return/);
+ assert.match(withParts(read('web/core/chats.js')),/liveRc && needs \? esc\(liveRc.name\) \+ ' sign-in expired'/);const power=read('web/core/chat-power.js');assert.match(power,/Sign in<\/button>/);assert.match(power,/H.openLink\?\.\(`\/troubleshoot\/\?provider=/);assert.match(power,/if \(rc\) return/);
 });
