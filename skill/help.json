@@ -396,7 +396,7 @@
       "where": "Settings › Appearance › Try new features › Desktop sidebar follows Default Chats"
     },
     "wizard/app-panel-left": {
-      "help": "AI apps desktop: a button in the app panel's header (or ⌥⇧M) moves it to the left, beside the chats sidebar.",
+      "help": "AI apps desktop: ⌥⇧M or the app panel's header button moves it beside the chats sidebar.",
       "where": "Settings › Appearance › Try new features › App panel on the left"
     },
     "wizard/assist-attach": {
@@ -483,6 +483,10 @@
     "wizard/app-wake": {
       "help": "Apps wake your agent.",
       "where": "Settings › Appearance › Try new features › Apps wake your agent"
+    },
+    "wizard/swap-sides": {
+      "help": "Chats right, apps left (⌥⇧L).",
+      "where": "Settings › Appearance › Try new features › Swap sides"
     }
   },
   "screenOrder": [
@@ -611,7 +615,7 @@
     },
     "layout:ai-apps": {
       "name": "AI apps view (desktop)",
-      "help": "The standard desktop. Left: the chats sidebar (switch Wizard at the top, search ⌥K, ◫ folds it to a rail ⌥L, the cog for Settings and + New chat at the bottom). Middle: the open chat with the message box, the model and the orb. Right: the Apps column (pinned apps, open apps, + Add an app, Tidy). ⌥1–⌥0 pick an app, ⌥W closes, ⌥F makes the app panel wider, ⌥R folds the column, ⌥H hides both sides. Sort options for its sidebar are in Settings › Chats & app screens when this view is on."
+      "help": "The standard desktop. Left: the chats sidebar (switch Wizard at the top, search ⌥K, ◫ folds it to a rail ⌥L, the cog for Settings and + New chat at the bottom). Middle: the open chat with the message box, the model and the orb. Right: the Apps column (pinned apps, open apps, + Add an app, Tidy). ⌥1–⌥0 pick an app, ⌥W closes, ⌥F makes the app panel wider, ⌥R folds the column, ⌥H hides both sides. Its sidebar's sort options: Settings › Chats & app screens."
     },
     "layout:apps": {
       "name": "Apps view",

@@ -1,0 +1,14 @@
+{
+  "id": "wizard/swap-sides",
+  "name": "Swap sides",
+  "version": "1.0.0",
+  "author": "wizard",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout"
+  ],
+  "issues": [
+    "humanitylabs-org/wizard-ux#1526"
+  ],
+  "description": "On the AI apps desktop, a button in the chats sidebar's header (or ⌥⇧L) puts the chats sidebar on the right and the Apps column on the left; press it again to put them back. Folded rails, resize handles, slides and ⌥L / ⌥R (fold the left / right side) mirror too. The choice is kept on this device. The narrower one-app window keeps the usual layout."
+}

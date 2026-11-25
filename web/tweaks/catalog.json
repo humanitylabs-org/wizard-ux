@@ -47,7 +47,8 @@
     "wizard/write-guard",
     "wizard/follow-main",
     "wizard/plain-chat-titles",
-    "wizard/app-wake"
+    "wizard/app-wake",
+    "wizard/swap-sides"
   ],
   "defaults": [
     "wizard/desktop-chats"

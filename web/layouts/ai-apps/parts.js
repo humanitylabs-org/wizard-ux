@@ -24,6 +24,8 @@ export const ICON = {
   more: ['M5.5 12h.01', 'M12 12h.01', 'M18.5 12h.01'],
   // the sidebar toggle (ChatGPT's ◫): a panel with its left column
   side: ['M4.5 5.5h15v13h-15z', 'M9.5 5.5v13'],
+  // two arrows, right over left: swap the sidebars' sides (wizard-ux issue 1526)
+  swap: ['M4.5 8.5h14', 'm15 5 3.5 3.5L15 12', 'M19.5 15.5h-14', 'm9 12-3.5 3.5L9 19'],
   pin: ['M9 4h6l-1 6 3 3H7l3-3-1-6z', 'M12 13v7'],
   rename: ['M4 20h4L19 9l-4-4L4 16z', 'm13.5 6.5 4 4'],
   unread: ['M3.5 6.5h17v11h-17z', 'm4.5 7.5 7.5 5.5 7.5-5.5'],

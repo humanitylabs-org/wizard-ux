@@ -152,7 +152,9 @@ export function tabsPart({ aadVars, api, applySizes, appName, appTile, badgeText
     if (root.dataset.aadTabs !== mode) { root.dataset.aadTabs = mode; applySizes(); }
     paintOneChats(); if (vtTog.hidden !== bar) vtTog.hidden = bar;
     vtTog.setAttribute('aria-expanded', String(!aadVars.vtFolded));
-    vtTog.setAttribute('aria-label', aadVars.vtFolded ? 'Show the apps\' names' : 'Fold the apps to icons'); vtTog.title = aadVars.vtFolded ? 'Expand (⌥R)' : 'Fold to icons (⌥R)';
+    // (⌥R folds the right side: with the sides swapped, wizard-ux issue 1526, this column is on the left, so ⌥L)
+    const vtKey = root.dataset.aadPaneSide === 'end' ? '⌥L' : '⌥R';
+    vtTog.setAttribute('aria-label', aadVars.vtFolded ? 'Show the apps\' names' : 'Fold the apps to icons'); vtTog.title = aadVars.vtFolded ? `Expand (${vtKey})` : `Fold to icons (${vtKey})`;
     const { pinned, others } = vtTabs();
     const sig = JSON.stringify([mode, frontDesk() ?? '', pinned.map(d => d.desk + d.id + d.name + badgeText(d.id)), others.map(d => d.desk + d.id + d.name + badgeText(d.id))]);
     if (!force && sig === aadVars.vtDrawn && vtList.childElementCount) return; aadVars.vtDrawn = sig;
