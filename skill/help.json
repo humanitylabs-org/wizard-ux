@@ -412,10 +412,6 @@
       "where": "Settings › Appearance › Try new features › Swipe away downloads",
       "when": "phone only"
     },
-    "wizard/capability-registry": {
-      "help": "Agents look up what this box already does (transcription, reminders, app jobs) before installing their own.",
-      "where": "Settings › Appearance › Try new features › Agents use what the box already does"
-    },
     "wizard/interface-manual": {
       "help": "Your agent gets this manual: every screen, Settings page and feature switch, so it can say where things are.",
       "where": "Settings › Appearance › Try new features › Agent knows the Wizard interface"
