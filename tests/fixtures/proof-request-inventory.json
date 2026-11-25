@@ -758,7 +758,7 @@
       "status": "not-exercised",
       "source": "web/core/welcome.js",
       "kind": "read",
-      "note": "Read only when the Welcome opens at Connect your AI (no AI signed in), behind wizard/private-first-setup's Agent Service answer; the proof harnesses sign an AI in, so the Welcome never opens there. Refused and collected, never answered, if a flow reaches it."
+      "note": "Read only when the Welcome opens at Connect your AI (no AI signed in), behind wizard/private-first-setup's Agent Service answer; with wizard/standard-first-setup on also when the Welcome or Settings › Privacy opens, and POSTed {offer} by the Welcome's private AI offer (wizard-ux issue 1800). The proof harnesses sign an AI in and leave that switch off, so neither happens there. Refused and collected, never answered, if a flow reaches it."
     },
     "/wizard/v1/setup": {
       "status": "catalogued",
