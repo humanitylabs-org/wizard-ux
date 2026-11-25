@@ -1,0 +1,14 @@
+{
+  "id": "wizard/action-cards",
+  "name": "Action cards in chat",
+  "version": "1.0.0",
+  "author": "wizard",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout"
+  ],
+  "description": "When your agent prepares something in an app (a Messenger draft, a mail reply, a calendar event), the chat shows a small card with the app's own preview and Approve, Edit and Open in app, so you can send it with one tap or take over in the app (wizard-ux issue 1463).",
+  "issues": [
+    "humanitylabs-org/wizard-ux#1463"
+  ]
+}

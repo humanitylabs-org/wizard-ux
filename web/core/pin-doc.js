@@ -48,7 +48,7 @@
     ['e', 'core/share-wizard.js'], ['e', 'core/app-services-windows.js'], ['e', 'core/app-services-boundary.js'], ['e', 'core/app-services.js'], ['e', 'core/app-versions.js'], ['e', 'core/agents.js'],
     ['e', 'core/app-route.js'], ['e', 'core/app-setup.js'], ['c', 'core/app-setup.css'], ['a', 'core/chats-list-model.js'],
     ['a', 'live-channels.js'], ['a', 'live-seen.js'], ['a', 'live-streams.js'], ['a', 'live-work.js'], ['a', 'live.js'], ['a', 'outbox.js'], ['x', 'core/orb-handoff.js'], ['e', 'core/share-sheet.js'],
-    ['a', 'core/chat-kit.js'], ['x', 'core/composer-input.js'], ['x', 'core/attach-chip.js'], ['x', 'core/chat-pins.js'],
+    ['a', 'core/chat-kit.js'], ['x', 'core/action-cards.js'], ['x', 'core/composer-input.js'], ['x', 'core/attach-chip.js'], ['x', 'core/chat-pins.js'],
     ['x', 'core/thread-tracker.js'], ['x', 'core/chat-topic-emojis-data.js'], ['x', 'core/chat-topic-emojis.js'],
     ['a', 'core/chat-models.js'], ['x', 'core/chat-work.js'], ['x', 'core/chat-errors.js'], ['x', 'core/files.js'],
     ['x', 'core/usage.js'], ['x', 'core/resources.js'], ['x', 'core/chat-power.js'], ['x', 'core/chat-search.js'],

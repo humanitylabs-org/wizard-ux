@@ -49,6 +49,8 @@ window.WizCore.chatsParts.bind = function ({ activityClick, actSetOrder, AGS, al
     const w = H.win(id); if (!w) return false;
     // A tweak card's switch: flips on this frame, Settings › Look's toggle underneath (core/settings.js tweakCardTap).
     const twk = e.target.closest('[data-chat-tweak]'); if (twk) { window.WosSettings?.tweakCardTap?.(twk, (i, t) => toast(i, t, 2400)); return true; }
+    // An app's action card (wizard-ux issue 1463, core/action-cards.js): Approve, Edit, Open in app, Reject.
+    const act = e.target.closest('[data-action-card] [data-act]'); if (act) { window.WosActionCards?.tap?.(act, (i, t) => toast(i, t, 3200)); return true; }
     // Thread tracker: the strip's own taps, Reply on a message, and the quote header's jump (all inert with the tweak off).
     if (globalThis.WosThreadTracker?.onFor?.(LIVE.agentOf && w.thread ? LIVE.agentOf(w.thread) : '')) {
       const resume = text => resumeTracked(id, w, text);
