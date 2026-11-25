@@ -331,6 +331,10 @@ Not covered yet (next slices, all on #133), so nobody should turn the box switch
   answered.
 - Phone: the shell has no key forwarding (it has no desktop keys). Pages in the link sheet lose their own storage and
   pop-ups.
+- Apps that cannot run from an opaque origin at all open as their own tab instead (`WizBrowserBoundary.ownTab`, by
+  installed app id and view path; wizard-os#942). Today that is Files (upstream File Browser keeps its sign-in in the
+  page's own localStorage and cookie and calls its own API directly): its window shows "Files opens in its own tab"
+  with an Open Files button, and a pinned Files opens File Browser itself. Every other app keeps its sandboxed window.
 - Each real app still needs checking one by one from an opaque origin (wizard-os#385); `fetch` (also streamed),
   `XMLHttpRequest`, `EventSource` and `WebSocket` to the app's own backend, `localStorage`, `sessionStorage`,
   IndexedDB and `document.cookie` work (above). The
