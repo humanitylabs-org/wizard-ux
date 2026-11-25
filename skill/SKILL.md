@@ -183,7 +183,6 @@ Settings › Appearance › Try new features lists unfinished features anyone ca
 - **Machines on Home**: Home shows a slim strip (Wizard, AI fuel, chats, backup, network); Settings › System holds your network, AI, security and storage.
 - **Now playing**: While an app plays audio or video, small moving bars sit on that app's icon in the AI apps view (the desktop apps column; the phone Home dock and grid); click or tap them to pause without opening the app. Option+P pauses or plays what played last on the desktop. Nothing shows while nothing plays.
 - **One-tap Snooze · bottom of Ready**: Snooze is one tap and the lowest priority: the thread waits at the bottom of Ready, below approvals, until you restore or reply.
-- **Open apps without Tailscale**: On a box not on Tailscale yet, app screens like Files and Search open inside Wizard on the box itself.
 - **Phone media player for Podcasts**: Android app: Podcasts plays through the phone's media player (lock screen, headset buttons), like Music.
 - **Phone notifications per app**: Android app: what any app sends to Notifications shows as a phone notification under that app's name, one Android channel per app.
 - **Private first setup**: New installs start private: Welcome leads with Tinfoil; Claude and ChatGPT are optional extras.
@@ -192,13 +191,14 @@ Settings › Appearance › Try new features lists unfinished features anyone ca
 - **Runtipi 4.12 sign-in key**: App Manager uses its own Runtipi 4.12 key.
 - **Say why a chat needs you**: When Wizard itself marks a chat Needs you (a helper finished after the chat closed), the chat says why, with Continue and Dismiss. Dismiss, Done or Archive clears it on every device.
 - **Send and go**: On desktop, sending opens a fresh chat.
-- **Sent: rows like the rest of Chats**: Sent rows look like Chats.
+- **Sent: the same rows as Inbox**: Sent uses Inbox's rows.
 - **Share feature counts**: Sends features you tried and your thumbs, plus a random box id.
 - **Short answer first**: A long agent reply shows only its one-line plain answer; tap it for the full reply. Choose whether replies start collapsed and how long the short answer is. Where: Settings › Appearance › Try new features › Short answer first; its options show under it when on.
 - **Skins are look only**: Skins become a look only. Your own skin stops deciding which features run: only the feature switches here and in the WizardOS Tracker do, the same for every tester. Turning this on carries the choices of the own skin you're wearing into those switches once. Tweaks on the drop list (Two orbs, App borders, No close on desks, Pin buttons, WizardOS name) are off. Skin scripts are paused. Your skin's saved choices and script approval are kept and come back when you switch this off.
 - **Stop write loops**: Stops repeated saves: an identical save within 10 s is not resent; over 20 a minute pauses.
 - **Swap sides**: Chats right, apps left (⌥⇧L).
 - **Swipe away downloads**: Phone: swipe the Downloaded banner away and swipe the Downloads sheet down to close it. (phone only).
+- **Tags**: A chat can carry several tags.
 - **Tap the app in front for its first view**: Narrow desktop window: tapping the icon of the app in front takes it back to its first view.
 - **Tell the team about failed updates**: When an app or WizardOS update fails on this box, the App Manager files a bug for the team (or adds to the open one) with the box, versions, failing step and error, using this box's GitHub login. Your notification then says the team was told.
 - **Undated chat titles**: Same-topic chats: no date.

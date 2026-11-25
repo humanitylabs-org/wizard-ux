@@ -7,7 +7,8 @@
  * body below keeps chats.js's indentation so `git log -L` and patches port over. */
 window.WizCore = window.WizCore || {};
 window.WizCore.chatsParts = window.WizCore.chatsParts || {};
-window.WizCore.chatsParts.channels = function ({ agentName, AGS, CHAN_ARCHIVE_PRUNE_DAYS, CHAN_DAY, CHAN_GENERAL, chanAgentId, chanPrefs, chanStore, focusAgents, focusedAgent, focusOf, H, LIVE, openDaily, owner, save, setFocus, spaceAgent, spaceContains, spaces, spacesOf, visibleSpaces, W }) {
+window.WizCore.chatsParts.channels = function ({ chanTags, agentName, AGS, CHAN_ARCHIVE_PRUNE_DAYS, CHAN_DAY, CHAN_GENERAL, chanAgentId, chanPrefs, chanStore, focusAgents, focusedAgent, focusOf, H, LIVE, openDaily, owner, save, setFocus, spaceAgent, spaceContains, spaces, spacesOf, visibleSpaces, W }) {
+  const CHAN_ARCHIVED = '__archived__'; // Tags on: the Archived tag view (wizard-agent-service issue 608)
   let chanHold, chanUserAt, runningBack, sentBack; // late-bound: chats.js declares these after the call, see bindLate
   // The channel a window's list draws as a feed, or null. It only holds while the Focus still matches it (a Focus
   // tap elsewhere simply leaves the feed).
@@ -16,6 +17,9 @@ window.WizCore.chatsParts.channels = function ({ agentName, AGS, CHAN_ARCHIVE_PR
     const o = W[owner(w.id)] || w, c = o.chan, f = focusOf(o);
     if (!c || typeof c.id !== 'string') return null;
     if (c.id === CHAN_GENERAL) return f?.kind === 'space' ? null : { id: CHAN_GENERAL, name: 'General', general: true };
+    // Tags on (wizard-agent-service issue 608): Archived is a tag view, every archived chat of the list's agent, drawn
+    // like an agent's feed (no store feed, no read mark, no channel actions).
+    if (c.id === CHAN_ARCHIVED) return f?.kind !== 'space' && typeof chanTags === 'function' && chanTags() ? { id: CHAN_ARCHIVED, name: 'Archived', agent: focusedAgent(f) || '', agentFeed: true, archivedFeed: true } : null;
     // An agent's feed (issue 1336): every thread with that agent, while its Focus holds.
     const ag = typeof chanAgentId === 'function' ? chanAgentId(c.id) : '';
     if (ag) return f?.kind === 'agent' && f.key === ag ? { id: c.id, name: typeof agentName === 'function' ? agentName(ag) : ag, agent: ag, agentFeed: true } : null;
@@ -34,7 +38,7 @@ window.WizCore.chatsParts.channels = function ({ agentName, AGS, CHAN_ARCHIVE_PR
   }
   // The row's own owner (a main and a routed thread can share an id), else the id-only pin.
   const rowAgent = s => (LIVE.ownerOf ? LIVE.ownerOf(s) : LIVE.agentOf(s.id)) || AGS()?.defaultId() || 'hermes';
-  const inChannel = (ch0, s) => ch0.agentFeed ? rowAgent(s) === ch0.agent : ch0.general ? !spacesOf(s.id).length : spaceContains(ch0.id, s.id) && rowAgent(s) === ch0.agent;
+  const inChannel = (ch0, s) => ch0.archivedFeed ? !!s.archived && (!ch0.agent || rowAgent(s) === ch0.agent) : ch0.agentFeed ? rowAgent(s) === ch0.agent : ch0.general ? !spacesOf(s.id).length : spaceContains(ch0.id, s.id) && rowAgent(s) === ch0.agent;
   const chanName = s => spacesOf(s.id)[0]?.name || 'General';
   // A channel's emoji and words (issue 1506): { emoji, label } of a channel ({ name, general }) or a name.
   const chanFace = c => window.WizCore?.channelFace?.(typeof c === 'string' ? c : c?.name, typeof c === 'string' ? c === 'General' : !!c?.general || c?.id === CHAN_GENERAL) || { emoji: '#', label: typeof c === 'string' ? c : c?.name || '' };
@@ -70,7 +74,7 @@ window.WizCore.chatsParts.channels = function ({ agentName, AGS, CHAN_ARCHIVE_PR
     // (the Focus moved since) gives way to the Focus showing now.
     const prev = o.chan && chanOpen(w) ? o.chan.prev : (o.focus || null), sp = id !== CHAN_GENERAL && spaces().find(s => s.id === id);
     const ag = typeof chanAgentId === 'function' ? chanAgentId(id) : ''; // an agent's feed (issue 1336) is that agent's Focus
-    if (id !== CHAN_GENERAL && !sp && !(ag && focusAgents().some(a => a.id === ag))) return false;
+    if (id !== CHAN_GENERAL && !(id === CHAN_ARCHIVED && typeof chanTags === 'function' && chanTags()) && !sp && !(ag && focusAgents().some(a => a.id === ag))) return false;
     o.chan = { id, prev }; chanUserAt[w.id] = 0; // the tap that opened it is not a scroll
     const f = focusOf(o), back = prev?.kind === 'space' ? { kind: 'agent', key: focusedAgent(prev) } : prev;
     // A Space channel is that Space's Focus; General keeps the agent the list was on (never a Space).

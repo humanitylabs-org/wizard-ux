@@ -1,0 +1,14 @@
+{
+  "id": "wizard/chat-tags",
+  "name": "Tags",
+  "version": "1.0.0",
+  "author": "wizard",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout"
+  ],
+  "issues": [
+    "humanitylabs-org/wizard-agent-service#608"
+  ],
+  "description": "Channels become tags: a chat can carry several, so a philosophy chat can also sit in your WizardOS tag. Hold a chat and tap Tags… to add or remove them (the sheet stays open), your agent adds the tag that fits, and #philosopher said to the orb tags that chat. Tapping a tag in the Tags tab opens the same channel view as today, and Archived opens your archived chats. Read by the Agent Service (wizard-agent-service issue 608); off, every chat shows in its first tag's channel as today."
+}

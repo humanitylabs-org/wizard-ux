@@ -280,6 +280,22 @@
   const shellPage = url => {
     try { const u = new URL(String(url), location.href); return u.origin === location.origin && SHELL_PAGE.test(u.pathname); } catch (_) { return false; }
   };
+  // One first-party app stays same-origin too (telegram#68, decided there for James): TG style is a second view of the
+  // shell's own chats and reads, opens and sends them through this page's WizLive/WosChat/WosModels, which a sealed
+  // window cannot reach. Unsealed it has the access this page already has, as before the boundary, and nothing more.
+  // Only by installed app id AND the repo the App Manager installed it from (the app list's `repo`), AND only pages
+  // under its own path: another app claiming the id, or a sideloaded copy, stays sealed. Never a flag an app declares.
+  // The App Manager's installed-app check (wizard-app-manager wam/boundary_apps.py SAME_ORIGIN) keeps the same list.
+  const SAME_ORIGIN = Object.freeze({ 'tg-style': Object.freeze({ home: '/tg-style/', repo: 'humanitylabs-org/telegram' }) });
+  const sameOriginApp = (appId, url) => {
+    const t = typeof appId === 'string' && Object.prototype.hasOwnProperty.call(SAME_ORIGIN, appId) ? SAME_ORIGIN[appId] : null;
+    if (!t) return false;
+    let repo = ''; try { repo = window.WizCore?.appRepo?.(appId) || ''; } catch (_) { repo = ''; }
+    if (repo !== t.repo) return false;
+    try { const u = new URL(String(url ?? t.home), location.href); return u.origin === location.origin && u.pathname.startsWith(t.home) && !u.pathname.includes('//'); } catch (_) { return false; }
+  };
+  // Whether a same-origin page lies under such an app's path (the guard below and shell-token.js armFrame).
+  const sameOriginPage = url => Object.keys(SAME_ORIGIN).some(id => sameOriginApp(id, url));
   // Backstop for such a frame: if it ever lands on a same-origin page that is not one of the shell's own (none of
   // them navigates its frame elsewhere today), it is reloaded sandboxed like any app page. Another site's page can't
   // reach the shell, so it is left alone and checked again on its next load.
@@ -291,7 +307,7 @@
       let href = '';
       try {
         const l = frame.contentWindow.location;
-        if (l.href === 'about:blank' || (l.origin === location.origin && SHELL_PAGE.test(l.pathname))) return;
+        if (l.href === 'about:blank' || (l.origin === location.origin && (SHELL_PAGE.test(l.pathname) || sameOriginPage(l.href)))) return;
         if (l.origin !== location.origin) return;
         href = l.href;
       } catch (_) { return; }
@@ -760,11 +776,14 @@
     sandbox: SANDBOX,
     // Whether this installed app opens as its own tab under the boundary instead of a sandboxed window (OWN_TAB).
     ownTab,
+    // Whether this installed app's window stays same-origin (SAME_ORIGIN: TG style from its own listing, telegram#68).
+    sameOriginApp,
+    sameOriginPage,
     // The attributes every app frame gets while the boundary is on (no allow-same-origin, ever).
     // The shell's own pages (shellPage) are the one exception: they stay same-origin (see guard above).
     // With the window's installed app id, its saved settings ride along as the frame's name (appStorage).
     frameAttributes: (url, appId) => {
-      if (url !== undefined && shellPage(url)) return '';
+      if (url !== undefined && (shellPage(url) || sameOriginApp(appId, url))) return '';
       const name = appId ? storageName(appId) : '';
       return `sandbox="${SANDBOX}"` + (name ? ` name="${attr(name)}"` : '');
     },

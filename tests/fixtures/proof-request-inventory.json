@@ -369,6 +369,12 @@
       "kind": "write",
       "note": "Today's Daily thread (wizard-ux issue 1469): asked only by a send from the Daily view; tests/daily-channel.test.mjs and tests/qa-chat-daily-channel.cjs cover it against a fake box. Refused and collected, never answered, if a flow reaches it."
     },
+    "/wizard/v1/channels/tags": {
+      "status": "not-exercised",
+      "source": "web/live-channels.js",
+      "kind": "write",
+      "note": "Chats Tags (wizard-agent-service issue 608, switch wizard/chat-tags): only when a chat's tag is added or removed with the box's Tags on; tests/chat-channel-store.test.mjs and tests/qa-chat-tags.cjs cover it against a fake box. Refused and collected, never answered, if a flow reaches it."
+    },
     "/wizard/v1/channels/membership": {
       "status": "not-exercised",
       "source": "web/live.js",
@@ -1224,6 +1230,12 @@
       "source": "web/core/settings.js",
       "kind": "write",
       "note": "Only posted to while the off-by-default box switch wizard/try-feature-counts is on (wizard-app-manager issue 701): the Try new features state of apps the App Manager can't read itself, for anonymous counts. The QA harnesses run with it off. Refused and collected, never answered, if a flow reaches it."
+    },
+    "/tg-style": {
+      "status": "not-exercised",
+      "source": "web/core/browser-boundary.js",
+      "kind": "navigation",
+      "note": "TG style's window path (browser boundary SAME_ORIGIN, telegram#68): a path prefix the shell compares a frame's URL with, never fetched by the shell itself. Refused and collected, never answered, if a flow reaches it."
     }
   }
 }

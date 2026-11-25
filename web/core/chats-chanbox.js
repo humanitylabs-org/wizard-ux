@@ -22,7 +22,8 @@ window.WizCore.chatsParts.chanbox = function ({ AGS, ch, CH, CHAN_TEXT_MAX, chan
   function chanSpaceOf(w) { const open = w && !w.thread ? chanOpen(w) : null; return open ? (open.general || open.agentFeed ? '' : open.id) : null; }
   function chanDraftKey(w) {
     const open = w && !w.thread ? chanOpen(w) : null;
-    return open && !chanArchived(open.id) ? `chan:${open.agent || winAgent(w) || ''}:${open.id}` : '';
+    // The Archived tag view (wizard-agent-service issue 608) takes no new posts, as an archived channel.
+    return open && !open.archivedFeed && !chanArchived(open.id) ? `chan:${open.agent || winAgent(w) || ''}:${open.id}` : '';
   }
   /* The model picked in a channel's box (wizard-ux issue 1309), one per box (agent + channel), whichever pane draws the
    * feed (the AI apps feed and the classic list pane are panes of their own, id::side / id::list, whose window is
