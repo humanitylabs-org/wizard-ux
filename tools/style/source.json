@@ -1,8 +1,8 @@
 {
   "source": "https://github.com/humanitylabs-org/wizard-os",
-  "revision": "e7b8a8fd16afe23c36d3bfacb27255f524972a48",
+  "revision": "874ebcf933f00a64d6e6c33f8f9d557f139164ad",
   "files": {
     "check_style.py": "061cb2918666c98d88464d0a1a8fa076d016dabb6ebff12544244dc4b305f267",
-    "style-policy.json": "41f50ad3499661e064455844db891cf53b290e1caadbc8c1fb627e4445364acf"
+    "style-policy.json": "ca5e63c4688ba2d638779eba4173081cb020239d1d1eb96d39b85c9b9e370ad8"
   }
 }
