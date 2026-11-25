@@ -156,11 +156,13 @@ export function tabsPart({ aadVars, api, applySizes, appName, appTile, badgeText
     const vtKey = root.dataset.aadPaneSide === 'end' ? '⌥L' : '⌥R';
     vtTog.setAttribute('aria-label', aadVars.vtFolded ? 'Show the apps\' names' : 'Fold the apps to icons'); vtTog.title = aadVars.vtFolded ? `Expand (${vtKey})` : `Fold to icons (${vtKey})`;
     const { pinned, others } = vtTabs();
-    const sig = JSON.stringify([mode, frontDesk() ?? '', pinned.map(d => d.desk + d.id + d.name + badgeText(d.id)), others.map(d => d.desk + d.id + d.name + badgeText(d.id))]);
+    const inst = bar ? [] : installsShown(pinned, others);
+    const sig = JSON.stringify([mode, frontDesk() ?? '', pinned.map(d => d.desk + d.id + d.name + badgeText(d.id)), others.map(d => d.desk + d.id + d.name + badgeText(d.id)), inst.map(r => r.id + r.state + r.name)]);
     if (!force && sig === aadVars.vtDrawn && vtList.childElementCount) return; aadVars.vtDrawn = sig;
     const out = pinned.map(d => vtTab(d, true));
     if (pinned.length && others.length) out.push(el('hr', 'aad-vtsep', { 'aria-hidden': 'true' }));
     out.push(...others.map(d => vtTab(d, false)));
+    out.push(...inst.map(vtInstall));
     if (!out.length) out.push(el('p', 'aad-vtnone', { text: 'No apps open.' }));
     if (drag) dragEnd(false);
     // the app bar: Chats and the first half of the apps left of the orb, the rest and All apps right of it (the phone's
@@ -175,6 +177,38 @@ export function tabsPart({ aadVars, api, applySizes, appName, appTile, badgeText
     vtList.replaceChildren(...out, dropLine);
     markMedia();
   }
+  /* An app being installed (wizard-os#682, switch wizard/install-in-sidebar, off by default): core/apps.js
+   * WizCore.installs follows each Store Get on the box, also once the Store is closed; each shows here after the open
+   * apps, with a spinner on its icon while it installs. Done, it is the app (not open yet: a click opens it, ✕ forgets
+   * it); failed, it says so (a click shows the Store). An app already pinned or open is its own row. These rows are
+   * not .aad-vtab, so dragging and ⌥1–9 never see them; the narrower window's app bar leaves them out. */
+  const installsOf = () => { try { return globalThis.WizCore?.installs || null; } catch (_) { return null; } };
+  function installsShown(pinned, others) {
+    const I = installsOf(), list = I?.list?.() || []; if (!list.length) return [];
+    const shown = new Set([...pinned, ...others].map(d => d.id));
+    for (const r of list) if (shown.has(r.id) && r.state !== 'installing') api.after(0, () => I.dismiss?.(r.id));   // opened: it is its own row now
+    return list.filter(r => !shown.has(r.id));
+  }
+  function vtInstall(r) {
+    const busy = r.state === 'installing', failed = r.state === 'failed', word = busy ? 'Installing…' : failed ? 'Couldn’t install' : 'Installed';
+    const b = el('div', 'aad-vtinst is-' + (busy ? 'installing' : failed ? 'failed' : 'ready'), { role: 'button', tabindex: '0', 'data-app': r.id, 'aria-busy': String(busy),
+      title: busy ? `${r.name} is installing. You can close the App Store.` : failed ? `${r.name}: ${r.error || 'the install did not finish'}` : `Open ${r.name}`,
+      'aria-label': `${r.name}, ${word}` });
+    const ic = el('span', 'aad-vti'); ic.append(appTile(r.id, 'aad-tile is-vt'));
+    if (busy) ic.append(el('i', 'aad-vtspin', { 'aria-hidden': 'true' }));
+    const words = el('span', 'aad-vtw'); words.append(el('span', 'aad-vtn', { text: r.name }), el('span', 'aad-vtst', { text: busy ? 'Installing…' : failed ? 'Couldn’t install' : 'Ready to open' }));
+    b.append(ic, words);
+    if (!busy) {
+      const x = el('button', 'aad-vtx', { type: 'button', tabindex: '-1', 'aria-label': `Hide ${r.name}`, title: 'Hide' }); x.append(icon('x', 'aad-ico aad-vtx-i'));
+      api.listen(x, 'click', e => { e.stopPropagation?.(); installsOf()?.dismiss?.(r.id); });
+      b.append(x);
+    }
+    const pick = () => { if (busy || failed) { goApp('app-store'); return; } installsOf()?.dismiss?.(r.id); goApp(r.id); };
+    api.listen(b, 'click', pick);
+    api.listen(b, 'keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault?.(); pick(); } });
+    return b;
+  }
+  api.listen(globalThis, 'wizard:installs', () => paintVt());
   /* narrower window (ONE): Chats, the app bar's first item, lit while Chats is in front; its badge: chats waiting */
   function paintOneChats() {
     const on = one(), front = on && !aadVars.pane, n = on ? badgeText(CHATS) : '';

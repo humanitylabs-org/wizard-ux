@@ -48,7 +48,8 @@
     "wizard/follow-main",
     "wizard/plain-chat-titles",
     "wizard/app-wake",
-    "wizard/swap-sides"
+    "wizard/swap-sides",
+    "wizard/install-in-sidebar"
   ],
   "defaults": [
     "wizard/desktop-chats"

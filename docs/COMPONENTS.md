@@ -76,7 +76,7 @@ Back: `WizEscapeBack`, `WosBack`; `WizChatsHost.registerBack`/back.push share re
 | Store | `storeKind,sourceLabel,parseInstallLink,removeInstalledApp,githubSheet` |
 | App agent routing, private-app note + setup (incl. Store) | `WosAppRoute` (`app-route.js`) |
 | App icons, logos | `WizSigil` (`sigils.js`, `sigils.css`): aliases, registry/HOUSE glyphs first; unbranded fallback; `orb(node)` white glyphs; contain-fit pins. Tests: `app-icon-*.test.mjs` |
-| Launcher | `WizLauncher`, `WizLauncherDefaults`; 1s boot; `renderLauncher`: unique ids; `WizCore`: native path gate, `whenOpenable` |
+| Launcher | `WizLauncher`, `WizLauncherDefaults`; 1s boot; `renderLauncher`: unique ids; `WizCore`: native path gate, `whenOpenable`, `installs` |
 | App tiles | `WosAppKinds` (`app-kinds.js`) |
 | Brand hat | `WizBrand` (`brand.js`) |
 | Links: outside→panel (Android; `links.panel:false`=off)/browser/`links.reader`; sheet/win/hold; `data-wizard-browse`=original | `WizLinks` (`links.js`; `openIn*`/`follow`) |
@@ -123,7 +123,7 @@ Back: `WizEscapeBack`, `WosBack`; `WizChatsHost.registerBack`/back.push share re
 
 ## Plumbing (single owner; files in `web/core/` unless noted)
 
-`WizCompanionPane`, `WizardApp`, `WizAppCapture`, `WizComposerInput`, `WizAttachChip`, `WosSkinFrame`, `WosDevice`, `WizAppServices` (`app-services.js`; stopped), `WizCore` (`core.js`, `bridge.js`), `WizConfig`, `WosWriteGuard` (write loops), `WizReach`, `WizAndroidRelay` (`android-relay.js`), `WizBackgroundAudio` (`background-audio.js`), `WizHomeScreenPolicy`/`WizPinDoc` (`home-screen-policy.js`), `WosOwnViews` (`own-views.js`), `WosOrbHandoff` (`orb-handoff.js`), `WosShareSheet` (`share-sheet.js`), `WosBell` (`notif-bell.js`), `WosResources` (`resources.js`), `WosUsage` (`usage.js`), `WizPhotosRelay` (`photos-relay.js`), `WosMusic`, `WizDeviceLegacy` (`voice-legacy.js`), openers `WizAppOpen`, `WizCanOpen`, `WizOpenApp`, `WizOpenAgentChats` (`app.js`), `WosBoundView` (`bound-view.js`), `WosWorkspaceSync` (`workspace-sync.js`), `WosMedia`, `WizWorkspaces` (`workspaces.js`, [contract](workspaces.md)), `WizShellBoundary`, `WizBrowserBoundary` (keys/layout/wz-keys/svc/skin/link), `WizBoundaryClient`.
+`WizCompanionPane`, `WizardApp`, `WizAppCapture`, `WizComposerInput`, `WizAttachChip`, `WosSkinFrame`, `WosDevice`, `WizAppServices` (`app-services.js`; stopped), `WizCore` (`core.js`, `bridge.js`), `WizConfig`, `WosWriteGuard` (write loops), `WizReach`, `WizAndroidRelay` (`android-relay.js`), `WizBackgroundAudio` (`background-audio.js`), `WizHomeScreenPolicy`/`WizPinDoc` (`home-screen-policy.js`), `WosOwnViews` (`own-views.js`), `WosOrbHandoff` (`orb-handoff.js`), `WosShareSheet` (`share-sheet.js`), `WosBell` (`notif-bell.js`), `WosResources` (`resources.js`), `WosUsage`, `WizPhotosRelay` (`photos-relay.js`), `WosMusic`, `WizDeviceLegacy` (`voice-legacy.js`), openers `WizAppOpen`, `WizCanOpen`, `WizOpenApp`, `WizOpenAgentChats` (`app.js`), `WosBoundView` (`bound-view.js`), `WosWorkspaceSync` (`workspace-sync.js`), `WosMedia`, `WizWorkspaces` (`workspaces.js`, [contract](workspaces.md)), `WizShellBoundary`, `WizBrowserBoundary` (keys/layout/wz-keys/svc/skin/link), `WizBoundaryClient`.
 
 AI usage: EXTEND `WosResources`/`WosUsage`: extra, sign-in ([details](component-contract-details.md)).
 
