@@ -384,10 +384,6 @@
       "where": "desktop: Settings › Appearance › Shell view › AI apps (the standard desktop view; Desks is the other choice)",
       "when": "desktop only"
     },
-    "wizard/app-updates-hourly": {
-      "help": "With app updates on Automatic, apps are checked and updated every hour instead of nightly.",
-      "where": "Settings › Appearance › Try new features › Hourly app updates"
-    },
     "wizard/clear-chat-notifications": {
       "help": "Android app: reading a LINE, WhatsApp, Telegram or other bridged chat in Messenger clears that app's own notification (needs Android's Notification access).",
       "where": "Settings › Appearance › Try new features › Clear chat notifications"

@@ -177,7 +177,6 @@ Settings › Appearance › Try new features lists unfinished features anyone ca
 - **Continue saved background results**: Work that finished while Wizard was down shows in its own thread with one Continue button. Nothing resumes until you tap it.
 - **Desktop sidebar follows Default Chats**: AI apps desktop: the chats sidebar uses the Chats look picked in Settings › Chats & app screens › Default Chats.
 - **Follow main**: Green merges go live by themselves.
-- **Hourly app updates**: With app updates on Automatic, apps are checked and updated every hour instead of nightly.
 - **Installs in the Apps column**: AI apps desktop: an app you Get shows in the Apps column, spinning until installed.
 - **Links open the app's own window**: Android app: a link to a Wizard app opens that app in its own Android window, like its home-screen icon.
 - **Machines on Home**: Home shows a slim strip (Wizard, AI fuel, chats, backup, network); Settings › System holds your network, AI, security and storage.
