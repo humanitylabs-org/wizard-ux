@@ -627,7 +627,7 @@
       for (const k of [...AGENT_POLL.keys()]) if (!known.includes(k)) AGENT_POLL.delete(k);
       // A removed agent's threads stop opening under it (wizard-agent-service issue 649): only a read agents list,
       // hidden agents included, decides; a failed read keeps every mapping.
-      if (!A.error && A.list.length) { const all = new Set(A.list.map(a => a.id)); for (const [sid, a] of AGENT_OF) if (!all.has(a)) AGENT_OF.delete(sid); }
+      if (!A.error && Array.isArray(A.list) && A.list.length) { const all = new Set([...A.list.map(a => a.id), ...known]); for (const [sid, a] of AGENT_OF) if (!all.has(a)) AGENT_OF.delete(sid); }
       const due = others.filter(a => {
         if (only && a.id !== only) return false;
         const p = AGENT_POLL.get(a.id);
