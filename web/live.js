@@ -130,9 +130,11 @@
   /* Quiet replies (wizard-ux issue 1808; both quiet-inbox switches, wizard/agent-inbox + wizard/chats-inbox): the box
    * marks a thread whose newest run answered the owner's reply that asked for nothing ("Sent to Miguel, done") and
    * that ended done or fyi (Agent Service quietReply). That answer is not new to him: no unread dot, no count, not in
-   * Inbox / Ready; Sent shows it Done. An ask on the row (needs you, check), a failure or a run still going never is. */
+   * Inbox / Ready; Sent shows it Done. An ask on the row (needs you, check), a failure or a run still going never is.
+   * Main agent only: the Sent log is the owner's to the main agent, so a routed agent's row (host-profile, container,
+   * restricted) never counts as quiet. */
   function quietReply(s) {
-    return !!s && s.quietReply === true && tweakOn('wizard/agent-inbox') && tweakOn('wizard/chats-inbox') && !s.critical
+    return !!s && s.quietReply === true && (!s.agent || s.agent === 'hermes') && tweakOn('wizard/agent-inbox') && tweakOn('wizard/chats-inbox') && !s.critical
       && !['needs_you', 'check'].includes(s.attention?.state) && !['failed', 'interrupted', 'waiting_for_approval', 'unknown'].includes(s.status)
       && !globalThis.WizChatsListModel?.isListWorking?.(s);
   }

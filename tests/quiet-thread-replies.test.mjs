@@ -21,7 +21,7 @@ function liveCtx(tweaks = ON) {
   vm.runInContext(between(live, '  function tweakOn(id)', '  function backgroundOn()') + `
     const hasNew = () => true, snoozeLast = () => false, isDeferred = () => false, inWorking = () => false, seenKeyOf = s => s.id, assistantAt = s => s.at, WEEK = 7 * 864e5;
     const groupWork = rows => ({ ready: rows });
-    this.L = { inArchive: () => false, seenOf: () => ({}), deferred: {}, sessionsFor: () => this.rows,
+    this.L = { inArchive: () => false, seenOf: () => ({}), deferred: {}, sessionsFor: (agent = '') => this.rows.filter(s => (s.agent || '') === agent),
       ${between(live, '    isNew(s) {', '\n')}
       ${between(live, '    quietReply,', '\n')}
       ${between(live, '    visibleUnread(rows) {', '\n')}
@@ -47,6 +47,20 @@ test('issue 1808: an ask, a failure or a run still going is never quiet, whateve
     ['failed', quiet({ status: 'failed' })], ['interrupted', quiet({ status: 'interrupted' })], ['running', quiet({ status: 'running' })], ['critical', quiet({ critical: true })]])
     assert.equal(c.L.isNew(s), true, why);
   assert.equal(c.L.isNew(quiet({ quietReply: 'yes' })), true, 'only a real true counts');
+});
+
+test('issue 1808: main versus routed: only the main agent\'s list drops a quiet reply; host-profile, container and restricted lists are unchanged', () => {
+  const c = liveCtx();
+  const main = quiet(), routed = ['host-profile', 'container', 'restricted'].map(agent => quiet({ id: `${agent}-clips`, agent }));
+  c.rows = [main, ...routed];
+  assert.equal(c.L.isNew(main), false, 'main: no dot');
+  assert.equal(clone(c.L.groups('').ready).length, 0, 'main: out of Ready');
+  for (const s of routed) {
+    assert.equal(c.L.isNew(s), true, `${s.agent}: a routed row never counts as quiet (its list keeps today\'s dot)`);
+    assert.deepEqual(clone(c.L.groups(s.agent).ready.map(x => x.id)), [s.id], `${s.agent}: still in its own Ready, never in another list`);
+  }
+  assert.deepEqual(clone(c.L.visibleUnread(c.rows).map(s => s.id)), routed.map(s => s.id), 'counts: the routed rows only');
+  assert.equal(c.L.isNew(quiet({ agent: 'hermes' })), false, 'a row pinned to the main agent by id is main');
 });
 
 test('issue 1808: switch off (either of the two): unchanged from today', () => {
