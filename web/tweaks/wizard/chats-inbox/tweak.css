@@ -45,3 +45,12 @@ html[data-tweaks~="wizard/chats-inbox"] .ch-sent-fix button { min-height: 32px; 
 html[data-tweaks~="wizard/chats-inbox"] .ch-sent-fix button[aria-pressed="true"] { color: var(--wz-on-accent, #1a1030); background: var(--wz-accent, #b99bff); border-color: var(--wz-accent, #b99bff); }
 html[data-tweaks~="wizard/chats-inbox"] .ch-sent-fix button:disabled { opacity: .55; cursor: progress; }
 html[data-tweaks~="wizard/chats-inbox"] .ch-sent-fix button:focus-visible { outline: 2px solid var(--wz-accent, #b99bff); outline-offset: 2px; }
+
+/* The AI apps desktop's Chats sidebar pane (wizard-ux issue 1807): the same tabs at the pane's bottom, over the gear and
+ * + row. Inbox keeps the sidebar's own rows above the tabs; Tags (the channel list) and Sent fill the pane in their place. */
+html[data-tweaks~="wizard/chats-inbox"][data-shell="desktop"][data-layout="ai-apps"] .aad-panel:has(> .aad-chan:not([hidden]) > .ch-side > .ch-tabbar) > .aad-chan { order: 2; }
+html[data-tweaks~="wizard/chats-inbox"][data-shell="desktop"][data-layout="ai-apps"] .aad-panel:has(> .aad-chan:not([hidden]) > .ch-side > .ch-tabbar) > .aad-foot { order: 3; }
+html[data-tweaks~="wizard/chats-inbox"][data-shell="desktop"][data-layout="ai-apps"] .aad-chan:has(> .ch-side-sent) { flex: 1; }
+html[data-tweaks~="wizard/chats-inbox"][data-shell="desktop"][data-layout="ai-apps"] .aad-panel:has(> .aad-chan:not([hidden]) > .ch-side-sent) > .aad-scroll { display: none; }
+html[data-tweaks~="wizard/chats-inbox"][data-shell="desktop"][data-layout="ai-apps"] .aad-panel > .aad-chan .ch-list.ch-side.ch-side-sent > .ch-scroll { display: block; flex: 1; min-height: 0; overflow-y: auto; }
+html[data-tweaks~="wizard/chats-inbox"][data-shell="desktop"][data-layout="ai-apps"] .aad-chan .ch-tabbar { margin: 0 8px; padding: 6px 0; border-radius: 14px; border: 1px solid var(--wz-border, var(--aad-line)); background: var(--wz-panel, var(--aad-panel)); }

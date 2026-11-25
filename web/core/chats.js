@@ -293,7 +293,7 @@ window.WizCore.chats = function createChats(H) {
   /* A thread row in a list; core/chats-rows.js. */
   const { alertFeedback, chatRow, INBOX_SVG, inboxCanSend, inboxHeadHtml, inboxMove, READY_ORDER_KEY, READY_ORDER_LABEL, READY_ORDERS, runningBack, runningBody, runningGo, runningHead, runningOn, runningOpen, runningRow, sweepAnswer, sweepHtml, sweepLater, sweepYesToAll, bindLate: rowsLate } = window.WizCore.chatsParts.rows({ actRowMark, agentLabelOf, ago, AGS: (...a) => AGS(...a), ATT, attOf, BOOM, ch, CH, chanName, channelsLate, chanStore, chanTitle, chatVars, clip, deferredOf, draftTag, esc, feedLate, H, isWorking, KIT, LIVE, paintListsNow, PIN, PIN_SVG, renderThreadNow, rerenderList, STI, STI_LAB, STI_TIP, stiKind, storeAgent, subjectOf, toast, TOPIC, topicOn, W, winAgent });
   /* The Sent tab and the bottom tabs Inbox · Tags · Sent (switch wizard/chats-inbox, wizard-ux issue 1778); core/chats-sent.js. */
-  const { sentBack, sentBar, sentBody, sentClick, sentHead, sentOpen, sentTabsOn } = window.WizCore.chatsParts.sent({ ago, ch, CH, CHAN_VIEW_KEY, chanSide, chatVars, clip, elOf: (...a) => elOf(...a), esc, H, LIVE, openChat, renderChatList: (...a) => renderChatList(...a), rerenderList, toast, W, winAgent });
+  const { sentBack, sentBar, sentBody, sentClick, sentHead, sentOpen, sentTabsOn } = window.WizCore.chatsParts.sent({ ago, ch, CH, CHAN_VIEW_KEY, chanElsewhere, chanSide, chatVars, clip, elOf: (...a) => elOf(...a), esc, H, LIVE, openChat, renderChatList: (...a) => renderChatList(...a), rerenderList, toast, W, winAgent });
   channelsLate({ sentBack });
   let readyOrder = (() => {
     try {
