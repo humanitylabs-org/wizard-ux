@@ -333,3 +333,12 @@ a.st-row { color: inherit; text-decoration: none; }
 [data-osu-apps] [data-osu-app-modes-lbl] { margin-top: 18px; }
 /* A failed row's link to the bug the App Manager filed or found for it (wizard-app-manager#524). */
 [data-osu-apps] [data-osu-app-bug] { align-self: flex-start; padding: 4px 0; color: inherit; text-decoration: underline; }
+
+/* Search in Settings (try-wizard#94, on for everyone; was the wizard/settings-search switch): the box at the top of
+ * the category list and the marks on matches, from core/settings-view.js. */
+.st-root .st-search { margin: 0 0 10px; }
+.st-root .st-search input { box-sizing: border-box; width: 100%; min-height: 36px; padding: 6px 12px; border: 1px solid var(--wz-border); border-radius: 10px; background: color-mix(in srgb, var(--wz-text) 4%, transparent); color: var(--wz-text); font: inherit; font-size: var(--wz-text-md); }
+.st-root .st-search input:focus-visible { outline: 2px solid var(--wz-accent); outline-offset: 1px; }
+.st-root mark.st-hit { padding: 0 1px; border-radius: 3px; background: color-mix(in srgb, var(--wz-warning, #f2b35b) 38%, transparent); color: inherit; box-shadow: 0 0 0 1px color-mix(in srgb, var(--wz-warning, #f2b35b) 70%, transparent); }
+.st-root mark.st-hit-first { background: color-mix(in srgb, var(--wz-warning, #f2b35b) 60%, transparent); }
+.st-root .st-search-none { margin: 12px 4px; color: var(--wz-text-secondary, var(--wz-text)); font-size: var(--wz-text-md); }

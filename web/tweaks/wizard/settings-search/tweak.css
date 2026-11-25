@@ -1,7 +1,0 @@
-/* Search in Settings (try-wizard issue 94): the box at the top of the category list and the marks on matches. */
-html[data-tweaks~="wizard/settings-search"] .st-search { margin: 0 0 10px; }
-html[data-tweaks~="wizard/settings-search"] .st-search input { box-sizing: border-box; width: 100%; min-height: 36px; padding: 6px 12px; border: 1px solid var(--wz-border); border-radius: 10px; background: color-mix(in srgb, var(--wz-text) 4%, transparent); color: var(--wz-text); font: inherit; font-size: var(--wz-text-md); }
-html[data-tweaks~="wizard/settings-search"] .st-search input:focus-visible { outline: 2px solid var(--wz-accent); outline-offset: 1px; }
-html[data-tweaks~="wizard/settings-search"] .st-root mark.st-hit { padding: 0 1px; border-radius: 3px; background: color-mix(in srgb, var(--wz-warning, #f2b35b) 38%, transparent); color: inherit; box-shadow: 0 0 0 1px color-mix(in srgb, var(--wz-warning, #f2b35b) 70%, transparent); }
-html[data-tweaks~="wizard/settings-search"] .st-root mark.st-hit-first { background: color-mix(in srgb, var(--wz-warning, #f2b35b) 60%, transparent); }
-html[data-tweaks~="wizard/settings-search"] .st-search-none { margin: 12px 4px; color: var(--wz-text-secondary, var(--wz-text)); font-size: var(--wz-text-md); }

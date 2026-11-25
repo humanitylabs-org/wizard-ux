@@ -190,7 +190,6 @@ Settings › Appearance › Try new features lists unfinished features anyone ca
 - **Reply to Telegram and Slack chats**: Chats started on Telegram or Slack can be continued in Wizard; replies go through that app's own connection.
 - **Runtipi 4.12 sign-in key**: App Manager uses its own Runtipi 4.12 key.
 - **Say why a chat needs you**: When Wizard itself marks a chat Needs you (a helper finished after the chat closed), the chat says why, with Continue and Dismiss. Dismiss, Done or Archive clears it on every device.
-- **Search in Settings**: Search box atop Settings: keeps the pages matching your words and marks them; Esc clears, Enter opens the first.
 - **Send and go**: On desktop, sending opens a fresh chat.
 - **Share feature counts**: Sends features you tried and your thumbs, plus a random box id.
 - **Short answer first**: A long agent reply shows only its one-line plain answer; tap it for the full reply. Choose whether replies start collapsed and how long the short answer is. Where: Settings › Appearance › Try new features › Short answer first; its options show under it when on.
