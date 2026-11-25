@@ -24,8 +24,8 @@ function shell({ on = true, jobs = {}, stored = null } = {}) {
       if (u.pathname.startsWith('/wizard-os-home/store-install/')) {
         const id = decodeURIComponent(u.pathname.split('/').pop()); reads.push(id);
         const j = jobs[id]; const next = Array.isArray(j) ? (j.length > 1 ? j.shift() : j[0]) : j;
-        if (!next) return { ok: false, status: 404, json: async () => ({ error: 'no install for that app' }) };
-        if (next.state === 'installed' && next.list) apps.push(...next.list.splice(0));
+        if (next?.state === 'installed' && next.list) apps.push(...next.list.splice(0));
+        if (!next || next.gone) return { ok: false, status: 404, json: async () => ({ error: 'no install for that app' }) };
         return { ok: true, status: 200, json: async () => next };
       }
       return { ok: true, status: 200, json: async () => ({ apps: apps.slice() }) };
@@ -37,7 +37,7 @@ function shell({ on = true, jobs = {}, stored = null } = {}) {
   const send = (origin, data) => { for (const [t, fn] of listeners) if (t === 'message') fn({ origin, data }); };
   const settle = async (n = 40) => { for (let i = 0; i < n; i++) await new Promise(r => setImmediate(r)); };
   const clone = v => JSON.parse(JSON.stringify(v));
-  return { window, I: window.WizCore.installs, send, settle, reads, storage, events, root, winListeners, list: () => clone(window.WizCore.installs.list()) };
+  return { window, apps, I: window.WizCore.installs, send, settle, reads, storage, events, root, winListeners, list: () => clone(window.WizCore.installs.list()) };
 }
 const tracker = { id: 'wizardos-tracker', name: 'WizardOS Tracker', url: '/wizardos-tracker/' };
 
@@ -92,4 +92,20 @@ test('after a reload a saved install keeps being followed (once the switch is on
   for (const [t, fn] of off.winListeners) if (t === 'wos:experience') fn();
   await off.settle(20);
   assert.ok(off.reads.length >= 1, 'switch turned on: it is followed');
+});
+
+test('an App Manager restart mid-install (the job is gone) keeps the row until the app shows up', async () => {
+  const s = shell({ jobs: { 'wizardos-tracker': [{ state: 'installing' }, { gone: true }] } });
+  await s.window.WizCore.appsLoaded(); await s.settle();
+  s.send(ORIGIN, { type: 'wizard:app-installing', id: 'wizardos-tracker', job: 'wizardos-tracker', name: 'WizardOS Tracker', view: true });
+  await s.settle(60);
+  assert.deepEqual(s.list().map(r => [r.id, r.state]), [['wizardos-tracker', 'installing']], 'still there after more than five 404s');
+  s.apps.push(tracker);
+  await s.settle(300);
+  assert.deepEqual(s.list().map(r => [r.id, r.state]), [['wizardos-tracker', 'ready']]);
+  const never = shell({ jobs: {} });
+  await never.window.WizCore.appsLoaded(); await never.settle();
+  never.send(ORIGIN, { type: 'wizard:app-installing', id: 'nope', job: 'nope', name: 'Nope', view: true });
+  await never.settle(200);
+  assert.deepEqual(never.list(), [], 'a Get that never started a job leaves no row');
 });

@@ -262,13 +262,17 @@
           let job = null;
           try { const res = await fetch(endpoint(r.job), { credentials: 'same-origin', cache: 'no-store' }); job = res.status === 404 ? { state: 'gone' } : res.ok ? await res.json() : null; } catch (_) {}
           if (job?.state === 'failed') { set(r, { state: 'failed', error: String(job.error || '').slice(0, 200) }); return; }
+          if (job?.state === 'installing' && !r.seen) { r.seen = true; save(); }
           // Installed (or no job any more, e.g. the App Manager restarted): wait for the app's page in the list.
           if (job?.state === 'installed' || job?.state === 'gone') {
             if (!r.view && job.state === 'installed') { rows = rows.filter(x => x !== r); save(); emit(); return; }   // nothing to open
             try { await loadRemote({ afterPending: true }); } catch (_) {}
             if (listed(id)) { set(r, { state: 'ready' }); return; }
-            if (job.state === 'gone' && ++misses > 4) { rows = rows.filter(x => x !== r); save(); emit(); return; }
-            if (Date.now() - (r.doneAt || (r.doneAt = Date.now())) > 120000) { set(r, { state: 'failed', error: 'Installed, but it has not started yet.' }); return; }
+            // No job that was ever seen running: the Get never started one (the Store says why), so nothing to show.
+            // One seen before and gone now (the App Manager restarted): keep it through the launcher's grace period.
+            if (job.state === 'gone' && !r.seen && ++misses > 4) { rows = rows.filter(x => x !== r); save(); emit(); return; }
+            if (!r.doneAt) { r.doneAt = Date.now(); save(); }
+            if (Date.now() - r.doneAt > 120000) { set(r, { state: 'failed', error: 'It has not shown up in your apps yet. Check the App Store.' }); return; }
           }
           await nap(i < 4 ? 1500 : 2500);
         }
