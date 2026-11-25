@@ -484,6 +484,10 @@
       "help": "Same-topic chats: no date.",
       "where": "Settings › Appearance › Try new features › Undated chat titles"
     },
+    "wizard/capture-inbox": {
+      "help": "Your agent files what you drop in Files Inbox.",
+      "where": "Settings › Appearance › Try new features › Capture inbox"
+    },
     "wizard/app-wake": {
       "help": "Apps wake your agent.",
       "where": "Settings › Appearance › Try new features › Apps wake your agent"
