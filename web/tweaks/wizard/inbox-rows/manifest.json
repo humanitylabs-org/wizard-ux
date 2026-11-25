@@ -1,0 +1,14 @@
+{
+  "id": "wizard/inbox-rows",
+  "name": "Inbox: only what needs you",
+  "version": "1.0.0",
+  "author": "wizard",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout"
+  ],
+  "issues": [
+    "humanitylabs-org/wizard-ux#1779"
+  ],
+  "description": "Chats › Inbox holds only what needs you (asks, failures, the agent's replies to what you started, background tasks waiting on you, alerts), drawn like Signal or Telegram: round avatar, the tag or agent, the title, one line of the latest reply, the time and an unread dot. Rows stay until you archive them (Archive button on each row); today's Daily and anything #priority or urgent are pinned on top. Quiet \"nothing needed\" replies and your own running sends stay in Sent."
+}

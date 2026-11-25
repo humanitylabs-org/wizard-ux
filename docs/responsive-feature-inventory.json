@@ -325,6 +325,13 @@
       ],
       "note": "Chats app thread opened over its window, closing it, per-window state and the document-scrolling check moved out of chats.js (issue 1665); called by createChats"
     },
+    "core/chats-inboxrows.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Chats Inbox rows: only what needs you, as Signal-style rows with Archive (issue 1779, switch wizard/inbox-rows); called by createChats"
+    },
     "core/chats-pull.js": {
       "loadedBy": [
         "phone",
@@ -1703,6 +1710,7 @@
     "core/chats-fitlabel.js",
     "core/chats-focus.js",
     "core/chats-hosted.js",
+    "core/chats-inboxrows.js",
     "core/chats-list-model.js",
     "core/chats-listpaint.js",
     "core/chats-notes.js",
