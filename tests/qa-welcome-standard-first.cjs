@@ -132,11 +132,8 @@ const server = http.createServer((req, res) => {
     await page.waitForFunction(() => !window.WosWelcome?.active, null, { timeout: 8000 }).catch(() => {});
     const reply = await page.waitForFunction(() => /What would you like to start with/.test(document.body.innerText), null, { timeout: 20000 }).then(() => true, () => false);
     if (process.env.QA_DEBUG) console.log('hello', k, await page.evaluate(() => JSON.stringify({ log: window.__welcomeLog, active: !!window.WosWelcome?.active, err: document.querySelector('.wl-status.err')?.textContent, ob: [...(window.WosOutbox?._items?.values?.() || [])].map(i => ({ state: i.state, error: i.error, text: i.text })), list: window.WosOutbox?.list?.()?.map?.(i => [i.state, i.error, i.text]) })));
-    // Desktop only, and on main too: a provider signed in inside the Welcome leaves the desktop's send-time model empty
-    // (wizard-ux#1805, its own bug). Reported, not counted here; an AI signed in before the page loaded replies.
-    const known = DESKTOP && !reply && !box.delivered.length && await page.evaluate(() => [...(window.WosOutbox?._items?.values?.() || [])].some(i => /Model unavailable/.test(i.error || '')));
-    if (known) notes.push(`${k}: desktop, first message held by wizard-ux#1805 (Model unavailable), as on main`);
-    else if (!reply || !box.delivered.length) fail(k, `first message: delivered ${JSON.stringify(box.delivered)}, reply shown ${reply}`);
+    // Desktop too: an AI signed in inside the Welcome must answer the very first message (wizard-ux#1811, #1805).
+    if (!reply || !box.delivered.length) fail(k, `first message: delivered ${JSON.stringify(box.delivered)}, reply shown ${reply}`);
     else notes.push(`${k}: first message "${box.delivered[0]}" -> the agent's reply shows in chat`);
   }
   async function privacyRow(page) {
