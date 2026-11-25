@@ -584,12 +584,26 @@
   // The Welcome then waits for the next launch, like the Setup launcher it replaces.
   let acted = false;
   const act = () => { acted = true; };
+  /* Standard first on a deep-linked first launch (issue 1800): a Mac's setup connects ChatGPT or Claude itself and opens
+   * the first chat with ?session= (try-wizard issue 171), which keeps the Welcome away. While the box is still in its
+   * first run with the AI connected and the offer unanswered, the Private AI step opens on its own over that chat, once;
+   * Later or No thanks closes it back to the chat. The owner acting first leaves it for the next launch's Welcome. */
+  async function deepOffer(h) {
+    // The switch is painted by the tweak loader a moment after boot: give it a few seconds. Off: nothing is read.
+    for (let i = 0; i < 16 && !sfOn(); i++) await new Promise(r => setTimeout(r, 500));
+    if (!sfOn()) return;
+    const [ok, setup] = await Promise.all([aiReady(), setupState()]);
+    if (ok !== true || setup?.first_run !== true) { log('deeplink:none:' + ok + ':' + setup?.first_run); return; }
+    await pfRead();
+    if (el || acted || h.busy?.() || !offerDue()) { log('deeplink:no-offer'); return; }
+    log('deeplink:offer'); open('private');
+  }
   function boot(h) {
     if (booted || !h) return; booted = true; H = h;
     try { addEventListener('pointerdown', act, true); addEventListener('keydown', act, true); } catch (e) {}
     setTimeout(async () => {
       if (seenPending()) markSeen();
-      if (h.deeplinked?.()) { log('deeplink'); return; }
+      if (h.deeplinked?.()) { log('deeplink'); if (typeof sfOn === 'function') deepOffer(h); return; }
       let [ok, setup] = await Promise.all([aiReady(), setupState(), Promise.race([Promise.resolve(window.WizCore?.appsLoaded?.()).catch(() => {}), new Promise(r => setTimeout(r, 5000))]),
         Promise.race([Promise.resolve(window.WizConfig?.ready).catch(() => {}), new Promise(r => setTimeout(r, 5000))])]); // never wait forever on the app list or the settings
       // Private first: a private agent already made counts as connected (its provider may not be the main agent's).

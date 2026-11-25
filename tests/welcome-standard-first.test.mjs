@@ -65,7 +65,7 @@ function device(box, { tweaks = SW } = {}) {
   const W = ctx.WosWelcome
   const press = (act, data = {}) => handlers.click({ target: { closest: s => (s === '[data-wl]' ? { dataset: { wl: act, ...data } } : null) } })
   const apps = { 'wizard-tinfoil': { url: '/tinfoil/' }, 'wizard-claude': { url: '/claude/' }, 'wizard-chatgpt': { url: '/chatgpt/' } }
-  const boot = async () => { W.boot({ app: id => apps[id] || null, deeplinked: () => false, busy: () => false, send: async () => ({ sessionId: 's1' }) }); await wait() }
+  const boot = async ({ deeplinked = false } = {}) => { W.boot({ app: id => apps[id] || null, deeplinked: () => deeplinked, busy: () => false, send: async () => ({ sessionId: 's1' }) }); await wait() }
   return { W, press, boot, html: () => card._html, features, shown: () => shown }
 }
 
@@ -221,4 +221,23 @@ test('Later leaves Settings › Privacy\'s "Finish setting up private AI", which
   assert.ok(await until(() => !d.shown()), 'closes once private AI is set up')
   // Done: the row goes.
   assert.equal(row.available(), false)
+})
+
+test('a Mac setup that opens the first chat by deep link: the offer opens once over that chat, Later closes it', async () => {
+  const box = fakeBox({ pf: OFF, providers: [{ slug: 'openai-codex', authenticated: true }] })
+  const d = device(box)
+  await d.boot({ deeplinked: true })
+  assert.ok(await until(() => title(d.html()) === 'Want a fully private AI?'))
+  assert.doesNotMatch(d.html(), /wl-dots/, 'one screen over the chat')
+  d.press('offer', { offer: 'later' })
+  assert.ok(await until(() => !d.shown()), 'Later goes back to the chat')
+  assert.deepEqual(box.offers, ['later'])
+  // Answered, finished, switch off or no AI yet: a deep link opens nothing.
+  for (const [b, tweaks] of [[fakeBox({ pf: { ...OFF, offer: 'later' }, providers: box.providers }), SW],
+    [fakeBox({ pf: OFF, providers: box.providers, firstRun: false }), SW], [fakeBox({ pf: OFF, providers: box.providers }), ''],
+    [fakeBox({ pf: OFF }), SW]]) {
+    const o = device(b, { tweaks })
+    await o.boot({ deeplinked: true }); await wait(40)
+    assert.equal(o.shown(), false); assert.deepEqual(b.offers, [])
+  }
 })

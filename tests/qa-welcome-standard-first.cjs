@@ -13,6 +13,8 @@
 //   3. skip-setup: Skip for now -> the step leads with private AI -> Set up private AI -> the Tinfoil sign-in -> the
 //      private agent exists -> Pick a skin
 //   4. off: the switch off: the Welcome is main's (Tinfoil leads while private first is on), nothing is POSTed
+//   7. mac-deeplink: a Mac's setup connected ChatGPT and opened the first chat with ?session= (try-wizard#171): the
+//      offer opens once over that chat, Later closes it back to the reply, and it does not come back
 // Skins: the Connect your AI and Private AI cards in Nebula and Grove (QA_SHOTS), and the card follows a live skin change.
 //   QA_PLAYWRIGHT=<path to playwright> node tests/qa-welcome-standard-first.cjs
 //   QA_WEB=<another web/ dir, e.g. main's> QA_EXPECT=broken: cases 1-3 must fail there.
@@ -83,6 +85,8 @@ const server = http.createServer((req, res) => {
     }
     const m = p.match(/^\/wizard\/hermes\/api\/sessions\/([^/]+)\/messages$/);
     if (m) return json(res, 200, { data: box.sessions[decodeURIComponent(m[1])] || [] });
+    const d = p.match(/^\/wizard\/hermes\/api\/sessions\/([^/]+)$/), sid = d && decodeURIComponent(d[1]);
+    if (d && box.sessions[sid]) return json(res, 200, { id: sid, title: 'First chat', message_count: box.sessions[sid].length, last_active: Date.now() / 1000, source: 'wizard-mobile', messages: box.sessions[sid] });
     if (p === '/wizard/hermes/api/sessions') return json(res, 200, { data: Object.keys(box.sessions).map(id => ({ id, title: 'First chat', message_count: box.sessions[id].length, last_active: Date.now() / 1000, source: 'wizard-mobile' })) });
     if (process.env.QA_DEBUG) console.log('404', req.method, p);
     json(res, 404, { error: 'not here' });
@@ -247,6 +251,29 @@ const server = http.createServer((req, res) => {
           if (!(await waitTitle(page, 'Pick a skin'))) fail(k, `after Later: "${await title(page)}"`);
           else { notes.push(`${k}: ChatGPT signed in before the Welcome -> "Want a fully private AI?" -> Later -> Pick a skin`); await hello(page, k); }
         }
+      }
+      await ctx.close();
+    }
+    // 7. A Mac's setup (try-wizard#171, StandardFirstSetup on) signs in to ChatGPT, sends the first message itself and
+    //    opens that chat with ?session=: the offer opens over the chat once, Later closes it back to the reply.
+    {
+      const k = 'mac-deeplink'; box = fresh(false); box.signed.add('openai-codex'); box.current = 'openai-codex';
+      const now = Date.now() / 1000;
+      box.sessions['mac-first'] = [{ id: 'm1', role: 'user', content: 'Meet Oscar', timestamp: now }, { id: 'm2', role: 'assistant', content: 'Hi! I am Oscar, on your ChatGPT. What would you like to start with?', timestamp: now + 1 }];
+      const { ctx, page } = await device();
+      await page.goto(base + HOME + '?session=mac-first');
+      if (!(await waitTitle(page, 'Want a fully private AI?', 20000))) fail(k, `no offer over the first chat: ${JSON.stringify(await page.evaluate(() => [window.__welcomeLog, window.__deeplinkLog]).catch(() => null))}`);
+      else {
+        const dots = await page.locator('.wl-card .wl-dots').count();
+        if (SHOTS) await page.screenshot({ path: path.join(SHOTS, 'mac-offer.png') });
+        await page.locator('.wl-card [data-wl="offer"][data-offer="later"]').click();
+        const closed = await page.waitForFunction(() => !window.WosWelcome?.active, null, { timeout: 8000 }).then(() => true, () => false);
+        const reply = await page.waitForFunction(() => /What would you like to start with/.test(document.body.innerText), null, { timeout: 15000 }).then(() => true, () => false);
+        if (dots || !closed || !reply || JSON.stringify(box.posts) !== '["later"]') fail(k, `dots ${dots} closed ${closed} reply ${reply} posts ${JSON.stringify(box.posts)}`);
+        else notes.push(`${k}: ?session= first chat -> "Want a fully private AI?" over it -> Later -> back to the chat with the reply; the box remembers later`);
+        if (SHOTS) await page.screenshot({ path: path.join(SHOTS, 'mac-after-later.png') });
+        await page.goto(base + HOME + '?session=mac-first'); await page.waitForTimeout(4000);
+        if (await page.evaluate(() => !!window.WosWelcome?.active)) fail(k, 'the offer came back after Later');
       }
       await ctx.close();
     }
