@@ -164,7 +164,6 @@ Settings › Appearance › Try new features lists unfinished features anyone ca
 
 - **Action cards in chat**: An app's proposed action (a draft, an event) shows in chat with Approve, Edit, Open in app.
 - **Agent knows the Wizard interface**: Your agent gets this manual: every screen, Settings page and feature switch, so it can say where things are.
-- **Agents use what the box already does**: Agents look up what this box already does (transcription, reminders, app jobs) before installing their own.
 - **App panel on the left**: AI apps desktop: ⌥⇧M or the app panel's header button moves it beside the chats sidebar.
 - **App switches in chat**: A reply's switch card also lists an app's own feature switches, flipped right in the chat.
 - **Archive on top**: Archive is the first section of the Chats list in both By day and By status, so switching layouts never moves it.
