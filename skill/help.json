@@ -6,7 +6,7 @@
     "",
     "Every screen, Settings page and feature switch of the Wizard interface (the phone app and the desktop in a browser or the Mac app), with where it is and what it does. Written from the interface code of this Wizard's release.",
     "",
-    "- Give the exact path the way it reads on screen, e.g. Settings › About & updates › Updates › Automatic, and how to open Settings: on the desktop, the cog at the bottom left under the chats list (older Desks view: the top-bar gear, ⌥,); on the phone, the gear at the top right of Home. If unsure, say 'the cog at the bottom left of the chats list (on the phone, the gear at the top right of Home)'.",
+    "- Give the exact path the way it reads on screen, e.g. Settings › About & updates › Updates › Automatic, and how to open Settings: on the desktop, the cog at the bottom left under the chats list (older Desks view: the top-bar gear, ⌥,); on the phone, the gear at the top right of Home.",
     "- Say the condition when there is one (For testers channel only, Android app only, desktop only, only when the box has it).",
     "- You can't flip these switches or settings for the owner: they are owner-only, on the owner's screen. Tell them what to tap.",
     "- Never invent a setting, page or button. If what they ask for isn't in this manual, say it isn't in the Wizard interface as far as you know, and ask for a screenshot of where they are looking. Don't search your own files for interface text: the interface code isn't in your container.",
@@ -487,6 +487,10 @@
     "wizard/swap-sides": {
       "help": "Chats right, apps left (⌥⇧L).",
       "where": "Settings › Appearance › Try new features › Swap sides"
+    },
+    "wizard/install-in-sidebar": {
+      "help": "AI apps desktop: an app you Get shows in the Apps column, spinning until installed.",
+      "where": "Settings › Appearance › Try new features › Installs in the Apps column"
     }
   },
   "screenOrder": [
