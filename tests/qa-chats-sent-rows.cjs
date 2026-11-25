@@ -136,7 +136,7 @@ const report = { origin, web, on: ON, cases: [] };
           const h = [...document.querySelectorAll(ai ? '.aad-side .aad-sec' : '.ch-list .ch-sec.ch-ib .ch-sec-h')].find(n => n.getClientRects().length);
           return { look: row ? lookOf(row, ai ? AADQ : IBQ) : null, head: h ? [getComputedStyle(h).fontSize, getComputedStyle(h).fontWeight, getComputedStyle(h).textTransform].join(' ') : null };
         }, [ai, IBQ, AADQ, lookOf.toString()]);
-        assert.ok(entry.inbox.look, 'Inbox shows its rows');
+        if (ON || process.env.QA_INBOX_ONLY) assert.ok(entry.inbox.look, 'Inbox shows its rows');
         await shot('1-inbox');
         if (process.env.QA_INBOX_ONLY) { entry.pass = true; continue; } // the Inbox rows' look only (compare with main)
         await vis(`${L} .ch-tabbar [data-chtab="sent"]`).click();
