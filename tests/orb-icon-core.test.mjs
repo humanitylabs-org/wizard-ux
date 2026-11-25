@@ -39,7 +39,7 @@ function draw() {
   const o = orb(); o.frame();
   const frag = o.sources.find(x => /gl_FragColor/.test(x));
   const s = shader(frag, { probe: ['stars', 'spec', 'arc', 'qr'] });
-  const base = { res: [48, 48], t: 1.3, lvl: 0, energy: .2, spin: .3, ring: 0, press: 0, R: .5, cA: [.1, .05, .2], cB: [.3, .2, .6], cC: [.6, .4, .9] };
+  const base = { res: [48, 48], t: 1.3, lvl: 0, energy: .2, spin: .3, ring: 0, press: 0, R: .5, sparkle: 1, cA: [.1, .05, .2], cB: [.3, .2, .6], cC: [.6, .4, .9] };
   const px = (x, y, u) => s.pixel([x, y], { ...base, ...u });
   const all = []; for (let y = 0; y < 48; y++) for (let x = 0; x < 48; x++) { const pr = px(x, y, { core: 0, gloss: 0 }).probes; if (pr.qr !== undefined) all.push({ x, y, ...pr }); }
   return (drawn = { px, all });
@@ -123,4 +123,26 @@ test("James 29 Oct: the white top-left shine on the orb goes while the white app
   }
   const o = orb('obsidian'); o.settle();
   assert.ok(o.uniforms.gloss > .999, 'other skins keep their shine');
+});
+
+// Phone bar (wizard-ux issue 1533, switch wizard/phone-nav): the phone's own orb drops its sparkles, the swirl stays;
+// every other orb and this one with the switch off keep them.
+test('wizard/phone-nav takes the sparkles out of the phone orb only, in the real shader', () => {
+  const cases = [['nebula', 'orb', 'wizard/phone-nav', undefined, 0], ['grove', 'orb', 'wizard/desktop-chats wizard/phone-nav', undefined, 0],
+    ['nebula', 'orb', '', undefined, 1], ['nebula', 'orb', 'wizard/desktop-chats', undefined, 1], ['obsidian', 'orb', 'wizard/phone-nav', undefined, 1],
+    ['nebula', 'agentOrb', 'wizard/phone-nav', undefined, 1], ['nebula', 'orb', 'wizard/phone-nav', 'desktop', 1]];
+  for (const [skin, id, tweaks, shell, want] of cases) {
+    const o = orb(skin, id); o.root.dataset.tweaks = tweaks; if (shell) o.root.dataset.shell = shell; o.frame();
+    assert.equal(o.uniforms.sparkle, want, `${skin} #${id} [${tweaks}] ${shell || 'phone'}`);
+  }
+  const d = draw(), lit = d.all.filter(p => p.stars > 0);
+  assert.ok(lit.length > 0, 'the shader draws some sparkles');
+  let most = 0;
+  for (const p of lit) {
+    const on = d.px(p.x, p.y, { core: 0, gloss: 0, sparkle: 1 }).color, off = d.px(p.x, p.y, { core: 0, gloss: 0, sparkle: 0 }).color;
+    assert.ok(lum(on) > lum(off), `sparkle at ${p.x},${p.y} goes with sparkle 0`); most = Math.max(most, lum(on) - lum(off));
+  }
+  assert.ok(most > .5, `a sparkle is a bright point (${most})`);
+  const plain = d.all.find(p => !(p.stars > 0));
+  assert.deepEqual(d.px(plain.x, plain.y, { core: 0, gloss: 0, sparkle: 0 }).color, d.px(plain.x, plain.y, { core: 0, gloss: 0, sparkle: 1 }).color, 'the swirl stays');
 });

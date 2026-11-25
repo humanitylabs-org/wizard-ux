@@ -23,7 +23,7 @@
   const FRAG = `
 precision highp float;
 uniform vec2 res; uniform float t; uniform float lvl; uniform float energy; uniform float spin;
-uniform float ring; uniform float core; uniform float press; uniform float R; uniform float gloss;
+uniform float ring; uniform float core; uniform float press; uniform float R; uniform float gloss; uniform float sparkle;
 uniform vec3 cA; uniform vec3 cB; uniform vec3 cC;
 float h(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
 float n(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.-2.*f);
@@ -54,7 +54,7 @@ void main(){
     inner += cB * pow(f, 1.6) * (1.1 + .6*energy);
     inner += cC * arms * f * (.45 + .9*energy + .6*lvl);
     inner += mix(cB,cC,.5) * dust * (.25 + .5*energy);
-    inner += vec3(1.,.95,1.) * (c0 + stars*.9);
+    inner += vec3(1.,.95,1.) * (c0 + stars*.9*sparkle);
     inner *= .30 + .85*z;
     float fres = pow(1.-z, 2.2);
     inner += mix(cB, cC, .55 + .45*sin(ang*2.+t*.7)) * fres * (1.0 + .8*energy);
@@ -105,7 +105,7 @@ void main(){
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
     const loc = gl.getAttribLocation(prog, 'p'); gl.enableVertexAttribArray(loc);
     gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
-    ['res','t','lvl','energy','spin','ring','core','press','R','cA','cB','cC','gloss'].forEach(k => U[k] = gl.getUniformLocation(prog, k));
+    ['res','t','lvl','energy','spin','ring','core','press','R','cA','cB','cC','gloss','sparkle'].forEach(k => U[k] = gl.getUniformLocation(prog, k));
     gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
   }
   function size() {
@@ -124,6 +124,16 @@ void main(){
     if (!icon || !icon.hasChildNodes()) return 1;
     const style = getComputedStyle(icon); // One style read; no geometry/layout query.
     return style.display !== 'none' && style.visibility !== 'hidden' && style.visibility !== 'collapse' && +style.opacity > .5 ? 0 : 1;
+  }
+  // Phone bar (wizard-ux issue 1533, switch wizard/phone-nav): the phone's own dock orb in James's five skins drops its
+  // sparkles; the swirl stays. Every other orb, and this one with the switch off, keeps them (sparkle 1).
+  function sparkleTarget() {
+    if (canvas.id !== 'orb') return 1;
+    try {
+      const r = document.documentElement, d = r.dataset || {};
+      if (d.shell === 'desktop' || !['nebula', 'grove', 'tide', 'ember', 'signal'].includes(d.skin)) return 1;
+      return String(d.tweaks || '').split(' ').includes('wizard/phone-nav') ? 0 : 1;
+    } catch (_) { return 1; }
   }
   let coreMultiplier = 1;
   const t0 = performance.now();
@@ -173,7 +183,7 @@ void main(){
       gl.uniform1f(U.t, (now - t0) / 1000);
       gl.uniform1f(U.lvl, levelS); gl.uniform1f(U.energy, cur.energy);
       gl.uniform1f(U.spin, cur.spin); gl.uniform1f(U.ring, cur.ring);
-      gl.uniform1f(U.core, cur.core * coreMultiplier); gl.uniform1f(U.gloss, coreMultiplier); gl.uniform1f(U.press, press); gl.uniform1f(U.R, opts.R || window.ORB_R || .5);
+      gl.uniform1f(U.core, cur.core * coreMultiplier); gl.uniform1f(U.gloss, coreMultiplier); gl.uniform1f(U.sparkle, sparkleTarget()); gl.uniform1f(U.press, press); gl.uniform1f(U.R, opts.R || window.ORB_R || .5);
       gl.uniform3fv(U.cA, cur.a); gl.uniform3fv(U.cB, cur.b); gl.uniform3fv(U.cC, cur.c);
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
       frames++;
@@ -195,7 +205,7 @@ void main(){
     });
     iconChanges.observe(host, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'hidden', 'style'] });
     const appearanceChanges = new MutationObserver(wake);
-    appearanceChanges.observe(document.documentElement, { attributes: true, attributeFilter: ['data-skin', 'data-layout', 'data-shell', 'class', 'style'] });
+    appearanceChanges.observe(document.documentElement, { attributes: true, attributeFilter: ['data-skin', 'data-layout', 'data-shell', 'data-tweaks', 'class', 'style'] });
     const device = canvas.closest?.('.device');
     if (device) appearanceChanges.observe(device, { attributes: true, attributeFilter: ['data-voice', 'data-sheet', 'class'] });
   }

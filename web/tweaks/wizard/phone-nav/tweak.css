@@ -1,0 +1,35 @@
+/* Phone bar (wizard-ux issue 1533): on the phone's own dock in James's five skins (Miguel's and Robert's skins draw
+ * their own docks), a 72 px orb (66 px at 360 px or less) whose edge is its one thin ring, no spinning arcs and no
+ * orbiting dots; 32 px icons in 44 px buttons; one yellow badge centred on the ring at 45 degrees. The shell hides the
+ * desks that don't fit (app-desks.js phoneNavFit) and marks iPhone (data-phone-nav-ios), where the bar is 78 px. */
+html[data-tweaks~="wizard/phone-nav"]:is([data-skin="nebula"], [data-skin="grove"], [data-skin="tide"], [data-skin="ember"], [data-skin="signal"]):not([data-shell="desktop"])[data-phone-nav-ios] { --dock-h: 78px; }
+html[data-tweaks~="wizard/phone-nav"]:is([data-skin="nebula"], [data-skin="grove"], [data-skin="tide"], [data-skin="ember"], [data-skin="signal"]):not([data-shell="desktop"])[data-phone-nav-ios] #device:not(.orb-corner) #dock { padding-bottom: calc(28px + var(--safe-b)); }
+html[data-tweaks~="wizard/phone-nav"]:is([data-skin="nebula"], [data-skin="grove"], [data-skin="tide"], [data-skin="ember"], [data-skin="signal"]):not([data-shell="desktop"]) #device:not(.orb-corner) #dock { --orb: 72px; }
+@media (max-width: 360px) {
+  html[data-tweaks~="wizard/phone-nav"]:is([data-skin="nebula"], [data-skin="grove"], [data-skin="tide"], [data-skin="ember"], [data-skin="signal"]):not([data-shell="desktop"]) #device:not(.orb-corner) #dock { --orb: 66px; }
+}
+/* the orb: its edge is the one thin ring; the halo glow stays, the arcs and the moons go */
+html[data-tweaks~="wizard/phone-nav"]:is([data-skin="nebula"], [data-skin="grove"], [data-skin="tide"], [data-skin="ember"], [data-skin="signal"]):not([data-shell="desktop"]) #device:not(.orb-corner) #dock .orb-ring { inset: 0; border: 1px solid var(--line-2); }
+html[data-tweaks~="wizard/phone-nav"]:is([data-skin="nebula"], [data-skin="grove"], [data-skin="tide"], [data-skin="ember"], [data-skin="signal"]):not([data-shell="desktop"]) #device:not(.orb-corner) #dock .orb-ring::before,
+html[data-tweaks~="wizard/phone-nav"]:is([data-skin="nebula"], [data-skin="grove"], [data-skin="tide"], [data-skin="ember"], [data-skin="signal"]):not([data-shell="desktop"]) #device:not(.orb-corner) #dock .orb-ring::after,
+html[data-tweaks~="wizard/phone-nav"]:is([data-skin="nebula"], [data-skin="grove"], [data-skin="tide"], [data-skin="ember"], [data-skin="signal"]):not([data-shell="desktop"]) #device:not(.orb-corner) #dock .moons { display: none; }
+/* the one badge: its centre on the ring at 45 degrees top right (50% + r cos 45), the number centred in the circle */
+html[data-tweaks~="wizard/phone-nav"]:is([data-skin="nebula"], [data-skin="grove"], [data-skin="tide"], [data-skin="ember"], [data-skin="signal"]):not([data-shell="desktop"]) #device:not(.orb-corner) #dock .orb-badge {
+  top: 14.645%; left: 85.355%; right: auto; translate: -50% -50%; box-sizing: border-box; min-width: 22px; height: 22px; padding: 0 6px;
+  font-size: .8125rem; line-height: 1; font-variant-numeric: tabular-nums; text-align: center; box-shadow: 0 0 0 2.5px var(--bg); }
+/* side icons: 32 px in 44 px buttons that never shrink (the shell hides a desk that doesn't fit instead) */
+html[data-tweaks~="wizard/phone-nav"]:is([data-skin="nebula"], [data-skin="grove"], [data-skin="tide"], [data-skin="ember"], [data-skin="signal"]):not([data-shell="desktop"]) #device:not(.orb-corner) #dock .ddot.sig { flex: 0 0 44px; width: 44px; min-width: 44px; height: 44px; }
+html[data-tweaks~="wizard/phone-nav"]:is([data-skin="nebula"], [data-skin="grove"], [data-skin="tide"], [data-skin="ember"], [data-skin="signal"]):not([data-shell="desktop"]) #device:not(.orb-corner) #dock .ddot.sig .dsg { width: 32px; height: 32px; scale: none; }
+html[data-tweaks~="wizard/phone-nav"]:is([data-skin="nebula"], [data-skin="grove"], [data-skin="tide"], [data-skin="ember"], [data-skin="signal"]):not([data-shell="desktop"]) #device:not(.orb-corner) #dock .ddot.sig .dsg.empty { width: 12px; height: 12px; }
+html[data-tweaks~="wizard/phone-nav"]:is([data-skin="nebula"], [data-skin="grove"], [data-skin="tide"], [data-skin="ember"], [data-skin="signal"]):not([data-shell="desktop"]) #device:not(.orb-corner) #dock .desk-dots > .pn-cut { display: none; }
+/* the open app's mark in the orb: 36 px; the Wizard hat 34 px, lifted 1.5 px so it sits optically centred */
+html[data-tweaks~="wizard/phone-nav"]:is([data-skin="nebula"], [data-skin="grove"], [data-skin="tide"], [data-skin="ember"], [data-skin="signal"]):not([data-shell="desktop"]) #device:not(.orb-corner) #dock #orbApp .dsg { width: 36px; height: 36px; max-width: none; max-height: none; scale: none; }
+html[data-tweaks~="wizard/phone-nav"]:is([data-skin="nebula"], [data-skin="grove"], [data-skin="tide"], [data-skin="ember"], [data-skin="signal"]):not([data-shell="desktop"]) #device:not(.orb-corner) #dock #orbApp .dsg:has(> :is(.sg-hat, .sg-hat-private)) { width: 34px; height: 34px; translate: 0 -1.5px; }
+/* the recording timer keeps to the bar under the bigger orb */
+html[data-tweaks~="wizard/phone-nav"]:is([data-skin="nebula"], [data-skin="grove"], [data-skin="tide"], [data-skin="ember"], [data-skin="signal"]):not([data-shell="desktop"]) #device:not(.orb-corner) #dock .timer { top: calc(100% - 14px); }
+/* while recording, the four voice buttons beside the orb step 10 px further out so the bigger orb never touches them */
+html[data-tweaks~="wizard/phone-nav"]:is([data-skin="nebula"], [data-skin="grove"], [data-skin="tide"], [data-skin="ember"], [data-skin="signal"]):not([data-shell="desktop"]) #device:not(.orb-corner) .voice.on .arc-left { transform: translate(-134px, 0) scale(1); }
+html[data-tweaks~="wizard/phone-nav"]:is([data-skin="nebula"], [data-skin="grove"], [data-skin="tide"], [data-skin="ember"], [data-skin="signal"]):not([data-shell="desktop"]) #device:not(.orb-corner) .voice.on .arc-mid { transform: translate(-76px, 0) scale(1); }
+html[data-tweaks~="wizard/phone-nav"]:is([data-skin="nebula"], [data-skin="grove"], [data-skin="tide"], [data-skin="ember"], [data-skin="signal"]):not([data-shell="desktop"]) #device:not(.orb-corner) .voice.on .arc-screen { transform: translate(76px, 0) scale(1); }
+html[data-tweaks~="wizard/phone-nav"]:is([data-skin="nebula"], [data-skin="grove"], [data-skin="tide"], [data-skin="ember"], [data-skin="signal"]):not([data-shell="desktop"]) #device:not(.orb-corner) .voice.on .arc-right { transform: translate(134px, 0) scale(1); }
+html[data-tweaks~="wizard/phone-nav"]:is([data-skin="nebula"], [data-skin="grove"], [data-skin="tide"], [data-skin="ember"], [data-skin="signal"]):not([data-shell="desktop"]) #device:not(.orb-corner) .voice .arc { bottom: calc(var(--safe-b) + var(--dock-h) - 28px); }

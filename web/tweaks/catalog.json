@@ -50,7 +50,8 @@
     "wizard/inbox-until-archived",
     "wizard/inbox-rows",
     "wizard/sent-rows",
-    "wizard/chats-title-bar"
+    "wizard/chats-title-bar",
+    "wizard/phone-nav"
   ],
   "defaults": [
     "wizard/desktop-chats"
