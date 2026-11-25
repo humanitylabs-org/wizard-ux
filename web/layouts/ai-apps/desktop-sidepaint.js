@@ -124,7 +124,9 @@ export function sidepaintPart({ aadVars, ACT_SECTIONS, actOn, actOrder, api, bad
       }
       // Miguel's "Archive on top" (miguel/archive-top) puts Archived first here too, as on the phone drawer (issue 1741)
       const actSections = archiveTop(root) ? [...ACT_SECTIONS.filter(([k]) => k === 'archive'), ...ACT_SECTIONS.filter(([k]) => k !== 'archive')] : ACT_SECTIONS;
-      for (const [k, word0] of actSections) {
+      const inboxKeep = !!globalThis.WizCore?.inboxKeep?.(); // Inbox until archived (wizard-ux issue 1810): Ready reads Inbox
+      for (const [k, word1] of actSections) {
+        const word0 = k === 'ready' && inboxKeep ? 'Inbox' : word1;
         if (aadVars.sessions && has(k)) {
           const rows = s[k] || [], on = k === 'recent' ? secOpen.recent !== false : !!secOpen[k];
           const hd = el('button', 'aad-lab aad-sec', { type: 'button', 'data-sec': k, 'aria-expanded': String(on), 'aria-controls': 'aad-sec-' + k });
@@ -301,7 +303,7 @@ export function sidepaintPart({ aadVars, ACT_SECTIONS, actOn, actOrder, api, bad
     if (grouped && groups.length) out.push(...groups.map(g => railRow('ready', globalThis.WizChatsListModel.unreadCount(g.rows), g.state === 'none' ? 'Other' : g.word, g.state, act)));   // (round 24b: or each project)
     // nothing ready (Miguel, 4 Nov 2026): no Ready mark at all, so the rail reads just "9 Working"
     // (wizard-os issue 510: an unread count with no Ready chat behind it pointed at nothing, so it needs a Ready row)
-    else if (ready.length) out.push(railRow('ready', unread, 'Ready', '', act, text));
+    else if (ready.length) out.push(railRow('ready', unread, globalThis.WizCore?.inboxKeep?.() ? 'Inbox' : 'Ready', '', act, text));
     rList.replaceChildren(...out);
     if (aadVars.fly) paintFly();
   }
