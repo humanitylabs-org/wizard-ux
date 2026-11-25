@@ -474,6 +474,11 @@
       "help": "Chats' title bar names the tab.",
       "where": "Settings › Appearance › Try new features › Chats: title bar names the tab"
     },
+    "wizard/phone-nav": {
+      "help": "Phone bar: bigger orb, one badge.",
+      "where": "Settings › Appearance › Try new features › Phone bar: bigger orb, one badge",
+      "when": "phone only"
+    },
     "wizard/capture-inbox": {
       "help": "Agent files your Files Inbox drops.",
       "where": "Settings › Appearance › Try new features › Capture inbox"

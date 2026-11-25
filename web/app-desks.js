@@ -73,6 +73,7 @@ window.WizCore.appParts.desks = function ({ $, appVars, CHATS, deskName, esc, HO
     $('#dotsL').innerHTML = (homeExtra ? mk(0) + (L[0] > 1 ? '<i class="dmore"></i>' : '') : '') + L.map(mk).join('');
     $('#dotsR').innerHTML = R.map(mk).join('') + (R.length && R[R.length - 1] < appVars.desks.length - 1 ? '<i class="dmore"></i>' : '')
       + (atPickerEnd() ? '' : '<button class="ddot sig dplus" data-plus aria-label="New desk: pick an app"><span class="dsg"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span></button>');
+    if (typeof phoneNavFit === 'function') phoneNavFit();
   }
   /* Dots: tap = jump to that desk. Long-press any dot = peek every desk as a
    * stack of cards (Android recents feel); tap a card to land there. */
@@ -90,5 +91,37 @@ window.WizCore.appParts.desks = function ({ $, appVars, CHATS, deskName, esc, HO
     closeOverview(); goDesk(+b.dataset.goto); tourEv('desk', { home: appVars.idx === HOME });
   });
   $('#dock').addEventListener('contextmenu', e => { if (e.target.closest('[data-goto]')) e.preventDefault(); });
+  /* Phone bar (wizard-ux issue 1533, switch wizard/phone-nav, read here inline): desk buttons are a fixed 44 px, so a
+   * desk that doesn't fit its half of the bar hides whole, farthest from the orb first; Home and + always stay. On
+   * iPhone the bar is 78 px (tweak.css reads data-phone-nav-ios). Only James's five skins: other skins draw their own
+   * docks. With the switch off nothing is marked or hidden. */
+  function phoneNavOn() {
+    try {
+      const r = document.documentElement;
+      return (r.getAttribute('data-tweaks') || '').split(' ').includes('wizard/phone-nav') && r.dataset.shell !== 'desktop'
+        && ['nebula', 'grove', 'tide', 'ember', 'signal'].includes(r.dataset.skin);
+    } catch (_) { return false; }
+  }
+  function phoneNavFit() {
+    const on = phoneNavOn(), r = document.documentElement;
+    r.toggleAttribute('data-phone-nav-ios', on && /iPhone|iPod/.test(navigator.userAgent || ''));
+    for (const side of [$('#dotsL'), $('#dotsR')]) {
+      if (!side) continue;
+      for (const el of side.querySelectorAll('.pn-cut')) el.classList.remove('pn-cut');
+      if (!on) continue;
+      const shown = () => [...side.children].filter(el => !el.classList.contains('pn-cut'));
+      const gap = parseFloat(getComputedStyle(side).columnGap) || 0;
+      const need = () => { const k = shown(); return k.reduce((n, el) => n + el.getBoundingClientRect().width, 0) + gap * Math.max(0, k.length - 1); };
+      for (let guard = 0; guard < 12 && need() > side.clientWidth + .5; guard++) {
+        const far = side.id === 'dotsL' ? shown() : shown().reverse(); // farthest from the orb first
+        const cut = far.find(el => el.matches('.ddot[data-goto]:not(.dhome)'));
+        if (!cut) break;
+        cut.classList.add('pn-cut');
+      }
+    }
+  }
+  // Turning the switch (or skin) on or off, a rotation or a resize: the buttons change size, so fit them again.
+  new MutationObserver(() => renderDots()).observe(document.documentElement, { attributes: true, attributeFilter: ['data-tweaks', 'data-skin'] });
+  addEventListener('resize', () => { if (phoneNavOn()) phoneNavFit(); });
   return { announce, atPickerEnd, deskSigil, endDotHold, goDesk, renderDots, bindLate: v => { if ('closeOverview' in v) closeOverview = v.closeOverview; if ('liftSettings' in v) liftSettings = v.liftSettings; if ('newDesk' in v) newDesk = v.newDesk; if ('openOverview' in v) openOverview = v.openOverview; if ('paintOrbBadge' in v) paintOrbBadge = v.paintOrbBadge; if ('syncBound' in v) syncBound = v.syncBound; if ('syncReviewChip' in v) syncReviewChip = v.syncReviewChip; } };
 };
