@@ -1,0 +1,14 @@
+{
+  "id": "wizard/sent-rows",
+  "name": "Sent: rows like the rest of Chats",
+  "version": "1.0.0",
+  "author": "wizard",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout"
+  ],
+  "issues": [
+    "humanitylabs-org/wizard-ux#1814"
+  ],
+  "description": "Chats › Sent draws each thing you sent as a normal Chats row (status mark, your words, the time, one plain line on where it went and what happened) under two headers, Working then Processed, with no back row or filter. Should have replied and Didn't need a reply move into the row's actions (hold, swipe left, right-click or Shift+F10), with a line saying why it went where it went."
+}

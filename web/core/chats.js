@@ -293,7 +293,7 @@ window.WizCore.chats = function createChats(H) {
   /* A thread row in a list; core/chats-rows.js. */
   const { alertFeedback, chatRow, INBOX_SVG, inboxCanSend, inboxHeadHtml, inboxMove, READY_ORDER_KEY, READY_ORDER_LABEL, READY_ORDERS, runningBack, runningBody, runningGo, runningHead, runningOn, runningOpen, runningRow, sweepAnswer, sweepHtml, sweepLater, sweepYesToAll, bindLate: rowsLate } = window.WizCore.chatsParts.rows({ actRowMark, agentLabelOf, ago, AGS: (...a) => AGS(...a), ATT, attOf, BOOM, ch, CH, chanName, channelsLate, chanStore, chanTitle, chatVars, clip, deferredOf, draftTag, esc, feedLate, H, isWorking, KIT, LIVE, paintListsNow, PIN, PIN_SVG, renderThreadNow, rerenderList, STI, STI_LAB, STI_TIP, stiKind, storeAgent, subjectOf, toast, TOPIC, topicOn, W, winAgent });
   /* The Sent tab and the bottom tabs Inbox · Tags · Sent (wizard-ux issue 1778); core/chats-sent.js. */
-  const { sentBack, sentBar, sentBody, sentClick, sentHead, sentOpen, sentTabsOn } = window.WizCore.chatsParts.sent({ ago, ch, CH, CHAN_VIEW_KEY, chanElsewhere, chanSide, chatVars, clip, elOf: (...a) => elOf(...a), esc, H, LIVE, openChat, renderChatList: (...a) => renderChatList(...a), rerenderList, toast, W, winAgent });
+  const { sentBack, sentBar, sentBody, sentClick, sentHead, sentOpen, sentSheet, sentTabsOn } = window.WizCore.chatsParts.sent({ ago, ch, CH, CHAN_VIEW_KEY, chanElsewhere, chanSide, chatVars, clip, closeRowSheet, elOf: (...a) => elOf(...a), esc, H, LIVE, openChat, renderChatList: (...a) => renderChatList(...a), rerenderList, STI, STI_TIP, toast, W, winAgent });
   channelsLate({ sentBack });
   let readyOrder = (() => {
     try {
@@ -412,7 +412,7 @@ window.WizCore.chats = function createChats(H) {
     window.WosSkinHost?.rendered?.('chats-list', null); // a layout that draws its own list (AI apps sidebar) re-reads it now too
   }
   /* Row actions for threads, alerts and channel lines; core/chats-rowacts.js. */
-  const { NOTE_ACT, noteRowAct, ROW_MENU, rowMenu, threadAct, bindLate: rowactsLate } = window.WizCore.chatsParts.rowacts({ ACT, actRestore, actUndo, BOOM, ch, CH, closeRowSheet, followUpActive, H, keepThreadOpen, leaveFinishedThread, LIVE, markDone, notifAct, openChannelSheet, openRowSheet, owner, paintListsNow, rowOf, threadBack, toast, vib, W });
+  const { NOTE_ACT, noteRowAct, ROW_MENU, rowMenu, threadAct, bindLate: rowactsLate } = window.WizCore.chatsParts.rowacts({ ACT, actRestore, actUndo, BOOM, ch, CH, closeRowSheet, followUpActive, H, keepThreadOpen, leaveFinishedThread, LIVE, markDone, notifAct, openChannelSheet, openRowSheet, owner, paintListsNow, rowOf, sentSheet, threadBack, toast, vib, W });
   let rowSheet = null; // { wid, sid?, nid?, trigger }
   function rowActions(s) {
     const acts = threadActions(s, null);

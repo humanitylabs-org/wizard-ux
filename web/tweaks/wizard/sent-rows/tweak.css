@@ -1,0 +1,24 @@
+/* Sent rows (wizard-ux issue 1814): Chats › Sent rows are the thread rows' own markup and CSS (core/chats.css), so
+ * only the actions sheet's "why" line and a picked correction need a look here. Wizard tokens only. Markup:
+ * core/chats-sent.js. */
+html[data-tweaks~="wizard/sent-rows"] .ch-sheet .ch-sr-why { margin: 0 12px 6px; font-size: .8125rem; line-height: 1.4; color: var(--wz-text-secondary); }
+html[data-tweaks~="wizard/sent-rows"] .ch-sheet-b button[data-rssentfix][aria-pressed="true"] { color: var(--wz-accent); }
+html[data-tweaks~="wizard/sent-rows"] .ch-sheet-b button[data-rssentfix][aria-pressed="true"] svg { stroke: var(--wz-accent); }
+html[data-tweaks~="wizard/sent-rows"] .ch-sheet-b button[data-rssentfix]:disabled { opacity: .55; cursor: progress; }
+/* The AI apps desktop's Chats panel: Inbox there is the sidebar's own compact rows (layouts/ai-apps desktop.css .aad-row:
+ * marker left of the title, 14 px title, the channel line under it, an 11 px time; .aad-sec headers), so Sent's rows take
+ * the same look in that pane: the marker in place of the status icon, the channel line in place of the preview. */
+html[data-tweaks~="wizard/sent-rows"][data-shell="desktop"][data-layout="ai-apps"] .ch-side-sent .ch-sr-wrap { border: 0; }
+html[data-tweaks~="wizard/sent-rows"][data-shell="desktop"][data-layout="ai-apps"] .ch-side-sent .ch-sr-row { min-height: 56px; height: auto; margin: 0; padding: 8px 10px; gap: 8px; border: 0; border-radius: 12px; align-items: center; color: var(--aad-ink, var(--wz-text)); background: none; box-shadow: none; }
+html[data-tweaks~="wizard/sent-rows"][data-shell="desktop"][data-layout="ai-apps"] .ch-side-sent .ch-sr-row:hover { background: var(--aad-hover, var(--wz-surface)); }
+html[data-tweaks~="wizard/sent-rows"][data-shell="desktop"][data-layout="ai-apps"] .ch-side-sent .ch-sr-row > .emo.sti, html[data-tweaks~="wizard/sent-rows"][data-shell="desktop"][data-layout="ai-apps"] .ch-side-sent .ch-sr-row .pv { display: none; }
+html[data-tweaks~="wizard/sent-rows"][data-shell="desktop"][data-layout="ai-apps"] .ch-side-sent .ch-sr-row > .ch-act-ind { order: -1; align-self: flex-start; width: 12px; height: 1.25rem; margin: 0 -2px 0 0; }
+html[data-tweaks~="wizard/sent-rows"][data-shell="desktop"][data-layout="ai-apps"] .ch-side-sent .ch-sr-row .ch-act-ind .ch-spin { display: inline-block; width: 10px; height: 10px; box-sizing: border-box; }
+html[data-tweaks~="wizard/sent-rows"][data-shell="desktop"][data-layout="ai-apps"] .ch-side-sent .ch-sr-row .bd { gap: 0; }
+html[data-tweaks~="wizard/sent-rows"][data-shell="desktop"][data-layout="ai-apps"] .ch-side-sent .ch-sr-row .tp b { font: 400 .875rem / 1.43 var(--wz-font-ui); color: var(--aad-ink, var(--wz-text)); }
+html[data-tweaks~="wizard/sent-rows"][data-shell="desktop"][data-layout="ai-apps"] .ch-side-sent .ch-sr-row .tp time { font: 400 .6875rem / 1 var(--wz-font-ui); font-variant-numeric: tabular-nums; color: var(--aad-ink-2, var(--wz-text-secondary)); }
+html[data-tweaks~="wizard/sent-rows"][data-shell="desktop"][data-layout="ai-apps"] .ch-side-sent .ch-sr-row .ch-chan-line { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: .75rem; font-weight: 400; color: var(--aad-ink-2, var(--wz-text-secondary)); }
+html[data-tweaks~="wizard/sent-rows"][data-shell="desktop"][data-layout="ai-apps"] .ch-side-sent .ch-sec.ch-sr { border: 0; }
+html[data-tweaks~="wizard/sent-rows"][data-shell="desktop"][data-layout="ai-apps"] .ch-side-sent .ch-sec.ch-sr > .ch-sec-h { height: 32px; margin: 10px 0 2px; padding: 0 8px; gap: 4px; border: 0; border-radius: 10px; font: 600 .8125rem / 1.4 var(--wz-font-ui); letter-spacing: normal; text-transform: none; color: var(--aad-ink-2, var(--wz-text-secondary)); }
+html[data-tweaks~="wizard/sent-rows"][data-shell="desktop"][data-layout="ai-apps"] .ch-side-sent .ch-sec.ch-sr > .ch-sec-h small { font: 600 .75rem / 1 var(--wz-font-ui); letter-spacing: normal; color: var(--aad-ink-2, var(--wz-text-secondary)); }
+html[data-tweaks~="wizard/sent-rows"][data-shell="desktop"][data-layout="ai-apps"] .ch-side-sent .ch-sec.ch-sr > .ch-sec-h:hover { background: var(--aad-hover, var(--wz-surface)); }

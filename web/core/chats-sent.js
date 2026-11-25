@@ -3,7 +3,7 @@
  * (core/chats.js) calls this once with the closure names it reads. Loaded before chats.js by both shells. */
 window.WizCore = window.WizCore || {};
 window.WizCore.chatsParts = window.WizCore.chatsParts || {};
-window.WizCore.chatsParts.sent = function ({ ago, ch, CH, CHAN_VIEW_KEY, chanElsewhere, chanSide, chatVars, clip, elOf, esc, H, LIVE, openChat, renderChatList, rerenderList, toast, W, winAgent }) {
+window.WizCore.chatsParts.sent = function ({ ago, ch, CH, CHAN_VIEW_KEY, chanElsewhere, chanSide, chatVars, clip, closeRowSheet, elOf, esc, H, LIVE, openChat, renderChatList, rerenderList, STI, STI_TIP, toast, W, winAgent }) {
   /* The main agent's Chats list gets three tabs at the bottom: Inbox (today's Activity list, until wizard-ux issue 1779
    * gives it its own rows), Tags (today's Channels view, until wizard-agent-service issue 608) and Sent. Sent lists every
    * capture the owner sent, newest first (LIVE.sentLog: GET /wizard/v1/sent): the first line of his words, when, where
@@ -61,7 +61,89 @@ window.WizCore.chatsParts.sent = function ({ ago, ch, CH, CHAN_VIEW_KEY, chanEls
       // A reply stays in the thread it was typed in: nothing to move, so no correction.
       + (r.route === 'thread' ? '' : `<div class="ch-sent-fix" role="group" aria-label="Correct the routing"><button type="button" data-chsentfix="reply" data-id="${esc(r.id)}" aria-pressed="${fixed === 'reply'}"${busy ? ' disabled' : ''}>Should have replied</button><button type="button" data-chsentfix="quiet" data-id="${esc(r.id)}" aria-pressed="${fixed === 'quiet'}"${busy ? ' disabled' : ''}>Didn’t need a reply</button></div>`) + '</div>';
   }
+  /* Sent rows (wizard-ux issue 1814, switch wizard/sent-rows, off by default; James, 25 Nov 2026: "Why is this UX so
+   * ugly, vs having a nice UX like the rest of the app"). With it on, each send is a normal Chats row (the thread row's
+   * `.ch-row-wrap > .ch-row` markup and CSS, so the same height, type and spacing as Inbox): the Activity status mark,
+   * the first line of his words with the time, then one muted line in plain words (where it went · what happened). One
+   * list with two section headers like Inbox's: Working (running) then Processed (finished); no back row, no filter.
+   * The two corrections leave the row: long-press, left swipe, right-click or Shift+F10 open the row actions sheet
+   * (ROW_MENU in core/chats-rowacts.js) with why it went where it went, Open, and the two corrections (the same
+   * POST /wizard/v1/sent/<id>/correct). Off: the cards above, unchanged. */
+  const SR_SWITCH = 'wizard/sent-rows';
+  function sentRowsOn() { try { return (document.documentElement.dataset.tweaks || '').split(' ').includes(SR_SWITCH); } catch (_) { return false; } }
+  const SR_WHERE = { dump: 'Ran quietly', agent: 'Replied in chat', command: 'Ran as a command', reminder: 'Set a reminder' };
+  const SR_STATE = { routing: 'Working', running: 'Working', done: 'Done', needs_you: 'Needs you · in Inbox', failed: 'Failed · in Inbox' };
+  const SR_MARK = { routing: 'working', running: 'working', done: 'done', needs_you: 'needs', failed: 'failed' };
+  const SR_TIP = { working: 'Working', done: 'Done', needs: 'Needs you', failed: 'Failed', none: 'No status' };
+  const srRunning = r => r.state === 'running' || r.state === 'routing';
+  const srFirst = r => (r.text.split('\n').find(x => x.trim()) || r.text || '').trim();
+  // Where it went, in his words: a reply in a thread he had stays in that chat.
+  function srWhere(r) { return r.route === 'thread' ? (r.quiet ? 'Noted in its chat' : 'Replied in its chat') : SR_WHERE[r.route] || 'Just sent'; }
+  // Line 2: [#tag ·] where · what happened [· Urgent] [· Corrected]. Never routing internals.
+  function srLine(r) {
+    const tag = r.tags.length ? `<span class="ch-chan-tag">${r.tags.map(t => `#${esc(t)}`).join(' ')}</span> · ` : '';
+    const st = SR_STATE[r.state] || '';
+    return `${tag}${esc(srWhere(r))}${st ? ' · ' + esc(st) : ''}${r.urgent ? ' · Urgent' : ''}${r.corrected ? ' · Corrected' : ''}`;
+  }
+  // Why it went where it went, one plain sentence for the actions sheet.
+  const SR_FALLBACK = { router_not_configured: 'deciding isn’t set up on this Wizard', router_timeout: 'deciding took too long', router_error: 'deciding failed', capture_failed: 'it couldn’t start in the background', unsure: 'Wizard wasn’t sure', no_answer: 'no answer came' };
+  function srWhy(r) {
+    const where = srWhere(r);
+    if (r.route === 'thread') return r.quiet ? `${where}: nothing was needed from you, so it stayed out of Inbox.` : r.wantsReply ? `${where} because you asked.` : `${where}.`;
+    const first = r.rules[0] || '';
+    let why = '';
+    if (r.decidedBy === 'owner_words') {
+      const said = /^(?:no_reply|wants_reply):(.+)$/.exec(first);
+      why = said ? `you said “${said[1]}”` : first === 'typed' ? 'you typed it in a chat' : first === 'new_chat' ? 'you started a new chat' : first === 'greeting' ? 'it was a greeting' : first === 'reminder' ? 'it was a reminder' : first === 'task_verb' ? 'it was a task' : first === 'short_question' ? 'it was a short question' : 'of how you put it';
+    } else if (r.decidedBy === 'model') why = 'Wizard judged it from your words';
+    else if (r.decidedBy === 'correction') why = 'you corrected one like it before';
+    else if (r.decidedBy === 'fallback') { const k = r.rules.find(x => SR_FALLBACK[x]); why = `Wizard couldn’t decide (${k ? SR_FALLBACK[k] : 'no answer came'}), so it took the safe way`; }
+    return why ? `${where} because ${why}.` : `${where}.`;
+  }
+  function srRow(r) {
+    const k = SR_MARK[r.state] || 'none', tip = SR_TIP[k], l2 = srLine(r), mark = (STI && STI[k]) || '';
+    return `<div class="ch-row-wrap ch-sr-wrap" data-morph-key="sent:${esc(r.id)}"><button type="button" class="ch-row ch-sr-row st-${esc(r.state)}" data-chsent="${esc(r.id)}" aria-haspopup="dialog" aria-keyshortcuts="Shift+F10" title="Open the chat it ran in · hold or open the context menu for actions">`
+      + `<span class="emo sti ${k}" title="${tip}" aria-label="${tip}">${mark}</span>`
+      + `<span class="bd"><span class="tp"><b>${esc(clip(srFirst(r), 120))}</b><time>${esc(r.at ? ago(r.at) : '')}</time></span><span class="ch-chan-line">${l2}</span><span class="pv">${l2}</span></span>${srInd(k)}</button></div>`;
+  }
+  // The Activity rows' own marker (core/chats-daily.js actRowMark): the one-line phone list shows it left of the title in
+  // place of the status icon (a spinner while it runs, the amber dot when it needs him or failed); an empty slot keeps
+  // the titles in one column.
+  function srInd(k) {
+    return k === 'working' ? '<span class="ch-act-ind"><i class="ch-spin" role="img" aria-label="Working"></i></span>'
+      : k === 'needs' || k === 'failed' ? `<span class="ch-act-ind"><i class="ch-chan-dot" role="img" aria-label="${k === 'failed' ? 'Failed' : 'Needs you'}"></i></span>` : '<span class="ch-act-ind" aria-hidden="true"></span>';
+  }
+  // Working then Processed, each under Inbox's own section header (folds like Inbox's); an empty one has no header.
+  function srBody(st) {
+    const sec = (k, label, list) => {
+      if (!list.length) return '';
+      const open = chatVars.secOpen?.[k] !== false;
+      return `<section class="ch-sec ch-act ch-sr${open ? ' open' : ''}" data-sec="${k}"><button class="ch-sec-h" data-sectoggle="${k}" aria-expanded="${open}"><span>${label}</span><small>${list.length}</small><i aria-hidden="true"></i></button>${open ? `<div class="ch-sec-b">${list.map(srRow).join('')}</div>` : ''}</section>`;
+    };
+    return sec('sentWorking', 'Working', st.rows.filter(srRunning)) + sec('sentProcessed', 'Processed', st.rows.filter(r => !srRunning(r)))
+      + (st.next ? '<button type="button" class="ch-more" data-chsentmore>Show older</button>' : '');
+  }
+  const SR_OPEN_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>';
+  const SR_REPLY_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H8l-4 4z"/></svg>';
+  const SR_QUIET_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13h4l2 3h4l2-3h4M5 13l2-8h10l2 8v6H5z"/></svg>';
+  // The row's actions sheet (the thread rows' `.ch-sheet` markup): why, Open, and the two corrections.
+  function sentSheet(wid, id) {
+    const r = LIVE.sentLog?.state()?.rows.find(x => x.id === id), el = elOf(wid);
+    if (!r || !el || !sentRowsOn()) return false;
+    closeRowSheet?.();
+    const trigger = Array.from(el.querySelectorAll('[data-chsent]')).find(b => b.dataset.chsent === id) || null;
+    const fixed = r.corrected ? (r.corrected.shouldReply ? 'reply' : 'quiet') : '', busy = SENT_BUSY.has(r.id);
+    const fix = (k, svg, label) => `<button type="button" data-rssentfix="${k}" aria-pressed="${fixed === k}"${busy ? ' disabled' : ''}>${svg}${label}${fixed === k ? ' · your correction' : ''}</button>`;
+    el.insertAdjacentHTML('beforeend', `<div class="ch-sheet" role="dialog" aria-label="Sent actions"><div class="ch-sheet-b"><div class="ch-sheet-t">${esc(clip(srFirst(r), 120))}</div>`
+      + `<p class="ch-sheet-n ch-sr-why">${esc(srWhy(r))}</p><button type="button" data-rssentopen>${SR_OPEN_SVG}Open chat</button>`
+      // A reply stays in the thread it was typed in: nothing to move, so no correction (as on the card).
+      + (r.route === 'thread' ? '' : fix('reply', SR_REPLY_SVG, 'Should have replied') + fix('quiet', SR_QUIET_SVG, 'Didn’t need a reply')) + '</div></div>');
+    chatVars.rowSheet = { wid, sent: id, trigger };
+    el.querySelector('.ch-sheet button')?.focus?.({ preventScroll: true });
+    return true;
+  }
   function sentHead(w) {
+    if (sentRowsOn()) return ''; // the bottom tabs are the navigation: no back row, no filter (issue 1814)
     const st = LIVE.sentLog?.state(), n = st?.ok ? st.rows.filter(r => r.state === 'running').length : 0, f = ch(w.id).sentFilter === 'working' ? 'working' : 'all';
     const pill = (k, label) => `<button type="button" data-chsentfilter="${k}" aria-pressed="${f === k}"${f === k ? ' class="on"' : ''}>${label}</button>`;
     return `<div class="ch-chan-h ch-sent-h" data-morph-key="sent-head"><button type="button" class="ch-chan-back" data-chsentback aria-label="Back to Inbox"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg></button><b>Sent</b></div>`
@@ -71,6 +153,7 @@ window.WizCore.chatsParts.sent = function ({ ago, ch, CH, CHAN_VIEW_KEY, chanEls
     const st = LIVE.sentLog?.state(), working = ch(w.id).sentFilter === 'working';
     if (!st?.ok) return '<div class="ch-empty">Checking what you sent…</div>';
     if (st.gone) return '<div class="ch-empty">Your Wizard keeps no Sent log yet.</div>';
+    if (sentRowsOn() && st.rows.length) return srBody(st);
     const rows = working ? st.rows.filter(r => r.state === 'running') : st.rows;
     if (!rows.length) return `<div class="ch-empty">${working ? 'Nothing is running.' : 'Nothing sent yet. What you say to the orb, start in a new chat or reply in a thread shows here.'}</div>`;
     return `<section class="ch-sec open ch-sent" data-sec="sent"><div class="ch-sec-b">${rows.map(sentRow).join('')}</div></section>${st.next && !working ? '<button type="button" class="ch-more" data-chsentmore>Show older</button>' : ''}`;
@@ -130,7 +213,11 @@ window.WizCore.chatsParts.sent = function ({ ago, ch, CH, CHAN_VIEW_KEY, chanEls
     const x = e.target.closest('[data-chsentfix]'); if (x) { if (!x.disabled) sentFix(x.dataset.id, x.dataset.chsentfix === 'reply'); return true; }
     if (e.target.closest('[data-chsentmore]')) { LIVE.sentLog?.more?.().then(sentRepaint, () => toast('!', 'Couldn’t read older ones', 2400)); return true; }
     const o = e.target.closest('[data-chsentopen]'); if (o) { sentOpenRow(id, o.dataset.chsentopen); return true; }
+    // Sent rows (issue 1814): a row opens its chat; its actions sheet's Open and corrections.
+    const so = e.target.closest('[data-chsent]'); if (so) { sentOpenRow(id, so.dataset.chsent); return true; }
+    const sf = e.target.closest('[data-rssentfix]'); if (sf && chatVars.rowSheet?.sent) { const sid = chatVars.rowSheet.sent; if (!sf.disabled) { closeRowSheet?.(); sentFix(sid, sf.dataset.rssentfix === 'reply'); } return true; }
+    if (e.target.closest('[data-rssentopen]') && chatVars.rowSheet?.sent) { const { wid, sent } = chatVars.rowSheet; closeRowSheet?.(); sentOpenRow(wid, sent); return true; }
     return false;
   }
-  return { sentBack, sentBar, sentBody, sentClick, sentHead, sentOpen, sentTabsOn };
+  return { sentBack, sentBar, sentBody, sentClick, sentHead, sentOpen, sentRowsOn, sentSheet, sentTabsOn };
 };
