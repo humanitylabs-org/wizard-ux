@@ -40,7 +40,8 @@ window.WizCore.chatsParts.inboxrows = function ({ actMark, actNeeds, actUnread, 
     return (LIVE.agentInbox?.needs?.(winAgent(w) || 'hermes') || []).filter(r => !listed.has(r.thread));
   }
   // The shell's count and badges (core/chats-ready.js) read the same rule.
-  window.WizCore.inboxRowsFacts = () => inboxRowsOn() ? { ...ibFacts(), extra: rows => ibRecs({}, rows).length } : null;
+  // (Guarded: tests run slices of createChats in a bare vm without window.)
+  try { window.WizCore.inboxRowsFacts = () => inboxRowsOn() ? { ...ibFacts(), extra: rows => ibRecs({}, rows).length } : null; } catch (_) {}
   const ibSig = ag => `<span class="ch-ib-av ch-ib-ag" aria-hidden="true">${AGS()?.sigil?.(agentRec(ag)) || ''}</span>`;
   function ibFace(s) {
     const t = ibTags(s)[0], f = t ? chanFace(t.name) : null, ag = rowAgent(s);
