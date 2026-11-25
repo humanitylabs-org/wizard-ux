@@ -625,6 +625,9 @@
       const others = A.others(), known = others.map(a => a.id), now = Date.now();
       for (const k of Object.keys(this.agentSessions)) if (!known.includes(k)) { delete this.agentSessions[k]; delete this.agentStatus[k]; }
       for (const k of [...AGENT_POLL.keys()]) if (!known.includes(k)) AGENT_POLL.delete(k);
+      // A removed agent's threads stop opening under it (wizard-agent-service issue 649): only a read agents list,
+      // hidden agents included, decides; a failed read keeps every mapping.
+      if (!A.error && Array.isArray(A.list) && A.list.length) { const all = new Set([...A.list.map(a => a.id), ...known]); for (const [sid, a] of AGENT_OF) if (!all.has(a)) AGENT_OF.delete(sid); }
       const due = others.filter(a => {
         if (only && a.id !== only) return false;
         const p = AGENT_POLL.get(a.id);
@@ -649,7 +652,13 @@
             p.holdUntil = 0;
             if (got.meta) this.windows[id] = got.meta;
             let list = got.sessions.filter(s => !s.agent || s.agent === id).map(s => { s.agent = id; AGENT_OF.set(s.id, id); return s; });
-            if (got.complete) p.fullAt = Date.now();
+            if (got.complete) {
+              p.fullAt = Date.now();
+              // A thread this agent's whole list no longer holds and the main list does is the main agent's: an
+              // earlier wrong list (issue 649) must not keep opening it here.
+              const mine = new Set(list.map(s => s.id)), main = new Set((this.sessions || []).map(s => s.id));
+              for (const [sid, a] of AGENT_OF) if (a === id && !mine.has(sid) && main.has(sid)) AGENT_OF.delete(sid);
+            }
             else { const fresh = new Set(list.map(s => s.id)); list = list.concat((this.agentSessions[id] || []).filter(s => !fresh.has(s.id) && !s.optimistic)); }
             for (const s of list) {
               const d = deferred[seenKeyOf(s)];
