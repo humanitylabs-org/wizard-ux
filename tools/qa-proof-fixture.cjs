@@ -75,6 +75,9 @@ for(const p of ['/wizard/v1/agent-inbox?state=running,stale&limit=200','/wizard/
 // Standard first is on for everyone (wizard-ux issue 1800): the Welcome reads the box's private first answer once an AI
 // is signed in. This catalogue is an older Service without that route, so the private AI offer never opens here.
 for(const method of ['GET','HEAD'])fixture.responses[method+' /wizard/v1/private-first']={status:404,body:JSON.stringify({error:'not_found'})};
+// Saved background results are discovered for everyone (wizard-agent-service issue 14): this catalogue is an older
+// Service without the route, so Chats shows no Continue panel and stays as it was.
+for(const method of ['GET','HEAD'])fixture.responses[method+' /wizard/background-results']={status:404,body:JSON.stringify({error:'not_found'})};
 for(const method of ['GET','HEAD'])fixture.responses[method+' /favicon.ico']={status:204,body:'',contentType:'image/x-icon'};
 // CSS is typed separately: discovery must not apply a JSON object as a stylesheet.
 for(const method of ['GET','HEAD','OPTIONS'])fixture.responses[method+' /wizard/v1/my-skin']={status:200,body:'',contentType:'text/css'};

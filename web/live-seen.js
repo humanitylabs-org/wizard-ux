@@ -130,8 +130,8 @@ window.WizCore.liveParts.seen = function ({  }) {
       waitingOn: item.wizard_waiting_on === 'helper' ? 'helper' : '',
       helperStatus: item.wizard_helper_status && typeof item.wizard_helper_status === 'object' ? item.wizard_helper_status : null,
       background: ['helper', 'heavy'].includes(item.wizard_background) ? item.wizard_background : '',
-      // A saved background result waiting for one-tap Continue (Agent Service background-results.mjs). Only the
-      // off-by-default wizard/background-continue tweak shows it (chat-power.js) or discovers more (below).
+      // A saved background result waiting for one-tap Continue (Agent Service background-results.mjs), shown by
+      // chat-power.js (on for everyone since wizard-agent-service #14).
       // With wizard/needs-you-reason the Service adds its plain reason (wizard-agent-service issue 469).
       backgroundResult: /^bg_[0-9a-f]{32}$/.test(item.wizard_background_result?.id || '') && item.wizard_background_result?.session_id === id
         ? { id: item.wizard_background_result.id, ...(typeof item.wizard_background_result.reason === 'string' && item.wizard_background_result.reason ? { reason: item.wizard_background_result.reason.slice(0, 160) } : {}) } : null,

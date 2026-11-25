@@ -117,7 +117,7 @@
     TITLE_LOADING.set(scope,task); return task;
   }
   /* Saved background results (Agent Service GET /wizard/background-results, wizard-agent-service #14).
-   * Off by default: runs only while the wizard/background-continue tweak is on. Read-only discovery merged into
+   * On for everyone (wizard-agent-service #14). Read-only discovery merged into
    * Chats; it never starts a model. A result older than the normal list window adds its original thread once.
    * While the Service reports it is still scanning, re-read briefly (bounded to one minute). */
   // wizard/needs-you-reason (wizard-agent-service issue 469) shows the same saved result with its reason and Dismiss.
@@ -138,7 +138,6 @@
       && !['needs_you', 'check'].includes(s.attention?.state) && !['failed', 'interrupted', 'waiting_for_approval', 'unknown'].includes(s.status)
       && !globalThis.WizChatsListModel?.isListWorking?.(s);
   }
-  function backgroundOn() { return tweakOn('wizard/background-continue') || reasonOn(); }
   let backgroundPollTimer = null, backgroundPollUntil = 0;
   // Results this device already continued (or found stale). A discovery read that started before the tap can land
   // after it; it must never bring the Continue panel back. Ids are per result, so this only ever grows a little.
@@ -150,12 +149,10 @@
     backgroundPollTimer = setTimeout(() => { backgroundPollTimer = null; if (!document.hidden) L.refresh(); }, 1000);
   }
   async function mergeBackgroundResults(sessions, isCurrent = () => true) {
-    if (!backgroundOn()) { for (const s of sessions) if (s.backgroundResult) s.backgroundResult = null; return; }
     let p;
     try { p = await (await req('/wizard/background-results', listSignal())).json(); }
     catch (e) { return; } // an older Agent Service lacks this route; normal Chats still works
     if (!isCurrent()) return;
-    if (!backgroundOn()) { for (const s of sessions) s.backgroundResult = null; return; }
     if (p?.scanning) scheduleBackgroundPoll();
     else { if (backgroundPollTimer) clearTimeout(backgroundPollTimer); backgroundPollTimer = null; backgroundPollUntil = 0; }
     const pending = new Set((Array.isArray(p?.results) ? p.results : []).map(r => r?.id).filter(id => id && !BACKGROUND_SETTLED.has(id)));
@@ -174,9 +171,9 @@
     }
     for (const s of sessions) if (s.backgroundResult && !s.backgroundResult.reason && reasons.has(s.backgroundResult.id)) s.backgroundResult = withReason(s.backgroundResult);
   }
-  window.addEventListener('wos:tweak-choice', e => { if (['wizard/background-continue', REASON_TWEAK].includes(e?.detail?.id)) setTimeout(() => L.refresh(), 0); });
-  // A switch that arrives with the synced Look file (no tweak-choice event) reads its saved results at once, not at the next poll.
-  try { let was = backgroundOn(); new MutationObserver(() => { const now = backgroundOn(); if (now && !was) setTimeout(() => L.refresh(), 0); was = now; }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-tweaks'] }); } catch (_) {}
+  window.addEventListener('wos:tweak-choice', e => { if (e?.detail?.id === REASON_TWEAK) setTimeout(() => L.refresh(), 0); });
+  // The reason switch arriving with the synced Look file (no tweak-choice event) repaints its saved results at once.
+  try { let was = reasonOn(); new MutationObserver(() => { const now = reasonOn(); if (now && !was) setTimeout(() => L.refresh(), 0); was = now; }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-tweaks'] }); } catch (_) {}
   const FULL_EVERY = 3 * 60 * 1000;
   /* Other agents' list reads (wizard-ux issue 1693): every 15 s poll used to walk every agent's whole list, so a
    * reload sent ~128 reads. Now each agent follows the main list's rule (a full walk every FULL_EVERY, the head page
@@ -604,13 +601,11 @@
           const [deferred, remote] = await side;
           apply(got, deferred, remote);
           const backgroundSessions = this.sessions;
-          if (backgroundOn()) {
-            // Paint the ordinary list and start routed reads without waiting for optional discovery.
-            void mergeBackgroundResults(backgroundSessions, () => this.sessions === backgroundSessions).then(() => {
-              if (this.sessions !== backgroundSessions) return;
-              writeSnap(this); this.emit();
-            }).catch(() => {});
-          } else { void mergeBackgroundResults(backgroundSessions); }
+          // Paint the ordinary list and start routed reads without waiting for saved-result discovery.
+          void mergeBackgroundResults(backgroundSessions, () => this.sessions === backgroundSessions).then(() => {
+            if (this.sessions !== backgroundSessions) return;
+            writeSnap(this); this.emit();
+          }).catch(() => {});
           if (Date.now() - this.snapAt > SNAP_EVERY) writeSnap(this);
           // Other agents' threads merge in after the main list is on screen; one slow agent never holds Chats.
           // Replacing a snapshot, they get a short head start so main and agents land in the same repaint.

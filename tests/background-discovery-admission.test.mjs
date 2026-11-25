@@ -9,17 +9,12 @@ import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts move
 const live=withLiveParts(readFileSync(new URL('../web/live.js',import.meta.url),'utf8'));
 const RID='bg_'+'a'.repeat(32);
 function fixture() {
- const ctx=modelContext({document:{documentElement:{dataset:{tweaks:'wizard/background-continue'}},hidden:true},window:{addEventListener(){}},Date,Map,Set,Array,setTimeout,clearTimeout,WORKING:new Set(['submitting','queued','running','stopping']),L:{refresh(){}},listSignal:()=>({})});
+ const ctx=modelContext({document:{documentElement:{dataset:{tweaks:''}},hidden:true},window:{addEventListener(){}},Date,Map,Set,Array,setTimeout,clearTimeout,WORKING:new Set(['submitting','queued','running','stopping']),L:{refresh(){}},listSignal:()=>({})});
  vm.runInContext(live.slice(live.indexOf('  const READY_OR_ATTENTION'),live.indexOf('  /* ---- thread-seen')),ctx);
  vm.runInContext(live.slice(live.indexOf('  /* Saved background results'),live.indexOf('  const FULL_EVERY'))+'; this.merge=mergeBackgroundResults;',ctx);
  return ctx;
 }
 const payload={results:[{id:RID,session_id:'old'}],sessions:[{id:'old',status:'completed',wizard_background_result:{id:RID,session_id:'old'}}],scanning:false};
-test('disabling the tweak during GET prevents late row insertion',async()=>{
- const ctx=fixture(); let release; ctx.req=()=>new Promise(resolve=>{release=()=>resolve({json:async()=>payload});});
- const rows=[]; const pending=ctx.merge(rows); ctx.document.documentElement.dataset.tweaks=''; release(); await pending;
- assert.equal(rows.length,0);
-});
 for (const includeSession of [true,false]) test(`a working row clears its retained result with session projection ${includeSession}`,async()=>{
  const ctx=fixture();ctx.req=async()=>({json:async()=>({...payload,sessions:includeSession?payload.sessions:[]})});
  const rows=[{id:'old',status:'running',backgroundResult:{id:RID}}];await ctx.merge(rows);

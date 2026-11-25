@@ -1231,3 +1231,6 @@ html:root[data-shell="desktop"][data-layout="ai-apps"] .aad-chan:has(> .ch-side-
 html:root[data-shell="desktop"][data-layout="ai-apps"] .aad-panel:has(> .aad-chan:not([hidden]) > .ch-side-sent) > .aad-scroll { display: none; }
 html:root[data-shell="desktop"][data-layout="ai-apps"] .aad-panel > .aad-chan .ch-list.ch-side.ch-side-sent > .ch-scroll { display: block; flex: 1; min-height: 0; overflow-y: auto; }
 html:root[data-shell="desktop"][data-layout="ai-apps"] .aad-chan .ch-tabbar { margin: 0 8px; padding: 6px 0; border-radius: 14px; border: 1px solid var(--wz-border, var(--aad-line)); background: var(--wz-panel, var(--aad-panel)); }
+/* Continue saved background results (wizard-agent-service #14; on for everyone): the panel reuses .ch-fail in the skin's accent. */
+html:root .ch-fail.ch-bg-result { background: color-mix(in srgb, var(--wz-accent) 8%, transparent); border-color: color-mix(in srgb, var(--wz-accent) 30%, transparent); }
+html:root .ch-fail.ch-bg-result .lb { color: var(--wz-accent); }

@@ -350,9 +350,6 @@
     "miguel/calm-offline": {
       "where": "Settings › Appearance › Try new features › Calm offline card"
     },
-    "wizard/background-continue": {
-      "where": "Settings › Appearance › Try new features › Continue saved background results"
-    },
     "wizard/needs-you-reason": {
       "where": "Settings › Appearance › Try new features › Say why a chat needs you"
     },

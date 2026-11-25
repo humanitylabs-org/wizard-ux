@@ -421,14 +421,12 @@ window.WosChatPower = function chatPower(A) {
 
   /* ================= #11/#12 failure recovery ================= */
   const failedShown = s => !!s && (FAILED.has(s.status) || (s.status === 'queued' && s.queueReason === 'provider_access')) && !(E && E.dismissed(s));
-  /* Saved background result (wizard-agent-service #14): one-tap Continue in its original thread. Off by default:
-   * only while the wizard/background-continue tweak is on. Showing the panel starts nothing; only the tap does. */
-  const BG_TWEAK = 'wizard/background-continue';
+  /* Saved background result (wizard-agent-service #14): one-tap Continue in its original thread, on for everyone.
+   * Showing the panel starts nothing; only the tap does. */
   // wizard/needs-you-reason (wizard-agent-service issue 469): the same panel says why (the Service's reason) and adds Dismiss.
   const REASON_TWEAK = 'wizard/needs-you-reason';
   const tweakOn = id => { try { return (document.documentElement.dataset.tweaks || '').split(' ').includes(id); } catch (_) { return false; } };
   const reasonOn = () => tweakOn(REASON_TWEAK);
-  const backgroundOn = () => tweakOn(BG_TWEAK) || reasonOn();
   // The main agent's own threads: rows carry no agent, or (since the shell names every agent) the main id hermes.
   const mainThread = s => !!s && (!s.agent || s.agent === 'hermes');
   function backgroundHtml(w, s) {
@@ -484,7 +482,7 @@ window.WosChatPower = function chatPower(A) {
   const signedOutFail = (s, busy = '') => (s && M?.signedOutFail ? M.signedOutFail({ ...s, ...failedRoute(s) }, busy || (retrying.has(s.id) ? 'retry' : '')) : null);
   function failureHtml(w, s) {
     // Main agent only: the Service's discovery and Continue routes are scoped to it (agent_id hermes).
-    if (s?.backgroundResult && mainThread(s) && backgroundOn()) return backgroundHtml(w, s);
+    if (s?.backgroundResult && mainThread(s)) return backgroundHtml(w, s);
     // Issue 1235: another app owns this chat, so no retry can ever deliver; the thread shows the clear card instead.
     if (!M || !failedShown(s) || M.foreignApp?.(s)) return '';
     const busy = retrying.has(s.id) ? 'retry' : E?.busy.get(s.id) || '';
@@ -860,7 +858,7 @@ window.WosChatPower = function chatPower(A) {
     // Failed thread panel. Signed out: open the provider's connection app in this shell, or the Store on it.
     const rc = t.closest('[data-chreconnect]'); if (rc) { openReconnect(rc.dataset.chreconnect, rc.dataset.installed !== '0', rc.dataset.recoveryRun || ''); return true; }
     const bg = t.closest('[data-background-continue]');
-    if (bg) { if (w?.thread && backgroundOn()) void continueBackground(w.id, w.thread, bg.dataset.backgroundContinue, bg); return true; }
+    if (bg) { if (w?.thread) void continueBackground(w.id, w.thread, bg.dataset.backgroundContinue, bg); return true; }
     const bd = t.closest('[data-background-dismiss]');
     if (bd) { if (w?.thread && reasonOn()) void dismissBackground(w.id, w.thread, bd.dataset.backgroundDismiss, bd); return true; }
     // Failed thread panel
