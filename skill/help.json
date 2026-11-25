@@ -264,7 +264,7 @@
         "Channel": null,
         "For testers": "every new release as soon as it's out; shows Try new features",
         "For everyone": "releases testers have used for about 3 days",
-        "Apps": "every installed app with its version and the newest, Update now, Retry, Hold, and Automatic / Ask me for app updates"
+        "Apps": "every installed app with its version and the newest, Update now, Retry, Hold, and Automatic / Ask me for app updates (Automatic checks and updates apps every hour)"
       }
     },
     "wizard": {
@@ -380,10 +380,6 @@
       "help": "The AI apps view: chats in a sidebar on the left that folds to a slim rail, the chat in a centred column, your apps in a column on the right; an app opens as a panel beside the chat.",
       "where": "desktop: Settings › Appearance › Shell view › AI apps (the standard desktop view; Desks is the other choice)",
       "when": "desktop only"
-    },
-    "wizard/app-updates-hourly": {
-      "help": "With app updates on Automatic, apps are checked and updated every hour instead of nightly.",
-      "where": "Settings › Appearance › Try new features › Hourly app updates"
     },
     "wizard/clear-chat-notifications": {
       "help": "Android app: reading a LINE, WhatsApp, Telegram or other bridged chat in Messenger clears that app's own notification (needs Android's Notification access).",
@@ -665,7 +661,7 @@
   "howTo": {
     "Turn on a new feature?": "Settings › About & updates › Channel › For testers (if not already), then Settings › Appearance › Try new features › the feature's switch.",
     "Turn on Channels?": "Nothing to turn on any more: open Chats and tap the Channels tab.",
-    "Make Wizard update automatically?": "Settings › About & updates › Updates › Automatic (installs overnight, never during a chat). For apps: Settings › About & updates › Apps › Automatic.",
+    "Make Wizard update automatically?": "Settings › About & updates › Updates › Automatic (installs overnight, never during a chat). For apps: Settings › About & updates › Apps › Automatic (checks and updates apps every hour).",
     "Update now?": "When an update is ready, the card at the top of Settings shows Install (or Install now); tap it. 'Interface updated · Reload' just reloads the screen.",
     "Get the newest features first?": "Settings › About & updates › Channel › For testers.",
     "Use Wizard on my phone?": "Settings › Phones & devices: scan the QR code with the Wizard phone app (needs Tailscale; the page walks you through it).",

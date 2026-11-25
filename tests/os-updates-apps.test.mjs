@@ -132,7 +132,7 @@ test('failed but not rolled back reads Update failed; never run reads not run ye
   await U.loadApps();
   const h = U.html();
   assert.match(h, /data-osu-app-state="failed">.*<span class="st-val">Update failed</);
-  assert.match(h, /App updates: Automatic, overnight · not run yet/);
+  assert.match(h, /App updates: Automatic, every hour · not run yet/);
 });
 
 test('older App Manager (404) or a bad answer: the list is as before, with no mode line', async () => {
@@ -249,7 +249,7 @@ test('the app Automatic / Ask me choice sends {mode}; the current choice sends n
   assert.deepEqual(posts.map(p => p.body), [{ mode: 'auto' }]);
   const h = U.html();
   assert.match(h, /data-osu="app-mode:auto" role="radio" aria-checked="true">Automatic</);
-  assert.match(h, /App updates: Automatic, overnight/);
+  assert.match(h, /App updates: Automatic, every hour/);
 });
 
 test('a forged button for an app or action the row does not offer is never sent', async () => {

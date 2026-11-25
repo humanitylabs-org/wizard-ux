@@ -22,7 +22,6 @@
     "wizard/update-bug-reports",
     "wizard/link-token-repair",
     "wizard/graceful-restart",
-    "wizard/app-updates-hourly",
     "wizard/clear-chat-notifications",
     "wizard/sidebar-chats-view",
     "wizard/app-panel-left",
