@@ -119,7 +119,7 @@ const settle = async h => { for (let i = 0; i < 100 && h.state.continuing; i++) 
 test('the panel shows Continue; showing it posts nothing; a double tap posts once to the original thread', async () => {
   const h = power({});
   const html = h.api.failureHtml(h.w, h.session);
-  assert.match(html, /Background result ready/);
+  assert.match(html, /Needs you/);
   assert.match(html, new RegExp(`data-background-continue="${RID}"`));
   assert.deepEqual(h.posts, []);
   h.click(); h.click(); await settle(h);

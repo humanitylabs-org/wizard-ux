@@ -120,13 +120,10 @@
    * On for everyone (wizard-agent-service #14). Read-only discovery merged into
    * Chats; it never starts a model. A result older than the normal list window adds its original thread once.
    * While the Service reports it is still scanning, re-read briefly (bounded to one minute). */
-  // wizard/needs-you-reason (wizard-agent-service issue 469) shows the same saved result with its reason and Dismiss.
-  const REASON_TWEAK = 'wizard/needs-you-reason';
+  // Each saved result shows with its reason and Dismiss (wizard-agent-service issue 469, on for everyone).
   // The Service's reason on its own saved-result Needs you; Done/Archive on a row that says it also dismiss it.
   const SAVED_RESULT_ASK = 'A helper finished after this chat closed';
   const savedResultAsk = s => !!s && (!!s.backgroundResult || s.attention?.state === 'needs_you' && s.attention?.ask === SAVED_RESULT_ASK);
-  function tweakOn(id) { try { return (document.documentElement.dataset.tweaks || '').split(' ').includes(id); } catch (_) { return false; } }
-  function reasonOn() { return tweakOn(REASON_TWEAK); }
   /* Quiet replies (wizard-ux issue 1808; on for everyone since wizard-ux issue 1778): the box
    * marks a thread whose newest run answered the owner's reply that asked for nothing ("Sent to Miguel, done") and
    * that ended done or fyi (Agent Service quietReply). That answer is not new to him: no unread dot, no count, not in
@@ -171,9 +168,6 @@
     }
     for (const s of sessions) if (s.backgroundResult && !s.backgroundResult.reason && reasons.has(s.backgroundResult.id)) s.backgroundResult = withReason(s.backgroundResult);
   }
-  window.addEventListener('wos:tweak-choice', e => { if (e?.detail?.id === REASON_TWEAK) setTimeout(() => L.refresh(), 0); });
-  // The reason switch arriving with the synced Look file (no tweak-choice event) repaints its saved results at once.
-  try { let was = reasonOn(); new MutationObserver(() => { const now = reasonOn(); if (now && !was) setTimeout(() => L.refresh(), 0); was = now; }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-tweaks'] }); } catch (_) {}
   const FULL_EVERY = 3 * 60 * 1000;
   /* Other agents' list reads (wizard-ux issue 1693): every 15 s poll used to walk every agent's whole list, so a
    * reload sent ~128 reads. Now each agent follows the main list's rule (a full walk every FULL_EVERY, the head page
@@ -534,12 +528,12 @@
       return { needs, ready, working };
     },
     // chat-power.js: a Continue tap settled this saved background result (#14); hide it for good on this device.
-    /* Dismiss the Service's saved-result Needs you (wizard-agent-service issue 469, wizard/needs-you-reason): kept on
+    /* Dismiss the Service's saved-result Needs you (wizard-agent-service issue 469, on for everyone): kept on
      * the box, so every device's next list read drops it. No id = every saved result of the thread (Done, Archive).
      * Main agent's threads only (the Service route is the main agent's). Resolves true once the box has it. */
     async dismissBackground(sid, id = '') {
       const s = this.session(sid);
-      if (!reasonOn() || !s || otherAgent(this.ownerOf(s))) return false;
+      if (!s || otherAgent(this.ownerOf(s))) return false;
       try {
         const r = await fetch('/wizard/background-results/dismiss', { method: 'POST', cache: 'no-store', credentials: 'same-origin', headers: J, body: JSON.stringify({ session_id: sid, ...(id ? { id } : {}) }) });
         const out = await r.json().catch(() => ({}));

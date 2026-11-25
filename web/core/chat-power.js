@@ -423,24 +423,17 @@ window.WosChatPower = function chatPower(A) {
   const failedShown = s => !!s && (FAILED.has(s.status) || (s.status === 'queued' && s.queueReason === 'provider_access')) && !(E && E.dismissed(s));
   /* Saved background result (wizard-agent-service #14): one-tap Continue in its original thread, on for everyone.
    * Showing the panel starts nothing; only the tap does. */
-  // wizard/needs-you-reason (wizard-agent-service issue 469): the same panel says why (the Service's reason) and adds Dismiss.
-  const REASON_TWEAK = 'wizard/needs-you-reason';
-  const tweakOn = id => { try { return (document.documentElement.dataset.tweaks || '').split(' ').includes(id); } catch (_) { return false; } };
-  const reasonOn = () => tweakOn(REASON_TWEAK);
+  // The panel says why (the Service's reason) and offers Dismiss (wizard-agent-service issue 469, on for everyone).
   // The main agent's own threads: rows carry no agent, or (since the shell names every agent) the main id hermes.
   const mainThread = s => !!s && (!s.agent || s.agent === 'hermes');
   function backgroundHtml(w, s) {
     const busy = ch(w.id)?.continuing === s.backgroundResult.id;
-    if (reasonOn()) {
-      const rid = esc(s.backgroundResult.id), gone = ch(w.id)?.dismissing === s.backgroundResult.id;
-      return `<section class="ch-fail ch-bg-result ch-bg-reason" role="status" data-bg-result="${rid}"><span class="lb">Needs you</span>
+    const rid = esc(s.backgroundResult.id), gone = ch(w.id)?.dismissing === s.backgroundResult.id;
+    return `<section class="ch-fail ch-bg-result ch-bg-reason" role="status" data-bg-result="${rid}"><span class="lb">Needs you</span>
         <p>${esc(s.backgroundResult.reason || 'A helper finished after this chat closed')}. Its result is saved: continue from it, or dismiss it.</p>
         <div class="ch-fail-b"><button type="button" data-background-continue="${rid}" ${busy || gone ? 'disabled' : ''}>${busy ? 'Continuing…' : 'Continue'}</button><button type="button" data-background-dismiss="${rid}" ${busy || gone ? 'disabled' : ''}>${gone ? 'Dismissing…' : 'Dismiss'}</button></div></section>`;
-    }
-    return `<section class="ch-fail ch-bg-result" role="status" data-bg-result="${esc(s.backgroundResult.id)}"><span class="lb">Background result ready</span>
-        <p>This work finished while Wizard wasn’t available. Continue from its saved result when you’re ready.</p>
-        <div class="ch-fail-b"><button type="button" data-background-continue="${esc(s.backgroundResult.id)}" ${busy ? 'disabled' : ''}>${busy ? 'Continuing…' : 'Continue'}</button></div></section>`;
   }
+
   async function continueBackground(id, sid, rid, button) {
     const c = ch(id);
     const own = LIVE.session(sid);
@@ -866,7 +859,7 @@ window.WosChatPower = function chatPower(A) {
     const bg = t.closest('[data-background-continue]');
     if (bg) { if (w?.thread) void continueBackground(w.id, w.thread, bg.dataset.backgroundContinue, bg); return true; }
     const bd = t.closest('[data-background-dismiss]');
-    if (bd) { if (w?.thread && reasonOn()) void dismissBackground(w.id, w.thread, bd.dataset.backgroundDismiss, bd); return true; }
+    if (bd) { if (w?.thread) void dismissBackground(w.id, w.thread, bd.dataset.backgroundDismiss, bd); return true; }
     // Failed thread panel
     if (t.closest('[data-mregen]') && w?.thread) { regenerateThread(id, w.thread); return true; }
     if (t.closest('[data-chretry]') && w?.thread) { retryThread(id, w.thread); return true; }

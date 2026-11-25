@@ -45,7 +45,7 @@ window.WizCore.chatsParts.done = function ({ attOf, ch, CH, CHAN_PREFS_KEY, chan
   function needsLineHtml(s) {
     const a = needsAsk(s); if (!a) return '';
     // A saved-result Needs you with its own reason panel (wizard-agent-service issue 469) is not drawn twice.
-    if (s.backgroundResult && (globalThis.document?.documentElement?.dataset?.tweaks || '').split(' ').includes('wizard/needs-you-reason')) return '';
+    if (s.backgroundResult) return '';
     return `<div class="ch-needs-line" data-needs-line role="status"><span class="ch-post-st needs"><i class="ch-chan-dot" aria-hidden="true"></i>${a.state === 'check' ? 'Your call' : 'Needs you'}</span><span class="ch-needs-ask">${esc(a.ask)}</span>${LIVE.markHandled ? `<button type="button" class="ch-needs-done" data-chmarkdone>${MARK_DONE_SVG}Mark done</button>` : ''}</div>`;
   }
   // Which reply carries the line: the agent's newest reply in the thread (its status line is the row's attention).
