@@ -1098,3 +1098,136 @@ html:root[data-layout="ai-apps"] .aad-rw[data-draft] .aad-draft-line::before { c
 html:root .ch-act-empty { display: flex; flex-direction: column; align-items: center; gap: 6px; margin: 24px 16px; padding: 22px 18px; border: 1px solid var(--wz-border, var(--line)); border-radius: 16px; background-color: var(--wz-base, var(--bg)); background-image: linear-gradient(var(--wz-surface, transparent), var(--wz-surface, transparent)); color: var(--wz-text-secondary, var(--ink-2)); text-align: center; font-size: 0.875rem; line-height: 1.5; }
 html:root .ch-act-empty b { color: var(--wz-text, var(--ink)); font-size: 1rem; }
 html:root .ch-act-empty .ch-fclear { margin-top: 8px; background-color: var(--wz-base, var(--bg)); background-image: linear-gradient(var(--wz-surface-raised, transparent), var(--wz-surface-raised, transparent)); color: var(--wz-text, var(--ink)); }
+
+/* The agent inbox in Chats (wizard-agent-service issue 549; Running view wizard-ux issue 1569, Open / Send to inbox
+   1570, orb dump toast 1588, sweep card 1586, alert feedback 1589), on for everyone since wizard-ux issue 1778 (it was
+   the wizard/agent-inbox switch's tweak.css; html:root keeps that switch's selector weight). */
+html:root .ch-running { background: var(--wz-panel); border: 1px solid var(--wz-border); color: var(--wz-text); cursor: pointer; font: inherit; }
+html:root .ch-running .pip { background: var(--wz-accent); }
+html:root .ch-running.quiet .pip { background: var(--wz-warning); }
+html:root .ch-running .tx small { color: var(--wz-text-secondary); opacity: 1; }
+html:root .ch-running .go { color: var(--wz-accent); }
+html:root .ch-running:focus-visible { outline: 2px solid var(--wz-accent); outline-offset: 2px; }
+
+/* The Running view: a back header like a channel's, then one ordinary chat row per task on an opaque panel. */
+html:root .ch-run-h { display: flex; align-items: center; gap: 4px; min-height: 44px; padding: 0 8px 4px; }
+html:root .ch-run-h b { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 1rem; font-weight: 600; color: var(--wz-text); }
+html:root .ch-run-h .ch-chan-back { flex: none; width: 44px; height: 44px; display: grid; place-items: center; border: 0; background: transparent; color: var(--wz-text-secondary); cursor: pointer; }
+html:root .ch-run-h .ch-chan-back svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+html:root .ch-run { background: var(--wz-panel); border: 1px solid var(--wz-border); border-radius: 14px; padding: 4px 0; margin: 0 0 96px; }
+html:root .ch-run-row b { color: var(--wz-text); }
+html:root .ch-run-row time { color: var(--wz-text-secondary); }
+html:root .ch-run-row .ch-run-pv { display: block; font-size: .8125rem; line-height: 1.35; color: var(--wz-text-secondary); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+html:root .ch-run-row .ch-run-pv em.att { font-style: normal; }
+html:root .ch-run-row .ch-run-age { display: block; font-size: .75rem; line-height: 1.3; color: var(--wz-text-muted); }
+html:root .ch-run-row.quiet .ch-run-pv em.att { color: var(--wz-warning); }
+/* The one-line phone list keeps rows 48 px high; a task row shows three short lines, so it grows to fit them. */
+html:root .ch-run .ch-row.ch-run-row { height: auto; min-height: 64px; padding-top: 8px; padding-bottom: 8px; align-items: center; }
+
+/* Open / Send to inbox (wizard-ux issue 1570): Open on a Running view row and in a hidden thread's header. */
+html:root .ch-inbox-open { flex: none; min-height: 32px; padding: 6px 12px; border: 1px solid var(--wz-border); border-radius: 10px; background: var(--wz-surface); color: var(--wz-accent); font: inherit; font-size: .8125rem; font-weight: 600; cursor: pointer; }
+html:root .ch-inbox-open:focus-visible { outline: 2px solid var(--wz-accent); outline-offset: 2px; }
+html:root .ch-run .ch-row-wrap .ch-inbox-open { position: absolute; z-index: 2; right: 10px; top: 50%; transform: translateY(-50%); }
+html:root .ch-run .ch-row-wrap:has(.ch-inbox-open) .ch-run-row { padding-right: 84px; }
+html:root .ch-inbox-h { flex: none; display: inline-flex; align-items: center; gap: 8px; margin-left: 4px; }
+html:root .ch-inbox-note { font-size: .75rem; color: var(--wz-text-secondary); white-space: nowrap; }
+@media (max-width: 420px) { html:root .ch-inbox-note { display: none; } }
+
+/* Orb dump (wizard-ux issue 1588): the "Got it" toast after the box took a take as a background task. An opaque panel in
+ * the skin's own colours, so it reads on every wallpaper; follows a skin change at once (plain custom properties). */
+html:root .toast.got-it { background: var(--wz-panel); border: 1px solid var(--wz-border); color: var(--wz-text); }
+html:root .toast.got-it b { font-weight: 700; color: var(--wz-text); }
+html:root .toast.got-it .ti { color: var(--wz-accent); }
+/* The signal sweep card in today's Daily thread (wizard-ux issue 1586): the run-control card's layout and buttons
+ * (core/chats.css .appr) on an opaque skin panel, so every skin keeps its text readable over its background. */
+html:root .appr.ch-sweep { background: var(--wz-panel); border: 1px solid var(--wz-border); color: var(--wz-text); gap: 6px; }
+html:root .appr.ch-sweep > b { color: var(--wz-accent); font-size: .9375rem; }
+html:root .ch-sweep .ch-sw-h { margin: 6px 0 0; font-size: .75rem; font-weight: 750; letter-spacing: .02em; color: var(--wz-text-secondary); }
+html:root .ch-sweep ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
+html:root .ch-sweep .ch-sw-i { padding: 10px; border-radius: 12px; background: var(--wz-surface-raised); border: 1px solid var(--wz-border); display: flex; flex-direction: column; gap: 6px; }
+html:root .ch-sweep .ch-sw-t { display: flex; align-items: center; gap: 8px; min-width: 0; }
+html:root .ch-sweep .ch-sw-t b { flex: 1 1 auto; min-width: 0; font-size: .875rem; color: var(--wz-text); overflow-wrap: anywhere; }
+html:root .ch-sweep a { color: var(--wz-accent); }
+html:root .ch-sweep .ch-sw-t b a { color: inherit; text-decoration: underline; text-decoration-color: var(--wz-border); }
+html:root .ch-sweep .ch-sw-age { flex: none; padding: 2px 8px; border-radius: 999px; font-size: .6875rem; font-weight: 700; color: var(--wz-on-accent); background: var(--wz-warning); }
+html:root .ch-sweep .ch-inbox-open { flex: none; }
+html:root .ch-sweep p { margin: 0; font-size: .8125rem; line-height: 1.4; color: var(--wz-text); }
+html:root .ch-sweep .ch-sw-rec, html:root .ch-sweep .ch-sw-none, html:root .ch-sweep .ch-sw-n { color: var(--wz-text-secondary); }
+html:root .ch-sweep .ch-sw-d li { font-size: .8125rem; }
+html:root .ch-sweep .appr-b button { color: var(--wz-on-accent); background: var(--wz-accent); min-height: 44px; }
+html:root .ch-sweep .appr-b button.no { color: var(--wz-text); background: var(--wz-surface); border: 1px solid var(--wz-border); }
+html:root .ch-sweep .appr-b button.def { outline: 2px solid var(--wz-text); outline-offset: -4px; }
+html:root .ch-sweep .appr-b .ch-sw-confirm { flex: 1 1 auto; display: grid; place-items: center; min-height: 44px; padding: 10px 12px; border-radius: 12px; font-size: .875rem; font-weight: 750; text-decoration: none; color: var(--wz-text); background: var(--wz-surface); border: 1px solid var(--wz-warning); }
+html:root .ch-sweep small, html:root .ch-sweep .ch-sw-st { font-size: .78125rem; font-weight: 700; color: var(--wz-text-secondary); }
+html:root .ch-sweep .appr-b button:focus-visible, html:root .ch-sweep a:focus-visible { outline: 2px solid var(--wz-accent); outline-offset: 2px; }
+
+/* Alert rules feedback (wizard-ux issue 1589): the Alerts channel's alert records (the sweep card's panel and items),
+ * their Not urgent button, Should have alerted on sweep items and the card's Later list. */
+html:root .ch-chan-feed .appr.ch-alerts { margin: 12px 12px 8px; }
+html:root .ch-sweep .ch-al-n { background: var(--wz-accent); }
+html:root .ch-sweep .ch-al-fb button { flex: 0 1 auto; min-width: 0; min-height: 44px; font-size: .8125rem; }
+html:root .ch-sweep .ch-sw-d li { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+html:root .ch-sweep .ch-sw-d .ch-al-fb button { min-height: 44px; }
+html:root .ch-sweep .ch-sw-lb { display: inline-flex; align-items: center; min-height: 44px; padding: 0; border: 0; background: none; color: var(--wz-accent); font: inherit; font-size: .8125rem; text-decoration: underline; cursor: pointer; }
+html:root .ch-sweep .ch-sw-lb:focus-visible { outline: 2px solid var(--wz-accent); outline-offset: 2px; }
+/* "Running: N" on the sweep card opens the Running view (the other ?inbox= lists have no view yet and show as text). */
+html:root .ch-sweep .ch-sw-run { all: unset; cursor: pointer; display: inline; font: inherit; color: var(--wz-accent); text-decoration: underline; min-height: 0; padding: 0; background: none; border: 0; }
+html:root .ch-sweep .ch-sw-run:focus-visible { outline: 2px solid var(--wz-accent); outline-offset: 2px; }
+
+/* The bottom tabs Inbox · Tags · Sent and the Sent view (wizard-ux issue 1778), on for everyone (it was the
+   wizard/chats-inbox switch's tweak.css; html:root keeps that switch's selector weight). */
+
+/* The tab bar: the list's last row, under the scroller; New chat (the + button) floats above it. */
+html:root .ch-tabbar { flex: none; position: relative; z-index: 6; display: flex; gap: 4px; padding: 6px 8px calc(6px + var(--ch-tabbar-pad, 0px)); background: var(--wz-panel); border-top: 1px solid var(--wz-border); }
+html:root .ch-tabbar button { flex: 1 1 0; min-width: 0; min-height: 48px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; border: 0; border-radius: 12px; background: transparent; color: var(--wz-text-secondary); font: inherit; font-size: .75rem; font-weight: 600; cursor: pointer; }
+html:root .ch-tabbar button svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+html:root .ch-tabbar button.on { color: var(--wz-accent); background: var(--wz-surface); }
+html:root .ch-tabbar button:focus-visible { outline: 2px solid var(--wz-accent); outline-offset: -2px; }
+html:root .ch-list:has(> .ch-tabbar) > .ch-fab, html:root .ch-list:has(> .ch-tabbar) > .ch-pill { margin-bottom: 62px; }
+
+/* Sent: a back header like a channel's, the All · Working filter, then one opaque panel per capture. */
+html:root .ch-sent-h { display: flex; align-items: center; gap: 4px; min-height: 44px; padding: 0 8px 2px; }
+html:root .ch-sent-h b { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 1rem; font-weight: 600; color: var(--wz-text); }
+html:root .ch-sent-h .ch-chan-back { flex: none; width: 44px; height: 44px; display: grid; place-items: center; border: 0; background: transparent; color: var(--wz-text-secondary); cursor: pointer; }
+html:root .ch-sent-h .ch-chan-back svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+html:root .ch-sent-filter small { margin-left: 4px; font-size: .6875rem; font-weight: 700; color: var(--wz-accent); }
+html:root .ch-sent { margin: 0 0 12px; }
+html:root .ch-sent .ch-sec-b { display: flex; flex-direction: column; gap: 8px; }
+html:root .ch-sent-row { background: var(--wz-panel); border: 1px solid var(--wz-border); border-radius: 14px; overflow: hidden; }
+html:root .ch-sent-open { display: flex; align-items: flex-start; gap: 10px; width: 100%; padding: 10px 12px 6px; border: 0; background: transparent; color: var(--wz-text); font: inherit; text-align: left; cursor: pointer; }
+html:root .ch-sent-open:focus-visible { outline: 2px solid var(--wz-accent); outline-offset: -2px; }
+html:root .ch-sent-open .bd { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+html:root .ch-sent-open .tp { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+html:root .ch-sent-open .tp b { flex: 1 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: .9375rem; font-weight: 600; color: var(--wz-text); }
+html:root .ch-sent-open .tp time { flex: none; font-size: .75rem; color: var(--wz-text-muted); }
+html:root .ch-sent-meta { font-size: .8125rem; line-height: 1.35; color: var(--wz-text-secondary); overflow-wrap: anywhere; }
+html:root .ch-sent-route { font-weight: 700; color: var(--wz-text); }
+html:root .ch-sent-urgent { font-weight: 700; color: var(--wz-warning); }
+html:root .ch-sent-tags { color: var(--wz-accent); }
+html:root .ch-sent-would { font-size: .75rem; font-style: italic; color: var(--wz-text-muted); }
+/* A reply's one-line answer from the agent (wizard-ux issue 1808). */
+html:root .ch-sent-answer { display: block; font-size: .8rem; color: var(--wz-text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The state mark: a spinner while it runs, ✓ done, ! needs you, ✕ failed. */
+html:root .ch-sent-st { flex: none; width: 24px; height: 24px; margin-top: 1px; display: grid; place-items: center; border-radius: 50%; font-size: .8125rem; font-weight: 800; color: var(--wz-text-secondary); background: var(--wz-surface); }
+html:root .st-running .ch-sent-st { color: var(--wz-accent); }
+html:root .st-done .ch-sent-st { color: var(--wz-success); }
+html:root .st-needs_you .ch-sent-st { color: var(--wz-on-accent); background: var(--wz-warning); }
+html:root .st-failed .ch-sent-st { color: var(--wz-on-accent); background: var(--wz-danger); }
+html:root .st-needs_you .ch-sent-state { font-weight: 700; color: var(--wz-warning); }
+html:root .st-failed .ch-sent-state { font-weight: 700; color: var(--wz-danger); }
+html:root .ch-sent-st .ch-spin { width: 14px; height: 14px; }
+/* The two corrections: one row of small buttons under the words; the one he picked stays marked. */
+html:root .ch-sent-fix { display: flex; flex-wrap: wrap; gap: 6px; padding: 2px 12px 10px 46px; }
+html:root .ch-sent-fix button { min-height: 32px; padding: 5px 10px; border: 1px solid var(--wz-border); border-radius: 10px; background: var(--wz-surface); color: var(--wz-text-secondary); font: inherit; font-size: .75rem; font-weight: 600; cursor: pointer; }
+html:root .ch-sent-fix button[aria-pressed="true"] { color: var(--wz-on-accent); background: var(--wz-accent); border-color: var(--wz-accent); }
+html:root .ch-sent-fix button:disabled { opacity: .55; cursor: progress; }
+html:root .ch-sent-fix button:focus-visible { outline: 2px solid var(--wz-accent); outline-offset: 2px; }
+
+/* The AI apps desktop's Chats sidebar pane (wizard-ux issue 1807): the same tabs at the pane's bottom, over the gear and
+ * + row. Inbox keeps the sidebar's own rows above the tabs; Tags (the channel list) and Sent fill the pane in their place. */
+html:root[data-shell="desktop"][data-layout="ai-apps"] .aad-panel:has(> .aad-chan:not([hidden]) > .ch-side > .ch-tabbar) > .aad-chan { order: 2; }
+html:root[data-shell="desktop"][data-layout="ai-apps"] .aad-panel:has(> .aad-chan:not([hidden]) > .ch-side > .ch-tabbar) > .aad-foot { order: 3; }
+html:root[data-shell="desktop"][data-layout="ai-apps"] .aad-chan:has(> .ch-side-sent) { flex: 1; }
+html:root[data-shell="desktop"][data-layout="ai-apps"] .aad-panel:has(> .aad-chan:not([hidden]) > .ch-side-sent) > .aad-scroll { display: none; }
+html:root[data-shell="desktop"][data-layout="ai-apps"] .aad-panel > .aad-chan .ch-list.ch-side.ch-side-sent > .ch-scroll { display: block; flex: 1; min-height: 0; overflow-y: auto; }
+html:root[data-shell="desktop"][data-layout="ai-apps"] .aad-chan .ch-tabbar { margin: 0 8px; padding: 6px 0; border-radius: 14px; border: 1px solid var(--wz-border, var(--aad-line)); background: var(--wz-panel, var(--aad-panel)); }

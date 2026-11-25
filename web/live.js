@@ -127,14 +127,14 @@
   const savedResultAsk = s => !!s && (!!s.backgroundResult || s.attention?.state === 'needs_you' && s.attention?.ask === SAVED_RESULT_ASK);
   function tweakOn(id) { try { return (document.documentElement.dataset.tweaks || '').split(' ').includes(id); } catch (_) { return false; } }
   function reasonOn() { return tweakOn(REASON_TWEAK); }
-  /* Quiet replies (wizard-ux issue 1808; both quiet-inbox switches, wizard/agent-inbox + wizard/chats-inbox): the box
+  /* Quiet replies (wizard-ux issue 1808; on for everyone since wizard-ux issue 1778): the box
    * marks a thread whose newest run answered the owner's reply that asked for nothing ("Sent to Miguel, done") and
    * that ended done or fyi (Agent Service quietReply). That answer is not new to him: no unread dot, no count, not in
    * Inbox / Ready; Sent shows it Done. An ask on the row (needs you, check), a failure or a run still going never is.
    * Main agent only: the Sent log is the owner's to the main agent, so a routed agent's row (host-profile, container,
    * restricted) never counts as quiet. */
   function quietReply(s) {
-    return !!s && s.quietReply === true && (!s.agent || s.agent === 'hermes') && tweakOn('wizard/agent-inbox') && tweakOn('wizard/chats-inbox') && !s.critical
+    return !!s && s.quietReply === true && (!s.agent || s.agent === 'hermes') && !s.critical
       && !['needs_you', 'check'].includes(s.attention?.state) && !['failed', 'interrupted', 'waiting_for_approval', 'unknown'].includes(s.status)
       && !globalThis.WizChatsListModel?.isListWorking?.(s);
   }
@@ -339,8 +339,8 @@
     const latest = new Map();
     for (const it of OB._items.values()) {
       if ((it.kind !== 'reply' && it.kind !== 'new') || !it.sessionId || it.compact || it.withdrawn) continue;
-      // An orb take still asking the router whether it is a background task, or one that was (wizard/agent-inbox,
-      // issue 1588): no Working row. A take the router keeps visible drops the mark and lists as usual.
+      // An orb take still asking the router whether it is a background task, or one that was (issue
+      // 1588): no Working row. A take the router keeps visible drops the mark and lists as usual.
       if (it.dump === true || it.dumped) continue;
       const tap = TAPS.get(it.sessionId); if (tap && it.createdAt >= tap.at) TAPS.delete(it.sessionId);
       // Custody without delivery intent must neither own Sending nor hide an older real send.
@@ -1017,7 +1017,7 @@
       applyLocal(i >= 0 ? list[i] : DETAIL.get(id) || s);
       return s;
     },
-    /* Open / Send to inbox (wizard-ux issue 1570, switch wizard/agent-inbox): the row moves on the tap frame (Open lists
+    /* Open / Send to inbox (wizard-ux issue 1570): the row moves on the tap frame (Open lists
      * it, Send drops it), then the box is told; a refusal puts the row back and throws. Main agent threads only. */
     async inboxMove(kind, id, opts = {}) {
       if (!this.agentInbox || (kind !== 'open' && kind !== 'send')) throw new Error('Agent inbox unavailable');

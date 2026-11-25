@@ -1,22 +1,20 @@
 'use strict';
-// Agent inbox Running view (switch wizard/agent-inbox, wizard-ux issue 1569) in a real browser.
+// Agent inbox Running view (wizard-ux issue 1569; on for everyone since wizard-ux issue 1778, no switch) in a real browser.
 // Disposable synthetic transport only: a fake box lists one ordinary chat and keeps two background tasks in its agent
 // inbox (GET /wizard/v1/agent-inbox?state=running,stale), one running and one quiet for 6 h. Their worker threads are
 // hidden, so the box never lists them (stock Hermes leaves hidden sessions out of /api/sessions) but reads them by id.
 // Phone 390x844 and Classic desktop 1440x960 (and the phone with Channels on), Nebula + Grove:
-//   the list shows one "2 running" row and never the worker threads; a tap opens the Running view (title, last update,
-//   how long it runs, "No news for 6 h" on the quiet one); a row opens its thread; Back returns to the Running view; Back
-//   again returns to Chats, which still does not list the worker thread; a live skin change repaints the view, and with
-//   no skin value it falls back to the dark look.
-// QA_ONLY_OFF=1: the switch stays off; writes the list's markup to off-<stem>.html (diff it against a run with
-// QA_WEB=<main>/web) and checks that nothing asks for the agent inbox.
+//   the list never shows the worker threads, and no "2 running" row: the bottom tabs Inbox · Tags · Sent (also on for
+//   everyone since issue 1778) replace it, and the sweep card's Running link is the way in, so the run taps a
+//   data-chrunning button in the list (the same click handler); the Running view shows title, last update, how long it
+//   runs, "No news for 6 h" on the quiet one; a row opens its thread; Back returns to the Running view; Back again
+//   returns to Chats, which still does not list the worker thread; a live skin change repaints the view.
 const assert = require('node:assert/strict');
 const { chromium } = require('../tools/qa-playwright.cjs');
 const { ownerRead } = require('../tools/qa-desktop-frame-fixture.cjs');
 const fs = require('node:fs'), path = require('node:path');
 const repo = path.resolve(__dirname, '..'), origin = process.env.QA_ORIGIN || 'https://agent-inbox-running.test', prefix = '/wizard-os-home/';
 const web = process.env.QA_WEB || path.join(repo, 'web'), out = process.env.QA_OUT || path.join(repo, 'agent-inbox-running-evidence');
-const off = process.env.QA_ONLY_OFF === '1';
 const SHELLS = (process.env.QA_SHELLS || 'phone,classic,phone-channels').split(','), SKINS = (process.env.QA_SKINS || 'nebula,grove').split(',');
 fs.mkdirSync(out, { recursive: true });
 const now = Date.now(), iso = t => new Date(t).toISOString(), nap = ms => new Promise(r => setTimeout(r, ms)), M = 60e3, H = 36e5;
@@ -30,17 +28,17 @@ const RECORDS = [
   { id: 'inbox_' + 'b'.repeat(24), agent: 'hermes', thread_id: 'qa-worker-2', state: 'stale', kind: 'note', title: 'Dentist slot', last_update: 'Asked two practices, waiting to hear back', created_at: now - 8 * H, updated_at: now - 7 * H },
 ];
 const raw = (id, s) => ({ id, title: s.title, runtime: 'direct', status: 'completed', updated_at: iso(s.at), updatedAt: iso(s.at), last_active: s.at / 1000, message_count: s.msgs.length, messageCount: s.msgs.length, preview: s.msgs.at(-1)?.[1] || '', ...(s.hidden ? { hidden: true } : {}) });
-const report = { origin, web, off, cases: [] };
+const report = { origin, web, cases: [] };
 (async () => {
   const browser = await chromium.launch();
   try {
     for (const shell0 of SHELLS) for (const skin of SKINS) {
-      const shell = shell0 === 'phone-channels' ? 'phone' : shell0, channels = shell0 === 'phone-channels', phone = shell === 'phone', stem = `${shell0}-${skin}${off ? '-off' : ''}`;
+      const shell = shell0 === 'phone-channels' ? 'phone' : shell0, channels = shell0 === 'phone-channels', phone = shell === 'phone', stem = `${shell0}-${skin}`;
       const entry = { stem, errors: [], refused: [], writes: [], inboxReads: 0 }; report.cases.push(entry);
       const context = await browser.newContext({ viewport: phone ? { width: 390, height: 844 } : { width: 1440, height: 960 }, isMobile: phone, hasTouch: phone, serviceWorkers: 'block', ...(phone ? { userAgent: 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Mobile Safari/537.36' } : {}) });
       try {
         await context.routeWebSocket('**/*', w => w.close());
-        const mix = { 'wizard/desktop-chats': true, ...(channels ? { 'wizard/chat-channels': true } : {}), ...(off ? {} : { 'wizard/agent-inbox': true }) };
+        const mix = { 'wizard/desktop-chats': true, ...(channels ? { 'wizard/chat-channels': true } : {}) };
         await context.addInitScript(({ shell, skin, mix }) => {
           if (window !== top) return;
           if (sessionStorage.getItem('qaBoot')) return; sessionStorage.setItem('qaBoot', '1');
@@ -89,34 +87,25 @@ const report = { origin, web, off, cases: [] };
         await page.goto(origin + prefix + (phone ? 'index.html?phone' : 'desktop.html'));
         await page.waitForFunction(() => (window.__wux || window.__wos) && !window.WosWelcome?.active && window.WosExperience?.state.tweaks.length && !window.WosExperience.state.busy);
         await page.addStyleTag({ content: '#wosWelcome{display:none!important}' });
-        if (!off) await page.waitForFunction(() => (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/agent-inbox'), null, { timeout: 15000 });
+        await page.waitForFunction(() => (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/desktop-chats'), null, { timeout: 15000 });
         if (phone) await page.evaluate(() => __wos.openSheet('inbox')); else await page.evaluate(() => __wux.openChatsList());
         const vis = sel => page.locator(sel).filter({ visible: true }).first();
         const back = () => page.evaluate(() => window.__wos ? __wos.onBack() : __wux.escStep());
         await vis('.ch-list [data-chopen="qa-chat-1"]').waitFor({ timeout: 15000 });
         const listed = () => page.locator('.ch-list [data-chopen]').filter({ visible: true }).evaluateAll(b => [...new Set(b.map(x => x.dataset.chopen))]);
-        if (off) {
-          await nap(1500);
-          entry.listed = await listed();
-          entry.runningRows = await page.locator('.ch-running').count();
-          assert.equal(entry.runningRows, 0, 'switch off: no Running row');
-          assert.equal(entry.inboxReads, 0, 'switch off: nothing asks for the agent inbox');
-          const html = await vis('.ch-list .ch-scroll').evaluate(n => n.innerHTML.replace(/<time>[^<]*<\/time>/g, '<time></time>'));
-          fs.writeFileSync(path.join(out, `off-${stem}.html`), html);
-          await page.screenshot({ path: path.join(out, stem + '-list.png') });
-          entry.pass = true; continue;
-        }
-        // 1. The list: one Running row, never the hidden worker threads.
-        const row = vis('.ch-running');
-        await row.waitFor({ timeout: 10000 });
-        entry.row = (await row.innerText()).replace(/\s+/g, ' ').trim();
-        assert.match(entry.row, /2 running · 1 quiet/, 'the Running row counts both tasks: ' + entry.row);
+        // 1. The list: the bottom tabs and no Running row (the tabs replace it), never the hidden worker threads.
+        await vis('.ch-tabbar').waitFor({ timeout: 10000 });
+        await page.waitForFunction(() => window.WizLive?.agentInbox?.records?.('hermes')?.length === 2, null, { timeout: 10000 });
+        await nap(500);
+        entry.runningRows = await page.locator('.ch-running').filter({ visible: true }).count();
+        assert.equal(entry.runningRows, 0, 'no Running row while the tabs are on');
         entry.listed = await listed();
         assert.deepEqual(entry.listed, ['qa-chat-1'], 'the worker threads never list');
         await page.evaluate(() => document.fonts.ready); await nap(300);
         await page.screenshot({ path: path.join(out, stem + '-1-list.png') });
-        // 2. One tap: the Running view.
-        await row.click();
+        // 2. One tap: the Running view (a data-chrunning button in the list, as the sweep card's Running link opens it).
+        await vis('.ch-list').evaluate(n => { const b = document.createElement('button'); b.type = 'button'; b.dataset.chrunning = ''; b.textContent = 'Running'; b.className = 'qa-run-go'; (n.querySelector('.ch-scroll') || n).prepend(b); });
+        await vis('.ch-list .qa-run-go').click();
         await vis('.ch-run-h').waitFor({ timeout: 8000 });
         entry.head = await vis('.ch-run-h').evaluate(n => { const b = n.querySelector('[data-chrunback]'), r = b?.getBoundingClientRect(); return { w: r?.width || 0, h: r?.height || 0, display: b ? getComputedStyle(b).display : '', html: n.outerHTML.slice(0, 300) }; });
         assert.ok(entry.head.w >= 40 && entry.head.h >= 40, 'a Back button on the Running view: ' + JSON.stringify(entry.head));
@@ -145,7 +134,7 @@ const report = { origin, web, off, cases: [] };
         }
         await vis('.ch-run-h').waitFor({ timeout: 8000 });
         assert.equal(await page.locator('.ch-run-row').filter({ visible: true }).count(), 2, 'back on the Running view');
-        // 5. A live skin change repaints the view without a reload; with no skin value it is the dark fallback.
+        // 5. A live skin change repaints the view without a reload.
         const panel = () => vis('.ch-run').evaluate(n => getComputedStyle(n).backgroundColor);
         entry.panel = await panel();
         const other = skin === 'nebula' ? 'grove' : 'nebula';
@@ -155,24 +144,13 @@ const report = { origin, web, off, cases: [] };
         assert.equal(await page.locator('.ch-run-row').filter({ visible: true }).count(), 2, 'still the Running view after the skin change');
         await page.screenshot({ path: path.join(out, stem + '-4-live-skin-' + other + '.png') });
         await page.evaluate(s => WosSkin.set(s), skin); await nap(500);
-        await page.evaluate(() => { for (const v of ['--wz-panel', '--wz-text', '--wz-border', '--wz-text-secondary', '--wz-text-muted', '--wz-accent', '--wz-warning']) document.documentElement.style.setProperty(v, 'initial'); }); await nap(200);
-        const blank = await page.evaluate(() => { const n = document.querySelector('.ch-run'); return n ? [...document.querySelectorAll('.ch-run')].filter(x => x.getClientRects().length).map(x => getComputedStyle(x).backgroundColor)[0] : ''; });
-        entry.fallback = blank;
-        assert.equal(entry.fallback, 'rgb(23, 19, 31)', 'with no skin value the panel is the dark fallback');
-        await page.evaluate(() => { for (const v of ['--wz-panel', '--wz-text', '--wz-border', '--wz-text-secondary', '--wz-text-muted', '--wz-accent', '--wz-warning']) document.documentElement.style.removeProperty(v); });
         // 6. Back again: Chats, still without the worker threads.
         await back(); await nap(500);
-        await vis('.ch-running').waitFor({ timeout: 8000 });
+        await vis('.ch-list [data-chopen="qa-chat-1"]').waitFor({ timeout: 8000 });
         assert.equal(await page.locator('.ch-run-h').filter({ visible: true }).count(), 0, 'Back leaves the Running view');
         entry.listedAfter = await listed();
         assert.deepEqual(entry.listedAfter, ['qa-chat-1'], 'opening a worker thread never lists it');
         assert.ok(!entry.writes.some(w => w.method === 'PATCH' && /api\/sessions/.test(w.path)), 'opening never unhides it');
-        // 7. A switch flip repaints the list at once (the shell's wos:experience after a tweak change), not at the next tick.
-        const flip = on => page.evaluate(on => { const h = document.documentElement, t = (h.dataset.tweaks || '').split(' ').filter(x => x && x !== 'wizard/agent-inbox'); h.dataset.tweaks = (on ? t.concat('wizard/agent-inbox') : t).join(' '); window.dispatchEvent(new CustomEvent('wos:experience')); }, on);
-        await flip(false); await nap(250);
-        entry.rowAfterOff = await page.locator('.ch-running').filter({ visible: true }).count();
-        assert.equal(entry.rowAfterOff, 0, 'switch off: the Running row goes at once');
-        await flip(true); await vis('.ch-running').waitFor({ timeout: 3000 });
         assert.equal(entry.errors.length, 0, 'browser errors: ' + entry.errors.join('; '));
         entry.pass = true;
       } catch (e) { entry.failure = e.stack; const pages = context.pages(); if (pages[0]) { entry.body = (await pages[0].locator('body').innerText().catch(() => '')).slice(0, 1500); await pages[0].screenshot({ path: path.join(out, stem + '-failure.png') }).catch(() => {}); } }

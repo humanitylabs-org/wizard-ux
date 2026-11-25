@@ -69,6 +69,9 @@ for(const method of ['GET','HEAD'])fixture.responses[method+' /morning/ready.jso
 // Channels are on for everyone (wizard-ux issue 1258): this catalogue is a box without the channel store or read sync
 // (an older Service), so Chats shows the Spaces as channels and keeps read marks on the device.
 for(const p of ['/wizard/v1/channels','/wizard/v1/channels/read'])for(const method of ['GET','HEAD'])fixture.responses[method+' '+p]={status:404,body:JSON.stringify({error:'not_found'})};
+// The agent inbox and the Sent log are on for everyone (wizard-ux issue 1778): this catalogue is a box without them
+// (WIZARD_AGENT_INBOX=0 or an older Service), so the Running view and Sent read as empty lists.
+for(const p of ['/wizard/v1/agent-inbox?state=running,stale&limit=200','/wizard/v1/agent-inbox?kind=alert&state=new,surfaced&limit=50','/wizard/v1/agent-inbox?state=new,surfaced&limit=200','/wizard/v1/sent?limit=100'])for(const method of ['GET','HEAD'])fixture.responses[method+' '+p]={status:404,body:JSON.stringify({error:'not_found'})};
 for(const method of ['GET','HEAD'])fixture.responses[method+' /favicon.ico']={status:204,body:'',contentType:'image/x-icon'};
 // CSS is typed separately: discovery must not apply a JSON object as a stylesheet.
 for(const method of ['GET','HEAD','OPTIONS'])fixture.responses[method+' /wizard/v1/my-skin']={status:200,body:'',contentType:'text/css'};

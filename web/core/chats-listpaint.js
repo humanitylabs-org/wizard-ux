@@ -40,8 +40,8 @@ window.WizCore.chatsParts.listpaint = function ({ actAllAgents, activityBody, ag
     // The main column's feed window draws a feed or nothing (never the tabs or the channel list: those stay in the sidebar).
     if (side && !feed && typeof chanElsewhere === 'function' && typeof H.channelsElsewhere === 'function' && !chanElsewhere(w)) { el.replaceChildren(); return; }
     chatVars.rowChan = chanOn && !feed;
-    // The bottom tabs Inbox · Tags · Sent (switch wizard/chats-inbox, wizard-ux issue 1778): the Sent view, and no Running row
-    // (Working is Sent's filter while they are on). The AI apps sidebar pane has them too (wizard-ux issue 1807).
+    // The bottom tabs Inbox · Tags · Sent (wizard-ux issue 1778): the Sent view, and no Running row
+    // (Working is Sent's filter). The AI apps sidebar pane has them too (wizard-ux issue 1807).
     const sentTabs = !feed && typeof sentTabsOn === 'function' && sentTabsOn(w), sentView = sentTabs && sentOpen(w);
     const runView = !side && !sentView && typeof runningOpen === 'function' && runningOpen(w), runRow = !side && !runView && !feed && !sentTabs && typeof runningRow === 'function' ? runningRow(w) : ''; // wizard-ux issue 1569
     if (!AGID) window.WizAppExtensions?.poll();

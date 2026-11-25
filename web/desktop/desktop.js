@@ -498,7 +498,7 @@
     // Files still uploading go as pending placeholders the outbox completes behind the message (never a wait gate).
     const extraFiles = (vFiles?.files || []).map(f=>window.WizUploads?.pending?.ref(f) || (f.id && !f.uploading ? {id:f.id,name:f.name,mime:f.mime,bytes:f.bytes} : null)).filter(f=>f&&f.id);
     if (vFeedback) { const staged=await OUTBOX.stage({kind:'reply',sessionId:vFeedback.thread,...vRoute,audio:r.blob,captureId:r.captureId,files:extraFiles}); const item=await window.WosBoundView.feedback(OUTBOX,{...vFeedback,route:vRoute,custodyId:staged.id},'',r.blob,extraFiles); if(!item){await OUTBOX.transition(staged.id,'held','Feedback unavailable · original kept');toast('!','Feedback kept for its original thread',2600);return 'retained';} toast('✦','Feedback kept · waiting to send',1800);return 'sent'; }
-    // Orb dump (wizard/agent-inbox, issue 1588): an idle take (no thread in front, or a new voice chat over a Chats list
+    // Orb dump (issue 1588): an idle take (no thread in front, or a new voice chat over a Chats list
     // that is no channel) may become a background task; it then goes through the outbox, never opened in a window.
     const dumpIt = !sealed && !extraFiles.length && (aimSid === '' || (aimSid === '__new__' && vNewChat && typeof vSpace !== 'string')) && typeof dumpTake === 'function' && dumpTake('', rp);
     let stagedId = null, transcript = '';

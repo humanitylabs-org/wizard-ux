@@ -1,35 +1,35 @@
 'use strict';
-// Orb dump "Got it" toast (switch wizard/agent-inbox, wizard-ux issue 1588) in a real browser, through the real orb:
+// Orb dump "Got it" toast (wizard-ux issue 1588; on for everyone since wizard-ux issue 1778, no switch) in a real
+// browser, through the real orb:
 // Chromium's fake capture device records a take, the shell stages it, the outbox transcribes it and asks the router
 // with accept_dump. Disposable synthetic transport only: the fake box answers the router with a dump (record written,
 // hidden worker started on its side), so the shell must show "Got it · <title>" and create no thread and no run.
 // Phone 412x915 and Classic desktop 1440x900, Nebula + Grove. Timing: send tap -> toast visible (fake STT + router at
 // QA_ROUTER_MS, default 400 ms, about the live fast classifier).
-// QA_ONLY_OFF=1: the switch stays off; the same take must never ask the router and goes out as today's new thread.
 const assert = require('node:assert/strict');
 const { chromium } = require('../tools/qa-playwright.cjs');
 const { ownerRead } = require('../tools/qa-desktop-frame-fixture.cjs');
 const fs = require('node:fs'), path = require('node:path');
 const repo = path.resolve(__dirname, '..'), origin = process.env.QA_ORIGIN || 'https://orb-dump-toast.test', prefix = '/wizard-os-home/';
 const web = process.env.QA_WEB || path.join(repo, 'web'), out = process.env.QA_OUT || path.join(repo, 'orb-dump-toast-evidence');
-const off = process.env.QA_ONLY_OFF === '1', ROUTER_MS = +(process.env.QA_ROUTER_MS || 400);
+const ROUTER_MS = +(process.env.QA_ROUTER_MS || 400);
 const SHELLS = (process.env.QA_SHELLS || 'phone,classic').split(','), SKINS = (process.env.QA_SKINS || 'nebula,grove').split(',');
 fs.mkdirSync(out, { recursive: true });
 const now = Date.now(), iso = t => new Date(t).toISOString(), nap = ms => new Promise(r => setTimeout(r, ms));
 const SAID = 'Research flights to Lisbon for next Friday';
 const ROWS = [{ id: 'qa-chat-1', title: 'Weekend plans', at: now - 20 * 6e4, preview: 'A walk by the river.' }]
   .map(s => ({ id: s.id, title: s.title, runtime: 'direct', status: 'completed', updated_at: iso(s.at), updatedAt: iso(s.at), last_active: s.at / 1000, message_count: 2, messageCount: 2, preview: s.preview }));
-const report = { origin, web, off, routerMs: ROUTER_MS, cases: [] };
+const report = { origin, web, routerMs: ROUTER_MS, cases: [] };
 (async () => {
   const browser = await chromium.launch({ args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'] });
   try {
     for (const shell of SHELLS) for (const skin of SKINS) {
-      const phone = shell === 'phone', stem = `${shell}-${skin}${off ? '-off' : ''}`;
+      const phone = shell === 'phone', stem = `${shell}-${skin}`;
       const entry = { stem, errors: [], refused: [], writes: [], routes: [] }; report.cases.push(entry);
       const context = await browser.newContext({ viewport: phone ? { width: 412, height: 915 } : { width: 1440, height: 900 }, ...(phone ? { isMobile: true, hasTouch: true, deviceScaleFactor: 2, userAgent: 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Mobile Safari/537.36' } : {}), serviceWorkers: 'block', permissions: ['microphone'] });
       try {
         await context.routeWebSocket('**/*', w => w.close());
-        const mix = { 'wizard/desktop-chats': true, ...(off ? {} : { 'wizard/agent-inbox': true }) };
+        const mix = { 'wizard/desktop-chats': true };
         await context.addInitScript(({ phone, skin, mix }) => {
           if (window !== top) return;
           if (sessionStorage.getItem('qaBoot')) return; sessionStorage.setItem('qaBoot', '1');
@@ -73,7 +73,7 @@ const report = { origin, web, off, routerMs: ROUTER_MS, cases: [] };
         await page.goto(origin + prefix + (phone ? 'index.html?phone' : 'desktop.html'));
         await page.waitForFunction(() => (window.__wux || window.__wos) && !window.WosWelcome?.active && window.WosExperience?.state.tweaks.length && !window.WosExperience.state.busy);
         await page.addStyleTag({ content: '#wosWelcome{display:none!important}' });
-        if (!off) await page.waitForFunction(() => (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/agent-inbox'), null, { timeout: 15000 });
+        await page.waitForFunction(() => (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/desktop-chats'), null, { timeout: 15000 });
         await nap(1200);
         const rowsBefore = await page.evaluate(() => (window.WizLive?.sessions || []).map(s => s.id));
         // The orb: tap to talk, about 1.6 s of the fake microphone, tap to send.
@@ -83,17 +83,6 @@ const report = { origin, web, off, routerMs: ROUTER_MS, cases: [] };
         await nap(1600);
         const sentAt = Date.now();
         await orb();
-        if (off) {
-          await page.waitForFunction(() => [...(window.WosOutbox?._items?.values() || [])].some(it => it.state === 'sent'), null, { timeout: 15000 });
-          await nap(800);
-          entry.created = entry.created || [];
-          assert.equal(entry.routes.length, 0, 'switch off: the take never asks the router with accept_dump');
-          assert.equal(entry.created.length, 1, 'switch off: today\'s new thread');
-          assert.equal(entry.runs, 1);
-          assert.equal(await page.locator('.toast.got-it').count(), 0);
-          await page.screenshot({ path: path.join(out, stem + '-sent.png') });
-          entry.pass = true; continue;
-        }
         const toast = page.locator('.toast.got-it');
         await page.waitForFunction(() => { const t = document.querySelector('.toast.got-it'); return t && (t.classList.contains('show') || t.classList.contains('on')); }, null, { timeout: 8000 });
         entry.toastMs = Date.now() - sentAt;
@@ -120,7 +109,7 @@ const report = { origin, web, off, routerMs: ROUTER_MS, cases: [] };
       }
       finally { await context.close(); }
     }
-  } finally { await browser.close(); fs.writeFileSync(path.join(out, 'report' + (off ? '-off' : '') + '.json'), JSON.stringify(report, null, 2)); }
+  } finally { await browser.close(); fs.writeFileSync(path.join(out, 'report.json'), JSON.stringify(report, null, 2)); }
   for (const c of report.cases) console.log(c.stem, c.pass ? 'PASS' : 'FAIL', c.toastMs != null ? c.toastMs + ' ms' : '', c.toast || '', c.failure || '', c.items ? JSON.stringify(c.items) : '', c.errors.length ? 'errors: ' + c.errors.join(' | ') : '');
   if (report.cases.some(c => !c.pass)) process.exitCode = 1;
 })();

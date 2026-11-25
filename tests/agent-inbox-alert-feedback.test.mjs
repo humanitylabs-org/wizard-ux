@@ -13,7 +13,6 @@ import { withParts } from './fixtures/chats-parts.mjs';
 import { block as sliceBlock, runRecording } from './fixtures/source-slice.mjs';
 import { createDocument } from './fixtures/mini-dom.mjs';
 import { cascade } from './fixtures/w1-css.mjs';
-import { freshDevice } from './fixtures/w1-experience.mjs';
 
 const live = withLiveParts(readFileSync(new URL('../web/live.js', import.meta.url), 'utf8'));
 const chats = withParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'));
@@ -127,21 +126,20 @@ function kit() {
 }
 
 // The chats.js block (sweep card + alert feedback) with the real live.js reader on the fake box.
-function block({ on = true, channels = [{ id: 'chan_alerts', kind: 'alerts' }, { id: 'chan_trip', kind: '' }], sessions = [] } = {}) {
+function block({ channels = [{ id: 'chan_alerts', kind: 'alerts' }, { id: 'chan_trip', kind: '' }], sessions = [] } = {}) {
   const b = box(), reader = inboxReader(b.answer);
-  const toasts = [], paints = { threads: 0, lists: 0 }, listeners = {}, sw = { on };
+  const toasts = [], paints = { threads: 0, lists: 0 };
   const ctx = {
-    window: { addEventListener: (t, fn) => { (listeners[t] ||= []).push(fn); } },
+    window: { addEventListener() {} },
     KIT: kit(), esc: v => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'),
-    inboxSwitchOn: () => sw.on, inboxListed: () => true, toast: (i, t) => toasts.push(t),
+    inboxListed: () => true, toast: (i, t) => toasts.push(t),
     CH: { w1: {} }, H: { win: () => ({ id: 'w1', thread: 'wizard_daily_1' }) }, renderThreadNow: () => { paints.threads++; }, paintListsNow: () => { paints.lists++; },
     chanStore: () => ({ channels }), storeAgent: a => !a || a === 'hermes' ? 'hermes' : a,
     LIVE: { sessions, agentInbox: reader.inbox },
   };
   vm.createContext(ctx);
   vm.runInContext(slice(running, '  const SWEEP = new Map();', '  return { alertFeedback') + '\nthis.api = { sweepHtml, sweepLater, alertsHtml, alertFeedback, ALFB };', ctx);
-  const flip = v => { sw.on = v; for (const fn of listeners['wos:experience'] || []) fn(); };
-  return { api: ctx.api, toasts, paints, flip, b, reader };
+  return { api: ctx.api, toasts, paints, b, reader };
 }
 const alertsOpen = { id: 'chan_alerts', name: 'Alerts', agent: 'hermes' };
 const fbButtons = (html, action) => [...html.matchAll(new RegExp(`data-chalertfb="${action}" data-id="(inbox_[a-f0-9]{24})"`, 'g'))].map(m => m[1]);
@@ -217,21 +215,15 @@ test('a failed tap keeps the button and says so', async () => {
   assert.deepEqual(f.toasts, ['Couldn’t send it · try again']);
 });
 
-test('switch off: no alert block, no Later list read, a stale button sends nothing (Alerts exactly as now)', async () => {
-  const f = block({ on: false });
-  assert.equal(f.api.alertsHtml(alertsOpen), '');
-  assert.equal(f.api.sweepHtml(card()), '');
-  await f.api.alertFeedback(AL, 'not_urgent');
-  await f.api.sweepLater(CARD);
-  assert.deepEqual(f.reader.calls, [], 'nothing asks the box');
+test('the channel feed draws the alert block only through the late-bound alertsHtml; nothing to show reads as before', async () => {
   // The real channel feed (core/chats-feed.js) draws the block only through the late-bound alertsHtml; with
-  // nothing to show (switch off: alertsHtml gives '') an empty channel reads exactly as before.
+  // nothing to show (alertsHtml gives '') an empty channel reads exactly as before.
   const feed = channelFeedPart();
   const open = { id: 'alerts', agent: 'hermes' }, w = { id: 'w' };
   const none = '<div class="ch-chan-feed"><span class="ch-none">No posts in the last 30 days.</span></div>';
   assert.equal(feed.channelFeed(w, open, []), none, 'before alertsHtml is bound');
-  feed.bindLate({ alertsHtml: () => f.api.alertsHtml(alertsOpen) });
-  assert.equal(feed.channelFeed(w, open, []), none, 'switch off: the same empty feed');
+  feed.bindLate({ alertsHtml: () => '' });
+  assert.equal(feed.channelFeed(w, open, []), none, 'nothing to show: the same empty feed');
   const seen = [];
   feed.bindLate({ alertsHtml: o => { seen.push(o); return '<div class="ch-al">A</div>'; } });
   assert.equal(feed.channelFeed(w, open, []), '<div class="ch-chan-feed"><div class="ch-al">A</div></div>', 'with alerts: the block instead of the empty line');
@@ -257,7 +249,7 @@ function clicks(html) {
   const tap = el => { ctx.calls.length = 0; ctx.click({ target: el }, 'w1'); return ctx.calls.filter(c => ['sweepLater', 'alertFeedback'].includes(c[0])).map(c => [...c]); };
   return { doc, tap };
 }
-test('the buttons are wired in the click handler and the new rules are scoped to the switch with skin tokens', async () => {
+test('the buttons are wired in the click handler and the new rules use skin tokens', async () => {
   const f = block(); await f.reader.inbox.readAlerts();
   const c = clicks(f.api.alertsHtml(alertsOpen) + f.api.sweepHtml(card()));
   const fb = (action, rid) => c.doc.querySelector(`[data-chalertfb="${action}"][data-id="${rid}"]`);
@@ -266,20 +258,14 @@ test('the buttons are wired in the click handler and the new rules are scoped to
   assert.deepEqual(c.tap(fb('should_alert', W1)), [['alertFeedback', W1, 'should_alert', false]], 'Should have alerted on a sweep item');
   assert.deepEqual(c.tap(c.doc.querySelector('[data-chsweeplater]')), [['sweepLater', CARD]], 'the Later list');
   fb('should_alert', DN).setAttribute('disabled', ''); assert.deepEqual(c.tap(fb('should_alert', DN)), [], 'a sending button sends nothing');
-  // The new rules apply only with the switch on, and their colours are skin tokens
-  const css = readFileSync(new URL('../web/tweaks/wizard/agent-inbox/tweak.css', import.meta.url), 'utf8');
+  // The rules are core CSS since wizard-ux issue 1778 (no switch), and their colours are skin tokens
+  const css = (c => c.slice(c.indexOf('/* The agent inbox in Chats'), c.indexOf('/* The bottom tabs Inbox · Tags · Sent and the Sent view')))(readFileSync(new URL('../web/core/chats.css', import.meta.url), 'utf8'));
   const rows = ['.ch-alerts', '.ch-al-i', '.ch-al-n', '[data-chalertfb]', '.ch-sw-lb'].map(sel => c.doc.querySelector(sel)).filter(Boolean);
   assert.ok(rows.length >= 4, 'the drawn alert block');
   const seen = new Set();
   for (const el of rows) {
-    assert.deepEqual(cascade(el, css), {}, 'switch off: no rule reaches ' + el.className);
-    c.doc.documentElement.setAttribute('data-tweaks', 'wizard/agent-inbox');
     const on = cascade(el, css);
     for (const [prop, d] of Object.entries(on)) { seen.add(prop); for (const v of d.value.match(/var\(--[a-z0-9-]+/g) || []) assert.match(v, /^var\(--wz-/, `${prop}: skin tokens only`); }
-    c.doc.documentElement.removeAttribute('data-tweaks');
   }
-  assert.ok(seen.size >= 3, 'switch on: the rules reach the block');
-  // The shell lists the switch with this issue (core/experience.js reads the catalog and manifest)
-  const { manifest } = await freshDevice().listing('wizard/agent-inbox');
-  assert.ok(manifest.issues.includes('humanitylabs-org/wizard-ux#1589'));
+  assert.ok(seen.size >= 3, 'the rules reach the block');
 });

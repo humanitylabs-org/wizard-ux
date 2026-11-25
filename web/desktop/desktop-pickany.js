@@ -262,12 +262,11 @@ window.WizCore.desktopParts.pickany = function ({ $, C, chanPost, CHATS, chatsUp
     hudPaint();
   });
   OUTBOX?.onChange(() => { if (desktopVars.homeOpen) paintHome($('#desktopHome'), homeHtml(null)); else if (!desktopVars.ws[desktopVars.cur].wins.length) { const h = wsEl(desktopVars.cur).querySelector('.home'); if (h) paintHome(h, homeHtml(desktopVars.cur)); } for (const id of [...desktopVars.ws[desktopVars.cur].wins, ...(desktopVars.hud?.open ? [desktopVars.hud.id] : [])]) { const w = desktopVars.W[id]; if ((w?.app === 'chats' || CHATS.isHosted(id)) && w.thread) { const el = stage.querySelector(`[data-chats="${id}"]`); if (el) CHATS.renderThread(w, el); } } });
-  /* Orb dump (switch wizard/agent-inbox, off by default; wizard-ux issue 1588): an orb take to the main agent with no
+  /* Orb dump (wizard-ux issue 1588, on for everyone since wizard-ux issue 1778): an orb take to the main agent with no
    * thread, window or reply in front is offered to the router as a possible background task (the outbox asks with
    * accept_dump); on this shell that is the orb's idle take (talkNew, a new voice chat). If the box takes it: "Got it"
    * with its title, nothing opens, nothing new in Chats. */
   function dumpTake(aimSid, rp) {
-    try { if (!(document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/agent-inbox')) return false; } catch (_) { return false; }
     return !aimSid && !rp && !desktopVars.vFeedback && !desktopVars.strictReply && !desktopVars.commandTake && !(desktopVars.vRoute?.agent && window.WosAgents?.isOther?.(desktopVars.vRoute.agent));
   }
   OUTBOX?.onDump?.(it => {

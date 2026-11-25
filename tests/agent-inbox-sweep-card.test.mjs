@@ -16,6 +16,8 @@ const chats = withParts(readFileSync(new URL('../web/core/chats.js', import.meta
 const running = readFileSync(new URL('../web/core/chats-running.js', import.meta.url), 'utf8'); // the agent inbox parts (issue 1665)
 const kitSrc = readFileSync(new URL('../web/core/chat-kit.js', import.meta.url), 'utf8');
 const clone = v => JSON.parse(JSON.stringify(v));
+// The agent inbox rules in core/chats.css (the wizard/agent-inbox switch's sheet until wizard-ux issue 1778).
+const inboxCss = () => { const c = readFileSync(new URL('../web/core/chats.css', import.meta.url), 'utf8'); return c.slice(c.indexOf('/* The agent inbox in Chats'), c.indexOf('/* The bottom tabs Inbox · Tags · Sent and the Sent view')); };
 const slice = (src, a, b) => { const i = src.indexOf(a), j = src.indexOf(b, i); assert.ok(i > 0 && j > i, `${a} is in the file`); return src.slice(i, j); };
 
 const CARD = 'sweep_' + 'c'.repeat(24), A = 'inbox_' + 'a'.repeat(24), B = 'inbox_' + 'b'.repeat(24), C = 'inbox_' + 'd'.repeat(24), R = 'inbox_' + 'e'.repeat(24);
@@ -122,20 +124,19 @@ test('parseRows: the card row is its own turn carrying the card, and a later rep
 });
 
 // The chats.js block with the real normalizer and the real chat-kit.
-function cardBlock({ on = true, listed = [], answer, yesToAll, sweep } = {}) {
+function cardBlock({ listed = [], answer, yesToAll, sweep } = {}) {
   const box = inboxReader(() => ({ json: {} })).inbox;
-  const toasts = [], paints = [], listeners = {}, sw = { on };
+  const toasts = [], paints = [];
   const ctx = {
-    window: { addEventListener: (t, f) => { (listeners[t] ||= []).push(f); } },
+    window: { addEventListener() {} },
     KIT: kit(), esc: v => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'),
-    inboxSwitchOn: () => sw.on, inboxListed: id => listed.includes(id), toast: (i, t) => toasts.push(t),
+    inboxListed: id => listed.includes(id), toast: (i, t) => toasts.push(t),
     CH: { w1: {} }, H: { win: () => ({ id: 'w1', thread: 'wizard_daily_1' }) }, renderThreadNow: () => paints.push(1),
     LIVE: { agentInbox: { card: box.card, answer: answer || (async () => ({})), yesToAll: yesToAll || (async () => ({ answered: [], card: null })), sweep: sweep || (async () => null) } },
   };
   vm.createContext(ctx);
   vm.runInContext(slice(running, '  const SWEEP = new Map();', '  return { alertFeedback') + '\nthis.api = { sweepHtml, sweepAnswer, sweepYesToAll, SWEEP };', ctx);
-  const flip = v => { sw.on = v; for (const f of listeners['wos:experience'] || []) f(); };
-  return { api: ctx.api, toasts, paints, flip };
+  return { api: ctx.api, toasts, paints };
 }
 const buttonsOf = (html, id) => [...html.matchAll(new RegExp(`data-chsweep="${id}" data-card="${CARD}" data-opt="([a-z-]+)"`, 'g'))].map(m => m[1]);
 
@@ -195,15 +196,13 @@ test('main versus routed: a routed agent\'s item answers by record id but never 
   assert.doesNotMatch(confirm, /ch-sw-confirm/);
 });
 
-test('switch off (or not a card): no card, the markdown copy shows', () => {
-  assert.equal(cardBlock({ on: false }).api.sweepHtml(card()), '');
+test('not a card: no card, the markdown copy shows', () => {
   assert.equal(cardBlock().api.sweepHtml({ id: 'x' }), '');
   // the real turn body (chats-attach.js turnHtml): a sweep card replaces the markdown copy, else the copy shows
   const bodyOf = slice(chats, '      const sweep = tn.a?.sweep', '(url, marker) =>');
   const turnBody = (tn, sweepHtml) => vm.runInNewContext(`${bodyOf}null) : ''); body`, { tn, sweepHtml, md: t => `<p>${t}</p>` });
   const on = cardBlock().api.sweepHtml;
   assert.equal(turnBody({ a: { text: 'copy', sweep: card() } }, on), on(card()), 'the card, not the copy');
-  assert.equal(turnBody({ a: { text: 'copy', sweep: card() } }, cardBlock({ on: false }).api.sweepHtml), '<p>copy</p>', 'switch off: the copy');
   assert.equal(turnBody({ a: { text: 'copy' } }, on), '<p>copy</p>', 'no card: the copy');
   assert.equal(turnBody({ a: { text: 'copy', sweep: card() } }, undefined), '<p>copy</p>', 'no card part loaded: the copy');
 });
@@ -261,13 +260,13 @@ test('Yes to all sends one request for the card and repaints from its answer (co
   assert.deepEqual(f.toasts, ['2 answers sent']);
 });
 
-test('the buttons are wired in the click handler and every card rule is scoped to the switch with skin tokens', () => {
+test('the buttons are wired in the click handler and every card rule uses skin tokens', () => {
   // the drawn card, tapped through the real click lines of core/chats-bind.js
   const bind = readFileSync(new URL('../web/core/chats-bind.js', import.meta.url), 'utf8');
   const lines = [slice(bind, "    const swb = e.target.closest('[data-chsweep]');", '\n'), slice(bind, "    const swa = e.target.closest('[data-chsweepall]');", '\n')].join('\n');
   const calls = [], ctx = { sweepAnswer: (...a) => calls.push(['answer', ...a]), sweepYesToAll: (...a) => calls.push(['all', ...a]) };
   vm.createContext(ctx); const click = vm.runInContext(`(e => {\n${lines}\nreturn false;\n})`, ctx);
-  const doc = createDocument(); doc.documentElement.setAttribute('data-tweaks', 'wizard/agent-inbox');
+  const doc = createDocument();
   doc.body.innerHTML = cardBlock().api.sweepHtml(card());
   const tap = n => click({ target: n });
   assert.equal(tap(doc.querySelector(`[data-chsweep="${A}"][data-opt="late"]`)), true);
@@ -275,25 +274,9 @@ test('the buttons are wired in the click handler and every card rule is scoped t
   assert.deepEqual(calls, [['answer', CARD, A, 'late'], ['all', CARD]], 'a token answers its item; Yes to all the card');
   const off = doc.querySelector(`[data-chsweep="${A}"][data-opt="early"]`); off.disabled = true; assert.equal(tap(off), true); assert.equal(calls.length, 2, 'a disabled button sends nothing');
   assert.equal(click({ target: doc.body }), false, 'anything else is not the card\'s');
-  // the styles: the switch's own sheet on the drawn card; nothing without the switch
-  const css = readFileSync(new URL('../web/tweaks/wizard/agent-inbox/tweak.css', import.meta.url), 'utf8'), panel = doc.querySelector('.appr.ch-sweep');
-  assert.equal(cascade(panel, css).background?.value, 'var(--wz-panel, #17131f)', 'opaque panel with the dark fallback');
-  doc.documentElement.removeAttribute('data-tweaks');
-  for (const n of [panel, ...panel.querySelectorAll('*')]) assert.deepEqual(Object.keys(cascade(n, css)), [], 'scoped to the switch: ' + n.className);
+  // the styles: core CSS since wizard-ux issue 1778 (no switch), an opaque skin panel on the drawn card
+  const css = inboxCss(), panel = doc.querySelector('.appr.ch-sweep');
+  assert.equal(cascade(panel, css).background?.value, 'var(--wz-panel)', 'opaque panel from the skin');
   const rules = css.replace(/\/\*[\s\S]*?\*\//g, '').split('}').filter(r => r.includes('ch-sweep'));
   for (const rule of rules) for (const c of rule.match(/var\(--[a-z0-9-]+/g) || []) assert.match(c, /^var\(--wz-/, 'skin tokens only');
-});
-
-test('switch turned off while the Daily thread is open: the thread repaints (markdown again) and a tap sends nothing', async () => {
-  const sent = [];
-  const f = cardBlock({ answer: async (id, opt) => { sent.push([id, opt]); return {}; }, yesToAll: async id => { sent.push([id]); return { answered: [], card: null }; } });
-  assert.notEqual(f.api.sweepHtml(card()), '');
-  f.flip(false);
-  assert.equal(f.paints.length, 1, 'open threads repainted on the switch change');
-  assert.equal(f.api.sweepHtml(card()), '', 'no card once off');
-  await f.api.sweepAnswer(CARD, A, 'early');
-  await f.api.sweepYesToAll(CARD);
-  assert.deepEqual(sent, [], 'a stale button sends nothing');
-  f.flip(true);
-  assert.equal(f.paints.length, 4, 'and again when it comes back on');
 });

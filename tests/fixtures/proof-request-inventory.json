@@ -376,40 +376,60 @@
       "note": "Chats channel store move (wizard-ux issue 1261): only when a chat is filed with the store answering; tests/chat-channel-store.test.mjs covers it. Refused and collected, never answered, if a flow reaches it."
     },
     "/wizard/v1/agent-inbox": {
-      "status": "not-exercised",
+      "status": "catalogued",
       "source": "web/live.js",
       "kind": "read",
-      "note": "Agent inbox Running view (wizard-ux issue 1569, wizard-agent-service issue 549): read only while the off-by-default wizard/agent-inbox switch is on, which none of the three flows turn on; tests/agent-inbox-running.test.mjs covers it against a fake box. Refused and collected, never answered, if a flow reaches it."
+      "examples": [
+        {
+          "method": "GET",
+          "path": "/wizard/v1/agent-inbox?state=running,stale&limit=200"
+        },
+        {
+          "method": "GET",
+          "path": "/wizard/v1/agent-inbox?kind=alert&state=new,surfaced&limit=50"
+        },
+        {
+          "method": "GET",
+          "path": "/wizard/v1/agent-inbox?state=new,surfaced&limit=200"
+        }
+      ],
+      "note": "Agent inbox (wizard-ux issues 1569, 1586, 1589; wizard-agent-service issue 549): on for everyone since wizard-ux issue 1778, so flows read the running list. The shared catalogue answers 404 (a box with WIZARD_AGENT_INBOX=0 or an older Service: an empty list); writes are refused and collected. tests/agent-inbox-running.test.mjs, agent-inbox-sweep-card.test.mjs and agent-inbox-alert-feedback.test.mjs cover it against a fake box."
     },
     "/wizard/v1/agent-inbox/{}": {
       "status": "not-exercised",
       "source": "web/live.js",
       "kind": "write",
-      "note": "Agent inbox Open / Send to inbox (wizard-ux issue 1570): POST open|send only on an owner tap while the off-by-default wizard/agent-inbox switch is on, which none of the three flows turn on; tests/agent-inbox-open-send.test.mjs covers it against a fake box. Refused and collected, never answered, if a flow reaches it."
+      "note": "Agent inbox Open / Send to inbox (wizard-ux issue 1570): POST open|send only on an owner tap (on for everyone since wizard-ux issue 1778), which none of the three flows tap; tests/agent-inbox-open-send.test.mjs covers it against a fake box. Refused and collected, never answered, if a flow reaches it."
     },
     "/wizard/v1/sent": {
-      "status": "not-exercised",
+      "status": "catalogued",
       "source": "web/live.js",
       "kind": "read",
-      "note": "Chats Sent tab (wizard-ux issue 1778, wizard-agent-service issue 607): read only while the off-by-default wizard/chats-inbox and wizard/agent-inbox switches are both on, which none of the three flows turn on; tests/chats-sent-tab.test.mjs covers it against a fake box. Refused and collected, never answered, if a flow reaches it."
+      "examples": [
+        {
+          "method": "GET",
+          "path": "/wizard/v1/sent?limit=100"
+        }
+      ],
+      "note": "Chats Sent tab (wizard-ux issue 1778, wizard-agent-service issue 607): on for everyone, read while the Sent tab or a quiet reply asks for it. The shared catalogue answers 404 (a box with WIZARD_AGENT_INBOX=0 or an older Service: no Sent log yet). tests/chats-sent-tab.test.mjs covers it against a fake box."
     },
     "/wizard/v1/sent/{}/correct": {
       "status": "not-exercised",
       "source": "web/live.js",
       "kind": "write",
-      "note": "Chats Sent tab correction (wizard-ux issue 1778): POST only on an owner tap on Should have replied / Didn't need a reply while the off-by-default wizard/chats-inbox switch is on, which none of the three flows turn on; tests/chats-sent-tab.test.mjs covers it against a fake box. Refused and collected, never answered, if a flow reaches it."
+      "note": "Chats Sent tab correction (wizard-ux issue 1778): POST only on an owner tap on Should have replied / Didn't need a reply (on for everyone since wizard-ux issue 1778), which none of the three flows tap; tests/chats-sent-tab.test.mjs covers it against a fake box. Refused and collected, never answered, if a flow reaches it."
     },
     "/wizard/v1/agent-inbox/{}/yes-to-all": {
       "status": "not-exercised",
       "source": "web/live.js",
       "kind": "write",
-      "note": "Signal sweep card Yes to all (wizard-ux issue 1586, wizard-agent-service issue 550): POST only on an owner tap on the card while the off-by-default wizard/agent-inbox switch is on, which none of the three flows turn on; tests/agent-inbox-sweep-card.test.mjs covers it against a fake box. Refused and collected, never answered, if a flow reaches it."
+      "note": "Signal sweep card Yes to all (wizard-ux issue 1586, wizard-agent-service issue 550): POST only on an owner tap on the card (on for everyone since wizard-ux issue 1778), which none of the three flows tap; tests/agent-inbox-sweep-card.test.mjs covers it against a fake box. Refused and collected, never answered, if a flow reaches it."
     },
     "/wizard/v1/agent-inbox/sweep": {
       "status": "not-exercised",
       "source": "web/live.js",
       "kind": "read",
-      "note": "Signal sweep card reread after a tap (wizard-ux issue 1586, wizard-agent-service issue 550): GET only after an owner tap on the card while the off-by-default wizard/agent-inbox switch is on, which none of the three flows turn on; tests/agent-inbox-sweep-card.test.mjs covers it against a fake box. Refused and collected, never answered, if a flow reaches it."
+      "note": "Signal sweep card reread after a tap (wizard-ux issue 1586, wizard-agent-service issue 550): GET only after an owner tap on the card (on for everyone since wizard-ux issue 1778), which none of the three flows tap; tests/agent-inbox-sweep-card.test.mjs covers it against a fake box. Refused and collected, never answered, if a flow reaches it."
     },
     "/wizard/v1/channels/read": {
       "status": "catalogued",

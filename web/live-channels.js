@@ -293,9 +293,9 @@ window.WizCore.liveParts.channels = function () {
   /* ---- agent inbox (wizard-ux issue 1569) ----
    * The box's agent inbox (wizard-agent-service issue 549, docs/agent-inbox.md): one record per background task.
    * state().records are the tasks still working (state running) or gone quiet for 6 h (stale), newest news first, as
-   * GET /wizard/v1/agent-inbox?state=running,stale answers; reading state() keeps it fresh every `every`. A 404 (the box's
-   * switch is off, or an older box) is an empty list, asked again after `every`. Chats reads it only while its
-   * wizard/agent-inbox switch is on (the Running view). */
+   * GET /wizard/v1/agent-inbox?state=running,stale answers; reading state() keeps it fresh every `every`. A 404 (a box with
+   * WIZARD_AGENT_INBOX=0, or an older box) is an empty list, asked again after `every`. Chats reads it for the Running
+   * view. */
   function agentInbox({ req, emit, now = () => Date.now(), every = 30e3 } = {}) {
     const SID = /^[A-Za-z0-9_.:-]{1,200}$/, RID = /^inbox_[a-f0-9]{24}$/, AID = /^[a-z][a-z0-9-]{0,40}$/;
     const str = (v, n) => typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, n) : '';
@@ -380,7 +380,7 @@ window.WizCore.liveParts.channels = function () {
      * the Running list; the day's collapsed "More alerts today" alert carries how many it holds (`extra`). later():
      * the Later and FYI records (kinds fyi and note, new or surfaced) for the sweep card's Later list, read on demand.
      * feedback(id, action): PATCH <id> {action: not_urgent | should_alert}; the box answers with the record and how many
-     * examples each kind now has. A 404 (the box's switch off, an older box) is an empty list. */
+     * examples each kind now has. A 404 (WIZARD_AGENT_INBOX=0, an older box) is an empty list. */
     const FB = new Set(['not_urgent', 'should_alert']), LATER = new Set(['fyi', 'note']);
     const alertRec = r => r && typeof r === 'object' && RID.test(r.id) && typeof r.kind === 'string'
       ? { id: r.id, kind: r.kind, agent: typeof r.agent === 'string' && AID.test(r.agent) ? r.agent : 'hermes', thread: typeof r.thread_id === 'string' && SID.test(r.thread_id) ? r.thread_id : '',
@@ -421,9 +421,9 @@ window.WizCore.liveParts.channels = function () {
   /* ---- sent log (wizard-ux issue 1778) ----
    * The box's Sent log (wizard-agent-service issue 607, same switch as the agent inbox): one row per capture the owner
    * sent, newest first, with where it went (route), why (decided_by + rules) and its live state. state() reads
-   * GET /wizard/v1/sent every `every` while something asks for it; a 404 (switch off on the box, or an older box) is an
+   * GET /wizard/v1/sent every `every` while something asks for it; a 404 (WIZARD_AGENT_INBOX=0 on the box, or an older box) is an
    * empty log with `gone`. correct(id, should_reply) posts the owner's correction and puts the row the box answers with
-   * in place, so the row changes on that frame. Chats reads it only while wizard/chats-inbox is on (the Sent tab). */
+   * in place, so the row changes on that frame. Chats reads it for the Sent tab. */
   function sentLog({ req, emit, now = () => Date.now(), every = 15e3 } = {}) {
     const ID = /^sent_[a-f0-9]{24}$/, SID = /^[A-Za-z0-9_.:-]{1,200}$/, RID = /^inbox_[a-f0-9]{24}$/;
     const ROUTES = new Set(['dump', 'agent', 'command', 'reminder', 'thread']), BY = new Set(['owner_words', 'model', 'correction', 'fallback']);

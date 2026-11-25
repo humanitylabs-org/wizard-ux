@@ -549,7 +549,7 @@
         "phone",
         "desktop"
       ],
-      "note": "Chats Sent tab and bottom tabs Inbox, Tags, Sent (switch wizard/chats-inbox, issue 1778); called by createChats"
+      "note": "Chats Sent tab and bottom tabs Inbox, Tags, Sent (issue 1778, on for everyone); called by createChats"
     },
     "core/chats-setup.js": {
       "loadedBy": [

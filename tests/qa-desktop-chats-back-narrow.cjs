@@ -141,7 +141,7 @@ const report = { origin, web, cases: [] };
         assert.equal(page.url(), startUrl, 'root Back stays in Wizard'); assert.ok(await page.evaluate(() => !!window.__wux));
         // 2. A channel: its feed, a post, Back to the feed, Back to the channel list.
         await showList();
-        await vis('.aad-chan [data-chview="channels"]').click(); await nap(300);
+        await vis('.aad-chan [data-chtab="tags"]').click(); await nap(300);
         await vis('.aad-chan .ch-chan-open[data-chchan="launch"]').click();
         await vis('.aad-feed .ch-post-b[data-chopen="qa-p02"]').waitFor({ timeout: 8000 }); await nap(800);
         s = await step('feed'); assert.notEqual(s.side, 'over', 'the feed in front');
@@ -168,7 +168,7 @@ const report = { origin, web, cases: [] };
           const feedShows = (name, timeout = 8000) => page.waitForFunction(n => [...document.querySelectorAll('.aad-feed')].some(f => f.getClientRects().length && f.getBoundingClientRect().width > 200 && f.innerText.includes('Synthetic ask for ' + n)), name, { timeout });
           // (one more click if a list repaint swallowed the first, 1 run in ~20 here; the broken build never opens at all)
           const pick = async (id, name) => {
-            await vis('.aad-chan [data-chview="channels"]').click(); await nap(300);
+            await vis('.aad-chan [data-chtab="tags"]').click(); await nap(300);
             await vis(`.aad-chan .ch-chan-open[data-chchan="${id}"]`).click();
             if (!(await feedShows(name, 3000).then(() => true, () => false))) { await vis(`.aad-chan .ch-chan-open[data-chchan="${id}"]`).click(); await feedShows(name); }
           };

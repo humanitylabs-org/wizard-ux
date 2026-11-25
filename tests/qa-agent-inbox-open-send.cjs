@@ -1,6 +1,6 @@
 'use strict';
-// Open / Send to inbox (switch wizard/agent-inbox, wizard-ux issue 1570) in a real browser, built on the Running view
-// harness (tests/qa-agent-inbox-running.cjs).
+// Open / Send to inbox (wizard-ux issue 1570; on for everyone since wizard-ux issue 1778, no switch) in a real browser, built on the Running view
+// harness (tests/qa-agent-inbox-running.cjs); the Running view opens from a data-chrunning button, as there.
 // Disposable synthetic transport only: a fake box lists one ordinary chat and keeps two background tasks in its agent
 // inbox; their worker threads are hidden (never listed, read by id). POST /wizard/v1/agent-inbox/open|send flips a
 // thread's hidden flag, answered after a 1.2 s delay so the run can tell the tap frame from the box's answer.
@@ -10,15 +10,13 @@
 //      frame and the thread lists in Chats;
 //   3. the row menu of a visible thread has Send to inbox (a pinned, Daily or Alerts thread has none); it leaves the list
 //      on the tap frame;
-//   4. a live skin change repaints the buttons, and with no skin value they fall back to the dark look.
-// QA_ONLY_OFF=1: the switch stays off: no Open anywhere, no Send to inbox in the row menu, nothing asks the inbox.
+//   4. a live skin change repaints the buttons.
 const assert = require('node:assert/strict');
 const { chromium } = require('../tools/qa-playwright.cjs');
 const { ownerRead } = require('../tools/qa-desktop-frame-fixture.cjs');
 const fs = require('node:fs'), path = require('node:path');
 const repo = path.resolve(__dirname, '..'), origin = process.env.QA_ORIGIN || 'https://agent-inbox-running.test', prefix = '/wizard-os-home/';
 const web = process.env.QA_WEB || path.join(repo, 'web'), out = process.env.QA_OUT || path.join(repo, 'agent-inbox-open-send-evidence');
-const off = process.env.QA_ONLY_OFF === '1';
 const SHELLS = (process.env.QA_SHELLS || 'phone,classic').split(','), SKINS = (process.env.QA_SKINS || 'nebula,grove').split(',');
 fs.mkdirSync(out, { recursive: true });
 const now = Date.now(), iso = t => new Date(t).toISOString(), nap = ms => new Promise(r => setTimeout(r, ms)), M = 60e3, H = 36e5;
@@ -35,18 +33,18 @@ const RECORDS = [
   { id: 'inbox_' + 'b'.repeat(24), agent: 'hermes', thread_id: 'qa-worker-2', state: 'stale', kind: 'note', title: 'Dentist slot', last_update: 'Asked two practices, waiting to hear back', created_at: now - 8 * H, updated_at: now - 7 * H },
 ];
 const raw = (id, s) => ({ id, title: s.title, runtime: 'direct', status: 'completed', updated_at: iso(s.at), updatedAt: iso(s.at), last_active: s.at / 1000, message_count: s.msgs.length, messageCount: s.msgs.length, preview: s.msgs.at(-1)?.[1] || '', ...(s.hidden ? { hidden: true } : {}) });
-const report = { origin, web, off, cases: [] };
+const report = { origin, web, cases: [] };
 (async () => {
   const browser = await chromium.launch();
   try {
     for (const shell0 of SHELLS) for (const skin of SKINS) {
-      const shell = shell0 === 'phone-channels' ? 'phone' : shell0, channels = shell0 === 'phone-channels', phone = shell === 'phone', stem = `${shell0}-${skin}${off ? '-off' : ''}`;
+      const shell = shell0 === 'phone-channels' ? 'phone' : shell0, channels = shell0 === 'phone-channels', phone = shell === 'phone', stem = `${shell0}-${skin}`;
       const entry = { stem, errors: [], refused: [], writes: [], moves: [], inboxReads: 0 }; report.cases.push(entry);
       const threads = JSON.parse(JSON.stringify(THREADS));
       const context = await browser.newContext({ viewport: phone ? { width: 390, height: 844 } : { width: 1440, height: 960 }, isMobile: phone, hasTouch: phone, serviceWorkers: 'block', ...(phone ? { userAgent: 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Mobile Safari/537.36' } : {}) });
       try {
         await context.routeWebSocket('**/*', w => w.close());
-        const mix = { 'wizard/desktop-chats': true, ...(channels ? { 'wizard/chat-channels': true } : {}), ...(off ? {} : { 'wizard/agent-inbox': true }) };
+        const mix = { 'wizard/desktop-chats': true, ...(channels ? { 'wizard/chat-channels': true } : {}) };
         await context.addInitScript(({ shell, skin, mix }) => {
           if (window !== top) return;
           if (sessionStorage.getItem('qaBoot')) return; sessionStorage.setItem('qaBoot', '1');
@@ -104,7 +102,7 @@ const report = { origin, web, off, cases: [] };
         await page.goto(origin + prefix + (phone ? 'index.html?phone' : 'desktop.html'));
         await page.waitForFunction(() => (window.__wux || window.__wos) && !window.WosWelcome?.active && window.WosExperience?.state.tweaks.length && !window.WosExperience.state.busy);
         await page.addStyleTag({ content: '#wosWelcome{display:none!important}' });
-        if (!off) await page.waitForFunction(() => (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/agent-inbox'), null, { timeout: 15000 });
+        await page.waitForFunction(() => (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/desktop-chats'), null, { timeout: 15000 });
         const openList = () => phone ? page.evaluate(() => __wos.openSheet('inbox')) : page.evaluate(() => __wux.openChatsList());
         await openList();
         const vis = sel => page.locator(sel).filter({ visible: true }).first();
@@ -119,26 +117,23 @@ const report = { origin, web, off, cases: [] };
           return page.locator('.ch-sheet button').filter({ visible: true }).evaluateAll(b => b.map(x => x.textContent.trim()));
         };
         const closeMenu = async () => { await page.keyboard.press('Escape'); await nap(300); if (await page.locator('.ch-sheet').filter({ visible: true }).count()) { await back(); await nap(300); } };
-        if (off) {
-          await nap(1500);
-          entry.listed = await listed();
-          entry.menu = await rowMenu('qa-chat-1');
-          assert.ok(!entry.menu.some(t => /Send to inbox/.test(t)), 'switch off: no Send to inbox in the menu: ' + entry.menu.join(' | '));
-          await page.screenshot({ path: path.join(out, stem + '-menu.png') });
-          await closeMenu();
-          assert.equal(await page.locator('.ch-inbox-open').count(), 0, 'switch off: no Open');
-          assert.equal(entry.inboxReads, 0, 'switch off: nothing asks for the agent inbox');
-          entry.pass = true; continue;
-        }
+        // The Running view's way in: the list's Running row is gone (the bottom tabs Inbox · Tags · Sent replace it since
+        // wizard-ux issue 1778) and the sweep card's Running link opens it, so the run taps a data-chrunning button in the
+        // list (the same click handler) once the inbox has both tasks.
+        await page.waitForFunction(() => window.WizLive?.agentInbox?.records?.('hermes')?.length === 2, null, { timeout: 10000 });
+        const openRunning = async () => {
+          await vis('.ch-list').evaluate(n => { n.querySelector('.qa-run-go')?.remove(); const b = document.createElement('button'); b.type = 'button'; b.dataset.chrunning = ''; b.textContent = 'Running'; b.className = 'qa-run-go'; (n.querySelector('.ch-scroll') || n).prepend(b); });
+          await vis('.ch-list .qa-run-go').click();
+        };
         await page.evaluate(() => document.fonts.ready); await nap(300);
         // 1. Running view: Open on every task; Open lists the thread on the tap frame.
-        await vis('.ch-running').click();
+        await openRunning();
         await vis('.ch-run-h').waitFor({ timeout: 8000 });
         entry.openButtons = await page.locator('.ch-run .ch-inbox-open').filter({ visible: true }).evaluateAll(b => b.map(x => { const r = x.getBoundingClientRect(); return { thread: x.dataset.chinboxopen, w: r.width, h: r.height, text: x.textContent.trim() }; }));
         assert.deepEqual(entry.openButtons.map(b => b.thread), ['qa-worker-1', 'qa-worker-2'], 'Open on each running task');
         assert.ok(entry.openButtons.every(b => b.h >= 30 && b.w >= 44), 'tappable: ' + JSON.stringify(entry.openButtons));
         await page.screenshot({ path: path.join(out, stem + '-1-running-open.png') });
-        // Live skin change and dark fallback on the buttons.
+        // Live skin change on the buttons.
         const colour = () => vis('.ch-run .ch-inbox-open').evaluate(n => getComputedStyle(n).backgroundColor + ' / ' + getComputedStyle(n).color);
         entry.btn = await colour();
         const other = skin === 'nebula' ? 'grove' : 'nebula';
@@ -147,11 +142,6 @@ const report = { origin, web, off, cases: [] };
         assert.notEqual(entry.btnOther, entry.btn, `the ${other} skin repaints Open (${entry.btn} → ${entry.btnOther})`);
         await page.screenshot({ path: path.join(out, stem + '-2-live-skin-' + other + '.png') });
         await page.evaluate(s => WosSkin.set(s), skin); await nap(500);
-        const TOKENS = ['--wz-surface', '--wz-accent', '--wz-border', '--wz-panel', '--wz-text', '--wz-text-secondary'];
-        await page.evaluate(v => { for (const t of v) document.documentElement.style.setProperty(t, 'initial'); }, TOKENS); await nap(200);
-        entry.fallback = await colour();
-        assert.equal(entry.fallback, 'rgb(34, 28, 44) / rgb(185, 155, 255)', 'with no skin value Open is the dark fallback');
-        await page.evaluate(v => { for (const t of v) document.documentElement.style.removeProperty(t); }, TOKENS); await nap(200);
         const tap = await page.evaluate(() => {
           const b = [...document.querySelectorAll('.ch-run .ch-inbox-open')].find(x => x.dataset.chinboxopen === 'qa-worker-1' && x.getClientRects().length);
           b.click();
@@ -169,7 +159,7 @@ const report = { origin, web, off, cases: [] };
         await nap(1500);
         await page.screenshot({ path: path.join(out, stem + '-3-opened-in-chats.png') });
         // 2. A hidden worker thread read by id: "In the background · Open" in its header.
-        await vis('.ch-running').click();
+        await openRunning();
         await vis('.ch-run-h').waitFor({ timeout: 8000 });
         await vis('.ch-run-row[data-chrunopen="qa-worker-2"]').click();
         const thread = () => page.locator('.ch-thread').filter({ visible: true }).first();

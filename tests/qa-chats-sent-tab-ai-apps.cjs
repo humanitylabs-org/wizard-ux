@@ -1,15 +1,13 @@
 'use strict';
-// The bottom tabs Inbox · Tags · Sent in the AI apps desktop's Chats sidebar pane (switch wizard/chats-inbox, needs
-// wizard/agent-inbox; wizard-ux issue 1807, a part of issue 1778) in a real browser. Same disposable synthetic box as
+// The bottom tabs Inbox · Tags · Sent in the AI apps desktop's Chats sidebar pane (wizard-ux issue 1807, a part of issue
+// 1778; on for everyone since issue 1778, no switch) in a real browser. Same disposable synthetic box as
 // tests/qa-chats-sent-tab.cjs: a Sent log (GET /wizard/v1/sent, POST /wizard/v1/sent/<id>/correct), an agent inbox with
 // one running task whose worker thread is hidden but reads by id.
 // Desktop 1440x960, wos.desktop-view.v1 = ai-apps, Nebula + Light (obsidian-light):
 //   the sidebar pane has Inbox · Tags · Sent at its bottom (Inbox on) and no Channels | Activity toggle at the top;
 //   Inbox keeps the sidebar's own rows (Working, Ready); Tags shows the channel list; Sent lists every capture with
 //   route, state, why and the two corrections; a correction posts and the row changes in place; a tap opens its thread
-//   in the main chat column; Esc from Sent returns to Inbox; a live switch flip repaints the pane at once.
-// QA_ONLY_OFF=1: wizard/chats-inbox stays off (agent-inbox on); writes the pane's markup to off-<stem>.html (diff it
-// against a run with QA_WEB=<main>/web) and checks the toggle is there and nothing asks for the Sent log.
+//   in the main chat column; Esc from Sent returns to Inbox.
 // QA_EXPECT=broken: the run on main must show the bug (no tabs in the pane, the toggle still at the top).
 const assert = require('node:assert/strict');
 const { chromium } = require('../tools/qa-playwright.cjs');
@@ -17,7 +15,7 @@ const { ownerRead } = require('../tools/qa-desktop-frame-fixture.cjs');
 const fs = require('node:fs'), path = require('node:path');
 const repo = path.resolve(__dirname, '..'), origin = process.env.QA_ORIGIN || 'https://chats-sent-ai-apps.test', prefix = '/wizard-os-home/';
 const web = process.env.QA_WEB || path.join(repo, 'web'), out = process.env.QA_OUT || path.join(repo, 'chats-sent-tab-ai-apps-evidence');
-const off = process.env.QA_ONLY_OFF === '1', broken = process.env.QA_EXPECT === 'broken';
+const broken = process.env.QA_EXPECT === 'broken';
 const SKINS = (process.env.QA_SKINS || 'nebula,obsidian-light').split(',');
 fs.mkdirSync(out, { recursive: true });
 const now = Date.now(), iso = t => new Date(t).toISOString(), nap = ms => new Promise(r => setTimeout(r, ms)), M = 60e3, H = 36e5;
@@ -36,18 +34,18 @@ let SENT = [
 ];
 const RECORDS = [{ id: rid('a'), agent: 'hermes', thread_id: 'qa-worker-1', state: 'running', kind: 'note', title: 'Call mom', last_update: 'Adding the reminder', created_at: now - 3 * M, updated_at: now - 2 * M }];
 const raw = (sid, s) => ({ id: sid, title: s.title, runtime: 'direct', status: 'completed', updated_at: iso(s.at), updatedAt: iso(s.at), last_active: s.at / 1000, message_count: s.msgs.length, messageCount: s.msgs.length, preview: s.msgs.at(-1)?.[1] || '', ...(s.hidden ? { hidden: true } : {}) });
-const report = { origin, web, off, broken, cases: [] };
+const report = { origin, web, broken, cases: [] };
 (async () => {
   const browser = await chromium.launch();
   try {
     for (const skin of SKINS) {
-      const stem = `ai-apps-${skin}${off ? '-off' : ''}${broken ? '-main' : ''}`;
+      const stem = `ai-apps-${skin}${broken ? '-main' : ''}`;
       const entry = { stem, errors: [], refused: [], writes: [], sentReads: 0, corrections: [] }; report.cases.push(entry);
       SENT = SENT.map(r => { const { corrected, ...rest } = r; return rest; });
       const context = await browser.newContext({ viewport: { width: 1440, height: 960 }, serviceWorkers: 'block' });
       try {
         await context.routeWebSocket('**/*', w => w.close());
-        const mix = { 'wizard/desktop-chats': true, 'wizard/agent-inbox': true, ...(off ? {} : { 'wizard/chats-inbox': true }) };
+        const mix = { 'wizard/desktop-chats': true };
         await context.addInitScript(({ skin, mix }) => {
           if (window !== top) return;
           if (sessionStorage.getItem('qaBoot')) return; sessionStorage.setItem('qaBoot', '1');
@@ -102,7 +100,7 @@ const report = { origin, web, off, broken, cases: [] };
         await page.waitForFunction(() => window.__wux && !window.WosWelcome?.active && window.WosExperience?.state.tweaks.length && !window.WosExperience.state.busy);
         await page.addStyleTag({ content: '#wosWelcome{display:none!important}' });
         await page.waitForFunction(() => document.documentElement.dataset.layout === 'ai-apps', null, { timeout: 15000 });
-        await page.waitForFunction(want => want.every(t => (document.documentElement.dataset.tweaks || '').split(' ').includes(t)), off ? ['wizard/agent-inbox'] : ['wizard/agent-inbox', 'wizard/chats-inbox'], { timeout: 15000 });
+        await page.waitForFunction(() => (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/desktop-chats'), null, { timeout: 15000 });
         const vis = sel => page.locator(sel).filter({ visible: true }).first();
         const count = sel => page.locator(sel).filter({ visible: true }).count();
         const sideRow = sid => vis(`.aad-side .aad-rw[data-sid="${sid}"] .aad-row`);
@@ -112,15 +110,10 @@ const report = { origin, web, off, broken, cases: [] };
         const pane = '.aad-side .aad-chan';
         entry.toggle = await count(`${pane} .ch-chan-tabs [data-chview]`);
         entry.tabbar = await count(`${pane} .ch-tabbar`);
-        if (off || broken) {
+        if (broken) {
           await shot('before');
-          assert.equal(entry.tabbar, 0, `${off ? 'switch off' : 'main'}: no bottom tabs in the pane`);
-          assert.equal(entry.toggle, 2, `${off ? 'switch off' : 'main'}: the Channels | Activity toggle is at the top`);
-          if (off) {
-            assert.equal(entry.sentReads, 0, 'switch off: nothing asks for the Sent log');
-            const html = await vis(pane).evaluate(n => n.outerHTML.replace(/<time>[^<]*<\/time>/g, '<time></time>').replace(/data-chats="[^"]*"/g, 'data-chats=""'));
-            fs.writeFileSync(path.join(out, `off-${stem}.html`), html);
-          }
+          assert.equal(entry.tabbar, 0, 'main: no bottom tabs in the pane');
+          assert.equal(entry.toggle, 2, 'main: the Channels | Activity toggle is at the top');
           entry.pass = true; continue;
         }
         // 1. Inbox: the pane's bottom tabs, Inbox selected; no top toggle; the sidebar's own rows stay above the tabs.
@@ -198,12 +191,6 @@ const report = { origin, web, off, broken, cases: [] };
         assert.equal(await count(`${pane} .ch-sent-h`), 0, 'Esc from Sent leaves Sent');
         await sideRow('qa-chat-1').waitFor({ timeout: 8000 });
         assert.deepEqual(await tabs(), ['Inbox*', 'Tags', 'Sent'], 'Esc from Sent: Inbox');
-        // 8. A switch flip repaints at once: off = today's pane (toggle back, no tabs), on = the tabs again.
-        const flip = on => page.evaluate(on => { const h = document.documentElement, t = (h.dataset.tweaks || '').split(' ').filter(x => x && x !== 'wizard/chats-inbox'); h.dataset.tweaks = (on ? t.concat('wizard/chats-inbox') : t).join(' '); window.dispatchEvent(new CustomEvent('wos:experience')); }, on);
-        await flip(false); await nap(400);
-        assert.equal(await count(`${pane} .ch-tabbar`), 0, 'switch off: the tabs go at once');
-        assert.equal(await count(`${pane} .ch-chan-tabs [data-chview]`), 2, 'switch off: the toggle is back');
-        await flip(true); await vis(`${pane} .ch-tabbar`).waitFor({ timeout: 3000 });
         assert.equal(entry.errors.length, 0, 'browser errors: ' + entry.errors.join('; '));
         assert.deepEqual(entry.refused.filter(x => x.reason === 'unexpected-write'), [], 'no unexpected writes');
         entry.pass = true;

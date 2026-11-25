@@ -1,6 +1,6 @@
 'use strict';
-// Quiet inbox: replies typed in a thread (wizard-ux issue 1808; switches wizard/agent-inbox + wizard/chats-inbox) in a
-// real browser. Disposable synthetic transport only: a fake box lists two threads the owner replied in, the Agent
+// Quiet inbox: replies typed in a thread (wizard-ux issue 1808; on for everyone since wizard-ux issue 1778, no switch)
+// in a real browser. Disposable synthetic transport only: a fake box lists two threads the owner replied in, the Agent
 // Service's Sent log rows for those replies (source reply, route thread) and, on the thread whose newest answer
 // needed nothing from him, the list row's wizard_quiet_reply mark.
 //   "Clips edit failure": he wrote "Sent to Miguel, done", the agent answered fyi "Nothing needed from you." (quiet).
@@ -9,15 +9,14 @@
 //   Inbox's Ready lists Mac app (green, unread) and not Clips edit failure, which sits in Recent with no unread mark;
 //   Sent lists both replies as "Reply" with the agent's one-line answer ("Done · nothing needed from you" / "Done · you
 //   asked") and no routing correction; a tap on the quiet row opens its thread.
-// QA_ONLY_OFF=1: wizard/chats-inbox off (agent-inbox on): Clips edit failure is in Ready, unread, as today.
-// QA_SHOTS=1 names the phone Nebula shots before.png (switch off) and after.png (on, Inbox) for the pitch.
+// QA_SHOTS=1 names the phone Nebula Inbox shot after.png for the pitch.
 const assert = require('node:assert/strict');
 const { chromium } = require('../tools/qa-playwright.cjs');
 const { ownerRead } = require('../tools/qa-desktop-frame-fixture.cjs');
 const fs = require('node:fs'), path = require('node:path');
 const repo = path.resolve(__dirname, '..'), origin = process.env.QA_ORIGIN || 'https://quiet-replies.test', prefix = '/wizard-os-home/';
 const web = process.env.QA_WEB || path.join(repo, 'web'), out = process.env.QA_OUT || path.join(repo, 'quiet-replies-evidence');
-const off = process.env.QA_ONLY_OFF === '1', shots = process.env.QA_SHOTS === '1';
+const shots = process.env.QA_SHOTS === '1';
 const SHELLS = (process.env.QA_SHELLS || 'phone,classic').split(','), SKINS = (process.env.QA_SKINS || 'nebula,obsidian-light').split(',');
 fs.mkdirSync(out, { recursive: true });
 const now = Date.now(), iso = t => new Date(t).toISOString(), nap = ms => new Promise(r => setTimeout(r, ms)), M = 60e3, H = 36e5;
@@ -45,17 +44,17 @@ const raw = (sid, s) => {
 };
 // The owner has read the old thread; the two replies' answers are newer than anything he saw.
 const SEEN = { initializedAt: 1, threads: { 'direct:qa-old': { seenAt: now, updatedAt: iso(THREADS['qa-old'].at), messageCount: 2, assistantActivityAt: iso(now) } } };
-const report = { origin, web, off, cases: [] };
+const report = { origin, web, cases: [] };
 (async () => {
   const browser = await chromium.launch();
   try {
     for (const shell of SHELLS) for (const skin of SKINS) {
-      const phone = shell === 'phone', stem = `${shell}-${skin}${off ? '-off' : ''}`;
+      const phone = shell === 'phone', stem = `${shell}-${skin}`;
       const entry = { stem, errors: [], refused: [], sentReads: 0 }; report.cases.push(entry);
       const context = await browser.newContext({ viewport: phone ? { width: 412, height: 915 } : { width: 1440, height: 960 }, isMobile: phone, hasTouch: phone, serviceWorkers: 'block', ...(phone ? { userAgent: 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Mobile Safari/537.36' } : {}) });
       try {
         await context.routeWebSocket('**/*', w => w.close());
-        const mix = { 'wizard/desktop-chats': true, 'wizard/agent-inbox': true, ...(off ? {} : { 'wizard/chats-inbox': true }) };
+        const mix = { 'wizard/desktop-chats': true };
         await context.addInitScript(({ shell, skin, mix }) => {
           if (window !== top) return;
           if (sessionStorage.getItem('qaBoot')) return; sessionStorage.setItem('qaBoot', '1');
@@ -100,15 +99,10 @@ const report = { origin, web, off, cases: [] };
         await page.goto(origin + prefix + (phone ? 'index.html?phone' : 'desktop.html'));
         await page.waitForFunction(() => (window.__wux || window.__wos) && !window.WosWelcome?.active && window.WosExperience?.state.tweaks.length && !window.WosExperience.state.busy);
         await page.addStyleTag({ content: '#wosWelcome{display:none!important}' });
-        await page.waitForFunction(want => want.every(t => (document.documentElement.dataset.tweaks || '').split(' ').includes(t)), off ? ['wizard/agent-inbox'] : ['wizard/agent-inbox', 'wizard/chats-inbox'], { timeout: 15000 });
+        await page.waitForFunction(() => (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/desktop-chats'), null, { timeout: 15000 });
         if (phone) await page.evaluate(() => __wos.openSheet('inbox')); else await page.evaluate(() => __wux.openChatsList());
         const vis = sel => page.locator(sel).filter({ visible: true }).first();
         const count = sel => page.locator(sel).filter({ visible: true }).count();
-        if (off) {
-          // Today's list: the Activity view (Channels | Activity toggle) holds Ready.
-          const act = vis('.ch-chan-tabs [data-chview="activity"]');
-          if (await act.count()) await act.click();
-        }
         await vis('.ch-list [data-chopen="qa-mac"]').waitFor({ timeout: 15000 });
         await nap(1500); // the Sent log and the seen state have landed
         const shot = async name => { await page.evaluate(() => document.fonts.ready); await nap(300); await page.screenshot({ path: path.join(out, `${stem}-${name}.png`) }); };
@@ -116,15 +110,6 @@ const report = { origin, web, off, cases: [] };
         const unread = sid => page.locator(`.ch-list [data-chopen="${sid}"]`).filter({ visible: true }).first().evaluate(n => n.classList.contains('unread'));
         entry.isNew = await page.evaluate(() => Object.fromEntries(['qa-clips', 'qa-mac', 'qa-old'].map(id => [id, !!window.WizLive?.isNew(window.WizLive.session(id))])));
         entry.sections = { clipsReady: await inSec('ready', 'qa-clips'), clipsRecent: await inSec('recent', 'qa-clips'), macReady: await inSec('ready', 'qa-mac') };
-        if (off) {
-          assert.equal(entry.sections.clipsReady, 1, 'switch off: Clips edit failure is in Ready as today: ' + JSON.stringify(entry.sections));
-          assert.equal(await unread('qa-clips'), true, 'switch off: it is unread (green) as today');
-          assert.equal(entry.isNew['qa-clips'], true);
-          assert.equal(entry.sentReads, 0, 'switch off: nothing asks for the Sent log');
-          await shot('inbox');
-          if (shots && phone && skin === 'nebula') fs.copyFileSync(path.join(out, `${stem}-inbox.png`), path.join(out, 'before.png'));
-          entry.pass = true; continue;
-        }
         // 1. Inbox: the question's answer is in Ready (unread); the "done" reply's answer is not, and is not unread.
         assert.equal(entry.sections.macReady, 1, 'the answer to his question is in Inbox / Ready: ' + JSON.stringify(entry.sections));
         assert.equal(await unread('qa-mac'), true, 'and unread (green)');
@@ -155,7 +140,7 @@ const report = { origin, web, off, cases: [] };
         assert.deepEqual(entry.refused.filter(x => x.reason === 'unexpected-write'), [], 'no unexpected writes');
         entry.pass = true;
       } catch (e) { entry.failure = e.stack; const pages = context.pages(); if (pages[0]) { entry.body = (await pages[0].locator('body').innerText().catch(() => '')).slice(0, 1500); await pages[0].screenshot({ path: path.join(out, stem + '-failure.png') }).catch(() => {}); } }
-      finally { fs.writeFileSync(path.join(out, `report${off ? '-off' : ''}.json`), JSON.stringify(report, null, 2)); await context.close(); }
+      finally { fs.writeFileSync(path.join(out, 'report.json'), JSON.stringify(report, null, 2)); await context.close(); }
     }
   } finally { await browser.close(); }
   const failed = report.cases.filter(c => !c.pass);

@@ -460,21 +460,20 @@
     await put(it); schedule();
     settleCancel(it, { outcome: 'cancelled', item: it });
   }
-  /* Orb dump (switch wizard/agent-inbox, off by default; wizard-ux issue 1588, the shell half of wizard-agent-service
+  /* Orb dump (wizard-ux issue 1588, on for everyone since wizard-ux issue 1778; the shell half of wizard-agent-service
    * issue 551). A plain orb take to the main agent that the shell marked `dump: true` asks the router once, with
    * accept_dump, before any thread exists. The box answers {cmd: {route: 'dump', title, record_id, thread_id}} after it
    * has written the inbox record and started the hidden worker itself: the item is done here (no thread, no run POST,
    * no row in the list) and onDump says "Got it". Any other answer, an error or a slow router: the take goes on as
    * today's visible new thread, so nothing is lost. A replay after a reload asks again; the box keeps one task for the
-   * same words the same day. Switch off: no item is marked and nothing here runs. */
-  const inboxOn = () => { try { return (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/agent-inbox'); } catch (_) { return false; } };
+   * same words the same day. */
   const DUMP_ROUTE_MS = 6000;
   async function dumped(it) {
     if (it.dump !== true) return false;
     const plain = it.kind === 'new' && !(it.agent && window.WosAgents?.isOther?.(it.agent)) && !it.steerRunId && !it.reply && !it.retryRunId && !String(it.typed || '').trim()
       && !(it.files || []).some(f => f?.id && f.id !== it.audioFile?.id);
     let url = '';
-    try { url = plain && it.text && inboxOn() ? window.WizConfig?.endpoint?.('route') || '' : ''; } catch (_) {}
+    try { url = plain && it.text ? window.WizConfig?.endpoint?.('route') || '' : ''; } catch (_) {}
     let cmd = null;
     if (url) try {
       const r = await bounded(signal => fetch(url, { method: 'POST', cache: 'no-store', credentials: 'same-origin', signal, headers: J,

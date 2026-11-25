@@ -44,7 +44,7 @@ window.WizCore.chatsParts.chanui = function ({ agentName, agentRec, ago, AGS, ch
   function chanHead(w, open) {
     if (open) return `<div class="ch-chan-h"><button type="button" class="ch-chan-back" data-chchanback aria-label="Back to channels"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg></button><b>${open.agentFeed ? `<span class="ch-chan-sig" aria-hidden="true">${AGS()?.sigil?.(agentRec(open.agent)) || ''}</span>` : `<span class="ch-chan-hash ch-chan-emo"${chanFace(open).label ? ' aria-hidden="true"' : ''}>${esc(chanFace(open).emoji)}</span>`}${esc(open.agentFeed ? open.name : chanFace(open).label)}</b></div>`;
     const sort = chatVars.chanView === 'channels' ? orderBar('Sort channels', 'data-chchansort', ['az', 'za'], chanPrefs().sort, o => o === 'az' ? 'A–Z' : 'Z–A') : '';
-    // The bottom tabs (switch wizard/chats-inbox, wizard-ux issue 1778) pick Inbox or Tags; only the channels' sort stays up here.
+    // The bottom tabs (wizard-ux issue 1778) pick Inbox or Tags; only the channels' sort stays up here.
     if (typeof sentTabsOn === 'function' && sentTabsOn(w)) return sort ? `<div class="ch-chan-tabs">${sort}</div>` : '';
     return `<div class="ch-chan-tabs">${orderBar('Chats view', 'data-chview', ['channels', 'activity'], chatVars.chanView, o => o === 'activity' ? 'Activity' : 'Channels')}${sort}</div>`;
   }

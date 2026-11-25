@@ -1,4 +1,4 @@
-// Chats Sent tab (switch wizard/chats-inbox, needs wizard/agent-inbox; wizard-ux issue 1778): the live.js reader of the
+// Chats Sent tab (wizard-ux issue 1778, on for everyone; its two switches are gone): the live.js reader of the
 // box's Sent log cut out of the file and run against a fake box, and the real Chats part (core/chats-sent.js) run on
 // it. Browser proof: tests/qa-chats-sent-tab.cjs.
 import test from 'node:test';
@@ -78,7 +78,7 @@ test('older rows read with Show older stay through the next poll, newest rows on
 });
 
 /* The real Chats part on a stand-in Chats: switch, rows, Working, corrections, a tap, Back. */
-function part({ tweaks = 'wizard/chats-inbox wizard/agent-inbox', rows = [], ok = true, gone = false, side = false, elsewhere = false } = {}) {
+function part({ tweaks = '', rows = [], ok = true, gone = false, side = false, elsewhere = false } = {}) {
   const listeners = {}, renders = [], opened = [], corrections = [], toasts = [], fetches = [];
   const CH = { main: {}, 'host-ops': {}, box: {}, locked: {} }, chatVars = { chanView: 'activity' };
   const W = { main: { id: 'main', thread: null }, 'host-ops': { id: 'host-ops', thread: null }, box: { id: 'box', thread: null }, locked: { id: 'locked', thread: null } };
@@ -101,10 +101,9 @@ function part({ tweaks = 'wizard/chats-inbox wizard/agent-inbox', rows = [], ok 
 }
 const view = (c, extra = {}) => ({ id: sid(c), at: 1000, source: 'orb', text: 'Words ' + c, route: 'agent', decidedBy: 'model', rules: [], state: 'done', thread: 'thread_' + c, record: null, tags: [], urgent: false, wouldRoute: null, corrected: null, error: '', ...extra });
 
-test('switch off, Agent inbox off, a routed agent or the main column feed window: no tabs (main versus routed)', () => {
-  assert.equal(part({ tweaks: '' }).p.sentTabsOn({ id: 'main' }), false, 'both off');
-  assert.equal(part({ tweaks: 'wizard/chats-inbox' }).p.sentTabsOn({ id: 'main' }), false, 'needs wizard/agent-inbox');
-  assert.equal(part({ tweaks: 'wizard/agent-inbox' }).p.sentTabsOn({ id: 'main' }), false, 'Agent inbox alone changes nothing here');
+test('on for everyone (no switch); a routed agent or the main column feed window: no tabs (main versus routed)', () => {
+  assert.equal(part({ tweaks: '' }).p.sentTabsOn({ id: 'main' }), true, 'no switch: the tabs show with any or no data-tweaks');
+  assert.equal(part({ tweaks: 'wizard/chats-inbox wizard/agent-inbox' }).p.sentTabsOn({ id: 'main' }), true, 'an old saved value changes nothing');
   const f = part();
   assert.equal(f.p.sentTabsOn(f.W.main), true, 'the main agent\'s Chats list has the tabs');
   for (const id of ['host-ops', 'box', 'locked']) assert.equal(f.p.sentTabsOn(f.W[id]), false, `${id}: a routed agent's list keeps today's look (its captures are the owner's, on the main list)`);
@@ -113,7 +112,6 @@ test('switch off, Agent inbox off, a routed agent or the main column feed window
   const sb = part({ side: true, elsewhere: true });
   assert.equal(sb.p.sentTabsOn({ id: 'main::side' }), true, 'the AI apps sidebar pane has the tabs');
   for (const id of ['host-ops', 'box', 'locked']) assert.equal(sb.p.sentTabsOn(sb.W[id]), false, `${id}: a routed agent's sidebar keeps today's look`);
-  assert.equal(part({ tweaks: 'wizard/agent-inbox', side: true, elsewhere: true }).p.sentTabsOn({ id: 'main::side' }), false, 'switch off: the sidebar pane keeps its toggle');
   assert.match(f.p.sentBar(f.W.main), /data-chtab="inbox" aria-selected="true".*data-chtab="tags" aria-selected="false".*data-chtab="sent" aria-selected="false"/s);
 });
 
@@ -166,7 +164,4 @@ test('tabs, corrections, a tap and Back', async () => {
   assert.equal(f.p.sentBack(w), true);
   assert.deepEqual([f.p.sentOpen(w), f.chatVars.chanView], [false, 'activity'], 'Inbox');
   assert.equal(f.p.sentBack(w), false, 'Inbox: nothing of Sent\'s left to close');
-  // Switched off while Sent was open: the list is today's again and Back has nothing to close.
-  f.click(w, { chtab: 'sent' }); f.ctx.document.documentElement.dataset.tweaks = '';
-  assert.equal(f.p.sentOpen(w), false); assert.equal(f.p.sentBack(w), false);
 });

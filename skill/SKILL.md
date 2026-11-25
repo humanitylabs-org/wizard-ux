@@ -162,7 +162,6 @@ Phone: things only the Android app can do: Wizard Everywhere (floating orb), sid
 Settings › Appearance › Try new features lists unfinished features anyone can switch on to try, A to Z, each 'by <author>'. The group only shows when this Wizard is on the For testers channel (Settings › About & updates › Channel › For testers); on For everyone it is hidden and these switches stay off. The same switches are also in the WizardOS Tracker app (Try it). A choice follows the owner on every device.
 
 - **Action cards in chat**: An app's proposed action (a draft, an event) shows in chat with Approve, Edit, Open in app.
-- **Agent inbox**: Background tasks keep one short record each; their worker threads stay out of the chat list, and Chats gets a Running view (what still works, what went quiet).
 - **Agent knows the Wizard interface**: Your agent gets this manual: every screen, Settings page and feature switch, so it can say where things are.
 - **Agents use what the box already does**: Agents look up what this box already does (transcription, reminders, app jobs) before installing their own.
 - **App panel on the left**: AI apps desktop: ⌥⇧M or the app panel's header button moves it beside the chats sidebar.
@@ -173,7 +172,6 @@ Settings › Appearance › Try new features lists unfinished features anyone ca
 - **Calm offline card**: The can't-reach-your-Wizard card shows one dotted path (Internet · Tailscale · Wizard), one short next step and a small Check again with the automatic re-check time.
 - **Camera and Attach on the side button**: Android app: Camera and Attach buttons next to Screen while talking to the side-button orb.
 - **Capture inbox**: Agent files your Files Inbox drops.
-- **Chats inbox**: Bottom tabs Inbox, Tags, Sent; Sent shows what you sent, where it went and why. Needs Agent inbox.
 - **Clear chat notifications**: Android app: reading a LINE, WhatsApp, Telegram or other bridged chat in Messenger clears that app's own notification (needs Android's Notification access).
 - **Continue saved background results**: Work that finished while Wizard was down shows in its own thread with one Continue button. Nothing resumes until you tap it.
 - **Desktop sidebar follows Default Chats**: AI apps desktop: the chats sidebar uses the Chats look picked in Settings › Chats & app screens › Default Chats.

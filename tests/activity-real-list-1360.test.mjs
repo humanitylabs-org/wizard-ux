@@ -56,7 +56,7 @@ function harness(payload = PAYLOAD, box = { seen: { initializedAt: 1, threads: {
   vm.runInContext(['const WORKING_ST =', 'const isWorking =', 'const handledNow =', 'const chanNeeds =',
     'const chanUnread =', 'const actNeeds =', 'const actUnread =', 'const actMark =', 'const chanAt =', 'const ATT =', 'const attOf =', 'const STI_LAB =', 'const STI_TIP ='].map(line).join('\n')
     + '\n' + ['const ID =', 'const on ='].map(tline).join('\n')
-    + '\n' + block('function actRowMark(s)', '// A thread of an agent other') + block('function stiKind(s)', 'const stiBadge =') + block('function chatRow(s', '/* Agent inbox (switch wizard/agent-inbox)')
+    + '\n' + block('function actRowMark(s)', '// A thread of an agent other') + block('function stiKind(s)', 'const stiBadge =') + block('function chatRow(s', '/* Agent inbox:')
     + block('const ACT_SORTS = () =>', '// The sort and Show older taps').replace('let actOlder = false;', 'let actOlder = false, rowChan = true;')
     + '\nthis.rule = { needs: actNeeds, unread: actUnread, mark: actMark, attOf, trackerOn: on }; this.activityBody = activityBody;', c);
   // The Thread tracker as chats.js sees it: its real on(); if it were on, every row would get a "waiting on you" dot.

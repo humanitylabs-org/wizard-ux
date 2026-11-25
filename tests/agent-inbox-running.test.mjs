@@ -73,35 +73,28 @@ test('a box without the inbox (404) is an empty list, not an error; a failed rea
   assert.deepEqual([gone.ok, gone.gone, gone.records.length], [true, true, 0]);
 });
 
-test('Chats reads the inbox only through the switch, and the Running view sits on the main Chats list', () => {
+test('the Running view sits on the main Chats list for everyone (no switch since wizard-ux issue 1778)', () => {
   const chats = withParts(['chats.js', 'chats-running.js'].map(f => readFileSync(new URL('../web/core/' + f, import.meta.url), 'utf8')).join('\n')); // the Running view moved to chats-running.js (issue 1665)
-  const part = chats.slice(chats.indexOf('  function inboxSwitchOn() {'), chats.indexOf('  function runningFor(ms)'));
-  const html = { dataset: { tweaks: '' } }, listeners = {}, repainted = [], fresh = [];
+  const part = chats.slice(chats.indexOf('  function runningOn(w) {'), chats.indexOf('  function runningFor(ms)'));
   const W = { main: { id: 'main', thread: null }, routed: { id: 'routed', thread: null, agent: 'box' }, open: { id: 'open', thread: 't1' } };
-  const ctx = { document: { documentElement: html }, window: { addEventListener: (t, fn) => { (listeners[t] ||= []).push(fn); } }, winAgent: w => w.agent || '', ch: id => ({ running: id === 'main' }),
-    LIVE: { agentInbox: { fresh: () => fresh.push(1) } }, CH: { main: {}, routed: {}, open: {} }, H: { win: id => W[id] }, rerenderList: w => repainted.push(w.id) };
-  vm.createContext(ctx); vm.runInContext(part + '\nthis.api = { inboxSwitchOn, runningOn, runningOpen };', ctx);
-  const { api } = ctx, flip = t => { html.dataset.tweaks = t; for (const fn of listeners['wos:experience'] || []) fn(); };
-  assert.equal(api.inboxSwitchOn(), false); assert.equal(api.runningOn(W.main), false, 'off: no Running row, no inbox read'); assert.equal(api.runningOpen(W.main), false);
-  flip('wizard/other wizard/agent-inbox');
-  assert.equal(api.inboxSwitchOn(), true); assert.equal(api.runningOn(W.main), true); assert.equal(api.runningOpen(W.main), true, 'the Running view on the main Chats list');
-  assert.equal(api.runningOn(W.routed), false, 'the main agent only (the orb dump is main only)');
-  assert.deepEqual(repainted, ['main', 'routed'], 'a switch flip repaints the lists at once (not an open thread)'); assert.equal(fresh.length, 1, 'and reads the inbox fresh');
-  flip('wizard/other wizard/agent-inbox'); assert.equal(repainted.length, 2, 'no change: no repaint');
-  flip(''); assert.equal(repainted.length, 4); assert.equal(fresh.length, 1, 'off: no inbox read');
+  for (const tweaks of ['', 'wizard/agent-inbox']) {
+    const ctx = { document: { documentElement: { dataset: { tweaks } } }, winAgent: w => w.agent || '', ch: id => ({ running: id === 'main' }), LIVE: { agentInbox: {} } };
+    vm.createContext(ctx); vm.runInContext(part + '\nthis.api = { runningOn, runningOpen };', ctx);
+    const { api } = ctx;
+    assert.equal(api.runningOn(W.main), true, `tweaks "${tweaks}": on`); assert.equal(api.runningOpen(W.main), true, 'the Running view on the main Chats list');
+    assert.equal(api.runningOn(W.routed), false, 'the main agent only (the orb dump is main only)');
+  }
   // Back from the Running view returns to Chats (channelBack asks runningBack first)
   const back = vm.runInNewContext(`(${block(chats, '  function channelBack(w) {').trim()})`, { runningBack: w => w.id === 'main', W: {}, owner: x => x });
   assert.equal(back({ id: 'main', thread: null }), true); assert.equal(back({ id: 'other', thread: null }), false);
   const catalog = JSON.parse(readFileSync(new URL('../web/tweaks/catalog.json', import.meta.url), 'utf8'));
-  assert.ok(catalog.tweaks.includes('wizard/agent-inbox') && !catalog.defaults.includes('wizard/agent-inbox'), 'listed, off by default');
-  const manifest = JSON.parse(readFileSync(new URL('../web/tweaks/wizard/agent-inbox/manifest.json', import.meta.url), 'utf8'));
-  assert.ok(manifest.issues.includes('humanitylabs-org/wizard-ux#1569'), 'the Tracker finds the switch from the issue');
+  assert.ok(!catalog.tweaks.includes('wizard/agent-inbox'), 'the switch is gone from the catalog');
 });
 
-// core/chats-running.js's part factory with the switch on, a main-agent list window and stand-ins for the Chats names.
+// core/chats-running.js's part factory, a main-agent list window and stand-ins for the Chats names.
 function runningPart(agentInbox) {
   const window = { WizCore: {}, addEventListener() {} };
-  const document = { documentElement: { dataset: { tweaks: 'wizard/agent-inbox' } } };
+  const document = { documentElement: { dataset: { tweaks: '' } } };
   vm.runInNewContext(readFileSync(new URL('../web/core/chats-running.js', import.meta.url), 'utf8'), { window, document });
   const CH = { w: {} };
   return window.WizCore.chatsParts.running({ ago: () => '1 min', ch: id => (CH[id] ||= {}), CH, chanStore: () => null, clip: (t, n) => String(t).slice(0, n),

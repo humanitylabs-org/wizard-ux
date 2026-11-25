@@ -1,6 +1,6 @@
 'use strict';
-// Chats Sent tab and the bottom tabs Inbox · Tags · Sent (switch wizard/chats-inbox, needs wizard/agent-inbox;
-// wizard-ux issue 1778) in a real browser. Disposable synthetic transport only: a fake box keeps a Sent log
+// Chats Sent tab and the bottom tabs Inbox · Tags · Sent (wizard-ux issue 1778; on for everyone, no switch) in a real
+// browser. Disposable synthetic transport only: a fake box keeps a Sent log
 // (GET /wizard/v1/sent, POST /wizard/v1/sent/<id>/correct) and an agent inbox with one running task; its worker thread
 // is hidden (stock Hermes leaves hidden sessions out of /api/sessions) but reads by id.
 // Phone 412x915 and Classic desktop 1440x960, Nebula + Light (obsidian-light):
@@ -9,16 +9,12 @@
 //   route, state and why ("would have gone to background" on a typed row); Working shows only what runs; Didn't need a
 //   reply posts the correction and the row changes in place; a tap opens the (hidden) thread; Back returns to Sent,
 //   Back again to Inbox, Back again leaves the app open.
-// QA_ONLY_OFF=1: wizard/chats-inbox stays off (agent-inbox on); writes the list markup to off-<stem>.html (diff it
-// against a run with QA_WEB=<main>/web) and checks that nothing asks for the Sent log.
-// QA_SHOTS=1 also writes the phone shots named for the pitch (before/after).
 const assert = require('node:assert/strict');
 const { chromium } = require('../tools/qa-playwright.cjs');
 const { ownerRead } = require('../tools/qa-desktop-frame-fixture.cjs');
 const fs = require('node:fs'), path = require('node:path');
 const repo = path.resolve(__dirname, '..'), origin = process.env.QA_ORIGIN || 'https://chats-sent-tab.test', prefix = '/wizard-os-home/';
 const web = process.env.QA_WEB || path.join(repo, 'web'), out = process.env.QA_OUT || path.join(repo, 'chats-sent-tab-evidence');
-const off = process.env.QA_ONLY_OFF === '1';
 const SHELLS = (process.env.QA_SHELLS || 'phone,classic').split(','), SKINS = (process.env.QA_SKINS || 'nebula,obsidian-light').split(',');
 fs.mkdirSync(out, { recursive: true });
 const now = Date.now(), iso = t => new Date(t).toISOString(), nap = ms => new Promise(r => setTimeout(r, ms)), M = 60e3, H = 36e5;
@@ -37,18 +33,18 @@ let SENT = [
 ];
 const RECORDS = [{ id: rid('a'), agent: 'hermes', thread_id: 'qa-worker-1', state: 'running', kind: 'note', title: 'Call mom', last_update: 'Adding the reminder', created_at: now - 3 * M, updated_at: now - 2 * M }];
 const raw = (sid, s) => ({ id: sid, title: s.title, runtime: 'direct', status: 'completed', updated_at: iso(s.at), updatedAt: iso(s.at), last_active: s.at / 1000, message_count: s.msgs.length, messageCount: s.msgs.length, preview: s.msgs.at(-1)?.[1] || '', ...(s.hidden ? { hidden: true } : {}) });
-const report = { origin, web, off, cases: [] };
+const report = { origin, web, cases: [] };
 (async () => {
   const browser = await chromium.launch();
   try {
     for (const shell of SHELLS) for (const skin of SKINS) {
-      const phone = shell === 'phone', stem = `${shell}-${skin}${off ? '-off' : ''}`;
+      const phone = shell === 'phone', stem = `${shell}-${skin}`;
       const entry = { stem, errors: [], refused: [], writes: [], sentReads: 0, corrections: [] }; report.cases.push(entry);
       SENT = SENT.map(r => { const { corrected, ...rest } = r; return rest; });
       const context = await browser.newContext({ viewport: phone ? { width: 412, height: 915 } : { width: 1440, height: 960 }, isMobile: phone, hasTouch: phone, serviceWorkers: 'block', ...(phone ? { userAgent: 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Mobile Safari/537.36' } : {}) });
       try {
         await context.routeWebSocket('**/*', w => w.close());
-        const mix = { 'wizard/desktop-chats': true, 'wizard/agent-inbox': true, ...(off ? {} : { 'wizard/chats-inbox': true }) };
+        const mix = { 'wizard/desktop-chats': true };
         await context.addInitScript(({ shell, skin, mix }) => {
           if (window !== top) return;
           if (sessionStorage.getItem('qaBoot')) return; sessionStorage.setItem('qaBoot', '1');
@@ -102,24 +98,13 @@ const report = { origin, web, off, cases: [] };
         await page.goto(origin + prefix + (phone ? 'index.html?phone' : 'desktop.html'));
         await page.waitForFunction(() => (window.__wux || window.__wos) && !window.WosWelcome?.active && window.WosExperience?.state.tweaks.length && !window.WosExperience.state.busy);
         await page.addStyleTag({ content: '#wosWelcome{display:none!important}' });
-        await page.waitForFunction(want => want.every(t => (document.documentElement.dataset.tweaks || '').split(' ').includes(t)), off ? ['wizard/agent-inbox'] : ['wizard/agent-inbox', 'wizard/chats-inbox'], { timeout: 15000 });
+        await page.waitForFunction(() => (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/desktop-chats'), null, { timeout: 15000 });
         if (phone) await page.evaluate(() => __wos.openSheet('inbox')); else await page.evaluate(() => __wux.openChatsList());
         const vis = sel => page.locator(sel).filter({ visible: true }).first();
         const count = sel => page.locator(sel).filter({ visible: true }).count();
         const back = () => page.evaluate(() => window.__wos ? __wos.onBack() : __wux.escStep());
         await vis('.ch-list [data-chopen="qa-chat-1"]').waitFor({ timeout: 15000 });
         const shot = async name => { await page.evaluate(() => document.fonts.ready); await nap(300); await page.screenshot({ path: path.join(out, `${stem}-${name}.png`) }); };
-        if (off) {
-          await vis('.ch-running').waitFor({ timeout: 10000 });
-          await nap(1200);
-          assert.equal(await count('.ch-tabbar'), 0, 'switch off: no bottom tabs');
-          assert.equal(await count('.ch-chan-tabs [data-chview]'), 2, 'switch off: the Channels | Activity toggle stays');
-          assert.equal(entry.sentReads, 0, 'switch off: nothing asks for the Sent log');
-          const html = await vis('.ch-list').evaluate(n => n.outerHTML.replace(/<time>[^<]*<\/time>/g, '<time></time>').replace(/Running \d+ min/g, 'Running N min'));
-          fs.writeFileSync(path.join(out, `off-${stem}.html`), html);
-          await shot('before');
-          entry.pass = true; continue;
-        }
         // 1. Inbox: the bottom tabs, Inbox selected; no top toggle and no Running row; New chat floats above the tabs.
         await vis('.ch-tabbar').waitFor({ timeout: 10000 });
         const tabs = () => page.locator('.ch-tabbar').filter({ visible: true }).first().locator('[role=tab]').evaluateAll(b => b.map(x => `${x.innerText.trim()}${x.getAttribute('aria-selected') === 'true' ? '*' : ''}`));
@@ -194,14 +179,6 @@ const report = { origin, web, off, cases: [] };
         await back(); await nap(500); await back(); await nap(500);
         assert.equal(page.url(), url, 'Back at Inbox never leaves the app');
         assert.ok(await page.evaluate(() => !!(window.__wos || window.__wux) && document.visibilityState === 'visible'), 'the app is still open');
-        // 7. A switch flip repaints at once: off = today's list (toggle and Running row back), on = the tabs again.
-        if (phone) await page.evaluate(() => __wos.openSheet('inbox')); else await page.evaluate(() => __wux.openChatsList());
-        const flip = on => page.evaluate(on => { const h = document.documentElement, t = (h.dataset.tweaks || '').split(' ').filter(x => x && x !== 'wizard/chats-inbox'); h.dataset.tweaks = (on ? t.concat('wizard/chats-inbox') : t).join(' '); window.dispatchEvent(new CustomEvent('wos:experience')); }, on);
-        await flip(false); await nap(300);
-        assert.equal(await count('.ch-tabbar'), 0, 'switch off: the tabs go at once');
-        await vis('.ch-running').waitFor({ timeout: 5000 });
-        assert.equal(await count('.ch-chan-tabs [data-chview]'), 2, 'switch off: the toggle is back');
-        await flip(true); await vis('.ch-tabbar').waitFor({ timeout: 3000 });
         assert.equal(entry.errors.length, 0, 'browser errors: ' + entry.errors.join('; '));
         assert.deepEqual(entry.refused.filter(x => x.reason === 'unexpected-write'), [], 'no unexpected writes');
         entry.pass = true;

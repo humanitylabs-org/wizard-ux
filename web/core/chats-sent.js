@@ -1,5 +1,5 @@
-/* Wizard UX core: Chats › the Sent tab and the bottom tabs Inbox · Tags · Sent (switch wizard/chats-inbox, needs
- * wizard/agent-inbox; wizard-ux issue 1778, the shell half of wizard-agent-service issue 607). createChats
+/* Wizard UX core: Chats › the Sent tab and the bottom tabs Inbox · Tags · Sent (wizard-ux issue 1778, on for
+ * everyone; the shell half of wizard-agent-service issue 607). createChats
  * (core/chats.js) calls this once with the closure names it reads. Loaded before chats.js by both shells. */
 window.WizCore = window.WizCore || {};
 window.WizCore.chatsParts = window.WizCore.chatsParts || {};
@@ -12,17 +12,12 @@ window.WizCore.chatsParts.sent = function ({ ago, ch, CH, CHAN_VIEW_KEY, chanEls
    * reply", "model", "your earlier correction", "fallback"). A tap opens the thread it ran in (a hidden worker thread
    * opens by id, as from the Running view); Should have replied / Didn't need a reply correct the routing in place
    * (POST /wizard/v1/sent/<id>/correct). Working is Sent's filter for what still runs; the Running row above Ready goes
-   * away while this is on. Back from Sent returns to Inbox (channelBack). With either switch off nothing here draws. */
-  const SWITCH = 'wizard/chats-inbox', NEEDS = 'wizard/agent-inbox';
-  function sentSwitchOn() { try { const t = (document.documentElement.dataset.tweaks || '').split(' '); return t.includes(SWITCH) && t.includes(NEEDS); } catch (_) { return false; } }
+   * away. Back from Sent returns to Inbox (channelBack). */
   // The tabs: the main agent's own Chats list (phone, Classic desktop and the AI apps sidebar pane, its id::side window
   // whose channels open elsewhere: wizard-ux issue 1807), never a routed agent's list or the main column's feed window.
-  function sentTabsOn(w) { return !!w && sentSwitchOn() && !winAgent(w) && !!LIVE.sentLog && !(typeof chanSide === 'function' && chanSide(w) && !(typeof chanElsewhere === 'function' && chanElsewhere(w))); }
+  function sentTabsOn(w) { return !!w && !winAgent(w) && !!LIVE.sentLog && !(typeof chanSide === 'function' && chanSide(w) && !(typeof chanElsewhere === 'function' && chanElsewhere(w))); }
   function sentOpen(w) { return !!w && !!ch(w.id).sent && sentTabsOn(w); }
   function sentTab(w) { return sentOpen(w) ? 'sent' : chatVars.chanView === 'channels' ? 'tags' : 'inbox'; }
-  // Turning either switch on or off repaints the lists at once (not at the next live tick).
-  let was = sentSwitchOn();
-  try { window.addEventListener('wos:experience', () => { const on = sentSwitchOn(); if (was === on) return; was = on; if (on) LIVE.sentLog?.fresh?.(); for (const id of Object.keys(CH)) { const x = H.win(id); if (x && !x.thread) rerenderList(x); } }); } catch (_) {}
   const TAB_SVG = {
     inbox: '<path d="M4 13h4l2 3h4l2-3h4M5 13l2-8h10l2 8v6H5z"/>',
     tags: '<path d="M9 4 7 20M17 4l-2 16M4 9h16M3 15h16"/>',

@@ -1,4 +1,4 @@
-// Orb dump (switch wizard/agent-inbox, off by default; wizard-ux issue 1588, the shell half of wizard-agent-service
+// Orb dump (wizard-ux issue 1588, on for everyone since wizard-ux issue 1778; the shell half of wizard-agent-service
 // issue 551). The real outbox.js runs against a fake box: an orb take the shell marked `dump: true` asks the router once
 // with accept_dump, and a dump answer ends it there (no thread, no run, "Got it"); any other answer is today's send.
 import { test } from 'node:test';
@@ -16,7 +16,7 @@ const source = withShellParts(readFileSync(new URL('../web/outbox.js', import.me
 const app = withShellParts(readFileSync(new URL('../web/app.js', import.meta.url), 'utf8'));
 const desktop = withShellParts(readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8'));
 const live = withShellParts(readFileSync(new URL('../web/live.js', import.meta.url), 'utf8'));
-const SWITCH = 'wizard/agent-inbox';
+const SWITCH = 'wizard/agent-inbox'; // the removed switch's id: an old saved value changes nothing
 const row = (extra = {}) => ({ id: 'orb-take', kind: 'new', intent: 'message', deliveryRequested: true, sessionId: 'wizard_new_1',
   agent: '', model: 'm', provider: 'p', createdAt: Date.now(), updatedAt: Date.now(), state: 'waiting', nextAt: 0, attempts: 0,
   text: 'research flights to Lisbon for next week', typed: '', files: [], source: 'orb', dump: true, ...extra });
@@ -52,7 +52,7 @@ async function until(fn) {
   for (let i = 0; i < 600; i++) { const value = fn(); if (value) return value; await new Promise(r => setTimeout(r, 5)); }
   throw Error('condition not reached');
 }
-async function fixture(t, { item = row(), tweaks = SWITCH, answer = () => ({ cmd: { route: 'dump', title: 'Lisbon flights', record_id: 'rec_1', thread_id: 'wizard_hidden_1', deadline: null }, ms: 300 }) } = {}) {
+async function fixture(t, { item = row(), tweaks = '', answer = () => ({ cmd: { route: 'dump', title: 'Lisbon flights', record_id: 'rec_1', thread_id: 'wizard_hidden_1', deadline: null }, ms: 300 }) } = {}) {
   const calls = [], rows = new Map([[item.id, structuredClone(item)]]);
   const server = createServer(async (req, res) => {
     const chunks = []; for await (const chunk of req) chunks.push(chunk);
@@ -111,13 +111,6 @@ for (const [name, answer] of [
   assert.equal(f.dumps.length, 0);
 });
 
-test('switch off: the marked take routes exactly as today (no router call)', async t => {
-  const f = await fixture(t, { tweaks: 'wizard/sidebar-chats-view' });
-  await until(() => f.api.get('orb-take')?.state === 'sent');
-  assert.deepEqual(f.paths(), ['/wizard/hermes/api/sessions', '/wizard/hermes/v1/runs']);
-  assert.equal(f.dumps.length, 0);
-});
-
 for (const [name, extra] of [
   ['an unmarked take', { dump: undefined }],
   ['a reply in a thread', { kind: 'reply', sessionId: 'open_thread' }],
@@ -146,14 +139,14 @@ function phoneDumpTake(tweaks, V = {}) {
   vm.runInNewContext(app.slice(start, end) + '\nthis.dumpTake = dumpTake;', ctx);
   return ctx.dumpTake;
 }
-test('phone: only a plain take away from any thread is marked, and only with the switch on', () => {
-  const on = phoneDumpTake(SWITCH), off = phoneDumpTake('');
+test('phone: only a plain take away from any thread is marked (no switch since wizard-ux issue 1778)', () => {
+  const on = phoneDumpTake(''), old = phoneDumpTake(SWITCH);
   const home = { view: null, route: { model: 'm', provider: 'p' } };
   assert.equal(on(home, null, null, 'auto'), true);
   assert.equal(on({ ...home, route: { agent: 'hermes' } }, null, null, 'auto'), true);
   assert.equal(on({ view: { kind: 'app', name: 'Music', id: 'w1' } }, null, null, 'quick'), true);
   assert.equal(on({ view: { kind: 'thread list', thread: null } }, null, null, 'auto'), true, 'the Chats list');
-  assert.equal(off(home, null, null, 'auto'), false, 'switch off: never marked');
+  assert.equal(old(home, null, null, 'auto'), true, 'an old saved switch value changes nothing');
   for (const [why, args] of [
     ['held command', [home, null, null, 'command']], ['reply take', [home, { sid: 's' }, null, 'auto']], ['desk aim', [home, null, 2, 'auto']],
     ['general button', [{ ...home, general: true }, null, null, 'auto']], ['app voice input', [{ ...home, conversation: { label: 'x' } }, null, null, 'auto']],
@@ -238,15 +231,10 @@ test('phone and desktop mark the staged take and say Got it; the list never show
   const items = [{ id: 'a', kind: 'new', sessionId: 's-dump', state: 'waiting', dump: true, createdAt: 1 }, { id: 'b', kind: 'new', sessionId: 's-took', state: 'sent', dumped: { title: 'x' }, createdAt: 1 }, { id: 'c', kind: 'new', sessionId: 's-plain', state: 'waiting', text: 'hi', createdAt: 1 }];
   sync.sync({ _items: new Map(items.map(i => [i.id, i])) });
   assert.deepEqual([...PEND.keys()], ['s-plain']);
-  const css = withShellParts(readFileSync(new URL('../web/tweaks/wizard/agent-inbox/tweak.css', import.meta.url), 'utf8'));
-  for (const rule of css.replace(/\/\*[\s\S]*?\*\//g, '').split('}').filter(r => r.includes('got-it')))
-    assert.match(rule.trim(), /^html\[data-tweaks~="wizard\/agent-inbox"\] /, 'scoped to the switch');
-  const doc = createDocument(); doc.documentElement.setAttribute('data-tweaks', SWITCH); doc.body.innerHTML = '<div id="toast" class="toast got-it"></div>';
-  assert.equal(cascade(doc.getElementById('toast'), css).background?.value.startsWith('var(--wz-panel, #17131f)'), true, 'opaque panel from the skin, dark fallback');
-  doc.documentElement.setAttribute('data-tweaks', '');
-  assert.equal(cascade(doc.getElementById('toast'), css).background, undefined, 'switch off: no got-it look');
-  const manifest = JSON.parse(withShellParts(readFileSync(new URL('../web/tweaks/wizard/agent-inbox/manifest.json', import.meta.url), 'utf8')));
-  assert.ok(manifest.issues.includes('humanitylabs-org/wizard-ux#1588'));
+  // The got-it look is core CSS since wizard-ux issue 1778 (no switch): an opaque skin panel with any or no data-tweaks.
+  const css = withShellParts(readFileSync(new URL('../web/core/chats.css', import.meta.url), 'utf8'));
+  const doc = createDocument(); doc.documentElement.setAttribute('data-tweaks', ''); doc.body.innerHTML = '<div id="toast" class="toast got-it"></div>';
+  assert.equal(cascade(doc.getElementById('toast'), css).background?.value, 'var(--wz-panel)', 'opaque panel from the skin');
 });
 
 test('desktop: the dump mark given at Send reaches a take staged before it', async t => {
