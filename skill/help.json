@@ -429,10 +429,6 @@
       "help": "App Manager uses its own Runtipi 4.12 key.",
       "where": "Settings › Appearance › Try new features › Runtipi 4.12 sign-in key"
     },
-    "wizard/github-signin": {
-      "help": "Apps › Sources gets Sign in to GitHub, so private beta apps you were invited to show under Beta.",
-      "where": "Settings › Appearance › Try new features › Sign in to GitHub in Apps"
-    },
     "wizard/local-app-routes": {
       "help": "On a box not on Tailscale yet, app screens like Files and Search open inside Wizard on the box itself.",
       "where": "Settings › Appearance › Try new features › Open apps without Tailscale"
