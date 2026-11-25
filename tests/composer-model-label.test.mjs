@@ -313,7 +313,10 @@ test('the model menu never runs past a narrow window\'s left edge (issue 1539)',
       assert.equal(cardRight, labRight - 2, 'room enough: the card stays right above the chip');
     }
   }
-  assert.match(read('web/core/chat-power.css'), /\.ch-sheet\.ch-mpop \.ch-sheet-b \{[^}]*width: min\(var\(--mpop-w, 236px\), calc\(100% - 24px\)\)/, 'the card\'s width follows placePop');
+  // The card's CSS (real chat-power.css) on the picker's markup takes placePop's width.
+  const doc = createDocument();
+  doc.body.innerHTML = '<div class="ch-sheet ch-psheet ch-mpop"><div class="ch-sheet-b"></div></div>';
+  assert.equal(cascade(doc.querySelector('.ch-sheet-b'), read('web/core/chat-power.css')).width?.value, 'min(var(--mpop-w, 236px), calc(100% - 24px))', 'the card\'s width follows placePop');
 });
 
 test('the composer scripts parse', () => {
