@@ -158,16 +158,20 @@ window.WizCore.chatsParts.spaces = function ({ chanTags, actNeeds, actUnread, in
     const sec = (k, label, n, inner, open = !!chatVars.secOpen[k], side = '') => { const h = `<button class="ch-sec-h" data-sectoggle="${k}" aria-expanded="${open}"><span>${label}</span>${n ? `<small>${n}</small>` : ''}<i aria-hidden="true"></i></button>`;
       return `<section class="ch-sec ch-act${open ? ' open' : ''}" data-sec="${k}">${side ? `<div class="ch-sec-hl">${h}${side}</div>` : h}${open ? `<div class="ch-sec-b">${inner()}</div>` : ''}</section>`; };
     // The one sort is a compact menu on Ready's header line (wizard-ux issue 1354), like the AI apps sidebar's: no pill row.
-    const sortSel = `<label class="ch-act-sort"><select data-chactorder aria-label="Sort ${keep ? 'Inbox' : 'Ready'}">${ACT_SORTS().map(([v, l]) => `<option value="${v}"${order === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label>`;
+    // With the title bar (wizard-ux issue 1836) the sort is in the filter sheet, and Ready/Inbox loses its section row when
+    // it is the list's first section; the bar shows its count.
+    const actTitled = c.tbar === 'inbox';
+    const sortSel = actTitled ? '' : `<label class="ch-act-sort"><select data-chactorder aria-label="Sort ${keep ? 'Inbox' : 'Ready'}">${ACT_SORTS().map(([v, l]) => `<option value="${v}"${order === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label>`;
     const older = g.older ? `<button class="ch-more ch-act-older" data-chactolder>Show older · ${g.older}</button>` : '';
     // Sends a graceful restart holds: their own Saved heading, only while there are any (wizard-ux issue 1362).
     const heldRow = s => !!globalThis.WizReach?.restartHeld?.(s), saved = g.working.filter(heldRow), working = g.working.filter(s => !heldRow(s));
+    if (actTitled) c.inboxN = ready.length;
     // A section shows only while it holds something (wizard-ux issue 1731): no empty headers, lines, pills or sort menu.
     // Nothing at all: one empty state with a way to start a chat; nothing but drafts: the Drafts section above says it.
     if (!working.length && !saved.length && !ready.length && !recent.length && !g.older && !snoozed.length && !g.archive.length) return drafts ? '' : actEmpty();
     return (working.length ? sec('working', 'Working', working.length, () => working.map(s => chatRow(s, null)).join('')) : '')
       + (saved.length ? sec('saved', 'Saved', saved.length, () => saved.map(s => chatRow(s, null)).join(''), chatVars.secOpen.saved !== false) : '')
-      + (ready.length ? sec('ready', keep ? 'Inbox' : 'Ready', ready.length, () => page('ready', ready), !!chatVars.secOpen.ready, sortSel) : '')
+      + (ready.length ? (actTitled && !working.length && !saved.length ? `<section class="ch-sec ch-act ch-tb-main open" data-sec="ready"><div class="ch-sec-b">${page('ready', ready)}</div></section>` : sec('ready', keep ? 'Inbox' : 'Ready', ready.length, () => page('ready', ready), !!chatVars.secOpen.ready, sortSel)) : '')
       + (recent.length || g.older ? sec('recent', 'Recent', 0, () => page('recent', recent) + older) : '')
       + (snoozed.length ? sec('snoozed', 'Snoozed', snoozed.length, () => page('snoozed', snoozed)) : '')
       + (g.archive.length ? sec('archived', 'Archived', g.archive.length, () => page('archived', g.archive.map(v => ({ id: v.id, v })))) : '');

@@ -143,11 +143,12 @@ window.WizCore.chatsParts.sent = function ({ ago, ch, CH, CHAN_VIEW_KEY, chanEls
     el.querySelector('.ch-sheet button')?.focus?.({ preventScroll: true });
     return true;
   }
-  function sentHead(w) {
+  // `titled`: the title bar (issue 1836) already says Sent, so no back row.
+  function sentHead(w, titled = false) {
     if (sentRowsOn()) return ''; // the bottom tabs are the navigation: no back row, no filter (issue 1814)
     const st = LIVE.sentLog?.state(), n = st?.ok ? sentRows(st).filter(r => r.state === 'running').length : 0, f = ch(w.id).sentFilter === 'working' ? 'working' : 'all';
     const pill = (k, label) => `<button type="button" data-chsentfilter="${k}" aria-pressed="${f === k}"${f === k ? ' class="on"' : ''}>${label}</button>`;
-    return `<div class="ch-chan-h ch-sent-h" data-morph-key="sent-head"><button type="button" class="ch-chan-back" data-chsentback aria-label="Back to Inbox"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg></button><b>Sent</b></div>`
+    return (titled ? '' : `<div class="ch-chan-h ch-sent-h" data-morph-key="sent-head"><button type="button" class="ch-chan-back" data-chsentback aria-label="Back to Inbox"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg></button><b>Sent</b></div>`)
       + `<div class="ch-chan-tabs ch-sent-filter" data-morph-key="sent-filter"><div class="ch-rdy-bar" role="group" aria-label="Show">${pill('all', 'All')}${pill('working', `Working${n ? ` <small>${n}</small>` : ''}`)}</div></div>`;
   }
   function sentBody(w) {
@@ -221,5 +222,27 @@ window.WizCore.chatsParts.sent = function ({ ago, ch, CH, CHAN_VIEW_KEY, chanEls
     if (e.target.closest('[data-rssentopen]') && chatVars.rowSheet?.sent) { const { wid, sent } = chatVars.rowSheet; closeRowSheet?.(); sentOpenRow(wid, sent); return true; }
     return false;
   }
-  return { sentBack, sentBar, sentBody, sentClick, sentHead, sentOpen, sentRowsOn, sentSheet, sentTabsOn };
+  /* The title bar (wizard-ux issue 1836, switch wizard/chats-title-bar, off by default; James, 25 Nov 2026: "Also remove
+   * these, collapse into bar above, change \"all chats\" to Inbox"). With it on, the list's own header (.ch-top, the one
+   * every shell draws: phone, the Classic desktop panel, a full Chats window) is a title bar naming the bottom tab,
+   * Inbox (with its count pill), Tags or Sent, then the search and filter icons; the search field opens under it only
+   * while searching or filtering. Inbox's own section row (fold + sort) goes: the sort is in the filter sheet. */
+  const TB_SWITCH = 'wizard/chats-title-bar', TB_TITLE = { inbox: 'Inbox', tags: 'Tags', sent: 'Sent' };
+  // The tab this list's title bar names, or '' (switch off, or not the main agent's tabbed list).
+  function titleBarTab(w) {
+    try { if (!(document.documentElement.dataset.tweaks || '').split(' ').includes(TB_SWITCH)) return ''; } catch (_) { return ''; }
+    return sentTabsOn(w) && !(typeof chanSide === 'function' && chanSide(w)) ? sentTab(w) : '';
+  }
+  const TB_FIND_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>';
+  const TB_FILT_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M7 12h10M10 18h4"/></svg>';
+  // `n` the Inbox count (its pill), `tools` false on Sent (its log has no search), `searching` the field is open,
+  // `filtered` a filter is set, `sheet` the filter sheet is open.
+  function titleBar(tab, { n = 0, tools = true, searching = false, filtered = false, sheet = false } = {}) {
+    const t = TB_TITLE[tab] || 'Inbox';
+    return `<div class="ch-top ch-tbar" data-morph-key="tbar"><h2 class="ch-tbar-t"><span>${t}</span>${tab === 'inbox' && n ? `<small class="ch-tbar-n" aria-label="${n} in ${t}">${n}</small>` : ''}</h2>`
+      + (tools ? `<button type="button" class="ch-tbar-b${searching ? ' on' : ''}" data-chtbsearch aria-label="Search chats" aria-pressed="${searching}">${TB_FIND_SVG}</button>`
+        + `<button type="button" class="ch-tbar-b ch-fbtn${filtered ? ' on' : ''}" data-chfbtn aria-label="Filter and sort" aria-expanded="${sheet ? 'true' : 'false'}">${TB_FILT_SVG}</button>` : '')
+      + '</div>';
+  }
+  return { sentBack, sentBar, sentBody, sentClick, sentHead, sentOpen, sentRowsOn, sentSheet, sentTabsOn, titleBar, titleBarTab };
 };

@@ -161,6 +161,10 @@ window.WizCore.chatsParts.bind = function ({ activityClick, actSetOrder, AGS, al
       else setFocus(w, kind === 'agent' ? rememberedFocus(w, key) : { kind, key });
       return true;
     }
+    // The title bar's search icon and the filter sheet's sort (wizard-ux issue 1836, switch wizard/chats-title-bar).
+    if (e.target.closest('[data-chtbsearch]')) { const c = ch(id), open = !(c.tsearch || c.q || c.focus); c.tsearch = open; c.sheet = false;
+      if (!open) { c.q = ''; c.focus = false; window.WizCore.chatSearch?.cancel(id); } renderChatList(w, elOf(id)); if (open) elOf(id)?.querySelector('[data-chsearch]')?.focus(); return true; }
+    const fso = e.target.closest('[data-chfsort]'); if (fso) { ch(id).sheet = false; if (typeof actSetOrder === 'function') actSetOrder(fso.dataset.chfsort); rerenderList(w); return true; }
     if (e.target.closest('[data-chfbtn]')) { const c = ch(id); c.sheet = c.sheet === 'status' ? false : 'status'; c.focus = false; rerenderList(w); return true; }
     if (e.target.closest('[data-chfclear]')) { const c = ch(id); c.sheet = false; c.coach = false; clearAll(w); return true; }
     if (e.target.closest('[data-chpins]')) { const on = !pinsOn(); try { localStorage.setItem(PINS_KEY, on ? '1' : '0'); } catch (err) {} paintPins(); for (const x of Object.keys(CH)) { const ww = W[x]; if (ww) renderChats(ww); } return; }
@@ -286,7 +290,7 @@ window.WizCore.chatsParts.bind = function ({ activityClick, actSetOrder, AGS, al
       if (!e.target.matches('[data-chsearch]')) return;
       const id = idOf(e.target), c = ch(id);
       // A tap on a suggestion blurs the field first: let the tap land, then hide the empty-field suggestions.
-      setTimeout(() => { const el = elOf(id), inp = el?.querySelector('[data-chsearch]'); if (!c.focus || (inp && document.activeElement === inp)) return; c.focus = false; if (!c.q && el?.querySelector('.ch-sug')) renderChatList(H.win(id), el); }, 260);
+      setTimeout(() => { const el = elOf(id), inp = el?.querySelector('[data-chsearch]'); if (!c.focus || (inp && document.activeElement === inp)) return; c.focus = false; if (!c.q && c.tsearch) c.tsearch = false; if (!c.q && el?.querySelector('.ch-sug, .ch-tbar-find')) renderChatList(H.win(id), el); }, 260);
     });
     root.addEventListener('input', e => {
       if (e.target.matches('[data-incog-field]')) { INC?.input(idOf(e.target), e.target); return; }

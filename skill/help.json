@@ -470,6 +470,10 @@
       "help": "Sent uses Inbox's rows.",
       "where": "Settings › Appearance › Try new features › Sent: the same rows as Inbox"
     },
+    "wizard/chats-title-bar": {
+      "help": "Chats' title bar names the tab.",
+      "where": "Settings › Appearance › Try new features › Chats: title bar names the tab"
+    },
     "wizard/capture-inbox": {
       "help": "Agent files your Files Inbox drops.",
       "where": "Settings › Appearance › Try new features › Capture inbox"
