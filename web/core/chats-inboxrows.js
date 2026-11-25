@@ -1,7 +1,7 @@
 /* Wizard UX core: Chats › Inbox rows (wizard-ux issue 1779, switch wizard/inbox-rows, off by default). With it on,
  * the Inbox tab holds only what needs the owner, drawn as Signal / Telegram chat rows: a round avatar (the first tag's
  * emoji, else the agent's icon), the sender line (the first tag, else the agent's name) with the time, the title with
-  * the unread / needs-you mark (no working mark: a run he started is in Sent, issue 1829), and one line of the latest agent message. Each row keeps an Archive button;
+ * the unread / needs-you mark (no working mark: a run he started is in Sent, issue 1829), and one line of the latest agent message. Each row keeps an Archive button;
  * rows stay until archived (nothing drops into Recent). Today's Daily and anything tagged #priority or said urgent are
  * pinned on top. The box's background tasks that wait on him or failed (agent inbox records, kind needs_you) are rows
  * too: their hidden worker thread opens by id, Archive archives the record. Who belongs here is one pure rule in the
