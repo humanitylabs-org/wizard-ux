@@ -130,7 +130,7 @@ window.WizCore.chatsParts.spaces = function ({ actNeeds, actUnread, inboxRowsBod
   const { anchorListPlace, holdListPlace, LIST_PLACE_KEY, LIST_PLACE_TTL, listPlace, restoreListPlace } = window.WizCore.chatsParts.places({ ch, elOf: (...a) => elOf(...a) });
   const listSig = w => { const f = focusOf(w), cv = chanOpen(w)?.id || chatVars.chanView; return [winAgent(w), f ? f.kind + ':' + f.key : '', ch(w.id).filter || '', norm(ch(w.id).q)].concat(cv ? [cv] : [], ch(w.id).running && typeof runningOpen === 'function' && runningOpen(w) ? ['running'] : []).join('|'); };
   /* Stored list places and Activity's Ready counts; core/chats-ready.js. */
-  const { ACT_SORTS, inboxKeep, listSaveT, queueListPlace, storedListPlace } = window.WizCore.chatsParts.ready({ actNeeds, actUnread, CH, chanAt, elOf: (...a) => elOf(...a), H, LIST_PLACE_KEY, LIST_PLACE_TTL, listPlace, listSig, LIVE, W });
+  const { ACT_SORTS, inboxKeep, inboxPlace, listSaveT, queueListPlace, storedListPlace } = window.WizCore.chatsParts.ready({ actNeeds, actUnread, CH, chanAt, elOf: (...a) => elOf(...a), H, LIST_PLACE_KEY, LIST_PLACE_TTL, listPlace, listSig, LIVE, W });
   let actOlder = false;
   // Activity with nothing in it (a fresh box): one deliberate empty state, never a stack of empty sections (issue 1731).
   const actEmpty = () => '<div class="ch-empty ch-act-empty"><b>No chats yet</b><span>Tap + to start one, or tap the orb and talk.</span><button type="button" class="ch-fclear" data-chnew data-chemptynew>New chat</button></div>';
@@ -139,7 +139,8 @@ window.WizCore.chatsParts.spaces = function ({ actNeeds, actUnread, inboxRowsBod
     if (typeof inboxRowsOn === 'function' && inboxRowsOn(w)) return inboxRowsBody(w, rows, nt, drafts);
     const M = window.WizChatsListModel, c = ch(w.id), order = M.activitySortOf(chatVars.readyOrder);
     const keep = typeof inboxKeep === 'function' && inboxKeep(); // Inbox until archived (wizard-ux issue 1810)
-    const g = M.activityGroups(LIVE.workGroups(rows), { needs: actNeeds, unread: actUnread, at: chanAt }, { order, now: Date.now(), older: actOlder, keep });
+    const g = M.activityGroups(LIVE.workGroups(rows), { needs: actNeeds, unread: actUnread, at: chanAt }, { order, now: Date.now(), older: actOlder, keep, place: keep && typeof inboxPlace === 'function' ? inboxPlace() : null });
+    // (Inbox or Sent, wizard-ux issue 1829: with keep on a thread is in Inbox or in Sent, never both; no Working section.)
     // Alerts set to Chats: the unread ones wait in Ready with the chats (an urgent one counts as Needs you), read ones in Recent.
     const pick = (list, notes) => list.map(v => ({ id: v.id, v })).concat((notes || []).map(v => ({ id: 'notif:' + v.id, v, n: true })));
     const at = x => x.n ? noteAt(x.v) : chanAt(x.v), needs = x => x.n ? M.notificationRow(x.v).rank === 1 : actNeeds(x.v);

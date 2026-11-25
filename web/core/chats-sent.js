@@ -61,8 +61,15 @@ window.WizCore.chatsParts.sent = function ({ ago, ch, CH, CHAN_VIEW_KEY, chanEls
       // A reply stays in the thread it was typed in: nothing to move, so no correction.
       + (r.route === 'thread' ? '' : `<div class="ch-sent-fix" role="group" aria-label="Correct the routing"><button type="button" data-chsentfix="reply" data-id="${esc(r.id)}" aria-pressed="${fixed === 'reply'}"${busy ? ' disabled' : ''}>Should have replied</button><button type="button" data-chsentfix="quiet" data-id="${esc(r.id)}" aria-pressed="${fixed === 'quiet'}"${busy ? ' disabled' : ''}>Didn’t need a reply</button></div>`) + '</div>';
   }
+  /* Inbox or Sent (wizard-ux issue 1829; James, 25 Nov 2026: "Things should be in one or the other"): while Inbox keeps
+   * threads (inbox-until-archived or Inbox rows), a send whose thread is in Inbox (it needs him, or he asked and it
+   * answered) is not listed here; the Inbox list decides (list model placeOf), so the two never both show a thread. */
+  function sentRows(st) {
+    const ids = window.WizCore?.inboxIds?.(LIVE), M = window.WizChatsListModel;
+    return ids && M?.sentShown ? M.sentShown(st.rows, ids) : st.rows;
+  }
   function sentHead(w) {
-    const st = LIVE.sentLog?.state(), n = st?.ok ? st.rows.filter(r => r.state === 'running').length : 0, f = ch(w.id).sentFilter === 'working' ? 'working' : 'all';
+    const st = LIVE.sentLog?.state(), n = st?.ok ? sentRows(st).filter(r => r.state === 'running').length : 0, f = ch(w.id).sentFilter === 'working' ? 'working' : 'all';
     const pill = (k, label) => `<button type="button" data-chsentfilter="${k}" aria-pressed="${f === k}"${f === k ? ' class="on"' : ''}>${label}</button>`;
     return `<div class="ch-chan-h ch-sent-h" data-morph-key="sent-head"><button type="button" class="ch-chan-back" data-chsentback aria-label="Back to Inbox"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg></button><b>Sent</b></div>`
       + `<div class="ch-chan-tabs ch-sent-filter" data-morph-key="sent-filter"><div class="ch-rdy-bar" role="group" aria-label="Show">${pill('all', 'All')}${pill('working', `Working${n ? ` <small>${n}</small>` : ''}`)}</div></div>`;
@@ -71,7 +78,8 @@ window.WizCore.chatsParts.sent = function ({ ago, ch, CH, CHAN_VIEW_KEY, chanEls
     const st = LIVE.sentLog?.state(), working = ch(w.id).sentFilter === 'working';
     if (!st?.ok) return '<div class="ch-empty">Checking what you sent…</div>';
     if (st.gone) return '<div class="ch-empty">Your Wizard keeps no Sent log yet.</div>';
-    const rows = working ? st.rows.filter(r => r.state === 'running') : st.rows;
+    const all = sentRows(st), rows = working ? all.filter(r => r.state === 'running') : all;
+    if (!rows.length && !working && st.rows.length) return '<div class="ch-empty">Nothing here now. What you sent that needs you is in Inbox.</div>';
     if (!rows.length) return `<div class="ch-empty">${working ? 'Nothing is running.' : 'Nothing sent yet. What you say to the orb, start in a new chat or reply in a thread shows here.'}</div>`;
     return `<section class="ch-sec open ch-sent" data-sec="sent"><div class="ch-sec-b">${rows.map(sentRow).join('')}</div></section>${st.next && !working ? '<button type="button" class="ch-more" data-chsentmore>Show older</button>' : ''}`;
   }

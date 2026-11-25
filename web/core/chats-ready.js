@@ -39,7 +39,24 @@ window.WizCore.chatsParts.ready = function ({ actNeeds, actUnread, CH, chanAt, e
     const rows = (L.sessionsFor ? L.sessionsFor('') : L.unified()).filter(s => !s.hidden);
     // Inbox rows (wizard-ux issue 1779, switch wizard/inbox-rows): the Inbox's own rule, plus the waiting background tasks.
     const ib = window.WizCore.inboxRowsFacts?.() || null;
-    return M.activityGroups(L.workGroups(rows), { needs: actNeeds, unread: actUnread, at: chanAt }, { keep: inboxKeep(), inbox: ib }).ready;
+    return M.activityGroups(L.workGroups(rows), { needs: actNeeds, unread: actUnread, at: chanAt }, { keep: inboxKeep(), inbox: ib, place: inboxPlace(L) }).ready;
+  }
+  /* Inbox or Sent (wizard-ux issue 1829): while Inbox keeps threads (inboxKeep), the list model's placeOf decides where
+   * each thread is from the box's Sent log (which thread he sent into, how that ended), the quiet-reply mark and the
+   * graceful-restart hold. Null with both switches off: the lists are today's. */
+  function inboxPlace(live) {
+    const L = live || LIVE, M = window.WizChatsListModel;
+    if (!inboxKeep() || !M?.sentIndex) return null;
+    const st = L?.sentLog?.state?.();
+    return { sent: M.sentIndex(st?.ok ? st.rows : []), quiet: s => !!L?.quietReply?.(s), held: s => !!globalThis.WizReach?.restartHeld?.(s) };
+  }
+  /* What the Inbox shows right now: its thread ids plus, with Inbox rows, the waiting background tasks (thread and record
+   * ids). The Sent tab leaves those out (WizChatsListModel.sentShown), so the two lists can't disagree. Null when off. */
+  function inboxIds(live) {
+    const L = live || LIVE; if (!inboxKeep()) return null;
+    const out = new Set((activityReadyRows(L) || []).map(s => s.id));
+    if (window.WizCore.inboxRowsFacts?.()) for (const r of L?.agentInbox?.needs?.('hermes') || []) { if (r?.id) out.add(r.id); if (r?.thread) out.add(r.thread); }
+    return out;
   }
   // The waiting background tasks the Inbox shows as rows of their own (issue 1779): they count as well.
   function inboxExtra(live) {
@@ -58,6 +75,18 @@ window.WizCore.chatsParts.ready = function ({ actNeeds, actUnread, CH, chanAt, e
   // Inbox rows (wizard-ux issue 1779) keep every Inbox row until it is archived too, so the shells read it as Inbox.
   function inboxKeep() { try { const t = document.documentElement.dataset.tweaks, M = window.WizChatsListModel; return !!(M?.inboxKeep?.(t) || M?.inboxRowsOn?.(t)); } catch (_) { return false; } }
   window.WizCore.inboxKeep = inboxKeep;
+  window.WizCore.inboxPlace = inboxPlace;
+  window.WizCore.inboxIds = inboxIds;
+  // A thread can move between Inbox and Sent with no session change (the Sent log landing, a send's outcome): layouts
+  // that draw their own Inbox (the AI apps sidebar re-reads on a Chats paint) are told once whenever Inbox's ids change.
+  let placeSig = '';
+  try {
+    LIVE?.onChange?.(() => {
+      const ids = inboxIds(), sig = ids ? [...ids].sort().join('\n') : '';
+      if (sig === placeSig) return; const had = placeSig; placeSig = sig;
+      if (had || sig) window.WosSkinHost?.rendered?.('list', null);
+    });
+  } catch (_) {}
   window.WizCore.activityReady = activityReady;
   window.WizCore.activityHome = activityHome;
   /* Activity with Channels on (wizard-ux issue 1336; James, 12 Nov 2026: "I'm not really going to archive threads
@@ -66,5 +95,5 @@ window.WizCore.chatsParts.ready = function ({ actNeeds, actUnread, CH, chanAt, e
    * week back, then Show older within the live window; Snoozed and Archived fold at the very bottom. The one sort menu
    * sits on Ready (Newest first, Oldest first, Needs you first), stored as Chats' own Ready order. */
   const ACT_SORTS = () => window.WizChatsListModel.ACTIVITY_SORTS;
-  return { ACT_SORTS, inboxKeep, listSaveT, queueListPlace, storedListPlace };
+  return { ACT_SORTS, inboxKeep, inboxPlace, listSaveT, queueListPlace, storedListPlace };
 };

@@ -1,7 +1,7 @@
 /* Wizard UX core: Chats › Inbox rows (wizard-ux issue 1779, switch wizard/inbox-rows, off by default). With it on,
  * the Inbox tab holds only what needs the owner, drawn as Signal / Telegram chat rows: a round avatar (the first tag's
  * emoji, else the agent's icon), the sender line (the first tag, else the agent's name) with the time, the title with
- * the unread / needs-you / working mark, and one line of the latest agent message. Each row keeps an Archive button;
+  * the unread / needs-you mark (no working mark: a run he started is in Sent, issue 1829), and one line of the latest agent message. Each row keeps an Archive button;
  * rows stay until archived (nothing drops into Recent). Today's Daily and anything tagged #priority or said urgent are
  * pinned on top. The box's background tasks that wait on him or failed (agent inbox records, kind needs_you) are rows
  * too: their hidden worker thread opens by id, Archive archives the record. Who belongs here is one pure rule in the
@@ -54,7 +54,6 @@ window.WizCore.chatsParts.inboxrows = function ({ actMark, actNeeds, actUnread, 
   }
   // One line of the latest agent message: the ask while it waits on him, the failure, else the newest agent words.
   function ibLine(s) {
-    if (isWorking(s)) return 'Working…';
     const a = attOf(s);
     if (a && ['needs_you', 'check'].includes(a.state) && a.ask) return a.ask;
     if (['failed', 'interrupted'].includes(s.status)) return window.WosModels?.runError?.(s)?.line || 'Didn’t finish · open it to retry';
@@ -63,7 +62,8 @@ window.WizCore.chatsParts.inboxrows = function ({ actMark, actNeeds, actUnread, 
   const IB_ARCH_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16v3H4zM6 10v9h12v-9M10 14h4"/></svg>';
   const IB_PIN_MARK = '<span class="ch-ib-pin" aria-label="Pinned">📌</span>';
   function ibThreadRow(s, pin) {
-    const m = actMark(s), f = ibFace(s), unread = m === 'new';
+    // No working mark in Inbox (wizard-ux issue 1829): a run he started is in Sent › Working, not here.
+    const m0 = actMark(s), m = m0 === 'working' ? (actNeeds(s) ? 'needs' : actUnread(s) ? 'new' : '') : m0, f = ibFace(s), unread = m === 'new';
     return `<div class="ch-row-wrap ch-ib-wrap${pin ? ' pinned' : ''}" data-morph-key="row:${esc(s.id)}"><button type="button" data-part="thread-row" class="ch-row ch-ib-row${unread ? ' unread' : ''}${m === 'needs' ? ' needs' : ''}" data-chopen="${esc(s.id)}" aria-haspopup="dialog" aria-keyshortcuts="Shift+F10" title="Open thread · hold or open the context menu for actions">${f.av}`
       + `<span class="ch-ib-bd"><span class="ch-ib-l1"><span class="ch-ib-from">${pin ? IB_PIN_MARK : ''}${esc(f.from)}</span><time>${esc(ago(LIVE.cardAt(s)))}</time></span>`
       + `<span class="ch-ib-l2"><b class="ch-ib-t">${esc(s.title || 'New chat')}</b>${ibMark(m)}</span><span class="ch-ib-pv">${esc(clip(ibLine(s), 160))}</span></span></button>`
@@ -79,7 +79,7 @@ window.WizCore.chatsParts.inboxrows = function ({ actMark, actNeeds, actUnread, 
    * then Snoozed and Archived folded at the bottom as before. Working threads that never got an answer are in Sent. */
   function inboxRowsBody(w, rows, nt, drafts = 0) {
     const L = ibModel(), c = ch(w.id), order = L.activitySortOf(chatVars.readyOrder), fx = ibFacts();
-    const g = L.activityGroups(LIVE.workGroups(rows), { needs: actNeeds, unread: actUnread, at: chanAt }, { order, now: Date.now(), inbox: fx });
+    const g = L.activityGroups(LIVE.workGroups(rows), { needs: actNeeds, unread: actUnread, at: chanAt }, { order, now: Date.now(), inbox: fx, place: window.WizCore.inboxPlace?.() || null });
     const items = g.ready.map(s => ({ id: s.id, s, at: chanAt(s), needs: actNeeds(s), pin: fx.pin(s) }))
       .concat(ibRecs(w, rows).map(r => ({ id: 'ibrec:' + r.id, r, at: r.updatedAt, needs: true, pin: 0 })))
       .concat((nt?.awake || []).map(v => ({ id: 'notif:' + v.id, n: v, at: noteAt(v), needs: L.notificationRow(v).rank === 1, pin: 0 })));
