@@ -9,7 +9,7 @@
 'use strict';
 window.WizCore = window.WizCore || {};
 window.WizCore.skinHostParts = window.WizCore.skinHostParts || {};
-window.WizCore.skinHostParts.api = function ({ backClaims, builtins, claims, clock, disabled, env, ERR_LIMIT, ERR_WINDOW, EVENTS, isDoc, layoutDiagnostic, levels, loadOrb, personalFailed, skinHostVars, taps }) {
+window.WizCore.skinHostParts.api = function ({ backClaims, builtins, claims, clock, disabled, env, ERR_LIMIT, ERR_WINDOW, EVENTS, isDoc, layoutDiagnostic, levels, loadOrb, skinHostVars, taps }) {
   let layers, layoutUrl, paintTweaks, routeOf, tweaks; // late-bound: skin-host.js declares these after the call, see bindLate
   function fault(a, where, e) {
     if (!a || a.dead) return;
@@ -24,7 +24,6 @@ window.WizCore.skinHostParts.api = function ({ backClaims, builtins, claims, clo
     if (a.errs.length >= ERR_LIMIT) {
       const wasTweak = tweaks.has(a.id); disabled.add(a.id); dispose(a, 'error', e, where); if (wasTweak) { paintTweaks(); window.dispatchEvent?.(new Event('wos:experience')); }
       try { skinHostVars.shell && skinHostVars.shell.toast(`${a.label || nameOf(a.id)} gestures turned off after an error`); } catch (_) {}
-      if (a.id === 'my-skin') personalFailed(a.label, e, false); // the toast above already named the file
     }
   }
   const nameOf = id => ((typeof window !== 'undefined' && window.WosSkin?.list?.find(s => s.id === id)) || {}).name || id;
@@ -178,7 +177,6 @@ window.WizCore.skinHostParts.api = function ({ backClaims, builtins, claims, clo
     if (!a) return;
     layoutDiagnostic(a.id, reason, where, error);
     if (skinHostVars.active === a) skinHostVars.active = null;
-    if (skinHostVars.personal === a) skinHostVars.personal = null;
     if (builtins.get(a.id) === a) builtins.delete(a.id);
     if (tweaks.get(a.id) === a) tweaks.delete(a.id);
     a.dead = true;

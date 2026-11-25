@@ -9,12 +9,10 @@
 'use strict';
 window.WizCore = window.WizCore || {};
 window.WizCore.skinHostParts = window.WizCore.skinHostParts || {};
-window.WizCore.skinHostParts.host = function ({ backClaims, BOOT_GUESS_MS, bootGiveUp, booting, builtinDefs, builtins, chatArchiveOrders, chatListOwners, chatsClaimed, claims, clock, commandUis, cssLinks, disabled, dispose, emit, emitBeside, emitRoute, emptyHomes, ensureCss, env, escapeSurfaces, EXPECT_KEY, expected, homeHtml, inboxThreads, interceptors, isDoc, keyGuides, keyHandlers, layers, LAYOUT_KEY, layoutOf, LAYOUTS, levels, load, loadLayout, loadPersonal, loadTweaks, LOOK_ONLY, NOTE_ID, openRoutes, orbSwipeHolders, orbTaps, overlays, paintLayout, paintTweaks, panelHolders, preCss, release, REPLY_LENGTHS, replySummary, requested, safeTweakId, scriptProblem, setLayout, skinHostVars, snoozeLast, startBoot, startBuiltin, taps, tweakCss, tweaks, unload }) {
+window.WizCore.skinHostParts.host = function ({ backClaims, BOOT_GUESS_MS, bootGiveUp, booting, builtinDefs, builtins, chatArchiveOrders, chatListOwners, chatsClaimed, claims, clock, commandUis, cssLinks, disabled, dispose, emit, emitBeside, emitRoute, emptyHomes, ensureCss, env, escapeSurfaces, EXPECT_KEY, expected, homeHtml, inboxThreads, interceptors, isDoc, keyGuides, keyHandlers, layers, LAYOUT_KEY, layoutOf, LAYOUTS, levels, load, loadLayout, loadTweaks, NOTE_ID, openRoutes, orbSwipeHolders, orbTaps, overlays, paintLayout, paintTweaks, panelHolders, preCss, release, REPLY_LENGTHS, replySummary, requested, safeTweakId, scriptProblem, setLayout, skinHostVars, snoozeLast, startBoot, startBuiltin, taps, tweakCss, tweaks, unload }) {
 
   const host = {
     loadTweaks, emit,
-    /* my-skin.js / settings.js: true while wizard/skins-look-only keeps skin scripts from running. */
-    get lookOnly() { return skinHostVars.lookOnly; },
     get tweakState() { return [...tweaks.keys()]; },
     /* live.js / chats.js: 'last' while a live tweak holds api.nav.snoozeOrder('last'); otherwise 'default' (stock). */
     get snoozeOrder() { return snoozeLast.size ? 'last' : 'default'; },
@@ -28,9 +26,9 @@ window.WizCore.skinHostParts.host = function ({ backClaims, BOOT_GUESS_MS, bootG
     /* core/skins.js: picker landed near a skin (preview or commit). Stylesheet only. */
     preview(id) { ensureCss(id); },
     /* core/skins.js: the owner picked a skin. Stylesheet plus (if any) its script. */
-    commit(id) { ensureCss(id); skinHostVars.committedId = id; if (skinHostVars.shell) skinHostVars.packageReady = load(id); },
+    commit(id) { ensureCss(id); skinHostVars.committedId = id; if (skinHostVars.shell) load(id); },
     /* app.js: the shell is ready; hands over the narrow adapter skins are allowed to drive. */
-    attach(adapter) { skinHostVars.shell = adapter; for (const n of builtinDefs.keys()) startBuiltin(n); const id = skinHostVars.committedId || (window.WosSkin && window.WosSkin.current); skinHostVars.committedId = id; if (id) skinHostVars.packageReady = load(id); window.WosMySkin?.startScript(); if (layoutOf(skinHostVars.layoutId)) loadLayout(skinHostVars.layoutId); if (booting()) bootGiveUp(skinHostVars.layoutId); window.dispatchEvent?.(new Event('wos:skin-host-ready')); },
+    attach(adapter) { skinHostVars.shell = adapter; for (const n of builtinDefs.keys()) startBuiltin(n); const id = skinHostVars.committedId || (window.WosSkin && window.WosSkin.current); skinHostVars.committedId = id; if (id) load(id); if (layoutOf(skinHostVars.layoutId)) loadLayout(skinHostVars.layoutId); if (booting()) bootGiveUp(skinHostVars.layoutId); window.dispatchEvent?.(new Event('wos:skin-host-ready')); },
     /* Layouts: Settings › Look. Classic loads nothing. */
     layouts: LAYOUTS, setLayout,
     escapeSurface() { for (const h of [...escapeSurfaces].reverse()) if (!h.a.dead && h.back() === true) return true; return false; },
@@ -87,12 +85,12 @@ window.WizCore.skinHostParts.host = function ({ backClaims, BOOT_GUESS_MS, bootG
     level(v) { if (levels.size) for (const fn of [...levels]) fn(v); },
     /* app.js: the orb's voice state changed. */
     voice(state) { if (layers().length) emit('voice', Object.freeze({ ...(skinHostVars.shell?.voiceState ? skinHostVars.shell.voiceState() : { state }) })); },
-    loadPersonal, scriptProblem,
+    scriptProblem,
     /* core/*.js: a gesture every skin wears. `when: 'touch'` skips desktop pointers. */
     builtin(name, setup, { when = 'touch', label = name, capabilities } = {}) { if (typeof setup !== 'function' || builtinDefs.has(name)) return false; builtinDefs.set(name, { setup, when, label, capabilities }); return startBuiltin(name) || !skinHostVars.shell; },
     get builtinState() { return [...builtins.keys()]; },
-    stopPersonal() { skinHostVars.personalSeq++; dispose(skinHostVars.personal, 'off'); },
-    get personalState() { return { ready: !!skinHostVars.shell, active: !!skinHostVars.personal, disabled: disabled.has('my-skin'), error: skinHostVars.personalError ? { ...skinHostVars.personalError } : null, listeners: skinHostVars.personal?.offs.size || 0, handlers: skinHostVars.personal ? skinHostVars.personal.on.route.size + skinHostVars.personal.on.render.size : 0 }; },
+    /* core/experience.js: the shell is attached (no own-skin script runs: skins are look only, wizard-ux#1190). */
+    get personalState() { return { ready: !!skinHostVars.shell }; },
     /* app.js backStep / desktop.js escStep: close the newest package overlay. True when one closed. */
     back() { const e = overlays.pop(); if (!e) return false; e.close(); return true; },
     /* app.js / desktop.js: repaint a Home. Nodes a tweak mounted at the home-main slot move to the new markup
@@ -144,7 +142,7 @@ window.WizCore.skinHostParts.host = function ({ backClaims, BOOT_GUESS_MS, bootG
     const id = window.WosSkin && window.WosSkin.current;
     if (id) { ensureCss(id); skinHostVars.committedId = id; }
     // The tweaks this device wore last time: listed and styled from the first frame (loadTweaks settles the real list).
-    try { const last = JSON.parse(localStorage.getItem(EXPECT_KEY) || '[]'); if (isDoc && Array.isArray(last)) { for (const t of last.filter(x => typeof x === 'string' && safeTweakId(x)).slice(0, 40)) { expected.add(t); tweakCss(t); } if (expected.size) paintTweaks(); skinHostVars.lookOnly = expected.has(LOOK_ONLY); } } catch (_) {}
+    try { const last = JSON.parse(localStorage.getItem(EXPECT_KEY) || '[]'); if (isDoc && Array.isArray(last)) { for (const t of last.filter(x => typeof x === 'string' && safeTweakId(x)).slice(0, 40)) { expected.add(t); tweakCss(t); } if (expected.size) paintTweaks(); } } catch (_) {}
     // If the catalog or profile never loads, drop the guessed packages (and their styles) instead of hiding Home for good.
     if (expected.size) setTimeout(() => { if (skinHostVars.tweaksAsked) return; for (const t of [...expected]) { expected.delete(t); const l = preCss.get(t); if (l) { l.remove(); preCss.delete(t); } } paintTweaks(); }, BOOT_GUESS_MS);
     // ?layout=<id> only tries layouts supported by this shell. An unsupported link is ignored,

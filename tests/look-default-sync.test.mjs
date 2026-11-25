@@ -106,10 +106,12 @@ test('real experience emits built-in choice and adopts it without echoing or cha
   assert.deepEqual(clone(E.views), { desktop: 'miguel/ai-apps', phone: '' });
   assert.ok(active.includes('wizard/unified-inbox')); assert.ok(!active.includes('evil/script'));
   assert.equal(events.length, 1); assert.equal(W.WosSkin.current, 'nebula'); assert.equal(storage.get('wos.myskin.js.ok'), 'qa-local-approval');
-  W.WosMySkin = { active: { id: 'qa-owned', base: 'nebula', tweaks: { 'wizard/unified-inbox': false } } };
-  assert.deepEqual(clone(E.defaultChoices), {}, 'owned recipe preferences remain with their existing owner');
-  await E.adopt({}, undefined, { 'wizard/unified-inbox': true });
-  assert.equal(W.WosMySkin.active.tweaks['wizard/unified-inbox'], false, 'no own-skin customization or write');
+  // Skins are a look only (wizard-ux#1190): a worn own skin no longer holds the shared defaults back, and is never written.
+  W.WosMySkin = { active: { id: 'qa-owned', base: 'nebula', tweaks: {} } };
+  await E.adopt({}, undefined, { 'wizard/unified-inbox': false });
+  assert.equal(clone(E.defaultChoices)['wizard/unified-inbox'], false, 'the shared default is taken with an own skin worn');
+  assert.equal(events.length, 1, 'adopting echoes nothing');
+  assert.deepEqual(clone(W.WosMySkin.active.tweaks), {}, 'no own-skin customization or write');
 });
 
 const DEFAULT = 'wizard/unified-inbox';

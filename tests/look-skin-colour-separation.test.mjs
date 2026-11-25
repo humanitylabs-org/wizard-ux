@@ -1,4 +1,6 @@
-// James, 31 Oct and 1 Nov 2026; #801/#803: keep Skin and Color separate, never flatten colors into skins.
+// Settings › Look (wizard-ux issue 1190, on for everyone since James's yes on 25 Nov 2026): skins are a look only, so
+// Look is one list of looks (every colour, your own skins, + New skin), the worn colour's Background, and Views.
+// Own skins, New skin and skin import stay, as looks; a new skin saves no feature choices.
 // Exercise the real Settings renderer and dispatch, not a parallel picker or a source-only label check.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -8,7 +10,7 @@ import { withSettingsParts } from './fixtures/settings-parts.mjs'; // settings.j
 const source = withSettingsParts(fs.readFileSync(new URL('../web/core/settings.js', import.meta.url), 'utf8'));
 
 function look(shell, ownSkins = false) {
-  const picked = [], familyPicked = [], last = { wizard: 'grove', mizel: 'obsidian-light' };
+  const picked = [], last = { wizard: 'grove', mizel: 'obsidian-light' };
   const S = {
     current: 'nebula',
     list: ['nebula', 'grove', 'obsidian', 'obsidian-light'].map(id => ({ id, name: id, t: {} })),
@@ -16,13 +18,13 @@ function look(shell, ownSkins = false) {
     familyOf: id => id.startsWith('obsidian') ? 'mizel' : 'wizard',
     lastIn: id => last[id],
     set(id) { picked.push(id); this.current = id; last[this.familyOf(id)] = id; },
-    setFamily(id) { familyPicked.push(id); this.set(last[id]); },
+    setFamily(id) { this.set(last[id]); },
   };
   const s = { console, URL, setTimeout, CSS: { escape: String }, navigator: { userAgent: 'Desktop' },
     document: { activeElement: null }, location: { host: 'example.test' }, WizCore: {}, WosSkin: S };
   if (ownSkins) {
     s.WosMySkin = { recipes: [], active: null, on() {}, create(draft) { this.created = JSON.parse(JSON.stringify(draft)); } };
-    s.WosExperience = { installedReady: true, installed: async () => [{ id: 'sample', name: 'Sample tweak' }], defaults: async () => ({ sample: true }), state: { tweaks: [{ id: 'sample', on: true, builtin: true }] } };   // built in: the New skin draft lists built-ins and views, not feature switches
+    s.WosExperience = { installedReady: true, installed: async () => [{ id: 'sample', name: 'Sample tweak' }], defaults: async () => ({ sample: true }), state: { tweaks: [{ id: 'sample', on: true, builtin: true }] } };
   }
   s.window = s;
   vm.runInNewContext(source, s);
@@ -35,106 +37,110 @@ function look(shell, ownSkins = false) {
     ? { dataset: { settingsFeature: 'look' } }
     : selector === `[${attr}]` ? { dataset: { [attr.slice(5).replace(/-([a-z])/g, (_, c) => c.toUpperCase())]: value } } : null });
   const input = (attr, value) => handlers.input({ target: { value, matches: selector => selector === `[${attr}]`, closest: () => ({ dataset: { settingsFeature: 'look' } }) } });
-  return { S, root, view, act, input, s, picked, familyPicked };
+  return { S, root, view, act, input, s, picked };
 }
+const ticks = async (n = 5) => { for (let i = 0; i < n; i++) await Promise.resolve(); };
 
-// owner-correction: humanitylabs-org/wizard-ux#803 · 2026-11-01 · "we don’t want to flatten the colors into the skins."
-for (const shell of ['phone', 'desktop']) test(`${shell}: Look keeps skin and colour as separate working controls`, async () => {
-  const h = look(shell);
-  const assertControls = (family, colours, foreign) => {
-    const html = h.root.innerHTML;
-    assert.match(html, /role="group" aria-label="Skins"/, 'a distinct Skin group must remain');
-    for (const id of ['wizard', 'mizel']) assert.match(html, new RegExp(`data-skinfamily="${id}"`));
-    assert.match(html, new RegExp(`data-skinfamily="${family}" aria-pressed="true"`));
-    assert.match(html, /<h4>Colou?rs<\/h4>/i, 'colours have their own heading');
-    for (const id of colours) assert.match(html, new RegExp(`data-skinpick="${id}"`));
-    for (const id of foreign) assert.doesNotMatch(html, new RegExp(`data-skinpick="${id}"`), 'not one flat all-colours-as-skins grid');
-  };
-  assertControls('wizard', ['nebula', 'grove'], ['obsidian', 'obsidian-light']);
-  h.act('data-skinfamily', 'mizel'); await Promise.resolve(); await Promise.resolve();
-  assert.equal(h.familyPicked.at(-1), 'mizel');
-  assert.equal(h.S.current, 'obsidian-light', 'skin choice restores its last colour');
-  assertControls('mizel', ['obsidian', 'obsidian-light'], ['nebula', 'grove']);
-  h.act('data-skinpick', 'obsidian'); await Promise.resolve(); await Promise.resolve();
-  assert.equal(h.picked.at(-1), 'obsidian');
-  assert.equal(h.S.familyOf(h.S.current), 'mizel', 'colour choice does not choose a different skin');
-  h.act('data-skinfamily', 'wizard'); await Promise.resolve(); await Promise.resolve();
-  assert.equal(h.S.current, 'grove');
-  h.act('data-skinfamily', 'mizel'); await Promise.resolve(); await Promise.resolve();
-  assert.equal(h.S.current, 'obsidian', 'family round-trip remembers the chosen colour');
+// owner-correction: humanitylabs-org/wizard-ux#1190 · 2026-11-25 · "Settings > Look merges skins and colours into one list of looks (skins are only a look now). Own skins, New skin and skin import stay, as looks."
+for (const shell of ['phone', 'desktop']) test(`${shell}: Look is one list of looks: every colour, own skins and + New skin`, async () => {
+  const h = look(shell, true), M = h.s.WosMySkin;
+  M.recipes = [{ id: 'own-1', name: 'Quiet', base: 'obsidian-light', tweaks: {} }];
+  h.view.render();
+  const html = () => h.root.innerHTML;
+  assert.match(html(), /<h4>Looks<\/h4>/);
+  assert.match(html(), /role="group" aria-label="Looks"/);
+  for (const id of ['nebula', 'grove', 'obsidian', 'obsidian-light']) assert.match(html(), new RegExp(`data-skinpick="${id}"`), 'every colour of every skin');
+  assert.match(html(), /data-ownskin="own-1"/, 'own skins stay, as looks');
+  assert.match(html(), /data-newskin/, '+ New skin stays');
+  assert.match(html(), /data-skinimport/, 'skin import stays');
+  assert.doesNotMatch(html(), /data-skinfamily=/, 'no separate skin families');
+  assert.doesNotMatch(html(), /aria-label="Skins"/);
+  assert.match(html(), /data-skinpick="nebula" aria-pressed="true"/);
+  h.act('data-skinpick', 'obsidian'); await ticks();
+  assert.equal(h.picked.at(-1), 'obsidian', 'a colour of another skin is one tap away');
+  assert.match(html(), /data-skinpick="obsidian" aria-pressed="true"/);
   h.view.destroy();
 });
 
-for (const shell of ['phone', 'desktop']) test(`${shell}: separate Skin/Color choices never replace the independent tweak mix (#801)`, async () => {
-  const h=look(shell,true), storage=new Map();let active=[];
-  for(const family of h.S.families) family.tweaks=family.id==='wizard'?'wizard':'miguel';
-  h.s.WosSkinHost={layout:'classic',personalState:{ready:false},get tweakState(){return active;},loadTweaks:async ids=>{active=Array.from(ids);}};
-  h.s.addEventListener=()=>{};h.s.dispatchEvent=()=>{};
-  vm.runInNewContext(fs.readFileSync(new URL('../web/core/experience.js',import.meta.url),'utf8'),{
-    window:h.s,Event,URL,AbortSignal,setTimeout(){},
-    document:{baseURI:'https://wizard.test/wizard-os-home/',addEventListener(){}},
-    localStorage:{getItem:k=>storage.get(k),setItem:(k,v)=>storage.set(k,v)},
-    fetch:async url=>({ok:true,json:async()=>JSON.parse(fs.readFileSync(new URL('../web/'+url.pathname.split('/wizard-os-home/')[1],import.meta.url),'utf8'))}),
-  });
-  const E=h.s.WosExperience;await E.refresh();await E.toggle('wizard/sidebar-chats-view');
-  const before=JSON.stringify(JSON.parse(storage.get('wos.skin-tweaks.v1')).mix), beforeActive=JSON.stringify(active);
-  let pending=Promise.resolve(), picks=0;const choose=E.chooseSkin.bind(E);
-  E.chooseSkin=(...args)=>{picks++;return pending=choose(...args);};
-  for(const [attr,id] of [['data-skinfamily','mizel'],['data-skinpick','obsidian'],['data-skinfamily','wizard'],['data-skinpick','nebula'],['data-skinfamily','mizel']]) {
-    h.act(attr,id);await pending;for(let n=0;n<5;n++)await Promise.resolve();
-    assert.equal(JSON.stringify(JSON.parse(storage.get('wos.skin-tweaks.v1')).mix),before,'real persisted mix survives each pick');
-    assert.equal(JSON.stringify(active),beforeActive,'real active host mix survives each pick');
-  }
-  assert.equal(h.S.current,'obsidian');assert.equal(picks,5,'dispatch must run the actual chooseSkin reconciler');
-  h.view.destroy();
-});
-
-for (const shell of ['phone', 'desktop']) test(`${shell}: installed own-skin API does not make plain family selection depend on the box`, async () => {
+for (const shell of ['phone', 'desktop']) test(`${shell}: Look offers no feature switch`, () => {
   const h = look(shell, true);
-  h.s.WosMySkin.leave = () => { throw Error('offline: must not call leave without a worn own skin'); };
-  h.act('data-skinfamily', 'mizel');
-  await Promise.resolve();
-  assert.equal(h.S.current, 'obsidian-light');
-  h.s.WosMySkin.active = { id: 'own-1', name: 'Quiet', base: 'obsidian-light' };
-  let updated;
-  h.s.WosMySkin.update = async change => { updated = change.base; h.S.set(change.base); };
-  h.act('data-skinpick', 'obsidian');
-  await Promise.resolve(); await Promise.resolve();
-  assert.equal(updated, 'obsidian', 'Colours edit the worn own skin');
+  h.s.WosExperience.state = { shell, channel: 'latest', tweaks: [{ id: 'test/feature', name: 'A feature', on: false }] };
+  h.view.render();
+  assert.doesNotMatch(h.root.innerHTML, /data-tweak-toggle="test\/feature"/, 'feature switches are on Try new features, not Look');
+  assert.doesNotMatch(h.root.innerHTML, /data-try-features/);
+  h.view.destroy();
+});
+
+for (const shell of ['phone', 'desktop']) test(`${shell}: picking looks never changes the tweak mix (#801)`, async () => {
+  const h = look(shell, true), storage = new Map(); let active = [];
+  h.s.WosSkinHost = { layout: 'classic', personalState: { ready: false }, get tweakState() { return active; }, loadTweaks: async ids => { active = Array.from(ids); } };
+  h.s.addEventListener = () => {}; h.s.dispatchEvent = () => {};
+  vm.runInNewContext(fs.readFileSync(new URL('../web/core/experience.js', import.meta.url), 'utf8'), {
+    window: h.s, Event, URL, AbortSignal, setTimeout() {},
+    document: { baseURI: 'https://wizard.test/wizard-os-home/', addEventListener() {} },
+    localStorage: { getItem: k => storage.get(k), setItem: (k, v) => storage.set(k, v) },
+    fetch: async url => ({ ok: true, json: async () => JSON.parse(fs.readFileSync(new URL('../web/' + url.pathname.split('/wizard-os-home/')[1], import.meta.url), 'utf8')) }),
+  });
+  const E = h.s.WosExperience; await E.refresh(); await E.toggle('wizard/sidebar-chats-view');
+  const before = JSON.stringify(JSON.parse(storage.get('wos.skin-tweaks.v1')).mix), beforeActive = JSON.stringify(active);
+  let pending = Promise.resolve(), picks = 0; const choose = E.chooseSkin.bind(E);
+  E.chooseSkin = (...args) => { picks++; return pending = choose(...args); };
+  for (const id of ['obsidian', 'nebula', 'obsidian-light', 'grove']) {
+    h.act('data-skinpick', id); await pending; await ticks();
+    assert.equal(JSON.stringify(JSON.parse(storage.get('wos.skin-tweaks.v1')).mix), before, 'real persisted mix survives each pick');
+    assert.equal(JSON.stringify(active), beforeActive, 'real active host mix survives each pick');
+  }
+  assert.equal(h.S.current, 'grove'); assert.equal(picks, 4, 'dispatch must run the actual chooseSkin reconciler');
+  h.view.destroy();
+});
+
+for (const shell of ['phone', 'desktop']) test(`${shell}: a worn own skin is a look: its tile is pressed, a colour takes it off`, async () => {
+  const h = look(shell, true), M = h.s.WosMySkin;
+  M.recipes = [{ id: 'own-1', name: 'Quiet', base: 'obsidian-light', tweaks: {} }];
+  M.active = { id: 'own-1', name: 'Quiet', base: 'obsidian-light', tweaks: {} };
+  M.update = () => { throw Error('a colour pick must not edit the own skin'); };
+  h.S.current = 'obsidian-light'; h.view.render();
+  assert.match(h.root.innerHTML, /data-ownskin="own-1" aria-pressed="true"/);
+  assert.doesNotMatch(h.root.innerHTML, /data-skinpick="[^"]+" aria-pressed="true"/, 'no colour is the worn look');
+  assert.match(h.root.innerHTML, /data-myskin="edit"/, 'Edit with your Wizard');
+  assert.match(h.root.innerHTML, /data-ownskin-remove="own-1"/, 'Remove skin');
+  assert.doesNotMatch(h.root.innerHTML, /data-myskin-script|Skin script/, 'no script row: skin scripts never run');
+  h.act('data-skinpick', 'nebula'); await ticks();
+  assert.equal(h.picked.at(-1), 'nebula', 'the colour is worn (my-skin.js takes the own skin off on wos:skin)');
   let left = false;
-  h.s.WosMySkin.leave = async () => { left = true; h.s.WosMySkin.active = null; };
-  h.act('data-skinfamily', 'wizard');
-  await Promise.resolve(); await Promise.resolve();
-  assert.equal(left, true, 'choosing another family takes the own skin off, as before #755');
-  assert.equal(h.S.current, 'grove');
+  M.leave = async () => { left = true; M.active = null; };
+  M.active = { id: 'own-1', name: 'Quiet', base: 'obsidian-light', tweaks: {} };
+  h.act('data-ownskin', 'own-1'); await ticks();
+  assert.equal(left, true, 'tapping the worn own skin takes it off');
   h.view.destroy();
 });
 
 for (const shell of ['phone', 'desktop']) test(`${shell}: device recovery opens the existing draft, cancel keeps preview, Create is explicit`, async () => {
   const h = look(shell, true), M = h.s.WosMySkin, dismissed = [];
-  const preview = { id: 'device-old', name: 'Old preview', base: 'obsidian-light', tweaks: {sample:false} };
+  const preview = { id: 'device-old', name: 'Old preview', base: 'obsidian-light', tweaks: { sample: false } };
   M.previews = [preview]; M.dismissPreview = id => { dismissed.push(id); M.previews = []; };
   h.view.focus('look'); assert.match(h.root.innerHTML, /data-skin-preview="device-old"/);
-  h.act('data-skin-preview', 'device-old'); for (let i=0;i<10;i++) await Promise.resolve();
+  h.act('data-skin-preview', 'device-old'); await ticks(10);
   assert.equal(h.S.current, 'nebula'); assert.equal(M.created, undefined); assert.equal(h.view.context.skinDraft.base, 'obsidian-light');
-  assert.equal(h.view.context.skinDraft.tweaks.sample, false); h.view.back(); assert.equal(dismissed.length,0); assert.equal(M.previews.length,1);
-  h.act('data-skin-preview', 'device-old'); for (let i=0;i<10;i++) await Promise.resolve();
-  h.act('data-skin-create', ''); assert.deepEqual(M.created,{name:'Old preview',base:'obsidian-light',tweaks:{sample:false}});
-  assert.deepEqual(dismissed,['device-old']); assert.deepEqual(preview,{id:'device-old',name:'Old preview',base:'obsidian-light',tweaks:{sample:false}});
+  h.view.back(); assert.equal(dismissed.length, 0); assert.equal(M.previews.length, 1);
+  h.act('data-skin-preview', 'device-old'); await ticks(10);
+  h.act('data-skin-create', '');
+  assert.deepEqual(M.created, { name: 'Old preview', base: 'obsidian-light', tweaks: { sample: false } }, 'a recovered skin keeps only its own saved choices');
+  assert.deepEqual(dismissed, ['device-old']); assert.deepEqual(preview, { id: 'device-old', name: 'Old preview', base: 'obsidian-light', tweaks: { sample: false } });
   h.view.destroy();
 });
 
-for (const shell of ['phone', 'desktop']) test(`${shell}: New skin keeps Base skin and Colour independent without resetting name or tweaks`, async () => {
+for (const shell of ['phone', 'desktop']) test(`${shell}: New skin is a name, a base skin and a colour, with no feature list`, async () => {
   const h = look(shell, true);
   h.S.set('grove');
   h.act('data-newskin', '');
-  for (let tick = 0; tick < 10 && !h.view.context.skinDraft.items.length; tick++) await Promise.resolve();
-  assert.equal(h.view.context.skinDraft.loading, false);
   assert.match(h.root.innerHTML, /Base skin<select data-skin-base>/);
   assert.match(h.root.innerHTML, /<h4>Color<\/h4>/);
   assert.match(h.root.innerHTML, /data-skinpick="grove" aria-pressed="true"/, 'starts from worn colour');
+  assert.match(h.root.innerHTML, /data-newskin-look-only/);
+  assert.doesNotMatch(h.root.innerHTML, /data-draft-tweak=|<h4>Tweaks<\/h4>|data-skinretry/, 'no tweak switches in the draft');
+  assert.doesNotMatch(h.root.innerHTML, /data-skin-create disabled/, 'Create never waits for a tweak list');
   h.input('data-skin-name', 'Quiet morning');
-  h.act('data-draft-tweak', 'sample');
   h.input('data-skin-base', 'mizel');
   assert.match(h.root.innerHTML, /value="mizel" selected/);
   assert.match(h.root.innerHTML, /data-skinpick="obsidian-light" aria-pressed="true"/);
@@ -142,15 +148,12 @@ for (const shell of ['phone', 'desktop']) test(`${shell}: New skin keeps Base sk
   h.act('data-skinpick', 'obsidian');
   assert.equal(h.S.current, 'grove', 'draft choices do not change the worn skin');
   assert.equal(h.view.context.skinDraft.name, 'Quiet morning');
-  assert.equal(h.view.context.skinDraft.tweaks.sample, false, 'changing family or colour preserves edited switches');
   h.act('data-skin-create', '');
-  assert.equal(h.s.WosMySkin.created.base, 'obsidian');
-  assert.equal(h.s.WosMySkin.created.name, 'Quiet morning');
-  assert.equal(h.s.WosMySkin.created.tweaks.sample, false);
+  assert.deepEqual(h.s.WosMySkin.created, { name: 'Quiet morning', base: 'obsidian', tweaks: {} }, 'a new skin saves no feature choices');
   h.act('data-newskin', '');
   assert.equal(h.view.back(), true, 'Back leaves New skin, not Wizard');
   assert.equal(h.view.context.skinDraft, null);
-  assert.match(h.root.innerHTML, /aria-label="Skins"/);
+  assert.match(h.root.innerHTML, /aria-label="Looks"/);
   h.view.destroy();
 });
 
@@ -159,108 +162,35 @@ for (const shell of ['phone', 'desktop']) test(`${shell}: slow Create saves a sn
   let finish, submitted;
   h.s.WosMySkin.create = snapshot => { submitted = snapshot; return new Promise(resolve => { finish = resolve; }); };
   h.act('data-newskin', '');
-  for (let tick = 0; tick < 10 && !h.view.context.skinDraft.items.length; tick++) await Promise.resolve();
   h.input('data-skin-name', 'First');
   h.act('data-skin-create', '');
   h.input('data-skin-name', 'Changed while saving');
   h.input('data-skin-base', 'mizel');
   h.act('data-skinpick', 'grove');
-  h.act('data-draft-tweak', 'sample');
   assert.equal(h.view.context.skinDraft.name, 'First');
   assert.equal(submitted.base, 'nebula');
-  assert.equal(submitted.tweaks.sample, true);
+  assert.deepEqual(JSON.parse(JSON.stringify(submitted.tweaks)), {});
   assert.equal(h.view.back(), true);
   h.act('data-newskin', '');
   h.input('data-skin-name', 'Second');
   const next = h.view.context.skinDraft;
   finish();
-  await Promise.resolve(); await Promise.resolve();
+  await ticks(2);
   assert.equal(h.view.context.skinDraft, next);
   assert.equal(next.name, 'Second');
   h.view.destroy();
 });
 
-for (const shell of ['phone', 'desktop']) test(`${shell}: New skin shares Look's shell filter without erasing hidden defaults`, async () => {
+for (const shell of ['phone', 'desktop']) test(`${shell}: Look lists only the views this shell can wear`, () => {
   const h = look(shell, true);
   const items = [
     { id: 'miguel/ai-apps', name: 'AI apps', view: 'AI apps', shells: ['desktop'] },
-    { id: 'miguel/orb-shell', name: 'Orb', view: 'Orb', shells: ['phone', 'desktop'] },
     { id: 'test/phone', name: 'Phone only', view: 'Phone', shells: ['phone'] },
     { id: 'test/ordinary', name: 'Ordinary', shells: ['desktop'] },
   ];
-  const defaults = Object.fromEntries(items.map(t => [t.id, true]));
   h.s.WosExperience.state = { shell, tweaks: items };
-  h.s.WosExperience.installed = async () => items;
-  h.s.WosExperience.defaults = async () => ({ ...defaults });
   h.view.render();
-  const visible = id => id === 'miguel/ai-apps' ? shell === 'desktop' : id === 'test/phone' ? shell === 'phone' : true;
-  // No channel read yet: only views show; feature switches appear under "Try new features" on For testers.
-  for (const t of items) assert.equal(h.root.innerHTML.includes(`data-tweak-toggle="${t.id}"`), visible(t.id) && !!t.view, t.id);
-  h.act('data-newskin', '');
-  for (let n = 0; n < 10; n++) await Promise.resolve();
-  // Feature switches (test/ordinary) are not offered in the draft; their saved state is carried over unchanged.
-  for (const t of items) assert.equal(h.root.innerHTML.includes(`data-draft-tweak="${t.id}"`), visible(t.id) && !!t.view, t.id);
-  assert.deepEqual(JSON.parse(JSON.stringify(h.view.context.skinDraft.tweaks)), defaults, 'filter presentation, not other-shell state');
-  h.input('data-skin-name', 'Keep both devices'); h.act('data-draft-tweak', 'miguel/orb-shell');
-  h.act('data-skin-create', '');
-  assert.deepEqual(h.s.WosMySkin.created.tweaks, { ...defaults, 'miguel/orb-shell': false });
+  const visible = id => id === 'miguel/ai-apps' ? shell === 'desktop' : id === 'test/phone' ? shell === 'phone' : false;
+  for (const t of items) assert.equal(h.root.innerHTML.includes(`data-tweak-toggle="${t.id}"`), visible(t.id), t.id);
   h.view.destroy();
-});
-
-// Skins are look only (wizard-ux issue 1190, switch wizard/skins-look-only): with it on, New skin offers no tweak
-// switches and a new skin saves no feature choices, so a skin can never decide what runs. Off: unchanged (tests above).
-for (const shell of ['phone', 'desktop']) test(`${shell}: with Skins are look only on, a new skin is a look only`, async () => {
-  const h = look(shell, true);
-  h.s.WosExperience.lookOnly = true;
-  h.act('data-newskin', '');
-  for (let tick = 0; tick < 10 && !h.view.context.skinDraft.items.length; tick++) await Promise.resolve();
-  assert.doesNotMatch(h.root.innerHTML, /data-draft-tweak=/, 'no tweak switches in the draft');
-  assert.doesNotMatch(h.root.innerHTML, /<h4>Tweaks<\/h4>/);
-  assert.match(h.root.innerHTML, /data-newskin-look-only/);
-  assert.match(h.root.innerHTML, /<h4>Color<\/h4>/, 'colours are still chosen');
-  h.input('data-skin-name', 'Just a look');
-  h.act('data-skin-create', '');
-  assert.deepEqual(h.s.WosMySkin.created, { name: 'Just a look', base: 'nebula', tweaks: {} });
-  h.view.destroy();
-});
-
-for (const shell of ['phone', 'desktop']) test(`${shell}: with Skins are look only on, a recovered device skin keeps only its own saved choices`, async () => {
-  const h = look(shell, true), M = h.s.WosMySkin;
-  h.s.WosExperience.lookOnly = true;
-  M.previews = [{ id: 'device-old', name: 'Old preview', base: 'obsidian-light', tweaks: { sample: false } }]; M.dismissPreview = () => { M.previews = []; };
-  h.view.focus('look');
-  h.act('data-skin-preview', 'device-old'); for (let i = 0; i < 10; i++) await Promise.resolve();
-  h.act('data-skin-create', '');
-  assert.deepEqual(M.created, { name: 'Old preview', base: 'obsidian-light', tweaks: { sample: false } }, 'nothing the device runs now is added');
-  h.view.destroy();
-});
-
-test('WosExperience.lookOnly follows the wizard/skins-look-only switch (real experience.js)', async () => {
-  for (const on of [false, true]) {
-    const storage = new Map([['wos.channel.v1', 'latest'], ['wos.skin-tweaks.v1', JSON.stringify({ version: 1, off: {}, preset: 'none', mix: on ? { 'wizard/skins-look-only': true } : {}, machinesHomeMoved: true })]]);
-    const w = { WosSkin: { current: 'nebula', families: [], familyOf: () => 'wizard' }, WosSkinHost: { personalState: { ready: false }, tweakState: [], loadTweaks: async () => {} }, addEventListener() {}, dispatchEvent() {} };
-    vm.runInNewContext(fs.readFileSync(new URL('../web/core/experience.js', import.meta.url), 'utf8'), { window: w, Event, URL, AbortSignal, setTimeout() {},
-      document: { baseURI: 'https://wizard.test/wizard-os-home/', addEventListener() {} },
-      localStorage: { getItem: k => storage.get(k), setItem: (k, v) => storage.set(k, v) },
-      fetch: async url => ({ ok: true, json: async () => JSON.parse(fs.readFileSync(new URL('../web/' + url.pathname.split('/wizard-os-home/')[1], import.meta.url), 'utf8')) }) });
-    await w.WosExperience.refresh();
-    assert.equal(w.WosExperience.lookOnly, on);
-  }
-});
-
-for (const shell of ['phone', 'desktop']) test(`${shell}: with Skins are look only on, New skin can be created while the tweak list is loading or failed to load`, async () => {
-  for (const fail of [false, true]) {
-    const h = look(shell, true);
-    h.s.WosExperience.lookOnly = true; h.s.WosExperience.installedReady = false;
-    h.s.WosExperience.installed = () => fail ? Promise.reject(new Error('offline')) : new Promise(() => {});
-    h.act('data-newskin', '');
-    for (let n = 0; n < 10; n++) await Promise.resolve();
-    assert.equal(!!h.view.context.skinDraft.error, fail);
-    assert.doesNotMatch(h.root.innerHTML, /data-skinretry|role="alert"/, 'no tweak-loading error in a look-only draft');
-    assert.doesNotMatch(h.root.innerHTML, /data-skin-create disabled/);
-    h.input('data-skin-name', 'Colour only');
-    h.act('data-skin-create', '');
-    assert.deepEqual(h.s.WosMySkin.created, { name: 'Colour only', base: 'nebula', tweaks: {} });
-    h.view.destroy();
-  }
 });

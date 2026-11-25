@@ -73,14 +73,14 @@ async function main(){
   await p.locator('[data-skinpick="grove"]').click();
   await p.locator('[data-bgpick="living"]').click();
   record('Living canvas restores scenery without changing color',await p.evaluate(()=>WosSkin.current==='grove'&&WosSkin.wallpaper==='living'&&!document.documentElement.hasAttribute('data-image-background')));
-  await p.locator('[data-skinfamily="mizel"]').click();await p.waitForSelector('[data-bgpick="sea"]');
+  await p.locator('[data-skinpick="obsidian"]').click();await p.waitForSelector('[data-bgpick="sea"]');
   await p.locator('[data-bgpick="sea"]').click();await p.waitForFunction(()=>WosSkin.current==='landscapes'&&WosSkin.wallpaper==='sea');
   await p.waitForTimeout(800);await shot(p,'desktop-mizel-sea-picker');
   await p.evaluate(()=>{__wux.closeSettings();__wux.goHome();});await shot(p,'desktop-mizel-sea-home');
   record('Mizel keeps its existing Background/Mode picker and independent preference');
   await p.evaluate(()=>__wux.openSettings('look'));await p.locator('[data-skinmode="light"]').click();
   await p.waitForFunction(()=>WosSkin.current==='landscapes-light'&&WosSkin.wallpaper==='sea');record('Mizel light mode preserves chosen image');
-  await p.locator('[data-skinfamily="wizard"]').click();await p.waitForSelector('[data-bgpick="living"]');
+  await p.locator('[data-skinpick="grove"]').click();await p.waitForSelector('[data-bgpick="living"]');
   record('switching back to Wizard keeps living-canvas reset',await p.evaluate(()=>WosSkin.wallpaper==='living'));
   await p.locator('[data-bgpick="lake"]').click();
   await p.locator('[data-desktop-view="ai-apps"]').click();

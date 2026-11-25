@@ -17,7 +17,7 @@
     "Search settings: the box at the top of the Settings list. Typing keeps only the pages that mention the words and marks them on the open page, scrolled to the first; Esc clears it, Enter opens the first page."
   ],
   "switchesIntro": [
-    "Settings › Appearance › Try new features lists unfinished features anyone can switch on to try, A to Z, each 'by <author>'. The group only shows when this Wizard is on the For testers channel (Settings › About & updates › Channel › For testers); on For everyone it is hidden and these switches stay off. The same switches are also in the WizardOS Tracker app (Try it). A choice follows the owner on every device."
+    "Settings › Try new features lists unfinished features anyone can switch on to try, A to Z, each 'by <author>'. The group only shows when this Wizard is on the For testers channel (Settings › About & updates › Channel › For testers); on For everyone it is hidden and these switches stay off. The same switches are also in the WizardOS Tracker app (Try it). A choice follows the owner on every device."
   ],
   "pages": {
     "overview": {
@@ -72,6 +72,10 @@
     },
     "about": {
       "help": "About & updates: update WizardOS (Automatic or Ask me), the release channel (For everyone or For testers), versions, connection status, and Gestures & help."
+    },
+    "try-features": {
+      "help": "Try new features: the feature switches, its own page in Settings (For testers channel only). See Feature switches below.",
+      "when": "only on the For testers channel, when there are switches"
     }
   },
   "sections": {
@@ -83,14 +87,12 @@
       }
     },
     "look": {
-      "help": "Skin: pick a skin (a whole look) and one of its colors; + New skin makes your own skin (name, base skin, color, tweaks), which you can then ask the agent to change ('change my <name> skin so…'). Your own skins show here with Edit with your Wizard and Remove skin. Some skins also offer Mode (Dark or Light) and Background (plain, pictures, or your own image).",
+      "help": "Looks: one list of looks, every color plus your own skins; + New skin makes your own skin (a name, a base skin and a color), which you can then ask the agent to change ('change my <name> skin so…'). A skin is a look only: it never turns features on or off. Your own skins show here with Edit with your Wizard and Remove skin. Some colors also offer Mode (Dark or Light) and Background (plain, pictures, or your own image).",
       "controls": {
-        "Skin": null,
-        "Colors": "the colors of the chosen skin",
+        "Looks": "every color and your own skins in one row; + New skin adds one",
         "Shell view": "desktop only: how this desktop is laid out, chosen per device",
         "Desks": "the classic desktop: a top bar, desks of windows",
         "AI apps": "chats in a sidebar on the left, the chat in the middle, apps on the right (like the ChatGPT and Claude apps); the standard desktop view",
-        "Try new features": "the feature switches (For testers channel only), see Feature switches below",
         "Mode": "Dark or Light, for skins that have both",
         "Background": "Plain, pictures, or (some skins) your own image with Choose image",
         "Dark": null,
@@ -325,49 +327,49 @@
       "when": "Android app"
     },
     "try-features": {
-      "help": "Try new features as its own Settings page (with Skins look only on): the same feature switches, listed A to Z."
+      "help": "Try new features: unfinished features you can switch on to try, A to Z, each labelled with who made it.",
+      "controls": {
+        "Try new features": "the feature switches, see Feature switches below"
+      }
     }
   },
   "switches": {
     "miguel/send-and-go": {
-      "where": "Settings › Appearance › Try new features › Send and go"
+      "where": "Settings › Try new features › Send and go"
     },
     "miguel/snooze-someday": {
-      "where": "Settings › Appearance › Try new features › One-tap Snooze · bottom of Ready"
+      "where": "Settings › Try new features › One-tap Snooze · bottom of Ready"
     },
     "miguel/machines-home": {
-      "where": "Settings › Appearance › Try new features › Machines on Home"
+      "where": "Settings › Try new features › Machines on Home"
     },
     "miguel/archive-top": {
-      "where": "Settings › Appearance › Try new features › Archive on top"
+      "where": "Settings › Try new features › Archive on top"
     },
     "miguel/reply-summary": {
-      "where": "Settings › Appearance › Try new features › Short answer first; its options show under it when on"
+      "where": "Settings › Try new features › Short answer first; its options show under it when on"
     },
     "miguel/now-playing": {
-      "where": "Settings › Appearance › Try new features › Now playing"
+      "where": "Settings › Try new features › Now playing"
     },
     "miguel/calm-offline": {
-      "where": "Settings › Appearance › Try new features › Calm offline card"
+      "where": "Settings › Try new features › Calm offline card"
     },
     "wizard/needs-you-reason": {
-      "where": "Settings › Appearance › Try new features › Say why a chat needs you"
+      "where": "Settings › Try new features › Say why a chat needs you"
     },
     "wizard/failure-reason": {
-      "where": "Settings › Appearance › Try new features › Why a reply failed"
-    },
-    "wizard/skins-look-only": {
-      "where": "Settings › Appearance › Try new features › Skins are look only"
+      "where": "Settings › Try new features › Why a reply failed"
     },
     "wizard/update-bug-reports": {
-      "where": "Settings › Appearance › Try new features › Tell the team about failed updates"
+      "where": "Settings › Try new features › Tell the team about failed updates"
     },
     "wizard/link-token-repair": {
       "help": "When the agent can't reach its Wizard app tools (unauthorized), `wizard link` puts the box's token back in the agent's settings; `wizard doctor` shows if they match.",
-      "where": "Settings › Appearance › Try new features › Repair the agent's Wizard connection"
+      "where": "Settings › Try new features › Repair the agent's Wizard connection"
     },
     "wizard/graceful-restart": {
-      "where": "Settings › Appearance › Try new features › Calm Agent Service restarts",
+      "where": "Settings › Try new features › Calm Agent Service restarts",
       "help": "While the Agent Service waits for running chats to restart, you see a quiet note, not errors; a message sent meanwhile sends after the restart; if overdue, choose Wait longer or Restart now."
     },
     "wizard/unified-inbox": {
@@ -383,121 +385,121 @@
     },
     "wizard/clear-chat-notifications": {
       "help": "Android app: reading a LINE, WhatsApp, Telegram or other bridged chat in Messenger clears that app's own notification (needs Android's Notification access).",
-      "where": "Settings › Appearance › Try new features › Clear chat notifications"
+      "where": "Settings › Try new features › Clear chat notifications"
     },
     "wizard/sidebar-chats-view": {
       "help": "AI apps desktop: the chats sidebar uses the Chats look picked in Settings › Chats & app screens › Default Chats.",
-      "where": "Settings › Appearance › Try new features › Desktop sidebar follows Default Chats"
+      "where": "Settings › Try new features › Desktop sidebar follows Default Chats"
     },
     "wizard/app-panel-left": {
       "help": "AI apps desktop: ⌥⇧M or the app panel's header button moves it beside the chats sidebar.",
-      "where": "Settings › Appearance › Try new features › App panel on the left"
+      "where": "Settings › Try new features › App panel on the left"
     },
     "wizard/assist-attach": {
       "help": "Android app: Camera and Attach buttons next to Screen while talking to the side-button orb.",
-      "where": "Settings › Appearance › Try new features › Camera and Attach on the side button"
+      "where": "Settings › Try new features › Camera and Attach on the side button"
     },
     "wizard/assist-agent-note": {
       "help": "Android app: the side button opens Messenger's Agent chat for a note instead of a new Wizard chat.",
-      "where": "Settings › Appearance › Try new features › Side button opens the Agent chat"
+      "where": "Settings › Try new features › Side button opens the Agent chat"
     },
     "wizard/app-windows": {
       "help": "Android app: a link to a Wizard app opens that app in its own Android window, like its home-screen icon.",
-      "where": "Settings › Appearance › Try new features › Links open the app's own window"
+      "where": "Settings › Try new features › Links open the app's own window"
     },
     "wizard/private-first-setup": {
       "help": "New installs start private: Welcome leads with Tinfoil; Claude and ChatGPT are optional extras.",
-      "where": "Settings › Appearance › Try new features › Private first setup"
+      "where": "Settings › Try new features › Private first setup"
     },
     "wizard/chat-app-switches": {
       "help": "A reply's switch card also lists an app's own feature switches, flipped right in the chat.",
-      "where": "Settings › Appearance › Try new features › App switches in chat"
+      "where": "Settings › Try new features › App switches in chat"
     },
     "wizard/action-cards": {
       "help": "An app's proposed action (a draft, an event) shows in chat with Approve, Edit, Open in app.",
-      "where": "Settings › Appearance › Try new features › Action cards in chat"
+      "where": "Settings › Try new features › Action cards in chat"
     },
     "wizard/phone-app-notifications": {
       "help": "Android app: what any app sends to Notifications shows as a phone notification under that app's name, one Android channel per app.",
-      "where": "Settings › Appearance › Try new features › Phone notifications per app"
+      "where": "Settings › Try new features › Phone notifications per app"
     },
     "wizard/lock-screen-player": {
       "help": "Android app: Podcasts plays through the phone's media player (lock screen, headset buttons), like Music.",
-      "where": "Settings › Appearance › Try new features › Phone media player for Podcasts"
+      "where": "Settings › Try new features › Phone media player for Podcasts"
     },
     "wizard/runtipi-cli-key": {
       "help": "App Manager uses its own Runtipi 4.12 key.",
-      "where": "Settings › Appearance › Try new features › Runtipi 4.12 sign-in key"
+      "where": "Settings › Try new features › Runtipi 4.12 sign-in key"
     },
     "wizard/app-tap-home": {
       "help": "Narrow desktop window: tapping the icon of the app in front takes it back to its first view.",
-      "where": "Settings › Appearance › Try new features › Tap the app in front for its first view"
+      "where": "Settings › Try new features › Tap the app in front for its first view"
     },
     "wizard/download-swipe": {
       "help": "Phone: swipe the Downloaded banner away and swipe the Downloads sheet down to close it.",
-      "where": "Settings › Appearance › Try new features › Swipe away downloads",
+      "where": "Settings › Try new features › Swipe away downloads",
       "when": "phone only"
     },
     "wizard/capability-registry": {
       "help": "Agents look up what this box already does (transcription, reminders, app jobs) before installing their own.",
-      "where": "Settings › Appearance › Try new features › Agents use what the box already does"
+      "where": "Settings › Try new features › Agents use what the box already does"
     },
     "wizard/interface-manual": {
       "help": "Your agent gets this manual: every screen, Settings page and feature switch, so it can say where things are.",
-      "where": "Settings › Appearance › Try new features › Agent knows the Wizard interface"
+      "where": "Settings › Try new features › Agent knows the Wizard interface"
     },
     "wizard/write-guard": {
       "help": "Stops repeated saves: an identical save within 10 s is not resent; over 20 a minute pauses.",
-      "where": "Settings › Appearance › Try new features › Stop write loops"
+      "where": "Settings › Try new features › Stop write loops"
     },
     "wizard/follow-main": {
       "help": "Green merges go live by themselves.",
-      "where": "Settings › Appearance › Try new features › Follow main"
+      "where": "Settings › Try new features › Follow main"
     },
     "wizard/plain-chat-titles": {
       "help": "Same-topic chats: no date.",
-      "where": "Settings › Appearance › Try new features › Undated chat titles"
+      "where": "Settings › Try new features › Undated chat titles"
     },
     "wizard/inbox-until-archived": {
       "help": "Chats stay in Inbox until archived.",
-      "where": "Settings › Appearance › Try new features › Inbox until archived"
+      "where": "Settings › Try new features › Inbox until archived"
     },
     "wizard/inbox-rows": {
       "help": "Inbox: only what needs you.",
-      "where": "Settings › Appearance › Try new features › Inbox: only what needs you"
+      "where": "Settings › Try new features › Inbox: only what needs you"
     },
     "wizard/sent-rows": {
       "help": "Sent uses Inbox's rows.",
-      "where": "Settings › Appearance › Try new features › Sent: the same rows as Inbox"
+      "where": "Settings › Try new features › Sent: the same rows as Inbox"
     },
     "wizard/chats-title-bar": {
       "help": "Chats' title bar names the tab.",
-      "where": "Settings › Appearance › Try new features › Chats: title bar names the tab"
+      "where": "Settings › Try new features › Chats: title bar names the tab"
     },
     "wizard/phone-nav": {
       "help": "Phone bar: bigger orb, one badge.",
-      "where": "Settings › Appearance › Try new features › Phone bar: bigger orb, one badge",
+      "where": "Settings › Try new features › Phone bar: bigger orb, one badge",
       "when": "phone only"
     },
     "wizard/capture-inbox": {
       "help": "Agent files your Files Inbox drops.",
-      "where": "Settings › Appearance › Try new features › Capture inbox"
+      "where": "Settings › Try new features › Capture inbox"
     },
     "wizard/chat-tags": {
       "help": "A chat can carry several tags.",
-      "where": "Settings › Appearance › Try new features › Tags"
+      "where": "Settings › Try new features › Tags"
     },
     "wizard/swap-sides": {
       "help": "Chats right, apps left (⌥⇧L).",
-      "where": "Settings › Appearance › Try new features › Swap sides"
+      "where": "Settings › Try new features › Swap sides"
     },
     "wizard/install-in-sidebar": {
       "help": "AI apps desktop: an app you Get shows in the Apps column, spinning until installed.",
-      "where": "Settings › Appearance › Try new features › Installs in the Apps column"
+      "where": "Settings › Try new features › Installs in the Apps column"
     },
     "wizard/try-feature-counts": {
       "help": "Sends features you tried and your thumbs, plus a random box id.",
-      "where": "Settings › Appearance › Try new features › Share feature counts"
+      "where": "Settings › Try new features › Share feature counts"
     }
   },
   "screenOrder": [
@@ -672,7 +674,7 @@
     }
   ],
   "howTo": {
-    "Turn on a new feature?": "Settings › About & updates › Channel › For testers (if not already), then Settings › Appearance › Try new features › the feature's switch.",
+    "Turn on a new feature?": "Settings › About & updates › Channel › For testers (if not already), then Settings › Try new features › the feature's switch.",
     "Turn on Channels?": "Nothing to turn on any more: open Chats and tap the Channels tab.",
     "Make Wizard update automatically?": "Settings › About & updates › Updates › Automatic (installs overnight, never during a chat). For apps: Settings › About & updates › Apps › Automatic (checks and updates apps every hour).",
     "Update now?": "When an update is ready, the card at the top of Settings shows Install (or Install now); tap it. 'Interface updated · Reload' just reloads the screen.",

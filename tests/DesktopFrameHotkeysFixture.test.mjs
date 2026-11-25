@@ -88,7 +88,7 @@ test('real browser oracle remains exact; no force clicks or alternate expected d
   const good = await runFrameHotkeys();
   assert.equal(good.report.failedCase, null, good.report.failure); assert.equal(good.report.passed.length, 17); assert.equal(good.exitCode, undefined);
   // Settings › Appearance in the real Settings, both skins picked there (the fake refuses force clicks and a shown intro)
-  assert.deepEqual(good.clicks.filter(c => c.startsWith('#dsettings')), ['[data-st-page="appearance"]', '[data-skinfamily="wizard"]', '[data-skinpick="nebula"]', '[data-st-page="appearance"]', '[data-skinfamily="mizel"]', '[data-skinpick="landscapes"]'].map(s => '#dsettings ' + s));
+  assert.deepEqual(good.clicks.filter(c => c.startsWith('#dsettings')), ['[data-st-page="appearance"]', '[data-skinpick="nebula"]', '[data-st-page="appearance"]', '[data-skinpick="obsidian"]'].map(s => '#dsettings ' + s));
   const fails = async (knobs, failedCase, message) => {
     const r = await runFrameHotkeys(knobs);
     assert.equal(r.exitCode, 1, JSON.stringify(knobs)); assert.equal(r.report.failedCase, failedCase, JSON.stringify(knobs));

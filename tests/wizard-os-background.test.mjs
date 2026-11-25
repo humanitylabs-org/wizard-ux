@@ -49,13 +49,13 @@ test('Landscapes stays the default and every WizardOS option is listed', () => {
   }
 });
 
-test('twinned skins keep Colors alongside Background cards and separate Dark | Light mode', () => {
+test('twinned skins keep Looks alongside Background cards and separate Dark | Light mode', () => {
   const { S, documentElement } = skinsRuntime({ 'wos.skin': 'landscapes' }); documentElement.dataset.shell = 'phone';
   assert.equal(S.wallpaperable, true);
   const v = settingsView({ WosSkin: S });
   const page = () => { const doc = createDocument(); doc.body.innerHTML = v.html(); return doc.body; };
   let body = page();
-  assert.deepEqual(body.querySelectorAll('h4').map(h => h.textContent).slice(0, 4), ['Skin', 'Colors', 'Mode', 'Background'], 'Colors stays beside Background and Mode');
+  assert.deepEqual(body.querySelectorAll('h4').map(h => h.textContent).slice(0, 3), ['Looks', 'Mode', 'Background'], 'Looks stays beside Background and Mode');
   assert.deepEqual(body.querySelectorAll('[data-bgpick]').map(b => b.dataset.bgpick), ['plain', 'landscapes', ...SCENES]);
   assert.ok(body.querySelectorAll('[data-bgpick]').every(b => b.className === 'skp-card'), 'the same cards as Colors');
   assert.equal(body.querySelector('[data-bgpick][aria-pressed="true"]').dataset.bgpick, 'landscapes');

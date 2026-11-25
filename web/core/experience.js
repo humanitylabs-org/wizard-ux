@@ -69,20 +69,15 @@
   const presetOn = id => !!set?.tweaks.includes(id) && !(set.off || []).includes(id);
   // Ids switched off for this preset: the owner's explicit offs plus the published default-offs he has not touched.
   const offFor = () => [...Object.keys(state.mix || {}).filter(id => state.mix[id] === false), ...(set?.off || []).filter(id => mixOf(id) === undefined)];
-  /* Skins are look only (wizard-ux#1190, switch wizard/skins-look-only, off by default). One system for trying changes:
-   * while it is on, an own skin's saved tweak choices are set aside (kept, back when it is off) and only the shared
-   * feature switches (Settings and the WizardOS Tracker, look.json `tweaks`) decide what runs. The switch itself always
-   * lives in the shared mix, never in a skin, so a skin cannot hide it. For everyone keeps it off like every switch. */
+  /* Skins are look only (wizard-ux#1190, on for everyone since James's yes): one system for trying changes. An own
+   * skin's saved tweak choices never decide what runs; only the shared feature switches (Settings › Try new features
+   * and the WizardOS Tracker, look.json `tweaks`) do. The old switch wizard/skins-look-only is gone: a device that had
+   * it on already carried its recipe (the marker below), and its stored value is cleared. */
   const LOOK_ONLY = 'wizard/skins-look-only';
-  const lookOnly = () => !locked() && mixOf(LOOK_ONLY) === true;
-  const recipe = () => lookOnly() ? null : window.WosMySkin?.active;
-  // A device that already wears the switch (from look sync, or from before the migration) has no carry left: only the
-  // owner turning it on here, the first time, carries a recipe (carryRecipe below; adopt() marks it the same way).
-  if (mixOf(LOOK_ONLY) === true && !state.recipeCarried) { state.recipeCarried = true; Store.write(state); }
-  /* Slice 3 (#1190), same switch: tweaks on the drop list (catalog `lookOnlyOff`, posted on #1190, waiting for
-   * Miguel/James) are off while it is on: not loaded and not offered. Nothing is deleted; saved choices come back off. */
-  const dropped = id => (catalog?.lookOnlyOff || []).includes(id);
-  const retiring = id => lookOnly() && dropped(id);
+  if (state.mix && Object.hasOwn(state.mix, LOOK_ONLY)) {
+    if (state.mix[LOOK_ONLY] === true) state.recipeCarried = true;
+    const mix = { ...state.mix }; delete mix[LOOK_ONLY]; state.mix = mix; Store.write(state);
+  }
   // Release-wide defaults are independent of skin. Saved offs and recipe choices keep their meaning across renames.
   /* Built into the shell, not tweak packages (wizard-ux issue 1352): Notifications in Chats (a release-wide default,
    * Settings › Chats) and the AI apps desktop view, described in core/core-features.json (core/skin-host.js loads their
@@ -126,47 +121,42 @@
     for (const [old, current] of Object.entries(aliases())) if (current === id && Object.hasOwn(own.tweaks, old)) return own.tweaks[old];
     return undefined;
   };
-  // A worn own skin decides only the switches it saved a choice for; every other switch follows the owner's own
-  // (wizard-ux#1529: a Files skin saves none, and wearing it used to turn every feature off).
-  const enabled = (id, own = recipe()) => id === LOOK_ONLY ? lookOnly() : retiring(id) ? false : globalIds().includes(id) ? !globalOff(id) && recipeChoice(own, id) !== false
-    : recipeChoice(own, id) ?? mixOf(id) ?? presetOn(id);
+  const enabled = id => globalIds().includes(id) ? !globalOff(id) : mixOf(id) ?? presetOn(id);
   // Packages that fill the same place (two Home maps): the first one listed in a catalog `oneOf` group wins.
-  // An explicit off for any member (My skin recipe, a saved off, a release-wide off) turns the whole group off.
-  const oneOf = (ids, own = recipe()) => { const out = [...ids]; for (const g of catalog?.oneOf || []) { const off = g.some(id => recipeChoice(own, id) === false || offFor(owner).includes(id) || globalOff(id)), on = g.filter(x => out.includes(x)); for (const id of off ? on : on.slice(1)) out.splice(out.indexOf(id), 1); } return out; };
+  // An explicit off for any member (a saved off, a release-wide off) turns the whole group off.
+  const oneOf = ids => { const out = [...ids]; for (const g of catalog?.oneOf || []) { const off = g.some(id => offFor(owner).includes(id) || globalOff(id)), on = g.filter(x => out.includes(x)); for (const id of off ? on : on.slice(1)) out.splice(out.indexOf(id), 1); } return out; };
   const groupOf = id => (catalog?.oneOf || []).find(g => g.includes(id)) || null;
   // One switch per group in Settings: the member this skin's profile lists, else the first one installed.
   const shownInGroup = id => { const g = groupOf(id); if (!g) return true; const present = g.filter(x => manifests.has(x)); return id === (present.find(x => set?.tweaks.includes(x)) || present[0]); };
-  const groupOn = id => { const own = recipe(); return oneOf([...manifests.keys()].filter(x => enabled(x, own)), own).some(x => groupOf(id).includes(x)); };
-  const explicitOff = id => recipeChoice(recipe(), id) === false || offFor(owner).includes(id) || globalOff(id);
+  const groupOn = id => oneOf([...manifests.keys()].filter(x => enabled(x))).some(x => groupOf(id).includes(x));
+  const explicitOff = id => offFor(owner).includes(id) || globalOff(id);
   async function setOne(id, on) {
     if (globalIds().includes(id)) {
       const off = new Set(state.defaultsOff || []); on ? off.delete(id) : off.add(id);
       state.defaultsOff = [...off]; Store.write(state);
-      if (recipe()) await window.WosMySkin.update({ tweaks: { [id]: on } });
       // Safe built-in preference only, never personal-script approval.
       try { window.dispatchEvent(new CustomEvent('wos:tweak-choice', { detail: { id, on, scope: 'default' } })); } catch (_) {}
       return;
     }
-    if (recipe() && id !== LOOK_ONLY) { await window.WosMySkin.update({ tweaks: { [id]: on } }); return; }
     if (!switchIds().includes(id)) return;
     const mix = { ...(state.mix || {}) }; if (on === presetOn(id)) delete mix[id]; else mix[id] = on;
     state.mix = mix; Store.write(state);
     // An owner's own switch (not a migration): core/look-sync.js shares it with his other devices.
     try { window.dispatchEvent(new CustomEvent('wos:tweak-choice', { detail: { id, on } })); } catch (_) {}
   }
-  /* The one-time quiet migration (#1190): when the owner turns wizard/skins-look-only on here, what the own skin worn on
-   * this device chose becomes the owner's shared feature switches (look sync carries them to look.json, so every
-   * device and the Tracker show them), instead of silently stopping. Once per device: turning it off and on again, or
-   * another device adopting the switch, never re-applies an old recipe over newer shared choices. The recipe itself is
-   * left as it was. Views, drop-list tweaks and the switch itself are not carried. */
+  /* The one-time quiet migration (wizard-ux#1190): what an own skin worn on this device used to choose becomes the
+   * owner's shared feature switches (look sync carries them to look.json, so every device and the Tracker show them),
+   * so the device keeps running what it ran instead of silently stopping. Once per device, marked recipeCarried (also
+   * set where the old switch was already on, which carried it then). The recipe itself is left as it was. Views are not
+   * carried. */
   async function carryRecipe() {
     const own = window.WosMySkin?.active;
-    if (state.recipeCarried || locked() || !own?.tweaks || typeof own.tweaks !== 'object') return;
+    if (state.recipeCarried || !own?.tweaks || typeof own.tweaks !== 'object' || !Object.keys(own.tweaks).length) return;
     state.recipeCarried = true; Store.write(state);
     for (const id of [...manifests.keys()]) {
-      if (id === LOOK_ONLY || dropped(id) || viewOf(id)) continue;
+      if (id === LOOK_ONLY || viewOf(id)) continue;
       const choice = recipeChoice(own, id); if (typeof choice !== 'boolean') continue;
-      if (choice !== enabled(id, null)) await setOne(id, choice); // recipe() is null now: this writes the shared set
+      if (choice !== enabled(id)) await setOne(id, choice);
     }
   }
   const profileReads = new Map();
@@ -189,8 +179,7 @@
   // A new skin starts from what this device runs now (the color no longer decides tweaks).
   async function defaults() {
     const list = await installed();
-    // What actually runs now, including the worn own skin's choices.
-    return Object.fromEntries(list.map(m => [m.id, enabled(m.id, recipe())]));
+    return Object.fromEntries(list.map(m => [m.id, enabled(m.id)]));
   }
   // Authors with tweaks here, for the quick buttons: display name from their profile, else the id.
   async function authors() {
@@ -241,18 +230,19 @@
         if (ran && mixOf('miguel/machines-home') === undefined && Object.entries(state.mix || {}).some(([id, on]) => on === true && id.startsWith('miguel/'))) state.mix = { ...state.mix, 'miguel/machines-home': true };
         state.machinesHomeMoved = true; Store.write(state);
       }
-      const own = recipe();
       // Every installed tweak is offered, whoever wrote it; the preset only sets which start on.
       const all = [...new Set([...switchIds(), ...globalIds()])];
       manifests = new Map(await Promise.all(all.map(async id => [id, await manifestOf(id)])));
       if (seq !== generation) return;
+      await carryRecipe();
+      if (seq !== generation) return;
       if (desktop && !desktopView) migrateDesktopView(desktopMigration);
-      const worn = wornView(own);
+      const worn = wornView();
       // Keep the last canonical desktop choice if an older sync writer later omits views.
       if (desktop && chosenView('desktop') !== undefined && desktopView !== effectiveDesktopView()) rememberDesktopView(effectiveDesktopView());
       if (desktop) window.WosSkinHost.setStandardLayout?.(effectiveDesktopView());
       const allowed = id => !(locked() && !globalIds().includes(id) && !viewOf(id));   // views are not feature switches
-      await window.WosSkinHost.loadTweaks(oneOf(all.filter(id => desktop && layoutForView(id) ? false : viewOf(id) ? id === worn : enabled(id, own)), own).filter(allowed), slots, { teamAuthors: catalog.teamAuthors });
+      await window.WosSkinHost.loadTweaks(oneOf(all.filter(id => desktop && layoutForView(id) ? false : viewOf(id) ? id === worn : enabled(id))).filter(allowed), slots, { teamAuthors: catalog.teamAuthors });
       if (desktop) window.WosSkinHost.setStandardLayout?.(effectiveDesktopView());
     } catch (e) { if (seq === generation) { error = e.message; if (!retried) { retried = true; setTimeout(() => { if (seq === generation) apply(); }, 5000); } } } finally { if (seq === generation) { busy = false; changed(); } }
   }
@@ -272,8 +262,10 @@
   function migrateDesktopView(legacy) {
     const ids = viewIds('desktop').filter(layoutForView);
     const offs = legacy.carry || legacy.off?.[legacy.preset || legacyOwner()] || [];
-    const explicit = ids.some(id => typeof legacy.mix?.[id] === 'boolean' || offs.includes(id) || typeof recipeChoice(recipe(), id) === 'boolean');
-    const chosen = ids.find(id => enabled(id, recipe()));
+    // An old own skin's view choice still counts here, once, like the rest of that device's old state (wizard-ux#1190).
+    const worn = window.WosMySkin?.active;
+    const explicit = ids.some(id => typeof legacy.mix?.[id] === 'boolean' || offs.includes(id) || typeof recipeChoice(worn, id) === 'boolean');
+    const chosen = ids.find(id => recipeChoice(worn, id) ?? enabled(id));
     const oldLayout = legacy.materializedLayout;
     rememberDesktopView(chosen ? layoutForView(chosen) : explicit ? 'classic' : desktopViews.includes(oldLayout) ? oldLayout : 'ai-apps');
   }
@@ -282,25 +274,23 @@
   function effectiveDesktopView() {
     const chosen = chosenView('desktop');
     if (chosen !== undefined) return viewIds('desktop').includes(chosen) ? layoutForView(chosen) || 'classic' : 'classic';
-    const legacy = viewIds('desktop').find(id => enabled(id, recipe()));
+    const legacy = viewIds('desktop').find(id => enabled(id));
     return legacy ? layoutForView(legacy) || 'classic' : desktopView || 'ai-apps';
   }
-  const wornView = (own, shell = shellHere()) => {
+  const wornView = (shell = shellHere()) => {
     const chosen = chosenView(shell);
     if (chosen !== undefined) return viewIds(shell).includes(chosen) ? chosen : '';
     if (desktop && shell === 'desktop') return viewIds(shell).find(id => layoutForView(id) === effectiveDesktopView()) || '';
-    return viewIds(shell).find(id => enabled(id, own)) || '';
+    return viewIds(shell).find(id => enabled(id)) || '';
   };
   const cleanViews = v => Object.fromEntries(SHELLS.filter(s => typeof v?.[s] === 'string' && (v[s] === '' || ID.test(v[s]))).map(s => [s, v[s]]));
   const experience = {
     get state() {
       return copy({ owner, busy, error, active: window.WosSkinHost?.tweakState || [],
         shell: shellHere(),
-        tweaks: [...manifests].filter(([id]) => shownInGroup(id)).filter(([id]) => !retiring(id)).map(([id, m]) => ({ id, name: m.name, description: m.description || '', author: id.split('/')[0], builtin: globalIds().includes(id), layout: layoutForView(id), view: viewOf(id), on: groupOf(id) ? groupOn(id) : enabled(id) })).map(t => t.view ? { ...t, shells: shellsOf(t.id), on: t.id === wornView(recipe()) } : Array.isArray(manifests.get(t.id)?.shells) ? { ...t, shells: shellsOf(t.id) } : t).map(t => locked() && !t.builtin && !t.view ? { ...t, on: false, locked: true } : t), locked: locked(), channel });
+        tweaks: [...manifests].filter(([id]) => shownInGroup(id)).map(([id, m]) => ({ id, name: m.name, description: m.description || '', author: id.split('/')[0], builtin: globalIds().includes(id), layout: layoutForView(id), view: viewOf(id), on: groupOf(id) ? groupOn(id) : enabled(id) })).map(t => t.view ? { ...t, shells: shellsOf(t.id), on: t.id === wornView() } : Array.isArray(manifests.get(t.id)?.shells) ? { ...t, shells: shellsOf(t.id) } : t).map(t => locked() && !t.builtin && !t.view ? { ...t, on: false, locked: true } : t), locked: locked(), channel });
     },
     installed, defaults, authors,
-    // wizard/skins-look-only is on here: Settings' New skin then saves no feature choices into a skin.
-    get lookOnly() { return lookOnly(); },
     // Initial shell routes must see the selected view, including overlapping refreshes.
     async whenReady() { let p; do { p = applying; await p; } while (p !== applying); },
     get desktopView() { return desktop ? effectiveDesktopView() : null; },
@@ -320,7 +310,7 @@
     get installedReady() { return !!installedP?.settled; },
     // Look sync (core/look-sync.js): the tweaks switched on here, and wearing the owner's shared set instead.
     get mix() { return copy(state.mix || {}); },
-    get defaultChoices() { return recipe() ? {} : Object.fromEntries(globalIds().map(id => [id, !globalOff(id)])); },
+    get defaultChoices() { return Object.fromEntries(globalIds().map(id => [id, !globalOff(id)])); },
     // Switches that became release-wide defaults after owners could already choose them (catalog `promotedDefaults`,
     // e.g. wizard-ux issue 1236): look sync carries an owner's earlier explicit on/off for them into `defaults` once.
     get promotedDefaults() { return (catalog?.promotedDefaults || []).filter(id => globalIds().includes(id)); },
@@ -334,16 +324,13 @@
       catalog ||= await read('tweaks/catalog.json'); await readCore();
       const grouped = new Set((catalog.oneOf || []).flat()), next = {};
       for (const id of switchIds()) if (!globalIds().includes(id) && !grouped.has(id)) next[id] = false;
-      for (const [id, on] of Object.entries(mix || {})) if (on === true && ID.test(id)) next[canonical(id)] = true;
+      for (const [id, on] of Object.entries(mix || {})) if (on === true && ID.test(id) && id !== LOOK_ONLY) next[canonical(id)] = true;
       // Old files omit defaults: retain local offs until the upgrade seeds them.
       const off = new Set(state.defaultsOff || []);
-      // Decided on the state being adopted: a shared look-only switch arriving with these defaults sets the skin aside now.
-      const skinDecides = !!window.WosMySkin?.active && !(!locked() && next[LOOK_ONLY] === true);
-      const shared = skinDecides ? [] : globalIds().filter(id => typeof defaults[id] === 'boolean');
+      const shared = globalIds().filter(id => typeof defaults[id] === 'boolean');
       for (const id of shared) defaults[id] ? off.delete(id) : off.add(id);
       state.defaultsOff = [...off]; if (shared.length) state.defaultsMigrated = true;
       state.mix = next; state.preset = 'none'; delete state.carry;
-      if (next[LOOK_ONLY] === true) state.recipeCarried = true; // the switch came from elsewhere: nothing to carry here, ever
       if (views && typeof views === 'object') state.views = cleanViews(views);
       Store.write(state);
       return apply();
@@ -363,7 +350,6 @@
         return apply();
       }
       // A oneOf group is one switch: off = this member off (that turns the group off); on = clear every member's off.
-      if (id === LOOK_ONLY && !item.on) { await setOne(id, true); await carryRecipe(); return apply(); }
       if (item.on) await setOne(id, false);
       else for (const m of groupOf(id) || [id]) if (m === id || explicitOff(m)) await setOne(m, true);
       return apply();

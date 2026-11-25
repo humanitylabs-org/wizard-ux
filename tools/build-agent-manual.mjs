@@ -269,10 +269,10 @@ export function render(data, help) {
     }
     o.push('');
   }
-  o.push('## Feature switches (Settings › Appearance › Try new features)', '', ...h.switchesIntro, '');
+  o.push('## Feature switches (Settings › Try new features)', '', ...h.switchesIntro, '');
   const kinds = { switch: data.switches.filter(t => t.kind === 'switch'), setting: data.switches.filter(t => t.kind !== 'switch') };
-  // The path of a tester switch is the section's own (Settings › Appearance › Try new features › <name>): said once.
-  const tryPath = t => `Settings › Appearance › Try new features › ${t.name}`;
+  // The path of a tester switch is the section's own (Settings › Try new features › <name>): said once.
+  const tryPath = t => `Settings › Try new features › ${t.name}`;
   for (const t of [...kinds.switch].sort((a, b) => a.name.localeCompare(b.name))) {
     const sh = h.switches[t.id] || {};
     o.push(`- **${t.name}**: ${line(sh.help || t.description, sh.where !== tryPath(t) && `Where: ${sh.where}`, sh.when && `(${sh.when})`)}`);

@@ -32,13 +32,8 @@
     get layoutLoading() { return layoutLoading; }, set layoutLoading(v) { layoutLoading = v; },
     get layoutRec() { return layoutRec; }, set layoutRec(v) { layoutRec = v; },
     get layoutSeq() { return layoutSeq; }, set layoutSeq(v) { layoutSeq = v; },
-    get lookOnly() { return lookOnly; }, set lookOnly(v) { lookOnly = v; },
-    get packageReady() { return packageReady; }, set packageReady(v) { packageReady = v; },
     get panelHold() { return panelHold; }, set panelHold(v) { panelHold = v; },
     get panelOn() { return panelOn; }, set panelOn(v) { panelOn = v; },
-    get personal() { return personal; }, set personal(v) { personal = v; },
-    get personalError() { return personalError; }, set personalError(v) { personalError = v; },
-    get personalSeq() { return personalSeq; }, set personalSeq(v) { personalSeq = v; },
     get routing() { return routing; }, set routing(v) { routing = v; },
     get shell() { return shell; }, set shell(v) { shell = v; },
     get slotContract() { return slotContract; }, set slotContract(v) { slotContract = v; },
@@ -86,37 +81,15 @@
   let claimAt = -Infinity;          // when a claimed finger last went down or lifted (a back swipe that follows is the gesture's)
   const requested = [];             // asset URLs requested (diagnostics + tests)
   let importer = url => import(url);
-  let committedId = null, loadSeq = 0;
-  /* Skins are look only (wizard-ux#1190, switch wizard/skins-look-only, off by default). While the switch is among the
-   * tweaks the experience asks for, no skin script runs: neither a skin package's skin.js nor an own skin's personal
-   * script. Their stylesheets still apply. Switching it off brings both back (the personal one only if still approved). */
-  const LOOK_ONLY = 'wizard/skins-look-only';
-  let lookOnly = false;
-  let personal = null, personalSeq = 0, packageReady = Promise.resolve();
+  let committedId = null;
+  /* Skins are look only (wizard-ux#1190): a skin package brings its stylesheet only, and no skin script runs (neither
+   * a package's skin.js nor an own skin's). */
   /* Built-in gestures, the release stamp, the orb stand-in, the stylesheet and the error fallback: core/skin-host-boot.js (moved verbatim, wizard-ux issue 1665). */
   const { builtinDefs, builtins, dirOf, ensureCss, env, layoutDiagnostic, loadOrb, record, skinOf, stamp, url } = window.WizCore.skinHostParts.boot({ cssLinks, isDoc, requested });
   /* What a skin script receives and how it is loaded and disposed; core/skin-host-api.js. */
-  const { dispose, fault, guard, makeApi, nameOf, unload, bindLate: apiLate } = window.WizCore.skinHostParts.api({ backClaims, builtins, claims, clock, disabled, env, ERR_LIMIT, ERR_WINDOW, EVENTS, isDoc, layoutDiagnostic, levels, loadOrb, personalFailed, skinHostVars, taps });
+  const { dispose, fault, guard, makeApi, nameOf, unload, bindLate: apiLate } = window.WizCore.skinHostParts.api({ backClaims, builtins, claims, clock, disabled, env, ERR_LIMIT, ERR_WINDOW, EVENTS, isDoc, layoutDiagnostic, levels, loadOrb, skinHostVars, taps });
 
-  async function load(id) {
-    const seq = ++loadSeq;
-    unload('switch');
-    const pkg = skinOf(id);
-    if (!pkg || !pkg.js || lookOnly || disabled.has(id) || !shell) return false;
-    const E = env();
-    if ((pkg.when || 'touch') === 'touch' && !E.touch) return false;
-    const href = url(dirOf(id, pkg), 'skin.js'); requested.push(href);
-    let mod;
-    try { mod = await importer(href); } catch (e) { try { console.warn(`[skin ${id}] import failed:`, e); } catch (_) {} return false; }
-    if (seq !== loadSeq || committedId !== id || lookOnly) return false; // switched again while loading
-    const setup = mod && mod.default;
-    if (typeof setup !== 'function') return false;
-    const a = record(id, nameOf(id));
-    active = a; lastRoute = '';
-    try { a.teardown = setup(makeApi(a)); } catch (e) { fault(a, 'setup', e); if (a.dead) return false; }
-    if (active === a) emitRoute();
-    return active === a;
-  }
+  function load() { unload('switch'); return false; }
   /* Events, the route, and the layout layer: loading, booting and painting a layout; core/skin-host-layout.js. */
   const { bootGiveUp, booting, emit, emitBeside, emitRoute, endBoot, layers, layoutLoadFailed, layoutUrl, paintChatsOwner, paintLayout, routeOf, startBoot, bindLate: layoutLate } = window.WizCore.skinHostParts.layout({ builtins, chatsClaimed, isDoc, layoutDiagnostic, layoutFile, layoutOf, requested, skinHostVars, stamp });
   apiLate({ layers, layoutUrl, routeOf });
@@ -294,45 +267,6 @@
     return next;
   }
 
-  /* My skin supplies hashed bytes, never a service URL. Check consent again after waiting for the
-   * package; generations cancel stale/revoked loads. Blob import executes only the verified bytes. */
-  // A broken owner script switches itself off and names its file (spec SKINS_AND_VIEWS §2): the error is kept
-  // for Settings, the owner hears it once, and wos:personal-error lets My skin revoke the approval so the next
-  // load starts with the script off.
-  let personalError = null;
-  function personalFailed(file, e, notify = true) {
-    const message = String((e && (e.message || e)) || 'error').split('\n')[0].slice(0, 160);
-    personalError = { file, message };
-    try { console.warn('[%s] turned off:', file, e); } catch (_) {}
-    if (notify) try { shell && shell.toast(`${file} turned off · ${message}`); } catch (_) {}
-    try { window.dispatchEvent?.(new CustomEvent('wos:personal-error', { detail: { ...personalError } })); } catch (_) {}
-  }
-  // The look-only switch turned on or off: stop both skin script layers now, or bring the skin package's back.
-  // My skin hears wos:look-only and restarts its approved personal script itself.
-  function setLookOnly(on) {
-    if (on === lookOnly) return;
-    lookOnly = on;
-    if (on) { loadSeq++; unload('look-only'); personalSeq++; dispose(personal, 'look-only'); }
-    else if (shell && committedId) packageReady = load(committedId);
-    try { window.dispatchEvent?.(new Event('wos:look-only')); } catch (_) {}
-  }
-  async function loadPersonal(bytes, allowed, file = 'Skins/My skin/skin.js') {
-    const seq = ++personalSeq;
-    dispose(personal, 'replace'); personalError = null;
-    let pending; do { pending = packageReady; await pending; } while (pending !== packageReady);
-    if (seq !== personalSeq || !shell || lookOnly || disabled.has('my-skin') || !allowed()) return false;
-    const href = URL.createObjectURL(new Blob([bytes], { type: 'application/javascript' }));
-    let mod;
-    try { mod = await importer(href); }
-    catch (e) { if (seq === personalSeq) personalFailed(file, e); return false; }
-    finally { URL.revokeObjectURL(href); }
-    if (seq !== personalSeq || lookOnly || !allowed()) return false;
-    if (typeof mod?.default !== 'function') { personalFailed(file, new Error('no export default function setup(api)')); return false; }
-    const a = record('my-skin', file); personal = a;
-    try { a.teardown = mod.default(makeApi(a)); } catch (e) { dispose(a, 'error'); personalFailed(file, e); return false; }
-    lastRoute = ''; emitRoute();
-    return personal === a;
-  }
   function release(id) { if (backClaims.delete(id)) claimAt = clock(); claims.delete(id); for (const l of layers()) l.claims.delete(id); }
   function startBuiltin(name) {
     const d = builtinDefs.get(name); if (!d || !shell || builtins.has('core:' + name) || disabled.has('core:' + name)) return false;
@@ -374,7 +308,6 @@
   async function loadTweaksNow(entries, contract, { teamAuthors = [], trustedAuthors = [] } = {}) {
     const seq = ++tweakSeq; slotContract = contract; tweaksAsked = true;
     const want = entries.filter(safeTweakId);
-    setLookOnly(want.includes(LOOK_ONLY));
     for (const [id, l] of preCss) if (!want.includes(id)) { l.remove(); preCss.delete(id); }
     for (const id of want) tweakCss(id);
     expected.clear(); for (const id of want) expected.add(id);
@@ -430,5 +363,5 @@
     paintTweaks(); lastRoute = ''; emitRoute(); window.dispatchEvent?.(new Event('wos:prefs')); return true;
   }
   /* The skin host object the shells call; core/skin-host-host.js. */
-  window.WizCore.skinHostParts.host({ backClaims, BOOT_GUESS_MS, bootGiveUp, booting, builtinDefs, builtins, chatArchiveOrders, chatListOwners, chatsClaimed, claims, clock, commandUis, cssLinks, disabled, dispose, emit, emitBeside, emitRoute, emptyHomes, ensureCss, env, escapeSurfaces, EXPECT_KEY, expected, homeHtml, inboxThreads, interceptors, isDoc, keyGuides, keyHandlers, layers, LAYOUT_KEY, layoutOf, LAYOUTS, levels, load, loadLayout, loadPersonal, loadTweaks, LOOK_ONLY, NOTE_ID, openRoutes, orbSwipeHolders, orbTaps, overlays, paintLayout, paintTweaks, panelHolders, preCss, release, REPLY_LENGTHS, replySummary, requested, safeTweakId, scriptProblem, setLayout, skinHostVars, snoozeLast, startBoot, startBuiltin, taps, tweakCss, tweaks, unload });
+  window.WizCore.skinHostParts.host({ backClaims, BOOT_GUESS_MS, bootGiveUp, booting, builtinDefs, builtins, chatArchiveOrders, chatListOwners, chatsClaimed, claims, clock, commandUis, cssLinks, disabled, dispose, emit, emitBeside, emitRoute, emptyHomes, ensureCss, env, escapeSurfaces, EXPECT_KEY, expected, homeHtml, inboxThreads, interceptors, isDoc, keyGuides, keyHandlers, layers, LAYOUT_KEY, layoutOf, LAYOUTS, levels, load, loadLayout, loadTweaks, NOTE_ID, openRoutes, orbSwipeHolders, orbTaps, overlays, paintLayout, paintTweaks, panelHolders, preCss, release, REPLY_LENGTHS, replySummary, requested, safeTweakId, scriptProblem, setLayout, skinHostVars, snoozeLast, startBoot, startBuiltin, taps, tweakCss, tweaks, unload });
 })();

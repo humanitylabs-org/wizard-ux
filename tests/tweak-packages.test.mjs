@@ -214,9 +214,10 @@ test('own recipes expose all installed tweaks, use published defaults and isolat
   const skin = {id:'quiet',tweaks:{...defaults,'miguel/snooze-someday':true}};
   f.window.WosMySkin = {active:skin,update(v){ Object.assign(skin.tweaks,v.tweaks); }};
   await f.E.refresh(); const cat = JSON.parse(read('web/tweaks/catalog.json')); assert.equal(f.E.state.tweaks.length, cat.tweaks.length + coreIds.length - (cat.oneOf || []).reduce((n, g) => n + g.length - 1, 0), 'one switch per oneOf group');
-  assert.deepEqual(f.active(),['miguel/snooze-someday']);
+  assert.deepEqual(f.active(),['miguel/snooze-someday'], 'its old choice is carried into the shared switches once (wizard-ux#1190)');
   await f.E.toggle('wizard/failure-reason'); assert.ok(f.active().includes('wizard/failure-reason'));
-  f.window.WosMySkin.active=null; await f.E.refresh(); assert.deepEqual(f.active(),[]);
+  assert.equal(skin.tweaks['wizard/failure-reason'], false, 'a flip never writes into the skin');
+  f.window.WosMySkin.active=null; await f.E.refresh(); assert.deepEqual(f.active(),['miguel/snooze-someday','wizard/failure-reason'], 'taking a skin off changes no feature: a skin is a look only');
 });
 
 test('installed list warms base profiles so picking Mizel does not wait for another network request', async () => {
@@ -470,7 +471,7 @@ function lookTweaks(tweaks, own = null) {
   const s = readRaw('web/core/settings.js');
   const ctx = runRecording(`${between(s, '  const tweakSwitches =', '\n')}\n${block(s, '  function tweakRows(')}\nthis.tweakRows = tweakRows;`, { window: { WosExperience: { state: { tweaks, channel: 'latest', shell: 'phone' }, authors: async () => [] }, WosMySkin: { active: own } },
     esc: v => String(v), shellTweaks: l => l, tweakOpts: new Map(), mounts: [], authorList: [{ id: 'miguel', name: 'Miguel' }, { id: 'wizard', name: 'Wizard' }] });
-  const doc = createDocument(); doc.body.innerHTML = ctx.tweakRows({}); return doc.body;
+  const doc = createDocument(); doc.body.innerHTML = ctx.tweakRows({}, 'try'); return doc.body;
 }
 test('Settings › Look: one flat Tweaks list, a switch per tweak labelled by author, no "All of" buttons, in every skin (Miguel, 1 Nov 2026)', () => {
   const tweaks = [{ id: 'wizard/zeta', name: 'Zeta', author: 'wizard', on: true }, { id: 'miguel/alpha', name: 'Alpha', author: 'miguel', on: false }, { id: 'miguel/mid', name: 'Mid', author: 'miguel', on: true }];
@@ -501,7 +502,7 @@ test('flat Tweaks list keeps a device mix exactly: whatever is on stays on, rend
   assert.equal(E.chooseAuthor, undefined);
 });
 
-const REMOVED = ['wizard/orb-radial', 'wizard/new-send-list', 'wizard/wizardos-name', 'wizard/two-orbs', 'wizard/app-borders', 'wizard/pin-buttons', 'miguel/no-desk-close', 'miguel/group-by-day', 'miguel/switch-row-actions', 'miguel/orb-shell', 'miguel/apps-home', 'wizard/bar-scrub', 'wizard/chat-channels', 'wizard/thread-tracker', 'wizard/app-updates-list', 'wizard/pin-fast-open', 'wizard/draft-marks', 'wizard/pin-reach-answer', 'wizard/agent-inbox', 'wizard/chats-inbox', 'wizard/settings-search', 'wizard/standard-first-setup', 'wizard/background-continue', 'wizard/local-app-routes', 'wizard/app-wake'];
+const REMOVED = ['wizard/orb-radial', 'wizard/new-send-list', 'wizard/wizardos-name', 'wizard/two-orbs', 'wizard/app-borders', 'wizard/pin-buttons', 'miguel/no-desk-close', 'miguel/group-by-day', 'miguel/switch-row-actions', 'miguel/orb-shell', 'miguel/apps-home', 'wizard/bar-scrub', 'wizard/chat-channels', 'wizard/thread-tracker', 'wizard/app-updates-list', 'wizard/pin-fast-open', 'wizard/draft-marks', 'wizard/pin-reach-answer', 'wizard/agent-inbox', 'wizard/chats-inbox', 'wizard/settings-search', 'wizard/standard-first-setup', 'wizard/background-continue', 'wizard/local-app-routes', 'wizard/app-wake', 'wizard/skins-look-only'];
 test('retired Orb radial and the switches removed in wizard-ux issue 1239: saved mixes and recipes never request a removed package', async () => {
   const mixes = [
     new Map(),

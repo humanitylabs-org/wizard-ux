@@ -18,7 +18,6 @@
     "wizard/desktop-chats",
     "wizard/needs-you-reason",
     "wizard/failure-reason",
-    "wizard/skins-look-only",
     "wizard/update-bug-reports",
     "wizard/link-token-repair",
     "wizard/graceful-restart",
@@ -60,6 +59,5 @@
   ],
   "aliases": {
     "wizard/machines-home": "miguel/machines-home"
-  },
-  "lookOnlyOff": []
+  }
 }

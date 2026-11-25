@@ -1,6 +1,6 @@
-// Skins are look only (wizard-ux#1190, slice 2): while the off-by-default switch wizard/skins-look-only is among the
-// tweaks the experience asks for, no skin script runs. Neither a skin package's skin.js nor an own skin's personal
-// script; their stylesheets still apply. Switching it off brings both back (the personal one only if still approved).
+// Skins are look only (wizard-ux#1190, on for everyone): no skin script runs. Neither a skin package's skin.js nor an own
+// skin's skin.js; their stylesheets still apply. The old per-device script approval is cleared, and Settings has no
+// script on/off row. The owner-script lint and the Blob-module CSP stay as they were.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
@@ -8,126 +8,81 @@ import { readFileSync } from 'node:fs';
 import { createHash, webcrypto } from 'node:crypto';
 import { withSkinHostParts } from './fixtures/skin-host-parts.mjs';
 import { settingsView } from './fixtures/skin-palettes-harness.mjs';
+import { parseCsp, nginxCsp, qaOriginCsp, serverPyCsp } from './fixtures/w1-csp.mjs';
 
 const source = p => readFileSync(new URL('../web/' + p, import.meta.url), 'utf8');
 const tick = () => new Promise(r => setTimeout(r, 10));
-const ID = 'wizard/skins-look-only';
 const CODE = 'export default api => () => {};\n';
 
-function hostPage({ store = new Map() } = {}) {
-  const imported = [], events = []; let packageOff = 0, personalOff = 0;
+function hostPage() {
+  const imported = [];
   const ctx = { URL: { createObjectURL: () => 'blob:verified', revokeObjectURL() {} }, Blob, Event: class { constructor(type) { this.type = type; } },
     console: { warn() {} }, matchMedia: () => ({ matches: true }), navigator: { userAgent: 'Android' },
     requestAnimationFrame: () => 1, cancelAnimationFrame() {}, setTimeout, clearTimeout,
-    localStorage: { getItem: k => store.get(k) ?? null, setItem: (k, v) => store.set(k, String(v)), removeItem: k => store.delete(k) },
+    localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
     WosSkin: { current: 'fixture', pkgOf: () => ({ dir: 'fixture', js: true, when: 'always' }), list: [] },
-    dispatchEvent: e => { events.push(e.type); },
+    dispatchEvent() {},
   };
   ctx.window = ctx; vm.runInNewContext(withSkinHostParts(source('core/skin-host.js')), ctx);
   const H = ctx.WosSkinHost;
-  H._test.setImporter(async url => {
-    imported.push(url);
-    if (url.startsWith('skins/')) return { default() { return () => { packageOff++; }; } };
-    return { default() { return () => { personalOff++; }; } };
-  });
+  H._test.setImporter(async url => { imported.push(url); return { default() { return () => {}; } }; });
   const adapter = { route: () => ({ view: 'desk' }), root: () => ({ addEventListener() {}, removeEventListener() {} }), toast() {} };
-  const skinJs = () => imported.filter(u => u.startsWith('skins/')).length;
-  return { H, adapter, imported, events, skinJs, get packageOff() { return packageOff; }, get personalOff() { return personalOff; } };
+  return { H, adapter, imported };
 }
 
-test('switch off (today): the skin package script and the personal script both run', async () => {
+test('a skin package with a script: attaching and committing it never imports skin.js', async () => {
   const p = hostPage(); p.H.attach(p.adapter); await tick();
-  assert.equal(p.H.lookOnly, false);
-  assert.equal(p.H.state.active, 'fixture');
-  assert.equal(await p.H.loadPersonal(new TextEncoder().encode(CODE), () => true), true);
-});
-
-test('switch on: running skin scripts stop, and neither layer can start again', async () => {
-  const p = hostPage(); p.H.attach(p.adapter); await tick();
-  await p.H.loadPersonal(new TextEncoder().encode(CODE), () => true);
-  await p.H.loadTweaks([ID], { apiVersion: 1 });
-  assert.equal(p.H.lookOnly, true);
-  assert.equal(p.H.state.active, null, 'skin.js torn down');
-  assert.equal(p.packageOff, 1); assert.equal(p.personalOff, 1);
-  assert.equal(p.H.personalState.active, false);
-  assert.ok(p.events.includes('wos:look-only'), 'My skin hears it');
-  const before = p.imported.length;
   p.H.commit('fixture'); await tick();
-  assert.equal(await p.H.loadPersonal(new TextEncoder().encode(CODE), () => true), false);
-  assert.equal(p.imported.length, before, 'nothing imported while look only');
+  assert.equal(p.imported.filter(u => /skin\.js/.test(u)).length, 0, 'skin.js never imported');
   assert.equal(p.H.state.active, null);
-  assert.ok(p.H.state.css.includes('fixture') || p.H.state.css.length === 0, 'the stylesheet path is untouched');
+  assert.equal(p.H.personalState.ready, true, 'the shell is attached');
+  assert.equal(typeof p.H.loadPersonal, 'undefined', 'there is no way to run an own skin\'s script');
+  assert.equal('lookOnly' in p.H, false, 'no switch left to read');
 });
 
-test('switch off again: the skin package script comes back', async () => {
-  const p = hostPage(); p.H.attach(p.adapter); await tick();
-  await p.H.loadTweaks([ID], { apiVersion: 1 });
-  assert.equal(p.H.state.active, null);
-  await p.H.loadTweaks([], { apiVersion: 1 }); await tick();
-  assert.equal(p.H.lookOnly, false);
-  assert.equal(p.H.state.active, 'fixture');
-  assert.equal(await p.H.loadPersonal(new TextEncoder().encode(CODE), () => true), true);
-});
-
-test('the switch known before the shell attaches: skin.js never starts', async () => {
-  const p = hostPage();
-  await p.H.loadTweaks([ID], { apiVersion: 1 });
-  p.H.attach(p.adapter); await tick();
-  assert.equal(p.H.state.active, null);
-  assert.equal(p.skinJs(), 0, 'skin.js never imported');
-});
-
-test('only the shared switch fences scripts: other tweaks leave skin scripts alone', async () => {
-  const p = hostPage(); p.H.attach(p.adapter); await tick();
-  await p.H.loadTweaks(['wizard/pin-buttons'], { apiVersion: 1 });
-  assert.equal(p.H.lookOnly, false);
-  assert.equal(p.H.state.active, 'fixture');
-});
-
-async function mySkin({ lookOnly = false, doc = false } = {}) {
+test('My skin never fetches or runs a skin.js and clears the old approval', async () => {
   const bytes = new TextEncoder().encode(CODE), sha = createHash('sha256').update(bytes).digest('hex');
-  const store = new Map([['wos.myskin.js.ok', sha]]), loaded = [], listeners = {};
-  const host = { lookOnly, personalState: { ready: true }, scriptProblem: () => null, stopPersonal() {}, async loadPersonal(b, allowed) { if (allowed()) loaded.push(b); return true; } };
+  const store = new Map([['wos.myskin.js.ok', sha]]), calls = [];
   const ctx = { URLSearchParams, Uint8Array, TextDecoder, crypto: webcrypto, location: { search: '' },
     localStorage: { getItem: k => store.get(k) || null, setItem: (k, v) => store.set(k, String(v)), removeItem: k => store.delete(k) },
-    WosSkinHost: host, addEventListener: (t, fn) => { listeners[t] = fn; }, dispatchEvent() {},
+    WosSkinHost: { personalState: { ready: true }, async loadPersonal() { throw Error('must not run'); } },
+    addEventListener() {}, dispatchEvent() {},
     fetch: async url => {
+      calls.push(url);
       if (url.endsWith('format=json')) return { ok: true, json: async () => ({ script: { exists: true, sha256: sha, bytes: bytes.length } }) };
-      if (url.endsWith('/script')) return { ok: true, headers: { get: k => k.toLowerCase() === 'content-type' ? 'application/javascript' : sha }, arrayBuffer: async () => bytes.buffer };
       return { ok: true, headers: { get: () => 'text/css' }, text: async () => '' };
     },
   };
   ctx.window = ctx;
-  // doc: a page (a document), so My skin also wires its page listeners (storage, wos:look-only, visibility).
-  if (doc) ctx.document = { addEventListener() {}, createElement: () => ({ dataset: {}, remove() {} }), head: { appendChild() {} }, documentElement: { toggleAttribute() {} }, visibilityState: 'visible' };
   vm.runInNewContext(source('core/my-skin.js'), ctx);
   await ctx.WosMySkin.refresh();
-  return { M: ctx.WosMySkin, host, loaded, listeners };
-}
-
-test('My skin does not start an approved personal script while skins are look only, and starts it once off', async () => {
-  const b = await mySkin({ lookOnly: true });
-  assert.equal(b.loaded.length, 0);
-  assert.equal(b.M.state.script.approved, true, 'the approval is kept, not revoked');
-  b.host.lookOnly = false; await b.M.startScript();
-  assert.equal(b.loaded.length, 1);
+  assert.equal(store.has('wos.myskin.js.ok'), false, 'stored approval cleared');
+  assert.ok(!calls.some(u => u.endsWith('/script')), 'the script is never read');
+  assert.equal(ctx.WosMySkin.turnOn, undefined); assert.equal(ctx.WosMySkin.startScript, undefined);
+  assert.equal(ctx.WosMySkin.state.script, undefined);
 });
 
-test('My skin restarts its script on wos:look-only, and Settings shows it paused while on', async () => {
-  const b = await mySkin({ lookOnly: true, doc: true }); await tick();
-  assert.equal(b.loaded.length, 0);
-  assert.equal(typeof b.listeners['wos:look-only'], 'function', 'My skin listens for the switch');
-  b.host.lookOnly = false; b.listeners['wos:look-only'](); await tick();
-  assert.equal(b.loaded.length, 1, 'the switch going off restarts the approved script at once');
-  // Settings › Look on the worn own skin: the script row says paused while the switch is on.
+test('Settings › Look on a worn own skin has no script row', () => {
   const S = { current: 'nebula', list: [{ id: 'nebula', name: 'Nebula', t: {} }], families: [{ id: 'wizard', name: 'Wizard', palettes: ['nebula'] }], familyOf: () => 'wizard', lastIn: () => 'nebula' };
   const M = { recipes: [{ id: 'own-1', name: 'Quiet', base: 'nebula' }], active: { id: 'own-1', name: 'Quiet', base: 'nebula' }, on() {},
     state: { script: { exists: true, approved: true }, off: false } };
   const h = settingsView({ WosSkin: S, WosMySkin: M, timer: () => 0 });
-  h.s.WosSkinHost = { lookOnly: true }; h.view.focus('look');
-  assert.match(h.html(), /<b>Skin script paused<\/b><small>Skins\/own-1\/skin\.js · paused while Skins are look only is on<\/small>/);
-  h.s.WosSkinHost.lookOnly = false; h.view.focus('look');
-  assert.match(h.html(), /<b>Skin script on<\/b>/);
-  assert.doesNotMatch(h.html(), /paused/);
+  h.view.focus('look');
+  assert.match(h.html(), /data-ownskin-panel/);
+  assert.doesNotMatch(h.html(), /Skin script|data-myskin="on"|data-myskin="off"/);
   h.view.destroy();
+});
+
+test('owner-script lint still refuses banned APIs', () => {
+  const p = hostPage();
+  assert.equal(p.H.scriptProblem(CODE), null);
+  for (const code of ['fetch("/x")', 'window.localStorage.getItem("x")', 'setTimeout(fn, 1)', 'eval("x")', 'el.innerHTML = "x"', 'import("/x.js")']) assert.ok(p.H.scriptProblem(code), code);
+});
+
+test('production and QA CSP keep no inline/eval permission', async () => {
+  for (const [name, header] of [['nginx', nginxCsp()], ['qa-origin', await qaOriginCsp()], ['server.py', await serverPyCsp()]]) {
+    const csp = parseCsp(header);
+    assert.deepEqual(csp['script-src'], ["'self'", 'blob:'], name);
+    assert.ok(!csp['default-src'].some(s => /unsafe-(inline|eval)/.test(s)), name);
+  }
 });

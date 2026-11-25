@@ -170,7 +170,7 @@ test('unsent Edit consumes only after the shared draft store verifies text and a
 });
 
 // Switches live in Settings (For testers only) and in the WizardOS Tracker app, one state (Miguel, 7 Nov 2026).
-test('Settings › Look shows "Try new features" on For testers and hides it on For everyone, in both mounts', () => {
+test('Settings shows a "Try new features" page on For testers and hides it on For everyone, in both mounts', () => {
   const { sandbox, roots } = harness();
   sandbox.WosSkin = { current:'obsidian', list:[], families:[{ id:'mizel', name:'Mizel', tweaks:'miguel', palettes:['obsidian'] }], familyOf:()=>'mizel' };
   const tweak = { id:'miguel/snooze-someday', name:'One-tap Snooze', description:'Snooze is one tap', author:'miguel', on:true };
@@ -184,7 +184,9 @@ test('Settings › Look shows "Try new features" on For testers and hides it on 
       assert.match(html, /data-tweak-toggle="miguel\/orb-shell"/, channel + ': views stay');
       assert.doesNotMatch(html, /WizardOS Tracker/, 'Settings is self-contained: no pointer to the Tracker');
       if (channel === 'latest') {
-        assert.match(html, /data-try-features><h4>Try new features<\/h4><p class="st-hint">Unfinished features you can switch on to try\. The team can see which ones you use only if you allow it\.<\/p>[^]*data-tweak-toggle="miguel\/snooze-someday"[^]*class="tw-by">by miguel</);
+        assert.doesNotMatch(html, /data-try-features/, 'feature switches are not on Look (wizard-ux#1190)');
+        v.focus('try-features'); assert.equal(v.page, 'try-features');
+        assert.match(root.innerHTML, /data-try-features><h4>Try new features<\/h4><p class="st-hint">Unfinished features you can switch on to try\. The team can see which ones you use only if you allow it\.<\/p>[^]*data-tweak-toggle="miguel\/snooze-someday"[^]*class="tw-by">by miguel</);
       } else {
         assert.doesNotMatch(html, /Try new features|data-try-features|data-tweak-toggle="miguel\/snooze-someday"/, 'For everyone: hidden');
       }

@@ -1,6 +1,6 @@
 # Look packages and behaviour tweaks
 
-The 24 October decision supersedes the historical behaviour-in-skins instructions below. New skins are look only (tokens, CSS, backgrounds, icons). Behaviour belongs in `web/tweaks/<owner>/<tweak>/`, never in a new skin script or core patch. Existing non-Miguel skin scripts and My skin consent remain compatibility surfaces; do not add new behaviour there.
+The 24 October decision supersedes the historical behaviour-in-skins instructions below. Skins are look only (tokens, CSS, backgrounds, icons). Behaviour belongs in `web/tweaks/<owner>/<tweak>/`, never in a skin script or core patch. Since wizard-ux#1190 (James, 25 Nov 2026) no skin script runs at all: the host never imports a package's `skin.js` or an own skin's `Skins/<name>/skin.js`, there is no script approval, and Settings › Appearance is one list of looks (every colour, own skins, + New skin) with the feature switches on their own Try new features page. The skin.js sections below are history.
 
 A tweak ships `manifest.json` (`id`, `version`, `author`, `apiVersion`, `capabilities`), `tweak.js` default `setup(api)` returning teardown, optional `tweak.css`, and `contract.mjs`. Core CI discovers each shipped contract. `slots.json` owns the versioned mounts. Remove/rename a v1 slot only with an API bump; additions are compatible. Select only literal `[data-slot]` / `[data-part]`, never shell classes. `api.slot(name)` reads a mount; `api.slot.mount(name,node,order)` inserts in numeric order and restores borrowed core elements on teardown. Missing mounts are safe no-ops until the next render.
 
@@ -52,7 +52,8 @@ whichever skin is picked. It starts empty, and empty means the picked skin exact
   desktop, after `core/skins.css`, the skin package's `skin.css` and `skin-frame.css`. Same specificity wins later
   in the cascade, so its rules sit on top of every skin. The last good copy is cached for the first frame.
 - **Targeting:** `html[data-skin] …` for every skin, `html[data-skin="grove"] …` for one.
-- **Optional behaviour:** `Skins/My skin/skin.js` uses the hook API below, after the selected package script.
+- **Behaviour (retired, wizard-ux#1190):** a `skin.js` in the folder never runs. What follows is how it used to work.
+  `Skins/My skin/skin.js` used the hook API below, after the selected package script.
   It runs only after the owner taps **Turn on** in Settings › Look for its exact SHA-256, saved in
   `wos.myskin.js.ok` on this device. Every edit needs a new owner tap; agents cannot approve it.
   The shell hashes the fetched bytes and imports those same bytes as a Blob module (no URL re-fetch).

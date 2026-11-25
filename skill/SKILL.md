@@ -69,17 +69,21 @@ Storage & backups: disk space and backups, filled by the apps that handle them. 
 
 ### Appearance
 Appearance: the skin (look), colors, mode, background, desktop view, window opacity, and Try new features.
-- Skin: pick a skin (a whole look) and one of its colors; + New skin makes your own skin (name, base skin, color, tweaks), which you can then ask the agent to change ('change my <name> skin so…'). Your own skins show here with Edit with your Wizard and Remove skin. Some skins also offer Mode (Dark or Light) and Background (plain, pictures, or your own image).
-  - Colors: the colors of the chosen skin
+- Looks: one list of looks, every color plus your own skins; + New skin makes your own skin (a name, a base skin and a color), which you can then ask the agent to change ('change my <name> skin so…'). A skin is a look only: it never turns features on or off. Your own skins show here with Edit with your Wizard and Remove skin. Some colors also offer Mode (Dark or Light) and Background (plain, pictures, or your own image).
+  - Looks: every color and your own skins in one row; + New skin adds one
   - Mode: Dark or Light, for skins that have both
   - Background: Plain, pictures, or (some skins) your own image with Choose image
   - Shell view: desktop only: how this desktop is laid out, chosen per device
-  - Try new features: the feature switches (For testers channel only), see Feature switches below
   - Desks: the classic desktop: a top bar, desks of windows
   - AI apps: chats in a sidebar on the left, the chat in the middle, apps on the right (like the ChatGPT and Claude apps); the standard desktop view
 - Windows › Window opacity: a slider for how see-through every window and app is, on this device; Use skin default puts it back.
 - Home: a switch for Machines on Home, shown here only when it is on for everyone.
 - Advanced › Import skin JSON: apply a skin file (up to 8 KB) on this device.
+
+### Try new features
+Try new features: the feature switches, its own page in Settings (For testers channel only). See Feature switches below. (only on the For testers channel, when there are switches).
+- Try new features: unfinished features you can switch on to try, A to Z, each labelled with who made it.
+  - Try new features: the feature switches, see Feature switches below
 
 ### Chats & app screens
 Chats & app screens: how Chats behaves and looks, which Chats app is the default, and app screens.
@@ -158,9 +162,9 @@ Phone: things only the Android app can do: Wizard Everywhere (floating orb), sid
 - Orb switcher: choose what holding or swiping the orb offers on the phone. (phone).
 - Downloads: files you downloaded in Wizard apps, with their progress; reopens the Downloads sheet. (Android app).
 
-## Feature switches (Settings › Appearance › Try new features)
+## Feature switches (Settings › Try new features)
 
-Settings › Appearance › Try new features lists unfinished features anyone can switch on to try, A to Z, each 'by <author>'. The group only shows when this Wizard is on the For testers channel (Settings › About & updates › Channel › For testers); on For everyone it is hidden and these switches stay off. The same switches are also in the WizardOS Tracker app (Try it). A choice follows the owner on every device.
+Settings › Try new features lists unfinished features anyone can switch on to try, A to Z, each 'by <author>'. The group only shows when this Wizard is on the For testers channel (Settings › About & updates › Channel › For testers); on For everyone it is hidden and these switches stay off. The same switches are also in the WizardOS Tracker app (Try it). A choice follows the owner on every device.
 
 - **Action cards in chat**: An app's proposed action (a draft, an event) shows in chat with Approve, Edit, Open in app.
 - **Agent knows the Wizard interface**: Your agent gets this manual: every screen, Settings page and feature switch, so it can say where things are.
@@ -193,9 +197,8 @@ Settings › Appearance › Try new features lists unfinished features anyone ca
 - **Send and go**: On desktop, sending opens a fresh chat.
 - **Sent: the same rows as Inbox**: Sent uses Inbox's rows.
 - **Share feature counts**: Sends features you tried and your thumbs, plus a random box id.
-- **Short answer first**: A long agent reply shows only its one-line plain answer; tap it for the full reply. Choose whether replies start collapsed and how long the short answer is. Where: Settings › Appearance › Try new features › Short answer first; its options show under it when on.
+- **Short answer first**: A long agent reply shows only its one-line plain answer; tap it for the full reply. Choose whether replies start collapsed and how long the short answer is. Where: Settings › Try new features › Short answer first; its options show under it when on.
 - **Side button opens the Agent chat**: Android app: the side button opens Messenger's Agent chat for a note instead of a new Wizard chat.
-- **Skins are look only**: Skins become a look only. Your own skin stops deciding which features run: only the feature switches here and in the WizardOS Tracker do, the same for every tester. Turning this on carries the choices of the own skin you're wearing into those switches once. Tweaks on the drop list (Two orbs, App borders, No close on desks, Pin buttons, WizardOS name) are off. Skin scripts are paused. Your skin's saved choices and script approval are kept and come back when you switch this off.
 - **Stop write loops**: Stops repeated saves: an identical save within 10 s is not resent; over 20 a minute pauses.
 - **Swap sides**: Chats right, apps left (⌥⇧L).
 - **Swipe away downloads**: Phone: swipe the Downloaded banner away and swipe the Downloads sheet down to close it. (phone only).
@@ -219,7 +222,7 @@ No longer switches (owners and old chats may still name them):
 
 ## How do I…
 
-- **Turn on a new feature?** Settings › About & updates › Channel › For testers (if not already), then Settings › Appearance › Try new features › the feature's switch.
+- **Turn on a new feature?** Settings › About & updates › Channel › For testers (if not already), then Settings › Try new features › the feature's switch.
 - **Turn on Channels?** Nothing to turn on any more: open Chats and tap the Channels tab.
 - **Make Wizard update automatically?** Settings › About & updates › Updates › Automatic (installs overnight, never during a chat). For apps: Settings › About & updates › Apps › Automatic (checks and updates apps every hour).
 - **Update now?** When an update is ready, the card at the top of Settings shows Install (or Install now); tap it. 'Interface updated · Reload' just reloads the screen.
