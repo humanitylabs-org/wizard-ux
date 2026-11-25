@@ -335,6 +335,15 @@ Not covered yet (next slices, all on #133), so nobody should turn the box switch
   installed app id and view path; wizard-os#942). Today that is Files (upstream File Browser keeps its sign-in in the
   page's own localStorage and cookie and calls its own API directly): its window shows "Files opens in its own tab"
   with an Open Files button, and a pinned Files opens File Browser itself. Every other app keeps its sandboxed window.
+- One first-party app stays same-origin (`WizBrowserBoundary.sameOriginApp`, humanitylabs-org/telegram#68, decided
+  there for James): TG style is a second view of the shell's own chats and reads, opens and sends them through the
+  shell page's `WizLive`/`WosChat`/`WosModels`, which a sealed window cannot reach. Its window gets no sandbox, like
+  Store and Setup, only when the installed app id is `tg-style`, the app list's `repo` (Agent Service, from apps.json)
+  is `humanitylabs-org/telegram`, and the page is under `/tg-style/`; the guard reseals it the moment it lands anywhere
+  else. `core/app-client.js` in that page asks the top shell to arm its own fetch/XHR (`armFrame`, which accepts only
+  shell pages and such a page), so its owner calls carry the token as they did before the boundary. It gains nothing
+  the shell page does not already have. No app can declare this; any other app, or a TG style installed from elsewhere,
+  stays sealed. The App Manager's installed-app check keeps the same list (wizard-app-manager `wam/boundary_apps.py`).
 - Each real app still needs checking one by one from an opaque origin (wizard-os#385); `fetch` (also streamed),
   `XMLHttpRequest`, `EventSource` and `WebSocket` to the app's own backend, `localStorage`, `sessionStorage`,
   IndexedDB and `document.cookie` work (above). The

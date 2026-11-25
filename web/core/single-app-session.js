@@ -188,7 +188,7 @@
     win.replaceChildren(); frame = document.createElement('iframe'); frame.className = 'appframe'; frame.title = policy.displayName(next);
     frame.setAttribute('allow','microphone; clipboard-read; clipboard-write; autoplay; fullscreen'); frame.referrerPolicy = 'same-origin';
     // Browser owner boundary (wizard-os#133, box switch): the pinned app runs sandboxed like a phone/desktop app window.
-    const opaque = !!window.WizBrowserBoundary?.enabled;
+    const opaque = !!window.WizBrowserBoundary?.enabled && !window.WizBrowserBoundary.sameOriginApp?.(next.id || id, next.url);
     if (opaque) frame.setAttribute('sandbox', window.WizBrowserBoundary.sandbox);
     // Its saved settings ride along as the frame's name, set before the frame exists (the page reads them as it loads).
     // A pin made before its app was renamed (ux#1471) resolves through the registry's aliases: services use the app's current id.

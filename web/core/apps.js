@@ -84,6 +84,9 @@
     ...(a.desktop_only ? { desktopOnly: true } : {}),
     phoneOnly: a.phone_only === true || deviceSurface(a)?.phoneOnly === true, source: a.source || '', system: a.system === true,
     status: a.status,
+    // Where the App Manager installed it from (owner/repo): the browser boundary keeps one first-party app same-origin
+    // only when it came from its own listing (core/browser-boundary.js SAME_ORIGIN, telegram#68).
+    repo: a.source === 'apps.json' && typeof a.repo === 'string' && /^[A-Za-z0-9][A-Za-z0-9-]{0,38}\/[A-Za-z0-9._-]{1,100}$/.test(a.repo) ? a.repo : '',
     renamedFrom: renamedFrom(a),
     // Declared by the installed app itself (wizard.md home_screen); sanitized, never keyed by app id.
     homeScreen: a.source === 'apps.json' ? window.WizHomeScreenCapabilities?.sanitize(a.home_screen ?? a.homeScreen) || null : null,
@@ -105,6 +108,8 @@
   let REMOTE = (() => { try { return (JSON.parse(localStorage.getItem(REMOTE_KEY) || '[]') || []).filter(a => !SHELL_HIDDEN.has(a?.id)).map(toTile); } catch (e) { return []; } })();
   // The installed app's own home-screen declaration (or null), for shell code that has no registry handle.
   window.WizCore.appHomeScreen = id => REMOTE.find(a => a.id === id)?.homeScreen || null;
+  // The repo an installed app came from ('' when the box's list does not say), read by core/browser-boundary.js.
+  window.WizCore.appRepo = id => REMOTE.find(a => a.id === id)?.repo || '';
   const BACK_KEY = 'wux.apps.backend.v1';
   window.WizCore.appMetadata = id => [...REMOTE, ...BACK].find(a => a.id === id)?.sigil;
   let BACK = (() => { try { return (JSON.parse(localStorage.getItem(BACK_KEY) || '[]') || []).filter(a => !SHELL_HIDDEN.has(a?.id)).map(a => toTile(a)); } catch (e) { return []; } })();
