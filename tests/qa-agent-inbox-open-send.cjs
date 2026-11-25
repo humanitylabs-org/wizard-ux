@@ -102,7 +102,6 @@ const report = { origin, web, cases: [] };
         await page.goto(origin + prefix + (phone ? 'index.html?phone' : 'desktop.html'));
         await page.waitForFunction(() => (window.__wux || window.__wos) && !window.WosWelcome?.active && window.WosExperience?.state.tweaks.length && !window.WosExperience.state.busy);
         await page.addStyleTag({ content: '#wosWelcome{display:none!important}' });
-        await page.waitForFunction(() => (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/desktop-chats'), null, { timeout: 15000 });
         const openList = () => phone ? page.evaluate(() => __wos.openSheet('inbox')) : page.evaluate(() => __wux.openChatsList());
         await openList();
         const vis = sel => page.locator(sel).filter({ visible: true }).first();
