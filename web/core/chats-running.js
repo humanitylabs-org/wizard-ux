@@ -151,6 +151,9 @@ window.WizCore.chatsParts.running = function ({ ago, ch, CH, chanStore, clip, es
   // Turning the switch on or off repaints open threads at once: the card's buttons come and go with it.
   let sweepWas = inboxSwitchOn();
   try { window.addEventListener('wos:experience', () => { const on = inboxSwitchOn(); if (sweepWas === on) return; sweepWas = on; sweepRepaint(); }); } catch (_) {}
+  // Inline action cards (wizard-ux issue 1463, core/action-cards.js): flipping wizard/action-cards repaints open threads too.
+  let actWas = window.WosActionCards?.on?.() === true;
+  try { window.addEventListener('wos:experience', () => { const on = window.WosActionCards?.on?.() === true; if (actWas === on) return; actWas = on; sweepRepaint(); }); } catch (_) {}
   // Read the card again; only the same card's view is kept (a newer sweep posts its own row).
   async function sweepReread(id) {
     try { const v = await LIVE.agentInbox.sweep(); if (v && v.id === id) sweepOf(id).view = v; } catch (_) {}

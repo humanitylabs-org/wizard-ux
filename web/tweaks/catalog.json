@@ -31,6 +31,7 @@
     "wizard/app-windows",
     "wizard/private-first-setup",
     "wizard/chat-app-switches",
+    "wizard/action-cards",
     "wizard/agent-inbox",
     "wizard/phone-app-notifications",
     "wizard/lock-screen-player",

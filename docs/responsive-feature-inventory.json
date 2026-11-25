@@ -389,6 +389,14 @@
       "classification": "shared",
       "note": "Optional in-memory temporary chat; strict server capability plus default-off preference"
     },
+    "core/action-cards.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "classification": "shared",
+      "note": "Inline action cards in chat: an app's proposed action with Approve, Edit, Open in app (issue 1463, switch wizard/action-cards)"
+    },
     "core/chats-approvals.js": {
       "loadedBy": [
         "phone",
@@ -1629,6 +1637,7 @@
   "purpose": "Every entrypoint-exclusive asset must be explicit; new common features must be shared by default, not added to these exceptions.",
   "sharedAssets": [
     "/wizard-os-home/apple-touch-icon.png",
+    "core/action-cards.js",
     "core/agents.js",
     "core/android-relay.js",
     "core/app-capture.js",

@@ -7,7 +7,7 @@ description: "Where is, what is, how to: any Wizard setting or screen. Use when 
 
 Every screen, Settings page and feature switch of the Wizard interface (the phone app and the desktop in a browser or the Mac app), with where it is and what it does. Written from the interface code of this Wizard's release.
 
-- Give the exact path the way it reads on screen, e.g. Settings › About & updates › Updates › Automatic, and how to open Settings: on the desktop, the cog at the bottom left under the chats list (the standard AI apps view has no top bar; only the older Desks view has a gear in a top bar, ⌥,); on the phone, the gear at the top right of Home. If you don't know which they use, say 'the cog at the bottom left of the chats list (or the gear at the top right of Home on the phone)'.
+- Give the exact path the way it reads on screen, e.g. Settings › About & updates › Updates › Automatic, and how to open Settings: on the desktop, the cog at the bottom left under the chats list (older Desks view: the top-bar gear, ⌥,); on the phone, the gear at the top right of Home. If unsure, say 'the cog at the bottom left of the chats list (on the phone, the gear at the top right of Home)'.
 - Say the condition when there is one (For testers channel only, Android app only, desktop only, only when the box has it).
 - You can't flip these switches or settings for the owner: they are owner-only, on the owner's screen. Tell them what to tap.
 - Never invent a setting, page or button. If what they ask for isn't in this manual, say it isn't in the Wizard interface as far as you know, and ask for a screenshot of where they are looking. Don't search your own files for interface text: the interface code isn't in your container.
@@ -50,7 +50,7 @@ Every screen, Settings page and feature switch of the Wizard interface (the phon
 
 ## Settings
 
-Open Settings: desktop, the cog at the bottom left under the chats list (standard AI apps view; the older Desks view has a gear at the right of its top bar, ⌥,); phone, the gear at the top right of Home or an empty desk, or hold the orb and say 'settings'. Settings is a list of pages under System and Preferences; on a wide screen the list is on the left and the page on the right. A page with nothing on it is hidden. Pages are the same on phone and desktop, except rows that only exist on one of them (named below).
+Open Settings: desktop, the cog at the bottom left under the chats list (older Desks view: the top-bar gear, ⌥,); phone, the gear at the top right of Home or an empty desk, or hold the orb and say 'settings'. Settings is a list of pages under System and Preferences; on a wide screen the list is on the left and the page on the right. A page with nothing on it is hidden. Pages are the same on phone and desktop, except rows that only exist on one of them (named below).
 
 ### System › Your network
 Your network: the computers and devices this Wizard runs on, filled by the apps that report them. (only when an installed app adds something here; with Machines on Home on, Settings › System holds network, AI, security and storage).
@@ -161,6 +161,7 @@ Phone: things only the Android app can do: Wizard Everywhere (floating orb), sid
 
 Settings › Appearance › Try new features lists unfinished features anyone can switch on to try, A to Z, each 'by <author>'. The group only shows when this Wizard is on the For testers channel (Settings › About & updates › Channel › For testers); on For everyone it is hidden and these switches stay off. The same switches are also in the WizardOS Tracker app (Try it). A choice follows the owner on every device. If the owner can't find Try new features, the first step is Channel › For testers.
 
+- **Action cards in chat**: An app's proposed action (a draft, an event) shows in chat with Approve, Edit, Open in app.
 - **Agent inbox**: Background tasks keep one short record each; their worker threads stay out of the chat list, and Chats gets a Running view (what still works, what went quiet).
 - **Agent knows the Wizard interface**: Your agent gets this manual: every screen, Settings page and feature switch, so it can say where things are.
 - **Agents use what the box already does**: Agents look up what this box already does (transcription, reminders, app jobs) before installing their own.
