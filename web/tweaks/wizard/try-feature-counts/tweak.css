@@ -1,0 +1,2 @@
+/* Share feature counts (wizard-app-manager issue 701): a box-side switch. web/core/settings.js reads the apps' Try new
+ * features state while it is on and the App Manager (wam/switch_feedback.py) sends the counts. Nothing on screen changes. */

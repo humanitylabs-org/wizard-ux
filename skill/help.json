@@ -432,11 +432,11 @@
       "where": "Settings › Appearance › Try new features › Phone media player for Podcasts"
     },
     "wizard/runtipi-cli-key": {
-      "help": "Server side: the App Manager signs in to Runtipi 4.12 with its own key. Nothing looks different.",
+      "help": "App Manager uses its own Runtipi 4.12 key.",
       "where": "Settings › Appearance › Try new features › Runtipi 4.12 sign-in key"
     },
     "wizard/settings-search": {
-      "help": "A search box at the top of the Settings list: keeps the pages that mention your words and marks them on the page; Esc clears, Enter opens the first.",
+      "help": "Search box atop Settings: keeps the pages matching your words and marks them; Esc clears, Enter opens the first.",
       "where": "Settings › Appearance › Try new features › Search in Settings"
     },
     "wizard/github-signin": {
@@ -491,6 +491,10 @@
     "wizard/install-in-sidebar": {
       "help": "AI apps desktop: an app you Get shows in the Apps column, spinning until installed.",
       "where": "Settings › Appearance › Try new features › Installs in the Apps column"
+    },
+    "wizard/try-feature-counts": {
+      "help": "Sends features you tried and your thumbs, plus a random box id.",
+      "where": "Settings › Appearance › Try new features › Share feature counts"
     }
   },
   "screenOrder": [

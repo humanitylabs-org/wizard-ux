@@ -1,0 +1,14 @@
+{
+  "id": "wizard/try-feature-counts",
+  "name": "Share feature counts",
+  "version": "1.0.0",
+  "author": "wizard",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout"
+  ],
+  "issues": [
+    "humanitylabs-org/wizard-app-manager#701"
+  ],
+  "description": "Once an hour this box sends the team only which app features under test were tried and your thumbs up or down on them, with a random box id and nothing else (no names, content or identity), so the Tracker can show Tried by N and thumbs counts. The shell reads each app's own Try new features state and the App Manager (wam/switch_feedback.py) sends the counts; nothing on screen changes."
+}
