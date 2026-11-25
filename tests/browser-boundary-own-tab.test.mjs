@@ -72,7 +72,7 @@ function policy(id) {
   launcherFixture(ctx); vm.runInContext(readFileSync(new URL('../web/core/home-screen-policy.js', import.meta.url), 'utf8'), ctx);
   return window.WizHomeScreenPolicy;
 }
-async function pinned({ on, app }) {
+async function pinned({ on, app, search = '' }) {
   const frames = [], replaced = [];
   function el(tag) {
     return { tag, dataset: {}, attrs: {}, style: { setProperty() {} }, classList: { add() {}, remove() {} }, children: [], events: {},
@@ -85,8 +85,9 @@ async function pinned({ on, app }) {
     WizAppServices: { attach: () => () => {}, guardBack() {}, back: () => 'pending' } };
   if (on) window.WizBrowserBoundary = boundary();
   const store = new Map(), localStorage = { getItem: k => store.get(k) ?? null, setItem: (k, v) => store.set(k, String(v)), removeItem: k => store.delete(k), get length() { return store.size; }, key: n => [...store.keys()][n] ?? null };
-  const location = { origin: ORIGIN, href: ORIGIN + '/wizard-os-home/?app-session=' + app.id, replace: u => replaced.push(u) };
-  const ctx = vm.createContext({ window, document, localStorage, location, URL, addEventListener() {}, setInterval() {}, setTimeout() {} });
+  const location = { origin: ORIGIN, href: ORIGIN + '/wizard-os-home/?app-session=' + app.id + search, search: '?app-session=' + app.id + search, replace: u => replaced.push(u) };
+  const history = { state: null, replaceState() {} };
+  const ctx = vm.createContext({ window, document, localStorage, location, history, URL, URLSearchParams, addEventListener() {}, setInterval() {}, setTimeout() {} });
   vm.runInContext(readFileSync(new URL('../web/core/single-app-session.js', import.meta.url), 'utf8'), ctx); await new Promise(setImmediate);
   return { frames, replaced };
 }
@@ -95,6 +96,10 @@ test('pinned Files opens Files itself under the boundary; other pinned apps and 
   const files = await pinned({ on: true, app: FILES });
   assert.ok(files.replaced.length > 0 && files.replaced.every(u => u === '/files/'), 'the pin page becomes File Browser');
   assert.equal(files.frames.length, 0, 'no sandboxed frame it would stay blank in');
+  const deep = await pinned({ on: true, app: FILES, search: '&app-path=' + encodeURIComponent('/files/files/Documents/') });
+  assert.equal(deep.replaced[0], ORIGIN + '/files/files/Documents/', 'a link into Files lands on that page');
+  const outside = await pinned({ on: true, app: FILES, search: '&app-path=' + encodeURIComponent('/notes/') });
+  assert.equal(outside.replaced[0], '/files/', 'never a page outside Files');
   const notes = await pinned({ on: true, app: NOTES });
   assert.deepEqual(notes.replaced, []); assert.equal(notes.frames.length, 1); assert.equal(notes.frames[0].getAttribute('sandbox'), SANDBOX);
   const off = await pinned({ on: false, app: FILES });
