@@ -1,0 +1,17 @@
+{
+  "id": "wizard/assist-agent-note",
+  "name": "Side button opens the Agent chat",
+  "version": "1.0.0",
+  "author": "wizard",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout"
+  ],
+  "issues": [
+    "humanitylabs-org/wizard-ux#1528"
+  ],
+  "description": "WizardOS Android app: holding the phone's side button (the assistant button) opens Messenger's Agent chat, ready for a typed or voice note, instead of starting a new Wizard chat. A note there gets a tick and your agent works on it in the background; nothing is answered back. Without Messenger, and on the lock screen, the button works as before.",
+  "shells": [
+    "phone"
+  ]
+}

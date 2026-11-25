@@ -659,6 +659,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         String json = ACTION_SIDE_BUTTON.equals(act) ? "{\"action\":\"side-button\"}"
                 : ACTION_SETTINGS.equals(act) ? Handoff.settings(intent.getStringExtra(EXTRA_SETTINGS_FOCUS))
                 : ACTION_UNSENT.equals(act) ? "{\"action\":\"unsent\"}"
+                : ai.wizards.os.assist.AssistNote.ACTION.equals(act) ? "{\"action\":\"agent-note\"}" // wizard-ux issue 1528
                 : (ACTION_FOOD.equals(act) || ACTION_USUALS.equals(act)) ? "{\"action\":\"food\"}"
                 : ACTION_THREAD.equals(act) && intent.getStringExtra(EXTRA_THREAD) != null
                     ? "{\"action\":\"thread\",\"id\":" + Handoff.quote(intent.getStringExtra(EXTRA_THREAD)) + "}"
@@ -1707,6 +1708,13 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         public void assistAttachSwitch(boolean on) {
             if (MainActivity.this instanceof AppSessionActivity) return;
             ai.wizards.os.assist.AssistAttach.setOn(MainActivity.this, on);
+        }
+        /* ---- Side button opens the Agent chat (wizard-ux issue 1528, switch wizard/assist-agent-note, off by default): the
+         * button is answered natively before any page runs, so the shell copies the switch here (assist/AssistNote). ---- */
+        @JavascriptInterface
+        public void assistNoteSwitch(boolean on) {
+            if (MainActivity.this instanceof AppSessionActivity) return;
+            ai.wizards.os.assist.AssistNote.setOn(MainActivity.this, on);
         }
         /* ---- App windows (wizard-os issue 650, switch wizard/app-windows, off by default): the main page copies the
          * switch here; any page asks to open an app's own window for a link (false = keep the link where it is). ---- */
