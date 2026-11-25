@@ -279,7 +279,7 @@
     // Later and No thanks: the box remembers when it can; the Welcome goes on either way.
     offerDone();
   }
-  function offerDone() { if (solo) { close(); log('offer:closed'); return; } step = nextStep(); provider = null; paint(); }
+  function offerDone() { if (solo) { close(); log('offer:closed'); try { window.WosSettings?.refresh?.(); } catch (e) {} return; } step = nextStep(); provider = null; paint(); }
 
   // Private first's Connect your AI: Tinfoil, then "Optional: a second agent" with Claude and ChatGPT. Once the private
   // agent is ready the card stays here, so the owner can add a second agent or go on.
@@ -645,7 +645,10 @@
   try {
     window.WosSettings?.register?.({ id: 'private-ai-finish', page: 'privacy', aliases: ['privacy', 'private-ai'], available: finishDue,
       html: () => `<div class="st-group"><button type="button" class="st-row wz-row" data-private-ai-finish><span class="st-tx"><b>Finish setting up private AI</b><small>Private AI runs in sealed hardware: only you can see your messages and data.</small></span><span class="st-go">›</span></button></div>`,
-      act(ctx, t) { if (!t?.closest?.('[data-private-ai-finish]') || !finishDue()) return false; if (!H) return false; open('private'); return true; } });
+      // Another device may have finished it (or said No thanks) meanwhile: ask the box again before opening.
+      act(ctx, t) { if (!t?.closest?.('[data-private-ai-finish]') || !H || !sfOn()) return false;
+        pfRead().then(s => { pfAt = Date.now(); if (s?.offer === 'later' && !s?.private_agent && sfOn()) open('private'); else try { window.WosSettings?.refresh?.(); } catch (e) {} });
+        return true; } });
   } catch (e) { console.error(e); }
 
   window.WosWelcome = { whenThreadExists, aiConnected, boot, back, open: (at) => open(at || 'ai'), close, get active() { return !!el; }, get log() { return window.__welcomeLog || []; } };

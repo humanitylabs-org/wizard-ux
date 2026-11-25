@@ -204,8 +204,16 @@ test('Later leaves Settings › Privacy\'s "Finish setting up private AI", which
   assert.ok(await until(() => row.available()))
   assert.match(row.html(), /Finish setting up private AI/)
   d.W.close()
-  assert.equal(row.act({}, { closest: s => (s === '[data-private-ai-finish]' ? {} : null) }), true)
-  assert.equal(title(d.html()), 'Want a fully private AI?')
+  const tap = { closest: s => (s === '[data-private-ai-finish]' ? {} : null) }
+  // Another device finished it meanwhile: the tap asks the box first and opens nothing (Codex P2).
+  box.pf = { ...box.pf, offer: 'declined' }
+  assert.equal(row.act({}, tap), true)
+  await wait(20)
+  assert.equal(d.shown(), false)
+  assert.equal(row.available(), false)
+  box.pf = { ...box.pf, offer: 'later' }
+  assert.equal(row.act({}, tap), true)
+  assert.ok(await until(() => title(d.html()) === 'Want a fully private AI?'))
   assert.doesNotMatch(d.html(), /wl-dots/, 'one screen, no step dots')
   d.press('offer', { offer: 'setup' })
   assert.ok(await until(() => /Sign in to Tinfoil/.test(d.html())))
