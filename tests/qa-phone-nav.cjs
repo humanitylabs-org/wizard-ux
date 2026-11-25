@@ -20,7 +20,8 @@ const CASES = [
   { name: 'android-393', width: 393, height: 852, ua: ANDROID },
   { name: 'android-320', width: 320, height: 640, ua: ANDROID },
   { name: 'iphone-393', width: 393, height: 852, ua: IPHONE },
-].filter(c => !process.env.QA_CASES || process.env.QA_CASES.split(',').includes(c.name));
+  { name: 'android-412', width: 412, height: 915, ua: ANDROID, only: true }, // pitch shots (QA_CASES=android-412)
+].filter(c => process.env.QA_CASES ? process.env.QA_CASES.split(',').includes(c.name) : !c.only);
 const SKINS = (process.env.QA_SKINS || 'nebula,grove').split(',');
 fs.mkdirSync(out, { recursive: true });
 const nap = ms => new Promise(r => setTimeout(r, ms));
