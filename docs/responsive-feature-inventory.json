@@ -702,6 +702,13 @@
       ],
       "note": "In-app Downloads banner and sheet; shows only where the Android bridge exists"
     },
+    "core/desktop-chats.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Skin host built-in: the phone Chats list header row (desktop-style list, wizard-ux issue 1236); no-op on desktop"
+    },
     "core/edge-peek.js": {
       "loadedBy": [
         "phone",
@@ -1750,6 +1757,8 @@
     "core/context-menu.js",
     "core/core.js",
     "core/deeplink.js",
+    "core/desktop-chats.css",
+    "core/desktop-chats.js",
     "core/disk-status.js",
     "core/dom-morph.js",
     "core/downloads.css",

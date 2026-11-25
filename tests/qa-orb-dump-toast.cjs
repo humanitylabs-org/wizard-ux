@@ -73,7 +73,6 @@ const report = { origin, web, routerMs: ROUTER_MS, cases: [] };
         await page.goto(origin + prefix + (phone ? 'index.html?phone' : 'desktop.html'));
         await page.waitForFunction(() => (window.__wux || window.__wos) && !window.WosWelcome?.active && window.WosExperience?.state.tweaks.length && !window.WosExperience.state.busy);
         await page.addStyleTag({ content: '#wosWelcome{display:none!important}' });
-        await page.waitForFunction(() => (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/desktop-chats'), null, { timeout: 15000 });
         await nap(1200);
         const rowsBefore = await page.evaluate(() => (window.WizLive?.sessions || []).map(s => s.id));
         // The orb: tap to talk, about 1.6 s of the fake microphone, tap to send.

@@ -16,7 +16,7 @@ const clone = v => JSON.parse(JSON.stringify(v));
 const tick = async () => { for (let i = 0; i < 8; i++) await new Promise(r => setImmediate(r)); };
 const ID = 'wizard/skins-look-only';
 const catalog = JSON.parse(read('web/tweaks/catalog.json'));
-const builtin = catalog.defaults[0];
+const builtin = builtinDefaults(catalog)[0]; // a release-wide default (the catalog's own list is empty since wizard-ux issue 1236)
 // The real drop list emptied when its tweaks were removed (wizard-ux issue 1239). The mechanism stays, so these tests
 // serve a stand-in list of kept tweaks in place of catalog `lookOnlyOff`.
 const DROP = ['wizard/failure-reason', 'wizard/link-token-repair', 'miguel/now-playing'];

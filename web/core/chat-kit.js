@@ -26,7 +26,7 @@
     }
     return out;
   }
-  // [WIZARD_TWEAK_V1]{"id":"wizard/desktop-chats"}[/WIZARD_TWEAK_V1] (or {"ids":[…]}), on its own line: the reply carries
+  // [WIZARD_TWEAK_V1]{"id":"wizard/inbox-rows"}[/WIZARD_TWEAK_V1] (or {"ids":[…]}), on its own line: the reply carries
   // a tweak's live switch (WosSettings.tweakCard, the same row as Settings › Look). Ids only; a malformed marker is hidden.
   // An app feature switch `<app id>:<switch id>` (wizard.app-switches/1) parses too; the card shows it only while the
   // switch wizard/chat-app-switches is on (wizard-ux issue 1560) and drops it otherwise, as before.

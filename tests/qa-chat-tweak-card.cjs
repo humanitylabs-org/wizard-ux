@@ -13,8 +13,8 @@ fs.mkdirSync(out, { recursive: true });
 const EXPECTED_CASES = 4, HOLD_MS = 3000, now = Date.now(), nap = ms => new Promise(r => setTimeout(r, ms));
 const report = { origin, web, cases: [] };
 // MAIN: an off-by-default tweak this shell can wear. OTHER: one it can't (shown disabled, labelled).
-const PLAN = { phone: { main: 'wizard/desktop-chats', other: 'miguel/ai-apps', only: 'Desktop only' },
-  desktop: { main: 'wizard/sidebar-chats-view', other: 'wizard/desktop-chats', only: 'Phone only' } };
+const PLAN = { phone: { main: 'wizard/phone-nav', other: 'miguel/ai-apps', only: 'Desktop only' },
+  desktop: { main: 'wizard/sidebar-chats-view', other: 'wizard/phone-nav', only: 'Phone only' } };
 const MARK = o => `[WIZARD_TWEAK_V1]${JSON.stringify(o)}[/WIZARD_TWEAK_V1]`;
 (async () => {
   const browser = await chromium.launch();

@@ -100,7 +100,6 @@ const report = { origin, web, broken, cases: [] };
         await page.waitForFunction(() => window.__wux && !window.WosWelcome?.active && window.WosExperience?.state.tweaks.length && !window.WosExperience.state.busy);
         await page.addStyleTag({ content: '#wosWelcome{display:none!important}' });
         await page.waitForFunction(() => document.documentElement.dataset.layout === 'ai-apps', null, { timeout: 15000 });
-        await page.waitForFunction(() => (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/desktop-chats'), null, { timeout: 15000 });
         const vis = sel => page.locator(sel).filter({ visible: true }).first();
         const count = sel => page.locator(sel).filter({ visible: true }).count();
         const sideRow = sid => vis(`.aad-side .aad-rw[data-sid="${sid}"] .aad-row`);
