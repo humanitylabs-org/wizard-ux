@@ -38,7 +38,8 @@ export function panesPart({ aadVars, api, COLS, doc, flip, one, ONE, panes, pane
     const m = paneModel(), focus = root.hasAttribute('data-aad-focus');
     // Horizontal dock interaction is not admitted yet: keep the saved model but render at end. The narrower window's
     // app bar (ONE) is that dock at ONE.bar, ONE.barH thick; the saved wide-window edge is left as it is.
-    const bar = one(), edge = bar ? ONE.bar : sideOf(m) === 'end' ? 'start' : 'end';
+    // (the dock's saved edge counts only while the swap-sides switch is on, wizard-ux issue 1526; off it is the right edge)
+    const bar = one(), edge = bar ? ONE.bar : swapOn() && m.dock.edge === 'start' ? 'start' : 'end';
     const sm = root.dataset.aadSide;
     const sideWidth = focus || sm === 'none' ? 0 : sm === 'open' ? s.side[0] : sm === 'full' ? vw() : RAIL;
     const dockWidth = focus ? 0 : bar ? ONE.barH : root.dataset.aadTabs === 'rail' ? COLS.tabsRail : s.tabs[0];
