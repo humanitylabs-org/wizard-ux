@@ -1,0 +1,14 @@
+{
+  "id": "wizard/inbox-until-archived",
+  "name": "Inbox until archived",
+  "version": "1.0.0",
+  "author": "wizard",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout"
+  ],
+  "issues": [
+    "humanitylabs-org/wizard-ux#1810"
+  ],
+  "description": "Chats › Inbox keeps every thread until you archive it: one list (Working, then Inbox), no Ready / Recent split. Opening or reading a thread no longer moves it; the unread dot and Needs you marks still show, and the count is the Inbox count. Snoozed threads leave until their snooze ends."
+}

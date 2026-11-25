@@ -37,7 +37,7 @@ window.WizCore.chatsParts.ready = function ({ actNeeds, actUnread, CH, chanAt, e
     const L = live || LIVE, M = window.WizChatsListModel;
     if (!L?.ok || !M?.activityGroups) return null;
     const rows = (L.sessionsFor ? L.sessionsFor('') : L.unified()).filter(s => !s.hidden);
-    return M.activityGroups(L.workGroups(rows), { needs: actNeeds, unread: actUnread, at: chanAt }).ready;
+    return M.activityGroups(L.workGroups(rows), { needs: actNeeds, unread: actUnread, at: chanAt }, { keep: inboxKeep() }).ready;
   }
   /* Home's "N need you" and its Needs you · Unread card (wizard-ux issue 1517): with Channels on, the same split as
    * Activity's Ready (amber = actNeeds, the rest green), so an amber thread already opened still counts as needing you.
@@ -46,6 +46,10 @@ window.WizCore.chatsParts.ready = function ({ actNeeds, actUnread, CH, chanAt, e
     const r = activityReadyRows(live); if (!r) return null;
     return { needs: r.filter(actNeeds), ready: r.filter(s => !actNeeds(s)) };
   }
+  /* Inbox until archived (wizard-ux issue 1810, switch wizard/inbox-until-archived): every thread stays in Inbox until it
+   * is archived, so Ready, its count and the badges are the Inbox. Read from the root's data-tweaks (the list model is pure). */
+  function inboxKeep() { try { return !!window.WizChatsListModel?.inboxKeep?.(document.documentElement.dataset.tweaks); } catch (_) { return false; } }
+  window.WizCore.inboxKeep = inboxKeep;
   window.WizCore.activityReady = activityReady;
   window.WizCore.activityHome = activityHome;
   /* Activity with Channels on (wizard-ux issue 1336; James, 12 Nov 2026: "I'm not really going to archive threads
@@ -54,5 +58,5 @@ window.WizCore.chatsParts.ready = function ({ actNeeds, actUnread, CH, chanAt, e
    * week back, then Show older within the live window; Snoozed and Archived fold at the very bottom. The one sort menu
    * sits on Ready (Newest first, Oldest first, Needs you first), stored as Chats' own Ready order. */
   const ACT_SORTS = () => window.WizChatsListModel.ACTIVITY_SORTS;
-  return { ACT_SORTS, listSaveT, queueListPlace, storedListPlace };
+  return { ACT_SORTS, inboxKeep, listSaveT, queueListPlace, storedListPlace };
 };
