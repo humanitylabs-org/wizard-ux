@@ -49,7 +49,8 @@
     "wizard/try-feature-counts",
     "wizard/inbox-until-archived",
     "wizard/inbox-rows",
-    "wizard/sent-rows"
+    "wizard/sent-rows",
+    "wizard/chats-title-bar"
   ],
   "defaults": [
     "wizard/desktop-chats"
