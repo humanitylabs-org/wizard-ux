@@ -78,7 +78,7 @@ test('older rows read with Show older stay through the next poll, newest rows on
 });
 
 /* The real Chats part on a stand-in Chats: switch, rows, Working, corrections, a tap, Back. */
-function part({ tweaks = 'wizard/chats-inbox wizard/agent-inbox', rows = [], ok = true, gone = false, side = false } = {}) {
+function part({ tweaks = 'wizard/chats-inbox wizard/agent-inbox', rows = [], ok = true, gone = false, side = false, elsewhere = false } = {}) {
   const listeners = {}, renders = [], opened = [], corrections = [], toasts = [], fetches = [];
   const CH = { main: {}, 'host-ops': {}, box: {}, locked: {} }, chatVars = { chanView: 'activity' };
   const W = { main: { id: 'main', thread: null }, 'host-ops': { id: 'host-ops', thread: null }, box: { id: 'box', thread: null }, locked: { id: 'locked', thread: null } };
@@ -94,21 +94,26 @@ function part({ tweaks = 'wizard/chats-inbox wizard/agent-inbox', rows = [], ok 
   vm.createContext(ctx);
   vm.runInContext(readFileSync(new URL('../web/core/chats-sent.js', import.meta.url), 'utf8'), ctx);
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-  const p = ctx.window.WizCore.chatsParts.sent({ ago: () => '3m', ch: id => CH[id], CH, CHAN_VIEW_KEY: 'k', chanSide: () => side, chatVars, clip: (s, n) => String(s).slice(0, n), elOf: () => ({}), esc, H: { win: id => W[id] },
+  const p = ctx.window.WizCore.chatsParts.sent({ ago: () => '3m', ch: id => CH[id], CH, CHAN_VIEW_KEY: 'k', chanElsewhere: () => elsewhere, chanSide: () => side, chatVars, clip: (s, n) => String(s).slice(0, n), elOf: () => ({}), esc, H: { win: id => W[id] },
     LIVE, openChat: (wid, t) => opened.push([wid, t]), renderChatList: w => renders.push(w.id), rerenderList: w => renders.push(w.id), toast: (...a) => toasts.push(a), W, winAgent: w => agentOf[w.id] || '' });
   const click = (w, attrs) => p.sentClick({ target: { closest: sel => { const k = /\[data-([a-z]+)\]/.exec(sel)?.[1]; return k && k in attrs ? { dataset: { [k]: attrs[k], ...(attrs.dataset || {}) }, disabled: false } : null; } } }, w.id, w);
   return { p, W, CH, chatVars, renders, opened, corrections, toasts, fetches, listeners, ctx, click };
 }
 const view = (c, extra = {}) => ({ id: sid(c), at: 1000, source: 'orb', text: 'Words ' + c, route: 'agent', decidedBy: 'model', rules: [], state: 'done', thread: 'thread_' + c, record: null, tags: [], urgent: false, wouldRoute: null, corrected: null, error: '', ...extra });
 
-test('switch off, Agent inbox off, a routed agent or the AI apps sidebar: no tabs (main versus routed)', () => {
+test('switch off, Agent inbox off, a routed agent or the main column feed window: no tabs (main versus routed)', () => {
   assert.equal(part({ tweaks: '' }).p.sentTabsOn({ id: 'main' }), false, 'both off');
   assert.equal(part({ tweaks: 'wizard/chats-inbox' }).p.sentTabsOn({ id: 'main' }), false, 'needs wizard/agent-inbox');
   assert.equal(part({ tweaks: 'wizard/agent-inbox' }).p.sentTabsOn({ id: 'main' }), false, 'Agent inbox alone changes nothing here');
   const f = part();
   assert.equal(f.p.sentTabsOn(f.W.main), true, 'the main agent\'s Chats list has the tabs');
   for (const id of ['host-ops', 'box', 'locked']) assert.equal(f.p.sentTabsOn(f.W[id]), false, `${id}: a routed agent's list keeps today's look (its captures are the owner's, on the main list)`);
-  assert.equal(part({ side: true }).p.sentTabsOn({ id: 'main' }), false, 'the AI apps sidebar pane keeps its own tabs');
+  assert.equal(part({ side: true }).p.sentTabsOn({ id: 'main::side' }), false, 'the AI apps main column feed window (a ::side window whose channels open in it) has no tabs');
+  // wizard-ux issue 1807: the AI apps sidebar pane (the main Chats list as id::side, its channels open elsewhere) has them.
+  const sb = part({ side: true, elsewhere: true });
+  assert.equal(sb.p.sentTabsOn({ id: 'main::side' }), true, 'the AI apps sidebar pane has the tabs');
+  for (const id of ['host-ops', 'box', 'locked']) assert.equal(sb.p.sentTabsOn(sb.W[id]), false, `${id}: a routed agent's sidebar keeps today's look`);
+  assert.equal(part({ tweaks: 'wizard/agent-inbox', side: true, elsewhere: true }).p.sentTabsOn({ id: 'main::side' }), false, 'switch off: the sidebar pane keeps its toggle');
   assert.match(f.p.sentBar(f.W.main), /data-chtab="inbox" aria-selected="true".*data-chtab="tags" aria-selected="false".*data-chtab="sent" aria-selected="false"/s);
 });
 

@@ -3,7 +3,7 @@
  * (core/chats.js) calls this once with the closure names it reads. Loaded before chats.js by both shells. */
 window.WizCore = window.WizCore || {};
 window.WizCore.chatsParts = window.WizCore.chatsParts || {};
-window.WizCore.chatsParts.sent = function ({ ago, ch, CH, CHAN_VIEW_KEY, chanSide, chatVars, clip, elOf, esc, H, LIVE, openChat, renderChatList, rerenderList, toast, W, winAgent }) {
+window.WizCore.chatsParts.sent = function ({ ago, ch, CH, CHAN_VIEW_KEY, chanElsewhere, chanSide, chatVars, clip, elOf, esc, H, LIVE, openChat, renderChatList, rerenderList, toast, W, winAgent }) {
   /* The main agent's Chats list gets three tabs at the bottom: Inbox (today's Activity list, until wizard-ux issue 1779
    * gives it its own rows), Tags (today's Channels view, until wizard-agent-service issue 608) and Sent. Sent lists every
    * capture the owner sent, newest first (LIVE.sentLog: GET /wizard/v1/sent): the first line of his words, when, where
@@ -14,9 +14,9 @@ window.WizCore.chatsParts.sent = function ({ ago, ch, CH, CHAN_VIEW_KEY, chanSid
    * away while this is on. Back from Sent returns to Inbox (channelBack). With either switch off nothing here draws. */
   const SWITCH = 'wizard/chats-inbox', NEEDS = 'wizard/agent-inbox';
   function sentSwitchOn() { try { const t = (document.documentElement.dataset.tweaks || '').split(' '); return t.includes(SWITCH) && t.includes(NEEDS); } catch (_) { return false; } }
-  // The tabs: the main agent's own Chats list (phone and Classic desktop), never a routed agent's list or the AI apps
-  // sidebar pane (that keeps its Channels | Activity tabs).
-  function sentTabsOn(w) { return !!w && sentSwitchOn() && !winAgent(w) && !!LIVE.sentLog && !(typeof chanSide === 'function' && chanSide(w)); }
+  // The tabs: the main agent's own Chats list (phone, Classic desktop and the AI apps sidebar pane, its id::side window
+  // whose channels open elsewhere: wizard-ux issue 1807), never a routed agent's list or the main column's feed window.
+  function sentTabsOn(w) { return !!w && sentSwitchOn() && !winAgent(w) && !!LIVE.sentLog && !(typeof chanSide === 'function' && chanSide(w) && !(typeof chanElsewhere === 'function' && chanElsewhere(w))); }
   function sentOpen(w) { return !!w && !!ch(w.id).sent && sentTabsOn(w); }
   function sentTab(w) { return sentOpen(w) ? 'sent' : chatVars.chanView === 'channels' ? 'tags' : 'inbox'; }
   // Turning either switch on or off repaints the lists at once (not at the next live tick).
