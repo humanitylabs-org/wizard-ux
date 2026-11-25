@@ -6,6 +6,8 @@
 //   QA_SWITCH=on (default): each marker is a card with the app's own preview; Edit changes the message, Send POSTs the
 //     edited field with X-Wizard-Action: 1 and the card reads "Approved"; Reject on the second; Open in app opens
 //     Messenger at that item's own page; an item the app no longer has says so; no marker text anywhere.
+//   Agent parity: the same card in a routed thread of each kind (a host profile, a container and a restricted agent,
+//     served by /sessions?agent=): it reads the same app item path, Send posts and the card reads Approved.
 //   QA_SWITCH=off: no card, nothing read from or sent to the app. QA_EXPECT=broken (QA_WEB=<main worktree>/web) records
 //     main's thread text (the marker shows as raw text there).
 // Screens in QA_OUT: <shell>-<switch>.png (+ -edit, -approved).
@@ -28,6 +30,12 @@ const ACTIONS = () => ({
 });
 const REPLY1 = `I drafted a reply to Sam in Messenger:\n\n${MARK('draft-1')}\n\nSend it as is, or change it first.`;
 const REPLY2 = `And one for Dana, plus an older one:\n\n${MARK('draft-2')}\n${MARK('gone-3')}`;
+const AGENTS = [{ id: 'hermes', label: 'Wizard QA', harness: 'hermes', privacy: 'standard', is_default: true, status: 'running', appearance: { glyph: 'w', hue: 260 }, model: { provider: 'anthropic', model: 'claude-opus-4' } }];
+const KINDS = [['host', 'Host ops'], ['container', 'Box'], ['restricted', 'Locked']];
+for (const [id, label] of KINDS) AGENTS.push({ id, label, harness: 'hermes', privacy: 'standard', status: 'running', appearance: { glyph: id[0], hue: 120 }, model: { provider: 'anthropic', model: 'claude-opus-4' } });
+const routedRow = id => ({ id: 'qa-act-' + id, title: 'Draft from ' + id, runtime: 'direct', status: 'completed', updated_at: iso(now - 9e4), updatedAt: iso(now - 9e4), last_active: (now - 9e4) / 1000, message_count: 2, messageCount: 2, archived: false, preview: 'A draft for you' });
+const ROUTED = Object.fromEntries(KINDS.map(([id]) => [id, [routedRow(id)]]));
+const routedDraft = id => ({ schema: 'wizard.app-actions/1', id: 'draft-' + id, kind: 'Draft reply', title: 'Reply to ' + id, state: 'pending', approve_label: 'Send', fields: [{ id: 'text', label: 'Message', value: 'From the ' + id + ' agent', editable: true }] });
 const ROW = { id: 'qa-act', title: 'Messenger drafts', runtime: 'direct', status: 'completed', updated_at: iso(now - 6e4), updatedAt: iso(now - 6e4), last_active: (now - 6e4) / 1000, message_count: 4, messageCount: 4, archived: false, preview: REPLY2 };
 const PAGE = `<!doctype html><meta charset="utf-8"><title>Messenger</title><body style="font:16px system-ui;padding:24px"><h1>Messenger (stand-in)</h1><p id="at"></p><script>window.seenAt = location.search; document.getElementById('at').textContent = 'Open: ' + (location.search || 'home');</script></body>`;
 const report = { origin, web, switch: SWITCH, expect: EXPECT, cases: [] };
@@ -37,7 +45,7 @@ const report = { origin, web, switch: SWITCH, expect: EXPECT, cases: [] };
     for (const shell of SHELLS) {
       const phone = shell === 'phone', stem = `${shell}-${SWITCH}${EXPECT === 'broken' ? '-main' : ''}`;
       const entry = { stem, errors: [], refused: [], app: [] }; report.cases.push(entry);
-      const actions = ACTIONS();
+      const actions = { ...ACTIONS(), ...Object.fromEntries(KINDS.map(([id]) => ['draft-' + id, routedDraft(id)])) };
       const context = await browser.newContext({ viewport: phone ? { width: 412, height: 915 } : { width: 1440, height: 900 }, isMobile: phone, hasTouch: phone, serviceWorkers: 'block', ...(phone ? { userAgent: 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Mobile Safari/537.36' } : {}) });
       try {
         await context.routeWebSocket('**/*', w => w.close());
@@ -83,8 +91,12 @@ const report = { origin, web, switch: SWITCH, expect: EXPECT, cases: [] };
           if (p === '/wizard/v1/apps') return r.fulfill({ json: { apps: [APP] } });
           if (p === '/wizard/v1/pages/wizard-look/look.json') return r.fulfill({ status: 404, json: { error: 'not_here' } });
           if (p === '/wizard/v1/ui-preferences') return r.fulfill({ json: { migrations: { 'launcher-seed-v1': true } } });
-          if (p === '/wizard/hermes/api/sessions') return r.fulfill({ json: { data: [ROW], has_more: false } });
+          if (p === '/wizard/v1/agents') return r.fulfill({ json: { agents: AGENTS } });
+          if (p === '/wizard/hermes/api/sessions') return r.fulfill({ json: { data: ROUTED[u.searchParams.get('agent')] || [ROW], has_more: false } });
           const m = /^\/wizard\/hermes\/api\/sessions\/([^/]+)(\/messages)?$/.exec(p);
+          const routed = m && KINDS.find(([id]) => decodeURIComponent(m[1]) === 'qa-act-' + id);
+          if (routed) { const [id] = routed; entry.routedReads = [...new Set([...(entry.routedReads || []), id + ':' + (u.searchParams.get('agent') || '')])];
+            return r.fulfill({ json: m[2] ? { messages: [{ role: 'user', content: 'Draft a reply', timestamp: now / 1000 - 100 }, { role: 'assistant', content: `Here it is:\n\n${MARK('draft-' + id)}`, timestamp: now / 1000 - 90 }] } : { session: ROUTED[id][0] } }); }
           if (m) { if (decodeURIComponent(m[1]) !== ROW.id) return r.fulfill({ status: 404, json: { error: 'missing' } });
             return r.fulfill({ json: m[2] ? { messages: [{ role: 'user', content: 'Answer Sam and Dana for me', timestamp: now / 1000 - 120 }, { role: 'assistant', content: REPLY1, timestamp: now / 1000 - 110 },
               { role: 'user', content: 'Anything else?', timestamp: now / 1000 - 70 }, { role: 'assistant', content: REPLY2, timestamp: now / 1000 - 60 }] } : { session: ROW } }); }
@@ -153,6 +165,29 @@ const report = { origin, web, switch: SWITCH, expect: EXPECT, cases: [] };
         await c2.scrollIntoViewIfNeeded(); await c2.locator('[data-act="reject"]').click();
         await page.waitForFunction(() => /Rejected/.test(document.querySelector('.ch-thread [data-action-card="wizard-messenger/draft-2"]')?.textContent || ''), null, { timeout: 8000 });
         assert.deepEqual(entry.app.find(x => x.method === 'POST' && x.id === 'draft-2')?.body, { decision: 'reject' });
+        // Agent parity: a routed thread of each kind draws the same card from the same app item and sends the same way.
+        entry.routed = {};
+        for (const [id] of KINDS) {
+          const sid = 'qa-act-' + id, key = `wizard-messenger/draft-${id}`;
+          await page.evaluate(phone => phone ? __wos.openSheet('inbox') : __wux.openChatsList(), phone);
+          const row = page.locator(`.ch-list [data-chopen="${sid}"]`).filter({ visible: true }).first();
+          for (let i = 0; i < 20 && !(await row.isVisible().catch(() => false)); i++) { const back = page.locator('.ch-back').filter({ visible: true }).first(); if (await back.isVisible().catch(() => false)) await back.click().catch(() => {}); await nap(300); }
+          await row.click();
+          const rc = page.locator(`.ch-thread [data-action-card="${key}"]`).filter({ visible: true }).first();
+          await rc.waitFor({ timeout: 10000 });
+          await page.waitForFunction(k => /Reply to/.test(document.querySelector(`.ch-thread [data-action-card="${k}"]`)?.textContent || ''), key, { timeout: 10000 });
+          await rc.locator('[data-act="approve"]').click();
+          await page.waitForFunction(k => /Approved/.test([...document.querySelectorAll(`.ch-thread [data-action-card="${k}"]`)].find(n => n.getClientRects().length)?.textContent || ''), key, { timeout: 8000 });
+          const post = entry.app.find(x => x.method === 'POST' && x.id === 'draft-' + id);
+          assert.deepEqual(post, { method: 'POST', id: 'draft-' + id, header: '1', body: { decision: 'approve' } }, id + ': Send posts the same decision');
+          entry.routed[id] = (await rc.innerText()).replace(/\s+/g, ' ');
+          assert.match(entry.routed[id], /Reply to \w+ .*From the \w+ agent.*✓ Approved/, id);
+        }
+        await page.screenshot({ path: path.join(out, stem + '-routed.png') });
+        // Back to the first thread for Open in app.
+        await page.evaluate(phone => phone ? __wos.openSheet('inbox') : __wux.openChatsList(), phone);
+        for (let i = 0; i < 20 && !(await listRow.isVisible().catch(() => false)); i++) { const back = page.locator('.ch-back').filter({ visible: true }).first(); if (await back.isVisible().catch(() => false)) await back.click().catch(() => {}); await nap(300); }
+        await listRow.click(); await c2.waitFor({ timeout: 10000 }); await c2.scrollIntoViewIfNeeded();
         // Open in app: Messenger opens at that item's own page.
         await c2.locator('[data-act="open"]').click();
         let at = null;

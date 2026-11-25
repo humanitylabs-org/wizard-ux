@@ -6,6 +6,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
 
 const read = p => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
 const clone = v => JSON.parse(JSON.stringify(v));
@@ -142,4 +143,37 @@ test('an answer for another item or another schema is not shown', () => {
   assert.equal(AC.normalize({ ...DRAFT, id: 'other' }, 'draft-1'), null);
   assert.equal(AC.normalize({ ...DRAFT, schema: 'wizard.app-actions/9' }, 'draft-1'), null);
   assert.equal(AC.normalize({ ...DRAFT, state: 'weird' }, 'draft-1').state, 'pending');
+});
+
+// Agent chat parity (AGENTS.md; wizard-agent-service qa/agent-parity/features.json "chat-action-cards"): the same reply in
+// a main thread and in host-profile, container and restricted routed threads gives the same card from the same app
+// item, the same decision and the same clean Chats preview. Routed ids and agent pins as the Service sends them.
+const ROUTES = { main: ['wizard_1793157258294_34b4a71ae61a', ''], 'host-profile': ['20261028_101500_ab12cd', 'qa-host-profile'],
+  container: ['agent-research:20261028_101501_ef34', 'agent-research'], restricted: ['restricted.vault_20261028-101502', 'restricted.vault'] };
+function listNormalizer() {
+  const live = withLiveParts(read('web/live.js')), a = live.indexOf('  const READY_OR_ATTENTION'), b = live.indexOf('  /* ---- thread-seen');
+  assert.ok(a > 0 && b > a, 'live.js normalizer block found');
+  const context = modelContext({});
+  vm.runInContext(`${live.slice(a, b)}\nthis.normalize = normalize;`, context);
+  return context.normalize;
+}
+test('parity: main and routed threads (host-profile, container, restricted) get the same card, decision and preview', async () => {
+  const normalize = listNormalizer(), cards = new Map(), reply = `I drafted a reply:\n\n${MARK('wizard-messenger', 'draft-1')}\n\nSend it?`;
+  for (const [kind, [sid, agent]] of Object.entries(ROUTES)) {
+    const history = rows(reply).map(r => ({ ...r, session_id: sid, ...(agent ? { agent } : {}) }));
+    const [tn] = KIT.parseRows(history);
+    assert.deepEqual(clone(tn.a.actions), ['wizard-messenger/draft-1'], `${kind}: action parsed from history`);
+    assert.doesNotMatch(tn.a.text + tn.a.plainText, /WIZARD_ACTION|draft-1/, `${kind}: marker hidden in thread and copy`);
+    const it = clone(DRAFT);
+    const w = cardsWorld({ answer: (url, method, body) => { if (method === 'POST') it.state = body.decision === 'approve' ? 'approved' : 'rejected'; return { status: 200, d: it }; } });
+    const n = w.node(tn.a.actions[0]); w.AC.html(tn.a.actions); await w.settle(); w.AC.paint();
+    cards.set(kind, n.innerHTML);
+    w.AC.tap(btn(n, 'approve')); await w.settle();
+    assert.deepEqual(w.calls.map(c => [c.method, c.url, c.body]), [['GET', '/wizard-messenger/api/actions/draft-1', null], ['POST', '/wizard-messenger/api/actions/draft-1', { decision: 'approve' }]], `${kind}: same item, same decision`);
+    assert.match(n.innerHTML, /✓ Approved/, kind);
+    const full = normalize({ id: sid, title: 'Synthetic', status: 'completed', ...(agent ? { agent } : {}), latest_message: { role: 'assistant', content: reply, timestamp: 2 } });
+    assert.equal(full.agent, agent, `${kind}: row keeps its agent`);
+    assert.equal(full.preview, 'I drafted a reply: Send it?', `${kind}: full-list preview`);
+  }
+  assert.equal(new Set(cards.values()).size, 1, 'byte-identical card for every runtime kind');
 });
