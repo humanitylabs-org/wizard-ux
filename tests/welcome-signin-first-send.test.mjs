@@ -6,7 +6,6 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 const source = readFileSync(new URL('../web/core/chat-models.js', import.meta.url), 'utf8');
-const welcome = readFileSync(new URL('../web/core/welcome.js', import.meta.url), 'utf8');
 
 function box() {
   const state = { signed: false, reads: 0 };
@@ -47,9 +46,4 @@ test('a send with a model never re-reads the list', async () => {
   assert.equal(state.reads, 1);
 });
 
-test('the Welcome refreshes the shell model list when it sees the AI signed in', () => {
-  const at = welcome.indexOf('if (ok === true) {');
-  assert.ok(at > 0);
-  const next = welcome.slice(at, at + 600);
-  assert.match(next, /WosModels[\s\S]*load\(true\)[\s\S]*wos:models/);
-});
+// The Welcome's own refresh on sign-in runs in the browser: tests/qa-welcome-standard-first.cjs (QA_SHELL=desktop).
