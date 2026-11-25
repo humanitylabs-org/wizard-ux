@@ -288,6 +288,37 @@ test('native keyboard leaves a usable picker above the temporarily shorter input
   // (closing the picker gives the input its height back: the test above runs popOff)
 });
 
+test('the model menu never runs past a narrow window\'s left edge (issue 1539)', () => {
+  const src = read('web/core/chat-power.js');
+  const place = src.slice(src.indexOf('  function placePop(el) {'), src.indexOf('  function openSheet(o) {'));
+  // Desktop: a 247 px New chat window at x=251 (two windows side by side in a 760 px browser), the chip ~40 px in
+  // from its right; also a roomy window and a phone, where the card keeps its 236 px beside the chip.
+  for (const [left, right, labRight, viewport] of [[251, 498, 460, 760], [577, 877, 799, 1365], [288, 1165, 1057, 1365], [0, 412, 392, 412]]) {
+    const styles = new Map(), rect = { top: 0, bottom: 800, left, right, height: 800 };
+    const boxes = {
+      '.ch-psheet.ch-mpop': { getBoundingClientRect: () => rect, style: { setProperty: (k, v) => styles.set(k, parseFloat(v)) } },
+      '.ch-mlabel': { getBoundingClientRect: () => ({ top: 740, right: labRight }) },
+      '.ch-head': { getBoundingClientRect: () => ({ bottom: 60 }) },
+      '.ch-compose': { getBoundingClientRect: () => ({ top: 730, height: 50 }) },
+    };
+    const ctx = vm.createContext({ window: { visualViewport: { offsetTop: 0, offsetLeft: 0, height: 800, width: viewport } }, el: { querySelector: s => boxes[s] || null } });
+    vm.runInContext(`${place}; placePop(el);`, ctx);
+    // The CSS: width min(var(--mpop-w), 100% - 24px), right var(--mpop-r).
+    const width = Math.min(styles.get('--mpop-w'), right - left - 24), cardRight = right - styles.get('--mpop-r'), cardLeft = cardRight - width;
+    assert.ok(cardLeft >= left + 8, `card starts inside the window (${cardLeft} >= ${left + 8})`);
+    assert.ok(cardRight <= Math.min(right, viewport) - 8, 'card ends inside the window');
+    assert.ok(width >= 200, 'model names keep a readable width');
+    if (right - left >= 236 + (right - labRight) + 16) {
+      assert.equal(width, 236, 'room enough: the card keeps its size');
+      assert.equal(cardRight, labRight - 2, 'room enough: the card stays right above the chip');
+    }
+  }
+  // The card's CSS (real chat-power.css) on the picker's markup takes placePop's width.
+  const doc = createDocument();
+  doc.body.innerHTML = '<div class="ch-sheet ch-psheet ch-mpop"><div class="ch-sheet-b"></div></div>';
+  assert.equal(cascade(doc.querySelector('.ch-sheet-b'), read('web/core/chat-power.css')).width?.value, 'min(var(--mpop-w, 236px), calc(100% - 24px))', 'the card\'s width follows placePop');
+});
+
 test('the composer scripts parse', () => {
   for (const f of ['web/core/chats.js', 'web/core/chat-power.js', 'web/core/chat-models.js']) assert.doesNotThrow(() => new vm.Script(read(f), { filename: f }));
 });

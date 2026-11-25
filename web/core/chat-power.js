@@ -780,7 +780,13 @@ window.WosChatPower = function chatPower(A) {
       el.style.setProperty('--mpop-input-max', cap + 'px');
     }
     const bottom = bottomEdge();
-    const right = Math.min(pr.right, (vv?.offsetLeft || 0) + (vv?.width || innerWidth), lr.right + 6) - 8;
+    const paneRight = Math.min(pr.right, (vv?.offsetLeft || 0) + (vv?.width || innerWidth));
+    // Bound the left side too (issue 1539): in a narrow desktop window the card, pinned beside the label, ran past the
+    // window's left edge and the window cut off the model names. Slide it right, then narrow it only if it still can't fit.
+    const left = Math.max(Number(pr.left) || 0, vv?.offsetLeft || 0) + 8;
+    const width = Math.max(0, Math.min(236, paneRight - 8 - left));
+    const right = Math.min(paneRight - 8, Math.max(Math.min(paneRight, lr.right + 6) - 8, left + width));
+    pop.style.setProperty('--mpop-w', `${width}px`);
     pop.style.setProperty('--mpop-b', `${Math.max(0, pr.bottom - bottom)}px`);
     pop.style.setProperty('--mpop-r', `${Math.max(8, pr.right - right)}px`);
     pop.style.setProperty('--mpop-h', `${Math.max(0, bottom - top)}px`);

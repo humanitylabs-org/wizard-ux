@@ -171,9 +171,35 @@ async function exercise(browser, c) {
     ok(errs.length === 0, `${label}: no page errors`, errs);
   } finally { await ctx.close(); }
 }
+// Issue 1539: two New chat windows side by side in a narrow desktop browser; the card ran past its window's left edge.
+async function narrowDesktop(browser, width) {
+  const label = `desktop-${width}-two-windows`;
+  const { ctx, p, errs } = await boot(browser, { mode: 'desktop', width, height: 900, skin: 'nebula', short: true });
+  try {
+    await p.evaluate(() => __wux.newChat({ fresh: true }));
+    await p.waitForTimeout(500);
+    const chips = p.locator('.win [data-chats] [data-chmodel]:visible'), n = await chips.count();
+    ok(n === 2, `${label}: two chat windows with a model chip`, n);
+    for (let i = 0; i < n; i++) {
+      await chips.nth(i).click();
+      await p.locator('.ch-mpop .ch-sheet-b').waitFor(); await p.waitForTimeout(250);
+      if (i === 0) await p.screenshot({ path: path.join(OUT, `${label}.png`) });
+      const g = await p.evaluate(() => {
+        const card = document.querySelector('.ch-mpop .ch-sheet-b'), win = card.closest('.win').getBoundingClientRect(), r = card.getBoundingClientRect();
+        const rows = [...card.querySelectorAll('[data-mpick]')].map(el => { el.scrollIntoView({ block: 'nearest' }); const q = el.getBoundingClientRect(), hit = document.elementFromPoint(q.left + 6, q.top + q.height / 2); return { name: el.textContent.trim(), inside: q.left >= win.left && q.right <= win.right, hit: !!hit && el.contains(hit) }; });
+        return { winLeft: win.left, winRight: win.right, left: r.left, right: r.right, width: r.width, rows };
+      });
+      ok(g.left >= g.winLeft + 4 && g.right <= g.winRight - 4 && g.width >= 200, `${label}: window ${i + 1} picker wholly inside its window`, g);
+      ok(g.rows.length >= 6 && g.rows.every(r => r.inside && r.hit), `${label}: window ${i + 1} every model name visible and clickable at its left edge`, g.rows.filter(r => !r.inside || !r.hit));
+      await p.keyboard.press('Escape'); await p.waitForTimeout(150);
+    }
+    ok(errs.length === 0, `${label}: no page errors`, errs);
+  } finally { await ctx.close(); }
+}
 (async () => {
   const browser = await chromium.launch({ executablePath: process.env.QA_CHROME || undefined, args: ['--no-sandbox'] });
   try {
+    for (const width of [760, 820]) { try { await narrowDesktop(browser, width); } catch (e) { ok(false, `desktop-${width}-two-windows: completed`, String(e)); } }
     const cases = [];
     for (const mode of ['native', 'phone', 'desktop']) for (const width of (mode === 'desktop' ? [1365] : [360, 412]))
       for (const skin of ['nebula', 'sepia']) for (const short of [false, true])
