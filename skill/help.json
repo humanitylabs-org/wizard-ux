@@ -16,7 +16,7 @@
     "Open Settings: desktop, the cog at the bottom left under the chats list (older Desks view: the top-bar gear, ⌥,); phone, the gear at the top right of Home or an empty desk, or hold the orb and say 'settings'. Settings is a list of pages under System and Preferences; on a wide screen the list is on the left and the page on the right. A page with nothing on it is hidden. Pages are the same on phone and desktop, except rows that only exist on one of them (named below)."
   ],
   "switchesIntro": [
-    "Settings › Appearance › Try new features lists unfinished features anyone can switch on to try, A to Z, each 'by <author>'. The group only shows when this Wizard is on the For testers channel (Settings › About & updates › Channel › For testers); on For everyone it is hidden and these switches stay off. The same switches are also in the WizardOS Tracker app (Try it). A choice follows the owner on every device. If the owner can't find Try new features, the first step is Channel › For testers."
+    "Settings › Appearance › Try new features lists unfinished features anyone can switch on to try, A to Z, each 'by <author>'. The group only shows when this Wizard is on the For testers channel (Settings › About & updates › Channel › For testers); on For everyone it is hidden and these switches stay off. The same switches are also in the WizardOS Tracker app (Try it). A choice follows the owner on every device."
   ],
   "pages": {
     "overview": {
@@ -370,7 +370,7 @@
     },
     "wizard/graceful-restart": {
       "where": "Settings › Appearance › Try new features › Calm Agent Service restarts",
-      "help": "While the Agent Service waits for running chats before restarting, you see a quiet 'Restarting when chats finish' note, not errors; a message sent meanwhile is saved and sends after the restart; if overdue you see what still runs and choose Wait longer or Restart now. Needs a box that supports it."
+      "help": "While the Agent Service waits for running chats to restart, you see a quiet note, not errors; a message sent meanwhile sends after the restart; if overdue, choose Wait longer or Restart now."
     },
     "wizard/unified-inbox": {
       "where": "Settings › Chats & app screens › Notifications › Notifications in Chats (on for everyone)"
@@ -422,6 +422,10 @@
     "wizard/agent-inbox": {
       "help": "Background tasks keep one short record each; their worker threads stay out of the chat list, and Chats gets a Running view (what still works, what went quiet).",
       "where": "Settings › Appearance › Try new features › Agent inbox"
+    },
+    "wizard/chats-inbox": {
+      "help": "Bottom tabs Inbox, Tags, Sent; Sent shows what you sent, where it went and why. Needs Agent inbox.",
+      "where": "Settings › Appearance › Try new features › Chats inbox"
     },
     "wizard/phone-app-notifications": {
       "help": "Android app: what any app sends to Notifications shows as a phone notification under that app's name, one Android channel per app.",

@@ -50,7 +50,8 @@
     "wizard/app-wake",
     "wizard/swap-sides",
     "wizard/install-in-sidebar",
-    "wizard/try-feature-counts"
+    "wizard/try-feature-counts",
+    "wizard/chats-inbox"
   ],
   "defaults": [
     "wizard/desktop-chats"

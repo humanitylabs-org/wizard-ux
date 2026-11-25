@@ -387,6 +387,18 @@
       "kind": "write",
       "note": "Agent inbox Open / Send to inbox (wizard-ux issue 1570): POST open|send only on an owner tap while the off-by-default wizard/agent-inbox switch is on, which none of the three flows turn on; tests/agent-inbox-open-send.test.mjs covers it against a fake box. Refused and collected, never answered, if a flow reaches it."
     },
+    "/wizard/v1/sent": {
+      "status": "not-exercised",
+      "source": "web/live.js",
+      "kind": "read",
+      "note": "Chats Sent tab (wizard-ux issue 1778, wizard-agent-service issue 607): read only while the off-by-default wizard/chats-inbox and wizard/agent-inbox switches are both on, which none of the three flows turn on; tests/chats-sent-tab.test.mjs covers it against a fake box. Refused and collected, never answered, if a flow reaches it."
+    },
+    "/wizard/v1/sent/{}/correct": {
+      "status": "not-exercised",
+      "source": "web/live.js",
+      "kind": "write",
+      "note": "Chats Sent tab correction (wizard-ux issue 1778): POST only on an owner tap on Should have replied / Didn't need a reply while the off-by-default wizard/chats-inbox switch is on, which none of the three flows turn on; tests/chats-sent-tab.test.mjs covers it against a fake box. Refused and collected, never answered, if a flow reaches it."
+    },
     "/wizard/v1/agent-inbox/{}/yes-to-all": {
       "status": "not-exercised",
       "source": "web/live.js",

@@ -418,5 +418,65 @@ window.WizCore.liveParts.channels = function () {
     }
     return { state, records, read, fresh, move, stays, card, answer, yesToAll, sweep, alerts, alertState, readAlerts, later, feedback };
   }
-  return { agentInbox, channelDaily, channelReads, channelStore };
+  /* ---- sent log (wizard-ux issue 1778) ----
+   * The box's Sent log (wizard-agent-service issue 607, same switch as the agent inbox): one row per capture the owner
+   * sent, newest first, with where it went (route), why (decided_by + rules) and its live state. state() reads
+   * GET /wizard/v1/sent every `every` while something asks for it; a 404 (switch off on the box, or an older box) is an
+   * empty log with `gone`. correct(id, should_reply) posts the owner's correction and puts the row the box answers with
+   * in place, so the row changes on that frame. Chats reads it only while wizard/chats-inbox is on (the Sent tab). */
+  function sentLog({ req, emit, now = () => Date.now(), every = 15e3 } = {}) {
+    const ID = /^sent_[a-f0-9]{24}$/, SID = /^[A-Za-z0-9_.:-]{1,200}$/, RID = /^inbox_[a-f0-9]{24}$/;
+    const ROUTES = new Set(['dump', 'agent', 'command', 'reminder']), BY = new Set(['owner_words', 'model', 'correction', 'fallback']);
+    const STATES = new Set(['routing', 'running', 'done', 'needs_you', 'failed', 'unknown']);
+    const str = (v, n) => typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, n) : '';
+    const num = v => { const n = Number(v); return Number.isFinite(n) && n > 0 ? n : 0; };
+    const list = (v, n) => (Array.isArray(v) ? v : []).map(x => str(x, 80)).filter(Boolean).slice(0, n);
+    const row = r => r && typeof r === 'object' && ID.test(r.id) ? {
+      id: r.id, at: num(r.at), source: str(r.source, 20), text: typeof r.text === 'string' ? r.text.slice(0, 2000) : '',
+      route: ROUTES.has(r.route) ? r.route : null, decidedBy: BY.has(r.decided_by) ? r.decided_by : null, rules: list(r.rules_matched, 12),
+      state: STATES.has(r.state) ? r.state : 'unknown', thread: typeof r.thread_id === 'string' && SID.test(r.thread_id) ? r.thread_id : null,
+      record: typeof r.record_id === 'string' && RID.test(r.record_id) ? r.record_id : null, tags: list(r.tags, 8), urgent: r.urgent === true,
+      wouldRoute: ROUTES.has(r.would_route) ? r.would_route : null, corrected: r.corrected && typeof r.corrected.should_reply === 'boolean' ? { shouldReply: r.corrected.should_reply, at: num(r.corrected.at) } : null,
+      error: str(r.error, 80),
+    } : null;
+    const s = { rows: [], next: null, ok: false, gone: false, at: 0, busy: null };
+    const tell = () => { try { emit(); } catch (_) {} };
+    function read() {
+      if (s.busy) return s.busy;
+      s.at = now();
+      s.busy = (async () => {
+        try {
+          const j = await (await req('/wizard/v1/sent?limit=100', { cache: 'no-store' })).json();
+          s.rows = (Array.isArray(j?.rows) ? j.rows : []).map(row).filter(Boolean);
+          s.next = typeof j?.next === 'string' && ID.test(j.next) ? j.next : null;
+          s.ok = true; s.gone = false;
+        } catch (e) { if (e?.status === 404) { s.rows = []; s.next = null; s.ok = true; s.gone = true; } }
+        finally { s.busy = null; tell(); }
+        return s;
+      })();
+      return s.busy;
+    }
+    function state() { if (!s.busy && now() - s.at >= every) read(); return s; }
+    const fresh = () => { s.at = 0; };
+    // The next page (older rows) after the last one shown.
+    async function more() {
+      if (!s.next) return s;
+      const j = await (await req(`/wizard/v1/sent?limit=100&before=${encodeURIComponent(s.next)}`, { cache: 'no-store' })).json();
+      const have = new Set(s.rows.map(r => r.id));
+      s.rows = s.rows.concat((Array.isArray(j?.rows) ? j.rows : []).map(row).filter(r => r && !have.has(r.id)));
+      s.next = typeof j?.next === 'string' && ID.test(j.next) ? j.next : null;
+      tell(); return s;
+    }
+    // Should have replied (true) / Didn't need a reply (false): the box moves the thread and keeps the example.
+    async function correct(id, shouldReply) {
+      if (!ID.test(String(id || '')) || typeof shouldReply !== 'boolean') throw Object.assign(new Error('invalid'), { status: 400 });
+      const j = await (await req(`/wizard/v1/sent/${id}/correct`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ should_reply: shouldReply }) })).json();
+      const r = row(j?.row);
+      if (r) { s.rows = s.rows.map(x => x.id === r.id ? r : x); tell(); }
+      return { row: r, changed: j?.changed === true };
+    }
+    return { state, read, fresh, more, correct };
+  }
+  /* ---- end sent log ---- */
+  return { agentInbox, channelDaily, channelReads, channelStore, sentLog };
 };
