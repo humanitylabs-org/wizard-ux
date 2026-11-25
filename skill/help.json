@@ -417,10 +417,6 @@
       "help": "Android app: Podcasts plays through the phone's media player (lock screen, headset buttons), like Music.",
       "where": "Settings › Appearance › Try new features › Phone media player for Podcasts"
     },
-    "wizard/runtipi-cli-key": {
-      "help": "App Manager uses its own Runtipi 4.12 key.",
-      "where": "Settings › Appearance › Try new features › Runtipi 4.12 sign-in key"
-    },
     "wizard/app-tap-home": {
       "help": "Narrow desktop window: tapping the icon of the app in front takes it back to its first view.",
       "where": "Settings › Appearance › Try new features › Tap the app in front for its first view"

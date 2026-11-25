@@ -31,7 +31,6 @@
     "wizard/action-cards",
     "wizard/phone-app-notifications",
     "wizard/lock-screen-player",
-    "wizard/runtipi-cli-key",
     "wizard/app-tap-home",
     "wizard/download-swipe",
     "wizard/capability-registry",
