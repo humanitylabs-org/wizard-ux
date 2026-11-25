@@ -48,7 +48,8 @@
     "wizard/capture-inbox",
     "wizard/swap-sides",
     "wizard/install-in-sidebar",
-    "wizard/try-feature-counts"
+    "wizard/try-feature-counts",
+    "wizard/inbox-until-archived"
   ],
   "defaults": [
     "wizard/desktop-chats"

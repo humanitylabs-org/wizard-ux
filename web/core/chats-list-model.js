@@ -226,22 +226,31 @@ function activitySort(rows, order, { at = r => msOf(r?.at), needs = r => r?.mark
 }
 /** The sections from the shell's groups (LIVE.workGroups) and its facts: needs(s), unread(s), at(s) in ms.
  * { working, ready, recent, older (how many Recent rows "Show older" would add), snoozed, archive }. Pure. */
-function activityGroups(groups, { needs, unread, at }, { order = 'newest', now = 0, days = ACTIVITY_RECENT_DAYS, older = false } = {}) {
+/* Inbox until archived (wizard-ux issue 1810, switch wizard/inbox-until-archived; James, 25 Nov 2026: "treat it like an
+ * inbox again"): with it on, Ready is the Inbox and holds every thread that is not working, snoozed or archived, read or
+ * not; there is no Recent and no week cut. Opening a thread never moves it; only Archive (or Snooze) does. */
+const INBOX_KEEP = 'wizard/inbox-until-archived';
+/** Whether the switch is on, from the root's data-tweaks string (the adapter reads the DOM, not this model). */
+const inboxKeep = tweaks => String(tweaks || '').split(' ').includes(INBOX_KEEP);
+function activityGroups(groups, { needs, unread, at }, { order = 'newest', now = 0, days = ACTIVITY_RECENT_DAYS, older = false, keep = false } = {}) {
   if (!groups) return null;
   const snoozed = s => deferred(s) && !['waiting_for_approval', 'unknown'].includes(s.status);
-  const rest = [...(groups.errors || []), ...(groups.ready || []), ...(groups.yesterday || []), ...(groups.pastWeek || [])];
+  // keep: a thread only aged past "archive after" (not archived by the owner) stays in Inbox too.
+  const aged = keep ? (groups.archive || []).filter(s => !s.archived) : [];
+  const rest = [...(groups.errors || []), ...(groups.ready || []), ...(groups.yesterday || []), ...(groups.pastWeek || []), ...aged];
   const ready = [], recent = [], snz = [...(groups.deferred || [])];
-  for (const s of rest) (snoozed(s) ? snz : needs(s) || unread(s) ? ready : recent).push(s);
+  for (const s of rest) (snoozed(s) ? snz : keep || needs(s) || unread(s) ? ready : recent).push(s);
   const newest = rows => activitySort(rows, 'newest', { at });
   const cut = now - days * DAY_MS, all = newest(recent), within = all.filter(s => at(s) >= cut);
   return { working: activitySort(groups.working || [], order === 'priority' ? 'newest' : order, { at }), ready: activitySort(ready, order, { at, needs }),
-    recent: older ? all : within, older: older ? 0 : all.length - within.length, snoozed: newest(snz), archive: newest(groups.archive || []) };
+    recent: older ? all : within, older: older ? 0 : all.length - within.length, snoozed: newest(snz), archive: newest(keep ? (groups.archive || []).filter(s => s.archived) : groups.archive || []) };
 }
 /** The same sections as rows for a layout that draws its own list (sessionRow, plus each row's marker). */
 function activityList(groups, facts, opts = {}) {
   const c = facts.chats, at = s => msOf(facts.live.cardAt?.(s)) || msOf(s.updatedAt) || msOf(s.createdAt);
   const needs = s => !!c.activityNeeds?.(s), unread = s => !!c.activityUnread?.(s);
-  const g = activityGroups(groups, { needs, unread, at }, opts); if (!g) return null;
+  // keep: Inbox until archived (wizard-ux issue 1810), from the shell's own switch read unless the caller says.
+  const g = activityGroups(groups, { needs, unread, at }, { ...opts, keep: opts.keep ?? !!c.inboxKeep?.() }); if (!g) return null;
   const rows = (list, kind) => list.slice(0, 200).map(s => ({ ...sessionRow(s, kind, facts), mark: activityMark({ working: kind === 'working', needs: needs(s), unread: unread(s) }),
     ...(c.activityDraft?.(s) ? { draft: true } : {}) })); // a saved, unsent draft (wizard-ux issue 1445, on for everyone since 1604)
   return splitSaved({ working: rows(g.working, 'working'), ready: rows(g.ready, 'ready'), recent: rows(g.recent, 'ready'), older: g.older,
@@ -254,5 +263,5 @@ const unreadThreads = (rows, isNew, notes) => new Set((rows || []).filter(s => i
 const unreadCount = rows => new Set((rows || []).filter(r => r.unread).map(r => r.id)).size;
 root.WizChatsListModel = Object.freeze({ STATES, stateOf, stateGroups, WORKING_SORTS, workingOrderOf, workingAt, workingSort, READY_SORTS, sortOf, PRIORITY_TIP, rankOf, readySort, executionStatus, isListWorking,
   readyGroups, NOTES_PROJECT, NO_PROJECT, projectOf, titleInProject, projectGroups, GROUP_MODES, groupMode, readyFlat,
-  readyStep, visibleIds, ACTIVITY_SORTS, activitySortOf, ACTIVITY_RECENT_DAYS, activityMark, activitySort, activityGroups, activityList, unreadCount, unreadThreads, compareTime, deferred, sessionRow, sessionList, sessionRank, orderSessions, notificationRow, sortNotes, mixedRows, subjectGroups, priorityGroups });
+  readyStep, visibleIds, INBOX_KEEP, inboxKeep, ACTIVITY_SORTS, activitySortOf, ACTIVITY_RECENT_DAYS, activityMark, activitySort, activityGroups, activityList, unreadCount, unreadThreads, compareTime, deferred, sessionRow, sessionList, sessionRank, orderSessions, notificationRow, sortNotes, mixedRows, subjectGroups, priorityGroups });
 })(globalThis);

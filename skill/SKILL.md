@@ -136,7 +136,7 @@ Schedules: jobs the agent runs on a timer (e.g. a daily summary), with their nex
 ### About & updates
 About & updates: update WizardOS (Automatic or Ask me), the release channel (For everyone or For testers), versions, connection status, and Gestures & help.
 - WizardOS (server): the installed version and whether it is up to date. Updates: Automatic installs them overnight, never during a chat; Ask me installs nothing until you tap Install. Channel: For everyone gets releases testers have used for about 3 days; For testers gets every release at once and shows Try new features in Appearance. When an update is ready a card at the top of Settings offers Install (or Install now).
-  - Apps: every installed app with its version and the newest, Update now, Retry, Hold, and Automatic / Ask me for app updates
+  - Apps: every installed app with its version and the newest, Update now, Retry, Hold, and Automatic / Ask me for app updates (Automatic checks and updates apps every hour)
   - WizardOS (server) {version}: the installed server version
   - Automatic: updates install overnight, never during a chat
   - Ask me: nothing installs until you tap Install
@@ -177,6 +177,7 @@ Settings › Appearance › Try new features lists unfinished features anyone ca
 - **Continue saved background results**: Work that finished while Wizard was down shows in its own thread with one Continue button. Nothing resumes until you tap it.
 - **Desktop sidebar follows Default Chats**: AI apps desktop: the chats sidebar uses the Chats look picked in Settings › Chats & app screens › Default Chats.
 - **Follow main**: Green merges go live by themselves.
+- **Inbox until archived**: Chats stay in Inbox until archived.
 - **Installs in the Apps column**: AI apps desktop: an app you Get shows in the Apps column, spinning until installed.
 - **Links open the app's own window**: Android app: a link to a Wizard app opens that app in its own Android window, like its home-screen icon.
 - **Machines on Home**: Home shows a slim strip (Wizard, AI fuel, chats, backup, network); Settings › System holds your network, AI, security and storage.
@@ -218,7 +219,7 @@ No longer switches (owners and old chats may still name them):
 
 - **Turn on a new feature?** Settings › About & updates › Channel › For testers (if not already), then Settings › Appearance › Try new features › the feature's switch.
 - **Turn on Channels?** Nothing to turn on any more: open Chats and tap the Channels tab.
-- **Make Wizard update automatically?** Settings › About & updates › Updates › Automatic (installs overnight, never during a chat). For apps: Settings › About & updates › Apps › Automatic.
+- **Make Wizard update automatically?** Settings › About & updates › Updates › Automatic (installs overnight, never during a chat). For apps: Settings › About & updates › Apps › Automatic (checks and updates apps every hour).
 - **Update now?** When an update is ready, the card at the top of Settings shows Install (or Install now); tap it. 'Interface updated · Reload' just reloads the screen.
 - **Get the newest features first?** Settings › About & updates › Channel › For testers.
 - **Use Wizard on my phone?** Settings › Phones & devices: scan the QR code with the Wizard phone app (needs Tailscale; the page walks you through it).
