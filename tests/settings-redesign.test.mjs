@@ -161,7 +161,7 @@ test('index: one update card on top when there is something to do, nothing other
   assert.doesNotMatch(h.root.innerHTML, /osu-card|st-card-wrap|Check for updates|Update ready/, 'nothing to do: no card at all');
   cardHtml = '<div class="osu-card" data-osu-card="behind"><button data-osu="apply">Update</button></div>';
   h.view.render();
-  assert.match(h.root.innerHTML, /<h3 class="st-title" tabindex="-1">Settings<\/h3><section class="st-card-wrap" data-settings-feature="updates"><div class="osu-card" data-osu-card="behind">/);
+  assert.match(h.root.innerHTML, /<h3 class="st-title" tabindex="-1">Settings<\/h3><div class="st-search" role="search">.*?<\/div><section class="st-card-wrap" data-settings-feature="updates"><div class="osu-card" data-osu-card="behind">/);
   const d = harness({ shell: 'desktop' }); d.s.WosUpdates = h.s.WosUpdates; d.view.focus('about');
   assert.doesNotMatch(d.root.innerHTML, /st-card-wrap/, 'desktop: About & updates beside the list carries the card');
   d.view.focus('look'); assert.match(d.root.innerHTML, /st-card-wrap/);

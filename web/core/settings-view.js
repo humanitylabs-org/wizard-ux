@@ -12,7 +12,7 @@ window.WizCore.settingsParts.view = function ({ attention, cardHtml, chatsHost, 
     root.classList.add('st-root'); root.dataset.settingsRoot = '';
     const ctx = { ...adapter, root }, api = { render, focus, back, destroy, dispatch, context: ctx, get page() { return page; } };
     let skinImportMessage = '', page = '', confirm = null, wanted = '';
-    // Search box (switch wizard/settings-search, try-wizard issue 94): `query` filters the category list to the pages
+    // Search box (try-wizard issue 94, on for everyone): `query` filters the category list to the pages
     // that mention it and marks every place it appears on the open page; `searchScrolled` keeps background repaints
     // from scrolling again once the first hit was brought into view.
     let query = '', searchScrolled = '', searchPage = '';
@@ -40,7 +40,7 @@ window.WizCore.settingsParts.view = function ({ attention, cardHtml, chatsHost, 
       if (wanted && (page === wanted || !PAGES.find(p => p.id === wanted)?.pending?.())) wanted = '';
       if (page && !shown.some(p => p.id === page)) { if (PAGES.find(p => p.id === page)?.pending?.()) wanted = page; page = ''; }
       if (searchPage && !shown.some(p => p.id === searchPage)) searchPage = '';
-      const q = searchOn() ? query.trim() : '';
+      const q = query.trim();
       const hits = q ? searchHits(shown, q) : null;
       const pages = hits ? shown.filter(p => hits.has(p.id)) : shown;
       const selected = openPage();
@@ -56,7 +56,7 @@ window.WizCore.settingsParts.view = function ({ attention, cardHtml, chatsHost, 
       const content = fs.map(f => `<section data-settings-feature="${esc(f.id)}">${f.html(ctx)}</section>`).join('');
       root.dataset.settingsPage = page;
       root.dataset.settingsNested = ctx.skinDraft ? 'true' : 'false';
-      const html = `<div class="st-inner ${desktop ? 'st-desktop' : 'st-phone'} ${page ? 'st-in-page' : ''}"><div class="st-index"><h3 class="st-title" tabindex="-1">Settings</h3>${searchOn() ? searchBox() : ''}${card}${hits ? '' : attentionHtml}<nav aria-label="Settings categories">${nav}${hits && !pages.length ? `<p class="st-search-none" role="status">No settings mention “${esc(q)}”</p>` : ''}</nav></div><div class="st-page" ${selected ? '' : 'hidden'}><header class="st-page-head"><button data-st-back aria-label="${ctx.skinDraft ? 'Back to Look' : 'Back to Settings'}">‹</button><h3 tabindex="-1">${ctx.skinDraft ? 'New skin' : heading}</h3></header>${content}</div></div>${confirm ? `<div class="st-confirm-scrim"><section class="st-confirm" role="alertdialog" aria-modal="true" aria-labelledby="st-confirm-title"><h3 id="st-confirm-title">Use ${esc(chatsName(confirm.id))} for all your chats?</h3><p>You can switch back here any time.</p><div class="st-actions"><button data-chats-cancel ${ctx.chatsBusy ? 'disabled' : ''}>Cancel</button><button data-chats-confirm ${ctx.chatsBusy ? 'disabled' : ''}>${ctx.chatsBusy ? 'Switching…' : 'Use ' + esc(chatsName(confirm.id))}</button></div></section></div>` : ''}`;
+      const html = `<div class="st-inner ${desktop ? 'st-desktop' : 'st-phone'} ${page ? 'st-in-page' : ''}"><div class="st-index"><h3 class="st-title" tabindex="-1">Settings</h3>${searchBox()}${card}${hits ? '' : attentionHtml}<nav aria-label="Settings categories">${nav}${hits && !pages.length ? `<p class="st-search-none" role="status">No settings mention “${esc(q)}”</p>` : ''}</nav></div><div class="st-page" ${selected ? '' : 'hidden'}><header class="st-page-head"><button data-st-back aria-label="${ctx.skinDraft ? 'Back to Look' : 'Back to Settings'}">‹</button><h3 tabindex="-1">${ctx.skinDraft ? 'New skin' : heading}</h3></header>${content}</div></div>${confirm ? `<div class="st-confirm-scrim"><section class="st-confirm" role="alertdialog" aria-modal="true" aria-labelledby="st-confirm-title"><h3 id="st-confirm-title">Use ${esc(chatsName(confirm.id))} for all your chats?</h3><p>You can switch back here any time.</p><div class="st-actions"><button data-chats-cancel ${ctx.chatsBusy ? 'disabled' : ''}>Cancel</button><button data-chats-confirm ${ctx.chatsBusy ? 'disabled' : ''}>${ctx.chatsBusy ? 'Switching…' : 'Use ' + esc(chatsName(confirm.id))}</button></div></section></div>` : ''}`;
       // A background refresh that changes nothing leaves the page alone: rewriting identical markup made Settings blink
       // and sent the desktop's own-scrolling category list back to the top (several modules refresh on timers).
       // The skin-import status line lives outside the markup, so it is written on the skip path too.
@@ -73,9 +73,6 @@ window.WizCore.settingsParts.view = function ({ attention, cardHtml, chatsHost, 
       if (attrs.length) { const scope = record ? root.querySelector(`[data-ubid="${CSS.escape(record)}"]`) : root; const sel = attrs.map(a => `[${a.name}="${CSS.escape(a.value)}"]`).join(''); const target = scope?.querySelector(sel); target?.focus({ preventScroll: true }); if (target && selection) target.setSelectionRange(...selection); }
       const U = window.WosUsage;
       if (U && !U.loading && (!U.snap || Date.now() - U.at > 60000)) U.load().then(ctx.paintUsage);
-    }
-    function searchOn() {
-      try { return (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/settings-search'); } catch (_) { return false; }
     }
     function searchBox() {
       return `<div class="st-search" role="search"><input type="search" data-st-search="" placeholder="Search settings" aria-label="Search settings" autocomplete="off" spellcheck="false" value="${esc(query)}"></div>`;
@@ -161,10 +158,10 @@ window.WizCore.settingsParts.view = function ({ attention, cardHtml, chatsHost, 
     function back() {
       const inBox = document.activeElement?.matches?.('[data-st-search]') && root.contains(document.activeElement);
       // Search: Esc/Back in the box, or at the list, clears the words first (a page goes back to the list, words kept).
-      if (searchOn() && query && inBox) { search(''); root.querySelector('[data-st-search]')?.focus({ preventScroll: true }); return true; }
+      if (query && inBox) { search(''); root.querySelector('[data-st-search]')?.focus({ preventScroll: true }); return true; }
       for (const f of features.values()) if (pageOf(f) === openPage() && f.back?.(ctx)) return true;
       if (confirm) { if (!ctx.chatsBusy) { confirm = null; render(); root.querySelector('[data-chats-choice][aria-checked="true"]')?.focus(); } return true; }
-      if (searchOn() && query && !page) { search(''); root.querySelector('[data-st-search]')?.focus({ preventScroll: true }); return true; }
+      if (query && !page) { search(''); root.querySelector('[data-st-search]')?.focus({ preventScroll: true }); return true; }
       if (!page) return false;
       const previous = page; focus(); root.querySelector(`[data-st-page="${previous}"]`)?.focus({ preventScroll: true }); return true;
     }
@@ -204,9 +201,8 @@ window.WizCore.settingsParts.view = function ({ attention, cardHtml, chatsHost, 
     }
     const click = e => dispatch(e.target, e);
     // An IME composes text in the box: wait for compositionend, or a repaint would replace the box mid-word.
-    const searchInput = e => { if (searchOn() && !e.isComposing && e.target.matches?.('[data-st-search]')) search(e.target.value); };
-    const searchComposed = e => { if (searchOn() && e.target.matches?.('[data-st-search]')) search(e.target.value); };
-    const searchSwitch = () => setTimeout(() => { if (!searchOn()) { query = ''; searchPage = ''; } render(true); }, 0);
+    const searchInput = e => { if (!e.isComposing && e.target.matches?.('[data-st-search]')) search(e.target.value); };
+    const searchComposed = e => { if (e.target.matches?.('[data-st-search]')) search(e.target.value); };
     const featureInput = e => { const id = e.target.closest('[data-settings-feature]')?.dataset.settingsFeature; features.get(id)?.input?.(ctx, e.target); };
     const change = async e => {
       featureInput(e);
@@ -259,8 +255,7 @@ window.WizCore.settingsParts.view = function ({ attention, cardHtml, chatsHost, 
     const unsubscribe = ctx.live?.onChange?.(() => render());
     const appsChanged = () => render();
     window.addEventListener?.('wos:prefs', appsChanged); window.addEventListener?.('wizard:apps', appsChanged); window.addEventListener?.('wizard:notify-route', appsChanged); window.addEventListener?.('wizard:notify-attention', appsChanged);
-    function destroy() { for (const f of features.values()) f.leave?.(ctx); root.removeEventListener('input', featureInput); if (typeof unsubscribe === 'function') unsubscribe(); window.removeEventListener?.('wos:prefs', appsChanged); window.removeEventListener?.('wizard:apps', appsChanged); window.removeEventListener?.('wizard:notify-route', appsChanged); window.removeEventListener?.('wizard:notify-attention', appsChanged); window.removeEventListener?.('wos:tweak-choice', searchSwitch); root.removeEventListener('input', searchInput); root.removeEventListener('compositionend', searchComposed); mounts.delete(api); root.removeEventListener('click', click); root.removeEventListener('keydown', key); root.removeEventListener('change', change); }
-    window.addEventListener?.('wos:tweak-choice', searchSwitch);
+    function destroy() { for (const f of features.values()) f.leave?.(ctx); root.removeEventListener('input', featureInput); if (typeof unsubscribe === 'function') unsubscribe(); window.removeEventListener?.('wos:prefs', appsChanged); window.removeEventListener?.('wizard:apps', appsChanged); window.removeEventListener?.('wizard:notify-route', appsChanged); window.removeEventListener?.('wizard:notify-attention', appsChanged); root.removeEventListener('input', searchInput); root.removeEventListener('compositionend', searchComposed); mounts.delete(api); root.removeEventListener('click', click); root.removeEventListener('keydown', key); root.removeEventListener('change', change); }
     root.addEventListener('input', searchInput); root.addEventListener('compositionend', searchComposed); root.addEventListener('input', featureInput); root.addEventListener('click', click); root.addEventListener('keydown', key); root.addEventListener('change', change); mounts.add(api); render(); return api;
   }
   // One deferred System link at a time: a newer link, Back, or anything the user does first cancels the wait.
