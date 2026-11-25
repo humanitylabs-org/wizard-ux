@@ -1,4 +1,4 @@
-// Browser QA for wizard-ux#1800 (standard first, switch wizard/standard-first-setup): a fresh Wizard's Welcome asks for
+// Browser QA for wizard-ux#1800 (standard first, on for everyone, no switch): a fresh Wizard's Welcome asks for
 // Claude or ChatGPT first, then offers private AI once (Set up private AI / Later / No thanks). Real Chromium, the real
 // phone shell (web/index.html, 412 px; QA_SHELL=desktop: web/desktop.html at 1280 px) on a fake fresh box whose Agent
 // Service answers GET/POST /wizard/v1/private-first the way wizard-agent-service does (POST {offer: setup} turns private
@@ -12,20 +12,21 @@
 //   2. claude: the same with Claude, then No thanks: Settings › Privacy has nothing
 //   3. skip-setup: Skip for now -> the step leads with private AI -> Set up private AI -> the Tinfoil sign-in -> the
 //      private agent exists -> Pick a skin
-//   4. off: the switch off: the Welcome is main's (Tinfoil leads while private first is on), nothing is POSTed
+//   4. old-switch: a device that still has the removed switch wizard/standard-first-setup saved (on or off) gets the
+//      same standard first Welcome; 5. old-switch-chatgpt: private first off (Linux) the same, ChatGPT -> the offer
 //   7. mac-deeplink: a Mac's setup connected ChatGPT and opened the first chat with ?session= (try-wizard#171): the
 //      offer opens once over that chat, Later closes it back to the reply, and it does not come back
 // Skins: the Connect your AI and Private AI cards in Nebula and Grove (QA_SHOTS), and the card follows a live skin change.
 //   QA_PLAYWRIGHT=<path to playwright> node tests/qa-welcome-standard-first.cjs
 //   QA_WEB=<another web/ dir, e.g. main's> QA_EXPECT=broken: cases 1-3 must fail there.
-//   QA_SHOTS=<dir>: connect-<skin>.png, offer-<skin>.png, offer-none.png, privacy-row.png, off.png
+//   QA_SHOTS=<dir>: connect-<skin>.png, offer-<skin>.png, offer-none.png, privacy-row.png
 const http = require('http'), fs = require('fs'), path = require('path');
 const { chromium } = require('../tools/qa-playwright.cjs');
 const WEB = process.env.QA_WEB ? path.resolve(process.env.QA_WEB) : path.join(__dirname, '..', 'web');
 const SHOTS = process.env.QA_SHOTS || '';
 const BROKEN = process.env.QA_EXPECT === 'broken';
 const DESKTOP = process.env.QA_SHELL === 'desktop', HOME = '/wizard-os-home/' + (DESKTOP ? 'desktop.html' : '');
-const SW = 'wizard/standard-first-setup';
+const OLD = 'wizard/standard-first-setup'; // the removed switch: a saved value must change nothing
 const TYPES = { '.js': 'application/javascript', '.css': 'text/css', '.html': 'text/html', '.png': 'image/png', '.json': 'application/json', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.webmanifest': 'application/manifest+json' };
 const APPS = [
   { id: 'wizard-chatgpt', name: 'ChatGPT', url: '/wizard-chatgpt/', kind: 'wizard', source: 'apps.json' },
@@ -99,11 +100,12 @@ const server = http.createServer((req, res) => {
   const browser = await chromium.launch();
   const fails = [], notes = [];
   const fail = (k, m) => fails.push(`${k}: ${m}`);
-  async function device({ on = true, skin = 'nebula' } = {}) {
+  // saved: what this device still remembers of the removed switch (undefined = nothing saved).
+  async function device({ saved, skin = 'nebula' } = {}) {
     const ctx = await browser.newContext(DESKTOP ? { viewport: { width: 1280, height: 820 } } : { viewport: { width: 412, height: 915 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true });
-    await ctx.addInitScript(({ on, skin, SW }) => { if (window !== window.top || sessionStorage.getItem('qa.seeded')) return; sessionStorage.setItem('qa.seeded', '1');
+    await ctx.addInitScript(({ saved, skin, OLD }) => { if (window !== window.top || sessionStorage.getItem('qa.seeded')) return; sessionStorage.setItem('qa.seeded', '1');
       try { localStorage.setItem('wos.coached', 'true'); localStorage.setItem('wos.tour.v1', 'true'); localStorage.setItem('wos.skin', skin);
-        localStorage.setItem('wos.skin-tweaks.v1', JSON.stringify({ version: 1, preset: 'none', off: {}, mix: on ? { [SW]: true } : {} })); } catch (e) {} }, { on, skin, SW });
+        localStorage.setItem('wos.skin-tweaks.v1', JSON.stringify({ version: 1, preset: 'none', off: {}, mix: saved === undefined ? {} : { [OLD]: saved } })); } catch (e) {} }, { saved, skin, OLD });
     const page = await ctx.newPage();
     page.on('pageerror', e => notes.push(`pageerror: ${e.message}`));
     return { ctx, page };
@@ -113,8 +115,6 @@ const server = http.createServer((req, res) => {
   async function start(page, k) {
     await page.goto(base + HOME);
     if (!(await page.waitForFunction(() => window.WosWelcome?.active, null, { timeout: 25000 }).then(() => true, () => false))) { fail(k, 'no Welcome on a fresh Wizard ' + JSON.stringify(await page.evaluate(() => window.__welcomeLog).catch(() => null))); return false; }
-    // The switch is painted by the tweak loader a moment after boot; the Welcome follows it (an owner sees the same).
-    await page.waitForFunction(sw => (document.documentElement.dataset.tweaks || '').split(' ').includes(sw), SW, { timeout: 8000 }).catch(() => {});
     await page.waitForTimeout(400);
     if (/^Name your/.test(await title(page))) await page.locator('.wl-card [data-wl="skip-name"]').click();
     return true;
@@ -214,29 +214,31 @@ const server = http.createServer((req, res) => {
       }
       await ctx.close();
     } catch (e) { if (!e.qaSkip) throw e; }
-    // 4. Switch off: main's Welcome
-    {
-      const k = 'off'; box = fresh(true);
-      const { ctx, page } = await device({ on: false });
+    // 4. A device that still has the removed switch saved, on or off: the same standard first Connect your AI.
+    for (const saved of [true, false]) {
+      const k = 'old-switch-' + saved; box = fresh(true);
+      const { ctx, page } = await device({ saved });
       if (await start(page, k)) {
         const c = await choices(page), skip = await page.locator('.wl-card [data-wl="skip-ai"]').count();
-        if (c[0]?.split('=')[0] !== 'wizard-tinfoil' || skip) fail(k, `switch off shows ${JSON.stringify(c)} skip=${skip}`);
-        else notes.push(`off: unchanged Connect your AI ${JSON.stringify(c.map(x => x.split('=')[0]))}, no Skip for now`);
-        if (SHOTS) await page.screenshot({ path: path.join(SHOTS, 'off.png') });
-        await page.waitForTimeout(1500);
-        if (box.posts.length) fail(k, `POSTed ${JSON.stringify(box.posts)}`);
+        if (JSON.stringify(c.map(x => x.split('=')[0])) !== '["wizard-claude","wizard-chatgpt"]' || !skip) fail(k, `shows ${JSON.stringify(c)} skip=${skip}`);
+        else notes.push(`${k}: ${OLD} saved ${saved} -> Connect your AI ${JSON.stringify(c.map(x => x.split('=')[0]))} + Skip for now`);
+        if (await page.evaluate(o => (document.documentElement.dataset.tweaks || '').split(' ').includes(o), OLD)) fail(k, 'the removed switch still loads');
       }
       await ctx.close();
     }
-    // 5. Switch off, private first off (Linux): main's Welcome, ChatGPT -> Pick a skin (no offer) -> Say hello -> reply.
+    // 5. Private first off (Linux), the old switch saved off: ChatGPT -> the offer -> Later -> Pick a skin -> reply.
     {
-      const k = 'off-chatgpt'; box = fresh(false);
-      const { ctx, page } = await device({ on: false });
+      const k = 'old-switch-chatgpt'; box = fresh(false);
+      const { ctx, page } = await device({ saved: false });
       if (await start(page, k)) {
         await signIn(page, 'wizard-chatgpt');
-        if (!(await waitTitle(page, 'Pick a skin'))) fail(k, `after signing in: "${await title(page)}"`);
-        else { notes.push(`${k}: ChatGPT -> Pick a skin (no private AI offer)`); await hello(page, k); }
-        if (box.posts.length) fail(k, `POSTed ${JSON.stringify(box.posts)}`);
+        if (!(await waitTitle(page, 'Want a fully private AI?'))) fail(k, `after signing in: "${await title(page)}"`);
+        else {
+          await page.locator('.wl-card [data-wl="offer"][data-offer="later"]').click();
+          if (!(await waitTitle(page, 'Pick a skin'))) fail(k, `after Later: "${await title(page)}"`);
+          else { notes.push(`${k}: ChatGPT -> "Want a fully private AI?" -> Later -> Pick a skin`); await hello(page, k); }
+        }
+        if (JSON.stringify(box.posts) !== '["later"]') fail(k, `posts ${JSON.stringify(box.posts)}`);
       }
       await ctx.close();
     }

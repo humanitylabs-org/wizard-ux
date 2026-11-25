@@ -412,10 +412,6 @@
       "help": "New installs start private: Welcome leads with Tinfoil; Claude and ChatGPT are optional extras.",
       "where": "Settings › Appearance › Try new features › Private first setup"
     },
-    "wizard/standard-first-setup": {
-      "help": "Welcome asks for Claude or ChatGPT first, then offers private AI once.",
-      "where": "Settings › Appearance › Try new features › Standard first setup"
-    },
     "wizard/chat-app-switches": {
       "help": "A reply's switch card also lists an app's own feature switches, flipped right in the chat.",
       "where": "Settings › Appearance › Try new features › App switches in chat"

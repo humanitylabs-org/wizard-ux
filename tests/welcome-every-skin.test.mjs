@@ -56,7 +56,9 @@ function device(skin) {
   const ctx = {
     console, URL, URLSearchParams, Promise, JSON, Date, Math, String, Object, Array, Error, Map, Set,
     fetch: async u => String(u).endsWith('/wizard/v1/setup') ? ok({ first_run: true })
-      : String(u).endsWith('/model/options') ? ok({ providers: [{ slug: 'anthropic', authenticated: true }] }) : ok({}),
+      : String(u).endsWith('/model/options') ? ok({ providers: [{ slug: 'anthropic', authenticated: true }] })
+      // The private AI offer (wizard-ux issue 1800) was already answered: these tests are about Pick a skin.
+      : String(u).endsWith('/wizard/v1/private-first') ? ok({ on: false, private_agent: null, offer: 'declined' }) : ok({}),
     CustomEvent: class {}, setTimeout: (f, ms) => setTimeout(f, Math.min(ms || 0, 5)), clearTimeout,
     AbortController, AbortSignal, requestAnimationFrame: f => setTimeout(f, 0), matchMedia: () => ({ matches: true }),
     localStorage: { getItem: k => store.get(k) ?? null, setItem: (k, v) => store.set(k, String(v)), removeItem: k => store.delete(k) },

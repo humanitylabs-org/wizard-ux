@@ -49,6 +49,8 @@ const server = http.createServer((req, res) => {
       { slug: 'moa', name: 'Mixture of Agents', authenticated: true, auth_type: 'virtual' },
     ] });
     if (p === '/wizard/v1/setup') return json(res, 200, { first_run: box.firstRun, items: [] });
+    // The private AI offer (wizard-ux issue 1800, standard first) was already answered: this script is about other steps.
+    if (p === '/wizard/v1/private-first') return json(res, 200, { schema: 'wizard.private-first/1', on: false, private_agent: null, standard_on: true, offer: 'declined' });
     if (p === '/wizard/v1/setup/seen') return json(res, 200, { ok: true });
     if (p === '/troubleshoot/api/ping') return json(res, 200, { ok: true });
     if (p === '/troubleshoot/api/status') return json(res, 200, { checks: [] });

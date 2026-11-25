@@ -15,13 +15,14 @@ const choices = d => [...d.html().matchAll(/data-wl="provider" data-app="([^"]+)
 const skins = () => ({ list: [{ id: 'nebula', name: 'Nebula', t: {} }, { id: 'grove', name: 'Grove', t: {} }], current: 'nebula', set(id) { this.current = id; } });
 const SEEN = 'POST /wizard/v1/setup/seen';
 
-test('Welcome: Claude is listed first and recommended, then ChatGPT and Tinfoil, under the WizardOS brand', async () => {
+test('Welcome: Connect your AI asks for Claude or ChatGPT first (standard first, issue 1800), under the WizardOS brand', async () => {
   const d = device(fakeBox());
   await d.boot();
   assert.equal(title(d), 'Connect your AI');
-  assert.deepEqual(choices(d), [{ app: 'wizard-claude', tag: 'Recommended' }, { app: 'wizard-chatgpt', tag: '' }, { app: 'wizard-tinfoil', tag: 'Private' }]);
+  assert.deepEqual(choices(d), [{ app: 'wizard-claude', tag: '' }, { app: 'wizard-chatgpt', tag: '' }]);
   assert.match(d.html(), /<div class="wl-brand"><img src="brand\/wizard-mark-white.png" alt=""><span>WizardOS<\/span><\/div>/, 'one word (James, 8 Nov 2026)');
-  assert.match(d.html(), /<p>Oscar thinks with your own AI subscription/);
+  assert.match(d.html(), /<p>Sign in with the AI you already pay for\. We recommend at least one; you can add more later\.<\/p>/);
+  assert.match(d.html(), /data-wl="skip-ai"[^>]*>Skip for now/);
 });
 
 test('Welcome: opens only without a signed-in provider, resumes after sign-in, never on a deep link', async () => {
@@ -144,18 +145,18 @@ test('Welcome: a provider that is not installed installs through the Store insta
   const apps = { 'wizard-claude': { url: '/wizard-claude/' } }, box = fakeBox(), base = box.fetch;
   box.fetch = async (u, i = {}) => {
     const s = String(u);
-    if (s.includes('store-data/wizard/v1/index/search')) { box.calls.push('search'); return { ok: true, status: 200, json: async () => ({ apps: [{ id: 'wizard-tinfoil', version: '1.0.0', source: 's', repo: 'r', commit: 'c' }] }) }; }
-    if (s.includes('store-install/wizard-tinfoil') && i.method === 'POST') { box.calls.push('install ' + JSON.parse(i.body).operation); apps['wizard-tinfoil'] = { url: '/wizard-tinfoil/' }; return { ok: true, status: 200, json: async () => ({ state: 'installed' }) }; }
+    if (s.includes('store-data/wizard/v1/index/search')) { box.calls.push('search'); return { ok: true, status: 200, json: async () => ({ apps: [{ id: 'wizard-chatgpt', version: '1.0.0', source: 's', repo: 'r', commit: 'c' }] }) }; }
+    if (s.includes('store-install/wizard-chatgpt') && i.method === 'POST') { box.calls.push('install ' + JSON.parse(i.body).operation); apps['wizard-chatgpt'] = { url: '/wizard-chatgpt/' }; return { ok: true, status: 200, json: async () => ({ state: 'installed' }) }; }
     return base(u, i);
   };
   const d = device(box, { apps });
   await d.boot();
-  d.press('provider', { app: 'wizard-tinfoil' });
-  assert.match(d.html(), /data-app="wizard-tinfoil" disabled>.*Installing…/);
+  d.press('provider', { app: 'wizard-chatgpt' });
+  assert.match(d.html(), /data-app="wizard-chatgpt" disabled>.*Installing…/);
   await d.advance(10);
   assert.deepEqual(box.calls.filter(c => c === 'search' || c.startsWith('install')), ['search', 'install install']);
-  assert.equal(title(d), 'Sign in to Tinfoil');
-  assert.equal(d.nodes.iframe.attrs.src, 'https://box.test/wizard-tinfoil/?connect=1');
+  assert.equal(title(d), 'Sign in to ChatGPT');
+  assert.equal(d.nodes.iframe.attrs.src, 'https://box.test/wizard-chatgpt/?connect=1');
 });
 
 test('Welcome: Back peels the sign-in, then steps back; the shells\' Back asks the Welcome first', async () => {
@@ -222,7 +223,7 @@ test('Welcome: never covers work already started, keeps keys and focus, Back can
   // Tab stays inside the card, the shell never sees the keys.
   const d = device(fakeBox());
   await d.boot();
-  assert.deepEqual(d.nodes.focusables.map(n => n.attrs['data-app']), ['wizard-claude', 'wizard-chatgpt', 'wizard-tinfoil']);
+  assert.deepEqual(d.nodes.focusables.map(n => n.attrs['data-app'] || n.attrs['data-wl']), ['wizard-claude', 'wizard-chatgpt', 'skip-ai']);
   d.doc.activeElement = d.nodes.focusables[2];
   const tab = d.key('Tab'); assert.equal(d.doc.activeElement, d.nodes.focusables[0], 'Tab wraps to the first');
   assert.ok(tab.prevented && tab.stopped);

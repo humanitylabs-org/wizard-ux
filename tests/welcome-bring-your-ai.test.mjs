@@ -24,6 +24,8 @@ function fakeBox({ name = 'Wizard', authenticated = false, failPut = false, live
     if (u.endsWith('/wizard/v1/settings')) return ok({ settings: box.settings })
     if (u.endsWith('/wizard/v1/setup')) return ok({ first_run: true })
     if (u.endsWith('/wizard/hermes/api/model/options')) return ok({ providers: [{ slug: 'anthropic', authenticated }] })
+    // The private AI offer (wizard-ux issue 1800) was already answered: these tests are about Bring your AI.
+    if (u.endsWith('/wizard/v1/private-first')) return ok({ on: false, private_agent: null, offer: 'declined' })
     return ok({})
   }
   return box

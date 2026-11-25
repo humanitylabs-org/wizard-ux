@@ -38,6 +38,8 @@ const server = http.createServer((req, res) => {
     }
     if (p === '/wizard/hermes/api/model/options') return json(res, 200, { provider: 'anthropic', model: 'claude-sonnet-4-5', providers: [{ slug: 'anthropic', name: 'Anthropic', authenticated: true, auth_type: 'api_key', models: ['claude-sonnet-4-5'] }] });
     if (p === '/wizard/v1/setup') return json(res, 200, { first_run: true, items: [] });
+    // The private AI offer (wizard-ux issue 1800, standard first) was already answered: this script is about other steps.
+    if (p === '/wizard/v1/private-first') return json(res, 200, { schema: 'wizard.private-first/1', on: false, private_agent: null, standard_on: true, offer: 'declined' });
     if (p === '/wizard/v1/setup/seen') return json(res, 200, { ok: true });
     if (p === '/troubleshoot/api/ping') return json(res, 200, { ok: true });
     if (p === '/troubleshoot/api/status') return json(res, 200, { checks: [] });

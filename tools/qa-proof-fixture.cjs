@@ -72,6 +72,9 @@ for(const p of ['/wizard/v1/channels','/wizard/v1/channels/read'])for(const meth
 // The agent inbox and the Sent log are on for everyone (wizard-ux issue 1778): this catalogue is a box without them
 // (WIZARD_AGENT_INBOX=0 or an older Service), so the Running view and Sent read as empty lists.
 for(const p of ['/wizard/v1/agent-inbox?state=running,stale&limit=200','/wizard/v1/agent-inbox?kind=alert&state=new,surfaced&limit=50','/wizard/v1/agent-inbox?state=new,surfaced&limit=200','/wizard/v1/sent?limit=100'])for(const method of ['GET','HEAD'])fixture.responses[method+' '+p]={status:404,body:JSON.stringify({error:'not_found'})};
+// Standard first is on for everyone (wizard-ux issue 1800): the Welcome reads the box's private first answer once an AI
+// is signed in. This catalogue is an older Service without that route, so the private AI offer never opens here.
+for(const method of ['GET','HEAD'])fixture.responses[method+' /wizard/v1/private-first']={status:404,body:JSON.stringify({error:'not_found'})};
 for(const method of ['GET','HEAD'])fixture.responses[method+' /favicon.ico']={status:204,body:'',contentType:'image/x-icon'};
 // CSS is typed separately: discovery must not apply a JSON object as a stylesheet.
 for(const method of ['GET','HEAD','OPTIONS'])fixture.responses[method+' /wizard/v1/my-skin']={status:200,body:'',contentType:'text/css'};

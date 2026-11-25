@@ -10,8 +10,12 @@ export const flush = async (n = 6) => { for (let i = 0; i < n; i++) await new Pr
 
 // firstRun: the Agent Service setup first_run (true until the Welcome was finished once: a fresh box).
 // providers: the model/options providers list; signedIn: shorthand for one authenticated Anthropic provider.
+// pf: GET /wizard/v1/private-first (wizard-ux issue 1800). By default the owner already said No thanks to the private AI
+// offer, so tests about other steps see the Welcome's usual order; null answers 404 (an older Agent Service), and
+// { ...PF, offer: null } a box whose offer is still open.
+export const PF = { schema: 'wizard.private-first/1', on: false, standard_agent: 'hermes', private_agent: null, standard_on: true, offer: 'declined' };
 export function fakeBox({ name = 'Oscar', signedIn = false, providers, firstRun = true, live = true, seen = [200],
-  threads = {}, optionsDown = false } = {}) {
+  threads = {}, optionsDown = false, pf = PF } = {}) {
   const box = { settings: { agent: { name, adapter: 'hermes-plugin' }, owner: { name: '' } }, calls: [], seenCodes: [...seen], threads, providers: providers || (signedIn ? [{ slug: 'anthropic', authenticated: true }] : []) };
   const ok = (body, status = 200) => ({ ok: status < 300, status, json: async () => JSON.parse(JSON.stringify(body)) });
   box.fetch = async (url, init = {}) => {
@@ -21,6 +25,7 @@ export function fakeBox({ name = 'Oscar', signedIn = false, providers, firstRun 
     if (u.endsWith('/wizard/v1/settings')) return ok({ settings: box.settings });
     if (u.endsWith('/wizard/v1/setup/seen')) return ok({}, box.seenCodes.length > 1 ? box.seenCodes.shift() : box.seenCodes[0]);
     if (u.endsWith('/wizard/v1/setup')) return ok({ first_run: firstRun });
+    if (u.endsWith('/wizard/v1/private-first')) return pf ? ok(pf) : ok({ error: 'not_found' }, 404);
     if (u.endsWith('/wizard/hermes/api/model/options')) return optionsDown ? ok({}, 503) : ok({ providers: box.providers });
     const t = /\/wizard\/hermes\/api\/sessions\/([^/]+)\/messages$/.exec(u);
     if (t) return ok({ data: box.threads[decodeURIComponent(t[1])] || [] });
