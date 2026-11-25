@@ -34,7 +34,6 @@
     "wizard/phone-app-notifications",
     "wizard/lock-screen-player",
     "wizard/runtipi-cli-key",
-    "wizard/github-signin",
     "wizard/local-app-routes",
     "wizard/app-tap-home",
     "wizard/messaging-chat-replies",
