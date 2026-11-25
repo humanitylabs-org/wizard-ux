@@ -104,9 +104,9 @@ test('main versus routed: only the main agent\'s threads move (host-profile, con
 });
 
 // The chats.js rules: where Open and Send to inbox show.
-function rules({ routedWin = false, pins = [], recs = [], sessions = [], stay = [], channels = null, daily = false } = {}) {
+function rules({ gone = false, routedWin = false, pins = [], recs = [], sessions = [], stay = [], channels = null, daily = false } = {}) {
   const ctx = {
-    LIVE: { sessions, agentInbox: { stays: id => stay.includes(id) }, ownerOf: s => s.agent && s.agent !== 'hermes' ? s.agent : '' },
+    LIVE: { sessions, agentInbox: { stays: id => stay.includes(id), state: () => ({ ok: true, gone }) }, ownerOf: s => s.agent && s.agent !== 'hermes' ? s.agent : '' },
     chanStore: () => channels ? { channels } : null,
     W: { w1: daily ? { id: 'w1', daily: { id: 'daily', sid: 'wizard_visible_1' } } : { id: 'w1' } }, winAgent: () => routedWin ? 'host-ops' : '', runningRecs: () => recs,
     PIN: { has: id => pins.includes(id) }, esc: v => String(v),
@@ -132,6 +132,8 @@ test('Send to inbox is in a visible main thread\'s menu, never for a pinned, arc
   assert.equal(rules({ pins: ['wizard_visible_1'] }).inboxCanSend('w1', s), false, 'a pinned (collaborative) thread stays');
   for (const extra of [{ archived: true }, { hidden: true }, { optimistic: true }, { agent: 'host-ops' }, { agent: 'box' }, { agent: 'locked' }]) assert.equal(rules().inboxCanSend('w1', { ...s, ...extra }), false, JSON.stringify(extra));
   assert.equal(rules({ routedWin: true }).inboxCanSend('w1', s), false, 'a routed agent window');
+  assert.equal(rules({ gone: true }).inboxCanSend('w1', s), false, 'a box without the agent inbox (404: WIZARD_AGENT_INBOX=0, an older Service): no item');
+  assert.equal(rules({ gone: true }).inboxHeadHtml({ id: 'w1' }, { id: 'wizard_worker_1', hidden: true }), '', 'and no Open');
 });
 
 // Issue 1569 review: one tap must never hide today's Daily thread (the sweep card lives there) or an Alerts thread.

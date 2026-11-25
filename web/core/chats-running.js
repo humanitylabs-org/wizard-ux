@@ -59,8 +59,11 @@ window.WizCore.chatsParts.running = function ({ ago, ch, CH, chanStore, clip, es
    * keeps each tap as an example for the orb's router. Main agent threads only (the box hides only those). */
   const INBOX_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13h4l2 3h4l2-3h4M5 13l2-8h10l2 8v6H5z"/></svg>';
   function inboxListed(id) { return LIVE.sessions.some(x => x.id === id && !x.hidden && !x.optimistic); }
+  // The box keeps an agent inbox: not one that answered 404 (WIZARD_AGENT_INBOX=0 or an older Service), so Open and
+  // Send to inbox are never offered there; before the first answer they are (the usual case).
+  function inboxBoxOn() { return !!LIVE.agentInbox && LIVE.agentInbox.state?.()?.gone !== true; }
   function inboxHidden(w, s) {
-    if (!s || !w || winAgent(w) || !LIVE.agentInbox || (LIVE.ownerOf && LIVE.ownerOf(s))) return false;
+    if (!s || !w || winAgent(w) || !inboxBoxOn() || (LIVE.ownerOf && LIVE.ownerOf(s))) return false;
     if (inboxListed(s.id)) return false;
     return s.hidden === true || runningRecs().some(r => r.thread === s.id);
   }
@@ -76,7 +79,7 @@ window.WizCore.chatsParts.running = function ({ ago, ch, CH, chanStore, clip, es
   }
   function inboxCanSend(wid, s) {
     const w = W[wid];
-    return !!(s && w && !winAgent(w) && LIVE.agentInbox && !(LIVE.ownerOf && LIVE.ownerOf(s)) && !s.hidden && !s.archived && !s.optimistic && !s.synthetic && !PIN.has(s.id) && !inboxStays(w, s));
+    return !!(s && w && !winAgent(w) && inboxBoxOn() && !(LIVE.ownerOf && LIVE.ownerOf(s)) && !s.hidden && !s.archived && !s.optimistic && !s.synthetic && !PIN.has(s.id) && !inboxStays(w, s));
   }
   function inboxRepaint(id) {
     paintListsNow();
