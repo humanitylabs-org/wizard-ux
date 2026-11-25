@@ -1,21 +1,21 @@
 'use strict';
-// An app being installed shows in the Apps column at once (wizard-os#682, switch wizard/install-in-sidebar). Real
+// An app being installed shows in the Apps column at once (wizard-os#682, on for everyone). Real
 // browser, AI apps desktop at 1440x900, every box read is a fixture and the only writes answered are the Store's own
 // install POST and the shell's fixture reads (no box is read or written). The App Store opens as the panel, Get is
 // tapped on WizardOS Tracker, and the App Manager fixture keeps the job `installing` for INSTALL_MS before it says
 // `installed` and the shell's app list gains the app.
-//   Switch off: the column shows nothing about the install (as before), and the app is not in it afterwards.
-//   Switch on: right after Get the column has a "WizardOS Tracker · Installing…" row with a spinner; the Store is then
+//   Expected (case `on`): right after Get the column has a "WizardOS Tracker · Installing…" row with a spinner; the Store is then
 //   closed (its ✕ in the column) and the row stays and keeps going; once the job ends the row turns into the app
 //   (not open yet, no spinner) and a click on it opens the app as the panel.
-// QA_SWITCH=off,on picks the cases, QA_WEB=<web dir> runs another tree (main for the before shots), QA_OUT=<dir>.
+// QA_SWITCH=off expects the old build's behaviour (nothing in the column; run it with QA_WEB=<an older web dir> for
+// before shots), QA_SWITCH=on (the default) the current one, QA_OUT=<dir>.
 const assert = require('node:assert/strict');
 const { chromium } = require('../tools/qa-playwright.cjs');
 const { ownerRead } = require('../tools/qa-desktop-frame-fixture.cjs');
 const fs = require('node:fs'), path = require('node:path'), os = require('node:os');
 const repo = path.resolve(__dirname, '..'), origin = 'https://install-sidebar.test', prefix = '/wizard-os-home/';
 const web = process.env.QA_WEB || path.join(repo, 'web'), out = process.env.QA_OUT || path.join(os.tmpdir(), 'install-in-sidebar-qa');
-const SWITCH = (process.env.QA_SWITCH || 'off,on').split(',');
+const SWITCH = (process.env.QA_SWITCH || 'on').split(',');
 const INSTALL_MS = Number(process.env.QA_INSTALL_MS || 9000);
 const C = 'c'.repeat(40);
 const tracker = { id: 'wizardos-tracker', name: 'WizardOS Tracker', summary: 'Goals, bugs and features of WizardOS in one place.', repo: 'humanitylabs-org/wizardos-tracker', version: '0.39.2', commit: C, source: 'standard', source_name: 'Standard', channel: 'standard', type: 'view', category: 'app', tags: ['work'], publisher: 'humanitylabs-org', uses: [], provides: [] };
@@ -32,7 +32,7 @@ const report = { web, cases: [] };
       const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, serviceWorkers: 'block' });
       try {
         await context.routeWebSocket('**/*', w => w.close());
-        const mix = { 'wizard/desktop-chats': true, ...(on ? { 'wizard/install-in-sidebar': true } : {}) };
+        const mix = { 'wizard/desktop-chats': true };
         await context.addInitScript(({ mix }) => {
           if (window !== top) return;
           if (sessionStorage.getItem('qaBoot')) return; sessionStorage.setItem('qaBoot', '1');
@@ -85,9 +85,6 @@ const report = { web, cases: [] };
         await page.goto(origin + prefix + 'desktop.html');
         await page.waitForFunction(() => window.__wux && !window.WosWelcome?.active && window.WosExperience?.state.tweaks.length && !window.WosExperience.state.busy);
         await page.waitForFunction(() => document.documentElement.dataset.layout === 'ai-apps', null, { timeout: 15000 });
-        if (on) await page.waitForFunction(() => (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/install-in-sidebar'), null, { timeout: 15000 }).catch(() => {});
-        entry.switchOn = await page.evaluate(() => (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/install-in-sidebar'));
-        assert.equal(entry.switchOn, on, stem + ': switch state');
         await page.evaluate(() => document.fonts.ready); await nap(1200);
         const column = () => page.evaluate(() => {
           const vt = document.querySelector('.aad-vt'); if (!vt) return null;

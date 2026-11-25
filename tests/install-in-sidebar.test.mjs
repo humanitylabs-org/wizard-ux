@@ -2,16 +2,16 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
-// An app being installed shows in the Apps column (wizard-os#682, switch wizard/install-in-sidebar): the real
+// An app being installed shows in the Apps column (wizard-os#682, on for everyone): the real
 // core/apps.js in a vm. The Store posts `wizard:app-installing`; WizCore.installs follows the App Manager job itself
 // (GET store-install/<id>), so it keeps going with the Store closed, and becomes ready once the app is in the list.
 const source = readFileSync(new URL('../web/core/apps.js', import.meta.url), 'utf8');
-const ORIGIN = 'https://wizard.example', SWITCH = 'wizard/install-in-sidebar';
-function shell({ on = true, jobs = {}, stored = null } = {}) {
+const ORIGIN = 'https://wizard.example';
+function shell({ jobs = {}, stored = null } = {}) {
   const listeners = [], winListeners = [], storage = new Map(), reads = [], events = [];
   if (stored) storage.set('wos.installs.v1', JSON.stringify(stored));
   const apps = [];
-  const root = { dataset: { tweaks: on ? `wizard/desktop-chats ${SWITCH}` : 'wizard/desktop-chats' } };
+  const root = { dataset: { tweaks: 'wizard/desktop-chats' } };
   const window = { WizCore: { norm: s => String(s).toLowerCase() }, WizConfig: { endpoint: () => '/wizard/v1/apps' },
     dispatchEvent: e => events.push(e.type), addEventListener: (t, fn) => winListeners.push([t, fn]),
     localStorage: { getItem: k => storage.get(k) ?? null, setItem: (k, v) => storage.set(k, v) } };
@@ -41,18 +41,7 @@ function shell({ on = true, jobs = {}, stored = null } = {}) {
 }
 const tracker = { id: 'wizardos-tracker', name: 'WizardOS Tracker', url: '/wizardos-tracker/' };
 
-test('switch off: a Store Get changes nothing (no row, no read, nothing saved)', async () => {
-  const s = shell({ on: false, jobs: { 'wizardos-tracker': { state: 'installing' } } });
-  await s.window.WizCore.appsLoaded(); await s.settle();
-  s.send(ORIGIN, { type: 'wizard:app-installing', id: 'wizardos-tracker', job: 'wizardos-tracker', name: 'WizardOS Tracker', view: true });
-  await s.settle();
-  assert.deepEqual(s.list(), []);
-  assert.deepEqual(s.reads, []);
-  assert.equal(s.storage.has('wos.installs.v1'), false);
-  assert.equal(s.events.includes('wizard:installs'), false);
-});
-
-test('switch on: the Get shows at once, is followed on the box without the Store, and turns into the app', async () => {
+test('the Get shows at once, with no switch in the tweaks,, is followed on the box without the Store, and turns into the app', async () => {
   const s = shell({ jobs: { 'wizardos-tracker': [{ state: 'installing' }, { state: 'installing' }, { state: 'installed', list: [tracker] }] } });
   await s.window.WizCore.appsLoaded(); await s.settle();
   s.send('https://evil.example', { type: 'wizard:app-installing', id: 'wizardos-tracker', name: 'x' });
@@ -80,18 +69,11 @@ test('a failed job says so; a screenless app leaves the column once installed; b
   assert.deepEqual(s.list().map(r => [r.id, r.state, r.error]), [['broken', 'failed', 'image pull failed']]);
 });
 
-test('after a reload a saved install keeps being followed (once the switch is on)', async () => {
+test('after a reload a saved install keeps being followed', async () => {
   const s = shell({ stored: [{ id: 'wizardos-tracker', job: 'wizardos-tracker', name: 'WizardOS Tracker', view: true, at: Date.now() - 5000, state: 'installing' }],
     jobs: { 'wizardos-tracker': [{ state: 'installing' }, { state: 'installed', list: [tracker] }] } });
   await s.window.WizCore.appsLoaded(); await s.settle(200);
   assert.deepEqual(s.list().map(r => [r.id, r.state]), [['wizardos-tracker', 'ready']]);
-  const off = shell({ on: false, stored: [{ id: 'wizardos-tracker', job: 'wizardos-tracker', name: 'WizardOS Tracker', view: true, at: Date.now() - 5000, state: 'installing' }] });
-  await off.window.WizCore.appsLoaded(); await off.settle(50);
-  assert.deepEqual(off.reads, [], 'switch off: nothing is read');
-  off.root.dataset.tweaks = SWITCH;
-  for (const [t, fn] of off.winListeners) if (t === 'wos:experience') fn();
-  await off.settle(20);
-  assert.ok(off.reads.length >= 1, 'switch turned on: it is followed');
 });
 
 test('an App Manager restart mid-install (the job is gone) keeps the row until the app shows up', async () => {

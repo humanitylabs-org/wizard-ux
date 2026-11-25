@@ -510,7 +510,7 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
     for (const id of new Set([a.id, openId(a)])) { S.starting.delete(id); S.late.delete(id); }   // a new install waits afresh
     refresh();
     // The shell shows a Get in progress in its Apps column and follows the job itself, so the Store can be closed
-    // (wizard-os#682, switch wizard/install-in-sidebar; the shell ignores this message while the switch is off).
+    // (wizard-os#682).
     if (framed && operation === 'install') try { parent.postMessage({ type: 'wizard:app-installing', id: hostAppId(a), job: a.id, name: a.name, view: kindOf(a)?.id === 'apps' }, location.origin); } catch (_) {}
     const say = (m, ok=false) => toast(renderInstallResult({ name: a.name, message: m, ok }));
     try {

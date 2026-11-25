@@ -241,15 +241,13 @@
   addEventListener('message', e => {
     if (e.origin === location.origin && e.data && e.data.type === 'wizard:apps-changed') loadRemote();
   });
-  /* Installs in progress (wizard-os#682, switch wizard/install-in-sidebar, off by default). The Store says when a Get
+  /* Installs in progress (wizard-os#682). The Store says when a Get
    * starts (wizard:app-installing); the shell then follows that App Manager job itself (GET store-install/<id>, the
    * Store's own read), so it keeps going once the Store is closed and across a reload. An entry is installing, then
    * ready (the app is in the list, not opened yet) or failed, until it is opened or dismissed. Layouts draw it
-   * (the AI apps Apps column) from WizCore.installs.list() and repaint on `wizard:installs`. Off: list() is empty,
-   * messages are ignored and nothing is read. */
+   * (the AI apps Apps column) from WizCore.installs.list() and repaint on `wizard:installs`. */
   const INSTALLS = (() => {
-    const SWITCH = 'wizard/install-in-sidebar', KEY = 'wos.installs.v1', ID = /^[a-z0-9][a-z0-9-]{0,63}$/, DAY = 864e5;
-    const on = () => { try { return String(document.documentElement.dataset.tweaks || '').split(' ').includes(SWITCH); } catch (_) { return false; } };
+    const KEY = 'wos.installs.v1', ID = /^[a-z0-9][a-z0-9-]{0,63}$/, DAY = 864e5;
     let rows = [];
     try { rows = (JSON.parse(localStorage.getItem(KEY) || '[]') || []).filter(r => r && ID.test(r.id) && ID.test(r.job) && Date.now() - r.at < DAY); } catch (_) { rows = []; }
     const save = () => { try { localStorage.setItem(KEY, JSON.stringify(rows)); } catch (_) {} };
@@ -263,7 +261,7 @@
       if (following.has(id)) return; following.add(id);
       try {
         for (let i = 0, misses = 0; i < 720; i++) {
-          const r = find(id); if (!r || r.state !== 'installing' || !on()) return;
+          const r = find(id); if (!r || r.state !== 'installing') return;
           let job = null;
           try { const res = await fetch(endpoint(r.job), { credentials: 'same-origin', cache: 'no-store' }); job = res.status === 404 ? { state: 'gone' } : res.ok ? await res.json() : null; } catch (_) {}
           if (job?.state === 'failed') { set(r, { state: 'failed', error: String(job.error || '').slice(0, 200) }); return; }
@@ -284,19 +282,19 @@
       } finally { following.delete(id); }
     }
     function start(d) {
-      if (!on() || !d || !ID.test(String(d.id)) || !ID.test(String(d.job || d.id))) return;
+      if (!d || !ID.test(String(d.id)) || !ID.test(String(d.job || d.id))) return;
       const id = String(d.id), r = { id, job: String(d.job || id), name: String(d.name || id).slice(0, 80), view: d.view !== false, at: Date.now(), state: 'installing' };
       rows = rows.filter(x => x.id !== id).concat(r).slice(-8); save(); emit(); follow(id);
     }
     addEventListener('message', e => { if (e.origin === location.origin && e.data && e.data.type === 'wizard:app-installing') start(e.data); });
     const api = {
-      list: () => on() ? rows.map(r => ({ id: r.id, name: r.name, state: r.state, error: r.error || '', at: r.at })) : [],
+      list: () => rows.map(r => ({ id: r.id, name: r.name, state: r.state, error: r.error || '', at: r.at })),
       dismiss: id => { const n = rows.length; rows = rows.filter(r => r.id !== id); if (rows.length !== n) { save(); emit(); } },
       start,
     };
-    // After a reload (or the switch turning on), keep following what was still installing.
-    const resume = () => { if (!on()) return; for (const r of rows) if (r.state === 'installing') follow(r.id); emit(); };
-    try { window.addEventListener('wos:experience', resume); if (typeof setTimeout === 'function') setTimeout(resume, 0); } catch (_) {}
+    // After a reload, keep following what was still installing.
+    const resume = () => { for (const r of rows) if (r.state === 'installing') follow(r.id); emit(); };
+    try { if (typeof setTimeout === 'function') setTimeout(resume, 0); } catch (_) {}
     return api;
   })();
   window.WizCore.installs = INSTALLS;

@@ -177,7 +177,7 @@ export function tabsPart({ aadVars, api, applySizes, appName, appTile, badgeText
     vtList.replaceChildren(...out, dropLine);
     markMedia();
   }
-  /* An app being installed (wizard-os#682, switch wizard/install-in-sidebar, off by default): core/apps.js
+  /* An app being installed (wizard-os#682): core/apps.js
    * WizCore.installs follows each Store Get on the box, also once the Store is closed; each shows here after the open
    * apps, with a spinner on its icon while it installs. Done, it is the app (not open yet: a click opens it, ✕ forgets
    * it); failed, it says so (a click shows the Store). An app already pinned or open is its own row. These rows are
