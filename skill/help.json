@@ -393,10 +393,6 @@
       "help": "AI apps desktop: ⌥⇧M or the app panel's header button moves it beside the chats sidebar.",
       "where": "Settings › Appearance › Try new features › App panel on the left"
     },
-    "wizard/assist-attach": {
-      "help": "Android app: Camera and Attach buttons next to Screen while talking to the side-button orb.",
-      "where": "Settings › Appearance › Try new features › Camera and Attach on the side button"
-    },
     "wizard/assist-agent-note": {
       "help": "Android app: the side button opens Messenger's Agent chat for a note instead of a new Wizard chat.",
       "where": "Settings › Appearance › Try new features › Side button opens the Agent chat"

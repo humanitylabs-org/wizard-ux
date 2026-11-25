@@ -1,12 +1,11 @@
-// Camera and Attach on the side-button corner orb (wizard-os issue 655, switch wizard/assist-attach, off by default).
-// The corner orb is the Android app's own page, so the shell copies the switch to native; the real android-relay.js
-// runs here in a vm with a stand-in native bridge. The rest checks that the switch, the orb page and the Android
-// wiring stay in step (the native rules themselves are JVM tests: android/app/src/test/.../AttachPolicyTest.java).
+// Camera and Attach on the side-button corner orb (wizard-os issue 655, on for everyone: the switch
+// wizard/assist-attach is removed). The real android-relay.js runs here in a vm with a stand-in native bridge (older
+// APKs that kept the switch are told on). The rest checks that the orb page and the Android wiring stay in step (the native rules themselves are JVM tests: android/app/src/test/.../AttachPolicyTest.java).
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { java, method } from './fixtures/s1-java-slice.mjs';
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import { createDocument } from './fixtures/mini-dom.mjs';
 import { cascade } from './fixtures/mini-css.mjs';
 import { between } from './fixtures/source-slice.mjs';
@@ -14,11 +13,11 @@ import { lookBox } from './fixtures/r5A-experience.mjs';
 import { manifest } from './fixtures/r8C-manifest.mjs';
 
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
-const SWITCH = 'wizard/assist-attach';
+const OLD_SWITCH = 'wizard/assist-attach';
 
-function fixture({ on = false, native = true } = {}) {
+function fixture({ native = true, tweaks = 'wizard/desktop-chats' } = {}) {
   const calls = [], timers = [], observers = [], winListeners = {};
-  const root = { dataset: { tweaks: on ? 'wizard/desktop-chats ' + SWITCH : 'wizard/desktop-chats' } };
+  const root = { dataset: { tweaks } };
   const c = { URL, console, JSON, Date, location: new URL('https://wizard.example/wizard-os-home/'),
     document: { readyState: 'complete', hidden: false, documentElement: root, body: { appendChild() {} }, querySelectorAll: () => [],
       createElement: () => ({}), getElementById: () => null, addEventListener() {} },
@@ -29,50 +28,38 @@ function fixture({ on = false, native = true } = {}) {
   if (native) c.WizardOSNative = { assistAttachSwitch: v => calls.push(v) };
   c.window = c; vm.createContext(c);
   vm.runInContext(read('web/core/android-relay.js'), c);
-  const flip = v => { root.dataset.tweaks = v ? 'wizard/desktop-chats ' + SWITCH : 'wizard/desktop-chats'; for (const o of observers) o.fn([]); };
+  const flip = v => { root.dataset.tweaks = v; for (const o of observers) o.fn([]); };
   const settle = () => { for (const t of timers.filter(t => t.ms === 5000)) t.fn(); };
   const experience = () => { for (const f of winListeners['wos:experience'] || []) f(); };
   return { calls, flip, settle, experience };
 }
 
-test('off by default: nothing is sent to the Android app before the switches settle, then one off', () => {
-  const f = fixture();
-  assert.deepEqual(f.calls, []);
-  f.settle();
-  assert.deepEqual(f.calls, [false]);
-  f.experience(); f.settle();
-  assert.deepEqual(f.calls, [false], 'the same state is never sent twice');
+test('on for everyone: an older Android app that kept the old switch is told on once, whatever the tweaks say', () => {
+  for (const tweaks of ['wizard/desktop-chats', '', 'wizard/desktop-chats ' + OLD_SWITCH]) {
+    const f = fixture({ tweaks });
+    assert.deepEqual(f.calls, [true]);
+    f.settle(); f.experience(); f.flip(''); f.flip(OLD_SWITCH);
+    assert.deepEqual(f.calls, [true], 'never an off, never again');
+  }
 });
 
-test('on: the Android app hears it at once, and turning it off later reaches it too', () => {
-  const f = fixture({ on: true });
-  assert.deepEqual(f.calls, [true]);
-  f.flip(false);
-  assert.deepEqual(f.calls, [true], 'an off waits for the switches to settle');
-  f.experience();
-  assert.deepEqual(f.calls, [true, false]);
-  f.flip(true);
-  assert.deepEqual(f.calls, [true, false, true]);
-});
-
-test('a browser or an older APK without the bridge is left alone', () => {
-  const f = fixture({ on: true, native: false });
-  f.settle(); f.flip(false); f.experience();
+test('a browser or a newer APK without the old bridge call is left alone', () => {
+  const f = fixture({ native: false });
+  f.settle(); f.flip(''); f.experience();
   assert.deepEqual(f.calls, []);
 });
 
-test('the switch is in the catalog and off by default', async () => {
-  // The real Settings › Look switch list (core/experience.js) on the real catalog: listed, off, not loaded, not promoted.
+test('no switch is left: not in the catalog, the help or Settings › Look', async () => {
+  const catalog = JSON.parse(read('web/tweaks/catalog.json'));
+  assert.equal(JSON.stringify(catalog).includes(OLD_SWITCH), false);
+  const help = JSON.parse(read('skill/help.json'));
+  assert.equal(JSON.stringify(help).includes(OLD_SWITCH), false);
+  assert.equal(existsSync(new URL('../web/tweaks/' + OLD_SWITCH + '/manifest.json', import.meta.url)), false);
   const box = await lookBox();
-  const row = box.row(SWITCH);
-  assert.ok(row, 'Settings › Look lists the switch');
-  assert.equal(row.on, false, 'a fresh device has it off');
-  assert.match(row.description, /lock screen/);
-  assert.ok(!box.active().includes(SWITCH), 'and never loads it');
-  assert.ok(!box.E.promotedDefaults.includes(SWITCH));
+  assert.equal(box.row(OLD_SWITCH) ?? null, null, 'Settings › Look no longer lists it');
 });
 
-test('the corner orb shows Camera and Attach only when native says the switch is on, and never on the lock screen', () => {
+test('the corner orb shows Camera and Attach in the corner while talking, and never on the lock screen', () => {
   const html = read('android/app/src/main/assets/assist/surface.html');
   // The real orb page: its stylesheet, its buttons, canAttach() and the two click handlers, run on a mini-dom.
   const css = between(html, '<style>', '</style>').slice(7);
@@ -85,8 +72,8 @@ test('the corner orb shows Camera and Attach only when native says the switch is
   doc.body.classList.add('corner');
   assert.equal(vm.runInContext('canAttach()', ctx), false, 'full-screen orb: never');
   vm.runInContext("MODE='corner'", ctx);
-  N.on = false; assert.equal(vm.runInContext('canAttach()', ctx), false); assert.deepEqual(shown(), ['none', 'none'], 'switch off: hidden');
-  N.on = true; assert.equal(vm.runInContext('canAttach()', ctx), true); assert.deepEqual(shown(), ['flex', 'flex'], 'switch on in the corner: shown');
+  N.on = false; assert.equal(vm.runInContext('canAttach()', ctx), false); assert.deepEqual(shown(), ['none', 'none'], 'native says no (locked): hidden');
+  N.on = true; assert.equal(vm.runInContext('canAttach()', ctx), true); assert.deepEqual(shown(), ['flex', 'flex'], 'in the corner: shown');
   delete N.attachOn; assert.equal(vm.runInContext('canAttach()', ctx), false, 'an older APK without attachOn: hidden'); assert.deepEqual(shown(), ['none', 'none']);
   N.attachOn = () => { throw new Error('gone'); }; assert.equal(vm.runInContext('canAttach()', ctx), false);
   doc.getElementById('camC').dispatchEvent({ type: 'click', bubbles: true }); doc.getElementById('pickC').dispatchEvent({ type: 'click', bubbles: true });
@@ -96,23 +83,23 @@ test('the corner orb shows Camera and Attach only when native says the switch is
   // (the hide/show rules, canAttach() and the listen-only click handlers: run and cascaded above)
   const lock = read('android/app/src/main/java/ai/wizards/os/assist/AssistLockActivity.java');
   assert.ok(!/attachOn|camera\(\)|AssistPickActivity/.test(lock), 'the lock-screen surface has no Camera/Attach bridge');
-  // the real WizardSession methods, run with stand-ins: the bridge, the picker and dismissal obey the switch and the lock
+  // the real WizardSession methods, run with stand-ins: the bridge, the picker and dismissal obey the lock (no switch)
   const session = java('assist/WizardSession.java');
-  const world = (on, locked, take = {}) => {
+  const world = (locked, take = {}) => {
     const log = [];
     const capture = { listening: () => take.listening ?? true, away: () => take.away ?? false, attachedCount: () => 0, attachCap: () => 10,
       beginAway: () => { log.push('away'); return true; }, finishOnDismiss: why => log.push('finish:' + why), detach() {}, noteDismissed() {}, pickDone() {} };
-    const scope = { capture, shotPending: false, AssistAttach: { on: c => { assert.equal(c, 'ctx'); return on; } }, getContext: () => 'ctx',
+    const scope = { capture, shotPending: false, getContext: () => 'ctx',
       keyguard: { isKeyguardLocked: () => locked }, startAssistantActivity: () => log.push('picker'), AssistPickActivity: { intent: (c, k) => k } };
     return { log, scope };
   };
-  for (const [on, locked] of [[false, false], [true, false], [false, true], [true, true]]) {
-    const w = world(on, locked);
-    assert.equal(method(session, 'public boolean attachOn()', { scope: w.scope }).value, on && !locked, `attachOn on=${on} locked=${locked}`);
+  for (const locked of [false, true]) {
+    const w = world(locked);
+    assert.equal(method(session, 'public boolean attachOn()', { scope: w.scope }).value, !locked, `attachOn locked=${locked}`);
     method(session, 'private void openPick(String kind)', { args: { kind: 'camera' }, scope: w.scope });
-    assert.deepEqual(w.log, on && !locked ? ['away', 'picker'] : [], `openPick on=${on} locked=${locked}`);
+    assert.deepEqual(w.log, !locked ? ['away', 'picker'] : [], `openPick locked=${locked}`);
   }
-  const hide = take => { const w = world(true, false, take); method(session, 'public void onHide()', { scope: w.scope, base: class { onHide() {} } }); return w.log; };
+  const hide = take => { const w = world(false, take); method(session, 'public void onHide()', { scope: w.scope, base: class { onHide() {} } }); return w.log; };
   assert.deepEqual(hide({ away: true }), [], 'opening the camera never ends the take');
   assert.deepEqual(hide({ away: false }), ['finish:dismiss'], 'a real dismissal still sends the take');
   assert.deepEqual(hide({ listening: false }), []);

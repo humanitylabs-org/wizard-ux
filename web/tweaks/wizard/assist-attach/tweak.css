@@ -1,3 +1,0 @@
-/* Camera and Attach on the side button (wizard-os issue 655): nothing in the shell changes; the buttons live on the
- * Android app's own corner orb page. This rule only marks the switch as present. */
-html[data-tweaks~="wizard/assist-attach"] { --wos-assist-attach: 1; }

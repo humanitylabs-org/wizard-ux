@@ -13,8 +13,8 @@ import java.io.File;
 import java.io.FileNotFoundException;
 
 /**
- * Where the camera app writes the full-size photo for the corner orb's Camera button (wizard-os issue 655, switch
- * wizard/assist-attach): content://<pkg>.assistcam/<hex token>.jpg, not exported; the camera gets a one-off write grant
+ * Where the camera app writes the full-size photo for the corner orb's Camera button (wizard-os
+ * issue 655): content://<pkg>.assistcam/<hex token>.jpg, not exported; the camera gets a one-off write grant
  * for one file WizardOS created empty in cache/assist-cam/. Nothing else is reachable.
  */
 public class AssistCameraProvider extends ContentProvider {

@@ -7,20 +7,14 @@ import static org.junit.Assert.assertTrue;
 import org.json.JSONObject;
 import org.junit.Test;
 
-/** Camera and Attach on the side-button orb (wizard-os issue 655, switch wizard/assist-attach). */
+/** Camera and Attach on the side-button orb (wizard-os issue 655, on for everyone). */
 public class AttachPolicyTest {
-    @Test public void switchOffKeepsTheOldFourScreenshotCap() {
-        assertEquals(4, AttachPolicy.cap(false));
-        assertEquals(0, AttachPolicy.room(false, 4));
-        assertEquals(1, AttachPolicy.room(false, 3));
-    }
-
-    @Test public void switchOnSharesOneCapAcrossScreenCameraAndAttach() {
-        assertEquals(8, AttachPolicy.cap(true));
-        assertEquals(8, AttachPolicy.room(true, 0));
-        assertEquals(3, AttachPolicy.room(true, 5));
-        assertEquals(0, AttachPolicy.room(true, 9));
-        assertEquals(8, AttachPolicy.room(true, -2));
+    @Test public void oneCapSharedAcrossScreenCameraAndAttach() {
+        assertEquals(8, AttachPolicy.MAX);
+        assertEquals(8, AttachPolicy.room(0));
+        assertEquals(3, AttachPolicy.room(5));
+        assertEquals(0, AttachPolicy.room(9));
+        assertEquals(8, AttachPolicy.room(-2));
     }
 
     @Test public void emptyOrHugeFilesAreLeftOut() {
@@ -60,7 +54,7 @@ public class AttachPolicyTest {
     }
 
     @Test public void countsAreValidJsonWithoutNames() throws Exception {
-        JSONObject o = new JSONObject(AttachPolicy.counts(1, 2, 3, 2, 1, 0, true));
+        JSONObject o = new JSONObject(AttachPolicy.counts(1, 2, 3, 2, 1, 0));
         assertEquals(1, o.getInt("shots"));
         assertEquals(2, o.getInt("pictures"));
         assertEquals(3, o.getInt("files"));
