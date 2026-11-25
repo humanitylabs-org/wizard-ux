@@ -269,6 +269,8 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         if (!(this instanceof AppSessionActivity)) deleteSharedPreferences("reach-answer");
         // The same for the removed switch wizard/app-windows (wizard-os issue 650).
         if (!(this instanceof AppSessionActivity)) AppWindows.forgetOldSwitch(this);
+        // And for the removed switch wizard/assist-attach (wizard-os issue 655).
+        if (!(this instanceof AppSessionActivity)) ai.wizards.os.assist.AssistAttach.forgetOldSwitch(this);
         if (ai.wizards.os.device.AppState.origin(this).isEmpty()) {
             startActivity(new Intent(this, ConnectActivity.class)); finish(); return;
         }
@@ -1702,13 +1704,6 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
                 ai.wizards.os.notify.BridgedNotificationListener.setOn(MainActivity.this, true);
                 ai.wizards.os.notify.BridgedNotificationListener.openAccess(MainActivity.this);
             });
-        }
-        /* ---- Camera and Attach on the side-button corner orb (wizard-os issue 655, switch wizard/assist-attach, off by
-         * default): the corner orb has its own page, so the shell copies the switch here (assist/AssistAttach). ---- */
-        @JavascriptInterface
-        public void assistAttachSwitch(boolean on) {
-            if (MainActivity.this instanceof AppSessionActivity) return;
-            ai.wizards.os.assist.AssistAttach.setOn(MainActivity.this, on);
         }
         /* ---- Side button opens the Agent chat (wizard-ux issue 1528, switch wizard/assist-agent-note, off by default): the
          * button is answered natively before any page runs, so the shell copies the switch here (assist/AssistNote). ---- */

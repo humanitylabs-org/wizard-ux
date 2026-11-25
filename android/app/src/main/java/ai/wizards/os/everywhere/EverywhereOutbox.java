@@ -55,7 +55,7 @@ public final class EverywhereOutbox {
                     ? "Spoken into the WizardOS side-button assistant while the Android phone was LOCKED, so the speaker was not verified by an unlock. "
                     : "The user spoke this by holding their Android phone's side button (WizardOS assistant, phone unlocked). ")
                 : "The user spoke this to the Wizard Everywhere floating orb on their Android phone, outside the WizardOS app (they may be in another app). ";
-        if (it.files != null && it.files.length() > 0) { // Camera / Attach (wizard-os issue 655, switch wizard/assist-attach)
+        if (it.files != null && it.files.length() > 0) { // Camera / Attach (wizard-os issue 655)
             int pictures = 0;
             for (int i = 0; i < it.files.length(); i++) if ("photo".equals(it.files.optJSONObject(i) == null ? "" : it.files.optJSONObject(i).optString("kind"))) pictures++;
             return where + "The original recording is attached as a voice note."
@@ -89,8 +89,8 @@ public final class EverywhereOutbox {
     }
 
     /**
-     * A photo taken with the corner orb's Camera button or a file picked with Attach while talking (wizard-os issue 655,
-     * switch wizard/assist-attach). A private copy on disk (assist PickedFiles), a cleaned name and a type; kind is
+     * A photo taken with the corner orb's Camera button or a file picked with Attach while talking (wizard-os issue 655).
+     * A private copy on disk (assist PickedFiles), a cleaned name and a type; kind is
      * "photo" or "file". Enqueueing moves the copy into the outbox.
      */
     public static final class Attachment {

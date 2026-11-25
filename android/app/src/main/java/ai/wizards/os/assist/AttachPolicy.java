@@ -3,15 +3,13 @@ package ai.wizards.os.assist;
 import java.util.Locale;
 
 /**
- * Camera and Attach on the side-button corner orb (wizard-os issue 655, switch wizard/assist-attach, off by default).
+ * Camera and Attach on the side-button corner orb (wizard-os issue 655, on for everyone).
  * Plain Java (no Android types) so the rules run as JVM tests: how many things one take may carry, how big one file
  * may be, and how a picked file's name and type are cleaned before they go to Wizard Files.
  */
 public final class AttachPolicy {
-    /** Switch off: Screen alone, four screenshots, exactly as before. */
-    static final int MAX_OFF = 4;
-    /** Switch on: one cap shared by Screen, Camera and Attach. */
-    static final int MAX_ON = 8;
+    /** One cap shared by Screen, Camera and Attach. */
+    static final int MAX = 8;
     /** One picked file or photo; anything bigger is left out (the voice note itself is never refused). */
     static final long MAX_BYTES = 25L * 1024 * 1024;
     /** A picker or the camera that never comes back: the take goes on (or is sent) after this. */
@@ -21,10 +19,8 @@ public final class AttachPolicy {
 
     private AttachPolicy() { }
 
-    static int cap(boolean on) { return on ? MAX_ON : MAX_OFF; }
-
     /** How many more things this take may carry. */
-    static int room(boolean on, int attached) { return Math.max(0, cap(on) - Math.max(0, attached)); }
+    static int room(int attached) { return Math.max(0, MAX - Math.max(0, attached)); }
 
     static boolean fits(long bytes) { return bytes > 0 && bytes <= MAX_BYTES; }
 
@@ -83,8 +79,8 @@ public final class AttachPolicy {
     }
 
     /** What the orb shows after a Camera or Attach round: JSON for W.onAttach (no names, counts only). */
-    static String counts(int shots, int pictures, int files, int added, int skipped, int tooBig, boolean on) {
+    static String counts(int shots, int pictures, int files, int added, int skipped, int tooBig) {
         return "{\"shots\":" + shots + ",\"pictures\":" + pictures + ",\"files\":" + files + ",\"added\":" + added
-                + ",\"skipped\":" + skipped + ",\"tooBig\":" + tooBig + ",\"max\":" + cap(on) + "}";
+                + ",\"skipped\":" + skipped + ",\"tooBig\":" + tooBig + ",\"max\":" + MAX + "}";
     }
 }

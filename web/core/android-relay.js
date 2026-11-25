@@ -135,24 +135,10 @@
   document.addEventListener('visibilitychange', () => { if (!document.hidden) chatSync(); });
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => chatSync()); else chatSync();
 
-  /* Camera and Attach on the side-button corner orb (wizard-os issue 655, switch wizard/assist-attach, off by default).
-   * The corner orb is its own native page and never sees the shell's switches, so the shell copies this one to the
-   * Android app. As above, an off is applied only once the switches have settled. */
-  const ATTACH_SWITCH = 'wizard/assist-attach';
-  let attachWas = null;
-  function attachSync() {
-    const n = window.WizardOSNative; if (!n || typeof n.assistAttachSwitch !== 'function') return;
-    let on = false; try { on = (document.documentElement.dataset.tweaks || '').split(' ').includes(ATTACH_SWITCH); } catch (_) {}
-    if (!on && !chatSettled) return;
-    if (on === attachWas) return;
-    attachWas = on; try { n.assistAttachSwitch(on); } catch (_) {}
-  }
-  if (typeof MutationObserver === 'function' && document.documentElement) {
-    new MutationObserver(() => attachSync()).observe(document.documentElement, { attributes: true, attributeFilter: ['data-tweaks'] });
-  }
-  window.addEventListener('wos:experience', () => { chatSettled = true; attachSync(); });
-  setTimeout(() => { chatSettled = true; attachSync(); }, 5000);
-  attachSync();
+  /* Camera and Attach on the side-button corner orb (wizard-os issue 655, on for everyone). Android apps 0.10.49 to
+   * 0.10.65 still wait to be told it is on (they kept a copy of the old switch wizard/assist-attach), so the main page
+   * tells them; newer ones have no such call. */
+  try { const n = window.WizardOSNative; if (n && typeof n.assistAttachSwitch === 'function') n.assistAttachSwitch(true); } catch (_) {}
 
   /* Side button opens the Agent chat (wizard-ux issue 1528, switch wizard/assist-agent-note, off by default). The
    * corner orb decides at the button press, before any shell page runs, so the shell copies this switch to the Android

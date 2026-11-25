@@ -12,7 +12,7 @@ import java.util.List;
 import ai.wizards.os.everywhere.EverywhereOutbox;
 
 /**
- * Pictures and files picked with the corner orb's Camera and Attach (wizard-os issue 655, switch wizard/assist-attach)
+ * Pictures and files picked with the corner orb's Camera and Attach (wizard-os issue 655)
  * wait here, one private file each, until the take is sent (the outbox moves them into its own folder) or thrown away.
  * They are streamed to disk as they are read, so eight large files never sit in memory at once. Never audio.
  */

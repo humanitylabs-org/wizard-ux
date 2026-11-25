@@ -27,7 +27,7 @@ import java.util.List;
 import ai.wizards.os.everywhere.EverywhereOutbox;
 
 /**
- * Camera and Attach for the side-button corner orb (wizard-os issue 655, switch wizard/assist-attach, off by default).
+ * Camera and Attach for the side-button corner orb (wizard-os issue 655).
  * A see-through activity the orb opens while you talk: it starts the phone's camera (one full-size photo) or Android's
  * file picker (pictures or files, several at once), reads what comes back, hands it to the live take and shows the orb
  * again. The take is paused meanwhile, so nothing said is lost and the pause detector never sends it. Never on the
@@ -61,7 +61,7 @@ public class AssistPickActivity extends Activity {
         PickedFiles.prune(this);
         KeyguardManager k = (KeyguardManager) getSystemService(Context.KEYGUARD_SERVICE);
         if (k != null && k.isKeyguardLocked()) { deliver(null, 0); return; }
-        if (!AssistAttach.on(this) || !VoiceCapture.get(this).away()) { deliver(null, 0); return; }
+        if (!VoiceCapture.get(this).away()) { deliver(null, 0); return; }
         String kind = getIntent().getStringExtra(EXTRA_KIND);
         try {
             if (KIND_CAMERA.equals(kind)) openCamera();
@@ -138,7 +138,7 @@ public class AssistPickActivity extends Activity {
                 //noinspection ResultOfMethodCallIgnored
                 if (cameraJpeg.isFile()) cameraJpeg.delete();
             }
-            int room = AttachPolicy.MAX_ON;
+            int room = AttachPolicy.MAX;
             for (Uri u : uris) {
                 if (got.size() >= room) break;
                 try {
