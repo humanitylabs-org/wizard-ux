@@ -2,7 +2,7 @@
  * Listings merge configured catalogs; installation identity joins WAM, canonical shell and Runtipi reads.
  * Get and explicit release changes use this Wizard's owner-authorized App Manager. Back: detail → list → Store root,
  * through the shell's canonical hook (window.__wizardCloseOverlay); standalone it guards its own history. */
-import {resolveInstalled, releaseState, preferredRelease, compareApps, isUserApp, architectureReason, mergeConflicts, storeKind} from './store-status.js';
+import {resolveInstalled, releaseState, preferredRelease, compareApps, isUserApp, architectureReason, mergeConflicts, storeKind, hostAppId} from './store-status.js';
 import {routerNeeds, hasNeeds, pending} from './store-router.js';
 import {installRelease, followInstall, runningInstall} from './store-install.js';
 import {removalPlan, removeInstalledApp, canRemove, confirmView, forgetRemoved, pendingForgets} from './store-remove.js';
@@ -509,6 +509,9 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
     S.busy.add(a.id); S.busyAt.set(a.id, Date.now());
     for (const id of new Set([a.id, openId(a)])) { S.starting.delete(id); S.late.delete(id); }   // a new install waits afresh
     refresh();
+    // The shell shows a Get in progress in its Apps column and follows the job itself, so the Store can be closed
+    // (wizard-os#682, switch wizard/install-in-sidebar; the shell ignores this message while the switch is off).
+    if (framed && operation === 'install') try { parent.postMessage({ type: 'wizard:app-installing', id: hostAppId(a), job: a.id, name: a.name, view: kindOf(a)?.id === 'apps' }, location.origin); } catch (_) {}
     const say = (m, ok=false) => toast(renderInstallResult({ name: a.name, message: m, ok }));
     try {
       await installRelease({ ...a, operation });

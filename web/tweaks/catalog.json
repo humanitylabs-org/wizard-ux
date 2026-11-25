@@ -31,6 +31,7 @@
     "wizard/app-windows",
     "wizard/private-first-setup",
     "wizard/chat-app-switches",
+    "wizard/action-cards",
     "wizard/agent-inbox",
     "wizard/phone-app-notifications",
     "wizard/lock-screen-player",
@@ -46,6 +47,9 @@
     "wizard/write-guard",
     "wizard/follow-main",
     "wizard/plain-chat-titles",
+    "wizard/app-wake",
+    "wizard/swap-sides",
+    "wizard/install-in-sidebar",
     "wizard/try-feature-counts"
   ],
   "defaults": [

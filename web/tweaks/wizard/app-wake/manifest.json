@@ -1,0 +1,14 @@
+{
+  "id": "wizard/app-wake",
+  "name": "Apps wake your agent",
+  "version": "1.0.0",
+  "author": "wizard",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout"
+  ],
+  "issues": [
+    "humanitylabs-org/wizard-os#634"
+  ],
+  "description": "An installed app can wake your agent with a small typed event through the box (wizard-os spec/APP_WAKE.md, wizard.app-wake/1), with no setup by the agent: Messenger's Agent chat wakes your agent within seconds of a note, a Sweep tap or an answer. Only agents you gave that app are woken, never with message text, each wake in its own background thread. Read by the Agent Service (server/app-wake.mjs). Nothing in the shell changes."
+}

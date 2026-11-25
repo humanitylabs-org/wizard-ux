@@ -4,6 +4,8 @@
 
 One owner per capability: [gate](app-reuse-gate.md).
 
+| Text/media | `WosChat.viewer` zoom/keys/seek; Chats `mediaBlock`; reply action cards `WosActionCards` (`action-cards.js`, `wizard/action-cards`, wizard-os spec/APP_ACTIONS.md) | per-app approve UI in chat |
+
 | Search | `WizCore.chatSearch` (`web/core/chat-search.js`); coverage, relevance × recency; flat paged hits | duplicate ranking |
 
 | QA | `tools/qa-synthetic-fence.cjs` +startup/census | offline |

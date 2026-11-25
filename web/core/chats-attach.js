@@ -250,7 +250,9 @@ window.WizCore.chatsParts.attach = function ({ ch, CHEV_SVG, clip, COG_SVG, draf
         + `<div class="rdet" data-reply-details="${rk}"${open ? '' : ' hidden'}><div class="rtools"><button type="button" class="rcog" data-reply-length aria-label="Short answer length" title="Short answer length">${COG_SVG}</button><button type="button" class="rless" data-reply-summary="${rk}" aria-expanded="true">Show less${CHEV_SVG}</button></div>${body}</div>` : body;
       // A tweak the reply carries (WIZARD_TWEAK_V1): Settings' own switch row, live state (core/settings.js tweakCard).
       const tweak = tn.a?.tweaks?.length ? window.WosSettings?.tweakCard?.(tn.a.tweaks) || '' : '';
-      h += (needs || '') + `<div class="msg a${lead ? ` has-rsum${open ? ' rsum-open' : ''}` : ''}"${isFinite(bAt) ? ` data-boom-at="${bAt}" data-morph-key="a${bAt}"` : ''}${msgIds(tn.a, bAt, tt)}><div class="bub">${shown}${tweak}${mediaBlock(c, tn.media.filter(m => !placed.has(m.id)))}</div>`
+      // An app's proposed action the reply carries (WIZARD_ACTION_V1, wizard-ux issue 1463): core/action-cards.js, '' while off.
+      const action = tn.a?.actions?.length ? window.WosActionCards?.html?.(tn.a.actions) || '' : '';
+      h += (needs || '') + `<div class="msg a${lead ? ` has-rsum${open ? ' rsum-open' : ''}` : ''}"${isFinite(bAt) ? ` data-boom-at="${bAt}" data-morph-key="a${bAt}"` : ''}${msgIds(tn.a, bAt, tt)}><div class="bub">${shown}${tweak}${mediaBlock(c, tn.media.filter(m => !placed.has(m.id)))}${action}</div>`
         + `<div class="mmeta">${timeTag(tn.a?.at ?? tn.mediaAt)}${k >= 0 ? `<button type="button" data-mcopy="${k}" aria-label="Copy response">${COPY_SVG}Copy</button><button type="button" data-mshare="${k}" aria-label="Share response">${SHARE_SVG}Share</button>` : ''}${quoteBtn(tt)}${k >= 0 && last && !working && regenOn() ? '<button type="button" data-mregen aria-label="Regenerate response">↻ Regenerate</button>' : ''}</div></div>`;
     }
     return h;

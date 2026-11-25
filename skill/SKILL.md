@@ -7,7 +7,7 @@ description: "Where is, what is, how to: any Wizard setting or screen. Use when 
 
 Every screen, Settings page and feature switch of the Wizard interface (the phone app and the desktop in a browser or the Mac app), with where it is and what it does. Written from the interface code of this Wizard's release.
 
-- Give the exact path the way it reads on screen, e.g. Settings › About & updates › Updates › Automatic, and how to open Settings: on the desktop, the cog at the bottom left under the chats list (the standard AI apps view has no top bar; only the older Desks view has a gear in a top bar, ⌥,); on the phone, the gear at the top right of Home. If you don't know which they use, say 'the cog at the bottom left of the chats list (or the gear at the top right of Home on the phone)'.
+- Give the exact path the way it reads on screen, e.g. Settings › About & updates › Updates › Automatic, and how to open Settings: on the desktop, the cog at the bottom left under the chats list (older Desks view: the top-bar gear, ⌥,); on the phone, the gear at the top right of Home.
 - Say the condition when there is one (For testers channel only, Android app only, desktop only, only when the box has it).
 - You can't flip these switches or settings for the owner: they are owner-only, on the owner's screen. Tell them what to tap.
 - Never invent a setting, page or button. If what they ask for isn't in this manual, say it isn't in the Wizard interface as far as you know, and ask for a screenshot of where they are looking. Don't search your own files for interface text: the interface code isn't in your container.
@@ -37,7 +37,7 @@ Every screen, Settings page and feature switch of the Wizard interface (the phon
 - **Settings › Resources**: A link straight to the Resources (AI usage) page.
 - **Gestures & help**: Phone: How Wizard works: tap the orb to talk, hold it for a command, swipe it up for apps, down to hide the bars, sideways between desks; Back is always one step back; Practice again. Desktop: the keys guide (⌥/, or hold ⌥ to see the keys on screen). Desktop: Settings › About & updates › Gestures & help, or ⌥/. Phone: Settings › About & updates › Gestures & help, or say 'help'.
 - **Practice tour**: The first-run practice of the orb gestures; start it again from Gestures & help › Practice again.
-- **AI apps view (desktop)**: The standard desktop. Left: the chats sidebar (switch Wizard at the top, search ⌥K, ◫ folds it to a rail ⌥L, the cog for Settings and + New chat at the bottom). Middle: the open chat with the message box, the model and the orb. Right: the Apps column (pinned apps, open apps, + Add an app, Tidy). ⌥1–⌥0 pick an app, ⌥W closes, ⌥F makes the app panel wider, ⌥R folds the column, ⌥H hides both sides. Sort options for its sidebar are in Settings › Chats & app screens when this view is on.
+- **AI apps view (desktop)**: The standard desktop. Left: the chats sidebar (switch Wizard at the top, search ⌥K, ◫ folds it to a rail ⌥L, the cog for Settings and + New chat at the bottom). Middle: the open chat with the message box, the model and the orb. Right: the Apps column (pinned apps, open apps, + Add an app, Tidy). ⌥1–⌥0 pick an app, ⌥W closes, ⌥F makes the app panel wider, ⌥R folds the column, ⌥H hides both sides. Its sidebar's sort options: Settings › Chats & app screens.
 - **Apps view**: A view where every open app has its own full-screen window, with a + sheet listing Open, Installed and Get more apps.
 - **Orb view**: A view where your apps float as satellites around the orb (phone Home and a desktop scene).
 - **Desktop top bar (Desks view)**: Left: Home and your desks (+ New desktop). Right: search (⌥Space, also ⌘K), Talk about this (⌥S; replies to the open chat or asks about the window), Tell the computer (⌥C, local commands like 'next desk'), Dictate (⌥D), New voice chat (⌥V), the Inbox count (⌥I, opens Chats), Settings (⌥,), Keys guide (⌥/). The AI apps view has no top bar.
@@ -50,7 +50,7 @@ Every screen, Settings page and feature switch of the Wizard interface (the phon
 
 ## Settings
 
-Open Settings: desktop, the cog at the bottom left under the chats list (standard AI apps view; the older Desks view has a gear at the right of its top bar, ⌥,); phone, the gear at the top right of Home or an empty desk, or hold the orb and say 'settings'. Settings is a list of pages under System and Preferences; on a wide screen the list is on the left and the page on the right. A page with nothing on it is hidden. Pages are the same on phone and desktop, except rows that only exist on one of them (named below).
+Open Settings: desktop, the cog at the bottom left under the chats list (older Desks view: the top-bar gear, ⌥,); phone, the gear at the top right of Home or an empty desk, or hold the orb and say 'settings'. Settings is a list of pages under System and Preferences; on a wide screen the list is on the left and the page on the right. A page with nothing on it is hidden. Pages are the same on phone and desktop, except rows that only exist on one of them (named below).
 
 ### System › Your network
 Your network: the computers and devices this Wizard runs on, filled by the apps that report them. (only when an installed app adds something here; with Machines on Home on, Settings › System holds network, AI, security and storage).
@@ -161,13 +161,15 @@ Phone: things only the Android app can do: Wizard Everywhere (floating orb), sid
 
 Settings › Appearance › Try new features lists unfinished features anyone can switch on to try, A to Z, each 'by <author>'. The group only shows when this Wizard is on the For testers channel (Settings › About & updates › Channel › For testers); on For everyone it is hidden and these switches stay off. The same switches are also in the WizardOS Tracker app (Try it). A choice follows the owner on every device. If the owner can't find Try new features, the first step is Channel › For testers.
 
-- **Agent inbox**: Background tasks keep one short record each; their worker threads stay out of the chat list, and Chats gets a Running view (what is still working, what went quiet).
+- **Action cards in chat**: An app's proposed action (a draft, an event) shows in chat with Approve, Edit, Open in app.
+- **Agent inbox**: Background tasks keep one short record each; their worker threads stay out of the chat list, and Chats gets a Running view (what still works, what went quiet).
 - **Agent knows the Wizard interface**: Your agent gets this manual: every screen, Settings page and feature switch, so it can say where things are.
 - **Agents use what the box already does**: Agents look up what this box already does (transcription, reminders, app jobs) before installing their own.
-- **App panel on the left**: AI apps desktop: a button in the app panel's header (or ⌥⇧M) moves the app panel to the left, beside the chats sidebar.
+- **App panel on the left**: AI apps desktop: ⌥⇧M or the app panel's header button moves it beside the chats sidebar.
 - **App switches in chat**: A reply's switch card also lists an app's own feature switches, flipped right in the chat.
+- **Apps wake your agent**: Apps wake your agent.
 - **Archive on top**: Archive is the first section of the Chats list in both By day and By status, so switching layouts never moves it.
-- **Calm Agent Service restarts**: While the Agent Service waits for running chats before restarting, you see a quiet 'Restarting when chats finish' note, not errors; a message sent meanwhile shows as saved and sends after the restart; if the restart is overdue you see what's still running and choose Wait longer or Restart now. Needs a box that supports it.
+- **Calm Agent Service restarts**: While the Agent Service waits for running chats before restarting, you see a quiet 'Restarting when chats finish' note, not errors; a message sent meanwhile is saved and sends after the restart; if overdue you see what still runs and choose Wait longer or Restart now. Needs a box that supports it.
 - **Calm offline card**: The can't-reach-your-Wizard card shows one dotted path (Internet · Tailscale · Wizard), one short next step and a small Check again with the automatic re-check time.
 - **Camera and Attach on the side button**: Android app: Camera and Attach buttons next to Screen while talking to the side-button orb.
 - **Clear chat notifications**: Android app: reading a LINE, WhatsApp, Telegram or other bridged chat in Messenger clears that app's own notification (needs Android's Notification access).
@@ -175,6 +177,7 @@ Settings › Appearance › Try new features lists unfinished features anyone ca
 - **Desktop sidebar follows Default Chats**: AI apps desktop: the chats sidebar uses the Chats look picked in Settings › Chats & app screens › Default Chats.
 - **Follow main**: Green merges go live by themselves.
 - **Hourly app updates**: With app updates on Automatic, apps are checked and updated every hour instead of nightly.
+- **Installs in the Apps column**: AI apps desktop: an app you Get shows in the Apps column, spinning until installed.
 - **Links open the app's own window**: Android app: a link to a Wizard app opens that app in its own Android window, like its home-screen icon.
 - **Machines on Home**: Home shows a slim strip (Wizard, AI fuel, chats, backup, network); Settings › System holds your network, AI, security and storage.
 - **Now playing**: While an app plays audio or video, small moving bars sit on that app's icon in the AI apps view (the desktop apps column; the phone Home dock and grid); click or tap them to pause without opening the app. Option+P pauses or plays what played last on the desktop. Nothing shows while nothing plays.
@@ -183,7 +186,7 @@ Settings › Appearance › Try new features lists unfinished features anyone ca
 - **Phone media player for Podcasts**: Android app: Podcasts plays through the phone's media player (lock screen, headset buttons), like Music.
 - **Phone notifications per app**: Android app: what any app sends to Notifications shows as a phone notification under that app's name, one Android channel per app.
 - **Private first setup**: New installs start private: Welcome's Connect your AI leads with Tinfoil; Claude and ChatGPT are optional extras.
-- **Repair the agent's Wizard connection**: If the agent's Wizard app tools say unauthorized, `wizard link` restores the box's connection token; `wizard doctor` checks it.
+- **Repair the agent's Wizard connection**: When the agent can't reach its Wizard app tools (unauthorized), `wizard link` puts the box's token back in the agent's settings; `wizard doctor` shows if they match.
 - **Reply to Telegram and Slack chats**: Chats started on Telegram or Slack can be continued in Wizard; replies go through that app's own connection.
 - **Runtipi 4.12 sign-in key**: App Manager uses its own Runtipi 4.12 key.
 - **Say why a chat needs you**: When Wizard itself marks a chat Needs you (a helper finished after the chat closed), the chat says why, with Continue and Dismiss. Dismiss, Done or Archive clears it on every device.
@@ -194,6 +197,7 @@ Settings › Appearance › Try new features lists unfinished features anyone ca
 - **Sign in to GitHub in Apps**: Apps › Sources gets Sign in to GitHub, so private beta apps you were invited to show under Beta.
 - **Skins are look only**: Skins become a look only. Your own skin stops deciding which features run: only the feature switches here and in the WizardOS Tracker do, the same for every tester. Turning this on carries the choices of the own skin you're wearing into those switches once. Tweaks on the drop list (Two orbs, App borders, No close on desks, Pin buttons, WizardOS name) are off. Skin scripts are paused. Your skin's saved choices and script approval are kept and come back when you switch this off.
 - **Stop write loops**: Stops repeated saves: an identical save within 10 s is not resent; over 20 a minute pauses.
+- **Swap sides**: Chats right, apps left (⌥⇧L).
 - **Swipe away downloads**: Phone: swipe the Downloaded banner away and swipe the Downloads sheet down to close it. (phone only).
 - **Tap the app in front for its first view**: Narrow desktop window: tapping the icon of the app in front takes it back to its first view.
 - **Tell the team about failed updates**: When an app or WizardOS update fails on this box, the App Manager files a bug for the team (or adds to the open one) with the box, versions, failing step and error, using this box's GitHub login. Your notification then says the team was told.

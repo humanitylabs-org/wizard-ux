@@ -88,7 +88,7 @@ window.WizCore.chatsParts.posts = function ({ ch, CH, CHAN_TEXT_MAX, chanChanged
   const replyRev = s => [s.messageCount ?? '', s.lastAssistantAt || '', s.previewAt || ''].join('|');
   function replyAts(rows) {
     let t; try { t = toTurns(rows); } catch (_) { return null; }
-    return t.filter(x => x.a ? !!(x.a.text || x.a.tweaks?.length || x.a.failed) : !!x.media?.length).map(x => Number(x.a?.at ?? x.mediaAt ?? x.at) || 0);
+    return t.filter(x => x.a ? !!(x.a.text || x.a.tweaks?.length || x.a.actions?.length || x.a.failed) : !!x.media?.length).map(x => Number(x.a?.at ?? x.mediaAt ?? x.at) || 0);
   }
   function chanReplies(s) {
     const k = firstKey(s), r = REPLIES.get(k), rev = replyRev(s);
