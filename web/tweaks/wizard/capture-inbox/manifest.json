@@ -1,0 +1,14 @@
+{
+  "id": "wizard/capture-inbox",
+  "name": "Capture inbox",
+  "version": "1.0.0",
+  "author": "wizard",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout"
+  ],
+  "issues": [
+    "humanitylabs-org/wizard-os#696"
+  ],
+  "description": "Your agent files whatever you drop in Inbox in Files (uploads, the share menu, a synced folder), by your own plain-words rules in Files › Capture rules.md: receipts to Documents/Receipts, articles to Reading, book-page highlights into a note under the book's title, and so on. One batch at a time after a quiet couple of minutes, one line in your agent inbox, every move logged, and \"undo that\" puts a batch back exactly. Only what arrives after you turn it on. Read by the Agent Service (server/capture-inbox.mjs). Nothing in the shell changes."
+}
