@@ -235,13 +235,15 @@ const inboxKeep = tweaks => String(tweaks || '').split(' ').includes(INBOX_KEEP)
 function activityGroups(groups, { needs, unread, at }, { order = 'newest', now = 0, days = ACTIVITY_RECENT_DAYS, older = false, keep = false } = {}) {
   if (!groups) return null;
   const snoozed = s => deferred(s) && !['waiting_for_approval', 'unknown'].includes(s.status);
-  const rest = [...(groups.errors || []), ...(groups.ready || []), ...(groups.yesterday || []), ...(groups.pastWeek || [])];
+  // keep: a thread only aged past "archive after" (not archived by the owner) stays in Inbox too.
+  const aged = keep ? (groups.archive || []).filter(s => !s.archived) : [];
+  const rest = [...(groups.errors || []), ...(groups.ready || []), ...(groups.yesterday || []), ...(groups.pastWeek || []), ...aged];
   const ready = [], recent = [], snz = [...(groups.deferred || [])];
   for (const s of rest) (snoozed(s) ? snz : keep || needs(s) || unread(s) ? ready : recent).push(s);
   const newest = rows => activitySort(rows, 'newest', { at });
   const cut = now - days * DAY_MS, all = newest(recent), within = all.filter(s => at(s) >= cut);
   return { working: activitySort(groups.working || [], order === 'priority' ? 'newest' : order, { at }), ready: activitySort(ready, order, { at, needs }),
-    recent: older ? all : within, older: older ? 0 : all.length - within.length, snoozed: newest(snz), archive: newest(groups.archive || []) };
+    recent: older ? all : within, older: older ? 0 : all.length - within.length, snoozed: newest(snz), archive: newest(keep ? (groups.archive || []).filter(s => s.archived) : groups.archive || []) };
 }
 /** The same sections as rows for a layout that draws its own list (sessionRow, plus each row's marker). */
 function activityList(groups, facts, opts = {}) {

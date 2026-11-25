@@ -60,7 +60,7 @@ window.WizCore.skinHostParts.rows = function ({ isDoc }) {
     const M = window.WizChatsListModel, o = structuredClone(l), order = readReadyOrder();
     const notes = noteRows().map(r => ({ ...r, mark: r.snoozed ? '' : r.rank === 1 ? 'needs' : 'new' }));
     o.ready = M.activitySort([...(o.ready || []), ...notes.filter(r => !r.snoozed)], order);
-    // Inbox until archived (wizard-ux issue 1810): no Recent; a snoozed alert waits with the snoozed chats.
+    // Inbox until archived (wizard-ux issue 1810): no Recent; a read (kept) alert waits with the snoozed chats, as in Classic.
     if (window.WizCore?.inboxKeep?.()) o.snoozed = M.activitySort([...(o.snoozed || []), ...notes.filter(r => r.snoozed)], 'newest');
     else o.recent = M.activitySort([...(o.recent || []), ...notes.filter(r => r.snoozed)], 'newest');
     return o;

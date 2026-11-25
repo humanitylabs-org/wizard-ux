@@ -141,8 +141,9 @@ window.WizCore.chatsParts.spaces = function ({ actNeeds, actUnread, agentRec, AG
     // Alerts set to Chats: the unread ones wait in Ready with the chats (an urgent one counts as Needs you), read ones in Recent.
     const pick = (list, notes) => list.map(v => ({ id: v.id, v })).concat((notes || []).map(v => ({ id: 'notif:' + v.id, v, n: true })));
     const at = x => x.n ? noteAt(x.v) : chanAt(x.v), needs = x => x.n ? M.notificationRow(x.v).rank === 1 : actNeeds(x.v);
-    // With Inbox until archived, read alerts stay in Inbox too: one list, no Recent.
-    const ready = M.activitySort(pick(g.ready, keep ? [...(nt?.awake || []), ...(nt?.later || [])] : nt?.awake), order, { at, needs }), recent = keep ? [] : M.activitySort(pick(g.recent, nt?.later), 'newest', { at });
+    // With Inbox until archived there is no Recent: a read (kept) alert waits with Snoozed, as on the AI apps sidebar.
+    const ready = M.activitySort(pick(g.ready, nt?.awake), order, { at, needs }), recent = keep ? [] : M.activitySort(pick(g.recent, nt?.later), 'newest', { at });
+    const snoozed = keep ? M.activitySort(pick(g.snoozed, nt?.later), 'newest', { at }) : g.snoozed.map(v => ({ id: v.id, v }));
     const row = x => x.n ? noteRow(x.v) : chatRow(x.v, null);
     const page = (k, list) => { const shown = c.more?.[k] ? list : list.slice(0, SEC_PAGE); return shown.map(row).join('') + (list.length > shown.length ? `<button class="ch-more" data-secmore="${k}">Show all ${list.length}</button>` : ''); };
     // side = a control on the header line beside the fold button (a button cannot hold a select)
@@ -155,12 +156,12 @@ window.WizCore.chatsParts.spaces = function ({ actNeeds, actUnread, agentRec, AG
     const heldRow = s => !!globalThis.WizReach?.restartHeld?.(s), saved = g.working.filter(heldRow), working = g.working.filter(s => !heldRow(s));
     // A section shows only while it holds something (wizard-ux issue 1731): no empty headers, lines, pills or sort menu.
     // Nothing at all: one empty state with a way to start a chat; nothing but drafts: the Drafts section above says it.
-    if (!working.length && !saved.length && !ready.length && !recent.length && !g.older && !g.snoozed.length && !g.archive.length) return drafts ? '' : actEmpty();
+    if (!working.length && !saved.length && !ready.length && !recent.length && !g.older && !snoozed.length && !g.archive.length) return drafts ? '' : actEmpty();
     return (working.length ? sec('working', 'Working', working.length, () => working.map(s => chatRow(s, null)).join('')) : '')
       + (saved.length ? sec('saved', 'Saved', saved.length, () => saved.map(s => chatRow(s, null)).join(''), chatVars.secOpen.saved !== false) : '')
       + (ready.length ? sec('ready', keep ? 'Inbox' : 'Ready', ready.length, () => page('ready', ready), !!chatVars.secOpen.ready, sortSel) : '')
       + (recent.length || g.older ? sec('recent', 'Recent', 0, () => page('recent', recent) + older) : '')
-      + (g.snoozed.length ? sec('snoozed', 'Snoozed', g.snoozed.length, () => page('snoozed', g.snoozed.map(v => ({ id: v.id, v })))) : '')
+      + (snoozed.length ? sec('snoozed', 'Snoozed', snoozed.length, () => page('snoozed', snoozed)) : '')
       + (g.archive.length ? sec('archived', 'Archived', g.archive.length, () => page('archived', g.archive.map(v => ({ id: v.id, v })))) : '');
   }
   // The sort and Show older taps (Activity with Channels on); false = not one of them.

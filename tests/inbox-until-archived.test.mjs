@@ -46,6 +46,15 @@ test('list model: on, every thread waits in Inbox until archived; off, read ones
   assert.equal(off.older, 1);
 });
 
+test('list model: a thread only aged past "archive after" stays in Inbox; one the owner archived does not', () => {
+  const g = groups(ROWS()); g.archive.push(row('aged', 9 * 24));   // in Archive by age only (archived is false)
+  const on = M.activityGroups(g, facts, { now: NOW, keep: true });
+  assert.ok(on.ready.some(s => s.id === 'aged'), 'aged: still in Inbox');
+  assert.deepEqual(J(on.archive.map(s => s.id)), ['a1'], 'only what the owner archived');
+  const off = M.activityGroups(g, facts, { now: NOW });
+  assert.deepEqual(J(off.archive.map(s => s.id)), ['a1', 'aged'], 'off: as today');
+});
+
 test('regression: open an unread Inbox thread and go Back: still in Inbox, now read; Archive it: gone from Inbox, in Archived', () => {
   const rows = ROWS(), inbox = () => M.activityGroups(groups(rows), facts, { now: NOW, keep: true });
   assert.ok(inbox().ready.some(s => s.id === 'g1' && unread(s)));
@@ -78,11 +87,11 @@ function phone(keep) {
 const secs = html => [...html.matchAll(/data-sec="([^"]+)">(?:<div class="ch-sec-hl">)?<button class="ch-sec-h" data-sectoggle="[^"]+" aria-expanded="(?:true|false)"><span>([^<]+)<\/span>(?:<small>([^<]*)<\/small>)?/g)].map(m => [m[1], m[2], m[3] || '']);
 const rowsIn = (html, k) => [...(html.split(`data-sec="${k}"`)[1] || '').split('</section>')[0].matchAll(/<(?:row|note) ([^>]+)>/g)].map(m => m[1]);
 
-test('phone / Classic: Working, then Inbox with its count, no Recent; read alerts stay in Inbox too', () => {
+test('phone / Classic: Working, then Inbox with its count, no Recent; a read (kept) alert waits with Snoozed, as on the AI apps sidebar', () => {
   const nt = { awake: [{ id: 'n1', time: (NOW - 0.5 * H) / 1000 }], later: [{ id: 'n2', time: (NOW - 6 * H) / 1000 }] };
   const html = phone(true).activityBody({ id: 'w' }, ROWS(), nt);
-  assert.deepEqual(secs(html), [['working', 'Working', '1'], ['ready', 'Inbox', '7'], ['snoozed', 'Snoozed', '1'], ['archived', 'Archived', '1']]);
-  assert.deepEqual(rowsIn(html, 'ready'), ['n1', 'g1', 'r1', 'n2', 'y1', 'r2', 'old']);
+  assert.deepEqual(secs(html), [['working', 'Working', '1'], ['ready', 'Inbox', '6'], ['snoozed', 'Snoozed', '2'], ['archived', 'Archived', '1']]);
+  assert.deepEqual(rowsIn(html, 'ready'), ['n1', 'g1', 'r1', 'y1', 'r2', 'old']);
   assert.doesNotMatch(html, /data-sec="recent"|data-chactolder/);
   assert.match(html, /aria-label="Sort Inbox"/);
 });
