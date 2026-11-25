@@ -67,3 +67,7 @@ html[data-skin="obsidian"] .wl-mic.on{color:black}
 .wl-voice{margin:8px 2px 0;min-height:1.3em;color:var(--ink-2);font-size:var(--wz-text-md)}
 .wl-voice:empty{display:none}
 .wl-voice.err{color:var(--wz-danger)}
+/* Standard first (wizard-ux issue 1800): the Private AI offer. Later and No thanks side by side under the primary. */
+.wl-head p.wl-lead{color:var(--ink);font-weight:600}
+.wl-offer-more{display:flex;justify-content:center;gap:8px;margin-top:6px}
+.wl-offer-more .wl-skip{margin:0}

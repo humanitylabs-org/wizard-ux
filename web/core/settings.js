@@ -35,6 +35,8 @@
     // Connections: the App Manager's own view (agents, what each may use, app-to-app links), only where its owner
     // listener answers. System pieces that come with every box live in Settings, not the launcher (wizard-os issue 324).
     // pending: availability not known yet; a deep link to it waits for the answer instead of falling back to the root.
+    // Privacy: private AI (standard first, wizard-ux issue 1800); hidden while nothing is on it.
+    { id: 'privacy', title: 'Privacy', available: filled('privacy') },
     { id: 'connections', title: 'Connections', available: () => connectionsAvailable() || filled('connections')(), pending: () => conn.ok === null && !features.has('saved-wizards') },
     { id: 'recovery', title: 'Unsent & recovered' },
     // Resources: the Home resource bars (AI + Compute) from the shared renderer, when it is there; else AI usage.

@@ -51,6 +51,28 @@
   // Switch on: Tinfoil first, then the two extras; off: PROVIDERS as listed.
   const providers = () => (privateFirst() ? PROVIDERS.filter(p => p.app === PRIVATE).concat(PROVIDERS.filter(p => p.app !== PRIVATE)) : PROVIDERS);
   const extraNote = p => `Adds a second agent that uses ${p.name}. Your private agent and its apps stay private.`;
+  /* Standard first (wizard-ux issue 1800, switch wizard/standard-first-setup, off by default; James 25 Nov 2026): Connect
+   * your AI asks for Claude or ChatGPT first (the AI the owner already pays for, on the standard agent), with Skip for
+   * now, also when the box says private first is on. Then, once, the Private AI step offers Set up private AI / Later /
+   * No thanks. Set up private AI asks the Agent Service to opt this box in (POST /wizard/v1/private-first {offer}),
+   * then runs the private first sign-in above (Tinfoil, the private agent made the default on a fresh box); Later and
+   * No thanks are saved on the box, and Later leaves Settings › Privacy's "Finish setting up private AI", which opens
+   * the same step on its own. Reconnect your AI never offers it. Off: this Welcome is unchanged. */
+  const SF_SWITCH = 'wizard/standard-first-setup';
+  const sfOn = () => { try { return String(document.documentElement.getAttribute('data-tweaks') || '').split(' ').includes(SF_SWITCH); } catch (e) { return false; } };
+  const sfFirst = () => sfOn() && !reconnect;
+  const STANDARD = ['wizard-claude', 'wizard-chatgpt'];
+  // offered: this Welcome shows the Private AI step (decided when it opens); solo: opened for that step alone (Settings).
+  // skipped: Skip for now with nothing connected; linked: providers connected in this Welcome.
+  let offered = false, solo = false, skipped = false, offerBusy = '', offerError = '', sfWatch = null;
+  const linked = new Set();
+  const offerDue = () => sfFirst() && !pf?.private_agent && !pf?.offer;
+  async function offerPost(choice) {
+    const r = await fetch(PF_STATE, { method: 'POST', credentials: 'same-origin', cache: 'no-store', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ offer: choice }), signal: tsig(8000) });
+    const j = await r.json().catch(() => null);
+    if (!r.ok || !j || typeof j !== 'object') throw Object.assign(Error('offer ' + r.status), { status: r.status });
+    pf = j; return j;
+  }
   const brand = () => `<div class="wl-brand"><img src="brand/wizard-mark-white.png" alt=""><span>${OS()}</span></div>`;
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   // Product name: WizardOS, always one word (James, 8 Nov 2026; wizard-os#436).
@@ -74,7 +96,8 @@
   const IMPORTER = 'importer';
   let bringOpen = false;
   const bringOn = () => { try { return isInstalled(IMPORTER); } catch (e) { return false; } };
-  const order = () => (asked ? ['name'] : []).concat(['ai', 'look'], bringOn() ? ['bring'] : [], ['hello']);
+  const order = () => solo ? ['private'] : (asked ? ['name'] : []).concat(['ai'], offered ? ['private'] : [], ['look'], bringOn() ? ['bring'] : [], ['hello']);
+  const signing = () => step === 'ai' || step === 'private'; // a provider's sign-in page can show in either step
   const nextStep = () => { const all = order(), i = all.indexOf(step); return all[Math.min(all.length - 1, i + 1)] || 'hello'; };
   const prevStep = () => { const all = order(), i = all.indexOf(step); return i > 0 ? all[i - 1] : step; };
   const DEFAULT_NAME = 'Wizard', NAME_MAX = 40;
@@ -173,7 +196,7 @@
   let frameOff = () => {};
 
   function dots() {
-    if (reconnect) return '';
+    if (reconnect || solo) return '';
     const all = order(), i = all.indexOf(step);
     return `<div class="wl-dots" aria-hidden="true">${all.map((x, n) => `<i class="${n === i ? 'on' : n < i ? 'done' : ''}"></i>`).join('')}</div>`;
   }
@@ -207,17 +230,56 @@
   }
 
   function paintAI() {
-    if (provider) {
-      const p = PROVIDERS.find(x => x.app === provider), a = H.app(provider);
-      return `${brand()}${dots()}<header class="wl-head wl-row"><button type="button" class="wl-back" data-wl="back" aria-label="Back">‹</button><h2 tabindex="-1">Sign in to ${esc(p.name)}</h2></header>
-        <div class="wl-frame"><iframe src="${esc(signinUrl(a.url))}"${sbx(signinUrl(a.url), provider)} title="${esc(p.name)} sign-in"></iframe></div>
-        <p class="wl-status${connected ? ' ok' : ''}" role="status">${connected ? `${esc(p.name)} is connected.` : `${privateFirst() && p.app !== PRIVATE ? esc(extraNote(p)) + ' ' : ''}This continues by itself once you are signed in.`}</p>`;
-    }
-    if (privateFirst()) return paintPrivateAI();
+    if (provider) return paintSignin();
+    if (privateFirst() && !sfFirst()) return paintPrivateAI();
+    if (sfFirst()) return paintStandardAI();
     return `${brand()}${dots()}<header class="wl-head"><h2 tabindex="-1">${reconnect ? 'Reconnect your AI' : 'Connect your AI'}</h2><p>${reconnect ? esc(RECONNECT_WORDS()) : `${esc(agent())} thinks with your own AI subscription. Sign in once.`}</p></header>
       <div class="wl-choices">${PROVIDERS.map(p => `<button type="button" class="wl-choice" data-wl="provider" data-app="${esc(p.app)}"${installing ? ' disabled' : ''}><span class="wl-mark"><img src="brand/apps/${esc(p.mark)}.svg" alt=""></span><span class="wl-name">${esc(p.name)}</span>${installing === p.app ? '<span class="wl-sub">Installing…</span>' : p.note ? `<span class="wl-tag${p.note === 'Recommended' ? '' : ' soft'}">${esc(p.note)}</span>` : ''}</button>`).join('')}</div>
       ${installError ? `<p class="wl-status err" role="alert">${esc(installError)}</p>` : ''}`;
   }
+  function paintSignin() {
+    const p = PROVIDERS.find(x => x.app === provider), a = H.app(provider);
+    return `${brand()}${dots()}<header class="wl-head wl-row"><button type="button" class="wl-back" data-wl="back" aria-label="Back">‹</button><h2 tabindex="-1">Sign in to ${esc(p.name)}</h2></header>
+      <div class="wl-frame"><iframe src="${esc(signinUrl(a.url))}"${sbx(signinUrl(a.url), provider)} title="${esc(p.name)} sign-in"></iframe></div>
+      <p class="wl-status${connected ? ' ok' : ''}" role="status">${connected ? `${esc(p.name)} is connected.` : `${privateFirst() && !sfFirst() && p.app !== PRIVATE ? esc(extraNote(p)) + ' ' : ''}This continues by itself once you are signed in.`}</p>`;
+  }
+
+  // Standard first's Connect your AI: Claude and ChatGPT on the standard agent; Skip for now (no model yet) is allowed.
+  function paintStandardAI() {
+    const choice = p => { const done = linked.has(p.app);
+      return `<button type="button" class="wl-choice" data-wl="provider" data-app="${esc(p.app)}"${installing || done ? ' disabled' : ''}><span class="wl-mark"><img src="brand/apps/${esc(p.mark)}.svg" alt=""></span><span class="wl-name">Sign in with ${esc(p.name)}</span>${done ? '<span class="wl-tag soft">Connected</span>' : installing === p.app ? '<span class="wl-sub">Installing…</span>' : ''}</button>`; };
+    return `${brand()}${dots()}<header class="wl-head"><h2 tabindex="-1">Connect your AI</h2><p>Sign in with the AI you already pay for. We recommend at least one; you can add more later.</p></header>
+      <div class="wl-choices">${STANDARD.map(id => choice(PROVIDERS.find(p => p.app === id))).join('')}</div>
+      ${installError ? `<p class="wl-status err" role="alert">${esc(installError)}</p>` : ''}${linked.size ? '<button type="button" class="wl-primary" data-wl="next">Continue</button>' : '<button type="button" class="wl-skip" data-wl="skip-ai">Skip for now</button>'}`;
+  }
+
+  // Standard first's Private AI step (offered once). With nothing connected it leads with private AI as the way to get
+  // a model. "Why does this matter?" waits for its page (wizard-ux issue 1801), so it is not drawn yet.
+  function paintOffer() {
+    if (provider) return paintSignin();
+    const none = skipped && !linked.size, busy = !!offerBusy;
+    const btn = (choice, label, cls) => `<button type="button" class="${cls}" data-wl="offer" data-offer="${choice}"${busy || installing ? ' disabled' : ''}>${offerBusy === choice || (choice === 'setup' && installing) ? (choice === 'setup' && installing ? 'Installing\u2026' : 'One moment\u2026') : label}</button>`;
+    return `${brand()}${dots()}<header class="wl-head"><h2 tabindex="-1">Want a fully private AI?</h2>${none ? `<p class="wl-lead">You haven\u2019t connected an AI yet. Private AI can be how ${esc(agent())} thinks: set it up now and ${esc(agent())} can answer you.</p>` : ''}<p>Private AI runs in sealed hardware. No one except you, not us or any AI company, can see your messages, its answers or your data. Use it alongside your Claude or ChatGPT, or on its own.</p></header>
+      ${offerError || installError ? `<p class="wl-status err" role="alert">${esc(offerError || installError)}</p>` : ''}
+      ${btn('setup', 'Set up private AI', 'wl-primary')}
+      <div class="wl-offer-more">${btn('later', 'Later', 'wl-skip')}${btn('declined', 'No thanks', 'wl-skip')}</div>`;
+  }
+  // The answer: Set up private AI opts the box in, then signs in to Tinfoil here; Later and No thanks go on.
+  async function answer(choice) {
+    if (offerBusy || installing || step !== 'private') return;
+    const mine = el; offerBusy = choice; offerError = ''; installError = ''; paint(false);
+    let ok = true;
+    try { await offerPost(choice); log('offer:' + choice); } catch (err) { ok = false; log('offer:' + choice + ':' + (err?.status || 'offline')); }
+    if (el !== mine || step !== 'private') return;
+    offerBusy = '';
+    if (choice === 'setup') {
+      if (!ok || !privateFirst()) { offerError = 'Private AI can\u2019t be set up on this Wizard yet. Choose Later to find it in Settings \u203a Privacy.'; paint(false); return; }
+      pfSeen = 0; return choose(PRIVATE);
+    }
+    // Later and No thanks: the box remembers when it can; the Welcome goes on either way.
+    offerDone();
+  }
+  function offerDone() { if (solo) { close(); log('offer:closed'); try { window.WosSettings?.refresh?.(); } catch (e) {} return; } step = nextStep(); provider = null; paint(); }
 
   // Private first's Connect your AI: Tinfoil, then "Optional: a second agent" with Claude and ChatGPT. Once the private
   // agent is ready the card stays here, so the owner can add a second agent or go on.
@@ -343,9 +405,9 @@
   function paint(focus = true) {
     if (!el) return;
     const card = el.querySelector('.wl-card');
-    card.classList.toggle('wide', (step === 'ai' && !!provider) || (step === 'bring' && bringOpen));
+    card.classList.toggle('wide', (signing() && !!provider) || (step === 'bring' && bringOpen));
     el.classList.toggle('wl-peek', step === 'look');
-    card.innerHTML = step === 'name' ? paintName() : step === 'ai' ? paintAI() : step === 'look' ? paintLook() : step === 'bring' && bringOn() ? paintBring() : paintHello();
+    card.innerHTML = step === 'name' ? paintName() : step === 'ai' ? paintAI() : step === 'private' ? paintOffer() : step === 'look' ? paintLook() : step === 'bring' && bringOn() ? paintBring() : paintHello();
     // Escape inside the provider's own page (same origin) still steps back; a cross-origin page keeps the Back button.
     const fr = card.querySelector('.wl-frame iframe');
     frameOff(); frameOff = () => {};
@@ -355,7 +417,7 @@
       // The page is an installed app's own page, so it is attached as that app's window (core/app-services.js): its
       // calls to its own backend, saved settings and IndexedDB go through the shell as in any app window. Without that
       // an opaque sign-in page's fetch goes out with Origin null and no cookie, and signing in never finishes.
-      const id = step === 'ai' ? provider : IMPORTER, url = H?.app?.(id)?.url, here = () => !!el && fr.isConnected && card.contains(fr);
+      const id = signing() ? provider : IMPORTER, url = H?.app?.(id)?.url, here = () => !!el && fr.isConnected && card.contains(fr);
       const offApp = url && window.WizAppServices?.attach?.(fr, { appId: id, path: url, isFront: here, isVisible: here, back: () => { if (!here()) return false; back(); return true; } });
       const detach = B.attach(fr), stop = B.onInput((f, ev) => { if (f === fr && fr.isConnected && ev.kind === 'key' && ev.type === 'keydown' && ev.key === 'Escape') back(); });
       frameOff = () => { stop(); if (typeof offApp === 'function') offApp(); detach(); };
@@ -369,8 +431,8 @@
 
   function poll() {
     clearTimeout(pollT);
-    if (!el || step !== 'ai' || !provider) return; // only while signing in to a chosen provider
-    const mine = el, chosen = provider; // a reply for an earlier choice (Back, then another provider) is ignored
+    if (!el || !signing() || !provider) return; // only while signing in to a chosen provider
+    const mine = el, chosen = provider, at = step; // a reply for an earlier choice (Back, then another provider) is ignored
     pollT = setTimeout(async () => {
       let ok = await aiReady(PROVIDERS.find(x => x.app === chosen)?.slug);
       // Private first: Tinfoil is done once the Agent Service has the private agent (its record decides, not the
@@ -383,15 +445,17 @@
         if (s?.private_agent) ok = true;
         else if (s && ok === true) { pfSeen++; ok = pfSeen >= PF_GRACE ? true : null; }
       }
-      if (!el || el !== mine || step !== 'ai' || provider !== chosen) return;
+      if (!el || el !== mine || step !== at || provider !== chosen) return;
       if (ok === true) {
         // Reconnect: this Wizard is set up already, so connected is the end; it closes by itself a moment later.
         if (reconnect) { connected = true; write('done'); log('reconnected'); paint(false); setTimeout(() => { if (el === mine && step === 'ai' && provider === chosen) close(); }, 1200); return; }
-        connected = true; write('ai'); log('connected'); paint(false);
+        connected = true; if (!solo) write('ai'); linked.add(chosen); log('connected'); paint(false);
+        // Standard first's Set up private AI: the private agent is ready, so the Welcome goes on (Settings: it closes).
+        if (at === 'private') { privateReady = priv; setTimeout(() => { if (el === mine && step === at && provider === chosen) offerDone(); }, 1200); return; }
         // The private agent is ready: back to Connect your AI, where a second agent is optional and Continue goes on.
         if (priv) { privateReady = true; setTimeout(() => { if (el === mine && step === 'ai' && provider === chosen) { provider = null; paint(); } }, 1200); return; }
 
-        setTimeout(() => { if (el && step === 'ai' && provider === chosen) { step = 'look'; provider = null; paint(); } }, 1200); // Back cancels it
+        setTimeout(() => { if (el && step === 'ai' && provider === chosen) { step = nextStep(); provider = null; paint(); } }, 1200); // Back cancels it
         return;
       }
       poll();
@@ -401,12 +465,17 @@
   function open(at = 'ai', opts = {}) {
     if (el) return;
     reconnect = !!opts.reconnect && at === 'ai';
-    asked = !reconnect && unnamed(); after = at; saving = false; nameError = ''; prefill = agent();
+    // Standard first: the Private AI step on its own (Settings › Privacy), or once after Connect your AI. A box whose AI
+    // was connected before the Welcome (a Mac's setup) starts at it instead of the skin.
+    solo = at === 'private' && sfOn(); if (at === 'private' && !solo) at = 'ai';
+    offered = solo || offerDue(); skipped = false; offerBusy = ''; offerError = ''; linked.clear();
+    if (at === 'look' && offered) at = 'private';
+    asked = !reconnect && !solo && unnamed(); after = at; saving = false; nameError = ''; prefill = agent();
     step = asked ? 'name' : at; provider = null; connected = false; sending = false; installing = ''; installError = ''; sendError = ''; bringOpen = false;
     privateReady = !!pf?.private_agent && privateFirst();
     el = document.createElement('div');
     el.className = 'wl-overlay'; el.id = 'wosWelcome';
-    el.innerHTML = `<div class="wl-card" role="dialog" aria-modal="true" aria-label="${reconnect ? 'Reconnect your AI' : 'Welcome'}"></div>`;
+    el.innerHTML = `<div class="wl-card" role="dialog" aria-modal="true" aria-label="${reconnect ? 'Reconnect your AI' : solo ? 'Private AI' : 'Welcome'}"></div>`;
     document.body.appendChild(el);
     document.documentElement.classList.add('wl-open');
     try { window.WizardPwaInstall?.hold(true); } catch (e) {}
@@ -422,13 +491,32 @@
       }
       e.stopPropagation(); // the shell's own shortcuts wait until the welcome is done (desktop onKey also stands down)
     });
-    paint(); poll(); log('open:' + at + (asked ? ':name' : '') + (reconnect ? ':reconnect' : ''));
+    paint(); poll(); log('open:' + at + (asked ? ':name' : '') + (reconnect ? ':reconnect' : '') + (offered ? ':offer' : ''));
+    // The switch can arrive after the Welcome opened (the Look file or a skin's tweaks apply a moment later): while the
+    // owner has not gone past the first AI step yet, follow it.
+    try { let was = sfOn(); const mine = el;
+      const follow = () => {
+        if (el !== mine || solo) return;
+        const early = step === 'name' || step === 'ai' || ((step === 'look' || step === 'private') && after === step);
+        if (!early) return;
+        offered = sfOn() && offerDue();
+        if (after === 'look' && offered) { after = 'private'; if (step === 'look') step = 'private'; }
+        else if (after === 'private' && !offered) { after = 'look'; if (step === 'private') step = 'look'; }
+        if (!provider && step !== 'name') paint(false);
+      };
+      sfWatch = new MutationObserver(() => { const on = sfOn(); if (on === was || el !== mine) return; was = on; log('switch:' + (on ? 'on' : 'off'));
+        if (on && !pf) pfRead().then(follow); follow(); });
+      sfWatch.observe(document.documentElement, { attributes: true, attributeFilter: ['data-tweaks'] });
+    } catch (e) { sfWatch = null; }
     // Opened from Settings or the Setup tile: read the private first answer if boot did not, then repaint Connect your AI.
-    if (!pf && at === 'ai') { const mine = el; pfRead().then(s => { if (!s || el !== mine) return; privateReady = !!s.private_agent && privateFirst(); if (step === 'ai' && !provider) paint(false); }); }
+    if (!pf && (at === 'ai' || solo)) { const mine = el; pfRead().then(s => { if (!s || el !== mine) return; privateReady = !!s.private_agent && privateFirst();
+      if (!solo && !offered && order().indexOf(step) <= order().indexOf('ai') && offerDue()) offered = true; // still before the offer
+      if ((step === 'ai' || step === 'private') && !provider) paint(false); }); }
   }
 
   function close() {
     clearTimeout(pollT);
+    try { sfWatch?.disconnect(); } catch (e) {} sfWatch = null;
     micDrop(); voiceMsg = { text: '', err: false };
     frameOff(); frameOff = () => {};
     if (!el) return;
@@ -437,17 +525,23 @@
     try { window.WizardPwaInstall?.hold(false); } catch (e) {}
   }
 
+  // Sign in to one provider (installed first when it is not), in the step showing it.
+  function choose(id) {
+    installError = '';
+    const at = step;
+    if (isInstalled(id)) { provider = id; connected = false; paint(); poll(); return; }
+    installing = id; paint(false);
+    const mine = el; // a Welcome closed and reopened meanwhile (or another install) must not be taken over
+    install(id).then(() => { if (el !== mine || installing !== id) return; installing = ''; if (step === at) { provider = id; connected = false; paint(); poll(); } },
+      err => { if (el !== mine || installing !== id) return; installing = ''; installError = err?.message || 'Install failed.'; paint(false); });
+  }
+
   function onClick(e) {
     const t = e.target.closest('[data-wl]'); if (!t) return;
     const act = t.dataset.wl;
-    if (act === 'provider') {
-      const id = t.dataset.app; installError = ''; pfSeen = 0;
-      if (isInstalled(id)) { provider = id; connected = false; paint(); poll(); return; }
-      installing = id; paint(false);
-      const mine = el; // a Welcome closed and reopened meanwhile (or another install) must not be taken over
-      install(id).then(() => { if (el !== mine || installing !== id) return; installing = ''; if (step === 'ai') { provider = id; connected = false; paint(); poll(); } },
-        err => { if (el !== mine || installing !== id) return; installing = ''; installError = err?.message || 'Install failed.'; paint(false); });
-    }
+    if (act === 'provider') { pfSeen = 0; choose(t.dataset.app); }
+    else if (act === 'skip-ai' && step === 'ai') { skipped = !linked.size; log('ai:skipped'); step = nextStep(); provider = null; paint(); }
+    else if (act === 'offer' && step === 'private') answer(t.dataset.offer);
     else if (act === 'back' && step === 'bring') { bringOpen = false; paint(); }
     else if (act === 'back') { clearTimeout(pollT); provider = null; paint(); }
     else if (act === 'store') { close(); H.openStore?.(); }
@@ -478,7 +572,8 @@
     if (!el) return '';
     if (sending) return 'welcome'; // a send settles in a moment; an install keeps going in the background if Back closes
     if (saving) return 'welcome'; // the name is being saved; it settles in a moment
-    if (step === 'ai' && provider) { clearTimeout(pollT); provider = null; paint(); return 'welcome'; }
+    if (signing() && provider) { clearTimeout(pollT); provider = null; paint(); return 'welcome'; }
+    if (step === 'private' && !solo) { step = prevStep(); paint(); return 'welcome'; }
     if (step === 'bring' && bringOpen) { bringOpen = false; paint(); return 'welcome'; }
     if (step === 'hello' || step === 'bring') { if (step === 'hello') { micDrop(); voiceMsg = { text: '', err: false }; } step = prevStep(); bringOpen = false; paint(); return 'welcome'; }
     if (asked && step === after && !saving) { clearTimeout(pollT); step = 'name'; paint(); return 'welcome'; } // back to the name
@@ -489,18 +584,34 @@
   // The Welcome then waits for the next launch, like the Setup launcher it replaces.
   let acted = false;
   const act = () => { acted = true; };
+  /* Standard first on a deep-linked first launch (issue 1800): a Mac's setup connects ChatGPT or Claude itself and opens
+   * the first chat with ?session= (try-wizard issue 171), which keeps the Welcome away. While the box is still in its
+   * first run with the AI connected and the offer unanswered, the Private AI step opens on its own over that chat, once;
+   * Later or No thanks closes it back to the chat. The owner acting first leaves it for the next launch's Welcome. */
+  async function deepOffer(h) {
+    // The switch is painted by the tweak loader a moment after boot: give it a few seconds. Off: nothing is read.
+    for (let i = 0; i < 16 && !sfOn(); i++) await new Promise(r => setTimeout(r, 500));
+    if (!sfOn()) return;
+    const [ok, setup] = await Promise.all([aiReady(), setupState()]);
+    if (ok !== true || setup?.first_run !== true) { log('deeplink:none:' + ok + ':' + setup?.first_run); return; }
+    await pfRead();
+    if (el || acted || h.busy?.() || !offerDue()) { log('deeplink:no-offer'); return; }
+    log('deeplink:offer'); open('private');
+  }
   function boot(h) {
     if (booted || !h) return; booted = true; H = h;
     try { addEventListener('pointerdown', act, true); addEventListener('keydown', act, true); } catch (e) {}
     setTimeout(async () => {
       if (seenPending()) markSeen();
-      if (h.deeplinked?.()) { log('deeplink'); return; }
+      if (h.deeplinked?.()) { log('deeplink'); if (typeof sfOn === 'function') deepOffer(h); return; }
       let [ok, setup] = await Promise.all([aiReady(), setupState(), Promise.race([Promise.resolve(window.WizCore?.appsLoaded?.()).catch(() => {}), new Promise(r => setTimeout(r, 5000))]),
         Promise.race([Promise.resolve(window.WizConfig?.ready).catch(() => {}), new Promise(r => setTimeout(r, 5000))])]); // never wait forever on the app list or the settings
       // Private first: a private agent already made counts as connected (its provider may not be the main agent's).
       // Read before the tap/key listeners go, so the owner acting meanwhile still keeps the Welcome away.
       // (typeof: tests vm-slice boot() on its own.)
       if (ok === false && typeof pfRead === 'function' && (await pfRead())?.private_agent && privateFirst()) { ok = true; log('boot:private'); }
+      // Standard first (issue 1800): whether the Private AI offer is still open is the box's answer, read before opening.
+      else if (ok === true && typeof sfOn === 'function' && sfOn()) await pfRead();
       const state = read();
       log('boot:' + ok + ':' + state + ':' + (setup?.first_run === true));
       try { removeEventListener('pointerdown', act, true); removeEventListener('keydown', act, true); } catch (e) {}
@@ -535,6 +646,24 @@
     }
     log('thread:timeout');
   }
+
+  /* Settings › Privacy (standard first, issue 1800): after Later, one row, "Finish setting up private AI", which opens
+   * the Private AI step on its own. A minimal row for now; the full Privacy page (wizard-ux issue 1801) builds on it.
+   * The box's answer is read when Settings asks, at most once a minute (sooner after a miss). */
+  let pfAt = 0, pfAsking = false;
+  const finishDue = () => {
+    if (!sfOn()) return false;
+    if (!pfAsking && Date.now() - pfAt > (pf ? 60000 : 15000)) { pfAsking = true; pfRead().then(() => { pfAt = Date.now(); pfAsking = false; try { window.WosSettings?.refresh?.(); } catch (e) {} }); }
+    return pf?.offer === 'later' && !pf?.private_agent;
+  };
+  try {
+    window.WosSettings?.register?.({ id: 'private-ai-finish', page: 'privacy', aliases: ['privacy', 'private-ai'], available: finishDue,
+      html: () => `<div class="st-group"><button type="button" class="st-row wz-row" data-private-ai-finish><span class="st-tx"><b>Finish setting up private AI</b><small>Private AI runs in sealed hardware: only you can see your messages and data.</small></span><span class="st-go">›</span></button></div>`,
+      // Another device may have finished it (or said No thanks) meanwhile: ask the box again before opening.
+      act(ctx, t) { if (!t?.closest?.('[data-private-ai-finish]') || !H || !sfOn()) return false;
+        pfRead().then(s => { pfAt = Date.now(); if (s?.offer === 'later' && !s?.private_agent && sfOn()) open('private'); else try { window.WosSettings?.refresh?.(); } catch (e) {} });
+        return true; } });
+  } catch (e) { console.error(e); }
 
   window.WosWelcome = { whenThreadExists, aiConnected, boot, back, open: (at) => open(at || 'ai'), close, get active() { return !!el; }, get log() { return window.__welcomeLog || []; } };
 })();

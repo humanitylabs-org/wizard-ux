@@ -267,7 +267,7 @@
       }
     },
     "wizard": {
-      "help": "Wizard: whether this device is connected to your Wizard (Connected, Connecting…, Sign-in needed) and its address; the interface and the server update separately. Technical details shows the interface revision. Gestures & help opens How Wizard works on the phone (orb, desks, Back, Practice again) and the keys guide on the desktop. On the Android app it also shows Recording, Reply notifications and the phone app's version (tap it to update the app).",
+      "help": "Wizard: whether this device is connected to your Wizard (Connected, Connecting…, Sign-in needed) and its address; the interface and the server update separately. Technical details shows the interface revision. Gestures & help opens How Wizard works on the phone (orb, desks, Back, Practice again) and the keys guide on the desktop. On Android it also shows Recording, Reply notifications and the app's version (tap it to update).",
       "controls": {
         "Wizard": null,
         "Connected": "this device's connection to your Wizard",
@@ -408,8 +408,12 @@
       "where": "Settings › Appearance › Try new features › Links open the app's own window"
     },
     "wizard/private-first-setup": {
-      "help": "New installs start private: Welcome's Connect your AI leads with Tinfoil; Claude and ChatGPT are optional extras.",
+      "help": "New installs start private: Welcome leads with Tinfoil; Claude and ChatGPT are optional extras.",
       "where": "Settings › Appearance › Try new features › Private first setup"
+    },
+    "wizard/standard-first-setup": {
+      "help": "Welcome asks for Claude or ChatGPT first, then offers private AI once.",
+      "where": "Settings › Appearance › Try new features › Standard first setup"
     },
     "wizard/chat-app-switches": {
       "help": "A reply's switch card also lists an app's own feature switches, flipped right in the chat.",

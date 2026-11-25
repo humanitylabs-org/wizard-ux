@@ -141,7 +141,7 @@ About & updates: update WizardOS (Automatic or Ask me), the release channel (For
   - Ask me: nothing installs until you tap Install
   - For testers: every new release as soon as it's out; shows Try new features
   - For everyone: releases testers have used for about 3 days
-- Wizard: whether this device is connected to your Wizard (Connected, Connecting…, Sign-in needed) and its address; the interface and the server update separately. Technical details shows the interface revision. Gestures & help opens How Wizard works on the phone (orb, desks, Back, Practice again) and the keys guide on the desktop. On the Android app it also shows Recording, Reply notifications and the phone app's version (tap it to update the app).
+- Wizard: whether this device is connected to your Wizard (Connected, Connecting…, Sign-in needed) and its address; the interface and the server update separately. Technical details shows the interface revision. Gestures & help opens How Wizard works on the phone (orb, desks, Back, Practice again) and the keys guide on the desktop. On Android it also shows Recording, Reply notifications and the app's version (tap it to update).
   - Connected: this device's connection to your Wizard
   - Recording: Android: recording keeps going with the screen off
   - Reply notifications: Android: a notification when the agent answers a chat you sent from the phone
@@ -186,7 +186,7 @@ Settings › Appearance › Try new features lists unfinished features anyone ca
 - **Open apps without Tailscale**: On a box not on Tailscale yet, app screens like Files and Search open inside Wizard on the box itself.
 - **Phone media player for Podcasts**: Android app: Podcasts plays through the phone's media player (lock screen, headset buttons), like Music.
 - **Phone notifications per app**: Android app: what any app sends to Notifications shows as a phone notification under that app's name, one Android channel per app.
-- **Private first setup**: New installs start private: Welcome's Connect your AI leads with Tinfoil; Claude and ChatGPT are optional extras.
+- **Private first setup**: New installs start private: Welcome leads with Tinfoil; Claude and ChatGPT are optional extras.
 - **Repair the agent's Wizard connection**: When the agent can't reach its Wizard app tools (unauthorized), `wizard link` puts the box's token back in the agent's settings; `wizard doctor` shows if they match.
 - **Reply to Telegram and Slack chats**: Chats started on Telegram or Slack can be continued in Wizard; replies go through that app's own connection.
 - **Runtipi 4.12 sign-in key**: App Manager uses its own Runtipi 4.12 key.
@@ -197,6 +197,7 @@ Settings › Appearance › Try new features lists unfinished features anyone ca
 - **Short answer first**: A long agent reply shows only its one-line plain answer; tap it for the full reply. Choose whether replies start collapsed and how long the short answer is. Where: Settings › Appearance › Try new features › Short answer first; its options show under it when on.
 - **Sign in to GitHub in Apps**: Apps › Sources gets Sign in to GitHub, so private beta apps you were invited to show under Beta.
 - **Skins are look only**: Skins become a look only. Your own skin stops deciding which features run: only the feature switches here and in the WizardOS Tracker do, the same for every tester. Turning this on carries the choices of the own skin you're wearing into those switches once. Tweaks on the drop list (Two orbs, App borders, No close on desks, Pin buttons, WizardOS name) are off. Skin scripts are paused. Your skin's saved choices and script approval are kept and come back when you switch this off.
+- **Standard first setup**: Welcome asks for Claude or ChatGPT first, then offers private AI once.
 - **Stop write loops**: Stops repeated saves: an identical save within 10 s is not resent; over 20 a minute pauses.
 - **Swap sides**: Chats right, apps left (⌥⇧L).
 - **Swipe away downloads**: Phone: swipe the Downloaded banner away and swipe the Downloads sheet down to close it. (phone only).
