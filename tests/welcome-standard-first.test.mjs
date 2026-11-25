@@ -1,4 +1,4 @@
-// Standard first onboarding (wizard-ux issue 1800, switch wizard/standard-first-setup, off by default): Connect your AI
+// Standard first onboarding (wizard-ux issue 1800, on for everyone since James's yes, 25 Nov 2026): Connect your AI
 // asks for Claude or ChatGPT first (also when the box says private first is on), with Skip for now, then offers private
 // AI once (Set up private AI / Later / No thanks). Later leaves Settings › Privacy's "Finish setting up private AI".
 // Runs the real web/core/welcome.js and web/core/config.js against a fake Agent Service (welcome-private-first harness).
@@ -11,7 +11,6 @@ const welcome = readFileSync(new URL('../web/core/welcome.js', import.meta.url),
 const config = readFileSync(new URL('../web/core/config.js', import.meta.url), 'utf8')
 const wait = async (n = 12) => { for (let i = 0; i < n; i++) await new Promise(r => setTimeout(r, 2)) }
 const until = async (f, n = 400) => { for (let i = 0; i < n && !f(); i++) await new Promise(r => setTimeout(r, 2)); return f() }
-const SW = 'wizard/standard-first-setup'
 
 // pf: the Agent Service's private first state (null = 404, an older Agent Service). POST {offer} answers like
 // wizard-agent-service (setup turns it on for the box).
@@ -37,7 +36,7 @@ function fakeBox({ pf = null, providers = [], firstRun = true } = {}) {
   return box
 }
 
-function device(box, { tweaks = SW } = {}) {
+function device(box, { tweaks = '' } = {}) {
   const handlers = {}, store = new Map(), features = []
   const card = { _html: '', classList: { toggle() {} }, focus() {}, set innerHTML(h) { card._html = h }, get innerHTML() { return card._html },
     querySelector: s => (/h2/.test(s) ? { focus() {} } : null) }
@@ -74,19 +73,22 @@ const ON = { schema: 'wizard.private-first/1', on: true, standard_agent: 'hermes
 const OFF = { ...ON, on: false }
 const title = html => (html.match(/<h2[^>]*>([^<]*)</) || [])[1]
 
-test('switch off: the Welcome is unchanged (private first on still leads with Tinfoil; off lists all three)', async () => {
-  const pfOn = device(fakeBox({ pf: ON }), { tweaks: '' })
-  await pfOn.boot()
-  assert.deepEqual(order(pfOn.html()), ['wizard-tinfoil', 'wizard-claude', 'wizard-chatgpt'])
-  assert.doesNotMatch(pfOn.html(), /Skip for now/)
-  const pfOff = device(fakeBox({ pf: OFF }), { tweaks: 'wizard/chat-channels' })
-  await pfOff.boot()
-  assert.deepEqual(order(pfOff.html()), ['wizard-claude', 'wizard-chatgpt', 'wizard-tinfoil'])
-  assert.match(pfOff.html(), /thinks with your own AI subscription/)
-  assert.deepEqual(pfOff.features.map(f => f.available()), [false], 'no Settings › Privacy row')
+test('no switch: standard first with no tweaks at all, also when a device still has the old switch id saved', async () => {
+  for (const tweaks of ['', 'wizard/standard-first-setup', 'wizard/private-first-setup']) {
+    const d = device(fakeBox({ pf: ON }), { tweaks })
+    await d.boot()
+    assert.equal(title(d.html()), 'Connect your AI', tweaks)
+    assert.deepEqual(order(d.html()), ['wizard-claude', 'wizard-chatgpt'], tweaks)
+    assert.match(d.html(), /Skip for now/, tweaks)
+  }
+  // Reconnect your AI keeps the box's own order (private first on: Tinfoil leads).
+  const re = device(fakeBox({ pf: ON, firstRun: false }))
+  await re.boot()
+  assert.equal(title(re.html()), 'Reconnect your AI')
+  assert.deepEqual(order(re.html()), ['wizard-tinfoil', 'wizard-claude', 'wizard-chatgpt'])
 })
 
-test('switch on, a fresh Mac (private first on): Connect your AI asks for Claude or ChatGPT, with Skip for now', async () => {
+test('a fresh Mac (private first on): Connect your AI asks for Claude or ChatGPT, with Skip for now', async () => {
   const d = device(fakeBox({ pf: ON }))
   await d.boot()
   const h = d.html()
@@ -232,11 +234,10 @@ test('a Mac setup that opens the first chat by deep link: the offer opens once o
   d.press('offer', { offer: 'later' })
   assert.ok(await until(() => !d.shown()), 'Later goes back to the chat')
   assert.deepEqual(box.offers, ['later'])
-  // Answered, finished, switch off or no AI yet: a deep link opens nothing.
-  for (const [b, tweaks] of [[fakeBox({ pf: { ...OFF, offer: 'later' }, providers: box.providers }), SW],
-    [fakeBox({ pf: OFF, providers: box.providers, firstRun: false }), SW], [fakeBox({ pf: OFF, providers: box.providers }), ''],
-    [fakeBox({ pf: OFF }), SW]]) {
-    const o = device(b, { tweaks })
+  // Answered, finished or no AI yet: a deep link opens nothing.
+  for (const b of [fakeBox({ pf: { ...OFF, offer: 'later' }, providers: box.providers }),
+    fakeBox({ pf: OFF, providers: box.providers, firstRun: false }), fakeBox({ pf: OFF })]) {
+    const o = device(b)
     await o.boot({ deeplinked: true }); await wait(40)
     assert.equal(o.shown(), false); assert.deepEqual(b.offers, [])
   }

@@ -775,10 +775,16 @@
       "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
     },
     "/wizard/v1/private-first": {
-      "status": "not-exercised",
+      "status": "catalogued",
       "source": "web/core/welcome.js",
       "kind": "read",
-      "note": "Read only when the Welcome opens at Connect your AI (no AI signed in), behind wizard/private-first-setup's Agent Service answer; with wizard/standard-first-setup on also when the Welcome or Settings › Privacy opens, and POSTed {offer} by the Welcome's private AI offer (wizard-ux issue 1800). The proof harnesses sign an AI in and leave that switch off, so neither happens there. Refused and collected, never answered, if a flow reaches it."
+      "examples": [
+        {
+          "method": "GET",
+          "path": "/wizard/v1/private-first"
+        }
+      ],
+      "note": "Private first answer (wizard-ux issues 1549 and 1800): read when the Welcome boots or opens, and when Settings › Privacy asks for its Finish setting up private AI row; standard first is on for everyone since wizard-ux issue 1800. POSTed {offer} only by an owner tap on the Welcome's private AI offer, which none of the three flows reach. The shared catalogue answers 404 (an older Service without the route). tests/welcome-standard-first.test.mjs covers it against a fake box."
     },
     "/wizard/v1/setup": {
       "status": "catalogued",

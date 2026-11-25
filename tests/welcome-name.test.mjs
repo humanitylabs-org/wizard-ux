@@ -26,6 +26,8 @@ function fakeBox({ name = 'Wizard', authenticated = false, failPut = false, live
     if (u.endsWith('/wizard/v1/settings')) return ok({ settings: box.settings })
     if (u.endsWith('/wizard/v1/setup')) return ok({ first_run: true })
     if (u.endsWith('/wizard/hermes/api/model/options')) return ok({ providers: [{ slug: 'anthropic', authenticated }] })
+    // The private AI offer (wizard-ux issue 1800) was already answered: these tests are about the name step.
+    if (u.endsWith('/wizard/v1/private-first')) return ok({ schema: 'wizard.private-first/1', on: false, private_agent: null, standard_on: true, offer: 'declined' })
     return ok({})
   }
   return box
@@ -79,7 +81,7 @@ test('Name your Wizard: first step, only while the agent has the default name', 
   await named.boot()
   assert.ok(named.W.active)
   assert.doesNotMatch(named.html(), /Name your Wizard/)
-  assert.match(named.html(), /Connect your AI<\/h2><p>Oscar thinks with your own AI subscription/)
+  assert.match(named.html(), /Connect your AI<\/h2><p>Sign in with the AI you already pay for/)
   assert.equal((named.html().match(/<i class/g) || []).length, 3)
 })
 
@@ -98,7 +100,7 @@ test('Name your Wizard: Continue saves a trimmed plain-text name, keeps the agen
   assert.equal(box.puts.length, 1)
   assert.deepEqual(JSON.parse(JSON.stringify(box.puts[0])), { agent: { name: 'Os b car', adapter: 'hermes-plugin' } })
   assert.equal(d.ctx.WizConfig.agent(), 'Os b car')
-  assert.match(d.html(), /Connect your AI<\/h2><p>Os b car thinks with your own AI subscription/)
+  assert.match(d.html(), /Connect your AI<\/h2><p>Sign in with the AI you already pay for/)
 
   const long = fakeBox({ name: 'Wizard' }), e = device(long)
   await e.boot()
@@ -121,7 +123,7 @@ test('Name your Wizard: Skip and an untouched Continue keep the default and writ
   await d.boot()
   d.press('skip-name'); await wait()
   assert.equal(a.puts.length, 0)
-  assert.match(d.html(), /Connect your AI<\/h2><p>Wizard thinks/)
+  assert.match(d.html(), /Connect your AI<\/h2><p>Sign in with the AI you already pay for/)
 
   const b = fakeBox(), e = device(b)
   await e.boot()
@@ -168,7 +170,7 @@ test('two devices: an edit on a stale device is refused as a conflict and shows 
   assert.equal(b.input.value, 'Merlin')
   assert.equal(b.ctx.WizConfig.agent(), 'Merlin', 'the stale device adopts the current name')
   b.submit(); await wait()
-  assert.equal(box.puts.length, 1); assert.match(b.html(), /Merlin thinks/)
+  assert.equal(box.puts.length, 1); assert.match(b.html(), /Connect your AI<\/h2><p>Sign in with the AI you already pay for/)
   // A deliberate edit after seeing the new name still saves.
   const c = device(box); await c.boot(); assert.doesNotMatch(c.html(), /Name your Wizard/, 'a named box never asks again')
 })

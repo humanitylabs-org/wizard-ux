@@ -36,7 +36,7 @@
    * (GET /wizard/v1/private-first: its env WIZARD_PRIVATE_FIRST beats the Look file, which a fresh box does not have
    * yet); with no answer (an older Agent Service) the shell's own switch decides. Off: this Welcome is unchanged. */
   const PF_SWITCH = 'wizard/private-first-setup', PF_STATE = '/wizard/v1/private-first', PRIVATE = 'wizard-tinfoil';
-  let pf = null, privateReady = false, pfSeen = 0;
+  let pf = null, pfSeen = 0;
   const PF_GRACE = 7; // polls (about 20 s) a Tinfoil sign-in may wait for the private agent record
   const pfTweak = () => { try { return String(document.documentElement.getAttribute('data-tweaks') || '').split(' ').includes(PF_SWITCH); } catch (e) { return false; } };
   const privateFirst = () => (pf && typeof pf.on === 'boolean' ? pf.on : pfTweak());
@@ -51,20 +51,18 @@
   // Switch on: Tinfoil first, then the two extras; off: PROVIDERS as listed.
   const providers = () => (privateFirst() ? PROVIDERS.filter(p => p.app === PRIVATE).concat(PROVIDERS.filter(p => p.app !== PRIVATE)) : PROVIDERS);
   const extraNote = p => `Adds a second agent that uses ${p.name}. Your private agent and its apps stay private.`;
-  /* Standard first (wizard-ux issue 1800, switch wizard/standard-first-setup, off by default; James 25 Nov 2026): Connect
+  /* Standard first (wizard-ux issue 1800, on for everyone since James's yes, 25 Nov 2026): Connect
    * your AI asks for Claude or ChatGPT first (the AI the owner already pays for, on the standard agent), with Skip for
    * now, also when the box says private first is on. Then, once, the Private AI step offers Set up private AI / Later /
    * No thanks. Set up private AI asks the Agent Service to opt this box in (POST /wizard/v1/private-first {offer}),
    * then runs the private first sign-in above (Tinfoil, the private agent made the default on a fresh box); Later and
    * No thanks are saved on the box, and Later leaves Settings › Privacy's "Finish setting up private AI", which opens
-   * the same step on its own. Reconnect your AI never offers it. Off: this Welcome is unchanged. */
-  const SF_SWITCH = 'wizard/standard-first-setup';
-  const sfOn = () => { try { return String(document.documentElement.getAttribute('data-tweaks') || '').split(' ').includes(SF_SWITCH); } catch (e) { return false; } };
-  const sfFirst = () => sfOn() && !reconnect;
+   * the same step on its own. Reconnect your AI never offers it. */
+  const sfFirst = () => !reconnect;
   const STANDARD = ['wizard-claude', 'wizard-chatgpt'];
   // offered: this Welcome shows the Private AI step (decided when it opens); solo: opened for that step alone (Settings).
   // skipped: Skip for now with nothing connected; linked: providers connected in this Welcome.
-  let offered = false, solo = false, skipped = false, offerBusy = '', offerError = '', sfWatch = null;
+  let offered = false, solo = false, skipped = false, offerBusy = '', offerError = '';
   const linked = new Set();
   const offerDue = () => sfFirst() && !pf?.private_agent && !pf?.offer;
   async function offerPost(choice) {
@@ -231,9 +229,10 @@
 
   function paintAI() {
     if (provider) return paintSignin();
-    if (privateFirst() && !sfFirst()) return paintPrivateAI();
-    if (sfFirst()) return paintStandardAI();
-    return `${brand()}${dots()}<header class="wl-head"><h2 tabindex="-1">${reconnect ? 'Reconnect your AI' : 'Connect your AI'}</h2><p>${reconnect ? esc(RECONNECT_WORDS()) : `${esc(agent())} thinks with your own AI subscription. Sign in once.`}</p></header>
+    // A new Wizard asks for Claude or ChatGPT first (standard first); Reconnect your AI keeps the box's own order.
+    if (!reconnect) return paintStandardAI();
+    if (privateFirst()) return paintPrivateAI();
+    return `${brand()}${dots()}<header class="wl-head"><h2 tabindex="-1">Reconnect your AI</h2><p>${esc(RECONNECT_WORDS())}</p></header>
       <div class="wl-choices">${PROVIDERS.map(p => `<button type="button" class="wl-choice" data-wl="provider" data-app="${esc(p.app)}"${installing ? ' disabled' : ''}><span class="wl-mark"><img src="brand/apps/${esc(p.mark)}.svg" alt=""></span><span class="wl-name">${esc(p.name)}</span>${installing === p.app ? '<span class="wl-sub">Installing…</span>' : p.note ? `<span class="wl-tag${p.note === 'Recommended' ? '' : ' soft'}">${esc(p.note)}</span>` : ''}</button>`).join('')}</div>
       ${installError ? `<p class="wl-status err" role="alert">${esc(installError)}</p>` : ''}`;
   }
@@ -241,7 +240,7 @@
     const p = PROVIDERS.find(x => x.app === provider), a = H.app(provider);
     return `${brand()}${dots()}<header class="wl-head wl-row"><button type="button" class="wl-back" data-wl="back" aria-label="Back">‹</button><h2 tabindex="-1">Sign in to ${esc(p.name)}</h2></header>
       <div class="wl-frame"><iframe src="${esc(signinUrl(a.url))}"${sbx(signinUrl(a.url), provider)} title="${esc(p.name)} sign-in"></iframe></div>
-      <p class="wl-status${connected ? ' ok' : ''}" role="status">${connected ? `${esc(p.name)} is connected.` : `${privateFirst() && !sfFirst() && p.app !== PRIVATE ? esc(extraNote(p)) + ' ' : ''}This continues by itself once you are signed in.`}</p>`;
+      <p class="wl-status${connected ? ' ok' : ''}" role="status">${connected ? `${esc(p.name)} is connected.` : `${privateFirst() && reconnect && p.app !== PRIVATE ? esc(extraNote(p)) + ' ' : ''}This continues by itself once you are signed in.`}</p>`;
   }
 
   // Standard first's Connect your AI: Claude and ChatGPT on the standard agent; Skip for now (no model yet) is allowed.
@@ -283,18 +282,18 @@
 
   // Private first's Connect your AI: Tinfoil, then "Optional: a second agent" with Claude and ChatGPT. Once the private
   // agent is ready the card stays here, so the owner can add a second agent or go on.
+  // Reconnect your AI on a box with private first on (a new Wizard always gets standard first's Connect your AI).
   function paintPrivateAI() {
     const choice = (p, lead) => {
-      const done = lead && privateReady, tag = done ? '<span class="wl-tag soft">Connected</span>' : installing === p.app ? '<span class="wl-sub">Installing…</span>'
-        : lead ? '<span class="wl-tag">Recommended</span>' : '';
-      return `<button type="button" class="wl-choice${lead ? '' : ' wl-extra'}" data-wl="provider" data-app="${esc(p.app)}"${installing || done ? ' disabled' : ''}><span class="wl-mark"><img src="brand/apps/${esc(p.mark)}.svg" alt=""></span><span class="wl-name">${esc(p.name)}${lead ? '<span class="wl-sub">Private</span>' : `<span class="wl-sub">${esc(extraNote(p))}</span>`}</span>${tag}</button>`;
+      const tag = installing === p.app ? '<span class="wl-sub">Installing…</span>' : lead ? '<span class="wl-tag">Recommended</span>' : '';
+      return `<button type="button" class="wl-choice${lead ? '' : ' wl-extra'}" data-wl="provider" data-app="${esc(p.app)}"${installing ? ' disabled' : ''}><span class="wl-mark"><img src="brand/apps/${esc(p.mark)}.svg" alt=""></span><span class="wl-name">${esc(p.name)}${lead ? '<span class="wl-sub">Private</span>' : `<span class="wl-sub">${esc(extraNote(p))}</span>`}</span>${tag}</button>`;
     };
     const [lead, ...extras] = providers();
-    return `${brand()}${dots()}<header class="wl-head"><h2 tabindex="-1">${reconnect ? 'Reconnect your AI' : 'Connect your AI'}</h2><p>${reconnect && !privateReady ? esc(RECONNECT_WORDS()) : privateReady ? `Your private agent is ready. You can add a second agent now, or later.` : `${esc(agent())} thinks privately with Tinfoil: your chats and apps stay private. Sign in once.`}</p></header>
+    return `${brand()}${dots()}<header class="wl-head"><h2 tabindex="-1">Reconnect your AI</h2><p>${esc(RECONNECT_WORDS())}</p></header>
       <div class="wl-choices">${choice(lead, true)}</div>
       <p class="wl-extras-h">Optional: a second agent</p>
       <div class="wl-choices wl-extras">${extras.map(p => choice(p, false)).join('')}</div>
-      ${installError ? `<p class="wl-status err" role="alert">${esc(installError)}</p>` : ''}${privateReady ? '<button type="button" class="wl-primary" data-wl="next">Continue</button>' : ''}`;
+      ${installError ? `<p class="wl-status err" role="alert">${esc(installError)}</p>` : ''}`;
   }
 
   // The same preview cards as Settings › Look (core/settings.js skinCard + core/skins.css .skp): every color, any author.
@@ -451,9 +450,7 @@
         if (reconnect) { connected = true; write('done'); log('reconnected'); paint(false); setTimeout(() => { if (el === mine && step === 'ai' && provider === chosen) close(); }, 1200); return; }
         connected = true; if (!solo) write('ai'); linked.add(chosen); log('connected'); paint(false);
         // Standard first's Set up private AI: the private agent is ready, so the Welcome goes on (Settings: it closes).
-        if (at === 'private') { privateReady = priv; setTimeout(() => { if (el === mine && step === at && provider === chosen) offerDone(); }, 1200); return; }
-        // The private agent is ready: back to Connect your AI, where a second agent is optional and Continue goes on.
-        if (priv) { privateReady = true; setTimeout(() => { if (el === mine && step === 'ai' && provider === chosen) { provider = null; paint(); } }, 1200); return; }
+        if (at === 'private') { setTimeout(() => { if (el === mine && step === at && provider === chosen) offerDone(); }, 1200); return; }
 
         setTimeout(() => { if (el && step === 'ai' && provider === chosen) { step = nextStep(); provider = null; paint(); } }, 1200); // Back cancels it
         return;
@@ -467,12 +464,11 @@
     reconnect = !!opts.reconnect && at === 'ai';
     // Standard first: the Private AI step on its own (Settings › Privacy), or once after Connect your AI. A box whose AI
     // was connected before the Welcome (a Mac's setup) starts at it instead of the skin.
-    solo = at === 'private' && sfOn(); if (at === 'private' && !solo) at = 'ai';
+    solo = at === 'private';
     offered = solo || offerDue(); skipped = false; offerBusy = ''; offerError = ''; linked.clear();
     if (at === 'look' && offered) at = 'private';
     asked = !reconnect && !solo && unnamed(); after = at; saving = false; nameError = ''; prefill = agent();
     step = asked ? 'name' : at; provider = null; connected = false; sending = false; installing = ''; installError = ''; sendError = ''; bringOpen = false;
-    privateReady = !!pf?.private_agent && privateFirst();
     el = document.createElement('div');
     el.className = 'wl-overlay'; el.id = 'wosWelcome';
     el.innerHTML = `<div class="wl-card" role="dialog" aria-modal="true" aria-label="${reconnect ? 'Reconnect your AI' : solo ? 'Private AI' : 'Welcome'}"></div>`;
@@ -492,31 +488,14 @@
       e.stopPropagation(); // the shell's own shortcuts wait until the welcome is done (desktop onKey also stands down)
     });
     paint(); poll(); log('open:' + at + (asked ? ':name' : '') + (reconnect ? ':reconnect' : '') + (offered ? ':offer' : ''));
-    // The switch can arrive after the Welcome opened (the Look file or a skin's tweaks apply a moment later): while the
-    // owner has not gone past the first AI step yet, follow it.
-    try { let was = sfOn(); const mine = el;
-      const follow = () => {
-        if (el !== mine || solo) return;
-        const early = step === 'name' || step === 'ai' || ((step === 'look' || step === 'private') && after === step);
-        if (!early) return;
-        offered = sfOn() && offerDue();
-        if (after === 'look' && offered) { after = 'private'; if (step === 'look') step = 'private'; }
-        else if (after === 'private' && !offered) { after = 'look'; if (step === 'private') step = 'look'; }
-        if (!provider && step !== 'name') paint(false);
-      };
-      sfWatch = new MutationObserver(() => { const on = sfOn(); if (on === was || el !== mine) return; was = on; log('switch:' + (on ? 'on' : 'off'));
-        if (on && !pf) pfRead().then(follow); follow(); });
-      sfWatch.observe(document.documentElement, { attributes: true, attributeFilter: ['data-tweaks'] });
-    } catch (e) { sfWatch = null; }
     // Opened from Settings or the Setup tile: read the private first answer if boot did not, then repaint Connect your AI.
-    if (!pf && (at === 'ai' || solo)) { const mine = el; pfRead().then(s => { if (!s || el !== mine) return; privateReady = !!s.private_agent && privateFirst();
+    if (!pf && (at === 'ai' || solo)) { const mine = el; pfRead().then(s => { if (!s || el !== mine) return;
       if (!solo && !offered && order().indexOf(step) <= order().indexOf('ai') && offerDue()) offered = true; // still before the offer
       if ((step === 'ai' || step === 'private') && !provider) paint(false); }); }
   }
 
   function close() {
     clearTimeout(pollT);
-    try { sfWatch?.disconnect(); } catch (e) {} sfWatch = null;
     micDrop(); voiceMsg = { text: '', err: false };
     frameOff(); frameOff = () => {};
     if (!el) return;
@@ -589,9 +568,6 @@
    * first run with the AI connected and the offer unanswered, the Private AI step opens on its own over that chat, once;
    * Later or No thanks closes it back to the chat. The owner acting first leaves it for the next launch's Welcome. */
   async function deepOffer(h) {
-    // The switch is painted by the tweak loader a moment after boot: give it a few seconds. Off: nothing is read.
-    for (let i = 0; i < 16 && !sfOn(); i++) await new Promise(r => setTimeout(r, 500));
-    if (!sfOn()) return;
     const [ok, setup] = await Promise.all([aiReady(), setupState()]);
     if (ok !== true || setup?.first_run !== true) { log('deeplink:none:' + ok + ':' + setup?.first_run); return; }
     await pfRead();
@@ -603,7 +579,7 @@
     try { addEventListener('pointerdown', act, true); addEventListener('keydown', act, true); } catch (e) {}
     setTimeout(async () => {
       if (seenPending()) markSeen();
-      if (h.deeplinked?.()) { log('deeplink'); if (typeof sfOn === 'function') deepOffer(h); return; }
+      if (h.deeplinked?.()) { log('deeplink'); if (typeof deepOffer === 'function') deepOffer(h); return; }
       let [ok, setup] = await Promise.all([aiReady(), setupState(), Promise.race([Promise.resolve(window.WizCore?.appsLoaded?.()).catch(() => {}), new Promise(r => setTimeout(r, 5000))]),
         Promise.race([Promise.resolve(window.WizConfig?.ready).catch(() => {}), new Promise(r => setTimeout(r, 5000))])]); // never wait forever on the app list or the settings
       // Private first: a private agent already made counts as connected (its provider may not be the main agent's).
@@ -611,7 +587,7 @@
       // (typeof: tests vm-slice boot() on its own.)
       if (ok === false && typeof pfRead === 'function' && (await pfRead())?.private_agent && privateFirst()) { ok = true; log('boot:private'); }
       // Standard first (issue 1800): whether the Private AI offer is still open is the box's answer, read before opening.
-      else if (ok === true && typeof sfOn === 'function' && sfOn()) await pfRead();
+      else if (ok === true && typeof pfRead === 'function') await pfRead();
       const state = read();
       log('boot:' + ok + ':' + state + ':' + (setup?.first_run === true));
       try { removeEventListener('pointerdown', act, true); removeEventListener('keydown', act, true); } catch (e) {}
@@ -652,7 +628,6 @@
    * The box's answer is read when Settings asks, at most once a minute (sooner after a miss). */
   let pfAt = 0, pfAsking = false;
   const finishDue = () => {
-    if (!sfOn()) return false;
     if (!pfAsking && Date.now() - pfAt > (pf ? 60000 : 15000)) { pfAsking = true; pfRead().then(() => { pfAt = Date.now(); pfAsking = false; try { window.WosSettings?.refresh?.(); } catch (e) {} }); }
     return pf?.offer === 'later' && !pf?.private_agent;
   };
@@ -660,8 +635,8 @@
     window.WosSettings?.register?.({ id: 'private-ai-finish', page: 'privacy', aliases: ['privacy', 'private-ai'], available: finishDue,
       html: () => `<div class="st-group"><button type="button" class="st-row wz-row" data-private-ai-finish><span class="st-tx"><b>Finish setting up private AI</b><small>Private AI runs in sealed hardware: only you can see your messages and data.</small></span><span class="st-go">›</span></button></div>`,
       // Another device may have finished it (or said No thanks) meanwhile: ask the box again before opening.
-      act(ctx, t) { if (!t?.closest?.('[data-private-ai-finish]') || !H || !sfOn()) return false;
-        pfRead().then(s => { pfAt = Date.now(); if (s?.offer === 'later' && !s?.private_agent && sfOn()) open('private'); else try { window.WosSettings?.refresh?.(); } catch (e) {} });
+      act(ctx, t) { if (!t?.closest?.('[data-private-ai-finish]') || !H) return false;
+        pfRead().then(s => { pfAt = Date.now(); if (s?.offer === 'later' && !s?.private_agent) open('private'); else try { window.WosSettings?.refresh?.(); } catch (e) {} });
         return true; } });
   } catch (e) { console.error(e); }
 
