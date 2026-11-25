@@ -1,4 +1,4 @@
-/* Wizard UX core: Chats › the agent inbox parts (switch wizard/agent-inbox): the Running view, Open / Send to inbox,
+/* Wizard UX core: Chats › the agent inbox parts (on for everyone since wizard-ux issue 1778): the Running view, Open / Send to inbox,
  * the Signal sweep card and Alert rules feedback. Moved verbatim out of core/chats.js (wizard-ux issue 1665: split the
  * giant front-end files, no behaviour change). createChats (core/chats.js) calls this once, where the code used to be,
  * with the closure names it reads, and keeps the functions it returns under their old names. Loaded before chats.js
@@ -6,25 +6,20 @@
 window.WizCore = window.WizCore || {};
 window.WizCore.chatsParts = window.WizCore.chatsParts || {};
 window.WizCore.chatsParts.running = function ({ ago, ch, CH, chanStore, clip, esc, H, KIT, LIVE, paintListsNow, PIN, renderThreadNow, rerenderList, STI, storeAgent, toast, W, winAgent }) {
-  /* Running view (switch wizard/agent-inbox, off by default; wizard-ux issue 1569). A task the owner hands off (the orb's
+  /* Running view (wizard-ux issue 1569). A task the owner hands off (the orb's
    * dump) works in a hidden worker thread that never lists in Chats, Activity or the unread counts; the box's agent inbox
    * (LIVE.agentInbox: GET /wizard/v1/agent-inbox?state=running,stale) says what is still running. The main Chats list
    * shows one row at the top while anything runs (the unsent row's markup); a tap opens the Running view in the same list
    * window: one ordinary chat row per task with its title, last update, how long it has been running, and "No news for
    * 6 h" once it went quiet. A tap opens the thread (openChat, like any link); Back from the thread returns here (the
    * window keeps ch().running) and Back here returns to Chats (channelBack, clearFilter). Opening never unhides it. */
-  function inboxSwitchOn() { try { return (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/agent-inbox'); } catch (_) { return false; } }
   function runningOn(w) {
-    if (!inboxSwitchOn()) return false;
     return !!w && !winAgent(w) && !!LIVE.agentInbox;
   }
   function runningOpen(w) { return !!w && !!ch(w.id).running && runningOn(w); }
   // The main Chats list shows the main agent's tasks only (the orb's dump starts them there): a routed agent's record
   // never opens as the main agent's thread, even when both use the same thread id.
   function runningRecs() { return LIVE.agentInbox?.records?.('hermes') || []; }
-  // Turning the switch on or off repaints the lists at once (not at the next live tick).
-  let runWas = inboxSwitchOn();
-  try { window.addEventListener('wos:experience', () => { const on = inboxSwitchOn(); if (runWas === on) return; runWas = on; if (on) LIVE.agentInbox?.fresh?.(); for (const id of Object.keys(CH)) { const x = H.win(id); if (x && !x.thread) rerenderList(x); } }); } catch (_) {}
   function runningFor(ms) { const m = Math.max(1, Math.round(ms / 60000)); return m < 60 ? `${m} min` : m < 2880 ? `${Math.round(m / 60)} h` : `${Math.round(m / 1440)} d`; }
   function runningRow(w) {
     if (!runningOn(w) || ch(w.id).running) return '';
@@ -57,7 +52,7 @@ window.WizCore.chatsParts.running = function ({ ago, ch, CH, chanStore, clip, es
     if (!was) return false;
     rerenderList(w); return true;
   }
-  /* Open / Send to inbox (same switch; wizard-ux issue 1570). One tap fixes a wrong routing either way: Open (a Running
+  /* Open / Send to inbox (wizard-ux issue 1570). One tap fixes a wrong routing either way: Open (a Running
    * view row, a hidden thread's header) moves a background thread into the chat list at once; Send to inbox (a visible
    * thread's menu, never a pinned one) hides it and lets it finish in the background, its result in the next sweep.
    * LIVE.inboxMove moves the row on the tap frame and tells the box (POST /wizard/v1/agent-inbox/open|send), which also
@@ -65,7 +60,7 @@ window.WizCore.chatsParts.running = function ({ ago, ch, CH, chanStore, clip, es
   const INBOX_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13h4l2 3h4l2-3h4M5 13l2-8h10l2 8v6H5z"/></svg>';
   function inboxListed(id) { return LIVE.sessions.some(x => x.id === id && !x.hidden && !x.optimistic); }
   function inboxHidden(w, s) {
-    if (!s || !w || winAgent(w) || !inboxSwitchOn() || !LIVE.agentInbox || (LIVE.ownerOf && LIVE.ownerOf(s))) return false;
+    if (!s || !w || winAgent(w) || !LIVE.agentInbox || (LIVE.ownerOf && LIVE.ownerOf(s))) return false;
     if (inboxListed(s.id)) return false;
     return s.hidden === true || runningRecs().some(r => r.thread === s.id);
   }
@@ -81,7 +76,7 @@ window.WizCore.chatsParts.running = function ({ ago, ch, CH, chanStore, clip, es
   }
   function inboxCanSend(wid, s) {
     const w = W[wid];
-    return !!(s && w && !winAgent(w) && inboxSwitchOn() && LIVE.agentInbox && !(LIVE.ownerOf && LIVE.ownerOf(s)) && !s.hidden && !s.archived && !s.optimistic && !s.synthetic && !PIN.has(s.id) && !inboxStays(w, s));
+    return !!(s && w && !winAgent(w) && LIVE.agentInbox && !(LIVE.ownerOf && LIVE.ownerOf(s)) && !s.hidden && !s.archived && !s.optimistic && !s.synthetic && !PIN.has(s.id) && !inboxStays(w, s));
   }
   function inboxRepaint(id) {
     paintListsNow();
@@ -98,8 +93,8 @@ window.WizCore.chatsParts.running = function ({ ago, ch, CH, chanStore, clip, es
     }
     inboxRepaint(id);
   }
-  /* Signal sweep card (same switch; wizard-ux issue 1586, box half wizard-agent-service issue 550). The Service adds
-   * the card as the last row of today's Daily thread (display_kind agent_sweep); while the switch is on Chats draws it
+  /* Signal sweep card (wizard-ux issue 1586, box half wizard-agent-service issue 550). The Service adds
+   * the card as the last row of today's Daily thread (display_kind agent_sweep); Chats draws it
    * with the run-control buttons instead of its markdown copy: one button per answer token on each Waiting item (a tap
    * posts the answer, the Service sends the full message into that task's thread), Later (snoozed to the next sweep),
    * "Open to confirm" for an item that sends or spends, Open for a hidden main-agent thread, and Yes to all. After a tap
@@ -130,9 +125,9 @@ window.WizCore.chatsParts.running = function ({ ago, ch, CH, chanStore, clip, es
     return `<li class="ch-sw-i" data-morph-key="sw:${esc(i.id)}"><div class="ch-sw-t"><b>${sweepThread(i, esc(i.title || 'Task'))}</b>${age}${open}</div>`
       + `${i.ask ? `<p class="ch-sw-ask">${esc(i.ask)}</p>` : ''}${i.recommendation ? `<p class="ch-sw-rec">Recommendation: ${esc(i.recommendation)}</p>` : ''}${act}${alertFbHtml(i.id, 'should_alert')}</li>`;
   }
-  // The card for one history row (tn.a.sweep), or '' (switch off, or not a card the shell can read: the markdown shows).
+  // The card for one history row (tn.a.sweep), or '' (not a card the shell can read: the markdown shows).
   function sweepHtml(raw) {
-    if (!inboxSwitchOn() || !LIVE.agentInbox?.card) return '';
+    if (!LIVE.agentInbox?.card) return '';
     const base = LIVE.agentInbox.card(raw); if (!base) return '';
     const s = sweepOf(base.id); s.base = base;
     const v = s.view || base, w = v.waiting, d = v.done;
@@ -148,9 +143,6 @@ window.WizCore.chatsParts.running = function ({ ago, ch, CH, chanStore, clip, es
       + `${d.more ? `<p class="ch-sw-more">${sweepLink('more', d.link)}</p>` : ''}<p class="ch-sw-n">${counts.join('<br>')}</p>${sweepLaterHtml(s)}</div>`;
   }
   function sweepRepaint() { for (const x of Object.keys(CH)) { const ww = H.win(x); if (ww && ww.thread) renderThreadNow(ww); } }
-  // Turning the switch on or off repaints open threads at once: the card's buttons come and go with it.
-  let sweepWas = inboxSwitchOn();
-  try { window.addEventListener('wos:experience', () => { const on = inboxSwitchOn(); if (sweepWas === on) return; sweepWas = on; sweepRepaint(); }); } catch (_) {}
   // Inline action cards (wizard-ux issue 1463, core/action-cards.js): flipping wizard/action-cards repaints open threads too.
   let actWas = window.WosActionCards?.on?.() === true;
   try { window.addEventListener('wos:experience', () => { const on = window.WosActionCards?.on?.() === true; if (actWas === on) return; actWas = on; sweepRepaint(); }); } catch (_) {}
@@ -159,7 +151,6 @@ window.WizCore.chatsParts.running = function ({ ago, ch, CH, chanStore, clip, es
     try { const v = await LIVE.agentInbox.sweep(); if (v && v.id === id) sweepOf(id).view = v; } catch (_) {}
   }
   async function sweepAnswer(cardId, itemId, option) {
-    if (!inboxSwitchOn()) { sweepRepaint(); return; }
     const s = sweepOf(cardId); if (s.busy[itemId] || s.all) return;
     s.busy[itemId] = option; sweepRepaint();
     try {
@@ -173,7 +164,6 @@ window.WizCore.chatsParts.running = function ({ ago, ch, CH, chanStore, clip, es
     sweepRepaint();
   }
   async function sweepYesToAll(cardId) {
-    if (!inboxSwitchOn()) { sweepRepaint(); return; }
     const s = sweepOf(cardId); if (s.all || Object.keys(s.busy).length) return;
     s.all = true; sweepRepaint();
     try {
@@ -185,7 +175,7 @@ window.WizCore.chatsParts.running = function ({ ago, ch, CH, chanStore, clip, es
     await sweepReread(cardId);
     sweepRepaint();
   }
-  /* Alert rules feedback (same switch; wizard-ux issue 1589, box half wizard-agent-service issue 552). The box decides
+  /* Alert rules feedback (wizard-ux issue 1589, box half wizard-agent-service issue 552). The box decides
    * what is loud: an alert record (kind alert) reaches Alerts, everything else waits for the sweep. Each answer teaches
    * it one example: Not urgent on an alert in the Alerts channel (the alert moves to the sweep; on the day's collapsed
    * "More alerts today" alert it only clears it) and Should have alerted on a sweep item (the card's Waiting and Done
@@ -207,7 +197,6 @@ window.WizCore.chatsParts.running = function ({ ago, ch, CH, chanStore, clip, es
     return `<div class="ch-sw-h" role="heading" aria-level="3">Later and FYI</div><ul class="ch-sw-l ch-sw-later">${s.laterList.map(r => `<li class="ch-sw-i" data-morph-key="swl:${esc(r.id)}"><div class="ch-sw-t"><b>${esc(r.title || 'Note')}</b></div>${r.ask ? `<p class="ch-sw-ask">${esc(r.ask)}</p>` : ''}${r.feedback === 'should_alert' && !ALFB.done.has(r.id) ? '<small class="ch-sw-st ch-al-done">Marked · alerts like this get through next time</small>' : alertFbHtml(r.id, 'should_alert')}</li>`).join('')}</ul>`;
   }
   async function sweepLater(cardId) {
-    if (!inboxSwitchOn()) { sweepRepaint(); return; }
     const s = sweepOf(cardId); s.laterOpen = !s.laterOpen;
     if (!s.laterOpen) { sweepRepaint(); return; }
     s.laterList = null; sweepRepaint();
@@ -216,7 +205,7 @@ window.WizCore.chatsParts.running = function ({ ago, ch, CH, chanStore, clip, es
   }
   // The Alerts channel (kind alerts) shows the alert records still waiting on top of its posts' end, newest first.
   function alertsChan(open) {
-    if (!open || open.general || open.agentFeed || !inboxSwitchOn() || !LIVE.agentInbox?.alerts) return false;
+    if (!open || open.general || open.agentFeed || !LIVE.agentInbox?.alerts) return false;
     const st = typeof chanStore === 'function' ? chanStore() : null;
     return !!st && st.channels.some(c => c.id === open.id && c.kind === 'alerts');
   }
@@ -227,7 +216,6 @@ window.WizCore.chatsParts.running = function ({ ago, ch, CH, chanStore, clip, es
     return `<section class="appr ch-sweep ch-alerts" role="group" aria-label="Alerts now" data-morph-key="alerts-now"><b>Alerts now</b><ul class="ch-sw-l">${list.map(r => `<li class="ch-sw-i ch-al-i${r.collapsed ? ' collapsed' : ''}" data-morph-key="al:${esc(r.id)}"><div class="ch-sw-t"><b>${r.agent === 'hermes' && r.thread && LIVE.sessions?.some?.(x => x.id === r.thread) ? `<a href="/wizard-os-home/?session=${encodeURIComponent(r.thread)}" class="wsl" data-session="${esc(r.thread)}">${esc(r.title || 'Alert')}</a>` : esc(r.title || 'Alert')}</b>${r.collapsed ? `<span class="ch-sw-age ch-al-n" title="${r.extra} more alerts today">${r.extra}</span>` : ''}</div>${r.ask ? `<p class="ch-sw-ask">${esc(r.ask)}</p>` : ''}${alertFbHtml(r.id, 'not_urgent')}</li>`).join('')}</ul></section>`;
   }
   async function alertFeedback(id, action, collapsed = false) {
-    if (!inboxSwitchOn()) { sweepRepaint(); return; }
     if (ALFB.busy[id] || ALFB.done.has(id)) return;
     ALFB.busy[id] = action; alertRepaint();
     try {

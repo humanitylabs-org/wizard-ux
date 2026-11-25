@@ -33,7 +33,6 @@
     "wizard/standard-first-setup",
     "wizard/chat-app-switches",
     "wizard/action-cards",
-    "wizard/agent-inbox",
     "wizard/phone-app-notifications",
     "wizard/lock-screen-player",
     "wizard/runtipi-cli-key",
@@ -52,8 +51,7 @@
     "wizard/capture-inbox",
     "wizard/swap-sides",
     "wizard/install-in-sidebar",
-    "wizard/try-feature-counts",
-    "wizard/chats-inbox"
+    "wizard/try-feature-counts"
   ],
   "defaults": [
     "wizard/desktop-chats"

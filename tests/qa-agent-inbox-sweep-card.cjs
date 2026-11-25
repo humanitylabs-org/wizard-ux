@@ -1,5 +1,5 @@
 'use strict';
-// Signal sweep card buttons (switch wizard/agent-inbox, wizard-ux issue 1586) in a real browser, built on the Open /
+// Signal sweep card buttons (wizard-ux issue 1586; on for everyone since wizard-ux issue 1778, no switch) in a real browser, built on the Open /
 // Send to inbox harness (tests/qa-agent-inbox-open-send.cjs). Disposable synthetic transport only: a fake box serves a
 // Daily thread whose history ends with the card row (display_kind agent_sweep, as wizard-agent-service
 // server/agent-sweep.mjs cardRow() adds it), keeps the inbox records, answers PATCH /wizard/v1/agent-inbox/<id>,
@@ -8,15 +8,13 @@
 //   1. the card shows with its buttons (one per token + Later), Open to confirm, the age badge and Yes to all;
 //   2. a token tap sends exactly one PATCH {action:'answer', option}, and the item then shows its answer;
 //   3. Yes to all sends one POST and leaves the confirm item to the owner;
-//   4. a live skin change repaints the card; with no skin value it is the dark fallback.
-// QA_ONLY_OFF=1: switch off: no card buttons (the markdown copy shows), nothing asks the inbox.
+//   4. a live skin change repaints the card.
 const assert = require('node:assert/strict');
 const { chromium } = require('../tools/qa-playwright.cjs');
 const { ownerRead } = require('../tools/qa-desktop-frame-fixture.cjs');
 const fs = require('node:fs'), path = require('node:path');
 const repo = path.resolve(__dirname, '..'), origin = process.env.QA_ORIGIN || 'https://agent-inbox-sweep.test', prefix = '/wizard-os-home/';
 const web = process.env.QA_WEB || path.join(repo, 'web'), out = process.env.QA_OUT || path.join(repo, 'agent-inbox-sweep-card-evidence');
-const off = process.env.QA_ONLY_OFF === '1';
 const SHELLS = (process.env.QA_SHELLS || 'phone,classic').split(','), SKINS = (process.env.QA_SKINS || 'nebula,grove').split(',');
 fs.mkdirSync(out, { recursive: true });
 const now = Date.now(), iso = t => new Date(t).toISOString(), nap = ms => new Promise(r => setTimeout(r, ms)), M = 60e3;
@@ -45,18 +43,18 @@ const cardView = recs => {
 };
 const cardRow = recs => { const v = cardView(recs); return { id: v.id, role: 'assistant', session_id: v.thread_id, timestamp: v.at / 1000, display_kind: 'agent_sweep', content: '**Signal sweep**\n\n**Waiting on you** (3)\n1. Lisbon flights: Book the 9:40 or the 13:10 flight on Friday?', agent_sweep: v }; };
 const raw = (id, s) => ({ id, title: s.title, runtime: 'direct', status: 'completed', updated_at: iso(s.at), updatedAt: iso(s.at), last_active: s.at / 1000, message_count: s.msgs.length, messageCount: s.msgs.length, preview: s.msgs.at(-1)?.[1] || '', ...(s.hidden ? { hidden: true } : {}) });
-const report = { origin, web, off, cases: [] };
+const report = { origin, web, cases: [] };
 (async () => {
   const browser = await chromium.launch();
   try {
     for (const shell of SHELLS) for (const skin of SKINS) {
-      const phone = shell === 'phone', stem = `${shell}-${skin}${off ? '-off' : ''}`;
+      const phone = shell === 'phone', stem = `${shell}-${skin}`;
       const entry = { stem, errors: [], refused: [], writes: [], answers: [], yesToAll: 0, sweepReads: 0, inboxReads: 0 }; report.cases.push(entry);
       const recs = recordsFresh();
       const context = await browser.newContext({ viewport: phone ? { width: 390, height: 844 } : { width: 1440, height: 960 }, isMobile: phone, hasTouch: phone, serviceWorkers: 'block', ...(phone ? { userAgent: 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Mobile Safari/537.36' } : {}) });
       try {
         await context.routeWebSocket('**/*', w => w.close());
-        const mix = { 'wizard/desktop-chats': true, ...(off ? {} : { 'wizard/agent-inbox': true }) };
+        const mix = { 'wizard/desktop-chats': true };
         await context.addInitScript(({ shell, skin, mix }) => {
           if (window !== top) return;
           if (sessionStorage.getItem('qaBoot')) return; sessionStorage.setItem('qaBoot', '1');
@@ -104,8 +102,8 @@ const report = { origin, web, off, cases: [] };
           if (m) {
             const id = decodeURIComponent(m[1]), s = THREADS[id]; if (!s) return r.fulfill({ status: 404, json: { error: 'missing' } });
             const t0 = s.at / 1000 - 600, rows = s.msgs.map(([role, content, dt]) => ({ role, content, timestamp: t0 + dt }));
-            // The Service adds the card as the last row of the Daily thread's newest page (only while its switch is on).
-            if (m[2] && id === 'qa-daily-1' && !off) rows.push(cardRow(recs));
+            // The Service adds the card as the last row of the Daily thread's newest page.
+            if (m[2] && id === 'qa-daily-1') rows.push(cardRow(recs));
             return r.fulfill({ json: m[2] ? { messages: rows } : { session: raw(id, s) } });
           }
           return r.fulfill({ json: ownerRead(p) });
@@ -114,21 +112,13 @@ const report = { origin, web, off, cases: [] };
         await page.goto(origin + prefix + (phone ? 'index.html?phone' : 'desktop.html'));
         await page.waitForFunction(() => (window.__wux || window.__wos) && !window.WosWelcome?.active && window.WosExperience?.state.tweaks.length && !window.WosExperience.state.busy);
         await page.addStyleTag({ content: '#wosWelcome{display:none!important}' });
-        if (!off) await page.waitForFunction(() => (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/agent-inbox'), null, { timeout: 15000 });
+        await page.waitForFunction(() => (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/desktop-chats'), null, { timeout: 15000 });
         const vis = sel => page.locator(sel).filter({ visible: true }).first();
         if (phone) await page.evaluate(() => __wos.openSheet('inbox')); else await page.evaluate(() => __wux.openChatsList());
         await vis('.ch-list [data-chopen="qa-daily-1"]').click();
         const thread = () => page.locator('.ch-thread').filter({ visible: true }).first();
         await thread().getByText('The card is posted below.').waitFor({ timeout: 10000 });
         await page.evaluate(() => document.fonts.ready); await nap(500);
-        if (off) {
-          await nap(800);
-          assert.equal(await page.locator('.ch-sweep').count(), 0, 'switch off: no card');
-          entry.inboxCalls = entry.inboxReads + entry.sweepReads;
-          assert.equal(entry.inboxCalls, 0, 'switch off: nothing asks the agent inbox');
-          await page.screenshot({ path: path.join(out, stem + '-thread.png') });
-          entry.pass = true; continue;
-        }
         const card = vis('.ch-sweep');
         await card.waitFor({ timeout: 8000 });
         await card.scrollIntoViewIfNeeded();
@@ -143,7 +133,7 @@ const report = { origin, web, off, cases: [] };
         assert.match(await card.locator('[data-chsweepall]').innerText(), /Yes to all \(2\)/);
         await page.screenshot({ path: path.join(out, stem + '-1-card.png') });
         await card.screenshot({ path: path.join(out, stem + '-1-card-only.png') });
-        // Live skin change and the dark fallback.
+        // Live skin change.
         const colour = () => card.evaluate(n => getComputedStyle(n).backgroundColor + ' / ' + getComputedStyle(n.querySelector('[data-chsweep]')).backgroundColor);
         entry.colour = await colour();
         const other = skin === 'nebula' ? 'grove' : 'nebula';
@@ -152,11 +142,6 @@ const report = { origin, web, off, cases: [] };
         assert.notEqual(entry.colourOther, entry.colour, `the ${other} skin repaints the card (${entry.colour} → ${entry.colourOther})`);
         await card.screenshot({ path: path.join(out, stem + '-2-live-skin-' + other + '.png') });
         await page.evaluate(s => WosSkin.set(s), skin); await nap(500);
-        const TOKENS = ['--wz-panel', '--wz-accent', '--wz-border', '--wz-surface', '--wz-surface-raised', '--wz-text', '--wz-text-secondary', '--wz-on-accent', '--wz-warning'];
-        await page.evaluate(v => { for (const t of v) document.documentElement.style.setProperty(t, 'initial'); }, TOKENS); await nap(200);
-        entry.fallback = await colour();
-        assert.equal(entry.fallback, 'rgb(23, 19, 31) / rgb(185, 155, 255)', 'with no skin value the card is the dark fallback');
-        await page.evaluate(v => { for (const t of v) document.documentElement.style.removeProperty(t); }, TOKENS); await nap(200);
         // 2. A token tap: one PATCH, Sending… at once, then the answer.
         await vis(`.ch-sweep [data-chsweep="${A}"][data-opt="early"]`).click();
         entry.sending = await vis(`.ch-sweep [data-chsweep="${A}"][data-opt="early"]`).innerText().catch(() => '');

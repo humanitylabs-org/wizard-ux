@@ -104,7 +104,7 @@ test('real chat row keeps the amber ask (tracker off) with no helper badge, for 
     topicOn: () => false, privRow: () => false, PIN: { has: () => false, on: () => false }, BOOM: () => null,
     STI: { needs: '!', working: '~' }, STI_TIP: {}, STI_LAB: { needs: 'Needs you' },
     ATT: { needs_you: { cls: 'needs', label: 'Needs you' } }, stiKind: s => s.status === 'running' ? 'working' : 'needs' });
-  vm.runInContext(block(chats, '  function chatRow(', '  /* Agent inbox (switch wizard/agent-inbox)') + '\nthis.renderRow = chatRow;', c);
+  vm.runInContext(block(chats, '  function chatRow(', '  /* Agent inbox:') + '\nthis.renderRow = chatRow;', c);
   for (const status of ['completed', 'running']) {
     const html = c.renderRow(row({ status, background: 'helper' }));
     assert.doesNotMatch(html, /Helper still working|ch-background/, 'the Working spinner says it (James, 7 Nov 2026)');

@@ -81,7 +81,7 @@ window.WizCore.appParts.routing = function ({ $, APP, appAt, appByName, APPS, ap
       if (loc) { snap.quickRan = true; showRouted('command', `Quick command · on-device${sttNote}`); return finishCmd(loc, text, qo); }
       if (window.WosTour?.isHelp(text) && snap.view?.kind !== 'chat thread') { snap.quickRan = true; setVoice('idle'); txHide(0); return window.WosTour.openHelp(); }
       const routeUrl = snap.view?.kind !== 'chat thread' && window.WizConfig.endpoint('route');
-      // A take marked as a possible background task (wizard/agent-inbox, issue 1588) asks for it in this one call.
+      // A take marked as a possible background task (issue 1588) asks for it in this one call.
       const dumpAsk = OUTBOX.get?.(snap.custodyId)?.dump === true;
       if (routeUrl) try {
         setVoice('think'); if (isPill()) tx.dataset.detail = 'Quick command? · routing'; else $('#txRouteText').textContent = 'Quick command? · routing';
@@ -261,12 +261,11 @@ window.WizCore.appParts.routing = function ({ $, APP, appAt, appByName, APPS, ap
     renderMoons(); refreshHome(); renderDots();
     return item;
   }
-  /* Orb dump (switch wizard/agent-inbox, off by default; wizard-ux issue 1588): a plain new take to the main agent, said
+  /* Orb dump (wizard-ux issue 1588, on for everyone since wizard-ux issue 1778): a plain new take to the main agent, said
    * away from any thread (home, an app, the Chats list), is offered to the router as a possible background task (the
    * outbox asks with accept_dump). A take aimed anywhere (a thread, a review, a capture view, an agent's or a channel's
    * chats, a desk, the general button, a meeting) or carrying composer words, files or a reply is never one. */
   function dumpTake(snap, rt, aimAt, kind) {
-    try { if (!(document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/agent-inbox')) return false; } catch (_) { return false; }
     const v = snap?.view;
     return !rt && aimAt == null && kind !== 'command' && !snap.general && !snap.conversation && !snap.meetingEventId && !V.meetingLoan
       && !snap.seal && !snap.newChatWid && !(snap.route?.agent && window.WosAgents?.isOther?.(snap.route.agent)) && !V.files?.length

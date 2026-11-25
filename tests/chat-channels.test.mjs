@@ -2237,7 +2237,8 @@ test('issue 1331: Reply on any message is standard for the main agent; the Threa
 test('issue 1331: Archive turns quiet; Mark done is the strong button, only while a Needs you is open', () => {
   // Moved into the Channels package (issue 1358); the rules come after its Needs you comment.
   const all = (s => s.slice(s.indexOf('/* Channels in Chats (wizard-ux issue 1254)')))(readFileSync(new URL('../web/core/chats.css', import.meta.url), 'utf8'));
-  const css = all.slice(all.indexOf('/* Needs you in the thread (wizard-ux issue 1331'));
+  // The agent inbox rules that follow (wizard-ux issue 1778) have their own @media line: stop before them.
+  const css = (c => c.slice(0, c.includes('/* The agent inbox in Chats') ? c.indexOf('/* The agent inbox in Chats') : c.length))(all.slice(all.indexOf('/* Needs you in the thread (wizard-ux issue 1331')));
   const S = 'html:root';
   for (const rule of css.split('\n').filter(l => l.includes('{'))) assert.ok(rule.startsWith(S), 'scoped: ' + rule.slice(0, 60));
   const s = askRow('b'), f = needsFixture();

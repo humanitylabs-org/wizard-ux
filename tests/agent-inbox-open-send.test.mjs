@@ -104,11 +104,11 @@ test('main versus routed: only the main agent\'s threads move (host-profile, con
 });
 
 // The chats.js rules: where Open and Send to inbox show.
-function rules({ on = true, routedWin = false, pins = [], recs = [], sessions = [], stay = [], channels = null, daily = false } = {}) {
+function rules({ routedWin = false, pins = [], recs = [], sessions = [], stay = [], channels = null, daily = false } = {}) {
   const ctx = {
     LIVE: { sessions, agentInbox: { stays: id => stay.includes(id) }, ownerOf: s => s.agent && s.agent !== 'hermes' ? s.agent : '' },
     chanStore: () => channels ? { channels } : null,
-    W: { w1: daily ? { id: 'w1', daily: { id: 'daily', sid: 'wizard_visible_1' } } : { id: 'w1' } }, winAgent: () => routedWin ? 'host-ops' : '', inboxSwitchOn: () => on, runningRecs: () => recs,
+    W: { w1: daily ? { id: 'w1', daily: { id: 'daily', sid: 'wizard_visible_1' } } : { id: 'w1' } }, winAgent: () => routedWin ? 'host-ops' : '', runningRecs: () => recs,
     PIN: { has: id => pins.includes(id) }, esc: v => String(v),
   };
   vm.createContext(ctx);
@@ -116,21 +116,19 @@ function rules({ on = true, routedWin = false, pins = [], recs = [], sessions = 
   return ctx.api;
 }
 
-test('a hidden thread\'s header shows Open; a listed one, a routed one or the switch off shows none', () => {
+test('a hidden thread\'s header shows Open; a listed one or a routed one shows none', () => {
   const s = { id: 'wizard_worker_1', hidden: true };
   assert.match(rules().inboxHeadHtml({ id: 'w1' }, s), /data-chinboxopen="wizard_worker_1"[^>]*>Open</);
   assert.match(rules({ recs: [{ thread: 'wizard_worker_2' }] }).inboxHeadHtml({ id: 'w1' }, { id: 'wizard_worker_2' }), /Open/, 'a running task read by id');
-  assert.equal(rules({ on: false }).inboxHeadHtml({ id: 'w1' }, s), '', 'switch off: no button');
   assert.equal(rules({ sessions: [{ id: 'wizard_worker_1' }] }).inboxHeadHtml({ id: 'w1' }, s), '', 'already in the list');
   assert.equal(rules({ routedWin: true }).inboxHeadHtml({ id: 'w1' }, s), '', 'a routed agent window');
   assert.equal(rules().inboxHeadHtml({ id: 'w1' }, { ...s, agent: 'box' }), '', 'a routed row');
   assert.equal(rules().inboxHeadHtml({ id: 'w1' }, { id: 'wizard_plain' }), '', 'a thread that was never hidden');
 });
 
-test('Send to inbox is in a visible main thread\'s menu, never for a pinned, archived, routed or hidden one, never with the switch off', () => {
+test('Send to inbox is in a visible main thread\'s menu, never for a pinned, archived, routed or hidden one', () => {
   const s = { id: 'wizard_visible_1' };
   assert.equal(rules().inboxCanSend('w1', s), true);
-  assert.equal(rules({ on: false }).inboxCanSend('w1', s), false, 'switch off: no item');
   assert.equal(rules({ pins: ['wizard_visible_1'] }).inboxCanSend('w1', s), false, 'a pinned (collaborative) thread stays');
   for (const extra of [{ archived: true }, { hidden: true }, { optimistic: true }, { agent: 'host-ops' }, { agent: 'box' }, { agent: 'locked' }]) assert.equal(rules().inboxCanSend('w1', { ...s, ...extra }), false, JSON.stringify(extra));
   assert.equal(rules({ routedWin: true }).inboxCanSend('w1', s), false, 'a routed agent window');
@@ -193,6 +191,9 @@ test('the buttons are wired: the Running view row, the header, the row menu and 
   const send = tap(line("closest('[data-rsinbox]')"), { sel: '[data-rsinbox]' }, { chatVars: { rowSheet: { sid: 'wizard_v' } }, LIVE: { session: () => ({ title: 'Trip', firstRequest: '  ', request: 'Plan the trip' }) } });
   assert.equal(send.r, true);
   assert.deepEqual(clone(send.calls), [['closeRowSheet'], ['inboxMove', 'send', 'wizard_v', { title: 'Trip', utterance: 'Plan the trip' }]]);
-  const css = readFileSync(new URL('../web/tweaks/wizard/agent-inbox/tweak.css', import.meta.url), 'utf8');
-  for (const rule of css.replace(/\/\*[\s\S]*?\*\//g, '').split('}').filter(r => r.includes('ch-inbox'))) assert.match(rule.trim(), /^(?:@media[^{]*\{\s*)?html\[data-tweaks~="wizard\/agent-inbox"\]/, 'every rule is scoped to the switch');
+  // Core CSS since wizard-ux issue 1778 (no switch): html:root keeps the old switch rules' selector weight.
+  const css = (c => c.slice(c.indexOf('/* The agent inbox in Chats'), c.indexOf('/* The bottom tabs Inbox · Tags · Sent and the Sent view')))(readFileSync(new URL('../web/core/chats.css', import.meta.url), 'utf8'));
+  const inboxRules = css.replace(/\/\*[\s\S]*?\*\//g, '').split('}').filter(r => r.includes('ch-inbox'));
+  assert.ok(inboxRules.length > 0);
+  for (const rule of inboxRules) assert.match(rule.trim(), /^(?:@media[^{]*\{\s*)?html:root /, 'every rule keeps the html:root weight');
 });

@@ -1,4 +1,4 @@
-// Quiet inbox: replies typed in a thread (wizard-ux issue 1808; switches wizard/agent-inbox + wizard/chats-inbox).
+// Quiet inbox: replies typed in a thread (wizard-ux issue 1808; on for everyone since wizard-ux issue 1778).
 // The box (wizard-agent-service, same issue) logs every reply in a thread as a Sent row (source reply, route thread)
 // and marks a thread whose newest answer was to a reply that asked for none, ended done or fyi (quietReply). Here:
 // the real live.js quietReply + isNew + groups lines, the real Sent log reader (live-channels.js) and the real Sent
@@ -12,7 +12,7 @@ import { withLiveParts } from './fixtures/live-parts.mjs';
 
 const live = withLiveParts(readFileSync(new URL('../web/live.js', import.meta.url), 'utf8'));
 const clone = v => JSON.parse(JSON.stringify(v));
-const ON = 'wizard/agent-inbox wizard/chats-inbox';
+const ON = '';
 
 // live.js: quietReply and the three places that count a thread as new (isNew, visibleUnread, groups).
 function liveCtx(tweaks = ON) {
@@ -63,11 +63,11 @@ test('issue 1808: main versus routed: only the main agent\'s list drops a quiet 
   assert.equal(c.L.isNew(quiet({ agent: 'hermes' })), false, 'a row pinned to the main agent by id is main');
 });
 
-test('issue 1808: switch off (either of the two): unchanged from today', () => {
-  for (const tweaks of ['', 'wizard/agent-inbox', 'wizard/chats-inbox']) {
+test('issue 1778: no switch: a quiet reply is quiet with any or no data-tweaks (old saved values change nothing)', () => {
+  for (const tweaks of ['', 'wizard/agent-inbox', 'wizard/chats-inbox', 'wizard/agent-inbox wizard/chats-inbox']) {
     const c = liveCtx(tweaks); c.rows = [quiet()];
-    assert.equal(c.L.isNew(c.rows[0]), true, `tweaks "${tweaks}": unread as today`);
-    assert.equal(c.L.groups().ready.length, 1, `tweaks "${tweaks}": in Ready as today`);
+    assert.equal(c.L.isNew(c.rows[0]), false, `tweaks "${tweaks}": not unread`);
+    assert.equal(c.L.groups().ready.length, 0, `tweaks "${tweaks}": not in Ready`);
   }
 });
 

@@ -1,24 +1,21 @@
 'use strict';
-// Alert rules feedback (switch wizard/agent-inbox, wizard-ux issue 1589; box half wizard-agent-service issue 552) in a
-// real browser. Disposable synthetic transport only: a fake box serves the channel store (Daily, Alerts, Trip), the
+// Alert rules feedback (wizard-ux issue 1589; box half wizard-agent-service issue 552; on for everyone since wizard-ux
+// issue 1778, no switch) in a real browser. Disposable synthetic transport only: a fake box serves the channel store (Daily, Alerts, Trip), the
 // Alerts channel's one agent post, the alert records (one ordinary, the day's collapsed "More alerts today" with its
 // count), the Later list, a Daily thread whose history ends with the sweep card (with rules_flag), and answers
 // PATCH /wizard/v1/agent-inbox/<id> {action: not_urgent | should_alert} with the example counts.
 // Phone 390x844 and Classic desktop 1440x960, Nebula + Grove:
 //   1. the Alerts channel shows the alert records with Not urgent (>= 44 px), the collapsed one with its count;
 //   2. Not urgent sends exactly one PATCH and the alert leaves Alerts; on the collapsed one it clears it;
-//   3. the sweep card (Channels off, the Daily thread from the list) carries Should have alerted on its items, the rules
+//   3. the sweep card (the Daily thread from the Inbox tab) carries Should have alerted on its items, the rules
 //      line, and the Later list opens in place with Should have alerted; a tap sends one PATCH and marks it;
-//   4. a live skin change repaints the block; with no skin value it is the dark fallback.
-// QA_ONLY_OFF=1: switch off: the Alerts channel feed with no alert block and nothing asks the inbox; its feed markup is
-// saved (feed-<stem>.html) so a run with QA_WEB=<main>/web can be compared byte for byte.
+//   4. a live skin change repaints the block.
 const assert = require('node:assert/strict');
 const { chromium } = require('../tools/qa-playwright.cjs');
 const { ownerRead } = require('../tools/qa-desktop-frame-fixture.cjs');
 const fs = require('node:fs'), path = require('node:path');
 const repo = path.resolve(__dirname, '..'), origin = process.env.QA_ORIGIN || 'https://agent-inbox-alerts.test', prefix = '/wizard-os-home/';
 const web = process.env.QA_WEB || path.join(repo, 'web'), out = process.env.QA_OUT || path.join(repo, 'agent-inbox-alert-feedback-evidence');
-const off = process.env.QA_ONLY_OFF === '1';
 const SHELLS = (process.env.QA_SHELLS || 'phone,classic').split(','), SKINS = (process.env.QA_SKINS || 'nebula,grove').split(',');
 fs.mkdirSync(out, { recursive: true });
 const now = Date.now(), iso = t => new Date(t).toISOString(), nap = ms => new Promise(r => setTimeout(r, ms)), M = 60e3;
@@ -51,18 +48,18 @@ const cardView = () => ({ schema: 'wizard.agent-sweep/1', id: CARD, at: now - 2 
   missing: 0, rules_flag: { day: '2026-11-19', alerts: 5, cap: 3, link: '/wizard-os-home/?inbox=alert-rules' }, yes_to_all: { count: 1, skipped: 0 } });
 const cardRow = () => { const v = cardView(); return { id: v.id, role: 'assistant', session_id: v.thread_id, timestamp: v.at / 1000, display_kind: 'agent_sweep', content: '**Signal sweep**\n\n**Waiting on you** (1)', agent_sweep: v }; };
 const raw = (id, s) => ({ id, title: s.title, runtime: 'direct', status: 'completed', updated_at: iso(s.at), updatedAt: iso(s.at), last_active: s.at / 1000, message_count: s.msgs.length, messageCount: s.msgs.length, preview: s.msgs.at(-1)?.[1] || '', ...(s.channel ? { channel: s.channel } : {}) });
-const report = { origin, web, off, cases: [] };
+const report = { origin, web, cases: [] };
 (async () => {
   const browser = await chromium.launch();
   try {
     for (const shell of SHELLS) for (const skin of SKINS) {
-      const phone = shell === 'phone', stem = `${shell}-${skin}${off ? '-off' : ''}`;
+      const phone = shell === 'phone', stem = `${shell}-${skin}`;
       const entry = { stem, errors: [], refused: [], patches: [], inboxReads: 0 }; report.cases.push(entry);
       const box = boxFresh();
       const context = await browser.newContext({ viewport: phone ? { width: 390, height: 844 } : { width: 1440, height: 960 }, isMobile: phone, hasTouch: phone, serviceWorkers: 'block', ...(phone ? { userAgent: 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Mobile Safari/537.36' } : {}) });
       try {
         await context.routeWebSocket('**/*', w => w.close());
-        const mix = { 'wizard/desktop-chats': true, ...(off ? {} : { 'wizard/agent-inbox': true }) };
+        const mix = { 'wizard/desktop-chats': true };
         await context.addInitScript(({ shell, skin, mix }) => {
           if (window !== top) return;
           if (sessionStorage.getItem('qaBoot')) return; sessionStorage.setItem('qaBoot', '1');
@@ -117,7 +114,7 @@ const report = { origin, web, off, cases: [] };
           if (m) {
             const id = decodeURIComponent(m[1]), s = THREADS[id]; if (!s) return r.fulfill({ status: 404, json: { error: 'missing' } });
             const t0 = s.at / 1000 - 600, rows = s.msgs.map(([role, content, dt]) => ({ role, content, timestamp: t0 + dt }));
-            if (m[2] && id === 'qa-daily-1' && !off) rows.push(cardRow());
+            if (m[2] && id === 'qa-daily-1') rows.push(cardRow());
             return r.fulfill({ json: m[2] ? { messages: rows } : { session: raw(id, s) } });
           }
           return r.fulfill({ json: ownerRead(p) });
@@ -127,7 +124,7 @@ const report = { origin, web, off, cases: [] };
         await page.waitForFunction(() => (window.__wux || window.__wos) && !window.WosWelcome?.active && window.WosExperience?.state.tweaks.length && !window.WosExperience.state.busy);
         await page.addStyleTag({ content: '#wosWelcome{display:none!important}' });
         await page.waitForFunction(() => true, null, { timeout: 15000 });
-        if (!off) await page.waitForFunction(() => (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/agent-inbox'), null, { timeout: 15000 });
+        await page.waitForFunction(() => (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/desktop-chats'), null, { timeout: 15000 });
         const vis = sel => page.locator(sel).filter({ visible: true }).first();
         const openList = () => page.evaluate(phone => phone ? __wos.openSheet('inbox') : __wux.openChatsList(), phone);
         await openList();
@@ -135,14 +132,6 @@ const report = { origin, web, off, cases: [] };
         await vis('.ch-chan-open[data-chchan="alerts"]').click();
         await vis('.ch-chan-feed').getByText('The nightly build failed').waitFor({ timeout: 10000 });
         await page.evaluate(() => document.fonts.ready); await nap(1200);
-        if (off) {
-          assert.equal(await page.locator('.ch-alerts').count(), 0, 'switch off: no alert block');
-          assert.equal(entry.inboxReads, 0, 'switch off: nothing asks the agent inbox');
-          fs.writeFileSync(path.join(out, `feed-${shell}-${skin}.html`), (await vis('.ch-chan-feed').evaluate(n => n.outerHTML)).replace(/\d+ (min|h|d)\b|now|\d+:\d\d/g, 'T'));
-          await page.screenshot({ path: path.join(out, stem + '-alerts.png') });
-          assert.deepEqual(entry.errors, []);
-          entry.pass = true; continue;
-        }
         // 1. The Alerts channel: both alert records, Not urgent, the collapsed count.
         const block = vis('.ch-alerts');
         await block.waitFor({ timeout: 8000 });
@@ -153,7 +142,7 @@ const report = { origin, web, off, cases: [] };
         assert.equal(await block.locator('.ch-al-i.collapsed .ch-al-n').innerText(), '4', 'the collapsed alert shows its count');
         await block.scrollIntoViewIfNeeded();
         await page.screenshot({ path: path.join(out, stem + '-1-alerts.png') });
-        // Live skin change and the dark fallback.
+        // Live skin change.
         const colour = () => block.evaluate(n => getComputedStyle(n).backgroundColor + ' / ' + getComputedStyle(n.querySelector('[data-chalertfb]')).backgroundColor);
         entry.colour = await colour();
         const other = skin === 'nebula' ? 'grove' : 'nebula';
@@ -161,11 +150,6 @@ const report = { origin, web, off, cases: [] };
         entry.colourOther = await colour();
         assert.notEqual(entry.colourOther, entry.colour, `the ${other} skin repaints the block (${entry.colour} → ${entry.colourOther})`);
         await page.evaluate(s => WosSkin.set(s), skin); await nap(500);
-        const TOKENS = ['--wz-panel', '--wz-accent', '--wz-border', '--wz-surface', '--wz-surface-raised', '--wz-text', '--wz-text-secondary', '--wz-on-accent', '--wz-warning'];
-        await page.evaluate(v => { for (const t of v) document.documentElement.style.setProperty(t, 'initial'); }, TOKENS); await nap(200);
-        entry.fallback = await colour();
-        assert.equal(entry.fallback.split(' / ')[0], 'rgb(23, 19, 31)', 'with no skin value the panel is the dark fallback');
-        await page.evaluate(v => { for (const t of v) document.documentElement.style.removeProperty(t); }, TOKENS); await nap(200);
         // 2. Not urgent: one PATCH; the alert leaves Alerts. Then the collapsed one: cleared.
         await vis(`[data-chalertfb="not_urgent"][data-id="${AL}"]`).click();
         entry.sending = await vis(`[data-chalertfb="not_urgent"][data-id="${AL}"]`).innerText().catch(() => '');
@@ -178,6 +162,8 @@ const report = { origin, web, off, cases: [] };
         assert.deepEqual(entry.patches.map(x => x.id), [AL, COL]);
         // 3. The sweep card in the Daily thread (a row in the Activity list).
         await openList();
+        if (await page.locator('[data-chchanback]').filter({ visible: true }).count()) await vis('[data-chchanback]').click();
+        await vis('.ch-tabbar [data-chtab="inbox"]').click();
         await vis('.ch-list [data-chopen="qa-daily-1"]').click();
         const card = vis('.ch-sweep');
         await card.waitFor({ timeout: 10000 });
