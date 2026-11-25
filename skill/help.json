@@ -428,7 +428,7 @@
       "where": "Settings › Appearance › Try new features › Phone media player for Podcasts"
     },
     "wizard/runtipi-cli-key": {
-      "help": "Server side: the App Manager signs in to Runtipi 4.12 with its own key. Nothing looks different.",
+      "help": "App Manager uses its own Runtipi 4.12 key.",
       "where": "Settings › Appearance › Try new features › Runtipi 4.12 sign-in key"
     },
     "wizard/settings-search": {
@@ -475,6 +475,10 @@
     "wizard/plain-chat-titles": {
       "help": "Same-topic chats: no date.",
       "where": "Settings › Appearance › Try new features › Undated chat titles"
+    },
+    "wizard/try-feature-counts": {
+      "help": "Anonymous thumbs counts.",
+      "where": "Settings › Appearance › Try new features › Share feature counts"
     }
   },
   "screenOrder": [

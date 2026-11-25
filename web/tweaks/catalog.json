@@ -45,7 +45,8 @@
     "wizard/interface-manual",
     "wizard/write-guard",
     "wizard/follow-main",
-    "wizard/plain-chat-titles"
+    "wizard/plain-chat-titles",
+    "wizard/try-feature-counts"
   ],
   "defaults": [
     "wizard/desktop-chats"
