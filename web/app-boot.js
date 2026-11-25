@@ -122,15 +122,32 @@ window.WizCore.appParts.boot = function ({ $, APP, APPS, appVars, armBack, backS
   // Assistant handoff (side-key app → WizardOS). 'listen' opens the orb listening; 'say' shows the words as a
   // draft that James sends with one tap — another app can never make Archimedes act on its own.
   let threadHandoffGeneration = 0;
-  // Messenger at its pinned Agent chat (`#chat=agent:notes`, Messenger's own link). On a cold start the app list may
-  // still be loading, so wait for it once. Without Messenger the button keeps today's listening orb: never a dead press.
-  const AGENT_NOTE_APPS = ['messenger', 'wizard-messenger'];
+  // Messenger at its pinned Agent chat (Messenger's own link `#chat=agent:notes`). Messenger opens the way its icon
+  // opens it (a review window opened at a link closes on any stray Back-like pop while it loads), and only once its page
+  // is up is the link handed to that page in place: no new history entry, and the one pop it makes is the app's own
+  // step. On a cold start the app list may still be loading, so wait for it once. Without Messenger the button keeps
+  // today's listening orb: never a dead press.
+  const AGENT_NOTE_APPS = ['messenger', 'wizard-messenger'], AGENT_NOTE_LINK = 'chat=agent:notes';
   function agentNote() {
     const log = s => { window.__backLog = (window.__backLog || []).concat('handoff:agent-note:' + s).slice(-30); };
+    const toChat = (id, base, tries = 0) => {
+      const f = [...document.querySelectorAll('iframe.appframe')].find(x => x.isConnected && x.dataset.ownApp === id);
+      let w = null; try { w = f?.contentWindow; if (!(w.document.readyState === 'complete' && w.location.pathname.startsWith(base.pathname))) w = null; } catch (_) { w = null; }
+      if (!w) { if (tries < 100) setTimeout(() => toChat(id, base, tries + 1), 150); else log('no-page:' + id); return; }
+      try {
+        if (w.__wosAgentNoteLink) { log('pending:' + id); return; } // a second press while the first link lands
+        const doc = w.document, clear = () => { w.__wosAgentNoteLink = false; if (w.__wosSelfPop?.doc === doc && !w.__wosSelfPop.key) w.__wosSelfPop = null; };
+        w.__wosAgentNoteLink = true; w.__wosSelfPop = { doc, key: null }; // app-frame.js takeSelfPop: this pop is Messenger's own step
+        w.addEventListener('hashchange', () => setTimeout(clear, 0), { once: true }); setTimeout(clear, 2000);
+        w.location.replace(w.location.pathname + w.location.search + '#' + AGENT_NOTE_LINK); log('chat:' + id); // same page: only the fragment changes
+      } catch (_) { log('refused-link:' + id); }
+    };
     const open = () => {
       const id = AGENT_NOTE_APPS.find(x => window.WizCanOpen?.(x)); if (!id) return false;
-      let u; try { u = new URL(APP[id].url, location.href); u.hash = 'chat=agent:notes'; } catch (_) { return false; }
-      const ok = window.WizOpenApp?.(id, u.href) === true; log(ok ? 'open:' + id : 'refused:' + id); return ok;
+      let base; try { base = new URL(APP[id].url, location.href); } catch (_) { return false; }
+      const ok = !!window.WizOpenApp?.(id); log(ok ? 'open:' + id : 'refused:' + id);
+      if (ok) toChat(id, base);
+      return ok;
     };
     if (open()) return;
     Promise.resolve(window.WizCore?.appsLoaded?.()).catch(() => {}).then(() => {

@@ -4,9 +4,11 @@
 // the REAL Messenger page (QA_MESSENGER=<wizard-messenger checkout>/static) at /messenger/ on a synthetic API that keeps
 // Agent chat notes the way agent_chat.py does. Nothing reads or writes a real box.
 //   QA_SWITCH=on (default): the shell tells the app the switch is on; the press (MainActivity's {action:'agent-note'}
-//     handoff) opens Messenger at its Agent chat with the text field and the mic ready; a typed note is saved there,
-//     gets a ✓ once the agent picks it up, gets no reply, and no Wizard chat is created. Without Messenger the press
-//     says where the Agent chat is and listens as before.
+//     handoff) opens Messenger at its Agent chat with the text field and the mic ready, still open 2 s later with no
+//     Back taken; a typed note is saved there, gets a ✓ once the agent picks it up, gets no reply, and no Wizard chat is
+//     created; Back then steps inside Messenger; pressed twice with Messenger already open: one window, Agent chat.
+//     Without Messenger the press says where the Agent chat is and listens as before.
+//   QA_W / QA_H: viewport (default 412x915); QA_MOBILE=0: no touch.
 //   QA_SWITCH=off: the shell tells the app the switch is off (so the button keeps the orb); nothing opens Messenger.
 //   QA_EXPECT=broken (QA_WEB=<main worktree>/web): main has no agent-note handoff (it answers false).
 // Screens in QA_OUT: <switch>-*.png.
@@ -40,10 +42,11 @@ function agentBox() {
 async function run(browser, { label, on, apps }) {
   const entry = { label, errors: [], wizardWrites: [], native: [] };
   const box = agentBox();
-  const context = await browser.newContext({ viewport: { width: 412, height: 915 }, isMobile: true, hasTouch: true, serviceWorkers: 'block', colorScheme: 'dark',
+  const context = await browser.newContext({ viewport: { width: +(process.env.QA_W || 412), height: +(process.env.QA_H || 915) }, isMobile: process.env.QA_MOBILE !== '0', hasTouch: process.env.QA_MOBILE !== '0', serviceWorkers: 'block', colorScheme: 'dark',
     userAgent: 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Mobile Safari/537.36' });
   try {
     await context.routeWebSocket('**/*', w => w.close());
+    await context.addInitScript(() => { if (window === top) return; const log = (top.__frameEvents ||= []); for (const ev of ['popstate', 'hashchange']) addEventListener(ev, () => log.push(ev + ' ' + location.pathname + location.hash), true); });
     await context.addInitScript(({ on, apps }) => {
       if (window !== top) return;
       window.__native = [];
@@ -134,11 +137,20 @@ async function run(browser, { label, on, apps }) {
       await page.evaluate(() => window.__wos.cancelVoice?.(true));
       return entry;
     }
-    // On, with Messenger: its Agent chat, text field and mic ready.
-    await page.waitForFunction(o => [...document.querySelectorAll('iframe')].some(f => (f.contentWindow?.location.href || '').startsWith(o + '/messenger/')), origin, { timeout: 15000 });
-    const m = frame();
-    await m.locator('#unified-inbox .u-thread-head.u-agent-head').waitFor({ timeout: 20000 });
-    await nap(800);
+    // On, with Messenger: its Agent chat, text field and mic ready, and it stays open (a stray Back-like pop while a
+    // window opened at a link loads closed it on some machines: the tester's first receipt).
+    const agentOpen = async (stage) => {
+      await page.waitForFunction(o => [...document.querySelectorAll('iframe')].some(f => (f.contentWindow?.location.href || '').startsWith(o + '/messenger/')), origin, { timeout: 15000 });
+      const m = frame();
+      await m.locator('#unified-inbox .u-thread-head.u-agent-head').waitFor({ timeout: 20000 });
+      await nap(2000);
+      const still = frame(); assert.ok(still, stage + ': Messenger is still open 2 s later');
+      assert.equal(await still.locator('#unified-inbox .u-thread-head.u-agent-head').count(), 1, stage + ': still on the Agent chat');
+      const back = await page.evaluate(() => window.__backLog || []);
+      assert.ok(!back.some(b => /review-close|^home$|native:/.test(b)), stage + ': no Back was taken: ' + JSON.stringify(back));
+      return still;
+    };
+    const m = await agentOpen('cold');
     entry.frameHash = await m.evaluate(() => location.hash);
     entry.head = (await m.locator('#unified-inbox .u-thread-head').innerText()).replace(/\s+/g, ' ');
     entry.field = await m.locator('.u-ac-field').isVisible();
@@ -159,6 +171,19 @@ async function run(browser, { label, on, apps }) {
     assert.equal(entry.replies, 0, 'the note gets no reply');
     assert.deepEqual(entry.notes, ['Add dentist Tuesday 10:00 to my calendar'], 'the note is kept by Messenger');
     assert.deepEqual(entry.wizardWrites, [], 'no Wizard chat is created');
+    // Back from the Agent chat is Messenger's own step (to its chat list), never a closed window; the next Back is
+    // the shell's again (the marker for the link's own pop is gone).
+    entry.back1 = await page.evaluate(() => window.__wosNativeBack());
+    await nap(600);
+    entry.afterBack1 = { open: !!frame(), list: frame() ? await frame().locator('.u-agent-row[data-mode="chat"]').count() : 0 };
+    assert.equal(entry.back1, 'hosted', 'Back steps inside Messenger');
+    assert.ok(entry.afterBack1.open && entry.afterBack1.list === 1, 'Messenger shows its chat list');
+    // Warm: Messenger already open on its list, pressed twice in a row.
+    await page.evaluate(() => { window.__backLog = []; window.__wosHandoff({ action: 'agent-note' }); window.__wosHandoff({ action: 'agent-note' }); });
+    await agentOpen('warm, twice');
+    entry.frameEvents = await page.evaluate(() => window.__frameEvents || []);
+    entry.windows = await page.evaluate(() => Object.values(window.__wos.wins).filter(w => w.appId === 'messenger').length);
+    assert.equal(entry.windows, 1, 'one Messenger window');
     return entry;
   } finally {
     entry.errors = entry.errors.filter(e => !/ResizeObserver/.test(e));

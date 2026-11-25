@@ -125,23 +125,45 @@ test('MainActivity hands the press to the shell as the agent-note handoff', () =
   assert.deepEqual(posted, ['deliver']);
 });
 
-// The real agentNote() from app-boot.js with a stand-in app registry.
-function shell({ apps = {}, later = {} } = {}) {
-  const log = [], APP = { ...apps };
+// The real agentNote() from app-boot.js with a stand-in app registry and app window.
+function shell({ apps = {}, later = {}, pageAt = '/messenger/', readyAfter = 0 } = {}) {
+  const log = [], APP = { ...apps }, timers = [];
+  let polls = 0;
+  const win = { __wosSelfPop: null, listeners: {}, document: { get readyState() { return polls >= readyAfter ? 'complete' : 'loading'; } },
+    location: { pathname: pageAt, search: '', replace: u => log.push('link:' + u + (win.__wosSelfPop ? ' (own step)' : '')) },
+    addEventListener: (n, f) => { win.listeners[n] = f; } };
+  const frame = { isConnected: true, dataset: { ownApp: '' }, get contentWindow() { polls++; return win; } };
   const ctx = { APP, log, V: { state: 'idle' }, URL, Promise, location: new URL('https://box.test/wizard-os-home/index.html'),
-    toast: (i, t) => log.push('toast:' + t), startVoice: m => log.push('listen:' + m), window: null };
-  ctx.window = { __backLog: [], WizCanOpen: id => !!APP[id], WizOpenApp: (id, url) => { log.push('open:' + id + ' ' + url); return true; },
+    toast: (i, t) => log.push('toast:' + t), startVoice: m => log.push('listen:' + m), setTimeout: (fn, ms = 0) => { timers.push({ fn, ms }); return timers.length; },
+    document: { querySelectorAll: () => frame.dataset.ownApp ? [frame] : [] }, window: null };
+  ctx.window = { __backLog: [], WizCanOpen: id => !!APP[id], WizOpenApp: (id, path) => { log.push('open:' + id + (path ? ' ' + path : '')); frame.dataset.ownApp = id; return { id: 'w1' }; },
     WizCore: { appsLoaded: async () => { Object.assign(APP, later); } } };
   vm.createContext(ctx);
   vm.runInContext(between(read('web/app-boot.js'), '  const AGENT_NOTE_APPS', '  window.__wosHandoff = h => {') + '\nthis.agentNote = agentNote;', ctx);
-  return { log, run: async () => { ctx.agentNote(); await new Promise(r => setTimeout(r, 0)); return log; } };
+  const tick = (upTo = 150) => { const due = timers.filter(t => t.ms <= upTo); for (const t of due) timers.splice(timers.indexOf(t), 1); for (const t of due) t.fn(); };
+  return { log, win, tick, run: async () => { ctx.agentNote(); await new Promise(r => setImmediate(r)); for (let i = 0; i < 5; i++) tick(); return log; } };
 }
 
-test('the shell opens Messenger at its pinned Agent chat, also when the app list arrives a moment later', async () => {
+test('the shell opens Messenger the plain way, then hands its page the Agent chat link in place, as its own step', async () => {
   const messenger = { id: 'messenger', url: '/messenger/', kind: 'wizard' };
-  assert.deepEqual(await shell({ apps: { messenger } }).run(), ['open:messenger https://box.test/messenger/#chat=agent:notes']);
-  assert.deepEqual(await shell({ later: { messenger } }).run(), ['open:messenger https://box.test/messenger/#chat=agent:notes'], 'cold start');
-  assert.deepEqual(await shell({ apps: { 'wizard-messenger': { url: '/wizard-messenger/' } } }).run(), ['open:wizard-messenger https://box.test/wizard-messenger/#chat=agent:notes']);
+  const s = shell({ apps: { messenger } });
+  assert.deepEqual(await s.run(), ['open:messenger', 'link:/messenger/#chat=agent:notes (own step)'], 'no window opened at a link');
+  assert.ok(s.win.__wosAgentNoteLink, 'the link is marked as on its way');
+  s.win.listeners.hashchange(); s.tick(0);
+  assert.equal(s.win.__wosSelfPop, null, 'once the link landed, the next pop is a real Back again');
+  assert.equal(s.win.__wosAgentNoteLink, false);
+  const quiet = shell({ apps: { messenger } }); await quiet.run(); quiet.tick(2000);
+  assert.equal(quiet.win.__wosSelfPop, null, 'and if no hashchange comes, the mark goes after 2 s');
+  assert.deepEqual(await shell({ later: { messenger } }).run(), ['open:messenger', 'link:/messenger/#chat=agent:notes (own step)'], 'cold start: waits for the app list');
+  assert.deepEqual(await shell({ apps: { messenger }, readyAfter: 3 }).run(), ['open:messenger', 'link:/messenger/#chat=agent:notes (own step)'], 'waits for the page');
+  assert.deepEqual(await shell({ apps: { messenger }, pageAt: '/messenger/index.html' }).run(), ['open:messenger', 'link:/messenger/index.html#chat=agent:notes (own step)'], 'stays on the same page');
+  assert.deepEqual(await shell({ apps: { 'wizard-messenger': { url: '/wizard-messenger/' } }, pageAt: '/wizard-messenger/' }).run(), ['open:wizard-messenger', 'link:/wizard-messenger/#chat=agent:notes (own step)']);
+});
+
+test('a second press while the first link is landing does not navigate again', async () => {
+  const s = shell({ apps: { messenger: { url: '/messenger/' } } });
+  await s.run(); await s.run();
+  assert.deepEqual(s.log.filter(l => l.startsWith('link:')), ['link:/messenger/#chat=agent:notes (own step)']);
 });
 
 test('without Messenger the press is never dead: it says where the Agent chat is and listens as before', async () => {
