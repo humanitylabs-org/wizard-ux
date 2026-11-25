@@ -474,6 +474,10 @@
       "help": "Agent files your Files Inbox drops.",
       "where": "Settings › Appearance › Try new features › Capture inbox"
     },
+    "wizard/chat-tags": {
+      "help": "A chat can carry several tags.",
+      "where": "Settings › Appearance › Try new features › Tags"
+    },
     "wizard/app-wake": {
       "help": "Apps wake your agent.",
       "where": "Settings › Appearance › Try new features › Apps wake your agent"

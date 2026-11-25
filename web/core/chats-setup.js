@@ -7,7 +7,7 @@
  * body below keeps chats.js's indentation so `git log -L` and patches port over. */
 window.WizCore = window.WizCore || {};
 window.WizCore.chatsParts = window.WizCore.chatsParts || {};
-window.WizCore.chatsParts.setup = function ({ AGS, attOf, ch, chanStoreMove, chanStoreSpaces, chatsBack, deferredOf, elOf, focusAgents, growTa, LIVE, norm, rerenderList, toast, W }) {
+window.WizCore.chatsParts.setup = function ({ AGS, attOf, ch, chanStoreMove, chanStoreSpaces, chanTags, chatsBack, deferredOf, elOf, focusAgents, growTa, LIVE, norm, rerenderList, toast, W }) {
   let renderChats, snoozeLast; // late-bound: chats.js declares these after the call, see bindLate
   // Parsing, Markdown, local time, drafts, copy/share and the media viewer live in chat-kit.js.
   const KIT = window.WosChat;
@@ -127,6 +127,13 @@ window.WizCore.chatsParts.setup = function ({ AGS, attOf, ch, chanStoreMove, cha
   // again changes nothing. Removing stays its own row-sheet action.
   function fileInSpace(key, sid, agent) {
     const from = spacesOf(sid), name = spaces().find(x => x.id === key)?.name || (SPACE.ch ? 'channel' : SPACE.one);
+    // Tags on (wizard-agent-service issue 608): choosing a tag adds it, choosing one the chat has removes it; the chat
+    // keeps its other tags.
+    if (typeof chanTags === 'function' && chanTags()) {
+      const had = from.some(x => x.id === key);
+      if (!spaceMember(key, sid, !had, agent)) return false;
+      toast('✓', `${had ? 'Removed' : 'Tagged'} ${name}`, 1600); return true;
+    }
     if (from.length === 1 && from[0].id === key) { toast('✓', `Already in ${name}`, 1600); return false; }
     if (!spaceMember(key, sid, true, agent)) return false;
     toast('✓', `${from.length ? 'Moved to' : 'Added to'} ${name}`, 2000); return true;
@@ -135,9 +142,10 @@ window.WizCore.chatsParts.setup = function ({ AGS, attOf, ch, chanStoreMove, cha
   // atomic move to null). Already in General changes nothing.
   function fileInGeneral(sid, agent) {
     const from = spacesOf(sid);
-    if (!from.length) { toast('✓', 'Already in General', 1600); return false; }
+    const tags = typeof chanTags === 'function' && chanTags();
+    if (!from.length) { toast('✓', tags ? 'No tags yet' : 'Already in General', 1600); return false; }
     let ok = false; for (const s of from) ok = spaceMember(s.id, sid, false, agent) || ok;
-    if (ok) toast('✓', 'Moved to General', 2000); return ok;
+    if (ok) toast('✓', tags ? 'Tags removed' : 'Moved to General', 2000); return ok;
   }
   return { agoText, BOOM, byStatus, fileInGeneral, fileInSpace, focusedAgent, INC, isWorking, KIT, matchFilters, md, paintPins, PIN, PIN_SVG, PINS_KEY, pinsOn, SEC_OPEN_KEY, SECTIONS_DAY, SECTIONS_STATUS, setFilter, SPACE, spaceAgent, spaceContains, spaceMember, spaces, SPACES_KEY, spacesOf, STALE_LIST, STATUS, statusEntries, subjectOf, subjects, TOPIC, topicOn, toTurns, visibleSpaces, WORKING_ST, bindLate: v => { if ('renderChats' in v) renderChats = v.renderChats; if ('snoozeLast' in v) snoozeLast = v.snoozeLast; } };
 };

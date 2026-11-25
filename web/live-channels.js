@@ -17,6 +17,9 @@ window.WizCore.liveParts.channels = function () {
    * followed by a fresh read; a read that started before a later edit is dropped, so a slow answer never undoes a tap.
    * Membership is keyed by the thread's agent plus its id ('hermes' = main), as the store keys it. */
   const CHANNELS_URL = '/wizard/v1/channels', CHANNEL_MEMBERSHIP_URL = '/wizard/v1/channels/membership', CHANNELS_CACHE = 'wos.chats.channels.v1';
+  // Tags (wizard-agent-service issue 608, switch wizard/chat-tags): with the box's Tags on (`tags: true` on the list) a
+  // chat carries several channels; PUT {sessionId, agent, add|remove} adds or removes one.
+  const CHANNEL_TAGS_URL = '/wizard/v1/channels/tags';
   function channelStore({ req, emit, normalize = r => r, onRow = r => r, onError = () => {}, now = () => Date.now(), storage = null, every = 30e3, offEvery = 5 * 60e3, feedMax = 200, moveKeep = 120e3 } = {}) {
     const ID = /^[a-z0-9-]{1,48}$/, AGENT = /^[a-z0-9][a-z0-9-]{0,47}$/;
     const agentKey = a => a && AGENT.test(a) ? a : 'hermes';
@@ -24,11 +27,11 @@ window.WizCore.liveParts.channels = function () {
     const one = c => ({ id: c.id, agent: c.agent, name: c.name.slice(0, 60), order: Number(c.order) || 0, createdAt: typeof c.createdAt === 'string' ? c.createdAt : '', archived: !!c.archived,
       ...(c.archived ? { archivedAt: typeof c.archivedAt === 'string' ? c.archivedAt : '' } : {}), pinned: !!c.pinned, ...(c.pinned ? { pinOrder: Number.isFinite(c.pinOrder) ? c.pinOrder : 0 } : {}),
       ...(c.kind === 'alerts' ? { kind: 'alerts' } : c.kind === 'daily' ? { kind: 'daily', dayStartsAt: typeof c.dayStartsAt === 'string' ? c.dayStartsAt.slice(0, 5) : '05:00' } : {}), count: Number(c.count) || 0 });
-    const clean = d => d && typeof d === 'object' && Array.isArray(d.channels) ? { sort: d.sort === 'za' ? 'za' : 'az', channels: d.channels.filter(valid).map(one) } : null;
+    const clean = d => d && typeof d === 'object' && Array.isArray(d.channels) ? { sort: d.sort === 'za' ? 'za' : 'az', channels: d.channels.filter(valid).map(one), ...(d.tags === true ? { tags: true } : {}) } : null;
     const store = storage || (() => { try { return globalThis.localStorage || null; } catch (_) { return null; } })();
     let doc = null; try { doc = clean(JSON.parse(store?.getItem(CHANNELS_CACHE) || 'null')); } catch (_) {}
     let rev = doc ? 1 : 0, off = false, readAt = 0, reading = null, edits = 0, pending = 0, writes = Promise.resolve();
-    const MOVES = new Map(), FEEDS = new Map();
+    const MOVES = new Map(), FEEDS = new Map(), TAGS = new Map(); // TAGS: agent|id -> Map(channel id -> {on, at})
     const bump = () => { rev++; try { emit(); } catch (_) {} };
     const keep = d => { doc = d; try { if (d) store?.setItem(CHANNELS_CACHE, JSON.stringify(d)); else store?.removeItem?.(CHANNELS_CACHE); } catch (_) {} bump(); };
     function pull() {
@@ -41,7 +44,7 @@ window.WizCore.liveParts.channels = function () {
           if (!d || pending || at !== edits) return; // an edit made since this read began is newer than its answer
           if (JSON.stringify(d) !== JSON.stringify(doc)) keep(d);
         } catch (e) {
-          if (e?.status === 404) { const had = !!doc || !off; off = true; MOVES.clear(); FEEDS.clear(); if (had) keep(null); }
+          if (e?.status === 404) { const had = !!doc || !off; off = true; MOVES.clear(); FEEDS.clear(); TAGS.clear(); if (had) keep(null); }
           // Offline or busy: the list this device last read stays.
         } finally { reading = null; }
       })();
@@ -50,7 +53,7 @@ window.WizCore.liveParts.channels = function () {
     // The store as Chats shows it, or null (unknown yet, store off, older service). Reading it keeps it fresh.
     function state() {
       if (!reading && now() - readAt >= (off ? offEvery : every)) pull();
-      return off || !doc ? null : { rev, sort: doc.sort, channels: doc.channels };
+      return off || !doc ? null : { rev, sort: doc.sort, channels: doc.channels, ...(doc.tags ? { tags: true } : {}) };
     }
     // Sent in order; after the last one settles the list is read again (also after a refusal, to show the box's own).
     function send(url, method, body) {
@@ -99,13 +102,29 @@ window.WizCore.liveParts.channels = function () {
     // and kept over list reads for a while, so a list read before the move landed never moves the chat back.
     function move(sessionId, channelId, agent = '') {
       const k = agentKey(agent) + '|' + sessionId, mark = { to: channelId || '', at: now() };
-      MOVES.set(k, mark); bump();
+      MOVES.set(k, mark); TAGS.delete(k); bump();
       return send(CHANNEL_MEMBERSHIP_URL, 'PUT', { sessionId, channelId: channelId || null, agent: agentKey(agent) }).then(r => {
         if (!r.ok && MOVES.get(k) === mark) { MOVES.delete(k); bump(); }
         return r;
       });
     }
     function moves() { const t = now(), out = []; for (const [k, m] of MOVES) { if (t - m.at > moveKeep) MOVES.delete(k); else out.push([k, m.to]); } return out; }
+    // Tags on: add or remove one tag (PUT tags), shown at once and kept over list reads for a while like a move.
+    function tag(sessionId, channelId, on, agent = '') {
+      const k = agentKey(agent) + '|' + sessionId, mark = { on: !!on, at: now() };
+      if (!TAGS.has(k)) TAGS.set(k, new Map());
+      TAGS.get(k).set(channelId, mark); bump();
+      return send(CHANNEL_TAGS_URL, 'PUT', { sessionId, agent: agentKey(agent), [on ? 'add' : 'remove']: channelId }).then(r => {
+        if (!r.ok && TAGS.get(k)?.get(channelId) === mark) { TAGS.get(k).delete(channelId); bump(); }
+        return r;
+      });
+    }
+    // [[agent|id, channel id, on]] still inside moveKeep.
+    function tagEdits() {
+      const t = now(), out = [];
+      for (const [k, m] of TAGS) { for (const [c, e] of m) { if (t - e.at > moveKeep) m.delete(c); else out.push([k, c, e.on]); } if (!m.size) TAGS.delete(k); }
+      return out;
+    }
     /* One channel's threads (view=list&channel=<id>, oldest first) on its agent's route: the newest feedMax of them,
      * read once per open and every `every` while shown. A 404 means the channel is gone: the list is read again. */
     function feed(id, agent = '') {
@@ -129,7 +148,8 @@ window.WizCore.liveParts.channels = function () {
               const p = await page(offset, snapshot), rows = p.data || [];
               raw.push(...rows); offset += rows.length; more = p.has_more === true && rows.length > 0;
             }
-            f.rows = raw.map(r => { const s = normalize(r); if (!s) return null; if (f.agent !== 'hermes') s.agent = f.agent; if (!s.channel) s.channel = f.id; return onRow(s, f.agent === 'hermes' ? '' : f.agent); }).filter(s => s && s.channel === f.id).slice(-feedMax);
+            // Tags on: a tag's feed also lists chats whose primary tag is another one (`tags` holds every tag).
+            f.rows = raw.map(r => { const s = normalize(r); if (!s) return null; if (f.agent !== 'hermes') s.agent = f.agent; if (!s.channel) s.channel = f.id; return onRow(s, f.agent === 'hermes' ? '' : f.agent); }).filter(s => s && (s.channel === f.id || (Array.isArray(s.tags) && s.tags.includes(f.id)))).slice(-feedMax);
             f.ok = true; f.gone = false;
             break;
           } catch (e) { if (e?.status === 409 && tries < 1) continue; throw e; }
@@ -148,7 +168,7 @@ window.WizCore.liveParts.channels = function () {
     }
     // A window coming back to the front reads again at once (another device may have pinned or sorted meanwhile).
     const fresh = () => { readAt = 0; for (const f of FEEDS.values()) f.at = 0; };
-    return { state, pull, patch, create, move, moves, feed, rows, find, fresh, get off() { return off; } };
+    return { state, pull, patch, create, move, moves, tag, tagEdits, feed, rows, find, fresh, get off() { return off; } };
   }
   /* ---- end channel store ---- */
   /* ---- channel reads (wizard-agent-service issue 471) ----

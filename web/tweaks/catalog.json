@@ -44,6 +44,7 @@
     "wizard/plain-chat-titles",
     "wizard/app-wake",
     "wizard/capture-inbox",
+    "wizard/chat-tags",
     "wizard/swap-sides",
     "wizard/install-in-sidebar",
     "wizard/try-feature-counts",
