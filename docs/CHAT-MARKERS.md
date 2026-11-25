@@ -20,12 +20,12 @@ When an agent ships an off-by-default tweak, it puts the tweak's switch in its r
 there instead of going to Settings › Look:
 
 ```
-The Desktop-style Chats list is live on your phone. It starts off; switch it on here:
+The new Inbox rows are live. They start off; switch them on here:
 
-[WIZARD_TWEAK_V1]{"id":"wizard/desktop-chats"}[/WIZARD_TWEAK_V1]
+[WIZARD_TWEAK_V1]{"id":"wizard/inbox-rows"}[/WIZARD_TWEAK_V1]
 ```
 
-- Several at once: `{"ids":["wizard/desktop-chats","miguel/ai-apps"]}` (max 8). Ids are catalogue ids
+- Several at once: `{"ids":["wizard/inbox-rows","miguel/ai-apps"]}` (max 8). Ids are catalogue ids
   (`web/tweaks/catalog.json`, `author/name`) or the core features' ids (`web/core/core-features.json`); anything else
   is dropped silently.
 - Wizard draws Settings › Look's own switch row (`WosSettings.tweakCard`, same `tweakSwitches` markup, name, "by" line,

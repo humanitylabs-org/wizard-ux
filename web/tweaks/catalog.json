@@ -15,7 +15,6 @@
     "miguel/reply-summary",
     "miguel/now-playing",
     "miguel/calm-offline",
-    "wizard/desktop-chats",
     "wizard/needs-you-reason",
     "wizard/failure-reason",
     "wizard/skins-look-only",
@@ -24,7 +23,6 @@
     "wizard/graceful-restart",
     "wizard/clear-chat-notifications",
     "wizard/sidebar-chats-view",
-    "wizard/app-panel-left",
     "wizard/assist-agent-note",
     "wizard/private-first-setup",
     "wizard/chat-app-switches",
@@ -47,12 +45,8 @@
     "wizard/chats-title-bar",
     "wizard/phone-nav"
   ],
-  "defaults": [
-    "wizard/desktop-chats"
-  ],
-  "promotedDefaults": [
-    "wizard/desktop-chats"
-  ],
+  "defaults": [],
+  "promotedDefaults": [],
   "aliases": {
     "wizard/machines-home": "miguel/machines-home"
   },

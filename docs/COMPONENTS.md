@@ -51,7 +51,7 @@ Back: `WizEscapeBack`, `WosBack`; `WizChatsHost.registerBack`/back.push share re
 | App setup | `WosAppSetup` (`app-setup.js`) |
 | Chats | `WizCore` (`chats.js`/`.css`); desktop `keepThreadOpen`; `WizConfig.chatAfterAction` (phone); Archive/Snooze→`archiveOrder`, `leaveFinishedThread`; `WizLive.messages`/`firstMessages`/`readyRank`; `setFocus`/`migrateChatsFocus`; `--wos-note-quiet` alerts; Esc→`CHATS.clearFilter(id::list)`; `inboxIds` |
 | Chats list model | `WizChatsListModel` (`chats-list-model.js`): `executionStatus`/`isListWorking`; `workingSort`; stalled waits Ready, `background` stays Working; running helper keeps failed Working; `WizLive.workingOrder`; `activityList` (Activity), `placeOf`; Ready's `orderBar` |
-| Pane placement | `WizCore.panes` (`pane-layout.js`): Classic split/cols; tiled/centre/pair/full geometry/focus/ratios/dock (<1100px bar)/appSide; AI keys/Back; local |
+| Pane placement | `WizCore.panes` (`pane-layout.js`): Classic split/cols; tiled/centre/pair/full geometry/focus/ratios/dock (<1100px bar); AI keys/Back; local |
 | Desktop lifecycle | `WizDesktop.host` (`core/desktop-host.js`): snapshots, retained frames/readiness/tools, open/focus/close, onChange, panes; chats(id), settings, placements() |
 | Chat time | `WizCore.ago` (`core.js`): hours <24h, then owner day |
 | Chat state | `WizLive`: rename/read fence, `chanStore`/`chanDaily`/`agentInbox`; `WizCore.chats` dispose |
@@ -104,7 +104,7 @@ Back: `WizEscapeBack`, `WosBack`; `WizChatsHost.registerBack`/back.push share re
 | Need | Use |
 |---|---|
 | The orb, any size | `Orb.create(canvas, fallback, {R})` (`web/orb.js`, icon/core); Android `assets/assist/everywhere.html` + skin |
-| Skin, scenery and tweaks | `WosSkin` (`skins.js`: setGlass), `WosSkinHost` (`skin-host.js`; sheet yield, boot guard, Group/Sort, projects, workspaces); desktop keys (`desktop/desktop.js`, `layouts/ai-apps/desktop.js`): ⌥←/→ pass, E/Z Archive/Snooze, Z Back. `api.settings.section(id, 'look', node)`; `slots.json`: `home-main`, `paintHome`, `windowRefresh`, beside, inbox/list/notify, `data.read`, `back.push`; `api.apps`/`api.desk`, `api.aiUsage`; `WosExperience` (`experience.js`; retry; stable lock), `WosMySkin` (`my-skin.js`; explicit recovery; bad skin off), `WosScenery` (`scenery.js`), `WizAppearance` (`appearance-host.js`; desk geometry); tweak `wizard/desktop-chats` |
+| Skin, scenery and tweaks | `WosSkin` (`skins.js`: setGlass), `WosSkinHost` (`skin-host.js`; sheet yield, boot guard, Group/Sort, projects, workspaces); desktop keys (`desktop/desktop.js`, `layouts/ai-apps/desktop.js`): ⌥←/→ pass, E/Z Archive/Snooze, Z Back. `api.settings.section(id, 'look', node)`; `slots.json`: `home-main`, `paintHome`, `windowRefresh`, beside, inbox/list/notify, `data.read`, `back.push`; `api.apps`/`api.desk`, `api.aiUsage`; `WosExperience` (`experience.js`; retry; stable lock), `WosMySkin` (`my-skin.js`; explicit recovery; bad skin off), `WosScenery` (`scenery.js`), `WizAppearance` (`appearance-host.js`; desk geometry); `desktop-chats.js` |
 | Pins-only orb radial | `WosCreateOrbSwitcher`/`WosOrbSwitcher` (`web/core/orb-switcher.js`/`.css`), core phone dock default (not desktop/corner orb); saves pins/voice options as before |
 | Background image picker/catalogue/scenery | `WosSettings` Background (`settings.js`) + `WosSkin.wallpapers / setWallpaper` (`skins.js`); Mizel shells + Wizard desktop: Files images (wide/tall), cover/scrim, opaque materials |
 

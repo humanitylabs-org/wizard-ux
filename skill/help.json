@@ -137,13 +137,6 @@
         "Newest first": null
       }
     },
-    "chats-list-style": {
-      "help": "Chats list › Desktop-style Chats list: on the phone, draw the Chats list like the desktop sidebar (one quiet line per chat). On for everyone; switch it off for the older phone list.",
-      "when": "phone",
-      "controls": {
-        "Chats list": null
-      }
-    },
     "notifications-in-chats": {
       "help": "Notifications › Notifications in Chats: alerts from Notifications and from apps with an inbox show as yellow threads in Chats (Open, Done, Snooze, Resolve this). On for everyone; switch it off to keep them out of Chats.",
       "controls": {}
@@ -373,9 +366,6 @@
     "wizard/unified-inbox": {
       "where": "Settings › Chats & app screens › Notifications › Notifications in Chats (on for everyone)"
     },
-    "wizard/desktop-chats": {
-      "where": "Settings › Chats & app screens › Chats list › Desktop-style Chats list (phone; on for everyone)"
-    },
     "miguel/ai-apps": {
       "help": "The AI apps view: chats in a sidebar on the left that folds to a slim rail, the chat in a centred column, your apps in a column on the right; an app opens as a panel beside the chat.",
       "where": "desktop: Settings › Appearance › Shell view › AI apps (the standard desktop view; Desks is the other choice)",
@@ -388,10 +378,6 @@
     "wizard/sidebar-chats-view": {
       "help": "AI apps desktop: the chats sidebar uses the Chats look picked in Settings › Chats & app screens › Default Chats.",
       "where": "Settings › Appearance › Try new features › Desktop sidebar follows Default Chats"
-    },
-    "wizard/app-panel-left": {
-      "help": "AI apps desktop: ⌥⇧M or the app panel's header button moves it beside the chats sidebar.",
-      "where": "Settings › Appearance › Try new features › App panel on the left"
     },
     "wizard/assist-agent-note": {
       "help": "Android app: the side button opens Messenger's Agent chat for a note instead of a new Wizard chat.",

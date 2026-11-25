@@ -1343,7 +1343,7 @@ test('desktop app panel: an app\'s title-bar tools (Morning Report\'s ‹ date �
   w.st.renderTools = (frame, slot) => { asked.push(frame); slot.replaceChildren(...tools.map(t => { const b = node('button', 'tool'); b.textContent = t; return b; })); return tools.length > 0; };
   p.go({ view: 'desk', desk: 4 });
   const top = w.q('.aad-ptop'), slot = w.q('.aad-ptop .aad-ptools');
-  assert.deepEqual(top.children.map(c => c.className).filter(c => !/aad-modes|aad-pside/.test(c)), ['aad-pti', 'aad-ptn', 'aad-ptools', 'aad-ib aad-pw', 'aad-ib aad-px'], 'round 15: icon, name, the tools, then Wider and ✕ in the app panel\'s header');
+  assert.deepEqual(top.children.map(c => c.className).filter(c => !/aad-modes/.test(c)), ['aad-pti', 'aad-ptn', 'aad-ptools', 'aad-ib aad-pw', 'aad-ib aad-px'], 'round 15: icon, name, the tools, then Wider and ✕ in the app panel\'s header');
   assert.equal(slot.hidden, true, 'no tools yet: the slot is hidden'); assert.ok(asked.includes(p.appWins[0].querySelector('iframe')), 'the shared host renderer is asked for the panel window\'s frame');
   tools = ['‹', 'Today', '›', 'PDF']; w.st.hostChanged(); w.run(); await settle();
   assert.equal(slot.hidden, false, 'a late registration shows up (the host lifecycle)'); assert.deepEqual(slot.children.map(b => b.textContent), ['‹', 'Today', '›', 'PDF']);

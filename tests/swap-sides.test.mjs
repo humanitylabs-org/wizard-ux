@@ -18,11 +18,11 @@ const SHEETS = [parseCss(readFileSync(new URL('web/layouts/ai-apps/desktop.css',
 test('geometry: side end + dock edge start is the usual layout mirrored, in every arrangement', () => {
   const p = panesOf(), W = 1440, viewport = { width: W, height: 900 };
   const flip = b => ({ ...b, x: W - b.x - b.width });
-  for (const chatOn of [false, true]) for (const appOn of [false, true]) for (const appSide of ['end', 'start'])
+  for (const chatOn of [false, true]) for (const appOn of [false, true])
     for (const extra of [{}, { ratio: '1/3' }, { mode: 'pair' }]) {
       const env = { appOn, chatOn, appWidth: 560, sideWidth: 288, dockWidth: 200 };
-      const usual = p.geometry({ ...extra, appSide }, viewport, env), swapped = p.geometry({ ...extra, appSide, side: 'end', dock: { edge: 'start' } }, viewport, env);
-      const what = JSON.stringify({ chatOn, appOn, appSide, extra });
+      const usual = p.geometry(extra, viewport, env), swapped = p.geometry({ ...extra, side: 'end', dock: { edge: 'start' } }, viewport, env);
+      const what = JSON.stringify({ chatOn, appOn, extra });
       assert.deepEqual(plain(swapped.sidebar), plain(flip(usual.sidebar)), 'the chats sidebar at the right edge ' + what);
       assert.deepEqual(plain(swapped.dock), plain(flip(usual.dock)), 'the Apps column at the left edge ' + what);
       assert.deepEqual(plain(swapped.content), plain(flip(usual.content)), what);
@@ -103,11 +103,10 @@ test('switch on, then off: the layout goes back to the usual sides at once and t
   assert.equal(d.btn()?.hidden, false); assert.equal(d.w.html.dataset.aadPaneSide, 'end', 'on again: the saved swap is back');
 });
 
-test('with the sides swapped, app-panel-left puts the panel next to the chats sidebar, now on the right', () => {
+test('with the sides swapped, the app panel meets the Apps column and the chat the chats sidebar (app-panel-left, wizard-os#639, removed)', () => {
   const p = panesOf(), env = { appOn: true, chatOn: true, appWidth: 560, sideWidth: 288, dockWidth: 200 }, viewport = { width: 1440, height: 900 };
   const g = p.geometry({ side: 'end', dock: { edge: 'start' }, appSide: 'start' }, viewport, env);
-  assert.equal(g.panes.app.x + g.panes.app.width, g.sidebar.x, 'the panel meets the chats sidebar');
-  assert.equal(g.panes.chats.x, g.dock.x + g.dock.width, 'the chat meets the Apps column');
-  const usual = p.geometry({ side: 'end', dock: { edge: 'start' } }, viewport, env);
-  assert.equal(usual.panes.app.x, usual.dock.x + usual.dock.width, 'without it the panel meets the Apps column');
+  assert.equal(g.panes.app.x, g.dock.x + g.dock.width, 'the panel meets the Apps column, a saved appSide is ignored');
+  assert.equal(g.panes.chats.x + g.panes.chats.width, g.sidebar.x, 'the chat meets the chats sidebar');
+  assert.equal(p.normalize({ appSide: 'start' }).appSide, undefined, 'the old saved choice is dropped');
 });

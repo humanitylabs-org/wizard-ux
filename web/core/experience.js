@@ -20,6 +20,16 @@
   let desktopView = '', desktopMigration = null;
   try { const saved = localStorage.getItem(DESKTOP_VIEW); if (desktopViews.includes(saved)) desktopView = saved; } catch (_) {}
   let state = Store.read() || { version: 1, off: {} };
+  /* Switches removed once they were on for everyone (wizard-ux issue 1236: wizard/desktop-chats, the phone Chats list is
+   * now core/desktop-chats.*) or dropped with their code (wizard-os#639: wizard/app-panel-left): a saved on/off for one is
+   * cleared from this device, once, so no stale choice is kept. */
+  const GONE = ['wizard/desktop-chats', 'wizard/app-panel-left'];
+  if (Store.read()) {
+    let dirty = false;
+    for (const k of ['defaultsOff', 'promotedMigrated']) if (Array.isArray(state[k]) && state[k].some(id => GONE.includes(id))) { state[k] = state[k].filter(id => !GONE.includes(id)); dirty = true; }
+    if (state.mix && typeof state.mix === 'object') for (const id of GONE) if (Object.hasOwn(state.mix, id)) { delete state.mix[id]; dirty = true; }
+    if (dirty) Store.write(state);
+  }
   if (desktop && !desktopView) try { const seed = JSON.parse(localStorage.getItem(DESKTOP_SEED)); if (seed?.version === 1 && seed.off && typeof seed.off === 'object') desktopMigration = seed; } catch (_) {}
   let retried = false;  // one quiet retry when a slow network made the whole set fail to load
   let catalog = null, slots = null, set = null, owner = null, manifests = new Map(), generation = 0, error = '', busy = false;
@@ -107,7 +117,7 @@
     for (const ids of Object.values(state.off)) for (const id of ids) if (globalIds().includes(canonical(id))) off.add(canonical(id));
     state.defaultsOff = [...off]; state.defaultsMigrated = true; Store.write(state);
   }
-  /* Switches promoted to defaults (catalog `promotedDefaults`, wizard-ux issue 1236): an off this device chose but has
+  /* Switches promoted to defaults (catalog `promotedDefaults`, first used by wizard-ux issue 1236): an off this device chose but has
    * not shared yet (look sync's queue, wos.look-sync.v1 `pending.tweaks`: offline, or a box without Pages) stays off.
    * Once per id. A choice already shared comes back through look sync, which carries it into `defaults`. `mix` false is
    * never read: setOne() drops an off rather than storing it, and adopt() writes false for every switch not on in the
@@ -322,7 +332,7 @@
     get mix() { return copy(state.mix || {}); },
     get defaultChoices() { return recipe() ? {} : Object.fromEntries(globalIds().map(id => [id, !globalOff(id)])); },
     // Switches that became release-wide defaults after owners could already choose them (catalog `promotedDefaults`,
-    // e.g. wizard-ux issue 1236): look sync carries an owner's earlier explicit on/off for them into `defaults` once.
+    // first used by wizard-ux issue 1236): look sync carries an owner's earlier explicit on/off for them into `defaults` once.
     get promotedDefaults() { return (catalog?.promotedDefaults || []).filter(id => globalIds().includes(id)); },
     // The view chosen per shell type ({ desktop, phone }: a view id, '' = Desks; a missing type = no choice yet).
     get views() { return cleanViews(state.views); },
