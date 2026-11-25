@@ -412,7 +412,10 @@
         return { model: snapshot.model, provider: a.model.provider, agent: a.id };
       }
       if (!M.ready || !snapshot?.provider) await M.load();
-      const route = snapshot || M.snapshot('');
+      let route = snapshot || M.snapshot('');
+      // No model in a cached list: an AI may have been signed in since it was read (the Welcome's sign-in on the
+      // desktop, wizard-ux#1811). Ask the box once more before giving up, never send on a 5-minute-old empty list.
+      if (!snapshot && !route?.model) { await M.load(true); route = M.snapshot(''); }
       if (!route?.model) throw new Error('Model unavailable · choose a model before sending');
       let provider = route.provider;
       if (!provider) {
