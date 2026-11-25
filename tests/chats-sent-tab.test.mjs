@@ -64,6 +64,19 @@ test('a correction posts should_reply and puts the row the box answers with in p
   assert.equal(f.calls.filter(c => c.method === 'POST').length, 1, 'a bad id or answer never reaches the box');
 });
 
+test('older rows read with Show older stay through the next poll, newest rows on top', async () => {
+  let first = [row('d'), row('c')];
+  const f = reader(path => path.includes('before=') ? { json: { rows: [row('b'), row('a')], next: null } } : { json: { rows: first, next: sid('c') } });
+  await f.log.read();
+  await f.log.more();
+  assert.deepEqual(clone(f.log.state().rows.map(r => r.id)), [sid('d'), sid('c'), sid('b'), sid('a')]);
+  assert.equal(f.calls.at(-1).path, `/wizard/v1/sent?limit=100&before=${sid('c')}`);
+  first = [row('e'), row('d')]; // a new capture: the first page moved by one
+  f.log.fresh(); await f.log.read();
+  assert.deepEqual(clone(f.log.state().rows.map(r => r.id)), [sid('e'), sid('d'), sid('c'), sid('b'), sid('a')], 'the loaded tail stays under the fresh page');
+  assert.equal(f.log.state().next, null, 'the older cursor stays (nothing older left)');
+});
+
 /* The real Chats part on a stand-in Chats: switch, rows, Working, corrections, a tap, Back. */
 function part({ tweaks = 'wizard/chats-inbox wizard/agent-inbox', rows = [], ok = true, gone = false, side = false } = {}) {
   const listeners = {}, renders = [], opened = [], corrections = [], toasts = [], fetches = [];

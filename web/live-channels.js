@@ -439,7 +439,7 @@ window.WizCore.liveParts.channels = function () {
       wouldRoute: ROUTES.has(r.would_route) ? r.would_route : null, corrected: r.corrected && typeof r.corrected.should_reply === 'boolean' ? { shouldReply: r.corrected.should_reply, at: num(r.corrected.at) } : null,
       error: str(r.error, 80),
     } : null;
-    const s = { rows: [], next: null, ok: false, gone: false, at: 0, busy: null };
+    const s = { rows: [], next: null, ok: false, gone: false, at: 0, busy: null, deep: false };
     const tell = () => { try { emit(); } catch (_) {} };
     function read() {
       if (s.busy) return s.busy;
@@ -447,10 +447,13 @@ window.WizCore.liveParts.channels = function () {
       s.busy = (async () => {
         try {
           const j = await (await req('/wizard/v1/sent?limit=100', { cache: 'no-store' })).json();
-          s.rows = (Array.isArray(j?.rows) ? j.rows : []).map(row).filter(Boolean);
-          s.next = typeof j?.next === 'string' && ID.test(j.next) ? j.next : null;
+          const page = (Array.isArray(j?.rows) ? j.rows : []).map(row).filter(Boolean), next = typeof j?.next === 'string' && ID.test(j.next) ? j.next : null;
+          // Older pages read with Show older stay: the fresh first page, then the loaded rows after its last one.
+          const k = s.deep && page.length ? s.rows.findIndex(r => r.id === page.at(-1).id) : -1;
+          if (k >= 0 && k < s.rows.length - 1) { const have = new Set(page.map(r => r.id)); s.rows = page.concat(s.rows.slice(k + 1).filter(r => !have.has(r.id))); }
+          else { s.rows = page; s.next = next; s.deep = false; }
           s.ok = true; s.gone = false;
-        } catch (e) { if (e?.status === 404) { s.rows = []; s.next = null; s.ok = true; s.gone = true; } }
+        } catch (e) { if (e?.status === 404) { s.rows = []; s.next = null; s.deep = false; s.ok = true; s.gone = true; } }
         finally { s.busy = null; tell(); }
         return s;
       })();
@@ -465,7 +468,7 @@ window.WizCore.liveParts.channels = function () {
       const have = new Set(s.rows.map(r => r.id));
       s.rows = s.rows.concat((Array.isArray(j?.rows) ? j.rows : []).map(row).filter(r => r && !have.has(r.id)));
       s.next = typeof j?.next === 'string' && ID.test(j.next) ? j.next : null;
-      tell(); return s;
+      s.deep = true; tell(); return s;
     }
     // Should have replied (true) / Didn't need a reply (false): the box moves the thread and keeps the example.
     async function correct(id, shouldReply) {
