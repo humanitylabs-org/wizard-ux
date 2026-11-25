@@ -84,6 +84,8 @@ window.WizCore.liveParts.seen = function ({  }) {
       // Chats channels (wizard-ux issue 1261): the row's channel id and first owner request, checked after the spread.
       if (!(typeof s.channel === 'string' && /^[a-z0-9-]{1,48}$/.test(s.channel))) delete s.channel;
       if (typeof s.firstRequest === 'string') s.firstRequest = s.firstRequest.slice(0, 400); else delete s.firstRequest;
+      // wizard-ux issue 1808: the box's quiet-reply mark (live.js quietReply), only ever true.
+      if (s.quietReply !== true) delete s.quietReply;
       return s;
     }
     const id = item.id || item.session_id; if (!id) return null;
@@ -150,6 +152,8 @@ window.WizCore.liveParts.seen = function ({  }) {
       agent: typeof item.agent === 'string' ? item.agent : item.agent && typeof item.agent === 'object' && typeof item.agent.id === 'string' ? item.agent.id : '',
       ...(typeof item.channel === 'string' && /^[a-z0-9-]{1,48}$/.test(item.channel) ? { channel: item.channel } : {}),
       ...(typeof item.firstRequest === 'string' ? { firstRequest: item.firstRequest.slice(0, 400) } : {}),
+      // wizard-ux issue 1808: the newest answer was to the owner's reply that asked for none (live.js quietReply).
+      ...(item.wizard_quiet_reply === true || item.quietReply === true ? { quietReply: true } : {}),
     };
   }
 

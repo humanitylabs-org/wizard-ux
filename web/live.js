@@ -127,6 +127,15 @@
   const savedResultAsk = s => !!s && (!!s.backgroundResult || s.attention?.state === 'needs_you' && s.attention?.ask === SAVED_RESULT_ASK);
   function tweakOn(id) { try { return (document.documentElement.dataset.tweaks || '').split(' ').includes(id); } catch (_) { return false; } }
   function reasonOn() { return tweakOn(REASON_TWEAK); }
+  /* Quiet replies (wizard-ux issue 1808; both quiet-inbox switches, wizard/agent-inbox + wizard/chats-inbox): the box
+   * marks a thread whose newest run answered the owner's reply that asked for nothing ("Sent to Miguel, done") and
+   * that ended done or fyi (Agent Service quietReply). That answer is not new to him: no unread dot, no count, not in
+   * Inbox / Ready; Sent shows it Done. An ask on the row (needs you, check), a failure or a run still going never is. */
+  function quietReply(s) {
+    return !!s && s.quietReply === true && tweakOn('wizard/agent-inbox') && tweakOn('wizard/chats-inbox') && !s.critical
+      && !['needs_you', 'check'].includes(s.attention?.state) && !['failed', 'interrupted', 'waiting_for_approval', 'unknown'].includes(s.status)
+      && !globalThis.WizChatsListModel?.isListWorking?.(s);
+  }
   function backgroundOn() { return tweakOn('wizard/background-continue') || reasonOn(); }
   let backgroundPollTimer = null, backgroundPollUntil = 0;
   // Results this device already continued (or found stale). A discovery read that started before the tap can land
@@ -469,7 +478,8 @@
     ticks: 0,
     emit() { this.ticks++; for (const fn of this.listeners) { try { fn(this); } catch (e) { console.error(e); } } },
     // Archived threads are read (James, 24 Oct 2026): Archive (Done, or aged past archiveAfterDays) never shows unread.
-    isNew(s) { return !this.inArchive(s) && hasNew(s, this.seenOf(s)); },
+    isNew(s) { return !this.inArchive(s) && !this.quietReply?.(s) && hasNew(s, this.seenOf(s)); },
+    quietReply,
     // Same rule as groupWork's Archive section, without the per-row day maths.
     inArchive(s) {
       if (!s || s.hidden || needsApproval(s) || inWorking(s) || isDeferred(s) || isErr(s)) return false;
@@ -481,7 +491,7 @@
     // (agents, Spaces) count only these, so a dot never points at nothing.
     // Snoozed is never unread (wizard-os issue 510): with Snooze = bottom of Ready a snoozed thread sits in Ready's tail
     // (and in the AI apps view's Snoozed), so it must not light the Ready badge while Ready shows nothing new.
-    visibleUnread(rows) { const g = groupWork(rows || []), out = []; for (const [k, list] of Object.entries(g)) if (k !== 'archive' && k !== 'deferred' && k !== 'working') for (const s of list) if (hasNew(s, this.seenOf(s)) && !(snoozeLast() && isDeferred(s) && !inWorking(s))) out.push(s); return out; },
+    visibleUnread(rows) { const g = groupWork(rows || []), out = []; for (const [k, list] of Object.entries(g)) if (k !== 'archive' && k !== 'deferred' && k !== 'working') for (const s of list) if (hasNew(s, this.seenOf(s)) && !this.quietReply?.(s) && !(snoozeLast() && isDeferred(s) && !inWorking(s))) out.push(s); return out; },
     // Server-owned, agent-qualified receipts: activity metadata only, never transcript text.
     seenOf(s) { return this.seen; },
     seenRecord(s) { return this.seen?.threads?.[seenKeyOf(s)]; },
@@ -517,7 +527,7 @@
         if (def) continue;
         const at = Date.parse(assistantAt(s) || s.activityAt || s.updatedAt);
         if (isFinite(at) && at < now - WEEK) continue;
-        if (!hasNew(s, this.seenOf(s))) continue;
+        if (!hasNew(s, this.seenOf(s)) || this.quietReply?.(s)) continue;
         if (s.status === 'failed' || s.status === 'interrupted' || s.critical) needs.push(s); else ready.push(s);
       }
       const t = s => Date.parse(assistantAt(s) || s.activityAt || s.updatedAt) || 0;
