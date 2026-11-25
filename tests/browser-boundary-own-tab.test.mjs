@@ -8,6 +8,7 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { withShellParts } from './fixtures/shell-parts.mjs';
 import { withWebParts } from './fixtures/web-parts.mjs';
+import { launcherFixture } from './launcher-fixture.mjs';
 
 const read = p => withShellParts(withWebParts(readFileSync(new URL('../' + p, import.meta.url), 'utf8')));
 const ORIGIN = 'https://box.example.ts.net';
@@ -64,9 +65,38 @@ for (const which of ['phone', 'desktop']) {
   });
 }
 
-test('pinned Files (single-app session) opens Files itself under the boundary instead of a sandboxed frame', () => {
-  const src = read('web/core/single-app-session.js');
-  const i = src.indexOf('ownTab?.('), j = src.indexOf("frame = document.createElement('iframe')");
-  assert.ok(i > 0 && i < j, 'checked before any app frame is made');
-  assert.match(src.slice(i, j), /location\.replace\(next\.url\)/);
+// The pinned single-app session (web/core/single-app-session.js), run for real with the shell's home-screen policy.
+function policy(id) {
+  const window = {};
+  const ctx = vm.createContext({ window, document: { documentElement: { setAttribute() {} } }, location: { origin: 'https://box.example', search: '?app-session=' + id }, URL, URLSearchParams, Object, Proxy, Reflect });
+  launcherFixture(ctx); vm.runInContext(readFileSync(new URL('../web/core/home-screen-policy.js', import.meta.url), 'utf8'), ctx);
+  return window.WizHomeScreenPolicy;
+}
+async function pinned({ on, app }) {
+  const frames = [], replaced = [];
+  function el(tag) {
+    return { tag, dataset: {}, attrs: {}, style: { setProperty() {} }, classList: { add() {}, remove() {} }, children: [], events: {},
+      setAttribute(k, v) { this.attrs[k] = String(v); }, hasAttribute(k) { return k in this.attrs; }, getAttribute(k) { return this.attrs[k] ?? null; },
+      appendChild(child) { this.children.push(child); if (child.tag === 'iframe') frames.push(child); }, replaceChildren() { this.children = []; }, append() {},
+      addEventListener(type, fn) { this.events[type] = fn; }, remove() {}, get isConnected() { return true; } };
+  }
+  const host = el('host'), document = { documentElement: el('html'), getElementById: () => host, addEventListener() {}, createElement: el, title: '' };
+  const window = { WizHomeScreenPolicy: policy(app.id), WizCore: { apps: () => ({ APP: { [app.id]: { ...app, kind: 'wizard' } } }), appsLoaded: () => Promise.resolve() }, WosSelMenu: { back: () => false },
+    WizAppServices: { attach: () => () => {}, guardBack() {}, back: () => 'pending' } };
+  if (on) window.WizBrowserBoundary = boundary();
+  const store = new Map(), localStorage = { getItem: k => store.get(k) ?? null, setItem: (k, v) => store.set(k, String(v)), removeItem: k => store.delete(k), get length() { return store.size; }, key: n => [...store.keys()][n] ?? null };
+  const location = { origin: ORIGIN, href: ORIGIN + '/wizard-os-home/?app-session=' + app.id, replace: u => replaced.push(u) };
+  const ctx = vm.createContext({ window, document, localStorage, location, URL, addEventListener() {}, setInterval() {}, setTimeout() {} });
+  vm.runInContext(readFileSync(new URL('../web/core/single-app-session.js', import.meta.url), 'utf8'), ctx); await new Promise(setImmediate);
+  return { frames, replaced };
+}
+
+test('pinned Files opens Files itself under the boundary; other pinned apps and boundary off keep their frame', async () => {
+  const files = await pinned({ on: true, app: FILES });
+  assert.ok(files.replaced.length > 0 && files.replaced.every(u => u === '/files/'), 'the pin page becomes File Browser');
+  assert.equal(files.frames.length, 0, 'no sandboxed frame it would stay blank in');
+  const notes = await pinned({ on: true, app: NOTES });
+  assert.deepEqual(notes.replaced, []); assert.equal(notes.frames.length, 1); assert.equal(notes.frames[0].getAttribute('sandbox'), SANDBOX);
+  const off = await pinned({ on: false, app: FILES });
+  assert.deepEqual(off.replaced, []); assert.equal(off.frames.length, 1); assert.equal(off.frames[0].hasAttribute('sandbox'), false);
 });
