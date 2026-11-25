@@ -104,7 +104,9 @@ window.WizCore.chatsParts.outbox = function ({ ch, CH, CHECK_SVG, elOf, esc, H, 
       const held = p.runId && (s?.reconnect?.runId === p.runId
         || (s?.lastRunKey === `wizard-saved-retry-${p.runId}` && s.lastRunStatus !== 'completed'));
       if (held) {
-        if (!s?.reconnect && ['failed', 'interrupted', 'cancelled'].includes(s?.lastRunStatus)) return '<span class="pst fail">Not sent · message saved</span>';
+        // Issue 1799: signed back in, the saved send waits for Retry (or its automatic resend), not for a sign-in.
+        const live = s?.reconnect && (window.WosModels?.reconnect ? window.WosModels.reconnect(s) : s.reconnect);
+        if (!live && ['failed', 'interrupted', 'cancelled'].includes(s?.lastRunStatus)) return '<span class="pst fail">Not sent · message saved</span>';
         return '<span class="pst wait">Waiting for sign-in</span>';
       }
       const label = p.steered ? `${CHECK_SVG}${p.steerQueued ? 'Added to the queued request' : `Delivered · ${agent} sees it next step`}` : 'Sent';

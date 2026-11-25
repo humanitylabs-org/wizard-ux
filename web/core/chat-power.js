@@ -513,7 +513,7 @@ window.WosChatPower = function chatPower(A) {
   // Retry = send the thread's last request again, through the durable outbox, on the same thread
   // (and the same model, unless one was just picked). controller.ts retryServerFailedSession.
   const retrying = new Map();
-  async function retryThread(wid, sid, o, sourceId, alive) {
+  async function retryThread(wid, sid, o, sourceId, alive, auto = '') {
     let s = LIVE.session(sid); if (!s || !OUTBOX) return false;
     // Issue 1235: Hermes refuses every reply into a chat another app owns; a resend would only fail the same way.
     if (M?.foreignApp?.(s)) { toast('!', `This chat lives in ${M.foreignApp(s)} · reply there`, 2600); return false; }
@@ -556,10 +556,10 @@ window.WosChatPower = function chatPower(A) {
       if (!text) { toast('!', 'This thread has no request to send again · open it to reply', 2600); return false; }
       const cur = o ? { model: o.value, provider: o.provider } : threadModel(s);
       await OUTBOX.enqueue({ kind: 'reply', sessionId: sid, agent: s.agent || A.winAgent?.(w) || '', text, retryRunId: s.retryRunId || '', wid: w && w.thread === sid ? wid : '', how: 'retry', source: 'chat',
-        instructions: `${window.WizConfig.owner() || 'The owner'} pressed Retry on this thread after the last request failed${o ? `, choosing ${o.name}` : ''}. ${text === RETRY_WORD ? 'Carry out the last request in this thread again (it may be a follow-through note rather than a typed message).' : 'This is the same request again.'}`,
+        instructions: `${auto ? `Wizard is sending this again on its own: the last request failed because the ${auto} sign-in had expired, and ${window.WizConfig.owner() || 'the owner'} has signed ${auto} back in` : `${window.WizConfig.owner() || 'The owner'} pressed Retry on this thread after the last request failed${o ? `, choosing ${o.name}` : ''}`}. ${text === RETRY_WORD ? 'Carry out the last request in this thread again (it may be a follow-through note rather than a typed message).' : 'This is the same request again.'}`,
         ...(cur.model ? { model: cur.model, provider: cur.provider } : {}) });
       E?.cleared.set(sid, Date.now());
-      toast('↻', o ? `Retrying on ${o.name}` : 'Retrying', 1600);
+      toast('↻', o ? `Retrying on ${o.name}` : auto ? `${auto} is back · sending your saved message` : 'Retrying', 1600);
       if (c) follow(wid);
       return true;
     } catch (e) { toast('!', 'Couldn’t queue the retry', 2400); return false; }
@@ -614,7 +614,29 @@ window.WosChatPower = function chatPower(A) {
   function dismissThread(wid, sid) { E?.dismissFailure(sid, rowFor(wid, sid)); rerenderAll(); }
   function rerenderAll() { for (const id of Object.keys(A.CH)) { const w = H.win(id); if (w) A.renderChats(w); } H.changed?.(); }
   // A subscription signed out or back in (WosUsage reading): failed-send cards switch between Reconnect and Retry.
-  window.addEventListener?.('wos:ai-signin', () => rerenderAll());
+  // Issue 1799: the sign-in card promises "Sign in to Claude and it will send … on its own". When this device saw a
+  // subscription read signed out and now reads it signed in, each chat whose failed send that card holds goes again
+  // once, through the same saved retry as the Retry button (wizard_retry_run_id): the box admits one saved retry per
+  // failed run, so its own automatic resend or another device doing the same never sends it twice.
+  let wasOut = new Set();
+  const resentRuns = new Set();
+  function resendHeld(back) {
+    const rows = [...(LIVE.sessions || []), ...Object.values(LIVE.agentSessions || {}).flat()];
+    for (const s of rows) {
+      const rc = s?.reconnect;
+      if (!rc?.runId || !back.has(rc.provider) || resentRuns.has(rc.runId) || !['failed', 'interrupted'].includes(s.status)) continue;
+      // One owner per id, and a routed thread only when its row names its agent (the resend must reach that agent).
+      if (s.queueReason === 'provider_access' || E?.dismissed?.(s) || LIVE.session(s.id) !== s || (LIVE.ownerOf?.(s) && s.agent !== LIVE.ownerOf(s))) continue;
+      resentRuns.add(rc.runId);
+      retryThread('', s.id, null, rc.runId, null, rc.name || 'AI');
+    }
+  }
+  window.addEventListener?.('wos:ai-signin', e => {
+    const out = new Set(e?.detail?.signedOut || []), back = new Set((e?.detail?.signedIn || []).filter(f => wasOut.has(f)));
+    wasOut = out;
+    if (back.size) resendHeld(back);
+    rerenderAll();
+  });
 
   /* Errors section extras: background work Wizard flagged (/wizard/attention) and voice notes that didn't send. */
   const voiceFailed = () => (OUTBOX ? OUTBOX.unsent().filter(it => it.state === 'failed' && (it.audio || it.audioFile)) : []);
@@ -623,7 +645,9 @@ window.WosChatPower = function chatPower(A) {
   function errorRow(s, rowHtml) {
     if (!E) return rowHtml;
     const busy = E.busy.get(s.id);
-    const rc = s.reconnect ? `<button type="button" data-chreconnect="${esc(s.reconnect.appId)}" data-recovery-run="${esc(s.reconnect.runId || '')}">Sign in</button>` : '';
+    // Issue 1799: the stored sign-in diagnosis only while that subscription still reads signed out; else Retry.
+    const live = M?.reconnect ? M.reconnect(s) : s.reconnect;
+    const rc = live ? `<button type="button" data-chreconnect="${esc(live.appId)}" data-recovery-run="${esc(live.runId || '')}">Sign in</button>` : '';
     if (rc) return `<div class="ch-err diagnosed" data-errsid="${esc(s.id)}">${rowHtml}</div>`;
     // Issue 1235: a chat another app owns can't be retried from here; only Dismiss.
     if (M?.foreignApp?.(s)) return `<div class="ch-err diagnosed" data-errsid="${esc(s.id)}">${rowHtml}<div class="ch-err-b"><button type="button" class="ghost" data-errdismiss="${esc(s.id)}" ${busy ? 'disabled' : ''}>${busy === 'dismiss' ? 'Dismissing…' : 'Dismiss'}</button></div></div>`;
