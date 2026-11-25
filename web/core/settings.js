@@ -898,5 +898,50 @@
   /* The Settings view (mount), deep links (route) and the focus trap live in core/settings-view.js (wizard-ux issue 1665). */
   const { cancelWait, mount, route, trap } = window.WizCore.settingsParts.view({ attention, cardHtml, chatsHost, chatsName, esc, featurePages, features, filled, mounts, pageOf, PAGES, subtitle });
   window.WosMySkin?.on(() => { for (const m of mounts) m.render(); });
-  window.WosSettings = { refresh: () => { for (const m of mounts) m.render(); }, register, mount, route, cancelWait, tweakCard, tweakCardTap, hasSystem: () => PAGES.some(p => p.group === 'System' && p.available()), systemPages: Object.freeze(PAGES.filter(p => p.group === 'System').map(p => p.id)), trap, pageOf, attention, moveDraft, unsentAll, unsentRow, unsentAction, retryAll, focusUnsent, tweakOptions, get features() { return [...features.values()].map(f => ({ id: f.id, aliases: f.aliases || [], page: pageOf(f) })); } };
+  /* Share feature counts (wizard-app-manager issue 701, box switch wizard/try-feature-counts, off by default): while it
+   * is on, read the Try new features state (tried, thumbs) of every app the App Manager can't call itself (no owner
+   * proof key, wizard-os#133) the way the Tracker's Try it does (same origin, the owner's Serve login, X-Wizard-Switch: 1)
+   * and hand only {id, issues, tried, vote} to this box's App Manager (store-install/_switch-feedback), which sends the
+   * anonymous counts. A few seconds after start, then at most every 10 minutes while the shell is visible. */
+  const COUNTS_TWEAK = 'wizard/try-feature-counts', COUNTS_EVERY = 10 * 60 * 1000, COUNT_APP = /^[a-z0-9][a-z0-9-]{0,62}$/;
+  const counts = { at: 0, busy: false, timer: 0 };
+  const countsOn = () => { try { return String(document.documentElement?.dataset?.tweaks || '').split(' ').includes(COUNTS_TWEAK); } catch (e) { return false; } };
+  async function countsListing(app) {
+    for (const p of ['api/switches', 'api/view/switches']) {
+      const r = await window.fetch(`/${encodeURIComponent(app)}/${p}`, { credentials: 'same-origin', cache: 'no-store', headers: { Accept: 'application/json', 'X-Wizard-Switch': '1' } });
+      if (r.status === 404) continue;
+      const j = /json/.test(r.headers.get('content-type') || '') ? await r.json().catch(() => null) : null;
+      return r.ok && j && Array.isArray(j.switches) ? j.switches : null;
+    }
+    return null;
+  }
+  async function countsCollect() {
+    const cat = await appSwFetch();
+    const apps = (Array.isArray(cat?.apps) ? cat.apps : []).filter(a => a && a.ok === false && COUNT_APP.test(String(a.id || '')));
+    const out = [];
+    for (const a of apps) {
+      try {
+        const sw = await countsListing(a.id);
+        if (sw) out.push({ id: a.id, switches: sw.filter(x => x && typeof x.id === 'string').map(x => ({ id: x.id, issues: Array.isArray(x.issues) ? x.issues : [], tried: x.tried === true, vote: x.vote === 'up' || x.vote === 'down' ? x.vote : null })) });
+      } catch (e) { /* that app is restarting or gone: next time */ }
+    }
+    if (!out.length) return { apps: 0 };
+    const r = await window.fetch(homePath('store-install/_switch-feedback'), { method: 'POST', credentials: 'same-origin', cache: 'no-store',
+      headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-Wizard-Store': '1' }, body: JSON.stringify({ apps: out }) });
+    return { apps: out.length, status: r.status };
+  }
+  function countsRun() {
+    if (counts.busy || !countsOn() || typeof window.fetch !== 'function' || document.visibilityState === 'hidden' || Date.now() - counts.at < COUNTS_EVERY) return null;
+    counts.busy = true; counts.at = Date.now();
+    return countsCollect().catch(() => null).finally(() => { counts.busy = false; });
+  }
+  // Armed only while the switch is on (wos:experience fires once the shell has applied its switches): a few seconds after
+  // start, then every 10 minutes. Switched off, no timer is left behind.
+  function countsArm() {
+    if (counts.timer || !countsOn() || typeof setTimeout !== 'function') return;
+    counts.timer = setTimeout(() => { counts.timer = 0; void countsRun(); countsArm(); }, counts.at ? COUNTS_EVERY : 4000);
+  }
+  window.addEventListener?.('wos:experience', countsArm);
+  window.addEventListener?.('visibilitychange', () => { void countsRun(); countsArm(); });
+  window.WosSettings = { refresh: () => { for (const m of mounts) m.render(); }, countsCollect, register, mount, route, cancelWait, tweakCard, tweakCardTap, hasSystem: () => PAGES.some(p => p.group === 'System' && p.available()), systemPages: Object.freeze(PAGES.filter(p => p.group === 'System').map(p => p.id)), trap, pageOf, attention, moveDraft, unsentAll, unsentRow, unsentAction, retryAll, focusUnsent, tweakOptions, get features() { return [...features.values()].map(f => ({ id: f.id, aliases: f.aliases || [], page: pageOf(f) })); } };
 })();

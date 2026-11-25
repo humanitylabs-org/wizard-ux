@@ -1170,6 +1170,12 @@
       "source": "web/store/store-github.js",
       "kind": "write-or-stream",
       "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
+    "/wizard-os-home/store-install/_switch-feedback": {
+      "status": "not-exercised",
+      "source": "web/core/settings.js",
+      "kind": "write",
+      "note": "Only posted to while the off-by-default box switch wizard/try-feature-counts is on (wizard-app-manager issue 701): the Try new features state of apps the App Manager can't read itself, for anonymous counts. The QA harnesses run with it off. Refused and collected, never answered, if a flow reaches it."
     }
   }
 }
