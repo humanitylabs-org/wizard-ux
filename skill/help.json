@@ -425,10 +425,6 @@
       "help": "App Manager uses its own Runtipi 4.12 key.",
       "where": "Settings › Appearance › Try new features › Runtipi 4.12 sign-in key"
     },
-    "wizard/local-app-routes": {
-      "help": "On a box not on Tailscale yet, app screens like Files and Search open inside Wizard on the box itself.",
-      "where": "Settings › Appearance › Try new features › Open apps without Tailscale"
-    },
     "wizard/app-tap-home": {
       "help": "Narrow desktop window: tapping the icon of the app in front takes it back to its first view.",
       "where": "Settings › Appearance › Try new features › Tap the app in front for its first view"
