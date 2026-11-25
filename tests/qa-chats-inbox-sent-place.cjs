@@ -111,7 +111,7 @@ const report = { origin, web, cases: [] };
         const inbox = () => page.evaluate(aad => {
           if (aad) {
             const out = {};
-            for (const b of document.querySelectorAll('.aad-side .aad-sec-b[id^="aad-sec-"]')) for (const r of b.querySelectorAll('.aad-rw[data-sid]')) if (r.getClientRects().length) out[r.dataset.sid] = b.id.slice(8).replace(/^ready$/, 'ready');
+            for (const b of document.querySelectorAll('.aad-side .aad-sec-b[id^="aad-sec-"]')) for (const r of b.querySelectorAll('.aad-rw[data-sid]')) if (r.getClientRects().length) out[r.dataset.sid] = b.id.slice(8);
             return out;
           }
           const list = [...document.querySelectorAll('.ch-list')].find(n => n.getClientRects().length);
