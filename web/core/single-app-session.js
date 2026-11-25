@@ -144,7 +144,7 @@
   };
   window.WizAppServices?.guardBack(() => { window.__wosNativeBack(); return true; }, toast);
   window.WizCore.bridge?.handle({ back:window.__wosNativeBack, dictation: text => { if (chats?.isHosted(wid)) chats.insertText(wid, text); } });
-  /* App windows (wizard-os issue 650, switch wizard/app-windows): the Android app opens this window for a link to a page
+  /* App windows (wizard-os issue 650): the Android app opens this window for a link to a page
    * of this app with ?app-path= (a new window) or __wosSessionGo (an open one). Only a page inside the app is followed. */
   let linkPath = ''; try { linkPath = /[?&]app-path=/.test(location.search) ? new URLSearchParams(location.search).get('app-path') || '' : ''; } catch (_) {}
   if (linkPath) { try { const u = new URL(location.href); u.searchParams.delete('app-path'); history.replaceState(history.state, '', u.pathname + u.search + u.hash); } catch (_) {} }
@@ -194,7 +194,7 @@
     // A pin made before its app was renamed (ux#1471) resolves through the registry's aliases: services use the app's current id.
     if (opaque) { const seed = window.WizBrowserBoundary.storageName?.(next.id || id); if (seed) frame.name = seed; }
     const saved = read();
-    // A link opened this window at a page inside the app (Android, switch wizard/app-windows): that page, once.
+    // A link opened this window at a page inside the app (Android, wizard-os issue 650): that page, once.
     const linked = takeLinkPath(next.url);
     frame.src = linked || (saved?.v === 1 && saved.base === next.url && policy.within(saved.href, next.url) ? saved.href : next.url);
     // Attach before frontend scripts run: shared capture/share/appearance/reading, not a nested shell.

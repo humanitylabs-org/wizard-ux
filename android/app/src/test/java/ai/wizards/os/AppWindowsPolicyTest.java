@@ -3,7 +3,7 @@ package ai.wizards.os;
 import org.junit.Test;
 import static org.junit.Assert.*;
 
-/** App windows (wizard-os issue 650, switch wizard/app-windows): what a link may open and when. */
+/** App windows (wizard-os issue 650): what a link may open and when. */
 public class AppWindowsPolicyTest {
     @Test public void appStartAndPagesInsideAnAppAreKept() {
         assertEquals("", AppWindowsPolicy.path(null));

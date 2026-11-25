@@ -1,7 +1,7 @@
 package ai.wizards.os;
 
 /**
- * App windows (wizard-os issue 650, switch wizard/app-windows): the plain rules, no Android types, so they run as JVM
+ * App windows (wizard-os issue 650): the plain rules, no Android types, so they run as JVM
  * tests. {@link AppWindows} applies them.
  */
 public final class AppWindowsPolicy {
