@@ -45,7 +45,7 @@ function discovery({ tweaks, payload }) {
   };
   ctx.normalize = normalizer();
   vm.createContext(ctx);
-  vm.runInContext(`${body}; this.merge = mergeBackgroundResults; this.backgroundOn = backgroundOn; this.settled = BACKGROUND_SETTLED;`, ctx);
+  vm.runInContext(`${body}; this.merge = mergeBackgroundResults; this.settled = BACKGROUND_SETTLED;`, ctx);
   return { ctx, calls };
 }
 const listing = {
@@ -54,9 +54,8 @@ const listing = {
   scanning: false,
 };
 
-test('on (without background-continue): discovery runs and each result keeps the Service reason', async () => {
+test('on: discovery runs and each result keeps the Service reason', async () => {
   const { ctx, calls } = discovery({ tweaks: `wizard/unified-inbox ${ID}`, payload: listing });
-  assert.equal(ctx.backgroundOn(), true);
   const rows = [{ id: 'old', status: 'completed', backgroundResult: { id: RID } }];
   await ctx.merge(rows);
   assert.deepEqual(calls, ['/wizard/background-results']);
@@ -68,12 +67,12 @@ test('on (without background-continue): discovery runs and each result keeps the
   assert.equal(normalizer()({ id: 'old', status: 'completed', wizard_background_result: { id: RID, session_id: 'old', reason: REASON } }).backgroundResult.reason, REASON);
 });
 
-test('off: Chats never asks for saved results (nothing changes)', async () => {
+test('off: discovery still runs (Continue is on for everyone, wizard-agent-service #14) and only reads', async () => {
   const { ctx, calls } = discovery({ tweaks: 'wizard/unified-inbox', payload: listing });
   const rows = [{ id: 'old', status: 'completed', backgroundResult: null }];
   await ctx.merge(rows);
-  assert.deepEqual(calls, []);
-  assert.equal(rows[0].backgroundResult, null);
+  assert.deepEqual(calls, ['/wizard/background-results']);
+  assert.equal(rows[0].backgroundResult.id, RID);
 });
 
 // The real LIVE.dismissBackground / markHandled / archive hooks, cut out of live.js.
@@ -115,7 +114,7 @@ test('on: Done and Archive send the thread-wide form (they know no result id)', 
 });
 
 test('off, or a routed agent thread: nothing is posted', async () => {
-  const off = liveDismiss({ tweaks: 'wizard/background-continue' });
+  const off = liveDismiss({ tweaks: '' });
   assert.equal(await off.ctx.LIVE.dismissBackground('old', RID), false);
   assert.deepEqual(off.posts, []);
   for (const kind of ['host-profile', 'container', 'restricted']) {
@@ -179,14 +178,13 @@ test('on: the thread says why, with Continue and Dismiss; Dismiss (tapped twice)
   assert.deepEqual(h.posts, [], 'Dismiss starts no Continue');
 });
 
-test('off: the background-continue panel is unchanged and has no Dismiss; a stray tap does nothing', async () => {
-  const h = power({ tweaks: 'wizard/background-continue' });
+test('off: the Continue panel (on for everyone) is unchanged and has no Dismiss; a stray tap does nothing', async () => {
+  const h = power({ tweaks: '' });
   const html = h.api.failureHtml(h.w, h.session);
   assert.match(html, /Background result ready/);
   assert.doesNotMatch(html, /data-background-dismiss/);
   h.tap(); await new Promise(r => setTimeout(r, 10));
   assert.deepEqual(h.dismissed, []);
-  assert.equal(power({ tweaks: '' }).api.failureHtml(h.w, h.session), '', 'both off: no panel at all');
 });
 
 for (const kind of ['host-profile', 'container', 'restricted']) test(`on: a routed ${kind} thread gets no panel (main agent only)`, () => {

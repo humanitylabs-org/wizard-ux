@@ -174,7 +174,6 @@ Settings › Appearance › Try new features lists unfinished features anyone ca
 - **Camera and Attach on the side button**: Android app: Camera and Attach buttons next to Screen while talking to the side-button orb.
 - **Capture inbox**: Agent files your Files Inbox drops.
 - **Clear chat notifications**: Android app: reading a LINE, WhatsApp, Telegram or other bridged chat in Messenger clears that app's own notification (needs Android's Notification access).
-- **Continue saved background results**: Work that finished while Wizard was down shows in its own thread with one Continue button. Nothing resumes until you tap it.
 - **Desktop sidebar follows Default Chats**: AI apps desktop: the chats sidebar uses the Chats look picked in Settings › Chats & app screens › Default Chats.
 - **Follow main**: Green merges go live by themselves.
 - **Hourly app updates**: With app updates on Automatic, apps are checked and updated every hour instead of nightly.

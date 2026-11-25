@@ -1186,10 +1186,16 @@
       "note": "Thread tracker is an off-by-default tweak; none of qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed turns it on, so nothing reaches it. Refused and collected, never answered, if a flow reaches it."
     },
     "/wizard/background-results": {
-      "status": "not-exercised",
+      "status": "catalogued",
       "source": "web/live.js",
       "kind": "read",
-      "note": "Continue saved background results is an off-by-default tweak (wizard/background-continue); none of qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed turns it on, so nothing reaches it. Refused and collected, never answered, if a flow reaches it."
+      "examples": [
+        {
+          "method": "GET",
+          "path": "/wizard/background-results"
+        }
+      ],
+      "note": "Saved background results (wizard-agent-service issue 14): on for everyone, read-only discovery on each Chats list refresh; it never starts a model. The shared catalogue answers 404 (an older Service without the route), so Chats stays as it was. tests/background-continue.test.mjs covers it against a fake box."
     },
     "/wizard/background-results/dismiss": {
       "status": "not-exercised",
@@ -1201,7 +1207,7 @@
       "status": "not-exercised",
       "source": "web/core/chat-power.js",
       "kind": "write-or-stream",
-      "note": "Continue saved background results is an off-by-default tweak (wizard/background-continue); none of qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed turns it on, so nothing reaches it. Refused and collected, never answered, if a flow reaches it."
+      "note": "One-tap Continue for a saved background result (wizard-agent-service issue 14, on for everyone): POSTed only by an owner tap on the Continue panel, which none of qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed reach (the shared catalogue lists no saved result). Refused and collected, never answered, if a flow reaches it."
     },
     "/wizard-os-home/store-install/_github": {
       "status": "not-exercised",

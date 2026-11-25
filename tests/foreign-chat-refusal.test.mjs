@@ -87,7 +87,7 @@ test('no Needs retry panel, no Errors-list Retry, and Retry itself refuses in su
   const M = models(), power = read('web/core/chat-power.js');
   // The thread's Needs retry panel (failureHtml, with the route helpers it reads).
   const fail = runRecording(power.slice(power.indexOf('  const failedRoute'), power.indexOf('  function failureHtml(')) + block(power, '  function failureHtml('),
-    { M, failedShown: () => true, backgroundOn: () => false, retrying: new Map(), E: { busy: new Map() }, esc: String });
+    { M, failedShown: () => true, retrying: new Map(), E: { busy: new Map() }, esc: String });
   const failureHtml = vm.runInContext('failureHtml', fail);
   assert.equal(failureHtml({ id: 'w' }, TG), '', 'no Needs retry panel in a Telegram chat');
   assert.match(failureHtml({ id: 'w' }, OWN), /Needs retry/, 'a WizardOS chat still gets it');
