@@ -167,7 +167,7 @@ Settings › Appearance › Try new features lists unfinished features anyone ca
 - **App panel on the left**: AI apps desktop: a button in the app panel's header (or ⌥⇧M) moves the app panel to the left, beside the chats sidebar.
 - **App switches in chat**: A reply's switch card also lists an app's own feature switches, flipped right in the chat.
 - **Archive on top**: Archive is the first section of the Chats list in both By day and By status, so switching layouts never moves it.
-- **Calm Agent Service restarts**: While Wizard waits for running chats to finish before restarting its Agent Service, you see a quiet 'Restarting when chats finish' note instead of errors; a message sent meanwhile shows as saved and sends after the restart; if the restart is overdue you see what's still running and choose Wait longer or Restart now. Needs a box that supports it.
+- **Calm Agent Service restarts**: While the Agent Service waits for running chats before restarting, you see a quiet 'Restarting when chats finish' note, not errors; a message sent meanwhile shows as saved and sends after the restart; if the restart is overdue you see what's still running and choose Wait longer or Restart now. Needs a box that supports it.
 - **Calm offline card**: The can't-reach-your-Wizard card shows one dotted path (Internet · Tailscale · Wizard), one short next step and a small Check again with the automatic re-check time.
 - **Camera and Attach on the side button**: Android app: Camera and Attach buttons next to Screen while talking to the side-button orb.
 - **Clear chat notifications**: Android app: reading a LINE, WhatsApp, Telegram or other bridged chat in Messenger clears that app's own notification (needs Android's Notification access).
@@ -183,7 +183,7 @@ Settings › Appearance › Try new features lists unfinished features anyone ca
 - **Phone media player for Podcasts**: Android app: Podcasts plays through the phone's media player (lock screen, headset buttons), like Music.
 - **Phone notifications per app**: Android app: what any app sends to Notifications shows as a phone notification under that app's name, one Android channel per app.
 - **Private first setup**: New installs start private: Welcome's Connect your AI leads with Tinfoil; Claude and ChatGPT are optional extras.
-- **Repair the agent's Wizard connection**: When the agent can't reach its Wizard app tools (unauthorized), running `wizard link` again puts this box's connection token back into the agent's settings; `wizard doctor` shows whether they match.
+- **Repair the agent's Wizard connection**: When the agent can't reach its Wizard app tools (unauthorized), `wizard link` puts the box's connection token back in the agent's settings; `wizard doctor` shows if they match.
 - **Reply to Telegram and Slack chats**: Chats started on Telegram or Slack can be continued in Wizard; replies go through that app's own connection.
 - **Runtipi 4.12 sign-in key**: Server side: the App Manager signs in to Runtipi 4.12 with its own key. Nothing looks different.
 - **Say why a chat needs you**: When Wizard itself marks a chat Needs you (a helper finished after the chat closed), the chat says why, with Continue and Dismiss. Dismiss, Done or Archive clears it on every device.
@@ -196,6 +196,7 @@ Settings › Appearance › Try new features lists unfinished features anyone ca
 - **Swipe away downloads**: Phone: swipe the Downloaded banner away and swipe the Downloads sheet down to close it. (phone only).
 - **Tap the app in front for its first view**: Narrow desktop window: tapping the icon of the app in front takes it back to its first view.
 - **Tell the team about failed updates**: When an app or WizardOS update fails on this box, the App Manager files a bug for the team (or adds to the open one) with the box, versions, failing step and error, using this box's GitHub login. Your notification then says the team was told.
+- **Undated chat titles**: Same-topic chats: no date.
 - **Why a reply failed**: When a reply fails and Wizard knows why (subscription ended, usage limit, signed out, network), Chats > Errors and the thread say so plainly, with Choose another model first when Retry can't work.
 
 Switches that are ordinary settings or views, not tester switches:

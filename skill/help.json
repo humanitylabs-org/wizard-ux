@@ -365,12 +365,12 @@
       "where": "Settings › Appearance › Try new features › Tell the team about failed updates"
     },
     "wizard/link-token-repair": {
-      "help": "When the agent can't reach its Wizard app tools (unauthorized), running `wizard link` again puts this box's connection token back into the agent's settings; `wizard doctor` shows whether they match.",
+      "help": "When the agent can't reach its Wizard app tools (unauthorized), `wizard link` puts the box's connection token back in the agent's settings; `wizard doctor` shows if they match.",
       "where": "Settings › Appearance › Try new features › Repair the agent's Wizard connection"
     },
     "wizard/graceful-restart": {
       "where": "Settings › Appearance › Try new features › Calm Agent Service restarts",
-      "help": "While Wizard waits for running chats to finish before restarting its Agent Service, you see a quiet 'Restarting when chats finish' note instead of errors; a message sent meanwhile shows as saved and sends after the restart; if the restart is overdue you see what's still running and choose Wait longer or Restart now. Needs a box that supports it."
+      "help": "While the Agent Service waits for running chats before restarting, you see a quiet 'Restarting when chats finish' note, not errors; a message sent meanwhile shows as saved and sends after the restart; if the restart is overdue you see what's still running and choose Wait longer or Restart now. Needs a box that supports it."
     },
     "wizard/unified-inbox": {
       "where": "Settings › Chats & app screens › Notifications › Notifications in Chats (on for everyone)"
@@ -471,6 +471,10 @@
     "wizard/follow-main": {
       "help": "Green merges go live by themselves.",
       "where": "Settings › Appearance › Try new features › Follow main"
+    },
+    "wizard/plain-chat-titles": {
+      "help": "Same-topic chats: no date.",
+      "where": "Settings › Appearance › Try new features › Undated chat titles"
     }
   },
   "screenOrder": [

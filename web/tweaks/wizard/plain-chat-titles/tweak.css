@@ -1,0 +1,2 @@
+/* Undated chat titles (wizard-agent-service issue 518): a box-side switch read by the Agent Service
+ * (server/thread-titles.mjs). Nothing in the shell changes; the chat list gets the plain titles from the service. */
