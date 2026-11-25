@@ -89,6 +89,8 @@
     for (const p of s?.providers || []) { const k = String(p.provider || ''); if (!RECONNECT[k]) continue; const f = fam.get(k) || { all: true }; f.all = f.all && p.signedOut === true; fam.set(k, f); }
     return [...fam].filter(([, f]) => f.all).map(([k]) => ({ provider: k, appId: RECONNECT[k][0], name: RECONNECT[k][1] }));
   }
+  // Issue 1799: the subscription families read signed in right now (an account that answers, not signed out).
+  const signedInFams = s => [...new Set((s?.providers || []).filter(p => RECONNECT[p.provider] && !p.signedOut && ['ok', 'stale'].includes(p.status)).map(p => p.provider))];
   const reconnectBtn = a => `<button type="button" class="us-reconnect" data-res-signin="${esc(a.appId)}" data-res-reconnect="1">Reconnect ${esc(a.name)}</button>`;
   let SNAP = null, outSig = '';
   const U = {
@@ -96,12 +98,15 @@
     // Both readers (this module and Home's resources.js) store the reading here; a change in which subscriptions are
     // signed out tells open chats, so a failed send names the reason as soon as Wizard knows it.
     set snap(v) {
-      SNAP = v; const sig = signedOutApps(v).map(a => a.provider).join(',');
-      if (sig !== outSig) { outSig = sig; try { globalThis.dispatchEvent?.(new CustomEvent('wos:ai-signin', { detail: { signedOut: sig ? sig.split(',') : [] } })); } catch (_) {} }
+      // Issue 1799: also when a subscription starts reading signed in, so a stale sign-in card turns into Retry.
+      SNAP = v; const out = signedOutApps(v).map(a => a.provider), inn = signedInFams(v), sig = out.join(',') + '|' + inn.join(',');
+      if (sig !== outSig) { outSig = sig; try { globalThis.dispatchEvent?.(new CustomEvent('wos:ai-signin', { detail: { signedOut: out, signedIn: inn } })); } catch (_) {} }
     },
     error: '', at: 0, loading: null,
     /** The connection app for a provider family ('claude' | 'chatgpt' | 'tinfoil') that reads signed out, or null. */
     signedOut(provider) { return signedOutApps(SNAP).find(a => a.provider === provider) || null; },
+    /** Issue 1799: true when a provider family reads signed in now, false when it reads signed out, null when unread. */
+    signedIn(provider) { if (signedInFams(SNAP).includes(provider)) return true; return signedOutApps(SNAP).some(a => a.provider === provider) ? false : null; },
     signedOutApps: () => signedOutApps(SNAP), reconnectBtn,
     load(force) {
       if (U.loading) return U.loading;

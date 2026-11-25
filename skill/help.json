@@ -453,10 +453,6 @@
       "help": "New channels get a fitting emoji.",
       "where": "Settings › Appearance › Try new features › Channels: a fitting emoji for new channels"
     },
-    "wizard/capture-inbox": {
-      "help": "Agent files your Files Inbox drops.",
-      "where": "Settings › Appearance › Try new features › Capture inbox"
-    },
     "wizard/chat-tags": {
       "help": "A chat can carry several tags.",
       "where": "Settings › Appearance › Try new features › Tags"
