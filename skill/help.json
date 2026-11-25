@@ -365,12 +365,12 @@
       "where": "Settings › Appearance › Try new features › Tell the team about failed updates"
     },
     "wizard/link-token-repair": {
-      "help": "When the agent can't reach its Wizard app tools (unauthorized), `wizard link` puts the box's connection token back in the agent's settings; `wizard doctor` shows if they match.",
+      "help": "When the agent can't reach its Wizard app tools (unauthorized), `wizard link` puts the box's token back in the agent's settings; `wizard doctor` shows if they match.",
       "where": "Settings › Appearance › Try new features › Repair the agent's Wizard connection"
     },
     "wizard/graceful-restart": {
       "where": "Settings › Appearance › Try new features › Calm Agent Service restarts",
-      "help": "While the Agent Service waits for running chats before restarting, you see a quiet 'Restarting when chats finish' note, not errors; a message sent meanwhile shows as saved and sends after the restart; if the restart is overdue you see what's still running and choose Wait longer or Restart now. Needs a box that supports it."
+      "help": "While the Agent Service waits for running chats before restarting, you see a quiet 'Restarting when chats finish' note, not errors; a message sent meanwhile is saved and sends after the restart; if overdue you see what still runs and choose Wait longer or Restart now. Needs a box that supports it."
     },
     "wizard/unified-inbox": {
       "where": "Settings › Chats & app screens › Notifications › Notifications in Chats (on for everyone)"
@@ -396,7 +396,7 @@
       "where": "Settings › Appearance › Try new features › Desktop sidebar follows Default Chats"
     },
     "wizard/app-panel-left": {
-      "help": "AI apps desktop: a button in the app panel's header (or ⌥⇧M) moves the app panel to the left, beside the chats sidebar.",
+      "help": "AI apps desktop: a button in the app panel's header (or ⌥⇧M) moves it to the left, beside the chats sidebar.",
       "where": "Settings › Appearance › Try new features › App panel on the left"
     },
     "wizard/assist-attach": {
@@ -416,7 +416,7 @@
       "where": "Settings › Appearance › Try new features › App switches in chat"
     },
     "wizard/agent-inbox": {
-      "help": "Background tasks keep one short record each; their worker threads stay out of the chat list, and Chats gets a Running view (what is still working, what went quiet).",
+      "help": "Background tasks keep one short record each; their worker threads stay out of the chat list, and Chats gets a Running view (what still works, what went quiet).",
       "where": "Settings › Appearance › Try new features › Agent inbox"
     },
     "wizard/phone-app-notifications": {
@@ -475,6 +475,10 @@
     "wizard/plain-chat-titles": {
       "help": "Same-topic chats: no date.",
       "where": "Settings › Appearance › Try new features › Undated chat titles"
+    },
+    "wizard/app-wake": {
+      "help": "Apps wake your agent.",
+      "where": "Settings › Appearance › Try new features › Apps wake your agent"
     }
   },
   "screenOrder": [
