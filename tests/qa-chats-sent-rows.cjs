@@ -57,7 +57,7 @@ const report = { origin, web, on: ON, cases: [] };
       const context = await browser.newContext({ viewport: phone ? { width: 412, height: 915 } : { width: 1440, height: 960 }, isMobile: phone, hasTouch: phone, serviceWorkers: 'block', ...(phone ? { userAgent: 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Mobile Safari/537.36' } : {}) });
       try {
         await context.routeWebSocket('**/*', w => w.close());
-        const mix = { 'wizard/desktop-chats': true, ...(ON ? { [SW]: true } : {}) };
+        const mix = { 'wizard/desktop-chats': true, ...(ON ? { [SW]: true } : {}), ...(process.env.QA_INBOX_ROWS !== 'off' && (ON || process.env.QA_INBOX_ONLY) ? { 'wizard/inbox-rows': true } : {}) };
         await context.addInitScript(({ shell, skin, mix }) => {
           if (window !== top) return;
           if (sessionStorage.getItem('qaBoot')) return; sessionStorage.setItem('qaBoot', '1');
@@ -121,21 +121,24 @@ const report = { origin, web, on: ON, cases: [] };
         const back = () => page.evaluate(() => window.__wos ? __wos.onBack() : __wux.escStep());
         const shot = async name => { await page.evaluate(() => document.fonts.ready); await nap(300); await page.screenshot({ path: path.join(out, `${stem}-${name}.png`) }); };
         await vis(ai ? '.aad-side .aad-rw[data-sid="qa-chat-1"] .aad-row' : '.ch-list [data-chopen="qa-chat-1"]').waitFor({ timeout: 15000 });
+        if (ON && !ai && process.env.QA_INBOX_ROWS !== 'off') await vis('.ch-list .ch-ib-row[data-chopen="qa-chat-1"]').waitFor({ timeout: 15000 });
         await vis(`${L} .ch-tabbar`).waitFor({ timeout: 10000 }); await nap(600);
-        // 1. Inbox: its row height and title size, the yardstick for Sent.
-        entry.inbox = await page.evaluate(ai => {
-          const row = [...document.querySelectorAll(ai ? '.aad-side .aad-row' : '.ch-list .ch-row[data-chopen]')].find(n => n.getClientRects().length);
-          const b = row.getBoundingClientRect(), t = row.querySelector(ai ? '.aad-t, b' : '.tp b') || row;
-          const h = [...document.querySelectorAll(ai ? '.aad-side .aad-sec-h, .aad-side h3' : '.ch-list .ch-sec-h')].find(n => n.getClientRects().length);
-          const cs = getComputedStyle(row), pv = row.querySelector(ai ? '.aad-sub, .aad-chan-line' : '.pv'), mk = row.querySelector('.emo');
-          const look = { pad: [cs.paddingTop, cs.paddingRight, cs.paddingBottom, cs.paddingLeft].join(' '), gap: cs.columnGap, line2: pv ? [getComputedStyle(pv).fontSize, getComputedStyle(pv).lineHeight].join('/') : '', mark: mk ? getComputedStyle(mk).width : '' };
-          return { height: Math.round(b.height), title: getComputedStyle(t).fontSize, look, head: h ? { size: getComputedStyle(h).fontSize, weight: getComputedStyle(h).fontWeight, transform: getComputedStyle(h).textTransform } : null };
-        }, ai);
-        if (ai) entry.inbox.aad = await page.evaluate(() => {
-          const r = [...document.querySelectorAll('.aad-side .aad-row')].find(n => n.getClientRects().length && n.querySelector('.aad-chan-line')), cs = getComputedStyle(r);
-          return { height: Math.round(r.getBoundingClientRect().height), title: getComputedStyle(r.querySelector('.aad-row-t')).fontSize, line2: getComputedStyle(r.querySelector('.aad-chan-line')).fontSize, pad: [cs.paddingTop, cs.paddingLeft].join(' '), icon: 'none' };
-        });
+        // 1. Inbox: its rows (the new Inbox rows, wizard/inbox-rows) are the yardstick for Sent's.
+        const lookOf = (row, q) => {
+          const cs = getComputedStyle(row), t = row.querySelector(q.title), pv = row.querySelector(q.line), av = q.av && row.querySelector(q.av);
+          const f = n => n ? [getComputedStyle(n).fontSize, getComputedStyle(n).fontWeight, getComputedStyle(n).lineHeight, getComputedStyle(n).color].join(' ') : '';
+          return { height: Math.round(row.getBoundingClientRect().height), pad: [cs.paddingTop, cs.paddingLeft, cs.paddingBottom].join(' '), gap: cs.columnGap, title: t ? [getComputedStyle(t).fontSize, getComputedStyle(t).lineHeight].join(' ') : '', line: f(pv), av: av ? [getComputedStyle(av).width, getComputedStyle(av).borderRadius, getComputedStyle(av).display].join(' ') : 'none', from: q.from && row.querySelector(q.from) ? f(row.querySelector(q.from)) : '' };
+        };
+        const IBQ = { title: '.ch-ib-t', line: '.ch-ib-pv', av: '.ch-ib-av', from: '.ch-ib-from' }, AADQ = { title: '.aad-row-t', line: '.aad-chan-line', av: null, from: null };
+        entry.inbox = await page.evaluate(([ai, IBQ, AADQ, lookSrc]) => {
+          const lookOf = eval(lookSrc);
+          const row = [...document.querySelectorAll(ai ? '.aad-side .aad-row' : '.ch-list .ch-ib-row[data-chopen]')].find(n => n.getClientRects().length && (!ai || n.querySelector('.aad-chan-line')));
+          const h = [...document.querySelectorAll(ai ? '.aad-side .aad-sec' : '.ch-list .ch-sec.ch-ib .ch-sec-h')].find(n => n.getClientRects().length);
+          return { look: row ? lookOf(row, ai ? AADQ : IBQ) : null, head: h ? [getComputedStyle(h).fontSize, getComputedStyle(h).fontWeight, getComputedStyle(h).textTransform].join(' ') : null };
+        }, [ai, IBQ, AADQ, lookOf.toString()]);
+        assert.ok(entry.inbox.look, 'Inbox shows its rows');
         await shot('1-inbox');
+        if (process.env.QA_INBOX_ONLY) { entry.pass = true; continue; } // the Inbox rows' look only (compare with main)
         await vis(`${L} .ch-tabbar [data-chtab="sent"]`).click();
         if (!ON) {
           await vis(`${L} .ch-sent-row`).waitFor({ timeout: 8000 });
@@ -148,53 +151,42 @@ const report = { origin, web, on: ON, cases: [] };
           entry.pass = true; continue;
         }
         await vis(`${L} .ch-sr-row`).waitFor({ timeout: 8000 }); await nap(400);
-        // 2. Sent: no back row, no pills, Working then Processed under Inbox's header, normal Chats rows.
+        // 2. Sent: no back row, no pills, Working then Processed under Inbox's header, the new Inbox's own rows.
         assert.equal(await count(`${L} .ch-sent-h`), 0, 'no "‹ Sent" back row');
         assert.equal(await count(`${L} [data-chsentfilter], ${L} .ch-sent-filter`), 0, 'no All / Working pills or filter');
         assert.equal(await count(`${L} .ch-sent-row`), 0, 'no cards');
         entry.sections = await page.locator(`${L} .ch-sec.ch-sr > .ch-sec-h`).filter({ visible: true }).evaluateAll(b => b.map(x => x.innerText.replace(/\s+/g, ' ').trim()));
         assert.deepEqual(entry.sections.map(s => s.toLowerCase()), ['working 2', 'processed 10'], 'Working, then Processed: ' + JSON.stringify(entry.sections));
-        entry.sent = await page.evaluate(L => {
-          const rows = [...document.querySelectorAll(`${L} .ch-row-wrap > .ch-row.ch-sr-row`)].filter(n => n.getClientRects().length);
+        entry.sent = await page.evaluate(([L, ai, IBQ, AADQ, lookSrc]) => {
+          const lookOf = eval(lookSrc);
+          const rows = [...document.querySelectorAll(`${L} .ch-ib-wrap.ch-sr-wrap > .ch-row.ch-ib-row.ch-sr-row`)].filter(n => n.getClientRects().length);
           const sc = rows[0].closest('.ch-scroll').getBoundingClientRect(), bar = document.querySelector(`${L} .ch-tabbar`)?.getBoundingClientRect();
           const bottom = Math.min(sc.bottom, bar ? bar.top : sc.bottom);
           const h = [...document.querySelectorAll(`${L} .ch-sec.ch-sr > .ch-sec-h`)].find(n => n.getClientRects().length);
-          const text = n => n.innerText.replace(/\s+/g, ' ').trim(); // what shows (the phone shows line 2 once, as the channel line)
-          const r0 = rows[0], cs = getComputedStyle(r0), pv = r0.querySelector('.pv'), mk = r0.querySelector('.emo');
-          const look = { pad: [cs.paddingTop, cs.paddingRight, cs.paddingBottom, cs.paddingLeft].join(' '), gap: cs.columnGap, line2: [getComputedStyle(pv).fontSize, getComputedStyle(pv).lineHeight].join('/'), mark: getComputedStyle(mk).width };
-          return { n: rows.length, look, heights: [...new Set(rows.map(r => Math.round(r.getBoundingClientRect().height)))], inView: rows.filter(r => { const b = r.getBoundingClientRect(); return b.top >= sc.top - 1 && b.bottom <= bottom + 1; }).length,
-            title: getComputedStyle(rows[0].querySelector('.tp b')).fontSize, head: { size: getComputedStyle(h).fontSize, weight: getComputedStyle(h).fontWeight, transform: getComputedStyle(h).textTransform },
-            marks: rows.map(r => r.querySelector('.emo.sti')?.className.replace('emo sti ', '')), texts: rows.map(text), bg: getComputedStyle(rows[0]).backgroundColor, border: getComputedStyle(rows[0].parentElement).borderTopWidth };
-        }, L);
+          const text = n => { const c = [...n.querySelectorAll('.ch-ib-from, time, .ch-ib-t, .ch-ib-pv')].filter(x => x.getClientRects().length); return c.map(x => x.innerText.trim()).join(' | '); };
+          const aadLook = r => { const t = r.querySelector('.ch-ib-t'), pv = r.querySelector('.ch-ib-pv'), cs = getComputedStyle(r); return { height: Math.round(r.getBoundingClientRect().height), pad: [cs.paddingTop, cs.paddingLeft, cs.paddingBottom].join(' '), gap: cs.columnGap, title: [getComputedStyle(t).fontSize, getComputedStyle(t).lineHeight].join(' '), line: [getComputedStyle(pv).fontSize, getComputedStyle(pv).fontWeight, getComputedStyle(pv).lineHeight, getComputedStyle(pv).color].join(' '), av: 'none', from: '' }; };
+          return { n: rows.length, look: ai ? aadLook(rows[2]) : lookOf(rows[2], IBQ), heights: [...new Set(rows.map(r => Math.round(r.getBoundingClientRect().height)))], inView: rows.filter(r => { const b = r.getBoundingClientRect(); return b.top >= sc.top - 1 && b.bottom <= bottom + 1; }).length,
+            head: [getComputedStyle(h).fontSize, getComputedStyle(h).fontWeight, getComputedStyle(h).textTransform].join(' '),
+            marks: rows.map(r => r.querySelector('.ch-ib-mk i')?.className.split(' ')[0] || ''), texts: rows.map(text), arch: rows.filter(r => r.parentElement.querySelector('.ch-ib-arch')).length };
+        }, [L, ai, IBQ, AADQ, lookOf.toString()]);
         assert.equal(entry.sent.n, 12, 'one row per send');
-        if (ai) {
-          // The AI apps panel's Inbox is the sidebar's own compact rows: Sent takes their height, title and line sizes.
-          entry.sent.aad = await page.evaluate(L => {
-            const r = [...document.querySelectorAll(`${L} .ch-sr-row`)].find(n => n.getClientRects().length), cs = getComputedStyle(r);
-            return { height: Math.round(r.getBoundingClientRect().height), title: getComputedStyle(r.querySelector('.tp b')).fontSize, line2: getComputedStyle(r.querySelector('.ch-chan-line')).fontSize, pad: [cs.paddingTop, cs.paddingLeft].join(' '), icon: getComputedStyle(r.querySelector('.emo')).display };
-          }, L);
-          assert.deepEqual(entry.sent.aad, entry.inbox.aad, 'the panel\'s Sent rows look like its Inbox rows');
-        }
-        if (!ai) {
-          // The phone list is one fixed height; desktop rows grow with a wrapped second line, as Inbox rows do.
-          if (phone) assert.deepEqual(entry.sent.heights, [entry.inbox.height], 'every Sent row is as tall as an Inbox row: ' + JSON.stringify([entry.sent.heights, entry.inbox]));
-          else assert.ok(Math.max(...entry.sent.heights) <= entry.inbox.height, 'no Sent row taller than an Inbox row: ' + JSON.stringify([entry.sent.heights, entry.inbox]));
-          assert.deepEqual(entry.sent.look, entry.inbox.look, 'the same row padding, spacing, second line and mark size as Inbox');
-          assert.equal(entry.sent.title, entry.inbox.title, 'the same title size as Inbox');
-          assert.deepEqual(entry.sent.head, entry.inbox.head, 'the same section header as Inbox');
-        }
-        if (phone) assert.ok(entry.sent.inView >= 9, `at least 9 Sent rows on the phone screen: ${entry.sent.inView}`);
-        assert.deepEqual(entry.sent.marks.slice(0, 2), ['working', 'working'], 'a spinner while it runs');
-        assert.deepEqual(entry.sent.marks.slice(2, 5), ['done', 'done', 'needs'], 'a check when done, the hand when it needs him');
-        assert.equal(entry.sent.marks[5], 'failed', 'the failure mark when it failed');
+        // The same row design as Inbox beside it: height, padding, spacing, title, line, avatar, sender, section header.
+        assert.deepEqual(entry.sent.look, entry.inbox.look, 'Sent rows look like the Inbox rows: ' + JSON.stringify([entry.sent.look, entry.inbox.look]));
+        assert.deepEqual(entry.sent.heights, [entry.inbox.look.height], 'every Sent row is as tall as an Inbox row');
+        if (!ai) assert.equal(entry.sent.head, entry.inbox.head, 'the same section header as Inbox');
+        assert.equal(entry.sent.arch, 0, 'a send has no Archive button');
+        // The issue's first "at least 9 rows" was for one-line rows; James's later word (25 Nov) is Inbox's own rows (77 px):
+        // a 412x915 phone shows 7 whole ones (today's cards: 4 or 5), the same as Inbox.
+        if (phone) assert.ok(entry.sent.inView >= 7, `Sent rows on the phone screen (Inbox-size rows): ${entry.sent.inView}`);
+        assert.deepEqual(entry.sent.marks, ['ch-spin', 'ch-spin', '', '', 'ch-chan-dot', 'ch-chan-dot', '', '', '', '', '', ''], 'the spinner while it runs, the amber dot when it needs him or failed');
         for (const t of entry.sent.texts) assert.doesNotMatch(t, INTERNAL, 'no internal words: ' + t);
-        assert.match(entry.sent.texts[0], /^Note to self: call mom about Sunday lunch \d+m Ran quietly · Working$/);
-        assert.match(entry.sent.texts[2], /^Tell me the weather tomorrow \d+m Replied in chat · Done$/);
-        assert.match(entry.sent.texts[4], /^Book a table for four on Friday #family \d+h #family · Ran quietly · Needs you · in Inbox$/);
+        assert.match(entry.sent.texts[0], /\d+m \| Note to self: call mom about Sunday lunch \| Ran quietly · Working$/);
+        assert.match(entry.sent.texts[2], /\d+m \| Tell me the weather tomorrow \| Replied in chat · Done$/);
+        assert.match(entry.sent.texts[4], /\d+h \| Book a table for four on Friday #family \| Ran quietly · Needs you · in Inbox$/);
+        if (!ai) assert.match(entry.sent.texts[4], /^family \| /, 'a tag names the row, as in Inbox');
         assert.match(entry.sent.texts[5], /Failed · in Inbox$/);
         assert.match(entry.sent.texts[6], /Set a reminder · Done · Urgent$/);
         assert.match(entry.sent.texts[8], /Noted in its chat · Done$/);
-        assert.equal(entry.sent.border, '0px', 'no card border');
         await shot('2-sent');
         // 3. The actions sheet: a long-press on the phone, right-click and Shift+F10 on desktop.
         const rowSel = c => `${L} [data-chsent="${id(c)}"]`;
@@ -232,7 +224,7 @@ const report = { origin, web, on: ON, cases: [] };
           await page.keyboard.press('Escape'); await nap(300);
         }
         // 5. A live skin change repaints the rows (tokens only).
-        const colour = () => vis(rowSel('b')).evaluate(n => getComputedStyle(n.querySelector('.tp b')).color);
+        const colour = () => vis(rowSel('b')).evaluate(n => getComputedStyle(n.querySelector('.ch-ib-t')).color);
         const c0 = await colour(), other = skin === 'nebula' ? 'obsidian-light' : 'nebula';
         await page.evaluate(sk => WosSkin.set(sk), other); await nap(900);
         entry.liveSkin = { from: c0, to: await colour(), applied: await page.evaluate(() => document.documentElement.dataset.skin || '') };

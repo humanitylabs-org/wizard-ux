@@ -12,7 +12,6 @@ const SW = 'wizard/sent-rows';
 const clone = v => JSON.parse(JSON.stringify(v));
 const sid = c => 'sent_' + c.repeat(24);
 const view = (c, extra = {}) => ({ id: sid(c), at: 1000, source: 'orb', text: 'Words ' + c, route: 'agent', decidedBy: 'model', rules: [], state: 'done', thread: 'thread_' + c, record: null, tags: [], urgent: false, wouldRoute: null, corrected: null, error: '', wantsReply: true, answer: '', quiet: false, ...extra });
-const STI = { working: '<i class="spin"></i>', done: '<svg data-k="done"></svg>', needs: '<svg data-k="needs"></svg>', failed: '<svg data-k="failed"></svg>', none: '<i class="dot"></i>' };
 
 function part({ tweaks = SW, rows = [], next = null } = {}) {
   const renders = [], opened = [], corrections = [], toasts = [], sheets = [];
@@ -25,17 +24,21 @@ function part({ tweaks = SW, rows = [], next = null } = {}) {
   const listEl = { html: '', insertAdjacentHTML(_, h) { this.html += h; sheets.push(h); }, querySelectorAll: () => [], querySelector: () => null };
   const ctx = { document: { documentElement: root }, window: { WizCore: {} }, localStorage: { setItem() {} }, console, fetch: async () => ({ ok: false }) };
   vm.createContext(ctx);
+  vm.runInContext(readFileSync(new URL('../web/core/chats-inboxrows.js', import.meta.url), 'utf8'), ctx);
   vm.runInContext(readFileSync(new URL('../web/core/chats-sent.js', import.meta.url), 'utf8'), ctx);
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  // The new Inbox's own row renderer (core/chats-inboxrows.js), the one Sent must share (James, 25 Nov 2026).
+  const ib = ctx.window.WizCore.chatsParts.inboxrows({ AGS: () => ({ sigil: a => `<span class="ag-sig">${a.id}</span>`, defaultId: () => 'hermes' }), agentName: id => id || 'Wizard', agentRec: id => ({ id }),
+    chanFace: n => n === 'family' ? { emoji: '👪', label: 'Family', own: true } : { emoji: '💬', label: n, own: false }, esc, LIVE });
   const closeRowSheet = () => { const had = !!chatVars.rowSheet; chatVars.rowSheet = null; return had; };
   const p = ctx.window.WizCore.chatsParts.sent({ ago: () => '3m', ch: id => CH[id], CH, CHAN_VIEW_KEY: 'k', chanElsewhere: () => false, chanSide: () => false, chatVars, clip: (s, n) => String(s).slice(0, n), closeRowSheet, elOf: () => listEl, esc, H: { win: id => W[id] },
-    LIVE, openChat: (wid, t) => opened.push([wid, t]), renderChatList: w => renders.push(w.id), rerenderList: w => renders.push(w.id), STI, STI_TIP: {}, toast: (...a) => toasts.push(a), W, winAgent: w => agentOf[w.id] || '' });
+    ibMark: ib.ibMark, ibRow: ib.ibRow, ibTagFace: ib.ibTagFace, LIVE, openChat: (wid, t) => opened.push([wid, t]), renderChatList: w => renders.push(w.id), rerenderList: w => renders.push(w.id), toast: (...a) => toasts.push(a), W, winAgent: w => agentOf[w.id] || '' });
   const click = (w, attrs) => p.sentClick({ target: { closest: sel => { for (const k of Object.keys(attrs)) if (k !== 'dataset' && sel === `[data-${k}]`) return { dataset: { [k]: attrs[k], ...(attrs.dataset || {}) }, disabled: false }; return null; } } }, w.id, w);
   return { p, W, CH, chatVars, root, state, renders, opened, corrections, toasts, sheets, listEl, click };
 }
-const rowsOf = html => [...html.matchAll(/<div class="ch-row-wrap ch-sr-wrap"[\s\S]*?<\/button><\/div>/g)].map(m => m[0]);
-// What a row says, once (the phone shows line 2 as the channel line, the other lists as the preview: same words).
-const said = row => row.replace(/<span class="pv">[\s\S]*?<\/span><\/span>/, '</span>').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+const rowsOf = html => [...html.matchAll(/<div class="ch-row-wrap ch-ib-wrap ch-sr-wrap"[\s\S]*?<\/button><\/div>/g)].map(m => m[0]);
+// What a row says: sender, time, his words, the line under them.
+const said = row => row.replace(/<span class="ch-ib-av[^"]*"[^>]*>(?:<span[^>]*>[^<]*<\/span>|[^<]*)<\/span>/, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
 
 test('switch off: Sent is today\'s cards, back row and All / Working pills, unchanged', () => {
   const f = part({ tweaks: 'wizard/desktop-chats', rows: [view('a', { state: 'running', route: 'dump' }), view('b')] });
@@ -48,12 +51,12 @@ test('switch off: Sent is today\'s cards, back row and All / Working pills, unch
   assert.deepEqual(f.sheets, []);
 });
 
-test('switch on: no back row and no filter; Working then Processed under Inbox\'s section header; an empty section hides', () => {
+test('switch on: no back row and no filter; Working then Processed under Inbox\'s section header (on Inbox\'s panel); an empty section hides', () => {
   const f = part({ rows: [view('a', { state: 'running', route: 'dump' }), view('r', { state: 'routing', route: null }), view('b'), view('c', { state: 'failed' })] });
   assert.equal(f.p.sentRowsOn(), true);
   assert.equal(f.p.sentHead(f.W.main), '', 'the bottom tabs are the navigation: no "‹ Sent", no pills');
   const body = f.p.sentBody(f.W.main);
-  const secs = [...body.matchAll(/<section class="ch-sec ch-act ch-sr open" data-sec="(\w+)"><button class="ch-sec-h" data-sectoggle="\1" aria-expanded="true"><span>(\w+)<\/span><small>(\d+)<\/small><i aria-hidden="true"><\/i><\/button>/g)].map(m => [m[1], m[2], +m[3]]);
+  const secs = [...body.matchAll(/<section class="ch-sec ch-act ch-ib ch-sr open" data-sec="(\w+)"><button class="ch-sec-h" data-sectoggle="\1" aria-expanded="true"><span>(\w+)<\/span><small>(\d+)<\/small><i aria-hidden="true"><\/i><\/button>/g)].map(m => [m[1], m[2], +m[3]]);
   assert.deepEqual(secs, [['sentWorking', 'Working', 2], ['sentProcessed', 'Processed', 2]], 'Inbox\'s own foldable header markup');
   assert.doesNotMatch(body, /ch-sent-row|data-chsentfix|data-chsentfilter/, 'no cards, no inline corrections');
   const ids = [...body.matchAll(/data-chsent="([^"]+)"/g)].map(m => m[1]);
@@ -61,13 +64,13 @@ test('switch on: no back row and no filter; Working then Processed under Inbox\'
   assert.doesNotMatch(part({ rows: [view('b')] }).p.sentBody(f.W.main), /Working/, 'nothing running: no Working header');
   assert.doesNotMatch(part({ rows: [view('a', { state: 'running' })] }).p.sentBody(f.W.main), /Processed/, 'nothing finished: no Processed header');
   f.chatVars.secOpen = { sentProcessed: false };
-  assert.match(f.p.sentBody(f.W.main), /<section class="ch-sec ch-act ch-sr" data-sec="sentProcessed"><button class="ch-sec-h" data-sectoggle="sentProcessed" aria-expanded="false">[^]*?<\/button><\/section>/, 'folds like Inbox\'s sections');
+  assert.match(f.p.sentBody(f.W.main), /<section class="ch-sec ch-act ch-ib ch-sr" data-sec="sentProcessed"><button class="ch-sec-h" data-sectoggle="sentProcessed" aria-expanded="false">[^]*?<\/button><\/section>/, 'folds like Inbox\'s sections');
   assert.match(part({ rows: [view('b')], next: sid('b') }).p.sentBody(f.W.main), /data-chsentmore>Show older/, 'older sends still load');
   const empty = part({ rows: [] }).p.sentBody(f.W.main);
   assert.match(empty, /<div class="ch-empty">Nothing sent yet\./, 'the empty state is today\'s .ch-empty text');
 });
 
-test('each row is a normal Chats row: status mark, first line + time, one plain line; never internal words', () => {
+test('each row is the new Inbox\'s own row (shared renderer): avatar, sender + time, his words + mark, one plain line', () => {
   const f = part({ rows: [
     view('a', { route: 'dump', decidedBy: 'owner_words', rules: ['no_reply:note to self'], state: 'running', text: 'Note to self: call mom\nsecond line' }),
     view('b', { decidedBy: 'owner_words', rules: ['wants_reply:tell me'] }),
@@ -82,29 +85,27 @@ test('each row is a normal Chats row: status mark, first line + time, one plain 
   const rows = rowsOf(f.p.sentBody(f.W.main));
   assert.equal(rows.length, 9);
   for (const r of rows) {
-    assert.match(r, /^<div class="ch-row-wrap ch-sr-wrap" data-morph-key="sent:sent_\w+"><button type="button" class="ch-row ch-sr-row st-\w+" data-chsent="sent_\w+" aria-haspopup="dialog" aria-keyshortcuts="Shift\+F10"/, 'the thread row markup');
-    assert.match(r, /<span class="emo sti \w+"[^>]*>[\s\S]*?<\/span><span class="bd"><span class="tp"><b>[^<]*<\/b><time>3m<\/time><\/span><span class="ch-chan-line">[\s\S]*?<\/span><span class="pv">/, 'mark, then title + time, then line 2');
+    assert.match(r, /^<div class="ch-row-wrap ch-ib-wrap ch-sr-wrap" data-morph-key="sent:sent_\w+"><button type="button" data-part="thread-row" class="ch-row ch-ib-row ch-sr-row st-\w+( needs)?" data-chsent="sent_\w+" aria-haspopup="dialog" aria-keyshortcuts="Shift\+F10" title="[^"]+">/, 'the Inbox row markup');
+    assert.match(r, /<span class="ch-ib-bd"><span class="ch-ib-l1"><span class="ch-ib-from">[^<]*<\/span><time>3m<\/time><\/span><span class="ch-ib-l2"><b class="ch-ib-t">[^<]*<\/b>[\s\S]*?<\/span><span class="ch-ib-pv">[^<]*<\/span><\/span><\/button><\/div>$/, 'sender + time, title + mark, one line; no Archive button');
     assert.doesNotMatch(said(r), /\bThread\b|you typed it|would have|router|fallback|owner_words|no_reply|wants_reply|\bmodel\b|Background/, 'plain words only: ' + said(r));
+    assert.doesNotMatch(r, /ch-ib-arch|ch-sent-row|data-chsentfix/);
   }
-  const marks = rows.map(r => /class="emo sti (\w+)"/.exec(r)[1]);
-  assert.deepEqual(marks, ['working', 'working', 'done', 'done', 'needs', 'failed', 'done', 'done', 'done'], 'spinner, check, hand, failure mark');
-  assert.match(rows[0], /<span class="emo sti working"[^>]*><i class="spin"><\/i><\/span>/, 'the Activity status icon itself (STI)');
-  assert.match(rows[0], /<span class="ch-act-ind"><i class="ch-spin" role="img" aria-label="Working"><\/i><\/span><\/button>/, 'and the phone list\'s marker');
-  assert.match(rows[4], /<span class="ch-act-ind"><i class="ch-chan-dot" role="img" aria-label="Needs you">/);
-  assert.match(rows[5], /<span class="ch-act-ind"><i class="ch-chan-dot" role="img" aria-label="Failed">/);
-  assert.match(rows[2], /<span class="ch-act-ind" aria-hidden="true"><\/span>/, 'an empty slot keeps titles in one column');
+  // The very same function draws an Inbox thread row: the same wrapper, classes and parts.
+  assert.match(rows[0], /<span class="ch-ib-av ch-ib-ag" aria-hidden="true"><span class="ag-sig">hermes<\/span><\/span>/, 'the agent\'s round avatar');
+  assert.match(rows[4], /<span class="ch-ib-av" aria-hidden="true">👪<\/span>[\s\S]*<span class="ch-ib-from">Family<\/span>/, 'a tag names the row like Inbox: its emoji and name');
+  const marks = rows.map(r => /<span class="ch-ib-mk"><i class="(ch-spin|ch-chan-dot)"/.exec(r)?.[1] || '');
+  assert.deepEqual(marks, ['ch-spin', 'ch-spin', '', '', 'ch-chan-dot', 'ch-chan-dot', '', '', ''], 'the spinner while it runs, the amber dot when it needs him or failed');
   assert.deepEqual(rows.map(said), [
-    'Note to self: call mom 3m Ran quietly · Working',
-    'Words i 3m Just sent · Working',
-    'Words b 3m Replied in chat · Done',
-    'Words c 3m Replied in chat · Done',
-    'Book &lt;b&gt;a table&lt;/b&gt; 3m #family · Ran quietly · Needs you · in Inbox',
-    'Words e 3m Replied in chat · Failed · in Inbox',
-    'Words f 3m Set a reminder · Done · Urgent · Corrected',
-    'Words g 3m Ran as a command · Done',
-    'Words h 3m Noted in its chat · Done',
+    'Wizard 3m Note to self: call mom Ran quietly · Working',
+    'Wizard 3m Words i Just sent · Working',
+    'Wizard 3m Words b Replied in chat · Done',
+    'Wizard 3m Words c Replied in chat · Done',
+    'Family 3m Book &lt;b&gt;a table&lt;/b&gt; Ran quietly · Needs you · in Inbox',
+    'Wizard 3m Words e Replied in chat · Failed · in Inbox',
+    'Wizard 3m Words f Set a reminder · Done · Urgent · Corrected',
+    'Wizard 3m Words g Ran as a command · Done',
+    'Wizard 3m Words h Noted in its chat · Done',
   ]);
-  assert.match(rows[4], /<span class="ch-chan-tag">#family<\/span> · /, 'a tag uses the Inbox channel line\'s chip');
 });
 
 test('the row actions sheet: why it went there in plain words, Open chat, both corrections; a reply has none', async () => {

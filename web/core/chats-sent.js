@@ -3,7 +3,7 @@
  * (core/chats.js) calls this once with the closure names it reads. Loaded before chats.js by both shells. */
 window.WizCore = window.WizCore || {};
 window.WizCore.chatsParts = window.WizCore.chatsParts || {};
-window.WizCore.chatsParts.sent = function ({ ago, ch, CH, CHAN_VIEW_KEY, chanElsewhere, chanSide, chatVars, clip, closeRowSheet, elOf, esc, H, LIVE, openChat, renderChatList, rerenderList, STI, STI_TIP, toast, W, winAgent }) {
+window.WizCore.chatsParts.sent = function ({ ago, ch, CH, CHAN_VIEW_KEY, chanElsewhere, chanSide, chatVars, clip, closeRowSheet, elOf, esc, H, ibMark, ibRow, ibTagFace, LIVE, openChat, renderChatList, rerenderList, toast, W, winAgent }) {
   /* The main agent's Chats list gets three tabs at the bottom: Inbox (today's Activity list, until wizard-ux issue 1779
    * gives it its own rows), Tags (today's Channels view, until wizard-agent-service issue 608) and Sent. Sent lists every
    * capture the owner sent, newest first (LIVE.sentLog: GET /wizard/v1/sent): the first line of his words, when, where
@@ -62,28 +62,28 @@ window.WizCore.chatsParts.sent = function ({ ago, ch, CH, CHAN_VIEW_KEY, chanEls
       + (r.route === 'thread' ? '' : `<div class="ch-sent-fix" role="group" aria-label="Correct the routing"><button type="button" data-chsentfix="reply" data-id="${esc(r.id)}" aria-pressed="${fixed === 'reply'}"${busy ? ' disabled' : ''}>Should have replied</button><button type="button" data-chsentfix="quiet" data-id="${esc(r.id)}" aria-pressed="${fixed === 'quiet'}"${busy ? ' disabled' : ''}>Didn’t need a reply</button></div>`) + '</div>';
   }
   /* Sent rows (wizard-ux issue 1814, switch wizard/sent-rows, off by default; James, 25 Nov 2026: "Why is this UX so
-   * ugly, vs having a nice UX like the rest of the app"). With it on, each send is a normal Chats row (the thread row's
-   * `.ch-row-wrap > .ch-row` markup and CSS, so the same height, type and spacing as Inbox): the Activity status mark,
-   * the first line of his words with the time, then one muted line in plain words (where it went · what happened). One
-   * list with two section headers like Inbox's: Working (running) then Processed (finished); no back row, no filter.
-   * The two corrections leave the row: long-press, left swipe, right-click or Shift+F10 open the row actions sheet
-   * (ROW_MENU in core/chats-rowacts.js) with why it went where it went, Open, and the two corrections (the same
-   * POST /wizard/v1/sent/<id>/correct). Off: the cards above, unchanged. */
+   * ugly, vs having a nice UX like the rest of the app", then "let's give the same design to sent"). With it on, each
+   * send is drawn by the new Inbox's own row renderer (core/chats-inboxrows.js ibRow, the Signal / Telegram rows), so
+   * Inbox and Sent can't drift apart: the avatar and sender line (its first tag, else the agent) with the time, the
+   * first line of his words with the working / needs-you mark, then one line in plain words (where it went · what
+   * happened). One list with two section headers like Inbox's: Working (running) then Processed (finished); no back
+   * row, no filter. The two corrections leave the row: long-press, left swipe, right-click or Shift+F10 open the row
+   * actions sheet (ROW_MENU in core/chats-rowacts.js) with why it went where it went, Open, and the two corrections
+   * (the same POST /wizard/v1/sent/<id>/correct). Off: the cards above, unchanged. */
   const SR_SWITCH = 'wizard/sent-rows';
   function sentRowsOn() { try { return (document.documentElement.dataset.tweaks || '').split(' ').includes(SR_SWITCH); } catch (_) { return false; } }
   const SR_WHERE = { dump: 'Ran quietly', agent: 'Replied in chat', command: 'Ran as a command', reminder: 'Set a reminder' };
   const SR_STATE = { routing: 'Working', running: 'Working', done: 'Done', needs_you: 'Needs you · in Inbox', failed: 'Failed · in Inbox' };
-  const SR_MARK = { routing: 'working', running: 'working', done: 'done', needs_you: 'needs', failed: 'failed' };
-  const SR_TIP = { working: 'Working', done: 'Done', needs: 'Needs you', failed: 'Failed', none: 'No status' };
+  // The Inbox rows' mark: the spinner while it runs, the amber dot when it needs him or failed (as Inbox marks a failure).
+  const SR_MARK = { routing: 'working', running: 'working', needs_you: 'needs', failed: 'needs' };
   const srRunning = r => r.state === 'running' || r.state === 'routing';
   const srFirst = r => (r.text.split('\n').find(x => x.trim()) || r.text || '').trim();
   // Where it went, in his words: a reply in a thread he had stays in that chat.
   function srWhere(r) { return r.route === 'thread' ? (r.quiet ? 'Noted in its chat' : 'Replied in its chat') : SR_WHERE[r.route] || 'Just sent'; }
-  // Line 2: [#tag ·] where · what happened [· Urgent] [· Corrected]. Never routing internals.
+  // The line under his words: where · what happened [· Urgent] [· Corrected]. Never routing internals.
   function srLine(r) {
-    const tag = r.tags.length ? `<span class="ch-chan-tag">${r.tags.map(t => `#${esc(t)}`).join(' ')}</span> · ` : '';
     const st = SR_STATE[r.state] || '';
-    return `${tag}${esc(srWhere(r))}${st ? ' · ' + esc(st) : ''}${r.urgent ? ' · Urgent' : ''}${r.corrected ? ' · Corrected' : ''}`;
+    return `${srWhere(r)}${st ? ' · ' + st : ''}${r.urgent ? ' · Urgent' : ''}${r.corrected ? ' · Corrected' : ''}`;
   }
   // Why it went where it went, one plain sentence for the actions sheet.
   const SR_FALLBACK = { router_not_configured: 'deciding isn’t set up on this Wizard', router_timeout: 'deciding took too long', router_error: 'deciding failed', capture_failed: 'it couldn’t start in the background', unsure: 'Wizard wasn’t sure', no_answer: 'no answer came' };
@@ -100,25 +100,18 @@ window.WizCore.chatsParts.sent = function ({ ago, ch, CH, CHAN_VIEW_KEY, chanEls
     else if (r.decidedBy === 'fallback') { const k = r.rules.find(x => SR_FALLBACK[x]); why = `Wizard couldn’t decide (${k ? SR_FALLBACK[k] : 'no answer came'}), so it took the safe way`; }
     return why ? `${where} because ${why}.` : `${where}.`;
   }
+  // One send as an Inbox row (ibRow): no Archive button (a send is not something to archive).
   function srRow(r) {
-    const k = SR_MARK[r.state] || 'none', tip = SR_TIP[k], l2 = srLine(r), mark = (STI && STI[k]) || '';
-    return `<div class="ch-row-wrap ch-sr-wrap" data-morph-key="sent:${esc(r.id)}"><button type="button" class="ch-row ch-sr-row st-${esc(r.state)}" data-chsent="${esc(r.id)}" aria-haspopup="dialog" aria-keyshortcuts="Shift+F10" title="Open the chat it ran in · hold or open the context menu for actions">`
-      + `<span class="emo sti ${k}" title="${tip}" aria-label="${tip}">${mark}</span>`
-      + `<span class="bd"><span class="tp"><b>${esc(clip(srFirst(r), 120))}</b><time>${esc(r.at ? ago(r.at) : '')}</time></span><span class="ch-chan-line">${l2}</span><span class="pv">${l2}</span></span>${srInd(k)}</button></div>`;
-  }
-  // The Activity rows' own marker (core/chats-daily.js actRowMark): the one-line phone list shows it left of the title in
-  // place of the status icon (a spinner while it runs, the amber dot when it needs him or failed); an empty slot keeps
-  // the titles in one column.
-  function srInd(k) {
-    return k === 'working' ? '<span class="ch-act-ind"><i class="ch-spin" role="img" aria-label="Working"></i></span>'
-      : k === 'needs' || k === 'failed' ? `<span class="ch-act-ind"><i class="ch-chan-dot" role="img" aria-label="${k === 'failed' ? 'Failed' : 'Needs you'}"></i></span>` : '<span class="ch-act-ind" aria-hidden="true"></span>';
+    const m = SR_MARK[r.state] || '', f = ibTagFace(r.tags[0] || ''); // the main agent's sends
+    return ibRow({ key: `sent:${esc(r.id)}`, wrap: ' ch-sr-wrap', cls: ` ch-sr-row st-${esc(r.state)}${m === 'needs' ? ' needs' : ''}`, open: `data-chsent="${esc(r.id)}" aria-haspopup="dialog" aria-keyshortcuts="Shift+F10"`,
+      tip: 'Open the chat it ran in · hold or open the context menu for actions', av: f.av, from: esc(f.from), time: esc(r.at ? ago(r.at) : ''), title: esc(clip(srFirst(r), 120)), mark: ibMark(m), line: esc(srLine(r)) });
   }
   // Working then Processed, each under Inbox's own section header (folds like Inbox's); an empty one has no header.
   function srBody(st) {
     const sec = (k, label, list) => {
       if (!list.length) return '';
       const open = chatVars.secOpen?.[k] !== false;
-      return `<section class="ch-sec ch-act ch-sr${open ? ' open' : ''}" data-sec="${k}"><button class="ch-sec-h" data-sectoggle="${k}" aria-expanded="${open}"><span>${label}</span><small>${list.length}</small><i aria-hidden="true"></i></button>${open ? `<div class="ch-sec-b">${list.map(srRow).join('')}</div>` : ''}</section>`;
+      return `<section class="ch-sec ch-act ch-ib ch-sr${open ? ' open' : ''}" data-sec="${k}"><button class="ch-sec-h" data-sectoggle="${k}" aria-expanded="${open}"><span>${label}</span><small>${list.length}</small><i aria-hidden="true"></i></button>${open ? `<div class="ch-sec-b">${list.map(srRow).join('')}</div>` : ''}</section>`;
     };
     return sec('sentWorking', 'Working', st.rows.filter(srRunning)) + sec('sentProcessed', 'Processed', st.rows.filter(r => !srRunning(r)))
       + (st.next ? '<button type="button" class="ch-more" data-chsentmore>Show older</button>' : '');
