@@ -172,7 +172,7 @@
             android:noHistory="true"
             android:label="Side button"
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
-        <!-- Camera and Attach on the corner orb (wizard-os issue 655, switch wizard/assist-attach, off by default): a
+        <!-- Camera and Attach on the corner orb (wizard-os issue 655): a
              see-through step that opens the camera or the file picker mid-take, in its own task so the app underneath
              comes back when it is done. The provider is where the camera writes that one photo (one-off write grant). -->
         <activity

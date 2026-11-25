@@ -25,7 +25,6 @@
     "wizard/clear-chat-notifications",
     "wizard/sidebar-chats-view",
     "wizard/app-panel-left",
-    "wizard/assist-attach",
     "wizard/assist-agent-note",
     "wizard/private-first-setup",
     "wizard/chat-app-switches",

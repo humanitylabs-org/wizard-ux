@@ -388,8 +388,8 @@ final class WizardSession extends VoiceInteractionSession implements VoiceCaptur
 
         @JavascriptInterface public int shots() { return capture.shotCount(); }
 
-        /* Camera and Attach (wizard-os issue 655, switch wizard/assist-attach, off by default; never on the lock screen). */
-        @JavascriptInterface public boolean attachOn() { return AssistAttach.on(getContext()) && !keyguard.isKeyguardLocked(); }
+        /* Camera and Attach (wizard-os issue 655; never on the lock screen). */
+        @JavascriptInterface public boolean attachOn() { return !keyguard.isKeyguardLocked(); }
 
         @JavascriptInterface public void camera() { main.post(() -> openPick(AssistPickActivity.KIND_CAMERA)); }
 
@@ -410,11 +410,11 @@ final class WizardSession extends VoiceInteractionSession implements VoiceCaptur
     /**
      * Camera: one full-size photo from the phone's camera app. Attach: pictures or files from Android's picker. The take
      * pauses (so nothing is lost and the pause detector can't send it), the orb steps aside, and both come back when
-     * the picker answers. Only while talking, only with the switch on, never on the lock screen, up to the take's cap.
+     * the picker answers. Only while talking, never on the lock screen, up to the take's cap.
      */
     private void openPick(String kind) {
         if (!capture.listening() || capture.away() || shotPending) return;
-        if (!AssistAttach.on(getContext()) || keyguard.isKeyguardLocked()) return;
+        if (keyguard.isKeyguardLocked()) return;
         if (capture.attachedCount() >= capture.attachCap()) { js("W.onAttach(" + capture.attachCounts(0, 1, 0) + ")"); return; }
         if (!capture.beginAway()) return;
         Log.i(TAG, "camera/attach open " + kind);

@@ -75,7 +75,7 @@ final class VoiceCapture {
     /** Screenshots taken with the corner orb's Screen button while talking; they ride with this take. */
     static final int MAX_SHOTS = 4;
     private final List<byte[]> shots = new ArrayList<>();
-    /** Pictures (Camera) and files (Attach) for this take, while switch wizard/assist-attach is on (wizard-os issue 655). */
+    /** Pictures (Camera) and files (Attach) for this take, (wizard-os issue 655). */
     private final List<EverywhereOutbox.Attachment> picked = new ArrayList<>();
 
     private VoiceCapture(Context app) {
@@ -141,7 +141,7 @@ final class VoiceCapture {
     int attachedCount() { return shots.size() + picked.size(); }
 
     /** One cap for the whole take: four screenshots with the switch off (as before), eight things with it on. */
-    int attachCap() { return AttachPolicy.cap(AssistAttach.on(app)); }
+    int attachCap() { return AttachPolicy.MAX; }
 
     int photoCount() {
         int n = 0;
@@ -151,7 +151,7 @@ final class VoiceCapture {
 
     String attachCounts(int added, int skipped, int tooBig) {
         int pictures = photoCount();
-        return AttachPolicy.counts(shots.size(), pictures, picked.size() - pictures, added, skipped, tooBig, AssistAttach.on(app));
+        return AttachPolicy.counts(shots.size(), pictures, picked.size() - pictures, added, skipped, tooBig);
     }
 
     /** Attach a screenshot to the take in progress. False when nothing is being recorded or the take is full. */
