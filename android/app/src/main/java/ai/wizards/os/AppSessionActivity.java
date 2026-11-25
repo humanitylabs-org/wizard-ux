@@ -13,9 +13,9 @@ public final class AppSessionActivity extends MainActivity {
         // Drop caller extras/actions before MainActivity sees them; invalid data gets
         // only the isolated unavailable surface, never the ordinary workspace.
         String requested = HomeScreenShortcuts.appId(this,getIntent());
-        // A link to this app asked for this window (AppWindows, switch wizard/app-windows): where to open, and that
-        // Back at the app's start returns to the window the link was in. Read before the extras are dropped.
-        if (requested != null && AppWindows.on(this)) linked(getIntent());
+        // A link to this app asked for this window (AppWindows): where to open, and that Back at the app's start
+        // returns to the window the link was in. Read before the extras are dropped.
+        if (requested != null) linked(getIntent());
         setIntent(new Intent(this,AppSessionActivity.class).setAction(Intent.ACTION_VIEW)
             .setData(requested == null ? null : getIntent().getData()));
         super.onCreate(state);
@@ -53,7 +53,7 @@ public final class AppSessionActivity extends MainActivity {
         return ai.wizards.os.device.AppState.homeUrl(this) + "?app-session=" + android.net.Uri.encode(app == null ? "" : app)
             + (app != null && !at.isEmpty() ? "&app-path=" + android.net.Uri.encode(at) : "");
     }
-    /* ---- App windows (wizard-os issue 650, switch wizard/app-windows, off by default) ---- */
+    /* ---- App windows (wizard-os issue 650) ---- */
     private String linkPath = "", linkName = "";
     private boolean fromLink = false;
     /** Takes what a link launch carries; an icon tap (no extras) clears "opened by a link". */
@@ -67,7 +67,6 @@ public final class AppSessionActivity extends MainActivity {
     boolean backToLink() {
         if (!fromLink) return false;
         fromLink = false;
-        if (!AppWindows.on(this)) return false; // the switch went off while this window was open
         return moveTaskToBack(true);
     }
     @Override protected void onNewIntent(Intent intent) {
@@ -76,12 +75,10 @@ public final class AppSessionActivity extends MainActivity {
         if (HomeScreenShortcuts.appId(this,intent) == null || getIntent().getData() == null
                 || !getIntent().getData().equals(intent.getData())) return;
         super.onNewIntent(intent);
-        if (AppWindows.on(this)) {
-            linked(intent);
-            // A link to a page inside this app: the open window goes there (its page checks the page is in the app).
-            String at = linkPath; linkPath = "";
-            if (!at.isEmpty()) evalJs("(window.__wosSessionGo && window.__wosSessionGo(" + org.json.JSONObject.quote(at) + "))");
-        } else { fromLink = false; linkPath = ""; } // switch off since: an icon tap keeps today's Back
+        linked(intent);
+        // A link to a page inside this app: the open window goes there (its page checks the page is in the app).
+        String at = linkPath; linkPath = "";
+        if (!at.isEmpty()) evalJs("(window.__wosSessionGo && window.__wosSessionGo(" + org.json.JSONObject.quote(at) + "))");
         setIntent(new Intent(this,AppSessionActivity.class).setAction(Intent.ACTION_VIEW).setData(intent.getData()));
     }
     boolean acceptsUrl(String raw) {

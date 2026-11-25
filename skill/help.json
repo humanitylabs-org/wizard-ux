@@ -403,10 +403,6 @@
       "help": "Android app: the side button opens Messenger's Agent chat for a note instead of a new Wizard chat.",
       "where": "Settings › Try new features › Side button opens the Agent chat"
     },
-    "wizard/app-windows": {
-      "help": "Android app: a link to a Wizard app opens that app in its own Android window, like its home-screen icon.",
-      "where": "Settings › Try new features › Links open the app's own window"
-    },
     "wizard/private-first-setup": {
       "help": "New installs start private: Welcome leads with Tinfoil; Claude and ChatGPT are optional extras.",
       "where": "Settings › Try new features › Private first setup"

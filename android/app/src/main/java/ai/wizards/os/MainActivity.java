@@ -267,6 +267,8 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         ScrollCaptureCrashGuard.install();
         // The removed switch wizard/pin-reach-answer (wizard-ux issue 1607) kept its copy here; it is always on now.
         if (!(this instanceof AppSessionActivity)) deleteSharedPreferences("reach-answer");
+        // The same for the removed switch wizard/app-windows (wizard-os issue 650).
+        if (!(this instanceof AppSessionActivity)) AppWindows.forgetOldSwitch(this);
         if (ai.wizards.os.device.AppState.origin(this).isEmpty()) {
             startActivity(new Intent(this, ConnectActivity.class)); finish(); return;
         }
@@ -314,7 +316,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         }
     }
 
-    /* ---- App windows (wizard-os issue 650, switch wizard/app-windows, off by default): a link to a Wizard app opens
+    /* ---- App windows (wizard-os issue 650): a link to a Wizard app opens
      * that app's own window (AppWindows). Only right after a real tap here, or once after a link intent to an app. ---- */
     private long tapUpAt = 0, linkIntentAt = 0, appWindowAt = 0;
     @Override
@@ -330,7 +332,6 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
     }
     void evalJs(String js) { if (web != null) web.evaluateJavascript(js, null); }
     private boolean openAppWindow(String appId, String path, String name) {
-        if (!AppWindows.on(this)) return false;
         final String id = String.valueOf(appId), at = AppWindows.path(path);
         if (!HomeScreenPolicy.validId(id) || at == null) return false;
         // This app's own window keeps its links in place.
@@ -607,7 +608,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         if (reach != null && reach.isOffline()) { retryReach(); return; } // Back on the connection screen: try again, stay
         web.evaluateJavascript("(window.__wosNativeBack ? window.__wosNativeBack() : 'nojs')", result -> {
             String r = result == null ? "" : result.replace("\"", "");
-            // An app window a link opened (switch wizard/app-windows): Back at the app's start returns to the link's window.
+            // An app window a link opened (wizard-os issue 650): Back at the app's start returns to the link's window.
             if ("root".equals(r) && this instanceof AppSessionActivity && ((AppSessionActivity)this).backToLink()) return;
             if (!r.equals("nojs") && !r.isEmpty() && !r.equals("null")) return; // the shell handled it
             if (this instanceof AppSessionActivity) return; // not-yet-loaded sessions consume Back too
@@ -1716,13 +1717,6 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
             if (MainActivity.this instanceof AppSessionActivity) return;
             ai.wizards.os.assist.AssistNote.setOn(MainActivity.this, on);
         }
-        /* ---- App windows (wizard-os issue 650, switch wizard/app-windows, off by default): the main page copies the
-         * switch here; any page asks to open an app's own window for a link (false = keep the link where it is). ---- */
-        @JavascriptInterface
-        public void appWindowsSwitch(boolean on) {
-            if (MainActivity.this instanceof AppSessionActivity) return;
-            AppWindows.setOn(MainActivity.this, on);
-        }
         /** Phone notifications per app (wizard-ux issue 1567, switch wizard/phone-app-notifications): the main page's
          *  copy of the switch, with the installed apps' names for their Android channels. */
         @JavascriptInterface
@@ -1735,6 +1729,8 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
                 main.post(() -> requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, REQ_APP_NOTIFY));
             }
         }
+        /* ---- App windows (wizard-os issue 650, on for everyone): any page asks to open an app's own window for a link
+         * (false = keep the link where it is). ---- */
         @JavascriptInterface
         public boolean openAppWindow(String appId, String path, String name) {
             return MainActivity.this.openAppWindow(appId, path, name);

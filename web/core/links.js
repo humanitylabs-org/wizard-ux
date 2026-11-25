@@ -336,7 +336,7 @@
     const sheet = primary;
     if (!sheet) { if (inApp(u)) return false; outside(u); return true; }
     if (!inApp(u)) return sheet.open(u.href) !== false;
-    if (window.WizAndroidRelay?.appLink?.(u.href)) return true; // a Wizard app's own Android window (wizard/app-windows)
+    if (window.WizAndroidRelay?.appLink?.(u.href)) return true; // a Wizard app's own Android window (wizard-os issue 650)
     const DL = window.WizCore && window.WizCore.deeplink;
     if (DL && DL.route(u.href, frame)) return true;
     if (sheet.route && sheet.route(u.href, frame)) return true;
@@ -359,7 +359,7 @@
       e.preventDefault(); e.stopPropagation();
       if (inApp(u) && isImage(u) && viewImage(u, a.ownerDocument)) return;
       if (isFile(u)) { download(u, a.ownerDocument); return; }
-      // A link to a Wizard app opens that app's own Android window (switch wizard/app-windows; android-relay.js).
+      // A link to a Wizard app opens that app's own Android window (wizard-os issue 650; android-relay.js).
       if (inApp(u) && !a.hasAttribute?.('data-wizard-browse') && window.WizAndroidRelay?.appLink?.(u.href)) return;
       // A link to this app itself (…/wizard-os-home/?session=…, ?view=…) opens in place, not in a sheet.
       const DL = window.WizCore && window.WizCore.deeplink;
@@ -448,7 +448,7 @@
       if (isFile(u)) return download(u, doc);
       if (u.origin !== ORIGIN) return sheet.open(u.href);
       let fe = null; try { fe = win.frameElement; } catch (e) {}
-      if (window.WizAndroidRelay?.appLink?.(u.href)) return; // another app: its own Android window (wizard/app-windows)
+      if (window.WizAndroidRelay?.appLink?.(u.href)) return; // another app: its own Android window (wizard-os issue 650)
       // Hosted apps use the same canonical thread/app navigation as chat links.
       // Otherwise a Manager result opens a second Wizard inside the link viewer.
       const DL = window.WizCore && window.WizCore.deeplink;

@@ -314,7 +314,7 @@ window.WizCore.skinHostParts.tweaks = function ({ fault, guard, inboxThreads, in
       open(id) {
         if (a.dead) return false;
         const it = window.WosBell?.item?.(id); if (!(it?.app || it?.from) || typeof window.WizOpenApp !== 'function') return false;
-        // Android, switch wizard/app-windows (wizard-os issue 650): Open shows the app in its own window, as a link does.
+        // Android (wizard-os issue 650): Open shows the app in its own window, as a link does.
         const openApp = (app, path) => window.WizAndroidRelay?.openAppWindow?.(app, path || '') === true || (path ? window.WizOpenApp(app, path) : window.WizOpenApp(app));
         if (!it.app) return !!openApp(it.from);   // a Notifications item about an app: open that app
         if (!it.open) return !!openApp(it.app);

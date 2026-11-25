@@ -183,7 +183,6 @@ Settings › Try new features lists unfinished features anyone can switch on to 
 - **Inbox until archived**: Chats stay in Inbox until archived.
 - **Inbox: only what needs you**: Inbox: only what needs you.
 - **Installs in the Apps column**: AI apps desktop: an app you Get shows in the Apps column, spinning until installed.
-- **Links open the app's own window**: Android app: a link to a Wizard app opens that app in its own Android window, like its home-screen icon.
 - **Machines on Home**: Home shows a slim strip (Wizard, AI fuel, chats, backup, network); Settings › System holds your network, AI, security and storage.
 - **Now playing**: While an app plays audio or video, small moving bars sit on that app's icon in the AI apps view (the desktop apps column; the phone Home dock and grid); click or tap them to pause without opening the app. Option+P pauses or plays what played last on the desktop. Nothing shows while nothing plays.
 - **One-tap Snooze · bottom of Ready**: Snooze is one tap and the lowest priority: the thread waits at the bottom of Ready, below approvals, until you restore or reply.
