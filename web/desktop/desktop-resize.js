@@ -339,6 +339,8 @@ window.WizCore.desktopParts.resize = function ({ APP, appAt, appOf, C, CHATS, cl
       <div class="pane-main"><div class="chats" data-chats="${w.id}"></div><div class="pane-empty"><div><b>Your conversations, side by side.</b><br>Choose a chat on the left, or start one.<br><button type="button" class="pane-newchat" data-panenew>Start a new chat</button><br><kbd>${MOD}↓</kbd> top ready chat · <kbd>${MOD}N</kbd> new chat · <kbd>${MOD}V</kbd> new voice chat · hold <kbd>${IS_MAC ? '⌥' : 'Alt'}</kbd> for every key</div></div></div></div>`;
     if (w.appId === 'troubleshooter') return window.WizReach.recoveryHtml();
     const a = appOf(w), url = window.WosOwnViews?.frameUrl(a, w.url) || w.url || a.url || '/';
+    // Browser boundary: an app that can't run in a sandboxed window (Files, wizard-os#942) opens as its own tab.
+    if (window.WizBrowserBoundary?.ownTab?.(a.id, url)) return `<div class="frame-fallback on" data-own-tab="${esc(a.id || '')}"><div><b>${esc(a.name)} opens in its own tab</b>It can’t run inside a Wizard window.<br><a href="${esc(url)}" target="_blank" rel="noopener">Open ${esc(a.name)} ↗</a></div></div>`;
     return `${window.WosOwnViews?.noteHtml(a) || ''}<iframe data-own-app="${esc(a.id || '')}"${window.WizBrowserBoundary?.enabled ? ' ' + window.WizBrowserBoundary.frameAttributes(url, a.id) : ''} src="${esc(url)}" title="${esc(a.name)}" allow="microphone; clipboard-read; clipboard-write; autoplay; fullscreen"></iframe>
       <div class="frame-fallback"><div><b>${esc(a.name)} can’t show in a window</b><a href="${esc(url)}" target="_blank" rel="noopener">Open it in a tab ↗</a></div></div>`;
   }

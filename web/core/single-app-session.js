@@ -180,6 +180,8 @@
     const next = registry.APP[id];
     if (!next || next.kind !== 'wizard' || !next.url || !policy.within(next.url, next.url) || policy.isShell(next.url)) { unavailable(); return; }
     if (frame && mountedURL === next.url) { app = next; return; }
+    // Browser boundary: an app that can't run in a sandboxed window (Files, wizard-os#942) is its own page: the pin opens it.
+    if (window.WizBrowserBoundary?.ownTab?.(next.id || id, next.url)) { checkpoint(); detach?.(); detach = null; frame?.remove(); frame = null; location.replace(next.url); return; }
     checkpoint(); chats?.forget(wid); detach?.(); app = next; mountedURL = next.url; loaded = false;
     threadWindow.appId = next.id || id;   // hosted Chats threads are allowed per current app id (ux#1471)
     win.replaceChildren(); frame = document.createElement('iframe'); frame.className = 'appframe'; frame.title = policy.displayName(next);

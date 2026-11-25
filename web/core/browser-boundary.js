@@ -743,9 +743,23 @@
     });
   }
   const attr = v => String(v).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  // Apps that cannot run in a sandboxed window at all open as their own browser tab instead (wizard-os#942), by
+  // installed app id and the view path it is installed at. Files is upstream File Browser: it keeps its sign-in in the
+  // page's own localStorage and cookie and calls its own API directly, none of which an opaque page has, so a sandboxed
+  // window stays blank even with CORS on its files. In its own tab it runs as a normal page, as it did before the
+  // boundary, and no other app gets this. The App Manager's installed-app check (wizard-app-manager#1043) should count
+  // these as opening.
+  const OWN_TAB = Object.freeze({ files: '/files/' });
+  const ownTab = (appId, url) => {
+    const home = typeof appId === 'string' && Object.prototype.hasOwnProperty.call(OWN_TAB, appId) ? OWN_TAB[appId] : '';
+    if (!home) return false;
+    try { const u = new URL(String(url || home), location.href); return u.origin === location.origin && u.pathname.startsWith(home); } catch (_) { return false; }
+  };
   window.WizBrowserBoundary = Object.freeze({
     enabled: true,
     sandbox: SANDBOX,
+    // Whether this installed app opens as its own tab under the boundary instead of a sandboxed window (OWN_TAB).
+    ownTab,
     // The attributes every app frame gets while the boundary is on (no allow-same-origin, ever).
     // The shell's own pages (shellPage) are the one exception: they stay same-origin (see guard above).
     // With the window's installed app id, its saved settings ride along as the frame's name (appStorage).
