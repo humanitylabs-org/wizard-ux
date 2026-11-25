@@ -1,19 +1,17 @@
-// Search in Settings (switch wizard/settings-search, humanitylabs-org/try-wizard#94): a box at the top of the
-// category list filters it to the pages that mention the words; the open page marks them (browser proof:
-// tests/qa-settings-search.cjs). Off: Settings renders exactly as before, with no box.
+// Search in Settings (humanitylabs-org/try-wizard#94, on for everyone; the wizard/settings-search switch is removed):
+// a box at the top of the category list filters it to the pages that mention the words; the open page marks them
+// (browser proof: tests/qa-settings-search.cjs).
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import { withSettingsParts } from './fixtures/settings-parts.mjs';
-import { lookBox } from './fixtures/r5A-experience.mjs';
-import { parseCss } from './fixtures/mini-css.mjs';
 const source = withSettingsParts(fs.readFileSync(new URL('../web/core/settings.js', import.meta.url), 'utf8'));
 const ID = 'wizard/settings-search';
 const text = html => String(html).split(/<[^>]*>/).join(' ').split('&amp;').join('&');
-function harness({ on = true, shell = 'desktop' } = {}) {
+function harness({ shell = 'desktop' } = {}) {
   const storage = new Map(), listeners = {};
-  const documentElement = { dataset: { tweaks: on ? `wizard/sidebar-chats-view ${ID}` : 'wizard/sidebar-chats-view' } };
+  const documentElement = { dataset: { tweaks: '' } };
   // Test-only stand-in for the inert <template> the view parses page markup with.
   const createElement = () => { let h = ''; return { set innerHTML(v) { h = v; }, content: { querySelectorAll: () => [], get textContent() { return text(h); } } }; };
   const s = { console, Map, Set, Date, String, CSS: { escape: String }, setTimeout, document: { activeElement: null, documentElement, createElement }, navigator: { userAgent: 'Desktop' }, location: { host: 'example.test' }, localStorage: { getItem: k => storage.get(k), setItem: (k, v) => storage.set(k, v) } };
@@ -32,14 +30,7 @@ function harness({ on = true, shell = 'desktop' } = {}) {
   const cats = () => [...root.innerHTML.matchAll(/data-st-page="([^"]+)"/g)].map(m => m[1]);
   return { s, root, view, type, cats, documentElement, winListeners };
 }
-test('off: no search box and the full category list, as before', () => {
-  const h = harness({ on: false });
-  assert.doesNotMatch(h.root.innerHTML, /data-st-search/);
-  const all = h.cats();
-  h.type('hotkey');
-  assert.deepEqual(h.cats(), all, 'typing does nothing while the switch is off');
-});
-test('on: the box sits at the top of the list, above the categories', () => {
+test('with no switch on, the box sits at the top of the list, above the categories', () => {
   const h = harness();
   const html = h.root.innerHTML;
   assert.match(html, /<h3 class="st-title"[^>]*>Settings<\/h3><div class="st-search" role="search"><input type="search" data-st-search="" placeholder="Search settings" aria-label="Search settings"/);
@@ -64,17 +55,13 @@ test('typing keeps only the pages that mention the words and opens the first one
   h.type('');
   assert.deepEqual(h.cats(), all, 'clearing the box brings every category back');
 });
-test('an explicitly opened page that does not match moves to the first match; turning the switch off clears it', async () => {
+test('an explicitly opened page that does not match moves to the first match', () => {
   const h = harness();
   h.view.focus('look'); assert.equal(h.view.page, 'appearance');
   h.type('hotkey');
   assert.equal(h.view.page, 'voice');
-  h.documentElement.dataset.tweaks = 'wizard/sidebar-chats-view';
   assert.match(h.root.innerHTML, /data-st-search/);
-  assert.equal(h.winListeners['wos:tweak-choice']?.length, 1);
-  for (const f of h.winListeners['wos:tweak-choice']) f();
-  await new Promise(r => setTimeout(r, 5));
-  assert.doesNotMatch(h.root.innerHTML, /data-st-search/);
+  assert.equal(h.winListeners['wos:tweak-choice'], undefined, 'no longer follows a switch');
 });
 test('an IME composing in the box is left alone until compositionend (no repaint replaces the box mid-word)', () => {
   const h = harness();
@@ -84,19 +71,4 @@ test('an IME composing in the box is left alone until compositionend (no repaint
   h.type('hotkey', 'compositionend');
   assert.deepEqual(h.cats(), ['voice']);
   assert.ok(all.length > 1);
-});
-test('the switch is a listed tweak package linked to this issue', async () => {
-  // the real Settings › Look list on the real catalog: listed, off on a fresh device, the switch turns it on
-  const fresh = await lookBox();
-  const row = fresh.row(ID);
-  assert.ok(row, 'listed'); assert.equal(row.on, false, 'off by default'); assert.ok(!fresh.active().includes(ID));
-  await fresh.E.toggle(ID); assert.ok(fresh.active().includes(ID), 'the switch turns it on');
-  const m = JSON.parse(fs.readFileSync(new URL('../web/tweaks/wizard/settings-search/manifest.json', import.meta.url), 'utf8'));
-  assert.equal(m.id, ID); assert.deepEqual(m.issues, ['humanitylabs-org/try-wizard#94']);
-});
-// static-rule: every rule of the switch's own stylesheet must be scoped to the switch (a lint over the whole file)
-test('every rule of the settings-search stylesheet is scoped to its switch', () => {
-  const rules = parseCss(fs.readFileSync(new URL('../web/tweaks/wizard/settings-search/tweak.css', import.meta.url), 'utf8'));
-  assert.ok(rules.length);
-  for (const r of rules) for (const sel of r.selectors) assert.ok(sel.startsWith(`html[data-tweaks~="${ID}"]`), sel);
 });

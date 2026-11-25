@@ -1,23 +1,23 @@
 'use strict';
-// Search in Settings (switch wizard/settings-search, humanitylabs-org/try-wizard#94). Real phone and desktop shells on a
-// synthetic origin, every write refused. With the switch on: the box sits at the top of the category list; typing
-// keeps only the pages that mention the words, marks them on the open page and scrolls the first mark into view; Esc
-// clears it. With it off (QA_ONLY_OFF=1, or the off pass of every run): no box, and the list is the full list.
+// Search in Settings (humanitylabs-org/try-wizard#94, on for everyone; the wizard/settings-search switch is gone). Real
+// phone and desktop shells on a synthetic origin, every write refused, with no tweaks on: the box sits at the top of
+// the category list; typing keeps only the pages that mention the words, marks them on the open page and scrolls the
+// first mark into view; Esc clears it.
 // QA_OUT=<dir> saves screenshots. QA_WEB=<checkout>/web points at another build.
 const {chromium}=require('../tools/qa-playwright.cjs');
 const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
 const root=path.resolve(process.env.QA_WEB||path.join(__dirname,'../web')),origin='https://settings-search.test',prefix='/wizard-os-home/';
 const out=process.env.QA_OUT||'';if(out)fs.mkdirSync(out,{recursive:true});
-const ID='wizard/settings-search',WORD=process.env.QA_WORD||'skin',DEEPS={desktop:process.env.QA_DEEP||'Moonrise',phone:process.env.QA_DEEP||'opacity'};
+const WORD=process.env.QA_WORD||'skin',DEEPS={desktop:process.env.QA_DEEP||'Moonrise',phone:process.env.QA_DEEP||'opacity'};
 const type=f=>f.endsWith('.js')||f.endsWith('.mjs')?'text/javascript':f.endsWith('.css')?'text/css':f.endsWith('.html')?'text/html':f.endsWith('.json')?'application/json':'application/octet-stream';
 (async()=>{
  const browser=await chromium.launch({headless:true});const results=[];
  try{
-  for(const on of process.env.QA_ONLY_OFF==='1'?[false]:[false,true])for(const v of [{shell:'desktop',w:1280,h:760},{shell:'desktop',w:2400,h:900},{shell:'phone',w:390,h:844}]){
-   const phone=v.shell==='phone',DEEP=DEEPS[v.shell],label=`${v.shell} ${v.w} ${on?'on':'off'}`;
+  for(const v of [{shell:'desktop',w:1280,h:760},{shell:'desktop',w:2400,h:900},{shell:'phone',w:390,h:844}]){
+   const phone=v.shell==='phone',DEEP=DEEPS[v.shell],label=`${v.shell} ${v.w}`;
    const ctx=await browser.newContext({viewport:{width:v.w,height:v.h},isMobile:phone,hasTouch:phone,serviceWorkers:'block'});
    await ctx.routeWebSocket('**/*',ws=>ws.close());
-   const mix=on?{[ID]:true}:{};
+   const mix={};
    await ctx.addInitScript(({shell,mix})=>{if(window!==window.top)return;for(const[k,val]of Object.entries({'wos.shell':shell,'wos.coached':'true','wos.tour.v1':'true','wos.welcome.v1':'done','wos.desktop-view.v1':'classic','wos.skin-tweaks.v1':JSON.stringify({version:1,preset:'none',off:{},mix})}))localStorage.setItem(k,val);},{shell:v.shell,mix});
    const errors=[],writes=[];
    await ctx.route('**/*',async r=>{
@@ -37,16 +37,13 @@ const type=f=>f.endsWith('.js')||f.endsWith('.mjs')?'text/javascript':f.endsWith
    // The synthetic box answers no setup: close the Welcome so it doesn't own Esc.
    await pg.evaluate(()=>{if(window.WosWelcome?.active)window.WosWelcome.close?.();});
    await pg.waitForFunction(()=>{const o=window.__wos?.openSettings||window.__wux?.openSettings;o();return !!document.querySelector('.st-inner .st-index nav');},null,{timeout:15000});
-   if(on)await pg.waitForFunction(id=>(document.documentElement.dataset.tweaks||'').split(' ').includes(id)&&document.querySelector('[data-st-search]'),ID,{timeout:15000});
+   await pg.waitForFunction(()=>document.querySelector('[data-st-search]'),null,{timeout:15000});
    await pg.waitForTimeout(600);
    const cats=()=>pg.evaluate(()=>[...document.querySelectorAll('.st-index [data-st-page]')].map(b=>b.dataset.stPage));
    const all=await cats();
    const r={variant:label,all};
-   if(out)await pg.screenshot({path:path.join(out,`settings-search-${v.shell}-${v.w}-${on?'on':'off'}-before.png`)});
-   if(!on){
-    r.box=await pg.locator('[data-st-search]').count();
-    assert.equal(r.box,0,`${label}: no search box while off`);
-   }else{
+   if(out)await pg.screenshot({path:path.join(out,`settings-search-${v.shell}-${v.w}-before.png`)});
+   {
     const box=pg.locator('[data-st-search]');
     const geo=await pg.evaluate(()=>{const b=document.querySelector('[data-st-search]').getBoundingClientRect(),c=document.querySelector('.st-index [data-st-page]').getBoundingClientRect();return {boxTop:b.top,boxLeft:b.left,firstCat:c.top};});
     assert.ok(geo.boxTop<geo.firstCat,`${label}: the box sits above the categories ${JSON.stringify(geo)}`);
