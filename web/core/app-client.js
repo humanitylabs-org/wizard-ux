@@ -43,6 +43,9 @@
    * an opaque origin and cannot reach the shell's window. Back, appearance and field insertion then travel by
    * postMessage through core/browser-boundary-client.js; requests carry only what the shell answers there. */
   const opaque = framed && globalThis.origin === 'null';
+  // A same-origin app page under the boundary (only TG style, telegram#68) asks the top-level shell to send its owner
+  // calls with the shell token, as the shell's own pages do (core/shell-token.js armFrame decides). Off: no-op.
+  if (framed && !opaque) { try { top.WizShellBoundary?.armFrame?.(window); } catch (_) {} }
   // Wizard ID: the phone's sheet may stay open 3 minutes. Under the boundary the shell first waits up to a minute for
   // the window to be in front (app-services.js boundaryIdentity), so the app waits for both.
   const ID_WAIT = opaque ? 255000 : 190000;
