@@ -6,7 +6,7 @@
  * in front and the pins) stay in desktop.js; this code reads and writes them as aadVars.<name>, its get/set accessors
  * on the same variables, so every read and write is live. desktop.js's own imports are imported here again from the
  * same modules. The body below keeps desktop.js's indentation so `git log -L` and patches port over. */
-export function modesPart({ aadVars, api, cTop, cX, doc, el, flipAppSide, icon, MODE_KEYS, MODE_LABELS, modeBars, pTop, pW, root, sTop, toggleSide, top, windowMode }) {
+export function modesPart({ aadVars, api, cTop, cX, doc, el, icon, MODE_KEYS, MODE_LABELS, modeBars, pTop, pW, root, sTop, toggleSide, top, windowMode }) {
   let hidePanel; // late-bound: desktop.js declares these after the call, see bindLate
   function modeBar(slot) {
     const bar = el('span', 'aad-modes', { role: 'group', 'aria-label': 'Window arrangement' });
@@ -22,9 +22,6 @@ export function modesPart({ aadVars, api, cTop, cX, doc, el, flipAppSide, icon, 
     modeBars.push({ slot, bar }); return bar;
   }
   cTop.insertBefore(modeBar('chats'), cX); pTop.insertBefore(modeBar('app'), pW); sTop.append(modeBar('app2'));
-  const pSide = el('button', 'aad-ib aad-pside', { type: 'button', 'aria-keyshortcuts': 'Alt+Shift+M' }); pSide.append(icon('side')); pSide.hidden = true;
-  api.listen(pSide, 'click', e => { e.stopPropagation(); flipAppSide(); });
-  pTop.insertBefore(pSide, pW);
   top.append(cTop, pTop);
   /* Wizard for Mac (wizard-os#548): the Mac app's title-bar drag strip covers #bar and lets a click through only on a
    * control INSIDE #bar (try-wizard WizardDragView reads #bar's box and the buttons in it). The chat's and the app panel's
@@ -75,5 +72,5 @@ export function modesPart({ aadVars, api, cTop, cX, doc, el, flipAppSide, icon, 
     soon();
     return { soon, dispose() { ro?.disconnect(); mo?.disconnect(); box.remove(); } };
   })();
-  return { macHoles, pSide, bindLate: v => { if ('hidePanel' in v) hidePanel = v.hidePanel; } };
+  return { macHoles, bindLate: v => { if ('hidePanel' in v) hidePanel = v.hidePanel; } };
 }

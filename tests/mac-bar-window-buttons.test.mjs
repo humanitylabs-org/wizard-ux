@@ -101,7 +101,7 @@ test('inside the Mac app the chat and app panel header buttons get click-through
       const x = 100 * (doc.querySelectorAll('button').indexOf(this) + 1); return { left: x, top: 8, right: x + 30, bottom: 32, width: 30, height: 24 };
     };
     const frames = [], api = { listen() {}, frame: f => frames.push(f) };
-    const { macHoles } = modesPart({ aadVars: {}, api, cTop, cX, doc, el, flipAppSide() {}, icon: () => el('i', 'ic'), MODE_KEYS: {}, MODE_LABELS: {}, modeBars: [], pTop, pW, root: doc.documentElement, sTop, toggleSide() {}, top, windowMode() {} });
+    const { macHoles } = modesPart({ aadVars: {}, api, cTop, cX, doc, el, icon: () => el('i', 'ic'), MODE_KEYS: {}, MODE_LABELS: {}, modeBars: [], pTop, pW, root: doc.documentElement, sTop, toggleSide() {}, top, windowMode() {} });
     while (frames.length) frames.shift()();
     return { doc, macHoles, frames };
   };

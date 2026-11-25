@@ -1,12 +1,12 @@
 'use strict';
 // Swap sides (wizard-ux issue 1526, switch wizard/swap-sides). Real browser, AI apps desktop at 1440x900, the synthetic
-// transport of tests/qa-desktop-app-panel-left.cjs (no box is read or written). Switch off: no button, ⌥⇧L does nothing,
+// transport of tests/qa-desktop-reload-app-beside.cjs (no box is read or written). Switch off: no button, ⌥⇧L does nothing,
 // the chats sidebar is left and the Apps column right, as before. Switch on: the chats sidebar header's "Move the chats to
 // the right" button puts the chats sidebar on the right and the Apps column on the left, the Pages panel next to the Apps
 // column and a docked chat beside the chats sidebar; ⌥L folds the left side (Apps) and ⌥R the right side (chats) to
 // their rails, the folded chats rail opens its list to its left, the sidebar's grip sits on its left edge and dragging it
-// left widens it, Home's composer stays clear of the panel, a reload keeps the choice (this device), app-panel-left's
-// ⌥⇧M moves the panel next to the chats sidebar (now right), and ⌥⇧L swaps back. QA_SWITCH=off,on picks the cases.
+// left widens it, Home's composer stays clear of the panel, a reload keeps the choice (this device), and ⌥⇧L swaps
+// back. QA_SWITCH=off,on picks the cases.
 const assert = require('node:assert/strict');
 const { chromium } = require('../tools/qa-playwright.cjs');
 const { ownerRead } = require('../tools/qa-desktop-frame-fixture.cjs');
@@ -46,7 +46,7 @@ const report = { origin, web, cases: [] };
       const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, serviceWorkers: 'block' });
       try {
         await context.routeWebSocket('**/*', w => w.close());
-        const mix = { 'wizard/desktop-chats': true, 'wizard/app-panel-left': true, ...(on ? { 'wizard/swap-sides': true } : {}) };
+        const mix = { 'wizard/desktop-chats': true, ...(on ? { 'wizard/swap-sides': true } : {}) };
         await context.addInitScript(({ skin, mix, spaces, desk }) => {
           if (window !== top) return;
           if (sessionStorage.getItem('qaBoot')) return; sessionStorage.setItem('qaBoot', '1');
@@ -91,7 +91,6 @@ const report = { origin, web, cases: [] };
         await page.goto(origin + prefix + 'desktop.html');
         await page.waitForFunction(() => window.__wux && !window.WosWelcome?.active && window.WosExperience?.state.tweaks.length && !window.WosExperience.state.busy);
         await page.waitForFunction(() => document.documentElement.dataset.layout === 'ai-apps', null, { timeout: 15000 });
-        await page.waitForFunction(() => (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/app-panel-left'), null, { timeout: 15000 }).catch(() => {});
         if (on) await page.waitForFunction(() => (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/swap-sides'), null, { timeout: 15000 }).catch(() => {});
         entry.tweaks = await page.evaluate(() => document.documentElement.dataset.tweaks);
         assert.equal(entry.tweaks.split(' ').includes('wizard/swap-sides'), on, stem + ': switch state');
@@ -216,12 +215,6 @@ const report = { origin, web, cases: [] };
         if (await page.evaluate(() => document.documentElement.dataset.aadMode !== 'tiled')) { await vis('.aad-ctop [data-mode="tiled"]').click().catch(() => {}); await nap(1000); }
         entry.tiledAgain = await seen(); assert.ok(mirrored(entry.tiledAgain), 'tiled again, still swapped: ' + JSON.stringify(entry.tiledAgain));
         await page.mouse.click(720, 450).catch(() => {}); await blur();
-        // app-panel-left's ⌥⇧M: the panel next to the chats sidebar, now on the right
-        await page.keyboard.press('Alt+Shift+KeyM'); await nap(1200);
-        entry.appNextToChats = await seen();
-        await page.screenshot({ path: path.join(out, stem + '-6-app-next-to-chats.png') });
-        assert.ok(entry.appNextToChats.app && Math.abs(entry.appNextToChats.app[0] + entry.appNextToChats.app[1] - entry.appNextToChats.side[0]) <= 2, '⌥⇧M puts the panel next to the chats sidebar: ' + JSON.stringify(entry.appNextToChats));
-        await page.keyboard.press('Alt+Shift+KeyM'); await nap(1200);
         // the choice is kept on this device
         await page.reload();
         await page.waitForFunction(() => window.__wux && !window.WosExperience?.state.busy && document.documentElement.dataset.layout === 'ai-apps', null, { timeout: 15000 });

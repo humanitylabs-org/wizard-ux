@@ -8,7 +8,7 @@
  * same modules. The body below keeps desktop.js's indentation so `git log -L` and patches port over. */
 import { railActive, readyStep } from './parts.js';
 import { CHATS } from '../apps/chrome.js';
-export function keysPart({ aadVars, allOpenNow, anim, api, appKeyOf, applySizes, appName, behindThread, chanTitle, chatAction, chatParts, chatWindows, closeAll, closeChat, closeDesk, closeTidy, closeWs, cTop, curChat, cX, deskOfNode, desks, doc, DRAFT, el, FEED, feedBack, feedGone, feedOn, feedTitle, findBtn, flipAppSide, focusIn, focusLeave, focusOut, FRAME_KEYS, goApp, grip, hBack, hidePanel, hMid, homeComposer, host, isAppKey, KEY_LIKE, khMarks, leftOn, listBack, macHoles, mainChats, MODE_KEYS, MODE_LABELS, modeBars, narrow, newBtn, NOTE, noteOn, noteTitle, one, oneBack, oneSplit, openAll, openTidy, openWs, orbBtn, paintAgents, paintBack, paintHome, paintList, paintOneChats, paintOrbIdentity, paintRail, paintSplit, paintVt, paintWs, paneFrame, panes, pIcon, plus, pSide, pW, pX, railMode, readSessions, readyIds, readyOrder, retileSoon, rFind, rList, rNew, root, rSet, rTog, setBtn, setSearch, setSize, settings, setWide, side, sizes, stepReady, swapOn, swapped, swapSides, syncOrb, syncSide, talkFromOrb, tidyBtn, titleOf, togBtn, toggleSide, toggleTabs, top, tt, typing, unpeek, vtAll, vtList, vtTog, windowMode, wsBtn, wsName }) {
+export function keysPart({ aadVars, allOpenNow, anim, api, appKeyOf, applySizes, appName, behindThread, chanTitle, chatAction, chatParts, chatWindows, closeAll, closeChat, closeDesk, closeTidy, closeWs, cTop, curChat, cX, deskOfNode, desks, doc, DRAFT, el, FEED, feedBack, feedGone, feedOn, feedTitle, findBtn, focusIn, focusLeave, focusOut, FRAME_KEYS, goApp, grip, hBack, hidePanel, hMid, homeComposer, host, isAppKey, KEY_LIKE, khMarks, listBack, macHoles, mainChats, MODE_KEYS, MODE_LABELS, modeBars, narrow, newBtn, NOTE, noteOn, noteTitle, one, oneBack, oneSplit, openAll, openTidy, openWs, orbBtn, paintAgents, paintBack, paintHome, paintList, paintOneChats, paintOrbIdentity, paintRail, paintSplit, paintVt, paintWs, paneFrame, panes, pIcon, plus, pW, pX, railMode, readSessions, readyIds, readyOrder, retileSoon, rFind, rList, rNew, root, rSet, rTog, setBtn, setSearch, setSize, settings, setWide, side, sizes, stepReady, swapOn, swapped, swapSides, syncOrb, syncSide, talkFromOrb, tidyBtn, titleOf, togBtn, toggleSide, toggleTabs, top, tt, typing, unpeek, vtAll, vtList, vtTog, windowMode, wsBtn, wsName }) {
   const closeSettings = () => host?.settings.close();
   // (inside the Chats desk, which can carry [hidden] while the view shows it: on screen = it has a box)
   const onScreen = n => !!n && typeof n.getClientRects === 'function' && n.getClientRects().length > 0 && n.getBoundingClientRect().width > 0;
@@ -33,7 +33,6 @@ export function keysPart({ aadVars, allOpenNow, anim, api, appKeyOf, applySizes,
     // The snooze sheet keeps ⌥Z to close; Someday is an explicit button, never an arrow shortcut.
     if (snoozeOpen()) return code === 'KeyZ' && !sh ? once(() => doc.querySelector('.boom-sheet [data-boom-close]')?.click?.()) : KEY_LIKE.test(code);
     if (sh && MODE_KEYS[code]) return once(() => windowMode(MODE_KEYS[code]));
-    if (sh && code === 'KeyM' && leftOn() && !one()) return once(flipAppSide);
     if (sh && code === 'KeyL' && swapOn() && !one()) return once(swapSides);   // swap sides (wizard-ux issue 1526)
     // voice: the shell's own keys (⌥D into the open chat's box, ⌥V a new voice chat, ⌥C a command); ⌥Space = the orb
     if (code === 'KeyV' || code === 'KeyC' || code === 'KeyD') return false;
@@ -161,7 +160,6 @@ export function keysPart({ aadVars, allOpenNow, anim, api, appKeyOf, applySizes,
       const n = bar.querySelector('[data-mode="' + mode + '"]');
       if (shown(n)) out.push({ el: n, key: '⇧' + code.slice(3), at: 'below', word: MODE_LABELS[mode] });
     }
-    if (shown(pSide)) out.push({ el: pSide, key: '⇧M', at: 'below', word: 'Move the app' });
     midH();
     if (aadVars.docked) {
       for (const [a, k] of [['snooze', 'Z'], ['done', 'E'], ['resolve', 'X']]) putIn(chatBtn(a), k);

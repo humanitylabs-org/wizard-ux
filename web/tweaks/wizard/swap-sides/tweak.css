@@ -17,7 +17,6 @@ html[data-tweaks~="wizard/swap-sides"][data-shell="desktop"][data-layout="ai-app
 html[data-tweaks~="wizard/swap-sides"][data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side="end"][data-aad-app-side="start"] .aad-ptop { box-shadow: 1px 0 0 var(--aad-line), inset 0 -1px 0 var(--aad-line); }
 html[data-tweaks~="wizard/swap-sides"][data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side="end"][data-aad-app-side="start"] .aad-pload { box-shadow: 1px 0 0 var(--aad-line), 12px 0 32px color-mix(in srgb, black 10%, transparent); }
 html[data-tweaks~="wizard/swap-sides"][data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side="end"][data-aad-app-side="start"][data-aad-split] .aad-grip[data-grip="app"] { left: calc(var(--aad-pane-app-x) + var(--aad-pane-app-width)); }
-html[data-tweaks~="wizard/swap-sides"][data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side="end"][data-aad-app-side="end"][data-aad-split] .aad-grip[data-grip="app"] { left: var(--aad-pane-app-x); }
 /* a chat docked beside the chats sidebar (now on the right): its line and shadow on its left */
 html[data-tweaks~="wizard/swap-sides"][data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side="end"][data-aad-app-side="start"][data-aad-chat] #stage > .wsp[data-aad-role="chat"] { box-shadow: -1px 0 0 var(--aad-line), -12px 0 32px color-mix(in srgb, black 8%, transparent); }
 /* Home's composer (no chat docked) sits in the room right of the panel, never under it */
