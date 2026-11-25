@@ -80,6 +80,10 @@ test('switch on: the header button and ⌥⇧L swap the sides and back, saved on
   assert.equal(d.css('html', '--aad-side'), 'var(--aad-pane-main-x)'); assert.equal(d.css('html', '--aad-rs'), 'var(--aad-pane-main-right)');
   assert.equal(d.css('.aad-side', 'left'), 'auto'); assert.equal(d.css('.aad-side', 'right'), 'var(--aad-pane-side-right)');
   assert.equal(d.css('.aad-sh .aad-tog .aad-ico', 'transform'), 'scaleX(-1)', '◫ faces its side');
+  // Wizard for Mac: the traffic lights sit over the left column, so the Apps header steps below them, the chats' does not
+  d.w.html.setAttribute('data-native-chrome', 'mac');
+  assert.equal(d.css('.aad-vth', 'margin-top'), 'var(--aad-mac-top)'); assert.equal(d.css('.aad-sh', 'margin-top'), '0');
+  d.w.html.removeAttribute('data-native-chrome');
   // a fresh view on the same device starts swapped
   assert.equal(d.panes.get().side, 'end');
   // ⌥⇧L swaps back

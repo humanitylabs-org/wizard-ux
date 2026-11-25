@@ -200,6 +200,22 @@ const report = { origin, web, cases: [] };
         entry.reopened = await seen();
         assert.equal(entry.reopened.sideMode, 'open'); assert.equal(entry.reopened.tabs, 'open');
         assert.ok(mirrored(entry.reopened), 'both open again, still swapped: ' + JSON.stringify(entry.reopened));
+        // full screen: a chat's Back opens the chats over the page from the window's right edge
+        await sideRow('qa-v1').click(); await nap(1800);
+        await vis('.aad-ctop [data-mode="full"]').click(); await nap(1000);
+        entry.full = await page.evaluate(() => ({ mode: document.documentElement.dataset.aadMode, focus: JSON.parse(localStorage.getItem('wos.pane-layout.v1') || '{}').focus, back: [...document.querySelectorAll('.aad-cback')].map(b => [b.hidden, b.getClientRects().length]) }));
+        const fullBack = vis('.aad-cback');
+        if (await fullBack.count()) {
+          await fullBack.click(); await nap(900);
+          entry.fullOver = await seen();
+          await page.screenshot({ path: path.join(out, stem + '-5c-full-over.png') });
+          assert.equal(entry.fullOver.sideMode, 'over', JSON.stringify(entry.fullOver));
+          assert.ok(entry.fullOver.side && entry.fullOver.side[0] + entry.fullOver.side[1] === entry.fullOver.W && entry.fullOver.side[1] > 200, 'full screen: the chats open over the page at the right edge: ' + JSON.stringify(entry.fullOver));
+          await page.keyboard.press('Escape'); await nap(700);
+        } else entry.fullOver = 'no Back in full screen';
+        if (await page.evaluate(() => document.documentElement.dataset.aadMode !== 'tiled')) { await vis('.aad-ctop [data-mode="tiled"]').click().catch(() => {}); await nap(1000); }
+        entry.tiledAgain = await seen(); assert.ok(mirrored(entry.tiledAgain), 'tiled again, still swapped: ' + JSON.stringify(entry.tiledAgain));
+        await page.mouse.click(720, 450).catch(() => {}); await blur();
         // app-panel-left's ⌥⇧M: the panel next to the chats sidebar, now on the right
         await page.keyboard.press('Alt+Shift+KeyM'); await nap(1200);
         entry.appNextToChats = await seen();

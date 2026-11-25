@@ -7,6 +7,8 @@ html[data-tweaks~="wizard/swap-sides"][data-shell="desktop"][data-layout="ai-app
 html[data-tweaks~="wizard/swap-sides"][data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side="end"] .aad-side { left: auto; right: var(--aad-pane-side-right); box-shadow: -1px 0 0 var(--aad-line); }
 html[data-tweaks~="wizard/swap-sides"][data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side="end"][data-aad-side="over"] .aad-side { z-index: 5; box-shadow: -1px 0 0 var(--aad-line), -8px 0 32px color-mix(in srgb, black 22%, transparent); border-radius: 16px 0 0 16px; }
 html[data-tweaks~="wizard/swap-sides"][data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side="end"] :is(.aad-panel, .aad-rail) { left: auto; right: 0; }
+/* (full screen reserves no sidebar, so the list Back opens over the page hangs from the window's right edge itself) */
+html[data-tweaks~="wizard/swap-sides"][data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side="end"][data-aad-mode="full"][data-aad-side="over"] .aad-side { left: auto; right: 0; }
 html[data-tweaks~="wizard/swap-sides"][data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side="end"] .aad-vt { box-shadow: 1px 0 0 var(--aad-line); }
 /* the panel icons (◫) face the side their column is on */
 html[data-tweaks~="wizard/swap-sides"][data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side="end"] :is(.aad-tog, .aad-rtog, .aad-vtog) .aad-ico { transform: scaleX(-1); }
@@ -29,8 +31,11 @@ html[data-tweaks~="wizard/swap-sides"][data-shell="desktop"][data-layout="ai-app
 html[data-tweaks~="wizard/swap-sides"][data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side="end"][data-aad-app-side="start"] :is(#stage > .wsp[data-aad-role="chat"][data-aad-anim="dock"], .aad-ctop[data-aad-anim="dock"]) { animation-name: aad-swap-col-in; }
 html[data-tweaks~="wizard/swap-sides"][data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side="end"] #stage > .wsp[data-aad-anim="thread"] .win .dchats .pane-main .ch-thread { animation-name: aad-swap-thread-in; }
 html[data-tweaks~="wizard/swap-sides"][data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side="end"] .aad-fly { animation-name: aad-swap-fly; }
-/* a Mac window's traffic lights sit over the left column: the Apps column's header steps below them */
+/* a Mac window's traffic lights sit over the left column: the Apps column's header steps below them, the chats on the
+ * right no longer need to */
 html[data-tweaks~="wizard/swap-sides"][data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side="end"][data-native-chrome="mac"] .aad-vth { margin-top: var(--aad-mac-top); }
+html[data-tweaks~="wizard/swap-sides"][data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side="end"][data-native-chrome="mac"] .aad-sh { margin-top: 0; }
+html[data-tweaks~="wizard/swap-sides"][data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side="end"][data-native-chrome="mac"] .aad-rail { padding-top: 8px; }
 @keyframes aad-swap-app-in { from { translate: max(-100%, -480px) 0; opacity: .3; } }
 @keyframes aad-swap-col-in { from { translate: 48px 0; opacity: 0; } }
 @keyframes aad-swap-thread-in { from { transform: translateX(24px); opacity: 0; } }
