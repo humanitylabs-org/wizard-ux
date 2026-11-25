@@ -21,8 +21,9 @@
   try { const saved = localStorage.getItem(DESKTOP_VIEW); if (desktopViews.includes(saved)) desktopView = saved; } catch (_) {}
   let state = Store.read() || { version: 1, off: {} };
   /* Switches removed once they were on for everyone (wizard-ux issue 1236: wizard/desktop-chats, the phone Chats list is
-   * now core/desktop-chats.*): a saved on/off for one is cleared from this device, once, so no stale choice is kept. */
-  const GONE = ['wizard/desktop-chats'];
+   * now core/desktop-chats.*) or dropped with their code (wizard-os#639: wizard/app-panel-left): a saved on/off for one is
+   * cleared from this device, once, so no stale choice is kept. */
+  const GONE = ['wizard/desktop-chats', 'wizard/app-panel-left'];
   if (Store.read()) {
     let dirty = false;
     for (const k of ['defaultsOff', 'promotedMigrated']) if (Array.isArray(state[k]) && state[k].some(id => GONE.includes(id))) { state[k] = state[k].filter(id => !GONE.includes(id)); dirty = true; }

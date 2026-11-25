@@ -15,7 +15,7 @@
     let x = gap;
     return shares.map(s => { const w = Math.round(avail * (s > 0 ? s * scale : free)); const r = { x, width: w }; x += w + gap; return r; });
   }
-  const defaults = () => ({ mode: 'tiled', focus: 'chats', slots: ['chats', 'app'], ratio: null, side: 'start', appSide: 'end', weights: {}, app2: null,
+  const defaults = () => ({ mode: 'tiled', focus: 'chats', slots: ['chats', 'app'], ratio: null, side: 'start', weights: {}, app2: null,
     dock: { edge: 'end', insets: { top: 0, bottom: 0, start: 0, end: 0 } } });
   function normalize(input = {}) {
     if (!input || typeof input !== 'object') input = {};
@@ -26,7 +26,7 @@
     const insets = {}; for (const k of Object.keys(d.dock.insets)) insets[k] = clamp(Number(input.dock?.insets?.[k]) || 0, 0, 10000);
     return { mode: ['tiled', 'centre', 'pair', 'full'].includes(input.mode) ? input.mode : 'tiled',
       focus: ['chats', 'app', 'app2'].includes(input.focus) ? input.focus : 'chats',
-      slots: slots.length ? slots : d.slots, ratio, side: input.side === 'end' ? 'end' : 'start', appSide: input.appSide === 'start' ? 'start' : 'end', weights,
+      slots: slots.length ? slots : d.slots, ratio, side: input.side === 'end' ? 'end' : 'start', weights,
       app2: typeof input.app2 === 'string' && input.app2 ? input.app2 : null,
       dock: { edge: ['start', 'end', 'top', 'bottom'].includes(input.dock?.edge) ? input.dock.edge : 'end', insets } };
   }
@@ -42,9 +42,8 @@
     const sidebar = box(m.side === 'start' ? area.x : area.x + area.width - sw, area.y, sw, area.height);
     const content = box(area.x + (m.side === 'start' ? sw : 0), area.y, area.width - sw, area.height);
     const chatOn = !!env.chatOn, appOn = !!env.appOn;
-    // The app panel at the start of the main area, the chat after it (wizard-os#639): mirrored like side 'end', the sidebar stays.
-    // With the sidebar at the end (wizard-ux issue 1526) appSide 'start' mirrors too: the app next to the sidebar, on the right.
-    const appFirst = (m.side === 'end') !== (m.appSide === 'start');
+    // With the sidebar at the end (wizard-ux issue 1526) the main area mirrors: the app panel at its start, the chat after it.
+    const appFirst = m.side === 'end';
     // The chat keeps at least its old column (a third, 30% beside an app) and takes all the room the app leaves, so
     // its messages fill the main area up to the 768px reading column, never a narrow strip with empty canvas beside
     // it (issue 1233).
@@ -89,6 +88,8 @@
   }
   function create(storage, events) {
     let value; try { value = normalize(JSON.parse(storage?.getItem(KEY) || '{}')); } catch (_) { value = defaults(); }
+    // (the dropped app-panel-left choice, wizard-os#639: a saved appSide is cleared from this device once)
+    try { const raw = JSON.parse(storage?.getItem(KEY) || 'null'); if (raw && typeof raw === 'object' && Object.hasOwn(raw, 'appSide')) storage.setItem(KEY, JSON.stringify(value)); } catch (_) {}
     const listeners = new Set(), get = () => normalize(value);
     const notify = () => { for (const fn of [...listeners]) fn(get()); };
     const set = patch => {
