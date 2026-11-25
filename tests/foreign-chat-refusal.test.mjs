@@ -26,44 +26,39 @@ function normalizer() {
   return context.normalize;
 }
 
-test('a chat started in a messaging app is named; WizardOS chats are not', () => {
-  const M = models();
-  assert.equal(M.foreignApp({ source: 'telegram' }), 'Telegram');
-  assert.equal(M.foreignApp({ source: 'Slack' }), 'Slack');
-  assert.equal(M.foreignApp({ source: 'whatsapp_cloud' }), 'WhatsApp');
-  for (const source of ['', 'api_server', 'bot_room', 'wizard-mobile', 'cron', 'webhook', 'toString', '__proto__', undefined, 7])
-    assert.equal(M.foreignApp({ source }), '', String(source));
-  assert.equal(M.foreignApp(null), '');
-  assert.equal(M.refusal({ source: 'telegram' }), 'This chat was started in Telegram, so WizardOS can’t add to it. Your message is saved. Reply in Telegram, or start a new chat.');
-  assert.equal(M.refusal({ source: 'api_server' }), '');
-});
+// wizard-agent-service issue 427 (on for everyone): the Service sends a reply into a messaging-app chat through that
+// chat's own connection, so the chat takes replies (and Retry) like any other. Only Hermes' own refusal (an older chat
+// on a Hermes that refuses API turns into it; the Service's "started in another app" words) is final: the clear card,
+// with no Retry.
+const REFUSED_WORDS = 'This chat was started in another app, such as Telegram, so WizardOS can’t add to it. Your message is saved. Reply in that app, or start a new chat.';
 
-// wizard-agent-service issue 427: with the switch on, the Service sends the reply through the chat's own connection, so
-// the chat takes replies (and Retry) like any other. Hermes' own refusal (an older chat on a Hermes that refuses API
-// turns into it, the Service's "started in another app" words) still gets the clear card with no Retry.
-test('switch wizard/messaging-chat-replies on: messaging chats take replies; a refusal still says so', () => {
-  const M = models('wizard/unified-inbox wizard/messaging-chat-replies');
-  assert.equal(M.foreignApp({ source: 'telegram' }), '');
+test('a messaging-app chat takes replies; only Hermes refusing it names the app', () => {
+  const M = models();
+  for (const source of ['telegram', 'Slack', 'whatsapp_cloud', '', 'api_server', 'bot_room', 'wizard-mobile', 'cron', 'webhook', 'toString', '__proto__', undefined, 7])
+    assert.equal(M.foreignApp({ source }), '', String(source));
   assert.equal(M.foreignApp({ source: 'slack', status: 'failed', safeError: 'The AI provider couldn’t answer' }), '');
+  assert.equal(M.foreignApp(null), '');
   assert.equal(M.refusal({ source: 'telegram' }), '');
-  const refused = { source: 'telegram', status: 'failed', safeError: 'This chat was started in another app, such as Telegram, so WizardOS can’t add to it. Your message is saved. Reply in that app, or start a new chat.' };
-  assert.equal(M.foreignApp(refused), 'Telegram');
-  assert.match(M.refusal(refused), /started in Telegram/);
-  // Off (or another switch only): exactly as before.
-  assert.equal(models('wizard/unified-inbox').foreignApp({ source: 'telegram' }), 'Telegram');
+  assert.equal(M.foreignApp({ source: 'telegram', status: 'failed', safeError: REFUSED_WORDS }), 'Telegram');
+  assert.equal(M.foreignApp({ source: 'Slack', safeError: REFUSED_WORDS }), 'Slack');
+  assert.equal(M.foreignApp({ source: 'whatsapp_cloud', safeError: REFUSED_WORDS }), 'WhatsApp');
+  assert.equal(M.foreignApp({ source: 'api_server', safeError: REFUSED_WORDS }), '', 'a WizardOS chat is never named');
+  assert.equal(M.refusal({ source: 'telegram', safeError: REFUSED_WORDS }), 'This chat was started in Telegram, so WizardOS can’t add to it. Your message is saved. Reply in Telegram, or start a new chat.');
+  // There is no switch any more: the retired tweak id in an old device's mix changes nothing.
+  assert.equal(models('wizard/messaging-chat-replies').foreignApp({ source: 'telegram' }), '');
+  assert.equal(models('wizard/messaging-chat-replies').foreignApp({ source: 'telegram', safeError: REFUSED_WORDS }), 'Telegram');
   // Main and routed threads (host-profile, container, restricted agents) follow the same rule: the decision reads the
   // chat's Hermes source and the Service's refusal words, never the agent, and the Service sends every kind's reply
   // through its own route (wizard-agent-service parity check messaging-chat-replies covers all four kinds).
   for (const agent of [undefined, 'hermes', 'host-research', 'container-research', 'restricted-research']) {
     assert.equal(M.foreignApp({ agent, source: 'telegram' }), '', String(agent));
     assert.equal(M.foreignApp({ agent, source: 'api_server' }), '', String(agent));
-    assert.equal(M.foreignApp({ agent, ...refused }), 'Telegram', String(agent));
-    assert.equal(models().foreignApp({ agent, source: 'telegram' }), 'Telegram', String(agent));
+    assert.equal(M.foreignApp({ agent, source: 'telegram', safeError: REFUSED_WORDS }), 'Telegram', String(agent));
   }
 });
 
-test('switch on: a routed Telegram thread offers Retry and its Retry sends again', async () => {
-  const M = models('wizard/messaging-chat-replies'), power = read('web/core/chat-power.js');
+test('a routed Telegram thread offers Retry and its Retry sends again', async () => {
+  const M = models(), power = read('web/core/chat-power.js');
   for (const agent of ['hermes', 'host-research', 'container-research', 'restricted-research']) {
     const s = { id: `tg-${agent}`, agent, title: 'From Telegram', source: 'telegram', status: 'failed' };
     const rows = runRecording(block(power, '  function errorRow('), { M, E: { busy: new Map() }, esc: String, signedOutFail: () => null });
@@ -81,9 +76,11 @@ test('the list row keeps the Hermes session source the shell decides on', () => 
   assert.equal(row.source, 'telegram');
 });
 
-const TG = { id: 't1', title: 'From Telegram', source: 'telegram', status: 'failed' }, OWN = { id: 'w1', title: 'Mine', source: 'api_server', status: 'failed' };
+// TG: a Telegram chat Hermes refused (the Service's words); PLAIN: a Telegram chat that takes replies.
+const PLAIN = { id: 'p1', title: 'From Telegram', source: 'telegram', status: 'failed' };
+const TG = { id: 't1', title: 'From Telegram', source: 'telegram', status: 'failed', safeError: REFUSED_WORDS }, OWN = { id: 'w1', title: 'Mine', source: 'api_server', status: 'failed' };
 
-test('no Needs retry panel, no Errors-list Retry, and Retry itself refuses in such a chat', async () => {
+test('a refused messaging chat: no Needs retry panel, no Errors-list Retry, and Retry itself refuses', async () => {
   const M = models(), power = read('web/core/chat-power.js');
   // The thread's Needs retry panel (failureHtml, with the route helpers it reads).
   const fail = runRecording(power.slice(power.indexOf('  const failedRoute'), power.indexOf('  function failureHtml(')) + block(power, '  function failureHtml('),
@@ -91,6 +88,7 @@ test('no Needs retry panel, no Errors-list Retry, and Retry itself refuses in su
   const failureHtml = vm.runInContext('failureHtml', fail);
   assert.equal(failureHtml({ id: 'w' }, TG), '', 'no Needs retry panel in a Telegram chat');
   assert.match(failureHtml({ id: 'w' }, OWN), /Needs retry/, 'a WizardOS chat still gets it');
+  assert.match(failureHtml({ id: 'w' }, PLAIN), /Needs retry/, 'a Telegram chat that takes replies gets it too');
   // The Errors list row: Dismiss only.
   const rows = runRecording(block(power, '  function errorRow('), { M, E: { busy: new Map() }, esc: String, signedOutFail: () => null });
   const errorRow = vm.runInContext('errorRow', rows);
@@ -115,29 +113,31 @@ test('the thread shows the clear card at once, with Dismiss and without Retry; t
     const c = {}; const r = runRecording(`${decide}\nthis.out = { refused, retryRunId: c.retryRunId };`, { window: { WosModels: M }, s, shown, working, c });
     return { ...r.out };
   };
-  assert.deepEqual(run({ ...TG, retryRunId: 'q1' }), { refused: true, retryRunId: '' }, 'failed: refused at once; the Not sent Retry has no run');
-  assert.equal(run({ ...TG, status: 'idle' }, [{ u: { queue: { status: 'failed' } } }]).refused, true, 'a Not sent message is enough');
-  assert.equal(run({ ...TG, status: 'idle', safeError: 'x' }).refused, true);
-  assert.equal(run({ ...TG, status: 'idle' }).refused, false, 'nothing failed: no card');
+  assert.deepEqual(run({ ...TG, retryRunId: 'q1' }), { refused: true, retryRunId: '' }, 'refused: the clear card; the Not sent Retry has no run');
+  assert.equal(run({ ...TG, status: 'idle' }).refused, true, 'the refusal words are enough');
   assert.equal(run(TG, [], true).refused, false, 'not while it works');
+  assert.deepEqual(run({ ...PLAIN, retryRunId: 'q1' }), { refused: false, retryRunId: 'q1' }, 'a Telegram chat that takes replies keeps its Retry');
+  assert.equal(run({ ...PLAIN, status: 'idle' }, [{ u: { queue: { status: 'failed' } } }]).refused, false);
   assert.deepEqual(run({ ...OWN, retryRunId: 'q1' }), { refused: false, retryRunId: 'q1' }, 'a WizardOS chat keeps its Retry');
   // The card itself: the refusal words and Dismiss; refused wins over the generic Reply not sent card.
   const cardSrc = paint.slice(paint.indexOf('(refused ? `'), paint.indexOf('\n        + approvalHtml(c, s)'));
   const card = (s, refused) => runRecording(`this.out = ${cardSrc};`, { window: { WosModels: M }, esc: String, s, refused, runErr: false, signedOut: false }).out;
-  const shown = card({ ...TG, safeError: 'Generic words' }, true);
+  const shown = card(TG, true);
   assert.equal(shown, `<div class="appr" role="status" data-chrefused><b>Reply not sent</b><p>${M.refusal(TG)}</p><div class="appr-b"><button type="button" class="no" data-chdismiss>Dismiss</button></div></div>`);
-  assert.doesNotMatch(shown, /data-chretry|Choose another model|Generic words/, 'no second, generic Reply not sent card beside it');
+  assert.doesNotMatch(shown, /data-chretry|Choose another model|such as Telegram/, 'no second, generic Reply not sent card beside it');
   assert.match(card({ ...OWN, safeError: 'Generic words' }, false), /<b>Reply not sent<\/b><p>Generic words<\/p>/);
   // The reply box says it up front.
   const ph = expression(paint, '${!isNew && window.WosModels?.foreignApp?.(s)');
   const place = (s, isNew = false) => runRecording(`this.out = \`${ph}\`;`, { window: { WosModels: M }, esc: String, s, isNew }).out;
   assert.match(place(TG), /^This chat lives in Telegram · reply there/);
   assert.doesNotMatch(place(OWN), /This chat lives in/);
+  assert.doesNotMatch(place(PLAIN), /This chat lives in/, 'a Telegram chat that takes replies: the normal reply box');
   // A pending Not sent line in the thread offers no Retry for such a chat.
   const pendSrc = outbox.slice(outbox.indexOf("    if (p.state === 'failed') return `"), outbox.indexOf('\n', outbox.indexOf("    if (p.state === 'failed') return `")));
   const pend = s => runRecording(`this.out = (() => { ${pendSrc} })();`, { window: { WosModels: M }, esc: String, s, p: { id: 'o1', state: 'failed', error: 'x' }, OUTBOX: { canRetry: () => true }, recover: '' }).out;
   assert.doesNotMatch(pend(TG), /data-obretry/);
   assert.match(pend(OWN), /data-obretry="o1"/);
+  assert.match(pend(PLAIN), /data-obretry="o1"/);
 });
 
 test('a Not sent bubble without a retry run shows no Retry button (what a foreign chat gets)', () => {
@@ -153,20 +153,21 @@ test('a Not sent bubble without a retry run shows no Retry button (what a foreig
 
 test('a routed agent thread from Telegram is refused the same way: the decision reads only the session source', () => {
   const M = models();
-  assert.equal(M.foreignApp({ id: 'r1', agent: 'research', source: 'telegram' }), 'Telegram');
-  assert.equal(M.foreignApp({ id: 'r2', agent: 'research', source: 'api_server' }), '');
-  assert.equal(M.refusal({ agent: 'research', source: 'slack' }), M.refusal({ source: 'slack' }));
+  assert.equal(M.foreignApp({ id: 'r1', agent: 'research', source: 'telegram', safeError: REFUSED_WORDS }), 'Telegram');
+  assert.equal(M.foreignApp({ id: 'r2', agent: 'research', source: 'api_server', safeError: REFUSED_WORDS }), '');
+  assert.equal(M.refusal({ agent: 'research', source: 'slack', safeError: REFUSED_WORDS }), M.refusal({ source: 'slack', safeError: REFUSED_WORDS }));
 });
 
 test('the chat-list send pill offers no Retry for a failed reply into such a chat', () => {
   const M = models(), drafts = read('web/core/chats-drafts.js');
-  const sessions = { t1: TG, w1: OWN };
+  const sessions = { t1: TG, w1: OWN, p1: PLAIN };
   const pill = items => runRecording(`${block(drafts, '  function sendPill(')}\nthis.out = sendPill(items, { id: 'w' });`, {
     window: { WosModels: M }, esc: String, clip: v => v, ch: () => ({}), LIVE: { ok: true, session: id => sessions[id] },
     OUTBOX: { get: () => null, quarantined: () => false, canRetry: () => true }, troubleshoot: '', items }).out;
   const item = (id, sessionId) => ({ id, kind: 'reply', sessionId, state: 'failed', text: 'hi' });
   assert.doesNotMatch(pill([item('o1', 't1')]), /data-obretry/, 'one failed reply into Telegram: no Retry');
   assert.match(pill([item('o1', 'w1')]), /data-obretry="o1"/, 'a WizardOS chat keeps Retry');
+  assert.match(pill([item('o1', 'p1')]), /data-obretry="o1"/, 'a Telegram chat that takes replies keeps Retry');
   assert.doesNotMatch(pill([item('o1', 't1'), item('o2', 't1')]), /data-obretryall/, 'all foreign: no Retry all');
   assert.match(pill([item('o1', 't1'), item('o2', 'w1')]), /data-obretryall>Retry all<\/button>/);
 });

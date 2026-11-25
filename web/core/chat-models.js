@@ -106,22 +106,17 @@
     if (!make) return null;
     return { code: e.code, message: e.message || '', ...make(providerName(e.provider || s.provider)) };
   }
-  // Issue 1235: a chat started in a messaging app (its Hermes session `source`) belongs to that app's connection, and
-  // Hermes refuses every reply WizardOS sends into it (permission_denied, gateway/session_api_turn.py: only api_server
-  // and bot_room sessions take API turns). The refusal is final, so the shell offers no Retry and says so at once.
-  // When replies to these chats work (wizard-agent-service issue 427), this is the one place to change.
+  // Issue 1235: a chat started in a messaging app (its Hermes session `source`) belongs to that app's connection.
   const FOREIGN_APPS = { telegram: 'Telegram', slack: 'Slack', discord: 'Discord', whatsapp: 'WhatsApp', whatsapp_cloud: 'WhatsApp',
     signal: 'Signal', matrix: 'Matrix', mattermost: 'Mattermost', email: 'Email', sms: 'Messages', bluebubbles: 'iMessage',
     feishu: 'Feishu', dingtalk: 'DingTalk', wecom: 'WeCom', weixin: 'WeChat', qqbot: 'QQ' };
-  // wizard-agent-service issue 427 (switch wizard/messaging-chat-replies, off by default): the Agent Service sends a reply
-  // into such a chat through that chat's own connection (the wizard-os Hermes plugin), so it takes replies like any
-  // chat. Only Hermes' own refusal (an older chat, on a Hermes that refuses API turns into it) keeps the no-Retry card:
-  // the Service's words for it say "started in another app" (wizard-agent-service hermes-compat.mjs).
-  const REPLIES_TWEAK = 'wizard/messaging-chat-replies';
-  const repliesOn = () => { try { return (document.documentElement.dataset.tweaks || '').split(' ').includes(REPLIES_TWEAK); } catch (_) { return false; } };
+  // wizard-agent-service issue 427 (on for everyone): the Agent Service sends a reply into such a chat through that
+  // chat's own connection (the wizard-os Hermes plugin), so it takes replies like any chat. Only Hermes' own refusal
+  // (an older chat, on a Hermes that refuses API turns into it: permission_denied, gateway/session_api_turn.py) is
+  // final and keeps the no-Retry card: the Service's words for it say "started in another app" (hermes-compat.mjs).
   const REFUSED = /started in another app/;
   const appOf = s => (s && typeof s.source === 'string' && Object.prototype.hasOwnProperty.call(FOREIGN_APPS, s.source.toLowerCase()) ? FOREIGN_APPS[s.source.toLowerCase()] : '');
-  const foreignApp = s => { const app = appOf(s); return app && repliesOn() && !REFUSED.test(String(s?.safeError || '')) ? '' : app; };
+  const foreignApp = s => { const app = appOf(s); return app && REFUSED.test(String(s?.safeError || '')) ? app : ''; };
   const refusal = s => { const app = foreignApp(s); return app ? `This chat was started in ${app}, so WizardOS can’t add to it. Your message is saved. Reply in ${app}, or start a new chat.` : ''; };
   const connectorOf = o => CLAUDE_PROVIDERS.has(o.provider) ? 'claude' : o.provider === 'openai-codex' ? 'chatgpt' : isTinfoil(o.provider) ? 'tinfoil' : '';
   const CONNECT_AI = '<a class="mrow more" href="/wizard-os-home/store/index.html?kind=connections" target="_blank" rel="noopener">Connect an AI</a>';
