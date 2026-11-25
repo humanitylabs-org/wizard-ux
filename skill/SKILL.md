@@ -174,7 +174,6 @@ Settings › Appearance › Try new features lists unfinished features anyone ca
 - **Camera and Attach on the side button**: Android app: Camera and Attach buttons next to Screen while talking to the side-button orb.
 - **Capture inbox**: Agent files your Files Inbox drops.
 - **Clear chat notifications**: Android app: reading a LINE, WhatsApp, Telegram or other bridged chat in Messenger clears that app's own notification (needs Android's Notification access).
-- **Continue saved background results**: Work that finished while Wizard was down shows in its own thread with one Continue button. Nothing resumes until you tap it.
 - **Desktop sidebar follows Default Chats**: AI apps desktop: the chats sidebar uses the Chats look picked in Settings › Chats & app screens › Default Chats.
 - **Follow main**: Green merges go live by themselves.
 - **Inbox until archived**: Chats stay in Inbox until archived.
@@ -194,7 +193,6 @@ Settings › Appearance › Try new features lists unfinished features anyone ca
 - **Send and go**: On desktop, sending opens a fresh chat.
 - **Share feature counts**: Sends features you tried and your thumbs, plus a random box id.
 - **Short answer first**: A long agent reply shows only its one-line plain answer; tap it for the full reply. Choose whether replies start collapsed and how long the short answer is. Where: Settings › Appearance › Try new features › Short answer first; its options show under it when on.
-- **Sign in to GitHub in Apps**: Apps › Sources gets Sign in to GitHub, so private beta apps you were invited to show under Beta.
 - **Skins are look only**: Skins become a look only. Your own skin stops deciding which features run: only the feature switches here and in the WizardOS Tracker do, the same for every tester. Turning this on carries the choices of the own skin you're wearing into those switches once. Tweaks on the drop list (Two orbs, App borders, No close on desks, Pin buttons, WizardOS name) are off. Skin scripts are paused. Your skin's saved choices and script approval are kept and come back when you switch this off.
 - **Stop write loops**: Stops repeated saves: an identical save within 10 s is not resent; over 20 a minute pauses.
 - **Swap sides**: Chats right, apps left (⌥⇧L).

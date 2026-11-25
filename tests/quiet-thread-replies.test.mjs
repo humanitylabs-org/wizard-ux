@@ -18,7 +18,7 @@ const ON = '';
 function liveCtx(tweaks = ON) {
   const ctx = { document: { documentElement: { dataset: { tweaks } } }, WizChatsListModel: { isListWorking: s => s.status === 'running' }, console };
   ctx.globalThis = ctx; vm.createContext(ctx);
-  vm.runInContext(between(live, '  function tweakOn(id)', '  function backgroundOn()') + `
+  vm.runInContext(between(live, '  function tweakOn(id)', '  let backgroundPollTimer') + `
     const hasNew = () => true, snoozeLast = () => false, isDeferred = () => false, inWorking = () => false, seenKeyOf = s => s.id, assistantAt = s => s.at, WEEK = 7 * 864e5;
     const groupWork = rows => ({ ready: rows });
     this.L = { inArchive: () => false, seenOf: () => ({}), deferred: {}, sessionsFor: (agent = '') => this.rows.filter(s => (s.agent || '') === agent),

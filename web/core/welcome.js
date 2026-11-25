@@ -446,6 +446,9 @@
       }
       if (!el || el !== mine || step !== at || provider !== chosen) return;
       if (ok === true) {
+        // The shell read its model list before this sign-in: refresh it now, so the first message (and the chat's model
+        // chip) uses the AI just signed in, not an empty list cached at boot (desktop, wizard-ux#1811).
+        const M = window.WosModels; if (M?.load) M.load(true).then(() => window.dispatchEvent?.(new Event('wos:models'))).catch(() => {});
         // Reconnect: this Wizard is set up already, so connected is the end; it closes by itself a moment later.
         if (reconnect) { connected = true; write('done'); log('reconnected'); paint(false); setTimeout(() => { if (el === mine && step === 'ai' && provider === chosen) close(); }, 1200); return; }
         connected = true; if (!solo) write('ai'); linked.add(chosen); log('connected'); paint(false);

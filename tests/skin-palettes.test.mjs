@@ -113,11 +113,11 @@ function experienceStub(tweaks, extra = {}) {
 test('colors and tweaks are separate: onboarding offers every color; Look offers tweak sets apart from color', async () => {
   // Onboarding lists every colour: covered by tests/welcome-every-skin.test.mjs 'Pick a skin: one flat grid of every skin in WosSkin.list order, including a skin in no family'.
   // A colour pick never swaps the tweak set: covered by tests/look-skin-colour-separation.test.mjs '${shell}: separate Skin/Color choices never replace the independent tweak mix (#801)'.
-  const E = experienceStub([tweak('miguel/send-and-go'), tweak('wizard/background-continue', { on: true }), tweak('miguel/reply-summary')]);
+  const E = experienceStub([tweak('miguel/send-and-go'), tweak('wizard/failure-reason', { on: true }), tweak('miguel/reply-summary')]);
   const h = lookPage('phone', E); await tick(); h.view.focus('look');
   const html = h.html();
   assert.equal((html.match(/data-tweak-toggle="/g) || []).length, 3, 'a switch per tweak');
-  assert.match(html, /data-tweak-toggle="wizard\/background-continue" role="switch" aria-checked="true"/);
+  assert.match(html, /data-tweak-toggle="wizard\/failure-reason" role="switch" aria-checked="true"/);
   assert.match(html, /data-tweak-toggle="miguel\/send-and-go" role="switch" aria-checked="false"/, 'everything else starts off');
   assert.doesNotMatch(html, /data-tweakauthor=|data-tweakpreset/, 'one flat list: no per-author quick button, no preset sets');
   assert.ok(html.indexOf('data-tweak-toggle') > html.indexOf('<h4>Colors</h4>'), 'tweaks sit apart from colour');
