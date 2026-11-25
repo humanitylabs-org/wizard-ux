@@ -83,6 +83,8 @@ window.WizCore.liveParts.seen = function ({  }) {
       const s = { safeError:'', reconnect:null, runError:null, critical:false, waitingOn:'', helperStatus:null, attention:null, ...item, runError: runErrorOf(item.runError), status: globalThis.WizChatsListModel.executionStatus(item.status, item.runId, item.lastRunStatus), runtime: 'direct', request: '', renames: [], detailNeeded: true };
       // Chats channels (wizard-ux issue 1261): the row's channel id and first owner request, checked after the spread.
       if (!(typeof s.channel === 'string' && /^[a-z0-9-]{1,48}$/.test(s.channel))) delete s.channel;
+      // Tags (wizard-agent-service issue 608, switch wizard/chat-tags): every channel the chat carries, primary first.
+      if (Array.isArray(s.tags)) s.tags = s.tags.filter(t => typeof t === 'string' && /^[a-z0-9-]{1,48}$/.test(t)).slice(0, 200); else delete s.tags;
       if (typeof s.firstRequest === 'string') s.firstRequest = s.firstRequest.slice(0, 400); else delete s.firstRequest;
       // wizard-ux issue 1808: the box's quiet-reply mark (live.js quietReply), only ever true.
       if (s.quietReply !== true) delete s.quietReply;

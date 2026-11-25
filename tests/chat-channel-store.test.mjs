@@ -134,8 +134,8 @@ const code = cut("  const SPACE = { one: 'Space'", '  /* A Space open in front')
 const H = 3600e3, NOW = Date.parse('2026-11-11T12:00:00.000Z')
 const AG = { t1: '', t2: '', h1: 'host', k1: 'container', r1: 'restricted' }
 
-async function shell({ on = true, off = false, channels = START(), members = {}, rows = [], agentRows = {}, projection = [], local = {} } = {}) {
-  const box = channelBox({ channels, members, off }), dev = channelDevice(box), wins = { w: { id: 'w', thread: null, focus: null } }
+async function shell({ on = true, off = false, tags = false, channels = START(), members = {}, rows = [], agentRows = {}, projection = [], local = {} } = {}) {
+  const box = channelBox({ channels, members, off, tags }), dev = channelDevice(box), wins = { w: { id: 'w', thread: null, focus: null } }
   await dev.pull()
   const store = new Map(Object.entries({ 'wos.chats.spaces.v1': JSON.stringify(projection), ...local })), toasts = [], prefOps = []
   const env = {
@@ -155,7 +155,7 @@ async function shell({ on = true, off = false, channels = START(), members = {},
     closeRowSheet() { env.rowSheet = null; }, vib() {}, rowSheet: null, toTurns: () => [], KIT: { viewer: { open() {} } },
   }
   vm.createContext(env); modelContext(env)
-  vm.runInContext(code + ';this.api={spaces,spaceContains,spaceMember,fileInSpace,spacesOf,chanPrefs,channelsFor,channelOf,channelClick,channelSheetClick,openChannelSheet,chanFeedRows,inChannel,chanArchived,chanStore,chanCarry};', env)
+  vm.runInContext(code + ';this.api={fileInGeneral,chanTags,spaces,spaceContains,spaceMember,fileInSpace,spacesOf,chanPrefs,channelsFor,channelOf,channelClick,channelSheetClick,openChannelSheet,chanFeedRows,inChannel,chanArchived,chanStore,chanCarry};', env)
   const click = attrs => ({ target: { closest: sel => { const k = sel.slice(1, -1); return k in attrs ? { dataset: { [k.replace(/^data-/, '').replace(/-./g, m => m[1].toUpperCase())]: attrs[k] } } : null; } } })
   return { ...env.api, env, box, dev, wins, w: wins.w, store, toasts, prefOps, click }
 }
@@ -250,4 +250,56 @@ test('store off (404): Spaces exactly as in phase 1', async () => {
     assert.deepEqual(clone(s.prefOps), [{ op: 'add', key: 'spaces/launch/threads', item: 't2' }])
     assert.ok(!s.box.log.some(l => /^(PUT|PATCH)/.test(l)))
   }
+})
+
+// ---- Tags (wizard-agent-service issue 608, switch wizard/chat-tags): the box says tags: true ----
+test('tags on: a chat is in every channel it carries; its row\'s tags decide, main and routed apart', async () => {
+  const s = await shell({ tags: true, rows: [row('t1', '', { channel: 'launch', tags: ['launch', 'voice'] }), row('t2', '', { channel: 'voice' })],
+    agentRows: { host: [row('h1', 'host', { channel: 'host-ops', tags: ['host-ops'] })], restricted: [row('t1', 'restricted', { channel: 'locked', tags: ['locked'] })] } })
+  assert.equal(s.chanTags(), true)
+  assert.equal(s.spaceContains('launch', 't1'), true); assert.equal(s.spaceContains('voice', 't1'), true, 'the second tag')
+  assert.deepEqual(s.spacesOf('t1').map(x => x.id).sort(), ['launch', 'voice'])
+  assert.equal(s.inChannel({ id: 'voice', agent: 'hermes' }, s.env.LIVE.sessions[0]), true)
+  assert.equal(s.inChannel({ id: 'voice', agent: 'hermes' }, s.env.LIVE.agentSessions.restricted[0]), false, 'a routed chat sharing the id stays in its own tags')
+  assert.equal(s.inChannel({ id: 'locked', agent: 'restricted' }, s.env.LIVE.agentSessions.restricted[0]), true)
+  assert.equal(s.inChannel({ archivedFeed: true, agentFeed: true, agent: 'hermes', id: '__archived__' }, { ...s.env.LIVE.sessions[0], archived: true }), true, 'Archived lists archived chats')
+  assert.equal(s.inChannel({ archivedFeed: true, agentFeed: true, agent: 'hermes', id: '__archived__' }, s.env.LIVE.sessions[0]), false)
+})
+
+test('tags on: choosing a tag adds it (PUT tags), choosing it again removes it; the chat keeps its other tags', async () => {
+  const s = await shell({ tags: true, members: { 'hermes|t1': 'launch' }, rows: [row('t1', '', { channel: 'launch', tags: ['launch'] })],
+    agentRows: { host: [row('h1', 'host', { channel: 'host-ops', tags: ['host-ops'] })] } })
+  assert.equal(s.fileInSpace('voice', 't1', ''), true)
+  assert.equal(s.spaceContains('voice', 't1'), true, 'shown at once'); assert.equal(s.spaceContains('launch', 't1'), true, 'still in its first tag')
+  await settle()
+  assert.ok(s.box.log.some(l => l === 'PUT /wizard/v1/channels/tags {"sessionId":"t1","agent":"hermes","add":"voice"}'), s.box.log.join('\n'))
+  assert.ok(!s.box.log.some(l => l.startsWith('PUT /wizard/v1/channels/membership')), 'never a move')
+  assert.deepEqual(s.box.tagged['hermes|t1'], ['voice']); assert.equal(s.box.members['hermes|t1'], 'launch')
+  assert.equal(s.fileInSpace('launch', 't1', ''), true)
+  await settle()
+  assert.equal(s.box.members['hermes|t1'], 'voice', 'removing the first tag leaves the other one')
+  assert.ok(s.toasts.includes('Tagged Voice') && s.toasts.includes('Removed Launch'), s.toasts.join(','))
+  // A routed chat takes its own agent's tag, with its own agent.
+  assert.equal(s.fileInSpace('box', 'h1', 'host'), false, 'never another agent\'s channel')
+  s.env.LIVE.agentSessions.host.push(row('h2', 'host'))
+  await settle()
+  assert.equal(s.fileInGeneral('t1', ''), true)
+  await settle()
+  assert.ok(s.box.log.some(l => l.includes('"remove":"voice"')), 'No tags removes every tag')
+})
+
+test('tags on: a tag\'s own feed lists chats whose first tag is another one', async () => {
+  const s = await shell({ tags: true, members: { 'hermes|t1': 'launch', 'hermes|t2': 'voice' }, rows: [] })
+  s.box.tagged['hermes|t1'] = ['voice']
+  s.env.LIVE.chanStore.feed('voice', 'hermes'); await settle()
+  assert.deepEqual(s.env.LIVE.chanStore.feed('voice', 'hermes').rows.map(r => r.id), ['t1', 't2'])
+})
+
+test('tags off: the same box without tags keeps one channel per chat and moves', async () => {
+  const s = await shell({ rows: [row('t1', '', { channel: 'launch', tags: ['launch', 'voice'] })] })
+  assert.equal(s.chanTags(), false)
+  assert.equal(s.spaceContains('voice', 't1'), false, 'rows\' tags are ignored while the box has Tags off')
+  s.fileInSpace('voice', 't1', ''); await settle()
+  assert.ok(s.box.log.some(l => l.startsWith('PUT /wizard/v1/channels/membership')), 'a move, as before')
+  assert.ok(!s.box.log.some(l => l.includes('/channels/tags')))
 })
