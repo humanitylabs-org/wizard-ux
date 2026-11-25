@@ -544,6 +544,13 @@
       ],
       "note": "Chats Stop, Send and go and the one send carrying the whole composer (voice, files, sealed drafts) moved out of chats.js (issue 1665); called by createChats"
     },
+    "core/chats-sent.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Chats Sent tab and bottom tabs Inbox, Tags, Sent (switch wizard/chats-inbox, issue 1778); called by createChats"
+    },
     "core/chats-setup.js": {
       "loadedBy": [
         "phone",
@@ -1710,6 +1717,7 @@
     "core/chats-running.js",
     "core/chats-select.js",
     "core/chats-send.js",
+    "core/chats-sent.js",
     "core/chats-setup.js",
     "core/chats-sheets.js",
     "core/chats-shims.js",

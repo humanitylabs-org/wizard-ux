@@ -8,7 +8,7 @@
 window.WizCore = window.WizCore || {};
 window.WizCore.chatsParts = window.WizCore.chatsParts || {};
 window.WizCore.chatsParts.channels = function ({ agentName, AGS, CHAN_ARCHIVE_PRUNE_DAYS, CHAN_DAY, CHAN_GENERAL, chanAgentId, chanPrefs, chanStore, focusAgents, focusedAgent, focusOf, H, LIVE, openDaily, owner, save, setFocus, spaceAgent, spaceContains, spaces, spacesOf, visibleSpaces, W }) {
-  let chanHold, chanUserAt, runningBack; // late-bound: chats.js declares these after the call, see bindLate
+  let chanHold, chanUserAt, runningBack, sentBack; // late-bound: chats.js declares these after the call, see bindLate
   // The channel a window's list draws as a feed, or null. It only holds while the Focus still matches it (a Focus
   // tap elsewhere simply leaves the feed).
   function chanOpen(w) {
@@ -83,6 +83,7 @@ window.WizCore.chatsParts.channels = function ({ agentName, AGS, CHAN_ARCHIVE_PR
   function channelBack(w) {
     if (!w || w.thread) return false;
     if (typeof runningBack === 'function' && runningBack(w)) return true; // the Running view → Chats (wizard-ux issue 1569)
+    if (typeof sentBack === 'function' && sentBack(w)) return true; // Sent → Inbox (wizard-ux issue 1778)
     const o = W[owner(w.id)] || w; if (!o?.chan) return false;
     const open = chanOpen(w), prev = o.chan.prev || null; o.chan = null;
     if (!open) { save(); return false; }
@@ -100,5 +101,5 @@ window.WizCore.chatsParts.channels = function ({ agentName, AGS, CHAN_ARCHIVE_PR
    * w.daily = { id, agent }; Back, or opening any other thread, leaves it. Activity and the rows stay as they are. */
   const dailyChan = id => { const st = typeof chanStore === 'function' ? chanStore() : null; return (st && st.channels.find(c => c.id === id && c.kind === 'daily' && !c.archived)) || null; };
   const DAILY_OPEN = new Map(), DAILY_HIST = new Map(), DAILY_LAST = 'wos.chats.daily-last.v1';
-  return { chanAt, chanElsewhere, chanFace, chanName, channelBack, channelOf, channelsFor, chanOpen, chanPostOrder, chanPruned, chanSide, chanTarget, chanTitle, DAILY_HIST, DAILY_LAST, DAILY_OPEN, dailyChan, inChannel, openChannel, rowAgent, bindLate: v => { if ('chanHold' in v) chanHold = v.chanHold; if ('chanUserAt' in v) chanUserAt = v.chanUserAt; if ('runningBack' in v) runningBack = v.runningBack; } };
+  return { chanAt, chanElsewhere, chanFace, chanName, channelBack, channelOf, channelsFor, chanOpen, chanPostOrder, chanPruned, chanSide, chanTarget, chanTitle, DAILY_HIST, DAILY_LAST, DAILY_OPEN, dailyChan, inChannel, openChannel, rowAgent, bindLate: v => { if ('chanHold' in v) chanHold = v.chanHold; if ('chanUserAt' in v) chanUserAt = v.chanUserAt; if ('runningBack' in v) runningBack = v.runningBack; if ('sentBack' in v) sentBack = v.sentBack; } };
 };

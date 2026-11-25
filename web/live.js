@@ -456,7 +456,7 @@
     return out;
   }
   /* channels: moved to live-channels.js (wizard-ux issue 1665), called once here */
-  const { agentInbox, channelDaily, channelReads, channelStore } = window.WizCore.liveParts.channels({});
+  const { agentInbox, channelDaily, channelReads, channelStore, sentLog } = window.WizCore.liveParts.channels({});
   /* ---- end agent inbox ---- */
   const L = {
     windows: {},
@@ -1311,6 +1311,7 @@
   L.chanReads = channelReads({ req, emit: () => L.emit() });
   L.chanDaily = channelDaily({ req, emit: () => L.emit() });
   L.agentInbox = agentInbox({ req, emit: () => L.emit() });
+  L.sentLog = sentLog({ req, emit: () => L.emit() }); // the Sent tab (wizard-ux issue 1778)
   try { addEventListener('focus', () => { L.chanStore.fresh(); L.chanReads.fresh(); }); document.addEventListener('visibilitychange', () => { if (!document.hidden) { L.chanStore.fresh(); L.chanReads.fresh(); } }); } catch (e) {}
 
   window.WizLive = L;
