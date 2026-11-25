@@ -466,9 +466,17 @@
       "help": "Inbox: only what needs you.",
       "where": "Settings › Appearance › Try new features › Inbox: only what needs you"
     },
+    "wizard/sent-rows": {
+      "help": "Sent uses Inbox's rows.",
+      "where": "Settings › Appearance › Try new features › Sent: the same rows as Inbox"
+    },
     "wizard/capture-inbox": {
       "help": "Agent files your Files Inbox drops.",
       "where": "Settings › Appearance › Try new features › Capture inbox"
+    },
+    "wizard/chat-tags": {
+      "help": "A chat can carry several tags.",
+      "where": "Settings › Appearance › Try new features › Tags"
     },
     "wizard/app-wake": {
       "help": "Apps wake your agent.",

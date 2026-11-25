@@ -1,29 +1,3 @@
-/* Inbox rows (wizard-ux issue 1779): Chats › Inbox as Signal / Telegram chat rows. Wizard tokens only; the Inbox
- * list sits on an opaque panel. Markup: core/chats-inboxrows.js. */
-html[data-tweaks~="wizard/inbox-rows"] .ch-list .ch-sec.ch-ib > .ch-sec-b { background: linear-gradient(var(--wz-surface), var(--wz-surface)), var(--wz-canvas); border-radius: var(--wz-radius-tile); overflow: hidden; }
-html[data-tweaks~="wizard/inbox-rows"] .ch-list .ch-ib-wrap { position: relative; display: flex; align-items: stretch; background: transparent; }
-html[data-tweaks~="wizard/inbox-rows"] .ch-list .ch-ib-wrap + .ch-ib-wrap { box-shadow: inset 0 1px 0 color-mix(in srgb, var(--wz-border) 70%, transparent); }
-html[data-tweaks~="wizard/inbox-rows"] .ch-list .ch-ib-wrap > .ch-row.ch-ib-row { flex: 1; min-width: 0; height: auto; min-height: 72px; box-sizing: border-box; align-items: center; gap: 12px; padding: 8px 52px 8px 12px; border-radius: 0; background: transparent; }
-html[data-tweaks~="wizard/inbox-rows"] .ch-list .ch-ib-wrap > .ch-row.ch-ib-row::after { content: none; }
-html[data-tweaks~="wizard/inbox-rows"] .ch-list .ch-ib-wrap > .ch-row.ch-ib-row:hover { background: color-mix(in srgb, var(--wz-text) 5%, transparent); }
-html[data-tweaks~="wizard/inbox-rows"] .ch-list .ch-ib-wrap > .ch-row.ch-ib-row:active { background: color-mix(in srgb, var(--wz-text) 9%, transparent); }
-html[data-tweaks~="wizard/inbox-rows"] .ch-list .ch-ib-av { flex: none; width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; font-size: 1.5rem; line-height: 1; background: var(--wz-surface-raised); color: var(--wz-text); overflow: hidden; }
-html[data-tweaks~="wizard/inbox-rows"] .ch-list .ch-ib-av svg, html[data-tweaks~="wizard/inbox-rows"] .ch-list .ch-ib-av .ag-sig { width: 30px; height: 30px; border-radius: 50%; font-size: 0.875rem; }
-html[data-tweaks~="wizard/inbox-rows"] .ch-list .ch-ib-bd { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-html[data-tweaks~="wizard/inbox-rows"] .ch-list .ch-ib-l1, html[data-tweaks~="wizard/inbox-rows"] .ch-list .ch-ib-l2 { display: flex; align-items: center; gap: 8px; min-width: 0; }
-html[data-tweaks~="wizard/inbox-rows"] .ch-list .ch-ib-from { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: 600 0.8125rem / 1.3 var(--wz-font-ui, inherit); color: var(--wz-accent); }
-html[data-tweaks~="wizard/inbox-rows"] .ch-list .ch-ib-pin { margin-right: 4px; font-size: 0.75rem; }
-html[data-tweaks~="wizard/inbox-rows"] .ch-list .ch-ib-l1 time { flex: none; font: 400 0.75rem / 1.3 var(--wz-font-ui, inherit); color: var(--wz-text-muted); }
-html[data-tweaks~="wizard/inbox-rows"] .ch-list .ch-ib-row.unread .ch-ib-l1 time { color: var(--wz-accent); }
-html[data-tweaks~="wizard/inbox-rows"] .ch-list .ch-ib-t { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: 500 1rem / 1.3 var(--wz-font-ui, inherit); color: var(--wz-text); }
-html[data-tweaks~="wizard/inbox-rows"] .ch-list .ch-ib-row.unread .ch-ib-t, html[data-tweaks~="wizard/inbox-rows"] .ch-list .ch-ib-row.needs .ch-ib-t { font-weight: 700; }
-html[data-tweaks~="wizard/inbox-rows"] .ch-list .ch-ib-mk { flex: none; display: inline-flex; align-items: center; }
-html[data-tweaks~="wizard/inbox-rows"] .ch-list .ch-ib-mk .ch-chan-dot { width: 10px; height: 10px; }
-html[data-tweaks~="wizard/inbox-rows"] .ch-list .ch-ib-mk .ch-spin { display: inline-block; width: 12px; height: 12px; box-sizing: border-box; }
-html[data-tweaks~="wizard/inbox-rows"] .ch-list .ch-ib-pv { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: 400 0.875rem / 1.35 var(--wz-font-ui, inherit); color: var(--wz-text-secondary); }
-html[data-tweaks~="wizard/inbox-rows"] .ch-list .ch-ib-pv .att { font-style: normal; }
-html[data-tweaks~="wizard/inbox-rows"] .ch-list .ch-ib-arch { position: absolute; z-index: 1; right: 8px; top: 50%; width: 36px; height: 36px; margin-top: -18px; display: grid; place-items: center; border: 0; border-radius: 50%; color: var(--wz-text-muted); background: transparent; cursor: pointer; }
-html[data-tweaks~="wizard/inbox-rows"] .ch-list .ch-ib-arch:hover, html[data-tweaks~="wizard/inbox-rows"] .ch-list .ch-ib-arch:focus-visible { background: var(--wz-surface-raised); color: var(--wz-text); }
-html[data-tweaks~="wizard/inbox-rows"] .ch-list .ch-ib-arch svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-html[data-tweaks~="wizard/inbox-rows"] .ch-list .ch-ib-empty { display: flex; flex-direction: column; gap: 4px; align-items: center; text-align: center; padding: 32px 16px; color: var(--wz-text-muted); }
-html[data-tweaks~="wizard/inbox-rows"] .ch-list .ch-ib-empty b { color: var(--wz-text); }
+/* Inbox rows (wizard-ux issue 1779): Chats › Inbox as Signal / Telegram chat rows. The rows' look lives in
+ * core/chats.css ("Inbox rows and Sent rows"), shared with Sent's rows (wizard-ux issue 1814, switch wizard/sent-rows)
+ * so the two can't drift apart. Markup: core/chats-inboxrows.js. */

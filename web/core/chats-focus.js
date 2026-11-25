@@ -10,7 +10,7 @@
 'use strict';
 window.WizCore = window.WizCore || {};
 window.WizCore.chatsParts = window.WizCore.chatsParts || {};
-window.WizCore.chatsParts.focus = function ({ agentRec, AGS, androidDocument, ch, chanStoreMove, chanStoreSpaces, chatsBack, chatVars, growTa, H, LIVE, norm, OUTBOX, owner, renderChatList, renderThread, save, toast, W, winAgent }) {
+window.WizCore.chatsParts.focus = function ({ agentRec, AGS, androidDocument, ch, chanStoreMove, chanStoreSpaces, chanTags, chatsBack, chatVars, growTa, H, LIVE, norm, OUTBOX, owner, renderChatList, renderThread, save, toast, W, winAgent }) {
   let attOf, chanHold, channelBack, chanOwnPost, closeSpacePicker, deferredOf, elOf, openSpacePicker, PAGE, PW, rowAgent; // late-bound: chats.js declares these after the call, see bindLate
   const scrollBox = nb => nb && chatVars.docOwner?.contains(nb) ? document.scrollingElement : nb;
   // The one admission check for measuring, saving and restoring either scroll mode.
@@ -121,7 +121,7 @@ window.WizCore.chatsParts.focus = function ({ agentRec, AGS, androidDocument, ch
     window.addEventListener('resize', resizeDocument);
   }
   /* Pins, Boomerang, topic emojis, list layouts and the Focus; core/chats-setup.js. */
-  const { agoText, BOOM, byStatus, fileInGeneral, fileInSpace, focusedAgent, INC, isWorking, KIT, matchFilters, md, paintPins, PIN, PIN_SVG, PINS_KEY, pinsOn, SEC_OPEN_KEY, SECTIONS_DAY, SECTIONS_STATUS, setFilter, SPACE, spaceAgent, spaceContains, spaceMember, spaces, SPACES_KEY, spacesOf, STALE_LIST, STATUS, statusEntries, subjectOf, subjects, TOPIC, topicOn, toTurns, visibleSpaces, WORKING_ST, bindLate: setupLate } = window.WizCore.chatsParts.setup({ AGS: (...a) => AGS(...a), attOf: (...a) => attOf(...a), ch, chanStoreMove, chanStoreSpaces, chatsBack, deferredOf: (...a) => deferredOf(...a), elOf: (...a) => elOf(...a), focusAgents, growTa, LIVE, norm, rerenderList, toast, W });
+  const { agoText, BOOM, byStatus, fileInGeneral, fileInSpace, focusedAgent, INC, isWorking, KIT, matchFilters, md, paintPins, PIN, PIN_SVG, PINS_KEY, pinsOn, SEC_OPEN_KEY, SECTIONS_DAY, SECTIONS_STATUS, setFilter, SPACE, spaceAgent, spaceContains, spaceMember, spaces, SPACES_KEY, spacesOf, STALE_LIST, STATUS, statusEntries, subjectOf, subjects, TOPIC, topicOn, toTurns, visibleSpaces, WORKING_ST, bindLate: setupLate } = window.WizCore.chatsParts.setup({ AGS: (...a) => AGS(...a), attOf: (...a) => attOf(...a), ch, chanStoreMove, chanStoreSpaces, chanTags, chatsBack, deferredOf: (...a) => deferredOf(...a), elOf: (...a) => elOf(...a), focusAgents, growTa, LIVE, norm, rerenderList, toast, W });
   // Move to channel… from a row a layout draws itself (the AI apps Activity rows): the same picker as a feed's row menu.
   function moveToChannel(wid, sid) {
     const w = W[wid]; if (!w || !sid) return false;

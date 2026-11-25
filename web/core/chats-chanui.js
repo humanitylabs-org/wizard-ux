@@ -30,10 +30,14 @@ window.WizCore.chatsParts.chanui = function ({ agentName, agentRec, ago, AGS, ch
     const archSec = arch.length ? `<section class="ch-sec ch-chan-arch${chatVars.chanArchOpen ? ' open' : ''}" data-sec="chan-archive"><button type="button" class="ch-sec-h" data-chchanarch aria-expanded="${chatVars.chanArchOpen}"><span>Archive</span><small>${arch.length}</small><i aria-hidden="true"></i></button>${chatVars.chanArchOpen ? `<div class="ch-sec-b">${arch.map(c => channelLine(c, rows, now, cur, gAg, dAg)).join('')}</div>` : ''}</section>` : '';
     // + New channel (wizard-ux issue 1308): the list's last row after General, in the accent colour; it opens the
     // existing name form (openSpacePicker naming) for the agent this list shows.
-    const add = chanNewAgent(w) ? '<button type="button" class="ch-chan-add" data-chchannew aria-haspopup="dialog"><span class="ch-chan-hash" aria-hidden="true">+</span><b>New channel</b></button>' : '';
+    const tags = !!chanStore()?.tags; // Tags on (wizard-agent-service issue 608, switch wizard/chat-tags)
+    const add = chanNewAgent(w) ? `<button type="button" class="ch-chan-add" data-chchannew aria-haspopup="dialog"><span class="ch-chan-hash" aria-hidden="true">+</span><b>${tags ? 'New tag' : 'New channel'}</b></button>` : '';
+    // Archived is a tag view: one line after General that opens every archived chat of this list's agent.
+    const aAg = focusedAgent(focusOf(w)), archN = tags ? rows.filter(s => s.archived && !s.hidden && (!aAg || rowAgent(s) === aAg)).length : 0;
+    const archLine = tags ? `<div class="ch-chan${cur === '__archived__' ? ' cur' : ''}" data-morph-key="chan:__archived__"><div class="ch-chan-r"><button type="button" class="ch-chan-open" data-chchan="__archived__" title="Open your archived chats"><span class="ch-chan-hash ch-chan-emo" aria-hidden="true">🗄️</span><b>Archived</b>${archN ? `<small class="ch-chan-n-all">${archN}</small>` : ''}</button></div></div>` : '';
     // Agents (issue 1336): a folded row just above Archive, so Archive stays last.
     const agents = typeof chanAgentsSec === 'function' ? chanAgentsSec(rows) : '';
-    return `<div class="ch-chan-list">${channelsFor(w).map(c => channelLine(c, rows, now, cur, gAg, dAg)).join('')}${add}${agents}${archSec}</div>`;
+    return `<div class="ch-chan-list">${channelsFor(w).map(c => channelLine(c, rows, now, cur, gAg, dAg)).join('')}${archLine}${add}${agents}${archSec}</div>`;
   }
   /* Channel posts: first message, words, reply counts, feed place; core/chats-posts.js. */
   const { chanHold, chanKey, chanNewN, chanPostText, chanRepaint, chanReplies, chanScrolled, chanStart, chanUser, chanUserAt, FIRST, firstAgent, firstPost, firstWant, pullFirst, replyWant } = window.WizCore.chatsParts.posts({ ch, CH, CHAN_TEXT_MAX, chanChanged, chanGenAgent, chanOpen, chanReadAt, chanReadFeed, chanReadKey, elOf: (...a) => elOf(...a), holdList: (...a) => holdList(...a), isWorking, LIVE, mediaOfFile: (...a) => mediaOfFile(...a), owner: (...a) => owner(...a), paintFeedJump, rerenderList, rowAgent, toTurns, W });
@@ -149,6 +153,6 @@ window.WizCore.chatsParts.chanui = function ({ agentName, agentRec, ago, AGS, ch
   feedLate({ chanSending });
   function clearAll(w) { const c = ch(w.id); c.filter = ''; c.q = ''; c.filterFrom = null; window.WizCore.chatSearch?.cancel(w.id); rerenderList(w); }
   function setQuery(w, q) { const c = ch(w.id); if (w.thread) chatsBack(w); c.q = String(q || ''); rerenderList(w); }
-  const SEC_DEFAULT = { errors: true, working: true, saved: true, ready: true, yesterday: true, pastWeek: false, deferred: false, archive: false, recent: true, snoozed: false, archived: false };
+  const SEC_DEFAULT = { errors: true, working: true, saved: true, ready: true, yesterday: true, pastWeek: false, deferred: false, archive: false, recent: true, snoozed: false, archived: false, sentWorking: true, sentProcessed: true };
   return { boxModel, chanboxLate, chanCompose, chanComposer, chanDraftKey, chanDropSending, chanEditUnsent, chanEmojiPick, chanEmojiSync, chanEmojiTap, chanHead, chanHold, chanKey, chanMark, chanModel, channelClick, channelFeed, channelsBody, channelSend, chanOwnPost, chanRepaint, chanScrolled, chanSetEmoji, chanSpaceOf, chanToEnd, chanUser, clearAll, feedLate, openChannelSheet, SEC_DEFAULT, setChanModel, setQuery, submitChannelRename, bindLate: v => { if ('ACT' in v) ACT = v.ACT; if ('elOf' in v) elOf = v.elOf; if ('holdList' in v) holdList = v.holdList; if ('mediaOfFile' in v) mediaOfFile = v.mediaOfFile; if ('openSpacePicker' in v) openSpacePicker = v.openSpacePicker; if ('orderBar' in v) orderBar = v.orderBar; if ('RENAME_SVG' in v) RENAME_SVG = v.RENAME_SVG; } };
 };

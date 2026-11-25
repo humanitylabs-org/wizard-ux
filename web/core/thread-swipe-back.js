@@ -121,7 +121,7 @@ import { engages, commits, COMMIT_PX } from './swipe-intent.js';
           if (dy > 36 && dy > Math.abs(raw)) { sw = null; return; }
           if (!engages(d, dy)) return;
           if (sw.mode !== 'thread') {
-            if (sw.mode === 'page' && raw < 0 && sw.target.closest('[data-chopen], [data-chnotif]')) { sw = null; return; } // the row's own leftward swipe
+            if (sw.mode === 'page' && raw < 0 && sw.target.closest('[data-chopen], [data-chnotif], [data-chsent]')) { sw = null; return; } // the row's own leftward swipe (a Sent row's too: issue 1814)
             if (scrolls(sw.sc, raw)) { sw = null; return; }
           }
           sw.on = true; sw.th.style.transition = 'none';

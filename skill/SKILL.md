@@ -191,12 +191,14 @@ Settings › Appearance › Try new features lists unfinished features anyone ca
 - **Runtipi 4.12 sign-in key**: App Manager uses its own Runtipi 4.12 key.
 - **Say why a chat needs you**: When Wizard itself marks a chat Needs you (a helper finished after the chat closed), the chat says why, with Continue and Dismiss. Dismiss, Done or Archive clears it on every device.
 - **Send and go**: On desktop, sending opens a fresh chat.
+- **Sent: the same rows as Inbox**: Sent uses Inbox's rows.
 - **Share feature counts**: Sends features you tried and your thumbs, plus a random box id.
 - **Short answer first**: A long agent reply shows only its one-line plain answer; tap it for the full reply. Choose whether replies start collapsed and how long the short answer is. Where: Settings › Appearance › Try new features › Short answer first; its options show under it when on.
 - **Skins are look only**: Skins become a look only. Your own skin stops deciding which features run: only the feature switches here and in the WizardOS Tracker do, the same for every tester. Turning this on carries the choices of the own skin you're wearing into those switches once. Tweaks on the drop list (Two orbs, App borders, No close on desks, Pin buttons, WizardOS name) are off. Skin scripts are paused. Your skin's saved choices and script approval are kept and come back when you switch this off.
 - **Stop write loops**: Stops repeated saves: an identical save within 10 s is not resent; over 20 a minute pauses.
 - **Swap sides**: Chats right, apps left (⌥⇧L).
 - **Swipe away downloads**: Phone: swipe the Downloaded banner away and swipe the Downloads sheet down to close it. (phone only).
+- **Tags**: A chat can carry several tags.
 - **Tap the app in front for its first view**: Narrow desktop window: tapping the icon of the app in front takes it back to its first view.
 - **Tell the team about failed updates**: When an app or WizardOS update fails on this box, the App Manager files a bug for the team (or adds to the open one) with the box, versions, failing step and error, using this box's GitHub login. Your notification then says the team was told.
 - **Undated chat titles**: Same-topic chats: no date.

@@ -115,7 +115,7 @@ window.WizCore.chatsParts.swipe = function ({ ACT, addFiles, BOOM, ch, CH, chanS
         q.row.style.transform = '';
         // Preserve the stock gesture outside Novairecito phone skins and on desktop.
         if (q.dx < -60 && q.row.dataset.quiet === '1' && threadActions(rowOf(q.wid, q.sid), null).includes('done')) { chatVars.lpUntil = Date.now() + 700; threadAct(q.wid, q.sid, 'done'); }
-        else if (q.dx < -60) { chatVars.lpUntil = Date.now() + 700; if (!q.row.dataset.chchan) openRowSheet(q.wid, q.sid, q.nid); else rowMenu(q.wid, q.row); }
+        else if (q.dx < -60) { chatVars.lpUntil = Date.now() + 700; if (!q.row.dataset.chchan && !q.row.dataset.chsent) openRowSheet(q.wid, q.sid, q.nid); else rowMenu(q.wid, q.row); }
         return;
       }
       if (!q.moved) return;
