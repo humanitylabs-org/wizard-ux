@@ -100,7 +100,10 @@
   function armFrame(win) {
     try {
       if (!win || win === window || win.top !== window) return false;
-      if (win.location.origin !== location.origin || !SHELL_PAGE.test(win.location.pathname)) return false;
+      if (win.location.origin !== location.origin) return false;
+      // A shell page, or the one first-party app the boundary keeps same-origin (TG style, telegram#68): it already
+      // calls this page's own objects, so arming its own fetch gives it nothing it did not have.
+      if (!SHELL_PAGE.test(win.location.pathname) && !window.WizBrowserBoundary?.sameOriginPage?.(win.location.href)) return false;
       wrap(win);
       return true;
     } catch (_) { return false; }

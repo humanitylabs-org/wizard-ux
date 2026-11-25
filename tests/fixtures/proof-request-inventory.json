@@ -1224,6 +1224,12 @@
       "source": "web/core/settings.js",
       "kind": "write",
       "note": "Only posted to while the off-by-default box switch wizard/try-feature-counts is on (wizard-app-manager issue 701): the Try new features state of apps the App Manager can't read itself, for anonymous counts. The QA harnesses run with it off. Refused and collected, never answered, if a flow reaches it."
+    },
+    "/tg-style": {
+      "status": "not-exercised",
+      "source": "web/core/browser-boundary.js",
+      "kind": "navigation",
+      "note": "TG style's window path (browser boundary SAME_ORIGIN, telegram#68): a path prefix the shell compares a frame's URL with, never fetched by the shell itself. Refused and collected, never answered, if a flow reaches it."
     }
   }
 }
