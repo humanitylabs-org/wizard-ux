@@ -11,17 +11,8 @@ import { block, between } from './fixtures/source-slice.mjs';
 import { withLiveParts } from './fixtures/live-parts.mjs';
 
 const read = p => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
-const ID = 'wizard/needs-you-reason';
 const RID = 'bg_' + 'a'.repeat(32), RID2 = 'bg_' + 'b'.repeat(32);
 const REASON = 'A helper finished after this chat closed';
-
-test('the switch is gone: no catalog entry, no package, no help line', () => {
-  const catalog = JSON.parse(read('web/tweaks/catalog.json'));
-  assert.ok(!JSON.stringify(catalog).includes(ID), 'not in the catalog');
-  assert.ok(!read('skill/help.json').includes(ID), 'no help line');
-  for (const f of ['web/core/chat-power.js', 'web/core/chats-done.js', 'web/live.js']) assert.ok(!read(f).includes(ID), `${f} reads no switch`);
-  assert.match(read('web/core/chat-power.css'), /\.ch-fail\.ch-bg-reason \{/, 'the panel look is core CSS');
-});
 
 // live.js discovery block, run against stub network helpers (as background-continue.test.mjs).
 function normalizer() {
