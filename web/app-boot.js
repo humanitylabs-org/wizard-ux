@@ -122,6 +122,41 @@ window.WizCore.appParts.boot = function ({ $, APP, APPS, appVars, armBack, backS
   // Assistant handoff (side-key app → WizardOS). 'listen' opens the orb listening; 'say' shows the words as a
   // draft that James sends with one tap — another app can never make Archimedes act on its own.
   let threadHandoffGeneration = 0;
+  // Messenger at its pinned Agent chat (Messenger's own link `#chat=agent:notes`). Messenger opens the way its icon
+  // opens it (a review window opened at a link closes on any stray Back-like pop while it loads), and only once its page
+  // is up is the link handed to that page in place: no new history entry, and the one pop it makes is the app's own
+  // step. On a cold start the app list may still be loading, so wait for it once. Without Messenger the button keeps
+  // today's listening orb: never a dead press.
+  const AGENT_NOTE_APPS = ['messenger', 'wizard-messenger'], AGENT_NOTE_LINK = 'chat=agent:notes';
+  function agentNote() {
+    const log = s => { window.__backLog = (window.__backLog || []).concat('handoff:agent-note:' + s).slice(-30); };
+    const toChat = (id, base, tries = 0) => {
+      const f = [...document.querySelectorAll('iframe.appframe')].find(x => x.isConnected && x.dataset.ownApp === id);
+      let w = null; try { w = f?.contentWindow; if (!(w.document.readyState === 'complete' && w.location.pathname.startsWith(base.pathname))) w = null; } catch (_) { w = null; }
+      if (!w) { if (tries < 100) setTimeout(() => toChat(id, base, tries + 1), 150); else log('no-page:' + id); return; }
+      try {
+        if (w.__wosAgentNoteLink) { log('pending:' + id); return; } // a second press while the first link lands
+        const doc = w.document, clear = () => { w.__wosAgentNoteLink = false; if (w.__wosSelfPop?.doc === doc && !w.__wosSelfPop.key) w.__wosSelfPop = null; };
+        w.__wosAgentNoteLink = true; w.__wosSelfPop = { doc, key: null }; // app-frame.js takeSelfPop: this pop is Messenger's own step
+        w.addEventListener('hashchange', () => setTimeout(clear, 0), { once: true }); setTimeout(clear, 2000);
+        w.location.replace(w.location.pathname + w.location.search + '#' + AGENT_NOTE_LINK); log('chat:' + id); // same page: only the fragment changes
+      } catch (_) { log('refused-link:' + id); }
+    };
+    const open = () => {
+      const id = AGENT_NOTE_APPS.find(x => window.WizCanOpen?.(x)); if (!id) return false;
+      let base; try { base = new URL(APP[id].url, location.href); } catch (_) { return false; }
+      const ok = !!window.WizOpenApp?.(id); log(ok ? 'open:' + id : 'refused:' + id);
+      if (ok) toChat(id, base);
+      return ok;
+    };
+    if (open()) return;
+    Promise.resolve(window.WizCore?.appsLoaded?.()).catch(() => {}).then(() => {
+      if (open()) return;
+      log('no-messenger');
+      toast('◉', 'The Agent chat is in Messenger · get it from the App Store', 3200);
+      if (V.state === 'idle') startVoice('auto');
+    });
+  }
   window.__wosHandoff = h => {
     // A side-button handoff means James already knows the gestures: clear the first-run coach so the draft is visible.
     if (window.WosTour?.active) window.WosTour.finish('handoff');
@@ -142,6 +177,9 @@ window.WizCore.appParts.boot = function ({ $, APP, APPS, appVars, armBack, backS
       }).catch(() => { if (generation === threadHandoffGeneration) toast('◉', 'Could not locate that chat · reconnect and tap again'); });
       return true;
     }
+    // Side button opens the Agent chat (wizard-ux issue 1528, switch wizard/assist-agent-note): the Android app sends
+    // this instead of starting a Wizard take. Messenger's pinned Agent chat takes the typed or voice note and ticks it.
+    if (h.action === 'agent-note') { agentNote(); return true; }
     if (APP[h.action]?.kind === 'wizard') return openApp(APP[h.action]);
     // Photos is its own app: older WizardOS builds still ask for Settings › photos-backup (notification, native screen).
     if (h.action === 'settings' && (h.focus === 'photos-backup' || h.focus === 'photos')) { if (!window.WizOpenApp?.('photos')) toast('▣', 'Photos backup lives in the Photos app · install it from the App Store', 3200); return true; }
