@@ -24,6 +24,8 @@ const ROWS = () => [row('w1', 1, { status: 'running' }), row('y1', 30, { attenti
   row('r1', 3), row('r2', 50), row('old', 10 * 24), row('s1', 4, { deferred: true }), row('a1', 5, { archived: true })];
 const M = modelContext({}).WizChatsListModel;
 const facts = { needs, unread, at: s => s.at };
+// w1 is a send of his still running: the box's Sent log names its thread, so it is in Sent › Working, not in Inbox (issue 1829).
+const PLACE = () => ({ sent: M.sentIndex([{ id: 'sent_w1', thread: 'w1', state: 'running', at: NOW - H }]) });
 const J = v => JSON.parse(JSON.stringify(v)); // vm arrays are from another realm
 
 test('list model: the switch id is read from data-tweaks', () => {
@@ -34,8 +36,8 @@ test('list model: the switch id is read from data-tweaks', () => {
 });
 
 test('list model: on, every thread waits in Inbox until archived; off, read ones fall to Recent as today', () => {
-  const on = M.activityGroups(groups(ROWS()), facts, { now: NOW, keep: true });
-  assert.deepEqual(J(on.working.map(s => s.id)), ['w1']);
+  const on = M.activityGroups(groups(ROWS()), facts, { now: NOW, keep: true, place: PLACE() });
+  assert.deepEqual(J(on.working.map(s => s.id)), [], 'no Working section in Inbox: his running send is in Sent (issue 1829)');
   assert.deepEqual(J(on.ready.map(s => s.id)), ['g1', 'r1', 'y1', 'r2', 'old'], 'read, unread, needs you and old alike, newest first');
   assert.deepEqual([on.recent.length, on.older], [0, 0], 'no Recent and no Show older');
   assert.deepEqual(J(on.snoozed.map(s => s.id)), ['s1'], 'snoozed leave until the snooze ends');
@@ -67,7 +69,7 @@ test('regression: open an unread Inbox thread and go Back: still in Inbox, now r
 });
 
 test('list model activityList: the shell\'s own switch read decides, and the badge count is the Inbox count', () => {
-  const f = keep => ({ live: { cardAt: s => s.updatedAt }, chats: { activityNeeds: needs, activityUnread: unread, inboxKeep: () => keep, threadActions: () => ['snooze', 'done'], channelOf: () => 'General', agentLabelOf: () => '' } });
+  const f = keep => ({ live: { cardAt: s => s.updatedAt }, chats: { activityNeeds: needs, activityUnread: unread, inboxKeep: () => keep, inboxPlace: () => keep ? PLACE() : null, threadActions: () => ['snooze', 'done'], channelOf: () => 'General', agentLabelOf: () => '' } });
   const on = M.activityList(groups(ROWS()), f(true), { now: NOW });
   assert.deepEqual(J(on.ready.map(r => [r.id, r.mark])), [['g1', 'new'], ['r1', ''], ['y1', 'needs'], ['r2', ''], ['old', '']], 'marks tell read from unread in the one list');
   assert.equal(on.recent.length, 0);
@@ -80,17 +82,17 @@ function phone(keep) {
   c.window = c; modelContext(c);
   Object.assign(c, { readyOrder: 'newest', actOlder: false, SEC_PAGE: 40, secOpen: { working: true, ready: true, recent: true, snoozed: false, archived: false },
     ch: () => ({ more: {} }), LIVE: { workGroups: groups }, actNeeds: needs, actUnread: unread, chanAt: s => s.at, noteAt: n => n.time * 1000,
-    chatRow: s => `<row ${s.id}>`, noteRow: n => `<note ${n.id}>`, inboxKeep: () => keep });
+    chatRow: s => `<row ${s.id}>`, noteRow: n => `<note ${n.id}>`, inboxKeep: () => keep, inboxPlace: PLACE });
   vm.runInContext(between(chats, '  const ACT_SORTS = () =>', '  // The sort and Show older taps').replace('let actOlder = false;', ''), c);
   return c;
 }
 const secs = html => [...html.matchAll(/data-sec="([^"]+)">(?:<div class="ch-sec-hl">)?<button class="ch-sec-h" data-sectoggle="[^"]+" aria-expanded="(?:true|false)"><span>([^<]+)<\/span>(?:<small>([^<]*)<\/small>)?/g)].map(m => [m[1], m[2], m[3] || '']);
 const rowsIn = (html, k) => [...(html.split(`data-sec="${k}"`)[1] || '').split('</section>')[0].matchAll(/<(?:row|note) ([^>]+)>/g)].map(m => m[1]);
 
-test('phone / Classic: Working, then Inbox with its count, no Recent; a read (kept) alert waits with Snoozed, as on the AI apps sidebar', () => {
+test('phone / Classic: Inbox with its count, no Working (issue 1829) and no Recent; a read (kept) alert waits with Snoozed, as on the AI apps sidebar', () => {
   const nt = { awake: [{ id: 'n1', time: (NOW - 0.5 * H) / 1000 }], later: [{ id: 'n2', time: (NOW - 6 * H) / 1000 }] };
   const html = phone(true).activityBody({ id: 'w' }, ROWS(), nt);
-  assert.deepEqual(secs(html), [['working', 'Working', '1'], ['ready', 'Inbox', '6'], ['snoozed', 'Snoozed', '2'], ['archived', 'Archived', '1']]);
+  assert.deepEqual(secs(html), [['ready', 'Inbox', '6'], ['snoozed', 'Snoozed', '2'], ['archived', 'Archived', '1']]);
   assert.deepEqual(rowsIn(html, 'ready'), ['n1', 'g1', 'r1', 'y1', 'r2', 'old']);
   assert.doesNotMatch(html, /data-sec="recent"|data-chactolder/);
   assert.match(html, /aria-label="Sort Inbox"/);
@@ -113,7 +115,7 @@ function sidebar(keep) {
   c.window = c; c.globalThis = c; modelContext(c);
   c.WizCore = { inboxKeep: () => keep };
   const Mc = c.WizChatsListModel;
-  const f = { live: { cardAt: s => s.updatedAt, isNew: unread }, chats: { activityNeeds: needs, activityUnread: unread, inboxKeep: () => keep, threadActions: () => ['snooze', 'done'], channelOf: () => 'General', agentLabelOf: () => '' } };
+  const f = { live: { cardAt: s => s.updatedAt, isNew: unread }, chats: { activityNeeds: needs, activityUnread: unread, inboxKeep: () => keep, inboxPlace: () => keep ? PLACE() : null, threadActions: () => ['snooze', 'done'], channelOf: () => 'General', agentLabelOf: () => '' } };
   const api = { listen() {}, storage: { set() {}, get: () => undefined },
     sessions: { order: () => 'newest', list: o => o?.activity ? Mc.activityList(groups(ROWS()), f, { order: 'newest', now: NOW, older: o.older }) : { working: [], snoozed: [], ready: [], archive: [] } },
     agents: { focus: () => ({ id: '', agents: [] }) } };
@@ -133,9 +135,9 @@ function sidebar(keep) {
 const words = sc => sc.all().filter(n => n.cls === 'aad-sec-w').map(n => n.textContent);
 const rws = sc => sc.all().filter(n => n.cls === 'aad-rw').map(n => n.textContent);
 
-test('AI apps desktop sidebar: Working, Inbox, Snoozed, Archived; every thread in Inbox with its marks', () => {
+test('AI apps desktop sidebar: Inbox, Snoozed, Archived (no Working: issue 1829); every thread in Inbox with its marks', () => {
   const on = sidebar(true);
-  assert.deepEqual(words(on.scroll), ['Working', 'Inbox', 'Snoozed', 'Archived']);
+  assert.deepEqual(words(on.scroll), ['Inbox', 'Snoozed', 'Archived']);
   assert.deepEqual(rws(on.scroll), ['g1:new', 'r1', 'y1:needs', 'r2', 'old']);
   assert.equal(on.scroll.all().filter(n => n.cls === 'aad-more-older').length, 0, 'no Show older');
   const off = sidebar(false);

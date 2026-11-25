@@ -42,7 +42,7 @@ test('list model: Inbox holds only what needs him; pinned first in pin order; no
   assert.equal(g.pinned, 2);
   assert.ok(!g.ready.some(s => s.id === 'q1'), 'a quiet "nothing needed" reply is never in Inbox (it is in Sent)');
   assert.ok(!g.ready.some(s => s.id === 'w0'), 'his own send still working with no answer is not in Inbox (Sent › Working)');
-  assert.deepEqual(J(g.working.map(s => s.id)), ['w0'], 'what is left working stays the shell\'s Working list');
+  assert.deepEqual(J(g.working.map(s => s.id)), [], 'no Working list beside Inbox: a run he started is in Sent › Working (issue 1829)');
   assert.deepEqual([g.recent.length, g.older], [0, 0]);
   assert.deepEqual(J(g.snoozed.map(s => s.id)), ['s1']);
   assert.deepEqual(J(g.archive.map(s => s.id)), ['a1']);
