@@ -482,10 +482,6 @@
       "help": "A chat can carry several tags.",
       "where": "Settings › Appearance › Try new features › Tags"
     },
-    "wizard/app-wake": {
-      "help": "Apps wake your agent.",
-      "where": "Settings › Appearance › Try new features › Apps wake your agent"
-    },
     "wizard/swap-sides": {
       "help": "Chats right, apps left (⌥⇧L).",
       "where": "Settings › Appearance › Try new features › Swap sides"

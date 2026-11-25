@@ -167,7 +167,6 @@ Settings › Appearance › Try new features lists unfinished features anyone ca
 - **Agents use what the box already does**: Agents look up what this box already does (transcription, reminders, app jobs) before installing their own.
 - **App panel on the left**: AI apps desktop: ⌥⇧M or the app panel's header button moves it beside the chats sidebar.
 - **App switches in chat**: A reply's switch card also lists an app's own feature switches, flipped right in the chat.
-- **Apps wake your agent**: Apps wake your agent.
 - **Archive on top**: Archive is the first section of the Chats list in both By day and By status, so switching layouts never moves it.
 - **Calm Agent Service restarts**: While the Agent Service waits for running chats to restart, you see a quiet note, not errors; a message sent meanwhile sends after the restart; if overdue, choose Wait longer or Restart now.
 - **Calm offline card**: The can't-reach-your-Wizard card shows one dotted path (Internet · Tailscale · Wizard), one short next step and a small Check again with the automatic re-check time.
