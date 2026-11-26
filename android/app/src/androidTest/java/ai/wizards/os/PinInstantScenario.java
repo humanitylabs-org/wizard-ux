@@ -307,10 +307,11 @@ final class PinInstantScenario {
                     cache = "no-store";
                     out = "<!doctype html><meta charset='utf-8'><meta name='wos-release' content='abcdef012345'>"
                         + "<meta name='viewport' content='width=device-width,initial-scale=1'><body style='margin:0;background:#05030c'>"
-                        + "<iframe id='f' src='/qa-pin/' style='border:0;width:100vw;height:100vh;display:block'></iframe><script>"
-                        + "try{WizardOSNative.pinRelease('abcdef012345')}catch(e){}"
-                        + "document.getElementById('f').addEventListener('load',function(){requestAnimationFrame(function(){setTimeout(function(){try{WizardOSNative.pinShown()}catch(e){}},120)})});"
-                        + "</script>";
+                        // As core/single-app-session.js does: the release first, then the app frame.
+                        + "<script>try{WizardOSNative.pinRelease('abcdef012345')}catch(e){}"
+                        + "var f=document.createElement('iframe');f.src='/qa-pin/';f.style.cssText='border:0;width:100vw;height:100vh;display:block';"
+                        + "f.addEventListener('load',function(){requestAnimationFrame(function(){setTimeout(function(){try{WizardOSNative.pinShown()}catch(e){}},120)})});"
+                        + "document.body.appendChild(f);</script>";
                 } else if (path.equals("/qa-pin/")) {
                     etag = "\"page" + v + "\"";
                     out = "<!doctype html><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>"
