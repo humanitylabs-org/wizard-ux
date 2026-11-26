@@ -1,0 +1,2 @@
+/* Get set up (wizard-ux issue 1837): the list's look lives in web/setup/setup.css, drawn only while this switch is on. */
+html[data-tweaks~="wizard/get-set-up"] { --wz-get-set-up: 1; }

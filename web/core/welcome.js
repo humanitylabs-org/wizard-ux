@@ -93,7 +93,10 @@
   // Importer app. It embeds that app's own screen, like the provider sign-in step, so there is one Importer, two ways in.
   const IMPORTER = 'importer';
   let bringOpen = false;
-  const bringOn = () => { try { return isInstalled(IMPORTER); } catch (e) { return false; } };
+  // Get set up (wizard-ux issue 1837, switch wizard/get-set-up): the import leaves the first run for Setup's optional
+  // list, so only AI sign-in stays a required step. Off: unchanged.
+  const bringOn = () => { try { if (String(document.documentElement.getAttribute('data-tweaks') || '').split(' ').includes('wizard/get-set-up')) return false; } catch (e) {}
+    try { return isInstalled(IMPORTER); } catch (e) { return false; } };
   const order = () => solo ? ['private'] : (asked ? ['name'] : []).concat(['ai'], offered ? ['private'] : [], ['look'], bringOn() ? ['bring'] : [], ['hello']);
   const signing = () => step === 'ai' || step === 'private'; // a provider's sign-in page can show in either step
   const nextStep = () => { const all = order(), i = all.indexOf(step); return all[Math.min(all.length - 1, i + 1)] || 'hello'; };
@@ -646,5 +649,8 @@
         return true; } });
   } catch (e) { console.error(e); }
 
-  window.WosWelcome = { whenThreadExists, aiConnected, boot, back, open: (at) => open(at || 'ai'), close, get active() { return !!el; }, get log() { return window.__welcomeLog || []; } };
+  // takesSetup: the Setup tile opens this Welcome. With Get set up on (wizard-ux issue 1837) the tile opens the Setup
+  // page instead, where the optional accounts list lives; the Welcome still opens by itself while no AI is signed in.
+  window.WosWelcome = { whenThreadExists, aiConnected, boot, back, open: (at) => open(at || 'ai'), close, get active() { return !!el; }, get log() { return window.__welcomeLog || []; },
+    get takesSetup() { try { return !String(document.documentElement.getAttribute('data-tweaks') || '').split(' ').includes('wizard/get-set-up'); } catch (e) { return true; } } };
 })();

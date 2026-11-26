@@ -64,6 +64,7 @@
       S.list = { status: 'ok', data: r.data };
       if (r.data.first_run === true) S.firstRun = true;
       window.WosRecommended?.load();
+      window.WosGetSetUp?.load();
       if (r.data.first_run === false) window.WosRecommended?.prefetch();
     } else S.list = { status: r.kind, data: S.list.data };
     renderList();
@@ -152,6 +153,8 @@
     // Preserve the approved Setup entry: a separate tinted action below the completed checklist row.
     if (st === 'done') h += '<button class="wz-button add-device" data-act="list-connect-device">Connect another device</button>';
     if (L.status === 'neterr') h += '<button class="link wz-button secondary" data-act="retry-list">Try again</button>';
+    // Get set up (wizard-ux issue 1837, switch wizard/get-set-up): the optional accounts list, right after the phone row.
+    if (L.status === 'ok') h += window.WosGetSetUp?.html() || '';
     if (L.status === 'ok') h += window.WosRecommended?.html() || '';
     h += '<p class="foot custom" data-customize>Everything you see is customizable. Try asking your Wizard for one change.</p>';
     h += `<p class="foot">${phoneLayout && tourPending() ? 'The 30-second tour starts when you go back to Home.' : 'You can come back to Setup any time.'}</p>`;
@@ -199,6 +202,7 @@
   $('scrim').addEventListener('click', () => { closeSheet(); closeMenu(); });
 
   /* ---------------- boot ---------------- */
+  window.WosGetSetUp?.init(renderList);
   window.WosRecommended?.init(renderList, () => S.screen === 'list' && !document.hidden && (!ioList || S.listVisible));
   try { WA?.ready({ name: 'Setup' }); } catch (e) {}
   renderList(); if (!ioList) loadList();

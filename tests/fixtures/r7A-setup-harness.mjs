@@ -14,7 +14,9 @@ export const tick = async (n = 6) => { for (let i = 0; i < n; i++) await new Pro
 
 const PHONE = { step: 'phone_seen', wizard_url: 'https://wizard.example.test/', phones: [{ name: 'Pixel', os: 'android', online: true }] };
 
-export async function setupApp({ setup = { items: [] }, seen = 200, phone = PHONE } = {}) {
+// getSetUp (wizard-ux issue 1837): also runs the real web/setup/get-set-up.js inside a shell frame; `parent` is the
+// shell (data-tweaks, WizOpenApp, postMessage) and `box(url, o)` answers every other request ([status, body] or null).
+export async function setupApp({ setup = { items: [] }, seen = 200, phone = PHONE, getSetUp = null } = {}) {
   const doc = createDocument({ url: 'https://wizard.example.test/setup/' });
   doc.visibilityState = 'visible';
   doc.body.innerHTML = BODY;
@@ -25,6 +27,8 @@ export async function setupApp({ setup = { items: [] }, seen = 200, phone = PHON
     if (url === '/wizard/v1/setup') return reply(200, structuredClone(setup));
     if (url === '/wizard/v1/setup/seen') return reply(seen, { ok: true });
     if (url.startsWith('/wizard/v1/setup/phone')) return reply(200, structuredClone(phone));
+    const answer = getSetUp?.box?.(String(url), o);
+    if (answer) return reply(answer[0], structuredClone(answer[1]));
     return reply(404, {});
   };
   const ctx = {
@@ -36,7 +40,12 @@ export async function setupApp({ setup = { items: [] }, seen = 200, phone = PHON
     WosRecommended: { init: () => recommended.push('init'), load: () => recommended.push('load'), prefetch: () => recommended.push('prefetch'), html: () => '' },
   };
   ctx.window = ctx; ctx.parent = ctx; doc.defaultView = ctx;
+  if (getSetUp) {
+    ctx.location = { href: 'https://wizard.example.test/wizard-os-home/setup/index.html', origin: 'https://wizard.example.test' };
+    if (getSetUp.parent) ctx.parent = getSetUp.parent;
+  }
   vm.createContext(ctx);
+  if (getSetUp) vm.runInContext(web('setup/get-set-up.js'), ctx, { filename: 'get-set-up.js' });
   vm.runInContext(PC, ctx, { filename: 'phone-connect.js' });
   vm.runInContext(SETUP, ctx, { filename: 'setup.js' });
   await tick();
