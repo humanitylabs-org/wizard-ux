@@ -487,6 +487,10 @@
       "help": "Sends features you tried and your thumbs, plus a random box id.",
       "where": "Settings › Appearance › Try new features › Share feature counts"
     },
+    "wizard/human-handoff": {
+      "where": "Settings › Appearance › Try new features › Browser takeover for Google setup",
+      "help": "The agent gets hermes-human-handoff for Google setup."
+    },
     "wizard/phone-tester-builds": {
       "help": "Phones get the newest tester build.",
       "where": "Settings › Appearance › Try new features › Phone tester builds"
