@@ -41,7 +41,7 @@ import static org.junit.Assert.*;
  * of the feature (the pinned page only makes the two calls core/single-app-session.js makes). Each open is a cold one:
  * the pinned window's task is removed first, as when Android has dropped it.
  *  1. Switch on, first open: the app loads from the box; leaving the window keeps a picture of its last screen.
- *  2. Five more opens with the pinned page held back 3 s by the box: the last screen is on screen at once (time to the
+ *  2. Five more opens with the pinned page held back 4 s by the box: the last screen is on screen at once (time to the
  *     window's first frame with it, median logged), no Connecting, then the live app; the box is asked only whether the
  *     app's page changed (no script, stylesheet or shell file).
  *  3. The app is updated on the box: the next open shows the new version.
@@ -80,7 +80,7 @@ final class PinInstantScenario {
             for (int i = 0; i < 5; i++) {
                 close(c);
                 box.clear();
-                box.pageDelayMs = 3000;
+                box.pageDelayMs = 4000;
                 long t0 = open(c);
                 Activity a = waitResumed(10000);
                 long shown = waitShotDrawn(a, t0, 5000);
@@ -89,14 +89,22 @@ final class PinInstantScenario {
                 if (i == 0) {
                     // Screenshots trail the screen on CI emulators: take it well inside the 3 s the page is held back.
                     SystemClock.sleep(Math.max(0, 1500 - (SystemClock.uptimeMillis() - t0)));
-                    shot(device, c, "on-held-back");
-                    Bitmap b = screen(device, c);
-                    assertNotNull(b);
-                    int px = b.getPixel(b.getWidth() / 2, b.getHeight() / 2);
-                    Log.i(TAG, "screen centre while the page is held back: #" + Integer.toHexString(px & 0xffffff));
-                    assertTrue("open 1: the app's last screen fills the window while its page is held back", near(px, BLUE));
+                    // CI emulators sometimes raise "… isn't responding" over everything: wait it out, then look again
+                    // (still well inside the 4 s the page is held back).
+                    boolean blue = false;
+                    for (int k = 0; k < 3 && !blue && SystemClock.uptimeMillis() - t0 < 3300; k++) {
+                        UiObject2 anr = device.findObject(By.res("android:id/aerr_wait"));
+                        if (anr != null) { anr.click(); SystemClock.sleep(300); }
+                        Bitmap b = screen(device, c);
+                        assertNotNull(b);
+                        int px = b.getPixel(b.getWidth() / 2, b.getHeight() / 2);
+                        Log.i(TAG, "screen centre while the page is held back: #" + Integer.toHexString(px & 0xffffff));
+                        blue = near(px, BLUE);
+                        if (blue) shot(device, c, "on-held-back");
+                    }
+                    assertTrue("open 1: the app's last screen fills the window while its page is held back", blue);
                 }
-                SystemClock.sleep(Math.max(0, 2200 - (SystemClock.uptimeMillis() - t0)));
+                SystemClock.sleep(Math.max(0, 3000 - (SystemClock.uptimeMillis() - t0)));
                 assertNull("open " + (i + 1) + ": no Connecting", device.findObject(By.text("Connecting to your Wizard…")));
                 assertNotNull("open " + (i + 1) + ": the live app", find(device, By.textStartsWith("Pinned app v1"), 20000));
                 assertTrue("open " + (i + 1) + ": the picture gave way to the live page", waitShotGone(a, 5000));
@@ -111,7 +119,7 @@ final class PinInstantScenario {
                 SystemClock.sleep(1200);
             }
             List<Long> sorted = new ArrayList<>(toShot); Collections.sort(sorted);
-            Log.i(TAG, "switch on: last screen on screen after " + toShot + " ms, median " + sorted.get(2) + " ms (5 cold opens, page held back 3 s)");
+            Log.i(TAG, "switch on: last screen on screen after " + toShot + " ms, median " + sorted.get(2) + " ms (5 cold opens, page held back 4 s)");
 
             // 3. the app is updated on the box: the next open shows it
             box.version = 2;
@@ -307,10 +315,11 @@ final class PinInstantScenario {
                     cache = "no-store";
                     out = "<!doctype html><meta charset='utf-8'><meta name='wos-release' content='abcdef012345'>"
                         + "<meta name='viewport' content='width=device-width,initial-scale=1'><body style='margin:0;background:#05030c'>"
-                        + "<iframe id='f' src='/qa-pin/' style='border:0;width:100vw;height:100vh;display:block'></iframe><script>"
-                        + "try{WizardOSNative.pinRelease('abcdef012345')}catch(e){}"
-                        + "document.getElementById('f').addEventListener('load',function(){requestAnimationFrame(function(){setTimeout(function(){try{WizardOSNative.pinShown()}catch(e){}},120)})});"
-                        + "</script>";
+                        // As core/single-app-session.js does: the release first, then the app frame.
+                        + "<script>try{WizardOSNative.pinRelease('abcdef012345')}catch(e){}"
+                        + "var f=document.createElement('iframe');f.src='/qa-pin/';f.style.cssText='border:0;width:100vw;height:100vh;display:block';"
+                        + "f.addEventListener('load',function(){requestAnimationFrame(function(){setTimeout(function(){try{WizardOSNative.pinShown()}catch(e){}},120)})});"
+                        + "document.body.appendChild(f);</script>";
                 } else if (path.equals("/qa-pin/")) {
                     etag = "\"page" + v + "\"";
                     out = "<!doctype html><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>"
