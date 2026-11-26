@@ -40,7 +40,11 @@ import static org.junit.Assert.*;
  * against a disposable localhost Wizard (files/qa_home.txt) whose pinned page and app are stand-ins that never heard
  * of the feature (the pinned page only makes the two calls core/single-app-session.js makes). Each open is a cold one:
  * the pinned window's task is removed first, as when Android has dropped it.
- *  1. Switch on, first open: the app loads from the box; leaving the window keeps a picture of its last screen.
+ *  1. Switch on, first open (no picture yet, the pinned page held back 4 s): Android's placeholder (the app's name on
+ *     the skin's background) is on the window's first frame, never an empty window and no Connecting; then the app
+ *     loads from the box, and a picture of it is kept while it is still on screen (field report 2, 26 Nov).
+ *  1b. The pinned page held back 13 s, past the 10 s Can't-reach mark, while the box's /shell-health answers: no
+ *     Can't reach, the placeholder or last screen stays, then the app (field report 1).
  *  2. Five more opens with the pinned page held back 4 s by the box: the last screen is on screen at once (time to the
  *     window's first frame with it, median logged), no Connecting, then the live app; the box is asked only whether the
  *     app's page changed (no script, stylesheet or shell file).
@@ -64,16 +68,53 @@ final class PinInstantScenario {
             PinInstant.setOn(c, false);
             PinInstant.setOn(c, true);
 
-            // 1. first open, then leave the window: a picture of the app is kept
-            long first = open(c);
-            assertNotNull("the app never showed", find(device, By.textStartsWith("Pinned app v1"), 30000));
-            Log.i(TAG, "first open (nothing kept yet): app page after " + (SystemClock.uptimeMillis() - first) + " ms");
-            assertTrue("the app's files came from the box", box.saw("GET /qa-pin/app.js"));
-            SystemClock.sleep(1500);
-            device.pressHome();
+            // The main app answered a moment ago on this network (as when it is open).
+            PinInstant.reached(c);
+            // The app's home-screen icon, as pinning keeps it (its picture and name are what the placeholder shows).
+            pinIcon(c, true);
+
+            // 1. first open with nothing kept yet and the page held back: the placeholder, never an empty window
             File shot = PinInstant.shotFile(c, box.origin(), APP);
-            assertTrue("leaving the window kept a picture of the app", waitFile(shot, 10000));
+            assertFalse(shot.exists());
+            box.pageDelayMs = 4000;
+            long first = open(c);
+            Activity a0 = waitResumed(10000);
+            long cover = waitCoverDrawn(a0, first, 5000);
+            assertTrue("first open: the placeholder was on the window's first frame", cover >= 0);
+            boolean[] placeholder = {false};
+            InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> placeholder[0] = ((MainActivity) a0).pinPlaceholderShowing());
+            assertTrue("first open: it is the placeholder (no picture kept yet)", placeholder[0]);
+            SystemClock.sleep(Math.max(0, 2200 - (SystemClock.uptimeMillis() - first)));
+            assertNotNull("first open: the placeholder names the app", find(device, By.text("QA Pin"), 1500));
+            assertNull("first open: no Connecting", device.findObject(By.text("Connecting to your Wizard…")));
+            shot(device, c, "placeholder");
+            Log.i(TAG, "first open (nothing kept yet): placeholder on the first frame after " + cover + " ms");
+            assertNotNull("the app never showed", find(device, By.textStartsWith("Pinned app v1"), 30000));
+            Log.i(TAG, "first open: app page after " + (SystemClock.uptimeMillis() - first) + " ms");
+            assertTrue("the app's files came from the box", box.saw("GET /qa-pin/app.js"));
+            // A picture is kept once the app has shown, while the window is still on screen.
+            assertTrue("a picture of the app was kept while it was on screen", waitFile(shot, 10000));
             shot(device, c, "after-first");
+            device.pressHome();
+            SystemClock.sleep(1200);
+
+            // 1b. a slow cold load past the Can't-reach mark while the box answers its health check: no Can't reach
+            close(c);
+            box.clear();
+            box.pageDelayMs = 13000;
+            long slow = open(c);
+            Activity a1 = waitResumed(10000);
+            SystemClock.sleep(Math.max(0, 11500 - (SystemClock.uptimeMillis() - slow)));
+            boolean[] offline = {true}, covered = {false};
+            InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+                offline[0] = ((MainActivity) a1).reachOfflineShowing(); covered[0] = ((MainActivity) a1).pinShotShowing(); });
+            assertFalse("slow load, box answering: no Can't reach at 11.5 s", offline[0]);
+            assertTrue("slow load: the window is still covered (never empty)", covered[0]);
+            assertTrue("slow load: the phone asked the box's health check", box.saw("GET /shell-health"));
+            assertNotNull("slow load: the live app", find(device, By.textStartsWith("Pinned app v1"), 20000));
+            Log.i(TAG, "slow load (page held back 13 s): no Can't reach, the app by " + (SystemClock.uptimeMillis() - slow) + " ms");
+            device.pressHome();
+            SystemClock.sleep(1200);
 
             // 2. five cold opens with the pinned page held back: the last screen at once, no Connecting
             List<Long> toShot = new ArrayList<>();
@@ -154,6 +195,7 @@ final class PinInstantScenario {
             assertTrue("switch off: the app's files are asked for as before", box.saw("GET /qa-pin/app.js"));
             Log.i(TAG, "pin instant open scenario passed");
         } finally {
+            pinIcon(c, false);
             //noinspection ResultOfMethodCallIgnored
             home.delete();
             PinInstant.setOn(c, false);
@@ -161,6 +203,22 @@ final class PinInstantScenario {
             shell("svc wifi disable");
             device.pressHome();
         }
+    }
+
+    /** Stores (or removes) a pinned icon for the stand-in app the way HomeScreenShortcuts does: name and PNG picture. */
+    private static void pinIcon(Context c, boolean on) {
+        android.content.SharedPreferences p = c.getSharedPreferences("home-screen-pins", Context.MODE_PRIVATE);
+        String id = HomeScreenPolicy.identity(HomeScreenShortcuts.origin(c), APP);
+        if (!on) { p.edit().remove(id + ":name").remove(id + ":icon").commit(); return; }
+        Bitmap b = Bitmap.createBitmap(192, 192, Bitmap.Config.ARGB_8888);
+        android.graphics.Canvas k = new android.graphics.Canvas(b);
+        android.graphics.Paint paint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+        paint.setColor(0xff000000 | BLUE);
+        k.drawCircle(96, 96, 88, paint);
+        ByteArrayOutputStream png = new ByteArrayOutputStream();
+        b.compress(Bitmap.CompressFormat.PNG, 100, png);
+        p.edit().putString(id + ":name", "QA Pin")
+                .putString(id + ":icon", "data:image/png;base64," + android.util.Base64.encodeToString(png.toByteArray(), android.util.Base64.NO_WRAP)).commit();
     }
 
     /** A JPEG of a flat colour comes back within a few steps of it. */
@@ -209,6 +267,18 @@ final class PinInstantScenario {
         while (SystemClock.uptimeMillis() < end) {
             long[] at = {-1};
             InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> at[0] = ((MainActivity) a).pinShotDrawnAt());
+            if (at[0] > 0) return at[0] - t0;
+            SystemClock.sleep(10);
+        }
+        return -1;
+    }
+
+    /** ms from the tap to a drawn frame of the window with its last screen or the placeholder on it; -1 if neither. */
+    private static long waitCoverDrawn(Activity a, long t0, long ms) {
+        long end = SystemClock.uptimeMillis() + ms;
+        while (SystemClock.uptimeMillis() < end) {
+            long[] at = {-1};
+            InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> at[0] = ((MainActivity) a).pinCoverDrawnAt());
             if (at[0] > 0) return at[0] - t0;
             SystemClock.sleep(10);
         }
@@ -320,6 +390,8 @@ final class PinInstantScenario {
                         + "var f=document.createElement('iframe');f.src='/qa-pin/';f.style.cssText='border:0;width:100vw;height:100vh;display:block';"
                         + "f.addEventListener('load',function(){requestAnimationFrame(function(){setTimeout(function(){try{WizardOSNative.pinShown()}catch(e){}},120)})});"
                         + "document.body.appendChild(f);</script>";
+                } else if (path.equals("/shell-health")) {
+                    type = "application/json"; out = "{\"ok\":true}";
                 } else if (path.equals("/qa-pin/")) {
                     etag = "\"page" + v + "\"";
                     out = "<!doctype html><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>"

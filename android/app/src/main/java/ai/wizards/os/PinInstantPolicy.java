@@ -29,6 +29,14 @@ final class PinInstantPolicy {
     static final int SHOT_WIDTH = 720;
     /** The saved last screen gives way to the live page by this time at the latest. */
     static final long SHOT_MAX_MS = 10_000L;
+    /** With a kept copy of the app's page, the window waits at most this long for the box to say whether it changed;
+     *  a slower box gets the kept page at once (its answer is kept for the next open). Usually the 304 comes first. */
+    static final long PAGE_WAIT_MS = 250L;
+    /** Can't reach for a pinned window (switch on): at the give-up mark the phone asks the box's /shell-health; a box
+     *  that answers in this long is loading slowly, not away, so the window keeps waiting. */
+    static final int HEALTH_TIMEOUT_MS = 4_000;
+    /** After the app has shown, a picture of it is kept this soon (not only when the window leaves the screen). */
+    static final long SHOT_AFTER_SHOWN_MS = 2_000L;
     /** One kept file at most this big; bigger ones pass through untouched. */
     static final int MAX_FILE = 4 * 1024 * 1024;
     /** All kept files together; the oldest go first. */
@@ -45,6 +53,24 @@ final class PinInstantPolicy {
     /** The network an answer came over: the active network and whether a VPN (Tailscale) carries it. */
     static String network(boolean network, String id, boolean vpn) {
         return network && id != null && !id.isEmpty() ? id + (vpn ? "|vpn" : "|direct") : "";
+    }
+
+    /** The box answered the health check: any HTTP answer below 500 is the box (a 502/503/504 is the gateway saying the
+     *  Wizard behind it is not there). -1 / 0: no answer at all. */
+    static boolean boxAnswers(int status) { return status >= 200 && status < 500; }
+
+    /** The name on the placeholder: the pinned icon's label, else the app id made readable ("wizard-search" → "Search"). */
+    static String placeholderName(String pinned, String app) {
+        if (pinned != null && !pinned.trim().isEmpty()) return pinned.trim();
+        String id = app == null ? "" : app.trim();
+        if (id.startsWith("wizard-")) id = id.substring(7);
+        StringBuilder out = new StringBuilder();
+        for (String w : id.split("[-_ ]+")) {
+            if (w.isEmpty()) continue;
+            if (out.length() > 0) out.append(' ');
+            out.append(Character.toUpperCase(w.charAt(0))).append(w.substring(1));
+        }
+        return out.toString();
     }
 
     static boolean shotFresh(long now, long takenAt) {

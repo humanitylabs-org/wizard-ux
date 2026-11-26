@@ -29,8 +29,10 @@ public class PinCacheTest {
     /** A box: path -> (etag, body, extra headers); it answers conditionals with 304 like nginx. */
     static final class Box implements PinCache.Net {
         final Map<String, String[]> files = new HashMap<>();
-        final List<String> log = new ArrayList<>();
-        boolean down = false;
+        final List<String> log = java.util.Collections.synchronizedList(new ArrayList<>());
+        volatile boolean down = false;
+        /** How long the box takes to answer (a slow box, or a cold load right after a deploy). */
+        volatile long delayMs = 0;
         void put(String path, String etag, String type, String body, String... extra) {
             String[] row = new String[3 + extra.length];
             row[0] = etag; row[1] = type; row[2] = body;
@@ -40,6 +42,7 @@ public class PinCacheTest {
         @Override public PinCache.Reply get(String url, Map<String, String> headers) throws IOException {
             String path = url.substring(BOX.length());
             log.add(path + (headers.containsKey("If-None-Match") ? " (conditional)" : ""));
+            if (delayMs > 0) try { Thread.sleep(delayMs); } catch (InterruptedException e) { throw new IOException(e); }
             if (down) throw new IOException("connect timed out");
             String[] f = files.get(path);
             Map<String, String> h = new LinkedHashMap<>();
@@ -195,5 +198,63 @@ public class PinCacheTest {
         byte[] small = "hello".getBytes(StandardCharsets.UTF_8);
         assertArrayEquals(small, PinCache.readAll(new java.io.ByteArrayInputStream(small), 10));
         assertNull(PinCache.readAll(new java.io.ByteArrayInputStream(new byte[11]), 10));
+    }
+
+    @Test
+    public void aSlowBoxGetsTheKeptPageAtOnceAndItsAnswerIsKeptForTheNextOpen() throws Exception {
+        // Field report 2 (26 Nov): the app's page itself comes from the phone, the box's answer no longer holds it up.
+        File dir = Files.createTempDirectory("pin-cache").toFile();
+        Box box = search();
+        open(dir, box, "aaaaaaaaaaaa");
+        box.put("/wizard-search/", "\"p2\"", "text/html", "<h1>Search 2</h1>");
+        box.delayMs = 1500;
+        PinCache c = new PinCache(dir, box, BOX);
+        c.release("aaaaaaaaaaaa");
+        long t0 = System.nanoTime();
+        PinCache.Reply page = c.answer(BOX + "/wizard-search/", "GET", false, accept(HTML));
+        long ms = (System.nanoTime() - t0) / 1_000_000;
+        assertEquals("<h1>Search 1</h1>", new String(page.body, StandardCharsets.UTF_8));
+        assertTrue("the kept page came in " + ms + " ms", ms < PinInstantPolicy.PAGE_WAIT_MS + 200);
+        assertEquals(1, c.keptPages.get());
+        // This window's files match the page it shows: from the phone, no read.
+        box.log.clear();
+        assertEquals("search v1", new String(c.answer(BOX + "/wizard-search/app.js", "GET", false, accept("*/*")).body, StandardCharsets.UTF_8));
+        assertTrue(box.log.isEmpty());
+        // The box's late answer (a new page) is kept: the next open shows the update.
+        Thread.sleep(2000);
+        box.delayMs = 0;
+        assertEquals("<h1>Search 2</h1>", open(dir, box, "aaaaaaaaaaaa").get(0));
+    }
+
+    @Test
+    public void aQuickBoxStillDecidesThePage() throws Exception {
+        File dir = Files.createTempDirectory("pin-cache").toFile();
+        Box box = search();
+        open(dir, box, "aaaaaaaaaaaa");
+        box.put("/wizard-search/", "\"p2\"", "text/html", "<h1>Search 2</h1>");
+        box.delayMs = 20;
+        assertEquals("<h1>Search 2</h1>", open(dir, box, "aaaaaaaaaaaa").get(0));
+    }
+
+    @Test
+    public void aFileAskedForTwiceAtOnceIsReadFromTheBoxOnce() throws Exception {
+        // Field report 2: core/app-client.js reached the box three times in one open.
+        File dir = Files.createTempDirectory("pin-cache").toFile();
+        Box box = search();
+        PinCache c = new PinCache(dir, box, BOX);
+        c.release("aaaaaaaaaaaa");
+        c.answer(BOX + "/wizard-search/", "GET", false, accept(HTML));
+        box.log.clear();
+        box.delayMs = 300;
+        List<Thread> asks = new ArrayList<>();
+        List<String> got = java.util.Collections.synchronizedList(new ArrayList<>());
+        for (int i = 0; i < 3; i++) asks.add(new Thread(() -> {
+            PinCache.Reply r = c.answer(BOX + "/wizard-os-home/core/app-client.js", "GET", false, accept("*/*"));
+            got.add(r == null ? null : new String(r.body, StandardCharsets.UTF_8));
+        }));
+        for (Thread t : asks) t.start();
+        for (Thread t : asks) t.join();
+        assertEquals(List.of("client r1", "client r1", "client r1"), got);
+        assertEquals(List.of("/wizard-os-home/core/app-client.js"), box.log);
     }
 }

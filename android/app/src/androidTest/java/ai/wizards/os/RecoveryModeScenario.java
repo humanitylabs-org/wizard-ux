@@ -62,8 +62,21 @@ final class RecoveryModeScenario {
             assertTrue("background work is paused", StartGuard.paused());
             assertTrue("the shell loads underneath", box.waitFor("GET /wizard-os-home/", 20000));
             // 2. Send diagnostics
-            find(device, By.text("Send diagnostics"), 10000).click();
-            assertNotNull("diagnostics never reported sent", find(device, By.text("Diagnostics sent to your Wizard."), 40000));
+            // A busy emulator can lose the tap: tap again (the card says Sent or Couldn't reach after each answer).
+            UiObject2 sent = null;
+            for (int tap = 0; tap < 3 && sent == null; tap++) {
+                UiObject2 send = find(device, By.text("Send diagnostics"), 10000);
+                if (send != null) send.click();
+                sent = find(device, By.text("Diagnostics sent to your Wizard."), 15000);
+            }
+            if (sent == null) {
+                // Say what the box got and what the card says, so a failure here can be read from the CI log.
+                ByteArrayOutputStream tree = new ByteArrayOutputStream();
+                device.dumpWindowHierarchy(tree);
+                String t = tree.toString("UTF-8").replaceAll("\\s+", " ");
+                for (int i = 0; i < t.length(); i += 3000) Log.i(TAG, "window: " + t.substring(i, Math.min(t.length(), i + 3000)));
+                fail("diagnostics never reported sent; the box saw " + box.seen + "; delivered: " + ScrollCaptureDiagnostics.hasDeliveredForQa());
+            }
             String report = box.body("POST /wizard-os-home/api/diagnostics/scroll-capture");
             assertNotNull("the Wizard got the report", report);
             assertTrue("the report carries the saved freezes", report.contains("\"hangs\""));

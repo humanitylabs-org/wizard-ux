@@ -24,11 +24,14 @@ import java.util.concurrent.atomic.AtomicInteger;
  *
  *  - The app's page (an HTML read from inside the window) always goes to the box, as a conditional read when a copy is
  *    kept (usually a 304). What identifies that version of the page (validators, else bytes) becomes the app's
- *    generation for this window.
+ *    generation for this window. With a copy kept, the window waits at most {@link PinInstantPolicy#PAGE_WAIT_MS} for
+ *    that answer: a slower box gets the kept page at once, and its late answer is kept for the next open.
  *  - The app's other files (scripts, styles, pictures, fonts under /<app>/) are answered from the phone with no request
  *    when they were kept under that same generation. A changed page means a new generation, so they are fetched again.
  *  - The shell's own unstamped files (/wizard-os-home/core/app-client.js and the like, loaded by apps) are kept per shell
  *    release (the pinned page tells the window its release); a release-stamped file marked immutable is kept as is.
+ *  - Each file is read from the box at most once at a time: a second ask for it while the first read is out waits for
+ *    that read and is answered from it.
  *  - Never kept: APIs, the window's own page, no-store / private / cookie-setting / varying answers, ranges, big files.
  *    A read that fails, or a redirect, passes through (null), so offline and error screens stay as they are.
  */
@@ -65,14 +68,22 @@ final class PinCache {
     private final Net net;
     private final String origin;
     private final Map<String, String> pages = new ConcurrentHashMap<>();
+    private final Map<String, Object> locks = new ConcurrentHashMap<>();
     private volatile String release = "";
+    /** How long a page with a kept copy waits for the box before the copy is shown (tests set it). */
+    volatile long pageWaitMs = PinInstantPolicy.PAGE_WAIT_MS;
+    /** Late page answers, read on after the kept copy was shown; daemon threads, so they never hold the app open. */
+    private static final java.util.concurrent.ExecutorService BG = java.util.concurrent.Executors.newCachedThreadPool(r -> {
+        Thread t = new Thread(r, "pin-cache-page"); t.setDaemon(true); return t;
+    });
     private final AtomicInteger stores = new AtomicInteger();
-    final AtomicInteger hits = new AtomicInteger(), reads = new AtomicInteger();
+    final AtomicInteger hits = new AtomicInteger(), reads = new AtomicInteger(), keptPages = new AtomicInteger();
 
     PinCache(File dir, Net net, String origin) { this.dir = dir; this.net = net; this.origin = origin; }
 
     /** The pinned page's shell release (its wos-release); unstamped shell files are kept per release. */
     void release(String token) { release = token != null && token.matches("[0-9a-f]{12}") ? token : ""; }
+    String release() { return release; }
 
     /** null: pass through. Otherwise the answer to hand the WebView (from the phone or just read from the box). */
     Reply answer(String url, String method, boolean mainFrame, Map<String, String> requestHeaders) {
@@ -99,7 +110,20 @@ final class PinCache {
             if (!modified.isEmpty()) h.put("If-Modified-Since", modified);
         }
         Reply r;
-        try { r = net.get(url, h); reads.incrementAndGet(); } catch (IOException | RuntimeException failed) { pages.remove(app); return null; }
+        if (old == null) {
+            try { r = net.get(url, h); reads.incrementAndGet(); } catch (IOException | RuntimeException failed) { pages.remove(app); return null; }
+        } else {
+            java.util.concurrent.Future<Reply> asked = BG.submit(() -> net.get(url, h));
+            try { r = asked.get(pageWaitMs, java.util.concurrent.TimeUnit.MILLISECONDS); reads.incrementAndGet(); }
+            catch (java.util.concurrent.TimeoutException slow) {
+                // The box is slow to say whether the page changed: show the kept page now (this window keeps its
+                // generation, so the app's files match it) and keep the box's answer for the next open.
+                pages.put(app, old.gen); touch(url); hits.incrementAndGet(); keptPages.incrementAndGet();
+                BG.execute(() -> late(url, asked));
+                return old.reply;
+            }
+            catch (Exception failed) { pages.remove(app); return null; }
+        }
         if (r.status == 304 && old != null) { pages.put(app, old.gen); touch(url); hits.incrementAndGet(); return old.reply; }
         if (r.status == 200) {
             String gen = PinInstantPolicy.generation(r.headers, sha1(r.body));
@@ -111,7 +135,23 @@ final class PinCache {
         return PinInstantPolicy.replayable(r.status) ? r : null;
     }
 
+    /** The box's late answer about a page already shown from the phone: a changed page is kept for the next open. */
+    private void late(String url, java.util.concurrent.Future<Reply> asked) {
+        Reply r;
+        try { r = asked.get(30, java.util.concurrent.TimeUnit.SECONDS); reads.incrementAndGet(); } catch (Exception gone) { return; }
+        if (r.status == 304) { touch(url); return; }
+        if (r.status != 200) return;
+        if (PinInstantPolicy.storable(r.status, r.headers, r.body.length)) write(new Entry(url, PinInstantPolicy.generation(r.headers, sha1(r.body)), r));
+        else forget(url);
+    }
+
     private Reply file(String url, String gen, Map<String, String> requestHeaders) {
+        // One read of a file at a time: the same file asked for twice at once (a preload and its script, two frames)
+        // is read from the box once and the second ask is answered from the copy the first one kept.
+        synchronized (locks.computeIfAbsent(url, k -> new Object())) { return fileOnce(url, gen, requestHeaders); }
+    }
+
+    private Reply fileOnce(String url, String gen, Map<String, String> requestHeaders) {
         Entry e = read(url);
         if (e != null && (gen.equals(e.gen) || (url.contains("?v=") && PinInstantPolicy.immutable(e.reply.headers)))) {
             touch(url); hits.incrementAndGet(); return e.reply;
