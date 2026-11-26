@@ -359,13 +359,13 @@
     },
     "wizard/graceful-restart": {
       "where": "Settings › Appearance › Try new features › Calm Agent Service restarts",
-      "help": "While a restart waits for running chats you see a quiet note, not errors; messages sent meanwhile go after it; if overdue, Wait longer or Restart now."
+      "help": "A restart shows a quiet note, not errors; sends wait; if overdue, Wait longer or Restart now."
     },
     "wizard/unified-inbox": {
       "where": "Settings › Chats & app screens › Notifications › Notifications in Chats (on for everyone)"
     },
     "miguel/ai-apps": {
-      "help": "The AI apps view: chats in a sidebar on the left that folds to a slim rail, the chat in a centred column, your apps in a column on the right; an app opens as a panel beside the chat.",
+      "help": "The AI apps view: chats in a left sidebar that folds to a slim rail, the chat in a centred column, your apps in a right column; an app opens beside the chat.",
       "where": "desktop: Settings › Appearance › Shell view › AI apps (the standard desktop view; Desks is the other choice)",
       "when": "desktop only"
     },
@@ -536,6 +536,10 @@
     "wizard/try-feature-counts": {
       "help": "Sends features you tried and your thumbs, plus a random box id.",
       "where": "Settings › Appearance › Try new features › Share feature counts"
+    },
+    "wizard/feature-counts-ask": {
+      "help": "Counts are shared only after you say Share.",
+      "where": "Settings › Appearance › Try new features › Ask before sharing feature counts"
     },
     "wizard/phone-tester-builds": {
       "help": "Phones get the newest tester build.",
