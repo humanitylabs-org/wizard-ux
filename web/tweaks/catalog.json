@@ -42,7 +42,8 @@
     "wizard/chats-title-bar",
     "wizard/phone-nav",
     "wizard/ai-apps-running",
-    "wizard/channel-auto-emoji"
+    "wizard/channel-auto-emoji",
+    "wizard/phone-push"
   ],
   "defaults": [],
   "promotedDefaults": [],

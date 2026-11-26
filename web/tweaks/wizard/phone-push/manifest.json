@@ -1,0 +1,14 @@
+{
+  "id": "wizard/phone-push",
+  "name": "Instant phone notifications",
+  "version": "1.0.0",
+  "author": "wizard",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout"
+  ],
+  "description": "WizardOS Android app, with Phone notifications per app on: your Wizard tells the phone the moment an app sends something to Notifications, so it shows within seconds, also with Wizard closed and the phone locked. The phone keeps one connection to your own Wizard over Tailscale (nothing goes through Google) and shows a small silent \"Ready for app notifications\" notification, which you can hide in Android settings.",
+  "issues": [
+    "humanitylabs-org/wizard-ux#1618"
+  ]
+}

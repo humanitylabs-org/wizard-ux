@@ -258,6 +258,25 @@
             android:name=".mizel.MizelUploadJob"
             android:exported="false"
             android:permission="android.permission.BIND_JOB_SERVICE" />
+        <!-- Box-to-phone push for app notifications (wizard-ux issue 1618, switch wizard/phone-push, off by default):
+             one connection to the owner's own Wizard over Tailscale, no Google. -->
+        <service
+            android:name=".notify.AppPush$AppPushService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse"
+            android:stopWithTask="false">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Instant notifications from the owner's own self-hosted Wizard server (no Google push)" />
+        </service>
+        <receiver
+            android:name=".notify.AppPushBoot"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
         <receiver
             android:name=".everywhere.EverywhereBoot"
             android:exported="true">
