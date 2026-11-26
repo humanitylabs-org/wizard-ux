@@ -134,14 +134,14 @@ Schedules: jobs the agent runs on a timer (e.g. a daily summary), with their nex
 
 ### About & updates
 About & updates: update WizardOS (Automatic or Ask me), the release channel (For everyone or For testers), versions, connection status, and Gestures & help.
-- WizardOS (server): the installed version and whether it is up to date. Updates: Automatic installs them overnight, never during a chat; Ask me installs nothing until you tap Install. Channel: For everyone gets releases testers have used for about 3 days; For testers gets every release at once and shows Try new features in Appearance. When an update is ready a card at the top of Settings offers Install (or Install now).
+- WizardOS (server): installed version, up to date or not. Updates: Automatic installs them overnight, never during a chat; Ask me installs nothing until you tap Install. Channel: For everyone gets releases testers have used for 3 days; For testers gets every release at once and shows Try new features in Appearance. A ready update shows Install at the top of Settings.
   - Apps: every installed app with its version and the newest, Update now, Retry, Hold, and Automatic / Ask me for app updates (Automatic checks and updates apps every hour)
   - WizardOS (server) {version}: the installed server version
   - Automatic: updates install overnight, never during a chat
   - Ask me: nothing installs until you tap Install
   - For testers: every new release as soon as it's out; shows Try new features
   - For everyone: releases testers have used for about 3 days
-- Wizard: whether this device is connected to your Wizard (Connected, Connecting…, Sign-in needed) and its address; interface and server update separately. Technical details shows the interface revision. Gestures & help opens How Wizard works on the phone (orb, desks, Back, Practice again) and the keys guide on the desktop. On Android also Recording, Reply notifications and the app's version (tap it to update).
+- Wizard: whether this device is connected (Connected, Connecting…, Sign-in needed) and its address; interface and server update separately. Technical details shows the interface revision. Gestures & help opens How Wizard works on the phone (orb, desks, Back, Practice again) and the keys guide on the desktop. On Android also Recording, Reply notifications and the app's version (tap it to update).
   - Connected: this device's connection to your Wizard
   - Recording: Android: recording keeps going with the screen off
   - Reply notifications: Android: a notification when the agent answers a chat you sent from the phone
@@ -168,6 +168,7 @@ Settings › Appearance › Try new features lists unfinished features anyone ca
 - **Agents run code without asking**: Container agents run code without an approval nobody sees (Agents: Just run, Ask me, Refuse); prompts wait an hour.
 - **App switches in chat**: A reply's switch card also lists an app's own feature switches, flipped right in the chat.
 - **Archive on top**: Archive is the first section of the Chats list in both By day and By status, so switching layouts never moves it.
+- **Backup health in Resources**: Resources shows your backup's health.
 - **Bottom app bar on desktop**: Apps bar at the bottom on any width.
 - **Calm Agent Service restarts**: While the Agent Service waits for running chats to restart, you see a quiet note, not errors; a message sent meanwhile sends after the restart; if overdue, choose Wait longer or Restart now.
 - **Calm offline card**: The can't-reach-your-Wizard card shows one dotted path (Internet · Tailscale · Wizard), one short next step and a small Check again with the automatic re-check time.

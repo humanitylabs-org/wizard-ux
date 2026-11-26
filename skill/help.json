@@ -248,7 +248,7 @@
       }
     },
     "updates": {
-      "help": "WizardOS (server): the installed version and whether it is up to date. Updates: Automatic installs them overnight, never during a chat; Ask me installs nothing until you tap Install. Channel: For everyone gets releases testers have used for about 3 days; For testers gets every release at once and shows Try new features in Appearance. When an update is ready a card at the top of Settings offers Install (or Install now).",
+      "help": "WizardOS (server): installed version, up to date or not. Updates: Automatic installs them overnight, never during a chat; Ask me installs nothing until you tap Install. Channel: For everyone gets releases testers have used for 3 days; For testers gets every release at once and shows Try new features in Appearance. A ready update shows Install at the top of Settings.",
       "controls": {
         "WizardOS (server) {version}": "the installed server version",
         "Updates": null,
@@ -261,7 +261,7 @@
       }
     },
     "wizard": {
-      "help": "Wizard: whether this device is connected to your Wizard (Connected, Connecting…, Sign-in needed) and its address; interface and server update separately. Technical details shows the interface revision. Gestures & help opens How Wizard works on the phone (orb, desks, Back, Practice again) and the keys guide on the desktop. On Android also Recording, Reply notifications and the app's version (tap it to update).",
+      "help": "Wizard: whether this device is connected (Connected, Connecting…, Sign-in needed) and its address; interface and server update separately. Technical details shows the interface revision. Gestures & help opens How Wizard works on the phone (orb, desks, Back, Practice again) and the keys guide on the desktop. On Android also Recording, Reply notifications and the app's version (tap it to update).",
       "controls": {
         "Wizard": null,
         "Connected": "this device's connection to your Wizard",
@@ -536,6 +536,10 @@
     "wizard/install-agent-builds": {
       "help": "Apps I build install with one tap.",
       "where": "Settings › Appearance › Try new features › Install apps your agent builds"
+    },
+    "wizard/backup-health": {
+      "help": "Resources shows your backup's health.",
+      "where": "Settings › Appearance › Try new features › Backup health in Resources"
     }
   },
   "screenOrder": [
