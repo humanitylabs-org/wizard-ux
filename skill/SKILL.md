@@ -37,7 +37,7 @@ Every screen, Settings page and feature switch of the Wizard interface (the phon
 - **Settings › Resources**: A link straight to the Resources (AI usage) page.
 - **Gestures & help**: Phone: How Wizard works: tap the orb to talk, hold it for a command, swipe it up for apps, down to hide the bars, sideways between desks; Back is always one step back; Practice again. Desktop: the keys guide (⌥/, or hold ⌥ to see the keys on screen). Desktop: Settings › About & updates › Gestures & help, or ⌥/. Phone: Settings › About & updates › Gestures & help, or say 'help'.
 - **Practice tour**: The first-run practice of the orb gestures; start it again from Gestures & help › Practice again.
-- **AI apps view (desktop)**: The standard desktop. Left: the chats sidebar (switch Wizard at the top, search ⌥K, ◫ folds it to a rail ⌥L, the cog for Settings and + New chat at the bottom). Middle: the open chat with the message box, the model and the orb. Right: the Apps column (pinned apps, open apps, + Add an app, Tidy). ⌥1–⌥0 pick an app, ⌥W closes, ⌥F makes the app panel wider, ⌥R folds the column, ⌥H hides both sides. Its sidebar's sort options: Settings › Chats & app screens.
+- **AI apps view (desktop)**: The standard desktop. Left: the chats sidebar (switch Wizard at the top, search ⌥K, ◫ folds it to a rail ⌥L, the cog for Settings and + New chat at the bottom). Middle: the open chat, message box, model and orb. Right: the Apps column (pinned apps, open apps, + Add an app, Tidy). ⌥1–⌥0 pick an app, ⌥W closes, ⌥F makes the app panel wider, ⌥R folds the column, ⌥H hides both sides. Its sidebar's sort options: Settings › Chats & app screens.
 - **Apps view**: A view where every open app has its own full-screen window, with a + sheet listing Open, Installed and Get more apps.
 - **Orb view**: A view where your apps float as satellites around the orb (phone Home and a desktop scene).
 - **Desktop top bar (Desks view)**: Left: Home and your desks (+ New desktop). Right: search (⌥Space, also ⌘K), Talk about this (⌥S), Tell the computer (⌥C, local commands), Dictate (⌥D), New voice chat (⌥V), the Inbox count (⌥I, opens Chats), Settings (⌥,), Keys guide (⌥/). The AI apps view has no top bar.
@@ -69,7 +69,7 @@ Storage & backups: disk space and backups, filled by the apps that handle them. 
 
 ### Appearance
 Appearance: the skin (look), colors, mode, background, desktop view, window opacity, and Try new features.
-- Skin: pick a skin (a whole look) and one of its colors; + New skin makes your own skin (name, base skin, color, tweaks), which you can then ask the agent to change ('change my <name> skin so…'). Your own skins show here with Edit with your Wizard and Remove skin. Some skins also offer Mode (Dark or Light) and Background (plain, pictures, or your own image).
+- Skin: pick a skin (a whole look) and one of its colors; + New skin makes your own skin (name, base skin, color, tweaks), which the agent can change ('change my <name> skin so…'). Your own skins show here with Edit with your Wizard and Remove skin. Some skins also offer Mode (Dark or Light) and Background (plain, pictures, or your own image).
   - Colors: the colors of the chosen skin
   - Mode: Dark or Light, for skins that have both
   - Background: Plain, pictures, or (some skins) your own image with Choose image
@@ -134,7 +134,7 @@ Schedules: jobs the agent runs on a timer (e.g. a daily summary), with their nex
 
 ### About & updates
 About & updates: update WizardOS (Automatic or Ask me), the release channel (For everyone or For testers), versions, connection status, and Gestures & help.
-- WizardOS (server): installed version, up to date or not. Updates: Automatic installs them overnight, never during a chat; Ask me installs nothing until you tap Install. Channel: For everyone gets releases testers have used for 3 days; For testers gets every release at once and shows Try new features in Appearance. A ready update shows Install at the top of Settings.
+- WizardOS (server): installed version, up to date or not. Updates: Automatic installs at night, not mid-chat; Ask me waits for Install. Channel: For everyone gets releases testers used for 3 days; For testers gets every release at once and shows Try new features in Appearance. A ready update shows Install at the top of Settings.
   - Apps: every installed app with its version and the newest, Update now, Retry, Hold, and Automatic / Ask me for app updates (Automatic checks and updates apps every hour)
   - WizardOS (server) {version}: the installed server version
   - Automatic: updates install overnight, never during a chat
@@ -170,7 +170,7 @@ Settings › Appearance › Try new features lists unfinished features anyone ca
 - **Archive on top**: Archive is the first section of the Chats list in both By day and By status, so switching layouts never moves it.
 - **Backup health in Resources**: Resources shows your backup's health.
 - **Bottom app bar on desktop**: Apps bar at the bottom on any width.
-- **Calm Agent Service restarts**: While a restart waits for running chats you see a quiet note, not errors; messages sent meanwhile go after it; if overdue, Wait longer or Restart now.
+- **Calm Agent Service restarts**: While a restart waits for running chats you see a quiet note; messages sent meanwhile go after it; if overdue, Wait longer or Restart now.
 - **Calm offline card**: The can't-reach-your-Wizard card shows one dotted path (Internet · Tailscale · Wizard), one short next step and a small Check again with the automatic re-check time.
 - **Channels: a fitting emoji for new channels**: New channels get a fitting emoji.
 - **Channels: an AI-picked emoji for new channels**: New channels with no emoji get one picked by your Wizard's fast model.
@@ -198,6 +198,7 @@ Settings › Appearance › Try new features lists unfinished features anyone ca
 - **Private mode switch-over**: Settings › Privacy: Private mode, Privacy check.
 - **Private routing**: Orb opens the named agent's thread (else private), with a chip to move it.
 - **Repair the agent's Wizard connection**: When the agent can't reach its Wizard app tools (unauthorized), `wizard link` puts the box's token back in the agent's settings; `wizard doctor` shows if they match.
+- **Result reader**: A private model files each finished background task.
 - **Running view in the AI apps sidebar**: AI apps: Running view in the sidebar.
 - **Send and go**: On desktop, sending opens a fresh chat.
 - **Sent: the same rows as Inbox**: Sent uses Inbox's rows.

@@ -1,0 +1,14 @@
+{
+  "id": "wizard/result-reader",
+  "name": "Result reader",
+  "version": "1.0.0",
+  "author": "wizard",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout"
+  ],
+  "issues": [
+    "humanitylabs-org/wizard-agent-service#630"
+  ],
+  "description": "When a background task finishes, a fixed private model reads how it actually ended and decides how it reaches you: waiting on you (with a short plain ask and any choices the reply offered), a result, or a quiet note for the next sweep, and whether it is urgent enough for the alert rules. The agent's own status line becomes a hint, so a task that forgot it, or said done when it failed, still lands right. Only your private router model is ever asked; without one nothing changes. Read by the Agent Service (wizard-agent-service issue 630); nothing in the shell changes until it is on."
+}
