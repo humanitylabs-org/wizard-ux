@@ -87,6 +87,8 @@ final class PinInstantScenario {
                 assertTrue("open " + (i + 1) + ": the last screen was on screen", shown >= 0);
                 toShot.add(shown);
                 if (i == 0) {
+                    // Screenshots trail the screen on CI emulators: take it well inside the 3 s the page is held back.
+                    SystemClock.sleep(Math.max(0, 1500 - (SystemClock.uptimeMillis() - t0)));
                     shot(device, c, "on-held-back");
                     Bitmap b = screen(device, c);
                     assertNotNull(b);
@@ -134,6 +136,7 @@ final class PinInstantScenario {
             InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> firstFrame[0] = ((MainActivity) a).pinFirstDrawAt());
             assertNotNull("switch off: Connecting as today", find(device, By.text("Connecting to your Wizard…"), 4000));
             long connecting = SystemClock.uptimeMillis() - t0;
+            SystemClock.sleep(Math.max(0, 2500 - connecting));
             shot(device, c, "off-held-back");
             assertNotNull("switch off: the live app", find(device, By.textStartsWith("Pinned app v2"), 20000));
             Log.i(TAG, "switch off: first frame (empty) after " + (firstFrame[0] > 0 ? firstFrame[0] - t0 : -1) + " ms, Connecting seen by " + connecting
