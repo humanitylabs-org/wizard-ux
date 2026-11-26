@@ -163,6 +163,7 @@ Settings › Appearance › Try new features lists unfinished features anyone ca
 
 - **Action cards in chat**: An app's proposed action (a draft, an event) shows in chat with Approve, Edit, Open in app.
 - **Add an app: search the App Store too**: Add an app's search also finds App Store apps.
+- **Agent access under the browser boundary**: Browser boundary on: Connected accounts' Agent access shows and sets agents per account app.
 - **Agent knows the Wizard interface**: Your agent gets this manual: every screen, Settings page and feature switch, so it can say where things are.
 - **Agents run code without asking**: Container agents run code without an approval nobody sees (Agents: Just run, Ask me, Refuse); prompts wait an hour.
 - **App switches in chat**: A reply's switch card also lists an app's own feature switches, flipped right in the chat.

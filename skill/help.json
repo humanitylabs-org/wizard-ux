@@ -368,6 +368,10 @@
       "where": "desktop: Settings › Appearance › Shell view › AI apps (the standard desktop view; Desks is the other choice)",
       "when": "desktop only"
     },
+    "wizard/boundary-agent-access": {
+      "help": "Browser boundary on: Connected accounts' Agent access shows and sets agents per account app.",
+      "where": "Settings › Appearance › Try new features › Agent access under the browser boundary"
+    },
     "wizard/clear-chat-notifications": {
       "help": "Android app: reading a LINE, WhatsApp, Telegram or other bridged chat in Messenger clears that app's own notification (needs Android's Notification access).",
       "where": "Settings › Appearance › Try new features › Clear chat notifications"

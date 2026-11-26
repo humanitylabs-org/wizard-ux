@@ -52,7 +52,8 @@
     "wizard/share-people-box",
     "wizard/agent-approvals",
     "wizard/attach-menu-icons",
-    "wizard/app-location"
+    "wizard/app-location",
+    "wizard/boundary-agent-access"
   ],
   "defaults": [],
   "promotedDefaults": [],
