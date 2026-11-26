@@ -412,6 +412,15 @@
       "help": "Narrow desktop window: tapping the icon of the app in front takes it back to its first view.",
       "where": "Settings › Appearance › Try new features › Tap the app in front for its first view"
     },
+    "wizard/share-people-box": {
+      "help": "Share's People row shows Messenger's recent chats in every window, also one that never opened Messenger.",
+      "where": "Settings › Appearance › Try new features › Share to people in any window"
+    },
+    "wizard/mac-app-updates": {
+      "help": "Wizard for Mac: About & updates gets a Wizard for Mac group: its version, up to date or not, Check for updates, Update and restart, Download.",
+      "where": "Settings › Appearance › Try new features › Wizard for Mac in About & updates",
+      "when": "Wizard for Mac only"
+    },
     "wizard/download-swipe": {
       "help": "Phone: swipe the Downloaded banner away and swipe the Downloads sheet down to close it.",
       "where": "Settings › Appearance › Try new features › Swipe away downloads",
@@ -477,6 +486,10 @@
     "wizard/try-feature-counts": {
       "help": "Sends features you tried and your thumbs, plus a random box id.",
       "where": "Settings › Appearance › Try new features › Share feature counts"
+    },
+    "wizard/phone-tester-builds": {
+      "help": "Phones get the newest tester build.",
+      "where": "Settings › Appearance › Try new features › Phone tester builds"
     }
   },
   "screenOrder": [
