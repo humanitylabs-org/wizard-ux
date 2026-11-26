@@ -176,7 +176,7 @@ window.WizCore.chatsParts.attach = function ({ ch, CHEV_SVG, clip, COG_SVG, draf
   function mediaBtn(c, m) {
     const k = c.media.push(m) - 1;
     // Inline bytes are already local. Lazy decoding can deadlock an image-only
-    // shrink-to-fit bubble at zero width, so only network images remain lazy; the owner's own photos (m.eager, set by
+    // shrink-to-fit bubble at zero width, so only network images remain lazy; the owner's own images (m.eager, set by
     // userMedia) load at once too, in a steer bubble beside a voice note as well (wizard-ux#1840).
     if (m.kind === 'image') return `<button type="button" class="mimg" data-mi="${k}" aria-label="Open ${esc(m.name || 'photo')}"><img src="${esc(m.thumb || m.url)}"${m.local ? ` data-local="${esc(m.local)}"` : ''} alt="${esc(m.name || 'Photo')}" loading="${m.eager || /^data:image\//i.test(m.thumb || m.url || '') ? 'eager' : 'lazy'}" decoding="async"></button>`;
     if (m.kind === 'audio') return `<div class="mcard aud"><span class="mic">♪</span><span class="mn"><b>${esc(m.name)}</b><audio controls preload="none" src="${esc(m.url)}"></audio>${m.transcript ? `<small>${esc(m.transcript)}</small>` : ''}</span></div>`;
