@@ -16,7 +16,7 @@
   function toast(icon, text) { const el = document.getElementById('toast'); el.textContent = text; el.classList.add('show'); setTimeout(() => el.classList.remove('show'), 1400); }
   // Reuse the shared link/media utilities, but never their desk-placement action.
   // Wisdom's selection Search uses window.open; without this guard it is a dead tap in Android.
-  const links = window.WizLinks?.mount({ parent:document.body, mode:'sheet', allowURL:u => {
+  const links = window.WizLinks?.mount({ parent:document.body, mode:'sheet', popups:true, allowURL:u => {
     if (!u || (u.origin === location.origin && (policy.isShell(u.href) || /%(?:2f|5c|2e|25)/i.test(u.pathname)))) {
       toast('!', 'Use your device Home to switch apps'); return false;
     }

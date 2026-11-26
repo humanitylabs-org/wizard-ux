@@ -159,15 +159,16 @@ Phone: things only the Android app can do: Wizard Everywhere (floating orb), sid
 
 ## Feature switches (Settings › Appearance › Try new features)
 
-Settings › Appearance › Try new features lists unfinished features anyone can switch on to try, A to Z, each 'by <author>'. The group only shows when this Wizard is on the For testers channel; on For everyone it is hidden and these switches stay off. The same switches are also in the WizardOS Tracker app (Try it). A choice follows the owner on every device.
+Settings › Appearance › Try new features lists unfinished features anyone can switch on to try, A to Z, each 'by <author>'. The group only shows when this Wizard is on the For testers channel; on For everyone these switches stay hidden and off. The same switches are also in the WizardOS Tracker app (Try it). A choice follows the owner on every device.
 
 - **Action cards in chat**: An app's proposed action (a draft, an event) shows in chat with Approve, Edit, Open in app.
 - **Add an app: search the App Store too**: Add an app's search also finds App Store apps.
-- **Agent access under the browser boundary**: Connected accounts' Agent access works under the browser boundary.
+- **Agent access under the browser boundary**: Connected accounts' Agent access, boundary on.
 - **Agent knows the Wizard interface**: Your agent gets this manual: every screen, Settings page and feature switch, so it can say where things are.
 - **Agents run code without asking**: Container agents run code without an approval nobody sees (Agents: Just run, Ask me, Refuse); prompts wait an hour.
 - **App switches in chat**: A reply's switch card also lists an app's own feature switches, flipped right in the chat.
 - **Archive on top**: Archive is the first section of the Chats list in both By day and By status, so switching layouts never moves it.
+- **Bottom app bar on desktop**: Apps bar at the bottom on any width.
 - **Calm Agent Service restarts**: While the Agent Service waits for running chats to restart, you see a quiet note, not errors; a message sent meanwhile sends after the restart; if overdue, choose Wait longer or Restart now.
 - **Calm offline card**: The can't-reach-your-Wizard card shows one dotted path (Internet · Tailscale · Wizard), one short next step and a small Check again with the automatic re-check time.
 - **Channels: a fitting emoji for new channels**: New channels get a fitting emoji.
@@ -179,10 +180,11 @@ Settings › Appearance › Try new features lists unfinished features anyone ca
 - **Icons on the attach menu**: Android app: the menu from + in a chat (and the orb's Attach) shows a round icon before Photo or video, Camera and File, on bigger rows that are easier to tap. (Android app only).
 - **Inbox until archived**: Chats stay in Inbox until archived.
 - **Inbox: only what needs you**: Inbox: only what needs you.
-- **Instant phone notifications**: Android app, with Phone notifications per app on: your Wizard tells the phone the moment an app sends a notification, so it shows within seconds even with the phone locked (one connection over Tailscale, no Google).
+- **Instant phone notifications**: Android app, with Phone notifications per app on: app notifications reach the phone within seconds, even locked (one Tailscale connection, no Google).
 - **Location for Maps**: Only apps that ask for your location in their wizard.md (today just Maps) may use it, and only after you say yes in your browser's or phone's own location prompt. Every other app stays blocked with no prompt.
 - **Machines on Home**: Home shows a slim strip (Wizard, AI fuel, chats, backup, network); Settings › System holds your network, AI, security and storage.
 - **Now playing**: While an app plays audio or video, small moving bars sit on that app's icon in the AI apps view (the desktop apps column; the phone Home dock and grid); click or tap them to pause without opening the app. Option+P pauses or plays what played last on the desktop. Nothing shows while nothing plays.
+- **One UI icon count**: Android: Messenger icon count shows the exact number in a One UI-style corner badge.
 - **One-tap Snooze · bottom of Ready**: Snooze is one tap and the lowest priority: the thread waits at the bottom of Ready, below approvals, until you restore or reply.
 - **Phone bar: bigger orb, one badge**: Phone bar: bigger orb, one badge. (phone only).
 - **Phone media player for Music and Podcasts**: Phone app (Android and iPhone): Music and Podcasts play through the phone's own media player (lock screen, Control Center, headset buttons), and keep playing locked.
@@ -221,11 +223,10 @@ No longer switches (owners and old chats may still name them):
 
 ## How do I…
 
-- **Turn on a new feature?** Settings › About & updates › Channel › For testers (if not already), then Settings › Appearance › Try new features › the feature's switch.
+- **Turn on a new feature (or get them first)?** Settings › About & updates › Channel › For testers (if not already), then Settings › Appearance › Try new features › the feature's switch.
 - **Turn on Channels?** Nothing to turn on any more: open Chats and tap the Channels tab.
 - **Make Wizard update automatically?** Settings › About & updates › Updates › Automatic (installs overnight, never during a chat). For apps: Settings › About & updates › Apps › Automatic (checks and updates apps every hour).
 - **Update now?** When an update is ready, the card at the top of Settings shows Install (or Install now); tap it. 'Interface updated · Reload' just reloads the screen.
-- **Get the newest features first?** Settings › About & updates › Channel › For testers.
 - **Use Wizard on my phone?** Settings › Phones & devices: scan the QR code with the Wizard phone app (needs Tailscale; the page walks you through it).
 - **Change the look?** Settings › Appearance › Skin and Colors; + New skin to make your own.
 - **Switch the desktop layout?** Settings › Appearance › Shell view: AI apps (standard) or Desks.

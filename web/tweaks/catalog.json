@@ -36,6 +36,7 @@
     "wizard/plain-chat-titles",
     "wizard/chat-tags",
     "wizard/swap-sides",
+    "wizard/desktop-bottom-bar",
     "wizard/try-feature-counts",
     "wizard/inbox-until-archived",
     "wizard/inbox-rows",
@@ -53,7 +54,8 @@
     "wizard/agent-approvals",
     "wizard/attach-menu-icons",
     "wizard/app-location",
-    "wizard/boundary-agent-access"
+    "wizard/boundary-agent-access",
+    "wizard/phone-badge-look"
   ],
   "defaults": [],
   "promotedDefaults": [],

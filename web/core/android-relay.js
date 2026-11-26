@@ -227,6 +227,24 @@
   window.addEventListener('wos:experience', () => { chatSettled = true; locationSync(); });
   setTimeout(() => { chatSettled = true; locationSync(); }, 5000);
   locationSync();
+  /* One UI-style icon count (wizard-ux issue 1669, switch wizard/phone-badge-look, off by default). The Messenger
+   * home-screen icon's count is drawn by the Android app (badge/BadgeLook): exact digits up to 999 in a ringless
+   * orange-red badge at the tile's corner. The main page copies the switch there; off once settled. */
+  const BADGE_SWITCH = 'wizard/phone-badge-look';
+  let badgeWas = null;
+  function badgeSync() {
+    const n = window.WizardOSNative; if (!n || typeof n.badgeLookSwitch !== 'function' || window.WizHomeScreenPolicy?.mode) return;
+    let on = false; try { on = (document.documentElement.dataset.tweaks || '').split(' ').includes(BADGE_SWITCH); } catch (_) {}
+    if (!on && !chatSettled) return;
+    if (on === badgeWas) return;
+    badgeWas = on; try { n.badgeLookSwitch(on); } catch (_) {}
+  }
+  if (typeof MutationObserver === 'function' && document.documentElement) {
+    new MutationObserver(() => badgeSync()).observe(document.documentElement, { attributes: true, attributeFilter: ['data-tweaks'] });
+  }
+  window.addEventListener('wos:experience', () => { chatSettled = true; badgeSync(); });
+  setTimeout(() => { chatSettled = true; badgeSync(); }, 5000);
+  badgeSync();
   // The installed Wizard app a page of this Wizard belongs to (the longest app address it lies under), or the app a
   // shell link names (…/wizard-os-home/?open=<id>). Wizard's own pages and anything else: null.
   function appOfLink(u) {

@@ -1786,6 +1786,13 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
             // Off: forget any grant this WebView still holds; the shell also takes `geolocation` off open frames.
             if (!on) runOnUiThread(() -> GeolocationPermissions.getInstance().clearAll());
         }
+        /* ---- One UI icon count (wizard-ux issue 1669, switch wizard/phone-badge-look, off by default): the main page
+         * copies the switch here (badge/BadgeLook); a change redraws the Messenger icon count at once. ---- */
+        @JavascriptInterface
+        public void badgeLookSwitch(boolean on) {
+            if (MainActivity.this instanceof AppSessionActivity) return;
+            ai.wizards.os.badge.BadgeLook.setOn(MainActivity.this, on);
+        }
         /* ---- App windows (wizard-os issue 650, on for everyone): any page asks to open an app's own window for a link
          * (false = keep the link where it is). ---- */
         @JavascriptInterface

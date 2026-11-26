@@ -45,4 +45,70 @@ public class BadgeGeometryTest {
             }
         }
     }
+
+    /* ---- One UI look (wizard-ux issue 1669). Adaptive bitmaps are built from 48..256 px squares (108 / 72 of them). */
+    private static final int[] SQUARES = {48, 96, 192, 256};
+    private static final String[] LABELS = {"1", "85", "999", "999+"};
+    private static int full(int square) { return Math.round(square * 108f / 72f); }
+
+    /** Every point of the pill (both end circles, sampled) passes {@code inside}. */
+    private interface Inside { boolean at(double x, double y); }
+    private static void assertPillInside(String what, BadgeGeometry g, Inside inside) {
+        float r = g.radius(), cy = g.top + r;
+        for (float cx : new float[]{g.left + r, g.right - r}) for (int i = 0; i < 360; i++) {
+            double t = Math.toRadians(i), x = cx + r * Math.cos(t), y = cy + r * Math.sin(t);
+            assertTrue(what + " point " + x + "," + y + " inside the mask", inside.at(x, y));
+        }
+    }
+
+    @Test public void samsungBadgeIsInsideTheSquircleAtTheTilesTopRightCorner() {
+        for (int sq : SQUARES) for (String label : LABELS) {
+            int f = full(sq);
+            float tile = BadgeGeometry.visibleTile(f), c = f / 2f;
+            BadgeGeometry g = BadgeGeometry.oneUiAdaptive(f, label.length(), 0, true);
+            String what = sq + "px " + label;
+            assertPillInside(what, g, (x, y) -> BadgeGeometry.insideSquircle(x, y, c, tile / 2f));
+            assertEquals(what + " no ring", 0f, g.ring, 0f);
+            assertEquals(what + " a quarter of the visible tile high", tile / 4f, g.height(), 0.01f);
+            // At the corner: right edge in the tile's right tenth... and the top within the tile's top tenth-and-a-bit,
+            // i.e. well past the glyph (the old bubble's top-right edge was at 69 % / 31 % of the full art).
+            float tileLeft = c - tile / 2f;
+            assertTrue(what + " right edge near the tile's right edge: " + (g.right - tileLeft) / tile, (g.right - tileLeft) / tile > 0.88f);
+            assertTrue(what + " top edge near the tile's top edge: " + (g.top - tileLeft) / tile, (g.top - tileLeft) / tile < 0.12f);
+            assertTrue(what + " centre in the top-right quarter", (g.left + g.right) / 2f > c && (g.top + g.bottom) / 2f < c);
+        }
+    }
+
+    @Test public void otherLaunchersKeepTheBadgeInTheSafeZoneSoACircleMaskNeverClipsIt() {
+        for (int sq : SQUARES) for (String label : LABELS) {
+            int f = full(sq);
+            float c = f / 2f, safe = f * 33f / 108f; // 66 dp safe-zone circle on 108 dp art
+            BadgeGeometry g = BadgeGeometry.oneUiAdaptive(f, label.length(), 0, false);
+            String what = sq + "px " + label;
+            assertPillInside(what, g, (x, y) -> Math.hypot(x - c, y - c) <= safe + 0.01);
+            assertEquals(what + " same size as on Samsung", BadgeGeometry.visibleTile(f) / 4f, g.height(), 0.01f);
+            float[] r = BadgeGeometry.adaptiveRegion(f);
+            assertEquals(what + " anchored at the safe square's right edge", r[0] + r[1], g.right, Math.max(0.5f, r[1] * 0.01f) + 0.01f);
+            assertTrue(what + " centre in the top-right quarter", (g.left + g.right) / 2f > c && (g.top + g.bottom) / 2f < c);
+        }
+    }
+
+    @Test public void oneUiIsACircleForOneDigitAndAPillThatGrowsLeftwardsForMore() {
+        for (boolean samsung : new boolean[]{true, false}) {
+            BadgeGeometry one = BadgeGeometry.oneUiAdaptive(288, 1, 0, samsung), two = BadgeGeometry.oneUiAdaptive(288, 2, 0, samsung),
+                    three = BadgeGeometry.oneUiAdaptive(288, 3, 0, samsung);
+            assertEquals(one.height(), one.width(), 0.01f);
+            assertTrue(two.width() > one.width() && three.width() > two.width());
+            assertEquals(one.height(), three.height(), 0.01f);
+            assertTrue("smaller than the classic 40 % bubble", one.height() < BadgeGeometry.compute(Math.round(BadgeGeometry.adaptiveRegion(288)[1]), 1, 0).height());
+        }
+    }
+
+    @Test public void oneUiWidgetBadgeStaysInsideARoundedTile() {
+        for (int sq : SQUARES) for (String label : LABELS) {
+            BadgeGeometry g = BadgeGeometry.oneUi(0f, sq, label.length(), 0, true);
+            assertPillInside(sq + " " + label, g, (x, y) -> BadgeGeometry.insideSquircle(x, y, sq / 2f, sq / 2f));
+            assertTrue(g.left >= 0 && g.top >= 0 && g.right <= sq && g.bottom <= sq);
+        }
+    }
 }
