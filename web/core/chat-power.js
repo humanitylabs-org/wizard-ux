@@ -859,6 +859,7 @@ window.WosChatPower = function chatPower(A) {
     if (sheet && sheet.pane === id) {
       if (t.closest('[data-ficlose]') || (t.closest('.ch-psheet') && !t.closest('.ch-sheet-b'))) { closeSheet(); return true; }
       if (sheet.type === 'model') {
+        if (t.closest('[data-mprivsetup]')) { closeSheet(); window.WosPrivacy?.open?.('setup'); return true; }
         if (t.closest('[data-mall]')) { sheet.all = true; paint(id, A.elOf(id)); if (sheet.pop) { const l = A.elOf(id)?.querySelector('.ch-mpop .msheet-list'); if (l) l.scrollTop = 0; } return true; }
         const p = t.closest('[data-mpick]'); if (p) { const o = sheet.list?.[+p.dataset.mpick]; if (o) pickModel(o); return true; }
       }

@@ -6,7 +6,7 @@
     "",
     "Every screen, Settings page and feature switch of the Wizard interface (the phone app and the desktop in a browser or the Mac app), with where it is and what it does. Written from the interface code of this Wizard's release.",
     "",
-    "- Give the exact path the way it reads on screen, e.g. Settings › About & updates › Updates › Automatic, and how to open Settings: on the desktop, the cog at the bottom left under the chats list (older Desks view: the top-bar gear, ⌥,); on the phone, the gear at the top right of Home.",
+    "- Give the exact path the way it reads on screen, e.g. Settings › About & updates › Updates › Automatic, and how to open Settings (Open Settings, below).",
     "- Say the condition when there is one (For testers channel only, Android app only, desktop only, only when the box has it).",
     "- You can't flip these switches or settings for the owner: they are owner-only, on the owner's screen. Tell them what to tap.",
     "- Never invent a setting, page or button. If what they ask for isn't in this manual, say it isn't in the Wizard interface as far as you know, and ask for a screenshot of where they are looking. Don't search your own files for interface text: the interface code isn't in your container.",
@@ -359,7 +359,7 @@
     },
     "wizard/graceful-restart": {
       "where": "Settings › Appearance › Try new features › Calm Agent Service restarts",
-      "help": "While the Agent Service waits for running chats to restart, you see a quiet note, not errors; a message sent meanwhile sends after the restart; if overdue, choose Wait longer or Restart now."
+      "help": "While a restart waits for running chats you see a quiet note, not errors; messages sent meanwhile go after it; if overdue, Wait longer or Restart now."
     },
     "wizard/unified-inbox": {
       "where": "Settings › Chats & app screens › Notifications › Notifications in Chats (on for everyone)"
@@ -394,8 +394,12 @@
       "where": "Settings › Appearance › Try new features › Install sheet recommends private AI"
     },
     "wizard/private-mode": {
-      "help": "Turn private mode on or off on this Wizard: chosen apps move to a private Tinfoil agent, plus the Privacy check.",
+      "help": "Settings › Privacy: Private mode, Privacy check.",
       "where": "Settings › Appearance › Try new features › Private mode switch-over"
+    },
+    "wizard/private-routing": {
+      "help": "Orb sends a request to the agent you name, else private.",
+      "where": "Settings › Appearance › Try new features › Private routing"
     },
     "wizard/private-first-setup": {
       "help": "New installs start private: Welcome leads with Tinfoil; Claude and ChatGPT are optional extras.",
@@ -414,7 +418,7 @@
       "where": "Settings › Appearance › Try new features › Phone notifications per app"
     },
     "wizard/app-location": {
-      "help": "Only apps whose wizard.md asks for location (today Maps) may use it, after you say yes in the browser's or phone's own prompt.",
+      "help": "Only apps whose wizard.md asks for location (today Maps) may use it, after your browser's or phone's own yes; others stay blocked.",
       "where": "Settings › Appearance › Try new features › Location for Maps"
     },
     "wizard/phone-badge-look": {
@@ -690,7 +694,7 @@
   "extraScreens": [
     {
       "name": "Desktop top bar (Desks view)",
-      "help": "Left: Home and your desks (+ New desktop). Right: search (⌥Space, also ⌘K), Talk about this (⌥S; replies to the open chat or asks about the window), Tell the computer (⌥C, local commands like 'next desk'), Dictate (⌥D), New voice chat (⌥V), the Inbox count (⌥I, opens Chats), Settings (⌥,), Keys guide (⌥/). The AI apps view has no top bar."
+      "help": "Left: Home and your desks (+ New desktop). Right: search (⌥Space, also ⌘K), Talk about this (⌥S), Tell the computer (⌥C, local commands), Dictate (⌥D), New voice chat (⌥V), the Inbox count (⌥I, opens Chats), Settings (⌥,), Keys guide (⌥/). The AI apps view has no top bar."
     },
     {
       "name": "Desks (phone) / desktops",
@@ -730,7 +734,8 @@
     "See AI usage or server load?": "Home's resource bars, or Settings › Resources.",
     "Add another Wizard?": "Settings › Connections › Wizards › Add a Wizard.",
     "Install an app?": "Open the App Store (desktop: Apps column › + Add an app › Get more; phone: swipe the orb up › Get more), open the app, Get.",
-    "See keyboard shortcuts?": "Desktop: ⌥/ or hold ⌥."
+    "See keyboard shortcuts?": "Desktop: ⌥/ or hold ⌥.",
+    "Why would I want private AI?": "Claude and ChatGPT keep what you send on their servers; private AI runs in sealed hardware (Tinfoil) that nobody else, not even us, can see into. Settings › Privacy › Why it matters."
   },
   "retired": {
     "Channels in Chats": "on for everyone now, nothing to turn on: open Chats and use the Channels / Activity tabs at the top. Channels lists your Spaces one per line, plus General; open one to see its chats as posts with a reply line.",

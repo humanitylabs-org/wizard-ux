@@ -1,2 +1,35 @@
-/* Private mode switch-over (wizard-agent-service issue 626): a box-side switch read by the Agent Service.
- * Nothing in the shell's look changes. */
+/* Private mode (wizard-agent-service issue 626, wizard-ux issue 1801): Settings › Privacy and the switch-over sheet
+ * (core/privacy.js). The sheet is the app settings sheet (core/app-route.css .aroute/.ar-card) drawn with the skin's
+ * --wz-* tokens: an opaque panel, so text always reads on every skin. Only while the switch is on. */
+html[data-tweaks~="wizard/private-mode"] .pm-sheet { z-index: 9100; background: color-mix(in srgb, var(--wz-canvas) 62%, transparent); }
+html[data-tweaks~="wizard/private-mode"] .pm-card { position: relative; background: var(--wz-panel); color: var(--wz-text); border-color: var(--wz-border); font-family: var(--wz-font-ui); }
+html[data-tweaks~="wizard/private-mode"] .pm-card .ar-head { padding-right: 34px; }
+html[data-tweaks~="wizard/private-mode"] .pm-card .ar-head b { font-size: var(--wz-text-title); color: var(--wz-text); outline: none; }
+html[data-tweaks~="wizard/private-mode"] .pm-card .ar-head small,
+html[data-tweaks~="wizard/private-mode"] .pm-card .ar-note { font-size: var(--wz-text-sm); color: var(--wz-text-secondary); }
+html[data-tweaks~="wizard/private-mode"] .pm-card .ar-note.ok { color: var(--wz-success); }
+html[data-tweaks~="wizard/private-mode"] .pm-card .ar-note.bad { color: var(--wz-danger); background: color-mix(in srgb, var(--wz-danger) 10%, var(--wz-panel)); border-color: color-mix(in srgb, var(--wz-danger) 40%, transparent); }
+html[data-tweaks~="wizard/private-mode"] .pm-card .ar-agent { --ag: var(--wz-accent); background: var(--wz-surface); border-color: var(--wz-border); color: var(--wz-text); }
+html[data-tweaks~="wizard/private-mode"] .pm-card .ar-agent.on { background: color-mix(in srgb, var(--wz-accent) 14%, var(--wz-surface)); }
+html[data-tweaks~="wizard/private-mode"] .pm-card .ar-agent .tx small { color: var(--wz-text-secondary); }
+html[data-tweaks~="wizard/private-mode"] .pm-card .ar-agent .tx small.pm-line { color: var(--wz-text-muted); font-size: var(--wz-text-sm); }
+html[data-tweaks~="wizard/private-mode"] .pm-card .ar-tick.on .cb::after { border-color: var(--wz-on-accent); }
+html[data-tweaks~="wizard/private-mode"] .pm-card .ar-btn { background: var(--wz-accent); color: var(--wz-on-accent); border-radius: var(--wz-radius); font-size: var(--wz-text-md); }
+html[data-tweaks~="wizard/private-mode"] .pm-card .ar-btn.ghost { background: var(--wz-surface); color: var(--wz-text); border: 1px solid var(--wz-border); }
+html[data-tweaks~="wizard/private-mode"] .pm-card .ar-btn:disabled { opacity: .6; }
+html[data-tweaks~="wizard/private-mode"] .pm-x { position: absolute; top: 10px; right: 10px; width: 32px; height: 32px; border-radius: 50%; border: 0; background: var(--wz-surface); color: var(--wz-text-secondary); font-size: var(--wz-text-lg); line-height: 1; }
+html[data-tweaks~="wizard/private-mode"] .pm-dots { display: flex; gap: 6px; margin: 0 2px 12px; }
+html[data-tweaks~="wizard/private-mode"] .pm-dots i { width: 7px; height: 7px; border-radius: 50%; background: var(--wz-border); }
+html[data-tweaks~="wizard/private-mode"] .pm-dots i.done { background: color-mix(in srgb, var(--wz-accent) 55%, var(--wz-border)); }
+html[data-tweaks~="wizard/private-mode"] .pm-dots i.on { width: 20px; border-radius: var(--wz-radius-pill); background: var(--wz-accent); }
+html[data-tweaks~="wizard/private-mode"] .pm-frame { margin-top: 12px; height: min(52vh, 420px); border-radius: var(--wz-radius); overflow: hidden; border: 1px solid var(--wz-border); background: var(--wz-surface); }
+html[data-tweaks~="wizard/private-mode"] .pm-frame iframe { width: 100%; height: 100%; border: 0; display: block; }
+html[data-tweaks~="wizard/private-mode"] .pm-links { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+html[data-tweaks~="wizard/private-mode"] .pm-link { display: block; width: 100%; padding: 10px 12px; border-radius: var(--wz-radius); border: 1px solid var(--wz-border); background: var(--wz-surface); color: var(--wz-accent); font-size: var(--wz-text-sm); font-weight: 600; text-align: left; text-decoration: none; }
+/* Settings › Privacy: the Privacy check rows and their Move buttons. */
+html[data-tweaks~="wizard/private-mode"] .pm-note { margin: 4px 4px 8px; font-size: var(--wz-text-sm); color: var(--wz-text-secondary); }
+html[data-tweaks~="wizard/private-mode"] .pm-note.bad { color: var(--wz-danger); }
+html[data-tweaks~="wizard/private-mode"] .pm-app .st-tx { min-width: 0; }
+html[data-tweaks~="wizard/private-mode"] .pm-mv { flex: none; min-height: 36px; padding: 0 12px; border-radius: var(--wz-radius-pill); border: 1px solid var(--wz-border); background: var(--wz-surface); color: var(--wz-text); font-size: var(--wz-text-sm); font-weight: 600; }
+html[data-tweaks~="wizard/private-mode"] .pm-mv:disabled { opacity: .6; }
+html[data-tweaks~="wizard/private-mode"] .wl-why { display: block; margin: 10px auto 0; }

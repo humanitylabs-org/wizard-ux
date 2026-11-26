@@ -136,6 +136,7 @@
   const refusal = s => { const app = foreignApp(s); return app ? `This chat was started in ${app}, so WizardOS can’t add to it. Your message is saved. Reply in ${app}, or start a new chat.` : ''; };
   const connectorOf = o => CLAUDE_PROVIDERS.has(o.provider) ? 'claude' : o.provider === 'openai-codex' ? 'chatgpt' : isTinfoil(o.provider) ? 'tinfoil' : '';
   const CONNECT_AI = '<a class="mrow more" href="/wizard-os-home/store/index.html?kind=connections" target="_blank" rel="noopener">Connect an AI</a>';
+  const SETUP_PRIVATE = '<button type="button" class="mrow more" data-mprivsetup>Set up private AI</button>';
   const primaryFamilies = () => CONNECTORS.filter(c => M.connected(c.id)).flatMap(c => c.models.map(([family, name]) => ({ family, name })));
   // A disconnected connector's models leave the menu. Only an existing thread keeps its current one (keep); a new chat
   // never inherits a disconnected default.
@@ -484,11 +485,15 @@
         : main.map((o, i) => `<button type="button" class="mrow${isTinfoil(o.provider) ? ' secure' : ''}${isCur(o) ? ' on' : ''}" data-mpick="${i}" aria-pressed="${isCur(o)}"><span class="mn"><b>${esc(o.name)}</b><small>${esc([o.description, o.isGlobalDefault ? 'Default' : ''].filter(Boolean).join(' · ') || o.value)}</small></span>${isCur(o) ? '<i class="mck" aria-hidden="true">✓</i>' : ''}</button>`).join('');
       const lock = window.WosAgents?.lock?.() || '';
       const privNote = mode === 'thread' ? 'Starts a new private chat with this conversation quoted. This thread stays as it is.' : 'Runs on your private agent: its own history, no fallback.';
-      const privRows = privList.length ? `<div class="msheet-grp priv" role="group" aria-label="Private models"><div class="msheet-gh">${lock}<span>Private</span></div>`
+      // Private mode's setup (wizard-ux issue 1801, switch wizard/private-mode): no private agent yet, so the Private
+      // group offers Set up private AI, which opens Settings › Privacy's switch-over sheet.
+      const privSetup = !own && Array.isArray(priv) && !privList.length && !!window.WosPrivacy?.setupDue?.();
+      const privRows = privSetup ? `<div class="msheet-grp priv" role="group" aria-label="Private models"><div class="msheet-gh">${lock}<span>Private</span></div>${SETUP_PRIVATE}</div>`
+        : privList.length ? `<div class="msheet-grp priv" role="group" aria-label="Private models"><div class="msheet-gh">${lock}<span>Private</span></div>`
         + privList.map((o, k) => { const i = main.length + k; return `<button type="button" class="mrow priv${isCur(o) ? ' on' : ''}" data-mpick="${i}" data-mprivate="${esc(o.agent)}" aria-pressed="${isCur(o)}"><span class="mn"><b>${lock}${esc(o.name)}</b><small>${esc([o.description, o.isGlobalDefault ? 'Default' : ''].filter(Boolean).join(' · '))}</small></span>${isCur(o) ? '<i class="mck" aria-hidden="true">✓</i>' : ''}</button>`; }).join('')
         + `<p class="msheet-gn">${esc(privNote)}</p></div>` : '';
       return { list, html: `<div class="ch-sheet ch-msheet" role="dialog" aria-label="${esc(head)}"><div class="ch-sheet-b"><div class="ch-sheet-t">${esc(title ? `${head} · ${title}` : head)}</div>
-        <div class="msheet-list">${own ? '' : M.claudeNote()}${rows}${own ? '' : M.noConnectorHtml()}${!own && !privList.length && ours() && !M.options.some(o => isTinfoil(o.provider)) ? '<a class="mrow more" href="/wizard-tinfoil/" target="_blank" rel="noopener">Set up Tinfoil</a>' : ''}${!own && M.ready && !all && catalogue.length > main.length ? `<button type="button" class="mrow more" data-mall>More models · ${catalogue.length}</button>` : ''}${privRows}</div>
+        <div class="msheet-list">${own ? '' : M.claudeNote()}${rows}${own ? '' : M.noConnectorHtml()}${!own && !privList.length && !privSetup && ours() && !M.options.some(o => isTinfoil(o.provider)) ? '<a class="mrow more" href="/wizard-tinfoil/" target="_blank" rel="noopener">Set up Tinfoil</a>' : ''}${!own && M.ready && !all && catalogue.length > main.length ? `<button type="button" class="mrow more" data-mall>More models · ${catalogue.length}</button>` : ''}${privRows}</div>
         <p class="ch-sheet-n">${esc(note)}</p></div></div>` };
     },
     /* The compact model menu opened from the label in the message box: a small card over the right side.
@@ -519,7 +524,7 @@
         const curO = cur?.model ? M.find(cur.model, cur.provider) : null;
         mainRows = (curO ? row(curO) : '') + CONNECT_AI;
       }
-      const privRows = privList.map(o => row(o, ' priv')).join('');
+      const privRows = privList.map(o => row(o, ' priv')).join('') || (!own && Array.isArray(priv) && window.WosPrivacy?.setupDue?.() ? SETUP_PRIVATE : '');
       const moreRows = rest.map(o => row(o)).join('');
       const moreBtn = !own && M.ready && !all && vis.some(o => !primary.includes(o)) ? `<button type="button" class="mrow more" data-mall>More models</button>` : '';
       // The section you're in sits at the bottom, by your thumb; the other section is right above it.

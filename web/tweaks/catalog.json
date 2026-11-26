@@ -61,6 +61,7 @@
     "wizard/private-mode",
     "wizard/phone-recovery-mode",
     "wizard/backup-health",
+    "wizard/private-routing",
     "wizard/private-ai-nudge"
   ],
   "defaults": [],
