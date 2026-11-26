@@ -396,6 +396,10 @@
       "help": "Android app: what any app sends to Notifications shows as a phone notification under that app's name, one Android channel per app.",
       "where": "Settings › Appearance › Try new features › Phone notifications per app"
     },
+    "wizard/phone-chat-replies": {
+      "help": "Android app: your agent's chat replies reach the phone as Notifications items under Chats; tap opens the chat.",
+      "where": "Settings › Appearance › Try new features › Chat replies as Chats notifications"
+    },
     "wizard/lock-screen-player": {
       "help": "Android app: Podcasts plays through the phone's media player (lock screen, headset buttons), like Music.",
       "where": "Settings › Appearance › Try new features › Phone media player for Podcasts"

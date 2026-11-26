@@ -27,6 +27,7 @@
     "wizard/chat-app-switches",
     "wizard/action-cards",
     "wizard/phone-app-notifications",
+    "wizard/phone-chat-replies",
     "wizard/lock-screen-player",
     "wizard/app-tap-home",
     "wizard/download-swipe",

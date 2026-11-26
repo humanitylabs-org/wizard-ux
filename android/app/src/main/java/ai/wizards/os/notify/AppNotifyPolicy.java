@@ -36,14 +36,36 @@ public final class AppNotifyPolicy {
     private static final Pattern APPID = Pattern.compile("^[a-z0-9][a-z0-9-]{0,63}$");
     private static final Pattern APP_TAG = Pattern.compile("^app:([a-z0-9][a-z0-9-]{0,63})$");
 
-    /** One notification to post. */
+    /** One notification to post. thread: the chat it is a reply in (a Chats item the box posted), else null. */
     public static final class Note {
-        public final String id, app, title, text, link;
+        public final String id, app, title, text, link, thread;
         public final double time;
         public final int priority;
-        Note(String id, String app, String title, String text, String link, double time, int priority) {
+        Note(String id, String app, String title, String text, String link, double time, int priority, String thread) {
             this.id = id; this.app = app; this.title = title; this.text = text; this.link = link; this.time = time; this.priority = priority;
+            this.thread = thread;
         }
+    }
+
+    /* Chat replies as Chats notifications (wizard-ux issue 1619, switch wizard/phone-chat-replies): with it on, the box
+     * posts an agent's chat reply to Notifications under Chats, tagged chat-reply and linked to its thread
+     * (…/wizard-os-home/?session=<id>). Such a note opens that thread like the reply watcher's did, and carries the
+     * thread so reading it in Wizard clears it. Only the box posts these, and only for a phone that asked. */
+    public static final String CHATS_APP = "chats";
+    public static final String CHAT_REPLY_TAG = "chat-reply";
+    private static final Pattern SESSION_ID = Pattern.compile("^(?!\\.{1,2}$)[A-Za-z0-9._:-]{1,180}$");
+    private static final Pattern SESSION_PARAM = Pattern.compile("[?&]session=([^&#]*)");
+
+    /** The thread a Chats reply item is about (its link's {@code session}), else null. */
+    public static String threadOf(JSONObject it) {
+        if (it == null || !CHATS_APP.equals(appOf(it)) || !hasTag(it, CHAT_REPLY_TAG)) return null;
+        String link = it.optString("link", "");
+        if (link.length() > 2000) return null;
+        Matcher m = SESSION_PARAM.matcher(link);
+        if (!m.find()) return null;
+        String id;
+        try { id = java.net.URLDecoder.decode(m.group(1), "UTF-8"); } catch (Exception e) { return null; }
+        return SESSION_ID.matcher(id).matches() ? id : null;
     }
 
     /** The result of one read: what to post (newest first) and the new watermark (item time, seconds). */
@@ -133,7 +155,7 @@ public final class AppNotifyPolicy {
             if (quiet(routes, it)) continue;
             String title = clip(it.optString("title", ""), 120), text = clip(it.optString("message", ""), 400);
             if (title.isEmpty() && text.isEmpty()) continue;
-            out.add(new Note(id, app, title, text, it.optString("link", ""), t, pr));
+            out.add(new Note(id, app, title, text, it.optString("link", ""), t, pr, threadOf(it)));
         }
         Collections.sort(out, (a, b) -> Double.compare(b.time, a.time));
         if (out.size() > MAX_PER_PASS) out = new ArrayList<>(out.subList(0, MAX_PER_PASS));
