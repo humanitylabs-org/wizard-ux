@@ -1,2 +1,0 @@
-/* Merged fixes go live by themselves (wizard-agent-service issue 514): a box-side switch read by the Agent Service
- * (server/follow-main.mjs) and its follow-main timer. Nothing in the shell changes. */
