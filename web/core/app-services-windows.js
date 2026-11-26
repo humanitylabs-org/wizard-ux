@@ -42,7 +42,7 @@ window.WizCore.servicesParts.windows = function ({ apps, changed, fault, frames,
     return st.openContextDraft(st.appId + ':' + data.id, { title: data.title, message: data.message });
   }
   function threadOpen(st, id, opts, authorized) {
-    // This bounded workflow is admitted only for an admitted installed app's current document (Manager, Wisdom).
+    // This bounded workflow is admitted only for an installed Wizard app's own current document (any app, issue 1838).
     if (!authorized || st.isVisible?.() !== true || typeof id !== 'string' || !id || id.length > 512 || /[\s\x00-\x1f]/.test(id) || id === '__new__') throw fault('Thread navigation unavailable');
     // Optional app item that rides beside the thread's draft: keyed to this app, quoted as data when sent.
     let reply = null;

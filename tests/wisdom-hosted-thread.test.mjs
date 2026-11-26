@@ -27,6 +27,20 @@ test('Manager and Wisdom use one synced launcher admission policy in both consum
   assert.equal(policy.hasHostedThread('wisdom'), false);
 });
 
+test('any installed Wizard app may open its own Chats thread (issue 1838), others stay refused', () => {
+  const reg = { mobile: [{ id: 'goals', kind: 'wizard', url: '/goals/' }, { id: 'site', kind: 'link', url: 'https://x.test/' }, { id: 'nourl', kind: 'wizard' }], desktop: [{ id: 'calendar', kind: 'wizard', url: '/wizard-calendar/' }] };
+  const policy = launcherFixture({ window: { WizCore: { apps: k => ({ APPS: reg[k] }) } } });
+  assert.equal(policy.hasHostedThread('goals'), true, 'a builder-made app on the box');
+  assert.equal(policy.hasHostedThread('calendar'), true, 'found in either shell registry');
+  assert.equal(policy.hasHostedThread('wisdom'), true, 'the synced list still counts');
+  for (const id of ['not-installed', 'site', 'nourl', '', null, undefined]) assert.equal(policy.hasHostedThread(id), false, String(id));
+  policy.accept({ launcher: { hostedThreadApps: [] } });
+  assert.equal(policy.hasHostedThread('goals'), true, 'an old synced list cannot shut an installed app out');
+  // a registry that throws is a refusal, never a crash
+  const broken = launcherFixture({ window: { WizCore: { apps: () => { throw new Error('no registry'); } } } });
+  assert.equal(broken.hasHostedThread('goals'), false);
+});
+
 // The real chat kit (drafts, reply items) in a vm, with its own storage.
 function kit() {
   const store = new Map();
