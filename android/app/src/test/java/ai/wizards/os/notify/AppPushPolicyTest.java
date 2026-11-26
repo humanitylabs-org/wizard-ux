@@ -47,9 +47,6 @@ public class AppPushPolicyTest {
         return "http://127.0.0.1:" + server.getLocalPort();
     }
 
-    // The desktop JVM drops an Origin header unless allowed (Android's HttpURLConnection sends it, as Http.json does).
-    static { System.setProperty("sun.net.http.allowRestrictedHeaders", "true"); }
-
     @After public void stop() throws IOException { if (server != null) server.close(); }
 
     @Test
@@ -88,9 +85,9 @@ public class AppPushPolicyTest {
     @Test
     public void listensOnARealLineAndReadsTheMomentAnItemIsTold() throws Exception {
         CountDownLatch tell = new CountDownLatch(1);
-        List<String> origins = new CopyOnWriteArrayList<>();
+        List<String> origins = new CopyOnWriteArrayList<>(); // what the phone asked for (Accept)
         String origin = serve((head, o) -> {
-            for (String l : head.split("\n")) if (l.toLowerCase().startsWith("origin:")) origins.add(l.substring(7).trim());
+            for (String l : head.split("\n")) if (l.toLowerCase().startsWith("accept:")) origins.add(l.substring(7).trim());
             assertTrue(head, head.startsWith("GET " + AppPushPolicy.PATH + " "));
             o.write(("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream; charset=utf-8\r\nConnection: close\r\n\r\n"
                     + "retry: 5000\n\nevent: hello\ndata: {\"type\":\"hello\",\"v\":1}\n\n: ping\n\n").getBytes(StandardCharsets.UTF_8));
@@ -113,7 +110,7 @@ public class AppPushPolicyTest {
         }
         assertEquals(List.of("hello", "inbox"), reads);
         assertTrue("told at once, not polled", (at[1] - at[0]) / 1_000_000L < 1000);
-        assertEquals(origin, origins.get(0));
+        assertEquals("asks for an event stream", "text/event-stream", origins.get(0));
     }
 
     @Test
