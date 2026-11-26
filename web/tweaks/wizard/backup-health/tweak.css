@@ -1,0 +1,2 @@
+/* Backup health in Resources (wizard-ux issue 1743): Home › Resources › Health reads the App Manager's
+ * store-install/_backup-health while this is on (core/resources.js). The rows use the existing Health styles. */

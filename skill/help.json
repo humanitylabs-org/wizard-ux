@@ -359,7 +359,7 @@
     },
     "wizard/graceful-restart": {
       "where": "Settings › Appearance › Try new features › Calm Agent Service restarts",
-      "help": "While the Agent Service waits for running chats to restart, you see a quiet note, not errors; a message sent meanwhile sends after the restart; if overdue, choose Wait longer or Restart now."
+      "help": "While a restart waits for running chats you see a quiet note, not errors; messages sent meanwhile go after it; if overdue, Wait longer or Restart now."
     },
     "wizard/unified-inbox": {
       "where": "Settings › Chats & app screens › Notifications › Notifications in Chats (on for everyone)"
@@ -414,7 +414,7 @@
       "where": "Settings › Appearance › Try new features › Phone notifications per app"
     },
     "wizard/app-location": {
-      "help": "Only apps that ask for your location in their wizard.md (today just Maps) may use it, and only after you say yes in your browser's or phone's own location prompt. Every other app stays blocked with no prompt.",
+      "help": "Only apps whose wizard.md asks for location (today Maps) may use it, after your browser's or phone's own yes; others stay blocked.",
       "where": "Settings › Appearance › Try new features › Location for Maps"
     },
     "wizard/phone-badge-look": {
@@ -536,6 +536,10 @@
     "wizard/install-agent-builds": {
       "help": "Apps I build install with one tap.",
       "where": "Settings › Appearance › Try new features › Install apps your agent builds"
+    },
+    "wizard/backup-health": {
+      "help": "Resources shows your backup's health.",
+      "where": "Settings › Appearance › Try new features › Backup health in Resources"
     }
   },
   "screenOrder": [
