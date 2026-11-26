@@ -450,6 +450,10 @@
       "help": "New channels get a fitting emoji.",
       "where": "Settings › Appearance › Try new features › Channels: a fitting emoji for new channels"
     },
+    "wizard/channel-model-emoji": {
+      "help": "New channels with no emoji get one picked by your Wizard's fast model.",
+      "where": "Settings › Appearance › Try new features › Channels: an AI-picked emoji for new channels"
+    },
     "wizard/chat-tags": {
       "help": "A chat can carry several tags.",
       "where": "Settings › Appearance › Try new features › Tags"
