@@ -11,6 +11,10 @@
 // (the parent is today's thread of the Daily channel, opened from Channels in the Daily view with an earlier day folded
 // above it, and a new reply lands there while he is away: Back must bring the Daily view back at his place) and routed
 // (both threads are a routed Claude agent's, with an agent-qualified link, and a new reply lands in the parent).
+// Issue 1882 adds QA_ACTS=reopen: Back to the list (Channels for Daily, Esc on desktop) and open the same thread again
+// from there, with or without a new reply landing while he is away, and QA_KINDS=daily-read (Daily, no new reply). Daily's
+// days list has a second page (Earlier days above the folds), as a real Daily does. Main fails reopen after a new reply
+// (phone, document scroll, desktop) and the desktop Daily reopen (it jumped to the top).
 const assert = require('node:assert/strict');
 const { chromium } = require('../tools/qa-playwright.cjs');
 const { ownerRead } = require('../tools/qa-desktop-frame-fixture.cjs');
@@ -39,10 +43,10 @@ const acts = (process.env.QA_ACTS || 'look,send,send-go').split(',');
 (async () => {
   const browser = await chromium.launch(), report = [];
   try {
-    for (const shell of cases) for (const skin of (process.env.QA_SKINS || 'nebula,grove').split(',')) for (const kind of kinds) for (const act of acts) for (const back of (act === 'send-go' ? ['auto'] : shell === 'desktop' ? ['escape'] : backs)) {
+    for (const shell of cases) for (const skin of (process.env.QA_SKINS || 'nebula,grove').split(',')) for (const kind of kinds) for (const act of acts) for (const back of (act === 'send-go' || act === 'reopen' ? ['auto'] : shell === 'desktop' ? ['escape'] : backs)) {
       const phone = shell.startsWith('phone'); if (act === 'send-go' && !phone) continue; // desktop keeps its thread pane
       const stem = `${shell}-${skin}-${kind}-${act}-${back}`, entry = { stem, errors: [] }; report.push(entry);
-      const working = kind === 'working' || kind === 'working-newreply', daily = kind === 'daily', routed = kind === 'routed';
+      const working = kind === 'working' || kind === 'working-newreply', daily = kind.startsWith('daily'), routed = kind === 'routed';
       const msgsA = routed ? msgs.map(m => m.content === reply ? { ...m, content: replyTo('claude') } : m) : msgs.slice();
       const DAY = d => new Date(now - d * 864e5).toISOString().slice(0, 10);
       const ROWS = [
@@ -93,7 +97,9 @@ const acts = (process.env.QA_ACTS || 'look,send,send-go').split(',');
           if (p === '/wizard/v1/agents') return r.fulfill({ json: { agents: routed ? AGENTS : [] } });
           if (p === '/wizard/v1/channels') return r.fulfill({ json: { schema: 'wizard.channels/1', sort: 'az', channels: daily ? CHANNELS : [] } });
           if (p === '/wizard/v1/channels/read') return r.fulfill({ json: { at: {} } });
-          if (p === '/wizard/v1/channels/daily/days') return r.fulfill({ json: { channel: 'daily', agent: 'hermes', dayStartsAt: '05:00', today: 'qa-a', days: [dayRow('qa-a', 0), dayRow('qa-y', 1)], next: null } });
+          // Issue 1882: Daily has more than one page of days (Earlier days sits above the folds), as a real Daily does.
+          if (p === '/wizard/v1/channels/daily/days') { entry.dayReads = (entry.dayReads || 0) + 1; return r.fulfill({ json: u.searchParams.get('cursor') ? { channel: 'daily', agent: 'hermes', dayStartsAt: '05:00', today: 'qa-a', days: [2, 3, 4].map(d => dayRow('qa-z' + d, d)), next: null }
+            : { channel: 'daily', agent: 'hermes', dayStartsAt: '05:00', today: 'qa-a', days: [dayRow('qa-a', 0), dayRow('qa-y', 1)], next: DAY(1) } }); }
           if (p === '/wizard/hermes/api/sessions' && u.searchParams.has('channel')) {
             const data = daily && u.searchParams.get('channel') === 'daily' ? ROWS.filter(x => x.channel === 'daily').reverse().map(x => ({ ...x, listVersion: 1, agent: '' })) : [];
             return r.fulfill({ json: { object: 'list', data, offset: 0, limit: 100, has_more: false, snapshot: 'snap', window: 'channel', channel: u.searchParams.get('channel'), order: 'oldest', channel_total: data.length, view: 'list', list_version: 1 } });
@@ -136,16 +142,23 @@ const acts = (process.env.QA_ACTS || 'look,send,send-go').split(',');
         const spot = () => page.evaluate(() => { const a = [...document.querySelectorAll('.ch-msgs .bub a')].find(x => x.getClientRects().length && /Press notes/.test(x.textContent)); return a ? Math.round(a.getBoundingClientRect().top) : null; });
         entry.before = await spot();
         await page.screenshot({ path: path.join(out, `${stem}-1-reading.png`) });
-        await vis('.ch-msgs .bub a:has-text("Press notes")').click();
-        await page.waitForFunction(() => [...document.querySelectorAll('.ch-head .ti b')].some(b => b.getClientRects().length && /Press notes/.test(b.textContent)), null, { timeout: 15000 });
-        await nap(1200);
-        // Do something there: scroll it and type a draft (look), or send a reply (send, send-go).
-        await page.mouse.move(phone ? 206 : 900, mid); await page.mouse.wheel(0, 300); await nap(300); await page.mouse.wheel(0, -200);
-        const ta = vis('.ch-compose textarea');
-        if (act === 'look') { if (await ta.count()) { await ta.click(); await ta.fill('Looks good'); await ta.fill(''); await page.keyboard.press('Tab').catch(() => {}); } }
-        else { await ta.click(); await ta.fill('Looks good, send it'); await vis('.ch-compose .ch-send').click(); }
+        const reopen = act === 'reopen';
+        if (reopen) {
+          // Issue 1882 route 1: Back to the list (Channels for Daily), then open the same thread again from there.
+          if (shell === 'desktop') await page.keyboard.press('Escape'); else await vis('[data-chback]').click();
+          await nap(900);
+        } else {
+          await vis('.ch-msgs .bub a:has-text("Press notes")').click();
+          await page.waitForFunction(() => [...document.querySelectorAll('.ch-head .ti b')].some(b => b.getClientRects().length && /Press notes/.test(b.textContent)), null, { timeout: 15000 });
+          await nap(1200);
+          // Do something there: scroll it and type a draft (look), or send a reply (send, send-go).
+          await page.mouse.move(phone ? 206 : 900, mid); await page.mouse.wheel(0, 300); await nap(300); await page.mouse.wheel(0, -200);
+          const ta = vis('.ch-compose textarea');
+          if (act === 'look') { if (await ta.count()) { await ta.click(); await ta.fill('Looks good'); await ta.fill(''); await page.keyboard.press('Tab').catch(() => {}); } }
+          else { await ta.click(); await ta.fill('Looks good, send it'); await vis('.ch-compose .ch-send').click(); }
+        }
         // A new reply lands in the parent while he is away (issue 1653): the list and the thread both say so.
-        if (kind === 'newreply' || kind === 'working-newreply' || daily || routed) {
+        if (kind === 'newreply' || kind === 'working-newreply' || kind === 'daily' || routed) {
           await nap(400);
           msgsA.push({ role: 'assistant', content: 'One more thing: ' + para(3, 'Later'), timestamp: Date.now() / 1000 });
           const a = [...ROWS, ...CLAUDE].find(x => x.id === 'qa-a'); Object.assign(a, { status: 'completed', updated_at: iso(Date.now()), updatedAt: iso(Date.now()), last_active: Date.now() / 1000, message_count: msgsA.length, messageCount: msgsA.length, preview: 'One more thing' });
@@ -153,7 +166,10 @@ const acts = (process.env.QA_ACTS || 'look,send,send-go').split(',');
           await page.evaluate(() => WizLive.refresh?.()).catch(() => {});
         }
         await nap(1500);
-        if (back === 'auto') { /* Send and go already stepped back to the parent */ }
+        if (reopen) {
+          if (daily) { if (!(await page.locator('.ch-chan-open[data-chchan="daily"]').filter({ visible: true }).count())) await vis('[data-chview="channels"]').click().catch(() => {}); await vis('.ch-chan-open[data-chchan="daily"]').click(); }
+          else await vis('[data-chopen="qa-a"]').click();
+        } else if (back === 'auto') { /* Send and go already stepped back to the parent */ }
         else if (back === 'button') await vis('[data-chback]').click();
         else if (phone) await page.goBack(); else await page.keyboard.press('Escape');
         if (daily) await page.waitForFunction(() => [...document.querySelectorAll('.ch-dday-h')].some(b => b.getClientRects().length), null, { timeout: 15000 }).catch(() => { entry.noDailyView = true; });

@@ -60,11 +60,14 @@ window.WizCore.chatsParts.daily = function ({ agentName, AGS, CH, chanElsewhere,
     const d = w?.daily; if (!d || !dailyOn(w)) return;
     Promise.resolve(LIVE.chanDaily.more(d.id)).catch(() => {}).then(() => { const el = elOf(w.id); if (W[w.id] === w && w.daily && el) renderThread(w, el, true); });
   }
-  // The top of the Daily view reads older days once Earlier days scrolls into view.
+  // The top of the Daily view reads older days once Earlier days scrolls into view. Watched against what really scrolls
+  // (issue 1882): the thread box, or the page itself in the Android app's document scrolling, where the box never scrolls
+  // and a box root saw the button "in view" on every open and re-read the days above the reader.
   function dailyWatch(w, el) {
     const b = el?.querySelector?.('[data-chddaymore]:not([disabled])'); if (!b || typeof IntersectionObserver !== 'function') return;
     if (el._dailyIo) el._dailyIo.disconnect();
-    el._dailyIo = new IntersectionObserver(es => { if (es.some(x => x.isIntersecting)) { el._dailyIo.disconnect(); el._dailyIo = null; dailyMore(w); } }, { root: el.querySelector('.ch-msgs') || null });
+    const nb = el.querySelector('.ch-msgs'), oy = nb && typeof getComputedStyle === 'function' ? getComputedStyle(nb).overflowY : '';
+    el._dailyIo = new IntersectionObserver(es => { if (es.some(x => x.isIntersecting)) { el._dailyIo.disconnect(); el._dailyIo = null; dailyMore(w); } }, { root: /auto|scroll/.test(oy) ? nb : null });
     el._dailyIo.observe(b);
   }
   // A link to one of Daily's earlier days from inside the Daily view unfolds that day instead of leaving.
