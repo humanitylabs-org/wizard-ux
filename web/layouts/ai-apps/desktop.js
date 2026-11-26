@@ -205,8 +205,11 @@ export default function desktop(api) {
   let pane = null, dockEl = null, want = null, docked = false, wide = false, chatThread = null, splitTries = 0, fixingBehind = false;
   let paneGeometry = null, secondEl = null;
   const paneVars = new Set();
-  /* Narrower window, one app at a time (ONE above): from the window's width alone, never stored */
-  const one = () => (globalThis.innerWidth || 1440) < ONE.from;
+  /* Narrower window, one app at a time (ONE above): from the window's width alone, never stored. Bottom app bar on
+   * desktop (wizard-ux issue 1692, switch wizard/desktop-bottom-bar, off by default): while it is on, the same one-app
+   * layout at every width (the bar's items keep their 96 px and centre, Chats keeps its list beside the chat). */
+  const barOn = () => { try { return String(root.dataset.tweaks || '').split(' ').includes('wizard/desktop-bottom-bar'); } catch (_) { return false; } };
+  const one = () => barOn() || (globalThis.innerWidth || 1440) < ONE.from;
   /* Activity as a short what-needs-me list (wizard-ux issue 1336, part of Channels, on for everyone since issue 1258): no agent
    * chips (every agent's chats; agents live in the Channels list), Working, Ready (amber needs you and green unread
    * only), Recent (the rest, newest first, a week back, then Show older), Snoozed and Archived folded at the bottom,
@@ -681,8 +684,12 @@ export default function desktop(api) {
   }
   api.listen(sSwap, 'click', e => { e.stopPropagation(); swapSides(); });
   const swapCheck = () => { const was = swapWas; paintSwap(); if (was !== swapWas) { paintTop(); applySizes(); retileSoon(); } };
+  // (the bottom app bar switch flipped: the one-app layout comes or goes at once, no reload; paintOne lays it out)
+  let barWas = barOn();
+  const barCheck = () => { if (barOn() === barWas) return; barWas = barOn(); paintTop(); paintSwap(); };
+  api.listen(globalThis, 'wos:experience', barCheck);
   api.listen(globalThis, 'wos:experience', swapCheck);
-  const swapMo = globalThis.MutationObserver ? new MutationObserver(swapCheck) : null; swapMo?.observe(root, { attributes: true, attributeFilter: ['data-tweaks'] });
+  const swapMo = globalThis.MutationObserver ? new MutationObserver(() => { barCheck(); swapCheck(); }) : null; swapMo?.observe(root, { attributes: true, attributeFilter: ['data-tweaks'] });
   api.listen(globalThis, 'resize', () => paintSwap());
   paintSwap();
   globalThis.dispatchEvent?.(new Event('resize'));

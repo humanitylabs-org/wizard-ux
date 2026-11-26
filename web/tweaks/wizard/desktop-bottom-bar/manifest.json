@@ -1,0 +1,14 @@
+{
+  "id": "wizard/desktop-bottom-bar",
+  "name": "Bottom app bar on desktop",
+  "version": "1.0.0",
+  "author": "wizard",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout"
+  ],
+  "issues": [
+    "humanitylabs-org/wizard-ux#1692"
+  ],
+  "description": "On the AI apps desktop, the layout of the narrower window at every window width: one thing in front (an app across the main area, or Chats with its list beside the chat) and the apps along a bar at the bottom, Chats first, the orb in the centre and All apps last, instead of the side panels. Below 1100 px nothing changes."
+}

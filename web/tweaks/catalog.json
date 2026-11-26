@@ -36,6 +36,7 @@
     "wizard/plain-chat-titles",
     "wizard/chat-tags",
     "wizard/swap-sides",
+    "wizard/desktop-bottom-bar",
     "wizard/try-feature-counts",
     "wizard/inbox-until-archived",
     "wizard/inbox-rows",
