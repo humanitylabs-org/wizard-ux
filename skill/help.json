@@ -416,6 +416,11 @@
       "help": "Narrow desktop window: tapping the icon of the app in front takes it back to its first view.",
       "where": "Settings › Appearance › Try new features › Tap the app in front for its first view"
     },
+    "wizard/attach-menu-icons": {
+      "help": "Android app: the menu from + in a chat (and the orb's Attach) shows a round icon before Photo or video, Camera and File, on bigger rows that are easier to tap.",
+      "where": "Settings › Appearance › Try new features › Icons on the attach menu",
+      "when": "Android app only"
+    },
     "wizard/share-people-box": {
       "help": "Share's People row shows Messenger's recent chats in every window, also one that never opened Messenger.",
       "where": "Settings › Appearance › Try new features › Share to people in any window"
