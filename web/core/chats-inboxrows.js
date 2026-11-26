@@ -9,7 +9,7 @@
  * createChats (core/chats.js) calls this once with the closure names it reads. Loaded before chats.js by both shells. */
 window.WizCore = window.WizCore || {};
 window.WizCore.chatsParts = window.WizCore.chatsParts || {};
-window.WizCore.chatsParts.inboxrows = function ({ actMark, actNeeds, actUnread, AGS, agentName, agentRec, ago, attOf, chanAt, chanFace, chanStore, chatVars, ch, clip, elOf, esc, isWorking, LIVE, noteAt, noteRow, renderChatList, rowAgent, spacesOf, threadAct, toast, W, winAgent }) {
+window.WizCore.chatsParts.inboxrows = function ({ actMark, actNeeds, actUnread, AGS, agentName, agentRec, ago, attOf, chanAt, chanFace, chanStore, chatVars, ch, clip, elOf, esc, isWorking, LIVE, noteAt, noteRow, PIN, renderChatList, rowAgent, spacesOf, threadAct, toast, W, winAgent }) {
   const IB_SWITCH = 'wizard/inbox-rows';
   function inboxRowsOn() { try { return (document.documentElement.dataset.tweaks || '').split(' ').includes(IB_SWITCH); } catch (_) { return false; } }
   // Sent's thread rows (wizard-ux issue 1880) carry the same Archive button.
@@ -30,12 +30,30 @@ window.WizCore.chatsParts.inboxrows = function ({ actMark, actNeeds, actUnread, 
     for (const r of st?.ok ? st.rows : []) if (r.urgent && r.thread) out.add(r.thread);
     return out;
   }
-  // Pin rank: 1 today's Daily, 2 #priority / urgent / a critical ask, 0 not pinned. Read once per paint (ibPins).
-  function ibPins() {
-    const today = ibDailyToday(), urgent = ibUrgent();
-    return s => !s ? 0 : s.id === today ? 1 : (s.critical || urgent.has(s.id) || ibTags(s).some(sp => ibBare(chanFace(sp.name).label || sp.name) === 'priority')) ? 2 : 0;
+  /* Pin to top (wizard-ux issue 1887, switch wizard/inbox-pin-top, off by default, with Inbox rows on): the threads in
+   * the owner's pin list (core/chat-pins.js: the box's ui-preferences pinnedChats, the same on every device; the row
+   * menu's Pin to top writes it, and an agent adds to it with PATCH /wizard/v1/ui-preferences
+   * {"ops":[{"op":"add","key":"pinnedChats","item":"<thread id>"}]}) rank above today's Daily, in the order pinned.
+   * Null while off, or while Pins are hidden in the Filter sheet. */
+  const IB_PIN_TOP = 'wizard/inbox-pin-top';
+  function ibPinTopOn() { try { return inboxRowsOn() && (document.documentElement.dataset.tweaks || '').split(' ').includes(IB_PIN_TOP); } catch (_) { return false; } }
+  function ibTops() {
+    if (!ibPinTopOn()) return null;
+    try {
+      if (typeof PIN !== 'undefined' && PIN?.on?.() === false) return null;
+      return new Map((window.WosChatPins?.ids?.() || []).map((id, i) => [id, (i + 1) / 1000]));
+    } catch (_) { return null; }
   }
-  const ibFacts = () => ({ quiet: ibQuiet, pin: ibPins() });
+  // Pin rank: 1 today's Daily, 2 #priority / urgent / a critical ask, 0 not pinned; a pinned-to-top thread is a fraction
+  // below 1 (its place in the pin list). Read once per paint (ibPins).
+  function ibPinFacts() {
+    const today = ibDailyToday(), urgent = ibUrgent(), tops = ibTops();
+    const base = s => !s ? 0 : s.id === today ? 1 : (s.critical || urgent.has(s.id) || ibTags(s).some(sp => ibBare(chanFace(sp.name).label || sp.name) === 'priority')) ? 2 : 0;
+    if (!tops) return { pin: base };
+    return { pin: s => s && tops.has(s.id) ? tops.get(s.id) : base(s), top: s => !!s && tops.has(s.id), base };
+  }
+  function ibPins() { return ibPinFacts().pin; }
+  const ibFacts = () => ({ quiet: ibQuiet, ...ibPinFacts() });
   // The box's waiting background tasks for this list's agent whose thread is not a row already.
   function ibRecs(w, rows) {
     const listed = new Set((rows || []).filter(s => !s.hidden).map(s => s.id));
@@ -106,12 +124,14 @@ window.WizCore.chatsParts.inboxrows = function ({ actMark, actNeeds, actUnread, 
     const SEC_PAGE = 50, page = (k, list) => { const shown = c.more?.[k] ? list : list.slice(0, SEC_PAGE); return shown.map(row).join('') + (list.length > shown.length ? `<button class="ch-more" data-secmore="${k}">Show all ${list.length}</button>` : ''); };
     // The title bar (wizard-ux issue 1836) names Inbox and carries its count, sort and search: no section row, no fold.
     const ibTitled = c.tbar === 'inbox';
-    if (ibTitled) c.inboxN = inbox.length;
+    // Pin to top: a read thread that is here only because it is pinned is not counted (issue 1887).
+    const ibSkip = g.counted ? new Set(g.ready.filter(s => !g.counted.includes(s)).map(s => s.id)) : null, inboxN = ibSkip ? inbox.filter(x => !ibSkip.has(x.id)).length : inbox.length;
+    if (ibTitled) c.inboxN = inboxN;
     const sec = (k, label, n, inner, open, main = k === 'ready') => ibTitled && main ? `<section class="ch-sec ch-act ch-ib ch-tb-main open" data-sec="${k}"><div class="ch-sec-b">${inner()}</div></section>` : `<section class="ch-sec ch-act${main ? ' ch-ib' : ''}${open ? ' open' : ''}" data-sec="${k}">${main ? `<div class="ch-sec-hl"><button class="ch-sec-h" data-sectoggle="${k}" aria-expanded="${open}"><span>${label}</span>${n ? `<small>${n}</small>` : ''}<i aria-hidden="true"></i></button>${sortSel}</div>` : `<button class="ch-sec-h" data-sectoggle="${k}" aria-expanded="${open}"><span>${label}</span>${n ? `<small>${n}</small>` : ''}<i aria-hidden="true"></i></button>`}${open ? `<div class="ch-sec-b">${inner()}</div>` : ''}</section>`;
     const sortSel = `<label class="ch-act-sort"><select data-chactorder aria-label="Sort Inbox">${L.ACTIVITY_SORTS.map(([v, l]) => `<option value="${v}"${order === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label>`;
     const empty = '<div class="ch-empty ch-ib-empty"><b>Nothing needs you</b><span>Replies and asks land here. What you sent is in Sent.</span></div>';
     if (!inbox.length && !snoozed.length && !g.archive.length) return drafts ? '' : empty;
-    return (inbox.length ? sec('ready', 'Inbox', inbox.length, () => page('ready', inbox), chatVars.secOpen.ready !== false) : drafts ? '' : empty)
+    return (inbox.length ? sec('ready', 'Inbox', inboxN, () => page('ready', inbox), chatVars.secOpen.ready !== false) : drafts ? '' : empty)
       + (snoozed.length ? sec('snoozed', 'Snoozed', snoozed.length, () => page('snoozed', snoozed), !!chatVars.secOpen.snoozed) : '')
       + (g.archive.length ? sec('archived', 'Archived', g.archive.length, () => g.archive.slice(0, 200).map(s => ibThreadRowPlain(s)).join(''), !!chatVars.secOpen.archived) : '');
   }
@@ -133,5 +153,7 @@ window.WizCore.chatsParts.inboxrows = function ({ actMark, actNeeds, actUnread, 
   }
   // The list model's inbox facts for a layout that draws its own list (CHATS.inboxRows), null with the switch off.
   function inboxRowsFacts() { return inboxRowsOn() ? ibFacts() : null; }
-  return { ibMark, ibRow, ibTagFace, ibThreadRow, inboxRowsOn, inboxRowsBody, inboxRowsClick, inboxRowsFacts };
+  // The row menu's word for a thread's pin (core/chats.js openRowSheet): Pin to top while the switch is on.
+  function ibPinWord(pinned) { return pinned ? 'Unpin' : ibPinTopOn() ? 'Pin to top' : 'Pin'; }
+  return { ibMark, ibPinTopOn, ibPinWord, ibRow, ibTagFace, ibThreadRow, inboxRowsOn, inboxRowsBody, inboxRowsClick, inboxRowsFacts };
 };

@@ -94,7 +94,7 @@ Chats & app screens: how Chats behaves and looks, which Chats app is the default
 - Workspace sync › Same workspaces on every device: the same desks with the same apps on all your devices (layout and the current desk stay per device), plus Recently closed desks with Reopen. (when the box supports it).
 
 ### Notifications
-Notifications: for each app that sends notifications, choose Badge (a count on its icon) or Chats (its alerts arrive as threads in Chats). Saved on this device. Chats needs Notifications in Chats on.
+Notifications: per app, Badge (a count on its icon) or Chats (its alerts arrive as threads in Chats). Saved on this device.
 - One row per app that sends notifications, each with Badge or Chats.
 
 ### Voice & typing
@@ -183,6 +183,7 @@ Settings › Appearance › Try new features lists unfinished features anyone ca
 - **Icons on the attach menu**: Android app: the + menu in a chat (and the orb's Attach) shows icons before Photo or video, Camera and File, on bigger rows. (Android app only).
 - **Inbox until archived**: Chats stay in Inbox until archived.
 - **Inbox: only what needs you**: Inbox: only what needs you.
+- **Inbox: pin threads to the top**: Pin threads above today's Daily.
 - **Install apps your agent builds**: Apps I build install with one tap.
 - **Install sheet recommends private AI**: Installing a personal-data app suggests private AI.
 - **Instant home-screen apps**: Android: pinned app icons open at once on their last screen.

@@ -43,7 +43,7 @@
       "help": "Chats & app screens: how Chats behaves and looks, which Chats app is the default, and app screens."
     },
     "notifications": {
-      "help": "Notifications: for each app that sends notifications, choose Badge (a count on its icon) or Chats (its alerts arrive as threads in Chats). Saved on this device. Chats needs Notifications in Chats on."
+      "help": "Notifications: per app, Badge (a count on its icon) or Chats (its alerts arrive as threads in Chats). Saved on this device."
     },
     "voice": {
       "help": "Voice & typing: speech-to-text, which microphone the phone uses, the text selection menu, and the desktop's voice buttons."
@@ -511,6 +511,10 @@
     "wizard/sent-threads": {
       "help": "Sent lists threads, like email.",
       "where": "Settings › Appearance › Try new features › Sent: threads, like email"
+    },
+    "wizard/inbox-pin-top": {
+      "help": "Pin threads above today's Daily.",
+      "where": "Settings › Appearance › Try new features › Inbox: pin threads to the top"
     },
     "wizard/chats-title-bar": {
       "help": "Chats' title bar names the tab.",
