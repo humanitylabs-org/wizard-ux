@@ -1,0 +1,14 @@
+{
+  "id": "wizard/ai-apps-running",
+  "name": "Running view in the AI apps sidebar",
+  "version": "1.0.0",
+  "author": "wizard",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout"
+  ],
+  "issues": [
+    "humanitylabs-org/wizard-ux#1599"
+  ],
+  "description": "On the AI apps desktop, the Signal sweep card's Running link opens the Running view in the sidebar: every background task with its last update, how long it has run and No news for 6 h when it went quiet. A task opens in the main column; Esc returns to the view, then to the sidebar list."
+}

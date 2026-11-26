@@ -68,6 +68,80 @@ window.WizCore.channelEmojiName = function channelEmojiName(name, emoji) {
   const t = (emoji + (bare ? ' ' + bare : '')).trim();
   return t.length > 60 ? '' : t;
 };
+/* Auto channel emoji (wizard-ux issue 1580, switch wizard/channel-auto-emoji, off by default): a channel created with
+ * no emoji in front of its name gets a fitting one from this small keyword map, instantly and offline ("Money" →
+ * "💰 Money"), stored the same way as a picked one (the start of the name). A name that already starts with an emoji,
+ * or matches no word here, is kept exactly as typed (no emoji shows as 💬). channelAutoEmoji(name) → the emoji or '';
+ * channelAutoName(name) → the name to store. Whole words first ("workout" before "work"), then a word that starts with
+ * a keyword of 4+ letters ("podcasting"). The agent's own create tool uses the same list behind the same switch
+ * (wizard-agent-service server/channel-emoji.mjs): change both together. */
+window.WizCore.CHANNEL_AUTO_EMOJI = [
+  ['💰', 'money finance finances budget budgets bank banking invest investing investment investments tax taxes savings expense expenses crypto bitcoin stocks accounting invoice invoices salary pension'],
+  ['🧾', 'receipts receipt bills bill'],
+  ['🎵', 'music song songs playlist playlists band guitar piano concert concerts spotify'],
+  ['🎙️', 'podcast podcasts interview interviews radio'],
+  ['🩺', 'health doctor doctors medical medicine clinic hospital symptoms dentist'],
+  ['🧘', 'meditation mindfulness wellbeing wellness therapy mental'],
+  ['🏋️', 'fitness gym workout workouts training exercise running yoga'],
+  ['⚽', 'football soccer sport sports'],
+  ['🍳', 'food cooking recipe recipes kitchen meal meals dinner lunch breakfast'],
+  ['☕', 'coffee'],
+  ['🛒', 'shop groceries grocery'],
+  ['📦', 'shipping packages orders delivery deliveries'],
+  ['✈️', 'travel travels trip trips flight flights vacation vacations holiday holidays'],
+  ['🏠', 'home house household apartment chores'],
+  ['👪', 'family kids parents children'],
+  ['❤️', 'love dating relationship relationships partner'],
+  ['💼', 'work job jobs career office business clients client'],
+  ['📅', 'calendar schedule schedules meeting meetings events agenda planning plans'],
+  ['🚀', 'launch launches startup release releases'],
+  ['💡', 'ideas idea brainstorm brainstorming inspiration'],
+  ['🛠️', 'dev development code coding engineering build builds tools repair'],
+  ['🐛', 'bug bugs debugging'],
+  ['🤖', 'ai agent agents bot bots automation automations'],
+  ['📚', 'books book reading study studies learning learn school homework course courses university'],
+  ['🔬', 'research science'],
+  ['🧪', 'test tests testing experiment experiments lab'],
+  ['📝', 'notes note writing journal diary blog drafts draft todo todos tasks'],
+  ['🎨', 'design art drawing painting creative'],
+  ['📷', 'photo photography pictures'],
+  ['🎬', 'movies movie film films video videos tv netflix'],
+  ['🎮', 'games game gaming'],
+  ['🌱', 'garden gardening plants plant nature'],
+  ['🐶', 'dog dogs pet pets puppy'],
+  ['🐱', 'cat cats kitten'],
+  ['🚗', 'car cars commute driving'],
+  ['🎉', 'party parties birthday birthdays celebration wedding'],
+  ['🎁', 'gifts gift presents christmas'],
+  ['📰', 'news newsletter newsletters press'],
+  ['⚖️', 'legal law lawyer contracts contract'],
+  ['📈', 'marketing growth sales analytics metrics investors'],
+  ['📊', 'reports report data dashboard stats'],
+  ['👥', 'team teams people friends community social hiring'],
+  ['🌍', 'world languages language translation'],
+  ['🔒', 'security privacy passwords'],
+  ['⚙️', 'settings admin system ops setup'],
+  ['✉️', 'email emails mail inbox'],
+  ['📞', 'calls call phone'],
+  ['☀️', 'weather'],
+  ['🙏', 'faith church prayer'],
+  ['⭐', 'favorites favourites starred important'],
+];
+window.WizCore.channelAutoEmoji = function channelAutoEmoji(name) {
+  const C = window.WizCore, words = String(name || '').toLowerCase().normalize('NFKC').split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+  if (!words.length) return '';
+  if (!C.channelAutoIndex) { C.channelAutoIndex = new Map(); for (const [e, ks] of C.CHANNEL_AUTO_EMOJI) for (const k of ks.split(' ')) if (!C.channelAutoIndex.has(k)) C.channelAutoIndex.set(k, e); }
+  const ix = C.channelAutoIndex;
+  for (const w of words) { const e = ix.get(w) || (w.length > 3 && w.endsWith('s') && ix.get(w.slice(0, -1))); if (e) return e; }
+  for (const w of words) for (const [k, e] of ix) if (k.length >= 4 && w.length > k.length && w.startsWith(k)) return e;
+  return '';
+};
+window.WizCore.channelAutoName = function channelAutoName(name) {
+  const C = window.WizCore, n = String(name || '').trim();
+  if (!n || C.channelFace(n).own) return n;
+  const e = C.channelAutoEmoji(n);
+  return (e && C.channelEmojiName(n, e)) || n;
+};
 window.WizCore.chats = function createChats(H) {
   'use strict';
   /* Values this closure changes over time (wizard-ux issue 1665): the parts in core/chats-*.js read and write them
@@ -302,7 +376,7 @@ window.WizCore.chats = function createChats(H) {
   // of the screen text sent as context with a message to another agent (core/screen-text.js).
   let rowListAgent = '', rowChan = false;
   /* A thread row in a list; core/chats-rows.js. */
-  const { alertFeedback, chatRow, INBOX_SVG, inboxCanSend, inboxHeadHtml, inboxMove, READY_ORDER_KEY, READY_ORDER_LABEL, READY_ORDERS, runningBack, runningBody, runningGo, runningHead, runningOn, runningOpen, runningRow, sweepAnswer, sweepHtml, sweepLater, sweepYesToAll, bindLate: rowsLate } = window.WizCore.chatsParts.rows({ actRowMark, agentLabelOf, ago, AGS: (...a) => AGS(...a), ATT, attOf, BOOM, ch, CH, chanName, channelsLate, chanStore, chanTitle, chatVars, clip, deferredOf, draftTag, esc, feedLate, H, isWorking, KIT, LIVE, paintListsNow, PIN, PIN_SVG, renderThreadNow, rerenderList, STI, STI_LAB, STI_TIP, stiKind, storeAgent, subjectOf, toast, TOPIC, topicOn, W, winAgent });
+  const { alertFeedback, chatRow, INBOX_SVG, inboxCanSend, inboxHeadHtml, inboxMove, READY_ORDER_KEY, READY_ORDER_LABEL, READY_ORDERS, runningBack, runningBody, runningGo, runningHead, runningOn, runningOpen, runningRow, runningSideGo, sweepAnswer, sweepHtml, sweepLater, sweepYesToAll, bindLate: rowsLate } = window.WizCore.chatsParts.rows({ actRowMark, agentLabelOf, ago, AGS: (...a) => AGS(...a), ATT, attOf, BOOM, ch, CH, chanName, channelsLate, chanStore, chanTitle, chatVars, clip, deferredOf, draftTag, esc, feedLate, H, isWorking, KIT, LIVE, paintListsNow, PIN, PIN_SVG, renderThreadNow, rerenderList, STI, STI_LAB, STI_TIP, stiKind, storeAgent, subjectOf, toast, TOPIC, topicOn, W, winAgent });
   /* The Sent tab and the bottom tabs Inbox · Tags · Sent (wizard-ux issue 1778); core/chats-sent.js. */
   const { sentBack, sentBar, sentBody, sentClick, sentHead, sentOpen, sentSheet, sentTabsOn, titleBar, titleBarTab } = window.WizCore.chatsParts.sent({ ago, ch, CH, CHAN_VIEW_KEY, chanElsewhere, chanSide, chatVars, clip, closeRowSheet, elOf: (...a) => elOf(...a), esc, H, ibMark: (...a) => ibMark(...a), ibRow: (...a) => ibRow(...a), ibTagFace: (...a) => ibTagFace(...a), LIVE, openChat, renderChatList: (...a) => renderChatList(...a), rerenderList, toast, W, winAgent });
   channelsLate({ sentBack });
@@ -651,7 +725,7 @@ window.WizCore.chats = function createChats(H) {
     if (ta.scrollTop !== top) ta.scrollTop = top;
   }
   /* Presence, clicks inside a Chats window, composer events, text from outside, forget; core/chats-bind.js. */
-  const { bind, click, closeFilterSheet, closeOverlay, elOf, forget, holdList, idOf, insertText, justPressed, markVisibleThreadsSeen, registerBack, bindLate: bindLate } = window.WizCore.chatsParts.bind({ activityClick, actSetOrder, AGS, alertFeedback, bindGestures, bindPull, BOOM, byStatus, ch, CH, chanDropSending, chanEditUnsent, channelClick, channelSend, chanRepaint, chanRowAgent, chanSeenRow, chanSetEmoji, chatsBack, chatVars, chooseApproval, clearAll, clearReading, closeHosted, closeRowSheet, closeSpacePicker, closeStream, closeSwipe, COMPACT_KEY, compactOn, dailyClick, desks, discardDraft, draftKey, focusAgents, focusedAgent, focusOf, growTa, H, idx, inboxMove, INC, isHosted, jumpGo, jumpToMessage, keepThreadOpen, KIT, listSaveT, LIVE, loadThread, markDone, moveSubject, nextOrder, noteRowAct, notifDoneAll, notifRoute, openChat, openEmojiSheet, openLengthSheet, openMedia, openNewDraft, openRenameSheet, openSpacePicker, OUTBOX, owner, PAGE, paintPins, PHONE, picker, PIN, PINS_KEY, pinsOn, quoteMessage, readingIn, READY_ORDER_KEY, READY_ORDERS, refreshCompose, refreshReply, rememberedFocus, renderChatList, renderChats, renderEmojiSearch, renderThread, renderThreadLive, renderThreadNow, replyStd, rerenderList, resumeTracked, ROW_MENU, rowMenu, runningBack, runningGo, runningOn, saveDraft, sendChat, sentClick, setDraft, setFocus, setSummaryOpen, showBoomMessage, SPACE, spaceMember, spaces, stopPendingSend, stopTapped, submitChannelRename, submitRename, sweepAnswer, sweepLater, sweepYesToAll, syncSend, threadAct, threadBack, toast, toggleSection, toggleVoice, TOPIC, topicOn, typedInto, UPLOAD_ABORT, vib, W, winAgent, WORKING_ORDERS });
+  const { bind, click, closeFilterSheet, closeOverlay, elOf, forget, holdList, idOf, insertText, justPressed, markVisibleThreadsSeen, registerBack, bindLate: bindLate } = window.WizCore.chatsParts.bind({ activityClick, actSetOrder, AGS, alertFeedback, bindGestures, bindPull, BOOM, byStatus, ch, CH, chanDropSending, chanEditUnsent, channelClick, channelSend, chanRepaint, chanRowAgent, chanSeenRow, chanSetEmoji, chatsBack, chatVars, chooseApproval, clearAll, clearReading, closeHosted, closeRowSheet, closeSpacePicker, closeStream, closeSwipe, COMPACT_KEY, compactOn, dailyClick, desks, discardDraft, draftKey, focusAgents, focusedAgent, focusOf, growTa, H, idx, inboxMove, INC, isHosted, jumpGo, jumpToMessage, keepThreadOpen, KIT, listSaveT, LIVE, loadThread, markDone, moveSubject, nextOrder, noteRowAct, notifDoneAll, notifRoute, openChat, openEmojiSheet, openLengthSheet, openMedia, openNewDraft, openRenameSheet, openSpacePicker, OUTBOX, owner, PAGE, paintPins, PHONE, picker, PIN, PINS_KEY, pinsOn, quoteMessage, readingIn, READY_ORDER_KEY, READY_ORDERS, refreshCompose, refreshReply, rememberedFocus, renderChatList, renderChats, renderEmojiSearch, renderThread, renderThreadLive, renderThreadNow, replyStd, rerenderList, resumeTracked, ROW_MENU, rowMenu, runningBack, runningGo, runningOn, runningSideGo, saveDraft, sendChat, sentClick, setDraft, setFocus, setSummaryOpen, showBoomMessage, SPACE, spaceMember, spaces, stopPendingSend, stopTapped, submitChannelRename, submitRename, sweepAnswer, sweepLater, sweepYesToAll, syncSend, threadAct, threadBack, toast, toggleSection, toggleVoice, TOPIC, topicOn, typedInto, UPLOAD_ABORT, vib, W, winAgent, WORKING_ORDERS });
   listpaintLate({ elOf, holdList });
   focusLate({ elOf });
   agentrowsLate({ elOf, holdList });

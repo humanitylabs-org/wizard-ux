@@ -1,0 +1,3 @@
+/* Auto channel emoji (wizard-ux#1580): New channel's create step (core/chats-spaces.js) and the Agent Service's
+ * spaces_create read html[data-tweaks~="wizard/channel-auto-emoji"] / the Look file; the emoji shows with the channel's
+ * existing look, so no rules are needed. */
