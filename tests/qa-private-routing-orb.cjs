@@ -99,6 +99,9 @@ function startBox() {
         if (name === 'move' && SW && entry.front.chip) {
           const first = entry.runs.at(-1);
           await page.locator('.wpr-chip').filter({ visible: true }).first().click();
+          await page.locator('.wpr-sheet .wpr-panel').waitFor();
+          entry.sheet = await page.locator('.wpr-sheet .wpr-panel').evaluate(n => ({ bg: getComputedStyle(n).backgroundColor, rows: [...n.querySelectorAll('[data-wprmove]')].map(b => b.dataset.wprmove) }));
+          await page.screenshot({ path: path.join(out, stem + '-sheet.png') });
           await page.locator('.wpr-sheet [data-wprmove="philosopher"]').click();
           const t1 = Date.now();
           while (Date.now() - t1 < 15000) { st = await state(); if (st.runs.length > entry.runs.length) break; await nap(250); }
@@ -125,6 +128,8 @@ function startBox() {
             assert.ok(entry.moved.archived.some(a => a.id === entry.moved.old), 'the old thread (no reply yet) is removed');
             assert.equal(entry.moved.sent.filter(x => x.corrected).length, 1, 'one correction on the Sent row');
             assert.match(entry.front.after || '', /Philosopher · Claude Fable/);
+            assert.equal(entry.sheet.rows[0], 'private', 'Private group first');
+            assert.ok(!/rgba\([^)]*, 0(\.\d+)?\)|transparent/.test(entry.sheet.bg), 'opaque sheet panel: ' + entry.sheet.bg);
           }
         } else if (name === 'typed') {
           assert.equal(last.agent, 'hermes'); assert.equal(last.model, 'claude-opus-5-5'); assert.match(entry.front.chip || '', /Hermes · .*Opus.* · you named it/);

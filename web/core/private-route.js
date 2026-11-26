@@ -77,7 +77,7 @@
     const r = record(sid); if (!r || !on()) return false;
     const A = AG(), list = choices();
     const row = a => `<button type="button" class="wpr-opt${a.id === r.agent ? ' cur' : ''}" data-wprmove="${esc(a.id)}"${a.id === r.agent ? ' aria-current="true" disabled' : ''}>${A.sigil(a, 'wpr-sig')}`
-      + `<span class="wpr-on"><b>${esc(a.label)}</b><small>${esc([A.isPrivate(a) ? 'Private agent' : a.is_default ? 'Main agent' : 'Agent', A.modelName(a, a.model?.model)].filter(Boolean).join(' · '))}</small></span>`
+      + `<span class="wpr-on"><b>${esc(a.label)}</b><small>${esc([A.isPrivate(a) ? 'Private agent' : a.is_default ? 'Main agent' : 'Agent', modelLabel(a.id, a.model?.model, a.model?.provider)].filter(Boolean).join(' · '))}</small></span>`
       + `${a.id === r.agent ? '<i class="wpr-ck" aria-hidden="true">✓</i>' : ''}</button>`;
     const priv = list.filter(a => A.isPrivate(a)), std = list.filter(a => !A.isPrivate(a));
     const grp = (name, rows, cls) => rows.length ? `<div class="wpr-grp${cls}" role="group" aria-label="${esc(name)}"><div class="wpr-gh">${cls ? A.lock() : ''}<span>${esc(name)}</span></div>${rows.map(row).join('')}</div>` : '';
