@@ -196,7 +196,7 @@ Settings › Appearance › Try new features lists unfinished features anyone ca
 - **Phone tester builds**: Phones get the newest tester build.
 - **Private first setup**: New installs start private: Welcome leads with Tinfoil; Claude and ChatGPT are optional extras.
 - **Private mode switch-over**: Settings › Privacy: Private mode, Privacy check.
-- **Private routing**: Orb opens the named agent's thread (else private), with a chip to move it.
+- **Private routing**: Orb opens the named agent's thread; a chip moves it.
 - **Repair the agent's Wizard connection**: When the agent can't reach its Wizard app tools (unauthorized), `wizard link` puts the box's token back in the agent's settings; `wizard doctor` shows if they match.
 - **Result reader**: A private model files each finished background task.
 - **Running view in the AI apps sidebar**: AI apps: Running view in the sidebar.
