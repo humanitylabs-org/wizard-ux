@@ -14,14 +14,20 @@ const ON=process.env.QA_SWITCH!=='off', origin='https://store-nudge.test', C='c'
 const SKINS=(process.env.QA_SKINS||'nebula,obsidian-light').split(',').map(id=>({id,css:id.startsWith('obsidian')?'/wizard-os-home/skins/obsidian/skin.css':''}));
 const listing=(id,name,summary)=>({id,name,summary,repo:'humanitylabs-org/'+id,version:'1.0.0',commit:C,source:'standard',source_name:'Standard',channel:'standard',type:'view',category:'app',tags:['work'],publisher:'humanitylabs-org',uses:[],provides:[]});
 // Messenger here declares personal data (privacy: private), as the issue's acceptance assumes; Tracker declares nothing.
-const APPS=[listing('messenger','Messenger','Your chats in one place.'),listing('wizard-notes','Notes','A private Markdown vault.'),listing('wizardos-tracker','WizardOS Tracker','Goals, bugs and features.')];
+const APPS=[listing('messenger','Messenger','Your chats in one place.'),listing('wizard-mail','Mail','One inbox for your accounts.'),listing('wizard-notes','Notes','A private Markdown vault.'),listing('wizardos-tracker','WizardOS Tracker','Goals, bugs and features.')];
 const PERSONAL=new Set(['messenger','wizard-notes']);
+// Mail declares personal data with the label only (wizard-os#929: `personal_data: reads your email`): it stays a
+// standard app, so it starts on the main agent like any app, and the card names what it reads.
+const LABELLED=new Map([['wizard-mail','reads your email']]);
 const MAIN={id:'hermes',label:'Wizard',privacy:'standard',is_default:true}, PRIV={id:'private',label:'Private',privacy:'private',is_default:false};
 const CASES=[
  {name:'standard',app:'messenger',agents:[MAIN],tap:'standard'},        // Use Claude for now -> on the standard agent
  {name:'private',app:'messenger',agents:[MAIN],tap:'setup'},            // Set up private AI -> switch-over -> on the private agent
  {name:'no-declaration',app:'wizardos-tracker',agents:[MAIN]},           // not personal: no card
  {name:'has-private',app:'wizard-notes',agents:[MAIN,PRIV]},             // a private agent already: no card
+ {name:'label-standard',app:'wizard-mail',agents:[MAIN],tap:'standard'},  // label only: card with its line; keep on Claude
+ {name:'label-private',app:'wizard-mail',agents:[MAIN],tap:'setup'},      // label only: switch-over moves it to private
+ {name:'label-has-private',app:'wizard-mail',agents:[MAIN,PRIV]},        // label only, a private agent already: no card
 ];
 (async()=>{
  fs.mkdirSync(OUT,{recursive:true});
@@ -34,10 +40,12 @@ const CASES=[
   const box={installed:new Set(), agents:c.agents.map(a=>({...a})), grants:new Map()};
   const view=id=>{const priv=PERSONAL.has(id), has=box.agents.some(a=>a.privacy==='private');
    if(!box.grants.has(id)) box.grants.set(id,new Set(box.agents.filter(a=>priv?a.privacy==='private':a.id==='hermes').map(a=>a.id)));
-   return {app_id:id,kind:'wizard_apps',privacy:priv?'private':'standard',...(priv?{needs_private_agent:!has}:{}),agents:box.agents.map(a=>({...a,enabled:box.grants.get(id).has(a.id)}))};};
+   const lab=LABELLED.has(id)?{personal_data:true,personal_data_reads:LABELLED.get(id)}:{};
+   return {app_id:id,kind:'wizard_apps',privacy:priv?'private':'standard',...(priv?{needs_private_agent:!has}:{}),...lab,agents:box.agents.map(a=>({...a,enabled:box.grants.get(id).has(a.id)}))};};
   await context.exposeBinding('qaSwitchOver',()=>{ // what the real switch-over ends with: a private agent that has the app
    if(!box.agents.some(a=>a.privacy==='private')) box.agents.push({...PRIV});
    for(const id of PERSONAL) if(box.grants.has(id)) box.grants.get(id).add('private');
+   for(const id of LABELLED.keys()) if(box.grants.has(id)) { box.grants.get(id).delete('hermes'); box.grants.get(id).add('private'); }
   });
   await context.route('**/*',async route=>{
    const req=route.request(),u=new URL(req.url()),p=u.pathname,m=req.method();
@@ -89,14 +97,15 @@ window.WizCore={apps:()=>({APPS:[{url:'/wizard-os-home/store/'}]}),refreshApps:a
   out.oldCard=sheetOpen ? await f.locator('#sheet .pv-card:not([data-pn-card])').count() : 0;
   if(sheetOpen) { out.sheet=(await f.locator('#sheet').innerText()).replace(/\s+/g,' ').trim(); fs.writeFileSync(path.join(OUT,`${tag}-sheet.html`),await f.locator('#sheet').innerHTML()); }
   out.shotInstall=await shot('install');
-  const personalNoPrivate=PERSONAL.has(c.app) && !c.agents.some(a=>a.privacy==='private');
+  const personalNoPrivate=(PERSONAL.has(c.app)||LABELLED.has(c.app)) && !c.agents.some(a=>a.privacy==='private');
   if(!ON) {
    // Switch off: exactly the sheet as before (Privacy first) for a personal app on a box with no private agent.
    assert.equal(out.card,0,'no new card while off');
-   if(personalNoPrivate) assert.equal(out.oldCard,1,'old Privacy first card');
+   if(personalNoPrivate && PERSONAL.has(c.app)) assert.equal(out.oldCard,1,'old Privacy first card');
+   if(LABELLED.has(c.app)) assert.equal(out.oldCard,0,'a labelled app: no card at all while off, as before');
   } else if(personalNoPrivate) {
    assert.equal(out.card,1,'the card shows');
-   assert.match(out.sheet,new RegExp(`${name} holds personal data\\. We recommend private AI for apps like this, so no AI company sees it\\.`));
+   assert.match(out.sheet,new RegExp(`${name} ${LABELLED.get(c.app)||'holds personal data'}\\. We recommend private AI for apps like this, so no AI company sees it\\.`));
    assert.match(out.sheet,/Set up private AI/); assert.match(out.sheet,/Use Claude for now/); assert.match(out.sheet,/Why it matters/);
    assert.equal(out.oldCard,0,'one card only');
    // The card sits above everything else in the sheet.

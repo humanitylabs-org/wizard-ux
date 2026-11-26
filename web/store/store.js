@@ -13,7 +13,7 @@ import {sourceLabel, installedOnlyApps} from './store-source.js';
 import {parseInstallLink, installShareLink} from './install-link.js';
 import {adoptAppearance} from './store-appearance.js';
 import {renderInstallResult, successMessage} from './store-install-result.js';
-import {nudgeOn, nudgeDue, nudgeHtml, nudgeStatus, providerWord, withStandard} from './store-private-nudge.js';
+import {nudgeOn, nudgeDue, nudgeHtml, nudgeStatus, personalApp, providerWord, withStandard} from './store-private-nudge.js';
 (() => {
   'use strict';
   const $ = id => document.getElementById(id);
@@ -287,16 +287,20 @@ import {nudgeOn, nudgeDue, nudgeHtml, nudgeStatus, providerWord, withStandard} f
     const access = S.access.get(id), models = hasNeeds(c?.data);
     // Switch wizard/private-ai-nudge (issue 1802): the card recommends private AI instead, with a one-tap way to keep
     // the standard agent; after a choice the sheet says which agent has the app.
-    const nudge = nudgeOn() && access?.privacy === 'private', nst = S.nudge.get(id);
-    const card = nudge && nudgeDue(access) ? nudgeHtml({ id, name: a.name, provider: stdProvider(), why: privacyPage(), busy: nst?.busy, waiting: nst?.state === 'waiting' }) : '';
+    // An app with only the personal-data label (wizard-os#929) is already on the standard agent: once the owner chose to
+    // keep it there, the card gives way to the status line.
+    const nudge = nudgeOn() && personalApp(access), nst = S.nudge.get(id);
+    const card = nudge && nudgeDue(access) && nst?.state !== 'standard' ? nudgeHtml({ id, name: a.name, reads: access?.personal_data_reads, provider: stdProvider(), why: privacyPage(), busy: nst?.busy, waiting: nst?.state === 'waiting' }) : '';
     const chosen = nudge && !card && nst?.state ? nudgeStatus({ id, name: a.name, provider: stdProvider() }, access) : '';
     const privacy = nudge ? card : access?.needs_private_agent ? `<div class="pv-card" data-pv-app="${esc(id)}"><h3>Privacy first</h3>
       <p class="mc-lede">${esc(a.name)} is meant to be private, and this Wizard has no private agent yet, so no agent can use it. Set up a private agent, or choose a non-private agent yourself.</p>
       <div class="pv-acts"><button type="button" class="get big" data-pv-new>Set up private agent</button><button type="button" class="get" data-pv-choose>Choose an agent</button></div></div>` : '';
+    // Only a tagged app (no agent can use it yet) hides its connections behind the card; a labelled app keeps them.
+    const hides = privacy && access?.privacy === 'private';
     $('sheet').innerHTML = `<div class="list-head"><button class="back" data-back aria-label="Back">‹</button><div><h2>${esc(a.name)} is installed</h2>
-      <p>${models || !privacy ? (left ? `${left} connection${left === 1 ? '' : 's'} need${left === 1 ? 's' : ''} setup` : 'Every connection is ready') : 'Private app'}</p></div></div>
+      <p>${models || !hides ? (left ? `${left} connection${left === 1 ? '' : 's'} need${left === 1 ? 's' : ''} setup` : 'Every connection is ready') : 'Private app'}</p></div></div>
       <p class="sheet-source">${chip(a)} ${esc(provenance(a).detail)}</p>
-      ${privacy}${chosen}${models || !privacy ? `<div class="mc-list" data-mc-app="${esc(id)}">${c?.data ? Setup.html(id, c.data, rctx()) + Setup.controls(id, c.data, { ...rctx(), name: a.name, store: true }) : '<p class="empty">Checking connections…</p>'}</div>` : ''}`;
+      ${privacy}${chosen}${models || !hides ? `<div class="mc-list" data-mc-app="${esc(id)}">${c?.data ? Setup.html(id, c.data, rctx()) + Setup.controls(id, c.data, { ...rctx(), name: a.name, store: true }) : '<p class="empty">Checking connections…</p>'}</div>` : ''}`;
   }
   /* ---------------- Private AI card on the install sheet (issue 1802, switch wizard/private-ai-nudge) ---------------- */
   // The owner's standard AI by its product name, from the shell's model list ('' when unknown: "your standard agent").
@@ -579,7 +583,9 @@ import {nudgeOn, nudgeDue, nudgeHtml, nudgeStatus, providerWord, withStandard} f
       // The Router reads the app's declaration once it is registered; any needs open the install sheet.
       const id = routerId(a), [need, access] = await Promise.all([routerNeeds(id), appAccess(id)]); S.router.set(id, { ...need, at: Date.now() });
       if (access) S.access.set(id, access);
-      if (hasNeeds(need.data) || access?.needs_private_agent) { if (top() !== 'sheet') push('sheet', key(a)); else S.stack.at(-1).arg=key(a); showSheet(key(a)); window.scrollTo(0, 0); }
+      // With wizard/private-ai-nudge on, an app that declares personal data with its label only (wizard-os#929) also
+      // opens the sheet, so the card can recommend private AI; with it off nothing changes.
+      if (hasNeeds(need.data) || access?.needs_private_agent || (nudgeOn() && nudgeDue(access))) { if (top() !== 'sheet') push('sheet', key(a)); else S.stack.at(-1).arg=key(a); showSheet(key(a)); window.scrollTo(0, 0); }
       else {
         say(successMessage(access), true);
         // Asked from the Orb / Apps views' "Get more" (?open=1): open it at once, in place of this Store window.
