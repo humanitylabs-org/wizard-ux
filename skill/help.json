@@ -398,7 +398,7 @@
       "where": "Settings › Appearance › Try new features › Private mode switch-over"
     },
     "wizard/private-routing": {
-      "help": "Orb opens the named agent's thread (else private), with a chip to move it.",
+      "help": "Orb opens the named agent's thread; a chip moves it.",
       "where": "Settings › Appearance › Try new features › Private routing"
     },
     "wizard/result-reader": {
