@@ -311,6 +311,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         getWindow().setAttributes(lp);
         setContentView(root);
         buildWebView();
+        if (this instanceof AppSessionActivity) pinShotShow(); // over the WebView, under the connection screen
         reach = new ReachScreen(this, root, this::retryReach, this::openTailscale);
         if (recoveryStart && StartGuard.paused()) showRecovery();
         watchNetwork();
@@ -462,6 +463,12 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
                 if (req.isForMainFrame()) {
                     final String u = req.getUrl().toString();
                     if (!u.equals(wantUrl)) { wantUrl = u; mainFailed = false; main.post(MainActivity.this::armReach); }
+                }
+                // Instant home-screen apps (wizard-ux issue 1830, switch wizard/pin-instant-open): a pinned window's app
+                // files come from the phone (PinCache); null for anything it does not keep, which passes through as before.
+                else if (pinCache != null && PinInstant.on(MainActivity.this)) {
+                    PinCache.Reply kept = pinCache.answer(req.getUrl().toString(), req.getMethod(), false, req.getRequestHeaders());
+                    if (kept != null) return PinInstant.response(kept);
                 }
                 return null;
             }
@@ -850,7 +857,10 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         if (reach == null) return;
         boolean[] n = ReachScreen.net(this);
         if (ReachPolicy.failNow(n[0], n[1], ServerOrigin.needsTailscale(ai.wizards.os.device.AppState.origin(this)))) showOffline(null);
-        else reach.connecting();
+        // Instant home-screen apps (wizard-ux issue 1830): a Wizard window was answered a moment ago on this network, so
+        // a pinned window leaves Connecting out; Can't reach still comes at GIVE_UP_MS if nothing paints.
+        else if (this instanceof AppSessionActivity && PinInstant.skipConnecting(this)) android.util.Log.i("WizardOSReach", "connecting skipped: reached recently");
+        else { pinShotHide(); reach.connecting(); }
     };
 
     private final Runnable reachGiveUp = () -> showOffline(null);
@@ -878,6 +888,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         if (now != null && url.contains("#") && noFragment(url).equals(noFragment(now))) return; // same page, a #hop
         mainFailed = false;
         wantUrl = url;
+        pinPageShown = false;
         armReach();
     }
 
@@ -890,6 +901,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
     }
 
     void landed() {
+        PinInstant.reached(this);
         main.removeCallbacks(reachMark);
         main.removeCallbacks(reachGiveUp);
         main.removeCallbacks(reachRetry);
@@ -903,13 +915,102 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
      *  never paints still ends on the offline screen at GIVE_UP_MS, and only a paint (landed) clears that. */
     void answered(String url) {
         if (!ReachPolicy.answerDisarms(isWeb(url), mainFailed, sameHost(url, wantUrl))) return;
+        PinInstant.reached(this);
         main.removeCallbacks(reachMark);
         if (reach != null && ReachPolicy.answerHides(reach.isShowing(), reach.isOffline())) reach.hide();
+    }
+
+    /* ---- Instant home-screen apps (wizard-ux issue 1830, switch wizard/pin-instant-open, off by default) ----
+     * A pinned window's file cache (PinCache, asked from shouldInterceptRequest) and the app's last screen: saved when
+     * the window leaves the screen, shown at the next cold open over the WebView (under the connection screen) until the
+     * pinned page says the app has loaded (WizardOSNative.pinShown), a connection screen shows, or SHOT_MAX_MS. */
+    volatile PinCache pinCache;
+    private android.widget.ImageView pinShot;
+    private boolean pinPageShown = false;
+    private final Runnable pinShotGiveUp = this::pinShotHide;
+
+    /** Started at the top of a pinned window's onCreate, so the picture decodes while the WebView is being made. */
+    private java.util.concurrent.FutureTask<android.graphics.Bitmap> pinShotLoad;
+    private long pinCreateAt = 0, pinFirstDrawAt = 0, pinShotDrawnAt = 0;
+
+    void pinShotStart() {
+        pinCreateAt = android.os.SystemClock.uptimeMillis();
+        if (!PinInstant.on(this)) return;
+        final String origin = ai.wizards.os.device.AppState.origin(this), app = HomeScreenShortcuts.appId(this, getIntent());
+        final android.content.Context ctx = getApplicationContext();
+        pinShotLoad = new java.util.concurrent.FutureTask<>(() -> PinInstant.shot(ctx, origin, app));
+        new Thread(pinShotLoad, "pin-shot-load").start();
+    }
+
+    private void pinShotShow() {
+        pinCache = PinInstant.cache(this);
+        long built = android.os.SystemClock.uptimeMillis();
+        android.graphics.Bitmap b = null;
+        try { if (pinShotLoad != null) b = pinShotLoad.get(400, java.util.concurrent.TimeUnit.MILLISECONDS); }
+        catch (Exception slow) { if (pinShotLoad != null) pinShotLoad.cancel(true); }
+        pinShotLoad = null;
+        final long waited = android.os.SystemClock.uptimeMillis() - built;
+        if (b != null) {
+            pinShot = new android.widget.ImageView(this);
+            pinShot.setScaleType(android.widget.ImageView.ScaleType.FIT_START);
+            pinShot.setBackgroundColor(Color.rgb(5, 3, 12));
+            pinShot.setImageBitmap(b);
+            pinShot.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS);
+            root.addView(pinShot, root.indexOfChild(web) + 1, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+            main.postDelayed(pinShotGiveUp, PinInstantPolicy.SHOT_MAX_MS);
+        }
+        final android.widget.ImageView shown = pinShot;
+        // The window's first frame (with the picture when there is one): timed for PinInstantScenario and the log.
+        root.getViewTreeObserver().addOnPreDrawListener(new android.view.ViewTreeObserver.OnPreDrawListener() {
+            @Override public boolean onPreDraw() {
+                if (root != null) root.getViewTreeObserver().removeOnPreDrawListener(this);
+                pinFirstDrawAt = android.os.SystemClock.uptimeMillis();
+                if (shown != null && pinShot == shown) pinShotDrawnAt = pinFirstDrawAt;
+                if (shown != null) android.util.Log.i("WizardOSPinInstant", "last screen on the first frame, " + (pinFirstDrawAt - pinCreateAt)
+                        + " ms after the window was created (WebView " + (built - pinCreateAt) + " ms, waited " + waited + " ms for the picture)");
+                return true;
+            }
+        });
+    }
+
+    /** When the first frame with the last screen on it was drawn (0: not shown); read by PinInstantScenario. */
+    long pinShotDrawnAt() { return pinShotDrawnAt; }
+    /** When this pinned window's first frame was drawn, with or without a picture (0: not yet). */
+    long pinFirstDrawAt() { return pinFirstDrawAt; }
+    boolean pinShotShowing() { return pinShot != null; }
+
+    void pinShotHide() {
+        final android.widget.ImageView shot = pinShot;
+        if (shot == null) return;
+        pinShot = null;
+        main.removeCallbacks(pinShotGiveUp);
+        shot.animate().alpha(0f).setDuration(150).withEndAction(() -> { if (root != null) root.removeView(shot); }).start();
+    }
+
+    /** Leaving the screen: keep a picture of the app as it is now, for the next cold open (only a loaded app page). */
+    private void pinShotSave() {
+        if (web == null || root == null || !pinPageShown || pinShot != null || (reach != null && reach.isShowing()) || !PinInstant.on(this)) return;
+        final String app = HomeScreenShortcuts.appId(this, getIntent());
+        final int w = web.getWidth(), h = web.getHeight();
+        if (app == null || w <= 0 || h <= 0) return;
+        final float scale = Math.min(1f, PinInstantPolicy.SHOT_WIDTH / (float) w);
+        final android.graphics.Bitmap dest;
+        try { dest = android.graphics.Bitmap.createBitmap(Math.round(w * scale), Math.round(h * scale), android.graphics.Bitmap.Config.ARGB_8888); }
+        catch (OutOfMemoryError oom) { return; }
+        int[] at = new int[2];
+        web.getLocationInWindow(at);
+        final String origin = ai.wizards.os.device.AppState.origin(this);
+        try {
+            android.view.PixelCopy.request(getWindow(), new android.graphics.Rect(at[0], at[1], at[0] + w, at[1] + h), dest, result -> {
+                if (result == android.view.PixelCopy.SUCCESS) PinInstant.saveShot(this, origin, app, dest); else dest.recycle();
+            }, main);
+        } catch (RuntimeException unavailable) { dest.recycle(); }
     }
 
     private void showOffline(String why) {
         main.removeCallbacks(reachMark);
         main.removeCallbacks(reachGiveUp);
+        pinShotHide();
         if (reach == null) return;
         ReachPolicy.Why w = ReachScreen.why(this);
         reach.offline(w, why, ReachScreen.tailscaleInstalled(this));
@@ -1305,6 +1406,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         ScrollCaptureDiagnostics.record("Activity.onPause",ScrollCaptureDiagnostics.fields());
         if (web != null && !(this instanceof AppSessionActivity)) web.evaluateJavascript(WizardLook.READ_JS, raw -> WizardLook.save(this, raw)); // the reach/Connect screens wear the last skin
         if (this instanceof AppSessionActivity && web != null) web.evaluateJavascript("window.__wosSessionCheckpoint?.()", null);
+        if (this instanceof AppSessionActivity) pinShotSave();
         if (mizel != null) mizel.setPcmForeground(false);
         // Mid-recording the page must keep running in the background (the floating orb can send/pause/cancel it).
         if (web != null && !ai.wizards.os.everywhere.EverywhereService.appIsRecording()) web.onPause();
@@ -1858,6 +1960,23 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
             AppLocation.setOn(MainActivity.this, on);
             // Off: forget any grant this WebView still holds; the shell also takes `geolocation` off open frames.
             if (!on) runOnUiThread(() -> GeolocationPermissions.getInstance().clearAll());
+        }
+        /* ---- Instant home-screen apps (wizard-ux issue 1830, switch wizard/pin-instant-open, off by default): the main
+         * page copies the switch here (PinInstant); a pinned page says its shell release and when its app has loaded. ---- */
+        @JavascriptInterface
+        public void pinInstantSwitch(boolean on) {
+            if (MainActivity.this instanceof AppSessionActivity) return;
+            PinInstant.setOn(MainActivity.this, on);
+        }
+        @JavascriptInterface
+        public void pinRelease(String token) {
+            PinCache c = pinCache;
+            if (c != null) c.release(token);
+        }
+        @JavascriptInterface
+        public void pinShown() {
+            if (!(MainActivity.this instanceof AppSessionActivity)) return;
+            main.post(() -> { pinPageShown = true; pinShotHide(); });
         }
         /* ---- One UI icon count (wizard-ux issue 1669, switch wizard/phone-badge-look, off by default): the main page
          * copies the switch here (badge/BadgeLook); a change redraws the Messenger icon count at once. ---- */

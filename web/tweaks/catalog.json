@@ -64,7 +64,8 @@
     "wizard/backup-health",
     "wizard/private-routing",
     "wizard/result-reader",
-    "wizard/private-ai-nudge"
+    "wizard/private-ai-nudge",
+    "wizard/pin-instant-open"
   ],
   "defaults": [],
   "promotedDefaults": [],

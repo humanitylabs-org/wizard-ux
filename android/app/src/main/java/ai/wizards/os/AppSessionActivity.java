@@ -18,6 +18,8 @@ public final class AppSessionActivity extends MainActivity {
         if (requested != null) linked(getIntent());
         setIntent(new Intent(this,AppSessionActivity.class).setAction(Intent.ACTION_VIEW)
             .setData(requested == null ? null : getIntent().getData()));
+        // Instant home-screen apps (wizard-ux issue 1830): the app's last screen starts decoding now, beside the WebView.
+        pinShotStart();
         super.onCreate(state);
         applyImmersive(false);
         String app = HomeScreenShortcuts.appId(this,getIntent());
