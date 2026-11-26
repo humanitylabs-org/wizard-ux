@@ -31,6 +31,8 @@ window.WizCore.skinHostParts.host = function ({ backClaims, BOOT_GUESS_MS, bootG
     commit(id) { ensureCss(id); skinHostVars.committedId = id; if (skinHostVars.shell) skinHostVars.packageReady = load(id); },
     /* app.js: the shell is ready; hands over the narrow adapter skins are allowed to drive. */
     attach(adapter) { skinHostVars.shell = adapter; for (const n of builtinDefs.keys()) startBuiltin(n); const id = skinHostVars.committedId || (window.WosSkin && window.WosSkin.current); skinHostVars.committedId = id; if (id) skinHostVars.packageReady = load(id); window.WosMySkin?.startScript(); if (layoutOf(skinHostVars.layoutId)) loadLayout(skinHostVars.layoutId); if (booting()) bootGiveUp(skinHostVars.layoutId); window.dispatchEvent?.(new Event('wos:skin-host-ready')); },
+    /* core/privacy.js (wizard-ux#1801): Ask my Wizard opens a new chat holding these words, unsent. */
+    textDraft(text) { try { return !!skinHostVars.shell?.textDraft?.(String(text || '').slice(0, 2000)); } catch (e) { console.error(e); return false; } },
     /* Layouts: Settings › Look. Classic loads nothing. */
     layouts: LAYOUTS, setLayout,
     escapeSurface() { for (const h of [...escapeSurfaces].reverse()) if (!h.a.dead && h.back() === true) return true; return false; },

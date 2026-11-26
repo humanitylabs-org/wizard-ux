@@ -58,7 +58,7 @@ Back: `WizEscapeBack`, `WosBack`; `WizChatsHost.registerBack`/back.push share re
 | Group by day | `WizCore.chats`/`WizLive.groups`: `--wos-chats-group-switch` hook; Pins/compact independent |
 | Chats/Ready | `WizChatsHost`/`WizAppExtensions` (`chats-view.js`): surface/(views.)mount, placement, `replyRecorder`, draft admission; host `keepNewOpen(id)` keeps docked New open on send (`WosSkinHost.routeShows`); pills: `workspaceNav.chatsCount/refreshChats`; subgroups: `WizChatsListModel.unreadCount`; counts: `.unreadThreads` |
 | Bound-view handle (3 intro glows) | `WosSkinHost` built-in (`edge-peek.js`), host storage |
-| Repaint changed nodes without flicker | `WosMorph.morph` (`dom-morph.js`) |
+| Repaint changed nodes without flicker | `WosMorph.morph` |
 | Mic, retry, model, place/follow | `WosChatPower` (`chat-power.js`;`chanOwnPost`/`chanModel`/`landAt`/`paintJump`); `voice.reply/onTap`→`recordReply`; `WosModels` (`foreignApp`,`reconnect`); `WosErrors`; `WosWork`; composer `WizCore` (`chats.js` `fitLabel`,`.css` `lab-row`) |
 | Text/media | `WosChat` (`chat-kit.js`: `helm`, `tweakIds`, `actionIds`→`WosActionCards`, `md`, `copyRich`, `viewer`, `saveFile`, `drafts.keys`) |
 | Spaces / Focus | `WizCore` Chats (`chats.js`), `WizLive.prefOps` (`spaces`; add = move, one Space per chat); `WizLive.spaceSessions(ids)`; `winAgent`/`modelRoute`; `WosOutbox.onNew`; restored Focus awaits census; hidden routes; AI apps pills (`.aad-agents`): `focusRows`, `agents.focus`; `WosAgents.colour`/`distinctHues` + `--ch-agent-hue` |
@@ -74,18 +74,18 @@ Back: `WizEscapeBack`, `WosBack`; `WizChatsHost.registerBack`/back.push share re
 | Settings in both shells | `WosSettings.register` (`settings.js`: Skin/Colors, Background/Mode, shared About/fail-closed updates, package `hasSystem`), `focus(id)`; same-HTML `refresh()` no-op; Home/AI rehost; Look/New skin shell filter (keeps hidden defaults); reply tweak `tweakCard`; narrow Back; `WosFeatures`; `WizConfig.responseStyle`; Try new features |
 | Agent identity, glyph, hue; default-agent route (`routeAgent`); app's agents (`appAgents`) | `WosAgents` (`agents.js`) |
 | Store | `storeKind,sourceLabel,parseInstallLink,removeInstalledApp,githubSheet` |
-| App agent routing, private-app note + setup (incl. Store) | `WosAppRoute` (`app-route.js`) |
+| App agent routing, private-app note + setup (incl. Store); private mode (Settings › Privacy) | `WosAppRoute` (`app-route.js`, `openAgents`); `WosPrivacy` |
 | App icons, logos | `WizSigil` (`sigils.js`, `sigils.css`): aliases, registry/HOUSE glyphs first; unbranded fallback; `orb(node)` white glyphs; contain-fit pins. Tests: `app-icon-*.test.mjs` |
 | Launcher | `WizLauncher`, `WizLauncherDefaults`; 1s boot; `renderLauncher`: unique ids; `WizCore`: native path gate, `whenOpenable`, `installs` |
-| App tiles | `WosAppKinds` (`app-kinds.js`) |
-| Brand hat | `WizBrand` (`brand.js`) |
+| App tiles | `WosAppKinds` |
+| Brand hat | `WizBrand` |
 | Links: outside→panel (Android; `links.panel:false`=off)/browser/`links.reader`; sheet/win/hold; `data-wizard-browse`=original | `WizLinks` (`links.js`; `openIn*`/`follow`/`popup`) |
 | Downloads: in-app “Downloaded · Open” banner + recent-downloads sheet (Android only; inert without `wizardDownloadsPort`); Settings → Phone → Downloads | `WosDownloads` (`downloads.js`, `downloads.css`); native `downloads/*.java` (names, quiet DownloadManager; docs/android-downloads-port.md) |
-| Selection actions, AI Look up | `WosSelMenu` (`sel-menu.js`), `WosLookup` (`lookup-pop.js`) |
+| Selection actions, AI Look up | `WosSelMenu`, `WosLookup` (`lookup-pop.js`) |
 | Share sheet (text/url/image/file), generic cached People recency, Agents and pending handoffs | `WosShareSheet` (`share-sheet.js`), entered via `WosChat.sharePayload`/`shareFile`; hold → tray: `bindSharePress` |
-| Agent screen context | `WizScreen` (`screen-text.js`) |
+| Agent screen context | `WizScreen` |
 | Dictation into a focused field | `WizCore` (`focused-field.js`, sandboxed too); native `WizardKeyboardService.insertText`; voice.js; `WosMic` (`mic.js`) |
-| Local commands | `WosCommands` (`commands.js`) |
+| Local commands | `WosCommands` |
 | Screen capture | `WosScreenCapture`(`screen-capture.js`),`WosCaptureTools`; `ScreenMode`/`screen.html` |
 | Screen | `ScreenMode`: picture caption placement (`screen.html`); independent picture-read executor (`ScreenMode.java`) |
 | Reload notices/keep | `WizWebUpdate`, `WizAppUpdates` (`web-update.js`), `WizAppVersions`, `WosUpdates`/`WosUpdateFlow` (`os-updates.js`, `wos:channel`; APK `UpdatePolicy`); `WizAppCapture.rescueTake`/`pageAudioFree` |

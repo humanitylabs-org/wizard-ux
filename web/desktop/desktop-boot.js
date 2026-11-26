@@ -313,6 +313,8 @@ window.WizCore.desktopParts.boot = function ({ $$, APP, appAt, appOf, APPS, ask,
     contextDraft: (key, item, words, draft) => { let w = desktopVars.homeOpen ? null : skinChatsWin(); if (!w) { openChatsList(); w = skinChatsWin(); } if (!w) return false; focusWin(w.id); const inPlace = !!words && !draft && String(key).startsWith('notifications:') && CHATS.notifOpen?.(w.id) === String(key).slice(14); if (!inPlace) { CHATS.openContextDraft(w.id, key, item, draft); CHATS.renderChats(w); syncChatsPane(w.id); } if (words) CHATS.sendChat(w.id, words, 'tapping Resolve this on a notification in Chats'); else setTimeout(() => focusInside(w.id), 30); return true; },
     models: () => { const w = skinChatsWin(); return w ? CHATS.tweakModels(w.id) : []; },
     model: (choice, alive) => { const w = skinChatsWin(); return w ? CHATS.tweakModel(w.id, choice, alive) : null; },
+    // Settings › Privacy's Ask my Wizard (wizard-ux#1801): a new chat whose composer holds these words, unsent.
+    textDraft: text => { let w = desktopVars.homeOpen ? null : skinChatsWin(); if (!w) { openChatsList(); w = skinChatsWin(); } if (!w) return false; closeSettings(); focusWin(w.id); CHATS.openTextDraft(w.id, text); CHATS.renderChats(w); syncChatsPane(w.id); setTimeout(() => focusInside(w.id), 30); return true; },
     deskCount: () => desktopVars.ws.length,
     root() { const w = skinChatsWin(); return w ? document.querySelector(`[data-chats="${w.id}"]`) : null; },
     dock: () => null,

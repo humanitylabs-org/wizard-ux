@@ -7,7 +7,7 @@ description: "Where is, what is, how to: any Wizard setting or screen. Use when 
 
 Every screen, Settings page and feature switch of the Wizard interface (the phone app and the desktop in a browser or the Mac app), with where it is and what it does. Written from the interface code of this Wizard's release.
 
-- Give the exact path the way it reads on screen, e.g. Settings › About & updates › Updates › Automatic, and how to open Settings: on the desktop, the cog at the bottom left under the chats list (older Desks view: the top-bar gear, ⌥,); on the phone, the gear at the top right of Home.
+- Give the exact path the way it reads on screen, e.g. Settings › About & updates › Updates › Automatic, and how to open Settings (Open Settings, below).
 - Say the condition when there is one (For testers channel only, Android app only, desktop only, only when the box has it).
 - You can't flip these switches or settings for the owner: they are owner-only, on the owner's screen. Tell them what to tap.
 - Never invent a setting, page or button. If what they ask for isn't in this manual, say it isn't in the Wizard interface as far as you know, and ask for a screenshot of where they are looking. Don't search your own files for interface text: the interface code isn't in your container.
@@ -40,7 +40,7 @@ Every screen, Settings page and feature switch of the Wizard interface (the phon
 - **AI apps view (desktop)**: The standard desktop. Left: the chats sidebar (switch Wizard at the top, search ⌥K, ◫ folds it to a rail ⌥L, the cog for Settings and + New chat at the bottom). Middle: the open chat with the message box, the model and the orb. Right: the Apps column (pinned apps, open apps, + Add an app, Tidy). ⌥1–⌥0 pick an app, ⌥W closes, ⌥F makes the app panel wider, ⌥R folds the column, ⌥H hides both sides. Its sidebar's sort options: Settings › Chats & app screens.
 - **Apps view**: A view where every open app has its own full-screen window, with a + sheet listing Open, Installed and Get more apps.
 - **Orb view**: A view where your apps float as satellites around the orb (phone Home and a desktop scene).
-- **Desktop top bar (Desks view)**: Left: Home and your desks (+ New desktop). Right: search (⌥Space, also ⌘K), Talk about this (⌥S; replies to the open chat or asks about the window), Tell the computer (⌥C, local commands like 'next desk'), Dictate (⌥D), New voice chat (⌥V), the Inbox count (⌥I, opens Chats), Settings (⌥,), Keys guide (⌥/). The AI apps view has no top bar.
+- **Desktop top bar (Desks view)**: Left: Home and your desks (+ New desktop). Right: search (⌥Space, also ⌘K), Talk about this (⌥S), Tell the computer (⌥C, local commands), Dictate (⌥D), New voice chat (⌥V), the Inbox count (⌥I, opens Chats), Settings (⌥,), Keys guide (⌥/). The AI apps view has no top bar.
 - **Desks (phone) / desktops**: Separate spaces for apps and chats. Phone: swipe the orb sideways or tap the dots under it (long-press to see all). Desktop (Desks view): the desks in the top bar, + New desktop; ⌥` or ⌥1 Home, ⌥2–⌥9 the next desks.
 - **Phone orb**: Tap: talk to Wizard (tap again to send). Hold: a command for the phone (e.g. 'calendar', 'next desk', 'settings'). Swipe up: apps; down: hide the bars; sideways: desks. While recording: Cancel, Pause, Screenshot, Attach.
 - **Spaces**: Named groups of chats you make (a chat can be in several); pick one in Chats' Focus strip. Ask the agent to make or fill a Space. Spaces are the Channels (Chats › Channels).
@@ -194,7 +194,7 @@ Settings › Appearance › Try new features lists unfinished features anyone ca
 - **Phone recovery mode**: Android: a frozen start reopens in recovery mode.
 - **Phone tester builds**: Phones get the newest tester build.
 - **Private first setup**: New installs start private: Welcome leads with Tinfoil; Claude and ChatGPT are optional extras.
-- **Private mode switch-over**: Turn private mode on or off on this Wizard: chosen apps move to a private Tinfoil agent, plus the Privacy check.
+- **Private mode switch-over**: Settings › Privacy: Private mode, Privacy check.
 - **Private routing**: Orb sends a request to the agent you name, else private.
 - **Repair the agent's Wizard connection**: When the agent can't reach its Wizard app tools (unauthorized), `wizard link` puts the box's token back in the agent's settings; `wizard doctor` shows if they match.
 - **Running view in the AI apps sidebar**: AI apps: Running view in the sidebar.
@@ -242,3 +242,4 @@ No longer switches (owners and old chats may still name them):
 - **Add another Wizard?** Settings › Connections › Wizards › Add a Wizard.
 - **Install an app?** Open the App Store (desktop: Apps column › + Add an app › Get more; phone: swipe the orb up › Get more), open the app, Get.
 - **See keyboard shortcuts?** Desktop: ⌥/ or hold ⌥.
+- **Why would I want private AI?** Claude and ChatGPT keep what you send on their servers; private AI runs in sealed hardware (Tinfoil) that nobody else, not even us, can see into. Settings › Privacy › Why it matters.

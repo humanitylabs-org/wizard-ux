@@ -1,14 +1,15 @@
 {
   "id": "wizard/private-mode",
   "name": "Private mode switch-over",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "author": "wizard",
   "apiVersion": 1,
   "capabilities": [
     "layout"
   ],
   "issues": [
-    "humanitylabs-org/wizard-agent-service#626"
+    "humanitylabs-org/wizard-agent-service#626",
+    "humanitylabs-org/wizard-ux#1801"
   ],
-  "description": "An existing Wizard can turn private mode on and off: a private agent on Tinfoil (your existing one is reused), the apps you choose (Mail, Notes and the like) move to it with their work and schedules, it can read your standard agent's chats and memory (never the other way), and new chats start on it. Turning it off puts every app back and keeps the private agent and its history sealed. Also gives the Privacy check: each app, which agent uses it and whose servers that model runs on. Read by the Agent Service (wizard-agent-service issue 626); nothing in the shell changes until it is on."
+  "description": "Settings › Privacy gets a Private mode row, the Privacy check (each app holding personal data, which agent uses it and whose servers that AI runs on, with Move to private / Move to standard) and Why it matters. Set up private AI opens a short sheet: sign in to Tinfoil, create your private agent, tick the apps to move, bring your context along, start new chats on private AI. The model picker's Private group offers the same setup. Turning it off puts every app back and keeps the private agent and its history sealed. The Agent Service does the work (wizard-agent-service issue 626); with the switch off nothing changes."
 }

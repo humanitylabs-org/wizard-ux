@@ -396,6 +396,14 @@
       "classification": "shared",
       "note": "Optional in-memory temporary chat; strict server capability plus default-off preference"
     },
+    "core/privacy.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "classification": "shared",
+      "note": "Settings › Privacy: Private mode row, Privacy check, switch-over sheet, Why it matters (issue 1801, switch wizard/private-mode)"
+    },
     "core/action-cards.js": {
       "loadedBy": [
         "phone",
@@ -1794,6 +1802,7 @@
     "core/phone-connect.js",
     "core/photos-relay.js",
     "core/polish.css",
+    "core/privacy.js",
     "core/reach.js",
     "core/resources.css",
     "core/resources.js",
