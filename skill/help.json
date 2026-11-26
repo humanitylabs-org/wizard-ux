@@ -400,6 +400,10 @@
       "help": "Android app, with Phone notifications per app on: your Wizard tells the phone the moment an app sends a notification, so it shows within seconds even with the phone locked (one connection over Tailscale, no Google).",
       "where": "Settings › Appearance › Try new features › Instant phone notifications"
     },
+    "wizard/phone-chat-replies": {
+      "help": "Android app: your agent's chat replies reach the phone as Notifications items under Chats; tap opens the chat.",
+      "where": "Settings › Appearance › Try new features › Chat replies as Chats notifications"
+    },
     "wizard/lock-screen-player": {
       "help": "Android app: Podcasts plays through the phone's media player (lock screen, headset buttons), like Music.",
       "where": "Settings › Appearance › Try new features › Phone media player for Podcasts"

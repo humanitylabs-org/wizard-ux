@@ -125,4 +125,42 @@ public class AppNotifyPolicyTest {
         assertEquals(o + "/wizard-os-home/?open=messenger", AppNotifyPolicy.target(o, "javascript:alert(1)", "messenger"));
         assertEquals(o + "/wizard-os-home/?open=notifications", AppNotifyPolicy.target(o, "", "notifications"));
     }
+
+    /* Chat replies as Chats notifications (wizard-ux issue 1619, switch wizard/phone-chat-replies). */
+    static JSONObject reply(String id, double time, String link, String... tags) throws Exception {
+        return item(id, time, "Trip plan", 3, tags).put("link", link).put("from", "chats");
+    }
+
+    @Test
+    public void aChatReplyTheBoxPostedOpensItsThreadUnderChats() throws Exception {
+        String link = "https://box.example.ts.net:8796/wizard-os-home/?session=20261126_010203_ab12";
+        JSONArray items = new JSONArray()
+                .put(reply("r1", 200, link, "app:chats", "chat-reply"))
+                .put(item("m1", 190, "Carlos", 3, "app:messenger"));
+        AppNotifyPolicy.Pass p = AppNotifyPolicy.pass(items, new JSONObject(), 100, new HashSet<>());
+        assertEquals(2, p.post.size());
+        assertEquals("chats", p.post.get(0).app);
+        assertEquals("app-chats", AppNotifyPolicy.channelId(p.post.get(0).app));
+        assertEquals("Chats", AppNotifyPolicy.channelName("chats", null));
+        assertEquals("20261126_010203_ab12", p.post.get(0).thread);
+        assertEquals(null, p.post.get(1).thread); // any other app keeps opening its link or the app
+    }
+
+    @Test
+    public void onlyATaggedChatsReplyWithAValidThreadCarriesOne() throws Exception {
+        String o = "https://box.example.ts.net/wizard-os-home/";
+        assertEquals("abc", AppNotifyPolicy.threadOf(reply("a", 1, o + "?view=chats&session=abc", "app:chats", "chat-reply")));
+        assertEquals(null, AppNotifyPolicy.threadOf(reply("a", 1, o + "?session=a%20b", "app:chats", "chat-reply")));
+        assertEquals(null, AppNotifyPolicy.threadOf(reply("a", 1, o + "?session=abc", "app:chats"))); // not a box reply
+        assertEquals(null, AppNotifyPolicy.threadOf(reply("a", 1, o + "?session=abc", "app:messenger", "chat-reply")));
+        assertEquals(null, AppNotifyPolicy.threadOf(reply("a", 1, o + "?session=..", "app:chats", "chat-reply")));
+        assertEquals(null, AppNotifyPolicy.threadOf(reply("a", 1, o, "app:chats", "chat-reply")));
+        assertEquals(null, AppNotifyPolicy.threadOf(reply("a", 1, o + "?session=" + "x".repeat(181), "app:chats", "chat-reply")));
+    }
+
+    @Test
+    public void chatsSetToOffInNotificationsKeepsRepliesOffThePhone() throws Exception {
+        JSONArray items = new JSONArray().put(reply("r1", 200, "https://b.example/wizard-os-home/?session=s1", "app:chats", "chat-reply"));
+        assertEquals(0, AppNotifyPolicy.pass(items, new JSONObject().put("chats", "off"), 100, new HashSet<>()).post.size());
+    }
 }

@@ -170,6 +170,7 @@ Settings › Appearance › Try new features lists unfinished features anyone ca
 - **Calm offline card**: The can't-reach-your-Wizard card shows one dotted path (Internet · Tailscale · Wizard), one short next step and a small Check again with the automatic re-check time.
 - **Channels: a fitting emoji for new channels**: New channels get a fitting emoji.
 - **Channels: an AI-picked emoji for new channels**: New channels with no emoji get one picked by your Wizard's fast model.
+- **Chat replies as Chats notifications**: Android app: your agent's chat replies reach the phone as Notifications items under Chats; tap opens the chat.
 - **Chats: title bar names the tab**: Chats' title bar names the tab.
 - **Clear chat notifications**: Android app: reading a LINE, WhatsApp, Telegram or other bridged chat in Messenger clears that app's own notification (needs Android's Notification access).
 - **Desktop sidebar follows Default Chats**: AI apps desktop: the chats sidebar uses the Chats look picked in Settings › Chats & app screens › Default Chats.

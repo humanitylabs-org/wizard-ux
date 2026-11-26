@@ -395,7 +395,11 @@
     if (out.length) await loadMarks();
     return withMarks(out.filter(it => inChats(it.app)));
   }
-  const readNotes = () => fetch('/notifications/api/items?view=all&limit=200', { cache: 'no-store', credentials: 'same-origin' }).then(r => r.ok ? r.json() : null, () => null);
+  // A chat reply the box posted for the phone (wizard-ux issue 1619: app:chats + chat-reply) is already its thread's
+  // unread reply in Chats: the bell never lists it a second time.
+  const chatReply = i => !!i && Array.isArray(i.tags) && i.tags.includes('chat-reply') && (i.from === 'chats' || i.tags.includes('app:chats'));
+  const readNotes = () => fetch('/notifications/api/items?view=all&limit=200', { cache: 'no-store', credentials: 'same-origin' }).then(r => r.ok ? r.json() : null, () => null)
+    .then(d => d && Array.isArray(d.items) ? { ...d, items: d.items.filter(i => !chatReply(i)) } : d);
   async function loadItems() {
     if (!IN.subs.size) {
       // Nothing lists them, but the part reads the whole list for its own sources (never the stock part).
