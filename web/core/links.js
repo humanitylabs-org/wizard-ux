@@ -21,6 +21,7 @@
  *      L.open(url) · L.back() → bool · L.close() · L.isOpen() · L.state()
  *      asWindow(path, title) → bool: the host opens same-origin pages as its own window instead of the sheet/pane.
  *      WizLinks.intercept(root, L) wires every http(s) link inside `root` (chat bubbles) to the sheet.
+ *      WizLinks.popup(href) → bool: an installed app's page as a pop-up over the current screen (wizard-os#796).
  */
 (() => {
   'use strict';
@@ -161,7 +162,7 @@
       </header>
       <div class="ls-body"><i class="ls-load"></i><iframe class="ls-frame" title="Link" allow="microphone; clipboard-read; clipboard-write; fullscreen; geolocation 'none'" referrerpolicy="same-origin"></iframe></div></div>`;
     (parent || document.body).appendChild(el);
-    const frame = el.querySelector('iframe'), bar = el.querySelector('.ls-bar'), panel = el.querySelector('.ls-panel');
+    let frame = el.querySelector('iframe'); const bar = el.querySelector('.ls-bar'), panel = el.querySelector('.ls-panel');
     // Browser owner boundary (wizard-os#133, box switch): every page in the sheet runs sandboxed (opaque origin), so an
     // app page or upload opened here cannot reach the shell. The sheet then treats it like any other-site page.
     if (window.WizBrowserBoundary?.enabled) frame.setAttribute('sandbox', window.WizBrowserBoundary.sandbox);
@@ -188,7 +189,7 @@
       onChange && onChange(true);
     }
     function close() {
-      if (!open) return false; open = false; el.classList.remove('peek'); { const fb = el.querySelector('[data-ls="full"]'); if (fb) { fb.textContent = '⤡'; fb.setAttribute('aria-label', 'Smaller'); fb.title = 'Smaller'; } }
+      if (!open) return false; open = false; unpop(); el.classList.remove('peek'); { const fb = el.querySelector('[data-ls="full"]'); if (fb) { fb.textContent = '⤡'; fb.setAttribute('aria-label', 'Smaller'); fb.title = 'Smaller'; } }
       el.classList.remove('open'); panel.style.transform = '';
       hideT = setTimeout(() => { if (!open) { el.hidden = true; stack = []; try { frame.contentWindow.location.replace('about:blank'); } catch (e) {} } }, 260);
       onChange && onChange(false);
@@ -216,6 +217,32 @@
       stack.push({ url: u.href, title: '' }); paint(); show(); load(u.href);
       return true;
     }
+    // An installed app's page as a pop-up over the current screen (wizard-os#796): it skips the shell's own route for
+    // app links (the app's desk, window or Android window), so the page it was tapped in stays exactly as it was.
+    // The app keeps its services here (theme, Back, the browser boundary channel) until the sheet closes.
+    let popDetach = null;
+    function unpop() { const d = popDetach; popDetach = null; try { d?.(); } catch (_) {} }
+    function popup(href, app) {
+      const u = abs(href); if (!u || !inApp(u) || !app?.id || !app?.url || !allowURL(u)) return false;
+      unpop();
+      // A fresh frame that starts at the app's page: the shell's app services check a window by its frame's own src
+      // (inside the app's path), and a first load adds no browser history entry, so Back stays the shell's.
+      const fresh = document.createElement('iframe');
+      for (const k of ['class', 'title', 'referrerpolicy', 'sandbox']) { const v = frame.getAttribute(k); if (v != null) fresh.setAttribute(k, v); }
+      fresh.setAttribute('allow', window.WizCore?.frameAllow?.('microphone; clipboard-read; clipboard-write; fullscreen', { url: u.href }) || "microphone; clipboard-read; clipboard-write; fullscreen; geolocation 'none'");
+      fresh.src = u.href;
+      frame.removeEventListener('load', onLoad); fresh.addEventListener('load', onLoad);
+      frame.replaceWith(fresh); frame = fresh;
+      stack.push({ url: u.href, title: String(app.name || '') }); paint(); show(); el.classList.add('loading');
+      const off = window.WizAppServices?.attach?.(frame, { appId: app.id, path: app.url, isFront: () => open, isVisible: () => open, back: () => back() }) || null;
+      // Under the browser boundary the page is sandboxed: its Esc only comes across as a message (no window owns
+      // this frame, so nobody else steps back for it).
+      const B = window.WizBrowserBoundary, shown = frame;
+      const stopKeys = B?.enabled && typeof B.onInput === 'function'
+        ? B.onInput((f, ev) => { if (f === shown && open && ev?.kind === 'key' && ev.type === 'keydown' && ev.key === 'Escape') back(); }) : null;
+      popDetach = () => { try { stopKeys?.(); } catch (_) {} off?.(); };
+      return true;
+    }
     function back() {
       if (!open) return false;
       if (stack.length > 1) { stack.pop(); popping = true; paint(); load(cur().url); return true; }
@@ -223,7 +250,8 @@
     }
 
     // Every load: record where the page really is, and keep it inside the sheet.
-    frame.addEventListener('load', () => {
+    frame.addEventListener('load', onLoad);
+    function onLoad() {
       el.classList.remove('loading');
       let win, doc; try { win = frame.contentWindow; doc = frame.contentDocument; } catch (e) { return; }
       if (!doc || doc.location.href === 'about:blank') return;
@@ -243,7 +271,7 @@
       if (cur()) cur().title = (doc.title || '').trim();
       paint();
       patch(win, doc);
-    });
+    }
     function patch(win, doc) {
       if (doc.__wizLinks) return; doc.__wizLinks = true;
       try { linkMenu(doc, 'body', doc.baseURI); } catch (_) {}
@@ -315,12 +343,13 @@
     }
 
     const api = {
-      el, open: go, back, close,
+      el, open: go, back, close, popup,
       isOpen: () => open,
       state: () => ({ open, depth: stack.length, url: cur()?.url || '', title: cur()?.title || '' }),
     };
     // The shell's own sheet (the mount that names its Reader) also opens sandboxed apps' links (follow, below).
     if (arguments[0]?.readerApp) primary = api;
+    if (arguments[0]?.readerApp || arguments[0]?.popups) popHost = api;
     return api;
   }
 
@@ -329,7 +358,32 @@
    * that window) and it opens here by guardFrame's rules: `data-wizard-browse` in the owner's browser, an image of this
    * Wizard in the viewer, a file as a download, another site by the sheet's outside route, a page of this Wizard
    * through the deep link, the shell's route (an app window, a link desk) or the sheet. */
-  let primary = null;
+  let primary = null, popHost = null;
+  /* WizLinks.popup(href) (wizard-os#796): an app that wants a link to another installed Wizard app to open as a pop-up
+   * over itself, never in that app's own place (TG style's chat links, behind its own switch), asks here. True = the
+   * shell's sheet (phone, the one-app window) or pane (desktop) shows it; false = not an installed app's page, this
+   * Wizard itself, a file or an image, or no sheet here: the caller keeps its own route. */
+  function appOf(u) {
+    let best = null;
+    for (const kind of ['mobile', 'desktop']) {
+      let list = []; try { list = window.WizCore?.apps?.(kind)?.APPS || []; } catch (_) { list = []; }
+      for (const a of list) {
+        if (!a || a.kind === 'native' || !a.id || typeof a.url !== 'string') continue;
+        const t = abs(a.url); if (!t || !inApp(t)) continue;
+        const dir = t.pathname.endsWith('/') ? t.pathname : t.pathname.slice(0, t.pathname.lastIndexOf('/') + 1);
+        if (dir === '/' || !u.pathname.startsWith(dir)) continue;
+        if (!best || dir.length > best.dir.length) best = { app: a, dir };
+      }
+    }
+    return best ? best.app : null;
+  }
+  function popup(href) {
+    const u = abs(href); if (!u || !inApp(u) || isFile(u) || isImage(u)) return false;
+    const DL = window.WizCore && window.WizCore.deeplink;
+    try { if (DL?.isOwn?.(u)) return false; } catch (_) { return false; }
+    const app = appOf(u), host = popHost; if (!app || !host) return false;
+    return host.popup(u.href, app) === true;
+  }
   function follow(frame, href, { browse: toBrowser = false } = {}) {
     const u = abs(href); if (!u || !/^https?:$/.test(u.protocol)) return false;
     if (toBrowser) { browse(u); return true; }
@@ -491,5 +545,5 @@
     } catch (e) {}
   }
 
-  window.WizLinks = { mount, intercept, guardFrame, follow, download: (href, name) => { const u = abs(href); return !!u && /^https?:$/.test(u.protocol) && download(u, null, name); }, backMenu, isMenuOpen: () => linkMenus.size > 0, viewImage: href => viewImage(abs(href)), inApp: href => inApp(abs(href)) };
+  window.WizLinks = { mount, intercept, guardFrame, follow, popup, download: (href, name) => { const u = abs(href); return !!u && /^https?:$/.test(u.protocol) && download(u, null, name); }, backMenu, isMenuOpen: () => linkMenus.size > 0, viewImage: href => viewImage(abs(href)), inApp: href => inApp(abs(href)) };
 })();
