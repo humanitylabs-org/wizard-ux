@@ -322,7 +322,9 @@ window.WizCore.liveParts.channels = function () {
     const num = v => { const n = Number(v); return Number.isFinite(n) && n > 0 ? n : 0; };
     const rec = r => r && typeof r === 'object' && RID.test(r.id) && typeof r.thread_id === 'string' && SID.test(r.thread_id) && (r.state === 'running' || r.state === 'stale')
       ? { id: r.id, agent: typeof r.agent === 'string' && AID.test(r.agent) ? r.agent : 'hermes', thread: r.thread_id, title: str(r.title, 120), update: str(r.last_update, 200), state: r.state, createdAt: num(r.created_at), updatedAt: num(r.updated_at) || num(r.created_at) } : null;
-    const s = { records: [], stay: new Set(), ok: false, gone: false, at: 0, busy: null };
+    // privateDefault: the box's private default agent while its wizard/private-routing switch is on (wizard-agent-service
+    // issue 631): its threads move too. '' otherwise (switch off, an older box): only main-agent threads, as before.
+    const s = { records: [], stay: new Set(), privateDefault: '', ok: false, gone: false, at: 0, busy: null };
     const tell = () => { try { emit(); } catch (_) {} };
     function read() {
       if (s.busy) return s.busy;
@@ -333,8 +335,9 @@ window.WizCore.liveParts.channels = function () {
           s.records = (Array.isArray(j?.records) ? j.records : []).map(rec).filter(Boolean).sort((a, b) => b.updatedAt - a.updatedAt || (a.id < b.id ? -1 : 1));
           // The main agent's Daily and Alerts threads (issue 1569 review): Send to inbox is never offered for them.
           s.stay = new Set((Array.isArray(j?.stay) ? j.stay : []).filter(id => typeof id === 'string' && SID.test(id)).slice(0, 1000));
+          s.privateDefault = typeof j?.private_default === 'string' && AID.test(j.private_default) && j.private_default !== 'hermes' ? j.private_default : '';
           s.ok = true; s.gone = false;
-        } catch (e) { if (e?.status === 404) { s.records = []; s.stay = new Set(); s.ok = true; s.gone = true; } }
+        } catch (e) { if (e?.status === 404) { s.records = []; s.stay = new Set(); s.privateDefault = ''; s.ok = true; s.gone = true; } }
         finally { s.busy = null; tell(); }
         return s;
       })();
@@ -349,6 +352,8 @@ window.WizCore.liveParts.channels = function () {
     async function move(kind, thread, extra = {}) {
       if ((kind !== 'open' && kind !== 'send') || !SID.test(String(thread || ''))) throw Object.assign(new Error('invalid'), { status: 400 });
       const body = { thread_id: thread };
+      // Issue 631: a private default agent's thread names its agent (the box hides it in that agent's own Hermes).
+      if (typeof extra.agent === 'string' && extra.agent && extra.agent === s.privateDefault) body.agent = extra.agent;
       const title = str(extra.title, 120), utterance = str(extra.utterance, 600);
       if (title) body.title = title;
       if (utterance) body.utterance = utterance;
@@ -463,7 +468,8 @@ window.WizCore.liveParts.channels = function () {
         return { record: alertRec(j?.record), examples: { not_urgent: cnt(j?.examples?.not_urgent), should_alert: cnt(j?.examples?.should_alert) } };
       } finally { al.at = 0; readAlerts(); }
     }
-    return { state, records, read, fresh, move, stays, card, answer, yesToAll, sweep, alerts, alertState, readAlerts, later, feedback, needs, needsState, readNeeds, archive };
+    const privateDefault = () => state().privateDefault;
+    return { state, records, read, fresh, move, stays, privateDefault, card, answer, yesToAll, sweep, alerts, alertState, readAlerts, later, feedback, needs, needsState, readNeeds, archive };
   }
   /* ---- sent log (wizard-ux issue 1778) ----
    * The box's Sent log (wizard-agent-service issue 607, same switch as the agent inbox): one row per capture the owner

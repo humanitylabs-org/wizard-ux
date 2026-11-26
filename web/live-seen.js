@@ -186,7 +186,9 @@ window.WizCore.liveParts.seen = function ({  }) {
     if ((r.unreadAt ?? -1) > r.seenAt) return true;
     const cur = Date.parse(assistantAt(s) ?? ''), seenA = Date.parse(r.assistantActivityAt ?? '');
     const comparable = typeof s.messageCount === 'number' && typeof r.messageCount === 'number';
-    const previewChanged = !otherAgent(s.agent) && !comparable && fingerprint(s.preview) !== r.previewFingerprint;
+    // A row read from a thread's detail alone (a hidden thread opened by link) has no preview: no evidence of a change,
+    // and treating it as one kept it unread however often it was marked (a thread-seen write storm, agent-service 631).
+    const previewChanged = !otherAgent(s.agent) && !comparable && !!vis(s.preview) && fingerprint(s.preview) !== r.previewFingerprint;
     const countUp = comparable && s.messageCount > r.messageCount;
     const becameReady = !!s.status && s.status !== r.status && READY_OR_ATTENTION.has(s.status) && (!r.status || !READY_OR_ATTENTION.has(r.status));
     if (isFinite(cur)) return isFinite(seenA) ? cur > seenA : cur > r.seenAt;

@@ -116,7 +116,7 @@ window.WizCore.chatsParts.bind = function ({ activityClick, actSetOrder, AGS, al
     if (e.target.closest('[data-chrunning]')) { runningGo(w, true); return true; }
     if (e.target.closest('[data-chrunback]')) { runningBack(w); return true; }
     const ro = e.target.closest('[data-chrunopen]'); if (ro) { openChat(id, ro.dataset.chrunopen); return true; }
-    const io = e.target.closest('[data-chinboxopen]'); if (io) { inboxMove('open', io.dataset.chinboxopen, { title: io.dataset.title || '' }); return true; }
+    const io = e.target.closest('[data-chinboxopen]'); if (io) { inboxMove('open', io.dataset.chinboxopen, { title: io.dataset.title || '', ...(io.dataset.agent ? { agent: io.dataset.agent } : {}) }); return true; }
     const swb = e.target.closest('[data-chsweep]'); if (swb) { if (!swb.disabled) sweepAnswer(swb.dataset.card, swb.dataset.chsweep, swb.dataset.opt); return true; }
     // Running on the sweep card: the desktop's list pane (id::list) shows the Running view next to the thread; with one
     // pane (phone) the thread steps back to the list first.

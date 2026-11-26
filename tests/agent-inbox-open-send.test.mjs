@@ -5,6 +5,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { runWithChatsModel, modelContext } from './fixtures/chats-list-model.mjs';
 import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts moved out verbatim (issue 1665)
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 import { createDocument } from './fixtures/mini-dom.mjs';
@@ -41,7 +42,7 @@ test('move() posts the thread to open or send, and asks for the running list aga
 });
 
 // LIVE.inboxMove: the row moves on the tap frame; a refusal puts it back.
-function liveMove({ fail = null, rows = [], detail = [] } = {}) {
+function liveMove({ fail = null, rows = [], detail = [], privateDefault = '' } = {}) {
   const ctx = { DETAIL: new Map(detail.map(r => [r.id, r])), otherAgent: a => !!a && a !== 'hermes', setTimeout: () => 0,
     normalize: item => ({ id: item.id, title: item.title, updatedAt: item.updated_at, hidden: !!item.hidden }) };
   vm.createContext(ctx);
@@ -52,7 +53,7 @@ function liveMove({ fail = null, rows = [], detail = [] } = {}) {
     ownerOf: s => s.agent && s.agent !== 'hermes' ? s.agent : '',
     emit() { emits.push(this.sessions.filter(x => !x.hidden).map(x => x.id).join(',')); },
     refresh() { this.refreshes++; },
-    agentInbox: { move: async (kind, id, opts) => { moves.push([kind, id, opts]); if (fail) throw Object.assign(new Error('no'), { status: fail }); return { hidden: kind === 'send' }; } },
+    agentInbox: { privateDefault: () => privateDefault, move: async (kind, id, opts) => { moves.push([kind, id, opts]); if (fail) throw Object.assign(new Error('no'), { status: fail }); return { hidden: kind === 'send' }; } },
     inboxMove: ctx.m.inboxMove };
   return { L, moves, emits };
 }
@@ -104,11 +105,11 @@ test('main versus routed: only the main agent\'s threads move (host-profile, con
 });
 
 // The chats.js rules: where Open and Send to inbox show.
-function rules({ gone = false, routedWin = false, pins = [], recs = [], sessions = [], stay = [], channels = null, daily = false } = {}) {
+function rules({ gone = false, routedWin = false, pins = [], recs = [], sessions = [], stay = [], channels = null, daily = false, privateDefault = '', agentSessions = {} } = {}) {
   const ctx = {
-    LIVE: { sessions, agentInbox: { stays: id => stay.includes(id), state: () => ({ ok: true, gone }) }, ownerOf: s => s.agent && s.agent !== 'hermes' ? s.agent : '' },
+    LIVE: { sessions, agentSessions, agentInbox: { stays: id => stay.includes(id), state: () => ({ ok: true, gone }), privateDefault: () => privateDefault }, ownerOf: s => s.agent && s.agent !== 'hermes' ? s.agent : '' },
     chanStore: () => channels ? { channels } : null,
-    W: { w1: daily ? { id: 'w1', daily: { id: 'daily', sid: 'wizard_visible_1' } } : { id: 'w1' } }, winAgent: () => routedWin ? 'host-ops' : '', runningRecs: () => recs,
+    W: { w1: daily ? { id: 'w1', daily: { id: 'daily', sid: 'wizard_visible_1' } } : { id: 'w1' } }, winAgent: () => routedWin === true ? 'host-ops' : routedWin || '', runningRecs: () => recs,
     PIN: { has: id => pins.includes(id) }, esc: v => String(v),
   };
   vm.createContext(ctx);
@@ -198,4 +199,102 @@ test('the buttons are wired: the Running view row, the header, the row menu and 
   const inboxRules = css.replace(/\/\*[\s\S]*?\*\//g, '').split('}').filter(r => r.includes('ch-inbox'));
   assert.ok(inboxRules.length > 0);
   for (const rule of inboxRules) assert.match(rule.trim(), /^(?:@media[^{]*\{\s*)?html:root /, 'every rule keeps the html:root weight');
+});
+
+// wizard-agent-service issue 631 (box switch wizard/private-routing): the box names its private default agent, whose
+// threads then move like the main agent's, through that agent's own Hermes. Nothing named: exactly as before.
+test('a private default agent named by the box: its threads move, with their agent; other agents still do not', async () => {
+  const f = inboxReader(path => ({ json: path.includes('?') ? { records: [], stay: [], private_default: 'private-ai' } : { record: { id: 'inbox_' + 'b'.repeat(24) } } }));
+  assert.equal(f.inbox.privateDefault(), '', 'nothing before the first read');
+  await f.inbox.read();
+  assert.equal(f.inbox.privateDefault(), 'private-ai');
+  await f.inbox.move('send', 'wizard_p1', { agent: 'private-ai' });
+  await f.inbox.move('send', 'wizard_p2', { agent: 'host-ops' });
+  assert.deepEqual(clone(f.calls.filter(c => c.method === 'POST').map(c => c.body)), [{ thread_id: 'wizard_p1', agent: 'private-ai' }, { thread_id: 'wizard_p2' }], 'only the private default is named');
+  const g = inboxReader(() => ({ json: { records: [], private_default: 'Bad Id!' } }));
+  await g.inbox.read();
+  assert.equal(g.inbox.privateDefault(), '', 'an invalid id is dropped');
+
+  const row = { id: 'wizard_p1', title: 'Rent', agent: 'private-ai' };
+  const m = liveMove({ rows: [row], privateDefault: 'private-ai' });
+  await m.L.inboxMove('send', 'wizard_p1', { title: 'Rent' });
+  assert.deepEqual(clone(m.moves), [['send', 'wizard_p1', { title: 'Rent', agent: 'private-ai' }]]);
+  const hidden = { id: 'wizard_p3', title: 'Bills', agent: 'private-ai', hidden: true };
+  const n = liveMove({ privateDefault: 'private-ai' }); n.L.agentSessions['private-ai'] = [hidden];
+  await n.L.inboxMove('open', 'wizard_p3', { agent: 'private-ai' });
+  assert.equal(hidden.hidden, false, 'its own hidden row is listed on the tap frame');
+  assert.deepEqual(clone(n.moves), [['open', 'wizard_p3', { agent: 'private-ai' }]]);
+  const o = liveMove({ rows: [{ id: 'wizard_x', title: 'x', agent: 'host-ops' }], privateDefault: 'private-ai' });
+  await assert.rejects(o.L.inboxMove('send', 'wizard_x'), e => e.status === 409, 'another routed agent is still refused');
+  const off = liveMove({ rows: [{ id: 'wizard_p1', title: 'x', agent: 'private-ai' }] });
+  await assert.rejects(off.L.inboxMove('send', 'wizard_p1'), e => e.status === 409, 'switch off on the box: refused as before');
+
+  const s = { id: 'wizard_p1', agent: 'private-ai' };
+  assert.equal(rules({ privateDefault: 'private-ai' }).inboxCanSend('w1', s), true, 'Send to inbox in the private default agent\u2019s menu');
+  assert.equal(rules({ privateDefault: 'private-ai', routedWin: 'private-ai' }).inboxCanSend('w1', { id: 'wizard_p1' }), true, 'and in its own window');
+  assert.equal(rules({ privateDefault: 'private-ai' }).inboxCanSend('w1', { id: 'wizard_x', agent: 'host-ops' }), false);
+  assert.equal(rules().inboxCanSend('w1', s), false, 'nothing named: as before');
+  assert.equal(rules({ privateDefault: 'private-ai', stay: ['wizard_p1'] }).inboxCanSend('w1', s), false, 'its Daily stays');
+  const head = rules({ privateDefault: 'private-ai' }).inboxHeadHtml({ id: 'w1' }, { ...s, hidden: true });
+  assert.match(head, /data-chinboxopen="wizard_p1" data-agent="private-ai"[^>]*>Open</);
+  assert.equal(rules({ privateDefault: 'private-ai', agentSessions: { 'private-ai': [{ id: 'wizard_p1' }] } }).inboxHeadHtml({ id: 'w1' }, { ...s, hidden: true }), '', 'already listed for that agent');
+});
+
+// The tester's run of issue 631 (box with a standard main agent and a private default agent): Open could not be reached
+// because the private default agent's hidden thread, and its own Daily thread, failed to load ("Thread scope changed"),
+// and the Running view listed only `hermes` tasks.
+function detailReader({ route = '', windows = {}, agent = 'private-ai' } = {}) {
+  const pins = new Map(), detail = new Map();
+  const body = live.slice(live.indexOf('    async sessionInfo(id) {'), live.indexOf('    /* ---- thread actions ---- */'));
+  const L = { agentSessions: {}, sessions: [], windows, agentOf: id => pins.get(id) || '' };
+  const c = { L, titleRead: 0, applyTitle() {}, AGENT_OF: pins, DETAIL: detail, otherAgent: id => !!id && id !== (route || 'hermes'), normalize: raw => raw,
+    AG: () => ({ routeAgent: () => route }),
+    aq: () => '', applyLocal: () => {}, req: async () => ({ json: async () => ({ session: { id: 'wizard_hidden_1', agent, hidden: true, wizard_retry_input: 'hello' } }) }) };
+  runWithChatsModel(`L.sessionInfo = ({${body}}).sessionInfo`, c);
+  return { L, detail };
+}
+
+test('a private default agent\u2019s hidden thread read by id loads as a main-list thread (its Daily too)', async () => {
+  // The standard agent is another agent on that box, so its list window (windows.hermes) is known.
+  const { L, detail } = detailReader({ route: 'private-ai', windows: { hermes: { complete: true } } });
+  const s = await L.sessionInfo('wizard_hidden_1');
+  assert.equal(s.id, 'wizard_hidden_1');
+  assert.equal(s.agent, '', 'a main-list row (one seen key), not a second scope');
+  assert.deepEqual(L.sessions.map(x => x.id), ['wizard_hidden_1'], 'held where the main list is, so Open finds it');
+  assert.equal(detail.size, 0);
+  const other = detailReader({ route: 'private-ai', agent: 'host-ops' });
+  const got = await other.L.sessionInfo('wizard_hidden_1');
+  assert.equal(got.agent, 'host-ops', 'another agent\u2019s thread still keeps its own scope');
+});
+
+test('a hermes-default box still refuses a detail that names another scope', async () => {
+  const { L } = detailReader({ route: '', agent: 'hermes' });
+  const s = await L.sessionInfo('wizard_hidden_1');
+  assert.equal(s.agent, 'hermes');
+  assert.deepEqual(L.sessions.map(x => x.id), ['wizard_hidden_1']);
+});
+
+test('a row read from its detail alone (no preview, no count) is not unread forever: no thread-seen write storm', () => {
+  const ctx = { otherAgent: a => !!a && a !== 'hermes', READY_OR_ATTENTION: new Set(['completed', 'failed', 'interrupted', 'waiting_for_approval', 'unknown']) };
+  modelContext(ctx);
+  vm.runInContext(live.slice(live.indexOf('  const vis = v =>'), live.indexOf('  function later(')) + '\nthis.api = { hasNew, fingerprint };', ctx);
+  const { hasNew, fingerprint } = ctx.api;
+  const rec = { messageCount: 2, updatedAt: '2026-11-26T10:00:00.000Z', previewFingerprint: fingerprint('Noted: pay rent'), seenAt: 5 };
+  const state = { threads: { 'direct:wizard_hidden_1': rec } };
+  const detailRow = { id: 'wizard_hidden_1', runtime: 'direct', agent: '', preview: '', updatedAt: rec.updatedAt };
+  assert.equal(hasNew(detailRow, state), false, 'marked once, it stays read');
+  assert.equal(hasNew({ ...detailRow, preview: 'A new reply' }, state), true, 'a real new preview still counts');
+  assert.equal(hasNew({ ...detailRow, updatedAt: '2026-11-26T11:00:00.000Z' }, state), true, 'and a newer update');
+});
+
+test('Running lists the private default agent\u2019s tasks while the box names it; only main\u2019s otherwise', () => {
+  const recs = { hermes: [{ id: 'inbox_h', agent: 'hermes', thread: 'wizard_h' }], 'private-ai': [{ id: 'inbox_p', agent: 'private-ai', thread: 'wizard_p' }] };
+  const make = pd => {
+    const ctx = { LIVE: { agentInbox: { records: a => recs[a] || [], privateDefault: () => pd } } };
+    vm.createContext(ctx);
+    vm.runInContext(block(running, '  function runningRecs() {') + '\n' + block(running, '  function inboxPrivate() {') + '\nthis.runningRecs = runningRecs;', ctx);
+    return ctx.runningRecs().map(r => r.id);
+  };
+  assert.deepEqual(make('private-ai'), ['inbox_p']);
+  assert.deepEqual(make(''), ['inbox_h'], 'switch off on the box: as before');
 });
