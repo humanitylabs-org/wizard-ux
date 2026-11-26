@@ -42,6 +42,7 @@
     "wizard/sent-rows",
     "wizard/chats-title-bar",
     "wizard/phone-nav",
+    "wizard/ai-apps-running",
     "wizard/channel-model-emoji",
     "wizard/channel-auto-emoji"
   ],
