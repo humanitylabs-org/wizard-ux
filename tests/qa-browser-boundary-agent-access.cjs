@@ -7,6 +7,9 @@
 // with the shell token (as the real one does with the boundary on).
 //  - QA_APP=<wizard-connectors web/ dir>: the real Connected accounts page (its own /api is a small stand-in).
 //    Without it, a stand-in page makes the same calls the way wizard-connectors web/connections.js does.
+//  - QA_APP_URL=<base of a running Connected accounts server> (with QA_APP_OWNER=<its owner token>): the real app
+//    server answers /connected-accounts/ (files and API) through a stand-in for the box ingress that adds the owner
+//    bearer, so the page's own file loads meet the app's real request rules (Sec-Fetch-Site, Origin).
 //  - QA_SWITCH=off: the switch is off; the shell refuses the service and the app falls back to today's message.
 //  - QA_SHOT=<png>: a phone-size (412 px) shot of the Agent access screen.
 //  - QA_WEB=<another web/ dir> QA_EXPECT=broken: the on checks must fail there (e.g. main).
@@ -15,6 +18,20 @@ const http = require('http'), fs = require('fs'), path = require('path');
 const { chromium } = require('../tools/qa-playwright.cjs');
 const WEB = process.env.QA_WEB ? path.resolve(process.env.QA_WEB) : path.join(__dirname, '..', 'web');
 const APPDIR = process.env.QA_APP ? path.resolve(process.env.QA_APP) : '';
+const APPURL = process.env.QA_APP_URL || '', APPOWNER = process.env.QA_APP_OWNER || '';
+// The box ingress stand-in: the request as the browser sent it (method, body, Origin, Sec-Fetch-*), plus the owner bearer.
+function proxy(req, res, rest, body) {
+  const target = new URL(rest + (new URL(req.url, 'http://x').search), APPURL.replace(/\/?$/, '/'));
+  const headers = { host: target.host };
+  for (const h of ['origin', 'sec-fetch-site', 'sec-fetch-mode', 'sec-fetch-dest', 'content-type', 'accept', 'cookie']) if (req.headers[h]) headers[h] = req.headers[h];
+  if (APPOWNER) headers.authorization = 'Bearer ' + APPOWNER;
+  const out = http.request(target, { method: req.method, headers }, up => {
+    seen.push({ method: req.method, path: '/connected-accounts/' + rest, app: up.statusCode, site: req.headers['sec-fetch-site'] || '', origin: req.headers.origin || '' });
+    res.writeHead(up.statusCode, up.headers); up.pipe(res);
+  });
+  out.on('error', () => { res.statusCode = 502; res.end(''); });
+  out.end(body || undefined);
+}
 const ON = process.env.QA_SWITCH !== 'off', SHOT = process.env.QA_SHOT || '';
 const TOKEN = 'ab'.repeat(32), SWITCH = 'wizard/boundary-agent-access';
 const seen = [];
@@ -93,6 +110,7 @@ const server = http.createServer((req, res) => {
     if (u.pathname === '/notes/') return send(200, 'text/html', NOTES);
     if (u.pathname.startsWith('/connected-accounts/')) {
       const rest = u.pathname.slice('/connected-accounts/'.length);
+      if (APPURL) return proxy(req, res, rest, body);
       if (rest === 'api/state') return json(200, STATE);
       if (rest.startsWith('api/')) return json(404, { error: 'not_found' });
       if (!APPDIR) return rest === '' ? send(200, 'text/html', STANDIN) : send(404, 'text/plain', '');
@@ -142,10 +160,12 @@ const check = (ok, what) => { console.log((ok ? 'PASS ' : 'FAIL ') + what); if (
     const fr = frame();
     check(await fr.evaluate(() => self.origin) === 'null', 'the Connected accounts page is opaque (sandboxed)');
     // Open Agent access (the real app: its main screen row).
-    if (APPDIR) {
+    if (APPDIR || APPURL) {
       await fr.waitForSelector('#grants-row', { timeout: 8000 });
       await fr.waitForFunction(() => !document.getElementById('workspace').hidden, null, { timeout: 8000 }).catch(() => {});
-      await fr.click('#grants-row');
+      const files = seen.filter(x => x.app && /\.(js|css)$/.test(x.path));
+      if (APPURL) check(files.length >= 5 && files.every(x => x.app === 200), 'the real app server gave the sandboxed page its own files: ' + JSON.stringify(files.map(x => x.path.split('/').pop() + ':' + x.app + ':' + x.site)));
+      await fr.click('#grants-row', { timeout: 5000 }).catch(e => console.log('grants-row: ' + e.message.split('\n')[0]));
     }
     await fr.waitForFunction(() => document.querySelector('.google-toggle[role="switch"]') || document.querySelector('.google-status'), null, { timeout: 10000 }).catch(() => {});
     await page.waitForTimeout(600);
