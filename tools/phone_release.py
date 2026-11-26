@@ -7,8 +7,12 @@ No live feed writes. The Thales path publishes draft-only.
 
 `ci` is the CI path (.github/workflows/phone-release.yml, ux#1400): the same metadata checks on an APK
 a Linux runner built and signed from main, then (with --publish) the shared android-v<version> release.
+With --prerelease (release lanes on, wizard-os#720) it is a tester build: a GitHub prerelease that boxes never
+mirror. `promote` (.github/workflows/phone-promote.yml, every 6h) makes the newest tester build that soaked 72h, while no
+release-blocker issue is open, the latest release, with the same bytes and no rebuild. No person approves it.
 """
 import argparse
+from datetime import datetime, timedelta, timezone  # noqa: F401  timedelta: tests
 import hashlib
 import json
 import os
@@ -200,7 +204,7 @@ def collect(args):
     print(json.dumps(phone, indent=2))
 
 
-def draft(output, phone, publish=False):
+def draft(output, phone, publish=False, prerelease=False):
     tag = 'android-v' + phone['versionName']
     apk = output / f'wizard-os-{phone["versionName"]}.apk'
     require(digest(apk) == phone['sha256'], 'Draft APK mismatch')
@@ -218,9 +222,13 @@ def draft(output, phone, publish=False):
     run(['gh', 'release', 'download', tag, '--repo', REPO, '--dir', verify])
     require(digest(verify / apk.name) == phone['sha256'] and json.loads((verify / 'phone.json').read_text()) == phone, 'Draft asset bytes readback failed')
     if publish:
-        run(['gh', 'release', 'edit', tag, '--repo', REPO, '--draft=false', '--latest'])
-        state = json.loads(text(['gh', 'release', 'view', tag, '--repo', REPO, '--json', 'url,isDraft,targetCommitish,assets']))
+        # A tester build (release lanes, wizard-os#720) is a prerelease and never "latest", so boxes ignore it
+        # until the release train promotes it after its soak (promote below).
+        lane = ['--prerelease', '--latest=false'] if prerelease else ['--latest']
+        run(['gh', 'release', 'edit', tag, '--repo', REPO, '--draft=false'] + lane)
+        state = json.loads(text(['gh', 'release', 'view', tag, '--repo', REPO, '--json', 'url,isDraft,isPrerelease,targetCommitish,assets']))
         require(not state['isDraft'], 'Release publish readback failed')
+        require(bool(state.get('isPrerelease')) == prerelease, 'Release lane readback failed')
     write_json(output / 'draft-release.json', state)
 
 
@@ -257,8 +265,116 @@ def ci(args):
     (args.output / f'wizard-os-{phone["versionName"]}.apk').write_bytes(apk.read_bytes())
     write_json(args.output / 'phone.json', phone)
     if args.publish:
-        draft(args.output, phone, publish=True)
+        draft(args.output, phone, publish=True, prerelease=getattr(args, 'prerelease', False))
     print(json.dumps(phone, indent=2))
+
+
+# Promotion by the release train (wizard-os#720, Miguel 21 Nov 2026: no human approval step for releases). The same
+# rule as WizardOS For everyone (wizard-os tools/release_train.py promote-soaked): the newest tester build published
+# SOAK_HOURS or more ago that is newer than the public release, while no issue labelled release-blocker is open.
+SOAK_HOURS = 72
+BLOCKER_LABEL = 'release-blocker'
+ORG = REPO.split('/')[0]
+TAG = re.compile(r'android-v(\d+)\.(\d+)\.(\d+)')
+
+
+def tag_version(tag):
+    m = TAG.fullmatch(tag or '')
+    return tuple(map(int, m.groups())) if m else None
+
+
+def published_hours(item, now):
+    """Hours since a release was published (a draft has no published_at: None)."""
+    when = item.get('published_at')
+    if not when:
+        return None
+    return (now - datetime.fromisoformat(when.replace('Z', '+00:00'))).total_seconds() / 3600
+
+
+def soaked(releases, current, now, need=SOAK_HOURS):
+    """(the release to promote or None, a one-line reason). Newest soaked tester build above `current` wins; younger
+    tester builds wait their turn and older ones are skipped, as in the box train's soak by cut age."""
+    floor = tag_version(current) or (0, 0, 0)
+    tester = [r for r in releases if r.get('prerelease') and not r.get('draft') and tag_version(r.get('tag_name'))
+              and tag_version(r['tag_name']) > floor]
+    if not tester:
+        return None, f'nothing to promote: no tester build above {current or "none"}'
+    tester.sort(key=lambda r: tag_version(r['tag_name']), reverse=True)
+    due = [r for r in tester if (published_hours(r, now) or 0) >= need]
+    if not due:
+        oldest = min(tester, key=lambda r: tag_version(r['tag_name']))
+        return None, f'WAITING: {oldest["tag_name"]} is {published_hours(oldest, now) or 0:.1f}h old; tester builds are promoted at {need}h'
+    return due[0], f'{due[0]["tag_name"]} soaked {published_hours(due[0], now):.1f}h (>= {need}h)'
+
+
+def blockers():
+    """Open release-blocker issues in the org. Fails closed: an unreadable answer stops promotion."""
+    q = f'org:{ORG} label:{BLOCKER_LABEL} state:open is:issue'
+    data = json.loads(text(['gh', 'api', '-X', 'GET', 'search/issues', '-f', f'q={q}', '-f', 'per_page=20']))
+    require(isinstance(data.get('total_count'), int), 'Could not read release-blocker issues')
+    return [i.get('html_url', '') for i in data.get('items', [])] if data['total_count'] else []
+
+
+def audit(apk):
+    """aapt2 badging, apksigner certificates and BuildConfig of these exact bytes (the runner's own build-tools)."""
+    tools = build_tools(os.environ.get('ANDROID_HOME') or os.environ.get('ANDROID_SDK_ROOT') or '')
+    badging = text([tools / 'aapt2', 'dump', 'badging', apk])
+    certs = text([tools / 'apksigner', 'verify', '--verbose', '--print-certs', apk])
+    return badging, certs, apk_build_config(apk)
+
+
+def latest_tag():
+    return json.loads(text(['gh', 'api', f'repos/{REPO}/releases/latest'])).get('tag_name', '')
+
+
+def releases():
+    pages = json.loads(text(['gh', 'api', '--paginate', '--slurp', f'repos/{REPO}/releases?per_page=100']))
+    return [r for page in pages for r in page]
+
+
+def promote(args):
+    """Make the newest soaked tester build the latest release: same bytes, no rebuild (wizard-os#720)."""
+    reject_origin_environment(os.environ)
+    require(os.environ.get('GITHUB_ACTIONS') == 'true' or args.check, 'The promote command runs only inside GitHub Actions')
+    current = latest_tag()
+    pick, why = soaked(releases(), current, datetime.now(timezone.utc))
+    if pick is None:
+        print(why)
+        return
+    held = blockers()
+    if held:
+        print(f'HELD: {len(held)} open {BLOCKER_LABEL} issue(s): ' + ' '.join(held))
+        return
+    tag = pick['tag_name']
+    if args.check:
+        print(f'DUE: {why}; would promote {tag} over {current or "none"}')
+        return
+    state = json.loads(text(['gh', 'release', 'view', tag, '--repo', REPO, '--json', 'isDraft,isPrerelease,assets']))
+    require(not state['isDraft'] and state.get('isPrerelease'), f'{tag} is no longer a published tester build')
+    name = f'wizard-os-{tag.removeprefix("android-v")}.apk'
+    require({a['name'] for a in state['assets']} == {name, 'phone.json'}, f'{tag} assets are not exactly {name} and phone.json')
+    args.output.mkdir(parents=True, mode=0o700, exist_ok=True)
+    got = args.output / 'tester'
+    got.mkdir(exist_ok=False)
+    run(['gh', 'release', 'download', tag, '--repo', REPO, '--dir', got])
+    phone = json.loads((got / 'phone.json').read_text())
+    apk = got / name
+    require(phone.get('versionName') == tag.removeprefix('android-v'), f'{tag} phone.json names another versionName')
+    require(digest(apk) == phone.get('sha256') and apk.stat().st_size == phone.get('bytes'), 'Tester APK bytes do not match its phone.json')
+    # The same checks the tester build passed, again on the bytes boxes will mirror: one signer 3bf74d0b…d1fd, no origin.
+    badging, certs, fields = audit(apk)
+    require(metadata(apk, badging, certs, fields, phone['source_commit'], phone['notes'], phone['min_box_snapshot']) == phone, 'Tester phone.json disagrees with its APK')
+    previous = None
+    if current:
+        old = args.output / 'public'
+        old.mkdir(exist_ok=False)
+        run(['gh', 'release', 'download', current, '--repo', REPO, '--pattern', 'phone.json', '--dir', old])
+        previous = json.loads((old / 'phone.json').read_text())
+    newer_than(phone, previous)
+    run(['gh', 'release', 'edit', tag, '--repo', REPO, '--prerelease=false', '--latest'])
+    state = json.loads(text(['gh', 'release', 'view', tag, '--repo', REPO, '--json', 'isDraft,isPrerelease']))
+    require(not state['isDraft'] and not state['isPrerelease'] and latest_tag() == tag, 'Promotion readback failed')
+    print(json.dumps(dict(promoted=tag, previous=current, reason=why, sha256=phone['sha256'], versionCode=phone['versionCode']), indent=2))
 
 
 def main():
@@ -290,7 +406,12 @@ def main():
     a.add_argument('--min-box-snapshot', default='0.3.40')
     a.add_argument('--previous-phone', type=Path, help='phone.json of the last published release')
     a.add_argument('--publish', action='store_true')
+    a.add_argument('--prerelease', action='store_true', help='publish as a tester build (release lanes on)')
     a.set_defaults(func=ci)
+    a = commands.add_parser('promote')
+    a.add_argument('--output', type=Path, required=True)
+    a.add_argument('--check', action='store_true', help='only say what is due (reads GitHub, changes nothing)')
+    a.set_defaults(func=promote)
     args = p.parse_args()
     args.func(args)
 
