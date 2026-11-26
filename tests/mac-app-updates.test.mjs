@@ -118,6 +118,26 @@ test('ready: Update and restart calls updates.install; a refusal is a toast and 
   assert.match(text(m.f.html()), /^Updating Wizard for Mac Wizard restarts in a moment\./);
 });
 
+test('urgent (try-wizard#128): a critical release says Important update and asks for it soon; no field, no change', async () => {
+  const latest = { version: '0.8.2', build: '313' };
+  const m = await load({ status: st('ready', { latest, urgent: true }) });
+  const h = await m.shown();
+  assert.match(text(h), /^Important update: Wizard for Mac 0\.8\.2 is ready Restart to finish\. Takes about a minute; chats, files and apps stay as they are\. It fixes something that matters, so install it soon\. Update and restart/);
+  assert.match(h, /data-osu-card="mac-ready" data-osu-urgent data-osu-stack/);
+  m.push(st('ready', { latest, urgent: true, waitingFor: 'recording' }));
+  assert.match(text(m.f.html()), /^Important update: Wizard for Mac 0\.8\.2 is ready It can restart once the recording ends\./);
+  m.push(st('downloading', { latest, urgent: true, progress: 0.5 }));
+  assert.match(text(m.f.html()), /^Important update: Wizard for Mac 0\.8\.2 Downloading · 50%/);
+  m.push(st('failed', { urgent: true, error: 'no network' }));
+  assert.doesNotMatch(m.f.html(), /Important update|data-osu-urgent/);
+  for (const urgent of [undefined, false, 'yes']) {
+    const plain = await load({ status: st('ready', { latest, ...(urgent === undefined ? {} : { urgent }) }) });
+    const p = await plain.shown();
+    assert.doesNotMatch(p, /Important update|data-osu-urgent/, String(urgent));
+    assert.match(text(p), /^Wizard for Mac 0\.8\.2 is ready Restart to finish\. Takes about a minute; chats, files and apps stay as they are\. Update and restart/);
+  }
+});
+
 test('needs a new download: Download calls updates.download, only for Wizard’s own download pages', async () => {
   const m = await load({ status: st('manual', { latest: { version: '0.9.0', build: '400' }, manual: { url: 'https://downloads.aiwizards.com/mac/Wizard-0.9.0.dmg' } }) });
   const h = await m.shown();
