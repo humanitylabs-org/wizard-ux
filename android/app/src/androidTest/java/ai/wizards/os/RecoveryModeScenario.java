@@ -50,24 +50,31 @@ final class RecoveryModeScenario {
             unfinishedStart(c);
             StartGuard.forgetProcessForQa();
             c.startActivity(new Intent(c, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK));
-            assertNotNull("the recovery card never showed", device.wait(Until.findObject(By.desc("Recovery mode")), 30000));
+            if (device.wait(Until.findObject(By.text("Recovery mode")), 30000) == null) {
+                ByteArrayOutputStream tree = new ByteArrayOutputStream();
+                device.dumpWindowHierarchy(tree);
+                String t = tree.toString("UTF-8").replaceAll("\\s+", " ");
+                for (int i = 0; i < t.length(); i += 3000) Log.i(TAG, "window: " + t.substring(i, Math.min(t.length(), i + 3000)));
+                fail("the recovery card never showed");
+            }
+            screen(device, c, "device");
             assertNotNull(device.findObject(By.textStartsWith("WizardOS closed before it finished starting")));
             assertTrue("background work is paused", StartGuard.paused());
             assertTrue("the shell loads underneath", box.waitFor("GET /wizard-os-home/", 20000));
             // 2. Send diagnostics
-            device.findObject(By.desc("Send diagnostics")).click();
+            device.findObject(By.text("Send diagnostics")).click();
             assertNotNull("diagnostics never reported sent", device.wait(Until.findObject(By.text("Diagnostics sent to your Wizard.")), 20000));
             String report = box.body("POST /wizard-os-home/api/diagnostics/scroll-capture");
             assertNotNull("the Wizard got the report", report);
             assertTrue("the report carries the saved freezes", report.contains("\"hangs\""));
             // 3. Check for update, through the normal update feed
-            device.findObject(By.desc("Check for update")).click();
+            device.findObject(By.text("Check for update")).click();
             assertNotNull("the update check never answered",
                     device.wait(Until.findObject(By.text("WizardOS " + BuildConfig.VERSION_NAME + " is the newest version.")), 20000));
             assertTrue(box.waitFor("GET /reports/wizard-os/latest.json", 1000));
             // 4. Start normally
-            device.findObject(By.desc("Start normally")).click();
-            assertTrue("the card left", device.wait(Until.gone(By.desc("Recovery mode")), 10000));
+            device.findObject(By.text("Start normally")).click();
+            assertTrue("the card left", device.wait(Until.gone(By.text("Recovery mode")), 10000));
             assertFalse("the pause ended", StartGuard.paused());
             // 5. switch off: the same unfinished start opens normally
             StartGuard.setOn(c, false);
@@ -76,7 +83,7 @@ final class RecoveryModeScenario {
             c.startActivity(new Intent(c, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK));
             assertTrue("the shell loads again", box.waitFor("GET /wizard-os-home/", 20000));
             Thread.sleep(2000);
-            assertNull("switch off: no card", device.findObject(By.desc("Recovery mode")));
+            assertNull("switch off: no card", device.findObject(By.text("Recovery mode")));
             assertFalse("switch off: nothing paused", StartGuard.paused());
             Log.i(TAG, "recovery mode scenario passed");
         } finally {
@@ -87,6 +94,17 @@ final class RecoveryModeScenario {
             StartGuard.forgetProcessForQa();
             device.pressHome();
         }
+    }
+
+    /** The emulator's real screen, logged (tag RecoveryShot, base64 PNG in chunks) for the pull request. */
+    private static void screen(UiDevice device, Context c, String name) throws IOException {
+        File f = new File(c.getCacheDir(), "recovery-" + name + ".png");
+        if (!device.takeScreenshot(f, 0.5f, 90)) return;
+        String all = android.util.Base64.encodeToString(Files.readAllBytes(f.toPath()), android.util.Base64.NO_WRAP);
+        int n = (all.length() + 2999) / 3000;
+        for (int i = 0; i < n; i++) Log.i("RecoveryShot", name + " " + i + "/" + n + " " + all.substring(i * 3000, Math.min(all.length(), (i + 1) * 3000)));
+        //noinspection ResultOfMethodCallIgnored
+        f.delete();
     }
 
     /** What a start that died leaves behind: pending, normal, in a process that isn't this one. */
