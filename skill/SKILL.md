@@ -50,7 +50,7 @@ Every screen, Settings page and feature switch of the Wizard interface (the phon
 
 ## Settings
 
-Open Settings: desktop, the cog at the bottom left under the chats list (older Desks view: the top-bar gear, ⌥,); phone, the gear at the top right of Home or an empty desk, or hold the orb and say 'settings'. Settings is a list of pages under System and Preferences (wide screen: list left, page right). A page with nothing on it is hidden. Pages are the same on phone and desktop, except rows that only exist on one of them (named below).
+Open Settings: desktop, the cog at the bottom left under the chats list (older Desks view: the top-bar gear, ⌥,); phone, the gear at the top right of Home or an empty desk, or hold the orb and say 'settings'. Settings is a list of pages under System and Preferences (wide screen: list left, page right); empty pages are hidden. Pages are the same on phone and desktop, except rows that only exist on one of them (named below).
 Search settings: the box at the top of the Settings list. Typing keeps only the pages that mention the words and marks them on the open page, scrolled to the first; Esc clears it, Enter opens the first page.
 
 ### System › Your network
