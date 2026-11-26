@@ -359,7 +359,7 @@
     },
     "wizard/graceful-restart": {
       "where": "Settings › Appearance › Try new features › Calm Agent Service restarts",
-      "help": "While a restart waits for running chats you see a quiet note, not errors; messages sent meanwhile go after it; if overdue, Wait longer or Restart now."
+      "help": "While a restart waits for running chats you see a quiet note; messages sent meanwhile go after it; if overdue, Wait longer or Restart now."
     },
     "wizard/unified-inbox": {
       "where": "Settings › Chats & app screens › Notifications › Notifications in Chats (on for everyone)"
@@ -396,6 +396,10 @@
     "wizard/private-routing": {
       "help": "Orb sends a request to the agent you name, else private.",
       "where": "Settings › Appearance › Try new features › Private routing"
+    },
+    "wizard/result-reader": {
+      "help": "A private model files each finished background task.",
+      "where": "Settings › Appearance › Try new features › Result reader"
     },
     "wizard/private-first-setup": {
       "help": "New installs start private: Welcome leads with Tinfoil; Claude and ChatGPT are optional extras.",

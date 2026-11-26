@@ -170,7 +170,7 @@ Settings › Appearance › Try new features lists unfinished features anyone ca
 - **Archive on top**: Archive is the first section of the Chats list in both By day and By status, so switching layouts never moves it.
 - **Backup health in Resources**: Resources shows your backup's health.
 - **Bottom app bar on desktop**: Apps bar at the bottom on any width.
-- **Calm Agent Service restarts**: While a restart waits for running chats you see a quiet note, not errors; messages sent meanwhile go after it; if overdue, Wait longer or Restart now.
+- **Calm Agent Service restarts**: While a restart waits for running chats you see a quiet note; messages sent meanwhile go after it; if overdue, Wait longer or Restart now.
 - **Calm offline card**: The can't-reach-your-Wizard card shows one dotted path (Internet · Tailscale · Wizard), one short next step and a small Check again with the automatic re-check time.
 - **Channels: a fitting emoji for new channels**: New channels get a fitting emoji.
 - **Channels: an AI-picked emoji for new channels**: New channels with no emoji get one picked by your Wizard's fast model.
@@ -197,6 +197,7 @@ Settings › Appearance › Try new features lists unfinished features anyone ca
 - **Private mode switch-over**: Settings › Privacy: Private mode, Privacy check.
 - **Private routing**: Orb sends a request to the agent you name, else private.
 - **Repair the agent's Wizard connection**: When the agent can't reach its Wizard app tools (unauthorized), `wizard link` puts the box's token back in the agent's settings; `wizard doctor` shows if they match.
+- **Result reader**: A private model files each finished background task.
 - **Running view in the AI apps sidebar**: AI apps: Running view in the sidebar.
 - **Send and go**: On desktop, sending opens a fresh chat.
 - **Sent: the same rows as Inbox**: Sent uses Inbox's rows.
