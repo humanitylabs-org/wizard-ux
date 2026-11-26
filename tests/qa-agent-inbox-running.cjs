@@ -9,13 +9,18 @@
 //   data-chrunning button in the list (the same click handler); the Running view shows title, last update, how long it
 //   runs, "No news for 6 h" on the quiet one; a row opens its thread; Back returns to the Running view; Back again
 //   returns to Chats, which still does not list the worker thread; a live skin change repaints the view.
+// AI apps desktop 1440x960 (shell ai-apps, wizard-ux issue 1599, switch wizard/ai-apps-running): the sweep card's Running
+//   link (a data-chsweeprunning button in the open thread, the same click handler) opens the Running view in the sidebar's
+//   Chats pane; a row opens its thread in the main column with the view still in the sidebar; Esc closes the thread, Esc
+//   again returns to the sidebar's own rows; the view's ‹ and the Tags tab leave it too. QA_SWITCH=off: the same tap draws
+//   nothing and the sidebar's markup is written to side-<stem>.html (QA_WEB=<main>/web gives the baseline to cmp).
 const assert = require('node:assert/strict');
 const { chromium } = require('../tools/qa-playwright.cjs');
 const { ownerRead } = require('../tools/qa-desktop-frame-fixture.cjs');
 const fs = require('node:fs'), path = require('node:path');
 const repo = path.resolve(__dirname, '..'), origin = process.env.QA_ORIGIN || 'https://agent-inbox-running.test', prefix = '/wizard-os-home/';
 const web = process.env.QA_WEB || path.join(repo, 'web'), out = process.env.QA_OUT || path.join(repo, 'agent-inbox-running-evidence');
-const SHELLS = (process.env.QA_SHELLS || 'phone,classic,phone-channels').split(','), SKINS = (process.env.QA_SKINS || 'nebula,grove').split(',');
+const SHELLS = (process.env.QA_SHELLS || 'phone,classic,phone-channels,ai-apps').split(','), SWITCH_ON = process.env.QA_SWITCH !== 'off', SKINS = (process.env.QA_SKINS || 'nebula,grove').split(',');
 fs.mkdirSync(out, { recursive: true });
 const now = Date.now(), iso = t => new Date(t).toISOString(), nap = ms => new Promise(r => setTimeout(r, ms)), M = 60e3, H = 36e5;
 const THREADS = {
@@ -29,6 +34,85 @@ const RECORDS = [
 ];
 const raw = (id, s) => ({ id, title: s.title, runtime: 'direct', status: 'completed', updated_at: iso(s.at), updatedAt: iso(s.at), last_active: s.at / 1000, message_count: s.msgs.length, messageCount: s.msgs.length, preview: s.msgs.at(-1)?.[1] || '', ...(s.hidden ? { hidden: true } : {}) });
 const report = { origin, web, cases: [] };
+// The AI apps desktop (wizard-ux issue 1599).
+async function aiApps(page, vis, entry, stem, skin) {
+  await page.waitForFunction(() => document.documentElement.dataset.layout === 'ai-apps', null, { timeout: 15000 });
+  const sideRow = id => vis(`.aad-side .aad-rw[data-sid="${id}"] .aad-row`);
+  await sideRow('qa-chat-1').waitFor({ timeout: 15000 });
+  await page.waitForFunction(() => window.WizLive?.agentInbox?.records?.('hermes')?.length === 2, null, { timeout: 10000 });
+  await nap(500);
+  const sideIds = () => page.locator('.aad-side .aad-rw[data-sid]').filter({ visible: true }).evaluateAll(b => [...new Set(b.map(x => x.dataset.sid))]);
+  entry.sideListed = await sideIds();
+  assert.deepEqual(entry.sideListed, ['qa-chat-1'], 'the worker threads never list in the sidebar');
+  const runHead = () => page.locator('.aad-chan .ch-run-h').filter({ visible: true }).count();
+  // The sweep card's Running link, in the open thread (the same data-chsweeprunning handler the card's link uses).
+  const runLink = async () => {
+    await vis('.ch-thread').evaluate(n => { const b = document.createElement('button'); b.type = 'button'; b.dataset.chsweeprunning = ''; b.textContent = 'Running: 2'; b.className = 'qa-run-go'; (n.querySelector('.ch-msgs, .ch-scroll') || n).prepend(b); });
+    await vis('.ch-thread .qa-run-go').click(); await nap(700);
+  };
+  await sideRow('qa-chat-1').click();
+  await vis('.ch-thread').getByText('A walk by the river, then the market.').waitFor({ timeout: 10000 });
+  await page.evaluate(() => document.fonts.ready); await nap(300);
+  if (!SWITCH_ON) {
+    await runLink();
+    entry.offRunHead = await page.locator('.ch-run-h').filter({ visible: true }).count();
+    assert.equal(entry.offRunHead, 0, 'switch off: no Running view anywhere');
+    await page.locator('.qa-run-go').evaluateAll(b => b.forEach(x => x.remove()));
+    fs.writeFileSync(path.join(out, `side-${stem}.html`), await page.locator('.aad-side').first().evaluate(n => n.outerHTML.replace(/<time[^>]*>[^<]*<\/time>/g, '<time></time>').replace(/data-(chats|at)="[^"]*"/g, 'data-$1=""')));
+    await page.screenshot({ path: path.join(out, stem + '-off.png') });
+    assert.equal(entry.errors.length, 0, 'browser errors: ' + entry.errors.join('; '));
+    return;
+  }
+  // 1. The Running link: the view in the sidebar's Chats pane, the sidebar's own rows step aside, the thread stays.
+  await runLink();
+  await vis('.aad-chan .ch-run-h').waitFor({ timeout: 8000 });
+  assert.equal(await page.locator('.aad-scroll').filter({ visible: true }).count(), 0, 'the sidebar rows step aside');
+  assert.ok(await vis('.ch-thread').getByText('A walk by the river, then the market.').isVisible(), 'the thread stays in the main column');
+  const rows = page.locator('.aad-chan .ch-run-row').filter({ visible: true });
+  entry.rows = await rows.evaluateAll(b => b.map(x => ({ thread: x.dataset.chrunopen, text: x.innerText.replace(/\s+/g, ' ').trim() })));
+  assert.deepEqual(entry.rows.map(r => r.thread), ['qa-worker-1', 'qa-worker-2'], 'every running record');
+  assert.match(entry.rows[0].text, /Lisbon flights.*Comparing three fares.*Running 2\d min/, 'title, last update, age: ' + entry.rows[0].text);
+  assert.match(entry.rows[1].text, /Dentist slot.*No news for 6 h:.*Asked two practices.*Running 8 h/, 'the quiet one is marked: ' + entry.rows[1].text);
+  entry.fits = await page.locator('.aad-chan .ch-run-row').filter({ visible: true }).evaluateAll(n => { const side = n[0].closest('.aad-side').getBoundingClientRect(); return n.every(x => x.getBoundingClientRect().right <= side.right + 0.5); });
+  assert.ok(entry.fits, 'rows fit the sidebar');
+  await page.screenshot({ path: path.join(out, stem + '-1-running.png') });
+  // 2. A row opens its thread in the main column; the view stays in the sidebar.
+  await rows.first().click();
+  await vis('.ch-thread').getByText('Comparing three fares for Friday morning.').waitFor({ timeout: 10000 });
+  assert.ok(entry.reads.some(x => x.startsWith('qa-worker-1')), 'read by id');
+  assert.equal(await runHead(), 1, 'the Running view stays in the sidebar');
+  await page.screenshot({ path: path.join(out, stem + '-2-thread.png') });
+  // 3. Esc closes the thread: the Running view is what is left.
+  await vis('.ch-thread').getByText('Comparing three fares for Friday morning.').click(); await page.keyboard.press('Escape'); await nap(700);
+  assert.equal(await page.getByText('Comparing three fares for Friday morning.').filter({ visible: true }).count(), 0, 'Esc closes the thread');
+  assert.equal(await runHead(), 1, 'Esc returns to the Running view');
+  // A live skin change repaints the view.
+  const panel = () => vis('.aad-chan .ch-run').evaluate(n => getComputedStyle(n).backgroundColor + ' / ' + getComputedStyle(n.closest('.aad-side')).backgroundColor);
+  entry.panel = await panel();
+  const other = skin === 'nebula' ? 'grove' : 'nebula';
+  await page.evaluate(s => WosSkin.set(s), other); await nap(700);
+  entry.panelOther = await panel();
+  assert.notEqual(entry.panelOther, entry.panel, `the ${other} skin repaints the view`);
+  await page.evaluate(s => WosSkin.set(s), skin); await nap(500);
+  // 4. Esc again: the sidebar's own rows, still without the worker threads.
+  await page.keyboard.press('Escape'); await nap(700);
+  assert.equal(await runHead(), 0, 'Esc again leaves the Running view');
+  await sideRow('qa-chat-1').waitFor({ timeout: 8000 });
+  entry.sideAfter = await sideIds();
+  assert.deepEqual(entry.sideAfter, ['qa-chat-1'], 'opening a worker thread never lists it');
+  await page.screenshot({ path: path.join(out, stem + '-3-back.png') });
+  // 5. The view's ‹ and the Tags tab leave it too.
+  await sideRow('qa-chat-1').click(); await vis('.ch-thread').getByText('A walk by the river, then the market.').waitFor({ timeout: 10000 });
+  await runLink(); await vis('.aad-chan .ch-run-h').waitFor({ timeout: 8000 });
+  await vis('.aad-chan [data-chrunback]').click(); await nap(500);
+  assert.equal(await runHead(), 0, '‹ leaves the Running view');
+  await runLink(); await vis('.aad-chan .ch-run-h').waitFor({ timeout: 8000 });
+  await vis('.aad-chan [data-chtab="tags"]').click(); await nap(500);
+  assert.equal(await runHead(), 0, 'Tags leaves the Running view');
+  assert.ok(!entry.writes.some(w => w.method === 'PATCH' && /api\/sessions/.test(w.path)), 'opening never unhides it');
+  assert.equal(entry.errors.length, 0, 'browser errors: ' + entry.errors.join('; '));
+}
+
 (async () => {
   const browser = await chromium.launch();
   try {
@@ -38,11 +122,11 @@ const report = { origin, web, cases: [] };
       const context = await browser.newContext({ viewport: phone ? { width: 390, height: 844 } : { width: 1440, height: 960 }, isMobile: phone, hasTouch: phone, serviceWorkers: 'block', ...(phone ? { userAgent: 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Mobile Safari/537.36' } : {}) });
       try {
         await context.routeWebSocket('**/*', w => w.close());
-        const mix = { 'wizard/desktop-chats': true, ...(channels ? { 'wizard/chat-channels': true } : {}) };
+        const mix = { 'wizard/desktop-chats': true, ...(channels ? { 'wizard/chat-channels': true } : {}), ...(shell0 === 'ai-apps' && SWITCH_ON ? { 'wizard/ai-apps-running': true } : {}) };
         await context.addInitScript(({ shell, skin, mix }) => {
           if (window !== top) return;
           if (sessionStorage.getItem('qaBoot')) return; sessionStorage.setItem('qaBoot', '1');
-          for (const [k, v] of Object.entries({ 'wos.shell': shell === 'phone' ? 'phone' : 'desktop', 'wux.shell': shell === 'phone' ? 'phone' : 'desktop', 'wos.desktop-view.v1': 'classic', 'wos.coached': 'true', 'wos.tour.v1': 'true', 'wos.welcome.v1': 'done', 'wos.skin': skin,
+          for (const [k, v] of Object.entries({ 'wos.shell': shell === 'phone' ? 'phone' : 'desktop', 'wux.shell': shell === 'phone' ? 'phone' : 'desktop', 'wos.desktop-view.v1': shell === 'ai-apps' ? 'ai-apps' : 'classic', 'wos.coached': 'true', 'wos.tour.v1': 'true', 'wos.welcome.v1': 'done', 'wos.skin': skin,
             'wos.skin-tweaks.v1': JSON.stringify({ version: 1, preset: 'none', off: {}, mix }) })) localStorage.setItem(k, v);
         }, { shell, skin, mix });
         await context.route('**/*', async r => {
@@ -87,8 +171,9 @@ const report = { origin, web, cases: [] };
         await page.goto(origin + prefix + (phone ? 'index.html?phone' : 'desktop.html'));
         await page.waitForFunction(() => (window.__wux || window.__wos) && !window.WosWelcome?.active && window.WosExperience?.state.tweaks.length && !window.WosExperience.state.busy);
         await page.addStyleTag({ content: '#wosWelcome{display:none!important}' });
-        if (phone) await page.evaluate(() => __wos.openSheet('inbox')); else await page.evaluate(() => __wux.openChatsList());
         const vis = sel => page.locator(sel).filter({ visible: true }).first();
+        if (shell === 'ai-apps') { await aiApps(page, vis, entry, stem, skin); entry.pass = true; continue; }
+        if (phone) await page.evaluate(() => __wos.openSheet('inbox')); else await page.evaluate(() => __wux.openChatsList());
         const back = () => page.evaluate(() => window.__wos ? __wos.onBack() : __wux.escStep());
         await vis('.ch-list [data-chopen="qa-chat-1"]').waitFor({ timeout: 15000 });
         const listed = () => page.locator('.ch-list [data-chopen]').filter({ visible: true }).evaluateAll(b => [...new Set(b.map(x => x.dataset.chopen))]);

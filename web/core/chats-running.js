@@ -16,7 +16,21 @@ window.WizCore.chatsParts.running = function ({ ago, ch, CH, chanStore, clip, es
   function runningOn(w) {
     return !!w && !winAgent(w) && !!LIVE.agentInbox;
   }
-  function runningOpen(w) { return !!w && !!ch(w.id).running && runningOn(w); }
+  /* The AI apps desktop's sidebar (wizard-ux issue 1599, switch wizard/ai-apps-running, off by default): the sweep card's
+   * Running link opens the Running view in the sidebar's Chats pane (its id::side window, H.runningPane) instead of the
+   * Classic list pane; a task opens in the main column (the pane's thread setter), the view stays in the sidebar, and
+   * Esc / ‹ there returns to the sidebar list (channelBack). Off, a side window never shows it. */
+  const RUN_SIDE = 'wizard/ai-apps-running';
+  function runningSideOn() { try { return (document.documentElement.dataset.tweaks || '').split(' ').includes(RUN_SIDE); } catch (_) { return false; } }
+  const runningSideWin = w => /::side$/.test(String(w?.id || ''));
+  function runningOpen(w) { return !!w && !!ch(w.id).running && runningOn(w) && (!runningSideWin(w) || runningSideOn()); }
+  // The sweep card's Running link on the AI apps desktop: true when the sidebar took it.
+  function runningSideGo() {
+    const sp = runningSideOn() && typeof H.runningPane === 'function' ? H.runningPane() : null;
+    if (!sp || !runningOn(sp)) return false;
+    ch(sp.id).sent = false; // the view takes the pane's place, Sent included
+    return runningGo(sp, true);
+  }
   // The main Chats list shows the main agent's tasks only (the orb's dump starts them there): a routed agent's record
   // never opens as the main agent's thread, even when both use the same thread id.
   function runningRecs() { return LIVE.agentInbox?.records?.('hermes') || []; }
@@ -48,7 +62,7 @@ window.WizCore.chatsParts.running = function ({ ago, ch, CH, chanStore, clip, es
   }
   function runningBack(w) {
     if (!w || w.thread || !ch(w.id).running) return false;
-    const was = runningOn(w); ch(w.id).running = false;
+    const was = runningOpen(w); ch(w.id).running = false;
     if (!was) return false;
     rerenderList(w); return true;
   }
@@ -230,5 +244,5 @@ window.WizCore.chatsParts.running = function ({ ago, ch, CH, chanStore, clip, es
     alertRepaint();
   }
   function alertRepaint() { sweepRepaint(); if (typeof paintListsNow === 'function') paintListsNow(); }
-  return { alertFeedback, alertsHtml, INBOX_SVG, inboxCanSend, inboxHeadHtml, inboxMove, runningBack, runningBody, runningGo, runningHead, runningOn, runningOpen, runningRow, sweepAnswer, sweepHtml, sweepLater, sweepYesToAll };
+  return { alertFeedback, alertsHtml, INBOX_SVG, inboxCanSend, inboxHeadHtml, inboxMove, runningBack, runningBody, runningGo, runningHead, runningOn, runningOpen, runningRow, runningSideGo, sweepAnswer, sweepHtml, sweepLater, sweepYesToAll };
 };

@@ -67,6 +67,12 @@ window.WizCore.desktopParts.sideview = function ({ APP, appAt, appByName, deskto
     channelsElsewhere: w => feedPane(w),
     channelCurrent: () => feedOpen()?.id || '',
     channelOpened: id => feedOpened(id),
+    // The AI apps sidebar's Chats pane (its id::side window) while it is on screen, for the Running view (wizard-ux issue
+    // 1599); null on every other layout or while a Default Chats look holds the sidebar.
+    runningPane: () => {
+      const h = desktopVars.sideHost; if (!desktopVars.ownsChatList || !h?.isConnected || h.closest('[hidden]')) return null;
+      const w = sideMain(); return h.dataset.chats === w.id + '::side' ? listWin(w.id, 'side') : null;
+    },
     // The composer's mic (#13): the same recorder as Right ⌘, pinned to this thread.
     recordReply: (wid, sid) => recordReply(wid, sid),
     captureBusy: () => VOICE.state !== 'idle' || desktopVars.dictationFinishing || !!window.WizAppCapture?.getState?.()?.active,

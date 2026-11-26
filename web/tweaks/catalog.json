@@ -42,7 +42,8 @@
     "wizard/inbox-rows",
     "wizard/sent-rows",
     "wizard/chats-title-bar",
-    "wizard/phone-nav"
+    "wizard/phone-nav",
+    "wizard/ai-apps-running"
   ],
   "defaults": [],
   "promotedDefaults": [],

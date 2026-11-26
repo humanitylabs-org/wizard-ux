@@ -428,6 +428,10 @@
       "help": "Same-topic chats: no date.",
       "where": "Settings › Appearance › Try new features › Undated chat titles"
     },
+    "wizard/ai-apps-running": {
+      "help": "AI apps: Running view in the sidebar.",
+      "where": "Settings › Appearance › Try new features › Running view in the AI apps sidebar"
+    },
     "wizard/inbox-until-archived": {
       "help": "Chats stay in Inbox until archived.",
       "where": "Settings › Appearance › Try new features › Inbox until archived"
