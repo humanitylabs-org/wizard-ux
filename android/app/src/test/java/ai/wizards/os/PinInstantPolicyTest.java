@@ -138,4 +138,21 @@ public class PinInstantPolicyTest {
         assertFalse(PinInstantPolicy.shotFresh(now, 0));
         assertEquals(10_000L, PinInstantPolicy.SHOT_MAX_MS);
     }
+
+    @Test
+    public void cantReachOnlyWhenTheBoxDoesNotAnswer() {
+        assertTrue(PinInstantPolicy.boxAnswers(200));
+        assertTrue(PinInstantPolicy.boxAnswers(401));   // a sign-in wall is still the box answering
+        assertFalse(PinInstantPolicy.boxAnswers(502));  // the gateway: the Wizard behind it is not there
+        assertFalse(PinInstantPolicy.boxAnswers(-1));   // no answer at all
+        assertFalse(PinInstantPolicy.boxAnswers(0));
+    }
+
+    @Test
+    public void thePlaceholderNamesTheApp() {
+        assertEquals("Search", PinInstantPolicy.placeholderName("Search", "wizard-search"));
+        assertEquals("Search", PinInstantPolicy.placeholderName("", "wizard-search"));
+        assertEquals("Youtube Music", PinInstantPolicy.placeholderName(null, "youtube-music"));
+        assertEquals("", PinInstantPolicy.placeholderName(null, null));
+    }
 }

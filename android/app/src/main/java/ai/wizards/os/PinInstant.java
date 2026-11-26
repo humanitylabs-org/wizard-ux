@@ -109,6 +109,41 @@ final class PinInstant {
         }, "pin-shot-save").start();
     }
 
+    /** Can't reach only when the box truly doesn't answer (issue 1830, field report 1): the box's own health check,
+     *  read by the phone with the WebView's cookies. The HTTP status, or -1 with no answer at all. Not on the UI thread. */
+    static int health(Context c) {
+        String origin = ai.wizards.os.device.AppState.origin(c);
+        if (origin.isEmpty()) return -1;
+        HttpURLConnection con = null;
+        try {
+            String url = origin + "/shell-health";
+            con = (HttpURLConnection) new URL(url).openConnection();
+            con.setInstanceFollowRedirects(false);
+            con.setConnectTimeout(PinInstantPolicy.HEALTH_TIMEOUT_MS); con.setReadTimeout(PinInstantPolicy.HEALTH_TIMEOUT_MS);
+            con.setUseCaches(false);
+            String cookie = android.webkit.CookieManager.getInstance().getCookie(url);
+            if (cookie != null && !cookie.isEmpty()) con.setRequestProperty("Cookie", cookie);
+            return con.getResponseCode();
+        } catch (IOException | RuntimeException none) { return -1; }
+        finally { if (con != null) con.disconnect(); }
+    }
+
+    /** The app's name and icon as its home-screen icon was pinned (HomeScreenShortcuts), for the placeholder a pinned
+     *  window paints before it has anything else. Name falls back to the app id; icon may be null. */
+    static String pinnedName(Context c, String origin, String app) {
+        String name = c.getSharedPreferences("home-screen-pins", Context.MODE_PRIVATE).getString(HomeScreenPolicy.identity(origin, app) + ":name", "");
+        return PinInstantPolicy.placeholderName(name, app);
+    }
+
+    static Bitmap pinnedIcon(Context c, String origin, String app) {
+        try {
+            String png = c.getSharedPreferences("home-screen-pins", Context.MODE_PRIVATE).getString(HomeScreenPolicy.identity(origin, app) + ":icon", "");
+            if (!png.startsWith("data:image/png;base64,")) return null;
+            byte[] bytes = android.util.Base64.decode(png.substring(22), android.util.Base64.DEFAULT);
+            return BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
+        } catch (RuntimeException | OutOfMemoryError e) { return null; }
+    }
+
     /* ---- the file cache ---- */
 
     static File cacheDir(Context c) { return new File(c.getApplicationContext().getCacheDir(), "pin-files"); }

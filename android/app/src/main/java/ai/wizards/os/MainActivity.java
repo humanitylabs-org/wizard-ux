@@ -863,7 +863,32 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         else { pinShotHide(); reach.connecting(); }
     };
 
-    private final Runnable reachGiveUp = () -> showOffline(null);
+    private final Runnable reachGiveUp = () -> {
+        // Instant home-screen apps (wizard-ux issue 1830, field report 1): a pinned window shows Can't reach only when the
+        // box truly doesn't answer. At the mark the phone asks the box's own health check; a box that answers is only
+        // slow (a cold load right after a deploy), so the window keeps waiting and asks again at the next mark.
+        if (this instanceof AppSessionActivity && PinInstant.on(this) && !mainFailed) { giveUpUnlessAnswering(); return; }
+        showOffline(null);
+    };
+
+    /** Bumped by every new watch of a load and by a paint, so a late health answer can't act on a later load. */
+    private int reachWatch = 0;
+
+    private void giveUpUnlessAnswering() {
+        final int watch = reachWatch;
+        final android.content.Context app = getApplicationContext();
+        new Thread(() -> {
+            int status = PinInstant.health(app);
+            main.post(() -> {
+                if (watch != reachWatch || mainFailed || isFinishing() || isDestroyed()) return;
+                if (PinInstantPolicy.boxAnswers(status)) {
+                    android.util.Log.i("WizardOSReach", "still loading: the box answers (" + status + "), no Can't reach");
+                    main.removeCallbacks(reachGiveUp);
+                    main.postDelayed(reachGiveUp, ReachPolicy.GIVE_UP_MS);
+                } else showOffline(null);
+            });
+        }, "pin-reach-health").start();
+    }
 
     private final Runnable reachRetry = new Runnable() {
         @Override
@@ -889,6 +914,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         mainFailed = false;
         wantUrl = url;
         pinPageShown = false;
+        pinLanded = false;
         armReach();
     }
 
@@ -896,12 +922,15 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         if (mainFailed) return; // this load already failed fast (its screen is up)
         main.removeCallbacks(reachMark);
         main.removeCallbacks(reachGiveUp);
+        reachWatch++;
         main.postDelayed(reachMark, ReachPolicy.CONNECTING_MS);
         main.postDelayed(reachGiveUp, ReachPolicy.GIVE_UP_MS);
     }
 
     void landed() {
         PinInstant.reached(this);
+        reachWatch++;
+        pinLanded = true;
         main.removeCallbacks(reachMark);
         main.removeCallbacks(reachGiveUp);
         main.removeCallbacks(reachRetry);
@@ -925,13 +954,24 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
      * the window leaves the screen, shown at the next cold open over the WebView (under the connection screen) until the
      * pinned page says the app has loaded (WizardOSNative.pinShown), a connection screen shows, or SHOT_MAX_MS. */
     volatile PinCache pinCache;
-    private android.widget.ImageView pinShot;
+    /** What covers a pinned window until its app has loaded: the app's last screen, else a placeholder (never blank). */
+    private View pinShot;
+    private boolean pinShotIsPicture = false, pinShownSaved = false;
     private boolean pinPageShown = false;
-    private final Runnable pinShotGiveUp = this::pinShotHide;
+    /** The cover gives way at SHOT_MAX_MS, but only to a page that has painted: never to an empty window. */
+    private boolean pinLanded = false;
+    private final Runnable pinShotGiveUp = new Runnable() {
+        @Override public void run() {
+            if (pinShot == null) return;
+            if (pinLanded) pinShotHide(); else main.postDelayed(this, 1_000L);
+        }
+    };
 
     /** Started at the top of a pinned window's onCreate, so the picture decodes while the WebView is being made. */
     private java.util.concurrent.FutureTask<android.graphics.Bitmap> pinShotLoad;
-    private long pinCreateAt = 0, pinFirstDrawAt = 0, pinShotDrawnAt = 0;
+    /** The pinned icon's picture and name, for the placeholder; read beside the WebView too. */
+    private java.util.concurrent.FutureTask<Object[]> pinLabelLoad;
+    private long pinCreateAt = 0, pinFirstDrawAt = 0, pinShotDrawnAt = 0, pinCoverDrawnAt = 0;
 
     void pinShotStart() {
         pinCreateAt = android.os.SystemClock.uptimeMillis();
@@ -940,6 +980,10 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         final android.content.Context ctx = getApplicationContext();
         pinShotLoad = new java.util.concurrent.FutureTask<>(() -> PinInstant.shot(ctx, origin, app));
         new Thread(pinShotLoad, "pin-shot-load").start();
+        final String pinOrigin = HomeScreenShortcuts.origin(this);
+        pinLabelLoad = new java.util.concurrent.FutureTask<>(() -> new Object[]{
+                PinInstant.pinnedIcon(ctx, pinOrigin, app), PinInstant.pinnedName(ctx, pinOrigin, app), WizardLook.load(ctx)});
+        new Thread(pinLabelLoad, "pin-label-load").start();
     }
 
     private void pinShotShow() {
@@ -951,22 +995,34 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         pinShotLoad = null;
         final long waited = android.os.SystemClock.uptimeMillis() - built;
         if (b != null) {
-            pinShot = new android.widget.ImageView(this);
-            pinShot.setScaleType(android.widget.ImageView.ScaleType.FIT_START);
-            pinShot.setBackgroundColor(Color.rgb(5, 3, 12));
-            pinShot.setImageBitmap(b);
+            android.widget.ImageView picture = new android.widget.ImageView(this);
+            picture.setScaleType(android.widget.ImageView.ScaleType.FIT_START);
+            picture.setBackgroundColor(Color.rgb(5, 3, 12));
+            picture.setImageBitmap(b);
+            pinShot = picture;
+            pinShotIsPicture = true;
+        } else if (pinLabelLoad != null) {
+            // No picture yet (first open on this phone, or the app was never left): never a blank window (field report
+            // 2). Android paints the app's icon and name on the skin's background with a quiet progress line.
+            Object[] label = null;
+            try { label = pinLabelLoad.get(200, java.util.concurrent.TimeUnit.MILLISECONDS); } catch (Exception slow) { pinLabelLoad.cancel(true); }
+            pinShot = pinPlaceholder(label);
+        }
+        pinLabelLoad = null;
+        if (pinShot != null) {
             pinShot.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS);
             root.addView(pinShot, root.indexOfChild(web) + 1, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
             main.postDelayed(pinShotGiveUp, PinInstantPolicy.SHOT_MAX_MS);
         }
-        final android.widget.ImageView shown = pinShot;
+        final View shown = pinShot;
+        final boolean picture = pinShotIsPicture;
         // The window's first frame (with the picture when there is one): timed for PinInstantScenario and the log.
         root.getViewTreeObserver().addOnPreDrawListener(new android.view.ViewTreeObserver.OnPreDrawListener() {
             @Override public boolean onPreDraw() {
                 if (root != null) root.getViewTreeObserver().removeOnPreDrawListener(this);
                 pinFirstDrawAt = android.os.SystemClock.uptimeMillis();
-                if (shown != null && pinShot == shown) pinShotDrawnAt = pinFirstDrawAt;
-                if (shown != null) android.util.Log.i("WizardOSPinInstant", "last screen on the first frame, " + (pinFirstDrawAt - pinCreateAt)
+                if (shown != null && pinShot == shown) { pinCoverDrawnAt = pinFirstDrawAt; if (picture) pinShotDrawnAt = pinFirstDrawAt; }
+                if (shown != null) android.util.Log.i("WizardOSPinInstant", (picture ? "last screen" : "placeholder") + " on the first frame, " + (pinFirstDrawAt - pinCreateAt)
                         + " ms after the window was created (WebView " + (built - pinCreateAt) + " ms, waited " + waited + " ms for the picture)");
                 return true;
             }
@@ -975,17 +1031,60 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
 
     /** When the first frame with the last screen on it was drawn (0: not shown); read by PinInstantScenario. */
     long pinShotDrawnAt() { return pinShotDrawnAt; }
+    /** When the first frame with the last screen or the placeholder on it was drawn (0: neither). */
+    long pinCoverDrawnAt() { return pinCoverDrawnAt; }
+    boolean pinPlaceholderShowing() { return pinShot != null && !pinShotIsPicture; }
+    boolean reachOfflineShowing() { return reach != null && reach.isShowing() && reach.isOffline(); }
+
+    /** The placeholder: the app's icon and name on the worn skin's background, a quiet progress line under them. */
+    private View pinPlaceholder(Object[] label) {
+        android.graphics.Bitmap icon = label == null ? null : (android.graphics.Bitmap) label[0];
+        String name = label == null ? PinInstantPolicy.placeholderName("", HomeScreenShortcuts.appId(this, getIntent())) : (String) label[1];
+        WizardLook look = label == null ? WizardLook.load(this) : (WizardLook) label[2];
+        float dp = getResources().getDisplayMetrics().density;
+        FrameLayout cover = new FrameLayout(this);
+        cover.setBackgroundColor(look.base);
+        cover.setContentDescription("pin-placeholder");
+        android.widget.LinearLayout col = new android.widget.LinearLayout(this);
+        col.setOrientation(android.widget.LinearLayout.VERTICAL);
+        col.setGravity(android.view.Gravity.CENTER_HORIZONTAL);
+        if (icon != null) {
+            android.widget.ImageView i = new android.widget.ImageView(this);
+            i.setImageBitmap(icon);
+            col.addView(i, new android.widget.LinearLayout.LayoutParams(Math.round(72 * dp), Math.round(72 * dp)));
+        }
+        android.widget.TextView t = new android.widget.TextView(this);
+        t.setText(name);
+        t.setTextColor(look.text);
+        t.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 17);
+        t.setGravity(android.view.Gravity.CENTER);
+        android.widget.LinearLayout.LayoutParams tl = new android.widget.LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        tl.topMargin = Math.round(14 * dp);
+        col.addView(t, tl);
+        android.widget.ProgressBar line = new android.widget.ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
+        line.setIndeterminate(true);
+        line.setIndeterminateTintList(android.content.res.ColorStateList.valueOf(look.accent));
+        line.setAlpha(0.55f);
+        android.widget.LinearLayout.LayoutParams ll = new android.widget.LinearLayout.LayoutParams(Math.round(96 * dp), Math.round(4 * dp));
+        ll.topMargin = Math.round(18 * dp);
+        col.addView(line, ll);
+        cover.addView(col, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, android.view.Gravity.CENTER));
+        return cover;
+    }
     /** When this pinned window's first frame was drawn, with or without a picture (0: not yet). */
     long pinFirstDrawAt() { return pinFirstDrawAt; }
     boolean pinShotShowing() { return pinShot != null; }
 
     void pinShotHide() {
-        final android.widget.ImageView shot = pinShot;
+        final View shot = pinShot;
         if (shot == null) return;
         pinShot = null;
+        pinShotIsPicture = false;
         main.removeCallbacks(pinShotGiveUp);
         shot.animate().alpha(0f).setDuration(150).withEndAction(() -> { if (root != null) root.removeView(shot); }).start();
     }
+
+    private void pinShotSaveIfFront() { if (resumed && hasWindowFocus()) pinShotSave(); }
 
     /** Leaving the screen: keep a picture of the app as it is now, for the next cold open (only a loaded app page). */
     private void pinShotSave() {
@@ -1976,7 +2075,12 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         @JavascriptInterface
         public void pinShown() {
             if (!(MainActivity.this instanceof AppSessionActivity)) return;
-            main.post(() -> { pinPageShown = true; pinShotHide(); });
+            main.post(() -> {
+                pinPageShown = true; pinShotHide();
+                // Keep a picture once the app has shown, not only when the window leaves (field report 2), so the
+                // very next open has its last screen even if this window is swiped away.
+                if (!pinShownSaved) { pinShownSaved = true; main.postDelayed(MainActivity.this::pinShotSaveIfFront, PinInstantPolicy.SHOT_AFTER_SHOWN_MS); }
+            });
         }
         /* ---- One UI icon count (wizard-ux issue 1669, switch wizard/phone-badge-look, off by default): the main page
          * copies the switch here (badge/BadgeLook); a change redraws the Messenger icon count at once. ---- */
