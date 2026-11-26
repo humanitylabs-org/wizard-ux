@@ -37,8 +37,9 @@ import ai.wizards.os.device.Http;
  * item as its own Android notification, on a channel per app named after it, so Android settings can mute one app
  * and keep the others. A tap opens the item's link on this Wizard, or the app. Rules: {@link AppNotifyPolicy}.
  *
- * Delivery in this slice is a read every 30 s while the app process lives, plus a 15-minute JobScheduler backstop
- * after a kill. Box-to-phone push (seconds while locked) is a follow-up. While WizardOS is on screen nothing is posted
+ * Delivery is a read every 30 s while the app process lives, plus a 15-minute JobScheduler backstop after a kill.
+ * With the switch wizard/phone-push on as well, {@link AppPush} keeps a line to the box open and reads at once on
+ * each new item, also while the phone is locked (issue 1618). While WizardOS is on screen nothing is posted
  * (the shell shows it), but the watermark still moves, so nothing seen there is posted later.
  *
  * The switch lives in the shell (look.json); the main page copies it here with the apps' names
@@ -72,7 +73,7 @@ public final class AppNotify {
         if (!on) e.remove("since").remove("posted").remove("asked");
         e.apply();
         if (was != on) Log.i(TAG, "switch " + (on ? "on" : "off"));
-        if (on) kick(app); else stop(app);
+        if (on) kick(app); else { stop(app); AppPush.ensure(app); }
     }
 
     /** True once per switch-on: the page may ask Android for permission to post, never again until it is off and on. */
@@ -86,6 +87,7 @@ public final class AppNotify {
     /** Start (or keep) the in-process read and the backstop job; nothing while the switch is off. */
     public static void kick(Context c) {
         Context app = c.getApplicationContext();
+        AppPush.ensure(app); // box-to-phone push (issue 1618, its own switch): runs only while this one is on too
         if (!on(app)) { stop(app); return; }
         synchronized (LOCK) {
             if (loop == null) {
@@ -97,7 +99,8 @@ public final class AppNotify {
             loop.post(new Runnable() {
                 @Override public void run() {
                     if (!on(app)) return;
-                    pollOnce(app);
+                    if (!AppPush.listening()) pollOnce(app); // the push line reads at once; no need to ask every 30 s
+
                     loop.postDelayed(this, LOOP_MS);
                 }
             });
