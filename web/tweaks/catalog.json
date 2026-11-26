@@ -54,6 +54,7 @@
     "wizard/agent-approvals",
     "wizard/attach-menu-icons",
     "wizard/app-location",
+    "wizard/boundary-agent-access",
     "wizard/phone-badge-look",
     "wizard/sent-threads"
   ],

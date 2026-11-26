@@ -297,6 +297,38 @@
     if (!apps().some(a => a.id === st.appId && a.source === 'apps.json' && a.provides?.includes('messaging'))) return false;
     return window.WizAndroidRelay?.chatRead?.(data) === true;
   }
+  /* Agent access under the browser boundary (wizard-ux issue 1668, switch wizard/boundary-agent-access): Connected
+   * accounts' Agent access screen shows and sets which agents may use an account app (the owner's agent.json ticks,
+   * wizard-os spec/PERMISSIONS.md). A sandboxed page's own owner call carries no shell token, so the shell makes it:
+   * GET / PUT /wizard/v1/apps/<id>/agents, the same routes the App Manager's Connections page uses (core/agents.js).
+   * Only the installed Connected accounts app asks, only for the apps that hold accounts (ACCESS_APPS, the list on its
+   * screen), only while its window is on screen, and a change only right after a real tap in that window. Nothing is
+   * kept here; only the ticks cross back (browser-boundary.js accessShape). */
+  const ACCESS_SWITCH = 'wizard/boundary-agent-access', ACCESS_ASKERS = ['connected-accounts', 'wizard-connectors'];
+  const ACCESS_APPS = new Set(['connected-accounts', 'wizard-google', 'wizard-microsoft', 'messenger', 'wizard-mail', 'money', 'wizard-health',
+    'wizard-apple-health', 'wizard-fitbit', 'wizard-oura', 'wizard-whoop', 'wizard-withings']);
+  const ACCESS_AGENT = /^[a-z0-9][a-z0-9._-]{0,63}$/;
+  function accessOn() { try { return String(document.documentElement.dataset.tweaks || '').split(/\s+/).includes(ACCESS_SWITCH); } catch (_) { return false; } }
+  async function agentAccess(st, method, args, ctx) {
+    if (!accessOn()) throw fault('Agent access is not available here');
+    if (!apps().some(a => a.id === st.appId && a.source === 'apps.json' && ACCESS_ASKERS.includes(a.id))) throw fault('Only Connected accounts may ask');
+    if (document.hidden || st?.isVisible?.() !== true) throw fault('Open the app first');
+    const app = typeof args?.app === 'string' ? args.app : '';
+    if (!ACCESS_APPS.has(app)) throw fault('Not an app that holds accounts');
+    let body = null;
+    if (method === 'agents.set') {
+      if (ctx?.tapped !== true) throw fault('Changing agent access needs a tap in the app');
+      const ids = args?.agents;
+      if (!Array.isArray(ids) || ids.length > 64 || !ids.every(x => typeof x === 'string' && ACCESS_AGENT.test(x))) throw fault('Invalid agent list');
+      body = JSON.stringify({ agents: [...new Set(ids)] });
+    }
+    const headers = body ? { Accept: 'application/json', 'Content-Type': 'application/json' } : { Accept: 'application/json' };
+    const r = await fetch('/wizard/v1/apps/' + encodeURIComponent(app) + '/agents', { method: body ? 'PUT' : 'GET', cache: 'no-store', credentials: 'same-origin', redirect: 'error', headers, ...(body ? { body } : {}) });
+    let j = null; try { j = await r.json(); } catch (_) {}
+    if (r.status === 404 && j?.error === 'app_not_found') return { access: { state: 'absent' } };
+    if (!r.ok || !Array.isArray(j?.agents)) throw fault(typeof j?.error === 'string' && /^[a-z0-9_]{1,64}$/.test(j.error) ? j.error : 'request_failed');
+    return { access: { state: 'ok', agents: j.agents } };
+  }
   // App badge: an installed app's own unread count on its desk mark / bar badge (same slot Notifications uses).
   // Keyed by the verified frame's app id, so an app can only badge itself; shell-owned counts are not writable.
   const SHELL_COUNTS = new Set(['wizard', 'notifications']);
@@ -1103,6 +1135,7 @@
       if (!boundaryLive(st)) throw fault('App window not verified');
       if (method === 'badge.set') { setBadge(st.appId, args?.n, args?.more === true); st.badged = true; return true; }
       if (method === 'notify.chatRead') return chatRead(st, args);
+      if (method === 'agents.read' || method === 'agents.set') return agentAccess(st, method, args, ctx);
       if (method === 'titlebar.set') {
         // The page's own address, only as the base for relative links (each link must still stay inside the app).
         let base = null; try { if (typeof args?.base === 'string' && args.base.length <= 2048) { const u = new URL(args.base); if (within(u, st.url)) base = u.href; } } catch (_) {}

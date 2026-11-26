@@ -42,7 +42,9 @@
  *    (`capture.*`: the shell's one recorder, for the window's own app; preparing or starting a new recording needs a
  *    real tap in that window, events stream back as `notice` `capture`); and the app's own saved settings
  *    (`storage.load`, `storage.save`: see appStorage below); and the app's calls to its own backend (`net.fetch`: see
- *    net below).
+ *    net below); and agent access (`agents.read`, `agents.set`, switch wizard/boundary-agent-access, wizard-ux issue
+ *    1668: only the installed Connected accounts app, only for the apps that hold accounts, a change only on a real tap;
+ *    the shell asks the Agent Service with its own token and only the agent ticks cross back).
  *    They are handed to the one server core/app-services.js registers (serve(fn)), which checks the
  *    frame against the installed app list and validates the data. Answers are protocol data only (a boolean, a share
  *    status, a transcript, the vault's `{ secret }` or `{ available, saved }`, Wizard ID's public info, signed event or
@@ -101,7 +103,7 @@
     'identity.info', 'identity.sign', 'identity.nip44_encrypt', 'identity.nip44_decrypt',
     'capture.sync', 'capture.prepare', 'capture.release', 'capture.start', 'capture.call', 'capture.settle', 'capture.pending', 'capture.ack', 'capture.confirm',
     'storage.load', 'storage.save', 'idb.load', 'idb.commit', 'idb.drop', 'idb.list', 'net.fetch', 'net.abort', 'net.ack', 'ws.open', 'ws.send', 'ws.close', 'link.open',
-    'media.view', 'nav.back', 'nav.openThread', 'nav.openContextDraft', 'notify.chatRead'];
+    'media.view', 'nav.back', 'nav.openThread', 'nav.openContextDraft', 'notify.chatRead', 'agents.read', 'agents.set'];
   // Sharing out and Share to Wizard open a shell sheet: only right after a real tap or key in that app window, never
   // from a page alone.
   // Preparing a recording (capture.prepare) needs the same tap; a new recording (capture.start) is checked by the server
@@ -144,6 +146,8 @@
       const str = x => (typeof x === 'string' && x.length <= 1024 ? x : '');
       return { ws: { protocol: str(v.ws.protocol), extensions: str(v.ws.extensions) } };
     }
+    // Agent access (agents.read, agents.set): one account app's agent ticks, as the Agent Service keeps them.
+    if (v && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length === 1 && v.access && typeof v.access === 'object') return { access: accessShape(v.access) };
     if (Array.isArray(v)) return v.slice(0, 32).map(shareItem).filter(Boolean);
     if (typeof v === 'boolean') return v;
     if (typeof v === 'string') return v.length <= 32 ? v : null;
@@ -156,6 +160,14 @@
       return identityShape(v);
     }
     return null;
+  }
+  // Which agents may use one account app (wizard-ux issue 1668): each agent's id, name, privacy and tick, nothing else.
+  function accessShape(a) {
+    if (a.state === 'absent') return { state: 'absent' };
+    const str = (x, n) => (typeof x === 'string' && x.length <= n ? x : '');
+    const agents = (Array.isArray(a.agents) ? a.agents : []).slice(0, 64).filter(x => x && str(x.id, 64))
+      .map(x => ({ id: x.id, label: str(x.label, 200) || x.id, privacy: x.privacy === 'private' ? 'private' : 'standard', enabled: x.enabled === true }));
+    return { state: 'ok', agents };
   }
   function netShape(r) {
     const status = Number.isInteger(r.status) && r.status >= 200 && r.status <= 599 ? r.status : 502;
