@@ -1952,6 +1952,23 @@
     /* Clear chat notifications (wizard-ux issue 1276): tell Wizard the owner read a chat of another network,
      * chatRead({ network: 'line', names: ['Mike'] }). With the owner's switch on, the WizardOS Android app clears that
      * chat app's own notification from the tray. Resolves true when it was handed on, false otherwise (any host). */
+    /* Agent access (wizard-ux issue 1668): which agents may use an account app, for Connected accounts in a sandboxed
+     * window (browser boundary), where its own owner call carries no token. read(appId) and set(appId, agentIds) answer
+     * { state: 'ok', agents: [{ id, label, privacy, enabled }] } or { state: 'absent' } (not installed); set needs a real
+     * tap in the app. Rejects where the shell does not offer it (not sandboxed, switch off, another app): use the owner
+     * route there. */
+    agentAccess: Object.freeze((() => {
+      // A screen reads many apps at once; the shell takes a few app requests at a time, so they wait their turn here.
+      let running = 0; const waiting = [];
+      const turn = () => { while (running < 3 && waiting.length) { running++; const job = waiting.shift(); job().finally(() => { running--; turn(); }); } };
+      const queued = job => new Promise((resolve, reject) => { waiting.push(() => job().then(resolve, reject)); turn(); });
+      const call = (op, args) => (typeof opaque !== 'undefined' && opaque ? queued(() => request(op, args, 20000)) : Promise.reject(new Error('unavailable')))
+        .then(v => { if (!v?.access || !['ok', 'absent'].includes(v.access.state)) throw new Error('unavailable'); return v.access; });
+      return {
+        read: appId => call('agents.read', { app: String(appId || '') }),
+        set: (appId, agentIds) => call('agents.set', { app: String(appId || ''), agents: Array.isArray(agentIds) ? agentIds.map(String) : [] }),
+      };
+    })()),
     notifications: Object.freeze({ chatRead: data => service?.notifications ? Promise.resolve().then(() => service.notifications.chatRead(data) === true).catch(() => false)
       : transportReady || opaque ? request('notify.chatRead', data).then(v => v === true, () => false) : Promise.resolve(false) }),
     badge: Object.freeze({ set: (n, o) => { const more = !!(o && o.more === true); return service ? service.badge.set(n, { more }) : transportReady ? request('badge.set', { n, more }).then(() => true, () => false) : Promise.resolve(false); } }),

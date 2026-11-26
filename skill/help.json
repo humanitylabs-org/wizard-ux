@@ -17,7 +17,7 @@
     "Search settings: the box at the top of the Settings list. Typing keeps only the pages that mention the words and marks them on the open page, scrolled to the first; Esc clears it, Enter opens the first page."
   ],
   "switchesIntro": [
-    "Settings › Appearance › Try new features lists unfinished features anyone can switch on to try, A to Z, each 'by <author>'. The group only shows when this Wizard is on the For testers channel (Settings › About & updates › Channel › For testers); on For everyone it is hidden and these switches stay off. The same switches are also in the WizardOS Tracker app (Try it). A choice follows the owner on every device."
+    "Settings › Appearance › Try new features lists unfinished features anyone can switch on to try, A to Z, each 'by <author>'. The group only shows when this Wizard is on the For testers channel; on For everyone these switches stay hidden and off. The same switches are also in the WizardOS Tracker app (Try it). A choice follows the owner on every device."
   ],
   "pages": {
     "overview": {
@@ -368,6 +368,10 @@
       "where": "desktop: Settings › Appearance › Shell view › AI apps (the standard desktop view; Desks is the other choice)",
       "when": "desktop only"
     },
+    "wizard/boundary-agent-access": {
+      "help": "Connected accounts' Agent access, boundary on.",
+      "where": "Settings › Appearance › Try new features › Agent access under the browser boundary"
+    },
     "wizard/clear-chat-notifications": {
       "help": "Android app: reading a LINE, WhatsApp, Telegram or other bridged chat in Messenger clears that app's own notification (needs Android's Notification access).",
       "where": "Settings › Appearance › Try new features › Clear chat notifications"
@@ -685,11 +689,10 @@
     }
   ],
   "howTo": {
-    "Turn on a new feature?": "Settings › About & updates › Channel › For testers (if not already), then Settings › Appearance › Try new features › the feature's switch.",
+    "Turn on a new feature (or get them first)?": "Settings › About & updates › Channel › For testers (if not already), then Settings › Appearance › Try new features › the feature's switch.",
     "Turn on Channels?": "Nothing to turn on any more: open Chats and tap the Channels tab.",
     "Make Wizard update automatically?": "Settings › About & updates › Updates › Automatic (installs overnight, never during a chat). For apps: Settings › About & updates › Apps › Automatic (checks and updates apps every hour).",
     "Update now?": "When an update is ready, the card at the top of Settings shows Install (or Install now); tap it. 'Interface updated · Reload' just reloads the screen.",
-    "Get the newest features first?": "Settings › About & updates › Channel › For testers.",
     "Use Wizard on my phone?": "Settings › Phones & devices: scan the QR code with the Wizard phone app (needs Tailscale; the page walks you through it).",
     "Change the look?": "Settings › Appearance › Skin and Colors; + New skin to make your own.",
     "Switch the desktop layout?": "Settings › Appearance › Shell view: AI apps (standard) or Desks.",
