@@ -993,7 +993,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         final String app = HomeScreenShortcuts.appId(this, getIntent());
         final int w = web.getWidth(), h = web.getHeight();
         if (app == null || w <= 0 || h <= 0) return;
-        final float scale = Math.min(1f, 1080f / w);
+        final float scale = Math.min(1f, PinInstantPolicy.SHOT_WIDTH / (float) w);
         final android.graphics.Bitmap dest;
         try { dest = android.graphics.Bitmap.createBitmap(Math.round(w * scale), Math.round(h * scale), android.graphics.Bitmap.Config.ARGB_8888); }
         catch (OutOfMemoryError oom) { return; }

@@ -89,7 +89,10 @@ final class PinInstant {
         if (app == null || !on(c)) return null;
         File f = shotFile(c, origin, app);
         if (!f.isFile() || !PinInstantPolicy.shotFresh(System.currentTimeMillis(), f.lastModified())) return null;
-        try { return BitmapFactory.decodeFile(f.getPath()); } catch (RuntimeException | OutOfMemoryError e) { return null; }
+        // RGB_565: half the memory of the default, so it decodes and reaches the screen sooner (a JPEG has no alpha).
+        BitmapFactory.Options o = new BitmapFactory.Options();
+        o.inPreferredConfig = Bitmap.Config.RGB_565;
+        try { return BitmapFactory.decodeFile(f.getPath(), o); } catch (RuntimeException | OutOfMemoryError e) { return null; }
     }
 
     static void saveShot(Context c, String origin, String app, Bitmap b) {

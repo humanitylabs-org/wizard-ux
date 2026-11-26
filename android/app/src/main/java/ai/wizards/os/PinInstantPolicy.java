@@ -25,6 +25,8 @@ final class PinInstantPolicy {
     static final long REACHED_MS = 5 * 60_000L;
     /** A saved last screen older than this is not shown (the app has likely moved on). */
     static final long SHOT_MAX_AGE_MS = 7 * 24 * 3_600_000L;
+    /** The saved last screen is kept at most this wide (px): small enough to decode and draw in the first frame. */
+    static final int SHOT_WIDTH = 720;
     /** The saved last screen gives way to the live page by this time at the latest. */
     static final long SHOT_MAX_MS = 10_000L;
     /** One kept file at most this big; bigger ones pass through untouched. */
