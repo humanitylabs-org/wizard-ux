@@ -45,6 +45,7 @@
     "wizard/channel-model-emoji",
     "wizard/channel-auto-emoji",
     "wizard/app-picker-store-search",
+    "wizard/phone-push",
     "wizard/phone-tester-builds"
   ],
   "defaults": [],

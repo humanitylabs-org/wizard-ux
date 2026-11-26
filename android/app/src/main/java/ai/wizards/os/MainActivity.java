@@ -1724,6 +1724,12 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
                 main.post(() -> requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, REQ_APP_NOTIFY));
             }
         }
+        /** Box-to-phone push (wizard-ux issue 1618, switch wizard/phone-push): the main page's copy of the switch. */
+        @JavascriptInterface
+        public void appPushSwitch(boolean on) {
+            if (MainActivity.this instanceof AppSessionActivity) return;
+            ai.wizards.os.notify.AppPush.setOn(MainActivity.this, on);
+        }
         /* ---- App windows (wizard-os issue 650, on for everyone): any page asks to open an app's own window for a link
          * (false = keep the link where it is). ---- */
         @JavascriptInterface
