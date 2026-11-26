@@ -237,6 +237,13 @@
       } else if (cur) { if (later(cur, at)) { const prev = cur; newTurn(null); cur.at = at; cur.later = { at, after: prev.a.at }; } cur.steps++; noteWork(cur, m, at); }
     }
     for (const t of out) { liftAnswer(t); delete t.said; }
+    // 26 Nov 2026: a saved retry or a resend of the same words after a turn that never finished is one request, not
+    // two. The copy shows as a quiet "Sent again" line, not a second bubble.
+    for (let i = 1; i < out.length; i++) {
+      const t = out[i], prev = out[i - 1];
+      if (!t.u || !prev.u || !t.u.text || t.u.files?.length || t.u.images?.length || t.u.text !== prev.u.text) continue;
+      if (!prev.a || prev.a.final === false || prev.a.failed) t.u = { ...t.u, again: true };
+    }
     return out;
   }
   // The model often writes its whole answer in a message that also carries a tool call (a notes patch), then ends the

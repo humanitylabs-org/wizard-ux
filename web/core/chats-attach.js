@@ -217,7 +217,10 @@ window.WizCore.chatsParts.attach = function ({ ch, CHEV_SVG, clip, COG_SVG, draf
     const unsent = tn.u && ['failed', 'interrupted'].includes(tn.u.queue?.status);
     const unsentRetry = unsent && c.retryRunId && tn.u.queue.runId === c.retryRunId
       ? `<button type="button" class="pbtn" data-chretry${c.retrying ? ' disabled' : ''}>${c.retrying ? 'Retrying…' : 'Retry'}</button>` : '';
-    if (tn.u) h += `<div class="msg u${tn.u.reply ? ' has-rq' : ''}${unsent ? ' unsent' : ''}"${isFinite(tn.u.at) ? ` data-morph-key="u${tn.u.at}"` : ''}${msgIds(tn.u, undefined, tt)}><div class="bub">${replyCard(tn.u.reply)}${userMedia(c, tn.u.files, tn.u.images)}${tn.u.text ? md(tn.u.text) : ''}</div><div class="mmeta">${unsent ? `<span class="pst fail" data-unsent>Not sent · message saved</span>${unsentRetry}` : ''}${timeTag(tn.u.at)}${quoteBtn(tt)}</div></div>`;
+    // The same words sent again after an unfinished turn (see parseRows) are a quiet line, not a second bubble. It keeps
+    // the message ids so going to that message (a quote's header, a tracker row) still lands on it.
+    if (tn.u?.again && !unsent) h += `<div class="ch-renamed ch-again"${isFinite(tn.u.at) ? ` data-morph-key="u${tn.u.at}"` : ''}${msgIds(tn.u, undefined, tt)}><span>Sent again${isFinite(tn.u.at) ? ` · ${esc(KIT.time.stamp(tn.u.at))}` : ''}</span></div>`;
+    else if (tn.u) h += `<div class="msg u${tn.u.reply ? ' has-rq' : ''}${unsent ? ' unsent' : ''}"${isFinite(tn.u.at) ? ` data-morph-key="u${tn.u.at}"` : ''}${msgIds(tn.u, undefined, tt)}><div class="bub">${replyCard(tn.u.reply)}${userMedia(c, tn.u.files, tn.u.images)}${tn.u.text ? md(tn.u.text) : ''}</div><div class="mmeta">${unsent ? `<span class="pst fail" data-unsent>Not sent · message saved</span>${unsentRetry}` : ''}${timeTag(tn.u.at)}${quoteBtn(tt)}</div></div>`;
     else if (tn.note) h += noteHtml(tn.note);
     else if (tn.later) h += runContextHtml(tn.later);
     // A send a graceful restart holds is not live work: no Working timer under it (renderThread sets c.restartHeld).
