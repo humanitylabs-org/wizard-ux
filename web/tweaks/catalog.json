@@ -60,7 +60,8 @@
     "wizard/sent-threads",
     "wizard/private-mode",
     "wizard/phone-recovery-mode",
-    "wizard/backup-health"
+    "wizard/backup-health",
+    "wizard/private-routing"
   ],
   "defaults": [],
   "promotedDefaults": [],
