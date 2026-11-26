@@ -248,7 +248,7 @@
       }
     },
     "updates": {
-      "help": "WizardOS (server): the installed version and whether it is up to date. Updates: Automatic installs them overnight, never during a chat; Ask me installs nothing until you tap Install. Channel: For everyone gets releases testers have used for about 3 days; For testers gets every release at once and shows Try new features in Appearance. When an update is ready a card at the top of Settings offers Install (or Install now).",
+      "help": "WizardOS (server): installed version, up to date or not. Updates: Automatic installs them overnight, never during a chat; Ask me installs nothing until you tap Install. Channel: For everyone gets releases testers have used for 3 days; For testers gets every release at once and shows Try new features in Appearance. A ready update shows Install at the top of Settings.",
       "controls": {
         "WizardOS (server) {version}": "the installed server version",
         "Updates": null,
@@ -261,7 +261,7 @@
       }
     },
     "wizard": {
-      "help": "Wizard: whether this device is connected to your Wizard (Connected, Connecting…, Sign-in needed) and its address; interface and server update separately. Technical details shows the interface revision. Gestures & help opens How Wizard works on the phone (orb, desks, Back, Practice again) and the keys guide on the desktop. On Android also Recording, Reply notifications and the app's version (tap it to update).",
+      "help": "Wizard: whether this device is connected (Connected, Connecting…, Sign-in needed) and its address; interface and server update separately. Technical details shows the interface revision. Gestures & help opens How Wizard works on the phone (orb, desks, Back, Practice again) and the keys guide on the desktop. On Android also Recording, Reply notifications and the app's version (tap it to update).",
       "controls": {
         "Wizard": null,
         "Connected": "this device's connection to your Wizard",
@@ -416,6 +416,10 @@
     "wizard/phone-badge-look": {
       "help": "Android: Messenger icon count shows the exact number in a One UI-style corner badge.",
       "where": "Settings › Appearance › Try new features › One UI icon count"
+    },
+    "wizard/phone-recovery-mode": {
+      "help": "Android: a frozen start reopens in recovery mode.",
+      "where": "Settings › Appearance › Try new features › Phone recovery mode"
     },
     "wizard/phone-push": {
       "help": "Android app, with Phone notifications per app on: app notifications reach the phone within seconds, even locked (one Tailscale connection, no Google).",

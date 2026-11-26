@@ -134,14 +134,14 @@ Schedules: jobs the agent runs on a timer (e.g. a daily summary), with their nex
 
 ### About & updates
 About & updates: update WizardOS (Automatic or Ask me), the release channel (For everyone or For testers), versions, connection status, and Gestures & help.
-- WizardOS (server): the installed version and whether it is up to date. Updates: Automatic installs them overnight, never during a chat; Ask me installs nothing until you tap Install. Channel: For everyone gets releases testers have used for about 3 days; For testers gets every release at once and shows Try new features in Appearance. When an update is ready a card at the top of Settings offers Install (or Install now).
+- WizardOS (server): installed version, up to date or not. Updates: Automatic installs them overnight, never during a chat; Ask me installs nothing until you tap Install. Channel: For everyone gets releases testers have used for 3 days; For testers gets every release at once and shows Try new features in Appearance. A ready update shows Install at the top of Settings.
   - Apps: every installed app with its version and the newest, Update now, Retry, Hold, and Automatic / Ask me for app updates (Automatic checks and updates apps every hour)
   - WizardOS (server) {version}: the installed server version
   - Automatic: updates install overnight, never during a chat
   - Ask me: nothing installs until you tap Install
   - For testers: every new release as soon as it's out; shows Try new features
   - For everyone: releases testers have used for about 3 days
-- Wizard: whether this device is connected to your Wizard (Connected, Connecting…, Sign-in needed) and its address; interface and server update separately. Technical details shows the interface revision. Gestures & help opens How Wizard works on the phone (orb, desks, Back, Practice again) and the keys guide on the desktop. On Android also Recording, Reply notifications and the app's version (tap it to update).
+- Wizard: whether this device is connected (Connected, Connecting…, Sign-in needed) and its address; interface and server update separately. Technical details shows the interface revision. Gestures & help opens How Wizard works on the phone (orb, desks, Back, Practice again) and the keys guide on the desktop. On Android also Recording, Reply notifications and the app's version (tap it to update).
   - Connected: this device's connection to your Wizard
   - Recording: Android: recording keeps going with the screen off
   - Reply notifications: Android: a notification when the agent answers a chat you sent from the phone
@@ -191,6 +191,7 @@ Settings › Appearance › Try new features lists unfinished features anyone ca
 - **Phone bar: bigger orb, one badge**: Phone bar: bigger orb, one badge. (phone only).
 - **Phone media player for Music and Podcasts**: Phone app (Android and iPhone): Music and Podcasts play through the phone's own media player (lock screen, Control Center, headset buttons), and keep playing locked.
 - **Phone notifications per app**: Android app: what any app sends to Notifications shows as a phone notification under that app's name, one Android channel per app.
+- **Phone recovery mode**: Android: a frozen start reopens in recovery mode.
 - **Phone tester builds**: Phones get the newest tester build.
 - **Private first setup**: New installs start private: Welcome leads with Tinfoil; Claude and ChatGPT are optional extras.
 - **Private mode switch-over**: Turn private mode on or off on this Wizard: chosen apps move to a private Tinfoil agent, plus the Privacy check.
