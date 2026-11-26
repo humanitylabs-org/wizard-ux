@@ -82,9 +82,13 @@ test('open(): an unknown icon name is ignored, never a broken tile', () => {
   assert.equal(pic.children[0].className, 'wos-cm-tile');
 });
 
-test('the switch is listed in the catalog, off by default, linked to its issue', () => {
-  assert.ok(CATALOG.tweaks.includes(SWITCH));
-  assert.ok(!CATALOG.defaults.includes(SWITCH));
+test('with the catalog defaults (a fresh install) the switch is off and the attach menu is plain rows', () => {
+  assert.ok(CATALOG.tweaks.includes(SWITCH), 'listed so it can be flipped');
+  const { M, body, input, anchor } = load(CATALOG.defaults.join(' '));
+  assert.equal(M.attach(input, anchor), true);
+  const p = panel(body);
+  assert.ok(!p.className.includes('wos-cm-icons'));
+  assert.deepEqual(rows(p).map(r => [r.textContent, r.children.length]), [['Photo or video', 0], ['Camera', 0], ['File', 0]]);
   const m = JSON.parse(fs.readFileSync(new URL('../web/tweaks/wizard/attach-menu-icons/manifest.json', import.meta.url), 'utf8'));
   assert.deepEqual(m.issues, ['humanitylabs-org/wizard-ux#1639']);
 });
