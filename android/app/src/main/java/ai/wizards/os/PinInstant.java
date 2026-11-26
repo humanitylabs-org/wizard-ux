@@ -28,7 +28,6 @@ import java.util.Map;
  */
 final class PinInstant {
     private static final String PREFS = "pin-instant-open";
-    private static long lastWrite = 0;
 
     private PinInstant() {}
 
@@ -59,13 +58,16 @@ final class PinInstant {
         } catch (RuntimeException e) { return ""; }
     }
 
-    /** A Wizard window got an answer from this box (a page committed or painted). Written at most every few seconds. */
+    /** A Wizard window got an answer from this box (a page committed or painted). Only while the switch is on; the
+     *  same answer again within a second or two (a commit and its paint) is written once. */
     static void reached(Context c) {
-        long now = System.currentTimeMillis();
-        synchronized (PinInstant.class) { if (now - lastWrite < 5_000L) return; lastWrite = now; }
         if (!on(c)) return;
-        prefs(c).edit().putLong("reachedAt", now).putString("reachedNet", network(c))
-                .putString("reachedOrigin", ai.wizards.os.device.AppState.origin(c)).apply();
+        long now = System.currentTimeMillis();
+        SharedPreferences p = prefs(c);
+        String net = network(c), origin = ai.wizards.os.device.AppState.origin(c);
+        if (now - p.getLong("reachedAt", 0) >= 0 && now - p.getLong("reachedAt", 0) < 2_000L
+                && net.equals(p.getString("reachedNet", "")) && origin.equals(p.getString("reachedOrigin", ""))) return;
+        p.edit().putLong("reachedAt", now).putString("reachedNet", net).putString("reachedOrigin", origin).apply();
     }
 
     static boolean skipConnecting(Context c) {
