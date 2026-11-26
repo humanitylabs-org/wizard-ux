@@ -311,7 +311,15 @@
     const d = Math.floor(s / 86400); return `${d} ${d === 1 ? 'day' : 'days'} ago`;
   }
   // The card: {title, line, action, label} or null (up to date, idle, checking: nothing to do).
+  // A critical release (`urgent: true`, try-wizard#128; the Mac sends it only with its UpdateDeadlines switch on) says
+  // so in the title and asks for it soon; without the field the card is what it always was.
+  const MAU_URGENT = ['downloading', 'verifying', 'ready', 'ready-waiting', 'installing'];
   function mauCard(d) {
+    const c = mauCardPlain(d);
+    if (!c || d.urgent !== true || !MAU_URGENT.includes(c.state)) return c;
+    return { ...c, urgent: true, title: `Important update: ${c.title}`, line: `${c.line} It fixes something that matters, so install it soon.` };
+  }
+  function mauCardPlain(d) {
     const v = mauText(d.latest?.version, 40) || mauText(d.latest?.build, 40);
     const name = `Wizard for Mac${v ? ' ' + v : ''}`;
     if (d.phase === 'downloading' || d.phase === 'verifying') {
@@ -337,7 +345,7 @@
     const checking = d.phase === 'checking' || mauAct === 'check';
     const checked = typeof d.checkedAt === 'number' && isFinite(d.checkedAt) && d.checkedAt > 0 ? ` · checked ${mauAgo(d.checkedAt)}` : '';
     const value = c ? 'Installed on this Mac' : checking ? 'Checking…' : `Up to date${checked}`;
-    const card = c ? `<div class="osu-card" data-osu-card="mac-${c.state}" data-osu-stack role="status"><div class="osu-tx"><b data-osu-title>${esc(c.title)}</b><span>${esc(c.line)}</span></div>${c.action ? `<button type="button" class="osu-go" data-mau="${c.action}"${mauAct ? ' disabled' : ''}>${esc(mauAct === c.action ? c.busyLabel : c.label)}</button>` : ''}</div>` : '';
+    const card = c ? `<div class="osu-card" data-osu-card="mac-${c.state}"${c.urgent ? ' data-osu-urgent' : ''} data-osu-stack role="status"><div class="osu-tx"><b data-osu-title>${esc(c.title)}</b><span>${esc(c.line)}</span></div>${c.action ? `<button type="button" class="osu-go" data-mau="${c.action}"${mauAct ? ' disabled' : ''}>${esc(mauAct === c.action ? c.busyLabel : c.label)}</button>` : ''}</div>` : '';
     const head = `<div class="st-row static osu-head" data-settings-version="mac"><span class="st-tx"><b data-osu-title>${esc(title)}</b></span><span class="st-val">${esc(value)}</span></div>`;
     const hint = '<p class="st-hint">Wizard for Mac looks for a new version every hour and downloads it by itself. It restarts only when you say so, never while you’re recording.</p>';
     const check = c ? '' : `<button type="button" class="st-wide wz-button secondary" data-mau="check"${checking ? ' disabled aria-busy="true"' : ''}>${checking ? 'Checking…' : 'Check for updates'}</button>`;
