@@ -182,13 +182,15 @@ window.WosChatPower = function chatPower(A) {
     if (c.posFor !== sid) {
       c.posFor = sid; c.posLid = c.lid; c.readerMoved = false;
       c.posCached = !(c.loadedFor === sid && c.loadedNav === c.readNav);
-      // Back into a thread (the link trail, or Send and go stepping back to it) restores the place he was reading
-      // mid-thread even when a new reply landed there while he was away (issue 1653): it is anchored on the message he
-      // was reading, so the new reply below cannot move it (↓ Latest shows it). Any other open keeps the rules below.
-      const back = c.backTo === sid;
-      const kept = c.unreadOpen === sid && !back ? null : RP.read(sid);
-      const reading = back && !!kept?.anchor && !kept.atBottom;
-      const saved = kept && (reading || (!(kept.atBottom && kept.working) && kept.messageId === c.lid)) ? kept : null;
+      // Every return to a thread (Back from a linked thread, Back to the list and open it again, switching threads and
+      // coming back) restores the place he was reading mid-thread, also when a new reply landed there while he was away
+      // or the thread turned unread (issue 1653 for Back; James, 26 Nov 2026, issue 1882: "It should remember my scroll
+      // position in every thread"). It is anchored on the message he was reading, so the new reply below cannot move it
+      // (↓ Latest shows it). A place at the bottom keeps the rules below: an unread thread or a newer reply opens at its
+      // newest reply, as does a thread with no place from the last hour.
+      const kept = RP.read(sid);
+      const reading = !!kept?.anchor && !kept.atBottom;
+      const saved = kept && (reading || (c.unreadOpen !== sid && !(kept.atBottom && kept.working) && kept.messageId === c.lid)) ? kept : null;
       const reply = lastReply(nb), last = o.turns[o.turns.length - 1];
       let place = saved;
       if (!place) {
@@ -924,7 +926,10 @@ window.WosChatPower = function chatPower(A) {
     });
   }
   // back: the open steps back into a thread he left (threadBack), so its reading place wins (issue 1653).
-  const opened = (wid, sid, back = false) => { const c = ch(wid), s = sid && sid !== '__new__' ? LIVE.session(sid) : null; c.unreadOpen = s && LIVE.isNew(s) ? sid : ''; c.posFor = ''; c.backTo = back && sid !== '__new__' ? sid : ''; if (sid !== '__new__') c.newModel = null; if (sheet && A.owner(sheet.pane) === wid && sheet.type === 'model') closeSheet(); };
+  // A Chats list pane (the desktop's id::list, the AI apps id::side) opens its thread in the window it belongs to, so the
+  // open resets that window's placement (issue 1882: a reopen from the list pane kept the old placement, and the fresh box
+  // at the top was saved over his place).
+  const opened = (wid, sid, back = false) => { wid = A.owner ? A.owner(wid) : wid; const c = ch(wid), s = sid && sid !== '__new__' ? LIVE.session(sid) : null; c.unreadOpen = s && LIVE.isNew(s) ? sid : ''; c.posFor = ''; c.backTo = back && sid !== '__new__' ? sid : ''; if (sid !== '__new__') c.newModel = null; if (sheet && A.owner(sheet.pane) === wid && sheet.type === 'model') closeSheet(); };
   const holds = id => !!sheet && sheet.pane === id;
   async function tweakModels(wid) {
     const w = H.win(wid); if (!w) return [];

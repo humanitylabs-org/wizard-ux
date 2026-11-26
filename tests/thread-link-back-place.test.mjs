@@ -27,7 +27,8 @@ function harness(kind = 'main') {
     // same ids as main threads; the place is kept per thread for each.
     WizLive: { session: id => ({ id, status: 'completed', ...(kind === 'main' ? {} : { agent: `qa-${kind}`, runtime: kind }) }), isNew: () => false, agentOf: () => kind === 'main' ? '' : `qa-${kind}` } };
   ctx.window = ctx; vm.createContext(ctx); vm.runInContext(source, ctx);
-  const api = ctx.WosChatPower({ ch: () => state, CH: { win: state }, H: { win: () => w }, threadOnScreen: () => true, scrollBox: () => nb, isWorking: () => false });
+  const panes = {}; // another pane's own state (the desktop list pane id::list), never the thread window's
+  const api = ctx.WosChatPower({ ch: id => id === 'win' ? state : (panes[id] = panes[id] || {}), owner: id => String(id).replace(/::(list|side)$/, ''), CH: { win: state }, H: { win: () => w }, threadOnScreen: () => true, scrollBox: () => nb, isWorking: () => false });
   const turnsOf = (n, at) => Array.from({ length: n }, (_, i) => ({ u: { text: 'q' + i }, a: { text: 'a' + i, at: at + i } }));
   return { api, nb, host, w, state, sc, turnsOf, top: () => top, setTop: n => { top = n; }, scrollBy: n => { on.get('wheel')?.(); top = n; } };
 }
@@ -58,12 +59,43 @@ test('a resume only re-places the thread its options belong to', () => {
   assert.equal(h.api.RP.read('thread-b'), null, 'no place is saved for thread-b from thread-a\'s turns');
   assert.equal(h.state.posFor, '', 'thread-b is still unplaced, so its own paint places it');
 });
-test('a new reply that arrived while he was away still opens at its first line (a plain open, not Back)', () => {
+// wizard-ux issue 1882 (James, 26 Nov 2026): Back to the list and opening the thread again (or switching threads and
+// coming back) lost his place too, because a new reply had landed or the thread was unread: the old rule opened such a
+// thread at its newest reply. His newest words replace it: every return restores a mid-thread place from the last hour.
+test('a plain reopen keeps his mid-thread place when a new reply landed while he was away (issue 1882)', () => {
   const h = harness(), A = h.turnsOf(5, 1000);
   h.api.opened('win', 'thread-a'); paint(h, A); h.scrollBy(1700); h.api.capture(h.nb);
   h.w.thread = 'thread-b'; h.api.opened('win', 'thread-b'); h.setTop(0); paint(h, h.turnsOf(1, 9000));
   h.w.thread = 'thread-a'; h.api.opened('win', 'thread-a'); h.setTop(0); paint(h, h.turnsOf(6, 1000));
+  assert.equal(h.top(), 1700, 'the reopen lands where he was reading, not on the new reply');
+  assert.equal(h.api.RP.read('thread-a').scrollTop, 1700, 'and keeps his place saved');
+});
+test('a plain reopen of a thread that turned unread keeps his mid-thread place (issue 1882)', () => {
+  const h = harness(), A = h.turnsOf(5, 1000);
+  h.api.opened('win', 'thread-a'); paint(h, A); h.scrollBy(1700); h.api.capture(h.nb);
+  h.w.thread = null;
+  h.state.unreadOpen = 'thread-a'; h.w.thread = 'thread-a'; h.state.posFor = ''; h.state.backTo = ''; // opened() with LIVE.isNew true
+  h.setTop(0); paint(h, h.turnsOf(6, 1000));
+  assert.equal(h.top(), 1700, 'an unread thread with a mid-thread place opens at that place');
+});
+test('a thread he left at the bottom still opens on a new reply\'s first line (issue 1882 keeps this)', () => {
+  const h = harness(), A = h.turnsOf(5, 1000);
+  h.api.opened('win', 'thread-a'); paint(h, A); h.scrollBy(3200); h.api.capture(h.nb);
+  assert.equal(h.api.RP.read('thread-a').atBottom, true);
+  h.w.thread = 'thread-b'; h.api.opened('win', 'thread-b'); h.setTop(0); paint(h, h.turnsOf(1, 9000));
+  h.w.thread = 'thread-a'; h.api.opened('win', 'thread-a'); h.setTop(0); paint(h, h.turnsOf(6, 1000));
   assert.equal(h.top(), 192, 'a newer latest reply opens at its first line');
+});
+test('opening from the desktop list pane (id::list) resets the placement of the window it opens in (issue 1882)', () => {
+  const h = harness(), A = h.turnsOf(5, 1000);
+  h.api.opened('win::list', 'thread-a'); paint(h, A); h.scrollBy(1700); h.api.capture(h.nb);
+  h.w.thread = null; h.setTop(0);                                           // Back to the list: the box closes
+  h.w.thread = 'thread-a'; h.api.opened('win::list', 'thread-a');          // the same thread again, from the list pane
+  assert.equal(h.state.posFor, '', 'the thread window is unplaced, so the fresh box at the top is never saved as his place');
+  h.api.capture(h.nb);
+  assert.equal(h.api.RP.read('thread-a').scrollTop, 1700, 'a capture before the placement saves nothing');
+  paint(h, A);
+  assert.equal(h.top(), 1700, 'the reopen lands where he was reading');
 });
 // wizard-ux issue 1653 (James, 20 Nov 2026): in the Daily thread he taps a link, replies in the linked thread and goes
 // Back (or Send and go steps back). The parent came back at the bottom: a new reply had landed there while he was away,
