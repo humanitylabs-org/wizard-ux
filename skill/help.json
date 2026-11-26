@@ -465,6 +465,10 @@
     "wizard/try-feature-counts": {
       "help": "Sends features you tried and your thumbs, plus a random box id.",
       "where": "Settings › Appearance › Try new features › Share feature counts"
+    },
+    "wizard/phone-tester-builds": {
+      "help": "Phones get the newest tester build.",
+      "where": "Settings › Appearance › Try new features › Phone tester builds"
     }
   },
   "screenOrder": [

@@ -1,0 +1,14 @@
+{
+  "id": "wizard/phone-tester-builds",
+  "name": "Phone tester builds",
+  "version": "1.0.0",
+  "author": "wizard",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout"
+  ],
+  "issues": [
+    "humanitylabs-org/wizard-app-manager#799"
+  ],
+  "description": "Your phones are offered the newest WizardOS phone tester build (the GitHub prerelease each phone merge publishes) instead of waiting for it to become public. The App Manager (wam/phone_sync.py) checks it exactly like a public release: the real WizardOS signing key, sha256, size and the version cap. Nothing on screen changes; the phone's own update prompt offers the newer build."
+}

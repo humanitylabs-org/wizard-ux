@@ -180,6 +180,7 @@ Settings › Appearance › Try new features lists unfinished features anyone ca
 - **Phone bar: bigger orb, one badge**: Phone bar: bigger orb, one badge. (phone only).
 - **Phone media player for Podcasts**: Android app: Podcasts plays through the phone's media player (lock screen, headset buttons), like Music.
 - **Phone notifications per app**: Android app: what any app sends to Notifications shows as a phone notification under that app's name, one Android channel per app.
+- **Phone tester builds**: Phones get the newest tester build.
 - **Private first setup**: New installs start private: Welcome leads with Tinfoil; Claude and ChatGPT are optional extras.
 - **Repair the agent's Wizard connection**: When the agent can't reach its Wizard app tools (unauthorized), `wizard link` puts the box's token back in the agent's settings; `wizard doctor` shows if they match.
 - **Running view in the AI apps sidebar**: AI apps: Running view in the sidebar.
