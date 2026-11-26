@@ -212,6 +212,10 @@ window.WizCore.chatsParts.attach = function ({ ch, CHEV_SVG, clip, COG_SVG, draf
     let h = '';
     // A provider sign-out has its own panel (Open Claude / Open ChatGPT) in place of Hermes' generic failed-turn notice.
     if (last && reconnect && tn.a?.failed) tn = { ...tn, a: null };
+    // A turn whose last agent message still called tools never finished (failed, stopped, restarted): that message is a
+    // progress note, so it stays in the work fold and the turn says it stopped, instead of posing as the reply.
+    const stopped = !(last && working) && tn.a && tn.a.final === false && !tn.a.failed && !tn.a.sweep && !tn.media.length;
+    if (stopped) tn = { ...tn, notes: [...tn.notes, tn.a.text], steps: tn.steps + 1, a: null };
     // 9 Nov 2026 (James: "the message I sent is disappearing"): a message Hermes never took in stays in the thread,
     // marked Not sent. Retry here is the failed panel's own Retry (the same saved words and files, sent once).
     const unsent = tn.u && ['failed', 'interrupted'].includes(tn.u.queue?.status);
@@ -230,6 +234,7 @@ window.WizCore.chatsParts.attach = function ({ ch, CHEV_SVG, clip, COG_SVG, draf
       h += `<details class="steps${live ? ' live' : ''}"><summary>${live ? '<i class="dots"><b></b><b></b><b></b></i>' : '◇'} ${label}</summary>${tn.notes.map(x => `<div class="note-line">${md(x)}</div>`).join('')}</details>`;
     }
     h += steersHtml;
+    if (stopped) h += `<div class="ch-renamed ch-stopped" role="status"><span>Stopped before finishing</span></div>`;
     if (tn.a || tn.media.length) {
       const text = tn.a?.plainText ?? tn.a?.text;
       const k = text ? c.texts.push(text) - 1 : -1;
