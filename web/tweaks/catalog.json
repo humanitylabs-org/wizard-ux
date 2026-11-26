@@ -54,7 +54,8 @@
     "wizard/agent-approvals",
     "wizard/attach-menu-icons",
     "wizard/app-location",
-    "wizard/phone-badge-look"
+    "wizard/phone-badge-look",
+    "wizard/sent-threads"
   ],
   "defaults": [],
   "promotedDefaults": [],

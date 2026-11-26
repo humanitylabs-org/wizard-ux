@@ -12,6 +12,8 @@ window.WizCore.chatsParts = window.WizCore.chatsParts || {};
 window.WizCore.chatsParts.inboxrows = function ({ actMark, actNeeds, actUnread, AGS, agentName, agentRec, ago, attOf, chanAt, chanFace, chanStore, chatVars, ch, clip, elOf, esc, isWorking, LIVE, noteAt, noteRow, renderChatList, rowAgent, spacesOf, threadAct, toast, W, winAgent }) {
   const IB_SWITCH = 'wizard/inbox-rows';
   function inboxRowsOn() { try { return (document.documentElement.dataset.tweaks || '').split(' ').includes(IB_SWITCH); } catch (_) { return false; } }
+  // Sent's thread rows (wizard-ux issue 1880) carry the same Archive button.
+  function ibSentThreads() { try { return (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/sent-threads'); } catch (_) { return false; } }
   const ibModel = () => window.WizChatsListModel;
   const ibQuiet = s => !!LIVE.quietReply?.(s);
   const ibBare = t => String(t || '').replace(/^[^\p{L}\p{N}]+/u, '').trim().toLowerCase();
@@ -74,10 +76,12 @@ window.WizCore.chatsParts.inboxrows = function ({ actMark, actNeeds, actUnread, 
       + `<span class="ch-ib-l2"><b class="ch-ib-t">${title}</b>${mark}</span><span class="ch-ib-pv">${line}</span></span></button>`
       + `${after}</div>`;
   }
-  function ibThreadRow(s, pin) {
+  // `sent`: the row as Sent draws it (wizard-ux issue 1880, switch wizard/sent-threads): the same row, with its Sent key
+  // for the actions sheet's sends and the spinner while it runs.
+  function ibThreadRow(s, pin, sent = null) {
     // No working mark in Inbox (wizard-ux issue 1829): a run he started is in Sent › Working, not here.
-    const m0 = actMark(s), m = m0 === 'working' ? (actNeeds(s) ? 'needs' : actUnread(s) ? 'new' : '') : m0, f = ibFace(s), unread = m === 'new';
-    return ibRow({ key: `row:${esc(s.id)}`, wrap: pin ? ' pinned' : '', cls: `${unread ? ' unread' : ''}${m === 'needs' ? ' needs' : ''}`, open: `data-chopen="${esc(s.id)}" aria-haspopup="dialog" aria-keyshortcuts="Shift+F10"`, tip: 'Open thread · hold or open the context menu for actions',
+    const m0 = actMark(s), m = sent?.working ? 'working' : m0 === 'working' ? (actNeeds(s) ? 'needs' : actUnread(s) ? 'new' : '') : m0, f = ibFace(s), unread = m === 'new';
+    return ibRow({ key: `row:${esc(s.id)}`, wrap: `${pin ? ' pinned' : ''}${sent ? ' ch-st-wrap' : ''}`, cls: `${unread ? ' unread' : ''}${m === 'needs' ? ' needs' : ''}${sent ? ' ch-st-row' : ''}`, open: `data-chopen="${esc(s.id)}"${sent ? ` data-chsentthread="${esc(sent.key)}"` : ''} aria-haspopup="dialog" aria-keyshortcuts="Shift+F10"`, tip: 'Open thread · hold or open the context menu for actions',
       av: f.av, from: esc(f.from), pin, time: esc(ago(LIVE.cardAt(s))), title: esc(s.title || 'New chat'), mark: ibMark(m), line: esc(clip(ibLine(s), 160)),
       after: `<button type="button" class="ch-ib-arch" data-chibarch="${esc(s.id)}" aria-label="Archive: ${esc(s.title || 'New chat')}" title="Archive">${IB_ARCH_SVG}</button>` });
   }
@@ -115,7 +119,7 @@ window.WizCore.chatsParts.inboxrows = function ({ actMark, actNeeds, actUnread, 
   function ibThreadRowPlain(s) { return ibThreadRow(s, 0).replace(/<button type="button" class="ch-ib-arch"[^]*?<\/button><\/div>$/, '</div>'); }
   // The row's Archive: a thread archives as from its actions (Undo while it shows); a waiting task archives its record.
   function inboxRowsClick(e, w) {
-    if (!w || w.thread || !inboxRowsOn()) return false;
+    if (!w || w.thread || !(inboxRowsOn() || ibSentThreads())) return false;
     const a = e.target.closest('[data-chibarch]');
     if (a) { threadAct(w.id, a.dataset.chibarch, 'done'); return true; }
     const r = e.target.closest('[data-chibrec]');
@@ -129,5 +133,5 @@ window.WizCore.chatsParts.inboxrows = function ({ actMark, actNeeds, actUnread, 
   }
   // The list model's inbox facts for a layout that draws its own list (CHATS.inboxRows), null with the switch off.
   function inboxRowsFacts() { return inboxRowsOn() ? ibFacts() : null; }
-  return { ibMark, ibRow, ibTagFace, inboxRowsOn, inboxRowsBody, inboxRowsClick, inboxRowsFacts };
+  return { ibMark, ibRow, ibTagFace, ibThreadRow, inboxRowsOn, inboxRowsBody, inboxRowsClick, inboxRowsFacts };
 };
