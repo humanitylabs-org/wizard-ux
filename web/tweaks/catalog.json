@@ -64,6 +64,7 @@
     "wizard/backup-health",
     "wizard/private-routing",
     "wizard/result-reader",
+    "wizard/first-chat-goals",
     "wizard/private-ai-nudge",
     "wizard/pin-instant-open",
     "wizard/get-set-up"
