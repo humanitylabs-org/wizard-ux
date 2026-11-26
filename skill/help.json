@@ -347,6 +347,7 @@
       "where": "Settings › Appearance › Try new features › Why a reply failed"
     },
     "wizard/skins-look-only": {
+      "help": "Skins change only the look; feature switches decide what runs. Off again brings your skin's choices back.",
       "where": "Settings › Appearance › Try new features › Skins are look only"
     },
     "wizard/update-bug-reports": {
@@ -515,6 +516,10 @@
     "wizard/phone-tester-builds": {
       "help": "Phones get the newest tester build.",
       "where": "Settings › Appearance › Try new features › Phone tester builds"
+    },
+    "wizard/install-agent-builds": {
+      "help": "Apps I build install with one tap.",
+      "where": "Settings › Appearance › Try new features › Install apps your agent builds"
     }
   },
   "screenOrder": [
