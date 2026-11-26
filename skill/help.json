@@ -532,6 +532,10 @@
     "wizard/install-agent-builds": {
       "help": "Apps I build install with one tap.",
       "where": "Settings › Appearance › Try new features › Install apps your agent builds"
+    },
+    "wizard/backup-health": {
+      "help": "Resources shows your backup's health.",
+      "where": "Settings › Appearance › Try new features › Backup health in Resources"
     }
   },
   "screenOrder": [
