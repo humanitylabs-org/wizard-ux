@@ -56,6 +56,23 @@
     }
     return out;
   }
+  // [WIZARD_CHOICES_V1]{"choices":["Get on top of my inbox","Find a job",…]}[/WIZARD_CHOICES_V1], on its own line: tap-to-pick
+  // replies under the answer (wizard-agent-service issue 650, switch wizard/first-chat-goals; the agent writes it on a first
+  // chat, wizard-guide "First chat: five choices"). Plain one-line texts, 1-80 characters, at most 5, first marker only.
+  // Always hidden from the text; drawn only while the switch is on (core/chats-attach.js turnHtml).
+  const CHOICES_RE = /\[WIZARD_CHOICES_V1\]\s*([\s\S]*?)\s*\[\/WIZARD_CHOICES_V1\]/;
+  function choiceList(s) {
+    const out = [], m = String(s || '').match(CHOICES_RE);
+    if (!m) return out;
+    try {
+      const p = JSON.parse(m[1]);
+      for (const v of Array.isArray(p?.choices) ? p.choices : []) {
+        const t = typeof v === 'string' ? v.replace(/\s+/g, ' ').trim() : '';
+        if (t && t.length <= 80 && !/[\u0000-\u001f\u007f<>]/.test(t) && !out.includes(t) && out.length < 5) out.push(t);
+      }
+    } catch (e) { /* hidden, not shown */ }
+    return out;
+  }
   // <helm_attachments>{"items":[…]}</helm_attachments>: port of normalizers.ts helmPresentation.
   const HELM = /<\s*(\/?)\s*helm_attachments\s*>/gi;
   const HELM_ID = /^[0-9a-f]{32}$/;
@@ -129,6 +146,7 @@
     .replace(/\[WIZARD_IMAGE_INTENT_V1\][\s\S]*?\[\/WIZARD_IMAGE_INTENT_V1\]/g, '')
     .replace(/\n*[ \t]*\[WIZARD_TWEAK_V1\](?:[\s\S]*?\[\/WIZARD_TWEAK_V1\]|[\s\S]*$)[ \t]*\n*/g, '\n\n') // unterminated: to the end
     .replace(/\n*[ \t]*\[WIZARD_ACTION_V1\](?:[\s\S]*?\[\/WIZARD_ACTION_V1\]|[\s\S]*$)[ \t]*\n*/g, '\n\n') // an action card (actionIds)
+    .replace(/\n*[ \t]*\[WIZARD_CHOICES_V1\](?:[\s\S]*?\[\/WIZARD_CHOICES_V1\]|[\s\S]*$)[ \t]*\n*/g, '\n\n') // reply buttons (choiceList)
     .replace(/<memory-context>[\s\S]*?<\/memory-context>/g, '')
     .replace(/^\[Workspace::v1: [^\]\r\n]+\]\s*/, '')
     .replace(/\n*\[Browser dogfooding policy[\s\S]*$/, '')
@@ -209,7 +227,7 @@
         newTurn({ ...identity, text: t, files, images, at, ...(rq ? { reply: rq } : {}), ...(q ? { queue: q } : {}) });
       } else if (m.role === 'assistant') {
         const h = helm(cleanText(raw));
-        const t = h.text, tweaks = kind === 'commentary' ? [] : tweakIds(raw), actions = kind === 'commentary' ? [] : actionIds(raw);
+        const t = h.text, tweaks = kind === 'commentary' ? [] : tweakIds(raw), actions = kind === 'commentary' ? [] : actionIds(raw), choices = kind === 'commentary' ? [] : choiceList(raw);
         // The Agent Service's signal sweep card (wizard-ux issue 1586): its own turn, never folded into another one's
         // answer; Chats draws its buttons from `sweep` (the markdown copy stays the text for Copy and older shells).
         if (kind === 'agent_sweep' && m.agent_sweep && typeof m.agent_sweep === 'object' && !Array.isArray(m.agent_sweep)) {
@@ -223,12 +241,12 @@
         for (const a of h.attachments) if (!cur.media.some(x => x.id === a.id)) cur.media.push(a);
         for (const u of imagesOf(m, content)) if (!cur.media.some(x => x.url === u)) cur.media.push({ id: u.slice(-24), name: 'Image', mime: 'image/*', kind: 'image', url: u });
         if (h.attachments.length && !cur.mediaAt) cur.mediaAt = at;
-        if (!t && !tweaks.length && !actions.length) { if (!h.attachments.length) cur.steps++; continue; }
+        if (!t && !tweaks.length && !actions.length && !choices.length) { if (!h.attachments.length) cur.steps++; continue; }
         if (kind === 'commentary') { cur.notes.push(t); cur.steps++; continue; }
         // A tweak card stays with the turn's answer even when a later message in the same turn takes its place.
         const carried = [...new Set([...(cur.a?.tweaks || []), ...tweaks])].slice(0, 8), acts = [...new Set([...(cur.a?.actions || []), ...actions])].slice(0, 4);
         if (cur.a?.text) { cur.notes.push(cur.a.text); (cur.said ||= []).push(cur.a); }
-        cur.a = { ...(identity.id != null ? { id: identity.id } : {}), text: t, plainText: h.plainText, inlineMedia: h.inlineMedia, at, final: !(Array.isArray(m.tool_calls) && m.tool_calls.length), ...(carried.length ? { tweaks: carried } : {}), ...(acts.length ? { actions: acts } : {}) };
+        cur.a = { ...(identity.id != null ? { id: identity.id } : {}), text: t, plainText: h.plainText, inlineMedia: h.inlineMedia, at, final: !(Array.isArray(m.tool_calls) && m.tool_calls.length), ...(carried.length ? { tweaks: carried } : {}), ...(acts.length ? { actions: acts } : {}), ...(choices.length ? { choices } : {}) };
         // The reply's own plain-words ask (its hidden status line, served as wizard_ask): a long reply can lead with it.
         if (typeof m.wizard_ask === 'string' && m.wizard_ask.trim()) cur.a.ask = m.wizard_ask.trim();
         // Hermes' own "Your request was not processed" boundary row (display_kind failed_turn), not the model's words.
@@ -1352,5 +1370,5 @@
     return action && (choices.length || it.kind === 'clarify') ? { kind: it.kind || 'approval', requestId: str(it.prompt_id, it.request_id, it.id) || undefined, generation: canonical ? it.execution_generation : undefined, action, choices, ...closes } : null;
   }
 
-  window.WosChat = { K, reply, esc, homePath, isHomeUrl, parseRows, helm, imagesOf, chipFiles, tweakIds, actionIds, md, inline, time, drafts, copyText, copyRich, richParts, bindSharePress, sharePayload, shareText, shareAssistantText, shareFile, saveFile, download: save, viewer, normalizeApproval, friendlyChoice, choiceReceipt };
+  window.WosChat = { K, reply, esc, homePath, isHomeUrl, parseRows, helm, imagesOf, chipFiles, tweakIds, actionIds, choiceList, md, inline, time, drafts, copyText, copyRich, richParts, bindSharePress, sharePayload, shareText, shareAssistantText, shareFile, saveFile, download: save, viewer, normalizeApproval, friendlyChoice, choiceReceipt };
 })();

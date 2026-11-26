@@ -44,7 +44,8 @@ test('the shell copies the switch to the Android app: off once settled, on at on
   const on = relay({ on: true });
   assert.deepEqual(on.calls, [true]);
   on.flip(false); assert.deepEqual(on.calls, [true], 'an off waits for the switches to settle');
-  on.experience(); assert.deepEqual(on.calls, [true, false]);
+  on.experience(); assert.deepEqual(on.calls, [true], 'the first wos:experience is not the settle (wizard-ux issue 1865)');
+  on.settle(); assert.deepEqual(on.calls, [true, false]);
   on.flip(true); assert.deepEqual(on.calls, [true, false, true]);
   const old = relay({ on: true, native: false }); old.settle(); old.flip(false); old.experience();
   assert.deepEqual(old.calls, [], 'a browser or an older APK is left alone');

@@ -154,7 +154,13 @@ window.WizCore.chatsParts.sent = function ({ ago, ch, CH, CHAN_VIEW_KEY, chanEls
    * one still being routed) gets the same row with its task's title, else its words. His sends stay in the thread and
    * in the row's actions sheet ("Sent from you", with the two corrections), never as list rows. */
   const ST_SWITCH = 'wizard/sent-threads';
-  function sentThreadsOn() { try { return (document.documentElement.dataset.tweaks || '').split(' ').includes(ST_SWITCH); } catch (_) { return false; } }
+  // Smart inbox (wizard-ux issue 1883, switch wizard/smart-inbox) shows Sent as threads too.
+  function sentThreadsOn() { try { const t = (document.documentElement.dataset.tweaks || '').split(' '); return t.includes(ST_SWITCH) || t.includes(SMART_SWITCH); } catch (_) { return false; } }
+  /* Smart inbox (wizard-ux issue 1883, switch wizard/smart-inbox, off by default): Inbox holds only what blocks him, so
+   * every other thread is here, also one with no Sent row (a watch, a schedule, a helper result, a thread older than
+   * the log): WizChatsListModel.sentRest adds those, under Working while they run and Processed when done. */
+  const SMART_SWITCH = 'wizard/smart-inbox';
+  function smartOn() { try { return (document.documentElement.dataset.tweaks || '').split(' ').includes(SMART_SWITCH); } catch (_) { return false; } }
   // The send's state in plain words, without "in Inbox": a row here is not in Inbox.
   const ST_STATE = { ...SR_STATE, needs_you: 'Needs you', failed: 'Failed' };
   function stLine(r) {
@@ -165,7 +171,12 @@ window.WizCore.chatsParts.sent = function ({ ago, ch, CH, CHAN_VIEW_KEY, chanEls
   function stGroups(st) {
     const M = window.WizChatsListModel; if (!M?.sentThreads) return [];
     const ids = window.WizCore?.inboxIds?.(LIVE) || null;
-    return M.sentThreads(st.rows, ids, { session: id => LIVE.session?.(id) || null, working: s => !!M.isListWorking?.(s), at: s => Date.parse(LIVE.cardAt?.(s) || '') || 0 });
+    const facts = { session: id => LIVE.session?.(id) || null, working: s => !!M.isListWorking?.(s), at: s => Date.parse(LIVE.cardAt?.(s) || '') || 0 };
+    const groups = M.sentThreads(st.rows, ids, facts);
+    if (!smartOn() || !M.sentRest || !ids) return groups;
+    const rows = (LIVE.sessionsFor ? LIVE.sessionsFor('') : LIVE.unified?.() || []).filter(x => x && !x.hidden);
+    const rest = M.sentRest(rows, ids, new Set(groups.map(g => g.thread).filter(Boolean)), { ...facts, held: x => !!globalThis.WizReach?.restartHeld?.(x) });
+    return [...groups, ...rest].sort((a, b) => b.at - a.at || (a.key < b.key ? -1 : 1));
   }
   // A thread's title when its row isn't loaded: its hidden worker's, else its task record's, else his words.
   function stTitle(g) {
@@ -175,6 +186,9 @@ window.WizCore.chatsParts.sent = function ({ ago, ch, CH, CHAN_VIEW_KEY, chanEls
   function stRow(g) {
     const s = g.session;
     if (s && !s.hidden && typeof ibThreadRow === 'function') return ibThreadRow(s, 0, { key: g.key, working: g.working });
+    // A thread with no Sent row (Smart inbox, issue 1883) opens itself.
+    if (!g.sends.length) return s ? ibRow({ key: `sent:${esc(g.key)}`, wrap: ' ch-st-wrap', cls: ' ch-st-row', open: `data-chopen="${esc(s.id)}" data-chsentthread="${esc(g.key)}" aria-haspopup="dialog" aria-keyshortcuts="Shift+F10"`,
+      tip: 'Open thread · hold or open the context menu for actions', av: ibTagFace('').av, from: esc(ibTagFace('').from), time: esc(g.at ? ago(g.at) : ''), title: esc(clip(s.title || 'New chat', 120)), mark: ibMark(g.working ? 'working' : ''), line: esc(clip(s.preview || '', 160)) }) : '';
     const r = g.sends[0], m = g.working ? 'working' : SR_MARK[r.state] || '', f = ibTagFace(r.tags[0] || '');
     return ibRow({ key: `sent:${esc(g.key)}`, wrap: ' ch-st-wrap', cls: ` ch-st-row st-${esc(r.state)}${m === 'needs' ? ' needs' : ''}`, open: `data-chsent="${esc(r.id)}" data-chsentthread="${esc(g.key)}" aria-haspopup="dialog" aria-keyshortcuts="Shift+F10"`,
       tip: 'Open thread · hold or open the context menu for actions', av: f.av, from: esc(f.from), time: esc(g.at ? ago(g.at) : ''), title: esc(clip(stTitle(g), 120)), mark: ibMark(m), line: esc(clip(s?.preview || stLine(r), 160)) });
