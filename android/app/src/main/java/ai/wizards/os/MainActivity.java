@@ -1005,8 +1005,14 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
             // No picture yet (first open on this phone, or the app was never left): never a blank window (field report
             // 2). Android paints the app's icon and name on the skin's background with a quiet progress line.
             Object[] label = null;
-            try { label = pinLabelLoad.get(200, java.util.concurrent.TimeUnit.MILLISECONDS); } catch (Exception slow) { pinLabelLoad.cancel(true); }
-            pinShot = pinPlaceholder(label);
+            final java.util.concurrent.FutureTask<Object[]> later = pinLabelLoad;
+            try { label = later.get(200, java.util.concurrent.TimeUnit.MILLISECONDS); } catch (Exception slow) { /* filled in when it comes */ }
+            final View cover = pinPlaceholder(label);
+            pinShot = cover;
+            if (label == null) new Thread(() -> {
+                try { Object[] l = later.get(5, java.util.concurrent.TimeUnit.SECONDS); main.post(() -> { if (pinShot == cover) pinLabel(cover, l); }); }
+                catch (Exception none) { /* the app id stays as its name */ }
+            }, "pin-label-wait").start();
         }
         pinLabelLoad = null;
         if (pinShot != null) {
@@ -1022,7 +1028,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
                 if (root != null) root.getViewTreeObserver().removeOnPreDrawListener(this);
                 pinFirstDrawAt = android.os.SystemClock.uptimeMillis();
                 if (shown != null && pinShot == shown) { pinCoverDrawnAt = pinFirstDrawAt; if (picture) pinShotDrawnAt = pinFirstDrawAt; }
-                if (shown != null) android.util.Log.i("WizardOSPinInstant", (picture ? "last screen" : "placeholder") + " on the first frame, " + (pinFirstDrawAt - pinCreateAt)
+                if (shown != null) android.util.Log.i("WizardOSPinInstant", (picture ? "last screen" : "placeholder '" + shown.getTag() + "'") + " on the first frame, " + (pinFirstDrawAt - pinCreateAt)
                         + " ms after the window was created (WebView " + (built - pinCreateAt) + " ms, waited " + waited + " ms for the picture)");
                 return true;
             }
@@ -1048,13 +1054,13 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         android.widget.LinearLayout col = new android.widget.LinearLayout(this);
         col.setOrientation(android.widget.LinearLayout.VERTICAL);
         col.setGravity(android.view.Gravity.CENTER_HORIZONTAL);
-        if (icon != null) {
-            android.widget.ImageView i = new android.widget.ImageView(this);
-            i.setImageBitmap(icon);
-            col.addView(i, new android.widget.LinearLayout.LayoutParams(Math.round(72 * dp), Math.round(72 * dp)));
-        }
+        android.widget.ImageView i = new android.widget.ImageView(this);
+        i.setImageBitmap(icon);
+        i.setVisibility(icon == null ? View.GONE : View.VISIBLE);
+        col.addView(i, new android.widget.LinearLayout.LayoutParams(Math.round(72 * dp), Math.round(72 * dp)));
         android.widget.TextView t = new android.widget.TextView(this);
         t.setText(name);
+        cover.setTag(name);
         t.setTextColor(look.text);
         t.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 17);
         t.setGravity(android.view.Gravity.CENTER);
@@ -1071,6 +1077,17 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         col.addView(line, ll);
         cover.addView(col, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, android.view.Gravity.CENTER));
         return cover;
+    }
+
+    /** The pinned icon's picture and name arrived after the placeholder was drawn: put them on it. */
+    private void pinLabel(View cover, Object[] label) {
+        if (label == null || !(cover instanceof FrameLayout) || ((FrameLayout) cover).getChildCount() == 0) return;
+        android.widget.LinearLayout col = (android.widget.LinearLayout) ((FrameLayout) cover).getChildAt(0);
+        android.graphics.Bitmap icon = (android.graphics.Bitmap) label[0];
+        android.widget.ImageView i = (android.widget.ImageView) col.getChildAt(0);
+        if (icon != null) { i.setImageBitmap(icon); i.setVisibility(View.VISIBLE); }
+        ((android.widget.TextView) col.getChildAt(1)).setText((String) label[1]);
+        cover.setTag(label[1]);
     }
     /** When this pinned window's first frame was drawn, with or without a picture (0: not yet). */
     long pinFirstDrawAt() { return pinFirstDrawAt; }

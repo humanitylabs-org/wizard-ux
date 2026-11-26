@@ -85,7 +85,7 @@ final class PinInstantScenario {
             InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> placeholder[0] = ((MainActivity) a0).pinPlaceholderShowing());
             assertTrue("first open: it is the placeholder (no picture kept yet)", placeholder[0]);
             SystemClock.sleep(Math.max(0, 2200 - (SystemClock.uptimeMillis() - first)));
-            assertNotNull("first open: the placeholder names the app", device.findObject(By.text("QA Pin")));
+            assertNotNull("first open: the placeholder names the app", find(device, By.text("QA Pin"), 1500));
             assertNull("first open: no Connecting", device.findObject(By.text("Connecting to your Wizard…")));
             shot(device, c, "placeholder");
             Log.i(TAG, "first open (nothing kept yet): placeholder on the first frame after " + cover + " ms");
