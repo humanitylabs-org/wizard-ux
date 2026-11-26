@@ -5,7 +5,8 @@
 // synthetic Agent Service answers POST /wizard/v1/channel-emoji with 📈 for "Quarterly OKRs" (after QA_DELAY ms, default
 // 1200) and 503 (no broker) for anything else. Expected: each channel is stored exactly as typed at once (Create never
 // waits), "Quarterly OKRs" is renamed once to "📈 Quarterly OKRs" within a few seconds, Zzzqx keeps 💬, "🎯 Plans" never
-// asks. QA_SWITCH=off (switch off) checks no ask is made and every name stays as typed.
+// asks. QA_SWITCH=off (switch off) checks no ask is made and every name stays as typed. QA_KEYWORDS=on also turns on
+// #1580's keyword map (wizard/channel-auto-emoji) and adds "Money": it gets 💰 from the map and never asks.
 const assert = require('node:assert/strict');
 const { chromium } = require('../tools/qa-playwright.cjs');
 const { ownerRead } = require('../tools/qa-desktop-frame-fixture.cjs');
@@ -38,7 +39,7 @@ const report = { origin, web, broken, off, cases: [] };
       const context = await browser.newContext({ viewport: phone ? { width: Number(process.env.QA_PHONE_W) || 412, height: 844 } : { width: 1440, height: 960 }, isMobile: phone, hasTouch: phone, serviceWorkers: 'block' });
       try {
         await context.routeWebSocket('**/*', w => w.close());
-        const mix = off || broken ? { 'wizard/desktop-chats': true } : { 'wizard/desktop-chats': true, 'wizard/channel-model-emoji': true };
+        const mix = off || broken ? { 'wizard/desktop-chats': true } : { 'wizard/desktop-chats': true, 'wizard/channel-model-emoji': true, ...(process.env.QA_KEYWORDS === 'on' ? { 'wizard/channel-auto-emoji': true } : {}) };
         await context.addInitScript(({ shell, skin, mix, spaces }) => {
           if (window !== top) return;
           for (const [k, v] of Object.entries({ 'wos.shell': shell, 'wux.shell': shell, 'wos.desktop-view.v1': 'classic', 'wos.coached': 'true', 'wos.tour.v1': 'true', 'wos.welcome.v1': 'done', 'wos.skin': skin,
@@ -103,7 +104,7 @@ const report = { origin, web, broken, off, cases: [] };
         await vis('.ch-chan-open[data-chchan="voice"]').waitFor();
         await page.evaluate(() => document.fonts.ready); await nap(300);
         const lines = () => page.evaluate(() => [...document.querySelectorAll('.ch-chan-open')].filter(b => b.getClientRects().length).map(b => [b.querySelector('.ch-chan-hash')?.textContent || '', b.querySelector('b')?.textContent || '']));
-        const TYPED = ['Quarterly OKRs', 'Zzzqx', '🎯 Plans'];
+        const kw = process.env.QA_KEYWORDS === 'on' && !broken, TYPED = ['Quarterly OKRs', 'Zzzqx', '🎯 Plans', ...(kw ? ['Money'] : [])];
         for (const [i, typed] of TYPED.entries()) {
           await nap(phone ? 800 : 300);
           await vis('.ch-chan-add').click();
@@ -122,7 +123,7 @@ const report = { origin, web, broken, off, cases: [] };
         entry.renames = (entry.ops || []).filter(o => o.op === 'set' && /\/name$/.test(o.key)).map(o => o.item);
         entry.list = await lines();
         await page.screenshot({ path: path.join(out, stem + '-list.png') });
-        assert.deepEqual(entry.stored, TYPED, 'every name stored exactly as typed at create');
+        assert.deepEqual(entry.stored, TYPED.map(t => kw && t === 'Money' ? '💰 Money' : t), 'every name stored as typed at create (keyword map: 💰 Money)');
         if (broken) {
           assert.deepEqual(entry.asks || [], [], 'switch off / main: nothing asks a model');
           assert.deepEqual(entry.renames, [], 'switch off / main: no rename');
@@ -132,7 +133,7 @@ const report = { origin, web, broken, off, cases: [] };
         assert.ok(entry.createMs < DELAY, `Create closed in ${entry.createMs} ms, before the model answered (${DELAY} ms)`);
         assert.deepEqual((entry.asks || []).map(a => [a.name, a.agent]), [['Quarterly OKRs', 'hermes'], ['Zzzqx', 'hermes']], 'asked for the two names with no emoji only');
         assert.deepEqual(entry.renames, ['📈 Quarterly OKRs'], 'renamed once, only the one the model answered');
-        for (const want of [['📈', 'Quarterly OKRs'], ['💬', 'Zzzqx'], ['🎯', 'Plans']]) assert.ok(entry.list.some(l => l[0] === want[0] && l[1] === want[1]), 'list shows ' + want.join(' '));
+        for (const want of [['📈', 'Quarterly OKRs'], ['💬', 'Zzzqx'], ['🎯', 'Plans'], ...(kw ? [['💰', 'Money']] : [])]) assert.ok(entry.list.some(l => l[0] === want[0] && l[1] === want[1]), 'list shows ' + want.join(' '));
         assert.deepEqual(entry.errors, []); assert.deepEqual(entry.refused, []);
         entry.pass = true;
       } catch (e) { entry.pass = false; entry.error = String(e.stack || e); }
