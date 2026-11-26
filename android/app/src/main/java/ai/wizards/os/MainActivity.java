@@ -1064,7 +1064,8 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         android.widget.ProgressBar line = new android.widget.ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
         line.setIndeterminate(true);
         line.setIndeterminateTintList(android.content.res.ColorStateList.valueOf(look.accent));
-        line.setAlpha(0.55f);
+        line.setProgressBackgroundTintList(android.content.res.ColorStateList.valueOf(WizardLook.withAlpha(look.text, 0.12f)));
+        line.setAlpha(0.85f);
         android.widget.LinearLayout.LayoutParams ll = new android.widget.LinearLayout.LayoutParams(Math.round(96 * dp), Math.round(4 * dp));
         ll.topMargin = Math.round(18 * dp);
         col.addView(line, ll);

@@ -70,6 +70,8 @@ final class PinInstantScenario {
 
             // The main app answered a moment ago on this network (as when it is open).
             PinInstant.reached(c);
+            // The app's home-screen icon, as pinning keeps it (its picture and name are what the placeholder shows).
+            pinIcon(c, true);
 
             // 1. first open with nothing kept yet and the page held back: the placeholder, never an empty window
             File shot = PinInstant.shotFile(c, box.origin(), APP);
@@ -83,7 +85,7 @@ final class PinInstantScenario {
             InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> placeholder[0] = ((MainActivity) a0).pinPlaceholderShowing());
             assertTrue("first open: it is the placeholder (no picture kept yet)", placeholder[0]);
             SystemClock.sleep(Math.max(0, 2200 - (SystemClock.uptimeMillis() - first)));
-            assertNotNull("first open: the placeholder names the app", device.findObject(By.text("Qa Pin")));
+            assertNotNull("first open: the placeholder names the app", device.findObject(By.text("QA Pin")));
             assertNull("first open: no Connecting", device.findObject(By.text("Connecting to your Wizard…")));
             shot(device, c, "placeholder");
             Log.i(TAG, "first open (nothing kept yet): placeholder on the first frame after " + cover + " ms");
@@ -193,6 +195,7 @@ final class PinInstantScenario {
             assertTrue("switch off: the app's files are asked for as before", box.saw("GET /qa-pin/app.js"));
             Log.i(TAG, "pin instant open scenario passed");
         } finally {
+            pinIcon(c, false);
             //noinspection ResultOfMethodCallIgnored
             home.delete();
             PinInstant.setOn(c, false);
@@ -200,6 +203,22 @@ final class PinInstantScenario {
             shell("svc wifi disable");
             device.pressHome();
         }
+    }
+
+    /** Stores (or removes) a pinned icon for the stand-in app the way HomeScreenShortcuts does: name and PNG picture. */
+    private static void pinIcon(Context c, boolean on) {
+        android.content.SharedPreferences p = c.getSharedPreferences("home-screen-pins", Context.MODE_PRIVATE);
+        String id = HomeScreenPolicy.identity(HomeScreenShortcuts.origin(c), APP);
+        if (!on) { p.edit().remove(id + ":name").remove(id + ":icon").commit(); return; }
+        Bitmap b = Bitmap.createBitmap(192, 192, Bitmap.Config.ARGB_8888);
+        android.graphics.Canvas k = new android.graphics.Canvas(b);
+        android.graphics.Paint paint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+        paint.setColor(0xff000000 | BLUE);
+        k.drawCircle(96, 96, 88, paint);
+        ByteArrayOutputStream png = new ByteArrayOutputStream();
+        b.compress(Bitmap.CompressFormat.PNG, 100, png);
+        p.edit().putString(id + ":name", "QA Pin")
+                .putString(id + ":icon", "data:image/png;base64," + android.util.Base64.encodeToString(png.toByteArray(), android.util.Base64.NO_WRAP)).commit();
     }
 
     /** A JPEG of a flat colour comes back within a few steps of it. */
