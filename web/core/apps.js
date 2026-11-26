@@ -96,6 +96,9 @@
     voice_routes_confirmed: trusted === true,
     voice_names: Array.isArray(a.voice_names) ? a.voice_names.filter(n => typeof n === 'string') : [],
     provides: trusted && Array.isArray(a.provides) ? a.provides.filter(n => typeof n === 'string') : [],
+    // Device powers the app declared it needs (wizard.md permissions; today only geolocation, wizard-ux issue 1629). Like
+    // provides, only the box's own list counts: a device cache never grants one.
+    permissions: trusted === true && Array.isArray(a.permissions) ? a.permissions.filter(n => n === 'geolocation') : [],
     // Declared kind (wizard.md type) and store shelf, as the Agent Service projects them from apps.json. Not sensitive,
     // so backend-only tiles carry them too; app-kinds.js sorts Connectors by type === 'external'.
     ...(APP_TYPES.has(a.type) ? { type: a.type } : {}),
@@ -110,6 +113,61 @@
   window.WizCore.appHomeScreen = id => REMOTE.find(a => a.id === id)?.homeScreen || null;
   // The repo an installed app came from ('' when the box's list does not say), read by core/browser-boundary.js.
   window.WizCore.appRepo = id => REMOTE.find(a => a.id === id)?.repo || '';
+  /* Location only for the apps that ask for it (wizard-ux issue 1629, switch wizard/app-location, off by default). The
+   * shell's header allows location for Wizard's own origin, so every frame says who may use it through its `allow`:
+   * an app frame gets `geolocation` only while the switch is on AND the box's app list says that app declared
+   * `permissions: [geolocation]` in its wizard.md (today only Maps); every other frame gets `geolocation 'none'`, so
+   * its navigator.geolocation is denied with no prompt, exactly as before. The browser (or the Android/Mac app) still
+   * asks the owner before the first position. Pass the app's id, or for a link sheet the page URL (longest app address). */
+  const LOCATION_SWITCH = 'wizard/app-location';
+  window.WizCore.frameAllow = (base, { id = '', url = '' } = {}) => {
+    let on = false;
+    try { on = String(document.documentElement.getAttribute('data-tweaks') || '').split(' ').includes(LOCATION_SWITCH); } catch (_) {}
+    let app = null;
+    if (on && id) app = REMOTE.find(a => a.id === String(id)) || null;
+    else if (on && url) {
+      try {
+        const u = new URL(url, location.href);
+        let best = 0;
+        for (const a of REMOTE) {
+          const t = a.url ? new URL(a.url, location.href) : null, dir = t ? t.pathname.replace(/[^/]*$/, '') : '';
+          // A page lies under an app's address; an app at the site root ('/') never claims every page.
+          if (!t || t.origin !== u.origin || dir.length < 2 || !u.pathname.startsWith(dir) || dir.length <= best) continue;
+          app = a; best = dir.length;
+        }
+      } catch (_) { app = null; }
+    }
+    const yes = !!app && Array.isArray(app.permissions) && app.permissions.includes('geolocation');
+    return `${base ? base + '; ' : ''}geolocation${yes ? '' : " 'none'"}`;
+  };
+  // Turning the switch off (here or from another device), or an app no longer declaring it, takes location back from a
+  // frame that is already open: its `allow` loses `geolocation` and the frame reloads, because a browser applies a
+  // frame's `allow` only to its next page. It never grants on its own: a frame drawn after the switch turns on asks.
+  const LOC_ON = /(^|;)\s*geolocation\s*(;|$)/;
+  const relockLocation = () => {
+    let frames = [];
+    try { frames = [...document.querySelectorAll('iframe[allow]')]; } catch (_) { return 0; }
+    let n = 0;
+    for (const f of frames) {
+      const allow = String(f.getAttribute('allow') || '');
+      if (!LOC_ON.test(allow)) continue;
+      const base = allow.split(';').map(x => x.trim()).filter(x => x && !/^geolocation\b/.test(x)).join('; ');
+      const id = f.getAttribute('data-own-app') || '';
+      let url = f.getAttribute('src') || '';
+      try { url = f.contentWindow.location.href || url; } catch (_) {}
+      const next = window.WizCore.frameAllow(base, id ? { id } : { url });
+      if (LOC_ON.test(next)) continue;
+      f.setAttribute('allow', next); n++;
+      try { f.contentWindow.location.reload(); } catch (_) { try { f.setAttribute('src', f.src); } catch (_) {} }
+    }
+    return n;
+  };
+  window.WizCore.relockLocation = relockLocation;
+  try {
+    if (typeof MutationObserver === 'function' && document.documentElement) {
+      new MutationObserver(() => relockLocation()).observe(document.documentElement, { attributes: true, attributeFilter: ['data-tweaks'] });
+    }
+  } catch (_) {}
   const BACK_KEY = 'wux.apps.backend.v1';
   window.WizCore.appMetadata = id => [...REMOTE, ...BACK].find(a => a.id === id)?.sigil;
   let BACK = (() => { try { return (JSON.parse(localStorage.getItem(BACK_KEY) || '[]') || []).filter(a => !SHELL_HIDDEN.has(a?.id)).map(a => toTile(a)); } catch (e) { return []; } })();
@@ -176,6 +234,7 @@
       const back = all.filter(a => !a.url && !window.WizCore.isMaintenanceApp?.(a));
       try { localStorage.setItem(REMOTE_KEY, JSON.stringify(list)); localStorage.setItem(BACK_KEY, JSON.stringify(back)); } catch (e) {}
       REMOTE = list.map(a => toTile(a, true));
+      relockLocation();
       // The pinned-app worker learns which installed apps declared an offline pin (no per-app list in the shell).
       window.WizOfflineSession?.publish(REMOTE).catch(() => {});
       BACK = back.map(a => toTile(a));

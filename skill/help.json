@@ -400,6 +400,10 @@
       "help": "Android app: what any app sends to Notifications shows as a phone notification under that app's name, one Android channel per app.",
       "where": "Settings › Appearance › Try new features › Phone notifications per app"
     },
+    "wizard/app-location": {
+      "help": "Only apps that ask for your location in their wizard.md (today just Maps) may use it, and only after you say yes in your browser's or phone's own location prompt. Every other app stays blocked with no prompt.",
+      "where": "Settings › Appearance › Try new features › Location for Maps"
+    },
     "wizard/phone-push": {
       "help": "Android app, with Phone notifications per app on: your Wizard tells the phone the moment an app sends a notification, so it shows within seconds even with the phone locked (one connection over Tailscale, no Google).",
       "where": "Settings › Appearance › Try new features › Instant phone notifications"

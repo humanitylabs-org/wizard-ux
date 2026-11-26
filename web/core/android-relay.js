@@ -208,6 +208,25 @@
   setTimeout(() => { chatSettled = true; pushSettled = true; notifySync(); pushSync(); }, 5000);
   notifySync();
   pushSync();
+  /* Location for the apps that ask for it (wizard-ux issue 1629, switch wizard/app-location, off by default). The shell
+   * decides which app frame may ask (core/apps.js frameAllow); the Android app then shows Android's own location
+   * prompt and answers only for this Wizard's address, and only while the switch is on. The main page copies the switch
+   * to the Android app (an app window's page never sees the shell's switches); off is applied once settled. */
+  const LOCATION_SWITCH = 'wizard/app-location';
+  let locationWas = null;
+  function locationSync() {
+    const n = window.WizardOSNative; if (!n || typeof n.appLocationSwitch !== 'function' || window.WizHomeScreenPolicy?.mode) return;
+    let on = false; try { on = (document.documentElement.dataset.tweaks || '').split(' ').includes(LOCATION_SWITCH); } catch (_) {}
+    if (!on && !chatSettled) return;
+    if (on === locationWas) return;
+    locationWas = on; try { n.appLocationSwitch(on); } catch (_) {}
+  }
+  if (typeof MutationObserver === 'function' && document.documentElement) {
+    new MutationObserver(() => locationSync()).observe(document.documentElement, { attributes: true, attributeFilter: ['data-tweaks'] });
+  }
+  window.addEventListener('wos:experience', () => { chatSettled = true; locationSync(); });
+  setTimeout(() => { chatSettled = true; locationSync(); }, 5000);
+  locationSync();
   // The installed Wizard app a page of this Wizard belongs to (the longest app address it lies under), or the app a
   // shell link names (…/wizard-os-home/?open=<id>). Wizard's own pages and anything else: null.
   function appOfLink(u) {

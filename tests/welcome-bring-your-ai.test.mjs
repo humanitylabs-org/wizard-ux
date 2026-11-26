@@ -95,7 +95,7 @@ test('Bring my AI embeds the Importer screen; Back peels it, then steps back to 
   const d = withSkins(device(fakeBox({ name: 'Ana', authenticated: true })))
   await d.boot(IMPORTER)
   d.press('next'); d.press('bring')
-  assert.match(d.html(), /<div class="wl-frame wl-embed"><iframe src="https:\/\/box\.test\/importer\/\?embedded=1" title="Importer"><\/iframe><\/div>/)
+  assert.match(d.html(), /<div class="wl-frame wl-embed"><iframe src="https:\/\/box\.test\/importer\/\?embedded=1" allow="geolocation 'none'" title="Importer"><\/iframe><\/div>/)
   assert.match(d.html(), /data-wl="next">Continue</)
   assert.equal(d.W.back(), 'welcome')
   assert.match(d.html(), /Bring my AI/) // frame closed, still on the step

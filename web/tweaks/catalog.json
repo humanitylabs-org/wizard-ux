@@ -51,7 +51,8 @@
     "wizard/phone-tester-builds",
     "wizard/share-people-box",
     "wizard/agent-approvals",
-    "wizard/attach-menu-icons"
+    "wizard/attach-menu-icons",
+    "wizard/app-location"
   ],
   "defaults": [],
   "promotedDefaults": [],

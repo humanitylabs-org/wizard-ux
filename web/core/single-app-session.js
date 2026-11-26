@@ -186,7 +186,7 @@
     checkpoint(); chats?.forget(wid); detach?.(); app = next; mountedURL = next.url; loaded = false;
     threadWindow.appId = next.id || id;   // hosted Chats threads are allowed per current app id (ux#1471)
     win.replaceChildren(); frame = document.createElement('iframe'); frame.className = 'appframe'; frame.title = policy.displayName(next);
-    frame.setAttribute('allow','microphone; clipboard-read; clipboard-write; autoplay; fullscreen'); frame.referrerPolicy = 'same-origin';
+    frame.setAttribute('allow', window.WizCore?.frameAllow?.('microphone; clipboard-read; clipboard-write; autoplay; fullscreen', { id: next.id || id }) || "microphone; clipboard-read; clipboard-write; autoplay; fullscreen; geolocation 'none'"); frame.referrerPolicy = 'same-origin';
     // Browser owner boundary (wizard-os#133, box switch): the pinned app runs sandboxed like a phone/desktop app window.
     const opaque = !!window.WizBrowserBoundary?.enabled && !window.WizBrowserBoundary.sameOriginApp?.(next.id || id, next.url);
     if (opaque) frame.setAttribute('sandbox', window.WizBrowserBoundary.sandbox);

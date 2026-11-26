@@ -16,6 +16,7 @@ import android.view.ViewGroup;
 import android.view.WindowInsets;
 import android.view.WindowManager;
 import android.webkit.CookieManager;
+import android.webkit.GeolocationPermissions;
 import android.webkit.JavascriptInterface;
 import android.webkit.PermissionRequest;
 import android.webkit.RenderProcessGoneDetail;
@@ -67,6 +68,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
     private static final int REQ_EVERYWHERE = 44;
     private static final int REQ_CAMERA = 45;
     private static final int REQ_APP_NOTIFY = 46;
+    private static final int REQ_LOCATION = 47; // an app that declared location asked for it (AppLocation)
     private static java.lang.ref.WeakReference<MainActivity> current = new java.lang.ref.WeakReference<>(null);
     private boolean everywhereSetup; // James is on Android's "Display over other apps" page
     private boolean sideSetupActive; // the user tapped Turn on and is in the system picker
@@ -82,6 +84,8 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
     private SelectionWebView web;
     private FrameLayout root;
     private PermissionRequest pendingMic;
+    private GeolocationPermissions.Callback pendingGeo; // waiting on Android's location prompt (AppLocation)
+    private String pendingGeoOrigin;
     private ValueCallback<Uri[]> pendingFiles;
     private java.io.File pendingPhoto; // the empty file the camera writes the page's photo into (issue 1534)
     private WebChromeClient.FileChooserParams pendingChooser; // waiting on the CAMERA prompt
@@ -498,6 +502,17 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
             @Override
             public void onPermissionRequest(PermissionRequest request) {
                 runOnUiThread(() -> handleWebPermission(request));
+            }
+
+            // Location (wizard-ux issue 1629, AppLocation): only reached for a frame the shell let ask (Maps).
+            @Override
+            public void onGeolocationPermissionsShowPrompt(String origin, GeolocationPermissions.Callback callback) {
+                runOnUiThread(() -> handleGeolocation(origin, callback));
+            }
+
+            @Override
+            public void onGeolocationPermissionsHidePrompt() {
+                runOnUiThread(() -> { pendingGeo = null; pendingGeoOrigin = null; });
             }
 
             @Override
@@ -957,6 +972,26 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
 
     /* ---------------- Microphone for the orb ---------------- */
 
+    /* Location for the apps that ask for it (wizard-ux issue 1629, switch wizard/app-location, off by default): never
+     * granted silently. Switch off or another address: denied with no prompt. Otherwise Android's own location prompt
+     * first (once; Android remembers the answer and it can be turned off in the phone's settings), and the WebView is
+     * told never to remember the grant itself, so each ask re-checks the switch and Android's permission. */
+    private void handleGeolocation(String origin, GeolocationPermissions.Callback cb) {
+        if (!AppLocation.mayAsk(AppLocation.on(this), ai.wizards.os.device.AppState.primaryOrigin(this), origin)) {
+            cb.invoke(origin, false, false);
+            return;
+        }
+        if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+                || checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+            cb.invoke(origin, true, false);
+            return;
+        }
+        if (pendingGeo != null) pendingGeo.invoke(pendingGeoOrigin, false, false);
+        pendingGeo = cb;
+        pendingGeoOrigin = origin;
+        requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION}, REQ_LOCATION);
+    }
+
     private void handleWebPermission(PermissionRequest request) {
         if (!Origin.isPrivate(MainActivity.this, request.getOrigin())) { request.deny(); return; }
         boolean wantsMic = false;
@@ -981,6 +1016,18 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
             if (p == null || pendingFiles == null) return;
             boolean ok = results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED;
             if (!openChooser(p, ok)) { pendingFiles.onReceiveValue(null); pendingFiles = null; }
+            return;
+        }
+        if (code == REQ_LOCATION) {
+            GeolocationPermissions.Callback cb = pendingGeo;
+            String origin = pendingGeoOrigin;
+            pendingGeo = null;
+            pendingGeoOrigin = null;
+            if (cb == null) return;
+            boolean ok = false;
+            for (int r : results) if (r == PackageManager.PERMISSION_GRANTED) ok = true;
+            // Still re-check the switch: it may have been turned off while Android's prompt was showing.
+            cb.invoke(origin, ok && AppLocation.mayAsk(AppLocation.on(this), ai.wizards.os.device.AppState.primaryOrigin(this), origin), false);
             return;
         }
         if (code == REQ_EVERYWHERE) { continueEverywhere(); return; }
@@ -1729,6 +1776,15 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         public void appPushSwitch(boolean on) {
             if (MainActivity.this instanceof AppSessionActivity) return;
             ai.wizards.os.notify.AppPush.setOn(MainActivity.this, on);
+        }
+        /* ---- Location for the apps that ask for it (wizard-ux issue 1629, switch wizard/app-location, off by default):
+         * the main page copies the switch here (AppLocation). ---- */
+        @JavascriptInterface
+        public void appLocationSwitch(boolean on) {
+            if (MainActivity.this instanceof AppSessionActivity) return;
+            AppLocation.setOn(MainActivity.this, on);
+            // Off: forget any grant this WebView still holds; the shell also takes `geolocation` off open frames.
+            if (!on) runOnUiThread(() -> GeolocationPermissions.getInstance().clearAll());
         }
         /* ---- App windows (wizard-os issue 650, on for everyone): any page asks to open an app's own window for a link
          * (false = keep the link where it is). ---- */
