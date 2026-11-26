@@ -998,8 +998,12 @@
       // A direct link can arrive before the scoped lists. Learn the authoritative
       // server target before the first history read or reply; never overwrite a known scope.
       if (!agent && otherAgent(s.agent) && s.id === id) { agent = s.agent; AGENT_OF.set(id, agent); }
-      if (s.agent && (s.agent || 'hermes') !== (agent || 'hermes')) throw new Error('Thread scope changed');
-      if (agent) s.agent = agent;
+      // An unscoped read goes to the default agent (core/agents.js routeAgent): on a box whose default is a private
+      // agent its detail names that agent, which is still this thread's own scope (wizard-agent-service issue 631).
+      const route = (typeof AG === 'function' && AG()?.routeAgent?.()) || '';
+      if (s.agent && (s.agent || 'hermes') !== (agent || route || 'hermes')) throw new Error('Thread scope changed');
+      // ... and its row stays a main-list row (agent '', as the list's own rows): one seen/side-state key, not two.
+      if (agent) s.agent = agent; else if (route && s.agent === route) s.agent = '';
       const list = agent ? (this.agentSessions[agent] = this.agentSessions[agent] || []) : this.sessions;
       applyTitle(s, read, true);
       const i = list.findIndex(x => x.id === id);
@@ -1010,7 +1014,7 @@
       const run = s.status ? { queueReason: s.queueReason, status: s.status } : {};
       if (i >= 0) list[i] = { ...list[i], title: s.title, request: s.request, retryRunId: s.retryRunId, ...run, safeError: s.safeError, reconnect: s.reconnect, renames: s.renames, detailNeeded: false,
         ...(s.model ? { model: s.model, provider: s.provider, modelLockAt: s.modelLockAt } : {}) };
-      else if (this.windows[agent || 'hermes']) DETAIL.set(id, { ...s, detailNeeded: false });
+      else if (this.windows[agent || route || 'hermes']) DETAIL.set(id, { ...s, detailNeeded: false });
       else list.push({ ...s, detailNeeded: false });
       applyLocal(i >= 0 ? list[i] : DETAIL.get(id) || s);
       return s;

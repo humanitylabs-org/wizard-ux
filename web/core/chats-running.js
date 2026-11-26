@@ -33,7 +33,9 @@ window.WizCore.chatsParts.running = function ({ ago, ch, CH, chanStore, clip, es
   }
   // The main Chats list shows the main agent's tasks only (the orb's dump starts them there): a routed agent's record
   // never opens as the main agent's thread, even when both use the same thread id.
-  function runningRecs() { return LIVE.agentInbox?.records?.('hermes') || []; }
+  // Issue 631: while the box names its private default agent (wizard/private-routing on), the main list is that
+  // agent's, so its tasks are the ones listed (and open here); a standard agent's id would not open in that list.
+  function runningRecs() { const p = inboxPrivate(); return LIVE.agentInbox?.records?.(p || 'hermes') || []; }
   function runningFor(ms) { const m = Math.max(1, Math.round(ms / 60000)); return m < 60 ? `${m} min` : m < 2880 ? `${Math.round(m / 60)} h` : `${Math.round(m / 1440)} d`; }
   function runningRow(w) {
     if (!runningOn(w) || ch(w.id).running) return '';
