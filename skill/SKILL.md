@@ -189,6 +189,7 @@ Settings › Appearance › Try new features lists unfinished features anyone ca
 - **Send and go**: On desktop, sending opens a fresh chat.
 - **Sent: the same rows as Inbox**: Sent uses Inbox's rows.
 - **Share feature counts**: Sends features you tried and your thumbs, plus a random box id.
+- **Share to people in any window**: Share's People row shows Messenger's recent chats in every window, also one that never opened Messenger.
 - **Short answer first**: A long agent reply shows only its one-line plain answer; tap it for the full reply. Choose whether replies start collapsed and how long the short answer is. Where: Settings › Appearance › Try new features › Short answer first; its options show under it when on.
 - **Side button opens the Agent chat**: Android app: the side button opens Messenger's Agent chat for a note instead of a new Wizard chat.
 - **Skins are look only**: Skins become a look only. Your own skin stops deciding which features run: only the feature switches here and in the WizardOS Tracker do, the same for every tester. Turning this on carries the choices of the own skin you're wearing into those switches once. Tweaks on the drop list (Two orbs, App borders, No close on desks, Pin buttons, WizardOS name) are off. Skin scripts are paused. Your skin's saved choices and script approval are kept and come back when you switch this off.
