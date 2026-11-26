@@ -389,6 +389,10 @@
       "help": "Container agents run code without an approval nobody sees (Agents: Just run, Ask me, Refuse); prompts wait an hour.",
       "where": "Settings › Appearance › Try new features › Agents run code without asking"
     },
+    "wizard/private-ai-nudge": {
+      "help": "Installing a personal-data app suggests private AI.",
+      "where": "Settings › Appearance › Try new features › Install sheet recommends private AI"
+    },
     "wizard/private-mode": {
       "help": "Settings › Privacy: Private mode, Privacy check.",
       "where": "Settings › Appearance › Try new features › Private mode switch-over"
@@ -434,7 +438,7 @@
       "where": "Settings › Appearance › Try new features › Chat replies as Chats notifications"
     },
     "wizard/lock-screen-player": {
-      "help": "Phone app (Android and iPhone): Music and Podcasts play through the phone's own media player (lock screen, Control Center, headset buttons), and keep playing locked.",
+      "help": "Android and iPhone: Music and Podcasts play through the phone's media player (lock screen, Control Center, headset buttons), and keep playing locked.",
       "where": "Settings › Appearance › Try new features › Phone media player for Music and Podcasts"
     },
     "wizard/app-tap-home": {
