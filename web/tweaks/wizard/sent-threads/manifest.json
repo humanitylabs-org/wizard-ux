@@ -1,0 +1,14 @@
+{
+  "id": "wizard/sent-threads",
+  "name": "Sent: threads, like email",
+  "version": "1.0.0",
+  "author": "wizard",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout"
+  ],
+  "issues": [
+    "humanitylabs-org/wizard-ux#1880"
+  ],
+  "description": "Chats › Sent lists threads, not each thing you sent: one row per thread, the same row as Inbox (its title, avatar or tag, last message, time), under Working while it runs and Processed when done. A thread is in Inbox when it needs you and in Sent otherwise, never in both. What you sent into a thread is in the thread and in the row's actions (hold, swipe left, right-click or Shift+F10), with the two routing corrections."
+}

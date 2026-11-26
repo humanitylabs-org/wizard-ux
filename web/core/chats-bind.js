@@ -109,6 +109,8 @@ window.WizCore.chatsParts.bind = function ({ activityClick, actSetOrder, AGS, al
     const rb = e.target.closest('[data-obretry]'); if (rb) { H.toast('↻', OUTBOX.retryFeedback(OUTBOX.retry(rb.dataset.obretry)), 2400); return true; }
     if (e.target.closest('[data-chunsent]')) { H.openUnsent?.(); return true; }
     if (e.target.closest('[data-chsent]') && justPressed()) return true; // a long-press/swipe just opened a Sent row's sheet (issue 1814)
+    // The ghost click of that same press must not land on a button of the sheet it opened (issue 1880: the sheet's sends move them under the finger).
+    if (e.target.closest('[data-rssentfix], [data-rssentopen]') && justPressed()) return true;
     if (/::side$/.test(String(id)) && ch(id).running && e.target.closest('[data-chtab]')) ch(id).running = false; // a tab leaves the sidebar's Running view (wizard-ux issue 1599)
     if (typeof sentClick === 'function' && sentClick(e, id, w)) return true; // the Sent tab and the bottom tabs (wizard-ux issue 1778)
     if (e.target.closest('[data-chrunning]')) { runningGo(w, true); return true; }

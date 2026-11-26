@@ -193,15 +193,17 @@ Settings › Appearance › Try new features lists unfinished features anyone ca
 - **Phone notifications per app**: Android app: what any app sends to Notifications shows as a phone notification under that app's name, one Android channel per app.
 - **Phone tester builds**: Phones get the newest tester build.
 - **Private first setup**: New installs start private: Welcome leads with Tinfoil; Claude and ChatGPT are optional extras.
+- **Private mode switch-over**: Turn private mode on or off on this Wizard: chosen apps move to a private Tinfoil agent, plus the Privacy check.
 - **Repair the agent's Wizard connection**: When the agent can't reach its Wizard app tools (unauthorized), `wizard link` puts the box's token back in the agent's settings; `wizard doctor` shows if they match.
 - **Running view in the AI apps sidebar**: AI apps: Running view in the sidebar.
 - **Send and go**: On desktop, sending opens a fresh chat.
 - **Sent: the same rows as Inbox**: Sent uses Inbox's rows.
+- **Sent: threads, like email**: Sent lists threads, like email.
 - **Share feature counts**: Sends features you tried and your thumbs, plus a random box id.
 - **Share to people in any window**: Share's People row shows Messenger's recent chats in every window, also one that never opened Messenger.
 - **Short answer first**: A long agent reply shows only its one-line plain answer; tap it for the full reply. Choose whether replies start collapsed and how long the short answer is. Where: Settings › Appearance › Try new features › Short answer first; its options show under it when on.
 - **Side button opens the Agent chat**: Android app: the side button opens Messenger's Agent chat for a note instead of a new Wizard chat.
-- **Skins are look only**: Skins change only the look; feature switches decide what runs. Off again brings your skin's choices back.
+- **Skins are look only**: Skins become a look only: only feature switches decide what runs. Your skin's own choices come back when you switch this off.
 - **Stop write loops**: Stops repeated saves: an identical save within 10 s is not resent; over 20 a minute pauses.
 - **Swap sides**: Chats right, apps left (⌥⇧L).
 - **Swipe away downloads**: Phone: swipe the Downloaded banner away and swipe the Downloads sheet down to close it. (phone only).

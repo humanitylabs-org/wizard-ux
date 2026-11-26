@@ -389,6 +389,10 @@
       "help": "Container agents run code without an approval nobody sees (Agents: Just run, Ask me, Refuse); prompts wait an hour.",
       "where": "Settings › Appearance › Try new features › Agents run code without asking"
     },
+    "wizard/private-mode": {
+      "help": "Turn private mode on or off on this Wizard: chosen apps move to a private Tinfoil agent, plus the Privacy check.",
+      "where": "Settings › Appearance › Try new features › Private mode switch-over"
+    },
     "wizard/private-first-setup": {
       "help": "New installs start private: Welcome leads with Tinfoil; Claude and ChatGPT are optional extras.",
       "where": "Settings › Appearance › Try new features › Private first setup"
@@ -468,6 +472,10 @@
       "help": "Chats stay in Inbox until archived.",
       "where": "Settings › Appearance › Try new features › Inbox until archived"
     },
+    "wizard/skins-look-only": {
+      "help": "Skins become a look only: only feature switches decide what runs. Your skin's own choices come back when you switch this off.",
+      "where": "Settings › Appearance › Try new features › Skins are look only"
+    },
     "wizard/inbox-rows": {
       "help": "Inbox: only what needs you.",
       "where": "Settings › Appearance › Try new features › Inbox: only what needs you"
@@ -475,6 +483,10 @@
     "wizard/sent-rows": {
       "help": "Sent uses Inbox's rows.",
       "where": "Settings › Appearance › Try new features › Sent: the same rows as Inbox"
+    },
+    "wizard/sent-threads": {
+      "help": "Sent lists threads, like email.",
+      "where": "Settings › Appearance › Try new features › Sent: threads, like email"
     },
     "wizard/chats-title-bar": {
       "help": "Chats' title bar names the tab.",

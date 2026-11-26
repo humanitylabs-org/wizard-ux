@@ -277,6 +277,37 @@ function sentIndex(rows) {
 }
 /** The Sent rows to draw: none whose thread (or background record) the Inbox shows, so a thread is never in both. Pure. */
 const sentShown = (rows, inboxIds) => (rows || []).filter(r => !(r?.thread && inboxIds?.has(r.thread)) && !(r?.record && inboxIds?.has(r.record)));
+/* Sent as threads (wizard-ux issue 1880, switch wizard/sent-threads; James, 26 Nov 2026: "The sent box should have the
+ * same threads as the inbox ... The same thread moves to the sent box or the inbox, depending on whether it needs my
+ * attention."). The Sent log's sends, one group per thread they ran in (a background send with no thread yet: its task
+ * record, else the send alone), newest first. A group whose thread (or record) Inbox shows is left out, and so is an
+ * archived or snoozed thread, so a thread is never in both lists. `session(id)` the shell's row for a thread (or null),
+ * `working(s)` whether that thread runs, `at(s)` its list time in ms. Each group: { key, thread, record, sends (newest
+ * first), session, at, working }. Pure. */
+const SENT_THREADS = 'wizard/sent-threads';
+const sentThreadsOn = tweaks => String(tweaks || '').split(' ').includes(SENT_THREADS);
+const SENT_RUNNING = new Set(['running', 'routing']);
+function sentThreads(rows, inboxIds, { session = () => null, working = () => false, at = () => 0 } = {}) {
+  const by = new Map();
+  for (const r of rows || []) {
+    if (!r || typeof r.id !== 'string') continue;
+    const key = typeof r.thread === 'string' && r.thread ? r.thread : typeof r.record === 'string' && r.record ? 'rec:' + r.record : 'send:' + r.id;
+    if (!by.has(key)) by.set(key, { key, thread: r.thread || null, record: null, sends: [] });
+    const g = by.get(key); g.sends.push(r); if (!g.record && r.record) g.record = r.record;
+  }
+  const out = [];
+  for (const g of by.values()) {
+    if ((g.thread && inboxIds?.has(g.thread)) || (g.record && inboxIds?.has(g.record))) continue;
+    const s = g.thread ? session(g.thread) || null : null;
+    if (s && (s.archived || deferred(s))) continue;
+    g.sends.sort((a, b) => (Number(b.at) || 0) - (Number(a.at) || 0));
+    g.session = s;
+    g.at = Math.max(Number(g.sends[0].at) || 0, s ? Number(at(s)) || 0 : 0);
+    g.working = SENT_RUNNING.has(g.sends[0].state) || (!!s && !!working(s));
+    out.push(g);
+  }
+  return out.sort((a, b) => b.at - a.at || (a.key < b.key ? -1 : 1));
+}
 function activityGroups(groups, { needs, unread, at }, { order = 'newest', now = 0, days = ACTIVITY_RECENT_DAYS, older = false, keep = false, inbox = null, place = null } = {}) {
   if (!groups) return null;
   const snoozed = s => deferred(s) && !['waiting_for_approval', 'unknown'].includes(s.status);
@@ -332,5 +363,5 @@ const unreadThreads = (rows, isNew, notes) => new Set((rows || []).filter(s => i
 const unreadCount = rows => new Set((rows || []).filter(r => r.unread).map(r => r.id)).size;
 root.WizChatsListModel = Object.freeze({ STATES, stateOf, stateGroups, WORKING_SORTS, workingOrderOf, workingAt, workingSort, READY_SORTS, sortOf, PRIORITY_TIP, rankOf, readySort, executionStatus, isListWorking,
   readyGroups, NOTES_PROJECT, NO_PROJECT, projectOf, titleInProject, projectGroups, GROUP_MODES, groupMode, readyFlat,
-  readyStep, visibleIds, INBOX_KEEP, inboxKeep, INBOX_ROWS, inboxRowsOn, inboxWants, inboxReplied, placeOf, sentIndex, sentShown, ACTIVITY_SORTS, activitySortOf, ACTIVITY_RECENT_DAYS, activityMark, activitySort, activityGroups, activityList, unreadCount, unreadThreads, compareTime, deferred, sessionRow, sessionList, sessionRank, orderSessions, notificationRow, sortNotes, mixedRows, subjectGroups, priorityGroups });
+  readyStep, visibleIds, INBOX_KEEP, inboxKeep, INBOX_ROWS, inboxRowsOn, inboxWants, inboxReplied, placeOf, sentIndex, sentShown, SENT_THREADS, sentThreadsOn, sentThreads, ACTIVITY_SORTS, activitySortOf, ACTIVITY_RECENT_DAYS, activityMark, activitySort, activityGroups, activityList, unreadCount, unreadThreads, compareTime, deferred, sessionRow, sessionList, sessionRank, orderSessions, notificationRow, sortNotes, mixedRows, subjectGroups, priorityGroups });
 })(globalThis);
