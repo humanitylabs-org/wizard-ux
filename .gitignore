@@ -9,3 +9,6 @@ web/data.js
 web/summaries.js
 web/ux-version.txt
 web/ux-changes.json
+# Local QA output (wizard-ux#1663): QA scripts and CI write here by default; never commit it
+/evidence/
+/*-evidence/

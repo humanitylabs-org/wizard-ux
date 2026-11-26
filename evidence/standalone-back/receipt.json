@@ -1,8 +1,0 @@
-{
-  "core_sha256": "862c63976291044a8f5915ac5bc5899147cbf16917ac4408c408a4321513d822",
-  "checks": [],
-  "limitations": [
-    "Installed display mode and native bridge presence are simulated in desktop Chrome; not physical-device acceptance."
-  ],
-  "error": "browserType.launch: Chromium distribution 'chrome' is not found at /opt/google/chrome/chrome\nRun \"npx playwright install chrome\"\n    at qa/scripts/qa-app-standalone-back.cjs:39:31"
-}
