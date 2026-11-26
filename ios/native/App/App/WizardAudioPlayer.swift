@@ -46,6 +46,24 @@ final class WizardAudioBridge: NSObject, WKScriptMessageHandler {
     """
     // shim:end
 
+    /// Run in the shell when the app goes to the background while the native player is not playing. The app declares
+    /// `UIBackgroundModes: audio` for this player only, so audio playing inside a web page (any app's own player with
+    /// the switch off, or an app other than Music and Podcasts with it on) stops on lock as it always has.
+    // pause:begin
+    static let pauseInPage = """
+    (function () {
+      var n = 0;
+      function stop(doc) {
+        if (!doc) return;
+        try { Array.prototype.forEach.call(doc.querySelectorAll('audio,video'), function (m) { if (!m.paused) { m.pause(); n++; } }); } catch (_) {}
+        try { Array.prototype.forEach.call(doc.querySelectorAll('iframe'), function (f) { try { stop(f.contentDocument); } catch (_) {} }); } catch (_) {}
+      }
+      stop(document);
+      return n;
+    })()
+    """
+    // pause:end
+
     private weak var web: WKWebView?
     private var loadingObservation: NSKeyValueObservation?
     private var observers: [NSObjectProtocol] = []
@@ -64,7 +82,9 @@ final class WizardAudioBridge: NSObject, WKScriptMessageHandler {
         }
         let center = NotificationCenter.default
         bridge.observers.append(center.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main) { [weak bridge] _ in
-            bridge?.backgroundedPlaying = WizardAudioPlayer.shared.wantsPlaying
+            guard let bridge else { return }
+            bridge.backgroundedPlaying = WizardAudioPlayer.shared.wantsPlaying
+            if !bridge.backgroundedPlaying { bridge.web?.evaluateJavaScript(Self.pauseInPage) }
         })
         // Coming back while it played in the background (the lock screen's player, Control Center, or the app icon):
         // open the app that is playing, like Android's notification tap.
@@ -168,14 +188,13 @@ final class WizardAudioPlayer: NSObject {
     private var revision = 0, generation = 0, refillAttempts = 0
     private var refilling = false, advanceAfterRefill = false, reporting = false
     private var refillKey = UUID().uuidString
-    private var skipBack: Double = 0, skipForward: Double = 0
+    private var controls = WizardAudioPolicy.controls(back: nil, forward: nil)
     private var volume: Float = 1
     private var artwork: (url: String, art: MPMediaItemArtwork)?
     private var progressTimer: Timer?
     private var itemObservations: [NSKeyValueObservation] = []
     private var statusObservation: NSKeyValueObservation?
     private var reports: [[String: Any]] = []
-    private static let progressEvery: TimeInterval = 15
     private static let reportsKey = "wizardAudio.reports"
 
     private lazy var http: URLSession = {
@@ -212,7 +231,7 @@ final class WizardAudioPlayer: NSObject {
         if !origin.isEmpty {
             requestPlaying(false); generation += 1; station = nil; advanceAfterRefill = false
             player.replaceCurrentItem(with: nil); tracks.removeAll(); index = -1; revision += 1; error = ""
-            owner = WizardAudioPolicy.music; skipBack = 0; skipForward = 0; applyOwner(); artwork = nil; nowPlaying()
+            owner = WizardAudioPolicy.music; controls = WizardAudioPolicy.controls(back: nil, forward: nil); applyOwner(); artwork = nil; nowPlaying()
             try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
         }
         origin = new
@@ -279,8 +298,7 @@ final class WizardAudioPlayer: NSObject {
         let add = try q.map { try checked($0, app: app) }
         if owner != app { adopt(app) }
         let skip = p["skip"] as? [String: Any]
-        skipBack = WizardAudioPolicy.skipSeconds((skip?["back"] as? NSNumber)?.doubleValue)
-        skipForward = WizardAudioPolicy.skipSeconds((skip?["forward"] as? NSNumber)?.doubleValue)
+        controls = WizardAudioPolicy.controls(back: (skip?["back"] as? NSNumber)?.doubleValue, forward: (skip?["forward"] as? NSNumber)?.doubleValue)
         applyOwner()
         let lo = max(0, index + 1 - 50), hi = min(index, tracks.count - 1)
         let history = index < 0 || lo > hi ? [] : Array(tracks[lo...hi])
@@ -313,7 +331,7 @@ final class WizardAudioPlayer: NSObject {
         saveProgress(completed: false); requestPlaying(false)
         generation += 1; station = nil; advanceAfterRefill = false
         player.replaceCurrentItem(with: nil); tracks.removeAll(); index = -1; revision += 1; error = ""
-        owner = app; skipBack = 0; skipForward = 0; applyOwner()
+        owner = app; controls = WizardAudioPolicy.controls(back: nil, forward: nil); applyOwner()
     }
 
     func snapshot(app: String, known: Int) -> [String: Any] {
@@ -359,7 +377,7 @@ final class WizardAudioPlayer: NSObject {
         userWant = want && !tracks.isEmpty
         if userWant {
             let session = AVAudioSession.sharedInstance()
-            try? session.setCategory(.playback, mode: WizardAudioPolicy.spoken(owner) ? .spokenAudio : .default, options: [])
+            try? session.setCategory(.playback, mode: WizardAudioPolicy.sessionMode(owner) == "spokenAudio" ? .spokenAudio : .default, options: [])
             try? session.setActive(true)
             if player.currentItem == nil, index >= 0, index < tracks.count { start(at: index, positionMs: 0) }
             player.play()
@@ -384,7 +402,7 @@ final class WizardAudioPlayer: NSObject {
 
     /// Like Android's player: past the first 4 s, previous restarts the track.
     private func previous() {
-        if position > 4 || index <= 0 { seek(seconds: 0) } else { start(at: index - 1, positionMs: 0) }
+        if WizardAudioPolicy.previousRestarts(position: position, index: index) { seek(seconds: 0) } else { start(at: index - 1, positionMs: 0) }
         requestPlaying(true)
     }
 
@@ -427,23 +445,21 @@ final class WizardAudioPlayer: NSObject {
 
     /// Calls, alarms and other apps: iOS pauses us; when it says we should resume and we were playing, we resume.
     private func interrupted(_ note: Notification) {
-        guard let raw = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt, let type = AVAudioSession.InterruptionType(rawValue: raw) else { return }
-        let options = AVAudioSession.InterruptionOptions(rawValue: note.userInfo?[AVAudioSessionInterruptionOptionKey] as? UInt ?? 0)
+        let type = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt
+        let options = note.userInfo?[AVAudioSessionInterruptionOptionKey] as? UInt
         DispatchQueue.main.async { [self] in
-            switch type {
-            case .began: interruptedWhilePlaying = userWant; userWant = false; player.pause(); nowPlaying()
-            case .ended:
-                if interruptedWhilePlaying, options.contains(.shouldResume) { requestPlaying(true) }
-                interruptedWhilePlaying = false
-            @unknown default: break
+            let began = type == AVAudioSession.InterruptionType.began.rawValue
+            switch WizardAudioPolicy.interruption(type: type, options: options, wasPlaying: began ? userWant : interruptedWhilePlaying) {
+            case .pause: interruptedWhilePlaying = true; userWant = false; player.pause(); nowPlaying()
+            case .resume: interruptedWhilePlaying = false; requestPlaying(true)
+            case .nothing: if !began { interruptedWhilePlaying = false }
             }
         }
     }
 
     /// Headphones or a Bluetooth speaker went away: pause, like every iPhone media app.
     private func routeChanged(_ note: Notification) {
-        guard let raw = note.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt,
-              AVAudioSession.RouteChangeReason(rawValue: raw) == .oldDeviceUnavailable else { return }
+        guard WizardAudioPolicy.pausesOnRouteChange(note.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt) else { return }
         DispatchQueue.main.async { [self] in requestPlaying(false) }
     }
 
@@ -460,8 +476,8 @@ final class WizardAudioPlayer: NSObject {
         }
         c.nextTrackCommand.addTarget { [weak self] _ in self?.remote { $0.next() } ?? .commandFailed }
         c.previousTrackCommand.addTarget { [weak self] _ in self?.remote { $0.previous() } ?? .commandFailed }
-        c.skipBackwardCommand.addTarget { [weak self] _ in self?.remote { $0.seekBy(-$0.skipBack) } ?? .commandFailed }
-        c.skipForwardCommand.addTarget { [weak self] _ in self?.remote { $0.seekBy($0.skipForward) } ?? .commandFailed }
+        c.skipBackwardCommand.addTarget { [weak self] _ in self?.remote { $0.seekBy(-$0.controls.skipBack) } ?? .commandFailed }
+        c.skipForwardCommand.addTarget { [weak self] _ in self?.remote { $0.seekBy($0.controls.skipForward) } ?? .commandFailed }
         applyOwner()
     }
 
@@ -472,24 +488,24 @@ final class WizardAudioPlayer: NSObject {
 
     /// Podcasts (asked for skip sizes): back 15 / forward 30 in place of previous/next. Music: previous/next.
     private func applyOwner() {
-        let c = MPRemoteCommandCenter.shared(), skips = skipBack > 0 || skipForward > 0
-        c.skipBackwardCommand.isEnabled = skipBack > 0
-        c.skipForwardCommand.isEnabled = skipForward > 0
-        if skipBack > 0 { c.skipBackwardCommand.preferredIntervals = [NSNumber(value: skipBack)] }
-        if skipForward > 0 { c.skipForwardCommand.preferredIntervals = [NSNumber(value: skipForward)] }
-        c.nextTrackCommand.isEnabled = !skips
-        c.previousTrackCommand.isEnabled = !skips
-        c.changePlaybackPositionCommand.isEnabled = true
+        let c = MPRemoteCommandCenter.shared(), k = controls
+        c.skipBackwardCommand.isEnabled = k.skipBack > 0
+        c.skipForwardCommand.isEnabled = k.skipForward > 0
+        if k.skipBack > 0 { c.skipBackwardCommand.preferredIntervals = [NSNumber(value: k.skipBack)] }
+        if k.skipForward > 0 { c.skipForwardCommand.preferredIntervals = [NSNumber(value: k.skipForward)] }
+        c.nextTrackCommand.isEnabled = k.nextPrevious
+        c.previousTrackCommand.isEnabled = k.nextPrevious
+        c.changePlaybackPositionCommand.isEnabled = k.scrub
     }
 
     private func nowPlaying() {
         let center = MPNowPlayingInfoCenter.default()
         guard index >= 0, index < tracks.count else { center.nowPlayingInfo = nil; return }
-        let t = tracks[index]
+        let t = tracks[index], text = WizardAudioPolicy.nowPlayingText(app: owner, track: t)
         var info: [String: Any] = [
-            MPMediaItemPropertyTitle: t["title"] as? String ?? "",
-            MPMediaItemPropertyArtist: t["artist"] as? String ?? "",
-            MPMediaItemPropertyAlbumTitle: t["album"] as? String ?? "",
+            MPMediaItemPropertyTitle: text.title,
+            MPMediaItemPropertyArtist: text.artist,
+            MPMediaItemPropertyAlbumTitle: text.album,
             MPNowPlayingInfoPropertyElapsedPlaybackTime: position,
             MPNowPlayingInfoPropertyPlaybackRate: player.timeControlStatus == .playing ? 1.0 : 0.0,
             MPNowPlayingInfoPropertyDefaultPlaybackRate: 1.0,
@@ -497,7 +513,7 @@ final class WizardAudioPlayer: NSObject {
             MPNowPlayingInfoPropertyPlaybackQueueIndex: index,
             MPNowPlayingInfoPropertyPlaybackQueueCount: tracks.count,
         ]
-        if WizardAudioPolicy.spoken(owner), let show = t["artist"] as? String { info[MPMediaItemPropertyPodcastTitle] = show }
+        if let show = text.podcast { info[MPMediaItemPropertyPodcastTitle] = show }
         if duration > 0 { info[MPMediaItemPropertyPlaybackDuration] = duration }
         if let artwork, artwork.url == t["art"] as? String { info[MPMediaItemPropertyArtwork] = artwork.art }
         center.nowPlayingInfo = info
@@ -521,16 +537,14 @@ final class WizardAudioPlayer: NSObject {
     private func progressTick() {
         progressTimer?.invalidate(); progressTimer = nil
         guard WizardAudioPolicy.spoken(owner) else { return }
-        progressTimer = Timer.scheduledTimer(withTimeInterval: Self.progressEvery, repeats: true) { [weak self] _ in self?.saveProgress(completed: false) }
+        progressTimer = Timer.scheduledTimer(withTimeInterval: WizardAudioPolicy.progressEvery, repeats: true) { [weak self] _ in self?.saveProgress(completed: false) }
     }
 
     /// Spoken-word apps get their place saved by the player itself, so it keeps saving while the phone is locked.
     private func saveProgress(completed: Bool) {
-        guard WizardAudioPolicy.spoken(owner), index >= 0, index < tracks.count, let raw = tracks[index]["progress"] as? String,
-              WizardAudioPolicy.trusted(raw, origin: origin, kind: "progress", app: owner), let url = URL(string: raw) else { return }
-        var body: [String: Any] = ["position": completed && duration > 0 ? duration : position]
-        if duration > 0 { body["duration"] = duration }
-        if completed { body["completed"] = true }
+        guard index >= 0, index < tracks.count, let raw = tracks[index]["progress"] as? String,
+              WizardAudioPolicy.trusted(raw, origin: origin, kind: "progress", app: owner), let url = URL(string: raw),
+              let body = WizardAudioPolicy.progressBody(app: owner, position: position, duration: duration, completed: completed) else { return }
         fetch(url, body: body) { _ in }
     }
 

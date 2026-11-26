@@ -64,6 +64,60 @@ enum WizardAudioPolicy {
         return u.percentEncodedPath.hasPrefix("/wizard-os-home/") && !u.percentEncodedPath.contains("..") && !u.percentEncodedPath.contains("%")
     }
 
+    // MARK: what the player does (the iPhone player calls these; ios/tests/audio checks them)
+
+    /// Lock-screen / Control Center buttons for the owner. Podcasts asks for skip sizes and gets back 15 / forward 30
+    /// (MPRemoteCommandCenter skipBackward/skipForward with these preferredIntervals) in place of previous/next;
+    /// Music asks for none and gets previous/next. The progress bar can always be dragged.
+    struct Controls: Equatable {
+        let skipBack: Double, skipForward: Double
+        var nextPrevious: Bool { skipBack <= 0 && skipForward <= 0 }
+        var scrub: Bool { true }
+    }
+    static func controls(back: Double?, forward: Double?) -> Controls {
+        Controls(skipBack: skipSeconds(back), skipForward: skipSeconds(forward))
+    }
+
+    /// The audio mode for the owner's session: spoken word for Podcasts, default for Music (both category playback).
+    static func sessionMode(_ appId: String?) -> String { spoken(appId) ? "spokenAudio" : "default" }
+
+    /// What an AVAudioSession interruption (a call, an alarm, Siri) does, from its raw userInfo values
+    /// (AVAudioSession.InterruptionType: began 1, ended 0; InterruptionOptions.shouldResume 1).
+    enum Interruption: Equatable { case pause, resume, nothing }
+    static func interruption(type: UInt?, options: UInt?, wasPlaying: Bool) -> Interruption {
+        switch type {
+        case 1?: return wasPlaying ? .pause : .nothing
+        case 0?: return wasPlaying && ((options ?? 0) & 1) != 0 ? .resume : .nothing
+        default: return .nothing
+        }
+    }
+
+    /// Headphones or a Bluetooth speaker went away (AVAudioSession.RouteChangeReason.oldDeviceUnavailable, raw 2): pause,
+    /// like every iPhone media app. Any other route change (new headphones, a category change) leaves playback alone.
+    static func pausesOnRouteChange(_ reason: UInt?) -> Bool { reason == 2 }
+
+    /// Past the first 4 s, previous restarts the track (like Android's player); otherwise it goes one back.
+    static func previousRestarts(position: Double, index: Int) -> Bool { position > 4 || index <= 0 }
+
+    /// Podcasts' place is saved by the player itself this often while it plays, and on pause and at the end.
+    static let progressEvery: Double = 15
+
+    /// The body the player POSTs to the episode's progress URL (Podcasts only; nil for other apps or no episode).
+    static func progressBody(app: String?, position: Double, duration: Double, completed: Bool) -> [String: Any]? {
+        guard spoken(app), position.isFinite, duration.isFinite else { return nil }
+        var body: [String: Any] = ["position": completed && duration > 0 ? duration : max(0, position)]
+        if duration > 0 { body["duration"] = duration }
+        if completed { body["completed"] = true }
+        return body
+    }
+
+    /// Title, artist and album lines for the lock screen from the app's track; Podcasts' show also goes in the podcast line.
+    static func nowPlayingText(app: String?, track: [String: Any]) -> (title: String, artist: String, album: String, podcast: String?) {
+        let line = { (k: String) -> String in String((track[k] as? String ?? "").prefix(500)) }
+        let artist = line("artist")
+        return (line("title"), artist, line("album"), spoken(app) && !artist.isEmpty ? artist : nil)
+    }
+
     private static func sameOrigin(_ u: URLComponents, _ o: URLComponents) -> Bool {
         guard let us = u.scheme?.lowercased(), us == o.scheme?.lowercased(), us == "https",
               let uh = u.percentEncodedHost?.lowercased(), !uh.isEmpty, uh == o.percentEncodedHost?.lowercased(),

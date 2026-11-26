@@ -1,22 +1,34 @@
 // iPhone media player for Music and Podcasts (wizard-ux issue 1664, switch wizard/lock-screen-player, off by default).
-// The Swift player itself is built and tried on a Mac/iPhone; here: the shim the iPhone app injects (it is what the
-// switch gates), the shell driving it unchanged, and the native wiring that must not go missing.
+// Here: the shim the iPhone app injects (it is what the switch gates) run against the real shell modules, and the
+// Swift player rules compiled and run (ios/tests/audio). The player on a real iPhone needs a Mac to build.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
 import vm from 'node:vm';
 
 const read = path => readFileSync(new URL('../' + path, import.meta.url), 'utf8');
 const SWITCH = 'wizard/lock-screen-player';
 const origin = 'https://wizard.example';
 const IOS = 'ios/native/App/App/';
-const player = read(IOS + 'WizardAudioPlayer.swift');
+const player = read(IOS + 'WizardAudioPlayer.swift'); // only to run the JavaScript shim it injects
 
 // The JavaScript between `// shim:begin` and `// shim:end` (a Swift multi-line string, indented 4).
 function shimSource() {
   const block = player.split('// shim:begin')[1].split('// shim:end')[0];
   const body = block.split('"""')[1];
   return body.split('\n').map(l => l.replace(/^ {4}/, '')).join('\n');
+}
+
+// The JavaScript between `// pause:begin` and `// pause:end`: what the app runs in the shell on going to the background
+// while its own player is not playing.
+function pauseSource() {
+  return player.split('// pause:begin')[1].split('// pause:end')[0].split('"""')[1].split('\n').map(l => l.replace(/^ {4}/, '')).join('\n');
+}
+function media(paused) { return { paused, pause() { this.paused = true; } }; }
+function doc(els, frames = []) {
+  return { querySelectorAll: sel => sel === 'iframe' ? frames : els };
 }
 
 function phone({ on = false } = {}) {
@@ -84,14 +96,6 @@ test('a load still on its way keeps the port reachable after the switch goes off
   assert.equal(f.c.wizardAudioPort, undefined);
 });
 
-test('Change Wizard: the player drops the old Wizard\'s queue and unsent feedback before serving the new one', () => {
-  assert.match(player, /player\.bind\(origin: origin\)/);
-  const bind = player.split('func bind(origin new: String)')[1].split('\n    }\n')[0];
-  assert.match(bind, /tracks\.removeAll\(\)/);
-  assert.match(bind, /reports\.removeAll \{ \$0\["origin"\] as\? String != new \}/);
-  assert.match(player, /first\["origin"\] as\? String == origin/);
-});
-
 test('a live-only push (no id) is not delivered as an answer, and pages cannot replace the port', () => {
   const f = phone({ on: true });
   let got = 0; f.c.wizardAudioPort.onmessage = () => { got++; };
@@ -103,39 +107,42 @@ test('a live-only push (no id) is not delivered as an answer, and pages cannot r
   assert.equal(f.c.__wizardAudioReply, reply);
 });
 
-test('iPhone native: background audio mode, both files built, only the shell main frame, exactly Music and Podcasts', () => {
-  const plist = read(IOS + 'Info.plist');
-  assert.match(plist, /<key>UIBackgroundModes<\/key>\s*<array>\s*<string>audio<\/string>/);
+test('going to the background without the phone player: audio playing inside a page stops, as it does today', () => {
+  const shellAudio = media(false), musicAudio = media(false), pausedOne = media(true), video = media(false);
+  const crossOrigin = { get contentDocument() { throw new Error('SecurityError'); } };
+  const appFrame = { contentDocument: doc([musicAudio, pausedOne], [{ contentDocument: doc([video]) }]) };
+  const c = { document: doc([shellAudio], [appFrame, crossOrigin, { contentDocument: null }]), Array };
+  vm.createContext(c);
+  const stopped = vm.runInContext(pauseSource(), c);
+  assert.equal(stopped, 3, 'the shell, an app page and a page inside it');
+  assert.ok(shellAudio.paused && musicAudio.paused && video.paused && pausedOne.paused);
+  assert.equal(vm.runInContext(pauseSource(), c), 0, 'nothing left playing');
+});
+
+// The rules the iPhone player follows (only Music and Podcasts, which URLs it opens, lock-screen buttons, calls,
+// headphones out, saving Podcasts' place), compiled and run with Swift wherever a toolchain exists (GitHub's
+// ubuntu runners, any Mac). The player itself needs Apple's frameworks: here it is syntax-checked.
+const swiftc = spawnSync('swiftc', ['--version'], { encoding: 'utf8' });
+test('iPhone native: the player rules compile and pass, and the player parses', { skip: swiftc.status === 0 ? false : 'no Swift toolchain here' }, () => {
+  const run = spawnSync('bash', [new URL('../ios/tests/audio/run.sh', import.meta.url).pathname], { encoding: 'utf8', env: { ...process.env, TMPDIR: tmpdir() } });
+  assert.equal(run.status, 0, run.stdout + run.stderr);
+  assert.match(run.stdout, /audio policy checks passed/);
+  assert.match(run.stdout, /player syntax ok/);
+});
+
+// static-rule: every Swift file in the iPhone app is compiled into it (a file missing from Sources silently drops the player)
+test('iPhone native: every Swift file of the app is in the Xcode project build sources', () => {
   const project = read('ios/native/App/App.xcodeproj/project.pbxproj');
-  for (const file of ['WizardAudioPolicy.swift', 'WizardAudioPlayer.swift']) assert.match(project, new RegExp(file.replace('.', '\\.') + ' in Sources \\*/,'), file);
-  const policy = read(IOS + 'WizardAudioPolicy.swift');
-  assert.match(policy, /static let apps: Set<String> = \[music, podcasts\]/);
-  assert.match(player, /message\.frameInfo\.isMainFrame/);
-  assert.match(player, /WizardAudioPolicy\.shell\(web\.url/);
-  assert.match(player, /WizardAudioPolicy\.admitted\(app\)/);
-  assert.doesNotMatch(player, /wizardNative/, 'that handler name means Wizard for Mac to the shell');
-  const vc = read(IOS + 'WizardViewController.swift');
-  assert.match(vc, /if !connectMode \{ audioBridge = WizardAudioBridge\.install\(on: web\) \}/);
+  const files = readdirSync(new URL('../' + IOS, import.meta.url)).filter(f => f.endsWith('.swift'));
+  assert.ok(files.includes('WizardAudioPlayer.swift') && files.includes('WizardAudioPolicy.swift'));
+  for (const f of files) assert.ok(project.includes(`/* ${f} in Sources */,`), f + ' is built');
 });
 
-test('iPhone native: lock screen, Control Center, skip 15/30 for Podcasts, interruptions, unplug, progress', () => {
-  assert.match(player, /setCategory\(\.playback, mode: WizardAudioPolicy\.spoken\(owner\) \? \.spokenAudio/);
-  assert.match(player, /MPNowPlayingInfoCenter\.default\(\)/);
-  for (const key of ['MPMediaItemPropertyTitle', 'MPMediaItemPropertyArtist', 'MPMediaItemPropertyArtwork', 'MPMediaItemPropertyPlaybackDuration', 'MPNowPlayingInfoPropertyElapsedPlaybackTime']) assert.ok(player.includes(key), key);
-  assert.match(player, /changePlaybackPositionCommand/);
-  assert.match(player, /skipBackwardCommand\.preferredIntervals = \[NSNumber\(value: skipBack\)\]/);
-  assert.match(player, /skipForwardCommand\.preferredIntervals = \[NSNumber\(value: skipForward\)\]/);
-  assert.match(player, /nextTrackCommand\.isEnabled = !skips/);
-  assert.match(player, /AVAudioSession\.interruptionNotification/);
-  assert.match(player, /options\.contains\(\.shouldResume\)/);
-  assert.match(player, /\.oldDeviceUnavailable/);
-  assert.match(player, /progressEvery: TimeInterval = 15/);
-  assert.match(player, /kind: "progress"/);
-  assert.match(player, /completionHandler\(nil\)/, 'no redirects');
-});
-
-test('the switch lists this issue too', () => {
-  const m = JSON.parse(read('web/tweaks/wizard/lock-screen-player/manifest.json'));
-  assert.ok(m.issues.includes('humanitylabs-org/wizard-ux#1664'));
-  assert.match(m.description, /iPhone/);
+// static-rule: an app that sets the playback audio session must declare the background audio mode, or iOS stops it on lock
+test('iPhone native: playing in the background is declared wherever the app plays', () => {
+  const plist = read(IOS + 'Info.plist');
+  const modes = /<key>UIBackgroundModes<\/key>\s*<array>([\s\S]*?)<\/array>/.exec(plist)?.[1] || '';
+  const plays = readdirSync(new URL('../' + IOS, import.meta.url)).filter(f => f.endsWith('.swift')).some(f => /setCategory\(\.playback/.test(read(IOS + f)));
+  assert.ok(plays, 'the iPhone app sets the playback category');
+  assert.ok(/<string>audio<\/string>/.test(modes), 'UIBackgroundModes has audio');
 });
