@@ -1339,7 +1339,10 @@
       if (typeof c === 'string') return { value: c, label: friendlyChoice(c) };
       const v = str(c?.value, c?.choice, c?.id); return v ? { value: v, label: str(c?.label, c?.name) || friendlyChoice(v) } : null;
     }).filter(Boolean);
-    return action && (choices.length || it.kind === 'clarify') ? { kind: it.kind || 'approval', requestId: str(it.prompt_id, it.request_id, it.id) || undefined, generation: canonical ? it.execution_generation : undefined, action, choices } : null;
+    // wizard-agent-service issue 597: a prompt that says when it closes (expires_at, seconds) carries it, so the card can
+    // show Expired instead of offering an answer the agent no longer waits for.
+    const closes = Number.isFinite(it.expires_at) && it.expires_at > 0 ? { expiresAt: it.expires_at * 1000, ...(it.expired === true ? { expired: true } : {}) } : {};
+    return action && (choices.length || it.kind === 'clarify') ? { kind: it.kind || 'approval', requestId: str(it.prompt_id, it.request_id, it.id) || undefined, generation: canonical ? it.execution_generation : undefined, action, choices, ...closes } : null;
   }
 
   window.WosChat = { K, reply, esc, homePath, isHomeUrl, parseRows, helm, imagesOf, chipFiles, tweakIds, actionIds, md, inline, time, drafts, copyText, copyRich, richParts, bindSharePress, sharePayload, shareText, shareAssistantText, shareFile, saveFile, download: save, viewer, normalizeApproval, friendlyChoice, choiceReceipt };
