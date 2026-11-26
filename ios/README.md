@@ -13,6 +13,7 @@ phone shell from the iPhone user agent; the app adds `WizardOS-iOS/<version>` to
 | Navigation | Pages of the Wizard's host stay in the app; other sites open in Safari |
 | Microphone / camera | The page's `getUserMedia` + `MediaRecorder` and file inputs. Capture is granted only to the Wizard's https pages (`MediaGate`), after iOS's own prompt |
 | Native features | Capacitor plugins, callable from the Wizard's pages as `window.Capacitor.Plugins.*`: App, Camera, Haptics, LocalNotifications, Preferences, PushNotifications, Share, SplashScreen, StatusBar |
+| Music and Podcasts player | Switch `wizard/lock-screen-player` (off by default, wizard-ux issue 1664): the shell's background-audio port (`WizardAudioPlayer.swift`, same protocol as Android). Keeps playing locked, lock-screen / Control Center controls, Podcasts back 15 / forward 30, saves Podcasts' place. Rules: `WizardAudioPolicy.swift`, checked by `tests/audio/run.sh` |
 | Back | Left-edge swipe calls `window.__wosNativeBack()` (same contract as Android) |
 | Resume | Foregrounding dispatches `wos-native-resume`, like Android |
 
@@ -30,6 +31,7 @@ ios/
     App/WizardOrigin.swift           address rules + the Wizard check (Foundation only)
     App/QRScannerViewController.swift  camera QR scanner
   tests/origin/run.sh     address checks (the Android cases); runs on any Mac, no Xcode needed
+  tests/audio/run.sh      media-player rules (the Android AudioPolicy cases); any Mac, or the swift Docker image
   fastlane/               sim + TestFlight lanes
 ```
 
