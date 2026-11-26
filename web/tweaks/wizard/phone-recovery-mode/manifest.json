@@ -1,0 +1,14 @@
+{
+  "id": "wizard/phone-recovery-mode",
+  "name": "Phone recovery mode",
+  "version": "1.0.0",
+  "author": "wizard",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout"
+  ],
+  "description": "WizardOS Android app: if the app froze or closed while it was starting, the next start opens in recovery mode. Only the shell loads, meeting recording and uploads are paused, and a card offers Check for update (installs a fixed version the normal way), Send diagnostics (the freeze details go to your Wizard) and Start normally.",
+  "issues": [
+    "humanitylabs-org/wizard-ux#1775"
+  ]
+}

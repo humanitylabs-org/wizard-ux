@@ -91,6 +91,9 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
     private WebChromeClient.FileChooserParams pendingChooser; // waiting on the CAMERA prompt
     /** The native "can't reach your Wizard" screen over the WebView (ReachScreen / ReachPolicy). */
     private ReachScreen reach;
+    /** Recovery mode's card (wizard-ux issue 1775, switch wizard/phone-recovery-mode); null on a normal start. */
+    private RecoveryScreen recovery;
+    private static String recoveryPausedMeeting; // the live meeting recovery mode paused (this process), resumed by Start normally
     private volatile boolean mainFailed; // this main-frame load failed: its error page must not count as "landed"
     private volatile String wantUrl;     // the page the last main-frame load was for (Try again reloads it)
     private boolean resumed;
@@ -278,6 +281,9 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         if (ai.wizards.os.device.AppState.origin(this).isEmpty()) {
             startActivity(new Intent(this, ConnectActivity.class)); finish(); return;
         }
+        // Recovery mode (wizard-ux issue 1775, switch wizard/phone-recovery-mode, off by default): the last start froze
+        // or never finished, so this one is the shell only with the meeting recorder and uploads paused.
+        final boolean recoveryStart = !(this instanceof AppSessionActivity) && StartGuard.begin(this);
         root = new FrameLayout(this);
         root.setBackgroundColor(Color.rgb(5, 3, 12));
         // targetSdk 35 draws edge to edge. The page itself runs under the status bar so its background reaches the
@@ -306,6 +312,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         setContentView(root);
         buildWebView();
         reach = new ReachScreen(this, root, this::retryReach, this::openTailscale);
+        if (recoveryStart && StartGuard.paused()) showRecovery();
         watchNetwork();
         if (state != null && ai.wizards.os.device.AppState.origin(this).equals(state.getString("serverOrigin"))) web.restoreState(state);
         if (this instanceof AppSessionActivity && web.getUrl() != null && !((AppSessionActivity)this).acceptsUrl(web.getUrl())) web.clearHistory();
@@ -363,6 +370,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         web.setBackgroundColor(Color.rgb(5, 3, 12));
         root.addView(web, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         if (reach != null) reach.toFront(); // a rebuilt WebView goes under the connection screen
+        if (recovery != null) recovery.toFront(); // and under recovery mode's card
         WebSettings s = web.getSettings();
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
@@ -385,7 +393,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         if (!(this instanceof AppSessionActivity)) HomeScreenShortcuts.attach(this, web);
         if (photos != null) photos.detach();
         photos = ai.wizards.os.photos.PhotosBridge.install(this, web); // status/settings only; no media or credentials
-        ai.wizards.os.photos.BackupScheduler.schedule(this);
+        if (!StartGuard.paused()) ai.wizards.os.photos.BackupScheduler.schedule(this); // recovery mode: uploads wait
         if (device != null) device.onPageStarted();
         device = new ai.wizards.os.device.DeviceBridge(this, web);
         installNativeBridges(web);
@@ -1092,6 +1100,8 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         if (device == null) return;
         device.onStart();
         ai.wizards.os.everywhere.EverywhereService.setAppInFront(this, ai.wizards.os.device.AppState.shellFront());
+        // Recovery mode (wizard-ux issue 1775): this background work waits for Start normally.
+        if (ai.wizards.os.StartGuard.paused()) return;
         ai.wizards.os.everywhere.EverywhereOutbox.get(this).pump();
         // A meeting cut off by a process death is closed and uploaded; the store opens off the UI thread (wizard-ux#1769).
         ai.wizards.os.mizel.MeetingRecorderService.recoverFromActivity(this);
@@ -1099,6 +1109,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
 
     @Override
     protected void onStop() {
+        if (!(this instanceof AppSessionActivity)) StartGuard.settle(this); // left the screen: this start went on
         if (device != null) device.onStop();
         ai.wizards.os.everywhere.EverywhereService.setAppInFront(this, ai.wizards.os.device.AppState.shellFront());
         super.onStop();
@@ -1166,9 +1177,9 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         if (web == null) return; // Connect owns the screen until an origin is set
         ScrollCaptureDiagnostics.resumed(this);
         web.onResume();
-        ai.wizards.os.mizel.MeetingRecorderService.resumeUpdateFromActivity(this);
-        ai.wizards.os.share.ShareService.resumeIfPending(this); // shares left queued (force-stop, reboot) carry on
-        ai.wizards.os.mizel.MeetingEventSync.kick(this); // meeting markers from the floating orb / side button still unsent
+        if (!(this instanceof AppSessionActivity) && StartGuard.resumed()) main.postDelayed(settleStart, StartPolicy.SETTLE_MS);
+        if (recovery != null && recovery.isShowing()) pollRecovery();
+        if (!StartGuard.paused()) resumeBackgroundWork();
         resumed = true;
         ai.wizards.os.downloads.Downloads.addListener(downloadsListener);
         queueDownloadPush(ai.wizards.os.downloads.DownloadsPolicy.eventJson("sync", null)); // a download may have finished while away
@@ -1231,6 +1242,61 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
             Toast.makeText(this, "WizardOS is your assistant. Hold the side button to talk.", Toast.LENGTH_LONG).show();
         }
         pushSideButton();
+    }
+
+    /** Background work a start resumes; recovery mode holds it until Start normally (wizard-ux issue 1775). */
+    private void resumeBackgroundWork() {
+        ai.wizards.os.mizel.MeetingRecorderService.resumeUpdateFromActivity(this);
+        ai.wizards.os.share.ShareService.resumeIfPending(this); // shares left queued (force-stop, reboot) carry on
+        ai.wizards.os.mizel.MeetingEventSync.kick(this); // meeting markers from the floating orb / side button still unsent
+    }
+
+    /* ---------------- Recovery mode (wizard-ux issue 1775, switch wizard/phone-recovery-mode, off by default) ----------------
+     * The last start froze or never finished (StartGuard / StartPolicy). This start is the shell only: the meeting
+     * recorder (a live meeting is paused), meeting/share/photo uploads and the outbox wait, and a native card offers
+     * Check for update (the normal updater: check, download, verify, install), Send diagnostics (the report with the
+     * saved freeze stacks and process exits) and Start normally. */
+    private final Runnable settleStart = () -> StartGuard.settle(this);
+    private final Runnable recoveryPoll = new Runnable() {
+        @Override public void run() {
+            if (recovery == null || !recovery.isShowing() || !resumed) return;
+            try { recovery.updateState(new org.json.JSONObject(ai.wizards.os.update.Updater.state())); } catch (org.json.JSONException ignored) { }
+            main.postDelayed(this, 1000);
+        }
+    };
+    private void pollRecovery() { main.removeCallbacks(recoveryPoll); main.post(recoveryPoll); }
+
+    private void showRecovery() {
+        recovery = new RecoveryScreen(this, root, new RecoveryScreen.Actions() {
+            @Override public void update(boolean install) {
+                if (install) { ai.wizards.os.update.Updater.install(MainActivity.this); return; }
+                recovery.checking(true);
+                ai.wizards.os.update.Updater.check(MainActivity.this, () -> main.post(() -> { if (recovery != null) recovery.checking(false); }));
+            }
+            @Override public void diagnostics() {
+                ScrollCaptureDiagnostics.sendNow(MainActivity.this, ok -> { if (recovery != null) recovery.diagnosticsSent(ok); });
+            }
+            @Override public void startNormally() { leaveRecovery(); }
+        });
+        recovery.show(StartGuard.why());
+        // A meeting still recording in this process (the service outlived the frozen screen) is paused, not ended.
+        String paused = ai.wizards.os.mizel.MeetingRecorderService.pauseForRecovery(this);
+        if (paused != null) recoveryPausedMeeting = paused; // a recreated Activity keeps the one paused before
+        pollRecovery();
+    }
+
+    /** Start normally: the card goes, the held work runs now, and this start is watched like any other. */
+    private void leaveRecovery() {
+        StartGuard.startNormally(this);
+        main.removeCallbacks(recoveryPoll);
+        if (recovery != null) { recovery.hide(); root.removeView(recovery.view()); recovery = null; }
+        ai.wizards.os.photos.BackupScheduler.schedule(this);
+        ai.wizards.os.everywhere.EverywhereOutbox.get(this).pump();
+        ai.wizards.os.mizel.MeetingRecorderService.endRecovery(this, recoveryPausedMeeting); // recovery, uploads, the paused meeting
+        recoveryPausedMeeting = null;
+        resumeBackgroundWork();
+        main.removeCallbacks(settleStart);
+        main.postDelayed(settleStart, StartPolicy.SETTLE_MS);
     }
 
     @Override
@@ -1371,6 +1437,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         LIVE.remove(this);
         if (device != null) device.onDestroy();
         main.removeCallbacks(reachMark); main.removeCallbacks(reachGiveUp); main.removeCallbacks(reachRetry); main.removeCallbacks(netSettled);
+        main.removeCallbacks(settleStart); main.removeCallbacks(recoveryPoll);
         if (netWatch != null) { try { getSystemService(android.net.ConnectivityManager.class).unregisterNetworkCallback(netWatch); } catch (RuntimeException ignored) {} netWatch = null; }
         if (!(this instanceof AppSessionActivity)) {
             ai.wizards.os.everywhere.EverywhereService.setAppVoiceRemote(null);
@@ -1770,6 +1837,12 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
                     && ai.wizards.os.notify.AppNotify.askOnce(MainActivity.this)) {
                 main.post(() -> requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, REQ_APP_NOTIFY));
             }
+        }
+        /** Recovery mode (wizard-ux issue 1775, switch wizard/phone-recovery-mode): the main page's copy of the switch. */
+        @JavascriptInterface
+        public void recoveryModeSwitch(boolean on) {
+            if (MainActivity.this instanceof AppSessionActivity) return;
+            StartGuard.setOn(MainActivity.this, on);
         }
         /** Box-to-phone push (wizard-ux issue 1618, switch wizard/phone-push): the main page's copy of the switch. */
         @JavascriptInterface

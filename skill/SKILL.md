@@ -134,14 +134,14 @@ Schedules: jobs the agent runs on a timer (e.g. a daily summary), with their nex
 
 ### About & updates
 About & updates: update WizardOS (Automatic or Ask me), the release channel (For everyone or For testers), versions, connection status, and Gestures & help.
-- WizardOS (server): the installed version and whether it is up to date. Updates: Automatic installs them overnight, never during a chat; Ask me installs nothing until you tap Install. Channel: For everyone gets releases testers have used for about 3 days; For testers gets every release at once and shows Try new features in Appearance. When an update is ready a card at the top of Settings offers Install (or Install now).
+- WizardOS (server): installed version, up to date or not. Updates: Automatic installs them overnight, never during a chat; Ask me installs nothing until you tap Install. Channel: For everyone gets releases testers have used for 3 days; For testers gets every release at once and shows Try new features in Appearance. A ready update shows Install at the top of Settings.
   - Apps: every installed app with its version and the newest, Update now, Retry, Hold, and Automatic / Ask me for app updates (Automatic checks and updates apps every hour)
   - WizardOS (server) {version}: the installed server version
   - Automatic: updates install overnight, never during a chat
   - Ask me: nothing installs until you tap Install
   - For testers: every new release as soon as it's out; shows Try new features
   - For everyone: releases testers have used for about 3 days
-- Wizard: whether this device is connected to your Wizard (Connected, Connecting…, Sign-in needed) and its address; interface and server update separately. Technical details shows the interface revision. Gestures & help opens How Wizard works on the phone (orb, desks, Back, Practice again) and the keys guide on the desktop. On Android also Recording, Reply notifications and the app's version (tap it to update).
+- Wizard: whether this device is connected (Connected, Connecting…, Sign-in needed) and its address; interface and server update separately. Technical details shows the interface revision. Gestures & help opens How Wizard works on the phone (orb, desks, Back, Practice again) and the keys guide on the desktop. On Android also Recording, Reply notifications and the app's version (tap it to update).
   - Connected: this device's connection to your Wizard
   - Recording: Android: recording keeps going with the screen off
   - Reply notifications: Android: a notification when the agent answers a chat you sent from the phone
@@ -170,7 +170,7 @@ Settings › Appearance › Try new features lists unfinished features anyone ca
 - **Archive on top**: Archive is the first section of the Chats list in both By day and By status, so switching layouts never moves it.
 - **Backup health in Resources**: Resources shows your backup's health.
 - **Bottom app bar on desktop**: Apps bar at the bottom on any width.
-- **Calm Agent Service restarts**: While the Agent Service waits for running chats to restart, you see a quiet note, not errors; a message sent meanwhile sends after the restart; if overdue, choose Wait longer or Restart now.
+- **Calm Agent Service restarts**: While a restart waits for running chats you see a quiet note, not errors; messages sent meanwhile go after it; if overdue, Wait longer or Restart now.
 - **Calm offline card**: The can't-reach-your-Wizard card shows one dotted path (Internet · Tailscale · Wizard), one short next step and a small Check again with the automatic re-check time.
 - **Channels: a fitting emoji for new channels**: New channels get a fitting emoji.
 - **Channels: an AI-picked emoji for new channels**: New channels with no emoji get one picked by your Wizard's fast model.
@@ -183,7 +183,7 @@ Settings › Appearance › Try new features lists unfinished features anyone ca
 - **Inbox: only what needs you**: Inbox: only what needs you.
 - **Install apps your agent builds**: Apps I build install with one tap.
 - **Instant phone notifications**: Android app, with Phone notifications per app on: app notifications reach the phone within seconds, even locked (one Tailscale connection, no Google).
-- **Location for Maps**: Only apps that ask for your location in their wizard.md (today just Maps) may use it, and only after you say yes in your browser's or phone's own location prompt. Every other app stays blocked with no prompt.
+- **Location for Maps**: Only apps whose wizard.md asks for location (today Maps) may use it, after your browser's or phone's own yes; others stay blocked.
 - **Machines on Home**: Home shows a slim strip (Wizard, AI fuel, chats, backup, network); Settings › System holds your network, AI, security and storage.
 - **Now playing**: While an app plays audio or video, small moving bars sit on that app's icon in the AI apps view (the desktop apps column; the phone Home dock and grid); click or tap them to pause without opening the app. Option+P pauses or plays what played last on the desktop. Nothing shows while nothing plays.
 - **One UI icon count**: Android: Messenger icon count shows the exact number in a One UI-style corner badge.
@@ -191,9 +191,11 @@ Settings › Appearance › Try new features lists unfinished features anyone ca
 - **Phone bar: bigger orb, one badge**: Phone bar: bigger orb, one badge. (phone only).
 - **Phone media player for Music and Podcasts**: Phone app (Android and iPhone): Music and Podcasts play through the phone's own media player (lock screen, Control Center, headset buttons), and keep playing locked.
 - **Phone notifications per app**: Android app: what any app sends to Notifications shows as a phone notification under that app's name, one Android channel per app.
+- **Phone recovery mode**: Android: a frozen start reopens in recovery mode.
 - **Phone tester builds**: Phones get the newest tester build.
 - **Private first setup**: New installs start private: Welcome leads with Tinfoil; Claude and ChatGPT are optional extras.
 - **Private mode switch-over**: Settings › Privacy: Private mode, Privacy check.
+- **Private routing**: Orb sends a request to the agent you name, else private.
 - **Repair the agent's Wizard connection**: When the agent can't reach its Wizard app tools (unauthorized), `wizard link` puts the box's token back in the agent's settings; `wizard doctor` shows if they match.
 - **Running view in the AI apps sidebar**: AI apps: Running view in the sidebar.
 - **Send and go**: On desktop, sending opens a fresh chat.

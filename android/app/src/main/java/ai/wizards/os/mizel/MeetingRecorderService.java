@@ -391,6 +391,32 @@ public class MeetingRecorderService extends Service {
         return null;
     }
 
+    /**
+     * Recovery mode (wizard-ux issue 1775): a meeting still recording in this process is paused like the owner's own
+     * Pause (chunks kept, the notification offers Resume, the usual pause limit applies). Returns the paused meeting's
+     * id, or null when nothing was recording.
+     */
+    public static String pauseForRecovery(Context c) {
+        Live l = live;
+        if (l == null || l.paused || instance == null) return null;
+        Log.i(TAG, "recovery mode: pausing " + l.meetingId);
+        send(c, ACTION_PAUSE, l.meetingId, null, 0, false);
+        return l.meetingId;
+    }
+
+    /**
+     * Start normally after recovery mode: what the start held back runs now (meeting recovery, the uploader), and the
+     * meeting recovery mode paused ({@code pausedId}, may be null) records again if it is still that paused meeting.
+     */
+    public static void endRecovery(android.app.Activity a, String pausedId) {
+        recoverFromActivity(a);
+        MizelUploader.get(a).kick();
+        Live l = live;
+        if (pausedId == null || l == null || !l.paused || !l.meetingId.equals(pausedId)) return;
+        Log.i(TAG, "recovery mode ended: resuming " + pausedId);
+        send(a, ACTION_RESUME, pausedId, null, 0, false); // the service is running: a plain start from the visible app
+    }
+
     static void send(Context c, String action, String meetingId, String reason, int req, boolean foreground) {
         Intent i = new Intent(c, MeetingRecorderService.class).setAction(action).putExtra(EXTRA_MEETING, meetingId).putExtra(EXTRA_REQ, req);
         if (reason != null) i.putExtra(EXTRA_REASON, reason);

@@ -245,6 +245,25 @@
   window.addEventListener('wos:experience', () => { chatSettled = true; badgeSync(); });
   setTimeout(() => { chatSettled = true; badgeSync(); }, 5000);
   badgeSync();
+  /* Recovery mode (wizard-ux issue 1775, switch wizard/phone-recovery-mode, off by default). When a start of the Android
+   * app froze or never finished, the next start opens with the shell only (meeting recording and uploads paused) and a
+   * native card: Check for update, Send diagnostics, Start normally. That is decided before any page loads, so the main
+   * page copies the switch to the Android app; off once settled. */
+  const RECOVERY_SWITCH = 'wizard/phone-recovery-mode';
+  let recoveryWas = null;
+  function recoverySync() {
+    const n = window.WizardOSNative; if (!n || typeof n.recoveryModeSwitch !== 'function' || window.WizHomeScreenPolicy?.mode) return;
+    let on = false; try { on = (document.documentElement.dataset.tweaks || '').split(' ').includes(RECOVERY_SWITCH); } catch (_) {}
+    if (!on && !chatSettled) return;
+    if (on === recoveryWas) return;
+    recoveryWas = on; try { n.recoveryModeSwitch(on); } catch (_) {}
+  }
+  if (typeof MutationObserver === 'function' && document.documentElement) {
+    new MutationObserver(() => recoverySync()).observe(document.documentElement, { attributes: true, attributeFilter: ['data-tweaks'] });
+  }
+  window.addEventListener('wos:experience', () => { chatSettled = true; recoverySync(); });
+  setTimeout(() => { chatSettled = true; recoverySync(); }, 5000);
+  recoverySync();
   // The installed Wizard app a page of this Wizard belongs to (the longest app address it lies under), or the app a
   // shell link names (…/wizard-os-home/?open=<id>). Wizard's own pages and anything else: null.
   function appOfLink(u) {

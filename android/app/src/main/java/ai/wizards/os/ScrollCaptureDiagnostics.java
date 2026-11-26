@@ -113,12 +113,29 @@ final class ScrollCaptureDiagnostics {
         if(HangWatch.log(c).takeUnreported()) arm("hang");
         MAIN.postDelayed(()->upload(c),750);
     }
+    /**
+     * Recovery mode's Send diagnostics (wizard-ux issue 1775): the same report, with the saved freezes and process
+     * exits, goes out now; {@code done} hears on the main thread whether the Wizard took it.
+     */
+    static void sendNow(Context context, java.util.function.Consumer<Boolean> done) {
+        Context c=context.getApplicationContext(); init(c);
+        synchronized(ScrollCaptureDiagnostics.class){ if(done!=null) waiters.add(done); }
+        arm("recovery");
+        StartupWork.then(ProcessExits.refreshed(),()->ProcessExits.refresh(c),()->upload(c));
+    }
+    private static final java.util.List<java.util.function.Consumer<Boolean>> waiters=new java.util.ArrayList<>();
+    private static synchronized void answer(boolean ok) {
+        if(waiters.isEmpty())return;
+        final java.util.List<java.util.function.Consumer<Boolean>> now=new java.util.ArrayList<>(waiters);
+        waiters.clear();
+        MAIN.post(()->{ for(java.util.function.Consumer<Boolean> w:now) w.accept(ok); });
+    }
     private static synchronized void upload(Context c) {
         if(uploading){retryRequested=true;return;}
-        if(generation==delivered || session==null)return;
+        if(generation==delivered || session==null){answer(generation==delivered);return;}
         String origin=ai.wizards.os.device.AppState.origin(c);
         android.net.Uri u=android.net.Uri.parse(origin);
-        if(!Origin.isPrivate(c,u) && !(BuildConfig.DEBUG && ai.wizards.os.device.AppState.isQaOrigin(origin))) return;
+        if(!Origin.isPrivate(c,u) && !(BuildConfig.DEBUG && ai.wizards.os.device.AppState.isQaOrigin(origin))) {answer(false);return;}
         final long sent=generation;
         try {
             session.put("processExits",ProcessExits.log(c).json(5));
@@ -147,6 +164,7 @@ final class ScrollCaptureDiagnostics {
                 synchronized(ScrollCaptureDiagnostics.class){
                     if(ok)delivered=sent;uploading=false;
                     if(retryRequested){retryRequested=false;MAIN.postDelayed(()->upload(c),750);}
+                    else answer(ok);
                 }
             }
         },"ScrollDiagnosticsUpload").start();
