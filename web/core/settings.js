@@ -81,7 +81,7 @@
   // A quiet value on the right of a row, only where it tells you something at a glance; '' otherwise.
   function subtitle(id, ctx) {
     if (id === 'phones') { const pc = phones(), v = pc?.view; if (!v) return ''; if (pc.lost) return 'Can’t check'; const n = v.phones.length; return pc.on ? (n ? `${n} ${n === 1 ? 'device' : 'devices'}` : 'On') : pc.settingUp ? 'Setting up' : v.step === 'off' ? 'Off' : ''; }
-    if (id === 'appearance') return window.WosSkin ? (mySkinWorn() && !lookOnlyDraft() ? window.WosMySkin.active.name + ' · ' : '') + lookName(window.WosSkin, window.WosSkin.current) : '';
+    if (id === 'appearance') return window.WosSkin ? (mySkinWorn() ? window.WosMySkin.active.name + ' · ' : '') + lookName(window.WosSkin, window.WosSkin.current) : '';
     if (id === 'phone') { if (shell()) return shellOrb()?.state.on ? 'Everywhere on' : ''; try { return JSON.parse(native()?.everywhere?.() || '{}').enabled ? 'Everywhere on' : ''; } catch (_) { return ''; } }
     if (id === 'recovery') { const n = new Set([...unsentAll(ctx), ...recovered()].map(x => x.id)).size; return n ? String(n) : ''; }
     // Resources: quiet unless something is running low (under a quarter left), then the lowest one.
@@ -502,6 +502,8 @@
     if (!previews.length) return '';
     return `<details class="st-advanced"><summary>Recover device skins</summary><p>These previews are still on this device. Recover opens New skin; nothing is saved until you choose Create.</p>${previews.map(s => `<div><button type="button" data-skin-preview="${esc(s.id)}">Recover ${esc(s.name)}</button><button type="button" data-skin-preview-dismiss="${esc(s.id)}">Dismiss preview</button></div>`).join('')}</details>`;
   }
+  const skinConfirm = ctx => ctx.skinRemove ? `<div class="st-confirm-scrim"><section class="st-confirm" role="alertdialog" aria-modal="true" aria-labelledby="skin-remove-title"><h3 id="skin-remove-title">Remove ${esc(ctx.skinRemove.name)}?</h3><p>You can undo this removal. Your Wizard keeps the folder in trash for seven days.</p><div class="st-actions"><button data-skin-remove-cancel>Cancel</button><button data-skin-remove-confirm>Remove skin</button></div></section></div>` : '';
+  const skinUndoToast = ctx => ctx.skinUndo ? `<div class="st-skin-toast" role="status">Skin removed<button data-skin-undo>Undo</button><button data-skin-undo-dismiss aria-label="Dismiss">×</button></div>` : '';
   function lookHtml(S, ctx) {
     window.WosExperience?.installed?.().catch(() => {}); // warm the tweak list for New skin
     if (ctx.skinDraft) return newSkinHtml(S, ctx.skinDraft);
@@ -517,24 +519,25 @@
     }).join('');
     const grid = `<div class="skp skp-families" role="group" aria-label="Skins">${tiles}${ownTiles(S, ctx.skinRemoving)}${newTile()}</div>`;
     const colours = `<div class="skp-colours"><h4>Colors</h4><div class="skp" role="group" aria-label="${esc(own?.name || family?.name || 'Skin')} colors">${(family?.palettes || []).map(id => S.list.find(k => k.id === id)).filter(Boolean).map(k => skinCard(k, cur)).join('')}</div></div>` + (!own && (S.wizardBackgrounds || twinned(S, family)) ? backgroundHtml(S, family, cur, ctx) : '');
-    const confirm = ctx.skinRemove ? `<div class="st-confirm-scrim"><section class="st-confirm" role="alertdialog" aria-modal="true" aria-labelledby="skin-remove-title"><h3 id="skin-remove-title">Remove ${esc(ctx.skinRemove.name)}?</h3><p>You can undo this removal. Your Wizard keeps the folder in trash for seven days.</p><div class="st-actions"><button data-skin-remove-cancel>Cancel</button><button data-skin-remove-confirm>Remove skin</button></div></section></div>` : '';
-    const undo = ctx.skinUndo ? `<div class="st-skin-toast" role="status">Skin removed<button data-skin-undo>Undo</button><button data-skin-undo-dismiss aria-label="Dismiss">×</button></div>` : '';
+    const confirm = skinConfirm(ctx), undo = skinUndoToast(ctx);
     return `<div class="st-group" data-stgroup="look"><h4>Skin</h4><div class="skp-all${facesReady ? '' : ' skp-wait'}">${grid}${colours}</div>${deviceSkinRecovery()}${tweakRows(S)}${own ? mySkinRow(own) : ''}${confirm}${undo}</div>`;
   }
-  /* Skins are look only (wizard-ux issue 1190, Miguel 20 Nov 2026: "it's really just colors and background"): no skins,
-   * own skins or New skin, one row of every colour (the scenic landscapes colours are a Background, not a colour), the
-   * worn colour's Background, and Views. Feature switches are on their own page (try-features above). Picking a colour
-   * takes off an own skin (my-skin.js leaves it when the worn colour changes); switching off brings the skins back. */
+  /* Skins are look only (wizard-ux issue 1190, Miguel 20 Nov 2026 "it's really just colors and background"; issue 1816,
+   * James 25 Nov: skins and colours are one list of looks, own skins, New skin and skin import stay, as looks). One
+   * Looks row: every colour (the scenic landscapes colours are a Background, not a colour), then your own skins and
+   * + New skin. Then the worn colour's Mode and Background (not while an own skin is worn: it brings its own) and Views.
+   * Feature switches are on their own page (try-features above). Picking a colour takes off an own skin (my-skin.js
+   * leaves it when the worn colour changes); switching off brings the Skin and Colors rows back. */
   function lookOnlyHtml(S, ctx) {
-    const cur = S.current;
+    const cur = S.current, own = window.WosMySkin?.active;
     loadFaces();
     const fams = S.families || [{ id: cur, name: lookName(S, cur), palettes: S.list.map(k => k.id) }];
     const family = fams.find(f => f.id === S.familyOf?.(cur)) || fams[0];
     const ids = [...new Set(fams.flatMap(f => f.palettes || []))].filter(id => !/^landscapes/.test(id));
-    const shownCur = /^landscapes/.test(cur) ? family?.palettes.find(id => !/^landscapes/.test(id) && isLight(id) === isLight(cur)) || cur : cur;
-    const colours = `<div class="skp-colours"><h4>Colors</h4><div class="skp" role="group" aria-label="Colors">${ids.map(id => S.list.find(k => k.id === id)).filter(Boolean).map(k => skinCard(k, shownCur)).join('')}</div></div>`;
-    const background = family && (S.wizardBackgrounds || twinned(S, family)) ? backgroundHtml(S, family, cur, ctx) : '';
-    return `<div class="st-group" data-stgroup="look" data-look-only><div class="skp-all${facesReady ? '' : ' skp-wait'}">${colours}${background}</div>${tweakRows(S, 'look')}</div>`;
+    const shownCur = own ? '' : /^landscapes/.test(cur) ? family?.palettes.find(id => !/^landscapes/.test(id) && isLight(id) === isLight(cur)) || cur : cur;
+    const looks = `<div class="skp-colours"><h4>Looks</h4><div class="skp" role="group" aria-label="Looks">${ids.map(id => S.list.find(k => k.id === id)).filter(Boolean).map(k => skinCard(k, shownCur)).join('')}${ownTiles(S, ctx.skinRemoving)}${newTile()}</div></div>`;
+    const background = !own && family && (S.wizardBackgrounds || twinned(S, family)) ? backgroundHtml(S, family, cur, ctx) : '';
+    return `<div class="st-group" data-stgroup="look" data-look-only><div class="skp-all${facesReady ? '' : ' skp-wait'}">${looks}${background}</div>${deviceSkinRecovery()}${own ? mySkinRow(own) : ''}${tweakRows(S, 'look')}${skinConfirm(ctx)}${skinUndoToast(ctx)}</div>`;
   }
   // Background + Mode (Miguel, 4 Nov 2026): a skin whose colours come in dark/light twins shows ONE row of
   // backgrounds (Plain, landscape pictures, WizardOS scenes) and a separate Dark | Light switch. Keep the
@@ -654,7 +657,11 @@
     const family = el.closest('[data-skinfamily]');
     if (family) { skinAction(() => M?.active ? M.leave() : undefined, () => { S.setFamily(family.dataset.skinfamily); void window.WosExperience?.chooseSkin?.(); for (const m of mounts) m.render(); ctx.haptic?.(8); }, e => ctx.toast?.('!', e.message, 3000)); return true; }
     const b = el.closest('[data-skinpick]'); if (!b) return false;
-    skinAction(() => M?.active && !lookOnlyDraft() ? M.update({ base: b.dataset.skinpick }) : S.set(b.dataset.skinpick), () => {
+    // Skins are look only: a colour is a look of its own, so it takes off a worn own skin first and is worn after that
+    // (wizard-ux issue 1816: leaving on the colour change raced the box, whose answer put the skin's colour back).
+    const shed = M?.active && lookOnlyDraft();
+    skinAction(() => shed ? M.leave() : M?.active && !lookOnlyDraft() ? M.update({ base: b.dataset.skinpick }) : S.set(b.dataset.skinpick), () => {
+      if (shed && S.current !== b.dataset.skinpick) S.set(b.dataset.skinpick);
       void window.WosExperience?.chooseSkin?.();
       for (const m of mounts) m.render(); ctx.haptic?.(8);
     }, e => ctx.toast?.('!', e.message, 3000)); return true;
@@ -687,7 +694,7 @@
   const settingRow = id => { const t = window.WosExperience?.state.tweaks.find(x => x.id === id && x.builtin); return t ? tweakSwitches([t], 'data-tweak-toggle', window.WosExperience.state.busy) : ''; };
   const settingAct = (ctx, el) => { const b = el.closest('[data-tweak-toggle]'); if (!b) return false; if (typeof askIntercept === 'function' && askIntercept(b.dataset.tweakToggle)) return true; void window.WosExperience.toggle(b.dataset.tweakToggle).catch(e => ctx.toast?.('!', e.message, 2400)); return true; };
   register({ id: 'home-network', page: 'appearance', html: () => { const r = settingRow('wizard/machines-home'); return r ? `<div class="st-group"><h4>Home</h4>${r}</div>` : ''; }, act: settingAct });
-  register({ id: 'skin-frame', available: () => !!window.WosSkin && !lookOnlyDraft(), html() {
+  register({ id: 'skin-frame', available: () => !!window.WosSkin, html() {
     return '<div class="st-group sf-section"><details class="st-advanced"><summary>Advanced</summary><button class="sf-import" data-skinimport>Import skin JSON</button><input type="file" data-skinfile accept="application/json,.json" hidden><p data-skinimport-status role="status"></p></details></div>';
   }, act(ctx, el) {
     if (!el.closest('[data-skinimport]')) return false;
