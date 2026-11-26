@@ -17,7 +17,7 @@
     "Search settings: the box at the top of the Settings list. Typing keeps only the pages that mention the words and marks them on the open page, scrolled to the first; Esc clears it, Enter opens the first page."
   ],
   "switchesIntro": [
-    "Settings › Appearance › Try new features lists unfinished features anyone can switch on to try, A to Z, each 'by <author>'. The group only shows when this Wizard is on the For testers channel; on For everyone these switches stay hidden and off. The same switches are also in the WizardOS Tracker app (Try it). A choice follows the owner on every device."
+    "Settings › Appearance › Try new features lists unfinished features to try, A to Z, each 'by <author>'. It only shows on the For testers channel; on For everyone these switches stay hidden and off. The same switches are also in the WizardOS Tracker app (Try it). Choices follow the owner to every device."
   ],
   "pages": {
     "overview": {
@@ -511,6 +511,10 @@
     "wizard/sent-threads": {
       "help": "Sent lists threads, like email.",
       "where": "Settings › Appearance › Try new features › Sent: threads, like email"
+    },
+    "wizard/smart-inbox": {
+      "help": "Inbox: only what blocks you.",
+      "where": "Settings › Appearance › Try new features › Smart inbox: only what needs you"
     },
     "wizard/chats-title-bar": {
       "help": "Chats' title bar names the tab.",

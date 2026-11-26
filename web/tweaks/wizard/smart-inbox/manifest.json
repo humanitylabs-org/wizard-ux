@@ -1,0 +1,14 @@
+{
+  "id": "wizard/smart-inbox",
+  "name": "Smart inbox: only what needs you",
+  "version": "1.0.0",
+  "author": "wizard",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout"
+  ],
+  "issues": [
+    "humanitylabs-org/wizard-ux#1883"
+  ],
+  "description": "Chats › Inbox holds only what can't go on without you: a needs-you that blocks, an approval, a failed run (with one line saying why) and answers you asked for. Everything else finishes in Sent, whoever started it: done, FYI and check-this asks, watches, schedules and helper results, a new chat's first message. Running chats are in Sent › Working. Unread alone never puts a chat in Inbox, and a chat is never in both."
+}
