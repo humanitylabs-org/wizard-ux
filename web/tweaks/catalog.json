@@ -44,7 +44,8 @@
     "wizard/ai-apps-running",
     "wizard/channel-model-emoji",
     "wizard/channel-auto-emoji",
-    "wizard/app-picker-store-search"
+    "wizard/app-picker-store-search",
+    "wizard/phone-push"
   ],
   "defaults": [],
   "promotedDefaults": [],
