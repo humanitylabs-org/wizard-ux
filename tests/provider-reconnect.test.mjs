@@ -36,14 +36,14 @@ function live() {
 
 test('live.js keeps only the known connection apps from wizard_reconnect', () => {
   const reconnectOf = live();
-  assert.deepEqual({ ...reconnectOf(FIELD) }, { provider: 'claude', appId: 'wizard-claude', name: 'Claude', runId: '', installed: true });
-  assert.deepEqual({ ...reconnectOf({ ...FIELD, provider: 'chatgpt', app_id: 'wizard-chatgpt', installed: false }) }, { provider: 'chatgpt', appId: 'wizard-chatgpt', name: 'ChatGPT', runId: '', installed: false });
+  assert.deepEqual({ ...reconnectOf(FIELD) }, { provider: 'claude', appId: 'wizard-claude', name: 'Claude', runId: '', installed: true, appStatus: 'expired' });
+  assert.deepEqual({ ...reconnectOf({ ...FIELD, provider: 'chatgpt', app_id: 'wizard-chatgpt', installed: false }) }, { provider: 'chatgpt', appId: 'wizard-chatgpt', name: 'ChatGPT', runId: '', installed: false, appStatus: 'expired' });
   for (const bad of [null, {}, { ...FIELD, app_id: 'evil' }, { ...FIELD, kind: 'x' }, { ...FIELD, provider: 'tinfoil' }]) assert.equal(reconnectOf(bad), null);
   // The real normalize() (live-seen.js) puts it on the session the panel reads.
   const lv = withLiveParts(read('web/live.js')), a = lv.indexOf('  const READY_OR_ATTENTION'), b = lv.indexOf('  /* ---- thread-seen');
   const nc = modelContext({}); vm.runInContext(`${lv.slice(a, b)}\nthis.normalize = normalize;`, nc);
   const row = extra => ({ id: 's1', title: 'Plan', status: 'failed', last_user_message: { role: 'user', content: 'Plan my week' }, ...extra });
-  assert.deepEqual({ ...nc.normalize(row({ wizard_reconnect: FIELD })).reconnect }, { provider: 'claude', appId: 'wizard-claude', name: 'Claude', runId: '', installed: true });
+  assert.deepEqual({ ...nc.normalize(row({ wizard_reconnect: FIELD })).reconnect }, { provider: 'claude', appId: 'wizard-claude', name: 'Claude', runId: '', installed: true, appStatus: 'expired' });
   assert.equal(nc.normalize(row({ wizard_reconnect: { ...FIELD, app_id: 'evil' } })).reconnect, null);
   assert.equal(nc.normalize(row({})).reconnect, null);
 });
