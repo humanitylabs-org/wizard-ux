@@ -84,7 +84,8 @@ function browser(box, { on = true, ask = () => true } = {}) {
   return { P, feature, calls, sheet, tap, outside, root, window, ctx };
 }
 const settle = (ms = 30) => new Promise(r => setTimeout(r, ms));
-const text = html => String(html || '').replace(/<[^>]+>/g, ' ').replace(/&rsaquo;|›/g, '›').replace(/&amp;/g, '&').replace(/&#39;|’/g, "'").replace(/\s+/g, ' ').trim();
+const ENT = { '&amp;': '&', '&#39;': "'", '&rsaquo;': '›', '&quot;': '"', '&lt;': '<', '&gt;': '>' };
+const text = html => String(html || '').replace(/<[^>]+>/g, ' ').replace(/&(amp|#39|rsaquo|quot|lt|gt);/g, m => ENT[m]).replace(/’/g, "'").replace(/\s+/g, ' ').trim();
 async function until(fn, ms = 2000) { const end = Date.now() + ms; while (Date.now() < end) { if (fn()) return true; await settle(20); } return false; }
 
 test('switch off: nothing on Settings › Privacy, the sheet never opens and the box is never asked', async () => {
