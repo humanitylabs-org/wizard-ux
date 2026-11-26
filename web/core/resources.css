@@ -121,3 +121,9 @@ body>.rs-backdrop{position:fixed}
 .rs-reconnect, .us-fix { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px 15px; border-top: 1px solid var(--line); }
 .us-fix { padding: 8px 4px 0; border-top: 0; }
 .rs-reconnect button, .us-fix button { min-height: 36px; padding: 0 16px; border: 0; border-radius: 18px; font-size: .875rem; font-weight: 700; color: var(--wz-on-accent, var(--wz-base)); background: var(--wz-accent); cursor: pointer; }
+/* Backup health's Include it (wizard-ux issue 1743, switch wizard/backup-health; rows come only while it is on) */
+.rs-health li .rs-h-msg{color:var(--wz-text,var(--ink))}
+.rs-health li .rs-h-msg-no{color:var(--amber)}
+.rs-h-act{display:block;margin:10px 0 0 19px;min-height:36px;padding:0 16px;border:1px solid var(--line);border-radius:999px;background:var(--wz-surface-raised,transparent);color:var(--wz-text,var(--ink));font:inherit;font-size:.8125rem;font-weight:600}
+.rs-h-act:disabled{opacity:.6}
+.rs-h-act:focus-visible{outline:2px solid var(--violet-2);outline-offset:2px}

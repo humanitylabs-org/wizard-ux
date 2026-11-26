@@ -58,7 +58,8 @@
     "wizard/boundary-agent-access",
     "wizard/phone-badge-look",
     "wizard/sent-threads",
-    "wizard/private-mode"
+    "wizard/private-mode",
+    "wizard/backup-health"
   ],
   "defaults": [],
   "promotedDefaults": [],
