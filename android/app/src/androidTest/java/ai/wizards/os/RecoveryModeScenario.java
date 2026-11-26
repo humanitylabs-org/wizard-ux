@@ -50,7 +50,7 @@ final class RecoveryModeScenario {
             unfinishedStart(c);
             StartGuard.forgetProcessForQa();
             c.startActivity(new Intent(c, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK));
-            if (device.wait(Until.findObject(By.text("Recovery mode")), 30000) == null) {
+            if (find(device, By.text("Recovery mode"), 30000) == null) {
                 ByteArrayOutputStream tree = new ByteArrayOutputStream();
                 device.dumpWindowHierarchy(tree);
                 String t = tree.toString("UTF-8").replaceAll("\\s+", " ");
@@ -62,18 +62,18 @@ final class RecoveryModeScenario {
             assertTrue("background work is paused", StartGuard.paused());
             assertTrue("the shell loads underneath", box.waitFor("GET /wizard-os-home/", 20000));
             // 2. Send diagnostics
-            device.findObject(By.text("Send diagnostics")).click();
-            assertNotNull("diagnostics never reported sent", device.wait(Until.findObject(By.text("Diagnostics sent to your Wizard.")), 20000));
+            find(device, By.text("Send diagnostics"), 10000).click();
+            assertNotNull("diagnostics never reported sent", find(device, By.text("Diagnostics sent to your Wizard."), 20000));
             String report = box.body("POST /wizard-os-home/api/diagnostics/scroll-capture");
             assertNotNull("the Wizard got the report", report);
             assertTrue("the report carries the saved freezes", report.contains("\"hangs\""));
             // 3. Check for update, through the normal update feed
-            device.findObject(By.text("Check for update")).click();
+            find(device, By.text("Check for update"), 10000).click();
             assertNotNull("the update check never answered",
-                    device.wait(Until.findObject(By.text("WizardOS " + BuildConfig.VERSION_NAME + " is the newest version.")), 20000));
+                    find(device, By.text("WizardOS " + BuildConfig.VERSION_NAME + " is the newest version."), 20000));
             assertTrue(box.waitFor("GET /reports/wizard-os/latest.json", 1000));
             // 4. Start normally
-            device.findObject(By.text("Start normally")).click();
+            find(device, By.text("Start normally"), 10000).click();
             assertTrue("the card left", device.wait(Until.gone(By.text("Recovery mode")), 10000));
             assertFalse("the pause ended", StartGuard.paused());
             // 5. switch off: the same unfinished start opens normally
@@ -82,7 +82,7 @@ final class RecoveryModeScenario {
             StartGuard.forgetProcessForQa();
             c.startActivity(new Intent(c, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK));
             assertTrue("the shell loads again", box.waitFor("GET /wizard-os-home/", 20000));
-            Thread.sleep(2000);
+            assertNotNull("switch off: the shell is on screen", find(device, By.text("Shell"), 20000));
             assertNull("switch off: no card", device.findObject(By.text("Recovery mode")));
             assertFalse("switch off: nothing paused", StartGuard.paused());
             Log.i(TAG, "recovery mode scenario passed");
@@ -94,6 +94,18 @@ final class RecoveryModeScenario {
             StartGuard.forgetProcessForQa();
             device.pressHome();
         }
+    }
+
+    /** CI emulators raise "Pixel Launcher isn't responding" over the app; tap Wait and keep looking. */
+    private static UiObject2 find(UiDevice device, androidx.test.uiautomator.BySelector target, long ms) {
+        long end = System.currentTimeMillis() + ms;
+        while (System.currentTimeMillis() < end) {
+            UiObject2 hit = device.wait(Until.findObject(target), 1500);
+            if (hit != null) return hit;
+            UiObject2 wait = device.findObject(By.res("android:id/aerr_wait"));
+            if (wait != null) wait.click();
+        }
+        return null;
     }
 
     /** The emulator's real screen, logged (tag RecoveryShot, base64 PNG in chunks) for the pull request. */
