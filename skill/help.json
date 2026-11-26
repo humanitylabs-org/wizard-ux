@@ -398,7 +398,7 @@
       "where": "Settings › Appearance › Try new features › Private mode switch-over"
     },
     "wizard/private-routing": {
-      "help": "Orb sends a request to the agent you name, else private.",
+      "help": "Orb opens the named agent's thread (else private), with a chip to move it.",
       "where": "Settings › Appearance › Try new features › Private routing"
     },
     "wizard/private-first-setup": {

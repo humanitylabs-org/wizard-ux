@@ -468,21 +468,55 @@
    * today's visible new thread, so nothing is lost. A replay after a reload asks again; the box keeps one task for the
    * same words the same day. */
   const DUMP_ROUTE_MS = 6000;
+  /* Private routing (wizard-ux issue 1804, switch wizard/private-routing; the Agent Service half is
+   * wizard-agent-service issue 629). In private mode the route's answer names the agent a take is for (agent_id, and a
+   * model when one was named). With the switch on, that same one answer (asked here, or already asked by the phone for a
+   * typed or short take: it.routed; it.routeOnly asks without accept_dump) puts the take on that agent and model, with the owner's exact words, before its
+   * thread is announced; it.privateRoute says where it went and why (core/private-route.js paints it and opens it).
+   * Switch off, an answer that names no agent, or an agent this Wizard doesn't list: nothing here changes the take. */
+  const PRIVATE_ROUTING = 'wizard/private-routing';
+  const routingOn = () => { try { return (document.documentElement.dataset.tweaks || '').split(/\s+/).includes(PRIVATE_ROUTING); } catch (_) { return false; } };
+  const AGENT_ID = /^[a-z0-9][a-z0-9-]{0,40}$/;
+  function routeChoice(j) {
+    const c = j?.cmd;
+    if (!c || c.route !== 'agent' || typeof c.agent_id !== 'string' || !AGENT_ID.test(c.agent_id)) return null;
+    const text = s => typeof s === 'string' ? s.slice(0, 80) : '';
+    return { agent: c.agent_id, model: text(c.model), provider: text(c.provider), why: text(c.chosen_by === 'rules_only' ? c.rule || 'default' : c.chosen_by) || 'default',
+      sent: typeof j.sent_id === 'string' && /^sent_[a-z0-9]{6,64}$/i.test(j.sent_id) ? j.sent_id : '' };
+  }
+  function applyChoice(it, choice) {
+    const AG = window.WosAgents, a = AG?.get?.(choice.agent);
+    if (!a || a.hidden) return false;
+    const other = AG.isOther(a.id);
+    // A named model rides only when its agent may use it (the main agent's models come from its own model list).
+    const named = choice.model && choice.provider && (!other || a.id === 'hermes' || AG.allows(a, choice.model)) ? { model: choice.model, provider: choice.provider } : null;
+    const route = named || (other ? AG.route(a, '') : null);
+    if (other && !route?.model) return false;
+    Object.assign(it, { agent: other ? a.id : '' }, route || {});
+    it.privateRoute = { agent: a.id, model: it.model || '', provider: it.provider || '', why: choice.why, sent: choice.sent, words: it.text, at: now() };
+    if (other) window.WizLive?.pinAgent?.(it.sessionId, a.id);
+    return true;
+  }
   async function dumped(it) {
     if (it.dump !== true) return false;
     const plain = it.kind === 'new' && !(it.agent && window.WosAgents?.isOther?.(it.agent)) && !it.steerRunId && !it.reply && !it.retryRunId && !String(it.typed || '').trim()
       && !(it.files || []).some(f => f?.id && f.id !== it.audioFile?.id);
+    const routing = plain && routingOn(), asked = routing && it.routed?.cmd ? it.routed : null;
     let url = '';
-    try { url = plain && it.text ? window.WizConfig?.endpoint?.('route') || '' : ''; } catch (_) {}
-    let cmd = null;
+    try { url = plain && it.text && !asked ? window.WizConfig?.endpoint?.('route') || '' : ''; } catch (_) {}
+    let cmd = null, choice = asked ? routeChoice(asked) : null;
     if (url) try {
       const r = await bounded(signal => fetch(url, { method: 'POST', cache: 'no-store', credentials: 'same-origin', signal, headers: J,
-        body: JSON.stringify({ text: it.text, force: '', view: null, apps: [], accept_dump: true }) }), DUMP_ROUTE_MS);
+        body: JSON.stringify({ text: it.text, force: '', view: null, apps: [], ...(it.routeOnly ? {} : { accept_dump: true }) }) }), DUMP_ROUTE_MS);
       const j = r.ok ? await r.json() : null;
-      cmd = j?.cmd?.route === 'dump' && j.cmd.record_id ? j.cmd : null;
+      cmd = !it.routeOnly && j?.cmd?.route === 'dump' && j.cmd.record_id ? j.cmd : null;
+      if (!cmd && routing) choice = routeChoice(j);
     } catch (_) { /* router away or slow: a visible thread, as before */ }
     it.dump = false;
+    if ('routed' in it) delete it.routed;
+    if ('routeOnly' in it) delete it.routeOnly;
     if (!cmd) {
+      if (choice) applyChoice(it, choice);
       await put(it);
       // Not a dump: it is an ordinary new thread from here, announced now (enqueue held the announcement back).
       if (it.kind === 'new' && it.sessionId) for (const fn of newHooks) try { fn(it, {}); } catch (e) { console.error(e); }
@@ -725,6 +759,10 @@
       audio: o.audio || null, audioType: o.audio?.type || '', model: o.model || '', provider: o.provider || '',
       pendingBlobs: keepPending(o.files), sealKey: o.sealKey || '', nativeId: o.nativeId || '', agent: o.agent || '', wid: o.wid || '', how: o.how || '', intent: o.intent || 'message', deliveryRequested: false, source: o.source || 'chat', title: String(o.text || o.typed || '').slice(0, 60), durable: false,
       ...(o.dump === true ? { dump: true } : {}),
+      // The route's answer the phone already has for this take (private routing, wizard-ux issue 1804): never asked twice.
+      ...(o.dump === true && o.routed?.cmd ? { routed: { cmd: o.routed.cmd, sent_id: o.routed.sent_id || '' } } : {}),
+      // Asked only for its agent (a typed take, private routing on): never offered as a background task.
+      ...(o.dump === true && o.routeOnly === true ? { routeOnly: true } : {}),
       // A Notifications Reply: the item, framed after his words only in the message that is delivered (deliver()).
       ...(replyOf(o) ? { reply: replyOf(o) } : {}) };
   }
@@ -892,6 +930,7 @@
         fitAgentRoute(it);
         // The orb's dump mark (issue 1588): given at Send (desktop), or taken back once the phone's quick router call answered.
         if (o.dump === true && it.kind === 'new') it.dump = true; else if (o.dump === false) delete it.dump;
+        if (o.dump === true && it.kind === 'new' && o.routed?.cmd) it.routed = { cmd: o.routed.cmd, sent_id: o.routed.sent_id || '' };
         // Preserve the original route/destination/id. Routing is allowed to choose a local command;
         // message delivery always retains the send-time thread and selected provider.
         Object.assign(it, { text: String(o.text || '').trim(), typed: o.typed || it.typed, files: [...(it.files || []), ...(o.files || [])].filter((f, i, all) => all.findIndex(x => x.id === f.id) === i), instructions: o.instructions || it.instructions, wid: o.wid || it.wid, ...(replyOf(o) || it.reply ? { reply: replyOf(o) || it.reply } : {}),

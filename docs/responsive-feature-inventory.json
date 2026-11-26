@@ -396,6 +396,14 @@
       "classification": "shared",
       "note": "Optional in-memory temporary chat; strict server capability plus default-off preference"
     },
+    "core/private-route.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "classification": "shared",
+      "note": "Private routing: the orb opens the chosen agent's thread, a where-it-went chip and one-tap move (issue 1804, switch wizard/private-routing)"
+    },
     "core/privacy.js": {
       "loadedBy": [
         "phone",
@@ -1803,6 +1811,7 @@
     "core/photos-relay.js",
     "core/polish.css",
     "core/privacy.js",
+    "core/private-route.js",
     "core/reach.js",
     "core/resources.css",
     "core/resources.js",
