@@ -179,6 +179,7 @@ Settings › Appearance › Try new features lists unfinished features anyone ca
 - **Inbox until archived**: Chats stay in Inbox until archived.
 - **Inbox: only what needs you**: Inbox: only what needs you.
 - **Instant phone notifications**: Android app, with Phone notifications per app on: your Wizard tells the phone the moment an app sends a notification, so it shows within seconds even with the phone locked (one connection over Tailscale, no Google).
+- **Location for Maps**: Only apps that ask for your location in their wizard.md (today just Maps) may use it, and only after you say yes in your browser's or phone's own location prompt. Every other app stays blocked with no prompt.
 - **Machines on Home**: Home shows a slim strip (Wizard, AI fuel, chats, backup, network); Settings › System holds your network, AI, security and storage.
 - **Now playing**: While an app plays audio or video, small moving bars sit on that app's icon in the AI apps view (the desktop apps column; the phone Home dock and grid); click or tap them to pause without opening the app. Option+P pauses or plays what played last on the desktop. Nothing shows while nothing plays.
 - **One-tap Snooze · bottom of Ready**: Snooze is one tap and the lowest priority: the thread waits at the bottom of Ready, below approvals, until you restore or reply.

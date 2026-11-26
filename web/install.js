@@ -12,7 +12,8 @@
     const frame = document.createElement('iframe');
     frame.id = 'session'; frame.title = document.title;
     frame.src = '/wizard-os-home/?app-session=' + encodeURIComponent(id);
-    frame.allow = 'microphone; clipboard-read; clipboard-write; autoplay; fullscreen';
+    // The pinned session is Wizard's own shell; it passes location on only to an app that declared it (wizard-ux issue 1629).
+    frame.allow = 'microphone; clipboard-read; clipboard-write; autoplay; fullscreen; geolocation';
     frame.referrerPolicy = 'same-origin';
     document.body.replaceChildren(frame);
     return;

@@ -57,7 +57,7 @@ test('Connections page hosts the App Manager view itself, and the old app id and
   for (const alias of ['connections', 'app-connections']) {
     h.view.focus(); assert.equal(h.s.WosSettings.route(alias, h.view.focus), true); assert.equal(h.view.page, 'connections', alias);
   }
-  assert.match(h.root.innerHTML, /<section data-settings-feature="connections"><div class="st-embed" data-st-connections><iframe src="\/wizard-os-home\/store-install\/_connections\/\?embed=settings" title="Connections"><\/iframe><\/div><\/section>/);
+  assert.match(h.root.innerHTML, /<section data-settings-feature="connections"><div class="st-embed" data-st-connections><iframe src="\/wizard-os-home\/store-install\/_connections\/\?embed=settings" title="Connections" allow="geolocation 'none'"><\/iframe><\/div><\/section>/);
   assert.match(h.root.innerHTML, /<h3 tabindex="-1">Connections<\/h3>/);
   const desktop = harness({ shell: 'desktop' }); await tick(); desktop.view.focus('connections');
   assert.match(desktop.root.innerHTML, /st-desktop[^]*data-st-connections><iframe/);

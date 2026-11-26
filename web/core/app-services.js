@@ -1047,6 +1047,7 @@
       let url; try { url = new URL(app.url, location.href); } catch (_) { continue; }
       if (url.origin !== location.origin) continue;
       const frame = document.createElement('iframe'); frame.className = 'appframe'; frame.hidden = true; frame.dataset.voiceService = id;
+      frame.setAttribute('allow', "geolocation 'none'"); // never location for a hidden app frame (wizard-ux issue 1629)
       frame.src = url.href; frame.style.display = 'none'; frame.setAttribute('aria-hidden', 'true'); frame.setAttribute('tabindex', '-1');
       document.body.appendChild(frame);
       const detach = attach(frame, {appId:id, path:app.url});

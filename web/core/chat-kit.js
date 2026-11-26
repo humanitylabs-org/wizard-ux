@@ -1238,7 +1238,7 @@
         // A plain link (no type known up front) previews only when the bytes turn out to be a PDF.
         if (!isPdf(it) && !/pdf/i.test(b.type || '')) { stage.innerHTML = fileCard(it, 'Download it to open it in another app.'); return; }
         dropPdf(); V.pdf = URL.createObjectURL(new Blob([b], { type: 'application/pdf' }));
-        stage.innerHTML = `<iframe class="mv-pdf" src="${esc(V.pdf)}" title="${esc(it.name || 'PDF')}"></iframe>`;
+        stage.innerHTML = `<iframe class="mv-pdf" src="${esc(V.pdf)}" allow="geolocation 'none'" title="${esc(it.name || 'PDF')}"></iframe>`;
       }).catch(() => { if (V.items[V.i] === want) stage.innerHTML = fileCard(it, 'Can’t preview this PDF here. Download it to open it.'); });
     } else stage.innerHTML = fileCard(it, isPdf(it) ? 'Download it to open it in a PDF app.' : 'Download it to open it in another app.');
     paint();
