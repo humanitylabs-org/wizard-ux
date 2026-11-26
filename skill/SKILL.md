@@ -7,7 +7,7 @@ description: "Where is, what is, how to: any Wizard setting or screen. Use when 
 
 Every screen, Settings page and feature switch of the Wizard interface (the phone app and the desktop in a browser or the Mac app), with where it is and what it does. Written from the interface code of this Wizard's release.
 
-- Give the exact path the way it reads on screen, e.g. Settings › About & updates › Updates › Automatic, and how to open Settings: on the desktop, the cog at the bottom left under the chats list (older Desks view: the top-bar gear, ⌥,); on the phone, the gear at the top right of Home.
+- Give the exact path the way it reads on screen, e.g. Settings › About & updates › Updates › Automatic, and how to open Settings (Open Settings, below).
 - Say the condition when there is one (For testers channel only, Android app only, desktop only, only when the box has it).
 - You can't flip these switches or settings for the owner: they are owner-only, on the owner's screen. Tell them what to tap.
 - Never invent a setting, page or button. If what they ask for isn't in this manual, say it isn't in the Wizard interface as far as you know, and ask for a screenshot of where they are looking. Don't search your own files for interface text: the interface code isn't in your container.
@@ -193,7 +193,7 @@ Settings › Appearance › Try new features lists unfinished features anyone ca
 - **Phone notifications per app**: Android app: what any app sends to Notifications shows as a phone notification under that app's name, one Android channel per app.
 - **Phone tester builds**: Phones get the newest tester build.
 - **Private first setup**: New installs start private: Welcome leads with Tinfoil; Claude and ChatGPT are optional extras.
-- **Private mode switch-over**: Settings › Privacy: Private mode and the Privacy check.
+- **Private mode switch-over**: Settings › Privacy: Private mode, Privacy check.
 - **Repair the agent's Wizard connection**: When the agent can't reach its Wizard app tools (unauthorized), `wizard link` puts the box's token back in the agent's settings; `wizard doctor` shows if they match.
 - **Running view in the AI apps sidebar**: AI apps: Running view in the sidebar.
 - **Send and go**: On desktop, sending opens a fresh chat.
@@ -240,4 +240,4 @@ No longer switches (owners and old chats may still name them):
 - **Add another Wizard?** Settings › Connections › Wizards › Add a Wizard.
 - **Install an app?** Open the App Store (desktop: Apps column › + Add an app › Get more; phone: swipe the orb up › Get more), open the app, Get.
 - **See keyboard shortcuts?** Desktop: ⌥/ or hold ⌥.
-- **Why would I want private AI?** Claude and ChatGPT keep what you send on their servers; private AI runs in sealed hardware (Tinfoil) nobody else can see into. Settings › Privacy › Why it matters.
+- **Why would I want private AI?** Claude and ChatGPT keep what you send on their servers; private AI runs in sealed hardware (Tinfoil) that nobody else, not even us, can see into. Settings › Privacy › Why it matters.
