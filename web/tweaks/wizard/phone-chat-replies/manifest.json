@@ -1,0 +1,14 @@
+{
+  "id": "wizard/phone-chat-replies",
+  "name": "Chat replies as Chats notifications",
+  "version": "1.0.0",
+  "author": "wizard",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout"
+  ],
+  "description": "WizardOS Android app: when your agent answers a chat you sent from the phone, your Wizard itself posts the reply to Notifications under Chats, so it reaches the phone the same way every app's notifications do (its own Chats channel in Android settings, also with Wizard closed). A tap opens that chat, and reading the chat clears it. Needs Phone notifications per app on the phone.",
+  "issues": [
+    "humanitylabs-org/wizard-ux#1619"
+  ]
+}

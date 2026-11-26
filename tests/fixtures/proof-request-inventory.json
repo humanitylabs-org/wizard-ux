@@ -701,6 +701,12 @@
       "kind": "read",
       "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
     },
+    "/wizard/v1/phone/reply-notes": {
+      "status": "not-exercised",
+      "source": "web/device.js",
+      "kind": "write-or-stream",
+      "note": "Chat replies as Chats notifications (wizard-ux issue 1619): POST only from the Android app (window.WizardOSDevice) after a send, while the off-by-default wizard/phone-chat-replies switch and the phone's per-app reader are on; the three browser flows have no native bridge. tests/phone-chat-replies.test.mjs covers it against a fake box. Refused and collected, never answered, if a flow reaches it."
+    },
     "/wizard/v1/setup/phone": {
       "status": "not-exercised",
       "source": "web/core/phone-connect.js",
@@ -1164,6 +1170,12 @@
         }
       ],
       "note": "v11 refusal: explicit synthetic unconfigured backup overview. No upstream or mutation."
+    },
+    "/wizard/v1/pages/wizard-share/people.json": {
+      "status": "not-exercised",
+      "source": "web/core/share-sheet.js",
+      "kind": "read",
+      "note": "Share people on the box (wizard-ux issue 1627): read (GET) and written (PUT, versioned) only while the off-by-default wizard/share-people-box switch is on; the QA harnesses run with it off. tests/share-people-box.test.mjs and tests/qa-share-people-fresh-window.cjs cover it against a fake box. Refused and collected, never answered, if a flow reaches it."
     },
     "/wizard/v1/pages/wizard-look/look.json": {
       "status": "catalogued",

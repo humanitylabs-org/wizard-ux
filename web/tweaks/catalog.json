@@ -27,6 +27,7 @@
     "wizard/chat-app-switches",
     "wizard/action-cards",
     "wizard/phone-app-notifications",
+    "wizard/phone-chat-replies",
     "wizard/lock-screen-player",
     "wizard/app-tap-home",
     "wizard/download-swipe",
@@ -46,6 +47,9 @@
     "wizard/channel-auto-emoji",
     "wizard/app-picker-store-search",
     "wizard/phone-push",
+    "wizard/mac-app-updates",
+    "wizard/phone-tester-builds",
+    "wizard/share-people-box",
     "wizard/agent-approvals"
   ],
   "defaults": [],

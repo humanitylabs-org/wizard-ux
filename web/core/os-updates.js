@@ -266,6 +266,135 @@
     return true;
   }
 
+  /* ---- Wizard for Mac (wizard-ux issue 1624, switch wizard/mac-app-updates; native half try-wizard#126) ----
+   * The Mac app's own updates, under the WizardOS group: which version runs, up to date or not, a new version
+   * downloading or ready to restart, or one that needs a new download from the website. Only inside Wizard for Mac
+   * (WizCore.bridge.native() === 'mac') and only once the app answers `updates.status`; in a browser, on a phone or
+   * in an older Mac app (the call rejects or times out) there is no group and nothing is logged. The app pushes the
+   * same status object as the window event `wizard:app-update`, so the card moves live; otherwise it is read again
+   * at most once a minute while the page is shown. Buttons: updates.check / updates.install / updates.download. */
+  const MAU = 'wizard/mac-app-updates';
+  const MAU_PHASES = ['idle', 'checking', 'current', 'downloading', 'verifying', 'ready', 'installing', 'manual', 'failed'];
+  const MAU_HOSTS = ['www.aiwizards.com', 'downloads.aiwizards.com'];
+  const mauOn = () => { try { return String(document.documentElement?.dataset?.tweaks || '').split(' ').includes(MAU); } catch (_) { return false; } };
+  const mauMac = () => { try { const b = window.WizCore?.bridge; return typeof b?.native === 'function' ? b.native() === 'mac' : !!window.webkit?.messageHandlers?.wizardNative; } catch (_) { return false; } };
+  let mau = null, mauAt = 0, mauBusy = null, mauAct = '', mauEv = 0;   // mauEv counts the app's events
+  const mauText = (v, n) => (typeof v === 'string' || typeof v === 'number') ? String(v).trim().slice(0, n) : '';
+  // Only the app's own status shape (schema 1); anything else is no answer.
+  function mauValid(d) {
+    if (typeof d === 'string') { try { d = JSON.parse(d); } catch (_) { return null; } }
+    if (!d || typeof d !== 'object' || !d.installed || typeof d.installed !== 'object' || !MAU_PHASES.includes(d.phase)) return null;
+    const version = mauText(d.installed.version, 40);
+    return version ? d : null;
+  }
+  function mauDownloadOk(url) {
+    try { const u = new URL(String(url)); return u.protocol === 'https:' && MAU_HOSTS.includes(u.hostname) && !u.username && !u.password && (!u.port || u.port === '443'); } catch (_) { return false; }
+  }
+  function mauLoad(force) {
+    if (!mauOn() || !mauMac()) return Promise.resolve(mau);
+    if (mauBusy) return mauBusy;
+    if (!force && mauAt && Date.now() - mauAt < FRESH) return Promise.resolve(mau);
+    const call = window.WizCore?.bridge?.call;
+    if (typeof call !== 'function') return Promise.resolve(mau);
+    mauAt = Date.now();
+    // An event that lands while the read is on its way is newer than the read's answer: keep the event's.
+    const ev = mauEv;
+    mauBusy = Promise.resolve().then(() => call('updates.status', {})).then(d => { const v = mauValid(d); if (v && ev === mauEv) mau = v; }, () => {})
+      .then(() => { mauBusy = null; mauAt = Date.now(); changed(); return mau; });
+    return mauBusy;
+  }
+  function mauAgo(ms) {
+    const s = Math.max(0, (Date.now() - ms) / 1000);
+    if (s < 60) return 'just now';
+    if (s < 3600) return `${Math.floor(s / 60)} min ago`;
+    if (s < 86400) { const h = Math.floor(s / 3600); return `${h} ${h === 1 ? 'hour' : 'hours'} ago`; }
+    const d = Math.floor(s / 86400); return `${d} ${d === 1 ? 'day' : 'days'} ago`;
+  }
+  // The card: {title, line, action, label} or null (up to date, idle, checking: nothing to do).
+  // A critical release (`urgent: true`, try-wizard#128; the Mac sends it only with its UpdateDeadlines switch on) says
+  // so in the title and asks for it soon; without the field the card is what it always was.
+  const MAU_URGENT = ['downloading', 'verifying', 'ready', 'ready-waiting', 'installing'];
+  function mauCard(d) {
+    const c = mauCardPlain(d);
+    if (!c || d.urgent !== true || !MAU_URGENT.includes(c.state)) return c;
+    return { ...c, urgent: true, title: `Important update: ${c.title}`, line: `${c.line} It fixes something that matters, so install it soon.` };
+  }
+  function mauCardPlain(d) {
+    const v = mauText(d.latest?.version, 40) || mauText(d.latest?.build, 40);
+    const name = `Wizard for Mac${v ? ' ' + v : ''}`;
+    if (d.phase === 'downloading' || d.phase === 'verifying') {
+      const p = typeof d.progress === 'number' && isFinite(d.progress) ? Math.round(Math.min(1, Math.max(0, d.progress)) * 100) : null;
+      return { state: d.phase, title: name, line: `${d.phase === 'verifying' ? 'Checking the download' : 'Downloading'}${p != null ? ` · ${p}%` : ''}. It installs only when you say so.` };
+    }
+    if (d.phase === 'ready') {
+      if (d.waitingFor === 'recording') return { state: 'ready-waiting', title: `${name} is ready`, line: 'It can restart once the recording ends.' };
+      if (d.waitingFor === 'work') return { state: 'ready-waiting', title: `${name} is ready`, line: 'It can restart once Wizard finishes what it’s working on.' };
+      return { state: 'ready', title: `${name} is ready`, line: 'Restart to finish. Takes about a minute; chats, files and apps stay as they are.', action: 'install', label: 'Update and restart', busyLabel: 'Restarting…' };
+    }
+    if (d.phase === 'installing') return { state: 'installing', title: 'Updating Wizard for Mac', line: 'Wizard restarts in a moment.' };
+    if (d.phase === 'manual') return { state: 'manual', title: `${name} needs a new download`, line: 'This version can’t install itself. Download it and drag it to Applications. Your Wizard, chats and files stay.', action: 'download', label: 'Download', busyLabel: 'Opening…' };
+    if (d.phase === 'failed') return { state: 'failed', title: 'Couldn’t update Wizard for Mac', line: mauText(d.error, 200) || 'The version you have keeps working.', action: 'check', label: 'Try again', busyLabel: 'Checking…' };
+    return null;
+  }
+  function mauHtml() {
+    if (!mauAt || Date.now() - mauAt >= FRESH) void mauLoad();
+    const d = mau; if (!d) return '';
+    const c = mauCard(d);
+    const build = mauText(d.installed.build, 40);
+    const title = `Wizard for Mac ${mauText(d.installed.version, 40)}${build ? ` (${build})` : ''}`;
+    const checking = d.phase === 'checking' || mauAct === 'check';
+    const checked = typeof d.checkedAt === 'number' && isFinite(d.checkedAt) && d.checkedAt > 0 ? ` · checked ${mauAgo(d.checkedAt)}` : '';
+    const value = c ? 'Installed on this Mac' : checking ? 'Checking…' : `Up to date${checked}`;
+    const card = c ? `<div class="osu-card" data-osu-card="mac-${c.state}"${c.urgent ? ' data-osu-urgent' : ''} data-osu-stack role="status"><div class="osu-tx"><b data-osu-title>${esc(c.title)}</b><span>${esc(c.line)}</span></div>${c.action ? `<button type="button" class="osu-go" data-mau="${c.action}"${mauAct ? ' disabled' : ''}>${esc(mauAct === c.action ? c.busyLabel : c.label)}</button>` : ''}</div>` : '';
+    const head = `<div class="st-row static osu-head" data-settings-version="mac"><span class="st-tx"><b data-osu-title>${esc(title)}</b></span><span class="st-val">${esc(value)}</span></div>`;
+    const hint = '<p class="st-hint">Wizard for Mac looks for a new version every hour and downloads it by itself. It restarts only when you say so, never while you’re recording.</p>';
+    const check = c ? '' : `<button type="button" class="st-wide wz-button secondary" data-mau="check"${checking ? ' disabled aria-busy="true"' : ''}>${checking ? 'Checking…' : 'Check for updates'}</button>`;
+    return `<div class="st-group" data-mau-group data-mau-phase="${esc(d.phase)}">${card}${head}${hint}${check}</div>`;
+  }
+  function mauTap(ctx, el) {
+    const b = el?.closest?.('[data-mau]'); if (!b) return false;
+    const what = b.dataset.mau, call = window.WizCore?.bridge?.call;
+    if (mauAct || !mau || typeof call !== 'function' || !mauOn() || !mauMac()) return true;
+    const toast = (...a) => { try { ctx?.toast?.(...a); } catch (_) {} };
+    const c = mauCard(mau);
+    if (what === 'check' && (c ? c.action === 'check' : mau.phase !== 'checking')) {
+      mauAct = 'check'; changed(); ctx?.haptic?.(8);
+      const ev = mauEv;
+      Promise.resolve().then(() => call('updates.check', {})).then(d => { const v = mauValid(d); if (v && ev === mauEv) mau = v; mauAt = Date.now(); },
+        e => toast('!', mauText(e?.message, 160) || 'Couldn’t check for updates', 2600))
+        .finally(() => { mauAct = ''; changed(); });
+    } else if (what === 'install' && c?.action === 'install') {
+      mauAct = 'install'; changed(); ctx?.haptic?.(8);
+      Promise.resolve().then(() => call('updates.install', {})).then(d => {
+        if (d?.started === false) toast('!', mauText(d.reason, 200) || 'Wizard for Mac can’t restart right now.', 3200);
+      }, e => toast('!', mauText(e?.message, 160) || 'Couldn’t start the update', 2600)).finally(() => { mauAct = ''; changed(); void mauLoad(true); });
+    } else if (what === 'download' && c?.action === 'download') {
+      // Only Wizard's own download pages; the app checks the same again before it opens the browser.
+      const url = mau.manual?.url;
+      if (!mauDownloadOk(url)) { toast('!', 'Get the new version from aiwizards.com/downloads', 3200); return true; }
+      mauAct = 'download'; changed(); ctx?.haptic?.(8);
+      Promise.resolve().then(() => call('updates.download', {})).catch(e => toast('!', mauText(e?.message, 160) || 'Couldn’t open the download page', 2600))
+        .finally(() => { mauAct = ''; changed(); });
+    }
+    return true;
+  }
+  // While the app is checking, look again every 5 s (its event normally comes first); otherwise once a minute, and only
+  // while the group is on screen.
+  function mauTick() {
+    if (!mau || !mauOn() || !mauMac() || mauBusy || mauAct || document.hidden) return;
+    let shown = false; try { shown = !!document.querySelector('[data-mau-group]')?.getClientRects().length; } catch (_) {}
+    if (shown && Date.now() - mauAt >= (mau.phase === 'checking' ? 5e3 : FRESH)) void mauLoad(true);
+  }
+  try {
+    window.addEventListener?.('wizard:app-update', e => {
+      if (!mauMac()) return;
+      const v = mauValid(e?.detail); if (!v) return;
+      // The same status again (the app dedupes, but a re-read may cross an event) redraws nothing.
+      const same = JSON.stringify(v) === JSON.stringify(mau);
+      mau = v; mauAt = Date.now(); mauEv++; if (!same && mauOn()) changed();
+    });
+  } catch (_) {}
+
   function load(force) {
     if (off && !force) return Promise.resolve(st);
     if (!force && st && Date.now() - at < FRESH) return Promise.resolve(st);
@@ -475,6 +604,14 @@
   // Turning a switch on or off repaints Settings (wizard/os-update-waits and the other update switches).
   try { window.addEventListener?.('wos:tweak-choice', () => changed()); } catch (_) {}
   window.WosSettings?.register({ id: 'updates', aliases: ['updates'], available: () => true, html: () => html(), act: (ctx, el) => act(el, ctx) });
+  // Wizard for Mac's own group, right under WizardOS (core/settings-view.js keeps it second). Never on a phone or in a
+  // browser; inside the Mac app only with the switch on and once the app answered updates.status.
+  if (mauMac()) {
+    window.WosSettings?.register({ id: 'mac-app-updates', page: 'about', aliases: ['mac-app-updates', 'wizard-for-mac'],
+      available: () => { if (!mauOn()) return false; if (!mau) void mauLoad(); return !!mau; }, html: () => mauHtml(), act: (ctx, el) => mauTap(ctx, el) });
+    const mt = typeof setInterval === 'function' ? setInterval(mauTick, 5e3) : 0;
+    mt?.unref?.();
+  }
   load();
   // Look again by itself so Home hears about a new release without a reload: every minute while an update runs,
   // otherwise every 10 minutes (the App Manager caches stable ~10 min), and whenever the page comes back into view.

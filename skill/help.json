@@ -404,6 +404,10 @@
       "help": "Android app, with Phone notifications per app on: your Wizard tells the phone the moment an app sends a notification, so it shows within seconds even with the phone locked (one connection over Tailscale, no Google).",
       "where": "Settings › Appearance › Try new features › Instant phone notifications"
     },
+    "wizard/phone-chat-replies": {
+      "help": "Android app: your agent's chat replies reach the phone as Notifications items under Chats; tap opens the chat.",
+      "where": "Settings › Appearance › Try new features › Chat replies as Chats notifications"
+    },
     "wizard/lock-screen-player": {
       "help": "Android app: Podcasts plays through the phone's media player (lock screen, headset buttons), like Music.",
       "where": "Settings › Appearance › Try new features › Phone media player for Podcasts"
@@ -411,6 +415,15 @@
     "wizard/app-tap-home": {
       "help": "Narrow desktop window: tapping the icon of the app in front takes it back to its first view.",
       "where": "Settings › Appearance › Try new features › Tap the app in front for its first view"
+    },
+    "wizard/share-people-box": {
+      "help": "Share's People row shows Messenger's recent chats in every window, also one that never opened Messenger.",
+      "where": "Settings › Appearance › Try new features › Share to people in any window"
+    },
+    "wizard/mac-app-updates": {
+      "help": "Wizard for Mac: About & updates gets a Wizard for Mac group: its version, up to date or not, Check for updates, Update and restart, Download.",
+      "where": "Settings › Appearance › Try new features › Wizard for Mac in About & updates",
+      "when": "Wizard for Mac only"
     },
     "wizard/download-swipe": {
       "help": "Phone: swipe the Downloaded banner away and swipe the Downloads sheet down to close it.",
@@ -477,6 +490,10 @@
     "wizard/try-feature-counts": {
       "help": "Sends features you tried and your thumbs, plus a random box id.",
       "where": "Settings › Appearance › Try new features › Share feature counts"
+    },
+    "wizard/phone-tester-builds": {
+      "help": "Phones get the newest tester build.",
+      "where": "Settings › Appearance › Try new features › Phone tester builds"
     }
   },
   "screenOrder": [

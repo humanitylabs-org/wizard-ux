@@ -199,9 +199,12 @@ public final class AppNotify {
         if (!canNotify(c)) return;
         String name = AppNotifyPolicy.channelName(n.app, names);
         String ch = channel(c, n.app, names);
-        Uri open = Uri.parse(AppNotifyPolicy.target(origin, n.link, n.app));
-        Intent i = new Intent(Intent.ACTION_VIEW, open, c, MainActivity.class)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        // A chat reply (wizard-ux issue 1619) opens its thread through the same handoff as the reply watcher's notes.
+        Intent i = n.thread != null
+                ? new Intent(c, MainActivity.class).setAction(MainActivity.ACTION_THREAD).putExtra(MainActivity.EXTRA_THREAD, n.thread)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                : new Intent(Intent.ACTION_VIEW, Uri.parse(AppNotifyPolicy.target(origin, n.link, n.app)), c, MainActivity.class)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
         String tag = "app-note:" + n.id;
         PendingIntent pi = PendingIntent.getActivity(c, tag.hashCode(), i, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         String title = n.title.isEmpty() ? name : n.title;
@@ -215,6 +218,8 @@ public final class AppNotify {
                 .setWhen((long) (n.time * 1000))
                 .setShowWhen(true);
         if (!n.text.isEmpty()) b.setContentText(n.text).setStyle(new Notification.BigTextStyle().bigText(n.text));
+        // The thread goes along, so reading it anywhere in Wizard clears this note (ReplyWatcher.clearThread / active).
+        if (n.thread != null) b.setCategory(Notification.CATEGORY_MESSAGE).addExtras(ReplyWatcher.threadExtras(n.thread));
         try {
             c.getSystemService(NotificationManager.class).notify(tag, N_ID, b.build());
         } catch (RuntimeException e) { Log.w(TAG, "post: " + e); }
