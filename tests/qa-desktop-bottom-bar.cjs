@@ -1,0 +1,172 @@
+'use strict';
+// Bottom app bar on desktop (wizard-ux issue 1692, switch wizard/desktop-bottom-bar, off by default), in a real browser:
+// the one-app layout of the narrower window (tests/qa-desktop-one-app.cjs, whose steps this runs) at every width while
+// the switch is on. Per width with QA_SWITCH=on (default): the app across the main area above the bottom bar (Chats
+// first, the orb at the centre, All apps last, each item at most 96 px wide and the row centred), Chats with its list
+// beside the chat, one click each way, the app keeping its state; resizing keeps the bar; turning the switch off brings
+// the side panels back at once and on again the bar, without a reload. QA_SWITCH=off: from 1100 px today's layout.
+const { chromium } = require('../tools/qa-playwright.cjs');
+const { ownerRead } = require('../tools/qa-desktop-frame-fixture.cjs');
+const fs = require('node:fs'), path = require('node:path'), assert = require('node:assert/strict');
+const repo = path.resolve(__dirname, '..'), prefix = '/wizard-os-home/', origin = 'https://narrow.test';
+const web = process.env.QA_WEB || path.join(repo, 'web'), out = process.env.QA_OUT || path.join(repo, 'bottom-bar-evidence');
+const SKINS = (process.env.QA_SKINS || 'nebula,grove').split(','), WIDTHS = (process.env.QA_WIDTHS || '1920,1440,1100,900').split(',').map(Number);
+const ID = 'wizard/desktop-bottom-bar', SW = (process.env.QA_SWITCH || 'on') !== 'off';
+fs.mkdirSync(out, { recursive: true });
+const now = Date.now(), iso = t => new Date(t).toISOString();
+const ROWS = [['qa-a', 'Trip to Lisbon'], ['qa-b', 'Quarterly numbers'], ['qa-c', 'Dinner ideas']].map(([id, title], i) => ({ id, title, runtime: 'direct', status: 'completed',
+  updated_at: iso(now - (i + 1) * 36e5), updatedAt: iso(now - (i + 1) * 36e5), last_active: (now - (i + 1) * 36e5) / 1000, message_count: 2, messageCount: 2, preview: 'Here you go.' }));
+const box = (page, s) => page.evaluate(s => { const n = document.querySelector(s); if (!n || !n.getClientRects().length) return null; const b = n.getBoundingClientRect(); const cs = getComputedStyle(n); return cs.visibility === 'hidden' || cs.display === 'none' || !b.width ? null : { x: Math.round(b.x), w: Math.round(b.width) }; }, s);
+const report = { web, cases: [] };
+// the chat's visible Back: the column's (PR 1414) or, for a new chat, one app's own
+const BACK = '.aad-cback:not([hidden]), .aad-oneback:not([hidden])';
+(async () => {
+  const browser = await chromium.launch();
+  let page;
+  try {
+    for (const skin of SKINS) for (const W of WIDTHS) {
+      const ON = SW || W < 1100, stem = `${skin}-${W}`, entry = { stem }; report.cases.push(entry);
+      const context = await browser.newContext({ viewport: { width: W, height: 760 }, serviceWorkers: 'block', reducedMotion: 'reduce' });
+      const errors = [], writes = [];
+      await context.routeWebSocket('**/*', ws => ws.close());
+      const mix = SW ? { [ID]: true } : {};
+      await context.addInitScript(({ skin, mix }) => {
+        if (window !== top) return;
+        for (const [k, v] of Object.entries({ 'wos.shell': 'desktop', 'wux.shell': 'desktop', 'wos.desktop-view.v1': 'ai-apps', 'wos.coached': 'true', 'wos.tour.v1': 'true', 'wos.welcome.v1': 'done', 'wos.skin': skin,
+          'wos.skin-tweaks.v1': JSON.stringify({ version: 1, preset: 'none', off: {}, mix }) })) localStorage.setItem(k, v);
+      }, { skin, mix });
+      await context.route('**/*', async r => {
+        const q = r.request(), u = new URL(q.url());
+        if (u.origin !== origin) return r.abort();
+        if (u.pathname.includes('/v1/runs')) return r.abort();
+        if (!['GET', 'HEAD'].includes(q.method())) { writes.push(q.method() + ' ' + u.pathname); return r.fulfill({ status: 403, json: { error: 'QA refuses all writes' } }); }
+        if ([prefix + 'store/index.html', prefix + 'agents/index.html'].includes(u.pathname)) return r.fulfill({ contentType: 'text/html', body: '<!doctype html><style>body{background:#fff;color:#111}</style><h1>Synthetic app</h1><input value="">' });
+        if (u.pathname === '/wizard/v1/ui-preferences') return r.fulfill({ json: { migrations: { 'launcher-seed-v1': true } } });
+        if (u.pathname === '/wizard/hermes/api/sessions') return r.fulfill({ json: { data: ROWS, has_more: false } });
+        const m = /^\/wizard\/hermes\/api\/sessions\/([^/]+)\/messages/.exec(u.pathname);
+        if (m) return r.fulfill({ json: { data: [{ id: 'u1', role: 'user', content: 'Plan it for ' + m[1], created_at: now / 1000 - 99 }, { id: 'a1', role: 'assistant', content: 'Done: a plan for ' + m[1] + '.', created_at: now / 1000 - 90 }], has_more: false } });
+        if (u.pathname.startsWith('/wizard/')) return r.fulfill({ json: ownerRead(u.pathname) });
+        if (u.pathname.startsWith(prefix)) {
+          const f = decodeURIComponent(u.pathname.slice(prefix.length) || 'index.html'), abs = path.resolve(web, f);
+          if (abs.startsWith(web + path.sep) && fs.existsSync(abs) && fs.statSync(abs).isFile()) return r.fulfill({ path: abs });
+        }
+        return r.fulfill({ json: { apps: [], agents: [], sessions: [], connected: false } });
+      });
+      page = await context.newPage(); page.on('pageerror', e => errors.push(e.message));
+      await page.goto(origin + prefix + 'desktop.html');
+      await page.waitForFunction(() => window.__wux && document.documentElement.dataset.aiApps === 'desktop' && !WosWelcome.active && !WosExperience.state.busy && document.querySelector('.ch-compose'));
+      const settle = async () => { await page.waitForTimeout(350); await page.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))); };
+      const shot = async name => { await settle(); await page.screenshot({ path: path.join(out, `${stem}-${name}.png`) }); };
+      const ds = () => page.evaluate(() => ({ ...document.documentElement.dataset }));
+      await settle();
+      assert.equal((await page.evaluate(() => String(document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/desktop-bottom-bar'))), SW, stem + ': the switch is ' + (SW ? 'on' : 'off'));
+      await shot('1-home');
+      if (ON) {
+        // ux#1495: Home's message bar sits fully above the app bar (it ran under it; tests/qa-desktop-one-app-composer.cjs has more sizes)
+        const mb = await page.evaluate(() => { const bar = document.querySelector('.aad-vt').getBoundingClientRect();
+          const c = [...document.querySelectorAll('.ch-compose')].find(n => n.getBoundingClientRect().width > 40 && getComputedStyle(n).visibility !== 'hidden');
+          return c && { bottom: Math.round(c.getBoundingClientRect().bottom), barTop: Math.round(bar.top) }; });
+        // (under 680 px Home is the chats list alone: no message bar to check)
+        if (W >= 680) assert.ok(mb && mb.bottom <= mb.barTop + 1, stem + ': Home\'s message bar above the app bar ' + JSON.stringify(mb));
+      }
+      // an app: the store, with an unsent word typed into it
+      await page.evaluate(() => __wux.openApp(WizCore.apps('desktop').APP['app-store']));
+      const store = page.frameLocator('iframe[src*="/store/index.html"]').locator('input');
+      await store.waitFor(); await store.fill('unsent words');
+      await page.waitForFunction(() => document.documentElement.hasAttribute('data-aad-split') || document.documentElement.dataset.aadOne === 'app');
+      await shot('2-app');
+      const vbox = s => page.evaluate(s => { const n = document.querySelector(s); if (!n) return null; const b = n.getBoundingClientRect(), cs = getComputedStyle(n); return cs.visibility === 'hidden' || !b.width ? null : { x: Math.round(b.x), y: Math.round(b.y), w: Math.round(b.width), h: Math.round(b.height) }; }, s);
+      entry.app = { side: await box(page, '.aad-side'), app: await vbox('#stage > .wsp[data-aad-role="app"]'), dock: await vbox('.aad-vt'), chats: await vbox('.aad-vt .aad-vchats'), orb: await vbox('.aad-orb'), all: await vbox('.aad-vt .aad-vall'), modes: await box(page, '.aad-ptop .aad-modes'), ds: await ds() };
+      if (!ON) {
+        assert.equal(entry.app.ds.aadOne, undefined, stem + ': today\'s layout'); assert.notEqual(entry.app.ds.aadTabs, 'bar'); assert.equal(entry.app.chats, null, stem + ': no Chats item');
+        assert.ok(entry.app.dock && entry.app.dock.x + entry.app.dock.w === W && entry.app.dock.h > 600, stem + ': the Apps column at the right');
+      } else {
+        assert.equal(entry.app.side, null, stem + ': no sidebar beside the app');
+        assert.equal(entry.app.ds.aadTabs, 'bar'); assert.equal(entry.app.ds.aadDockEdge, 'bottom');
+        const d = entry.app.dock, a = entry.app.app;
+        assert.ok(d && d.x === 0 && d.w === W && d.y + d.h === 760 && d.h < 90, stem + ': the bar along the bottom ' + JSON.stringify(d));
+        assert.ok(a && a.x <= 1 && a.x + a.w >= W - 1 && a.y + a.h <= d.y + 1, stem + ': the app fills the main area above the bar ' + JSON.stringify(entry.app));
+        assert.ok(entry.app.chats && entry.app.all && entry.app.chats.x < entry.app.all.x, stem + ': Chats first, All apps last');
+        const o = entry.app.orb; assert.ok(o && Math.abs(o.x + o.w / 2 - W / 2) <= 2 && o.y >= d.y - 2, stem + ': the orb at the bar\'s centre ' + JSON.stringify(o));
+        // ux#1552: sized to the bar (its drawn glow ~1.3x the box stays inside the bar), not the wide window's 60 px
+        assert.ok(o.w <= 46 && o.w >= 40 && o.y + o.h <= d.y + d.h && o.w * 1.3 <= d.h, stem + ': the orb fits the bar ' + JSON.stringify({ o, d }));
+        assert.ok(await page.evaluate(() => [...document.querySelectorAll('.aad-vt .aad-vtab')].every(t => { const r = t.getBoundingClientRect(); return r.width > 20 && getComputedStyle(t).visibility !== 'hidden'; })), stem + ': every open app shows in the bar');
+        assert.equal(entry.app.modes, null, stem + ': no pane modes');
+        // a wide window: the bar's items keep their size (at most 96 px) and sit centred, never stretched across
+        const items = await page.evaluate(() => [...document.querySelectorAll('.aad-vt :is(.aad-vchats, .aad-vtab, .aad-vall)')].filter(n => n.getClientRects().length).map(n => { const r = n.getBoundingClientRect(); return { x: Math.round(r.x), w: Math.round(r.width) }; }));
+        entry.app.items = items;
+        assert.ok(items.length >= 3 && items.every(i => i.w <= 96), stem + ': bar items at most 96 px ' + JSON.stringify(items));
+        const lo = Math.min(...items.map(i => i.x)), hi = Math.max(...items.map(i => i.x + i.w));
+        assert.ok(Math.abs((lo + hi) / 2 - W / 2) <= 60, stem + ': the bar row centred ' + JSON.stringify({ lo, hi }));
+        // Chats: from the app, one click, painted on the click's own frame
+        const sameFrame = await page.evaluate(() => new Promise(res => { const c = document.querySelector('.aad-vt .aad-vchats'); c.click(); res(document.documentElement.dataset.aadOne); }));
+        assert.equal(sameFrame, 'chats', stem + ': Chats in front on the same frame as the click');
+        await shot('3-chats');
+        entry.chats = { side: await box(page, '.aad-side'), list: await box(page, '.aad-side .aad-scroll'), ds: await ds() };
+        assert.ok(entry.chats.side, stem + ': the chats list shows');
+        await page.click('.aad-side .aad-row[data-id="qa-a"], .aad-side [data-sid="qa-a"]', { timeout: 3000 }).catch(async () => { await page.evaluate(() => __wux.openThread('qa-a')); });
+        await page.waitForFunction(() => /qa-a/.test(location.href + JSON.stringify(WizCore?.route?.() || '')) || document.querySelector('.ch-msgs') && document.body.innerText.includes('Done: a plan for qa-a'));
+        await shot('4-thread');
+        entry.thread = { side: await box(page, '.aad-side'), chat: await box(page, '#stage > .wsp[data-aad-role="chat"], #stage > .wsp:not([hidden]) .win .dchats'), back: await box(page, BACK), ds: await ds() };
+        if (W >= 680) assert.ok(entry.thread.side, stem + ': list beside the chat from 680 px');
+        else {
+          assert.equal(entry.thread.side, null, stem + ': the chat alone when narrower');
+          assert.ok(entry.thread.back && entry.thread.back.x < W / 2, stem + ': a visible Back at the top left');
+          await page.keyboard.press('Escape'); await settle();
+          assert.ok(await box(page, '.aad-side'), stem + ': Esc shows the list');
+          await shot('5-list-again');
+          // at the list, Back goes to the app that was in front before Chats, its word still there (issues 1314, 1452)
+          await page.keyboard.press('Escape'); await settle();
+          await page.waitForFunction(() => document.documentElement.dataset.aadOne === 'app');
+          assert.equal(await store.inputValue(), 'unsent words', stem + ': Back from the list: the app before, as it was');
+          assert.ok(await page.evaluate(() => !!window.__wux), stem + ': still in Wizard');
+          await page.click('.aad-vt .aad-vchats'); await settle();
+          if (!(await box(page, '.aad-side'))) { await page.locator(BACK).filter({ visible: true }).first().click(); await settle(); }
+          assert.ok(await box(page, '.aad-side'), stem + ': Chats again, its list');
+          // the same chat's row again: the chat (still open behind the list)
+          await page.locator('.aad-side .aad-rw[data-sid="qa-a"] .aad-row').filter({ visible: true }).first().click(); await settle();
+          assert.equal(await box(page, '.aad-side'), null, stem + ': its row shows the chat again');
+          await page.locator(BACK).filter({ visible: true }).first().click(); await settle();
+          assert.ok(await box(page, '.aad-side'), stem + ': the visible Back shows the list');
+        }
+        // one click on the app: in front again, its word still there
+        await page.click('.aad-vt .aad-vtab[data-app="app-store"]');
+        await page.waitForFunction(() => document.documentElement.dataset.aadOne === 'app');
+        assert.equal(await store.inputValue(), 'unsent words', stem + ': the app kept its state');
+        await shot('6-app-again');
+        if (SW && W === 1440) {
+          // resizing keeps the bar at every width (the narrow layout's own steps below 680 px stay as they are)
+          await page.setViewportSize({ width: 1920, height: 760 }); await settle();
+          assert.equal((await ds()).aadTabs, 'bar', stem + ': still the bar at 1920');
+          await page.setViewportSize({ width: 1440, height: 760 }); await settle();
+          // the switch off: today's side panels at once, no reload; on again: the bar
+          const mark = await page.evaluate(() => (window.__qaMark = Math.random()));
+          await page.evaluate(id => WosExperience.toggle(id), ID); await settle();
+          await page.waitForFunction(() => document.documentElement.dataset.aadTabs !== 'bar');
+          const offDs = await ds();
+          assert.equal(offDs.aadOne, undefined, stem + ': switch off = today'); assert.notEqual(offDs.aadTabs, 'bar');
+          assert.equal(await box(page, '.aad-vt .aad-vchats'), null, stem + ': no Chats item with the switch off');
+          const col = await page.evaluate(() => { const b = document.querySelector('.aad-vt').getBoundingClientRect(); return { x: Math.round(b.x), w: Math.round(b.width), h: Math.round(b.height) }; });
+          assert.ok(col.x + col.w === 1440 && col.h > 600, stem + ': the Apps column back at the right ' + JSON.stringify(col));
+          await shot('7-switched-off');
+          await page.evaluate(id => WosExperience.toggle(id), ID); await settle();
+          await page.waitForFunction(() => document.documentElement.dataset.aadTabs === 'bar');
+          assert.ok((await ds()).aadOne, stem + ': on again = the bar');
+          assert.equal(await page.evaluate(() => window.__qaMark), mark, stem + ': no reload');
+          await shot('8-switched-on');
+        }
+        if (!SW && W === 900) {
+          await page.setViewportSize({ width: 1200, height: 760 }); await settle();
+          const wideDs = await ds();
+          assert.equal(wideDs.aadOne, undefined, stem + ': switch off, wide again = today'); assert.notEqual(wideDs.aadTabs, 'bar');
+        }
+      }
+      assert.deepEqual(errors, [], stem + ': page errors');
+      entry.writes = writes;
+      await context.close();
+    }
+    fs.writeFileSync(path.join(out, 'report.json'), JSON.stringify(report, null, 2));
+    console.log('PASS desktop bottom app bar', SW ? 'on' : 'off', SKINS.join(','), WIDTHS.join(','));
+  } catch (e) { await page?.screenshot({ path: path.join(out, 'failure.png') }).catch(() => {}); fs.writeFileSync(path.join(out, 'partial-report.json'), JSON.stringify(report, null, 2)); throw e; }
+  finally { await browser.close(); }
+})().catch(e => { console.error(e); process.exit(1); });

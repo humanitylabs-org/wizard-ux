@@ -1,0 +1,2 @@
+/* Bottom app bar on desktop (wizard-ux issue 1692): layouts/ai-apps/desktop.js keeps the one-app layout at every width
+ * while this switch is on; desktop.css draws it as for the narrower window, so nothing more is needed here. */
