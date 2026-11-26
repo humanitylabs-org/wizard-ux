@@ -75,6 +75,8 @@ export function appmenuPart({ aadVars, api, canPin, chanTitle, closeAll, closeMe
     // helper pill either way: the spinner already shows it (James, 7 Nov 2026).
     const ask = s.workingAsk && !globalThis.WosThreadTracker?.onFor?.(ttAgent(s.id)) ? s.workingAsk : null; // main agent only
     if (ask) title.append(el('span', 'aad-working-ask', { text: `${ask.state === 'needs_you' ? 'Needs you' : 'Your call'}: ${ask.ask}` }));
+    // Smart inbox (wizard-ux issue 1883): a failed chat in Inbox says why in one line.
+    if (s.failWhy) title.append(el('span', 'aad-working-ask aad-fail-why', { text: s.failWhy }));
     // Channels on (issue 1256): the chat's channel, muted on a second line, as in Chats' Activity
     if (s.channel) title.append(el('span', 'aad-chan-line', { text: `# ${s.channel}` }));
     if (s.channel && typeof chanTitle === 'function') title.lastChild.textContent = chanTitle({ name: s.channel, general: s.channel === 'General' }); // (issue 1506: its emoji, not #)
@@ -94,6 +96,7 @@ export function appmenuPart({ aadVars, api, canPin, chanTitle, closeAll, closeMe
     if (mk !== null ? s.kind === 'working' || mk === 'needs' || mk === 'new' : s.kind === 'working' || (s.kind === 'ready' && s.unread)) b.append(el('i', 'aad-st' + (s.kind === 'working' ? '' : mk === 'needs' ? ' is-needs' : ' is-new'), { 'aria-hidden': 'true' }));
     b.setAttribute('aria-label', `${s.note ? 'Notification: ' : ''}${s.title}${s.kind === 'working' ? ', working' : s.kind === 'snoozed' ? ', snoozed' : s.unread ? ', ready, new' : s.snoozed && s.note ? ', snoozed' : s.kind === 'ready' ? ', ready' : ''}${s.pinned ? ', pinned' : ''}`);
     if (ask) b.setAttribute('aria-label', `${b.getAttribute('aria-label')}, ${ask.state === 'needs_you' ? 'Needs you' : 'Your call'}: ${ask.ask}`);
+    if (s.failWhy) b.setAttribute('aria-label', `${b.getAttribute('aria-label')}, ${s.failWhy}`);
     if (mk === 'needs') b.setAttribute('aria-label', `${b.getAttribute('aria-label')}, needs you`);
     if (s.channel) b.setAttribute('aria-label', `${b.getAttribute('aria-label')}, in # ${s.channel}${s.agentName ? `, ${s.agentName}` : ''}`);
     if (s.draft) b.setAttribute('aria-label', `${b.getAttribute('aria-label')}, unsent draft`);

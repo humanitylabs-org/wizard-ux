@@ -13,7 +13,8 @@ window.WizCore.chatsParts.inboxrows = function ({ actMark, actNeeds, actUnread, 
   const IB_SWITCH = 'wizard/inbox-rows';
   function inboxRowsOn() { try { return (document.documentElement.dataset.tweaks || '').split(' ').includes(IB_SWITCH); } catch (_) { return false; } }
   // Sent's thread rows (wizard-ux issue 1880) carry the same Archive button.
-  function ibSentThreads() { try { return (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/sent-threads'); } catch (_) { return false; } }
+  // (Smart inbox, wizard-ux issue 1883, shows Sent as threads too.)
+  function ibSentThreads() { try { const t = (document.documentElement.dataset.tweaks || '').split(' '); return t.includes('wizard/sent-threads') || t.includes('wizard/smart-inbox'); } catch (_) { return false; } }
   const ibModel = () => window.WizChatsListModel;
   const ibQuiet = s => !!LIVE.quietReply?.(s);
   const ibBare = t => String(t || '').replace(/^[^\p{L}\p{N}]+/u, '').trim().toLowerCase();
@@ -60,7 +61,8 @@ window.WizCore.chatsParts.inboxrows = function ({ actMark, actNeeds, actUnread, 
   function ibLine(s) {
     const a = attOf(s);
     if (a && ['needs_you', 'check'].includes(a.state) && a.ask) return a.ask;
-    if (['failed', 'interrupted'].includes(s.status)) return window.WosModels?.runError?.(s)?.line || 'Didn’t finish · open it to retry';
+    // Smart inbox (wizard-ux issue 1883): a failure in Inbox says why when the box knows (the named reason).
+    if (['failed', 'interrupted'].includes(s.status)) return window.WosModels?.smartFail?.(s)?.line || window.WosModels?.runError?.(s)?.line || 'Didn’t finish · open it to retry';
     return s.previewRole === 'user' ? 'You: ' + (s.preview || '') : s.preview || '';
   }
   const IB_ARCH_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16v3H4zM6 10v9h12v-9M10 14h4"/></svg>';
