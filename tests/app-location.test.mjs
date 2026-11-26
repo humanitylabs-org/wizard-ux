@@ -37,7 +37,7 @@ async function shell({ on = false, snapshot = { apps: [MAPS, NOTES] }, cached = 
 
 // A frame as the shell draws it: attributes plus a same-origin page that can be reloaded.
 function frame(attrs, href) {
-  const f = { attrs: { ...attrs }, reloads: 0, getAttribute(k) { return this.attrs[k] ?? null; }, setAttribute(k, v) { this.attrs[k] = v; },
+  const f = { attrs: { ...attrs }, reloads: 0, srcSets: 0, getAttribute(k) { return this.attrs[k] ?? null; }, setAttribute(k, v) { if (k === 'src') this.srcSets++; this.attrs[k] = v; },
     get src() { return this.attrs.src || ''; } };
   f.contentWindow = { location: { href: href || attrs.src || '', reload: () => { f.reloads++; } } };
   return f;
@@ -60,9 +60,9 @@ test('switch on: only the app that declared location (Maps) gets it; any other a
   assert.equal(s.allow({ id: 'maps' }), BASE + "; geolocation 'none'", 'reads the switch at every frame, never a stale copy');
 });
 
-test('turning the switch off takes location back from an open Maps frame (here or from another device): allow + reload', async () => {
+test('turning the switch off takes location back from an open Maps frame, and on gives it back (allow + reload)', async () => {
   const maps = frame({ 'data-own-app': 'maps', src: '/maps/', allow: BASE + '; geolocation' });
-  const sheet = frame({ allow: 'microphone; clipboard-read; clipboard-write; fullscreen; geolocation' }, 'https://wizard.test/maps/?q=x');
+  const sheet = frame({ class: 'ls-frame', allow: 'microphone; clipboard-read; clipboard-write; fullscreen; geolocation' }, 'https://wizard.test/maps/?q=x');
   const notes = frame({ 'data-own-app': 'wizard-notes', src: '/notes/', allow: BASE + "; geolocation 'none'" });
   const s = await shell({ on: true, frames: [maps, sheet, notes] });
   s.flip(true);
@@ -72,8 +72,31 @@ test('turning the switch off takes location back from an open Maps frame (here o
   assert.equal(sheet.attrs.allow, "microphone; clipboard-read; clipboard-write; fullscreen; geolocation 'none'");
   assert.deepEqual([maps.reloads, sheet.reloads, notes.reloads], [1, 1, 0]);
   s.flip(true);
-  assert.equal(maps.attrs.allow, BASE + "; geolocation 'none'", 'never grants on its own; the next frame drawn asks');
-  assert.equal(maps.reloads, 1);
+  assert.equal(maps.attrs.allow, BASE + '; geolocation', 'on again: the open Maps frame may ask again (the browser still asks the owner)');
+  assert.equal(sheet.attrs.allow, 'microphone; clipboard-read; clipboard-write; fullscreen; geolocation');
+  assert.equal(notes.attrs.allow, BASE + "; geolocation 'none'");
+  assert.deepEqual([maps.reloads, sheet.reloads, notes.reloads], [2, 2, 0]);
+});
+
+test('a Maps frame drawn before the box\'s app list arrived (fresh start, ?open=maps) gains location once the list says so', async () => {
+  // The shell draws from the device cache, which never grants, so the first frame says 'none'.
+  const maps = frame({ 'data-own-app': 'maps', class: 'appframe', src: '/maps/', allow: BASE + "; geolocation 'none'" }, 'https://wizard.test/maps/');
+  const pinned = frame({ class: 'appframe', src: '/maps/', allow: BASE + "; geolocation 'none'" }, 'about:blank');
+  const notes = frame({ 'data-own-app': 'wizard-notes', class: 'appframe', src: '/notes/', allow: BASE + "; geolocation 'none'" });
+  const hidden = frame({ class: 'appframe', 'data-voice-service': 'maps', src: '/maps/', allow: "geolocation 'none'" });
+  const settings = frame({ src: '/maps/embed', allow: "geolocation 'none'" });
+  const s = await shell({ on: true, snapshot: null, cached: [MAPS], frames: [maps, pinned, notes, hidden, settings] });
+  assert.equal(s.allow({ id: 'maps' }), BASE + "; geolocation 'none'", 'before the box answers');
+  await new Promise(r => setTimeout(r, 0)); // the first read (the box did not answer) has settled
+  await s.relist({ apps: [MAPS, NOTES] });
+  assert.equal(maps.attrs.allow, BASE + '; geolocation');
+  assert.equal(pinned.attrs.allow, BASE + '; geolocation', 'the pinned app page too (by its address)');
+  assert.deepEqual([maps.reloads, pinned.reloads], [1, 0], 'a frame still on its blank first page restarts from its src instead');
+  assert.equal(pinned.srcSets, 1);
+  for (const f of [notes, hidden, settings]) assert.equal(f.attrs.allow.endsWith("geolocation 'none'"), true);
+  assert.deepEqual([notes.reloads, hidden.reloads, settings.reloads], [0, 0, 0]);
+  await s.relist({ apps: [MAPS, NOTES] });
+  assert.equal(maps.reloads, 1, 'a second read of the same list reloads nothing');
 });
 
 test('an app that stops declaring location loses it on the next box read', async () => {

@@ -22,7 +22,7 @@ const shellPage = on => `<!doctype html><html data-tweaks="${on ? 'wizard/app-lo
   addEventListener('message', e => results.push(e.data));
   WizCore.appsLoaded().then(() => {
     for (const id of ['maps', 'wizard-notes']) {
-      const f = document.createElement('iframe');
+      const f = document.createElement('iframe'); f.className = 'appframe'; f.dataset.ownApp = id;
       f.setAttribute('allow', WizCore.frameAllow('microphone; clipboard-read; clipboard-write; autoplay; fullscreen', { id }));
       f.src = id === 'maps' ? '/maps/' : '/notes/';
       document.body.appendChild(f);
@@ -67,6 +67,14 @@ const shellPage = on => `<!doctype html><html data-tweaks="${on ? 'wizard/app-lo
       if (!pass) failed++;
       out.revoked = again;
       console.log(`${pass ? 'PASS' : 'FAIL'} switch on->off with Maps open: /maps/ reloads -> ${again.ok ? 'position ' + again.lat : 'denied (code ' + again.code + ')'}`);
+      // On again with Maps still open (or the box's app list arriving after Maps was drawn): Maps may ask again.
+      await page.evaluate(() => { window.results.length = 0; document.documentElement.setAttribute('data-tweaks', 'wizard/app-location'); });
+      await page.waitForFunction(() => window.results.some(x => x.app === '/maps/'), null, { timeout: 15000 });
+      const back = (await page.evaluate(() => window.results)).find(x => x.app === '/maps/');
+      const passBack = back.ok === true && back.lat === 52.37;
+      if (!passBack) failed++;
+      out.restored = back;
+      console.log(`${passBack ? 'PASS' : 'FAIL'} switch off->on with Maps open: /maps/ reloads -> ${back.ok ? 'position ' + back.lat : 'denied (code ' + back.code + ')'}`);
     }
     await ctx.close();
   }

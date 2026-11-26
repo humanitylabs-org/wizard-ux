@@ -140,25 +140,35 @@
     const yes = !!app && Array.isArray(app.permissions) && app.permissions.includes('geolocation');
     return `${base ? base + '; ' : ''}geolocation${yes ? '' : " 'none'"}`;
   };
-  // Turning the switch off (here or from another device), or an app no longer declaring it, takes location back from a
-  // frame that is already open: its `allow` loses `geolocation` and the frame reloads, because a browser applies a
-  // frame's `allow` only to its next page. It never grants on its own: a frame drawn after the switch turns on asks.
+  // Keeps every open frame's location rule in step with the switch and the box's app list. Off (here or from another
+  // device), or an app no longer declaring it: the frame loses `geolocation`. On, or the box's list arriving after an
+  // app's frame was drawn (a fresh start, ?open=maps, a restored window: the shell draws before the box answers): an
+  // app's own frame that declared it gains `geolocation`. Either way the frame reloads, because a browser applies a
+  // frame's `allow` only to its next page. Gaining it never grants anything: the browser or phone still asks the owner.
+  // Only app frames gain it (an app window, the pinned app page, the link sheet), never a hidden service frame.
   const LOC_ON = /(^|;)\s*geolocation\s*(;|$)/;
+  const appFrame = f => !f.getAttribute('data-voice-service') && (!!f.getAttribute('data-own-app') || /(^|\s)(appframe|ls-frame)(\s|$)/.test(String(f.getAttribute('class') || '')));
   const relockLocation = () => {
     let frames = [];
     try { frames = [...document.querySelectorAll('iframe[allow]')]; } catch (_) { return 0; }
     let n = 0;
     for (const f of frames) {
       const allow = String(f.getAttribute('allow') || '');
-      if (!LOC_ON.test(allow)) continue;
+      if (!/(^|;)\s*geolocation\b/.test(allow)) continue;
+      const had = LOC_ON.test(allow);
+      if (!had && !appFrame(f)) continue;
       const base = allow.split(';').map(x => x.trim()).filter(x => x && !/^geolocation\b/.test(x)).join('; ');
       const id = f.getAttribute('data-own-app') || '';
-      let url = f.getAttribute('src') || '';
-      try { url = f.contentWindow.location.href || url; } catch (_) {}
+      // The page the frame shows now; a frame still on its first blank page (or one we can't read) restarts from src.
+      let live = ''; try { live = f.contentWindow.location.href || ''; } catch (_) {}
+      if (live === 'about:blank') live = '';
+      const url = live || f.getAttribute('src') || '';
+      if (!id && !url) continue;
       const next = window.WizCore.frameAllow(base, id ? { id } : { url });
-      if (LOC_ON.test(next)) continue;
+      if (LOC_ON.test(next) === had) continue;
       f.setAttribute('allow', next); n++;
-      try { f.contentWindow.location.reload(); } catch (_) { try { f.setAttribute('src', f.src); } catch (_) {} }
+      if (live) { try { f.contentWindow.location.reload(); continue; } catch (_) {} }
+      try { const src = f.getAttribute('src'); if (src) f.setAttribute('src', src); } catch (_) {}
     }
     return n;
   };
