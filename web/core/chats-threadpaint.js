@@ -49,6 +49,8 @@ window.WizCore.chatsParts.threadpaint = function ({ ACT, actionLabel, agentName,
     else if (!turns && !isNew && !pend.length) msgs = c.err && (c.failN > 1 || c.err !== 'Couldn’t load this thread') ? threadErrHtml(c) : skelThread();
     else {
       const all = turns || [];
+      // Reply buttons (wizard-ux issue 1889): what each group has picked, read from this thread's turns (turnHtml).
+      c.rbPicks = window.WosActionCards?.replyOn?.() ? window.WosActionCards.replyPicks(all, w.thread) : null;
       if (c.showFor !== w.thread) {
         const shown = PW?.RP.read(w.thread)?.shown;
         c.show = Number.isInteger(shown) ? Math.max(PAGE, Math.min(all.length, shown)) : PAGE; c.showFor = w.thread;

@@ -245,13 +245,18 @@ window.WizCore.chatsParts.attach = function ({ ch, CHEV_SVG, clip, COG_SVG, draf
       ? `<button type="button" class="pbtn" data-chretry${c.retrying ? ' disabled' : ''}>${c.retrying ? 'Retrying…' : 'Retry'}</button>` : '';
     // The same words sent again after an unfinished turn (see parseRows) are a quiet line, not a second bubble. It keeps
     // the message ids so going to that message (a quote's header, a tracker row) still lands on it.
-    if (tn.u?.again && !unsent) h += `<div class="ch-renamed ch-again"${isFinite(tn.u.at) ? ` data-morph-key="u${tn.u.at}"` : ''}${msgIds(tn.u, undefined, tt)}><span>Sent again${isFinite(tn.u.at) ? ` · ${esc(KIT.time.stamp(tn.u.at))}` : ''}</span></div>`;
+    // The owner's reply-button taps (wizard-ux issue 1889, core/action-cards.js): a quiet machine line, never his words.
+    const RB = globalThis.WosActionCards?.replyOn?.() ? globalThis.WosActionCards : null;
+    const tapsIn = u => (RB && u ? u.taps || KIT.tapsOf?.(u.text)?.taps || [] : []); // a local copy still carries the raw text
+    const taps = unsent ? [] : tapsIn(tn.u);
+    if (taps.length) h += `<div class="ch-renamed ch-taps" data-rb-taps${isFinite(tn.u.at) ? ` data-morph-key="u${tn.u.at}"` : ''}${msgIds(tn.u, undefined, tt)}>${RB.tapLinesHtml(taps)}${isFinite(tn.u.at) ? `<span class="ch-rb-at">${esc(KIT.time.stamp(tn.u.at))}</span>` : ''}</div>`;
+    else if (tn.u?.again && !unsent) h += `<div class="ch-renamed ch-again"${isFinite(tn.u.at) ? ` data-morph-key="u${tn.u.at}"` : ''}${msgIds(tn.u, undefined, tt)}><span>Sent again${isFinite(tn.u.at) ? ` · ${esc(KIT.time.stamp(tn.u.at))}` : ''}</span></div>`;
     else if (tn.u) h += `<div class="msg u${tn.u.reply ? ' has-rq' : ''}${unsent ? ' unsent' : ''}"${isFinite(tn.u.at) ? ` data-morph-key="u${tn.u.at}"` : ''}${msgIds(tn.u, undefined, tt)}><div class="bub">${replyCard(tn.u.reply)}${userMedia(c, tn.u.files, tn.u.images)}${tn.u.text ? md(tn.u.text) : ''}</div><div class="mmeta">${unsent ? `<span class="pst fail" data-unsent>Not sent · message saved</span>${unsentRetry}` : ''}${timeTag(tn.u.at)}${quoteBtn(tt)}</div></div>`;
     else if (tn.note) h += noteHtml(tn.note);
     else if (tn.later) h += runContextHtml(tn.later);
     // A send a graceful restart holds is not live work: no Working timer under it (renderThread sets c.restartHeld).
     const live = last && working && !c.restartHeld;
-    const steersHtml = (tn.steers || []).map(st => st.note ? noteHtml(st) : `<div class="msg u steer" data-steer><div class="bub">${userMedia(c, st.files || [], [])}${md(st.text)}</div><div class="mmeta"><span class="srcpt">${CHECK_SVG}Read by ${esc(window.WizConfig.agent())}</span>${timeTag(st.at)}</div></div>`).join('');
+    const steersHtml = (tn.steers || []).map(st => st.note ? noteHtml(st) : tapsIn(st).length ? `<div class="ch-renamed ch-taps steer" data-rb-taps>${RB.tapLinesHtml(tapsIn(st))}</div>` : `<div class="msg u steer" data-steer><div class="bub">${userMedia(c, st.files || [], [])}${md(st.text)}</div><div class="mmeta"><span class="srcpt">${CHECK_SVG}Read by ${esc(window.WizConfig.agent())}</span>${timeTag(st.at)}</div></div>`).join('');
     const wk = PW ? PW.workHtml(c, tn, live, helperStatus) : null; // the work receipt (chat-work.js #17)
     if (wk != null) h += wk;
     else if (tn.steps || tn.notes.length || live) {
@@ -265,15 +270,18 @@ window.WizCore.chatsParts.attach = function ({ ch, CHEV_SVG, clip, COG_SVG, draf
       const k = text ? c.texts.push(text) - 1 : -1;
       const bAt = tn.a?.at ?? tn.mediaAt;
       const placed = new Set();
-      const sweep = tn.a?.sweep && typeof sweepHtml === 'function' ? sweepHtml(tn.a.sweep) : '';
-      const body = sweep || (tn.a ? md(tn.a.text, (url, marker) => {
+      const mediaHook = (url, marker) => {
         if (!marker || tn.a.inlineMedia?.[marker] !== url) return null;
         const image = tn.media.find(m => m.kind === 'image' && m.url === url);
         if (!image) return null; // no metadata: keep the ordinary safe image link
         if (placed.has(image.id)) return '';
         placed.add(image.id);
         return mediaBlock(c, [image]); // same thumbnail, gallery and viewer as bottom attachments
-      }) : '');
+      };
+      // Reply buttons (wizard-ux issue 1889): each group drawn where its line sits; off, the text keeps their labels.
+      const rbBody = RB && !tn.a?.sweep && tn.a?.buttons?.length ? RB.replyHtml(tn.a.btext || tn.a.text, tn.a.buttons, t => md(t, mediaHook), c.rbPicks) : '';
+      const sweep = tn.a?.sweep && typeof sweepHtml === 'function' ? sweepHtml(tn.a.sweep) : '';
+      const body = sweep || (typeof rbBody === 'string' && rbBody) || (tn.a ? md(tn.a.text, (url, marker) => mediaHook(url, marker)) : '');
       const lead = summaryOf(tn.a), rk = esc(String(bAt));
       const open = !!lead && (c.rsum?.get(String(bAt)) ?? summaryStartsOpen());
       const shown = lead ? `<button type="button" class="rsum" data-reply-summary="${rk}" aria-expanded="false"${open ? ' hidden' : ''}><span class="rsum-t">${esc(leadText(lead))}</span>${CHEV_SVG}</button>`
