@@ -261,7 +261,7 @@
       }
     },
     "wizard": {
-      "help": "Wizard: whether this device is connected (Connected, Connecting…, Sign-in needed) and its address; interface and server update separately. Technical details shows the interface revision. Gestures & help opens How Wizard works on the phone (orb, desks, Back, Practice again) and the keys guide on the desktop. On Android also Recording, Reply notifications and the app's version (tap it to update).",
+      "help": "Wizard: whether this device is connected (Connected, Connecting…, Sign-in needed) and its address; interface and server update separately. Technical details shows the interface revision. Gestures & help: How Wizard works (phone) or the keys guide (desktop). On Android also Recording, Reply notifications and the app's version (tap it to update).",
       "controls": {
         "Wizard": null,
         "Connected": "this device's connection to your Wizard",
@@ -393,6 +393,10 @@
       "help": "Installing a personal-data app suggests private AI.",
       "where": "Settings › Appearance › Try new features › Install sheet recommends private AI"
     },
+    "wizard/get-set-up": {
+      "help": "Setup lists optional accounts to connect.",
+      "where": "Settings › Appearance › Try new features › Get set up list in Setup"
+    },
     "wizard/private-mode": {
       "help": "Settings › Privacy: Private mode, Privacy check.",
       "where": "Settings › Appearance › Try new features › Private mode switch-over"
@@ -454,7 +458,7 @@
       "where": "Settings › Appearance › Try new features › Tap the app in front for its first view"
     },
     "wizard/attach-menu-icons": {
-      "help": "Android app: the menu from + in a chat (and the orb's Attach) shows a round icon before Photo or video, Camera and File, on bigger rows that are easier to tap.",
+      "help": "Android app: the + menu in a chat (and the orb's Attach) shows icons before Photo or video, Camera and File, on bigger rows.",
       "where": "Settings › Appearance › Try new features › Icons on the attach menu",
       "when": "Android app only"
     },

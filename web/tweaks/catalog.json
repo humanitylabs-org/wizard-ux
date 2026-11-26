@@ -65,7 +65,8 @@
     "wizard/private-routing",
     "wizard/result-reader",
     "wizard/private-ai-nudge",
-    "wizard/pin-instant-open"
+    "wizard/pin-instant-open",
+    "wizard/get-set-up"
   ],
   "defaults": [],
   "promotedDefaults": [],
