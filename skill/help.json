@@ -1,6 +1,6 @@
 {
   "_note": "Owner-facing help lines for the agent's Wizard interface manual. tools/build-agent-manual.mjs joins them with what the interface code really draws and writes skill/SKILL.md; tests/agent-manual.test.mjs fails when something on screen has no line here. Plain words, no internal module names. A control set to null is drawn but needs no words of its own.",
-  "description": "Where is, what is, how to: any Wizard setting or screen. Use when the owner asks what something in Wizard is, where a setting or screen is, or how to do something in Wizard on the phone or computer (Settings pages and rows, Try new features switches, updates, Chats, Home, apps, voice). Load it before wizard-guide for these; it is generated from this Wizard's interface.",
+  "description": "Where is, what is, how to: any Wizard setting or screen. Use when the owner asks what something in Wizard is, where a setting or screen is, or how to do something in Wizard on the phone or computer (Settings pages and rows, Try new features switches, updates, Chats, Home, apps, voice). Load it before wizard-guide for these.",
   "intro": [
     "# Wizard interface manual",
     "",
@@ -13,7 +13,7 @@
     "- Names in Wizard: the agent is 'Wizard' (or the name the owner gave it); 'WizardOS' is the server software; the interface on phone and desktop is just 'Wizard'."
   ],
   "settingsIntro": [
-    "Open Settings: desktop, the cog at the bottom left under the chats list (older Desks view: the top-bar gear, ⌥,); phone, the gear at the top right of Home or an empty desk, or hold the orb and say 'settings'. Settings is a list of pages under System and Preferences; on a wide screen the list is on the left and the page on the right. A page with nothing on it is hidden. Pages are the same on phone and desktop, except rows that only exist on one of them (named below).",
+    "Open Settings: desktop, the cog at the bottom left under the chats list (older Desks view: the top-bar gear, ⌥,); phone, the gear at the top right of Home or an empty desk, or hold the orb and say 'settings'. Settings is a list of pages under System and Preferences (wide screen: list left, page right). A page with nothing on it is hidden. Pages are the same on phone and desktop, except rows that only exist on one of them (named below).",
     "Search settings: the box at the top of the Settings list. Typing keeps only the pages that mention the words and marks them on the open page, scrolled to the first; Esc clears it, Enter opens the first page."
   ],
   "switchesIntro": [
@@ -365,7 +365,7 @@
       "where": "Settings › Chats & app screens › Notifications › Notifications in Chats (on for everyone)"
     },
     "miguel/ai-apps": {
-      "help": "The AI apps view: chats in a sidebar on the left that folds to a slim rail, the chat in a centred column, your apps in a column on the right; an app opens as a panel beside the chat.",
+      "help": "The AI apps view: chats in a left sidebar that folds to a slim rail, the chat in a centred column, your apps in a right column; an app opens beside the chat.",
       "where": "desktop: Settings › Appearance › Shell view › AI apps (the standard desktop view; Desks is the other choice)",
       "when": "desktop only"
     },
@@ -424,6 +424,10 @@
     "wizard/app-location": {
       "help": "Only apps whose wizard.md asks for location (today Maps) may use it, after your browser's or phone's own yes; others stay blocked.",
       "where": "Settings › Appearance › Try new features › Location for Maps"
+    },
+    "wizard/pin-instant-open": {
+      "help": "Android: pinned app icons open at once on their last screen.",
+      "where": "Settings › Appearance › Try new features › Instant home-screen apps"
     },
     "wizard/phone-badge-look": {
       "help": "Android: Messenger icon count shows the exact number in a One UI-style corner badge.",
@@ -540,6 +544,10 @@
     "wizard/try-feature-counts": {
       "help": "Sends features you tried and your thumbs, plus a random box id.",
       "where": "Settings › Appearance › Try new features › Share feature counts"
+    },
+    "wizard/feature-counts-ask": {
+      "help": "Shared only after you say Share.",
+      "where": "Settings › Appearance › Try new features › Ask before sharing feature counts"
     },
     "wizard/phone-tester-builds": {
       "help": "Phones get the newest tester build.",
@@ -680,7 +688,7 @@
     },
     "layout:ai-apps": {
       "name": "AI apps view (desktop)",
-      "help": "The standard desktop. Left: the chats sidebar (switch Wizard at the top, search ⌥K, ◫ folds it to a rail ⌥L, the cog for Settings and + New chat at the bottom). Middle: the open chat, message box, model and orb. Right: the Apps column (pinned apps, open apps, + Add an app, Tidy). ⌥1–⌥0 pick an app, ⌥W closes, ⌥F makes the app panel wider, ⌥R folds the column, ⌥H hides both sides. Its sidebar's sort options: Settings › Chats & app screens."
+      "help": "The standard desktop. Left: the chats sidebar (Wizard switcher, search ⌥K, ◫ folds it ⌥L, Settings cog, + New chat below). Middle: the open chat, message box, model and orb. Right: the Apps column (pinned apps, open apps, + Add an app, Tidy). ⌥1–⌥0 pick an app, ⌥W closes, ⌥F widens the app panel, ⌥R folds the column, ⌥H hides both sides. Sidebar sort: Settings › Chats & app screens."
     },
     "layout:apps": {
       "name": "Apps view",

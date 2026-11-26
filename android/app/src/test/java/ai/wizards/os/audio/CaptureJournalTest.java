@@ -302,6 +302,9 @@ public class CaptureJournalTest {
         allow(allowed, "update/Updater.java", "f.delete()", "x.delete()", "f.delete()");
         allow(allowed, "apps/AppsInstaller.java", "f.delete()", "file(app,sha).delete()");
         allow(allowed, "MainActivity.java", "f.delete()", "d.delete()");
+        // Instant home-screen apps (wizard-ux issue 1830): kept copies of box files and pictures of app screens, never audio.
+        allow(allowed, "PinCache.java", "dir.delete()", "f.delete()", "f.delete()", "f.delete()", "f.delete()", "fileOf(url).delete()", "tmp.delete()");
+        allow(allowed, "PinInstant.java", "tmp.delete()");
         final Path root = base;
         try (Stream<Path> paths = Files.walk(root)) {
             for (Path file : (Iterable<Path>) paths.filter(p -> p.toString().endsWith(".java"))::iterator) {

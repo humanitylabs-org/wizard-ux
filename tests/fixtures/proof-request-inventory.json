@@ -1123,6 +1123,12 @@
       "kind": "read",
       "note": "Conservative path literal census (including static paths). Not requested by these three proofs; refused and collected if reached."
     },
+    "/wizard-os-home/pin-instant-open.json": {
+      "status": "not-exercised",
+      "source": "web/core/offline-session.js",
+      "kind": "read",
+      "note": "Instant home-screen apps (wizard-ux issue 1830, switch wizard/pin-instant-open, off): a Cache Storage key the shell page writes and the shell worker reads, never a network request."
+    },
     "/wizard-os-home/store-install/_slots/chats": {
       "status": "not-exercised",
       "source": "web/core/settings.js",

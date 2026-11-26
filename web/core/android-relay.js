@@ -227,6 +227,25 @@
   window.addEventListener('wos:experience', () => { chatSettled = true; locationSync(); });
   setTimeout(() => { chatSettled = true; locationSync(); }, 5000);
   locationSync();
+  /* Instant home-screen apps (wizard-ux issue 1830, switch wizard/pin-instant-open, off by default). A home-screen app
+   * window is a new Android window with its own page, so the Android app does the work (PinInstant): skip Connecting
+   * when Wizard was just reached, show the app's last screen at once, keep app files on the phone. The main page copies
+   * the switch there; off once settled. */
+  const PIN_SWITCH = 'wizard/pin-instant-open';
+  let pinWas = null;
+  function pinSync() {
+    const n = window.WizardOSNative; if (!n || typeof n.pinInstantSwitch !== 'function' || window.WizHomeScreenPolicy?.mode) return;
+    let on = false; try { on = (document.documentElement.dataset.tweaks || '').split(' ').includes(PIN_SWITCH); } catch (_) {}
+    if (!on && !chatSettled) return;
+    if (on === pinWas) return;
+    pinWas = on; try { n.pinInstantSwitch(on); } catch (_) {}
+  }
+  if (typeof MutationObserver === 'function' && document.documentElement) {
+    new MutationObserver(() => pinSync()).observe(document.documentElement, { attributes: true, attributeFilter: ['data-tweaks'] });
+  }
+  window.addEventListener('wos:experience', () => { chatSettled = true; pinSync(); });
+  setTimeout(() => { chatSettled = true; pinSync(); }, 5000);
+  pinSync();
   /* One UI-style icon count (wizard-ux issue 1669, switch wizard/phone-badge-look, off by default). The Messenger
    * home-screen icon's count is drawn by the Android app (badge/BadgeLook): exact digits up to 999 in a ringless
    * orange-red badge at the tile's corner. The main page copies the switch there; off once settled. */
