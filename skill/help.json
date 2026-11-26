@@ -413,8 +413,8 @@
       "where": "Settings › Appearance › Try new features › Chat replies as Chats notifications"
     },
     "wizard/lock-screen-player": {
-      "help": "Android app: Podcasts plays through the phone's media player (lock screen, headset buttons), like Music.",
-      "where": "Settings › Appearance › Try new features › Phone media player for Podcasts"
+      "help": "Phone app (Android and iPhone): Music and Podcasts play through the phone's own media player (lock screen, Control Center, headset buttons), and keep playing locked.",
+      "where": "Settings › Appearance › Try new features › Phone media player for Music and Podcasts"
     },
     "wizard/app-tap-home": {
       "help": "Narrow desktop window: tapping the icon of the app in front takes it back to its first view.",
