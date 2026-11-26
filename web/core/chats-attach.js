@@ -207,6 +207,8 @@ window.WizCore.chatsParts.attach = function ({ ch, CHEV_SVG, clip, COG_SVG, draf
   // Issue 1331: Needs you in the thread makes Reply standard (turnHtml's tt: main agent) and retires the tracker itself.
   const msgIds = (m, at, tt = true) => (tt && m ? `${m.id != null ? ` data-mid="${esc(String(m.id))}"` : ''}${isFinite(at ?? m.at) ? ` data-mat="${at ?? m.at}"` : ''}` : '');
   const quoteBtn = (tt = true) => (tt ? '<button type="button" data-mquote aria-label="Reply to this message" title="Reply"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 6 6v3"/></svg>Reply</button>' : '');
+  // wizard-agent-service issue 650: reply buttons are drawn only while the owner's switch is on (read live, like other switches).
+  const replyChoicesOn = () => { try { return (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/first-chat-goals'); } catch (e) { return false; } };
   // needs: the amber Needs you line (issue 1331) drawn right above this turn's reply bubble.
   function turnHtml(c, tn, last, working, helperStatus, reconnect, tt = true, needs = '') {
     let h = '';
@@ -260,7 +262,10 @@ window.WizCore.chatsParts.attach = function ({ ch, CHEV_SVG, clip, COG_SVG, draf
       const tweak = tn.a?.tweaks?.length ? window.WosSettings?.tweakCard?.(tn.a.tweaks) || '' : '';
       // An app's proposed action the reply carries (WIZARD_ACTION_V1, wizard-ux issue 1463): core/action-cards.js, '' while off.
       const action = tn.a?.actions?.length ? window.WosActionCards?.html?.(tn.a.actions) || '' : '';
-      h += (needs || '') + `<div class="msg a${lead ? ` has-rsum${open ? ' rsum-open' : ''}` : ''}"${isFinite(bAt) ? ` data-boom-at="${bAt}" data-morph-key="a${bAt}"` : ''}${msgIds(tn.a, bAt, tt)}><div class="bub">${shown}${tweak}${mediaBlock(c, tn.media.filter(m => !placed.has(m.id)))}${action}</div>`
+      // Tap-to-pick replies (WIZARD_CHOICES_V1, wizard-agent-service issue 650, switch wizard/first-chat-goals): only under
+      // the newest finished answer, so they go once the owner answers; a tap sends that text (core/chats-bind.js).
+      const picks = last && !working && tn.a?.choices?.length && replyChoicesOn() ? `<div class="ch-choices" role="group" aria-label="Pick a reply">${tn.a.choices.map(t => `<button type="button" data-chchoice="${esc(t)}">${esc(t)}</button>`).join('')}</div>` : '';
+      h += (needs || '') + `<div class="msg a${lead ? ` has-rsum${open ? ' rsum-open' : ''}` : ''}"${isFinite(bAt) ? ` data-boom-at="${bAt}" data-morph-key="a${bAt}"` : ''}${msgIds(tn.a, bAt, tt)}><div class="bub">${shown}${tweak}${mediaBlock(c, tn.media.filter(m => !placed.has(m.id)))}${action}${picks}</div>`
         + `<div class="mmeta">${timeTag(tn.a?.at ?? tn.mediaAt)}${k >= 0 ? `<button type="button" data-mcopy="${k}" aria-label="Copy response">${COPY_SVG}Copy</button><button type="button" data-mshare="${k}" aria-label="Share response">${SHARE_SVG}Share</button>` : ''}${quoteBtn(tt)}${k >= 0 && last && !working && regenOn() ? '<button type="button" data-mregen aria-label="Regenerate response">↻ Regenerate</button>' : ''}</div></div>`;
     }
     return h;
