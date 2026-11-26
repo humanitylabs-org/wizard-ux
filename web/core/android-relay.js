@@ -112,7 +112,9 @@
     const n = chatNative(); if (!n) return;
     const on = chatOn();
     // Switches are painted onto the page a little after load: an off is applied once they have settled, so a start
-    // never turns the listener off and on again.
+    // never turns the listener off and on again. Settled means the 5 s timer below, never the first wos:experience:
+    // that can come before this device's own switches are applied (wizard-ux issue 1865). The same holds for every
+    // switch below that waits for chatSettled.
     if (!on && !chatSettled) return;
     if (on !== chatWas) { chatWas = on; try { n.chatNotifySwitch(on); } catch (_) {} if (on) chatHidden = false; }
     chatBar(on && !chatHidden && chatState(n).access === false);
@@ -130,7 +132,7 @@
   if (typeof MutationObserver === 'function' && document.documentElement) {
     new MutationObserver(() => chatSync()).observe(document.documentElement, { attributes: true, attributeFilter: ['data-tweaks'] });
   }
-  window.addEventListener('wos:experience', () => { chatSettled = true; chatSync(); });
+  window.addEventListener('wos:experience', () => { chatSync(); });
   setTimeout(() => { chatSettled = true; chatSync(); }, 5000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) chatSync(); });
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => chatSync()); else chatSync();
@@ -155,7 +157,7 @@
   if (typeof MutationObserver === 'function' && document.documentElement) {
     new MutationObserver(() => noteSync()).observe(document.documentElement, { attributes: true, attributeFilter: ['data-tweaks'] });
   }
-  window.addEventListener('wos:experience', () => { chatSettled = true; noteSync(); });
+  window.addEventListener('wos:experience', () => { noteSync(); });
   setTimeout(() => { chatSettled = true; noteSync(); }, 5000);
   noteSync();
 
@@ -204,7 +206,7 @@
   if (typeof MutationObserver === 'function' && document.documentElement) {
     new MutationObserver(() => pushSync()).observe(document.documentElement, { attributes: true, attributeFilter: ['data-tweaks'] });
   }
-  window.addEventListener('wos:experience', () => { chatSettled = true; notifySync(); pushSync(); });
+  window.addEventListener('wos:experience', () => { notifySync(); pushSync(); });
   setTimeout(() => { chatSettled = true; pushSettled = true; notifySync(); pushSync(); }, 5000);
   notifySync();
   pushSync();
@@ -224,7 +226,7 @@
   if (typeof MutationObserver === 'function' && document.documentElement) {
     new MutationObserver(() => locationSync()).observe(document.documentElement, { attributes: true, attributeFilter: ['data-tweaks'] });
   }
-  window.addEventListener('wos:experience', () => { chatSettled = true; locationSync(); });
+  window.addEventListener('wos:experience', () => { locationSync(); });
   setTimeout(() => { chatSettled = true; locationSync(); }, 5000);
   locationSync();
   /* Instant home-screen apps (wizard-ux issue 1830, switch wizard/pin-instant-open, off by default). A home-screen app
@@ -243,7 +245,7 @@
   if (typeof MutationObserver === 'function' && document.documentElement) {
     new MutationObserver(() => pinSync()).observe(document.documentElement, { attributes: true, attributeFilter: ['data-tweaks'] });
   }
-  window.addEventListener('wos:experience', () => { chatSettled = true; pinSync(); });
+  window.addEventListener('wos:experience', () => { pinSync(); });
   setTimeout(() => { chatSettled = true; pinSync(); }, 5000);
   pinSync();
   /* One UI-style icon count (wizard-ux issue 1669, switch wizard/phone-badge-look, off by default). The Messenger
@@ -261,7 +263,7 @@
   if (typeof MutationObserver === 'function' && document.documentElement) {
     new MutationObserver(() => badgeSync()).observe(document.documentElement, { attributes: true, attributeFilter: ['data-tweaks'] });
   }
-  window.addEventListener('wos:experience', () => { chatSettled = true; badgeSync(); });
+  window.addEventListener('wos:experience', () => { badgeSync(); });
   setTimeout(() => { chatSettled = true; badgeSync(); }, 5000);
   badgeSync();
   /* Recovery mode (wizard-ux issue 1775, switch wizard/phone-recovery-mode, off by default). When a start of the Android
@@ -280,7 +282,7 @@
   if (typeof MutationObserver === 'function' && document.documentElement) {
     new MutationObserver(() => recoverySync()).observe(document.documentElement, { attributes: true, attributeFilter: ['data-tweaks'] });
   }
-  window.addEventListener('wos:experience', () => { chatSettled = true; recoverySync(); });
+  window.addEventListener('wos:experience', () => { recoverySync(); });
   setTimeout(() => { chatSettled = true; recoverySync(); }, 5000);
   recoverySync();
   // The installed Wizard app a page of this Wizard belongs to (the longest app address it lies under), or the app a
