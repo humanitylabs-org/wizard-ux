@@ -73,7 +73,8 @@ window.WizCore.chatsParts.ready = function ({ actNeeds, actUnread, CH, chanAt, e
   /* Inbox until archived (wizard-ux issue 1810, switch wizard/inbox-until-archived): every thread stays in Inbox until it
    * is archived, so Ready, its count and the badges are the Inbox. Read from the root's data-tweaks (the list model is pure). */
   // Inbox rows (wizard-ux issue 1779) keep every Inbox row until it is archived too, so the shells read it as Inbox.
-  function inboxKeep() { try { const t = document.documentElement.dataset.tweaks, M = window.WizChatsListModel; return !!(M?.inboxKeep?.(t) || M?.inboxRowsOn?.(t)); } catch (_) { return false; } }
+  // Sent as threads (wizard-ux issue 1880) needs the one-place rule as well: a thread is in Inbox or in Sent, never both.
+  function inboxKeep() { try { const t = document.documentElement.dataset.tweaks, M = window.WizChatsListModel; return !!(M?.inboxKeep?.(t) || M?.inboxRowsOn?.(t) || M?.sentThreadsOn?.(t)); } catch (_) { return false; } }
   window.WizCore.inboxKeep = inboxKeep;
   window.WizCore.inboxPlace = inboxPlace;
   window.WizCore.inboxIds = inboxIds;

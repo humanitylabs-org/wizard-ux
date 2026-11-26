@@ -7,7 +7,7 @@
  * body below keeps chats.js's indentation so `git log -L` and patches port over. */
 window.WizCore = window.WizCore || {};
 window.WizCore.chatsParts = window.WizCore.chatsParts || {};
-window.WizCore.chatsParts.rowacts = function ({ ACT, actRestore, actUndo, BOOM, ch, CH, closeRowSheet, followUpActive, H, keepThreadOpen, leaveFinishedThread, LIVE, markDone, notifAct, openChannelSheet, openRowSheet, owner, paintListsNow, rowOf, sentSheet, threadBack, toast, vib, W }) {
+window.WizCore.chatsParts.rowacts = function ({ ACT, actRestore, actUndo, BOOM, ch, CH, closeRowSheet, followUpActive, H, keepThreadOpen, leaveFinishedThread, LIVE, markDone, notifAct, openChannelSheet, openRowSheet, owner, paintListsNow, rowOf, sentSends, sentSheet, threadBack, toast, vib, W }) {
   let renderChats; // late-bound: chats.js declares these after the call, see bindLate
   async function threadAct(wid, sid, a) {
     wid = owner(wid);
@@ -60,7 +60,8 @@ window.WizCore.chatsParts.rowacts = function ({ ACT, actRestore, actUndo, BOOM, 
   // A Sent row (wizard-ux issue 1814, switch wizard/sent-rows) is a row too: its sheet holds the routing corrections.
   const ROW_MENU = '.ch-list [data-chopen], .ch-list .ch-notif-row[data-chnotif], .ch-list [data-chchan], .ch-list [data-chsent]';
   // A channel line opens the channel sheet; every other row its thread or alert sheet.
-  const rowMenu = (wid, row) => row?.dataset.chchan ? openChannelSheet(wid, row.dataset.chchan, row) : row?.dataset.chsent ? sentSheet?.(wid, row.dataset.chsent) : openRowSheet(wid, row?.dataset.chopen, row?.dataset.chnotif);
+  // A thread row in Sent (wizard-ux issue 1880, switch wizard/sent-threads) opens the thread's own sheet plus its sends.
+  const rowMenu = (wid, row) => row?.dataset.chchan ? openChannelSheet(wid, row.dataset.chchan, row) : row?.dataset.chsent ? sentSheet?.(wid, row.dataset.chsent) : (openRowSheet(wid, row?.dataset.chopen, row?.dataset.chnotif), row?.dataset.chsentthread ? sentSends?.(wid, row.dataset.chsentthread) : undefined);
   const NOTE_ACT = { done: ACT.done, snooze: { ...ACT.snooze, label: 'Snooze' }, unread: ACT.unread };
   // On a folded row (several from one app) every action covers the whole fold.
   async function noteRowAct(nid, a, ids) {
