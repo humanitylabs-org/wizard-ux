@@ -159,11 +159,11 @@ Phone: things only the Android app can do: Wizard Everywhere (floating orb), sid
 
 ## Feature switches (Settings › Appearance › Try new features)
 
-Settings › Appearance › Try new features lists unfinished features anyone can switch on to try, A to Z, each 'by <author>'. The group only shows when this Wizard is on the For testers channel (Settings › About & updates › Channel › For testers); on For everyone it is hidden and these switches stay off. The same switches are also in the WizardOS Tracker app (Try it). A choice follows the owner on every device.
+Settings › Appearance › Try new features lists unfinished features anyone can switch on to try, A to Z, each 'by <author>'. The group only shows when this Wizard is on the For testers channel; on For everyone it is hidden and these switches stay off. The same switches are also in the WizardOS Tracker app (Try it). A choice follows the owner on every device.
 
 - **Action cards in chat**: An app's proposed action (a draft, an event) shows in chat with Approve, Edit, Open in app.
 - **Add an app: search the App Store too**: Add an app's search also finds App Store apps.
-- **Agent access under the browser boundary**: Browser boundary on: Connected accounts' Agent access shows and sets agents per account app.
+- **Agent access under the browser boundary**: Connected accounts' Agent access works under the browser boundary.
 - **Agent knows the Wizard interface**: Your agent gets this manual: every screen, Settings page and feature switch, so it can say where things are.
 - **Agents run code without asking**: Container agents run code without an approval nobody sees (Agents: Just run, Ask me, Refuse); prompts wait an hour.
 - **App switches in chat**: A reply's switch card also lists an app's own feature switches, flipped right in the chat.

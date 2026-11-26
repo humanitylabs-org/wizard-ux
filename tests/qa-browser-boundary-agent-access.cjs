@@ -20,12 +20,15 @@ const WEB = process.env.QA_WEB ? path.resolve(process.env.QA_WEB) : path.join(__
 const APPDIR = process.env.QA_APP ? path.resolve(process.env.QA_APP) : '';
 const APPURL = process.env.QA_APP_URL || '', APPOWNER = process.env.QA_APP_OWNER || '';
 // The box ingress stand-in: the request as the browser sent it (method, body, Origin, Sec-Fetch-*), plus the owner bearer.
+// Only the app's own plain paths; the app server's host and port are fixed (QA_APP_URL).
+const APPBASE = APPURL ? new URL(APPURL) : null;
+const APPPATH = /^(?:[a-z0-9_-]+(?:\.[a-z0-9]+)?\/?)*$/i;
 function proxy(req, res, rest, body) {
-  const target = new URL(rest + (new URL(req.url, 'http://x').search), APPURL.replace(/\/?$/, '/'));
-  const headers = { host: target.host };
+  if (!APPPATH.test(rest)) { res.statusCode = 400; return res.end(''); }
+  const headers = { host: APPBASE.host };
   for (const h of ['origin', 'sec-fetch-site', 'sec-fetch-mode', 'sec-fetch-dest', 'content-type', 'accept', 'cookie']) if (req.headers[h]) headers[h] = req.headers[h];
   if (APPOWNER) headers.authorization = 'Bearer ' + APPOWNER;
-  const out = http.request(target, { method: req.method, headers }, up => {
+  const out = http.request({ hostname: APPBASE.hostname, port: APPBASE.port, path: APPBASE.pathname.replace(/\/?$/, '/') + rest, method: req.method, headers }, up => {
     seen.push({ method: req.method, path: '/connected-accounts/' + rest, app: up.statusCode, site: req.headers['sec-fetch-site'] || '', origin: req.headers.origin || '' });
     res.writeHead(up.statusCode, up.headers); up.pipe(res);
   });

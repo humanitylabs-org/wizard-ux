@@ -17,7 +17,7 @@
     "Search settings: the box at the top of the Settings list. Typing keeps only the pages that mention the words and marks them on the open page, scrolled to the first; Esc clears it, Enter opens the first page."
   ],
   "switchesIntro": [
-    "Settings › Appearance › Try new features lists unfinished features anyone can switch on to try, A to Z, each 'by <author>'. The group only shows when this Wizard is on the For testers channel (Settings › About & updates › Channel › For testers); on For everyone it is hidden and these switches stay off. The same switches are also in the WizardOS Tracker app (Try it). A choice follows the owner on every device."
+    "Settings › Appearance › Try new features lists unfinished features anyone can switch on to try, A to Z, each 'by <author>'. The group only shows when this Wizard is on the For testers channel; on For everyone it is hidden and these switches stay off. The same switches are also in the WizardOS Tracker app (Try it). A choice follows the owner on every device."
   ],
   "pages": {
     "overview": {
@@ -369,7 +369,7 @@
       "when": "desktop only"
     },
     "wizard/boundary-agent-access": {
-      "help": "Browser boundary on: Connected accounts' Agent access shows and sets agents per account app.",
+      "help": "Connected accounts' Agent access works under the browser boundary.",
       "where": "Settings › Appearance › Try new features › Agent access under the browser boundary"
     },
     "wizard/clear-chat-notifications": {
