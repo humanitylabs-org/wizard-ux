@@ -389,6 +389,10 @@
       "help": "Container agents run code without an approval nobody sees (Agents: Just run, Ask me, Refuse); prompts wait an hour.",
       "where": "Settings › Appearance › Try new features › Agents run code without asking"
     },
+    "wizard/private-mode": {
+      "help": "Turn private mode on or off on this Wizard: chosen apps move to a private Tinfoil agent, plus the Privacy check.",
+      "where": "Settings › Appearance › Try new features › Private mode switch-over"
+    },
     "wizard/private-first-setup": {
       "help": "New installs start private: Welcome leads with Tinfoil; Claude and ChatGPT are optional extras.",
       "where": "Settings › Appearance › Try new features › Private first setup"

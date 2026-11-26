@@ -57,7 +57,8 @@
     "wizard/app-location",
     "wizard/boundary-agent-access",
     "wizard/phone-badge-look",
-    "wizard/sent-threads"
+    "wizard/sent-threads",
+    "wizard/private-mode"
   ],
   "defaults": [],
   "promotedDefaults": [],
