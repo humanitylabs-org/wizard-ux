@@ -164,7 +164,7 @@ Settings › Appearance › Try new features lists unfinished features anyone ca
 - **Action cards in chat**: An app's proposed action (a draft, an event) shows in chat with Approve, Edit, Open in app.
 - **Add an app: search the App Store too**: Add an app's search also finds App Store apps.
 - **Agent knows the Wizard interface**: Your agent gets this manual: every screen, Settings page and feature switch, so it can say where things are.
-- **Agents run code without asking**: Container agents run code without an approval nobody sees; prompts wait an hour, then show Expired.
+- **Agents run code without asking**: Container agents run code without an approval nobody sees (Agents: Just run, Ask me, Refuse); prompts wait an hour.
 - **App switches in chat**: A reply's switch card also lists an app's own feature switches, flipped right in the chat.
 - **Archive on top**: Archive is the first section of the Chats list in both By day and By status, so switching layouts never moves it.
 - **Calm Agent Service restarts**: While the Agent Service waits for running chats to restart, you see a quiet note, not errors; a message sent meanwhile sends after the restart; if overdue, choose Wait longer or Restart now.

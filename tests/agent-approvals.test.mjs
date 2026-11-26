@@ -89,13 +89,17 @@ this.permsHtml = permsHtml;`, ctx);
   return ctx;
 }
 
-test('Agents app: the Run code without asking toggle shows only when the Service offers it', () => {
+test('Agents app: the Code and commands choice shows only when the Service offers it', () => {
   const off = agentsPage();
-  assert.doesNotMatch(off.permsHtml({ wizard_apps: [], unattended_approvals: 'approve' }, { privacy: 'private', editable: true }), /data-unattended/, 'switch off: no toggle');
-  const on = agentsPage({ approvals: { unattended: ['approve', 'deny'], default: 'approve', window_s: 3600 } });
+  assert.doesNotMatch(off.permsHtml({ wizard_apps: [], unattended_approvals: 'approve' }, { privacy: 'private', editable: true }), /data-unattended/, 'switch off: no choice');
+  const on = agentsPage({ approvals: { unattended: ['approve', 'ask', 'deny'], default: 'approve', window_s: 3600 } });
   assert.doesNotMatch(on.permsHtml({ wizard_apps: [] }, { privacy: 'private', editable: true }), /data-unattended/, 'the main agent and host profiles have no setting');
+  const pick = html => [...html.matchAll(/aria-checked="(true|false)" data-unattended="(\w+)"/g)].map(m => `${m[2]}:${m[1]}`);
   const yes = on.permsHtml({ wizard_apps: [], unattended_approvals: 'approve' }, { privacy: 'private', editable: true });
-  assert.match(yes, /<b>Run code without asking<\/b>/); assert.match(yes, /aria-checked="true"[^>]*data-unattended/);
+  assert.match(yes, /Code and commands/); assert.deepEqual(pick(yes), ['approve:true', 'ask:false', 'deny:false']);
+  assert.match(yes, /without asking/);
+  const ask = on.permsHtml({ wizard_apps: [], unattended_approvals: 'ask' }, { privacy: 'standard', editable: true });
+  assert.deepEqual(pick(ask), ['approve:false', 'ask:true', 'deny:false']); assert.match(ask, /up to an hour/);
   const no = on.permsHtml({ wizard_apps: [], unattended_approvals: 'deny' }, { privacy: 'standard', editable: true });
-  assert.match(no, /aria-checked="false"[^>]*data-unattended/); assert.match(no, /wait for your Approve/);
+  assert.deepEqual(pick(no), ['approve:false', 'ask:false', 'deny:true']); assert.match(no, /refused at once/);
 });

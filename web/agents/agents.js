@@ -25,6 +25,8 @@
   const PLUS = '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>';
   // Other agents: how much of the OTHER agents' chats this agent may see (Agent Service OTHER_AGENTS_LEVELS).
   const OTHERS = { none: 'None', titles: 'Titles', search: 'Search', read: 'Read' };
+  // wizard-agent-service issue 597 (switch wizard/agent-approvals): what a container agent does with code and flagged commands.
+  const APPROVALS = [['approve', 'Just run', 'Runs code and scripts in its own container without asking. Clearly destructive commands are refused at once.'], ['ask', 'Ask me', 'Flagged commands wait for your Approve in the chat, for up to an hour. Code it can’t ask about is refused at once.'], ['deny', 'Refuse', 'Code and flagged commands are refused at once, and the agent is told why.']];
   const FILES = [['none', 'None', 'No files at all'], ['own', 'Own folder', 'Only its own folder'], ['shared-read', 'Read shared', 'Can read your shared files'], ['shared-write', 'Read & write', 'Can read and change your shared files']];
 
   /* ---------------- data ---------------- */
@@ -238,7 +240,9 @@
       <div class="ag-card" data-agent-apps>${aa.map(a => appRow(a, 'agent')).join('') || '<div class="ag-empty-line">No agent apps, tools or connectors.</div>'}
         ${appsEditable ? `<button type="button" class="ag-add" data-add="agent">${PLUS.replace('<svg', '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2"')}Add agent app</button><button type="button" class="ag-add" data-add="tool">${PLUS.replace('<svg', '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2"')}Add tool or connector</button>` : ''}</div>
       ${privacy === 'private' ? `<div class="ag-sec">Standard chats</div><div class="ag-card"><div class="ag-tog"><span class="tx"><b>Read standard chats</b><small>Read-only search, conversation history and memory. Nothing flows back.</small></span><button type="button" class="sw" role="switch" aria-checked="${p.read_standard_chats === true}" aria-label="Read standard chats" data-standard-chats ${editable && typeof p.read_standard_chats === 'boolean' ? '' : 'disabled'}></button></div>${typeof p.read_standard_chats !== 'boolean' ? '<p class="ag-note">Available after the Agent Service update.</p>' : ''}</div>` : ''}
-      ${typeof p.unattended_approvals === 'string' && S.opts?.approvals ? `<div class="ag-sec">Approvals</div><div class="ag-card"><div class="ag-tog"><span class="tx"><b>Run code without asking</b><small>${p.unattended_approvals === 'approve' ? 'It works in its own container, so code and scripts run without waiting for you. Clearly destructive commands still ask.' : 'Code and flagged commands stop and wait for your Approve; scripts it can’t ask about are refused at once.'}</small></span><button type="button" class="sw" role="switch" aria-checked="${p.unattended_approvals === 'approve'}" aria-label="Run code without asking" data-unattended ${editable ? '' : 'disabled'}></button></div></div>` : ''}
+      ${typeof p.unattended_approvals === 'string' && S.opts?.approvals ? `<div class="ag-sec">Code and commands</div>
+      <div class="ag-seg" role="radiogroup" aria-label="Code and commands" style="--n:${APPROVALS.length}">${APPROVALS.map(([v, l]) => `<button type="button" role="radio" aria-checked="${p.unattended_approvals === v}" data-unattended="${v}" ${dis}>${l}</button>`).join('')}</div>
+      <p class="ag-note">${esc((APPROVALS.find(x => x[0] === p.unattended_approvals) || [])[2] || '')}</p>` : ''}
       <div class="ag-sec">Other agents</div>
       <div class="ag-seg" role="radiogroup" aria-label="Other agents" style="--n:${o.other_agents.length}">${o.other_agents.map(x => `<button type="button" role="radio" aria-checked="${(p.other_agents || 'none') === x.id}" data-others="${esc(x.id)}" ${dis}>${esc(x.label)}</button>`).join('')}</div>
       ${draft ? '' : `<p class="ag-note">${privacy === 'private' ? 'Sealed: no other agent can read this agent’s chats, memory or files, whatever its own setting says. The Agent Service keeps them apart; it is not encryption, so this box’s administrators (and, on an install beside your own Hermes, that Hermes) can still read them.' : 'Private agents are never readable, whatever this says.'}</p>`}`;
@@ -394,7 +398,7 @@
     if (d.files) { editPerms(p => { p.files = d.files; }, 'Files updated'); return; }
     if (d.others) { editPerms(p => { p.other_agents = d.others; }, 'Saved'); return; }
     // wizard-agent-service issue 597 (switch wizard/agent-approvals): approve or deny commands nobody is asked about.
-    if ('unattended' in d && !t.disabled) { editPerms(p => { p.unattended_approvals = p.unattended_approvals === 'approve' ? 'deny' : 'approve'; }, 'Approvals updated'); return; }
+    if (d.unattended && !t.disabled) { editPerms(p => { p.unattended_approvals = d.unattended; }, 'Saved'); return; }
     if ('standardChats' in d && !t.disabled) { editPerms(p => { p.read_standard_chats = !p.read_standard_chats; }, 'Standard chat access updated'); return; }
     if (d.add) { openSheet({ type: 'add', kind: d.add }); return; }
     if (d.addpick) {

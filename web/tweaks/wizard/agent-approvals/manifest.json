@@ -10,5 +10,5 @@
   "issues": [
     "humanitylabs-org/wizard-agent-service#597"
   ],
-  "description": "Agents in their own container (your private agent too) run code and inline scripts without waiting for an approval nobody can see, each with an on/off on its page in Agents. When one still asks you, the card waits an hour instead of five minutes and shows Expired once the agent stopped waiting, so you never approve something that then gets refused. Read by the Agent Service (wizard-agent-service issue 597); nothing in the shell changes until it is on."
+  "description": "Agents in their own container (your private agent too) run code and inline scripts without waiting for an approval nobody can see, with a choice on its page in Agents (Just run, Ask me, Refuse). When one asks you, the card waits an hour instead of five minutes and shows Expired once the agent stopped waiting, so you never approve something that then gets refused. Read by the Agent Service (wizard-agent-service issue 597); nothing in the shell changes until it is on."
 }
