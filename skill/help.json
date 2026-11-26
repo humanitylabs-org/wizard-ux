@@ -343,9 +343,6 @@
     "miguel/calm-offline": {
       "where": "Settings › Appearance › Try new features › Calm offline card"
     },
-    "wizard/needs-you-reason": {
-      "where": "Settings › Appearance › Try new features › Say why a chat needs you"
-    },
     "wizard/failure-reason": {
       "where": "Settings › Appearance › Try new features › Why a reply failed"
     },
@@ -452,6 +449,10 @@
       "help": "Phone bar: bigger orb, one badge.",
       "where": "Settings › Appearance › Try new features › Phone bar: bigger orb, one badge",
       "when": "phone only"
+    },
+    "wizard/channel-auto-emoji": {
+      "help": "New channels get a fitting emoji.",
+      "where": "Settings › Appearance › Try new features › Channels: a fitting emoji for new channels"
     },
     "wizard/chat-tags": {
       "help": "A chat can carry several tags.",

@@ -15,7 +15,6 @@
     "miguel/reply-summary",
     "miguel/now-playing",
     "miguel/calm-offline",
-    "wizard/needs-you-reason",
     "wizard/failure-reason",
     "wizard/skins-look-only",
     "wizard/update-bug-reports",
@@ -43,7 +42,8 @@
     "wizard/sent-rows",
     "wizard/chats-title-bar",
     "wizard/phone-nav",
-    "wizard/ai-apps-running"
+    "wizard/ai-apps-running",
+    "wizard/channel-auto-emoji"
   ],
   "defaults": [],
   "promotedDefaults": [],
