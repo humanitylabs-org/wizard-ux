@@ -124,13 +124,14 @@ test('parseRows: the card row is its own turn carrying the card, and a later rep
 });
 
 // The chats.js block with the real normalizer and the real chat-kit.
-function cardBlock({ listed = [], answer, yesToAll, sweep } = {}) {
+function cardBlock({ listed = [], answer, yesToAll, sweep, privateDefault = null } = {}) {
   const box = inboxReader(() => ({ json: {} })).inbox;
   const toasts = [], paints = [];
   const ctx = {
     window: { addEventListener() {} },
     KIT: kit(), esc: v => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'),
     inboxListed: id => listed.includes(id), toast: (i, t) => toasts.push(t),
+    ...(privateDefault === null ? {} : { inboxPrivate: () => privateDefault }),
     CH: { w1: {} }, H: { win: () => ({ id: 'w1', thread: 'wizard_daily_1' }) }, renderThreadNow: () => paints.push(1),
     LIVE: { agentInbox: { card: box.card, answer: answer || (async () => ({})), yesToAll: yesToAll || (async () => ({ answered: [], card: null })), sweep: sweep || (async () => null) } },
   };
@@ -194,6 +195,16 @@ test('main versus routed: a routed agent\'s item answers by record id but never 
   const confirm = cardBlock().api.sweepHtml(card({ waiting: { items: [{ ...card().waiting.items[3], confirm: true }], more: 0 } }));
   assert.match(confirm, /Open its thread to confirm/);
   assert.doesNotMatch(confirm, /ch-sw-confirm/);
+});
+
+// wizard-agent-service issue 631: the box's private default agent (wizard/private-routing on) is not a foreign agent here.
+test('the private default agent\'s item opens like a main-agent one, naming its agent', () => {
+  const routed = card().waiting.items[3];
+  const html = cardBlock({ privateDefault: routed.agent }).api.sweepHtml(card());
+  assert.match(html, new RegExp(`data-chinboxopen="${routed.thread_id || 'wizard_routed_1'}" data-agent="${routed.agent}"[^>]*>Open<`));
+  assert.match(html, /data-session="wizard_routed_1"/, 'its thread link');
+  const other = cardBlock({ privateDefault: 'someone-else' }).api.sweepHtml(card());
+  assert.doesNotMatch(other, /data-chinboxopen="wizard_routed_1"/, 'another agent: still no Open');
 });
 
 test('not a card: no card, the markdown copy shows', () => {

@@ -1020,9 +1020,14 @@
     async inboxMove(kind, id, opts = {}) {
       if (!this.agentInbox || (kind !== 'open' && kind !== 'send')) throw new Error('Agent inbox unavailable');
       // The main agent's own row only: a routed thread may share the id (agentSessions), and is never the one moved.
-      const detail = DETAIL.get(id), fromDetail = !!detail && !otherAgent(detail.agent || '');
-      let s = this.sessions.find(x => x.id === id) || (fromDetail ? detail : null), added = false;
-      if (s && otherAgent(this.ownerOf(s))) throw Object.assign(new Error('Only the main agent’s threads move'), { status: 409 });
+      // Issue 631: also the private default agent's, while the box names one (its wizard/private-routing switch on).
+      const priv = (typeof this.agentInbox.privateDefault === 'function' && this.agentInbox.privateDefault()) || '';
+      const mine = a => !otherAgent(a || '') || (!!priv && a === priv);
+      const detail = DETAIL.get(id), fromDetail = !!detail && mine(detail.agent || '');
+      let s = this.sessions.find(x => x.id === id) || (fromDetail ? detail : null) || (priv && opts.agent === priv ? (this.agentSessions?.[priv] || []).find(x => x.id === id) || null : null), added = false;
+      if (s && !mine(this.ownerOf(s))) throw Object.assign(new Error('Only the main agent’s threads move'), { status: 409 });
+      const owner = s ? this.ownerOf(s) : opts.agent === priv ? priv : '';
+      if (priv && owner === priv) opts = { ...opts, agent: priv };
       const was = s ? !!s.hidden : null;
       if (kind === 'open') {
         if (!s && opts.title) s = normalize({ id, title: opts.title, updated_at: opts.at ? new Date(opts.at).toISOString() : new Date().toISOString(), hidden: false });

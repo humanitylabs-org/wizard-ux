@@ -51,7 +51,7 @@ window.WizCore.chatsParts.running = function ({ ago, ch, CH, chanStore, clip, es
     return `<section class="ch-sec open ch-run" data-sec="running"><div class="ch-sec-b">${r.map(x => {
       const quiet = x.state === 'stale', lead = quiet ? '<em class="att quiet">No news for 6 h:</em> ' : '';
       return `<div class="ch-row-wrap" data-morph-key="run:${esc(x.id)}"><button type="button" data-part="thread-row" class="ch-row ch-run-row${quiet ? ' quiet' : ''}" data-chrunopen="${esc(x.thread)}" title="Open thread"><span class="emo sti ${quiet ? 'deferred' : 'working'}" aria-label="${quiet ? 'No news for 6 h' : 'Working'}">${quiet ? STI.deferred : STI.working}</span>
-      <span class="bd"><span class="tp"><b>${esc(x.title || 'Background task')}</b><time>${esc(x.updatedAt ? ago(x.updatedAt) : '')}</time></span><span class="ch-run-pv">${lead}${esc(clip(x.update || '', 140))}</span><span class="ch-run-age">Running ${esc(runningFor(now - (x.createdAt || now)))}</span></span></button>${typeof inboxListed === 'function' && !inboxListed(x.thread) ? `<button type="button" class="ch-inbox-open" data-chinboxopen="${esc(x.thread)}" data-title="${esc(x.title || '')}" aria-label="Open in Chats: ${esc(x.title || 'Background task')}" title="Move it into the chat list">Open</button>` : ''}</div>`;
+      <span class="bd"><span class="tp"><b>${esc(x.title || 'Background task')}</b><time>${esc(x.updatedAt ? ago(x.updatedAt) : '')}</time></span><span class="ch-run-pv">${lead}${esc(clip(x.update || '', 140))}</span><span class="ch-run-age">Running ${esc(runningFor(now - (x.createdAt || now)))}</span></span></button>${typeof inboxListed === 'function' && !inboxListed(x.thread) ? `<button type="button" class="ch-inbox-open" data-chinboxopen="${esc(x.thread)}"${x.agent && x.agent !== 'hermes' && typeof inboxPrivate === 'function' && x.agent === inboxPrivate() ? ` data-agent="${esc(x.agent)}"` : ''} data-title="${esc(x.title || '')}" aria-label="Open in Chats: ${esc(x.title || 'Background task')}" title="Move it into the chat list">Open</button>` : ''}</div>`;
     }).join('')}</div></section>`;
   }
   function runningGo(w, on) {
@@ -72,17 +72,22 @@ window.WizCore.chatsParts.running = function ({ ago, ch, CH, chanStore, clip, es
    * LIVE.inboxMove moves the row on the tap frame and tells the box (POST /wizard/v1/agent-inbox/open|send), which also
    * keeps each tap as an example for the orb's router. Main agent threads only (the box hides only those). */
   const INBOX_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13h4l2 3h4l2-3h4M5 13l2-8h10l2 8v6H5z"/></svg>';
-  function inboxListed(id) { return LIVE.sessions.some(x => x.id === id && !x.hidden && !x.optimistic); }
+  function inboxListed(id) { const p = inboxPrivate(); return LIVE.sessions.some(x => x.id === id && !x.hidden && !x.optimistic) || (!!p && (LIVE.agentSessions?.[p] || []).some(x => x.id === id && !x.hidden && !x.optimistic)); }
+  // Issue 631: the box's private default agent (wizard/private-routing on) moves like the main agent; '' otherwise.
+  function inboxPrivate() { return (LIVE.agentInbox && typeof LIVE.agentInbox.privateDefault === 'function' && LIVE.agentInbox.privateDefault()) || ''; }
+  // A window or row of an agent other than the main one, or the private default.
+  function inboxForeign(w, s) { const p = inboxPrivate(), a = winAgent(w), o = LIVE.ownerOf ? LIVE.ownerOf(s) : ''; return (!!a && a !== p) || (!!o && o !== p); }
   // The box keeps an agent inbox: not one that answered 404 (WIZARD_AGENT_INBOX=0 or an older Service), so Open and
   // Send to inbox are never offered there; before the first answer they are (the usual case).
   function inboxBoxOn() { return !!LIVE.agentInbox && LIVE.agentInbox.state?.()?.gone !== true; }
   function inboxHidden(w, s) {
-    if (!s || !w || winAgent(w) || !inboxBoxOn() || (LIVE.ownerOf && LIVE.ownerOf(s))) return false;
+    if (!s || !w || inboxForeign(w, s) || !inboxBoxOn()) return false;
     if (inboxListed(s.id)) return false;
     return s.hidden === true || runningRecs().some(r => r.thread === s.id);
   }
   function inboxHeadHtml(w, s) {
-    return inboxHidden(w, s) ? `<span class="ch-inbox-h"><span class="ch-inbox-note">In the background</span><button type="button" class="ch-inbox-open" data-chinboxopen="${esc(s.id)}" aria-label="Open: move this thread into the chat list" title="Move it into the chat list">Open</button></span>` : '';
+    const p = inboxPrivate(), own = !!p && ((LIVE.ownerOf && LIVE.ownerOf(s)) === p || winAgent(w) === p);
+    return inboxHidden(w, s) ? `<span class="ch-inbox-h"><span class="ch-inbox-note">In the background</span><button type="button" class="ch-inbox-open" data-chinboxopen="${esc(s.id)}"${own ? ` data-agent="${esc(p)}"` : ''} aria-label="Open: move this thread into the chat list" title="Move it into the chat list">Open</button></span>` : '';
   }
   // Daily and Alerts threads always stay in Chats (issue 1569 review: the sweep card lives in today's Daily thread):
   // the box names them (stays), the row's channel says so while Channels are on, and nothing is offered in the Daily view.
@@ -93,7 +98,7 @@ window.WizCore.chatsParts.running = function ({ ago, ch, CH, chanStore, clip, es
   }
   function inboxCanSend(wid, s) {
     const w = W[wid];
-    return !!(s && w && !winAgent(w) && inboxBoxOn() && !(LIVE.ownerOf && LIVE.ownerOf(s)) && !s.hidden && !s.archived && !s.optimistic && !s.synthetic && !PIN.has(s.id) && !inboxStays(w, s));
+    return !!(s && w && !inboxForeign(w, s) && inboxBoxOn() && !s.hidden && !s.archived && !s.optimistic && !s.synthetic && !PIN.has(s.id) && !inboxStays(w, s));
   }
   function inboxRepaint(id) {
     paintListsNow();
@@ -123,7 +128,9 @@ window.WizCore.chatsParts.running = function ({ ago, ch, CH, chanStore, clip, es
   // A ?inbox= list link has no view in the shell yet (only Running has one, drawn as its own button): plain text, not a dead link.
   const sweepLink = (text, link) => link && !/^\/wizard-os-home\/\?inbox=/.test(link) ? KIT.inline(`[${sweepMd(text)}](${link})`) : esc(text);
   const sweepRunning = r => `<button type="button" class="ch-sw-run" data-chsweeprunning aria-label="Running: ${r.count}: open the Running view">Running: ${r.count}</button>`;
-  const sweepThread = (i, inner) => i.agent === 'hermes' && i.thread ? `<a href="/wizard-os-home/?session=${encodeURIComponent(i.thread)}" class="wsl" data-session="${esc(i.thread)}">${inner}</a>` : inner;
+  // A card item's thread opens here when it is the main agent's, or the private default agent's (issue 631).
+  const sweepOwn = i => i.agent === 'hermes' || (!!i.agent && typeof inboxPrivate === 'function' && i.agent === inboxPrivate());
+  const sweepThread = (i, inner) => sweepOwn(i) && i.thread ? `<a href="/wizard-os-home/?session=${encodeURIComponent(i.thread)}" class="wsl" data-session="${esc(i.thread)}">${inner}</a>` : inner;
   const sweepLabel = t => t === 'later' ? 'Later' : KIT.friendlyChoice(t);
   function sweepItemHtml(cardId, s, i) {
     const busy = s.busy[i.id], age = i.seen > 1 ? `<span class="ch-sw-age" title="Shown on ${i.seen} sweeps">Sweep ${i.seen}</span>` : '';
@@ -133,12 +140,12 @@ window.WizCore.chatsParts.running = function ({ ago, ch, CH, chanStore, clip, es
     else if (i.state === 'parked') act = '<small class="ch-sw-st">Parked</small>';
     else if (i.state === 'archived') act = '<small class="ch-sw-st">Archived</small>';
     else if (i.state === 'running') act = '<small class="ch-sw-st">Working on it</small>';
-    else if (i.confirm) act = i.agent === 'hermes' && i.thread ? `<div class="appr-b">${sweepThread(i, 'Open to confirm').replace('class="wsl"', 'class="wsl ch-sw-confirm"')}</div>` : '<small class="ch-sw-st">Open its thread to confirm</small>';
+    else if (i.confirm) act = sweepOwn(i) && i.thread ? `<div class="appr-b">${sweepThread(i, 'Open to confirm').replace('class="wsl"', 'class="wsl ch-sw-confirm"')}</div>` : '<small class="ch-sw-st">Open its thread to confirm</small>';
     else {
       const tokens = [...i.options, ...(i.options.includes('later') ? [] : ['later'])];
       act = `<div class="appr-b${tokens.length > 2 ? ' many' : ''}">${tokens.map(t => `<button type="button" data-chsweep="${esc(i.id)}" data-card="${esc(cardId)}" data-opt="${esc(t)}" class="${t === 'later' ? 'no' : ''}${t === i.def ? ' def' : ''}"${busy || s.all ? ' disabled' : ''}>${busy === t ? 'Sending…' : esc(sweepLabel(t))}</button>`).join('')}</div>`;
     }
-    const open = i.agent === 'hermes' && i.thread && !inboxListed(i.thread) ? `<button type="button" class="ch-inbox-open" data-chinboxopen="${esc(i.thread)}" data-title="${esc(i.title)}" aria-label="Open in Chats: ${esc(i.title || 'Task')}" title="Move it into the chat list">Open</button>` : '';
+    const open = sweepOwn(i) && i.thread && !inboxListed(i.thread) ? `<button type="button" class="ch-inbox-open" data-chinboxopen="${esc(i.thread)}"${i.agent !== 'hermes' ? ` data-agent="${esc(i.agent)}"` : ''} data-title="${esc(i.title)}" aria-label="Open in Chats: ${esc(i.title || 'Task')}" title="Move it into the chat list">Open</button>` : '';
     return `<li class="ch-sw-i" data-morph-key="sw:${esc(i.id)}"><div class="ch-sw-t"><b>${sweepThread(i, esc(i.title || 'Task'))}</b>${age}${open}</div>`
       + `${i.ask ? `<p class="ch-sw-ask">${esc(i.ask)}</p>` : ''}${i.recommendation ? `<p class="ch-sw-rec">Recommendation: ${esc(i.recommendation)}</p>` : ''}${act}${alertFbHtml(i.id, 'should_alert')}</li>`;
   }
