@@ -190,12 +190,14 @@
   /* Box-to-phone push (wizard-ux issue 1618, switch wizard/phone-push, off by default). On top of the switch above, the
    * Android app keeps one line to this Wizard's Notifications app open (over Tailscale, no Google) and reads each new
    * item at once, also while the phone is locked. The main page copies the switch there; off once settled. */
+  // Off is only sent once the page's switches have surely settled (5 s): the first wos:experience can come before this
+  // device's own switches are applied, and an early off would stop and restart the phone's line on every open.
   const PUSH_SWITCH = 'wizard/phone-push';
-  let pushWas = null;
+  let pushWas = null, pushSettled = false;
   function pushSync() {
     const n = window.WizardOSNative; if (!n || typeof n.appPushSwitch !== 'function' || window.WizHomeScreenPolicy?.mode) return;
     let on = false; try { on = (document.documentElement.dataset.tweaks || '').split(' ').includes(PUSH_SWITCH); } catch (_) {}
-    if (!on && !chatSettled) return;
+    if (!on && !pushSettled) return;
     if (on === pushWas) return;
     pushWas = on; try { n.appPushSwitch(on); } catch (_) {}
   }
@@ -203,7 +205,7 @@
     new MutationObserver(() => pushSync()).observe(document.documentElement, { attributes: true, attributeFilter: ['data-tweaks'] });
   }
   window.addEventListener('wos:experience', () => { chatSettled = true; notifySync(); pushSync(); });
-  setTimeout(() => { chatSettled = true; notifySync(); pushSync(); }, 5000);
+  setTimeout(() => { chatSettled = true; pushSettled = true; notifySync(); pushSync(); }, 5000);
   notifySync();
   pushSync();
   // The installed Wizard app a page of this Wizard belongs to (the longest app address it lies under), or the app a

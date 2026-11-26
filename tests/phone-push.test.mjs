@@ -46,8 +46,18 @@ test('the main page copies the push switch to the Android app: off only once the
   assert.deepEqual(on.push, [true]);
   assert.deepEqual(on.notify, [true], 'the per-app switch it builds on goes along as before');
   on.set([NOTIFY]); assert.deepEqual(on.push, [true], 'an off before the switches settle waits');
-  on.experience(); assert.deepEqual(on.push, [true, false]);
+  on.experience(); assert.deepEqual(on.push, [true], 'the first experience event can come before this device\'s switches: still waits');
+  on.settle(); assert.deepEqual(on.push, [true, false]);
   on.set([NOTIFY, SWITCH]); assert.deepEqual(on.push, [true, false, true]);
+  on.set([NOTIFY]); assert.deepEqual(on.push, [true, false, true, false], 'after settling, off goes at once');
+});
+
+test('a page whose own switches arrive late never sends an early off (no stop and restart of the line on each open)', () => {
+  const f = fixture();               // the switches are not applied yet
+  f.experience();                    // the first experience event, before this device's switches
+  f.set([NOTIFY, SWITCH]);           // now they are
+  f.settle(); f.experience();
+  assert.deepEqual(f.push, [true]);
 });
 
 test('it is its own switch: per-app notifications alone never start the push line', () => {
