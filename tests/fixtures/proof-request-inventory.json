@@ -345,6 +345,12 @@
       "kind": "stream",
       "note": "AI Look up: needs a text selection and the Look up tap, which the shell flows never make; tests/lookup-pop.browser.cjs covers it with a scripted local backend. Refused and collected, never answered, if a flow reaches it."
     },
+    "/wizard/v1/channel-emoji": {
+      "status": "not-exercised",
+      "source": "web/core/chats-chanemoji.js",
+      "kind": "write",
+      "note": "Channel emoji from a model (issue 1605): only after New channel creates a channel with the off-by-default switch wizard/channel-model-emoji on, which these flows never do; tests/channel-model-emoji.test.mjs and tests/qa-chat-channel-model-emoji.cjs cover it with a synthetic answer. Refused and collected, never answered, if a flow reaches it."
+    },
     "/wizard/v1/channels": {
       "status": "catalogued",
       "source": "web/live.js",
