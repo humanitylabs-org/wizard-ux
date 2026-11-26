@@ -130,9 +130,14 @@ final class PinInstantScenario {
             long t0 = open(c);
             Activity a = waitResumed(10000);
             assertTrue("switch off: no saved picture", waitShotDrawn(a, t0, 600) < 0);
+            long[] firstFrame = {0};
+            InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> firstFrame[0] = ((MainActivity) a).pinFirstDrawAt());
             assertNotNull("switch off: Connecting as today", find(device, By.text("Connecting to your Wizard…"), 4000));
+            long connecting = SystemClock.uptimeMillis() - t0;
             shot(device, c, "off-held-back");
             assertNotNull("switch off: the live app", find(device, By.textStartsWith("Pinned app v2"), 20000));
+            Log.i(TAG, "switch off: first frame (empty) after " + (firstFrame[0] > 0 ? firstFrame[0] - t0 : -1) + " ms, Connecting seen by " + connecting
+                    + " ms, the app by " + (SystemClock.uptimeMillis() - t0) + " ms (page held back 5 s)");
             SystemClock.sleep(800);
             Log.i(TAG, "switch off: box saw " + box.files());
             assertTrue("switch off: the app's files are asked for as before", box.saw("GET /qa-pin/app.js"));

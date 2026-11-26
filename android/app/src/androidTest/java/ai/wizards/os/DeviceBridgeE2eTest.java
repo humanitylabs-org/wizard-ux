@@ -122,9 +122,9 @@ public class DeviceBridgeE2eTest {
     /**
      * wizard-ux issue 1830 (switch wizard/pin-instant-open): a home-screen app window opens on the app's last screen at
      * once with no Connecting, asks the box only whether the app's page changed, shows an updated app on the next open,
-     * and with the switch off opens as today.
+     * and with the switch off opens as today. Named to run last: it brings Wi-Fi up for its network check.
      */
-    @Test public void pinnedAppOpensOnItsLastScreen() throws Exception {
+    @Test public void thePinnedAppOpensOnItsLastScreen() throws Exception {
         PinInstantScenario.run();
     }
 

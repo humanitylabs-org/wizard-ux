@@ -929,31 +929,54 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
     private boolean pinPageShown = false;
     private final Runnable pinShotGiveUp = this::pinShotHide;
 
+    /** Started at the top of a pinned window's onCreate, so the picture decodes while the WebView is being made. */
+    private java.util.concurrent.FutureTask<android.graphics.Bitmap> pinShotLoad;
+    private long pinCreateAt = 0, pinFirstDrawAt = 0, pinShotDrawnAt = 0;
+
+    void pinShotStart() {
+        pinCreateAt = android.os.SystemClock.uptimeMillis();
+        if (!PinInstant.on(this)) return;
+        final String origin = ai.wizards.os.device.AppState.origin(this), app = HomeScreenShortcuts.appId(this, getIntent());
+        final android.content.Context ctx = getApplicationContext();
+        pinShotLoad = new java.util.concurrent.FutureTask<>(() -> PinInstant.shot(ctx, origin, app));
+        new Thread(pinShotLoad, "pin-shot-load").start();
+    }
+
     private void pinShotShow() {
         pinCache = PinInstant.cache(this);
-        android.graphics.Bitmap b = PinInstant.shot(this, ai.wizards.os.device.AppState.origin(this), HomeScreenShortcuts.appId(this, getIntent()));
-        if (b == null) return;
-        pinShot = new android.widget.ImageView(this);
-        pinShot.setScaleType(android.widget.ImageView.ScaleType.FIT_START);
-        pinShot.setBackgroundColor(Color.rgb(5, 3, 12));
-        pinShot.setImageBitmap(b);
-        pinShot.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS);
-        root.addView(pinShot, root.indexOfChild(web) + 1, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        long built = android.os.SystemClock.uptimeMillis();
+        android.graphics.Bitmap b = null;
+        try { if (pinShotLoad != null) b = pinShotLoad.get(400, java.util.concurrent.TimeUnit.MILLISECONDS); }
+        catch (Exception slow) { if (pinShotLoad != null) pinShotLoad.cancel(true); }
+        pinShotLoad = null;
+        final long waited = android.os.SystemClock.uptimeMillis() - built;
+        if (b != null) {
+            pinShot = new android.widget.ImageView(this);
+            pinShot.setScaleType(android.widget.ImageView.ScaleType.FIT_START);
+            pinShot.setBackgroundColor(Color.rgb(5, 3, 12));
+            pinShot.setImageBitmap(b);
+            pinShot.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS);
+            root.addView(pinShot, root.indexOfChild(web) + 1, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+            main.postDelayed(pinShotGiveUp, PinInstantPolicy.SHOT_MAX_MS);
+        }
         final android.widget.ImageView shown = pinShot;
+        // The window's first frame (with the picture when there is one): timed for PinInstantScenario and the log.
         root.getViewTreeObserver().addOnPreDrawListener(new android.view.ViewTreeObserver.OnPreDrawListener() {
             @Override public boolean onPreDraw() {
                 if (root != null) root.getViewTreeObserver().removeOnPreDrawListener(this);
-                if (pinShot == shown) pinShotDrawnAt = android.os.SystemClock.uptimeMillis();
+                pinFirstDrawAt = android.os.SystemClock.uptimeMillis();
+                if (shown != null && pinShot == shown) pinShotDrawnAt = pinFirstDrawAt;
+                if (shown != null) android.util.Log.i("WizardOSPinInstant", "last screen on the first frame, " + (pinFirstDrawAt - pinCreateAt)
+                        + " ms after the window was created (WebView " + (built - pinCreateAt) + " ms, waited " + waited + " ms for the picture)");
                 return true;
             }
         });
-        main.postDelayed(pinShotGiveUp, PinInstantPolicy.SHOT_MAX_MS);
-        android.util.Log.i("WizardOSPinInstant", "last screen shown");
     }
 
-    private long pinShotDrawnAt = 0;
     /** When the first frame with the last screen on it was drawn (0: not shown); read by PinInstantScenario. */
     long pinShotDrawnAt() { return pinShotDrawnAt; }
+    /** When this pinned window's first frame was drawn, with or without a picture (0: not yet). */
+    long pinFirstDrawAt() { return pinFirstDrawAt; }
     boolean pinShotShowing() { return pinShot != null; }
 
     void pinShotHide() {
