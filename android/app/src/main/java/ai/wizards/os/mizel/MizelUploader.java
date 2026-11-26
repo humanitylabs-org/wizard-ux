@@ -92,6 +92,7 @@ public final class MizelUploader {
 
     /** One pass over every meeting. Returns ms until something is due again, or -1 when there is nothing to do. */
     long drainOnce() {
+        if (ai.wizards.os.StartGuard.paused()) return 5000; // recovery mode (wizard-ux issue 1775): waits for Start normally
         long next = -1;
         boolean changed = false;
         List<MizelJournal> all = store.all();

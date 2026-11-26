@@ -417,6 +417,10 @@
       "help": "Android: Messenger icon count shows the exact number in a One UI-style corner badge.",
       "where": "Settings › Appearance › Try new features › One UI icon count"
     },
+    "wizard/phone-recovery-mode": {
+      "help": "Android: a frozen start reopens in recovery mode.",
+      "where": "Settings › Appearance › Try new features › Phone recovery mode"
+    },
     "wizard/phone-push": {
       "help": "Android app, with Phone notifications per app on: app notifications reach the phone within seconds, even locked (one Tailscale connection, no Google).",
       "where": "Settings › Appearance › Try new features › Instant phone notifications"

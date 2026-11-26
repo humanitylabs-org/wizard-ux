@@ -286,7 +286,7 @@ test('Pinned home-screen apps keep the floating orb', async () => {
   visible.add(new MainActivity()); assert.equal(shellFront(), true, 'the shell itself is visible');
   // both lifecycle edges tell the floating orb what is in front, and say so with shellFront()
   const main = java('MainActivity.java'), told = [];
-  const ai = { wizards: { os: { AppSessionActivity, device: { AppState: { shellFront } }, everywhere: { EverywhereService: { setAppInFront: (a, front) => told.push(front) }, EverywhereOutbox: { get: () => ({ pump() {} }) } }, mizel: { MeetingRecorderService: { recoverFromActivity() {} } } } } };
+  const ai = { wizards: { os: { AppSessionActivity, device: { AppState: { shellFront } }, everywhere: { EverywhereService: { setAppInFront: (a, front) => told.push(front) }, EverywhereOutbox: { get: () => ({ pump() {} }) } }, mizel: { MeetingRecorderService: { recoverFromActivity() {} } }, StartGuard: { paused: () => false } } } };
   const Base = class { onStart() {} onStop() {} };
   method(main, 'protected void onStart()', { scope: { ai, AppSessionActivity, device: { onStart() {} } }, base: Base });
   visible.clear(); visible.add(new AppSessionActivity());

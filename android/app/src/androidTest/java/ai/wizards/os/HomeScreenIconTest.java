@@ -99,6 +99,57 @@ public class HomeScreenIconTest {
         logShot("after", sheet(c, square, true));
     }
 
+    /**
+     * Recovery mode's card (wizard-ux issue 1775, switch wizard/phone-recovery-mode), drawn by the real RecoveryScreen
+     * on this emulator at a 412 dp wide phone (2x): three one-tap actions that answer, the update line follows the
+     * updater. Logs the picture (tag RecoveryShot, base64 PNG in chunks) for the pull request.
+     */
+    @Test public void recoveryCardOffersUpdateDiagnosticsAndStartNormally() {
+        Context c = InstrumentationRegistry.getInstrumentation().getTargetContext();
+        android.content.res.Configuration cfg = new android.content.res.Configuration(c.getResources().getConfiguration());
+        cfg.densityDpi = 320; cfg.screenWidthDp = 412; cfg.screenHeightDp = 915;
+        Context k = c.createConfigurationContext(cfg);
+        final java.util.List<String> did = new java.util.ArrayList<>();
+        final Bitmap[] shot = new Bitmap[2];
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+            android.widget.FrameLayout parent = new android.widget.FrameLayout(k);
+            RecoveryScreen card = new RecoveryScreen(k, parent, new RecoveryScreen.Actions() {
+                @Override public void update(boolean install) { did.add(install ? "install" : "check"); }
+                @Override public void diagnostics() { did.add("diagnostics"); }
+                @Override public void startNormally() { did.add("normal"); }
+            });
+            card.show("froze");
+            int w = 824, h = 1830;
+            parent.measure(android.view.View.MeasureSpec.makeMeasureSpec(w, android.view.View.MeasureSpec.EXACTLY),
+                    android.view.View.MeasureSpec.makeMeasureSpec(h, android.view.View.MeasureSpec.EXACTLY));
+            parent.layout(0, 0, w, h);
+            android.view.ViewGroup col = (android.view.ViewGroup) card.view();
+            java.util.List<android.widget.TextView> buttons = new java.util.ArrayList<>();
+            for (int i = 0; i < col.getChildCount(); i++) if (col.getChildAt(i).isClickable()) buttons.add((android.widget.TextView) col.getChildAt(i));
+            assertEquals(3, buttons.size());
+            assertEquals("Check for update", buttons.get(0).getText().toString());
+            assertEquals("Send diagnostics", buttons.get(1).getText().toString());
+            assertEquals("Start normally", buttons.get(2).getText().toString());
+            assertTrue("the card sits at the bottom, clear of most of the shell", card.view().getTop() > h / 3);
+            shot[0] = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
+            parent.draw(new Canvas(shot[0]));
+            for (android.widget.TextView b : buttons) b.performClick();
+            assertEquals(java.util.Arrays.asList("check", "diagnostics", "normal"), did);
+            // the updater found the fixed build: the same button installs it
+            try { card.updateState(new org.json.JSONObject().put("state", "ready").put("version", "0.10.72")); } catch (org.json.JSONException e) { throw new AssertionError(e); }
+            parent.measure(android.view.View.MeasureSpec.makeMeasureSpec(w, android.view.View.MeasureSpec.EXACTLY),
+                    android.view.View.MeasureSpec.makeMeasureSpec(h, android.view.View.MeasureSpec.EXACTLY));
+            parent.layout(0, 0, w, h);
+            assertEquals("Install 0.10.72", buttons.get(0).getText().toString());
+            buttons.get(0).performClick();
+            assertEquals("install", did.get(did.size() - 1));
+            shot[1] = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
+            parent.draw(new Canvas(shot[1]));
+        });
+        logShot("RecoveryShot", "card", shot[0]);
+        logShot("RecoveryShot", "card-ready", shot[1]);
+    }
+
     private static Bitmap glyphSquare() {
         Bitmap sq = Bitmap.createBitmap(192, 192, Bitmap.Config.ARGB_8888);
         Canvas k = new Canvas(sq);
@@ -184,12 +235,13 @@ public class HomeScreenIconTest {
         }
         return out;
     }
-    private static void logShot(String name, Bitmap b) {
+    private static void logShot(String name, Bitmap b) { logShot("BadgeShot", name, b); }
+    private static void logShot(String tag, String name, Bitmap b) {
         ByteArrayOutputStream png = new ByteArrayOutputStream();
         b.compress(Bitmap.CompressFormat.PNG, 100, png);
         String all = Base64.encodeToString(png.toByteArray(), Base64.NO_WRAP);
         int n = (all.length() + 2999) / 3000;
-        for (int i = 0; i < n; i++) Log.i("BadgeShot", name + " " + i + "/" + n + " " + all.substring(i * 3000, Math.min(all.length(), (i + 1) * 3000)));
+        for (int i = 0; i < n; i++) Log.i(tag, name + " " + i + "/" + n + " " + all.substring(i * 3000, Math.min(all.length(), (i + 1) * 3000)));
     }
     private static Bitmap shown(Context c, Icon icon) {
         Drawable d = icon.loadDrawable(c);

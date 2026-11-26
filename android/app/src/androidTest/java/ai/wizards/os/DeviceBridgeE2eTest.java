@@ -111,6 +111,14 @@ public class DeviceBridgeE2eTest {
         }
     }
 
+    /**
+     * wizard-ux issue 1775 (switch wizard/phone-recovery-mode): after a start that never finished, the app opens in
+     * recovery mode; its card sends diagnostics, checks for an update and starts normally; with the switch off, nothing.
+     */
+    @Test public void recoveryModeOpensAfterAnUnfinishedStart() throws Exception {
+        RecoveryModeScenario.run();
+    }
+
     /** CI emulators raise "Pixel Launcher isn't responding" over the app; tap Wait and keep looking. */
     private static androidx.test.uiautomator.UiObject2 waitPastSystemDialogs(UiDevice device, androidx.test.uiautomator.BySelector target, long ms) {
         long end = System.currentTimeMillis() + ms;
