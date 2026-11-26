@@ -1,7 +1,7 @@
 // Install sheet recommends private AI (wizard-ux issue 1802, switch wizard/private-ai-nudge): the card's rules.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { NUDGE_SWITCH, nudgeOn, nudgeDue, nudgeHtml, nudgeStatus, personalApp, providerWord, readsLine, standardOf, withStandard } from '../web/store/store-private-nudge.js';
+import { NUDGE_SWITCH, nudgeOn, nudgeDue, nudgeHtml, nudgeStatus, personalApp, providerWord, personalSentence, standardOf, withStandard } from '../web/store/store-private-nudge.js';
 
 const MAIN = { id: 'hermes', label: 'Wizard', privacy: 'standard', is_default: true };
 const WORK = { id: 'work', label: 'Work', privacy: 'standard', is_default: false };
@@ -69,7 +69,7 @@ test('wizard-os#929: an app with only the personal_data label gets the card, and
   assert.deepEqual(withStandard(mail([{ ...MAIN, enabled: true }])), ['hermes'], 'Use Claude for now keeps it where it is');
   const html = nudgeHtml({ id: 'wizard-mail', name: 'Mail', reads: 'reads your email', provider: 'Claude' });
   assert.match(html, /Mail reads your email\. We recommend private AI for apps like this, so no AI company sees it\./);
-  assert.equal(readsLine('Mail', ' reads  your email. '), 'Mail reads your email.');
-  assert.equal(readsLine('Photos', ''), 'Photos holds personal data.');
+  assert.equal(personalSentence('Mail', ' reads  your email. '), 'Mail reads your email.');
+  assert.equal(personalSentence('Photos', ''), 'Photos holds personal data.');
   assert.match(nudgeHtml({ id: 'm', name: 'M', reads: '<img src=x>' }), /M &lt;img src=x&gt;\./, 'the line is escaped');
 });

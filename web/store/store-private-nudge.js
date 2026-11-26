@@ -27,7 +27,7 @@ export function nudgeDue(access) {
   return access?.personal_data === true && !agentsOf(access).some(a => a.privacy === 'private');
 }
 /** The sentence's first half: "<App> reads your email." from the app's own line, else "<App> holds personal data." */
-export function readsLine(name, reads) {
+export function personalSentence(name, reads) {
   const line = String(reads || '').replace(/\s+/g, ' ').trim().replace(/\.+$/, '').slice(0, 80);
   return `${name || 'This app'} ${line || 'holds personal data'}.`;
 }
@@ -55,7 +55,7 @@ export function nudgeHtml(o) {
   const use = o.provider ? `Use ${o.provider} for now` : 'Use your standard agent for now';
   return `<div class="pv-card pn-card" data-pv-app="${esc(o.id)}" data-pn-card>
       <h3>Private AI recommended</h3>
-      <p class="mc-lede">${esc(readsLine(o.name, o.reads))} We recommend private AI for apps like this, so no AI company sees it.</p>
+      <p class="mc-lede">${esc(personalSentence(o.name, o.reads))} We recommend private AI for apps like this, so no AI company sees it.</p>
       ${o.waiting ? '<p class="pn-note" role="status">Finish setting up private AI. This sheet follows on its own.</p>' : ''}
       <div class="pv-acts pn-acts"><button type="button" class="get big" data-pn-setup ${o.busy ? 'disabled' : ''}>Set up private AI</button><button type="button" class="get pn-std" data-pn-standard ${o.busy ? 'disabled' : ''}>${o.busy === 'standard' ? 'Saving…' : esc(use)}</button></div>
       ${o.why ? '<button type="button" class="pn-why" data-pn-why>Why it matters</button>' : ''}</div>`;
