@@ -167,6 +167,7 @@ Settings › Appearance › Try new features lists unfinished features anyone ca
 - **Archive on top**: Archive is the first section of the Chats list in both By day and By status, so switching layouts never moves it.
 - **Calm Agent Service restarts**: While the Agent Service waits for running chats to restart, you see a quiet note, not errors; a message sent meanwhile sends after the restart; if overdue, choose Wait longer or Restart now.
 - **Calm offline card**: The can't-reach-your-Wizard card shows one dotted path (Internet · Tailscale · Wizard), one short next step and a small Check again with the automatic re-check time.
+- **Channels: a fitting emoji for new channels**: New channels get a fitting emoji.
 - **Chats: title bar names the tab**: Chats' title bar names the tab.
 - **Clear chat notifications**: Android app: reading a LINE, WhatsApp, Telegram or other bridged chat in Messenger clears that app's own notification (needs Android's Notification access).
 - **Desktop sidebar follows Default Chats**: AI apps desktop: the chats sidebar uses the Chats look picked in Settings › Chats & app screens › Default Chats.

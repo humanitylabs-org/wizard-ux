@@ -41,7 +41,8 @@
     "wizard/inbox-rows",
     "wizard/sent-rows",
     "wizard/chats-title-bar",
-    "wizard/phone-nav"
+    "wizard/phone-nav",
+    "wizard/channel-auto-emoji"
   ],
   "defaults": [],
   "promotedDefaults": [],
