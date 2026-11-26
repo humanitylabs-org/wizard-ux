@@ -14,13 +14,13 @@ const cut = (src, from, to) => { const a = src.indexOf(from); assert.ok(a >= 0, 
 const tick = () => new Promise(r => setImmediate(r));
 
 // answer: what the service says ({status, json}) or a function (body) → that; 'hang' never answers.
-async function create({ typed, switchOn = true, agent = 'hermes', privacy = 'standard', answer = { status: 200, json: { emoji: '🎯' } }, onStore = true, before = null } = {}) {
+async function create({ typed, switchOn = true, keywords = false, agent = 'hermes', privacy = 'standard', answer = { status: 200, json: { emoji: '🎯' } }, onStore = true, before = null } = {}) {
   const calls = [], asks = [], list = [];
   let release; const gate = new Promise(r => { release = r; });
   const p = { wid: 'w1', from: 'w1', agent, name: typed, sid: '', busy: false, error: '' };
   const ctx = {
     calls, asks, list, AbortController, setTimeout, clearTimeout, JSON, String, Promise,
-    document: { documentElement: { dataset: { tweaks: switchOn ? 'wizard/desktop-chats wizard/channel-model-emoji' : 'wizard/desktop-chats' } } },
+    document: { documentElement: { dataset: { tweaks: ['wizard/desktop-chats', switchOn && 'wizard/channel-model-emoji', keywords && 'wizard/channel-auto-emoji'].filter(Boolean).join(' ') } } },
     window: { WizCore: { chatsParts: {} } },
     fetch: async (url, opts) => {
       asks.push({ url, method: opts.method, body: JSON.parse(opts.body), creds: opts.credentials });
@@ -102,4 +102,16 @@ test('1605: switch off: no ask and every name stays exactly as typed (every agen
     assert.deepEqual(r.asks, [], agent + ': ' + typed);
     assert.deepEqual(r.calls, [['create', typed, agent]], agent + ': ' + typed);
   }
+});
+
+test('1605: with the keyword map on too (#1580), only a name it can\'t match asks the model', async () => {
+  const money = await create({ typed: 'Money', keywords: true });
+  assert.deepEqual(money.asks, [], 'the keyword map already gave 💰');
+  assert.deepEqual(money.calls, [['create', '💰 Money', 'hermes']]);
+  const okrs = await create({ typed: 'Quarterly OKRs', keywords: true });
+  assert.deepEqual(okrs.asks.map(a => a.body.name), ['Quarterly OKRs']);
+  assert.deepEqual(okrs.calls, [['create', 'Quarterly OKRs', 'hermes'], ['rename', '🎯 Quarterly OKRs', true]]);
+  // Keyword map alone (this switch off): no ask, as #1580 shipped it.
+  const zz = await create({ typed: 'Zzzqx', keywords: true, switchOn: false });
+  assert.deepEqual(zz.asks, []); assert.deepEqual(zz.calls, [['create', 'Zzzqx', 'hermes']]);
 });

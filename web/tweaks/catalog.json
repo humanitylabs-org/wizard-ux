@@ -42,7 +42,8 @@
     "wizard/sent-rows",
     "wizard/chats-title-bar",
     "wizard/phone-nav",
-    "wizard/channel-model-emoji"
+    "wizard/channel-model-emoji",
+    "wizard/channel-auto-emoji"
   ],
   "defaults": [],
   "promotedDefaults": [],
