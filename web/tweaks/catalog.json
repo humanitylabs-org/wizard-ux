@@ -56,7 +56,8 @@
     "wizard/attach-menu-icons",
     "wizard/app-location",
     "wizard/boundary-agent-access",
-    "wizard/phone-badge-look"
+    "wizard/phone-badge-look",
+    "wizard/private-mode"
   ],
   "defaults": [],
   "promotedDefaults": [],
