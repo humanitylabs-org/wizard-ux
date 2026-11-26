@@ -1,6 +1,6 @@
 {
   "_note": "Owner-facing help lines for the agent's Wizard interface manual. tools/build-agent-manual.mjs joins them with what the interface code really draws and writes skill/SKILL.md; tests/agent-manual.test.mjs fails when something on screen has no line here. Plain words, no internal module names. A control set to null is drawn but needs no words of its own.",
-  "description": "Where is, what is, how to: any Wizard setting or screen. Use when the owner asks what something in Wizard is, where a setting or screen is, or how to do something in Wizard on the phone or computer (Settings pages and rows, Try new features switches, updates, Chats, Home, apps, voice). Load it before wizard-guide for these; it is generated from this Wizard's interface.",
+  "description": "Where is, what is, how to: any Wizard setting or screen. Use when the owner asks what something in Wizard is, where a setting or screen is, or how to do something in Wizard on the phone or computer (Settings pages and rows, Try new features switches, updates, Chats, Home, apps, voice). Load it before wizard-guide for these.",
   "intro": [
     "# Wizard interface manual",
     "",
@@ -13,7 +13,7 @@
     "- Names in Wizard: the agent is 'Wizard' (or the name the owner gave it); 'WizardOS' is the server software; the interface on phone and desktop is just 'Wizard'."
   ],
   "settingsIntro": [
-    "Open Settings: desktop, the cog at the bottom left under the chats list (older Desks view: the top-bar gear, ⌥,); phone, the gear at the top right of Home or an empty desk, or hold the orb and say 'settings'. Settings is a list of pages under System and Preferences; on a wide screen the list is on the left and the page on the right. A page with nothing on it is hidden. Pages are the same on phone and desktop, except rows that only exist on one of them (named below).",
+    "Open Settings: desktop, the cog at the bottom left under the chats list (older Desks view: the top-bar gear, ⌥,); phone, the gear at the top right of Home or an empty desk, or hold the orb and say 'settings'. Settings is a list of pages under System and Preferences (wide screen: list left, page right). A page with nothing on it is hidden. Pages are the same on phone and desktop, except rows that only exist on one of them (named below).",
     "Search settings: the box at the top of the Settings list. Typing keeps only the pages that mention the words and marks them on the open page, scrolled to the first; Esc clears it, Enter opens the first page."
   ],
   "switchesIntro": [
@@ -424,6 +424,10 @@
     "wizard/app-location": {
       "help": "Only apps whose wizard.md asks for location (today Maps) may use it, after your browser's or phone's own yes; others stay blocked.",
       "where": "Settings › Appearance › Try new features › Location for Maps"
+    },
+    "wizard/pin-instant-open": {
+      "help": "Android: pinned app icons open at once on their last screen.",
+      "where": "Settings › Appearance › Try new features › Instant home-screen apps"
     },
     "wizard/phone-badge-look": {
       "help": "Android: Messenger icon count shows the exact number in a One UI-style corner badge.",

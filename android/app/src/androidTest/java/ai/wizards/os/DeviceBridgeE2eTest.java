@@ -119,6 +119,15 @@ public class DeviceBridgeE2eTest {
         RecoveryModeScenario.run();
     }
 
+    /**
+     * wizard-ux issue 1830 (switch wizard/pin-instant-open): a home-screen app window opens on the app's last screen at
+     * once with no Connecting, asks the box only whether the app's page changed, shows an updated app on the next open,
+     * and with the switch off opens as today.
+     */
+    @Test public void pinnedAppOpensOnItsLastScreen() throws Exception {
+        PinInstantScenario.run();
+    }
+
     /** CI emulators raise "Pixel Launcher isn't responding" over the app; tap Wait and keep looking. */
     private static androidx.test.uiautomator.UiObject2 waitPastSystemDialogs(UiDevice device, androidx.test.uiautomator.BySelector target, long ms) {
         long end = System.currentTimeMillis() + ms;

@@ -161,6 +161,13 @@
     return true;
   };
   let mountGeneration = 0;
+  /* Instant home-screen apps (wizard-ux issue 1830, switch wizard/pin-instant-open): the Android app holds the switch
+   * (the main page copies it there) and does the work. This page only tells it which shell release it runs (so the
+   * shell files the app loads are kept per release) and when the app's page has loaded (so the saved picture of the
+   * app's last screen can give way to it). Off, or an older Android app: the calls are not there or do nothing. */
+  const pinNative = (name, ...args) => { try { const n = window.WizardOSNative; if (n && typeof n[name] === 'function') n[name](...args); } catch (_) {} };
+  try { const release = document.querySelector('meta[name="wos-release"]')?.content || ''; if (/^[0-9a-f]{12}$/.test(release)) pinNative('pinRelease', release); } catch (_) {}
+  function pinShown() { (window.requestAnimationFrame || (f => setTimeout(f, 16)))(() => setTimeout(() => pinNative('pinShown'), 120)); }
   async function mount() {
     const generation = ++mountGeneration;
     const declared = policy.configure?.(registry.APP[id]?.homeScreen);
@@ -207,6 +214,7 @@
       back: () => { window.__wosNativeBack(); return true; }, readingStorage:localStorage });
     frame.addEventListener('load', () => {
       if (frame !== mountedFrame) return;
+      pinShown();
       // The app is in: the rest of the pin host comes now, while nobody is waiting for it.
       if (slim) (window.requestIdleCallback || (f => setTimeout(f, 300)))(() => window.WizPinDoc.extras(), { timeout: 1500 });
       // An opaque frame cannot be read: no route restore or save, no in-frame hooks. Back, appearance and dictation go

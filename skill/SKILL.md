@@ -1,6 +1,6 @@
 ---
 name: wizard-interface
-description: "Where is, what is, how to: any Wizard setting or screen. Use when the owner asks what something in Wizard is, where a setting or screen is, or how to do something in Wizard on the phone or computer (Settings pages and rows, Try new features switches, updates, Chats, Home, apps, voice). Load it before wizard-guide for these; it is generated from this Wizard's interface."
+description: "Where is, what is, how to: any Wizard setting or screen. Use when the owner asks what something in Wizard is, where a setting or screen is, or how to do something in Wizard on the phone or computer (Settings pages and rows, Try new features switches, updates, Chats, Home, apps, voice). Load it before wizard-guide for these."
 ---
 
 # Wizard interface manual
@@ -50,7 +50,7 @@ Every screen, Settings page and feature switch of the Wizard interface (the phon
 
 ## Settings
 
-Open Settings: desktop, the cog at the bottom left under the chats list (older Desks view: the top-bar gear, ⌥,); phone, the gear at the top right of Home or an empty desk, or hold the orb and say 'settings'. Settings is a list of pages under System and Preferences; on a wide screen the list is on the left and the page on the right. A page with nothing on it is hidden. Pages are the same on phone and desktop, except rows that only exist on one of them (named below).
+Open Settings: desktop, the cog at the bottom left under the chats list (older Desks view: the top-bar gear, ⌥,); phone, the gear at the top right of Home or an empty desk, or hold the orb and say 'settings'. Settings is a list of pages under System and Preferences (wide screen: list left, page right). A page with nothing on it is hidden. Pages are the same on phone and desktop, except rows that only exist on one of them (named below).
 Search settings: the box at the top of the Settings list. Typing keeps only the pages that mention the words and marks them on the open page, scrolled to the first; Esc clears it, Enter opens the first page.
 
 ### System › Your network
@@ -183,6 +183,7 @@ Settings › Appearance › Try new features lists unfinished features anyone ca
 - **Inbox: only what needs you**: Inbox: only what needs you.
 - **Install apps your agent builds**: Apps I build install with one tap.
 - **Install sheet recommends private AI**: Installing a personal-data app suggests private AI.
+- **Instant home-screen apps**: Android: pinned app icons open at once on their last screen.
 - **Instant phone notifications**: Android app, with Phone notifications per app on: app notifications reach the phone within seconds, even locked (one Tailscale connection, no Google).
 - **Location for Maps**: Only apps whose wizard.md asks for location (today Maps) may use it, after your browser's or phone's own yes; others stay blocked.
 - **Machines on Home**: Home shows a slim strip (Wizard, AI fuel, chats, backup, network); Settings › System holds your network, AI, security and storage.
