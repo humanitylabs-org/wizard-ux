@@ -43,6 +43,7 @@
     "wizard/phone-nav",
     "wizard/ai-apps-running",
     "wizard/channel-auto-emoji",
+    "wizard/app-picker-store-search",
     "wizard/phone-push"
   ],
   "defaults": [],

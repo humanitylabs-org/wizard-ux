@@ -115,6 +115,10 @@ export function viewChrome(api, { openIds, goOpen = null, inset = null, orb = nu
   const desks = () => (api.desks?.list || api.phone?.desks)?.() || [];
   // (AI apps round 16, opt-in: the picker of installed apps that are neither open nor pinned; see open(opts))
   let pick = null;
+  /* wizard-os#721 (switch wizard/app-picker-store-search, off by default): the picker's search also looks in the App
+   * Store, like the plain sheet's: matches you don't have yet are listed under your installed ones; a pick opens its
+   * Store page. Off: the picker never reads the Store. */
+  const storeSearchOn = () => { try { return String(root.dataset.tweaks || '').split(' ').includes('wizard/app-picker-store-search'); } catch (_) { return false; } };
   function list() { const ex = new Set(pick?.exclude?.() || []); return notOpen(api.apps.list(), pick?.includeOpen ? [] : openIds()).filter(a => !ex.has(a.id)); }
   function tile(a, cls = 'vc-tile') {
     const t = el('span', cls, { 'aria-hidden': 'true' }); t.style.setProperty('--c', colourOf(a));
@@ -198,12 +202,8 @@ export function viewChrome(api, { openIds, goOpen = null, inset = null, orb = nu
       if (!groups.length) out.push(section(pick ? (pick.people || 'For people') : 'Installed', 0), el('p', 'vc-empty', { text: q ? 'No installed app by that name.' : pick ? 'Every installed app is pinned or open.' : 'Every installed app is open.' }));
       // the App Store: no list of everything you don't have (that is the Store's job); a search also looks there, and
       // one row opens the Store itself
-      if (searching && store?.length) {
-        // an app you already have under another Store id (a renamed Store listing) is not offered again
-        const have = new Set([...api.apps.list(), ...Object.values(K).flat()].map(a => String(a?.name || '').trim().toLowerCase()).filter(Boolean));
-        const hits = store.filter(a => matches(a, q) && !have.has(String(a.name || '').trim().toLowerCase()));
-        if (hits.length) { const g = el('div', 'vc-rows', { role: 'list', 'aria-label': 'In the App Store' }); g.append(...hits.map(getRow)); out.push(section('In the App Store', hits.length), g); }
-      }
+      if (searching && store?.length) storeSection(out, [...api.apps.list(), ...Object.values(K).flat()]);
+      else if (searching) pickStoreWait(out);
       out.push(pick ? moreTile() : storeBtn('Get more apps in the App Store'));
       body.replaceChildren(...out);
       return;
@@ -213,6 +213,7 @@ export function viewChrome(api, { openIds, goOpen = null, inset = null, orb = nu
         out.push(section(pick.people || 'For people', inst.length));
         if (inst.length) { const g = el('div', 'vc-list', { role: 'list', 'aria-label': pick.people || 'For people', 'data-kind': 'apps' }); g.append(...inst.map(row)); out.push(g); }
         else out.push(el('p', 'vc-empty', { text: q ? 'No installed app by that name.' : 'Every installed app is pinned or open.' }));
+        if (String(q).trim() && store?.length) storeSection(out, api.apps.list()); else if (String(q).trim()) pickStoreWait(out);
         out.push(moreTile()); body.replaceChildren(...out); return;
       }
       if (open.length) { const g = el('div', 'vc-list', { role: 'list', 'aria-label': 'Open' }); g.append(...open.map(openTile)); out.push(section('Open', open.length), g); }
@@ -232,6 +233,18 @@ export function viewChrome(api, { openIds, goOpen = null, inset = null, orb = nu
     api.listen(all, 'click', () => { close(); api.apps.openDesk('app-store'); });
     out.push(all);
     body.replaceChildren(...out);
+  }
+  // the App Store's matches for the search (apps you don't have yet), as one section
+  function storeSection(out, have0) {
+    // an app you already have under another Store id (a renamed Store listing) is not offered again
+    const have = new Set(have0.map(a => String(a?.name || '').trim().toLowerCase()).filter(Boolean));
+    const hits = store.filter(a => matches(a, q) && !have.has(String(a.name || '').trim().toLowerCase()));
+    if (hits.length) { const g = el('div', 'vc-rows', { role: 'list', 'aria-label': 'In the App Store' }); g.append(...hits.map(getRow)); out.push(section('In the App Store', hits.length), g); }
+  }
+  // the picker with the Store search on, while the Store list is on its way (or can't be read): say so
+  function pickStoreWait(out) {
+    if (!pick || !storeSearchOn() || store) return;
+    out.push(el('p', 'vc-empty vc-store-wait', { text: storeErr ? 'The App Store can’t be reached right now.' : 'Looking in the App Store…' }));
   }
   const storeBtn = text => { const all = el('button', 'vc-store', { type: 'button', text }); api.listen(all, 'click', () => { close(); api.apps.openDesk('app-store'); }); return all; };
   // the picker's last tile: + Get more = the App Store as it is (its own installed / open states)
@@ -269,7 +282,7 @@ export function viewChrome(api, { openIds, goOpen = null, inset = null, orb = nu
     root.dataset.vcSheet = 'open';
     paint();
     const mine = sheet;
-    if (!pick) Promise.resolve(api.apps.store ? api.apps.store() : []).then(l => { if (sheet === mine) { store = l || []; paint(); } }, () => { if (sheet === mine) { storeErr = true; paint(); } });
+    if (!pick || storeSearchOn()) Promise.resolve(api.apps.store ? api.apps.store() : []).then(l => { if (sheet === mine) { store = l || []; paint(); } }, () => { if (sheet === mine) { storeErr = true; paint(); } });
     // the desktop types at once; the phone waits for a tap (no keyboard over the lists)
     if (shell === 'desktop') field.focus?.({ preventScroll: true }); else shut.focus?.({ preventScroll: true });
   }
