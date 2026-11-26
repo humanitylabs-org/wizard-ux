@@ -22,9 +22,9 @@ const APPURL = process.env.QA_APP_URL || '', APPOWNER = process.env.QA_APP_OWNER
 // The box ingress stand-in: the request as the browser sent it (method, body, Origin, Sec-Fetch-*), plus the owner bearer.
 // Only the app's own plain paths; the app server's host and port are fixed (QA_APP_URL).
 const APPBASE = APPURL ? new URL(APPURL) : null;
-const APPPATH = /^(?:[a-z0-9_-]+(?:\.[a-z0-9]+)?\/?)*$/i;
+const appPath = p => /^[a-z0-9_./-]*$/i.test(p) && !p.split('/').some(x => x === '.' || x === '..');
 function proxy(req, res, rest, body) {
-  if (!APPPATH.test(rest)) { res.statusCode = 400; return res.end(''); }
+  if (!appPath(rest)) { res.statusCode = 400; return res.end(''); }
   const headers = { host: APPBASE.host };
   for (const h of ['origin', 'sec-fetch-site', 'sec-fetch-mode', 'sec-fetch-dest', 'content-type', 'accept', 'cookie']) if (req.headers[h]) headers[h] = req.headers[h];
   if (APPOWNER) headers.authorization = 'Bearer ' + APPOWNER;
