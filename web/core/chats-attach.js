@@ -150,13 +150,35 @@ window.WizCore.chatsParts.attach = function ({ ch, CHEV_SVG, clip, COG_SVG, draf
   }
   // Local thumbnails for files uploaded from this phone, so a just-sent photo shows before Wizard has it.
   const PREVIEW = {};
-  const mediaOfFile = f => ({ id: f.id, name: f.name, mime: f.mime || '', bytes: f.bytes || 0, kind: /^image\//.test(f.mime || '') ? 'image' : /^video\//.test(f.mime || '') ? 'video' : /^audio\//.test(f.mime || '') ? 'audio' : 'file', url: f.id && !PEND?.isPending(f.id) ? fileUrl(f.id) : '', thumb: PREVIEW[f.id] || '' });
+  // wizard-ux#1840: once Wizard has the file, the bubble shows Wizard's copy. The local blob: preview is only a stand-in
+  // while it is still uploading: on an Android WebView it can stop being readable, which left a broken photo in the
+  // owner's own bubble until a reload. It stays as `local`, a fallback for a moment Wizard can't be reached, and is
+  // released as soon as Wizard's copy has loaded (photoLoaded below).
+  const mediaOfFile = f => {
+    const url = f.id && !PEND?.isPending(f.id) ? fileUrl(f.id) : '', mine = PREVIEW[f.id] || '';
+    return { id: f.id, name: f.name, mime: f.mime || '', bytes: f.bytes || 0, kind: /^image\//.test(f.mime || '') ? 'image' : /^video\//.test(f.mime || '') ? 'video' : /^audio\//.test(f.mime || '') ? 'audio' : 'file', url, thumb: url ? '' : mine, local: url ? mine : '' };
+  };
+  const photoOf = e => { const img = e.target; return img instanceof HTMLImageElement && img.dataset.local ? img : null; };
+  function photoLoaded(e) {
+    const img = photoOf(e), u = img?.dataset.local; if (!img || img.getAttribute('src') === u) return;
+    img.removeAttribute('data-local');
+    for (const [id, p] of Object.entries(PREVIEW)) if (p === u) delete PREVIEW[id];
+    if (/^blob:/.test(u)) URL.revokeObjectURL(u);
+  }
+  function photoFailed(e) {
+    const img = photoOf(e), u = img?.dataset.local; if (!img || img.getAttribute('src') === u) return;
+    img.setAttribute('src', u); // Wizard's copy didn't load this time: the phone's own copy, while it still has it
+  }
+  // load/error don't bubble: listen in the capture phase, once for every thread this Chats draws.
+  document.addEventListener('load', photoLoaded, true);
+  document.addEventListener('error', photoFailed, true);
   // Every photo/file in the open thread gets an index into c.media; tapping it opens the in-app viewer.
   function mediaBtn(c, m) {
     const k = c.media.push(m) - 1;
     // Inline bytes are already local. Lazy decoding can deadlock an image-only
-    // shrink-to-fit bubble at zero width, so only network images remain lazy.
-    if (m.kind === 'image') return `<button type="button" class="mimg" data-mi="${k}" aria-label="Open ${esc(m.name || 'photo')}"><img src="${esc(m.thumb || m.url)}" alt="${esc(m.name || 'Photo')}" loading="${/^data:image\//i.test(m.thumb || m.url || '') ? 'eager' : 'lazy'}" decoding="async"></button>`;
+    // shrink-to-fit bubble at zero width, so only network images remain lazy; the owner's own images (m.eager, set by
+    // userMedia) load at once too, in a steer bubble beside a voice note as well (wizard-ux#1840).
+    if (m.kind === 'image') return `<button type="button" class="mimg" data-mi="${k}" aria-label="Open ${esc(m.name || 'photo')}"><img src="${esc(m.thumb || m.url)}"${m.local ? ` data-local="${esc(m.local)}"` : ''} alt="${esc(m.name || 'Photo')}" loading="${m.eager || /^data:image\//i.test(m.thumb || m.url || '') ? 'eager' : 'lazy'}" decoding="async"></button>`;
     if (m.kind === 'audio') return `<div class="mcard aud"><span class="mic">♪</span><span class="mn"><b>${esc(m.name)}</b><audio controls preload="none" src="${esc(m.url)}"></audio>${m.transcript ? `<small>${esc(m.transcript)}</small>` : ''}</span></div>`;
     // A file or video card: tap it to view it in Wizard; the ⤓ beside the name downloads it in one tap.
     const card = `<button type="button" class="mcard" data-mi="${k}"><span class="mic">${m.kind === 'video' ? PLAY_SVG : CLIP_SVG}</span><span class="mn"><b>${esc(m.name)}</b><small>${esc(m.kind === 'video' ? 'Video' : (m.mime.split('/')[1] || 'File').toUpperCase())}${m.bytes ? ' · ' + esc(fsize(m.bytes)) : ''}</small></span></button>`;
@@ -171,7 +193,7 @@ window.WizCore.chatsParts.attach = function ({ ch, CHEV_SVG, clip, COG_SVG, draf
   // What the owner sent: voice notes play inline, photos and screenshots show as photos, other files as cards.
   function userMedia(c, files, images) {
     const voice = files.filter(f => fileKind(f) === 'voice');
-    const list = files.filter(f => fileKind(f) !== 'voice').map(mediaOfFile).filter(m => m.url || m.thumb)
+    const list = files.filter(f => fileKind(f) !== 'voice').map(f => ({ ...mediaOfFile(f), eager: true })).filter(m => m.url || m.thumb)
       .concat((images || []).map((u, i) => ({ id: 'img' + i, name: 'Photo', mime: 'image/*', kind: 'image', url: u })));
     const unnamed = files.filter(f => fileKind(f) !== 'voice' && (!f.id || (PEND?.isPending(f.id) && !PREVIEW[f.id]))).map(f => `<span class="fchip">${CLIP_SVG} ${esc(f.name)}</span>`).join('');
     return (voice.length ? `<div class="fchips">${voice.map(fileChip).join('')}</div>` : '') + mediaBlock(c, list) + (unnamed ? `<div class="fchips">${unnamed}</div>` : '');
