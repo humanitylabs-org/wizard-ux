@@ -37,6 +37,8 @@ test('external and protocol-relative origins are never internal threads',()=>{
 test('attachment links and unrelated root parameters retain their routes',()=>{
  const media='/wizard/attachments/'+'a'.repeat(32);
  assert.match(md(`[attachment](${media})`),/data-mlink=/);assert.equal(route(media+'?session=qa'),false);
- for(const href of ['/?open=files','/?view=apps','/wizard/?open=files','/other/?session=qa']) assert.equal(route(href),false);
+ for(const href of ['/?view=apps','/other/?session=qa','/other/?open=files']) assert.equal(route(href),false);
+ // /?open=<app> is the shell's own route now (issue 1875): the app opens, never Wizard inside a host-titled window.
+ for(const href of ['/?open=files','/wizard/?open=files']) assert.equal(route(href),true);
  assert.match(md('[other](/other/?session=qa)'),/target="_blank"/);
 });

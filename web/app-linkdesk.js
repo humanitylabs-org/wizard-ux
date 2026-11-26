@@ -45,7 +45,7 @@ window.WizCore.appParts.linkdesk = function ({ APP, appAt, APPS, appVars, closeD
    * James says as feedback to that thread. Back or ✕ closes it and lands on the thread again; Pin keeps it
    * as a normal desk. Links tapped inside a review desk navigate that same window (Back steps back). */
   function linkTitle(u) {
-    const seg = decodeURIComponent(u.pathname.replace(/\/+$/, '').split('/').filter(Boolean)[0] || u.hostname);
+    const seg = decodeURIComponent(u.pathname.replace(/\/+$/, '').split('/').filter(Boolean)[0] || 'Wizard'); // never the bare host (issue 1875)
     const app = APPS.find(x => x.url && u.pathname.startsWith(x.url.replace(/[#?].*$/, '')));
     return app ? app.name : seg.replace(/[-_]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
   }
