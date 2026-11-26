@@ -37,7 +37,7 @@ Every screen, Settings page and feature switch of the Wizard interface (the phon
 - **Settings › Resources**: A link straight to the Resources (AI usage) page.
 - **Gestures & help**: Phone: How Wizard works: tap the orb to talk, hold it for a command, swipe it up for apps, down to hide the bars, sideways between desks; Back is always one step back; Practice again. Desktop: the keys guide (⌥/, or hold ⌥ to see the keys on screen). Desktop: Settings › About & updates › Gestures & help, or ⌥/. Phone: Settings › About & updates › Gestures & help, or say 'help'.
 - **Practice tour**: The first-run practice of the orb gestures; start it again from Gestures & help › Practice again.
-- **AI apps view (desktop)**: The standard desktop. Left: the chats sidebar (switch Wizard at the top, search ⌥K, ◫ folds it to a rail ⌥L, the cog for Settings and + New chat at the bottom). Middle: the open chat, message box, model and orb. Right: the Apps column (pinned apps, open apps, + Add an app, Tidy). ⌥1–⌥0 pick an app, ⌥W closes, ⌥F makes the app panel wider, ⌥R folds the column, ⌥H hides both sides. Its sidebar's sort options: Settings › Chats & app screens.
+- **AI apps view (desktop)**: The standard desktop. Left: the chats sidebar (Wizard switcher, search ⌥K, ◫ folds it ⌥L, Settings cog, + New chat below). Middle: the open chat, message box, model and orb. Right: the Apps column (pinned apps, open apps, + Add an app, Tidy). ⌥1–⌥0 pick an app, ⌥W closes, ⌥F widens the app panel, ⌥R folds the column, ⌥H hides both sides. Sidebar sort: Settings › Chats & app screens.
 - **Apps view**: A view where every open app has its own full-screen window, with a + sheet listing Open, Installed and Get more apps.
 - **Orb view**: A view where your apps float as satellites around the orb (phone Home and a desktop scene).
 - **Desktop top bar (Desks view)**: Left: Home and your desks (+ New desktop). Right: search (⌥Space, also ⌘K), Talk about this (⌥S), Tell the computer (⌥C, local commands), Dictate (⌥D), New voice chat (⌥V), the Inbox count (⌥I, opens Chats), Settings (⌥,), Keys guide (⌥/). The AI apps view has no top bar.
@@ -168,6 +168,7 @@ Settings › Appearance › Try new features lists unfinished features anyone ca
 - **Agents run code without asking**: Container agents run code without an approval nobody sees (Agents: Just run, Ask me, Refuse); prompts wait an hour.
 - **App switches in chat**: A reply's switch card also lists an app's own feature switches, flipped right in the chat.
 - **Archive on top**: Archive is the first section of the Chats list in both By day and By status, so switching layouts never moves it.
+- **Ask before sharing feature counts**: Shared only after you say Share.
 - **Backup health in Resources**: Resources shows your backup's health.
 - **Bottom app bar on desktop**: Apps bar at the bottom on any width.
 - **Calm Agent Service restarts**: While a restart waits for running chats you see a quiet note; messages sent meanwhile go after it; if overdue, Wait longer or Restart now.
@@ -220,7 +221,7 @@ Settings › Appearance › Try new features lists unfinished features anyone ca
 
 Switches that are ordinary settings or views, not tester switches:
 - **Notifications in Chats**: Chats is the inbox: Notifications’ alerts and every app with an inbox feed are yellow threads in Chats, labelled with their app; several from one app fold into one row. They open in the chat window with Open, Done, Snooze and Resolve this (the rest from that app listed under, with Done all); done ones under Archive. Where: Settings › Chats & app screens › Notifications › Notifications in Chats (on for everyone).
-- **Different shell view - AI apps**: The AI apps view: chats in a sidebar on the left that folds to a slim rail, the chat in a centred column, your apps in a column on the right; an app opens as a panel beside the chat. Where: desktop: Settings › Appearance › Shell view › AI apps (the standard desktop view; Desks is the other choice). (desktop only).
+- **Different shell view - AI apps**: The AI apps view: chats in a left sidebar that folds to a slim rail, the chat in a centred column, your apps in a right column; an app opens beside the chat. Where: desktop: Settings › Appearance › Shell view › AI apps (the standard desktop view; Desks is the other choice). (desktop only).
 
 No longer switches (owners and old chats may still name them):
 - **Channels in Chats**: on for everyone now, nothing to turn on: open Chats and use the Channels / Activity tabs at the top. Channels lists your Spaces one per line, plus General; open one to see its chats as posts with a reply line.

@@ -365,7 +365,7 @@
       "where": "Settings › Chats & app screens › Notifications › Notifications in Chats (on for everyone)"
     },
     "miguel/ai-apps": {
-      "help": "The AI apps view: chats in a sidebar on the left that folds to a slim rail, the chat in a centred column, your apps in a column on the right; an app opens as a panel beside the chat.",
+      "help": "The AI apps view: chats in a left sidebar that folds to a slim rail, the chat in a centred column, your apps in a right column; an app opens beside the chat.",
       "where": "desktop: Settings › Appearance › Shell view › AI apps (the standard desktop view; Desks is the other choice)",
       "when": "desktop only"
     },
@@ -541,6 +541,10 @@
       "help": "Sends features you tried and your thumbs, plus a random box id.",
       "where": "Settings › Appearance › Try new features › Share feature counts"
     },
+    "wizard/feature-counts-ask": {
+      "help": "Shared only after you say Share.",
+      "where": "Settings › Appearance › Try new features › Ask before sharing feature counts"
+    },
     "wizard/phone-tester-builds": {
       "help": "Phones get the newest tester build.",
       "where": "Settings › Appearance › Try new features › Phone tester builds"
@@ -680,7 +684,7 @@
     },
     "layout:ai-apps": {
       "name": "AI apps view (desktop)",
-      "help": "The standard desktop. Left: the chats sidebar (switch Wizard at the top, search ⌥K, ◫ folds it to a rail ⌥L, the cog for Settings and + New chat at the bottom). Middle: the open chat, message box, model and orb. Right: the Apps column (pinned apps, open apps, + Add an app, Tidy). ⌥1–⌥0 pick an app, ⌥W closes, ⌥F makes the app panel wider, ⌥R folds the column, ⌥H hides both sides. Its sidebar's sort options: Settings › Chats & app screens."
+      "help": "The standard desktop. Left: the chats sidebar (Wizard switcher, search ⌥K, ◫ folds it ⌥L, Settings cog, + New chat below). Middle: the open chat, message box, model and orb. Right: the Apps column (pinned apps, open apps, + Add an app, Tidy). ⌥1–⌥0 pick an app, ⌥W closes, ⌥F widens the app panel, ⌥R folds the column, ⌥H hides both sides. Sidebar sort: Settings › Chats & app screens."
     },
     "layout:apps": {
       "name": "Apps view",

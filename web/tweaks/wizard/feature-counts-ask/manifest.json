@@ -1,0 +1,14 @@
+{
+  "id": "wizard/feature-counts-ask",
+  "name": "Ask before sharing feature counts",
+  "version": "1.0.0",
+  "author": "wizard",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout"
+  ],
+  "issues": [
+    "humanitylabs-org/wizard-ux#1817"
+  ],
+  "description": "Share feature counts stays off until you say Share to one plain prompt. It opens the first time you tap a thumb in an app's Try new features, and when you turn Share feature counts on: it says exactly what is sent (switch id, tried, thumbs, a random box id; no content, no identity). Don't share keeps it off. Drawn by core/settings.js."
+}

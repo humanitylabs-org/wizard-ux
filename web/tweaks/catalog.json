@@ -38,6 +38,7 @@
     "wizard/swap-sides",
     "wizard/desktop-bottom-bar",
     "wizard/try-feature-counts",
+    "wizard/feature-counts-ask",
     "wizard/inbox-until-archived",
     "wizard/inbox-rows",
     "wizard/sent-rows",
