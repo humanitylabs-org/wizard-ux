@@ -74,7 +74,7 @@ Back: `WizEscapeBack`, `WosBack`; `WizChatsHost.registerBack`/back.push share re
 | Settings in both shells | `WosSettings.register` (`settings.js`: Skin/Colors, Background/Mode, shared About/fail-closed updates, package `hasSystem`), `focus(id)`; same-HTML `refresh()` no-op; Home/AI rehost; Look/New skin shell filter (keeps hidden defaults); reply tweak `tweakCard`; narrow Back; `WosFeatures`; `WizConfig.responseStyle`; Try new features |
 | Agent identity, glyph, hue; default-agent route (`routeAgent`); app's agents (`appAgents`) | `WosAgents` (`agents.js`) |
 | Store | `storeKind,sourceLabel,parseInstallLink,removeInstalledApp,githubSheet` |
-| App agent routing, private-app note + setup (incl. Store); private mode (Settings › Privacy) | `WosAppRoute` (`app-route.js`, `openAgents`); `WosPrivacy`, `WosPrivateRoute` |
+| App agent routing, private-app note + setup (incl. Store); private mode (Settings › Privacy); install-sheet private AI card for apps that declare personal data | `WosAppRoute` (`app-route.js`, `openAgents`); `WosPrivacy`, `WosPrivateRoute`; `nudgeDue`, `personalApp`, `readsLine` (`store-private-nudge.js`) |
 | App icons, logos | `WizSigil` (`sigils.js`, `sigils.css`): aliases, registry/HOUSE glyphs first; unbranded fallback; `orb(node)` white glyphs; contain-fit pins. Tests: `app-icon-*.test.mjs` |
 | Launcher | `WizLauncher`, `WizLauncherDefaults`; 1s boot; `renderLauncher`: unique ids; `WizCore`: native path gate, `whenOpenable`, `installs` |
 | App tiles | `WosAppKinds` |
