@@ -52,7 +52,9 @@ window.WizCore.settingsParts.view = function ({ attention, cardHtml, chatsHost, 
       const nav = pages.map((p, i) => (p.group && p.group !== pages[i - 1]?.group && pages.some(q => q.group && q.group !== p.group) ? `<h4 class="st-navgroup">${esc(p.group)}</h4>` : '') + `<button class="st-category" data-st-page="${p.id}" aria-current="${p.id === selected ? 'page' : 'false'}"><span class="st-tx"><b>${p.title}</b></span><span class="st-val" data-st-subtitle="${p.id}">${esc(subtitle(p.id, ctx))}</span><span class="st-go" aria-hidden="true">›</span></button>`).join('');
       const fs = [...features.values()].filter(f => pageOf(f) === selected && (!ctx.skinDraft || f.id === 'look') && (!f.available || f.available(ctx)));
       // About & updates leads with the update card and its choices; the connection rows follow.
-      if (selected === 'about') fs.sort((x, y) => (y.id === 'updates') - (x.id === 'updates'));
+      // Wizard for Mac's own updates (wizard-ux issue 1624) sit right under the WizardOS group.
+      const lead = f => f.id === 'updates' ? 2 : f.id === 'mac-app-updates' ? 1 : 0;
+      if (selected === 'about') fs.sort((x, y) => lead(y) - lead(x));
       const content = fs.map(f => `<section data-settings-feature="${esc(f.id)}">${f.html(ctx)}</section>`).join('');
       root.dataset.settingsPage = page;
       root.dataset.settingsNested = ctx.skinDraft ? 'true' : 'false';
