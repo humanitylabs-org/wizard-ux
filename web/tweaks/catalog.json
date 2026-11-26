@@ -32,7 +32,6 @@
     "wizard/download-swipe",
     "wizard/interface-manual",
     "wizard/write-guard",
-    "wizard/follow-main",
     "wizard/plain-chat-titles",
     "wizard/chat-tags",
     "wizard/swap-sides",
@@ -44,7 +43,8 @@
     "wizard/phone-nav",
     "wizard/ai-apps-running",
     "wizard/channel-model-emoji",
-    "wizard/channel-auto-emoji"
+    "wizard/channel-auto-emoji",
+    "wizard/app-picker-store-search"
   ],
   "defaults": [],
   "promotedDefaults": [],

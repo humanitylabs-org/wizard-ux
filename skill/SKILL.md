@@ -162,6 +162,7 @@ Phone: things only the Android app can do: Wizard Everywhere (floating orb), sid
 Settings › Appearance › Try new features lists unfinished features anyone can switch on to try, A to Z, each 'by <author>'. The group only shows when this Wizard is on the For testers channel (Settings › About & updates › Channel › For testers); on For everyone it is hidden and these switches stay off. The same switches are also in the WizardOS Tracker app (Try it). A choice follows the owner on every device.
 
 - **Action cards in chat**: An app's proposed action (a draft, an event) shows in chat with Approve, Edit, Open in app.
+- **Add an app: search the App Store too**: Add an app's search also finds App Store apps.
 - **Agent knows the Wizard interface**: Your agent gets this manual: every screen, Settings page and feature switch, so it can say where things are.
 - **App switches in chat**: A reply's switch card also lists an app's own feature switches, flipped right in the chat.
 - **Archive on top**: Archive is the first section of the Chats list in both By day and By status, so switching layouts never moves it.
@@ -172,7 +173,6 @@ Settings › Appearance › Try new features lists unfinished features anyone ca
 - **Chats: title bar names the tab**: Chats' title bar names the tab.
 - **Clear chat notifications**: Android app: reading a LINE, WhatsApp, Telegram or other bridged chat in Messenger clears that app's own notification (needs Android's Notification access).
 - **Desktop sidebar follows Default Chats**: AI apps desktop: the chats sidebar uses the Chats look picked in Settings › Chats & app screens › Default Chats.
-- **Follow main**: Green merges go live by themselves.
 - **Inbox until archived**: Chats stay in Inbox until archived.
 - **Inbox: only what needs you**: Inbox: only what needs you.
 - **Machines on Home**: Home shows a slim strip (Wizard, AI fuel, chats, backup, network); Settings › System holds your network, AI, security and storage.
