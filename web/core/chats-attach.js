@@ -68,7 +68,7 @@ window.WizCore.chatsParts.attach = function ({ ch, CHEV_SVG, clip, COG_SVG, draf
       // Sending never waits for this: a send while it runs takes a placeholder (WizUploads.pending) and the outbox
       // collects the receipt from here, or re-uploads the kept bytes if this upload dies.
       const settle = PEND ? PEND.track(local, file) : null;
-      try { const f = await uploadFile(file, { signal: abort.signal, onProgress }); Object.assign(local, f, { uploading: false }); settle?.ok(f); if (local.preview) { PREVIEW[local.id] = local.preview; new Image().src = fileUrl(local.id); } }
+      try { const f = await uploadFile(file, { signal: abort.signal, onProgress }); Object.assign(local, f, { uploading: false }); settle?.ok(f); if (local.preview) PREVIEW[local.id] = local.preview; }
       catch (e) { settle?.fail(e); c.files = c.files.filter(x => x !== local); if (tray !== c.files && tray.includes(local)) tray.splice(tray.indexOf(local), 1); if (!abort.signal.aborted && !local.handedOff) toast('!', e.user ? e.message : 'Upload failed · not attached', 3200); }
       finally { UPLOAD_ABORT.delete(local.key); }
       refreshCompose(wid);

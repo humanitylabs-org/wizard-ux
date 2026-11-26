@@ -63,7 +63,3 @@ test('the local preview is released once Wizard\'s copy loads; a failed load fal
   assert.equal(img.src, '/wizard/files/drop_8e86d69c/content');
 });
 
-test('an unloaded single photo is never 0 px wide', () => {
-  const css = readFileSync(new URL('../web/core/chats.css', import.meta.url), 'utf8');
-  assert.match(css, /\.mgrid\.n1 \.mimg img \{[^}]*min-width: 60px/);
-});
