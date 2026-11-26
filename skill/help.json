@@ -393,6 +393,10 @@
       "help": "Turn private mode on or off on this Wizard: chosen apps move to a private Tinfoil agent, plus the Privacy check.",
       "where": "Settings › Appearance › Try new features › Private mode switch-over"
     },
+    "wizard/private-routing": {
+      "help": "With private mode on, the orb sends each request straight to the agent it is for: the agent or model you name, personal data to the private agent, a reply to the thread in front, the rest to your private default.",
+      "where": "Settings › Appearance › Try new features › Private routing"
+    },
     "wizard/private-first-setup": {
       "help": "New installs start private: Welcome leads with Tinfoil; Claude and ChatGPT are optional extras.",
       "where": "Settings › Appearance › Try new features › Private first setup"
