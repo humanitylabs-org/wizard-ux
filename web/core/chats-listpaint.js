@@ -43,7 +43,7 @@ window.WizCore.chatsParts.listpaint = function ({ actAllAgents, activityBody, ag
     // The bottom tabs Inbox · Tags · Sent (wizard-ux issue 1778): the Sent view, and no Running row
     // (Working is Sent's filter). The AI apps sidebar pane has them too (wizard-ux issue 1807).
     const sentTabs = !feed && typeof sentTabsOn === 'function' && sentTabsOn(w), sentView = sentTabs && sentOpen(w);
-    const runView = !side && !sentView && typeof runningOpen === 'function' && runningOpen(w), runRow = !side && !runView && !feed && !sentTabs && typeof runningRow === 'function' ? runningRow(w) : ''; // wizard-ux issue 1569
+    const runView = !sentView && typeof runningOpen === 'function' && runningOpen(w), runRow = !side && !runView && !feed && !sentTabs && typeof runningRow === 'function' ? runningRow(w) : ''; // wizard-ux issue 1569
     // The title bar (wizard-ux issue 1836, switch wizard/chats-title-bar): the tab's name over the list, search and
     // filter as icons; the bodies read c.tbar (no Inbox section row) and leave the Inbox count in c.inboxN.
     const tbTab = !runView && sentTabs && typeof titleBarTab === 'function' ? titleBarTab(w) : '';
@@ -94,7 +94,7 @@ window.WizCore.chatsParts.listpaint = function ({ actAllAgents, activityBody, ag
     const ph = filtered ? 'Search within' : 'Search chats and messages';
     // With the title bar the search field opens under it only while searching or filtering, without its own filter button.
     const tbFind = !!tbTab && tbTab !== 'sent' && !!(c.tsearch || c.q || c.focus || F);
-    const head = side ? (sentView ? sentHead(w) : chanHead(w, feed)) : (tbTab && !tbFind ? '' : `<div class="ch-top${tbTab ? ' ch-tbar-find' : ''}"><label class="ch-search${filtered ? ' has-chips' : ''}"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>${chips}<input data-chsearch placeholder="${ph}" aria-label="Search chats and messages" value="${esc(c.q)}" enterkeyhint="search" spellcheck="false">${c.q ? '<button type="button" class="ch-sclear" data-chsclear aria-label="Clear search">×</button>' : ''}${tbTab ? '' : `<button type="button" class="ch-fbtn${filtered ? ' on' : ''}" data-chfbtn aria-label="Filter chats" aria-expanded="${c.sheet ? 'true' : 'false'}"><svg viewBox="0 0 24 24"><path d="M4 6h16M7 12h10M10 18h4"/></svg></button>`}</label>${AGID ? '' : (window.WosBell?.html?.() || '')}</div>`)
+    const head = side ? (runView ? runningHead() : sentView ? sentHead(w) : chanHead(w, feed)) : (tbTab && !tbFind ? '' : `<div class="ch-top${tbTab ? ' ch-tbar-find' : ''}"><label class="ch-search${filtered ? ' has-chips' : ''}"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>${chips}<input data-chsearch placeholder="${ph}" aria-label="Search chats and messages" value="${esc(c.q)}" enterkeyhint="search" spellcheck="false">${c.q ? '<button type="button" class="ch-sclear" data-chsclear aria-label="Clear search">×</button>' : ''}${tbTab ? '' : `<button type="button" class="ch-fbtn${filtered ? ' on' : ''}" data-chfbtn aria-label="Filter chats" aria-expanded="${c.sheet ? 'true' : 'false'}"><svg viewBox="0 0 24 24"><path d="M4 6h16M7 12h10M10 18h4"/></svg></button>`}</label>${AGID ? '' : (window.WosBell?.html?.() || '')}</div>`)
       // Switching Focus (agent/Space) never pushes the list down with a count line (James, 25 Oct 2026); only a status filter says how many matched.
       + (chanOn ? chanHead(w, feed) : '')
       + (F && LIVE.ok ? `<div class="ch-count">${hitCount()} ${hitCount() === 1 ? 'chat' : 'chats'}${coachLine()}</div>` : '');
@@ -162,7 +162,7 @@ window.WizCore.chatsParts.listpaint = function ({ actAllAgents, activityBody, ag
     if (sentView) body = sentBody(w);
     // Progress sits above the results (James, 25 Oct 2026: it was hidden below a long Archive); the final line stays under them.
     if (bs && LST.ok) body = BS.scanning(bs) || bs.busy ? BS.footer(bs) + body : body + BS.footer(bs);
-    if (side && !feed && !sentView && chatVars.chanView !== 'channels') body = ''; // Activity: the tabs only; the sidebar draws its own rows
+    if (side && !feed && !sentView && !runView && chatVars.chanView !== 'channels') body = ''; // Activity: the tabs only; the sidebar draws its own rows
     // An unlanded return bookmark outranks the scroller's own reading: that reading is the 0 it fell to.
     // A fresh page has no scroller yet: fall back to the place this list last saved (once per page per window).
     const fresh = !el.querySelector('.ch-scroll') && !c.listPlace && !c.listPending && !c.storedTried;
@@ -198,7 +198,7 @@ window.WizCore.chatsParts.listpaint = function ({ actAllAgents, activityBody, ag
     // The Inbox sort, in the filter sheet while the title bar is on (it left Inbox's section row): Chats' own Ready order.
     const tbSort = () => { const L = window.WizChatsListModel, o = L.activitySortOf(chatVars.readyOrder);
       return `<h5>Sort</h5><div class="ch-fopts ch-fsort">${L.ACTIVITY_SORTS.map(([v, l]) => `<button type="button" class="ch-fopt${o === v ? ' on' : ''}" data-chfsort="${v}" aria-pressed="${o === v}">${esc(l)}${o === v ? '<b>✓</b>' : ''}</button>`).join('')}</div>`; };
-    const html = side ? `<div data-part="list" class="ch-list ch-side${feed ? ' ch-side-feed' : sentView ? ' ch-side-sent' : chatVars.chanView === 'channels' ? ' ch-side-chan' : ''}">${head}<div class="ch-scroll">${body}</div>${feed && typeof jumpPillsHtml === 'function' ? jumpPillsHtml() : ''}${feed ? fab : ''}${sentTabs ? sentBar(w) : ''}</div>`
+    const html = side ? `<div data-part="list" class="ch-list ch-side${feed ? ' ch-side-feed' : runView ? ' ch-side-run' : sentView ? ' ch-side-sent' : chatVars.chanView === 'channels' ? ' ch-side-chan' : ''}">${head}<div class="ch-scroll">${body}</div>${feed && typeof jumpPillsHtml === 'function' ? jumpPillsHtml() : ''}${feed ? fab : ''}${sentTabs ? sentBar(w) : ''}</div>`
       : `<div data-part="list" class="ch-list${AGID ? ' agent' : ''}${compactOn() ? ' compact' : ''}${byStatus() ? ' by-status' : ''}"${focusedAgent(focus) ? ` style="--agc:${AGS()?.colour(agentRec(focusedAgent(focus))) || ''};--ch-agent-hue:${AGS()?.distinctHues().get(focusedAgent(focus)) ?? AGS()?.hue(agentRec(focusedAgent(focus)))}"` : ''}><div data-slot="list-top"></div>${tbTab ? titleBar(tbTab, { n: c.inboxN, tools: tbTab !== 'sent', searching: tbFind, filtered: !!F, sheet: !!c.sheet }) : ''}${runView ? runningHead() : sentView ? sentHead(w, !!tbTab) : head}${sync}<div class="ch-ptr" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 5v14M6 13l6 6 6-6"/></svg><span>Pull to refresh</span></div><div class="ch-scroll">${runView || sentView ? '' : sugHtml + unsentRow}${runRow}${body}</div>${feed && typeof jumpPillsHtml === 'function' ? jumpPillsHtml() : ''}${pill}${runView ? '' : fab}${sentTabs ? sentBar(w) : ''}${feed || chanOn ? '' : focusStrip(w)}${c.sheet ? filterSheet(w, c, tbTab === 'inbox' ? tbSort() : '') : ''}</div>`;
     // Unchanged list reads keep the same nodes, caret, scroll and text selection.
     // A thread/list remount invalidates the identity guard even when its HTML matches.
