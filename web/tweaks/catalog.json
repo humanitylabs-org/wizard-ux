@@ -46,6 +46,7 @@
     "wizard/channel-auto-emoji",
     "wizard/app-picker-store-search",
     "wizard/phone-push",
+    "wizard/mac-app-updates",
     "wizard/phone-tester-builds"
   ],
   "defaults": [],
