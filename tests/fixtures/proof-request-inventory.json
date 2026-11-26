@@ -808,6 +808,18 @@
       ],
       "note": "Private first answer (wizard-ux issues 1549 and 1800): read when the Welcome boots or opens, and when Settings › Privacy asks for its Finish setting up private AI row; standard first is on for everyone since wizard-ux issue 1800. POSTed {offer} only by an owner tap on the Welcome's private AI offer, which none of the three flows reach. The shared catalogue answers 404 (an older Service without the route). tests/welcome-standard-first.test.mjs covers it against a fake box."
     },
+    "/wizard/v1/private-mode": {
+      "status": "not-exercised",
+      "source": "web/core/privacy.js",
+      "kind": "read",
+      "note": "Settings › Privacy's Private mode row and switch-over sheet (wizard-ux issue 1801), read and POSTed (/private-mode/{agent,apps,context,default,off}) only while the switch wizard/private-mode is on, which none of the three flows turn on. tests/privacy-settings.test.mjs and tests/qa-privacy-settings.cjs (the real Agent Service) cover it. Refused and collected if a flow reaches it."
+    },
+    "/wizard/v1/privacy-check": {
+      "status": "not-exercised",
+      "source": "web/core/privacy.js",
+      "kind": "read",
+      "note": "Settings › Privacy's Privacy check (wizard-ux issue 1801), read only while the switch wizard/private-mode is on, which none of the three flows turn on. Covered by tests/privacy-settings.test.mjs and tests/qa-privacy-settings.cjs. Refused and collected if a flow reaches it."
+    },
     "/wizard/v1/setup": {
       "status": "catalogued",
       "source": "web/core/setup-launch.js",

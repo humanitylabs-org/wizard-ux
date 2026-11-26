@@ -52,6 +52,8 @@ window.WizCore.appParts.agentorb = function ({ $, agentInfo, APP, appAt, APPS, a
     contextDraft: (key, item, words, draft) => { let w = skinChatsWin(); if (!w) { openChatsList(); w = skinChatsWin(); } if (!w) return false; CHATS.openContextDraft(w.id, key, item, draft); CHATS.renderChats(w); if (words) CHATS.sendChat(w.id, words, 'tapping Resolve this on a notification in Chats'); return true; },
     models: () => { const w = skinChatsWin(); return w ? CHATS.tweakModels(w.id) : []; },
     model: (choice, alive) => { const w = skinChatsWin(); return w ? CHATS.tweakModel(w.id, choice, alive) : null; },
+    // Settings › Privacy's Ask my Wizard (wizard-ux#1801): a new chat whose composer holds these words, unsent.
+    textDraft: text => { openChatsList(); const w = skinChatsWin(); if (!w) return false; CHATS.openTextDraft(w.id, text); CHATS.renderChats(w); return true; },
     deskCount: () => appVars.desks.length,
     root() { const w = skinChatsWin(); return w ? track.querySelector(`[data-chats="${w.id}"]`) : null; },
     dock: () => $('#dock'),

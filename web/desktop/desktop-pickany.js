@@ -123,7 +123,7 @@ window.WizCore.desktopParts.pickany = function ({ $, C, chanPost, CHATS, chatsUp
     }
 
     if (pick.active()) return pick.key(e);
-    if (window.WosWelcome?.active) { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); window.WosWelcome.back(); } return; } // first run: no shell shortcuts behind it
+    if (window.WosWelcome?.active && !window.WosPrivacy?.isOpen) { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); window.WosWelcome.back(); } return; } // first run: no shell shortcuts behind it
     if (e.key === 'Escape' && keyHints.pinned()) { e.preventDefault(); e.stopPropagation(); toggleKeys(false); returnToSettings(); return; }
     keyHints.down(e);
     // A layout's own keys (the Orbs view: hold-left-⌥ app letters, its panels) see every key first, app frames included.

@@ -138,5 +138,5 @@
     if (d.action === 'new-private-agent') { HOOK.openAgents?.(null, { newPreset: 'private' }); return; }
     open(d.id);
   }
-  window.WosAppRoute = { slot, paint, open, close, request, isOpen: () => !!el, back: close, init(o = {}) { if (typeof o.openAgents === 'function') HOOK.openAgents = o.openAgents; }, get current() { return cur && { ...cur }; } };
+  window.WosAppRoute = { slot, paint, open, close, request, isOpen: () => !!el, back: close, openAgents: (id, o) => !!HOOK.openAgents && (HOOK.openAgents(id, o), true), init(o = {}) { if (typeof o.openAgents === 'function') HOOK.openAgents = o.openAgents; }, get current() { return cur && { ...cur }; } };
 })();

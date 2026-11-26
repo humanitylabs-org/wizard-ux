@@ -253,7 +253,8 @@
   }
 
   // Standard first's Private AI step (offered once). With nothing connected it leads with private AI as the way to get
-  // a model. "Why does this matter?" waits for its page (wizard-ux issue 1801), so it is not drawn yet.
+  // a model. "Why does this matter?" opens Settings › Privacy's Why it matters page (wizard-ux issue 1801, core/privacy.js),
+  // so it shows only while that page's switch (wizard/private-mode) is on.
   function paintOffer() {
     if (provider) return paintSignin();
     const none = skipped && !linked.size, busy = !!offerBusy;
@@ -261,7 +262,7 @@
     return `${brand()}${dots()}<header class="wl-head"><h2 tabindex="-1">Want a fully private AI?</h2>${none ? `<p class="wl-lead">You haven\u2019t connected an AI yet. Private AI can be how ${esc(agent())} thinks: set it up now and ${esc(agent())} can answer you.</p>` : ''}<p>Private AI runs in sealed hardware. No one except you, not us or any AI company, can see your messages, its answers or your data. Use it alongside your Claude or ChatGPT, or on its own.</p></header>
       ${offerError || installError ? `<p class="wl-status err" role="alert">${esc(offerError || installError)}</p>` : ''}
       ${btn('setup', 'Set up private AI', 'wl-primary')}
-      <div class="wl-offer-more">${btn('later', 'Later', 'wl-skip')}${btn('declined', 'No thanks', 'wl-skip')}</div>`;
+      <div class="wl-offer-more">${btn('later', 'Later', 'wl-skip')}${btn('declined', 'No thanks', 'wl-skip')}</div>${window.WosPrivacy?.on?.() ? '<button type="button" class="wl-skip wl-why" data-wl="why">Why does this matter?</button>' : ''}`;
   }
   // The answer: Set up private AI opts the box in, then signs in to Tinfoil here; Later and No thanks go on.
   async function answer(choice) {
@@ -524,6 +525,7 @@
     if (act === 'provider') { pfSeen = 0; choose(t.dataset.app); }
     else if (act === 'skip-ai' && step === 'ai') { skipped = !linked.size; log('ai:skipped'); step = nextStep(); provider = null; paint(); }
     else if (act === 'offer' && step === 'private') answer(t.dataset.offer);
+    else if (act === 'why') window.WosPrivacy?.open?.('why');
     else if (act === 'back' && step === 'bring') { bringOpen = false; paint(); }
     else if (act === 'back') { clearTimeout(pollT); provider = null; paint(); }
     else if (act === 'store') { close(); H.openStore?.(); }
@@ -632,7 +634,8 @@
   let pfAt = 0, pfAsking = false;
   const finishDue = () => {
     if (!pfAsking && Date.now() - pfAt > (pf ? 60000 : 15000)) { pfAsking = true; pfRead().then(() => { pfAt = Date.now(); pfAsking = false; try { window.WosSettings?.refresh?.(); } catch (e) {} }); }
-    return pf?.offer === 'later' && !pf?.private_agent;
+    // With private mode's Settings › Privacy on (wizard-ux issue 1801), its Private mode row says Finish setting up.
+    return pf?.offer === 'later' && !pf?.private_agent && !window.WosPrivacy?.on?.();
   };
   try {
     window.WosSettings?.register?.({ id: 'private-ai-finish', page: 'privacy', aliases: ['privacy', 'private-ai'], available: finishDue,
