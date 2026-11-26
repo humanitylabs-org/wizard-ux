@@ -389,6 +389,10 @@
       "help": "Container agents run code without an approval nobody sees (Agents: Just run, Ask me, Refuse); prompts wait an hour.",
       "where": "Settings › Appearance › Try new features › Agents run code without asking"
     },
+    "wizard/private-ai-nudge": {
+      "help": "Installing a personal-data app suggests private AI.",
+      "where": "Settings › Appearance › Try new features › Install sheet recommends private AI"
+    },
     "wizard/private-mode": {
       "help": "Turn private mode on or off on this Wizard: chosen apps move to a private Tinfoil agent, plus the Privacy check.",
       "where": "Settings › Appearance › Try new features › Private mode switch-over"
@@ -410,7 +414,7 @@
       "where": "Settings › Appearance › Try new features › Phone notifications per app"
     },
     "wizard/app-location": {
-      "help": "Only apps that ask for your location in their wizard.md (today just Maps) may use it, and only after you say yes in your browser's or phone's own location prompt. Every other app stays blocked with no prompt.",
+      "help": "Only apps whose wizard.md asks for location (today Maps) may use it, after you say yes in the browser's or phone's own prompt.",
       "where": "Settings › Appearance › Try new features › Location for Maps"
     },
     "wizard/phone-badge-look": {
@@ -430,7 +434,7 @@
       "where": "Settings › Appearance › Try new features › Chat replies as Chats notifications"
     },
     "wizard/lock-screen-player": {
-      "help": "Phone app (Android and iPhone): Music and Podcasts play through the phone's own media player (lock screen, Control Center, headset buttons), and keep playing locked.",
+      "help": "Android and iPhone: Music and Podcasts play through the phone's media player (lock screen, Control Center, headset buttons), and keep playing locked.",
       "where": "Settings › Appearance › Try new features › Phone media player for Music and Podcasts"
     },
     "wizard/app-tap-home": {
