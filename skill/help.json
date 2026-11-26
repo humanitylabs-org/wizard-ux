@@ -454,6 +454,10 @@
       "help": "A chat can carry several tags.",
       "where": "Settings › Appearance › Try new features › Tags"
     },
+    "wizard/app-picker-store-search": {
+      "help": "Add an app's search also finds App Store apps.",
+      "where": "Settings › Appearance › Try new features › Add an app: search the App Store too"
+    },
     "wizard/swap-sides": {
       "help": "Chats right, apps left (⌥⇧L).",
       "where": "Settings › Appearance › Try new features › Swap sides"
