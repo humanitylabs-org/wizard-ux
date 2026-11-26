@@ -22,9 +22,10 @@
   let state = Store.read() || { version: 1, off: {} };
   /* Switches removed once they were on for everyone (wizard-ux issue 1236: wizard/desktop-chats, the phone Chats list is
    * now core/desktop-chats.*) or dropped with their code (wizard-os#639: wizard/app-panel-left), or on for everyone in core (wizard-agent-service
-   * issue 469: wizard/needs-you-reason, now core/chat-power.*): a saved on/off for one is
+   * issue 469: wizard/needs-you-reason, now core/chat-power.*; issue 514: wizard/follow-main, the box follows main
+   * wherever its timer runs): a saved on/off for one is
    * cleared from this device, once, so no stale choice is kept. */
-  const GONE = ['wizard/desktop-chats', 'wizard/app-panel-left', 'wizard/needs-you-reason'];
+  const GONE = ['wizard/desktop-chats', 'wizard/app-panel-left', 'wizard/needs-you-reason', 'wizard/follow-main'];
   if (Store.read()) {
     let dirty = false;
     for (const k of ['defaultsOff', 'promotedMigrated']) if (Array.isArray(state[k]) && state[k].some(id => GONE.includes(id))) { state[k] = state[k].filter(id => !GONE.includes(id)); dirty = true; }
