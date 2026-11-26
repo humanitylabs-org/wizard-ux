@@ -50,7 +50,7 @@ final class UnreadNotification implements BadgeSync.Mechanism {
         Notification.Builder b = new Notification.Builder(c, CH)
                 .setSmallIcon(android.R.drawable.stat_notify_chat)
                 .setContentTitle("Messenger")
-                .setContentText(count == 1 ? "1 unread" : count + " unread")
+                .setContentText(BadgeLook.on(c) ? BadgeText.label(count, true) + " unread" : count == 1 ? "1 unread" : count + " unread")
                 .setNumber(count)
                 .setShortcutId(shortcutId)
                 .setBadgeIconType(Notification.BADGE_ICON_SMALL)

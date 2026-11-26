@@ -404,8 +404,12 @@
       "help": "Only apps that ask for your location in their wizard.md (today just Maps) may use it, and only after you say yes in your browser's or phone's own location prompt. Every other app stays blocked with no prompt.",
       "where": "Settings › Appearance › Try new features › Location for Maps"
     },
+    "wizard/phone-badge-look": {
+      "help": "Android: Messenger icon count shows the exact number in a One UI-style corner badge.",
+      "where": "Settings › Appearance › Try new features › One UI icon count"
+    },
     "wizard/phone-push": {
-      "help": "Android app, with Phone notifications per app on: your Wizard tells the phone the moment an app sends a notification, so it shows within seconds even with the phone locked (one connection over Tailscale, no Google).",
+      "help": "Android app, with Phone notifications per app on: app notifications reach the phone within seconds, even locked (one Tailscale connection, no Google).",
       "where": "Settings › Appearance › Try new features › Instant phone notifications"
     },
     "wizard/phone-chat-replies": {

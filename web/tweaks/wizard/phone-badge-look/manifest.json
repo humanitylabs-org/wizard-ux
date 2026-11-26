@@ -1,0 +1,14 @@
+{
+  "id": "wizard/phone-badge-look",
+  "name": "One UI icon count",
+  "version": "1.0.0",
+  "author": "wizard",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout"
+  ],
+  "description": "WizardOS Android app: the unread count on the Messenger home-screen icon shows the exact number (up to 999, then 999+) instead of 9+, in a solid orange-red badge with white digits and no ring, at the icon's top-right corner like One UI's own badges (on Samsung as close to the corner as the icon shape shows).",
+  "issues": [
+    "humanitylabs-org/wizard-ux#1669"
+  ]
+}

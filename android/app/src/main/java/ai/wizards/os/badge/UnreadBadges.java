@@ -110,6 +110,28 @@ public final class UnreadBadges {
         }
     }
 
+    /**
+     * The badge look changed (wizard-ux issue 1669, switch wizard/phone-badge-look): redraw every mechanism with the
+     * newest known count. The count is unchanged, so the applied marks are dropped first or the sync would skip it.
+     * No network; off the caller's thread (shortcut and widget IPC).
+     */
+    static void restyle(Context context) {
+        Context c = context.getApplicationContext();
+        new Thread(() -> {
+            try {
+                synchronized (POLL) {
+                    SharedPreferences p = prefs(c);
+                    SharedPreferences.Editor e = p.edit();
+                    for (String k : p.getAll().keySet()) if (k.startsWith("applied.")) e.remove(k);
+                    e.apply();
+                    if (!p.contains("count") || !wanted(c)) return;
+                    int ok = BadgeSync.syncAll(new PrefsStore(p), mechanisms(c), p.getInt("count", 0));
+                    Log.i(TAG, "restyle inSync=" + ok);
+                }
+            } catch (RuntimeException e) { Log.w(TAG, "restyle: " + e); }
+        }, "wizard-unread-restyle").start();
+    }
+
     /** The app is on screen or the Everywhere service lives: keep a light in-process poll going. */
     public static void hold(Context context, Object owner, boolean on) {
         Context c = context.getApplicationContext();
