@@ -1211,7 +1211,7 @@
       "status": "not-exercised",
       "source": "web/live.js",
       "kind": "write-or-stream",
-      "note": "Dismiss for the Service's saved-result Needs you is an off-by-default tweak (wizard/needs-you-reason); none of qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed turns it on, so nothing reaches it. Refused and collected, never answered, if a flow reaches it."
+      "note": "Dismiss for the Service's saved-result Needs you (wizard-agent-service issue 469, on for everyone) is only offered on a thread with a saved result; the shared catalogue answers /wizard/background-results with 404, so none of qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed reaches it. Refused and collected, never answered, if a flow reaches it."
     },
     "/wizard/background-results/{}/continue": {
       "status": "not-exercised",
