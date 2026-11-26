@@ -67,7 +67,7 @@ window.WizCore.chatsParts.chanui = function ({ agentName, agentRec, ago, AGS, ch
     vib(10); return true;
   }
   /* Channel emoji; core/chats-chanemoji.js. */
-  const { chanEmojiPick, chanEmojiSync, chanEmojiTap, chanSetEmoji, openChannelEmoji } = window.WizCore.chatsParts.chanemoji({ chanFace, chanRenameTo, esc, norm, openEmojiSheet, spaceAgent, spaces, toast });
+  const { chanEmojiPick, chanEmojiSync, chanEmojiTap, chanModelEmoji, chanSetEmoji, openChannelEmoji } = window.WizCore.chatsParts.chanemoji({ chanFace, chanRenameTo, esc, norm, openEmojiSheet, spaceAgent, spaces, toast });
   function openChannelRename(wid, cid) {
     const el = track.querySelector(`[data-chats="${wid}"]`), sp = spaces().find(s => s.id === cid); if (!el || !sp) return;
     closeRowSheet();
@@ -102,13 +102,13 @@ window.WizCore.chatsParts.chanui = function ({ agentName, agentRec, ago, AGS, ch
     closeRowSheet();
     chanRenameTo(cid, t);
   }
-  function chanRenameTo(cid, t) {
+  function chanRenameTo(cid, t, quiet = false) { // quiet: the model's emoji (issue 1605) renames with no toast
     const sp = spaces().find(s => s.id === cid); if (!sp || !t || t.length > 60) return false;
     if (spaces().some(s => s.id !== cid && spaceAgent(s) === spaceAgent(sp) && norm(s.name) === norm(t))) { toast('!', 'Already a channel with that name', 2200); return false; }
     if (t === sp.name) return true;
     if (chanStore()) LIVE.chanStore.patch({ id: cid, name: t }); // the store's channel (issue 1261)
     else LIVE.prefOps([{ op: 'set', key: `spaces/${cid}/name`, item: t }]);
-    chanRepaintAll(); toast('✎', 'Renamed', 1400);
+    chanRepaintAll(); if (!quiet) toast('✎', 'Renamed', 1400);
     return true;
   }
   function channelSheetClick(e) {
@@ -154,5 +154,5 @@ window.WizCore.chatsParts.chanui = function ({ agentName, agentRec, ago, AGS, ch
   function clearAll(w) { const c = ch(w.id); c.filter = ''; c.q = ''; c.filterFrom = null; window.WizCore.chatSearch?.cancel(w.id); rerenderList(w); }
   function setQuery(w, q) { const c = ch(w.id); if (w.thread) chatsBack(w); c.q = String(q || ''); rerenderList(w); }
   const SEC_DEFAULT = { errors: true, working: true, saved: true, ready: true, yesterday: true, pastWeek: false, deferred: false, archive: false, recent: true, snoozed: false, archived: false, sentWorking: true, sentProcessed: true };
-  return { boxModel, chanboxLate, chanCompose, chanComposer, chanDraftKey, chanDropSending, chanEditUnsent, chanEmojiPick, chanEmojiSync, chanEmojiTap, chanHead, chanHold, chanKey, chanMark, chanModel, channelClick, channelFeed, channelsBody, channelSend, chanOwnPost, chanRepaint, chanScrolled, chanSetEmoji, chanSpaceOf, chanToEnd, chanUser, clearAll, feedLate, openChannelSheet, SEC_DEFAULT, setChanModel, setQuery, submitChannelRename, bindLate: v => { if ('ACT' in v) ACT = v.ACT; if ('elOf' in v) elOf = v.elOf; if ('holdList' in v) holdList = v.holdList; if ('mediaOfFile' in v) mediaOfFile = v.mediaOfFile; if ('openSpacePicker' in v) openSpacePicker = v.openSpacePicker; if ('orderBar' in v) orderBar = v.orderBar; if ('RENAME_SVG' in v) RENAME_SVG = v.RENAME_SVG; } };
+  return { boxModel, chanboxLate, chanCompose, chanComposer, chanDraftKey, chanDropSending, chanEditUnsent, chanEmojiPick, chanEmojiSync, chanEmojiTap, chanModelEmoji, chanHead, chanHold, chanKey, chanMark, chanModel, channelClick, channelFeed, channelsBody, channelSend, chanOwnPost, chanRepaint, chanScrolled, chanSetEmoji, chanSpaceOf, chanToEnd, chanUser, clearAll, feedLate, openChannelSheet, SEC_DEFAULT, setChanModel, setQuery, submitChannelRename, bindLate: v => { if ('ACT' in v) ACT = v.ACT; if ('elOf' in v) elOf = v.elOf; if ('holdList' in v) holdList = v.holdList; if ('mediaOfFile' in v) mediaOfFile = v.mediaOfFile; if ('openSpacePicker' in v) openSpacePicker = v.openSpacePicker; if ('orderBar' in v) orderBar = v.orderBar; if ('RENAME_SVG' in v) RENAME_SVG = v.RENAME_SVG; } };
 };
