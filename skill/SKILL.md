@@ -166,6 +166,7 @@ Settings › Appearance › Try new features lists unfinished features anyone ca
 - **Agent knows the Wizard interface**: Your agent gets this manual: every screen, Settings page and feature switch, so it can say where things are.
 - **App switches in chat**: A reply's switch card also lists an app's own feature switches, flipped right in the chat.
 - **Archive on top**: Archive is the first section of the Chats list in both By day and By status, so switching layouts never moves it.
+- **Browser takeover for Google setup**: The agent gets hermes-human-handoff for Google setup.
 - **Calm Agent Service restarts**: While the Agent Service waits for running chats to restart, you see a quiet note, not errors; a message sent meanwhile sends after the restart; if overdue, choose Wait longer or Restart now.
 - **Calm offline card**: The can't-reach-your-Wizard card shows one dotted path (Internet · Tailscale · Wizard), one short next step and a small Check again with the automatic re-check time.
 - **Channels: a fitting emoji for new channels**: New channels get a fitting emoji.

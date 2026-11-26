@@ -1,0 +1,14 @@
+{
+  "id": "wizard/human-handoff",
+  "name": "Browser takeover for Google setup",
+  "version": "1.0.0",
+  "author": "wizard",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout"
+  ],
+  "issues": [
+    "humanitylabs-org/wizard-os#775"
+  ],
+  "description": "Your box's agent gets Human Handoff (hermes-human-handoff v0.1.0 with Python Playwright): it opens a fresh, throwaway browser on the box and sends you a private link to it on your phone, so you sign in to Google yourself and it does the rest of Connected accounts' Google app setup. The App Manager (wam/human_handoff.py) installs it within the hour, and removes it when you turn this off. Nothing on screen changes."
+}
