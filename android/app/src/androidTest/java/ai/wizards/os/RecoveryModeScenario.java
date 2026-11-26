@@ -62,8 +62,14 @@ final class RecoveryModeScenario {
             assertTrue("background work is paused", StartGuard.paused());
             assertTrue("the shell loads underneath", box.waitFor("GET /wizard-os-home/", 20000));
             // 2. Send diagnostics
-            find(device, By.text("Send diagnostics"), 10000).click();
-            assertNotNull("diagnostics never reported sent", find(device, By.text("Diagnostics sent to your Wizard."), 40000));
+            // A launcher ANR dialog (no readable root, so its Wait button can't be found) can swallow the tap: tap again.
+            UiObject2 sent = null;
+            for (int tap = 0; tap < 3 && sent == null; tap++) {
+                UiObject2 send = find(device, By.text("Send diagnostics"), 10000);
+                if (send != null) send.click();
+                sent = find(device, By.text("Diagnostics sent to your Wizard."), 15000);
+            }
+            assertNotNull("diagnostics never reported sent", sent);
             String report = box.body("POST /wizard-os-home/api/diagnostics/scroll-capture");
             assertNotNull("the Wizard got the report", report);
             assertTrue("the report carries the saved freezes", report.contains("\"hangs\""));
@@ -105,8 +111,15 @@ final class RecoveryModeScenario {
             if (hit != null) return hit;
             UiObject2 wait = device.findObject(By.res("android:id/aerr_wait"));
             if (wait != null) wait.click();
+            else closeSystemDialogs(device);
         }
         return null;
+    }
+
+    /** An ANR dialog whose root UiAutomator can't read: ask the system to close it. */
+    private static void closeSystemDialogs(UiDevice device) {
+        try { device.executeShellCommand("am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS"); }
+        catch (IOException ignored) { /* best effort */ }
     }
 
     /** The emulator's real screen, logged (tag RecoveryShot, base64 PNG in chunks) for the pull request. */

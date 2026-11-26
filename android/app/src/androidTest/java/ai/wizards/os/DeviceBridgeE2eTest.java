@@ -136,6 +136,11 @@ public class DeviceBridgeE2eTest {
             if (hit != null) return hit;
             androidx.test.uiautomator.UiObject2 wait = device.findObject(By.res("android:id/aerr_wait"));
             if (wait != null) wait.click();
+            else {
+                // An ANR dialog whose root UiAutomator can't read: ask the system to close it.
+                try { device.executeShellCommand("am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS"); }
+                catch (java.io.IOException ignored) { /* best effort */ }
+            }
         }
         return null;
     }
