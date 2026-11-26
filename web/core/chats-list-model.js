@@ -258,7 +258,38 @@ function inboxWants(s, { needs = () => false, unread = () => false, quiet = () =
  * he asked, activity he didn't start, an unknown outcome) is Inbox: when in doubt it stays visible. `rows` are the Sent
  * rows naming this thread (sentIndex), facts are the shell's needs(s), quiet(s) and working(s). Pure. */
 const PLACE_INBOX_STATES = new Set(['needs_you', 'failed']);
-function placeOf(s, rows, { needs = () => false, quiet = () => false, working = () => false } = {}) {
+/* Smart inbox (wizard-ux issue 1883, switch wizard/smart-inbox, off by default; James, 26 Nov 2026: "The only things
+ * that come into my inbox are things that require my attention in a timely manner and everything else will wait until
+ * I say catch me up"). With it on, `facts.smart` makes placeOf the smart rule: a failed run or an approval is Inbox; a
+ * running thread is Sent (Working), whoever started it; a blocking needs you is Inbox, a check / confirm ask is Sent;
+ * the newest Sent row failed is Inbox; an answer to words of his that asked for a reply is Inbox; everything else,
+ * with or without a Sent row (agent-started, a new chat's first message, older than the log), is Sent. Unread never
+ * decides. */
+const SMART_INBOX = 'wizard/smart-inbox';
+const smartInboxOn = tweaks => String(tweaks || '').split(' ').includes(SMART_INBOX);
+// His words asked for an answer: his correction says so, else the box's reply rules (a wants-reply phrase, a short
+// question; never a no-reply phrase), a voice reply with no words yet, a question mark or an ask-to-be-told phrase.
+const ASK_WORDS = /\b(?:answer me|tell me|let me know|get back to me|ping me|update me|keep me posted|what do you think)\b/i;
+function sentAsked(r) {
+  if (!r || r.quiet === true) return false;
+  if (r.corrected && typeof r.corrected.shouldReply === 'boolean') return r.corrected.shouldReply;
+  const first = String((Array.isArray(r.rules) && r.rules[0]) || '');
+  if (/^no_reply:/.test(first)) return false;
+  if (/^wants_reply:/.test(first) || first === 'short_question' || first === 'question' || (r.route === 'thread' && first === 'voice')) return true;
+  const t = String(r.text || '');
+  return t.includes('?') || ASK_WORDS.test(t);
+}
+const newestRow = rows => rows.reduce((a, r) => (Number(r?.at) || 0) > (Number(a?.at) || 0) ? r : a, rows[0]);
+function smartPlace(s, rows, { needs, working }) {
+  if (inboxFailed(s) || ['waiting_for_approval', 'unknown'].includes(s?.status)) return 'inbox';
+  if (working(s)) return 'sent';
+  if (needs(s) && s?.attention?.state !== 'check') return 'inbox';
+  const last = Array.isArray(rows) && rows.length ? newestRow(rows) : null;
+  if (last?.state === 'failed') return 'inbox';
+  return last && ['done', 'needs_you'].includes(last.state) && sentAsked(last) ? 'inbox' : 'sent';
+}
+function placeOf(s, rows, { needs = () => false, quiet = () => false, working = () => false, smart = false } = {}) {
+  if (smart) return smartPlace(s, rows, { needs, working });
   const mine = Array.isArray(rows) && rows.length > 0;
   if (working(s) && mine) return 'sent';
   if (needs(s) || inboxFailed(s) || ['waiting_for_approval', 'unknown'].includes(s?.status)) return 'inbox';
@@ -308,6 +339,17 @@ function sentThreads(rows, inboxIds, { session = () => null, working = () => fal
   }
   return out.sort((a, b) => b.at - a.at || (a.key < b.key ? -1 : 1));
 }
+/** Smart inbox (wizard-ux issue 1883): the threads with no Sent row that are in Sent all the same (agent-started, older
+ * than the log), as sentThreads groups with no sends: every listed thread not hidden, archived, snoozed, held, in Inbox
+ * or already a group (`taken`), so the two lists hold every thread once. Pure. */
+function sentRest(sessions, inboxIds, taken, { working = () => false, at = () => 0, held = () => false } = {}) {
+  const out = [];
+  for (const s of sessions || []) {
+    if (!s || typeof s.id !== 'string' || s.hidden || s.archived || deferred(s) || held(s) || inboxIds?.has(s.id) || taken?.has(s.id)) continue;
+    out.push({ key: s.id, thread: s.id, record: null, sends: [], session: s, at: Number(at(s)) || 0, working: !!working(s) });
+  }
+  return out;
+}
 function activityGroups(groups, { needs, unread, at }, { order = 'newest', now = 0, days = ACTIVITY_RECENT_DAYS, older = false, keep = false, inbox = null, place = null } = {}) {
   if (!groups) return null;
   const snoozed = s => deferred(s) && !['waiting_for_approval', 'unknown'].includes(s.status);
@@ -315,7 +357,7 @@ function activityGroups(groups, { needs, unread, at }, { order = 'newest', now =
   // Working section (a run he started is in Sent › Working); only sends a graceful restart holds keep theirs (Saved).
   // place = { sent: sentIndex(Sent rows), quiet(s), held(s) }, from the shell; without it no thread has a Sent row.
   const placing = !!(keep || inbox), workIds = new Set((groups.working || []).map(s => s?.id));
-  const placeFacts = { needs, quiet: s => !!(place?.quiet || inbox?.quiet)?.(s), working: s => workIds.has(s?.id) };
+  const placeFacts = { needs, quiet: s => !!(place?.quiet || inbox?.quiet)?.(s), working: s => workIds.has(s?.id), smart: !!place?.smart }; // smart: issue 1883
   const inInbox = s => !placing || placeOf(s, place?.sent?.get?.(s.id), placeFacts) === 'inbox';
   const held = s => !!place?.held?.(s);
   // Inbox rows (issue 1779): inbox = { quiet(s), pin(s) → 0 or its pin rank }. Ready is the Inbox: what inboxWants keeps
@@ -357,9 +399,12 @@ function activityList(groups, facts, opts = {}) {
   // keep: Inbox until archived (wizard-ux issue 1810), from the shell's own switch read unless the caller says.
   // inbox: Inbox rows (wizard-ux issue 1779), the shell's { quiet, pin } facts while its switch is on.
   // place: Inbox or Sent (wizard-ux issue 1829), the shell's { sent, quiet, held } facts while either switch is on.
-  const g = activityGroups(groups, { needs, unread, at }, { ...opts, keep: opts.keep ?? !!c.inboxKeep?.(), inbox: opts.inbox ?? (c.inboxRows?.() || null), place: opts.place ?? (c.inboxPlace?.() || null) }); if (!g) return null;
+  const place = opts.place ?? (c.inboxPlace?.() || null);
+  const g = activityGroups(groups, { needs, unread, at }, { ...opts, keep: opts.keep ?? !!c.inboxKeep?.(), inbox: opts.inbox ?? (c.inboxRows?.() || null), place }); if (!g) return null;
+  // Smart inbox (wizard-ux issue 1883): a failed thread in Inbox says why in one line (the shell's failWhy, else retry).
+  const why = s => place?.smart && inboxFailed(s) ? { failWhy: c.failWhy?.(s) || 'Didn’t finish · open it to retry' } : {};
   const rows = (list, kind) => list.slice(0, 200).map(s => ({ ...sessionRow(s, kind, facts), mark: activityMark({ working: kind === 'working', needs: needs(s), unread: unread(s) }),
-    ...(c.activityDraft?.(s) ? { draft: true } : {}) })); // a saved, unsent draft (wizard-ux issue 1445, on for everyone since 1604)
+    ...(c.activityDraft?.(s) ? { draft: true } : {}), ...(kind === 'ready' ? why(s) : {}) })); // a saved, unsent draft (wizard-ux issue 1445, on for everyone since 1604)
   return splitSaved({ working: rows(g.working, 'working'), ready: rows(g.ready, 'ready'), recent: rows(g.recent, 'ready'), older: g.older,
     snoozed: rows(g.snoozed, 'snoozed'), archive: rows(g.archive, 'archive') });
 }
@@ -370,5 +415,5 @@ const unreadThreads = (rows, isNew, notes) => new Set((rows || []).filter(s => i
 const unreadCount = rows => new Set((rows || []).filter(r => r.unread).map(r => r.id)).size;
 root.WizChatsListModel = Object.freeze({ STATES, stateOf, stateGroups, WORKING_SORTS, workingOrderOf, workingAt, workingSort, READY_SORTS, sortOf, PRIORITY_TIP, rankOf, readySort, executionStatus, isListWorking,
   readyGroups, NOTES_PROJECT, NO_PROJECT, projectOf, titleInProject, projectGroups, GROUP_MODES, groupMode, readyFlat,
-  readyStep, visibleIds, INBOX_KEEP, inboxKeep, INBOX_ROWS, inboxRowsOn, inboxWants, inboxReplied, placeOf, sentIndex, sentShown, SENT_THREADS, sentThreadsOn, sentThreads, ACTIVITY_SORTS, activitySortOf, ACTIVITY_RECENT_DAYS, activityMark, activitySort, activityGroups, activityList, unreadCount, unreadThreads, compareTime, deferred, sessionRow, sessionList, sessionRank, orderSessions, notificationRow, sortNotes, mixedRows, subjectGroups, priorityGroups });
+  readyStep, visibleIds, INBOX_KEEP, inboxKeep, INBOX_ROWS, inboxRowsOn, inboxWants, inboxReplied, placeOf, SMART_INBOX, smartInboxOn, sentAsked, sentIndex, sentShown, SENT_THREADS, sentThreadsOn, sentThreads, sentRest, ACTIVITY_SORTS, activitySortOf, ACTIVITY_RECENT_DAYS, activityMark, activitySort, activityGroups, activityList, unreadCount, unreadThreads, compareTime, deferred, sessionRow, sessionList, sessionRank, orderSessions, notificationRow, sortNotes, mixedRows, subjectGroups, priorityGroups });
 })(globalThis);

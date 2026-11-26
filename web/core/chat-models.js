@@ -100,13 +100,22 @@
     unknown: P => ({ line: `${P || 'The AI provider'} couldn’t answer`,
       body: 'Tap Retry, or choose another model.' }),
   };
-  function runError(s) {
-    if (!reasonOn() || !s || reconnect(s) || !['failed', 'interrupted'].includes(s.status)) return null;
+  // `named`: the caller shows the named reason whatever the tweak says (Smart inbox's failed Inbox row: wizard-ux issue 1883).
+  function runError(s, named = false) {
+    if (!(named === true || reasonOn()) || !s || reconnect(s) || !['failed', 'interrupted'].includes(s.status)) return null;
     const e = s.runError, make = e && REASONS[e.code];
     if (!make) return null;
     // Issue 1799: a sign-in failure whose subscription reads signed in again is a plain failed send (Retry).
     if (e.code === 'provider_auth' && (s.reconnect || window.WosUsage?.signedIn?.({ Claude: 'claude', ChatGPT: 'chatgpt' }[providerName(e.provider || s.provider)]) === true)) return null;
     return { code: e.code, message: e.message || '', ...make(providerName(e.provider || s.provider)) };
+  }
+  /* Smart inbox (wizard-ux issue 1883, switch wizard/smart-inbox): a failed thread in Inbox says why in one line, the
+   * named reason when the box gives one, else that it didn't finish. Null with the switch off or for any other thread. */
+  const SMART_INBOX = 'wizard/smart-inbox';
+  function smartFail(s) {
+    try { if (!(document.documentElement.dataset.tweaks || '').split(' ').includes(SMART_INBOX)) return null; } catch (_) { return null; }
+    if (!s || !['failed', 'interrupted'].includes(s.status)) return null;
+    return { ...(runError(s, true) || { line: 'Didn’t finish · open it to retry' }), smart: true };
   }
   /* Issue 1799: the Agent Service's stored sign-in diagnosis (s.reconnect, from the failed run) counts only while that
    * subscription isn't read as signed in right now. The live reading (WosUsage, what Home shows) decides; before it
@@ -328,7 +337,7 @@
     defaultOption() { return M.options.find(o => o.isGlobalDefault) || null; },
     find(model, provider) { if (!model) return null; return M.options.find(o => o.value === model && (!provider || o.provider === provider)) || null; },
     visible(model, provider, keep = true) { return visibleChoices(shown(M.options, model, provider, keep), model, provider); },
-    runError, reconnect,
+    runError, smartFail, reconnect,
     foreignApp,
     refusal,
     name(model, provider) { const o = M.find(model, provider); return o ? o.name : model ? (claudeName(model, provider || 'anthropic') || friendly(model)) : ''; },

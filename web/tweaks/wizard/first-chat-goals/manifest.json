@@ -1,0 +1,14 @@
+{
+  "id": "wizard/first-chat-goals",
+  "name": "Five-choice first chat",
+  "version": "1.0.0",
+  "author": "wizard",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout"
+  ],
+  "issues": [
+    "humanitylabs-org/wizard-agent-service#650"
+  ],
+  "description": "Your first chat opens with five things to tap (Get on top of my inbox, Organize my digital life, Grow my business, Find a job, Something else), then your Wizard does the first useful thing for the one you pick, asks for an account only when that step needs it, and can send four short tips built around your pick. Replies can carry tap-to-pick buttons under the newest answer; a tap sends that answer. Read by the Agent Service too (wizard-agent-service issue 650)."
+}

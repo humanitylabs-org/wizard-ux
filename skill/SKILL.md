@@ -35,16 +35,16 @@ Every screen, Settings page and feature switch of the Wizard interface (the phon
 - **Settings**: See Settings below. Desktop: the cog at the bottom left under the chats list (AI apps view); the gear in the top bar (Desks view, ⌥,). Phone: the gear at the top right of Home.
 - **Settings › Appearance**: A link straight to the skin picker.
 - **Settings › Resources**: A link straight to the Resources (AI usage) page.
-- **Gestures & help**: Phone: How Wizard works: tap the orb to talk, hold it for a command, swipe it up for apps, down to hide the bars, sideways between desks; Back is always one step back; Practice again. Desktop: the keys guide (⌥/, or hold ⌥ to see the keys on screen). Desktop: Settings › About & updates › Gestures & help, or ⌥/. Phone: Settings › About & updates › Gestures & help, or say 'help'.
+- **Gestures & help**: Phone: How Wizard works: tap the orb to talk, hold it for a command, swipe it up for apps, down to hide the bars, sideways between desks; Back is always one step back; Practice again. Desktop: the keys guide (hold ⌥ to see the keys). Desktop: Settings › About & updates › Gestures & help, or ⌥/. Phone: Settings › About & updates › Gestures & help, or say 'help'.
 - **Practice tour**: The first-run practice of the orb gestures; start it again from Gestures & help › Practice again.
 - **AI apps view (desktop)**: The standard desktop. Left: the chats sidebar (Wizard switcher, search ⌥K, ◫ folds it ⌥L, Settings cog, + New chat below). Middle: the open chat, message box, model and orb. Right: the Apps column (pinned apps, open apps, + Add an app, Tidy). ⌥1–⌥0 pick an app, ⌥W closes, ⌥F widens the app panel, ⌥R folds the column, ⌥H hides both sides. Sidebar sort: Settings › Chats & app screens.
 - **Apps view**: A view where every open app has its own full-screen window, with a + sheet listing Open, Installed and Get more apps.
 - **Orb view**: A view where your apps float as satellites around the orb (phone Home and a desktop scene).
 - **Desktop top bar (Desks view)**: Left: Home and your desks (+ New desktop). Right: search (⌥Space, also ⌘K), Talk about this (⌥S), Tell the computer (⌥C, local commands), Dictate (⌥D), New voice chat (⌥V), the Inbox count (⌥I, opens Chats), Settings (⌥,), Keys guide (⌥/). The AI apps view has no top bar.
-- **Desks (phone) / desktops**: Separate spaces for apps and chats. Phone: swipe the orb sideways or tap the dots under it (long-press to see all). Desktop (Desks view): the desks in the top bar, + New desktop; ⌥` or ⌥1 Home, ⌥2–⌥9 the next desks.
+- **Desks (phone) / desktops**: Separate spaces for apps and chats. Phone: swipe the orb sideways or tap the dots under it (long-press: all). Desktop (Desks view): the desks in the top bar, + New desktop; ⌥` or ⌥1 Home, ⌥2–⌥9 the next desks.
 - **Phone orb**: Tap: talk to Wizard (tap again to send). Hold: a command for the phone (e.g. 'calendar', 'next desk', 'settings'). Swipe up: apps; down: hide the bars; sideways: desks. While recording: Cancel, Pause, Screenshot, Attach.
 - **Spaces**: Named groups of chats you make (a chat can be in several); pick one in Chats' Focus strip. Ask the agent to make or fill a Space. Spaces are the Channels (Chats › Channels).
-- **Snooze and Archive**: From a chat's menu (long-press or right-click): Snooze hides it until a time you pick (Chats › Snoozed); Archive files it (Chats › Archive); Restore brings either back. One-tap Snooze changes Snooze to one tap that parks it at the bottom of Ready.
+- **Snooze and Archive**: From a chat's menu (long-press or right-click): Snooze hides it until a time you pick (Chats › Snoozed); Archive files it (Chats › Archive); Restore brings either back. One-tap Snooze parks it at the bottom of Ready in one tap.
 - **Update card**: At the top of Settings (and a small pop-up on Home): Interface updated · Reload, or WizardOS update · Install / Install now, or Updating WizardOS… with progress.
 - **My skin**: Your own skin, made with + New skin in Settings › Appearance › Skin; ask the agent to change it ('make my chat text a little bigger').
 
@@ -159,7 +159,7 @@ Phone: things only the Android app can do: Wizard Everywhere (floating orb), sid
 
 ## Feature switches (Settings › Appearance › Try new features)
 
-Settings › Appearance › Try new features lists unfinished features anyone can switch on to try, A to Z, each 'by <author>'. The group only shows when this Wizard is on the For testers channel; on For everyone these switches stay hidden and off. The same switches are also in the WizardOS Tracker app (Try it). A choice follows the owner on every device.
+Settings › Appearance › Try new features lists unfinished features to try, A to Z, each 'by <author>'. It only shows on the For testers channel; on For everyone these switches stay hidden and off. The same switches are also in the WizardOS Tracker app (Try it). Choices follow the owner to every device.
 
 - **Action cards in chat**: An app's proposed action (a draft, an event) shows in chat with Approve, Edit, Open in app.
 - **Add an app: search the App Store too**: Add an app's search also finds App Store apps.
@@ -179,11 +179,12 @@ Settings › Appearance › Try new features lists unfinished features anyone ca
 - **Chats: title bar names the tab**: Chats' title bar names the tab.
 - **Clear chat notifications**: Android app: reading a LINE, WhatsApp, Telegram or other bridged chat in Messenger clears that app's own notification (needs Android's Notification access).
 - **Desktop sidebar follows Default Chats**: AI apps desktop: the chats sidebar uses the Chats look picked in Settings › Chats & app screens › Default Chats.
+- **Five-choice first chat**: Five picks, then a first win.
 - **Get set up list in Setup**: Setup lists optional accounts to connect.
 - **Icons on the attach menu**: Android app: the + menu in a chat (and the orb's Attach) shows icons before Photo or video, Camera and File, on bigger rows. (Android app only).
 - **Inbox until archived**: Chats stay in Inbox until archived.
 - **Inbox: only what needs you**: Inbox: only what needs you.
-- **Inbox: pin threads to the top**: Pin threads above today's Daily.
+- **Inbox: pin threads to the top**: Pin threads on top.
 - **Install apps your agent builds**: Apps I build install with one tap.
 - **Install sheet recommends private AI**: Installing a personal-data app suggests private AI.
 - **Instant home-screen apps**: Android: pinned app icons open at once on their last screen.
@@ -212,6 +213,7 @@ Settings › Appearance › Try new features lists unfinished features anyone ca
 - **Short answer first**: A long agent reply shows only its one-line plain answer; tap it for the full reply. Choose whether replies start collapsed and how long the short answer is. Where: Settings › Appearance › Try new features › Short answer first; its options show under it when on.
 - **Side button opens the Agent chat**: Android app: the side button opens Messenger's Agent chat for a note instead of a new Wizard chat.
 - **Skins are look only**: Skins become a look only: only feature switches decide what runs. Your skin's own choices come back when you switch this off.
+- **Smart inbox: only what needs you**: Inbox: only what blocks you.
 - **Stop write loops**: Stops repeated saves: an identical save within 10 s is not resent; over 20 a minute pauses.
 - **Swap sides**: Chats right, apps left (⌥⇧L).
 - **Swipe away downloads**: Phone: swipe the Downloaded banner away and swipe the Downloads sheet down to close it. (phone only).

@@ -32,8 +32,9 @@ window.WizCore.chatsParts.stream = function ({ agentName, agentRec, ago, elOf, e
   const streamAnswer = value => {
     // A whole tweak card is mid-reply (its own line): drop it and keep streaming; a half-typed one is cut below.
     let s = String(value || '').replace(/\n*[ \t]*\[WIZARD_TWEAK_V1\](?:[\s\S]*?\[\/WIZARD_TWEAK_V1\]|[\s\S]*$)[ \t]*\n*/g, '\n\n')
-      .replace(/\n*[ \t]*\[WIZARD_ACTION_V1\](?:[\s\S]*?\[\/WIZARD_ACTION_V1\]|[\s\S]*$)[ \t]*\n*/g, '\n\n'); // an action card (wizard-ux issue 1463)
-    const markers = ['[WIZARD_STATUS_V1]', '[WIZARD_CLOSE_AND_FILE_V1]', '[WIZARD_FILES_V1]', '[WIZARD_FILE_CHIPS_V1]', '[WIZARD_IMAGE_INTENT_V1]', '[WIZARD_TWEAK_V1]', '[WIZARD_ACTION_V1]', '<helm_attachments>'];
+      .replace(/\n*[ \t]*\[WIZARD_ACTION_V1\](?:[\s\S]*?\[\/WIZARD_ACTION_V1\]|[\s\S]*$)[ \t]*\n*/g, '\n\n') // an action card (wizard-ux issue 1463)
+      .replace(/\n*[ \t]*\[WIZARD_CHOICES_V1\](?:[\s\S]*?\[\/WIZARD_CHOICES_V1\]|[\s\S]*$)[ \t]*\n*/g, '\n\n'); // reply buttons (wizard-agent-service issue 650)
+    const markers = ['[WIZARD_STATUS_V1]', '[WIZARD_CLOSE_AND_FILE_V1]', '[WIZARD_FILES_V1]', '[WIZARD_FILE_CHIPS_V1]', '[WIZARD_IMAGE_INTENT_V1]', '[WIZARD_TWEAK_V1]', '[WIZARD_ACTION_V1]', '[WIZARD_CHOICES_V1]', '<helm_attachments>'];
     for (const marker of markers) {
       const at = s.indexOf(marker); if (at >= 0) s = s.slice(0, at);
       for (let n = 1; n < marker.length; n++) if (s.endsWith(marker.slice(0, n))) { s = s.slice(0, -n); break; }

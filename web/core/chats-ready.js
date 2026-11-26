@@ -50,7 +50,9 @@ window.WizCore.chatsParts.ready = function ({ actNeeds, actUnread, CH, chanAt, e
     const L = live || LIVE, M = window.WizChatsListModel;
     if (!inboxKeep() || !M?.sentIndex) return null;
     const st = L?.sentLog?.state?.();
-    return { sent: M.sentIndex(st?.ok ? st.rows : []), quiet: s => !!L?.quietReply?.(s), held: s => !!globalThis.WizReach?.restartHeld?.(s) };
+    // Smart inbox (wizard-ux issue 1883, switch wizard/smart-inbox): placeOf's smart rule (only what blocks him is Inbox).
+    let smart = false; try { smart = !!M.smartInboxOn?.(document.documentElement.dataset.tweaks); } catch (_) {}
+    return { sent: M.sentIndex(st?.ok ? st.rows : []), quiet: s => !!L?.quietReply?.(s), held: s => !!globalThis.WizReach?.restartHeld?.(s), ...(smart ? { smart } : {}) };
   }
   /* What the Inbox shows right now: its thread ids plus, with Inbox rows, the waiting background tasks (thread and record
    * ids). The Sent tab leaves those out (WizChatsListModel.sentShown), so the two lists can't disagree. Null when off. */
@@ -76,7 +78,8 @@ window.WizCore.chatsParts.ready = function ({ actNeeds, actUnread, CH, chanAt, e
    * is archived, so Ready, its count and the badges are the Inbox. Read from the root's data-tweaks (the list model is pure). */
   // Inbox rows (wizard-ux issue 1779) keep every Inbox row until it is archived too, so the shells read it as Inbox.
   // Sent as threads (wizard-ux issue 1880) needs the one-place rule as well: a thread is in Inbox or in Sent, never both.
-  function inboxKeep() { try { const t = document.documentElement.dataset.tweaks, M = window.WizChatsListModel; return !!(M?.inboxKeep?.(t) || M?.inboxRowsOn?.(t) || M?.sentThreadsOn?.(t)); } catch (_) { return false; } }
+  // So does Smart inbox (wizard-ux issue 1883), which also shows Sent as threads.
+  function inboxKeep() { try { const t = document.documentElement.dataset.tweaks, M = window.WizChatsListModel; return !!(M?.inboxKeep?.(t) || M?.inboxRowsOn?.(t) || M?.sentThreadsOn?.(t) || M?.smartInboxOn?.(t)); } catch (_) { return false; } }
   window.WizCore.inboxKeep = inboxKeep;
   window.WizCore.inboxPlace = inboxPlace;
   window.WizCore.inboxIds = inboxIds;
