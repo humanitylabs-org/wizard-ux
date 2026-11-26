@@ -235,35 +235,52 @@ class PhoneReleaseTests(unittest.TestCase):
             self.assertIn('--latest=false', edit)
             self.assertNotIn('--latest', edit)
 
-    def test_public_release_file(self):
-        root = Path(release.__file__).parent.parent
-        data = release.json.loads((root / 'android/public-release.json').read_text())
-        release.public_target(data)
-        good = dict(versionName='0.10.60', versionCode=124, sha256='ab' * 32)
-        release.public_target(good)
-        for bad in [dict(good, versionCode='124'), dict(good, versionCode=True), dict(good, sha256='AB' * 32), dict(good, versionName='0.10'),
-                    dict(good, extra=1), {k: v for k, v in good.items() if k != 'sha256'}, []]:
-            with self.subTest(bad=bad), self.assertRaises(ValueError):
-                release.public_target(bad)
-        owners = (root / '.github/CODEOWNERS').read_text()
-        rules = dict(line.split(None, 1) for line in owners.splitlines() if line.strip() and not line.startswith('#'))
-        self.assertEqual(rules.get('/android/public-release.json').split(), ['@jdefleur', '@JanMesaric', '@mistermizel'])
+    def test_soak_picks_the_newest_tester_build_72h_old(self):
+        # wizard-os#720: the train, not a person, makes a tester build public: the newest one 72h+ old above public.
+        now = release.datetime(2026, 11, 26, 12, tzinfo=release.timezone.utc)
 
-    def promote_fixture(self, *, tester=None, public='android-v0.10.13', public_code=77, apk_bytes=None, want=None, audit_cert=None):
-        """Runs promote() against a fake gh: tester android-v0.10.14 (prerelease), public release `public`."""
-        phone = self.metadata()
+        def rel(tag, hours, pre=True, draft=False):
+            when = (now - release.timedelta(hours=hours)).isoformat().replace('+00:00', 'Z') if hours is not None else None
+            return dict(tag_name=tag, prerelease=pre, draft=draft, published_at=when)
+        rels = [rel('android-v0.10.13', 200, pre=False), rel('android-v0.10.14', 100), rel('android-v0.10.15', 80),
+                rel('android-v0.10.16', 10), rel('android-v0.10.9', 500), rel('v0.8.1', 300), rel('android-v0.10.17', None, draft=True)]
+        pick, why = release.soaked(rels, 'android-v0.10.13', now)
+        self.assertEqual(pick['tag_name'], 'android-v0.10.15')
+        self.assertIn('80.0h', why)
+        pick, why = release.soaked(rels, 'android-v0.10.15', now)
+        self.assertIsNone(pick)
+        self.assertTrue(why.startswith('WAITING: android-v0.10.16 is 10.0h old'), why)
+        pick, why = release.soaked(rels, 'android-v0.10.16', now)
+        self.assertIsNone(pick)
+        self.assertTrue(why.startswith('nothing to promote'), why)
+        # Version order is numeric (0.10.9 < 0.10.13), and exactly 72h is due.
+        pick, _ = release.soaked([rel('android-v0.10.9', 72), rel('android-v0.10.10', 71)], 'android-v0.10.8', now)
+        self.assertEqual(pick['tag_name'], 'android-v0.10.9')
+
+    def promote_fixture(self, *, tester=None, public='android-v0.10.13', public_code=77, apk_bytes=None, phone_edit=None,
+                        audit_cert=None, hours=100, blocked=0, blocker_error=False, check=False):
+        """Runs promote() against a fake gh: tester android-v0.10.14 (prerelease, `hours` old), public release `public`."""
+        phone = dict(self.metadata(), **(phone_edit or {}))
         apk_bytes = self.apk.read_bytes() if apk_bytes is None else apk_bytes
         root = Path(self.temp.name)
-        public_file = root / 'public-release.json'
-        release.write_json(public_file, want or {k: phone[k] for k in release.PUBLIC_KEYS})
         tester = dict(isDraft=False, isPrerelease=True, assets=[{'name': 'wizard-os-0.10.14.apk'}, {'name': 'phone.json'}]) if tester is None else tester
+        published = (release.datetime.now(release.timezone.utc) - release.timedelta(hours=hours)).isoformat()
+        listing = [dict(tag_name='android-v0.10.14', prerelease=True, draft=False, published_at=published),
+                   dict(tag_name='android-v0.10.13', prerelease=False, draft=False, published_at='2026-11-01T00:00:00Z')]
         latest = [public]
         calls = []
 
         def fake_text(argv, **kw):
             argv = list(map(str, argv))
-            if argv[:2] == ['gh', 'api']:
+            calls.append(argv)
+            if argv[:2] == ['gh', 'api'] and argv[2].endswith('/releases/latest'):
                 return release.json.dumps(dict(tag_name=latest[0]))
+            if argv[:3] == ['gh', 'api', '--paginate']:
+                return release.json.dumps([listing])
+            if argv[:2] == ['gh', 'api'] and 'search/issues' in argv:
+                if blocker_error:
+                    return release.json.dumps(dict(message='rate limited'))
+                return release.json.dumps(dict(total_count=blocked, items=[dict(html_url=f'https://github.com/x/y/issues/{i}') for i in range(blocked)]))
             if argv[:3] == ['gh', 'release', 'view']:
                 return release.json.dumps(tester)
             raise AssertionError(argv)
@@ -282,34 +299,46 @@ class PhoneReleaseTests(unittest.TestCase):
                 tester.update(isPrerelease=False)
                 latest[0] = argv[3]
             return unittest.mock.Mock(returncode=0)
-        args = unittest.mock.Mock(public=public_file, output=root / 'promote')
+        args = unittest.mock.Mock(output=root / 'promote', check=check)
         with patch.dict(os.environ, {'GITHUB_ACTIONS': 'true'}), \
                 patch.object(release, 'run', side_effect=fake_run), patch.object(release, 'text', side_effect=fake_text), \
                 patch.object(release, 'audit', return_value=(self.badging, audit_cert or self.cert, self.fields)):
             release.promote(args)
         return calls
 
+    @staticmethod
+    def edits(calls):
+        return [c for c in calls if c[:3] == ['gh', 'release', 'edit']]
+
     def test_promote_flips_the_same_tester_bytes_to_latest(self):
         calls = self.promote_fixture()
-        edits = [c for c in calls if c[:3] == ['gh', 'release', 'edit']]
+        edits = self.edits(calls)
         self.assertEqual(len(edits), 1)
         self.assertEqual(edits[0][3], 'android-v0.10.14')
         self.assertIn('--prerelease=false', edits[0])
         self.assertIn('--latest', edits[0])
         self.assertFalse(any(c[:3] in (['gh', 'release', 'create'], ['gh', 'release', 'upload']) for c in calls), 'promotion never uploads bytes')
+        self.assertTrue(any('search/issues' in c for c in calls), 'promotion checks for release-blocker issues')
 
-    def test_promote_is_a_no_op_when_already_public(self):
-        self.assertEqual(self.promote_fixture(public='android-v0.10.14'), [])
+    def test_promote_waits_holds_and_checks_without_changing_anything(self):
+        for label, kw in [('already public', dict(public='android-v0.10.14')), ('not soaked', dict(hours=71)),
+                          ('release-blocker open', dict(blocked=1)), ('check only', dict(check=True))]:
+            import shutil
+            shutil.rmtree(Path(self.temp.name) / 'promote', ignore_errors=True)
+            with self.subTest(label):
+                calls = self.promote_fixture(**kw)
+                self.assertEqual(self.edits(calls), [])
+                self.assertFalse(any(c[:3] == ['gh', 'release', 'download'] for c in calls))
+        with self.assertRaisesRegex(ValueError, 'release-blocker'):
+            self.promote_fixture(blocker_error=True)
 
     def test_promote_refuses_anything_but_the_exact_tester_build(self):
-        phone = self.metadata()
-        want = {k: phone[k] for k in release.PUBLIC_KEYS}
         cases = [
             ('other bytes', dict(apk_bytes=b'a different APK'), 'bytes do not match'),
-            ('wrong sha in file', dict(want=dict(want, sha256='0' * 64)), 'does not match the tester build'),
-            ('wrong code in file', dict(want=dict(want, versionCode=79)), 'does not match the tester build'),
-            ('draft', dict(tester=dict(isDraft=True, isPrerelease=True, assets=[])), 'draft'),
-            ('not a tester build', dict(tester=dict(isDraft=False, isPrerelease=False, assets=[])), 'not a tester build'),
+            ('phone.json names another sha', dict(phone_edit=dict(sha256='0' * 64)), 'bytes do not match'),
+            ('phone.json names another version', dict(phone_edit=dict(versionName='0.10.15')), 'another versionName'),
+            ('draft', dict(tester=dict(isDraft=True, isPrerelease=True, assets=[])), 'no longer a published tester build'),
+            ('not a tester build', dict(tester=dict(isDraft=False, isPrerelease=False, assets=[])), 'no longer a published tester build'),
             ('extra asset', dict(tester=dict(isDraft=False, isPrerelease=True, assets=[{'name': 'wizard-os-0.10.14.apk'}, {'name': 'phone.json'}, {'name': 'x'}])), 'assets'),
             ('not newer than public', dict(public_code=78), 'versionCode must rise'),
         ]
@@ -323,17 +352,21 @@ class PhoneReleaseTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'signer'):
             self.promote_fixture(audit_cert='Signer #1 certificate SHA-256 digest: ' + 'f' * 64 + '\n')
 
-    def test_promote_workflow_is_off_until_lanes_are_on(self):
+    def test_promote_workflow_is_the_train_and_off_until_lanes_are_on(self):
         root = Path(release.__file__).parent.parent
         wf = (root / '.github/workflows/phone-promote.yml').read_text()
         self.assertIn("    if: vars.WOS_RELEASE_LANES == 'on' && github.ref == 'refs/heads/main'\n", wf)
-        self.assertIn("paths: ['android/public-release.json']", wf)
+        self.assertIn("    - cron: '17 */6 * * *'\n", wf)
+        self.assertNotIn('push:', wf)
         self.assertNotIn('secrets.', wf)
         self.assertNotRegex(wf, r'(?m)^\s+environment:')
-        self.assertIn('tools/phone_release.py promote --public android/public-release.json', wf)
+        self.assertIn('tools/phone_release.py promote --output', wf)
         self.assertIn('group: phone-release-refs/heads/main', wf)
         for use in re.findall(r'uses: (\S+)', wf):
             self.assertRegex(use, r'@[0-9a-f]{40}$')
+        self.assertFalse((root / 'android/public-release.json').exists(), 'no human approval file (Miguel, 21 Nov)')
+        self.assertNotIn('public-release', (root / '.github/CODEOWNERS').read_text())
+        self.assertEqual(release.SOAK_HOURS, 72)
         _, jobs = self.ci_workflow_jobs()
         self.assertIn('LANES: ${{ vars.WOS_RELEASE_LANES }}', jobs['publish'])
         self.assertIn('if [ "$LANES" = on ]; then extra+=(--prerelease); fi', jobs['publish'])

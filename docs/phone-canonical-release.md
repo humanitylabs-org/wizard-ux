@@ -52,15 +52,11 @@ The CI path does not run the emulator upgrade-origin proof below (it needs a roo
 
 With the repository variable `WOS_RELEASE_LANES=on`, a merge that raises `versionName` still builds, signs and publishes `android-v<version>` automatically, but as a **tester build**: a GitHub prerelease that is never "latest". Boxes mirror only the latest release (`releases/latest`, which GitHub never resolves to a prerelease), and they check the APK's real signer and cap how far `versionCode` may jump (wizard-app-manager#789), so a tester build reaches no box by itself. Testers can install it from the release page.
 
-A tester build becomes **public** when a PR raises `android/public-release.json`:
+A tester build becomes **public** through the release train, with no person approving it (Miguel, 21 Nov 2026). Every 6 hours `.github/workflows/phone-promote.yml` runs `python3 tools/phone_release.py promote`, the same rule as WizardOS For everyone (wizard-os `tools/release_train.py promote-soaked`): it takes the newest tester build published **72 hours** or more ago that is newer than the latest release (younger ones wait their turn, older ones are skipped), and it holds (`HELD`) while any issue labelled `release-blocker` is open in the org. It downloads that tester build, checks the APK bytes against its `phone.json`, re-runs the `metadata()` audit on those bytes (one signer, no origin), refuses a `versionCode` that does not rise over the current public release, then marks the release as not a prerelease and latest and reads that back. No rebuild, so boxes get the exact bytes testers ran. Run workflow (Actions, Phone promote) promotes at once when one is due; `python3 tools/phone_release.py promote --check --output <dir>` says what is due without changing anything.
 
-```json
-{"versionName": "0.10.60", "versionCode": 124, "sha256": "<sha256 of wizard-os-0.10.60.apk>"}
-```
+To stop a tester build reaching everyone, open (or label) any org issue `release-blocker`, as for the box train.
 
-Copy the three values from that tester build's `phone.json`. The file is in `.github/CODEOWNERS` for `@jdefleur @JanMesaric @mistermizel`, so with code-owner review required on `main` the PR is blocked until one of them approves. When it merges, `.github/workflows/phone-promote.yml` runs `python3 tools/phone_release.py promote`: it downloads the tester build, checks that `phone.json` and the APK bytes match the file, re-runs the `metadata()` audit on those bytes (one signer, no origin), refuses a `versionCode` that does not rise over the current public release, then marks the release as not a prerelease and latest and reads that back. No rebuild, so boxes get the exact bytes testers ran. Run workflow (Actions, Phone promote) repeats a promotion that stopped half way.
-
-Without the variable (today), every CI release is the latest release and `android/public-release.json` is ignored. Switch it off again by removing the variable; tester builds already published stay prereleases until promoted.
+Without the variable (today), every CI release is the latest release and the promote workflow does nothing. Switch it off again by removing the variable; tester builds already published stay prereleases (promote one by hand with `gh release edit android-v<version> --prerelease=false --latest` if needed).
 
 ## Exact upgrade-origin proof
 
