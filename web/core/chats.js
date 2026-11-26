@@ -178,7 +178,8 @@ window.WizCore.chats = function createChats(H) {
   };
   /* The shims: the original body's names, backed by the host; core/chats-shims.js. */
   const { ago, applyLayout, clip, deskOf, desks, esc, hosted, idx, LIVE, norm, OUTBOX, reach, reachLabel, save, toast, track, troubleshoot, vib, viewContext, W, winTitle, bindLate: shimsLate } = window.WizCore.chatsParts.shims({ H });
-  // Apps admitted to open the standard thread over their window (app-services.js keeps the same list).
+  // Apps admitted to open the standard thread over their window: every installed Wizard app (WizLauncher.hasHostedThread,
+  // the same policy app-services.js checks; wizard-ux issue 1838).
   // Wisdom (James, 22 Oct 2026): Ask AI is the real Chats thread, never an app-built chat.
   function openHosted(wid, frame, sid, opts = {}) {
     const w = W[wid];

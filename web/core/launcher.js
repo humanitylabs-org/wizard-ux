@@ -6,6 +6,12 @@
   let current = defaults, shared = false, settled = false;
   const object = v => !!v && typeof v === 'object' && !Array.isArray(v);
   const listeners = new Set();
+  // The box's app list (registry), the same source the shell's own admission checks use.
+  function installedWizardApp(id) {
+    if (typeof id !== 'string' || !id) return false;
+    try { return ['mobile', 'desktop'].some(k => (window.WizCore?.apps?.(k)?.APPS || []).some(a => a.id === id && a.kind === 'wizard' && a.url)); }
+    catch (_) { return false; }
+  }
   function accept(prefs) {
     if (!object(prefs?.launcher)) return;
     const valid = Object.fromEntries(Object.entries(prefs.launcher).filter(([name, value]) =>
@@ -51,7 +57,9 @@
       try { await Promise.race([window.WizLauncher.ready, new Promise(resolve => { timer = setTimeout(resolve, 1000); })]); }
       finally { clearTimeout(timer); }
     },
-    hasHostedThread: id => current.hostedThreadApps.includes(id),
+    // Any installed Wizard app may open its own Chats thread over its window (wizard-ux issue 1838): the
+    // wizard-builder rule tells every app its chat is the Chats thread. The synced list stays honoured as extra ids.
+    hasHostedThread: id => current.hostedThreadApps.includes(id) || installedWizardApp(id),
     displayName: app => Object.hasOwn(current.displayNames, app.id) ? current.displayNames[app.id] : app.name,
     onChange: fn => { listeners.add(fn); return () => listeners.delete(fn); },
   };

@@ -1030,7 +1030,8 @@
     if (receipt?.accepted !== true || receipt.request_id !== message.request_id) throw fault('App receipt uncertain · original kept');
     return { accepted: true, request_id: message.request_id };
   }
-  // Same list as chats.js HOSTED_APPS: apps whose conversations are the real Chats thread over their window.
+  // Same policy as chats.js openHosted (WizLauncher.hasHostedThread): every installed Wizard app may lay the real
+  // Chats thread over its own window (wizard-ux issue 1838).
   // `sandboxed`: a window under the browser boundary, verified by boundaryLive (its document can't be read).
   function hostedThreadAuthorized(st, sandboxed = false) {
     if (!st || !window.WizLauncher?.hasHostedThread(st.appId) || !(sandboxed ? boundaryLive(st) : valid(st, st.doc)) || typeof st.openThread !== 'function') return false;
