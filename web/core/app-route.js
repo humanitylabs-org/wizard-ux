@@ -17,7 +17,8 @@
  *   WosAppRoute.init({ openAgents })   shell hook: openAgents(id, { newPreset }) opens the Agents app at an agent
  *                                      or its New agent flow
  *   WosAppRoute.request(msg)           a trusted frame's 'wizard:app-route' message: { id } opens the sheet,
- *                                      { id, action: 'new-private-agent' } starts the private agent setup
+ *                                      { id, action: 'new-private-agent' } starts the private agent setup,
+ *                                      { id, action: 'private-mode' } Settings › Privacy's Set up private AI (switch on)
  */
 (() => {
   'use strict';
@@ -136,6 +137,8 @@
   function request(d) {
     if (!d || typeof d.id !== 'string') return;
     if (d.action === 'new-private-agent') { HOOK.openAgents?.(null, { newPreset: 'private' }); return; }
+    // Private mode's switch-over sheet (wizard-ux issue 1801): the Tinfoil app or the install sheet asks for Set up private AI.
+    if (d.action === 'private-mode') { if (window.WosPrivacy?.on?.()) window.WosPrivacy.open('setup'); else open(d.id); return; }
     open(d.id);
   }
   window.WosAppRoute = { slot, paint, open, close, request, isOpen: () => !!el, back: close, openAgents: (id, o) => !!HOOK.openAgents && (HOOK.openAgents(id, o), true), init(o = {}) { if (typeof o.openAgents === 'function') HOOK.openAgents = o.openAgents; }, get current() { return cur && { ...cur }; } };
