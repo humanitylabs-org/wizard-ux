@@ -44,8 +44,22 @@ test('the main page copies the switch to the Android app: off only once the swit
   assert.equal(on.calls.length, 1);
   assert.equal(on.calls[0][0], true);
   on.flip(false); assert.equal(on.calls.length, 1);
-  on.experience(); assert.deepEqual(on.calls[1], [false, '']);
+  on.experience(); assert.equal(on.calls.length, 1, 'the first wos:experience is not the settle');
+  on.settle(); assert.deepEqual(on.calls[1], [false, '']);
   on.flip(true); assert.equal(on.calls[2][0], true);
+});
+
+test('opening the app never switches the reader off: an early wos:experience without the switch sends nothing (wizard-ux issue 1865)', () => {
+  // The page loads with the switch not yet painted; the first wos:experience comes before this device's own switches.
+  const f = fixture();
+  f.experience();
+  assert.deepEqual(f.calls, [], 'no off before the switches settle');
+  f.flip(true); f.experience();
+  assert.deepEqual(f.calls.map(c => c[0]), [true], 'only the on is sent: the reader keeps its place');
+  f.settle();
+  assert.deepEqual(f.calls.map(c => c[0]), [true], 'the settle sends nothing new while it is on');
+  f.flip(false);
+  assert.deepEqual(f.calls.map(c => c[0]), [true, false], 'a real off after the settle is sent at once');
 });
 
 test('the apps\' names go along for their channels, and a changed app list is sent again', () => {
