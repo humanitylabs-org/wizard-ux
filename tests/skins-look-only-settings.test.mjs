@@ -1,7 +1,8 @@
 // Skins are look only (wizard-ux issue 1190, switch wizard/skins-look-only), Miguel 20 Nov 2026: "it's really just colors
-// and background". With the switch on, Settings > Appearance > Look shows colours and background only (no skins, own
-// skins or New skin, no feature switches), and the feature switches move to their own "Try new features" page. Off:
-// Look is unchanged. Runs the real Settings renderer and dispatch.
+// and background"; issue 1816, James 25 Nov: "merge skins and colors". With the switch on, Settings > Appearance > Look
+// is one list of looks (every colour, then the own skins and + New skin; no Skin row, no feature switches; skin import
+// stays), and the feature switches move to their own "Try new features" page. Off: Look is unchanged. Runs the real
+// Settings renderer and dispatch.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -28,8 +29,9 @@ function harness({ lookOnly, channel = 'latest', own = false, shell = 'desktop' 
   const E = { lookOnly, installedReady: true, installed: async () => [], defaults: async () => ({}),
     state: { owner: 'miguel', busy: false, error: '', channel, locked: channel === 'stable', tweaks, active: [], shell },
     toggle: async id => { toggled.push(id); } };
+  const left = [];
   const M = { recipes: [{ id: 'mine', name: 'My look', base: 'grove' }], active: own ? { id: 'mine', name: 'My look', base: 'grove' } : null, previews: [], on() {},
-    update(p) { updated.push(p); }, leave() {}, wear() {} };
+    update(p) { updated.push(p); }, leave() { left.push(S.current); this.active = null; return Promise.resolve(); }, wear() {} };
   const s = { console, URL, setTimeout, CSS: { escape: String }, navigator: { userAgent: 'Desktop' },
     document: { activeElement: null }, location: { host: 'example.test' }, WizCore: {}, WosSkin: S, WosExperience: E, WosMySkin: M };
   s.window = s;
@@ -40,23 +42,47 @@ function harness({ lookOnly, channel = 'latest', own = false, shell = 'desktop' 
   const act = (feature, attr, value) => view.dispatch({ closest: sel => sel === '[data-settings-feature]'
     ? { dataset: { settingsFeature: feature } }
     : sel === `[${attr}]` ? { dataset: { [attr.slice(5).replace(/-([a-z])/g, (_, c) => c.toUpperCase())]: value } } : null });
-  return { S, E, M, s, root, view, act, picked, toggled, updated };
+  return { S, E, M, s, root, view, act, picked, toggled, updated, left };
 }
 const tick = async () => { for (let i = 0; i < 5; i++) await Promise.resolve(); };
 
-for (const shell of ['phone', 'desktop']) test(`${shell}: with Skins are look only on, Look is colours and background only`, () => {
+for (const shell of ['phone', 'desktop']) test(`${shell}: with Skins are look only on, Look is one list of looks`, () => {
   const h = harness({ lookOnly: true, shell });
   h.view.focus('look');
   const html = h.root.innerHTML;
   assert.match(html, /data-look-only/);
-  assert.doesNotMatch(html, /data-skinfamily=|aria-label="Skins"/, 'no skins');
-  assert.doesNotMatch(html, /data-ownskin=|data-newskin/, 'no own skins and no New skin');
+  assert.doesNotMatch(html, /data-skinfamily=|aria-label="Skins"/, 'no Skin row');
+  assert.doesNotMatch(html, /<h4>Colors<\/h4>|<h4>Skin<\/h4>/, 'no separate Colors row');
+  const list = html.match(/aria-label="Looks">([^]*?)<\/div><\/div>/)?.[1] || '';
+  assert.match(list, /data-skinpick="nebula"[^]*data-skinpick="sepia"[^]*data-ownskin="mine"[^]*data-newskin/, 'colours, then own skins, then + New skin, in one list');
   for (const id of ['nebula', 'grove', 'obsidian', 'obsidian-light', 'sepia']) assert.match(html, new RegExp(`data-skinpick="${id}"`), id);
   assert.doesNotMatch(html, /data-skinpick="landscapes/, 'landscapes are a background, not a colour');
   assert.match(html, /data-skinpick="nebula" aria-pressed="true"/);
   assert.doesNotMatch(html, /data-try-features|data-tweak-toggle="miguel\/snooze-someday"|data-tweak-toggle="wizard\/skins-look-only"/, 'no feature switches on Look');
   assert.match(html, /data-tweak-toggle="miguel\/orb-shell"/, 'views stay with Look');
-  assert.doesNotMatch(html, /data-skinimport/, 'no skin import');
+  assert.match(html, /data-skinimport/, 'skin import stays');
+  h.view.destroy();
+});
+
+test('with Skins are look only on, a worn own skin is the marked look, with its own panel instead of Mode/Background', () => {
+  const h = harness({ lookOnly: true, own: true });
+  h.S.current = 'grove';
+  h.view.focus('look');
+  const html = h.root.innerHTML;
+  assert.match(html, /data-ownskin="mine" aria-pressed="true"/);
+  assert.doesNotMatch(html, /data-skinpick="[^"]*" aria-pressed="true"/, 'its colour is not marked as a second look');
+  assert.match(html, /data-ownskin-panel[^]*data-ownskin-remove="mine"/, 'Edit with your Wizard and Remove skin');
+  assert.match(html, /data-st-page="appearance"[^]*My look · grove/, 'the Settings list names the worn own skin');
+  h.view.destroy();
+});
+
+test('with Skins are look only on, + New skin opens a sheet with no feature list', () => {
+  const h = harness({ lookOnly: true });
+  h.view.focus('look');
+  h.act('look', 'data-newskin', '');
+  const html = h.root.innerHTML;
+  assert.match(html, /data-newskin-sheet[^]*data-newskin-look-only/);
+  assert.doesNotMatch(html, /data-draft-tweak/);
   h.view.destroy();
 });
 
@@ -99,7 +125,9 @@ test('with Skins are look only on, a colour is worn plainly (an own skin is not 
   const on = harness({ lookOnly: true, own: true });
   on.view.focus('look');
   on.act('look', 'data-skinpick', 'obsidian'); await tick();
-  assert.deepEqual(on.picked, ['obsidian']);
+  assert.equal(on.left.length, 1, 'the own skin is taken off first');
+  assert.deepEqual(on.picked, ['obsidian'], 'then the colour is worn');
+  assert.equal(on.S.current, 'obsidian');
   assert.deepEqual(on.updated, [], 'the own skin recipe is left as it is');
   on.view.destroy();
   const off = harness({ lookOnly: false, own: true });
