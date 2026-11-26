@@ -66,7 +66,8 @@
     "wizard/result-reader",
     "wizard/private-ai-nudge",
     "wizard/pin-instant-open",
-    "wizard/get-set-up"
+    "wizard/get-set-up",
+    "wizard/shorter-app-updates"
   ],
   "defaults": [],
   "promotedDefaults": [],

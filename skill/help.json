@@ -463,7 +463,7 @@
       "when": "Android app only"
     },
     "wizard/share-people-box": {
-      "help": "Share's People row shows Messenger's recent chats in every window, also one that never opened Messenger.",
+      "help": "Share's People row shows Messenger's recent chats in every window.",
       "where": "Settings › Appearance › Try new features › Share to people in any window"
     },
     "wizard/mac-app-updates": {
@@ -552,6 +552,10 @@
     "wizard/feature-counts-ask": {
       "help": "Shared only after you say Share.",
       "where": "Settings › Appearance › Try new features › Ask before sharing feature counts"
+    },
+    "wizard/shorter-app-updates": {
+      "help": "App updates stop an app once.",
+      "where": "Settings › Appearance › Try new features › Shorter app updates"
     },
     "wizard/phone-tester-builds": {
       "help": "Phones get the newest tester build.",
