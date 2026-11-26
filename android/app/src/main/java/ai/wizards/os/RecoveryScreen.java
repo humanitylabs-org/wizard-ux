@@ -34,7 +34,7 @@ final class RecoveryScreen {
     private final LinearLayout card;
     private final TextView body, update, diag, normal, status;
     private JSONObject uState;
-    private boolean updateInstalls, checking;
+    private boolean updateInstalls, checking, asked;
 
     RecoveryScreen(Context c, FrameLayout parent, Actions act) {
         this.c = c;
@@ -61,7 +61,7 @@ final class RecoveryScreen {
         status = text(13, INK, false);
         status.setAlpha(0.65f);
         status.setVisibility(View.GONE);
-        update.setOnClickListener(v -> { if (!checking) act.update(updateInstalls); });
+        update.setOnClickListener(v -> { if (!checking) { asked = true; act.update(updateInstalls); } });
         diag.setOnClickListener(v -> { diag.setEnabled(false); diag.setAlpha(0.5f); act.diagnostics(); });
         normal.setOnClickListener(v -> act.startNormally());
 
@@ -91,7 +91,7 @@ final class RecoveryScreen {
     void hide() { card.setVisibility(View.GONE); }
 
     /** A check was asked for: say so until the updater answers. */
-    void checking(boolean on) { checking = on; paintUpdate(); }
+    void checking(boolean on) { checking = on; if (on) asked = true; paintUpdate(); }
 
     /** The updater's state ({@code Updater.state()}) changed or was read again. */
     void updateState(JSONObject u) { uState = u; paintUpdate(); }
@@ -100,7 +100,7 @@ final class RecoveryScreen {
         JSONObject u = uState;
         String st = u == null ? "" : u.optString("state");
         String line = checking && !StartPolicy.updateBusy(u) && !"current".equals(st) && !"available".equals(st) && !"ready".equals(st)
-                ? StartPolicy.updateLine(stateOf("checking")) : StartPolicy.updateLine(u);
+                ? StartPolicy.updateLine(stateOf("checking")) : StartPolicy.updateLine(u, asked);
         String label = StartPolicy.updateButton(u);
         update.setText(label);
         update.setContentDescription(label);

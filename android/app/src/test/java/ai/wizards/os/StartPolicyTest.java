@@ -99,5 +99,10 @@ public class StartPolicyTest {
         assertEquals("Download failed · try again",
                 StartPolicy.updateLine(new JSONObject().put("state", "error").put("message", "Download failed · try again")));
         assertTrue(StartPolicy.updateLine(new JSONObject().put("state", "offline")).startsWith("Couldn’t reach your Wizard"));
+        // before the owner tapped Check for update, an old answer from earlier in this process is not shown
+        assertEquals("", StartPolicy.updateLine(new JSONObject().put("state", "offline"), false));
+        assertEquals("", StartPolicy.updateLine(current, false));
+        assertEquals("WizardOS 0.10.72 is ready to install.", StartPolicy.updateLine(ready, false));
+        assertEquals("WizardOS 0.10.71 is the newest version.", StartPolicy.updateLine(current, true));
     }
 }

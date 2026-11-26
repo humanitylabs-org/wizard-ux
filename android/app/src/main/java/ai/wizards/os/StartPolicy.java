@@ -109,6 +109,16 @@ public final class StartPolicy {
         }
     }
 
+    /**
+     * The update line before the owner asked: only what the updater is doing or has found on its own (a download, a
+     * ready build). An old "couldn't reach" or "newest version" from earlier in this process is not news yet.
+     */
+    public static String updateLine(JSONObject u, boolean asked) {
+        String st = u == null ? "" : u.optString("state");
+        if (!asked && ("current".equals(st) || "offline".equals(st) || "error".equals(st))) return "";
+        return updateLine(u);
+    }
+
     /** The update button's label: Install once a newer build is known, else Check for update. */
     public static String updateButton(JSONObject u) {
         String st = u == null ? "" : u.optString("state"), v = u == null ? "" : u.optString("version");

@@ -63,7 +63,7 @@ final class RecoveryModeScenario {
             assertTrue("the shell loads underneath", box.waitFor("GET /wizard-os-home/", 20000));
             // 2. Send diagnostics
             find(device, By.text("Send diagnostics"), 10000).click();
-            assertNotNull("diagnostics never reported sent", find(device, By.text("Diagnostics sent to your Wizard."), 20000));
+            assertNotNull("diagnostics never reported sent", find(device, By.text("Diagnostics sent to your Wizard."), 40000));
             String report = box.body("POST /wizard-os-home/api/diagnostics/scroll-capture");
             assertNotNull("the Wizard got the report", report);
             assertTrue("the report carries the saved freezes", report.contains("\"hangs\""));
@@ -72,6 +72,7 @@ final class RecoveryModeScenario {
             assertNotNull("the update check never answered",
                     find(device, By.text("WizardOS " + BuildConfig.VERSION_NAME + " is the newest version."), 20000));
             assertTrue(box.waitFor("GET /reports/wizard-os/latest.json", 1000));
+            screen(device, c, "device-checked");
             // 4. Start normally
             find(device, By.text("Start normally"), 10000).click();
             assertTrue("the card left", device.wait(Until.gone(By.text("Recovery mode")), 10000));
@@ -134,7 +135,14 @@ final class RecoveryModeScenario {
         int read;
 
         Box() throws IOException {
-            new Thread(() -> { while (running) try { respond(socket.accept()); } catch (IOException ignored) { } }, "RecoveryBox").start();
+            // One thread per connection: the WebView opens idle connections ahead of use, and one of them must never
+            // hold up the app's own requests (the diagnostics report, the update feed).
+            new Thread(() -> {
+                while (running) try {
+                    Socket s = socket.accept();
+                    new Thread(() -> { try { respond(s); } catch (IOException ignored) { } }, "RecoveryBoxClient").start();
+                } catch (IOException ignored) { }
+            }, "RecoveryBox").start();
         }
 
         String origin() { return "http://localhost:" + socket.getLocalPort(); }
