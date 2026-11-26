@@ -56,7 +56,7 @@ const report = { origin, web, switch: SW ? 'on' : 'off', cases: [] };
       const context = await browser.newContext({ viewport: phone ? { width: 412, height: 915 } : { width: 1440, height: 960 }, isMobile: phone, hasTouch: phone, serviceWorkers: 'block', ...(phone ? { userAgent: 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Mobile Safari/537.36' } : {}) });
       try {
         await context.routeWebSocket('**/*', w => w.close());
-        const mix = { 'wizard/desktop-chats': true, 'wizard/inbox-rows': true, ...(SW ? { 'wizard/inbox-pin-top': true } : {}) };
+        const mix = { 'wizard/desktop-chats': true, 'wizard/inbox-rows': true, ...(process.env.QA_SMART ? { 'wizard/smart-inbox': true } : {}), ...(SW ? { 'wizard/inbox-pin-top': true } : {}) };
         await context.addInitScript(({ shell, skin, mix }) => {
           if (window !== top) return;
           if (sessionStorage.getItem('qaBoot')) return; sessionStorage.setItem('qaBoot', '1');
@@ -143,24 +143,29 @@ const report = { origin, web, switch: SW ? 'on' : 'off', cases: [] };
           await nap(700);
           return said;
         };
-        await vis('.ch-list [data-chopen="qa-new"]').waitFor({ timeout: 15000 });
+        await vis('.ch-list section[data-sec="ready"] [data-chopen]').waitFor({ timeout: 15000 });
         await page.waitForFunction(() => !!document.querySelector('.ch-list .ch-ib-wrap.pinned [data-chopen="qa-daily"]'), null, { timeout: 15000 }).catch(() => {});
         await nap(600);
         entry.first = await lay();
         await shot('0-before-pin');
+        // The thread the owner pins: a read reply (QA_SMART=1, with wizard/smart-inbox on: the first unpinned thread row).
+        const T = process.env.QA_SMART ? entry.first.rows.find(r => !r.pinned && r.id.startsWith('qa-') && r.id !== 'qa-bg')?.id : 'qa-read';
+        entry.target = T;
         const check = (ok, msg) => { if (BROKEN) { if (!ok) (entry.broken = entry.broken || []).push(msg); } else assert.ok(ok, msg); };
-        check(entry.first.ids[0] === 'qa-daily', 'before any pin: Daily first ' + JSON.stringify(entry.first.ids));
+        // Smart inbox (QA_SMART=1) keeps Daily out of Inbox; then pinned rows simply come first.
+        const SMART = !!process.env.QA_SMART, rest = entry.first.ids.filter(id => id !== T);
+        check(SMART || entry.first.ids[0] === 'qa-daily', 'before any pin: Daily first ' + JSON.stringify(entry.first.ids));
         // 1. The owner pins a read thread from its row menu.
-        entry.menuWord = await menu('qa-read', true);
+        entry.menuWord = await menu(T, true);
         if (SW || BROKEN) check(entry.menuWord === 'Pin to top', 'menu says Pin to top: ' + entry.menuWord);
         await page.waitForFunction(() => window.WosChatPins?.pending?.() === 0, null, { timeout: 8000 }).catch(() => {});
         entry.ownerPinned = await lay();
         await shot('1-owner-pinned');
         if (SW || BROKEN) {
           const L = entry.ownerPinned, r0 = L.rows[0] || {};
-          check(L.ids[0] === 'qa-read' && L.ids[1] === 'qa-daily', 'owner pin: first, above Daily ' + JSON.stringify(L.ids));
+          check(JSON.stringify(L.ids) === JSON.stringify([T, ...rest]), 'owner pin: first, above Daily, the rest unchanged ' + JSON.stringify(L.ids));
           check(r0.pinned && r0.mark && r0.av && r0.pv, 'pinned row: same row with the pin mark ' + JSON.stringify(r0));
-          check(BOX.pins.includes('qa-read'), 'the pin is on the box ' + JSON.stringify(BOX.pins));
+          check(BOX.pins.includes(T), 'the pin is on the box ' + JSON.stringify(BOX.pins));
           check(L.ids.length === entry.first.ids.length && L.badge === entry.first.badge && L.head === entry.first.head, `count unchanged: ${entry.first.head}/${entry.first.badge} -> ${L.head}/${L.badge}`);
         }
         // 2. An agent pins a thread through the box (the quiet reply that sits in Sent); the shell reads it on its next pull.
@@ -172,13 +177,13 @@ const report = { origin, web, switch: SW ? 'on' : 'off', cases: [] };
         await shot('2-agent-pinned');
         if (SW || BROKEN) {
           const L = entry.agentPinned;
-          check(L.ids.slice(0, 3).join() === 'qa-read,qa-quiet,qa-daily', 'agent pin: on top in pin order, above Daily ' + JSON.stringify(L.ids));
+          check(JSON.stringify(L.ids) === JSON.stringify([T, 'qa-quiet', ...rest]), 'agent pin: on top in pin order, above Daily ' + JSON.stringify(L.ids));
           check(L.rows[1]?.pinned && L.rows[1]?.mark, 'agent-pinned row has the pin mark');
           check(L.badge === entry.first.badge && L.head === entry.first.head, `a read pinned thread does not add to the count: ${entry.first.head}/${entry.first.badge} -> ${L.head}/${L.badge}`);
-          check(L.rows.length === L.ids.length && L.rows.every(r => r.h === L.rows[2].h || !r.av), 'same row height');
+          check(L.rows.every(r => r.h === L.rows[0].h || !r.av), 'same row height ' + JSON.stringify(L.rows.map(r => r.h)));
         }
         // 3. Unpin both from the row menu: back to normal order (the quiet thread back in Sent).
-        entry.unpinWord = await menu('qa-read', true);
+        entry.unpinWord = await menu(T, true);
         if (SW || BROKEN) check(entry.unpinWord === 'Unpin', 'pinned row menu says Unpin: ' + entry.unpinWord);
         if (entry.agentPinned.ids.includes('qa-quiet')) await menu('qa-quiet', true);
         await page.waitForFunction(() => window.WosChatPins?.pending?.() === 0, null, { timeout: 8000 }).catch(() => {});
