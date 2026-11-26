@@ -53,7 +53,7 @@ const openHealth = async b => { assert.ok(b.F.open('backup-health'), '?view=back
 test('switch on, no watchdog: Health shows the box\'s own backup rows and Home names the left-out main agent', async () => {
   const b = boot();
   const body = await openHealth(b);
-  assert.ok(b.fetches.includes('https://box.example.ts.net/wizard-os-home/store-install/_backup-health'));
+  assert.equal(new URL(b.fetches.find(u => u.endsWith('/_backup-health'))).pathname, '/wizard-os-home/store-install/_backup-health', 'read next to the shell, like the Store');
   const rows = body.querySelectorAll('[data-health]');
   assert.deepEqual(rows.map(r => r.dataset.health), ['main-agent-backup', 'backups'], 'problems first');
   assert.match(body.querySelector('[data-health="backups"]').textContent, /Last backup 11h ago, checked, 4 kept/);
