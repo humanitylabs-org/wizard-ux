@@ -3,7 +3,7 @@
  * (core/chats.js) calls this once with the closure names it reads. Loaded before chats.js by both shells. */
 window.WizCore = window.WizCore || {};
 window.WizCore.chatsParts = window.WizCore.chatsParts || {};
-window.WizCore.chatsParts.sent = function ({ ago, ch, CH, CHAN_VIEW_KEY, chanElsewhere, chanSide, chatVars, clip, closeRowSheet, elOf, esc, H, ibMark, ibRow, ibTagFace, ibThreadRow, LIVE, openChat, renderChatList, rerenderList, toast, W, winAgent }) {
+window.WizCore.chatsParts.sent = function ({ agentName, agentRec, ago, AGS, ch, CH, CHAN_AGENT, CHAN_VIEW_KEY, chanAgentsList, chanAt, chanElsewhere, chanFace, chanGenAgent, chanNeeds, chanNewCount, channelsFor, chanOpen, chanSide, chanUnreadN, chatsBack, chatVars, clip, closeRowSheet, elOf, esc, H, ibMark, ibRow, ibTagFace, ibThreadRow, inChannel, LIVE, openChannel, openChat, owner, renderChatList, rerenderList, rowAgent, setFocus, toast, W, winAgent }) {
   /* The main agent's Chats list gets three tabs at the bottom: Inbox, Tags (the Channels view) and Sent. Sent lists the
    * threads the owner sent into, one row per thread (Sent as threads below), from the box's Sent log (LIVE.sentLog:
    * GET /wizard/v1/sent). A tap opens the thread; the row's actions sheet holds his sends and the two routing
@@ -212,6 +212,8 @@ window.WizCore.chatsParts.sent = function ({ ago, ch, CH, CHAN_VIEW_KEY, chanEls
   function sentClick(e, id, w) {
     if (!w || w.thread) return false;
     const t = e.target.closest('[data-chtab]'); if (t) { sentGo(w, t.dataset.chtab); return true; }
+    // The title's ▾ (wizard-ux#1957): the shell's switcher sheet.
+    if (e.target.closest('[data-chswitch]')) { window.WizCore?.chatsSwitcher?.open?.('title'); return true; }
     if (e.target.closest('[data-chsentmore]')) { LIVE.sentLog?.more?.().then(sentRepaint, () => toast('!', 'Couldn’t read older ones', 2400)); return true; }
     // A Sent row whose thread isn't loaded yet opens its chat; its actions sheet's Open and corrections.
     const so = e.target.closest('[data-chsent]'); if (so) { sentOpenRow(id, so.dataset.chsent); return true; }
@@ -234,12 +236,86 @@ window.WizCore.chatsParts.sent = function ({ ago, ch, CH, CHAN_VIEW_KEY, chanEls
   const TB_FILT_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M7 12h10M10 18h4"/></svg>';
   // `n` the Inbox count (its pill), `tools` false on Sent (its log has no search), `searching` the field is open,
   // `filtered` a filter is set, `sheet` the filter sheet is open.
-  function titleBar(tab, { n = 0, tools = true, searching = false, filtered = false, sheet = false } = {}) {
-    const t = TB_TITLE[tab] || 'Inbox';
-    return `<div class="ch-top ch-tbar" data-morph-key="tbar"><h2 class="ch-tbar-t"><span>${t}</span>${tab === 'inbox' && n ? `<small class="ch-tbar-n" aria-label="${n} in ${t}">${n}</small>` : ''}</h2>`
+  // `pick`: the title is the Chats switcher's button (wizard-ux#1957, csTitle below).
+  function titleBar(tab, { n = 0, tools = true, searching = false, filtered = false, sheet = false, pick = false } = {}) {
+    const t = TB_TITLE[tab] || 'Inbox', count = tab === 'inbox' && n ? `<small class="ch-tbar-n" aria-label="${n} in ${t}">${n}</small>` : '';
+    return `<div class="ch-top ch-tbar" data-morph-key="tbar"><h2 class="ch-tbar-t">${pick ? csTitle(`<span>${t}</span>`, t, count) : `<span>${t}</span>${count}`}</h2>`
       + (tools ? `<button type="button" class="ch-tbar-b${searching ? ' on' : ''}" data-chtbsearch aria-label="Search chats" aria-pressed="${searching}">${TB_FIND_SVG}</button>`
         + `<button type="button" class="ch-tbar-b ch-fbtn${filtered ? ' on' : ''}" data-chfbtn aria-label="Filter and sort" aria-expanded="${sheet ? 'true' : 'false'}">${TB_FILT_SVG}</button>` : '')
       + '</div>';
   }
-  return { sentBack, sentBar, sentBody, sentClick, sentOpen, sentSends, sentSheet, sentTabsOn, titleBar, titleBarTab };
+  /* The Chats switcher (wizard-ux#1957, switch wizard/chats-switcher, off by default; James, 27 Nov 2026: "I don't like
+   * how you're displaying like a second line below chats... it can just be clear from the top of the screen what they're
+   * looking at... the arrow drop down on the inbox at the top"). On the phone (the shell's part, app-chatsswitch.js, is
+   * loaded and on) the main agent's list draws no bottom tabs: its title names the view it shows (Inbox, Sent, Archived,
+   * a tag's emoji and name, another agent) with a ▾, and a tap on it opens the shell's switcher sheet. The sheet lists
+   * csViews and switches with csGo. The Tags page is no destination there: its tags and agents are in the sheet, a tag
+   * opens its own list (today's Tags › tag feed), and Back from it goes to Inbox. Desktop and tablet keep the tabs. */
+  const CS_SWITCH = 'wizard/chats-switcher';
+  function csOn(w) {
+    try { if (!(document.documentElement.dataset.tweaks || '').split(' ').includes(CS_SWITCH) || !window.WizCore?.chatsSwitcher?.on?.()) return false; } catch (_) { return false; }
+    // The main agent's own list (an agent's list opened from the sheet focuses that agent, but is still this window).
+    const o = w ? (W[owner(w.id)] || w) : null;
+    return !w || (!o?.agent && !!LIVE.sentLog && !(typeof chanSide === 'function' && chanSide(w)));
+  }
+  const CS_CHEV = '<svg class="ch-tbar-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg>';
+  // The title as the switcher's button: the view's name (html), its count, the ▾.
+  const csTitle = (html, name, count = '') => `<button type="button" class="ch-tbar-pick" data-chswitch aria-haspopup="dialog" aria-label="${esc(name)}. Switch view">${html}${count}${CS_CHEV}</button>`;
+  // A view's key: 'inbox', 'sent', 'archived', or '#' + the channel id of a tag or an agent's list (CHAN_AGENT + id).
+  function csView(w) {
+    if (!w) return 'inbox';
+    if (sentOpen(w)) return 'sent';
+    const f = typeof chanOpen === 'function' ? chanOpen(w) : null;
+    return f ? (f.archivedFeed ? 'archived' : '#' + f.id) : 'inbox';
+  }
+  // The title bar over a tag's, an agent's or Archived's list (in place of the feed's back row).
+  function csFeedTitle(w, open) {
+    let html, name;
+    if (open.archivedFeed) { name = 'Archived'; html = '<span>Archived</span>'; }
+    else if (open.agentFeed) { name = open.name; html = `<span class="ch-chan-sig" aria-hidden="true">${AGS?.()?.sigil?.(agentRec(open.agent)) || ''}</span><span>${esc(open.name)}</span>`; }
+    else { const f = chanFace(open); name = f.label || f.emoji; html = `<span class="ch-tbar-emo" aria-hidden="true">${esc(f.emoji)}</span><span>${esc(f.label || '')}</span>`; }
+    return `<div class="ch-top ch-tbar ch-tbar-feed" data-morph-key="tbar" data-chfeedtitle><h2 class="ch-tbar-t">${csTitle(html, name)}</h2></div>`;
+  }
+  // A tag's dot: new posts since it was read (the Tags list's own mark) or a chat in it that needs him.
+  const csNeeds = list => typeof chanNeeds === 'function' && list.some(s => { try { return !!chanNeeds(s); } catch (_) { return false; } });
+  // Every row of the main list, archived ones too (a tag's unread dot and how recently it was active).
+  const csRows = () => { try { return (LIVE.sessionsFor ? LIVE.sessionsFor('') : LIVE.sessions || []).filter(s => s && !s.hidden); } catch (_) { return []; } };
+  /* The sheet's lists: `base` Inbox · Sent · Archived (bottom row), `grid` the tags and the other agents, most recently
+   * active first, each { key, kind, emoji | sigil, label, unread }, `cur` the view showing. */
+  function csViews(w) {
+    const o = w ? (W[owner(w.id)] || w) : null, rows = csRows(), grid = [];
+    // The tags of the list as it was before a tag or an agent took its Focus.
+    const base = { id: '__chats-switcher__', focus: o?.chan ? o.chan.prev || null : o?.focus || null };
+    const latest = list => list.reduce((m, s) => Math.max(m, chanAt(s) || 0), 0);
+    if (typeof channelsFor === 'function') for (const c of channelsFor(base)) {
+      const mine = rows.filter(s => !s.archived && inChannel(c, s)), f = chanFace(c);
+      grid.push({ key: '#' + c.id, kind: 'tag', emoji: f.emoji, label: f.label || f.title || c.name, unread: chanNewCount(c, mine, w ? chanGenAgent(w) : '') > 0 || csNeeds(mine), at: latest(mine) });
+    }
+    const main = AGS?.()?.defaultId?.() || 'hermes';
+    for (const a of (typeof chanAgentsList === 'function' ? chanAgentsList() : [])) {
+      if (a.id === main || a.is_default) continue;
+      const mine = rows.filter(s => !s.archived && rowAgent(s) === a.id);
+      grid.push({ key: '#' + CHAN_AGENT + a.id, kind: 'agent', sigil: AGS?.()?.sigil?.(agentRec(a.id)) || '', label: typeof agentName === 'function' ? agentName(a.id) : a.label || a.id, unread: (chanUnreadN?.(mine) || 0) > 0 || csNeeds(mine), at: latest(mine) });
+    }
+    grid.sort((a, b) => b.at - a.at || a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }));
+    return { cur: csView(w), base: [{ key: 'inbox', label: 'Inbox' }, { key: 'sent', label: 'Sent' }, { key: 'archived', label: 'Archived' }], grid };
+  }
+  // Show a view in the main list; false when it is gone (a tag deleted on another device).
+  function csGo(w, key) {
+    if (!w || typeof key !== 'string') return false;
+    const o = W[owner(w.id)] || w;
+    if (w.thread && typeof chatsBack === 'function') chatsBack(w);
+    if (key === 'inbox' || key === 'sent') {
+      if (o.chan) { const prev = o.chan.prev || null; o.chan = null; setFocus(w, prev); }
+      if (key === 'sent') return sentGo(w, 'sent');
+      ch(w.id).sent = false; return sentGo(w, 'inbox');
+    }
+    const id = key === 'archived' ? '__archived__' : key.startsWith('#') ? key.slice(1) : '';
+    if (!id) return false;
+    ch(w.id).sent = false; chatVars.chanView = 'activity'; // Back from it goes to Inbox
+    try { localStorage.setItem(CHAN_VIEW_KEY, chatVars.chanView); } catch (_) {}
+    return !!openChannel(w, id);
+  }
+  const switcher = { on: csOn, view: csView, views: csViews, go: csGo, feedTitle: csFeedTitle };
+  return { sentBack, sentBar, sentBody, sentClick, sentOpen, sentSends, sentSheet, sentTabsOn, switcher, titleBar, titleBarTab };
 };

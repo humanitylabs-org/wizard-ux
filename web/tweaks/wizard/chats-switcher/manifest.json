@@ -1,0 +1,17 @@
+{
+  "id": "wizard/chats-switcher",
+  "name": "Phone Chats: one bar and a view switcher on the Chats tile",
+  "version": "1.0.0",
+  "author": "wizard",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout"
+  ],
+  "issues": [
+    "humanitylabs-org/wizard-ux#1957"
+  ],
+  "description": "On the phone, Chats loses its second bar (Inbox · Tags · Sent): the list reaches the main bar and its title names what you are looking at (Inbox, Sent, Archived or a tag) with a small ▾. Tap Chats while you are on Chats, or tap the title, and a sheet rises from the bar: Inbox, Sent and Archived on the bottom row, your tags and other agents above. Hold Chats and slide to pick in one go. Swipe sideways on the Chats tile to flip between your last two views, or along the bar to step through them one at a time.",
+  "shells": [
+    "phone"
+  ]
+}
