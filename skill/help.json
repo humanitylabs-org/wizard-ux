@@ -454,10 +454,6 @@
       "help": "Share's People row shows Messenger's recent chats in every window.",
       "where": "Settings › Appearance › Try new features › Share to people in any window"
     },
-    "wizard/ai-apps-running": {
-      "help": "AI apps: Running view in the sidebar.",
-      "where": "Settings › Appearance › Try new features › Running view in the AI apps sidebar"
-    },
     "wizard/skins-look-only": {
       "help": "Skins become a look only: only feature switches decide what runs. Your skin's own choices come back when you switch this off.",
       "where": "Settings › Appearance › Try new features › Skins are look only"
