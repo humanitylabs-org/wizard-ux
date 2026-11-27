@@ -1748,6 +1748,14 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
             main.post(() -> MainActivity.this.shellToken(token));
         }
 
+        /** A Wizard app's call page (wizard-messenger issue 445, Messenger switch calls) in a call window of its own:
+         *  camera, microphone and earpiece / speaker / Bluetooth sound. Only this Wizard's own pages; false otherwise. */
+        @JavascriptInterface public boolean openCall(String url) {
+            final String u = String.valueOf(url);
+            if (!ai.wizards.os.call.CallActivity.allowed(ai.wizards.os.device.AppState.primaryOrigin(MainActivity.this), u)) return false;
+            runOnUiThread(() -> ai.wizards.os.call.CallActivity.open(MainActivity.this, u));
+            return true;
+        }
         /** Long-press › Open in your browser, also for this Wizard's own pages: the phone's default browser, never this app. */
         @JavascriptInterface public void openInBrowser(String url) {
             final Uri u = Uri.parse(String.valueOf(url));

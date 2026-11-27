@@ -49,6 +49,11 @@ public class DeviceBridgeE2eTest {
         AppLinkScenario.run();
     }
 
+    /** wizard-messenger#445: a call window for this Wizard's own call page: microphone, Element Call's outputs, routing. */
+    @Test public void callWindowRoutesTheCallsSound() throws Exception {
+        CallWindowScenario.run();
+    }
+
     @Test public void genericPackagesAndLegacyCompatibility() throws Exception {
         Context c = InstrumentationRegistry.getInstrumentation().getTargetContext();
         UiDevice device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation());
