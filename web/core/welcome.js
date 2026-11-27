@@ -257,7 +257,7 @@
 
   // Standard first's Private AI step (offered once). With nothing connected it leads with private AI as the way to get
   // a model. "Why does this matter?" opens Settings › Privacy's Why it matters page (wizard-ux issue 1801, core/privacy.js),
-  // so it shows only while that page's switch (wizard/private-mode) is on.
+  // so it shows wherever that page is loaded (on for everyone since wizard-agent-service issue 626).
   function paintOffer() {
     if (provider) return paintSignin();
     const none = skipped && !linked.size, busy = !!offerBusy;
@@ -637,7 +637,7 @@
   let pfAt = 0, pfAsking = false;
   const finishDue = () => {
     if (!pfAsking && Date.now() - pfAt > (pf ? 60000 : 15000)) { pfAsking = true; pfRead().then(() => { pfAt = Date.now(); pfAsking = false; try { window.WosSettings?.refresh?.(); } catch (e) {} }); }
-    // With private mode's Settings › Privacy on (wizard-ux issue 1801), its Private mode row says Finish setting up.
+    // Where private mode's Settings › Privacy is loaded (wizard-ux issue 1801), its Private mode row says Finish setting up.
     return pf?.offer === 'later' && !pf?.private_agent && !window.WosPrivacy?.on?.();
   };
   try {

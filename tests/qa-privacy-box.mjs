@@ -1,8 +1,7 @@
 // A test Wizard for wizard-ux#1801 (Settings › Privacy): the REAL Agent Service (wizard-agent-service
 // server/service.mjs from a checkout, QA_AS=<path>) with a stand-in main Hermes on Claude, and in front of it one
 // origin that serves this repo's web/ (or QA_WEB) at /wizard-os-home/, a stand-in Tinfoil app (/wizard-tinfoil/) and
-// passes everything else to the Agent Service. Private mode follows the owner's switch wizard/private-mode in the Look
-// file, which the shell itself writes (Pages/wizard-look/look.json), so the switch chain is the box's own.
+// passes everything else to the Agent Service. Private mode is on for everyone (wizard-agent-service#626, no switch).
 // Installed apps: Mail and Notes (personal data: `privacy: private`), Music, Tinfoil and Claude (connection apps).
 //   QA_AS=<agent service checkout> node tests/qa-privacy-box.mjs   → prints `READY <port> <dir>` and serves until killed
 // Control (for the QA script, never a real box): POST /qa/tinfoil {signed: true|false}; GET /qa/state.
@@ -55,7 +54,7 @@ const svc = createWizardServer({
   agentRuntime: { apply: async () => ({ ok: true }), start: async () => ({ ok: true }), stop: async () => ({ ok: true }) },
   schedulerStatePath: join(dir, 'schedules.sqlite'), schedulerIntervalMs: 3_600_000,
   followThrough: false, agentBasePort: 47930 + Math.floor(Math.random() * 500), runQueue: false,
-  pagesRoot: join(dir, 'Pages'), pagesGitDir: join(dir, 'pages-history.git'), pagesWatch: false, privateModeTtlMs: 0,
+  pagesRoot: join(dir, 'Pages'), pagesGitDir: join(dir, 'pages-history.git'), pagesWatch: false,
 })
 const svcAddress = await listen(svc)
 

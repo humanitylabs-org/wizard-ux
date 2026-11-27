@@ -410,7 +410,7 @@
         "desktop"
       ],
       "classification": "shared",
-      "note": "Settings › Privacy: Private mode row, Privacy check, switch-over sheet, Why it matters (issue 1801, switch wizard/private-mode)"
+      "note": "Settings › Privacy: Private mode row, Privacy check, switch-over sheet, Why it matters (issue 1801; on for everyone, switch wizard/private-mode removed)"
     },
     "core/action-cards.js": {
       "loadedBy": [
@@ -1835,6 +1835,7 @@
     "core/phone-nav.css",
     "core/photos-relay.js",
     "core/polish.css",
+    "core/privacy.css",
     "core/privacy.js",
     "core/private-route.js",
     "core/reach.js",

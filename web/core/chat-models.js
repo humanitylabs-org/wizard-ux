@@ -512,7 +512,7 @@
         : main.map((o, i) => `<button type="button" class="mrow${isTinfoil(o.provider) ? ' secure' : ''}${isCur(o) ? ' on' : ''}" data-mpick="${i}" aria-pressed="${isCur(o)}"><span class="mn"><b>${esc(o.name)}</b><small>${esc([o.description, o.isGlobalDefault ? 'Default' : ''].filter(Boolean).join(' · ') || o.value)}</small></span>${isCur(o) ? '<i class="mck" aria-hidden="true">✓</i>' : ''}</button>`).join('');
       const lock = window.WosAgents?.lock?.() || '';
       const privNote = mode === 'thread' ? 'Starts a new private chat with this conversation quoted. This thread stays as it is.' : 'Runs on your private agent: its own history, no fallback.';
-      // Private mode's setup (wizard-ux issue 1801, switch wizard/private-mode): no private agent yet, so the Private
+      // Private mode's setup (wizard-ux issue 1801, on for everyone): no private agent yet, so the Private
       // group offers Set up private AI, which opens Settings › Privacy's switch-over sheet.
       const privSetup = !own && Array.isArray(priv) && !privList.length && !!window.WosPrivacy?.setupDue?.();
       const privRows = privSetup ? `<div class="msheet-grp priv" role="group" aria-label="Private models"><div class="msheet-gh">${lock}<span>Private</span></div>${SETUP_PRIVATE}</div>`
