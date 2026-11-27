@@ -66,6 +66,8 @@ const only = process.env.QA_TAGS || '';
             if (method === 'PUT' && p === '/wizard/v1/channels/membership') { const k = 'hermes|' + b.sessionId; if (b.channelId) box.members[k] = b.channelId; else delete box.members[k]; box.tagged[k] = []; return r.fulfill({ json: { sessionId: b.sessionId, agent: 'hermes', channel: b.channelId } }); }
             if (method === 'PUT' && p === '/wizard/v1/channels/read') return r.fulfill({ json: { schema: 'wizard.channel-reads/1', at: {} } });
             if (method === 'PATCH' && p === '/wizard/v1/ui-preferences') return r.fulfill({ json: prefs });
+            // Channel emoji from a model (issue 1605, on for everyone): a box without the lookup broker answers 503, so 💬 stays.
+            if (method === 'POST' && p === '/wizard/v1/channel-emoji') return r.fulfill({ status: 503, json: { error: 'channel_emoji_unavailable' } });
             entry.refused.push({ method, path: p, reason: 'unexpected-write' }); return r.fulfill({ status: 405, json: { error: 'Synthetic fixture refuses this write' } });
           }
           if (p === prefix + 'installed-apps.json') return r.fulfill({ json: { apps: [] } });
