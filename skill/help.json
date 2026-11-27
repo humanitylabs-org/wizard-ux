@@ -413,10 +413,6 @@
       "help": "New installs start private: Welcome leads with Tinfoil; Claude and ChatGPT are optional extras.",
       "where": "Settings › Appearance › Try new features › Private first setup"
     },
-    "wizard/action-cards": {
-      "help": "An app's proposed action (a draft, an event) shows in chat with Approve, Edit, Open in app.",
-      "where": "Settings › Appearance › Try new features › Action cards in chat"
-    },
     "wizard/reply-buttons": {
       "help": "Tap-to-answer buttons in agent replies.",
       "where": "Settings › Appearance › Try new features › Tap to answer in replies"
@@ -528,10 +524,6 @@
     "wizard/app-picker-store-search": {
       "help": "Add an app's search also finds App Store apps.",
       "where": "Settings › Appearance › Try new features › Add an app: search the App Store too"
-    },
-    "wizard/swap-sides": {
-      "help": "Chats right, apps left (⌥⇧L).",
-      "where": "Settings › Appearance › Try new features › Swap sides"
     },
     "wizard/desktop-bottom-bar": {
       "help": "Apps bar at the bottom on any width.",

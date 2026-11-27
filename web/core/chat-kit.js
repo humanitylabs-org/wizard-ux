@@ -42,7 +42,7 @@
     return out;
   }
   // [WIZARD_ACTION_V1]{"app":"wizard-messenger","id":"draft-42"}[/WIZARD_ACTION_V1], on its own line: an app's proposed
-  // action, drawn as an inline card (core/action-cards.js, switch wizard/action-cards, wizard-ux issue 1463). App id and
+  // action, drawn as an inline card (core/action-cards.js, wizard-ux issue 1463). App id and
   // item id only (the card reads everything else from the app); keys `<app>/<id>`, at most 4. Always hidden from the text.
   const ACTION_RE = /\[WIZARD_ACTION_V1\]\s*([\s\S]*?)\s*\[\/WIZARD_ACTION_V1\]/g, ACTION_APP = /^[a-z0-9][a-z0-9-]{0,62}$/, ACTION_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
   function actionIds(s) {
