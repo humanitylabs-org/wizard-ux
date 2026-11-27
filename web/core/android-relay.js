@@ -168,10 +168,10 @@
    * kept a copy of the old switch wizard/app-windows), so the main page tells them; newer ones have no such call. */
   try { const n = window.WizardOSNative; if (n && typeof n.appWindowsSwitch === 'function' && !window.WizHomeScreenPolicy?.mode) n.appWindowsSwitch(true); } catch (_) {}
 
-  /* Phone notifications per app (wizard-ux issue 1567, switch wizard/phone-app-notifications, off by default). The
-   * Android app reads the Notifications app and posts each new item under its own app, on an Android channel per app.
-   * The main page copies the switch there with the installed apps' names (the channels' names); off once settled. */
-  const NOTIFY_SWITCH = 'wizard/phone-app-notifications';
+  /* Phone notifications per app (wizard-ux issue 1567, on for everyone). The Android app reads the Notifications app
+   * and posts each new item under its own app, on an Android channel per app. The main page hands it the installed
+   * apps' names (the channels' names). The call keeps its switch-era shape (on, names) and always says on: Android apps
+   * 0.10.54 to 0.10.73 still wait to be told (they kept a copy of the old switch wizard/phone-app-notifications). */
   let notifyWas = null;
   function notifyNames() {
     const out = {};
@@ -180,16 +180,11 @@
   }
   function notifySync() {
     const n = window.WizardOSNative; if (!n || typeof n.appNotifySwitch !== 'function' || window.WizHomeScreenPolicy?.mode) return;
-    let on = false; try { on = (document.documentElement.dataset.tweaks || '').split(' ').includes(NOTIFY_SWITCH); } catch (_) {}
-    if (!on && !chatSettled) return;
-    const names = on ? notifyNames() : '', key = on + '|' + names;
-    if (key === notifyWas) return;
-    notifyWas = key; try { n.appNotifySwitch(on, names); } catch (_) {}
+    const names = notifyNames();
+    if (names === notifyWas) return;
+    notifyWas = names; try { n.appNotifySwitch(true, names); } catch (_) {}
   }
-  if (typeof MutationObserver === 'function' && document.documentElement) {
-    new MutationObserver(() => notifySync()).observe(document.documentElement, { attributes: true, attributeFilter: ['data-tweaks'] });
-  }
-  /* Box-to-phone push (wizard-ux issue 1618, switch wizard/phone-push, off by default). On top of the switch above, the
+  /* Box-to-phone push (wizard-ux issue 1618, switch wizard/phone-push, off by default). On top of the reader above, the
    * Android app keeps one line to this Wizard's Notifications app open (over Tailscale, no Google) and reads each new
    * item at once, also while the phone is locked. The main page copies the switch there; off once settled. */
   // Off is only sent once the page's switches have surely settled (5 s): the first wos:experience can come before this

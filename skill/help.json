@@ -421,10 +421,6 @@
       "help": "Tap-to-answer buttons in agent replies.",
       "where": "Settings › Appearance › Try new features › Tap to answer in replies"
     },
-    "wizard/phone-app-notifications": {
-      "help": "Android app: what any app sends to Notifications shows as a phone notification under that app's name, one Android channel per app.",
-      "where": "Settings › Appearance › Try new features › Phone notifications per app"
-    },
     "wizard/app-location": {
       "help": "Only apps whose wizard.md asks for location (today Maps) may use it, after your browser's or phone's own yes; others stay blocked.",
       "where": "Settings › Appearance › Try new features › Location for Maps"

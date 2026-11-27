@@ -2045,14 +2045,15 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
             if (MainActivity.this instanceof AppSessionActivity) return;
             ai.wizards.os.assist.AssistNote.setOn(MainActivity.this, on);
         }
-        /** Phone notifications per app (wizard-ux issue 1567, switch wizard/phone-app-notifications): the main page's
-         *  copy of the switch, with the installed apps' names for their Android channels. */
+        /** Phone notifications per app (wizard-ux issue 1567, on for everyone): the main page hands over the installed
+         *  apps' names for their Android channels. The name and the on/off argument stay for pages from before the
+         *  switch wizard/phone-app-notifications went; the argument is ignored. */
         @JavascriptInterface
         public void appNotifySwitch(boolean on, String names) {
             if (MainActivity.this instanceof AppSessionActivity) return;
-            ai.wizards.os.notify.AppNotify.setOn(MainActivity.this, on, names);
-            // Android 13+: turning it on asks for permission to post (once per switch-on, never on its own).
-            if (on && Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+            ai.wizards.os.notify.AppNotify.apps(MainActivity.this, names);
+            // Android 13+: asks for permission to post once, never on its own.
+            if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
                     && ai.wizards.os.notify.AppNotify.askOnce(MainActivity.this)) {
                 main.post(() -> requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, REQ_APP_NOTIFY));
             }

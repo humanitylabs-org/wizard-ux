@@ -32,7 +32,7 @@ import ai.wizards.os.device.AppState;
 import ai.wizards.os.device.Http;
 
 /**
- * Phone notifications per app (wizard-ux issue 1567, switch wizard/phone-app-notifications, off by default).
+ * Phone notifications per app (wizard-ux issue 1567, on for everyone).
  * Reads the Notifications app (the one notify door every Wizard app and the agent already post to) and posts each new
  * item as its own Android notification, on a channel per app named after it, so Android settings can mute one app
  * and keep the others. A tap opens the item's link on this Wizard, or the app. Rules: {@link AppNotifyPolicy}.
@@ -42,8 +42,8 @@ import ai.wizards.os.device.Http;
  * each new item, also while the phone is locked (issue 1618). While WizardOS is on screen nothing is posted
  * (the shell shows it), but the watermark still moves, so nothing seen there is posted later.
  *
- * The switch lives in the shell (look.json); the main page copies it here with the apps' names
- * (WizardOSNative.appNotifySwitch), because the native side never sees the shell's switches.
+ * The main page hands over the installed apps' names for the channels (WizardOSNative.appNotifySwitch; the name stays
+ * from when this had a switch, and its on/off argument is ignored: the switch wizard/phone-app-notifications is gone).
  */
 public final class AppNotify {
     static final String TAG = "WizardAppNotify";
@@ -58,25 +58,19 @@ public final class AppNotify {
 
     static SharedPreferences prefs(Context c) { return c.getApplicationContext().getSharedPreferences(PREFS, Context.MODE_PRIVATE); }
 
-    public static boolean on(Context c) { return prefs(c).getBoolean("on", false); }
-
-    /** From the main page: the switch and the installed apps' names ({id: name}, may be empty). */
-    public static void setOn(Context c, boolean on, String names) {
+    /** From the main page: the installed apps' names ({id: name}, may be empty); starts the reader. */
+    public static void apps(Context c, String names) {
         Context app = c.getApplicationContext();
         SharedPreferences.Editor e = prefs(app).edit();
         if (names != null && names.length() <= 20_000) {
             try { new JSONObject(names); e.putString("names", names); } catch (JSONException ignored) { }
         }
-        boolean was = on(app);
-        e.putBoolean("on", on);
-        // Off forgets the watermark: turning it on again starts from now and never replays what came in meanwhile.
-        if (!on) e.remove("since").remove("posted").remove("asked");
+        e.remove("on"); // the copy of the removed switch wizard/phone-app-notifications older versions kept
         e.apply();
-        if (was != on) Log.i(TAG, "switch " + (on ? "on" : "off"));
-        if (on) kick(app); else { stop(app); AppPush.ensure(app); }
+        kick(app);
     }
 
-    /** True once per switch-on: the page may ask Android for permission to post, never again until it is off and on. */
+    /** True once: the page may ask Android for permission to post, never again. */
     public static boolean askOnce(Context c) {
         SharedPreferences p = prefs(c);
         if (p.getBoolean("asked", false)) return false;
@@ -84,11 +78,10 @@ public final class AppNotify {
         return true;
     }
 
-    /** Start (or keep) the in-process read and the backstop job; nothing while the switch is off. */
+    /** Start (or keep) the in-process read and the backstop job. */
     public static void kick(Context c) {
         Context app = c.getApplicationContext();
-        AppPush.ensure(app); // box-to-phone push (issue 1618, its own switch): runs only while this one is on too
-        if (!on(app)) { stop(app); return; }
+        AppPush.ensure(app); // box-to-phone push (issue 1618, its own switch)
         synchronized (LOCK) {
             if (loop == null) {
                 HandlerThread t = new HandlerThread("wizard-app-notify");
@@ -98,7 +91,6 @@ public final class AppNotify {
             loop.removeCallbacksAndMessages(null);
             loop.post(new Runnable() {
                 @Override public void run() {
-                    if (!on(app)) return;
                     if (!AppPush.listening()) pollOnce(app); // the push line reads at once; no need to ask every 30 s
 
                     loop.postDelayed(this, LOOP_MS);
@@ -129,7 +121,6 @@ public final class AppNotify {
 
     /** One read of the Notifications app. Network: call off the main thread. */
     static void pollOnce(Context c) {
-        if (!on(c)) return;
         // Without permission to post (Android 13+, not granted yet) nothing is read or consumed, so it shows once allowed.
         if (!canNotify(c)) return;
         synchronized (POLL) {
@@ -167,7 +158,7 @@ public final class AppNotify {
             JSONArray keep = new JSONArray();
             int skip = Math.max(0, posted.size() - AppNotifyPolicy.KEEP_POSTED), i = 0;
             for (String id : posted) if (i++ >= skip) keep.put(id);
-            if (on(c)) p.edit().putLong("since", Double.doubleToLongBits(pass.since)).putString("posted", keep.toString()).apply();
+            p.edit().putLong("since", Double.doubleToLongBits(pass.since)).putString("posted", keep.toString()).apply();
             if (!pass.post.isEmpty()) Log.i(TAG, (show ? "posted " : "seen on screen ") + pass.post.size());
         }
     }

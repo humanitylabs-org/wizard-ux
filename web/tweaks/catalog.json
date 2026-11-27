@@ -24,7 +24,6 @@
     "wizard/private-first-setup",
     "wizard/chat-app-switches",
     "wizard/reply-buttons",
-    "wizard/phone-app-notifications",
     "wizard/phone-chat-replies",
     "wizard/lock-screen-player",
     "wizard/chat-tags",

@@ -29,7 +29,7 @@ import ai.wizards.os.device.AppState;
  *
  * {@link AppNotify} reads the Notifications app every 30 s while this app's process lives and every 15 minutes after
  * that (a JobScheduler job Doze defers further), so a locked phone could see an item up to ~15 minutes late. With
- * this switch on (and Phone notifications per app on), a small foreground service keeps one connection to the box's
+ * this switch on, a small foreground service keeps one connection to the box's
  * Notifications app open over the owner's Tailscale ({@link AppPushPolicy}: nothing goes through Google), and each
  * hello / new-item ping runs the same reader once. A foreground service keeps its network while the phone dozes;
  * Android requires it to show a notification, which goes on its own silent, minimised channel the owner can hide.
@@ -49,8 +49,8 @@ public final class AppPush {
     /** The shell's switch wizard/phone-push, as the main page last copied it. */
     public static boolean switchOn(Context c) { return prefs(c).getBoolean("on", false); }
 
-    /** Push runs only on top of Phone notifications per app: it only makes that reader read sooner. */
-    public static boolean wanted(Context c) { return switchOn(c) && AppNotify.on(c) && AppNotify.canNotify(c); }
+    /** Push runs on top of Phone notifications per app (AppNotify): it only makes that reader read sooner. */
+    public static boolean wanted(Context c) { return switchOn(c) && AppNotify.canNotify(c); }
 
     /** The line to the box is up (its hello came): each new item is read at once, so the 30 s reads can rest. */
     public static boolean listening() { return AppPushService.running && AppPushService.connected; }
