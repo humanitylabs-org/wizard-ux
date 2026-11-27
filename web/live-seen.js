@@ -201,13 +201,16 @@ window.WizCore.liveParts.seen = function ({  }) {
     const comparable = typeof s.messageCount === 'number' && typeof r.messageCount === 'number';
     // A row read from a thread's detail alone (a hidden thread opened by link) has no preview: no evidence of a change,
     // and treating it as one kept it unread however often it was marked (a thread-seen write storm, agent-service 631).
-    const previewChanged = !otherAgent(s.agent) && !comparable && !!vis(s.preview) && fingerprint(s.preview) !== r.previewFingerprint;
-    const countUp = comparable && s.messageCount > r.messageCount;
-    const becameReady = !!s.status && s.status !== r.status && READY_OR_ATTENTION.has(s.status) && (!r.status || !READY_OR_ATTENTION.has(r.status));
+    // A row older than the record (the record was read at a newer revision: another device, or the thread's detail)
+    // has nothing the owner has not seen; its older preview or count never matched, so it stayed unread however often
+    // the open thread was marked read: a thread-seen write on every repaint (wizard-os issue 1020).
+    const u = Date.parse(s.updatedAt), su = Date.parse(r.updatedAt), older = isFinite(u) && isFinite(su) && u < su;
+    const previewChanged = !older && !otherAgent(s.agent) && !comparable && !!vis(s.preview) && fingerprint(s.preview) !== r.previewFingerprint;
+    const countUp = !older && comparable && s.messageCount > r.messageCount;
+    const becameReady = !older && !!s.status && s.status !== r.status && READY_OR_ATTENTION.has(s.status) && (!r.status || !READY_OR_ATTENTION.has(r.status));
     if (isFinite(cur)) return isFinite(seenA) ? cur > seenA : cur > r.seenAt;
     if (previewChanged || countUp || becameReady) return true;
     if (s.preview || typeof s.messageCount === 'number') return false;
-    const u = Date.parse(s.updatedAt), su = Date.parse(r.updatedAt);
     return isFinite(u) && (!isFinite(su) || u > su);
   }
   function later(l, r) {
@@ -231,7 +234,9 @@ window.WizCore.liveParts.seen = function ({  }) {
   function seenRecord(prior, s, seenAt) {
     const fresh = recordFor(s, seenAt); if (!prior) return fresh;
     const { unreadAt, ...kept } = later(prior, fresh);
-    return { ...kept, seenAt: Math.max(seenAt, prior.seenAt || 0) };
+    // Read lands past any unread mark, as markUnread lands past the last read: a mark made on a device whose clock
+    // runs ahead otherwise outlived this read on the box and kept the open thread unread (wizard-os issue 1020).
+    return { ...kept, seenAt: Math.max(seenAt, prior.seenAt || 0, (prior.unreadAt ?? -1) + 1) };
   }
   /* Mark done (wizard-ux issue 1317): the revision a thread was handled through is its own newest reply time (else
    * updatedAt), a server time, so device clocks never matter. A later reply moves past it and the markers come back. */

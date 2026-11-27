@@ -1,24 +1,23 @@
 'use strict';
-// Private routing in the shell (wizard-ux issue 1804, switch wizard/private-routing; the Agent Service half is
+// Private routing in the shell (wizard-ux issue 1804, on for everyone; the Agent Service half is
 // wizard-agent-service#629) in a real browser against the REAL Agent Service (tests/qa-private-routing-box.mjs, which
 // needs QA_AS=<wizard-agent-service checkout>). Chromium's fake microphone records each take through the real orb; only
 // speech-to-text and the recording upload are stand-ins here (the fake mic says nothing). The Agent Service decides
 // where each take goes (name rule, private label from a private stand-in router, default); the stand-in agent runtimes
 // record which agent got which words.
-//   QA_SWITCH=on|off (default on)   QA_SHELLS=phone,classic   QA_SKINS=nebula,grove   QA_OUT=<dir> (shots, report.json)
+//   QA_SHELLS=phone,classic   QA_SKINS=nebula,grove   QA_OUT=<dir> (shots, report.json)
 //   QA_CASES=philosopher,personal,move,typed,default (default all)   QA_EXPECT=broken: print, never fail (main, before)
 const assert = require('node:assert/strict');
 const { spawn } = require('node:child_process');
 const { chromium } = require('../tools/qa-playwright.cjs');
 const fs = require('node:fs'), path = require('node:path');
 const repo = path.resolve(__dirname, '..');
-const SW = (process.env.QA_SWITCH || 'on') === 'on', EXPECT_BROKEN = process.env.QA_EXPECT === 'broken';
+const EXPECT_BROKEN = process.env.QA_EXPECT === 'broken';
 const SHELLS = (process.env.QA_SHELLS || 'phone,classic').split(','), SKINS = (process.env.QA_SKINS || 'nebula,grove').split(',');
 const CASES = (process.env.QA_CASES || 'philosopher,personal,move,typed,default').split(',');
 const out = process.env.QA_OUT || path.join(repo, 'private-routing-evidence');
 fs.mkdirSync(out, { recursive: true });
 const nap = ms => new Promise(r => setTimeout(r, ms));
-const ID = 'wizard/private-routing';
 const SAY = {
   philosopher: 'Philosopher, what would Heraclitus say about this',
   personal: 'What did Sam say in Messenger yesterday',
@@ -26,11 +25,11 @@ const SAY = {
   typed: 'Use Opus to review this plan',
   default: 'Fix the Chats scroll bug',
 };
-const report = { switch: SW, cases: [] };
+const report = { cases: [] };
 
 function startBox() {
   return new Promise((resolve, reject) => {
-    const env = { ...process.env, QA_SWITCH: SW ? 'on' : 'off', QA_PORT: '0' };
+    const env = { ...process.env, QA_PORT: '0' };
     const p = spawn(process.execPath, [path.join(__dirname, 'qa-private-routing-box.mjs')], { env, stdio: ['ignore', 'pipe', 'pipe'] });
     let log = '';
     p.stdout.on('data', d => { log += d; const m = /READY (\d+)/.exec(log); if (m) resolve({ proc: p, port: +m[1] }); });
@@ -50,7 +49,7 @@ function startBox() {
       const state = async () => (await fetch(origin + '/qa/state')).json();
       try {
         await context.routeWebSocket('**/*', w => w.close());
-        const mix = { 'wizard/desktop-chats': true, ...(SW ? { [ID]: true } : {}) };
+        const mix = {};
         await context.addInitScript(({ phone, skin, mix }) => {
           if (window !== top) return;
           if (sessionStorage.getItem('qaBoot')) return; sessionStorage.setItem('qaBoot', '1');
@@ -74,7 +73,6 @@ function startBox() {
         await page.goto(origin + '/wizard-os-home/' + (phone ? 'index.html?phone' : 'desktop.html'));
         await page.waitForFunction(() => (window.__wux || window.__wos) && !window.WosWelcome?.active && window.WosExperience?.state.tweaks.length && !window.WosExperience.state.busy && window.WosAgents?.ready, null, { timeout: 30000 });
         await page.addStyleTag({ content: '#wosWelcome{display:none!important}' });
-        if (SW) await page.waitForFunction(id => (document.documentElement.dataset.tweaks || '').split(' ').includes(id), ID);
         await nap(1500);
         entry.before = (await state()).runs.length;
         // Typed: the phone's typed orb; the desktop's launcher Ask (⌘Enter).
@@ -96,7 +94,7 @@ function startBox() {
           return { chip: chip ? chip.innerText.replace(/\s+/g, ' ').trim() : null, thread: !!thread, title: thread?.querySelector('.ch-head .ti')?.innerText?.trim() || null };
         });
         await page.screenshot({ path: path.join(out, stem + '.png') });
-        if (name === 'move' && SW && entry.front.chip) {
+        if (name === 'move' && entry.front.chip) {
           const first = entry.runs.at(-1);
           await page.locator('.wpr-chip').filter({ visible: true }).first().click();
           await page.locator('.wpr-sheet .wpr-panel').waitFor();
@@ -115,10 +113,7 @@ function startBox() {
         const last = entry.runs.at(-1) || {};
         assert.equal(entry.runs.length, entry.before + 1, 'one run');
         assert.equal(last.input, entry.said, 'the owner\'s exact words');
-        if (!SW) {
-          assert.equal(last.agent, 'private', 'switch off: the default agent, as today');
-          assert.equal(entry.front.chip, null, 'switch off: no chip');
-        } else if (name === 'philosopher') {
+        if (name === 'philosopher') {
           assert.equal(last.agent, 'philosopher'); assert.equal(last.model, 'claude-fable-5');
           assert.match(entry.front.chip || '', /Philosopher · Claude Fable · you named it/);
         } else if (name === 'personal' || name === 'move') {

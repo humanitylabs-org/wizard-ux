@@ -1,7 +1,8 @@
-// Private routing, the shell half (wizard-ux issue 1804, switch wizard/private-routing; the Agent Service half is
-// wizard-agent-service issue 629). The real outbox.js runs against a fake box: with the switch on, the route's answer
+// Private routing, the shell half (wizard-ux issue 1804; on for everyone, switch wizard/private-routing removed; the
+// Agent Service half is wizard-agent-service issue 629). The real outbox.js runs against a fake box: the route's answer
 // (asked once by the outbox for an orb take, or already asked by the phone: it.routed) puts the take on the agent and
-// model it names, with the owner's exact words, before its thread is announced. Switch off: today's send, byte for byte.
+// model it names, with the owner's exact words, before its thread is announced. An answer naming no agent (a box
+// without a private default agent): today's send, byte for byte.
 // The real core/private-route.js paints the chip from that record and moves a request: same words to the chosen
 // agent, the old thread archived when nothing answered, one correction on the Sent row.
 import { test } from 'node:test';
@@ -14,7 +15,6 @@ import { withShellParts } from './fixtures/shell-parts.mjs';
 
 const source = withShellParts(readFileSync(new URL('../web/outbox.js', import.meta.url), 'utf8'));
 const part = readFileSync(new URL('../web/core/private-route.js', import.meta.url), 'utf8');
-const SWITCH = 'wizard/private-routing';
 const WORDS = 'Philosopher, what would Heraclitus say about this';
 const row = (extra = {}) => ({ id: 'orb-take', kind: 'new', intent: 'message', deliveryRequested: true, sessionId: 'wizard_new_1',
   agent: '', model: 'glm-5-3', provider: 'tinfoil', createdAt: Date.now(), updatedAt: Date.now(), state: 'waiting', nextAt: 0, attempts: 0,
@@ -36,7 +36,7 @@ function agents(extra = {}) {
   return A;
 }
 
-function client(origin, rows, tweaks) {
+function client(origin, rows, tweaks = '') {
   const timers = new Set(), pinned = [];
   const indexedDB = { open() {
     const r = {};
@@ -68,7 +68,7 @@ async function until(fn) {
   throw Error('condition not reached');
 }
 const named = (agent_id, extra = {}) => ({ cmd: { route: 'agent', summary: WORDS, agent_id, ...extra }, ms: 0, model: '', sent_id: 'sent_' + 'a'.repeat(24) });
-async function fixture(t, { item = row(), tweaks = SWITCH, answer = () => named('philosopher', { chosen_by: 'name' }) } = {}) {
+async function fixture(t, { item = row(), tweaks = '', answer = () => named('philosopher', { chosen_by: 'name' }) } = {}) {
   const calls = [], rows = new Map([[item.id, structuredClone(item)]]);
   const server = createServer(async (req, res) => {
     const chunks = []; for await (const chunk of req) chunks.push(chunk);
@@ -87,7 +87,7 @@ async function fixture(t, { item = row(), tweaks = SWITCH, answer = () => named(
   return { ...page, it, calls, news, run, body: run && JSON.parse(run.body), paths: () => calls.map(c => c.path) };
 }
 
-test('switch on: a spoken agent name puts the take on that agent, its model, the exact words, asked once', async t => {
+test('a spoken agent name puts the take on that agent, its model, the exact words, asked once', async t => {
   const f = await fixture(t);
   assert.deepEqual(f.paths(), ['/wizard/v1/route', '/wizard/hermes/api/sessions?agent=philosopher', '/wizard/hermes/v1/runs?agent=philosopher']);
   assert.equal(f.body.input, WORDS, 'the owner\'s own words, never a rewrite');
@@ -98,13 +98,13 @@ test('switch on: a spoken agent name puts the take on that agent, its model, the
   assert.deepEqual({ ...f.news[0].privateRoute, at: 0 }, { agent: 'philosopher', model: 'claude-fable-5', provider: 'anthropic', why: 'name', sent: 'sent_' + 'a'.repeat(24), words: WORDS, at: 0 });
 });
 
-test('switch on: a named model on the main agent rides on that model', async t => {
+test('a named model on the main agent rides on that model', async t => {
   const f = await fixture(t, { answer: () => named('hermes', { chosen_by: 'name', model: 'claude-opus-5-5', provider: 'anthropic' }) });
   assert.equal(f.body.agent, 'hermes'); assert.equal(f.body.model, 'claude-opus-5-5'); assert.equal(f.body.provider, 'anthropic');
   assert.equal(f.news[0].privateRoute.why, 'name');
 });
 
-test('switch on: personal data and the default stay on the private default agent, with the reason kept', async t => {
+test('personal data and the default stay on the private default agent, with the reason kept', async t => {
   for (const [why, extra] of [['private_label', { chosen_by: 'private_label' }], ['default', { chosen_by: 'default' }], ['default', { chosen_by: 'rules_only', rule: 'default' }]]) {
     const f = await fixture(t, { answer: () => named('private', extra) });
     assert.deepEqual(f.paths(), ['/wizard/v1/route', '/wizard/hermes/api/sessions', '/wizard/hermes/v1/runs'], 'the default agent: unscoped, as today');
@@ -113,13 +113,13 @@ test('switch on: personal data and the default stay on the private default agent
   }
 });
 
-test('switch on: an answer the phone already has is used, never asked again', async t => {
+test('an answer the phone already has is used, never asked again', async t => {
   const f = await fixture(t, { item: row({ routed: named('philosopher', { chosen_by: 'name' }) }), answer: () => assert.fail('asked twice') });
   assert.deepEqual(f.paths(), ['/wizard/hermes/api/sessions?agent=philosopher', '/wizard/hermes/v1/runs?agent=philosopher']);
   assert.equal(f.body.agent, 'philosopher'); assert.equal(f.it.routed, undefined);
 });
 
-test('switch on: a typed ask is asked for its agent only, never offered as a background task', async t => {
+test('a typed ask is asked for its agent only, never offered as a background task', async t => {
   const f = await fixture(t, { item: row({ routeOnly: true }) });
   assert.deepEqual(JSON.parse(f.calls[0].body), { text: WORDS, force: '', view: null, apps: [] });
   assert.equal(f.body.agent, 'philosopher'); assert.equal(f.it.routeOnly, undefined);
@@ -129,21 +129,18 @@ for (const [name, answer] of [
   ['an agent this Wizard does not list', () => named('ghost', { chosen_by: 'name' })],
   ['an answer with no agent (no private default on the box)', () => ({ cmd: { route: 'agent', summary: 'rewritten' }, ms: 1 })],
   ['a malformed agent id', () => named('../x', { chosen_by: 'name' })],
-]) test(`switch on: ${name} keeps today's send`, async t => {
+]) test(`${name} keeps today's send`, async t => {
   const f = await fixture(t, { answer });
   assert.deepEqual(f.paths(), ['/wizard/v1/route', '/wizard/hermes/api/sessions', '/wizard/hermes/v1/runs']);
   assert.equal(f.body.agent, undefined); assert.equal(f.body.input, WORDS); assert.equal(f.news[0].privateRoute, undefined);
 });
 
-test('switch off: the same answer changes nothing (today\'s send, the default agent)', async t => {
-  const off = await fixture(t, { tweaks: 'wizard/desktop-chats' });
-  assert.deepEqual(off.paths(), ['/wizard/v1/route', '/wizard/hermes/api/sessions', '/wizard/hermes/v1/runs']);
-  assert.deepEqual(JSON.parse(off.calls[0].body), { text: WORDS, force: '', view: null, apps: [], accept_dump: true });
-  assert.equal(off.body.agent, undefined); assert.equal(off.body.model, 'glm-5-3'); assert.equal(off.news[0].privateRoute, undefined);
-  assert.deepEqual(off.pinned, []);
-  // An item carrying the phone's answer with the switch off: still today's ask and send.
-  const kept = await fixture(t, { tweaks: '', item: row({ routed: named('philosopher') }) });
-  assert.equal(kept.paths()[0], '/wizard/v1/route'); assert.equal(kept.body.agent, undefined);
+test('no switch: a device that still holds the old wizard/private-routing tweak, or none, routes the same', async t => {
+  for (const tweaks of ['', 'wizard/desktop-chats', 'wizard/private-routing']) {
+    const f = await fixture(t, { tweaks });
+    assert.deepEqual(JSON.parse(f.calls[0].body), { text: WORDS, force: '', view: null, apps: [], accept_dump: true });
+    assert.equal(f.body.agent, 'philosopher'); assert.equal(f.news[0].privateRoute.agent, 'philosopher');
+  }
 });
 
 test('a take aimed by hand (an agent picked in the picker) is never re-routed', async t => {
@@ -153,7 +150,7 @@ test('a take aimed by hand (an agent picked in the picker) is never re-routed', 
 });
 
 // core/private-route.js: the chip and the move.
-function page({ tweaks = SWITCH, store = {}, replied = false } = {}) {
+function page({ tweaks = '', store = {}, replied = false, agentsExtra = {} } = {}) {
   const calls = [], listeners = {}, enqueued = [], body = { children: [], append(n) { this.children.push(n); } };
   const ls = new Map(Object.entries(store).map(([k, v]) => [k, JSON.stringify(v)]));
   const ctx = {
@@ -167,7 +164,7 @@ function page({ tweaks = SWITCH, store = {}, replied = false } = {}) {
       if (/\/messages/.test(url)) return { ok: true, status: 200, json: async () => ({ data: replied ? [{ role: 'user', content: 'x' }, { role: 'assistant', content: 'an answer' }] : [{ role: 'user', content: 'x' }] }) };
       return { ok: true, status: 200, json: async () => ({}) };
     },
-    WosAgents: agents(),
+    WosAgents: agents(agentsExtra),
     WosModels: { isPrivateRoute: p => p === 'wizard-tinfoil', privateName: m => m === 'glm-5-3' ? { name: 'GLM', version: '5.3' } : { name: m, version: '' }, name: (m) => ({ 'claude-fable-5': 'Claude Fable 5' })[m] || m },
     WosOutbox: { onNew: fn => { ctx.onNewHook = fn; }, enqueue: async o => { enqueued.push(o); return { sessionId: 'wizard_moved_1', state: 'queued', model: o.agent === 'philosopher' ? 'claude-fable-5' : 'glm-5-3', provider: o.agent === 'philosopher' ? 'anthropic' : 'tinfoil' }; } },
     WizLive: { cancelSend: async sid => { calls.push({ url: 'cancel:' + sid }); }, refresh() {} },
@@ -178,16 +175,18 @@ function page({ tweaks = SWITCH, store = {}, replied = false } = {}) {
 }
 const REC = { agent: 'private', model: 'glm-5-3', provider: 'tinfoil', why: 'private_label', sent: 'sent_' + 'b'.repeat(24), words: 'How much did I spend on food this week', at: 1 };
 
-test('chip: agent, model and why in two words, only with the switch on', () => {
+test('chip: agent, model and why in two words, with no switch', () => {
   const on = page({ store: { 'wos.private-route.v1': { t1: REC, t2: { ...REC, agent: 'philosopher', model: 'claude-fable-5', provider: 'anthropic', why: 'name' } } } });
   const text = html => html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
   assert.equal(text(on.R.chipHtml('t1')), 'Private · GLM 5.3 · personal data');
   assert.match(on.R.chipHtml('t1'), /class="wpr-chip priv" data-wprchip="t1"/);
   assert.equal(text(on.R.chipHtml('t2')), 'Philosopher · Claude Fable 5 · you named it');
   assert.equal(on.R.chipHtml('unknown'), '');
-  const off = page({ tweaks: '', store: { 'wos.private-route.v1': { t1: REC } } });
-  assert.equal(off.R.chipHtml('t1'), '', 'switch off: no chip');
-  assert.equal(off.R.answer(named('philosopher')), null, 'switch off: the phone never hands an answer on');
+  // A device that still holds the old tweak, or none: the same chip.
+  const old = page({ tweaks: 'wizard/private-routing', store: { 'wos.private-route.v1': { t1: REC } } });
+  assert.equal(text(old.R.chipHtml('t1')), 'Private · GLM 5.3 · personal data');
+  // An answer that names no agent (no private default on the box) is never handed on.
+  assert.equal(on.R.answer({ cmd: { route: 'agent', summary: 'x' } }), null);
   assert.deepEqual(JSON.parse(JSON.stringify(on.R.answer(named('philosopher')))).cmd.agent_id, 'philosopher');
   assert.equal(on.R.answer({ cmd: { route: 'command', action: 'open_app' } }), null);
 });
@@ -236,4 +235,12 @@ test('move: an old thread that already has an answer stays', async () => {
   assert.ok(p.calls.some(c => c.url === '/wizard/hermes/api/sessions/t1/messages?agent=philosopher'));
   assert.ok(!p.calls.some(c => c.method === 'PATCH'));
   assert.deepEqual(JSON.parse(JSON.stringify(p.enqueued))[0].agent, '', 'the default agent is unscoped');
+});
+
+test('on(): true only while this Wizard\'s default agent is a private agent (the desktop asks the route then)', () => {
+  assert.equal(page().R.on(), true);
+  const standard = page({ agentsExtra: { defaultId: () => 'hermes' } });
+  assert.equal(standard.R.on(), false, 'a standard default agent: the desktop launcher sends as before');
+  const none = page({ agentsExtra: { get: () => null } });
+  assert.equal(none.R.on(), false, 'agents not loaded yet: as before');
 });

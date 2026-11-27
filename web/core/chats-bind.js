@@ -29,11 +29,19 @@ window.WizCore.chatsParts.bind = function ({ activityClick, actSetOrder, AGS, al
   document.addEventListener('visibilitychange', () => { if (!document.hidden) lastPresence = Date.now(); }, true);
   function markVisibleThreadsSeen() {
     if (!LIVE?.ok || !attended()) return;
+    const MARKED = markVisibleThreadsSeen.marked ||= new Map(); // window id -> the thread change it last marked read
     for (const id of desks[idx].wins) {
       const w = W[id]; if ((w?.app !== 'chats' && !isHosted(id)) || !w.thread || w.thread === '__new__') continue;
       const hold = ch(id).unreadHold; if (hold?.sid === w.thread && hold.nav === ch(id).readNav) continue;
-      const r = typeof chanSeenRow === 'function' ? chanSeenRow(id, w.thread) : w.thread, s = typeof r === 'object' ? r : LIVE.session(w.thread); if (s && LIVE.isNew(s)) LIVE.markSeen(r);
+      const r = typeof chanSeenRow === 'function' ? chanSeenRow(id, w.thread) : w.thread, s = typeof r === 'object' ? r : LIVE.session(w.thread); if (!s || !LIVE.isNew(s)) continue;
+      // Once per change of the thread (wizard-os issue 1020): this runs on every Live repaint, so a read that did not
+      // stick wrote PUT /wizard/thread-seen each time (21 a minute on a desktop) until the write guard paused it. A new
+      // reply, another device's unread mark or a newer list row changes the stamp and marks it read again.
+      const rec = LIVE.seenRecord?.(s), stamp = JSON.stringify([s.id, s.agent || '', s.updatedAt, s.lastAssistantAt, s.previewAt, s.messageCount, s.status, s.preview, rec?.unreadAt]);
+      if (MARKED.get(id) === stamp) continue;
+      MARKED.set(id, stamp); LIVE.markSeen(r);
     }
+    for (const k of [...MARKED.keys()]) if (!W[k]) MARKED.delete(k);
   }
 
   const elOf = id => H.root().querySelector(`[data-chats="${id}"]`);
