@@ -232,6 +232,8 @@ window.WizCore.chatsParts.bind = function ({ activityClick, actSetOrder, AGS, al
     const nrt = e.target.closest('.ch-notif-route [data-notify-route]'); if (nrt && w.thread) { if (!nrt.disabled) notifRoute(id, nrt.dataset.notifyRoute, nrt.dataset.notifyTo); return true; }
     const ca = e.target.closest('[data-chact]'); if (ca && w.thread) { threadAct(id, w.thread, ca.dataset.chact); return true; }
     if (e.target.closest('[data-chstop]')) { const s = LIVE.session(w.thread), sb = e.target.closest('[data-chstop]'); stopTapped(sb); if (s && LIVE.cancelSend) { stopPendingSend(w, w.thread, s.runId || ''); } else if (s?.runId) { toast('■', 'Stopping…', 1400); LIVE.stop(s.runId).catch(() => { toast('!', 'Couldn’t stop · try again', 2600); renderThreadNow(w); }); } return true; }
+    // A tap-to-pick reply (wizard-agent-service issue 650): sends its words as the owner's answer in this thread, once.
+    const chPick = e.target.closest('[data-chchoice]'); if (chPick && w.thread) { if (!chPick.disabled) { chPick.closest('.ch-choices')?.querySelectorAll('button').forEach(b => { b.disabled = true; }); void sendChat(id, chPick.dataset.chchoice, 'tapping a reply button'); } return true; }
     const apb = e.target.closest('[data-approve]'); if (apb) { chooseApproval(id, apb.dataset.approve, apb.dataset.controlKey, apb.closest('.appr')?.querySelector('[data-clarify-answer]')?.value); return true; }
     // Short answer ⇄ full reply. Only its own two buttons toggle, so links and text selection in the reply never do.
     // The choice is kept per reply (ch(id).rsum), so live repaints keep it.

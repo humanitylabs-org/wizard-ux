@@ -60,11 +60,13 @@
     "wizard/boundary-agent-access",
     "wizard/phone-badge-look",
     "wizard/sent-threads",
+    "wizard/smart-inbox",
     "wizard/private-mode",
     "wizard/phone-recovery-mode",
     "wizard/backup-health",
     "wizard/private-routing",
     "wizard/result-reader",
+    "wizard/first-chat-goals",
     "wizard/private-ai-nudge",
     "wizard/pin-instant-open",
     "wizard/get-set-up"
