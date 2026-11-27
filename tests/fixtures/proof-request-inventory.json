@@ -842,13 +842,13 @@
       "status": "not-exercised",
       "source": "web/core/privacy.js",
       "kind": "read",
-      "note": "Settings › Privacy's Private mode row and switch-over sheet (wizard-ux issue 1801), read and POSTed (/private-mode/{agent,apps,context,default,off}) only while the switch wizard/private-mode is on, which none of the three flows turn on. tests/privacy-settings.test.mjs and tests/qa-privacy-settings.cjs (the real Agent Service) cover it. Refused and collected if a flow reaches it."
+      "note": "Settings › Privacy's Private mode row and switch-over sheet (wizard-ux issue 1801), read when Settings › Privacy or the sheet opens (never at page load) and POSTed (/private-mode/{agent,apps,context,default,off}) only by an owner tap there, which none of the three flows reach; on for everyone since wizard-agent-service issue 626. tests/privacy-settings.test.mjs and tests/qa-privacy-settings.cjs (the real Agent Service) cover it. Refused and collected if a flow reaches it."
     },
     "/wizard/v1/privacy-check": {
       "status": "not-exercised",
       "source": "web/core/privacy.js",
       "kind": "read",
-      "note": "Settings › Privacy's Privacy check (wizard-ux issue 1801), read only while the switch wizard/private-mode is on, which none of the three flows turn on. Covered by tests/privacy-settings.test.mjs and tests/qa-privacy-settings.cjs. Refused and collected if a flow reaches it."
+      "note": "Settings › Privacy's Privacy check (wizard-ux issue 1801), read only when Settings › Privacy or the sheet opens, which none of the three flows reach. Covered by tests/privacy-settings.test.mjs and tests/qa-privacy-settings.cjs. Refused and collected if a flow reaches it."
     },
     "/wizard/v1/setup": {
       "status": "catalogued",

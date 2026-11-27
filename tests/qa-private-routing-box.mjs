@@ -59,16 +59,16 @@ mkdirSync(join(dir, 'agents'), { recursive: true })
 mkdirSync(join(dir, 'Pages', 'wizard-look'), { recursive: true })
 writeFileSync(join(dir, 'apps.json'), JSON.stringify({ schema: 1, apps: APPS }))
 writeFileSync(join(dir, 'settings.json'), JSON.stringify({ fast_router: { endpoint: `http://127.0.0.1:${routerAddress.port}/v1/chat/completions`, model: 'fixture-router' } }))
-// Private mode is on (its own switch); private routing follows the Look file the shell writes (QA_SWITCH=on seeds it).
+// Private mode is on for everyone; private routing follows the Look file the shell writes (QA_SWITCH=on seeds it).
 writeFileSync(join(dir, 'Pages', 'wizard-look', 'look.json'), JSON.stringify({ version: 1, skin: null, tweaks: {
-  'wizard/private-mode': { on: true, at: 1 }, ...(process.env.QA_SWITCH === 'on' ? { 'wizard/private-routing': { on: true, at: 2 } } : {}) } }))
+  ...(process.env.QA_SWITCH === 'on' ? { 'wizard/private-routing': { on: true, at: 2 } } : {}) } }))
 const svc = createWizardServer({
   upstreamOrigin: `http://127.0.0.1:${mainAddress.port}`, hermesKey: 'fixture-key', requireAccess: false, agentBridge: false,
   appsJsonPath: join(dir, 'apps.json'), settingsPath: join(dir, 'settings.json'), wizardOsHome: dir,
   agentRuntime: { apply: async () => ({ ok: true }), start: async () => ({ ok: true }), stop: async () => ({ ok: true }) },
   schedulerStatePath: join(dir, 'schedules.sqlite'), schedulerIntervalMs: 3_600_000, followThrough: false,
   agentBasePort: 48100 + Math.floor(Math.random() * 400), runQueue: false, agentInboxStatePath: join(dir, 'state', 'agent-inbox.json'),
-  pagesRoot: join(dir, 'Pages'), pagesGitDir: join(dir, 'pages-history.git'), pagesWatch: false, privateModeTtlMs: 0, privateRoutingTtlMs: 0,
+  pagesRoot: join(dir, 'Pages'), pagesGitDir: join(dir, 'pages-history.git'), pagesWatch: false, privateRoutingTtlMs: 0,
 })
 const svcAddress = await listen(svc)
 const base = `http://127.0.0.1:${svcAddress.port}`
