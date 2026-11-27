@@ -342,8 +342,8 @@ window.WizCore.liveParts.channels = function () {
     const num = v => { const n = Number(v); return Number.isFinite(n) && n > 0 ? n : 0; };
     const rec = r => r && typeof r === 'object' && RID.test(r.id) && typeof r.thread_id === 'string' && SID.test(r.thread_id) && (r.state === 'running' || r.state === 'stale')
       ? { id: r.id, agent: typeof r.agent === 'string' && AID.test(r.agent) ? r.agent : 'hermes', thread: r.thread_id, title: str(r.title, 120), update: str(r.last_update, 200), state: r.state, createdAt: num(r.created_at), updatedAt: num(r.updated_at) || num(r.created_at) } : null;
-    // privateDefault: the box's private default agent while its wizard/private-routing switch is on (wizard-agent-service
-    // issue 631): its threads move too. '' otherwise (switch off, an older box): only main-agent threads, as before.
+    // privateDefault: the box's private default agent (wizard-agent-service
+    // issue 631): its threads move too. '' otherwise (no private default agent, an older box): only main-agent threads, as before.
     const s = { records: [], stay: new Set(), privateDefault: '', ok: false, gone: false, at: 0, busy: null };
     const tell = () => { try { emit(); } catch (_) {} };
     function read() {

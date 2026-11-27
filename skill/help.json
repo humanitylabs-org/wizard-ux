@@ -377,10 +377,6 @@
       "help": "Setup lists optional accounts to connect.",
       "where": "Settings › Appearance › Try new features › Get set up list in Setup"
     },
-    "wizard/private-routing": {
-      "help": "Orb opens the named agent's thread; a chip moves it.",
-      "where": "Settings › Appearance › Try new features › Private routing"
-    },
     "wizard/catch-up-sent": {
       "help": "Catch me up clears finished Sent chats, any age.",
       "where": "Settings › Appearance › Try new features › Catch me up clears Sent"

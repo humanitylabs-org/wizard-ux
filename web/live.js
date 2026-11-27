@@ -1094,7 +1094,7 @@
     async inboxMove(kind, id, opts = {}) {
       if (!this.agentInbox || (kind !== 'open' && kind !== 'send')) throw new Error('Agent inbox unavailable');
       // The main agent's own row only: a routed thread may share the id (agentSessions), and is never the one moved.
-      // Issue 631: also the private default agent's, while the box names one (its wizard/private-routing switch on).
+      // Issue 631: also the private default agent's, while the box names one.
       const priv = (typeof this.agentInbox.privateDefault === 'function' && this.agentInbox.privateDefault()) || '';
       const mine = a => !otherAgent(a || '') || (!!priv && a === priv);
       const detail = DETAIL.get(id), fromDetail = !!detail && mine(detail.agent || '');
