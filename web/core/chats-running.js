@@ -16,17 +16,14 @@ window.WizCore.chatsParts.running = function ({ ago, ch, CH, chanStore, clip, es
   function runningOn(w) {
     return !!w && !winAgent(w) && !!LIVE.agentInbox;
   }
-  /* The AI apps desktop's sidebar (wizard-ux issue 1599, switch wizard/ai-apps-running, off by default): the sweep card's
-   * Running link opens the Running view in the sidebar's Chats pane (its id::side window, H.runningPane) instead of the
-   * Classic list pane; a task opens in the main column (the pane's thread setter), the view stays in the sidebar, and
-   * Esc / ‹ there returns to the sidebar list (channelBack). Off, a side window never shows it. */
-  const RUN_SIDE = 'wizard/ai-apps-running';
-  function runningSideOn() { try { return (document.documentElement.dataset.tweaks || '').split(' ').includes(RUN_SIDE); } catch (_) { return false; } }
-  const runningSideWin = w => /::side$/.test(String(w?.id || ''));
-  function runningOpen(w) { return !!w && !!ch(w.id).running && runningOn(w) && (!runningSideWin(w) || runningSideOn()); }
+  /* The AI apps desktop's sidebar (wizard-ux issue 1599, on for everyone; switch wizard/ai-apps-running removed): the
+   * sweep card's Running link opens the Running view in the sidebar's Chats pane (its id::side window, H.runningPane)
+   * instead of the Classic list pane; a task opens in the main column (the pane's thread setter), the view stays in the
+   * sidebar, and Esc / ‹ there returns to the sidebar list (channelBack). */
+  function runningOpen(w) { return !!w && !!ch(w.id).running && runningOn(w); }
   // The sweep card's Running link on the AI apps desktop: true when the sidebar took it.
   function runningSideGo() {
-    const sp = runningSideOn() && typeof H.runningPane === 'function' ? H.runningPane() : null;
+    const sp = typeof H.runningPane === 'function' ? H.runningPane() : null;
     if (!sp || !runningOn(sp)) return false;
     ch(sp.id).sent = false; // the view takes the pane's place, Sent included
     return runningGo(sp, true);

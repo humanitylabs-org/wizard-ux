@@ -1,12 +1,11 @@
-// The Running view in the AI apps sidebar (wizard-ux issue 1599, switch wizard/ai-apps-running, off by default): the
+// The Running view in the AI apps sidebar (wizard-ux issue 1599, on for everyone; switch wizard/ai-apps-running removed): the
 // real core/chats-running.js part with stand-ins for the Chats names and the desktop's H.runningPane.
-// Browser proof: tests/qa-agent-inbox-running.cjs (shell ai-apps; QA_SWITCH=off for the unchanged sidebar).
+// Browser proof: tests/qa-agent-inbox-running.cjs (shell ai-apps).
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import vm from 'node:vm';
 
-const SW = 'wizard/ai-apps-running';
 const rec = { id: 'inbox_' + 'a'.repeat(24), agent: 'hermes', thread: 'wizard_worker_1', title: 'Lisbon flights', update: 'Comparing fares', state: 'running', createdAt: Date.now() - 25 * 60e3, updatedAt: Date.now() - 3 * 60e3 };
 
 function part({ tweaks = '', pane = 'main::side', agent = '' } = {}) {
@@ -22,20 +21,8 @@ function part({ tweaks = '', pane = 'main::side', agent = '' } = {}) {
   return { api, ch, painted, reads, document };
 }
 
-test('switch off: the sweep card\'s Running link is not taken by the sidebar, and a side window never shows the view', () => {
+test('no switch: the Running link opens the view in the sidebar pane (Sent steps aside), and Back leaves it', () => {
   const f = part();
-  assert.equal(f.api.runningSideGo(), false, 'Classic handling goes on as today');
-  assert.deepEqual(f.painted, [], 'nothing repainted');
-  f.ch('main::side').running = true; // e.g. left from a moment the switch was on
-  assert.equal(f.api.runningOpen({ id: 'main::side', thread: null }), false, 'the sidebar pane draws its usual tabs');
-  assert.equal(f.api.runningBack({ id: 'main::side', thread: null }), false, 'Esc is not swallowed by a view nobody sees');
-  assert.equal(f.ch('main::side').running, false, 'the stale mark is cleared');
-  f.ch('main').running = true;
-  assert.equal(f.api.runningOpen({ id: 'main', thread: null }), true, 'the Classic / phone list window is unchanged');
-});
-
-test('switch on: the Running link opens the view in the sidebar pane (Sent steps aside), and Back leaves it', () => {
-  const f = part({ tweaks: `wizard/desktop-chats ${SW}` });
   f.ch('main::side').sent = true;
   assert.equal(f.api.runningSideGo(), true, 'the sidebar took it');
   assert.equal(f.ch('main::side').running, true);
@@ -49,10 +36,14 @@ test('switch on: the Running link opens the view in the sidebar pane (Sent steps
   assert.match(body, /Lisbon flights.*Comparing fares.*Running 25 min/s);
   assert.equal(f.api.runningBack(side), true, 'Esc / ‹: back to the sidebar list');
   assert.equal(f.api.runningOpen(side), false);
+  f.ch('main').running = true;
+  assert.equal(f.api.runningOpen({ id: 'main', thread: null }), true, 'the Classic / phone list window is unchanged');
 });
 
-test('switch on, but no sidebar pane (Classic, another layout, a Default Chats look) or a routed agent: today\'s handling', () => {
-  assert.equal(part({ tweaks: SW, pane: '' }).api.runningSideGo(), false, 'no pane on screen');
-  assert.equal(part({ tweaks: SW, pane: null }).api.runningSideGo(), false, 'a shell without the hook (phone)');
-  assert.equal(part({ tweaks: SW, agent: 'box' }).api.runningSideGo(), false, 'the main agent\'s tasks only');
+test('the switch and its package are gone', () => {
+  const read = q => readFileSync(new URL('../' + q, import.meta.url), 'utf8'), ID = 'wizard/ai-apps-running';
+  const cat = JSON.parse(read('web/tweaks/catalog.json'));
+  assert.ok(!cat.tweaks.includes(ID) && !(cat.defaults || []).includes(ID));
+  assert.equal(existsSync(new URL('../web/tweaks/wizard/ai-apps-running', import.meta.url)), false);
+  assert.ok(!Object.values(JSON.parse(read('skill/help.json'))).some(g => g && typeof g === 'object' && Object.hasOwn(g, ID)));
 });

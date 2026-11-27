@@ -132,7 +132,7 @@ window.WizCore.chatsParts.bind = function ({ activityClick, actSetOrder, AGS, al
     // Running on the sweep card: the desktop's list pane (id::list) shows the Running view next to the thread; with one
     // pane (phone) the thread steps back to the list first.
     if (e.target.closest('[data-chsweeprunning]')) {
-      if (typeof runningSideGo === 'function' && runningSideGo()) return true; // the AI apps sidebar (wizard-ux issue 1599, switch on)
+      if (typeof runningSideGo === 'function' && runningSideGo()) return true; // the AI apps sidebar (wizard-ux issue 1599)
       const o = W[owner(w.id)] || w, lw = W[o.id + '::list'];
       if (lw && runningOn(lw)) runningGo(lw, true); else if (runningOn(o)) { chatsBack(o); runningGo(o, true); } else H.toast('·', 'The Running view is in the Chats window', 2000);
       return true;
