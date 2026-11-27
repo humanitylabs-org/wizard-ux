@@ -1,20 +1,19 @@
 'use strict';
-// Inbox rows (wizard-ux issue 1779, switch wizard/inbox-rows) in a real browser, disposable synthetic box only.
+// Inbox rows (wizard-ux issue 1779, on for everyone; the switch wizard/inbox-rows is gone) in a real browser, disposable synthetic box only.
 // Phone 412x915 and Classic desktop 1440x960, Nebula and a light skin:
-//   switch on: Chats › Inbox holds only what needs the owner: a new reply, a read reply (rows stay), needs you, a failure,
+//   Chats › Inbox holds only what needs the owner: a new reply, a read reply (rows stay), needs you, a failure,
 //   a waiting background task (agent inbox record, its thread hidden) and a Chats alert; never a quiet "nothing needed"
 //   reply or his own send still working with no answer. Today's Daily, a #priority thread and an urgent one are pinned
 //   first, in that order. Each row has a round avatar, the sender line (tag or agent), the title, one preview line, the
 //   time and the unread dot. The header count = the rows = the badge. Archive on a row archives the thread (gone from
 //   Inbox, in Archived); Archive on the task row archives its record. Opening a read row and coming back keeps it.
-//   QA_SWITCH=off: today's Inbox, unchanged (no Signal rows; the quiet reply and the working send are where they were).
 const assert = require('node:assert/strict');
 const { chromium } = require('../tools/qa-playwright.cjs');
 const { ownerRead } = require('../tools/qa-desktop-frame-fixture.cjs');
 const fs = require('node:fs'), path = require('node:path');
 const repo = path.resolve(__dirname, '..'), origin = process.env.QA_ORIGIN || 'https://chats-inbox-rows-1779.test', prefix = '/wizard-os-home/';
 const web = process.env.QA_WEB || path.join(repo, 'web'), out = process.env.QA_OUT || path.join(repo, 'chats-inbox-rows-evidence');
-const SHELLS = (process.env.QA_SHELLS || 'phone,classic').split(','), SKINS = (process.env.QA_SKINS || 'nebula,obsidian-light').split(','), SW = process.env.QA_SWITCH !== 'off';
+const SHELLS = (process.env.QA_SHELLS || 'phone,classic').split(','), SKINS = (process.env.QA_SKINS || 'nebula,obsidian-light').split(','), SW = true; // no switch: the rows are always drawn
 fs.mkdirSync(out, { recursive: true });
 const now = Date.now(), iso = t => new Date(t).toISOString(), nap = ms => new Promise(r => setTimeout(r, ms)), M = 60e3, D = 864e5;
 const REC = 'inbox_' + 'b'.repeat(24), TODAY = new Date(now).toISOString().slice(0, 10);
@@ -54,7 +53,7 @@ const report = { origin, web, switch: SW ? 'on' : 'off', cases: [] };
       const context = await browser.newContext({ viewport: phone ? { width: 412, height: 915 } : { width: 1440, height: 960 }, isMobile: phone, hasTouch: phone, serviceWorkers: 'block', ...(phone ? { userAgent: 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Mobile Safari/537.36' } : {}) });
       try {
         await context.routeWebSocket('**/*', w => w.close());
-        const mix = { 'wizard/desktop-chats': true, ...(SW ? { 'wizard/inbox-rows': true } : {}) };
+        const mix = { 'wizard/desktop-chats': true };
         await context.addInitScript(({ shell, skin, mix }) => {
           if (window !== top) return;
           if (sessionStorage.getItem('qaBoot')) return; sessionStorage.setItem('qaBoot', '1');
@@ -112,7 +111,6 @@ const report = { origin, web, switch: SW ? 'on' : 'off', cases: [] };
         await page.goto(origin + prefix + (phone ? 'index.html?phone' : 'desktop.html'));
         await page.waitForFunction(() => (window.__wux || window.__wos) && !window.WosWelcome?.active && window.WosExperience?.state.tweaks.length && !window.WosExperience.state.busy);
         await page.addStyleTag({ content: '#wosWelcome{display:none!important}' });
-        if (SW) await page.waitForFunction(() => (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/inbox-rows'), null, { timeout: 15000 });
         if (phone) await page.evaluate(() => __wos.openSheet('inbox')); else await page.evaluate(() => __wux.openChatsList());
         const vis = sel => page.locator(sel).filter({ visible: true }).first();
         const back = () => page.evaluate(() => window.__wos ? __wos.onBack() : __wux.escStep());

@@ -330,7 +330,7 @@
         "phone",
         "desktop"
       ],
-      "note": "Chats Inbox rows: only what needs you, as Signal-style rows with Archive (issue 1779, switch wizard/inbox-rows); called by createChats"
+      "note": "Chats Inbox rows: only what needs you, as Signal-style rows with Archive (issue 1779, on for everyone); called by createChats"
     },
     "core/chats-pull.js": {
       "loadedBy": [
@@ -1433,7 +1433,7 @@
     "app-sections.js": {
       "shell": "phone",
       "classification": "adapter",
-      "reason": "Phone shell part (wizard-ux#1929, switch wizard/phone-sections): the four sections around the orb (Home, Chats, Messenger, Apps) over the phone's desks; the desktop has its own bar."
+      "reason": "Phone shell part (wizard-ux#1929, on for everyone): the four sections around the orb (Home, Chats, Messenger, Apps) over the phone's desks; the desktop has its own bar."
     },
     "app-seed.js": {
       "shell": "phone",
@@ -1619,6 +1619,11 @@
       "shell": "phone",
       "classification": "adapter",
       "reason": "Phone desk indicators and dock layout."
+    },
+    "core/phone-sections.css": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone bar (wizard-ux#1929): the four section tiles Home, Chats, Messenger, Apps around the orb; the desktop has its own bar."
     },
     "core/home-surfaces.css": {
       "shell": "phone",

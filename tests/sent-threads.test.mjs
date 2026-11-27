@@ -161,8 +161,8 @@ test('switch off: Sent and Inbox are today\'s (one card per send, the same Inbox
   assert.doesNotMatch(base, /ch-st-row|data-chsentthread/);
   assert.equal(off.p.sentSends('main', 'trip'), false, 'no sends block while off');
   const none = shell({ tweaks: '' });
-  assert.equal(none.ctx.WizCore.inboxIds(none.LIVE), null, 'no Inbox placement with every switch off');
-  assert.equal(none.ctx.WizCore.inboxKeep(), false);
+  assert.notEqual(none.ctx.WizCore.inboxIds(none.LIVE), null, 'Inbox placement with no switch on (Inbox rows are on for everyone, wizard-ux issue 1779)');
+  assert.equal(none.ctx.WizCore.inboxKeep(), true);
   assert.equal(shell().ctx.WizCore.inboxKeep(), true, 'on: the one-place rule is on');
 });
 

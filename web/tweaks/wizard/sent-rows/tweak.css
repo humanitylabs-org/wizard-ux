@@ -10,7 +10,7 @@ html[data-tweaks~="wizard/sent-rows"] .ch-sheet-b button[data-rssentfix][aria-pr
 html[data-tweaks~="wizard/sent-rows"] .ch-sheet-b button[data-rssentfix]:disabled { opacity: .55; cursor: progress; }
 /* The AI apps desktop's Chats panel: its Inbox is the sidebar's own compact rows (layouts/ai-apps desktop.css .aad-row:
  * the marker left of the title, a 14 px title, the line under it, an 11 px time, no avatar; .aad-sec headers), which
- * wizard/inbox-rows does not restyle. There the same Sent rows take that look, so Inbox and Sent match in the panel too. */
+ * the Inbox rows do not restyle. There the same Sent rows take that look, so Inbox and Sent match in the panel too. */
 html[data-tweaks~="wizard/sent-rows"][data-shell="desktop"][data-layout="ai-apps"] .ch-side-sent .ch-sec.ch-sr > .ch-sec-b { background: none; border-radius: 0; }
 html[data-tweaks~="wizard/sent-rows"][data-shell="desktop"][data-layout="ai-apps"] .ch-side-sent .ch-ib-wrap.ch-sr-wrap + .ch-ib-wrap.ch-sr-wrap { box-shadow: none; }
 html[data-tweaks~="wizard/sent-rows"][data-shell="desktop"][data-layout="ai-apps"] .ch-side-sent .ch-ib-wrap.ch-sr-wrap > .ch-row.ch-ib-row { min-height: 56px; padding: 8px 10px; gap: 8px; border-radius: 12px; color: var(--aad-ink, var(--wz-text)); }

@@ -1,10 +1,10 @@
 'use strict';
-// wizard-ux issue 1946 in a real browser: the phone bar's four tiles (switch wizard/phone-sections) are evenly spaced.
+// wizard-ux issue 1946 in a real browser: the phone bar's four tiles (on for everyone, no switch) are evenly spaced.
 // Phones 412, 393 and 360 px wide, Nebula and Light, counts on Chats (12) and Messenger (3), and "WizardOS Tracker" open in
 // Apps (a long name). It measures the visual centre of every icon (the ink in a screenshot, labels and badges hidden) and
 // the orb's centre, and checks: the four gaps Home-Chats, Chats-orb, orb-Messenger, Messenger-Apps match within 3 px, the bar
 // is mirrored around the orb, a badge does not move its icon, labels fit (the long app name may be cut with an ellipsis),
-// 44 px targets, nothing overlaps or overflows, the orb is the size and place it is with the switch off.
+// 44 px targets, nothing overlaps or overflows, the orb is centred and at least today's 44 px.
 // QA_EXPECT=broken (with QA_WEB=<main>/web) asserts the uneven gaps that issue 1946 reported on Nebula (the 44 px orb), for
 // the baseline; Light's 66 px orb happened to come out nearly even before the fix.
 // Synthetic transport only (no box is reached). Shots and a report go to QA_OUT.
@@ -14,7 +14,7 @@ const { ownerRead } = require('../tools/qa-desktop-frame-fixture.cjs');
 const fs = require('node:fs'), path = require('node:path');
 const repo = path.resolve(__dirname, '..'), origin = 'https://phone-sections.test', prefix = '/wizard-os-home/';
 const web = process.env.QA_WEB || path.join(repo, 'web'), out = process.env.QA_OUT || path.join(repo, 'phone-bar-spacing-evidence');
-const SW = 'wizard/phone-sections', broken = process.env.QA_EXPECT === 'broken', TOL = 3;
+const broken = process.env.QA_EXPECT === 'broken', TOL = 3;
 const ANDROID = 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Mobile Safari/537.36';
 const CASES = [{ name: '412', width: 412, height: 915 }, { name: '393', width: 393, height: 852 }, { name: '360', width: 360, height: 780 }]
   .filter(c => !process.env.QA_CASES || process.env.QA_CASES.split(',').includes(c.name));
@@ -26,16 +26,16 @@ const THREAD = { id: 'qa-sections-1', title: 'Synthetic thread', source: 'wizard
 fs.mkdirSync(out, { recursive: true });
 const nap = ms => new Promise(r => setTimeout(r, ms));
 
-async function boot(browser, c, skin, sw) {
+async function boot(browser, c, skin) {
   const context = await browser.newContext({ viewport: { width: c.width, height: c.height }, isMobile: true, hasTouch: true, serviceWorkers: 'block', userAgent: ANDROID });
   const puts = [];
   await context.routeWebSocket('**/*', w => w.close());
-  await context.addInitScript(({ skin, sw, SW, APPS }) => {
+  await context.addInitScript(({ skin, APPS }) => {
     if (window !== top) return;
     const seed = { 'wux.apps.v1': JSON.stringify(APPS), 'wos.shell': 'phone', 'wux.shell': 'phone', 'wos.coached': 'true', 'wos.tour.v1': 'true', 'wos.tour.done': '1', 'wos.welcome.v1': 'done', 'wos.voiceTipSeen': 'true', 'wos.skin': skin,
-      'wos.skin-tweaks.v1': JSON.stringify({ version: 1, preset: 'none', off: {}, mix: sw ? { [SW]: true } : {} }) };
+      'wos.skin-tweaks.v1': JSON.stringify({ version: 1, preset: 'none', off: {}, mix: {} }) };
     for (const [k, v] of Object.entries(seed)) localStorage.setItem(k, v);
-  }, { skin, sw, SW, APPS });
+  }, { skin, APPS });
   const prefs = { migrations: { 'launcher-seed-v1': true, 'launcher.v1': true }, spaces: [], pinnedChats: [] };
   await context.route('**/*', async r => {
     const q = r.request(), u = new URL(q.url()), p = u.pathname, method = q.method();
@@ -63,7 +63,7 @@ async function boot(browser, c, skin, sw) {
   page.on('pageerror', e => errors.push(e.message));
   await page.goto(origin + prefix + 'index.html?phone');
   await page.waitForFunction(() => window.__wos && !window.WosWelcome?.active && window.WosExperience?.state.tweaks.length && !window.WosExperience.state.busy);
-  if (sw) await page.waitForFunction(id => (document.documentElement.dataset.tweaks || '').split(' ').includes(id) && document.querySelector('.sec-tile'), SW);
+  await page.waitForFunction(() => document.querySelector('.sec-tile'));
   await nap(900);
   await page.addStyleTag({ content: '#wosWelcome{display:none!important}' });
   return { context, page, errors, puts };
@@ -116,10 +116,7 @@ const r1 = n => Math.round(n * 10) / 10;
     for (const c of CASES) for (const skin of SKINS) {
       const tag = `${c.name}-${skin}`, steps = { tag };
       try {
-        const off = await boot(browser, c, skin, false);
-        steps.orbOff = await off.page.evaluate(() => { const r = document.querySelector('#orbWrap').getBoundingClientRect(); return { x: r.left, w: r.width, h: r.height }; });
-        await off.page.screenshot({ path: path.join(out, `${tag}-off.png`) }); await off.context.close();
-        const { context, page, errors } = await boot(browser, c, skin, true);
+        const { context, page, errors } = await boot(browser, c, skin);
         // No badges first, then counts on Chats and Messenger: the icons must not move.
         await page.evaluate(() => { WizCore.workspaceNav.setCount('wizard', 0); WizCore.workspaceNav.setCount('messenger', 0); }); await nap(400);
         steps.bare = await centres(page);
@@ -156,7 +153,7 @@ const r1 = n => Math.round(n * 10) / 10;
           }
           assert.equal(steps.bar.overlaps, 0, 'nothing overlaps'); assert.equal(steps.bar.scrollW, steps.bar.width, 'no horizontal overflow');
           assert.ok(steps.bar.tiles.every(t => t.x >= -.5 && t.x + t.w <= c.width + .5), 'every tile on screen');
-          assert.ok(Math.abs(steps.bar.orb.w - steps.orbOff.w) < .5 && Math.abs(steps.bar.orb.h - steps.orbOff.h) < .5, 'the orb is the size it is with the switch off');
+          assert.ok(steps.bar.orb.w >= 44 && steps.bar.orb.h >= 44, `the orb is today's size or larger (${steps.bar.orb.w}x${steps.bar.orb.h})`);
           assert.ok(Math.abs((steps.bar.orb.x + steps.bar.orb.w / 2) - c.width / 2) <= 1, 'the orb stays centred');
         }
         assert.deepEqual(errors, [], 'no page errors');

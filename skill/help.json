@@ -467,10 +467,6 @@
       "help": "Skins become a look only: only feature switches decide what runs. Your skin's own choices come back when you switch this off.",
       "where": "Settings › Appearance › Try new features › Skins are look only"
     },
-    "wizard/inbox-rows": {
-      "help": "Inbox: only what needs you.",
-      "where": "Settings › Appearance › Try new features › Inbox: only what needs you"
-    },
     "wizard/sent-rows": {
       "help": "Sent uses Inbox's rows.",
       "where": "Settings › Appearance › Try new features › Sent: the same rows as Inbox"
@@ -494,11 +490,6 @@
     "wizard/chats-title-bar": {
       "help": "Chats' title bar names the tab.",
       "where": "Settings › Appearance › Try new features › Chats: title bar names the tab"
-    },
-    "wizard/phone-sections": {
-      "help": "Phone bar of four places around the orb instead of desks: Home, Chats, Messenger, Apps. Hold Messenger to pin another app there; swipe the Apps tile to flip between your last two apps.",
-      "where": "Settings › Appearance › Try new features › Phone bar: Home, Chats, Messenger, Apps",
-      "when": "phone only"
     },
     "wizard/phone-nav": {
       "help": "Phone bar: bigger orb, one badge.",
@@ -578,13 +569,13 @@
       "name": "Home",
       "help": "The start screen: what's Working and Ready, the Resources bars (server and AI accounts), your apps.",
       "desktop": "AI apps view: close the open chat (✕, Esc or ⌥`) to get the empty Home with the message box, the orb and your pinned apps; Desks view: the house at the left of the top bar (⌥`)",
-      "phone": "the first desk; the gear at its top right opens Settings"
+      "phone": "Home in the bottom bar (Home, Chats, orb, Messenger, Apps); the gear at its top right opens Settings. Hold the Messenger tile to pin another app there; a sideways swipe on the Apps tile flips between your last two apps"
     },
     "view:chats": {
       "name": "Chats",
       "help": "All your conversations with the agent, in sections: Errors, Working, Saved, Ready, Yesterday, Past week, Snoozed, Archive (By day), or Working, Ready, Snoozed, Archive (By status; chosen in the Filter sheet). Search, Filter and + New chat. Long-press or right-click a chat for Pin, Rename, Mark unread, Snooze, Archive / Restore.",
       "desktop": "AI apps view: the chats sidebar on the left (search ⌥K, + New chat ⌥N); Desks view: the Inbox count in the top bar (⌥I)",
-      "phone": "the Chats desk, or hold the orb and say 'chats'"
+      "phone": "Chats in the bottom bar, or hold the orb and say 'chats'"
     },
     "view:work": {
       "name": "Work",

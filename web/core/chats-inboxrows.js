@@ -1,5 +1,5 @@
-/* Wizard UX core: Chats › Inbox rows (wizard-ux issue 1779, switch wizard/inbox-rows, off by default). With it on,
- * the Inbox tab holds only what needs the owner, drawn as Signal / Telegram chat rows: a round avatar (the first tag's
+/* Wizard UX core: Chats › Inbox rows (wizard-ux issue 1779; on for everyone since James's yes, 27 Nov 2026). The
+ * Inbox tab holds only what needs the owner, drawn as Signal / Telegram chat rows: a round avatar (the first tag's
  * emoji, else the agent's icon), the sender line (the first tag, else the agent's name) with the time, the title with
  * the unread / needs-you mark (no working mark: a run he started is in Sent, issue 1829), and one line of the latest agent message. Each row keeps an Archive button;
  * rows stay until archived (nothing drops into Recent). Today's Daily and anything tagged #priority or said urgent are
@@ -9,12 +9,8 @@
  * createChats (core/chats.js) calls this once with the closure names it reads. Loaded before chats.js by both shells. */
 window.WizCore = window.WizCore || {};
 window.WizCore.chatsParts = window.WizCore.chatsParts || {};
-window.WizCore.chatsParts.inboxrows = function ({ actMark, actNeeds, actUnread, AGS, agentName, agentRec, ago, attOf, chanAt, chanFace, chanStore, chatVars, ch, clip, elOf, esc, isWorking, LIVE, noteAt, noteIcon, notePlain, noteRow, noteRowAct, noteSrcName, PIN, renderChatList, rowAgent, spacesOf, threadAct, toast, W, winAgent }) {
-  const IB_SWITCH = 'wizard/inbox-rows';
-  function inboxRowsOn() { try { return (document.documentElement.dataset.tweaks || '').split(' ').includes(IB_SWITCH); } catch (_) { return false; } }
-  // Sent's thread rows (wizard-ux issue 1880) carry the same Archive button.
-  // (Smart inbox, wizard-ux issue 1883, shows Sent as threads too.)
-  function ibSentThreads() { try { const t = (document.documentElement.dataset.tweaks || '').split(' '); return t.includes('wizard/sent-threads') || t.includes('wizard/smart-inbox'); } catch (_) { return false; } }
+window.WizCore.chatsParts.inboxrows = function ({ actMark, actNeeds, actUnread, AGS, agentName, agentRec, ago, attOf, chanAt, chanFace, chanStore, chatVars, ch, clip, draftTag, elOf, esc, isWorking, LIVE, noteAt, noteIcon, notePlain, noteRow, noteRowAct, noteSrcName, PIN, renderChatList, rowAgent, spacesOf, threadAct, toast, W, winAgent }) {
+  // Sent's thread rows (wizard-ux issues 1880, 1883) carry the same Archive button (inboxRowsClick).
   const ibModel = () => window.WizChatsListModel;
   const ibQuiet = s => !!LIVE.quietReply?.(s);
   const ibBare = t => String(t || '').replace(/^[^\p{L}\p{N}]+/u, '').trim().toLowerCase();
@@ -31,13 +27,13 @@ window.WizCore.chatsParts.inboxrows = function ({ actMark, actNeeds, actUnread, 
     for (const r of st?.ok ? st.rows : []) if (r.urgent && r.thread) out.add(r.thread);
     return out;
   }
-  /* Pin to top (wizard-ux issue 1887, switch wizard/inbox-pin-top, off by default, with Inbox rows on): the threads in
+  /* Pin to top (wizard-ux issue 1887, switch wizard/inbox-pin-top, off by default): the threads in
    * the owner's pin list (core/chat-pins.js: the box's ui-preferences pinnedChats, the same on every device; the row
    * menu's Pin to top writes it, and an agent adds to it with PATCH /wizard/v1/ui-preferences
    * {"ops":[{"op":"add","key":"pinnedChats","item":"<thread id>"}]}) rank above today's Daily, in the order pinned.
    * Null while off, or while Pins are hidden in the Filter sheet. */
   const IB_PIN_TOP = 'wizard/inbox-pin-top';
-  function ibPinTopOn() { try { return inboxRowsOn() && (document.documentElement.dataset.tweaks || '').split(' ').includes(IB_PIN_TOP); } catch (_) { return false; } }
+  function ibPinTopOn() { try { return (document.documentElement.dataset.tweaks || '').split(' ').includes(IB_PIN_TOP); } catch (_) { return false; } }
   function ibTops() {
     if (!ibPinTopOn()) return null;
     try {
@@ -98,7 +94,7 @@ window.WizCore.chatsParts.inboxrows = function ({ actMark, actNeeds, actUnread, 
   function ibRepaintAll() { for (const x of Object.keys(W)) { const ww = W[x], el = ww && !ww.thread && elOf(x); if (el && el.querySelector?.('.ch-ib')) renderChatList(ww, el); } }
   try {
     LIVE.onChange?.(() => {
-      if (!ibDrawn.size || ibGonePaint || !inboxRowsOn()) return;
+      if (!ibDrawn.size || ibGonePaint) return;
       const gone = (LIVE.agentInbox?.needs?.('hermes') || []).filter(r => ibDrawn.has(r.id) && !ibKicked.has(r.id) && !ibRecWaits(r));
       if (!gone.length) return;
       for (const r of gone) ibKicked.add(r.id);
@@ -111,7 +107,7 @@ window.WizCore.chatsParts.inboxrows = function ({ actMark, actNeeds, actUnread, 
   } catch (_) {}
   // The shell's count and badges (core/chats-ready.js) read the same rule.
   // (Guarded: tests run slices of createChats in a bare vm without window.)
-  try { window.WizCore.inboxRowsFacts = () => inboxRowsOn() ? { ...ibFacts(), extra: rows => ibRecs({}, rows).length, recs: rows => ibRecs({}, rows) } : null; } catch (_) {}
+  try { window.WizCore.inboxRowsFacts = () => ({ ...ibFacts(), extra: rows => ibRecs({}, rows).length, recs: rows => ibRecs({}, rows) }); } catch (_) {}
   const ibSig = ag => `<span class="ch-ib-av ch-ib-ag" aria-hidden="true">${AGS()?.sigil?.(agentRec(ag)) || ''}</span>`;
   // The avatar and sender line for a tag name, else the agent (Sent rows name their first tag the same way: issue 1814).
   function ibTagFace(name, ag = AGS()?.defaultId?.() || 'hermes') {
@@ -151,7 +147,9 @@ window.WizCore.chatsParts.inboxrows = function ({ actMark, actNeeds, actUnread, 
     // No working mark in Inbox (wizard-ux issue 1829): a run he started is in Sent › Working, not here.
     const m0 = actMark(s), m = sent?.working ? 'working' : m0 === 'working' ? (actNeeds(s) ? 'needs' : actUnread(s) ? 'new' : '') : m0, f = ibFace(s), unread = m === 'new';
     return ibRow({ key: `row:${esc(s.id)}`, wrap: `${pin ? ' pinned' : ''}${sent ? ' ch-st-wrap' : ''}`, cls: `${unread ? ' unread' : ''}${m === 'needs' ? ' needs' : ''}${sent ? ' ch-st-row' : ''}`, open: `data-chopen="${esc(s.id)}"${sent ? ` data-chsentthread="${esc(sent.key)}"` : ''} aria-haspopup="dialog" aria-keyshortcuts="Shift+F10"`, tip: 'Open thread · hold or open the context menu for actions',
-      av: f.av, from: esc(f.from), pin, time: esc(ago(LIVE.cardAt(s))), title: esc(s.title || 'New chat'), mark: ibMark(m), line: esc(clip(ibLine(s), 160)),
+      av: f.av, from: esc(f.from), pin, time: esc(ago(LIVE.cardAt(s))), title: esc(s.title || 'New chat'), mark: ibMark(m),
+      // A saved, unsent draft says "✎ Draft" ahead of the line (wizard-ux issues 1445, 1604), as every Chats row does.
+      line: (typeof draftTag === 'function' ? draftTag(s) : '') + esc(clip(ibLine(s), 160)),
       after: `<button type="button" class="ch-ib-arch" data-chibarch="${esc(s.id)}" aria-label="Archive: ${esc(s.title || 'New chat')}" title="Archive">${IB_ARCH_SVG}</button>` });
   }
   function ibRecRow(r) {
@@ -185,7 +183,7 @@ window.WizCore.chatsParts.inboxrows = function ({ actMark, actNeeds, actUnread, 
       title: esc(clip(title, 160)), mark: `${n ? `<span class="ch-al-n" aria-label="${n} alerts">${n > 99 ? '99+' : n}</span>` : ''}${ibMark(m)}`, line: esc(line),
       after: `<button type="button" class="ch-ib-arch" data-chibnote="${esc(ids.join(' '))}" aria-label="Archive: ${esc(clip(title, 120))}" title="Archive">${IB_ARCH_SVG}</button>` });
   }
-  /* The list body with the switch on: Inbox (pinned first, then threads, waiting tasks and Chats alerts in the one sort),
+  /* The Inbox tab's list body: Inbox (pinned first, then threads, waiting tasks and Chats alerts in the one sort),
    * then Snoozed and Archived folded at the bottom as before. Working threads that never got an answer are in Sent. */
   function inboxRowsBody(w, rows, nt, drafts = 0) {
     const L = ibModel(), c = ch(w.id), order = L.activitySortOf(chatVars.readyOrder), fx = ibFacts();
@@ -207,7 +205,10 @@ window.WizCore.chatsParts.inboxrows = function ({ actMark, actNeeds, actUnread, 
     if (ibTitled) c.inboxN = inboxN;
     const sec = (k, label, n, inner, open, main = k === 'ready') => ibTitled && main ? `<section class="ch-sec ch-act ch-ib ch-tb-main open" data-sec="${k}"><div class="ch-sec-b">${inner()}</div></section>` : `<section class="ch-sec ch-act${main ? ' ch-ib' : ''}${open ? ' open' : ''}" data-sec="${k}">${main ? `<div class="ch-sec-hl"><button class="ch-sec-h" data-sectoggle="${k}" aria-expanded="${open}"><span>${label}</span>${n ? `<small>${n}</small>` : ''}<i aria-hidden="true"></i></button>${sortSel}</div>` : `<button class="ch-sec-h" data-sectoggle="${k}" aria-expanded="${open}"><span>${label}</span>${n ? `<small>${n}</small>` : ''}<i aria-hidden="true"></i></button>`}${open ? `<div class="ch-sec-b">${inner()}</div>` : ''}</section>`;
     const sortSel = `<label class="ch-act-sort"><select data-chactorder aria-label="Sort Inbox">${L.ACTIVITY_SORTS.map(([v, l]) => `<option value="${v}"${order === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label>`;
-    const empty = '<div class="ch-empty ch-ib-empty"><b>Nothing needs you</b><span>Replies and asks land here. What you sent is in Sent.</span></div>';
+    // A box with no chats at all (wizard-ux issue 1731): one deliberate empty state with a way to start a chat.
+    const fresh = !(rows || []).length && !(nt?.awake || []).length && !(nt?.later || []).length;
+    const empty = fresh ? '<div class="ch-empty ch-act-empty"><b>No chats yet</b><span>Tap + to start one, or tap the orb and talk.</span><button type="button" class="ch-fclear" data-chnew data-chemptynew>New chat</button></div>'
+      : '<div class="ch-empty ch-ib-empty"><b>Nothing needs you</b><span>Replies and asks land here. What you sent is in Sent.</span></div>';
     if (!inbox.length && !snoozed.length && !g.archive.length) return drafts ? '' : empty;
     return (inbox.length ? sec('ready', 'Inbox', inboxN, () => page('ready', inbox), chatVars.secOpen.ready !== false) : drafts ? '' : empty)
       + (snoozed.length ? sec('snoozed', 'Snoozed', snoozed.length, () => page('snoozed', snoozed), !!chatVars.secOpen.snoozed) : '')
@@ -217,7 +218,7 @@ window.WizCore.chatsParts.inboxrows = function ({ actMark, actNeeds, actUnread, 
   function ibThreadRowPlain(s) { return ibThreadRow(s, 0).replace(/<button type="button" class="ch-ib-arch"[^]*?<\/button><\/div>$/, '</div>'); }
   // The row's Archive: a thread archives as from its actions (Undo while it shows); a waiting task archives its record.
   function inboxRowsClick(e, w) {
-    if (!w || w.thread || !(inboxRowsOn() || ibSentThreads())) return false;
+    if (!w || w.thread) return false;
     const a = e.target.closest('[data-chibarch]');
     if (a) { threadAct(w.id, a.dataset.chibarch, 'done'); return true; }
     // An alert row's Archive (issue 1941): the alert, or every alert in its folded row, as the Alert actions' Archive.
@@ -232,9 +233,9 @@ window.WizCore.chatsParts.inboxrows = function ({ actMark, actNeeds, actUnread, 
     }
     return false;
   }
-  // The list model's inbox facts for a layout that draws its own list (CHATS.inboxRows), null with the switch off.
-  function inboxRowsFacts() { return inboxRowsOn() ? ibFacts() : null; }
+  // The list model's inbox facts for a layout that draws its own list (CHATS.inboxRows).
+  function inboxRowsFacts() { return ibFacts(); }
   // The row menu's word for a thread's pin (core/chats.js openRowSheet): Pin to top while the switch is on.
   function ibPinWord(pinned) { return pinned ? 'Unpin' : ibPinTopOn() ? 'Pin to top' : 'Pin'; }
-  return { ibMark, ibPinTopOn, ibPinWord, ibRow, ibTagFace, ibThreadRow, inboxRowsOn, inboxRowsBody, inboxRowsClick, inboxRowsFacts };
+  return { ibMark, ibPinTopOn, ibPinWord, ibRow, ibTagFace, ibThreadRow, inboxRowsBody, inboxRowsClick, inboxRowsFacts };
 };

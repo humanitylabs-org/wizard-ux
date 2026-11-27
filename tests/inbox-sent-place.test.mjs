@@ -130,8 +130,8 @@ test('new chats from the orb / typed: the Sent row\'s final state and wants_repl
   assert.equal(M.placeOf({ id: 'z', status: 'waiting_for_approval' }, [{ state: 'running', at: 1 }], f), 'inbox', 'approval: Inbox');
 });
 
-test('Inbox rows on too: the same split, no working mark in Inbox', () => {
-  const s = shell({ tweaks: 'wizard/inbox-until-archived wizard/inbox-rows' });
+test('Inbox rows (on for everyone): the same split, no working mark in Inbox', () => {
+  const s = shell({ tweaks: '' });
   s.ctx.WizCore.inboxRowsFacts = () => ({ quiet, pin: () => 0, extra: () => 0 });
   const inbox = s.inbox(), sent = s.sentList();
   assert.deepEqual(inbox.filter(id => sent.includes(id)), []);
@@ -141,12 +141,11 @@ test('Inbox rows on too: the same split, no working mark in Inbox', () => {
   assert.doesNotMatch(src, /'Working…'/, 'no "Working…" line on an Inbox row');
 });
 
-test('switch off: today\'s lists unchanged (Working on top, the quiet one in Recent, Sent lists every send)', () => {
+test('no switch (Inbox rows on for everyone, wizard-ux issue 1779): with no data-tweaks the split holds, one place per thread', () => {
   const s = shell({ tweaks: '' });
-  assert.equal(s.ctx.WizCore.inboxIds(s.LIVE), null, 'no Inbox placement');
-  assert.deepEqual(s.sentList(), ['failed', 'mac', 'needs', 'quiet', 'run'], 'Sent lists every send as today');
-  const g = M.activityGroups(groups(THREADS()), { needs, unread, at: x => x.at }, { now: NOW });
-  assert.deepEqual(J(g.working.map(x => x.id)), ['run']);
-  assert.ok(g.recent.some(x => x.id === 'quiet'));
-  assert.equal(s.ctx.WizCore.inboxPlace(s.LIVE), null);
+  const inbox = s.inbox(), sent = s.sentList();
+  assert.deepEqual(inbox, ['alert', 'failed', 'mac', 'needs'], 'Inbox placement with no switch on');
+  assert.deepEqual(sent, ['quiet', 'run'], 'Sent keeps the quiet reply and the running send');
+  assert.equal(s.ctx.WizCore.inboxKeep(), true);
+  assert.notEqual(s.ctx.WizCore.inboxPlace(s.LIVE), null);
 });
