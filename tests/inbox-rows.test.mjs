@@ -212,3 +212,52 @@ test('renderer: the thread open beside the list is the current row (aria-current
   assert.doesNotMatch(none.api.inboxRowsBody({ id: 'w' }, none.rows, { awake: [], later: [] }), /aria-current|ch-ib-wrap cur/);
   // (which list sets it, the pane beside the thread, is proven in a real browser: tests/qa-chats-shell-parity.cjs)
 });
+
+/* wizard-ux issue 1998: the phone Chats switcher has Archived as its own view. Switcher on: the Inbox draws no Archived
+ * fold, and Archived is every archived chat as Inbox rows with Restore (never a feed of message bubbles). Switcher off:
+ * the fold stays exactly as it was. Browser proof: tests/qa-chats-archived-view.cjs (160 archived chats). */
+test('switcher on (issue 1998): the Inbox draws no Archived fold; off: the fold stays as today', () => {
+  const { api, rows } = part();
+  const off = api.inboxRowsBody({ id: 'w' }, rows, { awake: [], later: [] });
+  assert.match(off, /<section class="ch-sec ch-act" data-sec="archived"><button class="ch-sec-h" data-sectoggle="archived" aria-expanded="false"><span>Archived<\/span><small>1<\/small>/, 'switcher off: the Archived fold, folded, with its count');
+  assert.equal(api.inboxRowsBody({ id: 'w' }, rows, { awake: [], later: [] }, 0, { noArchive: false }), off, 'noArchive false is today');
+  const on = api.inboxRowsBody({ id: 'w' }, rows, { awake: [], later: [] }, 0, { noArchive: true });
+  assert.doesNotMatch(on, /data-sec="archived"|>Archived</, 'switcher on: no Archived fold');
+  assert.equal(on.replace(/<section class="ch-sec ch-act" data-sec="archived">[^]*$/, ''), off.replace(/<section class="ch-sec ch-act" data-sec="archived">[^]*$/, ''), 'everything above the fold is the same');
+  // Only archived chats left: switcher on shows the Inbox empty state, not a bare fold.
+  const onlyArc = [row('a1', 6, { archived: true })];
+  assert.match(api.inboxRowsBody({ id: 'w' }, onlyArc, { awake: [], later: [] }, 0, { noArchive: true }), /Nothing needs you/);
+  assert.match(api.inboxRowsBody({ id: 'w' }, onlyArc, { awake: [], later: [] }), /data-sec="archived"/);
+});
+
+test('switcher Archived view (issue 1998): every archived chat as thread rows, newest first, with Restore; no message bubbles', () => {
+  const { api, taps } = part();
+  const many = Array.from({ length: 160 }, (_, i) => row('arc' + i, 10 + i, { archived: true, preview: 'Reply ' + i, previewRole: 'assistant' }));
+  const live = [row('new1', 1, { fresh: true }), row('s1', 2, { deferred: true })];
+  const html = api.archivedRowsBody({ id: 'w' }, live.concat(many.slice().reverse()));
+  const r = rowsOf(html);
+  assert.equal(r.length, 160, 'all 160, not a few');
+  assert.deepEqual(r.map(x => x.id), many.map(s => s.id), 'newest first, only archived chats');
+  for (const x of r) {
+    assert.match(x.body, /<span class="ch-ib-av/, 'the Inbox avatar'); assert.match(x.body, /<b class="ch-ib-t">T arc\d+<\/b>/, 'the title');
+    assert.match(x.body, /data-chopen="arc\d+"/, 'a tap opens the chat');
+  }
+  assert.match(r[0].body, /<span class="ch-ib-pv">Reply 0<\/span>/, 'the preview line');
+  assert.equal((html.match(/data-chibrestore="/g) || []).length, 160, 'Restore on every row');
+  assert.doesNotMatch(html, /data-chibarch=/, 'no Archive on an archived row');
+  assert.doesNotMatch(html, /ch-post|ch-feed|ch-msg|ch-bubble/, 'thread rows, not message bubbles');
+  // Restore: the thread's own Restore action (back to Inbox).
+  const tap = id => ({ target: { closest: sel => sel === '[data-chibrestore]' ? { dataset: { chibrestore: id } } : null } });
+  assert.equal(api.inboxRowsClick(tap('arc3'), { id: 'w' }), true);
+  assert.deepEqual(taps, [['w', 'arc3', 'restore']]);
+  assert.match(api.archivedRowsBody({ id: 'w' }, live), /Nothing archived/, 'none archived: a plain empty state');
+});
+
+test('list painter (issue 1998): the switcher\'s Archived draws archivedRowsBody, not the tag feed; the Inbox gets noArchive only with the switcher', () => {
+  const src = read('web/core/chats-listpaint.js');
+  assert.match(src, /const arcList = csw && !!feed\?\.archivedFeed && !n && typeof archivedRowsBody === 'function';/);
+  const arc = src.indexOf('else if (arcList) body = archivedRowsBody(w, all);'), feed = src.indexOf('else if (feed && !n && !F)');
+  assert.ok(arc > 0 && arc < feed, 'the Archived list is chosen before the feed');
+  assert.match(src, /activityBody\(w, all, listNotes, drafts\.length, \{ noArchive: csw \}\)/);
+  assert.match(read('web/core/chats.js'), /listpaint\(\{ actAllAgents, activityBody, archivedRowsBody,/);
+});

@@ -128,6 +128,7 @@ window.WizCore.chatsParts.inboxrows = function ({ actMark, actNeeds, actUnread, 
     return s.previewRole === 'user' ? 'You: ' + (s.preview || '') : s.preview || '';
   }
   const IB_ARCH_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16v3H4zM6 10v9h12v-9M10 14h4"/></svg>';
+  const IB_RESTORE_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3M4.5 4.5v4h4"/></svg>';
   const IB_PIN_MARK = '<span class="ch-ib-pin" aria-label="Pinned">📌</span>';
   /* The one Signal-style row: Inbox's threads and waiting tasks, and Sent's sends (wizard-ux issue 1814, on
    * for everyone: James, 25 Nov 2026, "let's give the same design to sent"), so the two can't drift apart. Every
@@ -186,7 +187,8 @@ window.WizCore.chatsParts.inboxrows = function ({ actMark, actNeeds, actUnread, 
   /* The Inbox tab's list body: Working on top (wizard-ux issue 1810: a running thread no Sent row names, one the agent
    * started), then Inbox (pinned first, then threads, waiting tasks and Chats alerts in the one sort), then Snoozed and
    * Archived folded at the bottom as before. A run he started is in Sent › Working (issue 1829). */
-  function inboxRowsBody(w, rows, nt, drafts = 0) {
+  // `noArchive`: the Chats switcher is on (wizard-ux issue 1998): Archived is its own view there, so Inbox draws no fold.
+  function inboxRowsBody(w, rows, nt, drafts = 0, { noArchive = false } = {}) {
     const L = ibModel(), c = ch(w.id), order = L.activitySortOf(chatVars.readyOrder), fx = ibFacts();
     ibDrawn = new Set();
     const g = L.activityGroups(LIVE.workGroups(rows), { needs: actNeeds, unread: actUnread, at: chanAt }, { order, now: Date.now(), inbox: fx, place: window.WizCore.inboxPlace?.() || null });
@@ -211,11 +213,24 @@ window.WizCore.chatsParts.inboxrows = function ({ actMark, actNeeds, actUnread, 
     const fresh = !(rows || []).length && !(nt?.awake || []).length && !(nt?.later || []).length;
     const empty = fresh ? '<div class="ch-empty ch-act-empty"><b>No chats yet</b><span>Tap + to start one, or tap the orb and talk.</span><button type="button" class="ch-fclear" data-chnew data-chemptynew>New chat</button></div>'
       : '<div class="ch-empty ch-ib-empty"><b>Nothing needs you</b><span>Replies and asks land here. What you sent is in Sent.</span></div>';
-    if (!work.length && !inbox.length && !snoozed.length && !g.archive.length) return drafts ? '' : empty;
+    const archived = noArchive ? [] : g.archive;
+    if (!work.length && !inbox.length && !snoozed.length && !archived.length) return drafts ? '' : empty;
     return (work.length ? sec('working', 'Working', work.length, () => work.map(s => ibThreadRow(s, 0, null, true)).join(''), chatVars.secOpen.working !== false, false) : '')
       + (inbox.length ? sec('ready', 'Inbox', inboxN, () => page('ready', inbox), chatVars.secOpen.ready !== false) : drafts ? '' : empty)
       + (snoozed.length ? sec('snoozed', 'Snoozed', snoozed.length, () => page('snoozed', snoozed), !!chatVars.secOpen.snoozed) : '')
-      + (g.archive.length ? sec('archived', 'Archived', g.archive.length, () => g.archive.slice(0, 200).map(s => ibThreadRowPlain(s)).join(''), !!chatVars.secOpen.archived) : '');
+      + (archived.length ? sec('archived', 'Archived', archived.length, () => archived.slice(0, 200).map(s => ibThreadRowPlain(s)).join(''), !!chatVars.secOpen.archived) : '');
+  }
+  /* The Chats switcher's Archived view (wizard-ux issue 1998): every archived chat of the list (`rows`, already the
+   * list's agent) as the same thread rows as Inbox and Sent, newest first, all of them (the list scrolls), each with
+   * Restore where an Inbox row has Archive. Tapping a row opens its chat. */
+  function archivedRowsBody(w, rows) {
+    const list = ibModel().activitySort((rows || []).filter(s => s && s.archived && !s.hidden), 'newest', { at: chanAt });
+    if (!list.length) return '<div class="ch-empty ch-ib-empty"><b>Nothing archived</b><span>Chats you archive land here.</span></div>';
+    return `<section class="ch-sec ch-act ch-ib ch-tb-main ch-ib-archived open" data-sec="archived-view"><div class="ch-sec-b">${list.map(ibThreadRowRestore).join('')}</div></section>`;
+  }
+  function ibThreadRowRestore(s) {
+    const t = esc(s.title || 'New chat');
+    return ibThreadRow(s, 0).replace(/<button type="button" class="ch-ib-arch"[^]*?<\/button><\/div>$/, `<button type="button" class="ch-ib-arch ch-ib-restore" data-chibrestore="${esc(s.id)}" aria-label="Restore: ${t}" title="Restore">${IB_RESTORE_SVG}</button></div>`);
   }
   // Archived rows: the same look without the Archive button.
   function ibThreadRowPlain(s) { return ibThreadRow(s, 0).replace(/<button type="button" class="ch-ib-arch"[^]*?<\/button><\/div>$/, '</div>'); }
@@ -224,6 +239,9 @@ window.WizCore.chatsParts.inboxrows = function ({ actMark, actNeeds, actUnread, 
     if (!w || w.thread) return false;
     const a = e.target.closest('[data-chibarch]');
     if (a) { threadAct(w.id, a.dataset.chibarch, 'done'); return true; }
+    // An Archived row's Restore (issue 1998): back to Inbox, as the thread's own Restore action.
+    const rs = e.target.closest('[data-chibrestore]');
+    if (rs) { threadAct(w.id, rs.dataset.chibrestore, 'restore'); return true; }
     // An alert row's Archive (issue 1941): the alert, or every alert in its folded row, as the Alert actions' Archive.
     const nb = e.target.closest('[data-chibnote]');
     if (nb) { const ids = String(nb.dataset.chibnote || '').split(' ').filter(Boolean); if (ids.length && typeof noteRowAct === 'function') void noteRowAct(ids[0], 'done', ids); return true; }
@@ -240,5 +258,5 @@ window.WizCore.chatsParts.inboxrows = function ({ actMark, actNeeds, actUnread, 
   function inboxRowsFacts() { return ibFacts(); }
   // The row menu's word for a thread's pin (core/chats.js openRowSheet): Pin to top while the switch is on.
   function ibPinWord(pinned) { return pinned ? 'Unpin' : ibPinTopOn() ? 'Pin to top' : 'Pin'; }
-  return { ibMark, ibPinTopOn, ibPinWord, ibRow, ibTagFace, ibThreadRow, inboxRowsBody, inboxRowsClick, inboxRowsFacts };
+  return { archivedRowsBody, ibMark, ibPinTopOn, ibPinWord, ibRow, ibTagFace, ibThreadRow, inboxRowsBody, inboxRowsClick, inboxRowsFacts };
 };
