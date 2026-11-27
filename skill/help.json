@@ -504,10 +504,6 @@
       "help": "New channels with no emoji get one picked by your Wizard's fast model.",
       "where": "Settings › Appearance › Try new features › Channels: an AI-picked emoji for new channels"
     },
-    "wizard/chat-tags": {
-      "help": "A chat can carry several tags.",
-      "where": "Settings › Appearance › Try new features › Tags"
-    },
     "wizard/app-picker-store-search": {
       "help": "Add an app's search also finds App Store apps.",
       "where": "Settings › Appearance › Try new features › Add an app: search the App Store too"

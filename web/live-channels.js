@@ -17,7 +17,7 @@ window.WizCore.liveParts.channels = function () {
    * followed by a fresh read; a read that started before a later edit is dropped, so a slow answer never undoes a tap.
    * Membership is keyed by the thread's agent plus its id ('hermes' = main), as the store keys it. */
   const CHANNELS_URL = '/wizard/v1/channels', CHANNEL_MEMBERSHIP_URL = '/wizard/v1/channels/membership', CHANNELS_CACHE = 'wos.chats.channels.v1';
-  // Tags (wizard-agent-service issue 608, switch wizard/chat-tags): with the box's Tags on (`tags: true` on the list) a
+  // Tags (wizard-agent-service issue 608, on for everyone): with the box's Tags on (`tags: true` on the list) a
   // chat carries several channels; PUT {sessionId, agent, add|remove} adds or removes one.
   const CHANNEL_TAGS_URL = '/wizard/v1/channels/tags';
   function channelStore({ req, emit, normalize = r => r, onRow = r => r, onError = () => {}, now = () => Date.now(), storage = null, every = 30e3, offEvery = 5 * 60e3, feedMax = 200, moveKeep = 120e3 } = {}) {
