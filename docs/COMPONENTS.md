@@ -60,8 +60,8 @@ Back: `WizEscapeBack`, `WosBack`; `WizChatsHost.registerBack`/back.push share re
 | Bound-view handle (3 intro glows) | `WosSkinHost` built-in (`edge-peek.js`), host storage |
 | Repaint changed nodes without flicker | `WosMorph.morph` |
 | Mic, retry, model, place/follow | `WosChatPower` (`chat-power.js`;`chanOwnPost`/`chanModel`/`landAt`/`paintJump`); `voice.reply/onTap`→`recordReply`; `WosModels` (`foreignApp`,`reconnect`); `WosErrors`; `WosWork`; composer `WizCore` (`chats.js` `fitLabel`,`.css` `lab-row`) |
-| Text/media | `WosChat` (`chat-kit.js`: `helm`, `tweakIds`, `actionIds`→`WosActionCards`, `md`, `copyRich`, `viewer`, `saveFile`, `drafts.keys`) |
-| Spaces / Focus | `WizCore` Chats (`chats.js`), `WizLive.prefOps` (`spaces`; add = move, one Space per chat); `WizLive.spaceSessions(ids)`; `winAgent`/`modelRoute`; `WosOutbox.onNew`; restored Focus awaits census; hidden routes; AI apps pills (`.aad-agents`): `focusRows`, `agents.focus`; `WosAgents.colour`/`distinctHues` + `--ch-agent-hue` |
+| Text/media | `WosChat` (`chat-kit.js`: `helm`, `tweakIds`, `actionIds`/`buttonGroups`→`WosActionCards`, `md`, `copyRich`, `viewer`, `saveFile`, `drafts.keys`) |
+| Spaces / Focus | `WizCore` Chats (`chats.js`), `WizLive.prefOps` (`spaces`; add = move, one Space per chat); `WizLive.spaceSessions(ids)`; `winAgent`/`modelRoute`; `WosOutbox.onNew`; hidden routes; AI apps pills (`.aad-agents`): `focusRows`, `agents.focus`; `WosAgents.colour`/`distinctHues` + `--ch-agent-hue` |
 | Pins: menu / opt-in row buttons | `WosChatPins` (`chat-pins.js`) |
 | Snooze thread/message: relative dates, Someday, Other date… last; action setting | `WosBoomerang` (`scheduled-reminders.js`) on one scheduler; Settings → Schedules `WosSchedules` (`schedules.js`) |
 | Thread topic emoji | `WosTopicEmoji` (`chat-topic-emojis.js`, data `WosTopicEmojiData`) |

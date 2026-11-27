@@ -177,5 +177,100 @@
     });
     document.addEventListener('visibilitychange', () => { if (document.visibilityState !== 'visible' || !on()) return; for (const n of document.querySelectorAll('[data-action-card]')) void read(n.dataset.actionCard, true); });
   } catch (_) {}
-  window.WosActionCards = Object.freeze({ SWITCH, SCHEMA, on, html, paint, tap, keys: keysOf, normalize: norm, _cards: cards });
+  /* ---- Tap-to-answer buttons inside a reply (wizard-ux issue 1889, off-by-default switch wizard/reply-buttons) ----
+   * The agent writes [WIZARD_BUTTONS_V1]{"group","buttons":[{"id","label"}]} lines (core/chat-kit.js buttonGroups);
+   * the reply draws each group's buttons where its line sits. A tap marks the button picked on the tap frame (the
+   * group's others dim) and joins this thread's batch; RB_BATCH_MS after the last tap the batch goes as ONE ordinary
+   * owner message through the thread's own send path (the outbox: retries, routed agents, steering a running reply),
+   * readable "Tapped Done · Workout" lines plus [WIZARD_TAPS_V1]{"taps":[{thread,message,group,button,label}]}. The
+   * thread draws that message as a machine line (core/chats-attach.js). What is picked is read back from the thread's
+   * own history (so a reload and every other device see it) plus this device's taps not landed yet; a group can be
+   * changed until the agent has replied after its tap. */
+  const RB_SWITCH = 'wizard/reply-buttons', RB_BATCH_MS = 3000, RB_MAX_WAIT_MS = 10000, RB_LOCAL_MS = 10 * 60e3;
+  const rbOn = () => { try { return String(document.documentElement.dataset.tweaks || '').split(/\s+/).includes(RB_SWITCH); } catch (_) { return false; } };
+  const rbLocal = new Map(); // `${thread}\n${message}\n${group}` -> { button, label, at } (tapped here, not in the history yet)
+  const rbBatch = new Map(); // thread -> { taps: [], t, first, send }
+  const rbKey = (sid, msg, group) => `${sid}\n${msg}\n${group}`;
+  const KIT = () => window.WosChat || null;
+  const tapsOfText = s => KIT()?.tapsOf ? KIT().tapsOf(s).taps : [];
+  // Thread `sid`'s picks: `${message}\n${group}` -> { button, label, at, locked }. A tap in a turn the agent has answered
+  // since is locked; a later tap of the same group wins; this device's newer taps (not landed yet) win over history.
+  function rbPicks(turns, sid) {
+    const out = new Map();
+    for (const tn of Array.isArray(turns) ? turns : []) {
+      const own = tn?.u ? (tn.u.taps || tapsOfText(tn.u.text)) : [];
+      for (const t of own) out.set(`${t.message}\n${t.group}`, { button: t.button, label: t.label, at: tn.u.at, locked: !!tn.a });
+      for (const st of tn?.steers || []) for (const t of st.taps || tapsOfText(st.text)) out.set(`${t.message}\n${t.group}`, { button: t.button, label: t.label, at: st.at, locked: !!(tn.a && isFinite(tn.a.at) && tn.a.at > st.at) });
+    }
+    const now = Date.now();
+    for (const [k, v] of rbLocal) {
+      const [s, msg, group] = k.split('\n'); if (s !== String(sid)) continue;
+      const h = out.get(`${msg}\n${group}`), waiting = rbBatch.get(s)?.taps.some(t => t.message === msg && t.group === group);
+      if (!waiting && (now - v.at > RB_LOCAL_MS || h?.button === v.button)) { rbLocal.delete(k); continue; } // landed (or stale): history says it
+      out.set(`${msg}\n${group}`, { button: v.button, label: v.label, at: v.at, locked: false, local: true });
+    }
+    return out;
+  }
+  function rbGroupHtml(g, picks) {
+    const p = picks?.get(`${g.msg}\n${g.group}`) || null, locked = !!p?.locked;
+    return `<div class="ch-rb${p ? ' picked' : ''}${locked ? ' locked' : ''}" role="group" aria-label="${esc(g.group)}" data-rb-group="${esc(g.group)}" data-rb-msg="${esc(g.msg)}" data-morph-key="rb:${esc(g.msg)}:${esc(g.group)}">`
+      + g.buttons.map(b => { const on = p?.button === b.id; return `<button type="button" class="ch-rb-btn${on ? ' on' : p ? ' dim' : ''}" data-rb="${esc(b.id)}" aria-pressed="${on}"${locked ? ' disabled' : ''}>${on ? '✓ ' : ''}${esc(b.label)}</button>`; }).join('')
+      + '</div>';
+  }
+  // A reply's body with its buttons in place: `btext` (chat-kit buttonsText) is cut at each group's token line, every
+  // piece goes through the thread's own markdown (`mdOf`, the same media hook), groups not placed follow the text.
+  function rbHtml(btext, groups, mdOf, picks) {
+    const tok = KIT()?.RB_TOKEN, placed = new Set(); let h = '', buf = [];
+    const flush = () => { const s = buf.join('\n').trim(); if (s) h += mdOf(s); buf = []; };
+    for (const line of String(btext || '').split('\n')) {
+      const m = tok && tok.exec(line.trim()), g = m ? groups[Number(m[1])] : null;
+      if (!g || g.placed === false) { if (!m) buf.push(line); continue; }
+      flush(); h += rbGroupHtml(g, picks); placed.add(g);
+    }
+    flush();
+    for (const g of groups) if (!placed.has(g)) h += rbGroupHtml(g, picks);
+    return h;
+  }
+  // The thread's tap message: one quiet line per tap (core/chats-attach.js turnHtml and the outbox's pending copy).
+  const rbLinesHtml = taps => taps.map(t => `<span class="ch-rb-tap">${esc(KIT()?.tapLine ? KIT().tapLine(t) : `Tapped ${t.label} · ${t.group}`)}</span>`).join('');
+  function rbMessage(taps) {
+    const lines = taps.map(t => (KIT()?.tapLine ? KIT().tapLine(t) : `Tapped ${t.label} · ${t.group}`)).join('\n');
+    return `${lines}\n[WIZARD_TAPS_V1]${JSON.stringify({ taps: taps.map(({ thread, message, group, button, label }) => ({ thread, message, group, button, label })) })}[/WIZARD_TAPS_V1]`;
+  }
+  async function rbFlush(sid) {
+    const b = rbBatch.get(sid); if (!b) return; clearTimeout(b.t); rbBatch.delete(sid);
+    if (!b.taps.length) return;
+    let ok = false;
+    try { ok = !!(await b.send(rbMessage(b.taps))); } catch (_) { ok = false; }
+    if (!ok) { // nothing was saved: the buttons show what the agent really has
+      for (const t of b.taps) { const k = rbKey(sid, t.message, t.group); if (rbLocal.get(k)?.at === t.at) rbLocal.delete(k); }
+      b.toast?.('!', 'Couldn’t send that tap · try again');
+    }
+    b.repaint?.();
+  }
+  // A tap on a reply button (core/chats-bind.js). ctx: { sid, send(text) -> promise of the outbox item (null = not
+  // saved), repaint(), toast }. Returns true when it was a reply button.
+  function rbTap(btn, ctx = {}) {
+    const box = btn?.closest?.('.ch-rb'), id = btn?.dataset?.rb, sid = String(ctx.sid || '');
+    if (!box || !id || !sid || sid === '__new__') return false;
+    if (btn.disabled || !rbOn() || typeof ctx.send !== 'function') { ctx.repaint?.(); return true; }
+    const msg = box.dataset.rbMsg, group = box.dataset.rbGroup, label = String(btn.textContent || '').replace(/^✓\s*/, '').trim();
+    if (!msg || !group || !label) return true;
+    const k = rbKey(sid, msg, group), cur = rbLocal.get(k);
+    if (cur?.button === id || (btn.getAttribute?.('aria-pressed') === 'true' && !cur)) return true; // already the pick
+    const at = Date.now(), tap = { thread: sid, message: msg, group, button: id, label, at };
+    rbLocal.set(k, { button: id, label, at });
+    let b = rbBatch.get(sid);
+    if (!b) rbBatch.set(sid, b = { taps: [], t: 0, first: at });
+    b.taps = [...b.taps.filter(t => !(t.message === msg && t.group === group)), tap];
+    b.send = ctx.send; b.repaint = ctx.repaint; b.toast = ctx.toast;
+    clearTimeout(b.t);
+    b.t = setTimeout(() => void rbFlush(sid), Math.max(0, Math.min(RB_BATCH_MS, b.first + RB_MAX_WAIT_MS - at)));
+    ctx.repaint?.();
+    return true;
+  }
+  // Leaving the page sends what is waiting at once (the outbox keeps it if the network is gone).
+  try { window.addEventListener('pagehide', () => { for (const sid of [...rbBatch.keys()]) void rbFlush(sid); }); } catch (_) {}
+  window.WosActionCards = Object.freeze({ SWITCH, SCHEMA, on, html, paint, tap, keys: keysOf, normalize: norm, _cards: cards,
+    REPLY_SWITCH: RB_SWITCH, replyOn: rbOn, replyHtml: rbHtml, replyPicks: rbPicks, replyTap: rbTap, replyFlush: rbFlush, replyMessage: rbMessage, tapLinesHtml: rbLinesHtml });
 })();

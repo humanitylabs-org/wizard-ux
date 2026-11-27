@@ -16,7 +16,7 @@ Every screen, Settings page and feature switch of the Wizard interface (the phon
 ## Screens
 
 - **Home**: The start screen: what's Working and Ready, the Resources bars (server and AI accounts), your apps. Desktop: AI apps view: close the open chat (✕, Esc or ⌥`) to get the empty Home with the message box, the orb and your pinned apps; Desks view: the house at the left of the top bar (⌥`). Phone: the first desk; the gear at its top right opens Settings.
-- **Chats**: All your conversations with the agent, in sections: Errors, Working, Saved, Ready, Yesterday, Past week, Snoozed, Archive (By day), or Working, Ready, Snoozed, Archive (By status; chosen in the Filter sheet). Search, the Filter button, + New chat, and a Focus strip with All, each agent and your Spaces. Long-press or right-click a chat for Pin, Rename, Mark unread, Snooze, Archive / Restore. Desktop: AI apps view: the chats sidebar on the left (search ⌥K, + New chat ⌥N); Desks view: the Inbox count in the top bar (⌥I). Phone: the Chats desk, or hold the orb and say 'chats'.
+- **Chats**: All your conversations with the agent, in sections: Errors, Working, Saved, Ready, Yesterday, Past week, Snoozed, Archive (By day), or Working, Ready, Snoozed, Archive (By status; chosen in the Filter sheet). Search, Filter and + New chat. Long-press or right-click a chat for Pin, Rename, Mark unread, Snooze, Archive / Restore. Desktop: AI apps view: the chats sidebar on the left (search ⌥K, + New chat ⌥N); Desks view: the Inbox count in the top bar (⌥I). Phone: the Chats desk, or hold the orb and say 'chats'.
 - **Work**: Chats opened at a section (a link to Working, Ready, Archive …).
 - **Chats › Errors**: Chats whose last reply failed, with Retry (and why, with Why a reply failed on).
 - **Chats › Working**: Chats where the agent is still working; order set in Settings › Chats & app screens › Working threads.
@@ -220,6 +220,7 @@ Settings › Appearance › Try new features lists unfinished features to try, A
 - **Swipe away downloads**: Phone: swipe the Downloaded banner away and swipe the Downloads sheet down to close it. (phone only).
 - **Tags**: A chat can carry several tags.
 - **Tap the app in front for its first view**: Narrow desktop window: tapping the icon of the app in front takes it back to its first view.
+- **Tap to answer in replies**: Tap-to-answer buttons in agent replies.
 - **Tell the team about failed updates**: When an app or WizardOS update fails on this box, the App Manager files a bug for the team (or adds to the open one) with the box, versions, failing step and error, using this box's GitHub login. Your notification then says the team was told.
 - **Undated chat titles**: Same-topic chats: no date.
 - **Why a reply failed**: When a reply fails and Wizard knows why (subscription ended, usage limit, signed out, network), Chats > Errors and the thread say so plainly, with Choose another model first when Retry can't work.
