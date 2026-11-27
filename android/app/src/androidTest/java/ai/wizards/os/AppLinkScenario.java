@@ -30,7 +30,10 @@ final class AppLinkScenario {
     /** The debug build's own deep-link host (no origin baked in): this app claims /wizard-os-home/ on it. */
     static final String OWN = "https://unconfigured.invalid/wizard-os-home/1948";
 
-    /** Records every VIEW this app starts; lets the app hand-off (FLAG_ACTIVITY_REQUIRE_NON_BROWSER) really start, blocks the rest. */
+    /**
+     * Records every VIEW this app starts. The app hand-off (FLAG_ACTIVITY_REQUIRE_NON_BROWSER) really runs, so Android
+     * itself decides whether an app takes the link; anything after it (the panel or the browser) is recorded and blocked.
+     */
     private static final class Capture extends Instrumentation.ActivityMonitor {
         final List<Intent> handoffs = new CopyOnWriteArrayList<>(), blocked = new CopyOnWriteArrayList<>();
         @Override public Instrumentation.ActivityResult onStartActivity(Intent intent) {
@@ -63,9 +66,10 @@ final class AppLinkScenario {
 
             // 1. A link no app owns: the browser panel, exactly as before.
             Capture plain = tap(inst, device, "Open the outside link");
-            assertEquals("plain link: no app hand-off", 0, plain.handoffs.size());
+            assertTrue("plain link: at most the one refused hand-off try", plain.handoffs.size() <= 1);
             assertEquals("plain link: one panel launch", 1, plain.blocked.size());
             assertEquals(wizard.outside(), plain.blocked.get(0).getDataString());
+            assertEquals("plain link: no app opened over Wizard", c.getPackageName(), device.getCurrentPackageName());
 
             if (selection) {
                 // 2. The owning app is installed but the person turned "Open supported links" off for it: the panel.
