@@ -62,7 +62,7 @@ final class AppLinkScenario {
         try (Fake wizard = new Fake()) {
             assertTrue(ServerSettings.save(c, wizard.origin()));
             c.startActivity(new Intent(c, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK));
-            assertNotNull("the synthetic chat never showed", device.wait(Until.findObject(By.text("Chat with links")), 30000));
+            assertNotNull("the synthetic chat never showed, top=" + device.getCurrentPackageName(), pastSystemDialogs(device, "Chat with links", 45000));
 
             // 1. A link no app owns: the browser panel, exactly as before.
             Capture plain = tap(inst, device, "Open the outside link");
@@ -91,7 +91,7 @@ final class AppLinkScenario {
             assertNotNull("the owning app is in front", device.wait(Until.findObject(By.pkg(testPkg).textContains("Opened in the app: " + OWNED)), 15000));
             assertEquals(testPkg, device.getCurrentPackageName());
             device.pressBack();
-            assertNotNull("Back returns to the chat", device.wait(Until.findObject(By.text("Chat with links")), 15000));
+            assertNotNull("Back returns to the chat", pastSystemDialogs(device, "Chat with links", 20000));
 
             // 4. A link this app claims itself: never handed off, so it can't loop back into Wizard.
             Capture own = tap(inst, device, "Open an own Wizard link");
@@ -108,10 +108,26 @@ final class AppLinkScenario {
         }
     }
 
+    /** Waits for text, tapping "Wait" on an "isn't responding" dialog an earlier test's blocked UI thread may leave up. */
+    private static androidx.test.uiautomator.UiObject2 pastSystemDialogs(UiDevice device, String text, long ms) {
+        long end = System.currentTimeMillis() + ms;
+        while (System.currentTimeMillis() < end) {
+            androidx.test.uiautomator.UiObject2 hit = device.wait(Until.findObject(By.text(text)), 1500);
+            if (hit != null) return hit;
+            androidx.test.uiautomator.UiObject2 wait = device.findObject(By.res("android:id/aerr_wait"));
+            if (wait != null) wait.click();
+        }
+        try { ByteArrayOutputStream dump = new ByteArrayOutputStream(); device.dumpWindowHierarchy(dump); android.util.Log.w("AppLink1948", "SCREEN " + dump); }
+        catch (IOException ignored) { }
+        return null;
+    }
+
     private static Capture tap(Instrumentation inst, UiDevice device, String button) throws InterruptedException {
         Capture capture = new Capture(); inst.addMonitor(capture);
         try {
-            device.wait(Until.findObject(By.text(button)), 10000).click();
+            androidx.test.uiautomator.UiObject2 b = pastSystemDialogs(device, button, 15000);
+            assertNotNull(button + " not on screen, top=" + device.getCurrentPackageName(), b);
+            b.click();
             for (int i = 0; i < 50 && capture.handoffs.isEmpty() && capture.blocked.isEmpty(); i++) Thread.sleep(100);
             Thread.sleep(1500); // a fallback after a refused hand-off comes right behind it
         } finally { inst.removeMonitor(capture); }
