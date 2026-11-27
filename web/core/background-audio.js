@@ -67,11 +67,21 @@
     });
   }
   // Existing installed apps can use their old envelope until they adopt WizardApp.device.
+  // Every request gets an answer, a refusal included, so an app never waits on silence (silence froze a player for 20 s).
+  const REFUSED = {ok:false,error:'Audio request refused'};
   window.addEventListener('message', e => {
     const d = e.data;
-    if (d?.type !== TYPE || !frameOk(e.source,e.origin)) return;
-    const win=e.source, doc=win.document, id=String(d.id || '').slice(0,80);
-    const reply = data => { if (frameOk(win) && win.document === doc) win.postMessage({type:TYPE,id,...data},location.origin); };
+    if (d?.type !== TYPE) return;
+    const win=e.source, id=String(d.id || '').slice(0,80);
+    if (!frameOk(win,e.origin)) {
+      if (e.origin === location.origin && win && win !== window && d.method !== 'detach') try { win.postMessage({type:TYPE,id,...REFUSED},location.origin); } catch (_) {}
+      return;
+    }
+    const doc=win.document;
+    const reply = data => {
+      try { if (win.document !== doc) return; } catch (_) { return; } // a new page in the frame never asked
+      win.postMessage({type:TYPE,id,...(frameOk(win) ? data : REFUSED)},location.origin);
+    };
     request(win,d.method,d.params).then(result=>reply({ok:true,result}),error=>reply({ok:false,error:error.message}));
   });
   // Explicit window/desk close, not reload/detach: keep queue and position, clear play intention.
