@@ -59,6 +59,7 @@
     "wizard/boundary-agent-access",
     "wizard/phone-badge-look",
     "wizard/sent-threads",
+    "wizard/inbox-pin-top",
     "wizard/smart-inbox",
     "wizard/private-mode",
     "wizard/phone-recovery-mode",
