@@ -183,7 +183,10 @@ const report = { origin, web, smart: SMART, cases: [] };
           assert.deepEqual(inboxReady, [], 'the row is never an Inbox row once the Inbox shows ' + JSON.stringify(entry.seen));
           assert.equal(onList[0].v, wantNow, `first Inbox paint: row ${wantNow} ` + JSON.stringify(entry.seen));
           if (SMART) {
-            await page.evaluate(() => window.WizCore.chatsSwitcher.pick('sent')); await nap(900);
+            // The phone's view switcher; the desktop list keeps its Inbox · Sent tabs.
+            if (await page.evaluate(() => !!window.WizCore?.chatsSwitcher?.on?.())) await page.evaluate(() => window.WizCore.chatsSwitcher.pick('sent'));
+            else await vis('.ch-tabbar [data-chtab="sent"]').click();
+            await nap(900);
             entry.sentNow = await page.evaluate(() => [...document.querySelectorAll('[data-chsentthread="qa-reply"]')].filter(n => n.getClientRects().length).map(n => n.closest('section[data-sec]')?.dataset.sec || n.closest('[data-sec]')?.dataset.sec || 'sent'));
             await page.screenshot({ path: path.join(out, stem + '-3-sent.png') });
             assert.ok(entry.sentNow.length, 'the replied thread is in Sent ' + JSON.stringify(entry.sentNow));
