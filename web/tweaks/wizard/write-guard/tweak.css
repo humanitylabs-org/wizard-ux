@@ -1,1 +1,0 @@
-/* Stop write loops (wizard-ux issue 1439). Off by default; core/write-guard.js reads the switch, nothing is styled. */

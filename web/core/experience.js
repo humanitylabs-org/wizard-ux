@@ -26,9 +26,10 @@
    * wherever its timer runs; wizard-ux issue 1332: wizard/app-tap-home, the narrow desktop's tap takes the app home;
    * wizard-agent-service issue 518: wizard/plain-chat-titles, the Agent Service serves undated titles; wizard-ux issue
    * 1362: wizard/graceful-restart, the calm restart note is core/reach.js + core/graceful-restart.css;
-   * wizard-ux issue 1437: wizard/interface-manual, every agent gets the interface manual): a saved on/off for one is
+   * wizard-ux issue 1437: wizard/interface-manual, every agent gets the interface manual;
+   * wizard-ux issue 1439: wizard/write-guard, core/write-guard.js guards every shell write): a saved on/off for one is
    * cleared from this device, once, so no stale choice is kept. */
-  const GONE = ['wizard/desktop-chats', 'wizard/app-panel-left', 'wizard/needs-you-reason', 'wizard/follow-main', 'wizard/app-tap-home', 'wizard/plain-chat-titles', 'wizard/graceful-restart', 'wizard/interface-manual'];
+  const GONE = ['wizard/desktop-chats', 'wizard/app-panel-left', 'wizard/needs-you-reason', 'wizard/follow-main', 'wizard/app-tap-home', 'wizard/plain-chat-titles', 'wizard/graceful-restart', 'wizard/interface-manual', 'wizard/write-guard'];
   if (Store.read()) {
     let dirty = false;
     for (const k of ['defaultsOff', 'promotedMigrated']) if (Array.isArray(state[k]) && state[k].some(id => GONE.includes(id))) { state[k] = state[k].filter(id => !GONE.includes(id)); dirty = true; }

@@ -214,7 +214,6 @@ Settings › Appearance › Try new features lists unfinished features to try, A
 - **Side button opens the Agent chat**: Android app: the side button opens Messenger's Agent chat for a note instead of a new Wizard chat.
 - **Skins are look only**: Skins become a look only: only feature switches decide what runs. Your skin's own choices come back when you switch this off.
 - **Smart inbox: only what needs you**: Inbox: only what blocks you.
-- **Stop write loops**: Stops repeated saves: an identical save within 10 s is not resent; over 20 a minute pauses.
 - **Swap sides**: Chats right, apps left (⌥⇧L).
 - **Tags**: A chat can carry several tags.
 - **Tap to answer in replies**: Tap-to-answer buttons in agent replies.
@@ -229,6 +228,7 @@ Switches that are ordinary settings or views, not tester switches:
 No longer switches (owners and old chats may still name them):
 - **Channels in Chats**: on for everyone now, nothing to turn on: open Chats and use the tabs at the bottom: Inbox (what needs you), Tags (your channels) and Sent. Tags lists your Spaces one per line, plus General; open one to see its chats as posts with a reply line.
 - **Thread tracker**: retired: Needs you now shows in the thread itself, on the reply that needs the owner (with Mark done), and in Inbox; Reply works on any message.
+- **Stop write loops**: on for everyone, nothing to turn on: an identical save within 10 s is not resent, and over 20 saves a minute to one place pauses.
 - **Apps in Updates**: on for everyone: Settings › About & updates › Apps.
 - **Reply to Telegram and Slack chats**: on for everyone: reply in Chats to a chat started on Telegram or Slack; it goes through that app's own connection and shows there too.
 - **Models from your connectors**: removed: the model menu in Chats lists the models of every AI connection you connected.

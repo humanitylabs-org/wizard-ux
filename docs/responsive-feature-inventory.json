@@ -31,7 +31,7 @@
         "phone",
         "desktop"
       ],
-      "note": "Direct entrypoint import; the shell's write guard (wizard-ux issue 1439, switch wizard/write-guard)"
+      "note": "Direct entrypoint import; the shell's write guard (wizard-ux issue 1439, on for everyone)"
     },
     "core/agents.js": {
       "loadedBy": [
