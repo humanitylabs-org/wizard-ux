@@ -1,17 +1,17 @@
 'use strict';
-// Inbox keeps every thread until archived (wizard-ux issue 1810, switch wizard/inbox-until-archived) in a real browser.
+// Inbox keeps every thread until archived (wizard-ux issue 1810, on for everyone, no switch) in a real browser.
 // Disposable synthetic transport only. Phone 412x915 and Classic desktop 1440x960:
-//   switch on: Chats › Inbox has one list (Working, then Inbox, no Recent); an unread thread opened and left with Back
+//   Chats › Inbox has one list (Working, then Inbox, no Recent); an unread thread opened and left with Back
 //   stays in Inbox, now read; an old read thread is in Inbox too; the header count and the badge count are the Inbox
-//   count; Archive in the thread removes it from Inbox and it shows under Archived.
-//   QA_SWITCH=off: today's Ready / Recent split (opening a thread moves it to Recent).
+//   count; a running thread the agent started is in Working on top; Archive in the thread removes it from Inbox and
+//   it shows under Archived.
 const assert = require('node:assert/strict');
 const { chromium } = require('../tools/qa-playwright.cjs');
 const { ownerRead } = require('../tools/qa-desktop-frame-fixture.cjs');
 const fs = require('node:fs'), path = require('node:path');
 const repo = path.resolve(__dirname, '..'), origin = process.env.QA_ORIGIN || 'https://chats-inbox-1810.test', prefix = '/wizard-os-home/';
 const web = process.env.QA_WEB || path.join(repo, 'web'), out = process.env.QA_OUT || path.join(repo, 'chats-inbox-until-archived-evidence');
-const SHELLS = (process.env.QA_SHELLS || 'phone,classic').split(','), SKINS = (process.env.QA_SKINS || 'nebula').split(','), SW = process.env.QA_SWITCH !== 'off';
+const SHELLS = (process.env.QA_SHELLS || 'phone,classic').split(','), SKINS = (process.env.QA_SKINS || 'nebula').split(',');
 fs.mkdirSync(out, { recursive: true });
 const now = Date.now(), iso = t => new Date(t).toISOString(), nap = ms => new Promise(r => setTimeout(r, ms)), M = 60e3, H = 36e5;
 const D = 864e5;
@@ -19,9 +19,11 @@ let THREADS;
 const fresh = () => ({
   'qa-chat-1': { title: 'Weather tomorrow', at: now - 20 * M, msgs: [['user', 'Tell me the weather tomorrow', 0], ['assistant', 'Sunny, 18 °C, light wind.', 30]] },
   'qa-chat-2': { title: 'Dentist slot', at: now - 50 * M, msgs: [['user', 'Find a dentist slot this week', 0], ['assistant', 'Thursday 10:00 is free at the practice on Main Street.', 60]] },
+  // A run the agent started (no Sent row names it), still running and older than the finished threads: Working on top.
+  'qa-run': { title: 'Booking flights', status: 'running', at: now - 2 * H, msgs: [['user', 'Watch flight prices to Lisbon', 0], ['assistant', 'Checking the fares now.', 30]] },
   'qa-old': { title: 'Garden plan', at: now - 3 * D, msgs: [['user', 'Plan the garden beds', 0], ['assistant', 'Tomatoes by the wall, herbs near the door.', 60]] },
 });
-const raw = (sid, s) => ({ id: sid, title: s.title, runtime: 'direct', status: 'completed', updated_at: iso(s.at), updatedAt: iso(s.at), last_active: s.at / 1000, message_count: s.msgs.length, messageCount: s.msgs.length, preview: s.msgs.at(-1)?.[1] || '', ...(s.archived ? { archived: true } : {}) });
+const raw = (sid, s) => ({ id: sid, title: s.title, runtime: 'direct', status: s.status || 'completed', updated_at: iso(s.at), updatedAt: iso(s.at), last_active: s.at / 1000, message_count: s.msgs.length, messageCount: s.msgs.length, preview: s.msgs.at(-1)?.[1] || '', ...(s.archived ? { archived: true } : {}) });
 // qa-old was read three days ago: a seen record at its last reply.
 const SEEN = () => ({ state: { initializedAt: 1, threads: { 'qa-old': { updatedAt: iso(now - 3 * D), assistantActivityAt: iso(now - 3 * D + 60e3), seenAt: now - 3 * D + 120e3 } } } });
 const report = { origin, web, cases: [] };
@@ -35,7 +37,7 @@ const report = { origin, web, cases: [] };
       const context = await browser.newContext({ viewport: phone ? { width: 412, height: 915 } : { width: 1440, height: 960 }, isMobile: phone, hasTouch: phone, serviceWorkers: 'block', ...(phone ? { userAgent: 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Mobile Safari/537.36' } : {}) });
       try {
         await context.routeWebSocket('**/*', w => w.close());
-        const mix = { 'wizard/desktop-chats': true, ...(SW ? { 'wizard/inbox-until-archived': true } : {}) };
+        const mix = { 'wizard/desktop-chats': true };
         await context.addInitScript(({ shell, skin, mix }) => {
           if (window !== top) return;
           if (sessionStorage.getItem('qaBoot')) return; sessionStorage.setItem('qaBoot', '1');
@@ -110,10 +112,12 @@ const report = { origin, web, cases: [] };
         entry.afterRead = await lay();
         entry.readMark = await page.evaluate(() => { const r = [...document.querySelectorAll('.ch-list [data-chopen="qa-chat-1"]')].find(n => n.getClientRects().length); return r ? r.className + ' ' + (r.closest('.ch-row, [class*="row"]')?.className || '') : null; });
         await shot('2-after-read');
-        if (SW) {
+        {
           assert.equal(entry.afterRead.where['qa-chat-1'], 'ready', 'opened and read, it stays in Inbox: ' + JSON.stringify(entry.afterRead));
           assert.ok(!entry.afterRead.secs.some(s => s.k === 'recent'), 'no Recent section: ' + JSON.stringify(entry.afterRead.secs));
           assert.equal(entry.afterRead.where['qa-old'], 'ready', 'an old read thread is in Inbox too');
+          assert.equal(entry.afterRead.secs[0]?.k, 'working', 'Working is the first section: ' + JSON.stringify(entry.afterRead.secs));
+          assert.equal(entry.afterRead.where['qa-run'], 'working', 'the running thread is in Working, not mixed into Inbox');
           const inbox = entry.afterRead.secs.find(s => s.k === 'ready');
           assert.equal(inbox.h, 'Inbox', 'the section is called Inbox');
           assert.equal(inbox.n, String(inbox.rows.length), 'the header count is the Inbox count');
@@ -131,9 +135,6 @@ const report = { origin, web, cases: [] };
           assert.ok(entry.writes.some(x => x.method === 'PATCH' && x.path.endsWith('/qa-chat-1')), 'archive went to the box');
           assert.notEqual(entry.afterArchive.where['qa-chat-1'], 'ready', 'archived: gone from Inbox ' + JSON.stringify(entry.afterArchive));
           assert.equal(entry.afterArchive.where['qa-chat-1'], 'archived', 'archived: in Archived ' + JSON.stringify(entry.afterArchive));
-        } else {
-          assert.equal(entry.afterRead.where['qa-chat-1'], 'recent', 'switch off: read moves to Recent as today ' + JSON.stringify(entry.afterRead));
-          assert.ok(entry.afterRead.secs.find(s => s.k === 'ready')?.h !== 'Inbox', 'switch off: the section keeps its name');
         }
         assert.equal(entry.errors.length, 0, 'browser errors: ' + entry.errors.join('; '));
         entry.pass = true;
@@ -142,6 +143,6 @@ const report = { origin, web, cases: [] };
     }
   } finally { await browser.close(); }
   const failed = report.cases.filter(c => !c.pass);
-  console.log(JSON.stringify({ switch: SW ? 'on' : 'off', cases: report.cases.length, passed: report.cases.length - failed.length, failed: failed.map(c => c.stem + ': ' + String(c.failure).split('\n')[0]), screenshots: fs.readdirSync(out).filter(f => f.endsWith('.png')).length }));
+  console.log(JSON.stringify({ cases: report.cases.length, passed: report.cases.length - failed.length, failed: failed.map(c => c.stem + ': ' + String(c.failure).split('\n')[0]), screenshots: fs.readdirSync(out).filter(f => f.endsWith('.png')).length }));
   if (failed.length || !report.cases.length) process.exitCode = 1;
 })().catch(e => { console.error(e); process.exitCode = 1; });

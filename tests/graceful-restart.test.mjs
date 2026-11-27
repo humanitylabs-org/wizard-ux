@@ -427,16 +427,20 @@ test('AI apps sidebar lists: held rows move to `saved` (kind saved, no spinner m
   const l = M.sessionList(groups, facts(['held']));
   assert.deepEqual(l.working.map(r => r.id), ['live']);
   assert.deepEqual(l.saved.map(r => [r.id, r.kind]), [['held', 'saved']]);
-  const a = M.activityList(groups, facts(['held']));
-  assert.deepEqual(a.working.map(r => [r.id, r.mark]), [['live', 'working']]);
-  assert.deepEqual(a.saved.map(r => [r.id, r.kind, r.mark]), [['held', 'saved', '']]);
+  // Activity (Inbox until archived, issue 1810): what the restart holds (the shell's place.held) moves to `saved`; a
+  // running thread the Sent log does not name is in Working on top of Inbox, with its spinner.
+  const hold = held => ({ ...facts(held), chats: { ...facts(held).chats, inboxPlace: () => ({ held: s => held.includes(s.id) }) } });
+  const a = M.activityList(groups, hold(['held']));
+  assert.deepEqual([...a.working].map(r => [r.id, r.mark]), [['live', 'working']]);
+  assert.deepEqual([...a.ready].map(r => r.id), []);
+  assert.deepEqual([...a.saved].map(r => [r.id, r.kind, r.mark]), [['held', 'saved', '']]);
   assert.equal('saved' in M.sessionList(groups, facts([])), false);
-  assert.equal('saved' in M.activityList(groups, facts([])), false);
+  assert.equal('saved' in M.activityList(groups, hold([])), false);
   const desk = read('layouts/ai-apps/desktop.js');
   assert.match(desk, /function savedSec\(rows, cur\)/);
   assert.equal((desk.match(/out\.push\(\.\.\.savedSec\(s\.saved, h\.thread\)\)/g) || []).length, 2, 'Activity and the stock sidebar both draw it');
   // Its search and titles find a held chat too (Codex P2): the sidebar's search lists include `saved`.
-  assert.match(desk, /const LKINDS = \[\.\.\.KINDS, 'recent', 'saved'\];/);
+  assert.match(desk, /const LKINDS = \[\.\.\.KINDS, 'saved'\];/);
   // The Working filter (Chats' status filter) leaves held sends out, as the Working heading does (Codex P2).
   assert.match(chats, /working: \{ label: 'Working',[^\n]*\.working \|\| \[\]\)\.filter\(x => !globalThis\.WizReach\?\.restartHeld\?\.\(x\)\)/);
 });

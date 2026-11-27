@@ -1,7 +1,7 @@
 'use strict';
-// Sent as threads (wizard-ux issue 1880, switch wizard/sent-threads, off by default) in a real browser. Disposable
+// Sent as threads (wizard-ux issue 1880, on for everyone; switch wizard/sent-threads removed) in a real browser. Disposable
 // synthetic transport only. Phone 412x915, Classic desktop and the AI apps desktop's Chats sidebar (1440x960), in Nebula
-// and Light (obsidian-light), with James's pilot switches (wizard/sent-rows; QA_ROWS=off drops it; Inbox rows are on for everyone).
+// and Light (obsidian-light). Inbox and Sent rows are on for everyone; QA_ROWS=off adds nothing (Inbox until archived is on for everyone too).
 // Threads and what the box says about each:
 //   qa-trip   three sends from him, the agent answered each quietly            → Sent, ONE row titled "Lyon trip"
 //   qa-quiet  "Sent to Miguel, done", answered quietly                         → Sent; then it needs him → Inbox; then quiet again → Sent
@@ -13,8 +13,8 @@
 // title is its thread's title (never his words); the same thread shows the same title (and sender, avatar) in Inbox and
 // in Sent as it moves, with no reload; no "in Inbox" text in Sent; Working then Processed; the row's actions sheet (hold
 // on the phone, right-click on desktop) lists the thread's three sends; a tap opens the thread.
-// QA_SWITCH=off: the Sent list's HTML is written to sent-<stem>.html, so a run with QA_WEB=<main checkout>/web can be
-// compared byte for byte (nothing changes with the switch off).
+// QA_SWITCH=off: only the Sent list's HTML is written to sent-<stem>.html (no checks), for a contrast run against an
+// older checkout (QA_WEB=<that checkout>/web).
 const assert = require('node:assert/strict');
 const { chromium } = require('../tools/qa-playwright.cjs');
 const { ownerRead } = require('../tools/qa-desktop-frame-fixture.cjs');
@@ -65,7 +65,7 @@ const report = { origin, web, on: ON, rows: ROWS, cases: [] };
       const context = await browser.newContext({ viewport: phone ? { width: 412, height: 915 } : { width: 1440, height: 960 }, isMobile: phone, hasTouch: phone, serviceWorkers: 'block', ...(phone ? { userAgent: 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Mobile Safari/537.36' } : {}) });
       try {
         await context.routeWebSocket('**/*', w => w.close());
-        const mix = { 'wizard/desktop-chats': true, ...(ROWS ? { 'wizard/sent-rows': true } : { 'wizard/inbox-until-archived': true }), ...(ON ? { 'wizard/sent-threads': true } : {}) };
+        const mix = { 'wizard/desktop-chats': true };
         await context.addInitScript(({ shell, skin, mix }) => {
           if (window !== top) return;
           if (sessionStorage.getItem('qaBoot')) return; sessionStorage.setItem('qaBoot', '1');
@@ -114,7 +114,6 @@ const report = { origin, web, on: ON, rows: ROWS, cases: [] };
         await page.goto(origin + prefix + (phone ? 'index.html?phone' : 'desktop.html'));
         await page.waitForFunction(() => (window.__wux || window.__wos) && !window.WosWelcome?.active && window.WosExperience?.state.tweaks.length && !window.WosExperience.state.busy);
         await page.addStyleTag({ content: '#wosWelcome{display:none!important}' });
-        if (ON) await page.waitForFunction(() => (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/sent-threads'), null, { timeout: 15000 });
         if (aad) await page.waitForFunction(() => document.documentElement.dataset.layout === 'ai-apps', null, { timeout: 15000 });
         else if (phone) await page.evaluate(() => __wos.openSheet('inbox')); else await page.evaluate(() => __wux.openChatsList());
         const L = aad ? '.aad-side .aad-chan' : '.ch-list';

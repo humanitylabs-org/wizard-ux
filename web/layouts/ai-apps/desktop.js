@@ -132,7 +132,6 @@ export default function desktop(api) {
   /* Values this view changes over time (wizard-ux issue 1665): the parts in layouts/ai-apps/desktop-*.js read and
    * write them as aadVars.<name>, accessors on these same variables, so every read and write is live. */
   const aadVars = {
-    get actOlder() { return actOlder; }, set actOlder(v) { actOlder = v; },
     get badgeMap() { return badgeMap; }, set badgeMap(v) { badgeMap = v; },
     get chatsFresh() { return chatsFresh; }, set chatsFresh(v) { chatsFresh = v; },
     get chatThread() { return chatThread; }, set chatThread(v) { chatThread = v; },
@@ -211,14 +210,12 @@ export default function desktop(api) {
   const barOn = () => { try { return String(root.dataset.tweaks || '').split(' ').includes('wizard/desktop-bottom-bar'); } catch (_) { return false; } };
   const one = () => barOn() || (globalThis.innerWidth || 1440) < ONE.from;
   /* Activity as a short what-needs-me list (wizard-ux issue 1336, part of Channels, on for everyone since issue 1258): no agent
-   * chips (every agent's chats; agents live in the Channels list), Working, Ready (amber needs you and green unread
-   * only), Recent (the rest, newest first, a week back, then Show older), Snoozed and Archived folded at the bottom,
-   * one sort on Ready (Newest first, Oldest first, Needs you first), and one marker per row: spinner, amber or green. */
+   * chips (every agent's chats; agents live in the Channels list), Working, Inbox (every thread until it is archived,
+   * wizard-ux issue 1810), Snoozed and Archived folded at the bottom, one sort on Inbox (Newest first, Oldest first, Needs you first), and one marker per row: spinner, amber or green. */
   const actOn = () => true; // tests that slice this file without it get the older list
-  const ACT_SECTIONS = [['working', 'Working'], ['ready', 'Ready'], ['recent', 'Recent'], ['snoozed', 'Snoozed'], ['archive', 'Archived']];
+  const ACT_SECTIONS = [['working', 'Working'], ['ready', 'Inbox'], ['snoozed', 'Snoozed'], ['archive', 'Archived']];
   // (+ 'saved': sends a graceful restart holds, wizard-ux issue 1362; listed only while there are any)
-  const LKINDS = [...KINDS, 'recent', 'saved'];
-  let actOlder = false;
+  const LKINDS = [...KINDS, 'saved'];
   /* The app panel on the left and placing the panes; layouts/ai-apps/desktop-panes.js. */
   const { desks, el, flipSides, icon, oneSplit, paneModel, placePanes, swapped, bindLate: panesLate } = panesPart({ aadVars, api, COLS, doc, flip, one, ONE, panes, paneVars, RAIL, root });
   let draftWant = false;   // round 21: the new chat in front holds an app's Reply: it docks as a chat (left), the app stays right
