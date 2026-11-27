@@ -34,6 +34,8 @@ import java.util.concurrent.atomic.AtomicInteger;
  *    that read and is answered from it.
  *  - Never kept: APIs, the window's own page, no-store / private / cookie-setting / varying answers, ranges, big files.
  *    A read that fails, or a redirect, passes through (null), so offline and error screens stay as they are.
+ *  - An app page that answered with a redirect (Recorder: its address answers with live/) is remembered for a day and handed straight
+ *    to the WebView on the next opens, with no read from the phone first (wizard-ux issue 1959).
  */
 final class PinCache {
     interface Net { Reply get(String url, Map<String, String> headers) throws IOException; }
@@ -77,7 +79,7 @@ final class PinCache {
         Thread t = new Thread(r, "pin-cache-page"); t.setDaemon(true); return t;
     });
     private final AtomicInteger stores = new AtomicInteger();
-    final AtomicInteger hits = new AtomicInteger(), reads = new AtomicInteger(), keptPages = new AtomicInteger();
+    final AtomicInteger hits = new AtomicInteger(), reads = new AtomicInteger(), keptPages = new AtomicInteger(), passed = new AtomicInteger();
 
     PinCache(File dir, Net net, String origin) { this.dir = dir; this.net = net; this.origin = origin; }
 
@@ -102,6 +104,9 @@ final class PinCache {
     }
 
     private Reply page(String url, String app, Map<String, String> requestHeaders) {
+        // An address that answered with a redirect last time (Recorder: its address answers with live/) goes straight to the WebView:
+        // the phone can't hand it a redirect, so reading it here first only added a box read to every open (issue 1959).
+        if (redirects(url)) { pages.remove(app); passed.incrementAndGet(); return null; }
         Entry old = read(url);
         Map<String, String> h = PinInstantPolicy.forward(requestHeaders);
         if (old != null) {
@@ -132,7 +137,27 @@ final class PinCache {
             return r;
         }
         pages.remove(app);
+        if (r.status >= 300 && r.status <= 399) redirected(url);
         return PinInstantPolicy.replayable(r.status) ? r : null;
+    }
+
+    /* ---- addresses that redirect (issue 1959): a small marker file per URL, fresh for REDIRECT_KEEP_MS ---- */
+
+    private File redirectOf(String url) { return new File(dir, sha1(url.getBytes(StandardCharsets.UTF_8)) + ".r"); }
+
+    private boolean redirects(String url) {
+        File f = redirectOf(url);
+        long at = f.lastModified(), now = System.currentTimeMillis();
+        return f.isFile() && at > 0 && now >= at && now - at <= PinInstantPolicy.REDIRECT_KEEP_MS;
+    }
+
+    private void redirected(String url) {
+        try {
+            if (!dir.isDirectory() && !dir.mkdirs()) return;
+            File f = redirectOf(url);
+            if (!f.isFile()) new FileOutputStream(f).close();
+            f.setLastModified(System.currentTimeMillis());
+        } catch (IOException | RuntimeException failed) { /* read again next time */ }
     }
 
     /** The box's late answer about a page already shown from the phone: a changed page is kept for the next open. */
