@@ -369,8 +369,38 @@
     }
     return before !== [...PEND].map(([k, p]) => k + p.key + p.state).join();
   }
+  /* A reply into a hidden thread lists it at once (wizard-ux issue 1990; James, 27 Nov 2026: "When I reply to a thread
+   * in my inbox and it jumps back to my inbox screen, that card should immediately disappear from inbox"). A background
+   * task that waits on him is an Inbox row for its record while its worker thread is hidden; his own turn there makes the
+   * box show the thread again (the Agent Service's owner turn), but only the next list read says so, about 3 s later, so
+   * the task's row stayed in Inbox meanwhile. Like Open on the tap frame (inboxMove), the thread he replied in is listed
+   * as soon as the send is held, under Working like any reply, so its task row leaves Inbox on the same frame. Main
+   * agent (and the box's private default agent) only, as the box unhides only those; a send that ends without the box
+   * listing it (refused, withdrawn) hides it again, and its task row comes back. */
+  function showReplied(list, agent) {
+    const priv = (typeof L.agentInbox?.privateDefault === 'function' && L.agentInbox.privateDefault()) || '';
+    if (agent && agent !== priv) return;
+    for (const [sid, p] of PEND) {
+      if (p.kind !== 'reply') continue;
+      const i = list.findIndex(s => s.id === sid), s = i >= 0 ? list[i] : DETAIL.get(sid);
+      // (a stale read that leaves it out again: the row this hold already showed goes back in)
+      if (!s || !(s.hidden || (i < 0 && s.sendShown)) || (i < 0 && (L.ownerOf(s) || '') !== agent)) continue;
+      s.hidden = false; s.sendShown = true;
+      if (i < 0) list.unshift(s);
+      applyPend(s);
+    }
+  }
+  // A send that held a hidden thread in the list is over: it is hidden again (a list read the box unhid it in has a fresh row).
+  function unShown(list) {
+    for (let i = list.length - 1; i >= 0; i--) {
+      const s = list[i]; if (!s?.sendShown || PEND.has(s.id)) continue;
+      s.hidden = true; delete s.sendShown;
+      if (DETAIL.get(s.id) === s) list.splice(i, 1);
+    }
+  }
   // A new chat is listed before Wizard has created it, so it lands in Working the moment it is sent.
   function addSynthetic(list, agent = '') {
+    unShown(list); showReplied(list, agent);
     for (const [sid, p] of PEND) {
       if (p.kind !== 'new' || (p.agent || '') !== agent || list.some(s => s.id === sid)) continue;
       const at = new Date(p.at).toISOString();
