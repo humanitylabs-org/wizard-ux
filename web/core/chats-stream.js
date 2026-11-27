@@ -54,6 +54,15 @@ window.WizCore.chatsParts.stream = function ({ agentName, agentRec, ago, elOf, e
   // words (its interim notes). A new run that merely ends like an old short answer ("Yes.") never matches.
   // Pictures are compared as absent on both sides: the stream has MEDIA lines, the transcript has thumbnails.
   const bare = v => streamAnswer(v).replace(SHOWN_MEDIA, '').replace(/\s+/g, '');
+  // Tap-to-answer buttons (issue 1889): the transcript's plain text keeps each group's labels (`[Done] [Later]`, chat-kit
+  // buttonsFallback) where the stream drops the whole group, so the same reply never matched and a late replay of it
+  // stayed drawn below it as a second copy (wizard-ux issue 1961). Compare the turn's words without those labels: only
+  // a line that is exactly a group's fallback goes (buttonsFallback puts it on its own), never the same words in prose.
+  const unlabel = (t, v) => {
+    const s = String(v || ''), drop = new Set((t?.a?.buttons || []).map(g => (g.buttons || []).map(b => `[${b.label}]`).join(' ')).filter(Boolean));
+    return drop.size ? s.split('\n').filter(l => !drop.has(l.trim())).join('\n') : s;
+  };
+  const shownBare = (t, v) => bare(unlabel(t, v));
   const streamEnded = st => {
     if (st.terminal) return true;
     // The complete done trailer is the older service's final-answer receipt,
@@ -68,8 +77,8 @@ window.WizCore.chatsParts.stream = function ({ agentName, agentRec, ago, elOf, e
     // keep the bound local to that turn so a new answer merely ending like an old "Yes." cannot disappear.
     return turns.some(t => {
       if (!t.a || t.a.final === false) return false;
-      const ans = bare(t.a.text);
-      return !!ans && got.endsWith(ans) && got.length <= [...(t.notes || []), t.a.text].map(bare).join('').length;
+      const ans = shownBare(t, t.a.text);
+      return !!ans && got.endsWith(ans) && got.length <= [...(t.notes || []), t.a.text].map(v => shownBare(t, v)).join('').length;
     });
   };
   // Mid-run the transcript already shows the run's interim words (a message the agent wrote before a tool call, and
@@ -78,7 +87,7 @@ window.WizCore.chatsParts.stream = function ({ agentName, agentRec, ago, elOf, e
   const streamUnshown = (text, turns) => {
     const t = (turns || []).at(-1);
     if (!t || (t.a && t.a.final !== false)) return text;
-    const shown = [...(t.notes || []), t.a?.text || ''].map(bare).join('');
+    const shown = [...(t.notes || []), t.a?.text || ''].map(v => shownBare(t, v)).join('');
     if (!shown) return text;
     let i = 0, j = 0;
     for (; i < text.length && j < shown.length; i++) { if (/\s/.test(text[i])) continue; if (text[i] !== shown[j]) return text; j++; }

@@ -9,6 +9,7 @@ import { JSDOM } from 'jsdom';
 const A = 'It is a 48 KB file of login keys and settings from Buzz. Keep it private.';
 const B = 'Noted: the Buzz keys file stays where it is.';
 const SID = 'fixture_old_reply';
+const FILES = [...readFileSync(new URL('../web/desktop.html', import.meta.url), 'utf8').matchAll(/src="((?:core\/(?:core|chat-kit|chats[-\w]*)|live[-\w]*)\.js)"/g)].map(m => m[1]).filter(f => f !== 'core/chats-view.js');
 const source = path => readFileSync(new URL('../web/' + path, import.meta.url), 'utf8');
 const row = (role, content, n) => ({ role, content, timestamp: 1793500000 + n });
 const rows = [row('user', 'What is that file?', 0), row('assistant', A, 1), row('user', 'Keep', 2), row('assistant', B, 3)];
@@ -41,7 +42,7 @@ function harness({ status = 'running', pending = false, transcript = rows } = {}
   };
   win.WizConfig = { agent: () => 'Fixture Wizard', timeZone: () => 'Asia/Tokyo', dayStart: now => Math.floor(now / 86400000) * 86400000 };
   win.WizBrand = { html: '' };
-  for (const file of ['core/core.js', 'core/chat-kit.js', 'core/chats-list-model.js', 'live-channels.js', 'live-seen.js', 'live-streams.js', 'live-work.js', 'live.js', 'core/chats-agentrows.js', 'core/chats-approvals.js', 'core/chats-attach.js', 'core/chats-bind.js', 'core/chats-chanbox.js', 'core/chats-chanemoji.js', 'core/chats-chanline.js', 'core/chats-channels.js', 'core/chats-chanread.js', 'core/chats-chanui.js', 'core/chats-daily.js', 'core/chats-done.js', 'core/chats-drafts.js', 'core/chats-events.js', 'core/chats-feed.js', 'core/chats-fitlabel.js', 'core/chats-focus.js', 'core/chats-hosted.js', 'core/chats-notes.js', 'core/chats-outbox.js', 'core/chats-places.js', 'core/chats-posts.js', 'core/chats-pull.js', 'core/chats-ready.js', 'core/chats-readylist.js', 'core/chats-rowacts.js', 'core/chats-rows.js', 'core/chats-running.js', 'core/chats-select.js', 'core/chats-send.js', 'core/chats-setup.js', 'core/chats-sheets.js', 'core/chats-shims.js', 'core/chats-spaces.js', 'core/chats-status.js', 'core/chats-stream.js', 'core/chats-swipe.js', 'core/chats-threadacts.js', 'core/chats-tracker.js', 'core/chats-undo.js', 'core/chats-listpaint.js', 'core/chats-threadpaint.js', 'core/chats.js']) win.eval(source(file));
+  for (const file of FILES.length ? FILES : ['core/core.js', 'core/chat-kit.js', 'core/chats-list-model.js', 'live-channels.js', 'live-seen.js', 'live-streams.js', 'live-work.js', 'live.js', 'core/chats-agentrows.js', 'core/chats-approvals.js', 'core/chats-attach.js', 'core/chats-bind.js', 'core/chats-chanbox.js', 'core/chats-chanemoji.js', 'core/chats-chanline.js', 'core/chats-channels.js', 'core/chats-chanread.js', 'core/chats-chanui.js', 'core/chats-daily.js', 'core/chats-done.js', 'core/chats-drafts.js', 'core/chats-events.js', 'core/chats-feed.js', 'core/chats-fitlabel.js', 'core/chats-focus.js', 'core/chats-hosted.js', 'core/chats-notes.js', 'core/chats-outbox.js', 'core/chats-places.js', 'core/chats-posts.js', 'core/chats-pull.js', 'core/chats-ready.js', 'core/chats-readylist.js', 'core/chats-rowacts.js', 'core/chats-rows.js', 'core/chats-running.js', 'core/chats-select.js', 'core/chats-send.js', 'core/chats-setup.js', 'core/chats-sheets.js', 'core/chats-shims.js', 'core/chats-spaces.js', 'core/chats-status.js', 'core/chats-stream.js', 'core/chats-swipe.js', 'core/chats-threadacts.js', 'core/chats-tracker.js', 'core/chats-undo.js', 'core/chats-listpaint.js', 'core/chats-threadpaint.js', 'core/chats.js']) win.eval(source(file));
   const live = win.WizLive;
   live.sessions = [{ id: SID, runtime: 'direct', title: 'Old replay fixture', status, runId: pending ? 'run-B' : 'run-A', updatedAt: new Date().toISOString() }];
   const items = pending ? [{ id: 'old-send', kind: 'reply', state: 'sent', runId: 'run-A', sessionId: SID, text: 'What is that file?', files: [], sentAt: Date.now() - 30000, createdAt: Date.now() - 35000 }] : [];
@@ -115,5 +116,21 @@ test('a longer new answer ending like an old short answer is not retired', async
     await new Promise(resolve => setImmediate(resolve));
     assert.equal(h.c.stream, null);
     assert.equal(h.c.turns.at(-1).a.text, B);
+  } finally { h.close(); }
+});
+
+// wizard-ux issue 1961: a reply carrying tap-to-answer buttons (and its status line) replayed by a late subscriber
+// showed twice: the transcript keeps the buttons' labels as its plain text, the stream drops the whole group.
+const RB = 'Yes. The badge is cut off because it is placed against our guess.\n\nThese are the minor fixes I would make:\n\n1. Smaller\n2. Inset\n3. Ring\n\n[WIZARD_BUTTONS_V1]{"group":"Badge styling tweaks","buttons":[{"id":"all","label":"File all three"},{"id":"two","label":"Only 1 and 2"},{"id":"leave","label":"Leave it"}]}[/WIZARD_BUTTONS_V1]\n\n[WIZARD_STATUS_V1]{"state":"done","ask":"Pick one"}[/WIZARD_STATUS_V1]';
+test('issue 1961: a replayed reply with tap-to-answer buttons is drawn once', async () => {
+  const transcript = [...rows, row('user', 'Fix the badge?', 4), row('assistant', RB, 5)];
+  const h = harness({ transcript });
+  try {
+    h.paint(); h.flush();
+    assert.equal(h.answers().length, 3);
+    h.emit(RB);
+    assert.equal(h.el.querySelector('[data-streaming]'), null, 'the replay of the shown reply is not drawn a second time');
+    assert.equal(h.c.stream.landed, true);
+    assert.equal(h.answers().filter(x => x.includes('The badge is cut off')).length, 1);
   } finally { h.close(); }
 });

@@ -46,7 +46,7 @@ import { engages, commits, COMMIT_PX } from './swipe-intent.js';
       const node = el && el.querySelector ? el.querySelector(`:scope > [data-part="${part}"]`) : null;
       if (!node || (node.classList && node.classList.contains('ch-side'))) return null; // the desktop sidebar list is not a view
       if (part === 'thread') return 'thread';
-      return node.querySelector('.ch-chan-h [data-chchanback]') ? 'feed' : node.querySelector('.ch-chan-tabs') ? 'home' : 'list';
+      return node.querySelector('.ch-chan-h [data-chchanback]') || node.querySelector('[data-chfeedtitle]') ? 'feed' : node.querySelector('.ch-chan-tabs') ? 'home' : 'list';
     };
     const DEPTH = { home: 0, list: 0, feed: 1, thread: 2 };
     // A linked thread (opened from another thread) is one layer deeper too: each window keeps the trail of threads it
@@ -82,7 +82,7 @@ import { engages, commits, COMMIT_PX } from './swipe-intent.js';
     // Always the list the finger is on: a shell can hold several Chats windows (main and routed agents, other desks).
     const listState = t => {
       const list = t && t.closest ? t.closest('.ch-list') : null; if (!list) return null;
-      if (list.querySelector('.ch-chan-h [data-chchanback]')) return { mode: 'feed', list, th: list, dir: 1 };
+      if (list.querySelector('.ch-chan-h [data-chchanback]') || list.querySelector('[data-chfeedtitle]')) return { mode: 'feed', list, th: list, dir: 1 };
       const tabs = list.querySelector('.ch-chan-tabs .ch-rdy-bar'), on = tabs && tabs.querySelector('[data-chview][aria-pressed="true"]');
       if (!on) return null;
       const page = on.dataset.chview, left = page === 'channels';
