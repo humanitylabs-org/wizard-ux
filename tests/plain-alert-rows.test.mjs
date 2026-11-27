@@ -11,7 +11,7 @@ import { readFileSync } from 'node:fs';
 import { modelContext } from './fixtures/chats-list-model.mjs';
 
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
-const SW = 'wizard/plain-alert-rows', ROWS_SW = 'wizard/inbox-rows', NOW = Date.now();
+const SW = 'wizard/plain-alert-rows', NOW = Date.now();
 const M = modelContext({}).WizChatsListModel;
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 const clip = (s, n) => String(s).slice(0, n);
@@ -59,7 +59,7 @@ const body = (api, awake, later = []) => api.inboxRowsBody({ id: 'w' }, [{ id: '
 const wrapOf = (html, id) => (new RegExp(`<div class="([^"]*)" data-morph-key="[^"]*"><button[^>]*data-chnotif="${id}"[\\s\\S]*?</button>(?:<button[^>]*class="ch-ib-arch"[^>]*>[\\s\\S]*?</button>)?</div>`).exec(html) || [])[0] || '';
 
 test('Inbox rows, switch on: an alert is the thread row (avatar, bell + source, title, preview, time, dot, Archive)', () => {
-  const { api } = inbox(`wizard/desktop-chats ${ROWS_SW} ${SW}`);
+  const { api } = inbox(`wizard/desktop-chats ${SW}`);
   const html = body(api, [ALERT, GROUP, APP], [SNOOZED]);
   const a = wrapOf(html, 'n1');
   assert.match(a, /^<div class="ch-row-wrap ch-ib-wrap ch-al-wrap"/, 'the thread row wrap, not the amber card');
@@ -84,7 +84,7 @@ test('Inbox rows, switch on: an alert is the thread row (avatar, bell + source, 
 });
 
 test('Inbox rows, switch on: the row\'s Archive archives the alert, or all of a folded row', () => {
-  const { api, acts } = inbox(`${ROWS_SW} ${SW}`);
+  const { api, acts } = inbox(SW);
   const tap = v => ({ target: { closest: sel => sel === '[data-chibnote]' ? { dataset: { chibnote: v } } : null } });
   assert.equal(api.inboxRowsClick(tap('n1'), { id: 'w' }), true);
   assert.equal(api.inboxRowsClick(tap('fa fb'), { id: 'w' }), true);
@@ -92,7 +92,7 @@ test('Inbox rows, switch on: the row\'s Archive archives the alert, or all of a 
 });
 
 test('Inbox rows, switch off: the alert is today\'s row, byte for byte', () => {
-  const { api, n } = inbox(`wizard/desktop-chats ${ROWS_SW}`);
+  const { api, n } = inbox('wizard/desktop-chats');
   const html = body(api, [ALERT, GROUP], [SNOOZED]);
   for (const it of [ALERT, GROUP, SNOOZED]) assert.ok(html.includes(n.noteRow(it)), 'today\'s noteRow for ' + it.id);
   assert.match(n.noteRow(ALERT), /^<div class="ch-row-wrap ch-notif-wrap"/);

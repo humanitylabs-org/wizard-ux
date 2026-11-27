@@ -105,7 +105,7 @@ const report = { origin, web, on: ON, rows: ROWS, cases: [] };
       const context = await browser.newContext({ viewport: phone ? { width: 412, height: 915 } : { width: 1440, height: 960 }, isMobile: phone, hasTouch: phone, serviceWorkers: 'block', ...(phone ? { userAgent: 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Mobile Safari/537.36' } : {}) });
       try {
         await context.routeWebSocket('**/*', w => w.close());
-        const mix = { 'wizard/desktop-chats': true, ...(ROWS ? { 'wizard/inbox-rows': true, 'wizard/sent-rows': true, 'wizard/sent-threads': true } : { 'wizard/inbox-until-archived': true }), ...(ON ? { 'wizard/smart-inbox': true } : {}) };
+        const mix = { 'wizard/desktop-chats': true, ...(ROWS ? { 'wizard/sent-rows': true, 'wizard/sent-threads': true } : { 'wizard/inbox-until-archived': true }), ...(ON ? { 'wizard/smart-inbox': true } : {}) };
         await context.addInitScript(({ shell, skin, mix }) => {
           if (window !== top) return;
           if (sessionStorage.getItem('qaBoot')) return; sessionStorage.setItem('qaBoot', '1');
