@@ -1,11 +1,11 @@
 'use strict';
-// App feature switches in a reply's switch card (wizard-ux issue 1560, switch wizard/chat-app-switches), in a real
+// App feature switches in a reply's switch card (wizard-ux issue 1560, on for everyone), in a real
 // browser. Disposable synthetic transport: a fake App Manager catalog (store-install/_feature-switches) whose app row
 // stands for Calendar's own /api/switches state, every other write refused. Phone 390x844 + desktop 1440x960, Nebula +
 // Grove. One reply carries [WIZARD_TWEAK_V1]{"ids":[core, app, app-not-updated, app-not-installed]}: the app row shows
 // its name, description and current state; a tap flips it on its own frame and POSTs the owner route once; the fake
 // app state (what the Tracker card reads) follows; the not-updated app is greyed "Update Notes first" + Update; the
-// not-installed one is hidden. QA_ONLY_OFF=1 runs the switch-off case: no app rows, no catalog read.
+// not-installed one is hidden. No tweak is turned on: app rows draw for everyone.
 const assert = require('node:assert/strict');
 const { chromium } = require('../tools/qa-playwright.cjs');
 const { ownerRead } = require('../tools/qa-desktop-frame-fixture.cjs');
@@ -13,15 +13,14 @@ const fs = require('node:fs'), path = require('node:path');
 const repo = path.resolve(__dirname, '..'), origin = process.env.QA_ORIGIN || 'https://chat-app-switch-card.test', prefix = '/wizard-os-home/';
 const web = process.env.QA_WEB || path.join(repo, 'web'), out = process.env.QA_OUT || path.join(repo, 'chat-app-switch-card-evidence');
 fs.mkdirSync(out, { recursive: true });
-const SWITCH = 'wizard/chat-app-switches', CAL = 'wizard-calendar:drag-events', NOTES = 'wizard-notes:quick-links', GONE = 'wizard-gone:thing';
+const CAL = 'wizard-calendar:drag-events', NOTES = 'wizard-notes:quick-links', GONE = 'wizard-gone:thing';
 const MARK = o => `[WIZARD_TWEAK_V1]${JSON.stringify(o)}[/WIZARD_TWEAK_V1]`, now = Date.now();
-const offOnly = process.env.QA_ONLY_OFF === '1';
-const report = { origin, web, offOnly, cases: [] };
+const report = { origin, web, cases: [] };
 (async () => {
   const browser = await chromium.launch();
   try {
     for (const shell of ['phone', 'desktop']) for (const skin of ['nebula', 'grove']) {
-      const phone = shell === 'phone', stem = `${shell}-${skin}${offOnly ? '-switch-off' : ''}`;
+      const phone = shell === 'phone', stem = `${shell}-${skin}`;
       const entry = { stem, errors: [], refused: [], posts: [], reads: 0 }; report.cases.push(entry);
       const calendar = { on: false };   // the app's own switch state (Calendar's DATA/switches.json)
       const listing = () => ({ channel: 'latest', channel_name: 'For testers', locked: false, note: '',
@@ -37,7 +36,7 @@ const report = { origin, web, offOnly, cases: [] };
           if (window !== top) return;
           for (const [k, v] of Object.entries({ 'wos.shell': shell, 'wos.desktop-view.v1': 'classic', 'wos.coached': 'true', 'wos.tour.v1': 'true', 'wos.welcome.v1': 'done', 'wos.skin': skin })) localStorage.setItem(k, v);
           localStorage.setItem('wos.skin-tweaks.v1', JSON.stringify({ version: 1, preset: 'none', off: {}, mix }));
-        }, { shell, skin, mix: offOnly ? {} : { [SWITCH]: true } });
+        }, { shell, skin, mix: {} });
         await context.route('**/*', async r => {
           const q = r.request(), u = new URL(q.url()), method = q.method(), p = u.pathname;
           if (u.origin !== origin) { entry.refused.push({ method, url: q.url(), reason: 'external' }); return r.abort(); }
@@ -72,8 +71,6 @@ const report = { origin, web, offOnly, cases: [] };
         await page.goto(origin + prefix + (phone ? 'index.html?phone' : 'desktop.html'));
         await page.waitForFunction(() => (window.__wux || window.__wos) && !window.WosWelcome?.active && window.WosExperience?.state.tweaks.length && !window.WosExperience.state.busy);
         assert.equal(await page.evaluate(() => document.documentElement.dataset.skin), skin);
-        entry.switchOn = await page.evaluate(id => String(document.documentElement.dataset.tweaks || '').split(' ').includes(id), SWITCH);
-        assert.equal(entry.switchOn, !offOnly, 'switch state as seeded');
         await page.evaluate(phone => phone ? __wos.openSheet('inbox') : __wux.openChatsList(), phone);
         const listRow = page.locator('.ch-list [data-chopen="qa-app-switch"]').filter({ visible: true }).first();
         await listRow.waitFor(); await listRow.click();
@@ -82,14 +79,7 @@ const report = { origin, web, offOnly, cases: [] };
         const thread = page.locator('.ch-thread').filter({ visible: true }).first();
         const text = await thread.innerText(); entry.threadText = text.slice(0, 600);
         assert.doesNotMatch(text, /WIZARD_TWEAK|drag-events|quick-links|wizard-gone/, 'marker and ids never show as text');
-        if (offOnly) {
-          await page.waitForTimeout(800);
-          assert.equal(await page.locator(`[data-chat-tweak="${CAL}"]`).count(), 0, 'off: no app row');
-          assert.equal(await page.locator('[data-chat-tweak-update]').count(), 0, 'off: no Update');
-          assert.equal(entry.reads, 0, 'off: the App Manager catalog is never read');
-          assert.equal(await card.getAttribute('data-chat-tweak-card'), 'wizard/sidebar-chats-view');
-          await page.screenshot({ path: path.join(out, stem + '.png') });
-        } else {
+        {
           const sw = page.locator(`.ch-thread [data-chat-tweak="${CAL}"]`).filter({ visible: true }).first();
           await sw.waitFor();
           entry.row = await sw.evaluate(b => ({ cls: b.className, role: b.getAttribute('role'), checked: b.getAttribute('aria-checked'), name: b.querySelector('.st-tx b')?.textContent, by: b.querySelector('.tw-by')?.textContent, desc: b.querySelectorAll('.st-tx small')[1]?.textContent, disabled: b.disabled }));
@@ -125,7 +115,7 @@ const report = { origin, web, offOnly, cases: [] };
         assert.equal(entry.refused.filter(x => x.reason === 'unexpected-write').length, 0, 'no unexpected mutations: ' + JSON.stringify(entry.refused));
         entry.pass = true;
       } catch (e) { entry.failure = e.stack; const pages = context.pages(); if (pages[0]) { entry.body = await pages[0].locator('body').innerText().catch(() => ''); await pages[0].screenshot({ path: path.join(out, stem + '-failure.png') }).catch(() => {}); } throw e; }
-      finally { fs.writeFileSync(path.join(out, `report${offOnly ? '-off' : ''}.json`), JSON.stringify(report, null, 2)); await context.close(); }
+      finally { fs.writeFileSync(path.join(out, 'report.json'), JSON.stringify(report, null, 2)); await context.close(); }
     }
     assert.equal(report.cases.length, 4);
   } finally { await browser.close(); }
