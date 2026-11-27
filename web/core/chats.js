@@ -369,7 +369,7 @@ window.WizCore.chats = function createChats(H) {
   focusLate({ chanHold, chanOwnPost });
   let secOpen = (() => { try { return { ...SEC_DEFAULT, ...JSON.parse(localStorage.getItem(SEC_OPEN_KEY) || '{}') }; } catch (e) { return { ...SEC_DEFAULT }; } })();
   /* Status marks, loading placeholders and the New chat face; core/chats-status.js. */
-  const { ATT, attOf, deferredOf, newChatHtml, SEC_PAGE, skelRows, skelThread, STI, STI_LAB, STI_TIP, stiBadge, stiKind, bindLate: statusLate } = window.WizCore.chatsParts.status({ agentName: (...a) => agentName(...a), agentRec, AGS: (...a) => AGS(...a), esc, H, handledNow, isWorking });
+  const { ATT, attOf, deferredOf, newChatHtml, quickLinksHtml, SEC_PAGE, skelRows, skelThread, STI, STI_LAB, STI_TIP, stiBadge, stiKind, bindLate: statusLate } = window.WizCore.chatsParts.status({ agentName: (...a) => agentName(...a), agentRec, AGS: (...a) => AGS(...a), esc, H, handledNow, isWorking });
   focusLate({ attOf, deferredOf });
   agentrowsLate({ deferredOf });
   chanreadLate({ deferredOf });
@@ -617,7 +617,7 @@ window.WizCore.chats = function createChats(H) {
   const { closeStream, keepLoadedImages, syncStream, threadState, bindLate: streamLate } = window.WizCore.chatsParts.stream({ agentName, agentRec, ago, elOf: (...a) => elOf(...a), esc, isWorking, LIVE, md, renderThreadLive, snoozeLast, stiKind, W });
   listpaintLate({ closeStream });
   /* Painting a thread; core/chats-threadpaint.js. */
-  const { renderThread, bindLate: threadpaintLate } = window.WizCore.chatsParts.threadpaint({ ACT, actionLabel, agentName, agentRec, AGS, approvalHtml, attachTray, BOOM, canMarkDone, ch, chanTitle, clearReading, clip, CLIP_SVG, dailyHtml, dailyName, dailyWatch, draftKey: (...a) => draftKey(...a), esc, growTa, H, hasContent, inboxHeadHtml, INC, jumpPillsHtml, keepLoadedImages, keptSheet, KIT, LIVE, loadDraft, MARK_DONE_SVG, md, needsAsk, needsMark, newChatHtml, noteIcon, noteMoreHtml, noteQuiet, noteRouteHtml, noteStackHtml, noteTactsHtml, notifOf, OUTBOX, PAGE, rebuildAround, replyBubble, replyStd, restoreSheet, rowOf, scrollBox, showBoomMessage, skelThread, STI, stiBadge, stiKind, syncDocumentThread, syncStream, threadActions, threadState, timeTag, turnAt, turnHtml, watchTracker, winAgent, winTitle });
+  const { renderThread, bindLate: threadpaintLate } = window.WizCore.chatsParts.threadpaint({ ACT, actionLabel, agentName, agentRec, AGS, approvalHtml, attachTray, BOOM, canMarkDone, ch, chanTitle, clearReading, clip, CLIP_SVG, dailyHtml, dailyName, dailyWatch, draftKey: (...a) => draftKey(...a), esc, growTa, H, hasContent, inboxHeadHtml, INC, jumpPillsHtml, keepLoadedImages, keptSheet, KIT, LIVE, loadDraft, MARK_DONE_SVG, md, needsAsk, needsMark, newChatHtml, noteIcon, noteMoreHtml, noteQuiet, noteRouteHtml, noteStackHtml, noteTactsHtml, notifOf, OUTBOX, PAGE, quickLinksHtml, rebuildAround, replyBubble, replyStd, restoreSheet, rowOf, scrollBox, showBoomMessage, skelThread, STI, stiBadge, stiKind, syncDocumentThread, syncStream, threadActions, threadState, timeTag, turnAt, turnHtml, watchTracker, winAgent, winTitle });
   /* ---- drafts: one per thread (and one for a new chat), kept across reloads ---- */
   // An agent's new chat keeps its own slot ('agentnew:<id>'), so it never shows in (or takes) the main Drafts.
   const draftKey = w => w.thread === '__new__' ? (winAgent(w) ? 'agentnew:' + winAgent(w) : 'new') : (!w.thread && typeof chanDraftKey === 'function' && chanDraftKey(w)) || 'direct:' + w.thread;
