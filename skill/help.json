@@ -488,10 +488,6 @@
       "help": "Stops repeated saves: an identical save within 10 s is not resent; over 20 a minute pauses.",
       "where": "Settings › Appearance › Try new features › Stop write loops"
     },
-    "wizard/plain-chat-titles": {
-      "help": "Same-topic chats: no date.",
-      "where": "Settings › Appearance › Try new features › Undated chat titles"
-    },
     "wizard/ai-apps-running": {
       "help": "AI apps: Running view in the sidebar.",
       "where": "Settings › Appearance › Try new features › Running view in the AI apps sidebar"
