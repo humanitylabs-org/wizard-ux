@@ -7,7 +7,7 @@
  * body below keeps chats.js's indentation so `git log -L` and patches port over. */
 window.WizCore = window.WizCore || {};
 window.WizCore.chatsParts = window.WizCore.chatsParts || {};
-window.WizCore.chatsParts.rowacts = function ({ ACT, actRestore, actUndo, BOOM, ch, CH, closeRowSheet, followUpActive, H, keepThreadOpen, leaveFinishedThread, LIVE, markDone, notifAct, openChannelSheet, openRowSheet, owner, paintListsNow, rowOf, sentSends, sentSheet, threadBack, toast, vib, W }) {
+window.WizCore.chatsParts.rowacts = function ({ ACT, actRestore, actUndo, BOOM, ch, CH, closeRowSheet, followUpActive, H, keepThreadOpen, leaveFinishedThread, LIVE, markDone, notifAct, openChannelSheet, openRowSheet, owner, paintListsNow, rowOf, sentSends, sentSheet, threadBack, toast, vib, W, workingNow }) {
   let renderChats; // late-bound: chats.js declares these after the call, see bindLate
   async function threadAct(wid, sid, a) {
     wid = owner(wid);
@@ -39,9 +39,11 @@ window.WizCore.chatsParts.rowacts = function ({ ACT, actRestore, actUndo, BOOM, 
     if (a === 'snooze') { const B = BOOM(); if (B) B.open({ sessionId: sid, targetKind: 'thread', title: s.title, context: s.title }, B.nextFor(sid)); else toast('!', 'Snooze is still loading', 1600); return; }
     // Archive of the open thread: desktop opens the next chat in the drawn list, the phone returns to the chats list
     // (James, 7 Nov 2026); Snooze lands the same way through the same helper.
+    // Archive on a thread still working (wizard-ux issue 1997) never stops its run; the reply brings it back to Inbox.
+    const archivingWork = a === 'done' && !!workingNow?.(s);
     if (a === 'done' && w?.thread === sid) leaveFinishedThread(w, sid);
     else if (!keepThreadOpen() && a !== 'restore' && w && w.thread === sid) threadBack(w);
-    const msg = { done: ['✓', followUpActive(s) ? 'Archived · still watching' : 'Archived'], file: ['▤', 'Filing…'], restore: ['↺', 'Restored to Work'] }[a];
+    const msg = { done: ['✓', archivingWork ? 'Archived · comes back when it’s done' : followUpActive(s) ? 'Archived · still watching' : 'Archived'], file: ['▤', 'Filing…'], restore: ['↺', 'Restored to Work'] }[a];
     // With Channels on, an archive offers Undo for about five seconds (issue 1336), in place of the plain toast. Undo
     // waits for the archive's own write to settle (a restore while it is in flight is refused as busy), then restores.
     let archiving = null;
