@@ -1,3 +1,0 @@
-/* Icons on the attach menu (wizard-ux issue 1639): the work is in core/context-menu.js (attach) and
- * core/context-menu.css (.wos-cm-icons). This rule only marks the switch as present. */
-html[data-tweaks~="wizard/attach-menu-icons"] { --wos-attach-menu-icons: 1; }

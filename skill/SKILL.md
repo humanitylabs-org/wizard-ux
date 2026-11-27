@@ -174,7 +174,6 @@ Settings › Appearance › Try new features lists unfinished features to try, A
 - **Chat replies as Chats notifications**: Android app: your agent's chat replies reach the phone as Notifications items under Chats; tap opens the chat.
 - **Five-choice first chat**: Five picks, then a first win.
 - **Get set up list in Setup**: Setup lists optional accounts to connect.
-- **Icons on the attach menu**: Android app: the + menu in a chat (and the orb's Attach) shows icons before Photo or video, Camera and File, on bigger rows. (Android app only).
 - **Inbox: pin threads to the top**: Pin threads on top.
 - **Install apps your agent builds**: Apps I build install with one tap.
 - **Install sheet recommends private AI**: Installing a personal-data app suggests private AI.

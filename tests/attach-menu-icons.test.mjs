@@ -1,6 +1,6 @@
 // wizard-ux issue 1639: James, 19 Nov 2026, "probably these would be more intuitive with icons." WosContextMenu.open
-// items take an optional `icon` (a built-in name), and the Android attach menu passes one per choice only while
-// switch wizard/attach-menu-icons is on. Off: the exact plain rows of today. Real context-menu.js in a vm with a
+// items take an optional `icon` (a built-in name), and the Android attach menu passes one per choice. On for everyone
+// since 27 Nov 2026 (show-and-tell yes): switch wizard/attach-menu-icons is removed. Real context-menu.js in a vm with a
 // small fake DOM; the browser proof (two skins, sizes, opaque panel) is tests/qa-attach-menu-icons.cjs.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -9,7 +9,7 @@ import vm from 'node:vm';
 
 const SRC = fs.readFileSync(new URL('../web/core/context-menu.js', import.meta.url), 'utf8');
 const CATALOG = JSON.parse(fs.readFileSync(new URL('../web/tweaks/catalog.json', import.meta.url), 'utf8'));
-const SWITCH = 'wizard/attach-menu-icons';
+const GONE_ID = 'wizard/attach-menu-icons';
 
 function el(tag, ns = null) {
   const n = {
@@ -44,8 +44,8 @@ function load(tweaks) {
 const panel = body => body.children.find(c => c.className.includes('wos-context-menu'));
 const rows = p => p.children.filter(c => c.attrs.role === 'menuitem');
 
-test('switch on: each attach choice has a round icon tile before its words', () => {
-  const { M, body, input, anchor } = load(`wizard/desktop-chats ${SWITCH}`);
+test('each attach choice has a round icon tile before its words', () => {
+  const { M, body, input, anchor } = load('wizard/desktop-chats');
   assert.equal(M.attach(input, anchor), true);
   const p = panel(body);
   assert.ok(p.classList.contains('wos-cm-icons'), 'the panel is marked for icon rows');
@@ -66,29 +66,28 @@ test('switch on: each attach choice has a round icon tile before its words', () 
   assert.deepEqual(input.clicked, { accept: 'image/*', capture: true }, 'Camera still opens the camera');
 });
 
-test('switch off: the attach menu is today\'s plain text rows', () => {
-  const { M, body, input, anchor } = load('wizard/desktop-chats');
-  M.attach(input, anchor);
-  const p = panel(body);
-  assert.equal(p.classList.contains('wos-cm-icons'), false);
-  for (const b of rows(p)) { assert.equal(b.children.length, 0, 'no tile'); assert.ok(b._text); }
-});
-
 test('open(): an unknown icon name is ignored, never a broken tile', () => {
-  const { M, body, anchor } = load(SWITCH);
+  const { M, body, anchor } = load('');
   M.open({ anchor, items: [{ label: 'Odd', icon: 'constructor', action() {} }, { label: 'Pic', icon: 'picture', action() {} }] });
   const [odd, pic] = rows(panel(body));
   assert.equal(odd.children.length, 0); assert.equal(odd.textContent, 'Odd');
   assert.equal(pic.children[0].className, 'wos-cm-tile');
 });
 
-test('with the catalog defaults (a fresh install) the switch is off and the attach menu is plain rows', () => {
-  assert.ok(CATALOG.tweaks.includes(SWITCH), 'listed so it can be flipped');
-  const { M, body, input, anchor } = load(CATALOG.defaults.join(' '));
-  assert.equal(M.attach(input, anchor), true);
-  const p = panel(body);
-  assert.ok(!p.className.includes('wos-cm-icons'));
-  assert.deepEqual(rows(p).map(r => [r.textContent, r.children.length]), [['Photo or video', 0], ['Camera', 0], ['File', 0]]);
-  const m = JSON.parse(fs.readFileSync(new URL('../web/tweaks/wizard/attach-menu-icons/manifest.json', import.meta.url), 'utf8'));
-  assert.deepEqual(m.issues, ['humanitylabs-org/wizard-ux#1639']);
+test('no switch: a fresh install and a device with the old id in its tweaks both get the icon rows', () => {
+  assert.equal(CATALOG.tweaks.includes(GONE_ID), false, 'the switch is no longer listed');
+  for (const tweaks of [CATALOG.defaults.join(' '), GONE_ID, '']) {
+    const { M, body, input, anchor } = load(tweaks);
+    assert.equal(M.attach(input, anchor), true);
+    const p = panel(body);
+    assert.ok(p.className.includes('wos-cm-icons'), tweaks);
+    assert.deepEqual(rows(p).map(r => [r.textContent, r.children[0].className]), [['Photo or video', 'wos-cm-tile'], ['Camera', 'wos-cm-tile'], ['File', 'wos-cm-tile']]);
+  }
+});
+
+test('desktop and plain browsers still open the file dialog straight away, no menu', () => {
+  const { M, body, input } = load('');
+  assert.equal(M.attach(input, null), false);
+  assert.equal(panel(body), undefined);
+  assert.deepEqual(input.clicked, { accept: '', capture: false });
 });
