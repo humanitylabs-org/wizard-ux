@@ -484,10 +484,6 @@
       "where": "Settings › Appearance › Try new features › Phone Apps tile: Favorites panel and quick switcher",
       "when": "phone only"
     },
-    "wizard/channel-auto-emoji": {
-      "help": "New channels get a fitting emoji.",
-      "where": "Settings › Appearance › Try new features › Channels: a fitting emoji for new channels"
-    },
     "wizard/channel-model-emoji": {
       "help": "New channels with no emoji get one picked by your Wizard's fast model.",
       "where": "Settings › Appearance › Try new features › Channels: an AI-picked emoji for new channels"

@@ -47,9 +47,9 @@
    * wizard-app-manager issue 799: wizard/phone-tester-builds, every For testers box offers its phones the tester build;
    * wizard-ux issue 1941: wizard/plain-alert-rows, Chats alerts are plain thread rows marked by a small bell;
    * wizard-agent-service issue 597: wizard/agent-approvals, container agents run code without an approval nobody
-   * sees): a saved on/off for one is
+   * sees; wizard-ux issue 1580: wizard/channel-auto-emoji, a new channel gets a fitting emoji from its name): a saved on/off for one is
    * cleared from this device, once, so no stale choice is kept. */
-  const GONE = ['wizard/desktop-chats', 'wizard/app-panel-left', 'wizard/needs-you-reason', 'wizard/follow-main', 'wizard/app-tap-home', 'wizard/plain-chat-titles', 'wizard/graceful-restart', 'wizard/interface-manual', 'wizard/write-guard', 'wizard/sidebar-chats-view', 'wizard/action-cards', 'wizard/swap-sides', 'wizard/phone-app-notifications', 'wizard/chat-app-switches', 'wizard/clear-chat-notifications', 'wizard/phone-sections', 'wizard/inbox-rows', 'wizard/chat-tags', 'wizard/chats-title-bar', 'wizard/phone-nav', 'wizard/catch-me-up', 'wizard/sent-rows', 'wizard/inbox-until-archived', 'wizard/sent-threads', 'wizard/chats-switcher', 'wizard/phone-tester-builds', 'wizard/plain-alert-rows', 'wizard/agent-approvals'];
+  const GONE = ['wizard/desktop-chats', 'wizard/app-panel-left', 'wizard/needs-you-reason', 'wizard/follow-main', 'wizard/app-tap-home', 'wizard/plain-chat-titles', 'wizard/graceful-restart', 'wizard/interface-manual', 'wizard/write-guard', 'wizard/sidebar-chats-view', 'wizard/action-cards', 'wizard/swap-sides', 'wizard/phone-app-notifications', 'wizard/chat-app-switches', 'wizard/clear-chat-notifications', 'wizard/phone-sections', 'wizard/inbox-rows', 'wizard/chat-tags', 'wizard/chats-title-bar', 'wizard/phone-nav', 'wizard/catch-me-up', 'wizard/sent-rows', 'wizard/inbox-until-archived', 'wizard/sent-threads', 'wizard/chats-switcher', 'wizard/phone-tester-builds', 'wizard/plain-alert-rows', 'wizard/agent-approvals', 'wizard/channel-auto-emoji'];
   if (Store.read()) {
     let dirty = false;
     for (const k of ['defaultsOff', 'promotedMigrated']) if (Array.isArray(state[k]) && state[k].some(id => GONE.includes(id))) { state[k] = state[k].filter(id => !GONE.includes(id)); dirty = true; }

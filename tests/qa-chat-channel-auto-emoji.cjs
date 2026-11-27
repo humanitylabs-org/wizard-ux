@@ -1,16 +1,16 @@
 'use strict';
-// Auto channel emoji (wizard-ux issue 1580, switch wizard/channel-auto-emoji) in a real browser, on the synthetic transport of
+// Auto channel emoji (wizard-ux issue 1580, on for everyone) in a real browser, on the synthetic transport of
 // qa-chat-channel-emoji.cjs (nothing reaches a box). Phone 390x844 + desktop 1440x960 (classic Chats window), Nebula + Grove.
 // Per case: + New channel, type "Money" / "Podcast" / "Zzzqx" / "🎯 Plans" and Create: the stored names (the one add op
 // each) are "💰 Money", "🎙️ Podcast", "Zzzqx" (shown with 💬) and "🎯 Plans" (the owner's own emoji wins), and the list shows
-// them. QA_SWITCH=off (switch off), or QA_EXPECT=broken with QA_WEB=<main>/web, checks every name is stored exactly as typed.
+// them. QA_EXPECT=broken with QA_WEB=<a build without it>/web checks every name is stored exactly as typed.
 const assert = require('node:assert/strict');
 const { chromium } = require('../tools/qa-playwright.cjs');
 const { ownerRead } = require('../tools/qa-desktop-frame-fixture.cjs');
 const fs = require('node:fs'), path = require('node:path');
 const repo = path.resolve(__dirname, '..'), origin = process.env.QA_ORIGIN || 'https://chat-channel-auto-emoji.test', prefix = '/wizard-os-home/';
 const web = process.env.QA_WEB || path.join(repo, 'web'), out = process.env.QA_OUT || path.join(repo, 'chat-channel-auto-emoji-evidence');
-const off = process.env.QA_SWITCH === 'off', broken = process.env.QA_EXPECT === 'broken' || off;
+const off = false, broken = process.env.QA_EXPECT === 'broken';
 fs.mkdirSync(out, { recursive: true });
 const now = Date.now(), iso = t => new Date(t).toISOString(), nap = ms => new Promise(r => setTimeout(r, ms));
 const SPACES = [
@@ -36,7 +36,7 @@ const report = { origin, web, broken, off, cases: [] };
       const context = await browser.newContext({ viewport: phone ? { width: Number(process.env.QA_PHONE_W) || 390, height: 844 } : { width: 1440, height: 960 }, isMobile: phone, hasTouch: phone, serviceWorkers: 'block' });
       try {
         await context.routeWebSocket('**/*', w => w.close());
-        const mix = off || broken ? { 'wizard/desktop-chats': true } : { 'wizard/desktop-chats': true, 'wizard/channel-auto-emoji': true };
+        const mix = { 'wizard/desktop-chats': true };
         await context.addInitScript(({ shell, skin, mix, spaces }) => {
           if (window !== top) return;
           for (const [k, v] of Object.entries({ 'wos.shell': shell, 'wux.shell': shell, 'wos.desktop-view.v1': 'classic', 'wos.coached': 'true', 'wos.tour.v1': 'true', 'wos.welcome.v1': 'done', 'wos.skin': skin,
@@ -80,7 +80,6 @@ const report = { origin, web, broken, off, cases: [] };
         const page = await context.newPage(); page.on('pageerror', e => entry.errors.push(e.message));
         await page.goto(origin + prefix + (phone ? 'index.html?phone' : 'desktop.html'));
         await page.waitForFunction(() => (window.__wux || window.__wos) && !window.WosWelcome?.active && window.WosExperience?.state.tweaks.length && !window.WosExperience.state.busy);
-        if (!broken) await page.waitForFunction(() => (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/channel-auto-emoji'), null, { timeout: 15000 });
         await page.addStyleTag({ content: '#wosWelcome{display:none!important}' });
         await page.evaluate(phone => phone ? __wos.openSheet('inbox') : __wux.openChatsList(), phone);
         const vis = sel => page.locator(sel).filter({ visible: true }).first();
@@ -111,7 +110,7 @@ const report = { origin, web, broken, off, cases: [] };
         entry.list = await lines();
         await page.screenshot({ path: path.join(out, stem + '-list.png') });
         if (broken) {
-          assert.deepEqual(entry.stored, TYPED, 'switch off / main: every name stored exactly as typed');
+          assert.deepEqual(entry.stored, TYPED, 'a build without it: every name stored exactly as typed');
           entry.pass = true; continue;
         }
         assert.deepEqual(entry.stored, ['💰 Money', '🎙️ Podcast', 'Zzzqx', '🎯 Plans'], 'a fitting emoji in front, none for no match, the owner\'s own kept');

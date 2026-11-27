@@ -70,12 +70,12 @@ window.WizCore.channelEmojiName = function channelEmojiName(name, emoji) {
   const t = (emoji + (bare ? ' ' + bare : '')).trim();
   return t.length > 60 ? '' : t;
 };
-/* Auto channel emoji (wizard-ux issue 1580, switch wizard/channel-auto-emoji, off by default): a channel created with
+/* Auto channel emoji (wizard-ux issue 1580, on for everyone): a channel created with
  * no emoji in front of its name gets a fitting one from this small keyword map, instantly and offline ("Money" →
  * "💰 Money"), stored the same way as a picked one (the start of the name). A name that already starts with an emoji,
  * or matches no word here, is kept exactly as typed (no emoji shows as 💬). channelAutoEmoji(name) → the emoji or '';
  * channelAutoName(name) → the name to store. Whole words first ("workout" before "work"), then a word that starts with
- * a keyword of 4+ letters ("podcasting"). The agent's own create tool uses the same list behind the same switch
+ * a keyword of 4+ letters ("podcasting"). The agent's own create tool uses the same list
  * (wizard-agent-service server/channel-emoji.mjs): change both together. */
 window.WizCore.CHANNEL_AUTO_EMOJI = [
   ['💰', 'money finance finances budget budgets bank banking invest investing investment investments tax taxes savings expense expenses crypto bitcoin stocks accounting invoice invoices salary pension'],
