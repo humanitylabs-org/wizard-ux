@@ -529,10 +529,6 @@
       "help": "Add an app's search also finds App Store apps.",
       "where": "Settings › Appearance › Try new features › Add an app: search the App Store too"
     },
-    "wizard/swap-sides": {
-      "help": "Chats right, apps left (⌥⇧L).",
-      "where": "Settings › Appearance › Try new features › Swap sides"
-    },
     "wizard/desktop-bottom-bar": {
       "help": "Apps bar at the bottom on any width.",
       "where": "Settings › Appearance › Try new features › Bottom app bar on desktop"

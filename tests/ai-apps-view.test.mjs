@@ -120,7 +120,7 @@ test('desktop: a sidebar (open apps, All apps, the Archive / Working / Ready sec
   assert.equal(w.html.dataset.aadSide, 'open', 'open from 680 px up');
   assert.ok(w.html.attrs['data-settings-over'] === '', 'Settings opens over the page (a centred panel), never beside the chat');
   // the sidebar: wordmark · 🔍 · ◫; Apps grid (badged first, All apps last); the sections (round 5: Ready open)
-  assert.deepEqual(w.q('.aad-sh').children.filter(c => !c.hidden).map(c => c.className.split(' ').pop()), ['aad-ws', 'aad-find', 'aad-tog'], 'round 7: the workspace switcher in place of the name; round 16: no ⌂ (Home = ✕, Esc, ⌥`)');
+  assert.deepEqual(w.q('.aad-sh').children.filter(c => !c.hidden).map(c => c.className.split(' ').pop()), ['aad-ws', 'aad-find', 'aad-sswap', 'aad-tog'], 'round 7: the workspace switcher in place of the name; round 16: no ⌂ (Home = ✕, Esc, ⌥`)');
   assert.equal(w.q('.aad-homeb'), null, 'round 16: the left sidebar is the chats only'); assert.equal(w.q('.aad-pins'), null, 'round 16: no pinned row on the left');
   assert.equal(w.q('.aad-sh .aad-wsn').textContent, 'Miguel');
   assert.equal(w.q('.aad-sh .aad-wsd'), null, 'round 8: the name is text only (and a small chevron), no disc');
@@ -822,7 +822,7 @@ test('round 5 + 7 desktop: no home button in the top row (round 7), the switcher
   assert.equal(w.qa('.aad-home').length, 0, 'round 7: the top row has no home button (Home = its tab, +, ⌥1)');
   assert.equal(w.qa('.aad-tname, .aad-viewall').length, 0, 'the name in the top row and View all are gone');
   assert.deepEqual(w.q('.aad-top').children.map(e => e.className), ['aad-ctop', 'aad-ptop'], 'round 15: no tab strip; the docked chat\'s title and the app panel\'s header');
-  assert.deepEqual(w.q('.aad-sh').children.map(e => e.className.split(' ').at(-1)), ['aad-ws', 'aad-find', 'aad-search', 'aad-cancel', 'aad-tog'], 'round 7: the switcher is the sidebar header; round 16: no ⌂');
+  assert.deepEqual(w.q('.aad-sh').children.map(e => e.className.split(' ').at(-1)), ['aad-ws', 'aad-find', 'aad-search', 'aad-cancel', 'aad-sswap', 'aad-tog'], 'round 7: the switcher is the sidebar header; round 16: no ⌂');
   assert.match(w.q('.aad-orbbtn').getAttribute('aria-label'), /drag up for a new chat to type in/);
   const css = read('web/layouts/ai-apps/desktop.css'), js = noComments(read('web/layouts/ai-apps/desktop.js'));
   assert.ok(!/\.aad-home\b|\btHome\b/.test(css + js) && !/aad-tname|aad-viewall/.test(css), 'and no styles or code left for them');
