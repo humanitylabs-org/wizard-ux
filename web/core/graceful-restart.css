@@ -3,7 +3,7 @@
    message box's round button style never squeezes Wait longer / Restart now. */
 /* Always on its own opaque panel: on the desktop with no chat open the message box floats over the wallpaper, and text
    on a floating surface is never see-through (wizard-ux issue 1432). Same panel as the phone Chats list's .float. */
-html:root .ch-restart-notice { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 6px 2px 0; padding: 8px 12px; box-sizing: border-box; font-size: .82rem; line-height: 1.35; color: var(--ink-2); background: var(--bg, #160f24); border: 1px solid var(--line, #433453); border-radius: 12px; }
+html:root .ch-restart-notice { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 6px 2px 0; padding: 8px 12px; box-sizing: border-box; font-size: .82rem; line-height: 1.35; color: var(--ink-2); background: var(--bg); border: 1px solid var(--line); border-radius: 12px; }
 html:root .ch-restart-notice b { font-weight: 600; color: var(--ink); }
 html:root .ch-restart-notice .rs-acts { display: inline-flex; flex: none; flex-wrap: wrap; align-items: center; gap: 8px; }
 html:root .ch-restart-notice .rs-acts > button { flex: none; display: inline-block; place-items: normal; box-shadow: none; width: auto; min-width: 0; height: auto; min-height: 0; margin: 0; white-space: nowrap; box-sizing: border-box; font: inherit; line-height: 1.4; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line); background: transparent; color: var(--ink); cursor: pointer; }
@@ -15,4 +15,4 @@ html:root .ch-held-line svg { width: 16px; height: 16px; flex: none; fill: none;
    layer or the page itself (outbox paintNotice), which covers the whole screen or sits in the top bar and takes no
    taps. The note then floats on its own opaque panel above the dock and the new-chat button, clear of the header,
    and takes taps itself (wizard-ux issue 1362, third review; core/reach.js paintRestart sets .float). */
-html:root .ch-restart-notice.float { position: fixed; z-index: 60; left: 50%; transform: translateX(-50%); width: min(440px, calc(100vw - 32px)); bottom: calc(var(--safe-b, 0px) + var(--dock-h, 64px) + 84px); flex-basis: auto; margin: 0; padding: 10px 12px; box-sizing: border-box; pointer-events: auto; background: var(--bg, #160f24); border: 1px solid var(--line, #433453); border-radius: 12px; box-shadow: 0 6px 24px rgba(0, 0, 0, .35); }
+html:root .ch-restart-notice.float { position: fixed; z-index: 60; left: 50%; transform: translateX(-50%); width: min(440px, calc(100vw - 32px)); bottom: calc(var(--safe-b, 0px) + var(--dock-h, 64px) + 84px); flex-basis: auto; margin: 0; padding: 10px 12px; box-sizing: border-box; pointer-events: auto; background: var(--bg); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 6px 24px color-mix(in srgb, black 35%, transparent); }
