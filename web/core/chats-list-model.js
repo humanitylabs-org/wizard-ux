@@ -312,9 +312,19 @@ const reminderFired = (s, r) => (r?.route === 'reminder' || r?.wouldRoute === 'r
  * or it set a reminder that has not fired yet. A check status line ("say if it feels right") is Inbox too, green:
  * needs() stays false for it, so it is not amber. */
 const TAPS = /\[WIZARD_TAPS_V1\]/;
-const ACK = /^(?:(?:ok(?:ay)?|k|kk|thanks?|thank you|thx|ty|cheers|great|perfect|nice|cool|awesome|good|got it|sounds good|no worries|np|lovely|brilliant|excellent|noted|all good|ta|alright|a lot|so much|many|very much)\s*)*$/i;
-const ACK_MARKS = /[\p{Extended_Pictographic}\u200d\ufe0f\u{1F3FB}-\u{1F3FF}!.,;:~-]+/gu;
-const ackOnly = t => ACK.test(t.replace(ACK_MARKS, ' ').replace(/\s+/g, ' ').trim());
+const ACK_WORDS = ['thank you so much', 'thank you', 'thanks a lot', 'sounds good', 'no worries', 'all good', 'got it', 'very much', 'so much', 'a lot', 'ok', 'okay', 'k', 'kk', 'thanks', 'thank', 'thx', 'ty', 'cheers',
+  'great', 'perfect', 'nice', 'cool', 'awesome', 'good', 'np', 'lovely', 'brilliant', 'excellent', 'noted', 'ta', 'alright', 'many'];
+const ACK_MARKS = /[\p{Extended_Pictographic}\u200d\ufe0f\u{1F3FB}-\u{1F3FF}!.,;:~-]/gu;
+// Only acknowledgement words and emoji ("ok thanks 👍"): the words are eaten longest first, no backtracking regex.
+function ackOnly(text) {
+  let t = String(text || '').replace(ACK_MARKS, ' ').toLowerCase().split(/\s+/).filter(Boolean).join(' ');
+  while (t) {
+    const w = ACK_WORDS.find(a => t === a || t.startsWith(a + ' '));
+    if (!w) return false;
+    t = t.slice(w.length).trim();
+  }
+  return true;
+}
 // His newest send wants no answer brought to him: a tap, an acknowledgement, his no-reply words or correction.
 function sentNoAnswer(r) {
   if (!r) return true;
