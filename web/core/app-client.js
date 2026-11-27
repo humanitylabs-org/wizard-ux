@@ -1325,7 +1325,7 @@
     return false;
   }
   /* Home (wizard-ux issue 1332): the shell asks the app for its first view, as if just opened, without a reload (the
-   * narrow desktop's tap on the app already in front, switch wizard/app-tap-home). The app's own WizardApp.nav.onHome
+   * narrow desktop's tap on the app already in front). The app's own WizardApp.nav.onHome
    * handler answers first (true = it is there). Without one, or when it says false, every Back step the app has runs
    * now: its overlays, its registered handlers, and a history adapter goes straight to its root entry in one
    * traversal. true = something moved; false = it was already at its first view. */

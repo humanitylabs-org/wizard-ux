@@ -30,7 +30,6 @@
     "wizard/phone-app-notifications",
     "wizard/phone-chat-replies",
     "wizard/lock-screen-player",
-    "wizard/app-tap-home",
     "wizard/download-swipe",
     "wizard/interface-manual",
     "wizard/write-guard",
