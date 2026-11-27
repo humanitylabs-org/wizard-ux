@@ -193,7 +193,6 @@ Settings › Appearance › Try new features lists unfinished features to try, A
 - **Send and go**: On desktop, sending opens a fresh chat.
 - **Share feature counts**: Sends features you tried and your thumbs, plus a random box id.
 - **Short answer first**: A long agent reply shows only its one-line plain answer; tap it for the full reply. Choose whether replies start collapsed and how long the short answer is. Where: Settings › Appearance › Try new features › Short answer first; its options show under it when on.
-- **Shorter app updates**: App updates stop an app once.
 - **Side button opens the Agent chat**: Android app: the side button opens Messenger's Agent chat for a note instead of a new Wizard chat.
 - **Skins are look only**: Skins become a look only: only feature switches decide what runs. Your skin's own choices come back when you switch this off.
 - **Smart inbox: only what needs you**: Inbox: only what blocks you.
@@ -211,6 +210,7 @@ No longer switches (owners and old chats may still name them):
 - **Thread tracker**: retired: Needs you now shows in the thread itself, on the reply that needs the owner (with Mark done), and in Inbox; Reply works on any message.
 - **Stop write loops**: on for everyone, nothing to turn on: an identical save within 10 s is not resent, and over 20 saves a minute to one place pauses.
 - **Apps in Updates**: on for everyone: Settings › About & updates › Apps.
+- **Shorter app updates**: on for everyone, nothing to turn on: an app update stops the app once, for seconds.
 - **Wizard for Mac in About & updates**: on for everyone, nothing to turn on: inside Wizard for Mac, Settings › About & updates shows a Wizard for Mac group under WizardOS.
 - **Reply to Telegram and Slack chats**: on for everyone: reply in Chats to a chat started on Telegram or Slack; it goes through that app's own connection and shows there too.
 - **Models from your connectors**: removed: the model menu in Chats lists the models of every AI connection you connected.
