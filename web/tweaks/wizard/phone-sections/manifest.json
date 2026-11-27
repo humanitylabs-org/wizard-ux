@@ -1,0 +1,17 @@
+{
+  "id": "wizard/phone-sections",
+  "name": "Phone bar: Home, Chats, Messenger, Apps",
+  "version": "1.0.0",
+  "author": "wizard",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout"
+  ],
+  "issues": [
+    "humanitylabs-org/wizard-ux#1929"
+  ],
+  "description": "The phone's bottom bar is four fixed places around today's orb: Home and Chats on the left, Messenger and Apps on the right, each an icon with a label, instead of a row of desks and the +. Apps opens the app picker; the app you pick stays in Apps (its icon and name on the tile), and a sideways swipe on the tile flips between your last two apps. Hold Messenger to pin another app there. Every section keeps its place, and swiping sideways steps through the four.",
+  "shells": [
+    "phone"
+  ]
+}
