@@ -1,6 +1,7 @@
 'use strict';
 // Chats title bar (wizard-ux issue 1836, on for everyone) in a real browser, disposable synthetic box only.
-// Phone 412x915 and Classic desktop 1440x960, Nebula and a light skin, with James's switches (desktop-chats,
+// Phone 412x915, Classic desktop 1440x960 and the AI apps sidebar pane (its <agent>::side window, wizard-ux issues 1966
+// and 1992), Nebula and a light skin, with James's switches (desktop-chats,
 // Inbox until archived and Inbox rows are on for everyone):
 //   The top of Chats is one title bar naming the tab, "Inbox" with its count pill (= the Inbox rows), then the
 //   search and filter icons; no "All chats", no "Inbox ^ · Newest first" section row: the rows start right under the bar.
@@ -13,7 +14,7 @@ const { ownerRead } = require('../tools/qa-desktop-frame-fixture.cjs');
 const fs = require('node:fs'), path = require('node:path');
 const repo = path.resolve(__dirname, '..'), origin = process.env.QA_ORIGIN || 'https://chats-title-bar-1836.test', prefix = '/wizard-os-home/';
 const web = process.env.QA_WEB || path.join(repo, 'web'), out = process.env.QA_OUT || path.join(repo, 'chats-title-bar-evidence');
-const SHELLS = (process.env.QA_SHELLS || 'phone,classic').split(','), SKINS = (process.env.QA_SKINS || 'nebula,obsidian-light').split(','), ROWS = true; // Inbox rows are on for everyone (wizard-ux issue 1779)
+const SHELLS = (process.env.QA_SHELLS || 'phone,classic,aiapps').split(','), SKINS = (process.env.QA_SKINS || 'nebula,obsidian-light').split(','), ROWS = true; // Inbox rows are on for everyone (wizard-ux issue 1779)
 fs.mkdirSync(out, { recursive: true });
 const now = Date.now(), iso = t => new Date(t).toISOString(), nap = ms => new Promise(r => setTimeout(r, ms)), M = 60e3, D = 864e5;
 const REC = 'inbox_' + 'b'.repeat(24), TODAY = new Date(now).toISOString().slice(0, 10);
@@ -23,13 +24,13 @@ const CHANNELS = [
   { id: 'trip', agent: 'hermes', name: '✈️ Trip', order: 1, createdAt: iso(now - 8e8), archived: false, pinned: false },
 ];
 let THREADS, BOX;
+// (nothing Working: a Working section on top brings Inbox's own fold back, wizard-ux issue 1810; tests/qa-chats-shell-parity.cjs has one)
 const fresh = () => ({
   'qa-new': { title: 'Weather tomorrow', at: now - 20 * M, channel: 'trip', msgs: [['user', 'Tell me the weather in Lisbon tomorrow', 0], ['assistant', 'Sunny, 18 °C, light wind from the north.', 30]] },
   'qa-read': { title: 'Garden plan', at: now - 3 * D, msgs: [['user', 'Plan the garden beds', 0], ['assistant', 'Tomatoes by the wall, herbs near the door.', 60]] },
   'qa-needs': { title: 'Dentist slot', at: now - 50 * M, attention: { state: 'needs_you', ask: 'Tuesday 10:00 or Thursday 16:00?' }, msgs: [['user', 'Find a dentist slot this week', 0], ['assistant', 'Two slots are free. Tuesday 10:00 or Thursday 16:00?', 60]] },
   'qa-failed': { title: 'Book the train', at: now - 70 * M, status: 'failed', msgs: [['user', 'Book the 9:10 train to Porto', 0]] },
   'qa-quiet': { title: 'Sent to Miguel', at: now - 10 * M, quiet: true, attention: { state: 'done', ask: 'Sent.' }, msgs: [['user', 'Sent to Miguel, done', 0], ['assistant', 'Noted.', 20]] },
-  'qa-working': { title: 'Summarise the report', at: now - 2 * M, status: 'running', msgs: [['user', 'Summarise the quarterly report', 0]] },
   'qa-daily': { title: 'Daily · today', at: now - 4 * 3600e3, channel: 'daily', msgs: [['user', 'signal sweep', 0], ['assistant', 'Two things wait on you; the rest is done.', 30]] },
   'qa-prio': { title: 'Tax return', at: now - 2 * D, channel: 'priority', msgs: [['user', 'File the tax return', 0], ['assistant', 'Drafted; one number to confirm.', 60]] },
   'qa-urgent': { title: 'Call the plumber', at: now - 5 * D, msgs: [['user', 'Urgent: the kitchen tap is leaking', 0], ['assistant', 'The plumber can come at 15:00.', 60]] },
@@ -57,7 +58,7 @@ const report = { origin, web, cases: [] };
         await context.addInitScript(({ shell, skin, mix }) => {
           if (window !== top) return;
           if (sessionStorage.getItem('qaBoot')) return; sessionStorage.setItem('qaBoot', '1');
-          for (const [k, v] of Object.entries({ 'wos.shell': shell === 'phone' ? 'phone' : 'desktop', 'wux.shell': shell === 'phone' ? 'phone' : 'desktop', 'wos.desktop-view.v1': 'classic', 'wos.coached': 'true', 'wos.tour.v1': 'true', 'wos.welcome.v1': 'done', 'wos.skin': skin,
+          for (const [k, v] of Object.entries({ 'wos.shell': shell === 'phone' ? 'phone' : 'desktop', 'wux.shell': shell === 'phone' ? 'phone' : 'desktop', 'wos.desktop-view.v1': shell === 'aiapps' ? 'ai-apps' : 'classic', 'wos.coached': 'true', 'wos.tour.v1': 'true', 'wos.welcome.v1': 'done', 'wos.skin': skin,
             'wos.skin-tweaks.v1': JSON.stringify({ version: 1, preset: 'none', off: {}, mix }) })) localStorage.setItem(k, v);
         }, { shell, skin, mix });
         await context.route('**/*', async r => {
@@ -112,7 +113,7 @@ const report = { origin, web, cases: [] };
         await page.goto(origin + prefix + (phone ? 'index.html?phone' : 'desktop.html'));
         await page.waitForFunction(() => (window.__wux || window.__wos) && !window.WosWelcome?.active && window.WosExperience?.state.tweaks.length && !window.WosExperience.state.busy);
         await page.addStyleTag({ content: '#wosWelcome{display:none!important}' });
-        if (phone) await page.evaluate(() => __wos.openSheet('inbox')); else await page.evaluate(() => __wux.openChatsList());
+        if (phone) await page.evaluate(() => __wos.openSheet('inbox')); else if (shell !== 'aiapps') await page.evaluate(() => __wux.openChatsList());
         const vis = sel => page.locator(sel).filter({ visible: true }).first();
         const shot = async name => { await page.evaluate(() => document.fonts.ready); await nap(300); await page.screenshot({ path: path.join(out, `${stem}-${name}.png`) }); };
         // The top of the list as a person sees it.

@@ -6,6 +6,7 @@
  * in front and the pins) stay in desktop.js; this code reads and writes them as aadVars.<name>, its get/set accessors
  * on the same variables, so every read and write is live. desktop.js's own imports are imported here again from the
  * same modules. The body below keeps desktop.js's indentation so `git log -L` and patches port over. */
+import { sharedList } from './parts.js';
 export function sidetabsPart({ aadVars, actOn, api, el, flip, foot, head, icon, one, oneSplit, panes, rail, readSessions, scroll, side }) {
   let paintList, paintRail, paintTop; // late-bound: desktop.js declares these after the call, see bindLate
   const rTog = el('button', 'aad-ib aad-rtog', { type: 'button', 'aria-label': 'Open sidebar', title: 'Open sidebar' }); rTog.append(icon('side'));
@@ -46,7 +47,8 @@ export function sidetabsPart({ aadVars, actOn, api, el, flip, foot, head, icon, 
    * api.sessions.channels: the Activity / Channels tabs over the rows below, and in Channels the channel list, or a
    * channel's feed and its message box, in place of them (desktop.css). Empty and hidden with the switch off. */
   const chanBox = el('div', 'aad-chan'); chanBox.hidden = true;
-  const paintChan = () => { const on = !aadVars.q && !!api.sessions.channels?.(chanBox); if (chanBox.hidden === on) chanBox.hidden = !on; };
+  // (true: the pane draws Chats' own list there, the phone's title bar, rows and tabs; wizard-ux issue 1966)
+  const paintChan = () => { const on = !aadVars.q && !!api.sessions.channels?.(chanBox); if (chanBox.hidden === on) chanBox.hidden = !on; return on && !!sharedList(chanBox); };
   /* A channel opens in the main chat column, never in this sidebar (James, 11 Nov 2026: "Channels should display in the
    * chat list with the channel list remaining visible on the sidebar"): its feed is one more chat in the column (FEED),
    * drawn by api.sessions.channelFeed into feedBox over the docked Chats window. A post opens its thread there; Back

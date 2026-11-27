@@ -18,8 +18,12 @@ window.WizCore.chatsParts.listpaint = function ({ actAllAgents, activityBody, ag
     // second, CSS-covered list underneath it (including a thread returning Back).
     // The AI apps sidebar's Channels pane (wizard-ux issue 1256) is this same list for the main Chats window, drawn
     // into the sidebar as the id::side window: tabs, the channel list, a feed and its box.
-    const side = typeof chanSide === 'function' && chanSide(w);
-    if (!side) {
+    // The sidebar's Chats pane itself (its channels open in the main column) draws the phone's list (wizard-ux issue 1966:
+    // one design on phone and desktop): the same title bar, rows, folds, tabs and filter sheet. Only the main column's
+    // feed window (an id::side whose channels open in it) keeps the side drawing.
+    const pane = typeof chanSide === 'function' && chanSide(w) && typeof chanElsewhere === 'function' && chanElsewhere(w);
+    const side = typeof chanSide === 'function' && chanSide(w) && !pane;
+    if (!side && !pane) {
       if (H.ownsChatList?.()) { el?.replaceChildren(); return; }
     }
     syncListTitle(w);
@@ -91,6 +95,8 @@ window.WizCore.chatsParts.listpaint = function ({ actAllAgents, activityBody, ag
     const hitCount = () => hit.length;
     const coachLine = () => c.coach ? '<span class="ch-coach">Filtered. Tap ✕ to see all chats.</span>' : '';
     const ownerId = owner(w.id), curThread = W[ownerId]?.thread;
+    // The pane sits beside the open thread: its row is marked current (as the sidebar's rows were).
+    chatVars.rowCur = pane && curThread ? String(curThread) : '';
     const drafts = focus ? [] : newDrafts().filter(d => !n || norm(d.text).includes(n));
     c.more = c.more || {};
     const chip = (k, label) => `<span class="ch-chip ${k}" data-chchip="${k}"><i class="ch-fdot ${k === 'status' ? c.filter : 'subject'}"></i>${esc(label)}<button type="button" data-chchipx="${k}" aria-label="Remove filter ${esc(label)}">✕</button></span>`;
@@ -202,8 +208,8 @@ window.WizCore.chatsParts.listpaint = function ({ actAllAgents, activityBody, ag
     // The Inbox sort, in the filter sheet while the title bar is on (it left Inbox's section row): Chats' own Ready order.
     const tbSort = () => { const L = window.WizChatsListModel, o = L.activitySortOf(chatVars.readyOrder);
       return `<h5>Sort</h5><div class="ch-fopts ch-fsort">${L.ACTIVITY_SORTS.map(([v, l]) => `<button type="button" class="ch-fopt${o === v ? ' on' : ''}" data-chfsort="${v}" aria-pressed="${o === v}">${esc(l)}${o === v ? '<b>✓</b>' : ''}</button>`).join('')}</div>`; };
-    const html = side ? `<div data-part="list" class="ch-list ch-side${feed ? ' ch-side-feed' : runView ? ' ch-side-run' : sentView ? ' ch-side-sent' : chatVars.chanView === 'channels' ? ' ch-side-chan' : ''}">${head}<div class="ch-scroll">${body}</div>${feed && typeof jumpPillsHtml === 'function' ? jumpPillsHtml() : ''}${feed ? fab : ''}${sentTabs ? sentBar(w) : ''}</div>`
-      : `<div data-part="list" class="ch-list${AGID ? ' agent' : ''}${compactOn() ? ' compact' : ''}${byStatus() ? ' by-status' : ''}"${focusedAgent(focus) ? ` style="--agc:${AGS()?.colour(agentRec(focusedAgent(focus))) || ''};--ch-agent-hue:${AGS()?.distinctHues().get(focusedAgent(focus)) ?? AGS()?.hue(agentRec(focusedAgent(focus)))}"` : ''}><div data-slot="list-top"></div>${tbTab ? titleBar(tbTab, { n: c.inboxN, tools: tbTab !== 'sent', searching: tbFind, filtered: !!F, sheet: !!c.sheet, pick: csw }) : ''}${runView ? runningHead() : sentView ? '' : head}${sync}<div class="ch-ptr" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 5v14M6 13l6 6 6-6"/></svg><span>Pull to refresh</span></div><div class="ch-scroll">${runView || sentView ? '' : sugHtml + unsentRow}${runRow}${body}</div>${feed && typeof jumpPillsHtml === 'function' ? jumpPillsHtml() : ''}${pill}${runView ? '' : fab}${sentTabs && !csw ? sentBar(w) : ''}${feed || chanOn ? '' : focusStrip(w)}${c.sheet ? filterSheet(w, c, tbTab === 'inbox' ? tbSort() : '') : ''}</div>`;
+    const html = side ? `<div data-part="list" class="ch-list ch-side${feed ? ' ch-side-feed' : runView ? ' ch-side-run' : chatVars.chanView === 'channels' ? ' ch-side-chan' : ''}">${head}<div class="ch-scroll">${body}</div>${feed && typeof jumpPillsHtml === 'function' ? jumpPillsHtml() : ''}${feed ? fab : ''}${sentTabs ? sentBar(w) : ''}</div>`
+      : `<div data-part="list" class="ch-list${AGID ? ' agent' : ''}${compactOn() ? ' compact' : ''}${byStatus() ? ' by-status' : ''}"${focusedAgent(focus) ? ` style="--agc:${AGS()?.colour(agentRec(focusedAgent(focus))) || ''};--ch-agent-hue:${AGS()?.distinctHues().get(focusedAgent(focus)) ?? AGS()?.hue(agentRec(focusedAgent(focus)))}"` : ''}><div data-slot="list-top"></div>${tbTab ? titleBar(tbTab, { n: c.inboxN, tools: tbTab !== 'sent', searching: tbFind, filtered: !!F, sheet: !!c.sheet, pick: csw }) : ''}${runView ? runningHead() : sentView ? '' : head}${sync}<div class="ch-ptr" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 5v14M6 13l6 6 6-6"/></svg><span>Pull to refresh</span></div><div class="ch-scroll">${runView || sentView ? '' : sugHtml + unsentRow}${runRow}${body}</div>${feed && typeof jumpPillsHtml === 'function' ? jumpPillsHtml() : ''}${pill}${runView || pane ? '' : fab /* (the pane's New chat is the sidebar's own + under it) */}${sentTabs && !csw ? sentBar(w) : ''}${feed || chanOn ? '' : focusStrip(w)}${c.sheet ? filterSheet(w, c, tbTab === 'inbox' ? tbSort() : '') : ''}</div>`;
     // Unchanged list reads keep the same nodes, caret, scroll and text selection.
     // A thread/list remount invalidates the identity guard even when its HTML matches.
     if (c.listHTML === html && c.listRoot === el.firstElementChild) { PW?.paint(w.id, el); return; }

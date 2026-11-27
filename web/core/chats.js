@@ -169,6 +169,7 @@ window.WizCore.chats = function createChats(H) {
     get readyOrder() { return readyOrder; }, set readyOrder(v) { readyOrder = v; },
     get rowChan() { return rowChan; }, set rowChan(v) { rowChan = v; },
     get rowListAgent() { return rowListAgent; }, set rowListAgent(v) { rowListAgent = v; },
+    get rowCur() { return rowCur; }, set rowCur(v) { rowCur = v; },
     get rowSheet() { return rowSheet; }, set rowSheet(v) { rowSheet = v; },
     get secOpen() { return secOpen; }, set secOpen(v) { secOpen = v; },
     get selT() { return selT; }, set selT(v) { selT = v; },
@@ -375,7 +376,7 @@ window.WizCore.chats = function createChats(H) {
   chanreadLate({ deferredOf });
   // Unified Chats: in the owner's main list, a private agent's row wears the lock. data-wiz-private keeps its words out
   // of the screen text sent as context with a message to another agent (core/screen-text.js).
-  let rowListAgent = '', rowChan = false;
+  let rowListAgent = '', rowChan = false, rowCur = '';
   /* A thread row in a list; core/chats-rows.js. */
   const { alertFeedback, chatRow, INBOX_SVG, inboxCanSend, inboxHeadHtml, inboxMove, READY_ORDER_KEY, READY_ORDER_LABEL, READY_ORDERS, runningBack, runningBody, runningGo, runningHead, runningOn, runningOpen, runningRow, runningSideGo, sweepAnswer, sweepHtml, sweepLater, sweepYesToAll, bindLate: rowsLate } = window.WizCore.chatsParts.rows({ actRowMark, agentLabelOf, ago, AGS: (...a) => AGS(...a), ATT, attOf, BOOM, ch, CH, chanName, channelsLate, chanStore, chanTitle, chatVars, clip, deferredOf, draftTag, esc, feedLate, H, isWorking, KIT, LIVE, paintListsNow, PIN, PIN_SVG, renderThreadNow, rerenderList, STI, STI_LAB, STI_TIP, stiKind, storeAgent, subjectOf, toast, TOPIC, topicOn, W, winAgent });
   /* The Sent tab and the bottom tabs Inbox · Tags · Sent (wizard-ux issue 1778); core/chats-sent.js. */

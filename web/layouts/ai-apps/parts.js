@@ -334,5 +334,14 @@ export function appLayers(desks, pins, { main = null, lit = () => false, manual 
 /** Layer 3's exclusions: what the picker never repeats (pinned or open). */
 export const shownIds = (layers, chats = 'wizard') => new Set([chats, ...layers.pinned.map(p => p.id), ...layers.open.map(d => d.id)]);
 
+/** The Chats list in the sidebar pane (wizard-ux issue 1966: the phone's title bar, rows and tabs, one design): the
+ * shared `.ch-list` Chats drew into the pane's `.aad-chan` box (not a `.ch-side` strip), or null. */
+export function sharedList(box) {
+  const l = box && !box.hidden ? box.children?.[0] : null;
+  return l && l.classList?.contains('ch-list') && !l.classList.contains('ch-side') ? l : null;
+}
+/** Its rows in one section (a thread's id, an alert's notif: id), in the order they are drawn. */
+export const sharedIds = node => [...(node?.querySelectorAll?.('[data-chopen], [data-chnotif]') || [])].map(b => b.dataset.chopen || 'notif:' + b.dataset.chnotif);
+
 /** Round 20 item 9: the flat Ready's tiny muted tag, only on the rows that wait on him (FYI, Done, plain: none). */
 export const STATE_TAG = Object.freeze({ approval: 'Approve', needs: 'Needs you', check: 'Your call', failed: 'Error' });
