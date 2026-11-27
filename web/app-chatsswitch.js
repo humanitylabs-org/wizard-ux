@@ -9,8 +9,9 @@
  *                                                  anywhere else (or back on the tile) changes nothing;
  *   a sideways swipe on the Chats tile             flips between the last two views (nothing with only one so far);
  *   a sideways swipe on the bar or the orb         while Chats is in front: one view along the sheet's order
- *                                                  (Inbox, Sent, Archived, then the tags and agents), stopping at
- *                                                  the ends (app-scrub.js asks `stepper`).
+ *                                                  (Inbox, Sent, Archived, then the tags and agents); past the first
+ *                                                  or the last view it moves to the next section as before, so the
+ *                                                  bar still leaves Chats (app-scrub.js asks `stepper`).
  * Tapping Chats from another section still goes to Chats in the view it was left in. The sheet's views and the switch
  * itself are Chats' own (CHATS.switcher: views, view, go), so the list and the sheet can't disagree. */
 'use strict';
@@ -150,10 +151,11 @@ window.WizCore.appParts.chatsswitch = function ({ $, appVars, CHATS, CHATS_APP, 
     return csPick(to);
   }
   function csOrder() { const v = S().views(csWin()); return [...v.base, ...v.grid].map(x => x.key); }
-  // step +1: the next view along the sheet (a swipe to the left); -1: the one before. The ends stay.
+  // step +1: the next view along the sheet (a swipe to the left); -1: the one before. False past the first or the last
+  // view: the bar then moves to the next section as before (Home before Inbox, Messenger after the last tag).
   function csStep(step) {
     const list = csOrder(), at = list.indexOf(csNow()), to = (at < 0 ? 0 : at) + step;
-    if (at >= 0 && (to < 0 || to >= list.length)) { vib(4); return false; }
+    if (at >= 0 && (to < 0 || to >= list.length)) return false;
     vib(8); return csPick(list[Math.max(0, Math.min(list.length - 1, to))]);
   }
   // app-scrub.js: while Chats is in front, the bar's and the orb's sideways swipes step views (null: scrub as before).

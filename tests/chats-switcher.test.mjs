@@ -2,7 +2,8 @@
 // (web/app-chatsswitch.js) runs in node:vm against a fake bar and a fake Chats; the Chats part (web/core/chats-sent.js)
 // runs with fake channels. Covered: switch off changes nothing; tap Chats on Chats opens the sheet (again closes it);
 // the title's ▾ opens the same sheet; hold Chats, slide and let go opens the item under the finger (let go on nothing:
-// no change); a sideways swipe on the tile flips the last two views and never reaches the bar scrub; the bar's steps;
+// no change); a sideways swipe on the tile flips the last two views and never reaches the bar scrub; the bar's steps
+// (past the first or the last view the bar moves sections as before, web/app-scrub.js);
 // Back closes only the sheet; the title and the views the sheet lists; switching views. Browser proof:
 // tests/qa-chats-switcher.cjs (phone, Nebula and a light skin, switch on and off).
 import test from 'node:test';
@@ -118,13 +119,13 @@ test('a sideways swipe on the Chats tile flips the last two views and never reac
   assert.deepEqual(one.calls.go, [], 'with one view used so far it does nothing');
 });
 
-test('the bar and the orb step one view at a time while Chats is in front, stopping at the ends', () => {
+test('the bar and the orb step one view at a time while Chats is in front; past the ends the bar moves sections as before', () => {
   const h = shell();
   const step = h.api.chatsStepper(); assert.equal(typeof step, 'function');
-  step(-1); assert.deepEqual(h.calls.go, [], 'the first view: a step back stays');
+  assert.equal(step(-1), false, 'before Inbox: not a view step (app-scrub.js then swipes to Home)'); assert.deepEqual(h.calls.go, []);
   step(1); step(1); step(1); step(1);
   assert.deepEqual(h.calls.go, ['sent', 'archived', '#philosopher', '#@agent:claude']);
-  step(1); assert.equal(h.calls.go.length, 4, 'the last view: it stays');
+  assert.equal(step(1), false, 'after the last view: not a view step (the next section)'); assert.equal(h.calls.go.length, 4);
   h.setSection('home'); assert.equal(h.api.chatsStepper(), null, 'elsewhere the bar scrubs sections as before');
 });
 
