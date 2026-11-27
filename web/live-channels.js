@@ -432,8 +432,8 @@ window.WizCore.liveParts.channels = function () {
       const j = await (await req('/wizard/v1/agent-inbox?state=new,surfaced&limit=200', { cache: 'no-store' })).json();
       return (Array.isArray(j?.records) ? j.records : []).map(alertRec).filter(r => r && LATER.has(r.kind)).sort((a, b) => b.updatedAt - a.updatedAt || (a.id < b.id ? -1 : 1)).slice(0, 30);
     }
-    /* Inbox rows (wizard-ux issue 1779, switch wizard/inbox-rows): the records waiting on the owner (kind needs_you,
-     * state new; `failed` when the task failed or stalled), read only while the switch asks for them, kept fresh like
+    /* Inbox rows (wizard-ux issue 1779): the records waiting on the owner (kind needs_you, state new; `failed` when
+     * the task failed or stalled), read only while the Inbox asks for them, kept fresh like
      * the Running list. archive(id): PATCH <id> {action: archive}, gone from the list on this frame. A 404 is none. */
     const nd = { records: [], ok: false, gone: false, at: 0, busy: null };
     function readNeeds() {

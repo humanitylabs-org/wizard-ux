@@ -10,5 +10,5 @@
   "issues": [
     "humanitylabs-org/wizard-ux#1887"
   ],
-  "description": "With Inbox rows on: Pin to top in a thread's menu (hold, right-click or Shift+F10) keeps it first in Chats › Inbox, above today's Daily, as a normal row with a pin mark, whatever else arrives. Unpin puts it back. An agent can pin a thread too (it goes on the same pin list, so Unpin works the same). A read pinned thread does not add to the Inbox count."
+  "description": "Pin to top in a thread's menu (hold, right-click or Shift+F10) keeps it first in Chats › Inbox, above today's Daily, as a normal row with a pin mark, whatever else arrives. Unpin puts it back. An agent can pin a thread too (it goes on the same pin list, so Unpin works the same). A read pinned thread does not add to the Inbox count."
 }
