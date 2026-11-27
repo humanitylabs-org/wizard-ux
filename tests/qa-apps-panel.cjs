@@ -1,6 +1,6 @@
 'use strict';
 // wizard-ux issue 1955 in a real browser: the phone Apps tile's Favorites panel, the hold-for-nine bubbles and the bar
-// swipe through Recent (switch wizard/apps-panel, with the four-section bar wizard/phone-sections on).
+// swipe through Recent (switch wizard/apps-panel; the four-section phone bar is on for everyone since #1956).
 // Phones 393 and 360 px wide (QA_CASES=412 for pitch shots), Nebula and Light (obsidian-light), a synthetic box with six
 // apps installed (one with a long name) and a Recent list. Switch on, it checks every ask of the issue: the panel's place,
 // size, rows and order; search and Enter; All apps; Edit (stars, drag, minus); the long-press menu; the Recent x; closing
@@ -16,7 +16,7 @@ const { ownerRead } = require('../tools/qa-desktop-frame-fixture.cjs');
 const fs = require('node:fs'), path = require('node:path');
 const repo = path.resolve(__dirname, '..'), origin = 'https://apps-panel.test', prefix = '/wizard-os-home/';
 const web = process.env.QA_WEB || path.join(repo, 'web'), out = process.env.QA_OUT || path.join(repo, 'apps-panel-evidence');
-const SW = 'wizard/apps-panel', SECTIONS = 'wizard/phone-sections', on = process.env.QA_SWITCH !== 'off';
+const SW = 'wizard/apps-panel', on = process.env.QA_SWITCH !== 'off';
 const ANDROID = 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Mobile Safari/537.36';
 const CASES = [{ name: '393', width: 393, height: 852 }, { name: '360', width: 360, height: 780 }, { name: '412', width: 412, height: 915, only: true }]
   .filter(c => process.env.QA_CASES ? process.env.QA_CASES.split(',').includes(c.name) : !c.only);
@@ -38,7 +38,7 @@ async function boot(browser, c, skin, prefs, { recent = RECENT, local = {} } = {
     const seed = { 'wux.apps.v1': JSON.stringify(APPS), 'wos.shell': 'phone', 'wux.shell': 'phone', 'wos.coached': 'true', 'wos.tour.v1': 'true', 'wos.tour.done': '1', 'wos.welcome.v1': 'done', 'wos.voiceTipSeen': 'true', 'wos.skin': skin,
       'wos.recent': JSON.stringify(recent), 'wos.skin-tweaks.v1': JSON.stringify({ version: 1, preset: 'none', off: {}, mix }), ...local };
     for (const [k, v] of Object.entries(seed)) localStorage.setItem(k, v);
-  }, { skin, mix: { [SECTIONS]: true, ...(on ? { [SW]: true } : {}) }, APPS, recent, local });
+  }, { skin, mix: on ? { [SW]: true } : {}, APPS, recent, local });
   await context.route('**/*', async r => {
     const q = r.request(), u = new URL(q.url()), p = u.pathname, method = q.method();
     if (u.origin !== origin) return r.abort();
@@ -63,7 +63,7 @@ async function boot(browser, c, skin, prefs, { recent = RECENT, local = {} } = {
   page.on('pageerror', e => errors.push(e.message));
   await page.goto(origin + prefix + 'index.html?phone');
   await page.waitForFunction(() => window.__wos && !window.WosWelcome?.active && window.WosExperience?.state.tweaks.length && !window.WosExperience.state.busy);
-  await page.waitForFunction(ids => ids.every(id => (document.documentElement.dataset.tweaks || '').split(' ').includes(id)) && document.querySelector('.sec-tile'), [SECTIONS, ...(on ? [SW] : [])]);
+  await page.waitForFunction(ids => ids.every(id => (document.documentElement.dataset.tweaks || '').split(' ').includes(id)) && document.querySelector('.sec-tile'), on ? [SW] : []);
   await nap(900);
   await page.addStyleTag({ content: '#wosWelcome{display:none!important}' });
   return { context, page, errors, puts };

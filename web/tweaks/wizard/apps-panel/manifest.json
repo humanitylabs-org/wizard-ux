@@ -10,7 +10,7 @@
   "issues": [
     "humanitylabs-org/wizard-ux#1955"
   ],
-  "description": "With the four-section phone bar, tapping Apps opens a slim panel above the tile instead of the full-screen grid: Search apps with All apps and Get apps at the top, your Favorites (Edit to reorder, remove or add), and your last four Recent apps nearest your thumb, each with an \u00d7 to take it off Recent. Holding Apps shows nine big bubbles of your recent and favorite apps: slide onto one and let go. While an app is in front, a sideways swipe anywhere on the bar steps one app back or forward through Recent. Favorites follow you to your other devices.",
+  "description": "On the phone, tapping Apps opens a slim panel above the tile instead of the full-screen grid: Search apps with All apps and Get apps at the top, your Favorites (Edit to reorder, remove or add), and your last four Recent apps nearest your thumb, each with an × to take it off Recent. Holding Apps shows nine big bubbles of your recent and favorite apps: slide onto one and let go. While an app is in front, a sideways swipe anywhere on the bar steps one app back or forward through Recent. Favorites follow you to your other devices.",
   "shells": [
     "phone"
   ]

@@ -72,7 +72,7 @@ window.WizCore.liveParts.work = function ({ J, req }) {
     replySummary: ['wos.chats.replySummary.v1', v => !!v && typeof v === 'object' && !Array.isArray(v) && typeof v.on === 'boolean', JSON.stringify],
     // The owner's other Wizards for the switcher (core/workspaces.js): the same list on every device of this box.
     savedWizards: ['wos.workspaces.box.v1', v => Array.isArray(v), JSON.stringify],
-    // The phone bar's pinned slot (app-sections.js, switch wizard/phone-sections): an app id, '' = Messenger.
+    // The phone bar's pinned slot (app-sections.js, wizard-ux#1929): an app id, '' = Messenger.
     phoneSlot: ['wos.phone.slot.v1', v => typeof v === 'string' && /^[A-Za-z0-9._-]{0,80}$/.test(v), String],
     // The phone Apps panel (app-appspanel.js, switch wizard/apps-panel): Favorites in order, and the apps taken off Recent.
     appFavorites: ['wos.apps.favorites.v1', v => Array.isArray(v) && v.every(x => typeof x === 'string' && /^[A-Za-z0-9._-]{1,80}$/.test(x)), JSON.stringify],

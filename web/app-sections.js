@@ -1,10 +1,10 @@
-/* Wizard UX phone shell › the four sections around the orb (wizard-ux#1929, switch wizard/phone-sections, off by default).
+/* Wizard UX phone shell › the four sections around the orb (wizard-ux#1929; on for everyone, the switch
+ * wizard/phone-sections is gone).
  *
- * With the switch on, the phone's bottom bar is Home · Chats · (orb) · Messenger · Apps instead of a row of desk dots
- * and the desk +. The orb itself is not touched (James, 27 Nov 2026: keep today's orb exactly as it is).
+ * The phone's bottom bar is Home · Chats · (orb) · Messenger · Apps instead of a row of desk dots and the desk +. The orb itself is not touched (James, 27 Nov 2026: keep today's orb exactly as it is).
  *
  * Sections are a view over the desks the shell already has, not a second window manager, so every app keeps its
- * place (its window stays loaded, nothing reloads) and turning the switch off leaves today's desks as they are:
+ * place (its window stays loaded, nothing reloads):
  *   Home      desk 0.
  *   Chats     the desk holding the main Chats window (opened when there is none).
  *   Messenger the pinned slot: the desk holding the slot app. The slot is Messenger, else the first chat/messaging app,
@@ -20,9 +20,10 @@
 window.WizCore = window.WizCore || {};
 window.WizCore.appParts = window.WizCore.appParts || {};
 window.WizCore.appParts.sections = function ({ $, APP, APPS, appVars, appsPanelHold, appsPanelHoldEnd, appsPanelHoldMove, appsPanelOn, appsPanelOpen, appsPanelToggled, appsStep, appsStepping, CHATS_APP, closeSheets, closeWin, esc, goDesk, HOME, launcher, LIVE, mainChats, openApp, openSheet, renderDots, renderLauncher, save, store, syncDesks, toast, vib, winApp }) {
-  const SEC_SWITCH = 'wizard/phone-sections', SEC_ORDER = ['home', 'chats', 'slot', 'apps'];
+  const SEC_ORDER = ['home', 'chats', 'slot', 'apps'];
+  // Always on in the phone shell; the desktop shell has its own bar.
   function secOn() {
-    try { const r = document.documentElement; return (r.getAttribute('data-tweaks') || '').split(' ').includes(SEC_SWITCH) && r.dataset.shell !== 'desktop'; } catch (_) { return false; }
+    try { return document.documentElement.dataset.shell !== 'desktop'; } catch (_) { return false; }
   }
   /* This device's Apps history: desk ids, the app in the Apps section first, the one a flip goes back to second. */
   /* var, not let: the shell's tests put this body back into app.js (tests/fixtures/app-parts.mjs), where goDesk may call
@@ -269,7 +270,7 @@ window.WizCore.appParts.sections = function ({ $, APP, APPS, appVars, appsPanelH
     const now = secOn(); secPainted = '';
     if (now && !secWas) { sectionsArrange(secD()[appVars.idx]); }
     secWas = now; renderDots(); sectionsPaint();
-  }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-tweaks', 'data-shell'] });
+  }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-shell'] });
   secReady = true;
   if (secOn()) sectionsArrange(secD()[appVars.idx]);
   sectionsPaint();

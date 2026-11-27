@@ -1,5 +1,5 @@
 /* Wizard UX phone shell › the Apps tile's Favorites panel and hold-for-nine quick switcher (wizard-ux#1955, switch
- * wizard/apps-panel, off by default; only with the four-section phone bar, app-sections.js).
+ * wizard/apps-panel, off by default; the phone's four-section bar, app-sections.js).
  *
  * Tap Apps: a slim panel above the tile instead of the full-screen Apps sheet. Top to bottom: \"Search apps\" with All
  * apps and Get apps, Favorites (the owner's pinned apps, in order, with Edit), Recent (the last four apps used that are
