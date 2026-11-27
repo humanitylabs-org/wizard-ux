@@ -26,7 +26,7 @@ window.WizCore.appParts.desks = function ({ $, appVars, CHATS, deskName, esc, HO
     if (from !== to && !CHATS.beforeNavigate(to?.wins || [])) { placeTrack(0, true); return; }
     if (from && to && from !== to && !from.home && !from.wins.length) { appVars.desks = appVars.desks.filter(d => d !== from); syncDesks(); n = appVars.desks.indexOf(to); }
     // Phone sections (wizard-ux#1929, switch wizard/phone-sections): the strip keeps the section desks first, in bar order.
-    if (sectionsArrange) { const k = sectionsArrange(to); if (k >= 0) n = k; }
+    if (typeof sectionsArrange === 'function') { const k = sectionsArrange(to); if (k >= 0) n = k; }
     const moved = from !== to;
     if (moved && appVars.sheet === 'settings' && !keepSettings) liftSettings(from && from.id); // explicit navigation parks Settings on the desk you leave
     appVars.idx = n;

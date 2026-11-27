@@ -158,7 +158,7 @@
   function swipeDesk(step) {
     const from = desks[idx]?.id;
     // With phone sections on, a swipe steps through Home, Chats, Messenger and Apps, never a new desk.
-    if (swipeBySection?.(step)) { /* moved by section */ }
+    if (typeof swipeBySection === 'function' && swipeBySection(step)) { /* moved by section */ }
     // The ＋ is the next destination after the last occupied desk, for swipes as well as taps.
     else if (step > 0 && idx === desks.length - 1) newDesk(); else goDesk(idx + step);
     // Only a swipe can be the iPhone's swipe home in disguise (undoLastMove below).
