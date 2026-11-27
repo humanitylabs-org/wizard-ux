@@ -1,8 +1,8 @@
-// Alerts as chat rows (wizard-ux issue 1941, switch wizard/plain-alert-rows, off by default): a Chats alert (a
-// Notifications item routed to Chats) is drawn as the thread row around it, marked only by a small bell before its
-// source name; no amber card, yellow tile, pill or time. Runs the real chats-inboxrows.js part (Inbox rows on) and the
-// real chats-notes.js part (the classic list). Switch off: exactly today's rows.
-// Browser proof: tests/qa-chats-plain-alert-rows.cjs (phone + Classic desktop, two skins, QA_ROWS=off, QA_SWITCH=off).
+// Alerts as chat rows (wizard-ux issue 1941, on for everyone; the switch wizard/plain-alert-rows is gone): a Chats alert
+// (a Notifications item routed to Chats) is drawn as the thread row around it, marked only by a small bell before its
+// source name; no amber card, yellow tile, pill or time, with no switch on. Runs the real chats-inboxrows.js part (the
+// Inbox rows) and the real chats-notes.js part (the classic list).
+// Browser proof: tests/qa-chats-plain-alert-rows.cjs (phone + Classic desktop, two skins, QA_ROWS=off).
 // Run: node --test tests/plain-alert-rows.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -11,7 +11,7 @@ import { readFileSync } from 'node:fs';
 import { modelContext } from './fixtures/chats-list-model.mjs';
 
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
-const SW = 'wizard/plain-alert-rows', NOW = Date.now();
+const NOW = Date.now();
 const M = modelContext({}).WizChatsListModel;
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 const clip = (s, n) => String(s).slice(0, n);
@@ -58,8 +58,8 @@ function inbox(tweaks) {
 const body = (api, awake, later = []) => api.inboxRowsBody({ id: 'w' }, [{ id: 't1', title: 'Weather', status: 'completed', preview: 'Sunny' }], { awake, later });
 const wrapOf = (html, id) => (new RegExp(`<div class="([^"]*)" data-morph-key="[^"]*"><button[^>]*data-chnotif="${id}"[\\s\\S]*?</button>(?:<button[^>]*class="ch-ib-arch"[^>]*>[\\s\\S]*?</button>)?</div>`).exec(html) || [])[0] || '';
 
-test('Inbox rows, switch on: an alert is the thread row (avatar, bell + source, title, preview, time, dot, Archive)', () => {
-  const { api } = inbox(`wizard/desktop-chats ${SW}`);
+test('Inbox rows, no switch: an alert is the thread row (avatar, bell + source, title, preview, time, dot, Archive)', () => {
+  const { api } = inbox('wizard/desktop-chats');
   const html = body(api, [ALERT, GROUP, APP], [SNOOZED]);
   const a = wrapOf(html, 'n1');
   assert.match(a, /^<div class="ch-row-wrap ch-ib-wrap ch-al-wrap"/, 'the thread row wrap, not the amber card');
@@ -83,24 +83,16 @@ test('Inbox rows, switch on: an alert is the thread row (avatar, bell + source, 
   assert.doesNotMatch(s, /ch-chan-dot/, 'snoozed: no dot');
 });
 
-test('Inbox rows, switch on: the row\'s Archive archives the alert, or all of a folded row', () => {
-  const { api, acts } = inbox(SW);
+test('Inbox rows: the row\'s Archive archives the alert, or all of a folded row', () => {
+  const { api, acts } = inbox('');
   const tap = v => ({ target: { closest: sel => sel === '[data-chibnote]' ? { dataset: { chibnote: v } } : null } });
   assert.equal(api.inboxRowsClick(tap('n1'), { id: 'w' }), true);
   assert.equal(api.inboxRowsClick(tap('fa fb'), { id: 'w' }), true);
   assert.deepEqual(JSON.parse(JSON.stringify(acts)), [['n1', 'done', ['n1']], ['fa', 'done', ['fa', 'fb']]]);
 });
 
-test('Inbox rows, switch off: the alert is today\'s row, byte for byte', () => {
-  const { api, n } = inbox('wizard/desktop-chats');
-  const html = body(api, [ALERT, GROUP], [SNOOZED]);
-  for (const it of [ALERT, GROUP, SNOOZED]) assert.ok(html.includes(n.noteRow(it)), 'today\'s noteRow for ' + it.id);
-  assert.match(n.noteRow(ALERT), /^<div class="ch-row-wrap ch-notif-wrap"/);
-  assert.doesNotMatch(html, /ch-al-|data-chibnote/);
-});
-
-test('classic list, switch on: a chat row with the bell + source in its line; switch off unchanged', () => {
-  const on = notes(SW).n, off = notes('').n;
+test('classic list, no switch: a chat row with the bell + source in its line', () => {
+  const on = notes('').n;
   const a = on.noteRow(ALERT);
   assert.match(a, /^<div class="ch-row-wrap ch-al-wrap" data-morph-key="notif:n1"><button type="button" class="ch-row ch-notif-row ch-al-row unread" data-chnotif="n1"/);
   assert.doesNotMatch(a, /ch-notif-wrap|ch-notif-from|ch-notif-ic/);
@@ -111,8 +103,5 @@ test('classic list, switch on: a chat row with the bell + source in its line; sw
   assert.match(on.noteRow(GROUP), /<i class="ch-chan-dot new" role="img" aria-label="Unread">/, 'unread dot');
   assert.match(on.noteRow(SNOOZED), /<span class="ch-act-ind" aria-hidden="true"><\/span><\/button>/, 'snoozed: the empty dot slot, like a read thread');
   assert.match(on.noteRow(SNOOZED), /ch-al-wrap later[^]*ch-al-row deferred/, 'snoozed reads as a read (deferred) row');
-  // Off: the amber row exactly as before (the same function, nothing else changes).
-  assert.match(off.noteRow(ALERT), /^<div class="ch-row-wrap ch-notif-wrap" data-morph-key="notif:n1"><button type="button" class="ch-row ch-notif-row unread" data-chnotif="n1"/);
-  assert.match(off.noteRow(ALERT), /<span class="ch-notif-from">Wizard<\/span>/);
+  assert.doesNotMatch(on.noteRow(SNOOZED) + on.noteRow(GROUP), /ch-notif-wrap|ch-notif-from|ch-notif-ic|ch-notif-n\b|Snoozed:/, 'no amber card parts on any alert row');
 });
-

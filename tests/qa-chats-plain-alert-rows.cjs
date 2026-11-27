@@ -1,13 +1,12 @@
 'use strict';
-// Plain alert rows (wizard-ux issue 1941, switch wizard/plain-alert-rows) in a real browser, disposable synthetic box only.
+// Plain alert rows (wizard-ux issue 1941, on for everyone; switch wizard/plain-alert-rows removed) in a real browser, disposable synthetic box only.
 // Phone 412x915 and Classic desktop 1440x960, Nebula and a light skin, with Inbox rows (on for everyone):
-//   switch on: an alert in Chats › Inbox (a Notifications item routed to Chats) is drawn as a thread row: the same row
+//   an alert in Chats › Inbox (a Notifications item routed to Chats) is drawn as a thread row: the same row
 //   layout as the thread rows around it (Inbox rows: round avatar, the source name on the label line, bold title, one
 //   preview line, time on the right, the unread dot, an Archive button), marked as an alert only by a small bell before
 //   the label. No amber background, outline, yellow tile, yellow pill or yellow time. A snoozed alert looks like a
 //   read thread (dimmed) and keeps the bell. Tap opens the alert, Shift+F10 (hold) opens the Alert actions sheet with
 //   Archive, a folded group keeps its count, the row's Archive archives it (all of a group).
-//   QA_SWITCH=off: today's amber rows, unchanged (QA_WEB=<git archive main>/web gives byte-identical list-*.html).
 const assert = require('node:assert/strict');
 const { chromium } = require('../tools/qa-playwright.cjs');
 const { ownerRead } = require('../tools/qa-desktop-frame-fixture.cjs');
@@ -15,7 +14,7 @@ const fs = require('node:fs'), path = require('node:path');
 const repo = path.resolve(__dirname, '..'), origin = process.env.QA_ORIGIN || 'https://plain-alert-rows-1941.test', prefix = '/wizard-os-home/';
 const web = process.env.QA_WEB || path.join(repo, 'web'), out = process.env.QA_OUT || path.join(repo, 'plain-alert-rows-evidence');
 const SHELLS = (process.env.QA_SHELLS || 'phone,classic').split(','), SKINS = (process.env.QA_SKINS || 'nebula,obsidian-light').split(',');
-const SW = process.env.QA_SWITCH !== 'off', ROWS = true; // Inbox rows are on for everyone (wizard-ux issue 1779)
+const SW = true, ROWS = true; // Inbox rows (wizard-ux issue 1779) and plain alert rows (issue 1941) are on for everyone
 fs.mkdirSync(out, { recursive: true });
 const now = Date.now(), sec = Math.floor(now / 1000), iso = t => new Date(t).toISOString(), nap = ms => new Promise(r => setTimeout(r, ms)), M = 60e3;
 const THREADS = {
@@ -44,7 +43,7 @@ const report = { origin, web, switch: SW ? 'on' : 'off', rows: ROWS ? 'on' : 'of
       const context = await browser.newContext({ viewport: phone ? { width: 412, height: 915 } : { width: 1440, height: 960 }, isMobile: phone, hasTouch: phone, serviceWorkers: 'block', ...(phone ? { userAgent: 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Mobile Safari/537.36' } : {}) });
       try {
         await context.routeWebSocket('**/*', w => w.close());
-        const mix = { 'wizard/desktop-chats': true, ...(SW ? { 'wizard/plain-alert-rows': true } : {}) };
+        const mix = { 'wizard/desktop-chats': true };
         await context.addInitScript(({ shell, skin, mix }) => {
           if (window !== top) return;
           if (sessionStorage.getItem('qaBoot')) return; sessionStorage.setItem('qaBoot', '1');
@@ -93,7 +92,6 @@ const report = { origin, web, switch: SW ? 'on' : 'off', rows: ROWS ? 'on' : 'of
         await page.goto(origin + prefix + (phone ? 'index.html?phone' : 'desktop.html'));
         await page.waitForFunction(() => (window.__wux || window.__wos) && !window.WosWelcome?.active && window.WosExperience?.state.tweaks.length && !window.WosExperience.state.busy);
         await page.addStyleTag({ content: '#wosWelcome{display:none!important}' });
-        if (SW) await page.waitForFunction(() => (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/plain-alert-rows'), null, { timeout: 15000 });
         await page.waitForFunction(() => (window.WosBell?.items?.() || []).length >= 4, null, { timeout: 15000 }).catch(() => {});
         if (phone) await page.evaluate(() => __wos.openSheet('inbox')); else await page.evaluate(() => __wux.openChatsList());
         const vis = sel => page.locator(sel).filter({ visible: true }).first();
@@ -179,9 +177,6 @@ const report = { origin, web, switch: SW ? 'on' : 'off', rows: ROWS ? 'on' : 'of
             entry.final = await lay();
             await shot('3-after-archive');
           }
-        } else {
-          fs.writeFileSync(path.join(out, `list-${stem}.html`), await page.evaluate(() => [...document.querySelectorAll('.ch-list')].find(n => n.getClientRects().length).innerHTML.replace(/\b\d+(m|h)\b/g, 'T')));
-          assert.ok(entry.first.some(r => /ch-notif-wrap/.test(r.cls)), 'switch off: today\'s alert rows');
         }
         assert.equal(entry.errors.length, 0, 'browser errors: ' + entry.errors.join('; '));
         assert.equal(entry.refused.filter(x => x.reason === 'unexpected-write').length, 0, 'unexpected writes: ' + JSON.stringify(entry.refused));

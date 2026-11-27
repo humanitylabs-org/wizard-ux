@@ -67,8 +67,8 @@ async function run(browser, { shell, skin, name, storage = {}, look = null }) {
     Object.assign(entry, await state());
     // Chats with the notifications
     await p.evaluate(phone => phone ? __wos.openSheet('inbox') : __wux.openChatsList?.(), phone); await nap(900);
-    entry.yellowRows = await p.evaluate(() => [...document.querySelectorAll('.ch-notif-wrap')].filter(n => n.getClientRects().length).length);
-    entry.yellowColour = await p.evaluate(() => { const n = [...document.querySelectorAll('.ch-notif-wrap')].find(n => n.getClientRects().length); return n ? getComputedStyle(n).backgroundColor + ' / ' + getComputedStyle(n).boxShadow : ''; });
+    entry.yellowRows = await p.evaluate(() => [...document.querySelectorAll('.ch-al-wrap')].filter(n => n.getClientRects().length).length);
+    entry.yellowColour = await p.evaluate(() => { const n = [...document.querySelectorAll('.ch-al-wrap')].find(n => n.getClientRects().length); return n ? getComputedStyle(n).backgroundColor + ' / ' + getComputedStyle(n).boxShadow : ''; });
     await p.screenshot({ path: path.join(out, `${shell}-${skin}-${name}-chats.png`) });
     // A notification opened in the chat window: one yellow message with Done, Snooze and Resolve this.
     entry.opened = await p.evaluate(id => !!window.WosSkinHost.inboxAct?.('open', id), NOTES[0].id); await nap(1200);

@@ -9,7 +9,7 @@
  * createChats (core/chats.js) calls this once with the closure names it reads. Loaded before chats.js by both shells. */
 window.WizCore = window.WizCore || {};
 window.WizCore.chatsParts = window.WizCore.chatsParts || {};
-window.WizCore.chatsParts.inboxrows = function ({ actMark, actNeeds, actUnread, AGS, agentName, agentRec, ago, attOf, chanAt, chanFace, chanStore, chatVars, ch, clip, draftTag, elOf, esc, isWorking, LIVE, noteAt, noteIcon, notePlain, noteRow, noteRowAct, noteSrcName, PIN, renderChatList, rowAgent, spacesOf, threadAct, toast, W, winAgent }) {
+window.WizCore.chatsParts.inboxrows = function ({ actMark, actNeeds, actUnread, AGS, agentName, agentRec, ago, attOf, chanAt, chanFace, chanStore, chatVars, ch, clip, draftTag, elOf, esc, isWorking, LIVE, noteAt, noteIcon, notePlain, noteRowAct, noteSrcName, PIN, renderChatList, rowAgent, spacesOf, threadAct, toast, W, winAgent }) {
   // Sent's thread rows (wizard-ux issues 1880, 1883) carry the same Archive button (inboxRowsClick).
   const ibModel = () => window.WizChatsListModel;
   const ibQuiet = s => !!LIVE.quietReply?.(s);
@@ -160,14 +160,12 @@ window.WizCore.chatsParts.inboxrows = function ({ actMark, actNeeds, actUnread, 
       title: esc(r.title || 'Background task'), mark: ibMark('needs'), line: `${r.failed ? '<em class="att failed">Failed:</em> ' : ''}${esc(clip(r.ask || '', 160))}`,
       after: `<button type="button" class="ch-ib-arch" data-chibrec="${esc(r.id)}" aria-label="Archive: ${esc(r.title || 'Background task')}" title="Archive">${IB_ARCH_SVG}</button>` });
   }
-  /* Plain alert rows (wizard-ux issue 1941, switch wizard/plain-alert-rows, off by default; James, 27 Nov 2026: "they
+  /* Plain alert rows (wizard-ux issue 1941, on for everyone since James's yes, 27 Nov 2026: "they
    * should be normal threads in the inbox that are marked alerts"): a Chats alert (a Notifications item routed to Chats)
    * is the same ibRow as the threads around it: the app's mark or the agent's as the avatar, a small bell before the
    * source name on the label line (the one alert marker), the title, the message as the preview line, the time, the
    * dot and an Archive button. The row button keeps the alert's own attributes, so open, the Alert actions sheet and
    * the folded count work as before. A snoozed (read) alert is a read row, still with the bell. */
-  const IB_ALERT = 'wizard/plain-alert-rows';
-  function ibAlertOn() { try { return (document.documentElement.dataset.tweaks || '').split(' ').includes(IB_ALERT); } catch (_) { return false; } }
   const IB_BELL = '<span class="ch-al-mk" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 16v-5a6 6 0 0 1 12 0v5l1.5 2h-15zM10 20.5a2 2 0 0 0 4 0"/></svg></span>';
   // (the alert's title as Chats' own alert rows read it: core/chats-notes.js noteTitle)
   const ibNoteTitle = it => notePlain(it.title) || notePlain(String(it.message || '').split('\n').find(l => l.trim())) || 'Notification';
@@ -198,10 +196,9 @@ window.WizCore.chatsParts.inboxrows = function ({ actMark, actNeeds, actUnread, 
     const sorted = L.activitySort(items.filter(x => !x.pin), order, { at: x => x.at, needs: x => x.needs });
     const inbox = items.filter(x => x.pin).sort((a, b) => a.pin - b.pin).concat(sorted);
     const snoozed = L.activitySort(g.snoozed.map(v => ({ id: v.id, v, at: chanAt(v) })).concat((nt?.later || []).map(v => ({ id: 'notif:' + v.id, n: v, at: noteAt(v) }))), 'newest', { at: x => x.at });
-    const alertRows = ibAlertOn();
     // Sends a graceful restart holds are not live work (wizard-ux issue 1362): not under Working.
     const work = g.working.filter(s => !globalThis.WizReach?.restartHeld?.(s));
-    const row = x => x.r ? ibRecRow(x.r) : x.n ? (alertRows ? ibNoteRow(x.n) : noteRow(x.n)) : ibThreadRow(x.s || x.v, x.pin);
+    const row = x => x.r ? ibRecRow(x.r) : x.n ? ibNoteRow(x.n) : ibThreadRow(x.s || x.v, x.pin);
     const SEC_PAGE = 50, page = (k, list) => { const shown = c.more?.[k] ? list : list.slice(0, SEC_PAGE); return shown.map(row).join('') + (list.length > shown.length ? `<button class="ch-more" data-secmore="${k}">Show all ${list.length}</button>` : ''); };
     // The title bar (wizard-ux issue 1836) names Inbox and carries its count, sort and search: no section row, no fold.
     const ibTitled = c.tbar === 'inbox';
