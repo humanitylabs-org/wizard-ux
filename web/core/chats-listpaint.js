@@ -44,7 +44,7 @@ window.WizCore.chatsParts.listpaint = function ({ actAllAgents, activityBody, ag
     // (Working is Sent's filter). The AI apps sidebar pane has them too (wizard-ux issue 1807).
     const sentTabs = !feed && typeof sentTabsOn === 'function' && sentTabsOn(w), sentView = sentTabs && sentOpen(w);
     const runView = !sentView && typeof runningOpen === 'function' && runningOpen(w), runRow = !side && !runView && !feed && !sentTabs && typeof runningRow === 'function' ? runningRow(w) : ''; // wizard-ux issue 1569
-    // The title bar (wizard-ux issue 1836, switch wizard/chats-title-bar): the tab's name over the list, search and
+    // The title bar (wizard-ux issue 1836): the tab's name over the list, search and
     // filter as icons; the bodies read c.tbar (no Inbox section row) and leave the Inbox count in c.inboxN.
     const tbTab = !runView && sentTabs && typeof titleBarTab === 'function' ? titleBarTab(w) : '';
     c.tbar = tbTab; c.inboxN = 0;

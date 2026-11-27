@@ -176,7 +176,7 @@ window.WizCore.chatsParts.bind = function ({ activityClick, actSetOrder, AGS, al
       else setFocus(w, kind === 'agent' ? rememberedFocus(w, key) : { kind, key });
       return true;
     }
-    // The title bar's search icon and the filter sheet's sort (wizard-ux issue 1836, switch wizard/chats-title-bar).
+    // The title bar's search icon and the filter sheet's sort (wizard-ux issue 1836).
     if (e.target.closest('[data-chtbsearch]')) { const c = ch(id), open = !(c.tsearch || c.q || c.focus); c.tsearch = open; c.sheet = false;
       if (!open) { c.q = ''; c.focus = false; window.WizCore.chatSearch?.cancel(id); } renderChatList(w, elOf(id)); if (open) elOf(id)?.querySelector('[data-chsearch]')?.focus(); return true; }
     const fso = e.target.closest('[data-chfsort]'); if (fso) { ch(id).sheet = false; if (typeof actSetOrder === 'function') actSetOrder(fso.dataset.chfsort); rerenderList(w); return true; }

@@ -1769,6 +1769,7 @@
     "core/chats-swipe.js",
     "core/chats-threadacts.js",
     "core/chats-threadpaint.js",
+    "core/chats-title-bar.css",
     "core/chats-tracker.js",
     "core/chats-undo.js",
     "core/chats-view.css",
