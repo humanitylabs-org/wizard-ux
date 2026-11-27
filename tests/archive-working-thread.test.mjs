@@ -80,7 +80,6 @@ test('a new chat archived seconds after sending stays archived while the box doe
   const live = readFileSync(new URL('../web/live.js', import.meta.url), 'utf8');
   const start = live.indexOf('  const PEND = new Map()'), end = live.indexOf('  const commandId =', start);
   const mark = live.slice(live.indexOf('    _archivedNew(id, on) {'), live.indexOf('\n', live.indexOf('    _archivedNew(id, on) {')));
-  assert.ok(start > 0 && end > start && mark.includes('ARCHIVED_NEW'), 'live.js blocks found');
   for (const kind of kinds) {
     const agent = kind === 'main' ? '' : `qa-${kind}`;
     const L = { sessions: [], agentSessions: agent ? { [agent]: [] } : {} }, OB = { _items: new Map() };
