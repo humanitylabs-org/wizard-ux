@@ -381,10 +381,12 @@
     const priv = (typeof L.agentInbox?.privateDefault === 'function' && L.agentInbox.privateDefault()) || '';
     if (agent && agent !== priv) return;
     for (const [sid, p] of PEND) {
-      if (p.kind !== 'reply') continue;
-      const i = list.findIndex(s => s.id === sid), s = i >= 0 ? list[i] : DETAIL.get(sid);
+      if (p.kind !== 'reply' || (p.agent || '') !== agent) continue; // a reply to another agent's thread is in its own list
+      const i = list.findIndex(s => s.id === sid);
+      if (i >= 0 && !list[i].hidden) continue; // listed and shown: nothing to do
+      const s = i >= 0 ? list[i] : DETAIL.get(sid);
       // (a stale read that leaves it out again: the row this hold already showed goes back in)
-      if (!s || !(s.hidden || (i < 0 && s.sendShown)) || (i < 0 && (L.ownerOf(s) || '') !== agent)) continue;
+      if (!s || !(s.hidden || s.sendShown) || (i < 0 && (L.ownerOf(s) || '') !== agent)) continue;
       s.hidden = false; s.sendShown = true;
       if (i < 0) list.unshift(s);
       applyPend(s);

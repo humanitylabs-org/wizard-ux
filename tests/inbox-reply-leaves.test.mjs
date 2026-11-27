@@ -69,7 +69,7 @@ test('only the agents the box un-hides: main and the private default; never new 
   const { ctx } = harness({ priv: 'private' });
   ctx.DETAIL.set('qa-routed', { id: 'qa-routed', agent: 'coder', hidden: true });
   ctx.DETAIL.set('qa-private', { id: 'qa-private', agent: 'private', hidden: true });
-  ctx.PEND.set('qa-routed', reply('a')); ctx.PEND.set('qa-private', reply('b'));
+  ctx.PEND.set('qa-routed', { ...reply('a'), agent: 'coder' }); ctx.PEND.set('qa-private', { ...reply('b'), agent: 'private' }); // the hold names a routed agent
   const main = [], coder = [], mine = [];
   ctx.addSynthetic(main, ''); ctx.addSynthetic(coder, 'coder'); ctx.addSynthetic(mine, 'private');
   assert.deepEqual(main.map(s => s.id), [], 'another agent\'s thread is never put in the main list');
