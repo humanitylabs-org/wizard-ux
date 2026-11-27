@@ -28,10 +28,13 @@ const tapsMsg = (sid, message, button, label) => `Tapped ${label} · Four-sectio
 
 function makeBox() {
   const t0 = now / 1000;
-  const rewrite = () => [{ id: 4449732, role: 'assistant', content: ORIGINAL, timestamp: t0 - 300 }, { id: 4449733, role: 'user', content: REPORTER, timestamp: t0 - 290 },
+  // James's thread drew both replies as one turn, so its reporter row reached the shell as a non-owner row (a display
+  // kind); the plain-text shape is checked too (qa-rw-plain): it must never show as an owner bubble.
+  const rewrite = (kind = 'hidden') => [{ id: 4449732, role: 'assistant', content: ORIGINAL, timestamp: t0 - 300 }, { id: 4449733, role: 'user', content: REPORTER, timestamp: t0 - 290, ...(kind ? { display_kind: kind } : {}) },
     { id: 4449734, role: 'assistant', content: REWRITE, timestamp: t0 - 200 }];
   const threads = {
     'qa-rw': { agent: '', title: 'Phone navigation redesign', msgs: rewrite() },
+    'qa-rw-plain': { agent: '', title: 'Plain reporter row', msgs: rewrite('') },
     'qa-rw-old-tap': { agent: '', title: 'Tapped on the original', msgs: [...rewrite(), { id: 4449740, role: 'user', content: tapsMsg('qa-rw-old-tap', '4449732', 'try', 'Let me try it first'), timestamp: t0 - 100 }] },
     'qa-two': { agent: '', title: 'Two groups', msgs: [{ id: 501, role: 'user', content: 'Plan?', timestamp: t0 - 400 }, { id: 502, role: 'assistant', content: `Desks first.\n${GROUP('Ship desks', ['go', 'Go for it'], ['drop', 'Drop this'])}`, timestamp: t0 - 395 },
       { id: 503, role: 'assistant', content: `Then the workout.\n${GROUP('Workout', ['done', 'Done'])}`, timestamp: t0 - 390 }] },
@@ -142,6 +145,9 @@ const groupsOf = page => page.evaluate(() => [...document.querySelectorAll('.ch-
         assert.equal(await page.locator('.ch-thread .ch-rb [data-rb]').filter({ visible: true }).count(), 3);
         assert.match(entry.threadText, /ready for your call/);
         assert.doesNotMatch(entry.threadText, /behind its switch|\[reporter\]|Rewrite it now|WIZARD_/, 'no original text, no reporter prompt, no marker');
+        await openThread(page, phone, 'qa-rw-plain');
+        assert.deepEqual(await groupsOf(page), ['Four-section phone bar@4449734'], 'plain reporter row: one group');
+        assert.doesNotMatch(await thread(page).innerText(), /behind its switch|\[reporter\]|Rewrite it now/, 'plain reporter row: hidden, original replaced');
         // 2. A tap made on the original's message still shows as the pick.
         await openThread(page, phone, 'qa-rw-old-tap');
         assert.deepEqual(await groupsOf(page), ['Four-section phone bar@4449734']);
