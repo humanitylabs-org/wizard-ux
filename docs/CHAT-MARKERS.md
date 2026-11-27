@@ -51,7 +51,7 @@ The new Inbox rows are live. They start off; switch them on here:
 
 ## WIZARD_ACTION_V1: an app's proposed action in the chat
 
-wizard-ux issue 1463, behind the off-by-default switch `wizard/action-cards`; contract wizard-os `spec/APP_ACTIONS.md`
+wizard-ux issue 1463, on for everyone (switch `wizard/action-cards` removed); contract wizard-os `spec/APP_ACTIONS.md`
 (`wizard.app-actions/1`). An app's agent tool keeps a prepared action pending in the app (a Messenger draft, a mail
 reply, a calendar event) and hands the agent one marker line naming the app and the item. `web/core/action-cards.js`
 (`WosActionCards`) draws a card from the app's own answer at `<app url>api/actions/<id>` (title, body, fields, state,
@@ -59,9 +59,9 @@ open path): **Approve** (the app's own word, e.g. Send), **Edit** (editable fiel
 sends the edited words), **Open in app** (that item's page inside the app) and a quiet **Reject**. A decision is a
 `POST` to the same path with `X-Wizard-Action: 1`. The marker carries no text or route, so the card and what Approve
 does always come from the app. A message is history: the card shows the item's current state. The marker is always
-hidden from the text; with the switch off no card is drawn and nothing is read or sent.
+hidden from the text. Look: `web/core/action-cards.css`.
 
-- Tests: `tests/action-cards.test.mjs`; browser: `tests/qa-chat-action-cards.cjs` (`QA_SWITCH=off` for the off case).
+- Tests: `tests/action-cards.test.mjs`; browser: `tests/qa-chat-action-cards.cjs`.
 
 ## WIZARD_BUTTONS_V1: tap-to-answer buttons in a reply
 

@@ -1,23 +1,23 @@
 'use strict';
-// Inline action cards in chat (wizard-ux issue 1463, switch wizard/action-cards) in a real browser. A disposable
+// Inline action cards in chat (wizard-ux issue 1463, on for everyone) in a real browser. A disposable
 // synthetic transport (no box is read or written) and a stand-in Messenger that keeps three proposed actions under its
 // own api/actions/<id> (wizard-os spec/APP_ACTIONS.md, wizard.app-actions/1). A thread whose replies carry
 // [WIZARD_ACTION_V1] markers. Phone 412x915 and desktop 1440x900 (Classic), Nebula.
-//   QA_SWITCH=on (default): each marker is a card with the app's own preview; Edit changes the message, Send POSTs the
+//   Each marker is a card (also with an old saved "off" for the removed switch wizard/action-cards) with the app's own preview; Edit changes the message, Send POSTs the
 //     edited field with X-Wizard-Action: 1 and the card reads "Approved"; Reject on the second; Open in app opens
 //     Messenger at that item's own page; an item the app no longer has says so; no marker text anywhere.
 //   Agent parity: the same card in a routed thread of each kind (a host profile, a container and a restricted agent,
 //     served by /sessions?agent=): it reads the same app item path, Send posts and the card reads Approved.
-//   QA_SWITCH=off: no card, nothing read from or sent to the app. QA_EXPECT=broken (QA_WEB=<main worktree>/web) records
+//   QA_EXPECT=broken (QA_WEB=<main worktree>/web) records
 //     main's thread text (the marker shows as raw text there).
-// Screens in QA_OUT: <shell>-<switch>.png (+ -edit, -approved).
+// Screens in QA_OUT: <shell>.png (+ -edit, -approved).
 const assert = require('node:assert/strict');
 const { chromium } = require('../tools/qa-playwright.cjs');
 const { ownerRead } = require('../tools/qa-desktop-frame-fixture.cjs');
 const fs = require('node:fs'), path = require('node:path');
 const repo = path.resolve(__dirname, '..'), origin = process.env.QA_ORIGIN || 'https://chat-action-cards.test', prefix = '/wizard-os-home/';
 const web = process.env.QA_WEB || path.join(repo, 'web'), out = process.env.QA_OUT || path.join(repo, 'chat-action-cards-evidence');
-const SWITCH = process.env.QA_SWITCH || 'on', EXPECT = process.env.QA_EXPECT || 'fixed', SHELLS = (process.env.QA_SHELLS || 'phone,desktop').split(',');
+const EXPECT = process.env.QA_EXPECT || 'fixed', SHELLS = (process.env.QA_SHELLS || 'phone,desktop').split(',');
 fs.mkdirSync(out, { recursive: true });
 const now = Date.now(), iso = t => new Date(t).toISOString(), nap = ms => new Promise(r => setTimeout(r, ms));
 const APP = { id: 'wizard-messenger', name: 'Messenger', url: '/wizard-messenger/', source: 'apps.json', type: 'view', kind: 'wizard', status: 'running' };
@@ -38,23 +38,23 @@ const ROUTED = Object.fromEntries(KINDS.map(([id]) => [id, [routedRow(id)]]));
 const routedDraft = id => ({ schema: 'wizard.app-actions/1', id: 'draft-' + id, kind: 'Draft reply', title: 'Reply to ' + id, state: 'pending', approve_label: 'Send', fields: [{ id: 'text', label: 'Message', value: 'From the ' + id + ' agent', editable: true }] });
 const ROW = { id: 'qa-act', title: 'Messenger drafts', runtime: 'direct', status: 'completed', updated_at: iso(now - 6e4), updatedAt: iso(now - 6e4), last_active: (now - 6e4) / 1000, message_count: 4, messageCount: 4, archived: false, preview: REPLY2 };
 const PAGE = `<!doctype html><meta charset="utf-8"><title>Messenger</title><body style="font:16px system-ui;padding:24px"><h1>Messenger (stand-in)</h1><p id="at"></p><script>window.seenAt = location.search; document.getElementById('at').textContent = 'Open: ' + (location.search || 'home');</script></body>`;
-const report = { origin, web, switch: SWITCH, expect: EXPECT, cases: [] };
+const report = { origin, web, expect: EXPECT, cases: [] };
 (async () => {
   const browser = await chromium.launch();
   try {
     for (const shell of SHELLS) {
-      const phone = shell === 'phone', stem = `${shell}-${SWITCH}${EXPECT === 'broken' ? '-main' : ''}`;
+      const phone = shell === 'phone', stem = `${shell}${EXPECT === 'broken' ? '-main' : ''}`;
       const entry = { stem, errors: [], refused: [], app: [] }; report.cases.push(entry);
       const actions = { ...ACTIONS(), ...Object.fromEntries(KINDS.map(([id]) => ['draft-' + id, routedDraft(id)])) };
       const context = await browser.newContext({ viewport: phone ? { width: 412, height: 915 } : { width: 1440, height: 900 }, isMobile: phone, hasTouch: phone, serviceWorkers: 'block', ...(phone ? { userAgent: 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Mobile Safari/537.36' } : {}) });
       try {
         await context.routeWebSocket('**/*', w => w.close());
-        await context.addInitScript(({ shell, on, app }) => {
+        await context.addInitScript(({ shell, app }) => {
           if (window !== top) return;
           localStorage.setItem('wux.apps.v1', JSON.stringify([app]));
           for (const [k, v] of Object.entries({ 'wos.shell': shell, 'wux.shell': shell, 'wos.desktop-view.v1': 'classic', 'wos.coached': 'true', 'wos.tour.v1': 'true', 'wos.welcome.v1': 'done', 'wos.skin': 'nebula',
-            'wos.skin-tweaks.v1': JSON.stringify({ version: 1, preset: 'none', off: {}, mix: on ? { 'wizard/action-cards': true } : {} }) })) localStorage.setItem(k, v);
-        }, { shell, on: SWITCH === 'on', app: APP });
+            'wos.skin-tweaks.v1': JSON.stringify({ version: 1, preset: 'none', off: {}, mix: { 'wizard/action-cards': false } }) })) localStorage.setItem(k, v);
+        }, { shell, app: APP });
         await context.route('**/*', async r => {
           const q = r.request(), u = new URL(q.url()), method = q.method(), p = u.pathname;
           if (u.origin !== origin) { entry.refused.push({ method, url: q.url(), reason: 'external' }); return r.abort(); }
@@ -106,8 +106,9 @@ const report = { origin, web, switch: SWITCH, expect: EXPECT, cases: [] };
         await page.goto(origin + prefix + (phone ? 'index.html?phone' : 'desktop.html'));
         await page.waitForFunction(() => (window.__wux || window.__wos) && window.WosExperience?.state.tweaks.length && !window.WosExperience.state.busy, null, { timeout: 30000 });
         await page.addStyleTag({ content: '#wosWelcome{display:none!important}' });
-        entry.switchOn = await page.evaluate(() => (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/action-cards'));
-        if (EXPECT !== 'broken') assert.equal(entry.switchOn, SWITCH === 'on', 'switch state as asked');
+        // The removed switch's old saved choice is cleared from this device (core/experience.js GONE).
+        entry.staleCleared = await page.evaluate(() => !Object.hasOwn(JSON.parse(localStorage.getItem('wos.skin-tweaks.v1') || '{}').mix || {}, 'wizard/action-cards'));
+        if (EXPECT !== 'broken') assert.equal(entry.staleCleared, true, 'old saved choice cleared');
         await page.evaluate(phone => phone ? __wos.openSheet('inbox') : __wux.openChatsList(), phone);
         const listRow = page.locator('.ch-list [data-chopen="qa-act"]').filter({ visible: true }).first();
         await listRow.waitFor({ timeout: 15000 });
@@ -118,14 +119,10 @@ const report = { origin, web, switch: SWITCH, expect: EXPECT, cases: [] };
         await nap(1500);
         entry.threadText = (await thread.innerText()).slice(0, 1500);
         const cards = page.locator('.ch-thread [data-action-card]').filter({ visible: true });
-        if (EXPECT === 'broken' || SWITCH === 'off') {
+        if (EXPECT === 'broken') {
           entry.cards = await cards.count();
           await page.locator('.ch-thread .msg.a').first().scrollIntoViewIfNeeded().catch(() => {});
           await page.screenshot({ path: path.join(out, stem + '.png') });
-          if (EXPECT !== 'broken') {
-            assert.equal(entry.cards, 0, 'off: no card');
-            assert.equal(entry.app.length, 0, 'off: nothing read from or sent to the app: ' + JSON.stringify(entry.app));
-          }
           assert.equal(entry.errors.length, 0, 'browser errors: ' + entry.errors.join('; '));
           entry.pass = true; continue;
         }
@@ -199,10 +196,10 @@ const report = { origin, web, switch: SWITCH, expect: EXPECT, cases: [] };
         assert.equal(entry.refused.filter(x => x.reason === 'unexpected-write').length, 0, 'no unexpected writes: ' + JSON.stringify(entry.refused));
         entry.pass = true;
       } catch (e) { entry.failure = e.stack; const pages = context.pages(); if (pages[0]) await pages[0].screenshot({ path: path.join(out, stem + '-failure.png') }).catch(() => {}); }
-      finally { fs.writeFileSync(path.join(out, `report-${SWITCH}-${EXPECT}.json`), JSON.stringify(report, null, 2)); await context.close(); }
+      finally { fs.writeFileSync(path.join(out, `report-${EXPECT}.json`), JSON.stringify(report, null, 2)); await context.close(); }
     }
   } finally { await browser.close(); }
   const failed = report.cases.filter(c => !c.pass);
-  console.log(JSON.stringify({ switch: SWITCH, expect: EXPECT, cases: report.cases.length, passed: report.cases.length - failed.length, failed: failed.map(c => c.stem + ': ' + String(c.failure).split('\n').slice(0, 2).join(' | ')) }));
+  console.log(JSON.stringify({ expect: EXPECT, cases: report.cases.length, passed: report.cases.length - failed.length, failed: failed.map(c => c.stem + ': ' + String(c.failure).split('\n').slice(0, 2).join(' | ')) }));
   if (failed.length) process.exitCode = 1;
 })().catch(e => { console.error(e); process.exitCode = 1; });
