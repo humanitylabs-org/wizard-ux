@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { shader } from './fixtures/s1-glsl.mjs';
 const source = readFileSync(new URL('../web/orb.js', import.meta.url), 'utf8');
-function orb(skin = 'nebula', id = 'orb') {
+function orb(skin = 'nebula', id = 'orb', inDock = false) {
   let now = 0, next, reads = 0;
   const uniforms = {}, observers = [], sources = [];
   const icon = { content: true, hasChildNodes() { return this.content; } };
@@ -15,7 +15,7 @@ function orb(skin = 'nebula', id = 'orb') {
   const gl = new Proxy({ getShaderParameter: () => true, getProgramParameter: () => true,
     getUniformLocation: (_, key) => key, uniform1f: (key, value) => { uniforms[key] = value; }, shaderSource: (_, src) => sources.push(src) },
     { get: (obj, key) => obj[key] || (() => ({})) });
-  const canvas = { id, parentElement: host, closest: () => device, clientWidth: 64, clientHeight: 64,
+  const canvas = { id, parentElement: host, closest: sel => sel === '#dock' ? (inDock ? {} : null) : device, clientWidth: 64, clientHeight: 64,
     getContext: () => gl, addEventListener() {} };
   const fallback = {};
   const document = { documentElement: root, hidden: false, addEventListener() {},
@@ -125,15 +125,15 @@ test("James 29 Oct: the white top-left shine on the orb goes while the white app
   assert.ok(o.uniforms.gloss > .999, 'other skins keep their shine');
 });
 
-// Phone bar (wizard-ux issue 1533, switch wizard/phone-nav): the phone's own orb drops its sparkles, the swirl stays;
-// every other orb and this one with the switch off keep them.
-test('wizard/phone-nav takes the sparkles out of the phone orb only, in the real shader', () => {
-  const cases = [['nebula', 'orb', 'wizard/phone-nav', undefined, 0], ['grove', 'orb', 'wizard/desktop-chats wizard/phone-nav', undefined, 0],
-    ['nebula', 'orb', '', undefined, 1], ['nebula', 'orb', 'wizard/desktop-chats', undefined, 1], ['obsidian', 'orb', 'wizard/phone-nav', undefined, 1],
-    ['nebula', 'agentOrb', 'wizard/phone-nav', undefined, 1], ['nebula', 'orb', 'wizard/phone-nav', 'desktop', 1]];
-  for (const [skin, id, tweaks, shell, want] of cases) {
-    const o = orb(skin, id); o.root.dataset.tweaks = tweaks; if (shell) o.root.dataset.shell = shell; o.frame();
-    assert.equal(o.uniforms.sparkle, want, `${skin} #${id} [${tweaks}] ${shell || 'phone'}`);
+// Phone bar (wizard-ux issue 1533, on for everyone): the phone's own dock orb drops its sparkles, the swirl stays;
+// every other orb (Everywhere's floating orb, other skins, desktop, agent orbs) keeps them. No switch decides it.
+test('the phone dock orb has no sparkles, every other orb keeps them, in the real shader', () => {
+  const cases = [['nebula', 'orb', true, undefined, 0], ['grove', 'orb', true, undefined, 0], ['signal', 'orb', true, undefined, 0],
+    ['nebula', 'orb', false, undefined, 1], ['obsidian', 'orb', true, undefined, 1],
+    ['nebula', 'agentOrb', true, undefined, 1], ['nebula', 'orb', true, 'desktop', 1]];
+  for (const [skin, id, inDock, shell, want] of cases) {
+    const o = orb(skin, id, inDock); if (shell) o.root.dataset.shell = shell; o.frame();
+    assert.equal(o.uniforms.sparkle, want, `${skin} #${id} ${inDock ? 'in the dock' : 'floating'} ${shell || 'phone'}`);
   }
   const d = draw(), lit = d.all.filter(p => p.stars > 0);
   assert.ok(lit.length > 0, 'the shader draws some sparkles');

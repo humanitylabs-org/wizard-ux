@@ -401,10 +401,6 @@
       "help": "Five picks, then a first win.",
       "where": "Settings › Appearance › Try new features › Five-choice first chat"
     },
-    "wizard/catch-me-up": {
-      "help": "Say catch me up: a two-step summary.",
-      "where": "Settings › Appearance › Try new features › Catch me up"
-    },
     "wizard/private-first-setup": {
       "help": "New installs start private: Welcome leads with Tinfoil; Claude and ChatGPT are optional extras.",
       "where": "Settings › Appearance › Try new features › Private first setup"
@@ -490,11 +486,6 @@
     "wizard/apps-panel": {
       "help": "On the phone, tapping Apps opens a slim Favorites panel (search, Favorites, Recent with an x to take an app off) and holding Apps shows nine big bubbles of your recent apps: slide onto one and let go. With an app in front, swipe the bar sideways to step through Recent.",
       "where": "Settings › Appearance › Try new features › Phone Apps tile: Favorites panel and quick switcher",
-      "when": "phone only"
-    },
-    "wizard/phone-nav": {
-      "help": "Phone bar: bigger orb, one badge.",
-      "where": "Settings › Appearance › Try new features › Phone bar: bigger orb, one badge",
       "when": "phone only"
     },
     "wizard/channel-auto-emoji": {
