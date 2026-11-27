@@ -115,34 +115,13 @@ test('on for everyone (no switch); a routed agent or the main column feed window
   assert.match(f.p.sentBar(f.W.main), /data-chtab="inbox" aria-selected="true".*data-chtab="tags" aria-selected="false".*data-chtab="sent" aria-selected="false"/s);
 });
 
-test('Sent rows say where each capture went, its state and why; typed rows say what the router would have done', () => {
-  const rows = [
-    view('a', { route: 'dump', decidedBy: 'owner_words', rules: ['no_reply:note to self'], state: 'running', thread: 'worker_a' }),
-    view('b', { decidedBy: 'owner_words', rules: ['wants_reply:reply'] }),
-    view('c', { source: 'typed', decidedBy: 'owner_words', rules: ['typed'], wouldRoute: 'dump' }),
-    view('d', { source: 'typed', decidedBy: 'owner_words', rules: ['typed'], wouldRoute: 'agent' }),
-    view('e', { route: 'reminder', decidedBy: 'correction', state: 'needs_you', thread: null, record: 'inbox_' + 'e'.repeat(24) }),
-    view('f', { decidedBy: 'fallback', rules: ['router_not_configured'], state: 'failed', corrected: { shouldReply: false, at: 1 } }),
-    view('g', { route: 'command', decidedBy: 'model', text: 'Next desk\nsecond line <b>' }),
-  ];
-  const f = part({ rows }), body = f.p.sentBody(f.W.main);
-  const text = [...body.matchAll(/<div class="ch-sent-row[^"]*"[\s\S]*?<\/div><\/div>/g)].map(m => m[0].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim());
-  assert.equal(text.length, 7, 'one row per capture');
-  assert.match(text[0], /Words a 3m Background · Running · you said note to self/);
-  assert.match(text[1], /Thread · Done · you said reply/);
-  assert.match(text[2], /you typed it would have gone to background/);
-  assert.doesNotMatch(text[3], /would have/, 'no note when the router agreed');
-  assert.match(text[4], /Reminder · Needs you · your earlier correction/);
-  assert.match(text[5], /Thread · Failed · fallback: no router/);
-  assert.match(text[6], /^✓ Next desk 3m Command · Done · model/, 'the first line of his words, escaped');
-  assert.doesNotMatch(body, /<b>second/, 'never raw markup');
-  assert.match(body, new RegExp(`sent:${sid('f')}[\\s\\S]*data-chsentfix="quiet" data-id="${sid('f')}" aria-pressed="true"`), 'the correction he made stays marked');
-  // Working: the running ones only.
-  f.CH.main.sentFilter = 'working';
-  assert.deepEqual([...f.p.sentBody(f.W.main).matchAll(/data-chsentopen="([^"]+)"/g)].map(m => m[1]), [sid('a')]);
-  assert.match(f.p.sentHead(f.W.main), /data-chsentfilter="working" aria-pressed="true"[^>]*>Working <small>1<\/small>/);
+test('Sent is threads (wizard-ux issue 1880): no card per capture, no filter, no back row; its empty and loading states', () => {
+  const f = part({ rows: [view('a', { state: 'running' }), view('b')] }), body = f.p.sentBody(f.W.main);
+  assert.doesNotMatch(body, /ch-sent-row|data-chsentopen|data-chsentfix|data-chsentfilter|data-chsentback/, 'none of the old cards');
+  assert.equal(f.p.sentHead, undefined, 'no Sent head: the bottom tabs are the navigation');
   assert.match(part({ ok: false }).p.sentBody({ id: 'main' }), /Checking what you sent/);
   assert.match(part({ gone: true }).p.sentBody({ id: 'main' }), /no Sent log yet/);
+  assert.match(part({ rows: [] }).p.sentBody({ id: 'main' }), /Nothing sent yet\./);
 });
 
 test('tabs, corrections, a tap and Back', async () => {
@@ -151,12 +130,12 @@ test('tabs, corrections, a tap and Back', async () => {
   assert.equal(f.click(w, { chtab: 'tags' }), true); assert.equal(f.chatVars.chanView, 'channels', 'Tags = the Channels view');
   assert.equal(f.click(w, { chtab: 'sent' }), true); assert.equal(f.p.sentOpen(w), true);
   assert.match(f.p.sentBar(w), /data-chtab="sent" aria-selected="true"/);
-  f.click(w, { chsentfix: 'quiet', dataset: { id: sid('a') } });
-  f.click(w, { chsentfix: 'reply', dataset: { id: sid('e') } });
+  f.click(w, { rssentfix: 'quiet', dataset: { id: sid('a') } });
+  f.click(w, { rssentfix: 'reply', dataset: { id: sid('e') } });
   await new Promise(r => setImmediate(r));
   assert.deepEqual(clone(f.corrections), [[sid('a'), false], [sid('e'), true]], 'Didn\'t need a reply = false, Should have replied = true');
-  f.click(w, { chsentopen: sid('a') }); await new Promise(r => setImmediate(r));
-  f.click(w, { chsentopen: sid('e') }); await new Promise(r => setImmediate(r)); await new Promise(r => setImmediate(r));
+  f.click(w, { chsent: sid('a') }); await new Promise(r => setImmediate(r));
+  f.click(w, { chsent: sid('e') }); await new Promise(r => setImmediate(r)); await new Promise(r => setImmediate(r));
   assert.deepEqual(clone(f.opened), [['main', 'worker_a'], ['main', 'worker_from_record']], 'a row opens its thread; a background one the thread its record names');
   assert.deepEqual(clone(f.fetches), ['/wizard/v1/agent-inbox/inbox_' + 'e'.repeat(24)]);
   // Back from Sent: Inbox; Back again is not Sent's (the shell's own Back takes it, never leaving the app).

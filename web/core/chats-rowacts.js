@@ -57,10 +57,10 @@ window.WizCore.chatsParts.rowacts = function ({ ACT, actRestore, actUndo, BOOM, 
     for (const id of Object.keys(CH)) { const x = W[id]; if (x) renderChats(x); } H.changed?.();
   }
   /* Threads and alerts share one actions sheet, dismissal and gesture ownership. */
-  // A Sent row (wizard-ux issue 1814, switch wizard/sent-rows) is a row too: its sheet holds the routing corrections.
+  // A Sent row whose thread isn't loaded yet (wizard-ux issues 1814, 1880) is a row too: its sheet holds the corrections.
   const ROW_MENU = '.ch-list [data-chopen], .ch-list .ch-notif-row[data-chnotif], .ch-list [data-chchan], .ch-list [data-chsent]';
   // A channel line opens the channel sheet; every other row its thread or alert sheet.
-  // A thread row in Sent (wizard-ux issue 1880, switch wizard/sent-threads) opens the thread's own sheet plus its sends.
+  // A thread row in Sent (wizard-ux issue 1880) opens the thread's own sheet plus its sends.
   const rowMenu = (wid, row) => row?.dataset.chchan ? openChannelSheet(wid, row.dataset.chchan, row) : row?.dataset.chsent ? sentSheet?.(wid, row.dataset.chsent) : (openRowSheet(wid, row?.dataset.chopen, row?.dataset.chnotif), row?.dataset.chsentthread ? sentSends?.(wid, row.dataset.chsentthread) : undefined);
   const NOTE_ACT = { done: ACT.done, snooze: { ...ACT.snooze, label: 'Snooze' }, unread: ACT.unread };
   // On a folded row (several from one app) every action covers the whole fold.

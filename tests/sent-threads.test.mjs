@@ -1,7 +1,7 @@
-// Sent as threads (wizard-ux issue 1880, switch wizard/sent-threads, off by default). Runs the real list model
+// Sent as threads (wizard-ux issue 1880, on for everyone; switch wizard/sent-threads removed). Runs the real list model
 // (sentThreads, placeOf, activityGroups), the real Chats ready part (core/chats-ready.js: inboxIds), the real Inbox rows
-// part (core/chats-inboxrows.js: ibThreadRow) and the real Sent part (core/chats-sent.js) over one fake box. With the
-// switch on, Sent lists threads, one row per thread, drawn by Inbox's own thread row; a thread is in Inbox or in Sent,
+// part (core/chats-inboxrows.js: ibThreadRow) and the real Sent part (core/chats-sent.js) over one fake box. Sent
+// lists threads, one row per thread, drawn by Inbox's own thread row; a thread is in Inbox or in Sent,
 // never both. Browser proof: tests/qa-chats-sent-threads.cjs (phone, Classic, AI apps sidebar).
 // Run: node --test tests/sent-threads.test.mjs
 import test from 'node:test';
@@ -12,7 +12,6 @@ import { modelContext } from './fixtures/chats-list-model.mjs';
 
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
 const J = v => JSON.parse(JSON.stringify(v));
-const SW = 'wizard/sent-threads';
 const H = 3600e3, NOW = Date.now();
 const sid = c => 'sent_' + c.repeat(24), rid = c => 'inbox_' + c.repeat(24);
 const iso = t => new Date(t).toISOString();
@@ -45,7 +44,7 @@ const quiet = s => s.quietReply === true && !needs(s) && s.status !== 'running';
 const groups = rows => ({ working: rows.filter(s => s.status === 'running'), errors: rows.filter(s => s.status === 'failed'), ready: rows.filter(s => !['running', 'failed'].includes(s.status) && !s.archived && !s.deferred), deferred: rows.filter(s => s.deferred && !s.archived), archive: rows.filter(s => s.archived) });
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
-function shell({ tweaks = SW, threads = THREADS(), sent = SENT(), agent = '' } = {}) {
+function shell({ tweaks = '', threads = THREADS(), sent = SENT(), agent = '' } = {}) {
   const ctx = { console, Date, Map, Set, structuredClone, document: { documentElement: { dataset: { tweaks } }, addEventListener() {} }, localStorage: { getItem: () => null, setItem() {} } };
   ctx.window = ctx; ctx.globalThis = ctx; ctx.addEventListener = () => {}; ctx.WizCore = { chatsParts: {} };
   modelContext(ctx);
@@ -153,23 +152,23 @@ test('the Sent tab is the main agent\'s list only (routed agents: host-profile, 
   assert.equal(shell().p.sentTabsOn({ id: 'main', thread: null, agent: '' }), true);
 });
 
-test('switch off: Sent and Inbox are today\'s (one card per send, the same Inbox ids)', () => {
-  const off = shell({ tweaks: 'wizard/inbox-until-archived' }), base = off.body();
-  assert.equal(off.p.sentThreadsOn(), false);
-  assert.match(base, /class="ch-sent-row st-running"/, 'today\'s cards');
-  assert.equal([...base.matchAll(/data-chsentopen=/g)].length, off.st.rows.filter(r => !(r.thread && off.inbox().includes(r.thread))).length, 'one card per send');
-  assert.doesNotMatch(base, /ch-st-row|data-chsentthread/);
-  assert.equal(off.p.sentSends('main', 'trip'), false, 'no sends block while off');
-  const none = shell({ tweaks: '' });
-  assert.notEqual(none.ctx.WizCore.inboxIds(none.LIVE), null, 'Inbox placement with no switch on (Inbox rows are on for everyone, wizard-ux issue 1779)');
-  assert.equal(none.ctx.WizCore.inboxKeep(), true);
-  assert.equal(shell().ctx.WizCore.inboxKeep(), true, 'on: the one-place rule is on');
+test('no switch: Sent is threads for everyone, a saved wizard/sent-threads choice changes nothing, Inbox placement as before', () => {
+  const none = shell({ tweaks: '' }), base = none.body();
+  assert.equal(none.p.sentThreadsOn, undefined, 'no switch to read');
+  assert.match(base, /ch-st-row|data-chsentthread/, 'thread rows with no tweak on');
+  assert.doesNotMatch(base, /class="ch-sent-row|data-chsentopen=|data-chsentfilter|data-chsentback/, 'no card per send, no filter, no back row');
+  assert.equal(none.p.sentSends('main', 'trip'), true, 'the sends block in the sheet');
+  for (const tweaks of ['wizard/sent-threads', 'wizard/inbox-until-archived', 'wizard/sent-rows']) {
+    const other = shell({ tweaks });
+    assert.equal(other.body(), base, 'the same Sent with ' + tweaks);
+    assert.deepEqual(other.inbox(), none.inbox(), 'the same Inbox with ' + tweaks);
+  }
+  assert.equal(none.ctx.WizCore.inboxKeep(), true, 'the one-place rule (Inbox rows, wizard-ux issue 1779)');
 });
 
 test('model: sentThreads groups by thread, then record, then the send; newest first', () => {
   const M = modelContext({}).WizChatsListModel;
-  assert.equal(M.sentThreadsOn('a wizard/sent-threads b'), true);
-  assert.equal(M.sentThreadsOn('wizard/sent-rows'), false);
+  assert.equal(M.sentThreadsOn, undefined, 'no switch in the model');
   const g = M.sentThreads([sentRow({ id: 'a', at: 1, thread: 't' }), sentRow({ id: 'b', at: 3, thread: 't', state: 'running' }), sentRow({ id: 'c', at: 2, record: 'r' }), sentRow({ id: 'd', at: 4 })], new Set(), {});
   assert.deepEqual(J(g.map(x => [x.key, x.sends.map(r => r.id), x.working])), [['send:d', ['d'], false], ['t', ['b', 'a'], true], ['rec:r', ['c'], false]]);
   assert.deepEqual(J(M.sentThreads([sentRow({ id: 'a', at: 1, thread: 't' }), sentRow({ id: 'c', at: 2, record: 'r' })], new Set(['t', 'r'])).map(x => x.key)), [], 'Inbox ids leave out');

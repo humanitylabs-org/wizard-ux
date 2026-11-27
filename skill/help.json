@@ -471,10 +471,6 @@
       "help": "Sent uses Inbox's rows.",
       "where": "Settings › Appearance › Try new features › Sent: the same rows as Inbox"
     },
-    "wizard/sent-threads": {
-      "help": "Sent lists threads.",
-      "where": "Settings › Appearance › Try new features › Sent: threads, like email"
-    },
     "wizard/inbox-pin-top": {
       "help": "Pin threads on top.",
       "where": "Settings › Appearance › Try new features › Inbox: pin threads to the top"
