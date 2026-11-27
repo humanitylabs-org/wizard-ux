@@ -1,0 +1,23 @@
+/* Chats title bar (wizard-ux issue 1836, on for everyone): the list's own header names the bottom tab (Inbox with its count pill, Tags,
+ * Sent), with search and filter as round icons; the search field opens under it only while searching or filtering.
+ * Markup: core/chats-sent.js titleBar, core/chats-listpaint.js. Colours are the skin's tokens. */
+html:root .ch-list > .ch-top.ch-tbar:not(#_) { display: flex; align-items: center; gap: 2px; min-height: 56px; padding: 6px 8px 2px 16px; box-sizing: border-box; }
+html:root .ch-list > .ch-top.ch-tbar-find:not(#_) { display: flex; padding-top: 0; }
+html:root .ch-tbar-t { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; margin: 0; color: var(--wz-text, var(--ink)); font: 600 1.125rem / 1.2 var(--wz-font-ui, inherit); letter-spacing: 0; }
+html:root .ch-tbar-t span { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+/* the count: today's amber count pill */
+html:root .ch-tbar-n {
+  flex: 0 0 auto; min-width: 22px; height: 18px; padding: 0 6px; box-sizing: border-box; border-radius: 9px; display: inline-grid; place-items: center;
+  color: color-mix(in srgb, black 88%, var(--amber, var(--wz-text, var(--ink)))); background: var(--amber, var(--wz-text, var(--ink))); font: 700 0.6875rem / 1 var(--wz-font-ui, inherit); font-variant-numeric: tabular-nums;
+}
+html:root .ch-list .ch-tbar-b:not(#_) {
+  flex: 0 0 auto; width: 40px; height: 40px; margin: 0; padding: 0; display: grid; place-items: center; border: 0; border-radius: 50%; background: none; color: var(--wz-text-secondary, var(--ink-2)); cursor: pointer; -webkit-tap-highlight-color: transparent;
+}
+html:root .ch-list .ch-tbar-b svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+html:root .ch-list .ch-tbar-b:hover { background: color-mix(in srgb, var(--wz-text, var(--ink)) 7%, transparent); }
+html:root .ch-list .ch-tbar-b:active, html:root .ch-list .ch-tbar-b.on { background: color-mix(in srgb, var(--wz-text, var(--ink)) 11%, transparent); color: var(--wz-text, var(--ink)); }
+html:root .ch-list .ch-tbar-b:focus-visible { outline: 2px solid var(--wz-accent, var(--violet-2)); outline-offset: 0; }
+/* the phone's desktop-style bar steps aside for this one (core/desktop-chats.js removes it on the next paint; this covers the gap) */
+html:root .ch-list .dc-head { display: none; }
+/* Inbox's rows start right under the bar: no section row above them */
+html:root .ch-sec.ch-tb-main { margin-top: 0; }

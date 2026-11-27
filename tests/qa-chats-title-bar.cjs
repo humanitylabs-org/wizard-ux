@@ -1,20 +1,19 @@
 'use strict';
-// Chats title bar (wizard-ux issue 1836, switch wizard/chats-title-bar) in a real browser, disposable synthetic box only.
+// Chats title bar (wizard-ux issue 1836, on for everyone) in a real browser, disposable synthetic box only.
 // Phone 412x915 and Classic desktop 1440x960, Nebula and a light skin, with James's switches (desktop-chats,
 // inbox-until-archived, inbox-rows; QA_ROWS=off drops inbox-rows to run the plain Inbox list):
-//   switch on: the top of Chats is one title bar naming the tab, "Inbox" with its count pill (= the Inbox rows), then the
+//   The top of Chats is one title bar naming the tab, "Inbox" with its count pill (= the Inbox rows), then the
 //   search and filter icons; no "All chats", no "Inbox ^ · Newest first" section row: the rows start right under the bar.
 //   The filter (≡) sheet holds the sort (Newest first by default); Oldest first reverses the unpinned rows and is kept.
 //   The search icon opens the field, a query finds a row, the icon closes it again. Tags and Sent: the title follows the
 //   tab. Archiving a row: the Archived fold still shows at the bottom.
-//   QA_SWITCH=off: today's list (QA_WEB=<main>/web gives the same list-*.html, byte for byte).
 const assert = require('node:assert/strict');
 const { chromium } = require('../tools/qa-playwright.cjs');
 const { ownerRead } = require('../tools/qa-desktop-frame-fixture.cjs');
 const fs = require('node:fs'), path = require('node:path');
 const repo = path.resolve(__dirname, '..'), origin = process.env.QA_ORIGIN || 'https://chats-title-bar-1836.test', prefix = '/wizard-os-home/';
 const web = process.env.QA_WEB || path.join(repo, 'web'), out = process.env.QA_OUT || path.join(repo, 'chats-title-bar-evidence');
-const SHELLS = (process.env.QA_SHELLS || 'phone,classic').split(','), SKINS = (process.env.QA_SKINS || 'nebula,obsidian-light').split(','), SW = process.env.QA_SWITCH !== 'off', ROWS = process.env.QA_ROWS !== 'off';
+const SHELLS = (process.env.QA_SHELLS || 'phone,classic').split(','), SKINS = (process.env.QA_SKINS || 'nebula,obsidian-light').split(','), ROWS = process.env.QA_ROWS !== 'off';
 fs.mkdirSync(out, { recursive: true });
 const now = Date.now(), iso = t => new Date(t).toISOString(), nap = ms => new Promise(r => setTimeout(r, ms)), M = 60e3, D = 864e5;
 const REC = 'inbox_' + 'b'.repeat(24), TODAY = new Date(now).toISOString().slice(0, 10);
@@ -43,7 +42,7 @@ const raw = (sid, s) => ({ id: sid, title: s.title, runtime: 'direct', status: s
 // Seen: every thread but qa-new was read at its last reply (qa-new is the one new reply).
 const SEEN = () => ({ state: { initializedAt: 1, threads: Object.fromEntries(Object.entries(THREADS).filter(([k]) => k !== 'qa-new').map(([k, s]) => [`direct:${k}`, { updatedAt: iso(s.at), assistantActivityAt: iso(s.at), seenAt: s.at + 60e3 }])) } });
 const SENT = () => ({ rows: [{ id: 'sent_' + 'c'.repeat(24), at: now - 5 * D, source: 'orb', text: 'Urgent: the kitchen tap is leaking', route: 'agent', decided_by: 'model', state: 'done', thread_id: 'qa-urgent', urgent: true, tags: [] }], next: null, check: null });
-const report = { origin, web, switch: SW ? 'on' : 'off', cases: [] };
+const report = { origin, web, cases: [] };
 (async () => {
   const browser = await chromium.launch();
   try {
@@ -54,7 +53,7 @@ const report = { origin, web, switch: SW ? 'on' : 'off', cases: [] };
       const context = await browser.newContext({ viewport: phone ? { width: 412, height: 915 } : { width: 1440, height: 960 }, isMobile: phone, hasTouch: phone, serviceWorkers: 'block', ...(phone ? { userAgent: 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Mobile Safari/537.36' } : {}) });
       try {
         await context.routeWebSocket('**/*', w => w.close());
-        const mix = { 'wizard/desktop-chats': true, 'wizard/inbox-until-archived': true, ...(ROWS ? { 'wizard/inbox-rows': true } : {}), ...(SW ? { 'wizard/chats-title-bar': true } : {}) };
+        const mix = { 'wizard/desktop-chats': true, 'wizard/inbox-until-archived': true, ...(ROWS ? { 'wizard/inbox-rows': true } : {}) };
         await context.addInitScript(({ shell, skin, mix }) => {
           if (window !== top) return;
           if (sessionStorage.getItem('qaBoot')) return; sessionStorage.setItem('qaBoot', '1');
@@ -113,7 +112,6 @@ const report = { origin, web, switch: SW ? 'on' : 'off', cases: [] };
         await page.goto(origin + prefix + (phone ? 'index.html?phone' : 'desktop.html'));
         await page.waitForFunction(() => (window.__wux || window.__wos) && !window.WosWelcome?.active && window.WosExperience?.state.tweaks.length && !window.WosExperience.state.busy);
         await page.addStyleTag({ content: '#wosWelcome{display:none!important}' });
-        if (SW) await page.waitForFunction(() => (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/chats-title-bar'), null, { timeout: 15000 });
         if (phone) await page.evaluate(() => __wos.openSheet('inbox')); else await page.evaluate(() => __wux.openChatsList());
         const vis = sel => page.locator(sel).filter({ visible: true }).first();
         const shot = async name => { await page.evaluate(() => document.fonts.ready); await nap(300); await page.screenshot({ path: path.join(out, `${stem}-${name}.png`) }); };
@@ -135,71 +133,65 @@ const report = { origin, web, switch: SW ? 'on' : 'off', cases: [] };
         await nap(800);
         entry.first = await bar();
         await shot('1-inbox');
-        if (SW) {
-          const B = entry.first;
-          assert.equal(B.title, 'Inbox', 'the title names the tab ' + JSON.stringify(B));
-          assert.ok(!B.allChats && !B.dc, 'no "All chats" and no second bar');
-          assert.ok(B.rows.length >= 5, 'Inbox rows ' + JSON.stringify(B.rows));
-          assert.equal(B.n, String(B.rows.length), 'the count pill is the Inbox count');
-          assert.ok(B.search && B.filter && !B.field, 'search and filter are icons in the bar; the field is folded ' + JSON.stringify(B));
-          assert.ok(!B.secRow && !B.sort, 'no Inbox section row and no sort on it ' + JSON.stringify(B));
-          assert.ok(B.gap !== null && B.gap >= 0 && B.gap <= 12, 'the rows start right under the bar: gap ' + B.gap);
-          // Sort from the filter sheet.
-          await vis('.ch-tbar [data-chfbtn]').click();
-          await vis('.ch-fsheet [data-chfsort="newest"]').waitFor({ timeout: 5000 });
-          entry.sheet = await page.evaluate(() => [...document.querySelectorAll('.ch-fsheet [data-chfsort]')].filter(n => n.getClientRects().length).map(n => n.dataset.chfsort + ':' + n.getAttribute('aria-pressed')));
-          assert.deepEqual(entry.sheet, ['newest:true', 'oldest:false', 'priority:false'], 'the sort is in the filter sheet, Newest first by default');
-          await shot('2-filter-sort');
-          await vis('.ch-fsheet [data-chfsort="oldest"]').click();
-          await page.waitForFunction(() => ![...document.querySelectorAll('.ch-fsheet')].some(n => n.getClientRects().length), null, { timeout: 5000 });
-          await nap(700);
-          entry.oldest = await bar();
-          const pinN = ROWS ? 3 : 0, free = B.rows.slice(pinN);
-          assert.deepEqual(entry.oldest.rows.slice(pinN), [...free].reverse(), 'Oldest first reverses the unpinned rows ' + JSON.stringify([B.rows, entry.oldest.rows]));
-          assert.deepEqual([...entry.oldest.rows.slice(0, pinN)].sort(), [...B.rows.slice(0, pinN)].sort(), 'pins stay on top');
-          assert.ok(entry.writes.some(x => x.method === 'PUT' && x.path === '/wizard/v1/ui-preferences'), 'the order is saved like before');
-          await vis('.ch-tbar [data-chfbtn]').click();
-          await vis('.ch-fsheet [data-chfsort="oldest"][aria-pressed="true"]').waitFor({ timeout: 5000 });
-          await vis('.ch-fsheet [data-chfsort="newest"]').click();
-          await nap(700);
-          assert.deepEqual((await bar()).rows, B.rows, 'Newest first again');
-          // Search from the bar's icon.
-          await vis('.ch-tbar [data-chtbsearch]').click();
-          await vis('.ch-list [data-chsearch]').waitFor({ timeout: 5000 });
-          assert.ok(await page.evaluate(() => document.activeElement?.matches?.('[data-chsearch]')), 'the field opens focused');
-          await page.keyboard.type('Dentist');
-          await vis('.ch-list [data-chopen="qa-needs"]').waitFor({ timeout: 8000 });
-          await nap(400);
-          assert.ok(!(await page.locator('.ch-list [data-chopen="qa-new"]').filter({ visible: true }).count()), 'search narrows the list');
-          await shot('3-search');
-          await vis('.ch-tbar [data-chtbsearch]').click();
-          await nap(600);
-          const closed = await bar();
-          assert.ok(!closed.field && closed.rows.length === B.rows.length, 'the icon closes search and the Inbox is back ' + JSON.stringify(closed));
-          // The title follows the tab.
-          await vis('.ch-tabbar [data-chtab="tags"]').click(); await nap(700);
-          entry.tags = await bar(); assert.equal(entry.tags.title, 'Tags', 'Tags tab'); assert.equal(entry.tags.n, '', 'no Inbox count on Tags');
-          await shot('4-tags');
-          await vis('.ch-tabbar [data-chtab="sent"]').click(); await nap(900);
-          entry.sent = await bar(); assert.equal(entry.sent.title, 'Sent', 'Sent tab'); assert.ok(!entry.sent.backRow, 'no second "Sent" back row');
-          await shot('5-sent');
-          await vis('.ch-tabbar [data-chtab="inbox"]').click(); await nap(700);
-          assert.equal((await bar()).title, 'Inbox', 'back on Inbox');
-          // Archive a row: the Archived fold at the bottom stays a fold.
-          if (ROWS) {
-            await vis('.ch-list [data-chibarch="qa-read"]').click();
-            await page.waitForFunction(() => !!document.querySelector('.ch-list section[data-sec="archived"]'), null, { timeout: 5000 });
-            await nap(900);
-            entry.archived = await bar();
-            assert.ok(entry.archived.secs.includes('archived:fold'), 'Archived keeps its fold ' + JSON.stringify(entry.archived.secs));
-            assert.ok(!entry.archived.secs.includes('ready:fold'), 'Inbox has none');
-            assert.equal(entry.archived.n, String(entry.archived.rows.length), 'the count follows');
-            await shot('6-archived');
-          }
-        } else {
-          fs.writeFileSync(path.join(out, `list-${stem}.html`), await page.evaluate(() => [...document.querySelectorAll('.ch-list')].find(n => n.getClientRects().length).innerHTML.replace(/\b\d+(m|h)\b/g, 'T')));
-          assert.equal(entry.first.title, '', 'switch off: no title bar');
-          assert.ok(entry.first.secRow && entry.first.sort, 'switch off: the Inbox section row with its sort');
+        const B = entry.first;
+        assert.equal(B.title, 'Inbox', 'the title names the tab ' + JSON.stringify(B));
+        assert.ok(!B.allChats && !B.dc, 'no "All chats" and no second bar');
+        assert.ok(B.rows.length >= 5, 'Inbox rows ' + JSON.stringify(B.rows));
+        assert.equal(B.n, String(B.rows.length), 'the count pill is the Inbox count');
+        assert.ok(B.search && B.filter && !B.field, 'search and filter are icons in the bar; the field is folded ' + JSON.stringify(B));
+        assert.ok(!B.secRow && !B.sort, 'no Inbox section row and no sort on it ' + JSON.stringify(B));
+        assert.ok(B.gap !== null && B.gap >= 0 && B.gap <= 12, 'the rows start right under the bar: gap ' + B.gap);
+        // Sort from the filter sheet.
+        await vis('.ch-tbar [data-chfbtn]').click();
+        await vis('.ch-fsheet [data-chfsort="newest"]').waitFor({ timeout: 5000 });
+        entry.sheet = await page.evaluate(() => [...document.querySelectorAll('.ch-fsheet [data-chfsort]')].filter(n => n.getClientRects().length).map(n => n.dataset.chfsort + ':' + n.getAttribute('aria-pressed')));
+        assert.deepEqual(entry.sheet, ['newest:true', 'oldest:false', 'priority:false'], 'the sort is in the filter sheet, Newest first by default');
+        await shot('2-filter-sort');
+        await vis('.ch-fsheet [data-chfsort="oldest"]').click();
+        await page.waitForFunction(() => ![...document.querySelectorAll('.ch-fsheet')].some(n => n.getClientRects().length), null, { timeout: 5000 });
+        await nap(700);
+        entry.oldest = await bar();
+        const pinN = ROWS ? 3 : 0, free = B.rows.slice(pinN);
+        assert.deepEqual(entry.oldest.rows.slice(pinN), [...free].reverse(), 'Oldest first reverses the unpinned rows ' + JSON.stringify([B.rows, entry.oldest.rows]));
+        assert.deepEqual([...entry.oldest.rows.slice(0, pinN)].sort(), [...B.rows.slice(0, pinN)].sort(), 'pins stay on top');
+        assert.ok(entry.writes.some(x => x.method === 'PUT' && x.path === '/wizard/v1/ui-preferences'), 'the order is saved like before');
+        await vis('.ch-tbar [data-chfbtn]').click();
+        await vis('.ch-fsheet [data-chfsort="oldest"][aria-pressed="true"]').waitFor({ timeout: 5000 });
+        await vis('.ch-fsheet [data-chfsort="newest"]').click();
+        await nap(700);
+        assert.deepEqual((await bar()).rows, B.rows, 'Newest first again');
+        // Search from the bar's icon.
+        await vis('.ch-tbar [data-chtbsearch]').click();
+        await vis('.ch-list [data-chsearch]').waitFor({ timeout: 5000 });
+        assert.ok(await page.evaluate(() => document.activeElement?.matches?.('[data-chsearch]')), 'the field opens focused');
+        await page.keyboard.type('Dentist');
+        await vis('.ch-list [data-chopen="qa-needs"]').waitFor({ timeout: 8000 });
+        await nap(400);
+        assert.ok(!(await page.locator('.ch-list [data-chopen="qa-new"]').filter({ visible: true }).count()), 'search narrows the list');
+        await shot('3-search');
+        await vis('.ch-tbar [data-chtbsearch]').click();
+        await nap(600);
+        const closed = await bar();
+        assert.ok(!closed.field && closed.rows.length === B.rows.length, 'the icon closes search and the Inbox is back ' + JSON.stringify(closed));
+        // The title follows the tab.
+        await vis('.ch-tabbar [data-chtab="tags"]').click(); await nap(700);
+        entry.tags = await bar(); assert.equal(entry.tags.title, 'Tags', 'Tags tab'); assert.equal(entry.tags.n, '', 'no Inbox count on Tags');
+        await shot('4-tags');
+        await vis('.ch-tabbar [data-chtab="sent"]').click(); await nap(900);
+        entry.sent = await bar(); assert.equal(entry.sent.title, 'Sent', 'Sent tab'); assert.ok(!entry.sent.backRow, 'no second "Sent" back row');
+        await shot('5-sent');
+        await vis('.ch-tabbar [data-chtab="inbox"]').click(); await nap(700);
+        assert.equal((await bar()).title, 'Inbox', 'back on Inbox');
+        // Archive a row: the Archived fold at the bottom stays a fold.
+        if (ROWS) {
+          await vis('.ch-list [data-chibarch="qa-read"]').click();
+          await page.waitForFunction(() => !!document.querySelector('.ch-list section[data-sec="archived"]'), null, { timeout: 5000 });
+          await nap(900);
+          entry.archived = await bar();
+          assert.ok(entry.archived.secs.includes('archived:fold'), 'Archived keeps its fold ' + JSON.stringify(entry.archived.secs));
+          assert.ok(!entry.archived.secs.includes('ready:fold'), 'Inbox has none');
+          assert.equal(entry.archived.n, String(entry.archived.rows.length), 'the count follows');
+          await shot('6-archived');
         }
         assert.equal(entry.errors.length, 0, 'browser errors: ' + entry.errors.join('; '));
         assert.equal(entry.refused.filter(x => x.reason === 'unexpected-write').length, 0, 'unexpected writes: ' + JSON.stringify(entry.refused));
@@ -209,6 +201,6 @@ const report = { origin, web, switch: SW ? 'on' : 'off', cases: [] };
     }
   } finally { await browser.close(); }
   const failed = report.cases.filter(c => !c.pass);
-  console.log(JSON.stringify({ switch: SW ? 'on' : 'off', cases: report.cases.length, passed: report.cases.length - failed.length, failed: failed.map(c => c.stem + ': ' + String(c.failure).split('\n')[0]), screenshots: fs.readdirSync(out).filter(f => f.endsWith('.png')).length }));
+  console.log(JSON.stringify({ cases: report.cases.length, passed: report.cases.length - failed.length, failed: failed.map(c => c.stem + ': ' + String(c.failure).split('\n')[0]), screenshots: fs.readdirSync(out).filter(f => f.endsWith('.png')).length }));
   if (failed.length || !report.cases.length) process.exitCode = 1;
 })().catch(e => { console.error(e); process.exitCode = 1; });
