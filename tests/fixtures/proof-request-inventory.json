@@ -417,6 +417,12 @@
       "kind": "write",
       "note": "Agent inbox Open / Send to inbox (wizard-ux issue 1570): POST open|send only on an owner tap (on for everyone since wizard-ux issue 1778), which none of the three flows tap; tests/agent-inbox-open-send.test.mjs covers it against a fake box. Refused and collected, never answered, if a flow reaches it."
     },
+    "/wizard/v1/reply-actions": {
+      "status": "not-exercised",
+      "source": "web/core/action-cards.js",
+      "kind": "write",
+      "note": "Action buttons (wizard-ux issue 1973, switch wizard/reply-actions, off): GET the thread's saved outcomes and POST an owner tap, only while both reply switches are on and a reply has a button with an app action; none of the proof flows has one. Refused and collected, never answered, if a flow reaches it. tests/reply-actions.test.mjs and tests/qa-reply-button-actions.cjs cover it against a fake box."
+    },
     "/wizard/v1/route": {
       "status": "not-exercised",
       "source": "web/outbox.js",

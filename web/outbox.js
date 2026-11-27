@@ -541,6 +541,12 @@
     halt(it);
     if (it.kind === 'conversation') throw new HttpError(409, 'App voice input messages use explicit conversation delivery only');
     if (fitAgentRoute(it)) await put(it);
+    // Retry works the route out again (wizard-ux issue 1973): a reply saved with its model but no provider (the phone's
+    // model list was missing) takes the provider the thread's box has saved for that same model, before anything is frozen.
+    if (it.kind === 'reply' && it.model && !it.provider && !it.agent && !it.body && !it.steerBody && window.WosModels?.savedProvider) {
+      const provider = await window.WosModels.savedProvider(it.sessionId, it.model).catch(() => '');
+      if (provider) { it.provider = provider; await put(it); }
+    }
     if (!it.model || !it.provider) throw new HttpError(409, 'No confirmed model route · choose a model before retrying');
     if (it.body) {
       const frozen = JSON.parse(it.body);
@@ -957,7 +963,7 @@
       try {
         if (routeError) throw routeError;
         if (!M) throw new Error('Model selector unavailable · reload Wizard before sending');
-        const route = await bounded(() => M.resolveRoute(held && it.model ? { model: it.model, provider: it.provider, ...(it.agent ? { agent: it.agent } : {}) } : snapshot), 15000);
+        const route = await bounded(() => M.resolveRoute(held && it.model ? { model: it.model, provider: it.provider, ...(it.agent ? { agent: it.agent } : {}) } : snapshot, { thread: it.kind === 'reply' ? it.sessionId : '' }), 15000);
         if (it.model && (route.model !== it.model || (it.provider && route.provider !== it.provider))) throw new Error('Selected route changed · original message kept');
         if (it.cancelled || it.cancelRequested) throw new StopRequested(); // Stop tapped while the route was resolving
         Object.assign(it, route, { state: 'queued' });

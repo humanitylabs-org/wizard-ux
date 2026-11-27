@@ -852,7 +852,7 @@
     async reply(id, input, opts = {}) {
       const M = window.WosModels;
       if (!M) throw new Error('Model selector unavailable · reload Wizard');
-      const route = await M.resolveRoute(M.snapshot(id, opts.model ? { model: opts.model, provider: opts.provider } : null));
+      const route = await M.resolveRoute(M.snapshot(id, opts.model ? { model: opts.model, provider: opts.provider } : null), { thread: id });
       const s = this.session(id);
       if (s && WORKING.has(s.status) && s.runId) {
         try {
@@ -1019,8 +1019,9 @@
       // was preloaded or opened, until the next list read put it back. A status the detail does report still wins.
       const run = s.status ? { queueReason: s.queueReason, status: s.status } : {};
       if (i >= 0) list[i] = { ...list[i], title: s.title, request: s.request, retryRunId: s.retryRunId, ...run, safeError: s.safeError, reconnect: s.reconnect, renames: s.renames, detailNeeded: false,
-        ...(s.model ? { model: s.model, provider: s.provider, modelLockAt: s.modelLockAt } : {}) };
-      else if (this.windows[agent || route || 'hermes']) DETAIL.set(id, { ...s, detailNeeded: false });
+        // A read that names no provider never wipes the one the row already has for the same model (wizard-ux issue 1973).
+        ...(s.model ? { model: s.model, provider: s.provider || (list[i].model === s.model ? list[i].provider || '' : ''), modelLockAt: s.modelLockAt || (list[i].model === s.model ? list[i].modelLockAt || 0 : 0) } : {}) };
+      else if (this.windows[agent || route || 'hermes']) { const was = DETAIL.get(id); DETAIL.set(id, { ...s, ...(!s.provider && was?.provider && was.model === s.model ? { provider: was.provider, modelLockAt: s.modelLockAt || was.modelLockAt || 0 } : {}), detailNeeded: false }); }
       else list.push({ ...s, detailNeeded: false });
       applyLocal(i >= 0 ? list[i] : DETAIL.get(id) || s);
       return s;

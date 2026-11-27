@@ -1,0 +1,14 @@
+{
+  "id": "wizard/reply-actions",
+  "name": "Buttons that tick things off in apps",
+  "version": "1.0.0",
+  "author": "wizard",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout"
+  ],
+  "description": "A reply button can act on one of your apps directly (Done on a checklist step ticks it in the app) with no agent reply: the app's answer shows as a small line under it, a failure shows Retry. Needs Tap to answer in replies (wizard-ux issue 1973).",
+  "issues": [
+    "humanitylabs-org/wizard-ux#1973"
+  ]
+}

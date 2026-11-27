@@ -172,7 +172,8 @@
       const f = e.target?.closest?.('[data-action-card] [data-act-field]'); if (!f) return;
       const c = cardOf(f.closest('[data-action-card]').dataset.actionCard); if (c.edit) c.draft[f.dataset.actField] = String(f.value).slice(0, 4000);
     });
-    document.addEventListener('visibilitychange', () => { if (document.visibilityState !== 'visible') return; for (const n of document.querySelectorAll('[data-action-card]')) void read(n.dataset.actionCard, true); });
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState !== 'visible') return; for (const n of document.querySelectorAll('[data-action-card]')) void read(n.dataset.actionCard, true);
+      for (const sid of new Set([...document.querySelectorAll('.ch-rb.ch-rb-acts[data-rb-sid]')].map(n => n.dataset.rbSid))) void raRead(sid, true); }); // action rows: another device's taps
   } catch (_) {}
   /* ---- Tap-to-answer buttons inside a reply (wizard-ux issue 1889, off-by-default switch wizard/reply-buttons) ----
    * The agent writes [WIZARD_BUTTONS_V1]{"group","buttons":[{"id","label"}]} lines (core/chat-kit.js buttonGroups);
@@ -206,6 +207,7 @@
       if (!waiting && (now - v.at > RB_LOCAL_MS || h?.button === v.button)) { rbLocal.delete(k); continue; } // landed (or stale): history says it
       out.set(`${msg}\n${group}`, { button: v.button, label: v.label, at: v.at, locked: false, local: true });
     }
+    out.sid = String(sid || ''); raPicksOf.set(out.sid, out); // the thread these picks are for (action buttons, issue 1973)
     return out;
   }
   // A group drawn once for several copies (chat-kit `also`, issue 1942): the newest pick on any of its messages.
@@ -214,7 +216,90 @@
     for (const msg of [g.msg, ...(Array.isArray(g.also) ? g.also : [])]) { const q = picks?.get(`${msg}\n${g.group}`); if (q && (!p || Number(q.at) > Number(p.at))) p = q; }
     return p;
   }
+  /* ---- Action buttons (wizard-ux issue 1973, off-by-default switch wizard/reply-actions, on top of wizard/reply-buttons) ----
+   * A button that declares "action":{"app","tool","args"} acts on that app directly with no agent turn: the tap posts only
+   * which button it was (thread, message, group, button) to the Agent Service (POST /wizard/v1/reply-actions), which reads
+   * the action from that message in the thread's own history and calls the app on the thread's agent's grant. Its answer
+   * (the pick and one machine line, or the failure with Retry) is saved on the box per thread and read back here
+   * (GET ?thread=), so a reload and every other device show it. No outbox, no model: a missing model list can't fail it.
+   * Buttons without an action, and everything with the switch off, keep the reply-buttons behaviour above. */
+  const RA_SWITCH = 'wizard/reply-actions', RA_FRESH_MS = 30e3, RA_PATH = '/wizard/v1/reply-actions';
+  const raOn = () => { try { return rbOn() && String(document.documentElement.dataset.tweaks || '').split(/\s+/).includes(RA_SWITCH); } catch (_) { return false; } };
+  const raThreads = new Map(); // thread -> { at, read, recs: Map(`${message}\n${group}` -> record) }
+  const raBusy = new Map(); // `${thread}\n${message}\n${group}` -> button id being run
+  const raDefs = new Map(); // `${thread}\n${message}\n${group}` -> the drawn group, for an in-place repaint
+  const raAgent = sid => { try { return String(window.WizLive?.agentOf?.(sid) || ''); } catch (_) { return ''; } };
+  const raQuery = sid => { const a = raAgent(sid); return `thread=${encodeURIComponent(sid)}${a ? `&agent=${encodeURIComponent(a)}` : ''}`; };
+  const raRec = r => r && typeof r === 'object' && typeof r.group === 'string' && typeof r.button === 'string'
+    ? { message: String(r.message || ''), group: r.group, button: r.button, ok: r.ok === true, line: str(r.line, 140), error: str(r.error, 200) || 'The app didn’t do it', at: Number(r.at) || 0 } : null;
+  const raOf = sid => { let t = raThreads.get(sid); if (!t) raThreads.set(sid, t = { at: 0, read: null, recs: new Map() }); return t; };
+  function raRead(sid, force) {
+    const t = raOf(sid);
+    if (!sid || t.read || typeof window.fetch !== 'function' || (!force && t.at && Date.now() - t.at < RA_FRESH_MS)) return t.read;
+    t.at = Date.now();
+    t.read = window.fetch(`${RA_PATH}?${raQuery(sid)}`, { credentials: 'same-origin', cache: 'no-store', headers: { Accept: 'application/json' } })
+      .then(r => (r.ok ? r.json() : null)).then(d => {
+        if (!Array.isArray(d?.actions)) return;
+        for (const r of d.actions.map(raRec).filter(Boolean)) { const k = `${r.message}\n${r.group}`, was = t.recs.get(k); if (!was || r.at >= was.at) t.recs.set(k, r); }
+      }, () => {}).finally(() => { t.read = null; t.at = Date.now(); raPaint(); });
+    return t.read;
+  }
+  // The saved outcome for a group drawn once for several copies (chat-kit `also`): the newest on any of its messages.
+  function raOutcome(sid, g) {
+    const t = raThreads.get(sid); let r = null;
+    for (const msg of [g.msg, ...(Array.isArray(g.also) ? g.also : [])]) { const q = t?.recs.get(`${msg}\n${g.group}`); if (q && (!r || q.at > r.at)) r = q; }
+    return r;
+  }
+  function raGroupHtml(g, picks, sid) {
+    const key = `${sid}\n${g.msg}\n${g.group}`; raDefs.set(key, g);
+    void raRead(sid, false);
+    const r = raOutcome(sid, g), busy = raBusy.get(key) || '', p = rbPick(g, picks);
+    // What shows as picked: the action this device is running, else the box's saved success, else a plain (agent) tap.
+    const pick = busy || (r?.ok ? r.button : '') || (p && !(r && r.at > Number(p.at)) ? p.button : '');
+    const btns = g.buttons.map(b => {
+      const on = pick === b.id, run = busy === b.id;
+      return `<button type="button" class="ch-rb-btn${on ? ' on' : pick ? ' dim' : ''}${b.act ? ' act' : ''}" data-rb="${esc(b.id)}"${b.act ? ' data-rb-act' : ''} aria-pressed="${on}"${busy ? ' disabled' : ''}${run ? ' aria-busy="true"' : ''}>${on && !run ? '✓ ' : ''}${esc(b.label)}${run ? '<span class="ch-rb-spin" aria-hidden="true">…</span>' : ''}</button>`;
+    }).join('');
+    const failed = r && !r.ok && !busy ? g.buttons.find(b => b.id === r.button && b.act) : null;
+    const note = busy ? '' : r?.ok && r.line ? `<p class="ch-rb-line" role="status">${esc(r.line)}</p>`
+      : failed ? `<p class="ch-rb-err" role="alert"><span>${esc(failed.label)} didn’t go through · ${esc(r.error)}</span><button type="button" class="ch-rb-retry" data-rb="${esc(failed.id)}" data-rb-act data-rb-retry>Retry</button></p>` : '';
+    return `<div class="ch-rb ch-rb-acts${pick ? ' picked' : ''}" role="group" aria-label="${esc(g.group)}" data-rb-group="${esc(g.group)}" data-rb-msg="${esc(g.msg)}" data-rb-sid="${esc(sid)}" data-morph-key="rb:${esc(g.msg)}:${esc(g.group)}">`
+      + `<span class="ch-rb-ask" aria-hidden="true">${esc(g.group)}</span>${btns}${note}</div>`;
+  }
+  // Repaint the action rows on screen in place once the box answers (a read, a tap's outcome).
+  function raPaint() {
+    let nodes = []; try { nodes = [...(document.querySelectorAll?.('.ch-rb.ch-rb-acts[data-rb-sid]') || [])]; } catch (_) {}
+    for (const n of nodes) {
+      const sid = n.dataset.rbSid, g = raDefs.get(`${sid}\n${n.dataset.rbMsg}\n${n.dataset.rbGroup}`); if (!g) continue;
+      const next = raGroupHtml(g, raPicksOf.get(sid) || null, sid);
+      if (n.outerHTML !== next) { const f = document.activeElement && n.contains(document.activeElement) ? document.activeElement.dataset?.rb : ''; n.outerHTML = next; if (f) try { document.querySelector(`.ch-rb.ch-rb-acts[data-rb-sid="${CSS.escape(sid)}"][data-rb-msg="${CSS.escape(n.dataset.rbMsg)}"] [data-rb="${CSS.escape(f)}"]`)?.focus({ preventScroll: true }); } catch (_) {} }
+    }
+  }
+  const raPicksOf = new Map(); // thread -> its latest history picks (rbPicks), for raPaint
+  async function raTap(btn, ctx, sid) {
+    const box = btn.closest('.ch-rb'), msg = box?.dataset.rbMsg, group = box?.dataset.rbGroup, id = btn.dataset.rb;
+    if (!msg || !group || !id) return true;
+    const key = `${sid}\n${msg}\n${group}`;
+    if (raBusy.has(key)) return true;
+    const r = raOutcome(sid, raDefs.get(key) || { msg, group }); if (r?.ok && r.button === id) return true; // already done
+    raBusy.set(key, id); ctx.repaint?.(); raPaint();
+    let rec = null;
+    try {
+      // One key per tap: Retry right after a failure is a new attempt, never the write guard's copy of the failed answer.
+      const attempt = (() => { try { return crypto.randomUUID(); } catch (_) { return `${Date.now()}-${Math.random().toString(36).slice(2)}`; } })();
+      const res = await window.fetch(RA_PATH, { method: 'POST', credentials: 'same-origin', cache: 'no-store', headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'Idempotency-Key': attempt },
+        body: JSON.stringify({ thread: sid, message: msg, group, button: id, ...(raAgent(sid) ? { agent: raAgent(sid) } : {}) }) });
+      const d = await res.json().catch(() => null);
+      rec = raRec(d?.action) || { message: msg, group, button: id, ok: false, error: str(d?.detail, 200) || (res.status === 404 ? 'Action buttons are off on this Wizard' : `Wizard said no (${res.status})`), at: Date.now() };
+    } catch (_) { rec = { message: msg, group, button: id, ok: false, error: 'Couldn’t reach Wizard · nothing was done', at: Date.now() }; }
+    raBusy.delete(key);
+    raOf(sid).recs.set(`${msg}\n${group}`, { ...rec, message: msg, at: Math.max(rec.at || 0, Date.now()) });
+    ctx.repaint?.(); raPaint();
+    return true;
+  }
   function rbGroupHtml(g, picks) {
+    const sid = picks?.sid || '';
+    if (sid && g.buttons.some(b => b.act) && raOn()) return raGroupHtml(g, picks, sid);
     const p = rbPick(g, picks), locked = !!p?.locked;
     return `<div class="ch-rb${p ? ' picked' : ''}${locked ? ' locked' : ''}" role="group" aria-label="${esc(g.group)}" data-rb-group="${esc(g.group)}" data-rb-msg="${esc(g.msg)}" data-morph-key="rb:${esc(g.msg)}:${esc(g.group)}">`
       + `<span class="ch-rb-ask" aria-hidden="true">${esc(g.group)}</span>` // the ask this row answers, on screen (issue 1963)
@@ -258,6 +343,8 @@
     const box = btn?.closest?.('.ch-rb'), id = btn?.dataset?.rb, sid = String(ctx.sid || '');
     if (!box || !id || !sid || sid === '__new__') return false;
     if (btn.disabled || !rbOn() || typeof ctx.send !== 'function') { ctx.repaint?.(); return true; }
+    // An action button: straight to the app through the box, no owner message and no agent turn (issue 1973).
+    if (btn.hasAttribute?.('data-rb-act') && box.classList?.contains('ch-rb-acts') && raOn()) { void raTap(btn, ctx, sid); return true; }
     const msg = box.dataset.rbMsg, group = box.dataset.rbGroup, label = String(btn.textContent || '').replace(/^✓\s*/, '').trim();
     if (!msg || !group || !label) return true;
     const k = rbKey(sid, msg, group), cur = rbLocal.get(k);
@@ -276,5 +363,6 @@
   // Leaving the page sends what is waiting at once (the outbox keeps it if the network is gone).
   try { window.addEventListener('pagehide', () => { for (const sid of [...rbBatch.keys()]) void rbFlush(sid); }); } catch (_) {}
   window.WosActionCards = Object.freeze({ SCHEMA, html, paint, tap, keys: keysOf, normalize: norm, _cards: cards,
-    REPLY_SWITCH: RB_SWITCH, replyOn: rbOn, replyHtml: rbHtml, replyPicks: rbPicks, replyTap: rbTap, replyFlush: rbFlush, replyMessage: rbMessage, tapLinesHtml: rbLinesHtml });
+    REPLY_SWITCH: RB_SWITCH, replyOn: rbOn, replyHtml: rbHtml, replyPicks: rbPicks, replyTap: rbTap, replyFlush: rbFlush, replyMessage: rbMessage, tapLinesHtml: rbLinesHtml,
+    ACTIONS_SWITCH: RA_SWITCH, actionsOn: raOn, actionsRead: raRead, _actions: raThreads });
 })();

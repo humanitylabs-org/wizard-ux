@@ -22,6 +22,7 @@
     "wizard/assist-agent-note",
     "wizard/private-first-setup",
     "wizard/reply-buttons",
+    "wizard/reply-actions",
     "wizard/phone-chat-replies",
     "wizard/lock-screen-player",
     "wizard/desktop-bottom-bar",
