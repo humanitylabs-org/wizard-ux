@@ -1,22 +1,20 @@
-// Wizard for Mac in Settings › About & updates (wizard-ux issue 1624, switch wizard/mac-app-updates). Runs the real
+// Wizard for Mac in Settings › About & updates (wizard-ux issue 1624, on for everyone). Runs the real
 // core/os-updates.js with a stand-in Mac bridge (WizCore.bridge) and checks what the group draws for each phase of the
-// app's `updates.status` (try-wizard#126 schema 1), what each button calls, and that nothing happens off the Mac or
-// with the switch off. The browser proof with the real shell is tests/qa-mac-app-updates.cjs.
+// app's `updates.status` (try-wizard#126 schema 1), what each button calls, and that nothing happens off the Mac. The browser proof with the real shell is tests/qa-mac-app-updates.cjs.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const src = readFileSync(new URL('../web/core/os-updates.js', import.meta.url), 'utf8');
 const tick = async (n = 4) => { for (let i = 0; i < n; i++) await new Promise(r => setTimeout(r, 0)); };
-const SW = 'wizard/mac-app-updates';
 const OS = { mode: 'ask', chosen: true, installed: '0.3.15', latest: '0.3.15', update_available: false, unpinned: false, checked: true, installing: false };
 const st = (phase, extra = {}) => ({ schema: 1, installed: { version: '0.8.1', build: '312' }, phase, latest: null, progress: null, checkedAt: null, waitingFor: null, manual: null, error: null, channel: null, ...extra });
 
-async function load({ mac = true, on = true, status = st('current'), answer } = {}) {
+async function load({ mac = true, status = st('current'), answer } = {}) {
   const calls = [], registered = [], listeners = {};
   let refreshes = 0;
   const fetch = async () => ({ ok: true, status: 200, json: async () => OS });
-  const root = { dataset: { tweaks: on ? `wizard/other ${SW}` : 'wizard/other' } };
+  const root = { dataset: { tweaks: 'wizard/other' } };
   const bridge = {
     native: () => (mac ? 'mac' : ''),
     call: async (method, params) => {
@@ -50,14 +48,11 @@ test('only inside Wizard for Mac: a browser or the phone never registers the gro
   assert.deepEqual(calls, []);
 });
 
-test('switch off: the group is not available and the Mac app is never asked', async () => {
-  const m = await load({ on: false });
+test('no switch: inside Wizard for Mac the group shows with no tweak chosen', async () => {
+  const m = await load();
   assert.equal(m.f.page, 'about');
-  assert.equal(m.f.available(), false); await tick();
-  assert.equal(m.f.available(), false);
-  m.push(st('ready', { latest: { version: '0.8.2', build: '313' } }));
-  assert.equal(m.f.available(), false, 'an event alone does not show it either');
-  assert.deepEqual(m.calls, []);
+  assert.match(text(await m.shown()), /^Wizard for Mac 0\.8\.1 \(312\)/);
+  assert.deepEqual(m.calls, ['updates.status']);
 });
 
 test('an older Mac app without updates.* (the call rejects): no group, asked once a minute at most', async () => {

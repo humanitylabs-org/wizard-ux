@@ -458,11 +458,6 @@
       "help": "Share's People row shows Messenger's recent chats in every window.",
       "where": "Settings › Appearance › Try new features › Share to people in any window"
     },
-    "wizard/mac-app-updates": {
-      "help": "Wizard for Mac: About & updates gets a Wizard for Mac group: its version, up to date or not, Check for updates, Update and restart, Download.",
-      "where": "Settings › Appearance › Try new features › Wizard for Mac in About & updates",
-      "when": "Wizard for Mac only"
-    },
     "wizard/ai-apps-running": {
       "help": "AI apps: Running view in the sidebar.",
       "where": "Settings › Appearance › Try new features › Running view in the AI apps sidebar"

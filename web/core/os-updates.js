@@ -266,17 +266,15 @@
     return true;
   }
 
-  /* ---- Wizard for Mac (wizard-ux issue 1624, switch wizard/mac-app-updates; native half try-wizard#126) ----
+  /* ---- Wizard for Mac (wizard-ux issue 1624, on for everyone; native half try-wizard#126) ----
    * The Mac app's own updates, under the WizardOS group: which version runs, up to date or not, a new version
    * downloading or ready to restart, or one that needs a new download from the website. Only inside Wizard for Mac
    * (WizCore.bridge.native() === 'mac') and only once the app answers `updates.status`; in a browser, on a phone or
    * in an older Mac app (the call rejects or times out) there is no group and nothing is logged. The app pushes the
    * same status object as the window event `wizard:app-update`, so the card moves live; otherwise it is read again
    * at most once a minute while the page is shown. Buttons: updates.check / updates.install / updates.download. */
-  const MAU = 'wizard/mac-app-updates';
   const MAU_PHASES = ['idle', 'checking', 'current', 'downloading', 'verifying', 'ready', 'installing', 'manual', 'failed'];
   const MAU_HOSTS = ['www.aiwizards.com', 'downloads.aiwizards.com'];
-  const mauOn = () => { try { return String(document.documentElement?.dataset?.tweaks || '').split(' ').includes(MAU); } catch (_) { return false; } };
   const mauMac = () => { try { const b = window.WizCore?.bridge; return typeof b?.native === 'function' ? b.native() === 'mac' : !!window.webkit?.messageHandlers?.wizardNative; } catch (_) { return false; } };
   let mau = null, mauAt = 0, mauBusy = null, mauAct = '', mauEv = 0;   // mauEv counts the app's events
   const mauText = (v, n) => (typeof v === 'string' || typeof v === 'number') ? String(v).trim().slice(0, n) : '';
@@ -291,7 +289,7 @@
     try { const u = new URL(String(url)); return u.protocol === 'https:' && MAU_HOSTS.includes(u.hostname) && !u.username && !u.password && (!u.port || u.port === '443'); } catch (_) { return false; }
   }
   function mauLoad(force) {
-    if (!mauOn() || !mauMac()) return Promise.resolve(mau);
+    if (!mauMac()) return Promise.resolve(mau);
     if (mauBusy) return mauBusy;
     if (!force && mauAt && Date.now() - mauAt < FRESH) return Promise.resolve(mau);
     const call = window.WizCore?.bridge?.call;
@@ -354,7 +352,7 @@
   function mauTap(ctx, el) {
     const b = el?.closest?.('[data-mau]'); if (!b) return false;
     const what = b.dataset.mau, call = window.WizCore?.bridge?.call;
-    if (mauAct || !mau || typeof call !== 'function' || !mauOn() || !mauMac()) return true;
+    if (mauAct || !mau || typeof call !== 'function' || !mauMac()) return true;
     const toast = (...a) => { try { ctx?.toast?.(...a); } catch (_) {} };
     const c = mauCard(mau);
     if (what === 'check' && (c ? c.action === 'check' : mau.phase !== 'checking')) {
@@ -381,7 +379,7 @@
   // While the app is checking, look again every 5 s (its event normally comes first); otherwise once a minute, and only
   // while the group is on screen.
   function mauTick() {
-    if (!mau || !mauOn() || !mauMac() || mauBusy || mauAct || document.hidden) return;
+    if (!mau || !mauMac() || mauBusy || mauAct || document.hidden) return;
     let shown = false; try { shown = !!document.querySelector('[data-mau-group]')?.getClientRects().length; } catch (_) {}
     if (shown && Date.now() - mauAt >= (mau.phase === 'checking' ? 5e3 : FRESH)) void mauLoad(true);
   }
@@ -391,7 +389,7 @@
       const v = mauValid(e?.detail); if (!v) return;
       // The same status again (the app dedupes, but a re-read may cross an event) redraws nothing.
       const same = JSON.stringify(v) === JSON.stringify(mau);
-      mau = v; mauAt = Date.now(); mauEv++; if (!same && mauOn()) changed();
+      mau = v; mauAt = Date.now(); mauEv++; if (!same) changed();
     });
   } catch (_) {}
 
@@ -605,10 +603,10 @@
   try { window.addEventListener?.('wos:tweak-choice', () => changed()); } catch (_) {}
   window.WosSettings?.register({ id: 'updates', aliases: ['updates'], available: () => true, html: () => html(), act: (ctx, el) => act(el, ctx) });
   // Wizard for Mac's own group, right under WizardOS (core/settings-view.js keeps it second). Never on a phone or in a
-  // browser; inside the Mac app only with the switch on and once the app answered updates.status.
+  // browser; inside the Mac app only once the app answered updates.status.
   if (mauMac()) {
     window.WosSettings?.register({ id: 'mac-app-updates', page: 'about', aliases: ['mac-app-updates', 'wizard-for-mac'],
-      available: () => { if (!mauOn()) return false; if (!mau) void mauLoad(); return !!mau; }, html: () => mauHtml(), act: (ctx, el) => mauTap(ctx, el) });
+      available: () => { if (!mau) void mauLoad(); return !!mau; }, html: () => mauHtml(), act: (ctx, el) => mauTap(ctx, el) });
     const mt = typeof setInterval === 'function' ? setInterval(mauTick, 5e3) : 0;
     mt?.unref?.();
   }

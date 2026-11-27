@@ -207,7 +207,6 @@ Settings › Appearance › Try new features lists unfinished features to try, A
 - **Tap to answer in replies**: Tap-to-answer buttons in agent replies.
 - **Tell the team about failed updates**: When an app or WizardOS update fails on this box, the App Manager files a bug for the team (or adds to the open one) with the box, versions, failing step and error, using this box's GitHub login. Your notification then says the team was told.
 - **Why a reply failed**: When a reply fails and Wizard knows why (subscription ended, usage limit, signed out, network), Chats > Errors and the thread say so plainly, with Choose another model first when Retry can't work.
-- **Wizard for Mac in About & updates**: Wizard for Mac: About & updates gets a Wizard for Mac group: its version, up to date or not, Check for updates, Update and restart, Download. (Wizard for Mac only).
 
 Switches that are ordinary settings or views, not tester switches:
 - **Notifications in Chats**: Chats is the inbox: Notifications’ alerts and every app with an inbox feed are yellow threads in Chats, labelled with their app; several from one app fold into one row. They open in the chat window with Open, Done, Snooze and Resolve this (the rest from that app listed under, with Done all); done ones under Archive. Where: Settings › Chats & app screens › Notifications › Notifications in Chats (on for everyone).
