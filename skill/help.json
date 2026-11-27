@@ -487,10 +487,6 @@
       "help": "Inbox: only what blocks you.",
       "where": "Settings › Appearance › Try new features › Smart inbox: only what needs you"
     },
-    "wizard/chats-title-bar": {
-      "help": "Chats' title bar names the tab.",
-      "where": "Settings › Appearance › Try new features › Chats: title bar names the tab"
-    },
     "wizard/phone-nav": {
       "help": "Phone bar: bigger orb, one badge.",
       "where": "Settings › Appearance › Try new features › Phone bar: bigger orb, one badge",
@@ -573,7 +569,7 @@
     },
     "view:chats": {
       "name": "Chats",
-      "help": "All your conversations with the agent, in sections: Errors, Working, Saved, Ready, Yesterday, Past week, Snoozed, Archive (By day), or Working, Ready, Snoozed, Archive (By status; chosen in the Filter sheet). Search, Filter and + New chat. Long-press or right-click a chat for Pin, Rename, Mark unread, Snooze, Archive / Restore.",
+      "help": "All your conversations with the agent, in sections: Errors, Working, Saved, Ready, Yesterday, Past week, Snoozed, Archive (By day), or Working, Ready, Snoozed, Archive (By status; chosen in the Filter sheet). The title bar names the bottom tab (Inbox with its count, Tags or Sent), with Search and Filter as icons; the sort (Newest first, Oldest first, Needs you first) is in the Filter sheet. + New chat. Long-press or right-click a chat for Pin, Rename, Mark unread, Snooze, Archive / Restore.",
       "desktop": "AI apps view: the chats sidebar on the left (search ⌥K, + New chat ⌥N); Desks view: the Inbox count in the top bar (⌥I)",
       "phone": "Chats in the bottom bar, or hold the orb and say 'chats'"
     },

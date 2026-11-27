@@ -23,7 +23,7 @@
     const tab = l => Array.from(l?.getElementsByClassName?.('ch-focus-tab') || []).find(t => t.classList.contains('on')) || null;
     const sync = () => {
       const l = list(); if (!l) return;
-      // Chats draws its own title bar (wizard-ux issue 1836, switch wizard/chats-title-bar): this bar steps aside.
+      // Chats draws its own title bar (wizard-ux issue 1836): this bar steps aside.
       if (first(l, 'ch-tbar')) { head.remove(); l.classList.remove('dc-search'); return; }
       if (head.parentNode !== api.slot('list-top')) api.slot.mount('list-top', head, -10);
       const t = tab(l), nm = Array.from(t?.getElementsByTagName?.('span') || []).pop()?.textContent?.trim();
