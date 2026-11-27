@@ -235,7 +235,7 @@ window.WizCore.chats = function createChats(H) {
     const st = chanStore(); if (!st) return null;
     const S = LIVE.chanStore, tick = LIVE.ticks || 0;
     if (chanStoreMemo && chanStoreMemo.rev === st.rev && chanStoreMemo.proj === proj && chanStoreMemo.tick === tick) return chanStoreMemo;
-    // Tags on (wizard-agent-service issue 608, switch wizard/chat-tags): a chat is in every channel it carries as a tag
+    // Tags on (wizard-agent-service issue 608, on for everyone): a chat is in every channel it carries as a tag
     // (its row's `tags`), so `where` holds a set of channel ids per chat.
     const byId = new Map(st.channels.map(c => [c.id, c])), where = new Map(), one = id => new Set(id ? [id] : []);
     for (const sp of proj) { const c = byId.get(sp.id); if (c) for (const t of sp.threads) where.set(c.agent + '|' + t, one(c.id)); }
@@ -265,7 +265,7 @@ window.WizCore.chats = function createChats(H) {
     else LIVE.chanStore.move(sid, add ? key : null, a);
     return true;
   }
-  // Tags on (wizard-agent-service issue 608, switch wizard/chat-tags): the box's channel list says so.
+  // Tags on (wizard-agent-service issue 608, on for everyone): the box's channel list says so.
   function chanTags() { return !!chanStore()?.tags; }
   // The row a window shows for this id, by its own agent (a main and a routed thread can share an id).
   const chanRowAgent = (wid, sid) => { const r = rowOf(wid, sid); return r && r.id === sid ? rowAgent(r) : undefined; };

@@ -35,7 +35,7 @@ window.WizCore.chatsParts.spaces = function ({ chanTags, actNeeds, actUnread, in
     const allOn = f?.kind === 'agent' && f.key === p.agent;
     // Channels: General is a place too (a chat in no channel), last as in the channel list, marked when it is there.
     const genOn = !!p.sid && SPACE.ch && !spacesOf(p.sid).length;
-    // Tags on (wizard-agent-service issue 608, switch wizard/chat-tags): a chat's picker is its tags, several at once; a
+    // Tags on (wizard-agent-service issue 608, on for everyone): a chat's picker is its tags, several at once; a
     // tap adds or removes one and the sheet stays open. General reads "No tags".
     const tags = typeof chanTags === 'function' && chanTags();
     const gen = p.sid && SPACE.ch ? `<button type="button" class="ch-fopt${genOn ? ' on' : ''}" data-spgeneral aria-pressed="${genOn}"><span>${tags ? 'No tags' : 'General'}</span><small></small>${genOn ? '<b>✓</b>' : ''}</button>` : '';
