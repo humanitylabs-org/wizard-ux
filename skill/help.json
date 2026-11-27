@@ -487,10 +487,6 @@
       "help": "Shared only after you say Share.",
       "where": "Settings › Appearance › Try new features › Ask before sharing feature counts"
     },
-    "wizard/shorter-app-updates": {
-      "help": "App updates stop an app once.",
-      "where": "Settings › Appearance › Try new features › Shorter app updates"
-    },
     "wizard/install-agent-builds": {
       "help": "Apps I build install with one tap.",
       "where": "Settings › Appearance › Try new features › Install apps your agent builds"
@@ -693,6 +689,7 @@
     "Thread tracker": "retired: Needs you now shows in the thread itself, on the reply that needs the owner (with Mark done), and in Inbox; Reply works on any message.",
     "Stop write loops": "on for everyone, nothing to turn on: an identical save within 10 s is not resent, and over 20 saves a minute to one place pauses.",
     "Apps in Updates": "on for everyone: Settings › About & updates › Apps.",
+    "Shorter app updates": "on for everyone, nothing to turn on: an app update stops the app once, for seconds.",
     "Wizard for Mac in About & updates": "on for everyone, nothing to turn on: inside Wizard for Mac, Settings › About & updates shows a Wizard for Mac group under WizardOS.",
     "Reply to Telegram and Slack chats": "on for everyone: reply in Chats to a chat started on Telegram or Slack; it goes through that app's own connection and shows there too.",
     "Models from your connectors": "removed: the model menu in Chats lists the models of every AI connection you connected."
