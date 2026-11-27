@@ -1,14 +1,14 @@
 // owner-correction: humanitylabs-org/wizard-ux#1950 · 2026-11-27 · "there should be no number above the orb"
 // With the four-section phone bar on (switch wizard/phone-sections) the orb carries no count badge, in every skin and with
 // Robert's phone bar (wizard/phone-nav) on or off: the Chats and Messenger tiles already show the counts. With the bar
-// off the orb badge works as before. The browser check is tests/qa-phone-sections.cjs (orbNum at Home, Chats, Messenger).
+// off the orb badge works as before. The bar's tweak.css also hides #orbBadge; the browser check of both is
+// tests/qa-phone-sections.cjs (orbNum at Home, Chats, Messenger; QA_PHONE_NAV=on for Robert's phone bar).
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 
 const deskbar = readFileSync(new URL('../web/app-deskbar.js', import.meta.url), 'utf8');
-const css = readFileSync(new URL('../web/tweaks/wizard/phone-sections/tweak.css', import.meta.url), 'utf8');
 const start = deskbar.indexOf('  function paintOrbBadge() {'), end = deskbar.indexOf("  addEventListener('wizard:app-counts'", start);
 const body = deskbar.slice(start, end);
 
@@ -38,8 +38,4 @@ test('four-section bar on: no number on the orb, in every skin, with phone-nav o
 test('four-section bar off: the orb badge is as before', () => {
   assert.equal(orbBadge({ sections: false }), '12');
   assert.equal(orbBadge({ sections: false, nav: true }), '12');
-});
-
-test('the bar\'s own CSS hides the orb badge too, so no skin rule can bring it back', () => {
-  assert.match(css, /html\[data-tweaks~="wizard\/phone-sections"\]:not\(\[data-shell="desktop"\]\) #dock\[data-sections\] #orbBadge \{ display: none !important; \}/);
 });
