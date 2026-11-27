@@ -30,8 +30,7 @@ window.WizCore.chatsParts.running = function ({ ago, ch, CH, chanStore, clip, es
   }
   // The main Chats list shows the main agent's tasks only (the orb's dump starts them there): a routed agent's record
   // never opens as the main agent's thread, even when both use the same thread id.
-  // Issue 631: while the box names its private default agent (wizard/private-routing on), the main list is that
-  // agent's, so its tasks are the ones listed (and open here); a standard agent's id would not open in that list.
+  // Issue 631: while the box names its private default agent, the main list is that agent's, so its tasks are the ones listed (and open here); a standard agent's id would not open in that list.
   function runningRecs() { const p = inboxPrivate(); return LIVE.agentInbox?.records?.(p || 'hermes') || []; }
   function runningFor(ms) { const m = Math.max(1, Math.round(ms / 60000)); return m < 60 ? `${m} min` : m < 2880 ? `${Math.round(m / 60)} h` : `${Math.round(m / 1440)} d`; }
   function runningRow(w) {
@@ -72,7 +71,7 @@ window.WizCore.chatsParts.running = function ({ ago, ch, CH, chanStore, clip, es
    * keeps each tap as an example for the orb's router. Main agent threads only (the box hides only those). */
   const INBOX_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13h4l2 3h4l2-3h4M5 13l2-8h10l2 8v6H5z"/></svg>';
   function inboxListed(id) { const p = inboxPrivate(); return LIVE.sessions.some(x => x.id === id && !x.hidden && !x.optimistic) || (!!p && (LIVE.agentSessions?.[p] || []).some(x => x.id === id && !x.hidden && !x.optimistic)); }
-  // Issue 631: the box's private default agent (wizard/private-routing on) moves like the main agent; '' otherwise.
+  // Issue 631: the box's private default agent moves like the main agent; '' otherwise.
   function inboxPrivate() { return (LIVE.agentInbox && typeof LIVE.agentInbox.privateDefault === 'function' && LIVE.agentInbox.privateDefault()) || ''; }
   // A window or row of an agent other than the main one, or the private default.
   function inboxForeign(w, s) { const p = inboxPrivate(), a = winAgent(w), o = LIVE.ownerOf ? LIVE.ownerOf(s) : ''; return (!!a && a !== p) || (!!o && o !== p); }

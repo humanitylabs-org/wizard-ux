@@ -174,7 +174,6 @@ Settings › Appearance › Try new features lists unfinished features to try, A
 - **Chat replies as Chats notifications**: Android app: your agent's chat replies reach the phone as Notifications items under Chats; tap opens the chat.
 - **Five-choice first chat**: Five picks, then a first win.
 - **Get set up list in Setup**: Setup lists optional accounts to connect.
-- **Icons on the attach menu**: Android app: the + menu in a chat (and the orb's Attach) shows icons before Photo or video, Camera and File, on bigger rows. (Android app only).
 - **Inbox: pin threads to the top**: Pin threads on top.
 - **Install apps your agent builds**: Apps I build install with one tap.
 - **Install sheet recommends private AI**: Installing a personal-data app suggests private AI.
@@ -190,7 +189,6 @@ Settings › Appearance › Try new features lists unfinished features to try, A
 - **Phone media player for Music and Podcasts**: Android and iPhone: Music and Podcasts play through the phone's media player (lock screen, Control Center, headset buttons), and keep playing locked.
 - **Phone recovery mode**: Android: a frozen start reopens in recovery mode.
 - **Private first setup**: New installs start private: Welcome leads with Tinfoil; Claude and ChatGPT are optional extras.
-- **Private routing**: Orb opens the named agent's thread; a chip moves it.
 - **Repair the agent's Wizard connection**: If the agent's app tools fail (unauthorized), `wizard link` restores the box's token; `wizard doctor` checks it.
 - **Result reader**: A private model files each finished background task.
 - **Send and go**: On desktop, sending opens a fresh chat.

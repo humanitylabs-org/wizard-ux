@@ -381,10 +381,6 @@
       "help": "Setup lists optional accounts to connect.",
       "where": "Settings › Appearance › Try new features › Get set up list in Setup"
     },
-    "wizard/private-routing": {
-      "help": "Orb opens the named agent's thread; a chip moves it.",
-      "where": "Settings › Appearance › Try new features › Private routing"
-    },
     "wizard/catch-up-sent": {
       "help": "Catch me up clears finished Sent chats, any age.",
       "where": "Settings › Appearance › Try new features › Catch me up clears Sent"
@@ -444,11 +440,6 @@
     "wizard/lock-screen-player": {
       "help": "Android and iPhone: Music and Podcasts play through the phone's media player (lock screen, Control Center, headset buttons), and keep playing locked.",
       "where": "Settings › Appearance › Try new features › Phone media player for Music and Podcasts"
-    },
-    "wizard/attach-menu-icons": {
-      "help": "Android app: the + menu in a chat (and the orb's Attach) shows icons before Photo or video, Camera and File, on bigger rows.",
-      "where": "Settings › Appearance › Try new features › Icons on the attach menu",
-      "when": "Android app only"
     },
     "wizard/skins-look-only": {
       "help": "Skins become a look only: only feature switches decide what runs. Your skin's own choices come back when you switch this off.",
