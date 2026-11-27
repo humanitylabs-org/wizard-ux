@@ -51,6 +51,15 @@ window.WizCore.chatsParts.notes = function ({ ago, clip, esc, LIVE, stiKind, wit
     try { const meta = window.WizCore?.appMetadata?.(app) || { id: app, name: it.appName || it.fromName || app }; return window.WizSigil.html(meta); } catch (e) { return window.WosBell?.icon || ''; }
   }
   const noteTitle = it => notePlain(it.title) || notePlain(String(it.message || '').split('\n').find(l => l.trim())) || 'Notification';
+  const NOTE_PLAIN = 'wizard/plain-alert-rows';
+  function notePlainOn() { try { return (document.documentElement.dataset.tweaks || '').split(' ').includes(NOTE_PLAIN); } catch (_) { return false; } }
+  const NOTE_BELL = '<span class="ch-al-mk" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 16v-5a6 6 0 0 1 12 0v5l1.5 2h-15zM10 20.5a2 2 0 0 0 4 0"/></svg></span>';
+  // The unread / needs-you dot where a thread row has it (core/chats-daily.js actRowMark's markup).
+  function noteInd(it) {
+    const m = it.read ? '' : window.WizChatsListModel?.notificationRow?.(it)?.rank === 1 ? 'needs' : 'new';
+    return m === 'needs' ? '<span class="ch-act-ind"><i class="ch-chan-dot" role="img" aria-label="Needs you"></i></span>'
+      : m === 'new' ? '<span class="ch-act-ind"><i class="ch-chan-dot new" role="img" aria-label="Unread"></i></span>' : '<span class="ch-act-ind" aria-hidden="true"></span>';
+  }
   /* A notification row reads unlike a chat at a glance: the app's mark on a yellow tile, the app's name as a small
    * yellow label, then one line of what happened (and a count when several from that app wait together). */
   function noteRow(it) {
@@ -58,6 +67,11 @@ window.WizCore.chatsParts.notes = function ({ ago, clip, esc, LIVE, stiKind, wit
     const title = n ? it.items.slice(0, 4).map(noteTitle).join(' · ') : noteTitle(it);
     const pv = (it.source === 'cron' && !n ? 'Scheduled job · ' : '') + clip(notePlain(it.message), 160);
     const lbl = n ? `${from}: ${n} waiting · newest ${noteTitle(it)}` : `${from}: ${noteTitle(it)}`;
+    // Plain alert rows (wizard-ux issue 1941, switch wizard/plain-alert-rows): a chat row like the threads around it (the
+    // same status tile, the source where a thread names its channel), marked only by a small bell before the source
+    // name (Inbox rows draw theirs in core/chats-inboxrows.js ibNoteRow).
+    if (notePlainOn()) return `<div class="ch-row-wrap ch-al-wrap${later ? ' later' : ''}" data-morph-key="${n ? `notifg:${esc(it.group)}:${later ? 'l' : 'a'}` : `notif:${esc(it.id)}`}"><button type="button" class="ch-row ch-notif-row ch-al-row${later ? ' deferred' : ' unread'}" data-chnotif="${esc(it.id)}"${it.app ? ` data-chnotif-app="${esc(it.app)}"` : ''}${n ? ` data-chnotif-group="${esc(it.group)}"` : ''} aria-label="${esc(clip('Alert from ' + lbl, 200))}" aria-haspopup="dialog" aria-keyshortcuts="Shift+F10" title="${n ? 'Open the newest · the rest are listed under it' : 'Open'} · hold or open the context menu for actions"><span class="emo sti ch-al-ic" aria-hidden="true">${noteIcon(it)}</span>
+      <span class="bd"><span class="tp"><b>${esc(clip(title, 160))}</b>${n ? `<span class="ch-al-n">${n > 99 ? '99+' : n}</span>` : ''}<time>${esc(ago(new Date(noteAt(it)).toISOString()))}</time></span><span class="ch-chan-line ch-al-from">${NOTE_BELL}${esc(clip(from, 40))}</span><span class="pv"><span class="ch-chan-tag ch-al-from">${NOTE_BELL}${esc(clip(from, 40))}</span> · ${esc(pv)}</span></span>${noteInd(it)}</button></div>`;
     return `<div class="ch-row-wrap ch-notif-wrap${later ? ' later' : ''}${it.app ? ' ch-notif-app' : ''}${n ? ' ch-notif-group' : ''}" data-morph-key="${n ? `notifg:${esc(it.group)}:${later ? 'l' : 'a'}` : `notif:${esc(it.id)}`}"><button type="button" class="ch-row ch-notif-row${later ? ' deferred' : ' unread'}" data-chnotif="${esc(it.id)}"${it.app ? ` data-chnotif-app="${esc(it.app)}"` : ''}${n ? ` data-chnotif-group="${esc(it.group)}"` : ''} aria-label="${esc(clip(lbl, 200))}" aria-haspopup="dialog" aria-keyshortcuts="Shift+F10" title="${n ? 'Open the newest · the rest are listed under it' : 'Open'} · hold or open the context menu for actions"><span class="emo ch-notif-ic" aria-hidden="true">${noteIcon(it)}</span>
       <span class="bd"><span class="tp"><span class="ch-notif-from">${esc(clip(from, 40))}</span><b>${esc(clip(title, 160))}</b>${n ? `<span class="ch-notif-n">${n > 99 ? '99+' : n}</span>` : ''}<time>${esc(ago(new Date(noteAt(it)).toISOString()))}</time></span><span class="pv">${later ? '<em class="att ch-notif-snz">Snoozed:</em> ' : ''}${esc(pv)}</span></span></button></div>`;
   }

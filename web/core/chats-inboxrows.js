@@ -9,7 +9,7 @@
  * createChats (core/chats.js) calls this once with the closure names it reads. Loaded before chats.js by both shells. */
 window.WizCore = window.WizCore || {};
 window.WizCore.chatsParts = window.WizCore.chatsParts || {};
-window.WizCore.chatsParts.inboxrows = function ({ actMark, actNeeds, actUnread, AGS, agentName, agentRec, ago, attOf, chanAt, chanFace, chanStore, chatVars, ch, clip, elOf, esc, isWorking, LIVE, noteAt, noteRow, PIN, renderChatList, rowAgent, spacesOf, threadAct, toast, W, winAgent }) {
+window.WizCore.chatsParts.inboxrows = function ({ actMark, actNeeds, actUnread, AGS, agentName, agentRec, ago, attOf, chanAt, chanFace, chanStore, chatVars, ch, clip, elOf, esc, isWorking, LIVE, noteAt, noteIcon, notePlain, noteRow, noteRowAct, noteSrcName, PIN, renderChatList, rowAgent, spacesOf, threadAct, toast, W, winAgent }) {
   const IB_SWITCH = 'wizard/inbox-rows';
   function inboxRowsOn() { try { return (document.documentElement.dataset.tweaks || '').split(' ').includes(IB_SWITCH); } catch (_) { return false; } }
   // Sent's thread rows (wizard-ux issue 1880) carry the same Archive button.
@@ -160,6 +160,31 @@ window.WizCore.chatsParts.inboxrows = function ({ actMark, actNeeds, actUnread, 
       title: esc(r.title || 'Background task'), mark: ibMark('needs'), line: `${r.failed ? '<em class="att failed">Failed:</em> ' : ''}${esc(clip(r.ask || '', 160))}`,
       after: `<button type="button" class="ch-ib-arch" data-chibrec="${esc(r.id)}" aria-label="Archive: ${esc(r.title || 'Background task')}" title="Archive">${IB_ARCH_SVG}</button>` });
   }
+  /* Plain alert rows (wizard-ux issue 1941, switch wizard/plain-alert-rows, off by default; James, 27 Nov 2026: "they
+   * should be normal threads in the inbox that are marked alerts"): a Chats alert (a Notifications item routed to Chats)
+   * is the same ibRow as the threads around it: the app's mark or the agent's as the avatar, a small bell before the
+   * source name on the label line (the one alert marker), the title, the message as the preview line, the time, the
+   * dot and an Archive button. The row button keeps the alert's own attributes, so open, the Alert actions sheet and
+   * the folded count work as before. A snoozed (read) alert is a read row, still with the bell. */
+  const IB_ALERT = 'wizard/plain-alert-rows';
+  function ibAlertOn() { try { return (document.documentElement.dataset.tweaks || '').split(' ').includes(IB_ALERT); } catch (_) { return false; } }
+  const IB_BELL = '<span class="ch-al-mk" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 16v-5a6 6 0 0 1 12 0v5l1.5 2h-15zM10 20.5a2 2 0 0 0 4 0"/></svg></span>';
+  // (the alert's title as Chats' own alert rows read it: core/chats-notes.js noteTitle)
+  const ibNoteTitle = it => notePlain(it.title) || notePlain(String(it.message || '').split('\n').find(l => l.trim())) || 'Notification';
+  function ibNoteRow(it) {
+    const later = !!it.read, n = it.group ? it.items.length : 0, from = noteSrcName(it);
+    const title = n ? it.items.slice(0, 4).map(ibNoteTitle).join(' · ') : ibNoteTitle(it);
+    const line = (it.source === 'cron' && !n ? 'Scheduled job · ' : '') + clip(notePlain(it.message), 160);
+    const lbl = `Alert from ${n ? `${from}: ${n} waiting · newest ${ibNoteTitle(it)}` : `${from}: ${ibNoteTitle(it)}`}`;
+    const needs = !later && window.WizChatsListModel?.notificationRow?.(it)?.rank === 1, m = later ? '' : needs ? 'needs' : 'new';
+    const av = (it.app || it.from) ? `<span class="ch-ib-av ch-al-av" aria-hidden="true">${noteIcon(it)}</span>` : ibSig(AGS()?.defaultId?.() || 'hermes');
+    const ids = n ? it.items.map(i => i.id) : [it.id];
+    return ibRow({ key: n ? `notifg:${esc(it.group)}:${later ? 'l' : 'a'}` : `notif:${esc(it.id)}`, wrap: ` ch-al-wrap${later ? ' later' : ''}`, cls: ` ch-notif-row${m === 'new' ? ' unread' : ''}${m === 'needs' ? ' needs' : ''}`,
+      open: `data-chnotif="${esc(it.id)}"${it.app ? ` data-chnotif-app="${esc(it.app)}"` : ''}${n ? ` data-chnotif-group="${esc(it.group)}"` : ''} aria-label="${esc(clip(lbl, 200))}" aria-haspopup="dialog" aria-keyshortcuts="Shift+F10"`,
+      tip: `${n ? 'Open the newest · the rest are listed under it' : 'Open'} · hold or open the context menu for actions`, av, from: `${IB_BELL}${esc(clip(from, 40))}`, time: esc(ago(new Date(noteAt(it)).toISOString())),
+      title: esc(clip(title, 160)), mark: `${n ? `<span class="ch-al-n" aria-label="${n} alerts">${n > 99 ? '99+' : n}</span>` : ''}${ibMark(m)}`, line: esc(line),
+      after: `<button type="button" class="ch-ib-arch" data-chibnote="${esc(ids.join(' '))}" aria-label="Archive: ${esc(clip(title, 120))}" title="Archive">${IB_ARCH_SVG}</button>` });
+  }
   /* The list body with the switch on: Inbox (pinned first, then threads, waiting tasks and Chats alerts in the one sort),
    * then Snoozed and Archived folded at the bottom as before. Working threads that never got an answer are in Sent. */
   function inboxRowsBody(w, rows, nt, drafts = 0) {
@@ -172,7 +197,8 @@ window.WizCore.chatsParts.inboxrows = function ({ actMark, actNeeds, actUnread, 
     const sorted = L.activitySort(items.filter(x => !x.pin), order, { at: x => x.at, needs: x => x.needs });
     const inbox = items.filter(x => x.pin).sort((a, b) => a.pin - b.pin).concat(sorted);
     const snoozed = L.activitySort(g.snoozed.map(v => ({ id: v.id, v, at: chanAt(v) })).concat((nt?.later || []).map(v => ({ id: 'notif:' + v.id, n: v, at: noteAt(v) }))), 'newest', { at: x => x.at });
-    const row = x => x.r ? ibRecRow(x.r) : x.n ? noteRow(x.n) : ibThreadRow(x.s || x.v, x.pin);
+    const alertRows = ibAlertOn();
+    const row = x => x.r ? ibRecRow(x.r) : x.n ? (alertRows ? ibNoteRow(x.n) : noteRow(x.n)) : ibThreadRow(x.s || x.v, x.pin);
     const SEC_PAGE = 50, page = (k, list) => { const shown = c.more?.[k] ? list : list.slice(0, SEC_PAGE); return shown.map(row).join('') + (list.length > shown.length ? `<button class="ch-more" data-secmore="${k}">Show all ${list.length}</button>` : ''); };
     // The title bar (wizard-ux issue 1836) names Inbox and carries its count, sort and search: no section row, no fold.
     const ibTitled = c.tbar === 'inbox';
@@ -194,6 +220,9 @@ window.WizCore.chatsParts.inboxrows = function ({ actMark, actNeeds, actUnread, 
     if (!w || w.thread || !(inboxRowsOn() || ibSentThreads())) return false;
     const a = e.target.closest('[data-chibarch]');
     if (a) { threadAct(w.id, a.dataset.chibarch, 'done'); return true; }
+    // An alert row's Archive (issue 1941): the alert, or every alert in its folded row, as the Alert actions' Archive.
+    const nb = e.target.closest('[data-chibnote]');
+    if (nb) { const ids = String(nb.dataset.chibnote || '').split(' ').filter(Boolean); if (ids.length && typeof noteRowAct === 'function') void noteRowAct(ids[0], 'done', ids); return true; }
     const r = e.target.closest('[data-chibrec]');
     if (r) {
       const id = r.dataset.chibrec; r.disabled = true;
