@@ -1,18 +1,17 @@
 // Inbox until archived (wizard-ux issue 1810, switch wizard/inbox-until-archived; James, 25 Nov 2026: "let's go back to
 // manually archiving things when they are done ... treat it like an inbox again"). With the switch on, Chats › Inbox is
 // one list: Working, then Inbox (every thread that is not working, snoozed or archived, read or not), no Recent. Runs
-// the real list model, the real phone / Classic Activity renderer, the real AI apps sidebar paint and the real skin-host
-// activity rows. With the switch off every one of them is today's Ready / Recent split.
+// the real list model, the real AI apps sidebar paint and the real skin-host activity rows. The phone / Classic Inbox
+// draws Inbox rows (wizard-ux issue 1779, on for everyone; tests/inbox-rows.test.mjs), which keep every row until archived.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { modelContext } from './fixtures/chats-list-model.mjs';
 import { withSkinHostParts } from './fixtures/skin-host-parts.mjs';
-import { withParts } from './fixtures/chats-parts.mjs';
 import { withWebParts } from './fixtures/web-parts.mjs';
 const read = p => withWebParts(readFileSync(new URL('../' + p, import.meta.url), 'utf8'));
-const chats = withParts(read('web/core/chats.js')), aad = read('web/layouts/ai-apps/desktop.js'), host = withSkinHostParts(read('web/core/skin-host.js'));
+const aad = read('web/layouts/ai-apps/desktop.js'), host = withSkinHostParts(read('web/core/skin-host.js'));
 const between = (s, a, b) => { const i = s.indexOf(a); assert.ok(i >= 0, a); const j = s.indexOf(b, i); assert.ok(j > i, b); return s.slice(i, j); };
 const H = 3600e3, NOW = Date.now(), SW = 'wizard/inbox-until-archived';
 const row = (id, h, extra = {}) => ({ id, title: 'T ' + id, status: 'completed', at: NOW - h * H, updatedAt: new Date(NOW - h * H).toISOString(), ...extra });
@@ -75,33 +74,6 @@ test('list model activityList: the shell\'s own switch read decides, and the bad
   assert.equal(on.recent.length, 0);
   const off = M.activityList(groups(ROWS()), f(false), { now: NOW });
   assert.deepEqual(J(off.ready.map(r => r.id)), ['g1', 'y1']); assert.deepEqual(J(off.recent.map(r => r.id)), ['r1', 'r2']);
-});
-
-function phone(keep) {
-  const c = { console, Date, localStorage: { getItem: () => null, setItem() {} } };
-  c.window = c; modelContext(c);
-  Object.assign(c, { readyOrder: 'newest', actOlder: false, SEC_PAGE: 40, secOpen: { working: true, ready: true, recent: true, snoozed: false, archived: false },
-    ch: () => ({ more: {} }), LIVE: { workGroups: groups }, actNeeds: needs, actUnread: unread, chanAt: s => s.at, noteAt: n => n.time * 1000,
-    chatRow: s => `<row ${s.id}>`, noteRow: n => `<note ${n.id}>`, inboxKeep: () => keep, inboxPlace: PLACE });
-  vm.runInContext(between(chats, '  const ACT_SORTS = () =>', '  // The sort and Show older taps').replace('let actOlder = false;', ''), c);
-  return c;
-}
-const secs = html => [...html.matchAll(/data-sec="([^"]+)">(?:<div class="ch-sec-hl">)?<button class="ch-sec-h" data-sectoggle="[^"]+" aria-expanded="(?:true|false)"><span>([^<]+)<\/span>(?:<small>([^<]*)<\/small>)?/g)].map(m => [m[1], m[2], m[3] || '']);
-const rowsIn = (html, k) => [...(html.split(`data-sec="${k}"`)[1] || '').split('</section>')[0].matchAll(/<(?:row|note) ([^>]+)>/g)].map(m => m[1]);
-
-test('phone / Classic: Inbox with its count, no Working (issue 1829) and no Recent; a read (kept) alert waits with Snoozed, as on the AI apps sidebar', () => {
-  const nt = { awake: [{ id: 'n1', time: (NOW - 0.5 * H) / 1000 }], later: [{ id: 'n2', time: (NOW - 6 * H) / 1000 }] };
-  const html = phone(true).activityBody({ id: 'w' }, ROWS(), nt);
-  assert.deepEqual(secs(html), [['ready', 'Inbox', '6'], ['snoozed', 'Snoozed', '2'], ['archived', 'Archived', '1']]);
-  assert.deepEqual(rowsIn(html, 'ready'), ['n1', 'g1', 'r1', 'y1', 'r2', 'old']);
-  assert.doesNotMatch(html, /data-sec="recent"|data-chactolder/);
-  assert.match(html, /aria-label="Sort Inbox"/);
-});
-
-test('phone / Classic, switch off: today\'s Ready and Recent', () => {
-  const html = phone(false).activityBody({ id: 'w' }, ROWS(), null);
-  assert.deepEqual(secs(html).map(s => s.slice(0, 2)), [['working', 'Working'], ['ready', 'Ready'], ['recent', 'Recent'], ['snoozed', 'Snoozed'], ['archived', 'Archived']]);
-  assert.match(html, /aria-label="Sort Ready"/);
 });
 
 class Node {

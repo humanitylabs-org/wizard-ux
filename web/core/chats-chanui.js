@@ -30,7 +30,7 @@ window.WizCore.chatsParts.chanui = function ({ agentName, agentRec, ago, AGS, ch
     const archSec = arch.length ? `<section class="ch-sec ch-chan-arch${chatVars.chanArchOpen ? ' open' : ''}" data-sec="chan-archive"><button type="button" class="ch-sec-h" data-chchanarch aria-expanded="${chatVars.chanArchOpen}"><span>Archive</span><small>${arch.length}</small><i aria-hidden="true"></i></button>${chatVars.chanArchOpen ? `<div class="ch-sec-b">${arch.map(c => channelLine(c, rows, now, cur, gAg, dAg)).join('')}</div>` : ''}</section>` : '';
     // + New channel (wizard-ux issue 1308): the list's last row after General, in the accent colour; it opens the
     // existing name form (openSpacePicker naming) for the agent this list shows.
-    const tags = !!chanStore()?.tags; // Tags on (wizard-agent-service issue 608, switch wizard/chat-tags)
+    const tags = !!chanStore()?.tags; // Tags on (wizard-agent-service issue 608, on for everyone)
     const add = chanNewAgent(w) ? `<button type="button" class="ch-chan-add" data-chchannew aria-haspopup="dialog"><span class="ch-chan-hash" aria-hidden="true">+</span><b>${tags ? 'New tag' : 'New channel'}</b></button>` : '';
     // Archived is a tag view: one line after General that opens every archived chat of this list's agent.
     const aAg = focusedAgent(focusOf(w)), archN = tags ? rows.filter(s => s.archived && !s.hidden && (!aAg || rowAgent(s) === aAg)).length : 0;

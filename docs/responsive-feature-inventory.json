@@ -330,7 +330,7 @@
         "phone",
         "desktop"
       ],
-      "note": "Chats Inbox rows: only what needs you, as Signal-style rows with Archive (issue 1779, switch wizard/inbox-rows); called by createChats"
+      "note": "Chats Inbox rows: only what needs you, as Signal-style rows with Archive (issue 1779, on for everyone); called by createChats"
     },
     "core/chats-pull.js": {
       "loadedBy": [
@@ -1774,6 +1774,7 @@
     "core/chats-swipe.js",
     "core/chats-threadacts.js",
     "core/chats-threadpaint.js",
+    "core/chats-title-bar.css",
     "core/chats-tracker.js",
     "core/chats-undo.js",
     "core/chats-view.css",

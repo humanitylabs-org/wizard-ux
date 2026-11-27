@@ -1,3 +1,0 @@
-/* Inbox rows (wizard-ux issue 1779): Chats › Inbox as Signal / Telegram chat rows. The rows' look lives in
- * core/chats.css ("Inbox rows and Sent rows"), shared with Sent's rows (wizard-ux issue 1814, switch wizard/sent-rows)
- * so the two can't drift apart. Markup: core/chats-inboxrows.js. */

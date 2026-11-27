@@ -1,7 +1,7 @@
-// Inbox rows (wizard-ux issue 1779, switch wizard/inbox-rows): Chats › Inbox holds only what needs the owner, as
-// Signal / Telegram rows that stay until archived, with today's Daily and #priority / urgent pinned on top. Runs the
-// real list model rule, the real agent inbox reader (cut out of live-channels.js) against a fake box, and the real
-// chats-inboxrows.js part drawing and tapping rows. Switch off: the model gives exactly today's groups.
+// Inbox rows (wizard-ux issue 1779, on for everyone since James's yes on 27 Nov 2026; the switch wizard/inbox-rows is
+// gone): Chats › Inbox holds only what needs the owner, as Signal / Telegram rows that stay until archived, with today's
+// Daily and #priority / urgent pinned on top. Runs the real list model rule, the real agent inbox reader (cut out of
+// live-channels.js) against a fake box, and the real chats-inboxrows.js part drawing and tapping rows.
 // Run: node --test tests/inbox-rows.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -12,7 +12,7 @@ import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts move
 
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
 const J = v => JSON.parse(JSON.stringify(v)); // vm arrays are from another realm
-const H = 3600e3, NOW = Date.now(), SW = 'wizard/inbox-rows';
+const H = 3600e3, NOW = Date.now(), GONE_ID = 'wizard/inbox-rows';
 const M = modelContext({}).WizChatsListModel;
 const iso = t => new Date(t).toISOString();
 const row = (id, h, extra = {}) => ({ id, title: 'T ' + id, status: 'completed', at: NOW - h * H, updatedAt: iso(NOW - h * H), lastAssistantAt: iso(NOW - h * H), messageCount: 2, ...extra });
@@ -29,11 +29,10 @@ const ROWS = () => [row('new1', 1, { fresh: true }), row('read1', 30), row('y1',
 const pin = s => s.id === 'd1' ? 1 : s.id === 'pr1' ? 2 : 0;
 const facts = { needs, unread, at: s => s.at };
 
-test('list model: the switch id is read from data-tweaks', () => {
-  assert.equal(M.INBOX_ROWS, SW);
-  assert.equal(M.inboxRowsOn(`wizard/desktop-chats ${SW}`), true);
-  assert.equal(M.inboxRowsOn('wizard/desktop-chats wizard/inbox-until-archived'), false);
-  assert.equal(M.inboxRowsOn(undefined), false);
+test('no switch: wizard/inbox-rows is gone from the catalog and the list model', () => {
+  assert.ok(!JSON.parse(read('web/tweaks/catalog.json')).tweaks.includes(GONE_ID), 'not offered in Settings');
+  assert.equal(M.INBOX_ROWS, undefined);
+  assert.equal(M.inboxRowsOn, undefined);
 });
 
 test('list model: Inbox holds only what needs him; pinned first in pin order; no Recent, no Show older', () => {
@@ -61,7 +60,7 @@ test('list model: a read reply stays until archived; archiving is the only way o
   assert.ok(M.activityGroups(g, facts, { now: NOW, inbox: { quiet, pin } }).ready.some(s => s.id === 'aged'));
 });
 
-test('list model: switch off gives exactly today\'s groups', () => {
+test('list model: without inbox facts (the pure model\'s plain lists) the groups are the plain ones', () => {
   const off = M.activityGroups(groups(ROWS()), facts, { now: NOW });
   const off2 = M.activityGroups(groups(ROWS()), facts, { now: NOW, inbox: null });
   assert.deepEqual(J(off2), J(off));
@@ -122,11 +121,11 @@ test('agent inbox reader: a box without the agent inbox (404) is an empty list',
 });
 
 /* The real chats-inboxrows.js part, drawn and tapped. */
-function part({ on = true, records = [] } = {}) {
+function part({ tweaks = 'wizard/desktop-chats', records = [] } = {}) {
   const taps = [], archived = [];
   const ctx = vm.createContext({ console, Date, Promise, String, Number, Set, Map, Array, Object, JSON, setTimeout });
   ctx.window = ctx; ctx.globalThis = ctx;
-  ctx.document = { documentElement: { dataset: { tweaks: on ? `wizard/desktop-chats ${SW}` : 'wizard/desktop-chats' } } };
+  ctx.document = { documentElement: { dataset: { tweaks } } };
   ctx.WizChatsListModel = M; ctx.WizCore = { chatsParts: {} };
   vm.runInContext(read('web/core/chats-inboxrows.js'), ctx);
   const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
@@ -152,7 +151,6 @@ const rowsOf = html => [...html.matchAll(/<div class="ch-row-wrap ch-ib-wrap([^"
 
 test('renderer: Signal rows: round avatar, sender line, title, one preview line, time, unread dot, Archive; pinned first', () => {
   const { api, rows, ctx } = part({ records: [{ id: RID('9'), agent: 'hermes', thread: 'bg9', title: 'Renew the permit', ask: 'Stalled: login', failed: true, updatedAt: NOW - 0.3 * H }] });
-  assert.equal(api.inboxRowsOn({ id: 'w' }), true);
   const html = api.inboxRowsBody({ id: 'w' }, rows, { awake: [], later: [] });
   const r = rowsOf(html);
   assert.deepEqual(r.map(x => x.id), ['d1', 'read1', 'pr1', 'w1', 'bg9', 'new1', 'y1', 'f1'], 'Daily first, then #priority / urgent (newest first); then newest first with the waiting task in line');
@@ -186,12 +184,14 @@ test('renderer: Archive taps archive the thread (as its actions do) and a waitin
   assert.equal(api.inboxRowsClick({ target: { closest: () => null } }, { id: 'w' }), false, 'any other tap is not ours');
 });
 
-test('renderer: switch off: not on, no rows drawn by this part, no box read for waiting tasks', () => {
-  let asked = 0;
-  const { api, ctx } = part({ on: false });
-  assert.equal(api.inboxRowsOn({ id: 'w' }), false);
-  assert.equal(api.inboxRowsFacts(), null);
-  assert.equal(ctx.WizCore.inboxRowsFacts(), null);
-  assert.equal(api.inboxRowsClick({ target: { closest: () => ({ dataset: { chibarch: 'x' } }) } }, { id: 'w' }), false);
-  assert.equal(asked, 0);
+test('renderer: no switch: the same rows with any or no data-tweaks, and a saved wizard/inbox-rows changes nothing', () => {
+  const draw = tweaks => { const { api, rows, ctx } = part({ tweaks }); return { ids: rowsOf(api.inboxRowsBody({ id: 'w' }, rows, { awake: [], later: [] })).map(x => x.id), facts: ctx.WizCore.inboxRowsFacts(), api }; };
+  const plain = draw(''), stale = draw(`wizard/desktop-chats ${GONE_ID}`);
+  assert.deepEqual(plain.ids, ['d1', 'read1', 'pr1', 'w1', 'new1', 'y1', 'f1']);
+  assert.deepEqual(stale.ids, plain.ids);
+  assert.equal(typeof plain.facts?.quiet, 'function', 'the count and badges always read the Inbox rule');
+  assert.equal(typeof plain.api.inboxRowsFacts()?.pin, 'function');
+  const { api, taps } = part({ tweaks: undefined });
+  assert.equal(api.inboxRowsClick({ target: { closest: sel => sel === '[data-chibarch]' ? { dataset: { chibarch: 'x' } } : null } }, { id: 'w' }), true, 'a row\'s Archive is always handled');
+  assert.deepEqual(taps, [['w', 'x', 'done']]);
 });
