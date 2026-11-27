@@ -221,6 +221,9 @@ const measure = page => page.evaluate(() => {
           const voice = () => page.evaluate(() => document.querySelector('#device').dataset.voice || __wos.voice || 'idle');
           await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [orbAt] }); await nap(650);
           steps.orbHold = await page.evaluate(() => __wos.V.kind + ':' + __wos.voice);
+          // wizard-ux#1958: the hold is the plain hold-to-command; the radial Orb switcher never opens over the bar.
+          steps.orbHoldRadial = await page.evaluate(() => !!document.querySelector('.wor') || document.body.classList.contains('wor-open') || !!window.WosOrbSwitcher?.isOpen);
+          await page.screenshot({ path: path.join(out, `${tag}-hold.png`) });
           await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }); await nap(300);
           await page.evaluate(() => { try { __wos.cancelVoice?.(); } catch (_) {} document.querySelector('#arcCancel')?.click(); }); await nap(700);
           await touch([orbAt], 60); await nap(500); steps.orbTap = await voice();
@@ -232,6 +235,13 @@ const measure = page => page.evaluate(() => {
           steps.orbDown = await page.evaluate(() => document.querySelector('#device').classList.contains('zen'));
           assert.ok(['listen', 'paused'].includes(steps.orbTap), `orb tap starts a take (${steps.orbTap})`);
           assert.match(steps.orbHold, /^command:/, `orb hold starts a command (${steps.orbHold})`);
+          assert.notEqual(steps.orbHold, 'command:idle', `the orb hold actually starts a command take (${steps.orbHold})`);
+          assert.equal(steps.orbHoldRadial, false, 'holding the orb never opens the radial Orb switcher (wizard-ux#1958)');
+          await page.evaluate(() => __wos.openSettings('phone')); await nap(900);
+          await page.screenshot({ path: path.join(out, `${tag}-settings-phone.png`) });
+          steps.orbSwitcherRow = await page.evaluate(() => !!window.WosOrbSwitcher?.available || !!document.querySelector('[data-orbsw]'));
+          await page.evaluate(() => __wos.closeSheets()); await nap(400);
+          assert.equal(steps.orbSwitcherRow, false, 'no Orb switcher row in phone Settings while the bar is on');
           assert.equal(steps.orbUp, 'launcher', 'orb swipe up opens the App selector'); assert.ok(steps.orbDown, 'orb swipe down hides the bars');
           // 360 px and the pinned app's bar at the end, for the record.
           steps.endBar = await measure(page);
