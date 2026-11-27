@@ -33,7 +33,7 @@ function phone({ order = 'newest', open = {} } = {}) {
     chanAt: s => s.at, chanFace: n => ({ emoji: '💬', label: n, own: false }), chanStore: () => ({ channels: [] }), chatVars: { readyOrder: order, secOpen: { snoozed: false, archived: false, ...open } },
     ch: () => ({ more: {} }), clip: (s, n) => String(s).slice(0, n), elOf: () => null, esc, isWorking: s => s.status === 'running',
     LIVE: { workGroups: groups, cardAt: s => new Date(s.at).toISOString(), quietReply: () => false, chanDaily: { state: () => null }, sentLog: { state: () => ({ ok: true, rows: [] }) }, agentInbox: { needs: () => [] } },
-    noteAt: n => n.time * 1000, noteRow: n => `<note ${n.id}>`, renderChatList: () => {}, rowAgent: () => 'hermes', spacesOf: () => [], threadAct: () => {}, toast: () => {}, W: {}, winAgent: () => '',
+    noteAt: n => n.time * 1000, noteIcon: () => '', notePlain: t => String(t || ''), noteSrcName: () => 'Wizard', renderChatList: () => {}, rowAgent: () => 'hermes', spacesOf: () => [], threadAct: () => {}, toast: () => {}, W: {}, winAgent: () => '',
   });
   c.inboxRowsBody = api.inboxRowsBody;
   vm.runInContext(between(chats, '  function activityBody(', "  // The Inbox's taps") + '\nthis.activityBody = activityBody;', c);

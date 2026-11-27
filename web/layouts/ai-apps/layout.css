@@ -516,9 +516,10 @@ html[data-shell="phone"][data-layout="ai-apps"] .ch-notif-thread .ch-tacts { gap
 html[data-shell="phone"][data-layout="ai-apps"] .ch-notif-thread .ch-tacts > button { min-height: 32px !important; padding: 0 12px !important; border-radius: 99px !important; font: 500 0.8125rem / 1 var(--wz-font-ui) !important; }
 html[data-shell="phone"][data-layout="ai-apps"] .ch-notif-thread .ch-tacts > [data-chact="resolve"] { color: var(--wz-base, var(--bg)) !important; background: var(--aa-ink) !important; border-color: var(--aa-ink) !important; }
 html[data-shell="phone"][data-layout="ai-apps"] .ch-notif-thread .ch-tacts > [data-chact]:not([data-chact="resolve"]) { color: var(--aa-ink) !important; background: none !important; border: 1px solid color-mix(in srgb, var(--aa-ink) 18%, transparent) !important; }
-/* round 20 item 6: a notification row: a small amber bell, its title in normal text, its unread dot amber */
-html[data-shell="phone"][data-layout="ai-apps"] .aa-row[data-note] .aa-bell { color: var(--amber, var(--wz-warning)); }
-html[data-shell="phone"][data-layout="ai-apps"] .aa-row[data-note] .aa-st.is-new { background: var(--amber, var(--wz-warning)); }
+/* round 20 item 6: a notification row: a small bell, its title in normal text; bell and unread dot in the ink and dot
+ * colours every other row uses (wizard-ux issue 1941: alerts are plain rows marked only by the bell) */
+html[data-shell="phone"][data-layout="ai-apps"] .aa-row[data-note] .aa-bell { color: var(--aa-ink-2); }
+html[data-shell="phone"][data-layout="ai-apps"] .aa-row[data-note] .aa-st.is-new { background: var(--wz-accent, var(--aa-ink)); }
 
 /* Notification stack + clearer buttons (Miguel, 4 Nov 2026: "Open" and "Resolve" weren't intuitive; clicking through a
  * fold didn't show which one was open). One stable newest-first list from the source; the open one is an amber card with

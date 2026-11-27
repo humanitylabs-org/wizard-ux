@@ -842,12 +842,12 @@ test('round 5: notifications in the list: Chats\' own items as plain rows with a
   } finally { Date.now = realNow; }
   const phoneCss = read('web/layouts/ai-apps/layout.css'), css = phoneCss + read('web/layouts/ai-apps/desktop.css');
   assert.ok(!/\.aad?-bell[^{]*\{[^}]*(yellow|background)/.test(css), 'no card');
-  // round 20 item 6 (Miguel): a notification row stands out, subtly: an amber bell and an amber unread dot, nothing else;
-  // the real layout.css / desktop.css on the rows the real views drew
-  const AMBER = 'var(--amber, var(--wz-warning))';
+  // round 20 item 6 (Miguel): a notification row is marked by its small bell, nothing else; since wizard-ux issue 1941
+  // (alerts are plain rows) the bell and the unread dot wear the ink and dot colours every row uses, no amber.
+  // The real layout.css / desktop.css on the rows the real views drew.
   w.html.setAttribute('data-shell', 'phone'); w.html.setAttribute('data-layout', 'ai-apps');
   const bell = w.q('.aa-chat[data-sid="notif:n2"] .aa-bell');
-  assert.equal(cascade(bell, phoneCss).color?.value, AMBER, 'phone: an amber bell');
+  assert.equal(cascade(bell, phoneCss).color?.value, 'var(--aa-ink-2)', 'phone: the bell in the quiet ink, not amber');
   delete bell.parentNode.dataset.note; assert.equal(cascade(bell, phoneCss).color?.value, 'var(--aa-ink-2)', 'phone: the bell itself in the quiet ink');
   const { w: d } = deskWorld();
   d.st.sessions.ready.unshift({ id: 'notif:n1', title: 'Card payment due', kind: 'ready', note: true, app: 'money', unread: true, snoozed: false, pinned: false, actions: ['snooze', 'done'] });
@@ -857,7 +857,7 @@ test('round 5: notifications in the list: Chats\' own items as plain rows with a
   assert.equal(d.q('.aad-rw[data-sid="notif:n1"]'), null, 'no alert row of the sidebar\'s own');
   d.q('.aad-tog').dispatchEvent(new FakePointerEvent('click')); d.st.timers.length = 0;
   d.q('.aad-rk[data-k="ready"]').dispatchEvent(new FakePointerEvent('pointerenter')); d.st.timers.find(h => h.ms === 300).fn();
-  assert.equal(cascade(d.q('.aad-fly-i[data-sid="notif:n1"] .aad-bell'), DESK_CSS).color?.value, AMBER, 'the rail\'s flyout: the amber bell too');
+  assert.equal(cascade(d.q('.aad-fly-i[data-sid="notif:n1"] .aad-bell'), DESK_CSS).color?.value, 'var(--aad-ink-2)', 'the rail\'s flyout: the bell in the quiet ink too');
   // the shell side: sessions.list() adds the inbox's items (while a package lists them), open / act go to its handler
   const host = withSkinHostParts(read('web/core/skin-host.js'));
   const src = host.match(/  const NOTE_ID = [\s\S]*?\n  function inboxAct\(action, id\) \{[^\n]*\n/)[0];

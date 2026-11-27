@@ -475,10 +475,6 @@
       "help": "Pin threads on top.",
       "where": "Settings › Appearance › Try new features › Inbox: pin threads to the top"
     },
-    "wizard/plain-alert-rows": {
-      "help": "Alerts look like chats.",
-      "where": "Settings › Appearance › Try new features › Inbox: alerts as chat rows"
-    },
     "wizard/smart-inbox": {
       "help": "Inbox: only what blocks you.",
       "where": "Settings › Appearance › Try new features › Smart inbox: only what needs you"

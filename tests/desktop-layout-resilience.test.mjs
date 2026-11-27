@@ -47,7 +47,7 @@ test('tweak disposal never writes the layout diagnostic', async () => {
   const f = fixture(); await f.host.whenLayoutReady();
   assert.equal(f.lsMap.has(key), false, 'Classic has no layout module; it is not a load failure');
   f.host._test.setImporter(async () => ({ default: () => () => {} }));
-  await f.mount('wizard/plain-alert-rows'); assert.ok(f.host.tweakState.includes('wizard/plain-alert-rows'), JSON.stringify(f.toasts)); await f.clear();
+  await f.mount('wizard/phone-recovery-mode'); assert.ok(f.host.tweakState.includes('wizard/phone-recovery-mode'), JSON.stringify(f.toasts)); await f.clear();
   assert.equal(f.lsMap.has(key), false);
 });
 

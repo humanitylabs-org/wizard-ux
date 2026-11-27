@@ -47,14 +47,15 @@ test('a folded row: app mark, app name label, count, newest first; a single row 
   const html = noteRow(g);
   assert.match(html, /data-chnotif="m2"/);
   assert.match(html, /data-chnotif-group="money"/);
-  assert.match(html, /<span class="ch-notif-from">Money<\/span>/);
-  assert.match(html, /<span class="ch-notif-n">2<\/span>/);
+  assert.match(html, /<span class="ch-chan-line ch-al-from"><span class="ch-al-mk"[^>]*><svg[^]*?<\/svg><\/span>Money<\/span>/, 'the source on the line a thread names its channel on, after the bell (issue 1941)');
+  assert.match(html, /<span class="ch-al-n">2<\/span>/);
   assert.match(html, /<b>Tm2 · Tm1<\/b>/);
-  assert.match(html, /aria-label="Money: 2 waiting · newest Tm2"/);
+  assert.match(html, /aria-label="Alert from Money: 2 waiting · newest Tm2"/);
   const one = noteRow(it('x1', 'messenger', 40));
-  assert.match(one, /<span class="ch-notif-from">Messenger<\/span><b>Tx1<\/b><time>/);
-  assert.doesNotMatch(one, /ch-notif-n|data-chnotif-group/);
-  assert.match(noteRow(it('n1', '', 20)), /<span class="ch-notif-from">Oscar<\/span>/, 'Wizard\'s own alerts carry the agent\'s name');
+  assert.match(one, /<b>Tx1<\/b><time>/);
+  assert.match(one, /<span class="ch-chan-line ch-al-from"><span class="ch-al-mk"[^>]*><svg[^]*?<\/svg><\/span>Messenger<\/span>/);
+  assert.doesNotMatch(one, /ch-al-n|data-chnotif-group/);
+  assert.match(noteRow(it('n1', '', 20)), /<span class="ch-chan-line ch-al-from"><span class="ch-al-mk"[^>]*><svg[^]*?<\/svg><\/span>Oscar<\/span>/, 'Wizard\'s own alerts carry the agent\'s name');
 });
 
 test('the open item lists the rest from its app (Done all clears them together)', async () => {
