@@ -1,7 +1,7 @@
-// Sent rows (wizard-ux issue 1814, switch wizard/sent-rows, off by default): the real Chats part (core/chats-sent.js)
-// on a stand-in Chats. With the switch on, Sent is one list of normal Chats rows under Working and Processed, with no
-// back row or filter, plain words only, and the corrections in the row's actions sheet; with it off, today's Sent.
-// Browser proof: tests/qa-chats-sent-rows.cjs (QA_SWITCH=off for the unchanged off path).
+// Sent rows (wizard-ux issue 1814, on for everyone since James's yes on 27 Nov 2026; switch wizard/sent-rows removed):
+// the real Chats part (core/chats-sent.js) on a stand-in Chats. Sent is one list of the Inbox rows under Working and
+// Processed, with no back row or filter, plain words only, and the corrections in the row's actions sheet.
+// Browser proof: tests/qa-chats-sent-rows.cjs.
 // Run: node --test tests/sent-rows.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -13,7 +13,7 @@ const clone = v => JSON.parse(JSON.stringify(v));
 const sid = c => 'sent_' + c.repeat(24);
 const view = (c, extra = {}) => ({ id: sid(c), at: 1000, source: 'orb', text: 'Words ' + c, route: 'agent', decidedBy: 'model', rules: [], state: 'done', thread: 'thread_' + c, record: null, tags: [], urgent: false, wouldRoute: null, corrected: null, error: '', wantsReply: true, answer: '', quiet: false, ...extra });
 
-function part({ tweaks = SW, rows = [], next = null } = {}) {
+function part({ tweaks = '', rows = [], next = null } = {}) {
   const renders = [], opened = [], corrections = [], toasts = [], sheets = [];
   const CH = { main: { sent: true }, 'host-ops': {}, box: {}, locked: {} }, chatVars = { chanView: 'activity', rowSheet: null, secOpen: {} };
   const W = { main: { id: 'main', thread: null }, 'host-ops': { id: 'host-ops', thread: null }, box: { id: 'box', thread: null }, locked: { id: 'locked', thread: null } };
@@ -40,21 +40,20 @@ const rowsOf = html => [...html.matchAll(/<div class="ch-row-wrap ch-ib-wrap ch-
 // What a row says: sender, time, his words, the line under them.
 const said = row => row.replace(/<span class="ch-ib-av[^"]*"[^>]*>(?:<span[^>]*>[^<]*<\/span>|[^<]*)<\/span>/, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
 
-test('switch off: Sent is today\'s cards, back row and All / Working pills, unchanged', () => {
-  const f = part({ tweaks: 'wizard/desktop-chats', rows: [view('a', { state: 'running', route: 'dump' }), view('b')] });
-  assert.equal(f.p.sentRowsOn(), false);
-  assert.match(f.p.sentHead(f.W.main), /data-chsentback[\s\S]*data-chsentfilter="all"[\s\S]*data-chsentfilter="working"/);
-  const body = f.p.sentBody(f.W.main);
-  assert.match(body, /class="ch-sent-row st-running"[\s\S]*data-chsentfix="reply"/, 'the cards with their two buttons');
-  assert.doesNotMatch(body, /ch-sr-row|data-chsent=/, 'none of the new rows');
-  assert.equal(f.p.sentSheet('main', sid('a')), false, 'no actions sheet while off');
-  assert.deepEqual(f.sheets, []);
+test('no switch: Sent is the Inbox rows for everyone, whatever else is switched on; no cards, back row or pills', () => {
+  for (const tweaks of ['', 'wizard/desktop-chats', SW]) {
+    const f = part({ tweaks, rows: [view('a', { state: 'running', route: 'dump' }), view('b')] });
+    assert.equal(f.p.sentRowsOn, undefined, 'no switch to read');
+    assert.equal(f.p.sentHead, undefined, 'no back row or filter to draw');
+    const body = f.p.sentBody(f.W.main);
+    assert.equal(rowsOf(body).length, 2, tweaks || 'nothing switched on');
+    assert.doesNotMatch(body, /ch-sent-row|data-chsentfix|data-chsentfilter|data-chsentback|data-chsentopen/, 'none of the old cards');
+    assert.equal(f.p.sentSheet('main', sid('a')), true, 'the actions sheet opens');
+  }
 });
 
-test('switch on: no back row and no filter; Working then Processed under Inbox\'s section header (on Inbox\'s panel); an empty section hides', () => {
+test('no back row and no filter; Working then Processed under Inbox\'s section header (on Inbox\'s panel); an empty section hides', () => {
   const f = part({ rows: [view('a', { state: 'running', route: 'dump' }), view('r', { state: 'routing', route: null }), view('b'), view('c', { state: 'failed' })] });
-  assert.equal(f.p.sentRowsOn(), true);
-  assert.equal(f.p.sentHead(f.W.main), '', 'the bottom tabs are the navigation: no "‹ Sent", no pills');
   const body = f.p.sentBody(f.W.main);
   const secs = [...body.matchAll(/<section class="ch-sec ch-act ch-ib ch-sr open" data-sec="(\w+)"><button class="ch-sec-h" data-sectoggle="\1" aria-expanded="true"><span>(\w+)<\/span><small>(\d+)<\/small><i aria-hidden="true"><\/i><\/button>/g)].map(m => [m[1], m[2], +m[3]]);
   assert.deepEqual(secs, [['sentWorking', 'Working', 2], ['sentProcessed', 'Processed', 2]], 'Inbox\'s own foldable header markup');
@@ -139,19 +138,17 @@ test('the row actions sheet: why it went there in plain words, Open chat, both c
   assert.deepEqual(clone(f.opened), [['main', 'thread_h'], ['main', 'worker_a']]);
 });
 
-test('a sheet button without an open Sent sheet, or the switch turned off, does nothing', async () => {
+test('a sheet button without an open Sent sheet, or an unknown row, does nothing', async () => {
   const f = part({ rows: [view('a')] });
   assert.equal(f.click(f.W.main, { rssentfix: 'quiet' }), false, 'no Sent sheet open: not Sent\'s tap');
-  f.root.dataset.tweaks = '';
-  assert.equal(f.p.sentSheet('main', sid('a')), false);
   assert.equal(f.p.sentSheet('main', sid('z')), false, 'an unknown row');
   await new Promise(r => setImmediate(r));
   assert.deepEqual(f.corrections, []);
 });
 
-test('the switch is listed, off by default, and Sent rows join the row actions (main versus routed lists)', async () => {
+test('the switch is gone from the list, and Sent rows join the row actions (main versus routed lists)', async () => {
   const catalog = JSON.parse(readFileSync(new URL('../web/tweaks/catalog.json', import.meta.url), 'utf8'));
-  assert.ok(catalog.tweaks.includes(SW) && !catalog.defaults.includes(SW));
+  assert.ok(!catalog.tweaks.includes(SW) && !(catalog.defaults || []).includes(SW));
   // The tabs (and so Sent rows) are the main agent's list only; a routed agent's list never draws them.
   const f = part({ rows: [view('a')] });
   assert.equal(f.p.sentTabsOn(f.W.main), true);

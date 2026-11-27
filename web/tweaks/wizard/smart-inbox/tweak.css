@@ -13,7 +13,7 @@ html[data-tweaks~="wizard/smart-inbox"] .ch-sheet-b button[data-rssentfix][aria-
 html[data-tweaks~="wizard/smart-inbox"] .ch-sheet-b button[data-rssentfix][aria-pressed="true"] svg { stroke: var(--wz-accent); }
 html[data-tweaks~="wizard/smart-inbox"] .ch-sheet-b button[data-rssentfix]:disabled { opacity: .55; cursor: progress; }
 /* The AI apps desktop's Chats panel: its Inbox is the sidebar's own compact rows (no avatar, no Archive button), so Sent's
- * thread rows take that look there, as Sent rows do (wizard/sent-rows). */
+ * thread rows take that look there, as Sent rows do. */
 html[data-tweaks~="wizard/smart-inbox"][data-shell="desktop"][data-layout="ai-apps"] .ch-side-sent .ch-st-wrap .ch-ib-arch { display: none; }
 html[data-tweaks~="wizard/smart-inbox"][data-shell="desktop"][data-layout="ai-apps"] .ch-side-sent .ch-sec.ch-st > .ch-sec-b { background: none; border-radius: 0; }
 html[data-tweaks~="wizard/smart-inbox"][data-shell="desktop"][data-layout="ai-apps"] .ch-side-sent .ch-ib-wrap.ch-st-wrap + .ch-ib-wrap.ch-st-wrap { box-shadow: none; }

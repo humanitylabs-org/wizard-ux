@@ -1,24 +1,21 @@
 'use strict';
-// Sent rows (wizard-ux issue 1814, switch wizard/sent-rows, off by default) in a real browser. Disposable synthetic
+// Sent rows (wizard-ux issue 1814, on for everyone; switch wizard/sent-rows removed) in a real browser. Disposable synthetic
 // transport only: a fake box keeps a Sent log of 12 sends (GET /wizard/v1/sent, POST /wizard/v1/sent/<id>/correct) and an
 // agent inbox; its worker thread is hidden (stock Hermes leaves hidden sessions out of /api/sessions) but reads by id.
 // Phone 412x915, Classic desktop 1440x960 (the full Chats view) and the AI apps desktop's Chats panel 1440x960, in
-// Nebula and Light (obsidian-light). With the switch on:
+// Nebula and Light (obsidian-light):
 //   Sent has no "‹ Sent" back row and no All / Working pills; one list with Inbox's section header style, Working (the
 //   running sends) then Processed (the finished ones); every row is a normal Chats row (.ch-row-wrap > .ch-row), as tall
 //   as an Inbox row with the same title size; at least 9 rows show on the phone; no internal words on any row; a
 //   long-press (phone), right-click and Shift+F10 (desktop) open the row actions sheet with why it went where it went,
 //   Open chat and the two corrections; a correction posts and the row says Corrected; a tap opens the (hidden) thread;
 //   Back returns to Sent, then Inbox; a live skin change repaints the rows.
-// QA_SWITCH=off: today's Sent (cards, back row, pills); the Sent list's HTML is written to sent-<stem>.html so a run
-// with QA_WEB=<main checkout>/web can be compared byte for byte.
 const assert = require('node:assert/strict');
 const { chromium } = require('../tools/qa-playwright.cjs');
 const { ownerRead } = require('../tools/qa-desktop-frame-fixture.cjs');
 const fs = require('node:fs'), path = require('node:path');
 const repo = path.resolve(__dirname, '..'), origin = process.env.QA_ORIGIN || 'https://chats-sent-rows.test', prefix = '/wizard-os-home/';
 const web = process.env.QA_WEB || path.join(repo, 'web'), out = process.env.QA_OUT || path.join(repo, 'chats-sent-rows-evidence');
-const SW = 'wizard/sent-rows', ON = process.env.QA_SWITCH !== 'off';
 const SHELLS = (process.env.QA_SHELLS || 'phone,classic,ai-apps').split(','), SKINS = (process.env.QA_SKINS || 'nebula,obsidian-light').split(',');
 fs.mkdirSync(out, { recursive: true });
 const now = Date.now(), iso = t => new Date(t).toISOString(), nap = ms => new Promise(r => setTimeout(r, ms)), M = 60e3, H = 36e5;
@@ -46,18 +43,18 @@ let SENT = [
 const RECORDS = [{ id: rid('a'), agent: 'hermes', thread_id: 'qa-worker-1', state: 'running', kind: 'note', title: 'Call mom', last_update: 'Adding the reminder', created_at: now - 3 * M, updated_at: now - 2 * M }];
 const raw = (sid, s) => ({ id: sid, title: s.title, runtime: 'direct', status: 'completed', updated_at: iso(s.at), updatedAt: iso(s.at), last_active: s.at / 1000, message_count: s.msgs.length, messageCount: s.msgs.length, preview: s.msgs.at(-1)?.[1] || '', ...(s.hidden ? { hidden: true } : {}) });
 const INTERNAL = /\bThread\b|you typed it|would have|router|fallback|owner_words|no_reply|wants_reply|\bmodel\b|Background ·/;
-const report = { origin, web, on: ON, cases: [] };
+const report = { origin, web, cases: [] };
 (async () => {
   const browser = await chromium.launch();
   try {
     for (const shell of SHELLS) for (const skin of SKINS) {
-      const phone = shell === 'phone', ai = shell === 'ai-apps', stem = `${shell}-${skin}-${ON ? 'on' : 'off'}`;
+      const phone = shell === 'phone', ai = shell === 'ai-apps', stem = `${shell}-${skin}`;
       const entry = { stem, errors: [], refused: [], writes: [], corrections: [] }; report.cases.push(entry);
       SENT = SENT.map(r => { const { corrected, ...rest } = r; return rest; });
       const context = await browser.newContext({ viewport: phone ? { width: 412, height: 915 } : { width: 1440, height: 960 }, isMobile: phone, hasTouch: phone, serviceWorkers: 'block', ...(phone ? { userAgent: 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Mobile Safari/537.36' } : {}) });
       try {
         await context.routeWebSocket('**/*', w => w.close());
-        const mix = { 'wizard/desktop-chats': true, ...(ON ? { [SW]: true } : {}), ...(process.env.QA_INBOX_ROWS !== 'off' && (ON || process.env.QA_INBOX_ONLY) ? { 'wizard/inbox-rows': true } : {}) };
+        const mix = { 'wizard/desktop-chats': true, ...(process.env.QA_INBOX_ROWS !== 'off' ? { 'wizard/inbox-rows': true } : {}) };
         await context.addInitScript(({ shell, skin, mix }) => {
           if (window !== top) return;
           if (sessionStorage.getItem('qaBoot')) return; sessionStorage.setItem('qaBoot', '1');
@@ -111,7 +108,6 @@ const report = { origin, web, on: ON, cases: [] };
         await page.goto(origin + prefix + (phone ? 'index.html?phone' : 'desktop.html'));
         await page.waitForFunction(() => (window.__wux || window.__wos) && !window.WosWelcome?.active && window.WosExperience?.state.tweaks.length && !window.WosExperience.state.busy);
         await page.addStyleTag({ content: '#wosWelcome{display:none!important}' });
-        if (ON) await page.waitForFunction(sw => (document.documentElement.dataset.tweaks || '').split(' ').includes(sw), SW, { timeout: 15000 });
         if (ai) await page.waitForFunction(() => document.documentElement.dataset.layout === 'ai-apps', null, { timeout: 15000 });
         else if (phone) await page.evaluate(() => __wos.openSheet('inbox')); else await page.evaluate(() => __wux.openChatsList());
         const L = ai ? '.aad-side .aad-chan' : '.ch-list';
@@ -120,7 +116,7 @@ const report = { origin, web, on: ON, cases: [] };
         const back = () => page.evaluate(() => window.__wos ? __wos.onBack() : __wux.escStep());
         const shot = async name => { await page.evaluate(() => document.fonts.ready); await nap(300); await page.screenshot({ path: path.join(out, `${stem}-${name}.png`) }); };
         await vis(ai ? '.aad-side .aad-rw[data-sid="qa-chat-1"] .aad-row' : '.ch-list [data-chopen="qa-chat-1"]').waitFor({ timeout: 15000 });
-        if (ON && !ai && process.env.QA_INBOX_ROWS !== 'off') await vis('.ch-list .ch-ib-row[data-chopen="qa-chat-1"]').waitFor({ timeout: 15000 });
+        if (!ai && process.env.QA_INBOX_ROWS !== 'off') await vis('.ch-list .ch-ib-row[data-chopen="qa-chat-1"]').waitFor({ timeout: 15000 });
         await vis(`${L} .ch-tabbar`).waitFor({ timeout: 10000 }); await nap(600);
         // 1. Inbox: its rows (the new Inbox rows, wizard/inbox-rows) are the yardstick for Sent's.
         const lookOf = (row, q) => {
@@ -135,20 +131,10 @@ const report = { origin, web, on: ON, cases: [] };
           const h = [...document.querySelectorAll(ai ? '.aad-side .aad-sec' : '.ch-list .ch-sec.ch-ib .ch-sec-h')].find(n => n.getClientRects().length);
           return { look: row ? lookOf(row, ai ? AADQ : IBQ) : null, head: h ? [getComputedStyle(h).fontSize, getComputedStyle(h).fontWeight, getComputedStyle(h).textTransform].join(' ') : null };
         }, [ai, IBQ, AADQ, lookOf.toString()]);
-        if (ON || process.env.QA_INBOX_ONLY) assert.ok(entry.inbox.look, 'Inbox shows its rows');
+        assert.ok(entry.inbox.look, 'Inbox shows its rows');
         await shot('1-inbox');
         if (process.env.QA_INBOX_ONLY) { entry.pass = true; continue; } // the Inbox rows' look only (compare with main)
         await vis(`${L} .ch-tabbar [data-chtab="sent"]`).click();
-        if (!ON) {
-          await vis(`${L} .ch-sent-row`).waitFor({ timeout: 8000 });
-          assert.equal(await count(`${L} .ch-sent-h`), 1, 'off: the back row stays');
-          assert.equal(await count(`${L} [data-chsentfilter]`), 2, 'off: the All / Working pills stay');
-          assert.equal(await count(`${L} .ch-sr-row`), 0, 'off: no new rows');
-          await nap(500);
-          fs.writeFileSync(path.join(out, `sent-${shell}-${skin}.html`), await page.locator(ai ? `${L} .ch-list` : '.ch-list').filter({ visible: true }).first().evaluate(n => n.outerHTML));
-          await shot('2-sent');
-          entry.pass = true; continue;
-        }
         await vis(`${L} .ch-sr-row`).waitFor({ timeout: 8000 }); await nap(400);
         // 2. Sent: no back row, no pills, Working then Processed under Inbox's header, the new Inbox's own rows.
         assert.equal(await count(`${L} .ch-sent-h`), 0, 'no "‹ Sent" back row');
@@ -244,10 +230,10 @@ const report = { origin, web, on: ON, cases: [] };
         assert.deepEqual(entry.refused.filter(x => x.reason === 'unexpected-write'), [], 'no unexpected writes');
         entry.pass = true;
       } catch (e) { entry.failure = e.stack; const pages = context.pages(); if (pages[0]) { entry.body = (await pages[0].locator('body').innerText().catch(() => '')).slice(0, 1500); await pages[0].screenshot({ path: path.join(out, stem + '-failure.png') }).catch(() => {}); } }
-      finally { fs.writeFileSync(path.join(out, `report-${ON ? 'on' : 'off'}.json`), JSON.stringify(report, null, 2)); await context.close(); }
+      finally { fs.writeFileSync(path.join(out, 'report.json'), JSON.stringify(report, null, 2)); await context.close(); }
     }
   } finally { await browser.close(); }
   const failed = report.cases.filter(c => !c.pass);
-  console.log(JSON.stringify({ on: ON, cases: report.cases.length, passed: report.cases.length - failed.length, failed: failed.map(c => c.stem + ': ' + String(c.failure).split('\n')[0]) }));
+  console.log(JSON.stringify({ cases: report.cases.length, passed: report.cases.length - failed.length, failed: failed.map(c => c.stem + ': ' + String(c.failure).split('\n')[0]) }));
   if (failed.length || !report.cases.length) process.exitCode = 1;
 })().catch(e => { console.error(e); process.exitCode = 1; });

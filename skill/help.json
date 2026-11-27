@@ -471,10 +471,6 @@
       "help": "Inbox: only what needs you.",
       "where": "Settings › Appearance › Try new features › Inbox: only what needs you"
     },
-    "wizard/sent-rows": {
-      "help": "Sent uses Inbox's rows.",
-      "where": "Settings › Appearance › Try new features › Sent: the same rows as Inbox"
-    },
     "wizard/sent-threads": {
       "help": "Sent lists threads.",
       "where": "Settings › Appearance › Try new features › Sent: threads, like email"

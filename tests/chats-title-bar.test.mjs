@@ -1,5 +1,5 @@
 // Chats title bar (wizard-ux issue 1836, switch wizard/chats-title-bar, off by default): the real Chats part
-// (core/chats-sent.js titleBarTab / titleBar / sentHead) run on a stand-in Chats. Which list gets the bar (only the main
+// (core/chats-sent.js titleBarTab / titleBar) run on a stand-in Chats. Which list gets the bar (only the main
 // agent's tabbed list, never a routed agent's or the AI apps sidebar pane), what the bar says per tab, and Sent without
 // a second "Sent" back row. Browser proof (phone + Classic desktop, two skins, sort from the filter sheet, search,
 // byte-identical list with the switch off): tests/qa-chats-title-bar.cjs.
@@ -56,12 +56,11 @@ test('the bar: the tab title, the Inbox count pill, search and filter icons; Sen
   assert.match(p.titleBar('inbox', { searching: true, filtered: true, sheet: true }), /ch-tbar-b on" data-chtbsearch[^>]*aria-pressed="true"[\s\S]*ch-fbtn on" data-chfbtn[^>]*aria-expanded="true"/);
 });
 
-test('Sent under the bar: no second "Sent" back row; without the bar the back row stays', () => {
-  const f = part({ tweaks: SW });
-  f.CH.main.sent = true;
-  const titled = f.p.sentHead(f.W.main, true), plain = f.p.sentHead(f.W.main);
-  assert.ok(!/data-chsentback/.test(titled), 'no back row under the title bar');
-  assert.match(titled, /data-chsentfilter="working"/, 'the All / Working filter stays');
-  assert.match(plain, /data-chsentback[\s\S]*<b>Sent<\/b>/, 'switch off: today\'s back row');
-  assert.equal(plain, f.p.sentHead(f.W.main, false));
+test('Sent under the bar: no second "Sent" back row (Sent has none at all since wizard-ux issue 1814)', () => {
+  for (const tweaks of [SW, '']) {
+    const f = part({ tweaks });
+    f.CH.main.sent = true;
+    assert.equal(f.p.sentHead, undefined, 'no Sent head to draw, with or without the bar');
+    assert.ok(!/data-chsentback|data-chsentfilter/.test(f.p.sentBody(f.W.main)), 'no back row and no filter');
+  }
 });

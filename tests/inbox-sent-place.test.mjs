@@ -49,14 +49,17 @@ function shell({ tweaks = 'wizard/inbox-until-archived', threads = THREADS(), se
     sentLog: { state: () => st, fresh() {}, read: async () => st } };
   vm.runInContext(read('web/core/chats-ready.js'), ctx);
   vm.runInContext(read('web/core/chats-sent.js'), ctx);
+  vm.runInContext(read('web/core/chats-inboxrows.js'), ctx);
   ctx.WizCore.chatsParts.ready({ actNeeds: needs, actUnread: unread, CH: {}, chanAt: s => s.at, elOf: () => null, H: { root: () => ({ querySelectorAll: () => [] }) }, LIST_PLACE_KEY: 'k', LIST_PLACE_TTL: 1, listPlace: () => null, listSig: () => '', LIVE, W: {} });
   const W = { main: { id: 'main', thread: null } }, CH = { main: { sent: true } };
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-  const p = ctx.WizCore.chatsParts.sent({ ago: () => '3m', ch: id => CH[id], CH, CHAN_VIEW_KEY: 'k', chanElsewhere: () => false, chanSide: () => false, chatVars: { chanView: 'activity' }, clip: (s, n) => String(s).slice(0, n), elOf: () => ({}), esc, H: { win: id => W[id] },
+  // Sent draws the new Inbox's own rows (wizard-ux issue 1814, on for everyone).
+  const ib = ctx.WizCore.chatsParts.inboxrows({ AGS: () => ({ sigil: () => '', defaultId: () => 'hermes' }), agentName: id => id || 'Wizard', agentRec: id => ({ id }), chanFace: n => ({ emoji: '💬', label: n, own: false }), esc, LIVE });
+  const p = ctx.WizCore.chatsParts.sent({ ibMark: ib.ibMark, ibRow: ib.ibRow, ibTagFace: ib.ibTagFace, ago: () => '3m', ch: id => CH[id], CH, CHAN_VIEW_KEY: 'k', chanElsewhere: () => false, chanSide: () => false, chatVars: { chanView: 'activity' }, clip: (s, n) => String(s).slice(0, n), elOf: () => ({}), esc, H: { win: id => W[id] },
     LIVE, openChat() {}, renderChatList() {}, rerenderList() {}, toast() {}, W, winAgent: () => '' });
   // Inbox: the Inbox list's threads (the count the badges show); Sent: the threads the drawn Sent rows open.
   const inbox = () => J((ctx.WizCore.inboxIds(LIVE) ? [...ctx.WizCore.inboxIds(LIVE)] : []).sort());
-  const sentList = () => [...new Set([...p.sentBody(W.main).matchAll(/data-chsentopen="([^"]+)"/g)].map(m => st.rows.find(r => r.id === m[1])?.thread))].sort();
+  const sentList = () => [...new Set([...p.sentBody(W.main).matchAll(/data-chsent="([^"]+)"/g)].map(m => st.rows.find(r => r.id === m[1])?.thread))].sort();
   return { ctx, LIVE, st, threads, inbox, sentList, p, W, listeners };
 }
 
@@ -82,7 +85,7 @@ test('James: "Sent to Miguel, done" answered fyi stays in Sent; "is the mac app 
 test('a working thread he sent into is only in Sent (Working), never in Inbox; when it ends the outcome decides', () => {
   const s = shell();
   assert.ok(!s.inbox().includes('run') && s.sentList().includes('run'));
-  assert.match(s.p.sentHead(s.W.main), /Working <small>1<\/small>/, 'Sent › Working counts it');
+  assert.match(s.p.sentBody(s.W.main), /<span>Working<\/span><small>1<\/small>/, 'Sent › Working counts it');
   // The run ends with a question for him: Inbox. Ends quietly: Sent.
   const t = s.threads.find(x => x.id === 'run');
   t.status = 'completed'; t.attention = { state: 'needs_you', ask: 'Which build?' }; s.st.rows = s.st.rows.map(r => r.id === sid('a') ? { ...r, state: 'needs_you' } : r);

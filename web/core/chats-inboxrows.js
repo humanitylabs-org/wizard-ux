@@ -134,8 +134,8 @@ window.WizCore.chatsParts.inboxrows = function ({ actMark, actNeeds, actUnread, 
   }
   const IB_ARCH_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16v3H4zM6 10v9h12v-9M10 14h4"/></svg>';
   const IB_PIN_MARK = '<span class="ch-ib-pin" aria-label="Pinned">📌</span>';
-  /* The one Signal-style row: Inbox's threads and waiting tasks, and Sent's sends (wizard-ux issue 1814, switch
-   * wizard/sent-rows: James, 25 Nov 2026, "let's give the same design to sent"), so the two can't drift apart. Every
+  /* The one Signal-style row: Inbox's threads and waiting tasks, and Sent's sends (wizard-ux issue 1814, on
+   * for everyone: James, 25 Nov 2026, "let's give the same design to sent"), so the two can't drift apart. Every
    * part comes in as HTML the caller escaped: `key` the morph key, `wrap` / `cls` extra classes, `open` the row button's
    * attributes, `tip` its title, `av` the avatar, `from` the sender, `time`, `title`, `mark`, `line` the one line under
    * the title, `after` what follows the row button (Archive). */

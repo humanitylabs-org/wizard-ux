@@ -6,13 +6,9 @@ window.WizCore.chatsParts = window.WizCore.chatsParts || {};
 window.WizCore.chatsParts.sent = function ({ ago, ch, CH, CHAN_VIEW_KEY, chanElsewhere, chanSide, chatVars, clip, closeRowSheet, elOf, esc, H, ibMark, ibRow, ibTagFace, ibThreadRow, LIVE, openChat, renderChatList, rerenderList, toast, W, winAgent }) {
   /* The main agent's Chats list gets three tabs at the bottom: Inbox (today's Activity list, until wizard-ux issue 1779
    * gives it its own rows), Tags (today's Channels view, until wizard-agent-service issue 608) and Sent. Sent lists every
-   * capture the owner sent, newest first (LIVE.sentLog: GET /wizard/v1/sent): the first line of his words, when, where
-   * it went (Background / Thread / Command / Reminder, or Reply for a message typed in a thread he had, with the
-   * agent's one-line answer: wizard-ux issue 1808), its state (running, done, needs you, failed) and why ("you said
-   * reply", "model", "your earlier correction", "fallback"). A tap opens the thread it ran in (a hidden worker thread
-   * opens by id, as from the Running view); Should have replied / Didn't need a reply correct the routing in place
-   * (POST /wizard/v1/sent/<id>/correct). Working is Sent's filter for what still runs; the Running row above Ready goes
-   * away. Back from Sent returns to Inbox (channelBack). */
+   * capture the owner sent, newest first (LIVE.sentLog: GET /wizard/v1/sent), as Inbox rows under Working and
+   * Processed (Sent rows below). A tap opens the thread it ran in (a hidden worker thread opens by id, as from the
+   * Running view). Back from Sent returns to Inbox (channelBack). */
   // The tabs: the main agent's own Chats list (phone, Classic desktop and the AI apps sidebar pane, its id::side window
   // whose channels open elsewhere: wizard-ux issue 1807), never a routed agent's list or the main column's feed window.
   function sentTabsOn(w) { return !!w && !winAgent(w) && !!LIVE.sentLog && !(typeof chanSide === 'function' && chanSide(w) && !(typeof chanElsewhere === 'function' && chanElsewhere(w))); }
@@ -27,40 +23,7 @@ window.WizCore.chatsParts.sent = function ({ ago, ch, CH, CHAN_VIEW_KEY, chanEls
     const cur = sentTab(w), tab = (k, label) => `<button type="button" role="tab" data-chtab="${k}" aria-selected="${cur === k}"${cur === k ? ' class="on"' : ''}><svg viewBox="0 0 24 24" aria-hidden="true">${TAB_SVG[k]}</svg><span>${label}</span></button>`;
     return `<nav class="ch-tabbar" role="tablist" aria-label="Chats" data-morph-key="tabbar">${tab('inbox', 'Inbox')}${tab('tags', 'Tags')}${tab('sent', 'Sent')}</nav>`;
   }
-  // `thread`: a reply he typed inside a thread he already had (wizard-ux issue 1808).
-  const ROUTE = { dump: 'Background', agent: 'Thread', command: 'Command', reminder: 'Reminder', thread: 'Reply' };
-  const STATE = { routing: ['Routing', '…'], running: ['Running', ''], done: ['Done', '✓'], needs_you: ['Needs you', '!'], failed: ['Failed', '✕'], unknown: ['', '·'] };
-  const FALLBACK = { router_not_configured: 'no router', router_timeout: 'router timed out', router_error: 'router error', capture_failed: 'couldn’t start in the background', unsure: 'model unsure', no_answer: 'no answer' };
-  // Why the row went where it went, in a few plain words.
-  function sentWhy(r) {
-    // A reply: whether his words asked for an answer; a quiet one needed nothing and stayed out of Inbox.
-    if (r.route === 'thread') return r.quiet ? 'nothing needed from you' : r.wantsReply ? 'you asked' : '';
-    const first = r.rules[0] || '';
-    let why = '';
-    if (r.decidedBy === 'owner_words') {
-      const said = /^(?:no_reply|wants_reply):(.+)$/.exec(first);
-      why = said ? `you said ${said[1]}` : first === 'typed' ? 'you typed it' : first === 'new_chat' ? 'a new chat' : first === 'greeting' ? 'a greeting' : first === 'reminder' ? 'a reminder' : first === 'task_verb' ? 'a task' : first === 'short_question' ? 'a short question' : 'your words';
-    } else if (r.decidedBy === 'model') why = 'model';
-    else if (r.decidedBy === 'correction') why = 'your earlier correction';
-    else if (r.decidedBy === 'fallback') { const k = r.rules.find(x => FALLBACK[x]); why = k ? `fallback: ${FALLBACK[k]}` : 'fallback'; }
-    return why;
-  }
-  const BG = new Set(['dump', 'reminder']), SENT_BUSY = new Set(); // SENT_BUSY: rows with a correction on its way
-  function sentRow(r) {
-    const [label, mark] = STATE[r.state] || STATE.unknown, line = (r.text.split('\n').find(x => x.trim()) || r.text || '').trim();
-    const why = sentWhy(r), route = r.route ? ROUTE[r.route] : 'Routing…';
-    const would = r.source === 'typed' && r.wouldRoute && (BG.has(r.wouldRoute) !== BG.has(r.route || 'agent')) ? (BG.has(r.wouldRoute) ? 'would have gone to background' : 'would have opened a thread') : '';
-    const fixed = r.corrected ? (r.corrected.shouldReply ? 'reply' : 'quiet') : '';
-    const busy = SENT_BUSY.has(r.id);
-    const tags = r.tags.length ? `<span class="ch-sent-tags">${r.tags.map(t => `#${esc(t)}`).join(' ')}</span>` : '';
-    return `<div class="ch-sent-row st-${esc(r.state)}" data-morph-key="sent:${esc(r.id)}"><button type="button" class="ch-sent-open" data-chsentopen="${esc(r.id)}" title="Open the thread it ran in">`
-      + `<span class="ch-sent-st" role="img" aria-label="${esc(label || 'State unknown')}" title="${esc(label)}">${r.state === 'running' ? '<i class="ch-spin" aria-hidden="true"></i>' : esc(mark)}</span>`
-      + `<span class="bd"><span class="tp"><b>${esc(clip(line, 120))}</b><time>${esc(r.at ? ago(r.at) : '')}</time></span>`
-      + `<span class="ch-sent-meta"><span class="ch-sent-route">${esc(route)}</span>${label && r.state !== 'unknown' ? ` · <span class="ch-sent-state">${esc(label)}</span>` : ''}${why ? ` · <span class="ch-sent-why">${esc(why)}</span>` : ''}${r.urgent ? ' · <span class="ch-sent-urgent">urgent</span>' : ''}${tags ? ' · ' + tags : ''}</span>`
-      + `${would ? `<span class="ch-sent-would">${esc(would)}</span>` : ''}${r.route === 'thread' && r.answer ? `<span class="ch-sent-answer">${esc(clip(r.answer, 140))}</span>` : ''}</span></button>`
-      // A reply stays in the thread it was typed in: nothing to move, so no correction.
-      + (r.route === 'thread' ? '' : `<div class="ch-sent-fix" role="group" aria-label="Correct the routing"><button type="button" data-chsentfix="reply" data-id="${esc(r.id)}" aria-pressed="${fixed === 'reply'}"${busy ? ' disabled' : ''}>Should have replied</button><button type="button" data-chsentfix="quiet" data-id="${esc(r.id)}" aria-pressed="${fixed === 'quiet'}"${busy ? ' disabled' : ''}>Didn’t need a reply</button></div>`) + '</div>';
-  }
+  const SENT_BUSY = new Set(); // rows with a correction on its way
   /* Inbox or Sent (wizard-ux issue 1829; James, 25 Nov 2026: "Things should be in one or the other"): while Inbox keeps
    * threads (inbox-until-archived or Inbox rows), a send whose thread is in Inbox (it needs him, or he asked and it
    * answered) is not listed here; the Inbox list decides (list model placeOf), so the two never both show a thread. */
@@ -68,17 +31,14 @@ window.WizCore.chatsParts.sent = function ({ ago, ch, CH, CHAN_VIEW_KEY, chanEls
     const ids = window.WizCore?.inboxIds?.(LIVE), M = window.WizChatsListModel;
     return ids && M?.sentShown ? M.sentShown(st.rows, ids) : st.rows;
   }
-  /* Sent rows (wizard-ux issue 1814, switch wizard/sent-rows, off by default; James, 25 Nov 2026: "Why is this UX so
-   * ugly, vs having a nice UX like the rest of the app", then "let's give the same design to sent"). With it on, each
-   * send is drawn by the new Inbox's own row renderer (core/chats-inboxrows.js ibRow, the Signal / Telegram rows), so
-   * Inbox and Sent can't drift apart: the avatar and sender line (its first tag, else the agent) with the time, the
-   * first line of his words with the working / needs-you mark, then one line in plain words (where it went · what
-   * happened). One list with two section headers like Inbox's: Working (running) then Processed (finished); no back
-   * row, no filter. The two corrections leave the row: long-press, left swipe, right-click or Shift+F10 open the row
-   * actions sheet (ROW_MENU in core/chats-rowacts.js) with why it went where it went, Open, and the two corrections
-   * (the same POST /wizard/v1/sent/<id>/correct). Off: the cards above, unchanged. */
-  const SR_SWITCH = 'wizard/sent-rows';
-  function sentRowsOn() { try { return (document.documentElement.dataset.tweaks || '').split(' ').includes(SR_SWITCH); } catch (_) { return false; } }
+  /* Sent rows (wizard-ux issue 1814, on for everyone; James, 25 Nov 2026: "Why is this UX so ugly, vs having a nice UX
+   * like the rest of the app", then "let's give the same design to sent"). Each send is drawn by the new Inbox's own row
+   * renderer (core/chats-inboxrows.js ibRow, the Signal / Telegram rows), so Inbox and Sent can't drift apart: the avatar
+   * and sender line (its first tag, else the agent) with the time, the first line of his words with the working /
+   * needs-you mark, then one line in plain words (where it went · what happened). One list with two section headers like
+   * Inbox's: Working (running) then Processed (finished); no back row, no filter. The two corrections live in the row
+   * actions sheet: long-press, left swipe, right-click or Shift+F10 (ROW_MENU in core/chats-rowacts.js) with why it went
+   * where it went, Open, and the two corrections (POST /wizard/v1/sent/<id>/correct). */
   const SR_WHERE = { dump: 'Ran quietly', agent: 'Replied in chat', command: 'Ran as a command', reminder: 'Set a reminder' };
   const SR_STATE = { routing: 'Working', running: 'Working', done: 'Done', needs_you: 'Needs you · in Inbox', failed: 'Failed · in Inbox' };
   // The Inbox rows' mark: the spinner while it runs, the amber dot when it needs him or failed (as Inbox marks a failure).
@@ -130,14 +90,14 @@ window.WizCore.chatsParts.sent = function ({ ago, ch, CH, CHAN_VIEW_KEY, chanEls
   // The row's actions sheet (the thread rows' `.ch-sheet` markup): why, Open, and the two corrections.
   function sentSheet(wid, id) {
     const r = LIVE.sentLog?.state()?.rows.find(x => x.id === id), el = elOf(wid);
-    if (!r || !el || !(sentRowsOn() || sentThreadsOn())) return false;
+    if (!r || !el) return false;
     closeRowSheet?.();
     const trigger = Array.from(el.querySelectorAll('[data-chsent]')).find(b => b.dataset.chsent === id) || null;
     const fixed = r.corrected ? (r.corrected.shouldReply ? 'reply' : 'quiet') : '', busy = SENT_BUSY.has(r.id);
     const fix = (k, svg, label) => `<button type="button" data-rssentfix="${k}" aria-pressed="${fixed === k}"${busy ? ' disabled' : ''}>${svg}${label}${fixed === k ? ' · your correction' : ''}</button>`;
     el.insertAdjacentHTML('beforeend', `<div class="ch-sheet" role="dialog" aria-label="Sent actions"><div class="ch-sheet-b"><div class="ch-sheet-t">${esc(clip(srFirst(r), 120))}</div>`
       + `<p class="ch-sheet-n ch-sr-why">${esc(srWhy(r))}</p><button type="button" data-rssentopen>${SR_OPEN_SVG}Open chat</button>`
-      // A reply stays in the thread it was typed in: nothing to move, so no correction (as on the card).
+      // A reply stays in the thread it was typed in: nothing to move, so no correction.
       + (r.route === 'thread' ? '' : fix('reply', SR_REPLY_SVG, 'Should have replied') + fix('quiet', SR_QUIET_SVG, 'Didn’t need a reply'))
       + (sentThreadsOn() ? stSendsHtml(stKeyOf(r), false) : '') + '</div></div>');
     chatVars.rowSheet = { wid, sent: id, trigger };
@@ -235,24 +195,15 @@ window.WizCore.chatsParts.sent = function ({ ago, ch, CH, CHAN_VIEW_KEY, chanEls
     if (t) t.insertAdjacentHTML('afterend', html); else b.insertAdjacentHTML('afterbegin', html);
     return true;
   }
-  // `titled`: the title bar (issue 1836) already says Sent, so no back row.
-  function sentHead(w, titled = false) {
-    if (sentRowsOn() || sentThreadsOn()) return ''; // the bottom tabs are the navigation: no back row, no filter (issues 1814, 1880)
-    const st = LIVE.sentLog?.state(), n = st?.ok ? sentRows(st).filter(r => r.state === 'running').length : 0, f = ch(w.id).sentFilter === 'working' ? 'working' : 'all';
-    const pill = (k, label) => `<button type="button" data-chsentfilter="${k}" aria-pressed="${f === k}"${f === k ? ' class="on"' : ''}>${label}</button>`;
-    return (titled ? '' : `<div class="ch-chan-h ch-sent-h" data-morph-key="sent-head"><button type="button" class="ch-chan-back" data-chsentback aria-label="Back to Inbox"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg></button><b>Sent</b></div>`)
-      + `<div class="ch-chan-tabs ch-sent-filter" data-morph-key="sent-filter"><div class="ch-rdy-bar" role="group" aria-label="Show">${pill('all', 'All')}${pill('working', `Working${n ? ` <small>${n}</small>` : ''}`)}</div></div>`;
-  }
+  // The bottom tabs are the navigation: Sent has no back row and no filter (issues 1814, 1880).
   function sentBody(w) {
-    const st = LIVE.sentLog?.state(), working = ch(w.id).sentFilter === 'working';
+    const st = LIVE.sentLog?.state();
     if (!st?.ok) return '<div class="ch-empty">Checking what you sent…</div>';
     if (st.gone) return '<div class="ch-empty">Your Wizard keeps no Sent log yet.</div>';
     if (sentThreadsOn()) return stBody(st); // threads, not sends (issue 1880)
-    if (sentRowsOn() && st.rows.length && sentRows(st).length) return srBody(st);
-    const all = sentRows(st), rows = working ? all.filter(r => r.state === 'running') : all;
-    if (!rows.length && !working && st.rows.length) return '<div class="ch-empty">Nothing here now. What you sent that needs you is in Inbox.</div>';
-    if (!rows.length) return `<div class="ch-empty">${working ? 'Nothing is running.' : 'Nothing sent yet. What you say to the orb, start in a new chat or reply in a thread shows here.'}</div>`;
-    return `<section class="ch-sec open ch-sent" data-sec="sent"><div class="ch-sec-b">${rows.map(sentRow).join('')}</div></section>${st.next && !working ? '<button type="button" class="ch-more" data-chsentmore>Show older</button>' : ''}`;
+    if (sentRows(st).length) return srBody(st);
+    if (st.rows.length) return '<div class="ch-empty">Nothing here now. What you sent that needs you is in Inbox.</div>';
+    return '<div class="ch-empty">Nothing sent yet. What you say to the orb, start in a new chat or reply in a thread shows here.</div>';
   }
   function sentGo(w, tab) {
     if (!w) return false;
@@ -304,11 +255,7 @@ window.WizCore.chatsParts.sent = function ({ ago, ch, CH, CHAN_VIEW_KEY, chanEls
   function sentClick(e, id, w) {
     if (!w || w.thread) return false;
     const t = e.target.closest('[data-chtab]'); if (t) { sentGo(w, t.dataset.chtab); return true; }
-    if (e.target.closest('[data-chsentback]')) { sentBack(w); return true; }
-    const f = e.target.closest('[data-chsentfilter]'); if (f) { ch(w.id).sentFilter = f.dataset.chsentfilter === 'working' ? 'working' : 'all'; rerenderList(w); return true; }
-    const x = e.target.closest('[data-chsentfix]'); if (x) { if (!x.disabled) sentFix(x.dataset.id, x.dataset.chsentfix === 'reply'); return true; }
     if (e.target.closest('[data-chsentmore]')) { LIVE.sentLog?.more?.().then(sentRepaint, () => toast('!', 'Couldn’t read older ones', 2400)); return true; }
-    const o = e.target.closest('[data-chsentopen]'); if (o) { sentOpenRow(id, o.dataset.chsentopen); return true; }
     // Sent rows (issue 1814): a row opens its chat; its actions sheet's Open and corrections.
     const so = e.target.closest('[data-chsent]'); if (so) { sentOpenRow(id, so.dataset.chsent); return true; }
     // A thread's actions sheet in Sent (issue 1880) names the send it corrects on the button.
@@ -338,5 +285,5 @@ window.WizCore.chatsParts.sent = function ({ ago, ch, CH, CHAN_VIEW_KEY, chanEls
         + `<button type="button" class="ch-tbar-b ch-fbtn${filtered ? ' on' : ''}" data-chfbtn aria-label="Filter and sort" aria-expanded="${sheet ? 'true' : 'false'}">${TB_FILT_SVG}</button>` : '')
       + '</div>';
   }
-  return { sentBack, sentBar, sentBody, sentClick, sentHead, sentOpen, sentRowsOn, sentSends, sentSheet, sentTabsOn, sentThreadsOn, titleBar, titleBarTab };
+  return { sentBack, sentBar, sentBody, sentClick, sentOpen, sentSends, sentSheet, sentTabsOn, sentThreadsOn, titleBar, titleBarTab };
 };

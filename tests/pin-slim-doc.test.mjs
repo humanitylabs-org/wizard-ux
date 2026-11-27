@@ -10,7 +10,7 @@ import vm from 'node:vm';
 import { createDocument } from './fixtures/mini-dom.mjs';
 
 const read = path => readFileSync(new URL('../web/' + path, import.meta.url), 'utf8');
-const WORN = 'wizard/sent-rows';
+const WORN = 'wizard/sent-threads';
 const INDEX = read('index.html');
 
 function indexFiles() {
