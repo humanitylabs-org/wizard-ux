@@ -16,7 +16,7 @@ Every screen, Settings page and feature switch of the Wizard interface (the phon
 ## Screens
 
 - **Home**: The start screen: what's Working and Ready, the Resources bars (server and AI accounts), your apps. Desktop: AI apps view: close the open chat (✕, Esc or ⌥`) to get the empty Home with the message box, the orb and your pinned apps; Desks view: the house at the left of the top bar (⌥`). Phone: Home in the bottom bar (Home, Chats, orb, Messenger, Apps); the gear at its top right opens Settings. Hold the Messenger tile to pin another app there; a sideways swipe on the Apps tile flips between your last two apps.
-- **Chats**: All your conversations with the agent, in sections: Errors, Working, Saved, Ready, Yesterday, Past week, Snoozed, Archive (By day), or Working, Ready, Snoozed, Archive (By status; chosen in the Filter sheet). Search, Filter and + New chat. Long-press or right-click a chat for Pin, Rename, Mark unread, Snooze, Archive / Restore. Desktop: AI apps view: the chats sidebar on the left (search ⌥K, + New chat ⌥N); Desks view: the Inbox count in the top bar (⌥I). Phone: Chats in the bottom bar, or hold the orb and say 'chats'.
+- **Chats**: All your conversations with the agent, in sections: Errors, Working, Saved, Ready, Yesterday, Past week, Snoozed, Archive (By day), or Working, Ready, Snoozed, Archive (By status; chosen in the Filter sheet). The title bar names the bottom tab (Inbox with its count, Tags or Sent), with Search and Filter as icons; the sort (Newest first, Oldest first, Needs you first) is in the Filter sheet. + New chat. Long-press or right-click a chat for Pin, Rename, Mark unread, Snooze, Archive / Restore. Desktop: AI apps view: the chats sidebar on the left (search ⌥K, + New chat ⌥N); Desks view: the Inbox count in the top bar (⌥I). Phone: Chats in the bottom bar, or hold the orb and say 'chats'.
 - **Work**: Chats opened at a section (a link to Working, Ready, Archive …).
 - **Chats › Errors**: Chats whose last reply failed, with Retry (and why, with Why a reply failed on).
 - **Chats › Working**: Chats where the agent is still working; order set in Settings › Chats & app screens › Working threads.
@@ -173,7 +173,6 @@ Settings › Appearance › Try new features lists unfinished features to try, A
 - **Channels: a fitting emoji for new channels**: New channels get a fitting emoji.
 - **Channels: an AI-picked emoji for new channels**: New channels with no emoji get one picked by your Wizard's fast model.
 - **Chat replies as Chats notifications**: Android app: your agent's chat replies reach the phone as Notifications items under Chats; tap opens the chat.
-- **Chats: title bar names the tab**: Chats' title bar names the tab.
 - **Five-choice first chat**: Five picks, then a first win.
 - **Get set up list in Setup**: Setup lists optional accounts to connect.
 - **Icons on the attach menu**: Android app: the + menu in a chat (and the orb's Attach) shows icons before Photo or video, Camera and File, on bigger rows. (Android app only).
