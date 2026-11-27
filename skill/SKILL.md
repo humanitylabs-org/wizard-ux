@@ -187,7 +187,6 @@ Settings › Appearance › Try new features lists unfinished features to try, A
 - **One UI icon count**: Android: Messenger icon count shows the exact number in a One UI-style corner badge.
 - **One-tap Snooze · bottom of Ready**: Snooze is one tap and the lowest priority: the thread waits at the bottom of Ready, below approvals, until you restore or reply.
 - **Phone Apps tile: Favorites panel and quick switcher**: On the phone, tapping Apps opens a slim Favorites panel (search, Favorites, Recent with an x to take an app off) and holding Apps shows nine big bubbles of your recent apps: slide onto one and let go. With an app in front, swipe the bar sideways to step through Recent. (phone only).
-- **Phone Chats: one bar and a view switcher on the Chats tile**: Phone Chats: one bar; tap Chats again or the title to switch views.
 - **Phone media player for Music and Podcasts**: Android and iPhone: Music and Podcasts play through the phone's media player (lock screen, Control Center, headset buttons), and keep playing locked.
 - **Phone recovery mode**: Android: a frozen start reopens in recovery mode.
 - **Phone tester builds**: Phones get the newest tester build.

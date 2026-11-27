@@ -1,7 +1,7 @@
 'use strict';
-// Phone Chats switcher (wizard-ux issue 1957, switch wizard/chats-switcher) in a real browser, disposable synthetic box
+// Phone Chats switcher (wizard-ux issue 1957, on for everyone) in a real browser, disposable synthetic box
 // only. Phone 412x915 (Android), Nebula and a light skin, three tags (Philosopher, WizardOS Launch, Trip), a second
-// agent (Claude), one archived chat and a Sent log. With the switch on it checks, as a person would do it:
+// agent (Claude), one archived chat and a Sent log. It checks, as a person would do it:
 //   one bottom bar (no Inbox · Tags · Sent row, the list reaches the bar, the tile stays icon + "Chats" + its badge);
 //   the title names the view with a ▾ and opens the sheet; tap Chats on Chats opens the sheet (Inbox with its count,
 //   Sent, Archived at the bottom, tags and agents above, the view showing outlined), Chats again / a tap outside / Back
@@ -10,15 +10,14 @@
 //   flips the last two views (never the section swipe); a sideways swipe on the bar or the orb steps one view at a time
 //   and stops at the ends; Back from a tag goes to Inbox, then Home; the badge counts the Inbox in every view; a live skin
 //   change repaints the open sheet; no browser errors, no writes the box would refuse.
-// QA_SWITCH=off: today's three tabs, no ▾, no sheet; with QA_WEB=<main's web> the list markup written to
-// list-off-*.html is byte-identical to the branch's. Shots and report.json go to QA_OUT.
+// Shots and report.json go to QA_OUT.
 const assert = require('node:assert/strict');
 const { chromium } = require('../tools/qa-playwright.cjs');
 const { ownerRead } = require('../tools/qa-desktop-frame-fixture.cjs');
 const fs = require('node:fs'), path = require('node:path');
 const repo = path.resolve(__dirname, '..'), origin = process.env.QA_ORIGIN || 'https://chats-switcher-1957.test', prefix = '/wizard-os-home/';
 const web = process.env.QA_WEB || path.join(repo, 'web'), out = process.env.QA_OUT || path.join(repo, 'chats-switcher-evidence');
-const SKINS = (process.env.QA_SKINS || 'nebula,obsidian-light').split(','), ON = process.env.QA_SWITCH !== 'off';
+const SKINS = (process.env.QA_SKINS || 'nebula,obsidian-light').split(',');
 fs.mkdirSync(out, { recursive: true });
 const now = Date.now(), iso = t => new Date(t).toISOString(), nap = ms => new Promise(r => setTimeout(r, ms)), M = 60e3, D = 864e5;
 const CHANNELS = [
@@ -46,13 +45,13 @@ const raw = (sid, s) => ({ id: sid, title: s.title, runtime: 'direct', status: s
   ...(s.channel ? { channel: s.channel, tags: [s.channel] } : { tags: [] }) });
 const CLAUDE = { title: 'Claude essay', at: now - 40 * M, msgs: [['user', 'Draft an essay', 0], ['assistant', 'Here is a draft.', 60]] };
 const SENT = () => ({ rows: [{ id: 'sent_' + 'c'.repeat(24), at: now - 5 * D, source: 'orb', text: 'Plan the garden beds', route: 'agent', decided_by: 'model', state: 'done', thread_id: 'qa-read', tags: [] }], next: null, check: null });
-const report = { origin, web, on: ON, cases: [] };
+const report = { origin, web, cases: [] };
 
 (async () => {
   const browser = await chromium.launch();
   try {
     for (const skin of SKINS) {
-      const stem = `${ON ? 'on' : 'off'}-${skin}`, entry = { stem, errors: [], refused: [], writes: [], steps: {} }; report.cases.push(entry);
+      const stem = `on-${skin}`, entry = { stem, errors: [], refused: [], writes: [], steps: {} }; report.cases.push(entry);
       const threads = fresh();
       const context = await browser.newContext({ viewport: { width: 412, height: 915 }, isMobile: true, hasTouch: true, serviceWorkers: 'block', userAgent: 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Mobile Safari/537.36' });
       try {
@@ -63,7 +62,7 @@ const report = { origin, web, on: ON, cases: [] };
           for (const [k, v] of Object.entries({ 'wos.shell': 'phone', 'wux.shell': 'phone', 'wos.coached': 'true', 'wos.tour.v1': 'true', 'wos.tour.done': '1', 'wos.welcome.v1': 'done', 'wos.voiceTipSeen': 'true', 'wos.skin': skin,
             'wos.skin-tweaks.v1': JSON.stringify({ version: 1, preset: 'none', off: {}, mix }) })) localStorage.setItem(k, v);
           window.__vib = []; try { navigator.vibrate = ms => { window.__vib.push(ms); return true; }; } catch (_) {}
-        }, { skin, mix: ON ? { 'wizard/chats-switcher': true } : {} });
+        }, { skin, mix: {} });
         await context.route('**/*', async r => {
           const q = r.request(), u = new URL(q.url()), method = q.method(), p = u.pathname;
           if (u.origin !== origin) { entry.refused.push({ method, url: q.url(), reason: 'external' }); return r.abort(); }
@@ -152,16 +151,7 @@ const report = { origin, web, on: ON, cases: [] };
         await page.waitForFunction(() => document.querySelector('.ch-list [data-chopen="qa-new"]'), null, { timeout: 15000 });
         await nap(600);
         S.inbox = await look(); await shot('1-inbox');
-        if (!ON) {
-          // Off: today's three tabs, no ▾; tapping Chats on Chats opens nothing.
-          assert.ok(S.inbox.tabbar, 'the Inbox · Tags · Sent tabs are there');
-          assert.ok(!S.inbox.chev, 'no ▾ in the title');
-          await tapAt('.sec-tile[data-sec="chats"]'); S.again = await look();
-          assert.ok(!S.again.open && !S.again.sheet, 'no sheet with the switch off');
-          fs.writeFileSync(path.join(out, `list-off-${skin}.html`), await page.evaluate(() => [...document.querySelectorAll('.ch-list')].find(n => n.getClientRects().length).outerHTML.replace(/\d+[smhd]\b|\d+ (?:min|h|d) ago|Tue \d+|\b\d{1,2}:\d{2}\b/g, 'T')));
-          await page.locator('.ch-tabbar [data-chtab="tags"]').filter({ visible: true }).first().click(); await nap(800);
-          S.tags = await look(); assert.equal(S.tags.title, 'Tags', 'the Tags tab as today'); await shot('2-tags');
-        } else {
+        {
           // 1-3. One bar; the tile is icon + Chats + badge; the title names the view with a ▾.
           assert.ok(!S.inbox.tabbar, 'no second bar ' + JSON.stringify(S.inbox));
           assert.equal(S.inbox.tile.label, 'Chats'); assert.equal(S.inbox.tile.lines, 1, 'no second line on the tile');
@@ -271,6 +261,6 @@ const report = { origin, web, on: ON, cases: [] };
     }
   } finally { await browser.close(); }
   const failed = report.cases.filter(c => !c.pass);
-  console.log(JSON.stringify({ on: ON, cases: report.cases.length, passed: report.cases.length - failed.length, failed: failed.map(c => c.stem + ': ' + String(c.failure).split('\n').slice(0, 2).join(' ')), screenshots: fs.readdirSync(out).filter(f => f.endsWith('.png')).length }));
+  console.log(JSON.stringify({ cases: report.cases.length, passed: report.cases.length - failed.length, failed: failed.map(c => c.stem + ': ' + String(c.failure).split('\n').slice(0, 2).join(' ')), screenshots: fs.readdirSync(out).filter(f => f.endsWith('.png')).length }));
   if (failed.length || !report.cases.length) process.exitCode = 1;
 })().catch(e => { console.error(e); process.exitCode = 1; });

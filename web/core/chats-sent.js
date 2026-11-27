@@ -244,16 +244,15 @@ window.WizCore.chatsParts.sent = function ({ agentName, agentRec, ago, AGS, ch, 
         + `<button type="button" class="ch-tbar-b ch-fbtn${filtered ? ' on' : ''}" data-chfbtn aria-label="Filter and sort" aria-expanded="${sheet ? 'true' : 'false'}">${TB_FILT_SVG}</button>` : '')
       + '</div>';
   }
-  /* The Chats switcher (wizard-ux#1957, switch wizard/chats-switcher, off by default; James, 27 Nov 2026: "I don't like
+  /* The Chats switcher (wizard-ux#1957, on for everyone; James, 27 Nov 2026: "I don't like
    * how you're displaying like a second line below chats... it can just be clear from the top of the screen what they're
    * looking at... the arrow drop down on the inbox at the top"). On the phone (the shell's part, app-chatsswitch.js, is
    * loaded and on) the main agent's list draws no bottom tabs: its title names the view it shows (Inbox, Sent, Archived,
    * a tag's emoji and name, another agent) with a ▾, and a tap on it opens the shell's switcher sheet. The sheet lists
    * csViews and switches with csGo. The Tags page is no destination there: its tags and agents are in the sheet, a tag
    * opens its own list (today's Tags › tag feed), and Back from it goes to Inbox. Desktop and tablet keep the tabs. */
-  const CS_SWITCH = 'wizard/chats-switcher';
   function csOn(w) {
-    try { if (!(document.documentElement.dataset.tweaks || '').split(' ').includes(CS_SWITCH) || !window.WizCore?.chatsSwitcher?.on?.()) return false; } catch (_) { return false; }
+    try { if (!window.WizCore?.chatsSwitcher?.on?.()) return false; } catch (_) { return false; }
     // The main agent's own list (an agent's list opened from the sheet focuses that agent, but is still this window).
     const o = w ? (W[owner(w.id)] || w) : null;
     return !w || (!o?.agent && !!LIVE.sentLog && !(typeof chanSide === 'function' && chanSide(w)));

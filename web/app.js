@@ -1074,7 +1074,7 @@
   const { sectionsArrange, sectionsPaint, sectionsPinHtml, sectionsStops, sectionsSwipe } = window.WizCore.appParts.sections({ $, APP, APPS, appVars, appsPanelHold, appsPanelHoldEnd, appsPanelHoldMove, appsPanelOn, appsPanelOpen, appsPanelToggled, appsStep, appsStepping, CHATS_APP, closeSheets, closeWin, esc, goDesk, HOME, launcher, LIVE, mainChats, openApp, openSheet, renderDots, renderLauncher, save, store, syncDesks, toast, vib, winApp });
   pinSheetHtml = sectionsPinHtml; swipeBySection = sectionsSwipe;
   desksLate({ sectionsArrange, sectionsPaint });
-  /* The Chats tile's view switcher (wizard-ux#1957, switch wizard/chats-switcher, off by default); app-chatsswitch.js. */
+  /* The Chats tile's view switcher (wizard-ux#1957, on for everyone); app-chatsswitch.js. */
   const { chatsStepper } = window.WizCore.appParts.chatsswitch({ $, appVars, CHATS, CHATS_APP, device, esc, mainChats, phoneBack, vib });
   scrubLate({ appsStep, appsStepping, chatsStepper, sectionsStops });
   sectionsPaint();
