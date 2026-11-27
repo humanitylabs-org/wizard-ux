@@ -1,4 +1,4 @@
-// wizard-ux issue 1439: the shell's write guard (web/core/write-guard.js, switch wizard/write-guard, off by default).
+// wizard-ux issue 1439: the shell's write guard (web/core/write-guard.js, on for everyone; switch removed).
 // Runs the real module in a vm with a fake fetch and a fake clock. Run: node --test tests/write-guard.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -8,11 +8,11 @@ import vm from 'node:vm';
 const SRC = readFileSync(new URL('../web/core/write-guard.js', import.meta.url), 'utf8');
 const ORIGIN = 'https://box.test';
 
-function load({ on = true, apps = null, answer = null } = {}) {
+function load({ apps = null, answer = null } = {}) {
   const clock = { t: Date.parse('2026-11-24T10:00:00Z') };
   const calls = [], events = [], storage = new Map();
   if (apps) storage.set('wux.apps.v1', JSON.stringify(apps));
-  const root = { dataset: { tweaks: on ? 'wizard/thread-tracker wizard/write-guard' : 'wizard/thread-tracker', shell: 'phone' } };
+  const root = { dataset: { tweaks: 'wizard/thread-tracker', shell: 'phone' } };
   const reply = answer || (() => new Response(JSON.stringify({ ok: true, n: calls.length }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
   function fetch(input, init) { calls.push({ url: String(input), init, self: this }); return new Promise(r => r(reply(String(input), init, calls.length))); }
   class FakeDate extends Date { constructor(...a) { super(...(a.length ? a : [clock.t])); } static now() { return clock.t; } }
@@ -32,15 +32,17 @@ function load({ on = true, apps = null, answer = null } = {}) {
 }
 const wire = (f, path) => f.calls.filter(c => new URL(c.url, ORIGIN).pathname === path).length;
 
-test('switch off: every call goes straight to the page fetch, unchanged', async () => {
-  const f = load({ on: false });
-  const init = { method: 'PUT', body: '{"a":1}' };
-  for (let i = 0; i < 30; i++) await f.put('/wizard/thread-seen', '{"a":1}');
-  await f.window.fetch('/wizard/thread-seen', init);
-  assert.equal(f.calls.length, 31, 'all 31 identical writes reach the network');
+test('no switch: the guard is on with no tweak in data-tweaks; reads go straight to the page fetch, unchanged', async () => {
+  const f = load();
+  assert.equal(f.guard.on, undefined, 'no switch is read any more');
+  const init = { method: 'GET' };
+  for (let i = 0; i < 30; i++) await f.window.fetch('/wizard/thread-seen', init);
+  assert.equal(f.calls.length, 30, 'all 30 reads reach the network');
   assert.equal(f.calls.at(-1).init, init, 'the very same init object is passed through');
   assert.equal(f.calls.at(-1).self, f.window, 'called with the page as this');
   assert.deepEqual(JSON.parse(JSON.stringify(f.guard.stats())), {}, 'nothing counted');
+  await f.put('/wizard/thread-seen', '{"a":1}'); await f.put('/wizard/thread-seen', '{"a":1}');
+  assert.equal(f.calls.length, 31, 'an identical write is guarded with no switch on');
 });
 
 test('the same write within 10 s gets the earlier answer and stays off the wire', async () => {
@@ -160,15 +162,6 @@ test('a 429 with Retry-After from the box pauses that endpoint for as long as it
   g.clock.t += 2000; assert.equal((await g.put('/wizard/v1/workspaces', '{"b":1}')).status, 200);
 });
 
-test('the switch is read on every write: turning it off mid-run lets everything through again', async () => {
-  const f = load();
-  await f.put('/wizard/thread-seen', '{"a":1}'); await f.put('/wizard/thread-seen', '{"a":1}');
-  assert.equal(f.calls.length, 1);
-  f.root.dataset.tweaks = 'wizard/thread-tracker';
-  await f.put('/wizard/thread-seen', '{"a":1}');
-  assert.equal(f.calls.length, 2);
-});
-
 test('identical writes waiting on one that fails retry one at a time through the guard', async () => {
   let n = 0, release; const gate = new Promise(r => { release = r; });
   const f = load({ answer: () => { n++; return n === 1 ? gate.then(() => new Response('{}', { status: 503 })) : new Response('{"ok":true}', { status: 200 }); } });
@@ -211,7 +204,4 @@ test('main and routed chats (host-profile, container, restricted) are guarded th
   assert.equal(f.calls.length, 12);
   for (const q of ROUTES) await f.put('/wizard/thread-seen' + q, '{"threads":{}}');
   assert.equal(f.calls.length, 12, 'and each repeat is dropped on its own route');
-  const g = load({ on: false });
-  for (const q of ROUTES) { await g.put('/wizard/thread-seen' + q, '{"threads":{}}'); await g.put('/wizard/thread-seen' + q, '{"threads":{}}'); }
-  assert.equal(g.calls.length, 8, 'switch off: every route unchanged');
 });

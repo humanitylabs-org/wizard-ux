@@ -475,10 +475,6 @@
       "where": "Settings › Appearance › Try new features › Wizard for Mac in About & updates",
       "when": "Wizard for Mac only"
     },
-    "wizard/write-guard": {
-      "help": "Stops repeated saves: an identical save within 10 s is not resent; over 20 a minute pauses.",
-      "where": "Settings › Appearance › Try new features › Stop write loops"
-    },
     "wizard/ai-apps-running": {
       "help": "AI apps: Running view in the sidebar.",
       "where": "Settings › Appearance › Try new features › Running view in the AI apps sidebar"
@@ -764,6 +760,7 @@
   "retired": {
     "Channels in Chats": "on for everyone now, nothing to turn on: open Chats and use the tabs at the bottom: Inbox (what needs you), Tags (your channels) and Sent. Tags lists your Spaces one per line, plus General; open one to see its chats as posts with a reply line.",
     "Thread tracker": "retired: Needs you now shows in the thread itself, on the reply that needs the owner (with Mark done), and in Inbox; Reply works on any message.",
+    "Stop write loops": "on for everyone, nothing to turn on: an identical save within 10 s is not resent, and over 20 saves a minute to one place pauses.",
     "Apps in Updates": "on for everyone: Settings › About & updates › Apps.",
     "Reply to Telegram and Slack chats": "on for everyone: reply in Chats to a chat started on Telegram or Slack; it goes through that app's own connection and shows there too.",
     "Models from your connectors": "removed: the model menu in Chats lists the models of every AI connection you connected."
