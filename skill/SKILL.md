@@ -193,7 +193,6 @@ Settings › Appearance › Try new features lists unfinished features to try, A
 - **Phone bar: bigger orb, one badge**: Phone bar: bigger orb, one badge. (phone only).
 - **Phone bar: Home, Chats, Messenger, Apps**: Phone bar of four places around the orb instead of desks: Home, Chats, Messenger, Apps. Hold Messenger to pin another app there; swipe the Apps tile to flip between your last two apps. (phone only).
 - **Phone media player for Music and Podcasts**: Android and iPhone: Music and Podcasts play through the phone's media player (lock screen, Control Center, headset buttons), and keep playing locked.
-- **Phone notifications per app**: Android app: what any app sends to Notifications shows as a phone notification under that app's name, one Android channel per app.
 - **Phone recovery mode**: Android: a frozen start reopens in recovery mode.
 - **Phone tester builds**: Phones get the newest tester build.
 - **Private first setup**: New installs start private: Welcome leads with Tinfoil; Claude and ChatGPT are optional extras.

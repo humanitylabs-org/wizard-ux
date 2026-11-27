@@ -12,7 +12,7 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 /**
- * Phone notifications per app (wizard-ux issue 1567, switch wizard/phone-app-notifications, off by default): which of
+ * Phone notifications per app (wizard-ux issue 1567, on for everyone): which of
  * the Notifications app's items become native Android notifications, under which app, and what a tap opens. Plain Java
  * (org.json only) so the JVM tests run it; {@link AppNotify} does the Android part.
  *
@@ -133,7 +133,7 @@ public final class AppNotifyPolicy {
 
     /**
      * One pass over the Notifications list. since &lt; 0 means this phone never read it: the watermark jumps to the
-     * newest item and nothing is posted, so turning the switch on never replays old items.
+     * newest item and nothing is posted, so the first read never replays old items.
      */
     public static Pass pass(JSONArray items, JSONObject routes, double since, Set<String> posted) {
         List<Note> out = new ArrayList<>();

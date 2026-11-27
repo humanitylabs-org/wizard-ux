@@ -1,3 +1,0 @@
-/* Phone notifications per app (wizard-ux issue 1567): nothing in the shell changes; the notifications are the Android
- * app's own. This rule only marks the switch as present. */
-html[data-tweaks~="wizard/phone-app-notifications"] { --wos-phone-app-notifications: 1; }
