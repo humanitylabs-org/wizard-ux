@@ -28,6 +28,7 @@ const FIX = {
   qa_1997_appr: { title: 'QA approval wait', status: 'waiting_for_approval', run: 'qa_1997_run_3' },
 };
 const ARCH = new Set();
+let LIST_NEW = false;
 function fixSession(id) {
   const f = FIX[id];
   return { id, agent: 'hermes', runtime: 'hermes', source: 'wizard-mobile', title: f.title, status: f.status, archived: ARCH.has(id), hidden: false, message_count: 2,
@@ -54,14 +55,21 @@ async function route(r) {
     writes.push({ m, p: u.pathname, body });
     const sm = u.pathname.match(/\/wizard\/hermes\/api\/sessions\/([^/]+)$/);
     if (m === 'PATCH' && sm && FIX[sm[1]]) { const b = JSON.parse(body || '{}'); if (b.archived === true) ARCH.add(sm[1]); if (b.archived === false) ARCH.delete(sm[1]); return json(200, { session: fixSession(sm[1]) }); }
-    if (u.pathname.endsWith('/v1/runs')) { let b = {}; try { b = JSON.parse(body); } catch (e) {} return json(202, { run_id: 'qa_1997_new_run', session_id: b.session_id, status: 'queued' }); }
+    if (u.pathname.endsWith('/v1/runs')) {
+      let b = {}; try { b = JSON.parse(body); } catch (e) {}
+      // Step 5: the box lists a chat sent from the real composer as soon as its run is posted, like Wizard does.
+      if (LIST_NEW && b.session_id && !FIX[b.session_id]) FIX[b.session_id] = { title: 'QA composer send', status: 'running', run: 'qa_1997_composer_run', fresh: true };
+      return json(202, { run_id: LIST_NEW ? 'qa_1997_composer_run' : 'qa_1997_new_run', session_id: b.session_id, status: 'queued' });
+    }
     if (u.pathname === '/wizard/thread-seen') { let st; try { st = JSON.parse(body).state; } catch (e) {} return json(200, { state: st || { initializedAt: Date.now(), threads: {} } }); }
     return json(200, { ok: true });
   }
   if (!u.pathname.startsWith('/wizard/')) return r.fulfill({ status: 404, body: '' });
   if (u.pathname === '/wizard/hermes/api/sessions') {
     const p = ownerRead(u.pathname);
-    p.data = Object.keys(FIX).map(fixSession); // live and archived rows alike, as the archive-50 window does
+    // Live and archived rows alike, as the archive-50 window does; a composer send's chat (step 5) is left out once it
+    // is archived, as the test box's list did (the sending device then had only its own stand-in row).
+    p.data = Object.keys(FIX).filter(id => !(FIX[id].fresh && ARCH.has(id))).map(fixSession);
     return json(200, p);
   }
   const mm = u.pathname.match(/\/wizard\/hermes\/api\/sessions\/([^/]+)\/messages$/);
@@ -142,6 +150,31 @@ async function route(r) {
       for (let i = 0; i < 2; i++) { await p.evaluate(() => __qa.live.refresh()); await sleep(400); }
       const g4 = await p.evaluate(sid => { const G = __qa.live.workGroups(); return { archive: G.archive.some(s => s.id === sid), working: G.working.some(s => s.id === sid) }; }, sid);
       ok(g4.archive && !g4.working, `${tag} 4 archived seconds after sending, it stays in Archive through list reads`, g4);
+    }
+    // 5. A chat sent from the real composer, which the box lists as running a moment later, archived from inside the
+    // thread a few seconds after sending: on the device that sent it, it leaves Inbox › Working at once and stays out
+    // through the next list reads (the tester's box run: it stayed under Working with its spinner until the run ended).
+    if (!BROKEN) {
+      LIST_NEW = true;
+      for (let i = 0; i < 4 && !DESKTOP && !(await p.locator('[data-chfab]:visible').count()); i++) { await p.locator('[data-chback]:visible').first().click().catch(() => {}); await sleep(600); }
+      await p.locator('[data-chfab]:visible, .aad-new:visible').first().click(); await sleep(1000);
+      const ta = p.locator('textarea:visible').first(); await ta.click(); await ta.fill('QA composer send ' + Date.now() % 1e5); await sleep(200);
+      await p.locator('.ch-send:visible').first().click(); await sleep(2500);
+      const sid = await p.evaluate(() => Object.values(__qa.wins).find(w => w.app === 'chats' && w.thread && w.thread !== '__new__')?.thread);
+      const a5 = await acts();
+      ok(!!sid && a5.includes('done'), `${tag} 5 composer send: the working thread offers Archive`, { sid, a5 });
+      await p.locator('[data-chact="done"]:visible').first().click().catch(() => {});
+      const where = () => p.evaluate(sid => { const G = __qa.live.workGroups(); const s = __qa.live.session(sid); return { groups: Object.keys(G).filter(k => G[k].some(x => x.id === sid)), status: s?.status, synthetic: !!s?.synthetic, archived: !!s?.archived, listed: [...document.querySelectorAll('.ch-ib-row, .ch-row')].filter(e => e.offsetParent && /QA composer send/.test(e.textContent)).length }; }, sid);
+      const seen = [];
+      for (const t of [500, 3000, 6000]) { await sleep(t === 500 ? 500 : 2500); await p.evaluate(() => __qa.live.refresh()); await sleep(400); seen.push(await where()); }
+      await p.screenshot({ path: path.join(OUT, `${tag}-5-composer-archived.png`) });
+      ok(seen.every(x => x.groups.includes('archive') && !x.groups.includes('working') && !x.listed), `${tag} 5 composer send archived seconds later: out of Working on this device through list reads`, seen);
+      // The reply lands: the box un-archives the chat and lists it again. This device shows it back out of Archive.
+      ARCH.delete(sid); if (FIX[sid]) FIX[sid].status = 'completed';
+      await p.evaluate(() => __qa.live.refresh()); await sleep(600);
+      const back = await where();
+      ok(!back.groups.includes('archive') && !back.synthetic && !back.archived, `${tag} 5 when the box brings it back, it leaves Archive on this device too`, back);
+      LIST_NEW = false;
     }
   } catch (e) { ok(false, 'run', String(e)); }
   ok(!errs.length, `${tag} no page errors`, errs);

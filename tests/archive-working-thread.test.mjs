@@ -96,11 +96,20 @@ test('a new chat archived seconds after sending stays archived while the box doe
     if (agent) L.agentSessions[agent] = []; else L.sessions = [];
     c.api.syncPending(OB);
     assert.equal(list()[0].archived, true, `${kind}: the rebuilt stand-in row stays archived`);
-    // Once the box lists the chat, its own row (and its own archived flag) wins and the mark is dropped.
+    // The box lists the chat (its own row wins), then leaves it out for being archived, as a box's list does: the
+    // stand-in built again from the held send stays archived (the tester's box run: it sat under Working until the run
+    // ended on the device that sent it).
     if (agent) L.agentSessions[agent] = [{ id: 'fresh', status: 'running', archived: true }]; else L.sessions = [{ id: 'fresh', status: 'running', archived: true }];
     c.api.syncPending(OB);
+    assert.equal(list().filter(s => s.id === 'fresh').length, 1, `${kind}: the box's own row, no stand-in beside it`);
     if (agent) L.agentSessions[agent] = []; else L.sessions = [];
     c.api.syncPending(OB);
-    assert.notEqual(list()[0]?.archived, true, `${kind}: the mark ends once the box listed the chat`);
+    assert.equal(list()[0].archived, true, `${kind}: left out of the box's list, the stand-in stays archived`);
+    // The send is over (the box reports its run settled, so the hold is released): no stand-in is built any more.
+    if (agent) L.agentSessions[agent] = [{ id: 'fresh', status: 'completed', lastRunKey: 'send', archived: false }]; else L.sessions = [{ id: 'fresh', status: 'completed', lastRunKey: 'send', archived: false }];
+    c.api.syncPending(OB); c.api.syncPending(OB);
+    if (agent) L.agentSessions[agent] = []; else L.sessions = [];
+    OB._items.delete('send'); c.api.syncPending(OB);
+    assert.equal(list().some(s => s.id === 'fresh'), false, `${kind}: no stand-in once the send is over`);
   }
 });

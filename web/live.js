@@ -243,8 +243,11 @@
    * this run settles (its idempotency key = the outbox item id); 2 min after acceptance it releases anyway.
    * A message that truly can't be sent puts the thread back where it was (the pill keeps Retry/Edit). */
   const PEND = new Map(); // sessionId -> { key, kind, text, at, state: 'sending'|'waiting'|'sent', sentAt, runId }
-  // New chats the owner archived while they were still only this device's stand-in row (wizard-ux issue 1997: Archive a
-  // chat still working, seconds after sending it). LIVE._archivedNew keeps it; addSynthetic reads it.
+  // New chats the owner archived while this device still holds their send (wizard-ux issue 1997: Archive a chat still
+  // working, seconds after sending it). The box's list leaves an archived chat out, so this device would build its
+  // stand-in row again, unarchived, under Working until the run ended. LIVE._archivedNew keeps the mark while the send
+  // is held; addSynthetic reads it (a stand-in is only built while the send is held), and a Restore or the next mark
+  // ends it.
   const ARCHIVED_NEW = new Set();
   const STOPPING = new Map(); // runId -> when Stop was asked (applyLocal)
   const STOP_SEND_MS = 15000, STOP_FOLLOW_MS = [800, 800, 900, 1500, 2000, 3000, 4000, 7000]; // gaps between re-reads, ~20 s in all
@@ -410,13 +413,12 @@
     }
   }
   // A new chat is listed before Wizard has created it, so it lands in Working the moment it is sent.
-  // Archived while it is still that stand-in row (ARCHIVED_NEW): every rebuilt stand-in keeps the archive until the
-  // box lists the chat itself.
+  // Archived while its send is held (ARCHIVED_NEW): every rebuilt stand-in keeps the archive, also after the box listed
+  // the chat once and then left it out for being archived.
   function addSynthetic(list, agent = '') {
     unShown(list); showReplied(list, agent);
     for (const [sid, p] of PEND) {
       if (p.kind !== 'new' || (p.agent || '') !== agent) continue;
-      if (list.some(s => s.id === sid && !s.synthetic)) { ARCHIVED_NEW.delete(sid); continue; }
       if (list.some(s => s.id === sid)) continue;
       const at = new Date(p.at).toISOString();
       const s = { id: sid, runtime: 'direct', title: (p.text || 'New chat').slice(0, 60), status: 'submitting', updatedAt: at, preview: p.text, previewRole: 'user', source: 'wizard-mobile', optimistic: true, synthetic: true, agent };
@@ -1101,6 +1103,9 @@
       }
       finally { setTimeout(() => this.refresh(), 800); }
     },
+    // Issue 1997: a new chat archived while this device still holds its send (see ARCHIVED_NEW).
+    _pendingNew(id) { return PEND.get(id)?.kind === 'new'; }, // this device still holds the send that opened the chat
+    _archivedNew(id, on) { if (!on) { ARCHIVED_NEW.delete(id); return; } for (const k of ARCHIVED_NEW) if (PEND.get(k)?.kind !== 'new') ARCHIVED_NEW.delete(k); ARCHIVED_NEW.add(id); if (ARCHIVED_NEW.size > 50) ARCHIVED_NEW.delete(ARCHIVED_NEW.values().next().value); },
     /* ---- thread actions ---- */
     busy(id) { const o = OVER.get(id); return !!o && !o.settled; },
     async _act(id, patch, write, capMs = 60000) {
@@ -1120,7 +1125,6 @@
         this.emit(); return false;
       }
     },
-    _archivedNew(id, on) { if (!on) { ARCHIVED_NEW.delete(id); return; } ARCHIVED_NEW.add(id); if (ARCHIVED_NEW.size > 50) ARCHIVED_NEW.delete(ARCHIVED_NEW.values().next().value); },
     // Done: archive the thread (PATCH archived). Close & file: the Helm filing route, idempotent by command id.
     // Only the owner's Archive/Done action calls this; tracker Dismiss/Seen never archives (James, 8 Nov 2026).
     archive(id, { file = false } = {}) {
@@ -1129,7 +1133,7 @@
       // Archive also clears a saved-result Needs you the Service added (issue 469), so restoring it brings no stale ask:
       // only once the archive itself succeeded (a failed archive keeps the result Continue-able).
       const saved = this.session(id);
-      if (saved?.synthetic && !file) this._archivedNew?.(id, true);
+      if (!file && (saved?.synthetic || this._pendingNew?.(id))) this._archivedNew?.(id, true);
       return this._act(id, { archived: true, deferred: false }, async s => {
         const all = readRestored(); if (all[id]) { delete all[id]; writeRestored(all); }
         if (!file) { await req(`/wizard/hermes/api/sessions/${encodeURIComponent(id)}${aq(id)}`, { method: 'PATCH', headers: J, body: JSON.stringify({ archived: true }) }); return; }
