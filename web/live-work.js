@@ -35,9 +35,12 @@ window.WizCore.liveParts.work = function ({ J, req }) {
   const needsApproval = s => ['waiting_for_approval', 'unknown'].includes(s.status);
   const inWorking = s => window.WizChatsListModel.isListWorking(s);
   const firstValid = (...v) => v.find(x => isFinite(Date.parse(x ?? ''))) ?? '';
+  // A working or failed row is timed by its request; one with no request clock (a helper follow-through ran on machine
+  // turns, no owner message: wizard-ux#1994) falls back to its latest activity, so every row with activity has a time.
+  const activityAt = s => firstValid(s.previewAt, s.activityAt, s.lastUserAt, s.updatedAt);
   const cardAt = s => (WORKING_SECTION.has(s.status) && !needsApproval(s) && !isErr(s)) || isErr(s)
-    ? firstValid(s.assignedAt, s.requestAt, s.lastUserAt, s.previewRole === 'user' ? s.previewAt : undefined)
-    : firstValid(s.previewAt, s.activityAt, s.lastUserAt, s.updatedAt);
+    ? firstValid(s.assignedAt, s.requestAt, s.lastUserAt, s.previewRole === 'user' ? s.previewAt : undefined) || activityAt(s)
+    : activityAt(s);
   const newestFirst = (l, r) => {
     const a = Date.parse(cardAt(l)), b = Date.parse(cardAt(r));
     if (isFinite(a) !== isFinite(b)) return isFinite(a) ? -1 : 1;
