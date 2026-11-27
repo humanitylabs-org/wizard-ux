@@ -1,0 +1,14 @@
+{
+  "id": "wizard/catch-up-sent",
+  "name": "Catch me up clears Sent",
+  "version": "1.0.0",
+  "author": "wizard",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout"
+  ],
+  "issues": [
+    "humanitylabs-org/wizard-agent-service#710"
+  ],
+  "description": "Catch me up also offers every finished chat in Sent, whatever its age, as one line in Clear all (\"N finished chats in Sent\"); when you answer clear, they are archived, so Sent holds only what is still running or finished since your last catch-up. Clear except N keeps the ones you name. Running chats and chats waiting on you are never cleared. Read by the Agent Service (wizard-agent-service issue 710); nothing in the shell changes until it is on."
+}

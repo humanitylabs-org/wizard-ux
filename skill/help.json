@@ -393,6 +393,10 @@
       "help": "Orb opens the named agent's thread; a chip moves it.",
       "where": "Settings › Appearance › Try new features › Private routing"
     },
+    "wizard/catch-up-sent": {
+      "help": "Catch me up clears finished Sent chats, any age.",
+      "where": "Settings › Appearance › Try new features › Catch me up clears Sent"
+    },
     "wizard/result-reader": {
       "help": "A private model files each finished background task.",
       "where": "Settings › Appearance › Try new features › Result reader"
