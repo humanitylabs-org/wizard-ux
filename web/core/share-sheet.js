@@ -93,16 +93,15 @@
     if (key && sw.on?.has(key)) return sw.on.get(key);
     return !!r?.accepts?.includes(kind);
   }
-  /* People on the box (wizard-ux issue 1627, switch wizard/share-people-box, off by default). The targets an app publishes
+  /* People on the box (wizard-ux issue 1627, on for everyone). The targets an app publishes
    * (id, name, detail only, in the app's own order: no activity times, never shared content) are also kept in one small
    * file in the owner's Files, Pages/wizard-share/people.json, through the Agent Service Pages file API that Look sync
    * uses (owner only, versioned, a stale save is a 409 carrying the newer text; no page.json, so it is never listed as a
    * page). A window that has never run Messenger then still shows Messenger's people: this browser's own copy wins when
    * it has one, else the box's. Read ahead (load, a file opened in the viewer, every share; cached 60 s, never waited on,
-   * so Share stays inside its tap); written a moment after a changed list, at most every 30 s. Off: never read or written.
+   * so Share stays inside its tap); written a moment after a changed list, at most every 30 s.
    *   { version: 1, apps: { '<app id>': { targets: [{ id, name, detail? }] } }, updated } */
-  const PEOPLE_SW = 'wizard/share-people-box', BOX = '/wizard/v1/pages/wizard-share/people.json';
-  const boxOn = () => { try { return String(document.documentElement?.dataset?.tweaks || '').split(/\s+/).includes(PEOPLE_SW); } catch (_) { return false; } };
+  const BOX = '/wizard/v1/pages/wizard-share/people.json';
   const bx = { apps: {}, version: null, known: false, gone: false, at: 0, read: null, mine: {}, timer: null, put: 0, busy: false };
   const slim = list => cleanTargets(list).map(({ id, name, detail }) => ({ id, name, ...(detail ? { detail } : {}) }));
   function parseBox(text) {
@@ -111,7 +110,7 @@
     return out;
   }
   function readBox(force = false) {
-    if (!boxOn() || bx.gone || typeof window.fetch !== 'function') return Promise.resolve();
+    if (bx.gone || typeof window.fetch !== 'function') return Promise.resolve();
     if (bx.read) return bx.read;
     if (!force && Date.now() - bx.at < 60000) return Promise.resolve();
     const ac = typeof AbortController === 'function' ? new AbortController() : null, timer = setTimeout(() => ac?.abort(), 8000);
@@ -125,7 +124,7 @@
     return bx.read;
   }
   function keepOnBox(appId) {
-    if (!boxOn() || bx.gone || !receivers[appId]) return;
+    if (bx.gone || !receivers[appId]) return;
     bx.mine = { ...bx.mine, [appId]: slim(receivers[appId].targets) }; // replaced, never edited: a write in flight keeps its own
     clearTimeout(bx.timer); bx.timer = setTimeout(writeBox, Math.max(2000, bx.put + 30000 - Date.now()));
   }
@@ -135,7 +134,7 @@
     try {
       // A fresh read first; a 409 hands back the newer file, which is merged per app and saved again.
       for (let i = 0; i < 4 && Object.keys(bx.mine).length; i++) {
-        if (!boxOn() || bx.gone) { bx.mine = {}; return; }
+        if (bx.gone) { bx.mine = {}; return; }
         if (i === 0 || !bx.known) await readBox(true);
         if (!bx.known) return; // offline or failing: kept, sent with the next change
         const mine = bx.mine, next = { ...bx.apps, ...mine };
@@ -152,19 +151,20 @@
       }
     } catch (_) { /* offline: kept, sent with the next change */ } finally { bx.busy = false; }
   }
-  // This browser's own copy when the app has published one here, else the box's (only while the switch is on).
+  // This browser's own copy when the app has published one here, else the box's.
   function targetsOf(appId, r) {
     const own = cleanTargets(r?.targets);
-    return own.length || !boxOn() ? own : cleanTargets(bx.apps[appId]);
+    return own.length ? own : cleanTargets(bx.apps[appId]);
   }
-  // Load and the switch turning on: read the box, and offer it the people this browser already has (an app publishes
-  // only when its list changes, so a list cached before the switch went on would otherwise wait for the next change).
+  // Load: read the box, and offer it the people this browser already has for an app the box holds nothing for yet
+  // (an app publishes only when its list changes, so a list cached earlier would otherwise wait for the next change).
+  // A list the box already holds is left alone: this browser's cached copy may be older than another device's.
   function boxStart() {
-    if (!boxOn()) return;
-    void readBox();
-    for (const [id, r] of Object.entries(receivers)) if (r?.targets?.length) keepOnBox(id);
+    return readBox().then(() => {
+      if (!bx.known || bx.gone) return;
+      for (const [id, r] of Object.entries(receivers)) if (r?.targets?.length && !Object.hasOwn(bx.apps, id)) keepOnBox(id);
+    });
   }
-  if (window.addEventListener) for (const ev of ['wos:experience', 'wos:tweak-choice']) window.addEventListener(ev, boxStart);
   if (typeof setTimeout === 'function') setTimeout(boxStart, 0);
   const live = kind => Object.entries({ ...DEFAULTS, ...receivers }).filter(([id, r]) => takes(id, r, kind) && installed(id));
   const rank = key => { const i = recent.indexOf(key); return i < 0 ? 1e6 : i; };
