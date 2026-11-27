@@ -1,4 +1,0 @@
-/* Wizard for Mac in About & updates (wizard-ux issue 1624): the group reuses the WizardOS update look from
- * core/settings.css (core/os-updates.js mauHtml). Only the version row's value may wrap, so
- * "Up to date · checked 5 min ago" stays whole in the Mac window's narrow Settings column. */
-html[data-tweaks~="wizard/mac-app-updates"] [data-settings-version="mac"] .st-val { white-space: normal; text-align: end; }

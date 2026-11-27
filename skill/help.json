@@ -248,7 +248,7 @@
       }
     },
     "updates": {
-      "help": "WizardOS (server): installed version, up to date or not. Updates: Automatic installs at night, not mid-chat; Ask me waits for Install. Channel: For everyone gets releases testers used for 3 days; For testers gets every release at once and shows Try new features in Appearance. A ready update shows Install at the top of Settings.",
+      "help": "WizardOS (server): installed version, up to date or not. Updates: Automatic installs at night, not mid-chat; Ask me waits for Install. Channel: For everyone gets releases testers used for 3 days; For testers gets every release at once and shows Try new features in Appearance. A ready update shows Install at the top of Settings. Inside Wizard for Mac a Wizard for Mac group follows: the Mac app's own version, up to date or not, Check for updates, a new version downloading, Update and restart once it is ready (never while recording), or Download when a release needs a new download from the website.",
       "controls": {
         "WizardOS (server) {version}": "the installed server version",
         "Updates": null,
@@ -448,11 +448,6 @@
     "wizard/share-people-box": {
       "help": "Share's People row shows Messenger's recent chats in every window.",
       "where": "Settings › Appearance › Try new features › Share to people in any window"
-    },
-    "wizard/mac-app-updates": {
-      "help": "Wizard for Mac: About & updates gets a Wizard for Mac group: its version, up to date or not, Check for updates, Update and restart, Download.",
-      "where": "Settings › Appearance › Try new features › Wizard for Mac in About & updates",
-      "when": "Wizard for Mac only"
     },
     "wizard/skins-look-only": {
       "help": "Skins become a look only: only feature switches decide what runs. Your skin's own choices come back when you switch this off.",
@@ -675,6 +670,7 @@
     "Turn on a new feature (or get them first)?": "Settings › About & updates › Channel › For testers (if not already), then Settings › Appearance › Try new features › the feature's switch.",
     "Turn on Channels?": "Nothing to turn on any more: open Chats and tap Tags in the tabs at the bottom (Inbox · Tags · Sent); your channels and General are listed there. (A box whose Agent Service has no Sent log shows Channels / Activity tabs at the top instead.)",
     "Make Wizard update automatically?": "Settings › About & updates › Updates › Automatic (installs overnight, never during a chat). For apps: Settings › About & updates › Apps › Automatic (checks and updates apps every hour).",
+    "Is my Mac app (Wizard for Mac) up to date?": "Inside Wizard for Mac: Settings › About & updates › Wizard for Mac shows its version and Up to date, or the new version downloading; Check for updates looks now, Update and restart installs a ready one, Download gets a release that needs a new download. Not shown in a browser or on the phone.",
     "Update now?": "When an update is ready, the card at the top of Settings shows Install (or Install now); tap it. 'Interface updated · Reload' just reloads the screen.",
     "Use Wizard on my phone?": "Settings › Phones & devices: scan the QR code with the Wizard phone app (needs Tailscale; the page walks you through it).",
     "Change the look?": "Settings › Appearance › Skin and Colors; + New skin to make your own.",
@@ -692,6 +688,7 @@
     "Thread tracker": "retired: Needs you now shows in the thread itself, on the reply that needs the owner (with Mark done), and in Inbox; Reply works on any message.",
     "Stop write loops": "on for everyone, nothing to turn on: an identical save within 10 s is not resent, and over 20 saves a minute to one place pauses.",
     "Apps in Updates": "on for everyone: Settings › About & updates › Apps.",
+    "Wizard for Mac in About & updates": "on for everyone, nothing to turn on: inside Wizard for Mac, Settings › About & updates shows a Wizard for Mac group under WizardOS.",
     "Reply to Telegram and Slack chats": "on for everyone: reply in Chats to a chat started on Telegram or Slack; it goes through that app's own connection and shows there too.",
     "Models from your connectors": "removed: the model menu in Chats lists the models of every AI connection you connected."
   }
