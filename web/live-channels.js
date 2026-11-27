@@ -459,6 +459,29 @@ window.WizCore.liveParts.channels = function () {
       catch (e) { nd.records = was; tell(); throw e; }
       finally { nd.at = 0; readNeeds(); }
     }
+    /* A thread archived from anywhere (its own Archive, a link trail, a row, a swipe: LIVE.archive) takes its waiting
+     * records with it (wizard-ux issue 1928), so a background task's Inbox row goes with its thread. restoreThread(thread)
+     * (LIVE.restore: Undo, Restore) puts back the records this device archived for it: the box has no un-archive, and
+     * its `snooze` action is the one that sets a record back to waiting (state new). Errors are swallowed: the Inbox
+     * rule already leaves out a record whose thread is archived. */
+    const byThread = new Map();
+    function archiveThread(thread) {
+      const mine = nd.records.filter(r => r.thread === thread); if (!mine.length) return Promise.resolve([]);
+      const job = Promise.all(mine.map(r => archive(r.id).then(() => r, () => null))).then(done => done.filter(Boolean));
+      byThread.set(thread, job);
+      return job;
+    }
+    async function restoreThread(thread) {
+      const job = byThread.get(thread); if (!job) return [];
+      byThread.delete(thread);
+      const done = await job.catch(() => []); if (!done.length) return [];
+      const have = new Set(nd.records.map(r => r.id));
+      nd.records = nd.records.concat(done.filter(r => !have.has(r.id))).sort((a, b) => b.updatedAt - a.updatedAt || (a.id < b.id ? -1 : 1)); tell();
+      try { await Promise.all(done.map(r => req(`/wizard/v1/agent-inbox/${r.id}`, { method: 'PATCH', ...JSON_POST({ action: 'snooze' }) }))); }
+      catch (_) {}
+      finally { await Promise.resolve(nd.busy).catch(() => {}); nd.at = 0; readNeeds(); }
+      return done;
+    }
     async function feedback(id, action) {
       if (!RID.test(String(id || '')) || !FB.has(action)) throw Object.assign(new Error('invalid'), { status: 400 });
       try {
@@ -469,7 +492,7 @@ window.WizCore.liveParts.channels = function () {
       } finally { al.at = 0; readAlerts(); }
     }
     const privateDefault = () => state().privateDefault;
-    return { state, records, read, fresh, move, stays, privateDefault, card, answer, yesToAll, sweep, alerts, alertState, readAlerts, later, feedback, needs, needsState, readNeeds, archive };
+    return { state, records, read, fresh, move, stays, privateDefault, card, answer, yesToAll, sweep, alerts, alertState, readAlerts, later, feedback, needs, needsState, readNeeds, archive, archiveThread, restoreThread };
   }
   /* ---- sent log (wizard-ux issue 1778) ----
    * The box's Sent log (wizard-agent-service issue 607, same switch as the agent inbox): one row per capture the owner

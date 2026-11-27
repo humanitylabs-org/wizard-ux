@@ -488,6 +488,8 @@
     // Server-owned, agent-qualified receipts: activity metadata only, never transcript text.
     seenOf(s) { return this.seen; },
     seenRecord(s) { return this.seen?.threads?.[seenKeyOf(s)]; },
+    // The box's snooze record for a thread (thread-dispositions), also for one the list never carries (issue 1928).
+    dispositionOf(s) { return (s && this.deferred?.[seenKeyOf(s)]) || null; },
     workGroups(sessions, now) { return groupWork(sessions || this.unified(), now); },
     readyByPriority: byPriority,
     readyRank,
@@ -1050,6 +1052,9 @@
     busy(id) { const o = OVER.get(id); return !!o && !o.settled; },
     async _act(id, patch, write, capMs = 60000) {
       const s = this.session(id); if (!s || this.busy(id)) return false;
+      // A hidden worker thread is never in the list, so the next list read would drop the row this action patches and
+      // its Undo would find nothing to restore (wizard-ux issue 1928): keep it readable by id.
+      if (s.hidden && !DETAIL.has(id)) DETAIL.set(id, s);
       const snap = { archived: s.archived, deferred: s.deferred, deferredAt: s.deferredAt, restoredAt: s.restoredAt };
       const entry = { patch }; OVER.set(id, entry); Object.assign(s, patch); this.emit();
       // Safety: a write that never answers must not pin the thread out of its list (or block the next tap) forever; after capMs it counts as failed and the thread is restored (Close & file polls for up to 10 minutes, so it gets 11).
@@ -1081,7 +1086,12 @@
           r = await fetch(`/wizard/filings/${encodeURIComponent(id)}/status${aq(id)}`, { method: 'POST', cache: 'no-store', credentials: 'same-origin', headers: J, body: JSON.stringify({ runtime: s.runtime || 'direct' }) });
         }
         if (!r.ok || r.status === 202) { const e = new Error('HTTP ' + r.status); e.status = r.status; throw e; }
-      }, file ? 11 * 60000 : 60000).then(ok => { if (ok) this.dismissSaved?.(saved); return ok; });
+      }, file ? 11 * 60000 : 60000).then(ok => {
+        if (ok) this.dismissSaved?.(saved);
+        // A background task's waiting record goes with its thread (wizard-ux issue 1928): its Inbox row too.
+        if (ok) try { void this.agentInbox?.archiveThread?.(id); } catch (_) {}
+        return ok;
+      });
     },
     // Stop exactly the watcher on the row the owner pressed: `agent` is the window's agent scope ('' = main).
     async stopWatching(id, agent) {
@@ -1145,7 +1155,18 @@
       return this._act(id, { archived: false, deferred: false, restoredAt: at }, async () => {
         await req(`/wizard/hermes/api/sessions/${encodeURIComponent(id)}${aq(id)}`, { method: 'PATCH', headers: J, body: JSON.stringify({ archived: false }) });
         writeRestored({ ...readRestored(), [id]: at });
+      }).then(ok => {
+        // Undo / Restore brings back the waiting record its archive took (wizard-ux issue 1928).
+        if (ok) try { void this.agentInbox?.restoreThread?.(id); } catch (_) {}
+        return ok;
       });
+    },
+    /* One thread's own state by id, stored nowhere (wizard-ux issue 1928): the Inbox reads a hidden worker thread's
+     * archived / snoozed / status line this way, since the list never carries it. Null when the box has no such thread. */
+    async peekSession(id) {
+      const p = await (await req(`/wizard/hermes/api/sessions/${encodeURIComponent(id)}${aq(id)}`, { cache: 'no-store' })).json();
+      const raw = p?.session || p;
+      return raw && (raw.id || raw.session_id) ? normalize(raw) : null;
     },
     /* ---- the live run: status, approval, stop (api.ts run/approve/stop) ---- */
     async run(runId) { return (await req(`/wizard/hermes/v1/runs/${encodeURIComponent(runId)}${rq(runId)}`)).json(); },

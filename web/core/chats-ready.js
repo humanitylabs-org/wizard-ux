@@ -59,7 +59,9 @@ window.WizCore.chatsParts.ready = function ({ actNeeds, actUnread, CH, chanAt, e
   function inboxIds(live) {
     const L = live || LIVE; if (!inboxKeep()) return null;
     const out = new Set((activityReadyRows(L) || []).map(s => s.id));
-    if (window.WizCore.inboxRowsFacts?.()) for (const r of L?.agentInbox?.needs?.('hermes') || []) { if (r?.id) out.add(r.id); if (r?.thread) out.add(r.thread); }
+    // The same waiting records the Inbox draws (issue 1928: not one whose thread is archived, snoozed or a check).
+    const ib = window.WizCore.inboxRowsFacts?.();
+    if (ib) for (const r of (ib.recs ? ib.recs(((L?.sessionsFor ? L.sessionsFor('') : L?.unified?.()) || []).filter(s => !s.hidden)) : L?.agentInbox?.needs?.('hermes')) || []) { if (r?.id) out.add(r.id); if (r?.thread) out.add(r.thread); }
     return out;
   }
   // The waiting background tasks the Inbox shows as rows of their own (issue 1779): they count as well.

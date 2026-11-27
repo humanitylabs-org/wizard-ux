@@ -55,14 +55,63 @@ window.WizCore.chatsParts.inboxrows = function ({ actMark, actNeeds, actUnread, 
   }
   function ibPins() { return ibPinFacts().pin; }
   const ibFacts = () => ({ quiet: ibQuiet, ...ibPinFacts() });
+  /* A waiting record's own thread (wizard-ux issue 1928). A background task's worker thread is hidden, so the list never
+   * carries it: the shell's row once it was opened here (LIVE.session, archived on the tap frame), else the thread read
+   * by id (LIVE.peekSession), again at most once a minute so an archive on another device or by the agent shows up.
+   * `undefined` while the first read is out, `null` when it failed (the record shows, as before). */
+  const IB_PEEK_MS = 60e3, ibPeeked = new Map();
+  function ibThreadOf(id) {
+    const own = LIVE.session?.(id); if (own) return own;
+    if (typeof LIVE.peekSession !== 'function') return null;
+    let e = ibPeeked.get(id);
+    if (!e || (!e.busy && Date.now() - e.at >= IB_PEEK_MS)) {
+      e = { s: e ? e.s : undefined, at: Date.now(), busy: true }; ibPeeked.set(id, e);
+      const mine = e;
+      Promise.resolve().then(() => LIVE.peekSession(id)).then(s => { mine.s = s || null; }, () => { if (mine.s === undefined) mine.s = null; })
+        .finally(() => { mine.busy = false; mine.at = Date.now(); try { LIVE.emit?.(); } catch (_) {} });
+    }
+    return e.s;
+  }
+  function ibSmartOn() { try { return !!window.WizChatsListModel?.smartInboxOn?.(document.documentElement.dataset.tweaks); } catch (_) { return false; } }
+  // Does this record still wait on him: its thread is not archived or snoozed, and with Smart inbox on its status line
+  // is not a check ("Your call" waits for catch me up, issue 1883). Hidden while its thread's first read is out.
+  function ibRecWaits(r) {
+    const s = ibThreadOf(r.thread);
+    if (s === undefined) return false;
+    if (!s) return true;
+    // Snoozed: the box's snooze record (this device or another) is newer than what this copy of the thread knows.
+    const d = LIVE.dispositionOf?.(s), v = d ? { ...s, deferred: !!d.deferred, deferredAt: d.deferred ? d.updatedAt : s.deferredAt } : s;
+    if (s.archived || window.WizChatsListModel?.deferred?.(v)) return false;
+    return !(ibSmartOn() && !r.failed && attOf(s)?.state === 'check');
+  }
   // The box's waiting background tasks for this list's agent whose thread is not a row already.
   function ibRecs(w, rows) {
     const listed = new Set((rows || []).filter(s => !s.hidden).map(s => s.id));
-    return (LIVE.agentInbox?.needs?.(winAgent(w) || 'hermes') || []).filter(r => !listed.has(r.thread));
+    return (LIVE.agentInbox?.needs?.(winAgent(w) || 'hermes') || []).filter(r => !listed.has(r.thread) && ibRecWaits(r));
   }
+  /* A task row whose thread was just archived or snoozed (from inside it, another device, the agent) leaves every drawn
+   * Inbox at once, as the row's own Archive does. The row tapped to open the thread may still hold focus in a list that
+   * holds its paint while focused (the desktop's list pane): it is a dead row now, so it lets go, then the lists repaint.
+   * Only a row leaving does this, once per record; nothing new jumps in under a finger. */
+  let ibDrawn = new Set(), ibGonePaint = 0;
+  const ibKicked = new Set();
+  function ibRepaintAll() { for (const x of Object.keys(W)) { const ww = W[x], el = ww && !ww.thread && elOf(x); if (el && el.querySelector?.('.ch-ib')) renderChatList(ww, el); } }
+  try {
+    LIVE.onChange?.(() => {
+      if (!ibDrawn.size || ibGonePaint || !inboxRowsOn()) return;
+      const gone = (LIVE.agentInbox?.needs?.('hermes') || []).filter(r => ibDrawn.has(r.id) && !ibKicked.has(r.id) && !ibRecWaits(r));
+      if (!gone.length) return;
+      for (const r of gone) ibKicked.add(r.id);
+      ibGonePaint = setTimeout(() => {
+        ibGonePaint = 0;
+        try { const a = document.activeElement; if (a && gone.some(r => a.closest?.(`[data-morph-key="ibrec:${r.id}"]`))) a.blur(); } catch (_) {}
+        ibRepaintAll(); try { LIVE.emit?.(); } catch (_) {}
+      }, 0);
+    });
+  } catch (_) {}
   // The shell's count and badges (core/chats-ready.js) read the same rule.
   // (Guarded: tests run slices of createChats in a bare vm without window.)
-  try { window.WizCore.inboxRowsFacts = () => inboxRowsOn() ? { ...ibFacts(), extra: rows => ibRecs({}, rows).length } : null; } catch (_) {}
+  try { window.WizCore.inboxRowsFacts = () => inboxRowsOn() ? { ...ibFacts(), extra: rows => ibRecs({}, rows).length, recs: rows => ibRecs({}, rows) } : null; } catch (_) {}
   const ibSig = ag => `<span class="ch-ib-av ch-ib-ag" aria-hidden="true">${AGS()?.sigil?.(agentRec(ag)) || ''}</span>`;
   // The avatar and sender line for a tag name, else the agent (Sent rows name their first tag the same way: issue 1814).
   function ibTagFace(name, ag = AGS()?.defaultId?.() || 'hermes') {
@@ -115,9 +164,10 @@ window.WizCore.chatsParts.inboxrows = function ({ actMark, actNeeds, actUnread, 
    * then Snoozed and Archived folded at the bottom as before. Working threads that never got an answer are in Sent. */
   function inboxRowsBody(w, rows, nt, drafts = 0) {
     const L = ibModel(), c = ch(w.id), order = L.activitySortOf(chatVars.readyOrder), fx = ibFacts();
+    ibDrawn = new Set();
     const g = L.activityGroups(LIVE.workGroups(rows), { needs: actNeeds, unread: actUnread, at: chanAt }, { order, now: Date.now(), inbox: fx, place: window.WizCore.inboxPlace?.() || null });
     const items = g.ready.map(s => ({ id: s.id, s, at: chanAt(s), needs: actNeeds(s), pin: fx.pin(s) }))
-      .concat(ibRecs(w, rows).map(r => ({ id: 'ibrec:' + r.id, r, at: r.updatedAt, needs: true, pin: 0 })))
+      .concat(ibRecs(w, rows).map(r => (ibDrawn.add(r.id), ibKicked.delete(r.id), { id: 'ibrec:' + r.id, r, at: r.updatedAt, needs: true, pin: 0 })))
       .concat((nt?.awake || []).map(v => ({ id: 'notif:' + v.id, n: v, at: noteAt(v), needs: L.notificationRow(v).rank === 1, pin: 0 })));
     const sorted = L.activitySort(items.filter(x => !x.pin), order, { at: x => x.at, needs: x => x.needs });
     const inbox = items.filter(x => x.pin).sort((a, b) => a.pin - b.pin).concat(sorted);
@@ -148,7 +198,7 @@ window.WizCore.chatsParts.inboxrows = function ({ actMark, actNeeds, actUnread, 
     if (r) {
       const id = r.dataset.chibrec; r.disabled = true;
       Promise.resolve(LIVE.agentInbox?.archive?.(id)).then(() => toast('✓', 'Archived', 1600), () => toast('!', 'Couldn’t archive · it stays in Inbox', 3200))
-        .finally(() => { for (const x of Object.keys(W)) { const ww = W[x], el = ww && !ww.thread && elOf(x); if (el && el.querySelector?.('.ch-ib')) renderChatList(ww, el); } });
+        .finally(ibRepaintAll);
       return true;
     }
     return false;
