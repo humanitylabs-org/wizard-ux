@@ -4,7 +4,8 @@
 // (tests/qa-chats-smart-inbox.cjs) plus the threads he asked for or set up: the pinned Wizard Topics roundup (agent-
 // started), a scheduled reminder firing and the Daily brief (Hermes cron runs), "Review everything in my inbox" answered
 // fyi, "summarize this transcript" answered done, "find me …", a "remind me" that fired later. And what still finishes
-// in Sent: a build confirmation, a scheduled check ask, a [SILENT] watch wake, a reminder just set. Disposable synthetic
+// in Sent: a [SILENT] watch wake, a reminder just set, a reply-button tap, a thanks (issue 1977 moved check asks and every
+// answer to his words, quiet-marked or not, to Inbox: James's three live sends are here too). Disposable synthetic
 // transport only; phone 412x915, Classic desktop and the AI apps sidebar, Nebula and Light. With the switch on the
 // Inbox is the 1883 Inbox plus the requested ones, never in both; QA_SWITCH=off writes list-<stem>.html to compare byte
 // for byte with QA_WEB=<main checkout>/web; QA_EXPECT=report prints where each thread is and asserts nothing.
@@ -81,8 +82,16 @@ const fresh = () => ({
   'c-cron': T('Weekly cleanup', 37, { attention: att('check', 'Cleaned 40 files. Have a look.'), unread: true, source: 'cron', quiet: true }),
   's-watch': T('Flight price watch', 39, { answer: '[SILENT]', unread: true, source: 'cron', quiet: true }),
   'd-remind-set': T('Water the plants', 41, { attention: att('done', 'Okay, I will remind you at 6.'), mine: { text: 'remind me to water the plants at 6', route: 'agent', rules_matched: ['task_verb'] } }),
+  // Issue 1977: James's live sends (the box marks them quiet, wants_reply false, rules ['statement']) answered: Inbox.
+  'q-factcheck': T('Clip fact check', 43, { attention: att('fyi', 'AI playing field clip is accurate; only the Jensen Huang line is outdated.'), quiet: true, mine: { text: 'Fact check: https://wizard.aiwizards.com/clips-pipeline/#/clip/abc', source: 'typed', route: 'agent', rules_matched: ['statement'], wants_reply: false, quiet: true } }),
+  'q-rightclick': T('Clips right click', 45, { attention: att('fyi', 'Right-click now opens a clip in a new tab.'), quiet: true, mine: { text: "On the clips pipeline, I need to be able to right click a clip in the list and open a new tab. That doesn't work", source: 'typed', route: 'agent', rules_matched: ['statement'], wants_reply: false, quiet: true } }),
+  'q-file': T('Matrix upside', 47, { attention: att('done', 'Filed. Matrix only cuts upkeep for calls.'), quiet: true, mine: { text: "File. And I guess the advantage or upside would be reliance on a project that's actively being maintained", source: 'reply', route: 'thread', rules_matched: ['statement'], wants_reply: false, quiet: true } }),
+  // Issue 1977: still Sent: a reply-button tap and a plain thanks.
+  's-tap': T('Workout', 49, { attention: att('done', 'Logged.'), mine: { text: 'Tapped Done · Workout\n[WIZARD_TAPS_V1]{"taps":[]}[/WIZARD_TAPS_V1]', route: 'thread', rules_matched: ['statement'], wants_reply: false, quiet: true } }),
+  's-thanks': T('Thanks', 51, { attention: att('done', 'Anytime.'), mine: { text: 'thanks 👍', route: 'thread', rules_matched: ['statement'], wants_reply: false, quiet: true } }),
 });
-const INBOX_WANT = ['a-pay', 'n-lease', 'n-sched', 'n-seat', 'n-watch', 'q-find', 'q-know', 'q-mac', 'q-remind', 'q-review', 'q-tell', 'q-transcript', 't-brief', 't-remind', 't-topics', 't-topics-hermes', 't-topics-list', 'x-export', 'x-sync'];
+// Issue 1977: plus every check ask and every answer to his words (no keyword test).
+const INBOX_WANT = ['a-pay', 'c-cron', 'c-forum', 'c-signal', 'c-topbar', 'c-video', 'd-build', 'd-clip', 'd-groceries', 'd-notes', 'f-launch', 'f-weather', 'n-lease', 'n-sched', 'n-seat', 'n-watch', 'new-chat', 'q-factcheck', 'q-file', 'q-find', 'q-know', 'q-mac', 'q-remind', 'q-review', 'q-rightclick', 'q-tell', 'q-transcript', 't-brief', 't-remind', 't-topics', 't-topics-hermes', 't-topics-list', 'x-export', 'x-sync'];
 const sid = n => 'sent_' + n.toString(16).padStart(24, '0');
 const freshSent = () => Object.entries(THREADS).filter(([, s]) => s.mine).map(([id, s], i) => ({ id: sid(i + 1), at: s.at - 60e3, source: 'orb', text: s.mine.text, route: 'agent', decided_by: 'owner_words', rules_matched: [], tags: [], urgent: false, thread_id: id, record_id: null, state: 'done', wants_reply: true, ...s.mine }));
 const raw = (id, s) => s.list ? listRaw(id, s) : ({ id, title: s.title, runtime: 'direct', status: s.status || 'completed', updated_at: iso(s.at), updatedAt: iso(s.at), last_active: s.at / 1000,
@@ -201,14 +210,14 @@ const report = { origin, web, on: ON, rows: ROWS, cases: [] };
         assert.match(b.inbox['x-sync'].line, /Didn’t finish|couldn’t|isn’t available|Error/, 'failed row says why: ' + b.inbox['x-sync'].line);
         // Live: needs you → done moves to Sent; done → failed moves back to Inbox. No reload.
         THREADS['n-seat'].attention = att('done', 'Booked seat 14A, window.'); THREADS['n-seat'].msgs.push(['user', 'window', 60], ['assistant', 'Booked seat 14A, window.', 90]); THREADS['n-seat'].at = Date.now();
-        SENT = [{ ...SENT.find(r => r.thread_id === 'n-seat'), id: sid(99), at: Date.now() - 1000, text: 'window', route: 'thread', wants_reply: false, rules_matched: ['statement'], state: 'done' }, ...SENT];
-        THREADS['d-clip'].status = 'failed'; THREADS['d-clip'].attention = undefined; THREADS['d-clip'].at = Date.now();
+        SENT = [{ ...SENT.find(r => r.thread_id === 'n-seat'), id: sid(99), at: Date.now() - 1000, text: 'Tapped Window · Flight seat\n[WIZARD_TAPS_V1]{"taps":[]}[/WIZARD_TAPS_V1]', route: 'thread', wants_reply: false, rules_matched: ['statement'], state: 'done' }, ...SENT];
+        THREADS['d-backup'].status = 'failed'; THREADS['d-backup'].attention = undefined; THREADS['d-backup'].at = Date.now();
         await page.evaluate(() => { window.WizLive?.refresh?.(); window.WizLive?.sentLog?.fresh?.(); window.WizLive?.sentLog?.read?.(); });
         await nap(2500);
         entry.moved = await place('2'); delete entry.moved.html;
         assert.deepEqual(entry.moved.both, [], 'never in both after the move');
         assert.ok(!entry.moved.inInbox.includes('n-seat') && entry.moved.sentIds.includes('n-seat'), 'needs you → done: Sent ' + JSON.stringify(entry.moved.inInbox));
-        assert.ok(entry.moved.inInbox.includes('d-clip') && !entry.moved.sentIds.includes('d-clip'), 'done → failed: Inbox ' + JSON.stringify(entry.moved.inInbox));
+        assert.ok(entry.moved.inInbox.includes('d-backup') && !entry.moved.sentIds.includes('d-backup'), 'done → failed: Inbox ' + JSON.stringify(entry.moved.inInbox));
         assert.equal(entry.errors.length, 0, 'browser errors: ' + entry.errors.join('; '));
         assert.deepEqual(entry.refused.filter(x => x.reason === 'unexpected-write'), [], 'no unexpected writes');
         entry.pass = true;

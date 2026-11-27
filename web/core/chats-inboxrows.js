@@ -68,9 +68,8 @@ window.WizCore.chatsParts.inboxrows = function ({ actMark, actNeeds, actUnread, 
     }
     return e.s;
   }
-  function ibSmartOn() { try { return !!window.WizChatsListModel?.smartInboxOn?.(document.documentElement.dataset.tweaks); } catch (_) { return false; } }
-  // Does this record still wait on him: its thread is not archived or snoozed, and with Smart inbox on its status line
-  // is not a check ("Your call" waits for catch me up, issue 1883). Hidden while its thread's first read is out.
+  // Does this record still wait on him: its thread is not archived or snoozed (a check waits on him too, issue 1977).
+  // Hidden while its thread's first read is out.
   function ibRecWaits(r) {
     const s = ibThreadOf(r.thread);
     if (s === undefined) return false;
@@ -78,7 +77,7 @@ window.WizCore.chatsParts.inboxrows = function ({ actMark, actNeeds, actUnread, 
     // Snoozed: the box's snooze record (this device or another) is newer than what this copy of the thread knows.
     const d = LIVE.dispositionOf?.(s), v = d ? { ...s, deferred: !!d.deferred, deferredAt: d.deferred ? d.updatedAt : s.deferredAt } : s;
     if (s.archived || window.WizChatsListModel?.deferred?.(v)) return false;
-    return !(ibSmartOn() && !r.failed && attOf(s)?.state === 'check');
+    return true;
   }
   // The box's waiting background tasks for this list's agent whose thread is not a row already.
   function ibRecs(w, rows) {

@@ -49,6 +49,9 @@ import static org.junit.Assert.*;
  *     window's first frame with it, median logged), no Connecting, then the live app; the box is asked only whether the
  *     app's page changed (no script, stylesheet or shell file).
  *  3. The app is updated on the box: the next open shows the new version.
+ *  3b. (wizard-ux issue 1959) The app's address is a redirect and its frame never finishes loading (a picture the box
+ *     holds 15 s), so the pinned page never says the app has loaded: the cover still leaves within 2 s of the pinned
+ *     page painting, the app is on screen, and on the next open the phone no longer reads the redirect itself.
  *  4. Switch off: the same held-back open shows today's Connecting, no saved picture, and every file is asked for.
  * Run by {@link DeviceBridgeE2eTest}. Numbers and screenshots go to logcat (tags WizardPinQa, PinShot).
  */
@@ -171,6 +174,39 @@ final class PinInstantScenario {
             assertTrue("its changed script was read again", box.saw("GET /qa-pin/app.js"));
             device.pressHome();
             SystemClock.sleep(1200);
+
+            // 3b. a redirecting address and an app frame that never finishes loading (wizard-ux issue 1959)
+            box.redirectStart = true; box.holdPictureMs = 15000;
+            for (int i = 0; i < 2; i++) {
+                close(c);
+                box.clear(); box.pageDelayMs = 0;
+                long t0 = open(c);
+                Activity a = waitResumed(10000);
+                assertNotNull("held frame " + (i + 1) + ": the app is on screen", find(device, By.textStartsWith("Pinned app v2"), 20000));
+                long[] at = new long[4]; String[] why = {""};
+                long end = SystemClock.uptimeMillis() + 8000;
+                while (SystemClock.uptimeMillis() < end) {
+                    InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+                        MainActivity m = (MainActivity) a;
+                        at[0] = m.pinPageAt(); at[1] = m.pinShownAt(); at[2] = m.pinCoverGoneAt(); at[3] = m.pinShotShowing() ? 1 : 0; why[0] = m.pinCoverWhy(); });
+                    if (at[3] == 0 && at[2] > 0) break;
+                    SystemClock.sleep(50);
+                }
+                Log.i(TAG, "held frame " + (i + 1) + ": page painted " + (at[0] - t0) + " ms, app ready " + (at[1] > 0 ? (at[1] - t0) + " ms" : "-")
+                        + ", cover left " + (at[2] - t0) + " ms (" + why[0] + "); box saw " + box.files());
+                assertTrue("held frame " + (i + 1) + ": the pinned page painted", at[0] > 0);
+                assertEquals("held frame " + (i + 1) + ": the cover has left", 0, at[3]);
+                assertTrue("held frame " + (i + 1) + ": the app never said it loaded (its frame is held)", at[1] == 0 || at[1] > at[2]);
+                assertTrue("held frame " + (i + 1) + ": the cover left within 2 s of the page (" + (at[2] - at[0]) + " ms)",
+                        at[2] - at[0] <= PinInstantPolicy.COVER_AFTER_PAGE_MS + 1000);
+                if (i == 1) shot(device, c, "held-frame");
+                int starts = 0; for (String f : box.files()) if (f.startsWith("GET /qa-pin/start")) starts++;
+                if (i == 0) assertEquals("first open: the phone and the WebView each read the redirect", 2, starts);
+                else assertEquals("next open: only the WebView reads the redirect", 1, starts);
+                device.pressHome();
+                SystemClock.sleep(1200);
+            }
+            box.redirectStart = false; box.holdPictureMs = 0;
 
             // 4. switch off: today's behaviour
             PinInstant.setOn(c, false);
@@ -355,6 +391,10 @@ final class PinInstantScenario {
         volatile boolean running = true;
         volatile long pageDelayMs = 0;
         volatile int version = 1;
+        /** wizard-ux issue 1959: the pinned page frames /qa-pin/start, a redirect to /qa-pin/; the app page asks for a
+         *  picture the box holds this long (its frame's load waits for it). */
+        volatile boolean redirectStart = false;
+        volatile long holdPictureMs = 0;
 
         Box() throws IOException {
             new Thread(() -> {
@@ -378,7 +418,7 @@ final class PinInstantScenario {
                 String h, ifNone = null;
                 while ((h = line(in)) != null && !h.isEmpty()) if (h.toLowerCase(java.util.Locale.ROOT).startsWith("if-none-match:")) ifNone = h.substring(14).trim();
                 String path = request.split(" ").length > 1 ? request.split(" ")[1] : "";
-                String status = "200 OK", type = "text/html", out, etag = null, cache = "no-cache";
+                String status = "200 OK", type = "text/html", out, etag = null, cache = "no-cache", location = null;
                 int v = version;
                 if (path.startsWith("/wizard-os-home/?app-session=" + APP)) {
                     if (pageDelayMs > 0) SystemClock.sleep(pageDelayMs);
@@ -387,15 +427,22 @@ final class PinInstantScenario {
                         + "<meta name='viewport' content='width=device-width,initial-scale=1'><body style='margin:0;background:#05030c'>"
                         // As core/single-app-session.js does: the release first, then the app frame.
                         + "<script>try{WizardOSNative.pinRelease('abcdef012345')}catch(e){}"
-                        + "var f=document.createElement('iframe');f.src='/qa-pin/';f.style.cssText='border:0;width:100vw;height:100vh;display:block';"
+                        + "var f=document.createElement('iframe');f.src='" + (redirectStart ? "/qa-pin/start" : "/qa-pin/") + "';f.style.cssText='border:0;width:100vw;height:100vh;display:block';"
                         + "f.addEventListener('load',function(){requestAnimationFrame(function(){setTimeout(function(){try{WizardOSNative.pinShown()}catch(e){}},120)})});"
                         + "document.body.appendChild(f);</script>";
                 } else if (path.equals("/shell-health")) {
                     type = "application/json"; out = "{\"ok\":true}";
+                } else if (path.equals("/qa-pin/start")) {
+                    status = "302 Found"; out = ""; location = "/qa-pin/";
+                } else if (path.equals("/qa-pin/held.png")) {
+                    if (holdPictureMs > 0) SystemClock.sleep(holdPictureMs);
+                    status = "404 Not Found"; type = "text/plain"; out = "no";
                 } else if (path.equals("/qa-pin/")) {
-                    etag = "\"page" + v + "\"";
+                    long held = holdPictureMs;
+                    etag = "\"page" + v + (held > 0 ? "-held" : "") + "\"";
                     out = "<!doctype html><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>"
                         + "<link rel='stylesheet' href='/qa-pin/app.css'><body><h1 id='t'>Loading</h1>"
+                        + (held > 0 ? "<img src='/qa-pin/held.png' alt=''>" : "")
                         + "<script src='/wizard-os-home/core/app-client.js'></script><script src='/qa-pin/app.js'></script>";
                 } else if (path.equals("/qa-pin/app.css")) {
                     type = "text/css"; etag = "\"css1\"";
@@ -412,7 +459,7 @@ final class PinInstantScenario {
                 byte[] bytes = notModified ? new byte[0] : out.getBytes(StandardCharsets.UTF_8);
                 OutputStream o = client.getOutputStream();
                 o.write(("HTTP/1.1 " + (notModified ? "304 Not Modified" : status) + "\r\nContent-Type: " + type + "; charset=utf-8\r\nCache-Control: " + cache
-                    + (etag != null ? "\r\nETag: " + etag : "") + "\r\nContent-Length: " + bytes.length + "\r\nConnection: close\r\n\r\n").getBytes(StandardCharsets.UTF_8));
+                    + (etag != null ? "\r\nETag: " + etag : "") + (location != null ? "\r\nLocation: " + location : "") + "\r\nContent-Length: " + bytes.length + "\r\nConnection: close\r\n\r\n").getBytes(StandardCharsets.UTF_8));
                 o.write(bytes); o.flush();
             }
         }

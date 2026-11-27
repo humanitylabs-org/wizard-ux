@@ -30,9 +30,7 @@ test('James: what he asked for or set up is in Inbox', () => {
 });
 
 test('what still finishes in Sent', () => {
-  assert.equal(P(t({ attention: att('done', 'Fixed and merged.') }), [row({ text: 'Fix the login bug in Messenger', rules: ['task_verb'] })]), 'sent', 'a build confirmation done');
-  assert.equal(P(t({ attention: att('check', 'Have a look.') }), [row({ text: 'Review the forum setup', state: 'needs_you' })]), 'sent', 'a check ask, even after a request');
-  assert.equal(P(t({ source: 'cron', attention: att('check', 'Cleaned 40 files. Have a look.') }), []), 'sent', 'a scheduled check ask');
+  assert.equal(P(t({ attention: att('done', 'Fixed and merged.') }), [row({ text: 'Tapped Fix it · Messenger\n[WIZARD_TAPS_V1]{"taps":[]}[/WIZARD_TAPS_V1]', rules: ['statement'] })]), 'sent', 'a build confirmation after a reply-button tap');
   assert.equal(P(t({ source: 'cron', preview: '[SILENT]' }), []), 'sent', 'a watch wake [SILENT]');
   assert.equal(P(t({ id: 'wizard_topics', preview: '[SILENT]' }), []), 'sent', 'a pinned thread whose run said [SILENT]');
   assert.equal(P(t({ quietReply: true, attention: att('done', 'Ok') }), [row({ text: 'thanks', route: 'thread', rules: ['statement'], wantsReply: false, quiet: true })]), 'sent', 'a quiet reply to "thanks"');
@@ -40,8 +38,8 @@ test('what still finishes in Sent', () => {
   assert.equal(P(t({ attention: att('done', 'Matched 12 invoices.') }), []), 'sent', 'a helper result that only confirms');
   assert.equal(P(t({ attention: att('fyi', 'Three meetings.') }), []), 'sent', 'agent-started, not scheduled, not pinned');
   assert.equal(P(t({ attention: att('fyi', 'Still on it.') }), [row({ text: 'Summarize the report', state: 'running' })]), 'sent', 'not answered yet');
-  assert.equal(P(t({ attention: att('done', 'Started') }), [row({ text: 'Start a shopping list for the party', rules: ['new_chat'] })]), 'sent', '"list" as a noun is not a request');
-  assert.equal(P(t({ attention: att('done', 'Done') }), [row({ text: 'Fix the login and when it works deploy it' })]), 'sent', 'a "when" inside a task is not a question');
+  assert.equal(P(t({ attention: att('done', 'Okay') }), [row({ text: 'ok great 👍', rules: ['statement'] })]), 'sent', 'a pure acknowledgement');
+  assert.equal(P(t({ attention: att('done', 'Noted') }), [row({ text: 'Remember the gate code is 4411', route: 'dump' })]), 'sent', 'a note dropped, not an agent ask');
   assert.equal(P(t({ attention: att('done', 'Ok') }), [row({ text: 'Summarize it', rules: ['no_reply:no need to reply'] })]), 'sent', 'he said no reply');
   assert.equal(P(t({ attention: att('done', 'Ok') }), [row({ text: 'Summarize it', corrected: { shouldReply: false, at: 1 } })]), 'sent', 'his correction: no reply');
 });
@@ -64,10 +62,11 @@ test('request words, with and without a question mark', () => {
     assert.equal(M.sentRequested(row({ text })), false, text);
 });
 
-test('an owner thread he pinned or scheduled: a later delivery is Inbox, the answer to a task is not', () => {
+test('an owner thread he pinned or scheduled: a later delivery is Inbox, the answer to his words too', () => {
   const s = t({ id: 'wizard_topics', attention: att('fyi', 'Topics · 2 moved') });
   assert.equal(P(s, [row({ text: 'Add AI chips to my topics', at: NOW - 30 * H })]), 'inbox', 'a roundup a day after his last send');
-  assert.equal(P(s, [row({ text: 'Add AI chips to my topics' })]), 'sent', 'the answer to his send, right after it');
+  assert.equal(P(s, [row({ text: 'Add AI chips to my topics' })]), 'inbox', 'the answer to his send, right after it (issue 1977: his words answered)');
+  assert.equal(P(s, [row({ text: 'thanks' })]), 'sent', 'right after his thanks');
 });
 
 test('blockers keep their place; Inbox and Sent stay one place each', () => {
@@ -109,4 +108,24 @@ test('a thread pinned with Hermes\' own flag counts as his pin (the list row\'s 
   assert.equal(place.pinned({ id: 'other' }), false, 'not pinned');
   const s = t({ id: 'wizard_topics', hermesPinned: true, quietReply: true, attention: att('fyi', 'Topics · 2 moved') });
   assert.equal(M.placeOf(s, [], facts({ pinned: place.pinned })), 'inbox', 'Topics, pinned only in Hermes: Inbox');
+});
+
+// owner-correction: humanitylabs-org/wizard-ux#1977 · 2026-11-27 · "I'm having things I directly ask that get a response that are just sitting in \"sent\" and never coming to my attention, as well as things waiting on me."
+test('James: answers to what he asked and check asks reach Inbox (issue 1977)', () => {
+  const live = (text, o = {}) => row({ text, rules: ['statement'], quiet: true, wantsReply: false, route: 'agent', source: 'typed', ...o });
+  assert.equal(P(t({ quietReply: true, attention: att('fyi', 'AI playing field clip is accurate; only the Jensen Huang line is outdated.') }), [live('Fact check: https://wizard.aiwizards.com/clips-pipeline/#/clip/abc')]), 'inbox', 'Fact check: <url>');
+  assert.equal(P(t({ quietReply: true, attention: att('fyi', 'Right-click now opens the clip in a new tab.') }), [live("On the clips pipeline, I need to be able to right click a clip in the list and open a new tab. That doesn't work")]), 'inbox', 'right click a clip');
+  assert.equal(P(t({ quietReply: true, attention: att('done', 'Filed. Matrix only cuts upkeep for calls.') }), [live("File. And I guess the advantage or upside would be reliance on a project that's actively being maintained", { route: 'thread', source: 'reply' })]), 'inbox', 'File. And I guess…');
+  const check = t({ attention: att('check', 'Desktop now shows just Full and Half screen with two windows open. Try dragging the middle bar and say if it feels right') });
+  const smartNeeds = s => ['waiting_for_approval', 'unknown'].includes(s.status) || s.attention?.state === 'needs_you'; // the shell's needs with Smart inbox on (chats-done.js chanNeeds)
+  assert.equal(M.placeOf(check, [], facts({ needs: smartNeeds })), 'inbox', 'a check ask, agent-started');
+  assert.equal(M.placeOf(check, [live('Make the desktop two windows', { state: 'needs_you' })], facts({ needs: smartNeeds })), 'inbox', 'a check ask after his send');
+  assert.equal(smartNeeds(check), false, 'no amber: not needs you');
+  // Still Sent
+  assert.equal(P(t({ attention: att('done', 'Logged.') }), [live('Tapped Done · Workout\n[WIZARD_TAPS_V1]{"taps":[{"thread":"x","message":"m","group":"g","button":"done","label":"Done"}]}[/WIZARD_TAPS_V1]')]), 'sent', 'a reply-button tap');
+  for (const text of ['thanks', 'Thank you!', 'ok', 'great', '👍', 'ok thanks', 'perfect.']) assert.equal(P(t({ attention: att('done', 'Ok') }), [live(text)]), 'sent', text);
+  assert.equal(P(t({ preview: '[SILENT]' }), [live('Fact check: https://x.test/')]), 'sent', '[SILENT]');
+  assert.equal(P(t({ attention: att('fyi', 'Three meetings.') }), []), 'sent', 'agent-started, no Sent row, no owner delivery');
+  assert.equal(P(t({ attention: att('done', 'Ok') }), [live('Fact check this', { corrected: { shouldReply: false, at: 1 } })]), 'sent', 'his correction: no reply');
+  assert.equal(P(t({ status: 'running' }), [live('Fact check this', { state: 'running' })]), 'sent', 'still running');
 });

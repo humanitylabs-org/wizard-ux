@@ -155,4 +155,16 @@ public class PinInstantPolicyTest {
         assertEquals("Youtube Music", PinInstantPolicy.placeholderName(null, "youtube-music"));
         assertEquals("", PinInstantPolicy.placeholderName(null, null));
     }
+    /** wizard-ux issue 1959 (owner: "why is it taking so long to load?"): once the box answered, the placeholder stays
+     *  at most 2 s; each open logs where its time went. */
+    @Test
+    public void theCoverLeavesWithinTwoSecondsOfThePageAndEachOpenSaysWhereTheTimeWent() {
+        assertTrue(PinInstantPolicy.COVER_AFTER_PAGE_MS <= 2_000L);
+        assertTrue(PinInstantPolicy.coverWhy(1_000L, 3_000L).startsWith("page painted 2000 ms ago"));
+        assertEquals("10 s mark", PinInstantPolicy.coverWhy(0L, 10_000L));
+        assertEquals("open mizel: tap 0, placeholder 120 ms, page 900 ms, app ready -, cover left 2900 ms (x)",
+                PinInstantPolicy.timingLine("mizel", false, 1_000L, 1_120L, 1_900L, 0L, 3_900L, "x"));
+        assertEquals("open wisdom: tap 0, last screen 80 ms, page 400 ms, app ready 700 ms, cover left 700 ms (app shown)",
+                PinInstantPolicy.timingLine("wisdom", true, 1_000L, 1_080L, 1_400L, 1_700L, 1_700L, "app shown"));
+    }
 }
