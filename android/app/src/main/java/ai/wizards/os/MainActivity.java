@@ -895,7 +895,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         // Instant home-screen apps (wizard-ux issue 1830): a Wizard window was answered a moment ago on this network, so
         // a pinned window leaves Connecting out; Can't reach still comes at GIVE_UP_MS if nothing paints.
         else if (this instanceof AppSessionActivity && PinInstant.skipConnecting(this)) android.util.Log.i("WizardOSReach", "connecting skipped: reached recently");
-        else { pinShotHide(); reach.connecting(); }
+        else { pinShotHide("Connecting"); reach.connecting(); }
     };
 
     private final Runnable reachGiveUp = () -> {
@@ -950,6 +950,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         wantUrl = url;
         pinPageShown = false;
         pinLanded = false;
+        pinPageAt = 0;
         armReach();
     }
 
@@ -966,6 +967,12 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         PinInstant.reached(this);
         reachWatch++;
         pinLanded = true;
+        // wizard-ux issue 1959: the box answered and the pinned page has painted, so the cover (placeholder or last
+        // screen) leaves at most COVER_AFTER_PAGE_MS from now, whether or not the app ever says it has loaded.
+        if (pinPageAt == 0) {
+            pinPageAt = android.os.SystemClock.uptimeMillis();
+            if (pinShot != null) { main.removeCallbacks(pinShotGiveUp); main.postDelayed(pinShotGiveUp, PinInstantPolicy.COVER_AFTER_PAGE_MS); }
+        }
         main.removeCallbacks(reachMark);
         main.removeCallbacks(reachGiveUp);
         main.removeCallbacks(reachRetry);
@@ -993,14 +1000,20 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
     private View pinShot;
     private boolean pinShotIsPicture = false, pinShownSaved = false;
     private boolean pinPageShown = false;
-    /** The cover gives way at SHOT_MAX_MS, but only to a page that has painted: never to an empty window. */
+    /** The cover gives way COVER_AFTER_PAGE_MS after the pinned page has painted (wizard-ux issue 1959), else at
+     *  SHOT_MAX_MS, but only to a page that has painted: never to an empty window. */
     private boolean pinLanded = false;
     private final Runnable pinShotGiveUp = new Runnable() {
         @Override public void run() {
             if (pinShot == null) return;
-            if (pinLanded) pinShotHide(); else main.postDelayed(this, 1_000L);
+            if (pinLanded) pinShotHide(PinInstantPolicy.coverWhy(pinPageAt, android.os.SystemClock.uptimeMillis()));
+            else main.postDelayed(this, 1_000L);
         }
     };
+    /** Each stage of a pinned open (uptime ms, 0: not yet), for the timing line and PinInstantScenario (issue 1959):
+     *  the pinned page painted (the box answered), the pinned page said the app has loaded, the cover left. */
+    private long pinPageAt = 0, pinShownAt = 0, pinCoverGoneAt = 0;
+    private String pinCoverWhy = "";
 
     /** Started at the top of a pinned window's onCreate, so the picture decodes while the WebView is being made. */
     private java.util.concurrent.FutureTask<android.graphics.Bitmap> pinShotLoad;
@@ -1128,9 +1141,21 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
     long pinFirstDrawAt() { return pinFirstDrawAt; }
     boolean pinShotShowing() { return pinShot != null; }
 
-    void pinShotHide() {
+    long pinPageAt() { return pinPageAt; }
+    long pinShownAt() { return pinShownAt; }
+    long pinCoverGoneAt() { return pinCoverGoneAt; }
+    String pinCoverWhy() { return pinCoverWhy; }
+
+    void pinShotHide() { pinShotHide("other"); }
+
+    void pinShotHide(String why) {
         final View shot = pinShot;
         if (shot == null) return;
+        pinCoverGoneAt = android.os.SystemClock.uptimeMillis();
+        pinCoverWhy = why;
+        // One line per open: where the time went (wizard-ux issue 1959).
+        android.util.Log.i("WizardOSPinInstant", PinInstantPolicy.timingLine(HomeScreenShortcuts.appId(this, getIntent()),
+                pinShotIsPicture, pinCreateAt, pinCoverDrawnAt, pinPageAt, pinShownAt, pinCoverGoneAt, why));
         pinShot = null;
         pinShotIsPicture = false;
         main.removeCallbacks(pinShotGiveUp);
@@ -1162,7 +1187,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
     private void showOffline(String why) {
         main.removeCallbacks(reachMark);
         main.removeCallbacks(reachGiveUp);
-        pinShotHide();
+        pinShotHide("Can't reach");
         if (reach == null) return;
         ReachPolicy.Why w = ReachScreen.why(this);
         reach.offline(w, why, ReachScreen.tailscaleInstalled(this));
@@ -2112,7 +2137,8 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         public void pinShown() {
             if (!(MainActivity.this instanceof AppSessionActivity)) return;
             main.post(() -> {
-                pinPageShown = true; pinShotHide();
+                if (pinShownAt == 0) pinShownAt = android.os.SystemClock.uptimeMillis();
+                pinPageShown = true; pinShotHide("app shown");
                 // Keep a picture once the app has shown, not only when the window leaves (field report 2), so the
                 // very next open has its last screen even if this window is swiped away.
                 if (!pinShownSaved) { pinShownSaved = true; main.postDelayed(MainActivity.this::pinShotSaveIfFront, PinInstantPolicy.SHOT_AFTER_SHOWN_MS); }

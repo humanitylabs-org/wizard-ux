@@ -29,6 +29,12 @@ final class PinInstantPolicy {
     static final int SHOT_WIDTH = 720;
     /** The saved last screen gives way to the live page by this time at the latest. */
     static final long SHOT_MAX_MS = 10_000L;
+    /** wizard-ux issue 1959: once the pinned page has painted (the box answered), the cover leaves at most this much
+     *  later, whether or not the app ever says it has loaded (its frame's load waits for every file it asks for). */
+    static final long COVER_AFTER_PAGE_MS = 2_000L;
+    /** An app page that answered with a redirect (Recorder: /mizel/ -> live/) goes straight to the WebView for this
+     *  long, with no phone-side read first (the WebView can't take a redirect from the phone). */
+    static final long REDIRECT_KEEP_MS = 24 * 3_600_000L;
     /** With a kept copy of the app's page, the window waits at most this long for the box to say whether it changed;
      *  a slower box gets the kept page at once (its answer is kept for the next open). Usually the 304 comes first. */
     static final long PAGE_WAIT_MS = 250L;
@@ -58,6 +64,23 @@ final class PinInstantPolicy {
     /** The box answered the health check: any HTTP answer below 500 is the box (a 502/503/504 is the gateway saying the
      *  Wizard behind it is not there). -1 / 0: no answer at all. */
     static boolean boxAnswers(int status) { return status >= 200 && status < 500; }
+
+    /** Why the cover left at its time mark: 2 s after the page painted, or the old 10 s mark from the tap. */
+    static String coverWhy(long pageAt, long now) {
+        return pageAt > 0 && now - pageAt < SHOT_MAX_MS ? "page painted " + (now - pageAt) + " ms ago, the app did not say it loaded" : "10 s mark";
+    }
+
+    /** The timing line of one pinned open (uptime ms; 0: that stage did not happen before the cover left). */
+    static String timingLine(String app, boolean picture, long tap, long cover, long page, long shown, long gone, String why) {
+        StringBuilder b = new StringBuilder("open ").append(app == null ? "?" : app).append(": tap 0");
+        b.append(", ").append(picture ? "last screen" : "placeholder").append(' ').append(stage(tap, cover));
+        b.append(", page ").append(stage(tap, page));
+        b.append(", app ready ").append(stage(tap, shown));
+        b.append(", cover left ").append(stage(tap, gone)).append(" (").append(why).append(')');
+        return b.toString();
+    }
+
+    private static String stage(long tap, long at) { return tap > 0 && at >= tap ? (at - tap) + " ms" : "-"; }
 
     /** The name on the placeholder: the pinned icon's label, else the app id made readable ("wizard-search" → "Search"). */
     static String placeholderName(String pinned, String app) {
