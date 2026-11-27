@@ -403,8 +403,11 @@ function activityGroups(groups, { needs, unread, at }, { order = 'newest', now =
     // because of the pin, so pinning never adds to the count or the badge.
     const top = s => !!inbox.top?.(s), pin = s => Number(inbox.pin?.(s)) || 0;
     const base = s => Number(inbox.base ? inbox.base(s) : top(s) ? 0 : pin(s)) || 0;
-    const own = s => inInbox(s) && (base(s) > 0 || inboxWants(s, { needs, unread, quiet: inbox.quiet }));
-    const want = s => top(s) || inInbox(s) && (pin(s) > 0 || inboxWants(s, { needs, unread, quiet: inbox.quiet }));
+    // Smart inbox (issues 1883, 1927): its rule already read the quiet mark (a quiet send is not asked for; information
+    // he asked for or set up is in Inbox even when the box marked the run quiet), so here it is not read twice.
+    const ibQuiet = place?.smart ? () => false : inbox.quiet;
+    const own = s => inInbox(s) && (base(s) > 0 || inboxWants(s, { needs, unread, quiet: ibQuiet }));
+    const want = s => top(s) || inInbox(s) && (pin(s) > 0 || inboxWants(s, { needs, unread, quiet: ibQuiet }));
     const aged = (groups.archive || []).filter(s => !s.archived), live = [...(groups.errors || []), ...(groups.ready || []), ...(groups.yesterday || []), ...(groups.pastWeek || []), ...aged];
     const ready = [], snz = [...(groups.deferred || [])], seen = new Set();
     for (const s of [...(groups.working || []), ...live]) {
