@@ -8,6 +8,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { runWithChatsModel } from './fixtures/chats-list-model.mjs';
 
 const live = readFileSync(new URL('../web/live.js', import.meta.url), 'utf8');
 const slice = (src, a, b) => { const i = src.indexOf(a), j = src.indexOf(b, i); assert.ok(i > 0 && j > i, `${a} is in live.js`); return src.slice(i, j); };
@@ -38,6 +39,17 @@ test('a reply into a hidden worker thread lists it on the send, under the hold',
   const stale = [{ id: 'qa-other', title: 'Mac app' }];
   ctx.addSynthetic(stale, '');
   assert.deepEqual(shown(stale), ['qa-worker', 'qa-other'], 'a stale read never drops it while the send is held');
+  // The thread was only in the list (a hidden row the shell held, never in the detail cache): a later read that leaves it
+  // out still shows it while the send is held (the tester's stale box, issue 1990 round 2).
+  const { ctx: c3 } = harness();
+  const held = { id: 'qa-held', title: 'Dentist booking', hidden: true }, first = [held, { id: 'qa-other' }];
+  c3.PEND.set('qa-held', reply('wos-3')); c3.addSynthetic(first, '');
+  assert.deepEqual(shown(first), ['qa-held', 'qa-other']);
+  const later = [{ id: 'qa-other' }]; c3.addSynthetic(later, '');
+  assert.deepEqual(shown(later), ['qa-held', 'qa-other'], 'not in the detail cache: still listed from the row the hold showed');
+  c3.PEND.delete('qa-held'); const after = [{ id: 'qa-other' }]; c3.addSynthetic(after, '');
+  assert.deepEqual(shown(after), ['qa-other'], 'once the hold ends it is not put back');
+  assert.equal(held.hidden, true);
   // A stale read listing it hidden: shown while held.
   const hiddenRow = { id: 'qa-worker', title: 'Flight options', hidden: true };
   const stale2 = [hiddenRow];
@@ -55,8 +67,9 @@ test('a send that ends without the box listing it hides the thread again (its ta
   assert.deepEqual(shown(list), ['qa-worker']);
   ctx.PEND.delete('qa-worker'); // refused / withdrawn / released
   ctx.addSynthetic(list, '');
-  assert.deepEqual(list.map(s => s.id), [], 'out of the list');
+  assert.deepEqual(shown(list), [], 'no longer shown in the list');
   assert.equal(worker.hidden, true, 'hidden again, as the box has it');
+  ctx.addSynthetic([], ''); assert.equal(worker.hidden, true, 'and a later read does not show it again');
   // A box row the hold had un-hidden stays in its list, hidden again.
   const row = { id: 'qa-worker', hidden: true }, l2 = [row];
   ctx.PEND.set('qa-worker', reply('wos-2')); ctx.addSynthetic(l2, '');
@@ -80,4 +93,26 @@ test('only the agents the box un-hides: main and the private default; never new 
   const row = { id: 'qa-seen', title: 'Seen' }; c2.PEND.set('qa-seen', reply('c'));
   const l = [row]; c2.addSynthetic(l, '');
   assert.deepEqual(l.map(s => s.id), ['qa-seen']); assert.equal(row.sendShown, undefined);
+});
+
+// A voice reply (an orb take) is held in Working from the tap; its outbox item was made when the recording started, before
+// the tap, so the tap's hold never handed over to it and lasted its full minute: an answer that needed him stayed in
+// Working instead of coming back to Inbox. The take's item takes over once it is asked to deliver.
+test('an orb take made before the tap takes over the hold once it is asked to deliver', () => {
+  const live = readFileSync(new URL('../web/live.js', import.meta.url), 'utf8');
+  const now = 1_800_000_000_000, tapAt = now - 1000;
+  const L = { sessions: [{ id: 'qa-voice', title: 'Dentist', status: 'completed', runtime: 'direct' }], agentSessions: {}, ownerOf: () => '' };
+  const c = { L, WORKING: new Set(['submitting', 'queued', 'running', 'stopping']), otherAgent: a => !!a && a !== 'hermes', AGENT_OF: new Map(), DETAIL: new Map(),
+    Date: class extends Date { static now() { return now; } }, WizReach: { restart: () => null } };
+  runWithChatsModel(slice(live, '  const PEND = new Map()', '  const commandId =') + '\nthis.api = { syncPending, TAPS, PEND };', c);
+  c.api.TAPS.set('qa-voice', { sid: 'qa-voice', at: tapAt, until: tapAt + 60e3 });
+  const take = { id: 'wos-take', kind: 'reply', sessionId: 'qa-voice', createdAt: tapAt - 8000, state: 'transcribing', text: '' };
+  const OB = { _items: new Map([['wos-take', take]]) };
+  c.api.syncPending(OB);
+  assert.equal(c.api.PEND.get('qa-voice').key, 'tap:' + tapAt, 'still the tap while the take is only being recorded / transcribed');
+  Object.assign(take, { deliveryRequested: true, state: 'queued', text: 'Book Tuesday' });
+  c.api.syncPending(OB);
+  assert.equal(c.api.TAPS.has('qa-voice'), false, 'the tap hands over');
+  assert.equal(c.api.PEND.get('qa-voice').key, 'wos-take', 'the take holds the thread now, so the box\'s finished run releases it');
+  assert.equal(L.sessions[0].status, 'submitting', 'still in Working while it is sent');
 });
