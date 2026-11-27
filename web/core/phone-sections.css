@@ -1,0 +1,38 @@
+/* Phone sections (wizard-ux#1929, on for everyone since the switch wizard/phone-sections went): the phone's bottom bar
+ * is Home · Chats · (orb) · Messenger · Apps. The orb (#orbWrap) is not touched: its size, ring, halo and states stay as
+ * they are. Its count badge is hidden (wizard-ux#1950, James: "there should be no number above the orb"): the Chats and
+ * Messenger tiles carry the counts, in every skin, with or without phone-nav. The desk dots and the desk + are hidden;
+ * app-sections.js draws the tiles into #secL and #secR on either side of the orb. Colours come from the skin's tokens.
+ * The desktop shell has its own bar. */
+html:root:not([data-shell="desktop"]) #dock[data-sections] { gap: 0; padding-left: max(4px, env(safe-area-inset-left, 0px)); padding-right: max(4px, env(safe-area-inset-right, 0px)); }
+html:root:not([data-shell="desktop"]) #dock[data-sections] > .desk-dots { display: none !important; }
+html:root:not([data-shell="desktop"]) #dock[data-sections] > #orbWrap { margin-left: 6px; margin-right: 6px; }
+html:root:not([data-shell="desktop"]) #dock[data-sections] #orbBadge { display: none !important; }
+/* Even spacing (wizard-ux#1946): the bar is five equal columns, Home · Chats · orb · Messenger · Apps, so every icon sits one
+ * pitch from the next, measured centre to centre, mirrored around the orb. The pitch is a fifth of the bar (at most 84 px):
+ * each side is (bar - orb - 12 px) / 2 wide, so a fifth of the bar is 40% of a side plus a fifth of (orb + 12 px). The
+ * inner tile keeps half a pitch from the orb's centre with its margin; spare room on a wide bar goes to the outer edges. */
+html:root .sec-side { --sec-p: min(84px, calc(40% + (var(--orb, 44px) + 12px) / 5)); flex: 1 1 0; min-width: 0; display: flex; align-items: center; pointer-events: auto; margin-top: 6px; }
+html:root .sec-side.left { justify-content: flex-end; }
+html:root .sec-side.right { justify-content: flex-start; }
+html:root .sec-side.left > .sec-tile:last-child { margin-right: calc(var(--sec-p) / 2 - var(--orb, 44px) / 2 - 6px); }
+html:root .sec-side.right > .sec-tile:first-child { margin-left: calc(var(--sec-p) / 2 - var(--orb, 44px) / 2 - 6px); }
+html:root .sec-tile { position: relative; flex: 0 0 var(--sec-p); width: var(--sec-p); min-width: 44px; min-height: 46px; padding: 4px 2px 2px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; border-radius: 12px;
+  color: var(--wz-text, var(--ink)); transition: background 160ms; -webkit-tap-highlight-color: transparent; }
+/* The others are dim (their icon and label); a badge always shows at full strength. */
+html:root .sec-tile:not(.on) > :is(.dsg, .sec-nm) { opacity: .55; transition: opacity 160ms; }
+html:root .sec-tile .dsg { width: 22px; height: 22px; opacity: 1; }
+html:root .sec-tile .dsg svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+html:root .sec-tile .sec-nm { max-width: 100%; font: 600 .65625rem/1.15 var(--font, system-ui, sans-serif); letter-spacing: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+html:root .sec-tile.on { color: var(--wz-accent, var(--violet-2)); }
+html:root .sec-tile.on .sec-nm { color: var(--wz-text, var(--ink)); }
+html:root .sec-tile:active { background: color-mix(in srgb, var(--wz-text, var(--ink)) 8%, transparent); }
+html:root .sec-tile .sec-bg { position: absolute; top: 0; left: calc(50% + 6px); min-width: 17px; height: 17px; padding: 0 5px; border-radius: 99px;
+  font: 800 .625rem/1.7 system-ui, sans-serif; text-align: center; color: color-mix(in srgb, black 88%, var(--amber)); background: var(--amber); box-shadow: 0 0 0 1.5px var(--wz-panel, color-mix(in srgb, black 90%, transparent)); pointer-events: none; }
+/* Pin an app here: the Apps sheet shows the grid only (no search field while pinning). */
+html:root .launcher.sec-pinning .launcher-foot { display: none; }
+html:root .sec-pin .lapp.sec-pinned .ic { box-shadow: 0 0 0 2px var(--wz-accent, var(--violet-2)); border-radius: 14px; }
+html:root .sec-pin .sec-reset { display: block; margin: 16px auto 4px; padding: 10px 18px; border-radius: 99px; border: 1px solid var(--line-2);
+  color: var(--wz-text, var(--ink)); font: 600 .875rem/1.2 var(--font, system-ui, sans-serif); }
+html:root .sec-pin .sec-reset[disabled] { opacity: .4; }

@@ -1,6 +1,6 @@
 /* Phone bar (wizard-ux issue 1533, on for everyone, was switch wizard/phone-nav): on the phone's own dock in James's
  * five skins (Miguel's and Robert's skins draw their own docks), a 72 px orb (66 px at 360 px or less) whose edge is its one thin ring, no spinning arcs and no
- * orbiting dots; 32 px icons in 44 px buttons; one yellow badge centred on the ring at 45 degrees. The shell hides the
+ * orbiting dots; 32 px icons in 44 px buttons (the orb carries no count: core/phone-sections.css hides it). The shell hides the
  * desks that don't fit (app-desks.js phoneNavFit) and marks iPhone (data-phone-nav-ios), where the bar is 78 px. */
 html:root:is([data-skin="nebula"], [data-skin="grove"], [data-skin="tide"], [data-skin="ember"], [data-skin="signal"]):not([data-shell="desktop"])[data-phone-nav-ios] { --dock-h: 78px; }
 html:root:is([data-skin="nebula"], [data-skin="grove"], [data-skin="tide"], [data-skin="ember"], [data-skin="signal"]):not([data-shell="desktop"])[data-phone-nav-ios] #device:not(.orb-corner) #dock { padding-bottom: calc(28px + var(--safe-b)); }
@@ -13,10 +13,6 @@ html:root:is([data-skin="nebula"], [data-skin="grove"], [data-skin="tide"], [dat
 html:root:is([data-skin="nebula"], [data-skin="grove"], [data-skin="tide"], [data-skin="ember"], [data-skin="signal"]):not([data-shell="desktop"]) #device:not(.orb-corner) #dock .orb-ring::before,
 html:root:is([data-skin="nebula"], [data-skin="grove"], [data-skin="tide"], [data-skin="ember"], [data-skin="signal"]):not([data-shell="desktop"]) #device:not(.orb-corner) #dock .orb-ring::after,
 html:root:is([data-skin="nebula"], [data-skin="grove"], [data-skin="tide"], [data-skin="ember"], [data-skin="signal"]):not([data-shell="desktop"]) #device:not(.orb-corner) #dock .moons { display: none; }
-/* the one badge: its centre on the ring at 45 degrees top right (50% + r cos 45), the number centred in the circle */
-html:root:is([data-skin="nebula"], [data-skin="grove"], [data-skin="tide"], [data-skin="ember"], [data-skin="signal"]):not([data-shell="desktop"]) #device:not(.orb-corner) #dock .orb-badge {
-  top: 14.645%; left: 85.355%; right: auto; translate: -50% -50%; box-sizing: border-box; min-width: 22px; height: 22px; padding: 0 6px;
-  font-size: .8125rem; line-height: 1; font-variant-numeric: tabular-nums; text-align: center; box-shadow: 0 0 0 2.5px var(--bg); }
 /* side icons: 32 px in 44 px buttons that never shrink (the shell hides a desk that doesn't fit instead) */
 html:root:is([data-skin="nebula"], [data-skin="grove"], [data-skin="tide"], [data-skin="ember"], [data-skin="signal"]):not([data-shell="desktop"]) #device:not(.orb-corner) #dock .ddot.sig { flex: 0 0 44px; width: 44px; min-width: 44px; height: 44px; }
 html:root:is([data-skin="nebula"], [data-skin="grove"], [data-skin="tide"], [data-skin="ember"], [data-skin="signal"]):not([data-shell="desktop"]) #device:not(.orb-corner) #dock .ddot.sig .dsg { width: 32px; height: 32px; scale: none; }

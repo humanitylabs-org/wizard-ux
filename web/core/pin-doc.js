@@ -36,7 +36,7 @@
     ['c', 'core/phone-connect.css'], ['c', 'core/own-views.css'], ['c', 'core/update-banner.css'],
     ['c', 'core/links.css'], ['c', 'core/downloads.css'], ['c', 'core/appearance-host.css'],
     ['c', 'core/resources.css'], ['c', 'core/home-surfaces.css'], ['c', 'core/sigils.css'], ['c', 'core/app-route.css'],
-    ['c', 'core/desks.css'], ['c', 'core/tour.css'], ['c', 'core/welcome.css'], ['c', 'core/skins.css'],
+    ['c', 'core/desks.css'], ['c', 'core/phone-sections.css'], ['c', 'core/tour.css'], ['c', 'core/welcome.css'], ['c', 'core/skins.css'],
     ['c', 'core/orb-switcher.css'], ['e', 'core/escape-back.js'], ['x', 'core/skin-host-api.js'], ['x', 'core/skin-host-boot.js'], ['x', 'core/skin-host-host.js'], ['x', 'core/skin-host-layout.js'], ['x', 'core/skin-host-logos.js'], ['x', 'core/skin-host-orbbar.js'], ['x', 'core/skin-host-rows.js'], ['x', 'core/skin-host-shellapi.js'], ['x', 'core/skin-host-summary.js'], ['x', 'core/skin-host-tweaks.js'], ['x', 'core/skin-host.js'],
     ['m', 'core/thread-swipe-back.js'], ['x', 'core/edge-peek.js'], ['x', 'core/desktop-chats.js'], ['c', 'core/skin-frame.css'],
     ['c', 'kit/shell-tokens.css'], ['c', 'kit/controls.css'], ['c', 'core/desktop-chats.css'], ['c', 'core/graceful-restart.css'], ['c', 'core/phone-nav.css'], ['c', 'core/action-cards.css'], ['e', 'core/my-skin.js'], ['x', 'core/experience.js'],

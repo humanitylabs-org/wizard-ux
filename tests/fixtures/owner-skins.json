@@ -2,10 +2,10 @@
   "note": "James's skins (Nebula, Grove, Tide, Ember, Signal) and the base shell look. Update only with James's explicit approval; name it in the commit. James approved the white app icon in the orb and removal of the centre dot, 27 Oct 2026. Miguel (owner) approved Robert's Signal Chats contrast fix (wizard-ux #747) on 30 Oct 2026: Robert's front-end design fixes ship immediately. James approved the phone bar (bigger orb, no orbit dots, wizard-ux #1533) on for everyone in his five skins, 27 Nov 2026 (https://github.com/humanitylabs-org/wizard-ux/issues/1533#issuecomment-7211569483).",
   "hashes": {
     "base": "6b08a59778a37980",
-    "nebula": "4d5630e21207007f",
-    "grove": "722c9489d76dcac1",
-    "tide": "405a7437d2249035",
-    "ember": "3596abaaaa45a8b3",
-    "signal": "16018a758097c59b"
+    "nebula": "412f8e0805990375",
+    "grove": "b4648685fd2b9c54",
+    "tide": "f3eef782666e64f2",
+    "ember": "d4d6f63619f05fa3",
+    "signal": "60ccc37c4cb7e01f"
   }
 }

@@ -1,5 +1,5 @@
-// wizard-ux issue 1929: the phone's four sections (web/app-sections.js, switch wizard/phone-sections) run in node:vm
-// against a fake desk strip. With the switch off nothing is arranged or drawn; with it on the strip keeps Home, Chats,
+// wizard-ux issue 1929: the phone's four sections (web/app-sections.js, on for everyone, no switch) run in node:vm
+// against a fake desk strip. In the desktop shell nothing is arranged or drawn; in the phone shell the strip keeps Home, Chats,
 // the Messenger slot and the Apps desk first in bar order, a link's desk stays beside the desk it came from, only the
 // last two apps stay open, the bar scrub stops only at sections, a swipe steps by section and the flip swaps the apps.
 import test from 'node:test';
@@ -9,7 +9,7 @@ import vm from 'node:vm';
 
 const src = readFileSync(new URL('../web/app-sections.js', import.meta.url), 'utf8');
 
-function harness({ on = true, desks, W, idx = 0, apps = [], pin = '', installed = ['messenger', 'notes', 'music', 'calendar'] } = {}) {
+function harness({ shell = 'phone', tweaks = '', desks, W, idx = 0, apps = [], pin = '', installed = ['messenger', 'notes', 'music', 'calendar'] } = {}) {
   const store = new Map(), local = new Map(pin ? [['wos.phone.slot.v1', pin]] : []), calls = { goDesk: [], closeWin: [], sheet: [], toast: [], synced: 0, saved: 0, prefs: [] };
   if (apps.length) store.set('sections.v1', { apps });
   const listeners = {};
@@ -17,7 +17,7 @@ function harness({ on = true, desks, W, idx = 0, apps = [], pin = '', installed 
   const dock = el(), launcher = el(), touched = [], placed = [], made = [];
   // The orb as the shell has it: every read or write of it is recorded, so a test can see the bar left it alone.
   const orbWrap = new Proxy({}, { get(_, k) { if (k === 'before' || k === 'after') return n => { touched.push(k); placed.push(n); }; touched.push('get:' + String(k)); return undefined; }, set(_, k) { touched.push('set:' + String(k)); return true; } });
-  const root = { attrs: { 'data-tweaks': on ? 'wizard/phone-sections other/x' : 'other/x' }, dataset: { shell: 'phone' }, getAttribute(k) { return this.attrs[k] ?? null; } };
+  const root = { attrs: { 'data-tweaks': tweaks }, dataset: { shell }, getAttribute(k) { return this.attrs[k] ?? null; } };
   const APP = Object.fromEntries(installed.map(id => [id, { id, name: id[0].toUpperCase() + id.slice(1), url: `/${id}/`, kind: 'wizard' }]));
   APP.wizard = { id: 'wizard', name: 'Chats', kind: 'chats' };
   const appVars = { desks, W, idx, sheet: null, dockSwiped: 0 };
@@ -49,8 +49,8 @@ function strip() {
   return { W, desks };
 }
 
-test('switch off: no arranging, no stops, no section swipe; the strip stays as it is', () => {
-  const { W, desks } = strip(), h = harness({ on: false, W, desks, idx: 1 });
+test('desktop shell: no arranging, no stops, no section swipe; the strip stays as it is', () => {
+  const { W, desks } = strip(), h = harness({ shell: 'desktop', W, desks, idx: 1 });
   const before = h.order();
   assert.equal(h.api.sectionsArrange(desks[1]), -1);
   assert.equal(h.api.sectionsStops(), null);
@@ -59,8 +59,9 @@ test('switch off: no arranging, no stops, no section swipe; the strip stays as i
   assert.deepEqual(h.order(), before); assert.equal(h.calls.synced, 0); assert.equal(h.calls.saved, 0);
 });
 
-test('switch on: Home, Chats, Messenger, Apps lead the strip in bar order; the app in front is the Apps section', () => {
+test('phone shell, no switch needed: Home, Chats, Messenger, Apps lead the strip in bar order; the app in front is the Apps section', () => {
   const { W, desks } = strip(), h = harness({ W, desks, idx: 1 });
+  assert.equal(h.P.on(), true, 'on with no tweak at all');
   const at = h.api.sectionsArrange(desks.find(d => d.id === 'dn'));
   assert.deepEqual(h.order(), ['home', 'dc', 'dg', 'dn', 'dm'], 'home, chats, messenger, apps, then the rest');
   assert.equal(at, 3); assert.equal(h.appVars.desks[h.appVars.idx].id, 'dn', 'the desk in front stays in front');

@@ -2,8 +2,8 @@
 // wizard-ux issue 1533 in a real browser: the phone bottom bar (on for everyone; the switch wizard/phone-nav is gone).
 // Phones 393 and 320 px wide (Android) plus an iPhone, Nebula and Grove, six desks, the main agent's Chats count at 3.
 // On: the orb is 72 px (66 px at 360 px or less) with one thin ring, no orbit dots, no spinning arcs, no sparkles;
-// side icons are 32 px in 44 px buttons; the one yellow badge sits on the ring at 45 degrees (its centre on the
-// ring, the number centred) on the main agent's desk only; Home and + always show and nothing in the bar overlaps;
+// the open app's mark in the orb is 36 px (the hat 34 px, lifted 1.5 px); no number on the orb (wizard-ux#1950: the
+// four section tiles of wizard-ux#1929 carry the counts) and nothing in the bar overlaps;
 // on iPhone the bar is 78 px tall and every page above it ends at its top edge; tap, hold and swipe on the orb work.
 // Synthetic transport only (no box is reached). Shots and a report go to QA_OUT.
 const assert = require('node:assert/strict');
@@ -154,13 +154,8 @@ const nap = ms => new Promise(r => setTimeout(r, ms));
             assert.equal(m.dockH, c.ua === IPHONE ? 78 : 66, `${k}: bar height`);
             if (m.tilesBottom !== null) assert.ok(m.tilesBottom <= m.dockTop + 1, `${k}: the page above ends at the bar (${m.tilesBottom} vs ${m.dockTop})`);
           }
-          for (const k of ['fullMid', 'fullEnd']) assert.ok(steps[k].plus, `${k}: + shows`);
-          assert.ok(steps.fullMid.home && steps.fullEnd.home, 'Home shows');
-          const b = steps.chats.badge; assert.ok(b, 'the main agent desk shows its count');
-          assert.equal(b.text, '3'); assert.ok(Math.abs(b.offRing) <= 1, `badge centre on the ring (${b.offRing})`); assert.ok(Math.abs(b.angle - 45) <= 2, `badge at 45 degrees (${b.angle})`);
-          assert.ok(Math.abs(b.textDx) <= 1 && Math.abs(b.textDy) <= 1.5, `number centred (${b.textDx}, ${b.textDy})`);
-          assert.equal(steps.home.badge, null, 'Home: no badge'); if (steps.other) assert.equal(steps.other.badge, null, 'another desk never shows the main agent badge');
-          assert.equal(steps.zero.badge, null, 'a zero count hides the badge');
+          // The four-section bar (wizard-ux#1929) replaced the desk dots and + and took the number off the orb (wizard-ux#1950):
+          for (const k of ['chats', 'home', 'zero', 'fullMid', 'fullEnd', ...(steps.other ? ['other'] : [])]) assert.equal(steps[k].badge, null, `${k}: no number on the orb`);
           assert.ok(steps.chats.orbApp, 'the open app mark shows in the orb');
           assert.equal(steps.chats.orbApp.size, steps.chats.orbApp.hat ? '34x34' : '36x36', 'mark size in the orb');
           assert.equal(steps.home.orbApp?.size, '36x36', 'Home mark 36 px');
