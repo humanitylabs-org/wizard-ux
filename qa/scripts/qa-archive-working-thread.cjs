@@ -71,7 +71,7 @@ async function route(r) {
   const rm = u.pathname.match(/\/wizard\/hermes\/v1\/runs\/([^/]+)$/);
   if (rm) { const id = Object.keys(FIX).find(k => FIX[k].run === rm[1]); return json(200, { run_id: rm[1], session_id: id, status: id ? FIX[id].status : 'completed', ...(id === 'qa_1997_appr' ? { approval: { id: 'qa_appr', command: 'rm -rf build', description: 'Delete the build folder', timestamp: now - 30 } } : {}) }); }
   if (/\/events$/.test(u.pathname)) return r.fulfill({ status: 204, body: '' });
-  if (u.pathname === '/wizard/v1/bootstrap') return json(200, { bootstrap: 1, settings: {}, capabilities: {}, endpoints: {} });
+  if (u.pathname === '/wizard/v1/bootstrap') return json(200, { bootstrap: 1, settings: {}, capabilities: { archive_returns_with_reply: true }, endpoints: {} });
   return json(200, ownerRead(u.pathname));
 }
 

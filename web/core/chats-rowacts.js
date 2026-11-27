@@ -40,7 +40,8 @@ window.WizCore.chatsParts.rowacts = function ({ ACT, actRestore, actUndo, BOOM, 
     // Archive of the open thread: desktop opens the next chat in the drawn list, the phone returns to the chats list
     // (James, 7 Nov 2026); Snooze lands the same way through the same helper.
     // Archive on a thread still working (wizard-ux issue 1997) never stops its run; the reply brings it back to Inbox.
-    const archivingWork = a === 'done' && typeof workingNow === 'function' && !!workingNow(s);
+    // The toast promises that only when this box's Agent Service says it does (bootstrap capability), else plain Archived.
+    const archivingWork = a === 'done' && typeof workingNow === 'function' && !!workingNow(s) && !!window.WizConfig?.has?.('archive_returns_with_reply');
     if (a === 'done' && w?.thread === sid) leaveFinishedThread(w, sid);
     else if (!keepThreadOpen() && a !== 'restore' && w && w.thread === sid) threadBack(w);
     const msg = { done: ['✓', archivingWork ? 'Archived · comes back when it’s done' : followUpActive(s) ? 'Archived · still watching' : 'Archived'], file: ['▤', 'Filing…'], restore: ['↺', 'Restored to Work'] }[a];

@@ -59,8 +59,10 @@ test('approval waits, quiet watcher checks and archived threads keep their own c
 test('Archive on a working thread never stops it and says it comes back when it is done', async () => {
   const T = threadacts();
   for (const kind of kinds) {
-    for (const [s, words] of [[row(kind, { status: 'running', runId: 'r1' }), 'Archived · comes back when it’s done'], [row(kind, { status: 'completed' }), 'Archived']]) {
-      const log = [], window = { WizCore: {} };
+    // The promise needs the Agent Service's bootstrap capability; an older service (no capability) gets plain Archived.
+    for (const [s, words, returns] of [[row(kind, { status: 'running', runId: 'r1' }), 'Archived · comes back when it’s done', true],
+      [row(kind, { status: 'running', runId: 'r1' }), 'Archived', false], [row(kind, { status: 'completed' }), 'Archived', true]]) {
+      const log = [], window = { WizCore: {}, WizConfig: { has: cap => cap === 'archive_returns_with_reply' && returns } };
       vm.runInNewContext(read('core/chats-rowacts.js'), { window });
       const W = { w1: { id: 'w1', thread: s.id } };
       const LIVE = { archive: id => (log.push('archive:' + id), Promise.resolve(true)), stop: () => log.push('stop'), cancel: () => log.push('cancel') };
@@ -69,7 +71,7 @@ test('Archive on a working thread never stops it and says it comes back when it 
         openRowSheet() {}, LIVE, owner: w => w, paintListsNow() {}, rowOf: () => s, threadBack() {}, toast: (i, t) => log.push('toast:' + t), vib() {}, W, workingNow: T.workingNow });
       part.bindLate({ renderChats() {} });
       await part.threadAct('w1', s.id, 'done');
-      assert.deepEqual(log, ['leave', 'toast:' + words, 'archive:' + s.id], `${kind} ${s.status}`);
+      assert.deepEqual(log, ['leave', 'toast:' + words, 'archive:' + s.id], `${kind} ${s.status} capability ${returns}`);
     }
   }
 });
