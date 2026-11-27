@@ -39,8 +39,8 @@ const selectors = { side: '.aad-side', dock: '.aad-vt', chat: '#stage > .wsp[dat
     await context.addInitScript(skin => {
      if (window !== top) return;
      for (const [k,v] of Object.entries({ 'wos.shell':'desktop', 'wos.desktop-view.v1':'ai-apps', 'wos.coached':'true', 'wos.tour.v1':'true', 'wos.welcome.v1':'done', 'wos.skin':skin,
-      // (a sidebar at the end and the dock at the start are read only while Swap sides is on, wizard-ux issue 1526)
-      'wos.skin-tweaks.v1':JSON.stringify({version:1,preset:'none',off:{},mix:{'wizard/swap-sides':true}}) })) localStorage.setItem(k,v);
+      // (a sidebar at the end and the dock at the start are read for everyone: Swap sides, wizard-ux issue 1526)
+      'wos.skin-tweaks.v1':JSON.stringify({version:1,preset:'none',off:{},mix:{}}) })) localStorage.setItem(k,v);
     }, skin);
     await context.route('**/*', async r => {
      const q = r.request(), u = new URL(q.url());
@@ -86,7 +86,6 @@ const selectors = { side: '.aad-side', dock: '.aad-vt', chat: '#stage > .wsp[dat
       for (const k of ['chat','ctop']) assert.ok(Math.abs(b[k].x+b[k].width-end)<=1/64,state+' '+k+' fills to '+end+': '+JSON.stringify(b[k]));
       assert.ok(b.chat.width>=before[state].chat.width,state+' chat never narrower than before');
      }
-     await page.waitForFunction(()=>(document.documentElement.dataset.tweaks||'').split(' ').includes('wizard/swap-sides'));
      for (const patch of [{ratio:'1/3'}, {ratio:'2/3'}, {ratio:'1/2',side:'end'}, {side:'start',dock:{edge:'start'}}]) {
       await page.evaluate(p=>WizCore.panes.set(p),patch); await settle();
       const actual = await boxes();

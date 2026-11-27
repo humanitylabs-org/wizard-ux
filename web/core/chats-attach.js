@@ -290,7 +290,7 @@ window.WizCore.chatsParts.attach = function ({ ch, CHEV_SVG, clip, COG_SVG, draf
         + `<div class="rdet" data-reply-details="${rk}"${open ? '' : ' hidden'}><div class="rtools"><button type="button" class="rcog" data-reply-length aria-label="Short answer length" title="Short answer length">${COG_SVG}</button><button type="button" class="rless" data-reply-summary="${rk}" aria-expanded="true">Show less${CHEV_SVG}</button></div>${body}</div>` : body;
       // A tweak the reply carries (WIZARD_TWEAK_V1): Settings' own switch row, live state (core/settings.js tweakCard).
       const tweak = tn.a?.tweaks?.length ? window.WosSettings?.tweakCard?.(tn.a.tweaks) || '' : '';
-      // An app's proposed action the reply carries (WIZARD_ACTION_V1, wizard-ux issue 1463): core/action-cards.js, '' while off.
+      // An app's proposed action the reply carries (WIZARD_ACTION_V1, wizard-ux issue 1463): core/action-cards.js.
       const action = tn.a?.actions?.length ? window.WosActionCards?.html?.(tn.a.actions) || '' : '';
       // Tap-to-pick replies (WIZARD_CHOICES_V1, wizard-agent-service issue 650, switch wizard/first-chat-goals): only under
       // the newest finished answer, so they go once the owner answers; a tap sends that text (core/chats-bind.js).

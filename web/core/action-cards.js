@@ -1,4 +1,4 @@
-/* Wizard UX core: inline action cards in chat (wizard-ux issue 1463, off-by-default switch wizard/action-cards).
+/* Wizard UX core: inline action cards in chat (wizard-ux issue 1463, on for everyone; switch wizard/action-cards removed).
  *
  * An app's agent tool prepares an action (a Messenger draft, a mail reply, a calendar event) and keeps it in the app,
  * pending. The agent puts one marker line in its reply:
@@ -17,14 +17,13 @@
  * anywhere else. A message is history: the card shows the item's CURRENT state (read when it paints, at most every
  * 15 s, and again when the page shows), so an item already sent from the app or another device reads as done.
  *
- * The marker is always hidden from the text (core/chat-kit.js actionIds/cleanText), like every chat marker; with the
- * switch off no card is drawn and nothing is read or sent. */
+ * The marker is always hidden from the text (core/chat-kit.js actionIds/cleanText), like every chat marker. Look:
+ * core/action-cards.css. */
 'use strict';
 (() => {
-  const SWITCH = 'wizard/action-cards', SCHEMA = 'wizard.app-actions/1', FRESH_MS = 15000;
+  const SCHEMA = 'wizard.app-actions/1', FRESH_MS = 15000;
   const KEY = /^([a-z0-9][a-z0-9-]{0,62})\/([A-Za-z0-9][A-Za-z0-9._-]{0,127})$/, FIELD = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
   const DONE = { approved: 'Approved', rejected: 'Rejected', failed: 'Didn’t go through', expired: 'No longer waiting' };
-  const on = () => { try { return String(document.documentElement.dataset.tweaks || '').split(/\s+/).includes(SWITCH); } catch (_) { return false; } };
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
   const str = (v, n) => typeof v === 'string' ? v.trim().slice(0, n) : '';
   const cards = new Map(); // key -> { doc, at, read, busy, err, gone, fail, edit, draft }
@@ -111,15 +110,14 @@
       + `${c.err ? `<small class="ch-act-err" role="alert">${esc(c.err)}</small>` : ''}${buttons(c, a, d)}`;
   }
   const keysOf = list => [...new Set((Array.isArray(list) ? list : String(list || '').split(' ')).filter(k => KEY.test(String(k))))].slice(0, 4);
-  // The thread's markup for one reply's cards (core/chats-attach.js turnHtml), or '' with the switch off.
+  // The thread's markup for one reply's cards (core/chats-attach.js turnHtml).
   function html(list) {
-    if (!on()) return '';
     return keysOf(list).map(key => `<div class="ch-act" data-action-card="${esc(key)}" data-morph-key="act:${esc(key)}" role="group" aria-label="Proposed action">${rows(key)}</div>`).join('');
   }
   function paint() {
     let nodes = []; try { nodes = [...(document.querySelectorAll?.('[data-action-card]') || [])]; } catch (_) {}
     for (const n of nodes) {
-      const key = n.dataset.actionCard, next = on() ? rows(key) : '';
+      const key = n.dataset.actionCard, next = rows(key);
       if (n.__wosAct === next) continue;
       const f = n.contains(document.activeElement) ? document.activeElement : null;
       const field = f?.dataset?.actField, act = f?.dataset?.act, sel = field && typeof f.selectionStart === 'number' ? [f.selectionStart, f.selectionEnd] : null;
@@ -131,7 +129,7 @@
 
   async function decide(key, decision, toast) {
     const c = cardOf(key), m = KEY.exec(key), a = m && appOf(m[1]);
-    if (!a || !c.doc || c.doc.state !== 'pending' || c.busy || !on()) return;
+    if (!a || !c.doc || c.doc.state !== 'pending' || c.busy) return;
     const fields = {};
     if (decision === 'approve' && c.edit) for (const f of c.doc.fields) if (f.editable && Object.hasOwn(c.draft, f.id)) fields[f.id] = String(c.draft[f.id]).slice(0, 4000);
     c.busy = decision; c.err = ''; paint();
@@ -162,7 +160,6 @@
     if (!card || !KEY.test(String(key)) || !act || btn.disabled) return false;
     const c = cardOf(key);
     if (act === 'open') openIn(key, toast);
-    else if (!on()) paint();
     else if (act === 'approve' || act === 'reject') void decide(key, act, toast);
     else if (act === 'edit' && c.doc?.state === 'pending') {
       c.edit = true; c.err = ''; c.draft = Object.fromEntries(c.doc.fields.filter(f => f.editable).map(f => [f.id, f.value])); paint();
@@ -175,7 +172,7 @@
       const f = e.target?.closest?.('[data-action-card] [data-act-field]'); if (!f) return;
       const c = cardOf(f.closest('[data-action-card]').dataset.actionCard); if (c.edit) c.draft[f.dataset.actField] = String(f.value).slice(0, 4000);
     });
-    document.addEventListener('visibilitychange', () => { if (document.visibilityState !== 'visible' || !on()) return; for (const n of document.querySelectorAll('[data-action-card]')) void read(n.dataset.actionCard, true); });
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState !== 'visible') return; for (const n of document.querySelectorAll('[data-action-card]')) void read(n.dataset.actionCard, true); });
   } catch (_) {}
   /* ---- Tap-to-answer buttons inside a reply (wizard-ux issue 1889, off-by-default switch wizard/reply-buttons) ----
    * The agent writes [WIZARD_BUTTONS_V1]{"group","buttons":[{"id","label"}]} lines (core/chat-kit.js buttonGroups);
@@ -271,6 +268,6 @@
   }
   // Leaving the page sends what is waiting at once (the outbox keeps it if the network is gone).
   try { window.addEventListener('pagehide', () => { for (const sid of [...rbBatch.keys()]) void rbFlush(sid); }); } catch (_) {}
-  window.WosActionCards = Object.freeze({ SWITCH, SCHEMA, on, html, paint, tap, keys: keysOf, normalize: norm, _cards: cards,
+  window.WosActionCards = Object.freeze({ SCHEMA, html, paint, tap, keys: keysOf, normalize: norm, _cards: cards,
     REPLY_SWITCH: RB_SWITCH, replyOn: rbOn, replyHtml: rbHtml, replyPicks: rbPicks, replyTap: rbTap, replyFlush: rbFlush, replyMessage: rbMessage, tapLinesHtml: rbLinesHtml });
 })();

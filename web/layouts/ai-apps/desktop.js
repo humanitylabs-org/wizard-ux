@@ -220,7 +220,7 @@ export default function desktop(api) {
   const LKINDS = [...KINDS, 'recent', 'saved'];
   let actOlder = false;
   /* The app panel on the left and placing the panes; layouts/ai-apps/desktop-panes.js. */
-  const { desks, el, flipSides, icon, oneSplit, paneModel, placePanes, swapOn, swapped, bindLate: panesLate } = panesPart({ aadVars, api, COLS, doc, flip, one, ONE, panes, paneVars, RAIL, root });
+  const { desks, el, flipSides, icon, oneSplit, paneModel, placePanes, swapped, bindLate: panesLate } = panesPart({ aadVars, api, COLS, doc, flip, one, ONE, panes, paneVars, RAIL, root });
   let draftWant = false;   // round 21: the new chat in front holds an app's Reply: it docks as a chat (left), the app stays right
   /* Round 11 (Miguel: opening and closing panels must be smooth): a change of layout snaps at once and its pieces glide
    * from where they were with a short transform (FLIP: translate only, never width / left), 220 ms. */
@@ -266,8 +266,8 @@ export default function desktop(api) {
   let sessions = null, badgeMap = api.apps.badges(m => { badgeMap = m; paintBadges(); });
   /* A row's tracker dots and the sidebar's header; layouts/ai-apps/desktop-sidebar.js. */
   const { agentName, appName, badgeText, cancelBtn, field, findBtn, foot, fuel, head, khMarks, lit, newBtn, rail, readSessions, scroll, searchBox, setBtn, side, titleOf, togBtn, ttAgent, ttDots, wsBtn, wsName } = sidebarPart({ aadVars, actOn, api, desks, el, icon, LKINDS });
-  /* Swap sides (wizard-ux issue 1526, switch wizard/swap-sides): a button in the chats sidebar's header, before ◫, only
-   * while the switch is on (paintSwap) */
+  /* Swap sides (wizard-ux issue 1526): a button in the chats sidebar's header, before ◫, except in the narrower one-app
+   * window (paintSwap) */
   const sSwap = el('button', 'aad-ib aad-sswap', { type: 'button', 'aria-keyshortcuts': 'Alt+Shift+L' }); sSwap.append(icon('swap')); sSwap.hidden = true;
   /* The rail's Wizard switcher, the agent choices, the Channels pane and another Chats look; layouts/ai-apps/desktop-sidetabs.js. */
   const { cBack, chanTitle, cTop, cX, FEED, feedBox, feedOn, modeBars, oneBack, paintAgents, paintChan, paintView, pIcon, pName, pTools, pTop, pW, pX, rFind, rList, rNew, rSet, rTog, rWs, shade, sName, sTop, top, tt, windowMode, bindLate: sidetabsLate } = sidetabsPart({ aadVars, actOn, api, el, flip, foot, head, icon, one, oneSplit, panes, rail, readSessions, scroll, side });
@@ -657,7 +657,7 @@ export default function desktop(api) {
   /* Stepping through Ready; layouts/ai-apps/desktop-ready.js. */
   const { KEY_LIKE, readyIds, stepReady, bindLate: readyLate } = readyPart({ aadVars, actOn, api, curChat, groupBy, railNow, readSessions, readyOrder, root, scroll, showToast });
   /* Now playing marks, the keycaps while left Option is held and the app keys; layouts/ai-apps/desktop-keys.js. */
-  const { focusOn, here, markMedia, offAppKeys, offFrameKeys, onMainChats, onScreen, paintTop, releaseSettings, soon } = keysPart({ aadVars, allOpenNow, anim, api, appKeyOf, applySizes, appName, behindThread, chanTitle, chatAction, chatParts, chatWindows, closeAll, closeChat, closeDesk, closeTidy, closeWs, cTop, curChat, cX, deskOfNode, desks, doc, DRAFT, el, FEED, feedBack, feedGone, feedOn, feedTitle, findBtn, focusIn, focusLeave, focusOut, FRAME_KEYS, goApp, grip, hBack, hidePanel, hMid, homeComposer, host, isAppKey, KEY_LIKE, khMarks, listBack, macHoles, mainChats, MODE_KEYS, MODE_LABELS, modeBars, narrow, newBtn, NOTE, noteOn, noteTitle, one, oneBack, oneSplit, openAll, openTidy, openWs, orbBtn, paintAgents, paintBack, paintHome, paintList, paintOneChats, paintOrbIdentity, paintRail, paintSplit, paintVt, paintWs, paneFrame, panes, pIcon, plus, pW, pX, railMode, readSessions, readyIds, readyOrder, retileSoon, rFind, rList, rNew, root, rSet, rTog, setBtn, setSearch, setSize, settings, setWide, side, sizes, stepReady, swapOn, swapped, swapSides, syncOrb, syncSide, talkFromOrb, tidyBtn, titleOf, togBtn, toggleSide, toggleTabs, top, tt, typing, unpeek, vtAll, vtList, vtTog, windowMode, wsBtn, wsName });
+  const { focusOn, here, markMedia, offAppKeys, offFrameKeys, onMainChats, onScreen, paintTop, releaseSettings, soon } = keysPart({ aadVars, allOpenNow, anim, api, appKeyOf, applySizes, appName, behindThread, chanTitle, chatAction, chatParts, chatWindows, closeAll, closeChat, closeDesk, closeTidy, closeWs, cTop, curChat, cX, deskOfNode, desks, doc, DRAFT, el, FEED, feedBack, feedGone, feedOn, feedTitle, findBtn, focusIn, focusLeave, focusOut, FRAME_KEYS, goApp, grip, hBack, hidePanel, hMid, homeComposer, host, isAppKey, KEY_LIKE, khMarks, listBack, macHoles, mainChats, MODE_KEYS, MODE_LABELS, modeBars, narrow, newBtn, NOTE, noteOn, noteTitle, one, oneBack, oneSplit, openAll, openTidy, openWs, orbBtn, paintAgents, paintBack, paintHome, paintList, paintOneChats, paintOrbIdentity, paintRail, paintSplit, paintVt, paintWs, paneFrame, panes, pIcon, plus, pW, pX, railMode, readSessions, readyIds, readyOrder, retileSoon, rFind, rList, rNew, root, rSet, rTog, setBtn, setSearch, setSize, settings, setWide, side, sizes, stepReady, swapped, swapSides, syncOrb, syncSide, talkFromOrb, tidyBtn, titleOf, togBtn, toggleSide, toggleTabs, top, tt, typing, unpeek, vtAll, vtList, vtTog, windowMode, wsBtn, wsName });
   sidetabsLate({ paintTop });
   sidepaintLate({ here });
   tabsLate({ here, markMedia, paintTop });
@@ -670,10 +670,10 @@ export default function desktop(api) {
   const offHost = host?.onChange(() => { paintTop(); watchPaneWins(); });
   let swapWas = swapped();
   const offPanes = panes.subscribe(() => { paintTop(); applySizes(); retileSoon(); paintSwap(); });
-  /* Swap sides (wizard-ux issue 1526): the button, ⌥⇧L and the switch turned on or off */
+  /* Swap sides (wizard-ux issue 1526): the button and ⌥⇧L */
   function swapSides() { flipSides([side, vtList.parentNode, top, orbBox, ...shownDesks()]); }
   function paintSwap() {
-    const show = swapOn() && !one(), on = swapped(), t = on ? 'Move the chats to the left (⌥⇧L)' : 'Move the chats to the right (⌥⇧L)';
+    const show = !one(), on = swapped(), t = on ? 'Move the chats to the left (⌥⇧L)' : 'Move the chats to the right (⌥⇧L)';
     if (sSwap.hidden !== !show) sSwap.hidden = !show;
     if (show && sSwap.parentNode !== head) head.insertBefore(sSwap, togBtn); else if (!show && sSwap.parentNode) sSwap.remove();
     if (sSwap.title !== t) { sSwap.title = t; sSwap.setAttribute('aria-label', t); }
