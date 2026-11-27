@@ -54,7 +54,7 @@ Back: `WizEscapeBack`, `WosBack`; `WizChatsHost.registerBack`/back.push share re
 | Pane placement | `WizCore.panes` (`pane-layout.js`): Classic split/cols; tiled/centre/pair/full geometry/focus/ratios/dock (<1100px bar); AI keys/Back; local |
 | Desktop lifecycle | `WizDesktop.host` (`core/desktop-host.js`): snapshots, retained frames/readiness/tools, open/focus/close, onChange, panes; chats(id), settings, placements() |
 | Chat time | `WizCore.ago` (`core.js`): hours <24h, then owner day |
-| Chat state | `WizLive`: `cardAt`, rename/read fence (a read always sticks: `seenRecord`/`hasNew`; open threads auto-read once per change, wizard-os#1020), `chanStore`/`chanDaily`/`agentInbox`/`peekSession`; `WizCore.chats` dispose |
+| Chat state | `WizLive`: `cardAt`, rename/read fence, `chanStore`/`chanDaily`/`agentInbox`/`peekSession`; `WizCore.chats` dispose |
 | Group by day | `WizCore.chats`/`WizLive.groups`: `--wos-chats-group-switch` hook; Pins/compact independent |
 | Chats/Ready | `WizChatsHost`/`WizAppExtensions` (`chats-view.js`): surface/(views.)mount, placement, `replyRecorder`, draft admission; host `keepNewOpen(id)` keeps docked New open on send (`WosSkinHost.routeShows`); pills: `workspaceNav.chatsCount/refreshChats`; subgroups: `WizChatsListModel.unreadCount`; counts: `.unreadThreads` |
 | Bound-view handle (3 intro glows) | `WosSkinHost` built-in (`edge-peek.js`), host storage |
