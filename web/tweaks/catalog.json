@@ -68,6 +68,7 @@
     "wizard/private-routing",
     "wizard/result-reader",
     "wizard/first-chat-goals",
+    "wizard/catch-me-up",
     "wizard/private-ai-nudge",
     "wizard/pin-instant-open",
     "wizard/get-set-up",
