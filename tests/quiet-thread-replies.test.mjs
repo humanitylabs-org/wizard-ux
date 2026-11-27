@@ -9,6 +9,7 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { between } from './fixtures/source-slice.mjs';
 import { withLiveParts } from './fixtures/live-parts.mjs';
+import { modelContext } from './fixtures/chats-list-model.mjs';
 
 const live = withLiveParts(readFileSync(new URL('../web/live.js', import.meta.url), 'utf8'));
 const clone = v => JSON.parse(JSON.stringify(v));
@@ -90,36 +91,37 @@ test('issue 1808: the Sent log reader keeps a reply row (route thread, answer, q
   assert.deepEqual(clone(s.rows[0]), { id: 'sent_' + 'a'.repeat(24), at: 5, source: 'reply', text: 'Sent to Miguel, done', route: 'thread', decidedBy: 'owner_words', rules: ['statement'], state: 'done', thread: 'wizard_clips', record: null, tags: [], urgent: false, wouldRoute: null, corrected: null, error: '', wantsReply: false, answer: 'Clip edit is with Miguel. Nothing needed from you.', quiet: true });
 });
 
-// The real Sent part: Reply rows say they stayed in their chat, offer no routing correction, and a tap opens the thread.
-function part(rows) {
+// The real Sent part (one row per thread since wizard-ux issue 1880): a reply's thread is a Sent row with the thread's
+// title and the agent's last message; one not loaded yet says where his reply went; no routing correction for a reply;
+// a tap opens the thread.
+function part(rows, threads = []) {
   const opened = [], CH = { main: {} }, W = { main: { id: 'main', thread: null } }, state = { ok: true, gone: false, rows, next: null };
   const ctx = { document: { documentElement: { dataset: { tweaks: ON } } }, window: { WizCore: {}, addEventListener() {} }, localStorage: { setItem() {} }, console, fetch: async () => ({ ok: false }) };
   vm.createContext(ctx);
+  modelContext(ctx);
   vm.runInContext(readFileSync(new URL('../web/core/chats-sent.js', import.meta.url), 'utf8'), ctx);
-  vm.runInContext(readFileSync(new URL('../web/core/chats-inboxrows.js', import.meta.url), 'utf8'), ctx);
-  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-  const LIVE = { sentLog: { state: () => state, fresh() {}, read: async () => state }, onChange() {} };
-  // Sent draws the new Inbox's own rows (wizard-ux issue 1814, on for everyone).
-  const ib = ctx.window.WizCore.chatsParts.inboxrows({ AGS: () => ({ sigil: () => '', defaultId: () => 'hermes' }), agentName: id => id || 'Wizard', agentRec: id => ({ id }), chanFace: n => ({ emoji: '💬', label: n, own: false }), esc, LIVE });
-  const p = ctx.window.WizCore.chatsParts.sent({ ibMark: ib.ibMark, ibRow: ib.ibRow, ibTagFace: ib.ibTagFace, ago: () => '4m', ch: id => CH[id], CH, CHAN_VIEW_KEY: 'k', chanElsewhere: () => false, chanSide: () => false, chatVars: { chanView: 'activity' }, clip: (s, n) => String(s).slice(0, n), elOf: () => ({}), esc, H: { win: id => W[id] },
-    LIVE, openChat: (wid, t) => opened.push([wid, t]), renderChatList() {}, rerenderList() {}, toast() {}, W, winAgent: () => '' });
+  const esc = s => String(s).replace(/[&<>\"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const LIVE = { sentLog: { state: () => state, fresh() {}, read: async () => state }, session: id => threads.find(t => t.id === id) || null, cardAt: () => '', onChange() {} };
+  // Stand-ins for Inbox's own rows (core/chats-inboxrows.js): what the row says, and what it opens.
+  const ibThreadRow = t => `<div class="row" data-chopen="${esc(t.id)}"><b>${esc(t.title)}</b> <i>${esc(t.preview || '')}</i></div>`;
+  const ibRow = o => `<div class="row" ${o.open}><b>${o.title}</b> <i>${o.line}</i></div>`;
+  const p = ctx.window.WizCore.chatsParts.sent({ ago: () => '4m', ch: id => CH[id], CH, CHAN_VIEW_KEY: 'k', chanElsewhere: () => false, chanSide: () => false, chatVars: { chanView: 'activity' }, clip: (s, n) => String(s).slice(0, n), elOf: () => ({}), esc, H: { win: id => W[id] },
+    ibMark: () => '', ibRow, ibTagFace: () => ({ av: '', from: '' }), ibThreadRow, LIVE, openChat: (wid, t) => opened.push([wid, t]), renderChatList() {}, rerenderList() {}, toast() {}, W, winAgent: () => '' });
   CH.main.sent = true;
   return { p, W, opened };
 }
 const view = (c, extra) => ({ id: 'sent_' + c.repeat(24), at: 1000, source: 'reply', text: 'Words ' + c, route: 'thread', decidedBy: 'owner_words', rules: [], state: 'done', thread: 'wizard_' + c, record: null, tags: [], urgent: false, wouldRoute: null, corrected: null, error: '', wantsReply: false, answer: '', quiet: false, ...extra });
 
-test('issue 1808: Sent shows each reply as staying in its chat (Sent rows, issue 1814), and a tap opens its thread', async () => {
+test('issue 1808: a reply\'s thread is one Sent row with the agent\'s answer, a reply has no routing correction, and a tap opens its thread', async () => {
   const rows = [view('a', { text: 'Sent to Miguel, done', quiet: true, answer: 'Clip edit is with Miguel. Nothing needed from you.' }), view('b', { text: 'is the mac app ready?', wantsReply: true, answer: 'The Mac app build is still running.' }),
     view('c', { text: 'ok, approve it', state: 'needs_you', answer: 'Phone update is ready. Reply ship to send it' })];
-  const f = part(rows), body = f.p.sentBody(f.W.main);
-  const text = body.split('<div class="ch-row-wrap ch-ib-wrap ch-sr-wrap"').slice(1).map(x => x.replace(/^[^>]*>/, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim());
-  assert.equal(text.length, 3);
-  assert.match(text[0], /Sent to Miguel, done Noted in its chat · Done$/, text[0]);
-  assert.match(text[1], /is the mac app ready\? Replied in its chat · Done$/, text[1]);
-  assert.match(text[2], /ok, approve it Replied in its chat · Needs you · in Inbox$/, text[2]);
+  const threads = [{ id: 'wizard_a', title: 'Clip edit', preview: 'Clip edit is with Miguel. Nothing needed from you.' }];
+  const f = part(rows, threads), body = f.p.sentBody(f.W.main);
+  const text = [...body.matchAll(/<div class="row"[^>]*>([\s\S]*?)<\/div>/g)].map(m => m[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim());
+  assert.deepEqual(text, ['Clip edit Clip edit is with Miguel. Nothing needed from you.', 'is the mac app ready? Replied in its chat · Done', 'ok, approve it Replied in its chat · Needs you'], 'the loaded thread by its title and last message; the others by his words and where they went');
   assert.doesNotMatch(body, /data-chsentfix|data-rssentfix/, 'a reply stays in its thread: no routing correction');
   const click = attrs => f.p.sentClick({ target: { closest: sel => { const k = /\[data-([a-z]+)\]/.exec(sel)?.[1]; return k && k in attrs ? { dataset: { [k]: attrs[k] } } : null; } } }, 'main', f.W.main);
-  assert.equal(click({ chsent: rows[0].id }), true);
+  assert.equal(click({ chsent: rows[1].id }), true);
   await new Promise(r => setTimeout(r, 0));
-  assert.deepEqual(f.opened, [['main', 'wizard_a']], 'the tap opens the thread he replied in');
+  assert.deepEqual(f.opened, [['main', 'wizard_b']], 'the tap opens the thread he replied in');
 });

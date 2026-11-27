@@ -1,6 +1,7 @@
 // Inbox or Sent (wizard-ux issue 1829): with Inbox until archived (or Inbox rows) on, every thread is in exactly one
 // place. Runs the real list model (placeOf, activityGroups, sentShown), the real Chats ready part (core/chats-ready.js:
-// inboxPlace, inboxIds, the Inbox count) and the real Sent part (core/chats-sent.js) over one fake box: a mixed set of
+// inboxPlace, inboxIds, the Inbox count) and the real Sent part (core/chats-sent.js, one row per thread since wizard-ux
+// issue 1880) over one fake box: a mixed set of
 // threads with the box's Sent rows. Browser proof: tests/qa-chats-inbox-sent-place.cjs (phone, Classic, AI apps sidebar).
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -45,7 +46,7 @@ function shell({ tweaks = '', threads = THREADS(), sent = SENT() } = {}) {
   ctx.window = ctx; ctx.globalThis = ctx; ctx.addEventListener = () => {}; ctx.WizCore = { chatsParts: {} };
   modelContext(ctx);
   const st = { ok: true, gone: false, rows: sent, next: null };
-  const LIVE = { ok: true, sessionsFor: () => threads, workGroups: rows => groups(rows || threads), quietReply: quiet, onChange: fn => listeners.push(fn),
+  const LIVE = { ok: true, sessionsFor: () => threads, session: id => threads.find(t => t.id === id) || null, cardAt: t => new Date(t.at).toISOString(), workGroups: rows => groups(rows || threads), quietReply: quiet, onChange: fn => listeners.push(fn),
     sentLog: { state: () => st, fresh() {}, read: async () => st } };
   vm.runInContext(read('web/core/chats-ready.js'), ctx);
   vm.runInContext(read('web/core/chats-sent.js'), ctx);
@@ -53,13 +54,13 @@ function shell({ tweaks = '', threads = THREADS(), sent = SENT() } = {}) {
   ctx.WizCore.chatsParts.ready({ actNeeds: needs, actUnread: unread, CH: {}, chanAt: s => s.at, elOf: () => null, H: { root: () => ({ querySelectorAll: () => [] }) }, LIST_PLACE_KEY: 'k', LIST_PLACE_TTL: 1, listPlace: () => null, listSig: () => '', LIVE, W: {} });
   const W = { main: { id: 'main', thread: null } }, CH = { main: { sent: true } };
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-  // Sent draws the new Inbox's own rows (wizard-ux issue 1814, on for everyone).
-  const ib = ctx.WizCore.chatsParts.inboxrows({ AGS: () => ({ sigil: () => '', defaultId: () => 'hermes' }), agentName: id => id || 'Wizard', agentRec: id => ({ id }), chanFace: n => ({ emoji: '💬', label: n, own: false }), esc, LIVE });
-  const p = ctx.WizCore.chatsParts.sent({ ibMark: ib.ibMark, ibRow: ib.ibRow, ibTagFace: ib.ibTagFace, ago: () => '3m', ch: id => CH[id], CH, CHAN_VIEW_KEY: 'k', chanElsewhere: () => false, chanSide: () => false, chatVars: { chanView: 'activity' }, clip: (s, n) => String(s).slice(0, n), elOf: () => ({}), esc, H: { win: id => W[id] },
-    LIVE, openChat() {}, renderChatList() {}, rerenderList() {}, toast() {}, W, winAgent: () => '' });
+  const p = ctx.WizCore.chatsParts.sent({ ago: () => '3m', ch: id => CH[id], CH, CHAN_VIEW_KEY: 'k', chanElsewhere: () => false, chanSide: () => false, chatVars: { chanView: 'activity' }, clip: (s, n) => String(s).slice(0, n), elOf: () => ({}), esc, H: { win: id => W[id] },
+    LIVE, openChat() {}, renderChatList() {}, rerenderList() {}, toast() {}, W, winAgent: () => '',
+    // Sent's rows are Inbox's own rows (wizard-ux issue 1880); here a stand-in that keeps the thread each row opens.
+    ibThreadRow: (t, _pin, sent) => `<div data-chopen="${esc(t.id)}" data-chsentthread="${esc(sent?.key || '')}"></div>`, ibRow: o => `<div ${o.open}></div>`, ibMark: () => '', ibTagFace: () => ({ av: '', from: '' }) });
   // Inbox: the Inbox list's threads (the count the badges show); Sent: the threads the drawn Sent rows open.
   const inbox = () => J((ctx.WizCore.inboxIds(LIVE) ? [...ctx.WizCore.inboxIds(LIVE)] : []).sort());
-  const sentList = () => [...new Set([...p.sentBody(W.main).matchAll(/data-chsent="([^"]+)"/g)].map(m => st.rows.find(r => r.id === m[1])?.thread))].sort();
+  const sentList = () => [...new Set([...p.sentBody(W.main).matchAll(/data-chsentthread="([^"]+)"/g)].map(m => m[1]))].sort();
   return { ctx, LIVE, st, threads, inbox, sentList, p, W, listeners };
 }
 

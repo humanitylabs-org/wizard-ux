@@ -1,8 +1,7 @@
 'use strict';
 // Smart inbox (wizard-ux issue 1883, switch wizard/smart-inbox, off by default) in a real browser. Disposable synthetic
 // transport only. Phone 412x915, Classic desktop and the AI apps desktop's Chats sidebar (1440x960), in Nebula and Light
-// (obsidian-light), with James's pilot switch (wizard/sent-threads; QA_ROWS=off
-// keeps none; Inbox until archived is on for everyone).
+// (obsidian-light). Sent as threads and Inbox until archived are on for everyone (QA_ROWS changes nothing now).
 // A copy of a real list: 30 threads, a mix of needs you / check / done / fyi / failed / approval / running, started by
 // the owner (a Sent row) or by an agent (watches, schedules, helper results, threads older than the Sent log: no Sent
 // row). Several of the agent-started ones are unread. With the switch on, Inbox holds only the blocking needs you, the
@@ -87,7 +86,7 @@ const report = { origin, web, on: ON, rows: ROWS, cases: [] };
       const context = await browser.newContext({ viewport: phone ? { width: 412, height: 915 } : { width: 1440, height: 960 }, isMobile: phone, hasTouch: phone, serviceWorkers: 'block', ...(phone ? { userAgent: 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Mobile Safari/537.36' } : {}) });
       try {
         await context.routeWebSocket('**/*', w => w.close());
-        const mix = { 'wizard/desktop-chats': true, ...(ROWS ? { 'wizard/sent-threads': true } : {}), ...(ON ? { 'wizard/smart-inbox': true } : {}) };
+        const mix = { 'wizard/desktop-chats': true, ...(ON ? { 'wizard/smart-inbox': true } : {}) };
         await context.addInitScript(({ shell, skin, mix }) => {
           if (window !== top) return;
           if (sessionStorage.getItem('qaBoot')) return; sessionStorage.setItem('qaBoot', '1');

@@ -4,11 +4,10 @@
 window.WizCore = window.WizCore || {};
 window.WizCore.chatsParts = window.WizCore.chatsParts || {};
 window.WizCore.chatsParts.sent = function ({ ago, ch, CH, CHAN_VIEW_KEY, chanElsewhere, chanSide, chatVars, clip, closeRowSheet, elOf, esc, H, ibMark, ibRow, ibTagFace, ibThreadRow, LIVE, openChat, renderChatList, rerenderList, toast, W, winAgent }) {
-  /* The main agent's Chats list gets three tabs at the bottom: Inbox (today's Activity list, until wizard-ux issue 1779
-   * gives it its own rows), Tags (today's Channels view, until wizard-agent-service issue 608) and Sent. Sent lists every
-   * capture the owner sent, newest first (LIVE.sentLog: GET /wizard/v1/sent), as Inbox rows under Working and
-   * Processed (Sent rows below). A tap opens the thread it ran in (a hidden worker thread opens by id, as from the
-   * Running view). Back from Sent returns to Inbox (channelBack). */
+  /* The main agent's Chats list gets three tabs at the bottom: Inbox, Tags (the Channels view) and Sent. Sent lists the
+   * threads the owner sent into, one row per thread (Sent as threads below), from the box's Sent log (LIVE.sentLog:
+   * GET /wizard/v1/sent). A tap opens the thread; the row's actions sheet holds his sends and the two routing
+   * corrections (POST /wizard/v1/sent/<id>/correct). Back from Sent returns to Inbox (channelBack). */
   // The tabs: the main agent's own Chats list (phone, Classic desktop and the AI apps sidebar pane, its id::side window
   // whose channels open elsewhere: wizard-ux issue 1807), never a routed agent's list or the main column's feed window.
   function sentTabsOn(w) { return !!w && !winAgent(w) && !!LIVE.sentLog && !(typeof chanSide === 'function' && chanSide(w) && !(typeof chanElsewhere === 'function' && chanElsewhere(w))); }
@@ -24,34 +23,14 @@ window.WizCore.chatsParts.sent = function ({ ago, ch, CH, CHAN_VIEW_KEY, chanEls
     return `<nav class="ch-tabbar" role="tablist" aria-label="Chats" data-morph-key="tabbar">${tab('inbox', 'Inbox')}${tab('tags', 'Tags')}${tab('sent', 'Sent')}</nav>`;
   }
   const SENT_BUSY = new Set(); // rows with a correction on its way
-  /* Inbox or Sent (wizard-ux issue 1829; James, 25 Nov 2026: "Things should be in one or the other"): while Inbox keeps
-   * threads (Inbox until archived, on for everyone, or Inbox rows), a send whose thread is in Inbox (it needs him, or he asked and it
-   * answered) is not listed here; the Inbox list decides (list model placeOf), so the two never both show a thread. */
-  function sentRows(st) {
-    const ids = window.WizCore?.inboxIds?.(LIVE), M = window.WizChatsListModel;
-    return ids && M?.sentShown ? M.sentShown(st.rows, ids) : st.rows;
-  }
-  /* Sent rows (wizard-ux issue 1814, on for everyone; James, 25 Nov 2026: "Why is this UX so ugly, vs having a nice UX
-   * like the rest of the app", then "let's give the same design to sent"). Each send is drawn by the new Inbox's own row
-   * renderer (core/chats-inboxrows.js ibRow, the Signal / Telegram rows), so Inbox and Sent can't drift apart: the avatar
-   * and sender line (its first tag, else the agent) with the time, the first line of his words with the working /
-   * needs-you mark, then one line in plain words (where it went · what happened). One list with two section headers like
-   * Inbox's: Working (running) then Processed (finished); no back row, no filter. The two corrections live in the row
-   * actions sheet: long-press, left swipe, right-click or Shift+F10 (ROW_MENU in core/chats-rowacts.js) with why it went
-   * where it went, Open, and the two corrections (POST /wizard/v1/sent/<id>/correct). */
+  /* How a send is described (wizard-ux issue 1814): where it went and what happened, in plain words, for the actions
+   * sheet and a thread row whose thread isn't loaded yet. */
   const SR_WHERE = { dump: 'Ran quietly', agent: 'Replied in chat', command: 'Ran as a command', reminder: 'Set a reminder' };
-  const SR_STATE = { routing: 'Working', running: 'Working', done: 'Done', needs_you: 'Needs you · in Inbox', failed: 'Failed · in Inbox' };
   // The Inbox rows' mark: the spinner while it runs, the amber dot when it needs him or failed (as Inbox marks a failure).
   const SR_MARK = { routing: 'working', running: 'working', needs_you: 'needs', failed: 'needs' };
-  const srRunning = r => r.state === 'running' || r.state === 'routing';
   const srFirst = r => (r.text.split('\n').find(x => x.trim()) || r.text || '').trim();
   // Where it went, in his words: a reply in a thread he had stays in that chat.
   function srWhere(r) { return r.route === 'thread' ? (r.quiet ? 'Noted in its chat' : 'Replied in its chat') : SR_WHERE[r.route] || 'Just sent'; }
-  // The line under his words: where · what happened [· Urgent] [· Corrected]. Never routing internals.
-  function srLine(r) {
-    const st = SR_STATE[r.state] || '';
-    return `${srWhere(r)}${st ? ' · ' + st : ''}${r.urgent ? ' · Urgent' : ''}${r.corrected ? ' · Corrected' : ''}`;
-  }
   // Why it went where it went, one plain sentence for the actions sheet.
   const SR_FALLBACK = { router_not_configured: 'deciding isn’t set up on this Wizard', router_timeout: 'deciding took too long', router_error: 'deciding failed', capture_failed: 'it couldn’t start in the background', unsure: 'Wizard wasn’t sure', no_answer: 'no answer came' };
   function srWhy(r) {
@@ -66,23 +45,6 @@ window.WizCore.chatsParts.sent = function ({ ago, ch, CH, CHAN_VIEW_KEY, chanEls
     else if (r.decidedBy === 'correction') why = 'you corrected one like it before';
     else if (r.decidedBy === 'fallback') { const k = r.rules.find(x => SR_FALLBACK[x]); why = `Wizard couldn’t decide (${k ? SR_FALLBACK[k] : 'no answer came'}), so it took the safe way`; }
     return why ? `${where} because ${why}.` : `${where}.`;
-  }
-  // One send as an Inbox row (ibRow): no Archive button (a send is not something to archive).
-  function srRow(r) {
-    const m = SR_MARK[r.state] || '', f = ibTagFace(r.tags[0] || ''); // the main agent's sends
-    return ibRow({ key: `sent:${esc(r.id)}`, wrap: ' ch-sr-wrap', cls: ` ch-sr-row st-${esc(r.state)}${m === 'needs' ? ' needs' : ''}`, open: `data-chsent="${esc(r.id)}" aria-haspopup="dialog" aria-keyshortcuts="Shift+F10"`,
-      tip: 'Open the chat it ran in · hold or open the context menu for actions', av: f.av, from: esc(f.from), time: esc(r.at ? ago(r.at) : ''), title: esc(clip(srFirst(r), 120)), mark: ibMark(m), line: esc(srLine(r)) });
-  }
-  // Working then Processed, each under Inbox's own section header (folds like Inbox's); an empty one has no header.
-  function srBody(st) {
-    const sec = (k, label, list) => {
-      if (!list.length) return '';
-      const open = chatVars.secOpen?.[k] !== false;
-      return `<section class="ch-sec ch-act ch-ib ch-sr${open ? ' open' : ''}" data-sec="${k}"><button class="ch-sec-h" data-sectoggle="${k}" aria-expanded="${open}"><span>${label}</span><small>${list.length}</small><i aria-hidden="true"></i></button>${open ? `<div class="ch-sec-b">${list.map(srRow).join('')}</div>` : ''}</section>`;
-    };
-    const rows = sentRows(st); // (Inbox or Sent, issue 1829: none whose thread is in Inbox)
-    return sec('sentWorking', 'Working', rows.filter(srRunning)) + sec('sentProcessed', 'Processed', rows.filter(r => !srRunning(r)))
-      + (st.next ? '<button type="button" class="ch-more" data-chsentmore>Show older</button>' : '');
   }
   const SR_OPEN_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>';
   const SR_REPLY_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H8l-4 4z"/></svg>';
@@ -99,30 +61,28 @@ window.WizCore.chatsParts.sent = function ({ ago, ch, CH, CHAN_VIEW_KEY, chanEls
       + `<p class="ch-sheet-n ch-sr-why">${esc(srWhy(r))}</p><button type="button" data-rssentopen>${SR_OPEN_SVG}Open chat</button>`
       // A reply stays in the thread it was typed in: nothing to move, so no correction.
       + (r.route === 'thread' ? '' : fix('reply', SR_REPLY_SVG, 'Should have replied') + fix('quiet', SR_QUIET_SVG, 'Didn’t need a reply'))
-      + (sentThreadsOn() ? stSendsHtml(stKeyOf(r), false) : '') + '</div></div>');
+      + stSendsHtml(stKeyOf(r), false) + '</div></div>');
     chatVars.rowSheet = { wid, sent: id, trigger };
     el.querySelector('.ch-sheet button')?.focus?.({ preventScroll: true });
     return true;
   }
-  /* Sent as threads (wizard-ux issue 1880, switch wizard/sent-threads, off by default; James, 26 Nov 2026: "The sent box
-   * should have the same threads as the inbox. This should look like email, where I can identify the same thread
-   * between my inbox and my sent box."). With it on, Sent lists threads, not sends: the Sent log grouped by the thread
-   * each send ran in (WizChatsListModel.sentThreads), one row per thread drawn by Inbox's own thread row (ibThreadRow:
-   * the thread's avatar or tag, its title, its last message, its time, Archive), under Working (it still runs) then
-   * Processed. A thread Inbox shows is not here (the one-place rule, placeOf, is on with this switch), so it moves
-   * between the two and is never in both. A send whose thread isn't loaded yet (a background task's hidden worker, or
-   * one still being routed) gets the same row with its task's title, else its words. His sends stay in the thread and
-   * in the row's actions sheet ("Sent from you", with the two corrections), never as list rows. */
-  const ST_SWITCH = 'wizard/sent-threads';
-  // Smart inbox (wizard-ux issue 1883, switch wizard/smart-inbox) shows Sent as threads too.
-  function sentThreadsOn() { try { const t = (document.documentElement.dataset.tweaks || '').split(' '); return t.includes(ST_SWITCH) || t.includes(SMART_SWITCH); } catch (_) { return false; } }
+  /* Sent as threads (wizard-ux issue 1880, on for everyone since James's yes, 27 Nov 2026; James, 26 Nov 2026: "The
+   * sent box should have the same threads as the inbox. This should look like email, where I can identify the same
+   * thread between my inbox and my sent box."). Sent lists threads, not sends: the Sent log grouped by the thread each
+   * send ran in (WizChatsListModel.sentThreads), one row per thread drawn by Inbox's own thread row (ibThreadRow: the
+   * thread's avatar or tag, its title, its last message, its time, Archive), under Working (it still runs) then
+   * Processed. A thread Inbox shows is not here (the one-place rule, placeOf), so it moves between the two and is never
+   * in both. A send whose thread isn't loaded yet (a background task's hidden worker, or one still being routed) gets
+   * the same row with its task's title, else its words. His sends stay in the thread and in the row's actions sheet
+   * ("Sent from you", with the two corrections), never as list rows. Which threads are kept out of Inbox at all is the
+   * triage, and that stays behind Smart inbox (below). */
   /* Smart inbox (wizard-ux issue 1883, switch wizard/smart-inbox, off by default): Inbox holds only what blocks him, so
    * every other thread is here, also one with no Sent row (a watch, a schedule, a helper result, a thread older than
    * the log): WizChatsListModel.sentRest adds those, under Working while they run and Processed when done. */
   const SMART_SWITCH = 'wizard/smart-inbox';
   function smartOn() { try { return (document.documentElement.dataset.tweaks || '').split(' ').includes(SMART_SWITCH); } catch (_) { return false; } }
   // The send's state in plain words, without "in Inbox": a row here is not in Inbox.
-  const ST_STATE = { ...SR_STATE, needs_you: 'Needs you', failed: 'Failed' };
+  const ST_STATE = { routing: 'Working', running: 'Working', done: 'Done', needs_you: 'Needs you', failed: 'Failed' };
   function stLine(r) {
     const st = ST_STATE[r.state] || '';
     return `${srWhere(r)}${st ? ' · ' + st : ''}${r.urgent ? ' · Urgent' : ''}${r.corrected ? ' · Corrected' : ''}`;
@@ -188,7 +148,7 @@ window.WizCore.chatsParts.sent = function ({ ago, ch, CH, CHAN_VIEW_KEY, chanEls
   }
   // A Sent thread row's actions sheet is the thread's own (rowMenu opens it); this adds its sends under the title.
   function sentSends(wid, key) {
-    if (!sentThreadsOn() || !key) return false;
+    if (!key) return false;
     const b = elOf(wid)?.querySelector?.('.ch-sheet .ch-sheet-b'), html = stSendsHtml(key);
     if (!b || !html) return false;
     const t = b.querySelector('.ch-sheet-t');
@@ -200,10 +160,7 @@ window.WizCore.chatsParts.sent = function ({ ago, ch, CH, CHAN_VIEW_KEY, chanEls
     const st = LIVE.sentLog?.state();
     if (!st?.ok) return '<div class="ch-empty">Checking what you sent…</div>';
     if (st.gone) return '<div class="ch-empty">Your Wizard keeps no Sent log yet.</div>';
-    if (sentThreadsOn()) return stBody(st); // threads, not sends (issue 1880)
-    if (sentRows(st).length) return srBody(st);
-    if (st.rows.length) return '<div class="ch-empty">Nothing here now. What you sent that needs you is in Inbox.</div>';
-    return '<div class="ch-empty">Nothing sent yet. What you say to the orb, start in a new chat or reply in a thread shows here.</div>';
+    return stBody(st);
   }
   function sentGo(w, tab) {
     if (!w) return false;
@@ -256,7 +213,7 @@ window.WizCore.chatsParts.sent = function ({ ago, ch, CH, CHAN_VIEW_KEY, chanEls
     if (!w || w.thread) return false;
     const t = e.target.closest('[data-chtab]'); if (t) { sentGo(w, t.dataset.chtab); return true; }
     if (e.target.closest('[data-chsentmore]')) { LIVE.sentLog?.more?.().then(sentRepaint, () => toast('!', 'Couldn’t read older ones', 2400)); return true; }
-    // Sent rows (issue 1814): a row opens its chat; its actions sheet's Open and corrections.
+    // A Sent row whose thread isn't loaded yet opens its chat; its actions sheet's Open and corrections.
     const so = e.target.closest('[data-chsent]'); if (so) { sentOpenRow(id, so.dataset.chsent); return true; }
     // A thread's actions sheet in Sent (issue 1880) names the send it corrects on the button.
     const sf = e.target.closest('[data-rssentfix]'); if (sf && (chatVars.rowSheet?.sent || sf.dataset.id)) { const sid = sf.dataset.id || chatVars.rowSheet.sent; if (!sf.disabled) { closeRowSheet?.(); sentFix(sid, sf.dataset.rssentfix === 'reply'); } return true; }
@@ -284,5 +241,5 @@ window.WizCore.chatsParts.sent = function ({ ago, ch, CH, CHAN_VIEW_KEY, chanEls
         + `<button type="button" class="ch-tbar-b ch-fbtn${filtered ? ' on' : ''}" data-chfbtn aria-label="Filter and sort" aria-expanded="${sheet ? 'true' : 'false'}">${TB_FILT_SVG}</button>` : '')
       + '</div>';
   }
-  return { sentBack, sentBar, sentBody, sentClick, sentOpen, sentSends, sentSheet, sentTabsOn, sentThreadsOn, titleBar, titleBarTab };
+  return { sentBack, sentBar, sentBody, sentClick, sentOpen, sentSends, sentSheet, sentTabsOn, titleBar, titleBarTab };
 };

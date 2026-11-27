@@ -24,10 +24,10 @@ there instead of going to Settings › Look:
 ```
 The new Sent rows are live. They start off; switch them on here:
 
-[WIZARD_TWEAK_V1]{"id":"wizard/sent-threads"}[/WIZARD_TWEAK_V1]
+[WIZARD_TWEAK_V1]{"id":"wizard/plain-alert-rows"}[/WIZARD_TWEAK_V1]
 ```
 
-- Several at once: `{"ids":["wizard/sent-threads","miguel/ai-apps"]}` (max 8). Ids are catalogue ids
+- Several at once: `{"ids":["wizard/plain-alert-rows","miguel/ai-apps"]}` (max 8). Ids are catalogue ids
   (`web/tweaks/catalog.json`, `author/name`) or the core features' ids (`web/core/core-features.json`); anything else
   is dropped silently.
 - Wizard draws Settings › Look's own switch row (`WosSettings.tweakCard`, same `tweakSwitches` markup, name, "by" line,

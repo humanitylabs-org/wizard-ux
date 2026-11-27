@@ -120,28 +120,13 @@ test('on for everyone (no switch); a routed agent or the main column feed window
   assert.match(f.p.sentBar(f.W.main), /data-chtab="inbox" aria-selected="true".*data-chtab="tags" aria-selected="false".*data-chtab="sent" aria-selected="false"/s);
 });
 
-test('Sent rows say where each capture went and its state in plain words (the why is in the row\'s actions sheet)', () => {
-  const rows = [
-    view('a', { route: 'dump', decidedBy: 'owner_words', rules: ['no_reply:note to self'], state: 'running', thread: 'worker_a' }),
-    view('b', { decidedBy: 'owner_words', rules: ['wants_reply:reply'] }),
-    view('e', { route: 'reminder', decidedBy: 'correction', state: 'needs_you', thread: null, record: 'inbox_' + 'e'.repeat(24) }),
-    view('f', { decidedBy: 'fallback', rules: ['router_not_configured'], state: 'failed', corrected: { shouldReply: false, at: 1 } }),
-    view('g', { route: 'command', decidedBy: 'model', text: 'Next desk\nsecond line <b>' }),
-  ];
-  const f = part({ rows }), body = f.p.sentBody(f.W.main);
-  const text = [...body.matchAll(/<div class="ch-row-wrap ch-ib-wrap ch-sr-wrap"[\s\S]*?<\/button><\/div>/g)].map(m => m[0].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim());
-  assert.equal(text.length, 5, 'one row per capture');
-  assert.match(text[0], /Words a Ran quietly · Working$/);
-  assert.match(text[1], /Words b Replied in chat · Done$/);
-  assert.match(text[2], /Words e Set a reminder · Needs you · in Inbox$/);
-  assert.match(text[3], /Words f Replied in chat · Failed · in Inbox · Corrected$/);
-  assert.match(text[4], /Next desk Ran as a command · Done$/, 'the first line of his words, escaped');
-  assert.doesNotMatch(body, /<b>second/, 'never raw markup');
-  assert.equal(f.p.sentSheet('main', sid('f')), true);
-  assert.match(f.listEl.html, /Replied in chat because Wizard couldn’t decide \(deciding isn’t set up on this Wizard\), so it took the safe way\./);
-  assert.match(f.listEl.html, /data-rssentfix="quiet" aria-pressed="true"/, 'the correction he made stays marked');
+test('Sent is threads (wizard-ux issue 1880): no card per capture, no filter, no back row; its empty and loading states', () => {
+  const f = part({ rows: [view('a', { state: 'running' }), view('b')] }), body = f.p.sentBody(f.W.main);
+  assert.doesNotMatch(body, /ch-sent-row|data-chsentopen|data-chsentfix|data-chsentfilter|data-chsentback/, 'none of the old cards');
+  assert.equal(f.p.sentHead, undefined, 'no Sent head: the bottom tabs are the navigation');
   assert.match(part({ ok: false }).p.sentBody({ id: 'main' }), /Checking what you sent/);
   assert.match(part({ gone: true }).p.sentBody({ id: 'main' }), /no Sent log yet/);
+  assert.match(part({ rows: [] }).p.sentBody({ id: 'main' }), /Nothing sent yet\./);
 });
 
 test('tabs, corrections, a tap and Back', async () => {

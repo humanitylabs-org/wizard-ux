@@ -141,7 +141,7 @@ window.WizCore.chatsParts.inboxrows = function ({ actMark, actNeeds, actUnread, 
       + `<span class="ch-ib-l2"><b class="ch-ib-t">${title}</b>${mark}</span><span class="ch-ib-pv">${line}</span></span></button>`
       + `${after}</div>`;
   }
-  // `sent`: the row as Sent draws it (wizard-ux issue 1880, switch wizard/sent-threads): the same row, with its Sent key
+  // `sent`: the row as Sent draws it (wizard-ux issue 1880): the same row, with its Sent key
   // for the actions sheet's sends and the spinner while it runs.
   // `run`: the row in Inbox › Working (wizard-ux issue 1810), with its spinner.
   function ibThreadRow(s, pin, sent = null, run = false) {

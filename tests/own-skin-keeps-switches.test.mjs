@@ -9,7 +9,7 @@ import vm from 'node:vm';
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
 const catalog = JSON.parse(read('web/tweaks/catalog.json'));
 const builtins = catalog.defaults || [];
-const MIX = { 'wizard/sent-threads': true, 'miguel/now-playing': true, 'wizard/failure-reason': true };
+const MIX = { 'wizard/plain-alert-rows': true, 'miguel/now-playing': true, 'wizard/failure-reason': true };
 
 function box({ recipe }) {
   const storage = new Map([['wos.skin', 'obsidian'], ['wos.channel.v1', 'latest'],
@@ -42,6 +42,6 @@ test('a worn Files skin with no saved choices keeps every feature the owner has 
 test('a choice the skin did save still decides that one switch', async () => {
   const b = box({ recipe: { 'miguel/now-playing': false } }); await b.E.refresh();
   assert.ok(!b.running().includes('miguel/now-playing'));
-  assert.ok(b.running().includes('wizard/sent-threads'));
+  assert.ok(b.running().includes('wizard/plain-alert-rows'));
   assert.ok(b.running().includes('wizard/failure-reason'));
 });

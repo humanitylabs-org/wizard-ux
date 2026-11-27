@@ -1,7 +1,7 @@
-// Sent rows (wizard-ux issue 1814, on for everyone since James's yes on 27 Nov 2026; switch wizard/sent-rows removed):
-// the real Chats part (core/chats-sent.js) on a stand-in Chats. Sent is one list of the Inbox rows under Working and
-// Processed, with no back row or filter, plain words only, and the corrections in the row's actions sheet.
-// Browser proof: tests/qa-chats-sent-rows.cjs.
+// Sent rows (wizard-ux issue 1814): the real Chats part (core/chats-sent.js) on a stand-in Chats. Since Sent as threads
+// (wizard-ux issue 1880, on for everyone) Sent's list is one row per thread (tests/sent-threads.test.mjs); what stays
+// from Sent rows is the row actions sheet of a send whose thread isn't loaded yet: plain words, Open chat and the two
+// corrections. Browser proof: tests/qa-chats-sent-threads.cjs.
 // Run: node --test tests/sent-rows.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -36,76 +36,8 @@ function part({ tweaks = '', rows = [], next = null } = {}) {
   const click = (w, attrs) => p.sentClick({ target: { closest: sel => { for (const k of Object.keys(attrs)) if (k !== 'dataset' && sel === `[data-${k}]`) return { dataset: { [k]: attrs[k], ...(attrs.dataset || {}) }, disabled: false }; return null; } } }, w.id, w);
   return { p, W, CH, chatVars, root, state, renders, opened, corrections, toasts, sheets, listEl, click };
 }
-const rowsOf = html => [...html.matchAll(/<div class="ch-row-wrap ch-ib-wrap ch-sr-wrap"[\s\S]*?<\/button><\/div>/g)].map(m => m[0]);
 // What a row says: sender, time, his words, the line under them.
 const said = row => row.replace(/<span class="ch-ib-av[^"]*"[^>]*>(?:<span[^>]*>[^<]*<\/span>|[^<]*)<\/span>/, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-
-test('no switch: Sent is the Inbox rows for everyone, whatever else is switched on; no cards, back row or pills', () => {
-  for (const tweaks of ['', 'wizard/desktop-chats', SW]) {
-    const f = part({ tweaks, rows: [view('a', { state: 'running', route: 'dump' }), view('b')] });
-    assert.equal(f.p.sentRowsOn, undefined, 'no switch to read');
-    assert.equal(f.p.sentHead, undefined, 'no back row or filter to draw');
-    const body = f.p.sentBody(f.W.main);
-    assert.equal(rowsOf(body).length, 2, tweaks || 'nothing switched on');
-    assert.doesNotMatch(body, /ch-sent-row|data-chsentfix|data-chsentfilter|data-chsentback|data-chsentopen/, 'none of the old cards');
-    assert.equal(f.p.sentSheet('main', sid('a')), true, 'the actions sheet opens');
-  }
-});
-
-test('no back row and no filter; Working then Processed under Inbox\'s section header (on Inbox\'s panel); an empty section hides', () => {
-  const f = part({ rows: [view('a', { state: 'running', route: 'dump' }), view('r', { state: 'routing', route: null }), view('b'), view('c', { state: 'failed' })] });
-  const body = f.p.sentBody(f.W.main);
-  const secs = [...body.matchAll(/<section class="ch-sec ch-act ch-ib ch-sr open" data-sec="(\w+)"><button class="ch-sec-h" data-sectoggle="\1" aria-expanded="true"><span>(\w+)<\/span><small>(\d+)<\/small><i aria-hidden="true"><\/i><\/button>/g)].map(m => [m[1], m[2], +m[3]]);
-  assert.deepEqual(secs, [['sentWorking', 'Working', 2], ['sentProcessed', 'Processed', 2]], 'Inbox\'s own foldable header markup');
-  assert.doesNotMatch(body, /ch-sent-row|data-chsentfix|data-chsentfilter/, 'no cards, no inline corrections');
-  const ids = [...body.matchAll(/data-chsent="([^"]+)"/g)].map(m => m[1]);
-  assert.deepEqual(ids, [sid('a'), sid('r'), sid('b'), sid('c')], 'running first, then the finished ones, newest first in each');
-  assert.doesNotMatch(part({ rows: [view('b')] }).p.sentBody(f.W.main), /Working/, 'nothing running: no Working header');
-  assert.doesNotMatch(part({ rows: [view('a', { state: 'running' })] }).p.sentBody(f.W.main), /Processed/, 'nothing finished: no Processed header');
-  f.chatVars.secOpen = { sentProcessed: false };
-  assert.match(f.p.sentBody(f.W.main), /<section class="ch-sec ch-act ch-ib ch-sr" data-sec="sentProcessed"><button class="ch-sec-h" data-sectoggle="sentProcessed" aria-expanded="false">[^]*?<\/button><\/section>/, 'folds like Inbox\'s sections');
-  assert.match(part({ rows: [view('b')], next: sid('b') }).p.sentBody(f.W.main), /data-chsentmore>Show older/, 'older sends still load');
-  const empty = part({ rows: [] }).p.sentBody(f.W.main);
-  assert.match(empty, /<div class="ch-empty">Nothing sent yet\./, 'the empty state is today\'s .ch-empty text');
-});
-
-test('each row is the new Inbox\'s own row (shared renderer): avatar, sender + time, his words + mark, one plain line', () => {
-  const f = part({ rows: [
-    view('a', { route: 'dump', decidedBy: 'owner_words', rules: ['no_reply:note to self'], state: 'running', text: 'Note to self: call mom\nsecond line' }),
-    view('b', { decidedBy: 'owner_words', rules: ['wants_reply:tell me'] }),
-    view('c', { source: 'typed', decidedBy: 'owner_words', rules: ['typed'], wouldRoute: 'dump' }),
-    view('d', { route: 'dump', tags: ['family'], state: 'needs_you', text: 'Book <b>a table</b>' }),
-    view('e', { decidedBy: 'fallback', rules: ['router_timeout'], state: 'failed' }),
-    view('f', { route: 'reminder', urgent: true, corrected: { shouldReply: true, at: 1 } }),
-    view('g', { route: 'command' }),
-    view('h', { route: 'thread', quiet: true, wantsReply: false }),
-    view('i', { route: null, state: 'routing' }), // still being routed: Working, under the running one
-  ] });
-  const rows = rowsOf(f.p.sentBody(f.W.main));
-  assert.equal(rows.length, 9);
-  for (const r of rows) {
-    assert.match(r, /^<div class="ch-row-wrap ch-ib-wrap ch-sr-wrap" data-morph-key="sent:sent_\w+"><button type="button" data-part="thread-row" class="ch-row ch-ib-row ch-sr-row st-\w+( needs)?" data-chsent="sent_\w+" aria-haspopup="dialog" aria-keyshortcuts="Shift\+F10" title="[^"]+">/, 'the Inbox row markup');
-    assert.match(r, /<span class="ch-ib-bd"><span class="ch-ib-l1"><span class="ch-ib-from">[^<]*<\/span><time>3m<\/time><\/span><span class="ch-ib-l2"><b class="ch-ib-t">[^<]*<\/b>[\s\S]*?<\/span><span class="ch-ib-pv">[^<]*<\/span><\/span><\/button><\/div>$/, 'sender + time, title + mark, one line; no Archive button');
-    assert.doesNotMatch(said(r), /\bThread\b|you typed it|would have|router|fallback|owner_words|no_reply|wants_reply|\bmodel\b|Background/, 'plain words only: ' + said(r));
-    assert.doesNotMatch(r, /ch-ib-arch|ch-sent-row|data-chsentfix/);
-  }
-  // The very same function draws an Inbox thread row: the same wrapper, classes and parts.
-  assert.match(rows[0], /<span class="ch-ib-av ch-ib-ag" aria-hidden="true"><span class="ag-sig">hermes<\/span><\/span>/, 'the agent\'s round avatar');
-  assert.match(rows[4], /<span class="ch-ib-av" aria-hidden="true">👪<\/span>[\s\S]*<span class="ch-ib-from">Family<\/span>/, 'a tag names the row like Inbox: its emoji and name');
-  const marks = rows.map(r => /<span class="ch-ib-mk"><i class="(ch-spin|ch-chan-dot)"/.exec(r)?.[1] || '');
-  assert.deepEqual(marks, ['ch-spin', 'ch-spin', '', '', 'ch-chan-dot', 'ch-chan-dot', '', '', ''], 'the spinner while it runs, the amber dot when it needs him or failed');
-  assert.deepEqual(rows.map(said), [
-    'Wizard 3m Note to self: call mom Ran quietly · Working',
-    'Wizard 3m Words i Just sent · Working',
-    'Wizard 3m Words b Replied in chat · Done',
-    'Wizard 3m Words c Replied in chat · Done',
-    'Family 3m Book &lt;b&gt;a table&lt;/b&gt; Ran quietly · Needs you · in Inbox',
-    'Wizard 3m Words e Replied in chat · Failed · in Inbox',
-    'Wizard 3m Words f Set a reminder · Done · Urgent · Corrected',
-    'Wizard 3m Words g Ran as a command · Done',
-    'Wizard 3m Words h Noted in its chat · Done',
-  ]);
-});
 
 test('the row actions sheet: why it went there in plain words, Open chat, both corrections; a reply has none', async () => {
   const f = part({ rows: [view('a', { route: 'dump', decidedBy: 'owner_words', rules: ['no_reply:note to self'], state: 'running', thread: 'worker_a' }), view('b', { decidedBy: 'fallback', rules: ['router_timeout'] }), view('h', { route: 'thread', quiet: true, wantsReply: false, thread: 'thread_h' }), view('m'), view('k', { decidedBy: 'correction', corrected: { shouldReply: false, at: 1 } })] });
@@ -131,7 +63,7 @@ test('the row actions sheet: why it went there in plain words, Open chat, both c
   assert.equal(f.chatVars.rowSheet, null, 'the sheet closes');
   sheet('b'); f.click(f.W.main, { rssentfix: 'reply' }); await new Promise(r => setImmediate(r));
   assert.deepEqual(clone(f.corrections), [[sid('a'), false], [sid('b'), true]], 'Didn\'t need a reply = false, Should have replied = true');
-  assert.match(said(rowsOf(f.p.sentBody(f.W.main))[0]), /Ran quietly · Working · Corrected$/);
+  assert.match(sheet('a'), /<small>3m · Ran quietly · Working · Corrected<\/small>/, 'its sends say Corrected');
   // Open chat from the sheet, and a tap on the row: the thread it ran in.
   sheet('h'); f.click(f.W.main, { rssentopen: '' }); await new Promise(r => setImmediate(r));
   f.click(f.W.main, { chsent: sid('a') }); await new Promise(r => setImmediate(r));
@@ -142,6 +74,7 @@ test('a sheet button without an open Sent sheet, or an unknown row, does nothing
   const f = part({ rows: [view('a')] });
   assert.equal(f.click(f.W.main, { rssentfix: 'quiet' }), false, 'no Sent sheet open: not Sent\'s tap');
   assert.equal(f.p.sentSheet('main', sid('z')), false, 'an unknown row');
+  assert.equal(f.p.sentSheet('main', sid('a')), true, 'no switch to read');
   await new Promise(r => setImmediate(r));
   assert.deepEqual(f.corrections, []);
 });

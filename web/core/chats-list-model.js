@@ -337,15 +337,13 @@ function sentIndex(rows) {
 }
 /** The Sent rows to draw: none whose thread (or background record) the Inbox shows, so a thread is never in both. Pure. */
 const sentShown = (rows, inboxIds) => (rows || []).filter(r => !(r?.thread && inboxIds?.has(r.thread)) && !(r?.record && inboxIds?.has(r.record)));
-/* Sent as threads (wizard-ux issue 1880, switch wizard/sent-threads; James, 26 Nov 2026: "The sent box should have the
+/* Sent as threads (wizard-ux issue 1880, on for everyone since 27 Nov 2026; James, 26 Nov 2026: "The sent box should have the
  * same threads as the inbox ... The same thread moves to the sent box or the inbox, depending on whether it needs my
  * attention."). The Sent log's sends, one group per thread they ran in (a background send with no thread yet: its task
  * record, else the send alone), newest first. A group whose thread (or record) Inbox shows is left out, and so is an
  * archived or snoozed thread, so a thread is never in both lists. `session(id)` the shell's row for a thread (or null),
  * `working(s)` whether that thread runs, `at(s)` its list time in ms. Each group: { key, thread, record, sends (newest
  * first), session, at, working }. Pure. */
-const SENT_THREADS = 'wizard/sent-threads';
-const sentThreadsOn = tweaks => String(tweaks || '').split(' ').includes(SENT_THREADS);
 const SENT_RUNNING = new Set(['running', 'routing']);
 function sentThreads(rows, inboxIds, { session = () => null, working = () => false, at = () => 0 } = {}) {
   const by = new Map();
@@ -448,5 +446,5 @@ const unreadThreads = (rows, isNew, notes) => new Set((rows || []).filter(s => i
 const unreadCount = rows => new Set((rows || []).filter(r => r.unread).map(r => r.id)).size;
 root.WizChatsListModel = Object.freeze({ STATES, stateOf, stateGroups, WORKING_SORTS, workingOrderOf, workingAt, workingSort, READY_SORTS, sortOf, PRIORITY_TIP, rankOf, readySort, executionStatus, isListWorking,
   readyGroups, NOTES_PROJECT, NO_PROJECT, projectOf, titleInProject, projectGroups, GROUP_MODES, groupMode, readyFlat,
-  readyStep, visibleIds, inboxWants, inboxReplied, placeOf, SMART_INBOX, smartInboxOn, sentAsked, sentRequested, sentIndex, sentShown, SENT_THREADS, sentThreadsOn, sentThreads, sentRest, ACTIVITY_SORTS, activitySortOf, activityMark, activitySort, activityGroups, activityList, unreadCount, unreadThreads, compareTime, deferred, sessionRow, sessionList, sessionRank, orderSessions, notificationRow, sortNotes, mixedRows, subjectGroups, priorityGroups });
+  readyStep, visibleIds, inboxWants, inboxReplied, placeOf, SMART_INBOX, smartInboxOn, sentAsked, sentRequested, sentIndex, sentShown, sentThreads, sentRest, ACTIVITY_SORTS, activitySortOf, activityMark, activitySort, activityGroups, activityList, unreadCount, unreadThreads, compareTime, deferred, sessionRow, sessionList, sessionRank, orderSessions, notificationRow, sortNotes, mixedRows, subjectGroups, priorityGroups });
 })(globalThis);

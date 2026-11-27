@@ -27,7 +27,7 @@
     }
     return out;
   }
-  // [WIZARD_TWEAK_V1]{"id":"wizard/sent-threads"}[/WIZARD_TWEAK_V1] (or {"ids":[…]}), on its own line: the reply carries
+  // [WIZARD_TWEAK_V1]{"id":"wizard/plain-alert-rows"}[/WIZARD_TWEAK_V1] (or {"ids":[…]}), on its own line: the reply carries
   // a tweak's live switch (WosSettings.tweakCard, the same row as Settings › Look). Ids only; a malformed marker is hidden.
   // An app feature switch `<app id>:<switch id>` (wizard.app-switches/1) parses too and draws the app's own switch row
   // (wizard-ux issue 1560).

@@ -16,7 +16,7 @@ const APPS = {
 
 function shell({ on = false } = {}) {
   const sent = [], frames = [], listeners = {};
-  const root = { dataset: { tweaks: on ? `wizard/sent-threads ${SWITCH}` : 'wizard/sent-threads' } };
+  const root = { dataset: { tweaks: on ? `wizard/plain-alert-rows ${SWITCH}` : 'wizard/plain-alert-rows' } };
   const c = { location: { origin, href: origin + '/wizard-os-home/' }, URL, console,
     document: { documentElement: root, querySelectorAll: () => frames },
     setTimeout: () => 1, clearTimeout: () => {}, addEventListener: (name, fn) => { listeners[name] = fn; },
@@ -79,7 +79,7 @@ test('turning the switch off mid-play never strands Podcasts: it keeps its own i
   const win = f.frame('wizard-podcasts');
   f.c.WizBackgroundAudio.request(win, 'load', { sessionId: 's', queue: [] }).catch(() => {});
   assert.equal(f.sent.at(-1).appId, 'wizard-podcasts');
-  f.root.dataset.tweaks = 'wizard/sent-threads';
+  f.root.dataset.tweaks = 'wizard/plain-alert-rows';
   f.c.WizBackgroundAudio.request(win, 'pause', { sessionId: 's' }).catch(() => {});
   assert.equal(f.sent.at(-1).appId, 'wizard-podcasts', 'the owner keeps controlling its own session');
   const answer = result => f.c.wizardAudioPort.onmessage({ data: JSON.stringify({ id: f.sent.at(-1).id, ok: true, result }) });
@@ -96,7 +96,7 @@ test('the off edge of the switch (wos:tweak-choice) triggers the release; other 
   const f = shell({ on: true });
   let calls = 0; f.c.WizBackgroundAudio.releaseOwn = () => { calls++; };
   const fire = detail => f.listeners['wos:tweak-choice']({ detail });
-  fire({ id: SWITCH, on: true }); fire({ id: 'wizard/sent-threads', on: false });
+  fire({ id: SWITCH, on: true }); fire({ id: 'wizard/plain-alert-rows', on: false });
   assert.equal(calls, 0);
   fire({ id: SWITCH, on: false });
   assert.equal(calls, 1);
