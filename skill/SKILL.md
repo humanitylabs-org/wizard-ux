@@ -134,7 +134,7 @@ Schedules: jobs the agent runs on a timer (e.g. a daily summary), with their nex
 
 ### About & updates
 About & updates: update WizardOS (Automatic or Ask me), the release channel (For everyone or For testers), versions, connection status, and Gestures & help.
-- WizardOS (server): installed version, up to date or not. Updates: Automatic installs at night, not mid-chat; Ask me waits for Install. Channel: For everyone gets releases testers used for 3 days; For testers gets every release at once and shows Try new features in Appearance. A ready update shows Install at the top of Settings.
+- WizardOS (server): installed version, up to date or not. Updates: Automatic installs at night, not mid-chat; Ask me waits for Install. Channel: For everyone gets releases testers used for 3 days; For testers gets every release at once and shows Try new features in Appearance. A ready update shows Install at the top of Settings. Inside Wizard for Mac a Wizard for Mac group follows: the Mac app's own version, up to date or not, Check for updates, a new version downloading, Update and restart once it is ready (never while recording), or Download when a release needs a new download from the website.
   - Apps: every installed app with its version and the newest, Update now, Retry, Hold, and Automatic / Ask me for app updates (Automatic checks and updates apps every hour)
   - WizardOS (server) {version}: the installed server version
   - Automatic: updates install overnight, never during a chat
@@ -194,7 +194,6 @@ Settings › Appearance › Try new features lists unfinished features to try, A
 - **Result reader**: A private model files each finished background task.
 - **Send and go**: On desktop, sending opens a fresh chat.
 - **Share feature counts**: Sends features you tried and your thumbs, plus a random box id.
-- **Share to people in any window**: Share's People row shows Messenger's recent chats in every window.
 - **Short answer first**: A long agent reply shows only its one-line plain answer; tap it for the full reply. Choose whether replies start collapsed and how long the short answer is. Where: Settings › Appearance › Try new features › Short answer first; its options show under it when on.
 - **Shorter app updates**: App updates stop an app once.
 - **Side button opens the Agent chat**: Android app: the side button opens Messenger's Agent chat for a note instead of a new Wizard chat.
@@ -203,7 +202,6 @@ Settings › Appearance › Try new features lists unfinished features to try, A
 - **Tap to answer in replies**: Tap-to-answer buttons in agent replies.
 - **Tell the team about failed updates**: When an app or WizardOS update fails on this box, the App Manager files a bug for the team (or adds to the open one) with the box, versions, failing step and error, using this box's GitHub login. Your notification then says the team was told.
 - **Why a reply failed**: When a reply fails and Wizard knows why (subscription ended, usage limit, signed out, network), Chats > Errors and the thread say so plainly, with Choose another model first when Retry can't work.
-- **Wizard for Mac in About & updates**: Wizard for Mac: About & updates gets a Wizard for Mac group: its version, up to date or not, Check for updates, Update and restart, Download. (Wizard for Mac only).
 
 Switches that are ordinary settings or views, not tester switches:
 - **Notifications in Chats**: Chats is the inbox: Notifications’ alerts and every app with an inbox feed are yellow threads in Chats, labelled with their app; several from one app fold into one row. They open in the chat window with Open, Done, Snooze and Resolve this (the rest from that app listed under, with Done all); done ones under Archive. Where: Settings › Chats & app screens › Notifications › Notifications in Chats (on for everyone).
@@ -214,6 +212,7 @@ No longer switches (owners and old chats may still name them):
 - **Thread tracker**: retired: Needs you now shows in the thread itself, on the reply that needs the owner (with Mark done), and in Inbox; Reply works on any message.
 - **Stop write loops**: on for everyone, nothing to turn on: an identical save within 10 s is not resent, and over 20 saves a minute to one place pauses.
 - **Apps in Updates**: on for everyone: Settings › About & updates › Apps.
+- **Wizard for Mac in About & updates**: on for everyone, nothing to turn on: inside Wizard for Mac, Settings › About & updates shows a Wizard for Mac group under WizardOS.
 - **Reply to Telegram and Slack chats**: on for everyone: reply in Chats to a chat started on Telegram or Slack; it goes through that app's own connection and shows there too.
 - **Models from your connectors**: removed: the model menu in Chats lists the models of every AI connection you connected.
 
@@ -222,6 +221,7 @@ No longer switches (owners and old chats may still name them):
 - **Turn on a new feature (or get them first)?** Settings › About & updates › Channel › For testers (if not already), then Settings › Appearance › Try new features › the feature's switch.
 - **Turn on Channels?** Nothing to turn on any more: open Chats and tap Tags in the tabs at the bottom (Inbox · Tags · Sent); your channels and General are listed there. (A box whose Agent Service has no Sent log shows Channels / Activity tabs at the top instead.)
 - **Make Wizard update automatically?** Settings › About & updates › Updates › Automatic (installs overnight, never during a chat). For apps: Settings › About & updates › Apps › Automatic (checks and updates apps every hour).
+- **Is my Mac app (Wizard for Mac) up to date?** Inside Wizard for Mac: Settings › About & updates › Wizard for Mac shows its version and Up to date, or the new version downloading; Check for updates looks now, Update and restart installs a ready one, Download gets a release that needs a new download. Not shown in a browser or on the phone.
 - **Update now?** When an update is ready, the card at the top of Settings shows Install (or Install now); tap it. 'Interface updated · Reload' just reloads the screen.
 - **Use Wizard on my phone?** Settings › Phones & devices: scan the QR code with the Wizard phone app (needs Tailscale; the page walks you through it).
 - **Change the look?** Settings › Appearance › Skin and Colors; + New skin to make your own.

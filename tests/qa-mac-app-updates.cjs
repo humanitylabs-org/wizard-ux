@@ -1,5 +1,5 @@
 'use strict';
-// Wizard for Mac in Settings › About & updates (wizard-ux issue 1624, switch wizard/mac-app-updates; native half
+// Wizard for Mac in Settings › About & updates (wizard-ux issue 1624, on for everyone; native half
 // humanitylabs-org/try-wizard#126). Real desktop and phone shells on a synthetic origin. Wizard for Mac is stood in
 // by a fake `window.webkit.messageHandlers.wizardNative` that answers updates.status / check / install / download
 // the way the app does and pushes `wizard:app-update` events; the WizardOS status is a plain up-to-date box.
@@ -8,26 +8,24 @@
 //     a refusal ({started:false, reason}) is a toast and the card stays; ready while recording: no button.
 //  3. Needs a new download: Download calls updates.download.  4. Failed: the app's words + Try again.
 //  5. A browser, the phone, and a Mac app without updates.*: no group, no errors, WizardOS group unchanged.
-//  6. Switch off inside the Mac app: no updates.* call, and the About page is byte-identical to QA_WEB_MAIN's.
-//  7. An event that changes nothing rewrites nothing (no blink).
+//  6. An event that changes nothing rewrites nothing (no blink).
 // QA_OUT=<dir> saves screenshots (the About page, 412 px wide in a 912 px desktop window like the Mac's Settings). QA_WEB=<checkout>/web points at another build;
-// QA_WEB_MAIN=<main>/web enables the byte-identical switch-off check. QA_EXPECT=broken: run against a build without
+// QA_EXPECT=broken: run against a build without
 // the feature and assert the group is missing everywhere.
 const {chromium}=require('../tools/qa-playwright.cjs');
 const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
 const root=path.resolve(process.env.QA_WEB||path.join(__dirname,'../web')),origin='https://mac-app-updates.test',prefix='/wizard-os-home/';
-const mainRoot=process.env.QA_WEB_MAIN?path.resolve(process.env.QA_WEB_MAIN):'',broken=process.env.QA_EXPECT==='broken';
+const broken=process.env.QA_EXPECT==='broken';
 const out=process.env.QA_OUT||'';if(out)fs.mkdirSync(out,{recursive:true});
-const SW='wizard/mac-app-updates';
 const type=f=>f.endsWith('.js')||f.endsWith('.mjs')?'text/javascript':f.endsWith('.css')?'text/css':f.endsWith('.html')?'text/html':f.endsWith('.json')?'application/json':f.endsWith('.svg')?'image/svg+xml':'application/octet-stream';
 const OS={mode:'ask',chosen:true,channel:'latest',installed:'0.3.242',latest:'0.3.242',stable:'0.3.240',update_available:false,unpinned:false,checked:true,installing:false,interrupted:false};
 const MIN=60e3;
 const st=(phase,extra={})=>({schema:1,installed:{version:'0.8.1',build:'312'},phase,latest:null,progress:null,checkedAt:null,waitingFor:null,manual:null,error:null,channel:null,...extra});
-async function boot(browser,{shell='desktop',w=1280,h=800,mac=true,legacy=false,on=true,web=root}){
+async function boot(browser,{shell='desktop',w=1280,h=800,mac=true,legacy=false,web=root}){
  const phone=shell==='phone';
  const ctx=await browser.newContext({viewport:{width:w,height:h},isMobile:phone,hasTouch:phone,serviceWorkers:'block'});
  await ctx.routeWebSocket('**/*',ws=>ws.close());
- const mix=on?{[SW]:true}:{};
+ const mix={};
  await ctx.addInitScript(({shell,mix,mac,legacy})=>{
   if(window!==window.top)return;
   for(const[k,v]of Object.entries({'wos.shell':shell,'wux.shell':shell,'wos.coached':'true','wos.tour.v1':'true','wos.welcome.v1':'done','wos.desktop-view.v1':'classic','wos.channel.v1':'latest','wos.skin-tweaks.v1':JSON.stringify({version:1,preset:'none',off:{},mix})}))localStorage.setItem(k,v);
@@ -72,7 +70,6 @@ async function start(pg,phone,status){
  await pg.goto(origin+prefix+(phone?'':'desktop.html'));
  await pg.waitForFunction(()=>window.WosSettings&&window.WosUpdates&&(window.__wos||window.__wux));
  await pg.evaluate(()=>document.getElementById('wosWelcome')?.remove());
- if(!broken)await pg.waitForFunction(sw=>(document.documentElement.dataset.tweaks||'').split(' ').includes(sw)||!JSON.parse(localStorage.getItem('wos.skin-tweaks.v1')||'{}').mix?.[sw],SW,{timeout:15000});
  await pg.evaluate(()=>(window.__wos?.openSettings||window.__wux?.openSettings)('updates'));
  await pg.waitForFunction(()=>[...document.querySelectorAll('[data-settings-feature="updates"] [data-osu-group]')].some(n=>n.getClientRects().length),null,{timeout:15000});
  await pg.waitForTimeout(700);
@@ -194,16 +191,6 @@ const until=async(pg,fn,label,ms=8000)=>{const t=Date.now();let g;while(Date.now
    assert.deepEqual(errors,[],`${v.label}: no errors`);
    if(v.label==='old Mac app')assert.ok((await pg.evaluate(()=>window.__mauCalls)).includes('updates.status'),'old Mac app was asked once');
    results.push({check:`${v.label}: no group`});await ctx.close();
-  }
-  // 6. Switch off inside the Mac app: no updates.* calls; About identical to main.
-  {
-   const about=async web=>{const {ctx,pg,errors}=await boot(browser,{...MAC,on:false,web});await start(pg,false,st('ready',{latest:{version:'0.8.2',build:'313'}}));await pg.waitForTimeout(800);
-    const r={g:await group(pg),calls:await pg.evaluate(()=>window.__mauCalls.filter(c=>c.startsWith('updates.'))),html:await pg.evaluate(()=>[...document.querySelectorAll('.st-page')].find(n=>n.getClientRects().length)?.innerHTML||'')};
-    if(web===root)await shot(pg,'mac-app-updates-off.png');assert.deepEqual(errors,[]);await ctx.close();return r;};
-   const off=await about(root);
-   assert.equal(off.g,null,'switch off: no group');assert.deepEqual(off.calls,[],'switch off: the Mac app is never asked');
-   if(mainRoot){const m=await about(mainRoot);assert.equal(off.html,m.html,'switch off: About is byte-identical to main');results.push({check:'switch off = main',bytes:off.html.length});}
-   else results.push({check:'switch off: no group, no calls'});
   }
   console.log(JSON.stringify(results,null,1));
  }finally{await browser.close();}

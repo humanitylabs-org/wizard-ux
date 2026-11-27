@@ -24,7 +24,7 @@ function boot({ installed = true, cached = targets, recent = [], entries = null,
     return el;
   }};
   vm.runInNewContext(source, {window, document, localStorage: {getItem: k => map.get(k), setItem: (k,v) => map.set(k,v)},
-    Date: class extends Date {static now() {return now;}}, File, Blob, URL, CustomEvent: class {}, requestAnimationFrame: f => f(), setTimeout: f => f()});
+    Date: class extends Date {static now() {return now;}}, File, Blob, URL, CustomEvent: class {}, requestAnimationFrame: f => f(), setTimeout: f => f(), clearTimeout: () => {}});
   const click = target => el.handlers.click({detail: 0, target});
   return { S: window.WosShareSheet, ops, opened, map, el: () => el, click,
     tick: t => {now = t;}, person: id => ({closest: selector => selector === '.shs-b' ? {} : selector === '[data-shs-app]' ? {dataset: {shsApp: 'messenger', shsTarget: id}} : null}) };
