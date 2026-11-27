@@ -15,7 +15,7 @@ const { ownerRead } = require('../tools/qa-desktop-frame-fixture.cjs');
 const fs = require('node:fs'), path = require('node:path');
 const repo = path.resolve(__dirname, '..'), origin = 'https://phone-sections.test', prefix = '/wizard-os-home/';
 const web = process.env.QA_WEB || path.join(repo, 'web'), out = process.env.QA_OUT || path.join(repo, 'phone-sections-evidence');
-const OLD_SW = 'wizard/phone-sections';
+const OLD_SW = 'wizard/phone-sections', NAV = process.env.QA_PHONE_NAV === 'on' ? 'wizard/phone-nav' : '';
 const ANDROID = 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Mobile Safari/537.36';
 const CASES = [{ name: '393', width: 393, height: 852 }, { name: '360', width: 360, height: 780 }, { name: '412', width: 412, height: 915, only: true }]
   .filter(c => process.env.QA_CASES ? process.env.QA_CASES.split(',').includes(c.name) : !c.only);
@@ -31,12 +31,12 @@ async function boot(browser, c, skin) {
   const context = await browser.newContext({ viewport: { width: c.width, height: c.height }, isMobile: true, hasTouch: true, serviceWorkers: 'block', userAgent: ANDROID });
   const puts = [];
   await context.routeWebSocket('**/*', w => w.close());
-  await context.addInitScript(({ skin, OLD_SW, APPS }) => {
+  await context.addInitScript(({ skin, OLD_SW, NAV, APPS }) => {
     if (window !== top) return;
     const seed = { 'wux.apps.v1': JSON.stringify(APPS), 'wos.shell': 'phone', 'wux.shell': 'phone', 'wos.coached': 'true', 'wos.tour.v1': 'true', 'wos.tour.done': '1', 'wos.welcome.v1': 'done', 'wos.voiceTipSeen': 'true', 'wos.skin': skin,
-      'wos.skin-tweaks.v1': JSON.stringify({ version: 1, preset: 'none', off: {}, mix: { [OLD_SW]: false } }) };
+      'wos.skin-tweaks.v1': JSON.stringify({ version: 1, preset: 'none', off: {}, mix: { [OLD_SW]: false, ...(NAV ? { [NAV]: true } : {}) } }) };
     for (const [k, v] of Object.entries(seed)) localStorage.setItem(k, v);
-  }, { skin, OLD_SW, APPS });
+  }, { skin, OLD_SW, NAV, APPS });
   const prefs = { migrations: { 'launcher-seed-v1': true, 'launcher.v1': true }, spaces: [], pinnedChats: [] };
   await context.route('**/*', async r => {
     const q = r.request(), u = new URL(q.url()), p = u.pathname, method = q.method();
@@ -75,7 +75,9 @@ const state = page => page.evaluate(() => {
   return { cur: P ? P.current() : null, secs: P ? P.sections() : null, sheet: __wos.sheet, idx: __wos.idx, desks: __wos.desks.length,
     front: d?.home ? 'home' : w ? (w.appId || w.app) + (w.thread ? ':' + w.thread : '') : '',
     tiles: [...document.querySelectorAll('.sec-tile')].map(b => ({ sec: b.dataset.sec, label: b.querySelector('.sec-nm').textContent, on: b.classList.contains('on'), badge: b.querySelector('.sec-bg')?.textContent || '' })),
-    toast: document.querySelector('#toast.show')?.textContent || '' };
+    toast: document.querySelector('#toast.show')?.textContent || '',
+    // wizard-ux#1950: the orb's own count badge, as a person sees it (shown and its number), '' when it is not on screen.
+    orbNum: (b => b && !b.hidden && getComputedStyle(b).display !== 'none' && getComputedStyle(b).visibility !== 'hidden' && b.getBoundingClientRect().width > 0 ? b.textContent : '')(document.querySelector('#orbBadge')) };
 });
 const measure = page => page.evaluate(() => {
   const box = el => { const r = el.getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; };
@@ -130,6 +132,8 @@ const measure = page => page.evaluate(() => {
           assert.ok(steps.home.tiles[0].on && !steps.home.tiles[1].on, 'Home is lit, the others dim');
           // 2) Badges: Chats the unread/Ready count, Messenger its unread count, Apps none.
           assert.deepEqual(steps.home.tiles.map(t => t.badge), ['', '12', '3', ''], 'badges');
+          // wizard-ux#1950 (James: "there should be no number above the orb"): the counts live only on the tiles.
+          assert.equal(steps.home.orbNum, '', `no number on the orb at Home (${steps.home.orbNum})`);
           // 5) Apps, first tap: the App selector (Recent, the grid, search).
           await tap('apps'); steps.selector = await state(page); await shot('selector');
           assert.equal(steps.selector.sheet, 'launcher', 'first Apps tap opens the App selector');
@@ -143,6 +147,7 @@ const measure = page => page.evaluate(() => {
           // 7) Back to Apps from another section: the same app, not reloaded.
           const m1 = await marks();
           await tap('chats'); steps.chats = await state(page); assert.equal(steps.chats.cur, 'chats');
+          await shot('chats'); assert.equal(steps.chats.orbNum, '', `no number on the orb in Chats (${steps.chats.orbNum})`);
           await tap('apps'); steps.back = await state(page); assert.equal(steps.back.cur, 'apps'); assert.equal(steps.back.front, 'notes');
           assert.deepEqual(await marks(), m1, 'Notes was not reloaded');
           // 8) The tile again on the app: the selector over it, dimmed; a tap outside closes it, so does Back.
@@ -171,6 +176,7 @@ const measure = page => page.evaluate(() => {
           assert.equal(steps.third.front, 'wizard-calendar'); assert.ok(!steps.thirdFrames.includes('/notes/'), `the oldest app closed (${steps.thirdFrames})`);
           // 10) Messenger: tap opens it; a long-press pins another app; Reset brings Messenger back.
           await tap('slot'); steps.slot = await state(page); assert.equal(steps.slot.cur, 'slot'); assert.equal(steps.slot.front, 'messenger');
+          assert.equal(steps.slot.orbNum, '', `no number on the orb in Messenger (${steps.slot.orbNum})`);
           const sp = await center('.sec-tile[data-sec="slot"]'); await touch([sp], 650); await nap(700);
           steps.pin = await page.evaluate(() => ({ sheet: __wos.sheet, title: document.querySelector('#launcherBody .sec-pin h4')?.textContent, apps: [...document.querySelectorAll('#launcherBody [data-secpin]')].map(b => b.dataset.secpin), reset: document.querySelector('#launcherBody [data-secreset]')?.textContent }));
           await shot('pin');
