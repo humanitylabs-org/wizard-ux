@@ -1,7 +1,7 @@
 'use strict';
 // Smart inbox (wizard-ux issue 1883, switch wizard/smart-inbox, off by default) in a real browser. Disposable synthetic
 // transport only. Phone 412x915, Classic desktop and the AI apps desktop's Chats sidebar (1440x960), in Nebula and Light
-// (obsidian-light), with James's pilot switches (wizard/inbox-rows, wizard/sent-rows, wizard/sent-threads; QA_ROWS=off
+// (obsidian-light), with James's pilot switches (wizard/inbox-rows, wizard/sent-threads; QA_ROWS=off
 // keeps only wizard/inbox-until-archived).
 // A copy of a real list: 30 threads, a mix of needs you / check / done / fyi / failed / approval / running, started by
 // the owner (a Sent row) or by an agent (watches, schedules, helper results, threads older than the Sent log: no Sent

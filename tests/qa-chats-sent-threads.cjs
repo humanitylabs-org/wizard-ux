@@ -1,7 +1,7 @@
 'use strict';
 // Sent as threads (wizard-ux issue 1880, switch wizard/sent-threads, off by default) in a real browser. Disposable
 // synthetic transport only. Phone 412x915, Classic desktop and the AI apps desktop's Chats sidebar (1440x960), in Nebula
-// and Light (obsidian-light), with James's pilot switches (wizard/inbox-rows, wizard/sent-rows; QA_ROWS=off drops them).
+// and Light (obsidian-light), with James's pilot switches (wizard/inbox-rows; QA_ROWS=off drops it).
 // Threads and what the box says about each:
 //   qa-trip   three sends from him, the agent answered each quietly            → Sent, ONE row titled "Lyon trip"
 //   qa-quiet  "Sent to Miguel, done", answered quietly                         → Sent; then it needs him → Inbox; then quiet again → Sent
