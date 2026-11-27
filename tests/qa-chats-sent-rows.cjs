@@ -5,7 +5,7 @@
 // Phone 412x915, Classic desktop 1440x960 (the full Chats view) and the AI apps desktop's Chats panel 1440x960, in
 // Nebula and Light (obsidian-light):
 //   Sent has no "‹ Sent" back row and no All / Working pills; one list with Inbox's section header style, Working (the
-//   running sends) then Processed (the finished ones); every row is a normal Chats row (.ch-row-wrap > .ch-row), as tall
+//   running sends) then Processed (the finished ones whose thread is not in Inbox, issue 1829); every row is a normal Chats row (.ch-row-wrap > .ch-row), as tall
 //   as an Inbox row with the same title size; at least 9 rows show on the phone; no internal words on any row; a
 //   long-press (phone), right-click and Shift+F10 (desktop) open the row actions sheet with why it went where it went,
 //   Open chat and the two corrections; a correction posts and the row says Corrected; a tap opens the (hidden) thread;
@@ -141,7 +141,7 @@ const report = { origin, web, cases: [] };
         assert.equal(await count(`${L} [data-chsentfilter], ${L} .ch-sent-filter`), 0, 'no All / Working pills or filter');
         assert.equal(await count(`${L} .ch-sent-row`), 0, 'no cards');
         entry.sections = await page.locator(`${L} .ch-sec.ch-sr > .ch-sec-h`).filter({ visible: true }).evaluateAll(b => b.map(x => x.innerText.replace(/\s+/g, ' ').trim()));
-        assert.deepEqual(entry.sections.map(s => s.toLowerCase()), ['working 2', 'processed 10'], 'Working, then Processed: ' + JSON.stringify(entry.sections));
+        assert.deepEqual(entry.sections.map(s => s.toLowerCase()), ['working 2', 'processed 6'], 'Working, then Processed: ' + JSON.stringify(entry.sections));
         entry.sent = await page.evaluate(([L, ai, IBQ, AADQ, lookSrc]) => {
           const lookOf = eval(lookSrc);
           const rows = [...document.querySelectorAll(`${L} .ch-ib-wrap.ch-sr-wrap > .ch-row.ch-ib-row.ch-sr-row`)].filter(n => n.getClientRects().length);
@@ -154,7 +154,7 @@ const report = { origin, web, cases: [] };
             head: [getComputedStyle(h).fontSize, getComputedStyle(h).fontWeight, getComputedStyle(h).textTransform].join(' '),
             marks: rows.map(r => r.querySelector('.ch-ib-mk i')?.className.split(' ')[0] || ''), texts: rows.map(text), arch: rows.filter(r => r.parentElement.querySelector('.ch-ib-arch')).length };
         }, [L, ai, IBQ, AADQ, lookOf.toString()]);
-        assert.equal(entry.sent.n, 12, 'one row per send');
+        assert.equal(entry.sent.n, 8, 'one row per send not in Inbox (issue 1829: a send whose thread is in Inbox is not listed in Sent)');
         // The same row design as Inbox beside it: height, padding, spacing, title, line, avatar, sender, section header.
         assert.deepEqual(entry.sent.look, entry.inbox.look, 'Sent rows look like the Inbox rows: ' + JSON.stringify([entry.sent.look, entry.inbox.look]));
         assert.deepEqual(entry.sent.heights, [entry.inbox.look.height], 'every Sent row is as tall as an Inbox row');
@@ -163,53 +163,47 @@ const report = { origin, web, cases: [] };
         // The issue's first "at least 9 rows" was for one-line rows; James's later word (25 Nov) is Inbox's own rows (77 px):
         // a 412x915 phone shows 7 whole ones (today's cards: 4 or 5), the same as Inbox.
         if (phone) assert.ok(entry.sent.inView >= 7, `Sent rows on the phone screen (Inbox-size rows): ${entry.sent.inView}`);
-        assert.deepEqual(entry.sent.marks, ['ch-spin', 'ch-spin', '', '', 'ch-chan-dot', 'ch-chan-dot', '', '', '', '', '', ''], 'the spinner while it runs, the amber dot when it needs him or failed');
+        assert.deepEqual(entry.sent.marks, ['ch-spin', 'ch-spin', 'ch-chan-dot', 'ch-chan-dot', '', '', '', ''], 'the spinner while it runs, the amber dot when it needs him or failed');
         for (const t of entry.sent.texts) assert.doesNotMatch(t, INTERNAL, 'no internal words: ' + t);
         assert.match(entry.sent.texts[0], /\d+m \| Note to self: call mom about Sunday lunch \| Ran quietly · Working$/);
-        assert.match(entry.sent.texts[2], /\d+m \| Tell me the weather tomorrow \| Replied in chat · Done$/);
-        assert.match(entry.sent.texts[4], /\d+h \| Book a table for four on Friday #family \| Ran quietly · Needs you · in Inbox$/);
-        if (!ai) assert.match(entry.sent.texts[4], /^family \| /, 'a tag names the row, as in Inbox');
-        assert.match(entry.sent.texts[5], /Failed · in Inbox$/);
-        assert.match(entry.sent.texts[6], /Set a reminder · Done · Urgent$/);
-        assert.match(entry.sent.texts[8], /Noted in its chat · Done$/);
+        assert.match(entry.sent.texts[2], /\d+h \| Book a table for four on Friday #family \| Ran quietly · Needs you · in Inbox$/);
+        if (!ai) assert.match(entry.sent.texts[2], /^family \| /, 'a tag names the row, as in Inbox');
+        assert.match(entry.sent.texts[3], /Failed · in Inbox$/);
+        assert.match(entry.sent.texts[4], /Set a reminder · Done · Urgent$/);
+        assert.match(entry.sent.texts[5], /Next desk \| Ran as a command · Done$/);
         await shot('2-sent');
         // 3. The actions sheet: a long-press on the phone, right-click and Shift+F10 on desktop.
         const rowSel = c => `${L} [data-chsent="${id(c)}"]`;
         const sheetOpen = () => vis('.ch-sheet [data-rssentopen]').waitFor({ timeout: 4000 });
         if (phone) {
-          const b = await vis(rowSel('b')).boundingBox(), cdp = await context.newCDPSession(page), pt = [{ x: b.x + 120, y: b.y + b.height / 2 }];
+          const b = await vis(rowSel('3')).boundingBox(), cdp = await context.newCDPSession(page), pt = [{ x: b.x + 120, y: b.y + b.height / 2 }];
           await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: pt }); await nap(800);
           await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+          await nap(800); // a tap within 700 ms of the press is its ghost click and is ignored on purpose (chats-bind justPressed, issue 1880)
         } else {
-          await vis(rowSel('b')).click({ button: 'right' });
+          await vis(rowSel('3')).click({ button: 'right' });
         }
         await sheetOpen();
         entry.sheet = await page.evaluate(() => { const s = [...document.querySelectorAll('.ch-sheet')].find(n => n.getClientRects().length); return { why: s.querySelector('.ch-sr-why')?.innerText, buttons: [...s.querySelectorAll('button')].map(b => b.innerText.trim()) }; });
-        assert.equal(entry.sheet.why, 'Replied in chat because you said “tell me”.');
+        assert.equal(entry.sheet.why, 'Ran as a command because it was a task.');
         assert.deepEqual(entry.sheet.buttons, ['Open chat', 'Should have replied', 'Didn’t need a reply']);
         await shot('3-sheet');
         if (!phone) {
           await page.keyboard.press('Escape'); await nap(300);
           assert.equal(await count('.ch-sheet'), 0, 'Esc closes the sheet');
-          await vis(rowSel('b')).focus(); await page.keyboard.press('Shift+F10');
+          await vis(rowSel('3')).focus(); await page.keyboard.press('Shift+F10');
           await sheetOpen();
           entry.keyboard = true;
         }
         // 4. Didn't need a reply: the same correction as today; the row says Corrected.
         await vis('.ch-sheet [data-rssentfix="quiet"]').click();
-        await page.waitForFunction(([L, sid]) => [...document.querySelectorAll(`${L} [data-chsent="${sid}"]`)].some(b => b.getClientRects().length && /Corrected/.test(b.innerText)), [L, id('b')], { timeout: 5000 });
-        assert.deepEqual(entry.corrections, [{ id: id('b'), body: { should_reply: false } }], 'one correction posted');
+        await page.waitForFunction(([L, sid]) => [...document.querySelectorAll(`${L} [data-chsent="${sid}"]`)].some(b => b.getClientRects().length && /Corrected/.test(b.innerText)), [L, id('3')], { timeout: 5000 });
+        assert.deepEqual(entry.corrections, [{ id: id('3'), body: { should_reply: false } }], 'one correction posted');
         assert.equal(await count('.ch-sheet'), 0, 'the sheet closed');
         await shot('4-corrected');
-        // A reply typed in a thread: why, Open, no corrections (nothing to move).
-        if (!phone) {
-          await vis(rowSel('4')).click({ button: 'right' }); await sheetOpen();
-          const t = await page.evaluate(() => { const s = [...document.querySelectorAll('.ch-sheet')].find(n => n.getClientRects().length); return { why: s.querySelector('.ch-sr-why')?.innerText, n: s.querySelectorAll('[data-rssentfix]').length }; });
-          assert.deepEqual(t, { why: 'Noted in its chat: nothing was needed from you, so it stayed out of Inbox.', n: 0 });
-          await page.keyboard.press('Escape'); await nap(300);
-        }
+        // (A reply typed in a thread, whose sheet has no corrections, is in Inbox here: its thread is; tests/sent-rows.test.mjs covers it.)
         // 5. A live skin change repaints the rows (tokens only).
-        const colour = () => vis(rowSel('b')).evaluate(n => getComputedStyle(n.querySelector('.ch-ib-t')).color);
+        const colour = () => vis(rowSel('3')).evaluate(n => getComputedStyle(n.querySelector('.ch-ib-t')).color);
         const c0 = await colour(), other = skin === 'nebula' ? 'obsidian-light' : 'nebula';
         await page.evaluate(sk => WosSkin.set(sk), other); await nap(900);
         entry.liveSkin = { from: c0, to: await colour(), applied: await page.evaluate(() => document.documentElement.dataset.skin || '') };
@@ -220,7 +214,7 @@ const report = { origin, web, cases: [] };
         const thread = () => page.locator('.ch-thread').filter({ visible: true }).first();
         await thread().getByText('Added a reminder to call mom about Sunday lunch.').waitFor({ timeout: 10000 });
         assert.ok(entry.reads.some(x => x.startsWith('qa-worker-1')), 'read by id');
-        if (phone) { await back(); await nap(600); assert.equal(await count(`${L} .ch-sr-row`), 12, 'Back from the thread: Sent'); await back(); await nap(600); }
+        if (phone) { await back(); await nap(600); assert.equal(await count(`${L} .ch-sr-row`), 8, 'Back from the thread: Sent'); await back(); await nap(600); }
         else if (!ai) { await thread().getByText('Added a reminder to call mom about Sunday lunch.').click(); await back(); await nap(600); await vis(`${L} .ch-sr-row`).waitFor({ timeout: 8000 }); await vis(`${L} .ch-sec.ch-sr .ch-sec-h`).focus(); await back(); await nap(600); }
         else { await page.keyboard.press('Escape'); await nap(500); await vis(`${L} .ch-sec.ch-sr .ch-sec-h`).focus(); await page.evaluate(() => __wux.escStep()); await nap(600); }
         assert.equal(await count(`${L} .ch-sr-row`), 0, 'Back from Sent leaves Sent');
