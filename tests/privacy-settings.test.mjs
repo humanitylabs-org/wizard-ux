@@ -107,6 +107,7 @@ test('an older Agent Service without private mode: the row says it is not availa
   assert.match(text(b.feature.html()), /Private mode Not available on this Wizard yet\. Update it in About & updates\./);
   assert.doesNotMatch(text(b.feature.html()), /Privacy check/);
   assert.equal(b.P.setupDue(), false);
+  assert.equal(b.P.on(), false, 'the Store and app routes keep their own fallback on such a box');
   assert.equal(await b.P.open('setup'), true);
   await settle();
   assert.match(text(b.sheet().innerHTML), /Private mode isn't available on this Wizard yet/);

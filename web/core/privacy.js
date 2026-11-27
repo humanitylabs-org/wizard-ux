@@ -15,7 +15,7 @@
  * Also opened from the model picker's Private group (setupDue), the Welcome's "Why does this matter?" and a trusted
  * app's 'wizard:app-route' { action: 'private-mode' } (the Tinfoil app, the install sheet).
  * The box's answers are read when Settings › Privacy or the sheet asks, never at page load.
- *   WosPrivacy.on() (always true; kept for callers such as the Store) / setupDue() / open(screen?) / close() / back() /
+ *   WosPrivacy.on() (false only once an older box said it has no private mode) / setupDue() / open(screen?) / close() / back() /
  *   isOpen / state / check */
 (() => {
   'use strict';
@@ -25,9 +25,11 @@
   const ASK = 'Why would I want private AI?';
   const VIDEO = ''; // aiwizards.com video: drawn once the content exists
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const on = () => true;
   const tsig = ms => { try { if (AbortSignal.timeout) return AbortSignal.timeout(ms); } catch (e) {} return undefined; };
   const P = { st: null, chk: null, pf: null, tin: null, at: 0, reading: null };
+  // No switch: available unless this box's Agent Service has said it has no private mode (an older one answers on: false),
+  // so the Store and app routes keep their own private-agent fallback there.
+  const on = () => P.st?.on !== false;
   async function getJson(url) {
     const r = await fetch(url, { credentials: 'same-origin', cache: 'no-store', signal: tsig(6000) });
     const j = await r.json().catch(() => null);
