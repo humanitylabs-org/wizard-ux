@@ -1,39 +1,39 @@
 'use strict';
-// wizard-ux issue 1439: the shell's write guard (core/write-guard.js, switch wizard/write-guard, off by default),
+// wizard-ux issue 1439: the shell's write guard (core/write-guard.js, on for everyone; switch removed),
 // in the real phone and desktop shells on a synthetic box (nothing leaves the test).
-// Per shell, switch off and on:
+// Per shell (no switch to turn on):
 //   - loop: the box never keeps one thread-seen record. A fixture feature in the page does what the shell did before
 //     wizard-ux#1429 (issue 1428): every 300 ms it reads /wizard/thread-seen and, when the record is missing, PUTs the
-//     whole state again. Off: it goes on the wire every time. On: the first write and at most one resend, then nothing.
+//     whole state again. The first write and at most one resend, then nothing.
 //     The shell's own thread-seen resend (live.js) is counted apart and stays at most one.
-//   - burst: 25 different PATCHes in a few seconds to one endpoint. On: 20 reach the box, the rest get a local 429 with
-//     Retry-After, and one bug report goes to the Feedback app (endpoint, rate, build). Off: all 25, no report.
-//   - box limit: the box answers 429 Retry-After: 3. On: nothing goes to that endpoint for 3 s. Off: every write goes.
-// QA_OUT=<dir> keeps report.json and a Settings screenshot per case. QA_SHELLS=phone|desktop, QA_SECS (loop length).
+//   - burst: 25 different PATCHes in a few seconds to one endpoint. 20 reach the box, the rest get a local 429 with
+//     Retry-After, and one bug report goes to the Feedback app (endpoint, rate, build).
+//   - box limit: the box answers 429 Retry-After: 3. Nothing goes to that endpoint for 3 s.
+// QA_OUT=<dir> keeps report.json and a screenshot per shell. QA_SHELLS=phone|desktop, QA_SECS (loop length).
 const { chromium } = require('../tools/qa-playwright.cjs');
 const { ownerRead } = require('../tools/qa-desktop-frame-fixture.cjs');
 const fs = require('node:fs'), path = require('node:path'), assert = require('node:assert/strict');
 const origin = 'https://write-guard.test', prefix = '/wizard-os-home/', root = path.resolve(process.env.QA_WEB || path.join(__dirname, '../web'));
 const out = process.env.QA_OUT || ''; if (out) fs.mkdirSync(out, { recursive: true });
-const SECS = Number(process.env.QA_SECS || 25), ID = 'wizard/write-guard', LOST = 'direct:lost';
+const SECS = Number(process.env.QA_SECS || 25), LOST = 'direct:lost';
 const now = Date.now(), sec = Math.floor(now / 1000);
 const row = (id, n) => ({ id, title: 'Chat ' + id, runtime: 'direct', status: 'completed', updated_at: new Date(now - n * 60000).toISOString(), updatedAt: new Date(now - n * 60000).toISOString(), message_count: 2, messageCount: 2, archived: false, preview: 'Hi.' });
 const ROWS = [row('a', 1), row('b', 2), row('lost', 3)];
 const nap = ms => new Promise(r => setTimeout(r, ms));
 const report = { root, cases: [] };
 
-async function run(browser, shell, on) {
-  const phone = shell === 'phone', entry = { shell, on, errors: [], writes: [] }; report.cases.push(entry);
+async function run(browser, shell) {
+  const phone = shell === 'phone', entry = { shell, errors: [], writes: [] }; report.cases.push(entry);
   const c = await browser.newContext({ viewport: phone ? { width: 412, height: 915 } : { width: 1440, height: 960 }, isMobile: phone, hasTouch: phone, serviceWorkers: 'block', reducedMotion: 'reduce',
     ...(phone ? { userAgent: 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Mobile Safari/537.36' } : {}) });
   try {
     await c.routeWebSocket('**/*', ws => ws.close());
-    await c.addInitScript(({ shell, LOST, now, on, ID }) => {
+    await c.addInitScript(({ shell, LOST, now }) => {
       if (window !== top) return;
       for (const [k, v] of Object.entries({ 'wos.shell': shell, 'wos.coached': 'true', 'wos.tour.v1': 'true', 'wos.welcome.v1': 'done', 'wos.skin': 'nebula', 'wos.channel.v1': 'latest' })) if (localStorage.getItem(k) === null) localStorage.setItem(k, v);
       localStorage.setItem('wizard.thread-seen.v1:wizard-account-local', JSON.stringify({ initializedAt: 1, threads: { [LOST]: { seenAt: now, assistantActivityAt: now - 180000 } } }));
-      localStorage.setItem('wos.skin-tweaks.v1', JSON.stringify({ version: 1, off: {}, preset: 'none', mix: on ? { [ID]: true } : {}, defaultsMigrated: true, machinesHomeMoved: true }));
-    }, { shell, LOST, now, on, ID });
+      localStorage.setItem('wos.skin-tweaks.v1', JSON.stringify({ version: 1, off: {}, preset: 'none', mix: {}, defaultsMigrated: true, machinesHomeMoved: true }));
+    }, { shell, LOST, now });
     let kept = { initializedAt: 1, threads: {} }, limitedUntil = 0;
     await c.route('**/*', async r => {
       const q = r.request(), u = new URL(q.url()); if (u.origin !== origin) return r.abort();
@@ -66,7 +66,6 @@ async function run(browser, shell, on) {
     await p.goto(origin + prefix + (phone ? 'index.html?phone' : 'desktop.html'));
     await p.waitForFunction(() => (window.__wux || window.__wos) && window.WosExperience?.state.tweaks.length && !window.WosExperience.state.busy, null, { timeout: 30000 });
     await p.waitForFunction(() => window.WizLive?.sessions?.length >= 3, null, { timeout: 20000 });
-    entry.switchOn = await p.evaluate(id => (document.documentElement.dataset.tweaks || '').split(' ').includes(id), ID);
     await p.waitForFunction(() => (JSON.parse(localStorage.getItem('wux.apps.v1') || '[]') || []).some(a => a.id === 'feedback'), null, { timeout: 10000 });
     // 1. loop: the pre-#1429 resend, through the page's own fetch (tagged ?qa-loop so it is counted apart)
     entry.loopTicks = await p.evaluate(async ({ LOST, ms }) => {
@@ -101,16 +100,7 @@ async function run(browser, shell, on) {
     const lim = entry.writes.filter(w => w.p === '/wizard/v1/qa-limited').map(w => w.t);
     entry.limitedGapMs = lim.length > 1 ? lim[1] - lim[0] : null; entry.limitedOnWire = lim.length;
     entry.stats = await p.evaluate(() => window.WosWriteGuard?.stats() || null);
-    // the Settings row for the switch (Before/After shots)
-    if (out) {
-      const row = p.locator(`[data-tweak-toggle="${ID}"]`).filter({ visible: true }).first();
-      for (const page of ['try-features', 'appearance']) {
-        await p.evaluate(page => (window.__wux?.openSettings || window.__wos?.openSettings)(page), page).catch(() => {}); await nap(1200);
-        if (await row.count()) break;
-      }
-      if (await row.count()) { await row.scrollIntoViewIfNeeded(); await nap(300); entry.settingsRow = await row.getAttribute('aria-checked'); }
-      await p.screenshot({ path: path.join(out, `${shell}-${on ? 'on' : 'off'}-settings.png`) });
-    }
+    if (out) await p.screenshot({ path: path.join(out, `${shell}-after-probe.png`) });
     return entry;
   } finally { await c.close(); }
 }
@@ -119,17 +109,8 @@ async function run(browser, shell, on) {
   const browser = await chromium.launch();
   try {
     for (const shell of (process.env.QA_SHELLS || 'phone,desktop').split(',')) {
-      const off = await run(browser, shell, false);
-      assert.deepEqual(off.errors, [], `${shell} off: no page errors`);
-      assert.equal(off.switchOn, false);
-      assert.ok(off.loopPuts >= off.loopTicks - 2 && off.loopPuts > 20, `${shell} off: the looping write goes out every time (${off.loopPuts}/${off.loopTicks})`);
-      assert.equal(off.burstOnWire, 25, `${shell} off: all 25 burst writes reach the box`);
-      assert.deepEqual(off.reports, [], `${shell} off: no bug report`);
-      assert.equal(off.limitedOnWire, 20, `${shell} off: every write goes even after the box asked to wait`);
-      assert.deepEqual(off.stats, {}, `${shell} off: the guard counted nothing`);
-      const on = await run(browser, shell, true);
+      const on = await run(browser, shell);
       assert.deepEqual(on.errors, [], `${shell} on: no page errors`);
-      assert.equal(on.switchOn, true, `${shell}: the switch is on`);
       assert.ok(on.loopPuts >= 1 && on.loopPuts <= 2, `${shell} on: the never-kept record is sent once and resent at most once (${on.loopPuts} of ${on.loopTicks} tries)`);
       if (on.loopPuts === 2) assert.ok(on.loopTimes[1] - on.loopTimes[0] >= 10000, `${shell} on: the resend comes after 10 s`);
       assert.ok(on.shellPuts <= 1, `${shell} on: the shell's own resend stays at most one (${on.shellPuts})`);
@@ -144,6 +125,6 @@ async function run(browser, shell, on) {
       assert.ok(on.limited.filter(([t, s]) => t < 2800).every(([, s]) => s === 429), `${shell} on: callers get a 429 meanwhile`);
     }
     if (out) fs.writeFileSync(path.join(out, 'report.json'), JSON.stringify(report, null, 2));
-    console.log('PASS write guard: identical resends dropped (one resend, then none), bursts paused with one report, box Retry-After honoured; switch off unchanged; phone + desktop');
+    console.log('PASS write guard: identical resends dropped (one resend, then none), bursts paused with one report, box Retry-After honoured with no switch; phone + desktop');
   } catch (e) { if (out) fs.writeFileSync(path.join(out, 'partial-report.json'), JSON.stringify(report, null, 2)); throw e; } finally { await browser.close(); }
 })().catch(e => { console.error(e); process.exit(1); });

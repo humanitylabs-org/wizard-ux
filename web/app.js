@@ -154,10 +154,13 @@
     const wake = () => { let busy = false; try { busy = !!(G || DS); } catch (e) {} if (busy) parkT = setTimeout(wake, 250); else parkDesks(true); };
     parkT = setTimeout(wake, 900);
   }
+  let swipeBySection = null; // phone sections (wizard-ux#1929, switch wizard/phone-sections): app-sections.js, set below
   function swipeDesk(step) {
     const from = desks[idx]?.id;
+    // With phone sections on, a swipe steps through Home, Chats, Messenger and Apps, never a new desk.
+    if (typeof swipeBySection === 'function' && swipeBySection(step)) { /* moved by section */ }
     // The ＋ is the next destination after the last occupied desk, for swipes as well as taps.
-    if (step > 0 && idx === desks.length - 1) newDesk(); else goDesk(idx + step);
+    else if (step > 0 && idx === desks.length - 1) newDesk(); else goDesk(idx + step);
     // Only a swipe can be the iPhone's swipe home in disguise (undoLastMove below).
     if (desks[idx]?.id !== from) lastMove = { from, at: Date.now() };
   }
@@ -532,6 +535,7 @@
   function appRow(a, sel) { const k = a.kind === 'view' ? 'view' : a.kind === 'native' ? 'native' : 'app'; return `<button class="lrow ${sel ? 'sel' : ''}" data-app="${a.id}">${ico('span', 'ic', a)}<span class="nm">${esc(a.name)}<small>${esc(a.desc)}</small></span><span class="kind ${k}">${k === 'native' ? 'Android' : k === 'view' ? 'View' : 'Wizard'}</span></button>`; }
   // live: a background refresh (sessions poll, app list). It repaints only when the content changed and never
   // moves the scroll, so an open Apps sheet stays still instead of redrawing every 15 s (James, 10 Oct).
+  let pinSheetHtml = null; // the pin sheet's grid while pinning the Messenger slot (app-sections.js)
   function renderLauncher(q, live) {
     const body = $('#launcherBody');
     q = q.trim(); tileN = 0;
@@ -542,6 +546,7 @@
     };
     if (!q) {
       // Recent is a placement, not a second copy of the Apps catalogue. Resolve aliases before deduping.
+      const pin = typeof pinSheetHtml === 'function' && pinSheetHtml(); if (pin) { paint(pin); return; } // "Pin an app here" (app-sections.js)
       const recentIds = [...new Set(store.get('recent', window.WizLauncher?.get('recents') || []).map(id => APP[id]?.id))].filter(id => APP[id] && !['app-store', 'agents'].includes(id) && APP[id].kind !== 'native' && !window.WizCore.isMaintenanceApp(APP[id])).slice(0, 4);
       const remainingApps = APPS.filter(a => !recentIds.includes(a.id) && a.id !== 'agents' && !window.WizCore.isMaintenanceApp(a) && (a.kind === 'wizard' || a.kind === 'chats' || a.kind === 'usuals'));
       paint(`<div class="lgroup"><h4>Recent</h4><div class="lgrid">${recentIds.map(id => appTile(APP[id])).join('')}</div></div>
@@ -1063,6 +1068,12 @@
   linkdeskLate({ armBack });
   cardsLate({ armBack, armFrameBack, backStep, ensureGuard, onBack });
   orbswipeLate({ armBack });
+  /* The four sections around the orb (switch wizard/phone-sections, off by default); app-sections.js. */
+  const { sectionsArrange, sectionsPaint, sectionsPinHtml, sectionsStops, sectionsSwipe } = window.WizCore.appParts.sections({ $, APP, APPS, appVars, CHATS_APP, closeSheets, closeWin, esc, goDesk, HOME, launcher, LIVE, mainChats, openApp, openSheet, renderDots, renderLauncher, save, store, syncDesks, toast, vib, winApp });
+  pinSheetHtml = sectionsPinHtml; swipeBySection = sectionsSwipe;
+  desksLate({ sectionsArrange, sectionsPaint });
+  scrubLate({ sectionsStops });
+  sectionsPaint();
   var dropUntil = 0; // retained for hosted-frame programmatic-pop accounting
   /* The Back guard, first run, the native shell bridge and deep links; app-boot.js. */
   window.WizCore.appParts.boot({ $, APP, APPS, appVars, armBack, backStep, blank, browserBarInset, buildDesks, cancelVoice, ch, CH, CHATS, chatsBack, closeAppPlayback, closeDesk, closeMenu, closeOverview, closePeek, closeSheets, closeWin, deskOf, device, ensureGuard, execute, FIELDS, findApp, finishVoice, focusWin, fromOf, goDesk, handleText, HOME, LIVE, localParse, mainChats, markVisibleThreadsSeen, MAXW, mergeDesks, mountLinks, moveWin, nativeFinish, nativeResume, NOMATCH_MS, onBack, onUnsentChange, openAgentChats, openApp, openChat, openChatsList, openLinkDesk, openOverview, openPeek, openSearch, openSettings, openSheet, openWin, openWizardThread, orbWrap, OUTBOX, ownedSwipe, pinWin, placeApp, placeTrack, posOf, QUICK_MS, quickTake, rearmFrames, recDone, recoverDictation, recoverParkedReply, refreshCompose, refreshHome, renderChats, renderDesk, renderDots, renderSettings, reorderDesks, runUtterance, save, sendChat, sendSnap, setFull, setVoice, setZen, shock, sideButtonTap, splitDesk, startVoice, store, syncDesks, toAgent, toast, track, tx, txHide, txShow, unsentAll, V, vib, viewContext, viewOf, watchers, winApp, winEl });

@@ -36,7 +36,7 @@ const sessions = () => [
       try {
         await context.routeWebSocket('**/*', w => w.close());
         // James's own tweak set on this device (synthetic copy of the choices, never his data), with or without archive-top.
-        const mix = { 'wizard/desktop-chats': true, 'miguel/reply-summary': true, 'wizard/sidebar-chats-view': true, ...(top ? { 'miguel/archive-top': true } : {}) };
+        const mix = { 'wizard/desktop-chats': true, 'miguel/reply-summary': true, ...(top ? { 'miguel/archive-top': true } : {}) };
         await context.addInitScript(({ shell, layout, skin, group, mix }) => {
           if (window !== top) return;
           for (const [k, v] of Object.entries({ 'wos.shell': shell, 'wos.desktop-view.v1': layout, 'wos.coached': 'true', 'wos.tour.v1': 'true', 'wos.welcome.v1': 'done', 'wos.skin': skin, 'wos.chats.layout.v1': group,
