@@ -44,7 +44,8 @@ const origin='https://rename.test',prefix='/wizard-os-home/',id='synthetic-renam
   await page.waitForFunction(()=>window.WizLive?.ok&&window.WosExperience&&!WosExperience.state.busy);
   await page.evaluate(()=>document.getElementById('wosWelcome')?.remove());
   if(phone)await page.evaluate(()=>__wos.openApp(WizCore.apps('mobile').APPS.find(a=>a.id==='wizard')));
-  const selector=phone?`.ch-row[data-chopen="${id}"]`:`.aad-rw[data-sid="${id}"] .aad-row`;
+  // (the AI apps sidebar draws the phone's shared rows since wizard-ux issue 1966)
+  const selector=phone?`.ch-row[data-chopen="${id}"]`:`.aad-chan .ch-row[data-chopen="${id}"]`;
   await page.locator(selector).first().waitFor({state:'visible'});
   // Start a real detail read before the write; deliver it only after a confirming poll.
   detailHeld=true;await page.evaluate(id=>{window.renameOldDetail=WizLive.sessionInfo(id);},id);

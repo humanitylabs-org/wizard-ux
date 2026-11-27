@@ -79,9 +79,10 @@ export function sidetabsPart({ aadVars, actOn, api, el, flip, foot, head, icon, 
   // one app at a time, the list alone: its row for the chat already open behind it shows that chat again (another row
   // opens its chat, and paintOne follows the new thread)
   api.listen(side, 'click', e => {
-    const w = e.target?.closest?.('.aad-row')?.closest?.('.aad-rw');
-    if (w && one() && !aadVars.pane && aadVars.oneList && !oneSplit() && w.dataset.sid === aadVars.chatThread) { aadVars.oneList = false; aadVars.oneSeen = aadVars.chatThread; paintTop(); }
-  });
+    // (a row of the sidebar's own, or of the pane's shared Chats list: wizard-ux issue 1966)
+    const sid = e.target?.closest?.('.aad-row')?.closest?.('.aad-rw')?.dataset.sid || e.target?.closest?.('.aad-chan [data-chopen]')?.dataset.chopen;
+    if (sid && one() && !aadVars.pane && aadVars.oneList && !oneSplit() && sid === aadVars.chatThread) { aadVars.oneList = false; aadVars.oneSeen = aadVars.chatThread; paintTop(); }
+  }, { capture: true }); // (capture: Chats' own pane handler stops the click once it opens the row)
   const shade = el('div', 'aad-shade', { 'aria-hidden': 'true' });
 
   /* ---------- round 15 (Miguel, 3 Nov 2026: Arc-style): the top row over the main area ----------
