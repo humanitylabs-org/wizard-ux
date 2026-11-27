@@ -43,7 +43,10 @@ public final class CallActivity extends Activity {
     private final Handler main = new Handler(Looper.getMainLooper());
     private WebView web;
     private CallAudio audio;
-    private PermissionRequest pending;
+    /** Page requests waiting on Android's prompt (the page may ask for the microphone and the camera separately). */
+    private final List<PermissionRequest> waiting = new ArrayList<>();
+    /** The permissions the prompt on screen asks for; null when none is showing. */
+    private List<String> asking;
     private String origin;
     private boolean picked;
     private int pushes;
@@ -112,7 +115,7 @@ public final class CallActivity extends Activity {
             public void onPermissionRequest(PermissionRequest request) { runOnUiThread(() -> media(request)); }
 
             @Override
-            public void onPermissionRequestCanceled(PermissionRequest request) { if (pending == request) pending = null; }
+            public void onPermissionRequestCanceled(PermissionRequest request) { waiting.remove(request); }
         });
         web.loadUrl(url);
     }
@@ -140,17 +143,38 @@ public final class CallActivity extends Activity {
         return ai.wizards.os.ServerOrigin.matches(origin, asked.toString());
     }
 
-    /** The call page asks for the microphone and/or camera: only this Wizard's call page, after Android's own prompt. */
-    private void media(PermissionRequest r) {
-        if (isFinishing() || !sameOrigin(origin, r.getOrigin())) { r.deny(); return; }
+    /** The Android permissions a page request still needs. */
+    private List<String> missing(PermissionRequest r) {
         List<String> need = new ArrayList<>();
         for (String res : r.getResources()) {
             if (PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(res) && !held(Manifest.permission.RECORD_AUDIO)) need.add(Manifest.permission.RECORD_AUDIO);
             if (PermissionRequest.RESOURCE_VIDEO_CAPTURE.equals(res) && !held(Manifest.permission.CAMERA)) need.add(Manifest.permission.CAMERA);
         }
-        if (need.isEmpty()) { grant(r); return; }
-        if (pending != null) pending.deny();
-        pending = r;
+        return need;
+    }
+
+    /** The call page asks for the microphone and/or camera: only this Wizard's call page, after Android's own prompt.
+     *  Requests that arrive while a prompt is showing wait for it; one prompt at a time. */
+    private void media(PermissionRequest r) {
+        if (isFinishing() || !sameOrigin(origin, r.getOrigin())) { r.deny(); return; }
+        if (missing(r).isEmpty()) { grant(r); return; }
+        waiting.add(r);
+        if (asking == null) ask();
+    }
+
+    /** Answers every waiting request the last prompt covered; asks again for what a later request still needs. */
+    private void ask() {
+        List<String> need = new ArrayList<>();
+        for (int i = waiting.size() - 1; i >= 0; i--) {
+            PermissionRequest r = waiting.get(i);
+            List<String> m = missing(r);
+            boolean answered = asking != null && asking.containsAll(m);
+            if (m.isEmpty() || answered) { waiting.remove(i); grant(r); continue; }
+            for (String p : m) if (!need.contains(p)) need.add(p);
+        }
+        asking = null;
+        if (need.isEmpty() || isFinishing()) return;
+        asking = need;
         requestPermissions(need.toArray(new String[0]), REQ_MEDIA);
     }
 
@@ -169,10 +193,8 @@ public final class CallActivity extends Activity {
     @Override
     public void onRequestPermissionsResult(int code, String[] perms, int[] results) {
         super.onRequestPermissionsResult(code, perms, results);
-        if (code != REQ_MEDIA) return;
-        PermissionRequest r = pending;
-        pending = null;
-        if (r != null) grant(r);
+        if (code != REQ_MEDIA || asking == null) return;
+        ask();
     }
 
     /** Hands Element Call the current outputs. Its list listener starts with the call, so the first list is repeated
@@ -195,7 +217,8 @@ public final class CallActivity extends Activity {
     @Override
     protected void onDestroy() {
         main.removeCallbacksAndMessages(null);
-        if (pending != null) { pending.deny(); pending = null; }
+        for (PermissionRequest r : waiting) r.deny();
+        waiting.clear();
         if (audio != null) audio.stop();
         audio = null;
         if (web != null) { web.stopLoading(); web.loadUrl("about:blank"); web.destroy(); web = null; }

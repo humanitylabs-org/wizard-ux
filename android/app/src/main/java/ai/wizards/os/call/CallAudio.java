@@ -1,6 +1,7 @@
 package ai.wizards.os.call;
 
 import android.content.Context;
+import android.content.Intent;
 import android.media.AudioDeviceCallback;
 import android.media.AudioDeviceInfo;
 import android.media.AudioManager;
@@ -98,12 +99,16 @@ public final class CallAudio {
     private final Handler main = new Handler(Looper.getMainLooper());
     private int savedMode = AudioManager.MODE_NORMAL;
     private boolean started;
+    private final Context context;
+    /** Android 9-11: a Bluetooth headset connects its call audio (SCO) after a while, or fails to; see {@link #select}. */
+    private android.content.BroadcastReceiver sco;
     private final AudioDeviceCallback callback = new AudioDeviceCallback() {
         @Override public void onAudioDevicesAdded(AudioDeviceInfo[] added) { changed.run(); }
         @Override public void onAudioDevicesRemoved(AudioDeviceInfo[] removed) { changed.run(); }
     };
 
     public CallAudio(Context c, Runnable changed) {
+        this.context = c;
         this.am = (AudioManager) c.getSystemService(Context.AUDIO_SERVICE);
         this.changed = changed;
     }
@@ -153,11 +158,38 @@ public final class CallAudio {
             int r = rank(d.getType());
             if (r < 0) return false;
             boolean bt = d.getType() == AudioDeviceInfo.TYPE_BLUETOOTH_SCO;
-            if (bt) { am.setSpeakerphoneOn(false); am.startBluetoothSco(); am.setBluetoothScoOn(true); }
-            else { am.setBluetoothScoOn(false); am.stopBluetoothSco(); am.setSpeakerphoneOn(d.getType() == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER); }
+            if (bt) { am.setSpeakerphoneOn(false); watchSco(); am.startBluetoothSco(); am.setBluetoothScoOn(true); }
+            else { dropSco(); am.setBluetoothScoOn(false); am.stopBluetoothSco(); am.setSpeakerphoneOn(d.getType() == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER); }
             return true;
         }
         return false;
+    }
+
+    /** Android 9-11: SCO starts asynchronously. When it fails (or the headset drops it), the call's sound is taken off
+     *  the headset route and Element Call gets the list again, so it can pick another output. */
+    @SuppressWarnings("deprecation")
+    private void watchSco() {
+        dropSco();
+        sco = new android.content.BroadcastReceiver() {
+            boolean connected;
+            @Override public void onReceive(Context c, Intent i) {
+                int st = i.getIntExtra(AudioManager.EXTRA_SCO_AUDIO_STATE, AudioManager.SCO_AUDIO_STATE_ERROR);
+                if (st == AudioManager.SCO_AUDIO_STATE_CONNECTED) { connected = true; return; }
+                boolean failed = st == AudioManager.SCO_AUDIO_STATE_ERROR || (connected && st == AudioManager.SCO_AUDIO_STATE_DISCONNECTED);
+                if (!failed || !started) return;
+                dropSco();
+                am.setBluetoothScoOn(false);
+                am.stopBluetoothSco();
+                changed.run();
+            }
+        };
+        context.registerReceiver(sco, new android.content.IntentFilter(AudioManager.ACTION_SCO_AUDIO_STATE_UPDATED));
+    }
+
+    private void dropSco() {
+        if (sco == null) return;
+        try { context.unregisterReceiver(sco); } catch (IllegalArgumentException ignored) { }
+        sco = null;
     }
 
     /** The call window closed: everything back as it was. */
@@ -166,6 +198,7 @@ public final class CallAudio {
         if (am == null || !started) return;
         started = false;
         am.unregisterAudioDeviceCallback(callback);
+        dropSco();
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) am.clearCommunicationDevice();
         else { am.setBluetoothScoOn(false); am.stopBluetoothSco(); am.setSpeakerphoneOn(false); }
         am.setMode(savedMode == AudioManager.MODE_IN_COMMUNICATION ? AudioManager.MODE_NORMAL : savedMode);
