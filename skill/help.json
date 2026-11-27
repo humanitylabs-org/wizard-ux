@@ -479,11 +479,6 @@
       "where": "Settings › Appearance › Try new features › Wizard for Mac in About & updates",
       "when": "Wizard for Mac only"
     },
-    "wizard/download-swipe": {
-      "help": "Phone: swipe the Downloaded banner away and swipe the Downloads sheet down to close it.",
-      "where": "Settings › Appearance › Try new features › Swipe away downloads",
-      "when": "phone only"
-    },
     "wizard/interface-manual": {
       "help": "Your agent gets this manual: every screen, Settings page and feature switch, so it can say where things are.",
       "where": "Settings › Appearance › Try new features › Agent knows the Wizard interface"
