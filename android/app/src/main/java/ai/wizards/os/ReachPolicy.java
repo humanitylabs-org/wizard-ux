@@ -40,6 +40,23 @@ final class ReachPolicy {
         return why(network, vpn, needsTailscale) != Why.NOT_ANSWERING;
     }
 
+    /** Wizard-ux issue 2008: waits before each quiet try after a fast failure (then the last one, until GIVE_UP_MS). */
+    static final long[] QUIET_RETRY_MS = { 400L, 800L, 1_500L, 2_500L };
+
+    /** Wizard-ux issue 2008: a load that failed fast (an error or a 5xx) while the phone has a network and Tailscale is
+     *  on (or not needed) is not yet a Wizard that can't be reached: right after a network change or a resume, the
+     *  Tailscale tunnel and its names are still waking and the first try fails in milliseconds. It tries again quietly
+     *  (Connecting at most) until GIVE_UP_MS after the load began. No network and Tailscale off still say so at once, and
+     *  once the offline screen is up its own retries keep it as it is. */
+    static boolean retryQuietly(Why why, long sinceLoadMs, boolean offlineShowing) {
+        return why == Why.NOT_ANSWERING && !offlineShowing && sinceLoadMs >= 0 && sinceLoadMs < GIVE_UP_MS;
+    }
+
+    /** The wait before quiet try number `tries` (0 first). */
+    static long quietRetryDelay(int tries) {
+        return QUIET_RETRY_MS[Math.max(0, Math.min(tries, QUIET_RETRY_MS.length - 1))];
+    }
+
     /** A gateway or server failure on the page itself (Caddy 502 while the Wizard restarts, 503, 504). */
     static boolean httpFailure(int status) {
         return status >= 500 && status <= 599;
