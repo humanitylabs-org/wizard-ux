@@ -381,10 +381,6 @@
       "help": "Setup lists optional accounts to connect.",
       "where": "Settings › Appearance › Try new features › Get set up list in Setup"
     },
-    "wizard/private-mode": {
-      "help": "Settings › Privacy: Private mode, Privacy check.",
-      "where": "Settings › Appearance › Try new features › Private mode switch-over"
-    },
     "wizard/private-routing": {
       "help": "Orb opens the named agent's thread; a chip moves it.",
       "where": "Settings › Appearance › Try new features › Private routing"
