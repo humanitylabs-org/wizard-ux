@@ -512,10 +512,6 @@
       "help": "App updates stop an app once.",
       "where": "Settings › Appearance › Try new features › Shorter app updates"
     },
-    "wizard/phone-tester-builds": {
-      "help": "Phones get the newest tester build.",
-      "where": "Settings › Appearance › Try new features › Phone tester builds"
-    },
     "wizard/install-agent-builds": {
       "help": "Apps I build install with one tap.",
       "where": "Settings › Appearance › Try new features › Install apps your agent builds"
