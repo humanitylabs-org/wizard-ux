@@ -115,7 +115,7 @@
     return APP[w.appId || w.app] || { name: w.title || 'Page', icon: '◇', g: ['#444a60', '#22263a'], url: w.url };
   }
   /* Window and desk titles, desk sections and making a window; app-windows.js. */
-  const { applyLayout, buildDesks, deskName, deskOf, focusedWin, isReviewDesk, makeWin, mountWin, placeTrack, renderDesk, secOf, syncDesks, winEl, winTitle, bindLate: windowsLate } = window.WizCore.appParts.windows({ $, $$, agentApp, agentWin, APP, appVars, CHATS, esc, HOME, ico, LIVE, MAXW, OUTBOX, parkDesks, refreshModes, RELOAD_BTN, renderChats, syncImmersive, track, winApp });
+  const { applyLayout, buildDesks, deskName, deskOf, focusedWin, isReviewDesk, makeWin, mountWin, placeTrack, renderDesk, secOf, syncDesks, wakeDesk, winEl, winTitle, bindLate: windowsLate } = window.WizCore.appParts.windows({ $, $$, agentApp, agentWin, APP, appVars, CHATS, esc, HOME, ico, LIVE, MAXW, OUTBOX, parkDesks, refreshModes, RELOAD_BTN, renderChats, store, syncImmersive, track, winApp });
   seedLate({ renderDesk, syncDesks, winEl });
   modelLate({ applyLayout, deskOf, winTitle });
   let labelT = 0;
@@ -146,6 +146,7 @@
       sec.classList.toggle('parked', Math.abs(i - idx) > 1);
       if (i !== idx || wakeCurrent) $$('iframe.appframe', sec).forEach(f => frameSetHidden(f, i !== idx));
     });
+    wakeDesk(); // an app on a desk never shown yet gets its page the first time its desk is in view (app-windows.js)
   }
   function scheduleParking() {
     parkDesks(false); clearTimeout(parkT);
