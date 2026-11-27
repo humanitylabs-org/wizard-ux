@@ -6,43 +6,28 @@ import android.os.Build;
 import android.util.Log;
 
 /**
- * One UI-style icon count (wizard-ux issue 1669, switch wizard/phone-badge-look, off by default). While on, the
- * Messenger icon, widget and Unread notification show the exact count (up to 999, then "999+"), and the bubble is a
- * ringless orange-red circle or pill about a quarter of the tile wide at the visible tile's top-right corner. Off keeps
- * the red ringed "9+" bubble in the safe zone exactly as before.
- *
- * The switch lives in the shell (look.json); the main page copies it here (WizardOSNative.badgeLookSwitch), because
- * the poll, the job and the widget run without any page.
+ * One UI-style icon count (wizard-ux issue 1669, on for everyone): the Messenger icon, widget and Unread notification
+ * show the exact count (up to 999, then "999+"), and the bubble is a ringless orange-red circle or pill at the visible
+ * tile's top-right corner (Samsung) or the safe-zone square's corner (every other launcher).
  */
 public final class BadgeLook {
-    private static final String PREFS = "badge-look", KEY = "on";
+    /** Where 0.10.70 to 0.10.81 kept their copy of the removed switch wizard/phone-badge-look ("on"). */
+    private static final String PREFS = "badge-look", OLD_SWITCH = "on", DRAWN = "drawn";
+    /** Bumped when the look changes, so badges drawn in an older look are redrawn once. */
+    static final int LOOK = 1;
     private BadgeLook() {}
-
-    /** What one drawing needs to know: the new look or the old one, and which placement for the new one. */
-    public static final class Style {
-        public final boolean oneUi, samsung;
-        public Style(boolean oneUi, boolean samsung) { this.oneUi = oneUi; this.samsung = samsung; }
-        public static final Style CLASSIC = new Style(false, false);
-    }
-
-    public static boolean on(Context c) {
-        return c.getApplicationContext().getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY, false);
-    }
 
     /** True on Samsung phones, whose One UI Home masks icons with its squircle. */
     public static boolean samsung() { return "samsung".equalsIgnoreCase(Build.MANUFACTURER); }
 
-    public static Style style(Context c) { return on(c) ? new Style(true, samsung()) : Style.CLASSIC; }
-
-    /** Label for {@code count} in the current look (empty = no bubble). */
-    public static String label(Context c, int count) { return BadgeText.label(count, on(c)); }
-
-    /** Saves the switch; a change redraws every badge with the newest count (same count, new look). */
-    public static void setOn(Context c, boolean on) {
+    /** The switch is gone (always on): drop the copy an older version stored, and redraw once any badge an older
+     *  version drew in the classic look (same count, new look). */
+    public static void upgrade(Context c) {
         Context app = c.getApplicationContext();
-        if (on(app) == on) return;
-        app.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY, on).apply();
-        Log.i(UnreadBadges.TAG, "badge-look switch " + (on ? "on" : "off"));
+        SharedPreferences p = app.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+        if (p.getInt(DRAWN, 0) == LOOK && !p.contains(OLD_SWITCH)) return;
+        p.edit().remove(OLD_SWITCH).putInt(DRAWN, LOOK).apply();
+        Log.i(UnreadBadges.TAG, "badge look " + LOOK + ": redraw");
         UnreadBadges.restyle(app);
     }
 }

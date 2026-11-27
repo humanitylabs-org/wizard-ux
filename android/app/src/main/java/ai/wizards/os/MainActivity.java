@@ -276,6 +276,8 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         if (!(this instanceof AppSessionActivity)) deleteSharedPreferences("reach-answer");
         // The same for the removed switch wizard/app-windows (wizard-os issue 650).
         if (!(this instanceof AppSessionActivity)) AppWindows.forgetOldSwitch(this);
+        // The same for the removed switch wizard/phone-badge-look (wizard-ux issue 1669); badges drawn before redraw once.
+        if (!(this instanceof AppSessionActivity)) ai.wizards.os.badge.BadgeLook.upgrade(this);
         // And for the removed switch wizard/assist-attach (wizard-os issue 655).
         if (!(this instanceof AppSessionActivity)) ai.wizards.os.assist.AssistAttach.forgetOldSwitch(this);
         if (ai.wizards.os.device.AppState.origin(this).isEmpty()) {
@@ -2200,13 +2202,6 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
                 // very next open has its last screen even if this window is swiped away.
                 if (!pinShownSaved) { pinShownSaved = true; main.postDelayed(MainActivity.this::pinShotSaveIfFront, PinInstantPolicy.SHOT_AFTER_SHOWN_MS); }
             });
-        }
-        /* ---- One UI icon count (wizard-ux issue 1669, switch wizard/phone-badge-look, off by default): the main page
-         * copies the switch here (badge/BadgeLook); a change redraws the Messenger icon count at once. ---- */
-        @JavascriptInterface
-        public void badgeLookSwitch(boolean on) {
-            if (MainActivity.this instanceof AppSessionActivity) return;
-            ai.wizards.os.badge.BadgeLook.setOn(MainActivity.this, on);
         }
         /* ---- App windows (wizard-os issue 650, on for everyone): any page asks to open an app's own window for a link
          * (false = keep the link where it is). ---- */

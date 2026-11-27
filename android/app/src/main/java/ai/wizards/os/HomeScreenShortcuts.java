@@ -170,20 +170,20 @@ public final class HomeScreenShortcuts {
      */
     static Icon adaptive(Bitmap square) { return adaptive(square, 0); }
     /** The adaptive icon, with the unread bubble drawn inside the launcher's mask (count 0 = plain icon). */
-    public static Icon adaptive(Bitmap square, int unread) { return adaptive(square, unread, ai.wizards.os.badge.BadgeLook.Style.CLASSIC); }
-    /** Same, with the bubble in {@code style} (wizard-ux issue 1669: the One UI look while wizard/phone-badge-look is on). */
-    public static Icon adaptive(Bitmap square, int unread, ai.wizards.os.badge.BadgeLook.Style style) {
-        return Icon.createWithAdaptiveBitmap(adaptiveArt(square, unread, style));
+    public static Icon adaptive(Bitmap square, int unread) { return adaptive(square, unread, ai.wizards.os.badge.BadgeLook.samsung()); }
+    /** Same, with the One UI badge (wizard-ux issue 1669) placed for a Samsung launcher or any other one. */
+    public static Icon adaptive(Bitmap square, int unread, boolean samsung) {
+        return Icon.createWithAdaptiveBitmap(adaptiveArt(square, unread, samsung));
     }
-    /** The full 108 dp art behind {@link #adaptive(Bitmap, int, ai.wizards.os.badge.BadgeLook.Style)}. */
-    static Bitmap adaptiveArt(Bitmap square, int unread, ai.wizards.os.badge.BadgeLook.Style style) {
+    /** The full 108 dp art behind {@link #adaptive(Bitmap, int, boolean)}. */
+    static Bitmap adaptiveArt(Bitmap square, int unread, boolean samsung) {
         int side = square.getWidth(), full = Math.round(side * 108f / 72f), inset = (full - side) / 2;
         Bitmap out = Bitmap.createBitmap(full, full, Bitmap.Config.ARGB_8888);
         android.graphics.Canvas canvas = new android.graphics.Canvas(out);
         canvas.drawColor(square.getPixel(0, 0) | 0xff000000);
         android.graphics.Rect dst = new android.graphics.Rect(inset, inset, inset + side, inset + side);
         canvas.drawBitmap(square, null, dst, new android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG));
-        return ai.wizards.os.badge.BadgeCompositor.composeAdaptive(out, unread, style);
+        return ai.wizards.os.badge.BadgeCompositor.composeAdaptive(out, unread, samsung);
     }
     /** No tap needed: can only change this package's existing pinned identity, never request a pin. */
     private static String refresh(Context c, JSONObject data) {
@@ -200,7 +200,7 @@ public final class HomeScreenShortcuts {
                 prefs.getString(id + ":icon",null),name,png)) return "unchanged";
         // A page refresh redraws the plain icon; keep the unread bubble on it.
         ShortcutInfo shortcut = new ShortcutInfo.Builder(c,id).setShortLabel(name).setLongLabel(name)
-            .setIcon(adaptive(bitmap,ai.wizards.os.badge.UnreadBadges.storedCount(c,app),ai.wizards.os.badge.BadgeLook.style(c))).build();
+            .setIcon(adaptive(bitmap,ai.wizards.os.badge.UnreadBadges.storedCount(c,app))).build();
         // Recheck ownership immediately before the update; updateShortcuts itself cannot create a pin.
         if (!pinned(c,app) || !c.getSystemService(ShortcutManager.class).updateShortcuts(Collections.singletonList(shortcut))) return "error";
         prefs.edit().putString(id + ":name",name).putString(id + ":icon",png).putInt(id + ":fmt",ICON_FORMAT).apply();
@@ -223,7 +223,7 @@ public final class HomeScreenShortcuts {
         Intent launch = new Intent(c,AppSessionActivity.class).setAction(Intent.ACTION_VIEW).setData(taskUri(c,app))
             .addFlags(Intent.FLAG_ACTIVITY_NEW_DOCUMENT | Intent.FLAG_ACTIVITY_NEW_TASK);
         ShortcutInfo shortcut = new ShortcutInfo.Builder(c,shortcutId).setShortLabel(name).setLongLabel(name)
-            .setIcon(adaptive(bitmap,ai.wizards.os.badge.UnreadBadges.storedCount(c,app),ai.wizards.os.badge.BadgeLook.style(c))).setIntent(launch).build();
+            .setIcon(adaptive(bitmap,ai.wizards.os.badge.UnreadBadges.storedCount(c,app))).setIntent(launch).build();
         Intent callback = new Intent(c,PinConfirmed.class).setData(taskUri(c,app)).putExtra("token",token);
         PendingIntent pending = PendingIntent.getBroadcast(c,0,callback,PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         return c.getSystemService(ShortcutManager.class).requestPinShortcut(shortcut,pending.getIntentSender()) ? "pending" : "unsupported";

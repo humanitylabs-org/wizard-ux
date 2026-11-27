@@ -183,7 +183,6 @@ Settings › Appearance › Try new features lists unfinished features to try, A
 - **Machines on Home**: Home shows a slim strip (Wizard, AI fuel, chats, backup, network); Settings › System holds your network, AI, security and storage.
 - **New chat quick links**: A new chat shows Catch me up, What's waiting on me and Plan my day above the message box; one tap sends it.
 - **Now playing**: While an app plays audio or video, small moving bars sit on that app's icon in the AI apps view (the desktop apps column; the phone Home dock and grid); click or tap them to pause without opening the app. Option+P pauses or plays what played last on the desktop. Nothing shows while nothing plays.
-- **One UI icon count**: Android: Messenger icon count shows the exact number in a One UI-style corner badge.
 - **One-tap Snooze · bottom of Ready**: Snooze is one tap and the lowest priority: the thread waits at the bottom of Ready, below approvals, until you restore or reply.
 - **Phone Apps tile: Favorites panel and quick switcher**: On the phone, tapping Apps opens a slim Favorites panel (search, Favorites, Recent with an x to take an app off) and holding Apps shows nine big bubbles of your recent apps: slide onto one and let go. With an app in front, swipe the bar sideways to step through Recent. (phone only).
 - **Phone media player for Music and Podcasts**: Android and iPhone: Music and Podcasts play through the phone's media player (lock screen, Control Center, headset buttons), and keep playing locked.
@@ -215,6 +214,7 @@ No longer switches (owners and old chats may still name them):
 - **Wizard for Mac in About & updates**: on for everyone, nothing to turn on: inside Wizard for Mac, Settings › About & updates shows a Wizard for Mac group under WizardOS.
 - **Reply to Telegram and Slack chats**: on for everyone: reply in Chats to a chat started on Telegram or Slack; it goes through that app's own connection and shows there too.
 - **Models from your connectors**: removed: the model menu in Chats lists the models of every AI connection you connected.
+- **One UI icon count**: on for everyone, nothing to turn on: in the Android app, the Messenger home-screen icon, its widget and the Unread notification show the exact unread count (up to 999, then 999+) in a One UI-style orange-red badge at the icon's top-right corner.
 
 ## How do I…
 

@@ -34,7 +34,6 @@
     "wizard/install-agent-builds",
     "wizard/app-location",
     "wizard/boundary-agent-access",
-    "wizard/phone-badge-look",
     "wizard/inbox-pin-top",
     "wizard/smart-inbox",
     "wizard/phone-recovery-mode",
