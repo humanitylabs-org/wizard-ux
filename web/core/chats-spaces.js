@@ -146,7 +146,7 @@ window.WizCore.chatsParts.spaces = function ({ chanTags, actNeeds, actUnread, in
   const { listSaveT, queueListPlace, storedListPlace } = window.WizCore.chatsParts.ready({ actNeeds, actUnread, CH, chanAt, elOf: (...a) => elOf(...a), H, LIST_PLACE_KEY, LIST_PLACE_TTL, listPlace, listSig, LIVE, W });
   // Chats › Inbox: only what needs him, as Signal-style rows that stay until archived (wizard-ux issue 1779, on for
   // everyone since 27 Nov 2026; core/chats-inboxrows.js).
-  function activityBody(w, rows, nt, drafts = 0) { return inboxRowsBody(w, rows, nt, drafts); }
+  function activityBody(w, rows, nt, drafts = 0, opts) { return inboxRowsBody(w, rows, nt, drafts, opts); }
   // The Inbox's taps (a row's Archive, the sort menu); false = not one of them.
   function activityClick(e, w) {
     if (!w || w.thread) return false;

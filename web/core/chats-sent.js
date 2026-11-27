@@ -314,6 +314,8 @@ window.WizCore.chatsParts.sent = function ({ agentName, agentRec, ago, AGS, ch, 
     }
     const id = key === 'archived' ? '__archived__' : key.startsWith('#') ? key.slice(1) : '';
     if (!id) return false;
+    // Archived has no search field or filter (wizard-ux issue 1998): a search or filter left from Inbox must not narrow it.
+    if (key === 'archived') { const c = ch(w.id); c.q = ''; c.filter = ''; c.tsearch = false; c.sheet = false; window.WizCore?.chatSearch?.cancel?.(w.id); }
     ch(w.id).sent = false; chatVars.chanView = 'activity'; // Back from it goes to Inbox
     try { localStorage.setItem(CHAN_VIEW_KEY, chatVars.chanView); } catch (_) {}
     return !!openChannel(w, id);
