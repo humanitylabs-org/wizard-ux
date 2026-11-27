@@ -24,15 +24,15 @@ const rows = [
   { role: 'user', timestamp: 3, content: 'Fix the badge?' }, { id: 4450724, role: 'assistant', timestamp: 4, content: REPLY },
 ];
 
-function stream(turns, { working = true } = {}) {
+function stream(turns, { working = true, agent = '' } = {}) {
   const w = { id: 'w', thread: 'sid' }, c = {}, row = { status: working ? 'running' : 'completed', runId: 'run-1' };
   let callback, closed = 0;
   const ctx = { LIVE: { pendingRun: () => 'run-1', session: () => row, openRunStream: (_s, _a, _r, cb) => (callback = cb, { close: () => closed++ }) },
     W: { w }, elOf: () => ({}), agentRec: () => ({ privacy: 'standard' }), isWorking: s => s.status === 'running', esc: s => s,
     md: s => `<p>${s}</p>`, renderThreadLive() {}, loadThread: async () => {}, setTimeout: () => 1, clearTimeout() {} };
   vm.runInNewContext(chats.slice(chats.indexOf('  const assistantStamp ='), chats.indexOf('  function renderThread(w, el, keep)')), ctx);
-  assert.equal(ctx.syncStream(w, c, turns, ''), '', 'nothing streamed yet');
-  return { ctx, w, c, turns, send: snap => callback(snap), paint: () => ctx.syncStream(w, c, turns, ''), closed: () => closed };
+  assert.equal(ctx.syncStream(w, c, turns, agent), '', 'nothing streamed yet');
+  return { ctx, w, c, turns, send: snap => callback(snap), paint: () => ctx.syncStream(w, c, turns, agent), closed: () => closed };
 }
 
 test('the transcript keeps the buttons as labels in its plain text (why the replay never matched)', () => {
@@ -41,8 +41,9 @@ test('the transcript keeps the buttons as labels in its plain text (why the repl
   assert.equal(t.a.buttons.length, 1);
 });
 
-test('issue 1961: a finished replay of a reply with buttons is retired, not drawn as a second copy', () => {
-  const s = stream(KIT.parseRows(rows));
+// Main and routed threads (host profile, container, restricted) share this path; each gets the same answer.
+for (const agent of ['', 'host', 'container', 'restricted']) test(`issue 1961: a finished replay of a reply with buttons is retired, not drawn as a second copy (${agent || 'main'})`, () => {
+  const s = stream(KIT.parseRows(rows), { agent });
   s.send({ text: REPLY, steps: [], terminal: true });
   assert.equal(s.paint(), '', 'the reply is drawn once, from the transcript');
   assert.equal(s.c.stream.landed, true); assert.equal(s.closed(), 1);
@@ -67,4 +68,14 @@ test('mid-run: words already drawn above a button group are not repeated under R
   s.send({ text: `Here are the options.\n\n${GROUP}\n\nChecking the icon now.`, steps: [], terminal: false });
   const html = s.paint();
   assert.match(html, /Checking the icon now\./); assert.doesNotMatch(html, /Here are the options/);
+});
+
+test('words in the prose that read like a button label are kept: a new reply is not taken for the old one', () => {
+  const raw = 'Choose [Done] now.\n\n[WIZARD_BUTTONS_V1]{"group":"Step","buttons":[{"id":"done","label":"Done"}]}[/WIZARD_BUTTONS_V1]';
+  const s = stream(KIT.parseRows([...rows.slice(0, 3), { id: 7, role: 'assistant', timestamp: 4, content: raw }]));
+  s.send({ text: 'Choose now.', steps: [], terminal: true });
+  assert.match(s.paint(), /Choose now\./, 'a genuinely new reply still shows'); assert.equal(s.c.stream.landed, false);
+  const again = stream(KIT.parseRows([...rows.slice(0, 3), { id: 7, role: 'assistant', timestamp: 4, content: raw }]));
+  again.send({ text: raw, steps: [], terminal: true });
+  assert.equal(again.paint(), '', 'its own replay is retired'); assert.equal(again.c.stream.landed, true);
 });

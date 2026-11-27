@@ -56,11 +56,11 @@ window.WizCore.chatsParts.stream = function ({ agentName, agentRec, ago, elOf, e
   const bare = v => streamAnswer(v).replace(SHOWN_MEDIA, '').replace(/\s+/g, '');
   // Tap-to-answer buttons (issue 1889): the transcript's plain text keeps each group's labels (`[Done] [Later]`, chat-kit
   // buttonsFallback) where the stream drops the whole group, so the same reply never matched and a late replay of it
-  // stayed drawn below it as a second copy (wizard-ux issue 1961). Compare the turn's words without those labels.
+  // stayed drawn below it as a second copy (wizard-ux issue 1961). Compare the turn's words without those labels: only
+  // a line that is exactly a group's fallback goes (buttonsFallback puts it on its own), never the same words in prose.
   const unlabel = (t, v) => {
-    let s = String(v || '');
-    for (const g of t?.a?.buttons || []) { const f = (g.buttons || []).map(b => `[${b.label}]`).join(' '); if (f) s = s.split(f).join(''); }
-    return s;
+    const s = String(v || ''), drop = new Set((t?.a?.buttons || []).map(g => (g.buttons || []).map(b => `[${b.label}]`).join(' ')).filter(Boolean));
+    return drop.size ? s.split('\n').filter(l => !drop.has(l.trim())).join('\n') : s;
   };
   const shownBare = (t, v) => bare(unlabel(t, v));
   const streamEnded = st => {
