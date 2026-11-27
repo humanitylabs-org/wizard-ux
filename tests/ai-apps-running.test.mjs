@@ -40,6 +40,19 @@ test('no switch: the Running link opens the view in the sidebar pane (Sent steps
   assert.equal(f.api.runningOpen({ id: 'main', thread: null }), true, 'the Classic / phone list window is unchanged');
 });
 
+test('no sidebar pane (Classic, another layout, a Default Chats look) or a routed agent: today\'s handling', () => {
+  assert.equal(part({ pane: '' }).api.runningSideGo(), false, 'no pane on screen');
+  assert.equal(part({ pane: null }).api.runningSideGo(), false, 'a shell without the hook (phone)');
+  // The main agent's tasks only: a routed thread's pane (host-profile, container or restricted agent) never shows them.
+  for (const agent of ['box', 'host-profile', 'container', 'restricted']) {
+    const f = part({ agent });
+    assert.equal(f.api.runningSideGo(), false, agent + ': the sidebar does not take the link');
+    assert.deepEqual(f.painted, [], agent + ': nothing repainted');
+    f.ch('main::side').running = true;
+    assert.equal(f.api.runningOpen({ id: 'main::side', thread: null }), false, agent + ': the main agent\'s Running view never draws');
+  }
+});
+
 test('the switch and its package are gone', () => {
   const read = q => readFileSync(new URL('../' + q, import.meta.url), 'utf8'), ID = 'wizard/ai-apps-running';
   const cat = JSON.parse(read('web/tweaks/catalog.json'));
