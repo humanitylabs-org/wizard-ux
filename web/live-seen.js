@@ -112,6 +112,8 @@ window.WizCore.liveParts.seen = function ({  }) {
       id, runtime: 'direct',
       title: String(item.title || item.name || 'Untitled chat'),
       source: item.source || '',
+      // wizard-ux issue 1927: Hermes' own pinned flag, as the Agent Service's list rows carry it (Smart inbox reads it).
+      ...(item.pinned === true || item.pinned === 1 ? { hermesPinned: true } : {}),
       status,
       queueReason: item.queue_reason === 'provider_access' ? 'provider_access' : '',
       safeError: typeof item.wizard_safe_error === 'string' ? item.wizard_safe_error : '',

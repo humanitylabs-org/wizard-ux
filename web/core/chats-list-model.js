@@ -285,7 +285,8 @@ const newestRow = rows => rows.reduce((a, r) => (Number(r?.at) || 0) > (Number(a
  * Inbox when it delivers what he asked for: his newest send asked for information in words without a question mark
  * (review, evaluate, summarize, compress, extract, find, look up, research, compare, explain, show me, give me, list,
  * what / how / why …), or it is the delivery of something he set up: a scheduled run (Hermes `source: 'cron'`, a
- * reminder route that fired after he set it) or a thread he pinned (Topics, the Daily brief). The explicit signals come
+ * reminder route that fired after he set it) or a thread he pinned (Topics, the Daily brief: the shared pin list or
+ * Hermes' own pinned flag, `hermesPinned` on the list row). The explicit signals come
  * first; the words are the fallback. Build and fix confirmations, check asks, progress notes, watch wakes and helper
  * results that only confirm stay in Sent. */
 const REQ_VERB = /(?:^|[.!?;:\n]\s*|\b(?:please|pls|can you|could you|would you|will you|and|then|also)\s+)(?:review|evaluate|assess|analy[sz]e|summari[sz]e|sum up|compress|condense|extract|transcribe|translate|find|search|look up|look into|research|compare|explain|list|brief me|report on|catch me up)\b/i;

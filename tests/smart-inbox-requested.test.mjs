@@ -4,6 +4,8 @@
 // Run: node --test tests/smart-inbox-requested.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import vm from 'node:vm';
+import { readFileSync } from 'node:fs';
 import { modelContext } from './fixtures/chats-list-model.mjs';
 
 const M = modelContext({}).WizChatsListModel;
@@ -91,4 +93,20 @@ test('with Inbox rows on, the quiet mark does not take a requested thread back o
   const ids = r => JSON.parse(JSON.stringify((r?.ready || []).map(s => s.id)));
   assert.deepEqual(ids(run({ sent: new Map(), smart: true, pinned: s => PINS.has(s.id) })), ['wizard_topics'], 'smart: Topics in Inbox, the helper result not');
   assert.deepEqual(ids(run({ sent: new Map() })), [], 'smart off: the quiet mark keeps both out, as today');
+});
+
+// The shell's own pinned fact (core/chats-ready.js inboxPlace): the shared pin list, or Hermes' flag on the list row.
+test('a thread pinned with Hermes\' own flag counts as his pin (the list row\'s hermesPinned)', () => {
+  const ctx = { console, Date, Map, Set, document: { documentElement: { dataset: { tweaks: 'wizard/smart-inbox' } }, addEventListener() {} }, localStorage: { getItem: () => null, setItem() {} } };
+  ctx.window = ctx; ctx.globalThis = ctx; ctx.addEventListener = () => {}; ctx.WizCore = { chatsParts: {} };
+  modelContext(ctx);
+  const LIVE = { ok: true, sentLog: { state: () => ({ ok: true, rows: [] }) }, onChange() {} };
+  vm.runInContext(readFileSync(new URL('../web/core/chats-ready.js', import.meta.url), 'utf8'), ctx);
+  ctx.WizCore.chatsParts.ready({ actNeeds: needs, actUnread: () => false, CH: {}, chanAt: s => s.at, elOf: () => null, H: { root: () => ({ querySelectorAll: () => [] }) }, LIST_PLACE_KEY: 'k', LIST_PLACE_TTL: 1, listPlace: () => null, listSig: () => '', LIVE, W: {} });
+  const place = ctx.WizCore.inboxPlace(LIVE);
+  assert.equal(place.pinned({ id: 'wizard_topics', hermesPinned: true }), true, 'Hermes pin on the compact list row');
+  assert.equal(place.pinned({ id: 'wizard_topics', pinned: true }), true, 'Hermes pin on a full row');
+  assert.equal(place.pinned({ id: 'other' }), false, 'not pinned');
+  const s = t({ id: 'wizard_topics', hermesPinned: true, quietReply: true, attention: att('fyi', 'Topics · 2 moved') });
+  assert.equal(M.placeOf(s, [], facts({ pinned: place.pinned })), 'inbox', 'Topics, pinned only in Hermes: Inbox');
 });

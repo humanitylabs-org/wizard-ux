@@ -66,6 +66,10 @@ const fresh = () => ({
   // Issue 1927: information he asked for or set up: Inbox. `quiet` is the box's quiet mark, as Smart inbox sets it on a
   // run nobody typed and on a send whose words asked no question.
   't-topics': T('Wizard Topics', 21, { attention: att('fyi', 'Wizard Topics · Fri 27 Nov, 2 of 29 topics moved'), unread: true, pinned: true, quiet: true }),
+  // The same roundup pinned only with Hermes' own pinned flag (the issue's "pinned=1"): a raw Hermes row, and the
+  // Agent Service's compact list row (listVersion 1, hermesPinned).
+  't-topics-hermes': T('Wizard Topics (Hermes pin)', 22, { attention: att('fyi', 'Wizard Topics · Thu 26 Nov, 4 of 29 topics moved'), unread: true, hermesPin: true, quiet: true }),
+  't-topics-list': T('Wizard Topics (list row)', 22.5, { attention: att('fyi', 'Wizard Topics · Wed 25 Nov, 1 of 29 topics moved'), unread: true, hermesPin: true, quiet: true, list: true }),
   't-remind': T('Reminder: call the dentist', 23, { attention: att('fyi', 'Time to call the dentist about Tuesday.'), unread: true, source: 'cron', quiet: true }),
   't-brief': T('Daily brief', 25, { attention: att('fyi', 'Your Friday: two meetings, rain later.'), unread: true, source: 'cron', quiet: true }),
   'q-review': T('Inbox review', 27, { attention: att('fyi', 'Reviewed 12 items: three need replies.'), quiet: true, mine: { text: 'Review everything in my inbox', route: 'agent', rules_matched: ['task_verb'], quiet: true } }),
@@ -78,12 +82,16 @@ const fresh = () => ({
   's-watch': T('Flight price watch', 39, { answer: '[SILENT]', unread: true, source: 'cron', quiet: true }),
   'd-remind-set': T('Water the plants', 41, { attention: att('done', 'Okay, I will remind you at 6.'), mine: { text: 'remind me to water the plants at 6', route: 'agent', rules_matched: ['task_verb'] } }),
 });
-const INBOX_WANT = ['a-pay', 'n-lease', 'n-sched', 'n-seat', 'n-watch', 'q-find', 'q-know', 'q-mac', 'q-remind', 'q-review', 'q-tell', 'q-transcript', 't-brief', 't-remind', 't-topics', 'x-export', 'x-sync'];
+const INBOX_WANT = ['a-pay', 'n-lease', 'n-sched', 'n-seat', 'n-watch', 'q-find', 'q-know', 'q-mac', 'q-remind', 'q-review', 'q-tell', 'q-transcript', 't-brief', 't-remind', 't-topics', 't-topics-hermes', 't-topics-list', 'x-export', 'x-sync'];
 const sid = n => 'sent_' + n.toString(16).padStart(24, '0');
 const freshSent = () => Object.entries(THREADS).filter(([, s]) => s.mine).map(([id, s], i) => ({ id: sid(i + 1), at: s.at - 60e3, source: 'orb', text: s.mine.text, route: 'agent', decided_by: 'owner_words', rules_matched: [], tags: [], urgent: false, thread_id: id, record_id: null, state: 'done', wants_reply: true, ...s.mine }));
-const raw = (id, s) => ({ id, title: s.title, runtime: 'direct', status: s.status || 'completed', updated_at: iso(s.at), updatedAt: iso(s.at), last_active: s.at / 1000,
+const raw = (id, s) => s.list ? listRaw(id, s) : ({ id, title: s.title, runtime: 'direct', status: s.status || 'completed', updated_at: iso(s.at), updatedAt: iso(s.at), last_active: s.at / 1000,
   message_count: s.msgs.length, messageCount: s.msgs.length, preview: s.msgs.at(-1)?.[1] || '', preview_role: s.msgs.at(-1)?.[0], last_assistant_at: iso(s.at),
-  ...(s.source ? { source: s.source } : {}), ...(s.quiet ? { wizard_quiet_reply: true } : {}), ...(s.attention ? { wizard_attention: s.attention } : {}) });
+  ...(s.source ? { source: s.source } : {}), ...(s.quiet ? { wizard_quiet_reply: true } : {}), ...(s.hermesPin ? { pinned: true } : {}), ...(s.attention ? { wizard_attention: s.attention } : {}) });
+// The Agent Service's compact list row (server/session-list-view.mjs listRow) for the same thread.
+const listRaw = (id, s) => ({ id, session_id: id, runtime: 'direct', agent_id: 'hermes', agent: '', listVersion: 1, title: s.title, status: s.status || 'completed', updatedAt: iso(s.at),
+  lastAssistantAt: iso(s.at), activityAt: iso(s.at), startedAt: iso(s.at - 600e3), messageCount: s.msgs.length, preview: s.msgs.at(-1)?.[1] || '', previewRole: s.msgs.at(-1)?.[0],
+  ...(s.source ? { source: s.source } : {}), ...(s.quiet ? { quietReply: true } : {}), ...(s.hermesPin ? { hermesPinned: true } : {}), ...(s.attention ? { attention: { subject: '', ...s.attention } } : {}) });
 // Read up to now, except the unread ones (their newest answer is after the seen mark).
 const SEEN = () => ({ state: { initializedAt: 1, threads: Object.fromEntries(Object.entries(THREADS).map(([id, s]) => [id, s.unread ? { updatedAt: iso(s.at - 3600e3), assistantActivityAt: iso(s.at - 3600e3), seenAt: s.at - 3600e3 } : { updatedAt: iso(s.at), assistantActivityAt: iso(s.at), seenAt: now }])) } });
 const report = { origin, web, on: ON, rows: ROWS, cases: [] };
