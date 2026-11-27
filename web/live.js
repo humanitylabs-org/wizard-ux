@@ -243,6 +243,12 @@
    * this run settles (its idempotency key = the outbox item id); 2 min after acceptance it releases anyway.
    * A message that truly can't be sent puts the thread back where it was (the pill keeps Retry/Edit). */
   const PEND = new Map(); // sessionId -> { key, kind, text, at, state: 'sending'|'waiting'|'sent', sentAt, runId }
+  // New chats the owner archived while this device still holds their send (wizard-ux issue 1997: Archive a chat still
+  // working, seconds after sending it). The box's list leaves an archived chat out, so this device would build its
+  // stand-in row again, unarchived, under Working until the run ended. LIVE._archivedNew keeps the mark while the send
+  // is held; addSynthetic reads it (a stand-in is only built while the send is held), and a Restore or the next mark
+  // ends it.
+  const ARCHIVED_NEW = new Set();
   const STOPPING = new Map(); // runId -> when Stop was asked (applyLocal)
   const STOP_SEND_MS = 15000, STOP_FOLLOW_MS = [800, 800, 900, 1500, 2000, 3000, 4000, 7000]; // gaps between re-reads, ~20 s in all
   // Every row of a run: the lists, rows read on their own (search, direct lookup, Spaces) and the thread Stop was tapped on.
@@ -417,12 +423,16 @@
     }
   }
   // A new chat is listed before Wizard has created it, so it lands in Working the moment it is sent.
+  // Archived while its send is held (ARCHIVED_NEW): every rebuilt stand-in keeps the archive, also after the box listed
+  // the chat once and then left it out for being archived.
   function addSynthetic(list, agent = '') {
     unShown(list); showReplied(list, agent);
     for (const [sid, p] of PEND) {
-      if (p.kind !== 'new' || (p.agent || '') !== agent || list.some(s => s.id === sid)) continue;
+      if (p.kind !== 'new' || (p.agent || '') !== agent) continue;
+      if (list.some(s => s.id === sid)) continue;
       const at = new Date(p.at).toISOString();
       const s = { id: sid, runtime: 'direct', title: (p.text || 'New chat').slice(0, 60), status: 'submitting', updatedAt: at, preview: p.text, previewRole: 'user', source: 'wizard-mobile', optimistic: true, synthetic: true, agent };
+      if (ARCHIVED_NEW.has(sid)) s.archived = true;
       list.unshift(s); applyPend(s);
     }
   }
@@ -1106,6 +1116,9 @@
       }
       finally { setTimeout(() => this.refresh(), 800); }
     },
+    // Issue 1997: a new chat archived while this device still holds its send (see ARCHIVED_NEW).
+    _pendingNew(id) { return PEND.get(id)?.kind === 'new'; }, // this device still holds the send that opened the chat
+    _archivedNew(id, on) { if (!on) { ARCHIVED_NEW.delete(id); return; } for (const k of ARCHIVED_NEW) if (PEND.get(k)?.kind !== 'new') ARCHIVED_NEW.delete(k); ARCHIVED_NEW.add(id); if (ARCHIVED_NEW.size > 50) ARCHIVED_NEW.delete(ARCHIVED_NEW.values().next().value); },
     /* ---- thread actions ---- */
     busy(id) { const o = OVER.get(id); return !!o && !o.settled; },
     async _act(id, patch, write, capMs = 60000) {
@@ -1133,6 +1146,7 @@
       // Archive also clears a saved-result Needs you the Service added (issue 469), so restoring it brings no stale ask:
       // only once the archive itself succeeded (a failed archive keeps the result Continue-able).
       const saved = this.session(id);
+      if (!file && (saved?.synthetic || this._pendingNew?.(id))) this._archivedNew?.(id, true);
       return this._act(id, { archived: true, deferred: false }, async s => {
         const all = readRestored(); if (all[id]) { delete all[id]; writeRestored(all); }
         if (!file) { await req(`/wizard/hermes/api/sessions/${encodeURIComponent(id)}${aq(id)}`, { method: 'PATCH', headers: J, body: JSON.stringify({ archived: true }) }); return; }
@@ -1145,6 +1159,7 @@
         }
         if (!r.ok || r.status === 202) { const e = new Error('HTTP ' + r.status); e.status = r.status; throw e; }
       }, file ? 11 * 60000 : 60000).then(ok => {
+        if (!ok) this._archivedNew?.(id, false);
         if (ok) this.dismissSaved?.(saved);
         // A background task's waiting record goes with its thread (wizard-ux issue 1928): its Inbox row too.
         if (ok) try { void this.agentInbox?.archiveThread?.(id); } catch (_) {}
@@ -1207,6 +1222,7 @@
     },
     // Restore: a deferred thread comes back to Work; an archived (or aged-out) one is un-archived and lands in Ready.
     restore(id) {
+      this._archivedNew?.(id, false);
       const s = this.session(id); if (!s) return Promise.resolve(false);
       const at = new Date().toISOString();
       if (s.deferred && !s.archived) return this._act(id, { deferred: false, restoredAt: at }, () => this._defer(id, false));
