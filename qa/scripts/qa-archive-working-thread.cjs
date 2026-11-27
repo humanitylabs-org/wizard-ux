@@ -54,6 +54,7 @@ async function route(r) {
     writes.push({ m, p: u.pathname, body });
     const sm = u.pathname.match(/\/wizard\/hermes\/api\/sessions\/([^/]+)$/);
     if (m === 'PATCH' && sm && FIX[sm[1]]) { const b = JSON.parse(body || '{}'); if (b.archived === true) ARCH.add(sm[1]); if (b.archived === false) ARCH.delete(sm[1]); return json(200, { session: fixSession(sm[1]) }); }
+    if (u.pathname.endsWith('/v1/runs')) { let b = {}; try { b = JSON.parse(body); } catch (e) {} return json(202, { run_id: 'qa_1997_new_run', session_id: b.session_id, status: 'queued' }); }
     if (u.pathname === '/wizard/thread-seen') { let st; try { st = JSON.parse(body).state; } catch (e) {} return json(200, { state: st || { initializedAt: Date.now(), threads: {} } }); }
     return json(200, { ok: true });
   }
@@ -128,6 +129,20 @@ async function route(r) {
     const a3 = await acts();
     await p.screenshot({ path: path.join(OUT, `${tag}-3-approval.png`) });
     ok(!a3.includes('done'), `${tag} 3 approval wait offers no Archive (approval kept)`, a3);
+    // 4. A brand-new chat archived seconds after sending, while the box does not list it yet (only this device's
+    // stand-in row): it stays in Archive through the next list reads instead of popping back into Working.
+    if (!BROKEN) {
+      const sid = 'qa_1997_new_' + Date.now();
+      await p.waitForFunction(() => window.WosOutbox?.stage, null, { timeout: 15000 }).catch(() => {});
+      await p.evaluate(async sid => { const it = await WosOutbox.stage({ kind: 'new', sessionId: sid, model: 'synthetic-hotkeys', provider: 'openai-codex', text: 'QA brand new long task' }); return it.id; }, sid);
+      await p.waitForFunction(sid => !!__qa.live.session(sid), sid, { timeout: 8000 }).catch(() => {});
+      const before = await p.evaluate(sid => { const G = __qa.live.workGroups(); return G.working.some(s => s.id === sid); }, sid);
+      ok(before, `${tag} 4 a just-sent new chat lists as Working`);
+      await p.evaluate(sid => __qa.live.archive(sid), sid);
+      for (let i = 0; i < 2; i++) { await p.evaluate(() => __qa.live.refresh()); await sleep(400); }
+      const g4 = await p.evaluate(sid => { const G = __qa.live.workGroups(); return { archive: G.archive.some(s => s.id === sid), working: G.working.some(s => s.id === sid) }; }, sid);
+      ok(g4.archive && !g4.working, `${tag} 4 archived seconds after sending, it stays in Archive through list reads`, g4);
+    }
   } catch (e) { ok(false, 'run', String(e)); }
   ok(!errs.length, `${tag} no page errors`, errs);
   console.log(`\n${pass} pass, ${fail} fail · shots in ${OUT}`);

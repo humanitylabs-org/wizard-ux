@@ -73,3 +73,33 @@ test('Archive on a working thread never stops it and says it comes back when it 
     }
   }
 });
+
+test('a new chat archived seconds after sending stays archived while the box does not list it yet', async () => {
+  // The real outbox hold (web/live.js, PEND .. commandId) and the real LIVE._archivedNew mark.
+  const { runWithChatsModel } = await import('./fixtures/chats-list-model.mjs');
+  const live = readFileSync(new URL('../web/live.js', import.meta.url), 'utf8');
+  const start = live.indexOf('  const PEND = new Map()'), end = live.indexOf('  const commandId =', start);
+  const mark = live.slice(live.indexOf('    _archivedNew(id, on) {'), live.indexOf('\n', live.indexOf('    _archivedNew(id, on) {')));
+  assert.ok(start > 0 && end > start && mark.includes('ARCHIVED_NEW'), 'live.js blocks found');
+  for (const kind of kinds) {
+    const agent = kind === 'main' ? '' : `qa-${kind}`;
+    const L = { sessions: [], agentSessions: agent ? { [agent]: [] } : {} }, OB = { _items: new Map() };
+    const c = { L, OB, WORKING: new Set(['submitting', 'queued', 'running', 'stopping']), otherAgent: a => !!a && a !== 'hermes', AGENT_OF: new Map(), Date };
+    runWithChatsModel(`${live.slice(start, end)}\nthis.api = { syncPending, LIVE: { ${mark.trim().replace(/,$/, '')} } };`, c);
+    const list = () => agent ? L.agentSessions[agent] : L.sessions;
+    OB._items.set('send', { id: 'send', sessionId: 'fresh', kind: 'new', createdAt: Date.now(), state: 'sent', sentAt: Date.now(), runId: 'r1', text: 'Plan the launch week', agent });
+    c.api.syncPending(OB);
+    assert.equal(list()[0].synthetic, true, `${kind}: the stand-in row`);
+    c.api.LIVE._archivedNew('fresh', true); // what LIVE.archive does for a stand-in row
+    // A list read drops the stand-in rows and builds them again from the outbox hold.
+    if (agent) L.agentSessions[agent] = []; else L.sessions = [];
+    c.api.syncPending(OB);
+    assert.equal(list()[0].archived, true, `${kind}: the rebuilt stand-in row stays archived`);
+    // Once the box lists the chat, its own row (and its own archived flag) wins and the mark is dropped.
+    if (agent) L.agentSessions[agent] = [{ id: 'fresh', status: 'running', archived: true }]; else L.sessions = [{ id: 'fresh', status: 'running', archived: true }];
+    c.api.syncPending(OB);
+    if (agent) L.agentSessions[agent] = []; else L.sessions = [];
+    c.api.syncPending(OB);
+    assert.notEqual(list()[0]?.archived, true, `${kind}: the mark ends once the box listed the chat`);
+  }
+});
