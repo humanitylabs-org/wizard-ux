@@ -7,7 +7,7 @@
  * on the same variables, so every read and write is live. desktop.js's own imports are imported here again from the
  * same modules. The body below keeps desktop.js's indentation so `git log -L` and patches port over. */
 import { CHATS } from '../apps/chrome.js';
-export function splitPart({ aadVars, anim, api, applySizes, appName, appTile, chatsEl, cTop, cX, desks, doneLoading, FEED, feedBox, flip, focusFrame, homeComposer, host, markUsed, modeBars, one, orbBox, paintTools, paneModel, paneWins, pIcon, placementOf, pName, pTop, pX, retileSoon, root, sName, sTop, syncSide, top, waitLoaded, watchPaneWins, wsps }) {
+export function splitPart({ aadVars, anim, api, applySizes, appName, appTile, chatsEl, cTop, cX, desks, doneLoading, FEED, feedBox, flip, focusFrame, homeComposer, host, markUsed, one, orbBox, paintModes, paintTools, paneModel, paneWins, pIcon, placementOf, pName, pTop, pX, retileSoon, root, sName, sTop, syncSide, top, waitLoaded, watchPaneWins, wsps }) {
   let here, onMainChats, paintTop, setWide; // late-bound: desktop.js declares these after the call, see bindLate
   /* The app beside a chat survives a reload (wizard-ux issue 1368): a chat opened from the sidebar puts the Chats desk
    * in front (the route), and the panel was kept only in memory. Saved as { id, desk } whenever it changes; on boot,
@@ -87,8 +87,8 @@ export function splitPart({ aadVars, anim, api, applySizes, appName, appTile, ch
     // The second app's header lives only on that window; parked nowhere when none is open.
     if (aadVars.secondEl) { if (sTop.parentNode !== aadVars.secondEl) aadVars.secondEl.append(sTop); } else sTop.remove();
     sTop.hidden = !aadVars.secondEl; sName.textContent = second ? appName(second.id) : '';
-    for (const { bar } of modeBars) for (const b of bar.querySelectorAll('[data-mode]')) b.setAttribute('aria-pressed', String(b.dataset.mode === model.mode));
     pTop.hidden = !aadVars.pane || !model.slots.includes('app'); cX.hidden = !aadVars.docked;
+    paintModes(model);   // the one Full screen / Half screen group: in which header, shown or not (wizard-ux issue 1813)
     paintFeed(chat);
     if (aadVars.pane) { pName.textContent = appName(aadVars.pane.id); pIcon.replaceChildren(appTile(aadVars.pane.id, 'aad-tile is-xs')); pX.setAttribute('aria-label', `Hide ${appName(aadVars.pane.id)} (Esc), it keeps running`); }
     paintTools();
