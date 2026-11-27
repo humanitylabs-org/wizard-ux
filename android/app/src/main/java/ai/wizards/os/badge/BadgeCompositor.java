@@ -56,13 +56,20 @@ public final class BadgeCompositor {
         if (out == null) return base;
         Canvas canvas = new Canvas(out);
         Paint text = new Paint(Paint.ANTI_ALIAS_FLAG);
-        text.setTypeface(Typeface.create(Typeface.create("sans-serif-medium", Typeface.NORMAL), 700, false));
-        text.setTextSize(BadgeGeometry.oneUiTextSize(BadgeGeometry.oneUiHeight(tile)));
+        // Heavier digits (issue 1960): the heaviest weight the font has up to 800, plus a hairline stroke so they read
+        // bolder even where the font stops at 700.
+        float ts = BadgeGeometry.oneUiTextSize(BadgeGeometry.oneUiHeight(tile));
+        text.setTypeface(Typeface.create(Typeface.create("sans-serif-medium", Typeface.NORMAL), 800, false));
+        text.setTextSize(ts);
+        text.setStyle(Paint.Style.FILL_AND_STROKE);
+        text.setStrokeWidth(ts * 0.03f);
         text.setTextAlign(Paint.Align.CENTER);
         text.setColor(Color.WHITE);
         BadgeGeometry g = place.at(label.length(), text.measureText(label));
         Paint fill = new Paint(Paint.ANTI_ALIAS_FLAG);
         fill.setColor(ONE_UI);
+        // A faint soft shadow lifts the badge off the tile (issue 1960); BadgeGeometry leaves room for it inside the mask.
+        fill.setShadowLayer(BadgeGeometry.shadowBlur(g.height()), 0f, BadgeGeometry.shadowDy(g.height()), BadgeGeometry.SHADOW_COLOR);
         canvas.drawRoundRect(new RectF(g.left, g.top, g.right, g.bottom), g.radius(), g.radius(), fill);
         // Centre the digits on their own ink, not on the font's ascent, so "1" and "85" sit in the middle.
         Rect ink = new Rect();
