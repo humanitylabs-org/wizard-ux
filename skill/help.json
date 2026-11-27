@@ -515,6 +515,11 @@
       "help": "Chats' title bar names the tab.",
       "where": "Settings › Appearance › Try new features › Chats: title bar names the tab"
     },
+    "wizard/phone-sections": {
+      "help": "Phone bar of four places around the orb instead of desks: Home, Chats, Messenger, Apps. Hold Messenger to pin another app there; swipe the Apps tile to flip between your last two apps.",
+      "where": "Settings › Appearance › Try new features › Phone bar: Home, Chats, Messenger, Apps",
+      "when": "phone only"
+    },
     "wizard/phone-nav": {
       "help": "Phone bar: bigger orb, one badge.",
       "where": "Settings › Appearance › Try new features › Phone bar: bigger orb, one badge",
