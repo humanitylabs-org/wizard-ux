@@ -41,9 +41,19 @@ function fixSession(id) {
     last_user_message: { role: 'user', content: lastU.content, timestamp: lastU.timestamp } };
 }
 const writes = [];
+// QA_OFFLINE=1: no Wizard behind the page (a builder or CI host). The shell comes straight from QA_WEB_DIR/web and every
+// /wizard/* read is answered here (fixture threads only), so the suite needs no origin server and no Agent Service.
+const OFFLINE = process.env.QA_OFFLINE === '1';
+const { ownerRead } = require('../../tools/qa-desktop-frame-fixture.cjs');
+const TYPES = { '.js': 'application/javascript', '.css': 'text/css', '.html': 'text/html', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.webmanifest': 'application/manifest+json', '.md': 'text/markdown' };
 function routeFor() {
   return async r => {
     const q = r.request(), u = new URL(q.url()), m = q.method();
+    if (OFFLINE && m === 'GET' && u.pathname.startsWith('/wizard-os-home/')) {
+      const root = path.resolve(WEB || path.join(__dirname, '..', '..'), 'web'), rel = decodeURIComponent(u.pathname.slice('/wizard-os-home/'.length)) || 'index.html', f = path.resolve(root, rel);
+      if (f.startsWith(root + path.sep) && fs.existsSync(f) && fs.statSync(f).isFile()) return r.fulfill({ status: 200, contentType: TYPES[path.extname(f)] || 'application/octet-stream', body: fs.readFileSync(f) });
+      return r.fulfill({ status: 404, body: '' });
+    }
     const wm = u.pathname.match(/\/wizard-os-home\/((?:core\/|desktop\/)?[a-z-]+\.(?:js|css)|index\.html|desktop\.html|)$/);
     if (WEB && wm && m === 'GET' && !/^(data|summaries)\.js$/.test(wm[1])) { const f = wm[1] || 'index.html', fp = path.join(WEB, 'web', f); if (fs.existsSync(fp)) return r.fulfill({ status: 200, contentType: f.endsWith('.css') ? 'text/css' : f.endsWith('.html') ? 'text/html' : 'application/javascript', body: fs.readFileSync(fp) }); }
     const json = (status, body) => r.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
@@ -52,15 +62,16 @@ function routeFor() {
       writes.push({ m, p: u.pathname, body });
       for (const id of Object.keys(FIX)) if (u.pathname.includes(id) || body.includes(id)) { if (/archive|hide|done/i.test(u.pathname + body)) ARCH.add(id); }
       if (u.pathname === '/wizard/thread-seen') { let st; try { st = JSON.parse(body).state; } catch (e) {} return json(200, { state: st || { initializedAt: Date.now(), threads: {} } }); }
+      if (u.pathname === '/wizard/thread-dispositions') { let d = {}; try { d = JSON.parse(body); } catch (e) {} if (d.deferred) DEF.add(d.sessionId); else DEF.delete(d.sessionId); return json(200, { record: { sessionId: d.sessionId, deferred: !!d.deferred, updatedAt: new Date().toISOString() } }); }
       if (u.pathname.endsWith('/transcribe')) { await sleep(1500); return json(200, {text: 'QA linked voice reply'}); }
       if (u.pathname.endsWith('/files/upload')) return json(200, {file:{id:'qa_voice',filename:'voice.webm',mime:'audio/webm',bytes:4000}});
       if (u.pathname.endsWith('/v1/runs')) return json(202, {run_id:'qa_trail_run',status:'queued'});
       if (/\/route$/.test(u.pathname)) return json(200, {cmd:{route:'view'},ms:1});
       return json(200, { ok: true });
     }
-    if (!u.pathname.startsWith('/wizard/')) return r.continue();
+    if (!u.pathname.startsWith('/wizard/')) return OFFLINE ? r.fulfill({ status: 404, body: '' }) : r.continue();
     if (u.pathname === '/wizard/hermes/api/sessions' && (u.searchParams.get('offset') || '0') === '0') {
-      const res = await r.fetch(); const p = await res.json();
+      const p = OFFLINE ? ownerRead(u.pathname) : await (await r.fetch()).json();
       p.data = Object.keys(FIX).map(fixSession).concat(p.data || []);
       return json(200, p);
     }
@@ -68,6 +79,7 @@ function routeFor() {
     if (mm && FIX[mm[1]] && HOLD.has(mm[1])) await HOLD.get(mm[1]).wait;
     if (mm && FIX[mm[1]]) { rid = 1; const rows = FIX[mm[1]].rows().map(x => ({ ...x, session_id: mm[1] })); return json(200, { object: 'list', data: rows, pagination: { limit: 500, offset: 0, returned: rows.length } }); }
     const sm = u.pathname.match(/\/wizard\/hermes\/api\/sessions\/([^/]+)$/); if (sm && FIX[sm[1]]) return json(200, { session: fixSession(sm[1]) });
+    if (OFFLINE) return u.pathname === '/wizard/v1/bootstrap' ? json(200, { bootstrap: 1, settings: {}, capabilities: {}, endpoints: {} }) : json(200, ownerRead(u.pathname));
     return r.continue();
   };
 }
@@ -181,14 +193,60 @@ function routeFor() {
     ok(await thread() === null, '5 Done on a thread opened from the list returns to the list', await thread());
     ok(await alive(), '5 app still open');
 
+    // 5b. Issue 1902 (James, 26 Nov 2026): Archive on a linked thread lands on the linking thread at its reading position,
+    // with its draft, and the linked thread is archived. Then Back → list, and root Back keeps Wizard open.
+    const unarchive = async (...ids) => { for (const id of ids) ARCH.delete(id); await p.evaluate(ids => { for (const id of ids) { const s = __wos.live.session(id); if (s) s.archived = false; } }, ids); await p.evaluate(() => __wos.live.refresh?.()); await sleep(800); };
+    const view = () => p.evaluate(() => { const w = Object.values(__wos.wins).find(x => x.app === 'chats'), el = document.querySelector(`[data-chats="${w.id}"]`), a = [...(el?.querySelectorAll('.ch-msgs .msg.a') || [])];
+      return { thread: w.thread, title: el?.querySelector('.ch-head .ti b')?.textContent || '', last: a.at(-1)?.textContent || '', top: el?.querySelector('.ch-msgs')?.scrollTop ?? -1, draft: el?.querySelector('textarea')?.value ?? null }; });
+    await unarchive('qa_tt_a', 'qa_tt_b');
+    await openFromList('qa_tt_sum');
+    // Typed like a person (key presses end the opening settle, so the reader's own scroll below is his saved place).
+    await p.locator(await S('textarea')).pressSequentially('Roundup draft kept on Archive'); await sleep(80);
+    await p.locator(await S('.ch-msgs a')).filter({ hasText: 'Thread A' }).last().scrollIntoViewIfNeeded(); await sleep(900);
+    const top5 = (await view()).top;
+    await tapLink('Thread A'); await waitThread('qa_tt_a');
+    await p.screenshot({ path: path.join(OUT, '5b-linked-thread-before-archive.png') });
+    await tapAct('done'); await waitThread('qa_tt_sum');
+    const v5 = await view();
+    ok(v5.thread === 'qa_tt_sum' && v5.title === 'QA trail summary' && /Remaining roundup notes/.test(v5.last), '5b Archive on a linked thread shows the linking thread (header and last bubble)', { ...v5, last: v5.last.slice(-80) });
+    ok(Math.abs(v5.top - top5) < 4, '5b the linking thread keeps its reading position', { top5, top: v5.top });
+    ok(v5.draft === 'Roundup draft kept on Archive', '5b the linking thread keeps its draft', v5.draft);
+    ok(await p.evaluate(() => !!__wos.live.session('qa_tt_a')?.archived), '5b the linked thread is archived');
+    ok(await p.evaluate(() => /Archived/.test(document.querySelector('.toast, #toast, [role="status"]')?.textContent || document.body.innerText)), '5b the Archived toast still shows');
+    await p.screenshot({ path: path.join(OUT, '5b-after-archive-linking-thread.png') });
+    await p.locator(await S('textarea')).fill(''); await sleep(80);
+    await back(); ok(await thread() === null, '5b Back from the linking thread → list', await thread());
+    await p.evaluate(() => window.__wosNativeBack?.()); await sleep(300); ok(await alive(), '5b root Back keeps Wizard open');
+
+    // 5c. Snooze (Someday, a real tap in the picker) on a linked thread lands where Archive lands: the linking thread.
+    await unarchive('qa_tt_a', 'qa_tt_b');
+    await openFromList('qa_tt_sum'); await tapLink('Thread B'); await waitThread('qa_tt_b');
+    await tapAct('snooze'); await p.waitForSelector('[data-boom-someday]', { timeout: 8000 }).catch(() => {});
+    await p.locator('[data-boom-someday]').tap().catch(() => {}); await sleep(900); await waitThread('qa_tt_sum');
+    ok(await p.waitForFunction(() => !document.querySelector('.boom-sheet') && !!__wos.live.session('qa_tt_b')?.deferred, null, { timeout: 5000 }).then(() => true, () => false), '5c the picker closed and the linked thread is snoozed');
+    ok(await thread() === 'qa_tt_sum', '5c Snooze on a linked thread returns to the linking thread', await thread());
+    await back(); ok(await thread() === null, '5c Back after that → list', await thread());
+
+    // 5d. Snooze on a thread opened from the list keeps today's landing on the phone: the chats list.
+    DEF.clear(); await unarchive('qa_tt_a', 'qa_tt_b'); await p.evaluate(() => { const s = __wos.live.session('qa_tt_b'); if (s) s.deferred = false; });
+    await openFromList('qa_tt_b');
+    await tapAct('snooze'); await p.waitForSelector('[data-boom-someday]', { timeout: 8000 }).catch(() => {});
+    await p.locator('[data-boom-someday]').tap().catch(() => {}); await sleep(900);
+    ok(await thread() === null, '5d Snooze on a list-opened thread still lands on the list', await thread());
+    ok(await alive(), '5d app still open');
+    await unarchive('qa_tt_a', 'qa_tt_b', 'qa_tt_c');
+
     const idle = async id => p.evaluate(id => { const s=__wos.live.session(id); Object.assign(s,{status:'completed',runId:'',archived:false}); },id);
     const type = async text => { await p.locator(await S('textarea')).fill(text); await sleep(80); };
     const send = async () => p.locator(await S('button.ch-send')).tap();
     const prepare = async () => { await openFromList('qa_tt_sum'); await idle('qa_tt_a'); await tapLink('Thread A'); await waitThread('qa_tt_a'); };
     const runsSince = n => writes.slice(n).filter(w=>/\/v1\/runs$/.test(w.p)).map(w=>JSON.parse(w.body));
+    // Cases 6-13 are the leave-after-send path, which runs only with After actions = Chats list (the default is now
+    // Stay on this chat, #1068); cases 1-5d above ran under the default.
+    await p.evaluate(() => localStorage.setItem('wos.chats.afterAction.v1', 'list'));
     // 6. Actual Send with an outstanding save: return to the link's reading position, retaining the parent's draft.
-    await openFromList('qa_tt_sum'); await type('Roundup draft stays here');
-    await p.locator(await S('.ch-msgs a')).filter({hasText:'Thread A'}).last().scrollIntoViewIfNeeded(); await sleep(350);
+    await openFromList('qa_tt_sum'); await type('Roundup draft stays here'); await p.locator(await S('textarea')).press('End'); // a key press ends the opening settle, as a person's touch does
+    await p.locator(await S('.ch-msgs a')).filter({hasText:'Thread A'}).last().scrollIntoViewIfNeeded(); await sleep(900); // let the scroll settle before measuring
     const parentTop = await p.locator(await S('.ch-msgs')).evaluate(e=>e.scrollTop);
     await idle('qa_tt_a'); await tapLink('Thread A'); await waitThread('qa_tt_a');
     await p.evaluate(()=>{const ob=WosOutbox; window.qaEnqueue=ob.enqueue.bind(ob); ob.enqueue=async spec=>{window.qaSpec=spec; await new Promise(r=>window.qaSave=r); return qaEnqueue(spec);};});
@@ -266,7 +324,26 @@ function routeFor() {
     await dc.route('**/*',routeFor());const dp=await dc.newPage();await dp.goto(URL_+'desktop.html',{waitUntil:'domcontentloaded'});
     await dp.waitForFunction(()=>window.__wux?.live?.session('qa_tt_sum'));
     const dr=await dp.evaluate(async()=>{const x=__wux;x.openThread('qa_tt_sum');await new Promise(r=>setTimeout(r,500));const w=Object.values(x.wins).find(w=>w.app==='chats'&&w.thread==='qa_tt_sum');x.chats.openChat(w.id,'qa_tt_b',{via:'link'});const left=x.chats.leaveAfterSend(w.id,'qa_tt_b',false);return {left,thread:w.thread};});
-    ok(dr.left===false&&dr.thread==='qa_tt_b','14 desktop reply keeps thread beside list',dr);await dc.close();
+    ok(dr.left===false&&dr.thread==='qa_tt_b','14 desktop reply keeps thread beside list',dr);
+    // 15. Desktop (issue 1902): Archive on a thread opened from a link (a real click) goes back to the linking thread; Archive
+    // on a thread opened from the list still opens the next chat in the list.
+    ARCH.clear(); DEF.clear(); await dp.evaluate(()=>{for(const id of ['qa_tt_a','qa_tt_b','qa_tt_c']){const s=__wux.live.session(id);if(s){s.archived=false;s.deferred=false;}}__wux.live.refresh?.();}); await sleep(800);
+    const dwin=sid=>dp.evaluate(sid=>{const w=Object.values(__wux.wins).find(w=>w.app==='chats'&&w.thread);return w?{id:w.id,thread:w.thread,trail:(__wux.chats.ch?.(w.id)?.trail||null)}:null;},sid);
+    const dwait=sid=>dp.waitForFunction(sid=>Object.values(__wux.wins).some(w=>w.app==='chats'&&w.thread===sid&&document.querySelector(`[data-chats="${w.id}"] .ch-msgs .msg.a`)),sid,{timeout:15000}).catch(()=>{});
+    await dp.evaluate(()=>__wux.openThread('qa_tt_sum')); await dwait('qa_tt_sum'); await sleep(400);
+    let dw=await dwin();
+    await dp.locator(`[data-chats="${dw.id}"] .ch-msgs .msg.a a`,{hasText:'Thread A'}).last().click(); await dwait('qa_tt_a'); await sleep(400);
+    ok((await dwin())?.thread==='qa_tt_a','15 desktop: a thread link opens the linked thread',await dwin());
+    dw=await dwin(); await dp.locator(`[data-chats="${dw.id}"] [data-chact="done"]`).first().click(); await dwait('qa_tt_sum'); await sleep(500);
+    ok((await dwin())?.thread==='qa_tt_sum','15 desktop: Archive on the linked thread goes back to the linking thread',await dwin());
+    ok(await dp.evaluate(()=>!!__wux.live.session('qa_tt_a')?.archived),'15 desktop: the linked thread is archived');
+    await dp.screenshot({path:path.join(OUT,'15-desktop-after-archive.png')});
+    await dp.evaluate(()=>__wux.openThread('qa_tt_b')); await dwait('qa_tt_b'); await sleep(400);
+    dw=await dwin(); await dp.locator(`[data-chats="${dw.id}"] [data-chact="done"]`).first().click(); await sleep(900);
+    dw=await dwin();
+    // (Which chat is next depends on the drawn sections; it is opened fresh, as from the list: no link trail, no step back.)
+    ok(!!dw&&!!dw.thread&&dw.thread!=='qa_tt_b'&&Array.isArray(dw.trail)&&dw.trail.length===0,'15 desktop: Archive on a list-opened thread opens the next chat in the list',dw);
+    await dc.close();
   } catch (e) { ok(false, 'suite crashed', String(e)); console.log('STATE', await p.evaluate(()=>({url:location.href,idx:__wos.idx,desks:__wos.desks,wins:__wos.wins,body:document.body.innerText.slice(-1500)}))); }
 
   const newIds = new Set(writes.filter(w=>w.m==='POST' && w.p==='/wizard/hermes/api/sessions').map(w=>JSON.parse(w.body).id).filter(Boolean));
