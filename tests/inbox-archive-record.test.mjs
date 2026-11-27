@@ -117,11 +117,12 @@ test('a hidden thread never opened here is read by id; hidden while that first r
   answer = {};
 });
 
-test('Smart inbox on: a record whose thread says check is not in the Inbox; off: it is, as before', () => {
+// Issue 1977 (reverses 1928's check rule): a check waits on his judgment, so its record is in the Inbox with the switch on too.
+test('Smart inbox on: a record whose thread says check is in the Inbox (issue 1977); off: it is, as before', () => {
   const threads = { c1: { id: 'c1', hidden: true, attention: { state: 'check', ask: 'Check it' } }, n1: { id: 'n1', hidden: true, attention: { state: 'needs_you', ask: 'A or B?' } } };
   const records = [rec('a', 'c1'), rec('b', 'n1'), rec('c', 'c1', { failed: true })];
   const on = part({ tweaks: 'wizard/smart-inbox', records, threads });
-  assert.deepEqual(drawn(on.api, on.ctx).ids.sort(), [RID('b'), RID('c')], 'the needs you and the failed task stay');
+  assert.deepEqual(drawn(on.api, on.ctx).ids.sort(), [RID('a'), RID('b'), RID('c')], 'the check, the needs you and the failed task all stay');
   const off = part({ tweaks: '', records, threads });
   assert.deepEqual(drawn(off.api, off.ctx).ids.sort(), [RID('a'), RID('b'), RID('c')]);
 });
