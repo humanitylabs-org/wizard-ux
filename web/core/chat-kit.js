@@ -29,8 +29,8 @@
   }
   // [WIZARD_TWEAK_V1]{"id":"wizard/inbox-rows"}[/WIZARD_TWEAK_V1] (or {"ids":[…]}), on its own line: the reply carries
   // a tweak's live switch (WosSettings.tweakCard, the same row as Settings › Look). Ids only; a malformed marker is hidden.
-  // An app feature switch `<app id>:<switch id>` (wizard.app-switches/1) parses too; the card shows it only while the
-  // switch wizard/chat-app-switches is on (wizard-ux issue 1560) and drops it otherwise, as before.
+  // An app feature switch `<app id>:<switch id>` (wizard.app-switches/1) parses too and draws the app's own switch row
+  // (wizard-ux issue 1560).
   const TWEAK_ID = /^(?:[a-z0-9][a-z0-9-]*\/[a-z0-9][a-z0-9-]*|[a-z0-9][a-z0-9-]{0,62}:[a-z0-9][a-z0-9-]{0,63})$/, TWEAK_RE = /\[WIZARD_TWEAK_V1\]\s*([\s\S]*?)\s*\[\/WIZARD_TWEAK_V1\]/g;
   function tweakIds(s) {
     const out = [];

@@ -345,15 +345,14 @@
    * was sent. A tap paints the flipped switch on its own frame (pending), then the real state reconciles; a failure
    * reverts with the same toast as Look. Every card on screen and Look repaint together on wos:experience. */
   const cardPending = new Map(), ONLY = { desktop: 'Desktop only', phone: 'Phone only' };
-  /* App feature switches in the same card (wizard-ux issue 1560, switch wizard/chat-app-switches): `<app id>:<switch id>`
+  /* App feature switches in the same card (wizard-ux issue 1560, on for everyone): `<app id>:<switch id>`
    * rows come from the App Manager's one catalog, store-install/_feature-switches (wizard-os docs/APP_SWITCHES.md), and
    * flip through its POST, the owner-proof path the Tracker's Try it uses, so the app's own /api/switches changes. Live
    * state: read when a card paints (at most every 15 s), when the page shows again, and from every flip's answer. An
    * installed app without that switch yet is greyed with "Update <app> first" + Update (opens it in the App Store); an app
-   * that isn't installed or declares no switches stays hidden. While the switch is off app ids are dropped, as before. */
-  const APP_SWITCH = /^([a-z0-9][a-z0-9-]{0,62}):[a-z0-9][a-z0-9-]{0,63}$/, APP_SWITCHES_TWEAK = 'wizard/chat-app-switches';
+   * that isn't installed or declares no switches stays hidden. */
+  const APP_SWITCH = /^([a-z0-9][a-z0-9-]{0,62}):[a-z0-9][a-z0-9-]{0,63}$/;
   const appSw = { list: null, at: 0, read: null, err: false, gen: 0, timer: 0 };
-  const appSwOn = () => { try { return String(document.documentElement?.dataset?.tweaks || '').split(' ').includes(APP_SWITCHES_TWEAK); } catch (e) { return false; } };
   const homePath = p => { try { return new URL(p, document.baseURI || location.href).pathname; } catch (e) { return '/wizard-os-home/' + p; } };
   function appSwTake(d) {
     if (!d || !Array.isArray(d.switches)) return;
@@ -381,7 +380,7 @@
   function appSwTick() {
     const later = window.setTimeout || (typeof setTimeout === 'function' ? setTimeout : null);
     if (appSw.timer || !later) return;
-    appSw.timer = later(() => { appSw.timer = 0; if (!appSwOn() || document.visibilityState === 'hidden' || !appSwShown()) return; void appSwRead(true); appSwTick(); }, 15000);
+    appSw.timer = later(() => { appSw.timer = 0; if (document.visibilityState === 'hidden' || !appSwShown()) return; void appSwRead(true); appSwTick(); }, 15000);
   }
   function appSwRow(id) {
     const app = APP_SWITCH.exec(id)[1], L = appSw.list;
@@ -394,7 +393,7 @@
     return tweakSwitches([{ id, name: nm, description: why, on: false }], 'data-chat-tweak', true) + (update ? `<div class="ch-tweak-upd"><button type="button" data-chat-tweak="" data-chat-tweak-update="${esc(app)}" aria-label="Update ${esc(nm)}">Update</button></div>` : '');
   }
   function appSwTap(btn, id, toast) {
-    if (btn.disabled || cardPending.has(id) || !appSwOn() || typeof window.fetch !== 'function') return false;
+    if (btn.disabled || cardPending.has(id) || typeof window.fetch !== 'function') return false;
     const was = btn.getAttribute('aria-checked') === 'true';
     cardPending.set(id, !was);
     btn.setAttribute('aria-checked', String(!was)); btn.querySelector('.sw')?.classList.toggle('on', !was); // this frame
@@ -409,7 +408,7 @@
     if (!(typeof open === 'function' && open('app-store', path))) toast?.('!', 'Open the App Store to update this app');
     return true;
   }
-  window.addEventListener?.('visibilitychange', () => { if (document.visibilityState === 'visible' && appSw.list && appSwOn()) { void appSwRead(true); appSwTick(); } });
+  window.addEventListener?.('visibilitychange', () => { if (document.visibilityState === 'visible' && appSw.list) { void appSwRead(true); appSwTick(); } });
   function tweakCardRows(list) {
     const E = window.WosExperience, s = E?.state;
     if (s && !authorList) E.authors?.().then(a => { authorList = a; paintTweakCards(); }, () => {});
@@ -424,7 +423,7 @@
       return tweakSwitches([{ ...t, on, where: t.locked ? 'For testers only' : here ? '' : ONLY[t.shells[0]] || '' }], 'data-chat-tweak', s.busy || !here || !!t.locked, name);
     }).join('');
   }
-  const cardIds = ids => [...new Set((Array.isArray(ids) ? ids : String(ids || '').split(' ')).filter(id => id && (!APP_SWITCH.test(id) || appSwOn())))];
+  const cardIds = ids => [...new Set((Array.isArray(ids) ? ids : String(ids || '').split(' ')).filter(Boolean))];
   function tweakCard(ids) {
     const list = cardIds(ids); if (!list.length) return '';
     const rows = tweakCardRows(list);
