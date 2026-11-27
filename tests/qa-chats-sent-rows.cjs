@@ -54,7 +54,7 @@ const report = { origin, web, cases: [] };
       const context = await browser.newContext({ viewport: phone ? { width: 412, height: 915 } : { width: 1440, height: 960 }, isMobile: phone, hasTouch: phone, serviceWorkers: 'block', ...(phone ? { userAgent: 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Mobile Safari/537.36' } : {}) });
       try {
         await context.routeWebSocket('**/*', w => w.close());
-        const mix = { 'wizard/desktop-chats': true, ...(process.env.QA_INBOX_ROWS !== 'off' ? { 'wizard/inbox-rows': true } : {}) };
+        const mix = { 'wizard/desktop-chats': true };
         await context.addInitScript(({ shell, skin, mix }) => {
           if (window !== top) return;
           if (sessionStorage.getItem('qaBoot')) return; sessionStorage.setItem('qaBoot', '1');
@@ -116,9 +116,9 @@ const report = { origin, web, cases: [] };
         const back = () => page.evaluate(() => window.__wos ? __wos.onBack() : __wux.escStep());
         const shot = async name => { await page.evaluate(() => document.fonts.ready); await nap(300); await page.screenshot({ path: path.join(out, `${stem}-${name}.png`) }); };
         await vis(ai ? '.aad-side .aad-rw[data-sid="qa-chat-1"] .aad-row' : '.ch-list [data-chopen="qa-chat-1"]').waitFor({ timeout: 15000 });
-        if (!ai && process.env.QA_INBOX_ROWS !== 'off') await vis('.ch-list .ch-ib-row[data-chopen="qa-chat-1"]').waitFor({ timeout: 15000 });
+        if (!ai) await vis('.ch-list .ch-ib-row[data-chopen="qa-chat-1"]').waitFor({ timeout: 15000 });
         await vis(`${L} .ch-tabbar`).waitFor({ timeout: 10000 }); await nap(600);
-        // 1. Inbox: its rows (the new Inbox rows, wizard/inbox-rows) are the yardstick for Sent's.
+        // 1. Inbox: its rows (the Inbox rows, on for everyone) are the yardstick for Sent's.
         const lookOf = (row, q) => {
           const cs = getComputedStyle(row), t = row.querySelector(q.title), pv = row.querySelector(q.line), av = q.av && row.querySelector(q.av);
           const f = n => n ? [getComputedStyle(n).fontSize, getComputedStyle(n).fontWeight, getComputedStyle(n).lineHeight, getComputedStyle(n).color].join(' ') : '';

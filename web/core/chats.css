@@ -1011,7 +1011,6 @@ html:root .ch-act-sort select:hover { background: color-mix(in srgb, var(--ink) 
 html:root .ch-act-sort select:focus-visible { outline: 2px solid var(--wz-accent, var(--violet-2)); outline-offset: 0; }
 html:root .ch-act-sort select option { color: var(--ink); background: var(--bg); }
 html:root .ch-act-sort::after { content: ""; position: absolute; right: 9px; top: 50%; width: 5px; height: 5px; margin-top: -4px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; color: var(--ink-3); transform: rotate(45deg); pointer-events: none; }
-html:root .ch-act-older { display: block; width: 100%; }
 /* Agents in the Channels list: a folded row above Archive, each agent with its sigil */
 html:root .ch-chan-agents { margin-top: 8px; }
 html:root .ch-chan-sig { flex: none; display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; overflow: hidden; }
@@ -1101,7 +1100,7 @@ html:root .ch-chan-draft + .ch-chan-ind { margin-left: 0; }
 /* AI apps sidebar: "✎ Draft" leads the row's second line (the channel), or is the line when the row has no channel. */
 html:root[data-layout="ai-apps"] .aad-rw[data-draft] .aad-chan-line::before { content: "✎ Draft · "; color: var(--wz-warning, var(--amber)); font-weight: 500; }
 html:root[data-layout="ai-apps"] .aad-rw[data-draft] .aad-draft-line::before { content: "✎ Draft"; }
-/* Activity with nothing in it (wizard-ux issue 1731): one deliberate empty state on an opaque panel, in every skin. */
+/* Chats with nothing in it (wizard-ux issue 1731): one deliberate empty state on an opaque panel, in every skin. */
 html:root .ch-act-empty { display: flex; flex-direction: column; align-items: center; gap: 6px; margin: 24px 16px; padding: 22px 18px; border: 1px solid var(--wz-border, var(--line)); border-radius: 16px; background-color: var(--wz-base, var(--bg)); background-image: linear-gradient(var(--wz-surface, transparent), var(--wz-surface, transparent)); color: var(--wz-text-secondary, var(--ink-2)); text-align: center; font-size: 0.875rem; line-height: 1.5; }
 html:root .ch-act-empty b { color: var(--wz-text, var(--ink)); font-size: 1rem; }
 html:root .ch-act-empty .ch-fclear { margin-top: 8px; background-color: var(--wz-base, var(--bg)); background-image: linear-gradient(var(--wz-surface-raised, transparent), var(--wz-surface-raised, transparent)); color: var(--wz-text, var(--ink)); }
@@ -1204,9 +1203,9 @@ html:root[data-shell="desktop"][data-layout="ai-apps"] .aad-chan .ch-tabbar { ma
 html:root .ch-fail.ch-bg-result { background: color-mix(in srgb, var(--wz-accent) 8%, transparent); border-color: color-mix(in srgb, var(--wz-accent) 30%, transparent); }
 html:root .ch-fail.ch-bg-result .lb { color: var(--wz-accent); }
 
-/* Inbox rows and Sent rows (wizard-ux issues 1779 and 1814; Sent's are on for everyone, Inbox's behind wizard/inbox-rows):
- * the Signal / Telegram chat rows drawn by core/chats-inboxrows.js ibRow, the only place .ch-ib markup comes from, one
- * look for both lists (moved word for word from the inbox-rows package so Sent wears it too; Sent as threads, wizard-ux issue 1880, wears it as well). Wizard tokens only; the list sits on an opaque panel. */
+/* Inbox rows and Sent rows (wizard-ux issues 1779 and 1814; both on for everyone since 27 Nov 2026): the
+ * Signal / Telegram chat rows drawn by core/chats-inboxrows.js ibRow, one look for both lists (moved word for word from
+ * the inbox-rows package so Sent wears it too; Sent as threads, wizard-ux issue 1880, wears it as well). Wizard tokens only; the list sits on an opaque panel. */
 html:root .ch-list .ch-sec.ch-ib > .ch-sec-b { background: linear-gradient(var(--wz-surface), var(--wz-surface)), var(--wz-canvas); border-radius: var(--wz-radius-tile); overflow: hidden; }
 html:root .ch-list .ch-ib-wrap { position: relative; display: flex; align-items: stretch; background: transparent; }
 html:root .ch-list .ch-ib-wrap + .ch-ib-wrap { box-shadow: inset 0 1px 0 color-mix(in srgb, var(--wz-border) 70%, transparent); }
@@ -1244,7 +1243,7 @@ html:root .ch-sheet-b button[data-rssentfix][aria-pressed="true"] svg { stroke: 
 html:root .ch-sheet-b button[data-rssentfix]:disabled { opacity: .55; cursor: progress; }
 /* The AI apps desktop's Chats panel: its Inbox is the sidebar's own compact rows (layouts/ai-apps desktop.css .aad-row:
  * the marker left of the title, a 14 px title, the line under it, an 11 px time, no avatar; .aad-sec headers), which
- * wizard/inbox-rows does not restyle. There the same Sent rows take that look, so Inbox and Sent match in the panel too. */
+ * the Inbox rows do not restyle. There the same Sent rows take that look, so Inbox and Sent match in the panel too. */
 html:root[data-shell="desktop"][data-layout="ai-apps"] .ch-side-sent .ch-sec.ch-sr > .ch-sec-b { background: none; border-radius: 0; }
 html:root[data-shell="desktop"][data-layout="ai-apps"] .ch-side-sent .ch-ib-wrap.ch-sr-wrap + .ch-ib-wrap.ch-sr-wrap { box-shadow: none; }
 html:root[data-shell="desktop"][data-layout="ai-apps"] .ch-side-sent .ch-ib-wrap.ch-sr-wrap > .ch-row.ch-ib-row { min-height: 56px; padding: 8px 10px; gap: 8px; border-radius: 12px; color: var(--aad-ink, var(--wz-text)); }

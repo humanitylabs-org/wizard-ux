@@ -179,7 +179,6 @@ Settings › Appearance › Try new features lists unfinished features to try, A
 - **Icons on the attach menu**: Android app: the + menu in a chat (and the orb's Attach) shows icons before Photo or video, Camera and File, on bigger rows. (Android app only).
 - **Inbox until archived**: Chats stay in Inbox until archived.
 - **Inbox: alerts as chat rows**: Alerts look like chats.
-- **Inbox: only what needs you**: Inbox: only what needs you.
 - **Inbox: pin threads to the top**: Pin threads on top.
 - **Install apps your agent builds**: Apps I build install with one tap.
 - **Install sheet recommends private AI**: Installing a personal-data app suggests private AI.

@@ -25,7 +25,7 @@ function part({ tweaks = '', side = false } = {}) {
 }
 
 test('switch off: no list gets the title bar', () => {
-  const f = part({ tweaks: 'wizard/desktop-chats wizard/inbox-rows' });
+  const f = part({ tweaks: 'wizard/desktop-chats' });
   for (const id of Object.keys(f.W)) assert.equal(f.p.titleBarTab(f.W[id]), '', id);
 });
 

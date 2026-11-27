@@ -57,7 +57,7 @@ const quiet = s => s.quietReply === true;
 const groups = rows => ({ working: rows.filter(s => s.status === 'running'), errors: rows.filter(s => s.status === 'failed'), ready: rows.filter(s => !['running', 'failed'].includes(s.status) && !s.archived && !s.deferred), deferred: rows.filter(s => s.deferred && !s.archived), archive: rows.filter(s => s.archived) });
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
-function shell({ tweaks = `wizard/inbox-rows wizard/sent-threads ${SW}`, threads = THREADS(), sent = SENT() } = {}) {
+function shell({ tweaks = `wizard/sent-threads ${SW}`, threads = THREADS(), sent = SENT() } = {}) {
   const ctx = { console, Date, Map, Set, structuredClone, document: { documentElement: { dataset: { tweaks } }, addEventListener() {} }, localStorage: { getItem: () => null, setItem() {} } };
   ctx.window = ctx; ctx.globalThis = ctx; ctx.addEventListener = () => {}; ctx.WizCore = { chatsParts: {} };
   modelContext(ctx);
@@ -188,10 +188,10 @@ test('switch off: placeOf and the lists are today\'s', () => {
   assert.equal(M.placeOf({ id: 'x', status: 'completed', attention: att('check', 'Try') }, [], f), 'inbox', 'check stays in Inbox');
   assert.equal(M.placeOf({ id: 'x', status: 'completed' }, [], f), 'inbox', 'no Sent row stays in Inbox');
   assert.equal(M.placeOf({ id: 'x', status: 'running' }, [], f), 'inbox', 'an agent-started run stays in Inbox');
-  const s = shell({ tweaks: 'wizard/inbox-rows wizard/sent-threads' });
+  const s = shell({ tweaks: 'wizard/sent-threads' });
   assert.equal(s.ctx.WizCore.inboxPlace(s.LIVE).smart, undefined, 'no smart fact');
   assert.ok(s.inbox().includes('check-agent') && s.inbox().includes('done-agent'), 'today: agent-started threads in Inbox');
   assert.ok(!s.sentList().includes('old'), 'today: Sent only lists threads with a Sent row');
   const bare = shell({ tweaks: '' });
-  assert.equal(bare.ctx.WizCore.inboxIds(bare.LIVE), null, 'nothing on: no placement at all');
+  assert.equal(bare.ctx.WizCore.inboxPlace(bare.LIVE).smart, undefined, 'nothing on: the plain one-place rule (Inbox rows are on for everyone), no smart fact');
 });

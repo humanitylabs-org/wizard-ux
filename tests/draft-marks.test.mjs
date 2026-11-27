@@ -1,6 +1,6 @@
 // Draft marks (wizard-ux issue 1445; on for everyone since issue 1604, the wizard/draft-marks switch is gone): an Activity row whose thread has a saved, unsent draft
 // says "✎ Draft" ahead of its preview, and a Channels line whose box holds one wears the same pencil. This runs the real
-// drafts store (core/chat-kit.js), the real Activity renderer (chats.js activityBody -> chatRow) over the real live.js
+// drafts store (core/chat-kit.js), the real Inbox renderer (core/chats-inboxrows.js, wizard-ux issue 1779) over the real live.js
 // list read, the real Channels list (chats.js channelsBody) and the real list model rows the AI apps sidebar draws.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -54,16 +54,22 @@ function device(storage = new Map(), dataset = { tweaks: ON }) {
   vm.runInContext(['const WORKING_ST =', 'const isWorking =', 'const handledNow =', 'const chanNeeds =',
     'const chanUnread =', 'const actNeeds =', 'const actUnread =', 'const actMark =', 'const chanAt =', 'const ATT =', 'const attOf =', 'const STI_LAB =', 'const STI_TIP ='].map(line).join('\n')
     + '\nconst WosThreadTracker = { on: () => false, onFor: () => false };\n'
-    + block('/* Draft marks (wizard-ux issue 1445', '// A row\'s marker, drawn just left') + block('function actRowMark(s)', '// A thread of an agent other') + block('function stiKind(s)', 'const stiBadge =') + block('function chatRow(s', '/* Agent inbox:')
-    + block('const ACT_SORTS = () =>', '// The sort and Show older taps').replace('let actOlder = false;', 'let actOlder = false, rowChan = true;')
-    + '\nthis.activityBody = activityBody; this.rowDraft = rowDraft; this.chanLineDraft = chanLineDraft;', c);
+    + block('/* Draft marks (wizard-ux issue 1445', '// A row\'s marker, drawn just left')
+    + '\nthis.rule = { actMark, actNeeds, actUnread, attOf, chanAt, isWorking, draftTag }; this.rowDraft = rowDraft; this.chanLineDraft = chanLineDraft;', c);
+  // Chats › Inbox (wizard-ux issue 1779, on for everyone): the real chats-inboxrows.js part over the real rule above.
+  c.WizCore = { chatsParts: {} }; vm.runInContext(read('web/core/chats-inboxrows.js'), c);
+  const R = c.rule, ib = c.WizCore.chatsParts.inboxrows({ ...R, AGS: () => null, agentName: () => 'Wizard', agentRec: id => ({ id }), ago: c.ago,
+    chanFace: n => ({ emoji: '💬', label: n, own: false }), chanStore: () => ({ channels: [] }), chatVars: { readyOrder: 'newest', secOpen: {} }, ch: c.ch, clip: c.clip,
+    elOf: () => null, esc: c.esc, LIVE: c.WizLive, noteAt: c.noteAt, noteRow: c.noteRow, renderChatList: () => {}, rowAgent: () => 'hermes', spacesOf: () => [{ name: 'launch' }],
+    threadAct: () => {}, toast: () => {}, W: {}, winAgent: () => '' });
+  c.activityBody = ib.inboxRowsBody;
   return { c, L: c.WizLive, drafts: c.WosChat.drafts, events, repaints, storage, dataset };
 }
 // Each Activity row's id -> whether its preview line starts with the Draft mark.
 function marks(d) {
   const html = d.c.activityBody({ id: 'w' }, d.L.sessions, null), out = {};
   for (const [, id, row] of html.matchAll(/data-morph-key="row:synthetic_1360_([a-z]+)">([^]*?)<\/button>/g))
-    out[id] = /<span class="pv">(<span class="ch-chan-tag">[^]*?<\/span> · )?<span class="ch-draft-tag"><span aria-hidden="true">✎<\/span> Draft<\/span> · /.test(row);
+    out[id] = /<span class="ch-ib-pv"><span class="ch-draft-tag"><span aria-hidden="true">✎<\/span> Draft<\/span> · /.test(row);
   return { out, order: [...html.matchAll(/data-morph-key="row:synthetic_1360_([a-z]+)"/g)].map(m => m[1]), html };
 }
 const drafted = d => Object.entries(marks(d).out).filter(([, v]) => v).map(([k]) => k);
@@ -80,8 +86,7 @@ test('Activity: the mark appears on the first keystroke, stays while typing, and
   const after = marks(d);
   assert.deepEqual(after.order, before.order, 'rows keep their order');
   assert.equal(after.html.split('data-sec=').length, before.html.split('data-sec=').length, 'same sections');
-  assert.match(after.html, /<span class="ch-chan-tag"># launch<\/span> · <span class="ch-draft-tag"><span aria-hidden="true">✎<\/span> Draft<\/span> · /, 'Draft sits ahead of the last message, after the channel');
-  assert.match(after.html, /<span class="ch-chan-line"><span class="ch-draft-tag"><span aria-hidden="true">✎<\/span> Draft<\/span> · # launch<\/span>/, 'the phone\'s one-line row (channel line only) leads with it too');
+  assert.match(after.html, /<span class="ch-ib-from">launch<\/span>[^]*?<span class="ch-ib-pv"><span class="ch-draft-tag"><span aria-hidden="true">✎<\/span> Draft<\/span> · [^<]/, 'Draft sits ahead of the last message, under the tag line');
   d.drafts.clear('direct:' + GREEN); // send clears the thread's draft
   assert.equal(d.events.filter(e => e === 'wos:drafts-keys').length, 2, 'the draft going is announced');
   assert.deepEqual(drafted(d), [], 'sent: the mark is gone');
