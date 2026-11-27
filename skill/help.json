@@ -401,10 +401,6 @@
       "help": "Five picks, then a first win.",
       "where": "Settings › Appearance › Try new features › Five-choice first chat"
     },
-    "wizard/catch-me-up": {
-      "help": "Say catch me up: a two-step summary.",
-      "where": "Settings › Appearance › Try new features › Catch me up"
-    },
     "wizard/private-first-setup": {
       "help": "New installs start private: Welcome leads with Tinfoil; Claude and ChatGPT are optional extras.",
       "where": "Settings › Appearance › Try new features › Private first setup"
@@ -482,11 +478,6 @@
     "wizard/smart-inbox": {
       "help": "Inbox: only what blocks you.",
       "where": "Settings › Appearance › Try new features › Smart inbox: only what needs you"
-    },
-    "wizard/phone-nav": {
-      "help": "Phone bar: bigger orb, one badge.",
-      "where": "Settings › Appearance › Try new features › Phone bar: bigger orb, one badge",
-      "when": "phone only"
     },
     "wizard/channel-auto-emoji": {
       "help": "New channels get a fitting emoji.",
