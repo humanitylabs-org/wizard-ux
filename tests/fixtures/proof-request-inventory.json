@@ -349,7 +349,7 @@
       "status": "not-exercised",
       "source": "web/core/chats-chanemoji.js",
       "kind": "write",
-      "note": "Channel emoji from a model (issue 1605): only after New channel creates a channel with the off-by-default switch wizard/channel-model-emoji on, which these flows never do; tests/channel-model-emoji.test.mjs and tests/qa-chat-channel-model-emoji.cjs cover it with a synthetic answer. Refused and collected, never answered, if a flow reaches it."
+      "note": "Channel emoji from a model (issue 1605): only after New channel creates a channel whose name has no emoji, which these flows never do; tests/channel-model-emoji.test.mjs and tests/qa-chat-channel-model-emoji.cjs cover it with a synthetic answer. Refused and collected, never answered, if a flow reaches it."
     },
     "/wizard/v1/channels": {
       "status": "catalogued",

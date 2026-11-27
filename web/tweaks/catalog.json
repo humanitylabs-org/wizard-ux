@@ -29,7 +29,6 @@
     "wizard/try-feature-counts",
     "wizard/feature-counts-ask",
     "wizard/apps-panel",
-    "wizard/channel-model-emoji",
     "wizard/app-picker-store-search",
     "wizard/phone-push",
     "wizard/install-agent-builds",
