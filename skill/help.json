@@ -465,10 +465,6 @@
       "help": "Android and iPhone: Music and Podcasts play through the phone's media player (lock screen, Control Center, headset buttons), and keep playing locked.",
       "where": "Settings › Appearance › Try new features › Phone media player for Music and Podcasts"
     },
-    "wizard/app-tap-home": {
-      "help": "Narrow desktop window: tapping the icon of the app in front takes it back to its first view.",
-      "where": "Settings › Appearance › Try new features › Tap the app in front for its first view"
-    },
     "wizard/attach-menu-icons": {
       "help": "Android app: the + menu in a chat (and the orb's Attach) shows icons before Photo or video, Camera and File, on bigger rows.",
       "where": "Settings › Appearance › Try new features › Icons on the attach menu",

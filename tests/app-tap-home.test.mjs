@@ -1,6 +1,6 @@
-// Tapping the app in front takes it to its first view (wizard-ux issue 1332, switch wizard/app-tap-home, off by
-// default). The app SDK's Home (web/core/app-client.js): the app's own WizardApp.nav.onHome first, then every Back step
-// at once, a history adapter in one traversal; the narrow desktop's tap uses it only while the switch is on.
+// Tapping the app in front takes it to its first view (wizard-ux issue 1332, on for everyone). The app SDK's Home
+// (web/core/app-client.js): the app's own WizardApp.nav.onHome first, then every Back step at once, a history adapter
+// in one traversal; the narrow desktop's tap uses it.
 // Browser proof: tests/qa-desktop-one-app-home.cjs.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -77,7 +77,7 @@ test('an onHome that throws is not home: the Back steps still run', () => {
 });
 
 // The narrow desktop's tap on the app already in front, on the real AI apps desktop view (tests/fixtures/ai-apps-world).
-async function narrowTap({ on, answer = 'handled', width = 900 }) {
+async function narrowTap({ stale = false, answer = 'handled', width = 900 }) {
   const had = globalThis.innerWidth, hadS = globalThis.WizAppServices;
   globalThis.innerWidth = width;
   try {
@@ -89,7 +89,7 @@ async function narrowTap({ on, answer = 'handled', width = 900 }) {
     stage.append(chatDesk, appDesk); w.html.children[0].append(stage);
     const calls = [];
     globalThis.WizAppServices = { home: f => { calls.push(['home', f === frame]); return answer; }, back: f => { calls.push(['back', f === frame]); return 'atRoot'; } };
-    if (on) w.html.dataset.tweaks = ID;
+    if (stale) w.html.dataset.tweaks = ID;
     (await layout()).default(w.api);
     w.st.route = { home: false, view: 'desk', thread: null, desk: 5 }; w.emit('route', w.st.route); w.run();
     assert.equal(w.html.dataset.aadOne, width < 1100 ? 'app' : undefined);
@@ -102,21 +102,21 @@ async function narrowTap({ on, answer = 'handled', width = 900 }) {
   }
 }
 
-test('narrow desktop, switch on: tapping the app in front asks it for Home once, and it stays in front', async () => {
-  const r = await narrowTap({ on: true });
+test('narrow desktop: tapping the app in front asks it for Home once, and it stays in front', async () => {
+  const r = await narrowTap({});
   assert.deepEqual(r.calls, [['home', true]], 'Home on the app\'s own frame, no Back steps');
   assert.deepEqual(r.moved, [], 'no desk change'); assert.equal(r.front, 'app');
-  const later = await narrowTap({ on: true, answer: 'pending' });
+  const later = await narrowTap({ answer: 'pending' });
   assert.deepEqual(later.calls, [['home', true]], 'a sandboxed app answers later: still no Back steps');
 });
 
-test('narrow desktop, switch on, an app with no Home (older SDK, off-origin): today\'s Back steps', async () => {
-  const r = await narrowTap({ on: true, answer: 'unsupported' });
+test('narrow desktop, an app with no Home (older SDK, off-origin): today\'s Back steps', async () => {
+  const r = await narrowTap({ answer: 'unsupported' });
   assert.deepEqual(r.calls.map(c => c[0]), ['home', 'back']);
 });
 
-test('switch off: the tap is today\'s Back steps, never Home', async () => {
-  const r = await narrowTap({ on: false });
-  assert.deepEqual(r.calls, [['back', true]]);
+test('a leftover switch attribute changes nothing: the tap still asks for Home', async () => {
+  const r = await narrowTap({ stale: true });
+  assert.deepEqual(r.calls, [['home', true]]);
   assert.deepEqual(r.moved, []); assert.equal(r.front, 'app');
 });
