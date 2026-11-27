@@ -1,4 +1,0 @@
-/* Clear chat notifications (wizard-ux issue 1276): the Notification access bar from core/android-relay.js wears the
- * update banner's look (.dv-update) and sits at the bottom, so it never covers an update banner. */
-html[data-tweaks~="wizard/clear-chat-notifications"] .wos-chat-notify { position: fixed; top: auto; bottom: calc(16px + var(--safe-b, 0px)); z-index: 61; }
-html[data-tweaks~="wizard/clear-chat-notifications"] .wos-chat-notify .dv-um { flex: 1; line-height: 1.3; }

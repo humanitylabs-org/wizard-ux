@@ -240,18 +240,6 @@
         <!-- ===== Mizel meeting recorder (feature/mizel-recorder) =====
              Captures the phone mic in 5 s WAV chunks while a meeting records; uploads them through a durable
              outbox; Pause releases the mic. Started only from the app (page bridge) while it is in front. -->
-        <!-- Clear chat notifications (wizard-ux issue 1276, switch wizard/clear-chat-notifications): off and absent
-             from Android's Notification access list until the owner turns the switch on (the shell enables it). -->
-        <service
-            android:name=".notify.BridgedNotificationListener"
-            android:enabled="false"
-            android:exported="true"
-            android:label="Clear chat notifications"
-            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
-            <intent-filter>
-                <action android:name="android.service.notification.NotificationListenerService" />
-            </intent-filter>
-        </service>
         <service
             android:name=".mizel.MeetingRecorderService"
             android:exported="false"

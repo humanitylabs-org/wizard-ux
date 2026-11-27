@@ -1949,9 +1949,6 @@
       };
     })()),
     keys, // Live app-key targets while Option is held.
-    /* Clear chat notifications (wizard-ux issue 1276): tell Wizard the owner read a chat of another network,
-     * chatRead({ network: 'line', names: ['Mike'] }). With the owner's switch on, the WizardOS Android app clears that
-     * chat app's own notification from the tray. Resolves true when it was handed on, false otherwise (any host). */
     /* Agent access (wizard-ux issue 1668): which agents may use an account app, for Connected accounts in a sandboxed
      * window (browser boundary), where its own owner call carries no token. read(appId) and set(appId, agentIds) answer
      * { state: 'ok', agents: [{ id, label, privacy, enabled }] } or { state: 'absent' } (not installed); set needs a real
@@ -1969,8 +1966,6 @@
         set: (appId, agentIds) => call('agents.set', { app: String(appId || ''), agents: Array.isArray(agentIds) ? agentIds.map(String) : [] }),
       };
     })()),
-    notifications: Object.freeze({ chatRead: data => service?.notifications ? Promise.resolve().then(() => service.notifications.chatRead(data) === true).catch(() => false)
-      : transportReady || opaque ? request('notify.chatRead', data).then(v => v === true, () => false) : Promise.resolve(false) }),
     badge: Object.freeze({ set: (n, o) => { const more = !!(o && o.more === true); return service ? service.badge.set(n, { more }) : transportReady ? request('badge.set', { n, more }).then(() => true, () => false) : Promise.resolve(false); } }),
     attachChip: Object.freeze({ node: chipNode, paint: (el, c) => window.WizAttachChip?.paint(el, c), ready: () => chipModule().then(m => !!m) }),
     composer: Object.freeze({ bind: composerBind, insertText: (field, text) => window.WizComposerInput ? window.WizComposerInput.insertText(field, text) : (composerModule(), false) }),

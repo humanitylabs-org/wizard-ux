@@ -79,63 +79,11 @@
       f.contentWindow.postMessage({type:'wizard-os:device-resume'}, location.origin);
     }
   }
-  /* Clear chat notifications (wizard-ux issue 1276, switch wizard/clear-chat-notifications, off by default). While the
-   * switch is on, the WizardOS Android app runs a notification listener (Android's Notification access) and clears a
-   * chat app's own tray notification once Messenger says that chat was read (WizardApp.notifications.chatRead, served
-   * by core/app-services.js). The shell turns the listener on and off with the switch, and while it is on without
-   * access, shows one bar with Allow (opens Android's page). Off: nothing here runs and the listener stays disabled. */
-  const CHAT_SWITCH = 'wizard/clear-chat-notifications', CHAT_RATE = 30;
-  let chatWas = null, chatHidden = false, chatCalls = [], chatSettled = false;
-  const chatOn = () => { try { return (document.documentElement.dataset.tweaks || '').split(' ').includes(CHAT_SWITCH); } catch (_) { return false; } };
-  const chatNative = () => { const n = window.WizardOSNative; return n && typeof n.chatNotifyState === 'function' ? n : null; };
-  function chatState(n) { try { return JSON.parse(n.chatNotifyState() || '{}') || {}; } catch (_) { return {}; } }
-  function chatBar(show) {
-    let bar = document.getElementById('wosChatNotify');
-    if (!show) { if (bar) bar.hidden = true; return; }
-    if (!bar) {
-      bar = document.createElement('div'); bar.id = 'wosChatNotify'; bar.className = 'dv-update wos-chat-notify'; bar.setAttribute('role', 'status');
-      const text = document.createElement('span'); text.className = 'dv-um';
-      text.textContent = 'Clear chat notifications needs Android\u2019s Notification access. Wizard looks only at chat apps\u2019 notification titles, to clear the one for a chat you read in Messenger, and keeps nothing.';
-      const allow = document.createElement('button'); allow.type = 'button'; allow.dataset.chatNotify = 'allow'; allow.textContent = 'Allow';
-      const later = document.createElement('button'); later.type = 'button'; later.dataset.chatNotify = 'later'; later.className = 'later'; later.setAttribute('aria-label', 'Later'); later.textContent = '\u00d7';
-      bar.append(text, allow, later);
-      bar.addEventListener('click', e => {
-        const b = e.target.closest?.('[data-chat-notify]'); if (!b) return;
-        if (b.dataset.chatNotify === 'allow') { try { chatNative()?.chatNotifyAccess(); } catch (_) {} }
-        chatHidden = true; chatBar(false);
-      });
-      document.body.appendChild(bar);
-    }
-    bar.hidden = false;
-  }
-  function chatSync() {
-    const n = chatNative(); if (!n) return;
-    const on = chatOn();
-    // Switches are painted onto the page a little after load: an off is applied once they have settled, so a start
-    // never turns the listener off and on again. Settled means the 5 s timer below, never the first wos:experience:
-    // that can come before this device's own switches are applied (wizard-ux issue 1865). The same holds for every
-    // switch below that waits for chatSettled.
-    if (!on && !chatSettled) return;
-    if (on !== chatWas) { chatWas = on; try { n.chatNotifySwitch(on); } catch (_) {} if (on) chatHidden = false; }
-    chatBar(on && !chatHidden && chatState(n).access === false);
-  }
-  function chatRead(data) {
-    const n = chatNative(); if (!n || !chatOn() || !data || typeof data !== 'object') return false;
-    const network = typeof data.network === 'string' ? data.network : '';
-    const names = Array.isArray(data.names) ? data.names.filter(x => typeof x === 'string' && x.trim() && x.length <= 200).slice(0, 8) : [];
-    if (!/^[a-z0-9_-]{1,32}$/.test(network) || !names.length) return false;
-    const now = Date.now(); chatCalls = chatCalls.filter(t => now - t < 60000);
-    if (chatCalls.length >= CHAT_RATE) return false;
-    chatCalls.push(now);
-    try { n.chatNotifyRead(JSON.stringify({ network, names })); return true; } catch (_) { return false; }
-  }
-  if (typeof MutationObserver === 'function' && document.documentElement) {
-    new MutationObserver(() => chatSync()).observe(document.documentElement, { attributes: true, attributeFilter: ['data-tweaks'] });
-  }
-  window.addEventListener('wos:experience', () => { chatSync(); });
-  setTimeout(() => { chatSettled = true; chatSync(); }, 5000);
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) chatSync(); });
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => chatSync()); else chatSync();
+  /* Native switches below are copied to the Android app as they flip. Switches are painted onto the page a little
+   * after load: an off is applied once they have settled, so a start never turns a native part off and on again.
+   * Settled means the 5 s timers below, never the first wos:experience: that can come before this device's own
+   * switches are applied (wizard-ux issue 1865). */
+  let switchesSettled = false;
 
   /* Camera and Attach on the side-button corner orb (wizard-os issue 655, on for everyone). Android apps 0.10.49 to
    * 0.10.65 still wait to be told it is on (they kept a copy of the old switch wizard/assist-attach), so the main page
@@ -150,7 +98,7 @@
   function noteSync() {
     const n = window.WizardOSNative; if (!n || typeof n.assistNoteSwitch !== 'function') return;
     let on = false; try { on = (document.documentElement.dataset.tweaks || '').split(' ').includes(NOTE_SWITCH); } catch (_) {}
-    if (!on && !chatSettled) return;
+    if (!on && !switchesSettled) return;
     if (on === noteWas) return;
     noteWas = on; try { n.assistNoteSwitch(on); } catch (_) {}
   }
@@ -158,7 +106,7 @@
     new MutationObserver(() => noteSync()).observe(document.documentElement, { attributes: true, attributeFilter: ['data-tweaks'] });
   }
   window.addEventListener('wos:experience', () => { noteSync(); });
-  setTimeout(() => { chatSettled = true; noteSync(); }, 5000);
+  setTimeout(() => { switchesSettled = true; noteSync(); }, 5000);
   noteSync();
 
   /* App windows (wizard-os issue 650, on for everyone). In the Android app, a link to a Wizard app (a chat link, a link
@@ -202,7 +150,7 @@
     new MutationObserver(() => pushSync()).observe(document.documentElement, { attributes: true, attributeFilter: ['data-tweaks'] });
   }
   window.addEventListener('wos:experience', () => { notifySync(); pushSync(); });
-  setTimeout(() => { chatSettled = true; pushSettled = true; notifySync(); pushSync(); }, 5000);
+  setTimeout(() => { switchesSettled = true; pushSettled = true; notifySync(); pushSync(); }, 5000);
   notifySync();
   pushSync();
   /* Location for the apps that ask for it (wizard-ux issue 1629, switch wizard/app-location, off by default). The shell
@@ -214,7 +162,7 @@
   function locationSync() {
     const n = window.WizardOSNative; if (!n || typeof n.appLocationSwitch !== 'function' || window.WizHomeScreenPolicy?.mode) return;
     let on = false; try { on = (document.documentElement.dataset.tweaks || '').split(' ').includes(LOCATION_SWITCH); } catch (_) {}
-    if (!on && !chatSettled) return;
+    if (!on && !switchesSettled) return;
     if (on === locationWas) return;
     locationWas = on; try { n.appLocationSwitch(on); } catch (_) {}
   }
@@ -222,7 +170,7 @@
     new MutationObserver(() => locationSync()).observe(document.documentElement, { attributes: true, attributeFilter: ['data-tweaks'] });
   }
   window.addEventListener('wos:experience', () => { locationSync(); });
-  setTimeout(() => { chatSettled = true; locationSync(); }, 5000);
+  setTimeout(() => { switchesSettled = true; locationSync(); }, 5000);
   locationSync();
   /* Instant home-screen apps (wizard-ux issue 1830, switch wizard/pin-instant-open, off by default). A home-screen app
    * window is a new Android window with its own page, so the Android app does the work (PinInstant): skip Connecting
@@ -233,7 +181,7 @@
   function pinSync() {
     const n = window.WizardOSNative; if (!n || typeof n.pinInstantSwitch !== 'function' || window.WizHomeScreenPolicy?.mode) return;
     let on = false; try { on = (document.documentElement.dataset.tweaks || '').split(' ').includes(PIN_SWITCH); } catch (_) {}
-    if (!on && !chatSettled) return;
+    if (!on && !switchesSettled) return;
     if (on === pinWas) return;
     pinWas = on; try { n.pinInstantSwitch(on); } catch (_) {}
   }
@@ -241,7 +189,7 @@
     new MutationObserver(() => pinSync()).observe(document.documentElement, { attributes: true, attributeFilter: ['data-tweaks'] });
   }
   window.addEventListener('wos:experience', () => { pinSync(); });
-  setTimeout(() => { chatSettled = true; pinSync(); }, 5000);
+  setTimeout(() => { switchesSettled = true; pinSync(); }, 5000);
   pinSync();
   /* One UI-style icon count (wizard-ux issue 1669, switch wizard/phone-badge-look, off by default). The Messenger
    * home-screen icon's count is drawn by the Android app (badge/BadgeLook): exact digits up to 999 in a ringless
@@ -251,7 +199,7 @@
   function badgeSync() {
     const n = window.WizardOSNative; if (!n || typeof n.badgeLookSwitch !== 'function' || window.WizHomeScreenPolicy?.mode) return;
     let on = false; try { on = (document.documentElement.dataset.tweaks || '').split(' ').includes(BADGE_SWITCH); } catch (_) {}
-    if (!on && !chatSettled) return;
+    if (!on && !switchesSettled) return;
     if (on === badgeWas) return;
     badgeWas = on; try { n.badgeLookSwitch(on); } catch (_) {}
   }
@@ -259,7 +207,7 @@
     new MutationObserver(() => badgeSync()).observe(document.documentElement, { attributes: true, attributeFilter: ['data-tweaks'] });
   }
   window.addEventListener('wos:experience', () => { badgeSync(); });
-  setTimeout(() => { chatSettled = true; badgeSync(); }, 5000);
+  setTimeout(() => { switchesSettled = true; badgeSync(); }, 5000);
   badgeSync();
   /* Recovery mode (wizard-ux issue 1775, switch wizard/phone-recovery-mode, off by default). When a start of the Android
    * app froze or never finished, the next start opens with the shell only (meeting recording and uploads paused) and a
@@ -270,7 +218,7 @@
   function recoverySync() {
     const n = window.WizardOSNative; if (!n || typeof n.recoveryModeSwitch !== 'function' || window.WizHomeScreenPolicy?.mode) return;
     let on = false; try { on = (document.documentElement.dataset.tweaks || '').split(' ').includes(RECOVERY_SWITCH); } catch (_) {}
-    if (!on && !chatSettled) return;
+    if (!on && !switchesSettled) return;
     if (on === recoveryWas) return;
     recoveryWas = on; try { n.recoveryModeSwitch(on); } catch (_) {}
   }
@@ -278,7 +226,7 @@
     new MutationObserver(() => recoverySync()).observe(document.documentElement, { attributes: true, attributeFilter: ['data-tweaks'] });
   }
   window.addEventListener('wos:experience', () => { recoverySync(); });
-  setTimeout(() => { chatSettled = true; recoverySync(); }, 5000);
+  setTimeout(() => { switchesSettled = true; recoverySync(); }, 5000);
   recoverySync();
   // The installed Wizard app a page of this Wizard belongs to (the longest app address it lies under), or the app a
   // shell link names (…/wizard-os-home/?open=<id>). Wizard's own pages and anything else: null.
@@ -313,7 +261,7 @@
     const hit = appOfLink(u); return !!hit && openAppWindow(hit.app.id, hit.path);
   }
 
-  window.WizAndroidRelay = { METHODS, frameOk, available: () => !!port(), resume, chatRead, openAppWindow, appLink,
+  window.WizAndroidRelay = { METHODS, frameOk, available: () => !!port(), resume, openAppWindow, appLink,
     legacy(source, appId, method, args = []) {
       const spec = legacySpec(source, appId);
       if (!spec.methods.includes(method) || !Array.isArray(args) || args.length > 3 || args.some(x => x !== null && !['string', 'number', 'boolean'].includes(typeof x))) throw new Error('Unknown legacy device method');

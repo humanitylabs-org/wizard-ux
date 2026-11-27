@@ -56,7 +56,7 @@
     'identity.info', 'identity.sign', 'identity.nip44_encrypt', 'identity.nip44_decrypt',
     'capture.sync', 'capture.prepare', 'capture.release', 'capture.start', 'capture.call', 'capture.settle', 'capture.pending', 'capture.ack', 'capture.confirm',
     'storage.load', 'storage.save', 'idb.load', 'idb.commit', 'idb.drop', 'idb.list', 'net.fetch', 'net.abort', 'net.ack', 'ws.open', 'ws.send', 'ws.close', 'link.open',
-    'media.view', 'nav.back', 'nav.openThread', 'nav.openContextDraft', 'notify.chatRead', 'agents.read', 'agents.set'], STICKY = ['badge.set', 'titlebar.set'];
+    'media.view', 'nav.back', 'nav.openThread', 'nav.openContextDraft', 'agents.read', 'agents.set'], STICKY = ['badge.set', 'titlebar.set'];
   // The shell's origin: our URL's own origin (the frame was loaded from the shell's host; only the document is opaque).
   const SHELL = location.origin;
   // home: this window's own app path from the shell's hello (e.g. /notes/), so app-client.js knows which links leave it.
