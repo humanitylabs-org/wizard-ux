@@ -263,6 +263,20 @@ const bubbles = page => page.evaluate(() => {
           steps.second = await state(two.page); await two.page.screenshot({ path: path.join(out, `${tag}-second-device.png`) });
           assert.deepEqual(steps.second.favs, ['wizard-calendar', 'wizard-music', 'wizard-podcasts'], 'Favorites on the second device'); assert.ok(!steps.second.recent.includes('notes'), 'Notes off Recent there too');
           await two.context.close();
+          // The way a person checks it (issue section 3): open Music, Notes, Calendar one after another, then walk back.
+          for (const id of ['wizard-music', 'notes', 'wizard-calendar']) {
+            await tap(APPS_TILE); await nap(400); if (!(await state(page)).panel) { await tap(APPS_TILE); await nap(400); }
+            await page.click('#appsPanel [data-apall]'); await page.click(`#appsPanel [data-apopen="${id}"]`); await nap(1500);
+          }
+          steps.walk0 = (await state(page)).front; assert.equal(steps.walk0, 'wizard-calendar');
+          await sideways(await center(APPS_TILE), 60); steps.walkR = (await state(page)).front;
+          assert.equal(steps.walkR, 'wizard-calendar', 'swipe right on the newest app: it stays (no wrap)');
+          await sideways(await center(APPS_TILE), -60); steps.walkL1 = (await state(page)).front;
+          await sideways(await center('.sec-tile[data-sec="chats"]'), -60); steps.walkL2 = await state(page);
+          assert.deepEqual([steps.walkL1, steps.walkL2.front], ['notes', 'wizard-music'], 'swipe left twice (Apps tile, then Chats tile): Notes, then Music, one at a time');
+          assert.equal(steps.walkL2.cur, 'apps', 'it stays in Apps'); assert.equal(steps.walkL2.appsLabel, 'Music', 'the tile follows');
+          await sideways(await center('.sec-tile[data-sec="home"]'), 60); steps.walkR2 = (await state(page)).front;
+          assert.equal(steps.walkR2, 'notes', 'swipe right: back toward the newest');
           await tap(APPS_TILE); await nap(500); if (!(await state(page)).panel) await tap(APPS_TILE); // from Chats the first tap goes to the app in Apps
           await page.click('#appsPanel [data-apall]'); await page.click('#appsPanel [data-apopen="notes"]'); await nap(1500);
           steps.back = await state(page); assert.equal(steps.back.front, 'notes');
