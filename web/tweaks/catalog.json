@@ -19,7 +19,6 @@
     "wizard/skins-look-only",
     "wizard/update-bug-reports",
     "wizard/link-token-repair",
-    "wizard/graceful-restart",
     "wizard/clear-chat-notifications",
     "wizard/sidebar-chats-view",
     "wizard/assist-agent-note",

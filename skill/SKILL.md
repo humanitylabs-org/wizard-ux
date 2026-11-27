@@ -171,7 +171,6 @@ Settings › Appearance › Try new features lists unfinished features to try, A
 - **Ask before sharing feature counts**: Shared only after you say Share.
 - **Backup health in Resources**: Resources shows your backup's health.
 - **Bottom app bar on desktop**: Apps bar at the bottom on any width.
-- **Calm Agent Service restarts**: While a restart waits for running chats you see a quiet note; messages sent meanwhile go after it; if overdue, Wait longer or Restart now.
 - **Calm offline card**: The can't-reach-your-Wizard card shows one dotted path (Internet · Tailscale · Wizard), one short next step and a small Check again with the automatic re-check time.
 - **Catch me up**: Say catch me up: a two-step summary.
 - **Channels: a fitting emoji for new channels**: New channels get a fitting emoji.

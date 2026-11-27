@@ -81,7 +81,7 @@ export function sidepaintPart({ aadVars, ACT_SECTIONS, actOn, actOrder, api, bad
 
   /* ---------- paint the sidebar (only when what it lists changed: renders come often while a chat works) ---------- */
   const label = text => el('h3', 'aad-lab', { text });
-  // Sends a graceful restart holds (wizard-ux issue 1362, wizard/graceful-restart): their own Saved heading under
+  // Sends a graceful restart holds (wizard-ux issue 1362): their own Saved heading under
   // Working, only while there are any (the list model's `saved`), so a held send never counts as Working.
   function savedSec(rows, cur) {
     if (!rows?.length) return [];
