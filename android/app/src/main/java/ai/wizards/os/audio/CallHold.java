@@ -45,8 +45,15 @@ public final class CallHold {
         return callEndedAt > 0 && now >= callEndedAt && now - callEndedAt <= SETTLE_MS;
     }
     /** At a call's start: the real-looking pause just before it was the call ringing, so the intention comes back. */
-    public static boolean ringPause(long pausedAt, long callStartAt) {
-        return pausedAt > 0 && callStartAt >= pausedAt && callStartAt - pausedAt <= RING_WINDOW_MS;
+    public static boolean ringPause(long pausedAt, long callStartAt) { return ringPause(REASON_FOCUS_LOSS, pausedAt, callStartAt); }
+    /**
+     * Same, by reason: a focus loss up to {@link #RING_WINDOW_MS} before (the ringing took it); a "becoming noisy" only
+     * within {@link #SETTLE_MS} before (the earphones leaving the media profile for the call a moment before the mode
+     * changes). An unplug seconds before a call is rare enough to accept.
+     */
+    public static boolean ringPause(int reason, long pausedAt, long callStartAt) {
+        long window = reason == REASON_FOCUS_LOSS ? RING_WINDOW_MS : reason == REASON_NOISY ? SETTLE_MS : -1;
+        return pausedAt > 0 && callStartAt >= pausedAt && callStartAt - pausedAt <= window;
     }
     /** After the call: resume only if the person still wants it and it is the same queue and item as before. */
     public static boolean resume(boolean held, boolean want, int heldGeneration, int generation, String heldItem, String item) {
@@ -58,7 +65,7 @@ public final class CallHold {
     private int heldGeneration;
     private String heldItem;
     private long pausedAt, callEndedAt;
-    private int pausedGeneration;
+    private int pausedGeneration, pausedReason;
     private String pausedItem;
 
     public boolean inCall() { return inCall; }
@@ -71,22 +78,22 @@ public final class CallHold {
      */
     public int mode(int next, boolean focusTaken, long now) {
         mode = next;
-        boolean recentPause = pausedAt > 0 && now - pausedAt <= RING_WINDOW_MS;
+        boolean recentPause = ringPause(pausedReason, pausedAt, now);
         if (!inCall && call(next, focusTaken || recentPause)) { inCall = true; return START; }
         if (inCall && !telephony(next) && !voip(next)) { inCall = false; callEndedAt = now; return END; }
         return NONE;
     }
 
     /**
-     * The player paused itself for lost audio focus and it was not (yet) a call: remember it, in case a call starts
-     * right after (the ringing took the focus). An unplug is never remembered: ringing does not unplug anything.
+     * The player paused itself (lost focus or "becoming noisy") and it was not (yet) a call: remember it, in case a
+     * call starts right after (see {@link #ringPause(int, long, long)}).
      */
     public void realPause(int reason, long now, int generation, String item) {
-        if (reason != REASON_FOCUS_LOSS) { pausedAt = 0; return; }
-        pausedAt = now; pausedGeneration = generation; pausedItem = item; }
+        if (reason != REASON_FOCUS_LOSS && reason != REASON_NOISY) { pausedAt = 0; return; }
+        pausedAt = now; pausedReason = reason; pausedGeneration = generation; pausedItem = item; }
     /** At a call's start: whether the pause just before it was the ringing (same item, nothing touched since). */
     public boolean ringTookIt(long now, int generation, String item) {
-        boolean took = ringPause(pausedAt, now) && pausedGeneration == generation && pausedItem != null && pausedItem.equals(item);
+        boolean took = ringPause(pausedReason, pausedAt, now) && pausedGeneration == generation && pausedItem != null && pausedItem.equals(item);
         pausedAt = 0;
         return took;
     }

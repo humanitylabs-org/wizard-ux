@@ -99,11 +99,28 @@ public class CallHoldTest {
         assertFalse(c.ringTookIt(2_000, 3, "ep:1"));
     }
 
-    @Test public void anUnplugIsNeverMistakenForTheRing() {
+    @Test public void anUnplugSecondsBeforeACallIsNotTheCalls() {
         CallHold c = new CallHold();
         c.realPause(REASON_NOISY, 1_000, 3, "ep:1");
-        assertEquals(START, c.mode(MODE_RINGTONE, false, 2_000));
-        assertFalse(c.ringTookIt(2_000, 3, "ep:1"));
+        assertEquals(START, c.mode(MODE_RINGTONE, false, 1_000 + SETTLE_MS + 1));
+        assertFalse(c.ringTookIt(1_000 + SETTLE_MS + 1, 3, "ep:1"));
+        CallHold d = new CallHold();
+        d.realPause(REASON_NOISY, 1_000, 3, "ep:1");
+        assertEquals("an older unplug does not make Wizard's own voice-chat mode a call", NONE, d.mode(MODE_IN_COMMUNICATION, false, 1_000 + SETTLE_MS + 1));
+    }
+
+    @Test public void earphonesLeavingTheMediaProfileJustBeforeTheModeChangesIsTheCalls() {
+        // Bluetooth sends "becoming noisy" as it moves to the call profile, a moment before WhatsApp sets voice-chat mode.
+        assertTrue(ringPause(REASON_NOISY, 1_000, 1_000 + SETTLE_MS));
+        assertFalse(ringPause(REASON_NOISY, 1_000, 1_000 + SETTLE_MS + 1));
+        CallHold c = new CallHold();
+        assertFalse(callCaused(REASON_NOISY, MODE_NORMAL, 1_000, 0));
+        c.realPause(REASON_NOISY, 1_000, 3, "ep:11139");
+        assertEquals(START, c.mode(MODE_IN_COMMUNICATION, false, 2_000));
+        assertTrue(c.ringTookIt(2_000, 3, "ep:11139"));
+        c.hold(3, "ep:11139");
+        assertEquals(END, c.mode(MODE_NORMAL, false, 40_000));
+        assertTrue(c.release(true, 3, "ep:11139"));
     }
 
     @Test public void wizardsOwnMicSettingVoiceChatModeIsNotACall() {
