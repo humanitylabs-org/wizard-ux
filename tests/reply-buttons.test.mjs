@@ -42,7 +42,7 @@ test('marker: groups parsed in place, the plain text keeps their labels, a reply
     { group: 'Workout', buttons: [{ id: 'done', label: 'Done' }], msg: '41' }]);
   for (const t of [tn.a.text, tn.a.plainText]) {
     assert.doesNotMatch(t, /WIZARD_BUTTONS|"group"/, 'no marker text');
-    assert.match(t, /I tested both layouts\.\n\n\[Go for it\] \[Drop this\]\n\n\*\*Morning\*\*\n1\. Workout\n\n\[Done\]\n\nThat's all\./, 'labels as text where the buttons sit');
+    assert.match(t, /I tested both layouts\.\n\nShip desks: \[Go for it\] \[Drop this\]\n\n\*\*Morning\*\*\n1\. Workout\n\nWorkout: \[Done\]\n\nThat's all\./, 'the ask and its labels as text where the buttons sit');
   }
   assert.deepEqual(tn.a.btext.split('\n').filter(l => KIT.RB_TOKEN.test(l)).map(l => KIT.RB_TOKEN.exec(l)[1]), ['0', '1'], 'one token line per group, in order');
   const plain = KIT.parseRows(rows('Nothing to tap.'))[0];
@@ -117,7 +117,7 @@ test('history: the picked state comes back on reload and on a second device; loc
     const html = AC.replyHtml(turns[0].a.btext, turns[0].a.buttons, md, AC.replyPicks(turns, 's3'));
     assert.match(html, /aria-pressed="true">✓ Done<\/button>/);
     assert.doesNotMatch(html, /disabled/, 'the agent has not acted yet: still changeable');
-    assert.match(html, /data-rb-group="Ship desks"[^>]*>(<button[^>]*aria-pressed="false"[^>]*>[^<]*<\/button>){2}/, 'other group untouched');
+    assert.match(html, /data-rb-group="Ship desks"[^>]*><span class="ch-rb-ask" aria-hidden="true">Ship desks<\/span>(<button[^>]*aria-pressed="false"[^>]*>[^<]*<\/button>){2}/, 'other group untouched');
   }
   const answered = a.KIT.parseRows([...history, { id: 43, role: 'assistant', timestamp: 4, content: 'Logged your workout.' }]);
   const locked = a.AC.replyHtml(answered[0].a.btext, answered[0].a.buttons, md, a.AC.replyPicks(answered, 's3'));
@@ -224,4 +224,31 @@ test('reporter rewrite that failed: the original reply stands', () => {
   const [tn] = KIT.parseRows([{ role: 'user', timestamp: 1, content: 'Hi' }, { id: 1, role: 'assistant', timestamp: 2, content: `Original report.\n${BAR}` }, REPORTER_ROW,
     { id: 2, role: 'assistant', timestamp: 4, display_kind: 'failed_turn', content: 'Your request was not processed. Send it again if you still want me to carry it out.' }]);
   assert.match(drawn(AC, tn), /data-rb-msg="1"/);
+});
+
+// Issue 1963: several groups with the same labels (Approve / Decline) looked identical; each row names its ask on
+// screen, picked and locked rows keep it, and the text fallback (Copy, switch off) names it too.
+test('asks: every row shows its group as a caption, also picked and locked; the fallback names the ask', async () => {
+  const { KIT, AC } = world(), sent = [];
+  const ASKS = `Four things to decide.\n${GROUP('Smart inbox switch', 'Approve', 'Decline')}\n${GROUP('Typed messages go quiet', 'Approve', 'Decline')}`;
+  const [tn] = KIT.parseRows(rows(ASKS));
+  for (const t of [tn.a.text, tn.a.plainText]) assert.match(t, /Smart inbox switch: \[Approve\] \[Decline\]\n+Typed messages go quiet: \[Approve\] \[Decline\]/, 'fallback names each ask');
+  const caps = h => [...h.matchAll(/<div class="ch-rb[^"]*"[^>]*data-rb-group="([^"]*)"[^>]*><span class="ch-rb-ask" aria-hidden="true">([^<]*)<\/span><button/g)].map(m => [m[1], m[2]]);
+  const both = [['Smart inbox switch', 'Smart inbox switch'], ['Typed messages go quiet', 'Typed messages go quiet']];
+  assert.deepEqual(caps(AC.replyHtml(tn.a.btext, tn.a.buttons, md, AC.replyPicks([tn], 'a1'))), both, 'caption first in each row, before its buttons');
+  AC.replyTap(button('41', 'Smart inbox switch', 'approve', 'Approve'), { sid: 'a1', send: async t => { sent.push(t); return {}; } });
+  const picked = AC.replyHtml(tn.a.btext, tn.a.buttons, md, AC.replyPicks([tn], 'a1'));
+  assert.deepEqual(caps(picked), both, 'picked row keeps its caption');
+  assert.match(picked, /class="ch-rb picked"[^>]*><span class="ch-rb-ask" aria-hidden="true">Smart inbox switch<\/span><button[^>]*aria-pressed="true">✓ Approve/);
+  await AC.replyFlush('a1');
+  assert.match(sent[0], /^Tapped Approve · Smart inbox switch\n/);
+  const turns = KIT.parseRows(rows(ASKS, [{ id: 42, role: 'user', timestamp: 3, content: sent[0] }, { id: 43, role: 'assistant', timestamp: 4, content: 'Turned it on.' }]));
+  const locked = AC.replyHtml(turns[0].a.btext, turns[0].a.buttons, md, AC.replyPicks(turns, 'a1'));
+  assert.match(locked, /class="ch-rb picked locked"[^>]*><span class="ch-rb-ask" aria-hidden="true">Smart inbox switch<\/span>/, 'locked row keeps its caption');
+  // one group reads as before plus its one caption; the name is escaped like the rest of the row
+  const [one] = KIT.parseRows(rows(`Log it?\n${GROUP('Workout <b>', 'Done')}`));
+  const h = AC.replyHtml(one.a.btext, one.a.buttons, md, new Map());
+  assert.equal((h.match(/class="ch-rb-ask"/g) || []).length, 1);
+  assert.match(h, /<span class="ch-rb-ask" aria-hidden="true">Workout &lt;b&gt;<\/span>/);
+  assert.match(one.a.text, /^Log it\?\n\nWorkout <b>: \[Done\]$/);
 });
