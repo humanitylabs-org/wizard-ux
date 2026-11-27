@@ -166,7 +166,7 @@ test('parity: main and routed threads (host-profile, container, restricted) get 
     const full = normalize({ id: sid, title: 'Synthetic', status: 'completed', ...(agent ? { agent } : {}), latest_message: { role: 'assistant', content: REPLY, timestamp: 2 } });
     assert.equal(full.agent, agent, `${kind}: row keeps its agent`);
     assert.doesNotMatch(full.preview, /WIZARD_|"group"/, `${kind}: no marker in the preview`);
-    assert.match(full.preview, /\[Go for it\] \[Drop this\]/, `${kind}: labels as text in the preview`);
+    assert.doesNotMatch(full.preview, /\[Go for it\]|\[Done\]/, `${kind}: the buttons are drawn in the thread, not in the one-line preview (wizard-os issue 974)`);
     const tapRow = normalize({ id: sid, title: 'Synthetic', status: 'completed', ...(agent ? { agent } : {}), latest_message: { role: 'user', content: sent[0], timestamp: 3 } });
     assert.equal(tapRow.preview, 'Tapped Done · Workout', `${kind}: the tap message previews as its line`);
   }

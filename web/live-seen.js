@@ -46,12 +46,18 @@ window.WizCore.liveParts.seen = function ({  }) {
     .replace(/\[WIZARD_IMAGE_INTENT_V1\][\s\S]*?\[\/WIZARD_IMAGE_INTENT_V1\]/g, ' ')
     .replace(/\[WIZARD_TWEAK_V1\](?:[\s\S]*?\[\/WIZARD_TWEAK_V1\]|[\s\S]*$)/g, ' ') // a tweak card (core/chat-kit.js tweakIds); unterminated: to the end
     .replace(/\[WIZARD_ACTION_V1\](?:[\s\S]*?\[\/WIZARD_ACTION_V1\]|[\s\S]*$)/g, ' ') // an action card (core/chat-kit.js actionIds)
-    .replace(/\[WIZARD_BUTTONS_V1\]\s*([\s\S]*?)\s*\[\/WIZARD_BUTTONS_V1\]/g, (_, j) => { try { return ' ' + JSON.parse(j).buttons.map(b => `[${String(b.label).trim()}]`).join(' ') + ' '; } catch (e) { return ' '; } }) // reply buttons: their labels (issue 1889)
+    .replace(/\[WIZARD_BUTTONS_V1\]\s*([\s\S]*?)\s*\[\/WIZARD_BUTTONS_V1\]/g, '\n') // reply buttons: drawn in the thread, not in the one-line preview (wizard-os issue 974)
     .replace(/\[WIZARD_(?:BUTTONS|TAPS)_V1\](?:[\s\S]*?\[\/WIZARD_(?:BUTTONS|TAPS)_V1\]|[\s\S]*$)/g, ' ') // the owner's taps (their Tapped lines stay); unterminated: to the end
     .replace(/\[WIZARD_CHOICES_V1\](?:[\s\S]*?\[\/WIZARD_CHOICES_V1\]|[\s\S]*$)/g, ' ') // reply buttons (core/chat-kit.js choiceList)
     .replace(/^Please use the attached files?\.\s*/, '')
     .replace(/<memory-context>[\s\S]*?<\/memory-context>/g, ' ')
     .replace(/\[(?:Browser dogfooding|System note)[^\]]*\][\s\S]*$/m, ' ')
+    // One plain line (wizard-os issue 974; same steps as wizard-agent-service server/session-list-view.mjs): Markdown
+    // links and images show their words, a line's heading, quote, bullet and rule marks go, and separate lines join with
+    // " · " (a space after a line that already ends a sentence).
+    .replace(/!?\[([^\]\n]*)\]\((?:[^()\s]|\([^()\s]*\))*(?:\s+"[^"\n]*")?\)/g, '$1').replace(/<((?:https?|mailto):[^>\s]+)>/g, '$1').replace(/~~/g, '')
+    .replace(/^[ \t]*(?:#{1,6}[ \t]+|>[ \t]*)+/gm, '').replace(/^[ \t]*(?:[-*+•]|\d{1,3}[.)])[ \t]+/gm, '').replace(/^[ \t]*[-*_`~=]+[ \t]*$/gm, '')
+    .trim().replace(/([.!?:;,…·]["')\]*_`]*)?[ \t]*\n\s*/g, (_, end) => end ? end + ' ' : ' · ')
     .replace(/[#*_`>]+/g, ' ').replace(/\s+/g, ' ').trim();
 
   // Only the two connection apps Wizard knows; anything else in the field is ignored.
@@ -93,6 +99,8 @@ window.WizCore.liveParts.seen = function ({  }) {
       if (typeof s.firstRequest === 'string') s.firstRequest = s.firstRequest.slice(0, 400); else delete s.firstRequest;
       // wizard-ux issue 1808: the box's quiet-reply mark (live.js quietReply), only ever true.
       if (s.quietReply !== true) delete s.quietReply;
+      // A box still serving the older list keeps Markdown links in the line: show their words (wizard-os issue 974).
+      if (typeof s.preview === 'string') s.preview = s.preview.replace(/!?\[([^\]\n]*)\]\((?:[^()\s]|\([^()\s]*\))*(?:\s+"[^"\n]*")?\)/g, '$1');
       return s;
     }
     const id = item.id || item.session_id; if (!id) return null;

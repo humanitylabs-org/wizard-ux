@@ -59,7 +59,7 @@
   // Tap-to-answer buttons inside a reply (wizard-ux issue 1889, switch wizard/reply-buttons, core/action-cards.js):
   //   [WIZARD_BUTTONS_V1]{"group":"Workout","buttons":[{"id":"done","label":"Done"}]}[/WIZARD_BUTTONS_V1]
   // on its own line, drawn where it sits. A group is one ask (1-60 chars, also its name in the tap line), 1-6 buttons.
-  // Shells that can't draw it (the switch off, a list preview, Copy) show the labels as text: `[Done]`.
+  // Shells that can't draw it (the switch off, Copy) show the labels as text: `[Done]`.
   const BUTTONS_RE = /\[WIZARD_BUTTONS_V1\]\s*([\s\S]*?)\s*\[\/WIZARD_BUTTONS_V1\]/g, RB_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
   const RB_TOKEN = /^\u2063WB(\d+)\u2063$/; // a placed group in the drawn copy of the text (buttonsText)
   const one = (v, n) => typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, n) : '';
