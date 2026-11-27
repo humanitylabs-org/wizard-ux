@@ -1200,3 +1200,8 @@ html[data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side="end"][data
 @keyframes aad-swap-col-in { from { translate: 48px 0; opacity: 0; } }
 @keyframes aad-swap-thread-in { from { transform: translateX(24px); opacity: 0; } }
 @keyframes aad-swap-fly { from { opacity: 0; translate: 4px 0; } }
+/* Desktop sidebar follows Default Chats (wizard-ux issue 1443, on for everyone): the provider's list fills the sidebar (or the rail). */
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-cview { position: relative; flex: 1; min-height: 0; min-width: 0; width: 100%; overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column; box-sizing: border-box; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-cview[hidden],
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-scroll[hidden],
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-rlist[hidden] { display: none; }

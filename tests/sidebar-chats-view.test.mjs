@@ -1,5 +1,5 @@
-// wizard-ux issue 1443: the desktop AI apps sidebar mounts the owner's Default Chats look (switch
-// wizard/sidebar-chats-view). These run the real core/chats-view.js: the list region a layout mounts through
+// wizard-ux issue 1443: the desktop AI apps sidebar mounts the owner's Default Chats look (on for everyone; the switch
+// wizard/sidebar-chats-view was removed). These run the real core/chats-view.js: the list region a layout mounts through
 // views.mount, the shell hooks that route its taps to the main chat (viewOpen / viewTarget), the main chat kept on the
 // standard look (mainLook), the fallback when a look fails, and the repaint signal when Default Chats changes.
 import test from 'node:test';
@@ -8,7 +8,6 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import { withShellParts } from './fixtures/shell-parts.mjs';
 import { lookBox } from './fixtures/r5A-experience.mjs';
-import { parseCss } from './fixtures/mini-css.mjs';
 const source = withShellParts(fs.readFileSync(new URL('../web/core/chats-view.js', import.meta.url), 'utf8'));
 const VERSION = 'wizard.chats-view/1';
 const entry = id => ({ id, name: 'Look ' + id, source: 'apps.json', url: `/${id}/`, provides: ['chats'], chats_view: { contract: VERSION, module: 'view.js' } });
@@ -85,7 +84,7 @@ test('mainLook keeps the main chat on standard Chats while the look fills the si
   assert.equal(h.core.views.providerFor({ id: 'x', agent: 'box', chatsProvider: 'look' }), 'wizard-chats', 'agent windows stay standard');
   const plain = harness();
   plain.api.configure({ apps: [entry('look')], slots: { chats: { default: 'look' } } });
-  assert.equal(plain.core.views.providerFor(plain.main), 'look', 'no hook: unchanged (phone, Classic, switch off)');
+  assert.equal(plain.core.views.providerFor(plain.main), 'look', 'no hook: unchanged (phone, Classic)');
 });
 
 test('a look that fails to mount: a toast, Chats takes over, and the sidebar is told to draw its own rows', () => {
@@ -114,54 +113,37 @@ test('a Default Chats change asks layouts to repaint, only when it changes', () 
   assert.deepEqual(h.events, ['wos:chats-view', 'wos:chats-view'], 'uninstalled: back to built-in, repaint');
 });
 
-test('the switch ships off: listed in the catalog, never a default, scoped CSS', async () => {
+test('no switch any more: gone from the catalog and from Try new features', async () => {
   const SW = 'wizard/sidebar-chats-view';
-  // the real Settings › Look list on the real catalog, on the desktop: listed and off until chosen
+  const catalog = JSON.parse(fs.readFileSync(new URL('../web/tweaks/catalog.json', import.meta.url), 'utf8'));
+  assert.ok(!catalog.tweaks.includes(SW), 'not in the catalog');
+  assert.ok(!fs.existsSync(new URL('../web/tweaks/wizard/sidebar-chats-view/', import.meta.url)), 'its package is gone');
   const fresh = await lookBox({ shell: 'desktop' });
-  const row = fresh.row(SW);
-  assert.ok(row, 'listed'); assert.equal(row.on, false, 'never a default'); assert.ok(!fresh.active().includes(SW));
-  await fresh.E.toggle(SW); assert.ok(fresh.active().includes(SW), 'the switch turns it on');
-  // every rule of its stylesheet (parsed) is scoped to the switch
-  const rules = parseCss(withShellParts(fs.readFileSync(new URL('../web/tweaks/wizard/sidebar-chats-view/tweak.css', import.meta.url), 'utf8')));
-  for (const r of rules) for (const sel of r.selectors) assert.match(sel, /^html\[data-tweaks~="wizard\/sidebar-chats-view"\]/);
-  // The shell's sideLook reads the switch: covered by tests/sidebar-chats-view.test.mjs 'AI apps + another Default Chats, switch off: ...'.
+  assert.ok(!fresh.row(SW), 'not listed under Try new features');
 });
 
-test('the AI apps layout mounts the look only while the switch is in the tweak list', () => {
-  const lj = withShellParts(fs.readFileSync(new URL('../web/layouts/ai-apps/desktop.js', import.meta.url), 'utf8'));
-  const line = lj.split('\n').find(l => l.startsWith('  const viewOn = () =>'));
-  const viewOn = tweaks => vm.runInNewContext(`${line}\nviewOn()`, { root: { dataset: { tweaks } }, String });
-  assert.equal(viewOn('wizard/sidebar-chats-view'), true);
-  assert.equal(viewOn('james/dense wizard/sidebar-chats-view'), true);
-  assert.equal(viewOn(''), false);
-  assert.equal(viewOn(undefined), false);
-  assert.equal(viewOn('wizard/sidebar-chats-view-old'), false, 'a whole word, not a prefix');
-  assert.equal(vm.runInNewContext(`${line}\nviewOn()`, { root: null, String }), false, 'no root: off');
-});
-
-// wizard-ux issue 1460: with the switch OFF and another look picked, the AI apps desktop must still treat its docked
+// wizard-ux issue 1460: with another look picked, the AI apps desktop must treat its docked
 // Chats window as the main chat (drawn as standard Chats), or sidebar taps open a hidden second Chats window.
-test('AI apps + another Default Chats, switch off: the docked Chats window is the main chat (issue 1460)', () => {
+test('AI apps + another Default Chats: the docked Chats window is the main chat (issue 1460)', () => {
   const dj = withShellParts(fs.readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8'));
   const lines = dj.split('\n');
-  const from = lines.findIndex(l => l.startsWith('  function sideViewOn()')), to = lines.findIndex((l, i) => i > from && l.startsWith('  const sideWin = id =>'));
+  const from = lines.findIndex(l => l.startsWith('  function mainStd()')), to = lines.findIndex((l, i) => i > from && l.startsWith('  const sideWin = id =>'));
   const main = lines.find(l => l.startsWith('  const mainChats = w =>')), look = lines.find(l => l.startsWith('    mainLook: w =>'));
   const run = ({ owns, tweaks, def }) => {
     const docked = { id: 'w-dock', app: 'chats', thread: null }, other = { id: 'w-look', app: 'chats', thread: '__new__', chatsProvider: 'look' }, agent = { id: 'w-ag', app: 'chats', agent: 'box' };
     const ctx = { ownsChatList: owns, document: { documentElement: { dataset: { tweaks } } }, W: { 'w-dock': docked, 'w-look': other, 'w-ag': agent },
       ws: [{ wins: ['w-dock'], focus: 'w-dock' }, { wins: ['w-look'], focus: 'w-look' }, { wins: ['w-ag'], focus: 'w-ag' }],
       CHATS: { views: { defaultId: () => def, providerFor: w => w.chatsProvider || def } } };
-    vm.runInNewContext(`${lines.slice(from, to).join('\n')}\n${main}\nthis.mainLook = { ${look} }.mainLook;\nthis.mainChats = mainChats; this.sideLook = sideLook;`, ctx);
+    vm.runInNewContext(`${lines.slice(from, to).join('\n')}\n${main}\nthis.mainLook = { ${look} }.mainLook;\nthis.mainChats = mainChats;`, ctx);
     return { ...ctx, docked, other, agent };
   };
-  for (const tweaks of ['', 'wizard/sidebar-chats-view']) {
-    const r = run({ owns: true, tweaks, def: 'look' });
-    assert.equal(r.mainChats(r.docked), true, `${tweaks || 'switch off'}: the docked window is the main chat`);
-    assert.equal(r.mainChats(r.other), false, `${tweaks || 'switch off'}: a look window on another desk is not`);
+  {
+    const r = run({ owns: true, tweaks: '', def: 'look' });
+    assert.equal(r.mainChats(r.docked), true, 'the docked window is the main chat');
+    assert.equal(r.mainChats(r.other), false, 'a look window on another desk is not');
     assert.equal(r.mainChats(r.agent), false, 'agent windows never are');
     assert.equal(r.mainLook(r.docked), 'wizard-chats', 'the docked window draws standard Chats');
     assert.equal(r.mainLook(r.other), '', 'other windows keep their look');
-    assert.equal(r.sideLook(), !!tweaks, 'the sidebar mounts the look only with the switch on');
   }
   // two Chats windows on the docked desk, the second focused: the first one is the main chat, as the layout draws it
   const two = run({ owns: true, tweaks: '', def: 'look' });

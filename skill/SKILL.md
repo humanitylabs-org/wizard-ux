@@ -177,7 +177,6 @@ Settings › Appearance › Try new features lists unfinished features to try, A
 - **Chat replies as Chats notifications**: Android app: your agent's chat replies reach the phone as Notifications items under Chats; tap opens the chat.
 - **Chats: title bar names the tab**: Chats' title bar names the tab.
 - **Clear chat notifications**: Android app: reading a LINE, WhatsApp, Telegram or other bridged chat in Messenger clears that app's own notification (needs Android's Notification access).
-- **Desktop sidebar follows Default Chats**: AI apps desktop: the chats sidebar uses the Chats look picked in Settings › Chats & app screens › Default Chats.
 - **Five-choice first chat**: Five picks, then a first win.
 - **Get set up list in Setup**: Setup lists optional accounts to connect.
 - **Icons on the attach menu**: Android app: the + menu in a chat (and the orb's Attach) shows icons before Photo or video, Camera and File, on bigger rows. (Android app only).
