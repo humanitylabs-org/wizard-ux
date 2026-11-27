@@ -169,9 +169,6 @@ window.WizCore.chatsParts.running = function ({ ago, ch, CH, chanStore, clip, es
       + `${d.more ? `<p class="ch-sw-more">${sweepLink('more', d.link)}</p>` : ''}<p class="ch-sw-n">${counts.join('<br>')}</p>${sweepLaterHtml(s)}</div>`;
   }
   function sweepRepaint() { for (const x of Object.keys(CH)) { const ww = H.win(x); if (ww && ww.thread) renderThreadNow(ww); } }
-  // Inline action cards (wizard-ux issue 1463, core/action-cards.js): flipping wizard/action-cards repaints open threads too.
-  let actWas = window.WosActionCards?.on?.() === true;
-  try { window.addEventListener('wos:experience', () => { const on = window.WosActionCards?.on?.() === true; if (actWas === on) return; actWas = on; sweepRepaint(); }); } catch (_) {}
   // Reply buttons (wizard-ux issue 1889): flipping wizard/reply-buttons redraws open threads (buttons or their labels).
   let rbWas = window.WosActionCards?.replyOn?.() === true;
   try { window.addEventListener('wos:experience', () => { const on = window.WosActionCards?.replyOn?.() === true; if (rbWas === on) return; rbWas = on; sweepRepaint(); }); } catch (_) {}
