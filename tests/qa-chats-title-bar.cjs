@@ -1,7 +1,7 @@
 'use strict';
 // Chats title bar (wizard-ux issue 1836, on for everyone) in a real browser, disposable synthetic box only.
 // Phone 412x915 and Classic desktop 1440x960, Nebula and a light skin, with James's switches (desktop-chats,
-// inbox-until-archived, inbox-rows; QA_ROWS=off drops inbox-rows to run the plain Inbox list):
+// inbox-until-archived; Inbox rows are on for everyone):
 //   The top of Chats is one title bar naming the tab, "Inbox" with its count pill (= the Inbox rows), then the
 //   search and filter icons; no "All chats", no "Inbox ^ · Newest first" section row: the rows start right under the bar.
 //   The filter (≡) sheet holds the sort (Newest first by default); Oldest first reverses the unpinned rows and is kept.
@@ -13,7 +13,7 @@ const { ownerRead } = require('../tools/qa-desktop-frame-fixture.cjs');
 const fs = require('node:fs'), path = require('node:path');
 const repo = path.resolve(__dirname, '..'), origin = process.env.QA_ORIGIN || 'https://chats-title-bar-1836.test', prefix = '/wizard-os-home/';
 const web = process.env.QA_WEB || path.join(repo, 'web'), out = process.env.QA_OUT || path.join(repo, 'chats-title-bar-evidence');
-const SHELLS = (process.env.QA_SHELLS || 'phone,classic').split(','), SKINS = (process.env.QA_SKINS || 'nebula,obsidian-light').split(','), ROWS = process.env.QA_ROWS !== 'off';
+const SHELLS = (process.env.QA_SHELLS || 'phone,classic').split(','), SKINS = (process.env.QA_SKINS || 'nebula,obsidian-light').split(','), ROWS = true; // Inbox rows are on for everyone (wizard-ux issue 1779)
 fs.mkdirSync(out, { recursive: true });
 const now = Date.now(), iso = t => new Date(t).toISOString(), nap = ms => new Promise(r => setTimeout(r, ms)), M = 60e3, D = 864e5;
 const REC = 'inbox_' + 'b'.repeat(24), TODAY = new Date(now).toISOString().slice(0, 10);
@@ -53,7 +53,7 @@ const report = { origin, web, cases: [] };
       const context = await browser.newContext({ viewport: phone ? { width: 412, height: 915 } : { width: 1440, height: 960 }, isMobile: phone, hasTouch: phone, serviceWorkers: 'block', ...(phone ? { userAgent: 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Mobile Safari/537.36' } : {}) });
       try {
         await context.routeWebSocket('**/*', w => w.close());
-        const mix = { 'wizard/desktop-chats': true, 'wizard/inbox-until-archived': true, ...(ROWS ? { 'wizard/inbox-rows': true } : {}) };
+        const mix = { 'wizard/desktop-chats': true, 'wizard/inbox-until-archived': true };
         await context.addInitScript(({ shell, skin, mix }) => {
           if (window !== top) return;
           if (sessionStorage.getItem('qaBoot')) return; sessionStorage.setItem('qaBoot', '1');

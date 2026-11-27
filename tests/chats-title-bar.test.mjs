@@ -24,7 +24,7 @@ function part({ tweaks = '', side = false } = {}) {
 }
 
 test('no switch: the main list names its tab whatever tweaks are on, and the removed switch id changes nothing', () => {
-  for (const tweaks of ['', 'wizard/desktop-chats wizard/inbox-rows', 'wizard/chats-title-bar']) assert.equal(part({ tweaks }).p.titleBarTab({ id: 'main', thread: null }), 'inbox', tweaks || '(none)');
+  for (const tweaks of ['', 'wizard/desktop-chats', 'wizard/chats-title-bar']) assert.equal(part({ tweaks }).p.titleBarTab({ id: 'main', thread: null }), 'inbox', tweaks || '(none)');
 });
 
 test('the main list names its tab; a routed agent (host-profile, container, restricted) and the AI apps sidebar pane never get it (main versus routed)', () => {

@@ -121,10 +121,11 @@ const cases = (process.env.QA_CASES || 'phone,ai-apps').split(','), skins = (pro
         } else { await page.locator('.aad-act-empty button').filter({ visible: true }).first().click(); await nap(600);
           entry.newChat = await page.evaluate(() => document.activeElement?.tagName === 'TEXTAREA' || [...document.querySelectorAll('textarea')].some(t => t.getClientRects().length)); }
         assert.ok(entry.newChat, 'the button starts a new chat');
-        // 2. A first message: Working only, then Ready only.
+        // 2. A first message: while it runs it is the Inbox's only row (no Working section beside Inbox: wizard-ux issues
+        // 1829 and 1779, Inbox rows on for everyone), then it stays in Inbox once answered.
         ROWS.push(shape({ id: 'qa-1', title: 'First chat', status: 'running', at: Date.now() }));
         await refresh(); entry.working = await settle(st => st.secs.length > 0); await shot('2-working');
-        assert.deepEqual(entry.working.secs, ['working'], 'only Working: ' + JSON.stringify(entry.working));
+        assert.deepEqual(entry.working.secs, ['ready'], 'only Inbox: ' + JSON.stringify(entry.working));
         assert.equal(entry.working.empty.length, 0, 'no empty state once a chat exists');
         assert.ok(entry.working.pills.every(t => t.trim()), 'no empty count pill: ' + JSON.stringify(entry.working.pills));
         Object.assign(ROWS[0], shape({ id: 'qa-1', title: 'First chat', at: Date.now() }));

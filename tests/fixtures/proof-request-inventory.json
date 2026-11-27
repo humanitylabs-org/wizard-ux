@@ -379,7 +379,7 @@
       "status": "not-exercised",
       "source": "web/live-channels.js",
       "kind": "write",
-      "note": "Chats Tags (wizard-agent-service issue 608, switch wizard/chat-tags): only when a chat's tag is added or removed with the box's Tags on; tests/chat-channel-store.test.mjs and tests/qa-chat-tags.cjs cover it against a fake box. Refused and collected, never answered, if a flow reaches it."
+      "note": "Chats Tags (wizard-agent-service issue 608, on for everyone): only when a chat's tag is added or removed with the box's Tags on; tests/chat-channel-store.test.mjs and tests/qa-chat-tags.cjs cover it against a fake box. Refused and collected, never answered, if a flow reaches it."
     },
     "/wizard/v1/channels/membership": {
       "status": "not-exercised",
@@ -409,7 +409,7 @@
           "path": "/wizard/v1/agent-inbox?state=new&kind=needs_you&limit=50"
         }
       ],
-      "note": "Agent inbox (wizard-ux issues 1569, 1586, 1589; wizard-agent-service issue 549): on for everyone since wizard-ux issue 1778, so flows read the running list. The shared catalogue answers 404 (a box with WIZARD_AGENT_INBOX=0 or an older Service: an empty list); writes are refused and collected. tests/agent-inbox-running.test.mjs, agent-inbox-sweep-card.test.mjs and agent-inbox-alert-feedback.test.mjs cover it against a fake box. The waiting-tasks read (kind needs_you) runs only with wizard/inbox-rows on (wizard-ux issue 1779, tests/inbox-rows.test.mjs)."
+      "note": "Agent inbox (wizard-ux issues 1569, 1586, 1589; wizard-agent-service issue 549): on for everyone since wizard-ux issue 1778, so flows read the running list. The shared catalogue answers 404 (a box with WIZARD_AGENT_INBOX=0 or an older Service: an empty list); writes are refused and collected. tests/agent-inbox-running.test.mjs, agent-inbox-sweep-card.test.mjs and agent-inbox-alert-feedback.test.mjs cover it against a fake box. The waiting-tasks read (kind needs_you) runs whenever the Inbox draws (Inbox rows, wizard-ux issue 1779, on for everyone; tests/inbox-rows.test.mjs)."
     },
     "/wizard/v1/agent-inbox/{}": {
       "status": "not-exercised",

@@ -10,7 +10,7 @@
 'use strict';
 window.WizCore = window.WizCore || {};
 window.WizCore.chatsParts = window.WizCore.chatsParts || {};
-window.WizCore.chatsParts.spaces = function ({ chanTags, actNeeds, actUnread, inboxRowsBody, inboxRowsClick, inboxRowsOn, agentRec, AGS, ch, CH, CHAN_STORE_MAX, chanAt, chanEmojiPick, chanEmojiSync, chanEmojiTap, chanModelEmoji, chanOpen, chanStore, chanTarget, chanToEnd, chatRow, chatVars, esc, fileInGeneral, fileInSpace, focusAgents, focusOf, focusOptions, H, LIVE, norm, noteAt, noteRow, openChannel, owner, READY_ORDER_KEY, renderChatList, rerenderList, runningOpen, SEC_PAGE, setFocus, SPACE, spaceAgent, spaceContains, spaceMember, spaces, spacesOf, storeAgent, toast, W, winAgent }) {
+window.WizCore.chatsParts.spaces = function ({ chanTags, actNeeds, actUnread, inboxRowsBody, inboxRowsClick, agentRec, AGS, ch, CH, CHAN_STORE_MAX, chanAt, chanEmojiPick, chanEmojiSync, chanEmojiTap, chanModelEmoji, chanOpen, chanStore, chanTarget, chanToEnd, chatRow, chatVars, esc, fileInGeneral, fileInSpace, focusAgents, focusOf, focusOptions, H, LIVE, norm, noteAt, noteRow, openChannel, owner, READY_ORDER_KEY, renderChatList, rerenderList, runningOpen, SEC_PAGE, setFocus, SPACE, spaceAgent, spaceContains, spaceMember, spaces, spacesOf, storeAgent, toast, W, winAgent }) {
   let elOf, idOf, renderChats, sendChat; // late-bound: chats.js declares these after the call, see bindLate
   function closeSpacePicker() {
     if (!chatVars.spacePicker) return false;
@@ -35,7 +35,7 @@ window.WizCore.chatsParts.spaces = function ({ chanTags, actNeeds, actUnread, in
     const allOn = f?.kind === 'agent' && f.key === p.agent;
     // Channels: General is a place too (a chat in no channel), last as in the channel list, marked when it is there.
     const genOn = !!p.sid && SPACE.ch && !spacesOf(p.sid).length;
-    // Tags on (wizard-agent-service issue 608, switch wizard/chat-tags): a chat's picker is its tags, several at once; a
+    // Tags on (wizard-agent-service issue 608, on for everyone): a chat's picker is its tags, several at once; a
     // tap adds or removes one and the sheet stays open. General reads "No tags".
     const tags = typeof chanTags === 'function' && chanTags();
     const gen = p.sid && SPACE.ch ? `<button type="button" class="ch-fopt${genOn ? ' on' : ''}" data-spgeneral aria-pressed="${genOn}"><span>${tags ? 'No tags' : 'General'}</span><small></small>${genOn ? '<b>✓</b>' : ''}</button>` : '';
@@ -143,53 +143,15 @@ window.WizCore.chatsParts.spaces = function ({ chanTags, actNeeds, actUnread, in
   const { anchorListPlace, holdListPlace, LIST_PLACE_KEY, LIST_PLACE_TTL, listPlace, restoreListPlace } = window.WizCore.chatsParts.places({ ch, elOf: (...a) => elOf(...a) });
   const listSig = w => { const f = focusOf(w), cv = chanOpen(w)?.id || chatVars.chanView; return [winAgent(w), f ? f.kind + ':' + f.key : '', ch(w.id).filter || '', norm(ch(w.id).q)].concat(cv ? [cv] : [], ch(w.id).running && typeof runningOpen === 'function' && runningOpen(w) ? ['running'] : []).join('|'); };
   /* Stored list places and Activity's Ready counts; core/chats-ready.js. */
-  const { ACT_SORTS, inboxKeep, inboxPlace, listSaveT, queueListPlace, storedListPlace } = window.WizCore.chatsParts.ready({ actNeeds, actUnread, CH, chanAt, elOf: (...a) => elOf(...a), H, LIST_PLACE_KEY, LIST_PLACE_TTL, listPlace, listSig, LIVE, W });
-  let actOlder = false;
-  // Activity with nothing in it (a fresh box): one deliberate empty state, never a stack of empty sections (issue 1731).
-  const actEmpty = () => '<div class="ch-empty ch-act-empty"><b>No chats yet</b><span>Tap + to start one, or tap the orb and talk.</span><button type="button" class="ch-fclear" data-chnew data-chemptynew>New chat</button></div>';
-  function activityBody(w, rows, nt, drafts = 0) {
-    // Inbox rows (wizard-ux issue 1779, switch wizard/inbox-rows): only what needs him, as Signal-style rows.
-    if (typeof inboxRowsOn === 'function' && inboxRowsOn(w)) return inboxRowsBody(w, rows, nt, drafts);
-    const M = window.WizChatsListModel, c = ch(w.id), order = M.activitySortOf(chatVars.readyOrder);
-    const keep = typeof inboxKeep === 'function' && inboxKeep(); // Inbox until archived (wizard-ux issue 1810)
-    const g = M.activityGroups(LIVE.workGroups(rows), { needs: actNeeds, unread: actUnread, at: chanAt }, { order, now: Date.now(), older: actOlder, keep, place: keep && typeof inboxPlace === 'function' ? inboxPlace() : null });
-    // (Inbox or Sent, wizard-ux issue 1829: with keep on a thread is in Inbox or in Sent, never both; no Working section.)
-    // Alerts set to Chats: the unread ones wait in Ready with the chats (an urgent one counts as Needs you), read ones in Recent.
-    const pick = (list, notes) => list.map(v => ({ id: v.id, v })).concat((notes || []).map(v => ({ id: 'notif:' + v.id, v, n: true })));
-    const at = x => x.n ? noteAt(x.v) : chanAt(x.v), needs = x => x.n ? M.notificationRow(x.v).rank === 1 : actNeeds(x.v);
-    // With Inbox until archived there is no Recent: a read (kept) alert waits with Snoozed, as on the AI apps sidebar.
-    const ready = M.activitySort(pick(g.ready, nt?.awake), order, { at, needs }), recent = keep ? [] : M.activitySort(pick(g.recent, nt?.later), 'newest', { at });
-    const snoozed = keep ? M.activitySort(pick(g.snoozed, nt?.later), 'newest', { at }) : g.snoozed.map(v => ({ id: v.id, v }));
-    const row = x => x.n ? noteRow(x.v) : chatRow(x.v, null);
-    const page = (k, list) => { const shown = c.more?.[k] ? list : list.slice(0, SEC_PAGE); return shown.map(row).join('') + (list.length > shown.length ? `<button class="ch-more" data-secmore="${k}">Show all ${list.length}</button>` : ''); };
-    // side = a control on the header line beside the fold button (a button cannot hold a select)
-    const sec = (k, label, n, inner, open = !!chatVars.secOpen[k], side = '') => { const h = `<button class="ch-sec-h" data-sectoggle="${k}" aria-expanded="${open}"><span>${label}</span>${n ? `<small>${n}</small>` : ''}<i aria-hidden="true"></i></button>`;
-      return `<section class="ch-sec ch-act${open ? ' open' : ''}" data-sec="${k}">${side ? `<div class="ch-sec-hl">${h}${side}</div>` : h}${open ? `<div class="ch-sec-b">${inner()}</div>` : ''}</section>`; };
-    // The one sort is a compact menu on Ready's header line (wizard-ux issue 1354), like the AI apps sidebar's: no pill row.
-    // With the title bar (wizard-ux issue 1836) the sort is in the filter sheet, and Ready/Inbox loses its section row when
-    // it is the list's first section; the bar shows its count.
-    const actTitled = c.tbar === 'inbox';
-    const sortSel = actTitled ? '' : `<label class="ch-act-sort"><select data-chactorder aria-label="Sort ${keep ? 'Inbox' : 'Ready'}">${ACT_SORTS().map(([v, l]) => `<option value="${v}"${order === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label>`;
-    const older = g.older ? `<button class="ch-more ch-act-older" data-chactolder>Show older · ${g.older}</button>` : '';
-    // Sends a graceful restart holds: their own Saved heading, only while there are any (wizard-ux issue 1362).
-    const heldRow = s => !!globalThis.WizReach?.restartHeld?.(s), saved = g.working.filter(heldRow), working = g.working.filter(s => !heldRow(s));
-    if (actTitled) c.inboxN = ready.length;
-    // A section shows only while it holds something (wizard-ux issue 1731): no empty headers, lines, pills or sort menu.
-    // Nothing at all: one empty state with a way to start a chat; nothing but drafts: the Drafts section above says it.
-    if (!working.length && !saved.length && !ready.length && !recent.length && !g.older && !snoozed.length && !g.archive.length) return drafts ? '' : actEmpty();
-    return (working.length ? sec('working', 'Working', working.length, () => working.map(s => chatRow(s, null)).join('')) : '')
-      + (saved.length ? sec('saved', 'Saved', saved.length, () => saved.map(s => chatRow(s, null)).join(''), chatVars.secOpen.saved !== false) : '')
-      + (ready.length ? (actTitled && !working.length && !saved.length ? `<section class="ch-sec ch-act ch-tb-main open" data-sec="ready"><div class="ch-sec-b">${page('ready', ready)}</div></section>` : sec('ready', keep ? 'Inbox' : 'Ready', ready.length, () => page('ready', ready), !!chatVars.secOpen.ready, sortSel)) : '')
-      + (recent.length || g.older ? sec('recent', 'Recent', 0, () => page('recent', recent) + older) : '')
-      + (snoozed.length ? sec('snoozed', 'Snoozed', snoozed.length, () => page('snoozed', snoozed)) : '')
-      + (g.archive.length ? sec('archived', 'Archived', g.archive.length, () => page('archived', g.archive.map(v => ({ id: v.id, v })))) : '');
-  }
-  // The sort and Show older taps (Activity with Channels on); false = not one of them.
+  const { listSaveT, queueListPlace, storedListPlace } = window.WizCore.chatsParts.ready({ actNeeds, actUnread, CH, chanAt, elOf: (...a) => elOf(...a), H, LIST_PLACE_KEY, LIST_PLACE_TTL, listPlace, listSig, LIVE, W });
+  // Chats › Inbox: only what needs him, as Signal-style rows that stay until archived (wizard-ux issue 1779, on for
+  // everyone since 27 Nov 2026; core/chats-inboxrows.js).
+  function activityBody(w, rows, nt, drafts = 0) { return inboxRowsBody(w, rows, nt, drafts); }
+  // The Inbox's taps (a row's Archive, the sort menu); false = not one of them.
   function activityClick(e, w) {
     if (!w || w.thread) return false;
     if (typeof inboxRowsClick === 'function' && inboxRowsClick(e, w)) return true;   // a row's Archive (issue 1779)
     if (e.target.closest('[data-chactorder]')) return true;   // the sort menu: its change event picks (actSetOrder)
-    if (e.target.closest('[data-chactolder]')) { actOlder = true; renderChatList(w, elOf(w.id)); return true; }
     return false;
   }
   // Ready's sort menu picked an order: stored as Chats' own Ready order (this device and the box), every list repaints.
