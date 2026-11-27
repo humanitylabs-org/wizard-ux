@@ -24,6 +24,8 @@ fs.mkdirSync(out, { recursive: true });
 const now = Date.now(), iso = t => new Date(t).toISOString(), nap = ms => new Promise(r => setTimeout(r, ms));
 const GROUP = (group, ...b) => `[WIZARD_BUTTONS_V1]${JSON.stringify({ group, buttons: b.map(([id, label]) => ({ id, label })) })}[/WIZARD_BUTTONS_V1]`;
 const REPLY = `Two things for today.\n\n**Ship desks?** I tried both layouts on the [desk page](https://example.com/desks).\n${GROUP('Ship desks', ['go', 'Go for it'], ['drop', 'Drop this'])}\n\n**Morning checklist**\n1. Workout, 20 minutes\n${GROUP('Workout', ['done', 'Done'])}\n\nThat's all for now.`;
+// Issue 1963: several asks with the same labels; each row has to say which ask it answers.
+const ASKS = `Four things to decide.\n\n1. Smart inbox switch\n2. Typed messages go quiet\n\n${GROUP('Smart inbox switch', ['approve', 'Approve'], ['decline', 'Decline'])}\n${GROUP('Typed messages go quiet', ['approve', 'Approve'], ['decline', 'Decline'])}`;
 const PLAIN = 'A plain reply with **bold**, a list:\n\n1. one\n2. two\n\nand a [link](https://example.com).';
 const AGENTS = [{ id: 'hermes', label: 'Wizard QA', harness: 'hermes', privacy: 'standard', is_default: true, status: 'running', appearance: { glyph: 'w', hue: 260 }, model: { provider: 'anthropic', model: 'claude-opus-4' } }];
 const KINDS = [['host', 'Host ops'], ['container', 'Box'], ['restricted', 'Locked']];
@@ -35,6 +37,7 @@ function makeBox() {
   const t0 = now / 1000;
   const threads = {
     'qa-rb': { agent: '', title: 'Today', msgs: [{ id: 101, role: 'user', content: 'What is up today?', timestamp: t0 - 120 }, { id: 102, role: 'assistant', content: REPLY, timestamp: t0 - 110 }] },
+    'qa-rb-asks': { agent: '', title: 'Inbox review', msgs: [{ id: 401, role: 'user', content: 'Review the inbox features', timestamp: t0 - 400 }, { id: 402, role: 'assistant', content: ASKS, timestamp: t0 - 390 }] },
     'qa-plain': { agent: '', title: 'Plain reply', msgs: [{ id: 201, role: 'user', content: 'Say something plain', timestamp: t0 - 300 }, { id: 202, role: 'assistant', content: PLAIN, timestamp: t0 - 290 }] },
   };
   for (const [id] of KINDS) threads['qa-rb-' + id] = { agent: id, title: 'Check from ' + id, msgs: [{ id: 301, role: 'user', content: 'Anything?', timestamp: t0 - 200 }, { id: 302, role: 'assistant', content: `From the ${id} agent:\n${GROUP('Approve ' + id, ['yes', 'Yes'], ['no', 'No'])}`, timestamp: t0 - 190 }] };
@@ -136,6 +139,25 @@ const reopen = async (page, phone, sid) => { await openThread(page, phone, sid);
         // A reply WITHOUT buttons: its thread markup, to compare on / off / main (renders exactly as today).
         await openThread(page, phone, 'qa-plain');
         fs.writeFileSync(path.join(out, `plain-${stem}.html`), (await thread(page).locator('.ch-msgs').first().innerHTML()).replace(/ data-(at|mat|boom-at)="[^"]*"/g, '').replace(/1\d{12}(\.\d+)?/g, 'T').replace(/<time[^>]*>[^<]*<\/time>/g, '<time></time>'));
+        // 0. Issue 1963: two asks with the same Approve / Decline buttons; each row names its ask on screen.
+        await openThread(page, phone, 'qa-rb-asks');
+        entry.asks = await page.evaluate(() => [...document.querySelectorAll('.ch-thread .ch-rb')].filter(n => n.getClientRects().length).map(n => {
+          const cap = n.querySelector('.ch-rb-ask'), r = cap?.getBoundingClientRect(), b = n.querySelector('[data-rb]')?.getBoundingClientRect();
+          return { group: n.dataset.rbGroup, caption: cap && r.width && r.height ? cap.textContent.trim() : null, above: !!(r && b && r.bottom <= b.top + 1), color: cap ? getComputedStyle(cap).color : null };
+        }));
+        entry.asksText = (await thread(page).innerText()).slice(0, 600);
+        await page.locator('.ch-thread .msg.a').filter({ visible: true }).last().scrollIntoViewIfNeeded().catch(() => {});
+        await page.screenshot({ path: path.join(out, stem + '-asks.png') });
+        if (EXPECT !== 'broken' && SWITCH === 'on') {
+          assert.deepEqual(entry.asks.map(a => [a.group, a.caption, a.above]), [['Smart inbox switch', 'Smart inbox switch', true], ['Typed messages go quiet', 'Typed messages go quiet', true]], 'each row names its ask above its buttons: ' + JSON.stringify(entry.asks));
+          await groupBtn(page, 'Typed messages go quiet', 'Decline').click();
+          assert.equal(await page.locator('.ch-thread .ch-rb.picked .ch-rb-ask').filter({ visible: true }).innerText(), 'Typed messages go quiet', 'picked keeps its caption');
+          assert.equal((await picks(page))['Typed messages go quiet'], 'Approve|✓ Decline*');
+          await until(() => box.runs.length >= 1, 8000, 'the asks tap');
+          assert.match(box.runs[0].body.input, /^Tapped Decline · Typed messages go quiet\n/);
+          box.runs.length = 0;
+        }
+        if (EXPECT !== 'broken' && SWITCH === 'off') assert.match(entry.asksText, /Smart inbox switch: \[Approve\] \[Decline\][\s\S]*Typed messages go quiet: \[Approve\] \[Decline\]/, 'off: the fallback names each ask');
         await openThread(page, phone, 'qa-rb');
         entry.threadText = (await thread(page).innerText()).slice(0, 1500);
         if (EXPECT === 'broken' || SWITCH === 'off') {
@@ -144,7 +166,7 @@ const reopen = async (page, phone, sid) => { await openThread(page, phone, sid);
           await page.screenshot({ path: path.join(out, stem + '.png') });
           if (EXPECT !== 'broken') {
             assert.equal(entry.groups, 0, 'off: no buttons');
-            assert.match(entry.threadText, /\[Go for it\] \[Drop this\][\s\S]*\[Done\]/, 'off: the labels as text, in place');
+            assert.match(entry.threadText, /Ship desks: \[Go for it\] \[Drop this\][\s\S]*Workout: \[Done\]/, 'off: the ask and its labels as text, in place');
             assert.doesNotMatch(entry.threadText, /WIZARD_|"group"/, 'off: no marker text');
             assert.equal(box.runs.length, 0, 'off: nothing sent');
           }

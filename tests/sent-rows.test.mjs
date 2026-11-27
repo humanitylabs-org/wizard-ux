@@ -13,7 +13,9 @@ const clone = v => JSON.parse(JSON.stringify(v));
 const sid = c => 'sent_' + c.repeat(24);
 const view = (c, extra = {}) => ({ id: sid(c), at: 1000, source: 'orb', text: 'Words ' + c, route: 'agent', decidedBy: 'model', rules: [], state: 'done', thread: 'thread_' + c, record: null, tags: [], urgent: false, wouldRoute: null, corrected: null, error: '', wantsReply: true, answer: '', quiet: false, ...extra });
 
-function part({ tweaks = '', rows = [], next = null } = {}) {
+// The routing corrections teach Smart inbox's triage, so they are there only with it on (wizard-ux issue 1962).
+const SMART = 'wizard/smart-inbox';
+function part({ tweaks = SMART, rows = [], next = null } = {}) {
   const renders = [], opened = [], corrections = [], toasts = [], sheets = [];
   const CH = { main: { sent: true }, 'host-ops': {}, box: {}, locked: {} }, chatVars = { chanView: 'activity', rowSheet: null, secOpen: {} };
   const W = { main: { id: 'main', thread: null }, 'host-ops': { id: 'host-ops', thread: null }, box: { id: 'box', thread: null }, locked: { id: 'locked', thread: null } };
@@ -96,4 +98,14 @@ test('the switch is gone from the list, and Sent rows join the row actions (main
   ra.rowMenu('main', { dataset: { chopen: 't1' } });
   ra.rowMenu('main', { dataset: { chchan: 'c1' } });
   assert.deepEqual(clone(calls.map(c => c.slice(0, 3))), [['sent', 'main', sid('a')], ['row', 'main', 't1'], ['chan', 'main', 'c1']]);
+});
+
+test('Smart inbox off (wizard-ux issue 1962): the sheet keeps why and Open chat, but no routing corrections, and a quiet reply does not say it stayed out of Inbox', () => {
+  const f = part({ tweaks: '', rows: [view('a', { route: 'dump', decidedBy: 'owner_words', rules: ['no_reply:note to self'], thread: 'worker_a' }), view('h', { route: 'thread', quiet: true, wantsReply: false, thread: 'thread_h' })] });
+  const sheet = id => { f.listEl.html = ''; assert.equal(f.p.sentSheet('main', sid(id)), true); return f.listEl.html; };
+  const a = sheet('a');
+  assert.match(a, /data-rssentopen/, 'Open chat');
+  assert.doesNotMatch(a, /data-rssentfix|Should have replied|Didn’t need a reply/, 'no corrections');
+  assert.match(a, /Ran quietly because you said “note to self”\./);
+  assert.doesNotMatch(sheet('h'), /stayed out of Inbox/);
 });

@@ -1,8 +1,8 @@
-/* Wizard UX phone shell › the Chats tile's switcher (wizard-ux#1957, switch wizard/chats-switcher, off by default; the
+/* Wizard UX phone shell › the Chats tile's switcher (wizard-ux#1957, on for everyone; the
  * phone's four-section bar, app-sections.js). James, 27 Nov 2026: one bottom bar, the view named at the top, and the
  * views one-handed from the Chats tile, the way the Apps tile opens the App selector.
  *
- * With it on, Chats has no second bar (core/chats-sent.js draws no Inbox · Tags · Sent tabs and names the view in the
+ * On the phone, Chats has no second bar (core/chats-sent.js draws no Inbox · Tags · Sent tabs and names the view in the
  * title, with a ▾). The views (Inbox, Sent, Archived, every tag, other agents) are in one sheet that rises from the bar:
  *   tap Chats while on Chats, or tap the title's ▾  the sheet; Chats again, a tap outside or Back closes it;
  *   hold Chats and slide                           the sheet under the finger, letting go on a view opens it,
@@ -17,12 +17,12 @@
 window.WizCore = window.WizCore || {};
 window.WizCore.appParts = window.WizCore.appParts || {};
 window.WizCore.appParts.chatsswitch = function ({ $, appVars, CHATS, CHATS_APP, device, esc, mainChats, phoneBack, vib }) {
-  const CS_SW = 'wizard/chats-switcher', CS_KEY = 'wos.chats.switcher.v1';
+  const CS_KEY = 'wos.chats.switcher.v1';
   // var, not let: the shell's tests may put this body back into app.js, where its hoisted functions can run first.
   var csReady = false;
   const P = () => window.WizCore.phoneSections;
   function csOn() {
-    try { return (document.documentElement.getAttribute('data-tweaks') || '').split(' ').includes(CS_SW) && !!P()?.on?.(); } catch (_) { return false; }
+    try { return !!P()?.on?.(); } catch (_) { return false; }
   }
   // The main agent's Chats window (the Chats section's), or null before Chats was first opened.
   function csWin() {

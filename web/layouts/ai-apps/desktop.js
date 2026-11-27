@@ -267,11 +267,11 @@ export default function desktop(api) {
    * window (paintSwap) */
   const sSwap = el('button', 'aad-ib aad-sswap', { type: 'button', 'aria-keyshortcuts': 'Alt+Shift+L' }); sSwap.append(icon('swap')); sSwap.hidden = true;
   /* The rail's Wizard switcher, the agent choices, the Channels pane and another Chats look; layouts/ai-apps/desktop-sidetabs.js. */
-  const { cBack, chanTitle, cTop, cX, FEED, feedBox, feedOn, modeBars, oneBack, paintAgents, paintChan, paintView, pIcon, pName, pTools, pTop, pW, pX, rFind, rList, rNew, rSet, rTog, rWs, shade, sName, sTop, top, tt, windowMode, bindLate: sidetabsLate } = sidetabsPart({ aadVars, actOn, api, el, flip, foot, head, icon, one, oneSplit, panes, rail, readSessions, scroll, side });
+  const { cBack, chanTitle, cTop, cX, FEED, feedBox, feedOn, modeBars, oneBack, paintAgents, paintChan, paintView, pIcon, pName, pTools, pTop, pX, rFind, rList, rNew, rSet, rTog, rWs, shade, sName, sTop, top, tt, windowMode, bindLate: sidetabsLate } = sidetabsPart({ aadVars, actOn, api, el, flip, foot, head, icon, one, oneSplit, panes, rail, readSessions, scroll, side });
   // (in memory only: after a reload in full screen, Esc goes to tiled)
   var fullFrom = 'tiled';
   /* The window arrangement buttons and the Mac title-bar strip; layouts/ai-apps/desktop-modes.js. */
-  const { macHoles, paintModes, bindLate: modesLate } = modesPart({ aadVars, api, cTop, cX, doc, el, MODE_LABELS, modeBars, panes, pTop, pW, root, sTop, top, windowMode });
+  const { macHoles, paintModes, bindLate: modesLate } = modesPart({ aadVars, api, cTop, cX, doc, el, MODE_LABELS, modeBars, panes, pTop, pX, root, sTop, top, windowMode });
   /* A slow app's placeholder, the apps column on the right and the orb's place; layouts/ai-apps/desktop-column.js. */
   const { chrome, cv, fb, hBack, hMid, near, orbAt, orbBox, orbBtn, paintOrbIdentity, pLoad, pLoadT, scene, tidyBtn, tidyW, toast, toastU, toastW, vChats, vChatsN, vOne, vtAll, vtFoot, vtList, vtTog } = columnPart({ api, desks, doc, el, feedBox, icon, shade, side, top });
 
@@ -541,7 +541,7 @@ export default function desktop(api) {
   // the panel hides (the app keeps running on its desk): back to the chat (docked) or Home
   let closing = null, exitMotion = null;
   /* Hiding the app panel, closing the chat column and Back; layouts/ai-apps/desktop-closing.js. */
-  const { chatBack, closeChat, hidePanel, listBack, setWide, bindLate: closingLate } = closingPart({ aadVars, anim, api, cX, doneLoading, DRAFT, FEED, feedBack, feedGone, flip, focusFrame, icon, mainChats, one, oneSplit, paintSide, paintSplit, panes, peekable, pTop, pW, pX, reduced, retileSoon, root, wantAppFocus });
+  const { chatBack, closeChat, hidePanel, listBack, setWide, bindLate: closingLate } = closingPart({ aadVars, anim, api, cX, doneLoading, DRAFT, FEED, feedBack, feedGone, flip, focusFrame, mainChats, one, oneSplit, paintSide, paintSplit, panes, peekable, pTop, pX, reduced, retileSoon, root, wantAppFocus });
   modesLate({ setSize, setWide });
   homeLate({ hidePanel });
   tabsLate({ closeChat, hidePanel, setWide });
@@ -654,7 +654,7 @@ export default function desktop(api) {
   /* Stepping through Ready; layouts/ai-apps/desktop-ready.js. */
   const { KEY_LIKE, readyIds, stepReady, bindLate: readyLate } = readyPart({ aadVars, actOn, api, curChat, groupBy, railNow, readSessions, readyOrder, root, scroll, showToast });
   /* Now playing marks, the keycaps while left Option is held and the app keys; layouts/ai-apps/desktop-keys.js. */
-  const { focusOn, here, markMedia, offAppKeys, offFrameKeys, onMainChats, onScreen, paintTop, releaseSettings, soon } = keysPart({ aadVars, allOpenNow, anim, api, appKeyOf, applySizes, appName, behindThread, chanTitle, chatAction, chatParts, chatWindows, closeAll, closeChat, closeDesk, closeTidy, closeWs, cTop, curChat, cX, deskOfNode, desks, doc, DRAFT, el, FEED, feedBack, feedGone, feedOn, feedTitle, findBtn, focusIn, focusLeave, focusOut, FRAME_KEYS, goApp, grip, hBack, hidePanel, hMid, homeComposer, host, isAppKey, KEY_LIKE, khMarks, listBack, macHoles, mainChats, MODE_KEYS, MODE_LABELS, modeBars, narrow, newBtn, NOTE, noteOn, noteTitle, one, oneBack, oneSplit, openAll, openTidy, openWs, orbBtn, paintAgents, paintBack, paintHome, paintList, paintOneChats, paintOrbIdentity, paintRail, paintSplit, paintVt, paintWs, paneFrame, panes, pIcon, plus, pW, pX, railMode, readSessions, readyIds, readyOrder, retileSoon, rFind, rList, rNew, root, rSet, rTog, setBtn, setSearch, setSize, settings, setWide, side, sizes, stepReady, swapped, swapSides, syncOrb, syncSide, talkFromOrb, tidyBtn, titleOf, togBtn, toggleSide, toggleTabs, top, tt, typing, unpeek, vtAll, vtList, vtTog, windowMode, wsBtn, wsName });
+  const { focusOn, here, markMedia, offAppKeys, offFrameKeys, onMainChats, onScreen, paintTop, releaseSettings, soon } = keysPart({ aadVars, allOpenNow, anim, api, appKeyOf, applySizes, appName, behindThread, chanTitle, chatAction, chatParts, chatWindows, closeAll, closeChat, closeDesk, closeTidy, closeWs, cTop, curChat, cX, deskOfNode, desks, doc, DRAFT, el, FEED, feedBack, feedGone, feedOn, feedTitle, findBtn, focusIn, focusLeave, focusOut, FRAME_KEYS, goApp, grip, hBack, hidePanel, hMid, homeComposer, host, isAppKey, KEY_LIKE, khMarks, listBack, macHoles, mainChats, MODE_KEYS, MODE_LABELS, modeBars, narrow, newBtn, NOTE, noteOn, noteTitle, one, oneBack, oneSplit, openAll, openTidy, openWs, orbBtn, paintAgents, paintBack, paintHome, paintList, paintOneChats, paintOrbIdentity, paintRail, paintSplit, paintVt, paintWs, paneFrame, panes, pIcon, plus, pX, railMode, readSessions, readyIds, readyOrder, retileSoon, rFind, rList, rNew, root, rSet, rTog, setBtn, setSearch, setSize, settings, side, sizes, stepReady, swapped, swapSides, syncOrb, syncSide, talkFromOrb, tidyBtn, titleOf, togBtn, toggleSide, toggleTabs, top, tt, typing, unpeek, vtAll, vtList, vtTog, windowMode, wsBtn, wsName });
   sidetabsLate({ paintTop });
   sidepaintLate({ here });
   tabsLate({ here, markMedia, paintTop });

@@ -217,6 +217,7 @@
   function rbGroupHtml(g, picks) {
     const p = rbPick(g, picks), locked = !!p?.locked;
     return `<div class="ch-rb${p ? ' picked' : ''}${locked ? ' locked' : ''}" role="group" aria-label="${esc(g.group)}" data-rb-group="${esc(g.group)}" data-rb-msg="${esc(g.msg)}" data-morph-key="rb:${esc(g.msg)}:${esc(g.group)}">`
+      + `<span class="ch-rb-ask" aria-hidden="true">${esc(g.group)}</span>` // the ask this row answers, on screen (issue 1963)
       + g.buttons.map(b => { const on = p?.button === b.id; return `<button type="button" class="ch-rb-btn${on ? ' on' : p ? ' dim' : ''}" data-rb="${esc(b.id)}" aria-pressed="${on}"${locked ? ' disabled' : ''}>${on ? '✓ ' : ''}${esc(b.label)}</button>`; }).join('')
       + '</div>';
   }

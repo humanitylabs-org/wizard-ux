@@ -1,17 +1,16 @@
-// wizard-ux issue 1957: the phone Chats switcher (switch wizard/chats-switcher, off by default). The shell part
+// wizard-ux issue 1957: the phone Chats switcher (on for everyone; was switch wizard/chats-switcher). The shell part
 // (web/app-chatsswitch.js) runs in node:vm against a fake bar and a fake Chats; the Chats part (web/core/chats-sent.js)
-// runs with fake channels. Covered: switch off changes nothing; tap Chats on Chats opens the sheet (again closes it);
+// runs with fake channels. Covered: without the phone's four-section bar nothing changes; tap Chats on Chats opens the sheet (again closes it);
 // the title's ▾ opens the same sheet; hold Chats, slide and let go opens the item under the finger (let go on nothing:
 // no change); a sideways swipe on the tile flips the last two views and never reaches the bar scrub; the bar's steps;
 // Back closes only the sheet; the title and the views the sheet lists; switching views. Browser proof:
-// tests/qa-chats-switcher.cjs (phone, Nebula and a light skin, switch on and off).
+// tests/qa-chats-switcher.cjs (phone, Nebula and a light skin).
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 
 const read = f => readFileSync(new URL('../web/' + f, import.meta.url), 'utf8');
-const SW = 'wizard/chats-switcher';
 
 // A DOM node with just what the parts touch.
 function node(extra = {}) {
@@ -32,7 +31,7 @@ function fire(target, type, init = {}) {
 
 function shell({ on = true, current = 'chats', recent = null, views = ['inbox', 'sent', 'archived', '#philosopher', '#@agent:claude'] } = {}) {
   const local = new Map(recent ? [['wos.chats.switcher.v1', JSON.stringify({ recent })]] : []), timers = [], calls = { go: [], sections: [], vib: [] };
-  const root = { attrs: { 'data-tweaks': on ? SW : '' }, dataset: { shell: 'phone' }, getAttribute(k) { return this.attrs[k] ?? null; } };
+  const root = { attrs: {}, dataset: { shell: 'phone' }, getAttribute(k) { return this.attrs[k] ?? null; } };
   const dock = node(), device = node(), orb = node(), made = [];
   let cur = 'inbox', hotAt = null;
   const w = { id: 'c', app: 'chats' };
@@ -40,7 +39,7 @@ function shell({ on = true, current = 'chats', recent = null, views = ['inbox', 
     view: () => cur, go: (win, key) => { calls.go.push(key); cur = key; return true; } };
   let section = current;
   const ctx = {
-    window: { WizCore: { appParts: {}, workspaceNav: { label: () => '6' }, phoneSections: { on: () => true, current: () => section, sections: () => ({ chats: 'dc' }), go: n => { calls.sections.push(n); section = n; } } } },
+    window: { WizCore: { appParts: {}, workspaceNav: { label: () => '6' }, phoneSections: { on: () => on, current: () => section, sections: () => ({ chats: 'dc' }), go: n => { calls.sections.push(n); section = n; } } } },
     document: { documentElement: root, createElement: () => { const e = node(); made.push(e); return e; }, elementFromPoint: (x, y) => hotAt && y < 700 ? { closest: s => s.includes('[data-csview]') ? { dataset: { csview: hotAt } } : null } : null },
     localStorage: { getItem: k => local.has(k) ? local.get(k) : null, setItem: (k, v) => local.set(k, String(v)) },
     setTimeout: (f, ms) => { timers.push({ f, ms }); return timers.length; }, clearTimeout: id => { if (timers[id - 1]) timers[id - 1].f = null; },
@@ -57,7 +56,7 @@ function shell({ on = true, current = 'chats', recent = null, views = ['inbox', 
   return { api, S: ctx.window.WizCore.chatsSwitcher, calls, tile, other, dock, runTimers, back, setHot: k => { hotAt = k; }, setCur: k => { cur = k; }, recent: () => JSON.parse(local.get('wos.chats.switcher.v1') || '{}').recent || [], sheet: made[0], setSection: s => { section = s; } };
 }
 
-test('switch off: the Chats tile is today\'s (no sheet, nothing stopped, no stepper)', () => {
+test('without the four-section bar the Chats tile is today\'s (no sheet, nothing stopped, no stepper)', () => {
   const h = shell({ on: false });
   const r = fire(h.tile, 'click');
   assert.equal(r.stopped, false, 'the tap goes on to the sections bar');
@@ -129,9 +128,9 @@ test('the bar and the orb step one view at a time while Chats is in front, stopp
 });
 
 // ---- the Chats part ----
-function chats({ on = true, shellOn = true } = {}) {
+function chats({ shellOn = true } = {}) {
   const W = {}, CH = {}, calls = { focus: [], open: [], rerender: 0, opened: 0 };
-  const root = { dataset: { tweaks: on ? SW : '' } };
+  const root = { dataset: {} };
   const ctx = { window: { WizCore: { chatsParts: {}, chatsSwitcher: shellOn ? { on: () => true, open: () => { calls.opened++; } } : undefined } }, document: { documentElement: root }, localStorage: { getItem: () => null, setItem() {} }, Date, Math, JSON, Object, Array, String, Set, Map, console };
   ctx.window.window = ctx.window; vm.createContext(ctx);
   vm.runInContext(read('core/chats-sent.js'), ctx);
@@ -150,7 +149,7 @@ function chats({ on = true, shellOn = true } = {}) {
   return { sp, w, W, CH, calls, chatVars };
 }
 
-test('the title names the view with a ▾ only while the switch is on in the phone shell; the ▾ opens the sheet', () => {
+test('the title names the view with a ▾ in the phone shell; the ▾ opens the sheet', () => {
   const c = chats();
   assert.equal(c.sp.switcher.on(c.w), true);
   const t = c.sp.titleBar('inbox', { n: 6, pick: true });
@@ -160,7 +159,6 @@ test('the title names the view with a ▾ only while the switch is on in the pho
   assert.equal(hit, true); assert.equal(c.calls.opened, 1, 'the ▾ opens the shell\'s sheet');
   assert.match(c.sp.switcher.feedTitle(c.w, { id: 'philosopher', name: '🧠 Philosopher' }), /data-chfeedtitle.*🧠.*Philosopher.*ch-tbar-chev/s);
   assert.match(c.sp.switcher.feedTitle(c.w, { id: '__archived__', archivedFeed: true, agentFeed: true }), /<span>Archived<\/span>/);
-  assert.equal(chats({ on: false }).sp.switcher.on(c.w), false, 'switch off');
   assert.equal(chats({ shellOn: false }).sp.switcher.on(c.w), false, 'desktop (no phone part): the tabs stay');
 });
 

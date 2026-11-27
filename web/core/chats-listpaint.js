@@ -40,7 +40,7 @@ window.WizCore.chatsParts.listpaint = function ({ actAllAgents, activityBody, ag
     // The main column's feed window draws a feed or nothing (never the tabs or the channel list: those stay in the sidebar).
     if (side && !feed && typeof chanElsewhere === 'function' && typeof H.channelsElsewhere === 'function' && !chanElsewhere(w)) { el.replaceChildren(); return; }
     chatVars.rowChan = chanOn && !feed;
-    // The Chats switcher (wizard-ux#1957, switch wizard/chats-switcher): no bottom tabs; the title names the view and
+    // The Chats switcher (wizard-ux#1957, the phone): no bottom tabs; the title names the view and
     // opens the switcher sheet. The Tags page is no destination there, so a list left on it shows Inbox.
     const csw = !side && typeof switcher !== 'undefined' && !!switcher?.on?.(w); // (tests slice this renderer without it)
     if (csw && !feed && chatVars.chanView === 'channels') chatVars.chanView = 'activity';

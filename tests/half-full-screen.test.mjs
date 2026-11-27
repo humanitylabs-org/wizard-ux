@@ -11,9 +11,8 @@ async function mount() {
   const doc = createDocument(); doc.body.innerHTML = '<header id="bar"></header><div class="top"></div>';
   const el = (tag, cls, attrs = {}) => { const n = doc.createElement(tag); if (cls) n.className = cls; for (const [k, v] of Object.entries(attrs)) if (v != null) n.setAttribute(k, v); return n; };
   const head = (cls, btn) => { const h = el('div', cls); if (btn) h.append(el('button', 'aad-ib ' + btn)); return h; };
-  const cTop = head('aad-ctop', 'aad-cx'), pTop = head('aad-ptop', 'aad-pw'), sTop = head('aad-stop');
-  pTop.append(el('button', 'aad-ib aad-px'));
-  const cX = cTop.querySelector('.aad-cx'), pW = pTop.querySelector('.aad-pw');
+  const cTop = head('aad-ctop', 'aad-cx'), pTop = head('aad-ptop', 'aad-px'), sTop = head('aad-stop');
+  const cX = cTop.querySelector('.aad-cx'), pX = pTop.querySelector('.aad-px');
   const top = doc.querySelector('.top'); top.append(cTop, pTop, sTop);
   let model = { mode: 'tiled', focus: 'chats', ratio: null, weights: {} };
   const panes = { get: () => ({ ...model }), set: p => { model = { ...model, ...p }; return model; } };
@@ -23,12 +22,12 @@ async function mount() {
     paneGeometry: { content: { x: 288, width: 951 }, panes: { chats: { x: 288, width: 475 }, app: { x: 763, width: 476 }, app2: { x: 0, width: 0 } } } };
   const windowMode = (mode, slot) => { calls.push(['mode', mode, slot]); model = { ...model, mode, focus: slot || model.focus }; };
   const modeBars = [];
-  const part = modesPart({ aadVars, api, cTop, cX, doc, el, MODE_LABELS: { full: 'Full screen' }, modeBars, panes, pTop, pW, root: doc.documentElement, sTop, top, windowMode });
+  const part = modesPart({ aadVars, api, cTop, cX, doc, el, MODE_LABELS: { full: 'Full screen' }, modeBars, panes, pTop, pX, root: doc.documentElement, sTop, top, windowMode });
   part.bindLate({ setSize: (id, w, keep) => calls.push(['size', id, w, keep]), setWide: on => { calls.push(['wide', on]); aadVars.wide = on; } });
   const groups = () => doc.querySelectorAll('.aad-modes');
   const btn = mode => doc.querySelector('.aad-modes [data-mode="' + mode + '"]');
   const press = mode => clicks.get(btn(mode))({ stopPropagation() {} });
-  return { part, aadVars, cTop, pTop, sTop, pW, cX, groups, btn, press, calls, modeBars, setModel: m => { model = { ...model, ...m }; }, model: () => model };
+  return { part, aadVars, cTop, pTop, sTop, pX, cX, groups, btn, press, calls, modeBars, setModel: m => { model = { ...model, ...m }; }, model: () => model };
 }
 
 test('one group of two buttons, Full screen then Half screen; none of Centred, Side by side, Back to tiled, Chats list', async () => {
@@ -58,7 +57,7 @@ test('the group sits in the header of the window at the end of the row, or of th
   const w = await mount(), g = w.groups()[0];
   w.aadVars.docked = true; w.aadVars.pane = { id: 'notes' }; w.pTop.hidden = false;
   w.part.paintModes();
-  assert.equal(g.parentNode, w.pTop, 'app panel at the end: in its header'); assert.equal(g.nextSibling, w.pW, 'before the panel\'s own ⤢');
+  assert.equal(g.parentNode, w.pTop, 'app panel at the end: in its header'); assert.equal(g.nextSibling, w.pX, 'right before the panel\'s Hide (wizard-ux issue 1964: no Wider ⤢ any more)');
   assert.equal(w.btn('half').getAttribute('aria-pressed'), 'true'); assert.equal(w.btn('full').getAttribute('aria-pressed'), 'false');
   // sides swapped: the chat is at the end
   w.aadVars.paneGeometry.panes = { chats: { x: 763, width: 476 }, app: { x: 288, width: 475 } };

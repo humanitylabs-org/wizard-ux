@@ -1,5 +1,6 @@
-// Inbox or Sent (wizard-ux issue 1829): with Inbox until archived (or Inbox rows) on, every thread is in exactly one
-// place. Runs the real list model (placeOf, activityGroups, sentShown), the real Chats ready part (core/chats-ready.js:
+// Inbox or Sent (wizard-ux issue 1829): with Smart inbox on, every thread is in exactly one place. Keeping things out of
+// Inbox is triage, and since wizard-ux issue 1962 that is Smart inbox only: with wizard/smart-inbox off (everyone's
+// default) nothing leaves Inbox and Sent lists every thread he sent into (the last tests below). Runs the real list model (placeOf, activityGroups, sentShown), the real Chats ready part (core/chats-ready.js:
 // inboxPlace, inboxIds, the Inbox count) and the real Sent part (core/chats-sent.js, one row per thread since wizard-ux
 // issue 1880) over one fake box: a mixed set of
 // threads with the box's Sent rows. Browser proof: tests/qa-chats-inbox-sent-place.cjs (phone, Classic, AI apps sidebar).
@@ -22,13 +23,13 @@ const THREADS = () => [
   { id: 'needs', title: 'Flight', status: 'completed', at: NOW - 0.3 * H, attention: { state: 'needs_you', ask: 'Window or aisle?' }, messageCount: 2 },
   { id: 'failed', title: 'Export', status: 'failed', at: NOW - 0.4 * H, messageCount: 2 },
   { id: 'run', title: 'Mine is not displaying this', status: 'running', at: NOW - 0.05 * H, messageCount: 3, lastAssistantAt: new Date(NOW - H).toISOString() },
-  { id: 'alert', title: 'Morning report', status: 'completed', at: NOW - 0.5 * H, attention: fyi('Three meetings today.'), messageCount: 1, previewRole: 'assistant' },
+  { id: 'alert', title: 'Morning report', source: 'cron', status: 'completed', at: NOW - 0.5 * H, attention: fyi('Three meetings today.'), messageCount: 1, previewRole: 'assistant' },
 ];
 const sentRow = r => ({ text: 'Words', rules: [], tags: [], source: 'reply', urgent: false, corrected: null, wouldRoute: null, decidedBy: 'owner_words', answer: '', ...r });
 const SENT = () => [
   { id: sid('a'), at: NOW - 0.05 * H, route: 'thread', state: 'running', thread: 'run', record: null, wantsReply: true, quiet: false },
-  { id: sid('b'), at: NOW - 0.1 * H, route: 'thread', state: 'done', thread: 'quiet', record: null, wantsReply: false, quiet: true, answer: 'Nothing needed from you.' },
-  { id: sid('c'), at: NOW - 0.2 * H, route: 'thread', state: 'done', thread: 'mac', record: null, wantsReply: true, quiet: false },
+  { id: sid('b'), at: NOW - 0.1 * H, route: 'thread', state: 'done', thread: 'quiet', record: null, wantsReply: false, quiet: true, answer: 'Nothing needed from you.', text: 'Sent to Miguel, done', rules: ['no_reply:done'] },
+  { id: sid('c'), at: NOW - 0.2 * H, route: 'thread', state: 'done', thread: 'mac', record: null, wantsReply: true, quiet: false, text: 'is the mac app ready?', rules: ['short_question'] },
   { id: sid('d'), at: NOW - 0.3 * H, route: 'agent', state: 'needs_you', thread: 'needs', record: null, wantsReply: true, quiet: false },
   { id: sid('e'), at: NOW - 0.4 * H, route: 'agent', state: 'failed', thread: 'failed', record: null, wantsReply: true, quiet: false },
   { id: sid('f'), at: NOW - 2 * H, route: 'agent', state: 'done', thread: 'quiet', record: null, wantsReply: true, quiet: false },
@@ -40,7 +41,8 @@ const quiet = s => s.quietReply === true && !needs(s) && s.status !== 'running';
 const groups = rows => ({ working: rows.filter(s => s.status === 'running'), errors: rows.filter(s => s.status === 'failed'), ready: rows.filter(s => !['running', 'failed'].includes(s.status) && !s.archived && !s.deferred), deferred: rows.filter(s => s.deferred && !s.archived), archive: rows.filter(s => s.archived) });
 
 // The real chats-ready part (inboxPlace / inboxIds / the Inbox count) and the real Sent part over one fake box.
-function shell({ tweaks = '', threads = THREADS(), sent = SENT() } = {}) {
+const SMART = 'wizard/smart-inbox';
+function shell({ tweaks = SMART, threads = THREADS(), sent = SENT() } = {}) {
   const listeners = [];
   const ctx = { console, Date, Map, Set, structuredClone, document: { documentElement: { dataset: { tweaks } }, addEventListener() {} }, localStorage: { getItem: () => null, setItem() {} } };
   ctx.window = ctx; ctx.globalThis = ctx; ctx.addEventListener = () => {}; ctx.WizCore = { chatsParts: {} };
@@ -91,7 +93,7 @@ test('a working thread he sent into is only in Sent (Working), never in Inbox; w
   const t = s.threads.find(x => x.id === 'run');
   t.status = 'completed'; t.attention = { state: 'needs_you', ask: 'Which build?' }; s.st.rows = s.st.rows.map(r => r.id === sid('a') ? { ...r, state: 'needs_you' } : r);
   assert.ok(s.inbox().includes('run') && !s.sentList().includes('run'), 'needs him: Inbox');
-  t.attention = fyi('Done.'); t.quietReply = true; s.st.rows = s.st.rows.map(r => r.id === sid('a') ? { ...r, state: 'done', quiet: true, wantsReply: false } : r);
+  t.attention = fyi('Done.'); t.quietReply = true; s.st.rows = s.st.rows.map(r => r.id === sid('a') ? { ...r, state: 'done', quiet: true, wantsReply: false, text: 'ok thanks' } : r);
   assert.ok(!s.inbox().includes('run') && s.sentList().includes('run'), 'quiet: Sent');
 });
 
@@ -115,27 +117,37 @@ test('opening an Inbox thread keeps it there until Archive (#1810); a reply that
   s.threads.find(x => x.id === 'mac').archived = true;
   assert.ok(!s.inbox().includes('mac'), 'archived: gone from Inbox');
   // He replies "done" in an Inbox thread and the agent answers quietly: it goes to Sent.
-  const n = s.threads.find(x => x.id === 'alert'); n.quietReply = true; s.st.rows.unshift(sentRow({ id: sid('1'), at: NOW, route: 'thread', state: 'done', thread: 'alert', record: null, wantsReply: false, quiet: true }));
+  const n = s.threads.find(x => x.id === 'alert'); n.quietReply = true; s.st.rows.unshift(sentRow({ id: sid('1'), at: NOW, route: 'thread', state: 'done', thread: 'alert', record: null, wantsReply: false, quiet: true, text: 'done, thanks', rules: ['no_reply:done'] }));
   assert.ok(!s.inbox().includes('alert') && s.sentList().includes('alert'));
 });
 
-test('new chats from the orb / typed: the Sent row\'s final state and wants_reply decide; missing or unknown goes to Inbox', () => {
-  const f = { needs, quiet: () => false, working: () => false };
-  const t = { id: 'x', status: 'completed' };
-  assert.equal(M.placeOf(t, [{ state: 'done', wantsReply: false, at: 1 }], f), 'sent', 'done, asked for nothing');
-  assert.equal(M.placeOf(t, [{ state: 'done', wantsReply: true, at: 1 }], f), 'inbox', 'done, he asked: Inbox');
-  assert.equal(M.placeOf(t, [{ state: 'unknown', wantsReply: false, at: 1 }], f), 'inbox', 'unknown outcome: Inbox');
-  assert.equal(M.placeOf(t, [{ state: 'running', at: 1 }], f), 'inbox', 'the log still says running but the run ended: Inbox');
+test('Smart inbox off (wizard-ux issue 1962): placeOf routes nothing out of Inbox, whatever the Sent row or the quiet mark says', () => {
+  const f = { needs, quiet: () => true, working: () => false };
+  const t = { id: 'x', status: 'completed', quietReply: true };
+  assert.equal(M.placeOf(t, [{ state: 'done', wantsReply: false, quiet: true, at: 1 }], f), 'inbox', 'done, asked for nothing, quiet: still Inbox');
+  assert.equal(M.placeOf(t, [{ state: 'done', wantsReply: true, at: 1 }], f), 'inbox');
   assert.equal(M.placeOf(t, [], f), 'inbox', 'no Sent row: Inbox');
   assert.equal(M.placeOf(t, undefined, f), 'inbox');
-  assert.equal(M.placeOf(t, [{ state: 'done', quiet: true, at: 1 }, { state: 'needs_you', at: 2 }], f), 'inbox', 'the newest row decides');
-  assert.equal(M.placeOf({ id: 'y', status: 'running' }, [], { ...f, working: () => true }), 'inbox', 'a run he didn\'t start stays visible in Inbox');
-  assert.equal(M.placeOf({ id: 'y', status: 'running' }, [{ state: 'running', at: 1 }], { ...f, working: () => true }), 'sent');
-  assert.equal(M.placeOf({ id: 'z', status: 'waiting_for_approval' }, [{ state: 'running', at: 1 }], f), 'inbox', 'approval: Inbox');
+  assert.equal(M.placeOf({ id: 'y', status: 'running' }, [{ state: 'running', at: 1 }], { ...f, working: () => true }), 'inbox', 'a run he started: Inbox › Working');
+  assert.equal(M.placeOf({ id: 'y', status: 'running' }, [{ state: 'running', at: 1 }], { ...f, working: () => true, smart: true }), 'sent', 'Smart inbox on: Sent › Working');
 });
 
-test('Inbox rows (on for everyone): the same split, no working mark in Inbox', () => {
+// James, 27 Nov 2026 (wizard-ux issue 1962): "you could keep the default so everything pops into inbox... Only keep behind
+// a switch the functionality, which I have you preventing things from coming into the inbox if they don't need me."
+test('Smart inbox off (wizard-ux issue 1962): every thread is in Inbox, the FYI "nothing needed" reply too; Sent lists every thread he sent into, so a thread can be in both', () => {
   const s = shell({ tweaks: '' });
+  s.ctx.WizCore.inboxRowsFacts = () => ({ quiet: () => false, pin: () => 0, extra: () => 0 });
+  assert.deepEqual(s.inbox(), ['alert', 'failed', 'mac', 'needs', 'quiet', 'run'], 'nothing routed out of Inbox (run in Inbox › Working)');
+  assert.deepEqual(s.sentList(), ['failed', 'mac', 'needs', 'quiet', 'run'], 'Sent keeps every thread he sent into');
+  // The same box with Smart inbox on: the quiet reply finishes in Sent, never in both.
+  const on = shell({ tweaks: SMART });
+  on.ctx.WizCore.inboxRowsFacts = () => ({ quiet, pin: () => 0, extra: () => 0 });
+  assert.ok(!on.inbox().includes('quiet') && on.sentList().includes('quiet'), 'on: the quiet reply is only in Sent');
+  assert.deepEqual(on.inbox().filter(id => on.sentList().includes(id)), [], 'on: never in both');
+});
+
+test('Inbox rows (on for everyone): with Smart inbox on the same split, no working mark in Inbox', () => {
+  const s = shell({ tweaks: SMART });
   s.ctx.WizCore.inboxRowsFacts = () => ({ quiet, pin: () => 0, extra: () => 0 });
   const inbox = s.inbox(), sent = s.sentList();
   assert.deepEqual(inbox.filter(id => sent.includes(id)), []);
@@ -145,11 +157,10 @@ test('Inbox rows (on for everyone): the same split, no working mark in Inbox', (
   assert.doesNotMatch(src, /'Working…'/, 'no "Working…" line on an Inbox row');
 });
 
-test('no switch (Inbox rows on for everyone, wizard-ux issue 1779): with no data-tweaks the split holds, one place per thread', () => {
+test('no design switch left (Inbox rows on for everyone, wizard-ux issue 1779): only wizard/smart-inbox decides the split', () => {
   const s = shell({ tweaks: '' });
-  const inbox = s.inbox(), sent = s.sentList();
-  assert.deepEqual(inbox, ['alert', 'failed', 'mac', 'needs'], 'Inbox placement with no switch on');
-  assert.deepEqual(sent, ['quiet', 'run'], 'Sent keeps the quiet reply and the running send');
   assert.equal(s.ctx.WizCore.inboxKeep, undefined, 'no switch read left (issue 1810)');
   assert.notEqual(s.ctx.WizCore.inboxPlace(s.LIVE), null);
+  assert.equal(s.ctx.WizCore.inboxPlace(s.LIVE).smart, undefined, 'off: no smart rule');
+  assert.equal(shell({ tweaks: SMART }).ctx.WizCore.inboxPlace(s.LIVE).smart, true, 'on: the smart rule');
 });

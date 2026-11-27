@@ -1,8 +1,8 @@
 // Sent as threads (wizard-ux issue 1880, on for everyone; switch wizard/sent-threads removed). Runs the real list model
 // (sentThreads, placeOf, activityGroups), the real Chats ready part (core/chats-ready.js: inboxIds), the real Inbox rows
 // part (core/chats-inboxrows.js: ibThreadRow) and the real Sent part (core/chats-sent.js) over one fake box. Sent
-// lists threads, one row per thread, drawn by Inbox's own thread row; a thread is in Inbox or in Sent,
-// never both. Browser proof: tests/qa-chats-sent-threads.cjs (phone, Classic, AI apps sidebar).
+// lists threads, one row per thread, drawn by Inbox's own thread row; with Smart inbox on (wizard/smart-inbox) a
+// thread is in Inbox or in Sent, never both; off (everyone's default, wizard-ux issue 1962) nothing leaves Inbox. Browser proof: tests/qa-chats-sent-threads.cjs (phone, Classic, AI apps sidebar).
 // Run: node --test tests/sent-threads.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -28,7 +28,7 @@ const sentRow = r => ({ text: 'Words', rules: [], tags: [], source: 'orb', urgen
 // hidden worker isn't loaded, and one still being routed.
 const SENT = () => [
   { id: sid('1'), at: NOW - 0.05 * H, state: 'running', thread: 'run', text: 'Clean the photo folder' },
-  { id: sid('2'), at: NOW - 0.1 * H, route: 'thread', state: 'done', thread: 'trip', text: 'Thanks, that works', wantsReply: false, quiet: true },
+  { id: sid('2'), at: NOW - 0.1 * H, route: 'thread', state: 'done', thread: 'trip', text: 'Thanks, that works', rules: ['no_reply:thanks'], wantsReply: false, quiet: true },
   { id: sid('3'), at: NOW - 0.15 * H, route: 'thread', state: 'done', thread: 'trip', text: 'Take the earlier one', wantsReply: false, quiet: true },
   { id: sid('4'), at: NOW - 0.2 * H, state: 'done', thread: 'mac', text: 'Is the mac app ready?' },
   { id: sid('5'), at: NOW - 0.3 * H, state: 'needs_you', thread: 'flight', text: 'Book my flight to Lisbon' },
@@ -44,7 +44,8 @@ const quiet = s => s.quietReply === true && !needs(s) && s.status !== 'running';
 const groups = rows => ({ working: rows.filter(s => s.status === 'running'), errors: rows.filter(s => s.status === 'failed'), ready: rows.filter(s => !['running', 'failed'].includes(s.status) && !s.archived && !s.deferred), deferred: rows.filter(s => s.deferred && !s.archived), archive: rows.filter(s => s.archived) });
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
-function shell({ tweaks = '', threads = THREADS(), sent = SENT(), agent = '' } = {}) {
+const SMART = 'wizard/smart-inbox';
+function shell({ tweaks = SMART, threads = THREADS(), sent = SENT(), agent = '' } = {}) {
   const ctx = { console, Date, Map, Set, structuredClone, document: { documentElement: { dataset: { tweaks } }, addEventListener() {} }, localStorage: { getItem: () => null, setItem() {} } };
   ctx.window = ctx; ctx.globalThis = ctx; ctx.addEventListener = () => {}; ctx.WizCore = { chatsParts: {} };
   modelContext(ctx);
@@ -172,4 +173,15 @@ test('model: sentThreads groups by thread, then record, then the send; newest fi
   const g = M.sentThreads([sentRow({ id: 'a', at: 1, thread: 't' }), sentRow({ id: 'b', at: 3, thread: 't', state: 'running' }), sentRow({ id: 'c', at: 2, record: 'r' }), sentRow({ id: 'd', at: 4 })], new Set(), {});
   assert.deepEqual(J(g.map(x => [x.key, x.sends.map(r => r.id), x.working])), [['send:d', ['d'], false], ['t', ['b', 'a'], true], ['rec:r', ['c'], false]]);
   assert.deepEqual(J(M.sentThreads([sentRow({ id: 'a', at: 1, thread: 't' }), sentRow({ id: 'c', at: 2, record: 'r' })], new Set(['t', 'r'])).map(x => x.key)), [], 'Inbox ids leave out');
+});
+
+test('Smart inbox off (wizard-ux issue 1962): nothing leaves Inbox, Sent still lists every thread he sent into (a thread can be in both), and no routing corrections', () => {
+  const s = shell({ tweaks: '' });
+  s.LIVE.quietReply = () => false; // live.js: the quiet mark counts only with Smart inbox on
+  const inbox = s.inbox(), sent = s.sentList();
+  assert.deepEqual(inbox, ['flight', 'mac', 'run', 'trip'], 'every live thread with agent activity (and the run, in Working) is in Inbox');
+  assert.deepEqual(sent, ['send:' + sid('7'), 'run', 'trip', 'mac', 'flight', 'rec:' + rid('a')], 'Sent lists every thread he sent into, Inbox or not');
+  assert.equal(s.p.sentSends('main', 'trip'), true);
+  assert.match(s.sheet.html, /Sent from you · 3/);
+  assert.doesNotMatch(s.sheet.html, /Should have replied|Didn’t need a reply/, 'no routing corrections with Smart inbox off');
 });

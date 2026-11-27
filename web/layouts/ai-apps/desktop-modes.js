@@ -6,7 +6,7 @@
  * in front and the pins) stay in desktop.js; this code reads and writes them as aadVars.<name>, its get/set accessors
  * on the same variables, so every read and write is live. desktop.js's own imports are imported here again from the
  * same modules. The body below keeps desktop.js's indentation so `git log -L` and patches port over. */
-export function modesPart({ aadVars, api, cTop, cX, doc, el, MODE_LABELS, modeBars, panes, pTop, pW, root, sTop, top, windowMode }) {
+export function modesPart({ aadVars, api, cTop, cX, doc, el, MODE_LABELS, modeBars, panes, pTop, pX, root, sTop, top, windowMode }) {
   let setSize, setWide; // late-bound: desktop.js declares these after the call, see bindLate
   /* The window arrangement group (wizard-ux issue 1813, James, 25 Nov 2026): two buttons, Full screen and Half screen,
    * ONE copy (not one per pane header), shown only while two windows are open. It sits in the header of the window
@@ -35,7 +35,7 @@ export function modesPart({ aadVars, api, cTop, cX, doc, el, MODE_LABELS, modeBa
     const c = aadVars.paneGeometry?.content; if (c?.width) setSize?.('app', Math.round(c.width / 2), true);
   }
   // header of each window, where the group goes in it, and its slot in the pane model
-  const HEADS = [[cTop, 'chats', () => cX], [pTop, 'app', () => pW], [sTop, 'app2', () => null]];
+  const HEADS = [[cTop, 'chats', () => cX], [pTop, 'app', () => pX], [sTop, 'app2', () => null]];
   /** after every paint of the panes: show the group only with two windows open, in one header, pressed state */
   function paintModes(m = panes.get()) {
     const open = HEADS.filter(([h, slot]) => !h.hidden && (slot === 'chats' ? !!aadVars.docked : slot === 'app' ? !!aadVars.pane : !!aadVars.secondEl));

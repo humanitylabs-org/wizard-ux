@@ -35,7 +35,7 @@ window.WizCore.chatsParts.sent = function ({ agentName, agentRec, ago, AGS, ch, 
   const SR_FALLBACK = { router_not_configured: 'deciding isn’t set up on this Wizard', router_timeout: 'deciding took too long', router_error: 'deciding failed', capture_failed: 'it couldn’t start in the background', unsure: 'Wizard wasn’t sure', no_answer: 'no answer came' };
   function srWhy(r) {
     const where = srWhere(r);
-    if (r.route === 'thread') return r.quiet ? `${where}: nothing was needed from you, so it stayed out of Inbox.` : r.wantsReply ? `${where} because you asked.` : `${where}.`;
+    if (r.route === 'thread') return r.quiet && smartOn() ? `${where}: nothing was needed from you, so it stayed out of Inbox.` : r.wantsReply ? `${where} because you asked.` : `${where}.`;
     const first = r.rules[0] || '';
     let why = '';
     if (r.decidedBy === 'owner_words') {
@@ -59,8 +59,9 @@ window.WizCore.chatsParts.sent = function ({ agentName, agentRec, ago, AGS, ch, 
     const fix = (k, svg, label) => `<button type="button" data-rssentfix="${k}" aria-pressed="${fixed === k}"${busy ? ' disabled' : ''}>${svg}${label}${fixed === k ? ' · your correction' : ''}</button>`;
     el.insertAdjacentHTML('beforeend', `<div class="ch-sheet" role="dialog" aria-label="Sent actions"><div class="ch-sheet-b"><div class="ch-sheet-t">${esc(clip(srFirst(r), 120))}</div>`
       + `<p class="ch-sheet-n ch-sr-why">${esc(srWhy(r))}</p><button type="button" data-rssentopen>${SR_OPEN_SVG}Open chat</button>`
-      // A reply stays in the thread it was typed in: nothing to move, so no correction.
-      + (r.route === 'thread' ? '' : fix('reply', SR_REPLY_SVG, 'Should have replied') + fix('quiet', SR_QUIET_SVG, 'Didn’t need a reply'))
+      // A reply stays in the thread it was typed in: nothing to move, so no correction. The corrections teach the triage,
+      // so they are there only with Smart inbox on (wizard-ux issue 1962).
+      + (r.route === 'thread' || !smartOn() ? '' : fix('reply', SR_REPLY_SVG, 'Should have replied') + fix('quiet', SR_QUIET_SVG, 'Didn’t need a reply'))
       + stSendsHtml(stKeyOf(r), false) + '</div></div>');
     chatVars.rowSheet = { wid, sent: id, trigger };
     el.querySelector('.ch-sheet button')?.focus?.({ preventScroll: true });
@@ -71,8 +72,8 @@ window.WizCore.chatsParts.sent = function ({ agentName, agentRec, ago, AGS, ch, 
    * thread between my inbox and my sent box."). Sent lists threads, not sends: the Sent log grouped by the thread each
    * send ran in (WizChatsListModel.sentThreads), one row per thread drawn by Inbox's own thread row (ibThreadRow: the
    * thread's avatar or tag, its title, its last message, its time, Archive), under Working (it still runs) then
-   * Processed. A thread Inbox shows is not here (the one-place rule, placeOf), so it moves between the two and is never
-   * in both. A send whose thread isn't loaded yet (a background task's hidden worker, or one still being routed) gets
+   * Processed. With Smart inbox on, a thread Inbox shows is not here (the one-place rule, placeOf), so it moves between
+   * the two and is never in both; off (everyone's default, issue 1962) nothing leaves Inbox and a thread can be in both. A send whose thread isn't loaded yet (a background task's hidden worker, or one still being routed) gets
    * the same row with its task's title, else its words. His sends stay in the thread and in the row's actions sheet
    * ("Sent from you", with the two corrections), never as list rows. Which threads are kept out of Inbox at all is the
    * triage, and that stays behind Smart inbox (below). */
@@ -90,7 +91,9 @@ window.WizCore.chatsParts.sent = function ({ agentName, agentRec, ago, AGS, ch, 
   const stKeyOf = r => r.thread || (r.record ? 'rec:' + r.record : 'send:' + r.id);
   function stGroups(st) {
     const M = window.WizChatsListModel; if (!M?.sentThreads) return [];
-    const ids = window.WizCore?.inboxIds?.(LIVE) || null;
+    // Smart inbox off (wizard-ux issue 1962): nothing is routed out of Inbox, so Sent keeps every thread he sent into,
+    // also one Inbox shows (a thread can be in both). On: a thread Inbox shows is not here.
+    const ids = smartOn() ? window.WizCore?.inboxIds?.(LIVE) || null : null;
     const facts = { session: id => LIVE.session?.(id) || null, working: s => !!M.isListWorking?.(s), at: s => Date.parse(LIVE.cardAt?.(s) || '') || 0 };
     const groups = M.sentThreads(st.rows, ids, facts);
     if (!smartOn() || !M.sentRest || !ids) return groups;
@@ -139,7 +142,7 @@ window.WizCore.chatsParts.sent = function ({ agentName, agentRec, ago, AGS, ch, 
   function stSendsHtml(key, fixes = true) {
     const st = LIVE.sentLog?.state?.(), rows = (st?.ok ? st.rows : []).filter(r => stKeyOf(r) === key).sort((a, b) => b.at - a.at);
     if (!rows.length) return '';
-    const fixable = fixes ? rows.find(r => r.route !== 'thread') : null, busy = fixable && SENT_BUSY.has(fixable.id);
+    const fixable = fixes && smartOn() ? rows.find(r => r.route !== 'thread') : null, busy = fixable && SENT_BUSY.has(fixable.id);
     const fixed = fixable?.corrected ? (fixable.corrected.shouldReply ? 'reply' : 'quiet') : '';
     const fix = (k, svg, label) => `<button type="button" data-rssentfix="${k}" data-id="${esc(fixable.id)}" aria-pressed="${fixed === k}"${busy ? ' disabled' : ''}>${svg}${label}${fixed === k ? ' · your correction' : ''}</button>`;
     return `<div class="ch-st-sends" data-part="sent-sends"><p class="ch-sheet-n">Sent from you · ${rows.length}</p><ul>`
@@ -244,16 +247,15 @@ window.WizCore.chatsParts.sent = function ({ agentName, agentRec, ago, AGS, ch, 
         + `<button type="button" class="ch-tbar-b ch-fbtn${filtered ? ' on' : ''}" data-chfbtn aria-label="Filter and sort" aria-expanded="${sheet ? 'true' : 'false'}">${TB_FILT_SVG}</button>` : '')
       + '</div>';
   }
-  /* The Chats switcher (wizard-ux#1957, switch wizard/chats-switcher, off by default; James, 27 Nov 2026: "I don't like
+  /* The Chats switcher (wizard-ux#1957, on for everyone; James, 27 Nov 2026: "I don't like
    * how you're displaying like a second line below chats... it can just be clear from the top of the screen what they're
    * looking at... the arrow drop down on the inbox at the top"). On the phone (the shell's part, app-chatsswitch.js, is
    * loaded and on) the main agent's list draws no bottom tabs: its title names the view it shows (Inbox, Sent, Archived,
    * a tag's emoji and name, another agent) with a ▾, and a tap on it opens the shell's switcher sheet. The sheet lists
    * csViews and switches with csGo. The Tags page is no destination there: its tags and agents are in the sheet, a tag
    * opens its own list (today's Tags › tag feed), and Back from it goes to Inbox. Desktop and tablet keep the tabs. */
-  const CS_SWITCH = 'wizard/chats-switcher';
   function csOn(w) {
-    try { if (!(document.documentElement.dataset.tweaks || '').split(' ').includes(CS_SWITCH) || !window.WizCore?.chatsSwitcher?.on?.()) return false; } catch (_) { return false; }
+    try { if (!window.WizCore?.chatsSwitcher?.on?.()) return false; } catch (_) { return false; }
     // The main agent's own list (an agent's list opened from the sheet focuses that agent, but is still this window).
     const o = w ? (W[owner(w.id)] || w) : null;
     return !w || (!o?.agent && !!LIVE.sentLog && !(typeof chanSide === 'function' && chanSide(w)));
