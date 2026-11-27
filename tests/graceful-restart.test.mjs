@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import vm from 'node:vm';
 import { randomUUID } from 'node:crypto';
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
@@ -10,10 +10,11 @@ import { withWebParts } from './fixtures/web-parts.mjs';
 // wizard-ux issue 1362 (shell half of wizard-agent-service issue 480): while the Agent Service waits to restart until
 // running chats finish, the shell shows a quiet "Restarting when chats finish" note instead of errors, a held send is
 // saved (never "Reply not sent" or Working), the overdue owner chooses Wait longer / Restart now, and a send that hits
-// the seconds the service is down is retried soon with the same Idempotency-Key. Switch wizard/graceful-restart, off.
+// the seconds the service is down is retried soon with the same Idempotency-Key. On for everyone (wizard-ux issue 1362
+// switch-default): the switch wizard/graceful-restart is gone, so no tweak list turns any of it on or off.
 const read = p => withWebParts(readFileSync(new URL('../web/' + p, import.meta.url), 'utf8'));
 const reachSource = read('core/reach.js'), outboxSource = read('outbox.js'), chats = withParts(read('core/chats.js'));
-const SWITCH = 'wizard/graceful-restart';
+const GONE_SWITCH = 'wizard/graceful-restart';
 
 const ok = body => ({ ok: true, status: 200, json: async () => body });
 // A tiny DOM: enough for the restart note's hosts (an element with children, querySelector by data attribute).
@@ -25,10 +26,10 @@ function el(tag = 'div') {
     querySelector(sel) { return sel === '[data-restart-notice]' ? this.children.find(c => 'restartNotice' in c.dataset) || null : null; } };
   return node;
 }
-function reach({ on = true, health, post, rows, live = {}, model, observe = false, body = {}, extra = {} } = {}) {
+function reach({ health, post, rows, live = {}, model, observe = false, body = {}, extra = {} } = {}) {
   let now = 1_800_000_000_000;
   const calls = [], hosts = [el('form')], timers = [];
-  const dataset = { shell: 'phone', tweaks: on ? 'wizard/chat-channels ' + SWITCH : 'wizard/chat-channels' };
+  const dataset = { shell: 'phone', tweaks: 'wizard/chat-channels' }; // no restart switch: the watch never reads this
   const listeners = {}, observers = [];
   const document = { documentElement: { dataset, ...(observe ? { nodeType: 1 } : {}) }, hidden: false, body,
     querySelectorAll: sel => sel === '[data-restart-notice]' ? hosts.flatMap(h => h.children.filter(c => 'restartNotice' in c.dataset)) : [],
@@ -55,10 +56,11 @@ function reach({ on = true, health, post, rows, live = {}, model, observe = fals
 }
 const holding = (extra = {}) => ok({ status: 'ok', restart: { phase: 'waiting', holding: true, reason: 'update', active: 1, held: 2, oldest_active_s: 40, wait_until: '2027-01-15T08:10:00.000Z', ...extra } });
 
-test('switched off: no health polling, no restart state, every label as before', async () => {
-  const h = reach({ on: false, health: () => holding() });
-  await h.settle();
-  assert.equal(h.calls.length, 0);
+test('no restart waiting: one health read at load, no restart state, every label as before', async () => {
+  const h = reach({ health: () => ok({ status: 'ok' }) });
+  await h.settle(); await h.settle();
+  assert.deepEqual(h.calls.map(c => c[0]), ['/wizard/health']);
+  assert.equal(h.timers.at(-1), 30000); // only every 30 s while nothing restarts
   assert.equal(h.api.restart(), null);
   assert.notEqual(h.api.label('send'), 'Saved · sends after Wizard restarts');
   h.api.paintRestart(h.hosts);
@@ -139,33 +141,24 @@ test('overdue: the owner sees what still runs and chooses Wait longer or Restart
   assert.deepEqual(posts[1], { now: true });
 });
 
-test('switch painted after load (reload, phone, second device): the watch starts without a choice in this tab', async () => {
-  // The skin host fills data-tweaks after reach.js runs; the review saw 0 health reads in 40 s after a reload.
-  for (const via of ['prefs', 'observer']) {
-    const h = reach({ on: false, observe: via === 'observer', health: () => holding() });
-    await h.settle();
-    assert.equal(h.calls.length, 0, via);
-    h.dataset.tweaks = 'wizard/chat-channels ' + SWITCH;
-    if (via === 'prefs') h.fire('wos:prefs');
-    else { assert.equal(JSON.stringify(h.observers[0].opts.attributeFilter), '["data-tweaks"]'); h.observers[0].fn([]); }
+test('every load watches (reload, phone, second device, PWA cold start): no switch, no tweak list to wait for', async () => {
+  // The review once saw 0 health reads in 40 s after a reload; with the switch gone the watch starts on every load.
+  for (const tweaks of ['', 'wizard/chat-channels', GONE_SWITCH]) {
+    const h = reach({ observe: true, health: () => holding() });
+    h.dataset.tweaks = tweaks;
     await h.settle(); await h.settle();
-    assert.deepEqual(h.calls.map(c => c[0]), ['/wizard/health'], via);
-    assert.equal(h.api.restart().phase, 'waiting', via);
+    assert.deepEqual(h.calls.map(c => c[0]), ['/wizard/health'], tweaks);
+    assert.equal(h.api.restart().phase, 'waiting', tweaks);
     h.api.paintRestart(h.hosts);
-    assert.match(h.hosts[0].children[0].innerHTML, /Restarting when chats finish/, via);
-    // Another repaint with the same list does not start a second poll.
-    if (via === 'prefs') h.fire('wos:prefs'); else h.observers[0].fn([]);
+    assert.match(h.hosts[0].children[0].innerHTML, /Restarting when chats finish/, tweaks);
+    // No watch on the tweak list or on switch choices is left.
+    assert.equal(h.observers.filter(o => o.target === h.ctx.document.documentElement).length, 0, tweaks);
+    h.fire('wos:prefs'); h.fire('wos:tweak-choice');
     await h.settle();
-    assert.equal(h.calls.length, 1, via);
-    // Switched off elsewhere: the watch stops and the note goes.
-    h.dataset.tweaks = 'wizard/chat-channels';
-    if (via === 'prefs') h.fire('wos:prefs'); else h.observers[0].fn([]);
-    await h.settle();
-    assert.equal(h.calls.length, 1, via);
-    assert.equal(h.api.restart(), null, via);
+    assert.equal(h.calls.length, 1, tweaks);
   }
+  assert.doesNotMatch(reachSource, /wizard\/graceful-restart'|restartOn|wos:tweak-choice/);
 });
-
 test('overdue names every chat the Chats list counts as working and a run this device just sent, never a held send', async () => {
   const model = { isListWorking: s => ['submitting', 'queued', 'running', 'stopping'].includes(s.status) || !!s.background };
   const rows = [
@@ -340,12 +333,15 @@ for (const [agent, kind] of [['', 'main'], ['host-ops', 'host-profile'], ['box',
   });
 }
 
-test('the switch is listed in the catalog, off by default', () => {
+test('the switch is gone: not in the catalog or Settings help, no package, a saved choice is cleared', () => {
   const catalog = JSON.parse(read('tweaks/catalog.json'));
-  assert.ok(catalog.tweaks.includes(SWITCH));
-  assert.ok(!catalog.defaults.includes(SWITCH));
-  const manifest = JSON.parse(read('tweaks/wizard/graceful-restart/manifest.json'));
-  assert.equal(manifest.id, SWITCH);
+  assert.ok(!catalog.tweaks.includes(GONE_SWITCH));
+  assert.ok(!(catalog.defaults || []).includes(GONE_SWITCH));
+  assert.equal(existsSync(new URL('../web/tweaks/wizard/graceful-restart', import.meta.url)), false);
+  assert.ok(!readFileSync(new URL('../skill/help.json', import.meta.url), 'utf8').includes(GONE_SWITCH));
+  assert.match(read('core/experience.js'), /const GONE = \[[^\]]*'wizard\/graceful-restart'/);
+  // Its look is core, loaded on every page after the skins: core/graceful-restart.css.
+  for (const f of ['index.html', 'desktop.html', 'app-session.html']) assert.match(read(f), /href="core\/graceful-restart\.css"/, f);
 });
 
 /* Re-review (12 Nov): a message sent during the hold still showed Working in its thread ("Working · 1s … 29s"), a new
@@ -372,9 +368,6 @@ test('restartHeld: queued, a new chat on its way and a 202 held for the restart 
   await h.settle(); await h.settle();
   for (const [k, s] of Object.entries(heldRows)) assert.equal(h.api.restartHeld(s), true, k);
   for (const [k, s] of Object.entries(notHeld)) assert.equal(h.api.restartHeld(s), false, k);
-  const off = reach({ on: false, health: () => holding() });
-  await off.settle();
-  for (const [k, s] of Object.entries(heldRows)) assert.equal(off.api.restartHeld(s), false, 'switch off: ' + k);
   const none = reach({ health: () => ok({ status: 'ok' }) });
   await none.settle(); await none.settle();
   for (const [k, s] of Object.entries(heldRows)) assert.equal(none.api.restartHeld(s), false, 'no restart: ' + k);
@@ -403,7 +396,7 @@ test('the open thread draws no Working timer for a held send: its last turn is n
   assert.match(ctx.turnHtml({ texts: [], media: [] }, tn, true, true), /Working · 3s/);
   assert.doesNotMatch(ctx.turnHtml({ texts: [], media: [], restartHeld: true }, tn, true, true), /Working/);
   assert.match(chats, /\(held \? `<div class="ch-held-line" role="status" data-restart-held>\$\{STI\.held\}<span>Saved · sends after Wizard restarts<\/span><\/div>` : ''\)/);
-  assert.match(read('tweaks/wizard/graceful-restart/tweak.css'), /html\[data-tweaks~="wizard\/graceful-restart"\] \.ch-held-line \{/);
+  assert.match(read('core/graceful-restart.css'), /^html:root \.ch-held-line \{/m);
 });
 test('Chats list: held sends sit under their own Saved heading, never counted under Working', async () => {
   const { listFixture, sectionKeys } = await import('./fixtures/chats-list-render.mjs');
@@ -566,11 +559,11 @@ test('the outbox keeps a held send past its 10-minute retention only while the r
   assert.equal(p2.api.get(pid).compact, true);
 });
 test('no message box on screen (phone Chats list, desktop with no chat): the note floats on its own panel and takes taps', () => {
-  // reach.js marks a note whose host is not a message box (.float); tweak.css gives it the panel (Codex P2: the
+  // reach.js marks a note whose host is not a message box (.float); core/graceful-restart.css gives it the panel (Codex P2: the
   // desktop fallback host is the top bar or the page, never a .dbar, so the rule keys on the note, not the host).
   assert.match(read('core/reach.js'), /el\.classList\?\.toggle\('float', !host\.classList\?\.contains\('ch-compose'\)\)/);
-  const css = withWebParts(readFileSync(new URL('../web/tweaks/wizard/graceful-restart/tweak.css', import.meta.url), 'utf8'));
-  const rule = css.split('\n').find(l => l.startsWith('html[data-tweaks~="wizard/graceful-restart"] .ch-restart-notice.float'));
+  const css = read('core/graceful-restart.css');
+  const rule = css.split('\n').find(l => l.startsWith('html:root .ch-restart-notice.float'));
   assert.ok(rule, 'a rule for the note in the voice dock layer');
   for (const want of ['position: fixed', 'pointer-events: auto', 'background: var(--bg', 'bottom: calc(']) assert.ok(rule.includes(want), want);
 });

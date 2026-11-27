@@ -10,10 +10,11 @@ function mount(url) {
   const details = { open: true }, button = { addEventListener() {} }, message = {}, rows = {}, remote = {}, direct = { hidden: true }, directLink = { removeAttribute() {} };
   const elements = { iframe: frame, details, '[data-recovery-check]': button, '[data-recovery-message]': message, '[data-recovery-rows]': rows, '[data-recovery-remote]': remote, '[data-recovery-direct]': direct, '[data-recovery-direct-link]': directLink };
   const root = { isConnected: true, classList: { add() {}, remove() {} }, querySelector(selector) { assert.ok(elements[selector], selector); return elements[selector]; } };
-  const context = { navigator: { onLine: true }, document: { hidden: false }, location: { hostname: 'wizard.test' }, Date, Event, AbortController,
+  // The graceful restart watch (wizard-ux issue 1362) stays out: the page loads hidden, so its first health read is skipped.
+  const context = { navigator: { onLine: true }, document: { hidden: true }, location: { hostname: 'wizard.test' }, Date, Event, AbortController,
     requestAnimationFrame(fn) { fn(); }, setTimeout(fn, ms) { timers.set(++id, { fn, ms }); return id; }, clearTimeout(id) { timers.delete(id); }, dispatchEvent() {},
     fetch: async (url, options) => { calls.push([url, options]); return { ok: true, status: 200, json: async () => ({ overall: 'ok', checks: [] }) }; } };
-  context.window = context; vm.runInNewContext(source, context);
+  context.window = context; vm.runInNewContext(source, context); context.document.hidden = false;
   context.WizReach.mountRecovery(root, url);
   return { calls, frame, details, timers, handlers };
 }

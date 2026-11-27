@@ -147,6 +147,8 @@ html[data-shell="phone"] .ch-fsheet:has([data-chfocusopt]) { bottom: calc(var(--
 .st.needs { background: var(--amber); box-shadow: 0 0 8px var(--amber); }
 .ch-empty { margin: 24px 16px; padding: 18px; border-radius: 16px; text-align: center; color: var(--ink-3); font-size: 14px; line-height: 1.5; background: rgba(205, 190, 255, .04); border: 1px solid var(--line); }
 .ch-empty b { color: var(--ink); font-size: 16px; }
+/* Sent: how often typed tasks were guessed right (wizard-agent-service issue 669, switch wizard/smart-inbox). */
+.ch-st-typed { margin: 8px 16px 4px; color: var(--ink-3); font-size: var(--wz-text-sm, 0.8125rem); line-height: 1.4; }
 .ch-readerr .pbtn { position: relative; margin-top: 12px; height: 34px; padding: 0 16px; border-radius: 99px; background: rgba(143, 99, 255, .35); color: var(--ink); font-size: 13px; font-weight: 700; }
 .ch-readerr .pbtn::after { content: ''; position: absolute; top: 50%; left: 50%; width: calc(100% + 12px); min-width: 44px; height: 44px; transform: translate(-50%, -50%); }
 .ch-readerr .pbtn + .pbtn { margin-left: 6px; background: transparent; border: 1px solid var(--line-2); color: var(--ink-2); }
