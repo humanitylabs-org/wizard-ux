@@ -812,6 +812,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
      * existing default-browser open.
      */
     private void openPanel(Uri u) {
+        if (openInApp(u)) return;
         android.content.pm.PackageManager pm = getPackageManager();
         java.util.List<String> providers = new java.util.ArrayList<>();
         try {
@@ -830,6 +831,40 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         tab.intent.setPackage(pkg);
         try { tab.launchUrl(this, u); }
         catch (ActivityNotFoundException | SecurityException e) { openInOwnBrowser(u); }
+    }
+
+    /**
+     * A link an installed app owns (YouTube, Spotify, Instagram, Maps…) opens in that app, the way every Android app does,
+     * before the browser panel (wizard-ux issue 1948: Custom Tabs never hand their first URL to an app). It follows
+     * Android's own per-app "Open supported links" choice: Android 11+ starts only a non-browser app the system would
+     * pick for the link (FLAG_ACTIVITY_REQUIRE_NON_BROWSER), else throws and the panel opens as before. Never for a link
+     * this app claims itself (the owner's own Wizard), so it can't loop back into Wizard. True when an app took it.
+     */
+    private boolean openInApp(Uri u) {
+        android.content.pm.PackageManager pm = getPackageManager();
+        Intent view = new Intent(Intent.ACTION_VIEW, u).addCategory(Intent.CATEGORY_BROWSABLE);
+        java.util.List<String> handlers = new java.util.ArrayList<>();
+        try {
+            for (android.content.pm.ResolveInfo ri : pm.queryIntentActivities(view, android.content.pm.PackageManager.MATCH_ALL))
+                if (ri.activityInfo != null) handlers.add(ri.activityInfo.packageName);
+        } catch (RuntimeException ignored) { }
+        if (PanelLinks.claimsSelf(handlers, getPackageName())) return false;
+        if (Build.VERSION.SDK_INT >= 30) {
+            view.addFlags(Intent.FLAG_ACTIVITY_REQUIRE_NON_BROWSER);
+        } else {
+            java.util.List<String> browsers = new java.util.ArrayList<>(), preferred = new java.util.ArrayList<>();
+            try {
+                for (android.content.pm.ResolveInfo ri : pm.queryIntentActivities(new Intent(Intent.ACTION_VIEW, Uri.parse("https://no-app-owns-this.invalid/")).addCategory(Intent.CATEGORY_BROWSABLE), android.content.pm.PackageManager.MATCH_ALL))
+                    if (ri.activityInfo != null) browsers.add(ri.activityInfo.packageName);
+                for (android.content.pm.ResolveInfo ri : pm.queryIntentActivities(view, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY))
+                    if (ri.activityInfo != null) preferred.add(ri.activityInfo.packageName);
+            } catch (RuntimeException e) { return false; }
+            String app = PanelLinks.appFor(preferred, browsers, getPackageName());
+            if (app == null) return false;
+            view.setPackage(app);
+        }
+        try { startActivity(view); return true; }
+        catch (ActivityNotFoundException | SecurityException e) { return false; } // no app owns it: the panel, as before
     }
 
     /* ---------------- Can't reach your Wizard (James, 12 Oct: Tailscale off gave a pure black screen) ----------------
@@ -2020,24 +2055,6 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
             v.vibrate(VibrationEffect.createOneShot(d, VibrationEffect.DEFAULT_AMPLITUDE));
         }
 
-        /* ---- Clear chat notifications (wizard-ux issue 1276, switch wizard/clear-chat-notifications, off by default):
-         * the shell turns the listener on with the switch, asks for Notification access, and hands it chats the owner
-         * read in Messenger (notify/BridgedNotificationListener). ---- */
-        @JavascriptInterface
-        public String chatNotifyState() { return ai.wizards.os.notify.BridgedNotificationListener.state(MainActivity.this); }
-        @JavascriptInterface
-        public void chatNotifySwitch(boolean on) {
-            if (MainActivity.this instanceof AppSessionActivity) return;
-            ai.wizards.os.notify.BridgedNotificationListener.setOn(MainActivity.this, on);
-        }
-        @JavascriptInterface
-        public void chatNotifyAccess() {
-            if (MainActivity.this instanceof AppSessionActivity) return;
-            runOnUiThread(() -> {
-                ai.wizards.os.notify.BridgedNotificationListener.setOn(MainActivity.this, true);
-                ai.wizards.os.notify.BridgedNotificationListener.openAccess(MainActivity.this);
-            });
-        }
         /* ---- Side button opens the Agent chat (wizard-ux issue 1528, switch wizard/assist-agent-note, off by default): the
          * button is answered natively before any page runs, so the shell copies the switch here (assist/AssistNote). ---- */
         @JavascriptInterface
@@ -2113,11 +2130,6 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         @JavascriptInterface
         public boolean openAppWindow(String appId, String path, String name) {
             return MainActivity.this.openAppWindow(appId, path, name);
-        }
-        @JavascriptInterface
-        public int chatNotifyRead(String json) {
-            if (MainActivity.this instanceof AppSessionActivity) return 0;
-            return ai.wizards.os.notify.BridgedNotificationListener.chatRead(json);
         }
     }
 }

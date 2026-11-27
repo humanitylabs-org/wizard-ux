@@ -32,6 +32,26 @@ public final class PanelLinks {
         return null;
     }
 
+    /**
+     * Android 9-10 only (Android 11+ asks the system with FLAG_ACTIVITY_REQUIRE_NON_BROWSER): the installed app that owns
+     * a tapped link (YouTube, Spotify, Maps…), so it opens there instead of the panel (wizard-ux issue 1948). Null when
+     * no app but browsers handles it, or when this app itself claims the link (the owner's own Wizard: never loop back).
+     *
+     * @param handlers packages resolving a VIEW of this link, Android's preferred first
+     * @param browsers packages resolving a VIEW of a link no app owns (every one of them is a browser)
+     */
+    public static String appFor(List<String> handlers, List<String> browsers, String self) {
+        if (handlers == null || claimsSelf(handlers, self)) return null;
+        for (String h : handlers)
+            if (h != null && !h.isEmpty() && !"android".equals(h) && (browsers == null || !browsers.contains(h))) return h;
+        return null;
+    }
+
+    /** This app is among a link's handlers: it is the owner's own Wizard link, so no hand-off to an app. */
+    public static boolean claimsSelf(List<String> handlers, String self) {
+        return handlers != null && self != null && handlers.contains(self);
+    }
+
     /** Only web links go into the panel; anything else keeps its existing route. */
     public static boolean web(String scheme) { return "https".equals(scheme) || "http".equals(scheme); }
 }

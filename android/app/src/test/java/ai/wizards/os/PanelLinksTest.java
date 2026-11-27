@@ -32,6 +32,23 @@ public class PanelLinksTest {
         assertEquals("never this app", "com.android.chrome", PanelLinks.pick(Arrays.asList(SELF, "com.android.chrome"), SELF, SELF));
     }
 
+    @Test public void onOldAndroidALinkAnInstalledAppOwnsGoesToThatAppNotABrowser() { // issue 1948
+        java.util.List<String> browsers = Arrays.asList("com.brave.browser", "com.android.chrome");
+        assertEquals("YouTube owns youtube.com", "com.google.android.youtube", PanelLinks.appFor(Arrays.asList("com.brave.browser", "com.google.android.youtube", "com.android.chrome"), browsers, SELF));
+        assertNull("only browsers: the panel", PanelLinks.appFor(Arrays.asList("com.brave.browser", "com.android.chrome"), browsers, SELF));
+        assertNull("the chooser is not an app", PanelLinks.appFor(Arrays.asList("android"), browsers, SELF));
+        assertNull("nothing resolves", PanelLinks.appFor(Collections.emptyList(), browsers, SELF));
+        assertNull(PanelLinks.appFor(null, browsers, SELF));
+    }
+
+    @Test public void theOwnersOwnWizardLinkNeverLoopsBackIntoThisApp() { // issue 1948
+        assertNull(PanelLinks.appFor(Arrays.asList(SELF), Arrays.asList("com.android.chrome"), SELF));
+        assertNull("this app claims it, even next to another app", PanelLinks.appFor(Arrays.asList("com.example.other", SELF), Arrays.asList("com.android.chrome"), SELF));
+        assertTrue(PanelLinks.claimsSelf(Arrays.asList("com.android.chrome", SELF), SELF));
+        assertFalse(PanelLinks.claimsSelf(Arrays.asList("com.google.android.youtube"), SELF));
+        assertFalse(PanelLinks.claimsSelf(null, SELF));
+    }
+
     @Test public void otherwiseNullMeaningThePlainBrowserOpen() {
         assertNull(PanelLinks.pick(Collections.emptyList(), "com.android.chrome", SELF));
         assertNull(PanelLinks.pick(null, "com.android.chrome", SELF));
