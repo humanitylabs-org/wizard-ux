@@ -13,15 +13,17 @@ function harness({ on = true, desks, W, idx = 0, apps = [], pin = '', installed 
   const store = new Map(), local = new Map(pin ? [['wos.phone.slot.v1', pin]] : []), calls = { goDesk: [], closeWin: [], sheet: [], toast: [], synced: 0, saved: 0, prefs: [] };
   if (apps.length) store.set('sections.v1', { apps });
   const listeners = {};
-  const el = () => ({ listeners: {}, addEventListener(t, f) { (this.listeners[t] ||= []).push(f); }, classList: { add() {}, remove() {}, contains: () => false }, querySelectorAll: () => [], dataset: {}, before() {}, after() {} });
-  const dock = el(), launcher = el(), orbWrap = el();
+  const el = () => ({ listeners: {}, addEventListener(t, f) { (this.listeners[t] ||= []).push(f); }, classList: { add() {}, remove() {}, contains: () => false }, querySelectorAll: () => [], dataset: {}, before() {}, after() {}, id: '', className: '', innerHTML: '' });
+  const dock = el(), launcher = el(), touched = [], placed = [], made = [];
+  // The orb as the shell has it: every read or write of it is recorded, so a test can see the bar left it alone.
+  const orbWrap = new Proxy({}, { get(_, k) { if (k === 'before' || k === 'after') return n => { touched.push(k); placed.push(n); }; touched.push('get:' + String(k)); return undefined; }, set(_, k) { touched.push('set:' + String(k)); return true; } });
   const root = { attrs: { 'data-tweaks': on ? 'wizard/phone-sections other/x' : 'other/x' }, dataset: { shell: 'phone' }, getAttribute(k) { return this.attrs[k] ?? null; } };
   const APP = Object.fromEntries(installed.map(id => [id, { id, name: id[0].toUpperCase() + id.slice(1), url: `/${id}/`, kind: 'wizard' }]));
   APP.wizard = { id: 'wizard', name: 'Chats', kind: 'chats' };
   const appVars = { desks, W, idx, sheet: null, dockSwiped: 0 };
   const ctx = {
     window: { WizCore: { appParts: {}, workspaceNav: { label: id => ({ wizard: '12', messenger: '3' })[id] || '' } } },
-    document: { documentElement: root, getElementById: () => null, createElement: () => el() },
+    document: { documentElement: root, getElementById: () => null, createElement: () => { const e = el(); made.push(e); return e; } },
     localStorage: { getItem: k => local.has(k) ? local.get(k) : null, setItem: (k, v) => local.set(k, String(v)) },
     MutationObserver: class { observe() {} }, addEventListener: (t, f) => { (listeners[t] ||= []).push(f); }, Date, Math, JSON, Object, Set, console,
   };
@@ -29,7 +31,7 @@ function harness({ on = true, desks, W, idx = 0, apps = [], pin = '', installed 
   vm.runInContext(src.replace("'use strict';", '') .replace(/window\.WizCore/g, 'window.WizCore'), ctx);
   const deskOfWin = id => appVars.desks.findIndex(d => d.wins.includes(id));
   const api = ctx.window.WizCore.appParts.sections({
-    $: s => ({ '#dock': dock, '#orbWrap': orbWrap, '#secL': null, '#secR': null })[s] ?? null, APP, APPS: Object.values(APP), appVars, CHATS_APP: { id: 'wizard', name: 'Chats' },
+    $: s => ({ '#dock': dock, '#orbWrap': orbWrap })[s] ?? made.find(e => '#' + e.id === s) ?? null, APP, APPS: Object.values(APP), appVars, CHATS_APP: { id: 'wizard', name: 'Chats' },
     closeSheets: () => { appVars.sheet = null; }, closeWin: (id, quiet) => { calls.closeWin.push(id); const i = deskOfWin(id); if (i < 0) return; const d = appVars.desks[i]; d.wins = d.wins.filter(x => x !== id); delete appVars.W[id]; if (!d.wins.length) { const cur = appVars.desks[appVars.idx]; appVars.desks = appVars.desks.filter(x => x !== d); appVars.idx = Math.max(0, appVars.desks.indexOf(cur)); } },
     esc: s => String(s), goDesk: (n, silent) => { calls.goDesk.push(n); const to = appVars.desks[n]; const k = api.sectionsArrange(to); appVars.idx = k >= 0 ? k : n; }, HOME: 0, launcher,
     LIVE: { setPhoneSlot: v => calls.prefs.push(v) }, mainChats: w => !!w && w.app === 'chats' && !w.agent,
@@ -38,7 +40,7 @@ function harness({ on = true, desks, W, idx = 0, apps = [], pin = '', installed 
     syncDesks: () => { calls.synced++; }, toast: (i, t) => calls.toast.push(t), vib() {}, winApp: w => APP[w.appId] || (w.app === 'chats' ? APP.wizard : { name: '?' }),
   });
   const P = ctx.window.WizCore.phoneSections, clone = v => JSON.parse(JSON.stringify(v));
-  return { api: { ...api, sectionsStops: () => clone(api.sectionsStops()) }, appVars, calls, store, P: { ...P, sections: () => clone(P.sections()) }, order: () => clone(appVars.desks.map(d => d.id)) };
+  return { api: { ...api, sectionsStops: () => clone(api.sectionsStops()) }, appVars, calls, store, P: { ...P, sections: () => clone(P.sections()) }, order: () => clone(appVars.desks.map(d => d.id)), orbTouched: () => clone(touched), placed: () => placed };
 }
 const frame = (id, appId, extra = {}) => ({ id, app: 'frame', appId, ...extra });
 function strip() {
@@ -119,4 +121,13 @@ test('the Messenger slot: Messenger by default, a pinned app instead, the defaul
   assert.equal(none.P.slotId(), '', 'no chat app installed: no slot app (a tap opens Pin an app here)');
   const other = harness({ W: strip().W, desks: strip().desks, installed: ['notes', 'telegram'] });
   assert.equal(other.P.slotId(), 'telegram', 'no Messenger: the first chat/messaging app');
+});
+
+// owner-correction: humanitylabs-org/wizard-ux#1929 · 2026-11-27 · "keep today's orb exactly as it is"
+test('drawing the bar never touches the orb: the tiles go beside it, the orb element itself is left as it is', () => {
+  const { W, desks } = strip(), h = harness({ W, desks, idx: 1 });
+  h.api.sectionsArrange(desks.find(d => d.id === 'dn'));
+  h.api.sectionsPaint();
+  assert.deepEqual(h.orbTouched(), ['before', 'after'], 'only a sibling on each side of the orb');
+  assert.equal(h.placed().length, 2, 'two tile groups, one each side');
 });
