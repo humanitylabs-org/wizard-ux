@@ -10,7 +10,7 @@
 window.WizCore = window.WizCore || {};
 window.WizCore.appParts = window.WizCore.appParts || {};
 window.WizCore.appParts.desks = function ({ $, appVars, CHATS, deskName, esc, HOME, isReviewDesk, markVisibleThreadsSeen, placeTrack, save, scheduleParking, syncDesks, syncImmersive, tourEv, vib, winApp }) {
-  let closeOverview, liftSettings, newDesk, openOverview, paintOrbBadge, syncBound, syncReviewChip; // late-bound: app.js declares these after the call, see bindLate
+  let closeOverview, liftSettings, newDesk, openOverview, paintOrbBadge, sectionsArrange, sectionsPaint, syncBound, syncReviewChip; // late-bound: app.js declares these after the call, see bindLate
   const undoLastMove = () => {
     if (!appVars.lastMove || Date.now() - appVars.lastMove.at > 1500) return;
     const back = appVars.desks.findIndex(d => d.id === appVars.lastMove.from); appVars.lastMove = null;
@@ -25,6 +25,8 @@ window.WizCore.appParts.desks = function ({ $, appVars, CHATS, deskName, esc, HO
     const from = appVars.desks[appVars.idx], to = appVars.desks[n];
     if (from !== to && !CHATS.beforeNavigate(to?.wins || [])) { placeTrack(0, true); return; }
     if (from && to && from !== to && !from.home && !from.wins.length) { appVars.desks = appVars.desks.filter(d => d !== from); syncDesks(); n = appVars.desks.indexOf(to); }
+    // Phone sections (wizard-ux#1929, switch wizard/phone-sections): the strip keeps the section desks first, in bar order.
+    if (sectionsArrange) { const k = sectionsArrange(to); if (k >= 0) n = k; }
     const moved = from !== to;
     if (moved && appVars.sheet === 'settings' && !keepSettings) liftSettings(from && from.id); // explicit navigation parks Settings on the desk you leave
     appVars.idx = n;
@@ -74,6 +76,7 @@ window.WizCore.appParts.desks = function ({ $, appVars, CHATS, deskName, esc, HO
     $('#dotsR').innerHTML = R.map(mk).join('') + (R.length && R[R.length - 1] < appVars.desks.length - 1 ? '<i class="dmore"></i>' : '')
       + (atPickerEnd() ? '' : '<button class="ddot sig dplus" data-plus aria-label="New desk: pick an app"><span class="dsg"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span></button>');
     if (typeof phoneNavFit === 'function') phoneNavFit();
+    if (typeof sectionsPaint === 'function') sectionsPaint(); // the four section tiles (switch wizard/phone-sections)
   }
   /* Dots: tap = jump to that desk. Long-press any dot = peek every desk as a
    * stack of cards (Android recents feel); tap a card to land there. */
@@ -123,5 +126,5 @@ window.WizCore.appParts.desks = function ({ $, appVars, CHATS, deskName, esc, HO
   // Turning the switch (or skin) on or off, a rotation or a resize: the buttons change size, so fit them again.
   new MutationObserver(() => renderDots()).observe(document.documentElement, { attributes: true, attributeFilter: ['data-tweaks', 'data-skin'] });
   addEventListener('resize', () => { if (phoneNavOn()) phoneNavFit(); });
-  return { announce, atPickerEnd, deskSigil, endDotHold, goDesk, renderDots, bindLate: v => { if ('closeOverview' in v) closeOverview = v.closeOverview; if ('liftSettings' in v) liftSettings = v.liftSettings; if ('newDesk' in v) newDesk = v.newDesk; if ('openOverview' in v) openOverview = v.openOverview; if ('paintOrbBadge' in v) paintOrbBadge = v.paintOrbBadge; if ('syncBound' in v) syncBound = v.syncBound; if ('syncReviewChip' in v) syncReviewChip = v.syncReviewChip; } };
+  return { announce, atPickerEnd, deskSigil, endDotHold, goDesk, renderDots, bindLate: v => { if ('closeOverview' in v) closeOverview = v.closeOverview; if ('liftSettings' in v) liftSettings = v.liftSettings; if ('newDesk' in v) newDesk = v.newDesk; if ('openOverview' in v) openOverview = v.openOverview; if ('paintOrbBadge' in v) paintOrbBadge = v.paintOrbBadge; if ('sectionsArrange' in v) sectionsArrange = v.sectionsArrange; if ('sectionsPaint' in v) sectionsPaint = v.sectionsPaint; if ('syncBound' in v) syncBound = v.syncBound; if ('syncReviewChip' in v) syncReviewChip = v.syncReviewChip; } };
 };

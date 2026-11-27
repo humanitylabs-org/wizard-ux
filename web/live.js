@@ -498,6 +498,8 @@
     set chatLayout(v) { const x = v === 'status' ? 'status' : 'day'; try { localStorage.setItem(LAYOUT_KEY, x); } catch (e) {} putPrefs({ chatLayout: x }); },
     set archiveAfterDays(d) { try { localStorage.setItem(ARCH_KEY, String(d)); } catch (e) {} putPrefs({ archiveAfterDays: d }); },
     putPrefs,
+    // The phone bar's pinned slot (wizard-ux#1929): this device at once, then the box for every device.
+    setPhoneSlot: id => { const v = typeof id === 'string' && /^[A-Za-z0-9._-]{0,80}$/.test(id) ? id : ''; try { localStorage.setItem('wos.phone.slot.v1', v); } catch (_) {} return putPrefs({ phoneSlot: v }); },
     workingOrder: () => { try { return window.WizChatsListModel.workingOrderOf(localStorage.getItem('wos.chats.workingOrder.v1')); } catch (_) { return 'alphabetical'; } },
     setWorkingOrder: o => {
       if (!window.WizChatsListModel.WORKING_SORTS.some(([v]) => v === o)) return false;

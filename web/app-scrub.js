@@ -10,7 +10,15 @@
 window.WizCore = window.WizCore || {};
 window.WizCore.appParts = window.WizCore.appParts || {};
 window.WizCore.appParts.scrub = function ({ $, appVars, BAR_FLICK_MIN, BAR_FLICK_MS, BAR_FLICK_STEPS, CHATS, endDotHold, goDesk, HOME, parkDesks, placeTrack, renderDots, secOf, swipeDesk, tourEv, track, vib }) {
-  let liftSettings, SC_STEP, scLabel, scrub; // late-bound: app.js declares these after the call, see bindLate
+  let liftSettings, SC_STEP, scLabel, scrub, sectionsStops; // late-bound: app.js declares these after the call, see bindLate
+  /* Where a scrub of `steps` desks from desk `start` lands. With phone sections on (wizard-ux#1929) it steps through the
+   * section desks only (sectionsStops: their indexes in bar order), counted from the section the start desk is in. */
+  const scrubTo = (start, steps) => {
+    const stops = typeof sectionsStops === 'function' ? sectionsStops() : null;
+    if (!stops || !stops.length) return Math.max(0, Math.min(appVars.desks.length - 1, start - steps));
+    let k = stops.length - 1; while (k > 0 && stops[k] > start) k--;
+    return stops[Math.max(0, Math.min(stops.length - 1, k - steps))];
+  };
   const barScrubBack = s => { if (s.live) { appVars.idx = s.start; placeTrack(0, true); renderDots(); parkDesks(false); } s.live = false; barScrubPeek(false); scrub.classList.remove('on'); };
   // The hovered desk and its neighbours render while the scrub points at it (parked desks skip rendering); the track
   // slides quicker so the desk follows each step. Desks the scrub has left behind (3+ away; 2 away may still be sliding
@@ -20,7 +28,7 @@ window.WizCore.appParts.scrub = function ({ $, appVars, BAR_FLICK_MIN, BAR_FLICK
     if (n !== false) appVars.desks.forEach((_, i) => { const d = Math.abs(i - n); if (d <= 1) secOf(i)?.classList.remove('parked'); else if (d > 2) secOf(i)?.classList.add('parked'); });
   };
   // Where the scrub points: counted from x0, set when the scrub went live (12 px before that point, the slop).
-  const barScrubAt = (s, x) => Math.max(0, Math.min(appVars.desks.length - 1, s.start - Math.round((x - s.x0) / SC_STEP)));
+  const barScrubAt = (s, x) => scrubTo(s.start, Math.round((x - s.x0) / SC_STEP));
   const barScrubLive = (s, e) => { s.live = true; s.x0 = e.clientX - Math.sign(e.clientX - s.x) * 12; barScrubPeek(s.at); placeTrack(0, true); scrub.classList.add('on'); scLabel(s.at); vib(10); };
   // The orb's sideways drag hands its finger to the bar scrub (the orb keeps tap, hold and up/down). Its moves and
   // release bubble from #orbWrap to #dock, so the dock's own handlers below run the scrub from here on.
@@ -65,12 +73,12 @@ window.WizCore.appParts.scrub = function ({ $, appVars, BAR_FLICK_MIN, BAR_FLICK
     }
     // The last move may not have come in before the release: land where the finger let go. A quick long swipe counts
     // its whole travel from touch-down, first move included (a lone far first move is not lost to the slop).
-    const n = quick ? Math.max(0, Math.min(appVars.desks.length - 1, s.start - Math.round(dx / SC_STEP))) : barScrubAt(s, e.clientX);
+    const n = quick ? scrubTo(s.start, Math.round(dx / SC_STEP)) : barScrubAt(s, e.clientX);
     if (n !== s.at && (n === s.start || CHATS.beforeNavigate(appVars.desks[n]?.wins || []))) s.at = n;
     // The scrub moved idx as it went; land from the start desk so goDesk runs its desk-leave work (Resources, a Home
     // card's Chats chip, an empty desk going away, an open link) exactly as a tap or flick does.
     barScrubPeek(false); scrub.classList.remove('on'); appVars.idx = s.start; goDesk(s.at, true); tourEv('desk', { home: appVars.idx === HOME });
   };
   $('#dock').addEventListener('pointerup', dockEnd); $('#dock').addEventListener('pointercancel', dockEnd);
-  return { barScrubDrop, barScrubJoin, bindLate: v => { if ('liftSettings' in v) liftSettings = v.liftSettings; if ('SC_STEP' in v) SC_STEP = v.SC_STEP; if ('scLabel' in v) scLabel = v.scLabel; if ('scrub' in v) scrub = v.scrub; } };
+  return { barScrubDrop, barScrubJoin, bindLate: v => { if ('liftSettings' in v) liftSettings = v.liftSettings; if ('SC_STEP' in v) SC_STEP = v.SC_STEP; if ('scLabel' in v) scLabel = v.scLabel; if ('scrub' in v) scrub = v.scrub; if ('sectionsStops' in v) sectionsStops = v.sectionsStops; } };
 };
