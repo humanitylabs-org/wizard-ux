@@ -488,6 +488,8 @@
     // Server-owned, agent-qualified receipts: activity metadata only, never transcript text.
     seenOf(s) { return this.seen; },
     seenRecord(s) { return this.seen?.threads?.[seenKeyOf(s)]; },
+    // The box's snooze record for a thread (thread-dispositions), also for one the list never carries (issue 1928).
+    dispositionOf(s) { return (s && this.deferred?.[seenKeyOf(s)]) || null; },
     workGroups(sessions, now) { return groupWork(sessions || this.unified(), now); },
     readyByPriority: byPriority,
     readyRank,

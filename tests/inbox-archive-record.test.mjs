@@ -64,7 +64,7 @@ test('a thread with no waiting record (or a restore with no archive here) writes
   assert.equal(calls.length, before);
 });
 
-function part({ tweaks = 'wizard/inbox-rows', records, threads = {}, peek }) {
+function part({ tweaks = 'wizard/inbox-rows', records, threads = {}, peek, extra = {} }) {
   const ctx = vm.createContext({ console, Date, Promise, String, Number, Set, Map, Array, Object, JSON, setTimeout });
   ctx.window = ctx; ctx.globalThis = ctx;
   ctx.document = { documentElement: { dataset: { tweaks } } };
@@ -73,7 +73,7 @@ function part({ tweaks = 'wizard/inbox-rows', records, threads = {}, peek }) {
   let emits = 0;
   const LIVE = { quietReply: () => false, cardAt: () => new Date().toISOString(), workGroups: rows => ({ working: [], ready: rows, deferred: [], archive: [] }),
     chanDaily: { state: () => ({}) }, sentLog: { state: () => ({ ok: true, rows: [] }) }, agentInbox: { needs: () => records },
-    session: id => threads[id] || null, ...(peek ? { peekSession: peek } : {}), emit: () => { emits++; } };
+    session: id => threads[id] || null, ...(peek ? { peekSession: peek } : {}), emit: () => { emits++; }, ...extra };
   const api = ctx.WizCore.chatsParts.inboxrows({ actMark: () => '', actNeeds: () => false, actUnread: () => false, AGS: () => ({ sigil: () => '', defaultId: () => 'hermes' }), agentName: id => id || 'Wizard', agentRec: id => ({ id }),
     ago: () => '', attOf: s => s.attention || null, chanAt: () => 0, chanFace: n => ({ emoji: '💬', label: n, own: false }), chanStore: () => ({ channels: [] }), chatVars: { readyOrder: 'newest', secOpen: {} }, ch: () => ({}),
     clip: (s, n) => String(s).slice(0, n), elOf: () => null, esc: s => String(s ?? ''), isWorking: () => false, LIVE, noteAt: () => 0, noteRow: () => '', renderChatList: () => {}, rowAgent: () => 'hermes',
@@ -91,6 +91,17 @@ test('the Inbox leaves out a record whose thread is archived or snoozed, on this
   assert.equal(d.extra, 1, 'the count and badges agree');
   threads.bg1.archived = false; // Undo / Restore
   assert.deepEqual(drawn(api, ctx).ids.sort(), [RID('1'), RID('3')]);
+});
+
+test('a thread snoozed on another device (the box\'s snooze record) keeps its task out; a later restore brings it back', () => {
+  const threads = { bg8: { id: 'bg8', runtime: 'direct', hidden: true } }, disp = { 'direct:bg8': { deferred: true, updatedAt: new Date().toISOString() } };
+  const { api, ctx } = part({ records: [rec('8', 'bg8')], threads });
+  const live = { dispositionOf: s => disp[`${s.runtime}:${s.id}`] || null };
+  const p2 = part({ records: [rec('8', 'bg8')], threads, extra: live });
+  assert.deepEqual(drawn(p2.api, p2.ctx).ids, [], 'snoozed elsewhere: out');
+  disp['direct:bg8'] = { deferred: false, updatedAt: new Date().toISOString() };
+  assert.deepEqual(drawn(p2.api, p2.ctx).ids, [RID('8')], 'restored: back');
+  assert.deepEqual(drawn(api, ctx).ids, [RID('8')], 'no snooze record: shown');
 });
 
 test('a hidden thread never opened here is read by id; hidden while that first read is out; shown when it fails', async () => {

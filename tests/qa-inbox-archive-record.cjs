@@ -10,6 +10,8 @@
 //   3. T3 opened from a link in another thread (#1920: Archive steps back to the linking thread): R3's row is gone when
 //      you go back to the list.
 //   4. Undo right after the archive in 1 brings T1 and R1's row back.
+//   6. A record whose thread is snoozed (on another device, or here from inside the thread) is not in the Inbox, also
+//      after a reload.
 //   5. Smart inbox on, R4 whose thread's last status line is check: not in the Inbox, no Needs you dot anywhere for it;
 //      the needs_you record and a waiting_for_approval thread keep the amber dot.
 // QA_EXPECT=broken: run against main (QA_WEB=<main>/web) and print what fails instead of failing.
@@ -23,8 +25,8 @@ const SHELLS = (process.env.QA_SHELLS || 'phone').split(','), SKINS = (process.e
 fs.mkdirSync(out, { recursive: true });
 const now = Date.now(), iso = t => new Date(t).toISOString(), nap = ms => new Promise(r => setTimeout(r, ms)), M = 60e3, D = 864e5;
 const rid = c => 'inbox_' + c.repeat(24);
-const R1 = rid('1'), R2 = rid('2'), R3 = rid('3'), R4 = rid('4');
-let THREADS, BOX;
+const R1 = rid('1'), R2 = rid('2'), R3 = rid('3'), R4 = rid('4'), R5 = rid('5');
+let THREADS, BOX, DISP;
 const fresh = () => ({
   'qa-read': { title: 'Garden plan', at: now - 3 * D, msgs: [['user', 'Plan the garden beds', 0], ['assistant', 'Tomatoes by the wall, herbs near the door.', 60]] },
   'qa-link': { title: 'Morning roundup', at: now - 40 * M, msgs: [['user', 'What is open?', 0], ['assistant', 'One task waits on you: [Renew the passport](/wizard/?session=qa-bg3).', 60]] },
@@ -32,6 +34,7 @@ const fresh = () => ({
   'qa-bg1': { hidden: true, title: 'Fix archive navigation', at: now - 10 * M, attention: { state: 'needs_you', ask: 'Archive in a thread opened from a link: which way should it go?' }, msgs: [['user', 'Fix archive navigation', 0], ['assistant', 'Two ways it can go. Which one?', 60]] },
   'qa-bg2': { hidden: true, archived: true, title: 'Order printer ink', at: now - 50 * M, attention: { state: 'needs_you', ask: 'Black only or all four?' }, msgs: [['user', 'Order printer ink', 0], ['assistant', 'Black only or all four?', 60]] },
   'qa-bg3': { hidden: true, title: 'Renew the passport', at: now - 30 * M, attention: { state: 'needs_you', ask: 'Which photo should I upload?' }, msgs: [['user', 'Renew the passport', 0], ['assistant', 'Which photo should I upload?', 60]] },
+  'qa-bg5': { hidden: true, title: 'Book the dentist', at: now - 15 * M, attention: { state: 'needs_you', ask: 'Tuesday or Thursday?' }, msgs: [['user', 'Book the dentist', 0], ['assistant', 'Tuesday or Thursday?', 60]] },
   'qa-bg4': { hidden: true, title: 'Signal chat names', at: now - 20 * M, attention: { state: 'check', ask: 'Renamed the chats. Check they look right.' }, msgs: [['user', 'Rename the Signal chats', 0], ['assistant', 'Renamed the chats. Check they look right.', 60]] },
 });
 const rec = (id, thread, title, ask, min) => ({ id, kind: 'needs_you', state: 'new', worker: true, agent: 'hermes', thread_id: thread, title, last_update: ask, created_at: now - 3 * 3600e3, updated_at: now - min * M });
@@ -40,6 +43,7 @@ const boxFresh = () => ({ records: [
   rec(R2, 'qa-bg2', 'Order printer ink', 'Black only or all four?', 50),
   rec(R3, 'qa-bg3', 'Renew the passport', 'Which photo should I upload?', 30),
   rec(R4, 'qa-bg4', 'Signal chat names', 'Renamed the chats. Check they look right.', 20),
+  rec(R5, 'qa-bg5', 'Book the dentist', 'Tuesday or Thursday?', 15),
 ], patches: [] });
 const raw = (sid, s) => ({ id: sid, title: s.title, runtime: 'direct', status: s.status || 'completed', updated_at: iso(s.at), updatedAt: iso(s.at), last_active: s.at / 1000, message_count: s.msgs.length, messageCount: s.msgs.length,
   preview: s.msgs.at(-1)?.[1] || '', latest_message: { role: s.msgs.at(-1)?.[0], content: s.msgs.at(-1)?.[1], timestamp: s.at / 1000 },
@@ -54,7 +58,7 @@ const report = { origin, web, cases: [] };
       const phone = shell === 'phone', stem = `${shell}-${skin}`;
       const entry = { stem, errors: [], refused: [], writes: [], checks: [] }; report.cases.push(entry);
       const check = (c, name, extra) => { entry.checks.push({ name, ok: !!c, ...(c ? {} : { extra }) }); if (!BROKEN) assert.ok(c, name + (extra === undefined ? '' : ' ' + JSON.stringify(extra))); };
-      THREADS = fresh(); BOX = boxFresh();
+      THREADS = fresh(); BOX = boxFresh(); DISP = { 'direct:qa-bg5': { deferred: true, updatedAt: iso(now - 5 * M) } }; // snoozed on another device
       const context = await browser.newContext({ viewport: phone ? { width: 412, height: 915 } : { width: 1440, height: 960 }, isMobile: phone, hasTouch: phone, serviceWorkers: 'block', ...(phone ? { userAgent: 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Mobile Safari/537.36' } : {}) });
       try {
         await context.routeWebSocket('**/*', w => w.close());
@@ -74,6 +78,7 @@ const report = { origin, web, cases: [] };
             if (method === 'PUT' && p === '/wizard/thread-seen') return r.fulfill({ json: { ok: true, state: body.state } });
             if (method === 'PUT' && p === '/wizard/v1/channels/read') return r.fulfill({ json: { at: {} } });
             if (method === 'PATCH' && p === '/wizard/v1/ui-preferences') return r.fulfill({ json: {} });
+            if (method === 'PUT' && p === '/wizard/thread-dispositions') { const rec = { sessionId: body.sessionId, deferred: !!body.deferred, updatedAt: new Date().toISOString() }; DISP[`${body.runtime || 'direct'}:${body.sessionId}`] = rec; return r.fulfill({ json: { record: rec } }); }
             const am = /^\/wizard\/v1\/agent-inbox\/(inbox_[a-f0-9]{24})$/.exec(p);
             if (method === 'PATCH' && am) {
               BOX.patches.push({ id: am[1], ...body }); const x = BOX.records.find(y => y.id === am[1]);
@@ -99,6 +104,7 @@ const report = { origin, web, cases: [] };
             return r.fulfill({ json: { records: [], check: null, stay: [] } });
           }
           if (p === '/wizard/thread-seen') return r.fulfill({ json: SEEN() });
+          if (p === '/wizard/thread-dispositions') return r.fulfill({ json: { state: DISP } });
           if (p === '/wizard/v1/pages/wizard-look/look.json') return r.fulfill({ status: 404, json: { error: 'not_here' } });
           if (p === '/wizard/v1/ui-preferences') return r.fulfill({ json: { migrations: { 'launcher-seed-v1': true } } });
           // The box's list never carries a hidden worker thread (wizard-agent-service docs/agent-inbox.md).
@@ -136,6 +142,7 @@ const report = { origin, web, cases: [] };
         check(keys.includes('ibrec:' + R1), '1 the Inbox shows R1\'s row', keys);
         check(!keys.includes('ibrec:' + R2), '2 R2 (its thread already archived) is not in the Inbox', keys);
         check(!keys.includes('ibrec:' + R4), '5 R4 (its thread says check) is not in the Inbox', keys);
+        check(!keys.includes('ibrec:' + R5), '6 R5 (its thread snoozed on another device) is not in the Inbox', keys);
         check(!(entry.first?.allDots || []).some(r => (r.key === 'ibrec:' + R4 || r.open === 'qa-bg4') && r.needs), '5 no Needs you dot on any row for R4', entry.first?.allDots);
         check(entry.first?.rows.find(r => r.key === 'ibrec:' + R1)?.dot, '5 the needs_you record keeps its amber dot', entry.first?.rows);
         check(entry.first?.rows.find(r => r.key === 'row:qa-appr')?.dot, '5 the approval thread keeps its amber dot', entry.first?.rows);
@@ -193,6 +200,22 @@ const report = { origin, web, cases: [] };
         entry.afterLink = await lay(); await shot('5-after-linked-archive');
         check(!(entry.afterLink?.keys || []).includes('ibrec:' + R3), '3 R3\'s row is gone from the Inbox', entry.afterLink?.keys);
         check(entry.writes.slice(w3).some(x => x.path === `/wizard/v1/agent-inbox/${R3}` && x.body.action === 'archive'), '3 the record archive was sent', entry.writes.slice(w3));
+        // 6. Snooze R1's thread from inside it (the Snooze picker's LIVE.defer), back to the list, then reload.
+        await vis(`.ch-list [data-morph-key="ibrec:${R1}"] [data-chrunopen]`).click();
+        await vis('[data-chact="done"]').waitFor({ timeout: 10000 }); await nap(400);
+        // QA_SNOOZE=live: the bare LIVE.defer call instead of the thread's Snooze button and the picker's Someday.
+        if (process.env.QA_SNOOZE === 'live') check(await page.evaluate(() => window.WizLive.defer('qa-bg1')), '6 the thread snoozed');
+        else { await vis('[data-chact="snooze"]').click(); await vis('[data-boom-someday]').click(); await page.waitForFunction(() => window.WizLive.session('qa-bg1')?.deferred === true && !window.WizLive.busy('qa-bg1'), null, { timeout: 8000 }).catch(() => {}); check(await page.evaluate(() => window.WizLive.session('qa-bg1')?.deferred === true), '6 the thread snoozed'); }
+        if (phone) await page.evaluate(() => __wos.onBack()); else await openList();
+        await nap(1200);
+        entry.afterSnooze = await lay(); await shot('6-after-snooze');
+        check(!(entry.afterSnooze?.keys || []).includes('ibrec:' + R1), '6 R1 is out of the Inbox once its thread is snoozed', entry.afterSnooze?.keys);
+        await page.reload(); await page.waitForFunction(() => (window.__wux || window.__wos) && window.WosExperience?.state.tweaks.length && !window.WosExperience.state.busy);
+        await page.addStyleTag({ content: '#wosWelcome{display:none!important}' });
+        await page.waitForFunction(() => (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/smart-inbox'), null, { timeout: 15000 });
+        await openList(); await vis('.ch-tabbar').waitFor({ timeout: 15000 }); await nap(2000);
+        entry.snoozeReload = await lay();
+        check(!(entry.snoozeReload?.keys || []).includes('ibrec:' + R1) && !(entry.snoozeReload?.keys || []).includes('ibrec:' + R5), '6 after a reload both snoozed tasks stay out', entry.snoozeReload?.keys);
         check(entry.errors.length === 0, 'no browser errors', entry.errors);
         check(entry.refused.filter(x => x.reason === 'unexpected-write').length === 0, 'no unexpected writes', entry.refused);
         entry.pass = entry.checks.every(c => c.ok);
