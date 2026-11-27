@@ -9,6 +9,7 @@
 
   /* ================= message parsing ================= */
   const INTERNAL = ['[IMPORTANT: Background process ', '[ASYNC DELEGATION BATCH COMPLETE', '[Wizard follow-through] The delegated results', '[CONTEXT COMPACTION', '[CONTEXT SUMMARY]:', '[PRIOR CONTEXT', '[Your active task list was preserved', '[Your previous agent loop was paused', '[James requested recovery', '[OUT-OF-BAND', '[SYSTEM:'];
+  const REPORTER = /^\s*\[reporter\]/;
   const partsText = c => typeof c === 'string' ? c
     : Array.isArray(c) ? c.map(p => typeof p === 'string' ? p : p && typeof p === 'object' && typeof p.text === 'string' ? p.text : '').filter(Boolean).join('\n')
     : c && typeof c === 'object' ? String(c.text || c.content || '') : '';
@@ -28,8 +29,8 @@
   }
   // [WIZARD_TWEAK_V1]{"id":"wizard/inbox-rows"}[/WIZARD_TWEAK_V1] (or {"ids":[…]}), on its own line: the reply carries
   // a tweak's live switch (WosSettings.tweakCard, the same row as Settings › Look). Ids only; a malformed marker is hidden.
-  // An app feature switch `<app id>:<switch id>` (wizard.app-switches/1) parses too; the card shows it only while the
-  // switch wizard/chat-app-switches is on (wizard-ux issue 1560) and drops it otherwise, as before.
+  // An app feature switch `<app id>:<switch id>` (wizard.app-switches/1) parses too and draws the app's own switch row
+  // (wizard-ux issue 1560).
   const TWEAK_ID = /^(?:[a-z0-9][a-z0-9-]*\/[a-z0-9][a-z0-9-]*|[a-z0-9][a-z0-9-]{0,62}:[a-z0-9][a-z0-9-]{0,63})$/, TWEAK_RE = /\[WIZARD_TWEAK_V1\]\s*([\s\S]*?)\s*\[\/WIZARD_TWEAK_V1\]/g;
   function tweakIds(s) {
     const out = [];
@@ -265,6 +266,9 @@
           if (cur) cur.steps++;
           continue;
         }
+        // The Agent Service's reporter asks for a rewrite of the reply just given (wizard-agent-service scheduler.mjs
+        // checkReport). Not the owner speaking: hidden, and the reply that answers it replaces the one before (issue 1942).
+        if (REPORTER.test(raw)) { if (cur) { cur.steps++; if (cur.a) cur.rewrite = true; } continue; }
         if (kind || INTERNAL.some(p => raw.trimStart().startsWith(p))) { if (cur) cur.steps++; continue; }
         const files = chipFiles(raw), images = imagesOf(m, content);
         const rq = reply.split(raw).reply; // a Notifications Reply: shown as a card above his words
@@ -294,17 +298,28 @@
           cur = null; continue;
         }
         if (!cur) newTurn(null);
-        else if (later(cur, at)) { const prev = cur; newTurn(null); cur.at = at; cur.later = { at, after: prev.a.at }; }
+        else if (!cur.rewrite && later(cur, at)) { const prev = cur; newTurn(null); cur.at = at; cur.later = { at, after: prev.a.at }; }
         noteWork(cur, m, at);
         for (const a of h.attachments) if (!cur.media.some(x => x.id === a.id)) cur.media.push(a);
         for (const u of imagesOf(m, content)) if (!cur.media.some(x => x.url === u)) cur.media.push({ id: u.slice(-24), name: 'Image', mime: 'image/*', kind: 'image', url: u });
         if (h.attachments.length && !cur.mediaAt) cur.mediaAt = at;
         if (!t && !tweaks.length && !actions.length && !choices.length && !groups.length) { if (!h.attachments.length) cur.steps++; continue; }
         if (kind === 'commentary') { cur.notes.push(t); cur.steps++; continue; }
+        // A reporter rewrite replaces the answer it rewrites: its text and buttons go, never into the notes (issue 1942).
+        // The earlier message ids stay with a group the rewrite repeats, so a tap made on the original still counts.
+        if (cur.rewrite && kind !== 'failed_turn' && !FAILED_TURN_TEXT.has(String(t).trim())) { // a failed rewrite: the original stands
+          cur.rewrite = false;
+          if (cur.a) { const gone = cur.a; cur.a = { ...gone, text: '', buttons: (gone.buttons || []).filter(g => groups.some(x => x.group === g.group)) }; }
+        }
         // A tweak card stays with the turn's answer even when a later message in the same turn takes its place.
         const carried = [...new Set([...(cur.a?.tweaks || []), ...tweaks])].slice(0, 8), acts = [...new Set([...(cur.a?.actions || []), ...actions])].slice(0, 4);
         // Buttons from an earlier message of the same turn stay too (drawn after the answer; only this one's are placed).
-        const rbs = [...groups, ...(cur.a?.buttons || []).filter(g => !groups.some(x => x.group === g.group && x.msg === g.msg)).map(g => ({ ...g, placed: false }))].slice(0, 12);
+        // One group name is drawn once per turn (issue 1942): a later copy wins and keeps the earlier message ids in
+        // `also`, so a tap on any copy reads as the group's pick (action-cards.js rbPick).
+        const prior = cur.a?.buttons || [];
+        const rbs = [...groups.map(g => { const ids = prior.filter(x => x.group === g.group && x.msg !== g.msg).flatMap(x => [x.msg, ...(x.also || [])]);
+          return ids.length ? { ...g, also: [...new Set(ids)].slice(0, 8) } : g; }),
+          ...prior.filter(g => !groups.some(x => x.group === g.group)).map(g => ({ ...g, placed: false }))].slice(0, 12);
         if (cur.a?.text) { cur.notes.push(cur.a.text); (cur.said ||= []).push(cur.a); }
         cur.a = { ...(identity.id != null ? { id: identity.id } : {}), text: t, plainText: h.plainText, inlineMedia: h.inlineMedia, at, final: !(Array.isArray(m.tool_calls) && m.tool_calls.length), ...(carried.length ? { tweaks: carried } : {}), ...(acts.length ? { actions: acts } : {}), ...(choices.length ? { choices } : {}), ...(rbs.length ? { buttons: rbs, btext } : {}) };
         // The reply's own plain-words ask (its hidden status line, served as wizard_ask): a long reply can lead with it.

@@ -409,10 +409,6 @@
       "help": "New installs start private: Welcome leads with Tinfoil; Claude and ChatGPT are optional extras.",
       "where": "Settings › Appearance › Try new features › Private first setup"
     },
-    "wizard/chat-app-switches": {
-      "help": "A reply's switch card also lists an app's own feature switches, flipped right in the chat.",
-      "where": "Settings › Appearance › Try new features › App switches in chat"
-    },
     "wizard/reply-buttons": {
       "help": "Tap-to-answer buttons in agent replies.",
       "where": "Settings › Appearance › Try new features › Tap to answer in replies"
@@ -486,6 +482,10 @@
     "wizard/inbox-pin-top": {
       "help": "Pin threads on top.",
       "where": "Settings › Appearance › Try new features › Inbox: pin threads to the top"
+    },
+    "wizard/plain-alert-rows": {
+      "help": "Alerts look like chats.",
+      "where": "Settings › Appearance › Try new features › Inbox: alerts as chat rows"
     },
     "wizard/smart-inbox": {
       "help": "Inbox: only what blocks you.",

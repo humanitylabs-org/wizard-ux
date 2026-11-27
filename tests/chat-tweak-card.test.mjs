@@ -200,12 +200,12 @@ test('parity: main and routed threads (host-profile, container, restricted) get 
 });
 
 
-// App feature switches in the card (wizard-ux issue 1560, switch wizard/chat-app-switches): `<app id>:<switch id>` rows
+// App feature switches in the card (wizard-ux issue 1560, on for everyone): `<app id>:<switch id>` rows
 // from the App Manager's one catalog (store-install/_feature-switches), flipped through its POST like the Tracker's Try it.
 const CAL = 'wizard-calendar:drag-events';
 const calRow = on => ({ id: CAL, kind: 'app', app: 'wizard-calendar', app_name: 'Calendar', switch: 'drag-events', name: 'Drag to move events', description: 'Drag an event to a new time.', author: 'wizard-calendar', on, issues: ['humanitylabs-org/wizard-calendar#19'], locked: false });
 const listingOf = (rows, apps = [{ id: 'wizard-calendar', name: 'Calendar', ok: true }]) => ({ channel: 'latest', locked: false, switches: [{ id: 'wizard/desktop-chats', kind: 'core', name: 'x', on: false }, ...rows], apps });
-function appKit({ on = true, listing = listingOf([calRow(false)]), post, timers = null } = {}) {
+function appKit({ listing = listingOf([calRow(false)]), post, timers = null } = {}) {
   const calls = [], cards = [], opened = [];
   const res = (status, body) => ({ ok: status >= 200 && status < 300, status, json: async () => body });
   const fetch = async (url, init = {}) => {
@@ -214,7 +214,7 @@ function appKit({ on = true, listing = listingOf([calRow(false)]), post, timers 
     return post ? post(JSON.parse(init.body)) : res(200, listingOf([calRow(JSON.parse(init.body).on)]));
   };
   const E = { state: { shell: 'phone', busy: false, error: '', tweaks: [{ ...desktopChats, on: false }] }, toggle: async () => {}, authors: async () => [{ id: 'wizard', name: 'Wizard' }] };
-  const doc = { activeElement: null, baseURI: 'https://box.example/wizard-os-home/', documentElement: { dataset: { tweaks: on ? 'wizard/chat-app-switches' : '' } }, querySelectorAll: q => q === '[data-chat-tweak-card]' ? cards : [] };
+  const doc = { activeElement: null, baseURI: 'https://box.example/wizard-os-home/', documentElement: { dataset: { tweaks: '' } }, querySelectorAll: q => q === '[data-chat-tweak-card]' ? cards : [] };
   const ctx = { window: { WosExperience: E, fetch, WizOpenApp: (id, path) => { opened.push([id, path]); return true; }, ...(timers ? { setTimeout: (fn, ms) => { timers.push([fn, ms]); return timers.length; } } : {}) }, document: doc, esc: KIT.esc, URL, Date, Promise, authorList: [{ id: 'wizard', name: 'Wizard' }] };
   vm.runInNewContext(`${between(settings, '  const tweakSwitches = ', '\n')}\n${between(settings, '  const cardPending = ', '  const newTile')}\nglobalThis.api = { tweakCard, tweakCardTap, paintTweakCards, tweakSwitches, forceRead: () => appSwRead(true) };`, ctx);
   return { ...ctx.api, calls, cards, opened, doc, res };
@@ -229,15 +229,13 @@ test('app marker: <app id>:<switch id> parses (alone and mixed with core ids) an
   for (const t of [tn.a.text, tn.a.plainText]) assert.doesNotMatch(t, /WIZARD_TWEAK|drag-events/);
 });
 
-test('app card, switch off: app ids are dropped exactly as before (no card, no catalog read)', () => {
-  const k = appKit({ on: false });
-  assert.equal(k.tweakCard([CAL]), '');
-  const mixed = k.tweakCard(['wizard/desktop-chats', CAL]);
-  assert.match(mixed, /data-chat-tweak-card="wizard\/desktop-chats"/); assert.doesNotMatch(mixed, /drag-events/);
-  assert.equal(k.calls.length, 0, 'never asks the App Manager while off');
+test('app card, no switch: app ids draw without any tweak turned on, and nothing is read before a card paints', () => {
+  const k = appKit();
+  assert.equal(k.calls.length, 0, 'no catalog read before a card');
+  assert.match(k.tweakCard([CAL]), /drag-events/);
 });
 
-test('app card, switch on: name, description and the CURRENT state from the one catalog; mixed with a core row', async () => {
+test('app card: name, description and the CURRENT state from the one catalog; mixed with a core row', async () => {
   const k = appKit();
   const first = k.tweakCard(['wizard/desktop-chats', CAL]);
   assert.match(first, /Loading switch…/); assert.match(first, /Desktop-style Chats list/);

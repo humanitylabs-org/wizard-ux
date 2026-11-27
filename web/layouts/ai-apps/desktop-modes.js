@@ -6,22 +6,50 @@
  * in front and the pins) stay in desktop.js; this code reads and writes them as aadVars.<name>, its get/set accessors
  * on the same variables, so every read and write is live. desktop.js's own imports are imported here again from the
  * same modules. The body below keeps desktop.js's indentation so `git log -L` and patches port over. */
-export function modesPart({ aadVars, api, cTop, cX, doc, el, icon, MODE_KEYS, MODE_LABELS, modeBars, pTop, pW, root, sTop, toggleSide, top, windowMode }) {
-  let hidePanel; // late-bound: desktop.js declares these after the call, see bindLate
+export function modesPart({ aadVars, api, cTop, cX, doc, el, MODE_LABELS, modeBars, panes, pTop, pW, root, sTop, top, windowMode }) {
+  let setSize, setWide; // late-bound: desktop.js declares these after the call, see bindLate
+  /* The window arrangement group (wizard-ux issue 1813, James, 25 Nov 2026): two buttons, Full screen and Half screen,
+   * ONE copy (not one per pane header), shown only while two windows are open. It sits in the header of the window
+   * at the end of the row (in Full screen: the window that fills the screen) and acts on the pair that shows. Half screen
+   * is the tiled split, the chat and the app panel side by side; its centre divider is the app panel's own grip (drag it,
+   * the width is kept like the other panel widths). Half screen again, while already in it, puts the divider back in the
+   * middle (50/50); from Full screen it goes back to the split as it was. Centred, Side by side, Back to tiled and the
+   * Chats list button left the group; their ⌥⇧ keys stay (desktop.js). */
   function modeBar(slot) {
     const bar = el('span', 'aad-modes', { role: 'group', 'aria-label': 'Window arrangement' });
-    const nav = el('button', 'aad-ib aad-mode-chats', { type: 'button', 'aria-label': 'Chats list', title: 'Chats list' }); nav.append(icon('side'));
-    api.listen(nav, 'click', e => { e.stopPropagation(); windowMode('tiled', 'chats'); if (aadVars.pane) hidePanel({ home: false }); if (root.dataset.aadSide !== 'open') toggleSide(); });
-    bar.append(nav);
-    for (const [code, mode] of Object.entries(MODE_KEYS)) {
-      const label = MODE_LABELS[mode], key = 'Alt+Shift+' + code.slice(3);
-      const b = el('button', 'aad-ib aad-mode', { type: 'button', 'data-mode': mode, 'aria-label': label, 'aria-keyshortcuts': key, title: label + ' (' + key + ')' });
+    for (const [mode, label, key] of [['full', MODE_LABELS.full, 'Alt+Shift+F'], ['half', 'Half screen', '']]) {
+      const b = el('button', 'aad-ib aad-mode', { type: 'button', 'data-mode': mode, 'aria-label': label, 'aria-keyshortcuts': key || null, 'aria-pressed': 'false', title: key ? label + ' (' + key + ')' : label + ' (again: back to the middle)' });
       b.append(el('span', 'aad-mode-glyph is-' + mode, { 'aria-hidden': 'true' }));
-      api.listen(b, 'click', e => { e.stopPropagation(); windowMode(mode, slot); }); bar.append(b);
+      api.listen(b, 'click', e => { e.stopPropagation(); if (mode === 'half') halfScreen(); else windowMode(mode); }); bar.append(b);
     }
+    bar.hidden = true;
     modeBars.push({ slot, bar }); return bar;
   }
-  cTop.insertBefore(modeBar('chats'), cX); pTop.insertBefore(modeBar('app'), pW); sTop.append(modeBar('app2'));
+  const group = modeBar('top');
+  function halfScreen() {
+    const m = panes.get();
+    if (m.mode !== 'tiled') { windowMode('tiled'); return; }
+    // already in Half screen: back to the middle (the arrangement keeps no other ratio for the pair)
+    if (aadVars.wide) setWide?.(false);
+    if (m.ratio != null || Object.keys(m.weights || {}).length) panes.set({ ratio: null, weights: {} });
+    const c = aadVars.paneGeometry?.content; if (c?.width) setSize?.('app', Math.round(c.width / 2), true);
+  }
+  // header of each window, where the group goes in it, and its slot in the pane model
+  const HEADS = [[cTop, 'chats', () => cX], [pTop, 'app', () => pW], [sTop, 'app2', () => null]];
+  /** after every paint of the panes: show the group only with two windows open, in one header, pressed state */
+  function paintModes(m = panes.get()) {
+    const open = HEADS.filter(([h, slot]) => !h.hidden && (slot === 'chats' ? !!aadVars.docked : slot === 'app' ? !!aadVars.pane : !!aadVars.secondEl));
+    const on = open.length >= 2;
+    if (group.hidden === on) group.hidden = !on;
+    for (const b of group.querySelectorAll('[data-mode]')) { const p = String(b.dataset.mode === 'half' ? m.mode === 'tiled' : b.dataset.mode === m.mode); if (b.getAttribute('aria-pressed') !== p) b.setAttribute('aria-pressed', p); }
+    if (!on) return;
+    const g = aadVars.paneGeometry?.panes || {};
+    const at = m.mode === 'full' ? open.find(([, slot]) => slot === m.focus) || open.find(([, slot]) => g[slot]?.width) || open.at(-1)
+      : open.reduce((a, b) => (g[b[1]]?.x ?? 0) >= (g[a[1]]?.x ?? 0) ? b : a);
+    const [head, , before] = at, ref = before();
+    if (group.parentNode !== head || (ref && group.nextSibling !== ref)) { if (ref && ref.parentNode === head) head.insertBefore(group, ref); else head.append(group); }
+  }
+  cTop.insertBefore(group, cX);
   top.append(cTop, pTop);
   /* Wizard for Mac (wizard-os#548): the Mac app's title-bar drag strip covers #bar and lets a click through only on a
    * control INSIDE #bar (try-wizard WizardDragView reads #bar's box and the buttons in it). The chat's and the app panel's
@@ -72,5 +100,5 @@ export function modesPart({ aadVars, api, cTop, cX, doc, el, icon, MODE_KEYS, MO
     soon();
     return { soon, dispose() { ro?.disconnect(); mo?.disconnect(); box.remove(); } };
   })();
-  return { macHoles, bindLate: v => { if ('hidePanel' in v) hidePanel = v.hidePanel; } };
+  return { macHoles, paintModes, bindLate: v => { if ('setSize' in v) setSize = v.setSize; if ('setWide' in v) setWide = v.setWide; } };
 }

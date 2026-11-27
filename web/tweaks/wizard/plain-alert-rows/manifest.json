@@ -1,0 +1,14 @@
+{
+  "id": "wizard/plain-alert-rows",
+  "name": "Inbox: alerts as chat rows",
+  "version": "1.0.0",
+  "author": "wizard",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout"
+  ],
+  "issues": [
+    "humanitylabs-org/wizard-ux#1941"
+  ],
+  "description": "Alerts in Chats (Notifications items set to Chats) look like the chat rows around them instead of amber cards: the app's or agent's mark as the avatar, the source name with a small bell (the one alert marker), the title, one line of the message, the time, the unread dot and an Archive button. Tap, hold, folded counts and Archive work as before."
+}
