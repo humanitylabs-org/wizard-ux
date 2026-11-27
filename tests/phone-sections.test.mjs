@@ -28,7 +28,7 @@ function harness({ on = true, desks, W, idx = 0, apps = [], pin = '', installed 
     MutationObserver: class { observe() {} }, addEventListener: (t, f) => { (listeners[t] ||= []).push(f); }, Date, Math, JSON, Object, Set, console,
   };
   ctx.window.window = ctx.window; vm.createContext(ctx);
-  vm.runInContext(src.replace("'use strict';", '') .replace(/window\.WizCore/g, 'window.WizCore'), ctx);
+  vm.runInContext(src, ctx);
   const deskOfWin = id => appVars.desks.findIndex(d => d.wins.includes(id));
   const api = ctx.window.WizCore.appParts.sections({
     $: s => ({ '#dock': dock, '#orbWrap': orbWrap })[s] ?? made.find(e => '#' + e.id === s) ?? null, APP, APPS: Object.values(APP), appVars, CHATS_APP: { id: 'wizard', name: 'Chats' },
