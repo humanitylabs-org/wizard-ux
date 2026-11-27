@@ -32,7 +32,7 @@ final class PinInstantPolicy {
     /** wizard-ux issue 1959: once the pinned page has painted (the box answered), the cover leaves at most this much
      *  later, whether or not the app ever says it has loaded (its frame's load waits for every file it asks for). */
     static final long COVER_AFTER_PAGE_MS = 2_000L;
-    /** An app page that answered with a redirect (Recorder: /mizel/ -> live/) goes straight to the WebView for this
+    /** An app page that answered with a redirect (Recorder: its address answers with live/) goes straight to the WebView for this
      *  long, with no phone-side read first (the WebView can't take a redirect from the phone). */
     static final long REDIRECT_KEEP_MS = 24 * 3_600_000L;
     /** With a kept copy of the app's page, the window waits at most this long for the box to say whether it changed;

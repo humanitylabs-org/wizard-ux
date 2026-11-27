@@ -443,7 +443,6 @@ final class PinInstantScenario {
                     out = "<!doctype html><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>"
                         + "<link rel='stylesheet' href='/qa-pin/app.css'><body><h1 id='t'>Loading</h1>"
                         + (held > 0 ? "<img src='/qa-pin/held.png' alt=''>" : "")
-                        + "
                         + "<script src='/wizard-os-home/core/app-client.js'></script><script src='/qa-pin/app.js'></script>";
                 } else if (path.equals("/qa-pin/app.css")) {
                     type = "text/css"; etag = "\"css1\"";

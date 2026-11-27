@@ -34,7 +34,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  *    that read and is answered from it.
  *  - Never kept: APIs, the window's own page, no-store / private / cookie-setting / varying answers, ranges, big files.
  *    A read that fails, or a redirect, passes through (null), so offline and error screens stay as they are.
- *  - An app page that answered with a redirect (Recorder: /mizel/ -> live/) is remembered for a day and handed straight
+ *  - An app page that answered with a redirect (Recorder: its address answers with live/) is remembered for a day and handed straight
  *    to the WebView on the next opens, with no read from the phone first (wizard-ux issue 1959).
  */
 final class PinCache {
@@ -104,7 +104,7 @@ final class PinCache {
     }
 
     private Reply page(String url, String app, Map<String, String> requestHeaders) {
-        // An address that answered with a redirect last time (Recorder: /mizel/ -> live/) goes straight to the WebView:
+        // An address that answered with a redirect last time (Recorder: its address answers with live/) goes straight to the WebView:
         // the phone can't hand it a redirect, so reading it here first only added a box read to every open (issue 1959).
         if (redirects(url)) { pages.remove(app); passed.incrementAndGet(); return null; }
         Entry old = read(url);
