@@ -1,10 +1,8 @@
-// Browser QA for wizard-ux#1801 (Settings › Privacy, switch wizard/private-mode): the REAL Agent Service
+// Browser QA for wizard-ux#1801 (Settings › Privacy, on for everyone since wizard-agent-service#626): the REAL Agent Service
 // (wizard-agent-service checkout at QA_AS, started by tests/qa-privacy-box.mjs with a stand-in main Hermes on Claude and
 // a stand-in Tinfoil app) behind the real phone shell (web/index.html at 412 px; QA_SHELL=desktop: web/desktop.html at
-// 1280 px) in Chromium. The switch is turned on the way an owner does it (WosExperience.toggle -> the Look file the
-// Service reads). Cases:
-//   off       switch off: no Privacy page, no Set up private AI in the model picker, the box says on:false.
-//   on        switch on: Privacy check reads Mail/Notes → Hermes → Anthropic; the picker's Private group's Set up private AI
+// 1280 px) in Chromium. No switch: private mode is there on every box. Cases:
+//   on        Privacy check reads Mail/Notes → Hermes → Anthropic; the picker's Private group's Set up private AI
 //             opens the sheet at step 1 (Tinfoil sign-in, the app's own page); signing in there moves on by itself;
 //             Create private agent; close after step 2 -> the row says Finish setting up -> reopening resumes at the
 //             Privacy check with one private agent; Mail and Notes ticked -> Bring your context along (on) -> Start new
@@ -14,12 +12,11 @@
 //             standard agent, the private agent kept. Back closes the sheet (Settings stays), an outside tap closes it,
 //             a live skin change repaints it, its panel is opaque.
 //   QA_AS=<wizard-agent-service checkout> QA_PLAYWRIGHT=<playwright> node tests/qa-privacy-settings.cjs
-//   QA_CASES=off|on (default both) · QA_SHOTS=<dir>: before/after shots at 412 px · QA_WEB=<another web/>
+//   QA_CASES=on (default) · QA_SHOTS=<dir>: before/after shots at 412 px · QA_WEB=<another web/>
 const { spawn } = require('child_process'), path = require('path'), fs = require('fs');
 const { chromium } = require('../tools/qa-playwright.cjs');
 const DESKTOP = process.env.QA_SHELL === 'desktop', SHOTS = process.env.QA_SHOTS || '';
-const CASES = (process.env.QA_CASES || 'off,on').split(',');
-const SWITCH = 'wizard/private-mode';
+const CASES = (process.env.QA_CASES || 'on').split(',');
 const fails = [], notes = [];
 const fail = (k, m) => { fails.push(`${k}: ${m}`); console.log(`  ✗ ${k}: ${m}`); };
 const pass = (k, m) => console.log(`  ✓ ${k}: ${m}`);
@@ -68,10 +65,8 @@ async function openPicker(page) {
 const screen = page => page.evaluate(() => window.WosPrivacy?.screen || '');
 const waitScreen = (page, s, ms = 15000) => page.waitForFunction(s => window.WosPrivacy?.screen === s, s, { timeout: ms }).then(() => true, () => false);
 const sheetText = page => page.evaluate(() => document.querySelector('.pm-card')?.innerText || '');
+// No switch to turn on: the box answers on:true from the start.
 async function turnOn(page, base) {
-  // After the device's first Look sync (an earlier toggle would be overwritten by the box's copy).
-  await page.waitForFunction(() => window.WosLookSync?.current?.state?.synced, null, { timeout: 20000 }).catch(() => {});
-  await page.evaluate(id => { if (!String(document.documentElement.dataset.tweaks || '').split(' ').includes(id)) return window.WosExperience.toggle(id); }, SWITCH);
   for (let i = 0; i < 30; i++) { if ((await J(base, '/wizard/v1/private-mode')).json?.on) return true; await page.waitForTimeout(500); }
   return false;
 }
@@ -80,35 +75,13 @@ async function turnOn(page, base) {
   const browser = await chromium.launch();
   const shell = DESKTOP ? 'desktop' : 'phone';
   try {
-    if (CASES.includes('off')) {
-      console.log(`off (${shell})`);
-      const box = await startBox();
-      try {
-        await J(box.base, '/wizard/v1/setup/seen', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
-        const { ctx, page } = await device(browser, box.base);
-        check('off', !(await page.evaluate(() => window.WosPrivacy.on())), 'switch off on this device');
-        const st = (await J(box.base, '/wizard/v1/private-mode')).json;
-        check('off', st?.on === false, 'the box says private mode is off', st);
-        const pv = await openPrivacy(page);
-        check('off', !pv.page && !pv.index.includes('privacy'), 'Settings has no Privacy page', pv.index);
-        if (SHOTS) await page.screenshot({ path: path.join(SHOTS, `${shell}-settings-off.png`) });
-        await page.evaluate(r => { const a = window[r]; if (a.closeSheets) a.closeSheets(true); else a.closeSettings?.(); }, root());
-        const pk = await openPicker(page);
-        check('off', pk.open && !pk.setup, 'the model picker has no Set up private AI', pk.text);
-        await page.evaluate(() => window.WosWelcome.open('private'));
-        await page.waitForSelector('.wl-card h2', { timeout: 8000 }).catch(() => {});
-        check('off', await page.locator('.wl-card [data-wl="why"]').count() === 0, 'the Welcome\'s private AI offer has no Why does this matter? link');
-        await page.evaluate(() => window.WosWelcome.close?.());
-        await ctx.close();
-      } finally { box.child.kill(); }
-    }
     if (CASES.includes('on')) {
       console.log(`on (${shell})`);
       const box = await startBox();
       try {
         await J(box.base, '/wizard/v1/setup/seen', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
         const { ctx, page } = await device(browser, box.base);
-        check('on', await turnOn(page, box.base), 'turning the switch on reaches the box (Look file)');
+        check('on', await turnOn(page, box.base), 'the box offers private mode with no switch');
         await page.waitForFunction(() => window.WosPrivacy?.state?.on === true, null, { timeout: 10000 }).catch(() => {});
         // Privacy check before anything moves.
         let pv = await openPrivacy(page);

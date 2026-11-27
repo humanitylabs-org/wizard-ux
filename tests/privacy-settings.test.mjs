@@ -1,5 +1,5 @@
-// wizard-ux#1801: Settings › Privacy (Private mode row, Privacy check, switch-over sheet, Why it matters) behind the
-// switch wizard/private-mode. Runs the real web/core/privacy.js against a fake box that answers the Agent Service's
+// wizard-ux#1801: Settings › Privacy (Private mode row, Privacy check, switch-over sheet, Why it matters), on for
+// everyone (wizard-agent-service#626: the switch wizard/private-mode is removed). Runs the real web/core/privacy.js against a fake box that answers the Agent Service's
 // private-mode routes the way wizard-agent-service server/private-mode.mjs does (one step per POST, next_step resumes).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -8,13 +8,13 @@ import { readFileSync } from 'node:fs';
 
 const SRC = readFileSync(new URL('../web/core/privacy.js', import.meta.url), 'utf8');
 const MODELS = readFileSync(new URL('../web/core/chat-models.js', import.meta.url), 'utf8');
-const SWITCH = 'wizard/private-mode';
 
-function fakeBox({ switchOn = true, tinfoil = true, steps = {}, privateAgent = null } = {}) {
-  const b = { switchOn, tinfoil, steps: { ...steps }, privateAgent, moved: new Set(), def: 'hermes', grant: false, posts: [] };
+function fakeBox({ older = false, tinfoil = true, steps = {}, privateAgent = null } = {}) {
+  const b = { older, tinfoil, steps: { ...steps }, privateAgent, moved: new Set(), def: 'hermes', grant: false, posts: [] };
   const agents = () => [{ id: 'hermes', label: 'Hermes', privacy: 'standard', company: 'Anthropic' }, ...(b.privateAgent ? [{ id: b.privateAgent, label: 'Private', privacy: 'private', company: 'Tinfoil' }] : [])];
   b.state = () => {
-    if (!b.switchOn) return { schema: 'wizard.private-mode/1', on: false };
+    // An Agent Service from before private mode was on for everyone answers on: false.
+    if (b.older) return { schema: 'wizard.private-mode/1', on: false };
     const next = !b.privateAgent ? 'agent' : ['agent', 'apps', 'context', 'default'].find(s => !b.steps[s]) || 'done';
     // Turned off: the private agent is kept (sealed) and the mode reads off until a step runs again.
     const mode = !b.privateAgent || (b.off && !Object.keys(b.steps).length) ? 'off' : next === 'done' ? 'on' : 'setting_up';
@@ -30,12 +30,12 @@ function fakeBox({ switchOn = true, tinfoil = true, steps = {}, privateAgent = n
     const ok = (j, status = 200) => ({ ok: status < 400, status, json: async () => j });
     if (u === '/wizard-tinfoil/api/status') return ok(b.tinfoil ? { provider: 'tinfoil', credentialStored: true } : { provider: null, credentialStored: false });
     if (u === '/wizard/v1/private-first') return ok({ on: false, offer: null, private_agent: null });
-    if (u === '/wizard/v1/privacy-check') return b.switchOn ? ok(b.check()) : ok({ error: 'not_found' }, 404);
+    if (u === '/wizard/v1/privacy-check') return !b.older ? ok(b.check()) : ok({ error: 'not_found' }, 404);
     if (u === '/wizard/v1/private-mode') return ok(b.state());
     const m = u.match(/^\/wizard\/v1\/private-mode\/(\w+)$/);
     if (m && method === 'POST') {
       b.posts.push([m[1], body]);
-      if (!b.switchOn) return ok({ ok: false, error: 'private_mode_off' }, 409);
+      if (b.older) return ok({ ok: false, error: 'private_mode_off' }, 409);
       if (m[1] === 'agent') { const created = !b.privateAgent; b.privateAgent ||= 'private'; b.off = false; b.steps.agent = 1; return ok({ agent: b.privateAgent, created, state: b.state() }); }
       if (!b.privateAgent) return ok({ ok: false, error: 'private_agent_required' }, 409);
       if (m[1] === 'apps') { for (const id of body.move || []) b.moved.add(id); for (const id of body.back || []) b.moved.delete(id); b.steps.apps = 1; return ok({ results: [], state: b.state() }); }
@@ -48,11 +48,11 @@ function fakeBox({ switchOn = true, tinfoil = true, steps = {}, privateAgent = n
   return b;
 }
 
-// A browser just big enough for privacy.js: data-tweaks, a body to hold the sheet, capture click listeners, Settings.
-function browser(box, { on = true, ask = () => true } = {}) {
+// A browser just big enough for privacy.js: a body to hold the sheet, capture click listeners, Settings.
+function browser(box, { ask = () => true } = {}) {
   const listeners = [], features = [], calls = [];
   const sheetEls = [];
-  const root = { tweaks: on ? `wizard/unified-inbox ${SWITCH}` : 'wizard/unified-inbox', getAttribute: n => (n === 'data-tweaks' ? root.tweaks : null) };
+  const root = { tweaks: 'wizard/unified-inbox', getAttribute: n => (n === 'data-tweaks' ? root.tweaks : null) };
   const document = {
     documentElement: root,
     addEventListener: (type, fn) => { if (type === 'click') listeners.push(fn); },
@@ -88,24 +88,33 @@ const ENT = { '&amp;': '&', '&#39;': "'", '&rsaquo;': '›', '&quot;': '"', '&lt
 const text = html => String(html || '').replace(/<[^>]+>/g, ' ').replace(/&(amp|#39|rsaquo|quot|lt|gt);/g, m => ENT[m]).replace(/’/g, "'").replace(/\s+/g, ' ').trim();
 async function until(fn, ms = 2000) { const end = Date.now() + ms; while (Date.now() < end) { if (fn()) return true; await settle(20); } return false; }
 
-test('switch off: nothing on Settings › Privacy, the sheet never opens and the box is never asked', async () => {
-  const box = fakeBox({ switchOn: false });
-  const b = browser(box, { on: false });
+test('no switch: Settings › Privacy is there for everyone, with no switch in the Look; the box is asked only when it is opened', async () => {
+  const b = browser(fakeBox());
   assert.ok(b.feature, 'registered once on the Privacy page');
   assert.equal(b.feature.page, 'privacy');
-  assert.equal(b.feature.available(), false);
-  assert.equal(b.feature.html(), '');
-  assert.equal(await b.P.open('setup'), false);
-  assert.equal(b.P.setupDue(), false);
-  await b.P.read(true);
+  assert.equal(b.feature.available, undefined, 'always available');
+  assert.equal(b.P.on(), true);
   await settle();
-  assert.deepEqual(b.calls.filter(c => c[0] === 'fetch'), []);
-  assert.equal(b.sheet(), undefined);
+  assert.deepEqual(b.calls.filter(c => c[0] === 'fetch'), [], 'nothing is read at page load');
+  assert.equal(b.P.setupDue(), true, 'no private agent yet');
+  b.feature.html();
+  assert.ok(await until(() => b.calls.some(c => c[1] === '/wizard/v1/private-mode')), 'opening Settings › Privacy reads the box');
 });
 
-test('switch on, private mode off: the Private mode row says Off, the Privacy check lists Mail and Notes with their agent and company, then Set up private AI', async () => {
+test('an older Agent Service without private mode: the row says it is not available yet and the sheet says so too', async () => {
+  const b = browser(fakeBox({ older: true }));
+  await b.P.read(true);
+  assert.match(text(b.feature.html()), /Private mode Not available on this Wizard yet\. Update it in About & updates\./);
+  assert.doesNotMatch(text(b.feature.html()), /Privacy check/);
+  assert.equal(b.P.setupDue(), false);
+  assert.equal(b.P.on(), false, 'the Store and app routes keep their own fallback on such a box');
+  assert.equal(await b.P.open('setup'), true);
+  await settle();
+  assert.match(text(b.sheet().innerHTML), /Private mode isn't available on this Wizard yet/);
+});
+
+test('private mode off: the Private mode row says Off, the Privacy check lists Mail and Notes with their agent and company, then Set up private AI', async () => {
   const b = browser(fakeBox());
-  assert.equal(b.feature.available(), true);
   await b.P.read(true);
   const page = text(b.feature.html());
   assert.match(page, /Private mode Apps with personal data use a private AI that only you can see\. Off/);
@@ -240,7 +249,7 @@ test('Back and an outside tap close the sheet', async () => {
   assert.equal(b.P.isOpen, false);
 });
 
-test('model picker: the Private group offers Set up private AI only while the switch is on and there is no private agent', async () => {
+test('model picker: the Private group offers Set up private AI only while there is no private agent', async () => {
   const run = (privacy) => {
     const window = { WosPrivacy: privacy, WosAgents: { lock: () => '', modelOptions: () => [] } };
     vm.runInNewContext(MODELS, { window, fetch: async () => ({ ok: false, json: async () => null }), AbortSignal, console });
