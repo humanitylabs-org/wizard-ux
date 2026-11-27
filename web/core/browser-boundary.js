@@ -42,8 +42,8 @@
  *    (`capture.*`: the shell's one recorder, for the window's own app; preparing or starting a new recording needs a
  *    real tap in that window, events stream back as `notice` `capture`); and the app's own saved settings
  *    (`storage.load`, `storage.save`: see appStorage below); and the app's calls to its own backend (`net.fetch`: see
- *    net below); and agent access (`agents.read`, `agents.set`, switch wizard/boundary-agent-access, wizard-ux issue
- *    1668: only the installed Connected accounts app, only for the apps that hold accounts, a change only on a real tap;
+ *    net below); and agent access (`agents.read`, `agents.set`, wizard-ux issue 1668,
+ *    on for everyone: only the installed Connected accounts app, only for the apps that hold accounts, a change only on a real tap;
  *    the shell asks the Agent Service with its own token and only the agent ticks cross back).
  *    They are handed to the one server core/app-services.js registers (serve(fn)), which checks the
  *    frame against the installed app list and validates the data. Answers are protocol data only (a boolean, a share

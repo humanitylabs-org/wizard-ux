@@ -1,3 +1,0 @@
-/* Agent access under the browser boundary (wizard-ux issue 1668): no look of its own; core/app-services.js answers
- * Connected accounts' agents.read / agents.set while this switch is on. */
-html[data-tweaks~="wizard/boundary-agent-access"] { --wz-boundary-agent-access: 1; }

@@ -365,10 +365,6 @@
       "where": "desktop: Settings › Appearance › Shell view › AI apps (the standard desktop view; Desks is the other choice)",
       "when": "desktop only"
     },
-    "wizard/boundary-agent-access": {
-      "help": "Connected accounts' Agent access, boundary on.",
-      "where": "Settings › Appearance › Try new features › Agent access under the browser boundary"
-    },
     "wizard/assist-agent-note": {
       "help": "Android app: the side button opens Messenger's Agent chat for a note instead of a new Wizard chat.",
       "where": "Settings › Appearance › Try new features › Side button opens the Agent chat"
@@ -680,6 +676,7 @@
     "Why would I want private AI?": "Claude and ChatGPT keep what you send on their servers; private AI runs in sealed hardware (Tinfoil) that nobody else, not even us, can see into. Settings › Privacy › Why it matters."
   },
   "retired": {
+    "Agent access under the browser boundary": "on for everyone, nothing to turn on: with the browser boundary on, Connected accounts' Agent access screen shows which agents may use each account app, and a tap there changes it.",
     "Channels in Chats": "on for everyone now, nothing to turn on: open Chats and use the tabs at the bottom: Inbox (what needs you), Tags (your channels) and Sent. Tags lists your Spaces one per line, plus General; open one to see its chats as posts with a reply line.",
     "Thread tracker": "retired: Needs you now shows in the thread itself, on the reply that needs the owner (with Mark done), and in Inbox; Reply works on any message.",
     "Stop write loops": "on for everyone, nothing to turn on: an identical save within 10 s is not resent, and over 20 saves a minute to one place pauses.",
