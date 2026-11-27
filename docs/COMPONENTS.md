@@ -80,7 +80,7 @@ Back: `WizEscapeBack`, `WosBack`; `WizChatsHost.registerBack`/back.push share re
 | App tiles | `WosAppKinds` |
 | Brand hat | `WizBrand` |
 | Links: outside→panel (Android; `links.panel:false`=off)/browser/`links.reader`; sheet/win/hold; `data-wizard-browse`=original | `WizLinks` (`links.js`; `openIn*`/`follow`/`popup`) |
-| Downloads: in-app “Downloaded · Open” banner + recent-downloads sheet (Android only; inert without `wizardDownloadsPort`); on the phone the banner swipes away up or sideways and the sheet pulls down to close (`bannerSwipe`/`sheetSwipe`, never cancels); Settings → Phone → Downloads | `WosDownloads` (`downloads.js`, `downloads.css`); native `downloads/*.java` (names, quiet DownloadManager; docs/android-downloads-port.md) |
+| Downloads: in-app “Downloaded · Open” banner + recent-downloads sheet (Android only; inert without `wizardDownloadsPort`); Settings → Phone → Downloads | `WosDownloads` (`downloads.js`, `downloads.css`); native `downloads/*.java` (names, quiet DownloadManager; docs/android-downloads-port.md) |
 | Selection actions, AI Look up | `WosSelMenu`, `WosLookup` (`lookup-pop.js`) |
 | Share sheet (text/url/image/file), generic cached People recency, Agents and pending handoffs | `WosShareSheet` (`share-sheet.js`), entered via `WosChat.sharePayload`/`shareFile`; hold → tray: `bindSharePress` |
 | Agent screen context | `WizScreen` |
