@@ -335,7 +335,11 @@
       // An orb take still asking the router whether it is a background task, or one that was (issue
       // 1588): no Working row. A take the router keeps visible drops the mark and lists as usual.
       if (it.dump === true || it.dumped) continue;
-      const tap = TAPS.get(it.sessionId); if (tap && it.createdAt >= tap.at) TAPS.delete(it.sessionId);
+      // The send's own item takes over from the tap. An orb take's item was made when the recording started (before the
+      // tap), so it counts once it is asked to deliver or was sent after the tap; otherwise the tap held the thread in
+      // Working for its full minute, past an answer that needed him (wizard-ux issue 1990).
+      const tap = TAPS.get(it.sessionId);
+      if (tap && (it.createdAt >= tap.at || (it.sentAt || 0) >= tap.at || (it.deliveryRequested && it.state !== 'sent'))) TAPS.delete(it.sessionId);
       // Custody without delivery intent must neither own Sending nor hide an older real send.
       if (OB.quarantined?.(it.id) || ['failed', 'empty', 'held', 'unconfirmed'].includes(it.state) || (it.state === 'sent' && it.steered)) continue;
       const cur = latest.get(it.sessionId); if (!cur || it.createdAt > cur.createdAt) latest.set(it.sessionId, it);
@@ -369,8 +373,42 @@
     }
     return before !== [...PEND].map(([k, p]) => k + p.key + p.state).join();
   }
+  /* A reply into a hidden thread lists it at once (wizard-ux issue 1990; James, 27 Nov 2026: "When I reply to a thread
+   * in my inbox and it jumps back to my inbox screen, that card should immediately disappear from inbox"). A background
+   * task that waits on him is an Inbox row for its record while its worker thread is hidden; his own turn there makes the
+   * box show the thread again (the Agent Service's owner turn), but only the next list read says so, about 3 s later, so
+   * the task's row stayed in Inbox meanwhile. Like Open on the tap frame (inboxMove), the thread he replied in is listed
+   * as soon as the send is held, under Working like any reply, so its task row leaves Inbox on the same frame. Main
+   * agent (and the box's private default agent) only, as the box unhides only those; a send that ends without the box
+   * listing it (refused, withdrawn) hides it again, and its task row comes back. */
+  const SHOWN = new Map(); // sessionId -> the hidden thread's row a held reply listed (a later list read may leave it out)
+  function showReplied(list, agent) {
+    const priv = (typeof L.agentInbox?.privateDefault === 'function' && L.agentInbox.privateDefault()) || '';
+    if (agent && agent !== priv) return;
+    for (const [sid, p] of PEND) {
+      if (p.kind !== 'reply' || (p.agent || '') !== agent) continue; // a reply to another agent's thread is in its own list
+      const i = list.findIndex(s => s.id === sid);
+      if (i >= 0 && !list[i].hidden) continue; // listed and shown: nothing to do
+      // A stale list read that leaves it out again (the box un-hides it a moment later): the row shown before goes back in.
+      const s = i >= 0 ? list[i] : SHOWN.get(sid) || DETAIL.get(sid);
+      if (!s || !(s.hidden || s.sendShown) || (i < 0 && (L.ownerOf(s) || '') !== agent)) continue;
+      s.hidden = false; s.sendShown = true; SHOWN.set(sid, s);
+      if (i < 0) list.unshift(s);
+      applyPend(s);
+    }
+  }
+  // A send that held a hidden thread in the list is over: it is hidden again, so its task row comes back until the box
+  // lists the thread itself (a list read the box un-hid it in has a fresh row).
+  function unShown(list) {
+    for (const [sid, s] of SHOWN) if (!PEND.has(sid)) { SHOWN.delete(sid); if (s.sendShown) { s.hidden = true; delete s.sendShown; } }
+    for (let i = list.length - 1; i >= 0; i--) {
+      const s = list[i]; if (!s?.sendShown || PEND.has(s.id)) continue;
+      s.hidden = true; delete s.sendShown;
+    }
+  }
   // A new chat is listed before Wizard has created it, so it lands in Working the moment it is sent.
   function addSynthetic(list, agent = '') {
+    unShown(list); showReplied(list, agent);
     for (const [sid, p] of PEND) {
       if (p.kind !== 'new' || (p.agent || '') !== agent || list.some(s => s.id === sid)) continue;
       const at = new Date(p.at).toISOString();
