@@ -280,16 +280,51 @@ function sentAsked(r) {
   return t.includes('?') || ASK_WORDS.test(t);
 }
 const newestRow = rows => rows.reduce((a, r) => (Number(r?.at) || 0) > (Number(a?.at) || 0) ? r : a, rows[0]);
-function smartPlace(s, rows, { needs, working }) {
+/* Requested information (wizard-ux issue 1927, same switch; James, 27 Nov 2026: "Threads with information I request
+ * shouldn't skip the inbox"). With Smart inbox on, a finished reply (done or fyi, not [SILENT]) also lands in
+ * Inbox when it delivers what he asked for: his newest send asked for information in words without a question mark
+ * (review, evaluate, summarize, compress, extract, find, look up, research, compare, explain, show me, give me, list,
+ * what / how / why …), or it is the delivery of something he set up: a scheduled run (Hermes `source: 'cron'`, a
+ * reminder route that fired after he set it) or a thread he pinned (Topics, the Daily brief). The explicit signals come
+ * first; the words are the fallback. Build and fix confirmations, check asks, progress notes, watch wakes and helper
+ * results that only confirm stay in Sent. */
+const REQ_VERB = /(?:^|[.!?;:\n]\s*|\b(?:please|pls|can you|could you|would you|will you|and|then|also)\s+)(?:review|evaluate|assess|analy[sz]e|summari[sz]e|sum up|compress|condense|extract|transcribe|translate|find|search|look up|look into|research|compare|explain|list|brief me|report on|catch me up)\b/i;
+const REQ_WH = /(?:^|[.!;\n]\s*)(?:what|what's|whats|how|why|who|when|where|which)\b/i;
+const REQ_ANY = /\b(?:summar(?:y|ies|i[sz]e)|tl;?dr|catch me up|show me|give me|find me|send me|look (?:it |this |that )?up|research|explain|report back|a report|full report)\b/i;
+const REMIND = /\bremind me\b/i, SILENT = /^\s*\[SILENT\]/i, FIRED_AFTER = 5 * 60e3;
+// His newest send asked for information. The box's quiet mark is not a veto here: with Smart inbox on it marks every
+// run nobody typed and every send whose words had no question, which is what this rule corrects; only his own
+// no-reply words and his correction are.
+function sentRequested(r) {
+  if (!r) return false;
+  if (r.corrected && r.corrected.shouldReply === false) return false;
+  if (/^no_reply:/.test(String((Array.isArray(r.rules) && r.rules[0]) || ''))) return false;
+  const t = String(r.text || '').trim();
+  return REQ_VERB.test(t) || REQ_WH.test(t) || REQ_ANY.test(t);
+}
+const silentReply = s => SILENT.test(String((s?.previewRole !== 'user' && s?.preview) || '')) || SILENT.test(String(s?.attention?.ask || ''));
+// A finished reply he can read: done or fyi (or no status line at all) and not a [SILENT] run.
+const readableReply = s => !silentReply(s) && inboxReplied(s) && (!s?.attention || ['done', 'fyi'].includes(s.attention.state));
+// A delivery he set up: a scheduled (Hermes cron) run or a thread he pinned.
+const ownerDelivery = (s, pinned) => s?.source === 'cron' || /^cron_/.test(String(s?.id || '')) || !!pinned(s);
+// His reminder fired: the send set a reminder and the agent wrote again well after it.
+const reminderFired = (s, r) => (r?.route === 'reminder' || r?.wouldRoute === 'reminder' || REMIND.test(String(r?.text || '')))
+  && (Date.parse(s?.lastAssistantAt ?? '') || 0) - (Number(r?.at) || 0) > FIRED_AFTER;
+function smartPlace(s, rows, { needs, working, pinned = () => false }) {
   if (inboxFailed(s) || ['waiting_for_approval', 'unknown'].includes(s?.status)) return 'inbox';
   if (working(s)) return 'sent';
   if (needs(s) && s?.attention?.state !== 'check') return 'inbox';
   const last = Array.isArray(rows) && rows.length ? newestRow(rows) : null;
   if (last?.state === 'failed') return 'inbox';
-  return last && ['done', 'needs_you'].includes(last.state) && sentAsked(last) ? 'inbox' : 'sent';
+  if (last && ['done', 'needs_you'].includes(last.state) && sentAsked(last)) return 'inbox';
+  // Issue 1927: what he asked for, or set up, is delivered (only a readable done / fyi reply; check stays in Sent).
+  if (!readableReply(s)) return 'sent';
+  if (!last) return ownerDelivery(s, pinned) ? 'inbox' : 'sent';
+  if (last.state !== 'done' && last.state !== 'needs_you') return 'sent';
+  return sentRequested(last) || reminderFired(s, last) || (ownerDelivery(s, pinned) && (Date.parse(s?.lastAssistantAt ?? '') || 0) - (Number(last.at) || 0) > FIRED_AFTER) ? 'inbox' : 'sent';
 }
-function placeOf(s, rows, { needs = () => false, quiet = () => false, working = () => false, smart = false } = {}) {
-  if (smart) return smartPlace(s, rows, { needs, working });
+function placeOf(s, rows, { needs = () => false, quiet = () => false, working = () => false, smart = false, pinned = () => false } = {}) {
+  if (smart) return smartPlace(s, rows, { needs, working, pinned });
   const mine = Array.isArray(rows) && rows.length > 0;
   if (working(s) && mine) return 'sent';
   if (needs(s) || inboxFailed(s) || ['waiting_for_approval', 'unknown'].includes(s?.status)) return 'inbox';
@@ -357,7 +392,7 @@ function activityGroups(groups, { needs, unread, at }, { order = 'newest', now =
   // Working section (a run he started is in Sent › Working); only sends a graceful restart holds keep theirs (Saved).
   // place = { sent: sentIndex(Sent rows), quiet(s), held(s) }, from the shell; without it no thread has a Sent row.
   const placing = !!(keep || inbox), workIds = new Set((groups.working || []).map(s => s?.id));
-  const placeFacts = { needs, quiet: s => !!(place?.quiet || inbox?.quiet)?.(s), working: s => workIds.has(s?.id), smart: !!place?.smart }; // smart: issue 1883
+  const placeFacts = { needs, quiet: s => !!(place?.quiet || inbox?.quiet)?.(s), working: s => workIds.has(s?.id), smart: !!place?.smart, pinned: s => !!place?.pinned?.(s) }; // smart: issue 1883; pinned: 1927
   const inInbox = s => !placing || placeOf(s, place?.sent?.get?.(s.id), placeFacts) === 'inbox';
   const held = s => !!place?.held?.(s);
   // Inbox rows (issue 1779): inbox = { quiet(s), pin(s) → 0 or its pin rank }. Ready is the Inbox: what inboxWants keeps
@@ -415,5 +450,5 @@ const unreadThreads = (rows, isNew, notes) => new Set((rows || []).filter(s => i
 const unreadCount = rows => new Set((rows || []).filter(r => r.unread).map(r => r.id)).size;
 root.WizChatsListModel = Object.freeze({ STATES, stateOf, stateGroups, WORKING_SORTS, workingOrderOf, workingAt, workingSort, READY_SORTS, sortOf, PRIORITY_TIP, rankOf, readySort, executionStatus, isListWorking,
   readyGroups, NOTES_PROJECT, NO_PROJECT, projectOf, titleInProject, projectGroups, GROUP_MODES, groupMode, readyFlat,
-  readyStep, visibleIds, INBOX_KEEP, inboxKeep, INBOX_ROWS, inboxRowsOn, inboxWants, inboxReplied, placeOf, SMART_INBOX, smartInboxOn, sentAsked, sentIndex, sentShown, SENT_THREADS, sentThreadsOn, sentThreads, sentRest, ACTIVITY_SORTS, activitySortOf, ACTIVITY_RECENT_DAYS, activityMark, activitySort, activityGroups, activityList, unreadCount, unreadThreads, compareTime, deferred, sessionRow, sessionList, sessionRank, orderSessions, notificationRow, sortNotes, mixedRows, subjectGroups, priorityGroups });
+  readyStep, visibleIds, INBOX_KEEP, inboxKeep, INBOX_ROWS, inboxRowsOn, inboxWants, inboxReplied, placeOf, SMART_INBOX, smartInboxOn, sentAsked, sentRequested, sentIndex, sentShown, SENT_THREADS, sentThreadsOn, sentThreads, sentRest, ACTIVITY_SORTS, activitySortOf, ACTIVITY_RECENT_DAYS, activityMark, activitySort, activityGroups, activityList, unreadCount, unreadThreads, compareTime, deferred, sessionRow, sessionList, sessionRank, orderSessions, notificationRow, sortNotes, mixedRows, subjectGroups, priorityGroups });
 })(globalThis);
