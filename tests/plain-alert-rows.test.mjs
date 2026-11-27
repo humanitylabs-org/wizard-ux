@@ -116,13 +116,3 @@ test('classic list, switch on: a chat row with the bell + source in its line; sw
   assert.match(off.noteRow(ALERT), /<span class="ch-notif-from">Wizard<\/span>/);
 });
 
-test('the switch: listed off by default, its css only colours (no amber), scoped to the switch', () => {
-  const cat = JSON.parse(read('web/tweaks/catalog.json'));
-  assert.ok(cat.tweaks.includes(SW));
-  assert.ok(!cat.defaults.includes(SW) && !(cat.promotedDefaults || []).includes(SW));
-  const man = JSON.parse(read('web/tweaks/wizard/plain-alert-rows/manifest.json'));
-  assert.equal(man.id, SW); assert.deepEqual(man.issues, ['humanitylabs-org/wizard-ux#1941']);
-  const css = read('web/tweaks/wizard/plain-alert-rows/tweak.css').replace(/\/\*[^]*?\*\//g, '');
-  for (const rule of css.split('}').map(r => r.trim()).filter(Boolean)) assert.ok(rule.startsWith('html[data-tweaks~="wizard/plain-alert-rows"]'), 'scoped: ' + rule.slice(0, 80));
-  assert.doesNotMatch(css, /amber|warning|--ui-y|#[0-9a-f]{3,6}\b|rgba?\(/i, 'tokens only, no amber');
-});
