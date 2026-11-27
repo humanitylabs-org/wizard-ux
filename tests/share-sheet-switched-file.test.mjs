@@ -9,6 +9,8 @@ const store = () => { const m = new Map(); return { getItem: k => (m.has(k) ? m.
 function load({ catalog, apps = { messenger: { kind: 'wizard', name: 'Messenger' } }, hang = false } = {}) {
   let ops = null; const calls = [];
   const fetch = async (url, opts) => {
+    // The share-people file on the box (wizard-ux issue 1627) is read at load: none here, and not a catalog read.
+    if (url === '/wizard/v1/pages/wizard-share/people.json') return { ok: false, status: 403, json: async () => ({}) };
     calls.push({ url, opts });
     if (hang) return new Promise(() => {});
     if (catalog === undefined) return { ok: false, status: 404, json: async () => ({}) };

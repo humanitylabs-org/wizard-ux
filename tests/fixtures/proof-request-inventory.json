@@ -1220,10 +1220,16 @@
       "note": "v11 refusal: explicit synthetic unconfigured backup overview. No upstream or mutation."
     },
     "/wizard/v1/pages/wizard-share/people.json": {
-      "status": "not-exercised",
+      "status": "catalogued",
       "source": "web/core/share-sheet.js",
       "kind": "read",
-      "note": "Share people on the box (wizard-ux issue 1627): read (GET) and written (PUT, versioned) only while the off-by-default wizard/share-people-box switch is on; the QA harnesses run with it off. tests/share-people-box.test.mjs and tests/qa-share-people-fresh-window.cjs cover it against a fake box. Refused and collected, never answered, if a flow reaches it."
+      "examples": [
+        {
+          "method": "GET",
+          "path": "/wizard/v1/pages/wizard-share/people.json"
+        }
+      ],
+      "note": "Share people on the box (wizard-ux issue 1627, on for everyone): read at load and on every share. These synthetic flows expose no share-people file (GET/HEAD answer explicit 403 fixture_share_people_unavailable), so the sheet keeps to this browser's own list and stops asking. PUT is not exercised, always refused and collected. tests/share-people-box.test.mjs and tests/qa-share-people-fresh-window.cjs cover reads and writes against a fake box."
     },
     "/wizard/v1/pages/wizard-look/look.json": {
       "status": "catalogued",

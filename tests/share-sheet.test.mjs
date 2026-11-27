@@ -14,7 +14,7 @@ function load({ apps = { messenger: { kind: 'wizard', name: 'Messenger' } }, ope
   }
   const storage = store();
   if (recent) storage.setItem('wos.share.recent.v1', JSON.stringify(recent));
-  const ctx = { window, localStorage: storage, sessionStorage: store(), CustomEvent: class { constructor(t, o) { this.type = t; this.detail = o?.detail; } }, document: {}, requestAnimationFrame: f => f(), setTimeout };
+  const ctx = { window, localStorage: storage, sessionStorage: store(), CustomEvent: class { constructor(t, o) { this.type = t; this.detail = o?.detail; } }, document: {}, requestAnimationFrame: f => f(), setTimeout, clearTimeout };
   vm.runInNewContext(src, ctx);
   return { S: Object.assign({}, window.WosShareSheet, ops), G: window.WosShareSheet, events, storage, claim: window.WizAppServices.claimShare };
 }

@@ -1,4 +1,4 @@
-// wizard-ux issue 1627 (switch wizard/share-people-box): the share targets an app publishes are kept on the box, so a
+// wizard-ux issue 1627 (on for everyone; switch wizard/share-people-box removed): the share targets an app publishes are kept on the box, so a
 // window that has never opened Messenger still shows Messenger's people. Runs the real share-sheet.js against a fake
 // Agent Service Pages file API (versioned GET/PUT, 409 carrying the newer file), two browsers sharing one box.
 import test from 'node:test';
@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 const src = readFileSync(new URL('../web/core/share-sheet.js', import.meta.url), 'utf8');
-const FILE = '/wizard/v1/pages/wizard-share/people.json', SW = 'wizard/share-people-box';
+const FILE = '/wizard/v1/pages/wizard-share/people.json';
 const store = () => { const m = new Map(); return { getItem: k => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)), removeItem: k => m.delete(k) }; };
 const reply = (status, body) => ({ ok: status >= 200 && status < 300, status, json: async () => body });
 function fakeBox({ pages = true } = {}) {
@@ -23,12 +23,12 @@ function fakeBox({ pages = true } = {}) {
   box.doc = () => (box.text ? JSON.parse(box.text) : null);
   return box;
 }
-function device(box, { on = true, apps = { messenger: { kind: 'wizard', name: 'Messenger' }, mail: { kind: 'wizard', name: 'Mail' } } } = {}) {
+function device(box, { ls = store(), apps = { messenger: { kind: 'wizard', name: 'Messenger' }, mail: { kind: 'wizard', name: 'Mail' } } } = {}) {
   let ops = null; const listeners = {};
-  const root = { dataset: { tweaks: on ? `wizard/other ${SW}` : 'wizard/other' } };
+  const root = { dataset: { tweaks: 'wizard/other' } };
   const window = { WizCore: { apps: () => ({ APP: apps }) }, WizOpenApp: () => true, dispatchEvent: () => {}, fetch: (u, o) => box.fetch(u, o),
     addEventListener: (t, f) => { (listeners[t] ||= []).push(f); }, WizAppServices: { claimShare: o => (ops ? false : (ops = o, true)) } };
-  const ctx = { window, localStorage: store(), sessionStorage: store(), CustomEvent: class { constructor(t, o) { this.type = t; this.detail = o?.detail; } },
+  const ctx = { window, localStorage: ls, sessionStorage: store(), CustomEvent: class { constructor(t, o) { this.type = t; this.detail = o?.detail; } },
     document: { baseURI: 'https://box.test/wizard-os-home/index.html', documentElement: root }, location: { href: 'https://box.test/wizard-os-home/index.html' },
     URL, requestAnimationFrame: f => f(), setTimeout: (f, ms) => setTimeout(f, Math.min(ms, 5)), clearTimeout, File, Blob };
   vm.runInNewContext(src, ctx);
@@ -41,22 +41,13 @@ const settle = (ms = 80) => new Promise(r => setTimeout(r, ms));
 const people = [{ id: 'tg:1', name: 'Ana Ruiz', detail: 'Telegram', lastActivity: 300 }, { id: 'tg:2', name: 'Ben Okafor', detail: 'Telegram', lastActivity: 200 }];
 const publish = (d, app = 'messenger', list = people) => { d.S.register(app, { accepts: ['text', 'url'] }); d.S.setTargets(app, list); };
 
-test('switch on: one browser keeps Messenger\'s people on the box, a fresh one shows them', async () => {
+test('one browser keeps Messenger\'s people on the box, a fresh one shows them', async () => {
   const box = fakeBox(), a = device(box);
   publish(a); await settle();
   assert.deepEqual(box.doc().apps, { messenger: { targets: [{ id: 'tg:1', name: 'Ana Ruiz', detail: 'Telegram' }, { id: 'tg:2', name: 'Ben Okafor', detail: 'Telegram' }] } }, 'names and ids only, no activity times');
   const b = device(box); await settle();
   assert.deepEqual(b.S._people('text'), ['tg:1', 'tg:2'], 'the fresh window lists them, in Messenger\'s order');
   assert.equal(b.S._state().receivers.messenger, undefined, 'Messenger never ran there');
-});
-
-test('switch off: the box is never read or written, and a fresh window has no people (as before)', async () => {
-  const box = fakeBox(), a = device(box, { on: false });
-  publish(a); a.S.prime('text'); await settle();
-  const b = device(box, { on: false }); b.S.prime('text'); await settle();
-  assert.deepEqual(box.log, []);
-  assert.deepEqual(b.S._people('text'), []);
-  assert.deepEqual(a.S._people('text'), ['tg:1', 'tg:2'], 'the window where Messenger ran keeps its own people');
 });
 
 test('only a changed list is written: new activity times alone never touch the box', async () => {
@@ -93,12 +84,11 @@ test('this browser\'s own copy wins over the box\'s; an empty list (signed out) 
   assert.deepEqual(c.S._people('text'), []);
 });
 
-test('switch turned on later: the people this browser already has go to the box; no Pages on the box: this browser only', async () => {
-  const box = fakeBox(), a = device(box, { on: false });
+test('people this browser cached before (an older build) go to the box at load; no Pages on the box: this browser only', async () => {
+  const ls = store(), old = fakeBox({ pages: false }), a = device(old, { ls });
   publish(a); await settle();
-  assert.equal(box.text, null);
-  a.root.dataset.tweaks = SW; a.fire('wos:tweak-choice'); await settle();
-  assert.equal(box.doc().apps.messenger.targets.length, 2);
+  const box = fakeBox(); device(box, { ls }); await settle();
+  assert.equal(box.doc().apps.messenger.targets.length, 2, 'a reload sends the cached list without waiting for a change');
   const none = fakeBox({ pages: false }), d = device(none);
   publish(d); await settle();
   assert.deepEqual(d.S._people('text'), ['tg:1', 'tg:2']);
