@@ -459,10 +459,6 @@
       "help": "Skins become a look only: only feature switches decide what runs. Your skin's own choices come back when you switch this off.",
       "where": "Settings › Appearance › Try new features › Skins are look only"
     },
-    "wizard/chats-switcher": {
-      "help": "Phone Chats: one bar; tap Chats again or the title to switch views.",
-      "where": "Settings › Appearance › Try new features › Phone Chats: one bar and a view switcher on the Chats tile"
-    },
     "wizard/inbox-pin-top": {
       "help": "Pin threads on top.",
       "where": "Settings › Appearance › Try new features › Inbox: pin threads to the top"
