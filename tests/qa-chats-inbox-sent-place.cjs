@@ -9,14 +9,18 @@
 //   qa-run    had an answer, then he sent again and it is working now                            → Sent only (Working)
 //   qa-alert  a scheduled report he didn't start (no Sent row)                                   → Inbox only
 // Then qa-quiet's newest outcome turns needs you: it moves from Sent to Inbox live, no reload. Opening an Inbox thread
-// keeps it in Inbox. QA_SENT_ROWS=on adds wizard/sent-rows (#1814's Sent rows). Inbox until archived is on for everyone (issue 1810): there is no off run.
+// keeps it in Inbox. Inbox until archived is on for everyone (issue 1810).
+// The routing above is triage, so it is Smart inbox only (wizard-ux issue 1962): QA_SMART=on turns wizard/smart-inbox on
+// and checks it (qa-alert, a thread he didn't start, finishes in Sent there too; #1883). Off (the default run, everyone's
+// default): nothing leaves Inbox. All six are in Inbox (qa-run in Inbox › Working, qa-quiet's FYI reply in Inbox and
+// counted), Sent lists the five threads he sent into (so a thread can be in both) and its sheet has no routing corrections.
 const assert = require('node:assert/strict');
 const { chromium } = require('../tools/qa-playwright.cjs');
 const { ownerRead } = require('../tools/qa-desktop-frame-fixture.cjs');
 const fs = require('node:fs'), path = require('node:path');
 const repo = path.resolve(__dirname, '..'), origin = process.env.QA_ORIGIN || 'https://chats-place-1829.test', prefix = '/wizard-os-home/';
 const web = process.env.QA_WEB || path.join(repo, 'web'), out = process.env.QA_OUT || path.join(repo, 'chats-inbox-sent-place-evidence');
-const SHELLS = (process.env.QA_SHELLS || 'phone,classic,aiapps').split(','), SW = true, ROWS = true; // Inbox rows are on for everyone (wizard-ux issue 1779)
+const SHELLS = (process.env.QA_SHELLS || 'phone,classic,aiapps').split(','), SW = process.env.QA_SMART === 'on', ROWS = true; // Inbox rows are on for everyone (wizard-ux issue 1779)
 fs.mkdirSync(out, { recursive: true });
 const now = Date.now(), iso = t => new Date(t).toISOString(), nap = ms => new Promise(r => setTimeout(r, ms)), M = 60e3;
 const fyi = ask => ({ state: 'fyi', ask });
@@ -55,7 +59,7 @@ const report = { origin, web, cases: [] };
       const context = await browser.newContext({ viewport: phone ? { width: 412, height: 915 } : { width: 1440, height: 960 }, isMobile: phone, hasTouch: phone, serviceWorkers: 'block', ...(phone ? { userAgent: 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Mobile Safari/537.36' } : {}) });
       try {
         await context.routeWebSocket('**/*', w => w.close());
-        const mix = { 'wizard/desktop-chats': true };
+        const mix = { 'wizard/desktop-chats': true, ...(SW ? { 'wizard/smart-inbox': true } : {}) };
         await context.addInitScript(({ shell, mix }) => {
           if (window !== top) return;
           if (sessionStorage.getItem('qaBoot')) return; sessionStorage.setItem('qaBoot', '1');
@@ -120,16 +124,14 @@ const report = { origin, web, cases: [] };
         }, aad);
         const rowSel = id => aad ? `.aad-side .aad-rw[data-sid="${id}"] .aad-row` : `.ch-list [data-chopen="${id}"]`;
         // Sent as a person sees it: the thread each visible Sent row opens.
-        const byRow = Object.fromEntries(SENT.map(r => [r.id, r.thread_id]));
-        const sent = () => page.evaluate(() => [...document.querySelectorAll('[data-morph-key^="sent:"]')].filter(n => n.getClientRects().length).map(n => n.dataset.morphKey.slice(5)));
-        const sentThreads = async () => [...new Set((await sent()).map(id => byRow[id]).filter(Boolean))].sort();
+        const sentThreads = () => page.evaluate(() => [...new Set([...document.querySelectorAll('[data-chsentthread]')].filter(n => n.getClientRects().length).map(n => n.dataset.chsentthread))].sort());
         const tab = async k => { await vis(`.ch-tabbar [data-chtab="${k}"]`).click(); await nap(700); };
         await vis('.ch-tabbar').waitFor({ timeout: 15000 });
         await vis(rowSel('qa-mac')).waitFor({ timeout: 15000 });
         await nap(800); await openSecs();
         const place = async (tag = '1') => {
           await tab('inbox'); await openSecs(); const i = await inbox(); await shot(tag + '-inbox');
-          await tab('sent'); await vis('[data-morph-key^="sent:"]').waitFor({ timeout: 8000 }).catch(() => {}); const s = await sentThreads(); await shot(tag + '-sent');
+          await tab('sent'); await vis('[data-chsentthread]').waitFor({ timeout: 8000 }).catch(() => {}); const s = await sentThreads(); await shot(tag + '-sent');
           await tab('inbox');
           const inInbox = Object.entries(i).filter(([, k]) => ['ready', 'working', 'recent', 'saved'].includes(k)).map(([id]) => id).sort();
           return { inbox: i, inInbox, sent: s, both: inInbox.filter(id => s.includes(id)) };
@@ -139,8 +141,8 @@ const report = { origin, web, cases: [] };
         entry.before = await place();
         if (SW) {
           assert.deepEqual(entry.before.both, [], 'never in both Inbox and Sent: ' + JSON.stringify(entry.before));
-          assert.deepEqual(entry.before.inInbox, ['qa-alert', 'qa-failed', 'qa-mac', 'qa-needs'], 'Inbox: what needs him ' + JSON.stringify(entry.before));
-          assert.deepEqual(entry.before.sent, ['qa-quiet', 'qa-run'], 'Sent: what needs nothing (quiet done, working) ' + JSON.stringify(entry.before));
+          assert.deepEqual(entry.before.inInbox, ['qa-failed', 'qa-mac', 'qa-needs'], 'Inbox: what needs him ' + JSON.stringify(entry.before));
+          assert.deepEqual(entry.before.sent, ['qa-alert', 'qa-quiet', 'qa-run'], 'Sent: what needs nothing (quiet done, working, not his) ' + JSON.stringify(entry.before));
           assert.ok(!Object.values(entry.before.inbox).includes('working'), 'no Working section in Inbox');
           // Opening an Inbox thread keeps it there (#1810).
           await vis(rowSel('qa-mac')).click();
@@ -160,8 +162,18 @@ const report = { origin, web, cases: [] };
           assert.ok(!entry.moved.sent.includes('qa-quiet'), 'needs you now: gone from Sent ' + JSON.stringify(entry.moved));
           assert.equal(await page.evaluate(() => window.WizCore?.activityReady?.(window.WizLive)), entry.moved.inInbox.length, 'the badge count is the Inbox count');
         } else {
-          assert.equal(entry.before.inbox['qa-quiet'], 'recent', 'switch off: the quiet one is in Recent as today ' + JSON.stringify(entry.before));
-          assert.equal(entry.before.inbox['qa-run'], 'working', 'switch off: Working on top as today');
+          // Issue 1962: Smart inbox off, nothing is routed out of Inbox.
+          assert.deepEqual(entry.before.inInbox, ['qa-alert', 'qa-failed', 'qa-mac', 'qa-needs', 'qa-quiet', 'qa-run'], 'off: every thread is in Inbox ' + JSON.stringify(entry.before));
+          assert.equal(entry.before.inbox['qa-quiet'], 'ready', 'off: the FYI "nothing needed" reply is in Inbox ' + JSON.stringify(entry.before));
+          assert.equal(entry.before.inbox['qa-run'], 'working', 'off: a running thread he started is in Inbox › Working');
+          assert.deepEqual(entry.before.sent, ['qa-failed', 'qa-mac', 'qa-needs', 'qa-quiet', 'qa-run'], 'off: Sent lists every thread he sent into ' + JSON.stringify(entry.before));
+          assert.deepEqual(entry.before.both, entry.before.sent, 'off: a thread can be in both');
+          assert.equal(await page.evaluate(() => window.WizCore?.activityReady?.(window.WizLive)), 5, 'off: the badge counts the quiet reply too (5 Ready, qa-run is Working)');
+          // No routing corrections in Sent's sheet.
+          await tab('sent'); await vis('[data-chsentthread="qa-mac"]').click({ button: 'right' }); await vis('.ch-sheet').waitFor({ timeout: 5000 });
+          entry.sheet = await vis('.ch-sheet').innerText(); await shot('3-sent-sheet');
+          assert.ok(!/Should have replied|Didn.t need a reply/.test(entry.sheet), 'off: no routing corrections ' + entry.sheet);
+          await back(); await nap(400); await tab('inbox');
         }
         assert.equal(entry.errors.length, 0, 'browser errors: ' + entry.errors.join('; '));
         entry.pass = true;
