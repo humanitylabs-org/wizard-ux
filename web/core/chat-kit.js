@@ -69,7 +69,9 @@
       const p = JSON.parse(json), group = one(p?.group, 60), seen = new Set(), buttons = [];
       for (const b of Array.isArray(p?.buttons) ? p.buttons : []) {
         const id = typeof b?.id === 'string' ? b.id.trim() : '', label = one(b?.label, 40);
-        if (RB_ID.test(id) && label && !seen.has(id) && buttons.length < 6) { seen.add(id); buttons.push({ id, label }); }
+        // `act`: the button declares an app action (issue 1973, switch wizard/reply-actions). Only that it has one: the box
+        // reads the action itself from this message in the thread's history, never from what the shell sends.
+        if (RB_ID.test(id) && label && !seen.has(id) && buttons.length < 6) { seen.add(id); buttons.push({ id, label, ...(b?.action && typeof b.action === 'object' && !Array.isArray(b.action) ? { act: true } : {}) }); }
       }
       return group && buttons.length ? { group, buttons } : null;
     } catch (e) { return null; }

@@ -541,10 +541,24 @@
     halt(it);
     if (it.kind === 'conversation') throw new HttpError(409, 'App voice input messages use explicit conversation delivery only');
     if (fitAgentRoute(it)) await put(it);
-    if (!it.model || !it.provider) throw new HttpError(409, 'No confirmed model route · choose a model before retrying');
+    // Retry works the route out again (wizard-ux issue 1973): a reply saved with its model but no provider (the phone's
+    // model list was missing) takes the provider the thread's box has saved for that same model, before anything is frozen.
+    if (it.kind === 'reply' && it.model && !it.provider && !it.agent && !it.body && !it.steerBody && window.WosModels?.savedProvider) {
+      const provider = await window.WosModels.savedProvider(it.sessionId, it.model).catch(() => '');
+      if (provider) { it.provider = provider; delete it.savedRoute; await put(it); }
+    }
+    // Still no provider for a reply: it goes on the thread's saved route (no model or provider on the wire). An older
+    // saved reply only when its model is the thread's own (never a pick the box doesn't hold), and never while a model
+    // change is still saving.
+    const row = window.WizLive?.session?.(it.sessionId);
+    const onSaved = it.kind === 'reply' && !it.agent && !it.provider && !window.WosModels?.pending?.has?.(it.sessionId)
+      && (it.savedRoute === true || (!it.body && !it.steerBody && !!it.model && row?.model === it.model));
+    if (onSaved && !it.savedRoute) { it.savedRoute = true; it.steerRunId = ''; await put(it); }
+    if (!onSaved && (!it.model || !it.provider)) throw new HttpError(409, 'No confirmed model route · choose a model before retrying');
+    const wire = onSaved ? { model: undefined, provider: undefined } : { model: it.model, provider: it.provider };
     if (it.body) {
       const frozen = JSON.parse(it.body);
-      if (frozen.model !== it.model || frozen.provider !== it.provider || frozen.session_id !== it.sessionId || (frozen.agent || '') !== (it.agent || '') || frozen.require_model_lock !== true)
+      if (frozen.model !== wire.model || frozen.provider !== wire.provider || frozen.session_id !== it.sessionId || (frozen.agent || '') !== (it.agent || '') || frozen.require_model_lock !== true)
         throw new HttpError(409, 'Stored route does not match this message · original message kept');
     }
     // When local writes fail, server audio custody comes before slower transcription.
@@ -670,14 +684,20 @@
       const body = { session_id: it.sessionId, input, ...(it.retryRunId ? { wizard_retry_run_id: it.retryRunId } : {}) };
       if (it.instructions) body.instructions = String(it.instructions).slice(0, 2000);
       if (fileIds.length) body.wizard_file_ids = fileIds;
-      Object.assign(body, { model: it.model, provider: it.provider, require_model_lock: true });
+      Object.assign(body, onSaved ? { require_model_lock: true } : { model: it.model, provider: it.provider, require_model_lock: true });
       if (it.agent) body.agent = it.agent;
       it.body = JSON.stringify(body); await put(it);
     }
     halt(it); // the last point where a Stop withdraws the send: after this the run may exist on Wizard
     if (await holdLate(it)) return;
     admitting.add(it.id);
-    const r = await call('/wizard/hermes/v1/runs' + aq, { method: 'POST', headers: { ...J, 'Idempotency-Key': it.id }, body: it.body });
+    let r;
+    try { r = await call('/wizard/hermes/v1/runs' + aq, { method: 'POST', headers: { ...J, 'Idempotency-Key': it.id }, body: it.body }); }
+    catch (e) {
+      // The box has no saved route for this thread either: say what to do. Picking a model saves one, so Retry then works.
+      if (onSaved && e.status === 400) throw new HttpError(409, 'Couldn’t tell which AI runs this chat · tap the model name, pick one, then Retry');
+      throw e;
+    }
     let run; try { run = await r.json(); } catch (_) { throw new HttpError(502, 'Wizard’s send receipt was lost'); }
     const runId = run.run_id || run.id;
     if (!runId) throw new HttpError(502, 'Wizard returned no send receipt');
@@ -957,10 +977,13 @@
       try {
         if (routeError) throw routeError;
         if (!M) throw new Error('Model selector unavailable · reload Wizard before sending');
-        const route = await bounded(() => M.resolveRoute(held && it.model ? { model: it.model, provider: it.provider, ...(it.agent ? { agent: it.agent } : {}) } : snapshot), 15000);
+        const route = await bounded(() => M.resolveRoute(held && it.model ? { model: it.model, provider: it.provider, ...(it.agent ? { agent: it.agent } : {}) } : snapshot, { thread: it.kind === 'reply' ? it.sessionId : '' }), 15000);
         if (it.model && (route.model !== it.model || (it.provider && route.provider !== it.provider))) throw new Error('Selected route changed · original message kept');
         if (it.cancelled || it.cancelRequested) throw new StopRequested(); // Stop tapped while the route was resolving
-        Object.assign(it, route, { state: 'queued' });
+        // A reply on the thread's saved route (wizard-ux issue 1973): sent with no model or provider, the box decides.
+        if (route.savedRoute && it.kind === 'reply' && !it.agent) { it.savedRoute = true; it.steerRunId = ''; } else delete it.savedRoute;
+        const { savedRoute: _saved, ...picked } = route;
+        Object.assign(it, picked, { state: 'queued' });
         if (it.agent) window.WizLive?.pinAgent?.(it.sessionId, it.agent);
       } catch (e) {
         if (it.cancelled || it.cancelRequested || e.stopRequested) { if (!it.cancelled) await finishCancel(it); return it; }
