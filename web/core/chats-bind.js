@@ -27,9 +27,9 @@ window.WizCore.chatsParts.bind = function ({ activityClick, actSetOrder, AGS, al
   // Real input only: a 'scroll' event also fires when a new reply auto-scrolls the thread, which is not James.
   for (const t of ['pointerdown', 'keydown', 'wheel', 'touchstart']) addEventListener(t, presence, { capture: true, passive: true });
   document.addEventListener('visibilitychange', () => { if (!document.hidden) lastPresence = Date.now(); }, true);
-  const MARKED = new Map(); // window id -> the thread change markVisibleThreadsSeen last marked read (wizard-os issue 1020)
   function markVisibleThreadsSeen() {
     if (!LIVE?.ok || !attended()) return;
+    const MARKED = markVisibleThreadsSeen.marked ||= new Map(); // window id -> the thread change it last marked read
     for (const id of desks[idx].wins) {
       const w = W[id]; if ((w?.app !== 'chats' && !isHosted(id)) || !w.thread || w.thread === '__new__') continue;
       const hold = ch(id).unreadHold; if (hold?.sid === w.thread && hold.nav === ch(id).readNav) continue;
