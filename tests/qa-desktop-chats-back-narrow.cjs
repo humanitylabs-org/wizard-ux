@@ -124,7 +124,8 @@ const report = { origin, web, cases: [] };
           await page.keyboard.press('Escape'); await nap(400);
         } else if (width >= 1200) {
           // full screen hides the list: the chat's Back shows it over the page, still full screen
-          await vis('.aad-ctop [data-mode="full"]').click(); await nap(900);
+          // (one window open: no arrangement buttons since wizard-ux issue 1813; its ⌥⇧F key stays)
+          await page.keyboard.press('Alt+Shift+KeyF'); await nap(900);
           s = await step('list-thread-full'); assert.equal(s.back, '‹ Activity', 'full screen: Back to the list');
           await page.keyboard.press('Escape'); await nap(700);
           s = await step('list-thread-full-esc', { mode: await page.evaluate(() => document.documentElement.dataset.aadMode || '') });
@@ -133,7 +134,6 @@ const report = { origin, web, cases: [] };
           assert.ok(box && box.height > 20 && box.width > 150, 'the list really shows: ' + JSON.stringify(box));
           await page.keyboard.press('Escape'); await nap(500);
           assert.notEqual(await side(), 'over', 'Esc again closes the list');
-          await vis('.aad-ctop [data-mode="full"]').click().catch(() => {}); await nap(400);
           if ((await page.evaluate(() => document.documentElement.dataset.aadMode || '')) === 'full') { await page.keyboard.press('Escape'); await nap(500); }
         }
         // root: more Esc presses never leave Wizard

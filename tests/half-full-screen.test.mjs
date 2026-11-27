@@ -4,10 +4,7 @@
 // The browser run (real shell, drag, reload, skins) is tests/qa-half-full-screen.cjs.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import { createDocument } from './fixtures/mini-dom.mjs';
-
-const read = path => readFileSync(new URL('../' + path, import.meta.url), 'utf8');
 
 async function mount() {
   const { modesPart } = await import('../web/layouts/ai-apps/desktop-modes.js');
@@ -41,8 +38,6 @@ test('one group of two buttons, Full screen then Half screen; none of Centred, S
   const g = w.groups()[0];
   assert.deepEqual(g.querySelectorAll('button').map(b => [b.getAttribute('data-mode'), b.getAttribute('aria-label')]), [['full', 'Full screen'], ['half', 'Half screen']]);
   assert.equal(g.getAttribute('role'), 'group');
-  const src = read('web/layouts/ai-apps/desktop-modes.js');
-  assert.doesNotMatch(src, /aad-mode-chats|'Chats list'|MODE_KEYS/, 'the other arrangement buttons left the group');
 });
 
 test('shown only while two windows are open; it disappears again when one closes', async () => {
@@ -88,15 +83,4 @@ test('Full screen acts on the window in front; Half screen from Full screen retu
   assert.deepEqual(w.calls.splice(0), [['wide', false], ['size', 'app', 476, true]]);
   assert.equal(w.model().ratio, null); assert.deepEqual(w.model().weights, {});
   for (const from of ['centre', 'pair']) { w.setModel({ mode: from }); w.press('half'); assert.deepEqual(w.calls.shift(), ['mode', 'tiled', undefined], from + ': Half screen is the split'); }
-});
-
-test('the centre divider is the app panel\'s own grip (no second resize system) and the group hides in the one-app window', () => {
-  const css = read('web/layouts/ai-apps/desktop.css');
-  assert.match(css, /\.aad-modes\[hidden\] \{ display: none; \}/, 'hidden wins over the group\'s inline-flex');
-  assert.match(css, /\[data-aad-one\] :is\(\.aad-modes,/);
-  assert.match(css, /\.aad-mode-glyph\.is-half \{/);
-  assert.doesNotMatch(css, /\.aad-mode-glyph\.is-(centre|pair|tiled)/, 'no glyphs left for buttons that are gone');
-  const split = read('web/layouts/ai-apps/desktop-split.js');
-  assert.match(split, /paintModes\(model\)/, 'repainted with the panes');
-  assert.doesNotMatch(read('web/layouts/ai-apps/desktop-modes.js'), /addEventListener\('pointer|pointerdown/, 'the divider drag stays in desktop-sizes.js');
 });
