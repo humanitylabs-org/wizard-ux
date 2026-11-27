@@ -54,6 +54,9 @@ window.WizCore.appParts.deskbar = function ({ $, $$, ago, APP, applyLayout, appV
   homeLate({ renderMoons });
   function paintOrbBadge() {
     const N = window.WizCore.workspaceNav, n = appVars.desks[appVars.idx] ? N.deskCount(appVars.desks[appVars.idx], appVars.W, winApp) : 0;
+    /* Four-section bar (wizard-ux issue 1950, switch wizard/phone-sections): no number on the orb at all; the Chats and
+     * Messenger tiles carry the counts. This wins over the phone-nav badge below, in every skin. */
+    if (window.WizCore.phoneSections?.on?.()) { $('#orbBadge').textContent = ''; $('#orbBadge').hidden = true; return; }
     /* Phone bar (wizard-ux issue 1533, switch wizard/phone-nav): one badge, the main agent's count, on its own desk only. */
     if (phoneNavBadge()) { const d = appVars.desks[appVars.idx], main = !!d && !d.home && (d.wins || []).some(id => appVars.W[id] && winApp(appVars.W[id])?.id === CHATS_APP.id), t = main ? N.label(CHATS_APP.id) : ''; $('#orbBadge').textContent = t; $('#orbBadge').hidden = !t; return; }
     $('#orbBadge').textContent = n ? N.fmt(n, N.deskMore?.(appVars.desks[appVars.idx], appVars.W, winApp)) : ''; $('#orbBadge').hidden = !n;

@@ -1,9 +1,11 @@
 /* Phone sections (wizard-ux#1929): Home · Chats · (orb) · Messenger · Apps. The orb (#orbWrap) is not touched: its
- * size, ring, halo, states and badge stay as they are. The desk dots and the desk + are hidden; app-sections.js draws
+ * size, ring, halo and states stay as they are. Its count badge is hidden (wizard-ux#1950, James: "there should be no
+ * number above the orb"): the Chats and Messenger tiles carry the counts, in every skin, with or without phone-nav. The desk dots and the desk + are hidden; app-sections.js draws
  * the tiles into #secL and #secR on either side of the orb. Colours come from the skin's tokens. */
 html[data-tweaks~="wizard/phone-sections"]:not([data-shell="desktop"]) #dock[data-sections] { gap: 0; padding-left: max(4px, env(safe-area-inset-left, 0px)); padding-right: max(4px, env(safe-area-inset-right, 0px)); }
 html[data-tweaks~="wizard/phone-sections"]:not([data-shell="desktop"]) #dock[data-sections] > .desk-dots { display: none !important; }
 html[data-tweaks~="wizard/phone-sections"]:not([data-shell="desktop"]) #dock[data-sections] > #orbWrap { margin-left: 6px; margin-right: 6px; }
+html[data-tweaks~="wizard/phone-sections"]:not([data-shell="desktop"]) #dock[data-sections] #orbBadge { display: none !important; }
 html[data-tweaks~="wizard/phone-sections"] .sec-side { flex: 1 1 0; min-width: 0; display: flex; align-items: center; justify-content: space-evenly; pointer-events: auto; margin-top: 6px; }
 html[data-tweaks~="wizard/phone-sections"] .sec-tile { position: relative; flex: 1 1 0; min-width: 44px; max-width: 84px; min-height: 46px; padding: 4px 2px 2px;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; border-radius: 12px;
