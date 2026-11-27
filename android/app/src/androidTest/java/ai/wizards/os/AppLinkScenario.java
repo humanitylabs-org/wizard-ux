@@ -88,7 +88,9 @@ final class AppLinkScenario {
             assertEquals("owned link: handed to the app", 1, owned.handoffs.size());
             assertEquals(OWNED, owned.handoffs.get(0).getDataString());
             assertEquals("owned link: no panel", 0, owned.blocked.size());
-            assertNotNull("the owning app is in front", device.wait(Until.findObject(By.pkg(testPkg).textContains("Opened in the app: " + OWNED)), 15000));
+            // CI emulators raise "Pixel Launcher isn't responding" over the app that just opened: tap Wait and keep looking
+            // (wizard-ux issue 2011).
+            assertNotNull("the owning app is in front", pastSystemDialogs(device, By.pkg(testPkg).textContains("Opened in the app: " + OWNED), 30000));
             assertEquals(testPkg, device.getCurrentPackageName());
             device.pressBack();
             assertNotNull("Back returns to the chat", pastSystemDialogs(device, "Chat with links", 20000));
@@ -110,9 +112,13 @@ final class AppLinkScenario {
 
     /** Waits for text, tapping "Wait" on an "isn't responding" dialog an earlier test's blocked UI thread may leave up. */
     private static androidx.test.uiautomator.UiObject2 pastSystemDialogs(UiDevice device, String text, long ms) {
+        return pastSystemDialogs(device, By.text(text), ms);
+    }
+
+    private static androidx.test.uiautomator.UiObject2 pastSystemDialogs(UiDevice device, androidx.test.uiautomator.BySelector target, long ms) {
         long end = System.currentTimeMillis() + ms;
         while (System.currentTimeMillis() < end) {
-            androidx.test.uiautomator.UiObject2 hit = device.wait(Until.findObject(By.text(text)), 1500);
+            androidx.test.uiautomator.UiObject2 hit = device.wait(Until.findObject(target), 1500);
             if (hit != null) return hit;
             androidx.test.uiautomator.UiObject2 wait = device.findObject(By.res("android:id/aerr_wait"));
             if (wait != null) wait.click();
