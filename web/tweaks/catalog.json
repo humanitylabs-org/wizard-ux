@@ -29,7 +29,6 @@
     "wizard/feature-counts-ask",
     "wizard/inbox-until-archived",
     "wizard/plain-alert-rows",
-    "wizard/sent-rows",
     "wizard/apps-panel",
     "wizard/ai-apps-running",
     "wizard/channel-model-emoji",

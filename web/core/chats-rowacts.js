@@ -57,7 +57,7 @@ window.WizCore.chatsParts.rowacts = function ({ ACT, actRestore, actUndo, BOOM, 
     for (const id of Object.keys(CH)) { const x = W[id]; if (x) renderChats(x); } H.changed?.();
   }
   /* Threads and alerts share one actions sheet, dismissal and gesture ownership. */
-  // A Sent row (wizard-ux issue 1814, switch wizard/sent-rows) is a row too: its sheet holds the routing corrections.
+  // A Sent row (wizard-ux issue 1814) is a row too: its sheet holds the routing corrections.
   const ROW_MENU = '.ch-list [data-chopen], .ch-list .ch-notif-row[data-chnotif], .ch-list [data-chchan], .ch-list [data-chsent]';
   // A channel line opens the channel sheet; every other row its thread or alert sheet.
   // A thread row in Sent (wizard-ux issue 1880, switch wizard/sent-threads) opens the thread's own sheet plus its sends.

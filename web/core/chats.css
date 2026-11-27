@@ -1191,44 +1191,6 @@ html:root .ch-tabbar button.on { color: var(--wz-accent); background: var(--wz-s
 html:root .ch-tabbar button:focus-visible { outline: 2px solid var(--wz-accent); outline-offset: -2px; }
 html:root .ch-list:has(> .ch-tabbar) > .ch-fab, html:root .ch-list:has(> .ch-tabbar) > .ch-pill { margin-bottom: 62px; }
 
-/* Sent: a back header like a channel's, the All · Working filter, then one opaque panel per capture. */
-html:root .ch-sent-h { display: flex; align-items: center; gap: 4px; min-height: 44px; padding: 0 8px 2px; }
-html:root .ch-sent-h b { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 1rem; font-weight: 600; color: var(--wz-text); }
-html:root .ch-sent-h .ch-chan-back { flex: none; width: 44px; height: 44px; display: grid; place-items: center; border: 0; background: transparent; color: var(--wz-text-secondary); cursor: pointer; }
-html:root .ch-sent-h .ch-chan-back svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-html:root .ch-sent-filter small { margin-left: 4px; font-size: .6875rem; font-weight: 700; color: var(--wz-accent); }
-html:root .ch-sent { margin: 0 0 12px; }
-html:root .ch-sent .ch-sec-b { display: flex; flex-direction: column; gap: 8px; }
-html:root .ch-sent-row { background: var(--wz-panel); border: 1px solid var(--wz-border); border-radius: 14px; overflow: hidden; }
-html:root .ch-sent-open { display: flex; align-items: flex-start; gap: 10px; width: 100%; padding: 10px 12px 6px; border: 0; background: transparent; color: var(--wz-text); font: inherit; text-align: left; cursor: pointer; }
-html:root .ch-sent-open:focus-visible { outline: 2px solid var(--wz-accent); outline-offset: -2px; }
-html:root .ch-sent-open .bd { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-html:root .ch-sent-open .tp { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
-html:root .ch-sent-open .tp b { flex: 1 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: .9375rem; font-weight: 600; color: var(--wz-text); }
-html:root .ch-sent-open .tp time { flex: none; font-size: .75rem; color: var(--wz-text-muted); }
-html:root .ch-sent-meta { font-size: .8125rem; line-height: 1.35; color: var(--wz-text-secondary); overflow-wrap: anywhere; }
-html:root .ch-sent-route { font-weight: 700; color: var(--wz-text); }
-html:root .ch-sent-urgent { font-weight: 700; color: var(--wz-warning); }
-html:root .ch-sent-tags { color: var(--wz-accent); }
-html:root .ch-sent-would { font-size: .75rem; font-style: italic; color: var(--wz-text-muted); }
-/* A reply's one-line answer from the agent (wizard-ux issue 1808). */
-html:root .ch-sent-answer { display: block; font-size: .8rem; color: var(--wz-text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* The state mark: a spinner while it runs, ✓ done, ! needs you, ✕ failed. */
-html:root .ch-sent-st { flex: none; width: 24px; height: 24px; margin-top: 1px; display: grid; place-items: center; border-radius: 50%; font-size: .8125rem; font-weight: 800; color: var(--wz-text-secondary); background: var(--wz-surface); }
-html:root .st-running .ch-sent-st { color: var(--wz-accent); }
-html:root .st-done .ch-sent-st { color: var(--wz-success); }
-html:root .st-needs_you .ch-sent-st { color: var(--wz-on-accent); background: var(--wz-warning); }
-html:root .st-failed .ch-sent-st { color: var(--wz-on-accent); background: var(--wz-danger); }
-html:root .st-needs_you .ch-sent-state { font-weight: 700; color: var(--wz-warning); }
-html:root .st-failed .ch-sent-state { font-weight: 700; color: var(--wz-danger); }
-html:root .ch-sent-st .ch-spin { width: 14px; height: 14px; }
-/* The two corrections: one row of small buttons under the words; the one he picked stays marked. */
-html:root .ch-sent-fix { display: flex; flex-wrap: wrap; gap: 6px; padding: 2px 12px 10px 46px; }
-html:root .ch-sent-fix button { min-height: 32px; padding: 5px 10px; border: 1px solid var(--wz-border); border-radius: 10px; background: var(--wz-surface); color: var(--wz-text-secondary); font: inherit; font-size: .75rem; font-weight: 600; cursor: pointer; }
-html:root .ch-sent-fix button[aria-pressed="true"] { color: var(--wz-on-accent); background: var(--wz-accent); border-color: var(--wz-accent); }
-html:root .ch-sent-fix button:disabled { opacity: .55; cursor: progress; }
-html:root .ch-sent-fix button:focus-visible { outline: 2px solid var(--wz-accent); outline-offset: 2px; }
-
 /* The AI apps desktop's Chats sidebar pane (wizard-ux issue 1807): the same tabs at the pane's bottom, over the gear and
  * + row. Inbox keeps the sidebar's own rows above the tabs; Tags (the channel list) and Sent fill the pane in their place. */
 html:root[data-shell="desktop"][data-layout="ai-apps"] .aad-panel:has(> .aad-chan:not([hidden]) > .ch-side > .ch-tabbar) > .aad-chan { order: 2; }
@@ -1241,7 +1203,7 @@ html:root[data-shell="desktop"][data-layout="ai-apps"] .aad-chan .ch-tabbar { ma
 html:root .ch-fail.ch-bg-result { background: color-mix(in srgb, var(--wz-accent) 8%, transparent); border-color: color-mix(in srgb, var(--wz-accent) 30%, transparent); }
 html:root .ch-fail.ch-bg-result .lb { color: var(--wz-accent); }
 
-/* Inbox rows and Sent rows (wizard-ux issues 1779 and 1814; Inbox rows on for everyone since 27 Nov 2026): the
+/* Inbox rows and Sent rows (wizard-ux issues 1779 and 1814; both on for everyone since 27 Nov 2026): the
  * Signal / Telegram chat rows drawn by core/chats-inboxrows.js ibRow, one look for both lists (moved word for word from
  * the inbox-rows package so Sent wears it too; Sent as threads, wizard-ux issue 1880, wears it as well). Wizard tokens only; the list sits on an opaque panel. */
 html:root .ch-list .ch-sec.ch-ib > .ch-sec-b { background: linear-gradient(var(--wz-surface), var(--wz-surface)), var(--wz-canvas); border-radius: var(--wz-radius-tile); overflow: hidden; }
@@ -1271,3 +1233,30 @@ html:root .ch-list .ch-ib-arch:hover, html:root .ch-list .ch-ib-arch:focus-visib
 html:root .ch-list .ch-ib-arch svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 html:root .ch-list .ch-ib-empty { display: flex; flex-direction: column; gap: 4px; align-items: center; text-align: center; padding: 32px 16px; color: var(--wz-text-muted); }
 html:root .ch-list .ch-ib-empty b { color: var(--wz-text); }
+/* Sent rows (wizard-ux issue 1814, on for everyone): only what Sent has of its own. Markup: core/chats-sent.js. */
+/* A send has no Archive button: its words run to the row's edge. */
+html:root .ch-list .ch-ib-wrap.ch-sr-wrap > .ch-row.ch-ib-row { padding-right: 12px; }
+/* The actions sheet: why it went where it went, and the correction he picked. */
+html:root .ch-sheet .ch-sr-why { margin: 0 12px 6px; font-size: .8125rem; line-height: 1.4; color: var(--wz-text-secondary); }
+html:root .ch-sheet-b button[data-rssentfix][aria-pressed="true"] { color: var(--wz-accent); }
+html:root .ch-sheet-b button[data-rssentfix][aria-pressed="true"] svg { stroke: var(--wz-accent); }
+html:root .ch-sheet-b button[data-rssentfix]:disabled { opacity: .55; cursor: progress; }
+/* The AI apps desktop's Chats panel: its Inbox is the sidebar's own compact rows (layouts/ai-apps desktop.css .aad-row:
+ * the marker left of the title, a 14 px title, the line under it, an 11 px time, no avatar; .aad-sec headers), which
+ * the Inbox rows do not restyle. There the same Sent rows take that look, so Inbox and Sent match in the panel too. */
+html:root[data-shell="desktop"][data-layout="ai-apps"] .ch-side-sent .ch-sec.ch-sr > .ch-sec-b { background: none; border-radius: 0; }
+html:root[data-shell="desktop"][data-layout="ai-apps"] .ch-side-sent .ch-ib-wrap.ch-sr-wrap + .ch-ib-wrap.ch-sr-wrap { box-shadow: none; }
+html:root[data-shell="desktop"][data-layout="ai-apps"] .ch-side-sent .ch-ib-wrap.ch-sr-wrap > .ch-row.ch-ib-row { min-height: 56px; padding: 8px 10px; gap: 8px; border-radius: 12px; color: var(--aad-ink, var(--wz-text)); }
+html:root[data-shell="desktop"][data-layout="ai-apps"] .ch-side-sent .ch-ib-wrap.ch-sr-wrap > .ch-row.ch-ib-row:hover { background: var(--aad-hover, var(--wz-surface)); }
+html:root[data-shell="desktop"][data-layout="ai-apps"] .ch-side-sent .ch-sr-row .ch-ib-av, html:root[data-shell="desktop"][data-layout="ai-apps"] .ch-side-sent .ch-sr-row .ch-ib-from { display: none; }
+html:root[data-shell="desktop"][data-layout="ai-apps"] .ch-side-sent .ch-sr-row .ch-ib-bd { display: grid; grid-template-columns: 12px minmax(0, 1fr) auto; column-gap: 6px; row-gap: 0; align-items: center; }
+html:root[data-shell="desktop"][data-layout="ai-apps"] .ch-side-sent .ch-sr-row :is(.ch-ib-l1, .ch-ib-l2) { display: contents; }
+html:root[data-shell="desktop"][data-layout="ai-apps"] .ch-side-sent .ch-sr-row .ch-ib-mk { grid-column: 1; grid-row: 1; justify-content: center; }
+html:root[data-shell="desktop"][data-layout="ai-apps"] .ch-side-sent .ch-sr-row .ch-ib-mk .ch-chan-dot { width: 8px; height: 8px; }
+html:root[data-shell="desktop"][data-layout="ai-apps"] .ch-side-sent .ch-sr-row .ch-ib-mk .ch-spin { width: 10px; height: 10px; }
+html:root[data-shell="desktop"][data-layout="ai-apps"] .ch-side-sent .ch-sr-row .ch-ib-t { grid-column: 2; grid-row: 1; font: 400 .875rem / 1.43 var(--wz-font-ui); color: var(--aad-ink, var(--wz-text)); }
+html:root[data-shell="desktop"][data-layout="ai-apps"] .ch-side-sent .ch-sr-row time { grid-column: 3; grid-row: 1; padding-left: .5rem; font: 400 .6875rem / 1 var(--wz-font-ui); font-variant-numeric: tabular-nums; color: var(--aad-ink-2, var(--wz-text-secondary)); }
+html:root[data-shell="desktop"][data-layout="ai-apps"] .ch-side-sent .ch-sr-row .ch-ib-pv { grid-column: 2 / 4; grid-row: 2; font: 400 .75rem / 1.43 var(--wz-font-ui); color: var(--aad-ink-2, var(--wz-text-secondary)); }
+html:root[data-shell="desktop"][data-layout="ai-apps"] .ch-side-sent .ch-sec.ch-sr > .ch-sec-h { height: 32px; margin: 10px 0 2px; padding: 0 8px; gap: 4px; border: 0; border-radius: 10px; font: 600 .8125rem / 1.4 var(--wz-font-ui); letter-spacing: normal; text-transform: none; color: var(--aad-ink-2, var(--wz-text-secondary)); }
+html:root[data-shell="desktop"][data-layout="ai-apps"] .ch-side-sent .ch-sec.ch-sr > .ch-sec-h small { font: 600 .75rem / 1 var(--wz-font-ui); letter-spacing: normal; color: var(--aad-ink-2, var(--wz-text-secondary)); }
+html:root[data-shell="desktop"][data-layout="ai-apps"] .ch-side-sent .ch-sec.ch-sr > .ch-sec-h:hover { background: var(--aad-hover, var(--wz-surface)); }

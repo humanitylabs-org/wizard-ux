@@ -17,7 +17,7 @@ const RAW = JSON.parse(read('tests/fixtures/sessions-list-1360.json'));
 const SHIFT = Date.now() - 5 * 60e3 - Math.max(...RAW.data.map(s => Date.parse(s.activityAt)));
 const shift = v => typeof v === 'string' && /^\d{4}-\d\d-\d\dT[\d:.]+Z$/.test(v) ? new Date(Date.parse(v) + SHIFT).toISOString() : Array.isArray(v) ? v.map(shift) : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, shift(x)])) : v;
 const PAYLOAD = shift(RAW);
-const ON = '', OTHER = 'wizard/sent-rows'; // no switch any more (issue 1604): marks show whatever data-tweaks holds
+const ON = '', OTHER = 'wizard/sent-threads'; // no switch any more (issue 1604): marks show whatever data-tweaks holds
 const GREEN = 'synthetic_1360_green', NEEDS = 'synthetic_1360_needs';
 
 // One device: its localStorage survives a "reload" (a new context on the same storage).
