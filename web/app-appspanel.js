@@ -5,7 +5,7 @@
  * apps and Get apps, Favorites (the owner's pinned apps, in order, with Edit), Recent (the last four apps used that are
  * not Favorites, each with an × that takes it off Recent). Search shows matching installed apps, best first; Enter opens
  * the best. All apps is the A–Z list. Edit: drag to reorder, minus to remove, Add favorites (All apps with stars), Done.
- * Long-press a row: Add to / Remove from Favorites. Tap outside, swipe the panel right or down, or Back closes it.
+ * Long-press a row: Add to / Remove from Favorites, and Add to Home Screen when the app can be pinned (ux#2001). Tap outside, swipe the panel right or down, or Back closes it.
  * Hold Apps (350 ms): nine round bubbles above the tile, recent first then favorites, the newest bottom-right; slide onto
  * one and let go to open it, let go elsewhere to cancel.
  * While Apps is the section in front, a sideways swipe anywhere on the bar steps one app through Recent (left = older,
@@ -176,12 +176,16 @@ window.WizCore.appParts.appspanel = function ({ $, APP, APPS, appVars, CHATS_APP
     if (d.apx) { apDropRecent(d.apx); return; }
     if (d.apopen) { if (apState.add) { apSetFav(d.apopen, !apIsFav(d.apopen)); vib(6); return; } apPick(d.apopen); }
   });
-  // Long-press a row: Add to / Remove from Favorites (WosContextMenu, so Back and a tap outside close it too).
+  // Long-press a row: Add to / Remove from Favorites, and Add to Home Screen for every app the home-screen sheet can pin
+  // (WizHomeScreenApps, as a hold on the Apps sheet or New desk grid; ux#2001). WosContextMenu, so Back and a tap
+  // outside close it too.
   function apMenu(btn) {
     const id = btn.dataset.apopen, a = APP[id], M = window.WosContextMenu; if (!a || !M) return;
     apLongAt = Date.now(); vib(12);
-    const r = btn.getBoundingClientRect(), fav = apIsFav(id);
-    M.open({ anchor: btn, x: Math.max(8, r.left + 12), y: r.bottom - 4, label: a.name, items: [{ label: fav ? 'Remove from Favorites' : 'Add to Favorites', action: () => apSetFav(id, !fav) }] });
+    const r = btn.getBoundingClientRect(), fav = apIsFav(id), H = window.WizHomeScreenApps;
+    const items = [{ label: fav ? 'Remove from Favorites' : 'Add to Favorites', action: () => apSetFav(id, !fav) }];
+    if (H?.canOffer?.(a)) items.push({ label: 'Add to Home Screen', action: () => H.offer(a) });
+    M.open({ anchor: btn, x: Math.max(8, r.left + 12), y: r.bottom - 4, label: a.name, items });
   }
   apEl.addEventListener('contextmenu', e => { const b = e.target.closest?.('[data-apopen]'); if (!b) return; e.preventDefault(); if (Date.now() - apLongAt > 600) apMenu(b); });
   apEl.addEventListener('pointerdown', e => {
