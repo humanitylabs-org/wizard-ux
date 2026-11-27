@@ -6,7 +6,7 @@
  * in front and the pins) stay in desktop.js; this code reads and writes them as aadVars.<name>, its get/set accessors
  * on the same variables, so every read and write is live. desktop.js's own imports are imported here again from the
  * same modules. The body below keeps desktop.js's indentation so `git log -L` and patches port over. */
-import { railActive, readyStep } from './parts.js';
+import { railActive, readyStep, sharedIds, sharedList } from './parts.js';
 import { CHATS } from '../apps/chrome.js';
 export function keysPart({ aadVars, allOpenNow, anim, api, appKeyOf, applySizes, appName, behindThread, chanTitle, chatAction, chatParts, chatWindows, closeAll, closeChat, closeDesk, closeTidy, closeWs, cTop, curChat, cX, deskOfNode, desks, doc, DRAFT, el, FEED, feedBack, feedGone, feedOn, feedTitle, findBtn, focusIn, focusLeave, focusOut, FRAME_KEYS, goApp, grip, hBack, hidePanel, hMid, homeComposer, host, isAppKey, KEY_LIKE, khMarks, listBack, macHoles, mainChats, MODE_KEYS, MODE_LABELS, modeBars, narrow, newBtn, NOTE, noteOn, noteTitle, one, oneBack, oneSplit, openAll, openTidy, openWs, orbBtn, paintAgents, paintBack, paintHome, paintList, paintOneChats, paintOrbIdentity, paintRail, paintSplit, paintVt, paintWs, paneFrame, panes, pIcon, plus, pX, railMode, readSessions, readyIds, readyOrder, retileSoon, rFind, rList, rNew, root, rSet, rTog, setBtn, setSearch, setSize, settings, side, sizes, stepReady, swapped, swapSides, syncOrb, syncSide, talkFromOrb, tidyBtn, titleOf, togBtn, toggleSide, toggleTabs, top, tt, typing, unpeek, vtAll, vtList, vtTog, windowMode, wsBtn, wsName }) {
   const closeSettings = () => host?.settings.close();
@@ -133,7 +133,9 @@ export function keysPart({ aadVars, allOpenNow, anim, api, appKeyOf, applySizes,
     if (open) {
       // ↓ / ↑ on the very rows ⌥↓ / ⌥↑ open (the drawn Ready, in its order)
       // (the row makes room at its start while ⌥ is held, data-aad-kh, so the keycap never touches its title)
-      const row = (id, k) => { const w = id && [...side.querySelectorAll('.aad-rw[data-kind="ready"]')].find(r => r.dataset.sid === id); const b = w?.querySelector('.aad-row'); if (shown(b)) { w.dataset.aadKh = k; khMarks.set(id, k); put(b, k, 'inside-l'); } };
+      // (the pane's Chats list, wizard-ux issue 1966: the phone's row for that thread or alert)
+      const paneRow = id => { const sec = id && sharedList(side.querySelector('.aad-chan'))?.querySelector('section.ch-sec[data-sec="ready"]'), ids = sharedIds(sec), i = ids.indexOf(id); return i < 0 ? null : sec.querySelectorAll('[data-chopen], [data-chnotif]')[i]; };
+      const row = (id, k) => { const w = id && [...side.querySelectorAll('.aad-rw[data-kind="ready"]')].find(r => r.dataset.sid === id); const b = w?.querySelector('.aad-row') || paneRow(id); if (shown(b)) { if (w) w.dataset.aadKh = k; khMarks.set(id, k); put(b, k, 'inside-l'); } };
       if (nx && nx.id !== cur) row(nx.id, '↓'); if (pv && pv.id !== cur) row(pv.id, '↑');
     } else {
       // folded: on the rail word whose group holds it (its status, else Ready)

@@ -73,7 +73,7 @@ import { glyphOf, colourOf } from '../orb/shared.js';
 import { HOLD_MS } from '../orb/keys.js';
 import { ACTS, svgIcon, initial, sectionsFor, archiveTop, KINDS, EMPTY, sectionsOpen, gridSlot, STATES, stateOf, stateGroups, gaugeInto, fuelOf,
   pinsFrom, togglePin, RAIL_WORDS, vtMove, relMoves, appLayers, shownIds, TIDY, TIDY_WORDS, TIDY_DEFAULT, tidyPlan, seedUsed, tidyWords,
-  TIDY_SHORT, tidySentence, readyGroups, projectGroups, GROUP_MODES, groupMode, readyFlat, readyStep, GROUP_ORDERS, groupOrder, railRows, railActive, railNext, shortTime, titleInProject } from './parts.js';
+  TIDY_SHORT, tidySentence, readyGroups, projectGroups, GROUP_MODES, groupMode, readyFlat, readyStep, GROUP_ORDERS, groupOrder, railRows, railActive, railNext, shortTime, titleInProject, sharedList } from './parts.js';
 import { homeView } from './home.js';
 import { appmenuPart } from './desktop-appmenu.js';
 import { closingPart } from './desktop-closing.js';
@@ -349,6 +349,9 @@ export default function desktop(api) {
   let q = '';
   function setSearch(on) {
     if (on && root.dataset.aadSide === 'rail') { if (narrow()) { peek = true; offPeek = api.back.push(() => { peek = false; offPeek = null; paintSide(); }); } else { folded = false; api.storage.set('folded', false); } paintSide(); }
+    // The pane's Chats list (wizard-ux issue 1966) searches in its own title bar, as on the phone: ⌥K opens that field.
+    const sl = on ? sharedList(root.querySelector?.('.aad-chan')) : null, tb = sl?.querySelector('.ch-tbar [data-chtbsearch]');
+    if (tb) { if (tb.getAttribute('aria-pressed') !== 'true') tb.click(); else sl.querySelector('[data-chsearch]')?.focus?.({ preventScroll: true }); return; }
     searchBox.hidden = cancelBtn.hidden = !on; wsBtn.hidden = findBtn.hidden = on;
     if (!on) { q = ''; field.value = ''; offSearch?.(); offSearch = null; } else if (!offSearch) offSearch = api.back.push(() => { offSearch = null; setSearch(false); });
     paintList(true);

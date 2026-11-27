@@ -66,9 +66,8 @@ test('AI apps layout: Archive last in the desktop sidebar and phone drawer; firs
   assert.equal(archiveTop(html('miguel/archive-topper')), false, 'exact tweak id only');
   assert.equal(archiveTop(null), false);
   // the phone drawer draws sectionsFor(root): ai-apps-view.test.mjs ('archive-top: Archive first') runs it; the desktop
-  // sidebar (the real view, drawn) keeps Archive last
-  const keys = await deskSections('wizard/unified-inbox');
-  assert.equal(keys.at(-1), 'archive', `desktop: Archive last (${keys})`);
+  // sidebar's sections are the pane's shared Chats list since wizard-ux issue 1966 (below)
+  assert.deepEqual(await deskSections('wizard/unified-inbox'), [], 'desktop: no sections of the sidebar\'s own');
 });
 
 // The real desktop AI apps view (tests/fixtures/ai-apps-world.mjs) with `tweaks` on <html>: its sidebar's section keys.
@@ -79,12 +78,10 @@ async function deskSections(tweaks) {
   return w.qa('.aad-sec').map(h => h.dataset.sec);
 }
 
-// The desktop sidebar draws the Activity sections (actOn() is always true in desktop.js); archive-top puts Archived first
-// there too, as on the phone drawer (wizard-ux issue 1741), and the rest keep their stock order.
-test('AI apps desktop sidebar: archive-top puts Archive first', async () => {
-  const off = await deskSections('wizard/unified-inbox');
-  const on = await deskSections('wizard/unified-inbox miguel/archive-top');
-  assert.equal(on[0], 'archive', `desktop with archive-top: ${on}`);
-  assert.deepEqual(on.slice(1), off.filter(k => k !== 'archive'), 'the other sections keep their order');
-  assert.equal(off.at(-1), 'archive', `desktop without archive-top: Archive last (${off})`);
+// The desktop sidebar's Working, Inbox, Snoozed and Archived are the pane's shared Chats list since wizard-ux issue 1966
+// (one design with the phone): archive-top orders them there exactly as on the phone's Chats list; the sidebar draws no
+// sections of its own, with or without it.
+test('AI apps desktop sidebar: no sections of its own with or without archive-top (the shared list orders them, issue 1966)', async () => {
+  assert.deepEqual(await deskSections('wizard/unified-inbox'), []);
+  assert.deepEqual(await deskSections('wizard/unified-inbox miguel/archive-top'), []);
 });

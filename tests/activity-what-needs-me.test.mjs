@@ -73,23 +73,27 @@ function sidebar({ order = 'newest', agents = 3, rows = null } = {}) {
 const heads = sc => sc.all().filter(n => n.cls === 'aad-lab aad-sec').map(n => [n.attrs['data-sec'], n.attrs['aria-expanded']]);
 const texts = (sc, cls) => sc.all().filter(n => n.cls === cls).map(n => n.textContent);
 
-test('AI apps sidebar: no agent chips, every agent, Working / Inbox / Snoozed / Archived, one sort', () => {
+// wizard-ux issue 1966 (one design on phone and desktop): the sidebar's Inbox is Chats' own list in its pane (the phone's
+// title bar, Working / Inbox / Snoozed / Archived, rows and sort), so the layout draws no sections or rows of its own.
+test('AI apps sidebar: no agent chips, every agent; Inbox is the pane\'s shared list, never rows of the sidebar\'s own (issue 1966)', () => {
   const { c, asked } = sidebar();
   c.paintAgents(); assert.equal(c.agentsRow.hidden, true, 'the agent chip strip is gone'); assert.equal(c.agentsRow.children.length, 0);
-  c.readSessions(); c.paintList(true);
+  c.paintChan = () => true; // the pane drew Chats' own list
+  c.readSessions(); c.scroll.append(new Node('div', 'aad-rw')); c.paintList(true);
   assert.deepEqual(JSON.parse(JSON.stringify(asked.at(-1))), { activity: true }, 'every agent, never the focused list');
-  assert.deepEqual(heads(c.scroll), [['working', 'false'], ['ready', 'true'], ['snoozed', 'false'], ['archive', 'false']]);
-  assert.deepEqual(texts(c.scroll, 'aad-sec-w'), ['Working', 'Inbox', 'Snoozed', 'Archived']);
-  assert.deepEqual(texts(c.scroll, 'aad-rw'), ['h1:new·Host', 'g1:new', 'r1', 'y1:needs', 'r2', 'old'], 'every thread until archived (issue 1810); another agent named after its channel');
-  assert.deepEqual(texts(c.scroll, 'aad-more-older'), [], 'no Show older');
-  assert.equal(c.scroll.all().filter(n => /aad-groupb|aad-working-orderb/.test(n.cls)).length, 0, 'no grouping drop-down and no Working sort');
-  const sort = c.scroll.all().find(n => n.cls === 'aad-sortb aad-act-orderb'); assert.ok(sort); assert.equal(sort.attrs['aria-label'], 'Sort: Newest first. Change');
+  assert.equal(c.scroll.children.length, 0, 'nothing of its own under the shared list');
+  c.paintChan = () => false; c.paintList(true); // the pane not drawn yet
+  assert.deepEqual(heads(c.scroll), [], 'no Working / Inbox section rows of its own');
+  assert.deepEqual(texts(c.scroll, 'aad-rw'), [], 'no compact rows of its own');
+  assert.equal(c.scroll.all().filter(n => /aad-sortb|aad-groupb/.test(n.cls)).length, 0, 'no sort or group drop-down of its own');
+  assert.deepEqual(texts(c.scroll, 'aad-empty'), ['Loading your chats…']);
 });
 
-test('AI apps sidebar: Needs you first puts amber first', () => {
-  const { c } = sidebar({ order: 'priority' }); c.readSessions(); c.paintList(true);
-  assert.deepEqual(texts(c.scroll, 'aad-rw').slice(0, 3), ['y1:needs', 'h1:new·Host', 'g1:new']);
-  assert.equal(c.scroll.all().find(n => n.cls === 'aad-sortb aad-act-orderb').attrs['aria-label'], 'Sort: Needs you first. Change');
+test('AI apps sidebar: Needs you first puts amber first (the shared Inbox rows the pane draws)', () => {
+  const ids = html => [...html.matchAll(/data-chopen="([^"]+)"/g)].map(m => m[1]);
+  const all = [...ROWS(), row('h1', 1, { owner: 'host', fresh: true })];
+  assert.deepEqual(ids(phone({ order: 'priority' }).activityBody({ id: 'w' }, all, null, 0)).filter(id => id !== 'w1').slice(0, 1), ['y1']);
+  assert.notEqual(ids(phone({ order: 'newest' }).activityBody({ id: 'w' }, all, null, 0)).filter(id => id !== 'w1')[0], 'y1');
 });
 
 test('skin-host: list({ activity: true }) reads the shell\'s activity list; unread alerts wait in Inbox, read ones with Snoozed', () => {
@@ -174,15 +178,10 @@ test('phone Inbox: only the sections that hold a chat, with real counts (issue 1
   assert.deepEqual(secs(html), [['Inbox', '1', true]], 'an unread alert alone still shows Inbox');
 });
 
-test('AI apps sidebar on a fresh box: one empty state with New chat, no sections; one chat shows only its section (issue 1731)', () => {
-  const { c, listens } = sidebar({ rows: [] }); let made = 0; c.api.sessions.newChat = () => { made++; };
+test('AI apps sidebar on a fresh box: the pane\'s one empty state with New chat, no sections; the sidebar adds none (issues 1731, 1966)', () => {
+  const { c } = sidebar({ rows: [] }); c.paintChan = () => true;
   c.readSessions(); c.paintList(true);
-  assert.deepEqual(heads(c.scroll), []);
-  assert.equal(c.scroll.all().filter(n => n.cls === 'aad-act-empty').length, 1);
-  assert.deepEqual(texts(c.scroll, 'aad-empty'), [], 'no per-section empty lines');
-  assert.equal(c.scroll.all().filter(n => /aad-act-orderb|aad-sec-n|aad-sec-m/.test(n.cls)).length, 0, 'no sort, no count');
-  listens.find(([n]) => n.cls === 'aad-act-new')[2](); assert.equal(made, 1, 'New chat starts one');
-  const one = sidebar({ rows: [row('s1', 1, { deferred: true })] }); one.c.readSessions(); one.c.paintList(true);
-  assert.deepEqual(heads(one.c.scroll), [['snoozed', 'false']]);
-  assert.equal(one.c.scroll.all().filter(n => n.cls === 'aad-act-empty').length, 0);
+  assert.deepEqual(heads(c.scroll), []); assert.equal(c.scroll.children.length, 0, 'no empty state of its own');
+  const html = phone().activityBody({ id: 'w' }, [], null, 0);
+  assert.match(html, /class="ch-empty ch-act-empty"/); assert.match(html, /data-chnew/); assert.deepEqual(secs(html), []);
 });

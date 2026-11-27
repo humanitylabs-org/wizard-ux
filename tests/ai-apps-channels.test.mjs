@@ -267,15 +267,15 @@ test('Chats paints the side pane: tabs, then the channel list or a feed with its
   assert.equal(api.sessions.channels(kid), true); assert.equal(api.sessions.channels(other), false, 'only the layout\'s own mounted nodes');
   assert.deepEqual(api.sessions.channelFeed(kid), { open: 'general' }); assert.equal(api.sessions.channelFeed(other), null, 'only the layout\'s own mounted nodes');
   assert.equal(api.sessions.channelBack(), true); assert.deepEqual(got, ['channels kid', 'feed kid', 'back']);
-  // the layout: its .aad-chan box gets the pane; Channels take the rows' place; a row's "# channel" makes it two lines
+  // the layout: its .aad-chan box gets the pane, Chats' own list (wizard-ux issue 1966: the phone's title bar, rows and
+  // tabs), which takes the sidebar rows' place: the layout draws no rows of its own under it
   const backs = [];
   const p = await panelDesk({ before: d => { d.w.st.sessions.ready[0].channel = 'general';
-    Object.assign(d.w.api.sessions, { channels: node => { node.replaceChildren(); const list = new El('div'); list.className = 'ch-list ch-side ch-side-chan'; node.append(list); return true; }, channelBack: () => { backs.push(1); return true; } }); } });
+    Object.assign(d.w.api.sessions, { channels: node => { node.replaceChildren(); const list = new El('div'); list.className = 'ch-list'; node.append(list); return true; }, channelBack: () => { backs.push(1); return true; } }); } });
   const { w, style } = p, box = w.q('.aad-chan');
   assert.equal(box.hidden, false, 'the side pane is shown in the sidebar'); assert.equal(box.closest('.aad-panel') !== null, true);
-  assert.ok(box.querySelector('.ch-side-chan'), 'Chats painted its channel list into the layout\'s box');
-  assert.equal(style(w.q('.aad-panel > .aad-scroll'))('display'), 'none', 'Channels and a feed take the rows\' place');
-  assert.equal(w.q('.aad-rw[data-sid="r1"] .aad-chan-line').textContent, '# general', 'a row\'s channel under its title');
-  const row = style(w.q('.aad-rw[data-sid="r1"] .aad-row')); assert.deepEqual([row('height'), row('min-height')], ['auto', '56px'], 'two lines at 56 px');
+  assert.ok(box.querySelector('.ch-list'), 'Chats painted its list into the layout\'s box');
+  assert.equal(style(w.q('.aad-panel > .aad-scroll'))('display'), 'none', 'the shared list takes the rows\' place');
+  assert.equal(w.q('.aad-rw[data-sid="r1"]'), null, 'no row of the sidebar\'s own');
   assert.equal(w.escape(), true); assert.equal(backs.length, 1, 'Esc with no docked thread: Back in Channels (thread → channel → list)');
 });
