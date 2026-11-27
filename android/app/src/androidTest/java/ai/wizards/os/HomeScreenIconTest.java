@@ -217,7 +217,7 @@ public class HomeScreenIconTest {
     }
     /** 412 px wide: top row One UI (n = 3 squircle, Samsung placement), bottom row this emulator's mask; counts 3, 17, 85, 1000. */
     private static Bitmap sheet(Context c, Bitmap square, boolean oneUi) {
-        int w = 412, tile = 84, gap = (w - 4 * tile) / 5, h = 2 * tile + 3 * 40;
+        int w = 412, tile = 84, gap = (w - 4 * tile) / 5, h = 2 * tile + 3 * 50;
         Bitmap out = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
         Canvas k = new Canvas(out);
         k.drawColor(0xff2b3a55);
@@ -225,7 +225,7 @@ public class HomeScreenIconTest {
         label.setColor(Color.WHITE); label.setTextSize(15); label.setTextAlign(Paint.Align.CENTER);
         int[] counts = {3, 17, 85, 1000};
         for (int row = 0; row < 2; row++) {
-            int top = 30 + row * (tile + 40);
+            int top = 34 + row * (tile + 50);
             for (int i = 0; i < counts.length; i++) {
                 int left = gap + i * (tile + gap);
                 BadgeLook.Style style = oneUi ? new BadgeLook.Style(true, row == 0) : BadgeLook.Style.CLASSIC;
