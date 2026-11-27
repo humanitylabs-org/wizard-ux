@@ -235,7 +235,7 @@ window.WizCore.chats = function createChats(H) {
     const st = chanStore(); if (!st) return null;
     const S = LIVE.chanStore, tick = LIVE.ticks || 0;
     if (chanStoreMemo && chanStoreMemo.rev === st.rev && chanStoreMemo.proj === proj && chanStoreMemo.tick === tick) return chanStoreMemo;
-    // Tags on (wizard-agent-service issue 608, switch wizard/chat-tags): a chat is in every channel it carries as a tag
+    // Tags on (wizard-agent-service issue 608, on for everyone): a chat is in every channel it carries as a tag
     // (its row's `tags`), so `where` holds a set of channel ids per chat.
     const byId = new Map(st.channels.map(c => [c.id, c])), where = new Map(), one = id => new Set(id ? [id] : []);
     for (const sp of proj) { const c = byId.get(sp.id); if (c) for (const t of sp.threads) where.set(c.agent + '|' + t, one(c.id)); }
@@ -265,7 +265,7 @@ window.WizCore.chats = function createChats(H) {
     else LIVE.chanStore.move(sid, add ? key : null, a);
     return true;
   }
-  // Tags on (wizard-agent-service issue 608, switch wizard/chat-tags): the box's channel list says so.
+  // Tags on (wizard-agent-service issue 608, on for everyone): the box's channel list says so.
   function chanTags() { return !!chanStore()?.tags; }
   // The row a window shows for this id, by its own agent (a main and a routed thread can share an id).
   const chanRowAgent = (wid, sid) => { const r = rowOf(wid, sid); return r && r.id === sid ? rowAgent(r) : undefined; };
@@ -396,9 +396,9 @@ window.WizCore.chats = function createChats(H) {
   // One local picker, rendered through the same Focus options as the filter sheet.
   let spacePicker = null, focusHoldUntil = 0;
   /* Space picker, Focus strip, Activity list and order; core/chats-spaces.js. */
-  /* Inbox rows (wizard-ux issue 1779, switch wizard/inbox-rows); core/chats-inboxrows.js. */
-  const { ibMark, ibPinTopOn, ibPinWord, ibRow, ibTagFace, ibThreadRow, inboxRowsOn, inboxRowsBody, inboxRowsClick, inboxRowsFacts } = window.WizCore.chatsParts.inboxrows({ actMark, actNeeds, actUnread, AGS: (...a) => AGS(...a), agentName: (...a) => agentName(...a), agentRec: (...a) => agentRec(...a), ago, attOf, chanAt, chanFace, chanStore, chatVars, ch, clip, elOf: (...a) => elOf(...a), esc, isWorking, LIVE, noteAt, noteIcon, notePlain, noteRow, noteRowAct: (...a) => noteRowAct(...a), noteSrcName, PIN, renderChatList: (...a) => renderChatList(...a), rowAgent, spacesOf, threadAct: (...a) => threadAct(...a), toast, W, winAgent: (...a) => winAgent(...a) });
-  const { activityBody, activityClick, actSetOrder, anchorListPlace, bindFocusStrip, closeSpacePicker, holdListPlace, listPlace, listSaveT, openSpacePicker, queueListPlace, restoreListPlace, storedListPlace, bindLate: spacesLate } = window.WizCore.chatsParts.spaces({ actNeeds, actUnread, chanTags, inboxRowsBody, inboxRowsClick, inboxRowsOn, agentRec, AGS: (...a) => AGS(...a), ch, CH, CHAN_STORE_MAX, chanAt, chanEmojiPick, chanEmojiSync, chanEmojiTap, chanModelEmoji, chanOpen, chanStore, chanTarget, chanToEnd, chatRow, chatVars, esc, fileInGeneral, fileInSpace, focusAgents, focusOf, focusOptions, H, LIVE, norm, noteAt, noteRow, openChannel, owner: (...a) => owner(...a), READY_ORDER_KEY, renderChatList: (...a) => renderChatList(...a), rerenderList, runningOpen, SEC_PAGE, setFocus, SPACE, spaceAgent, spaceContains, spaceMember, spaces, spacesOf, storeAgent, toast, W, winAgent });
+  /* Inbox rows (wizard-ux issue 1779, on for everyone); core/chats-inboxrows.js. */
+  const { ibMark, ibPinTopOn, ibPinWord, ibRow, ibTagFace, ibThreadRow, inboxRowsBody, inboxRowsClick, inboxRowsFacts } = window.WizCore.chatsParts.inboxrows({ actMark, actNeeds, actUnread, AGS: (...a) => AGS(...a), agentName: (...a) => agentName(...a), agentRec: (...a) => agentRec(...a), ago, attOf, chanAt, chanFace, chanStore, chatVars, ch, clip, draftTag, elOf: (...a) => elOf(...a), esc, isWorking, LIVE, noteAt, noteIcon, notePlain, noteRow, noteRowAct: (...a) => noteRowAct(...a), noteSrcName, PIN, renderChatList: (...a) => renderChatList(...a), rowAgent, spacesOf, threadAct: (...a) => threadAct(...a), toast, W, winAgent: (...a) => winAgent(...a) });
+  const { activityBody, activityClick, actSetOrder, anchorListPlace, bindFocusStrip, closeSpacePicker, holdListPlace, listPlace, listSaveT, openSpacePicker, queueListPlace, restoreListPlace, storedListPlace, bindLate: spacesLate } = window.WizCore.chatsParts.spaces({ actNeeds, actUnread, chanTags, inboxRowsBody, inboxRowsClick, agentRec, AGS: (...a) => AGS(...a), ch, CH, CHAN_STORE_MAX, chanAt, chanEmojiPick, chanEmojiSync, chanEmojiTap, chanModelEmoji, chanOpen, chanStore, chanTarget, chanToEnd, chatRow, chatVars, esc, fileInGeneral, fileInSpace, focusAgents, focusOf, focusOptions, H, LIVE, norm, noteAt, noteRow, openChannel, owner: (...a) => owner(...a), READY_ORDER_KEY, renderChatList: (...a) => renderChatList(...a), rerenderList, runningOpen, SEC_PAGE, setFocus, SPACE, spaceAgent, spaceContains, spaceMember, spaces, spacesOf, storeAgent, toast, W, winAgent });
   focusLate({ closeSpacePicker, openSpacePicker });
   chanuiLate({ openSpacePicker });
   /* Painting a Chats list and folding its sections; core/chats-listpaint.js. */

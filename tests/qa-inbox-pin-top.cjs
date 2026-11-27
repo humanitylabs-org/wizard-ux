@@ -1,5 +1,5 @@
 'use strict';
-// Pin to top (wizard-ux issue 1887, switch wizard/inbox-pin-top, with wizard/inbox-rows on), in a real browser on a
+// Pin to top (wizard-ux issue 1887, switch wizard/inbox-pin-top; Inbox rows are on for everyone), in a real browser on a
 // disposable synthetic box. Phone 412x915 and Classic desktop 1440x960, Nebula and a light skin:
 //   - the owner opens a read row's menu (Shift+F10, as hold / right-click) and taps Pin to top: it shows first, above
 //     today's Daily, with the pin mark, the same row look; the pin is written to the box's pin list (ui-preferences);
@@ -56,7 +56,7 @@ const report = { origin, web, switch: SW ? 'on' : 'off', cases: [] };
       const context = await browser.newContext({ viewport: phone ? { width: 412, height: 915 } : { width: 1440, height: 960 }, isMobile: phone, hasTouch: phone, serviceWorkers: 'block', ...(phone ? { userAgent: 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Mobile Safari/537.36' } : {}) });
       try {
         await context.routeWebSocket('**/*', w => w.close());
-        const mix = { 'wizard/desktop-chats': true, 'wizard/inbox-rows': true, ...(process.env.QA_SMART ? { 'wizard/smart-inbox': true } : {}), ...(SW ? { 'wizard/inbox-pin-top': true } : {}) };
+        const mix = { 'wizard/desktop-chats': true, ...(process.env.QA_SMART ? { 'wizard/smart-inbox': true } : {}), ...(SW ? { 'wizard/inbox-pin-top': true } : {}) };
         await context.addInitScript(({ shell, skin, mix }) => {
           if (window !== top) return;
           if (sessionStorage.getItem('qaBoot')) return; sessionStorage.setItem('qaBoot', '1');
@@ -120,7 +120,7 @@ const report = { origin, web, switch: SW ? 'on' : 'off', cases: [] };
         await page.goto(origin + prefix + (phone ? 'index.html?phone' : 'desktop.html'));
         await page.waitForFunction(() => (window.__wux || window.__wos) && !window.WosWelcome?.active && window.WosExperience?.state.tweaks.length && !window.WosExperience.state.busy);
         await page.addStyleTag({ content: '#wosWelcome{display:none!important}' });
-        await page.waitForFunction(sw => { const t = (document.documentElement.dataset.tweaks || '').split(' '); return t.includes('wizard/inbox-rows') && (!sw || t.includes('wizard/inbox-pin-top')); }, SW && !BROKEN, { timeout: 15000 });
+        await page.waitForFunction(sw => { const t = (document.documentElement.dataset.tweaks || '').split(' '); return !sw || t.includes('wizard/inbox-pin-top'); }, SW && !BROKEN, { timeout: 15000 });
         if (phone) await page.evaluate(() => __wos.openSheet('inbox')); else await page.evaluate(() => __wux.openChatsList());
         const vis = sel => page.locator(sel).filter({ visible: true }).first();
         const shot = async name => { await page.evaluate(() => document.fonts.ready); await nap(300); await page.screenshot({ path: path.join(out, `${stem}-${name}.png`) }); };

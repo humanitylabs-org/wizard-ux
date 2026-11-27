@@ -64,7 +64,7 @@ test('a thread with no waiting record (or a restore with no archive here) writes
   assert.equal(calls.length, before);
 });
 
-function part({ tweaks = 'wizard/inbox-rows', records, threads = {}, peek, extra = {} }) {
+function part({ tweaks = '', records, threads = {}, peek, extra = {} }) {
   const ctx = vm.createContext({ console, Date, Promise, String, Number, Set, Map, Array, Object, JSON, setTimeout });
   ctx.window = ctx; ctx.globalThis = ctx;
   ctx.document = { documentElement: { dataset: { tweaks } } };
@@ -120,9 +120,9 @@ test('a hidden thread never opened here is read by id; hidden while that first r
 test('Smart inbox on: a record whose thread says check is not in the Inbox; off: it is, as before', () => {
   const threads = { c1: { id: 'c1', hidden: true, attention: { state: 'check', ask: 'Check it' } }, n1: { id: 'n1', hidden: true, attention: { state: 'needs_you', ask: 'A or B?' } } };
   const records = [rec('a', 'c1'), rec('b', 'n1'), rec('c', 'c1', { failed: true })];
-  const on = part({ tweaks: 'wizard/inbox-rows wizard/smart-inbox', records, threads });
+  const on = part({ tweaks: 'wizard/smart-inbox', records, threads });
   assert.deepEqual(drawn(on.api, on.ctx).ids.sort(), [RID('b'), RID('c')], 'the needs you and the failed task stay');
-  const off = part({ tweaks: 'wizard/inbox-rows', records, threads });
+  const off = part({ tweaks: '', records, threads });
   assert.deepEqual(drawn(off.api, off.ctx).ids.sort(), [RID('a'), RID('b'), RID('c')]);
 });
 

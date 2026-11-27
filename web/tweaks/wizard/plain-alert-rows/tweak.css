@@ -1,5 +1,5 @@
 /* Alerts as chat rows (wizard-ux issue 1941): a Chats alert is drawn as a thread row (markup: core/chats-inboxrows.js
- * ibNoteRow with Inbox rows on, core/chats-notes.js noteRow in the classic list), marked only by a small bell before
+ * ibNoteRow), marked only by a small bell before
  * its source name. No amber fill, outline, tile, pill or time. Wizard tokens only. */
 html[data-tweaks~="wizard/plain-alert-rows"] .ch-list .ch-al-mk { display: inline-block; width: 0.8125rem; height: 0.8125rem; margin-right: 0.25rem; vertical-align: -0.125rem; color: currentColor; }
 html[data-tweaks~="wizard/plain-alert-rows"] .ch-list .ch-al-mk svg { display: block; width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }

@@ -1,4 +1,4 @@
-// Pin to top (wizard-ux issue 1887, switch wizard/inbox-pin-top, off by default, with wizard/inbox-rows on): threads
+// Pin to top (wizard-ux issue 1887, switch wizard/inbox-pin-top, off by default; Inbox rows are on for everyone): threads
 // in the owner's pin list (the box's ui-preferences pinnedChats, also what an agent adds to) rank above today's Daily,
 // in pin order, always in Inbox, drawn as the normal row with the pin mark; a read one that is only there because of
 // the pin is not counted. Runs the real list model and the real chats-inboxrows.js part. Switch off: nothing changes.
@@ -12,7 +12,7 @@ import { modelContext } from './fixtures/chats-list-model.mjs';
 
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
 const J = v => JSON.parse(JSON.stringify(v));
-const H = 3600e3, NOW = Date.now(), ROWS_SW = 'wizard/inbox-rows', SW = 'wizard/inbox-pin-top';
+const H = 3600e3, NOW = Date.now(), SW = 'wizard/inbox-pin-top';
 const M = modelContext({}).WizChatsListModel;
 const iso = t => new Date(t).toISOString();
 const row = (id, h, extra = {}) => ({ id, title: 'T ' + id, status: 'completed', at: NOW - h * H, updatedAt: iso(NOW - h * H), lastAssistantAt: iso(NOW - h * H), messageCount: 2, ...extra });
@@ -89,7 +89,7 @@ function part({ tweaks, pins = [], pinsShown = true }) {
 const order = html => [...html.matchAll(/<div class="ch-row-wrap ch-ib-wrap([^"]*)"[^>]*>[\s\S]*?data-chopen="([^"]+)"/g)].map(m => ({ id: m[2], pinned: / pinned/.test(m[1]) }));
 
 test('part: switch on, Pin to top rows first with the pin mark, the same row; the count leaves out a read one; menu word', () => {
-  const { api, rows } = part({ tweaks: `${ROWS_SW} ${SW}`, pins: ['m1'] });
+  const { api, rows } = part({ tweaks: SW, pins: ['m1'] });
   const html = api.inboxRowsBody({ id: 'w' }, rows, null);
   const r = order(html);
   assert.deepEqual(J(r.slice(0, 2)), [{ id: 'm1', pinned: true }, { id: 'd1', pinned: true }]);
@@ -103,15 +103,12 @@ test('part: switch on, Pin to top rows first with the pin mark, the same row; th
   assert.equal(fx.top({ id: 'm1' }), true); assert.ok(fx.pin({ id: 'm1' }) < fx.pin({ id: 'd1' }));
 });
 
-test('part: switch off (or Inbox rows off, or Pins hidden), a pinned thread is not lifted and the menu says Pin', () => {
-  for (const o of [{ tweaks: ROWS_SW }, { tweaks: SW }, { tweaks: `${ROWS_SW} ${SW}`, pinsShown: false }]) {
+test('part: switch off (or Pins hidden), a pinned thread is not lifted and the menu says Pin', () => {
+  for (const o of [{ tweaks: '' }, { tweaks: SW, pinsShown: false }]) {
     const { api, rows } = part({ ...o, pins: ['m1', 'read1'] });
-    const html = api.inboxRowsBody({ id: 'w' }, rows, null);
-    if (o.tweaks.includes(ROWS_SW)) {
-      const ref = part({ tweaks: ROWS_SW, pins: [] });
-      assert.equal(html, ref.api.inboxRowsBody({ id: 'w' }, ref.rows, null), 'byte-identical to no pins: ' + JSON.stringify(o));
-      assert.equal(order(html)[0].id, 'd1');
-    }
+    const html = api.inboxRowsBody({ id: 'w' }, rows, null), ref = part({ tweaks: '', pins: [] });
+    assert.equal(html, ref.api.inboxRowsBody({ id: 'w' }, ref.rows, null), 'byte-identical to no pins: ' + JSON.stringify(o));
+    assert.equal(order(html)[0].id, 'd1');
     if (!o.pinsShown && o.pinsShown !== undefined) continue;
     assert.equal(api.ibPinWord(false), 'Pin');
   }

@@ -463,10 +463,6 @@
       "help": "Skins become a look only: only feature switches decide what runs. Your skin's own choices come back when you switch this off.",
       "where": "Settings › Appearance › Try new features › Skins are look only"
     },
-    "wizard/inbox-rows": {
-      "help": "Inbox: only what needs you.",
-      "where": "Settings › Appearance › Try new features › Inbox: only what needs you"
-    },
     "wizard/sent-rows": {
       "help": "Sent uses Inbox's rows.",
       "where": "Settings › Appearance › Try new features › Sent: the same rows as Inbox"
@@ -487,15 +483,6 @@
       "help": "Inbox: only what blocks you.",
       "where": "Settings › Appearance › Try new features › Smart inbox: only what needs you"
     },
-    "wizard/chats-title-bar": {
-      "help": "Chats' title bar names the tab.",
-      "where": "Settings › Appearance › Try new features › Chats: title bar names the tab"
-    },
-    "wizard/phone-nav": {
-      "help": "Phone bar: bigger orb, one badge.",
-      "where": "Settings › Appearance › Try new features › Phone bar: bigger orb, one badge",
-      "when": "phone only"
-    },
     "wizard/channel-auto-emoji": {
       "help": "New channels get a fitting emoji.",
       "where": "Settings › Appearance › Try new features › Channels: a fitting emoji for new channels"
@@ -503,10 +490,6 @@
     "wizard/channel-model-emoji": {
       "help": "New channels with no emoji get one picked by your Wizard's fast model.",
       "where": "Settings › Appearance › Try new features › Channels: an AI-picked emoji for new channels"
-    },
-    "wizard/chat-tags": {
-      "help": "A chat can carry several tags.",
-      "where": "Settings › Appearance › Try new features › Tags"
     },
     "wizard/app-picker-store-search": {
       "help": "Add an app's search also finds App Store apps.",
@@ -577,7 +560,7 @@
     },
     "view:chats": {
       "name": "Chats",
-      "help": "All your conversations with the agent, in sections: Errors, Working, Saved, Ready, Yesterday, Past week, Snoozed, Archive (By day), or Working, Ready, Snoozed, Archive (By status; chosen in the Filter sheet). Search, Filter and + New chat. Long-press or right-click a chat for Pin, Rename, Mark unread, Snooze, Archive / Restore.",
+      "help": "All your conversations with the agent, in sections: Errors, Working, Saved, Ready, Yesterday, Past week, Snoozed, Archive (By day), or Working, Ready, Snoozed, Archive (By status; chosen in the Filter sheet). The title bar names the bottom tab (Inbox with its count, Tags or Sent), with Search and Filter as icons; the sort (Newest first, Oldest first, Needs you first) is in the Filter sheet. + New chat. Long-press or right-click a chat for Pin, Rename, Mark unread, Snooze, Archive / Restore.",
       "desktop": "AI apps view: the chats sidebar on the left (search ⌥K, + New chat ⌥N); Desks view: the Inbox count in the top bar (⌥I)",
       "phone": "Chats in the bottom bar, or hold the orb and say 'chats'"
     },
