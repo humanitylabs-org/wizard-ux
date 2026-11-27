@@ -442,7 +442,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
                 // A load replaced by a newer one (Try again over a hanging attempt) is not a failure of the new one.
                 if (req.isForMainFrame() && err.getErrorCode() == ERROR_UNKNOWN && String.valueOf(err.getDescription()).contains("ERR_ABORTED")) return;
                 // Unreachable: stay on this Wizard's own name and show the Retry screen (never the retired name).
-                if (req.isForMainFrame()) { mainFailed = true; showOffline(String.valueOf(err.getDescription())); }
+                if (req.isForMainFrame()) { mainFailed = true; loadFailed(String.valueOf(err.getDescription())); }
             }
 
             @Override
@@ -450,7 +450,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
                 // The gateway answered but the Wizard behind it didn't (502 while it restarts): same screen, it retries.
                 if (!req.isForMainFrame() || resp == null || !ReachPolicy.httpFailure(resp.getStatusCode())) return;
                 mainFailed = true;
-                showOffline("Wizard answered " + resp.getStatusCode());
+                loadFailed("Wizard answered " + resp.getStatusCode());
             }
 
             @Override
@@ -958,7 +958,11 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         if (mainFailed) return; // this load already failed fast (its screen is up)
         main.removeCallbacks(reachMark);
         main.removeCallbacks(reachGiveUp);
+        main.removeCallbacks(quietRetry);
+        quietPending = false;
         reachWatch++;
+        reachSince = android.os.SystemClock.uptimeMillis();
+        quietTries = 0;
         main.postDelayed(reachMark, ReachPolicy.CONNECTING_MS);
         main.postDelayed(reachGiveUp, ReachPolicy.GIVE_UP_MS);
     }
@@ -976,6 +980,8 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         main.removeCallbacks(reachMark);
         main.removeCallbacks(reachGiveUp);
         main.removeCallbacks(reachRetry);
+        main.removeCallbacks(quietRetry);
+        quietPending = false;
         if (reach != null && reach.isShowing()) android.util.Log.i("WizardOSReach", "reached " + pageUrl);
         if (reach != null) reach.hide();
     }
@@ -1184,9 +1190,46 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         } catch (RuntimeException unavailable) { dest.recycle(); }
     }
 
+    /** When the load being watched began (armReach): the give-up mark counts from here, across quiet tries. */
+    private long reachSince;
+    /** Quiet tries of this load so far (wizard-ux issue 2008). */
+    private int quietTries;
+    /** A quiet try is waiting to run (Handler.hasCallbacks needs API 29; minSdk is 28). */
+    private boolean quietPending;
+
+    /** Wizard-ux issue 2008: a main-frame load failed (an error, or a 5xx from the gateway). With a network and Tailscale
+     *  on, the tunnel may still be waking (network change, resume): try again quietly under Connecting, and leave the
+     *  give-up mark (armed when the load began) to show the offline screen if the Wizard never answers. No network,
+     *  Tailscale off, or the offline screen already up: show it now, as before. */
+    private void loadFailed(String why) {
+        long since = android.os.SystemClock.uptimeMillis() - reachSince;
+        ReachPolicy.Why w = ReachScreen.why(this);
+        if (reach == null || web == null || !ReachPolicy.retryQuietly(w, since, reach.isOffline())) { showOffline(why); return; }
+        long wait = ReachPolicy.quietRetryDelay(quietTries++);
+        android.util.Log.i("WizardOSReach", "quiet retry in " + wait + "ms after " + since + "ms: " + w + " " + why);
+        // Never the failed load's error page: Connecting covers it (a pinned window that skips Connecting keeps its cover).
+        if (!(this instanceof AppSessionActivity && PinInstant.skipConnecting(this) && pinShot != null)) { pinShotHide("Connecting"); reach.connecting(); }
+        main.removeCallbacks(quietRetry);
+        quietPending = true;
+        main.postDelayed(quietRetry, wait);
+    }
+
+    /** The quiet try: the same load again, without re-arming its marks (the give-up mark keeps the first try's time). */
+    private final Runnable quietRetry = () -> {
+        quietPending = false;
+        if (web == null || !mainFailed || (reach != null && reach.isOffline())) return;
+        String u = isWeb(wantUrl) ? wantUrl : ai.wizards.os.device.AppState.homeUrl(this);
+        android.util.Log.i("WizardOSReach", "quiet retry " + quietTries + " " + u);
+        mainFailed = false;
+        wantUrl = u;
+        web.loadUrl(u);
+    };
+
     private void showOffline(String why) {
         main.removeCallbacks(reachMark);
         main.removeCallbacks(reachGiveUp);
+        main.removeCallbacks(quietRetry);
+        quietPending = false;
         pinShotHide("Can't reach");
         if (reach == null) return;
         ReachPolicy.Why w = ReachScreen.why(this);
@@ -1251,6 +1294,12 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
     };
 
     void netChanged() {
+        // Wizard-ux issue 2008: a quiet try is waiting and the network changed (the Tailscale tunnel came up): try now.
+        if (reach != null && !reach.isOffline() && mainFailed && quietPending) {
+            main.removeCallbacks(quietRetry); // still pending: it runs once the burst settles
+            main.postDelayed(quietRetry, ReachPolicy.NET_SETTLE_MS);
+            return;
+        }
         if (reach == null || !reach.isOffline()) return;
         main.removeCallbacks(netSettled);
         main.postDelayed(netSettled, ReachPolicy.NET_SETTLE_MS);
