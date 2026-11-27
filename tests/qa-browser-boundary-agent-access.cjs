@@ -1,4 +1,4 @@
-// Browser QA for wizard-ux issue 1668 (switch wizard/boundary-agent-access): with the browser owner boundary on
+// Browser QA for wizard-ux issue 1668 (on for everyone; switch wizard/boundary-agent-access removed): with the browser owner boundary on
 // (wizard-os#133), Connected accounts' Agent access screen still shows each agent's tick per account app and a tap
 // changes it in the Agent Service, through the shell's bounded agent-access service (agents.read / agents.set).
 // Real Chromium: a top-level shell page with a shell token in its meta (as nginx writes it), the real
@@ -10,7 +10,6 @@
 //  - QA_APP_URL=<base of a running Connected accounts server> (with QA_APP_OWNER=<its owner token>): the real app
 //    server answers /connected-accounts/ (files and API) through a stand-in for the box ingress that adds the owner
 //    bearer, so the page's own file loads meet the app's real request rules (Sec-Fetch-Site, Origin).
-//  - QA_SWITCH=off: the switch is off; the shell refuses the service and the app falls back to today's message.
 //  - QA_SHOT=<png>: a phone-size (412 px) shot of the Agent access screen.
 //  - QA_WEB=<another web/ dir> QA_EXPECT=broken: the on checks must fail there (e.g. main).
 //   QA_PLAYWRIGHT=<path to playwright> node tests/qa-browser-boundary-agent-access.cjs
@@ -35,8 +34,8 @@ function proxy(req, res, rest, body) {
   out.on('error', () => { res.statusCode = 502; res.end(''); });
   out.end(body || undefined);
 }
-const ON = process.env.QA_SWITCH !== 'off', SHOT = process.env.QA_SHOT || '';
-const TOKEN = 'ab'.repeat(32), SWITCH = 'wizard/boundary-agent-access';
+const SHOT = process.env.QA_SHOT || '';
+const TOKEN = 'ab'.repeat(32);
 const seen = [];
 // The Agent Service's agent.json ticks, per app id.
 const ticks = {
@@ -74,7 +73,7 @@ const STANDIN = `<!doctype html><html><head><meta charset="utf-8"><script src="/
   }
   WizardApp.ready?.(); paint();
 </script></body></html>`;
-const SHELL = `<!doctype html><html data-shell="mobile"${ON ? ` data-tweaks="${SWITCH}"` : ''}><head><meta charset="utf-8">
+const SHELL = `<!doctype html><html data-shell="mobile"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="wizard-shell-token" content="${TOKEN}">
 <script src="/wizard-os-home/core/shell-token.js"></script>
@@ -185,36 +184,31 @@ const check = (ok, what) => { console.log((ok ? 'PASS ' : 'FAIL ') + what); if (
       await page.waitForTimeout(200);
       await page.locator('#a').screenshot({ path: SHOT });
     }
-    if (ON) {
-      const sorted = o => JSON.stringify(Object.fromEntries(Object.entries(o).sort(([a], [b]) => a.localeCompare(b))));
-      check(sorted(v1.ticks) === sorted({ 'connected-accounts': ['Wizard:true', 'Oscar:false'], messenger: ['Wizard:true', 'Oscar:true'], 'wizard-google': ['Wizard:false', 'Oscar:false'] }),
-        'Agent access shows each agent\'s tick per account app, as the Agent Service keeps them');
-      check(!/App Manager/.test(v1.message), 'no "choose that in App Manager" fallback message');
-      const reads = seen.filter(s => /\/wizard\/v1\/apps\/[^/]+\/agents$/.test(s.path) && s.method === 'GET');
-      check(reads.length >= 3 && reads.every(s => s.token === TOKEN && s.origin === ''), 'the shell read the ticks with its own token; the app page never held it: ' + JSON.stringify(reads.filter(s => s.token !== TOKEN || s.origin)));
-      // A real tap on Oscar for Messenger turns it off in the Agent Service.
-      const before = seen.length;
-      await fr.click('article[data-app="messenger"] .google-toggle[aria-label="Oscar may use Messenger"], article[data-app="messenger"] .google-toggle[aria-label="Oscar may use messenger"]', { timeout: 5000 }).catch(e => console.log('click: ' + e.message.split('\n')[0]));
-      await fr.waitForFunction(() => document.querySelector('article[data-app="messenger"] .google-toggle[aria-label^="Oscar may use"]')?.getAttribute('aria-checked') === 'false', null, { timeout: 6000 }).catch(() => {});
-      const puts = seen.slice(before).filter(s => s.method === 'PUT');
-      check(puts.length === 1 && puts[0].path === '/wizard/v1/apps/messenger/agents' && puts[0].token === TOKEN && JSON.parse(puts[0].body).agents.join() === 'hermes',
-        'a tap changed it in the Agent Service (PUT with the shell token): ' + JSON.stringify(puts.map(p => p.path + ' ' + p.body)));
-      check(ticks.messenger.oscar === false && ticks.messenger.hermes === true, 'the Agent Service now keeps Oscar off for Messenger, Wizard still on');
-      const v2 = await view();
-      check(JSON.stringify(v2.ticks.messenger) === '["Wizard:true","Oscar:false"]', 'the screen shows the stored answer: ' + JSON.stringify(v2.ticks.messenger));
-      // A page that asks to change agent access without a tap is refused (after the tap's activation has run out).
-      // (Playwright's evaluate counts as a gesture, so the page calls it by itself from a timer after activation is gone.)
-      const putsBefore = seen.filter(s => s.method === 'PUT').length;
-      const untapped = await fr.evaluate(() => new Promise(done => setTimeout(() => WizardApp.agentAccess.set('messenger', [])
-        .then(v => done('set:' + JSON.stringify(v)), e => done('refused:' + e.message)), 6500)));
-      check(untapped.startsWith('refused') && seen.filter(s => s.method === 'PUT').length === putsBefore && ticks.messenger.hermes === true, 'a change with no tap is refused: ' + untapped);
-      // An app id that holds no accounts is not answered.
-      const other = await fr.evaluate(() => WizardApp.agentAccess.read('notes').then(v => JSON.stringify(v), e => 'refused:' + e.message));
-      check(other.startsWith('refused'), 'an app that holds no accounts is not answered: ' + other);
-    } else {
-      check(Object.keys(v1.ticks).length === 0 && /App Manager/.test(v1.message), 'switch off: the screen says "choose that in App Manager" as before');
-      check(!seen.some(s => /\/agents$/.test(s.path) && s.token === TOKEN), 'switch off: the shell never asked the Agent Service for the app');
-    }
+    const sorted = o => JSON.stringify(Object.fromEntries(Object.entries(o).sort(([a], [b]) => a.localeCompare(b))));
+    check(sorted(v1.ticks) === sorted({ 'connected-accounts': ['Wizard:true', 'Oscar:false'], messenger: ['Wizard:true', 'Oscar:true'], 'wizard-google': ['Wizard:false', 'Oscar:false'] }),
+      'Agent access shows each agent\'s tick per account app, as the Agent Service keeps them');
+    check(!/App Manager/.test(v1.message), 'no "choose that in App Manager" fallback message');
+    const reads = seen.filter(s => /\/wizard\/v1\/apps\/[^/]+\/agents$/.test(s.path) && s.method === 'GET');
+    check(reads.length >= 3 && reads.every(s => s.token === TOKEN && s.origin === ''), 'the shell read the ticks with its own token; the app page never held it: ' + JSON.stringify(reads.filter(s => s.token !== TOKEN || s.origin)));
+    // A real tap on Oscar for Messenger turns it off in the Agent Service.
+    const before = seen.length;
+    await fr.click('article[data-app="messenger"] .google-toggle[aria-label="Oscar may use Messenger"], article[data-app="messenger"] .google-toggle[aria-label="Oscar may use messenger"]', { timeout: 5000 }).catch(e => console.log('click: ' + e.message.split('\n')[0]));
+    await fr.waitForFunction(() => document.querySelector('article[data-app="messenger"] .google-toggle[aria-label^="Oscar may use"]')?.getAttribute('aria-checked') === 'false', null, { timeout: 6000 }).catch(() => {});
+    const puts = seen.slice(before).filter(s => s.method === 'PUT');
+    check(puts.length === 1 && puts[0].path === '/wizard/v1/apps/messenger/agents' && puts[0].token === TOKEN && JSON.parse(puts[0].body).agents.join() === 'hermes',
+      'a tap changed it in the Agent Service (PUT with the shell token): ' + JSON.stringify(puts.map(p => p.path + ' ' + p.body)));
+    check(ticks.messenger.oscar === false && ticks.messenger.hermes === true, 'the Agent Service now keeps Oscar off for Messenger, Wizard still on');
+    const v2 = await view();
+    check(JSON.stringify(v2.ticks.messenger) === '["Wizard:true","Oscar:false"]', 'the screen shows the stored answer: ' + JSON.stringify(v2.ticks.messenger));
+    // A page that asks to change agent access without a tap is refused (after the tap's activation has run out).
+    // (Playwright's evaluate counts as a gesture, so the page calls it by itself from a timer after activation is gone.)
+    const putsBefore = seen.filter(s => s.method === 'PUT').length;
+    const untapped = await fr.evaluate(() => new Promise(done => setTimeout(() => WizardApp.agentAccess.set('messenger', [])
+      .then(v => done('set:' + JSON.stringify(v)), e => done('refused:' + e.message)), 6500)));
+    check(untapped.startsWith('refused') && seen.filter(s => s.method === 'PUT').length === putsBefore && ticks.messenger.hermes === true, 'a change with no tap is refused: ' + untapped);
+    // An app id that holds no accounts is not answered.
+    const other = await fr.evaluate(() => WizardApp.agentAccess.read('notes').then(v => JSON.stringify(v), e => 'refused:' + e.message));
+    check(other.startsWith('refused'), 'an app that holds no accounts is not answered: ' + other);
     // Another installed app gets nothing.
     const nf = page.frames().find(f => new URL(f.url() || 'about:blank', 'http://x').pathname === '/notes/');
     await nf.waitForFunction(() => window.results?.done, null, { timeout: 8000 }).catch(() => {});

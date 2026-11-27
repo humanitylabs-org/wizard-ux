@@ -33,7 +33,6 @@
     "wizard/phone-push",
     "wizard/install-agent-builds",
     "wizard/app-location",
-    "wizard/boundary-agent-access",
     "wizard/inbox-pin-top",
     "wizard/smart-inbox",
     "wizard/phone-recovery-mode",
