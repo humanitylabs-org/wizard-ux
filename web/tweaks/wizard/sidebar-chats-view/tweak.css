@@ -1,5 +1,0 @@
-/* Desktop sidebar follows Default Chats (wizard-ux issue 1443): the provider's list fills the sidebar (or the rail). */
-html[data-tweaks~="wizard/sidebar-chats-view"][data-layout="ai-apps"] .aad-cview { position: relative; flex: 1; min-height: 0; min-width: 0; width: 100%; overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column; box-sizing: border-box; }
-html[data-tweaks~="wizard/sidebar-chats-view"][data-layout="ai-apps"] .aad-cview[hidden],
-html[data-tweaks~="wizard/sidebar-chats-view"][data-layout="ai-apps"] .aad-scroll[hidden],
-html[data-tweaks~="wizard/sidebar-chats-view"][data-layout="ai-apps"] .aad-rlist[hidden] { display: none; }

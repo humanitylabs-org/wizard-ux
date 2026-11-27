@@ -197,12 +197,12 @@
    * list window of its own (feedBase, off the desks and never saved), so opening a channel never touches the Focus of
    * the window behind the sidebar: its channel list and Activity rows stay exactly as they were. */
   var feedBase = null;
-  /* The AI apps sidebar's list drawn by another installed Chats look (Settings › Chats › Default Chats, switch
-   * wizard/sidebar-chats-view, wizard-ux issue 1443): one more stand-in owner (off the desks, never saved) naming that
+  /* The AI apps sidebar's list drawn by another installed Chats look (Settings › Chats › Default Chats,
+   * wizard-ux issue 1443): one more stand-in owner (off the desks, never saved) naming that
    * provider, so the main Chats window and its thread stay as they are. Its list window is viewBase.id + '::side'. */
   var viewBase = null, viewLook = false;
   /* The Default Chats look beside a layout that owns the chat list, and finding Chats windows; desktop/desktop-sideview.js. */
-  const { CHATS, chatsWin, commandSaid, commandSnapshot, commandText, executeCommand, LOCAL_COMMANDS, localCommand, mainStd, openSearch, sideMainWin, sideViewOn, sideWin, bindLate: sideviewLate } = window.WizCore.desktopParts.sideview({ APP, appAt, appByName, desktopVars, findApp, focused, MOD, panelWin, panelWins, quickSearch, recordReply, save, searchUrl, shownBeside, stage, talk, threadShown, toast });
+  const { CHATS, chatsWin, commandSaid, commandSnapshot, commandText, executeCommand, LOCAL_COMMANDS, localCommand, mainStd, openSearch, sideMainWin, sideWin, bindLate: sideviewLate } = window.WizCore.desktopParts.sideview({ APP, appAt, appByName, desktopVars, findApp, focused, MOD, panelWin, panelWins, quickSearch, recordReply, save, searchUrl, shownBeside, stage, talk, threadShown, toast });
   let boundManager;
   function threadShown(wid,el) {
     if (wid.endsWith('::list') || wid.endsWith('::side')) return;
@@ -608,7 +608,7 @@
   let toastT = 0;
   function toast(icon, text, ms = 2000) { const t = $('#toast'); t.classList.remove('got-it'); t.innerHTML = `<span>${window.WizBrand.icon(esc(icon))}</span><span>${esc(text)}</span>`; t.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('on'), ms); }
   /* The native bridge for Wizard for Mac, deep links, boot and workspace sync; desktop/desktop-boot.js. */
-  const { LINKS } = window.WizCore.desktopParts.boot({ $$, APP, appAt, appOf, APPS, ask, C, chanPost, CHATS, closeCurrent, closeDesktop, closePalette, closeSettings, closeWin, commandSnapshot, commandText, commandVoice, desktopBack, desktopHost, desktopVars, dictate, escapeBack, feedCarry, feedOpen, feedOpened, fields, findApp, findWin, focused, focusInside, focusWin, framePage, freshDesk, goHome, goWs, hudClose, hudDock, hudKey, hudOn, ico, keyHints, leaveHome, listW, listWin, LIVE, localCommand, log, mainChats, mainStd, MOD, moveDesk, moveWin, newChat, newDesktop, newWin, openAgentChats, openApp, openAppLink, openChatsList, openFiles, openPalette, openPicker, openSearch, openSettings, openThread, openUsage, orbTap, OUTBOX, pal, palToggle, paneClicks, panelAppW, panelBack, panelChat, panelClose, panelDock, panelKind, panelListW, panelMode, panelQuit, panelRunning, panelSlot, panelWin, panelWins, recordReply, render, save, setEl, setListW, sideMain, sideViewOn, stage, stepThread, syncChatsPane, talk, talkNew, toast, toggleKeys, uid, usageEl, viewContext, VOICE, winEl, winTitle });
+  const { LINKS } = window.WizCore.desktopParts.boot({ $$, APP, appAt, appOf, APPS, ask, C, chanPost, CHATS, closeCurrent, closeDesktop, closePalette, closeSettings, closeWin, commandSnapshot, commandText, commandVoice, desktopBack, desktopHost, desktopVars, dictate, escapeBack, feedCarry, feedOpen, feedOpened, fields, findApp, findWin, focused, focusInside, focusWin, framePage, freshDesk, goHome, goWs, hudClose, hudDock, hudKey, hudOn, ico, keyHints, leaveHome, listW, listWin, LIVE, localCommand, log, mainChats, mainStd, MOD, moveDesk, moveWin, newChat, newDesktop, newWin, openAgentChats, openApp, openAppLink, openChatsList, openFiles, openPalette, openPicker, openSearch, openSettings, openThread, openUsage, orbTap, OUTBOX, pal, palToggle, paneClicks, panelAppW, panelBack, panelChat, panelClose, panelDock, panelKind, panelListW, panelMode, panelQuit, panelRunning, panelSlot, panelWin, panelWins, recordReply, render, save, setEl, setListW, sideMain, stage, stepThread, syncChatsPane, talk, talkNew, toast, toggleKeys, uid, usageEl, viewContext, VOICE, winEl, winTitle });
   framesLate({ LINKS });
   stepsLate({ LINKS });
   pickanyLate({ LINKS });

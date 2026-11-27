@@ -9,7 +9,7 @@
 'use strict';
 window.WizCore = window.WizCore || {};
 window.WizCore.desktopParts = window.WizCore.desktopParts || {};
-window.WizCore.desktopParts.boot = function ({ $$, APP, appAt, appOf, APPS, ask, C, chanPost, CHATS, closeCurrent, closeDesktop, closePalette, closeSettings, closeWin, commandSnapshot, commandText, commandVoice, desktopBack, desktopHost, desktopVars, dictate, escapeBack, feedCarry, feedOpen, feedOpened, fields, findApp, findWin, focused, focusInside, focusWin, framePage, freshDesk, goHome, goWs, hudClose, hudDock, hudKey, hudOn, ico, keyHints, leaveHome, listW, listWin, LIVE, localCommand, log, mainChats, mainStd, MOD, moveDesk, moveWin, newChat, newDesktop, newWin, openAgentChats, openApp, openAppLink, openChatsList, openFiles, openPalette, openPicker, openSearch, openSettings, openThread, openUsage, orbTap, OUTBOX, pal, palToggle, paneClicks, panelAppW, panelBack, panelChat, panelClose, panelDock, panelKind, panelListW, panelMode, panelQuit, panelRunning, panelSlot, panelWin, panelWins, recordReply, render, save, setEl, setListW, sideMain, sideViewOn, stage, stepThread, syncChatsPane, talk, talkNew, toast, toggleKeys, uid, usageEl, viewContext, VOICE, winEl, winTitle }) {
+window.WizCore.desktopParts.boot = function ({ $$, APP, appAt, appOf, APPS, ask, C, chanPost, CHATS, closeCurrent, closeDesktop, closePalette, closeSettings, closeWin, commandSnapshot, commandText, commandVoice, desktopBack, desktopHost, desktopVars, dictate, escapeBack, feedCarry, feedOpen, feedOpened, fields, findApp, findWin, focused, focusInside, focusWin, framePage, freshDesk, goHome, goWs, hudClose, hudDock, hudKey, hudOn, ico, keyHints, leaveHome, listW, listWin, LIVE, localCommand, log, mainChats, mainStd, MOD, moveDesk, moveWin, newChat, newDesktop, newWin, openAgentChats, openApp, openAppLink, openChatsList, openFiles, openPalette, openPicker, openSearch, openSettings, openThread, openUsage, orbTap, OUTBOX, pal, palToggle, paneClicks, panelAppW, panelBack, panelChat, panelClose, panelDock, panelKind, panelListW, panelMode, panelQuit, panelRunning, panelSlot, panelWin, panelWins, recordReply, render, save, setEl, setListW, sideMain, stage, stepThread, syncChatsPane, talk, talkNew, toast, toggleKeys, uid, usageEl, viewContext, VOICE, winEl, winTitle }) {
 
   /* ---------------- native bridge (Wizard for Mac drives this by events) ---------------- */
   C.bridge.handle({
@@ -201,13 +201,13 @@ window.WizCore.desktopParts.boot = function ({ $$, APP, appAt, appOf, APPS, ask,
       return { id: open.id, name: open.name };
     },
     chatFeedOpen: () => { const o = feedOpen(); return o ? { id: o.id, name: o.name } : null; },
-    /* The AI apps sidebar's list by the owner's Default Chats (wizard-ux issue 1443, switch wizard/sidebar-chats-view):
-     * that installed provider mounted into the layout's node as a list region. False (node emptied) with the switch off,
+    /* The AI apps sidebar's list by the owner's Default Chats (wizard-ux issue 1443, on for everyone):
+     * that installed provider mounted into the layout's node as a list region. False (node emptied) with
      * built-in Chats picked, or the provider failed: the layout then draws its own rows. */
     chatsView: host => {
       const look = mainStd();
       if (look !== desktopVars.viewLook) { desktopVars.viewLook = look; for (const w of Object.values(desktopVars.W)) if (w.app === 'chats' && !w.agent) CHATS.renderChats(w); } // the main column: standard again, or its look back
-      const id = sideViewOn() ? CHATS.views.defaultId() : 'wizard-chats';
+      const id = CHATS.views.defaultId();
       if (!host || host.nodeType !== 1 || !stage.contains(host) || id === 'wizard-chats' || !CHATS.views.usable?.(id)) {
         if (desktopVars.viewBase) { CHATS.forget(desktopVars.viewBase.id + '::side'); desktopVars.viewBase = null; }
         if (host?.dataset?.chats) { delete host.dataset.chats; host.replaceChildren?.(); }

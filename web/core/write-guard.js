@@ -1,8 +1,8 @@
-/* WizardOS — one guard for the shell's own writes (wizard-ux issue 1439; switch wizard/write-guard, off by default).
+/* WizardOS — one guard for the shell's own writes (wizard-ux issue 1439; on for everyone, switch removed).
  * On 13 Nov a phone re-sent its 117 KB read state up to ~8 times a second for hours (issue 1428) and the Agent Service
  * froze four times. Each feature decides on its own when to resend, so this sits in the one layer every shell write
- * already goes through: window.fetch of this page. It acts only on same-origin POST/PUT/PATCH/DELETE while the switch
- * is on; with it off the call goes straight through, unchanged.
+ * already goes through: window.fetch of this page. It acts only on same-origin POST/PUT/PATCH/DELETE; reads and other
+ * origins go straight through, unchanged.
  *   1. The same write again (method, URL, body and Idempotency-Key) within 10 s gets the earlier answer; nothing goes
  *      on the wire. One resend after that is let through, then the same body is held for 10 minutes, unless a
  *      different body goes to that URL or the earlier send failed.
@@ -16,7 +16,6 @@
 (() => {
   'use strict';
   if (typeof window === 'undefined' || typeof window.fetch !== 'function' || window.fetch.wosWriteGuard) return;
-  const ID = 'wizard/write-guard';
   const SAME_MS = 10000, HOLD_MS = 10 * 60000, WINDOW_MS = 60000, PER_MINUTE = 20;
   const PAUSE_MS = 30000, PAUSE_MAX = 15 * 60000, CALM_MS = 15 * 60000, RETRY_MAX = 60 * 60000, LANES_MAX = 500;
   const KEY = 'wos.write-guard.v1', KEPT_MAX = 20;
@@ -25,7 +24,6 @@
   const UPLOADS = /^\/wizard\/(?:v1\/uploads(?:\/|$)|files\/upload$)/;
   const base = window.fetch;
   const now = () => Date.now();
-  const on = () => { try { return String(document.documentElement.dataset.tweaks || '').split(/\s+/).includes(ID); } catch (_) { return false; } };
   const ends = new Map();    // 'METHOD /path' -> { sent: [times], until, level, trippedAt, why, counts }
   const targets = new Map(); // 'METHOD url'   -> { sig, at, resent, ok, kept, pending }
   const cap = (m, key, make) => {
@@ -155,7 +153,6 @@
   }
 
   const wrapped = function fetch(input, init) {
-    if (!on()) return base.call(this, input, init);
     const d = describe(input, init);
     return d ? guarded(this, input, init, d) : base.call(this, input, init);
   };
@@ -163,8 +160,6 @@
   window.fetch = wrapped;
 
   window.WosWriteGuard = Object.freeze({
-    id: ID,
-    get on() { return on(); },
     limits: Object.freeze({ sameMs: SAME_MS, holdMs: HOLD_MS, perMinute: PER_MINUTE, pauseMs: PAUSE_MS, pauseMax: PAUSE_MAX }),
     // Per endpoint: writes sent, answered from the earlier write, refused while paused, and breaker trips.
     stats: () => Object.fromEntries([...ends].map(([k, e]) => [k, { ...e.counts, pausedFor: Math.max(0, e.until - now()) }])),

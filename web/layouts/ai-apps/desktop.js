@@ -215,8 +215,6 @@ export default function desktop(api) {
    * only), Recent (the rest, newest first, a week back, then Show older), Snoozed and Archived folded at the bottom,
    * one sort on Ready (Newest first, Oldest first, Needs you first), and one marker per row: spinner, amber or green. */
   const actOn = () => true; // tests that slice this file without it get the older list
-  // The sidebar's list by the owner's Default Chats look (Settings › Chats; wizard-ux issue 1443), off by default.
-  const viewOn = () => { try { return String(root.dataset.tweaks || '').split(' ').includes('wizard/sidebar-chats-view'); } catch (_) { return false; } };
   const ACT_SECTIONS = [['working', 'Working'], ['ready', 'Ready'], ['recent', 'Recent'], ['snoozed', 'Snoozed'], ['archive', 'Archived']];
   // (+ 'saved': sends a graceful restart holds, wizard-ux issue 1362; listed only while there are any)
   const LKINDS = [...KINDS, 'recent', 'saved'];
@@ -272,7 +270,7 @@ export default function desktop(api) {
    * while the switch is on (paintSwap) */
   const sSwap = el('button', 'aad-ib aad-sswap', { type: 'button', 'aria-keyshortcuts': 'Alt+Shift+L' }); sSwap.append(icon('swap')); sSwap.hidden = true;
   /* The rail's Wizard switcher, the agent choices, the Channels pane and another Chats look; layouts/ai-apps/desktop-sidetabs.js. */
-  const { cBack, chanTitle, cTop, cX, FEED, feedBox, feedOn, modeBars, oneBack, paintAgents, paintChan, paintView, pIcon, pName, pTools, pTop, pW, pX, rFind, rList, rNew, rSet, rTog, rWs, shade, sName, sTop, top, tt, windowMode, bindLate: sidetabsLate } = sidetabsPart({ aadVars, actOn, api, el, flip, foot, head, icon, one, oneSplit, panes, rail, readSessions, scroll, side, viewOn });
+  const { cBack, chanTitle, cTop, cX, FEED, feedBox, feedOn, modeBars, oneBack, paintAgents, paintChan, paintView, pIcon, pName, pTools, pTop, pW, pX, rFind, rList, rNew, rSet, rTog, rWs, shade, sName, sTop, top, tt, windowMode, bindLate: sidetabsLate } = sidetabsPart({ aadVars, actOn, api, el, flip, foot, head, icon, one, oneSplit, panes, rail, readSessions, scroll, side });
   // (in memory only: after a reload in full screen, Esc goes to tiled)
   var fullFrom = 'tiled';
   /* The window arrangement buttons and the Mac title-bar strip; layouts/ai-apps/desktop-modes.js. */

@@ -31,7 +31,7 @@
         "phone",
         "desktop"
       ],
-      "note": "Direct entrypoint import; the shell's write guard (wizard-ux issue 1439, switch wizard/write-guard)"
+      "note": "Direct entrypoint import; the shell's write guard (wizard-ux issue 1439, on for everyone)"
     },
     "core/agents.js": {
       "loadedBy": [
@@ -1429,6 +1429,11 @@
       "shell": "phone",
       "classification": "adapter",
       "reason": "Phone shell part moved out of app.js (issue 1665, shared values through accessors): the Review coach, quick search and placing an app in a window."
+    },
+    "app-sections.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone shell part (wizard-ux#1929, switch wizard/phone-sections): the four sections around the orb (Home, Chats, Messenger, Apps) over the phone's desks; the desktop has its own bar."
     },
     "app-seed.js": {
       "shell": "phone",

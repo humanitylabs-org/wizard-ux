@@ -6,7 +6,7 @@
  * in front and the pins) stay in desktop.js; this code reads and writes them as aadVars.<name>, its get/set accessors
  * on the same variables, so every read and write is live. desktop.js's own imports are imported here again from the
  * same modules. The body below keeps desktop.js's indentation so `git log -L` and patches port over. */
-export function sidetabsPart({ aadVars, actOn, api, el, flip, foot, head, icon, one, oneSplit, panes, rail, readSessions, scroll, side, viewOn }) {
+export function sidetabsPart({ aadVars, actOn, api, el, flip, foot, head, icon, one, oneSplit, panes, rail, readSessions, scroll, side }) {
   let paintList, paintRail, paintTop; // late-bound: desktop.js declares these after the call, see bindLate
   const rTog = el('button', 'aad-ib aad-rtog', { type: 'button', 'aria-label': 'Open sidebar', title: 'Open sidebar' }); rTog.append(icon('side'));
   const rNew = el('button', 'aad-ib aad-rnew', { type: 'button', 'aria-label': 'New chat', title: 'New chat (⌥N)' }); rNew.append(icon('plus'));
@@ -51,17 +51,15 @@ export function sidetabsPart({ aadVars, actOn, api, el, flip, foot, head, icon, 
    * chat list with the channel list remaining visible on the sidebar"): its feed is one more chat in the column (FEED),
    * drawn by api.sessions.channelFeed into feedBox over the docked Chats window. A post opens its thread there; Back
    * (Esc, ✕) from the thread returns to the feed, and from the feed to nothing open. The sidebar list never changes. */
-  /* Another Chats look (wizard/sidebar-chats-view, wizard-ux issue 1443): with an installed provider picked under
+  /* Another Chats look (wizard-ux issue 1443, on for everyone): with an installed provider picked under
    * Settings › Chats › Default Chats, api.sessions.chatsView mounts it into viewBox in place of this sidebar's own rows
    * (and of the rail's, at the rail's real width: the provider handles a narrow column). Search keeps the stock hits.
-   * Built-in Chats, the switch off or a provider that fails: false, and the rows below come back as they were. */
+   * Built-in Chats or a provider that fails: false, and the rows below come back as they were. */
   const viewBox = el('div', 'aad-cview'); viewBox.hidden = true;
-  let viewShown = false;
   function paintView(inRail) {
     const at = inRail ? rail : panel;
     if (viewBox.parentNode !== at) { at.insertBefore(viewBox, inRail ? rSet : scroll); rList.hidden = false; scroll.hidden = false; }
-    const on = (viewOn() || viewShown) && !!api.sessions.chatsView?.(viewBox);
-    viewShown = on;
+    const on = !!api.sessions.chatsView?.(viewBox);
     const show = on && !(aadVars.q && !inRail);
     if (viewBox.hidden === show) viewBox.hidden = !show;
     if (inRail) rList.hidden = show; else { scroll.hidden = show; if (show) chanBox.hidden = true; }

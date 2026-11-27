@@ -373,10 +373,6 @@
       "help": "Android app: reading a LINE, WhatsApp, Telegram or other bridged chat in Messenger clears that app's own notification (needs Android's Notification access).",
       "where": "Settings › Appearance › Try new features › Clear chat notifications"
     },
-    "wizard/sidebar-chats-view": {
-      "help": "AI apps desktop: the chats sidebar uses the Chats look picked in Settings › Chats & app screens › Default Chats.",
-      "where": "Settings › Appearance › Try new features › Desktop sidebar follows Default Chats"
-    },
     "wizard/assist-agent-note": {
       "help": "Android app: the side button opens Messenger's Agent chat for a note instead of a new Wizard chat.",
       "where": "Settings › Appearance › Try new features › Side button opens the Agent chat"
@@ -471,10 +467,6 @@
       "where": "Settings › Appearance › Try new features › Wizard for Mac in About & updates",
       "when": "Wizard for Mac only"
     },
-    "wizard/write-guard": {
-      "help": "Stops repeated saves: an identical save within 10 s is not resent; over 20 a minute pauses.",
-      "where": "Settings › Appearance › Try new features › Stop write loops"
-    },
     "wizard/ai-apps-running": {
       "help": "AI apps: Running view in the sidebar.",
       "where": "Settings › Appearance › Try new features › Running view in the AI apps sidebar"
@@ -510,6 +502,11 @@
     "wizard/chats-title-bar": {
       "help": "Chats' title bar names the tab.",
       "where": "Settings › Appearance › Try new features › Chats: title bar names the tab"
+    },
+    "wizard/phone-sections": {
+      "help": "Phone bar of four places around the orb instead of desks: Home, Chats, Messenger, Apps. Hold Messenger to pin another app there; swipe the Apps tile to flip between your last two apps.",
+      "where": "Settings › Appearance › Try new features › Phone bar: Home, Chats, Messenger, Apps",
+      "when": "phone only"
     },
     "wizard/phone-nav": {
       "help": "Phone bar: bigger orb, one badge.",
@@ -755,6 +752,7 @@
   "retired": {
     "Channels in Chats": "on for everyone now, nothing to turn on: open Chats and use the tabs at the bottom: Inbox (what needs you), Tags (your channels) and Sent. Tags lists your Spaces one per line, plus General; open one to see its chats as posts with a reply line.",
     "Thread tracker": "retired: Needs you now shows in the thread itself, on the reply that needs the owner (with Mark done), and in Inbox; Reply works on any message.",
+    "Stop write loops": "on for everyone, nothing to turn on: an identical save within 10 s is not resent, and over 20 saves a minute to one place pauses.",
     "Apps in Updates": "on for everyone: Settings › About & updates › Apps.",
     "Reply to Telegram and Slack chats": "on for everyone: reply in Chats to a chat started on Telegram or Slack; it goes through that app's own connection and shows there too.",
     "Models from your connectors": "removed: the model menu in Chats lists the models of every AI connection you connected."
