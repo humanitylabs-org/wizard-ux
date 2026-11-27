@@ -418,7 +418,7 @@
         "desktop"
       ],
       "classification": "shared",
-      "note": "Inline action cards in chat: an app's proposed action with Approve, Edit, Open in app (issue 1463, switch wizard/action-cards)"
+      "note": "Inline action cards in chat: an app's proposed action with Approve, Edit, Open in app (issue 1463, on for everyone)"
     },
     "core/chats-approvals.js": {
       "loadedBy": [
@@ -1674,6 +1674,7 @@
   "purpose": "Every entrypoint-exclusive asset must be explicit; new common features must be shared by default, not added to these exceptions.",
   "sharedAssets": [
     "/wizard-os-home/apple-touch-icon.png",
+    "core/action-cards.css",
     "core/action-cards.js",
     "core/agents.js",
     "core/android-relay.js",

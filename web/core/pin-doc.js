@@ -39,7 +39,7 @@
     ['c', 'core/desks.css'], ['c', 'core/tour.css'], ['c', 'core/welcome.css'], ['c', 'core/skins.css'],
     ['c', 'core/orb-switcher.css'], ['e', 'core/escape-back.js'], ['x', 'core/skin-host-api.js'], ['x', 'core/skin-host-boot.js'], ['x', 'core/skin-host-host.js'], ['x', 'core/skin-host-layout.js'], ['x', 'core/skin-host-logos.js'], ['x', 'core/skin-host-orbbar.js'], ['x', 'core/skin-host-rows.js'], ['x', 'core/skin-host-shellapi.js'], ['x', 'core/skin-host-summary.js'], ['x', 'core/skin-host-tweaks.js'], ['x', 'core/skin-host.js'],
     ['m', 'core/thread-swipe-back.js'], ['x', 'core/edge-peek.js'], ['x', 'core/desktop-chats.js'], ['c', 'core/skin-frame.css'],
-    ['c', 'kit/shell-tokens.css'], ['c', 'kit/controls.css'], ['c', 'core/desktop-chats.css'], ['c', 'core/graceful-restart.css'], ['e', 'core/my-skin.js'], ['x', 'core/experience.js'],
+    ['c', 'kit/shell-tokens.css'], ['c', 'kit/controls.css'], ['c', 'core/desktop-chats.css'], ['c', 'core/graceful-restart.css'], ['c', 'core/action-cards.css'], ['e', 'core/my-skin.js'], ['x', 'core/experience.js'],
     ['x', 'core/look-sync.js'], ['e', 'core/core.js'], ['e', 'core/config.js'], ['e', 'core/write-guard.js'], ['x', 'core/reach.js'],
     ['x', 'core/status.js'], ['e', 'core/sigils.js'], ['x', 'core/workspace-navigation.js'], ['x', 'core/chats-view.js'],
     ['e', 'core/launcher-defaults.js'], ['e', 'core/launcher.js'], ['x', 'core/pages.js'], ['c', 'core/pages.css'],
