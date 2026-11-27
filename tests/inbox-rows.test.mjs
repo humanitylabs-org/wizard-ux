@@ -36,12 +36,15 @@ test('no switch: wizard/inbox-rows is gone from the catalog and the list model',
 });
 
 test('list model: Inbox holds only what needs him; pinned first in pin order; no Recent, no Show older', () => {
-  const g = M.activityGroups(groups(ROWS()), facts, { now: NOW, inbox: { quiet, pin } });
-  assert.deepEqual(J(g.ready.map(s => s.id)), ['d1', 'pr1', 'w1', 'new1', 'y1', 'f1', 'read1'], 'pinned Daily, #priority, then newest first');
+  // w0 is his send: the box's Sent log names its thread (issue 1829).
+  const place = { sent: M.sentIndex([{ id: 'sent_w0', thread: 'w0', state: 'running', at: NOW }]) };
+  const g = M.activityGroups(groups(ROWS()), facts, { now: NOW, inbox: { quiet, pin }, place });
+  assert.deepEqual(J(g.ready.map(s => s.id)), ['d1', 'pr1', 'new1', 'y1', 'f1', 'read1'], 'pinned Daily, #priority, then newest first');
+  assert.deepEqual(J(g.working.map(s => s.id)), ['w1'], 'a running thread no Sent row names is in Working on top, not in Inbox (issue 1810)');
   assert.equal(g.pinned, 2);
   assert.ok(!g.ready.some(s => s.id === 'q1'), 'a quiet "nothing needed" reply is never in Inbox (it is in Sent)');
   assert.ok(!g.ready.some(s => s.id === 'w0'), 'his own send still working with no answer is not in Inbox (Sent › Working)');
-  assert.deepEqual(J(g.working.map(s => s.id)), [], 'no Working list beside Inbox: a run he started is in Sent › Working (issue 1829)');
+  assert.ok(!g.working.some(s => s.id === 'w0'), 'a run he started is in Sent › Working, not in Inbox › Working (issue 1829)');
   assert.deepEqual([g.recent.length, g.older], [0, 0]);
   assert.deepEqual(J(g.snoozed.map(s => s.id)), ['s1']);
   assert.deepEqual(J(g.archive.map(s => s.id)), ['a1']);
@@ -60,11 +63,12 @@ test('list model: a read reply stays until archived; archiving is the only way o
   assert.ok(M.activityGroups(g, facts, { now: NOW, inbox: { quiet, pin } }).ready.some(s => s.id === 'aged'));
 });
 
-test('list model: without inbox facts (the pure model\'s plain lists) the groups are the plain ones', () => {
-  const off = M.activityGroups(groups(ROWS()), facts, { now: NOW });
-  const off2 = M.activityGroups(groups(ROWS()), facts, { now: NOW, inbox: null });
+test('list model: without inbox facts (the pure model\'s plain lists) every thread waits in Inbox until archived', () => {
+  const off = M.activityGroups(groups(ROWS()), facts, {});
+  const off2 = M.activityGroups(groups(ROWS()), facts, { inbox: null });
   assert.deepEqual(J(off2), J(off));
-  assert.ok(off.recent.some(s => s.id === 'read1'), 'off: a read reply is in Recent as today');
+  assert.ok(off.ready.some(s => s.id === 'read1'), 'a read reply stays in Inbox (issue 1810: no Recent)');
+  assert.deepEqual([off.recent.length, off.older], [0, 0]);
   assert.ok(off.working.some(s => s.id === 'w1'));
 });
 
@@ -73,7 +77,8 @@ test('list model: the same rule for the main agent and routed agents (host-profi
     const rows = ROWS().map(s => ({ ...s, agent, id: (agent || 'main') + ':' + s.id }));
     const p = s => pin({ ...s, id: s.id.split(':')[1] });
     const g = M.activityGroups(groups(rows), facts, { now: NOW, inbox: { quiet, pin: p } });
-    assert.deepEqual(J(g.ready.map(s => s.id.split(':')[1])), ['d1', 'pr1', 'w1', 'new1', 'y1', 'f1', 'read1'], 'agent ' + (agent || 'main'));
+    assert.deepEqual(J(g.ready.map(s => s.id.split(':')[1])), ['d1', 'pr1', 'new1', 'y1', 'f1', 'read1'], 'agent ' + (agent || 'main'));
+    assert.deepEqual(J(g.working.map(s => s.id.split(':')[1])), ['w0', 'w1'], 'agent ' + (agent || 'main') + ': Working');
   }
   assert.equal(M.inboxWants({ id: 'h', hidden: true, attention: { state: 'needs_you' } }, { needs: () => true }), false, 'a hidden worker thread is never a thread row');
 });
@@ -153,8 +158,8 @@ test('renderer: Signal rows: round avatar, sender line, title, one preview line,
   const { api, rows, ctx } = part({ records: [{ id: RID('9'), agent: 'hermes', thread: 'bg9', title: 'Renew the permit', ask: 'Stalled: login', failed: true, updatedAt: NOW - 0.3 * H }] });
   const html = api.inboxRowsBody({ id: 'w' }, rows, { awake: [], later: [] });
   const r = rowsOf(html);
-  assert.deepEqual(r.map(x => x.id), ['d1', 'read1', 'pr1', 'w1', 'bg9', 'new1', 'y1', 'f1'], 'Daily first, then #priority / urgent (newest first); then newest first with the waiting task in line');
-  assert.deepEqual(r.map(x => x.pinned), [true, true, true, false, false, false, false, false]);
+  assert.deepEqual(r.map(x => x.id), ['w0', 'w1', 'd1', 'read1', 'pr1', 'bg9', 'new1', 'y1', 'f1'], 'Working on top (issue 1810); then Daily first, then #priority / urgent (newest first); then newest first with the waiting task in line');
+  assert.deepEqual(r.map(x => x.pinned), [false, false, true, true, true, false, false, false, false]);
   const by = Object.fromEntries(r.map(x => [x.id, x.body]));
   assert.match(by.new1, /<span class="ch-ib-av"[^>]*>✈️<\/span>/, 'avatar: the tag emoji');
   assert.match(by.new1, /<span class="ch-ib-from">Trip<\/span><time>ago<\/time>/, 'sender line: the first tag, then the time');
@@ -169,8 +174,10 @@ test('renderer: Signal rows: round avatar, sender line, title, one preview line,
   assert.equal(shared.quiet({ quietReply: true }), true);
   assert.equal(shared.pin({ id: 'd1' }), 1);
   assert.equal(shared.extra(rows), 1, 'the waiting task counts once');
-  assert.match(html, /<section class="ch-sec ch-act ch-ib open" data-sec="ready">.*<span>Inbox<\/span><small>8<\/small>/s, 'the Inbox count is the row count');
-  assert.doesNotMatch(html, /data-sec="recent"|data-sec="working"|T q1|T w0/, 'no Recent, no Working, no quiet reply, no unanswered send');
+  assert.match(html, /<section class="ch-sec ch-act ch-ib open" data-sec="ready">.*<span>Inbox<\/span><small>7<\/small>/s, 'the Inbox count is the Inbox row count (Working is not counted)');
+  assert.match(html, /^<section class="ch-sec ch-act open" data-sec="working"><button class="ch-sec-h" data-sectoggle="working" aria-expanded="true"><span>Working<\/span><small>2<\/small>/, 'Working is the first section (issue 1810)');
+  assert.match(by.w0, /ch-ib-mk[^]*ch-spin|class="ch-ib-mk"[^>]*>[^]*working/, 'a Working row carries the spinner');
+  assert.doesNotMatch(html, /data-sec="recent"|T q1/, 'no Recent, no quiet reply');
 });
 
 test('renderer: Archive taps archive the thread (as its actions do) and a waiting task\'s record', async () => {
@@ -187,7 +194,7 @@ test('renderer: Archive taps archive the thread (as its actions do) and a waitin
 test('renderer: no switch: the same rows with any or no data-tweaks, and a saved wizard/inbox-rows changes nothing', () => {
   const draw = tweaks => { const { api, rows, ctx } = part({ tweaks }); return { ids: rowsOf(api.inboxRowsBody({ id: 'w' }, rows, { awake: [], later: [] })).map(x => x.id), facts: ctx.WizCore.inboxRowsFacts(), api }; };
   const plain = draw(''), stale = draw(`wizard/desktop-chats ${GONE_ID}`);
-  assert.deepEqual(plain.ids, ['d1', 'read1', 'pr1', 'w1', 'new1', 'y1', 'f1']);
+  assert.deepEqual(plain.ids, ['w0', 'w1', 'd1', 'read1', 'pr1', 'new1', 'y1', 'f1']);
   assert.deepEqual(stale.ids, plain.ids);
   assert.equal(typeof plain.facts?.quiet, 'function', 'the count and badges always read the Inbox rule');
   assert.equal(typeof plain.api.inboxRowsFacts()?.pin, 'function');

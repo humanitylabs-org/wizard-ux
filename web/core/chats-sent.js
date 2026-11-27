@@ -25,7 +25,7 @@ window.WizCore.chatsParts.sent = function ({ ago, ch, CH, CHAN_VIEW_KEY, chanEls
   }
   const SENT_BUSY = new Set(); // rows with a correction on its way
   /* Inbox or Sent (wizard-ux issue 1829; James, 25 Nov 2026: "Things should be in one or the other"): while Inbox keeps
-   * threads (inbox-until-archived or Inbox rows), a send whose thread is in Inbox (it needs him, or he asked and it
+   * threads (Inbox until archived, on for everyone, or Inbox rows), a send whose thread is in Inbox (it needs him, or he asked and it
    * answered) is not listed here; the Inbox list decides (list model placeOf), so the two never both show a thread. */
   function sentRows(st) {
     const ids = window.WizCore?.inboxIds?.(LIVE), M = window.WizChatsListModel;

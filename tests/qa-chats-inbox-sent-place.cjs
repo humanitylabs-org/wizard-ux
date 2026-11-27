@@ -1,6 +1,6 @@
 'use strict';
 // Every thread in exactly one place, Inbox or Sent (wizard-ux issue 1829), in a real browser. Disposable synthetic
-// transport only. Phone 412x915, Classic desktop and the AI apps desktop's Chats sidebar (1440x960), switch wizard/inbox-until-archived on (Inbox rows
+// transport only. Phone 412x915, Classic desktop and the AI apps desktop's Chats sidebar (1440x960), Inbox until archived on for everyone (Inbox rows
 // are on for everyone). A mixed set of threads, each with what the box says about it:
 //   qa-quiet  "Sent to Miguel, done", answered fyi "Nothing needed from you." (quiet reply)     → Sent only
 //   qa-mac    "is the mac app ready?", answered fyi (he asked)                                   → Inbox only
@@ -9,14 +9,14 @@
 //   qa-run    had an answer, then he sent again and it is working now                            → Sent only (Working)
 //   qa-alert  a scheduled report he didn't start (no Sent row)                                   → Inbox only
 // Then qa-quiet's newest outcome turns needs you: it moves from Sent to Inbox live, no reload. Opening an Inbox thread
-// keeps it in Inbox. QA_SWITCH=off: inbox-until-archived off, today's lists (qa-quiet in Recent, Working on top).
+// keeps it in Inbox. QA_SENT_ROWS=on adds wizard/sent-rows (#1814's Sent rows). Inbox until archived is on for everyone (issue 1810): there is no off run.
 const assert = require('node:assert/strict');
 const { chromium } = require('../tools/qa-playwright.cjs');
 const { ownerRead } = require('../tools/qa-desktop-frame-fixture.cjs');
 const fs = require('node:fs'), path = require('node:path');
 const repo = path.resolve(__dirname, '..'), origin = process.env.QA_ORIGIN || 'https://chats-place-1829.test', prefix = '/wizard-os-home/';
 const web = process.env.QA_WEB || path.join(repo, 'web'), out = process.env.QA_OUT || path.join(repo, 'chats-inbox-sent-place-evidence');
-const SHELLS = (process.env.QA_SHELLS || 'phone,classic,aiapps').split(','), SW = process.env.QA_SWITCH !== 'off', ROWS = true; // Inbox rows are on for everyone (wizard-ux issue 1779)
+const SHELLS = (process.env.QA_SHELLS || 'phone,classic,aiapps').split(','), SW = true, ROWS = true; // Inbox rows are on for everyone (wizard-ux issue 1779)
 fs.mkdirSync(out, { recursive: true });
 const now = Date.now(), iso = t => new Date(t).toISOString(), nap = ms => new Promise(r => setTimeout(r, ms)), M = 60e3;
 const fyi = ask => ({ state: 'fyi', ask });
@@ -55,7 +55,7 @@ const report = { origin, web, cases: [] };
       const context = await browser.newContext({ viewport: phone ? { width: 412, height: 915 } : { width: 1440, height: 960 }, isMobile: phone, hasTouch: phone, serviceWorkers: 'block', ...(phone ? { userAgent: 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Mobile Safari/537.36' } : {}) });
       try {
         await context.routeWebSocket('**/*', w => w.close());
-        const mix = { 'wizard/desktop-chats': true, ...(SW ? { 'wizard/inbox-until-archived': true } : {}) };
+        const mix = { 'wizard/desktop-chats': true };
         await context.addInitScript(({ shell, mix }) => {
           if (window !== top) return;
           if (sessionStorage.getItem('qaBoot')) return; sessionStorage.setItem('qaBoot', '1');

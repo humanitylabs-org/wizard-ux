@@ -103,10 +103,10 @@ window.WizCore.skinHostParts.shellapi = function ({ appLogo, chatArchiveOrders, 
         // in Settings › Notifications included), as rows of their own (id 'notif:<id>', note: true) in Chats' own order:
         // the new ones among the chats by time, the snoozed ones (read) at the end; acted on through the inbox's handler.
         // (a focused agent's list carries no inbox notifications: they belong to All, as in Chats)
-        // { activity: true } (Channels on, wizard-ux issue 1336): every agent's chats as Working, Ready, Recent (+ older:
-        // how many more Show older adds; { older: true } lists them), Snoozed and Archive, in the one Activity sort;
-        // unread notifications wait in Ready, read ones sit in Recent.
-        list: opts => { if (opts?.activity === true && live() && skinHostVars.shell.activityList) return activityRows(skinHostVars.shell.activityList({ order: readReadyOrder(), older: opts.older === true }));
+        // { activity: true } (Channels on, wizard-ux issue 1336): every agent's chats as Working, Ready (the Inbox: every
+        // thread until archived, issue 1810; recent stays empty), Snoozed and Archive, in the one Activity sort;
+        // unread notifications wait in Ready, read ones with Snoozed.
+        list: opts => { if (opts?.activity === true && live() && skinHostVars.shell.activityList) return activityRows(skinHostVars.shell.activityList({ order: readReadyOrder() }));
           const l = live() ? (opts?.focused === true && skinHostVars.shell.sessionListFocused ? skinHostVars.shell.sessionListFocused() : skinHostVars.shell.sessionList?.()) : null; if (!l) return null; const o = structuredClone(l); o.ready = opts?.focused === true && skinHostVars.shell.agentFocus?.().id ? (o.ready || []) : withNoteRows(o.ready || []); o.working = window.WizChatsListModel.workingSort(o.working, readWorkingOrder()); return o; },
         open: id => { if (!live() || typeof id !== 'string' || !id) return; if (id.startsWith(NOTE_ID)) inboxAct(NOTE_ID_OPEN, id.slice(NOTE_ID.length)); else skinHostVars.shell.openThread(id); },
         // The thread's own actions, through Chats' own paths (the same as its row sheet): Snooze, Done (archive), Mark
