@@ -71,3 +71,14 @@ test('wizard.md ships the manual as the agent skill (name and description, as th
   // The agent's skill index shows only the first 57 characters of a description: they must say what it is for.
   assert.match(description.slice(0, 57), /Wizard setting or screen/);
 });
+
+test('the manual names the Chats tabs the shell draws (wizard-ux issue 1437: "where do I turn on Channels?")', () => {
+  // The bottom tabs of the main agent's Chats list (core/chats-sent.js sentBar).
+  const bar = read('web/core/chats-sent.js').match(/function sentBar[\s\S]*?<\/nav>/)?.[0] || '';
+  const tabs = [...bar.matchAll(/tab\('\w+', '([^']+)'\)/g)].map(m => m[1]);
+  assert.deepEqual(tabs, ['Inbox', 'Tags', 'Sent']);
+  const help = JSON.parse(read('skill/help.json'));
+  const answer = help.howTo['Turn on Channels?'];
+  for (const t of tabs) assert.ok(answer.includes(t), `"Turn on Channels?" names the ${t} tab`);
+  assert.match(answer, /tap Tags/);
+});
