@@ -89,7 +89,7 @@ test('with Inbox rows on, the quiet mark does not take a requested thread back o
   const topics = t({ id: 'wizard_topics', quietReply: true, attention: att('fyi', 'Topics · 2 moved'), at: NOW });
   const helper = t({ id: 'helper', quietReply: true, attention: att('done', 'Matched 12 invoices.'), at: NOW });
   const g = { working: [], errors: [], ready: [topics, helper], deferred: [], archive: [] };
-  const run = place => M.activityGroups(g, { needs, unread: () => false, at: s => s.at }, { keep: true, inbox: { quiet: s => s.quietReply === true }, place });
+  const run = place => M.activityGroups(g, { needs, unread: () => false, at: s => s.at }, { inbox: { quiet: s => s.quietReply === true }, place });
   const ids = r => JSON.parse(JSON.stringify((r?.ready || []).map(s => s.id)));
   assert.deepEqual(ids(run({ sent: new Map(), smart: true, pinned: s => PINS.has(s.id) })), ['wizard_topics'], 'smart: Topics in Inbox, the helper result not');
   assert.deepEqual(ids(run({ sent: new Map() })), [], 'smart off: the quiet mark keeps both out, as today');

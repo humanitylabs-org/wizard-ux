@@ -63,8 +63,8 @@ function sidebar({ order = 'newest', agents = 3, rows = null } = {}) {
     el: (...a) => new Node(...a), icon: () => new Node('i'), label: t => new Node('h3', 'aad-lab', { text: t }), markCurrent() {}, closeMenu() {}, openSortMenu() {},
     chatRow: r => new Node('div', 'aad-rw', { text: r.id + (r.mark ? ':' + r.mark : '') + (r.agentName ? '·' + r.agentName : '') }), agentsRow: Object.assign(new Node(), { hidden: true }), agentsDrawn: '', pickAgent() {},
     groupBy: () => 'none', GROUP_ORDERS: [['newest', 'Newest first'], ['oldest', 'Oldest first']], GROUP_MODES: M.GROUP_MODES, readyGroups: M.readyGroups, projectGroups: M.projectGroups, readyFlat: M.readyFlat });
-  vm.runInContext(between(aad, '  const actOn = () =>', '  let actOlder = false;') + 'var actOlder = false;', c);
-  vm.runInContext('var readSessions = () => { sessions = api.sessions.list(actOn() ? { activity: true, older: actOlder } : { focused: true }); return sessions; };', c);
+  vm.runInContext(between(aad, '  const actOn = () =>', '  /* The app panel on the left'), c);
+  vm.runInContext('var readSessions = () => { sessions = api.sessions.list(actOn() ? { activity: true } : { focused: true }); return sessions; };', c);
   vm.runInContext(between(aad, '  const actOrder = () =>', '  const setActOrder = o =>'), c);
   vm.runInContext(between(aad, '  function paintAgents()', '  function pickAgent('), c);
   vm.runInContext(between(aad, '  function paintList(', '  /** the chat in front'), c);
@@ -73,21 +73,17 @@ function sidebar({ order = 'newest', agents = 3, rows = null } = {}) {
 const heads = sc => sc.all().filter(n => n.cls === 'aad-lab aad-sec').map(n => [n.attrs['data-sec'], n.attrs['aria-expanded']]);
 const texts = (sc, cls) => sc.all().filter(n => n.cls === cls).map(n => n.textContent);
 
-test('AI apps sidebar: no agent chips, every agent, Working / Ready / Recent / Snoozed / Archived, one sort', () => {
-  const { c, asked, listens } = sidebar();
+test('AI apps sidebar: no agent chips, every agent, Working / Inbox / Snoozed / Archived, one sort', () => {
+  const { c, asked } = sidebar();
   c.paintAgents(); assert.equal(c.agentsRow.hidden, true, 'the agent chip strip is gone'); assert.equal(c.agentsRow.children.length, 0);
   c.readSessions(); c.paintList(true);
-  assert.deepEqual(JSON.parse(JSON.stringify(asked.at(-1))), { activity: true, older: false }, 'every agent, never the focused list');
-  assert.deepEqual(heads(c.scroll), [['working', 'false'], ['ready', 'true'], ['recent', 'true'], ['snoozed', 'false'], ['archive', 'false']]);
-  assert.deepEqual(texts(c.scroll, 'aad-sec-w'), ['Working', 'Ready', 'Recent', 'Snoozed', 'Archived']);
-  assert.deepEqual(texts(c.scroll, 'aad-rw'), ['h1:new·Host', 'g1:new', 'y1:needs', 'r1', 'r2'], 'Ready then Recent; another agent named after its channel');
-  assert.deepEqual(texts(c.scroll, 'aad-more-older'), ['Show older · 1']);
+  assert.deepEqual(JSON.parse(JSON.stringify(asked.at(-1))), { activity: true }, 'every agent, never the focused list');
+  assert.deepEqual(heads(c.scroll), [['working', 'false'], ['ready', 'true'], ['snoozed', 'false'], ['archive', 'false']]);
+  assert.deepEqual(texts(c.scroll, 'aad-sec-w'), ['Working', 'Inbox', 'Snoozed', 'Archived']);
+  assert.deepEqual(texts(c.scroll, 'aad-rw'), ['h1:new·Host', 'g1:new', 'r1', 'y1:needs', 'r2', 'old'], 'every thread until archived (issue 1810); another agent named after its channel');
+  assert.deepEqual(texts(c.scroll, 'aad-more-older'), [], 'no Show older');
   assert.equal(c.scroll.all().filter(n => /aad-groupb|aad-working-orderb/.test(n.cls)).length, 0, 'no grouping drop-down and no Working sort');
   const sort = c.scroll.all().find(n => n.cls === 'aad-sortb aad-act-orderb'); assert.ok(sort); assert.equal(sort.attrs['aria-label'], 'Sort: Newest first. Change');
-  // Show older lists the rest of the live window.
-  listens.find(([n]) => n.cls === 'aad-more-older')[2]();
-  assert.deepEqual(JSON.parse(JSON.stringify(asked.at(-1))), { activity: true, older: true });
-  assert.deepEqual(texts(c.scroll, 'aad-rw').slice(-3), ['r1', 'r2', 'old']);
 });
 
 test('AI apps sidebar: Needs you first puts amber first', () => {
@@ -96,31 +92,32 @@ test('AI apps sidebar: Needs you first puts amber first', () => {
   assert.equal(c.scroll.all().find(n => n.cls === 'aad-sortb aad-act-orderb').attrs['aria-label'], 'Sort: Needs you first. Change');
 });
 
-test('skin-host: list({ activity: true }) reads the shell\'s activity list; unread alerts wait in Ready, read ones in Recent', () => {
+test('skin-host: list({ activity: true }) reads the shell\'s activity list; unread alerts wait in Inbox, read ones with Snoozed', () => {
   const c = { console, structuredClone }; c.window = c; modelContext(c);
   c.readReadyOrder = () => 'newest';
   c.noteRows = () => [{ id: 'notif:x', note: true, rank: 1, at: new Date(NOW).toISOString(), snoozed: false }, { id: 'notif:y', note: true, rank: 3, at: new Date(NOW - 9 * H).toISOString(), snoozed: true }];
   vm.runInContext(between(host, '  function activityRows(l) {', '  function withNoteRows('), c);
-  const o = c.activityRows({ working: [], ready: [{ id: 'g', at: new Date(NOW - H).toISOString(), mark: 'new' }], recent: [{ id: 'r', at: new Date(NOW - 2 * H).toISOString(), mark: '' }], snoozed: [], archive: [], older: 0 });
+  const o = c.activityRows({ working: [], ready: [{ id: 'g', at: new Date(NOW - H).toISOString(), mark: 'new' }], recent: [], snoozed: [], archive: [], older: 0 });
   assert.deepEqual([...o.ready].map(r => [r.id, r.mark]), [['notif:x', 'needs'], ['g', 'new']]);
-  assert.deepEqual([...o.recent].map(r => r.id), ['r', 'notif:y']);
+  assert.deepEqual([...o.recent].map(r => r.id), [], 'no Recent (issue 1810)');
+  assert.deepEqual([...o.snoozed].map(r => r.id), ['notif:y']);
   // the real host list(): { activity: true } asks the shell's activityList in the saved order and runs it through activityRows
   const asked = [], l0 = { working: [], ready: [{ id: 'g', at: new Date(NOW - H).toISOString(), mark: 'new' }], recent: [], snoozed: [], archive: [], older: 0 };
   c.live = () => true;
   c.shell = { activityList: o => { asked.push(JSON.parse(JSON.stringify(o))); return structuredClone(l0); }, sessionList: () => null };
   vm.runInContext(`this.api = ({ ${between(host, '        list: opts =>', '        open: id =>')} });`, c);
   const a = c.api.list({ activity: true });
-  assert.deepEqual([...a.ready].map(r => r.id), ['notif:x', 'g'], 'unread alerts join Ready through activityRows');
-  c.api.list({ activity: true, older: true }); c.api.list({ activity: true, older: 'yes' });
-  assert.deepEqual(asked, [{ order: 'newest', older: false }, { order: 'newest', older: true }, { order: 'newest', older: false }]);
+  assert.deepEqual([...a.ready].map(r => r.id), ['notif:x', 'g'], 'unread alerts join Inbox through activityRows');
+  c.api.list({ activity: true, older: true });
+  assert.deepEqual(asked, [{ order: 'newest' }, { order: 'newest' }], 'no Show older to ask for');
   assert.equal(c.api.list({ activity: 1 }), null, 'only activity: true reads the activity list');
   c.live = () => false; assert.equal(c.api.list({ activity: true }), null, 'nothing before the shell is live');
-  assert.equal(asked.length, 3);
+  assert.equal(asked.length, 2);
 });
 
 // wizard-ux issue 1360: one "waiting on you" rule. The real chanNeeds / attOf / chanUnread from chats.js drive the real
-// Activity grouping, so a Your call (check) thread stays in Ready with its amber marker after it is opened, green leaves
-// Ready on open, Mark done moves amber to Recent, and no row in Recent ever carries the amber marker.
+// Activity grouping, so a Your call (check) thread keeps its amber marker after it is opened, green loses its dot on
+// open, and Mark done clears amber; every thread stays in Inbox until archived (issue 1810).
 function realRule() {
   const line = t => { const i = chats.indexOf('\n  ' + t); assert.ok(i >= 0, t); return chats.slice(i + 1, chats.indexOf('\n', i + 1)); };
   const read = new Set(), handled = new Set();
@@ -132,26 +129,23 @@ function realRule() {
     + '\nthis.needs = actNeeds; this.unread = actUnread; this.attOf = attOf;', c);
   return { c, open: id => read.add(id), markDone: id => { handled.add(id); read.add(id); } };
 }
-test('issue 1360: one waiting-on-you rule for Ready and the amber marker; opening never clears amber, only green', () => {
+test('issue 1360: one waiting-on-you rule for Inbox and the amber marker; opening never clears amber, only green', () => {
   const { c, open, markDone } = realRule(), M = c.WizChatsListModel;
   const done = new Date(NOW - 2 * H).toISOString();
   const rows = [row('chk', 2, { fresh: true, attention: { state: 'check', ask: 'Try it and say what to tweak' }, lastAssistantAt: done }),
     row('ny', 3, { fresh: true, attention: { state: 'needs_you', ask: 'Pick one' } }), row('apr', 4, { status: 'waiting_for_approval' }),
     row('grn', 1, { fresh: true, attention: { state: 'done', ask: 'Shipped' } }), row('fyi', 5, { attention: { state: 'fyi', ask: 'FYI' } })];
-  const list = () => M.activityList(groups(rows), { live: { cardAt: s => s.updatedAt, isNew: c.unread }, chats: { activityNeeds: c.needs, activityUnread: c.unread, threadActions: () => [], channelOf: () => 'General', agentLabelOf: () => '' } }, { order: 'newest', now: NOW });
-  const marks = l => Object.fromEntries(['ready', 'recent'].map(k => [k, [...l[k]].map(r => r.id + (r.mark ? ':' + r.mark : ''))]));
-  const noAmberInRecent = l => assert.ok(![...l.recent].some(r => r.mark === 'needs'), 'no amber row sits in Recent');
+  const list = () => M.activityList(groups(rows), { live: { cardAt: s => s.updatedAt, isNew: c.unread }, chats: { activityNeeds: c.needs, activityUnread: c.unread, threadActions: () => [], channelOf: () => 'General', agentLabelOf: () => '' } }, { order: 'newest' });
+  const marks = l => [...l.ready].map(r => r.id + (r.mark ? ':' + r.mark : ''));
   let l = list();
-  assert.deepEqual(marks(l), { ready: ['grn:new', 'chk:needs', 'ny:needs', 'apr:needs'], recent: ['fyi'] });
-  noAmberInRecent(l);
+  assert.deepEqual(marks(l), ['grn:new', 'chk:needs', 'ny:needs', 'apr:needs', 'fyi']);
+  assert.equal(l.recent.length, 0, 'no Recent');
   for (const id of ['chk', 'ny', 'grn']) open(id); // open each thread and go back
   l = list();
-  assert.deepEqual(marks(l), { ready: ['chk:needs', 'ny:needs', 'apr:needs'], recent: ['grn', 'fyi'] }, 'Your call and Needs you stay in Ready with amber; green moves to Recent');
-  noAmberInRecent(l);
+  assert.deepEqual(marks(l), ['grn', 'chk:needs', 'ny:needs', 'apr:needs', 'fyi'], 'Your call and Needs you keep amber; green loses its dot and stays');
   markDone('chk'); markDone('ny');
   l = list();
-  assert.deepEqual(marks(l), { ready: ['apr:needs'], recent: ['grn', 'chk', 'ny', 'fyi'] }, 'Mark done clears amber and moves the thread to Recent');
-  noAmberInRecent(l);
+  assert.deepEqual(marks(l), ['grn', 'chk', 'ny', 'apr:needs', 'fyi'], 'Mark done clears amber; the thread stays until archived');
   assert.equal(c.attOf(rows[0]), null, 'Mark done clears a Your call status too');
 });
 
@@ -169,7 +163,7 @@ test('phone Activity on a fresh box: one empty state, no sections, no None lines
 test('phone Inbox: only the sections that hold a chat, with real counts (issue 1731)', () => {
   const one = rows => phone().activityBody({ id: 'w' }, rows, null);
   let html = one([row('w1', 0, { status: 'running' })]);
-  assert.deepEqual(secs(html), [], 'his own send still working is in Sent, not here'); assert.match(html, /ch-ib-empty"><b>Nothing needs you</); assert.doesNotMatch(html, /ch-none|<small><\/small>|data-chactorder|ch-act-empty/);
+  assert.deepEqual(secs(html), [['Working', '1', true]], 'a running thread no Sent row names: Working (issue 1810)'); assert.match(html, /ch-ib-empty"><b>Nothing needs you</, 'Inbox itself is empty'); assert.doesNotMatch(html, /ch-none|<small><\/small>|data-chactorder|ch-act-empty/);
   html = one([row('g1', 0, { fresh: true })]);
   assert.deepEqual(secs(html), [['Inbox', '1', true]]); assert.match(html, /data-chactorder/, 'the sort shows while Inbox has a chat');
   html = one([row('s1', 1, { deferred: true })]);

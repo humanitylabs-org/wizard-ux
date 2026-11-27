@@ -101,5 +101,5 @@ test('AI apps desktop rail: no Ready row (and no number) when Ready lists nothin
   assert.deepEqual(rail({ snoozed: [{}, {}, {}], unread: 3 }), ['snoozed:3:Snoozed']);
   assert.deepEqual(rail({ working: [{}], unread: 2 }), ['working:1:Working']);
   // Something ready: its Ready row carries the unread count.
-  assert.deepEqual(rail({ ready: [{ id: 'a' }], snoozed: [{}], unread: 1 }), ['snoozed:1:Snoozed', 'ready:1:Ready']);
+  assert.deepEqual(rail({ ready: [{ id: 'a' }], snoozed: [{}], unread: 1 }), ['snoozed:1:Snoozed', 'ready:1:Inbox']);
 });

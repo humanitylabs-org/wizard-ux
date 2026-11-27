@@ -39,7 +39,7 @@ const quiet = s => s.quietReply === true && !needs(s) && s.status !== 'running';
 const groups = rows => ({ working: rows.filter(s => s.status === 'running'), errors: rows.filter(s => s.status === 'failed'), ready: rows.filter(s => !['running', 'failed'].includes(s.status) && !s.archived && !s.deferred), deferred: rows.filter(s => s.deferred && !s.archived), archive: rows.filter(s => s.archived) });
 
 // The real chats-ready part (inboxPlace / inboxIds / the Inbox count) and the real Sent part over one fake box.
-function shell({ tweaks = 'wizard/inbox-until-archived', threads = THREADS(), sent = SENT() } = {}) {
+function shell({ tweaks = '', threads = THREADS(), sent = SENT() } = {}) {
   const listeners = [];
   const ctx = { console, Date, Map, Set, structuredClone, document: { documentElement: { dataset: { tweaks } }, addEventListener() {} }, localStorage: { getItem: () => null, setItem() {} } };
   ctx.window = ctx; ctx.globalThis = ctx; ctx.addEventListener = () => {}; ctx.WizCore = { chatsParts: {} };
@@ -146,6 +146,6 @@ test('no switch (Inbox rows on for everyone, wizard-ux issue 1779): with no data
   const inbox = s.inbox(), sent = s.sentList();
   assert.deepEqual(inbox, ['alert', 'failed', 'mac', 'needs'], 'Inbox placement with no switch on');
   assert.deepEqual(sent, ['quiet', 'run'], 'Sent keeps the quiet reply and the running send');
-  assert.equal(s.ctx.WizCore.inboxKeep(), true);
+  assert.equal(s.ctx.WizCore.inboxKeep, undefined, 'no switch read left (issue 1810)');
   assert.notEqual(s.ctx.WizCore.inboxPlace(s.LIVE), null);
 });

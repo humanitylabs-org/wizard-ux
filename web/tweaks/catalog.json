@@ -28,7 +28,6 @@
     "wizard/desktop-bottom-bar",
     "wizard/try-feature-counts",
     "wizard/feature-counts-ask",
-    "wizard/inbox-until-archived",
     "wizard/plain-alert-rows",
     "wizard/sent-rows",
     "wizard/chats-title-bar",

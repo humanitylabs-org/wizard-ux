@@ -154,7 +154,7 @@ test('the Sent tab is the main agent\'s list only (routed agents: host-profile, 
 });
 
 test('switch off: Sent and Inbox are today\'s (one card per send, the same Inbox ids)', () => {
-  const off = shell({ tweaks: 'wizard/inbox-until-archived' }), base = off.body();
+  const off = shell({ tweaks: '' }), base = off.body();
   assert.equal(off.p.sentThreadsOn(), false);
   assert.match(base, /class="ch-sent-row st-running"/, 'today\'s cards');
   assert.equal([...base.matchAll(/data-chsentopen=/g)].length, off.st.rows.filter(r => !(r.thread && off.inbox().includes(r.thread))).length, 'one card per send');
@@ -162,8 +162,7 @@ test('switch off: Sent and Inbox are today\'s (one card per send, the same Inbox
   assert.equal(off.p.sentSends('main', 'trip'), false, 'no sends block while off');
   const none = shell({ tweaks: '' });
   assert.notEqual(none.ctx.WizCore.inboxIds(none.LIVE), null, 'Inbox placement with no switch on (Inbox rows are on for everyone, wizard-ux issue 1779)');
-  assert.equal(none.ctx.WizCore.inboxKeep(), true);
-  assert.equal(shell().ctx.WizCore.inboxKeep(), true, 'on: the one-place rule is on');
+  assert.equal(none.ctx.WizCore.inboxKeep, undefined, 'no switch read left (Inbox until archived, issue 1810, on for everyone)');
 });
 
 test('model: sentThreads groups by thread, then record, then the send; newest first', () => {

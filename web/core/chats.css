@@ -1033,8 +1033,6 @@ html:root[data-layout="ai-apps"] .aad-rw .aad-row > .aad-st:is(.is-new, .is-need
 html:root[data-layout="ai-apps"] .aad-rw .aad-row:has(.aad-chan-line) > .aad-st { align-self: flex-start; margin-top: 4px; }
 html:root[data-layout="ai-apps"] .aad-rw .aad-row:has(.aad-chan-line) > .aad-st:is(.is-new, .is-needs) { margin-top: 6px; }
 html:root[data-layout="ai-apps"] .aad-rw .aad-chat:not(:has(> .aad-st))::before { content: ""; order: -1; flex: none; width: 12px; margin-right: -2px; }
-html:root[data-layout="ai-apps"] .aad-more-older { display: block; width: calc(100% - 16px); margin: 4px 8px; min-height: 32px; border: 0; border-radius: 8px; background: transparent; color: var(--wz-accent, currentColor); font: inherit; font-size: .8125rem; text-align: left; padding: 0 8px; cursor: pointer; }
-html:root[data-layout="ai-apps"] .aad-more-older:hover { background: color-mix(in srgb, currentColor 8%, transparent); }
 /* the one-line phone list (core/desktop-chats.css): the marker takes the accent unread dot's slot after the time; the
    spinner shows only there (the other lists keep the row's own status icon at its left) */
 html:root .ch-row .ch-act-ind .ch-spin { display: none; }

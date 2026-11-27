@@ -1,7 +1,7 @@
 'use strict';
 // Chats title bar (wizard-ux issue 1836, switch wizard/chats-title-bar) in a real browser, disposable synthetic box only.
 // Phone 412x915 and Classic desktop 1440x960, Nebula and a light skin, with James's switches (desktop-chats,
-// inbox-until-archived; Inbox rows are on for everyone):
+// Inbox until archived and Inbox rows are on for everyone):
 //   switch on: the top of Chats is one title bar naming the tab, "Inbox" with its count pill (= the Inbox rows), then the
 //   search and filter icons; no "All chats", no "Inbox ^ · Newest first" section row: the rows start right under the bar.
 //   The filter (≡) sheet holds the sort (Newest first by default); Oldest first reverses the unpinned rows and is kept.
@@ -54,7 +54,7 @@ const report = { origin, web, switch: SW ? 'on' : 'off', cases: [] };
       const context = await browser.newContext({ viewport: phone ? { width: 412, height: 915 } : { width: 1440, height: 960 }, isMobile: phone, hasTouch: phone, serviceWorkers: 'block', ...(phone ? { userAgent: 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Mobile Safari/537.36' } : {}) });
       try {
         await context.routeWebSocket('**/*', w => w.close());
-        const mix = { 'wizard/desktop-chats': true, 'wizard/inbox-until-archived': true, ...(SW ? { 'wizard/chats-title-bar': true } : {}) };
+        const mix = { 'wizard/desktop-chats': true, ...(SW ? { 'wizard/chats-title-bar': true } : {}) };
         await context.addInitScript(({ shell, skin, mix }) => {
           if (window !== top) return;
           if (sessionStorage.getItem('qaBoot')) return; sessionStorage.setItem('qaBoot', '1');
