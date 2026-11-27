@@ -256,7 +256,7 @@ test('a trusted tweak may switch only its own author\'s tweaks, through the devi
   const T = await load(['miguel']);
   assert.equal(await T.api.settings.toggleTweak('miguel/machines-home'), true);
   assert.deepEqual(T.toggled, ['miguel/machines-home'], 'switched through the device mix');
-  assert.equal(await T.api.settings.toggleTweak('wizard/sent-rows'), false, 'own author only');
+  assert.equal(await T.api.settings.toggleTweak('wizard/sent-threads'), false, 'own author only');
   assert.equal(await T.api.settings.toggleTweak('miguel/probe'), false, 'never itself');
   assert.equal(await T.api.settings.toggleTweak('miguel/../x'), false);
   assert.deepEqual(T.toggled, ['miguel/machines-home']);

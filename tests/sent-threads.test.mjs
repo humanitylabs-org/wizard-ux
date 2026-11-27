@@ -153,11 +153,11 @@ test('the Sent tab is the main agent\'s list only (routed agents: host-profile, 
   assert.equal(shell().p.sentTabsOn({ id: 'main', thread: null, agent: '' }), true);
 });
 
-test('switch off: Sent and Inbox are today\'s (one card per send, the same Inbox ids)', () => {
+test('switch off: Sent and Inbox are today\'s (one Sent row per send, the same Inbox ids)', () => {
   const off = shell({ tweaks: 'wizard/inbox-until-archived' }), base = off.body();
   assert.equal(off.p.sentThreadsOn(), false);
-  assert.match(base, /class="ch-sent-row st-running"/, 'today\'s cards');
-  assert.equal([...base.matchAll(/data-chsentopen=/g)].length, off.st.rows.filter(r => !(r.thread && off.inbox().includes(r.thread))).length, 'one card per send');
+  assert.match(base, /class="ch-row ch-ib-row ch-sr-row st-running/, 'today\'s Sent rows (wizard-ux issue 1814, on for everyone)');
+  assert.equal([...base.matchAll(/data-chsent=/g)].length, off.st.rows.filter(r => !(r.thread && off.inbox().includes(r.thread))).length, 'one row per send');
   assert.doesNotMatch(base, /ch-st-row|data-chsentthread/);
   assert.equal(off.p.sentSends('main', 'trip'), false, 'no sends block while off');
   const none = shell({ tweaks: '' });
@@ -169,7 +169,7 @@ test('switch off: Sent and Inbox are today\'s (one card per send, the same Inbox
 test('model: sentThreads groups by thread, then record, then the send; newest first', () => {
   const M = modelContext({}).WizChatsListModel;
   assert.equal(M.sentThreadsOn('a wizard/sent-threads b'), true);
-  assert.equal(M.sentThreadsOn('wizard/sent-rows'), false);
+  assert.equal(M.sentThreadsOn('wizard/inbox-rows'), false);
   const g = M.sentThreads([sentRow({ id: 'a', at: 1, thread: 't' }), sentRow({ id: 'b', at: 3, thread: 't', state: 'running' }), sentRow({ id: 'c', at: 2, record: 'r' }), sentRow({ id: 'd', at: 4 })], new Set(), {});
   assert.deepEqual(J(g.map(x => [x.key, x.sends.map(r => r.id), x.working])), [['send:d', ['d'], false], ['t', ['b', 'a'], true], ['rec:r', ['c'], false]]);
   assert.deepEqual(J(M.sentThreads([sentRow({ id: 'a', at: 1, thread: 't' }), sentRow({ id: 'c', at: 2, record: 'r' })], new Set(['t', 'r'])).map(x => x.key)), [], 'Inbox ids leave out');
