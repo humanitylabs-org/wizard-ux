@@ -379,7 +379,7 @@
       "status": "not-exercised",
       "source": "web/live-channels.js",
       "kind": "write",
-      "note": "Chats Tags (wizard-agent-service issue 608, switch wizard/chat-tags): only when a chat's tag is added or removed with the box's Tags on; tests/chat-channel-store.test.mjs and tests/qa-chat-tags.cjs cover it against a fake box. Refused and collected, never answered, if a flow reaches it."
+      "note": "Chats Tags (wizard-agent-service issue 608, on for everyone): only when a chat's tag is added or removed with the box's Tags on; tests/chat-channel-store.test.mjs and tests/qa-chat-tags.cjs cover it against a fake box. Refused and collected, never answered, if a flow reaches it."
     },
     "/wizard/v1/channels/membership": {
       "status": "not-exercised",
