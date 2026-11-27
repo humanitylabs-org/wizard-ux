@@ -6,7 +6,7 @@
  * in front and the pins) stay in desktop.js; this code reads and writes them as aadVars.<name>, its get/set accessors
  * on the same variables, so every read and write is live. desktop.js's own imports are imported here again from the
  * same modules. The body below keeps desktop.js's indentation so `git log -L` and patches port over. */
-export function closingPart({ aadVars, anim, api, cX, doneLoading, DRAFT, FEED, feedBack, feedGone, flip, focusFrame, icon, mainChats, one, oneSplit, paintSide, paintSplit, panes, peekable, pTop, pW, pX, reduced, retileSoon, root, wantAppFocus }) {
+export function closingPart({ aadVars, anim, api, cX, doneLoading, DRAFT, FEED, feedBack, feedGone, flip, focusFrame, mainChats, one, oneSplit, paintSide, paintSplit, panes, peekable, pTop, pX, reduced, retileSoon, root, wantAppFocus }) {
   let here, paintTop; // late-bound: desktop.js declares these after the call, see bindLate
   function hidePanel({ home: goBack = true } = {}) {
     if (!aadVars.pane || aadVars.closing) return !!aadVars.pane;
@@ -65,21 +65,17 @@ export function closingPart({ aadVars, anim, api, cX, doneLoading, DRAFT, FEED, 
     if (up && !aadVars.peek && peekable()) { aadVars.peek = true; aadVars.offPeek = api.back.push(() => { aadVars.peek = false; aadVars.offPeek = null; paintSide(); }); paintSide(); }
     return true;
   }
+  /* The app panel wide (an app showing its companion, autoWide in desktop.js). It has no button or key of its own: the
+   * header's Wider ⤢ did nothing beside Full screen / Half screen and is gone (wizard-ux issue 1964, James, 27 Nov 2026). */
   function setWide(on) {
-    const w = !!on && !!aadVars.pane; if (w === aadVars.wide) { paintWide(); return; } aadVars.wide = w;
+    const w = !!on && !!aadVars.pane; if (w === aadVars.wide) return; aadVars.wide = w;
     flip([aadVars.pane?.el], () => { if (aadVars.wide) root.dataset.aadWide = ''; else delete root.dataset.aadWide; });
-    paintWide(); retileSoon();
+    retileSoon();
   }
-  function paintWide() {
-    pW.setAttribute('aria-pressed', String(aadVars.wide)); pW.replaceChildren(icon(aadVars.wide ? 'shrink' : 'expand'));
-    pW.title = aadVars.wide ? 'Back to the side (⌥F)' : 'Wider (⌥F)'; pW.setAttribute('aria-label', aadVars.wide ? 'Make the app panel narrower again' : 'Make the app panel wider');
-  }
-  paintWide();
   api.listen(pX, 'click', () => hidePanel());
   // a click anywhere on the app panel's bar hands the keyboard back to the app (its buttons never keep it)
   api.listen(pTop, 'mousedown', e => e.preventDefault());
   api.listen(pTop, 'click', e => { if (aadVars.pane && !e.target?.closest?.('.aad-px') && !aadVars.focusing) { wantAppFocus(aadVars.pane.id); aadVars.focusing = true; focusFrame(); } });
   api.listen(cX, 'click', closeChat);
-  api.listen(pW, 'click', () => { aadVars.wideAuto = false; setWide(!aadVars.wide); });
   return { chatBack, closeChat, hidePanel, listBack, setWide, bindLate: v => { if ('here' in v) here = v.here; if ('paintTop' in v) paintTop = v.paintTop; } };
 }

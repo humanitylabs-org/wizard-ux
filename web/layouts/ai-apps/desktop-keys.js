@@ -8,7 +8,7 @@
  * same modules. The body below keeps desktop.js's indentation so `git log -L` and patches port over. */
 import { railActive, readyStep } from './parts.js';
 import { CHATS } from '../apps/chrome.js';
-export function keysPart({ aadVars, allOpenNow, anim, api, appKeyOf, applySizes, appName, behindThread, chanTitle, chatAction, chatParts, chatWindows, closeAll, closeChat, closeDesk, closeTidy, closeWs, cTop, curChat, cX, deskOfNode, desks, doc, DRAFT, el, FEED, feedBack, feedGone, feedOn, feedTitle, findBtn, focusIn, focusLeave, focusOut, FRAME_KEYS, goApp, grip, hBack, hidePanel, hMid, homeComposer, host, isAppKey, KEY_LIKE, khMarks, listBack, macHoles, mainChats, MODE_KEYS, MODE_LABELS, modeBars, narrow, newBtn, NOTE, noteOn, noteTitle, one, oneBack, oneSplit, openAll, openTidy, openWs, orbBtn, paintAgents, paintBack, paintHome, paintList, paintOneChats, paintOrbIdentity, paintRail, paintSplit, paintVt, paintWs, paneFrame, panes, pIcon, plus, pW, pX, railMode, readSessions, readyIds, readyOrder, retileSoon, rFind, rList, rNew, root, rSet, rTog, setBtn, setSearch, setSize, settings, setWide, side, sizes, stepReady, swapped, swapSides, syncOrb, syncSide, talkFromOrb, tidyBtn, titleOf, togBtn, toggleSide, toggleTabs, top, tt, typing, unpeek, vtAll, vtList, vtTog, windowMode, wsBtn, wsName }) {
+export function keysPart({ aadVars, allOpenNow, anim, api, appKeyOf, applySizes, appName, behindThread, chanTitle, chatAction, chatParts, chatWindows, closeAll, closeChat, closeDesk, closeTidy, closeWs, cTop, curChat, cX, deskOfNode, desks, doc, DRAFT, el, FEED, feedBack, feedGone, feedOn, feedTitle, findBtn, focusIn, focusLeave, focusOut, FRAME_KEYS, goApp, grip, hBack, hidePanel, hMid, homeComposer, host, isAppKey, KEY_LIKE, khMarks, listBack, macHoles, mainChats, MODE_KEYS, MODE_LABELS, modeBars, narrow, newBtn, NOTE, noteOn, noteTitle, one, oneBack, oneSplit, openAll, openTidy, openWs, orbBtn, paintAgents, paintBack, paintHome, paintList, paintOneChats, paintOrbIdentity, paintRail, paintSplit, paintVt, paintWs, paneFrame, panes, pIcon, plus, pX, railMode, readSessions, readyIds, readyOrder, retileSoon, rFind, rList, rNew, root, rSet, rTog, setBtn, setSearch, setSize, settings, side, sizes, stepReady, swapped, swapSides, syncOrb, syncSide, talkFromOrb, tidyBtn, titleOf, togBtn, toggleSide, toggleTabs, top, tt, typing, unpeek, vtAll, vtList, vtTog, windowMode, wsBtn, wsName }) {
   const closeSettings = () => host?.settings.close();
   // (inside the Chats desk, which can carry [hidden] while the view shows it: on screen = it has a box)
   const onScreen = n => !!n && typeof n.getClientRects === 'function' && n.getClientRects().length > 0 && n.getBoundingClientRect().width > 0;
@@ -69,7 +69,6 @@ export function keysPart({ aadVars, allOpenNow, anim, api, appKeyOf, applySizes,
     if ((code === 'Minus' || code === 'Equal') && !sh) { if (aadVars.pane && !aadVars.wide) setSize('app', sizes().app[0] + (code === 'Equal' ? 64 : -64), true); return true; }
     if (code === 'KeyW' && !sh && aadVars.pane) { if (!e.repeat) { const d = desks().find(x => x.desk === aadVars.pane.desk); if (d && !aadVars.pins.includes(d.id)) closeDesk(d); else hidePanel(); } return true; }
     if (code === 'KeyW' && !sh && aadVars.docked) { if (!e.repeat) closeChat(); return true; }
-    if (code === 'KeyF' && !sh && aadVars.pane) { if (!e.repeat) { aadVars.wideAuto = false; setWide(!aadVars.wide); } return true; }
     // The open item's own buttons change its state, never the selected thread.
     // Keep the existing letters: ⌥E Archive, ⌥Z Snooze. A and S already open All apps and Settings.
     const act = !sh && aadVars.docked && !typing() && { KeyZ: 'snooze', KeyE: 'done', KeyX: 'resolve' }[code];
@@ -155,7 +154,7 @@ export function keysPart({ aadVars, allOpenNow, anim, api, appKeyOf, applySizes,
     // ⌥P on the icon of what played last: on its bars while they play, else on the icon itself
     const np = api.media?.list?.()[0], npRow = np && rows.find(b => b.dataset.app === np.appId);
     if (npRow) { const bars = npRow.querySelector('.aad-np'); put(np.playing && bars ? bars : tile(npRow), 'P', np.playing && bars ? 'mid' : 'bl'); }
-    if (aadVars.pane) { put(pX, 'W'); put(pW, 'F'); if (!aadVars.wide) put(grip.app, '− =', 'mid'); put(pIcon, 'H'); } else if (aadVars.docked) put(cX, 'W');
+    if (aadVars.pane) { put(pX, 'W'); if (!aadVars.wide) put(grip.app, '− =', 'mid'); put(pIcon, 'H'); } else if (aadVars.docked) put(cX, 'W');
     for (const { bar } of modeBars) for (const [code, mode] of Object.entries(MODE_KEYS)) {
       const n = bar.querySelector('[data-mode="' + mode + '"]');
       if (shown(n)) out.push({ el: n, key: '⇧' + code.slice(3), at: 'below', word: MODE_LABELS[mode] });

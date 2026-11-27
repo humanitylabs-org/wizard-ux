@@ -69,10 +69,11 @@ test('shifted mode shortcuts precede app dispatch but yield to existing modal gu
  for (const scope of [{ allOpenNow: () => true }, { settingsOpen: () => true }, { doc: { querySelector: s => s === '.boom-sheet' ? {} : null } }]) {
   const g=keys(scope); assert.equal(g.down('KeyU',{shiftKey:true}),true,'consumed'); assert.deepEqual(g.modes,[],JSON.stringify(Object.keys(scope)));
  }
- // native plain ⌥ keys: ⌥U while typing is the accent, ⌥F is wide (with a panel), ⌥← word jump
+ // native plain ⌥ keys: ⌥U while typing is the accent, ⌥← word jump; ⌥F no longer flips the panel wide (wizard-ux
+ // issue 1964: its Wider button is gone, ⌥⇧F is the one Full screen key)
  const t=keys({ typing: () => true }); assert.equal(t.down('KeyU'),false); assert.deepEqual(t.modes,[]);
  const wide=[]; const f=keys({ pane:{ id:'app' }, wide:false, setWide: v => wide.push(v) });
- assert.equal(f.down('KeyF'),true); assert.deepEqual(wide,[true]); assert.deepEqual(f.modes,[]);
+ assert.equal(f.down('KeyF'),true); assert.deepEqual(wide,[]); assert.deepEqual(f.modes,[]);
  assert.equal(keys().down('ArrowLeft'),false);
 });
 

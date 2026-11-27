@@ -40,7 +40,7 @@ export function readyPart({ aadVars, actOn, api, curChat, groupBy, railNow, read
    * variant of a plain key, every key reachable from where it acts. Left: ⌥H Home (again = everything back as it was),
    * ⌥O workspaces, ⌥K search, ⌥L fold the sidebar, ⌥N new chat, ⌥S Settings, ⌥↓ / ⌥↑ the next / previous Ready item.
    * Right: ⌥1–⌥9 and ⌥0 the first ten rows, ⌥[ / ⌥] the previous / next app (every row past ten), ⌥⇧[ / ⌥⇧] move it,
-   * ⌥A add an app, ⌥T tidy, ⌥R fold the column, ⌥P pause / play what played last (Now playing). In front: ⌥W close, ⌥F wide, ⌥− / ⌥= narrower / wider, ⌥Z snooze,
+   * ⌥A add an app, ⌥T tidy, ⌥R fold the column, ⌥P pause / play what played last (Now playing). In front: ⌥W close, ⌥− / ⌥= narrower / wider, ⌥Z snooze,
    * ⌥E archive then the next, ⌥X resolve then the next, ⌥B where this app's notifications go. Voice: ⌥Space talk (the
    * orb), ⌥D dictate, ⌥V new voice chat, ⌥C command (the shell's own). A modal in front (the app picker, Settings):
    * only its own key (⌥A, ⌥S) and Esc. Every other ⌥ key is the view's and does nothing, so nothing acts unseen on a

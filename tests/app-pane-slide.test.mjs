@@ -35,14 +35,14 @@ function closing({ reduced = false, one = false } = {}) {
  const pane = { id: 'notes', desk: 2, el: { getBoundingClientRect: () => ({ width: 600 }), animate: (frames, o) => { const m = { frames, o, cancelled: false, cancel() { this.cancelled = true; } }; motions.push(m); return m; } } };
  const aadVars = { pane, closing: null, exitMotion: null, wide: false, chatThread: null };
  const api = { after: (ms, fn) => { after.push(fn); return () => {}; }, frame: fn => fn(), listen() {}, nav: { goDesk() {} }, sessions: { newChat() {} } };
- const part = closingPart({ aadVars, anim() {}, api, cX: node('cX'), doneLoading() {}, DRAFT: {}, FEED: {}, feedBack: () => false, feedGone() {}, icon: n => n,
+ const part = closingPart({ aadVars, anim() {}, api, cX: node('cX'), doneLoading() {}, DRAFT: {}, FEED: {}, feedBack: () => false, feedGone() {},
   flip: (els, fn) => { flips.push(els); fn(); }, focusFrame() {}, mainChats: () => null, one: () => one, oneSplit: () => false, paintSide() {}, paintSplit() {}, panes: { get: () => ({}) },
-  peekable: () => false, pTop: node('pTop'), pW: node('pW'), pX: node('pX'), reduced: () => reduced, retileSoon() {}, root: { dataset: {} }, wantAppFocus() {} });
+  peekable: () => false, pTop: node('pTop'), pX: node('pX'), reduced: () => reduced, retileSoon() {}, root: { dataset: {} }, wantAppFocus() {} });
  part.bindLate({ here: () => ({ app: 'other' }), paintTop() {} });
  return { part, aadVars, pane, motions, flips, after };
 }
 
-test('AI apps pane: hiding slides the common desk out alone, and Wider moves only that desk', () => {
+test('AI apps pane: hiding slides the common desk out alone, and going wide (an app with its companion) moves only that desk', () => {
  const c = closing();
  assert.equal(c.part.hidePanel(), true);
  assert.equal(c.motions.length, 1, 'one exit motion, on the pane desk itself');
