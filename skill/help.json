@@ -354,7 +354,7 @@
       "where": "Settings › Appearance › Try new features › Tell the team about failed updates"
     },
     "wizard/link-token-repair": {
-      "help": "When the agent can't reach its Wizard app tools (unauthorized), `wizard link` puts the box's token back in the agent's settings; `wizard doctor` shows if they match.",
+      "help": "If the agent's app tools fail (unauthorized), `wizard link` restores the box's token; `wizard doctor` checks it.",
       "where": "Settings › Appearance › Try new features › Repair the agent's Wizard connection"
     },
     "wizard/graceful-restart": {
@@ -412,6 +412,10 @@
     "wizard/first-chat-goals": {
       "help": "Five picks, then a first win.",
       "where": "Settings › Appearance › Try new features › Five-choice first chat"
+    },
+    "wizard/catch-me-up": {
+      "help": "Say catch me up: a two-step summary.",
+      "where": "Settings › Appearance › Try new features › Catch me up"
     },
     "wizard/private-first-setup": {
       "help": "New installs start private: Welcome leads with Tinfoil; Claude and ChatGPT are optional extras.",
