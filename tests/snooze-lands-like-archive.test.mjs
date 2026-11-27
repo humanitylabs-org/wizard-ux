@@ -1,5 +1,6 @@
 // James, 8 Nov 2026: Snooze on the open chat lands exactly where Archive does (desktop: next chat in the drawn list,
-// phone: the chats list), under either After-actions setting, through the same leaveFinishedThread helper.
+// phone: the chats list), under either After-actions setting, through the same leaveFinishedThread helper. A thread opened
+// from a link in another thread steps back to that thread on both, like Archive (issue 1902).
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
@@ -9,8 +10,8 @@ import { boomerang, openSheet } from './fixtures/s2-boom-picker.mjs';
 const src = withParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'));
 const rem = readFileSync(new URL('../web/core/scheduled-reminders.js', import.meta.url), 'utf8');
 const slice = (a, b) => { const i = src.indexOf(a), j = src.indexOf(b, i); assert.ok(i >= 0 && j > i, a); return src.slice(i, j); };
-function fixture({ desktop, after = 'stay', ids = ['a', 'b', 'c'], open = 'b' }) {
-  const w = { id: 'qa', thread: open }, c = { trail: ['parent'], archiveOrder: ids }, toasts = [], listeners = {}, opened = [];
+function fixture({ desktop, after = 'stay', ids = ['a', 'b', 'c'], open = 'b', trail = [] }) {
+  const w = { id: 'qa', thread: open }, c = { trail, archiveOrder: ids }, toasts = [], listeners = {}, opened = [];
   const rows = new Map([...ids, 'parent'].map(id => [id, { id, title: id }]));
   const section = {}, dom = ids.map(id => ({ dataset: { chopen: id }, closest: () => section }));
   const no = () => {};
@@ -25,14 +26,17 @@ function fixture({ desktop, after = 'stay', ids = ['a', 'b', 'c'], open = 'b' })
   vm.runInContext(slice('  function archiveListOrder(', '  // Repaint every chats list'), ctx);
   // Real openChat/chatsBack are slices of the same file; record the destination instead of rendering.
   ctx.openChat = (_wid, sid) => { opened.push(sid); w.thread = sid; };
-  ctx.chatsBack = x => { x.thread = null; };
+  ctx.chatsBack = x => { x.thread = null; c.trail = []; };
+  ctx.threadBack = x => { const up = c.trail.pop(); opened.push('back:' + up); x.thread = up; };
   return { w, c, toasts, listeners, opened, fire: (n, detail) => listeners[n]({ detail }) };
 }
 for (const after of ['stay', 'list']) for (const desktop of [true, false]) for (const ev of ['wos:snooze-chosen', 'wos:boomerang-set', 'wos:snooze-someday']) {
   test(`${desktop ? 'desktop' : 'phone'} ${ev} (after=${after}) lands like Archive`, () => {
     const f = fixture({ desktop, after }); f.fire(ev, { session: 'b', label: 'Back tomorrow' });
     if (desktop) { assert.equal(f.w.thread, 'c', 'next chat, as Archive'); assert.deepEqual(f.opened, ['c']); }
-    else { assert.equal(f.w.thread, null, 'chats list, as Archive'); assert.equal(f.c.trail.length, 0, 'no step up the link trail'); assert.deepEqual(f.opened, []); }
+    else { assert.equal(f.w.thread, null, 'chats list, as Archive'); assert.deepEqual(f.opened, []); }
+    const linked = fixture({ desktop, after, trail: ['parent'] }); linked.fire(ev, { session: 'b', label: 'Back tomorrow' });
+    assert.equal(linked.w.thread, 'parent', 'opened from a link in parent: back to parent, as Archive'); assert.deepEqual(linked.opened, ['back:parent']);
   });
 }
 test('desktop last chat steps to the one above; only chat goes to the list; other threads untouched', () => {

@@ -479,10 +479,14 @@ window.WizCore.chats = function createChats(H) {
     if (nx) openChat(w.id, nx);
     else { ch(w.id).trail = []; chatsBack(w); }
   }
-  // The one "I'm finished with this thread" landing, shared by Archive and Snooze (James, 8 Nov 2026): desktop opens the next
-  // chat in the drawn list, the phone goes straight to the chats list (no step up the link trail), whatever the After-actions setting.
+  // The one "I'm finished with this thread" landing, shared by Archive and Snooze (James, 8 Nov 2026), whatever the
+  // After-actions setting. A thread opened from a link in another thread steps back to that thread, one level, where Back
+  // goes (James, 26 Nov 2026, issue 1902); with no link trail, desktop opens the next chat in the drawn list and the phone
+  // goes straight to the chats list.
   function leaveFinishedThread(w, sid) {
     if (!w || !sid || w.thread !== sid) return false;
+    const trail = ch(w.id).trail || [], up = trail[trail.length - 1];
+    if (up && up !== sid && LIVE.session(up)) { threadBack(w); return true; }
     if (!PHONE()) archiveAdvance(w, sid);
     else { ch(w.id).trail = []; chatsBack(w); }
     return true;

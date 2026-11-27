@@ -531,9 +531,9 @@ test('skin: the CSS uses only --wz-* roles (with shell fallbacks) and opaque pan
   }
 });
 
-// Swipe to dismiss (switch wizard/download-swipe, wizard-ux issue 1343). The gestures run on the real module through
+// Swipe to dismiss (wizard-ux issue 1343, on for everyone on the phone). The gestures run on the real module through
 // its own listeners; the browser proof with real touches is tests/qa-download-swipe.cjs.
-const SWIPE = 'wizard/download-swipe';
+const SWIPE = '';   // no switch any more: the gesture runs with no tweaks at all
 const fire = (node, type, ev) => (node.listeners[type] || []).forEach(f => f({ isTrusted: true, pointerId: 1, button: 0, pointerType: 'touch', ...ev, type }));
 const drag = (node, from, to, steps = 4) => {
   fire(node, 'pointerdown', { clientX: from[0], clientY: from[1] });
@@ -556,7 +556,7 @@ async function bannerUp(tweaks, shell = 'phone') {
   return { r, b: r.body.children[0] };
 }
 
-test('swipe on: a swipe up dismisses the banner, the banner follows the finger, and nothing is cancelled', async () => {
+test('swipe: a swipe up dismisses the banner, the banner follows the finger, and nothing is cancelled', async () => {
   const { r, b } = await bannerUp(SWIPE);
   fire(b, 'pointerdown', { clientX: 100, clientY: 700 });
   fire(b, 'pointermove', { clientX: 100, clientY: 650 });
@@ -572,7 +572,7 @@ test('swipe on: a swipe up dismisses the banner, the banner follows the finger, 
   assert.ok(r.sent.every(m => m.method === 'list'));
 });
 
-test('swipe on: sideways either way dismisses; downward never moves the banner over the dock', async () => {
+test('swipe: sideways either way dismisses; downward never moves the banner over the dock', async () => {
   for (const dx of [-160, 160]) {
     const { r, b } = await bannerUp(SWIPE);
     drag(b, [200, 700], [200 + dx, 706]);
@@ -586,7 +586,7 @@ test('swipe on: sideways either way dismisses; downward never moves the banner o
   assert.equal(r.W.bannerOpen(), true, 'and does not dismiss it');
 });
 
-test('swipe on: a short slow drag springs back, and plain taps on the banner and Open still work', async () => {
+test('swipe: a short slow drag springs back, and plain taps on the banner and Open still work', async () => {
   const { r, b } = await bannerUp(SWIPE);
   const t0 = Date.now(); let now = t0; const real = Date.now; Date.now = () => now;
   try {
@@ -609,7 +609,7 @@ test('swipe on: a short slow drag springs back, and plain taps on the banner and
   assert.equal(again.r.W.isOpen(), true, 'a plain tap on the banner opens the Downloads sheet');
 });
 
-test('swipe on: the Downloads sheet follows a pull down and closes; a short pull, an upward move or a scrolled list keep it', async () => {
+test('swipe: the Downloads sheet follows a pull down and closes; a short pull, an upward move or a scrolled list keep it', async () => {
   const r = load({ items: [pdf(), pdf({ id: '13', status: 'running', finished: 0, got: 10 })], tweaks: SWIPE });
   r.W.show(); await flush();
   const sheet = r.body.children[0];
@@ -639,22 +639,7 @@ test('swipe on: the Downloads sheet follows a pull down and closes; a short pull
   assert.match(r.body.children.at(-1).list.innerHTML, /Plan\.pdf[\s\S]*Downloading/);
 });
 
-test('swipe off: the same gestures move nothing and dismiss nothing (today\'s behaviour)', async () => {
-  const { r, b } = await bannerUp('');
-  drag(b, [100, 700], [100, 520]);
-  drag(b, [100, 700], [300, 700]);
-  assert.ok(!b.style.transform, 'never moved');
-  assert.equal(r.W.bannerOpen(), true);
-  b.listeners.click.forEach(f => f({ target: b.querySelector('.wdl-main'), isTrusted: true }));
-  assert.equal(r.W.isOpen(), true, 'a tap opens the sheet as before');
-  const sheet = r.body.children.at(-1);
-  const prevented = touchPull(sheet, [200, 500], [200, 760], { handle: true });
-  assert.deepEqual(prevented, [], 'the list keeps its own scroll');
-  assert.ok(!sheet.panel.style.transform, 'never moved');
-  assert.equal(r.W.isOpen(), true);
-});
-
-test('swipe on, desktop shell: the banner and the Downloads dialog keep today\'s behaviour (the gesture is phone only)', async () => {
+test('swipe, desktop shell: the banner and the Downloads dialog keep today\'s behaviour (the gesture is phone only)', async () => {
   const { r, b } = await bannerUp(SWIPE, 'desktop');
   drag(b, [100, 100], [100, -80]);
   drag(b, [100, 100], [320, 100]);
