@@ -401,6 +401,10 @@
       "help": "A new chat shows Catch me up, What's waiting on me and Plan my day above the message box; one tap sends it.",
       "where": "Settings › Appearance › Try new features › New chat quick links"
     },
+    "wizard/auto-tags": {
+      "help": "Chats are tagged from what they are about; a channel's What goes here… edits its list.",
+      "where": "Settings › Appearance › Try new features › Automatic chat tags"
+    },
     "wizard/first-chat-goals": {
       "help": "Five picks, then a first win.",
       "where": "Settings › Appearance › Try new features › Five-choice first chat"

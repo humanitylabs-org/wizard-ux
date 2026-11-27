@@ -50,6 +50,7 @@
     "wizard/backup-health",
     "wizard/private-routing",
     "wizard/result-reader",
+    "wizard/auto-tags",
     "wizard/first-chat-goals",
     "wizard/private-ai-nudge",
     "wizard/pin-instant-open",
