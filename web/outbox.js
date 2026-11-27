@@ -466,7 +466,11 @@
    * has written the inbox record and started the hidden worker itself: the item is done here (no thread, no run POST,
    * no row in the list) and onDump says "Got it". Any other answer, an error or a slow router: the take goes on as
    * today's visible new thread, so nothing is lost. A replay after a reload asks again; the box keeps one task for the
-   * same words the same day. */
+   * same words the same day.
+   * Typed new chats (wizard-agent-service issue 669, switch wizard/smart-inbox): chats-send marks a typed new main-agent
+   * chat `dump` + `typedDump` only while the box says its typed guess has proved right (sent log typed_routing.on); the
+   * ask names it `source: typed`, and the box answers dump only for a task with no reply phrase, question or "let me
+   * know when". Anything else is today's visible thread. */
   const DUMP_ROUTE_MS = 6000;
   /* Private routing (wizard-ux issue 1804, switch wizard/private-routing; the Agent Service half is
    * wizard-agent-service issue 629). In private mode the route's answer names the agent a take is for (agent_id, and a
@@ -503,16 +507,19 @@
       && !(it.files || []).some(f => f?.id && f.id !== it.audioFile?.id);
     const routing = plain && routingOn(), asked = routing && it.routed?.cmd ? it.routed : null;
     let url = '';
-    try { url = plain && it.text && !asked ? window.WizConfig?.endpoint?.('route') || '' : ''; } catch (_) {}
+    // A typed new chat (issue 669) is asked only when the box said it decides typed tasks (its Sent log's typed_routing),
+    // which it does from his words alone, with no router configured too: the box's own route then.
+    try { url = plain && it.text && !asked ? window.WizConfig?.endpoint?.('route') || (it.typedDump ? '/wizard/v1/route' : '') : ''; } catch (_) {}
     let cmd = null, choice = asked ? routeChoice(asked) : null;
     if (url) try {
       const r = await bounded(signal => fetch(url, { method: 'POST', cache: 'no-store', credentials: 'same-origin', signal, headers: J,
-        body: JSON.stringify({ text: it.text, force: '', view: null, apps: [], ...(it.routeOnly ? {} : { accept_dump: true }) }) }), DUMP_ROUTE_MS);
+        body: JSON.stringify({ text: it.text, force: '', view: null, apps: [], ...(it.routeOnly ? {} : { accept_dump: true }), ...(it.typedDump ? { source: 'typed', idempotency_key: it.id } : {}) }) }), DUMP_ROUTE_MS);
       const j = r.ok ? await r.json() : null;
       cmd = !it.routeOnly && j?.cmd?.route === 'dump' && j.cmd.record_id ? j.cmd : null;
       if (!cmd && routing) choice = routeChoice(j);
     } catch (_) { /* router away or slow: a visible thread, as before */ }
     it.dump = false;
+    if ('typedDump' in it) delete it.typedDump;
     if ('routed' in it) delete it.routed;
     if ('routeOnly' in it) delete it.routeOnly;
     if (!cmd) {
@@ -763,6 +770,8 @@
       ...(o.dump === true && o.routed?.cmd ? { routed: { cmd: o.routed.cmd, sent_id: o.routed.sent_id || '' } } : {}),
       // Asked only for its agent (a typed take, private routing on): never offered as a background task.
       ...(o.dump === true && o.routeOnly === true ? { routeOnly: true } : {}),
+      // A typed new chat the box may run in the background (wizard-agent-service issue 669, Smart inbox).
+      ...(o.dump === true && o.typedDump === true ? { typedDump: true } : {}),
       // A Notifications Reply: the item, framed after his words only in the message that is delivered (deliver()).
       ...(replyOf(o) ? { reply: replyOf(o) } : {}) };
   }

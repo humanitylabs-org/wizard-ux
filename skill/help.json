@@ -475,10 +475,6 @@
       "where": "Settings › Appearance › Try new features › Wizard for Mac in About & updates",
       "when": "Wizard for Mac only"
     },
-    "wizard/interface-manual": {
-      "help": "Your agent gets this manual: every screen, Settings page and feature switch, so it can say where things are.",
-      "where": "Settings › Appearance › Try new features › Agent knows the Wizard interface"
-    },
     "wizard/write-guard": {
       "help": "Stops repeated saves: an identical save within 10 s is not resent; over 20 a minute pauses.",
       "where": "Settings › Appearance › Try new features › Stop write loops"
@@ -729,7 +725,7 @@
     },
     {
       "name": "Spaces",
-      "help": "Named groups of chats you make (a chat can be in several); pick one in Chats' Focus strip. Ask the agent to make or fill a Space. Spaces are the Channels (Chats › Channels)."
+      "help": "Named groups of chats you make (a chat can be in several); pick one in Chats' Focus strip. Ask the agent to make or fill a Space. Spaces are the channels (Chats › Tags tab at the bottom)."
     },
     {
       "name": "Snooze and Archive",
@@ -746,7 +742,7 @@
   ],
   "howTo": {
     "Turn on a new feature (or get them first)?": "Settings › About & updates › Channel › For testers (if not already), then Settings › Appearance › Try new features › the feature's switch.",
-    "Turn on Channels?": "Nothing to turn on any more: open Chats and tap the Channels tab.",
+    "Turn on Channels?": "Nothing to turn on any more: open Chats and tap Tags in the tabs at the bottom (Inbox · Tags · Sent); your channels and General are listed there. (A box whose Agent Service has no Sent log shows Channels / Activity tabs at the top instead.)",
     "Make Wizard update automatically?": "Settings › About & updates › Updates › Automatic (installs overnight, never during a chat). For apps: Settings › About & updates › Apps › Automatic (checks and updates apps every hour).",
     "Update now?": "When an update is ready, the card at the top of Settings shows Install (or Install now); tap it. 'Interface updated · Reload' just reloads the screen.",
     "Use Wizard on my phone?": "Settings › Phones & devices: scan the QR code with the Wizard phone app (needs Tailscale; the page walks you through it).",
@@ -761,8 +757,8 @@
     "Why would I want private AI?": "Claude and ChatGPT keep what you send on their servers; private AI runs in sealed hardware (Tinfoil) that nobody else, not even us, can see into. Settings › Privacy › Why it matters."
   },
   "retired": {
-    "Channels in Chats": "on for everyone now, nothing to turn on: open Chats and use the Channels / Activity tabs at the top. Channels lists your Spaces one per line, plus General; open one to see its chats as posts with a reply line.",
-    "Thread tracker": "retired: Needs you now shows in the thread itself, on the reply that needs the owner (with Mark done), and in Activity; Reply works on any message.",
+    "Channels in Chats": "on for everyone now, nothing to turn on: open Chats and use the tabs at the bottom: Inbox (what needs you), Tags (your channels) and Sent. Tags lists your Spaces one per line, plus General; open one to see its chats as posts with a reply line.",
+    "Thread tracker": "retired: Needs you now shows in the thread itself, on the reply that needs the owner (with Mark done), and in Inbox; Reply works on any message.",
     "Apps in Updates": "on for everyone: Settings › About & updates › Apps.",
     "Reply to Telegram and Slack chats": "on for everyone: reply in Chats to a chat started on Telegram or Slack; it goes through that app's own connection and shows there too.",
     "Models from your connectors": "removed: the model menu in Chats lists the models of every AI connection you connected."

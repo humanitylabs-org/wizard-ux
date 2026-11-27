@@ -9,7 +9,8 @@
   ],
   "issues": [
     "humanitylabs-org/wizard-ux#1883",
-    "humanitylabs-org/wizard-agent-service#667"
+    "humanitylabs-org/wizard-agent-service#667",
+    "humanitylabs-org/wizard-agent-service#669"
   ],
-  "description": "Chats › Inbox holds only what can't go on without you: a needs-you that blocks, an approval, a failed run (with one line saying why) and answers you asked for. Everything else finishes in Sent, whoever started it: done, FYI and check-this asks, watches, schedules and helper results, a new chat's first message. Running chats are in Sent › Working. Unread alone never puts a chat in Inbox, and a chat is never in both. Your agents keep needs-you for real blockers, and their check-this asks wait in the agent inbox for catch me up."
+  "description": "Chats › Inbox holds only what can't go on without you: a needs-you that blocks, an approval, a failed run (with one line saying why) and answers you asked for. Everything else finishes in Sent, whoever started it: done, FYI and check-this asks, watches, schedules and helper results, a new chat's first message. Running chats are in Sent › Working. Unread alone never puts a chat in Inbox, and a chat is never in both. Your agents keep needs-you for real blockers, and their check-this asks wait in the agent inbox for catch me up. Typed tasks go quiet too once Wizard has guessed them right often enough (90% of 50): a typed new chat that is a plain task, with no reply, question or \"let me know when\", runs in the background like an orb dump and waits in Sent › Working; Sent shows how often the guess was right."
 }

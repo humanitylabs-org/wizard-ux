@@ -38,9 +38,22 @@ window.WizCore.chatsParts.send = function ({ AGS, applyLayout, ch, chanDraftKey,
       else if (what) toast('■', 'Stopped · unsent message withdrawn' + what, 2800);
     }).catch(() => toast('!', 'Couldn’t stop · try again', 2600)).finally(() => { if (W[w.id]) renderThreadNow(w); });
   }
-  function leaveAfterSend(wid, sid, isNew, how = '') {
-    // A new chat docked beside an app (AI apps: Resolve this / a reply from a notification) stays in its column.
+  // Issue 669: the Smart inbox switch is on and the box says typed tasks may run in the background.
+  const TYPED_QUIET_SWITCH = 'wizard/smart-inbox';
+  function typedQuietOn() {
+    try { if (!(document.documentElement.dataset.tweaks || '').split(/\s+/).includes(TYPED_QUIET_SWITCH)) return false; } catch (_) { return false; }
+    return LIVE.sentLog?.state?.()?.typed?.on === true;
+  }
+  // Would this send leave its thread by itself (Send and go, a new chat on the desktop)? No navigation happens here.
+  function leaveAfterSendWould(wid, sid, isNew) {
     if (keepThreadOpen() && (!isNew || PHONE() || H.keepNewOpen?.(wid))) return false;
+    const w = W[wid];
+    return !!w && !!sid && w.thread === sid && (isNew || PHONE() || !!H.leaveOnSend?.(wid));
+  }
+  // `force` (issue 669): a typed task the box may run in the background leaves its thread like Send and go.
+  function leaveAfterSend(wid, sid, isNew, how = '', force = false) {
+    // A new chat docked beside an app (AI apps: Resolve this / a reply from a notification) stays in its column.
+    if (!force && keepThreadOpen() && (!isNew || PHONE() || H.keepNewOpen?.(wid))) return false;
     const w = W[wid];
     if (w && sid && w.thread === sid && hosted.has(wid)) {
       const entry = hosted.get(wid); closeHosted(wid);
@@ -203,13 +216,23 @@ window.WizCore.chatsParts.send = function ({ AGS, applyLayout, ch, chanDraftKey,
     const hold = !isNew ? LIVE.holdSend?.(sid) || null : null;
     const trackerSeen = !isNew && here && !opts.away ? globalThis.WosThreadTracker?.beforeSend?.(sid, Object.hasOwn(opts, 'agent') ? opts.agent : LIVE.agentOf?.(sid) || '', Date.now(), { defer: true }) : null;
     const navAtSend = c.readNav;
-    const left = opts.away ? false : leaveAfterSend(wid, sid, isNew, how);
+    // Typed messages can go quiet too (wizard-agent-service issue 669, switch wizard/smart-inbox, off by default): a typed
+    // new chat to the main agent asks the box first, and only while the box says its typed guess has proved right (sent
+    // log typed_routing.on). It leaves the thread at once like Send and go; the box runs a plain task in the background
+    // like an orb dump ("Got it", Sent › Working). A reply phrase, a question or anything unclear is today's visible
+    // thread, opened again once it exists when he would have stayed on it. Files, a picked model, another agent, a
+    // channel post, a send from elsewhere or a Reply never ask.
+    const typedDump = isNew && here && !opts.away && !voice && !audio && !files.length && !reply && !carryText && !spaceKey && !chanPost
+      && (!nm || nm.isDefault === true) && (!AGID || AGID === 'hermes') && typedQuietOn();
+    const stayAfter = typedDump && !leaveAfterSendWould(wid, sid, isNew, how);
+    const left = opts.away ? false : leaveAfterSend(wid, sid, isNew, how, typedDump);
     if (left) { renderChats(W[wid]); applyLayout(deskOf(wid)); }
     // Saved on the phone; the outbox delivers it (and retries) from here.
     let it;
     try {
       it = await OUTBOX.enqueue({ captureId: opts.captureId, custodyId: opts.custodyId, sealKey: sealed?.key, kind: isNew ? 'new' : 'reply', sessionId: isNew ? '' : sid, steerRunId, text, audio, typed: later ? typed : '',
-        instructions, files: files.map(f => ({ id: f.id, name: f.name, mime: f.mime, bytes: f.bytes })), ...(reply ? { reply } : {}), wid: here ? wid : '', how, source: 'chat', space: false, ...(nm ? { model: nm.model, provider: nm.provider } : {}), ...(AGID ? { agent: AGID } : {}) });
+        instructions, files: files.map(f => ({ id: f.id, name: f.name, mime: f.mime, bytes: f.bytes })), ...(reply ? { reply } : {}), wid: here ? wid : '', how, source: 'chat', space: false, ...(nm ? { model: nm.model, provider: nm.provider } : {}), ...(AGID ? { agent: AGID } : {}),
+        ...(typedDump ? { dump: true, typedDump: true } : {}) });
       trackerSeen?.commit(); // synchronize Seen only once the message/steer has durable custody
       if (!isNew && reply && typeof needsReplied === 'function') needsReplied(wid, sid, reply); // Reply on the Needs you message clears it (issue 1331)
     } catch (e) {
@@ -233,6 +256,15 @@ window.WizCore.chatsParts.send = function ({ AGS, applyLayout, ch, chanDraftKey,
     if (spaceKey && it?.sessionId) spaceMember(spaceKey, it.sessionId, true, it.agent ?? AGID ?? '');
     // A post into a channel from elsewhere (a voice key, the orb): that channel's feed brings it into view.
     if (isNew && typeof opts.space === 'string' && it?.sessionId && typeof chanOwnPost === 'function') chanOwnPost(opts.space, it.agent ?? AGID ?? '');
+    // Issue 669: he would have stayed on this chat. If the box keeps it visible, open it once it is a thread (the list
+    // is where he is now, unless he moved on); a background answer leaves him on the list with "Got it".
+    if (stayAfter && left && it?.sessionId) {
+      const nav = c.readNav, mine = x => x?.id === it.id;
+      let offNew = null, offDump = null;
+      const done = () => { offNew?.(); offDump?.(); };
+      offNew = OUTBOX.onNew?.(x => { if (!mine(x)) return; done(); if (W[wid] === w && !w.thread && c.readNav === nav) openChat(wid, it.sessionId); }) || null;
+      offDump = OUTBOX.onDump?.(x => { if (mine(x)) done(); }) || null;
+    }
     // Follow only this New chat's allocated id, never a different chat opened during the disk save.
     if (isNew && !left && !opts.away && it?.sessionId && W[wid] === w && w.thread === sid && c.readNav === navAtSend) openChat(wid, it.sessionId);
     sealed?.done(it);
