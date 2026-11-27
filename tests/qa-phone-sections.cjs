@@ -1,13 +1,13 @@
 'use strict';
-// wizard-ux issue 1929 in a real browser: the phone bar's four sections around the orb (switch wizard/phone-sections).
+// wizard-ux issue 1929 in a real browser: the phone bar's four sections around the orb (on for everyone, no switch).
 // Phones 393 and 360 px wide, Nebula and Light (obsidian-light), a synthetic box with Messenger, Notes, Music, Calendar
-// and Podcasts installed and one chat thread. Switch on, it checks: Home · Chats · orb · Messenger · Apps, labels that fit,
-// 44 px targets, no overflow or overlap, the orb as big as with the switch off; the Chats and Messenger badges; Apps
+// and Podcasts installed and one chat thread. It checks: Home · Chats · orb · Messenger · Apps, labels that fit,
+// 44 px targets, no overflow or overlap, the orb at least today's 44 px; the Chats and Messenger badges; Apps
 // steps 1-5 (selector, the app in Apps with its name on the tile, back with no reload, the selector over the app closed
 // by a tap outside and by Back, the flip and its toasts, a third app closes the oldest); the Messenger pin and reset
 // (saved to ui-preferences phoneSlot); Chats keeps its thread; Back goes thread -> list -> Home and stays; "open Notes"
 // by voice; the orb's tap, hold, swipe up and swipe down; sideways swipes step through the sections in bar order.
-// QA_SWITCH=off: the bar is today's (desk dots and +) and every app open still adds a desk.
+// A device that saved the old switch wizard/phone-sections as off still gets the bar (the saved choice is cleared).
 // Synthetic transport only (no box is reached). Shots and a report go to QA_OUT.
 const assert = require('node:assert/strict');
 const { chromium } = require('../tools/qa-playwright.cjs');
@@ -15,7 +15,7 @@ const { ownerRead } = require('../tools/qa-desktop-frame-fixture.cjs');
 const fs = require('node:fs'), path = require('node:path');
 const repo = path.resolve(__dirname, '..'), origin = 'https://phone-sections.test', prefix = '/wizard-os-home/';
 const web = process.env.QA_WEB || path.join(repo, 'web'), out = process.env.QA_OUT || path.join(repo, 'phone-sections-evidence');
-const SW = 'wizard/phone-sections', on = process.env.QA_SWITCH !== 'off';
+const OLD_SW = 'wizard/phone-sections';
 const ANDROID = 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Mobile Safari/537.36';
 const CASES = [{ name: '393', width: 393, height: 852 }, { name: '360', width: 360, height: 780 }, { name: '412', width: 412, height: 915, only: true }]
   .filter(c => process.env.QA_CASES ? process.env.QA_CASES.split(',').includes(c.name) : !c.only);
@@ -27,16 +27,16 @@ const THREAD = { id: 'qa-sections-1', title: 'Synthetic thread', source: 'wizard
 fs.mkdirSync(out, { recursive: true });
 const nap = ms => new Promise(r => setTimeout(r, ms));
 
-async function boot(browser, c, skin, sw) {
+async function boot(browser, c, skin) {
   const context = await browser.newContext({ viewport: { width: c.width, height: c.height }, isMobile: true, hasTouch: true, serviceWorkers: 'block', userAgent: ANDROID });
   const puts = [];
   await context.routeWebSocket('**/*', w => w.close());
-  await context.addInitScript(({ skin, sw, SW, APPS }) => {
+  await context.addInitScript(({ skin, OLD_SW, APPS }) => {
     if (window !== top) return;
     const seed = { 'wux.apps.v1': JSON.stringify(APPS), 'wos.shell': 'phone', 'wux.shell': 'phone', 'wos.coached': 'true', 'wos.tour.v1': 'true', 'wos.tour.done': '1', 'wos.welcome.v1': 'done', 'wos.voiceTipSeen': 'true', 'wos.skin': skin,
-      'wos.skin-tweaks.v1': JSON.stringify({ version: 1, preset: 'none', off: {}, mix: sw ? { [SW]: true } : {} }) };
+      'wos.skin-tweaks.v1': JSON.stringify({ version: 1, preset: 'none', off: {}, mix: { [OLD_SW]: false } }) };
     for (const [k, v] of Object.entries(seed)) localStorage.setItem(k, v);
-  }, { skin, sw, SW, APPS });
+  }, { skin, OLD_SW, APPS });
   const prefs = { migrations: { 'launcher-seed-v1': true, 'launcher.v1': true }, spaces: [], pinnedChats: [] };
   await context.route('**/*', async r => {
     const q = r.request(), u = new URL(q.url()), p = u.pathname, method = q.method();
@@ -64,7 +64,7 @@ async function boot(browser, c, skin, sw) {
   page.on('pageerror', e => errors.push(e.message));
   await page.goto(origin + prefix + 'index.html?phone');
   await page.waitForFunction(() => window.__wos && !window.WosWelcome?.active && window.WosExperience?.state.tweaks.length && !window.WosExperience.state.busy);
-  if (sw) await page.waitForFunction(id => (document.documentElement.dataset.tweaks || '').split(' ').includes(id) && document.querySelector('.sec-tile'), SW);
+  await page.waitForFunction(() => document.querySelector('.sec-tile'));
   await nap(900);
   await page.addStyleTag({ content: '#wosWelcome{display:none!important}' });
   return { context, page, errors, puts };
@@ -94,10 +94,8 @@ const measure = page => page.evaluate(() => {
   let failed = 0;
   try {
     for (const c of CASES) for (const skin of SKINS) {
-      const tag = `${c.name}-${skin}-${on ? 'on' : 'off'}`, steps = { tag };
-      // The orb's size with the switch off, to compare against.
-      if (on) { const b = await boot(browser, c, skin, false); steps.orbOff = (await measure(b.page)).orb; await b.context.close(); }
-      const { context, page, errors, puts } = await boot(browser, c, skin, on);
+      const tag = `${c.name}-${skin}`, steps = { tag };
+      const { context, page, errors, puts } = await boot(browser, c, skin);
       const shot = s => page.screenshot({ path: path.join(out, `${tag}-${s}.png`) });
       const cdp = await context.newCDPSession(page);
       const center = sel => page.evaluate(s => { const r = document.querySelector(s).getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }; }, sel);
@@ -114,16 +112,7 @@ const measure = page => page.evaluate(() => {
       const mark = () => page.evaluate(() => { for (const f of document.querySelectorAll('iframe.appframe')) try { f.contentWindow.__qaMark ||= f.closest('[data-win]').dataset.win + ':' + Math.random(); } catch (_) {} });
       const marks = () => page.evaluate(() => Object.fromEntries([...document.querySelectorAll('iframe.appframe')].map(f => { try { return [f.contentWindow.location.pathname, f.contentWindow.__qaMark || '']; } catch (_) { return ['?', '']; } })));
       try {
-        if (!on) {
-          // Switch off: today's bar and desks, untouched.
-          steps.bar = await measure(page);
-          assert.equal(steps.bar.tiles.length, 0, 'no section tiles'); assert.ok(steps.bar.dots, 'the desk dots show'); assert.ok(steps.bar.plus, 'the desk + shows');
-          const before = (await state(page)).desks;
-          for (const id of ['notes', 'wizard-music']) { await page.evaluate(id => __wos.openApp(WizCore.apps('mobile').APP[id]), id); await nap(900); }
-          steps.desks = [before, (await state(page)).desks];
-          assert.equal(steps.desks[1], before + 2, 'every app open still adds a desk');
-          await shot('bar');
-        } else {
+        {
           // 1) The bar: four tiles around today's orb.
           await page.evaluate(() => { WizCore.workspaceNav.setCount('wizard', 12); WizCore.workspaceNav.setCount('messenger', 3); }); await nap(300);
           steps.bar = await measure(page); steps.home = await state(page); await shot('home');
@@ -135,7 +124,9 @@ const measure = page => page.evaluate(() => {
           assert.equal(steps.bar.overlaps, 0, 'nothing overlaps'); assert.deepEqual(steps.bar.covered, [], 'nothing covers a tile');
           assert.equal(steps.bar.scrollW, steps.bar.width, 'no horizontal overflow'); assert.ok(steps.bar.inBar, 'every tile on screen');
           assert.ok(!steps.bar.dots && !steps.bar.plus, 'no desk dots and no +');
-          assert.equal(steps.bar.orb, steps.orbOff, 'the orb is the size it is with the switch off');
+          { const [ow, oh] = steps.bar.orb.split('x').map(Number); assert.ok(ow >= 44 && oh >= 44, `the orb is today's size or larger (${steps.bar.orb})`); }
+          steps.stale = await page.evaluate(id => { const m = JSON.parse(localStorage.getItem('wos.skin-tweaks.v1') || '{}').mix || {}; return Object.hasOwn(m, id); }, OLD_SW);
+          assert.equal(steps.stale, false, 'a saved choice for the old switch is cleared');
           assert.ok(steps.home.tiles[0].on && !steps.home.tiles[1].on, 'Home is lit, the others dim');
           // 2) Badges: Chats the unread/Ready count, Messenger its unread count, Apps none.
           assert.deepEqual(steps.home.tiles.map(t => t.badge), ['', '12', '3', ''], 'badges');
@@ -245,7 +236,7 @@ const measure = page => page.evaluate(() => {
       report.push(steps); console.log(JSON.stringify({ tag: steps.tag, ok: steps.ok, error: steps.error || undefined }));
     }
   } finally { await browser.close(); }
-  fs.writeFileSync(path.join(out, `report-${on ? 'on' : 'off'}.json`), JSON.stringify(report, null, 1));
+  fs.writeFileSync(path.join(out, 'report.json'), JSON.stringify(report, null, 1));
   console.log(failed ? `FAIL ${failed}/${report.length}` : `PASS ${report.length}/${report.length}`);
   process.exit(failed ? 1 : 0);
 })();
