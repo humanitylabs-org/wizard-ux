@@ -1,4 +1,4 @@
-// Agents run code without asking (wizard-agent-service issue 597, box switch wizard/agent-approvals): the Agent
+// Agents run code without asking (wizard-agent-service issue 597, on for everyone; switch removed): the Agent
 // Service stamps a container agent's approval prompt with when it closes (expires_at) and offers a per-agent
 // approve/deny setting. Runs the real chat-kit.js, chats-approvals.js and the Agents app permissions block.
 import { test } from 'node:test';
@@ -91,7 +91,7 @@ this.permsHtml = permsHtml;`, ctx);
 
 test('Agents app: the Code and commands choice shows only when the Service offers it', () => {
   const off = agentsPage();
-  assert.doesNotMatch(off.permsHtml({ wizard_apps: [], unattended_approvals: 'approve' }, { privacy: 'private', editable: true }), /data-unattended/, 'switch off: no choice');
+  assert.doesNotMatch(off.permsHtml({ wizard_apps: [], unattended_approvals: 'approve' }, { privacy: 'private', editable: true }), /data-unattended/, 'a Service that offers no approvals: no choice');
   const on = agentsPage({ approvals: { unattended: ['approve', 'ask', 'deny'], default: 'approve', window_s: 3600 } });
   assert.doesNotMatch(on.permsHtml({ wizard_apps: [] }, { privacy: 'private', editable: true }), /data-unattended/, 'the main agent and host profiles have no setting');
   const pick = html => [...html.matchAll(/aria-checked="(true|false)" data-unattended="(\w+)"/g)].map(m => `${m[2]}:${m[1]}`);

@@ -32,7 +32,7 @@ final class RecoveryScreen {
 
     private final Context c;
     private final LinearLayout card;
-    private final TextView body, update, diag, normal, status;
+    private final TextView body, update, diag, normal, status, sent;
     private JSONObject uState;
     private boolean updateInstalls, checking, asked;
 
@@ -61,6 +61,11 @@ final class RecoveryScreen {
         status = text(13, INK, false);
         status.setAlpha(0.65f);
         status.setVisibility(View.GONE);
+        // The diagnostics answer has its own line: the update line is repainted every second (MainActivity's
+        // recoveryPoll) and used to wipe "Diagnostics sent" within a second of it showing (wizard-ux issue 2011).
+        sent = text(13, INK, false);
+        sent.setAlpha(0.65f);
+        sent.setVisibility(View.GONE);
         update.setOnClickListener(v -> { if (!checking) { asked = true; act.update(updateInstalls); } });
         diag.setOnClickListener(v -> { diag.setEnabled(false); diag.setAlpha(0.5f); act.diagnostics(); });
         normal.setOnClickListener(v -> act.startNormally());
@@ -71,6 +76,7 @@ final class RecoveryScreen {
         card.addView(diag, lp(dp(10)));
         card.addView(normal, lp(dp(10)));
         card.addView(status, lp(dp(12)));
+        card.addView(sent, lp(dp(6)));
 
         FrameLayout.LayoutParams at = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM);
@@ -115,12 +121,14 @@ final class RecoveryScreen {
     void diagnosticsSent(boolean ok) {
         diag.setEnabled(true);
         diag.setAlpha(1f);
-        say(ok ? "Diagnostics sent to your Wizard." : "Couldn’t reach your Wizard. Try again in a moment.");
+        say(sent, ok ? "Diagnostics sent to your Wizard." : "Couldn’t reach your Wizard. Try again in a moment.");
     }
 
-    private void say(String line) {
-        status.setText(line);
-        status.setVisibility(line == null || line.isEmpty() ? View.GONE : View.VISIBLE);
+    private void say(String line) { say(status, line); }
+
+    private static void say(TextView t, String line) {
+        t.setText(line);
+        t.setVisibility(line == null || line.isEmpty() ? View.GONE : View.VISIBLE);
     }
 
     private static JSONObject stateOf(String s) {

@@ -58,7 +58,7 @@ function harness({ on = true, sections = true, current = 'apps', front = 'notes'
     .map(m => m[1] ? 'h:' + m[1] : m[2] ? (m[3].includes('data-apx') ? 'x:' : '') + m[2] : 'empty:' + m[4]);
   const q = v => { panel.querySelector('[data-apq]').value = v; panel.querySelector('[data-apq]').listeners.input?.forEach(f => f()); };
   return { api, A: { ...A, favorites: () => clone(A.favorites()), recent: () => clone(A.recent()), nine: () => clone(A.nine()), stepList: () => clone(A.stepList()) },
-    click, rows, q, puts, opened, toasts, local, store, appVars, ctx };
+    click, rows, q, puts, opened, toasts, local, store, appVars, ctx, panel };
 }
 
 test('switch off: the tile keeps the Apps sheet, nothing steps, nothing is saved', () => {
@@ -180,4 +180,47 @@ test('connectors are absent from search, All apps, Add favorites, Favorites, Rec
   h.click({ apback: '' }); h.click({ apadd: '' });
   const add = h.rows();
   assert.ok(!add.includes('wizard-claude') && add.includes('notes') && add.includes('agent:philosopher'), 'Add favorites the same');
+});
+
+// wizard-ux issue 2001: long-pressing a row (Favorites, Recent, All apps, a search result) offers Add to Home Screen for
+// every app the home-screen sheet can pin, next to Add to / Remove from Favorites; choosing it opens that sheet for the
+// app (WizHomeScreenApps.offer). An app it can't pin (an agent's chats) shows only the Favorites item.
+function withMenu(h) {
+  const menus = [], offered = [];
+  let t = 0; h.ctx.Date = { now: () => (t += 1000) }; // each long-press is its own finger
+  h.ctx.window.WosContextMenu = { open: o => menus.push(o) };
+  h.ctx.window.WizHomeScreenApps = { canOffer: a => !!a && a.kind === 'wizard' && !!a.url, offer: a => { offered.push(a.id); return true; } };
+  const press = id => {
+    const btn = { dataset: { apopen: id }, getBoundingClientRect: () => ({ left: 10, top: 100, right: 300, bottom: 144 }) };
+    const before = menus.length;
+    h.panel.listeners.contextmenu.forEach(f => f({ target: { closest: () => btn }, preventDefault() {} }));
+    assert.equal(menus.length, before + 1, `a menu opens on ${id}`);
+    return menus.at(-1);
+  };
+  return { press, offered, labels: m => Array.from(m.items, i => i.label), pick: (m, label) => m.items.find(i => i.label === label).action() };
+}
+
+test('long-press a row: Add to Home Screen beside Favorites in every list; choosing it opens the home-screen sheet', () => {
+  const h = harness({ favs: ['calendar'], extra: [PHIL] }), m = withMenu(h);
+  h.api.appsPanelOpen();
+  const lists = [['Favorites', 'calendar', 'Remove from Favorites'], ['Recent', 'notes', 'Add to Favorites']];
+  for (const [list, id, fav] of lists) {
+    assert.ok(h.rows().some(r => r.replace(/^x:/, '') === id), `${id} is on ${list}`);
+    const menu = m.press(id);
+    assert.deepEqual(m.labels(menu), [fav, 'Add to Home Screen'], `${list}: ${m.labels(menu)}`);
+    m.pick(menu, 'Add to Home Screen'); assert.equal(m.offered.at(-1), id, 'the home-screen sheet opens for that app');
+  }
+  h.click({ apall: '' }); assert.ok(h.rows().includes('files'), 'Files is in All apps');
+  let menu = m.press('files'); assert.deepEqual(m.labels(menu), ['Add to Favorites', 'Add to Home Screen']);
+  m.pick(menu, 'Add to Home Screen'); assert.equal(m.offered.at(-1), 'files');
+  h.click({ apback: '' }); h.q('book'); assert.deepEqual(h.rows(), ['books'], 'a search result');
+  menu = m.press('books'); assert.deepEqual(m.labels(menu), ['Add to Favorites', 'Add to Home Screen']);
+  m.pick(menu, 'Add to Home Screen'); assert.equal(m.offered.at(-1), 'books');
+  // An app the sheet can't pin: only Favorites, which still works.
+  h.q('philo'); assert.deepEqual(h.rows(), ['agent:philosopher']);
+  menu = m.press('agent:philosopher'); assert.deepEqual(m.labels(menu), ['Add to Favorites'], 'no Add to Home Screen for an agent\'s chats');
+  m.pick(menu, 'Add to Favorites'); assert.deepEqual(h.A.favorites(), ['calendar', 'agent:philosopher']);
+  assert.deepEqual(m.offered, ['calendar', 'notes', 'files', 'books']);
+  // No home-screen module on this page (an old shell part): the Favorites menu still opens.
+  delete h.ctx.window.WizHomeScreenApps; assert.deepEqual(m.labels(m.press('files')), ['Add to Favorites']);
 });

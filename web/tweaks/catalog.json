@@ -37,7 +37,6 @@
     "wizard/mac-app-updates",
     "wizard/install-agent-builds",
     "wizard/share-people-box",
-    "wizard/agent-approvals",
     "wizard/attach-menu-icons",
     "wizard/app-location",
     "wizard/boundary-agent-access",
@@ -55,7 +54,8 @@
     "wizard/pin-instant-open",
     "wizard/get-set-up",
     "wizard/shorter-app-updates",
-    "wizard/new-chat-chips"
+    "wizard/new-chat-chips",
+    "wizard/catch-up-sent"
   ],
   "defaults": [],
   "promotedDefaults": [],

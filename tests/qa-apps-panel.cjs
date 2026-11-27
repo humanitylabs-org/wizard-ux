@@ -179,13 +179,20 @@ const bubbles = page => page.evaluate(() => {
           const field = await page.evaluate(() => Math.round(document.querySelector('#appsPanel .ap-q').getBoundingClientRect().height)); assert.ok(field >= 44, `the search field is a 44 px target (${field})`); assert.deepEqual(small, [], `44 px targets (${JSON.stringify(small)})`);
           const long = steps.p1.names.find(n => n.t === LONG); assert.ok(long && long.cut && long.ell === 'ellipsis', 'a long name ends in an ellipsis');
           assert.equal(steps.p1.scrollW, steps.p1.width, 'no horizontal overflow');
-          // 7) Long-press a Recent row: Add to Favorites.
+          // 7) Long-press a Recent row: Add to Favorites, and Add to Home Screen (ux#2001).
           const lp = await center('#appsPanel [data-apopen="wizard-podcasts"]'); await touch([lp], 700); await nap(400);
           steps.menu = await page.evaluate(() => [...document.querySelectorAll('.wos-context-menu [role="menuitem"], .wos-context-menu button')].map(b => b.textContent.trim())); await shot('panel-menu');
-          assert.deepEqual(steps.menu, ['Add to Favorites'], `long-press menu (${steps.menu})`);
+          assert.deepEqual(steps.menu, ['Add to Favorites', 'Add to Home Screen'], `long-press menu (${steps.menu})`);
           await page.getByRole('menuitem', { name: 'Add to Favorites', exact: true }).click(); await nap(300);
           steps.s2 = await state(page); assert.deepEqual(steps.s2.favs, ['wizard-calendar', 'wizard-music', 'wizard-podcasts'], 'added from the menu');
           assert.ok(steps.s2.panel, 'the panel stays');
+          // 7b) Long-press a Favorite: Add to Home Screen opens the home-screen sheet for that app (ux#2001).
+          await touch([await center('#appsPanel [data-apopen="wizard-calendar"]')], 700); await nap(400);
+          await page.getByRole('menuitem', { name: 'Add to Home Screen', exact: true }).click(); await nap(500);
+          steps.pin = await page.evaluate(() => { const s = document.querySelector('.home-pin-sheet'), r = s?.getBoundingClientRect(); return s ? { label: s.getAttribute('aria-label'), shown: r.width > 0 && r.height > 0 } : null; });
+          await shot('panel-home-pin');
+          assert.ok(steps.pin?.shown && /Calendar/.test(steps.pin.label), `the home-screen sheet opens for Calendar (${JSON.stringify(steps.pin)})`);
+          assert.equal(await page.evaluate(() => window.WizHomeScreenApps.back()), true); await nap(300);
           // 14) The x on a Recent row: off Recent (on the box too), the next one moves up; not unfavorited or uninstalled.
           const before = steps.s2.recent;
           await page.click('#appsPanel [data-apx="notes"]'); await nap(300); steps.s3 = await state(page);

@@ -30,7 +30,7 @@
     get: 'Get Tailscale', signin: 'Sign in with your Wizard’s account', back: 'Come back here',
     free: 'Free, from Tailscale Inc.', installed: 'Installed.',
     same: 'Use the same Tailscale account as on your computer.', network: 'Your Wizard is on this network:',
-    stuck: 'Open Tailscale and check it’s connected with that account. If this phone was removed from Tailscale, or it looks stuck, turn Tailscale off and on again and log in if it asks.',
+    stuck: 'If your Wizard’s computer is on and awake, Tailscale on this phone may be stuck: open Tailscale and check it’s connected with that account. If it looks stuck, or this phone was removed, turn Tailscale off and on again and log in if it asks.',
     removed: 'This phone is on a different Tailscale network, or it was removed from yours. In Tailscale, switch account or sign in again.',
     vpnIos: 'The first time, iPhone asks to <b>Add VPN Configurations</b>. Tap <b>Allow</b>.',
     vpnAndroid: 'The first time, Android asks to set up a VPN connection. Tap <b>OK</b>.',

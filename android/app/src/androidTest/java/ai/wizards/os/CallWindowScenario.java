@@ -48,13 +48,13 @@ final class CallWindowScenario {
             assertTrue("could not set the test Wizard", ServerSettings.save(c, page.origin()));
             assertFalse("another site must never open a call window", CallActivity.open(c, "http://127.0.0.1:" + page.port() + "/call/"));
             assertTrue(CallActivity.open(c, page.origin() + "/messenger/call/k/test/join/"));
-            UiObject2 outs = device.wait(Until.findObject(By.textStartsWith("Outputs ")), 30000);
-            assertNotNull("Element Call's host hook never got the outputs", outs);
+            UiObject2 outs = pastSystemDialogs(device, By.textStartsWith("Outputs "), 30000);
+            assertNotNull("Element Call's host hook never got the outputs; the page was asked " + page.served + " times", outs);
             String text = outs.getText();
             android.util.Log.i("CallWindowScenario", text);
             // CI's emulator runs without audio (-noaudio): a granted mic may still fail to start (NotReadableError or
             // NotFoundError). What must never happen is the call page being refused it.
-            UiObject2 mic = device.wait(Until.findObject(By.text(java.util.regex.Pattern.compile("Mic (granted|[A-Z][A-Za-z]+Error)"))), 20000);
+            UiObject2 mic = pastSystemDialogs(device, By.text(java.util.regex.Pattern.compile("Mic (granted|[A-Z][A-Za-z]+Error)")), 20000);
             assertNotNull("the call page never heard back about the microphone", mic);
             android.util.Log.i("CallWindowScenario", mic.getText());
             assertFalse("the call page was refused the microphone: " + mic.getText(), mic.getText().contains("NotAllowedError") || mic.getText().contains("SecurityError"));
@@ -78,27 +78,60 @@ final class CallWindowScenario {
         }
     }
 
-    /** One page on localhost, for any path. */
+    /** CI emulators raise "Pixel Launcher isn't responding" over the call window; tap Wait and keep looking. */
+    private static UiObject2 pastSystemDialogs(UiDevice device, androidx.test.uiautomator.BySelector target, long ms) {
+        long end = System.currentTimeMillis() + ms;
+        while (System.currentTimeMillis() < end) {
+            UiObject2 hit = device.wait(Until.findObject(target), 1500);
+            if (hit != null) return hit;
+            UiObject2 wait = device.findObject(By.res("android:id/aerr_wait"));
+            if (wait != null) wait.click();
+        }
+        try {
+            ByteArrayOutputStream tree = new ByteArrayOutputStream();
+            device.dumpWindowHierarchy(tree);
+            String t = tree.toString("UTF-8").replaceAll("\\s+", " ");
+            for (int i = 0; i < t.length(); i += 3000) android.util.Log.i("CallWindowScenario", "window: " + t.substring(i, Math.min(t.length(), i + 3000)));
+        } catch (IOException ignored) { }
+        return null;
+    }
+
+    /**
+     * One page on localhost, for any path. Each connection is answered on its own thread: the WebView opens idle
+     * connections ahead of use, and one of them must never hold up the page itself (wizard-ux issue 2011).
+     */
     private static final class Page implements AutoCloseable {
         final ServerSocket socket = new ServerSocket(0, 10, InetAddress.getByName("127.0.0.1"));
         final Thread thread = new Thread(this::serve, "call-page");
+        volatile int served;
         Page() throws IOException { thread.setDaemon(true); thread.start(); }
         int port() { return socket.getLocalPort(); }
         String origin() { return "http://localhost:" + port(); }
         private void serve() {
             while (!socket.isClosed()) {
-                try (Socket s = socket.accept()) {
-                    BufferedReader in = new BufferedReader(new InputStreamReader(s.getInputStream(), StandardCharsets.UTF_8));
-                    String line;
-                    while ((line = in.readLine()) != null && !line.isEmpty()) { }
-                    byte[] body = PAGE.getBytes(StandardCharsets.UTF_8);
-                    OutputStream out = s.getOutputStream();
-                    out.write(("HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nCache-Control: no-store\r\nContent-Length: "
-                            + body.length + "\r\nConnection: close\r\n\r\n").getBytes(StandardCharsets.US_ASCII));
-                    out.write(body);
-                    out.flush();
+                try {
+                    Socket s = socket.accept();
+                    Thread t = new Thread(() -> answer(s), "call-page-client");
+                    t.setDaemon(true);
+                    t.start();
                 } catch (IOException ignored) { }
             }
+        }
+        private void answer(Socket client) {
+            try (Socket s = client) {
+                s.setSoTimeout(5000);
+                BufferedReader in = new BufferedReader(new InputStreamReader(s.getInputStream(), StandardCharsets.UTF_8));
+                String line = in.readLine();
+                if (line == null || line.isEmpty()) return; // an idle preconnect, closed unused
+                served++;
+                while ((line = in.readLine()) != null && !line.isEmpty()) { }
+                byte[] body = PAGE.getBytes(StandardCharsets.UTF_8);
+                OutputStream out = s.getOutputStream();
+                out.write(("HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nCache-Control: no-store\r\nContent-Length: "
+                        + body.length + "\r\nConnection: close\r\n\r\n").getBytes(StandardCharsets.US_ASCII));
+                out.write(body);
+                out.flush();
+            } catch (IOException ignored) { }
         }
         @Override public void close() throws IOException { socket.close(); }
     }

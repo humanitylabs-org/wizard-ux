@@ -163,7 +163,6 @@ Settings › Appearance › Try new features lists unfinished features to try, A
 
 - **Add an app: search the App Store too**: Add an app's search also finds App Store apps.
 - **Agent access under the browser boundary**: Connected accounts' Agent access, boundary on.
-- **Agents run code without asking**: Container agents run code without an approval nobody sees (Agents: Just run, Ask me, Refuse); prompts wait an hour.
 - **Archive on top**: Archive is the first section of the Chats list in both By day and By status, so switching layouts never moves it.
 - **Ask before sharing feature counts**: Shared only after you say Share.
 - **Automatic chat tags**: Chats are tagged from what they are about; a channel's What goes here… edits its list.
@@ -171,6 +170,7 @@ Settings › Appearance › Try new features lists unfinished features to try, A
 - **Bottom app bar on desktop**: Apps bar at the bottom on any width.
 - **Buttons that tick things off in apps**: Reply buttons that tick something off in an app (a checklist step) with no agent reply; a failure shows Retry.
 - **Calm offline card**: The can't-reach-your-Wizard card shows one dotted path (Internet · Tailscale · Wizard), one short next step and a small Check again with the automatic re-check time.
+- **Catch me up clears Sent**: Catch me up clears finished Sent chats, any age.
 - **Channels: a fitting emoji for new channels**: New channels get a fitting emoji.
 - **Channels: an AI-picked emoji for new channels**: New channels with no emoji get one picked by your Wizard's fast model.
 - **Chat replies as Chats notifications**: Android app: your agent's chat replies reach the phone as Notifications items under Chats; tap opens the chat.
