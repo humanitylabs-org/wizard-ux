@@ -24,10 +24,10 @@ const report = { origin, web, cases: [] };
       const entry = { stem, errors: [], refused: [], posts: [], reads: 0 }; report.cases.push(entry);
       const calendar = { on: false };   // the app's own switch state (Calendar's DATA/switches.json)
       const listing = () => ({ channel: 'latest', channel_name: 'For testers', locked: false, note: '',
-        switches: [{ id: 'wizard/sent-rows', kind: 'core', name: 'Thread tracker', on: false, locked: false, issues: [] },
+        switches: [{ id: 'wizard/plain-alert-rows', kind: 'core', name: 'Thread tracker', on: false, locked: false, issues: [] },
           { id: CAL, kind: 'app', app: 'wizard-calendar', app_name: 'Calendar', switch: 'drag-events', name: 'Drag to move events', description: 'Drag an event to a new time or day.', author: 'wizard-calendar', on: calendar.on, default: false, issues: ['humanitylabs-org/wizard-calendar#19'], locked: false }],
         apps: [{ id: 'wizard-calendar', name: 'Calendar', ok: true }, { id: 'wizard-notes', name: 'Notes', ok: true }] });
-      const reply = `The calendar change is in. It starts off; try it here:\n\n${MARK({ ids: ['wizard/sent-rows', CAL, NOTES, GONE] })}\n\nSay if dragging feels right.`;
+      const reply = `The calendar change is in. It starts off; try it here:\n\n${MARK({ ids: ['wizard/plain-alert-rows', CAL, NOTES, GONE] })}\n\nSay if dragging feels right.`;
       const row = { id: 'qa-app-switch', title: 'Synthetic app switch card', runtime: 'direct', status: 'completed', updated_at: new Date(now).toISOString(), updatedAt: new Date(now).toISOString(), message_count: 2, messageCount: 2, archived: false, preview: 'The calendar change is in.' };
       const context = await browser.newContext({ viewport: phone ? { width: 390, height: 844 } : { width: 1440, height: 960 }, isMobile: phone, hasTouch: phone, serviceWorkers: 'block', ...(phone ? { userAgent: 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Mobile Safari/537.36' } : {}) });
       try {

@@ -13,7 +13,7 @@ const clone = v => JSON.parse(JSON.stringify(v));
 const sid = c => 'sent_' + c.repeat(24);
 const view = (c, extra = {}) => ({ id: sid(c), at: 1000, source: 'orb', text: 'Words ' + c, route: 'agent', decidedBy: 'model', rules: [], state: 'done', thread: 'thread_' + c, record: null, tags: [], urgent: false, wouldRoute: null, corrected: null, error: '', wantsReply: true, answer: '', quiet: false, ...extra });
 
-function part({ tweaks = SW, rows = [], next = null } = {}) {
+function part({ tweaks = '', rows = [], next = null } = {}) {
   const renders = [], opened = [], corrections = [], toasts = [], sheets = [];
   const CH = { main: { sent: true }, 'host-ops': {}, box: {}, locked: {} }, chatVars = { chanView: 'activity', rowSheet: null, secOpen: {} };
   const W = { main: { id: 'main', thread: null }, 'host-ops': { id: 'host-ops', thread: null }, box: { id: 'box', thread: null }, locked: { id: 'locked', thread: null } };
@@ -70,8 +70,8 @@ test('the row actions sheet: why it went there in plain words, Open chat, both c
   assert.deepEqual(clone(f.opened), [['main', 'thread_h'], ['main', 'worker_a']]);
 });
 
-test('a sheet button without an open Sent sheet does nothing; the sheet opens with no switch set', async () => {
-  const f = part({ rows: [view('a')], tweaks: '' });
+test('a sheet button without an open Sent sheet, or an unknown row, does nothing', async () => {
+  const f = part({ rows: [view('a')] });
   assert.equal(f.click(f.W.main, { rssentfix: 'quiet' }), false, 'no Sent sheet open: not Sent\'s tap');
   assert.equal(f.p.sentSheet('main', sid('z')), false, 'an unknown row');
   assert.equal(f.p.sentSheet('main', sid('a')), true, 'no switch to read');
@@ -79,7 +79,9 @@ test('a sheet button without an open Sent sheet does nothing; the sheet opens wi
   assert.deepEqual(f.corrections, []);
 });
 
-test('Sent rows join the row actions (main versus routed lists)', async () => {
+test('the switch is gone from the list, and Sent rows join the row actions (main versus routed lists)', async () => {
+  const catalog = JSON.parse(readFileSync(new URL('../web/tweaks/catalog.json', import.meta.url), 'utf8'));
+  assert.ok(!catalog.tweaks.includes(SW) && !(catalog.defaults || []).includes(SW));
   // The tabs (and so Sent rows) are the main agent's list only; a routed agent's list never draws them.
   const f = part({ rows: [view('a')] });
   assert.equal(f.p.sentTabsOn(f.W.main), true);

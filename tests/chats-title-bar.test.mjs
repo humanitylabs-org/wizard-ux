@@ -54,9 +54,9 @@ test('the bar: the tab title, the Inbox count pill, search and filter icons; Sen
   assert.match(p.titleBar('inbox', { searching: true, filtered: true, sheet: true }), /ch-tbar-b on" data-chtbsearch[^>]*aria-pressed="true"[\s\S]*ch-fbtn on" data-chfbtn[^>]*aria-expanded="true"/);
 });
 
-test('Sent under the bar: no second "Sent" back row (Sent has none at all since wizard-ux issue 1880)', () => {
-  for (const tweaks of ['', 'wizard/sent-threads']) {
-    const f = part({ tweaks });
+test('Sent under the bar: no "Sent" back row and no filter (Sent has none at all since wizard-ux issue 1814)', () => {
+  for (const side of [false, true]) {
+    const f = part({ side });
     f.CH.main.sent = true;
     assert.equal(f.p.sentHead, undefined, 'no Sent head to draw, with or without the bar');
     assert.ok(!/data-chsentback|data-chsentfilter/.test(f.p.sentBody(f.W.main)), 'no back row and no filter');

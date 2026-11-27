@@ -1,7 +1,7 @@
 'use strict';
 // Sent as threads (wizard-ux issue 1880, on for everyone; switch wizard/sent-threads removed) in a real browser. Disposable
 // synthetic transport only. Phone 412x915, Classic desktop and the AI apps desktop's Chats sidebar (1440x960), in Nebula
-// and Light (obsidian-light), with James's pilot switches (wizard/sent-rows; QA_ROWS=off drops it; Inbox rows are on for everyone).
+// and Light (obsidian-light). Inbox and Sent rows are on for everyone; QA_ROWS=off adds nothing (Inbox until archived is on for everyone too).
 // Threads and what the box says about each:
 //   qa-trip   three sends from him, the agent answered each quietly            → Sent, ONE row titled "Lyon trip"
 //   qa-quiet  "Sent to Miguel, done", answered quietly                         → Sent; then it needs him → Inbox; then quiet again → Sent
@@ -65,7 +65,7 @@ const report = { origin, web, on: ON, rows: ROWS, cases: [] };
       const context = await browser.newContext({ viewport: phone ? { width: 412, height: 915 } : { width: 1440, height: 960 }, isMobile: phone, hasTouch: phone, serviceWorkers: 'block', ...(phone ? { userAgent: 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Mobile Safari/537.36' } : {}) });
       try {
         await context.routeWebSocket('**/*', w => w.close());
-        const mix = { 'wizard/desktop-chats': true, ...(ROWS ? { 'wizard/sent-rows': true } : { 'wizard/inbox-until-archived': true }) };
+        const mix = { 'wizard/desktop-chats': true };
         await context.addInitScript(({ shell, skin, mix }) => {
           if (window !== top) return;
           if (sessionStorage.getItem('qaBoot')) return; sessionStorage.setItem('qaBoot', '1');

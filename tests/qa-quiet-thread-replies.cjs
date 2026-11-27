@@ -118,20 +118,19 @@ const report = { origin, web, cases: [] };
         assert.deepEqual(entry.isNew, { 'qa-clips': false, 'qa-mac': true, 'qa-old': false }, 'unread counts agree');
         await shot('1-inbox');
         if (shots && phone && skin === 'nebula') fs.copyFileSync(path.join(out, `${stem}-1-inbox.png`), path.join(out, 'after.png'));
-        // 2. Sent: both replies as Reply rows with the agent's answer, no routing correction on them.
+        // 2. Sent: both replies as rows that stayed in their chat (Sent rows, issue 1814), no routing correction on the rows.
         await vis('.ch-tabbar [data-chtab="sent"]').click();
-        await vis('.ch-sent-row').waitFor({ timeout: 8000 });
-        const rows = () => page.locator('.ch-sent-row').filter({ visible: true }).evaluateAll(b => b.map(x => x.querySelector('.ch-sent-open').innerText.replace(/\s+/g, ' ').trim()));
+        await vis('.ch-sr-row').waitFor({ timeout: 8000 });
+        const rows = () => page.locator('.ch-sr-row').filter({ visible: true }).evaluateAll(b => b.map(x => x.innerText.replace(/\s+/g, ' ').trim()));
         entry.rows = await rows();
         assert.equal(entry.rows.length, 3, JSON.stringify(entry.rows));
-        assert.match(entry.rows[0], /Sent to Miguel, done.*Reply · Done · nothing needed from you.*Clip edit is with Miguel\. Nothing needed from you\./, entry.rows[0]);
-        assert.match(entry.rows[1], /is the mac app ready\?.*Reply · Done · you asked.*The Mac app build is still running\./, entry.rows[1]);
-        assert.match(entry.rows[2], /Why did the clips edit fail\?.*Thread · Done · you typed it/, entry.rows[2]);
-        assert.equal(await count(`.ch-sent-row[data-morph-key="sent:${id('a')}"] [data-chsentfix]`), 0, 'a reply has no routing correction');
-        assert.equal(await count(`.ch-sent-row[data-morph-key="sent:${id('c')}"] [data-chsentfix]`), 2, 'a typed row keeps its corrections');
+        assert.match(entry.rows[0], /Sent to Miguel, done.*Noted in its chat · Done/, entry.rows[0]);
+        assert.match(entry.rows[1], /is the mac app ready\?.*Replied in its chat · Done/, entry.rows[1]);
+        assert.match(entry.rows[2], /Why did the clips edit fail\?.*Replied in chat · Done/, entry.rows[2]);
+        assert.equal(await count('.ch-sr-row [data-chsentfix], .ch-sr-row [data-rssentfix]'), 0, 'corrections live in the row\'s actions sheet');
         await shot('2-sent');
         // 3. A tap on the quiet reply opens its thread.
-        await vis(`[data-chsentopen="${id('a')}"]`).click();
+        await vis(`[data-chsent="${id('a')}"]`).click();
         const thread = () => page.locator('.ch-thread').filter({ visible: true }).first();
         await thread().getByText('Great, the clip edit is with Miguel now. Nothing needed from you.').waitFor({ timeout: 10000 });
         await shot('3-thread');

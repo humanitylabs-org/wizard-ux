@@ -42,8 +42,8 @@ function harness(rows, { bellUnread = 0 } = {}) {
   vm.runInContext(block(nav, '  function chatsCount(live) {', '  function refreshChats(') + '\nthis.badge = chatsCount; this.word = readyWord;', c);
   // What the Inbox lists: the same model call the Inbox rows make (phone/Classic) and the AI apps sidebar's.
   const M = c.WizChatsListModel;
-  const activity = () => M.activityGroups(c.LIVE.workGroups(rows), { needs: c.needs, unread: c.unread, at: c.chanAt }, { order: 'newest', now: NOW, keep: true, inbox: IB }).ready.map(s => s.id);
-  const sidebar = () => M.activityList(c.LIVE.workGroups(rows), { live: { cardAt: s => s.updatedAt, isNew: c.unread }, chats: { activityNeeds: c.needs, activityUnread: c.unread, threadActions: () => [], channelOf: () => 'General', agentLabelOf: () => '', inboxRows: () => IB } }, { order: 'newest', now: NOW, keep: true }).ready.length;
+  const activity = () => M.activityGroups(c.LIVE.workGroups(rows), { needs: c.needs, unread: c.unread, at: c.chanAt }, { order: 'newest', now: NOW, inbox: IB }).ready.map(s => s.id);
+  const sidebar = () => M.activityList(c.LIVE.workGroups(rows), { live: { cardAt: s => s.updatedAt, isNew: c.unread }, chats: { activityNeeds: c.needs, activityUnread: c.unread, threadActions: () => [], channelOf: () => 'General', agentLabelOf: () => '', inboxRows: () => IB } }, { order: 'newest', now: NOW }).ready.length;
   return { c, activity, sidebar, open: id => fresh.delete(id), markDone: id => { handled.add(id); fresh.delete(id); } };
 }
 

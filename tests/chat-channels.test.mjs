@@ -2263,24 +2263,25 @@ test('issue 1331: Archive turns quiet; Mark done is the strong button, only whil
 const actFn = (f, name) => vm.runInContext(name, f.env);
 function actGroups(f, rows, opts = {}) {
   const M = f.env.WizChatsListModel;
-  return M.activityGroups({ ready: rows }, { needs: actFn(f, 'actNeeds'), unread: actFn(f, 'actUnread'), at: s => s.at }, { now: NOW, ...opts });
+  return M.activityGroups({ ready: rows }, { needs: actFn(f, 'actNeeds'), unread: actFn(f, 'actUnread'), at: s => s.at }, { ...opts });
 }
 const actIds = list => [...list].map(s => s.id);
 
-test('issue 1336: green leaves Ready once opened; amber stays in Ready until it is addressed (Mark done)', () => {
+// Inbox until archived (issue 1810, on for everyone): every thread stays in Inbox; opening clears green, Mark done amber.
+test('issue 1336: green loses its marker once opened; amber keeps it until addressed (Mark done); all stay in Inbox', () => {
   const green = row('g', 1, { fresh: true }), amber = row('y', 2, { fresh: true, attention: { state: 'needs_you', ask: 'Pick one' }, lastAssistantAt: new Date(NOW - 2 * H).toISOString() }), plain = row('p', 3);
   const f = doneFixture({ sessions: { y: amber } });
+  const mark = actFn(f, 'actMark'), marks = g => actIds(g.ready).map(id => id + ':' + mark([green, amber, plain].find(s => s.id === id)));
   let g = actGroups(f, [green, amber, plain]);
-  assert.deepEqual(actIds(g.ready), ['g', 'y']); assert.deepEqual(actIds(g.recent), ['p']);
-  // Opening both threads reads them (openChat → LIVE.markSeen): green goes to Recent, amber stays (James: "It should stay in ready").
+  assert.deepEqual(marks(g), ['g:new', 'y:needs', 'p:']); assert.deepEqual(actIds(g.recent), []);
+  // Opening both threads reads them (openChat → LIVE.markSeen): green loses its dot, amber stays (James: "It should stay in ready").
   f.env.LIVE.markSeen([green, amber]);
   g = actGroups(f, [green, amber, plain]);
-  assert.deepEqual(actIds(g.ready), ['y'], 'opening a yellow thread keeps it in Ready');
-  assert.deepEqual(actIds(g.recent), ['g', 'p'], 'the opened green thread is in Recent, newest first');
-  // Addressed: Mark done (the one rule of issue 1331/1317) takes it out of Ready.
+  assert.deepEqual(marks(g), ['g:', 'y:needs', 'p:'], 'opening a yellow thread keeps its amber; the opened green one stays, read');
+  // Addressed: Mark done (the one rule of issue 1331/1317) clears amber; the thread waits until archived.
   assert.equal(f.markDone('w', 'y'), true);
   g = actGroups(f, [green, amber, plain]);
-  assert.deepEqual(actIds(g.ready), []); assert.deepEqual(actIds(g.recent), ['g', 'y', 'p']);
+  assert.deepEqual(marks(g), ['g:', 'y:', 'p:']); assert.deepEqual(actIds(g.recent), []);
 });
 
 test('issue 1336: one marker per row, amber over green, spinner for working; the purple dot is gone', () => {
@@ -2318,27 +2319,25 @@ test('issue 1497 main vs routed: every Activity row has one marker slot, drawn l
   assert.doesNotMatch(css, /\.ch-act-ind \{ order: 6;/, 'nothing puts it back at the right end');
 });
 
-test('issue 1336: the three sorts (Newest first, Oldest first, Needs you first); Recent is always newest first', () => {
+test('issue 1336: the three sorts (Newest first, Oldest first, Needs you first) over the whole Inbox', () => {
   const f = fixture();
   const rows = [row('old-needs', 5, { attention: { state: 'needs_you', ask: 'x' } }), row('mid', 3, { fresh: true }), row('new', 1, { fresh: true }), row('r1', 2), row('r2', 4)];
   assert.deepEqual([...f.env.WizChatsListModel.ACTIVITY_SORTS].map(([, l]) => l), ['Newest first', 'Oldest first', 'Needs you first']);
-  assert.deepEqual(actIds(actGroups(f, rows).ready), ['new', 'mid', 'old-needs'], 'Newest first is the default');
-  assert.deepEqual(actIds(actGroups(f, rows, { order: 'oldest' }).ready), ['old-needs', 'mid', 'new']);
-  assert.deepEqual(actIds(actGroups(f, rows, { order: 'priority' }).ready), ['old-needs', 'new', 'mid'], 'Needs you first, then newest');
-  for (const order of ['newest', 'oldest', 'priority']) assert.deepEqual(actIds(actGroups(f, rows, { order }).recent), ['r1', 'r2']);
+  assert.deepEqual(actIds(actGroups(f, rows).ready), ['new', 'r1', 'mid', 'r2', 'old-needs'], 'Newest first is the default');
+  assert.deepEqual(actIds(actGroups(f, rows, { order: 'oldest' }).ready), ['old-needs', 'r2', 'mid', 'r1', 'new']);
+  assert.deepEqual(actIds(actGroups(f, rows, { order: 'priority' }).ready), ['old-needs', 'new', 'r1', 'mid', 'r2'], 'Needs you first, then newest');
+  for (const order of ['newest', 'oldest', 'priority']) assert.deepEqual(actIds(actGroups(f, rows, { order }).recent), []);
   assert.equal(f.env.WizChatsListModel.activitySortOf('subject'), 'newest', 'a By subject order reads as Newest first');
 });
 
-test('issue 1336: Recent goes back about a week, then Show older lists the rest of the live window', () => {
+test('issue 1810: no week cut and no Show older: old read threads stay in Inbox until archived', () => {
   const f = fixture();
   const rows = [row('d1', 24), row('d6', 6 * 24), row('d9', 9 * 24), row('d20', 20 * 24)];
   const g = actGroups(f, rows);
-  assert.deepEqual(actIds(g.recent), ['d1', 'd6']); assert.equal(g.older, 2);
-  const all = actGroups(f, rows, { older: true });
-  assert.deepEqual(actIds(all.recent), ['d1', 'd6', 'd9', 'd20']); assert.equal(all.older, 0);
+  assert.deepEqual(actIds(g.ready), ['d1', 'd6', 'd9', 'd20']); assert.deepEqual(actIds(g.recent), []); assert.equal(g.older, 0);
   // Snoozed and Archived are their own folded sections at the bottom.
   const M = f.env.WizChatsListModel, sn = row('s', 1, { deferred: true }), ar = row('x', 1, { archived: true });
-  const g2 = M.activityGroups({ ready: [sn], archive: [ar], working: [] }, { needs: actFn(f, 'actNeeds'), unread: actFn(f, 'actUnread'), at: s => s.at }, { now: NOW });
+  const g2 = M.activityGroups({ ready: [sn], archive: [ar], working: [] }, { needs: actFn(f, 'actNeeds'), unread: actFn(f, 'actUnread'), at: s => s.at });
   assert.deepEqual([actIds(g2.snoozed), actIds(g2.archive), actIds(g2.ready), actIds(g2.recent)], [['s'], ['x'], [], []]);
 });
 
@@ -2383,7 +2382,7 @@ test('issue 1336: main vs routed: host-profile, container and restricted threads
     // A routed row sharing a main thread's id is still its own agent's (the row's owner, never the id).
     assert.equal(label(row('a', 1, { owner })), name, owner + ' with a shared id');
     const g = actGroups(f, [row(id, 1, { owner, fresh: true }), row('a', 2, { owner: '' })]);
-    assert.deepEqual(actIds(g.ready), [id]); assert.deepEqual(actIds(g.recent), ['a']);
+    assert.deepEqual(actIds(g.ready), [id, 'a']); assert.deepEqual(actIds(g.recent), []);
     assert.equal(actFn(f, 'actMark')(row(id, 1, { owner, attention: { state: 'needs_you', ask: 'x' } })), 'needs');
   }
 });

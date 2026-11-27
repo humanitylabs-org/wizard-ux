@@ -1,8 +1,7 @@
 'use strict';
 // Archive in a background task's thread clears its Inbox row (wizard-ux issue 1928), in a real browser, disposable
 // synthetic box only, every write intercepted, service workers blocked. Phone 412x915 (QA_SHELLS=phone,classic for the
-// desktop too), Nebula and a light skin, James's switches: wizard/inbox-until-archived,
-// wizard/smart-inbox (Sent as threads is on for everyone).
+// desktop too), Nebula and a light skin, James's switch: wizard/smart-inbox (Sent as threads is on for everyone).
 //   1. Hidden worker thread T1 (needs_you) + record R1: the Inbox shows R1's row. Open it, Archive in the thread: the
 //      session PATCH {archived: true} and PATCH /wizard/v1/agent-inbox/R1 {action: archive} are both sent; back on the
 //      list there is no ibrec:R1 row and the Inbox count dropped by one, with no reload.
@@ -62,7 +61,7 @@ const report = { origin, web, cases: [] };
       const context = await browser.newContext({ viewport: phone ? { width: 412, height: 915 } : { width: 1440, height: 960 }, isMobile: phone, hasTouch: phone, serviceWorkers: 'block', ...(phone ? { userAgent: 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Mobile Safari/537.36' } : {}) });
       try {
         await context.routeWebSocket('**/*', w => w.close());
-        const mix = { 'wizard/desktop-chats': true, 'wizard/inbox-until-archived': true, 'wizard/smart-inbox': true };
+        const mix = { 'wizard/desktop-chats': true, 'wizard/smart-inbox': true };
         await context.addInitScript(({ shell, skin, mix }) => {
           if (window !== top) return;
           if (sessionStorage.getItem('qaBoot')) return; sessionStorage.setItem('qaBoot', '1');

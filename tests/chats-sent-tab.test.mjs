@@ -1,6 +1,6 @@
 // Chats Sent tab (wizard-ux issue 1778, on for everyone; its two switches are gone): the live.js reader of the
 // box's Sent log cut out of the file and run against a fake box, and the real Chats part (core/chats-sent.js) run on
-// it. Browser proof: tests/qa-chats-sent-tab.cjs.
+// it. Browser proof: tests/qa-chats-sent-rows.cjs.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -93,11 +93,16 @@ function part({ tweaks = '', rows = [], ok = true, gone = false, side = false, e
   };
   vm.createContext(ctx);
   vm.runInContext(readFileSync(new URL('../web/core/chats-sent.js', import.meta.url), 'utf8'), ctx);
+  vm.runInContext(readFileSync(new URL('../web/core/chats-inboxrows.js', import.meta.url), 'utf8'), ctx);
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-  const p = ctx.window.WizCore.chatsParts.sent({ ago: () => '3m', ch: id => CH[id], CH, CHAN_VIEW_KEY: 'k', chanElsewhere: () => elsewhere, chanSide: () => side, chatVars, clip: (s, n) => String(s).slice(0, n), elOf: () => ({}), esc, H: { win: id => W[id] },
+  // Sent draws the new Inbox's own rows, with the corrections in each row's actions sheet (wizard-ux issue 1814).
+  const ib = ctx.window.WizCore.chatsParts.inboxrows({ AGS: () => ({ sigil: () => '', defaultId: () => 'hermes' }), agentName: id => id || 'Wizard', agentRec: id => ({ id }), chanFace: n => ({ emoji: '💬', label: n, own: false }), esc, LIVE });
+  const listEl = { html: '', insertAdjacentHTML(_, h) { this.html += h; }, querySelectorAll: () => [], querySelector: () => null };
+  const closeRowSheet = () => { const had = !!chatVars.rowSheet; chatVars.rowSheet = null; return had; };
+  const p = ctx.window.WizCore.chatsParts.sent({ ibMark: ib.ibMark, ibRow: ib.ibRow, ibTagFace: ib.ibTagFace, closeRowSheet, ago: () => '3m', ch: id => CH[id], CH, CHAN_VIEW_KEY: 'k', chanElsewhere: () => elsewhere, chanSide: () => side, chatVars, clip: (s, n) => String(s).slice(0, n), elOf: () => listEl, esc, H: { win: id => W[id] },
     LIVE, openChat: (wid, t) => opened.push([wid, t]), renderChatList: w => renders.push(w.id), rerenderList: w => renders.push(w.id), toast: (...a) => toasts.push(a), W, winAgent: w => agentOf[w.id] || '' });
   const click = (w, attrs) => p.sentClick({ target: { closest: sel => { const k = /\[data-([a-z]+)\]/.exec(sel)?.[1]; return k && k in attrs ? { dataset: { [k]: attrs[k], ...(attrs.dataset || {}) }, disabled: false } : null; } } }, w.id, w);
-  return { p, W, CH, chatVars, renders, opened, corrections, toasts, fetches, listeners, ctx, click };
+  return { p, W, CH, chatVars, renders, opened, corrections, toasts, fetches, listeners, ctx, click, listEl };
 }
 const view = (c, extra = {}) => ({ id: sid(c), at: 1000, source: 'orb', text: 'Words ' + c, route: 'agent', decidedBy: 'model', rules: [], state: 'done', thread: 'thread_' + c, record: null, tags: [], urgent: false, wouldRoute: null, corrected: null, error: '', ...extra });
 
@@ -130,8 +135,8 @@ test('tabs, corrections, a tap and Back', async () => {
   assert.equal(f.click(w, { chtab: 'tags' }), true); assert.equal(f.chatVars.chanView, 'channels', 'Tags = the Channels view');
   assert.equal(f.click(w, { chtab: 'sent' }), true); assert.equal(f.p.sentOpen(w), true);
   assert.match(f.p.sentBar(w), /data-chtab="sent" aria-selected="true"/);
-  f.click(w, { rssentfix: 'quiet', dataset: { id: sid('a') } });
-  f.click(w, { rssentfix: 'reply', dataset: { id: sid('e') } });
+  assert.equal(f.p.sentSheet('main', sid('a')), true); f.click(w, { rssentfix: 'quiet' });
+  assert.equal(f.p.sentSheet('main', sid('e')), true); f.click(w, { rssentfix: 'reply' });
   await new Promise(r => setImmediate(r));
   assert.deepEqual(clone(f.corrections), [[sid('a'), false], [sid('e'), true]], 'Didn\'t need a reply = false, Should have replied = true');
   f.click(w, { chsent: sid('a') }); await new Promise(r => setImmediate(r));

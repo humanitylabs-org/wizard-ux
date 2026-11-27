@@ -130,8 +130,8 @@ window.WizCore.chatsParts.inboxrows = function ({ actMark, actNeeds, actUnread, 
   }
   const IB_ARCH_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16v3H4zM6 10v9h12v-9M10 14h4"/></svg>';
   const IB_PIN_MARK = '<span class="ch-ib-pin" aria-label="Pinned">📌</span>';
-  /* The one Signal-style row: Inbox's threads and waiting tasks, and Sent's sends (wizard-ux issue 1814, switch
-   * wizard/sent-rows: James, 25 Nov 2026, "let's give the same design to sent"), so the two can't drift apart. Every
+  /* The one Signal-style row: Inbox's threads and waiting tasks, and Sent's sends (wizard-ux issue 1814, on
+   * for everyone: James, 25 Nov 2026, "let's give the same design to sent"), so the two can't drift apart. Every
    * part comes in as HTML the caller escaped: `key` the morph key, `wrap` / `cls` extra classes, `open` the row button's
    * attributes, `tip` its title, `av` the avatar, `from` the sender, `time`, `title`, `mark`, `line` the one line under
    * the title, `after` what follows the row button (Archive). */
@@ -143,9 +143,11 @@ window.WizCore.chatsParts.inboxrows = function ({ actMark, actNeeds, actUnread, 
   }
   // `sent`: the row as Sent draws it (wizard-ux issue 1880): the same row, with its Sent key
   // for the actions sheet's sends and the spinner while it runs.
-  function ibThreadRow(s, pin, sent = null) {
-    // No working mark in Inbox (wizard-ux issue 1829): a run he started is in Sent › Working, not here.
-    const m0 = actMark(s), m = sent?.working ? 'working' : m0 === 'working' ? (actNeeds(s) ? 'needs' : actUnread(s) ? 'new' : '') : m0, f = ibFace(s), unread = m === 'new';
+  // `run`: the row in Inbox › Working (wizard-ux issue 1810), with its spinner.
+  function ibThreadRow(s, pin, sent = null, run = false) {
+    // An Inbox row has no working mark (wizard-ux issue 1829): a run he started is in Sent › Working, one the agent
+    // started is in Inbox › Working (`run`).
+    const m0 = actMark(s), m = sent?.working || run ? 'working' : m0 === 'working' ? (actNeeds(s) ? 'needs' : actUnread(s) ? 'new' : '') : m0, f = ibFace(s), unread = m === 'new';
     return ibRow({ key: `row:${esc(s.id)}`, wrap: `${pin ? ' pinned' : ''}${sent ? ' ch-st-wrap' : ''}`, cls: `${unread ? ' unread' : ''}${m === 'needs' ? ' needs' : ''}${sent ? ' ch-st-row' : ''}`, open: `data-chopen="${esc(s.id)}"${sent ? ` data-chsentthread="${esc(sent.key)}"` : ''} aria-haspopup="dialog" aria-keyshortcuts="Shift+F10"`, tip: 'Open thread · hold or open the context menu for actions',
       av: f.av, from: esc(f.from), pin, time: esc(ago(LIVE.cardAt(s))), title: esc(s.title || 'New chat'), mark: ibMark(m),
       // A saved, unsent draft says "✎ Draft" ahead of the line (wizard-ux issues 1445, 1604), as every Chats row does.
@@ -183,8 +185,9 @@ window.WizCore.chatsParts.inboxrows = function ({ actMark, actNeeds, actUnread, 
       title: esc(clip(title, 160)), mark: `${n ? `<span class="ch-al-n" aria-label="${n} alerts">${n > 99 ? '99+' : n}</span>` : ''}${ibMark(m)}`, line: esc(line),
       after: `<button type="button" class="ch-ib-arch" data-chibnote="${esc(ids.join(' '))}" aria-label="Archive: ${esc(clip(title, 120))}" title="Archive">${IB_ARCH_SVG}</button>` });
   }
-  /* The Inbox tab's list body: Inbox (pinned first, then threads, waiting tasks and Chats alerts in the one sort),
-   * then Snoozed and Archived folded at the bottom as before. Working threads that never got an answer are in Sent. */
+  /* The Inbox tab's list body: Working on top (wizard-ux issue 1810: a running thread no Sent row names, one the agent
+   * started), then Inbox (pinned first, then threads, waiting tasks and Chats alerts in the one sort), then Snoozed and
+   * Archived folded at the bottom as before. A run he started is in Sent › Working (issue 1829). */
   function inboxRowsBody(w, rows, nt, drafts = 0) {
     const L = ibModel(), c = ch(w.id), order = L.activitySortOf(chatVars.readyOrder), fx = ibFacts();
     ibDrawn = new Set();
@@ -196,6 +199,8 @@ window.WizCore.chatsParts.inboxrows = function ({ actMark, actNeeds, actUnread, 
     const inbox = items.filter(x => x.pin).sort((a, b) => a.pin - b.pin).concat(sorted);
     const snoozed = L.activitySort(g.snoozed.map(v => ({ id: v.id, v, at: chanAt(v) })).concat((nt?.later || []).map(v => ({ id: 'notif:' + v.id, n: v, at: noteAt(v) }))), 'newest', { at: x => x.at });
     const alertRows = ibAlertOn();
+    // Sends a graceful restart holds are not live work (wizard-ux issue 1362): not under Working.
+    const work = g.working.filter(s => !globalThis.WizReach?.restartHeld?.(s));
     const row = x => x.r ? ibRecRow(x.r) : x.n ? (alertRows ? ibNoteRow(x.n) : noteRow(x.n)) : ibThreadRow(x.s || x.v, x.pin);
     const SEC_PAGE = 50, page = (k, list) => { const shown = c.more?.[k] ? list : list.slice(0, SEC_PAGE); return shown.map(row).join('') + (list.length > shown.length ? `<button class="ch-more" data-secmore="${k}">Show all ${list.length}</button>` : ''); };
     // The title bar (wizard-ux issue 1836) names Inbox and carries its count, sort and search: no section row, no fold.
@@ -203,14 +208,15 @@ window.WizCore.chatsParts.inboxrows = function ({ actMark, actNeeds, actUnread, 
     // Pin to top: a read thread that is here only because it is pinned is not counted (issue 1887).
     const ibSkip = g.counted ? new Set(g.ready.filter(s => !g.counted.includes(s)).map(s => s.id)) : null, inboxN = ibSkip ? inbox.filter(x => !ibSkip.has(x.id)).length : inbox.length;
     if (ibTitled) c.inboxN = inboxN;
-    const sec = (k, label, n, inner, open, main = k === 'ready') => ibTitled && main ? `<section class="ch-sec ch-act ch-ib ch-tb-main open" data-sec="${k}"><div class="ch-sec-b">${inner()}</div></section>` : `<section class="ch-sec ch-act${main ? ' ch-ib' : ''}${open ? ' open' : ''}" data-sec="${k}">${main ? `<div class="ch-sec-hl"><button class="ch-sec-h" data-sectoggle="${k}" aria-expanded="${open}"><span>${label}</span>${n ? `<small>${n}</small>` : ''}<i aria-hidden="true"></i></button>${sortSel}</div>` : `<button class="ch-sec-h" data-sectoggle="${k}" aria-expanded="${open}"><span>${label}</span>${n ? `<small>${n}</small>` : ''}<i aria-hidden="true"></i></button>`}${open ? `<div class="ch-sec-b">${inner()}</div>` : ''}</section>`;
+    const sec = (k, label, n, inner, open, main = k === 'ready') => ibTitled && main && !work.length ? `<section class="ch-sec ch-act ch-ib ch-tb-main open" data-sec="${k}"><div class="ch-sec-b">${inner()}</div></section>` : `<section class="ch-sec ch-act${main ? ' ch-ib' : ''}${open ? ' open' : ''}" data-sec="${k}">${main ? `<div class="ch-sec-hl"><button class="ch-sec-h" data-sectoggle="${k}" aria-expanded="${open}"><span>${label}</span>${n ? `<small>${n}</small>` : ''}<i aria-hidden="true"></i></button>${sortSel}</div>` : `<button class="ch-sec-h" data-sectoggle="${k}" aria-expanded="${open}"><span>${label}</span>${n ? `<small>${n}</small>` : ''}<i aria-hidden="true"></i></button>`}${open ? `<div class="ch-sec-b">${inner()}</div>` : ''}</section>`;
     const sortSel = `<label class="ch-act-sort"><select data-chactorder aria-label="Sort Inbox">${L.ACTIVITY_SORTS.map(([v, l]) => `<option value="${v}"${order === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label>`;
     // A box with no chats at all (wizard-ux issue 1731): one deliberate empty state with a way to start a chat.
     const fresh = !(rows || []).length && !(nt?.awake || []).length && !(nt?.later || []).length;
     const empty = fresh ? '<div class="ch-empty ch-act-empty"><b>No chats yet</b><span>Tap + to start one, or tap the orb and talk.</span><button type="button" class="ch-fclear" data-chnew data-chemptynew>New chat</button></div>'
       : '<div class="ch-empty ch-ib-empty"><b>Nothing needs you</b><span>Replies and asks land here. What you sent is in Sent.</span></div>';
-    if (!inbox.length && !snoozed.length && !g.archive.length) return drafts ? '' : empty;
-    return (inbox.length ? sec('ready', 'Inbox', inboxN, () => page('ready', inbox), chatVars.secOpen.ready !== false) : drafts ? '' : empty)
+    if (!work.length && !inbox.length && !snoozed.length && !g.archive.length) return drafts ? '' : empty;
+    return (work.length ? sec('working', 'Working', work.length, () => work.map(s => ibThreadRow(s, 0, null, true)).join(''), chatVars.secOpen.working !== false, false) : '')
+      + (inbox.length ? sec('ready', 'Inbox', inboxN, () => page('ready', inbox), chatVars.secOpen.ready !== false) : drafts ? '' : empty)
       + (snoozed.length ? sec('snoozed', 'Snoozed', snoozed.length, () => page('snoozed', snoozed), !!chatVars.secOpen.snoozed) : '')
       + (g.archive.length ? sec('archived', 'Archived', g.archive.length, () => g.archive.slice(0, 200).map(s => ibThreadRowPlain(s)).join(''), !!chatVars.secOpen.archived) : '');
   }

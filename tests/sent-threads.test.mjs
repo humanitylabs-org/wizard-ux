@@ -163,7 +163,7 @@ test('no switch: Sent is threads for everyone, a saved wizard/sent-threads choic
     assert.equal(other.body(), base, 'the same Sent with ' + tweaks);
     assert.deepEqual(other.inbox(), none.inbox(), 'the same Inbox with ' + tweaks);
   }
-  assert.equal(none.ctx.WizCore.inboxKeep(), true, 'the one-place rule (Inbox rows, wizard-ux issue 1779)');
+  assert.equal(none.ctx.WizCore.inboxKeep, undefined, 'no switch read left (Inbox until archived, issue 1810, on for everyone)');
 });
 
 test('model: sentThreads groups by thread, then record, then the send; newest first', () => {

@@ -2260,7 +2260,7 @@ test('round 19 item 1 desktop: the folded rail used as it is: first, next, wrap,
   w.q('.aad-rk[data-k="ready"]').dispatchEvent(new FakePointerEvent('pointerenter'));
   assert.equal(w.q('.aad-fly'), null, 'not at once');
   const t = w.st.timers.find(h => h.ms === 300); assert.ok(t, 'a 300 ms hover delay'); t.fn();
-  assert.equal(w.q('.aad-fly .aad-pop-h').textContent, 'Ready · 5');
+  assert.equal(w.q('.aad-fly .aad-pop-h').textContent, 'Inbox · 5');
   assert.equal(w.q('.aad-fly-i .aad-fly-t').textContent, 'Plain'); assert.ok(w.q('.aad-fly-i .aad-fly-at'), 'and its time');
   assert.equal(w.escape(), true);
   assert.equal(w.q('.aad-fly'), null, 'Esc closes the flyout'); assert.equal(w.html.dataset.aadChat, 'on', 'and only the flyout');
