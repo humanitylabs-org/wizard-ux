@@ -158,7 +158,8 @@ const report = { origin, web, cases: [] };
         // The same row design as Inbox beside it: height, padding, spacing, title, line, avatar, sender, section header.
         assert.deepEqual(entry.sent.look, entry.inbox.look, 'Sent rows look like the Inbox rows: ' + JSON.stringify([entry.sent.look, entry.inbox.look]));
         assert.deepEqual(entry.sent.heights, [entry.inbox.look.height], 'every Sent row is as tall as an Inbox row');
-        if (!ai) assert.equal(entry.sent.head, entry.inbox.head, 'the same section header as Inbox');
+        // Inbox's own section row went with the title bar (issue 1836, on for everyone); a header Inbox does show (Pinned, Archived) is the same.
+        if (!ai && entry.inbox.head) assert.equal(entry.sent.head, entry.inbox.head, 'the same section header as Inbox');
         assert.equal(entry.sent.arch, 0, 'a send has no Archive button');
         // The issue's first "at least 9 rows" was for one-line rows; James's later word (25 Nov) is Inbox's own rows (77 px):
         // a 412x915 phone shows 7 whole ones (today's cards: 4 or 5), the same as Inbox.
