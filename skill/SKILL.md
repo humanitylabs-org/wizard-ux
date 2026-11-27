@@ -218,7 +218,6 @@ Settings › Appearance › Try new features lists unfinished features to try, A
 - **Smart inbox: only what needs you**: Inbox: only what blocks you.
 - **Stop write loops**: Stops repeated saves: an identical save within 10 s is not resent; over 20 a minute pauses.
 - **Swap sides**: Chats right, apps left (⌥⇧L).
-- **Swipe away downloads**: Phone: swipe the Downloaded banner away and swipe the Downloads sheet down to close it. (phone only).
 - **Tags**: A chat can carry several tags.
 - **Tap to answer in replies**: Tap-to-answer buttons in agent replies.
 - **Tell the team about failed updates**: When an app or WizardOS update fails on this box, the App Manager files a bug for the team (or adds to the open one) with the box, versions, failing step and error, using this box's GitHub login. Your notification then says the team was told.
