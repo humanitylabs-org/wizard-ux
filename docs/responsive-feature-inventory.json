@@ -1335,6 +1335,11 @@
       "classification": "adapter",
       "reason": "Phone shell part moved out of app.js (issue 1665, shared values through accessors): Settings as a sheet, unsent items, Home repaints and the New desk app cards."
     },
+    "app-chatsswitch.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone shell part (wizard-ux#1957, switch wizard/chats-switcher): the four-section bar's Chats tile opens the Chats view switcher sheet (tap again, hold and slide, a sideways swipe flips the last two views, a bar swipe steps one view); the views themselves are Chats' own (core/chats-sent.js), and the desktop keeps its Inbox · Tags · Sent tabs."
+    },
     "app-choice.js": {
       "shell": "phone",
       "classification": "adapter",

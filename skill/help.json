@@ -475,6 +475,10 @@
       "help": "Sent lists threads.",
       "where": "Settings › Appearance › Try new features › Sent: threads, like email"
     },
+    "wizard/chats-switcher": {
+      "help": "Phone Chats: one bar; tap Chats again or the title to switch views.",
+      "where": "Settings › Appearance › Try new features › Phone Chats: one bar and a view switcher on the Chats tile"
+    },
     "wizard/inbox-pin-top": {
       "help": "Pin threads on top.",
       "where": "Settings › Appearance › Try new features › Inbox: pin threads to the top"

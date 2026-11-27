@@ -1072,7 +1072,9 @@
   const { sectionsArrange, sectionsPaint, sectionsPinHtml, sectionsStops, sectionsSwipe } = window.WizCore.appParts.sections({ $, APP, APPS, appVars, CHATS_APP, closeSheets, closeWin, esc, goDesk, HOME, launcher, LIVE, mainChats, openApp, openSheet, renderDots, renderLauncher, save, store, syncDesks, toast, vib, winApp });
   pinSheetHtml = sectionsPinHtml; swipeBySection = sectionsSwipe;
   desksLate({ sectionsArrange, sectionsPaint });
-  scrubLate({ sectionsStops });
+  /* The Chats tile's view switcher (wizard-ux#1957, switch wizard/chats-switcher, off by default); app-chatsswitch.js. */
+  const { chatsStepper } = window.WizCore.appParts.chatsswitch({ $, appVars, CHATS, CHATS_APP, device, esc, mainChats, phoneBack, vib });
+  scrubLate({ chatsStepper, sectionsStops });
   sectionsPaint();
   var dropUntil = 0; // retained for hosted-frame programmatic-pop accounting
   /* The Back guard, first run, the native shell bridge and deep links; app-boot.js. */

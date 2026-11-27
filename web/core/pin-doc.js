@@ -71,7 +71,7 @@
     ['s', 'app-deskset.js'], ['s', 'app-dictation.js'], ['s', 'app-frame.js'], ['s', 'app-home.js'],
     ['s', 'app-inbox.js'], ['s', 'app-linkdesk.js'], ['s', 'app-mic.js'], ['s', 'app-model.js'],
     ['s', 'app-opening.js'], ['s', 'app-orbswipe.js'], ['s', 'app-overview.js'], ['s', 'app-pinch.js'],
-    ['s', 'app-reply.js'], ['s', 'app-routing.js'], ['s', 'app-scrub.js'], ['s', 'app-sections.js'], ['s', 'app-search.js'], ['s', 'app-seed.js'],
+    ['s', 'app-reply.js'], ['s', 'app-routing.js'], ['s', 'app-scrub.js'], ['s', 'app-chatsswitch.js'], ['s', 'app-sections.js'], ['s', 'app-search.js'], ['s', 'app-seed.js'],
     ['s', 'app-sendgo.js'], ['s', 'app-transcribe.js'], ['s', 'app-unsent.js'], ['s', 'app-viewvoice.js'],
     ['s', 'app-voicefiles.js'], ['s', 'app-voicesend.js'], ['s', 'app-windows.js'], ['s', 'app.js'],
     ['x', 'core/web-update.js'], ['s', 'device.js'], ['s', 'motion/wizard-motion.js'],
