@@ -153,25 +153,11 @@
   setTimeout(() => { switchesSettled = true; pushSettled = true; notifySync(); pushSync(); }, 5000);
   notifySync();
   pushSync();
-  /* Location for the apps that ask for it (wizard-ux issue 1629, switch wizard/app-location, off by default). The shell
-   * decides which app frame may ask (core/apps.js frameAllow); the Android app then shows Android's own location
-   * prompt and answers only for this Wizard's address, and only while the switch is on. The main page copies the switch
-   * to the Android app (an app window's page never sees the shell's switches); off is applied once settled. */
-  const LOCATION_SWITCH = 'wizard/app-location';
-  let locationWas = null;
-  function locationSync() {
-    const n = window.WizardOSNative; if (!n || typeof n.appLocationSwitch !== 'function' || window.WizHomeScreenPolicy?.mode) return;
-    let on = false; try { on = (document.documentElement.dataset.tweaks || '').split(' ').includes(LOCATION_SWITCH); } catch (_) {}
-    if (!on && !switchesSettled) return;
-    if (on === locationWas) return;
-    locationWas = on; try { n.appLocationSwitch(on); } catch (_) {}
-  }
-  if (typeof MutationObserver === 'function' && document.documentElement) {
-    new MutationObserver(() => locationSync()).observe(document.documentElement, { attributes: true, attributeFilter: ['data-tweaks'] });
-  }
-  window.addEventListener('wos:experience', () => { locationSync(); });
-  setTimeout(() => { switchesSettled = true; locationSync(); }, 5000);
-  locationSync();
+  /* Location for the apps that ask for it (wizard-ux issue 1629, on for everyone). The shell decides which app frame
+   * may ask (core/apps.js frameAllow); the Android app then shows Android's own location prompt and answers only for
+   * this Wizard's address. Android apps 0.10.69 to 0.10.81 still keep a copy of the old switch wizard/app-location, so
+   * the main page tells them it is on; newer ones have no switch and ignore the call. */
+  try { const n = window.WizardOSNative; if (n && typeof n.appLocationSwitch === 'function' && !window.WizHomeScreenPolicy?.mode) n.appLocationSwitch(true); } catch (_) {}
   /* Instant home-screen apps (wizard-ux issue 1830, switch wizard/pin-instant-open, off by default). A home-screen app
    * window is a new Android window with its own page, so the Android app does the work (PinInstant): skip Connecting
    * when Wizard was just reached, show the app's last screen at once, keep app files on the phone. The main page copies
@@ -193,7 +179,7 @@
   pinSync();
   /* One UI-style icon count (wizard-ux issue 1669, on for everyone). The Messenger home-screen icon's count is drawn
    * by the Android app (badge/BadgeLook): exact digits up to 999 in a ringless orange-red badge at the tile's corner.
-   * Android apps 0.10.70 to 0.10.81 still wait to be told it is on (they kept a copy of the old switch
+   * Android apps 0.10.70 to 0.10.82 still wait to be told it is on (they kept a copy of the old switch
    * wizard/phone-badge-look), so the main page tells them; newer ones have no such call. */
   try { const n = window.WizardOSNative; if (n && typeof n.badgeLookSwitch === 'function' && !window.WizHomeScreenPolicy?.mode) n.badgeLookSwitch(true); } catch (_) {}
   /* Recovery mode (wizard-ux issue 1775, switch wizard/phone-recovery-mode, off by default). When a start of the Android

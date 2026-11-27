@@ -11,7 +11,7 @@ import android.util.Log;
  * tile's top-right corner (Samsung) or the safe-zone square's corner (every other launcher).
  */
 public final class BadgeLook {
-    /** Where 0.10.70 to 0.10.81 kept their copy of the removed switch wizard/phone-badge-look ("on"). */
+    /** Where 0.10.70 to 0.10.82 kept their copy of the removed switch wizard/phone-badge-look ("on"). */
     private static final String PREFS = "badge-look", OLD_SWITCH = "on", DRAWN = "drawn";
     /** Bumped when the look changes, so badges drawn in an older look are redrawn once. */
     static final int LOOK = 1;

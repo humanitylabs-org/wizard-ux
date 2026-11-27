@@ -1,5 +1,5 @@
 // One UI-style icon count (wizard-ux issue 1669, on for everyone; switch wizard/phone-badge-look removed).
-// The real android-relay.js runs in a vm with a stand-in Android bridge: an older Android app (0.10.70 to 0.10.81,
+// The real android-relay.js runs in a vm with a stand-in Android bridge: an older Android app (0.10.70 to 0.10.82,
 // which kept a copy of the old switch) is told once that the look is on, whatever the shell's switches say; an app
 // window never tells it, and a newer Android app without the call is left alone. The drawing itself (exact label,
 // One UI geometry, Samsung squircle placement) has JVM tests in android/app/src/test/java/ai/wizards/os/badge and an
