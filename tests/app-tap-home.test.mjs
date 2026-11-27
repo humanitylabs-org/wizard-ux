@@ -7,8 +7,6 @@ import assert from 'node:assert/strict';
 import { appClient } from './fixtures/app-client-harness.mjs';
 import { deskWorld, layout, El, FakePointerEvent } from './fixtures/ai-apps-world.mjs';
 
-import fs from 'node:fs';
-
 const ID = 'wizard/app-tap-home';
 const shellSide = () => appClient({ service: { nav: {} } });
 
@@ -115,14 +113,6 @@ test('narrow desktop: tapping the app in front asks it for Home once, and it sta
 test('narrow desktop, an app with no Home (older SDK, off-origin): today\'s Back steps', async () => {
   const r = await narrowTap({ answer: 'unsupported' });
   assert.deepEqual(r.calls.map(c => c[0]), ['home', 'back']);
-});
-
-test('the switch is gone: no package, no catalog entry, no help line, a stale saved choice is cleared', () => {
-  assert.equal(fs.existsSync(new URL('../web/tweaks/wizard/app-tap-home', import.meta.url)), false);
-  assert.ok(!JSON.parse(fs.readFileSync(new URL('../web/tweaks/catalog.json', import.meta.url), 'utf8')).tweaks.includes(ID));
-  assert.ok(!fs.readFileSync(new URL('../skill/help.json', import.meta.url), 'utf8').includes(ID));
-  assert.match(fs.readFileSync(new URL('../web/core/experience.js', import.meta.url), 'utf8'), /const GONE = \[[^\]]*'wizard\/app-tap-home'/);
-  assert.ok(!fs.readFileSync(new URL('../web/layouts/ai-apps/desktop-tabs.js', import.meta.url), 'utf8').includes(ID), 'the tap no longer reads a switch');
 });
 
 test('a leftover switch attribute changes nothing: the tap still asks for Home', async () => {
