@@ -117,3 +117,23 @@ test('once frozen, rejection/retry retains exact route, body bytes and idempoten
   f.c.WosOutbox.retry(it.id); assert.equal((await settled(f, it.id)).state, 'sent');
   assert.equal(f.calls[1].body, first.body); assert.equal(f.calls[1].key, first.key);
 });
+
+// wizard-ux issue 1973: a reply in a thread whose model this phone can't route (the model list failed, or the model is
+// not in it) goes with no model and provider, and the Agent Service runs it on the thread's saved route (model lock).
+test('a reply the phone cannot route goes on the thread\'s saved route, and Retry resends the same bytes', async t => {
+  const f = fixture(); t.after(f.close);
+  f.session.model = 'lock-only-model'; // the thread's saved model, not in this phone's list
+  const it = await f.c.WosOutbox.enqueue({ kind: 'reply', sessionId: f.session.id, text: 'Tapped Done · Workout' });
+  assert.equal((await settled(f, it.id)).state, 'sent');
+  const wire = JSON.parse(f.calls.at(-1).body);
+  assert.ok(!('model' in wire) && !('provider' in wire), 'no route on the wire');
+  assert.equal(wire.require_model_lock, true); assert.equal(wire.session_id, f.session.id);
+  // A box with no saved route refuses it (400): the thread says what to do; Retry sends the same bytes once one exists.
+  const g = fixture(); t.after(g.close); g.session.model = 'lock-only-model'; g.reject(true);
+  const failed = await g.c.WosOutbox.enqueue({ kind: 'reply', sessionId: g.session.id, text: 'Tapped Done · Read' });
+  assert.equal((await settled(g, failed.id)).state, 'failed');
+  assert.match(failed.error, /tap the model name, pick one, then Retry/);
+  g.reject(false); g.c.WosOutbox.retry(failed.id);
+  assert.equal((await settled(g, failed.id)).state, 'sent');
+  assert.equal(g.calls.at(-1).body, g.calls[0].body); assert.equal(g.calls.at(-1).key, g.calls[0].key);
+});

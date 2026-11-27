@@ -5,10 +5,11 @@
 // lock the scheduled post set), its single-thread read (`?view=detail`) names the model but, like the Agent Service
 // before the fix, no provider; and the phone's model list read fails (QA_MODELS=fail, default) or is empty
 // (QA_MODELS=empty). Phone 412x915 and desktop 1440x900, Nebula, switch wizard/reply-buttons on.
-//   Fixed: the tap goes as one run on the thread's saved route (claude-sonnet-5-5 / anthropic) and no "Not sent".
-//   QA_DETAIL=bare also drops the thread from the list (only the single-thread read has it, like an archived thread
-//   opened from its Inbox pin): the shell asks the box for the thread's saved route (QA_DETAIL=bare + QA_SAVED=1
-//   answers it on the second read) and sends on it; with no saved route anywhere it shows the plain words.
+//   Fixed: the tap goes as one run on the thread's saved route and no "Not sent": with the provider when the row or a
+//   fresh single-thread read names it (claude-sonnet-5-5 / anthropic), else with no model or provider at all, which the
+//   box runs on the thread's model lock (like the Agent Service's locked-run bridge). Cases that drop the thread from
+//   the list open it like an archived thread from its Inbox pin. A box with no saved route answers 400 and the thread
+//   shows the plain words; once the box has one, Retry sends it.
 //   QA_EXPECT=broken (QA_WEB=<main worktree>/web) records main: "Model provider unavailable".
 // Screens in QA_OUT: <shell>-<case>.png.
 const assert = require('node:assert/strict');
@@ -37,7 +38,8 @@ function makeBox(c) {
     list: () => (c.inList ? [row(true)] : []),
     detail() { detailReads++; return row(c.detailProvider || (c.savedOnSecond && detailReads > 1)); },
     get detailReads() { return detailReads; },
-    run(body) { runs.push(body); msgs.push({ id: ++nextId, role: 'user', content: body.input, timestamp: Date.now() / 1000 }); return 'run_' + nextId; } };
+    // No model or provider: the box runs it on the thread's model lock, or refuses when it has none (400).
+    run(body) { if (!body.provider && !c.lock) return null; runs.push(body); msgs.push({ id: ++nextId, role: 'user', content: body.input, timestamp: Date.now() / 1000 }); return 'run_' + nextId; } };
 }
 
 async function boot(browser, box, shell, entry) {
@@ -52,7 +54,7 @@ async function boot(browser, box, shell, entry) {
   await context.route('**/*', async r => {
     const q = r.request(), u = new URL(q.url()), method = q.method(), p = u.pathname;
     if (u.origin !== origin) { entry.refused.push({ method, url: q.url(), reason: 'external' }); return r.abort(); }
-    if (method === 'POST' && p === '/wizard/hermes/v1/runs') { const body = q.postDataJSON() || {}; return r.fulfill({ status: 202, json: { run_id: box.run(body), status: 'queued' } }); }
+    if (method === 'POST' && p === '/wizard/hermes/v1/runs') { const body = q.postDataJSON() || {}, id = box.run(body); return id ? r.fulfill({ status: 202, json: { run_id: id, status: 'queued' } }) : r.fulfill({ status: 400, json: { error: 'No confirmed model/provider for this message' } }); }
     const rm = /^\/wizard\/hermes\/v1\/runs\/([^/]+)$/.exec(p);
     if (rm && method === 'GET') return r.fulfill({ json: { run_id: rm[1], status: 'completed' } });
     if (!['GET', 'HEAD'].includes(method)) {
@@ -100,15 +102,17 @@ const notSent = page => page.evaluate(() => [...document.querySelectorAll('.ch-t
 
 const CASES = [
   // The live report: the thread is listed with its saved route; the single-thread read names no provider.
-  { id: 'listed', inList: true, detailProvider: false, want: 'sent' },
+  { id: 'listed', inList: true, detailProvider: false, lock: true, want: 'provider' },
   // Archived, opened from its pin: only the single-thread read has it. The fixed box's read names the provider.
-  { id: 'pin-fixed-box', inList: false, detailProvider: true, want: 'sent' },
-  // An older box that answers the provider only when asked again: the shell asks for the thread's saved route.
-  { id: 'pin-asks-again', inList: false, detailProvider: false, savedOnSecond: true, want: 'sent' },
+  { id: 'pin-fixed-box', inList: false, detailProvider: true, lock: true, want: 'provider' },
+  // A box that names the provider only when asked again: the shell asks for the thread's saved route.
+  { id: 'pin-asks-again', inList: false, detailProvider: false, savedOnSecond: true, lock: true, want: 'provider' },
+  // Nothing the phone reads names the provider, but the box has the thread's model lock: sent with no route.
+  { id: 'pin-saved-route', inList: false, detailProvider: false, lock: true, want: 'saved' },
   // No saved route anywhere and no model list: plain words, nothing sent; once the box has the route, Retry sends it.
-  { id: 'no-saved-route', inList: false, detailProvider: false, want: 'plain-error', retry: true },
+  { id: 'no-saved-route', inList: false, detailProvider: false, lock: false, want: 'plain-error', retry: true },
   // A typed reply in the same thread goes the same way as a tap.
-  { id: 'typed-reply', inList: false, detailProvider: false, savedOnSecond: true, want: 'sent', typed: 'On it' },
+  { id: 'typed-reply', inList: false, detailProvider: false, lock: true, want: 'saved', typed: 'On it' },
 ];
 
 (async () => {
@@ -133,9 +137,10 @@ const CASES = [
         entry.detailReads = box.detailReads;
         await page.screenshot({ path: path.join(out, stem + '.png') });
         if (EXPECT === 'broken') { entry.ok = true; continue; }
-        if (c.want === 'sent') {
+        if (c.want === 'provider' || c.want === 'saved') {
           assert.equal(box.runs.length, 1, 'the tap went as one run');
-          assert.equal(box.runs[0].model, MODEL); assert.equal(box.runs[0].provider, PROVIDER, 'on the thread\'s saved route');
+          if (c.want === 'provider') { assert.equal(box.runs[0].model, MODEL); assert.equal(box.runs[0].provider, PROVIDER, 'on the thread\'s saved route'); }
+          else { assert.ok(!('model' in box.runs[0]) && !('provider' in box.runs[0]), 'no route on the wire: the box runs its model lock'); assert.equal(box.runs[0].require_model_lock, true); }
           assert.match(box.runs[0].input, c.typed ? new RegExp('^' + c.typed) : /^Tapped Done · Workout/);
           assert.equal(entry.notSent, '', 'no Not sent');
         } else {
@@ -143,12 +148,12 @@ const CASES = [
           assert.doesNotMatch(entry.notSent, /Model provider unavailable/, 'never the old words');
           assert.match(entry.notSent, /pick/i, 'plain words that say what to do');
           if (c.retry) { // the box now has the thread's saved route: Retry works it out again and sends on it
-            c.detailProvider = true;
+            c.lock = true;
             await page.locator('.ch-thread [data-obretry]').filter({ visible: true }).first().click();
             await until(async () => box.runs.length > 0, 12000);
             entry.retried = box.runs.map(b => ({ model: b.model || '', provider: b.provider || '' }));
             assert.equal(box.runs.length, 1, 'Retry sent it once');
-            assert.equal(box.runs[0].model, MODEL); assert.equal(box.runs[0].provider, PROVIDER);
+            assert.match(box.runs[0].input, /^Tapped Done · Workout/);
             await nap(800); await page.screenshot({ path: path.join(out, stem + '-retried.png') });
           }
         }

@@ -852,9 +852,11 @@
     async reply(id, input, opts = {}) {
       const M = window.WosModels;
       if (!M) throw new Error('Model selector unavailable · reload Wizard');
-      const route = await M.resolveRoute(M.snapshot(id, opts.model ? { model: opts.model, provider: opts.provider } : null), { thread: id });
+      const resolved = await M.resolveRoute(M.snapshot(id, opts.model ? { model: opts.model, provider: opts.provider } : null), { thread: id });
+      // The thread's saved route (wizard-ux issue 1973): no model or provider on the wire, the box runs its model lock.
+      const route = resolved.savedRoute ? {} : resolved;
       const s = this.session(id);
-      if (s && WORKING.has(s.status) && s.runId) {
+      if (s && WORKING.has(s.status) && s.runId && !resolved.savedRoute) {
         try {
           const active = await (await req(`/wizard/hermes/v1/runs/${encodeURIComponent(s.runId)}${aq(id)}`)).json();
           if (!M.matchesRuntime(active.runtime, route))

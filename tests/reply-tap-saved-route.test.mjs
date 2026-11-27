@@ -38,21 +38,25 @@ for (const list of ['fail', 'empty']) {
     assert.deepEqual({ ...route }, { model: MODEL, provider: PROVIDER });
     assert.deepEqual(reads, [SID]);
   });
-  test(`model list ${list}: no saved route anywhere is the only error, in plain words`, async () => {
+  test(`model list ${list}: nobody on the phone can name it: the reply goes on the thread's saved route on the box`, async () => {
     for (const detail of [{ model: MODEL, provider: '' }, null, new Error('offline'), { model: 'claude-opus-5-5', provider: PROVIDER }]) {
       const { M } = models({ list, detail });
-      await assert.rejects(M.resolveRoute(M.snapshot(SID), { thread: SID }), e => {
-        assert.doesNotMatch(e.message, /Model provider unavailable/);
-        assert.match(e.message, /tap the model name, pick one, then Retry/);
-        return true;
-      });
+      const route = await M.resolveRoute(M.snapshot(SID), { thread: SID });
+      assert.deepEqual({ ...route }, { model: MODEL, provider: '', savedRoute: true }, 'no error: the box decides');
     }
+    // Not even a model on the row: still the thread's saved route.
+    const { M } = models({ list, row: { model: '', provider: '' }, detail: null });
+    assert.deepEqual({ ...(await M.resolveRoute(M.snapshot(SID), { thread: SID })) }, { model: '', provider: '', savedRoute: true });
   });
 }
 
-test('a new chat (no thread) never borrows a thread\'s route', async () => {
+test('a new chat (no thread) never borrows a thread\'s route and has none saved: plain words', async () => {
   const { M, reads } = models({ detail: { model: MODEL, provider: PROVIDER } });
-  await assert.rejects(M.resolveRoute({ model: MODEL, provider: '' }), /pick one/);
+  await assert.rejects(M.resolveRoute({ model: MODEL, provider: '' }), e => {
+    assert.doesNotMatch(e.message, /Model provider unavailable/);
+    assert.match(e.message, /tap the model name, pick one, then Retry/);
+    return true;
+  });
   assert.deepEqual(reads, []);
 });
 

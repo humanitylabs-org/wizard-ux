@@ -448,15 +448,19 @@
       // No model in a cached list: an AI may have been signed in since it was read (the Welcome's sign-in on the
       // desktop, wizard-ux#1811). Ask the box once more before giving up, never send on a 5-minute-old empty list.
       if (!snapshot && !route?.model) { await M.load(true); route = M.snapshot(''); }
-      if (!route?.model) throw new Error('Model unavailable · choose a model before sending');
+      // A send in an existing thread never fails only because this phone can't name the route (wizard-ux issue 1973):
+      // it goes with no model and provider, and the Agent Service runs it on the thread's saved route (its model lock;
+      // a scheduled post's thread has one before the owner ever wrote in it). `savedRoute` never reaches the wire.
+      const saved = model => ({ model, provider: '', savedRoute: true });
+      if (!route?.model) { if (opts.thread) return saved(''); throw new Error('Model unavailable · choose a model before sending'); }
       let provider = route.provider;
       if (!provider) {
         const matches = M.options.filter(o => o.value === route.model);
         if (matches.length === 1) provider = matches[0].provider;
       }
-      // A send in an existing thread never fails only because this phone can't name the provider: the thread's saved
-      // route on the box decides (a scheduled post's thread has one before the owner ever wrote in it).
+      // First the provider the box's own reads name for the thread, else the thread's saved route on the box.
       if (!provider && opts.thread) provider = await M.savedProvider(opts.thread, route.model);
+      if (!provider && opts.thread) return saved(route.model);
       // Old recap metadata used a display label; the transport needs the configured provider slug.
       if (provider === 'tinfoil') provider = 'custom:tinfoil-operator';
       if (provider && M.providers.some(p => p.slug === provider && p.is_user_defined)) provider = 'custom:' + provider;
