@@ -381,6 +381,12 @@
       "kind": "write",
       "note": "Chats Tags (wizard-agent-service issue 608, on for everyone): only when a chat's tag is added or removed with the box's Tags on; tests/chat-channel-store.test.mjs and tests/qa-chat-tags.cjs cover it against a fake box. Refused and collected, never answered, if a flow reaches it."
     },
+    "/wizard/v1/channels/covers": {
+      "status": "not-exercised",
+      "source": "web/live-channels.js",
+      "kind": "write",
+      "note": "A channel's covers (wizard-agent-service issue 702, box switch wizard/auto-tags, off by default): read and written only from a channel's What goes here… sheet while the box's channel list says autoTags: true, which none of the three flows' boxes do; tests/chat-channel-covers.test.mjs covers it against a fake box. Refused and collected, never answered, if a flow reaches it."
+    },
     "/wizard/v1/channels/membership": {
       "status": "not-exercised",
       "source": "web/live.js",

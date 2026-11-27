@@ -59,7 +59,7 @@ window.WizCore.chatsParts.chanui = function ({ agentName, agentRec, ago, AGS, ch
     closeRowSheet();
     const p = chanPrefs(), pinned = p.pins.includes(cid), arch = !!p.archived[cid], name = sp ? sp.name : 'General';
     el.insertAdjacentHTML('beforeend', `<div class="ch-sheet" role="dialog" aria-label="Channel actions"><div class="ch-sheet-b"><div class="ch-sheet-t">${esc(chanTitle(sp ? name : { name, general: true }))}</div>
-      ${sp ? `<button type="button" data-rschpin>${PIN_SVG}${pinned ? 'Unpin' : 'Pin'}</button><button type="button" data-rschrename>${RENAME_SVG}Rename</button><button type="button" data-rschemoji><span class="ch-sheet-emo" aria-hidden="true">${esc(chanFace(name).emoji)}</span>Emoji…</button><button type="button" data-rscharch>${ACT.done.icon}${arch ? 'Restore' : 'Archive channel'}</button>` : ''}
+      ${sp ? `<button type="button" data-rschpin>${PIN_SVG}${pinned ? 'Unpin' : 'Pin'}</button><button type="button" data-rschrename>${RENAME_SVG}Rename</button>${chanStore()?.autoTags && !['alerts', 'daily'].includes(chanStore().channels.find(c => c.id === cid)?.kind) ? `<button type="button" data-rschcovers><span class="ch-sheet-emo" aria-hidden="true">🏷️</span>What goes here…</button>` : ''}<button type="button" data-rschemoji><span class="ch-sheet-emo" aria-hidden="true">${esc(chanFace(name).emoji)}</span>Emoji…</button><button type="button" data-rscharch>${ACT.done.icon}${arch ? 'Restore' : 'Archive channel'}</button>` : ''}
       <button type="button" data-rschread>${MARK_DONE_SVG}Mark channel read</button>
       ${arch ? '' : `<button type="button" data-rschnew><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>New post</button>`}</div></div>`);
     chatVars.rowSheet = { wid, chan: cid, trigger };
@@ -77,6 +77,34 @@ window.WizCore.chatsParts.chanui = function ({ agentName, agentRec, ago, AGS, ch
       <div class="ch-rename-b"><button type="button" data-rncancel>Cancel</button><button type="submit" class="go">Save</button></div></form></div>`);
     chatVars.rowSheet = { wid, chan: cid, rename: true };
     const inp = el.querySelector('.ch-rename input'); if (inp) { inp.focus(); inp.select(); }
+  }
+  /* What goes here (wizard-agent-service issue 702, the box's auto tags on): the channel's covers, one per line. Chats
+   * about any of them get this channel's tag by themselves; `kind: report` (question, lookup, evaluation, digest,
+   * reminder, todo) matches the kind of chat. Saving replaces the owner's list; what the box learned stays. */
+  function openChannelCovers(wid, cid) {
+    const el = track.querySelector(`[data-chats="${wid}"]`), sp = spaces().find(s => s.id === cid); if (!el || !sp || !LIVE.chanStore?.covers) return;
+    closeRowSheet();
+    el.insertAdjacentHTML('beforeend', `<div class="ch-sheet" role="dialog" aria-label="What goes in ${esc(chanTitle(sp.name))}"><div class="ch-sheet-b ch-rename ch-covers">
+      <div class="ch-sheet-t">What goes in ${esc(chanTitle(sp.name))}</div>
+      <p class="ch-covers-help">Chats about any of these get this tag by themselves. One per line; <code>kind: report</code> matches questions, lookups and reports.</p>
+      <textarea name="covers" rows="7" aria-label="What this channel covers" placeholder="Loading…" disabled></textarea>
+      <div class="ch-rename-b"><button type="button" data-rncancel>Cancel</button><button type="button" class="go" data-chcvsave disabled>Save</button></div></div></div>`);
+    chatVars.rowSheet = { wid, chan: cid, covers: true };
+    LIVE.chanStore.covers(cid).then(d => {
+      const ta = el.querySelector('.ch-covers textarea'), go = el.querySelector('[data-chcvsave]'); if (!ta || chatVars.rowSheet?.chan !== cid) return;
+      if (!d) { ta.placeholder = 'Not available right now'; return; }
+      ta.value = d.covers.join('\n'); ta.placeholder = 'clips\npodcast\nkind: report'; ta.disabled = false; if (go) go.disabled = false;
+      const learned = d.learned.length ? `<p class="ch-covers-help">Learned from your tags: ${esc(d.learned.slice(-6).join(', '))}</p>` : '';
+      if (learned) ta.insertAdjacentHTML('afterend', learned);
+      ta.focus();
+    });
+  }
+  function submitChannelCovers(sheet) {
+    const cid = chatVars.rowSheet?.chan, ta = sheet?.querySelector('.ch-covers textarea'); if (!cid || !ta || ta.disabled) return;
+    const list = [...new Set(ta.value.split(/\n|,/u).map(x => x.replace(/\s+/g, ' ').trim()).filter(Boolean))];
+    if (list.length > 40 || list.some(x => x.length > 60)) { toast('!', 'At most 40 lines of up to 60 letters', 2200); return; }
+    closeRowSheet();
+    LIVE.chanStore.setCovers(cid, list).then(r => toast(r.ok ? '🏷️' : '!', r.ok ? 'Saved: new chats are tagged by this list' : 'Not saved: check the lines', 1800));
   }
   /* Mark channel read (issue 1317, with Mark done): the channel's read point moves to now (issue 1316) and its posts'
    * green New reply words clear (LIVE.markSeen of the posts that have one). Amber Needs you is cleared only per thread. */
@@ -116,6 +144,8 @@ window.WizCore.chatsParts.chanui = function ({ agentName, agentRec, ago, AGS, ch
     const { wid, chan: cid } = chatVars.rowSheet, w = W[wid] || W[owner(wid)], p = chanPrefs(), name = spaces().find(s => s.id === cid)?.name || 'General';
     if (e.target.closest('[data-rschpin]')) { const on = !p.pins.includes(cid); p.pins = on ? p.pins.concat(cid) : p.pins.filter(x => x !== cid); chanPrefEdit(p, { id: cid, pinned: on }); closeRowSheet(); chanRepaintAll(); toast('⌖', on ? 'Pinned' : 'Unpinned', 1400); return true; }
     if (e.target.closest('[data-rschrename]')) { openChannelRename(wid, cid); return true; }
+    if (e.target.closest('[data-rschcovers]')) { openChannelCovers(wid, cid); return true; }
+    if (e.target.closest('[data-chcvsave]')) { submitChannelCovers(e.target.closest('.ch-covers')); return true; }
     if (e.target.closest('[data-rschemoji]')) { openChannelEmoji(wid, cid); return true; }
     const em = e.target.closest('[data-chemoji]'); if (em) { chanEmojiTap(em); return true; }
     if (e.target.closest('[data-rscharch]')) {

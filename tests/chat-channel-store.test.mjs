@@ -134,8 +134,8 @@ const code = cut("  const SPACE = { one: 'Space'", '  /* A Space open in front')
 const H = 3600e3, NOW = Date.parse('2026-11-11T12:00:00.000Z')
 const AG = { t1: '', t2: '', h1: 'host', k1: 'container', r1: 'restricted' }
 
-async function shell({ on = true, off = false, tags = false, channels = START(), members = {}, rows = [], agentRows = {}, projection = [], local = {} } = {}) {
-  const box = channelBox({ channels, members, off, tags }), dev = channelDevice(box), wins = { w: { id: 'w', thread: null, focus: null } }
+async function shell({ on = true, off = false, tags = false, autoTags = false, channels = START(), members = {}, rows = [], agentRows = {}, projection = [], local = {} } = {}) {
+  const box = channelBox({ channels, members, off, tags, autoTags }), dev = channelDevice(box), wins = { w: { id: 'w', thread: null, focus: null } }
   await dev.pull()
   const store = new Map(Object.entries({ 'wos.chats.spaces.v1': JSON.stringify(projection), ...local })), toasts = [], prefOps = []
   const env = {
@@ -302,4 +302,57 @@ test('tags off: the same box without tags keeps one channel per chat and moves',
   s.fileInSpace('voice', 't1', ''); await settle()
   assert.ok(s.box.log.some(l => l.startsWith('PUT /wizard/v1/channels/membership')), 'a move, as before')
   assert.ok(!s.box.log.some(l => l.includes('/channels/tags')))
+})
+
+// ---- What goes here (wizard-agent-service issue 702, box switch wizard/auto-tags): a channel's covers ----
+// A sheet stand-in: the HTML the code inserts, and a textarea / Save button it can find in it.
+function sheetTrack() {
+  const html = [], ta = { value: '', placeholder: '', disabled: true, focus() {}, insertAdjacentHTML: (_, h) => html.push(h) }, go = { disabled: true }
+  const sheet = { querySelector: sel => sel === '.ch-covers textarea' ? ta : sel === '[data-chcvsave]' ? go : null }
+  const el = { insertAdjacentHTML: (_, h) => html.push(h), querySelector: sel => sheet.querySelector(sel) || (sel === '.ch-sheet button' ? { focus() {} } : null) }
+  return { html, ta, go, sheet, track: { querySelector: () => el } }
+}
+const at = (attr, extra = {}) => ({ target: { closest: sel => sel === `[${attr}]` ? { dataset: {} } : extra[sel] || null } })
+
+test('auto tags on: the live store reads and replaces a channel\'s covers; off, it asks nothing', async () => {
+  const box = channelBox({ channels: START(), tags: true, autoTags: true }), dev = channelDevice(box)
+  await dev.pull()
+  assert.equal(dev.state().autoTags, true)
+  box.covers.launch = { covers: ['launch', 'kind: report'], learned: ['Launch plan'], not: [] }
+  assert.deepEqual(clone(await dev.covers('launch')), { covers: ['launch', 'kind: report'], learned: ['Launch plan'], not: [] })
+  const r = await dev.setCovers('launch', ['launch', 'press'])
+  assert.equal(r.ok, true); assert.deepEqual(box.covers.launch.covers, ['launch', 'press']); assert.deepEqual(box.covers.launch.learned, ['Launch plan'], 'what was learned stays')
+  const plain = channelBox({ channels: START(), tags: true }), other = channelDevice(plain)
+  await other.pull()
+  assert.equal(other.state().autoTags, undefined)
+  assert.equal(await other.covers('launch'), null)
+  assert.ok(!plain.log.some(l => l.includes('/covers')), 'never asks a box whose auto tags are off')
+})
+
+test('auto tags on: the channel sheet offers What goes here…, shows the covers and saves the edited list', async () => {
+  const s = await shell({ tags: true, autoTags: true }), t = sheetTrack()
+  s.env.track = t.track
+  assert.equal(s.openChannelSheet('w', 'launch'), true)
+  assert.ok(t.html.at(-1).includes('data-rschcovers') && t.html.at(-1).includes('What goes here'), 'offered on a plain channel')
+  s.openChannelSheet('w', 'alerts')
+  assert.ok(!t.html.at(-1).includes('data-rschcovers'), 'never on Alerts')
+  s.box.covers.launch = { covers: ['launch', 'kind: report'], learned: ['Launch plan'], not: [] }
+  s.env.rowSheet = { wid: 'w', chan: 'launch' }
+  assert.equal(s.channelSheetClick(at('data-rschcovers')), true)
+  assert.ok(t.html.at(-1).includes('What goes in') && t.html.at(-1).includes('Launch'), t.html.at(-1))
+  await settle()
+  assert.equal(t.ta.value, 'launch\nkind: report'); assert.equal(t.ta.disabled, false); assert.equal(t.go.disabled, false)
+  assert.ok(t.html.some(h => h.includes('Learned from your tags: Launch plan')))
+  t.ta.value = 'launch\npress release, launch\n\n  kind: report '
+  assert.equal(s.channelSheetClick(at('data-chcvsave', { '.ch-covers': t.sheet })), true)
+  await settle()
+  assert.deepEqual(s.box.covers.launch.covers, ['launch', 'press release', 'kind: report'])
+  assert.ok(s.toasts.includes('Saved: new chats are tagged by this list'), s.toasts.join(','))
+})
+
+test('auto tags off: the channel sheet has no What goes here…', async () => {
+  const s = await shell({ tags: true }), t = sheetTrack()
+  s.env.track = t.track
+  s.openChannelSheet('w', 'launch')
+  assert.ok(!t.html.at(-1).includes('data-rschcovers'))
 })

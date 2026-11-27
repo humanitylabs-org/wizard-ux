@@ -20,6 +20,9 @@ window.WizCore.liveParts.channels = function () {
   // Tags (wizard-agent-service issue 608, on for everyone): with the box's Tags on (`tags: true` on the list) a
   // chat carries several channels; PUT {sessionId, agent, add|remove} adds or removes one.
   const CHANNEL_TAGS_URL = '/wizard/v1/channels/tags';
+  // Automatic tags (wizard-agent-service issue 702, box switch wizard/auto-tags): with the box's auto tags on
+  // (`autoTags: true` on the list) each channel has a covers list, read and replaced through GET/PUT covers.
+  const CHANNEL_COVERS_URL = '/wizard/v1/channels/covers';
   function channelStore({ req, emit, normalize = r => r, onRow = r => r, onError = () => {}, now = () => Date.now(), storage = null, every = 30e3, offEvery = 5 * 60e3, feedMax = 200, moveKeep = 120e3 } = {}) {
     const ID = /^[a-z0-9-]{1,48}$/, AGENT = /^[a-z0-9][a-z0-9-]{0,47}$/;
     const agentKey = a => a && AGENT.test(a) ? a : 'hermes';
@@ -27,7 +30,7 @@ window.WizCore.liveParts.channels = function () {
     const one = c => ({ id: c.id, agent: c.agent, name: c.name.slice(0, 60), order: Number(c.order) || 0, createdAt: typeof c.createdAt === 'string' ? c.createdAt : '', archived: !!c.archived,
       ...(c.archived ? { archivedAt: typeof c.archivedAt === 'string' ? c.archivedAt : '' } : {}), pinned: !!c.pinned, ...(c.pinned ? { pinOrder: Number.isFinite(c.pinOrder) ? c.pinOrder : 0 } : {}),
       ...(c.kind === 'alerts' ? { kind: 'alerts' } : c.kind === 'daily' ? { kind: 'daily', dayStartsAt: typeof c.dayStartsAt === 'string' ? c.dayStartsAt.slice(0, 5) : '05:00' } : {}), count: Number(c.count) || 0 });
-    const clean = d => d && typeof d === 'object' && Array.isArray(d.channels) ? { sort: d.sort === 'za' ? 'za' : 'az', channels: d.channels.filter(valid).map(one), ...(d.tags === true ? { tags: true } : {}) } : null;
+    const clean = d => d && typeof d === 'object' && Array.isArray(d.channels) ? { sort: d.sort === 'za' ? 'za' : 'az', channels: d.channels.filter(valid).map(one), ...(d.tags === true ? { tags: true } : {}), ...(d.autoTags === true ? { autoTags: true } : {}) } : null;
     const store = storage || (() => { try { return globalThis.localStorage || null; } catch (_) { return null; } })();
     let doc = null; try { doc = clean(JSON.parse(store?.getItem(CHANNELS_CACHE) || 'null')); } catch (_) {}
     let rev = doc ? 1 : 0, off = false, readAt = 0, reading = null, edits = 0, pending = 0, writes = Promise.resolve();
@@ -53,7 +56,7 @@ window.WizCore.liveParts.channels = function () {
     // The store as Chats shows it, or null (unknown yet, store off, older service). Reading it keeps it fresh.
     function state() {
       if (!reading && now() - readAt >= (off ? offEvery : every)) pull();
-      return off || !doc ? null : { rev, sort: doc.sort, channels: doc.channels, ...(doc.tags ? { tags: true } : {}) };
+      return off || !doc ? null : { rev, sort: doc.sort, channels: doc.channels, ...(doc.tags ? { tags: true } : {}), ...(doc.autoTags ? { autoTags: true } : {}) };
     }
     // Sent in order; after the last one settles the list is read again (also after a refusal, to show the box's own).
     function send(url, method, body) {
@@ -119,6 +122,14 @@ window.WizCore.liveParts.channels = function () {
         return r;
       });
     }
+    // Auto tags on: a channel's covers ({covers, learned, not}) or null (switch off, older box, offline).
+    async function covers(id) {
+      if (off || !doc?.autoTags || !ID.test(id)) return null;
+      try { const d = await (await req(`${CHANNEL_COVERS_URL}?id=${encodeURIComponent(id)}`, { cache: 'no-store' })).json(); return d && Array.isArray(d.covers) ? { covers: d.covers.filter(x => typeof x === 'string'), learned: Array.isArray(d.learned) ? d.learned.filter(x => typeof x === 'string') : [], not: Array.isArray(d.not) ? d.not.filter(x => typeof x === 'string') : [] } : null; }
+      catch (_) { return null; }
+    }
+    // The owner's list replaces the channel's listed covers (what was learned stays). -> {ok, body}
+    function setCovers(id, list) { return ID.test(id) && Array.isArray(list) ? send(CHANNEL_COVERS_URL, 'PUT', { id, covers: list }) : Promise.resolve({ ok: false, status: 400 }); }
     // [[agent|id, channel id, on]] still inside moveKeep.
     function tagEdits() {
       const t = now(), out = [];
@@ -168,7 +179,7 @@ window.WizCore.liveParts.channels = function () {
     }
     // A window coming back to the front reads again at once (another device may have pinned or sorted meanwhile).
     const fresh = () => { readAt = 0; for (const f of FEEDS.values()) f.at = 0; };
-    return { state, pull, patch, create, move, moves, tag, tagEdits, feed, rows, find, fresh, get off() { return off; } };
+    return { state, pull, patch, create, move, moves, tag, tagEdits, covers, setCovers, feed, rows, find, fresh, get off() { return off; } };
   }
   /* ---- end channel store ---- */
   /* ---- channel reads (wizard-agent-service issue 471) ----

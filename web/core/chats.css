@@ -595,6 +595,10 @@ body > .mviewer { position: fixed; z-index: 200; }
 .ch-head .ti .ti-b b { font-size: 16px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ch-rename input { display: block; width: calc(100% - 20px); margin: 0 10px 4px; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line-2); background: rgba(205, 190, 255, .06); color: var(--ink); font-size: 16px; font-weight: 650; outline: none; }
 .ch-rename input:focus { border-color: var(--violet-2, #b9a5ff); }
+/* What goes here (wizard-agent-service issue 702): a channel's covers, one per line, under the same sheet look. */
+.ch-covers textarea { display: block; box-sizing: border-box; width: calc(100% - 20px); margin: 0 10px 4px; padding: 10px 14px; border-radius: 12px; border: 1px solid var(--line-2); background: transparent; color: var(--ink); font: inherit; font-size: 1rem; line-height: 1.4; resize: vertical; outline: none; }
+.ch-covers textarea:focus { border-color: var(--line-2); }
+.ch-covers-help { margin: 0 14px 8px; opacity: .72; font-size: .8125rem; }
 .ch-rename-b { display: flex; gap: 8px; padding: 6px 10px 2px; }
 .ch-sheet-b .ch-rename-b button { flex: 1; justify-content: center; text-align: center; padding: 11px; border: 1px solid var(--line-2); }
 .ch-sheet-b .ch-rename-b button.go { background: rgba(185, 165, 255, .18); border-color: rgba(185, 165, 255, .4); }
