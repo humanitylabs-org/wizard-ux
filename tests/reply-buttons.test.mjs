@@ -173,3 +173,55 @@ test('parity: main and routed threads (host-profile, container, restricted) get 
   assert.equal(htmls.size, 1, 'byte-identical buttons for every runtime kind');
   assert.equal(msgs.size, 1, 'the same tap for every runtime kind');
 });
+
+// Issue 1942: a reporter rewrite of a reply with buttons drew the group twice (original + rewrite in one turn).
+const BAR = GROUP('Four-section phone bar', 'Yes, on for everyone', 'Let me try it first', 'No, drop it');
+const REPORTER_ROW = { role: 'user', timestamp: 3, content: '[reporter] Your last report does not meet the report format: no status line. Rewrite it now in the format, nothing else.\n\nreport=status' };
+const rewriteRows = (reporter, extra = [], gap = 120) => [{ role: 'user', timestamp: 1, content: 'Phone navigation redesign?' },
+  { id: 4449732, role: 'assistant', timestamp: 2, content: `Original report.\n${BAR}` }, ...(reporter ? [reporter] : []),
+  { id: 4449734, role: 'assistant', timestamp: 2 + gap, content: `Rewritten report.\n${BAR}` }, ...extra];
+const drawn = (AC, tn, picks = new Map()) => AC.replyHtml(tn.a.btext, tn.a.buttons, md, picks);
+test('reporter rewrite: one text and one set of buttons, from the rewrite, whatever shape the reporter row has', () => {
+  const { KIT, AC } = world();
+  // No reporter row at all (a history that drops it): only the same-name guard can tell, within one turn.
+  for (const [reporter, gap] of [[REPORTER_ROW, 120], [{ ...REPORTER_ROW, display_kind: 'hidden' }, 120], [null, 20]]) {
+    const turns = KIT.parseRows(rewriteRows(reporter, [], gap));
+    assert.equal(turns.length, 1, 'one turn: the reporter is not the owner speaking, the rewrite is not a later turn');
+    const [tn] = turns, html = drawn(AC, tn);
+    assert.equal((html.match(/class="ch-rb"/g) || []).length, 1, 'the group is drawn once');
+    assert.equal((html.match(/<button /g) || []).length, 3);
+    assert.match(html, /data-rb-msg="4449734"/, 'the surviving copy is the rewrite');
+    assert.match(html, /Rewritten report/); assert.doesNotMatch(html, /Original report/);
+    assert.doesNotMatch(JSON.stringify(turns), /\[reporter\]|Rewrite it now/, 'the reporter prompt never shows');
+    if (reporter) assert.deepEqual(clone(tn.notes), [], 'the replaced reply is not kept in the turn either');
+  }
+});
+test('reporter rewrite: a tap on the original still counts, a tap on the survivor sends the usual line and reloads picked', async () => {
+  const { KIT, AC } = world(), sent = [];
+  const tapOn = msg => ({ id: 50, role: 'user', timestamp: 200, content: AC.replyMessage([{ thread: 's9', message: msg, group: 'Four-section phone bar', button: 'let-me-try-it-first', label: 'Let me try it first' }]) });
+  let turns = KIT.parseRows(rewriteRows(REPORTER_ROW, [tapOn('4449732')]));
+  assert.match(drawn(AC, turns[0], AC.replyPicks(turns, 's9')), /aria-pressed="true">✓ Let me try it first/, 'earlier message id counts as the pick');
+  AC.replyTap(button('4449734', 'Four-section phone bar', 'yes-on-for-everyone', 'Yes, on for everyone'), { sid: 's9', send: async t => { sent.push(t); return {}; } });
+  await AC.replyFlush('s9');
+  assert.match(sent[0], /^Tapped Yes, on for everyone · Four-section phone bar\n\[WIZARD_TAPS_V1\]/);
+  turns = KIT.parseRows(rewriteRows(REPORTER_ROW, [{ id: 51, role: 'user', timestamp: 300, content: sent[0] }]));
+  assert.match(drawn(AC, turns[0], AC.replyPicks(turns, 's9')), /aria-pressed="true">✓ Yes, on for everyone/, 'history reload shows the pick');
+});
+test('guard: the same group name twice in one turn draws the last copy; two different names both show', () => {
+  const { KIT, AC } = world();
+  const [tn] = KIT.parseRows([{ role: 'user', timestamp: 1, content: 'Hi' }, { id: 7, role: 'assistant', timestamp: 2, content: `First.\n${GROUP('Workout', 'Done')}` },
+    { id: 8, role: 'assistant', timestamp: 3, content: `Second.\n${GROUP('Workout', 'Done', 'Skip')}\n${GROUP('Ship desks', 'Go for it')}` }]);
+  const html = drawn(AC, tn);
+  assert.equal((html.match(/data-rb-group="Workout"/g) || []).length, 1);
+  assert.match(html, /data-rb-group="Workout" data-rb-msg="8"/);
+  assert.equal((html.match(/data-rb-group="Ship desks"/g) || []).length, 1);
+  const [two] = KIT.parseRows([{ role: 'user', timestamp: 1, content: 'Hi' }, { id: 7, role: 'assistant', timestamp: 2, content: `First.\n${GROUP('Workout', 'Done')}` },
+    { id: 8, role: 'assistant', timestamp: 3, content: `Second.\n${GROUP('Ship desks', 'Go for it')}` }]);
+  assert.deepEqual(clone(two.a.buttons).map(g => [g.group, g.msg]), [['Ship desks', '8'], ['Workout', '7']], 'different names: both kept');
+});
+test('reporter rewrite that failed: the original reply stands', () => {
+  const { KIT, AC } = world();
+  const [tn] = KIT.parseRows([{ role: 'user', timestamp: 1, content: 'Hi' }, { id: 1, role: 'assistant', timestamp: 2, content: `Original report.\n${BAR}` }, REPORTER_ROW,
+    { id: 2, role: 'assistant', timestamp: 4, display_kind: 'failed_turn', content: 'Your request was not processed. Send it again if you still want me to carry it out.' }]);
+  assert.match(drawn(AC, tn), /data-rb-msg="1"/);
+});
