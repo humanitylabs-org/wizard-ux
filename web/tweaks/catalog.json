@@ -20,7 +20,6 @@
     "wizard/update-bug-reports",
     "wizard/link-token-repair",
     "wizard/clear-chat-notifications",
-    "wizard/sidebar-chats-view",
     "wizard/assist-agent-note",
     "wizard/private-first-setup",
     "wizard/action-cards",

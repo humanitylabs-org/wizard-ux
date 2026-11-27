@@ -1159,3 +1159,8 @@ html[data-shell="desktop"][data-layout="ai-apps"][data-aad-tabs="rail"] .aad-vti
 html[data-shell="desktop"][data-layout="ai-apps"][data-aad-tabs="rail"] .aad-vtw { display: none; }
 @keyframes aad-vtspin { to { rotate: 360deg; } }
 @media (prefers-reduced-motion: reduce) { html[data-shell="desktop"][data-layout="ai-apps"] .aad-vtspin { animation-duration: 2700ms; } }
+/* Desktop sidebar follows Default Chats (wizard-ux issue 1443, on for everyone): the provider's list fills the sidebar (or the rail). */
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-cview { position: relative; flex: 1; min-height: 0; min-width: 0; width: 100%; overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column; box-sizing: border-box; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-cview[hidden],
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-scroll[hidden],
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-rlist[hidden] { display: none; }
