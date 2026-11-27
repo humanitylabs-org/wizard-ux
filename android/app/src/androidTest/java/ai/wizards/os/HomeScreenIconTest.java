@@ -67,6 +67,7 @@ public class HomeScreenIconTest {
     }
     /**
      * One UI icon count (wizard-ux issue 1669, switch wizard/phone-badge-look). Synthetic counts 3, 85 and 1000 only.
+     * Issue 1960: about a third of the tile high, wholly inside a rounder (n = 3) mask with its soft shadow.
      * Samsung placement: the badge sits at the visible tile's top-right corner inside One UI's squircle, with the exact
      * digits; other launchers keep it inside the safe zone so this emulator's own mask never clips it. Also logs a
      * 412 px wide picture (tag BadgeShot, base64 PNG in chunks) of the classic and the new look for the pull request.
@@ -75,18 +76,30 @@ public class HomeScreenIconTest {
         Context c = InstrumentationRegistry.getInstrumentation().getTargetContext();
         Bitmap square = glyphSquare();
         BadgeLook.Style samsung = new BadgeLook.Style(true, true), other = new BadgeLook.Style(true, false);
-        for (int n : new int[]{3, 85, 1000}) {
+        Bitmap bare = HomeScreenShortcuts.adaptiveArt(square, 0, samsung);
+        for (int n : new int[]{3, 17, 85, 1000}) {
             // Samsung: on the raw 288 px adaptive art the visible tile is [48, 240]; its top-right corner is (240, 48).
             Bitmap art = HomeScreenShortcuts.adaptiveArt(square, n, samsung);
             int[] box = orangeBox(art);
             assertTrue(n + ": badge drawn", box[4] > 200);
-            assertTrue(n + ": right edge near the tile's right edge, was " + box[2], box[2] >= 240 - 30);
-            assertTrue(n + ": top edge near the tile's top edge, was " + box[1], box[1] <= 48 + 30);
+            assertTrue(n + ": right edge near the tile's right edge, was " + box[2], box[2] >= 240 - 34);
+            assertTrue(n + ": top edge near the tile's top edge, was " + box[1], box[1] <= 48 + 34);
+            assertTrue(n + ": about a third of the tile high (issue 1960: 0.31 of 192), was " + (box[3] - box[1] + 1), box[3] - box[1] + 1 >= 56);
             assertEquals(n + ": no white ring around it", 0, whiteRing(art, box));
-            // Masked by a squircle (One UI), nothing of the badge is cut: every orange pixel is inside the shape.
-            for (int x = box[0]; x <= box[2]; x++) for (int y = box[1]; y <= box[3]; y++) {
-                if (orange(art.getPixel(x, y))) assertTrue(n + ": inside the squircle at " + x + "," + y, inSquircle(x, y, 144, 96, 5));
+            // Masked by One UI's rounder corner (issue 1960: an n = 3 squircle), nothing of the badge or its shadow is
+            // cut: every pixel the badge changed is inside the shape.
+            int changed = 0, shadow = 0;
+            for (int x = 0; x < art.getWidth(); x++) for (int y = 0; y < art.getHeight(); y++) {
+                int a = art.getPixel(x, y), b = bare.getPixel(x, y);
+                if (a == b) continue;
+                changed++;
+                assertTrue(n + ": badge or shadow inside the n=3 squircle at " + x + "," + y, inSquircle(x, y, 144, 96, 3));
+                if (y > box[3] && !orange(a) && Color.red(a) + Color.green(a) + Color.blue(a) < Color.red(b) + Color.green(b) + Color.blue(b)) shadow++;
             }
+            assertTrue(n + ": badge drawn onto the art", changed > 200);
+            assertTrue(n + ": a soft dark shadow just under the badge, px=" + shadow, shadow > 5);
+        }
+        for (int n : new int[]{3, 17, 85, 1000}) {
             // Any other launcher: the emulator's own mask shows the badge whole, top-right.
             Bitmap shownOther = shown(c, HomeScreenShortcuts.adaptive(square, n, other));
             assertTrue(n + ": other launcher shows it top-right", countOrange(shownOther, 108, 0, 216, 108) > 150);
@@ -196,24 +209,24 @@ public class HomeScreenIconTest {
         double c = side / 2.0;
         for (int i = 0; i <= 360; i++) {
             double th = Math.toRadians(i), co = Math.cos(th), si = Math.sin(th);
-            double x = c + c * Math.signum(co) * Math.pow(Math.abs(co), 2 / 5.0), y = c + c * Math.signum(si) * Math.pow(Math.abs(si), 2 / 5.0);
+            double x = c + c * Math.signum(co) * Math.pow(Math.abs(co), 2 / 3.0), y = c + c * Math.signum(si) * Math.pow(Math.abs(si), 2 / 3.0);
             if (i == 0) p.moveTo((float) (l + x), (float) (t + y)); else p.lineTo((float) (l + x), (float) (t + y));
         }
         p.close();
         return p;
     }
-    /** 412 px wide: top row One UI (squircle, Samsung placement), bottom row this emulator's mask; counts 3, 85, 1000. */
+    /** 412 px wide: top row One UI (n = 3 squircle, Samsung placement), bottom row this emulator's mask; counts 3, 17, 85, 1000. */
     private static Bitmap sheet(Context c, Bitmap square, boolean oneUi) {
-        int w = 412, tile = 96, gap = (w - 3 * tile) / 4, h = 2 * tile + 3 * 40;
+        int w = 412, tile = 84, gap = (w - 4 * tile) / 5, h = 2 * tile + 3 * 50;
         Bitmap out = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
         Canvas k = new Canvas(out);
         k.drawColor(0xff2b3a55);
         Paint label = new Paint(Paint.ANTI_ALIAS_FLAG);
         label.setColor(Color.WHITE); label.setTextSize(15); label.setTextAlign(Paint.Align.CENTER);
-        int[] counts = {3, 85, 1000};
+        int[] counts = {3, 17, 85, 1000};
         for (int row = 0; row < 2; row++) {
-            int top = 30 + row * (tile + 40);
-            for (int i = 0; i < 3; i++) {
+            int top = 34 + row * (tile + 50);
+            for (int i = 0; i < counts.length; i++) {
                 int left = gap + i * (tile + gap);
                 BadgeLook.Style style = oneUi ? new BadgeLook.Style(true, row == 0) : BadgeLook.Style.CLASSIC;
                 if (row == 0) {

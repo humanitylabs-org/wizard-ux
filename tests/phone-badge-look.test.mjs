@@ -63,5 +63,5 @@ test('the switch is in the catalog, off by default, and names its issue', async 
   assert.equal((await E.defaults())[SWITCH], false); assert.ok(!active().includes(SWITCH), 'not loaded');
   const m = JSON.parse(read('web/tweaks/wizard/phone-badge-look/manifest.json'));
   assert.equal(row.name, m.name); assert.equal(m.id, SWITCH);
-  assert.deepEqual(m.issues, ['humanitylabs-org/wizard-ux#1669']);
+  assert.deepEqual(m.issues, ['humanitylabs-org/wizard-ux#1669', 'humanitylabs-org/wizard-ux#1960']);
 });
