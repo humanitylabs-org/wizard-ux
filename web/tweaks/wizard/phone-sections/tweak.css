@@ -6,8 +6,16 @@ html[data-tweaks~="wizard/phone-sections"]:not([data-shell="desktop"]) #dock[dat
 html[data-tweaks~="wizard/phone-sections"]:not([data-shell="desktop"]) #dock[data-sections] > .desk-dots { display: none !important; }
 html[data-tweaks~="wizard/phone-sections"]:not([data-shell="desktop"]) #dock[data-sections] > #orbWrap { margin-left: 6px; margin-right: 6px; }
 html[data-tweaks~="wizard/phone-sections"]:not([data-shell="desktop"]) #dock[data-sections] #orbBadge { display: none !important; }
-html[data-tweaks~="wizard/phone-sections"] .sec-side { flex: 1 1 0; min-width: 0; display: flex; align-items: center; justify-content: space-evenly; pointer-events: auto; margin-top: 6px; }
-html[data-tweaks~="wizard/phone-sections"] .sec-tile { position: relative; flex: 1 1 0; min-width: 44px; max-width: 84px; min-height: 46px; padding: 4px 2px 2px;
+/* Even spacing (wizard-ux#1946): the bar is five equal columns, Home · Chats · orb · Messenger · Apps, so every icon sits one
+ * pitch from the next, measured centre to centre, mirrored around the orb. The pitch is a fifth of the bar (at most 84 px):
+ * each side is (bar - orb - 12 px) / 2 wide, so a fifth of the bar is 40% of a side plus a fifth of (orb + 12 px). The
+ * inner tile keeps half a pitch from the orb's centre with its margin; spare room on a wide bar goes to the outer edges. */
+html[data-tweaks~="wizard/phone-sections"] .sec-side { --sec-p: min(84px, calc(40% + (var(--orb, 44px) + 12px) / 5)); flex: 1 1 0; min-width: 0; display: flex; align-items: center; pointer-events: auto; margin-top: 6px; }
+html[data-tweaks~="wizard/phone-sections"] .sec-side.left { justify-content: flex-end; }
+html[data-tweaks~="wizard/phone-sections"] .sec-side.right { justify-content: flex-start; }
+html[data-tweaks~="wizard/phone-sections"] .sec-side.left > .sec-tile:last-child { margin-right: calc(var(--sec-p) / 2 - var(--orb, 44px) / 2 - 6px); }
+html[data-tweaks~="wizard/phone-sections"] .sec-side.right > .sec-tile:first-child { margin-left: calc(var(--sec-p) / 2 - var(--orb, 44px) / 2 - 6px); }
+html[data-tweaks~="wizard/phone-sections"] .sec-tile { position: relative; flex: 0 0 var(--sec-p); width: var(--sec-p); min-width: 44px; min-height: 46px; padding: 4px 2px 2px;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; border-radius: 12px;
   color: var(--wz-text, var(--ink, #f3efff)); transition: background 160ms; -webkit-tap-highlight-color: transparent; }
 /* The others are dim (their icon and label); a badge always shows at full strength. */
