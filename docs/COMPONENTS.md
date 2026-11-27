@@ -50,7 +50,7 @@ Back: `WizEscapeBack`, `WosBack`; `WizChatsHost.registerBack`/back.push share re
 | Action/attach menu | `WosContextMenu` (`context-menu.js`; open/attach) |
 | App setup | `WosAppSetup` (`app-setup.js`) |
 | Chats | `WizCore` (`chats.js`/`.css`); desktop `keepThreadOpen`; `WizConfig.chatAfterAction` (phone); Archive/Snooze→`archiveOrder`, `leaveFinishedThread`; `WizLive.messages`/`firstMessages`/`readyRank`; `setFocus`/`migrateChatsFocus`; `--wos-note-quiet` alerts; Esc→`CHATS.clearFilter(id::list)`; `inboxIds` |
-| Chats list model | `WizChatsListModel` (`chats-list-model.js`): `executionStatus`/`isListWorking`; `workingSort`; stalled waits Ready, `background` stays Working; running helper keeps failed Working; `WizLive.workingOrder`; `activityList` (Activity), `placeOf`; Ready's `orderBar` |
+| Chats list model | `WizChatsListModel` (`chats-list-model.js`): `executionStatus`/`isListWorking`; `workingSort`; stalled waits Ready, `background` stays Working; running helper keeps failed Working; `WizLive.workingOrder`; `activityList` (Activity), `placeOf` (smart: `sentAsked`, `sentRequested`, his pins and scheduled runs); Ready's `orderBar` |
 | Pane placement | `WizCore.panes` (`pane-layout.js`): Classic split/cols; tiled/centre/pair/full geometry/focus/ratios/dock (<1100px bar); AI keys/Back; local |
 | Desktop lifecycle | `WizDesktop.host` (`core/desktop-host.js`): snapshots, retained frames/readiness/tools, open/focus/close, onChange, panes; chats(id), settings, placements() |
 | Chat time | `WizCore.ago` (`core.js`): hours <24h, then owner day |
