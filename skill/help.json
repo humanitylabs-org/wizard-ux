@@ -483,11 +483,6 @@
       "help": "Inbox: only what blocks you.",
       "where": "Settings › Appearance › Try new features › Smart inbox: only what needs you"
     },
-    "wizard/phone-nav": {
-      "help": "Phone bar: bigger orb, one badge.",
-      "where": "Settings › Appearance › Try new features › Phone bar: bigger orb, one badge",
-      "when": "phone only"
-    },
     "wizard/channel-auto-emoji": {
       "help": "New channels get a fitting emoji.",
       "where": "Settings › Appearance › Try new features › Channels: a fitting emoji for new channels"
