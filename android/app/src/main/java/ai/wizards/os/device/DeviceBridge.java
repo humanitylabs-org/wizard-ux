@@ -364,9 +364,10 @@ public final class DeviceBridge implements RecorderService.Listener {
         ReplyWatcher.watch(activity, sessionId, runId, title, due);
     }
 
-    /** Phone notifications per app are on here (AppNotify reads Notifications): chat replies can go that way (issue 1619). */
+    /** Phone notifications per app are on here (AppNotify reads Notifications, for everyone since the switch
+     *  wizard/phone-app-notifications went): chat replies can go that way (issue 1619). */
     @JavascriptInterface
-    public boolean appNotifyOn() { return ai.wizards.os.notify.AppNotify.on(activity); }
+    public boolean appNotifyOn() { return true; }
 
     /** Reply notifications on the shade, so the page can clear the ones for threads James has since read. */
     @JavascriptInterface

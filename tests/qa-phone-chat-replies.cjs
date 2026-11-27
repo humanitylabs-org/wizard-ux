@@ -70,7 +70,7 @@ async function boot(b, { native = true, on = false, reader = true } = {}) {
   p.on('pageerror', e => errs.push(String(e)));
   await p.addInitScript(({ native, on, reader }) => {
     try { localStorage.setItem('wos.coached', 'true'); } catch (e) {}
-    try { localStorage.setItem('wos.skin-tweaks.v1', JSON.stringify({ version: 1, preset: 'none', off: {}, mix: on ? { 'wizard/phone-chat-replies': true, 'wizard/phone-app-notifications': true } : {} })); } catch (e) {}
+    try { localStorage.setItem('wos.skin-tweaks.v1', JSON.stringify({ version: 1, preset: 'none', off: {}, mix: on ? { 'wizard/phone-chat-replies': true } : {} })); } catch (e) {}
     if (!native || location.protocol === 'about:') return;
     // A faithful stand-in for the Android WizardOSDevice bridge (same method names and JSON shapes).
     const S = window.__dev = JSON.parse(sessionStorage.getItem('qa.dev') || 'null') || { calls: [], takes: {}, active: null, shares: {}, watch: [], upd: { state: 'idle', installed: '0.5.1' }, notif: { allowed: true, watching: 0 } };

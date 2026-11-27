@@ -11,7 +11,6 @@ import { experienceRuntime } from './fixtures/skin-palettes-harness.mjs';
 
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
 const SWITCH = 'wizard/phone-push';
-const NOTIFY = 'wizard/phone-app-notifications';
 const ORIGIN = 'https://wizard.example';
 
 function fixture({ on = [], native = true, session = '' } = {}) {
@@ -42,33 +41,33 @@ test('the main page copies the push switch to the Android app: off only once the
   off.settle();
   assert.deepEqual(off.push, [false]);
   off.experience(); assert.deepEqual(off.push, [false], 'unchanged: not sent again');
-  const on = fixture({ on: [NOTIFY, SWITCH] });
+  const on = fixture({ on: [SWITCH] });
   assert.deepEqual(on.push, [true]);
-  assert.deepEqual(on.notify, [true], 'the per-app switch it builds on goes along as before');
-  on.set([NOTIFY]); assert.deepEqual(on.push, [true], 'an off before the switches settle waits');
+  assert.deepEqual(on.notify, [true], 'the per-app reader it builds on is on for everyone (wizard-ux issue 1567)');
+  on.set([]); assert.deepEqual(on.push, [true], 'an off before the switches settle waits');
   on.experience(); assert.deepEqual(on.push, [true], 'the first experience event can come before this device\'s switches: still waits');
   on.settle(); assert.deepEqual(on.push, [true, false]);
-  on.set([NOTIFY, SWITCH]); assert.deepEqual(on.push, [true, false, true]);
-  on.set([NOTIFY]); assert.deepEqual(on.push, [true, false, true, false], 'after settling, off goes at once');
+  on.set([SWITCH]); assert.deepEqual(on.push, [true, false, true]);
+  on.set([]); assert.deepEqual(on.push, [true, false, true, false], 'after settling, off goes at once');
 });
 
 test('a page whose own switches arrive late never sends an early off (no stop and restart of the line on each open)', () => {
   const f = fixture();               // the switches are not applied yet
   f.experience();                    // the first experience event, before this device's switches
-  f.set([NOTIFY, SWITCH]);           // now they are
+  f.set([SWITCH]);           // now they are
   f.settle(); f.experience();
   assert.deepEqual(f.push, [true]);
 });
 
-test('it is its own switch: per-app notifications alone never start the push line', () => {
-  const f = fixture({ on: [NOTIFY] });
+test('it is its own switch: per-app notifications (on for everyone) alone never start the push line', () => {
+  const f = fixture();
   f.settle();
   assert.deepEqual(f.push, [false]);
   assert.deepEqual(f.notify, [true]);
 });
 
 test('a home-screen app window never sets it, and an older Android app without the bridge is left alone', () => {
-  const f = fixture({ session: 'wizard-health', on: [NOTIFY, SWITCH] });
+  const f = fixture({ session: 'wizard-health', on: [SWITCH] });
   f.settle(); f.experience();
   assert.deepEqual(f.push, []);
   assert.doesNotThrow(() => { const g = fixture({ native: false, on: [SWITCH] }); g.settle(); g.experience(); });

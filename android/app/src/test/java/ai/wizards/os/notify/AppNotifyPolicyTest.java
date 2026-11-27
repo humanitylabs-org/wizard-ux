@@ -10,7 +10,7 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 import org.junit.Test;
 
-/* Phone notifications per app (wizard-ux issue 1567, switch wizard/phone-app-notifications). */
+/* Phone notifications per app (wizard-ux issue 1567, on for everyone). */
 public class AppNotifyPolicyTest {
     static JSONObject item(String id, double time, String title, int priority, String... tags) throws Exception {
         JSONObject o = new JSONObject().put("id", id).put("time", time).put("title", title).put("message", "Body of " + id).put("priority", priority);

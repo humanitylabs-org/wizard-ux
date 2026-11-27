@@ -25,7 +25,6 @@
     "wizard/chat-app-switches",
     "wizard/action-cards",
     "wizard/reply-buttons",
-    "wizard/phone-app-notifications",
     "wizard/phone-chat-replies",
     "wizard/lock-screen-player",
     "wizard/chat-tags",
