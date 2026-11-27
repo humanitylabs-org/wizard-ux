@@ -19,8 +19,6 @@ public final class BackgroundAudioBridge {
     private ListenableFuture<MediaController> controller;
     private boolean detached;
     private int pending;
-    /** How long a request may wait for the phone player before it is answered with an error. */
-    static final long CONNECT_TIMEOUT_MS=5000;
     private final android.os.Handler ui=new android.os.Handler(android.os.Looper.getMainLooper());
     private BackgroundAudioBridge(Activity a,WebView w) { activity=a; web=w; }
     public static BackgroundAudioBridge install(Activity a,WebView w) {
@@ -31,7 +29,7 @@ public final class BackgroundAudioBridge {
         WebViewCompat.addWebMessageListener(w,"wizardAudioPort",origins,b::message); return b;
     }
     public void detach() { detached=true; if(controller!=null) MediaController.releaseFuture(controller); controller=null; }
-    /** Every request gets an answer, also a refusal, so the app never waits on silence (wizard-music#115). */
+    /** Every request gets an answer, also a refusal, so the app never waits on silence (AudioReply). */
     private void message(WebView view,WebMessageCompat raw,Uri source,boolean main,JavaScriptReplyProxy reply) {
         String id="";
         try {
@@ -39,7 +37,8 @@ public final class BackgroundAudioBridge {
             JSONObject r=value==null || value.length()>250000 ? null : new JSONObject(value);
             if(r!=null) id=r.optString("id");
             String origin=AppState.origin(activity);
-            if(r==null || detached || !main || source==null || !origin.equals(source.toString()) || !AudioPolicy.shell(web.getUrl(),origin)) { answer(reply,id,null,"Audio request refused"); return; }
+            String refused=AudioReply.refusal(r!=null,detached,main,source==null ? null : source.toString(),origin,AudioPolicy.shell(web.getUrl(),origin));
+            if(refused!=null) { answer(reply,id,null,refused); return; }
             String method=r.optString("method");
             final String app=r.optString("appId"), rid=id;
             if(!AudioPolicy.METHODS.contains(method) || r.optInt("v")!=1 || !AudioPolicy.admitted(app)) { answer(reply,id,null,"Unknown audio capability"); return; }
@@ -56,17 +55,17 @@ public final class BackgroundAudioBridge {
                     }
                 }).buildAsync();
             final ListenableFuture<MediaController> connected=controller;
-            final boolean[] done={false};
+            final AudioReply once=new AudioReply();
             // A connect that hangs answers within a few seconds and is dropped, so the next request connects afresh.
             final Runnable late=() -> {
-                if(done[0]) return; done[0]=true; pending--;
+                if(!once.claim()) return; pending--;
                 if(controller==connected && !connected.isDone()) { controller=null; MediaController.releaseFuture(connected); }
-                answer(reply,rid,null,"Music player did not answer");
+                answer(reply,rid,null,AudioReply.NO_ANSWER);
             };
-            ui.postDelayed(late,CONNECT_TIMEOUT_MS);
+            ui.postDelayed(late,AudioReply.TIMEOUT_MS);
             connected.addListener(() -> {
-                if(done[0]) return; done[0]=true; ui.removeCallbacks(late); pending--;
-                if(detached) { answer(reply,rid,null,"Audio request refused"); return; }
+                if(!once.claim()) return; ui.removeCallbacks(late); pending--;
+                if(detached) { answer(reply,rid,null,AudioReply.REFUSED); return; }
                 try {
                     try { connected.get(); } catch(Exception bad) {
                         if(controller==connected) { MediaController.releaseFuture(connected); controller=null; }

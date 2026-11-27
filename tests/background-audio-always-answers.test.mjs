@@ -1,5 +1,5 @@
 // Every wizard:background-audio:v1 request gets a reply (wizard-music#115): a silent drop froze Music's
-// player on an old song for 20-22 s, shown as if it were playing.
+// player on an old song for 20-22 s, shown as if it were playing. The Android side is AudioReplyTest (JUnit).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -77,16 +77,4 @@ test('a message from a foreign origin is never answered', async () => {
   await f.settle();
   assert.equal(f.replies.length, 0);
   assert.equal(f.toNative.length, 0);
-});
-
-test('Android bridge: every early exit of message() answers, and a hanging connect answers within 5 s', () => {
-  const src = read('android/app/src/main/java/ai/wizards/os/audio/BackgroundAudioBridge.java');
-  const body = src.slice(src.indexOf('private void message('), src.indexOf('private void answer('));
-  const bare = body.split('\n').filter(line => /\breturn;/.test(line) && !/answer\(reply/.test(line) && !/if\(done\[0\]\) return;/.test(line));
-  assert.deepEqual(bare, [], 'no request returns without an answer');
-  assert.match(body, /catch\(JSONException\|RuntimeException e\) \{ answer\(reply,id,null,/);
-  assert.match(body, /ui\.postDelayed\(late,CONNECT_TIMEOUT_MS\)/);
-  const ms = Number(src.match(/CONNECT_TIMEOUT_MS=(\d+)/)[1]);
-  assert.ok(ms > 0 && ms <= 5000, 'connect timeout of a few seconds');
-  assert.doesNotMatch(src.slice(src.indexOf('private void answer(')), /if\(detached\) return;/, 'a detaching view still answers');
 });

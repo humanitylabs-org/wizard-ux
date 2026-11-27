@@ -67,7 +67,7 @@
     });
   }
   // Existing installed apps can use their old envelope until they adopt WizardApp.device.
-  // Every request gets an answer, a refusal included, so an app never waits on silence (wizard-music#115).
+  // Every request gets an answer, a refusal included, so an app never waits on silence (silence froze a player for 20 s).
   const REFUSED = {ok:false,error:'Audio request refused'};
   window.addEventListener('message', e => {
     const d = e.data;
