@@ -471,6 +471,11 @@
       "help": "Inbox: only what blocks you.",
       "where": "Settings › Appearance › Try new features › Smart inbox: only what needs you"
     },
+    "wizard/apps-panel": {
+      "help": "On the phone, tapping Apps opens a slim Favorites panel (search, Favorites, Recent with an x to take an app off) and holding Apps shows nine big bubbles of your recent apps: slide onto one and let go. With an app in front, swipe the bar sideways to step through Recent.",
+      "where": "Settings › Appearance › Try new features › Phone Apps tile: Favorites panel and quick switcher",
+      "when": "phone only"
+    },
     "wizard/channel-auto-emoji": {
       "help": "New channels get a fitting emoji.",
       "where": "Settings › Appearance › Try new features › Channels: a fitting emoji for new channels"

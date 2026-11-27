@@ -1310,6 +1310,11 @@
       "classification": "adapter",
       "reason": "Phone shell part moved out of app.js (issue 1665, shared values through accessors): who the agent orb talks to, and the app window in front."
     },
+    "app-appspanel.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone shell part (wizard-ux#1955, switch wizard/apps-panel): the four-section bar's Apps tile opens a slim Favorites panel, holding it shows nine recent apps, and a bar swipe steps through Recent; the desktop has its own app sidebar."
+    },
     "app-arc.js": {
       "shell": "phone",
       "classification": "adapter",

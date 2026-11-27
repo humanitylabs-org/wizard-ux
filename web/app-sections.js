@@ -19,7 +19,7 @@
 'use strict';
 window.WizCore = window.WizCore || {};
 window.WizCore.appParts = window.WizCore.appParts || {};
-window.WizCore.appParts.sections = function ({ $, APP, APPS, appVars, CHATS_APP, closeSheets, closeWin, esc, goDesk, HOME, launcher, LIVE, mainChats, openApp, openSheet, renderDots, renderLauncher, save, store, syncDesks, toast, vib, winApp }) {
+window.WizCore.appParts.sections = function ({ $, APP, APPS, appVars, appsPanelHold, appsPanelHoldEnd, appsPanelHoldMove, appsPanelOn, appsPanelOpen, appsPanelToggled, appsStep, appsStepping, CHATS_APP, closeSheets, closeWin, esc, goDesk, HOME, launcher, LIVE, mainChats, openApp, openSheet, renderDots, renderLauncher, save, store, syncDesks, toast, vib, winApp }) {
   const SEC_ORDER = ['home', 'chats', 'slot', 'apps'];
   // Always on in the phone shell; the desktop shell has its own bar.
   function secOn() {
@@ -116,6 +116,8 @@ window.WizCore.appParts.sections = function ({ $, APP, APPS, appVars, CHATS_APP,
 
   /* ---- going to a section ---- */
   const secAt = d => secD().indexOf(d);
+  // The App selector: the Favorites panel with switch wizard/apps-panel (app-appspanel.js), else the Apps sheet.
+  const secSelector = () => { if (!(typeof appsPanelOpen === 'function' && appsPanelOpen())) openSheet('launcher'); };
   function secGo(name, how = 'tap') {
     const s = secAll(), here = secCurrent();
     if (name !== 'apps' || appVars.sheet !== 'launcher') closeSheets(true);
@@ -127,9 +129,10 @@ window.WizCore.appParts.sections = function ({ $, APP, APPS, appVars, CHATS_APP,
       return;
     }
     if (name === 'apps') {
+      if (typeof appsPanelOn === 'function' && appsPanelOn() && appsPanelToggled()) return; // the tile again: the panel goes away
       if (appVars.sheet === 'launcher' && !secPinMode) { closeSheets(); return; } // the tile again: the selector goes away
       // The first tap (no app yet), or a tap while on the app: the App selector, over the running app.
-      if (!s.apps || (how === 'tap' && here === 'apps')) { openSheet('launcher'); return; }
+      if (!s.apps || (how === 'tap' && here === 'apps')) { secSelector(); return; }
       if (how === 'swipe' && here === 'apps') return;
       goDesk(secAt(s.apps));
     }
@@ -139,7 +142,7 @@ window.WizCore.appParts.sections = function ({ $, APP, APPS, appVars, CHATS_APP,
     if (!secReady || !secOn()) return false;
     const k = SEC_ORDER.indexOf(secCurrent() || 'home'), n = SEC_ORDER[k + step];
     if (!n) { goDesk(appVars.idx); return true; } // past the end: stay (Back never exits, neither does a swipe)
-    if (n === 'apps' && !secAll().apps) { goDesk(appVars.idx); openSheet('launcher'); return true; }
+    if (n === 'apps' && !secAll().apps) { goDesk(appVars.idx); secSelector(); return true; }
     secGo(n, 'swipe'); return true;
   }
   // A sideways swipe on the Apps tile: flip between the last two apps.
@@ -208,19 +211,25 @@ window.WizCore.appParts.sections = function ({ $, APP, APPS, appVars, CHATS_APP,
       // The Apps tile's own sideways swipe flips apps: the bar scrub (app-scrub.js) never starts from it.
       e.stopPropagation(); secFlipDrag = { id: e.pointerId, x: e.clientX, y: e.clientY };
       try { b.setPointerCapture(e.pointerId); } catch (_) {}
+      if (typeof appsPanelHold === 'function') appsPanelHold(e); // held: the nine bubbles (switch wizard/apps-panel)
     }
   }, true);
   const secEndHold = () => { clearTimeout(secHold); secHold = null; };
   $('#dock').addEventListener('pointermove', e => {
     const b = secTileOf(e);
     if (secHold && b?.__hold && Math.hypot(e.clientX - b.__hold.x, e.clientY - b.__hold.y) > 10) secEndHold();
-    if (secFlipDrag && e.pointerId === secFlipDrag.id) e.stopPropagation();
+    if (secFlipDrag && e.pointerId === secFlipDrag.id) { e.stopPropagation(); if (typeof appsPanelHoldMove === 'function') appsPanelHoldMove(e); }
   }, true);
   const secFlipEnd = e => {
     secEndHold();
     if (!secFlipDrag || e.pointerId !== secFlipDrag.id) return;
     const dx = e.clientX - secFlipDrag.x, dy = e.clientY - secFlipDrag.y; secFlipDrag = null; e.stopPropagation();
-    if (e.type === 'pointerup' && Math.abs(dx) >= 20 && Math.abs(dx) > Math.abs(dy)) { secQuiet = Date.now() + 500; secFlip(); }
+    if (typeof appsPanelHoldEnd === 'function' && appsPanelHoldEnd(e)) { secQuiet = Date.now() + 700; return; } // the bubbles had this finger
+    if (e.type === 'pointerup' && Math.abs(dx) >= 20 && Math.abs(dx) > Math.abs(dy)) {
+      secQuiet = Date.now() + 500;
+      // Apps in front (switch wizard/apps-panel): one app through Recent, left = older; otherwise the flip.
+      if (typeof appsStepping === 'function' && appsStepping()) appsStep(dx < 0 ? 1 : -1); else secFlip();
+    }
   };
   $('#dock').addEventListener('pointerup', secFlipEnd, true); $('#dock').addEventListener('pointercancel', secFlipEnd, true);
 
