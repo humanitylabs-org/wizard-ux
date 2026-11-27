@@ -288,20 +288,18 @@
     if (r.old) { b.textContent = 'Start'; p.textContent = 'Update WizardOS in Settings, then tap Start.'; return; }
     b.textContent = 'Retry'; p.textContent = 'Could not start ' + appName(st) + ': ' + r.error;
   }
-  /* Agent access under the browser boundary (wizard-ux issue 1668, switch wizard/boundary-agent-access): Connected
+  /* Agent access under the browser boundary (wizard-ux issue 1668, on for everyone): Connected
    * accounts' Agent access screen shows and sets which agents may use an account app (the owner's agent.json ticks,
    * wizard-os spec/PERMISSIONS.md). A sandboxed page's own owner call carries no shell token, so the shell makes it:
    * GET / PUT /wizard/v1/apps/<id>/agents, the same routes the App Manager's Connections page uses (core/agents.js).
    * Only the installed Connected accounts app asks, only for the apps that hold accounts (ACCESS_APPS, the list on its
    * screen), only while its window is on screen, and a change only right after a real tap in that window. Nothing is
    * kept here; only the ticks cross back (browser-boundary.js accessShape). */
-  const ACCESS_SWITCH = 'wizard/boundary-agent-access', ACCESS_ASKERS = ['connected-accounts', 'wizard-connectors'];
+  const ACCESS_ASKERS = ['connected-accounts', 'wizard-connectors'];
   const ACCESS_APPS = new Set(['connected-accounts', 'wizard-google', 'wizard-microsoft', 'messenger', 'wizard-mail', 'money', 'wizard-health',
     'wizard-apple-health', 'wizard-fitbit', 'wizard-oura', 'wizard-whoop', 'wizard-withings']);
   const ACCESS_AGENT = /^[a-z0-9][a-z0-9._-]{0,63}$/;
-  function accessOn() { try { return String(document.documentElement.dataset.tweaks || '').split(/\s+/).includes(ACCESS_SWITCH); } catch (_) { return false; } }
   async function agentAccess(st, method, args, ctx) {
-    if (!accessOn()) throw fault('Agent access is not available here');
     if (!apps().some(a => a.id === st.appId && a.source === 'apps.json' && ACCESS_ASKERS.includes(a.id))) throw fault('Only Connected accounts may ask');
     if (document.hidden || st?.isVisible?.() !== true) throw fault('Open the app first');
     const app = typeof args?.app === 'string' ? args.app : '';
