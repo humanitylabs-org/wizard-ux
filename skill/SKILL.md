@@ -166,6 +166,7 @@ Settings › Appearance › Try new features lists unfinished features to try, A
 - **Agents run code without asking**: Container agents run code without an approval nobody sees (Agents: Just run, Ask me, Refuse); prompts wait an hour.
 - **Archive on top**: Archive is the first section of the Chats list in both By day and By status, so switching layouts never moves it.
 - **Ask before sharing feature counts**: Shared only after you say Share.
+- **Automatic chat tags**: Chats are tagged from what they are about; a channel's What goes here… edits its list.
 - **Backup health in Resources**: Resources shows your backup's health.
 - **Bottom app bar on desktop**: Apps bar at the bottom on any width.
 - **Calm offline card**: The can't-reach-your-Wizard card shows one dotted path (Internet · Tailscale · Wizard), one short next step and a small Check again with the automatic re-check time.
@@ -183,6 +184,7 @@ Settings › Appearance › Try new features lists unfinished features to try, A
 - **Instant phone notifications**: Android app, with Phone notifications per app on: app notifications reach the phone within seconds, even locked (one Tailscale connection, no Google).
 - **Location for Maps**: Only apps whose wizard.md asks for location (today Maps) may use it, after your browser's or phone's own yes; others stay blocked.
 - **Machines on Home**: Home shows a slim strip (Wizard, AI fuel, chats, backup, network); Settings › System holds your network, AI, security and storage.
+- **New chat quick links**: A new chat shows Catch me up, What's waiting on me and Plan my day above the message box; one tap sends it.
 - **Now playing**: While an app plays audio or video, small moving bars sit on that app's icon in the AI apps view (the desktop apps column; the phone Home dock and grid); click or tap them to pause without opening the app. Option+P pauses or plays what played last on the desktop. Nothing shows while nothing plays.
 - **One UI icon count**: Android: Messenger icon count shows the exact number in a One UI-style corner badge.
 - **One-tap Snooze · bottom of Ready**: Snooze is one tap and the lowest priority: the thread waits at the bottom of Ready, below approvals, until you restore or reply.
