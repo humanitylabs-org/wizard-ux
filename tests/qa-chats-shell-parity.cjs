@@ -64,6 +64,10 @@ function structure(root) {
     bar: tb && seen(tb) ? { title: text(tb.querySelector('.ch-tbar-t')), buttons: [...tb.querySelectorAll('button:not([data-chswitch])')].filter(seen).map(b => b.getAttribute('aria-label')) } : null,
     heads: [...list.querySelectorAll(':scope > .ch-top:not(.ch-tbar), :scope > .ch-chan-h, :scope > .ch-sent-h')].filter(seen).map(n => cls(n) + ':' + text(n)),
     sections: [...list.querySelectorAll('section.ch-sec[data-sec]')].filter(seen).map(s => s.dataset.sec + (s.querySelector(':scope > .ch-sec-h, :scope > .ch-sec-hl') ? ':fold' : '') + (s.classList.contains('open') ? ':open' : '') + (s.querySelector('[data-chactorder]') ? ':sort' : '')),
+    // A fold header's look (case, weight, type size) and its parts left to right (label, chevron, count): the
+    // tester's catch on the first try, the sidebar's folds in the Classic desktop's uppercase.
+    folds: [...list.querySelectorAll('section.ch-sec[data-sec] .ch-sec-h')].filter(seen).map(h => { const cs = getComputedStyle(h);
+      return [h.closest('section').dataset.sec, cs.textTransform, cs.fontWeight, cs.fontSize, [...h.children].filter(seen).sort((a, b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left).map(c => c.tagName.toLowerCase()).join(' ')].join('|'); }),
     // (a row's words without its relative time: the cases run minutes apart on one fixed clock)
     rows: [...list.querySelectorAll('.ch-scroll .ch-row-wrap, .ch-scroll .ch-chan, .ch-scroll .ch-post')].filter(seen).map(r => { const c = r.cloneNode(true); c.querySelectorAll('time').forEach(t => t.remove()); return { key: r.dataset.morphKey || '', cls: cls(r), parts: parts(r), words: text(c) }; }),
   };
