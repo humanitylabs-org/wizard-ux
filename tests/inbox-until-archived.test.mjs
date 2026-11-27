@@ -1,7 +1,8 @@
 // Inbox until archived (wizard-ux issue 1810, on for everyone; James, 25 Nov 2026: "let's go back to manually archiving
 // things when they are done ... treat it like an inbox again"). Chats › Inbox is one list: Working on top (a running
 // thread no Sent row names: one the agent started), then Inbox (every thread that is not working, snoozed or archived,
-// read or not), no Recent. A run he sent is in Sent › Working (issue 1829). Runs
+// read or not), no Recent. With Smart inbox off (everyone's default, wizard-ux issue 1962) a run he sent is in Working
+// on top too; only Smart inbox moves it to Sent › Working (issue 1829). Runs
 // the real list model, the real AI apps sidebar paint and the real skin-host activity rows. The phone / Classic Inbox
 // draws Inbox rows (wizard-ux issue 1779, on for everyone; tests/inbox-rows.test.mjs), which keep every row until archived.
 import test from 'node:test';
@@ -25,7 +26,8 @@ const ROWS = () => [row('w1', 1, { status: 'running' }), row('w2', 2.5, { status
   row('r1', 3), row('r2', 50), row('old', 10 * 24), row('s1', 4, { deferred: true }), row('a1', 5, { archived: true })];
 const M = modelContext({}).WizChatsListModel;
 const facts = { needs, unread, at: s => s.at };
-// w1 is a send of his still running: the box's Sent log names its thread, so it is in Sent › Working, not in Inbox (issue 1829).
+// w1 is a send of his still running: the box's Sent log names its thread. With Smart inbox off that keeps it in Inbox ›
+// Working all the same (issue 1962: nothing is routed out of Inbox).
 const PLACE = () => ({ sent: M.sentIndex([{ id: 'sent_w1', thread: 'w1', state: 'running', at: NOW - H }]) });
 const J = v => JSON.parse(JSON.stringify(v)); // vm arrays are from another realm
 
@@ -37,17 +39,17 @@ test('the switch is gone: not in the catalog, and a saved choice for it is clear
 
 test('list model: Working on top, then every thread waits in Inbox until archived, no Recent', () => {
   const g = M.activityGroups(groups(ROWS()), facts, { place: PLACE() });
-  assert.deepEqual(J(g.working.map(s => s.id)), ['w2'], 'the run the agent started is in Working; his own send is in Sent (issue 1829)');
+  assert.deepEqual(J(g.working.map(s => s.id)), ['w1', 'w2'], 'every running thread is in Working, his own send too (issue 1962)');
   assert.deepEqual(J(g.ready.map(s => s.id)), ['g1', 'r1', 'y1', 'r2', 'old'], 'read, unread, needs you and old alike, newest first; no running thread mixed in');
   assert.deepEqual([g.recent.length, g.older], [0, 0], 'no Recent and no Show older');
   assert.deepEqual(J(g.snoozed.map(s => s.id)), ['s1'], 'snoozed leave until the snooze ends');
   assert.deepEqual(J(g.archive.map(s => s.id)), ['a1'], 'archived stay reachable');
 });
 
-test('list model with Inbox rows facts: the agent-started run is in Working, not in Inbox', () => {
+test('list model with Inbox rows facts: running threads are in Working, not mixed into Inbox', () => {
   const inbox = { quiet: () => false, pin: () => 0 };
   const g = M.activityGroups(groups(ROWS()), facts, { inbox, place: PLACE() });
-  assert.deepEqual(J(g.working.map(s => s.id)), ['w2']);
+  assert.deepEqual(J(g.working.map(s => s.id)), ['w1', 'w2']);
   assert.ok(!g.ready.some(s => s.id === 'w1' || s.id === 'w2'), 'no running thread in Inbox');
   assert.ok(g.ready.some(s => s.id === 'y1'), 'what needs him stays in Inbox');
 });
@@ -73,7 +75,7 @@ test('regression: open an unread Inbox thread and go Back: still in Inbox, now r
 test('list model activityList: Working rows carry the spinner, Inbox rows their read / unread marks', () => {
   const f = { live: { cardAt: s => s.updatedAt }, chats: { activityNeeds: needs, activityUnread: unread, inboxPlace: () => PLACE(), threadActions: () => ['snooze', 'done'], channelOf: () => 'General', agentLabelOf: () => '' } };
   const l = M.activityList(groups(ROWS()), f, {});
-  assert.deepEqual(J(l.working.map(r => [r.id, r.mark])), [['w2', 'working']]);
+  assert.deepEqual(J(l.working.map(r => [r.id, r.mark])), [['w1', 'working'], ['w2', 'working']]);
   assert.deepEqual(J(l.ready.map(r => [r.id, r.mark])), [['g1', 'new'], ['r1', ''], ['y1', 'needs'], ['r2', ''], ['old', '']], 'marks tell read from unread in the one list');
   assert.equal(l.recent.length, 0);
 });
@@ -111,7 +113,7 @@ const rws = sc => sc.all().filter(n => n.cls === 'aad-rw').map(n => n.textConten
 test('AI apps desktop sidebar: Working on top, then Inbox, Snoozed, Archived; every thread in Inbox with its marks', () => {
   const on = sidebar();
   assert.deepEqual(words(on.scroll), ['Working', 'Inbox', 'Snoozed', 'Archived']);
-  assert.deepEqual(rws(on.scroll), ['w2:working', 'g1:new', 'r1', 'y1:needs', 'r2', 'old']);
+  assert.deepEqual(rws(on.scroll), ['w1:working', 'w2:working', 'g1:new', 'r1', 'y1:needs', 'r2', 'old']);
   assert.equal(on.scroll.all().filter(n => n.cls === 'aad-more-older').length, 0, 'no Show older');
 });
 

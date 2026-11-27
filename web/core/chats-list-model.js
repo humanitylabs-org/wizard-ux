@@ -244,13 +244,13 @@ function inboxWants(s, { needs = () => false, unread = () => false, quiet = () =
   return !!(unread(s) || inboxReplied(s));
 }
 /* Inbox or Sent (wizard-ux issue 1829; James, 25 Nov 2026: "why is it displaying in my sent box, but also in my inbox?
- * That shouldn't happen. Things should be in one or the other."). With Inbox until archived (or Inbox rows) on, every
- * thread is in exactly one place, and this is the one rule: a thread runs he started (it has a Sent row) is in Sent ›
- * Working while it runs; then needs you / check / approval or a failed run is Inbox; a quiet reply (the box's mark), or
- * a newest Sent row that ended done or quiet without asking for an answer, is Sent; everything else (an answer to what
- * he asked, activity he didn't start, an unknown outcome) is Inbox: when in doubt it stays visible. `rows` are the Sent
- * rows naming this thread (sentIndex), facts are the shell's needs(s), quiet(s) and working(s). Pure. */
-const PLACE_INBOX_STATES = new Set(['needs_you', 'failed']);
+ * That shouldn't happen. Things should be in one or the other."). Keeping things out of Inbox is the triage, and that
+ * is only Smart inbox (wizard-ux issue 1962; James, 27 Nov 2026: "Only keep behind a switch the functionality, which I
+ * have you preventing things from coming into the inbox if they don't need me. Everything else turn on by default").
+ * With wizard/smart-inbox off (everyone's default) nothing is routed out of Inbox: every thread is Inbox (a running one
+ * in Inbox › Working), whatever the Sent log or the box's quiet mark says, and Sent lists the threads he sent into as
+ * well, so a thread can be in both. With it on, smartPlace below is the one rule. `rows` are the Sent rows naming this
+ * thread (sentIndex), facts are the shell's needs(s), quiet(s), working(s) and smart. Pure. */
 /* Smart inbox (wizard-ux issue 1883, switch wizard/smart-inbox, off by default; James, 26 Nov 2026: "The only things
  * that come into my inbox are things that require my attention in a timely manner and everything else will wait until
  * I say catch me up"). With it on, `facts.smart` makes placeOf the smart rule: a failed run or an approval is Inbox; a
@@ -352,17 +352,9 @@ function smartPlace(s, rows, { needs, working, pinned = () => false }) {
   if (sentNoAnswer(last) || reminderSet(last) || ['dump', 'command'].includes(last.route)) return 'sent';
   return 'inbox';
 }
-function placeOf(s, rows, { needs = () => false, quiet = () => false, working = () => false, smart = false, pinned = () => false } = {}) {
+function placeOf(s, rows, { needs = () => false, working = () => false, smart = false, pinned = () => false } = {}) {
   if (smart) return smartPlace(s, rows, { needs, working, pinned });
-  const mine = Array.isArray(rows) && rows.length > 0;
-  if (working(s) && mine) return 'sent';
-  if (needs(s) || inboxFailed(s) || ['waiting_for_approval', 'unknown'].includes(s?.status)) return 'inbox';
-  if (working(s)) return 'inbox';
-  if (quiet(s)) return 'sent';
-  if (!mine) return 'inbox';
-  const last = rows.reduce((a, r) => (Number(r?.at) || 0) > (Number(a?.at) || 0) ? r : a, rows[0]);
-  if (PLACE_INBOX_STATES.has(last?.state)) return 'inbox';
-  return last?.state === 'done' && (last.quiet === true || last.wantsReply === false) ? 'sent' : 'inbox';
+  return 'inbox'; // issue 1962: no triage with Smart inbox off
 }
 /** Sent rows by the thread they ran in: Map thread id → rows. Pure. */
 function sentIndex(rows) {
@@ -439,7 +431,8 @@ function activityGroups(groups, { needs, unread, at }, { order = 'newest', inbox
     const top = s => !!inbox.top?.(s), pin = s => Number(inbox.pin?.(s)) || 0;
     const base = s => Number(inbox.base ? inbox.base(s) : top(s) ? 0 : pin(s)) || 0;
     // Smart inbox (issues 1883, 1927): its rule already read the quiet mark (a quiet send is not asked for; information
-    // he asked for or set up is in Inbox even when the box marked the run quiet), so here it is not read twice.
+    // he asked for or set up is in Inbox even when the box marked the run quiet), so here it is not read twice. With it
+    // off the shell's quiet(s) is always false (live.js quietReply, issue 1962), so nothing is kept out for being quiet.
     const ibQuiet = place?.smart ? () => false : inbox.quiet;
     const own = s => inInbox(s) && (base(s) > 0 || inboxWants(s, { needs, unread, quiet: ibQuiet }));
     const want = s => top(s) || inInbox(s) && (pin(s) > 0 || inboxWants(s, { needs, unread, quiet: ibQuiet }));

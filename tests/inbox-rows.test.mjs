@@ -35,16 +35,15 @@ test('no switch: wizard/inbox-rows is gone from the catalog and the list model',
   assert.equal(M.inboxRowsOn, undefined);
 });
 
-test('list model: Inbox holds only what needs him; pinned first in pin order; no Recent, no Show older', () => {
-  // w0 is his send: the box's Sent log names its thread (issue 1829).
-  const place = { sent: M.sentIndex([{ id: 'sent_w0', thread: 'w0', state: 'running', at: NOW }]) };
-  const g = M.activityGroups(groups(ROWS()), facts, { now: NOW, inbox: { quiet, pin }, place });
-  assert.deepEqual(J(g.ready.map(s => s.id)), ['d1', 'pr1', 'new1', 'y1', 'f1', 'read1'], 'pinned Daily, #priority, then newest first');
-  assert.deepEqual(J(g.working.map(s => s.id)), ['w1'], 'a running thread no Sent row names is in Working on top, not in Inbox (issue 1810)');
+test('list model, Smart inbox off (wizard-ux issue 1962): every thread with agent activity is in Inbox, the quiet reply and his own running send too; pinned first in pin order; no Recent, no Show older', () => {
+  // w0 is his send: the box's Sent log names its thread (issue 1829); with Smart inbox off that keeps nothing out of
+  // Inbox, and the shell reports no quiet mark (live.js quietReply counts only with Smart inbox on).
+  const place = { sent: M.sentIndex([{ id: 'sent_w0', thread: 'w0', state: 'running', at: NOW }]), quiet: () => false };
+  const g = M.activityGroups(groups(ROWS()), facts, { now: NOW, inbox: { quiet: () => false, pin }, place });
+  assert.deepEqual(J(g.ready.map(s => s.id)), ['d1', 'pr1', 'q1', 'new1', 'y1', 'f1', 'read1'], 'pinned Daily, #priority, then newest first');
+  assert.deepEqual(J(g.working.map(s => s.id)), ['w0', 'w1'], 'every running thread is in Inbox › Working on top (issue 1810), his own too');
   assert.equal(g.pinned, 2);
-  assert.ok(!g.ready.some(s => s.id === 'q1'), 'a quiet "nothing needed" reply is never in Inbox (it is in Sent)');
-  assert.ok(!g.ready.some(s => s.id === 'w0'), 'his own send still working with no answer is not in Inbox (Sent › Working)');
-  assert.ok(!g.working.some(s => s.id === 'w0'), 'a run he started is in Sent › Working, not in Inbox › Working (issue 1829)');
+  assert.ok(g.ready.some(s => s.id === 'q1'), 'a quiet "nothing needed" reply is in Inbox (triage is Smart inbox only)');
   assert.deepEqual([g.recent.length, g.older], [0, 0]);
   assert.deepEqual(J(g.snoozed.map(s => s.id)), ['s1']);
   assert.deepEqual(J(g.archive.map(s => s.id)), ['a1']);

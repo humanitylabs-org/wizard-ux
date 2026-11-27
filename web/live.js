@@ -129,9 +129,11 @@
    * that ended done or fyi (Agent Service quietReply). That answer is not new to him: no unread dot, no count, not in
    * Inbox / Ready; Sent shows it Done. An ask on the row (needs you, check), a failure or a run still going never is.
    * Main agent only: the Sent log is the owner's to the main agent, so a routed agent's row (host-profile, container,
-   * restricted) never counts as quiet. */
+   * restricted) never counts as quiet. Keeping a reply out of Inbox is triage, so the mark counts only with Smart inbox
+   * on (wizard-ux issue 1962, switch wizard/smart-inbox, off by default): off, the answer is new like any other. */
+  function smartInboxOn() { try { return (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/smart-inbox'); } catch (_) { return false; } }
   function quietReply(s) {
-    return !!s && s.quietReply === true && (!s.agent || s.agent === 'hermes') && !s.critical
+    return !!s && s.quietReply === true && smartInboxOn() && (!s.agent || s.agent === 'hermes') && !s.critical
       && !['needs_you', 'check'].includes(s.attention?.state) && !['failed', 'interrupted', 'waiting_for_approval', 'unknown'].includes(s.status)
       && !globalThis.WizChatsListModel?.isListWorking?.(s);
   }

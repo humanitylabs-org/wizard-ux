@@ -76,11 +76,11 @@ test('blockers keep their place; Inbox and Sent stay one place each', () => {
   for (const s of [t({ source: 'cron' }), t({ id: 'wizard_topics' }), t()]) assert.ok(['inbox', 'sent'].includes(P(s, [])));
 });
 
-test('switch off: the same threads are placed as today', () => {
-  const off = { needs, quiet: () => false, working: s => s.status === 'running' };
+test('switch off: nothing is routed out of Inbox (wizard-ux issue 1962)', () => {
+  const off = { needs, quiet: () => true, working: s => s.status === 'running' };
   assert.equal(M.placeOf(t({ source: 'cron', preview: '[SILENT]' }), [], off), 'inbox', 'off: an agent-started thread stays in Inbox');
-  assert.equal(M.placeOf(t({ attention: att('done', 'Fixed') }), [row({ text: 'Fix the login bug' })], off), 'inbox', 'off: today\'s rule');
-  assert.equal(M.placeOf(t({ attention: att('done', 'Ok') }), [row({ text: 'Summarize it', wantsReply: false })], off), 'sent', 'off: today\'s rule');
+  assert.equal(M.placeOf(t({ attention: att('done', 'Fixed') }), [row({ text: 'Fix the login bug' })], off), 'inbox', 'off: a done reply is in Inbox');
+  assert.equal(M.placeOf(t({ attention: att('done', 'Ok') }), [row({ text: 'Summarize it', wantsReply: false, quiet: true })], off), 'inbox', 'off: a quiet done reply is in Inbox too');
   assert.equal(M.placeOf(t({ id: 'wizard_topics', attention: att('fyi', 'Topics') }), [], { ...off, pinned: () => true }), 'inbox', 'off: pins change nothing');
 });
 
@@ -91,7 +91,9 @@ test('with Inbox rows on, the quiet mark does not take a requested thread back o
   const run = place => M.activityGroups(g, { needs, unread: () => false, at: s => s.at }, { inbox: { quiet: s => s.quietReply === true }, place });
   const ids = r => JSON.parse(JSON.stringify((r?.ready || []).map(s => s.id)));
   assert.deepEqual(ids(run({ sent: new Map(), smart: true, pinned: s => PINS.has(s.id) })), ['wizard_topics'], 'smart: Topics in Inbox, the helper result not');
-  assert.deepEqual(ids(run({ sent: new Map() })), [], 'smart off: the quiet mark keeps both out, as today');
+  // Smart inbox off: the shell reports no quiet mark (live.js quietReply, issue 1962), so nothing is kept out of Inbox.
+  const off = M.activityGroups(g, { needs, unread: () => false, at: s => s.at }, { inbox: { quiet: () => false }, place: { sent: new Map() } });
+  assert.deepEqual(ids(off), ['helper', 'wizard_topics'], 'smart off: nothing kept out of Inbox (issue 1962)');
 });
 
 // The shell's own pinned fact (core/chats-ready.js inboxPlace): the shared pin list, or Hermes' flag on the list row.

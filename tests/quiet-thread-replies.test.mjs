@@ -1,4 +1,5 @@
-// Quiet inbox: replies typed in a thread (wizard-ux issue 1808; on for everyone since wizard-ux issue 1778).
+// Quiet inbox: replies typed in a thread (wizard-ux issue 1808). Keeping a reply out of Inbox is triage, so since
+// wizard-ux issue 1962 the mark counts only with Smart inbox on (wizard/smart-inbox, off by default).
 // The box (wizard-agent-service, same issue) logs every reply in a thread as a Sent row (source reply, route thread)
 // and marks a thread whose newest answer was to a reply that asked for none, ended done or fyi (quietReply). Here:
 // the real live.js quietReply + isNew + groups lines, the real Sent log reader (live-channels.js) and the real Sent
@@ -13,7 +14,7 @@ import { modelContext } from './fixtures/chats-list-model.mjs';
 
 const live = withLiveParts(readFileSync(new URL('../web/live.js', import.meta.url), 'utf8'));
 const clone = v => JSON.parse(JSON.stringify(v));
-const ON = '';
+const ON = 'wizard/smart-inbox';
 
 // live.js: quietReply and the three places that count a thread as new (isNew, visibleUnread, groups).
 function liveCtx(tweaks = ON) {
@@ -64,12 +65,16 @@ test('issue 1808: main versus routed: only the main agent\'s list drops a quiet 
   assert.equal(c.L.isNew(quiet({ agent: 'hermes' })), false, 'a row pinned to the main agent by id is main');
 });
 
-test('issue 1778: no switch: a quiet reply is quiet with any or no data-tweaks (old saved values change nothing)', () => {
-  for (const tweaks of ['', 'wizard/agent-inbox', 'wizard/chats-inbox', 'wizard/agent-inbox wizard/chats-inbox']) {
+test('issue 1962: the quiet mark counts only with Smart inbox on; off (any other or no data-tweaks) the answer is new and in Ready like any other', () => {
+  for (const tweaks of ['', 'wizard/agent-inbox', 'wizard/chats-inbox', 'wizard/agent-inbox wizard/chats-inbox', 'wizard/smart-inboxes']) {
     const c = liveCtx(tweaks); c.rows = [quiet()];
-    assert.equal(c.L.isNew(c.rows[0]), false, `tweaks "${tweaks}": not unread`);
-    assert.equal(c.L.groups().ready.length, 0, `tweaks "${tweaks}": not in Ready`);
+    assert.equal(c.L.quietReply(c.rows[0]), false, `tweaks "${tweaks}": not quiet`);
+    assert.equal(c.L.isNew(c.rows[0]), true, `tweaks "${tweaks}": unread`);
+    assert.deepEqual(clone(c.L.groups().ready.map(s => s.id)), ['clips'], `tweaks "${tweaks}": in Ready`);
   }
+  const on = liveCtx('wizard/desktop-chats wizard/smart-inbox'); on.rows = [quiet()];
+  assert.equal(on.L.isNew(on.rows[0]), false, 'Smart inbox on: not unread');
+  assert.equal(on.L.groups().ready.length, 0, 'Smart inbox on: not in Ready');
 });
 
 test('issue 1808: the list keeps the box\'s mark from both list shapes, and only when it is true', () => {
