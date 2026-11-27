@@ -189,7 +189,6 @@ Settings › Appearance › Try new features lists unfinished features to try, A
 - **Phone media player for Music and Podcasts**: Android and iPhone: Music and Podcasts play through the phone's media player (lock screen, Control Center, headset buttons), and keep playing locked.
 - **Phone recovery mode**: Android: a frozen start reopens in recovery mode.
 - **Private first setup**: New installs start private: Welcome leads with Tinfoil; Claude and ChatGPT are optional extras.
-- **Private routing**: Orb opens the named agent's thread; a chip moves it.
 - **Repair the agent's Wizard connection**: If the agent's app tools fail (unauthorized), `wizard link` restores the box's token; `wizard doctor` checks it.
 - **Result reader**: A private model files each finished background task.
 - **Send and go**: On desktop, sending opens a fresh chat.

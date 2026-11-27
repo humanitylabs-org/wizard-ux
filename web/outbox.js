@@ -472,14 +472,13 @@
    * ask names it `source: typed`, and the box answers dump only for a task with no reply phrase, question or "let me
    * know when". Anything else is today's visible thread. */
   const DUMP_ROUTE_MS = 6000;
-  /* Private routing (wizard-ux issue 1804, switch wizard/private-routing; the Agent Service half is
+  /* Private routing (wizard-ux issue 1804, on for everyone; the Agent Service half is
    * wizard-agent-service issue 629). In private mode the route's answer names the agent a take is for (agent_id, and a
-   * model when one was named). With the switch on, that same one answer (asked here, or already asked by the phone for a
+   * model when one was named). That same one answer (asked here, or already asked by the phone for a
    * typed or short take: it.routed; it.routeOnly asks without accept_dump) puts the take on that agent and model, with the owner's exact words, before its
    * thread is announced; it.privateRoute says where it went and why (core/private-route.js paints it and opens it).
-   * Switch off, an answer that names no agent, or an agent this Wizard doesn't list: nothing here changes the take. */
-  const PRIVATE_ROUTING = 'wizard/private-routing';
-  const routingOn = () => { try { return (document.documentElement.dataset.tweaks || '').split(/\s+/).includes(PRIVATE_ROUTING); } catch (_) { return false; } };
+   * An answer that names no agent (any box without a private default agent), or an agent this Wizard doesn't list:
+   * nothing here changes the take. */
   const AGENT_ID = /^[a-z0-9][a-z0-9-]{0,40}$/;
   function routeChoice(j) {
     const c = j?.cmd;
@@ -505,7 +504,7 @@
     if (it.dump !== true) return false;
     const plain = it.kind === 'new' && !(it.agent && window.WosAgents?.isOther?.(it.agent)) && !it.steerRunId && !it.reply && !it.retryRunId && !String(it.typed || '').trim()
       && !(it.files || []).some(f => f?.id && f.id !== it.audioFile?.id);
-    const routing = plain && routingOn(), asked = routing && it.routed?.cmd ? it.routed : null;
+    const routing = plain, asked = routing && it.routed?.cmd ? it.routed : null;
     let url = '';
     // A typed new chat (issue 669) is asked only when the box said it decides typed tasks (its Sent log's typed_routing),
     // which it does from his words alone, with no router configured too: the box's own route then.
