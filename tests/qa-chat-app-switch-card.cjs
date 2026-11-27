@@ -79,18 +79,7 @@ const report = { origin, web, cases: [] };
         const thread = page.locator('.ch-thread').filter({ visible: true }).first();
         const text = await thread.innerText(); entry.threadText = text.slice(0, 600);
         assert.doesNotMatch(text, /WIZARD_TWEAK|drag-events|quick-links|wizard-gone/, 'marker and ids never show as text');
-<<<<<<< HEAD
         {
-=======
-        if (offOnly) {
-          await page.waitForTimeout(800);
-          assert.equal(await page.locator(`[data-chat-tweak="${CAL}"]`).count(), 0, 'off: no app row');
-          assert.equal(await page.locator('[data-chat-tweak-update]').count(), 0, 'off: no Update');
-          assert.equal(entry.reads, 0, 'off: the App Manager catalog is never read');
-          assert.equal(await card.getAttribute('data-chat-tweak-card'), 'wizard/swap-sides');
-          await page.screenshot({ path: path.join(out, stem + '.png') });
-        } else {
->>>>>>> origin/main
           const sw = page.locator(`.ch-thread [data-chat-tweak="${CAL}"]`).filter({ visible: true }).first();
           await sw.waitFor();
           entry.row = await sw.evaluate(b => ({ cls: b.className, role: b.getAttribute('role'), checked: b.getAttribute('aria-checked'), name: b.querySelector('.st-tx b')?.textContent, by: b.querySelector('.tw-by')?.textContent, desc: b.querySelectorAll('.st-tx small')[1]?.textContent, disabled: b.disabled }));
