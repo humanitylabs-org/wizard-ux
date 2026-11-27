@@ -15,8 +15,8 @@ Every screen, Settings page and feature switch of the Wizard interface (the phon
 
 ## Screens
 
-- **Home**: The start screen: what's Working and Ready, the Resources bars (server and AI accounts), your apps. Desktop: AI apps view: close the open chat (✕, Esc or ⌥`) to get the empty Home with the message box, the orb and your pinned apps; Desks view: the house at the left of the top bar (⌥`). Phone: the first desk; the gear at its top right opens Settings.
-- **Chats**: All your conversations with the agent, in sections: Errors, Working, Saved, Ready, Yesterday, Past week, Snoozed, Archive (By day), or Working, Ready, Snoozed, Archive (By status; chosen in the Filter sheet). Search, Filter and + New chat. Long-press or right-click a chat for Pin, Rename, Mark unread, Snooze, Archive / Restore. Desktop: AI apps view: the chats sidebar on the left (search ⌥K, + New chat ⌥N); Desks view: the Inbox count in the top bar (⌥I). Phone: the Chats desk, or hold the orb and say 'chats'.
+- **Home**: The start screen: what's Working and Ready, the Resources bars (server and AI accounts), your apps. Desktop: AI apps view: close the open chat (✕, Esc or ⌥`) to get the empty Home with the message box, the orb and your pinned apps; Desks view: the house at the left of the top bar (⌥`). Phone: Home in the bottom bar (Home, Chats, orb, Messenger, Apps); the gear at its top right opens Settings. Hold the Messenger tile to pin another app there; a sideways swipe on the Apps tile flips between your last two apps.
+- **Chats**: All your conversations with the agent, in sections: Errors, Working, Saved, Ready, Yesterday, Past week, Snoozed, Archive (By day), or Working, Ready, Snoozed, Archive (By status; chosen in the Filter sheet). Search, Filter and + New chat. Long-press or right-click a chat for Pin, Rename, Mark unread, Snooze, Archive / Restore. Desktop: AI apps view: the chats sidebar on the left (search ⌥K, + New chat ⌥N); Desks view: the Inbox count in the top bar (⌥I). Phone: Chats in the bottom bar, or hold the orb and say 'chats'.
 - **Work**: Chats opened at a section (a link to Working, Ready, Archive …).
 - **Chats › Errors**: Chats whose last reply failed, with Retry (and why, with Why a reply failed on).
 - **Chats › Working**: Chats where the agent is still working; order set in Settings › Chats & app screens › Working threads.
@@ -191,7 +191,6 @@ Settings › Appearance › Try new features lists unfinished features to try, A
 - **One UI icon count**: Android: Messenger icon count shows the exact number in a One UI-style corner badge.
 - **One-tap Snooze · bottom of Ready**: Snooze is one tap and the lowest priority: the thread waits at the bottom of Ready, below approvals, until you restore or reply.
 - **Phone bar: bigger orb, one badge**: Phone bar: bigger orb, one badge. (phone only).
-- **Phone bar: Home, Chats, Messenger, Apps**: Phone bar of four places around the orb instead of desks: Home, Chats, Messenger, Apps. Hold Messenger to pin another app there; swipe the Apps tile to flip between your last two apps. (phone only).
 - **Phone media player for Music and Podcasts**: Android and iPhone: Music and Podcasts play through the phone's media player (lock screen, Control Center, headset buttons), and keep playing locked.
 - **Phone recovery mode**: Android: a frozen start reopens in recovery mode.
 - **Phone tester builds**: Phones get the newest tester build.
