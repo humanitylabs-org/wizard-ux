@@ -193,15 +193,26 @@ window.WizCore.chatsParts.sent = function ({ ago, ch, CH, CHAN_VIEW_KEY, chanEls
     return ibRow({ key: `sent:${esc(g.key)}`, wrap: ' ch-st-wrap', cls: ` ch-st-row st-${esc(r.state)}${m === 'needs' ? ' needs' : ''}`, open: `data-chsent="${esc(r.id)}" data-chsentthread="${esc(g.key)}" aria-haspopup="dialog" aria-keyshortcuts="Shift+F10"`,
       tip: 'Open thread · hold or open the context menu for actions', av: f.av, from: esc(f.from), time: esc(g.at ? ago(g.at) : ''), title: esc(clip(stTitle(g), 120)), mark: ibMark(m), line: esc(clip(s?.preview || stLine(r), 160)) });
   }
+  /* Typed messages (wizard-agent-service issue 669, same switch): one line on how often the box's guess for a typed task
+   * matched what he did, and whether typed tasks now run in the background. The numbers are the box's (sent log
+   * typed_routing); a box without them shows nothing. */
+  function stTyped(st) {
+    const t = smartOn() ? st.typed : null;
+    if (!t || (!t.judged && !t.on)) return '';
+    const pct = t.rate != null ? ` (${Math.round(t.rate * 100)}%)` : '';
+    const line = t.on ? `Typed tasks now run in the background: Wizard guessed ${t.matched} of ${t.judged} right${pct}.`
+      : `Typed tasks open a chat until Wizard guesses ${Math.round(t.need * 100)}% of ${t.min} right: ${t.matched} of ${t.judged} so far${pct}.`;
+    return `<p class="ch-st-typed" data-part="typed-routing" data-on="${t.on ? '1' : '0'}">${esc(line)}</p>`;
+  }
   function stBody(st) {
-    const groups = stGroups(st);
-    if (!groups.length) return st.rows.length ? '<div class="ch-empty">Nothing here now. What you sent that needs you is in Inbox.</div>' : '<div class="ch-empty">Nothing sent yet. What you say to the orb, start in a new chat or reply in a thread shows here.</div>';
+    const groups = stGroups(st), typed = stTyped(st);
+    if (!groups.length) return typed + (st.rows.length ? '<div class="ch-empty">Nothing here now. What you sent that needs you is in Inbox.</div>' : '<div class="ch-empty">Nothing sent yet. What you say to the orb, start in a new chat or reply in a thread shows here.</div>');
     const sec = (k, label, list) => {
       if (!list.length) return '';
       const open = chatVars.secOpen?.[k] !== false;
       return `<section class="ch-sec ch-act ch-ib ch-sr ch-st${open ? ' open' : ''}" data-sec="${k}"><button class="ch-sec-h" data-sectoggle="${k}" aria-expanded="${open}"><span>${label}</span><small>${list.length}</small><i aria-hidden="true"></i></button>${open ? `<div class="ch-sec-b">${list.map(stRow).join('')}</div>` : ''}</section>`;
     };
-    return sec('sentWorking', 'Working', groups.filter(g => g.working)) + sec('sentProcessed', 'Processed', groups.filter(g => !g.working))
+    return typed + sec('sentWorking', 'Working', groups.filter(g => g.working)) + sec('sentProcessed', 'Processed', groups.filter(g => !g.working))
       + (st.next ? '<button type="button" class="ch-more" data-chsentmore>Show older</button>' : '');
   }
   // "Sent from you": the thread's sends, newest first, and the corrections for the newest one that went somewhere.

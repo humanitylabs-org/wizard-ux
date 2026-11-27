@@ -417,6 +417,12 @@
       "kind": "write",
       "note": "Agent inbox Open / Send to inbox (wizard-ux issue 1570): POST open|send only on an owner tap (on for everyone since wizard-ux issue 1778), which none of the three flows tap; tests/agent-inbox-open-send.test.mjs covers it against a fake box. Refused and collected, never answered, if a flow reaches it."
     },
+    "/wizard/v1/route": {
+      "status": "not-exercised",
+      "source": "web/outbox.js",
+      "kind": "write",
+      "note": "Typed tasks (wizard-agent-service issue 669, switch wizard/smart-inbox, off): a typed new chat asks the box's own route only while the switch is on and the box's Sent log says typed_routing.on; none of the proof flows sends. Refused and collected, never answered, if a flow reaches it. tests/typed-quiet.test.mjs covers it against a fake box."
+    },
     "/wizard/v1/sent": {
       "status": "catalogued",
       "source": "web/live.js",
