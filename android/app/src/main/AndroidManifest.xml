@@ -136,6 +136,15 @@
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|uiMode|density"
             android:windowSoftInputMode="adjustResize"
             android:screenOrientation="portrait" />
+        <!-- A call window (wizard-messenger issue 445): only WizardOSNative.openCall starts it, for this Wizard's own call page. -->
+        <activity
+            android:name=".call.CallActivity"
+            android:exported="false"
+            android:label="Call"
+            android:launchMode="singleTask"
+            android:taskAffinity="${applicationId}.call"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|uiMode|density"
+            android:windowSoftInputMode="adjustResize" />
         <receiver android:name=".HomeScreenShortcuts$PinConfirmed" android:exported="false" />
         <activity android:name=".photos.PhotosActivity" android:exported="true" android:launchMode="singleTop" android:parentActivityName=".MainActivity">
             <intent-filter>
