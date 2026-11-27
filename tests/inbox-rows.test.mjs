@@ -149,6 +149,7 @@ function part({ tweaks = 'wizard/desktop-chats', records = [], cur = '' } = {}) 
     isWorking: s => s.status === 'running', LIVE, noteAt: n => n.at, noteRow: n => `<div class="note" data-chnotif="${n.id}"></div>`, renderChatList: () => {}, rowAgent: s => s.agent || 'hermes',
     spacesOf: id => spaces[id] || [], threadAct: (wid, sid, a) => taps.push([wid, sid, a]), toast: () => {}, W: {}, winAgent: () => '',
   });
+  ctx.__live = LIVE;
   return { api, rows, taps, archived, ctx };
 }
 const rowsOf = html => [...html.matchAll(/<div class="ch-row-wrap ch-ib-wrap([^"]*)"[^>]*>([\s\S]*?)<\/button><\/div>/g)].map(m => ({ pinned: / pinned/.test(m[1]), id: (/data-ch(?:open|runopen)="([^"]+)"/.exec(m[2]) || [])[1], body: m[2] }));
@@ -253,11 +254,17 @@ test('switcher Archived view (issue 1998): every archived chat as thread rows, n
   assert.match(api.archivedRowsBody({ id: 'w' }, live), /Nothing archived/, 'none archived: a plain empty state');
 });
 
-test('list painter (issue 1998): the switcher\'s Archived draws archivedRowsBody, not the tag feed; the Inbox gets noArchive only with the switcher', () => {
-  const src = read('web/core/chats-listpaint.js');
-  assert.match(src, /const arcList = csw && !!feed\?\.archivedFeed && !n && typeof archivedRowsBody === 'function';/);
-  const arc = src.indexOf('else if (arcList) body = archivedRowsBody(w, all);'), feed = src.indexOf('else if (feed && !n && !F)');
-  assert.ok(arc > 0 && arc < feed, 'the Archived list is chosen before the feed');
-  assert.match(src, /activityBody\(w, all, listNotes, drafts\.length, \{ noArchive: csw \}\)/);
-  assert.match(read('web/core/chats.js'), /listpaint\(\{ actAllAgents, activityBody, archivedRowsBody,/);
+test('switcher Archived (issue 1998): Restore on a chat older than the list window makes it readable by id first', () => {
+  const { api, taps, ctx } = part();
+  const old = row('arc99', 400, { archived: true }), remembered = [];
+  // the part's LIVE: the live list has no arc99; the title index (searchRows) has it
+  const LIVE = ctx.__live;
+  assert.ok(LIVE, 'the fake LIVE is reachable');
+  LIVE.session = id => remembered.find(s => s.id === id) || null; LIVE.searchRows = () => [old]; LIVE.rememberSearch = s => remembered.push(s);
+  const tap = id => ({ target: { closest: sel => sel === '[data-chibrestore]' ? { dataset: { chibrestore: id } } : null } });
+  assert.equal(api.inboxRowsClick(tap('arc99'), { id: 'w' }), true);
+  assert.deepEqual(remembered.map(s => s.id), ['arc99'], 'remembered before the action');
+  assert.deepEqual(taps, [['w', 'arc99', 'restore']]);
+  api.inboxRowsClick(tap('arc99'), { id: 'w' });
+  assert.equal(remembered.length, 1, 'a row already readable is not remembered again');
 });

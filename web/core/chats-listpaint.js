@@ -49,7 +49,7 @@ window.WizCore.chatsParts.listpaint = function ({ actAllAgents, activityBody, ar
     const csw = !side && typeof switcher !== 'undefined' && !!switcher?.on?.(w); // (tests slice this renderer without it)
     if (csw && !feed && chatVars.chanView === 'channels') chatVars.chanView = 'activity';
     // Its Archived view is a list of archived chats (wizard-ux issue 1998), not the Archived tag's message feed.
-    const arcList = csw && !!feed?.archivedFeed && !n && typeof archivedRowsBody === 'function';
+    const arcList = csw && !!feed?.archivedFeed && typeof archivedRowsBody === 'function';
     // The bottom tabs Inbox · Tags · Sent (wizard-ux issue 1778): the Sent view, and no Running row
     // (Working is Sent's filter). The AI apps sidebar pane has them too (wizard-ux issue 1807).
     const sentTabs = !feed && typeof sentTabsOn === 'function' && sentTabsOn(w), sentView = sentTabs && sentOpen(w);
@@ -132,7 +132,9 @@ window.WizCore.chatsParts.listpaint = function ({ actAllAgents, activityBody, ar
     else if (!LST.ok) body = draftSec + `<div class="ch-empty">${esc(window.WizReach?.failure().message || 'Checking the connection to Wizard…')}</div>`;
     // Channels: the live window only (James, 9 Nov 2026: older chats are reached by asking the agent).
     // The switcher's Archived (wizard-ux issue 1998): the archived chats as thread rows, never a feed of their messages.
-    else if (arcList) body = archivedRowsBody(w, all);
+    // Every archived chat, not only the newest 50 the list window carries: the box's title index (WizLive.searchRows,
+    // every row with its archived mark) under the live rows.
+    else if (arcList) { const m = new Map(); for (const s of (LIVE.searchRows ? LIVE.searchRows(AGID) : [])) if (s && !s.hidden) m.set(s.id, s); for (const s of all) m.set(s.id, s); body = archivedRowsBody(w, [...m.values()]); }
     else if (feed && !n && !F) { const live = new Set((LIVE.sessionsFor ? LIVE.sessionsFor(AGID) : LIVE.sessions).map(s => s.id)), mine = all.filter(s => live.has(s.id)); body = channelFeed(w, feed, typeof chanFeedRows === 'function' ? chanFeedRows(feed, mine) : mine); }
     else if (chanOn && chatVars.chanView === 'channels' && !n && !F) body = channelsBody(w, all);
     // Activity as a short what-needs-me list (issue 1336): Working, Ready, Recent, then folded Snoozed and Archived.

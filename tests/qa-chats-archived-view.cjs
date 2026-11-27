@@ -2,8 +2,9 @@
 // The Chats switcher's Archived view (wizard-ux issue 1998) in a real browser, disposable synthetic box only. Phone
 // 412x915 (Android), Nebula and a light skin, the switcher's fixture (tests/qa-chats-switcher.cjs) plus 160 archived
 // chats. It checks, as a person would do it: Inbox has no Archived fold; the sheet's Archived lists every archived chat
-// as Inbox-style thread rows (no message bubbles), newest first, all 160 by scrolling, each with Restore; a tap opens
-// the chat; Restore puts it back in Inbox; the bar step and the tile flip into Archived show the same list.
+// as Inbox-style thread rows (no message bubbles), newest first, all 161 by scrolling (the box's list carries only the
+// newest 50 archived, as the Agent Service's archive-50 window; the rest come from its slim title index), each with
+// Restore; a tap opens the chat; Restore (of one beyond the window) puts it back in Inbox; the bar step and the tile flip into Archived show the same list.
 // Shots and report.json go to QA_OUT.
 const assert = require('node:assert/strict');
 const { chromium } = require('../tools/qa-playwright.cjs');
@@ -99,7 +100,16 @@ const report = { origin, web, cases: [] };
           if (p === '/wizard/hermes/api/sessions') {
             const ag = u.searchParams.get('agent') || '';
             if (ag && ag !== 'hermes') return r.fulfill({ json: { data: [raw('qa-claude', CLAUDE)], has_more: false } });
-            return r.fulfill({ json: { data: Object.entries(threads).map(([k, s]) => raw(k, s)), has_more: false } });
+            // As the Agent Service's list window (session-list-window.mjs): the list carries only the newest 50 archived
+            // chats (archive-50); the slim title index carries every row with its archived mark.
+            const all = Object.entries(threads), arc = all.filter(([, s]) => s.archived).sort((a, b) => b[1].at - a[1].at), keep = new Set(arc.slice(0, 50).map(([k]) => k));
+            const build = 'b' + all.filter(([, s]) => s.archived).length;
+            if (u.searchParams.get('fields') === 'slim') return r.fulfill({ json: { object: 'list', fields: 'slim', account_scope: 'qa', build, snapshot: 's-' + build, has_more: false, archive_cursor: null, list_version: 1, window: 'archive-50',
+              data: all.map(([k, s]) => ({ id: k, agent: 'hermes', title: s.title, preview: s.msgs.at(-1)?.[1] || '', status: 'completed', cardTime: iso(s.at), archived: !!s.archived })) } });
+            if (u.searchParams.get('window') === 'archive-50') return r.fulfill({ json: { object: 'list', list_version: 1, window: 'archive-50', build, snapshot: 's-' + build, has_more: false,
+              archive_total: arc.length, archive_returned: Math.min(50, arc.length), archive_cursor: arc.length > 50 ? { after: arc[49][0], remaining: arc.length - 50 } : null,
+              data: all.filter(([k, s]) => !s.archived || keep.has(k)).map(([k, s]) => ({ ...raw(k, s), listVersion: 1 })) } });
+            return r.fulfill({ json: { data: all.map(([k, s]) => raw(k, s)), has_more: false } });
           }
           const m = /^\/wizard\/hermes\/api\/sessions\/([^/]+)(\/messages)?$/.exec(p);
           if (m) {
@@ -150,9 +160,17 @@ const report = { origin, web, cases: [] };
         S.inbox = await look(); await shot('1-inbox');
         assert.equal(S.inbox.view, 'inbox'); assert.ok(!S.inbox.fold, 'Inbox draws no Archived fold ' + S.inbox.foldText);
         assert.ok(S.inbox.inboxRows.includes('qa-new') && !S.inbox.inboxRows.some(id => id.startsWith('qa-arc-') || id === 'qa-old'), 'Inbox lists only Inbox threads ' + JSON.stringify(S.inbox.inboxRows));
+        // A search left typed in Inbox must not narrow Archived (it has no search field to clear it).
+        await tapAt('.ch-list [data-chtbsearch]'); await page.fill('.ch-list [data-chsearch]', 'Weather'); await nap(800);
+        S.searching = await page.evaluate(() => [...document.querySelectorAll('.ch-list [data-chopen]')].filter(n => n.getClientRects().length).map(n => n.dataset.chopen));
+        assert.deepEqual(S.searching, ['qa-new'], 'the Inbox search narrows Inbox ' + JSON.stringify(S.searching));
         // 1. Sheet → Archived: every archived chat as thread rows, newest first, with Restore.
         await tapAt('.sec-tile[data-sec="chats"]');
         await tapAt('#chatsSwitch [data-csview="archived"]'); await nap(600);
+        // The live list holds only the newest 50 archived chats (as on a real box); the rest come from the title index.
+        S.window = await page.evaluate(() => WizLive.sessions.filter(s => s.archived).length);
+        assert.ok(S.window <= 50, 'the list window carries at most 50 archived chats ' + S.window);
+        await page.waitForFunction(n => document.querySelectorAll('.ch-list .ch-ib-archived [data-chopen]').length >= n, ARC_N, { timeout: 15000 }).catch(() => {});
         S.arc = await look(); await shot('2-archived');
         assert.equal(S.arc.view, 'archived'); assert.match(S.arc.title, /^Archived\b/);
         const want = Object.entries(threads).filter(([, s]) => s.archived).sort((a, b) => b[1].at - a[1].at).map(([k]) => k);
@@ -173,8 +191,8 @@ const report = { origin, web, cases: [] };
         assert.ok(S.opened === 'qa-old' || S.openedText, 'the tap opens the chat ' + S.opened);
         await page.evaluate(() => __wos.onBack()); await nap(900);
         S.back = await look(); assert.equal(S.back.view, 'archived', 'Back from the chat returns to Archived');
-        // 2. Restore puts it back in Inbox.
-        const restoreId = want[1];
+        // 2. Restore puts it back in Inbox: an old one, beyond the list's 50-row archive window.
+        const restoreId = want[120];
         await tapAt(`.ch-list [data-chibrestore="${restoreId}"]`); await nap(1200);
         S.restored = await look();
         S.restoreWrite = entry.writes.filter(x => x.method === 'PATCH' && x.path.endsWith('/' + restoreId));

@@ -241,7 +241,12 @@ window.WizCore.chatsParts.inboxrows = function ({ actMark, actNeeds, actUnread, 
     if (a) { threadAct(w.id, a.dataset.chibarch, 'done'); return true; }
     // An Archived row's Restore (issue 1998): back to Inbox, as the thread's own Restore action.
     const rs = e.target.closest('[data-chibrestore]');
-    if (rs) { threadAct(w.id, rs.dataset.chibrestore, 'restore'); return true; }
+    if (rs) {
+      // A chat older than the list's archive window is only in the title index: make it readable by id first.
+      const id = rs.dataset.chibrestore;
+      if (!LIVE.session?.(id)) { const r = LIVE.searchRows?.(winAgent(W[w.id] || w) || '')?.find(s => s.id === id); if (r) LIVE.rememberSearch?.(r); }
+      threadAct(w.id, id, 'restore'); return true;
+    }
     // An alert row's Archive (issue 1941): the alert, or every alert in its folded row, as the Alert actions' Archive.
     const nb = e.target.closest('[data-chibnote]');
     if (nb) { const ids = String(nb.dataset.chibnote || '').split(' ').filter(Boolean); if (ids.length && typeof noteRowAct === 'function') void noteRowAct(ids[0], 'done', ids); return true; }
