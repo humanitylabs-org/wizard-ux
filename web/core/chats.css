@@ -1011,7 +1011,6 @@ html:root .ch-act-sort select:hover { background: color-mix(in srgb, var(--ink) 
 html:root .ch-act-sort select:focus-visible { outline: 2px solid var(--wz-accent, var(--violet-2)); outline-offset: 0; }
 html:root .ch-act-sort select option { color: var(--ink); background: var(--bg); }
 html:root .ch-act-sort::after { content: ""; position: absolute; right: 9px; top: 50%; width: 5px; height: 5px; margin-top: -4px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; color: var(--ink-3); transform: rotate(45deg); pointer-events: none; }
-html:root .ch-act-older { display: block; width: 100%; }
 /* Agents in the Channels list: a folded row above Archive, each agent with its sigil */
 html:root .ch-chan-agents { margin-top: 8px; }
 html:root .ch-chan-sig { flex: none; display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; overflow: hidden; }
@@ -1101,7 +1100,7 @@ html:root .ch-chan-draft + .ch-chan-ind { margin-left: 0; }
 /* AI apps sidebar: "✎ Draft" leads the row's second line (the channel), or is the line when the row has no channel. */
 html:root[data-layout="ai-apps"] .aad-rw[data-draft] .aad-chan-line::before { content: "✎ Draft · "; color: var(--wz-warning, var(--amber)); font-weight: 500; }
 html:root[data-layout="ai-apps"] .aad-rw[data-draft] .aad-draft-line::before { content: "✎ Draft"; }
-/* Activity with nothing in it (wizard-ux issue 1731): one deliberate empty state on an opaque panel, in every skin. */
+/* Chats with nothing in it (wizard-ux issue 1731): one deliberate empty state on an opaque panel, in every skin. */
 html:root .ch-act-empty { display: flex; flex-direction: column; align-items: center; gap: 6px; margin: 24px 16px; padding: 22px 18px; border: 1px solid var(--wz-border, var(--line)); border-radius: 16px; background-color: var(--wz-base, var(--bg)); background-image: linear-gradient(var(--wz-surface, transparent), var(--wz-surface, transparent)); color: var(--wz-text-secondary, var(--ink-2)); text-align: center; font-size: 0.875rem; line-height: 1.5; }
 html:root .ch-act-empty b { color: var(--wz-text, var(--ink)); font-size: 1rem; }
 html:root .ch-act-empty .ch-fclear { margin-top: 8px; background-color: var(--wz-base, var(--bg)); background-image: linear-gradient(var(--wz-surface-raised, transparent), var(--wz-surface-raised, transparent)); color: var(--wz-text, var(--ink)); }
@@ -1242,33 +1241,33 @@ html:root[data-shell="desktop"][data-layout="ai-apps"] .aad-chan .ch-tabbar { ma
 html:root .ch-fail.ch-bg-result { background: color-mix(in srgb, var(--wz-accent) 8%, transparent); border-color: color-mix(in srgb, var(--wz-accent) 30%, transparent); }
 html:root .ch-fail.ch-bg-result .lb { color: var(--wz-accent); }
 
-/* Inbox rows and Sent rows (wizard-ux issues 1779 and 1814, switches wizard/inbox-rows and wizard/sent-rows): the
+/* Inbox rows and Sent rows (wizard-ux issues 1779 and 1814; Inbox rows on for everyone since 27 Nov 2026): the
  * Signal / Telegram chat rows drawn by core/chats-inboxrows.js ibRow, one look for both lists (moved word for word from
  * the inbox-rows package so Sent wears it too; Sent as threads, wizard-ux issue 1880, wears it as well). Wizard tokens only; the list sits on an opaque panel. */
-:is(html[data-tweaks~="wizard/inbox-rows"], html[data-tweaks~="wizard/sent-rows"], html[data-tweaks~="wizard/sent-threads"], html[data-tweaks~="wizard/smart-inbox"]) .ch-list .ch-sec.ch-ib > .ch-sec-b { background: linear-gradient(var(--wz-surface), var(--wz-surface)), var(--wz-canvas); border-radius: var(--wz-radius-tile); overflow: hidden; }
-:is(html[data-tweaks~="wizard/inbox-rows"], html[data-tweaks~="wizard/sent-rows"], html[data-tweaks~="wizard/sent-threads"], html[data-tweaks~="wizard/smart-inbox"]) .ch-list .ch-ib-wrap { position: relative; display: flex; align-items: stretch; background: transparent; }
-:is(html[data-tweaks~="wizard/inbox-rows"], html[data-tweaks~="wizard/sent-rows"], html[data-tweaks~="wizard/sent-threads"], html[data-tweaks~="wizard/smart-inbox"]) .ch-list .ch-ib-wrap + .ch-ib-wrap { box-shadow: inset 0 1px 0 color-mix(in srgb, var(--wz-border) 70%, transparent); }
-:is(html[data-tweaks~="wizard/inbox-rows"], html[data-tweaks~="wizard/sent-rows"], html[data-tweaks~="wizard/sent-threads"], html[data-tweaks~="wizard/smart-inbox"]) .ch-list .ch-ib-wrap > .ch-row.ch-ib-row { flex: 1; min-width: 0; height: auto; min-height: 72px; box-sizing: border-box; align-items: center; gap: 12px; padding: 8px 52px 8px 12px; border-radius: 0; background: transparent; }
-:is(html[data-tweaks~="wizard/inbox-rows"], html[data-tweaks~="wizard/sent-rows"], html[data-tweaks~="wizard/sent-threads"], html[data-tweaks~="wizard/smart-inbox"]) .ch-list .ch-ib-wrap > .ch-row.ch-ib-row::after { content: none; }
-:is(html[data-tweaks~="wizard/inbox-rows"], html[data-tweaks~="wizard/sent-rows"], html[data-tweaks~="wizard/sent-threads"], html[data-tweaks~="wizard/smart-inbox"]) .ch-list .ch-ib-wrap > .ch-row.ch-ib-row:hover { background: color-mix(in srgb, var(--wz-text) 5%, transparent); }
-:is(html[data-tweaks~="wizard/inbox-rows"], html[data-tweaks~="wizard/sent-rows"], html[data-tweaks~="wizard/sent-threads"], html[data-tweaks~="wizard/smart-inbox"]) .ch-list .ch-ib-wrap > .ch-row.ch-ib-row:active { background: color-mix(in srgb, var(--wz-text) 9%, transparent); }
-:is(html[data-tweaks~="wizard/inbox-rows"], html[data-tweaks~="wizard/sent-rows"], html[data-tweaks~="wizard/sent-threads"], html[data-tweaks~="wizard/smart-inbox"]) .ch-list .ch-ib-av { flex: none; width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; font-size: 1.5rem; line-height: 1; background: var(--wz-surface-raised); color: var(--wz-text); overflow: hidden; }
-:is(html[data-tweaks~="wizard/inbox-rows"], html[data-tweaks~="wizard/sent-rows"], html[data-tweaks~="wizard/sent-threads"], html[data-tweaks~="wizard/smart-inbox"]) .ch-list .ch-ib-av svg, :is(html[data-tweaks~="wizard/inbox-rows"], html[data-tweaks~="wizard/sent-rows"], html[data-tweaks~="wizard/sent-threads"], html[data-tweaks~="wizard/smart-inbox"]) .ch-list .ch-ib-av .ag-sig { width: 30px; height: 30px; border-radius: 50%; font-size: 0.875rem; }
-:is(html[data-tweaks~="wizard/inbox-rows"], html[data-tweaks~="wizard/sent-rows"], html[data-tweaks~="wizard/sent-threads"], html[data-tweaks~="wizard/smart-inbox"]) .ch-list .ch-ib-bd { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-:is(html[data-tweaks~="wizard/inbox-rows"], html[data-tweaks~="wizard/sent-rows"], html[data-tweaks~="wizard/sent-threads"], html[data-tweaks~="wizard/smart-inbox"]) .ch-list .ch-ib-l1, :is(html[data-tweaks~="wizard/inbox-rows"], html[data-tweaks~="wizard/sent-rows"], html[data-tweaks~="wizard/sent-threads"], html[data-tweaks~="wizard/smart-inbox"]) .ch-list .ch-ib-l2 { display: flex; align-items: center; gap: 8px; min-width: 0; }
-:is(html[data-tweaks~="wizard/inbox-rows"], html[data-tweaks~="wizard/sent-rows"], html[data-tweaks~="wizard/sent-threads"], html[data-tweaks~="wizard/smart-inbox"]) .ch-list .ch-ib-from { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: 600 0.8125rem / 1.3 var(--wz-font-ui, inherit); color: var(--wz-accent); }
-:is(html[data-tweaks~="wizard/inbox-rows"], html[data-tweaks~="wizard/sent-rows"], html[data-tweaks~="wizard/sent-threads"], html[data-tweaks~="wizard/smart-inbox"]) .ch-list .ch-ib-pin { margin-right: 4px; font-size: 0.75rem; }
-:is(html[data-tweaks~="wizard/inbox-rows"], html[data-tweaks~="wizard/sent-rows"], html[data-tweaks~="wizard/sent-threads"], html[data-tweaks~="wizard/smart-inbox"]) .ch-list .ch-ib-l1 time { flex: none; font: 400 0.75rem / 1.3 var(--wz-font-ui, inherit); color: var(--wz-text-muted); }
-:is(html[data-tweaks~="wizard/inbox-rows"], html[data-tweaks~="wizard/sent-rows"], html[data-tweaks~="wizard/sent-threads"], html[data-tweaks~="wizard/smart-inbox"]) .ch-list .ch-ib-row.unread .ch-ib-l1 time { color: var(--wz-accent); }
-:is(html[data-tweaks~="wizard/inbox-rows"], html[data-tweaks~="wizard/sent-rows"], html[data-tweaks~="wizard/sent-threads"], html[data-tweaks~="wizard/smart-inbox"]) .ch-list .ch-ib-t { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: 500 1rem / 1.3 var(--wz-font-ui, inherit); color: var(--wz-text); }
-:is(html[data-tweaks~="wizard/inbox-rows"], html[data-tweaks~="wizard/sent-rows"], html[data-tweaks~="wizard/sent-threads"], html[data-tweaks~="wizard/smart-inbox"]) .ch-list .ch-ib-row.unread .ch-ib-t, :is(html[data-tweaks~="wizard/inbox-rows"], html[data-tweaks~="wizard/sent-rows"], html[data-tweaks~="wizard/sent-threads"], html[data-tweaks~="wizard/smart-inbox"]) .ch-list .ch-ib-row.needs .ch-ib-t { font-weight: 700; }
-:is(html[data-tweaks~="wizard/inbox-rows"], html[data-tweaks~="wizard/sent-rows"], html[data-tweaks~="wizard/sent-threads"], html[data-tweaks~="wizard/smart-inbox"]) .ch-list .ch-ib-mk { flex: none; display: inline-flex; align-items: center; }
-:is(html[data-tweaks~="wizard/inbox-rows"], html[data-tweaks~="wizard/sent-rows"], html[data-tweaks~="wizard/sent-threads"], html[data-tweaks~="wizard/smart-inbox"]) .ch-list .ch-ib-mk .ch-chan-dot { width: 10px; height: 10px; }
-:is(html[data-tweaks~="wizard/inbox-rows"], html[data-tweaks~="wizard/sent-rows"], html[data-tweaks~="wizard/sent-threads"], html[data-tweaks~="wizard/smart-inbox"]) .ch-list .ch-ib-mk .ch-spin { display: inline-block; width: 12px; height: 12px; box-sizing: border-box; }
-:is(html[data-tweaks~="wizard/inbox-rows"], html[data-tweaks~="wizard/sent-rows"], html[data-tweaks~="wizard/sent-threads"], html[data-tweaks~="wizard/smart-inbox"]) .ch-list .ch-ib-pv { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: 400 0.875rem / 1.35 var(--wz-font-ui, inherit); color: var(--wz-text-secondary); }
-:is(html[data-tweaks~="wizard/inbox-rows"], html[data-tweaks~="wizard/sent-rows"], html[data-tweaks~="wizard/sent-threads"], html[data-tweaks~="wizard/smart-inbox"]) .ch-list .ch-ib-pv .att { font-style: normal; }
-:is(html[data-tweaks~="wizard/inbox-rows"], html[data-tweaks~="wizard/sent-rows"], html[data-tweaks~="wizard/sent-threads"], html[data-tweaks~="wizard/smart-inbox"]) .ch-list .ch-ib-arch { position: absolute; z-index: 1; right: 8px; top: 50%; width: 36px; height: 36px; margin-top: -18px; display: grid; place-items: center; border: 0; border-radius: 50%; color: var(--wz-text-muted); background: transparent; cursor: pointer; }
-:is(html[data-tweaks~="wizard/inbox-rows"], html[data-tweaks~="wizard/sent-rows"], html[data-tweaks~="wizard/sent-threads"], html[data-tweaks~="wizard/smart-inbox"]) .ch-list .ch-ib-arch:hover, :is(html[data-tweaks~="wizard/inbox-rows"], html[data-tweaks~="wizard/sent-rows"], html[data-tweaks~="wizard/sent-threads"], html[data-tweaks~="wizard/smart-inbox"]) .ch-list .ch-ib-arch:focus-visible { background: var(--wz-surface-raised); color: var(--wz-text); }
-:is(html[data-tweaks~="wizard/inbox-rows"], html[data-tweaks~="wizard/sent-rows"], html[data-tweaks~="wizard/sent-threads"], html[data-tweaks~="wizard/smart-inbox"]) .ch-list .ch-ib-arch svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-:is(html[data-tweaks~="wizard/inbox-rows"], html[data-tweaks~="wizard/sent-rows"], html[data-tweaks~="wizard/sent-threads"], html[data-tweaks~="wizard/smart-inbox"]) .ch-list .ch-ib-empty { display: flex; flex-direction: column; gap: 4px; align-items: center; text-align: center; padding: 32px 16px; color: var(--wz-text-muted); }
-:is(html[data-tweaks~="wizard/inbox-rows"], html[data-tweaks~="wizard/sent-rows"], html[data-tweaks~="wizard/sent-threads"], html[data-tweaks~="wizard/smart-inbox"]) .ch-list .ch-ib-empty b { color: var(--wz-text); }
+html:root .ch-list .ch-sec.ch-ib > .ch-sec-b { background: linear-gradient(var(--wz-surface), var(--wz-surface)), var(--wz-canvas); border-radius: var(--wz-radius-tile); overflow: hidden; }
+html:root .ch-list .ch-ib-wrap { position: relative; display: flex; align-items: stretch; background: transparent; }
+html:root .ch-list .ch-ib-wrap + .ch-ib-wrap { box-shadow: inset 0 1px 0 color-mix(in srgb, var(--wz-border) 70%, transparent); }
+html:root .ch-list .ch-ib-wrap > .ch-row.ch-ib-row { flex: 1; min-width: 0; height: auto; min-height: 72px; box-sizing: border-box; align-items: center; gap: 12px; padding: 8px 52px 8px 12px; border-radius: 0; background: transparent; }
+html:root .ch-list .ch-ib-wrap > .ch-row.ch-ib-row::after { content: none; }
+html:root .ch-list .ch-ib-wrap > .ch-row.ch-ib-row:hover { background: color-mix(in srgb, var(--wz-text) 5%, transparent); }
+html:root .ch-list .ch-ib-wrap > .ch-row.ch-ib-row:active { background: color-mix(in srgb, var(--wz-text) 9%, transparent); }
+html:root .ch-list .ch-ib-av { flex: none; width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; font-size: 1.5rem; line-height: 1; background: var(--wz-surface-raised); color: var(--wz-text); overflow: hidden; }
+html:root .ch-list .ch-ib-av svg, html:root .ch-list .ch-ib-av .ag-sig { width: 30px; height: 30px; border-radius: 50%; font-size: 0.875rem; }
+html:root .ch-list .ch-ib-bd { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+html:root .ch-list .ch-ib-l1, html:root .ch-list .ch-ib-l2 { display: flex; align-items: center; gap: 8px; min-width: 0; }
+html:root .ch-list .ch-ib-from { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: 600 0.8125rem / 1.3 var(--wz-font-ui, inherit); color: var(--wz-accent); }
+html:root .ch-list .ch-ib-pin { margin-right: 4px; font-size: 0.75rem; }
+html:root .ch-list .ch-ib-l1 time { flex: none; font: 400 0.75rem / 1.3 var(--wz-font-ui, inherit); color: var(--wz-text-muted); }
+html:root .ch-list .ch-ib-row.unread .ch-ib-l1 time { color: var(--wz-accent); }
+html:root .ch-list .ch-ib-t { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: 500 1rem / 1.3 var(--wz-font-ui, inherit); color: var(--wz-text); }
+html:root .ch-list .ch-ib-row.unread .ch-ib-t, html:root .ch-list .ch-ib-row.needs .ch-ib-t { font-weight: 700; }
+html:root .ch-list .ch-ib-mk { flex: none; display: inline-flex; align-items: center; }
+html:root .ch-list .ch-ib-mk .ch-chan-dot { width: 10px; height: 10px; }
+html:root .ch-list .ch-ib-mk .ch-spin { display: inline-block; width: 12px; height: 12px; box-sizing: border-box; }
+html:root .ch-list .ch-ib-pv { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: 400 0.875rem / 1.35 var(--wz-font-ui, inherit); color: var(--wz-text-secondary); }
+html:root .ch-list .ch-ib-pv .att { font-style: normal; }
+html:root .ch-list .ch-ib-arch { position: absolute; z-index: 1; right: 8px; top: 50%; width: 36px; height: 36px; margin-top: -18px; display: grid; place-items: center; border: 0; border-radius: 50%; color: var(--wz-text-muted); background: transparent; cursor: pointer; }
+html:root .ch-list .ch-ib-arch:hover, html:root .ch-list .ch-ib-arch:focus-visible { background: var(--wz-surface-raised); color: var(--wz-text); }
+html:root .ch-list .ch-ib-arch svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+html:root .ch-list .ch-ib-empty { display: flex; flex-direction: column; gap: 4px; align-items: center; text-align: center; padding: 32px 16px; color: var(--wz-text-muted); }
+html:root .ch-list .ch-ib-empty b { color: var(--wz-text); }

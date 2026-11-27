@@ -17,7 +17,7 @@ window.WizCore.liveParts.channels = function () {
    * followed by a fresh read; a read that started before a later edit is dropped, so a slow answer never undoes a tap.
    * Membership is keyed by the thread's agent plus its id ('hermes' = main), as the store keys it. */
   const CHANNELS_URL = '/wizard/v1/channels', CHANNEL_MEMBERSHIP_URL = '/wizard/v1/channels/membership', CHANNELS_CACHE = 'wos.chats.channels.v1';
-  // Tags (wizard-agent-service issue 608, switch wizard/chat-tags): with the box's Tags on (`tags: true` on the list) a
+  // Tags (wizard-agent-service issue 608, on for everyone): with the box's Tags on (`tags: true` on the list) a
   // chat carries several channels; PUT {sessionId, agent, add|remove} adds or removes one.
   const CHANNEL_TAGS_URL = '/wizard/v1/channels/tags';
   function channelStore({ req, emit, normalize = r => r, onRow = r => r, onError = () => {}, now = () => Date.now(), storage = null, every = 30e3, offEvery = 5 * 60e3, feedMax = 200, moveKeep = 120e3 } = {}) {
@@ -432,8 +432,8 @@ window.WizCore.liveParts.channels = function () {
       const j = await (await req('/wizard/v1/agent-inbox?state=new,surfaced&limit=200', { cache: 'no-store' })).json();
       return (Array.isArray(j?.records) ? j.records : []).map(alertRec).filter(r => r && LATER.has(r.kind)).sort((a, b) => b.updatedAt - a.updatedAt || (a.id < b.id ? -1 : 1)).slice(0, 30);
     }
-    /* Inbox rows (wizard-ux issue 1779, switch wizard/inbox-rows): the records waiting on the owner (kind needs_you,
-     * state new; `failed` when the task failed or stalled), read only while the switch asks for them, kept fresh like
+    /* Inbox rows (wizard-ux issue 1779): the records waiting on the owner (kind needs_you, state new; `failed` when
+     * the task failed or stalled), read only while the Inbox asks for them, kept fresh like
      * the Running list. archive(id): PATCH <id> {action: archive}, gone from the list on this frame. A 404 is none. */
     const nd = { records: [], ok: false, gone: false, at: 0, busy: null };
     function readNeeds() {

@@ -1,5 +1,5 @@
 'use strict';
-// Tags (wizard-agent-service issue 608, switch wizard/chat-tags) in a real browser, phone 412 px, Nebula + Obsidian Light.
+// Tags (wizard-agent-service issue 608, on for everyone) in a real browser, phone 412 px, Nebula + Obsidian Light.
 // Disposable synthetic transport only: a fake box answers /wizard/v1/channels (with `tags: true` while Tags are on),
 // PUT /wizard/v1/channels/tags, PUT membership, the Sent log (so the Inbox · Tags · Sent tabs show) and the channel
 // feeds; nothing reaches a box. Tags on: the Tags tab lists the tags (pinned first) plus Archived; a chat's Tags… sheet

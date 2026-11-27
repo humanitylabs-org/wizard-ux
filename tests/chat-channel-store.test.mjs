@@ -252,7 +252,7 @@ test('store off (404): Spaces exactly as in phase 1', async () => {
   }
 })
 
-// ---- Tags (wizard-agent-service issue 608, switch wizard/chat-tags): the box says tags: true ----
+// ---- Tags (wizard-agent-service issue 608, on for everyone): the box says tags: true ----
 test('tags on: a chat is in every channel it carries; its row\'s tags decide, main and routed apart', async () => {
   const s = await shell({ tags: true, rows: [row('t1', '', { channel: 'launch', tags: ['launch', 'voice'] }), row('t2', '', { channel: 'voice' })],
     agentRows: { host: [row('h1', 'host', { channel: 'host-ops', tags: ['host-ops'] })], restricted: [row('t1', 'restricted', { channel: 'locked', tags: ['locked'] })] } })
