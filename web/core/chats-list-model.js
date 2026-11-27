@@ -254,8 +254,8 @@ const PLACE_INBOX_STATES = new Set(['needs_you', 'failed']);
 /* Smart inbox (wizard-ux issue 1883, switch wizard/smart-inbox, off by default; James, 26 Nov 2026: "The only things
  * that come into my inbox are things that require my attention in a timely manner and everything else will wait until
  * I say catch me up"). With it on, `facts.smart` makes placeOf the smart rule: a failed run or an approval is Inbox; a
- * running thread is Sent (Working), whoever started it; a blocking needs you is Inbox, a check / confirm ask is Sent;
- * the newest Sent row failed is Inbox; an answer to words of his that asked for a reply is Inbox; everything else,
+ * running thread is Sent (Working), whoever started it; a blocking needs you is Inbox, a check ask too (issue 1977);
+ * the newest Sent row failed is Inbox; an answer to his words is Inbox (issue 1977: no keyword test); everything else,
  * with or without a Sent row (agent-started, a new chat's first message, older than the log), is Sent. Unread never
  * decides. */
 const SMART_INBOX = 'wizard/smart-inbox';
@@ -304,18 +304,43 @@ const ownerDelivery = (s, pinned) => s?.source === 'cron' || /^cron_/.test(Strin
 // His reminder fired: the send set a reminder and the agent wrote again well after it.
 const reminderFired = (s, r) => (r?.route === 'reminder' || r?.wouldRoute === 'reminder' || REMIND.test(String(r?.text || '')))
   && (Date.parse(s?.lastAssistantAt ?? '') || 0) - (Number(r?.at) || 0) > FIRED_AFTER;
+/* Answers to his words reach him (wizard-ux issue 1977, same switch; James, 27 Nov 2026: "I'm having things I directly
+ * ask that get a response that are just sitting in \"sent\" and never coming to my attention, as well as things waiting
+ * on me."). No keyword guess: when his newest send in a thread (typed, voice, a reply; route agent or thread) got a
+ * finished readable answer, the thread is Inbox, whatever the box's quiet mark says. It stays in Sent only when that
+ * send was a reply-button tap, a pure acknowledgement ("thanks", "ok", a no_reply rule), his correction said no reply,
+ * or it set a reminder that has not fired yet. A check status line ("say if it feels right") is Inbox too, green:
+ * needs() stays false for it, so it is not amber. */
+const TAPS = /\[WIZARD_TAPS_V1\]/;
+const ACK = /^(?:(?:ok(?:ay)?|k|kk|thanks?|thank you|thx|ty|cheers|great|perfect|nice|cool|awesome|good|got it|sounds good|no worries|np|lovely|brilliant|excellent|noted|all good|ta|alright|a lot|so much|many|very much)\s*)*$/i;
+const ACK_MARKS = /[\p{Extended_Pictographic}\u200d\ufe0f\u{1F3FB}-\u{1F3FF}!.,;:~-]+/gu;
+const ackOnly = t => ACK.test(t.replace(ACK_MARKS, ' ').replace(/\s+/g, ' ').trim());
+// His newest send wants no answer brought to him: a tap, an acknowledgement, his no-reply words or correction.
+function sentNoAnswer(r) {
+  if (!r) return true;
+  if (r.corrected && r.corrected.shouldReply === false) return true;
+  if (/^no_reply:/.test(String((Array.isArray(r.rules) && r.rules[0]) || ''))) return true;
+  const t = String(r.text || '').trim();
+  return !t || TAPS.test(t) || ackOnly(t);
+}
+const reminderSet = r => r?.route === 'reminder' || r?.wouldRoute === 'reminder' || REMIND.test(String(r?.text || ''));
 function smartPlace(s, rows, { needs, working, pinned = () => false }) {
   if (inboxFailed(s) || ['waiting_for_approval', 'unknown'].includes(s?.status)) return 'inbox';
   if (working(s)) return 'sent';
-  if (needs(s) && s?.attention?.state !== 'check') return 'inbox';
+  if (needs(s)) return 'inbox';
+  // Issue 1977: a check ask waits on his judgment: Inbox (green, not amber; still in catch me up).
+  if (s?.attention?.state === 'check' && !silentReply(s)) return 'inbox';
   const last = Array.isArray(rows) && rows.length ? newestRow(rows) : null;
   if (last?.state === 'failed') return 'inbox';
-  if (last && ['done', 'needs_you'].includes(last.state) && sentAsked(last)) return 'inbox';
-  // Issue 1927: what he asked for, or set up, is delivered (only a readable done / fyi reply; check stays in Sent).
+  if (last && ['done', 'needs_you'].includes(last.state) && !sentNoAnswer(last) && sentAsked(last)) return 'inbox';
+  // Issue 1927: what he set up is delivered (only a readable done / fyi reply).
   if (!readableReply(s)) return 'sent';
   if (!last) return ownerDelivery(s, pinned) ? 'inbox' : 'sent';
   if (last.state !== 'done' && last.state !== 'needs_you') return 'sent';
-  return sentRequested(last) || reminderFired(s, last) || (ownerDelivery(s, pinned) && (Date.parse(s?.lastAssistantAt ?? '') || 0) - (Number(last.at) || 0) > FIRED_AFTER) ? 'inbox' : 'sent';
+  if (reminderFired(s, last) || (ownerDelivery(s, pinned) && (Date.parse(s?.lastAssistantAt ?? '') || 0) - (Number(last.at) || 0) > FIRED_AFTER)) return 'inbox';
+  // Issue 1977: his words reached the agent and it answered: Inbox, unless they wanted no answer or only set a reminder.
+  if (sentNoAnswer(last) || reminderSet(last) || ['dump', 'command'].includes(last.route)) return 'sent';
+  return 'inbox';
 }
 function placeOf(s, rows, { needs = () => false, quiet = () => false, working = () => false, smart = false, pinned = () => false } = {}) {
   if (smart) return smartPlace(s, rows, { needs, working, pinned });

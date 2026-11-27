@@ -68,7 +68,8 @@ const fresh = () => ({
   // Older than the Sent log, finished, no status: Sent.
   'old': T('Tax folder', 60, { answer: 'Here is the folder.' }),
 });
-const INBOX_WANT = ['a-pay', 'n-lease', 'n-sched', 'n-seat', 'n-watch', 'q-know', 'q-mac', 'q-tell', 'x-export', 'x-sync'];
+// Issue 1977: check asks and answers to his words (no keyword test) are Inbox too; Sent keeps what he didn't start.
+const INBOX_WANT = ['a-pay', 'c-forum', 'c-signal', 'c-topbar', 'c-video', 'd-clip', 'd-groceries', 'd-notes', 'f-launch', 'f-weather', 'n-lease', 'n-sched', 'n-seat', 'n-watch', 'new-chat', 'q-know', 'q-mac', 'q-tell', 'x-export', 'x-sync'];
 const sid = n => 'sent_' + n.toString(16).padStart(24, '0');
 const freshSent = () => Object.entries(THREADS).filter(([, s]) => s.mine).map(([id, s], i) => ({ id: sid(i + 1), at: s.at - 60e3, source: 'orb', text: s.mine.text, route: 'agent', decided_by: 'owner_words', rules_matched: [], tags: [], urgent: false, thread_id: id, record_id: null, state: 'done', wants_reply: true, ...s.mine }));
 const raw = (id, s) => ({ id, title: s.title, runtime: 'direct', status: s.status || 'completed', updated_at: iso(s.at), updatedAt: iso(s.at), last_active: s.at / 1000,
@@ -175,7 +176,7 @@ const report = { origin, web, on: ON, rows: ROWS, cases: [] };
         entry.summary = { inbox: b.inInbox, sent: b.sentIds.slice().sort(), nowhere: all.filter(id => !b.inInbox.includes(id) && !b.sentIds.includes(id)), both: b.both };
         if (REPORT || !ON) { entry.pass = true; continue; }
         assert.deepEqual(b.both, [], 'Inbox ∩ Sent = ∅: ' + JSON.stringify(b.both));
-        assert.deepEqual(b.inInbox, INBOX_WANT, 'Inbox: only blocking needs you, failed, approval and asked-for answers ' + JSON.stringify(b.inInbox));
+        assert.deepEqual(b.inInbox, INBOX_WANT, 'Inbox: needs you, check, failed, approval and answers to his words ' + JSON.stringify(b.inInbox));
         assert.deepEqual(b.sentIds.slice().sort(), all.filter(id => !INBOX_WANT.includes(id)), 'Sent: every other thread ' + JSON.stringify(entry.summary));
         const working = b.sent.filter(r => r.sec === 'sentWorking').map(r => r.key).sort();
         assert.deepEqual(working, ['r-deck', 'r-photos', 'r-sched', 'r-watch'], 'Sent › Working: every running thread, whoever started it');
@@ -183,14 +184,14 @@ const report = { origin, web, on: ON, rows: ROWS, cases: [] };
         assert.match(b.inbox['x-sync'].line, /Didn’t finish|couldn’t|isn’t available|Error/, 'failed row says why: ' + b.inbox['x-sync'].line);
         // Live: needs you → done moves to Sent; done → failed moves back to Inbox. No reload.
         THREADS['n-seat'].attention = att('done', 'Booked seat 14A, window.'); THREADS['n-seat'].msgs.push(['user', 'window', 60], ['assistant', 'Booked seat 14A, window.', 90]); THREADS['n-seat'].at = Date.now();
-        SENT = [{ ...SENT.find(r => r.thread_id === 'n-seat'), id: sid(99), at: Date.now() - 1000, text: 'window', route: 'thread', wants_reply: false, rules_matched: ['statement'], state: 'done' }, ...SENT];
-        THREADS['d-clip'].status = 'failed'; THREADS['d-clip'].attention = undefined; THREADS['d-clip'].at = Date.now();
+        SENT = [{ ...SENT.find(r => r.thread_id === 'n-seat'), id: sid(99), at: Date.now() - 1000, text: 'Tapped Window · Flight seat\n[WIZARD_TAPS_V1]{"taps":[]}[/WIZARD_TAPS_V1]', route: 'thread', wants_reply: false, rules_matched: ['statement'], state: 'done' }, ...SENT];
+        THREADS['d-backup'].status = 'failed'; THREADS['d-backup'].attention = undefined; THREADS['d-backup'].at = Date.now();
         await page.evaluate(() => { window.WizLive?.refresh?.(); window.WizLive?.sentLog?.fresh?.(); window.WizLive?.sentLog?.read?.(); });
         await nap(2500);
         entry.moved = await place('2'); delete entry.moved.html;
         assert.deepEqual(entry.moved.both, [], 'never in both after the move');
-        assert.ok(!entry.moved.inInbox.includes('n-seat') && entry.moved.sentIds.includes('n-seat'), 'needs you → done: Sent ' + JSON.stringify(entry.moved.inInbox));
-        assert.ok(entry.moved.inInbox.includes('d-clip') && !entry.moved.sentIds.includes('d-clip'), 'done → failed: Inbox ' + JSON.stringify(entry.moved.inInbox));
+        assert.ok(!entry.moved.inInbox.includes('n-seat') && entry.moved.sentIds.includes('n-seat'), 'needs you → tapped, done: Sent ' + JSON.stringify(entry.moved.inInbox));
+        assert.ok(entry.moved.inInbox.includes('d-backup') && !entry.moved.sentIds.includes('d-backup'), 'done → failed: Inbox ' + JSON.stringify(entry.moved.inInbox));
         assert.equal(entry.errors.length, 0, 'browser errors: ' + entry.errors.join('; '));
         assert.deepEqual(entry.refused.filter(x => x.reason === 'unexpected-write'), [], 'no unexpected writes');
         entry.pass = true;

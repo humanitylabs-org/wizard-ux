@@ -48,8 +48,9 @@ const SENT = () => [
   { id: sid('6'), at: NOW - 0.05 * H, thread: 'run-mine', text: 'Clean the photo folder', state: 'running' },
   { id: sid('7'), at: NOW - 1.2 * H, thread: 'new-chat', text: 'Start a shopping list for the party', source: 'new_chat', rules: ['new_chat'] },
 ].map(sentRow);
-const INBOX = ['approval', 'asked', 'failed-agent', 'needs-agent', 'needs-mine'];
-const SENT_IDS = ['check-agent', 'check-mine', 'done-agent', 'done-mine', 'fyi-agent', 'fyi-mine', 'new-chat', 'old', 'run-agent', 'run-mine'];
+// Issue 1977: a check ask and an answer to his words (no keyword test) are Inbox too.
+const INBOX = ['approval', 'asked', 'check-agent', 'check-mine', 'done-mine', 'failed-agent', 'fyi-mine', 'needs-agent', 'needs-mine', 'new-chat'];
+const SENT_IDS = ['done-agent', 'fyi-agent', 'old', 'run-agent', 'run-mine'];
 const needs = s => !s.archived && s.status !== 'running' && (['waiting_for_approval', 'unknown'].includes(s.status) || ['needs_you', 'check'].includes(s.attention?.state));
 let UNREAD = () => true; // everything unread: being unread never decides
 const unread = s => UNREAD(s);
@@ -108,18 +109,19 @@ test('the same with only the smart switch (no Inbox rows, no Sent rows, no Sent 
 
 test('placeOf, smart rule, for every row type', () => {
   const f = { needs, quiet: () => false, working: s => s.status === 'running', smart: true };
-  const t = (o = {}) => ({ id: 'x', status: 'completed', ...o });
+  const t = (o = {}) => ({ id: 'x', status: 'completed', ...(o.attention ? { previewRole: 'assistant', messageCount: 2 } : {}), ...o });
   const row = (o = {}) => sentRow({ id: sid('x'), at: 1, ...o });
   const P = (s, rows) => M.placeOf(s, rows, f);
   // needs you / check
   assert.equal(P(t({ attention: att('needs_you', 'Which?') }), []), 'inbox', 'blocking needs you, agent-started');
   assert.equal(P(t({ attention: att('needs_you', 'Which?') }), [row()]), 'inbox', 'blocking needs you, his');
-  assert.equal(P(t({ attention: att('check', 'Try it') }), []), 'sent', 'check, agent-started');
-  assert.equal(P(t({ attention: att('check', 'Try it') }), [row({ state: 'needs_you' })]), 'sent', 'check (the Sent log says needs_you for a check too)');
+  assert.equal(P(t({ attention: att('check', 'Try it') }), []), 'inbox', 'check, agent-started (issue 1977)');
+  assert.equal(P(t({ attention: att('check', 'Try it') }), [row({ state: 'needs_you' })]), 'inbox', 'check (the Sent log says needs_you for a check too)');
   // done / fyi, with and without a Sent row
   for (const st of ['done', 'fyi']) {
     assert.equal(P(t({ attention: att(st, 'Ok') }), []), 'sent', `${st}, agent-started`);
-    assert.equal(P(t({ attention: att(st, 'Ok') }), [row({ rules: ['task_verb'], text: 'Send it' })]), 'sent', `${st}, his, nothing asked`);
+    assert.equal(P(t({ attention: att(st, 'Ok') }), [row({ rules: ['task_verb'], text: 'Send it' })]), 'inbox', `${st}, his words answered (issue 1977: no keyword test)`);
+    assert.equal(P(t({ attention: att(st, 'Ok') }), [row({ rules: ['statement'], text: 'thanks' })]), 'sent', `${st}, his thanks`);
   }
   assert.equal(P(t(), undefined), 'sent', 'older than the log: no Sent row, no status');
   // failed / approval
@@ -138,21 +140,21 @@ test('placeOf, smart rule, for every row type', () => {
   assert.equal(P(t(), [row({ text: 'Review the contract and let me know when it is done' })]), 'inbox', '"let me know when"');
   assert.equal(P(t(), [row({ route: 'thread', rules: ['voice'], text: 'Voice message' })]), 'inbox', 'a voice reply with no words yet');
   assert.equal(P(t(), [row({ text: 'Did it go?', rules: ['no_reply:no need to reply'] })]), 'sent', 'he said no reply');
-  assert.equal(P(t(), [row({ text: 'Is it done?', quiet: true })]), 'sent', 'the box marked the answer quiet');
+  assert.equal(P(t({ attention: att('done', 'Yes') }), [row({ text: 'Is it done?', quiet: true })]), 'inbox', 'the box marked it quiet: not a veto (issue 1977)');
   assert.equal(P(t(), [row({ text: 'Is it done?', corrected: { shouldReply: false, at: 2 } })]), 'sent', 'his correction: no reply');
   assert.equal(P(t(), [row({ text: 'Send it', corrected: { shouldReply: true, at: 2 } })]), 'inbox', 'his correction: reply');
   assert.equal(P(t(), [row({ text: 'Is it ready?', state: 'running' })]), 'sent', 'not answered yet (and not running): nothing to read');
   assert.equal(P(t(), [row({ text: 'Is it ready?', at: 1 }), row({ id: sid('y'), text: 'thanks', rules: ['statement'], route: 'thread', at: 2 })]), 'sent', 'the newest send decides');
-  assert.equal(P(t(), [row({ text: 'Reply to Bob about the invoice', rules: ['task_verb'] })]), 'sent', 'a task about replying is not asking for one');
+  assert.equal(P(t({ attention: att('done', 'Replied') }), [row({ text: 'Reply to Bob about the invoice', rules: ['task_verb'] })]), 'inbox', 'his task, answered (issue 1977)');
   // a new chat's first message
-  assert.equal(P(t({ attention: att('done', 'Started') }), [row({ source: 'new_chat', rules: ['new_chat'], text: 'Start a shopping list' })]), 'sent', 'new chat, nothing asked');
+  assert.equal(P(t({ attention: att('done', 'Started') }), [row({ source: 'new_chat', rules: ['new_chat'], text: 'Start a shopping list' })]), 'inbox', 'new chat, answered (issue 1977)');
 });
 
-test('a thread moves with no reload: needs you → done to Sent, done → failed back to Inbox', () => {
+test('a thread moves with no reload: needs you → tapped, done to Sent, done → failed back to Inbox', () => {
   const s = shell();
   const n = s.threads.find(x => x.id === 'needs-mine'); n.attention = att('done', 'Booked 14A.');
-  s.st.rows.unshift(sentRow({ id: sid('8'), at: NOW, thread: 'needs-mine', route: 'thread', text: 'window', rules: ['statement'], wantsReply: false }));
-  assert.ok(!s.inbox().includes('needs-mine') && s.sentList().includes('needs-mine'), 'answered done: Sent');
+  s.st.rows.unshift(sentRow({ id: sid('8'), at: NOW, thread: 'needs-mine', route: 'thread', text: 'Tapped Window · Flight seat\n[WIZARD_TAPS_V1]{"taps":[]}[/WIZARD_TAPS_V1]', rules: ['statement'], wantsReply: false }));
+  assert.ok(!s.inbox().includes('needs-mine') && s.sentList().includes('needs-mine'), 'his reply-button tap answered done: Sent');
   const d = s.threads.find(x => x.id === 'done-agent'); d.status = 'failed'; delete d.attention;
   assert.ok(s.inbox().includes('done-agent') && !s.sentList().includes('done-agent'), 'failed: Inbox');
   assert.match(s.ib.ibThreadRow(d, 0), /Didn’t finish · open it to retry/, 'one line saying why');
