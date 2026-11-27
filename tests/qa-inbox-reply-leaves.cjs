@@ -12,6 +12,9 @@
 // again, typed or voice (a voice reply used to stay in Working for a full minute). A send the box refuses puts the row
 // back in Inbox, with Retry.
 // QA_EXPECT=broken (with QA_WEB=<main worktree>/web) checks the baseline still fails (the record rows).
+// QA_LOADING=<ms> (wizard-ux issue 2017): the box takes that long to send the replied thread's details and history, and
+// he replies while the thread still shows only its grey loading placeholders (the background task's row lingered ~4 s).
+// The late detail answers with what the box has then (still hidden and finished while its list lags): a stale read too.
 const assert = require('node:assert/strict');
 const { chromium } = require('../tools/qa-playwright.cjs');
 const { ownerRead } = require('../tools/qa-desktop-frame-fixture.cjs');
@@ -27,6 +30,7 @@ const BOX = process.env.QA_BOX || 'live', ADMIT = +(process.env.QA_ADMIT || 600)
 const ROW = '[data-chopen="qa-reply"],[data-chrunopen="qa-reply"]';
 const SMART = process.env.QA_SMART === 'on', BROKEN = process.env.QA_EXPECT === 'broken';
 const SHELLS = (process.env.QA_SHELLS || 'phone,classic').split(',');
+const LOADING = +(process.env.QA_LOADING || 0);
 const MODES = (process.env.QA_MODES || 'typed,voice,refused').split(',');
 fs.mkdirSync(out, { recursive: true });
 const now = Date.now(), iso = t => new Date(t).toISOString(), nap = ms => new Promise(r => setTimeout(r, ms)), M = 60e3;
@@ -35,7 +39,7 @@ const fresh = () => ({
   'qa-other': { title: 'Mac app', at: now - 9 * M, attention: { state: 'done', ask: 'The Mac app build is ready.' }, msgs: [['user', 'is the mac app ready?', 0], ['assistant', 'The Mac app build is ready.', 30]] },
 });
 const sid = c => 'sent_' + c.repeat(24);
-const FINISHED = { done: false };
+const FINISHED = { done: false, admitted: false };
 const RECORDS = [{ id: 'inbox_' + 'a'.repeat(24), agent: 'hermes', kind: 'needs_you', state: 'new', thread_id: 'qa-reply', title: 'Flight options', ask: 'Which one should I book, 9:10 or 14:40?', created_at: now - 20 * M, updated_at: now - 6 * M }];
 const freshSent = () => [
   { id: sid('a'), at: now - 6 * M, source: 'typed', text: 'What flights are there on Friday?', route: 'agent', decided_by: 'owner_words', rules_matched: ['question'], tags: [], urgent: false, thread_id: 'qa-reply', record_id: null, state: 'done', wants_reply: true },
@@ -52,9 +56,9 @@ const report = { origin, web, smart: SMART, cases: [] };
     for (const kind of KINDS) for (const shell of SHELLS) for (const mode of MODES) {
       if (mode === 'voice' && shell !== 'phone') continue; // the orb take is the phone's voice reply
       KIND = kind;
-      const phone = shell === 'phone', stem = `${shell}-${mode}-${KIND}-${SMART ? 'smart' : 'off'}`;
+      const phone = shell === 'phone', stem = `${shell}-${mode}-${KIND}-${SMART ? 'smart' : 'off'}${LOADING ? '-loading' : ''}`;
       const entry = { stem, errors: [], writes: [] }; report.cases.push(entry);
-      const THREADS = fresh(); let SENT = freshSent(); FINISHED.done = false;
+      const THREADS = fresh(); let SENT = freshSent(); FINISHED.done = false; FINISHED.admitted = false;
       const SEEN = () => ({ state: { initializedAt: 1, threads: Object.fromEntries(Object.entries(THREADS).filter(([id]) => !(KIND === 'unread' && id === 'qa-reply')).map(([id, s]) => [id, { updatedAt: iso(s.at), assistantActivityAt: iso(s.at), seenAt: now }])) } });
       const context = await browser.newContext({ viewport: phone ? { width: 412, height: 915 } : { width: 1440, height: 960 }, isMobile: phone, hasTouch: phone, deviceScaleFactor: 1, serviceWorkers: 'block', permissions: ['microphone'], ...(phone ? { userAgent: 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Mobile Safari/537.36' } : {}) });
       try {
@@ -86,6 +90,7 @@ const report = { origin, web, smart: SMART, cases: [] };
             if (p === '/wizard/hermes/v1/runs') {
               await nap(ADMIT); // the box takes its time to admit the run, like a real one
               if (mode === 'refused') return r.fulfill({ status: 400, json: { error: 'qa refused' } }).catch(() => {});
+              FINISHED.admitted = true;
               // A box that lists the run once admitted: queued, then running (QA_BOX=live); stale keeps "completed".
               // The box's list is LAG ms behind (QA_LAG, default 2 s): until then it still lists the thread as it was
               // before the reply (a hidden worker thread: not listed at all); then it is listed (the box's owner turn
@@ -128,7 +133,10 @@ const report = { origin, web, smart: SMART, cases: [] };
           if (p === '/wizard/hermes/api/sessions') return r.fulfill({ json: { data: Object.entries(THREADS).filter(([, s]) => !s.hidden).map(([id, s]) => raw(id, s)), has_more: false } });
           const m = /^\/wizard\/hermes\/api\/sessions\/([^/]+)(\/messages)?$/.exec(p);
           if (m) {
-            const id = decodeURIComponent(m[1]), s = THREADS[id]; if (!s) return r.fulfill({ status: 404, json: { error: 'missing' } });
+            const id = decodeURIComponent(m[1]); if (!THREADS[id]) return r.fulfill({ status: 404, json: { error: 'missing' } });
+            // A slow box (QA_LOADING): the replied thread's details and history, asked when he opened it, come late.
+            if (LOADING && id === 'qa-reply' && !FINISHED.admitted) await nap(LOADING);
+            const s = THREADS[id];
             const t0 = s.at / 1000 - 600;
             return r.fulfill({ json: m[2] ? { messages: s.msgs.map(([role, content, dt]) => ({ role, content, timestamp: t0 + dt })) } : { session: raw(id, s) } });
           }
@@ -156,8 +164,12 @@ const report = { origin, web, smart: SMART, cases: [] };
         const press = l => phone ? l.tap() : l.click();
         await press(vis(`.ch-list :is(${ROW})`));
         await vis('.ch-thread .ch-compose textarea').waitFor({ timeout: 10000 });
-        await page.locator('.ch-thread').filter({ visible: true }).first().getByText('Two flights on Friday').first().waitFor({ timeout: 10000 });
-        await nap(400);
+        if (LOADING) { // he replies while the thread is still loading: none of its messages are drawn yet
+          entry.loading = await page.evaluate(() => !(([...document.querySelectorAll('.ch-thread')].find(n => n.getClientRects().length)?.innerText || '').includes('Two flights on Friday')));
+          await page.screenshot({ path: path.join(out, stem + '-0-loading.png') });
+          assert.ok(entry.loading, 'the reply goes out before the thread has loaded');
+        } else await page.locator('.ch-thread').filter({ visible: true }).first().getByText('Two flights on Friday').first().waitFor({ timeout: 10000 });
+        await nap(LOADING ? 100 : 400);
         if (mode !== 'voice') await vis('.ch-compose textarea').fill('Book the 9:10 one');
         const orbAt = async () => { const o = await page.locator('#orbWrap').boundingBox(); await page.touchscreen.tap(o.x + o.width / 2, o.y + o.height / 2); };
         if (mode === 'voice') { await orbAt(); await nap(2500); }
