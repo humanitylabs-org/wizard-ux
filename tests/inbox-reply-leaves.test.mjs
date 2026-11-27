@@ -13,10 +13,10 @@ import { runWithChatsModel } from './fixtures/chats-list-model.mjs';
 const live = readFileSync(new URL('../web/live.js', import.meta.url), 'utf8');
 const slice = (src, a, b) => { const i = src.indexOf(a), j = src.indexOf(b, i); assert.ok(i > 0 && j > i, `${a} is in live.js`); return src.slice(i, j); };
 
-function harness({ priv = '' } = {}) {
+function harness({ priv = '', records = [] } = {}) {
   const applied = [];
-  const ctx = { PEND: new Map(), DETAIL: new Map(), applyPend: s => applied.push(s.id), Date };
-  ctx.L = { agentInbox: { privateDefault: () => priv }, ownerOf: s => (s.agent && s.agent !== 'hermes' ? s.agent : '') };
+  const ctx = { PEND: new Map(), DETAIL: new Map(), applyPend: s => applied.push(s.id), Date, normalize: r => ({ ...r }) };
+  ctx.L = { agentInbox: { privateDefault: () => priv, needsState: () => ({ records }) }, ownerOf: s => (s.agent && s.agent !== 'hermes' ? s.agent : '') };
   vm.createContext(ctx);
   vm.runInContext(slice(live, '  /* A reply into a hidden thread lists it at once', '  const commandId = ') + '\nthis.addSynthetic = addSynthetic;', ctx);
   return { ctx, applied };
@@ -115,4 +115,27 @@ test('an orb take made before the tap takes over the hold once it is asked to de
   assert.equal(c.api.TAPS.has('qa-voice'), false, 'the tap hands over');
   assert.equal(c.api.PEND.get('qa-voice').key, 'wos-take', 'the take holds the thread now, so the box\'s finished run releases it');
   assert.equal(L.sessions[0].status, 'submitting', 'still in Working while it is sent');
+});
+
+// owner-correction: humanitylabs-org/wizard-ux#2017 · 2026-11-27 · "that card should immediately disappear from inbox. Don't make me wait three seconds before it disappears."
+test('replied before the hidden thread loaded: its Inbox record is the row the hold lists (issue 2017)', () => {
+  const rec = { id: 'inbox_' + 'a'.repeat(24), agent: 'hermes', thread: 'qa-worker', title: 'Flight options', updatedAt: 1_800_000_000_000 };
+  const { ctx, applied } = harness({ records: [rec, { ...rec, id: 'inbox_' + 'b'.repeat(24), agent: 'coder', thread: 'qa-routed' }] });
+  // No list row and no detail row yet (the detail read has not answered): only the record he tapped.
+  const list = [{ id: 'qa-other', title: 'Mac app' }];
+  ctx.PEND.set('qa-worker', reply('wos-1'));
+  ctx.addSynthetic(list, '');
+  assert.deepEqual(shown(list), ['qa-worker', 'qa-other'], 'listed on the send frame, so the task row leaves Inbox at once');
+  assert.equal(list[0].title, 'Flight options', 'named as the Inbox row was');
+  assert.ok(applied.includes('qa-worker'), 'held in Working like any reply');
+  // A stale list read that still leaves it out: listed again from the row the hold showed.
+  const stale = [{ id: 'qa-other' }]; ctx.addSynthetic(stale, '');
+  assert.deepEqual(shown(stale), ['qa-worker', 'qa-other']);
+  // Refused / withdrawn: hidden again, so the task row comes back.
+  ctx.PEND.delete('qa-worker'); const after = [{ id: 'qa-other' }]; ctx.addSynthetic(after, '');
+  assert.deepEqual(shown(after), ['qa-other']);
+  // Another agent's record is never listed in the main list; a reply with no record and no row lists nothing.
+  ctx.PEND.set('qa-routed', reply('wos-2')); ctx.PEND.set('qa-none', reply('wos-3'));
+  const main = []; ctx.addSynthetic(main, '');
+  assert.deepEqual(main.map(s => s.id), []);
 });

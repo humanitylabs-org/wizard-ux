@@ -5,8 +5,8 @@
 // synthetic Agent Service answers POST /wizard/v1/channel-emoji with 📈 for "Quarterly OKRs" (after QA_DELAY ms, default
 // 1200) and 503 (no broker) for anything else. Expected: each channel is stored exactly as typed at once (Create never
 // waits), "Quarterly OKRs" is renamed once to "📈 Quarterly OKRs" within a few seconds, Zzzqx keeps 💬, "🎯 Plans" never
-// asks. QA_SWITCH=off (switch off) checks no ask is made and every name stays as typed. QA_KEYWORDS=on also turns on
-// #1580's keyword map (wizard/channel-auto-emoji) and adds "Money": it gets 💰 from the map and never asks.
+// asks. QA_SWITCH=off (switch off) checks no ask is made and every name stays as typed. QA_KEYWORDS=on also adds
+// "Money": it gets 💰 from #1580's keyword map (on for everyone) and never asks.
 const assert = require('node:assert/strict');
 const { chromium } = require('../tools/qa-playwright.cjs');
 const { ownerRead } = require('../tools/qa-desktop-frame-fixture.cjs');
@@ -39,7 +39,7 @@ const report = { origin, web, broken, off, cases: [] };
       const context = await browser.newContext({ viewport: phone ? { width: Number(process.env.QA_PHONE_W) || 412, height: 844 } : { width: 1440, height: 960 }, isMobile: phone, hasTouch: phone, serviceWorkers: 'block' });
       try {
         await context.routeWebSocket('**/*', w => w.close());
-        const mix = off || broken ? { 'wizard/desktop-chats': true } : { 'wizard/desktop-chats': true, 'wizard/channel-model-emoji': true, ...(process.env.QA_KEYWORDS === 'on' ? { 'wizard/channel-auto-emoji': true } : {}) };
+        const mix = off || broken ? { 'wizard/desktop-chats': true } : { 'wizard/desktop-chats': true, 'wizard/channel-model-emoji': true };
         await context.addInitScript(({ shell, skin, mix, spaces }) => {
           if (window !== top) return;
           for (const [k, v] of Object.entries({ 'wos.shell': shell, 'wux.shell': shell, 'wos.desktop-view.v1': 'classic', 'wos.coached': 'true', 'wos.tour.v1': 'true', 'wos.welcome.v1': 'done', 'wos.skin': skin,

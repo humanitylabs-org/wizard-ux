@@ -1,4 +1,4 @@
-// Auto channel emoji (switch wizard/channel-auto-emoji, off by default): a new channel gets a fitting emoji (issue 1580). James, 18 Nov 2026: "all of
+// Auto channel emoji (on for everyone since the switch wizard/channel-auto-emoji was removed): a new channel gets a fitting emoji (issue 1580). James, 18 Nov 2026: "all of
 // mine are just a chat box"; he wants "the system auto detect what a good emoji would be when creating a channel and
 // assign one." The shipped keyword map and New channel's create step run here; only the shell around them is stubbed.
 import { test } from 'node:test';
@@ -38,10 +38,10 @@ test('1580: the stored name gets the emoji in front; a name with its own emoji i
 });
 
 // --- New channel's create step (chats.js createPickerSpace) ---
-async function create({ typed, switchOn = true, channelsOn = true, agent = 'hermes', existing = [], onStore = true } = {}) {
+async function create({ typed, channelsOn = true, agent = 'hermes', existing = [], onStore = true } = {}) {
   const calls = [], p = { wid: 'w1', from: 'w1', agent, name: typed, sid: '', busy: false, error: '' };
   const ctx = {
-    calls, SPACE: { get ch() { return channelsOn; } }, document: { documentElement: { dataset: { tweaks: switchOn ? 'wizard/desktop-chats wizard/channel-auto-emoji' : 'wizard/desktop-chats' } } }, spacePicker: p, CHAN_STORE_MAX: 200, crypto: { randomUUID: () => 'uuid' }, WizCore: core(),
+    calls, SPACE: { get ch() { return channelsOn; } }, document: { documentElement: { dataset: { tweaks: '' } } }, spacePicker: p, CHAN_STORE_MAX: 200, crypto: { randomUUID: () => 'uuid' }, WizCore: core(),
     W: { w1: { id: 'w1' } }, spaces: () => existing, spaceAgent: s => s.agent || 'hermes', norm: s => String(s).toLowerCase(),
     chanStore: () => onStore ? {} : null, storeAgent: a => a,
     LIVE: { chanStore: { create: async (name, a) => (calls.push(['create', name, a]), { id: 'ch-new' }) }, prefOps: async ops => (calls.push(['prefs', ops[0].item.name, ops[0].item.agent]), true) },
@@ -78,13 +78,11 @@ test('1580: a typed name that is already a channel with or without its emoji is 
   assert.deepEqual((await create({ typed: 'Money', agent: 'host', existing: [{ id: 'a', name: '💰 Money', agent: 'hermes' }] })).calls, [['create', '💰 Money', 'host']]);
 });
 
-test('1580: switch off keeps every name exactly as typed (store and Spaces fallback, every agent)', async () => {
-  for (const agent of ['hermes', 'host', 'container', 'restricted']) for (const typed of ['Money', 'Podcast', 'Zzzqx', '🚀 Launch']) {
-    assert.deepEqual((await create({ typed, agent, switchOn: false })).calls, [['create', typed, agent]], agent + ': ' + typed);
-    assert.deepEqual((await create({ typed, agent, switchOn: false, onStore: false })).calls[0], ['prefs', typed, agent], agent + ': ' + typed);
+test('1580: no switch: a fresh device with no tweaks on picks the emoji; classic Spaces keep names as typed', async () => {
+  for (const agent of ['hermes', 'host', 'container', 'restricted']) {
+    assert.deepEqual((await create({ typed: 'Money', agent })).calls, [['create', '💰 Money', agent]], agent);
+    assert.deepEqual((await create({ typed: 'Zzzqx', agent, onStore: false })).calls[0], ['prefs', 'Zzzqx', agent], agent);
   }
-  // Switch off: a plain "Money" next to "💰 Money" is a different name, as on main.
-  assert.deepEqual((await create({ typed: 'Money', switchOn: false, existing: [{ id: 'a', name: '💰 Money' }] })).calls, [['create', 'Money', 'hermes']]);
-  // Classic Spaces wording (Channels off) never picks either.
+  // Classic Spaces wording (Channels off) never picks.
   assert.deepEqual((await create({ typed: 'Money', channelsOn: false, onStore: false })).calls[0], ['prefs', 'Money', 'hermes']);
 });

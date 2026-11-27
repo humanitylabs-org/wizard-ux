@@ -390,12 +390,22 @@
       const i = list.findIndex(s => s.id === sid);
       if (i >= 0 && !list[i].hidden) continue; // listed and shown: nothing to do
       // A stale list read that leaves it out again (the box un-hides it a moment later): the row shown before goes back in.
-      const s = i >= 0 ? list[i] : SHOWN.get(sid) || DETAIL.get(sid);
+      const s = i >= 0 ? list[i] : SHOWN.get(sid) || DETAIL.get(sid) || fromRecord(sid, agent);
       if (!s || !(s.hidden || s.sendShown) || (i < 0 && (L.ownerOf(s) || '') !== agent)) continue;
       s.hidden = false; s.sendShown = true; SHOWN.set(sid, s);
       if (i < 0) list.unshift(s);
       applyPend(s);
     }
+  }
+  /* Replied before the hidden thread loaded (wizard-ux issue 2017): no list row and no detail row yet, only the Inbox
+   * record he tapped (thread id, title, agent, time). That record is the row the hold lists, so the task row still
+   * leaves Inbox on the send frame; the detail read fills the same row in when it lands (it finds it in the list). */
+  function fromRecord(sid, agent) {
+    const ai = L.agentInbox; if (typeof ai?.needsState !== 'function') return null;
+    const r = (ai.needsState().records || []).find(x => x.thread === sid && (x.agent === 'hermes' ? '' : x.agent) === agent);
+    if (!r) return null;
+    const s = normalize({ id: sid, title: r.title || 'Thread', updated_at: new Date(r.updatedAt || Date.now()).toISOString(), hidden: true, ...(agent ? { agent } : {}) });
+    return s && s.id === sid ? s : null;
   }
   // A send that held a hidden thread in the list is over: it is hidden again, so its task row comes back until the box
   // lists the thread itself (a list read the box un-hid it in has a fresh row).
@@ -615,7 +625,7 @@
           // A settled action stays applied until a list read that started after it lands.
           for (const [k, o] of OVER) if (o.settled && o.settled < started) OVER.delete(k);
           addSynthetic(sessions);
-          this.sessions = sessions; this.deferred = deferred;
+          this.sessions = sessions; this.deferred = deferred; this.listAskedAt = Math.max(this.listAskedAt || 0, started); // sessionInfo: a detail asked earlier is older
           let merged = merge(readLocal(), merge(this.seen, remote));
           if (!merged) { // first run anywhere: everything currently visible counts as read
             const ts = Date.now(); merged = { initializedAt: ts, threads: Object.fromEntries(sessions.slice(0, MAX).map(s => [keyOf(s), recordFor(s, ts)])) };
@@ -1020,7 +1030,7 @@
     },
     rememberSearch(s) { if(s?.id) { if(otherAgent(s.agent)) AGENT_OF.set(s.id,s.agent); DETAIL.set(s.id,s); while(DETAIL.size>300) DETAIL.delete(DETAIL.keys().next().value); } },
     async sessionInfo(id) {
-      const read = ++titleRead;
+      const read = ++titleRead, askedAt = Date.now();
       let agent = this.agentOf(id);
       let p;
       try { p = await (await req(`/wizard/hermes/api/sessions/${encodeURIComponent(id)}?view=detail${aq(id,'&')}`)).json(); }
@@ -1057,7 +1067,10 @@
       // The detail read carries no run state for a live thread (only the list projects runs and helpers), so an
       // empty status there must not settle the row: a Working thread used to flash into Ready whenever its history
       // was preloaded or opened, until the next list read put it back. A status the detail does report still wins.
-      const run = s.status ? { queueReason: s.queueReason, status: s.status } : {};
+      // A detail read asked before the main list's last read is older than the row (wizard-ux issue 2017: a slow box
+      // answered the detail he opened before replying after the list already showed his reply running): its status
+      // must not put the row back to how it was before the reply.
+      const run = s.status && !(!agent && (this.listAskedAt || 0) > askedAt) ? { queueReason: s.queueReason, status: s.status } : {};
       if (i >= 0) list[i] = { ...list[i], title: s.title, request: s.request, retryRunId: s.retryRunId, ...run, safeError: s.safeError, reconnect: s.reconnect, renames: s.renames, detailNeeded: false,
         // A read that names no provider never wipes the one the row already has for the same model (wizard-ux issue 1973).
         ...(s.model ? { model: s.model, provider: s.provider || (list[i].model === s.model ? list[i].provider || '' : ''), modelLockAt: s.modelLockAt || (list[i].model === s.model ? list[i].modelLockAt || 0 : 0) } : {}) };
