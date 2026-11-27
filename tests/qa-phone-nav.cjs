@@ -1,11 +1,10 @@
 'use strict';
-// wizard-ux issue 1533 in a real browser: the phone bottom bar with switch wizard/phone-nav.
+// wizard-ux issue 1533 in a real browser: the phone bottom bar (on for everyone; the switch wizard/phone-nav is gone).
 // Phones 393 and 320 px wide (Android) plus an iPhone, Nebula and Grove, six desks, the main agent's Chats count at 3.
 // On: the orb is 72 px (66 px at 360 px or less) with one thin ring, no orbit dots, no spinning arcs, no sparkles;
 // side icons are 32 px in 44 px buttons; the one yellow badge sits on the ring at 45 degrees (its centre on the
 // ring, the number centred) on the main agent's desk only; Home and + always show and nothing in the bar overlaps;
 // on iPhone the bar is 78 px tall and every page above it ends at its top edge; tap, hold and swipe on the orb work.
-// QA_SWITCH=off: the same pages with the switch off must match main (QA_WEB=<main>/web) and the checks are skipped.
 // Synthetic transport only (no box is reached). Shots and a report go to QA_OUT.
 const assert = require('node:assert/strict');
 const { chromium } = require('../tools/qa-playwright.cjs');
@@ -13,7 +12,8 @@ const { ownerRead } = require('../tools/qa-desktop-frame-fixture.cjs');
 const fs = require('node:fs'), path = require('node:path');
 const repo = path.resolve(__dirname, '..'), origin = 'https://phone-nav.test', prefix = '/wizard-os-home/';
 const web = process.env.QA_WEB || path.join(repo, 'web'), out = process.env.QA_OUT || path.join(repo, 'phone-nav-evidence');
-const SW = 'wizard/phone-nav', on = process.env.QA_SWITCH !== 'off';
+// A device that saved the old switch on still gets the same bar (core/experience.js clears the stale choice).
+const SW = 'wizard/phone-nav', on = true;
 const ANDROID = 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Mobile Safari/537.36';
 const IPHONE = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Mobile/15E148 Safari/604.1';
 const CASES = [
@@ -60,7 +60,6 @@ const nap = ms => new Promise(r => setTimeout(r, ms));
         const page = await context.newPage(); page.on('pageerror', e => errors.push(e.message));
         await page.goto(origin + prefix + 'index.html?phone');
         await page.waitForFunction(() => window.__wos && !window.WosWelcome?.active && window.WosExperience?.state.tweaks.length && !window.WosExperience.state.busy);
-        if (on) await page.waitForFunction(id => (document.documentElement.dataset.tweaks || '').split(' ').includes(id), SW, { timeout: 15000 });
         await nap(800);
         await page.addStyleTag({ content: '#wosWelcome{display:none!important}' });
         // Six desks: Home, Chats and four apps. The main agent (Chats) has 3 waiting, Notes-like apps 2.

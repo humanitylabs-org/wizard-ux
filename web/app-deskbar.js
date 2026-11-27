@@ -54,12 +54,12 @@ window.WizCore.appParts.deskbar = function ({ $, $$, ago, APP, applyLayout, appV
   homeLate({ renderMoons });
   function paintOrbBadge() {
     const N = window.WizCore.workspaceNav, n = appVars.desks[appVars.idx] ? N.deskCount(appVars.desks[appVars.idx], appVars.W, winApp) : 0;
-    /* Phone bar (wizard-ux issue 1533, switch wizard/phone-nav): one badge, the main agent's count, on its own desk only. */
+    /* Phone bar (wizard-ux issue 1533, on for everyone): one badge, the main agent's count, on its own desk only. */
     if (phoneNavBadge()) { const d = appVars.desks[appVars.idx], main = !!d && !d.home && (d.wins || []).some(id => appVars.W[id] && winApp(appVars.W[id])?.id === CHATS_APP.id), t = main ? N.label(CHATS_APP.id) : ''; $('#orbBadge').textContent = t; $('#orbBadge').hidden = !t; return; }
     $('#orbBadge').textContent = n ? N.fmt(n, N.deskMore?.(appVars.desks[appVars.idx], appVars.W, winApp)) : ''; $('#orbBadge').hidden = !n;
   }
   function phoneNavBadge() {
-    try { const r = document.documentElement; return (r.getAttribute('data-tweaks') || '').split(' ').includes('wizard/phone-nav') && r.dataset.shell !== 'desktop' && ['nebula', 'grove', 'tide', 'ember', 'signal'].includes(r.dataset.skin); } catch (_) { return false; }
+    try { const r = document.documentElement; return r.dataset.shell !== 'desktop' && ['nebula', 'grove', 'tide', 'ember', 'signal'].includes(r.dataset.skin); } catch (_) { return false; }
   }
   addEventListener('wizard:app-counts', () => { renderDots(); paintOrbBadge(); });
   // One place reacts to live changes: reads anywhere, new replies, finished runs.

@@ -94,14 +94,13 @@ window.WizCore.appParts.desks = function ({ $, appVars, CHATS, deskName, esc, HO
     closeOverview(); goDesk(+b.dataset.goto); tourEv('desk', { home: appVars.idx === HOME });
   });
   $('#dock').addEventListener('contextmenu', e => { if (e.target.closest('[data-goto]')) e.preventDefault(); });
-  /* Phone bar (wizard-ux issue 1533, switch wizard/phone-nav, read here inline): desk buttons are a fixed 44 px, so a
-   * desk that doesn't fit its half of the bar hides whole, farthest from the orb first; Home and + always stay. On
-   * iPhone the bar is 78 px (tweak.css reads data-phone-nav-ios). Only James's five skins: other skins draw their own
-   * docks. With the switch off nothing is marked or hidden. */
+  /* Phone bar (wizard-ux issue 1533, on for everyone): desk buttons are a fixed 44 px, so a desk that doesn't fit its
+   * half of the bar hides whole, farthest from the orb first; Home and + always stay. On iPhone the bar is 78 px
+   * (core/phone-nav.css reads data-phone-nav-ios). Only James's five skins: other skins draw their own docks. */
   function phoneNavOn() {
     try {
       const r = document.documentElement;
-      return (r.getAttribute('data-tweaks') || '').split(' ').includes('wizard/phone-nav') && r.dataset.shell !== 'desktop'
+      return r.dataset.shell !== 'desktop'
         && ['nebula', 'grove', 'tide', 'ember', 'signal'].includes(r.dataset.skin);
     } catch (_) { return false; }
   }
@@ -123,7 +122,7 @@ window.WizCore.appParts.desks = function ({ $, appVars, CHATS, deskName, esc, HO
       }
     }
   }
-  // Turning the switch (or skin) on or off, a rotation or a resize: the buttons change size, so fit them again.
+  // A skin change, a rotation or a resize: the buttons change size, so fit them again.
   new MutationObserver(() => renderDots()).observe(document.documentElement, { attributes: true, attributeFilter: ['data-tweaks', 'data-skin'] });
   addEventListener('resize', () => { if (phoneNavOn()) phoneNavFit(); });
   return { announce, atPickerEnd, deskSigil, endDotHold, goDesk, renderDots, bindLate: v => { if ('closeOverview' in v) closeOverview = v.closeOverview; if ('liftSettings' in v) liftSettings = v.liftSettings; if ('newDesk' in v) newDesk = v.newDesk; if ('openOverview' in v) openOverview = v.openOverview; if ('paintOrbBadge' in v) paintOrbBadge = v.paintOrbBadge; if ('sectionsArrange' in v) sectionsArrange = v.sectionsArrange; if ('sectionsPaint' in v) sectionsPaint = v.sectionsPaint; if ('syncBound' in v) syncBound = v.syncBound; if ('syncReviewChip' in v) syncReviewChip = v.syncReviewChip; } };

@@ -125,14 +125,14 @@ void main(){
     const style = getComputedStyle(icon); // One style read; no geometry/layout query.
     return style.display !== 'none' && style.visibility !== 'hidden' && style.visibility !== 'collapse' && +style.opacity > .5 ? 0 : 1;
   }
-  // Phone bar (wizard-ux issue 1533, switch wizard/phone-nav): the phone's own dock orb in James's five skins drops its
-  // sparkles; the swirl stays. Every other orb, and this one with the switch off, keeps them (sparkle 1).
+  // Phone bar (wizard-ux issue 1533, on for everyone): the phone's own dock orb in James's five skins drops its
+  // sparkles; the swirl stays. Every other orb (Everywhere, side button, other skins, desktop) keeps them (sparkle 1).
   function sparkleTarget() {
     if (canvas.id !== 'orb') return 1;
     try {
-      const r = document.documentElement, d = r.dataset || {};
+      const d = document.documentElement.dataset || {};
       if (d.shell === 'desktop' || !['nebula', 'grove', 'tide', 'ember', 'signal'].includes(d.skin)) return 1;
-      return String(d.tweaks || '').split(' ').includes('wizard/phone-nav') ? 0 : 1;
+      return canvas.closest?.('#dock') ? 0 : 1;
     } catch (_) { return 1; }
   }
   let coreMultiplier = 1;
