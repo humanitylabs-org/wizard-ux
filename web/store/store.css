@@ -162,6 +162,17 @@ html.wz-hosted .release-label select { background: var(--wz-surface-raised, #211
 .pv-card { margin: 0 0 16px; padding: 14px 16px; border-radius: 16px; border: 1px solid color-mix(in srgb, var(--ink-2) 30%, transparent); background: color-mix(in srgb, var(--ink-2) 6%, transparent); }
 .pv-card h3 { margin: 0 0 6px; font-size: 16px; }
 .pv-acts { display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+/* The private AI card (issue 1802, switch wizard/private-ai-nudge; markup: store-private-nudge.js). Wizard tokens. */
+.pn-card { border-color: color-mix(in srgb, var(--wz-accent, var(--violet)) 40%, transparent); background: color-mix(in srgb, var(--wz-accent, var(--violet)) 8%, transparent); }
+.pn-card .mc-lede { margin: 0 0 12px; line-height: 1.45; color: var(--wz-text, inherit); }
+.pn-acts { justify-content: flex-start; }
+.pn-acts .get.big { margin-top: 0; }
+#sheet .pn-acts .get.pn-std { height: 34px; font-size: .9375rem; color: var(--wz-accent, var(--violet)); background: var(--wz-accent-soft, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--wz-accent, var(--violet)) 45%, transparent); }
+.pn-acts .get:disabled { opacity: .6; cursor: progress; }
+.pn-note { margin: 0 0 12px; font-size: .8125rem; color: var(--wz-text-secondary, inherit); }
+.pn-why { display: inline-flex; align-items: center; min-height: 44px; margin: 4px 0 -10px; padding: 0; border: 0; background: transparent; color: var(--wz-accent, currentColor); font: inherit; font-size: .875rem; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.pn-done { display: flex; gap: 8px; align-items: flex-start; margin: 0 0 16px; padding: 12px 14px; border-radius: 14px; background: var(--wz-surface, transparent); color: var(--wz-text, inherit); line-height: 1.45; }
+.pn-tick { flex: none; color: var(--wz-success, var(--green)); font-weight: 800; }
 
 .d-home h3 { margin-bottom: 4px; }
 

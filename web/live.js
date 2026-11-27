@@ -120,21 +120,20 @@
    * On for everyone (wizard-agent-service #14). Read-only discovery merged into
    * Chats; it never starts a model. A result older than the normal list window adds its original thread once.
    * While the Service reports it is still scanning, re-read briefly (bounded to one minute). */
-  // wizard/needs-you-reason (wizard-agent-service issue 469) shows the same saved result with its reason and Dismiss.
-  const REASON_TWEAK = 'wizard/needs-you-reason';
+  // Each saved result shows with its reason and Dismiss (wizard-agent-service issue 469, on for everyone).
   // The Service's reason on its own saved-result Needs you; Done/Archive on a row that says it also dismiss it.
   const SAVED_RESULT_ASK = 'A helper finished after this chat closed';
   const savedResultAsk = s => !!s && (!!s.backgroundResult || s.attention?.state === 'needs_you' && s.attention?.ask === SAVED_RESULT_ASK);
-  function tweakOn(id) { try { return (document.documentElement.dataset.tweaks || '').split(' ').includes(id); } catch (_) { return false; } }
-  function reasonOn() { return tweakOn(REASON_TWEAK); }
   /* Quiet replies (wizard-ux issue 1808; on for everyone since wizard-ux issue 1778): the box
    * marks a thread whose newest run answered the owner's reply that asked for nothing ("Sent to Miguel, done") and
    * that ended done or fyi (Agent Service quietReply). That answer is not new to him: no unread dot, no count, not in
    * Inbox / Ready; Sent shows it Done. An ask on the row (needs you, check), a failure or a run still going never is.
    * Main agent only: the Sent log is the owner's to the main agent, so a routed agent's row (host-profile, container,
-   * restricted) never counts as quiet. */
+   * restricted) never counts as quiet. Keeping a reply out of Inbox is triage, so the mark counts only with Smart inbox
+   * on (wizard-ux issue 1962, switch wizard/smart-inbox, off by default): off, the answer is new like any other. */
+  function smartInboxOn() { try { return (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/smart-inbox'); } catch (_) { return false; } }
   function quietReply(s) {
-    return !!s && s.quietReply === true && (!s.agent || s.agent === 'hermes') && !s.critical
+    return !!s && s.quietReply === true && smartInboxOn() && (!s.agent || s.agent === 'hermes') && !s.critical
       && !['needs_you', 'check'].includes(s.attention?.state) && !['failed', 'interrupted', 'waiting_for_approval', 'unknown'].includes(s.status)
       && !globalThis.WizChatsListModel?.isListWorking?.(s);
   }
@@ -171,9 +170,6 @@
     }
     for (const s of sessions) if (s.backgroundResult && !s.backgroundResult.reason && reasons.has(s.backgroundResult.id)) s.backgroundResult = withReason(s.backgroundResult);
   }
-  window.addEventListener('wos:tweak-choice', e => { if (e?.detail?.id === REASON_TWEAK) setTimeout(() => L.refresh(), 0); });
-  // The reason switch arriving with the synced Look file (no tweak-choice event) repaints its saved results at once.
-  try { let was = reasonOn(); new MutationObserver(() => { const now = reasonOn(); if (now && !was) setTimeout(() => L.refresh(), 0); was = now; }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-tweaks'] }); } catch (_) {}
   const FULL_EVERY = 3 * 60 * 1000;
   /* Other agents' list reads (wizard-ux issue 1693): every 15 s poll used to walk every agent's whole list, so a
    * reload sent ~128 reads. Now each agent follows the main list's rule (a full walk every FULL_EVERY, the head page
@@ -339,7 +335,11 @@
       // An orb take still asking the router whether it is a background task, or one that was (issue
       // 1588): no Working row. A take the router keeps visible drops the mark and lists as usual.
       if (it.dump === true || it.dumped) continue;
-      const tap = TAPS.get(it.sessionId); if (tap && it.createdAt >= tap.at) TAPS.delete(it.sessionId);
+      // The send's own item takes over from the tap. An orb take's item was made when the recording started (before the
+      // tap), so it counts once it is asked to deliver or was sent after the tap; otherwise the tap held the thread in
+      // Working for its full minute, past an answer that needed him (wizard-ux issue 1990).
+      const tap = TAPS.get(it.sessionId);
+      if (tap && (it.createdAt >= tap.at || (it.sentAt || 0) >= tap.at || (it.deliveryRequested && it.state !== 'sent'))) TAPS.delete(it.sessionId);
       // Custody without delivery intent must neither own Sending nor hide an older real send.
       if (OB.quarantined?.(it.id) || ['failed', 'empty', 'held', 'unconfirmed'].includes(it.state) || (it.state === 'sent' && it.steered)) continue;
       const cur = latest.get(it.sessionId); if (!cur || it.createdAt > cur.createdAt) latest.set(it.sessionId, it);
@@ -373,8 +373,42 @@
     }
     return before !== [...PEND].map(([k, p]) => k + p.key + p.state).join();
   }
+  /* A reply into a hidden thread lists it at once (wizard-ux issue 1990; James, 27 Nov 2026: "When I reply to a thread
+   * in my inbox and it jumps back to my inbox screen, that card should immediately disappear from inbox"). A background
+   * task that waits on him is an Inbox row for its record while its worker thread is hidden; his own turn there makes the
+   * box show the thread again (the Agent Service's owner turn), but only the next list read says so, about 3 s later, so
+   * the task's row stayed in Inbox meanwhile. Like Open on the tap frame (inboxMove), the thread he replied in is listed
+   * as soon as the send is held, under Working like any reply, so its task row leaves Inbox on the same frame. Main
+   * agent (and the box's private default agent) only, as the box unhides only those; a send that ends without the box
+   * listing it (refused, withdrawn) hides it again, and its task row comes back. */
+  const SHOWN = new Map(); // sessionId -> the hidden thread's row a held reply listed (a later list read may leave it out)
+  function showReplied(list, agent) {
+    const priv = (typeof L.agentInbox?.privateDefault === 'function' && L.agentInbox.privateDefault()) || '';
+    if (agent && agent !== priv) return;
+    for (const [sid, p] of PEND) {
+      if (p.kind !== 'reply' || (p.agent || '') !== agent) continue; // a reply to another agent's thread is in its own list
+      const i = list.findIndex(s => s.id === sid);
+      if (i >= 0 && !list[i].hidden) continue; // listed and shown: nothing to do
+      // A stale list read that leaves it out again (the box un-hides it a moment later): the row shown before goes back in.
+      const s = i >= 0 ? list[i] : SHOWN.get(sid) || DETAIL.get(sid);
+      if (!s || !(s.hidden || s.sendShown) || (i < 0 && (L.ownerOf(s) || '') !== agent)) continue;
+      s.hidden = false; s.sendShown = true; SHOWN.set(sid, s);
+      if (i < 0) list.unshift(s);
+      applyPend(s);
+    }
+  }
+  // A send that held a hidden thread in the list is over: it is hidden again, so its task row comes back until the box
+  // lists the thread itself (a list read the box un-hid it in has a fresh row).
+  function unShown(list) {
+    for (const [sid, s] of SHOWN) if (!PEND.has(sid)) { SHOWN.delete(sid); if (s.sendShown) { s.hidden = true; delete s.sendShown; } }
+    for (let i = list.length - 1; i >= 0; i--) {
+      const s = list[i]; if (!s?.sendShown || PEND.has(s.id)) continue;
+      s.hidden = true; delete s.sendShown;
+    }
+  }
   // A new chat is listed before Wizard has created it, so it lands in Working the moment it is sent.
   function addSynthetic(list, agent = '') {
+    unShown(list); showReplied(list, agent);
     for (const [sid, p] of PEND) {
       if (p.kind !== 'new' || (p.agent || '') !== agent || list.some(s => s.id === sid)) continue;
       const at = new Date(p.at).toISOString();
@@ -494,6 +528,8 @@
     // Server-owned, agent-qualified receipts: activity metadata only, never transcript text.
     seenOf(s) { return this.seen; },
     seenRecord(s) { return this.seen?.threads?.[seenKeyOf(s)]; },
+    // The box's snooze record for a thread (thread-dispositions), also for one the list never carries (issue 1928).
+    dispositionOf(s) { return (s && this.deferred?.[seenKeyOf(s)]) || null; },
     workGroups(sessions, now) { return groupWork(sessions || this.unified(), now); },
     readyByPriority: byPriority,
     readyRank,
@@ -504,6 +540,8 @@
     set chatLayout(v) { const x = v === 'status' ? 'status' : 'day'; try { localStorage.setItem(LAYOUT_KEY, x); } catch (e) {} putPrefs({ chatLayout: x }); },
     set archiveAfterDays(d) { try { localStorage.setItem(ARCH_KEY, String(d)); } catch (e) {} putPrefs({ archiveAfterDays: d }); },
     putPrefs,
+    // The phone bar's pinned slot (wizard-ux#1929): this device at once, then the box for every device.
+    setPhoneSlot: id => { const v = typeof id === 'string' && /^[A-Za-z0-9._-]{0,80}$/.test(id) ? id : ''; try { localStorage.setItem('wos.phone.slot.v1', v); } catch (_) {} return putPrefs({ phoneSlot: v }); },
     workingOrder: () => { try { return window.WizChatsListModel.workingOrderOf(localStorage.getItem('wos.chats.workingOrder.v1')); } catch (_) { return 'alphabetical'; } },
     setWorkingOrder: o => {
       if (!window.WizChatsListModel.WORKING_SORTS.some(([v]) => v === o)) return false;
@@ -534,12 +572,12 @@
       return { needs, ready, working };
     },
     // chat-power.js: a Continue tap settled this saved background result (#14); hide it for good on this device.
-    /* Dismiss the Service's saved-result Needs you (wizard-agent-service issue 469, wizard/needs-you-reason): kept on
+    /* Dismiss the Service's saved-result Needs you (wizard-agent-service issue 469, on for everyone): kept on
      * the box, so every device's next list read drops it. No id = every saved result of the thread (Done, Archive).
      * Main agent's threads only (the Service route is the main agent's). Resolves true once the box has it. */
     async dismissBackground(sid, id = '') {
       const s = this.session(sid);
-      if (!reasonOn() || !s || otherAgent(this.ownerOf(s))) return false;
+      if (!s || otherAgent(this.ownerOf(s))) return false;
       try {
         const r = await fetch('/wizard/background-results/dismiss', { method: 'POST', cache: 'no-store', credentials: 'same-origin', headers: J, body: JSON.stringify({ session_id: sid, ...(id ? { id } : {}) }) });
         const out = await r.json().catch(() => ({}));
@@ -852,9 +890,11 @@
     async reply(id, input, opts = {}) {
       const M = window.WosModels;
       if (!M) throw new Error('Model selector unavailable · reload Wizard');
-      const route = await M.resolveRoute(M.snapshot(id, opts.model ? { model: opts.model, provider: opts.provider } : null));
+      const resolved = await M.resolveRoute(M.snapshot(id, opts.model ? { model: opts.model, provider: opts.provider } : null), { thread: id });
+      // The thread's saved route (wizard-ux issue 1973): no model or provider on the wire, the box runs its model lock.
+      const route = resolved.savedRoute ? {} : resolved;
       const s = this.session(id);
-      if (s && WORKING.has(s.status) && s.runId) {
+      if (s && WORKING.has(s.status) && s.runId && !resolved.savedRoute) {
         try {
           const active = await (await req(`/wizard/hermes/v1/runs/${encodeURIComponent(s.runId)}${aq(id)}`)).json();
           if (!M.matchesRuntime(active.runtime, route))
@@ -1004,8 +1044,12 @@
       // A direct link can arrive before the scoped lists. Learn the authoritative
       // server target before the first history read or reply; never overwrite a known scope.
       if (!agent && otherAgent(s.agent) && s.id === id) { agent = s.agent; AGENT_OF.set(id, agent); }
-      if (s.agent && (s.agent || 'hermes') !== (agent || 'hermes')) throw new Error('Thread scope changed');
-      if (agent) s.agent = agent;
+      // An unscoped read goes to the default agent (core/agents.js routeAgent): on a box whose default is a private
+      // agent its detail names that agent, which is still this thread's own scope (wizard-agent-service issue 631).
+      const route = (typeof AG === 'function' && AG()?.routeAgent?.()) || '';
+      if (s.agent && (s.agent || 'hermes') !== (agent || route || 'hermes')) throw new Error('Thread scope changed');
+      // ... and its row stays a main-list row (agent '', as the list's own rows): one seen/side-state key, not two.
+      if (agent) s.agent = agent; else if (route && s.agent === route) s.agent = '';
       const list = agent ? (this.agentSessions[agent] = this.agentSessions[agent] || []) : this.sessions;
       applyTitle(s, read, true);
       const i = list.findIndex(x => x.id === id);
@@ -1015,8 +1059,9 @@
       // was preloaded or opened, until the next list read put it back. A status the detail does report still wins.
       const run = s.status ? { queueReason: s.queueReason, status: s.status } : {};
       if (i >= 0) list[i] = { ...list[i], title: s.title, request: s.request, retryRunId: s.retryRunId, ...run, safeError: s.safeError, reconnect: s.reconnect, renames: s.renames, detailNeeded: false,
-        ...(s.model ? { model: s.model, provider: s.provider, modelLockAt: s.modelLockAt } : {}) };
-      else if (this.windows[agent || 'hermes']) DETAIL.set(id, { ...s, detailNeeded: false });
+        // A read that names no provider never wipes the one the row already has for the same model (wizard-ux issue 1973).
+        ...(s.model ? { model: s.model, provider: s.provider || (list[i].model === s.model ? list[i].provider || '' : ''), modelLockAt: s.modelLockAt || (list[i].model === s.model ? list[i].modelLockAt || 0 : 0) } : {}) };
+      else if (this.windows[agent || route || 'hermes']) { const was = DETAIL.get(id); DETAIL.set(id, { ...s, ...(!s.provider && was?.provider && was.model === s.model ? { provider: was.provider, modelLockAt: s.modelLockAt || was.modelLockAt || 0 } : {}), detailNeeded: false }); }
       else list.push({ ...s, detailNeeded: false });
       applyLocal(i >= 0 ? list[i] : DETAIL.get(id) || s);
       return s;
@@ -1026,9 +1071,14 @@
     async inboxMove(kind, id, opts = {}) {
       if (!this.agentInbox || (kind !== 'open' && kind !== 'send')) throw new Error('Agent inbox unavailable');
       // The main agent's own row only: a routed thread may share the id (agentSessions), and is never the one moved.
-      const detail = DETAIL.get(id), fromDetail = !!detail && !otherAgent(detail.agent || '');
-      let s = this.sessions.find(x => x.id === id) || (fromDetail ? detail : null), added = false;
-      if (s && otherAgent(this.ownerOf(s))) throw Object.assign(new Error('Only the main agent’s threads move'), { status: 409 });
+      // Issue 631: also the private default agent's, while the box names one (its wizard/private-routing switch on).
+      const priv = (typeof this.agentInbox.privateDefault === 'function' && this.agentInbox.privateDefault()) || '';
+      const mine = a => !otherAgent(a || '') || (!!priv && a === priv);
+      const detail = DETAIL.get(id), fromDetail = !!detail && mine(detail.agent || '');
+      let s = this.sessions.find(x => x.id === id) || (fromDetail ? detail : null) || (priv && opts.agent === priv ? (this.agentSessions?.[priv] || []).find(x => x.id === id) || null : null), added = false;
+      if (s && !mine(this.ownerOf(s))) throw Object.assign(new Error('Only the main agent’s threads move'), { status: 409 });
+      const owner = s ? this.ownerOf(s) : opts.agent === priv ? priv : '';
+      if (priv && owner === priv) opts = { ...opts, agent: priv };
       const was = s ? !!s.hidden : null;
       if (kind === 'open') {
         if (!s && opts.title) s = normalize({ id, title: opts.title, updated_at: opts.at ? new Date(opts.at).toISOString() : new Date().toISOString(), hidden: false });
@@ -1047,6 +1097,9 @@
     busy(id) { const o = OVER.get(id); return !!o && !o.settled; },
     async _act(id, patch, write, capMs = 60000) {
       const s = this.session(id); if (!s || this.busy(id)) return false;
+      // A hidden worker thread is never in the list, so the next list read would drop the row this action patches and
+      // its Undo would find nothing to restore (wizard-ux issue 1928): keep it readable by id.
+      if (s.hidden && !DETAIL.has(id)) DETAIL.set(id, s);
       const snap = { archived: s.archived, deferred: s.deferred, deferredAt: s.deferredAt, restoredAt: s.restoredAt };
       const entry = { patch }; OVER.set(id, entry); Object.assign(s, patch); this.emit();
       // Safety: a write that never answers must not pin the thread out of its list (or block the next tap) forever; after capMs it counts as failed and the thread is restored (Close & file polls for up to 10 minutes, so it gets 11).
@@ -1078,7 +1131,12 @@
           r = await fetch(`/wizard/filings/${encodeURIComponent(id)}/status${aq(id)}`, { method: 'POST', cache: 'no-store', credentials: 'same-origin', headers: J, body: JSON.stringify({ runtime: s.runtime || 'direct' }) });
         }
         if (!r.ok || r.status === 202) { const e = new Error('HTTP ' + r.status); e.status = r.status; throw e; }
-      }, file ? 11 * 60000 : 60000).then(ok => { if (ok) this.dismissSaved?.(saved); return ok; });
+      }, file ? 11 * 60000 : 60000).then(ok => {
+        if (ok) this.dismissSaved?.(saved);
+        // A background task's waiting record goes with its thread (wizard-ux issue 1928): its Inbox row too.
+        if (ok) try { void this.agentInbox?.archiveThread?.(id); } catch (_) {}
+        return ok;
+      });
     },
     // Stop exactly the watcher on the row the owner pressed: `agent` is the window's agent scope ('' = main).
     async stopWatching(id, agent) {
@@ -1142,7 +1200,18 @@
       return this._act(id, { archived: false, deferred: false, restoredAt: at }, async () => {
         await req(`/wizard/hermes/api/sessions/${encodeURIComponent(id)}${aq(id)}`, { method: 'PATCH', headers: J, body: JSON.stringify({ archived: false }) });
         writeRestored({ ...readRestored(), [id]: at });
+      }).then(ok => {
+        // Undo / Restore brings back the waiting record its archive took (wizard-ux issue 1928).
+        if (ok) try { void this.agentInbox?.restoreThread?.(id); } catch (_) {}
+        return ok;
       });
+    },
+    /* One thread's own state by id, stored nowhere (wizard-ux issue 1928): the Inbox reads a hidden worker thread's
+     * archived / snoozed / status line this way, since the list never carries it. Null when the box has no such thread. */
+    async peekSession(id) {
+      const p = await (await req(`/wizard/hermes/api/sessions/${encodeURIComponent(id)}${aq(id)}`, { cache: 'no-store' })).json();
+      const raw = p?.session || p;
+      return raw && (raw.id || raw.session_id) ? normalize(raw) : null;
     },
     /* ---- the live run: status, approval, stop (api.ts run/approve/stop) ---- */
     async run(runId) { return (await req(`/wizard/hermes/v1/runs/${encodeURIComponent(runId)}${rq(runId)}`)).json(); },

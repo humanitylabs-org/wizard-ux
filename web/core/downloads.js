@@ -171,15 +171,15 @@
     nextFrame(() => setTimeout(() => { ask('remove', { id }); }, 0));
   }
 
-  /* ---- swipe to dismiss (switch wizard/download-swipe, wizard-ux issue 1343) ----
+  /* ---- swipe to dismiss (wizard-ux issue 1343; on for everyone since James's yes) ----
    * James: the banner and the sheet must go away with a swipe. The banner follows the finger up or sideways once a press
    * moves past the tap slop; the sheet's panel follows a pull down from its grip or title, or from the list while the list
    * is at its top. On release a long drag or a fast flick dismisses (the shell's sheet rule, app.js sheetDrag: 90 px, or
    * a flick past 30 px), anything shorter springs back. Dismissing only hides: no cancel or remove is ever sent, so the
-   * download keeps running and stays in Settings → Downloads. With the switch off no handler acts and no style changes. */
-  const SWIPE = 'wizard/download-swipe', SLOP = 8;
+   * download keeps running and stays in Settings → Downloads. */
+  const SLOP = 8;
   // Phone shell only: on desktop the banner sits top-right and the sheet is a centred dialog, both closed as before.
-  const swipeOn = () => { try { const d = document.documentElement.dataset; return d.shell !== 'desktop' && (d.tweaks || '').split(' ').includes(SWIPE); } catch (_) { return false; } };
+  const swipeOn = () => { try { return document.documentElement.dataset.shell !== 'desktop'; } catch (_) { return false; } };
   const clock = () => { try { return performance.now(); } catch (_) { return Date.now(); } };
   const flung = (d, ms) => d > 90 || (d > 30 && d / (ms || 1) > 0.6);
   // Returns a check for the click handler: true once for the click that ends a drag (a drag is never also a tap).
@@ -297,7 +297,7 @@
     const size = fmtSize(it.size);
     el.innerHTML = `<button type="button" class="wdl-main" aria-label="Downloads"><span class="wdl-ic">${ICON.file}</span><span class="wdl-tx"><b>Downloaded</b><small>${esc(it.name)}${size ? ' · ' + esc(size) : ''}</small></span></button><button type="button" class="wdl-open">Open</button>`;
     const openBtn = el.querySelector('.wdl-open'), mainBtn = el.querySelector('.wdl-main');   // the shell's own buttons, held here
-    const swiped = bannerSwipe(el);                         // switch wizard/download-swipe; inert while it is off
+    const swiped = bannerSwipe(el);                         // phone only; inert on desktop
     el.addEventListener('click', e => {
       if (!trusted(e)) return;                              // only a real tap: never a script's dispatchEvent / click()
       if (swiped()) return;                                 // the release of a drag is not a tap
@@ -362,7 +362,7 @@
     let downOutside = false;
     el.addEventListener('pointerdown', e => { downOutside = !e.target.closest('.wdl-panel'); });
     el.addEventListener('pointercancel', () => { downOutside = false; });
-    const pulled = sheetSwipe(el);                           // switch wizard/download-swipe; inert while it is off
+    const pulled = sheetSwipe(el);                           // phone only; inert on desktop
     el.addEventListener('click', e => {
       if (!trusted(e)) return;                              // only a real tap: never a script's dispatchEvent / click()
       if (pulled()) return;                                 // the release of a pull is not a tap

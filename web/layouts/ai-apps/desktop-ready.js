@@ -6,10 +6,18 @@
  * in front and the pins) stay in desktop.js; this code reads and writes them as aadVars.<name>, its get/set accessors
  * on the same variables, so every read and write is live. desktop.js's own imports are imported here again from the
  * same modules. The body below keeps desktop.js's indentation so `git log -L` and patches port over. */
-import { railRows, readyFlat, readyStep } from './parts.js';
+import { railRows, readyFlat, readyStep, sharedIds, sharedList } from './parts.js';
 export function readyPart({ aadVars, actOn, api, curChat, groupBy, railNow, readSessions, readyOrder, root, scroll, showToast }) {
   let here; // late-bound: desktop.js declares these after the call, see bindLate
+  /* The Chats list in the sidebar pane (wizard-ux issue 1966: the phone's rows): its thread and alert rows in a section,
+   * as the ids api.sessions.open takes, in the order they are drawn. */
+  const paneList = () => sharedList(root.querySelector?.('.aad-chan')), paneIds = sharedIds;
   api.sessions.archiveOrder?.(sid => {
+    const pl = root.dataset.aadSide === 'rail' ? null : paneList();
+    if (pl) {
+      const b = [...pl.querySelectorAll('[data-chopen]')].find(n => n.dataset.chopen === sid);
+      return b ? paneIds(b.closest('section.ch-sec')) : [];
+    }
     if (root.dataset.aadSide === 'rail') {
       const key = railNow()?.key;
       return key ? railRows(aadVars.sessions || readSessions(), key, readyOrder(), groupBy()).map(r => r.id) : [];
@@ -23,7 +31,8 @@ export function readyPart({ aadVars, actOn, api, curChat, groupBy, railNow, read
     const section = group(row);
     return rows.filter(r => r.parentElement === row.parentElement && group(r) === section).map(r => r.dataset.sid);
   });
-  const readyIds = () => (typeof actOn === 'function' && actOn()) ? ((aadVars.sessions || readSessions()).ready || []).map(r => r.id) : readyFlat((aadVars.sessions || readSessions()).ready || [], readyOrder(), groupBy()).map(r => r.id);
+  // ⌥↓ / ⌥↑ walk the pane's Inbox as it is drawn (pinned first, the chosen sort); the folded rail keeps the model's order.
+  const readyIds = () => (root.dataset.aadSide !== 'rail' && paneList()) ? paneIds(paneList().querySelector('section.ch-sec[data-sec="ready"]')) : (typeof actOn === 'function' && actOn()) ? ((aadVars.sessions || readSessions()).ready || []).map(r => r.id) : readyFlat((aadVars.sessions || readSessions()).ready || [], readyOrder(), groupBy()).map(r => r.id);
   function stepReady(dir) {
     readSessions();
     const ids = readyIds();
@@ -40,7 +49,7 @@ export function readyPart({ aadVars, actOn, api, curChat, groupBy, railNow, read
    * variant of a plain key, every key reachable from where it acts. Left: ⌥H Home (again = everything back as it was),
    * ⌥O workspaces, ⌥K search, ⌥L fold the sidebar, ⌥N new chat, ⌥S Settings, ⌥↓ / ⌥↑ the next / previous Ready item.
    * Right: ⌥1–⌥9 and ⌥0 the first ten rows, ⌥[ / ⌥] the previous / next app (every row past ten), ⌥⇧[ / ⌥⇧] move it,
-   * ⌥A add an app, ⌥T tidy, ⌥R fold the column, ⌥P pause / play what played last (Now playing). In front: ⌥W close, ⌥F wide, ⌥− / ⌥= narrower / wider, ⌥Z snooze,
+   * ⌥A add an app, ⌥T tidy, ⌥R fold the column, ⌥P pause / play what played last (Now playing). In front: ⌥W close, ⌥− / ⌥= narrower / wider, ⌥Z snooze,
    * ⌥E archive then the next, ⌥X resolve then the next, ⌥B where this app's notifications go. Voice: ⌥Space talk (the
    * orb), ⌥D dictate, ⌥V new voice chat, ⌥C command (the shell's own). A modal in front (the app picker, Settings):
    * only its own key (⌥A, ⌥S) and Esc. Every other ⌥ key is the view's and does nothing, so nothing acts unseen on a

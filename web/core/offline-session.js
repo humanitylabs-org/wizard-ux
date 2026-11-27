@@ -43,4 +43,24 @@
     } catch (_) { return false; } finally { clearTimeout(timer); }
   })();
   globalThis.WizOfflineSession = Object.freeze({ publish, ready, idsOf });
+  /* Instant home-screen apps (wizard-ux issue 1830, switch wizard/pin-instant-open, off by default). The shell worker
+   * can't read the switch, so the full shell page (never a pinned app page, whose switch list is only a copy) saves a
+   * tiny flag beside the offline registry while it is on and removes it once the switch is settled off. While the flag
+   * is there core/offline-sw.js answers release-stamped shell files from a saved copy instead of the network. */
+  const PIN_SWITCH = 'wizard/pin-instant-open', PIN_FLAG = '/wizard-os-home/pin-instant-open.json';
+  let pinWas = null, pinSettled = false;
+  function pinSync() {
+    if (!globalThis.caches || typeof document === 'undefined' || !document.documentElement || globalThis.WizHomeScreenPolicy?.mode) return;
+    let on = false; try { on = (document.documentElement.dataset.tweaks || '').split(' ').includes(PIN_SWITCH); } catch (_) {}
+    if (!on && !pinSettled) return;
+    if (on === pinWas) return;
+    pinWas = on;
+    caches.open(CACHE).then(c => on ? c.put(PIN_FLAG, new Response('{"on":true}', { headers: { 'Content-Type': 'application/json' } })) : c.delete(PIN_FLAG)).catch(() => {});
+  }
+  try {
+    if (typeof MutationObserver === 'function' && document.documentElement) new MutationObserver(pinSync).observe(document.documentElement, { attributes: true, attributeFilter: ['data-tweaks'] });
+    addEventListener('wos:experience', () => { pinSettled = true; pinSync(); });
+    setTimeout(() => { pinSettled = true; pinSync(); }, 5000);
+    pinSync();
+  } catch (_) {}
 })();

@@ -9,15 +9,20 @@ window.WizCore = window.WizCore || {};
 window.WizCore.chatsParts = window.WizCore.chatsParts || {};
 window.WizCore.chatsParts.approvals = function ({ ch, esc, KIT, LIVE, renderThreadNow, toast, W }) {
   /* Controls are bound to the displayed identity, never to whichever prompt arrives next. */
+  /* wizard-agent-service issue 597: a prompt with a closing time shows Expired once it passed (the agent stopped
+   * waiting), and while open says until when it waits. Prompts without one look exactly as before. */
+  const apExpired = ap => Boolean(ap && ap.expiresAt && (ap.expired || Date.now() >= ap.expiresAt));
+  const apUntil = ap => { try { return new Date(ap.expiresAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); } catch { return ''; } };
   function approvalHtml(c, s) {
     const ap = c.approval;
     if (!ap || !s || ap.runId !== s.runId) return '';
+    if (!ap.resolved && apExpired(ap)) return `<div class="appr done" data-appr-expired>${esc('Expired · the agent stopped waiting for an answer. Ask it again if you still want this.')}</div>`;
     if (ap.resolved) return `<div class="appr done">${esc(ap.stale ? 'No longer waiting · already answered or expired' : ap.kind === 'unknown' ? 'Recovery acknowledged · execution interrupted' : ap.kind === 'clarify' ? 'Answer sent' : KIT.choiceReceipt(ap.resolved))}</div>`;
     const buttons = ap.kind === 'clarify' ? [...ap.choices, { value: '__answer', label: 'Send answer' }] : ap.choices;
     return `<div class="appr" role="group" aria-label="Run control"><b>${ap.kind === 'unknown' ? 'Needs recovery' : ap.kind === 'clarify' ? 'Answer needed' : 'Needs your approval'}</b><pre>${esc(ap.action)}</pre>
       ${ap.kind === 'clarify' ? `<input data-clarify-answer aria-label="Clarification answer" value="${esc(ap.answer || '')}" maxlength="16384">` : ''}
       <div class="appr-b${buttons.length > 2 ? ' many' : ''}">${buttons.map(ch => `<button type="button" data-approve="${esc(ch.value)}" data-control-key="${esc(ap.key)}" class="${/^(deny|reject)$/.test(ch.value) ? 'no' : ''}" ${ap.pending ? 'disabled' : ''}>${ap.pending === ch.value ? 'Sending…' : esc(ch.label)}</button>`).join('')}</div>
-      ${ap.error ? `<small class="err">${esc(ap.error)}</small>` : '<small>Only the displayed request will be answered.</small>'}</div>`;
+      ${ap.error ? `<small class="err">${esc(ap.error)}</small>` : `<small>${ap.expiresAt ? `${esc(`Waits until ${apUntil(ap)}.`)} ` : ''}Only the displayed request will be answered.</small>`}</div>`;
   }
   async function loadApproval(w, s) {
     const c = ch(w.id), sid = w.thread, nav = c.readNav;
@@ -45,7 +50,9 @@ window.WizCore.chatsParts.approvals = function ({ ch, esc, KIT, LIVE, renderThre
         if (settled) Object.assign(ap, { resolved: settled.resolved, stale: settled.stale, pending: '' });
       }
       c.approval = ap ? { ...ap, runId: s.runId, at: Date.now() } : null;
-      return JSON.stringify(prev && { k: prev.key, a: prev.action, c: prev.choices, r: prev.resolved }) !== JSON.stringify(c.approval && { k: c.approval.key, a: c.approval.action, c: c.approval.choices, r: c.approval.resolved });
+      // Repaint when the prompt's window closes, so the card turns Expired without another status read.
+      if (ap?.expiresAt && !ap.resolved && ap.expiresAt > Date.now() && prev?.key !== ap.key) setTimeout(() => { if (current() && c.approval?.key === ap.key) renderThreadNow(w); }, Math.min(ap.expiresAt - Date.now() + 50, 2 ** 31 - 1));
+      return JSON.stringify(prev && { k: prev.key, a: prev.action, c: prev.choices, r: prev.resolved, x: apExpired(prev) }) !== JSON.stringify(c.approval && { k: c.approval.key, a: c.approval.action, c: c.approval.choices, r: c.approval.resolved, x: apExpired(c.approval) });
     } catch { return false; }
   }
   function settle(c, key, resolved, stale = false) {
@@ -55,6 +62,7 @@ window.WizCore.chatsParts.approvals = function ({ ch, esc, KIT, LIVE, renderThre
   async function chooseApproval(wid, choice, key, answer) {
     const w = W[wid], c = ch(wid), ap = c.approval;
     if (!w || !ap || ap.pending || ap.resolved || ap.key !== key || !(ap.choices.some(x => x.value === choice) || ap.kind === 'clarify' && choice === '__answer')) return;
+    if (apExpired(ap)) { renderThreadNow(w); return; }
     const sid = w.thread, nav = c.readNav;
     const owns = () => W[wid] === w && w.thread === sid && c.readNav === nav && c.approval?.key === key;
     if (ap.kind === 'clarify') { ap.answer = choice === '__answer' ? answer : choice; if (!ap.answer?.trim()) return; }

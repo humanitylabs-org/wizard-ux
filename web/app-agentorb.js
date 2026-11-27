@@ -52,6 +52,8 @@ window.WizCore.appParts.agentorb = function ({ $, agentInfo, APP, appAt, APPS, a
     contextDraft: (key, item, words, draft) => { let w = skinChatsWin(); if (!w) { openChatsList(); w = skinChatsWin(); } if (!w) return false; CHATS.openContextDraft(w.id, key, item, draft); CHATS.renderChats(w); if (words) CHATS.sendChat(w.id, words, 'tapping Resolve this on a notification in Chats'); return true; },
     models: () => { const w = skinChatsWin(); return w ? CHATS.tweakModels(w.id) : []; },
     model: (choice, alive) => { const w = skinChatsWin(); return w ? CHATS.tweakModel(w.id, choice, alive) : null; },
+    // Settings › Privacy's Ask my Wizard (wizard-ux#1801): a new chat whose composer holds these words, unsent.
+    textDraft: text => { openChatsList(); const w = skinChatsWin(); if (!w) return false; CHATS.openTextDraft(w.id, text); CHATS.renderChats(w); return true; },
     deskCount: () => appVars.desks.length,
     root() { const w = skinChatsWin(); return w ? track.querySelector(`[data-chats="${w.id}"]`) : null; },
     dock: () => $('#dock'),
@@ -97,7 +99,7 @@ window.WizCore.appParts.agentorb = function ({ $, agentInfo, APP, appAt, APPS, a
     /* The AI apps view (layouts/ai-apps): its drawer's chats (Working, Ready; the rest for its search), each with the
      * actions Chats' row sheet offers, acted on through Chats' own paths; the Chats window as it is; a New chat in it. */
     // Activity with Channels on (wizard-ux issue 1336): every agent's chats as Working, Ready, Recent, Snoozed, Archived.
-    activityList: (o = {}) => window.WizChatsListModel.activityList(LIVE?.ok ? LIVE.workGroups() : null, { live: LIVE, chats: CHATS, pins: window.WosChatPins }, { order: o.order, older: !!o.older, now: Date.now() }),
+    activityList: (o = {}) => window.WizChatsListModel.activityList(LIVE?.ok ? LIVE.workGroups() : null, { live: LIVE, chats: CHATS, pins: window.WosChatPins }, { order: o.order }),
     sessionList: () => window.WizChatsListModel.sessionList(LIVE?.ok ? LIVE.workGroups() : null, { live: LIVE, chats: CHATS, pins: window.WosChatPins }),
     sessionAct: (sid, act) => {
       // Move to channel… (wizard-ux issue 1292): Chats' own picker, over the view as it is (no trip to Chats).

@@ -31,7 +31,7 @@
         "phone",
         "desktop"
       ],
-      "note": "Direct entrypoint import; the shell's write guard (wizard-ux issue 1439, switch wizard/write-guard)"
+      "note": "Direct entrypoint import; the shell's write guard (wizard-ux issue 1439, on for everyone)"
     },
     "core/agents.js": {
       "loadedBy": [
@@ -330,7 +330,7 @@
         "phone",
         "desktop"
       ],
-      "note": "Chats Inbox rows: only what needs you, as Signal-style rows with Archive (issue 1779, switch wizard/inbox-rows); called by createChats"
+      "note": "Chats Inbox rows: only what needs you, as Signal-style rows with Archive (issue 1779, on for everyone); called by createChats"
     },
     "core/chats-pull.js": {
       "loadedBy": [
@@ -396,13 +396,29 @@
       "classification": "shared",
       "note": "Optional in-memory temporary chat; strict server capability plus default-off preference"
     },
+    "core/private-route.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "classification": "shared",
+      "note": "Private routing: the orb opens the chosen agent's thread, a where-it-went chip and one-tap move (issue 1804, switch wizard/private-routing)"
+    },
+    "core/privacy.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "classification": "shared",
+      "note": "Settings › Privacy: Private mode row, Privacy check, switch-over sheet, Why it matters (issue 1801, switch wizard/private-mode)"
+    },
     "core/action-cards.js": {
       "loadedBy": [
         "phone",
         "desktop"
       ],
       "classification": "shared",
-      "note": "Inline action cards in chat: an app's proposed action with Approve, Edit, Open in app (issue 1463, switch wizard/action-cards)"
+      "note": "Inline action cards in chat: an app's proposed action with Approve, Edit, Open in app (issue 1463, on for everyone)"
     },
     "core/chats-approvals.js": {
       "loadedBy": [
@@ -701,6 +717,13 @@
         "desktop"
       ],
       "note": "In-app Downloads banner and sheet; shows only where the Android bridge exists"
+    },
+    "core/desktop-chats.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Skin host built-in: the phone Chats list header row (desktop-style list, wizard-ux issue 1236); no-op on desktop"
     },
     "core/edge-peek.js": {
       "loadedBy": [
@@ -1287,6 +1310,11 @@
       "classification": "adapter",
       "reason": "Phone shell part moved out of app.js (issue 1665, shared values through accessors): who the agent orb talks to, and the app window in front."
     },
+    "app-appspanel.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone shell part (wizard-ux#1955, switch wizard/apps-panel): the four-section bar's Apps tile opens a slim Favorites panel, holding it shows nine recent apps, and a bar swipe steps through Recent; the desktop has its own app sidebar."
+    },
     "app-arc.js": {
       "shell": "phone",
       "classification": "adapter",
@@ -1311,6 +1339,11 @@
       "shell": "phone",
       "classification": "adapter",
       "reason": "Phone shell part moved out of app.js (issue 1665, shared values through accessors): Settings as a sheet, unsent items, Home repaints and the New desk app cards."
+    },
+    "app-chatsswitch.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone shell part (wizard-ux#1957, on for everyone): the four-section bar's Chats tile opens the Chats view switcher sheet (tap again, hold and slide, a sideways swipe flips the last two views, a bar swipe steps one view); the views themselves are Chats' own (core/chats-sent.js), and the desktop keeps its Inbox · Tags · Sent tabs."
     },
     "app-choice.js": {
       "shell": "phone",
@@ -1406,6 +1439,11 @@
       "shell": "phone",
       "classification": "adapter",
       "reason": "Phone shell part moved out of app.js (issue 1665, shared values through accessors): the Review coach, quick search and placing an app in a window."
+    },
+    "app-sections.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone shell part (wizard-ux#1929, on for everyone): the four sections around the orb (Home, Chats, Messenger, Apps) over the phone's desks; the desktop has its own bar."
     },
     "app-seed.js": {
       "shell": "phone",
@@ -1592,6 +1630,11 @@
       "classification": "adapter",
       "reason": "Phone desk indicators and dock layout."
     },
+    "core/phone-sections.css": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone bar (wizard-ux#1929): the four section tiles Home, Chats, Messenger, Apps around the orb; the desktop has its own bar."
+    },
     "core/home-surfaces.css": {
       "shell": "phone",
       "classification": "adapter",
@@ -1651,6 +1694,7 @@
   "purpose": "Every entrypoint-exclusive asset must be explicit; new common features must be shared by default, not added to these exceptions.",
   "sharedAssets": [
     "/wizard-os-home/apple-touch-icon.png",
+    "core/action-cards.css",
     "core/action-cards.js",
     "core/agents.js",
     "core/android-relay.js",
@@ -1733,8 +1777,10 @@
     "core/chats-status.js",
     "core/chats-stream.js",
     "core/chats-swipe.js",
+    "core/chats-switcher.css",
     "core/chats-threadacts.js",
     "core/chats-threadpaint.js",
+    "core/chats-title-bar.css",
     "core/chats-tracker.js",
     "core/chats-undo.js",
     "core/chats-view.css",
@@ -1750,6 +1796,8 @@
     "core/context-menu.js",
     "core/core.js",
     "core/deeplink.js",
+    "core/desktop-chats.css",
+    "core/desktop-chats.js",
     "core/disk-status.js",
     "core/dom-morph.js",
     "core/downloads.css",
@@ -1760,6 +1808,7 @@
     "core/features.js",
     "core/files.js",
     "core/focused-field.js",
+    "core/graceful-restart.css",
     "core/home-screen-apps.css",
     "core/home-screen-apps.js",
     "core/home-screen-policy.js",
@@ -1783,8 +1832,11 @@
     "core/pages.js",
     "core/phone-connect.css",
     "core/phone-connect.js",
+    "core/phone-nav.css",
     "core/photos-relay.js",
     "core/polish.css",
+    "core/privacy.js",
+    "core/private-route.js",
     "core/reach.js",
     "core/resources.css",
     "core/resources.js",

@@ -32,7 +32,9 @@ window.WizCore.chatsParts.done = function ({ attOf, ch, CH, CHAN_PREFS_KEY, chan
    * amber marker, the channel line and the feed post all read it. A status line of needs_you or check ("Your call":
    * the owner's judgment is the missing piece) waits on him until Mark done, Reply to it, or a newer status line;
    * opening the thread never clears it (only green, unread, clears on open). */
-  const chanNeeds = s => !isWorking(s) && !s.archived && (['waiting_for_approval', 'unknown'].includes(s.status) || ['needs_you', 'check'].includes(attOf(s)?.state));
+  // Smart inbox (wizard-ux issues 1883, 1928): a check waits for catch me up, so it is not Needs you (no amber dot, not
+  // Inbox); only a blocker (needs_you, an approval, unknown) is. Switch off: check counts as before.
+  const chanNeeds = s => !isWorking(s) && !s.archived && (['waiting_for_approval', 'unknown'].includes(s.status) || attOf(s)?.state === 'needs_you' || (attOf(s)?.state === 'check' && !(() => { try { return !!window.WizChatsListModel?.smartInboxOn?.(document.documentElement.dataset.tweaks); } catch (_) { return false; } })()));
   /* Needs you in the thread (wizard-ux issue 1331, part of the Channels switch since issue 1358). The agent's
    * reply whose status line said needs_you gets the feed's amber Needs you line right above its bubble, with the ask
    * and Mark done beside it. One marker state for every surface: attOf (the row's status line; Mark done's handled
@@ -45,7 +47,7 @@ window.WizCore.chatsParts.done = function ({ attOf, ch, CH, CHAN_PREFS_KEY, chan
   function needsLineHtml(s) {
     const a = needsAsk(s); if (!a) return '';
     // A saved-result Needs you with its own reason panel (wizard-agent-service issue 469) is not drawn twice.
-    if (s.backgroundResult && (globalThis.document?.documentElement?.dataset?.tweaks || '').split(' ').includes('wizard/needs-you-reason')) return '';
+    if (s.backgroundResult) return '';
     return `<div class="ch-needs-line" data-needs-line role="status"><span class="ch-post-st needs"><i class="ch-chan-dot" aria-hidden="true"></i>${a.state === 'check' ? 'Your call' : 'Needs you'}</span><span class="ch-needs-ask">${esc(a.ask)}</span>${LIVE.markHandled ? `<button type="button" class="ch-needs-done" data-chmarkdone>${MARK_DONE_SVG}Mark done</button>` : ''}</div>`;
   }
   // Which reply carries the line: the agent's newest reply in the thread (its status line is the row's attention).

@@ -16,6 +16,7 @@ import android.view.ViewGroup;
 import android.view.WindowInsets;
 import android.view.WindowManager;
 import android.webkit.CookieManager;
+import android.webkit.GeolocationPermissions;
 import android.webkit.JavascriptInterface;
 import android.webkit.PermissionRequest;
 import android.webkit.RenderProcessGoneDetail;
@@ -67,6 +68,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
     private static final int REQ_EVERYWHERE = 44;
     private static final int REQ_CAMERA = 45;
     private static final int REQ_APP_NOTIFY = 46;
+    private static final int REQ_LOCATION = 47; // an app that declared location asked for it (AppLocation)
     private static java.lang.ref.WeakReference<MainActivity> current = new java.lang.ref.WeakReference<>(null);
     private boolean everywhereSetup; // James is on Android's "Display over other apps" page
     private boolean sideSetupActive; // the user tapped Turn on and is in the system picker
@@ -82,11 +84,16 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
     private SelectionWebView web;
     private FrameLayout root;
     private PermissionRequest pendingMic;
+    private GeolocationPermissions.Callback pendingGeo; // waiting on Android's location prompt (AppLocation)
+    private String pendingGeoOrigin;
     private ValueCallback<Uri[]> pendingFiles;
     private java.io.File pendingPhoto; // the empty file the camera writes the page's photo into (issue 1534)
     private WebChromeClient.FileChooserParams pendingChooser; // waiting on the CAMERA prompt
     /** The native "can't reach your Wizard" screen over the WebView (ReachScreen / ReachPolicy). */
     private ReachScreen reach;
+    /** Recovery mode's card (wizard-ux issue 1775, switch wizard/phone-recovery-mode); null on a normal start. */
+    private RecoveryScreen recovery;
+    private static String recoveryPausedMeeting; // the live meeting recovery mode paused (this process), resumed by Start normally
     private volatile boolean mainFailed; // this main-frame load failed: its error page must not count as "landed"
     private volatile String wantUrl;     // the page the last main-frame load was for (Try again reloads it)
     private boolean resumed;
@@ -274,6 +281,9 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         if (ai.wizards.os.device.AppState.origin(this).isEmpty()) {
             startActivity(new Intent(this, ConnectActivity.class)); finish(); return;
         }
+        // Recovery mode (wizard-ux issue 1775, switch wizard/phone-recovery-mode, off by default): the last start froze
+        // or never finished, so this one is the shell only with the meeting recorder and uploads paused.
+        final boolean recoveryStart = !(this instanceof AppSessionActivity) && StartGuard.begin(this);
         root = new FrameLayout(this);
         root.setBackgroundColor(Color.rgb(5, 3, 12));
         // targetSdk 35 draws edge to edge. The page itself runs under the status bar so its background reaches the
@@ -301,7 +311,9 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         getWindow().setAttributes(lp);
         setContentView(root);
         buildWebView();
+        if (this instanceof AppSessionActivity) pinShotShow(); // over the WebView, under the connection screen
         reach = new ReachScreen(this, root, this::retryReach, this::openTailscale);
+        if (recoveryStart && StartGuard.paused()) showRecovery();
         watchNetwork();
         if (state != null && ai.wizards.os.device.AppState.origin(this).equals(state.getString("serverOrigin"))) web.restoreState(state);
         if (this instanceof AppSessionActivity && web.getUrl() != null && !((AppSessionActivity)this).acceptsUrl(web.getUrl())) web.clearHistory();
@@ -359,6 +371,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         web.setBackgroundColor(Color.rgb(5, 3, 12));
         root.addView(web, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         if (reach != null) reach.toFront(); // a rebuilt WebView goes under the connection screen
+        if (recovery != null) recovery.toFront(); // and under recovery mode's card
         WebSettings s = web.getSettings();
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
@@ -381,7 +394,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         if (!(this instanceof AppSessionActivity)) HomeScreenShortcuts.attach(this, web);
         if (photos != null) photos.detach();
         photos = ai.wizards.os.photos.PhotosBridge.install(this, web); // status/settings only; no media or credentials
-        ai.wizards.os.photos.BackupScheduler.schedule(this);
+        if (!StartGuard.paused()) ai.wizards.os.photos.BackupScheduler.schedule(this); // recovery mode: uploads wait
         if (device != null) device.onPageStarted();
         device = new ai.wizards.os.device.DeviceBridge(this, web);
         installNativeBridges(web);
@@ -429,7 +442,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
                 // A load replaced by a newer one (Try again over a hanging attempt) is not a failure of the new one.
                 if (req.isForMainFrame() && err.getErrorCode() == ERROR_UNKNOWN && String.valueOf(err.getDescription()).contains("ERR_ABORTED")) return;
                 // Unreachable: stay on this Wizard's own name and show the Retry screen (never the retired name).
-                if (req.isForMainFrame()) { mainFailed = true; showOffline(String.valueOf(err.getDescription())); }
+                if (req.isForMainFrame()) { mainFailed = true; loadFailed(String.valueOf(err.getDescription())); }
             }
 
             @Override
@@ -437,7 +450,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
                 // The gateway answered but the Wizard behind it didn't (502 while it restarts): same screen, it retries.
                 if (!req.isForMainFrame() || resp == null || !ReachPolicy.httpFailure(resp.getStatusCode())) return;
                 mainFailed = true;
-                showOffline("Wizard answered " + resp.getStatusCode());
+                loadFailed("Wizard answered " + resp.getStatusCode());
             }
 
             @Override
@@ -450,6 +463,12 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
                 if (req.isForMainFrame()) {
                     final String u = req.getUrl().toString();
                     if (!u.equals(wantUrl)) { wantUrl = u; mainFailed = false; main.post(MainActivity.this::armReach); }
+                }
+                // Instant home-screen apps (wizard-ux issue 1830, switch wizard/pin-instant-open): a pinned window's app
+                // files come from the phone (PinCache); null for anything it does not keep, which passes through as before.
+                else if (pinCache != null && PinInstant.on(MainActivity.this)) {
+                    PinCache.Reply kept = pinCache.answer(req.getUrl().toString(), req.getMethod(), false, req.getRequestHeaders());
+                    if (kept != null) return PinInstant.response(kept);
                 }
                 return null;
             }
@@ -498,6 +517,17 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
             @Override
             public void onPermissionRequest(PermissionRequest request) {
                 runOnUiThread(() -> handleWebPermission(request));
+            }
+
+            // Location (wizard-ux issue 1629, AppLocation): only reached for a frame the shell let ask (Maps).
+            @Override
+            public void onGeolocationPermissionsShowPrompt(String origin, GeolocationPermissions.Callback callback) {
+                runOnUiThread(() -> handleGeolocation(origin, callback));
+            }
+
+            @Override
+            public void onGeolocationPermissionsHidePrompt() {
+                runOnUiThread(() -> { pendingGeo = null; pendingGeoOrigin = null; });
             }
 
             @Override
@@ -782,6 +812,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
      * existing default-browser open.
      */
     private void openPanel(Uri u) {
+        if (openInApp(u)) return;
         android.content.pm.PackageManager pm = getPackageManager();
         java.util.List<String> providers = new java.util.ArrayList<>();
         try {
@@ -800,6 +831,40 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         tab.intent.setPackage(pkg);
         try { tab.launchUrl(this, u); }
         catch (ActivityNotFoundException | SecurityException e) { openInOwnBrowser(u); }
+    }
+
+    /**
+     * A link an installed app owns (YouTube, Spotify, Instagram, Maps…) opens in that app, the way every Android app does,
+     * before the browser panel (wizard-ux issue 1948: Custom Tabs never hand their first URL to an app). It follows
+     * Android's own per-app "Open supported links" choice: Android 11+ starts only a non-browser app the system would
+     * pick for the link (FLAG_ACTIVITY_REQUIRE_NON_BROWSER), else throws and the panel opens as before. Never for a link
+     * this app claims itself (the owner's own Wizard), so it can't loop back into Wizard. True when an app took it.
+     */
+    private boolean openInApp(Uri u) {
+        android.content.pm.PackageManager pm = getPackageManager();
+        Intent view = new Intent(Intent.ACTION_VIEW, u).addCategory(Intent.CATEGORY_BROWSABLE);
+        java.util.List<String> handlers = new java.util.ArrayList<>();
+        try {
+            for (android.content.pm.ResolveInfo ri : pm.queryIntentActivities(view, android.content.pm.PackageManager.MATCH_ALL))
+                if (ri.activityInfo != null) handlers.add(ri.activityInfo.packageName);
+        } catch (RuntimeException ignored) { }
+        if (PanelLinks.claimsSelf(handlers, getPackageName())) return false;
+        if (Build.VERSION.SDK_INT >= 30) {
+            view.addFlags(Intent.FLAG_ACTIVITY_REQUIRE_NON_BROWSER);
+        } else {
+            java.util.List<String> browsers = new java.util.ArrayList<>(), preferred = new java.util.ArrayList<>();
+            try {
+                for (android.content.pm.ResolveInfo ri : pm.queryIntentActivities(new Intent(Intent.ACTION_VIEW, Uri.parse("https://no-app-owns-this.invalid/")).addCategory(Intent.CATEGORY_BROWSABLE), android.content.pm.PackageManager.MATCH_ALL))
+                    if (ri.activityInfo != null) browsers.add(ri.activityInfo.packageName);
+                for (android.content.pm.ResolveInfo ri : pm.queryIntentActivities(view, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY))
+                    if (ri.activityInfo != null) preferred.add(ri.activityInfo.packageName);
+            } catch (RuntimeException e) { return false; }
+            String app = PanelLinks.appFor(preferred, browsers, getPackageName());
+            if (app == null) return false;
+            view.setPackage(app);
+        }
+        try { startActivity(view); return true; }
+        catch (ActivityNotFoundException | SecurityException e) { return false; } // no app owns it: the panel, as before
     }
 
     /* ---------------- Can't reach your Wizard (James, 12 Oct: Tailscale off gave a pure black screen) ----------------
@@ -827,10 +892,38 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         if (reach == null) return;
         boolean[] n = ReachScreen.net(this);
         if (ReachPolicy.failNow(n[0], n[1], ServerOrigin.needsTailscale(ai.wizards.os.device.AppState.origin(this)))) showOffline(null);
-        else reach.connecting();
+        // Instant home-screen apps (wizard-ux issue 1830): a Wizard window was answered a moment ago on this network, so
+        // a pinned window leaves Connecting out; Can't reach still comes at GIVE_UP_MS if nothing paints.
+        else if (this instanceof AppSessionActivity && PinInstant.skipConnecting(this)) android.util.Log.i("WizardOSReach", "connecting skipped: reached recently");
+        else { pinShotHide("Connecting"); reach.connecting(); }
     };
 
-    private final Runnable reachGiveUp = () -> showOffline(null);
+    private final Runnable reachGiveUp = () -> {
+        // Instant home-screen apps (wizard-ux issue 1830, field report 1): a pinned window shows Can't reach only when the
+        // box truly doesn't answer. At the mark the phone asks the box's own health check; a box that answers is only
+        // slow (a cold load right after a deploy), so the window keeps waiting and asks again at the next mark.
+        if (this instanceof AppSessionActivity && PinInstant.on(this) && !mainFailed) { giveUpUnlessAnswering(); return; }
+        showOffline(null);
+    };
+
+    /** Bumped by every new watch of a load and by a paint, so a late health answer can't act on a later load. */
+    private int reachWatch = 0;
+
+    private void giveUpUnlessAnswering() {
+        final int watch = reachWatch;
+        final android.content.Context app = getApplicationContext();
+        new Thread(() -> {
+            int status = PinInstant.health(app);
+            main.post(() -> {
+                if (watch != reachWatch || mainFailed || isFinishing() || isDestroyed()) return;
+                if (PinInstantPolicy.boxAnswers(status)) {
+                    android.util.Log.i("WizardOSReach", "still loading: the box answers (" + status + "), no Can't reach");
+                    main.removeCallbacks(reachGiveUp);
+                    main.postDelayed(reachGiveUp, ReachPolicy.GIVE_UP_MS);
+                } else showOffline(null);
+            });
+        }, "pin-reach-health").start();
+    }
 
     private final Runnable reachRetry = new Runnable() {
         @Override
@@ -855,6 +948,9 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         if (now != null && url.contains("#") && noFragment(url).equals(noFragment(now))) return; // same page, a #hop
         mainFailed = false;
         wantUrl = url;
+        pinPageShown = false;
+        pinLanded = false;
+        pinPageAt = 0;
         armReach();
     }
 
@@ -862,14 +958,30 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         if (mainFailed) return; // this load already failed fast (its screen is up)
         main.removeCallbacks(reachMark);
         main.removeCallbacks(reachGiveUp);
+        main.removeCallbacks(quietRetry);
+        quietPending = false;
+        reachWatch++;
+        reachSince = android.os.SystemClock.uptimeMillis();
+        quietTries = 0;
         main.postDelayed(reachMark, ReachPolicy.CONNECTING_MS);
         main.postDelayed(reachGiveUp, ReachPolicy.GIVE_UP_MS);
     }
 
     void landed() {
+        PinInstant.reached(this);
+        reachWatch++;
+        pinLanded = true;
+        // wizard-ux issue 1959: the box answered and the pinned page has painted, so the cover (placeholder or last
+        // screen) leaves at most COVER_AFTER_PAGE_MS from now, whether or not the app ever says it has loaded.
+        if (pinPageAt == 0) {
+            pinPageAt = android.os.SystemClock.uptimeMillis();
+            if (pinShot != null) { main.removeCallbacks(pinShotGiveUp); main.postDelayed(pinShotGiveUp, PinInstantPolicy.COVER_AFTER_PAGE_MS); }
+        }
         main.removeCallbacks(reachMark);
         main.removeCallbacks(reachGiveUp);
         main.removeCallbacks(reachRetry);
+        main.removeCallbacks(quietRetry);
+        quietPending = false;
         if (reach != null && reach.isShowing()) android.util.Log.i("WizardOSReach", "reached " + pageUrl);
         if (reach != null) reach.hide();
     }
@@ -880,13 +992,245 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
      *  never paints still ends on the offline screen at GIVE_UP_MS, and only a paint (landed) clears that. */
     void answered(String url) {
         if (!ReachPolicy.answerDisarms(isWeb(url), mainFailed, sameHost(url, wantUrl))) return;
+        PinInstant.reached(this);
         main.removeCallbacks(reachMark);
         if (reach != null && ReachPolicy.answerHides(reach.isShowing(), reach.isOffline())) reach.hide();
     }
 
+    /* ---- Instant home-screen apps (wizard-ux issue 1830, switch wizard/pin-instant-open, off by default) ----
+     * A pinned window's file cache (PinCache, asked from shouldInterceptRequest) and the app's last screen: saved when
+     * the window leaves the screen, shown at the next cold open over the WebView (under the connection screen) until the
+     * pinned page says the app has loaded (WizardOSNative.pinShown), a connection screen shows, or SHOT_MAX_MS. */
+    volatile PinCache pinCache;
+    /** What covers a pinned window until its app has loaded: the app's last screen, else a placeholder (never blank). */
+    private View pinShot;
+    private boolean pinShotIsPicture = false, pinShownSaved = false;
+    private boolean pinPageShown = false;
+    /** The cover gives way COVER_AFTER_PAGE_MS after the pinned page has painted (wizard-ux issue 1959), else at
+     *  SHOT_MAX_MS, but only to a page that has painted: never to an empty window. */
+    private boolean pinLanded = false;
+    private final Runnable pinShotGiveUp = new Runnable() {
+        @Override public void run() {
+            if (pinShot == null) return;
+            if (pinLanded) pinShotHide(PinInstantPolicy.coverWhy(pinPageAt, android.os.SystemClock.uptimeMillis()));
+            else main.postDelayed(this, 1_000L);
+        }
+    };
+    /** Each stage of a pinned open (uptime ms, 0: not yet), for the timing line and PinInstantScenario (issue 1959):
+     *  the pinned page painted (the box answered), the pinned page said the app has loaded, the cover left. */
+    private long pinPageAt = 0, pinShownAt = 0, pinCoverGoneAt = 0;
+    private String pinCoverWhy = "";
+
+    /** Started at the top of a pinned window's onCreate, so the picture decodes while the WebView is being made. */
+    private java.util.concurrent.FutureTask<android.graphics.Bitmap> pinShotLoad;
+    /** The pinned icon's picture and name, for the placeholder; read beside the WebView too. */
+    private java.util.concurrent.FutureTask<Object[]> pinLabelLoad;
+    private long pinCreateAt = 0, pinFirstDrawAt = 0, pinShotDrawnAt = 0, pinCoverDrawnAt = 0;
+
+    void pinShotStart() {
+        pinCreateAt = android.os.SystemClock.uptimeMillis();
+        if (!PinInstant.on(this)) return;
+        final String origin = ai.wizards.os.device.AppState.origin(this), app = HomeScreenShortcuts.appId(this, getIntent());
+        final android.content.Context ctx = getApplicationContext();
+        pinShotLoad = new java.util.concurrent.FutureTask<>(() -> PinInstant.shot(ctx, origin, app));
+        new Thread(pinShotLoad, "pin-shot-load").start();
+        final String pinOrigin = HomeScreenShortcuts.origin(this);
+        pinLabelLoad = new java.util.concurrent.FutureTask<>(() -> new Object[]{
+                PinInstant.pinnedIcon(ctx, pinOrigin, app), PinInstant.pinnedName(ctx, pinOrigin, app), WizardLook.load(ctx)});
+        new Thread(pinLabelLoad, "pin-label-load").start();
+    }
+
+    private void pinShotShow() {
+        pinCache = PinInstant.cache(this);
+        long built = android.os.SystemClock.uptimeMillis();
+        android.graphics.Bitmap b = null;
+        try { if (pinShotLoad != null) b = pinShotLoad.get(400, java.util.concurrent.TimeUnit.MILLISECONDS); }
+        catch (Exception slow) { if (pinShotLoad != null) pinShotLoad.cancel(true); }
+        pinShotLoad = null;
+        final long waited = android.os.SystemClock.uptimeMillis() - built;
+        if (b != null) {
+            android.widget.ImageView picture = new android.widget.ImageView(this);
+            picture.setScaleType(android.widget.ImageView.ScaleType.FIT_START);
+            picture.setBackgroundColor(Color.rgb(5, 3, 12));
+            picture.setImageBitmap(b);
+            pinShot = picture;
+            pinShotIsPicture = true;
+        } else if (pinLabelLoad != null) {
+            // No picture yet (first open on this phone, or the app was never left): never a blank window (field report
+            // 2). Android paints the app's icon and name on the skin's background with a quiet progress line.
+            Object[] label = null;
+            final java.util.concurrent.FutureTask<Object[]> later = pinLabelLoad;
+            try { label = later.get(200, java.util.concurrent.TimeUnit.MILLISECONDS); } catch (Exception slow) { /* filled in when it comes */ }
+            final View cover = pinPlaceholder(label);
+            pinShot = cover;
+            if (label == null) new Thread(() -> {
+                try { Object[] l = later.get(5, java.util.concurrent.TimeUnit.SECONDS); main.post(() -> { if (pinShot == cover) pinLabel(cover, l); }); }
+                catch (Exception none) { /* the app id stays as its name */ }
+            }, "pin-label-wait").start();
+        }
+        pinLabelLoad = null;
+        if (pinShot != null) {
+            pinShot.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS);
+            root.addView(pinShot, root.indexOfChild(web) + 1, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+            main.postDelayed(pinShotGiveUp, PinInstantPolicy.SHOT_MAX_MS);
+        }
+        final View shown = pinShot;
+        final boolean picture = pinShotIsPicture;
+        // The window's first frame (with the picture when there is one): timed for PinInstantScenario and the log.
+        root.getViewTreeObserver().addOnPreDrawListener(new android.view.ViewTreeObserver.OnPreDrawListener() {
+            @Override public boolean onPreDraw() {
+                if (root != null) root.getViewTreeObserver().removeOnPreDrawListener(this);
+                pinFirstDrawAt = android.os.SystemClock.uptimeMillis();
+                if (shown != null && pinShot == shown) { pinCoverDrawnAt = pinFirstDrawAt; if (picture) pinShotDrawnAt = pinFirstDrawAt; }
+                if (shown != null) android.util.Log.i("WizardOSPinInstant", (picture ? "last screen" : "placeholder '" + shown.getTag() + "'") + " on the first frame, " + (pinFirstDrawAt - pinCreateAt)
+                        + " ms after the window was created (WebView " + (built - pinCreateAt) + " ms, waited " + waited + " ms for the picture)");
+                return true;
+            }
+        });
+    }
+
+    /** When the first frame with the last screen on it was drawn (0: not shown); read by PinInstantScenario. */
+    long pinShotDrawnAt() { return pinShotDrawnAt; }
+    /** When the first frame with the last screen or the placeholder on it was drawn (0: neither). */
+    long pinCoverDrawnAt() { return pinCoverDrawnAt; }
+    boolean pinPlaceholderShowing() { return pinShot != null && !pinShotIsPicture; }
+    boolean reachOfflineShowing() { return reach != null && reach.isShowing() && reach.isOffline(); }
+
+    /** The placeholder: the app's icon and name on the worn skin's background, a quiet progress line under them. */
+    private View pinPlaceholder(Object[] label) {
+        android.graphics.Bitmap icon = label == null ? null : (android.graphics.Bitmap) label[0];
+        String name = label == null ? PinInstantPolicy.placeholderName("", HomeScreenShortcuts.appId(this, getIntent())) : (String) label[1];
+        WizardLook look = label == null ? WizardLook.load(this) : (WizardLook) label[2];
+        float dp = getResources().getDisplayMetrics().density;
+        FrameLayout cover = new FrameLayout(this);
+        cover.setBackgroundColor(look.base);
+        cover.setContentDescription("pin-placeholder");
+        android.widget.LinearLayout col = new android.widget.LinearLayout(this);
+        col.setOrientation(android.widget.LinearLayout.VERTICAL);
+        col.setGravity(android.view.Gravity.CENTER_HORIZONTAL);
+        android.widget.ImageView i = new android.widget.ImageView(this);
+        i.setImageBitmap(icon);
+        i.setVisibility(icon == null ? View.GONE : View.VISIBLE);
+        col.addView(i, new android.widget.LinearLayout.LayoutParams(Math.round(72 * dp), Math.round(72 * dp)));
+        android.widget.TextView t = new android.widget.TextView(this);
+        t.setText(name);
+        cover.setTag(name);
+        t.setTextColor(look.text);
+        t.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 17);
+        t.setGravity(android.view.Gravity.CENTER);
+        android.widget.LinearLayout.LayoutParams tl = new android.widget.LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        tl.topMargin = Math.round(14 * dp);
+        col.addView(t, tl);
+        android.widget.ProgressBar line = new android.widget.ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
+        line.setIndeterminate(true);
+        line.setIndeterminateTintList(android.content.res.ColorStateList.valueOf(look.accent));
+        line.setProgressBackgroundTintList(android.content.res.ColorStateList.valueOf(WizardLook.withAlpha(look.text, 0.12f)));
+        line.setAlpha(0.85f);
+        android.widget.LinearLayout.LayoutParams ll = new android.widget.LinearLayout.LayoutParams(Math.round(96 * dp), Math.round(4 * dp));
+        ll.topMargin = Math.round(18 * dp);
+        col.addView(line, ll);
+        cover.addView(col, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, android.view.Gravity.CENTER));
+        return cover;
+    }
+
+    /** The pinned icon's picture and name arrived after the placeholder was drawn: put them on it. */
+    private void pinLabel(View cover, Object[] label) {
+        if (label == null || !(cover instanceof FrameLayout) || ((FrameLayout) cover).getChildCount() == 0) return;
+        android.widget.LinearLayout col = (android.widget.LinearLayout) ((FrameLayout) cover).getChildAt(0);
+        android.graphics.Bitmap icon = (android.graphics.Bitmap) label[0];
+        android.widget.ImageView i = (android.widget.ImageView) col.getChildAt(0);
+        if (icon != null) { i.setImageBitmap(icon); i.setVisibility(View.VISIBLE); }
+        ((android.widget.TextView) col.getChildAt(1)).setText((String) label[1]);
+        cover.setTag(label[1]);
+    }
+    /** When this pinned window's first frame was drawn, with or without a picture (0: not yet). */
+    long pinFirstDrawAt() { return pinFirstDrawAt; }
+    boolean pinShotShowing() { return pinShot != null; }
+
+    long pinPageAt() { return pinPageAt; }
+    long pinShownAt() { return pinShownAt; }
+    long pinCoverGoneAt() { return pinCoverGoneAt; }
+    String pinCoverWhy() { return pinCoverWhy; }
+
+    void pinShotHide() { pinShotHide("other"); }
+
+    void pinShotHide(String why) {
+        final View shot = pinShot;
+        if (shot == null) return;
+        pinCoverGoneAt = android.os.SystemClock.uptimeMillis();
+        pinCoverWhy = why;
+        // One line per open: where the time went (wizard-ux issue 1959).
+        android.util.Log.i("WizardOSPinInstant", PinInstantPolicy.timingLine(HomeScreenShortcuts.appId(this, getIntent()),
+                pinShotIsPicture, pinCreateAt, pinCoverDrawnAt, pinPageAt, pinShownAt, pinCoverGoneAt, why));
+        pinShot = null;
+        pinShotIsPicture = false;
+        main.removeCallbacks(pinShotGiveUp);
+        shot.animate().alpha(0f).setDuration(150).withEndAction(() -> { if (root != null) root.removeView(shot); }).start();
+    }
+
+    private void pinShotSaveIfFront() { if (resumed && hasWindowFocus()) pinShotSave(); }
+
+    /** Leaving the screen: keep a picture of the app as it is now, for the next cold open (only a loaded app page). */
+    private void pinShotSave() {
+        if (web == null || root == null || !pinPageShown || pinShot != null || (reach != null && reach.isShowing()) || !PinInstant.on(this)) return;
+        final String app = HomeScreenShortcuts.appId(this, getIntent());
+        final int w = web.getWidth(), h = web.getHeight();
+        if (app == null || w <= 0 || h <= 0) return;
+        final float scale = Math.min(1f, PinInstantPolicy.SHOT_WIDTH / (float) w);
+        final android.graphics.Bitmap dest;
+        try { dest = android.graphics.Bitmap.createBitmap(Math.round(w * scale), Math.round(h * scale), android.graphics.Bitmap.Config.ARGB_8888); }
+        catch (OutOfMemoryError oom) { return; }
+        int[] at = new int[2];
+        web.getLocationInWindow(at);
+        final String origin = ai.wizards.os.device.AppState.origin(this);
+        try {
+            android.view.PixelCopy.request(getWindow(), new android.graphics.Rect(at[0], at[1], at[0] + w, at[1] + h), dest, result -> {
+                if (result == android.view.PixelCopy.SUCCESS) PinInstant.saveShot(this, origin, app, dest); else dest.recycle();
+            }, main);
+        } catch (RuntimeException unavailable) { dest.recycle(); }
+    }
+
+    /** When the load being watched began (armReach): the give-up mark counts from here, across quiet tries. */
+    private long reachSince;
+    /** Quiet tries of this load so far (wizard-ux issue 2008). */
+    private int quietTries;
+    /** A quiet try is waiting to run (Handler.hasCallbacks needs API 29; minSdk is 28). */
+    private boolean quietPending;
+
+    /** Wizard-ux issue 2008: a main-frame load failed (an error, or a 5xx from the gateway). With a network and Tailscale
+     *  on, the tunnel may still be waking (network change, resume): try again quietly under Connecting, and leave the
+     *  give-up mark (armed when the load began) to show the offline screen if the Wizard never answers. No network,
+     *  Tailscale off, or the offline screen already up: show it now, as before. */
+    private void loadFailed(String why) {
+        long since = android.os.SystemClock.uptimeMillis() - reachSince;
+        ReachPolicy.Why w = ReachScreen.why(this);
+        if (reach == null || web == null || !ReachPolicy.retryQuietly(w, since, reach.isOffline())) { showOffline(why); return; }
+        long wait = ReachPolicy.quietRetryDelay(quietTries++);
+        android.util.Log.i("WizardOSReach", "quiet retry in " + wait + "ms after " + since + "ms: " + w + " " + why);
+        // Never the failed load's error page: Connecting covers it (a pinned window that skips Connecting keeps its cover).
+        if (!(this instanceof AppSessionActivity && PinInstant.skipConnecting(this) && pinShot != null)) { pinShotHide("Connecting"); reach.connecting(); }
+        main.removeCallbacks(quietRetry);
+        quietPending = true;
+        main.postDelayed(quietRetry, wait);
+    }
+
+    /** The quiet try: the same load again, without re-arming its marks (the give-up mark keeps the first try's time). */
+    private final Runnable quietRetry = () -> {
+        quietPending = false;
+        if (web == null || !mainFailed || (reach != null && reach.isOffline())) return;
+        String u = isWeb(wantUrl) ? wantUrl : ai.wizards.os.device.AppState.homeUrl(this);
+        android.util.Log.i("WizardOSReach", "quiet retry " + quietTries + " " + u);
+        mainFailed = false;
+        wantUrl = u;
+        web.loadUrl(u);
+    };
+
     private void showOffline(String why) {
         main.removeCallbacks(reachMark);
         main.removeCallbacks(reachGiveUp);
+        main.removeCallbacks(quietRetry);
+        quietPending = false;
+        pinShotHide("Can't reach");
         if (reach == null) return;
         ReachPolicy.Why w = ReachScreen.why(this);
         reach.offline(w, why, ReachScreen.tailscaleInstalled(this));
@@ -950,12 +1294,38 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
     };
 
     void netChanged() {
+        // Wizard-ux issue 2008: a quiet try is waiting and the network changed (the Tailscale tunnel came up): try now.
+        if (reach != null && !reach.isOffline() && mainFailed && quietPending) {
+            main.removeCallbacks(quietRetry); // still pending: it runs once the burst settles
+            main.postDelayed(quietRetry, ReachPolicy.NET_SETTLE_MS);
+            return;
+        }
         if (reach == null || !reach.isOffline()) return;
         main.removeCallbacks(netSettled);
         main.postDelayed(netSettled, ReachPolicy.NET_SETTLE_MS);
     }
 
     /* ---------------- Microphone for the orb ---------------- */
+
+    /* Location for the apps that ask for it (wizard-ux issue 1629, switch wizard/app-location, off by default): never
+     * granted silently. Switch off or another address: denied with no prompt. Otherwise Android's own location prompt
+     * first (once; Android remembers the answer and it can be turned off in the phone's settings), and the WebView is
+     * told never to remember the grant itself, so each ask re-checks the switch and Android's permission. */
+    private void handleGeolocation(String origin, GeolocationPermissions.Callback cb) {
+        if (!AppLocation.mayAsk(AppLocation.on(this), ai.wizards.os.device.AppState.primaryOrigin(this), origin)) {
+            cb.invoke(origin, false, false);
+            return;
+        }
+        if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+                || checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+            cb.invoke(origin, true, false);
+            return;
+        }
+        if (pendingGeo != null) pendingGeo.invoke(pendingGeoOrigin, false, false);
+        pendingGeo = cb;
+        pendingGeoOrigin = origin;
+        requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION}, REQ_LOCATION);
+    }
 
     private void handleWebPermission(PermissionRequest request) {
         if (!Origin.isPrivate(MainActivity.this, request.getOrigin())) { request.deny(); return; }
@@ -981,6 +1351,18 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
             if (p == null || pendingFiles == null) return;
             boolean ok = results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED;
             if (!openChooser(p, ok)) { pendingFiles.onReceiveValue(null); pendingFiles = null; }
+            return;
+        }
+        if (code == REQ_LOCATION) {
+            GeolocationPermissions.Callback cb = pendingGeo;
+            String origin = pendingGeoOrigin;
+            pendingGeo = null;
+            pendingGeoOrigin = null;
+            if (cb == null) return;
+            boolean ok = false;
+            for (int r : results) if (r == PackageManager.PERMISSION_GRANTED) ok = true;
+            // Still re-check the switch: it may have been turned off while Android's prompt was showing.
+            cb.invoke(origin, ok && AppLocation.mayAsk(AppLocation.on(this), ai.wizards.os.device.AppState.primaryOrigin(this), origin), false);
             return;
         }
         if (code == REQ_EVERYWHERE) { continueEverywhere(); return; }
@@ -1045,6 +1427,8 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         if (device == null) return;
         device.onStart();
         ai.wizards.os.everywhere.EverywhereService.setAppInFront(this, ai.wizards.os.device.AppState.shellFront());
+        // Recovery mode (wizard-ux issue 1775): this background work waits for Start normally.
+        if (ai.wizards.os.StartGuard.paused()) return;
         ai.wizards.os.everywhere.EverywhereOutbox.get(this).pump();
         // A meeting cut off by a process death is closed and uploaded; the store opens off the UI thread (wizard-ux#1769).
         ai.wizards.os.mizel.MeetingRecorderService.recoverFromActivity(this);
@@ -1052,6 +1436,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
 
     @Override
     protected void onStop() {
+        if (!(this instanceof AppSessionActivity)) StartGuard.settle(this); // left the screen: this start went on
         if (device != null) device.onStop();
         ai.wizards.os.everywhere.EverywhereService.setAppInFront(this, ai.wizards.os.device.AppState.shellFront());
         super.onStop();
@@ -1119,9 +1504,9 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         if (web == null) return; // Connect owns the screen until an origin is set
         ScrollCaptureDiagnostics.resumed(this);
         web.onResume();
-        ai.wizards.os.mizel.MeetingRecorderService.resumeUpdateFromActivity(this);
-        ai.wizards.os.share.ShareService.resumeIfPending(this); // shares left queued (force-stop, reboot) carry on
-        ai.wizards.os.mizel.MeetingEventSync.kick(this); // meeting markers from the floating orb / side button still unsent
+        if (!(this instanceof AppSessionActivity) && StartGuard.resumed()) main.postDelayed(settleStart, StartPolicy.SETTLE_MS);
+        if (recovery != null && recovery.isShowing()) pollRecovery();
+        if (!StartGuard.paused()) resumeBackgroundWork();
         resumed = true;
         ai.wizards.os.downloads.Downloads.addListener(downloadsListener);
         queueDownloadPush(ai.wizards.os.downloads.DownloadsPolicy.eventJson("sync", null)); // a download may have finished while away
@@ -1186,12 +1571,68 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         pushSideButton();
     }
 
+    /** Background work a start resumes; recovery mode holds it until Start normally (wizard-ux issue 1775). */
+    private void resumeBackgroundWork() {
+        ai.wizards.os.mizel.MeetingRecorderService.resumeUpdateFromActivity(this);
+        ai.wizards.os.share.ShareService.resumeIfPending(this); // shares left queued (force-stop, reboot) carry on
+        ai.wizards.os.mizel.MeetingEventSync.kick(this); // meeting markers from the floating orb / side button still unsent
+    }
+
+    /* ---------------- Recovery mode (wizard-ux issue 1775, switch wizard/phone-recovery-mode, off by default) ----------------
+     * The last start froze or never finished (StartGuard / StartPolicy). This start is the shell only: the meeting
+     * recorder (a live meeting is paused), meeting/share/photo uploads and the outbox wait, and a native card offers
+     * Check for update (the normal updater: check, download, verify, install), Send diagnostics (the report with the
+     * saved freeze stacks and process exits) and Start normally. */
+    private final Runnable settleStart = () -> StartGuard.settle(this);
+    private final Runnable recoveryPoll = new Runnable() {
+        @Override public void run() {
+            if (recovery == null || !recovery.isShowing() || !resumed) return;
+            try { recovery.updateState(new org.json.JSONObject(ai.wizards.os.update.Updater.state())); } catch (org.json.JSONException ignored) { }
+            main.postDelayed(this, 1000);
+        }
+    };
+    private void pollRecovery() { main.removeCallbacks(recoveryPoll); main.post(recoveryPoll); }
+
+    private void showRecovery() {
+        recovery = new RecoveryScreen(this, root, new RecoveryScreen.Actions() {
+            @Override public void update(boolean install) {
+                if (install) { ai.wizards.os.update.Updater.install(MainActivity.this); return; }
+                recovery.checking(true);
+                ai.wizards.os.update.Updater.check(MainActivity.this, () -> main.post(() -> { if (recovery != null) recovery.checking(false); }));
+            }
+            @Override public void diagnostics() {
+                ScrollCaptureDiagnostics.sendNow(MainActivity.this, ok -> { if (recovery != null) recovery.diagnosticsSent(ok); });
+            }
+            @Override public void startNormally() { leaveRecovery(); }
+        });
+        recovery.show(StartGuard.why());
+        // A meeting still recording in this process (the service outlived the frozen screen) is paused, not ended.
+        String paused = ai.wizards.os.mizel.MeetingRecorderService.pauseForRecovery(this);
+        if (paused != null) recoveryPausedMeeting = paused; // a recreated Activity keeps the one paused before
+        pollRecovery();
+    }
+
+    /** Start normally: the card goes, the held work runs now, and this start is watched like any other. */
+    private void leaveRecovery() {
+        StartGuard.startNormally(this);
+        main.removeCallbacks(recoveryPoll);
+        if (recovery != null) { recovery.hide(); root.removeView(recovery.view()); recovery = null; }
+        ai.wizards.os.photos.BackupScheduler.schedule(this);
+        ai.wizards.os.everywhere.EverywhereOutbox.get(this).pump();
+        ai.wizards.os.mizel.MeetingRecorderService.endRecovery(this, recoveryPausedMeeting); // recovery, uploads, the paused meeting
+        recoveryPausedMeeting = null;
+        resumeBackgroundWork();
+        main.removeCallbacks(settleStart);
+        main.postDelayed(settleStart, StartPolicy.SETTLE_MS);
+    }
+
     @Override
     protected void onPause() {
         ScrollCaptureDiagnostics.arm("activity-pause");
         ScrollCaptureDiagnostics.record("Activity.onPause",ScrollCaptureDiagnostics.fields());
         if (web != null && !(this instanceof AppSessionActivity)) web.evaluateJavascript(WizardLook.READ_JS, raw -> WizardLook.save(this, raw)); // the reach/Connect screens wear the last skin
         if (this instanceof AppSessionActivity && web != null) web.evaluateJavascript("window.__wosSessionCheckpoint?.()", null);
+        if (this instanceof AppSessionActivity) pinShotSave();
         if (mizel != null) mizel.setPcmForeground(false);
         // Mid-recording the page must keep running in the background (the floating orb can send/pause/cancel it).
         if (web != null && !ai.wizards.os.everywhere.EverywhereService.appIsRecording()) web.onPause();
@@ -1324,6 +1765,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         LIVE.remove(this);
         if (device != null) device.onDestroy();
         main.removeCallbacks(reachMark); main.removeCallbacks(reachGiveUp); main.removeCallbacks(reachRetry); main.removeCallbacks(netSettled);
+        main.removeCallbacks(settleStart); main.removeCallbacks(recoveryPoll);
         if (netWatch != null) { try { getSystemService(android.net.ConnectivityManager.class).unregisterNetworkCallback(netWatch); } catch (RuntimeException ignored) {} netWatch = null; }
         if (!(this instanceof AppSessionActivity)) {
             ai.wizards.os.everywhere.EverywhereService.setAppVoiceRemote(null);
@@ -1355,6 +1797,14 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
             main.post(() -> MainActivity.this.shellToken(token));
         }
 
+        /** A Wizard app's call page (wizard-messenger issue 445, Messenger switch calls) in a call window of its own:
+         *  camera, microphone and earpiece / speaker / Bluetooth sound. Only this Wizard's own pages; false otherwise. */
+        @JavascriptInterface public boolean openCall(String url) {
+            final String u = String.valueOf(url);
+            if (!ai.wizards.os.call.CallActivity.allowed(ai.wizards.os.device.AppState.primaryOrigin(MainActivity.this), u)) return false;
+            runOnUiThread(() -> ai.wizards.os.call.CallActivity.open(MainActivity.this, u));
+            return true;
+        }
         /** Long-press › Open in your browser, also for this Wizard's own pages: the phone's default browser, never this app. */
         @JavascriptInterface public void openInBrowser(String url) {
             final Uri u = Uri.parse(String.valueOf(url));
@@ -1687,24 +2137,6 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
             v.vibrate(VibrationEffect.createOneShot(d, VibrationEffect.DEFAULT_AMPLITUDE));
         }
 
-        /* ---- Clear chat notifications (wizard-ux issue 1276, switch wizard/clear-chat-notifications, off by default):
-         * the shell turns the listener on with the switch, asks for Notification access, and hands it chats the owner
-         * read in Messenger (notify/BridgedNotificationListener). ---- */
-        @JavascriptInterface
-        public String chatNotifyState() { return ai.wizards.os.notify.BridgedNotificationListener.state(MainActivity.this); }
-        @JavascriptInterface
-        public void chatNotifySwitch(boolean on) {
-            if (MainActivity.this instanceof AppSessionActivity) return;
-            ai.wizards.os.notify.BridgedNotificationListener.setOn(MainActivity.this, on);
-        }
-        @JavascriptInterface
-        public void chatNotifyAccess() {
-            if (MainActivity.this instanceof AppSessionActivity) return;
-            runOnUiThread(() -> {
-                ai.wizards.os.notify.BridgedNotificationListener.setOn(MainActivity.this, true);
-                ai.wizards.os.notify.BridgedNotificationListener.openAccess(MainActivity.this);
-            });
-        }
         /* ---- Side button opens the Agent chat (wizard-ux issue 1528, switch wizard/assist-agent-note, off by default): the
          * button is answered natively before any page runs, so the shell copies the switch here (assist/AssistNote). ---- */
         @JavascriptInterface
@@ -1712,28 +2144,75 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
             if (MainActivity.this instanceof AppSessionActivity) return;
             ai.wizards.os.assist.AssistNote.setOn(MainActivity.this, on);
         }
-        /** Phone notifications per app (wizard-ux issue 1567, switch wizard/phone-app-notifications): the main page's
-         *  copy of the switch, with the installed apps' names for their Android channels. */
+        /** Phone notifications per app (wizard-ux issue 1567, on for everyone): the main page hands over the installed
+         *  apps' names for their Android channels. The name and the on/off argument stay for pages from before the
+         *  switch wizard/phone-app-notifications went; the argument is ignored. */
         @JavascriptInterface
         public void appNotifySwitch(boolean on, String names) {
             if (MainActivity.this instanceof AppSessionActivity) return;
-            ai.wizards.os.notify.AppNotify.setOn(MainActivity.this, on, names);
-            // Android 13+: turning it on asks for permission to post (once per switch-on, never on its own).
-            if (on && Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+            ai.wizards.os.notify.AppNotify.apps(MainActivity.this, names);
+            // Android 13+: asks for permission to post once, never on its own.
+            if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
                     && ai.wizards.os.notify.AppNotify.askOnce(MainActivity.this)) {
                 main.post(() -> requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, REQ_APP_NOTIFY));
             }
+        }
+        /** Recovery mode (wizard-ux issue 1775, switch wizard/phone-recovery-mode): the main page's copy of the switch. */
+        @JavascriptInterface
+        public void recoveryModeSwitch(boolean on) {
+            if (MainActivity.this instanceof AppSessionActivity) return;
+            StartGuard.setOn(MainActivity.this, on);
+        }
+        /** Box-to-phone push (wizard-ux issue 1618, switch wizard/phone-push): the main page's copy of the switch. */
+        @JavascriptInterface
+        public void appPushSwitch(boolean on) {
+            if (MainActivity.this instanceof AppSessionActivity) return;
+            ai.wizards.os.notify.AppPush.setOn(MainActivity.this, on);
+        }
+        /* ---- Location for the apps that ask for it (wizard-ux issue 1629, switch wizard/app-location, off by default):
+         * the main page copies the switch here (AppLocation). ---- */
+        @JavascriptInterface
+        public void appLocationSwitch(boolean on) {
+            if (MainActivity.this instanceof AppSessionActivity) return;
+            AppLocation.setOn(MainActivity.this, on);
+            // Off: forget any grant this WebView still holds; the shell also takes `geolocation` off open frames.
+            if (!on) runOnUiThread(() -> GeolocationPermissions.getInstance().clearAll());
+        }
+        /* ---- Instant home-screen apps (wizard-ux issue 1830, switch wizard/pin-instant-open, off by default): the main
+         * page copies the switch here (PinInstant); a pinned page says its shell release and when its app has loaded. ---- */
+        @JavascriptInterface
+        public void pinInstantSwitch(boolean on) {
+            if (MainActivity.this instanceof AppSessionActivity) return;
+            PinInstant.setOn(MainActivity.this, on);
+        }
+        @JavascriptInterface
+        public void pinRelease(String token) {
+            PinCache c = pinCache;
+            if (c != null) c.release(token);
+        }
+        @JavascriptInterface
+        public void pinShown() {
+            if (!(MainActivity.this instanceof AppSessionActivity)) return;
+            main.post(() -> {
+                if (pinShownAt == 0) pinShownAt = android.os.SystemClock.uptimeMillis();
+                pinPageShown = true; pinShotHide("app shown");
+                // Keep a picture once the app has shown, not only when the window leaves (field report 2), so the
+                // very next open has its last screen even if this window is swiped away.
+                if (!pinShownSaved) { pinShownSaved = true; main.postDelayed(MainActivity.this::pinShotSaveIfFront, PinInstantPolicy.SHOT_AFTER_SHOWN_MS); }
+            });
+        }
+        /* ---- One UI icon count (wizard-ux issue 1669, switch wizard/phone-badge-look, off by default): the main page
+         * copies the switch here (badge/BadgeLook); a change redraws the Messenger icon count at once. ---- */
+        @JavascriptInterface
+        public void badgeLookSwitch(boolean on) {
+            if (MainActivity.this instanceof AppSessionActivity) return;
+            ai.wizards.os.badge.BadgeLook.setOn(MainActivity.this, on);
         }
         /* ---- App windows (wizard-os issue 650, on for everyone): any page asks to open an app's own window for a link
          * (false = keep the link where it is). ---- */
         @JavascriptInterface
         public boolean openAppWindow(String appId, String path, String name) {
             return MainActivity.this.openAppWindow(appId, path, name);
-        }
-        @JavascriptInterface
-        public int chatNotifyRead(String json) {
-            if (MainActivity.this instanceof AppSessionActivity) return 0;
-            return ai.wizards.os.notify.BridgedNotificationListener.chatRead(json);
         }
     }
 }

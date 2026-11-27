@@ -104,7 +104,7 @@ const report = { origin, web, cases: [] };
         const showList = async () => { const v = await side(); if (v !== 'open' && v !== 'full') { await vis(oneW ? '.aad-cback, .aad-oneback' : '.aad-rtog').click(); await nap(500); } };
         // 1. A chat from the list (Activity).
         await showList();
-        await vis(`.aad-side .aad-rw[data-sid="qa-g1"] .aad-row`).click();
+        await vis(`.aad-side [data-chopen="qa-g1"]`).click();
         await page.waitForFunction(() => [...document.querySelectorAll('.ch-thread')].some(t => t.getClientRects().length && /Synthetic ask for Weekend plans/.test(t.innerText)), null, { timeout: 8000 });
         await nap(700);
         let s = await step('list-thread');
@@ -114,26 +114,26 @@ const report = { origin, web, cases: [] };
           await vis('.aad-cback, .aad-oneback').click(); await nap(700);
           s = await step('list-thread-back', { thread: await thread() });
           assert.equal(s.side, over, 'Back shows the list'); assert.equal(s.back, '', 'the chat closed');
-          assert.ok(await vis(`.aad-side .aad-rw[data-sid="qa-g1"] .aad-row`).isVisible(), 'the list it came from');
+          assert.ok(await vis(`.aad-side [data-chopen="qa-g1"]`).isVisible(), 'the list it came from');
           await page.keyboard.press('Escape'); await nap(500); assert.equal(await side(), oneW ? 'full' : 'rail', oneW ? 'at the list Esc stays' : 'Esc closes the list');
           // Esc instead of the button: the same one level
-          await showList(); await vis(`.aad-side .aad-rw[data-sid="qa-g1"] .aad-row`).click(); await nap(900);
+          await showList(); await vis(`.aad-side [data-chopen="qa-g1"]`).click(); await nap(900);
           assert.equal(await back(), '‹ Activity');
           await page.keyboard.press('Escape'); await nap(700);
           s = await step('list-thread-esc'); assert.equal(s.side, over, 'Esc: the list'); assert.equal(s.back, '');
           await page.keyboard.press('Escape'); await nap(400);
         } else if (width >= 1200) {
           // full screen hides the list: the chat's Back shows it over the page, still full screen
-          await vis('.aad-ctop [data-mode="full"]').click(); await nap(900);
+          // (one window open: no arrangement buttons since wizard-ux issue 1813; its ⌥⇧F key stays)
+          await page.keyboard.press('Alt+Shift+KeyF'); await nap(900);
           s = await step('list-thread-full'); assert.equal(s.back, '‹ Activity', 'full screen: Back to the list');
           await page.keyboard.press('Escape'); await nap(700);
           s = await step('list-thread-full-esc', { mode: await page.evaluate(() => document.documentElement.dataset.aadMode || '') });
           assert.equal(s.side, 'over', 'the list over the page'); assert.equal(s.mode, 'full', 'still full screen');
-          const box = await vis(`.aad-side .aad-rw[data-sid="qa-g1"] .aad-row`).boundingBox();
+          const box = await vis(`.aad-side [data-chopen="qa-g1"]`).boundingBox();
           assert.ok(box && box.height > 20 && box.width > 150, 'the list really shows: ' + JSON.stringify(box));
           await page.keyboard.press('Escape'); await nap(500);
           assert.notEqual(await side(), 'over', 'Esc again closes the list');
-          await vis('.aad-ctop [data-mode="full"]').click().catch(() => {}); await nap(400);
           if ((await page.evaluate(() => document.documentElement.dataset.aadMode || '')) === 'full') { await page.keyboard.press('Escape'); await nap(500); }
         }
         // root: more Esc presses never leave Wizard

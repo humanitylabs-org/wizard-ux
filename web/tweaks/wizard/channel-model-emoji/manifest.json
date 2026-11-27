@@ -1,0 +1,14 @@
+{
+  "id": "wizard/channel-model-emoji",
+  "name": "Channels: an AI-picked emoji for new channels",
+  "version": "1.0.0",
+  "author": "wizard",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout"
+  ],
+  "issues": [
+    "humanitylabs-org/wizard-ux#1605"
+  ],
+  "description": "A channel you make with New channel whose name has no emoji (and no keyword match) asks your Wizard's fast model for one fitting emoji in the background, and gets it in front of its name a moment later (Quarterly OKRs becomes 🎯 Quarterly OKRs). Creating never waits. Only the name is sent; a private agent's names never leave your Wizard, and without the fast model the channel keeps 💬. Rename it or pick another emoji any time."
+}

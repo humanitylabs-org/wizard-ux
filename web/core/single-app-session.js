@@ -16,7 +16,7 @@
   function toast(icon, text) { const el = document.getElementById('toast'); el.textContent = text; el.classList.add('show'); setTimeout(() => el.classList.remove('show'), 1400); }
   // Reuse the shared link/media utilities, but never their desk-placement action.
   // Wisdom's selection Search uses window.open; without this guard it is a dead tap in Android.
-  const links = window.WizLinks?.mount({ parent:document.body, mode:'sheet', allowURL:u => {
+  const links = window.WizLinks?.mount({ parent:document.body, mode:'sheet', popups:true, allowURL:u => {
     if (!u || (u.origin === location.origin && (policy.isShell(u.href) || /%(?:2f|5c|2e|25)/i.test(u.pathname)))) {
       toast('!', 'Use your device Home to switch apps'); return false;
     }
@@ -161,6 +161,13 @@
     return true;
   };
   let mountGeneration = 0;
+  /* Instant home-screen apps (wizard-ux issue 1830, switch wizard/pin-instant-open): the Android app holds the switch
+   * (the main page copies it there) and does the work. This page only tells it which shell release it runs (so the
+   * shell files the app loads are kept per release) and when the app's page has loaded (so the saved picture of the
+   * app's last screen can give way to it). Off, or an older Android app: the calls are not there or do nothing. */
+  const pinNative = (name, ...args) => { try { const n = window.WizardOSNative; if (n && typeof n[name] === 'function') n[name](...args); } catch (_) {} };
+  try { const release = document.querySelector('meta[name="wos-release"]')?.content || ''; if (/^[0-9a-f]{12}$/.test(release)) pinNative('pinRelease', release); } catch (_) {}
+  function pinShown() { (window.requestAnimationFrame || (f => setTimeout(f, 16)))(() => setTimeout(() => pinNative('pinShown'), 120)); }
   async function mount() {
     const generation = ++mountGeneration;
     const declared = policy.configure?.(registry.APP[id]?.homeScreen);
@@ -186,7 +193,7 @@
     checkpoint(); chats?.forget(wid); detach?.(); app = next; mountedURL = next.url; loaded = false;
     threadWindow.appId = next.id || id;   // hosted Chats threads are allowed per current app id (ux#1471)
     win.replaceChildren(); frame = document.createElement('iframe'); frame.className = 'appframe'; frame.title = policy.displayName(next);
-    frame.setAttribute('allow','microphone; clipboard-read; clipboard-write; autoplay; fullscreen'); frame.referrerPolicy = 'same-origin';
+    frame.setAttribute('allow', window.WizCore?.frameAllow?.('microphone; clipboard-read; clipboard-write; autoplay; fullscreen', { id: next.id || id }) || "microphone; clipboard-read; clipboard-write; autoplay; fullscreen; geolocation 'none'"); frame.referrerPolicy = 'same-origin';
     // Browser owner boundary (wizard-os#133, box switch): the pinned app runs sandboxed like a phone/desktop app window.
     const opaque = !!window.WizBrowserBoundary?.enabled && !window.WizBrowserBoundary.sameOriginApp?.(next.id || id, next.url);
     if (opaque) frame.setAttribute('sandbox', window.WizBrowserBoundary.sandbox);
@@ -207,6 +214,7 @@
       back: () => { window.__wosNativeBack(); return true; }, readingStorage:localStorage });
     frame.addEventListener('load', () => {
       if (frame !== mountedFrame) return;
+      pinShown();
       // The app is in: the rest of the pin host comes now, while nobody is waiting for it.
       if (slim) (window.requestIdleCallback || (f => setTimeout(f, 300)))(() => window.WizPinDoc.extras(), { timeout: 1500 });
       // An opaque frame cannot be read: no route restore or save, no in-frame hooks. Back, appearance and dictation go

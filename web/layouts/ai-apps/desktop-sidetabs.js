@@ -6,7 +6,8 @@
  * in front and the pins) stay in desktop.js; this code reads and writes them as aadVars.<name>, its get/set accessors
  * on the same variables, so every read and write is live. desktop.js's own imports are imported here again from the
  * same modules. The body below keeps desktop.js's indentation so `git log -L` and patches port over. */
-export function sidetabsPart({ aadVars, actOn, api, el, flip, foot, head, icon, one, oneSplit, panes, rail, readSessions, scroll, side, viewOn }) {
+import { sharedList } from './parts.js';
+export function sidetabsPart({ aadVars, actOn, api, el, flip, foot, head, icon, one, oneSplit, panes, rail, readSessions, scroll, side }) {
   let paintList, paintRail, paintTop; // late-bound: desktop.js declares these after the call, see bindLate
   const rTog = el('button', 'aad-ib aad-rtog', { type: 'button', 'aria-label': 'Open sidebar', title: 'Open sidebar' }); rTog.append(icon('side'));
   const rNew = el('button', 'aad-ib aad-rnew', { type: 'button', 'aria-label': 'New chat', title: 'New chat (⌥N)' }); rNew.append(icon('plus'));
@@ -46,22 +47,21 @@ export function sidetabsPart({ aadVars, actOn, api, el, flip, foot, head, icon, 
    * api.sessions.channels: the Activity / Channels tabs over the rows below, and in Channels the channel list, or a
    * channel's feed and its message box, in place of them (desktop.css). Empty and hidden with the switch off. */
   const chanBox = el('div', 'aad-chan'); chanBox.hidden = true;
-  const paintChan = () => { const on = !aadVars.q && !!api.sessions.channels?.(chanBox); if (chanBox.hidden === on) chanBox.hidden = !on; };
+  // (true: the pane draws Chats' own list there, the phone's title bar, rows and tabs; wizard-ux issue 1966)
+  const paintChan = () => { const on = !aadVars.q && !!api.sessions.channels?.(chanBox); if (chanBox.hidden === on) chanBox.hidden = !on; return on && !!sharedList(chanBox); };
   /* A channel opens in the main chat column, never in this sidebar (James, 11 Nov 2026: "Channels should display in the
    * chat list with the channel list remaining visible on the sidebar"): its feed is one more chat in the column (FEED),
    * drawn by api.sessions.channelFeed into feedBox over the docked Chats window. A post opens its thread there; Back
    * (Esc, ✕) from the thread returns to the feed, and from the feed to nothing open. The sidebar list never changes. */
-  /* Another Chats look (wizard/sidebar-chats-view, wizard-ux issue 1443): with an installed provider picked under
+  /* Another Chats look (wizard-ux issue 1443, on for everyone): with an installed provider picked under
    * Settings › Chats › Default Chats, api.sessions.chatsView mounts it into viewBox in place of this sidebar's own rows
    * (and of the rail's, at the rail's real width: the provider handles a narrow column). Search keeps the stock hits.
-   * Built-in Chats, the switch off or a provider that fails: false, and the rows below come back as they were. */
+   * Built-in Chats or a provider that fails: false, and the rows below come back as they were. */
   const viewBox = el('div', 'aad-cview'); viewBox.hidden = true;
-  let viewShown = false;
   function paintView(inRail) {
     const at = inRail ? rail : panel;
     if (viewBox.parentNode !== at) { at.insertBefore(viewBox, inRail ? rSet : scroll); rList.hidden = false; scroll.hidden = false; }
-    const on = (viewOn() || viewShown) && !!api.sessions.chatsView?.(viewBox);
-    viewShown = on;
+    const on = !!api.sessions.chatsView?.(viewBox);
     const show = on && !(aadVars.q && !inRail);
     if (viewBox.hidden === show) viewBox.hidden = !show;
     if (inRail) rList.hidden = show; else { scroll.hidden = show; if (show) chanBox.hidden = true; }
@@ -79,9 +79,10 @@ export function sidetabsPart({ aadVars, actOn, api, el, flip, foot, head, icon, 
   // one app at a time, the list alone: its row for the chat already open behind it shows that chat again (another row
   // opens its chat, and paintOne follows the new thread)
   api.listen(side, 'click', e => {
-    const w = e.target?.closest?.('.aad-row')?.closest?.('.aad-rw');
-    if (w && one() && !aadVars.pane && aadVars.oneList && !oneSplit() && w.dataset.sid === aadVars.chatThread) { aadVars.oneList = false; aadVars.oneSeen = aadVars.chatThread; paintTop(); }
-  });
+    // (a row of the sidebar's own, or of the pane's shared Chats list: wizard-ux issue 1966)
+    const sid = e.target?.closest?.('.aad-row')?.closest?.('.aad-rw')?.dataset.sid || e.target?.closest?.('.aad-chan [data-chopen]')?.dataset.chopen;
+    if (sid && one() && !aadVars.pane && aadVars.oneList && !oneSplit() && sid === aadVars.chatThread) { aadVars.oneList = false; aadVars.oneSeen = aadVars.chatThread; paintTop(); }
+  }, { capture: true }); // (capture: Chats' own pane handler stops the click once it opens the row)
   const shade = el('div', 'aad-shade', { 'aria-hidden': 'true' });
 
   /* ---------- round 15 (Miguel, 3 Nov 2026: Arc-style): the top row over the main area ----------
@@ -102,9 +103,8 @@ export function sidetabsPart({ aadVars, actOn, api, el, flip, foot, head, icon, 
   const pTop = el('div', 'aad-ptop'); pTop.hidden = true;
   const pIcon = el('span', 'aad-pti'), pName = el('span', 'aad-ptn');
   const pTools = el('span', 'aad-ptools'); pTools.hidden = true;
-  const pW = el('button', 'aad-ib aad-pw', { type: 'button' });
   const pX = el('button', 'aad-ib aad-px', { type: 'button', title: 'Hide (Esc) · it keeps running' }); pX.append(icon('hide'));
-  pTop.append(pIcon, pName, pTools, pW, pX);
+  pTop.append(pIcon, pName, pTools, pX);
   const sTop = el('div', 'aad-stop'), sName = el('span', 'aad-ptn'); sTop.hidden = true;
   sTop.append(sName);
   api.listen(sTop, 'mousedown', e => e.preventDefault()); // like the app bar: never takes the keyboard itself
@@ -117,5 +117,5 @@ export function sidetabsPart({ aadVars, actOn, api, el, flip, foot, head, icon, 
     // Only mode/focus change: the tiled ratios, slots and rail sizes stay saved.
     flip([aadVars.dockEl, aadVars.pane?.el, aadVars.secondEl], () => panes.set({ mode, focus: slot }));
   }
-  return { cBack, chanTitle, cTop, cX, FEED, feedBox, feedOn, modeBars, oneBack, paintAgents, paintChan, paintView, pIcon, pName, pTools, pTop, pW, pX, rFind, rList, rNew, rSet, rTog, rWs, shade, sName, sTop, top, tt, windowMode, bindLate: v => { if ('paintList' in v) paintList = v.paintList; if ('paintRail' in v) paintRail = v.paintRail; if ('paintTop' in v) paintTop = v.paintTop; } };
+  return { cBack, chanTitle, cTop, cX, FEED, feedBox, feedOn, modeBars, oneBack, paintAgents, paintChan, paintView, pIcon, pName, pTools, pTop, pX, rFind, rList, rNew, rSet, rTog, rWs, shade, sName, sTop, top, tt, windowMode, bindLate: v => { if ('paintList' in v) paintList = v.paintList; if ('paintRail' in v) paintRail = v.paintRail; if ('paintTop' in v) paintTop = v.paintTop; } };
 }

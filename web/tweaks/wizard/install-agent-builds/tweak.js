@@ -1,0 +1,6 @@
+/* Install apps your agent builds (wizard-app-manager issue 997): a box-side switch. The App Manager
+ * (wam/agent_builds.py) answers the agent's install links while it is on. Nothing on screen changes here. */
+export default function setup(api) {
+  // Box-side switch: the App Manager's Store route (wizard-app-manager wam/agent_builds.py) reads it.
+  return () => {};
+}

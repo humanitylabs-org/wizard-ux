@@ -10,7 +10,7 @@
 'use strict';
 window.WizCore = window.WizCore || {};
 window.WizCore.chatsParts = window.WizCore.chatsParts || {};
-window.WizCore.chatsParts.bind = function ({ activityClick, actSetOrder, AGS, alertFeedback, bindGestures, bindPull, BOOM, byStatus, ch, CH, chanDropSending, chanEditUnsent, channelClick, channelSend, chanRepaint, chanRowAgent, chanSeenRow, chanSetEmoji, chatsBack, chatVars, chooseApproval, clearAll, clearReading, closeHosted, closeRowSheet, closeSpacePicker, closeStream, closeSwipe, COMPACT_KEY, compactOn, dailyClick, desks, discardDraft, draftKey, focusAgents, focusedAgent, focusOf, growTa, H, idx, inboxMove, INC, isHosted, jumpGo, jumpToMessage, keepThreadOpen, KIT, listSaveT, LIVE, loadThread, markDone, moveSubject, nextOrder, noteRowAct, notifDoneAll, notifRoute, openChat, openEmojiSheet, openLengthSheet, openMedia, openNewDraft, openRenameSheet, openSpacePicker, OUTBOX, owner, PAGE, paintPins, PHONE, picker, PIN, PINS_KEY, pinsOn, quoteMessage, readingIn, READY_ORDER_KEY, READY_ORDERS, refreshCompose, refreshReply, rememberedFocus, renderChatList, renderChats, renderEmojiSearch, renderThread, renderThreadLive, renderThreadNow, replyStd, rerenderList, resumeTracked, ROW_MENU, rowMenu, runningBack, runningGo, runningOn, saveDraft, sendChat, sentClick, setDraft, setFocus, setSummaryOpen, showBoomMessage, SPACE, spaceMember, spaces, stopPendingSend, stopTapped, submitChannelRename, submitRename, sweepAnswer, sweepLater, sweepYesToAll, syncSend, threadAct, threadBack, toast, toggleSection, toggleVoice, TOPIC, topicOn, typedInto, UPLOAD_ABORT, vib, W, winAgent, WORKING_ORDERS }) {
+window.WizCore.chatsParts.bind = function ({ activityClick, actSetOrder, AGS, alertFeedback, bindGestures, bindPull, BOOM, byStatus, ch, CH, chanDropSending, chanEditUnsent, channelClick, channelSend, chanRepaint, chanRowAgent, chanSeenRow, chanSetEmoji, chatsBack, chatVars, chooseApproval, clearAll, clearReading, closeHosted, closeRowSheet, closeSpacePicker, closeStream, closeSwipe, COMPACT_KEY, compactOn, dailyClick, desks, discardDraft, draftKey, focusAgents, focusedAgent, focusOf, growTa, H, idx, inboxMove, INC, isHosted, jumpGo, jumpToMessage, keepThreadOpen, KIT, listSaveT, LIVE, loadThread, markDone, moveSubject, nextOrder, noteRowAct, notifDoneAll, notifRoute, openChat, openEmojiSheet, openLengthSheet, openMedia, openNewDraft, openRenameSheet, openSpacePicker, OUTBOX, owner, PAGE, paintPins, PHONE, picker, PIN, PINS_KEY, pinsOn, quoteMessage, readingIn, READY_ORDER_KEY, READY_ORDERS, refreshCompose, refreshReply, rememberedFocus, renderChatList, renderChats, renderEmojiSearch, renderThread, renderThreadLive, renderThreadNow, replyStd, rerenderList, resumeTracked, ROW_MENU, rowMenu, runningBack, runningGo, runningOn, runningSideGo, saveDraft, sendChat, sentClick, setDraft, setFocus, setSummaryOpen, showBoomMessage, SPACE, spaceMember, spaces, stopPendingSend, stopTapped, submitChannelRename, submitRename, sweepAnswer, sweepLater, sweepYesToAll, syncSend, threadAct, threadBack, toast, toggleSection, toggleVoice, TOPIC, topicOn, typedInto, UPLOAD_ABORT, vib, W, winAgent, WORKING_ORDERS }) {
   let PW; // late-bound: chats.js declares these after the call, see bindLate
   // While a thread is on screen AND James is at that screen, new replies count as read (same rule as Wizard).
   // "At the screen" = the page was opened, brought to the front, touched, clicked, typed in or scrolled within
@@ -51,6 +51,17 @@ window.WizCore.chatsParts.bind = function ({ activityClick, actSetOrder, AGS, al
     const twk = e.target.closest('[data-chat-tweak]'); if (twk) { window.WosSettings?.tweakCardTap?.(twk, (i, t) => toast(i, t, 2400)); return true; }
     // An app's action card (wizard-ux issue 1463, core/action-cards.js): Approve, Edit, Open in app, Reject.
     const act = e.target.closest('[data-action-card] [data-act]'); if (act) { window.WosActionCards?.tap?.(act, (i, t) => toast(i, t, 3200)); return true; }
+    // A button inside a reply (wizard-ux issue 1889, core/action-cards.js replyTap): picked on this frame, sent as one
+    // owner message a few seconds after the last tap, through this thread's own send path (never the composer).
+    const rbt = e.target.closest('.ch-rb [data-rb]');
+    if (rbt && w.thread && w.thread !== '__new__') {
+      // The thread's own agent, the way rowOf scopes it: the window's agent when it lists this id, else the id's owner.
+      const wa = winAgent(W[owner(id)] || w), sid = w.thread, how = 'tapping a button in a reply';
+      const agent = (wa && LIVE.sessionFor && LIVE.sessionFor(sid, wa) ? wa : '') || (LIVE.agentOf && LIVE.agentOf(sid)) || '';
+      const repaint = () => { const ww = H.win(id); if (ww && ww.thread === sid) renderThreadNow(ww); };
+      if (window.WosActionCards?.replyTap?.(rbt, { sid, toast: (i, t) => toast(i, t, 3200), repaint,
+        send: text => sendChat(id, text, how, null, { sid, away: true, ...(agent ? { agent } : {}) }) })) return true;
+    }
     // Thread tracker: the strip's own taps, Reply on a message, and the quote header's jump (all inert with the tweak off).
     if (globalThis.WosThreadTracker?.onFor?.(LIVE.agentOf && w.thread ? LIVE.agentOf(w.thread) : '')) {
       const resume = text => resumeTracked(id, w, text);
@@ -109,15 +120,19 @@ window.WizCore.chatsParts.bind = function ({ activityClick, actSetOrder, AGS, al
     const rb = e.target.closest('[data-obretry]'); if (rb) { H.toast('↻', OUTBOX.retryFeedback(OUTBOX.retry(rb.dataset.obretry)), 2400); return true; }
     if (e.target.closest('[data-chunsent]')) { H.openUnsent?.(); return true; }
     if (e.target.closest('[data-chsent]') && justPressed()) return true; // a long-press/swipe just opened a Sent row's sheet (issue 1814)
+    // The ghost click of that same press must not land on a button of the sheet it opened (issue 1880: the sheet's sends move them under the finger).
+    if (e.target.closest('[data-rssentfix], [data-rssentopen]') && justPressed()) return true;
+    if (/::side$/.test(String(id)) && ch(id).running && e.target.closest('[data-chtab]')) ch(id).running = false; // a tab leaves the sidebar's Running view (wizard-ux issue 1599)
     if (typeof sentClick === 'function' && sentClick(e, id, w)) return true; // the Sent tab and the bottom tabs (wizard-ux issue 1778)
     if (e.target.closest('[data-chrunning]')) { runningGo(w, true); return true; }
     if (e.target.closest('[data-chrunback]')) { runningBack(w); return true; }
     const ro = e.target.closest('[data-chrunopen]'); if (ro) { openChat(id, ro.dataset.chrunopen); return true; }
-    const io = e.target.closest('[data-chinboxopen]'); if (io) { inboxMove('open', io.dataset.chinboxopen, { title: io.dataset.title || '' }); return true; }
+    const io = e.target.closest('[data-chinboxopen]'); if (io) { inboxMove('open', io.dataset.chinboxopen, { title: io.dataset.title || '', ...(io.dataset.agent ? { agent: io.dataset.agent } : {}) }); return true; }
     const swb = e.target.closest('[data-chsweep]'); if (swb) { if (!swb.disabled) sweepAnswer(swb.dataset.card, swb.dataset.chsweep, swb.dataset.opt); return true; }
     // Running on the sweep card: the desktop's list pane (id::list) shows the Running view next to the thread; with one
     // pane (phone) the thread steps back to the list first.
     if (e.target.closest('[data-chsweeprunning]')) {
+      if (typeof runningSideGo === 'function' && runningSideGo()) return true; // the AI apps sidebar (wizard-ux issue 1599, switch on)
       const o = W[owner(w.id)] || w, lw = W[o.id + '::list'];
       if (lw && runningOn(lw)) runningGo(lw, true); else if (runningOn(o)) { chatsBack(o); runningGo(o, true); } else H.toast('·', 'The Running view is in the Chats window', 2000);
       return true;
@@ -161,7 +176,7 @@ window.WizCore.chatsParts.bind = function ({ activityClick, actSetOrder, AGS, al
       else setFocus(w, kind === 'agent' ? rememberedFocus(w, key) : { kind, key });
       return true;
     }
-    // The title bar's search icon and the filter sheet's sort (wizard-ux issue 1836, switch wizard/chats-title-bar).
+    // The title bar's search icon and the filter sheet's sort (wizard-ux issue 1836).
     if (e.target.closest('[data-chtbsearch]')) { const c = ch(id), open = !(c.tsearch || c.q || c.focus); c.tsearch = open; c.sheet = false;
       if (!open) { c.q = ''; c.focus = false; window.WizCore.chatSearch?.cancel(id); } renderChatList(w, elOf(id)); if (open) elOf(id)?.querySelector('[data-chsearch]')?.focus(); return true; }
     const fso = e.target.closest('[data-chfsort]'); if (fso) { ch(id).sheet = false; if (typeof actSetOrder === 'function') actSetOrder(fso.dataset.chfsort); rerenderList(w); return true; }
@@ -217,6 +232,10 @@ window.WizCore.chatsParts.bind = function ({ activityClick, actSetOrder, AGS, al
     const nrt = e.target.closest('.ch-notif-route [data-notify-route]'); if (nrt && w.thread) { if (!nrt.disabled) notifRoute(id, nrt.dataset.notifyRoute, nrt.dataset.notifyTo); return true; }
     const ca = e.target.closest('[data-chact]'); if (ca && w.thread) { threadAct(id, w.thread, ca.dataset.chact); return true; }
     if (e.target.closest('[data-chstop]')) { const s = LIVE.session(w.thread), sb = e.target.closest('[data-chstop]'); stopTapped(sb); if (s && LIVE.cancelSend) { stopPendingSend(w, w.thread, s.runId || ''); } else if (s?.runId) { toast('■', 'Stopping…', 1400); LIVE.stop(s.runId).catch(() => { toast('!', 'Couldn’t stop · try again', 2600); renderThreadNow(w); }); } return true; }
+    // A tap-to-pick reply (wizard-agent-service issue 650): sends its words as the owner's answer in this thread, once.
+    const chPick = e.target.closest('[data-chchoice]'); if (chPick && w.thread) { if (!chPick.disabled) { chPick.closest('.ch-choices')?.querySelectorAll('button').forEach(b => { b.disabled = true; }); void sendChat(id, chPick.dataset.chchoice, 'tapping a reply button'); } return true; }
+    // A new chat's quick link (wizard-ux issue 1965): sends its prompt at once, only while the message box is empty.
+    const qk = e.target.closest('[data-chquick]'); if (qk && w.thread === '__new__') { const f = qk.closest('.ch-thread')?.querySelector('.ch-compose textarea'); if (!qk.disabled && !(f && f.value.trim()) && !(ch(id).files || []).length) { qk.closest('.ch-quick')?.querySelectorAll('button').forEach(b => { b.disabled = true; }); void sendChat(id, qk.dataset.chquick, 'tapping a new chat quick link'); } return true; }
     const apb = e.target.closest('[data-approve]'); if (apb) { chooseApproval(id, apb.dataset.approve, apb.dataset.controlKey, apb.closest('.appr')?.querySelector('[data-clarify-answer]')?.value); return true; }
     // Short answer ⇄ full reply. Only its own two buttons toggle, so links and text selection in the reply never do.
     // The choice is kept per reply (ch(id).rsum), so live repaints keep it.

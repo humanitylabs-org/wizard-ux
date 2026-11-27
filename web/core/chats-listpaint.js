@@ -10,7 +10,7 @@
 'use strict';
 window.WizCore = window.WizCore || {};
 window.WizCore.chatsParts = window.WizCore.chatsParts || {};
-window.WizCore.chatsParts.listpaint = function ({ actAllAgents, activityBody, agentName, agentRec, agoText, AGS, anchorListPlace, androidDocument, archSel, attOf, bindFocusStrip, byStatus, ch, chanComposer, chanElsewhere, chanFeedRows, chanHead, chanHold, channelFeed, channelsBody, chanOpen, chanSide, chatRow, chatVars, clip, compactOn, deferredOf, draftRow, esc, filterSheet, focusedAgent, focusLabel, focusMatches, focusOf, focusStrip, growTa, H, holdListPlace, isWorking, jumpPillsHtml, listPlace, LIVE, matchFilters, newDrafts, norm, notes, OUTBOX, owner, PIN, reachLabel, readyBody, readyOrdered, restoreListPlace, runningBody, runningHead, runningOpen, runningRow, SEC_OPEN_KEY, SEC_PAGE, SECTIONS_DAY, SECTIONS_STATUS, sendPill, sentBar, sentBody, sentHead, sentOpen, sentTabsOn, skelRows, snoozeLast, SPACE, spaceAgent, spaces, STALE_LIST, STATUS, storedListPlace, syncDocumentThread, syncListTitle, titleBar, titleBarTab, track, W, winAgent, workingOrderBar, workingOrdered }) {
+window.WizCore.chatsParts.listpaint = function ({ actAllAgents, activityBody, archivedRowsBody, agentName, agentRec, agoText, AGS, anchorListPlace, androidDocument, archSel, attOf, bindFocusStrip, byStatus, ch, chanComposer, chanElsewhere, chanFeedRows, chanHead, chanHold, channelFeed, channelsBody, chanOpen, chanSide, chatRow, chatVars, clip, compactOn, deferredOf, draftRow, esc, filterSheet, focusedAgent, focusLabel, focusMatches, focusOf, focusStrip, growTa, H, holdListPlace, isWorking, jumpPillsHtml, listPlace, LIVE, matchFilters, newDrafts, norm, notes, OUTBOX, owner, PIN, reachLabel, readyBody, readyOrdered, restoreListPlace, runningBody, runningHead, runningOpen, runningRow, SEC_OPEN_KEY, SEC_PAGE, SECTIONS_DAY, SECTIONS_STATUS, sendPill, sentBar, sentBody, sentOpen, sentTabsOn, skelRows, snoozeLast, SPACE, spaceAgent, spaces, STALE_LIST, STATUS, storedListPlace, switcher, syncDocumentThread, syncListTitle, titleBar, titleBarTab, track, W, winAgent, workingOrderBar, workingOrdered }) {
   let clearReading, closeStream, elOf, holdList, keptSheet, PW, restoreSheet; // late-bound: chats.js declares these after the call, see bindLate
   function renderChatList(w, el) {
     if (globalThis.WosThreadTracker?.on()) globalThis.WosThreadTracker.loadCounts();
@@ -18,8 +18,12 @@ window.WizCore.chatsParts.listpaint = function ({ actAllAgents, activityBody, ag
     // second, CSS-covered list underneath it (including a thread returning Back).
     // The AI apps sidebar's Channels pane (wizard-ux issue 1256) is this same list for the main Chats window, drawn
     // into the sidebar as the id::side window: tabs, the channel list, a feed and its box.
-    const side = typeof chanSide === 'function' && chanSide(w);
-    if (!side) {
+    // The sidebar's Chats pane itself (its channels open in the main column) draws the phone's list (wizard-ux issue 1966:
+    // one design on phone and desktop): the same title bar, rows, folds, tabs and filter sheet. Only the main column's
+    // feed window (an id::side whose channels open in it) keeps the side drawing.
+    const pane = typeof chanSide === 'function' && chanSide(w) && typeof chanElsewhere === 'function' && chanElsewhere(w);
+    const side = typeof chanSide === 'function' && chanSide(w) && !pane;
+    if (!side && !pane) {
       if (H.ownsChatList?.()) { el?.replaceChildren(); return; }
     }
     syncListTitle(w);
@@ -40,11 +44,17 @@ window.WizCore.chatsParts.listpaint = function ({ actAllAgents, activityBody, ag
     // The main column's feed window draws a feed or nothing (never the tabs or the channel list: those stay in the sidebar).
     if (side && !feed && typeof chanElsewhere === 'function' && typeof H.channelsElsewhere === 'function' && !chanElsewhere(w)) { el.replaceChildren(); return; }
     chatVars.rowChan = chanOn && !feed;
+    // The Chats switcher (wizard-ux#1957, the phone): no bottom tabs; the title names the view and
+    // opens the switcher sheet. The Tags page is no destination there, so a list left on it shows Inbox.
+    const csw = !side && typeof switcher !== 'undefined' && !!switcher?.on?.(w); // (tests slice this renderer without it)
+    if (csw && !feed && chatVars.chanView === 'channels') chatVars.chanView = 'activity';
+    // Its Archived view is a list of archived chats (wizard-ux issue 1998), not the Archived tag's message feed.
+    const arcList = csw && !!feed?.archivedFeed && typeof archivedRowsBody === 'function';
     // The bottom tabs Inbox · Tags · Sent (wizard-ux issue 1778): the Sent view, and no Running row
     // (Working is Sent's filter). The AI apps sidebar pane has them too (wizard-ux issue 1807).
     const sentTabs = !feed && typeof sentTabsOn === 'function' && sentTabsOn(w), sentView = sentTabs && sentOpen(w);
-    const runView = !side && !sentView && typeof runningOpen === 'function' && runningOpen(w), runRow = !side && !runView && !feed && !sentTabs && typeof runningRow === 'function' ? runningRow(w) : ''; // wizard-ux issue 1569
-    // The title bar (wizard-ux issue 1836, switch wizard/chats-title-bar): the tab's name over the list, search and
+    const runView = !sentView && typeof runningOpen === 'function' && runningOpen(w), runRow = !side && !runView && !feed && !sentTabs && typeof runningRow === 'function' ? runningRow(w) : ''; // wizard-ux issue 1569
+    // The title bar (wizard-ux issue 1836): the tab's name over the list, search and
     // filter as icons; the bodies read c.tbar (no Inbox section row) and leave the Inbox count in c.inboxN.
     const tbTab = !runView && sentTabs && typeof titleBarTab === 'function' ? titleBarTab(w) : '';
     c.tbar = tbTab; c.inboxN = 0;
@@ -87,6 +97,8 @@ window.WizCore.chatsParts.listpaint = function ({ actAllAgents, activityBody, ag
     const hitCount = () => hit.length;
     const coachLine = () => c.coach ? '<span class="ch-coach">Filtered. Tap ✕ to see all chats.</span>' : '';
     const ownerId = owner(w.id), curThread = W[ownerId]?.thread;
+    // The pane sits beside the open thread: its row is marked current (as the sidebar's rows were).
+    chatVars.rowCur = pane && curThread ? String(curThread) : '';
     const drafts = focus ? [] : newDrafts().filter(d => !n || norm(d.text).includes(n));
     c.more = c.more || {};
     const chip = (k, label) => `<span class="ch-chip ${k}" data-chchip="${k}"><i class="ch-fdot ${k === 'status' ? c.filter : 'subject'}"></i>${esc(label)}<button type="button" data-chchipx="${k}" aria-label="Remove filter ${esc(label)}">✕</button></span>`;
@@ -94,7 +106,7 @@ window.WizCore.chatsParts.listpaint = function ({ actAllAgents, activityBody, ag
     const ph = filtered ? 'Search within' : 'Search chats and messages';
     // With the title bar the search field opens under it only while searching or filtering, without its own filter button.
     const tbFind = !!tbTab && tbTab !== 'sent' && !!(c.tsearch || c.q || c.focus || F);
-    const head = side ? (sentView ? sentHead(w) : chanHead(w, feed)) : (tbTab && !tbFind ? '' : `<div class="ch-top${tbTab ? ' ch-tbar-find' : ''}"><label class="ch-search${filtered ? ' has-chips' : ''}"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>${chips}<input data-chsearch placeholder="${ph}" aria-label="Search chats and messages" value="${esc(c.q)}" enterkeyhint="search" spellcheck="false">${c.q ? '<button type="button" class="ch-sclear" data-chsclear aria-label="Clear search">×</button>' : ''}${tbTab ? '' : `<button type="button" class="ch-fbtn${filtered ? ' on' : ''}" data-chfbtn aria-label="Filter chats" aria-expanded="${c.sheet ? 'true' : 'false'}"><svg viewBox="0 0 24 24"><path d="M4 6h16M7 12h10M10 18h4"/></svg></button>`}</label>${AGID ? '' : (window.WosBell?.html?.() || '')}</div>`)
+    const head = side ? (runView ? runningHead() : sentView ? '' : chanHead(w, feed)) : csw && feed ? switcher.feedTitle(w, feed) : (tbTab && !tbFind ? '' : `<div class="ch-top${tbTab ? ' ch-tbar-find' : ''}"><label class="ch-search${filtered ? ' has-chips' : ''}"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>${chips}<input data-chsearch placeholder="${ph}" aria-label="Search chats and messages" value="${esc(c.q)}" enterkeyhint="search" spellcheck="false">${c.q ? '<button type="button" class="ch-sclear" data-chsclear aria-label="Clear search">×</button>' : ''}${tbTab ? '' : `<button type="button" class="ch-fbtn${filtered ? ' on' : ''}" data-chfbtn aria-label="Filter chats" aria-expanded="${c.sheet ? 'true' : 'false'}"><svg viewBox="0 0 24 24"><path d="M4 6h16M7 12h10M10 18h4"/></svg></button>`}</label>${AGID ? '' : (window.WosBell?.html?.() || '')}</div>`)
       // Switching Focus (agent/Space) never pushes the list down with a count line (James, 25 Oct 2026); only a status filter says how many matched.
       + (chanOn ? chanHead(w, feed) : '')
       + (F && LIVE.ok ? `<div class="ch-count">${hitCount()} ${hitCount() === 1 ? 'chat' : 'chats'}${coachLine()}</div>` : '');
@@ -119,10 +131,14 @@ window.WizCore.chatsParts.listpaint = function ({ actAllAgents, activityBody, ag
     else if (!LST.ok && !LST.error) body = draftSec + skelRows(AGID ? `Connecting to ${agentName(AGID)}` : 'Connecting to Wizard');
     else if (!LST.ok) body = draftSec + `<div class="ch-empty">${esc(window.WizReach?.failure().message || 'Checking the connection to Wizard…')}</div>`;
     // Channels: the live window only (James, 9 Nov 2026: older chats are reached by asking the agent).
+    // The switcher's Archived (wizard-ux issue 1998): the archived chats as thread rows, never a feed of their messages.
+    // Every archived chat, not only the newest 50 the list window carries: the box's title index (WizLive.searchRows,
+    // every row with its archived mark) under the live rows.
+    else if (arcList) { const m = new Map(); for (const s of (LIVE.searchRows ? LIVE.searchRows(AGID) : [])) if (s && !s.hidden) m.set(s.id, s); for (const s of all) m.set(s.id, s); body = archivedRowsBody(w, [...m.values()]); }
     else if (feed && !n && !F) { const live = new Set((LIVE.sessionsFor ? LIVE.sessionsFor(AGID) : LIVE.sessions).map(s => s.id)), mine = all.filter(s => live.has(s.id)); body = channelFeed(w, feed, typeof chanFeedRows === 'function' ? chanFeedRows(feed, mine) : mine); }
     else if (chanOn && chatVars.chanView === 'channels' && !n && !F) body = channelsBody(w, all);
     // Activity as a short what-needs-me list (issue 1336): Working, Ready, Recent, then folded Snoozed and Archived.
-    else if (chanOn && !side && !feed && !n && !F && typeof activityBody === 'function') body = draftSec + activityBody(w, all, listNotes, drafts.length);
+    else if (chanOn && !side && !feed && !n && !F && typeof activityBody === 'function') body = draftSec + activityBody(w, all, listNotes, drafts.length, { noArchive: csw });
     else if (focus?.kind === 'space' && !hit.length && !n && !F) body = `<div class="ch-empty">${esc(agentRec(focusedAgent(focus)).label)} is filling this ${SPACE.ch ? 'channel' : 'Space'}…</div>`;
     else if (AGID && !all.length && !n && !F) body = `<div class="ch-empty"><b>No chats with ${esc(agentName(AGID))} yet</b><br><button type="button" class="ch-fclear" data-chnew data-chemptynew>Start a new chat</button><br> ${agentRec(AGID).privacy === 'private' ? 'They stay with this agent: the main agent can’t search or read them.' : 'They stay in this agent’s chats.'}</div>`;
     else if (filtered && !hit.length && !listNotesN) body = `<div class="ch-empty">${n ? 'No chats match' : F ? F.empty : `No chats in ${esc(focusLabel(w))}`}<br><button type="button" class="ch-fclear" ${n || F ? 'data-chfclear' : 'data-chfbtn'}>${n || F ? 'Clear filter' : 'Change focus'}</button></div>`;
@@ -162,7 +178,7 @@ window.WizCore.chatsParts.listpaint = function ({ actAllAgents, activityBody, ag
     if (sentView) body = sentBody(w);
     // Progress sits above the results (James, 25 Oct 2026: it was hidden below a long Archive); the final line stays under them.
     if (bs && LST.ok) body = BS.scanning(bs) || bs.busy ? BS.footer(bs) + body : body + BS.footer(bs);
-    if (side && !feed && !sentView && chatVars.chanView !== 'channels') body = ''; // Activity: the tabs only; the sidebar draws its own rows
+    if (side && !feed && !sentView && !runView && chatVars.chanView !== 'channels') body = ''; // Activity: the tabs only; the sidebar draws its own rows
     // An unlanded return bookmark outranks the scroller's own reading: that reading is the 0 it fell to.
     // A fresh page has no scroller yet: fall back to the place this list last saved (once per page per window).
     const fresh = !el.querySelector('.ch-scroll') && !c.listPlace && !c.listPending && !c.storedTried;
@@ -198,8 +214,8 @@ window.WizCore.chatsParts.listpaint = function ({ actAllAgents, activityBody, ag
     // The Inbox sort, in the filter sheet while the title bar is on (it left Inbox's section row): Chats' own Ready order.
     const tbSort = () => { const L = window.WizChatsListModel, o = L.activitySortOf(chatVars.readyOrder);
       return `<h5>Sort</h5><div class="ch-fopts ch-fsort">${L.ACTIVITY_SORTS.map(([v, l]) => `<button type="button" class="ch-fopt${o === v ? ' on' : ''}" data-chfsort="${v}" aria-pressed="${o === v}">${esc(l)}${o === v ? '<b>✓</b>' : ''}</button>`).join('')}</div>`; };
-    const html = side ? `<div data-part="list" class="ch-list ch-side${feed ? ' ch-side-feed' : sentView ? ' ch-side-sent' : chatVars.chanView === 'channels' ? ' ch-side-chan' : ''}">${head}<div class="ch-scroll">${body}</div>${feed && typeof jumpPillsHtml === 'function' ? jumpPillsHtml() : ''}${feed ? fab : ''}${sentTabs ? sentBar(w) : ''}</div>`
-      : `<div data-part="list" class="ch-list${AGID ? ' agent' : ''}${compactOn() ? ' compact' : ''}${byStatus() ? ' by-status' : ''}"${focusedAgent(focus) ? ` style="--agc:${AGS()?.colour(agentRec(focusedAgent(focus))) || ''};--ch-agent-hue:${AGS()?.distinctHues().get(focusedAgent(focus)) ?? AGS()?.hue(agentRec(focusedAgent(focus)))}"` : ''}><div data-slot="list-top"></div>${tbTab ? titleBar(tbTab, { n: c.inboxN, tools: tbTab !== 'sent', searching: tbFind, filtered: !!F, sheet: !!c.sheet }) : ''}${runView ? runningHead() : sentView ? sentHead(w, !!tbTab) : head}${sync}<div class="ch-ptr" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 5v14M6 13l6 6 6-6"/></svg><span>Pull to refresh</span></div><div class="ch-scroll">${runView || sentView ? '' : sugHtml + unsentRow}${runRow}${body}</div>${feed && typeof jumpPillsHtml === 'function' ? jumpPillsHtml() : ''}${pill}${runView ? '' : fab}${sentTabs ? sentBar(w) : ''}${feed || chanOn ? '' : focusStrip(w)}${c.sheet ? filterSheet(w, c, tbTab === 'inbox' ? tbSort() : '') : ''}</div>`;
+    const html = side ? `<div data-part="list" class="ch-list ch-side${feed ? ' ch-side-feed' : runView ? ' ch-side-run' : chatVars.chanView === 'channels' ? ' ch-side-chan' : ''}">${head}<div class="ch-scroll">${body}</div>${feed && typeof jumpPillsHtml === 'function' ? jumpPillsHtml() : ''}${feed ? fab : ''}${sentTabs ? sentBar(w) : ''}</div>`
+      : `<div data-part="list" class="ch-list${AGID ? ' agent' : ''}${compactOn() ? ' compact' : ''}${byStatus() ? ' by-status' : ''}"${focusedAgent(focus) ? ` style="--agc:${AGS()?.colour(agentRec(focusedAgent(focus))) || ''};--ch-agent-hue:${AGS()?.distinctHues().get(focusedAgent(focus)) ?? AGS()?.hue(agentRec(focusedAgent(focus)))}"` : ''}><div data-slot="list-top"></div>${tbTab ? titleBar(tbTab, { n: c.inboxN, tools: tbTab !== 'sent', searching: tbFind, filtered: !!F, sheet: !!c.sheet, pick: csw }) : ''}${runView ? runningHead() : sentView ? '' : head}${sync}<div class="ch-ptr" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 5v14M6 13l6 6 6-6"/></svg><span>Pull to refresh</span></div><div class="ch-scroll">${runView || sentView ? '' : sugHtml + unsentRow}${runRow}${body}</div>${feed && !arcList && typeof jumpPillsHtml === 'function' ? jumpPillsHtml() : ''}${pill}${runView || pane ? '' : fab /* (the pane's New chat is the sidebar's own + under it) */}${sentTabs && !csw ? sentBar(w) : ''}${feed || chanOn ? '' : focusStrip(w)}${c.sheet ? filterSheet(w, c, tbTab === 'inbox' ? tbSort() : '') : ''}</div>`;
     // Unchanged list reads keep the same nodes, caret, scroll and text selection.
     // A thread/list remount invalidates the identity guard even when its HTML matches.
     if (c.listHTML === html && c.listRoot === el.firstElementChild) { PW?.paint(w.id, el); return; }

@@ -65,7 +65,7 @@
    *  'read'. Only a confirmed-healthy diagnosis differs: a send names the unsent message instead of the connection,
    *  a read stays neutral. Any real outage, or no diagnosis yet, keeps its connection wording for both. */
   function label(operation, { count = 1, diagnosis } = {}) {
-    // Graceful restart (switch wizard/graceful-restart): a send that hit the restart is saved, not refused.
+    // Graceful restart (wizard-ux issue 1362): a send that hit the restart is saved, not refused.
     if (!diagnosis && operation === 'send' && restartState()) return count > 1 ? `${count} messages saved · send after Wizard restarts` : 'Saved · sends after Wizard restarts';
     const d = diagnosis || window.WizReach.failure();
     if (operation === 'send' && d.layer === 'send') return count > 1 ? `${count} messages not sent · retrying` : 'Message not sent · retrying';
@@ -174,7 +174,7 @@
   const boundary = () => (window.WizBrowserBoundary?.enabled ? window.WizBrowserBoundary : null);
   // Local entry is part of the cached shell, not a second app or a remote preflight.
   function recoveryHtml() {
-    return `<section class="wz-recovery opening" data-recovery><details open><summary>Connection help</summary><div class="wz-recovery-help"><h2>Can’t reach your Wizard?</h2><p data-recovery-message>Check this device’s internet connection. On a Tailscale address, open the Tailscale app and check it’s connected. Your saved chats stay on this device.</p><ul class="wz-list" data-recovery-rows><li class="wz-row">Internet · Not checked</li><li class="wz-row">Your Wizard’s connection · Not checked</li><li class="wz-row">Wizard · Not checked</li></ul><button type="button" class="wz-button" data-recovery-check>Check again</button><p data-recovery-remote>Repair buttons and repair chat need a connection to your Wizard. Local connection help is available here.</p><p data-recovery-direct hidden><a class="wz-button" data-recovery-direct-link target="_blank" rel="noopener">Open Troubleshooter directly</a> It has its own line to your Wizard, so it works even when Wizard itself is stuck.</p></div></details><iframe class="appframe" data-own-app="troubleshooter" title="Troubleshooter" hidden${boundary() ? ' ' + boundary().frameAttributes('/troubleshoot/') : ''} allow="clipboard-read; clipboard-write" referrerpolicy="same-origin"></iframe></section>`;
+    return `<section class="wz-recovery opening" data-recovery><details open><summary>Connection help</summary><div class="wz-recovery-help"><h2>Can’t reach your Wizard?</h2><p data-recovery-message>Check this device’s internet connection. On a Tailscale address, open the Tailscale app and check it’s connected. Your saved chats stay on this device.</p><ul class="wz-list" data-recovery-rows><li class="wz-row">Internet · Not checked</li><li class="wz-row">Your Wizard’s connection · Not checked</li><li class="wz-row">Wizard · Not checked</li></ul><button type="button" class="wz-button" data-recovery-check>Check again</button><p data-recovery-remote>Repair buttons and repair chat need a connection to your Wizard. Local connection help is available here.</p><p data-recovery-direct hidden><a class="wz-button" data-recovery-direct-link target="_blank" rel="noopener">Open Troubleshooter directly</a> It has its own line to your Wizard, so it works even when Wizard itself is stuck.</p></div></details><iframe class="appframe" data-own-app="troubleshooter" title="Troubleshooter" hidden${boundary() ? ' ' + boundary().frameAttributes('/troubleshoot/') : ''} allow="clipboard-read; clipboard-write; geolocation 'none'" referrerpolicy="same-origin"></iframe></section>`;
   }
   const recoveries = new Set(), retaps = new Set();
   function mountRecovery(root, url) {
@@ -323,21 +323,20 @@
     if (!frame || frame.hidden) return;
     try { frame.contentWindow.location.reload(); } catch (_) { const src = frame.getAttribute('src'); if (src) frame.src = src; }
   }
-  /* Graceful Agent Service restart (wizard-ux issue 1362, switch wizard/graceful-restart, off by default; the box
-   * side is wizard-agent-service docs/graceful-restart.md). The only healthy polling here, and only while the switch
-   * is on: /wizard/health carries `restart` while a restarter holds new sends until running chats finish. That read
+  /* Graceful Agent Service restart (wizard-ux issue 1362, on for everyone: the switch wizard/graceful-restart is gone;
+   * the box side is wizard-agent-service docs/graceful-restart.md). The only healthy polling here: /wizard/health
+   * carries `restart` while a restarter holds new sends until running chats finish. That read
    * never renews the restarter's lease (GET /wizard/v1/restart would), so a crashed restarter still loses its hold.
    * The owner's choice when it is overdue goes back as POST /wizard/v1/restart: wait_s (wait longer) or now. */
-  const RESTART_SWITCH = 'wizard/graceful-restart', RESTART_GRACE = 3 * 60000;
-  const restartOn = () => { try { return String(document.documentElement.dataset.tweaks || '').split(' ').includes(RESTART_SWITCH); } catch (_) { return false; } };
+  const RESTART_GRACE = 3 * 60000;
   let restart = null, restartDownAt = 0, restartTimer = 0, restartAsk = '', restartPolledAt = 0;
   const restartPick = h => ({ phase: ['waiting', 'ready', 'overdue'].includes(h.phase) ? h.phase : 'waiting',
     active: Number.isFinite(h.active) ? h.active : null, held: Number(h.held) || 0, oldest: Number(h.oldest_active_s) || 0,
     waitUntil: typeof h.wait_until === 'string' ? h.wait_until : '', now: h.restart_now === true });
-  /** The restart the shell knows of, or null (switch off, none, or gone for longer than a restart takes). While the
+  /** The restart the shell knows of, or null (none, or gone for longer than a restart takes). While the
    *  service is down right after a hold, phase is 'restarting'. */
   function restartState() {
-    if (!restartOn() || !restart) return null;
+    if (!restart) return null;
     if (restartDownAt) {
       if (Date.now() - restartDownAt > RESTART_GRACE) { restart = null; restartDownAt = 0; return null; }
       return { ...restart, phase: 'restarting' };
@@ -377,8 +376,7 @@
   }
   async function restartPoll() {
     clearTimeout(restartTimer); restartTimer = 0; restartPolledAt = Date.now();
-    if (!restartOn()) { if (restart) restartSet(null, 0); return; }
-    if (!document.hidden) {
+    if (!globalThis.document?.hidden) {
       try {
         const { response, body } = await request('/wizard/health', {}, true);
         if (!response.ok || !body) throw new Error('health ' + response.status);
@@ -392,10 +390,10 @@
     }
     // Windows and composers open and close between polls: repaint the note where it belongs now.
     if (restart) try { window.WosOutbox?.paintNotice?.(); } catch (_) {}
-    if (restartOn()) restartTimer = setTimeout(restartPoll, restart ? 5000 : 30000);
+    restartTimer = setTimeout(restartPoll, restart ? 5000 : 30000);
   }
   async function restartChoose(choice) {
-    if (!restartOn() || !restart || restartAsk) return false;
+    if (!restart || restartAsk) return false;
     restartAsk = choice; restartChanged();
     try {
       const response = await fetch('/wizard/v1/restart', { method: 'POST', cache: 'no-store', credentials: 'same-origin',
@@ -413,7 +411,7 @@
   /** True when a chat row is a send this restart holds: saved on the box (queued) or still on its way (submitting, or
    *  this device's own Starting… over a thread that had no run going), with nothing actually running in it. The one
    *  rule for the thread, its header, the Chats list and the overdue note (wizard-ux issue 1362). False without a
-   *  known restart, so nothing changes while the switch is off. */
+   *  known restart, so nothing changes outside one. */
   function restartHeld(s) {
     if (!s || s.archived || s.background || !restartState()) return false;
     // A row this device sent shows Starting… (status running) until the list catches up; restartPending says the box's
@@ -467,15 +465,10 @@
       if (el.innerHTML !== html) el.innerHTML = html;
     }
   }
-  window.addEventListener?.('wos:tweak-choice', () => { setTimeout(() => { void restartPoll(); }, 0); });
-  globalThis.document?.addEventListener?.('visibilitychange', () => { if (!document.hidden && restartOn()) void restartPoll(); });
-  // The skin host paints data-tweaks after this script loads (and again whenever the list changes, on any device), so
-  // the watch starts or stops whenever the switch appears in or leaves that list, not only on a choice in this tab.
-  let restartWasOn = restartOn();
-  const restartWatch = () => { const on = restartOn(); if (on === restartWasOn) return; restartWasOn = on; void restartPoll(); };
-  window.addEventListener?.('wos:prefs', restartWatch);
-  try { if (typeof MutationObserver === 'function' && document.documentElement?.nodeType === 1) new MutationObserver(restartWatch).observe(document.documentElement, { attributes: true, attributeFilter: ['data-tweaks'] }); } catch (_) {}
-  if (restartWasOn) void restartPoll();
+  globalThis.document?.addEventListener?.('visibilitychange', () => { if (!document.hidden) void restartPoll(); });
+  // Every page load watches (a reload, the phone, a second device, a PWA cold start), no switch to wait for. Only a
+  // page watches: without a document (a bare script context) there is nothing to show the note on.
+  if (globalThis.document) void restartPoll();
   window.WizReach = {
     diagnose,
     reloadRepair,

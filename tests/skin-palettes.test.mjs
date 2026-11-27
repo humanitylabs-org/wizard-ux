@@ -64,11 +64,11 @@ function lookPage(shell = 'phone', experience) {
   return { ...settingsView({ shell, WosSkin, WosMySkin, WosExperience: experience }), picked, WosSkin };
 }
 
-// Skins are look only (wizard-ux#1190, James 25 Nov 2026): Look is one list of looks, own skins included.
-test('Settings › Look is one list of looks: every colour, then own skins, without a Chats pairing', async () => {
+// Skins are look only (wizard-ux#1190, James 25 Nov 2026): Look is one list of skins, own skins included.
+test('Settings › Look is one list of skins: every colour, then own skins, without a Chats pairing', async () => {
   const h = lookPage();
   const html = h.html();
-  const looks = html.match(/<div class="skp" role="group" aria-label="Looks">([\s\S]*?)<\/div><\/div>/)?.[1] || '';
+  const looks = html.match(/<div class="skp" role="group" aria-label="Skins">([\s\S]*?)<\/div><\/div>/)?.[1] || '';
   for (const id of ['nebula', 'grove', 'obsidian', 'obsidian-light']) assert.match(looks, new RegExp(`data-skinpick="${id}"`), id);
   assert.match(looks, /data-ownskin="own-1"[^>]*>[\s\S]*Quiet morning/, 'own skins are looks in the same row, under their own names');
   assert.doesNotMatch(html, /data-skinfamily=/, 'no family tiles');

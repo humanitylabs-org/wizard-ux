@@ -11,9 +11,6 @@ window.WizCore = window.WizCore || {};
 window.WizCore.desktopParts = window.WizCore.desktopParts || {};
 window.WizCore.desktopParts.sideview = function ({ APP, appAt, appByName, desktopVars, findApp, focused, MOD, panelWin, panelWins, quickSearch, recordReply, save, searchUrl, shownBeside, stage, talk, threadShown, toast }) {
   let closeDesktop, closeWin, editUnsent, feedOpen, feedOpened, feedPane, feedPaneFor, goHome, goWs, hostedOpenable, listWin, moveWin, newWin, openApp, openAppLink, openChatsList, openPalette, openSettings, openThread, sideMain, stepDesk, syncChatsPane, toggleMono, viewContext, viewKey, VOICE, winTitle; // late-bound: desktop.js declares these after the call, see bindLate
-  // The switch, read inline from the root like the other switches; it only acts where a layout owns the chat list.
-  function sideViewOn() { try { return (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/sidebar-chats-view'); } catch (_) { return false; } }
-  function sideLook() { return mainStd() && sideViewOn(); }
   /* Where a layout owns the chat list (AI apps) and another look is picked as Default Chats, the main Chats window is
    * the one the layout docks in its chat column: the first desk whose front window is a Chats window (deskApps'
    * 'wizard'), whatever look it was opened with, drawn as standard Chats. With the switch on or off (wizard-ux issue
@@ -67,6 +64,12 @@ window.WizCore.desktopParts.sideview = function ({ APP, appAt, appByName, deskto
     channelsElsewhere: w => feedPane(w),
     channelCurrent: () => feedOpen()?.id || '',
     channelOpened: id => feedOpened(id),
+    // The AI apps sidebar's Chats pane (its id::side window) while it is on screen, for the Running view (wizard-ux issue
+    // 1599); null on every other layout or while a Default Chats look holds the sidebar.
+    runningPane: () => {
+      const h = desktopVars.sideHost; if (!desktopVars.ownsChatList || !h?.isConnected || h.closest('[hidden]')) return null;
+      const w = sideMain(); return h.dataset.chats === w.id + '::side' ? listWin(w.id, 'side') : null;
+    },
     // The composer's mic (#13): the same recorder as Right ⌘, pinned to this thread.
     recordReply: (wid, sid) => recordReply(wid, sid),
     captureBusy: () => VOICE.state !== 'idle' || desktopVars.dictationFinishing || !!window.WizAppCapture?.getState?.()?.active,
@@ -109,5 +112,5 @@ window.WizCore.desktopParts.sideview = function ({ APP, appAt, appByName, deskto
     // A declared route opens only once the box's fresh app list confirms it (commands.js confirm).
     if (c?.action==='open_app_route') return LOCAL_COMMANDS.confirm(c,text,snap,'command').then(x=>x ? executeCommand(x,text,snap) : false);
     return c ? executeCommand(c,text,snap) : false; }
-  return { CHATS, chatsWin, commandSaid, commandSnapshot, commandText, executeCommand, LOCAL_COMMANDS, localCommand, mainStd, openSearch, sideMainWin, sideViewOn, sideWin, bindLate: v => { if ('closeDesktop' in v) closeDesktop = v.closeDesktop; if ('closeWin' in v) closeWin = v.closeWin; if ('editUnsent' in v) editUnsent = v.editUnsent; if ('feedOpen' in v) feedOpen = v.feedOpen; if ('feedOpened' in v) feedOpened = v.feedOpened; if ('feedPane' in v) feedPane = v.feedPane; if ('feedPaneFor' in v) feedPaneFor = v.feedPaneFor; if ('goHome' in v) goHome = v.goHome; if ('goWs' in v) goWs = v.goWs; if ('hostedOpenable' in v) hostedOpenable = v.hostedOpenable; if ('listWin' in v) listWin = v.listWin; if ('moveWin' in v) moveWin = v.moveWin; if ('newWin' in v) newWin = v.newWin; if ('openApp' in v) openApp = v.openApp; if ('openAppLink' in v) openAppLink = v.openAppLink; if ('openChatsList' in v) openChatsList = v.openChatsList; if ('openPalette' in v) openPalette = v.openPalette; if ('openSettings' in v) openSettings = v.openSettings; if ('openThread' in v) openThread = v.openThread; if ('sideMain' in v) sideMain = v.sideMain; if ('stepDesk' in v) stepDesk = v.stepDesk; if ('syncChatsPane' in v) syncChatsPane = v.syncChatsPane; if ('toggleMono' in v) toggleMono = v.toggleMono; if ('viewContext' in v) viewContext = v.viewContext; if ('viewKey' in v) viewKey = v.viewKey; if ('VOICE' in v) VOICE = v.VOICE; if ('winTitle' in v) winTitle = v.winTitle; } };
+  return { CHATS, chatsWin, commandSaid, commandSnapshot, commandText, executeCommand, LOCAL_COMMANDS, localCommand, mainStd, openSearch, sideMainWin, sideWin, bindLate: v => { if ('closeDesktop' in v) closeDesktop = v.closeDesktop; if ('closeWin' in v) closeWin = v.closeWin; if ('editUnsent' in v) editUnsent = v.editUnsent; if ('feedOpen' in v) feedOpen = v.feedOpen; if ('feedOpened' in v) feedOpened = v.feedOpened; if ('feedPane' in v) feedPane = v.feedPane; if ('feedPaneFor' in v) feedPaneFor = v.feedPaneFor; if ('goHome' in v) goHome = v.goHome; if ('goWs' in v) goWs = v.goWs; if ('hostedOpenable' in v) hostedOpenable = v.hostedOpenable; if ('listWin' in v) listWin = v.listWin; if ('moveWin' in v) moveWin = v.moveWin; if ('newWin' in v) newWin = v.newWin; if ('openApp' in v) openApp = v.openApp; if ('openAppLink' in v) openAppLink = v.openAppLink; if ('openChatsList' in v) openChatsList = v.openChatsList; if ('openPalette' in v) openPalette = v.openPalette; if ('openSettings' in v) openSettings = v.openSettings; if ('openThread' in v) openThread = v.openThread; if ('sideMain' in v) sideMain = v.sideMain; if ('stepDesk' in v) stepDesk = v.stepDesk; if ('syncChatsPane' in v) syncChatsPane = v.syncChatsPane; if ('toggleMono' in v) toggleMono = v.toggleMono; if ('viewContext' in v) viewContext = v.viewContext; if ('viewKey' in v) viewKey = v.viewKey; if ('VOICE' in v) VOICE = v.VOICE; if ('winTitle' in v) winTitle = v.winTitle; } };
 };

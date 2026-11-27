@@ -1,0 +1,15 @@
+{
+  "id": "wizard/private-routing",
+  "name": "Private routing",
+  "version": "1.0.0",
+  "author": "wizard",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout"
+  ],
+  "issues": [
+    "humanitylabs-org/wizard-agent-service#629",
+    "humanitylabs-org/wizard-ux#1804"
+  ],
+  "description": "With private mode on, the orb sends each request straight to the agent it is for, with your exact words: say an agent's name (\"Philosopher, ...\") or a model (\"use Opus ...\") and it goes there; anything touching your personal data or a private app goes to the private agent; everything else goes to your default, private agent. Only a private router model is ever asked. That agent's own thread opens, with a small chip saying where it went and why; tap the chip to send it to a different agent instead."
+}

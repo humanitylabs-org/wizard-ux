@@ -115,6 +115,15 @@ a.st-row { color: inherit; text-decoration: none; }
 .st-confirm { width: min(420px, 100%); padding: 20px; border-radius: 20px; border: 1px solid var(--wz-border); background: linear-gradient(var(--wz-overlay), var(--wz-overlay)), var(--wz-base); }
 .st-confirm h3 { font-size:var(--wz-text-heading); margin: 0 0 12px; }
 .st-confirm p { color: var(--wz-text-secondary); font-size:var(--wz-text-md); }
+/* Share feature counts? (wizard-ux issue 1817, switch wizard/feature-counts-ask): above app windows and sheets. */
+.fc-ask-scrim { z-index: 9100; }
+.fc-ask { max-height: calc(100dvh - 40px); overflow-y: auto; }
+.fc-ask ul { margin: 0 0 12px; padding-left: 20px; color: var(--wz-text-secondary); font-size: var(--wz-text-md); }
+.fc-ask li { margin: 4px 0; }
+.fc-ask code { font-size: var(--wz-text-sm); overflow-wrap: anywhere; }
+.fc-ask .st-actions { justify-content: flex-end; margin-top: 16px; }
+.fc-ask .st-actions button { min-height: 44px; min-width: 96px; }
+.fc-ask .st-actions .fc-ask-yes { background: var(--wz-accent); border-color: var(--wz-accent); color: var(--wz-on-accent); }
 .dsettings .st-root { overflow: hidden; padding-bottom: 16px; }
 .st-desktop { display: grid; grid-template-columns: 280px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); height: 100%; gap: 24px; }
 .st-desktop .st-index { overflow-y: auto; padding-right: 16px; border-right: 1px solid var(--wz-border); }

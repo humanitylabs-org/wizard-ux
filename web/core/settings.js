@@ -261,7 +261,7 @@
     const opened = app && window.WizOpenApp?.(app);
     if (!opened) ctx.toast?.('✎', esc(`Ask your Wizard: “change my ${M.active?.name || 'own'} skin so…”`), 4000);
   }
-  // Settings › Look: one list of looks (every colour, your own skins, + New skin), then the worn colour's background.
+  // Settings › Look: one list of skins (every colour, your own skins, + New skin), then the worn colour's background.
   const lookName = (S, id) => S.list.find(k => k.id === id)?.name || '';
   // Skin picker: a grid of small preview cards, one per look, in the skins' own order. Each card is a miniature of
   // that look (its background, a reply and a sent bubble, the dock with its orb) drawn in CSS from its own tokens, with
@@ -334,15 +334,14 @@
    * was sent. A tap paints the flipped switch on its own frame (pending), then the real state reconciles; a failure
    * reverts with the same toast as Look. Every card on screen and Look repaint together on wos:experience. */
   const cardPending = new Map(), ONLY = { desktop: 'Desktop only', phone: 'Phone only' };
-  /* App feature switches in the same card (wizard-ux issue 1560, switch wizard/chat-app-switches): `<app id>:<switch id>`
+  /* App feature switches in the same card (wizard-ux issue 1560, on for everyone): `<app id>:<switch id>`
    * rows come from the App Manager's one catalog, store-install/_feature-switches (wizard-os docs/APP_SWITCHES.md), and
    * flip through its POST, the owner-proof path the Tracker's Try it uses, so the app's own /api/switches changes. Live
    * state: read when a card paints (at most every 15 s), when the page shows again, and from every flip's answer. An
    * installed app without that switch yet is greyed with "Update <app> first" + Update (opens it in the App Store); an app
-   * that isn't installed or declares no switches stays hidden. While the switch is off app ids are dropped, as before. */
-  const APP_SWITCH = /^([a-z0-9][a-z0-9-]{0,62}):[a-z0-9][a-z0-9-]{0,63}$/, APP_SWITCHES_TWEAK = 'wizard/chat-app-switches';
+   * that isn't installed or declares no switches stays hidden. */
+  const APP_SWITCH = /^([a-z0-9][a-z0-9-]{0,62}):[a-z0-9][a-z0-9-]{0,63}$/;
   const appSw = { list: null, at: 0, read: null, err: false, gen: 0, timer: 0 };
-  const appSwOn = () => { try { return String(document.documentElement?.dataset?.tweaks || '').split(' ').includes(APP_SWITCHES_TWEAK); } catch (e) { return false; } };
   const homePath = p => { try { return new URL(p, document.baseURI || location.href).pathname; } catch (e) { return '/wizard-os-home/' + p; } };
   function appSwTake(d) {
     if (!d || !Array.isArray(d.switches)) return;
@@ -370,7 +369,7 @@
   function appSwTick() {
     const later = window.setTimeout || (typeof setTimeout === 'function' ? setTimeout : null);
     if (appSw.timer || !later) return;
-    appSw.timer = later(() => { appSw.timer = 0; if (!appSwOn() || document.visibilityState === 'hidden' || !appSwShown()) return; void appSwRead(true); appSwTick(); }, 15000);
+    appSw.timer = later(() => { appSw.timer = 0; if (document.visibilityState === 'hidden' || !appSwShown()) return; void appSwRead(true); appSwTick(); }, 15000);
   }
   function appSwRow(id) {
     const app = APP_SWITCH.exec(id)[1], L = appSw.list;
@@ -383,7 +382,7 @@
     return tweakSwitches([{ id, name: nm, description: why, on: false }], 'data-chat-tweak', true) + (update ? `<div class="ch-tweak-upd"><button type="button" data-chat-tweak="" data-chat-tweak-update="${esc(app)}" aria-label="Update ${esc(nm)}">Update</button></div>` : '');
   }
   function appSwTap(btn, id, toast) {
-    if (btn.disabled || cardPending.has(id) || !appSwOn() || typeof window.fetch !== 'function') return false;
+    if (btn.disabled || cardPending.has(id) || typeof window.fetch !== 'function') return false;
     const was = btn.getAttribute('aria-checked') === 'true';
     cardPending.set(id, !was);
     btn.setAttribute('aria-checked', String(!was)); btn.querySelector('.sw')?.classList.toggle('on', !was); // this frame
@@ -398,7 +397,7 @@
     if (!(typeof open === 'function' && open('app-store', path))) toast?.('!', 'Open the App Store to update this app');
     return true;
   }
-  window.addEventListener?.('visibilitychange', () => { if (document.visibilityState === 'visible' && appSw.list && appSwOn()) { void appSwRead(true); appSwTick(); } });
+  window.addEventListener?.('visibilitychange', () => { if (document.visibilityState === 'visible' && appSw.list) { void appSwRead(true); appSwTick(); } });
   function tweakCardRows(list) {
     const E = window.WosExperience, s = E?.state;
     if (s && !authorList) E.authors?.().then(a => { authorList = a; paintTweakCards(); }, () => {});
@@ -413,7 +412,7 @@
       return tweakSwitches([{ ...t, on, where: t.locked ? 'For testers only' : here ? '' : ONLY[t.shells[0]] || '' }], 'data-chat-tweak', s.busy || !here || !!t.locked, name);
     }).join('');
   }
-  const cardIds = ids => [...new Set((Array.isArray(ids) ? ids : String(ids || '').split(' ')).filter(id => id && (!APP_SWITCH.test(id) || appSwOn())))];
+  const cardIds = ids => [...new Set((Array.isArray(ids) ? ids : String(ids || '').split(' ')).filter(Boolean))];
   function tweakCard(ids) {
     const list = cardIds(ids); if (!list.length) return '';
     const rows = tweakCardRows(list);
@@ -433,6 +432,7 @@
     const id = btn.dataset.chatTweak, E = window.WosExperience;
     if (!id || !E || btn.disabled || cardPending.has(id)) return false;
     const was = btn.getAttribute('aria-checked') === 'true';
+    if (!was && typeof askIntercept === 'function' && askIntercept(id)) return true;
     cardPending.set(id, !was);
     btn.setAttribute('aria-checked', String(!was)); btn.querySelector('.sw')?.classList.toggle('on', !was); // this frame
     paintTweakCards(); // every other card naming it, the same frame
@@ -462,8 +462,10 @@
     if (!previews.length) return '';
     return `<details class="st-advanced"><summary>Recover device skins</summary><p>These previews are still on this device. Recover opens New skin; nothing is saved until you choose Create.</p>${previews.map(s => `<div><button type="button" data-skin-preview="${esc(s.id)}">Recover ${esc(s.name)}</button><button type="button" data-skin-preview-dismiss="${esc(s.id)}">Dismiss preview</button></div>`).join('')}</details>`;
   }
+  const skinConfirm = ctx => ctx.skinRemove ? `<div class="st-confirm-scrim"><section class="st-confirm" role="alertdialog" aria-modal="true" aria-labelledby="skin-remove-title"><h3 id="skin-remove-title">Remove ${esc(ctx.skinRemove.name)}?</h3><p>You can undo this removal. Your Wizard keeps the folder in trash for seven days.</p><div class="st-actions"><button data-skin-remove-cancel>Cancel</button><button data-skin-remove-confirm>Remove skin</button></div></section></div>` : '';
+  const skinUndoToast = ctx => ctx.skinUndo ? `<div class="st-skin-toast" role="status">Skin removed<button data-skin-undo>Undo</button><button data-skin-undo-dismiss aria-label="Dismiss">×</button></div>` : '';
   /* Skins are look only (wizard-ux issue 1190; Miguel 20 Nov 2026 "it's really just colors and background", James 25
-   * Nov: skins and colours are one list of looks, own skins, New skin and skin import stay, as looks). One Looks row:
+   * Nov: skins and colours are one list, own skins, New skin and skin import stay; 27 Nov: "call these skins, not looks"). One Skins row:
    * every colour (the scenic landscapes colours are a Background, not a colour), then your own skins and + New skin.
    * Then the worn colour's Mode and Background (not while an own skin is worn: it sets its own) and Views. Feature
    * switches are on their own page (try-features). Picking a colour takes off an own skin (my-skin.js leaves it when
@@ -476,11 +478,9 @@
     const family = fams.find(f => f.id === S.familyOf?.(cur)) || fams[0];
     const ids = [...new Set(fams.flatMap(f => f.palettes || []))].filter(id => !/^landscapes/.test(id));
     const shownCur = own ? '' : /^landscapes/.test(cur) ? family?.palettes.find(id => !/^landscapes/.test(id) && isLight(id) === isLight(cur)) || cur : cur;
-    const looks = `<div class="skp-colours"><h4>Looks</h4><div class="skp" role="group" aria-label="Looks">${ids.map(id => S.list.find(k => k.id === id)).filter(Boolean).map(k => skinCard(k, shownCur)).join('')}${ownTiles(S, ctx.skinRemoving)}${newTile()}</div></div>`;
+    const looks = `<div class="skp-colours"><h4>Skins</h4><div class="skp" role="group" aria-label="Skins">${ids.map(id => S.list.find(k => k.id === id)).filter(Boolean).map(k => skinCard(k, shownCur)).join('')}${ownTiles(S, ctx.skinRemoving)}${newTile()}</div></div>`;
     const background = !own && family && (S.wizardBackgrounds || twinned(S, family)) ? backgroundHtml(S, family, cur, ctx) : '';
-    const confirm = ctx.skinRemove ? `<div class="st-confirm-scrim"><section class="st-confirm" role="alertdialog" aria-modal="true" aria-labelledby="skin-remove-title"><h3 id="skin-remove-title">Remove ${esc(ctx.skinRemove.name)}?</h3><p>You can undo this removal. Your Wizard keeps the folder in trash for seven days.</p><div class="st-actions"><button data-skin-remove-cancel>Cancel</button><button data-skin-remove-confirm>Remove skin</button></div></section></div>` : '';
-    const undo = ctx.skinUndo ? `<div class="st-skin-toast" role="status">Skin removed<button data-skin-undo>Undo</button><button data-skin-undo-dismiss aria-label="Dismiss">×</button></div>` : '';
-    return `<div class="st-group" data-stgroup="look" data-look-only><div class="skp-all${facesReady ? '' : ' skp-wait'}">${looks}${background}</div>${deviceSkinRecovery()}${own ? mySkinRow(own) : ''}${tweakRows(S, 'look')}${confirm}${undo}</div>`;
+    return `<div class="st-group" data-stgroup="look" data-look-only><div class="skp-all${facesReady ? '' : ' skp-wait'}">${looks}${background}</div>${deviceSkinRecovery()}${own ? mySkinRow(own) : ''}${tweakRows(S, 'look')}${skinConfirm(ctx)}${skinUndoToast(ctx)}</div>`;
   }
   // Background + Mode (Miguel, 4 Nov 2026): a skin whose colours come in dark/light twins shows ONE row of
   // backgrounds (Plain, landscape pictures, WizardOS scenes) and a separate Dark | Light switch. Keep the
@@ -590,11 +590,16 @@
     const view = el.closest('[data-desktop-view]');
     if (view) { void window.WosExperience.chooseDesktopView(view.dataset.desktopView).catch(e => ctx.toast?.('!', e.message, 2400)); return true; }
     const tweak = el.closest('[data-tweak-toggle]');
+    if (tweak && typeof askIntercept === 'function' && askIntercept(tweak.dataset.tweakToggle)) return true;
     if (tweak) { void window.WosExperience.toggle(tweak.dataset.tweakToggle).catch(e => ctx.toast?.('!', e.message, 2400)); return true; }
     const my = el.closest('[data-myskin]');
     if (my) { mySkinAction(ctx, my.dataset.myskin); return true; }
     const b = el.closest('[data-skinpick]'); if (!b) return false;
-    skinAction(() => S.set(b.dataset.skinpick), () => {
+    // A colour is a look of its own, so it takes off a worn own skin first and is worn after that
+    // (wizard-ux issue 1816: leaving on the colour change raced the box, whose answer put the skin's colour back).
+    const shed = !!M?.active;
+    skinAction(() => shed ? M.leave() : S.set(b.dataset.skinpick), () => {
+      if (shed && S.current !== b.dataset.skinpick) S.set(b.dataset.skinpick);
       void window.WosExperience?.chooseSkin?.();
       for (const m of mounts) m.render(); ctx.haptic?.(8);
     }, e => ctx.toast?.('!', e.message, 3000)); return true;
@@ -624,7 +629,7 @@
   } });
   /* Features on for everyone (catalog `defaults`) are plain settings where they act: one switch each, no author. */
   const settingRow = id => { const t = window.WosExperience?.state.tweaks.find(x => x.id === id && x.builtin); return t ? tweakSwitches([t], 'data-tweak-toggle', window.WosExperience.state.busy) : ''; };
-  const settingAct = (ctx, el) => { const b = el.closest('[data-tweak-toggle]'); if (!b) return false; void window.WosExperience.toggle(b.dataset.tweakToggle).catch(e => ctx.toast?.('!', e.message, 2400)); return true; };
+  const settingAct = (ctx, el) => { const b = el.closest('[data-tweak-toggle]'); if (!b) return false; if (typeof askIntercept === 'function' && askIntercept(b.dataset.tweakToggle)) return true; void window.WosExperience.toggle(b.dataset.tweakToggle).catch(e => ctx.toast?.('!', e.message, 2400)); return true; };
   register({ id: 'home-network', page: 'appearance', html: () => { const r = settingRow('wizard/machines-home'); return r ? `<div class="st-group"><h4>Home</h4>${r}</div>` : ''; }, act: settingAct });
   register({ id: 'skin-frame', available: () => !!window.WosSkin, html() {
     return '<div class="st-group sf-section"><details class="st-advanced"><summary>Advanced</summary><button class="sf-import" data-skinimport>Import skin JSON</button><input type="file" data-skinfile accept="application/json,.json" hidden><p data-skinimport-status role="status"></p></details></div>';
@@ -797,8 +802,7 @@
     },
     // ?embed=settings: the view drops its own title, sheet and canvas and takes the shell's skin (Appearance v1), so the
     // page head is the one title and the content sits straight on the Settings page, with no box around it.
-    html: () => `<div class="st-embed" data-st-connections><iframe src="${esc(CONNECTIONS)}?embed=settings" title="Connections"></iframe></div>` });
-  register({ id: 'chats-list-style', page: 'chats', html: () => { const r = settingRow('wizard/desktop-chats'); return r ? `<div class="st-group"><h4>Chats list</h4>${r}</div>` : ''; }, act: settingAct });
+    html: () => `<div class="st-embed" data-st-connections><iframe src="${esc(CONNECTIONS)}?embed=settings" title="Connections" allow="geolocation 'none'"></iframe></div>` });
   register({ id: 'notifications-in-chats', page: 'chats', html: () => { const r = settingRow('wizard/unified-inbox'); return r ? `<div class="st-group"><h4>Notifications</h4>${r}</div>` : ''; }, act: settingAct });
   // Draft marks are on for everyone (wizard-ux issue 1604, James: "just ship this"); an owner can still turn them off here.
   /* Settings › Notifications: one choice per app, Badge or Chats, never both (Miguel, 1 Nov 2026). Lists
@@ -886,5 +890,88 @@
   }
   window.addEventListener?.('wos:experience', countsArm);
   window.addEventListener?.('visibilitychange', () => { void countsRun(); countsArm(); });
-  window.WosSettings = { refresh: () => { for (const m of mounts) m.render(); }, countsCollect, register, mount, route, cancelWait, tweakCard, tweakCardTap, hasSystem: () => PAGES.some(p => p.group === 'System' && p.available()), systemPages: Object.freeze(PAGES.filter(p => p.group === 'System').map(p => p.id)), trap, pageOf, attention, moveDraft, unsentAll, unsentRow, unsentAction, retryAll, focusUnsent, tweakOptions, get features() { return [...features.values()].map(f => ({ id: f.id, aliases: f.aliases || [], page: pageOf(f) })); } };
+  /* Ask before feature counts leave the box (wizard-ux issue 1817, switch wizard/feature-counts-ask, off by default).
+   * James, 25 Nov 2026: counts are never sent without the owner's explicit opt-in. Share feature counts stays off until
+   * the owner says Share to one plain prompt that names exactly what is sent. The prompt opens the first time the owner
+   * taps a thumb in an app's Try new features section (an app frame in this shell, or a thumb already saved that this
+   * device finds on its next look), and whenever Share feature counts is turned on from the shell. Share turns it on;
+   * Don't share keeps it off and this device never asks again on a thumb. Waiting on the prompt reads or sends nothing.
+   * Turning it off stays one tap. */
+  const ASK_TWEAK = 'wizard/feature-counts-ask', ASK_KEY = 'wos.feature-counts.answer.v1', ASK_EVERY = 10 * 60 * 1000;
+  const ask = { el: null, dismissed: false, at: 0, busy: false, docs: typeof WeakSet === 'function' ? new WeakSet() : null };
+  const askOn = () => { try { return String(document.documentElement?.dataset?.tweaks || '').split(' ').includes(ASK_TWEAK); } catch (e) { return false; } };
+  const askAnswer = () => { try { return localStorage.getItem(ASK_KEY) || ''; } catch (e) { return ''; } };
+  const askDue = () => askOn() && !countsOn() && !askAnswer() && !ask.dismissed && !ask.el;
+  const askHtml = example => `<div class="st-confirm-scrim fc-ask-scrim" data-fc-ask><section class="st-confirm fc-ask" role="dialog" aria-modal="true" aria-labelledby="fc-ask-title">`
+    + `<h3 id="fc-ask-title">Share feature counts?</h3>`
+    + `<p>Your thumbs up and down stay on this Wizard. You can also share them with the WizardOS team, so they see which test features people try and like.</p>`
+    + `<p>If you choose Share, this Wizard sends only this, for each test feature you tried or gave a thumb:</p>`
+    + `<ul><li>the feature’s switch id${example ? ` (this one is <code>${esc(example)}</code>)` : ''}</li><li>whether you tried it</li><li>your thumbs up or down</li><li>a random box id, so your Wizard is counted once</li></ul>`
+    + `<p>No names, messages or other content, and nothing that says who you are. Nothing is sent unless you choose Share. You can turn it off again in Settings, under Try new features (Share feature counts).</p>`
+    + `<div class="st-actions"><button type="button" class="ghost" data-fc-ask-no>Don’t share</button><button type="button" class="fc-ask-yes" data-fc-ask-yes>Share</button></div></section></div>`;
+  function askOpen(example) {
+    if (ask.el || !document.body) return false;
+    const holder = document.createElement('div'); holder.innerHTML = askHtml(example);
+    const el = ask.el = holder.firstElementChild;
+    el.addEventListener('click', e => {
+      if (e.target.closest?.('[data-fc-ask-yes]')) void askDone('share');
+      else if (e.target.closest?.('[data-fc-ask-no]')) void askDone('decline');
+      else if (e.target === el) void askDone(''); // a tap outside is no answer: nothing is sent
+    });
+    el.addEventListener('keydown', e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); void askDone(''); } });
+    document.body.appendChild(el);
+    el.querySelector('[data-fc-ask-yes]')?.focus?.({ preventScroll: true });
+    return true;
+  }
+  async function askDone(answer) {
+    const el = ask.el; if (!el) return '';
+    ask.el = null; el.remove();
+    if (!answer) { ask.dismissed = true; return 'feature-counts-ask'; }
+    try { localStorage.setItem(ASK_KEY, answer); } catch (e) { /* private mode: asks again next start */ }
+    if (answer === 'share' && !countsOn()) {
+      try { await window.WosExperience?.toggle(COUNTS_TWEAK); } catch (e) { (window.__wos?.toast || window.__wux?.toast)?.('!', e?.message || 'Couldn’t turn on Share feature counts', 2400); }
+    }
+    return 'feature-counts-ask';
+  }
+  // Turning Share feature counts ON from the shell (Settings row, chat switch card) goes through the prompt; OFF is one tap.
+  function askIntercept(id) {
+    if (id !== COUNTS_TWEAK || !askOn() || countsOn() || ask.el) return false;
+    return askOpen('');
+  }
+  // A thumb tapped in an app frame: the kit's buttons carry data-try-vote inside a row with data-try-id. The vote itself
+  // is still saved by the app on the box (it never leaves it); only the prompt is added.
+  function askHook(frame) {
+    let doc = null; try { doc = frame.contentDocument; } catch (e) { return; } // another origin: the next look finds it
+    if (!doc || !ask.docs || ask.docs.has(doc)) return;
+    ask.docs.add(doc);
+    doc.addEventListener('click', e => {
+      const b = e.target?.closest?.('[data-try-vote]'); if (!b || !askDue()) return;
+      let app = frame.dataset?.ownApp || '';
+      if (!app) try { app = decodeURIComponent(String(frame.contentWindow.location.pathname).split('/')[1] || ''); } catch (err) { app = ''; }
+      const sw = b.closest('[data-try-id]')?.getAttribute('data-try-id') || '';
+      askOpen(COUNT_APP.test(app) && sw ? `${app}:${sw}` : '');
+    }, true);
+  }
+  function askScan() { if (askOn()) for (const f of document.querySelectorAll?.('iframe') || []) askHook(f); }
+  // A thumb given before (or in an app opened outside the shell): the box's switch catalog, then the apps the App
+  // Manager can't read itself, the same reads the counts use, kept on this device. At most every 10 minutes.
+  async function askLook() {
+    if (!askDue() || ask.busy || typeof window.fetch !== 'function' || document.visibilityState === 'hidden' || Date.now() - ask.at < ASK_EVERY) return;
+    ask.busy = true; ask.at = Date.now();
+    try {
+      const cat = await appSwFetch();
+      const voted = s => s && typeof s.id === 'string' && (s.vote === 'up' || s.vote === 'down');
+      let hit = (Array.isArray(cat?.switches) ? cat.switches : []).find(s => s?.kind === 'app' && voted(s))?.id || '';
+      for (const a of (Array.isArray(cat?.apps) ? cat.apps : []).filter(a => a && a.ok === false && COUNT_APP.test(String(a.id || '')))) {
+        if (hit) break;
+        try { const sw = (await countsListing(a.id) || []).find(voted); if (sw) hit = `${a.id}:${sw.id}`; } catch (e) { /* next time */ }
+      }
+      if (hit && askDue()) askOpen(hit);
+    } catch (e) { /* no App Manager here: nothing to look at */ } finally { ask.busy = false; }
+  }
+  function askArm() { if (!askOn()) return; askScan(); void askLook(); }
+  document.addEventListener?.('load', e => { if (e.target?.tagName === 'IFRAME' && askOn()) askHook(e.target); }, true);
+  window.addEventListener?.('wos:experience', askArm);
+  window.addEventListener?.('visibilitychange', () => { if (document.visibilityState !== 'hidden') askArm(); });
+  window.WosSettings = { refresh: () => { for (const m of mounts) m.render(); }, countsCollect, countsAsk: { get isOpen() { return !!ask.el; }, back: () => { void askDone(''); return 'feature-counts-ask'; }, open: askOpen, intercept: askIntercept }, register, mount, route, cancelWait, tweakCard, tweakCardTap, hasSystem: () => PAGES.some(p => p.group === 'System' && p.available()), systemPages: Object.freeze(PAGES.filter(p => p.group === 'System').map(p => p.id)), trap, pageOf, attention, moveDraft, unsentAll, unsentRow, unsentAction, retryAll, focusUnsent, tweakOptions, get features() { return [...features.values()].map(f => ({ id: f.id, aliases: f.aliases || [], page: pageOf(f) })); } };
 })();

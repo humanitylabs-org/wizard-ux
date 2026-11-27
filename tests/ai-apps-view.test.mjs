@@ -120,7 +120,7 @@ test('desktop: a sidebar (open apps, All apps, the Archive / Working / Ready sec
   assert.equal(w.html.dataset.aadSide, 'open', 'open from 680 px up');
   assert.ok(w.html.attrs['data-settings-over'] === '', 'Settings opens over the page (a centred panel), never beside the chat');
   // the sidebar: wordmark · 🔍 · ◫; Apps grid (badged first, All apps last); the sections (round 5: Ready open)
-  assert.deepEqual(w.q('.aad-sh').children.filter(c => !c.hidden).map(c => c.className.split(' ').pop()), ['aad-ws', 'aad-find', 'aad-tog'], 'round 7: the workspace switcher in place of the name; round 16: no ⌂ (Home = ✕, Esc, ⌥`)');
+  assert.deepEqual(w.q('.aad-sh').children.filter(c => !c.hidden).map(c => c.className.split(' ').pop()), ['aad-ws', 'aad-find', 'aad-sswap', 'aad-tog'], 'round 7: the workspace switcher in place of the name; round 16: no ⌂ (Home = ✕, Esc, ⌥`)');
   assert.equal(w.q('.aad-homeb'), null, 'round 16: the left sidebar is the chats only'); assert.equal(w.q('.aad-pins'), null, 'round 16: no pinned row on the left');
   assert.equal(w.q('.aad-sh .aad-wsn').textContent, 'Miguel');
   assert.equal(w.q('.aad-sh .aad-wsd'), null, 'round 8: the name is text only (and a small chevron), no disc');
@@ -136,15 +136,12 @@ test('desktop: a sidebar (open apps, All apps, the Archive / Working / Ready sec
   assert.deepEqual(w.qa('.vc-pick .vc-app[data-app]').map(b => b.dataset.app), ['mail', 'music', 'money', 'notes', 'maps', 'movies'], 'desktop app search includes installed, open and pinned apps');
   assert.equal(w.q('.vc-pick .vc-fold'), null, 'no Already open row');
   assert.ok(w.q('.vc-pick .vc-more'), '+ Get more last');
-  assert.deepEqual(w.qa('.aad-sec').map(h => `${h.dataset.sec}:${h.getAttribute('aria-expanded')}`), ['working:false', 'ready:true', 'archive:false'], 'Activity (Channels on for everyone, issue 1258): Working, Ready, Recent, then Snoozed and Archived folded at the bottom; an empty one (here Recent and Snoozed) is not drawn (issue 1731)');
-  assert.deepEqual(w.qa('.aad-rw').map(r => `${r.dataset.sid}:${r.dataset.kind}`), ['r1:ready', 'r2:ready']);
+  // wizard-ux issue 1966 (one design on phone and desktop): Working, Inbox, Snoozed and Archived are Chats' own list in the
+  // pane (the phone's title bar and rows, tests/qa-chats-shell-parity.cjs); the sidebar draws no sections or rows of its own
+  assert.deepEqual(w.qa('.aad-sec').map(h => h.dataset.sec), [], 'no section rows of its own');
+  assert.deepEqual(w.qa('.aad-rw').map(r => r.dataset.sid), [], 'no compact rows of its own');
   assert.equal(w.q('.aad-viewall'), null, 'no View all: the sidebar is the chat list');
-  w.q('.aad-sec[data-sec="working"]').dispatchEvent(new FakePointerEvent('click'));
-  assert.deepEqual(w.qa('.aad-rw').map(r => r.dataset.sid), ['w1', 'r1', 'r2'], 'Working opens above Ready');
-  assert.deepEqual(store.sections, { archive: false, working: true, snoozed: false, ready: true }, 'kept on this device');
-  w.q('.aad-sec[data-sec="working"]').dispatchEvent(new FakePointerEvent('click'));
   assert.equal(w.q('.aad-tog .aad-count'), null, 'round 18 item 4a: no Ready count on ◫ any more');
-  assert.equal(w.q('.aad-sec[data-sec="ready"] .aad-sec-n').textContent, '2', 'round 18 item 4a: Ready\'s count on its own header (the rail\'s amber disc)');
   assert.deepEqual(w.q('.aad-foot').children.map(b => [b.className, b.getAttribute('aria-label'), b.textContent]), [['aad-set', 'Settings', ''], ['aad-fuel', null, ''], ['aad-new', 'New chat', '']], 'round 7: cog left, the fuel gauge between, + right');
   w.q('.aad-new').dispatchEvent(new FakePointerEvent('click')); assert.equal(w.st.newChats, 1);
   w.q('.aad-set').dispatchEvent(new FakePointerEvent('click')); assert.deepEqual(w.st.settings, ['']);
@@ -155,11 +152,7 @@ test('desktop: a sidebar (open apps, All apps, the Archive / Working / Ready sec
   w.q('.vc-pick .vc-more').dispatchEvent(new FakePointerEvent('click')); assert.equal(w.st.opened.at(-1), 'app-store', 'Get more = the App Store as it is');
   assert.equal(keys[1].down({ altKey: true, code: 'KeyR' }), true, 'round 21: ⌥R folds the apps column (the right one)');
   assert.equal(w.html.dataset.aadTabs, 'rail'); keys[1].down({ altKey: true, code: 'KeyR' }); assert.equal(w.html.dataset.aadTabs, 'open');
-  // ⋯ on a row: the same menu as the phone's long press, through Chats' own actions
-  w.q('.aad-rw[data-sid="r2"] .aad-more').dispatchEvent(new FakePointerEvent('click'));
-  assert.deepEqual(w.qa('.aad-pop-i').map(b => b.textContent), ['Pin', 'Rename', 'Mark unread', 'Move to channel…', 'Snooze', 'Archive']);
-  w.q('.aad-pop-i[data-act="done"]').dispatchEvent(new FakePointerEvent('click')); assert.deepEqual(w.st.acts, [['r2', 'done']]); assert.equal(w.q('.aad-pop'), null);
-  w.q('.aad-rw[data-sid="r1"] .aad-row').dispatchEvent(new FakePointerEvent('click')); assert.deepEqual(w.st.opened.at(-1), 'thread:r1');
+  // (a row's menu is the shared row's own, right-click or hold: Chats' rowMenu, as on the phone; issue 1966)
   // fold to the rail with ◫ or Ctrl / ⌘ + Shift + S; kept on this device
   w.q('.aad-tog').dispatchEvent(new FakePointerEvent('click'));
   assert.equal(w.q('.aad-rtog .aad-count'), null, 'round 16: no count on the rail\'s ◫ (Ready is right under it)'); assert.equal(w.q('.aad-rtog').getAttribute('aria-label'), 'Open sidebar');
@@ -822,7 +815,7 @@ test('round 5 + 7 desktop: no home button in the top row (round 7), the switcher
   assert.equal(w.qa('.aad-home').length, 0, 'round 7: the top row has no home button (Home = its tab, +, ⌥1)');
   assert.equal(w.qa('.aad-tname, .aad-viewall').length, 0, 'the name in the top row and View all are gone');
   assert.deepEqual(w.q('.aad-top').children.map(e => e.className), ['aad-ctop', 'aad-ptop'], 'round 15: no tab strip; the docked chat\'s title and the app panel\'s header');
-  assert.deepEqual(w.q('.aad-sh').children.map(e => e.className.split(' ').at(-1)), ['aad-ws', 'aad-find', 'aad-search', 'aad-cancel', 'aad-tog'], 'round 7: the switcher is the sidebar header; round 16: no ⌂');
+  assert.deepEqual(w.q('.aad-sh').children.map(e => e.className.split(' ').at(-1)), ['aad-ws', 'aad-find', 'aad-search', 'aad-cancel', 'aad-sswap', 'aad-tog'], 'round 7: the switcher is the sidebar header; round 16: no ⌂');
   assert.match(w.q('.aad-orbbtn').getAttribute('aria-label'), /drag up for a new chat to type in/);
   const css = read('web/layouts/ai-apps/desktop.css'), js = noComments(read('web/layouts/ai-apps/desktop.js'));
   assert.ok(!/\.aad-home\b|\btHome\b/.test(css + js) && !/aad-tname|aad-viewall/.test(css), 'and no styles or code left for them');
@@ -849,24 +842,22 @@ test('round 5: notifications in the list: Chats\' own items as plain rows with a
   } finally { Date.now = realNow; }
   const phoneCss = read('web/layouts/ai-apps/layout.css'), css = phoneCss + read('web/layouts/ai-apps/desktop.css');
   assert.ok(!/\.aad?-bell[^{]*\{[^}]*(yellow|background)/.test(css), 'no card');
-  // round 20 item 6 (Miguel): a notification row stands out, subtly: an amber bell and an amber unread dot, nothing else;
-  // the real layout.css / desktop.css on the rows the real views drew
-  const AMBER = 'var(--amber, var(--wz-warning))';
+  // round 20 item 6 (Miguel): a notification row is marked by its small bell, nothing else; since wizard-ux issue 1941
+  // (alerts are plain rows) the bell and the unread dot wear the ink and dot colours every row uses, no amber.
+  // The real layout.css / desktop.css on the rows the real views drew.
   w.html.setAttribute('data-shell', 'phone'); w.html.setAttribute('data-layout', 'ai-apps');
   const bell = w.q('.aa-chat[data-sid="notif:n2"] .aa-bell');
-  assert.equal(cascade(bell, phoneCss).color?.value, AMBER, 'phone: an amber bell');
+  assert.equal(cascade(bell, phoneCss).color?.value, 'var(--aa-ink-2)', 'phone: the bell in the quiet ink, not amber');
   delete bell.parentNode.dataset.note; assert.equal(cascade(bell, phoneCss).color?.value, 'var(--aa-ink-2)', 'phone: the bell itself in the quiet ink');
   const { w: d } = deskWorld();
   d.st.sessions.ready.unshift({ id: 'notif:n1', title: 'Card payment due', kind: 'ready', note: true, app: 'money', unread: true, snoozed: false, pinned: false, actions: ['snooze', 'done'] });
   d.html.setAttribute('data-shell', 'desktop'); d.html.setAttribute('data-layout', 'ai-apps');
   (await layout()).default(d.api);
-  const drow = d.q('.aad-rw[data-sid="notif:n1"]'), dst = k => cascade(drow.querySelector(k), DESK_CSS);
-  assert.equal(dst('.aad-bell').color?.value, AMBER, 'desktop: an amber bell'); assert.equal(dst('.aad-st.is-new').background?.value, AMBER, 'and an amber unread dot');
-  assert.equal(cascade(d.q('.aad-rw[data-sid="r1"] .aad-st.is-new'), DESK_CSS).background?.value, 'var(--wz-accent, var(--aad-ink))', 'a chat\'s dot stays the accent');
-  delete drow.dataset.note; assert.equal(dst('.aad-bell').color?.value, 'var(--aad-ink-2)', 'desktop: the bell itself in the quiet ink');
+  // (the open sidebar's alerts are the shared list's alert rows, as on the phone: wizard-ux issue 1966; the rail keeps its flyout)
+  assert.equal(d.q('.aad-rw[data-sid="notif:n1"]'), null, 'no alert row of the sidebar\'s own');
   d.q('.aad-tog').dispatchEvent(new FakePointerEvent('click')); d.st.timers.length = 0;
   d.q('.aad-rk[data-k="ready"]').dispatchEvent(new FakePointerEvent('pointerenter')); d.st.timers.find(h => h.ms === 300).fn();
-  assert.equal(cascade(d.q('.aad-fly-i[data-sid="notif:n1"] .aad-bell'), DESK_CSS).color?.value, AMBER, 'the rail\'s flyout: the amber bell too');
+  assert.equal(cascade(d.q('.aad-fly-i[data-sid="notif:n1"] .aad-bell'), DESK_CSS).color?.value, 'var(--aad-ink-2)', 'the rail\'s flyout: the bell in the quiet ink too');
   // the shell side: sessions.list() adds the inbox's items (while a package lists them), open / act go to its handler
   const host = withSkinHostParts(read('web/core/skin-host.js'));
   const src = host.match(/  const NOTE_ID = [\s\S]*?\n  function inboxAct\(action, id\) \{[^\n]*\n/)[0];
@@ -1038,8 +1029,7 @@ test('round 7 + 15 desktop: the app panel and the docked chat are back (Arc), ca
   assert.equal(w.q('.aad-ptop').hidden, false, 'its header'); assert.equal(w.q('.aad-ptop').parentNode, p.appDesk, 'riding on the app desk');
   assert.equal(style(w.html)('--aad-app-w'), 'var(--aad-pane-app-width)', 'the panel width feeds --aad-app-w');
   assert.equal(orb(), 'calc(var(--aad-side) + var(--aad-chat-w, 0px) + (100vw - var(--aad-side) - var(--aad-chat-w, 0px) - var(--aad-app-w, 0px) - var(--aad-rs)) / 2 - 30px)', 'the orb stays in the middle of the room left between the panels');
-  w.q('.aad-pw').dispatchEvent(new FakePointerEvent('click')); assert.equal(H.aadWide, '', 'Wider');
-  w.q('.aad-pw').dispatchEvent(new FakePointerEvent('click')); assert.equal(H.aadWide, undefined, 'and back');
+  assert.equal(w.q('.aad-pw'), null, 'no Wider ⤢ in the app panel\'s header (wizard-ux issue 1964, James: it did nothing beside Full / Half screen)');
   w.q('.aad-px').dispatchEvent(new FakePointerEvent('click')); w.run(); assert.equal(w.st.gone.at(-1), 1, '✕ hides the panel: back to the main Chats desk');
   // a thread docks beside the sidebar; another thread slides in from the left
   p.go({ view: 'thread', thread: 'r1', desk: 1 });
@@ -1152,11 +1142,8 @@ test('round 7 + 15 desktop: a chat docks beside the sidebar (✕, Esc and ⌥W b
   chatDesk.append(dchats); stage.append(chatDesk); w.html.children[0].append(stage);
   w.st.sessions.ready[0].state = 'needs'; w.st.sessions.ready[1].state = 'done';
   (await layout()).default(w.api);
-  // Activity (Channels on for everyone, wizard-ux issue 1258): each folded header carries its count, Ready the pill
-  assert.equal(w.q('.aad-sec[data-sec="working"] .aad-sec-m').textContent, '1');
-  assert.equal(w.q('.aad-sec[data-sec="archive"] .aad-sec-m').textContent, '1');
-  assert.equal(w.q('.aad-sec[data-sec="ready"] .aad-sec-n').textContent, '2', 'Ready: what waits on the owner');
-  assert.deepEqual(w.qa('#aad-sec-ready .aad-rw').map(r => r.dataset.sid), ['r1', 'r2'], 'an open section shows its rows');
+  // (the open sidebar's sections, counts and rows are the pane's shared Chats list since wizard-ux issue 1966)
+  assert.equal(w.q('.aad-sec'), null, 'no section rows of its own'); assert.equal(w.q('.aad-rw'), null, 'no rows of its own');
   // a thread: round 15 (round 7's column) docked beside the sidebar, its title and ✕ over it; Esc / ⌥W / ✕ back Home
   w.st.route = { home: false, view: 'thread', thread: 'r1', desk: 1 }; w.emit('route', w.st.route);
   assert.equal(w.html.dataset.aadChat, 'on', 'the docked column'); assert.equal(w.q('.aad-cx').hidden, false);
@@ -1180,13 +1167,7 @@ test('round 7 + 15 desktop: a chat docks beside the sidebar (✕, Esc and ⌥W b
   assert.equal(w.html.dataset.aadChat, 'on', 'the docked chat column beside the folded rail');
   assert.ok(w.q('.aad-rk[data-k="ready"]').classList.contains('is-on'), 'its group marked');
   w.q('.aad-tog').dispatchEvent(new FakePointerEvent('click')); assert.equal(w.html.dataset.aadSide, 'open', 'the toggle is the only thing that expands');
-  // the real desktop.css on the section headers the view drew: Archive a step quieter; a folded section's tally drawn
-  w.html.setAttribute('data-shell', 'desktop'); w.html.setAttribute('data-layout', 'ai-apps');
-  const op = sel => cascade(w.q(sel), DESK_CSS).opacity?.value;
-  assert.equal(op('.aad-sec[data-sec="archive"] > .aad-sec-w'), '.85', 'Archive a step quieter'); assert.equal(op('.aad-sec[data-sec="archive"] > .aad-sec-c'), '.85');
-  assert.equal(op('.aad-sec[data-sec="working"] > .aad-sec-w'), undefined, 'the other headers as they are');
-  // (a folded header's count: its .aad-sec-m number, checked above; desktop.css's older .aad-tally is never drawn while
-  // Activity is on, desktop.js actOn)
+  // (the section headers' look is the shared list's own since wizard-ux issue 1966)
 });
 test('round 7: a notification opens as a chat (never Home), its route choice in the action row, a bell on its message', async () => {
   const { w } = deskWorld();
@@ -1343,7 +1324,7 @@ test('desktop app panel: an app\'s title-bar tools (Morning Report\'s ‹ date �
   w.st.renderTools = (frame, slot) => { asked.push(frame); slot.replaceChildren(...tools.map(t => { const b = node('button', 'tool'); b.textContent = t; return b; })); return tools.length > 0; };
   p.go({ view: 'desk', desk: 4 });
   const top = w.q('.aad-ptop'), slot = w.q('.aad-ptop .aad-ptools');
-  assert.deepEqual(top.children.map(c => c.className).filter(c => !/aad-modes|aad-pside/.test(c)), ['aad-pti', 'aad-ptn', 'aad-ptools', 'aad-ib aad-pw', 'aad-ib aad-px'], 'round 15: icon, name, the tools, then Wider and ✕ in the app panel\'s header');
+  assert.deepEqual(top.children.map(c => c.className).filter(c => !/aad-modes/.test(c)), ['aad-pti', 'aad-ptn', 'aad-ptools', 'aad-ib aad-px'], 'round 15: icon, name, the tools, then Hide in the app panel\'s header (issue 1964: no Wider)');
   assert.equal(slot.hidden, true, 'no tools yet: the slot is hidden'); assert.ok(asked.includes(p.appWins[0].querySelector('iframe')), 'the shared host renderer is asked for the panel window\'s frame');
   tools = ['‹', 'Today', '›', 'PDF']; w.st.hostChanged(); w.run(); await settle();
   assert.equal(slot.hidden, false, 'a late registration shows up (the host lifecycle)'); assert.deepEqual(slot.children.map(b => b.textContent), ['‹', 'Today', '›', 'PDF']);
@@ -1796,11 +1777,8 @@ test('round 13: Snoozed from the stock snooze state, with and without the snooze
   const { w, store } = deskWorld();
   w.st.sessions.snoozed = [{ id: 'z1', title: 'Later one', kind: 'snoozed', unread: false, pinned: false, actions: ['restore', 'done'] }, { id: 'z2', title: 'Later two', kind: 'snoozed', unread: false, pinned: false, actions: ['restore'] }];
   (await layout()).default(w.api);
-  assert.deepEqual(w.qa('.aad-sec').map(h => `${h.dataset.sec}:${h.getAttribute('aria-expanded')}`), ['working:false', 'ready:true', 'snoozed:false', 'archive:false'], 'Activity (issue 1258): Working, Ready, Recent, then Snoozed and Archived folded at the bottom; an empty Recent is not drawn (issue 1731)');
-  assert.equal(w.q('.aad-sec[data-sec="snoozed"] .aad-sec-w').textContent, 'Snoozed');
-  assert.equal(w.q('.aad-sec[data-sec="snoozed"] .aad-sec-m').textContent, '2', 'its count when folded');
-  w.q('.aad-sec[data-sec="snoozed"]').dispatchEvent(new FakePointerEvent('click'));
-  assert.deepEqual(w.qa('.aad-rw[data-kind="snoozed"]').map(r => r.dataset.sid), ['z1', 'z2']); assert.equal(store.sections.snoozed, true);
+  // (the open sidebar's Snoozed fold is the shared Chats list's, as on the phone: wizard-ux issue 1966)
+  assert.equal(w.q('.aad-sec[data-sec="snoozed"]'), null, 'no Snoozed section of the sidebar\'s own');
   w.q('.aad-tog').dispatchEvent(new FakePointerEvent('click'));
   assert.deepEqual(w.q('.aad-rlist').children.map(n => n.dataset.k + ':' + n.querySelector('.aad-rk-n').dataset.n + n.querySelector('.aad-rk-w').textContent), ['working:1Working', 'snoozed:2Snoozed', 'ready:2Ready'], 'the rail (round 22): Working, Snoozed, then Ready');
   // the phone's drawer: the same sections
@@ -1827,13 +1805,9 @@ test('round 14: the phone Home grid shows Chats\' count once (on the first Chats
 test('round 14: the sidebar marks the chat in front without rebuilding; a fold never re-tiles every desk; the hidden desks keep their geometry', async () => {
   const { w } = deskWorld();
   (await layout()).default(w.api);
-  const rows = w.qa('.aad-rw');
+  // (the chat in front is marked on the shared list's row since wizard-ux issue 1966: tests/chats-shell-parity.test.mjs)
   w.st.route = { home: false, view: 'thread', thread: 'r1', desk: 1 }; w.emit('route', w.st.route);
-  const rows2 = w.qa('.aad-rw');
-  assert.ok(rows.length === rows2.length && rows.every((n, i) => n === rows2[i]), 'the same rows');
-  assert.ok(w.q('.aad-rw[data-sid="r1"]').classList.contains('is-cur')); assert.equal(w.q('.aad-rw[data-sid="r1"] .aad-row').getAttribute('aria-current'), 'page');
-  w.st.route = { home: false, view: 'thread', thread: 'r2', desk: 1 }; w.emit('route', w.st.route);
-  assert.equal(w.q('.aad-rw[data-sid="r1"]').classList.contains('is-cur'), false); assert.ok(w.q('.aad-rw[data-sid="r2"]').classList.contains('is-cur'));
+  assert.equal(w.q('.aad-rw'), null, 'no rows of the sidebar\'s own to mark');
   // a fold re-tiles (a page resize) only when a desk tiles several windows
   for (const [wins, want] of [[1, 0], [2, 1]]) {
     const p = await panelDesk({ wins }); p.go({ view: 'desk', desk: 4 }); p.w.run();
@@ -1859,14 +1833,8 @@ test('round 14: desks out of sight keep their geometry when the sidebar folds', 
 });
 
 test('round 14: Archive stays quieter but readable on the light skins (sidebar, rail, phone drawer)', async () => {
-  const { w } = deskWorld(); w.html.setAttribute('data-shell', 'desktop'); w.html.setAttribute('data-layout', 'ai-apps'); w.html.dataset.skin = 'paper-light';
-  (await layout()).default(w.api);
-  const d = read('web/layouts/ai-apps/desktop.css'), op = (n, css) => cascade(n, css).opacity?.value ?? '1';
-  const arch = w.q('.aad-sec[data-sec="archive"]'), ready = w.q('.aad-sec[data-sec="ready"]');
-  const label = h => h.children.find(c => c.tagName === 'SPAN' && !/aad-sec-[mn]/.test(c.className));
-  assert.ok(label(arch), 'the Archive header drew its word');
-  assert.equal(op(label(arch), d), '.85', 'Archive a step quieter (desktop sidebar), still readable');
-  assert.equal(op(label(ready), d), '1', 'Ready is not dimmed');
+  // (the desktop sidebar's Archived fold is the shared Chats list's since wizard-ux issue 1966; the phone drawer here)
+  const op = (n, css) => cascade(n, css).opacity?.value ?? '1';
   const p = world(); p.html.setAttribute('data-shell', 'phone'); p.html.setAttribute('data-layout', 'ai-apps'); p.html.dataset.skin = 'paper-light';
   (await layout()).default(p.api); p.q('.aa-menu').dispatchEvent(new FakePointerEvent('click'));
   const css = read('web/layouts/ai-apps/layout.css'), pa = p.q('.aa-sec[data-sec="archive"]');
@@ -2054,20 +2022,25 @@ test('round 18 parts: Ready sorts (stock Priority / Newest / Oldest), grouped li
   assert.equal(P.tidyWords(3, '24h'), 'Closed 3 apps you hadn\'t used in 24 hours');
 });
 
-test('round 18 item 3b + 4e desktop (Activity since issue 1258: the one sort, chosen in Settings): ⌥↓ / ⌥↑ walk exactly the drawn Ready, wrapping', async () => {
-  const at = h => new Date(Date.UTC(2026, 10, 3, h)).toISOString();
-  const row = (id, title, state, h, extra = {}) => ({ id, title, kind: 'ready', state, at: at(h), unread: false, pinned: false, actions: ['snooze', 'done'], ...extra });
+// The pane's shared Chats list as Chats draws it (wizard-ux issue 1966): a `.ch-list` with the Inbox section's rows, a
+// thread's [data-chopen] and an alert's [data-chnotif], in the order given (Chats' own sort, tested with Chats).
+function paneStandIn(w, ids) {
+  w.api.sessions.channels = box => {
+    const list = new El('div'); list.className = 'ch-list';
+    const sec = new El('section'); sec.className = 'ch-sec ch-act ch-ib open'; sec.dataset.sec = 'ready';
+    for (const id of ids) { const b = new El('button'); b.className = 'ch-row ch-ib-row'; if (id.startsWith('notif:')) b.dataset.chnotif = id.slice(6); else b.dataset.chopen = id; sec.append(b); }
+    list.append(sec); box.replaceChildren(list); return true;
+  };
+}
+test('round 18 item 3b + 4e desktop (Activity; the pane\'s shared list since issue 1966): ⌥↓ / ⌥↑ walk exactly the drawn Inbox, wrapping; the sort chosen in Settings', async () => {
+  const drawn = ['c2', 'notif:n1', 'c4', 'c1', 'c3', 'notif:n3', 'c5'];
   for (const order of ['priority', 'subject', 'newest', 'oldest']) {
     const { w, keys } = deskWorld();
     let saved = order, sets = [];
     w.api.sessions.order = () => saved; w.api.sessions.setOrder = o => { sets.push(o); saved = o; return true; };
-    w.st.sessions.ready = [row('c1', 'Old fyi', 'fyi', 1), row('c2', 'Needs me', 'needs', 2), row('notif:n1', 'Urgent note', '', 5, { note: true, needs: true }), row('c3', 'Plain', 'none', 6),
-      row('c4', 'Approve', 'approval', 0), row('notif:n3', 'FYI note', '', 4, { note: true }), row('c5', 'Newer fyi', 'fyi', 8), row('notif:n2', 'Read note', '', 7, { note: true, snoozed: true })];
+    paneStandIn(w, drawn);
     (await layout()).default(w.api);
-    const drawn = w.qa('#aad-sec-ready .aad-rw').map(n => n.dataset.sid);
-    assert.equal(drawn.length, 8, order + ': every Ready row drawn');
-    assert.equal(w.q('#aad-sec-ready .aad-grp'), null, order + ': Activity draws Ready as one list (Channels do the grouping)');
-    assert.ok(w.q('.aad-sech .aad-act-orderb'), 'the one sort always on Ready\'s header');
+    assert.equal(w.q('.aad-rw'), null, order + ': no rows of the sidebar\'s own under the shared list');
     const want = globalThis.WizChatsListModel.activitySortOf(order);
     assert.equal(w.q('[data-aad-act-order][aria-checked="true"]').dataset.aadActOrder, want, order + ': the stock choice in Settings (By subject reads as Newest)');
     const alt = code => keys.find(h => h.down({ altKey: true, code, key: code }) === true);
@@ -2086,9 +2059,8 @@ test('round 18 item 3b + 4e desktop (Activity since issue 1258: the one sort, ch
     const other = want === 'oldest' ? 'newest' : 'oldest';
     w.q(`[data-aad-act-order="${other}"]`).dispatchEvent(new FakePointerEvent('click'));
     assert.deepEqual(sets, [other], 'saved through the stock order (api.sessions.setOrder)');
-    const again = w.qa('#aad-sec-ready .aad-rw').map(n => n.dataset.sid);
     w.st.route = { home: true, view: 'desk', thread: null, desk: 1 }; alt('ArrowDown');
-    assert.equal(w.st.opened.at(-1).replace(/^thread:/, ''), again[0], 'from Home: the top of the new order');
+    assert.equal(w.st.opened.at(-1).replace(/^thread:/, ''), drawn[0], 'from Home: the top of the drawn list');
   }
 });
 
@@ -2260,7 +2232,7 @@ test('round 19 item 1 desktop: the folded rail used as it is: first, next, wrap,
   w.q('.aad-rk[data-k="ready"]').dispatchEvent(new FakePointerEvent('pointerenter'));
   assert.equal(w.q('.aad-fly'), null, 'not at once');
   const t = w.st.timers.find(h => h.ms === 300); assert.ok(t, 'a 300 ms hover delay'); t.fn();
-  assert.equal(w.q('.aad-fly .aad-pop-h').textContent, 'Ready · 5');
+  assert.equal(w.q('.aad-fly .aad-pop-h').textContent, 'Inbox · 5');
   assert.equal(w.q('.aad-fly-i .aad-fly-t').textContent, 'Plain'); assert.ok(w.q('.aad-fly-i .aad-fly-at'), 'and its time');
   assert.equal(w.escape(), true);
   assert.equal(w.q('.aad-fly'), null, 'Esc closes the flyout'); assert.equal(w.html.dataset.aadChat, 'on', 'and only the flyout');
@@ -2269,7 +2241,7 @@ test('round 19 item 1 desktop: the folded rail used as it is: first, next, wrap,
   assert.ok(!/sessions\.open[^\n]*send|leaveAfterSend/.test(noComments(read('web/layouts/ai-apps/desktop.js'))), 'nothing advances on send');
 });
 
-test('round 19 item 2 / round 22 desktop (Activity since issue 1258): one Sort (Newest / Oldest / Needs you first, the stock key) as a drop-down on Ready\'s header, always shown, no Group; Settings follows', async () => {
+test('round 19 item 2 / round 22 desktop (Activity since issue 1258): one Sort (Newest / Oldest / Needs you first, the stock key) in Settings, no Group; on the list it is the shared filter sheet (issue 1966)', async () => {
   const { w } = deskWorld();
   let saved = 'subject'; const sets = [];
   w.api.sessions.order = () => saved; w.api.sessions.setOrder = o => { sets.push(o); saved = o; return true; };
@@ -2280,23 +2252,11 @@ test('round 19 item 2 / round 22 desktop (Activity since issue 1258): one Sort (
   assert.deepEqual(node.querySelectorAll('[data-aad-act-order]').map(b => b.querySelector('b').textContent + ':' + b.getAttribute('aria-checked')), ['Newest first:true', 'Oldest first:false', 'Needs you first:false'], 'stock By subject reads as Newest');
   assert.equal(node.querySelector('[data-aad-group]'), null, 'no grouping: Channels do the grouping now');
   assert.equal(node.querySelector('[data-aad-sortshown]'), null, 'round 22: no "Show sort control" switch any more'); assert.equal(w.q('.aad-sort'), null, 'no native select anywhere');
-  const b = w.q('.aad-sech .aad-act-orderb'); assert.ok(b, 'shown on Ready\'s header from the start'); assert.equal(b.querySelector('.aad-sortb-w').textContent, 'Newest');
-  assert.equal(w.q('.aad-sech .aad-groupb'), null, 'no Group drop-down');
-  b.dispatchEvent(new FakePointerEvent('click'));
-  assert.deepEqual(w.qa('.aad-sortmenu .aad-pop-h').map(n => n.textContent), ['Sort'], 'the sort menu holds only the order');
-  assert.deepEqual(w.qa('.aad-sortmenu .aad-pop-i').map(n => n.textContent + ':' + n.getAttribute('aria-checked')), ['Newest first:true', 'Oldest first:false', 'Needs you first:false']);
-  w.q('.aad-sortmenu [data-act-order="oldest"]').dispatchEvent(new FakePointerEvent('click'));
-  assert.deepEqual(sets, ['oldest']); assert.equal(w.q('.aad-sortmenu'), null);
-  assert.equal(w.q('.aad-act-orderb .aad-sortb-w').textContent, 'Oldest'); assert.equal(w.st.setting[1].querySelector('[data-aad-act-order="oldest"]').getAttribute('aria-checked'), 'true', 'Settings follows');
+  // (the sort on the list itself is the shared title bar's filter sheet, as on the phone: wizard-ux issue 1966)
+  assert.equal(w.q('.aad-act-orderb'), null, 'no sort drop-down of the sidebar\'s own'); assert.equal(w.q('.aad-sech .aad-groupb'), null, 'no Group drop-down');
+  w.st.setting[1].querySelector('[data-aad-act-order="oldest"]').dispatchEvent(new FakePointerEvent('click')); assert.deepEqual(sets, ['oldest']);
+  assert.equal(w.st.setting[1].querySelector('[data-aad-act-order="oldest"]').getAttribute('aria-checked'), 'true', 'Settings follows');
   w.st.setting[1].querySelector('[data-aad-act-order="priority"]').dispatchEvent(new FakePointerEvent('click')); assert.deepEqual(sets, ['oldest', 'priority']);
-  assert.equal(w.q('.aad-act-orderb .aad-sortb-w').textContent, 'Needs you', 'the header follows Settings');
-  // desktop.css on the control and the menu the view drew (wizard-ux issue 1674)
-  w.html.setAttribute('data-shell', 'desktop'); w.html.setAttribute('data-layout', 'ai-apps');
-  const ob = w.q('.aad-act-orderb'); assert.ok(ob.classList.contains('aad-sortb'));
-  assert.equal(cascade(ob, DESK_CSS).font?.value, '400 0.6875rem / 1 var(--wz-font-ui)', 'the control in the shell\'s font token');
-  ob.dispatchEvent(new FakePointerEvent('click'));
-  const mi = cascade(w.q('.aad-sortmenu .aad-pop-i'), DESK_CSS);
-  assert.deepEqual([mi.height?.value, mi.gap?.value], ['36px', '10px'], 'its menu is the view\'s own menu (the shell type), not a native list');
   // core (the real host): a layout's group in Settings › Chats & app screens, released on teardown
   const regs = [], unregs = [], slotKids = [];
   const D = await layoutApi({ extra: ctx => { ctx.WosSettings = { register: r => { regs.push(r); return () => unregs.push(r.id); } }; } });
@@ -2311,6 +2271,10 @@ test('round 19 item 2 / round 22 desktop (Activity since issue 1258): one Sort (
 test('round 19 item 3 desktop: a quieter expanded sidebar (small muted normal-weight headers, Ready\'s amber count kept, Archive quietest); rows unchanged', async () => {
   const css = read('web/layouts/ai-apps/desktop.css'), at19 = css.indexOf('/* ---------- round 19'), r19 = css.slice(at19, css.indexOf('/* ---------- round', at19 + 10));
   const p = await panelDesk(), { w, style } = p;
+  // (the sidebar draws these only on its older stock list since wizard-ux issue 1966: its Inbox is the pane's shared
+  // list; the rules stay for that list, checked on the same markup it draws)
+  const scroll = w.q('.aad-scroll'), secHead = (k, open) => { const h = node('button', 'aad-lab aad-sec', scroll); h.dataset.sec = k; h.setAttribute('aria-expanded', String(open)); node('span', 'aad-sec-w', h); if (k === 'ready') node('b', 'aad-sec-n', h); node('i', 'aad-ico aad-sec-c', h); const b = node('div', 'aad-sec-b', scroll); b.id = 'aad-sec-' + k; if (open) { const rw = node('div', 'aad-rw', b); node('span', 'aad-row-t', node('button', 'aad-row', rw)); } return h; };
+  secHead('working', false); secHead('ready', true); secHead('archive', false);
   const sec = style(w.q('.aad-sec[data-sec="ready"]'));
   assert.deepEqual([sec('height'), sec('color'), sec('font')], ['26px', 'var(--aad-ink-3)', '400 0.75rem / 1 var(--wz-font-ui)'], 'section headers 12 px, muted, normal weight');
   assert.equal(style(w.html)('--aad-ink-3'), 'var(--wz-text-muted, var(--ink-3, var(--aad-ink-2)))', 'the muted ink from the skin');
@@ -2370,13 +2334,14 @@ test('round 21: hold-⌥ chips per state: a keycap on each visible target, 1–9
   const { w, keys } = deskWorld();
   const guides = [];
   w.api.keys = { on: h => { keys.push(h); return () => {}; }, guide: (g, o) => { guides.push([g, o]); return () => {}; } };
+  paneStandIn(w, ['r1', 'r2']); // the pane's shared Chats list (wizard-ux issue 1966)
   (await layout()).default(w.api);
   assert.equal(guides.length, 1); assert.deepEqual(guides[0][1], { only: true }, 'only the view\'s chips');
   const raw = () => guides[0][0](), chips = () => raw().map(c => `${c.key}@${String(c.el.className || '').split(' ').filter(x => x !== 'aad-ib' && x !== 'aad-ico')[0]}`);
   const open = chips();
   for (const want of ['Space@aad-orbbtn', 'H@aad-wsn', 'O@aad-wsc', 'L@aad-tog', 'K@aad-find', 'N@aad-new', 'S@aad-set', 'R@aad-vtog', 'A@aad-vti', 'T@aad-tidy-i']) assert.ok(open.includes(want), `open: ${want} in ${open}`);
-  const marked = raw().filter(c => /aad-row/.test(c.el.className));
-  assert.ok(marked.length >= 1 && marked.every(c => ['↓', '↑'].includes(c.key) && c.at === 'inside-l' && c.el.closest('.aad-rw').dataset.aadKh === c.key), 'the ↓ / ↑ rows are marked so they make room for the keycap');
+  const marked = raw().filter(c => c.el.dataset?.chopen);
+  assert.ok(marked.length >= 1 && marked.every(c => ['↓', '↑'].includes(c.key) && c.at === 'inside-l'), 'the ↓ / ↑ keycaps sit inside the shared list\'s rows (issue 1966)');
   assert.ok(!open.some(c => /@aad-(rtog|rnew|rfind|rset)/.test(c)), 'the rail\'s twins are not shown while the sidebar is open');
   const tiles = raw().filter(c => /aad-tile/.test(c.el.className));
   const digits = tiles.filter(c => /^\d$/.test(c.key)).map(c => c.key);
@@ -2401,12 +2366,10 @@ test('round 21: hold-⌥ chips per state: a keycap on each visible target, 1–9
   const on = (n, k) => { assert.ok(n, 'drawn'); return cascade(n, DESK_CSS)[k]?.value ?? ''; };
   assert.ok(w.html.dataset.aadFocus !== undefined, 'Home (focus)'); assert.equal(on(w.q('.aad-hback'), 'display'), 'grid', 'Home shows one quiet ◫ to come back');
   keys[1].down({ altKey: true, code: 'KeyH' }); w.run(); assert.equal(w.html.dataset.aadFocus, undefined); assert.notEqual(on(w.q('.aad-hback'), 'display'), 'grid', 'and only at Home');
-  const badge = w.q('.aad-vtb'), kh = raw().find(c => /aad-row/.test(c.el.className))?.el.closest('.aad-rw'), chip = node('b', 'kh-chip', w.html.children[0]);
-  assert.ok(kh?.dataset.aadKh, 'a ↓ / ↑ row marked'); const khTitle = kh.querySelector('.aad-chat');
-  const pad0 = on(khTitle, 'padding-left'), op0 = on(badge, 'opacity');
+  const badge = w.q('.aad-vtb'), chip = node('b', 'kh-chip', w.html.children[0]);
+  const op0 = on(badge, 'opacity');
   w.html.classList.add('key-hints-on');
   assert.equal(on(badge, 'opacity'), '.35', 'count badges step back while ⌥ is held'); assert.notEqual(op0, '.35');
-  assert.equal(on(khTitle, 'padding-left'), '34px', 'the ↓ / ↑ row makes room: the keycap never touches its title'); assert.notEqual(pad0, '34px');
   assert.deepEqual([on(chip, 'background'), on(chip, 'border-bottom-width')], ['var(--aad-canvas)', '2px'], 'hints are keycaps (skin tokens), unlike the round amber count badges');
 });
 
@@ -2472,7 +2435,7 @@ test('round 20 item 1 / round 21: ⌥H Home folds both sides away, closes the ch
   assert.equal(xw.st.opened.at(-1), 'thread:r2', '⌥↓ from the docked chat (r1) opens the next one');
   xw.st.route = { home: false, view: 'desk', thread: null, desk: 4 }; xw.emit('route', xw.st.route); xw.run();
   const xk = x.keys[1];
-  xk.down({ altKey: true, code: 'KeyF' }); xw.run(); assert.equal(xw.html.dataset.aadWide, '', 'wide (⌥F)');
+  xk.down({ altKey: true, code: 'KeyF' }); xw.run(); assert.equal(xw.html.dataset.aadWide, undefined, '⌥F no longer flips the panel wide (wizard-ux issue 1964)');
   const g = xw.q('.aad-grip[data-grip="side"]'); g.dispatchEvent(new FakePointerEvent('keydown', { key: 'ArrowRight' })); const sideW = xw.html.style.getPropertyValue('--aad-side-w'); assert.equal(sideW, '304px');
   const thread0 = xw.st.opened.at(-1); assert.equal(xw.html.dataset.aadChat, 'on');
   xk.down({ altKey: true, code: 'KeyH' }); xw.run();
@@ -2483,7 +2446,7 @@ test('round 20 item 1 / round 21: ⌥H Home folds both sides away, closes the ch
   assert.equal(xw.html.dataset.aadFocus, undefined);
   assert.deepEqual(xw.st.opened.slice(opened), [thread0], 'the chat that was docked opened again');
   assert.ok(xw.st.gone.slice(gone).includes(4), 'the app back on its desk');
-  assert.equal(xw.html.dataset.aadWide, '', 'wide again'); assert.equal(xw.html.style.getPropertyValue('--aad-side-w'), sideW, 'the widths as they were');
+  assert.equal(xw.html.dataset.aadWide, undefined, 'as narrow as it was'); assert.equal(xw.html.style.getPropertyValue('--aad-side-w'), sideW, 'the widths as they were');
 });
 
 test('round 20 item 9 / round 22 (Activity since issue 1258): Ready is one list in the chosen Sort (each row its time since the last message, no status tags), never status groups', async t => {
@@ -2500,24 +2463,13 @@ test('round 20 item 9 / round 22 (Activity since issue 1258): Ready is one list 
   (await layout()).default(w.api);
   assert.ok(asked.every(o => o?.activity === true), 'the sidebar asks Chats for the Activity list');
   assert.equal(w.q('.aad-grp'), null, 'no sub-headers');
-  const ready = () => w.qa('.aad-rw[data-kind="ready"]').map(r => r.dataset.sid);
-  assert.deepEqual(ready(), ['r1', 'r3', 'r2'], 'Newest: newer FYI and plain chat before older Needs you');
-  assert.equal(w.q('.aad-tag'), null, 'round 22: no status tags');
-  const times = w.qa('.aad-rw[data-kind="ready"] .aad-time'); assert.equal(times.length, 3, 'round 22: each Ready row shows how long ago');
-  assert.deepEqual(times.map(t => t.textContent), ['5m', '1h', '3h'], 'its time since the last message (newest first)');
-  for (const [sort, want] of [['oldest', ['r2', 'r3', 'r1']], ['newest', ['r1', 'r3', 'r2']]]) {
-    w.q('.aad-act-orderb').dispatchEvent(new FakePointerEvent('click'));
-    w.q(`.aad-sortmenu [data-act-order="${sort}"]`).dispatchEvent(new FakePointerEvent('click'));
-    assert.deepEqual(ready(), want, `Ready follows ${sort} from the sidebar Sort control`);
-    assert.equal(w.q('.aad-grp'), null, 'sorting never adds status groups');
-    for (const code of ['ArrowDown', 'ArrowUp']) for (let i = 0; i < want.length; i++) {
-      w.st.route = { home: false, view: 'thread', thread: want[i], desk: 1 }; w.emit('route', w.st.route);
-      assert.ok(keys.some(h => h.down({ altKey: true, code, key: code }) === true));
-      const step = code === 'ArrowDown' ? 1 : -1;
-      assert.equal(w.st.opened.at(-1), 'thread:' + want[(i + step + want.length) % want.length], `${sort}: ⌥${code} walks the drawn list, wrapping`);
-    }
-  }
-  { // desktop.css on a drawn row: its time steps aside for the ⋯ on hover, held or focused
+  // (the Inbox rows, their times and their sort are the pane's shared Chats list since wizard-ux issue 1966: the
+  // phone's rows, tests/qa-chats-shell-parity.cjs; ⌥↓ / ⌥↑ walk it as drawn, round 18 above)
+  assert.equal(w.q('.aad-rw'), null, 'no rows of the sidebar\'s own'); assert.equal(w.q('.aad-act-orderb'), null, 'no sort control of its own');
+  // a search hit (⌥K) is still the sidebar's own row, with its time
+  w.q('.aad-find').dispatchEvent(new FakePointerEvent('click'));
+  { const f = w.q('.aad-q'); f.value = 'Plain middle'; f.dispatchEvent(new FakePointerEvent('input')); }
+  { // desktop.css on a drawn row (a search hit): its time steps aside for the ⋯ on hover, held or focused
     w.html.setAttribute('data-shell', 'desktop'); w.html.setAttribute('data-layout', 'ai-apps');
     const rw = w.q('.aad-rw'), tm = rw.querySelector('.aad-time'), vis = (o) => cascade(tm, DESK_CSS, o).visibility?.value ?? '';
     assert.ok(tm, 'a row with its time'); assert.notEqual(vis(), 'hidden');
@@ -3130,8 +3082,9 @@ for (const order of ['newest', 'oldest']) for (const mode of ['none']) test(`sha
   const drawn = M.visibleIds(rows, order, mode);
   // Chats' own session list hands Activity its rows already in the chosen order; the layout draws them as given.
   w.st.sessions = { ready: drawn.map(id => rows.find(r => r.id === id)), working: [], snoozed: [], archive: [] };
+  paneStandIn(w, drawn); // the open sidebar's Inbox is the pane's shared Chats list (wizard-ux issue 1966)
   (await layout()).default(w.api);
-  assert.deepEqual(w.qa('#aad-sec-ready .aad-rw').map(n => n.dataset.sid), drawn, 'sidebar');
+  assert.equal(w.q('.aad-rw'), null, 'sidebar: no rows of its own');
   // Walk via the real layout key handler; notifications route through the same row identity.
   let cur = null;
   for (const id of drawn) {
@@ -3156,14 +3109,14 @@ for (const order of ['newest', 'oldest']) for (const mode of ['none']) test(`sha
   assert.deepEqual(phone.qa('.aa-chat').map(n => n.dataset.sid), M.visibleIds(rows, order, 'none'), 'phone drawer Sort');
 });
 
-test('desktop AI apps sidebar and rail flyout keep phone hours across midnight with a fixed clock', async t => {
+test('desktop AI apps rail flyout keeps phone hours across midnight with a fixed clock', async t => {
   const now = Date.UTC(2026, 10, 3, 5);
   t.mock.method(Date, 'now', () => now);
   const { w, keys } = deskWorld();
   w.st.sessions.ready = [{ id: 'midnight', title: 'Yesterday afternoon', kind: 'ready', state: 'fyi', at: new Date(now - 15 * 3600e3).toISOString(), actions: [] }];
   w.st.sessions.working = []; w.st.sessions.snoozed = []; w.st.sessions.archive = [];
   (await layout()).default(w.api);
-  assert.equal(w.q('.aad-rw[data-sid="midnight"] .aad-time').textContent, '15h');
+  // (the open sidebar's row time is the shared list's own since wizard-ux issue 1966; the folded rail's flyout here)
   keys[1].down({ altKey: true, code: 'KeyL' });
   w.q('.aad-rk[data-k="ready"]').dispatchEvent(new FakePointerEvent('pointerenter'));
   w.st.timers.find(x => x.ms === 300 && !x.dead).fn();
@@ -3225,11 +3178,10 @@ test('desktop app panel: an app with its companion pane (Video Editor video + Fe
   assert.equal(H.aadWide, undefined, 'and goes back to the side when the companion closes');
   assert.equal(style(app)('inset'), '0', 'a single window still fills the panel');
   assert.ok(twoPx > parseFloat(w.html.style['--aad-app-px']), `the panel was wider for two columns (${twoPx}px), and returns after`);
-  // the owner's own Wider / Back press wins over the automatic one
+  // the companion again: wide again, with no button for it in the header (wizard-ux issue 1964)
   side.className = 'win'; w.st.hostChanged(); w.run(); await settle(); assert.equal(H.aadWide, '', 'the companion again: wide');
-  w.q('.aad-pw').dispatchEvent(new FakePointerEvent('click')); assert.equal(H.aadWide, undefined, 'Back pressed');
-  side.className = 'win gone'; w.st.hostChanged(); w.run(); await settle(); assert.equal(H.aadWide, undefined);
-  side.className = 'win'; w.st.hostChanged(); w.run(); await settle();
+  assert.equal(w.q('.aad-pw'), null, 'automatic, no Wider button');
+  side.className = 'win gone'; w.st.hostChanged(); w.run(); await settle(); assert.equal(H.aadWide, undefined, 'and back');
 });
 
 test('desktop open chat stays on the same thread through Ready → Working → Ready and Archive', async () => {
@@ -3286,7 +3238,8 @@ test('agent choices: with a second agent the Activity sidebar draws no agent chi
   assert.equal(row?.children.length || 0, 0);
   assert.equal(w.calls.length, 0, 'no Focus set by the sidebar');
   assert.ok(w.sessionsSeen.length && w.sessionsSeen.every(o => o?.activity === true), 'the sidebar reads the Activity list');
-  assert.match(w.q('.aad-scroll').textContent, /Ready one/, 'the chats are listed');
+  // (every agent's chats are listed by the pane's shared Chats list, as on the phone: wizard-ux issue 1966)
+  assert.equal(w.q('.aad-rw'), null, 'no rows of the sidebar\'s own');
 });
 
 test('agent choices: one agent (or none known) = no control at all', async () => {

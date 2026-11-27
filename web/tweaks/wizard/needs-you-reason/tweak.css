@@ -1,5 +1,0 @@
-/* Say why a chat needs you (wizard-agent-service issue 469). Off by default; the panel reuses .ch-fail. */
-html[data-tweaks~="wizard/needs-you-reason"] .ch-fail.ch-bg-reason { background: color-mix(in srgb, var(--amber, var(--wz-accent)) 9%, transparent); border-color: color-mix(in srgb, var(--amber, var(--wz-accent)) 35%, transparent); }
-html[data-tweaks~="wizard/needs-you-reason"] .ch-fail.ch-bg-reason .lb { color: var(--amber, var(--wz-accent)); }
-html[data-tweaks~="wizard/needs-you-reason"] .ch-fail.ch-bg-reason .ch-fail-b { display: flex; gap: 8px; flex-wrap: wrap; }
-html[data-tweaks~="wizard/needs-you-reason"] .ch-fail.ch-bg-reason [data-background-dismiss] { background: transparent; color: var(--ink, inherit); border: 1px solid color-mix(in srgb, var(--ink, currentColor) 25%, transparent); }

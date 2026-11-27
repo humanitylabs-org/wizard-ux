@@ -30,7 +30,9 @@
   // An app the shell opened by itself (`seed`: a new device's starter apps) is not the owner's choice, so it never
   // reaches the box: a fresh phone or test browser joining must not pop Topics open on every device (James, 6 Nov 2026).
   // It travels once the owner opens it himself (the shell clears `seed`).
-  const syncable = w => !!w && APPS.has(w.app) && !window.WosFeatures?.retired(w) && !w.bound && !w.from && !w.servicesAs && !w.preview && !w.seed;
+  // An agent-locked Chats window (the phone's Apps section, ux#2007) stays on its device too: each shell keeps or folds
+  // its own (core/chats.js migrateChatsFocus), so one device's reload never closes it on another.
+  const syncable = w => !!w && APPS.has(w.app) && !window.WosFeatures?.retired(w) && !w.bound && !w.from && !w.servicesAs && !w.preview && !w.seed && !(w.app === 'chats' && w.agent);
   function pick(w) {
     const o = { id: w.id, app: w.app };
     for (const k of FIELDS) { const v = w[k]; if (v != null && v !== '' && !(k === 'thread' && v === '__new__')) o[k] = v; }

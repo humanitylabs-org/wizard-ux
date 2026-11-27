@@ -41,8 +41,11 @@
   function isOwn(u) {
     if(u?.protocol==='wizard:' && u.hostname==='install') return true;
     if (!u || u.origin !== location.origin) return false;
-    // Only thread links own the old launcher roots; /?open=… and attachments are not shell routes.
+    // Thread links and app links (`?open=<app>`) own the old launcher roots; other root parameters and attachments are not shell routes.
     if ((u.pathname === '/' || u.pathname === '/wizard/') && SESSION_ID.test(u.searchParams.get('session') || '')) return true;
+    // `/?open=<app>` (the link the app builder hands the owner, wizard-ux issue 1875) opens that app in Wizard, never
+    // Wizard inside a link window titled with the host.
+    if ((u.pathname === '/' || u.pathname === '/wizard/') && /^[a-z0-9-]{1,40}$/i.test(u.searchParams.get('open') || '')) return true;
     const here = location.pathname.replace(/[^/]*$/, ''); // …/wizard-os-home/
     return u.pathname === here || u.pathname === here + 'index.html' || u.pathname === here + 'desktop.html';
   }

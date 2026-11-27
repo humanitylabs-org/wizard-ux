@@ -1,4 +1,0 @@
-/* App switches in chat (wizard-ux issue 1560): the Update button under a greyed app switch row in a reply's card. */
-html[data-tweaks~="wizard/chat-app-switches"] .msg.a .ch-tweak .ch-tweak-upd { display: flex; justify-content: flex-end; padding: 0 0 10px; border-bottom: 1px solid var(--wz-border); }
-html[data-tweaks~="wizard/chat-app-switches"] .msg.a .ch-tweak > .ch-tweak-upd:last-child { border-bottom: 0; }
-html[data-tweaks~="wizard/chat-app-switches"] .msg.a .ch-tweak .ch-tweak-upd button { padding: 6px 14px; border: 1px solid var(--wz-border); border-radius: 12px; background: var(--wz-surface-raised); color: var(--wz-text); font: inherit; cursor: pointer; }

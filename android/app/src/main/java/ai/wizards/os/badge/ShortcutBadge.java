@@ -44,7 +44,7 @@ final class ShortcutBadge implements BadgeSync.Mechanism {
         Bitmap base = HomeScreenShortcuts.decodeIcon(png);
         if (base == null) return false;
         ShortcutInfo s = new ShortcutInfo.Builder(c, id).setShortLabel(name).setLongLabel(name)
-                .setIcon(HomeScreenShortcuts.adaptive(base, count)).build(); // same adaptive art as a pin/refresh
+                .setIcon(HomeScreenShortcuts.adaptive(base, count, BadgeLook.style(c))).build(); // same adaptive art as a pin/refresh
         boolean ok = m.updateShortcuts(Collections.singletonList(s));
         Log.i(UnreadBadges.TAG, "shortcut icon count=" + count + " ok=" + ok);
         return ok;

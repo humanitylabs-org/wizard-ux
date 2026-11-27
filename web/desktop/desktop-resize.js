@@ -185,7 +185,7 @@ window.WizCore.desktopParts.resize = function ({ APP, appAt, appOf, C, CHATS, cl
   window.WosAppSetup?.init({ getApp: id => APP[id], isFront: id => focused()?.appId === id });
   function openApp(a, opts = {}) {
     if (!a) return false;
-    if (a.id === 'setup' && window.WosWelcome) { window.WosWelcome.open(); return true; } // Setup is the Welcome modal now
+    if (a.id === 'setup' && window.WosWelcome && window.WosWelcome.takesSetup !== false) { window.WosWelcome.open(); return true; } // Setup is the Welcome modal now
     if (a.id === 'pages') { const ex = !opts.fresh && findWin(w => w.app === 'pages'); if (ex) focusWin(ex.id); else newWin({app:'pages',appId:'pages'}, opts); return true; }
     // A launcher link to one of the agent's Pages opens in the Pages window: a page is a sandboxed (opaque-origin)
     // document, so a plain app frame can't read it and wrongly shows "can't show in a window".
@@ -341,7 +341,7 @@ window.WizCore.desktopParts.resize = function ({ APP, appAt, appOf, C, CHATS, cl
     const a = appOf(w), url = window.WosOwnViews?.frameUrl(a, w.url) || w.url || a.url || '/';
     // Browser boundary: an app that can't run in a sandboxed window (Files, wizard-os#942) opens as its own tab.
     if (window.WizBrowserBoundary?.ownTab?.(a.id, url)) return `<div class="frame-fallback on" data-own-tab="${esc(a.id || '')}"><div><b>${esc(a.name)} opens in its own tab</b>It can’t run inside a Wizard window.<br><a href="${esc(url)}" target="_blank" rel="noopener">Open ${esc(a.name)} ↗</a></div></div>`;
-    return `${window.WosOwnViews?.noteHtml(a) || ''}<iframe data-own-app="${esc(a.id || '')}"${window.WizBrowserBoundary?.enabled ? ' ' + window.WizBrowserBoundary.frameAttributes(url, a.id) : ''} src="${esc(url)}" title="${esc(a.name)}" allow="microphone; clipboard-read; clipboard-write; autoplay; fullscreen"></iframe>
+    return `${window.WosOwnViews?.noteHtml(a) || ''}<iframe data-own-app="${esc(a.id || '')}"${window.WizBrowserBoundary?.enabled ? ' ' + window.WizBrowserBoundary.frameAttributes(url, a.id) : ''} src="${esc(url)}" title="${esc(a.name)}" allow="${esc(window.WizCore?.frameAllow?.('microphone; clipboard-read; clipboard-write; autoplay; fullscreen', { id: a.id }) || 'microphone; clipboard-read; clipboard-write; autoplay; fullscreen; geolocation \'none\'')}"></iframe>
       <div class="frame-fallback"><div><b>${esc(a.name)} can’t show in a window</b><a href="${esc(url)}" target="_blank" rel="noopener">Open it in a tab ↗</a></div></div>`;
   }
   /* Chats on the desktop: list on the left, thread on the right, both from the shared Chats client.

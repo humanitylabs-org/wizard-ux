@@ -345,6 +345,12 @@
       "kind": "stream",
       "note": "AI Look up: needs a text selection and the Look up tap, which the shell flows never make; tests/lookup-pop.browser.cjs covers it with a scripted local backend. Refused and collected, never answered, if a flow reaches it."
     },
+    "/wizard/v1/channel-emoji": {
+      "status": "not-exercised",
+      "source": "web/core/chats-chanemoji.js",
+      "kind": "write",
+      "note": "Channel emoji from a model (issue 1605): only after New channel creates a channel with the off-by-default switch wizard/channel-model-emoji on, which these flows never do; tests/channel-model-emoji.test.mjs and tests/qa-chat-channel-model-emoji.cjs cover it with a synthetic answer. Refused and collected, never answered, if a flow reaches it."
+    },
     "/wizard/v1/channels": {
       "status": "catalogued",
       "source": "web/live.js",
@@ -373,7 +379,13 @@
       "status": "not-exercised",
       "source": "web/live-channels.js",
       "kind": "write",
-      "note": "Chats Tags (wizard-agent-service issue 608, switch wizard/chat-tags): only when a chat's tag is added or removed with the box's Tags on; tests/chat-channel-store.test.mjs and tests/qa-chat-tags.cjs cover it against a fake box. Refused and collected, never answered, if a flow reaches it."
+      "note": "Chats Tags (wizard-agent-service issue 608, on for everyone): only when a chat's tag is added or removed with the box's Tags on; tests/chat-channel-store.test.mjs and tests/qa-chat-tags.cjs cover it against a fake box. Refused and collected, never answered, if a flow reaches it."
+    },
+    "/wizard/v1/channels/covers": {
+      "status": "not-exercised",
+      "source": "web/live-channels.js",
+      "kind": "write",
+      "note": "A channel's covers (wizard-agent-service issue 702, box switch wizard/auto-tags, off by default): read and written only from a channel's What goes here… sheet while the box's channel list says autoTags: true, which none of the three flows' boxes do; tests/chat-channel-covers.test.mjs covers it against a fake box. Refused and collected, never answered, if a flow reaches it."
     },
     "/wizard/v1/channels/membership": {
       "status": "not-exercised",
@@ -403,13 +415,25 @@
           "path": "/wizard/v1/agent-inbox?state=new&kind=needs_you&limit=50"
         }
       ],
-      "note": "Agent inbox (wizard-ux issues 1569, 1586, 1589; wizard-agent-service issue 549): on for everyone since wizard-ux issue 1778, so flows read the running list. The shared catalogue answers 404 (a box with WIZARD_AGENT_INBOX=0 or an older Service: an empty list); writes are refused and collected. tests/agent-inbox-running.test.mjs, agent-inbox-sweep-card.test.mjs and agent-inbox-alert-feedback.test.mjs cover it against a fake box. The waiting-tasks read (kind needs_you) runs only with wizard/inbox-rows on (wizard-ux issue 1779, tests/inbox-rows.test.mjs)."
+      "note": "Agent inbox (wizard-ux issues 1569, 1586, 1589; wizard-agent-service issue 549): on for everyone since wizard-ux issue 1778, so flows read the running list. The shared catalogue answers 404 (a box with WIZARD_AGENT_INBOX=0 or an older Service: an empty list); writes are refused and collected. tests/agent-inbox-running.test.mjs, agent-inbox-sweep-card.test.mjs and agent-inbox-alert-feedback.test.mjs cover it against a fake box. The waiting-tasks read (kind needs_you) runs whenever the Inbox draws (Inbox rows, wizard-ux issue 1779, on for everyone; tests/inbox-rows.test.mjs)."
     },
     "/wizard/v1/agent-inbox/{}": {
       "status": "not-exercised",
       "source": "web/live.js",
       "kind": "write",
       "note": "Agent inbox Open / Send to inbox (wizard-ux issue 1570): POST open|send only on an owner tap (on for everyone since wizard-ux issue 1778), which none of the three flows tap; tests/agent-inbox-open-send.test.mjs covers it against a fake box. Refused and collected, never answered, if a flow reaches it."
+    },
+    "/wizard/v1/reply-actions": {
+      "status": "not-exercised",
+      "source": "web/core/action-cards.js",
+      "kind": "write",
+      "note": "Action buttons (wizard-ux issue 1973, switch wizard/reply-actions, off): GET the thread's saved outcomes and POST an owner tap, only while both reply switches are on and a reply has a button with an app action; none of the proof flows has one. Refused and collected, never answered, if a flow reaches it. tests/reply-actions.test.mjs and tests/qa-reply-button-actions.cjs cover it against a fake box."
+    },
+    "/wizard/v1/route": {
+      "status": "not-exercised",
+      "source": "web/outbox.js",
+      "kind": "write",
+      "note": "Typed tasks (wizard-agent-service issue 669, switch wizard/smart-inbox, off): a typed new chat asks the box's own route only while the switch is on and the box's Sent log says typed_routing.on; none of the proof flows sends. Refused and collected, never answered, if a flow reaches it. tests/typed-quiet.test.mjs covers it against a fake box."
     },
     "/wizard/v1/sent": {
       "status": "catalogued",
@@ -454,16 +478,22 @@
       "note": "Channel read watermarks on the box (wizard-agent-service issue 471): Channels are on for everyone (wizard-ux issue 1258), so flows read it. The shared catalogue answers 404 (no read sync on the box: each device keeps its own marks); writes are refused and collected. tests/chat-channels.test.mjs (issue 471) covers the sync."
     },
     "/wizard/health": {
-      "status": "not-exercised",
+      "status": "catalogued",
       "source": "web/core/reach.js",
       "kind": "read",
-      "note": "Graceful restart watch (wizard-ux issue 1362): read only while the off-by-default wizard/graceful-restart switch is on, which none of the three flows turn on; tests/graceful-restart.test.mjs covers it. Refused and collected, never answered, if a flow reaches it."
+      "examples": [
+        {
+          "method": "GET",
+          "path": "/wizard/health"
+        }
+      ],
+      "note": "Graceful restart watch (wizard-ux issue 1362): on for everyone, so every flow reads it (every 30 s, every 5 s while a restart waits). The shared catalogue answers a healthy box with no restart waiting; tests/graceful-restart.test.mjs covers the hold."
     },
     "/wizard/v1/restart": {
       "status": "not-exercised",
       "source": "web/core/reach.js",
       "kind": "write",
-      "note": "The owner's Wait longer / Restart now on an overdue graceful restart (wizard-ux issue 1362): only with the off-by-default wizard/graceful-restart switch on and a tap; tests/graceful-restart.test.mjs covers it. Refused and collected, never answered, if a flow reaches it."
+      "note": "The owner's Wait longer / Restart now on an overdue graceful restart (wizard-ux issue 1362): only on a tap while the box reports an overdue restart, which none of the three flows see; tests/graceful-restart.test.mjs covers it. Refused and collected, never answered, if a flow reaches it."
     },
     "/wizard/v1/ui-preferences": {
       "status": "catalogued",
@@ -643,6 +673,12 @@
       "kind": "read",
       "note": "Read by Settings > About & updates > Apps (on for everyone since wizard-ux#1191); the QA harnesses don't open that page. Refused and collected, never answered, if a flow reaches it."
     },
+    "/wizard-os-home/store-install/_backup-health": {
+      "status": "not-exercised",
+      "source": "web/core/resources.js",
+      "kind": "read",
+      "note": "Read by Home > Resources > Health only while the wizard/backup-health switch is on (wizard-ux#1743), and posted to only by its Include it button; the QA harnesses run with the switch off. Refused and collected, never answered, if a flow reaches it."
+    },
     "/wizard-os-home/store-install/_app-updates": {
       "status": "not-exercised",
       "source": "web/core/os-updates.js",
@@ -653,7 +689,7 @@
       "status": "not-exercised",
       "source": "web/core/settings.js",
       "kind": "read",
-      "note": "Only read, and only posted to by a chat reply's app switch row (wizard-ux issue 1560), while the off-by-default wizard/chat-app-switches switch is on and a reply carries an <app id>:<switch id> marker; the QA harnesses run with it off. Also read (never posted to) by web/core/share-sheet.js when the media viewer opens a file or something is shared, and Messenger is installed (wizard-ux issue 1625); the QA harnesses share no files. Refused and collected, never answered, if a flow reaches it."
+      "note": "Only read, and only posted to by a chat reply's app switch row (wizard-ux issue 1560), when a reply carries an <app id>:<switch id> marker (on for everyone); the QA harnesses' replies carry no such marker. Also read (never posted to) by web/core/share-sheet.js when the media viewer opens a file or something is shared, and Messenger is installed (wizard-ux issue 1625); the QA harnesses share no files. Refused and collected, never answered, if a flow reaches it."
     },
     "/wizard-os-home/store-install/_updates": {
       "status": "catalogued",
@@ -694,6 +730,12 @@
       "source": "web/core/pages.js",
       "kind": "read",
       "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
+    "/wizard/v1/phone/reply-notes": {
+      "status": "not-exercised",
+      "source": "web/device.js",
+      "kind": "write-or-stream",
+      "note": "Chat replies as Chats notifications (wizard-ux issue 1619): POST only from the Android app (window.WizardOSDevice) after a send, while the off-by-default wizard/phone-chat-replies switch and the phone's per-app reader are on; the three browser flows have no native bridge. tests/phone-chat-replies.test.mjs covers it against a fake box. Refused and collected, never answered, if a flow reaches it."
     },
     "/wizard/v1/setup/phone": {
       "status": "not-exercised",
@@ -795,6 +837,18 @@
         }
       ],
       "note": "Private first answer (wizard-ux issues 1549 and 1800): read when the Welcome boots or opens, and when Settings › Privacy asks for its Finish setting up private AI row; standard first is on for everyone since wizard-ux issue 1800. POSTed {offer} only by an owner tap on the Welcome's private AI offer, which none of the three flows reach. The shared catalogue answers 404 (an older Service without the route). tests/welcome-standard-first.test.mjs covers it against a fake box."
+    },
+    "/wizard/v1/private-mode": {
+      "status": "not-exercised",
+      "source": "web/core/privacy.js",
+      "kind": "read",
+      "note": "Settings › Privacy's Private mode row and switch-over sheet (wizard-ux issue 1801), read and POSTed (/private-mode/{agent,apps,context,default,off}) only while the switch wizard/private-mode is on, which none of the three flows turn on. tests/privacy-settings.test.mjs and tests/qa-privacy-settings.cjs (the real Agent Service) cover it. Refused and collected if a flow reaches it."
+    },
+    "/wizard/v1/privacy-check": {
+      "status": "not-exercised",
+      "source": "web/core/privacy.js",
+      "kind": "read",
+      "note": "Settings › Privacy's Privacy check (wizard-ux issue 1801), read only while the switch wizard/private-mode is on, which none of the three flows turn on. Covered by tests/privacy-settings.test.mjs and tests/qa-privacy-settings.cjs. Refused and collected if a flow reaches it."
     },
     "/wizard/v1/setup": {
       "status": "catalogued",
@@ -1093,6 +1147,12 @@
       "kind": "read",
       "note": "Conservative path literal census (including static paths). Not requested by these three proofs; refused and collected if reached."
     },
+    "/wizard-os-home/pin-instant-open.json": {
+      "status": "not-exercised",
+      "source": "web/core/offline-session.js",
+      "kind": "read",
+      "note": "Instant home-screen apps (wizard-ux issue 1830, switch wizard/pin-instant-open, off): a Cache Storage key the shell page writes and the shell worker reads, never a network request."
+    },
     "/wizard-os-home/store-install/_slots/chats": {
       "status": "not-exercised",
       "source": "web/core/settings.js",
@@ -1159,6 +1219,12 @@
       ],
       "note": "v11 refusal: explicit synthetic unconfigured backup overview. No upstream or mutation."
     },
+    "/wizard/v1/pages/wizard-share/people.json": {
+      "status": "not-exercised",
+      "source": "web/core/share-sheet.js",
+      "kind": "read",
+      "note": "Share people on the box (wizard-ux issue 1627): read (GET) and written (PUT, versioned) only while the off-by-default wizard/share-people-box switch is on; the QA harnesses run with it off. tests/share-people-box.test.mjs and tests/qa-share-people-fresh-window.cjs cover it against a fake box. Refused and collected, never answered, if a flow reaches it."
+    },
     "/wizard/v1/pages/wizard-look/look.json": {
       "status": "catalogued",
       "source": "web/core/look-sync.js",
@@ -1211,7 +1277,7 @@
       "status": "not-exercised",
       "source": "web/live.js",
       "kind": "write-or-stream",
-      "note": "Dismiss for the Service's saved-result Needs you is an off-by-default tweak (wizard/needs-you-reason); none of qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed turns it on, so nothing reaches it. Refused and collected, never answered, if a flow reaches it."
+      "note": "Dismiss for the Service's saved-result Needs you (wizard-agent-service issue 469, on for everyone) is only offered on a thread with a saved result; the shared catalogue answers /wizard/background-results with 404, so none of qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed reaches it. Refused and collected, never answered, if a flow reaches it."
     },
     "/wizard/background-results/{}/continue": {
       "status": "not-exercised",

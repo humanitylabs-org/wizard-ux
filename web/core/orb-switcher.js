@@ -309,8 +309,12 @@ window.WosCreateOrbSwitcher = function createOrbSwitcher(adapter) {
   }
   const settingsRow = () => `<div class="st-group" data-orbsw><h4>Orb switcher</h4><button type="button" class="st-row wz-row" data-orbsw-open><span class="st-tx"><b>Hold the orb for pinned apps</b><small>${cfg.pins.length ? cfg.pins.length + ' pinned' : 'Nothing pinned'} · voice command ${cfg.voiceSlot === 'far' ? 'on the outer ring' : 'near the orb'}</small></span><span class="st-go">›</span></button></div>`;
 
+  // The phone's four-section bar (wizard-ux#1929, on for every phone) replaces the radial: while it is on, a hold on
+  // the orb is the plain hold-to-command, the Settings row is hidden and the radial's options stop applying (James,
+  // 27 Nov 2026, wizard-ux#1958: "let's remove that"). Saved pins stay in storage untouched.
+  const barOn = () => { try { return !!window.WizCore?.phoneSections?.on?.(); } catch (_) { return false; } };
   const instance = {
-    active: () => !disposed,
+    active: () => !disposed && !barOn(),
     dispose() {
       if (disposed) return;
       release(true); H().cancelGesture(); H().hover(null); close(true);
@@ -322,7 +326,7 @@ window.WosCreateOrbSwitcher = function createOrbSwitcher(adapter) {
       disposed = true;
       if (window.WosOrbSwitcher === instance) delete window.WosOrbSwitcher;
     },
-    available: true,
+    get available() { return !disposed && !barOn(); },
     open, move, release, close, back, level, openSettings, closeSheet, settingsRow,
     get: () => ({ ...cfg, pins: cfg.pins.slice() }), set,
     get isOpen() { return !!st; }, get sheetOpen() { return !!sheet; },

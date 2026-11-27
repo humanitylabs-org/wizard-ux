@@ -95,7 +95,7 @@ test('Bring my AI embeds the Importer screen; Back peels it, then steps back to 
   const d = withSkins(device(fakeBox({ name: 'Ana', authenticated: true })))
   await d.boot(IMPORTER)
   d.press('next'); d.press('bring')
-  assert.match(d.html(), /<div class="wl-frame wl-embed"><iframe src="https:\/\/box\.test\/importer\/\?embedded=1" title="Importer"><\/iframe><\/div>/)
+  assert.match(d.html(), /<div class="wl-frame wl-embed"><iframe src="https:\/\/box\.test\/importer\/\?embedded=1" allow="geolocation 'none'" title="Importer"><\/iframe><\/div>/)
   assert.match(d.html(), /data-wl="next">Continue</)
   assert.equal(d.W.back(), 'welcome')
   assert.match(d.html(), /Bring my AI/) // frame closed, still on the step
@@ -107,6 +107,26 @@ test('Bring my AI embeds the Importer screen; Back peels it, then steps back to 
   assert.match(d.html(), /Say hello/)
   assert.equal(d.W.back(), 'welcome')
   assert.match(d.html(), /Bring my AI/) // Back from Say hello returns to Bring your AI
+})
+
+// owner-facing: Get set up (wizard-ux issue 1837, switch wizard/get-set-up) moves the import out of the first run.
+test('Get set up switch on: the Importer is not a first-run step; AI sign-in, skin, then Say hello', async () => {
+  const d = withSkins(device(fakeBox({ name: 'Ana', authenticated: true })))
+  d.ctx.document.documentElement.getAttribute = k => (k === 'data-tweaks' ? 'wizard/desktop-chats wizard/get-set-up' : null)
+  await d.boot(IMPORTER)
+  const dots = h => (h.match(/class="wl-dots"[^]*?<\/div>/)[0].match(/<i /g) || []).length
+  assert.equal(dots(d.html()), 3) // AI, skin, hello
+  d.press('next')
+  assert.match(d.html(), /Say hello/)
+  assert.doesNotMatch(d.html(), /Bring your AI/)
+})
+
+test('Get set up switch off: the Bring your AI step stays as it is', async () => {
+  const d = withSkins(device(fakeBox({ name: 'Ana', authenticated: true })))
+  d.ctx.document.documentElement.getAttribute = k => (k === 'data-tweaks' ? 'wizard/desktop-chats' : null)
+  await d.boot(IMPORTER)
+  d.press('next')
+  assert.match(d.html(), /Bring my AI/)
 })
 
 test('the step only opens the Importer: no import call from the Welcome', () => {

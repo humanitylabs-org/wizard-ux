@@ -81,7 +81,7 @@ export function sidepaintPart({ aadVars, ACT_SECTIONS, actOn, actOrder, api, bad
 
   /* ---------- paint the sidebar (only when what it lists changed: renders come often while a chat works) ---------- */
   const label = text => el('h3', 'aad-lab', { text });
-  // Sends a graceful restart holds (wizard-ux issue 1362, wizard/graceful-restart): their own Saved heading under
+  // Sends a graceful restart holds (wizard-ux issue 1362): their own Saved heading under
   // Working, only while there are any (the list model's `saved`), so a held send never counts as Working.
   function savedSec(rows, cur) {
     if (!rows?.length) return [];
@@ -96,13 +96,16 @@ export function sidepaintPart({ aadVars, ACT_SECTIONS, actOn, actOrder, api, bad
   let drawn = '', railDrawn = '';
   function paintList(force = false) {
     if (root.dataset.aadSide === 'rail') return;
-    if (typeof paintChan === 'function') paintChan();
+    const shared = typeof paintChan === 'function' && paintChan();
     if (typeof paintView === 'function' && paintView(false)) return;
+    // The phone's Chats list fills the pane (wizard-ux issue 1966: one design, not two): its title bar, Inbox, Tags and
+    // Sent, rows, folds and filter sheet; this sidebar draws no rows of its own under it, only search hits (⌥K).
+    if (shared && !aadVars.q) { drawn = ''; if (scroll.childElementCount) scroll.replaceChildren(); closeMenu(); return; }
     const s = aadVars.sessions || readSessions(), h = here();
     // A tab switch or picked chat moves the current mark in place, never rebuilding the list.
     const sig = JSON.stringify([aadVars.q, archiveTop(root),
       secOpen, workingOrder(), readyOrder(), groupBy(), badgeText(CHATS), !!globalThis.WosThreadTracker?.on?.(), KINDS.map(k => (s[k] || []).map(r => [r.id, r.title, r.unread, r.pinned, r.state || '', r.at || '', r.workingAsk?.state || '', r.workingAsk?.ask || '', r.background || '', r.channel || '', (r.actions || []).join(), globalThis.WosThreadTracker?.on?.() ? globalThis.WosThreadTracker.dots(r.id, globalThis.WizLive?.agentOf?.(r.id) || '') : '']))]
-      .concat([(s.saved || []).map(r => [r.id, r.title, r.mark || ''])], (typeof actOn === 'function' && actOn()) ? [actOrder(), s.older || 0, (typeof LKINDS !== 'undefined' ? LKINDS : KINDS).map(k => (s[k] || []).map(r => [r.id, r.title, r.mark, r.agentName || '', r.channel || '', r.at || '', r.pinned, (r.actions || []).join(), !!r.draft]))] : []));
+      .concat([(s.saved || []).map(r => [r.id, r.title, r.mark || ''])], (typeof actOn === 'function' && actOn()) ? [actOrder(), (typeof LKINDS !== 'undefined' ? LKINDS : KINDS).map(k => (s[k] || []).map(r => [r.id, r.title, r.mark, r.agentName || '', r.channel || '', r.at || '', r.pinned, (r.actions || []).join(), !!r.draft]))] : []));
     if (!force && sig === drawn && scroll.childElementCount) { markCurrent(h.thread); return; }
     drawn = sig;
     const out = [];
@@ -111,50 +114,8 @@ export function sidepaintPart({ aadVars, ACT_SECTIONS, actOn, actOrder, api, bad
       if (hitsC.length) out.push(label('Chats'), ...hitsC.map(r => chatRow(r, h.thread)));
       if (!hitsC.length) out.push(el('p', 'aad-empty', { text: 'No chats by that name.' }));
     } else if ((typeof actOn === 'function' && actOn())) {
-      // Activity with Channels on (issue 1336): Working, Ready (its one sort on the header), Recent with Show older,
-      // then Snoozed and Archived folded at the very bottom, each with its count. A section shows only while it holds
-      // something; nothing at all is one empty state with a way to start a chat (wizard-ux issue 1731).
-      const has = k => (s[k] || []).length > 0 || (k === 'recent' && !!s.older);
-      if (!aadVars.sessions) out.push(el('p', 'aad-empty', { text: 'Loading your chats…' }));
-      else if (!ACT_SECTIONS.some(([k]) => has(k)) && !(s.saved || []).length) {
-        const box = el('div', 'aad-act-empty', { role: 'status' }), go = el('button', 'aad-act-new', { type: 'button', text: 'New chat' });
-        api.listen(go, 'click', () => api.sessions.newChat());
-        box.append(el('b', '', { text: 'No chats yet' }), el('span', '', { text: 'Type a message to Wizard, or tap the orb and talk.' }), go);
-        out.push(box);
-      }
-      // Miguel's "Archive on top" (miguel/archive-top) puts Archived first here too, as on the phone drawer (issue 1741)
-      const actSections = archiveTop(root) ? [...ACT_SECTIONS.filter(([k]) => k === 'archive'), ...ACT_SECTIONS.filter(([k]) => k !== 'archive')] : ACT_SECTIONS;
-      const inboxKeep = !!globalThis.WizCore?.inboxKeep?.(); // Inbox until archived (wizard-ux issue 1810): Ready reads Inbox
-      for (const [k, word1] of actSections) {
-        const word0 = k === 'ready' && inboxKeep ? 'Inbox' : word1;
-        if (aadVars.sessions && has(k)) {
-          const rows = s[k] || [], on = k === 'recent' ? secOpen.recent !== false : !!secOpen[k];
-          const hd = el('button', 'aad-lab aad-sec', { type: 'button', 'data-sec': k, 'aria-expanded': String(on), 'aria-controls': 'aad-sec-' + k });
-          hd.append(el('span', 'aad-sec-w', { text: word0 }));
-          // (Ready's count is what waits on the owner: the pill; the others a muted number)
-          if (rows.length && k !== 'recent') hd.append(el(k === 'ready' ? 'b' : 'span', k === 'ready' ? 'aad-sec-n' : 'aad-sec-m', { 'aria-hidden': 'true', text: rows.length > 99 ? '99+' : String(rows.length) }));
-          hd.append(icon('down', 'aad-ico aad-sec-c'));
-          hd.setAttribute('aria-label', `${word0}${rows.length && k !== 'recent' ? `, ${rows.length}` : ''}${on ? '' : ', folded'}`);
-          api.listen(hd, 'click', () => { secOpen[k] = !on; api.storage.set('sections', { ...secOpen }); paintList(true); });
-          const body = el('div', 'aad-sec-b', { id: 'aad-sec-' + k, role: 'group', 'aria-label': word0 }); body.hidden = !on;
-          if (on) {
-            body.append(...rows.map(r => chatRow(r, h.thread)));
-            if (k === 'recent' && s.older) {
-              const more = el('button', 'aad-more-older', { type: 'button', text: `Show older · ${s.older}` });
-              api.listen(more, 'click', () => { aadVars.actOlder = true; readSessions(); paintList(true); });
-              body.append(more);
-            }
-          }
-          if (k === 'ready') {
-            const row = el('div', 'aad-sech'), word = (globalThis.WizChatsListModel.ACTIVITY_SORTS.find(([v]) => v === actOrder()) || globalThis.WizChatsListModel.ACTIVITY_SORTS[0])[1];
-            const sort = el('button', 'aad-sortb aad-act-orderb', { type: 'button', 'aria-haspopup': 'menu', 'aria-expanded': 'false', 'aria-label': `Sort: ${word}. Change`, title: 'Sort' });
-            sort.append(el('span', 'aad-sortb-w', { text: word.replace(' first', '') }), icon('down', 'aad-ico aad-sortb-c'));
-            api.listen(sort, 'click', e => { e.stopPropagation?.(); openSortMenu(sort, 'act-sort'); });
-            row.append(hd, sort); out.push(row, body);
-          } else out.push(hd, body);
-        }
-        if (k === 'working' && typeof savedSec === 'function') out.push(...savedSec(s.saved, h.thread));
-      }
+      // Inbox, Tags and Sent are Chats' own list in the pane above (wizard-ux issue 1966), never rows drawn here.
+      out.push(el('p', 'aad-empty', { text: 'Loading your chats…' }));
     } else {
       // The sidebar and its search are Chats only; app search belongs to the global launcher.
       // Wizard's own sections in place of Recents (round 5): Working, Ready, Archive last (archive-top: first), each folding under its header
@@ -303,7 +264,7 @@ export function sidepaintPart({ aadVars, ACT_SECTIONS, actOn, actOrder, api, bad
     if (grouped && groups.length) out.push(...groups.map(g => railRow('ready', globalThis.WizChatsListModel.unreadCount(g.rows), g.state === 'none' ? 'Other' : g.word, g.state, act)));   // (round 24b: or each project)
     // nothing ready (Miguel, 4 Nov 2026): no Ready mark at all, so the rail reads just "9 Working"
     // (wizard-os issue 510: an unread count with no Ready chat behind it pointed at nothing, so it needs a Ready row)
-    else if (ready.length) out.push(railRow('ready', unread, globalThis.WizCore?.inboxKeep?.() ? 'Inbox' : 'Ready', '', act, text));
+    else if (ready.length) out.push(railRow('ready', unread, 'Inbox', '', act, text));
     rList.replaceChildren(...out);
     if (aadVars.fly) paintFly();
   }

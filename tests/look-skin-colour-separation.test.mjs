@@ -1,5 +1,5 @@
 // Settings › Look (wizard-ux issue 1190, on for everyone since James's yes on 25 Nov 2026): skins are a look only, so
-// Look is one list of looks (every colour, your own skins, + New skin), the worn colour's Background, and Views.
+// Look is one list of skins (every colour, your own skins, + New skin), the worn colour's Background, and Views.
 // Own skins, New skin and skin import stay, as looks; a new skin saves no feature choices.
 // Exercise the real Settings renderer and dispatch, not a parallel picker or a source-only label check.
 import test from 'node:test';
@@ -41,20 +41,20 @@ function look(shell, ownSkins = false) {
 }
 const ticks = async (n = 5) => { for (let i = 0; i < n; i++) await Promise.resolve(); };
 
-// owner-correction: humanitylabs-org/wizard-ux#1190 · 2026-11-25 · "Settings > Look merges skins and colours into one list of looks (skins are only a look now). Own skins, New skin and skin import stay, as looks."
-for (const shell of ['phone', 'desktop']) test(`${shell}: Look is one list of looks: every colour, own skins and + New skin`, async () => {
+// owner-correction: humanitylabs-org/wizard-ux#1190 · 2026-11-27 · "call these skins, not looks. I did not approve renaming them to looks. They're called skins, but otherwise, yes, that's approved."
+for (const shell of ['phone', 'desktop']) test(`${shell}: Look is one list of skins: every colour, own skins and + New skin`, async () => {
   const h = look(shell, true), M = h.s.WosMySkin;
   M.recipes = [{ id: 'own-1', name: 'Quiet', base: 'obsidian-light', tweaks: {} }];
   h.view.render();
   const html = () => h.root.innerHTML;
-  assert.match(html(), /<h4>Looks<\/h4>/);
-  assert.match(html(), /role="group" aria-label="Looks"/);
+  assert.match(html(), /<h4>Skins<\/h4>/);
+  assert.match(html(), /role="group" aria-label="Skins"/);
   for (const id of ['nebula', 'grove', 'obsidian', 'obsidian-light']) assert.match(html(), new RegExp(`data-skinpick="${id}"`), 'every colour of every skin');
-  assert.match(html(), /data-ownskin="own-1"/, 'own skins stay, as looks');
+  assert.match(html(), /data-ownskin="own-1"/, 'own skins stay in the one list');
   assert.match(html(), /data-newskin/, '+ New skin stays');
   assert.match(html(), /data-skinimport/, 'skin import stays');
   assert.doesNotMatch(html(), /data-skinfamily=/, 'no separate skin families');
-  assert.doesNotMatch(html(), /aria-label="Skins"/);
+  assert.doesNotMatch(html(), /Looks/, 'they are called skins, not looks');
   assert.match(html(), /data-skinpick="nebula" aria-pressed="true"/);
   h.act('data-skinpick', 'obsidian'); await ticks();
   assert.equal(h.picked.at(-1), 'obsidian', 'a colour of another skin is one tap away');
@@ -105,10 +105,12 @@ for (const shell of ['phone', 'desktop']) test(`${shell}: a worn own skin is a l
   assert.match(h.root.innerHTML, /data-myskin="edit"/, 'Edit with your Wizard');
   assert.match(h.root.innerHTML, /data-ownskin-remove="own-1"/, 'Remove skin');
   assert.doesNotMatch(h.root.innerHTML, /data-myskin-script|Skin script/, 'no script row: skin scripts never run');
-  h.act('data-skinpick', 'nebula'); await ticks();
-  assert.equal(h.picked.at(-1), 'nebula', 'the colour is worn (my-skin.js takes the own skin off on wos:skin)');
   let left = false;
   M.leave = async () => { left = true; M.active = null; };
+  h.act('data-skinpick', 'nebula'); await ticks();
+  assert.equal(left, true, 'a colour takes the own skin off first (wizard-ux#1816)');
+  assert.equal(h.picked.at(-1), 'nebula', 'then the colour is worn');
+  left = false;
   M.active = { id: 'own-1', name: 'Quiet', base: 'obsidian-light', tweaks: {} };
   h.act('data-ownskin', 'own-1'); await ticks();
   assert.equal(left, true, 'tapping the worn own skin takes it off');
@@ -153,7 +155,7 @@ for (const shell of ['phone', 'desktop']) test(`${shell}: New skin is a name, a 
   h.act('data-newskin', '');
   assert.equal(h.view.back(), true, 'Back leaves New skin, not Wizard');
   assert.equal(h.view.context.skinDraft, null);
-  assert.match(h.root.innerHTML, /aria-label="Looks"/);
+  assert.match(h.root.innerHTML, /aria-label="Skins"/);
   h.view.destroy();
 });
 

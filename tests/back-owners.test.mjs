@@ -16,7 +16,8 @@ function fixture() {
  module('WosWelcome','welcome','active');module('WosOrbSwitcher','orb-picker');module('WizShareWizard','share-wizard');
  module('WizHomeScreenApps','pin-sheet','state');Object.defineProperty(w.WizHomeScreenApps,'state',{get:()=>({open:state.open==='pin-sheet'})});
  module('WosTour','tour','helpOpen');module('WosLookup','lookup');module('WosSelMenu','selection','state');Object.defineProperty(w.WosSelMenu,'state',{get:()=>({open:state.open==='selection'})});
- module('WosContextMenu','context');
+ module('WosContextMenu','context');module('WosPrivacy','privacy');
+ w.WosSettings={countsAsk:{get isOpen(){return state.open==='feature-counts-ask';},back(){hits.push('feature-counts-ask');state.open='';return 'feature-counts-ask';}}};
  for(const [m,n] of [['WosShareSheet','share'],['WosDownloads','downloads'],['WosAppRoute','route'],['WosAppSetup','setup'],['WosBoomerang','reminder']]) {module(m,n);Object.defineProperty(w[m],'isOpen',{value:()=>state.open===n});}
  const viewer=module('viewer','viewer');Object.defineProperty(viewer,'isOpen',{value:()=>state.open==='viewer'||state.open==='viewer-menu'});Object.defineProperty(viewer,'state',{get:()=>({menu:state.open==='viewer-menu'})});viewer.close=()=>{hits.push(state.open);state.open='';};
  w.WizLinks={isMenuOpen:()=>state.open==='link-menu',backMenu(){hits.push('link-menu');state.open='';}};
@@ -71,7 +72,7 @@ test('phone history/native Back and desktop Escape install the identical shared 
 // The layouts' escapeOverlay hook (phoneBack.push / escapeBack.push) runs in layout-host tests (layout-host-*.test.mjs).
 
 test('enumerate EVERY registered shared Back handler: actual desktop Escape reaches each exactly once',()=>{
- const f=fixture(),expected=['welcome','orb-picker','share-wizard','pin-sheet','tour','share','lookup','selection','context','route','setup','reminder','viewer','viewer-menu','link-menu','links','downloads','row-swipe','space-picker','filter-sheet','thread-actions','chat-sheet','status','device','update-list','resources','os-update','os-update-sheet'];
+ const f=fixture(),expected=['welcome','orb-picker','share-wizard','pin-sheet','tour','share','lookup','selection','context','route','privacy','feature-counts-ask','setup','reminder','viewer','viewer-menu','link-menu','links','downloads','row-swipe','space-picker','filter-sheet','thread-actions','chat-sheet','status','device','update-list','resources','os-update','os-update-sheet'];
  assert.deepEqual(Array.from(f.stack.names()).sort(),expected.sort());
  for(const name of expected) {f.state.open=name;const n=f.hits.length;f.press();assert.deepEqual(f.hits.slice(n),[name],name);}
 });

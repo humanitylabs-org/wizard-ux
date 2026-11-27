@@ -1,0 +1,2 @@
+/* Add an app: search the App Store too (wizard-os issue 721): behaviour only, read inline by layouts/apps/chrome.js. */
+html[data-tweaks~="wizard/app-picker-store-search"] { --wos-app-picker-store-search: 1; }

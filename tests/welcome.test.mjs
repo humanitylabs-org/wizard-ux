@@ -269,6 +269,11 @@ test('Welcome: the server seen mark is retried until acknowledged; the Setup til
   assert.equal(phone.openApp({ id: 'setup' }), true); assert.deepEqual(phone.done, ['end:setup', 'sheets', 'welcome']);
   const desk = openApp('web/desktop/desktop-resize.js', 'function openApp(a, opts = {}) {');
   assert.equal(desk.openApp({ id: 'setup' }), true); assert.deepEqual(desk.done, ['welcome']);
+  // Get set up on (wizard-ux issue 1837): the Welcome lets the Setup tile open the Setup page, in both shells.
+  for (const [file, head] of [['web/app-search.js', 'function openApp(a, extra = {}, opts = {}) {'], ['web/desktop/desktop-resize.js', 'function openApp(a, opts = {}) {']]) {
+    const s = openApp(file, head); s.window.WosWelcome.takesSetup = false;
+    assert.equal(s.openApp({ id: 'setup' }), false); assert.deepEqual(s.done, []);
+  }
 });
 
 test('Welcome: Back can close during an install; the app-list wait is bounded', async () => {

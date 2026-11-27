@@ -46,9 +46,18 @@ window.WizCore.liveParts.seen = function ({  }) {
     .replace(/\[WIZARD_IMAGE_INTENT_V1\][\s\S]*?\[\/WIZARD_IMAGE_INTENT_V1\]/g, ' ')
     .replace(/\[WIZARD_TWEAK_V1\](?:[\s\S]*?\[\/WIZARD_TWEAK_V1\]|[\s\S]*$)/g, ' ') // a tweak card (core/chat-kit.js tweakIds); unterminated: to the end
     .replace(/\[WIZARD_ACTION_V1\](?:[\s\S]*?\[\/WIZARD_ACTION_V1\]|[\s\S]*$)/g, ' ') // an action card (core/chat-kit.js actionIds)
+    .replace(/\[WIZARD_BUTTONS_V1\]\s*([\s\S]*?)\s*\[\/WIZARD_BUTTONS_V1\]/g, '\n') // reply buttons: drawn in the thread, not in the one-line preview (wizard-os issue 974)
+    .replace(/\[WIZARD_(?:BUTTONS|TAPS)_V1\](?:[\s\S]*?\[\/WIZARD_(?:BUTTONS|TAPS)_V1\]|[\s\S]*$)/g, ' ') // the owner's taps (their Tapped lines stay); unterminated: to the end
+    .replace(/\[WIZARD_CHOICES_V1\](?:[\s\S]*?\[\/WIZARD_CHOICES_V1\]|[\s\S]*$)/g, ' ') // reply buttons (core/chat-kit.js choiceList)
     .replace(/^Please use the attached files?\.\s*/, '')
     .replace(/<memory-context>[\s\S]*?<\/memory-context>/g, ' ')
     .replace(/\[(?:Browser dogfooding|System note)[^\]]*\][\s\S]*$/m, ' ')
+    // One plain line (wizard-os issue 974; same steps as wizard-agent-service server/session-list-view.mjs): Markdown
+    // links and images show their words, a line's heading, quote, bullet and rule marks go, and separate lines join with
+    // " · " (a space after a line that already ends a sentence).
+    .replace(/!?\[([^\]\n]*)\]\((?:[^()\s]|\([^()\s]*\))*(?:\s+"[^"\n]*")?\)/g, '$1').replace(/<((?:https?|mailto):[^>\s]+)>/g, '$1').replace(/~~/g, '')
+    .replace(/^[ \t]*(?:#{1,6}[ \t]+|>[ \t]*)+/gm, '').replace(/^[ \t]*(?:[-*+•]|\d{1,3}[.)])[ \t]+/gm, '').replace(/^[ \t]*[-*_`~=]+[ \t]*$/gm, '')
+    .trim().replace(/([.!?:;,…·]["')\]*_`]*)?[ \t]*\n\s*/g, (_, end) => end ? end + ' ' : ' · ')
     .replace(/[#*_`>]+/g, ' ').replace(/\s+/g, ' ').trim();
 
   // Only the two connection apps Wizard knows; anything else in the field is ignored.
@@ -56,7 +65,9 @@ window.WizCore.liveParts.seen = function ({  }) {
   function reconnectOf(v) {
     const app = v && typeof v === 'object' && v.kind === 'provider_signed_out' ? RECONNECT[v.provider] : null;
     if (!app || v.app_id !== app[0]) return null;
-    return { provider: v.provider, appId: app[0], name: app[1], runId: String(v.run_id || ''), installed: v.installed !== false };
+    // app_status: what the connection app reads now (Agent Service decorateReconnect); core/chat-models.js reconnect.
+    return { provider: v.provider, appId: app[0], name: app[1], runId: String(v.run_id || ''), installed: v.installed !== false,
+      appStatus: ['connected', 'signed_out', 'expired'].includes(v.app_status) ? v.app_status : 'unknown' };
   }
   const ATTN = new Set(['needs_you', 'check', 'done', 'fyi']);
   function attentionOf(v) {
@@ -83,11 +94,13 @@ window.WizCore.liveParts.seen = function ({  }) {
       const s = { safeError:'', reconnect:null, runError:null, critical:false, waitingOn:'', helperStatus:null, attention:null, ...item, runError: runErrorOf(item.runError), status: globalThis.WizChatsListModel.executionStatus(item.status, item.runId, item.lastRunStatus), runtime: 'direct', request: '', renames: [], detailNeeded: true };
       // Chats channels (wizard-ux issue 1261): the row's channel id and first owner request, checked after the spread.
       if (!(typeof s.channel === 'string' && /^[a-z0-9-]{1,48}$/.test(s.channel))) delete s.channel;
-      // Tags (wizard-agent-service issue 608, switch wizard/chat-tags): every channel the chat carries, primary first.
+      // Tags (wizard-agent-service issue 608, on for everyone): every channel the chat carries, primary first.
       if (Array.isArray(s.tags)) s.tags = s.tags.filter(t => typeof t === 'string' && /^[a-z0-9-]{1,48}$/.test(t)).slice(0, 200); else delete s.tags;
       if (typeof s.firstRequest === 'string') s.firstRequest = s.firstRequest.slice(0, 400); else delete s.firstRequest;
       // wizard-ux issue 1808: the box's quiet-reply mark (live.js quietReply), only ever true.
       if (s.quietReply !== true) delete s.quietReply;
+      // A box still serving the older list keeps Markdown links in the line: show their words (wizard-os issue 974).
+      if (typeof s.preview === 'string') s.preview = s.preview.replace(/!?\[([^\]\n]*)\]\((?:[^()\s]|\([^()\s]*\))*(?:\s+"[^"\n]*")?\)/g, '$1');
       return s;
     }
     const id = item.id || item.session_id; if (!id) return null;
@@ -107,6 +120,8 @@ window.WizCore.liveParts.seen = function ({  }) {
       id, runtime: 'direct',
       title: String(item.title || item.name || 'Untitled chat'),
       source: item.source || '',
+      // wizard-ux issue 1927: Hermes' own pinned flag, as the Agent Service's list rows carry it (Smart inbox reads it).
+      ...(item.pinned === true || item.pinned === 1 ? { hermesPinned: true } : {}),
       status,
       queueReason: item.queue_reason === 'provider_access' ? 'provider_access' : '',
       safeError: typeof item.wizard_safe_error === 'string' ? item.wizard_safe_error : '',
@@ -134,7 +149,7 @@ window.WizCore.liveParts.seen = function ({  }) {
       background: ['helper', 'heavy'].includes(item.wizard_background) ? item.wizard_background : '',
       // A saved background result waiting for one-tap Continue (Agent Service background-results.mjs), shown by
       // chat-power.js (on for everyone since wizard-agent-service #14).
-      // With wizard/needs-you-reason the Service adds its plain reason (wizard-agent-service issue 469).
+      // The Service adds its plain reason (wizard-agent-service issue 469).
       backgroundResult: /^bg_[0-9a-f]{32}$/.test(item.wizard_background_result?.id || '') && item.wizard_background_result?.session_id === id
         ? { id: item.wizard_background_result.id, ...(typeof item.wizard_background_result.reason === 'string' && item.wizard_background_result.reason ? { reason: item.wizard_background_result.reason.slice(0, 160) } : {}) } : null,
       // What the finished thread asks of James (the agent's hidden status line): needs_you / check / done / fyi.
@@ -184,7 +199,9 @@ window.WizCore.liveParts.seen = function ({  }) {
     if ((r.unreadAt ?? -1) > r.seenAt) return true;
     const cur = Date.parse(assistantAt(s) ?? ''), seenA = Date.parse(r.assistantActivityAt ?? '');
     const comparable = typeof s.messageCount === 'number' && typeof r.messageCount === 'number';
-    const previewChanged = !otherAgent(s.agent) && !comparable && fingerprint(s.preview) !== r.previewFingerprint;
+    // A row read from a thread's detail alone (a hidden thread opened by link) has no preview: no evidence of a change,
+    // and treating it as one kept it unread however often it was marked (a thread-seen write storm, agent-service 631).
+    const previewChanged = !otherAgent(s.agent) && !comparable && !!vis(s.preview) && fingerprint(s.preview) !== r.previewFingerprint;
     const countUp = comparable && s.messageCount > r.messageCount;
     const becameReady = !!s.status && s.status !== r.status && READY_OR_ATTENTION.has(s.status) && (!r.status || !READY_OR_ATTENTION.has(r.status));
     if (isFinite(cur)) return isFinite(seenA) ? cur > seenA : cur > r.seenAt;

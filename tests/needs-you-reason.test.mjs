@@ -1,30 +1,18 @@
 // wizard-agent-service issue 469: the Needs you the Agent Service adds itself (a saved background helper result) says
 // why inside the thread, with Continue and Dismiss, and Dismiss / Done / Archive clear it on the box for every device.
-// Behind the off-by-default wizard/needs-you-reason tweak: with it off, Chats draws and sends exactly what it did.
+// On for everyone (the wizard/needs-you-reason switch was removed after show-and-tell).
 // Run: node --test tests/needs-you-reason.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
-import { freshDevice } from './fixtures/w1-experience.mjs';
 import { modelContext } from './fixtures/chats-list-model.mjs';
 import { block, between } from './fixtures/source-slice.mjs';
 import { withLiveParts } from './fixtures/live-parts.mjs';
 
 const read = p => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
-const ID = 'wizard/needs-you-reason';
 const RID = 'bg_' + 'a'.repeat(32), RID2 = 'bg_' + 'b'.repeat(32);
 const REASON = 'A helper finished after this chat closed';
-
-test('the tweak is in the catalog and off by default for everyone', async () => {
-  const fresh = freshDevice(), l = await fresh.listing(ID);
-  assert.equal(l.manifest?.id, ID, 'listed');
-  assert.equal(l.row?.on, false); assert.equal(l.running, false, 'off by default');
-  const { profiles } = JSON.parse(read('web/tweaks/catalog.json'));
-  for (const who of profiles) { const d = freshDevice({ preset: who }); await d.E.refresh(); assert.ok(!d.active().includes(ID), who); }
-  await fresh.E.toggle(ID); await fresh.E.whenReady();
-  assert.ok(fresh.active().includes(ID), 'and the owner can switch it on');
-});
 
 // live.js discovery block, run against stub network helpers (as background-continue.test.mjs).
 function normalizer() {
@@ -54,8 +42,8 @@ const listing = {
   scanning: false,
 };
 
-test('on: discovery runs and each result keeps the Service reason', async () => {
-  const { ctx, calls } = discovery({ tweaks: `wizard/unified-inbox ${ID}`, payload: listing });
+test('discovery runs and each result keeps the Service reason', async () => {
+  const { ctx, calls } = discovery({ tweaks: 'wizard/unified-inbox', payload: listing });
   const rows = [{ id: 'old', status: 'completed', backgroundResult: { id: RID } }];
   await ctx.merge(rows);
   assert.deepEqual(calls, ['/wizard/background-results']);
@@ -67,8 +55,8 @@ test('on: discovery runs and each result keeps the Service reason', async () => 
   assert.equal(normalizer()({ id: 'old', status: 'completed', wizard_background_result: { id: RID, session_id: 'old', reason: REASON } }).backgroundResult.reason, REASON);
 });
 
-test('off: discovery still runs (Continue is on for everyone, wizard-agent-service #14) and only reads', async () => {
-  const { ctx, calls } = discovery({ tweaks: 'wizard/unified-inbox', payload: listing });
+test('discovery with no tweaks at all runs and only reads', async () => {
+  const { ctx, calls } = discovery({ tweaks: '', payload: listing });
   const rows = [{ id: 'old', status: 'completed', backgroundResult: null }];
   await ctx.merge(rows);
   assert.deepEqual(calls, ['/wizard/background-results']);
@@ -96,16 +84,16 @@ function liveDismiss({ tweaks, status = 200, out = { ok: true, dismissed: 1, ids
   return { ctx, posts, rows };
 }
 
-test('on: Dismiss posts once to the box for the main agent thread and hides it on this device for good', async () => {
-  const h = liveDismiss({ tweaks: ID });
+test('Dismiss posts once to the box for the main agent thread and hides it on this device for good', async () => {
+  const h = liveDismiss({ tweaks: '' });
   assert.equal(await h.ctx.LIVE.dismissBackground('old', RID), true);
   assert.deepEqual(h.posts, [['/wizard/background-results/dismiss', 'POST', { session_id: 'old', id: RID }]]);
   assert.equal(h.rows[0].backgroundResult, null);
   assert.ok(h.ctx.settled.has(RID), 'a discovery read that started before the tap never brings it back');
 });
 
-test('on: Done and Archive send the thread-wide form (they know no result id)', async () => {
-  const h = liveDismiss({ tweaks: ID });
+test('Done and Archive send the thread-wide form (they know no result id)', async () => {
+  const h = liveDismiss({ tweaks: '' });
   assert.equal(h.ctx.savedResultAsk(h.rows[0]), true);
   assert.equal(h.ctx.savedResultAsk({ id: 'x', attention: { state: 'needs_you', ask: 'Approve the release' } }), false, "the agent's own Needs you is not the Service's");
   assert.equal(await h.ctx.LIVE.dismissBackground('old'), true);
@@ -113,12 +101,9 @@ test('on: Done and Archive send the thread-wide form (they know no result id)', 
   assert.equal(h.rows[0].backgroundResult, null);
 });
 
-test('off, or a routed agent thread: nothing is posted', async () => {
-  const off = liveDismiss({ tweaks: '' });
-  assert.equal(await off.ctx.LIVE.dismissBackground('old', RID), false);
-  assert.deepEqual(off.posts, []);
+test('a routed agent thread: nothing is posted', async () => {
   for (const kind of ['host-profile', 'container', 'restricted']) {
-    const routed = liveDismiss({ tweaks: ID, agent: `qa-${kind}` });
+    const routed = liveDismiss({ tweaks: '', agent: `qa-${kind}` });
     assert.equal(await routed.ctx.LIVE.dismissBackground('old', RID), false, kind);
     assert.deepEqual(routed.posts, [], kind);
   }
@@ -164,8 +149,8 @@ function power({ tweaks, agent = '' }) {
   return { api, w, session, state, notices, dismissed, posts, tap };
 }
 
-test('on: the thread says why, with Continue and Dismiss; Dismiss (tapped twice) dismisses once', async () => {
-  const h = power({ tweaks: ID });
+test('the thread says why, with Continue and Dismiss; Dismiss (tapped twice) dismisses once', async () => {
+  const h = power({ tweaks: '' });
   const html = h.api.failureHtml(h.w, h.session);
   assert.match(html, /Needs you/);
   assert.match(html, new RegExp(REASON));
@@ -178,17 +163,8 @@ test('on: the thread says why, with Continue and Dismiss; Dismiss (tapped twice)
   assert.deepEqual(h.posts, [], 'Dismiss starts no Continue');
 });
 
-test('off: the Continue panel (on for everyone) is unchanged and has no Dismiss; a stray tap does nothing', async () => {
-  const h = power({ tweaks: '' });
-  const html = h.api.failureHtml(h.w, h.session);
-  assert.match(html, /Background result ready/);
-  assert.doesNotMatch(html, /data-background-dismiss/);
-  h.tap(); await new Promise(r => setTimeout(r, 10));
-  assert.deepEqual(h.dismissed, []);
-});
-
-for (const kind of ['host-profile', 'container', 'restricted']) test(`on: a routed ${kind} thread gets no panel (main agent only)`, () => {
-  const h = power({ tweaks: ID, agent: `qa-${kind}` });
+for (const kind of ['host-profile', 'container', 'restricted']) test(`a routed ${kind} thread gets no panel (main agent only)`, () => {
+  const h = power({ tweaks: '', agent: `qa-${kind}` });
   assert.doesNotMatch(h.api.failureHtml(h.w, h.session), /data-background-dismiss/);
 });
 

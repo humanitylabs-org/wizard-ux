@@ -42,7 +42,7 @@ window.WizCore.appParts.search = function ({ APP, appAt, appVars, blank, CHATS, 
     openingReady();
     if (!here) { const w = openWin(obj, opts); openingEnd(); return w; }
     delete appVars.W[here].seed; // the owner opened it himself: a starter app becomes one of his open apps (and syncs)
-    if (appVars.W[here].app !== 'chats') bringBeside(here);
+    if (appVars.W[here].app !== 'chats' || appVars.W[here].agent) bringBeside(here);
     const t = deskOf(here);
     if (refresh) refresh(appVars.W[here], t);
     if (t !== appVars.idx) goDesk(t, true);
@@ -100,16 +100,29 @@ window.WizCore.appParts.search = function ({ APP, appAt, appVars, blank, CHATS, 
     closeSheets(true);
     const w = placeApp(mainChats, { app: 'chats', thread: null });
     if (!w) return false;
-    CHATS.setFocus(w, { kind: 'agent', key: id });
+    // Chats on its Activity list (the phone's Inbox) shows every agent and drops an agent Focus on its next paint
+    // (actAllAgents), so the agent's own list opens there the way the Chats switcher opens it (ux#1989).
+    if (!(CHATS.chanView?.() === 'activity' && CHATS.switcher?.go?.(w, '#@agent:' + id))) CHATS.setFocus(w, { kind: 'agent', key: id });
     if (w && o.thread === '__new__') CHATS.openNewDraft(w.id, '');
     LIVE?.refreshAgents?.().then(() => LIVE.emit());
     return o.share ? { id: w.id, agentId: id } : true;
   }
   window.WizOpenAgentChats = openAgentChats;
+  // The agent-locked Chats window (w.agent: that agent's list, new chats and replies) an agent tile opens in the Apps
+  // section. It is an app window like any other: it stays through a reload (app-seed.js keeps agent windows).
+  async function openAgentWin(id, opts = {}) {
+    const AG = window.WosAgents; if (!AG || !/^[a-z0-9][a-z0-9-]{0,40}$/.test(String(id || ''))) return false;
+    if (!AG.get(id)) await AG.load(true);
+    if (!AG.get(id)) { toast('!', 'That agent isn’t on this Wizard', 2000); return false; }
+    closeSheets(true);
+    const w = placeApp(x => x.app === 'chats' && x.agent === id && !x.from && !x.bound, { app: 'chats', agent: id, thread: null }, opts);
+    LIVE?.refreshAgents?.().then(() => LIVE.emit());
+    return !!w;
+  }
   window.WosAppSetup?.init({ getApp: id => APP[id], isFront: id => focusedWin()?.appId === id });
   function openApp(a, extra = {}, opts = {}) {
     if (!a) return false;
-    if (a.id === 'setup' && window.WosWelcome) { openingEnd(a.id); closeSheets(true); window.WosWelcome.open(); return true; } // Setup is the Welcome modal now
+    if (a.id === 'setup' && window.WosWelcome && window.WosWelcome.takesSetup !== false) { openingEnd(a.id); closeSheets(true); window.WosWelcome.open(); return true; } // Setup is the Welcome modal now
     if (a.id === 'pages') { closeSheets(true); placeApp(w => w.app === 'pages' && !w.from, {app:'pages', appId:'pages'}, opts); return true; }
     // A launcher link to one of the agent's Pages opens in the Pages window (pages are sandboxed, opaque-origin documents).
     const pageSlug = a.url && window.WosPages?.match(a.url);
@@ -118,7 +131,10 @@ window.WizCore.appParts.search = function ({ APP, appAt, appVars, blank, CHATS, 
       return window.WosAppSetup.gate(a, () => openApp(a, extra, { ...opts, setupChecked: true }), { settled: () => openingEnd(a.id) });
     if (a.id === 'side-button') { closeSheets(true); if (appVars.idx !== HOME) goDesk(HOME); sideButtonTap(true); return true; }
     if (a.kind === 'chats') {
-      if (a.agent) return openAgentChats(a.agent);
+      // An agent's tile (the Apps panel, the Apps sheet, voice) opens like any app: its own window, locked to that
+      // agent, in the Apps section; the main Chats window keeps its list, Focus and thread (ux#2007). The Chats
+      // switcher, the Agents app and links still focus the agent in Chats (openAgentChats).
+      if (a.agent) return openAgentWin(a.agent, opts);
       const chatsProvider = a.chatsProvider || CHATS.views.defaultId();
       placeApp(w => w.app === 'chats' && !w.agent && CHATS.views.providerFor(w) === chatsProvider, { app: 'chats', thread: null, chatsProvider }, opts);
       return true;

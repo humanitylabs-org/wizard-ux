@@ -44,6 +44,16 @@ public class DeviceBridgeE2eTest {
         LongMeetingStartupScenario.longMeetingUploadsDoNotHoldTheUiThread();
     }
 
+    /** wizard-ux#1948: a link an installed app owns opens in that app; others keep the browser panel; own links never loop. */
+    @Test public void linkAnInstalledAppOwnsOpensInThatApp() throws Exception {
+        AppLinkScenario.run();
+    }
+
+    /** wizard-messenger#445: a call window for this Wizard's own call page: microphone, Element Call's outputs, routing. */
+    @Test public void callWindowRoutesTheCallsSound() throws Exception {
+        CallWindowScenario.run();
+    }
+
     @Test public void genericPackagesAndLegacyCompatibility() throws Exception {
         Context c = InstrumentationRegistry.getInstrumentation().getTargetContext();
         UiDevice device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation());
@@ -109,6 +119,23 @@ public class DeviceBridgeE2eTest {
         } finally {
             c.getSharedPreferences("wizard_browser_boundary", Context.MODE_PRIVATE).edit().clear().commit();
         }
+    }
+
+    /**
+     * wizard-ux issue 1775 (switch wizard/phone-recovery-mode): after a start that never finished, the app opens in
+     * recovery mode; its card sends diagnostics, checks for an update and starts normally; with the switch off, nothing.
+     */
+    @Test public void recoveryModeOpensAfterAnUnfinishedStart() throws Exception {
+        RecoveryModeScenario.run();
+    }
+
+    /**
+     * wizard-ux issue 1830 (switch wizard/pin-instant-open): a home-screen app window opens on the app's last screen at
+     * once with no Connecting, asks the box only whether the app's page changed, shows an updated app on the next open,
+     * and with the switch off opens as today. Named to run last: it brings Wi-Fi up for its network check.
+     */
+    @Test public void thePinnedAppOpensOnItsLastScreen() throws Exception {
+        PinInstantScenario.run();
     }
 
     /** CI emulators raise "Pixel Launcher isn't responding" over the app; tap Wait and keep looking. */

@@ -105,23 +105,22 @@ async function main(){
   }
   const phone=await browser.newContext({viewport:{width:412,height:892},isMobile:true,hasTouch:true,deviceScaleFactor:2,reducedMotion:'reduce',serviceWorkers:'block',ignoreHTTPSErrors:true,userAgent:'Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Mobile Safari/537.36'});
   const q=await phone.newPage();q.on('pageerror',e=>errors.push(String(e)));
-  await q.goto(origin+'/wizard-os-home/?shell=phone');await ready(q);await q.waitForFunction(()=>window.WosOrbSwitcher?.active());
-  record('phone starts with core radial and no activation tweak',await q.evaluate(()=>!WosExperience.state.tweaks.some(t=>t.id==='wizard/orb-radial')));
+  await q.goto(origin+'/wizard-os-home/?shell=phone');await ready(q);await q.waitForFunction(()=>window.WizCore?.phoneSections?.on());
+  record('phone starts with no radial activation tweak',await q.evaluate(()=>!WosExperience.state.tweaks.some(t=>t.id==='wizard/orb-radial')));
   await q.evaluate(()=>__wos.openSheet('settings'));await q.locator('[data-st-page="appearance"]').click();
   record('phone Wizard background behaviour is unchanged',await q.locator('[data-bgpick]').count()===0);
-  await q.evaluate(()=>__wos.openSettings('orb-switcher'));await q.locator('[data-orbsw-open]').click();
-  await q.locator('[data-app="preview-notes"] [data-pin]').click();
-  await q.locator('[data-app="preview-calendar"] [data-pin]').click();
-  await q.locator('.wor-sheet [data-close]').click();await q.evaluate(()=>__wos.closeSheets());
+  await q.evaluate(()=>__wos.closeSheets());
+  // The phone's four-section bar retires the radial Orb switcher (wizard-ux#1958): a hold is the plain hold-to-command.
+  await q.evaluate(()=>{localStorage.setItem('wos.orbSwitcher.v1',JSON.stringify({pins:['preview-notes','preview-calendar']}));navigator.mediaDevices&&(navigator.mediaDevices.getUserMedia=()=>new Promise(()=>{}));});
   const cdp=await phone.newCDPSession(q);
   const orb=await q.locator('#orbWrap').boundingBox();
   await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:orb.x+orb.width/2,y:orb.y+orb.height/2,id:1}]});
-  await q.waitForSelector('.wor.on');await q.waitForTimeout(600);
-  record('physical phone hold opens pins, microphone and Customize without recording',await q.evaluate(()=>WosOrbSwitcher.isOpen&&__wos.voice==='idle'&&document.querySelectorAll('.wor-ic.app').length===2));
-  await shot(q,'phone-nebula-radial-open');
-  await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
-  await q.waitForFunction(()=>!WosOrbSwitcher.isOpen);record('release in cancel zone closes without voice',await q.evaluate(()=>__wos.voice==='idle'));
-  await q.reload();await ready(q);record('phone pins survive reload',await q.evaluate(()=>WosOrbSwitcher.get().pins.join(',')==='preview-notes,preview-calendar'));
+  await q.waitForTimeout(700);
+  record('physical phone hold is a command, never the radial',await q.evaluate(()=>!document.querySelector('.wor')&&!window.WosOrbSwitcher?.isOpen&&__wos.voice==='command'));
+  await shot(q,'phone-nebula-hold-command');
+  await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await q.waitForTimeout(300);
+  await q.evaluate(()=>__wos.cancelVoice(true));
+  await q.reload();await ready(q);record('saved radial pins stay untouched',await q.evaluate(()=>JSON.parse(localStorage.getItem('wos.orbSwitcher.v1')).pins.join(',')==='preview-notes,preview-calendar'&&!window.WosOrbSwitcher?.available));
   record('zero unexpected page errors',errors.length===0);
   const receipt=await (await fetch(origin+'/__preview/receipt')).json();record('no sends or runs admitted',receipt.synthetic&&receipt.upstream===false&&receipt.runs===0);
   record('server refuses real mutation path',(await fetch(origin+'/wizard/hermes/v1/runs',{method:'POST',body:'{}'})).status===403);

@@ -52,6 +52,8 @@
     add('selection', () => W.WosSelMenu?.state?.open, () => W.WosSelMenu.back());
     add('context', () => W.WosContextMenu?.isOpen, () => W.WosContextMenu.back());
     add('route', () => W.WosAppRoute?.isOpen?.(), () => W.WosAppRoute.back());
+    add('privacy', () => W.WosPrivacy?.isOpen, () => W.WosPrivacy.back());
+    add('feature-counts-ask', () => W.WosSettings?.countsAsk?.isOpen, () => W.WosSettings.countsAsk.back());
     add('setup', () => W.WosAppSetup?.isOpen?.(), () => W.WosAppSetup.back());
     add('reminder', () => W.WosBoomerang?.isOpen?.(), () => W.WosBoomerang.back());
     add('viewer', () => h.chats().KIT?.viewer?.isOpen(), () => h.chats().KIT.viewer.close());

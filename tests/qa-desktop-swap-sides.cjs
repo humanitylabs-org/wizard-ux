@@ -1,12 +1,12 @@
 'use strict';
-// Swap sides (wizard-ux issue 1526, switch wizard/swap-sides). Real browser, AI apps desktop at 1440x900, the synthetic
-// transport of tests/qa-desktop-app-panel-left.cjs (no box is read or written). Switch off: no button, ⌥⇧L does nothing,
-// the chats sidebar is left and the Apps column right, as before. Switch on: the chats sidebar header's "Move the chats to
-// the right" button puts the chats sidebar on the right and the Apps column on the left, the Pages panel next to the Apps
+// Swap sides (wizard-ux issue 1526, on for everyone, no switch). Real browser, AI apps desktop at 1440x900, the synthetic
+// transport of tests/qa-desktop-reload-app-beside.cjs (no box is read or written). The chats sidebar starts left and the
+// Apps column right; the chats sidebar header's "Move the chats to the right" button puts the chats sidebar on the
+// right and the Apps column on the left, the Pages panel next to the Apps
 // column and a docked chat beside the chats sidebar; ⌥L folds the left side (Apps) and ⌥R the right side (chats) to
 // their rails, the folded chats rail opens its list to its left, the sidebar's grip sits on its left edge and dragging it
-// left widens it, Home's composer stays clear of the panel, a reload keeps the choice (this device), app-panel-left's
-// ⌥⇧M moves the panel next to the chats sidebar (now right), and ⌥⇧L swaps back. QA_SWITCH=off,on picks the cases.
+// left widens it, Home's composer stays clear of the panel, a reload keeps the choice (this device), and ⌥⇧L swaps
+// back.
 const assert = require('node:assert/strict');
 const { chromium } = require('../tools/qa-playwright.cjs');
 const { ownerRead } = require('../tools/qa-desktop-frame-fixture.cjs');
@@ -14,7 +14,6 @@ const fs = require('node:fs'), path = require('node:path');
 const repo = path.resolve(__dirname, '..'), origin = process.env.QA_ORIGIN || 'https://reload-restore.test', prefix = '/wizard-os-home/';
 const web = process.env.QA_WEB || path.join(repo, 'web'), out = process.env.QA_OUT || path.join(repo, 'desktop-swap-sides-evidence');
 const SKINS = (process.env.QA_SKINS || 'nebula').split(',');
-const SWITCH = (process.env.QA_SWITCH || 'off,on').split(',');
 const DESK = () => ({ wins: { wqa0: { id: 'wqa0', app: 'chats', thread: 'qa-l1' }, wqa1: { id: 'wqa1', app: 'pages', appId: 'pages' } },
     ws: [{ id: 'dqa0', wins: ['wqa0'], focus: 'wqa0', mono: false }, { id: 'dqa1', wins: ['wqa1'], focus: 'wqa1', mono: false }], cur: 0 });
 fs.mkdirSync(out, { recursive: true });
@@ -40,13 +39,13 @@ const report = { origin, web, cases: [] };
 (async () => {
   const browser = await chromium.launch();
   try {
-    for (const skin of SKINS) for (const sw of SWITCH) {
-      const on = sw === 'on', stem = `swap-sides-${skin}-${sw}`, desk = DESK();
+    for (const skin of SKINS) {
+      const stem = `swap-sides-${skin}`, desk = DESK();
       const entry = { stem, errors: [], refused: [], writes: [] }; report.cases.push(entry);
       const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, serviceWorkers: 'block' });
       try {
         await context.routeWebSocket('**/*', w => w.close());
-        const mix = { 'wizard/desktop-chats': true, 'wizard/app-panel-left': true, ...(on ? { 'wizard/swap-sides': true } : {}) };
+        const mix = { 'wizard/desktop-chats': true };
         await context.addInitScript(({ skin, mix, spaces, desk }) => {
           if (window !== top) return;
           if (sessionStorage.getItem('qaBoot')) return; sessionStorage.setItem('qaBoot', '1');
@@ -91,10 +90,7 @@ const report = { origin, web, cases: [] };
         await page.goto(origin + prefix + 'desktop.html');
         await page.waitForFunction(() => window.__wux && !window.WosWelcome?.active && window.WosExperience?.state.tweaks.length && !window.WosExperience.state.busy);
         await page.waitForFunction(() => document.documentElement.dataset.layout === 'ai-apps', null, { timeout: 15000 });
-        await page.waitForFunction(() => (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/app-panel-left'), null, { timeout: 15000 }).catch(() => {});
-        if (on) await page.waitForFunction(() => (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/swap-sides'), null, { timeout: 15000 }).catch(() => {});
         entry.tweaks = await page.evaluate(() => document.documentElement.dataset.tweaks);
-        assert.equal(entry.tweaks.split(' ').includes('wizard/swap-sides'), on, stem + ': switch state');
         const vis = sel => page.locator(sel).filter({ visible: true }).first();
         const sideRow = id => vis(`.aad-side .aad-rw[data-sid="${id}"] .aad-row`);
         await sideRow('qa-g1').waitFor({ timeout: 15000 });
@@ -118,21 +114,6 @@ const report = { origin, web, cases: [] };
         assert.ok(usual(entry.start), 'chats left, apps right to start with: ' + JSON.stringify(entry.start));
         await page.screenshot({ path: path.join(out, stem + '-1-start.png') });
         const blur = async () => { await page.evaluate(() => document.activeElement?.blur?.()); };
-        if (!on) {
-          assert.equal(entry.start.button, null, 'switch off: no Swap button');
-          assert.equal(entry.start.paneSide, 'start');
-          await blur(); await page.keyboard.press('Alt+Shift+KeyL'); await nap(800);
-          entry.afterKey = await seen();
-          assert.ok(usual(entry.afterKey) && entry.afterKey.paneSide === 'start', 'switch off: ⌥⇧L does nothing ' + JSON.stringify(entry.afterKey));
-          // a model saved with the switch on is not read while it is off
-          await page.evaluate(() => window.WizCore.panes.set({ side: 'end', dock: { edge: 'start' } })); await nap(800);
-          entry.savedButOff = await seen();
-          assert.ok(usual(entry.savedButOff) && entry.savedButOff.paneSide === 'start', 'switch off: a saved swap is ignored ' + JSON.stringify(entry.savedButOff));
-          await page.keyboard.press('Alt+KeyL'); await nap(800);
-          entry.altL = await seen(); assert.equal(entry.altL.sideMode, 'rail', 'switch off: ⌥L folds the chats sidebar as before');
-          assert.equal(entry.errors.length, 0, 'browser errors: ' + entry.errors.join('; '));
-          entry.pass = true; continue;
-        }
         assert.equal(entry.start.button, 'Move the chats to the right (⌥⇧L)');
         await vis('.aad-sh .aad-sswap').click(); await nap(1200);
         entry.swapped = await seen();
@@ -216,12 +197,6 @@ const report = { origin, web, cases: [] };
         if (await page.evaluate(() => document.documentElement.dataset.aadMode !== 'tiled')) { await vis('.aad-ctop [data-mode="tiled"]').click().catch(() => {}); await nap(1000); }
         entry.tiledAgain = await seen(); assert.ok(mirrored(entry.tiledAgain), 'tiled again, still swapped: ' + JSON.stringify(entry.tiledAgain));
         await page.mouse.click(720, 450).catch(() => {}); await blur();
-        // app-panel-left's ⌥⇧M: the panel next to the chats sidebar, now on the right
-        await page.keyboard.press('Alt+Shift+KeyM'); await nap(1200);
-        entry.appNextToChats = await seen();
-        await page.screenshot({ path: path.join(out, stem + '-6-app-next-to-chats.png') });
-        assert.ok(entry.appNextToChats.app && Math.abs(entry.appNextToChats.app[0] + entry.appNextToChats.app[1] - entry.appNextToChats.side[0]) <= 2, '⌥⇧M puts the panel next to the chats sidebar: ' + JSON.stringify(entry.appNextToChats));
-        await page.keyboard.press('Alt+Shift+KeyM'); await nap(1200);
         // the choice is kept on this device
         await page.reload();
         await page.waitForFunction(() => window.__wux && !window.WosExperience?.state.busy && document.documentElement.dataset.layout === 'ai-apps', null, { timeout: 15000 });
@@ -246,5 +221,5 @@ const report = { origin, web, cases: [] };
   } finally { await browser.close(); }
   const failed = report.cases.filter(c => !c.pass);
   console.log(JSON.stringify({ cases: report.cases.length, passed: report.cases.length - failed.length, failed: failed.map(c => c.stem + ': ' + String(c.failure).split('\n').slice(0, 2).join(' | ')) }));
-  if (failed.length || report.cases.length !== SKINS.length * SWITCH.length) process.exitCode = 1;
+  if (failed.length || report.cases.length !== SKINS.length) process.exitCode = 1;
 })().catch(e => { console.error(e); process.exitCode = 1; });

@@ -13,6 +13,7 @@ import {sourceLabel, installedOnlyApps} from './store-source.js';
 import {parseInstallLink, installShareLink} from './install-link.js';
 import {adoptAppearance} from './store-appearance.js';
 import {renderInstallResult, successMessage} from './store-install-result.js';
+import {nudgeOn, nudgeDue, nudgeHtml, nudgeStatus, personalApp, providerWord, withStandard} from './store-private-nudge.js';
 (() => {
   'use strict';
   const $ = id => document.getElementById(id);
@@ -38,7 +39,7 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
   const hue = id => { let h = 0; for (const c of String(id)) h = (h * 31 + c.codePointAt(0)) >>> 0; return PALETTE[h % PALETTE.length]; };
   const cap = s => s ? s.charAt(0).toUpperCase() + s.slice(1) : '';
 
-  const S = { apps: [], installed: new Map(), complete:false, architecture:'', busy: new Set(), busyAt: new Map(), stack: [], q: '', loaded: false, error: '', sources: [], selections: new Map(), router: new Map(), mcBusy: new Set(), access: new Map(), removing: new Set(), remove: null, starting: new Map(), late: new Set(), startT: 0, startN: 0,
+  const S = { apps: [], installed: new Map(), complete:false, architecture:'', busy: new Set(), busyAt: new Map(), stack: [], q: '', loaded: false, error: '', sources: [], selections: new Map(), router: new Map(), mcBusy: new Set(), access: new Map(), removing: new Set(), remove: null, starting: new Map(), late: new Set(), startT: 0, startN: 0, nudge: new Map(), nudgeT: 0,
     gh: { status: { state: 'unknown' }, loading: false, busy: '', error: '', copied: false, unreachable: false, seq: 0, sawPending: false, pollT: 0 } };
   const key = a => `${a.id}|${a.repo || ''}`;
   const find = id => S.apps.find(a => key(a) === id) || S.apps.find(a => a.id === id) || (S.link?.app && (key(S.link.app) === id || S.link.app.id === id) ? S.link.app : null);
@@ -284,13 +285,72 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
     // An app tagged `privacy: private` on a Wizard with no private agent: nobody can use it yet, so ask
     // (James, 23 Oct 2026: "this is meant to be privacy first…").
     const access = S.access.get(id), models = hasNeeds(c?.data);
-    const privacy = access?.needs_private_agent ? `<div class="pv-card" data-pv-app="${esc(id)}"><h3>Privacy first</h3>
+    // Switch wizard/private-ai-nudge (issue 1802): the card recommends private AI instead, with a one-tap way to keep
+    // the standard agent; after a choice the sheet says which agent has the app.
+    // An app with only the personal-data label (wizard-os#929) is already on the standard agent: once the owner chose to
+    // keep it there, the card gives way to the status line.
+    const nudge = nudgeOn() && personalApp(access), nst = S.nudge.get(id);
+    const card = nudge && nudgeDue(access) && nst?.state !== 'standard' ? nudgeHtml({ id, name: a.name, reads: access?.personal_data_reads, provider: stdProvider(), why: privacyPage(), busy: nst?.busy, waiting: nst?.state === 'waiting' }) : '';
+    const chosen = nudge && !card && nst?.state ? nudgeStatus({ id, name: a.name, provider: stdProvider() }, access) : '';
+    const privacy = nudge ? card : access?.needs_private_agent ? `<div class="pv-card" data-pv-app="${esc(id)}"><h3>Privacy first</h3>
       <p class="mc-lede">${esc(a.name)} is meant to be private, and this Wizard has no private agent yet, so no agent can use it. Set up a private agent, or choose a non-private agent yourself.</p>
       <div class="pv-acts"><button type="button" class="get big" data-pv-new>Set up private agent</button><button type="button" class="get" data-pv-choose>Choose an agent</button></div></div>` : '';
+    // Only a tagged app (no agent can use it yet) hides its connections behind the card; a labelled app keeps them.
+    const hides = privacy && access?.privacy === 'private';
     $('sheet').innerHTML = `<div class="list-head"><button class="back" data-back aria-label="Back">‹</button><div><h2>${esc(a.name)} is installed</h2>
-      <p>${models || !privacy ? (left ? `${left} connection${left === 1 ? '' : 's'} need${left === 1 ? 's' : ''} setup` : 'Every connection is ready') : 'Private app'}</p></div></div>
+      <p>${models || !hides ? (left ? `${left} connection${left === 1 ? '' : 's'} need${left === 1 ? 's' : ''} setup` : 'Every connection is ready') : 'Private app'}</p></div></div>
       <p class="sheet-source">${chip(a)} ${esc(provenance(a).detail)}</p>
-      ${privacy}${models || !privacy ? `<div class="mc-list" data-mc-app="${esc(id)}">${c?.data ? Setup.html(id, c.data, rctx()) + Setup.controls(id, c.data, { ...rctx(), name: a.name, store: true }) : '<p class="empty">Checking connections…</p>'}</div>` : ''}`;
+      ${privacy}${chosen}${models || !hides ? `<div class="mc-list" data-mc-app="${esc(id)}">${c?.data ? Setup.html(id, c.data, rctx()) + Setup.controls(id, c.data, { ...rctx(), name: a.name, store: true }) : '<p class="empty">Checking connections…</p>'}</div>` : ''}`;
+  }
+  /* ---------------- Private AI card on the install sheet (issue 1802, switch wizard/private-ai-nudge) ---------------- */
+  // The owner's standard AI by its product name, from the shell's model list ('' when unknown: "your standard agent").
+  function stdProvider() {
+    try {
+      const M = framed ? parent.WosModels : window.WosModels;
+      if (M && !M.ready && !S.modelsAsked) { S.modelsAsked = true; Promise.resolve(M.load?.()).then(() => refresh(), () => {}); }
+      return providerWord(M?.defaultOption?.()?.provider);
+    } catch (_) { return ''; }
+  }
+  // Settings › Privacy's sheets (wizard-ux issue 1801): Why it matters and the switch-over, while they exist here.
+  const privacyPage = () => { try { return framed && parent.WosPrivacy?.on?.() === true; } catch (_) { return false; } };
+  const sheetApp = () => { const t = S.stack.at(-1), b = t?.t === 'sheet' ? find(t.arg) : null; return b ? routerId(selected(b)) : ''; };
+  // Use <provider> for now: the standard agent gets the app, the same write as the app's settings sheet (#58).
+  async function nudgeStandard(id) {
+    const access = S.access.get(id), want = withStandard(access);
+    if (!want || S.nudge.get(id)?.busy) return;
+    S.nudge.set(id, { busy: 'standard' }); refresh();
+    try {
+      const r = await fetch('/wizard/v1/apps/' + encodeURIComponent(id) + '/agents', { method: 'PUT', credentials: 'same-origin', cache: 'no-store', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ agents: want }) });
+      const j = await r.json().catch(() => null);
+      if (!r.ok || !Array.isArray(j?.agents)) throw new Error(j?.error || String(r.status));
+      S.access.set(id, { ...access, ...j }); S.nudge.set(id, { state: 'standard' });
+      try { if (framed) parent.WosAgents?.load?.(true); } catch (_) {}
+    } catch (_) { S.nudge.delete(id); toast('<b>Couldn’t save that.</b><span>Try again.</span>'); }
+    refresh();
+  }
+  // Set up private AI: the switch-over sheet when Settings › Privacy has it, else the New private agent flow. The sheet
+  // then reads the app's agents again until a private agent has it (or nobody is missing one any more).
+  function nudgeSetup(id) {
+    S.nudge.set(id, { state: 'waiting', at: Date.now() }); refresh();
+    let opened = false;
+    try { if (privacyPage()) { parent.WosPrivacy.open('setup'); opened = true; } } catch (_) {}
+    if (!opened) { if (framed) parent.postMessage({ type: 'wizard:app-route', id, action: 'new-private-agent' }, location.origin); else toast('<b>Open Wizard to set up private AI.</b>'); }
+    clearTimeout(S.nudgeT);
+    const tick = async () => {
+      S.nudgeT = 0;
+      const st = S.nudge.get(id);
+      if (st?.state !== 'waiting' || Date.now() - st.at > 15 * 60e3 || sheetApp() !== id) return;
+      if (!document.hidden) {
+        const v = await appAccess(id);
+        if (v && S.nudge.get(id)?.state === 'waiting') {
+          const was = JSON.stringify(S.access.get(id)); S.access.set(id, v);
+          if (!nudgeDue(v)) { S.nudge.set(id, { state: 'private' }); if (sheetApp() === id) refresh(); return; }
+          if (JSON.stringify(v) !== was && sheetApp() === id) refresh();
+        }
+      }
+      S.nudgeT = setTimeout(tick, 2500);
+    };
+    S.nudgeT = setTimeout(tick, 2500);
   }
   // Link previews share the existing sheet layer, preserving the screen underneath it.
   async function openInstallLink(input) {
@@ -510,7 +570,7 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
     for (const id of new Set([a.id, openId(a)])) { S.starting.delete(id); S.late.delete(id); }   // a new install waits afresh
     refresh();
     // The shell shows a Get in progress in its Apps column and follows the job itself, so the Store can be closed
-    // (wizard-os#682, switch wizard/install-in-sidebar; the shell ignores this message while the switch is off).
+    // (wizard-os#682).
     if (framed && operation === 'install') try { parent.postMessage({ type: 'wizard:app-installing', id: hostAppId(a), job: a.id, name: a.name, view: kindOf(a)?.id === 'apps' }, location.origin); } catch (_) {}
     const say = (m, ok=false) => toast(renderInstallResult({ name: a.name, message: m, ok }));
     try {
@@ -523,7 +583,9 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
       // The Router reads the app's declaration once it is registered; any needs open the install sheet.
       const id = routerId(a), [need, access] = await Promise.all([routerNeeds(id), appAccess(id)]); S.router.set(id, { ...need, at: Date.now() });
       if (access) S.access.set(id, access);
-      if (hasNeeds(need.data) || access?.needs_private_agent) { if (top() !== 'sheet') push('sheet', key(a)); else S.stack.at(-1).arg=key(a); showSheet(key(a)); window.scrollTo(0, 0); }
+      // With wizard/private-ai-nudge on, an app that declares personal data with its label only (wizard-os#929) also
+      // opens the sheet, so the card can recommend private AI; with it off nothing changes.
+      if (hasNeeds(need.data) || access?.needs_private_agent || (nudgeOn() && nudgeDue(access))) { if (top() !== 'sheet') push('sheet', key(a)); else S.stack.at(-1).arg=key(a); showSheet(key(a)); window.scrollTo(0, 0); }
       else {
         say(successMessage(access), true);
         // Asked from the Orb / Apps views' "Get more" (?open=1): open it at once, in place of this Store window.
@@ -603,6 +665,11 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
       if(!['get','switch','update'].includes(state)) return;
       install(a); return; }
 
+    const pn = e.target.closest('[data-pn-setup],[data-pn-standard],[data-pn-why]');
+    if (pn) { e.stopPropagation(); const id = pn.closest('[data-pv-app]')?.dataset.pvApp; if (!id || pn.disabled) return;
+      if (pn.matches('[data-pn-standard]')) nudgeStandard(id); else if (pn.matches('[data-pn-setup]')) nudgeSetup(id);
+      else try { if (privacyPage()) parent.WosPrivacy.open('why'); } catch (_) {}
+      return; }
     const pv = e.target.closest('[data-pv-new],[data-pv-choose]');
     if (pv) { e.stopPropagation(); const id = pv.closest('[data-pv-app]')?.dataset.pvApp; if (!id) return;
       if (framed) parent.postMessage({ type: 'wizard:app-route', id, ...(pv.matches('[data-pv-new]') ? { action: 'new-private-agent' } : {}) }, location.origin);

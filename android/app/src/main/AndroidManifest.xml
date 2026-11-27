@@ -15,6 +15,9 @@
     <!-- Mizel recorder: retry uploads the moment the network returns; network-constrained upload job. -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- Location only for apps that declare it (Maps), after Android's own prompt (wizard-ux issue 1629, AppLocation). -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
     <uses-permission android:name="android.permission.USE_FINGERPRINT" />
     <!-- Mizel recorder: a partial wake lock keeps capture going with the screen off. -->
@@ -133,6 +136,15 @@
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|uiMode|density"
             android:windowSoftInputMode="adjustResize"
             android:screenOrientation="portrait" />
+        <!-- A call window (wizard-messenger issue 445): only WizardOSNative.openCall starts it, for this Wizard's own call page. -->
+        <activity
+            android:name=".call.CallActivity"
+            android:exported="false"
+            android:label="Call"
+            android:launchMode="singleTask"
+            android:taskAffinity="${applicationId}.call"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|uiMode|density"
+            android:windowSoftInputMode="adjustResize" />
         <receiver android:name=".HomeScreenShortcuts$PinConfirmed" android:exported="false" />
         <activity android:name=".photos.PhotosActivity" android:exported="true" android:launchMode="singleTop" android:parentActivityName=".MainActivity">
             <intent-filter>
@@ -237,18 +249,6 @@
         <!-- ===== Mizel meeting recorder (feature/mizel-recorder) =====
              Captures the phone mic in 5 s WAV chunks while a meeting records; uploads them through a durable
              outbox; Pause releases the mic. Started only from the app (page bridge) while it is in front. -->
-        <!-- Clear chat notifications (wizard-ux issue 1276, switch wizard/clear-chat-notifications): off and absent
-             from Android's Notification access list until the owner turns the switch on (the shell enables it). -->
-        <service
-            android:name=".notify.BridgedNotificationListener"
-            android:enabled="false"
-            android:exported="true"
-            android:label="Clear chat notifications"
-            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
-            <intent-filter>
-                <action android:name="android.service.notification.NotificationListenerService" />
-            </intent-filter>
-        </service>
         <service
             android:name=".mizel.MeetingRecorderService"
             android:exported="false"
@@ -258,6 +258,25 @@
             android:name=".mizel.MizelUploadJob"
             android:exported="false"
             android:permission="android.permission.BIND_JOB_SERVICE" />
+        <!-- Box-to-phone push for app notifications (wizard-ux issue 1618, switch wizard/phone-push, off by default):
+             one connection to the owner's own Wizard over Tailscale, no Google. -->
+        <service
+            android:name=".notify.AppPush$AppPushService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse"
+            android:stopWithTask="false">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Instant notifications from the owner's own self-hosted Wizard server (no Google push)" />
+        </service>
+        <receiver
+            android:name=".notify.AppPushBoot"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
         <receiver
             android:name=".everywhere.EverywhereBoot"
             android:exported="true">

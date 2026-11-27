@@ -96,7 +96,7 @@ const BACK = '.aad-cback:not([hidden]), .aad-oneback:not([hidden])';
         await shot('3-chats');
         entry.chats = { side: await box(page, '.aad-side'), list: await box(page, '.aad-side .aad-scroll'), ds: await ds() };
         assert.ok(entry.chats.side, stem + ': the chats list shows');
-        await page.click('.aad-side .aad-row[data-id="qa-a"], .aad-side [data-sid="qa-a"]', { timeout: 3000 }).catch(async () => { await page.evaluate(() => __wux.openThread('qa-a')); });
+        await page.click('.aad-side [data-chopen="qa-a"]', { timeout: 3000 }).catch(async () => { await page.evaluate(() => __wux.openThread('qa-a')); });
         await page.waitForFunction(() => /qa-a/.test(location.href + JSON.stringify(WizCore?.route?.() || '')) || document.querySelector('.ch-msgs') && document.body.innerText.includes('Done: a plan for qa-a'));
         await shot('4-thread');
         entry.thread = { side: await box(page, '.aad-side'), chat: await box(page, '#stage > .wsp[data-aad-role="chat"], #stage > .wsp:not([hidden]) .win .dchats'), back: await box(page, BACK), ds: await ds() };
@@ -116,7 +116,7 @@ const BACK = '.aad-cback:not([hidden]), .aad-oneback:not([hidden])';
           if (!(await box(page, '.aad-side'))) { await page.locator(BACK).filter({ visible: true }).first().click(); await settle(); }
           assert.ok(await box(page, '.aad-side'), stem + ': Chats again, its list');
           // the same chat's row again: the chat (still open behind the list)
-          await page.locator('.aad-side .aad-rw[data-sid="qa-a"] .aad-row').filter({ visible: true }).first().click(); await settle();
+          await page.locator('.aad-side [data-chopen="qa-a"]').filter({ visible: true }).first().click(); await settle();
           assert.equal(await box(page, '.aad-side'), null, stem + ': its row shows the chat again');
           await page.locator(BACK).filter({ visible: true }).first().click(); await settle();
           assert.ok(await box(page, '.aad-side'), stem + ': the visible Back shows the list');

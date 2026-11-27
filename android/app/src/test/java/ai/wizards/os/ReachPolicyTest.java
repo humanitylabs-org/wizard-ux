@@ -89,4 +89,51 @@ public class ReachPolicyTest {
         assertEquals(10_000L, ReachPolicy.GIVE_UP_MS);
         assertEquals(1_200L, ReachPolicy.CONNECTING_MS);
     }
+
+    /** Replays one load's timeline the way MainActivity runs it: each entry is a try that fails fast at its time (ms
+     *  since the load began) or, the last one, succeeds; returns when the offline screen showed (-1: never). */
+    private static long offlineAt(Why why, long[] failAt, long okAt) {
+        long t = 0; int tries = 0;
+        for (long f : failAt) {
+            t = Math.max(t, f);
+            if (t >= ReachPolicy.GIVE_UP_MS) return ReachPolicy.GIVE_UP_MS; // the give-up mark came first
+            if (!ReachPolicy.retryQuietly(why, t, false)) return t;
+            t += ReachPolicy.quietRetryDelay(tries++);
+        }
+        return okAt >= 0 && Math.max(t, okAt) < ReachPolicy.GIVE_UP_MS ? -1 : ReachPolicy.GIVE_UP_MS;
+    }
+
+    @Test
+    public void aFastFailureWithTailscaleOnRetriesQuietlyAndNeverFlashesTheGuide() {
+        // wizard-ux issue 2008 (James, Android): Tailscale on, the tunnel still waking after resume. The first try fails
+        // in 300 ms, the next one reaches the Wizard: no guide at all, Connecting at most.
+        assertEquals(-1, offlineAt(Why.NOT_ANSWERING, new long[]{ 300 }, 1_800));
+        assertEquals(-1, offlineAt(Why.NOT_ANSWERING, new long[]{ 300, 800, 1_700 }, 4_000));
+        // A 502 while the Wizard restarts is the same: quiet tries until it answers.
+        assertTrue(ReachPolicy.retryQuietly(Why.NOT_ANSWERING, 50, false));
+    }
+
+    @Test
+    public void aWizardThatNeverAnswersStillShowsTheGuideAtTheGiveUpMark() {
+        long[] fails = new long[40];
+        for (int i = 0; i < fails.length; i++) fails[i] = 100L + i * 10L;
+        assertEquals(ReachPolicy.GIVE_UP_MS, offlineAt(Why.NOT_ANSWERING, fails, -1));
+        assertFalse("past the give-up mark: show it", ReachPolicy.retryQuietly(Why.NOT_ANSWERING, ReachPolicy.GIVE_UP_MS, false));
+        assertFalse("no known start: as before", ReachPolicy.retryQuietly(Why.NOT_ANSWERING, -5, false));
+        // The waits back off and never pass the give-up mark on their own.
+        long sum = 0;
+        for (int i = 0; i < ReachPolicy.QUIET_RETRY_MS.length; i++) {
+            assertTrue(ReachPolicy.quietRetryDelay(i) >= ReachPolicy.quietRetryDelay(Math.max(0, i - 1)));
+            sum += ReachPolicy.quietRetryDelay(i);
+        }
+        assertTrue(sum < ReachPolicy.GIVE_UP_MS);
+        assertEquals(ReachPolicy.QUIET_RETRY_MS[ReachPolicy.QUIET_RETRY_MS.length - 1], ReachPolicy.quietRetryDelay(99));
+    }
+
+    @Test
+    public void noNetworkTailscaleOffOrTheScreenAlreadyUpStillSayItAtOnce() {
+        assertEquals(300, offlineAt(Why.TAILSCALE_OFF, new long[]{ 300 }, 1_800));
+        assertEquals(300, offlineAt(Why.NO_NETWORK, new long[]{ 300 }, 1_800));
+        assertFalse("the offline screen's own retries keep it up", ReachPolicy.retryQuietly(Why.NOT_ANSWERING, 300, true));
+    }
 }

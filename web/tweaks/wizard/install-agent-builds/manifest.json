@@ -1,0 +1,14 @@
+{
+  "id": "wizard/install-agent-builds",
+  "name": "Install apps your agent builds",
+  "version": "1.0.0",
+  "author": "wizard",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout"
+  ],
+  "issues": [
+    "humanitylabs-org/wizard-app-manager#997"
+  ],
+  "description": "When your agent builds an app for you, it ends with an install link instead of a terminal command. The App Manager (wam/agent_builds.py) finds the app on this Wizard, checks exactly the copy the link names (refused once a file changed, or when it asks for host access) and installs or updates it when you tap. Box-side switch: the App Manager reads it."
+}

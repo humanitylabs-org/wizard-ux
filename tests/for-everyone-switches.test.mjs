@@ -10,7 +10,7 @@ import { builtinDefaults } from './fixtures/core-features.mjs';
 
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
 const tick = () => new Promise(r => setTimeout(r, 0));
-const MIX = { 'miguel/send-and-go': true, 'wizard/sidebar-chats-view': true };
+const MIX = { 'miguel/send-and-go': true, 'wizard/phone-recovery-mode': true };
 
 function box(channel) {
   const storage = new Map([['wos.skin', 'obsidian'], ['wos.skin-tweaks.v1', JSON.stringify({ version: 1, off: {}, preset: 'none', mix: MIX, machinesHomeMoved: true, miguelLayoutMoved: true })]]);

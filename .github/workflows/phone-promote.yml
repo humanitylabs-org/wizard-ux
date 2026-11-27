@@ -1,0 +1,41 @@
+name: Phone promote
+# Release lanes (wizard-os#720): the release train makes a tester build public; no person approves it (Miguel, 21 Nov
+# 2026). Every 6 hours, tools/phone_release.py promote takes the newest android-v<version> tester build (a GitHub
+# prerelease) published 72h or more ago that is newer than the latest release, the same soak as WizardOS For everyone,
+# and holds while any issue labelled release-blocker is open in the org. It downloads that tester build, checks its
+# bytes against its phone.json, re-audits the APK (one signer 3bf74d0b…d1fd, no owner origin), refuses a versionCode
+# that does not rise over the current public release, then makes it the latest release (what boxes mirror) and reads
+# that back. The same bytes, no rebuild.
+#
+# Needs no secret and no environment: the APK was signed by phone-release.yml; this only changes release flags with
+# github.token. Off by default, like the tester lane: nothing happens until the repository variable
+# WOS_RELEASE_LANES=on. Run workflow on main promotes right away when one is due.
+on:
+  schedule:
+    - cron: '17 */6 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  # The same group as phone-release.yml's main runs, so a promotion never races a tester publish.
+  group: phone-release-refs/heads/main
+  cancel-in-progress: false
+jobs:
+  promote:
+    if: vars.WOS_RELEASE_LANES == 'on' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      issues: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Promote the newest soaked tester build
+        run: |
+          set -euo pipefail
+          python3 tools/phone_release.py promote --output "$RUNNER_TEMP/promote" | tee "$RUNNER_TEMP/promote.txt"
+          { echo '```'; cat "$RUNNER_TEMP/promote.txt"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"

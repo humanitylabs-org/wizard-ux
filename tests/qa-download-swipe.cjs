@@ -1,19 +1,18 @@
 'use strict';
-// Swipe to dismiss the download banner and the Downloads sheet (switch wizard/download-swipe, wizard-ux issue 1343).
+// Swipe to dismiss the download banner and the Downloads sheet (wizard-ux issue 1343; on for everyone, no switch).
 // The real phone shell (412 x 915, touch) on a synthetic origin, every write refused, with a FAKE Android downloads
 // port (window.wizardDownloadsPort, protocol v1) that records every call. Gestures are real touches sent through CDP
 // (trusted pointer + touch events, like a finger), in two skins.
-// With the switch on: a swipe up or sideways on the banner and a swipe down on the sheet dismiss them, following the
+// A swipe up or sideways on the banner and a swipe down on the sheet dismiss them, following the
 // finger and settling on release; a short drag snaps back; taps on the banner and on Open still work; nothing is
 // cancelled or removed and the file is still listed from Settings → Downloads.
-// With it off (QA_ONLY_OFF=1, or the off pass of every run): the same swipes leave the banner and the sheet in place.
-// QA_OUT=<dir> saves screenshots (also mid-swipe frames). QA_WEB=<checkout>/web points at another build. QA_EXPECT=broken expects today's
-// behaviour also with the switch on (to show the cause on main).
+// QA_OUT=<dir> saves screenshots (also mid-swipe frames). QA_WEB=<checkout>/web points at another build. QA_EXPECT=broken expects the old
+// no-swipe behaviour (to show the probe catches it).
 const {chromium}=require('../tools/qa-playwright.cjs');
 const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
 const root=path.resolve(process.env.QA_WEB||path.join(__dirname,'../web')),origin='https://download-swipe.test',prefix='/wizard-os-home/';
 const out=process.env.QA_OUT||'';if(out)fs.mkdirSync(out,{recursive:true});
-const ID='wizard/download-swipe',broken=process.env.QA_EXPECT==='broken';
+const broken=process.env.QA_EXPECT==='broken';
 const SKINS=(process.env.QA_SKINS||'nebula,grove').split(',');
 const type=f=>f.endsWith('.js')||f.endsWith('.mjs')?'text/javascript':f.endsWith('.css')?'text/css':f.endsWith('.html')?'text/html':f.endsWith('.json')?'application/json':'application/octet-stream';
 // The fake native side: answers list/open/cancel/remove like Downloads.java and records every call in window.__dlCalls.
@@ -34,11 +33,11 @@ function fakePort(){
 (async()=>{
  const browser=await chromium.launch({headless:true});const results=[];
  try{
-  for(const on of process.env.QA_ONLY_OFF==='1'?[false]:[false,true])for(const skin of SKINS){
+  for(const on of [true])for(const skin of SKINS){
    const label=`${skin} ${on?'on':'off'}`,works=on&&!broken;
    const ctx=await browser.newContext({viewport:{width:412,height:915},isMobile:true,hasTouch:true,deviceScaleFactor:1,userAgent:'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Mobile Safari/537.36',serviceWorkers:'block'});
    await ctx.routeWebSocket('**/*',ws=>ws.close());
-   const mix=on?{[ID]:true}:{};
+   const mix={};
    await ctx.addInitScript(({skin,mix})=>{if(window!==window.top)return;for(const[k,val]of Object.entries({'wos.shell':'phone','wos.skin':skin,'wos.coached':'true','wos.tour.v1':'true','wos.welcome.v1':'done','wos.skin-tweaks.v1':JSON.stringify({version:1,preset:'none',off:{},mix})}))localStorage.setItem(k,val);},{skin,mix});
    await ctx.addInitScript(fakePort);
    const errors=[],writes=[];
@@ -77,7 +76,6 @@ function fakePort(){
    await pg.waitForFunction(()=>window.WosDownloads?.available?.()&&(window.__wos||window.__wux));
    await pg.addStyleTag({content:'#wosWelcome{display:none!important}'});
    await pg.evaluate(()=>{if(window.WosWelcome?.active)window.WosWelcome.close?.();});
-   if(on)await pg.waitForFunction(id=>(document.documentElement.dataset.tweaks||'').split(' ').includes(id),ID,{timeout:15000});
    await pg.waitForTimeout(500);
    const r={variant:label};
    // 1. Banner: swipe up.

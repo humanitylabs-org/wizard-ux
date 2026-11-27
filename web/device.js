@@ -262,10 +262,31 @@
   }
 
   /* ================= #21 reply notifications for chats sent from WizardOS ================= */
-  OUTBOX?.onSent((it, res) => {
+  /* Chat replies as Chats notifications (wizard-ux issue 1619, switch wizard/phone-chat-replies, off by default). With
+   * it on, and the Android app reading Notifications per app (AppNotify), the send is handed to the box instead of the
+   * native reply watcher: the Agent Service follows the run and posts the reply to Notifications under Chats, and the
+   * phone's per-app reader shows it on the Chats channel (a tap opens the thread, reading it clears it), so the phone
+   * never polls this run. Anything the box refuses (an older Service, no Notifications app) keeps the watcher. */
+  const CHAT_NOTES_SWITCH = 'wizard/phone-chat-replies';
+  function chatNotesOn(d) {
+    try {
+      return (document.documentElement.dataset.tweaks || '').split(' ').includes(CHAT_NOTES_SWITCH)
+        && typeof d.appNotifyOn === 'function' && d.appNotifyOn() === true;
+    } catch (e) { return false; }
+  }
+  async function boxWatch(it, runId, title) {
+    try {
+      const r = await fetch('/wizard/v1/phone/reply-notes', { method: 'POST', credentials: 'same-origin', cache: 'no-store',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session: it.sessionId, run: runId, title, ...(it.agent ? { agent: it.agent } : {}) }) });
+      return r.status === 202;
+    } catch (e) { return false; }
+  }
+  OUTBOX?.onSent(async (it, res) => {
     const d = DEV(); if (!d || typeof d.watchRun !== 'function' || !res?.runId) return;
     const s = W$()?.live?.session?.(it.sessionId);
     const title = (s?.title && s.title !== 'Untitled chat' ? s.title : (it.text || 'Voice note')).slice(0, 60);
+    if (chatNotesOn(d) && await boxWatch(it, res.runId, title)) { log('watch:box', it.sessionId, res.runId); return; }
     try { d.watchRun(it.sessionId, res.runId, title); log('watch', it.sessionId, res.runId); } catch (e) {}
   });
 

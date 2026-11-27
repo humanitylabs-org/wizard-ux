@@ -30,7 +30,7 @@ window.WizCore.chatsParts.chanui = function ({ agentName, agentRec, ago, AGS, ch
     const archSec = arch.length ? `<section class="ch-sec ch-chan-arch${chatVars.chanArchOpen ? ' open' : ''}" data-sec="chan-archive"><button type="button" class="ch-sec-h" data-chchanarch aria-expanded="${chatVars.chanArchOpen}"><span>Archive</span><small>${arch.length}</small><i aria-hidden="true"></i></button>${chatVars.chanArchOpen ? `<div class="ch-sec-b">${arch.map(c => channelLine(c, rows, now, cur, gAg, dAg)).join('')}</div>` : ''}</section>` : '';
     // + New channel (wizard-ux issue 1308): the list's last row after General, in the accent colour; it opens the
     // existing name form (openSpacePicker naming) for the agent this list shows.
-    const tags = !!chanStore()?.tags; // Tags on (wizard-agent-service issue 608, switch wizard/chat-tags)
+    const tags = !!chanStore()?.tags; // Tags on (wizard-agent-service issue 608, on for everyone)
     const add = chanNewAgent(w) ? `<button type="button" class="ch-chan-add" data-chchannew aria-haspopup="dialog"><span class="ch-chan-hash" aria-hidden="true">+</span><b>${tags ? 'New tag' : 'New channel'}</b></button>` : '';
     // Archived is a tag view: one line after General that opens every archived chat of this list's agent.
     const aAg = focusedAgent(focusOf(w)), archN = tags ? rows.filter(s => s.archived && !s.hidden && (!aAg || rowAgent(s) === aAg)).length : 0;
@@ -59,7 +59,7 @@ window.WizCore.chatsParts.chanui = function ({ agentName, agentRec, ago, AGS, ch
     closeRowSheet();
     const p = chanPrefs(), pinned = p.pins.includes(cid), arch = !!p.archived[cid], name = sp ? sp.name : 'General';
     el.insertAdjacentHTML('beforeend', `<div class="ch-sheet" role="dialog" aria-label="Channel actions"><div class="ch-sheet-b"><div class="ch-sheet-t">${esc(chanTitle(sp ? name : { name, general: true }))}</div>
-      ${sp ? `<button type="button" data-rschpin>${PIN_SVG}${pinned ? 'Unpin' : 'Pin'}</button><button type="button" data-rschrename>${RENAME_SVG}Rename</button><button type="button" data-rschemoji><span class="ch-sheet-emo" aria-hidden="true">${esc(chanFace(name).emoji)}</span>Emoji…</button><button type="button" data-rscharch>${ACT.done.icon}${arch ? 'Restore' : 'Archive channel'}</button>` : ''}
+      ${sp ? `<button type="button" data-rschpin>${PIN_SVG}${pinned ? 'Unpin' : 'Pin'}</button><button type="button" data-rschrename>${RENAME_SVG}Rename</button>${chanStore()?.autoTags && !['alerts', 'daily'].includes(chanStore().channels.find(c => c.id === cid)?.kind) ? `<button type="button" data-rschcovers><span class="ch-sheet-emo" aria-hidden="true">🏷️</span>What goes here…</button>` : ''}<button type="button" data-rschemoji><span class="ch-sheet-emo" aria-hidden="true">${esc(chanFace(name).emoji)}</span>Emoji…</button><button type="button" data-rscharch>${ACT.done.icon}${arch ? 'Restore' : 'Archive channel'}</button>` : ''}
       <button type="button" data-rschread>${MARK_DONE_SVG}Mark channel read</button>
       ${arch ? '' : `<button type="button" data-rschnew><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>New post</button>`}</div></div>`);
     chatVars.rowSheet = { wid, chan: cid, trigger };
@@ -67,7 +67,7 @@ window.WizCore.chatsParts.chanui = function ({ agentName, agentRec, ago, AGS, ch
     vib(10); return true;
   }
   /* Channel emoji; core/chats-chanemoji.js. */
-  const { chanEmojiPick, chanEmojiSync, chanEmojiTap, chanSetEmoji, openChannelEmoji } = window.WizCore.chatsParts.chanemoji({ chanFace, chanRenameTo, esc, norm, openEmojiSheet, spaceAgent, spaces, toast });
+  const { chanEmojiPick, chanEmojiSync, chanEmojiTap, chanModelEmoji, chanSetEmoji, openChannelEmoji } = window.WizCore.chatsParts.chanemoji({ chanFace, chanRenameTo, esc, norm, openEmojiSheet, spaceAgent, spaces, toast });
   function openChannelRename(wid, cid) {
     const el = track.querySelector(`[data-chats="${wid}"]`), sp = spaces().find(s => s.id === cid); if (!el || !sp) return;
     closeRowSheet();
@@ -77,6 +77,35 @@ window.WizCore.chatsParts.chanui = function ({ agentName, agentRec, ago, AGS, ch
       <div class="ch-rename-b"><button type="button" data-rncancel>Cancel</button><button type="submit" class="go">Save</button></div></form></div>`);
     chatVars.rowSheet = { wid, chan: cid, rename: true };
     const inp = el.querySelector('.ch-rename input'); if (inp) { inp.focus(); inp.select(); }
+  }
+  /* What goes here (wizard-agent-service issue 702, the box's auto tags on): the channel's covers, one per line. Chats
+   * about any of them get this channel's tag by themselves; `kind: report` (question, lookup, evaluation, digest,
+   * reminder, todo) matches the kind of chat. Saving sends only the lines added and removed (one entry each), so an
+   * edit from another device made meanwhile stays; what the box learned stays too. */
+  function openChannelCovers(wid, cid) {
+    const el = track.querySelector(`[data-chats="${wid}"]`), sp = spaces().find(s => s.id === cid); if (!el || !sp || !LIVE.chanStore?.covers) return;
+    closeRowSheet();
+    el.insertAdjacentHTML('beforeend', `<div class="ch-sheet" role="dialog" aria-label="What goes in ${esc(chanTitle(sp.name))}"><div class="ch-sheet-b ch-rename ch-covers">
+      <div class="ch-sheet-t">What goes in ${esc(chanTitle(sp.name))}</div>
+      <p class="ch-covers-help">Chats about any of these get this tag by themselves. One per line; <code>kind: report</code> matches questions, lookups and reports.</p>
+      <textarea name="covers" rows="7" aria-label="What this channel covers" placeholder="Loading…" disabled></textarea>
+      <div class="ch-rename-b"><button type="button" data-rncancel>Cancel</button><button type="button" class="go" data-chcvsave disabled>Save</button></div></div></div>`);
+    chatVars.rowSheet = { wid, chan: cid, covers: [] };
+    LIVE.chanStore.covers(cid).then(d => {
+      const ta = el.querySelector('.ch-covers textarea'), go = el.querySelector('[data-chcvsave]'); if (!ta || chatVars.rowSheet?.chan !== cid) return;
+      if (!d) { ta.placeholder = 'Not available right now'; return; }
+      chatVars.rowSheet.covers = d.covers; ta.value = d.covers.join('\n'); ta.placeholder = 'clips\npodcast\nkind: report'; ta.disabled = false; if (go) go.disabled = false;
+      const learned = d.learned.length ? `<p class="ch-covers-help">Learned from your tags: ${esc(d.learned.slice(-6).join(', '))}</p>` : '';
+      if (learned) ta.insertAdjacentHTML('afterend', learned);
+      ta.focus();
+    });
+  }
+  function submitChannelCovers(sheet) {
+    const cid = chatVars.rowSheet?.chan, before = chatVars.rowSheet?.covers || [], ta = sheet?.querySelector('.ch-covers textarea'); if (!cid || !ta || ta.disabled) return;
+    const list = [...new Set(ta.value.split(/\n|,/u).map(x => x.replace(/\s+/g, ' ').trim()).filter(Boolean))];
+    if (list.length > 40 || list.some(x => x.length > 60)) { toast('!', 'At most 40 lines of up to 60 letters', 2200); return; }
+    closeRowSheet();
+    LIVE.chanStore.editCovers(cid, before, list).then(r => toast(r.ok ? '🏷️' : '!', r.ok ? 'Saved: new chats are tagged by this list' : 'Not saved: check the lines', 1800));
   }
   /* Mark channel read (issue 1317, with Mark done): the channel's read point moves to now (issue 1316) and its posts'
    * green New reply words clear (LIVE.markSeen of the posts that have one). Amber Needs you is cleared only per thread. */
@@ -102,13 +131,13 @@ window.WizCore.chatsParts.chanui = function ({ agentName, agentRec, ago, AGS, ch
     closeRowSheet();
     chanRenameTo(cid, t);
   }
-  function chanRenameTo(cid, t) {
+  function chanRenameTo(cid, t, quiet = false) { // quiet: the model's emoji (issue 1605) renames with no toast
     const sp = spaces().find(s => s.id === cid); if (!sp || !t || t.length > 60) return false;
     if (spaces().some(s => s.id !== cid && spaceAgent(s) === spaceAgent(sp) && norm(s.name) === norm(t))) { toast('!', 'Already a channel with that name', 2200); return false; }
     if (t === sp.name) return true;
     if (chanStore()) LIVE.chanStore.patch({ id: cid, name: t }); // the store's channel (issue 1261)
     else LIVE.prefOps([{ op: 'set', key: `spaces/${cid}/name`, item: t }]);
-    chanRepaintAll(); toast('✎', 'Renamed', 1400);
+    chanRepaintAll(); if (!quiet) toast('✎', 'Renamed', 1400);
     return true;
   }
   function channelSheetClick(e) {
@@ -116,6 +145,8 @@ window.WizCore.chatsParts.chanui = function ({ agentName, agentRec, ago, AGS, ch
     const { wid, chan: cid } = chatVars.rowSheet, w = W[wid] || W[owner(wid)], p = chanPrefs(), name = spaces().find(s => s.id === cid)?.name || 'General';
     if (e.target.closest('[data-rschpin]')) { const on = !p.pins.includes(cid); p.pins = on ? p.pins.concat(cid) : p.pins.filter(x => x !== cid); chanPrefEdit(p, { id: cid, pinned: on }); closeRowSheet(); chanRepaintAll(); toast('⌖', on ? 'Pinned' : 'Unpinned', 1400); return true; }
     if (e.target.closest('[data-rschrename]')) { openChannelRename(wid, cid); return true; }
+    if (e.target.closest('[data-rschcovers]')) { openChannelCovers(wid, cid); return true; }
+    if (e.target.closest('[data-chcvsave]')) { submitChannelCovers(e.target.closest('.ch-covers')); return true; }
     if (e.target.closest('[data-rschemoji]')) { openChannelEmoji(wid, cid); return true; }
     const em = e.target.closest('[data-chemoji]'); if (em) { chanEmojiTap(em); return true; }
     if (e.target.closest('[data-rscharch]')) {
@@ -154,5 +185,5 @@ window.WizCore.chatsParts.chanui = function ({ agentName, agentRec, ago, AGS, ch
   function clearAll(w) { const c = ch(w.id); c.filter = ''; c.q = ''; c.filterFrom = null; window.WizCore.chatSearch?.cancel(w.id); rerenderList(w); }
   function setQuery(w, q) { const c = ch(w.id); if (w.thread) chatsBack(w); c.q = String(q || ''); rerenderList(w); }
   const SEC_DEFAULT = { errors: true, working: true, saved: true, ready: true, yesterday: true, pastWeek: false, deferred: false, archive: false, recent: true, snoozed: false, archived: false, sentWorking: true, sentProcessed: true };
-  return { boxModel, chanboxLate, chanCompose, chanComposer, chanDraftKey, chanDropSending, chanEditUnsent, chanEmojiPick, chanEmojiSync, chanEmojiTap, chanHead, chanHold, chanKey, chanMark, chanModel, channelClick, channelFeed, channelsBody, channelSend, chanOwnPost, chanRepaint, chanScrolled, chanSetEmoji, chanSpaceOf, chanToEnd, chanUser, clearAll, feedLate, openChannelSheet, SEC_DEFAULT, setChanModel, setQuery, submitChannelRename, bindLate: v => { if ('ACT' in v) ACT = v.ACT; if ('elOf' in v) elOf = v.elOf; if ('holdList' in v) holdList = v.holdList; if ('mediaOfFile' in v) mediaOfFile = v.mediaOfFile; if ('openSpacePicker' in v) openSpacePicker = v.openSpacePicker; if ('orderBar' in v) orderBar = v.orderBar; if ('RENAME_SVG' in v) RENAME_SVG = v.RENAME_SVG; } };
+  return { boxModel, chanboxLate, chanCompose, chanComposer, chanDraftKey, chanDropSending, chanEditUnsent, chanEmojiPick, chanEmojiSync, chanEmojiTap, chanModelEmoji, chanHead, chanHold, chanKey, chanMark, chanModel, channelClick, channelFeed, channelsBody, channelSend, chanOwnPost, chanRepaint, chanScrolled, chanSetEmoji, chanSpaceOf, chanToEnd, chanUser, clearAll, feedLate, openChannelSheet, SEC_DEFAULT, setChanModel, setQuery, submitChannelRename, bindLate: v => { if ('ACT' in v) ACT = v.ACT; if ('elOf' in v) elOf = v.elOf; if ('holdList' in v) holdList = v.holdList; if ('mediaOfFile' in v) mediaOfFile = v.mediaOfFile; if ('openSpacePicker' in v) openSpacePicker = v.openSpacePicker; if ('orderBar' in v) orderBar = v.orderBar; if ('RENAME_SVG' in v) RENAME_SVG = v.RENAME_SVG; } };
 };

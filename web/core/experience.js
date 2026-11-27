@@ -20,6 +20,40 @@
   let desktopView = '', desktopMigration = null;
   try { const saved = localStorage.getItem(DESKTOP_VIEW); if (desktopViews.includes(saved)) desktopView = saved; } catch (_) {}
   let state = Store.read() || { version: 1, off: {} };
+  /* Switches removed once they were on for everyone (wizard-ux issue 1236: wizard/desktop-chats, the phone Chats list is
+   * now core/desktop-chats.*) or dropped with their code (wizard-os#639: wizard/app-panel-left), or on for everyone in core (wizard-agent-service
+   * issue 469: wizard/needs-you-reason, now core/chat-power.*; issue 514: wizard/follow-main, the box follows main
+   * wherever its timer runs; wizard-ux issue 1332: wizard/app-tap-home, the narrow desktop's tap takes the app home;
+   * wizard-agent-service issue 518: wizard/plain-chat-titles, the Agent Service serves undated titles; wizard-ux issue
+   * 1362: wizard/graceful-restart, the calm restart note is core/reach.js + core/graceful-restart.css;
+   * wizard-ux issue 1437: wizard/interface-manual, every agent gets the interface manual;
+   * wizard-ux issue 1439: wizard/write-guard, core/write-guard.js guards every shell write;
+   * wizard-ux issue 1443: wizard/sidebar-chats-view, the AI apps sidebar follows Default Chats;
+   * wizard-ux issue 1463: wizard/action-cards, an app's proposed action is always a card, core/action-cards.*;
+   * wizard-ux issue 1526: wizard/swap-sides, the AI apps desktop's Swap sides button and ⌥⇧L;
+   * wizard-ux issue 1567: wizard/phone-app-notifications, the Android app shows every app's notifications;
+   * wizard-ux issue 1560: wizard/chat-app-switches, a reply's switch card always shows app switches;
+   * wizard-ux issue 1818: wizard/clear-chat-notifications, dropped (issue 1276), no Android chat notification clearing;
+   * wizard-ux issue 1929: wizard/phone-sections, the phone bar is Home, Chats, orb, Messenger, Apps;
+   * wizard-ux issue 1779: wizard/inbox-rows, Chats › Inbox is Signal-style rows of only what needs you;
+   * wizard-agent-service issue 608: wizard/chat-tags, a chat carries several tags wherever the box says tags: true;
+   * wizard-ux issue 1836: wizard/chats-title-bar, Chats' title bar names the tab, sort in the filter sheet;
+   * wizard-ux issue 1533: wizard/phone-nav, the phone bar's bigger orb is core/phone-nav.css;
+   * wizard-agent-service issue 668: wizard/catch-me-up, "catch me up" always runs the built catch-up;
+   * wizard-ux issue 1814: wizard/sent-rows, Chats › Sent uses the Inbox rows under Working and Processed;
+   * wizard-ux issue 1810: wizard/inbox-until-archived, Chats › Inbox keeps every thread until it is archived);
+   * wizard-ux issue 1880: wizard/sent-threads, Chats › Sent lists threads, the same rows as Inbox;
+   * wizard-ux issue 1957: wizard/chats-switcher, phone Chats has one bar and the Chats tile's view switcher;
+   * wizard-app-manager issue 799: wizard/phone-tester-builds, every For testers box offers its phones the tester build;
+   * wizard-ux issue 1941: wizard/plain-alert-rows, Chats alerts are plain thread rows marked by a small bell): a saved on/off for one is
+   * cleared from this device, once, so no stale choice is kept. */
+  const GONE = ['wizard/desktop-chats', 'wizard/app-panel-left', 'wizard/needs-you-reason', 'wizard/follow-main', 'wizard/app-tap-home', 'wizard/plain-chat-titles', 'wizard/graceful-restart', 'wizard/interface-manual', 'wizard/write-guard', 'wizard/sidebar-chats-view', 'wizard/action-cards', 'wizard/swap-sides', 'wizard/phone-app-notifications', 'wizard/chat-app-switches', 'wizard/clear-chat-notifications', 'wizard/phone-sections', 'wizard/inbox-rows', 'wizard/chat-tags', 'wizard/chats-title-bar', 'wizard/phone-nav', 'wizard/catch-me-up', 'wizard/sent-rows', 'wizard/inbox-until-archived', 'wizard/sent-threads', 'wizard/chats-switcher', 'wizard/phone-tester-builds', 'wizard/plain-alert-rows'];
+  if (Store.read()) {
+    let dirty = false;
+    for (const k of ['defaultsOff', 'promotedMigrated']) if (Array.isArray(state[k]) && state[k].some(id => GONE.includes(id))) { state[k] = state[k].filter(id => !GONE.includes(id)); dirty = true; }
+    if (state.mix && typeof state.mix === 'object') for (const id of GONE) if (Object.hasOwn(state.mix, id)) { delete state.mix[id]; dirty = true; }
+    if (dirty) Store.write(state);
+  }
   if (desktop && !desktopView) try { const seed = JSON.parse(localStorage.getItem(DESKTOP_SEED)); if (seed?.version === 1 && seed.off && typeof seed.off === 'object') desktopMigration = seed; } catch (_) {}
   let retried = false;  // one quiet retry when a slow network made the whole set fail to load
   let catalog = null, slots = null, set = null, owner = null, manifests = new Map(), generation = 0, error = '', busy = false;
@@ -102,7 +136,7 @@
     for (const ids of Object.values(state.off)) for (const id of ids) if (globalIds().includes(canonical(id))) off.add(canonical(id));
     state.defaultsOff = [...off]; state.defaultsMigrated = true; Store.write(state);
   }
-  /* Switches promoted to defaults (catalog `promotedDefaults`, wizard-ux issue 1236): an off this device chose but has
+  /* Switches promoted to defaults (catalog `promotedDefaults`, first used by wizard-ux issue 1236): an off this device chose but has
    * not shared yet (look sync's queue, wos.look-sync.v1 `pending.tweaks`: offline, or a box without Pages) stays off.
    * Once per id. A choice already shared comes back through look sync, which carries it into `defaults`. `mix` false is
    * never read: setOne() drops an off rather than storing it, and adopt() writes false for every switch not on in the
@@ -314,7 +348,7 @@
     get mix() { return copy(state.mix || {}); },
     get defaultChoices() { return Object.fromEntries(globalIds().map(id => [id, !globalOff(id)])); },
     // Switches that became release-wide defaults after owners could already choose them (catalog `promotedDefaults`,
-    // e.g. wizard-ux issue 1236): look sync carries an owner's earlier explicit on/off for them into `defaults` once.
+    // first used by wizard-ux issue 1236): look sync carries an owner's earlier explicit on/off for them into `defaults` once.
     get promotedDefaults() { return (catalog?.promotedDefaults || []).filter(id => globalIds().includes(id)); },
     // The view chosen per shell type ({ desktop, phone }: a view id, '' = Desks; a missing type = no choice yet).
     get views() { return cleanViews(state.views); },

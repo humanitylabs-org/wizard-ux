@@ -1,5 +1,5 @@
 'use strict';
-// wizard-ux issue 1432 in a real browser (graceful restart note polish, switch wizard/graceful-restart on, a hold active):
+// wizard-ux issue 1432 in a real browser (graceful restart note polish, on for everyone, a hold active):
 //   phone 412x915: a held chat's message box shows no Stop and no "Steer …"; the note shows in every frame across
 //   thread <-> Chats list navigation; a new chat sent during the hold shows the owner's words as its title from the tap
 //   (the synthetic box lists it as "New chat" the whole time, like a box whose first turn the restart holds);
@@ -28,7 +28,7 @@ const HOLD = { phase: 'waiting', holding: true, reason: 'update', active: 1, hel
     await context.addInitScript(() => {
       if (window !== top) return;
       for (const [k, v] of Object.entries({ 'wos.shell': 'phone', 'wos.coached': 'true', 'wos.tour.v1': 'true', 'wos.welcome.v1': 'done', 'wos.skin': 'nebula',
-        'wos.skin-tweaks.v1': JSON.stringify({ version: 1, preset: 'none', off: {}, mix: { 'wizard/graceful-restart': true } }) })) localStorage.setItem(k, v);
+        'wos.skin-tweaks.v1': JSON.stringify({ version: 1, preset: 'none', off: {}, mix: {} }) })) localStorage.setItem(k, v);
     });
     await context.route('**/*', async r => {
       const q = r.request(), u = new URL(q.url()), p = u.pathname, method = q.method();
@@ -108,7 +108,7 @@ const HOLD = { phase: 'waiting', holding: true, reason: 'update', active: 1, hel
       await dc.addInitScript(skin => {
         if (window !== top) return;
         for (const [k, v] of Object.entries({ 'wos.shell': 'desktop', 'wux.shell': 'desktop', 'wos.desktop-view.v1': 'ai-apps', 'wos.coached': 'true', 'wos.tour.v1': 'true', 'wos.welcome.v1': 'done', 'wos.skin': skin,
-          'wos.skin-tweaks.v1': JSON.stringify({ version: 1, preset: 'none', off: {}, mix: { 'wizard/desktop-chats': true, 'wizard/graceful-restart': true } }) })) localStorage.setItem(k, v);
+          'wos.skin-tweaks.v1': JSON.stringify({ version: 1, preset: 'none', off: {}, mix: {} }) })) localStorage.setItem(k, v);
       }, skin);
       await dc.route('**/*', async r => {
         const q = r.request(), u = new URL(q.url()), p = u.pathname, method = q.method();

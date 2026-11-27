@@ -1,0 +1,3 @@
+/* Smart inbox (wizard-ux issue 1883): only what blocks you is in Inbox, everything else finishes in Sent. Sent's look
+ * (threads as Inbox rows, the "Sent from you" sheet, the AI apps panel rows) is in core/chats.css for everyone since
+ * Sent as threads went on (wizard-ux issue 1880), so nothing in the look changes here. */

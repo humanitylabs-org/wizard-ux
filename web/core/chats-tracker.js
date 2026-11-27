@@ -44,9 +44,10 @@ window.WizCore.chatsParts.tracker = function ({ agentName, agentRec, AGS, byStat
     c.showFor = w.thread;
     if ((c.show || PAGE) < turns.length - idx) { c.show = turns.length - idx; const el0 = elOf(wid); if (el0) renderThread(w, el0, true); }
     const t = turns[idx], m = (exact(t) ? [t.u, t.a].find(x => x && ((a.message_id && x.id != null && String(x.id) === String(a.message_id)) || (!a.message_id && a.at && Math.abs((x.at || 0) - a.at) < 1500))) : t.a) || t.u || t.a;
-    const q = m?.id != null && a.message_id ? `.msg[data-mid="${CSS.escape(String(m.id))}"]` : `.msg[data-mat="${m?.at}"]`;
+    // A message sent again shows as a "Sent again" line (chats-attach.js), not a .msg bubble.
+    const q = m?.id != null && a.message_id ? `:is(.msg, .ch-again)[data-mid="${CSS.escape(String(m.id))}"]` : `:is(.msg, .ch-again)[data-mat="${m?.at}"]`;
     const go = tries => {
-      const node = elOf(wid)?.querySelector(q) || (m?.at != null && elOf(wid)?.querySelector(`.msg[data-mat="${m.at}"]`));
+      const node = elOf(wid)?.querySelector(q) || (m?.at != null && elOf(wid)?.querySelector(`:is(.msg, .ch-again)[data-mat="${m.at}"]`));
       if (!node) { if (tries > 0) requestAnimationFrame(() => go(tries - 1)); return; }
       // Far away: land there at once (a long smooth scroll hides the highlight); near: glide. Highlight once it has settled.
       const far = Math.abs(node.getBoundingClientRect().top - innerHeight / 2) > innerHeight * 1.5;

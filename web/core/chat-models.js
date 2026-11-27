@@ -100,11 +100,36 @@
     unknown: P => ({ line: `${P || 'The AI provider'} couldn’t answer`,
       body: 'Tap Retry, or choose another model.' }),
   };
-  function runError(s) {
-    if (!reasonOn() || !s || s.reconnect || !['failed', 'interrupted'].includes(s.status)) return null;
+  // `named`: the caller shows the named reason whatever the tweak says (Smart inbox's failed Inbox row: wizard-ux issue 1883).
+  function runError(s, named = false) {
+    if (!(named === true || reasonOn()) || !s || reconnect(s) || !['failed', 'interrupted'].includes(s.status)) return null;
     const e = s.runError, make = e && REASONS[e.code];
     if (!make) return null;
+    // Issue 1799: a sign-in failure whose subscription reads signed in again is a plain failed send (Retry).
+    if (e.code === 'provider_auth' && (s.reconnect || window.WosUsage?.signedIn?.({ Claude: 'claude', ChatGPT: 'chatgpt' }[providerName(e.provider || s.provider)]) === true)) return null;
     return { code: e.code, message: e.message || '', ...make(providerName(e.provider || s.provider)) };
+  }
+  /* Smart inbox (wizard-ux issue 1883, switch wizard/smart-inbox): a failed thread in Inbox says why in one line, the
+   * named reason when the box gives one, else that it didn't finish. Null with the switch off or for any other thread. */
+  const SMART_INBOX = 'wizard/smart-inbox';
+  function smartFail(s) {
+    try { if (!(document.documentElement.dataset.tweaks || '').split(' ').includes(SMART_INBOX)) return null; } catch (_) { return null; }
+    if (!s || !['failed', 'interrupted'].includes(s.status)) return null;
+    return { ...(runError(s, true) || { line: 'Didn’t finish · open it to retry' }), smart: true };
+  }
+  /* Issue 1799: the Agent Service's stored sign-in diagnosis (s.reconnect, from the failed run) counts only while that
+   * subscription isn't read as signed in right now. The live reading (WosUsage, what Home shows) decides; before it
+   * arrives, the box's own reading of the connection app (app_status). Signed back in, the thread, its Chats row and
+   * the Errors row show the ordinary Retry; the sign-in card's promise to send on its own is kept by chat-power.js. */
+  function reconnect(s) {
+    const rc = s?.reconnect; if (!rc) return null;
+    const U = typeof window !== 'undefined' ? window.WosUsage : null;
+    if (U?.signedIn) {
+      if (!U.snap || Date.now() - (U.at || 0) > 60e3) U.load?.();
+      const now = U.signedIn(rc.provider);
+      if (now !== null && now !== undefined) return now ? null : rc;
+    }
+    return rc.appStatus === 'connected' ? null : rc;
   }
   // Issue 1235: a chat started in a messaging app (its Hermes session `source`) belongs to that app's connection.
   const FOREIGN_APPS = { telegram: 'Telegram', slack: 'Slack', discord: 'Discord', whatsapp: 'WhatsApp', whatsapp_cloud: 'WhatsApp',
@@ -120,6 +145,7 @@
   const refusal = s => { const app = foreignApp(s); return app ? `This chat was started in ${app}, so WizardOS can’t add to it. Your message is saved. Reply in ${app}, or start a new chat.` : ''; };
   const connectorOf = o => CLAUDE_PROVIDERS.has(o.provider) ? 'claude' : o.provider === 'openai-codex' ? 'chatgpt' : isTinfoil(o.provider) ? 'tinfoil' : '';
   const CONNECT_AI = '<a class="mrow more" href="/wizard-os-home/store/index.html?kind=connections" target="_blank" rel="noopener">Connect an AI</a>';
+  const SETUP_PRIVATE = '<button type="button" class="mrow more" data-mprivsetup>Set up private AI</button>';
   const primaryFamilies = () => CONNECTORS.filter(c => M.connected(c.id)).flatMap(c => c.models.map(([family, name]) => ({ family, name })));
   // A disconnected connector's models leave the menu. Only an existing thread keeps its current one (keep); a new chat
   // never inherits a disconnected default.
@@ -311,7 +337,7 @@
     defaultOption() { return M.options.find(o => o.isGlobalDefault) || null; },
     find(model, provider) { if (!model) return null; return M.options.find(o => o.value === model && (!provider || o.provider === provider)) || null; },
     visible(model, provider, keep = true) { return visibleChoices(shown(M.options, model, provider, keep), model, provider); },
-    runError,
+    runError, smartFail, reconnect,
     foreignApp,
     refusal,
     name(model, provider) { const o = M.find(model, provider); return o ? o.name : model ? (claudeName(model, provider || 'anthropic') || friendly(model)) : ''; },
@@ -398,7 +424,18 @@
             (selected.version > 0 && s.modelLockAt >= selected.version)) M.selections.delete(s.id);
       }
     },
-    async resolveRoute(snapshot) {
+    /* The provider a thread's box has saved for it (its model lock), for a send in that thread when the phone's model
+     * list can't name it (failed, empty, still loading): the row this page has, else one fresh single-thread read.
+     * '' when the box has none either (wizard-ux issue 1973). */
+    async savedProvider(sid, model) {
+      const L = window.WizLive;
+      if (!sid || sid === '__new__' || !model || !L) return '';
+      const s = L.session?.(sid);
+      if (s?.model === model && s.provider) return s.provider;
+      try { const d = await L.sessionInfo?.(sid); if (d?.model === model && d.provider) return d.provider; } catch (_) { /* unknown: the plain words below */ }
+      return '';
+    },
+    async resolveRoute(snapshot, opts = {}) {
       // An agent's route is the agent's own provider and model, never the main agent's catalogue.
       if (snapshot?.agent) {
         const AG = window.WosAgents, a = AG?.get(snapshot.agent);
@@ -411,16 +448,23 @@
       // No model in a cached list: an AI may have been signed in since it was read (the Welcome's sign-in on the
       // desktop, wizard-ux#1811). Ask the box once more before giving up, never send on a 5-minute-old empty list.
       if (!snapshot && !route?.model) { await M.load(true); route = M.snapshot(''); }
-      if (!route?.model) throw new Error('Model unavailable · choose a model before sending');
+      // A send in an existing thread never fails only because this phone can't name the route (wizard-ux issue 1973):
+      // it goes with no model and provider, and the Agent Service runs it on the thread's saved route (its model lock;
+      // a scheduled post's thread has one before the owner ever wrote in it). `savedRoute` never reaches the wire.
+      const saved = model => ({ model, provider: '', savedRoute: true });
+      if (!route?.model) { if (opts.thread) return saved(''); throw new Error('Model unavailable · choose a model before sending'); }
       let provider = route.provider;
       if (!provider) {
         const matches = M.options.filter(o => o.value === route.model);
         if (matches.length === 1) provider = matches[0].provider;
       }
+      // First the provider the box's own reads name for the thread, else the thread's saved route on the box.
+      if (!provider && opts.thread) provider = await M.savedProvider(opts.thread, route.model);
+      if (!provider && opts.thread) return saved(route.model);
       // Old recap metadata used a display label; the transport needs the configured provider slug.
       if (provider === 'tinfoil') provider = 'custom:tinfoil-operator';
       if (provider && M.providers.some(p => p.slug === provider && p.is_user_defined)) provider = 'custom:' + provider;
-      if (!provider) throw new Error('Model provider unavailable · choose the model again');
+      if (!provider) throw new Error('Couldn’t tell which AI runs this chat · tap the model name, pick one, then Retry');
       if (isTinfoil(provider) && !M.tinfoilReady()) throw new Error('Set up Tinfoil in its connection app before choosing it');
       return { model: route.model, provider };
     },
@@ -468,11 +512,15 @@
         : main.map((o, i) => `<button type="button" class="mrow${isTinfoil(o.provider) ? ' secure' : ''}${isCur(o) ? ' on' : ''}" data-mpick="${i}" aria-pressed="${isCur(o)}"><span class="mn"><b>${esc(o.name)}</b><small>${esc([o.description, o.isGlobalDefault ? 'Default' : ''].filter(Boolean).join(' · ') || o.value)}</small></span>${isCur(o) ? '<i class="mck" aria-hidden="true">✓</i>' : ''}</button>`).join('');
       const lock = window.WosAgents?.lock?.() || '';
       const privNote = mode === 'thread' ? 'Starts a new private chat with this conversation quoted. This thread stays as it is.' : 'Runs on your private agent: its own history, no fallback.';
-      const privRows = privList.length ? `<div class="msheet-grp priv" role="group" aria-label="Private models"><div class="msheet-gh">${lock}<span>Private</span></div>`
+      // Private mode's setup (wizard-ux issue 1801, switch wizard/private-mode): no private agent yet, so the Private
+      // group offers Set up private AI, which opens Settings › Privacy's switch-over sheet.
+      const privSetup = !own && Array.isArray(priv) && !privList.length && !!window.WosPrivacy?.setupDue?.();
+      const privRows = privSetup ? `<div class="msheet-grp priv" role="group" aria-label="Private models"><div class="msheet-gh">${lock}<span>Private</span></div>${SETUP_PRIVATE}</div>`
+        : privList.length ? `<div class="msheet-grp priv" role="group" aria-label="Private models"><div class="msheet-gh">${lock}<span>Private</span></div>`
         + privList.map((o, k) => { const i = main.length + k; return `<button type="button" class="mrow priv${isCur(o) ? ' on' : ''}" data-mpick="${i}" data-mprivate="${esc(o.agent)}" aria-pressed="${isCur(o)}"><span class="mn"><b>${lock}${esc(o.name)}</b><small>${esc([o.description, o.isGlobalDefault ? 'Default' : ''].filter(Boolean).join(' · '))}</small></span>${isCur(o) ? '<i class="mck" aria-hidden="true">✓</i>' : ''}</button>`; }).join('')
         + `<p class="msheet-gn">${esc(privNote)}</p></div>` : '';
       return { list, html: `<div class="ch-sheet ch-msheet" role="dialog" aria-label="${esc(head)}"><div class="ch-sheet-b"><div class="ch-sheet-t">${esc(title ? `${head} · ${title}` : head)}</div>
-        <div class="msheet-list">${own ? '' : M.claudeNote()}${rows}${own ? '' : M.noConnectorHtml()}${!own && !privList.length && ours() && !M.options.some(o => isTinfoil(o.provider)) ? '<a class="mrow more" href="/wizard-tinfoil/" target="_blank" rel="noopener">Set up Tinfoil</a>' : ''}${!own && M.ready && !all && catalogue.length > main.length ? `<button type="button" class="mrow more" data-mall>More models · ${catalogue.length}</button>` : ''}${privRows}</div>
+        <div class="msheet-list">${own ? '' : M.claudeNote()}${rows}${own ? '' : M.noConnectorHtml()}${!own && !privList.length && !privSetup && ours() && !M.options.some(o => isTinfoil(o.provider)) ? '<a class="mrow more" href="/wizard-tinfoil/" target="_blank" rel="noopener">Set up Tinfoil</a>' : ''}${!own && M.ready && !all && catalogue.length > main.length ? `<button type="button" class="mrow more" data-mall>More models · ${catalogue.length}</button>` : ''}${privRows}</div>
         <p class="ch-sheet-n">${esc(note)}</p></div></div>` };
     },
     /* The compact model menu opened from the label in the message box: a small card over the right side.
@@ -503,7 +551,7 @@
         const curO = cur?.model ? M.find(cur.model, cur.provider) : null;
         mainRows = (curO ? row(curO) : '') + CONNECT_AI;
       }
-      const privRows = privList.map(o => row(o, ' priv')).join('');
+      const privRows = privList.map(o => row(o, ' priv')).join('') || (!own && Array.isArray(priv) && window.WosPrivacy?.setupDue?.() ? SETUP_PRIVATE : '');
       const moreRows = rest.map(o => row(o)).join('');
       const moreBtn = !own && M.ready && !all && vis.some(o => !primary.includes(o)) ? `<button type="button" class="mrow more" data-mall>More models</button>` : '';
       // The section you're in sits at the bottom, by your thumb; the other section is right above it.
@@ -530,7 +578,7 @@
      * and Retry comes back. A failure the Agent Service already named (network, quota, …) keeps its own card.
      * One rule for the thread card, the Errors row (desktop sidebar) and the hidden generic failed-turn line. */
     signedOutFail(s, busy = '') {
-      return s && !s.reconnect && (!s.runError || s.runError.code === 'provider_auth') && ['failed', 'interrupted'].includes(s.status) && s.queueReason !== 'provider_access' && busy !== 'retry' ? M.signedOutFor(s) : null;
+      return s && !reconnect(s) && (!s.runError || s.runError.code === 'provider_auth') && ['failed', 'interrupted'].includes(s.status) && s.queueReason !== 'provider_access' && busy !== 'retry' ? M.signedOutFor(s) : null;
     },
     /* A failed thread: what happened, on which model, and the ways out (Retry · Choose another model · Dismiss). */
     failureHtml({ s, busy, retryLabel, canRetry }) {
@@ -544,7 +592,7 @@
         <div class="ch-fail-b"><button type="button" data-chreconnect="${esc(out.appId)}" data-recovery-run="">Reconnect ${esc(out.name)}</button><button type="button" data-chretrymodel ${busy || !canRetry ? 'disabled' : ''}>Choose another model</button><button type="button" class="ghost" data-chdismiss ${busy ? 'disabled' : ''}>${busy === 'dismiss' ? 'Dismissing…' : 'Dismiss'}</button></div></section>`;
       }
       // The provider's sign-in expired: Retry can't fix that, the provider's connection app can.
-      const rc = s.reconnect;
+      const rc = reconnect(s);
       if (rc && s.queueReason !== 'provider_access' && busy !== 'retry') {
         const target = M.short(s.model, s.provider) || model || rc.name;
         return `<section class="ch-fail diagnosed" role="alert" data-chfail="${esc(s.id)}"><span class="lb">${esc(rc.name)} sign-in expired</span>

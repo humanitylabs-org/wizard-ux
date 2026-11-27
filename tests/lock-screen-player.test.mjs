@@ -16,7 +16,7 @@ const APPS = {
 
 function shell({ on = false } = {}) {
   const sent = [], frames = [], listeners = {};
-  const root = { dataset: { tweaks: on ? `wizard/sidebar-chats-view ${SWITCH}` : 'wizard/sidebar-chats-view' } };
+  const root = { dataset: { tweaks: on ? `wizard/phone-recovery-mode ${SWITCH}` : 'wizard/phone-recovery-mode' } };
   const c = { location: { origin, href: origin + '/wizard-os-home/' }, URL, console,
     document: { documentElement: root, querySelectorAll: () => frames },
     setTimeout: () => 1, clearTimeout: () => {}, addEventListener: (name, fn) => { listeners[name] = fn; },
@@ -79,7 +79,7 @@ test('turning the switch off mid-play never strands Podcasts: it keeps its own i
   const win = f.frame('wizard-podcasts');
   f.c.WizBackgroundAudio.request(win, 'load', { sessionId: 's', queue: [] }).catch(() => {});
   assert.equal(f.sent.at(-1).appId, 'wizard-podcasts');
-  f.root.dataset.tweaks = 'wizard/sidebar-chats-view';
+  f.root.dataset.tweaks = 'wizard/phone-recovery-mode';
   f.c.WizBackgroundAudio.request(win, 'pause', { sessionId: 's' }).catch(() => {});
   assert.equal(f.sent.at(-1).appId, 'wizard-podcasts', 'the owner keeps controlling its own session');
   const answer = result => f.c.wizardAudioPort.onmessage({ data: JSON.stringify({ id: f.sent.at(-1).id, ok: true, result }) });
@@ -96,7 +96,7 @@ test('the off edge of the switch (wos:tweak-choice) triggers the release; other 
   const f = shell({ on: true });
   let calls = 0; f.c.WizBackgroundAudio.releaseOwn = () => { calls++; };
   const fire = detail => f.listeners['wos:tweak-choice']({ detail });
-  fire({ id: SWITCH, on: true }); fire({ id: 'wizard/sidebar-chats-view', on: false });
+  fire({ id: SWITCH, on: true }); fire({ id: 'wizard/phone-recovery-mode', on: false });
   assert.equal(calls, 0);
   fire({ id: SWITCH, on: false });
   assert.equal(calls, 1);
@@ -112,7 +112,8 @@ test('the switch is listed, off by default, linked to its issue', async () => {
   await fresh.E.toggle(SWITCH); assert.ok(fresh.active().includes(SWITCH), 'the switch turns it on');
   const m = JSON.parse(read('web/tweaks/wizard/lock-screen-player/manifest.json'));
   assert.equal(m.id, SWITCH);
-  assert.deepEqual(m.issues, ['humanitylabs-org/wizard-ux#1661']);
+  assert.ok(m.issues.includes('humanitylabs-org/wizard-ux#1661'));
+  assert.ok(m.issues.includes('humanitylabs-org/wizard-ux#1664'), 'the iPhone player is behind the same switch');
 });
 
 // Not run here (wizard-ux issue 1674): this pinned Java/Swift source text and no JDK runs it in this suite. Android lock-screen player wiring: the admitted apps and the open path run in the JVM suite (AudioPolicyTest).

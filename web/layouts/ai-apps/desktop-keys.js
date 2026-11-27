@@ -6,9 +6,9 @@
  * in front and the pins) stay in desktop.js; this code reads and writes them as aadVars.<name>, its get/set accessors
  * on the same variables, so every read and write is live. desktop.js's own imports are imported here again from the
  * same modules. The body below keeps desktop.js's indentation so `git log -L` and patches port over. */
-import { railActive, readyStep } from './parts.js';
+import { railActive, readyStep, sharedIds, sharedList } from './parts.js';
 import { CHATS } from '../apps/chrome.js';
-export function keysPart({ aadVars, allOpenNow, anim, api, appKeyOf, applySizes, appName, behindThread, chanTitle, chatAction, chatParts, chatWindows, closeAll, closeChat, closeDesk, closeTidy, closeWs, cTop, curChat, cX, deskOfNode, desks, doc, DRAFT, el, FEED, feedBack, feedGone, feedOn, feedTitle, findBtn, flipAppSide, focusIn, focusLeave, focusOut, FRAME_KEYS, goApp, grip, hBack, hidePanel, hMid, homeComposer, host, isAppKey, KEY_LIKE, khMarks, leftOn, listBack, macHoles, mainChats, MODE_KEYS, MODE_LABELS, modeBars, narrow, newBtn, NOTE, noteOn, noteTitle, one, oneBack, oneSplit, openAll, openTidy, openWs, orbBtn, paintAgents, paintBack, paintHome, paintList, paintOneChats, paintOrbIdentity, paintRail, paintSplit, paintVt, paintWs, paneFrame, panes, pIcon, plus, pSide, pW, pX, railMode, readSessions, readyIds, readyOrder, retileSoon, rFind, rList, rNew, root, rSet, rTog, setBtn, setSearch, setSize, settings, setWide, side, sizes, stepReady, swapOn, swapped, swapSides, syncOrb, syncSide, talkFromOrb, tidyBtn, titleOf, togBtn, toggleSide, toggleTabs, top, tt, typing, unpeek, vtAll, vtList, vtTog, windowMode, wsBtn, wsName }) {
+export function keysPart({ aadVars, allOpenNow, anim, api, appKeyOf, applySizes, appName, behindThread, chanTitle, chatAction, chatParts, chatWindows, closeAll, closeChat, closeDesk, closeTidy, closeWs, cTop, curChat, cX, deskOfNode, desks, doc, DRAFT, el, FEED, feedBack, feedGone, feedOn, feedTitle, findBtn, focusIn, focusLeave, focusOut, FRAME_KEYS, goApp, grip, hBack, hidePanel, hMid, homeComposer, host, isAppKey, KEY_LIKE, khMarks, listBack, macHoles, mainChats, MODE_KEYS, MODE_LABELS, modeBars, narrow, newBtn, NOTE, noteOn, noteTitle, one, oneBack, oneSplit, openAll, openTidy, openWs, orbBtn, paintAgents, paintBack, paintHome, paintList, paintOneChats, paintOrbIdentity, paintRail, paintSplit, paintVt, paintWs, paneFrame, panes, pIcon, plus, pX, railMode, readSessions, readyIds, readyOrder, retileSoon, rFind, rList, rNew, root, rSet, rTog, setBtn, setSearch, setSize, settings, side, sizes, stepReady, swapped, swapSides, syncOrb, syncSide, talkFromOrb, tidyBtn, titleOf, togBtn, toggleSide, toggleTabs, top, tt, typing, unpeek, vtAll, vtList, vtTog, windowMode, wsBtn, wsName }) {
   const closeSettings = () => host?.settings.close();
   // (inside the Chats desk, which can carry [hidden] while the view shows it: on screen = it has a box)
   const onScreen = n => !!n && typeof n.getClientRects === 'function' && n.getClientRects().length > 0 && n.getBoundingClientRect().width > 0;
@@ -33,8 +33,7 @@ export function keysPart({ aadVars, allOpenNow, anim, api, appKeyOf, applySizes,
     // The snooze sheet keeps ⌥Z to close; Someday is an explicit button, never an arrow shortcut.
     if (snoozeOpen()) return code === 'KeyZ' && !sh ? once(() => doc.querySelector('.boom-sheet [data-boom-close]')?.click?.()) : KEY_LIKE.test(code);
     if (sh && MODE_KEYS[code]) return once(() => windowMode(MODE_KEYS[code]));
-    if (sh && code === 'KeyM' && leftOn() && !one()) return once(flipAppSide);
-    if (sh && code === 'KeyL' && swapOn() && !one()) return once(swapSides);   // swap sides (wizard-ux issue 1526)
+    if (sh && code === 'KeyL' && !one()) return once(swapSides);   // swap sides (wizard-ux issue 1526)
     // voice: the shell's own keys (⌥D into the open chat's box, ⌥V a new voice chat, ⌥C a command); ⌥Space = the orb
     if (code === 'KeyV' || code === 'KeyC' || code === 'KeyD') return false;
     // a word with an accent while typing (⌥E é, ⌥U ü, ⌥I î on a Mac) and ⌥← / ⌥→ word jumps stay the field's
@@ -70,7 +69,6 @@ export function keysPart({ aadVars, allOpenNow, anim, api, appKeyOf, applySizes,
     if ((code === 'Minus' || code === 'Equal') && !sh) { if (aadVars.pane && !aadVars.wide) setSize('app', sizes().app[0] + (code === 'Equal' ? 64 : -64), true); return true; }
     if (code === 'KeyW' && !sh && aadVars.pane) { if (!e.repeat) { const d = desks().find(x => x.desk === aadVars.pane.desk); if (d && !aadVars.pins.includes(d.id)) closeDesk(d); else hidePanel(); } return true; }
     if (code === 'KeyW' && !sh && aadVars.docked) { if (!e.repeat) closeChat(); return true; }
-    if (code === 'KeyF' && !sh && aadVars.pane) { if (!e.repeat) { aadVars.wideAuto = false; setWide(!aadVars.wide); } return true; }
     // The open item's own buttons change its state, never the selected thread.
     // Keep the existing letters: ⌥E Archive, ⌥Z Snooze. A and S already open All apps and Settings.
     const act = !sh && aadVars.docked && !typing() && { KeyZ: 'snooze', KeyE: 'done', KeyX: 'resolve' }[code];
@@ -135,7 +133,9 @@ export function keysPart({ aadVars, allOpenNow, anim, api, appKeyOf, applySizes,
     if (open) {
       // ↓ / ↑ on the very rows ⌥↓ / ⌥↑ open (the drawn Ready, in its order)
       // (the row makes room at its start while ⌥ is held, data-aad-kh, so the keycap never touches its title)
-      const row = (id, k) => { const w = id && [...side.querySelectorAll('.aad-rw[data-kind="ready"]')].find(r => r.dataset.sid === id); const b = w?.querySelector('.aad-row'); if (shown(b)) { w.dataset.aadKh = k; khMarks.set(id, k); put(b, k, 'inside-l'); } };
+      // (the pane's Chats list, wizard-ux issue 1966: the phone's row for that thread or alert)
+      const paneRow = id => { const sec = id && sharedList(side.querySelector('.aad-chan'))?.querySelector('section.ch-sec[data-sec="ready"]'), ids = sharedIds(sec), i = ids.indexOf(id); return i < 0 ? null : sec.querySelectorAll('[data-chopen], [data-chnotif]')[i]; };
+      const row = (id, k) => { const w = id && [...side.querySelectorAll('.aad-rw[data-kind="ready"]')].find(r => r.dataset.sid === id); const b = w?.querySelector('.aad-row') || paneRow(id); if (shown(b)) { if (w) w.dataset.aadKh = k; khMarks.set(id, k); put(b, k, 'inside-l'); } };
       if (nx && nx.id !== cur) row(nx.id, '↓'); if (pv && pv.id !== cur) row(pv.id, '↑');
     } else {
       // folded: on the rail word whose group holds it (its status, else Ready)
@@ -156,12 +156,11 @@ export function keysPart({ aadVars, allOpenNow, anim, api, appKeyOf, applySizes,
     // ⌥P on the icon of what played last: on its bars while they play, else on the icon itself
     const np = api.media?.list?.()[0], npRow = np && rows.find(b => b.dataset.app === np.appId);
     if (npRow) { const bars = npRow.querySelector('.aad-np'); put(np.playing && bars ? bars : tile(npRow), 'P', np.playing && bars ? 'mid' : 'bl'); }
-    if (aadVars.pane) { put(pX, 'W'); put(pW, 'F'); if (!aadVars.wide) put(grip.app, '− =', 'mid'); put(pIcon, 'H'); } else if (aadVars.docked) put(cX, 'W');
+    if (aadVars.pane) { put(pX, 'W'); if (!aadVars.wide) put(grip.app, '− =', 'mid'); put(pIcon, 'H'); } else if (aadVars.docked) put(cX, 'W');
     for (const { bar } of modeBars) for (const [code, mode] of Object.entries(MODE_KEYS)) {
       const n = bar.querySelector('[data-mode="' + mode + '"]');
       if (shown(n)) out.push({ el: n, key: '⇧' + code.slice(3), at: 'below', word: MODE_LABELS[mode] });
     }
-    if (shown(pSide)) out.push({ el: pSide, key: '⇧M', at: 'below', word: 'Move the app' });
     midH();
     if (aadVars.docked) {
       for (const [a, k] of [['snooze', 'Z'], ['done', 'E'], ['resolve', 'X']]) putIn(chatBtn(a), k);

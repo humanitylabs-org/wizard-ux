@@ -17,4 +17,6 @@
     mount(id, root, opts = {}) { const f = entries.get(id); if (!f) return; return f.mount?.(root, H, opts); },
     get entries() { return [...entries.values()]; }
   };
+  // Modules loaded before this one hand their entries over here (core/resources.js: ?view=backup-health).
+  for (const f of window.WosResources?.features || []) { try { api.register(f); } catch (_) { /* Settings not loaded yet */ } }
 })();

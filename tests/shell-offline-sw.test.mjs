@@ -228,3 +228,66 @@ test('a crawling link opens from the saved copy after 3 s, and the fresh copy st
   h.setOnline(false);
   assert.match((await h.get('/wizard-os-home/', { mode: 'navigate' })).body, /bbb/, 'the slow read still refreshed the copy');
 });
+
+// Instant home-screen apps (wizard-ux issue 1830, switch wizard/pin-instant-open). The pinned-app worker owns the shell
+// files on its list (base.css, styles.css, skins.js...) and read every one with no-store on every open, so a stamped,
+// year-immutable file was downloaded again each time (twice on a slim pin page). While the shell page's flag is saved,
+// a stamped file on that list comes from the saved copy; switch off is the old read, byte for byte.
+const STAMP = 'aaaaaaaaaaaa', BASE_CSS = '/wizard-os-home/core/base.css?v=' + STAMP;
+async function warmed(flag) {
+  const h = harness();
+  h.files.set(ORIGIN + '/wizard-os-home/', h.page(STAMP));
+  h.files.set(ORIGIN + '/wizard-os-home/core/base.css', { body: 'base A', headers: {} });
+  // The full shell page saved the flag (switch on), then its after-load hand-over kept the stamped copy.
+  if (flag) h.stores.set('wizard-os-home-registry', new Map([[ORIGIN + '/wizard-os-home/pin-instant-open.json', { ok: true, status: 200 }]]));
+  await h.visit('/wizard-os-home/', [BASE_CSS]);
+  return h;
+}
+
+test('switch on: a stamped shell file on the pinned-app list comes from the saved copy, with no box read', async () => {
+  const h = await warmed(true);
+  const before = h.fetched().length;
+  // A slim pin page asks for each head file twice (before and after window.stop()): both answered on the phone.
+  assert.equal((await h.get(BASE_CSS)).body, 'base A');
+  assert.equal((await h.get(BASE_CSS)).body, 'base A');
+  assert.deepEqual(h.fetched().slice(before), [], 'zero shell file reads to the box');
+  // Unstamped or another release's token: the network read as before.
+  await h.get('/wizard-os-home/core/base.css');
+  assert.deepEqual(h.fetched().slice(before), [ORIGIN + '/wizard-os-home/core/base.css']);
+  h.setOnline(false);
+  assert.equal((await h.get(BASE_CSS)).body, 'base A', 'offline too');
+});
+
+test('switch off (no flag): every pinned-app shell file is read from the box as before', async () => {
+  const h = await warmed(false);
+  const before = h.fetched().length;
+  await h.get(BASE_CSS); await h.get(BASE_CSS);
+  assert.deepEqual(h.fetched().slice(before), [ORIGIN + BASE_CSS, ORIGIN + BASE_CSS]);
+});
+
+test('the shell page saves the flag only while the switch is on, and never from a pinned app page', async () => {
+  const src = readFileSync(new URL('../web/core/offline-session.js', import.meta.url), 'utf8');
+  function page({ on, pinned = false }) {
+    const store = new Map(), timers = [], observers = [], listeners = {};
+    const root = { dataset: { tweaks: on ? 'wizard/pin-instant-open' : '' } };
+    const ctx = { Response: class { constructor(b) { this.b = b; } }, setTimeout: (fn, ms) => timers.push({ fn, ms }), clearTimeout() {},
+      document: { documentElement: root }, addEventListener: (n, f) => (listeners[n] ||= []).push(f),
+      MutationObserver: class { constructor(fn) { observers.push(fn); } observe() {} },
+      WizHomeScreenPolicy: { mode: pinned },
+      caches: { open: async () => ({ put: async (k, v) => store.set(k, v), delete: async k => store.delete(k), match: async k => store.get(k) }) } };
+    ctx.globalThis = ctx;
+    vm.runInNewContext(src, ctx);
+    const flush = () => new Promise(r => setImmediate(r));
+    return { store, flush, set(v) { root.dataset.tweaks = v ? 'wizard/pin-instant-open' : ''; observers.forEach(f => f()); }, settle() { timers.filter(t => t.ms === 5000).forEach(t => t.fn()); } };
+  }
+  const p = page({ on: true }); await p.flush();
+  assert.ok(p.store.has('/wizard-os-home/pin-instant-open.json'));
+  p.set(false); await p.flush();
+  assert.ok(p.store.has('/wizard-os-home/pin-instant-open.json'), 'an off before the switches settle waits');
+  p.settle(); await p.flush();
+  assert.ok(!p.store.has('/wizard-os-home/pin-instant-open.json'));
+  const off = page({ on: false }); off.settle(); await off.flush();
+  assert.equal(off.store.size, 0);
+  const pin = page({ on: true, pinned: true }); pin.settle(); await pin.flush();
+  assert.equal(pin.store.size, 0, 'a pinned page only holds a copy of the switches');
+});

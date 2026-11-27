@@ -99,8 +99,10 @@ window.WizCore.desktopParts.palopen = function ({ $, CHATS, desktopVars, findWin
   async function ask(text, how = 'typing in the desktop launcher', audio = null, route = null, quiet = false) {
     text = String(text || '').trim(); if (!text && !audio) return;
     const ctx = viewContext(null, how);
-    await OUTBOX.enqueue({ ...(route || {}), kind: 'new', text, audio, instructions: ctx, source: 'orb', how });
-    if (!audio && !quiet) toast('✦', `New thread started · ${window.WizConfig.agent()} is on it`, 1600);
+    // Private routing (wizard-ux issue 1804): a typed ask goes to the agent the route names (asked once, never a dump).
+    const routing = !!text && !audio && !route?.agent && !!window.WosPrivateRoute?.on?.();
+    await OUTBOX.enqueue({ ...(route || {}), kind: 'new', text, audio, instructions: ctx, source: 'orb', how, ...(routing ? { dump: true, routeOnly: true } : {}) });
+    if (!audio && !quiet) toast('✦', routing ? 'New thread started' : `New thread started · ${window.WizConfig.agent()} is on it`, 1600);
   }
 
   /* Wizard Files (#23): the shared Files sheet, in a Chats window (attaches to its open thread, else starts a new chat). */

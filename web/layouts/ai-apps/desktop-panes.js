@@ -12,43 +12,32 @@ export function panesPart({ aadVars, api, COLS, doc, flip, one, ONE, panes, pane
   const oneSplit = () => (globalThis.innerWidth || 1440) >= ONE.split;
   // (one app at a time: no split, no side by side, no second app; the saved arrangement is kept for the wide window)
   const paneModel = () => { const m = panes.get(); return one() ? { ...m, mode: 'tiled', ratio: null, weights: {}, slots: ['chats', 'app'], app2: null } : m; };
-  /* The app panel on the left (wizard-os#639, switch wizard/app-panel-left, off by default): one button in the panel's
-   * header (and ⌥⇧M) mirrors the main area, the app panel next to the sidebar and a docked chat beside it on the right,
-   * kept per device in the pane model (appSide). Off, or in the narrower one-app window, the panel stays on the right. */
-  const leftOn = () => { try { return String(root.dataset.tweaks || '').split(' ').includes('wizard/app-panel-left'); } catch (_) { return false; } };
-  const appSideOf = m => leftOn() && !one() && m.appSide === 'start' ? 'start' : 'end';
-  /* Swap sides (wizard-ux issue 1526, switch wizard/swap-sides, off by default): one button in the chats sidebar's
-   * header (and ⌥⇧L) puts the chats sidebar on the right and the open-apps column on the left, kept per device in the
-   * pane model (side 'end', dock edge 'start'); the whole wide layout mirrors. Off, or in the narrower one-app window,
-   * the chats sidebar stays on the left whatever the model says. */
-  const swapOn = () => { try { return String(root.dataset.tweaks || '').split(' ').includes('wizard/swap-sides'); } catch (_) { return false; } };
-  const sideOf = m => swapOn() && !one() && m.side === 'end' ? 'end' : 'start';
+  /* Swap sides (wizard-ux issue 1526, on for everyone): one button in the chats sidebar's header (and ⌥⇧L) puts the
+   * chats sidebar on the right and the open-apps column on the left, kept per device in the pane model (side 'end',
+   * dock edge 'start'); the whole wide layout mirrors. In the narrower one-app window the chats sidebar stays on the
+   * left whatever the model says. */
+  const sideOf = m => !one() && m.side === 'end' ? 'end' : 'start';
   const swapped = () => sideOf(panes.get()) === 'end';
   function flipSides(nodes = []) {
-    if (!swapOn() || one()) return;
+    if (one()) return;
     const to = panes.get().side === 'end' ? 'start' : 'end';
     flip([...nodes, aadVars.dockEl, aadVars.pane?.el, aadVars.secondEl], () => panes.set({ side: to, dock: { edge: to === 'end' ? 'start' : 'end' } }));
-  }
-  function flipAppSide() {
-    if (!leftOn() || one()) return;
-    const to = panes.get().appSide === 'start' ? 'end' : 'start';
-    flip([aadVars.dockEl, aadVars.pane?.el, aadVars.secondEl], () => panes.set({ appSide: to }));
   }
   function placePanes(s) {
     const m = paneModel(), focus = root.hasAttribute('data-aad-focus');
     // Horizontal dock interaction is not admitted yet: keep the saved model but render at end. The narrower window's
     // app bar (ONE) is that dock at ONE.bar, ONE.barH thick; the saved wide-window edge is left as it is.
-    // (the dock's saved edge counts only while the swap-sides switch is on, wizard-ux issue 1526; off it is the right edge)
-    const bar = one(), edge = bar ? ONE.bar : swapOn() && m.dock.edge === 'start' ? 'start' : 'end';
+    // (the dock's saved edge: the left one when the sides are swapped, wizard-ux issue 1526; otherwise the right edge)
+    const bar = one(), edge = bar ? ONE.bar : m.dock.edge === 'start' ? 'start' : 'end';
     const sm = root.dataset.aadSide;
     const sideWidth = focus || sm === 'none' ? 0 : sm === 'open' ? s.side[0] : sm === 'full' ? vw() : RAIL;
     const dockWidth = focus ? 0 : bar ? ONE.barH : root.dataset.aadTabs === 'rail' ? COLS.tabsRail : s.tabs[0];
-    aadVars.paneGeometry = panes.geometry({ ...m, appSide: appSideOf(m), side: sideOf(m), dock: { ...m.dock, edge } }, { width: vw(), height: globalThis.innerHeight || 900 }, {
+    aadVars.paneGeometry = panes.geometry({ ...m, side: sideOf(m), dock: { ...m.dock, edge } }, { width: vw(), height: globalThis.innerHeight || 900 }, {
       sideWidth, dockWidth, appWidth: s.app[0], chatOn: !!root.dataset.aadChat, appOn: !!root.dataset.aadSplit, wide: root.hasAttribute('data-aad-wide'), app2On: !!aadVars.secondEl,
     });
     root.dataset.aadPaneSide = sideOf(m); root.dataset.aadDockEdge = edge;
-    // (the side the app panel is on, as seen: with the sides swapped its own choice reads mirrored)
-    root.dataset.aadAppSide = (sideOf(m) === 'end') !== (appSideOf(m) === 'start') ? 'start' : 'end';
+    // (the side the app panel is on, as seen: with the sides swapped it sits at the start, next to the Apps column)
+    root.dataset.aadAppSide = sideOf(m) === 'end' ? 'start' : 'end';
     root.dataset.aadPaneTiled = String(aadVars.paneGeometry.tiled);
     root.dataset.aadMode = m.mode;
     const put = (k, v) => { const key = '--aad-pane-' + k; paneVars.add(key); if (root.style.getPropertyValue(key) !== v + 'px') root.style.setProperty(key, v + 'px'); };
@@ -58,7 +47,7 @@ export function panesPart({ aadVars, api, COLS, doc, flip, one, ONE, panes, pane
     }
     /* round 14 (wizard-ux issue 1742): desks out of sight keep the open sidebar's geometry, so a fold re-lays out only
      * what shows. The main area as it is with the sidebar and the tab column open (the same model, the fold left out). */
-    const held = panes.geometry({ ...m, appSide: appSideOf(m), side: sideOf(m), dock: { ...m.dock, edge } }, { width: vw(), height: globalThis.innerHeight || 900 }, {
+    const held = panes.geometry({ ...m, side: sideOf(m), dock: { ...m.dock, edge } }, { width: vw(), height: globalThis.innerHeight || 900 }, {
       sideWidth: s.side[0], dockWidth: bar ? ONE.barH : s.tabs[0], appWidth: s.app[0],
     }).content;
     put('held-x', held.x); put('held-right', vw() - held.x - held.width);
@@ -70,5 +59,5 @@ export function panesPart({ aadVars, api, COLS, doc, flip, one, ONE, panes, pane
   const el = (tag, cls, attrs = {}) => { const n = doc.createElement(tag); if (cls) n.className = cls; for (const [k, v] of Object.entries(attrs)) { if (v == null) continue; if (k === 'text') n.textContent = v; else n.setAttribute(k, v); } return n; };
   const icon = (name, cls = 'aad-ico') => svgIcon(doc, name, cls);
   const desks = () => api.desks.list();
-  return { appSideOf, desks, el, flipAppSide, flipSides, icon, leftOn, oneSplit, paneModel, placePanes, swapOn, swapped, bindLate: v => { if ('vw' in v) vw = v.vw; } };
+  return { desks, el, flipSides, icon, oneSplit, paneModel, placePanes, swapped, bindLate: v => { if ('vw' in v) vw = v.vw; } };
 }

@@ -826,9 +826,10 @@ html[data-shell="desktop"][data-layout="ai-apps"].key-hints-on .aad-rw[data-aad-
 /* app keys (Miguel, 4 Nov 2026, one anchor): the app in front's ⌥ keys (data-wz-key) wear the view's own keycap (no
  * second style); ⌥H also sits in the empty middle of Home (.aad-hmid is an invisible, unclickable spot there) */
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-hmid { position: absolute; left: calc(var(--aad-side) + (100vw - var(--aad-side) - var(--aad-rs)) / 2 - 12px); top: 40vh; width: 24px; height: 24px; pointer-events: none; }
-/* item 6: a notification row: a small amber bell, its title in normal text, its unread dot amber */
-html[data-shell="desktop"][data-layout="ai-apps"] .aad-rw[data-note] .aad-bell { color: var(--amber, var(--wz-warning)); opacity: 1; }
-html[data-shell="desktop"][data-layout="ai-apps"] .aad-rw[data-note] .aad-st.is-new { background: var(--amber, var(--wz-warning)); }
+/* item 6: a notification row: a small bell, its title in normal text; bell and unread dot in the ink and dot colours
+ * every other row uses (wizard-ux issue 1941: alerts are plain rows marked only by the bell) */
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-rw[data-note] .aad-bell { color: var(--aad-ink-2); opacity: 1; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-rw[data-note] .aad-st.is-new { background: var(--wz-accent, var(--aad-ink)); }
 /* item 9: the flat Ready's tag (Needs you, Your call), tiny and muted at the row's right */
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-tag { flex: none; margin-left: auto; padding-left: 8px; font: 400 0.6875rem / 1 var(--wz-font-ui); color: var(--aad-ink-2); opacity: .8; white-space: nowrap; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-tag + .aad-st { margin-left: 6px; }
@@ -864,7 +865,7 @@ html[data-shell="desktop"][data-layout="ai-apps"] .ch-notif-thread .ch-tacts { g
 html[data-shell="desktop"][data-layout="ai-apps"] .ch-notif-thread .ch-tacts > button { min-height: 32px !important; padding: 0 12px !important; border-radius: 99px !important; font: 500 0.8125rem / 1 var(--wz-font-ui) !important; }
 html[data-shell="desktop"][data-layout="ai-apps"] .ch-notif-thread .ch-tacts > [data-chact="resolve"] { color: var(--wz-base, var(--bg)) !important; background: var(--aad-ink) !important; border-color: var(--aad-ink) !important; }
 html[data-shell="desktop"][data-layout="ai-apps"] .ch-notif-thread .ch-tacts > [data-chact]:not([data-chact="resolve"]) { color: var(--aad-ink) !important; background: none !important; border: 1px solid color-mix(in srgb, var(--aad-ink) 18%, transparent) !important; }
-html[data-shell="desktop"][data-layout="ai-apps"] .aad-fly-i[data-note] .aad-bell { flex: none; margin-right: 6px; color: var(--amber, var(--wz-warning)); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-fly-i[data-note] .aad-bell { flex: none; margin-right: 6px; color: var(--aad-ink-2); }
 
 /* Notification stack + clearer buttons (Miguel, 4 Nov 2026: "Open" and "Resolve" weren't intuitive; clicking through a
  * fold didn't show which one was open). One stable newest-first list from the source; the open one is an amber card with
@@ -979,12 +980,11 @@ html[data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-tiled="true"] .a
  * panes' own skin colour (the window tint over the skin base, made opaque), never
  * the grey --wz-panel mix (James, 6 Nov 2026). */
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-modes { display: inline-flex; align-items: center; gap: 1px; flex: none; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-modes[hidden] { display: none; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-modes > .aad-ib { width: 28px; height: 30px; border-radius: 6px; color: var(--wz-text-secondary, var(--aad-ink-2)); }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-mode[aria-pressed="true"] { color: var(--wz-text, var(--aad-ink)); background: var(--wz-panel-raised, var(--wz-panel)); box-shadow: inset 0 0 0 1px var(--wz-border, var(--aad-line)); }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-mode-glyph { display: block; width: 16px; height: 12px; border: 1.5px solid currentColor; border-radius: 2px; box-sizing: border-box; }
-html[data-shell="desktop"][data-layout="ai-apps"] .aad-mode-glyph.is-centre { width: 12px; height: 10px; box-shadow: 0 0 0 2px var(--wz-panel); }
-html[data-shell="desktop"][data-layout="ai-apps"] .aad-mode-glyph.is-pair { background: linear-gradient(90deg, transparent 44%, currentColor 44%, currentColor 55%, transparent 55%); }
-html[data-shell="desktop"][data-layout="ai-apps"] .aad-mode-glyph.is-tiled { background: linear-gradient(90deg, transparent 25%, currentColor 25%, currentColor 33%, transparent 33%, transparent 66%, currentColor 66%, currentColor 74%, transparent 74%); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-mode-glyph.is-half { background: linear-gradient(90deg, transparent 44%, currentColor 44%, currentColor 55%, transparent 55%); }
 html[data-shell="desktop"][data-layout="ai-apps"] #stage > .wsp[data-aad-mode-hidden] { display: none !important; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-stop { position: absolute; inset: -44px 0 auto; height: 44px; display: flex; align-items: center; gap: 8px; padding: 0 8px 0 14px; box-sizing: border-box; color: var(--wz-text, var(--aad-ink)); background: linear-gradient(var(--aad-main), var(--aad-main)), var(--aad-canvas); }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-stop[hidden] { display: none; }
@@ -1015,6 +1015,12 @@ html[data-shell="desktop"][data-layout="ai-apps"] .aad-chan { position: relative
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-chan[hidden] { display: none; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-chan:has(.ch-side-chan, .ch-side-feed) { flex: 1; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-panel:has(.aad-chan:not([hidden]) :is(.ch-side-chan, .ch-side-feed)) > .aad-scroll { display: none; }
+/* The pane's own Chats list (wizard-ux issue 1966: the phone's title bar, rows, folds and tabs, one design) fills the
+ * sidebar above the gear and + row, in place of the sidebar's rows; its title bar has the search, so the header's ⌥K
+ * icon steps aside (⌥K opens the title bar's field). Nothing here restyles the list itself. */
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-chan:has(> .ch-list:not(.ch-side)) { flex: 1; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-panel:has(.aad-chan:not([hidden]) > .ch-list:not(.ch-side)) > .aad-scroll { display: none; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-panel:has(.aad-chan:not([hidden]) > .ch-list:not(.ch-side)) .aad-find { display: none; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-chan .ch-list { position: relative; inset: auto; flex: 1; min-height: 0; background: none; box-shadow: none; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-chan .ch-side:not(.ch-side-chan):not(.ch-side-feed) > .ch-scroll { display: none; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-chan .ch-list .ch-scroll { padding: 2px 8px 12px; scrollbar-width: thin; }
@@ -1079,7 +1085,7 @@ html[data-shell="desktop"][data-layout="ai-apps"][data-aad-side="full"] :is(.aad
 html[data-shell="desktop"][data-layout="ai-apps"][data-aad-side="full"] :is(.aad-top, #bar) { visibility: hidden; }
 html[data-shell="desktop"][data-layout="ai-apps"][data-aad-side="full"]:not([data-aad-tabs="bar"]) .aad-orb { visibility: hidden; }
 html[data-shell="desktop"][data-layout="ai-apps"][data-aad-side="full"] #stage > .wsp:not([data-aad-role="app"]) { visibility: hidden; }
-html[data-shell="desktop"][data-layout="ai-apps"][data-aad-one] :is(.aad-modes, .aad-pw, .aad-tog, .aad-rtog, .aad-grip[data-grip="side"], .aad-grip[data-grip="app"]) { display: none !important; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-one] :is(.aad-modes, .aad-tog, .aad-rtog, .aad-grip[data-grip="side"], .aad-grip[data-grip="app"]) { display: none !important; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-vone { flex: none; display: flex; flex-direction: column; padding: 2px 8px 0; box-sizing: border-box; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-vone[hidden] { display: none; }
 html[data-shell="desktop"][data-layout="ai-apps"][data-aad-tabs="rail"] .aad-vone { align-items: center; padding: 2px 0 0; }
@@ -1134,3 +1140,74 @@ html[data-shell="desktop"][data-layout="ai-apps"][data-aad-tabs="bar"] #stage > 
 /* (a desk with one window, Home's or a new chat's, is set 8 px past the edges at the top of this file; the bar's edge
  * needs the same weight, or that window and its message bar run under the bar: ux#1495) */
 html[data-shell="desktop"][data-layout="ai-apps"][data-aad-tabs="bar"] #stage > .wsp:not([data-aad-role]):not(:has(> .win:not(.gone) ~ .win:not(.gone))) { bottom: calc(var(--aad-pane-main-bottom) - 8px); }
+/* Installing apps in the Apps column (wizard-os#682): the rows layouts/ai-apps/desktop-tabs.js draws for a Store Get in
+ * progress, done or failed. They look like an app row that is not open; a spinner rings the icon while it installs. */
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-vtinst {
+  position: relative; flex: none; display: flex; align-items: center; gap: 10px; min-height: 36px; padding: 4px 6px 4px 8px; box-sizing: border-box; border-radius: 10px; cursor: pointer;
+  color: var(--aad-ink); background: none; transition: background 120ms ease; user-select: none;
+}
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-vtinst:hover { background: var(--aad-hover); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-vtinst:focus-visible { outline: 2px solid var(--wz-accent, var(--aad-ink)); outline-offset: -2px; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-vtinst.is-installing .aad-vtn { color: var(--aad-ink-2); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-vtinst.is-installing .aad-tile { opacity: .55; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-vtspin {
+  position: absolute; inset: -3px; border-radius: 9px; box-sizing: border-box; pointer-events: none;
+  border: 2px solid color-mix(in srgb, var(--wz-accent, var(--aad-ink)) 22%, transparent); border-top-color: var(--wz-accent, var(--aad-ink));
+  animation: aad-vtspin 900ms linear infinite;
+}
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-vtw { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-vtst { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--aad-ink-2); font: 500 0.6875rem / 1.25 var(--wz-font-ui); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-vtinst.is-ready .aad-vtst { color: var(--wz-accent, var(--aad-ink)); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-vtinst.is-failed .aad-vtst { color: var(--red, var(--aad-ink-2)); }
+html[data-shell="desktop"][data-layout="ai-apps"] :is(.aad-vtinst:hover, .aad-vtinst:focus-within) .aad-vtx { display: grid; }
+/* folded to icons: the icon and its spinner only */
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-tabs="rail"] .aad-vtinst { width: 40px; height: 40px; padding: 0; justify-content: center; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-tabs="rail"] .aad-vtw { display: none; }
+@keyframes aad-vtspin { to { rotate: 360deg; } }
+@media (prefers-reduced-motion: reduce) { html[data-shell="desktop"][data-layout="ai-apps"] .aad-vtspin { animation-duration: 2700ms; } }
+/* Swap sides (wizard-ux issue 1526, on for everyone): the pane geometry already puts the chats sidebar at the end and the Apps column at
+ * the start (data-aad-pane-side="end"); these rules mirror what desktop.css draws for them on the usual sides. The left
+ * and right insets of the main area become the Apps column and the chats sidebar, so every rule placed from them follows. */
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side="end"] { --aad-side: var(--aad-pane-main-x); --aad-rs: var(--aad-pane-main-right); }
+/* the chats sidebar at the right edge: its line on its left, and opened over the page it grows leftwards from there,
+ * over the orb (which sits at the composer's right end, under it) */
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side="end"] .aad-side { left: auto; right: var(--aad-pane-side-right); box-shadow: -1px 0 0 var(--aad-line); }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side="end"][data-aad-side="over"] .aad-side { z-index: 5; box-shadow: -1px 0 0 var(--aad-line), -8px 0 32px color-mix(in srgb, black 22%, transparent); border-radius: 16px 0 0 16px; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side="end"] :is(.aad-panel, .aad-rail) { left: auto; right: 0; }
+/* (full screen reserves no sidebar, so the list Back opens over the page hangs from the window's right edge itself) */
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side="end"][data-aad-mode="full"][data-aad-side="over"] .aad-side { left: auto; right: 0; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side="end"] .aad-vt { box-shadow: 1px 0 0 var(--aad-line); }
+/* the panel icons (◫) face the side their column is on */
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side="end"] :is(.aad-tog, .aad-rtog, .aad-vtog) .aad-ico { transform: scaleX(-1); }
+/* the app panel at the start (next to the Apps column): its line, header, placeholder and grip face the room on its right */
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side="end"][data-aad-app-side="start"][data-aad-split] #stage > .wsp[data-aad-role="app"] { box-shadow: 1px 0 0 var(--aad-line), 12px 0 32px color-mix(in srgb, black 10%, transparent); }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side="end"][data-aad-app-side="start"] .aad-ptop { box-shadow: 1px 0 0 var(--aad-line), inset 0 -1px 0 var(--aad-line); }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side="end"][data-aad-app-side="start"] .aad-pload { box-shadow: 1px 0 0 var(--aad-line), 12px 0 32px color-mix(in srgb, black 10%, transparent); }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side="end"][data-aad-app-side="start"][data-aad-split] .aad-grip[data-grip="app"] { left: calc(var(--aad-pane-app-x) + var(--aad-pane-app-width)); }
+/* a chat docked beside the chats sidebar (now on the right): its line and shadow on its left */
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side="end"][data-aad-app-side="start"][data-aad-chat] #stage > .wsp[data-aad-role="chat"] { box-shadow: -1px 0 0 var(--aad-line), -12px 0 32px color-mix(in srgb, black 8%, transparent); }
+/* Home's composer (no chat docked) sits in the room right of the panel, never under it */
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side="end"][data-aad-app-side="start"][data-aad-split]:not([data-aad-chat]):not([data-aad-wide]) #stage > .wsp[data-aad-role="chat"] .win .dchats .pane-main .ch-compose {
+  margin-left: max(calc(var(--aad-app-w) + 24px), calc(var(--aad-app-w) + (100% - var(--aad-app-w) - min(768px, calc(100% - var(--aad-app-w) - 48px))) / 2));
+}
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side="end"][data-aad-app-side="start"] .aad-orb { left: calc(var(--aad-side) + var(--aad-app-w, 0px) + var(--aad-chat-w, 0px) + (100vw - var(--aad-side) - var(--aad-chat-w, 0px) - var(--aad-app-w, 0px) - var(--aad-rs)) / 2 - 30px); }
+/* motion, mirrored: the app panel slides in from the left, a docked chat and a thread from the chats sidebar's side, a
+ * folded rail's list from the right */
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side="end"][data-aad-app-side="start"] #stage > .wsp[data-aad-role="app"][data-aad-anim="app"] { animation-name: aad-swap-app-in; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side="end"][data-aad-app-side="start"] :is(#stage > .wsp[data-aad-role="chat"][data-aad-anim="dock"], .aad-ctop[data-aad-anim="dock"]) { animation-name: aad-swap-col-in; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side="end"] #stage > .wsp[data-aad-anim="thread"] .win .dchats .pane-main .ch-thread { animation-name: aad-swap-thread-in; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side="end"] .aad-fly { animation-name: aad-swap-fly; }
+/* a Mac window's traffic lights sit over the left column: the Apps column's header steps below them, the chats on the
+ * right no longer need to */
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side="end"][data-native-chrome="mac"] .aad-vth { margin-top: var(--aad-mac-top); }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side="end"][data-native-chrome="mac"] .aad-sh { margin-top: 0; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side="end"][data-native-chrome="mac"] .aad-rail { padding-top: 8px; }
+@keyframes aad-swap-app-in { from { translate: max(-100%, -480px) 0; opacity: .3; } }
+@keyframes aad-swap-col-in { from { translate: 48px 0; opacity: 0; } }
+@keyframes aad-swap-thread-in { from { transform: translateX(24px); opacity: 0; } }
+@keyframes aad-swap-fly { from { opacity: 0; translate: 4px 0; } }
+/* Desktop sidebar follows Default Chats (wizard-ux issue 1443, on for everyone): the provider's list fills the sidebar (or the rail). */
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-cview { position: relative; flex: 1; min-height: 0; min-width: 0; width: 100%; overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column; box-sizing: border-box; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-cview[hidden],
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-scroll[hidden],
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-rlist[hidden] { display: none; }

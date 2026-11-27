@@ -96,6 +96,9 @@
     voice_routes_confirmed: trusted === true,
     voice_names: Array.isArray(a.voice_names) ? a.voice_names.filter(n => typeof n === 'string') : [],
     provides: trusted && Array.isArray(a.provides) ? a.provides.filter(n => typeof n === 'string') : [],
+    // Device powers the app declared it needs (wizard.md permissions; today only geolocation, wizard-ux issue 1629). Like
+    // provides, only the box's own list counts: a device cache never grants one.
+    permissions: trusted === true && Array.isArray(a.permissions) ? a.permissions.filter(n => n === 'geolocation') : [],
     // Declared kind (wizard.md type) and store shelf, as the Agent Service projects them from apps.json. Not sensitive,
     // so backend-only tiles carry them too; app-kinds.js sorts Connectors by type === 'external'.
     ...(APP_TYPES.has(a.type) ? { type: a.type } : {}),
@@ -110,6 +113,71 @@
   window.WizCore.appHomeScreen = id => REMOTE.find(a => a.id === id)?.homeScreen || null;
   // The repo an installed app came from ('' when the box's list does not say), read by core/browser-boundary.js.
   window.WizCore.appRepo = id => REMOTE.find(a => a.id === id)?.repo || '';
+  /* Location only for the apps that ask for it (wizard-ux issue 1629, switch wizard/app-location, off by default). The
+   * shell's header allows location for Wizard's own origin, so every frame says who may use it through its `allow`:
+   * an app frame gets `geolocation` only while the switch is on AND the box's app list says that app declared
+   * `permissions: [geolocation]` in its wizard.md (today only Maps); every other frame gets `geolocation 'none'`, so
+   * its navigator.geolocation is denied with no prompt, exactly as before. The browser (or the Android/Mac app) still
+   * asks the owner before the first position. Pass the app's id, or for a link sheet the page URL (longest app address). */
+  const LOCATION_SWITCH = 'wizard/app-location';
+  window.WizCore.frameAllow = (base, { id = '', url = '' } = {}) => {
+    let on = false;
+    try { on = String(document.documentElement.getAttribute('data-tweaks') || '').split(' ').includes(LOCATION_SWITCH); } catch (_) {}
+    let app = null;
+    if (on && id) app = REMOTE.find(a => a.id === String(id)) || null;
+    else if (on && url) {
+      try {
+        const u = new URL(url, location.href);
+        let best = 0;
+        for (const a of REMOTE) {
+          const t = a.url ? new URL(a.url, location.href) : null, dir = t ? t.pathname.replace(/[^/]*$/, '') : '';
+          // A page lies under an app's address; an app at the site root ('/') never claims every page.
+          if (!t || t.origin !== u.origin || dir.length < 2 || !u.pathname.startsWith(dir) || dir.length <= best) continue;
+          app = a; best = dir.length;
+        }
+      } catch (_) { app = null; }
+    }
+    const yes = !!app && Array.isArray(app.permissions) && app.permissions.includes('geolocation');
+    return `${base ? base + '; ' : ''}geolocation${yes ? '' : " 'none'"}`;
+  };
+  // Keeps every open frame's location rule in step with the switch and the box's app list. Off (here or from another
+  // device), or an app no longer declaring it: the frame loses `geolocation`. On, or the box's list arriving after an
+  // app's frame was drawn (a fresh start, ?open=maps, a restored window: the shell draws before the box answers): an
+  // app's own frame that declared it gains `geolocation`. Either way the frame reloads, because a browser applies a
+  // frame's `allow` only to its next page. Gaining it never grants anything: the browser or phone still asks the owner.
+  // Only app frames gain it (an app window, the pinned app page, the link sheet), never a hidden service frame.
+  const LOC_ON = /(^|;)\s*geolocation\s*(;|$)/;
+  const appFrame = f => !f.getAttribute('data-voice-service') && (!!f.getAttribute('data-own-app') || /(^|\s)(appframe|ls-frame)(\s|$)/.test(String(f.getAttribute('class') || '')));
+  const relockLocation = () => {
+    let frames = [];
+    try { frames = [...document.querySelectorAll('iframe[allow]')]; } catch (_) { return 0; }
+    let n = 0;
+    for (const f of frames) {
+      const allow = String(f.getAttribute('allow') || '');
+      if (!/(^|;)\s*geolocation\b/.test(allow)) continue;
+      const had = LOC_ON.test(allow);
+      if (!had && !appFrame(f)) continue;
+      const base = allow.split(';').map(x => x.trim()).filter(x => x && !/^geolocation\b/.test(x)).join('; ');
+      const id = f.getAttribute('data-own-app') || '';
+      // The page the frame shows now; a frame still on its first blank page (or one we can't read) restarts from src.
+      let live = ''; try { live = f.contentWindow.location.href || ''; } catch (_) {}
+      if (live === 'about:blank') live = '';
+      const url = live || f.getAttribute('src') || '';
+      if (!id && !url) continue;
+      const next = window.WizCore.frameAllow(base, id ? { id } : { url });
+      if (LOC_ON.test(next) === had) continue;
+      f.setAttribute('allow', next); n++;
+      if (live) { try { f.contentWindow.location.reload(); continue; } catch (_) {} }
+      try { const src = f.getAttribute('src'); if (src) f.setAttribute('src', src); } catch (_) {}
+    }
+    return n;
+  };
+  window.WizCore.relockLocation = relockLocation;
+  try {
+    if (typeof MutationObserver === 'function' && document.documentElement) {
+      new MutationObserver(() => relockLocation()).observe(document.documentElement, { attributes: true, attributeFilter: ['data-tweaks'] });
+    }
+  } catch (_) {}
   const BACK_KEY = 'wux.apps.backend.v1';
   window.WizCore.appMetadata = id => [...REMOTE, ...BACK].find(a => a.id === id)?.sigil;
   let BACK = (() => { try { return (JSON.parse(localStorage.getItem(BACK_KEY) || '[]') || []).filter(a => !SHELL_HIDDEN.has(a?.id)).map(a => toTile(a)); } catch (e) { return []; } })();
@@ -176,6 +244,7 @@
       const back = all.filter(a => !a.url && !window.WizCore.isMaintenanceApp?.(a));
       try { localStorage.setItem(REMOTE_KEY, JSON.stringify(list)); localStorage.setItem(BACK_KEY, JSON.stringify(back)); } catch (e) {}
       REMOTE = list.map(a => toTile(a, true));
+      relockLocation();
       // The pinned-app worker learns which installed apps declared an offline pin (no per-app list in the shell).
       window.WizOfflineSession?.publish(REMOTE).catch(() => {});
       BACK = back.map(a => toTile(a));
@@ -241,15 +310,13 @@
   addEventListener('message', e => {
     if (e.origin === location.origin && e.data && e.data.type === 'wizard:apps-changed') loadRemote();
   });
-  /* Installs in progress (wizard-os#682, switch wizard/install-in-sidebar, off by default). The Store says when a Get
+  /* Installs in progress (wizard-os#682). The Store says when a Get
    * starts (wizard:app-installing); the shell then follows that App Manager job itself (GET store-install/<id>, the
    * Store's own read), so it keeps going once the Store is closed and across a reload. An entry is installing, then
    * ready (the app is in the list, not opened yet) or failed, until it is opened or dismissed. Layouts draw it
-   * (the AI apps Apps column) from WizCore.installs.list() and repaint on `wizard:installs`. Off: list() is empty,
-   * messages are ignored and nothing is read. */
+   * (the AI apps Apps column) from WizCore.installs.list() and repaint on `wizard:installs`. */
   const INSTALLS = (() => {
-    const SWITCH = 'wizard/install-in-sidebar', KEY = 'wos.installs.v1', ID = /^[a-z0-9][a-z0-9-]{0,63}$/, DAY = 864e5;
-    const on = () => { try { return String(document.documentElement.dataset.tweaks || '').split(' ').includes(SWITCH); } catch (_) { return false; } };
+    const KEY = 'wos.installs.v1', ID = /^[a-z0-9][a-z0-9-]{0,63}$/, DAY = 864e5;
     let rows = [];
     try { rows = (JSON.parse(localStorage.getItem(KEY) || '[]') || []).filter(r => r && ID.test(r.id) && ID.test(r.job) && Date.now() - r.at < DAY); } catch (_) { rows = []; }
     const save = () => { try { localStorage.setItem(KEY, JSON.stringify(rows)); } catch (_) {} };
@@ -263,7 +330,7 @@
       if (following.has(id)) return; following.add(id);
       try {
         for (let i = 0, misses = 0; i < 720; i++) {
-          const r = find(id); if (!r || r.state !== 'installing' || !on()) return;
+          const r = find(id); if (!r || r.state !== 'installing') return;
           let job = null;
           try { const res = await fetch(endpoint(r.job), { credentials: 'same-origin', cache: 'no-store' }); job = res.status === 404 ? { state: 'gone' } : res.ok ? await res.json() : null; } catch (_) {}
           if (job?.state === 'failed') { set(r, { state: 'failed', error: String(job.error || '').slice(0, 200) }); return; }
@@ -284,19 +351,19 @@
       } finally { following.delete(id); }
     }
     function start(d) {
-      if (!on() || !d || !ID.test(String(d.id)) || !ID.test(String(d.job || d.id))) return;
+      if (!d || !ID.test(String(d.id)) || !ID.test(String(d.job || d.id))) return;
       const id = String(d.id), r = { id, job: String(d.job || id), name: String(d.name || id).slice(0, 80), view: d.view !== false, at: Date.now(), state: 'installing' };
       rows = rows.filter(x => x.id !== id).concat(r).slice(-8); save(); emit(); follow(id);
     }
     addEventListener('message', e => { if (e.origin === location.origin && e.data && e.data.type === 'wizard:app-installing') start(e.data); });
     const api = {
-      list: () => on() ? rows.map(r => ({ id: r.id, name: r.name, state: r.state, error: r.error || '', at: r.at })) : [],
+      list: () => rows.map(r => ({ id: r.id, name: r.name, state: r.state, error: r.error || '', at: r.at })),
       dismiss: id => { const n = rows.length; rows = rows.filter(r => r.id !== id); if (rows.length !== n) { save(); emit(); } },
       start,
     };
-    // After a reload (or the switch turning on), keep following what was still installing.
-    const resume = () => { if (!on()) return; for (const r of rows) if (r.state === 'installing') follow(r.id); emit(); };
-    try { window.addEventListener('wos:experience', resume); if (typeof setTimeout === 'function') setTimeout(resume, 0); } catch (_) {}
+    // After a reload, keep following what was still installing.
+    const resume = () => { for (const r of rows) if (r.state === 'installing') follow(r.id); emit(); };
+    try { if (typeof setTimeout === 'function') setTimeout(resume, 0); } catch (_) {}
     return api;
   })();
   window.WizCore.installs = INSTALLS;
@@ -307,9 +374,13 @@
     // Publish before rebuild emits wizard:apps; listeners may look it up synchronously.
     const result = { APPS, APP, findApp, appAt, appByName, searchApps, searchApp, searchUrl, quickSearch: text => searchApp() ? parseQuickSearch(text) : null };
     REGISTRIES.set(shell, result);
+    let agentsWatched = false;
     const rebuild = () => {
       const chats = ALL.findIndex(a => a.kind === 'chats');
       const AG = window.WosAgents;
+      // A registry made before core/agents.js loaded (app-services.js asks early) follows the agents from its next
+      // rebuild on, or agent chat tiles never appear until something else rebuilds the list (ux#1989).
+      if (AG?.onChange && !agentsWatched) { agentsWatched = true; AG.onChange(rebuild); }
       // Agent chat views are apps; the Agents management app remains separate. Rebuild fresh
       // records so rename/delete/privacy changes cannot leave cached names or sigils behind.
       const agentTile = a => ({
@@ -414,7 +485,9 @@
     }
     rebuild(); listeners.add(rebuild);
     window.WizLauncher?.onChange(rebuild);
-    window.WosAgents?.onChange(rebuild);
+    // Asked for before core/agents.js loaded: rebuild once the page's scripts are all in, which also starts following them.
+    if (!agentsWatched && typeof window.addEventListener === 'function' && window.document?.readyState === 'loading')
+      window.addEventListener('DOMContentLoaded', () => { if (!agentsWatched && window.WosAgents) rebuild(); }, { once: true });
     return result;
   }
   /* "ask AI is milk bad for gout", "image search capybaras", "find images of eames chairs", "search why is the sky blue", "quick search …".

@@ -9,8 +9,10 @@ const response = (body = { checks: [], overall: 'ok' }, status = 200) => ({ ok: 
 function setup({ online = true, fetch = async () => response(), hostname = 'wizard.example-tailnet.ts.net' } = {}) {
   let now = 100000, calls = [], events = 0, id = 0;
   const timers = new Map(), opened = [];
-  const ctx = { navigator: { onLine: online }, document: { documentElement: { dataset: { shell: 'phone' } } }, location: { hostname, assign: url => opened.push(['same', url]) }, open: (...args) => opened.push(args), dispatchEvent() { events++; }, Event, AbortController, Date: { now: () => now }, setTimeout(fn, ms) { assert.equal(ms, 4000); timers.set(++id, fn); return id; }, clearTimeout(id) { timers.delete(id); }, fetch: async (...args) => { calls.push(args); return fetch(...args); } };
-  ctx.window = ctx; vm.runInNewContext(source, ctx);
+  // The graceful restart watch (wizard-ux issue 1362, tests/graceful-restart.test.mjs) stays out of this harness: the page
+  // loads hidden, so its first health read is skipped, and its 30 s re-check is never run here.
+  const ctx = { navigator: { onLine: online }, document: { hidden: true, documentElement: { dataset: { shell: 'phone' } } }, location: { hostname, assign: url => opened.push(['same', url]) }, open: (...args) => opened.push(args), dispatchEvent() { events++; }, Event, AbortController, Date: { now: () => now }, setTimeout(fn, ms) { if (ms === 30000) return 0; assert.equal(ms, 4000); timers.set(++id, fn); return id; }, clearTimeout(id) { timers.delete(id); }, fetch: async (...args) => { calls.push(args); return fetch(...args); } };
+  ctx.window = ctx; vm.runInNewContext(source, ctx); ctx.document.hidden = false;
   return { ctx, api: ctx.WizReach, calls, timers, opened, events: () => events, advance: ms => { now += ms; } };
 }
 test('a false browser offline hint never proves absent internet', async () => {

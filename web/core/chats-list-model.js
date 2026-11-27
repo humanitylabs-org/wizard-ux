@@ -207,14 +207,12 @@ function priorityGroups(list, notes, rank) {
   return [...by.values()].sort((a, b) => a.rank - b.rank);
 }
 /* Activity as a short "what needs me" list (wizard-ux issue 1336, with Channels on; James, 12 Nov 2026). Working, then
- * Ready, which holds only threads waiting on the owner (amber, until addressed) and finished unread ones (green, until
- * opened), then Recent (everything else, newest first, about a week back, "Show older" for the rest of the live window),
- * then Snoozed and Archived. One sort for the view, stored as Chats' own Ready order (newest / oldest / priority, shared
+ * Inbox (Ready), which keeps a thread until it is archived (Inbox until archived, wizard-ux issue 1810, on for everyone:
+ * read or not, no Recent and no week cut), then Snoozed and Archived. One sort for the view, stored as Chats' own Ready order (newest / oldest / priority, shared
  * across devices): Newest first, Oldest first, Needs you first. Sections come from the shell's own classification
  * (LIVE.workGroups), never a second status policy. Pure. */
 const ACTIVITY_SORTS = Object.freeze([['newest', 'Newest first'], ['oldest', 'Oldest first'], ['priority', 'Needs you first']]);
 const activitySortOf = o => o === 'oldest' || o === 'priority' ? o : 'newest';
-const ACTIVITY_RECENT_DAYS = 7, DAY_MS = 864e5;
 // One marker per row, the same three meanings everywhere: working (spinner), needs (amber) and new (green); amber wins.
 const activityMark = ({ working, needs, unread }) => working ? 'working' : needs ? 'needs' : unread ? 'new' : '';
 const msOf = v => typeof v === 'number' ? v : Date.parse(v ?? '') || 0;
@@ -225,21 +223,16 @@ function activitySort(rows, order, { at = r => msOf(r?.at), needs = r => r?.mark
   return (rows || []).slice().sort(o === 'priority' ? (a, b) => Number(!!needs(b)) - Number(!!needs(a)) || t(a, b) : t);
 }
 /** The sections from the shell's groups (LIVE.workGroups) and its facts: needs(s), unread(s), at(s) in ms.
- * { working, ready, recent, older (how many Recent rows "Show older" would add), snoozed, archive }. Pure. */
-/* Inbox until archived (wizard-ux issue 1810, switch wizard/inbox-until-archived; James, 25 Nov 2026: "treat it like an
- * inbox again"): with it on, Ready is the Inbox and holds every thread that is not working, snoozed or archived, read or
- * not; there is no Recent and no week cut. Opening a thread never moves it; only Archive (or Snooze) does. */
-const INBOX_KEEP = 'wizard/inbox-until-archived';
-/** Whether the switch is on, from the root's data-tweaks string (the adapter reads the DOM, not this model). */
-const inboxKeep = tweaks => String(tweaks || '').split(' ').includes(INBOX_KEEP);
-/* Inbox rows (wizard-ux issue 1779, switch wizard/inbox-rows; James and Miguel, 24 Nov 2026: "only what needs you",
- * Signal / Telegram rows): Inbox holds only what needs the owner, and a row stays until he archives it. A thread waits
+ * { working, ready (the Inbox), recent and older (always empty and 0 since issue 1810), snoozed, archive }. Pure. */
+/* Inbox until archived (wizard-ux issue 1810, on for everyone; James, 25 Nov 2026: "treat it like an inbox again"): one
+ * list, Working on top, then Inbox. Inbox holds a thread until it is archived, read or not; there is no Recent and no
+ * week cut. Opening a thread never moves it; only Archive (or Snooze) does. */
+/* Inbox rows (wizard-ux issue 1779, on for everyone since 27 Nov 2026; James and Miguel, 24 Nov 2026: "only what needs
+ * you", Signal / Telegram rows): Inbox holds only what needs the owner, and a row stays until he archives it. A thread waits
  * there when it needs him (amber: needs you, check, approval) or failed; otherwise when the agent answered in it (a new
  * reply, read or not), unless that answer was a quiet one (the box's quiet-reply mark: it needed nothing, it is in Sent).
  * A thread that never got an answer (his own send still working, a hidden worker's background run) is not here: Sent
  * shows it. Pinned rows (today's Daily, #priority, said urgent) lead, in pin order. */
-const INBOX_ROWS = 'wizard/inbox-rows';
-const inboxRowsOn = tweaks => String(tweaks || '').split(' ').includes(INBOX_ROWS);
 const inboxFailed = s => ['failed', 'interrupted'].includes(s?.status);
 // The agent answered in it: the list's last-reply time, its newest message is the agent's, or it holds more than one message.
 const inboxReplied = s => !!(s && (Date.parse(s.lastAssistantAt ?? '') || s.previewRole === 'assistant' || Number(s.messageCount) >= 2));
@@ -251,23 +244,117 @@ function inboxWants(s, { needs = () => false, unread = () => false, quiet = () =
   return !!(unread(s) || inboxReplied(s));
 }
 /* Inbox or Sent (wizard-ux issue 1829; James, 25 Nov 2026: "why is it displaying in my sent box, but also in my inbox?
- * That shouldn't happen. Things should be in one or the other."). With Inbox until archived (or Inbox rows) on, every
- * thread is in exactly one place, and this is the one rule: a thread runs he started (it has a Sent row) is in Sent ›
- * Working while it runs; then needs you / check / approval or a failed run is Inbox; a quiet reply (the box's mark), or
- * a newest Sent row that ended done or quiet without asking for an answer, is Sent; everything else (an answer to what
- * he asked, activity he didn't start, an unknown outcome) is Inbox: when in doubt it stays visible. `rows` are the Sent
- * rows naming this thread (sentIndex), facts are the shell's needs(s), quiet(s) and working(s). Pure. */
-const PLACE_INBOX_STATES = new Set(['needs_you', 'failed']);
-function placeOf(s, rows, { needs = () => false, quiet = () => false, working = () => false } = {}) {
-  const mine = Array.isArray(rows) && rows.length > 0;
-  if (working(s) && mine) return 'sent';
-  if (needs(s) || inboxFailed(s) || ['waiting_for_approval', 'unknown'].includes(s?.status)) return 'inbox';
-  if (working(s)) return 'inbox';
-  if (quiet(s)) return 'sent';
-  if (!mine) return 'inbox';
-  const last = rows.reduce((a, r) => (Number(r?.at) || 0) > (Number(a?.at) || 0) ? r : a, rows[0]);
-  if (PLACE_INBOX_STATES.has(last?.state)) return 'inbox';
-  return last?.state === 'done' && (last.quiet === true || last.wantsReply === false) ? 'sent' : 'inbox';
+ * That shouldn't happen. Things should be in one or the other."). Keeping things out of Inbox is the triage, and that
+ * is only Smart inbox (wizard-ux issue 1962; James, 27 Nov 2026: "Only keep behind a switch the functionality, which I
+ * have you preventing things from coming into the inbox if they don't need me. Everything else turn on by default").
+ * With wizard/smart-inbox off (everyone's default) nothing is routed out of Inbox: every thread is Inbox (a running one
+ * in Inbox › Working), whatever the Sent log or the box's quiet mark says, and Sent lists the threads he sent into as
+ * well, so a thread can be in both. With it on, smartPlace below is the one rule. `rows` are the Sent rows naming this
+ * thread (sentIndex), facts are the shell's needs(s), quiet(s), working(s) and smart. Pure. */
+/* Smart inbox (wizard-ux issue 1883, switch wizard/smart-inbox, off by default; James, 26 Nov 2026: "The only things
+ * that come into my inbox are things that require my attention in a timely manner and everything else will wait until
+ * I say catch me up"). With it on, `facts.smart` makes placeOf the smart rule: a failed run or an approval is Inbox; a
+ * running thread is Sent (Working), whoever started it; a blocking needs you is Inbox, a check ask too (issue 1977);
+ * the newest Sent row failed is Inbox; an answer to his words is Inbox (issue 1977: no keyword test); everything else,
+ * with or without a Sent row (agent-started, a new chat's first message, older than the log), is Sent. Unread never
+ * decides. */
+const SMART_INBOX = 'wizard/smart-inbox';
+const smartInboxOn = tweaks => String(tweaks || '').split(' ').includes(SMART_INBOX);
+// His words asked for an answer: his correction says so, else the box's reply rules (a wants-reply phrase, a short
+// question; never a no-reply phrase), a voice reply with no words yet, a question mark or an ask-to-be-told phrase.
+const ASK_WORDS = /\b(?:answer me|tell me|let me know|get back to me|ping me|update me|keep me posted|what do you think)\b/i;
+function sentAsked(r) {
+  if (!r || r.quiet === true) return false;
+  if (r.corrected && typeof r.corrected.shouldReply === 'boolean') return r.corrected.shouldReply;
+  const first = String((Array.isArray(r.rules) && r.rules[0]) || '');
+  if (/^no_reply:/.test(first)) return false;
+  if (/^wants_reply:/.test(first) || first === 'short_question' || first === 'question' || (r.route === 'thread' && first === 'voice')) return true;
+  const t = String(r.text || '');
+  return t.includes('?') || ASK_WORDS.test(t);
+}
+const newestRow = rows => rows.reduce((a, r) => (Number(r?.at) || 0) > (Number(a?.at) || 0) ? r : a, rows[0]);
+/* Requested information (wizard-ux issue 1927, same switch; James, 27 Nov 2026: "Threads with information I request
+ * shouldn't skip the inbox"). With Smart inbox on, a finished reply (done or fyi, not [SILENT]) also lands in
+ * Inbox when it delivers what he asked for: his newest send asked for information in words without a question mark
+ * (review, evaluate, summarize, compress, extract, find, look up, research, compare, explain, show me, give me, list,
+ * what / how / why …), or it is the delivery of something he set up: a scheduled run (Hermes `source: 'cron'`, a
+ * reminder route that fired after he set it) or a thread he pinned (Topics, the Daily brief: the shared pin list or
+ * Hermes' own pinned flag, `hermesPinned` on the list row). The explicit signals come
+ * first; the words are the fallback. Build and fix confirmations, check asks, progress notes, watch wakes and helper
+ * results that only confirm stay in Sent. */
+const REQ_VERB = /(?:^|[.!?;:\n]\s*|\b(?:please|pls|can you|could you|would you|will you|and|then|also)\s+)(?:review|evaluate|assess|analy[sz]e|summari[sz]e|sum up|compress|condense|extract|transcribe|translate|find|search|look up|look into|research|compare|explain|list|brief me|report on|catch me up)\b/i;
+const REQ_WH = /(?:^|[.!;\n]\s*)(?:what|what's|whats|how|why|who|when|where|which)\b/i;
+const REQ_ANY = /\b(?:summar(?:y|ies|i[sz]e)|tl;?dr|catch me up|show me|give me|find me|send me|look (?:it |this |that )?up|research|explain|report back|a report|full report)\b/i;
+const REMIND = /\bremind me\b/i, SILENT = /^\s*\[SILENT\]/i, FIRED_AFTER = 5 * 60e3;
+// His newest send asked for information. The box's quiet mark is not a veto here: with Smart inbox on it marks every
+// run nobody typed and every send whose words had no question, which is what this rule corrects; only his own
+// no-reply words and his correction are.
+function sentRequested(r) {
+  if (!r) return false;
+  if (r.corrected && r.corrected.shouldReply === false) return false;
+  if (/^no_reply:/.test(String((Array.isArray(r.rules) && r.rules[0]) || ''))) return false;
+  const t = String(r.text || '').trim();
+  return REQ_VERB.test(t) || REQ_WH.test(t) || REQ_ANY.test(t);
+}
+const silentReply = s => SILENT.test(String((s?.previewRole !== 'user' && s?.preview) || '')) || SILENT.test(String(s?.attention?.ask || ''));
+// A finished reply he can read: done or fyi (or no status line at all) and not a [SILENT] run.
+const readableReply = s => !silentReply(s) && inboxReplied(s) && (!s?.attention || ['done', 'fyi'].includes(s.attention.state));
+// A delivery he set up: a scheduled (Hermes cron) run or a thread he pinned.
+const ownerDelivery = (s, pinned) => s?.source === 'cron' || /^cron_/.test(String(s?.id || '')) || !!pinned(s);
+// His reminder fired: the send set a reminder and the agent wrote again well after it.
+const reminderFired = (s, r) => (r?.route === 'reminder' || r?.wouldRoute === 'reminder' || REMIND.test(String(r?.text || '')))
+  && (Date.parse(s?.lastAssistantAt ?? '') || 0) - (Number(r?.at) || 0) > FIRED_AFTER;
+/* Answers to his words reach him (wizard-ux issue 1977, same switch; James, 27 Nov 2026: "I'm having things I directly
+ * ask that get a response that are just sitting in \"sent\" and never coming to my attention, as well as things waiting
+ * on me."). No keyword guess: when his newest send in a thread (typed, voice, a reply; route agent or thread) got a
+ * finished readable answer, the thread is Inbox, whatever the box's quiet mark says. It stays in Sent only when that
+ * send was a reply-button tap, a pure acknowledgement ("thanks", "ok", a no_reply rule), his correction said no reply,
+ * or it set a reminder that has not fired yet. A check status line ("say if it feels right") is Inbox too, green:
+ * needs() stays false for it, so it is not amber. */
+const TAPS = /\[WIZARD_TAPS_V1\]/;
+const ACK_WORDS = ['thank you so much', 'thank you', 'thanks a lot', 'sounds good', 'no worries', 'all good', 'got it', 'very much', 'so much', 'a lot', 'ok', 'okay', 'k', 'kk', 'thanks', 'thank', 'thx', 'ty', 'cheers',
+  'great', 'perfect', 'nice', 'cool', 'awesome', 'good', 'np', 'lovely', 'brilliant', 'excellent', 'noted', 'ta', 'alright', 'many'];
+const ACK_MARKS = /[\p{Extended_Pictographic}\u200d\ufe0f\u{1F3FB}-\u{1F3FF}!.,;:~-]/gu;
+// Only acknowledgement words and emoji ("ok thanks 👍"): the words are eaten longest first, no backtracking regex.
+function ackOnly(text) {
+  let t = String(text || '').replace(ACK_MARKS, ' ').toLowerCase().split(/\s+/).filter(Boolean).join(' ');
+  while (t) {
+    const w = ACK_WORDS.find(a => t === a || t.startsWith(a + ' '));
+    if (!w) return false;
+    t = t.slice(w.length).trim();
+  }
+  return true;
+}
+// His newest send wants no answer brought to him: a tap, an acknowledgement, his no-reply words or correction.
+function sentNoAnswer(r) {
+  if (!r) return true;
+  if (r.corrected && r.corrected.shouldReply === false) return true;
+  if (/^no_reply:/.test(String((Array.isArray(r.rules) && r.rules[0]) || ''))) return true;
+  const t = String(r.text || '').trim();
+  return !t || TAPS.test(t) || ackOnly(t);
+}
+const reminderSet = r => r?.route === 'reminder' || r?.wouldRoute === 'reminder' || REMIND.test(String(r?.text || ''));
+function smartPlace(s, rows, { needs, working, pinned = () => false }) {
+  if (inboxFailed(s) || ['waiting_for_approval', 'unknown'].includes(s?.status)) return 'inbox';
+  if (working(s)) return 'sent';
+  if (needs(s)) return 'inbox';
+  // Issue 1977: a check ask waits on his judgment: Inbox (green, not amber; still in catch me up).
+  if (s?.attention?.state === 'check' && !silentReply(s)) return 'inbox';
+  const last = Array.isArray(rows) && rows.length ? newestRow(rows) : null;
+  if (last?.state === 'failed') return 'inbox';
+  if (last && ['done', 'needs_you'].includes(last.state) && !sentNoAnswer(last) && sentAsked(last)) return 'inbox';
+  // Issue 1927: what he set up is delivered (only a readable done / fyi reply).
+  if (!readableReply(s)) return 'sent';
+  if (!last) return ownerDelivery(s, pinned) ? 'inbox' : 'sent';
+  if (last.state !== 'done' && last.state !== 'needs_you') return 'sent';
+  if (reminderFired(s, last) || (ownerDelivery(s, pinned) && (Date.parse(s?.lastAssistantAt ?? '') || 0) - (Number(last.at) || 0) > FIRED_AFTER)) return 'inbox';
+  // Issue 1977: his words reached the agent and it answered: Inbox, unless they wanted no answer or only set a reminder.
+  if (sentNoAnswer(last) || reminderSet(last) || ['dump', 'command'].includes(last.route)) return 'sent';
+  return 'inbox';
+}
+function placeOf(s, rows, { needs = () => false, working = () => false, smart = false, pinned = () => false } = {}) {
+  if (smart) return smartPlace(s, rows, { needs, working, pinned });
+  return 'inbox'; // issue 1962: no triage with Smart inbox off
 }
 /** Sent rows by the thread they ran in: Map thread id → rows. Pure. */
 function sentIndex(rows) {
@@ -277,51 +364,106 @@ function sentIndex(rows) {
 }
 /** The Sent rows to draw: none whose thread (or background record) the Inbox shows, so a thread is never in both. Pure. */
 const sentShown = (rows, inboxIds) => (rows || []).filter(r => !(r?.thread && inboxIds?.has(r.thread)) && !(r?.record && inboxIds?.has(r.record)));
-function activityGroups(groups, { needs, unread, at }, { order = 'newest', now = 0, days = ACTIVITY_RECENT_DAYS, older = false, keep = false, inbox = null, place = null } = {}) {
+/* Sent as threads (wizard-ux issue 1880, on for everyone since 27 Nov 2026; James, 26 Nov 2026: "The sent box should have the
+ * same threads as the inbox ... The same thread moves to the sent box or the inbox, depending on whether it needs my
+ * attention."). The Sent log's sends, one group per thread they ran in (a background send with no thread yet: its task
+ * record, else the send alone), newest first. A group whose thread (or record) Inbox shows is left out, and so is an
+ * archived or snoozed thread, so a thread is never in both lists. `session(id)` the shell's row for a thread (or null),
+ * `working(s)` whether that thread runs, `at(s)` its list time in ms. Each group: { key, thread, record, sends (newest
+ * first), session, at, working }. Pure. */
+const SENT_RUNNING = new Set(['running', 'routing']);
+function sentThreads(rows, inboxIds, { session = () => null, working = () => false, at = () => 0 } = {}) {
+  const by = new Map();
+  for (const r of rows || []) {
+    if (!r || typeof r.id !== 'string') continue;
+    const key = typeof r.thread === 'string' && r.thread ? r.thread : typeof r.record === 'string' && r.record ? 'rec:' + r.record : 'send:' + r.id;
+    if (!by.has(key)) by.set(key, { key, thread: r.thread || null, record: null, sends: [] });
+    const g = by.get(key); g.sends.push(r); if (!g.record && r.record) g.record = r.record;
+  }
+  const out = [];
+  for (const g of by.values()) {
+    if ((g.thread && inboxIds?.has(g.thread)) || (g.record && inboxIds?.has(g.record))) continue;
+    const s = g.thread ? session(g.thread) || null : null;
+    if (s && (s.archived || deferred(s))) continue;
+    g.sends.sort((a, b) => (Number(b.at) || 0) - (Number(a.at) || 0));
+    g.session = s;
+    g.at = Math.max(Number(g.sends[0].at) || 0, s ? Number(at(s)) || 0 : 0);
+    g.working = SENT_RUNNING.has(g.sends[0].state) || (!!s && !!working(s));
+    out.push(g);
+  }
+  return out.sort((a, b) => b.at - a.at || (a.key < b.key ? -1 : 1));
+}
+/** Smart inbox (wizard-ux issue 1883): the threads with no Sent row that are in Sent all the same (agent-started, older
+ * than the log), as sentThreads groups with no sends: every listed thread not hidden, archived, snoozed, held, in Inbox
+ * or already a group (`taken`), so the two lists hold every thread once. Pure. */
+function sentRest(sessions, inboxIds, taken, { working = () => false, at = () => 0, held = () => false } = {}) {
+  const out = [];
+  for (const s of sessions || []) {
+    if (!s || typeof s.id !== 'string' || s.hidden || s.archived || deferred(s) || held(s) || inboxIds?.has(s.id) || taken?.has(s.id)) continue;
+    out.push({ key: s.id, thread: s.id, record: null, sends: [], session: s, at: Number(at(s)) || 0, working: !!working(s) });
+  }
+  return out;
+}
+function activityGroups(groups, { needs, unread, at }, { order = 'newest', inbox = null, place = null } = {}) {
   if (!groups) return null;
   const snoozed = s => deferred(s) && !['waiting_for_approval', 'unknown'].includes(s.status);
-  // Inbox or Sent (issue 1829): with keep or inbox on, a thread placeOf puts in Sent is not in Inbox, and there is no
-  // Working section (a run he started is in Sent › Working); only sends a graceful restart holds keep theirs (Saved).
+  // Inbox or Sent (issue 1829): a thread placeOf puts in Sent is not in Inbox (a run he started is in Sent › Working).
   // place = { sent: sentIndex(Sent rows), quiet(s), held(s) }, from the shell; without it no thread has a Sent row.
-  const placing = !!(keep || inbox), workIds = new Set((groups.working || []).map(s => s?.id));
-  const placeFacts = { needs, quiet: s => !!(place?.quiet || inbox?.quiet)?.(s), working: s => workIds.has(s?.id) };
-  const inInbox = s => !placing || placeOf(s, place?.sent?.get?.(s.id), placeFacts) === 'inbox';
+  const workIds = new Set((groups.working || []).map(s => s?.id));
+  const placeFacts = { needs, quiet: s => !!(place?.quiet || inbox?.quiet)?.(s), working: s => workIds.has(s?.id), smart: !!place?.smart, pinned: s => !!place?.pinned?.(s) }; // smart: issue 1883; pinned: 1927
+  const inInbox = s => placeOf(s, place?.sent?.get?.(s.id), placeFacts) === 'inbox';
   const held = s => !!place?.held?.(s);
+  // Working on top, then Inbox (issue 1810): a running thread placeOf keeps out of Sent (no Sent row names it: one the
+  // agent started) is in Working above Inbox, never mixed into Inbox by time; sends a graceful restart holds are there
+  // too (the layouts draw them as Saved).
+  const work = [], snz = [...(groups.deferred || [])], rest = [];
+  for (const s of groups.working || []) { if (!s) continue; if (held(s)) work.push(s); else if (snoozed(s)) snz.push(s); else if (inInbox(s)) work.push(s); else rest.push(s); }
+  const working = activitySort(work, order === 'priority' ? 'newest' : order, { at });
+  // A thread only aged past "archive after" (not archived by the owner) stays in Inbox too.
+  const aged = (groups.archive || []).filter(s => !s.archived), live = [...(groups.errors || []), ...(groups.ready || []), ...(groups.yesterday || []), ...(groups.pastWeek || []), ...aged];
+  const archive = activitySort((groups.archive || []).filter(s => s.archived), 'newest', { at });
   // Inbox rows (issue 1779): inbox = { quiet(s), pin(s) → 0 or its pin rank }. Ready is the Inbox: what inboxWants keeps
   // and placeOf puts in Inbox, pinned rows first. No Recent.
   if (inbox) {
-    const pin = s => Number(inbox.pin?.(s)) || 0, want = s => inInbox(s) && (pin(s) > 0 || inboxWants(s, { needs, unread, quiet: inbox.quiet }));
-    const aged = (groups.archive || []).filter(s => !s.archived), live = [...(groups.errors || []), ...(groups.ready || []), ...(groups.yesterday || []), ...(groups.pastWeek || []), ...aged];
-    const ready = [], snz = [...(groups.deferred || [])], seen = new Set();
-    for (const s of [...(groups.working || []), ...live]) {
+    // Pin to top (issue 1887, switch wizard/inbox-pin-top): inbox.top(s) is true for a thread in the owner's pin list.
+    // It is always in Inbox (never in Sent) and ranks above Daily; `counted` leaves out a read one that is only here
+    // because of the pin, so pinning never adds to the count or the badge.
+    const top = s => !!inbox.top?.(s), pin = s => Number(inbox.pin?.(s)) || 0;
+    const base = s => Number(inbox.base ? inbox.base(s) : top(s) ? 0 : pin(s)) || 0;
+    // Smart inbox (issues 1883, 1927): its rule already read the quiet mark (a quiet send is not asked for; information
+    // he asked for or set up is in Inbox even when the box marked the run quiet), so here it is not read twice. With it
+    // off the shell's quiet(s) is always false (live.js quietReply, issue 1962), so nothing is kept out for being quiet.
+    const ibQuiet = place?.smart ? () => false : inbox.quiet;
+    const own = s => inInbox(s) && (base(s) > 0 || inboxWants(s, { needs, unread, quiet: ibQuiet }));
+    const want = s => top(s) || inInbox(s) && (pin(s) > 0 || inboxWants(s, { needs, unread, quiet: ibQuiet }));
+    const ready = [], seen = new Set(work.map(s => s.id));
+    for (const s of [...rest, ...live]) {
       if (!s || seen.has(s.id)) continue; seen.add(s.id);
-      if (snoozed(s)) snz.push(s); else if (!held(s) && want(s)) ready.push(s);
+      if (snoozed(s)) snz.push(s); else if (want(s)) ready.push(s);
     }
     const sorted = activitySort(ready, order, { at, needs });
     const pinned = sorted.filter(s => pin(s) > 0).sort((a, b) => pin(a) - pin(b));
-    return { working: activitySort((groups.working || []).filter(held), order === 'priority' ? 'newest' : order, { at }), ready: [...pinned, ...sorted.filter(s => !(pin(s) > 0))],
-      pinned: pinned.length, recent: [], older: 0, snoozed: activitySort(snz, 'newest', { at }), archive: activitySort((groups.archive || []).filter(s => s.archived), 'newest', { at }) };
+    const readyAll = [...pinned, ...sorted.filter(s => !(pin(s) > 0))];
+    return { working, ready: readyAll,
+      ...(inbox.top ? { counted: readyAll.filter(s => !top(s) || own(s) || needs(s) || unread(s)) } : {}), pinned: pinned.length, recent: [], older: 0, snoozed: activitySort(snz, 'newest', { at }), archive };
   }
-  // keep: a thread only aged past "archive after" (not archived by the owner) stays in Inbox too.
-  const aged = keep ? (groups.archive || []).filter(s => !s.archived) : [];
-  const rest = [...(keep ? (groups.working || []).filter(s => !held(s)) : []), ...(groups.errors || []), ...(groups.ready || []), ...(groups.yesterday || []), ...(groups.pastWeek || []), ...aged];
-  const ready = [], recent = [], snz = [...(groups.deferred || [])];
-  for (const s of rest) { if (snoozed(s)) snz.push(s); else if (keep) { if (inInbox(s)) ready.push(s); } else (needs(s) || unread(s) ? ready : recent).push(s); }
-  const newest = rows => activitySort(rows, 'newest', { at });
-  const cut = now - days * DAY_MS, all = newest(recent), within = all.filter(s => at(s) >= cut);
-  return { working: activitySort(keep ? (groups.working || []).filter(held) : groups.working || [], order === 'priority' ? 'newest' : order, { at }), ready: activitySort(ready, order, { at, needs }),
-    recent: older ? all : within, older: older ? 0 : all.length - within.length, snoozed: newest(snz), archive: newest(keep ? (groups.archive || []).filter(s => s.archived) : groups.archive || []) };
+  const ready = [];
+  for (const s of live) { if (snoozed(s)) snz.push(s); else if (inInbox(s)) ready.push(s); }
+  // recent / older stay in the shape (always empty) for layouts and skins that read them.
+  return { working, ready: activitySort(ready, order, { at, needs }), recent: [], older: 0, snoozed: activitySort(snz, 'newest', { at }), archive };
 }
 /** The same sections as rows for a layout that draws its own list (sessionRow, plus each row's marker). */
 function activityList(groups, facts, opts = {}) {
   const c = facts.chats, at = s => msOf(facts.live.cardAt?.(s)) || msOf(s.updatedAt) || msOf(s.createdAt);
   const needs = s => !!c.activityNeeds?.(s), unread = s => !!c.activityUnread?.(s);
-  // keep: Inbox until archived (wizard-ux issue 1810), from the shell's own switch read unless the caller says.
-  // inbox: Inbox rows (wizard-ux issue 1779), the shell's { quiet, pin } facts while its switch is on.
-  // place: Inbox or Sent (wizard-ux issue 1829), the shell's { sent, quiet, held } facts while either switch is on.
-  const g = activityGroups(groups, { needs, unread, at }, { ...opts, keep: opts.keep ?? !!c.inboxKeep?.(), inbox: opts.inbox ?? (c.inboxRows?.() || null), place: opts.place ?? (c.inboxPlace?.() || null) }); if (!g) return null;
+  // inbox: Inbox rows (wizard-ux issue 1779), the shell's { quiet, pin } facts.
+  // place: Inbox or Sent (wizard-ux issue 1829), the shell's { sent, quiet, held } facts.
+  const place = opts.place ?? (c.inboxPlace?.() || null);
+  const g = activityGroups(groups, { needs, unread, at }, { ...opts, inbox: opts.inbox ?? (c.inboxRows?.() || null), place }); if (!g) return null;
+  // Smart inbox (wizard-ux issue 1883): a failed thread in Inbox says why in one line (the shell's failWhy, else retry).
+  const why = s => place?.smart && inboxFailed(s) ? { failWhy: c.failWhy?.(s) || 'Didn’t finish · open it to retry' } : {};
   const rows = (list, kind) => list.slice(0, 200).map(s => ({ ...sessionRow(s, kind, facts), mark: activityMark({ working: kind === 'working', needs: needs(s), unread: unread(s) }),
-    ...(c.activityDraft?.(s) ? { draft: true } : {}) })); // a saved, unsent draft (wizard-ux issue 1445, on for everyone since 1604)
+    ...(c.activityDraft?.(s) ? { draft: true } : {}), ...(kind === 'ready' ? why(s) : {}) })); // a saved, unsent draft (wizard-ux issue 1445, on for everyone since 1604)
   return splitSaved({ working: rows(g.working, 'working'), ready: rows(g.ready, 'ready'), recent: rows(g.recent, 'ready'), older: g.older,
     snoozed: rows(g.snoozed, 'snoozed'), archive: rows(g.archive, 'archive') });
 }
@@ -332,5 +474,5 @@ const unreadThreads = (rows, isNew, notes) => new Set((rows || []).filter(s => i
 const unreadCount = rows => new Set((rows || []).filter(r => r.unread).map(r => r.id)).size;
 root.WizChatsListModel = Object.freeze({ STATES, stateOf, stateGroups, WORKING_SORTS, workingOrderOf, workingAt, workingSort, READY_SORTS, sortOf, PRIORITY_TIP, rankOf, readySort, executionStatus, isListWorking,
   readyGroups, NOTES_PROJECT, NO_PROJECT, projectOf, titleInProject, projectGroups, GROUP_MODES, groupMode, readyFlat,
-  readyStep, visibleIds, INBOX_KEEP, inboxKeep, INBOX_ROWS, inboxRowsOn, inboxWants, inboxReplied, placeOf, sentIndex, sentShown, ACTIVITY_SORTS, activitySortOf, ACTIVITY_RECENT_DAYS, activityMark, activitySort, activityGroups, activityList, unreadCount, unreadThreads, compareTime, deferred, sessionRow, sessionList, sessionRank, orderSessions, notificationRow, sortNotes, mixedRows, subjectGroups, priorityGroups });
+  readyStep, visibleIds, inboxWants, inboxReplied, placeOf, SMART_INBOX, smartInboxOn, sentAsked, sentRequested, sentIndex, sentShown, sentThreads, sentRest, ACTIVITY_SORTS, activitySortOf, activityMark, activitySort, activityGroups, activityList, unreadCount, unreadThreads, compareTime, deferred, sessionRow, sessionList, sessionRank, orderSessions, notificationRow, sortNotes, mixedRows, subjectGroups, priorityGroups });
 })(globalThis);

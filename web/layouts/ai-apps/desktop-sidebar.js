@@ -9,7 +9,7 @@
 import { KINDS } from './parts.js';
 export function sidebarPart({ aadVars, actOn, api, desks, el, icon, LKINDS }) {
   const agentName = () => (api.agents.list().find(a => a.main) || api.agents.here?.() || {}).label || (api.workspaces?.list()[0] || {}).name || 'Wizard';
-  const readSessions = () => { aadVars.sessions = api.sessions.list((typeof actOn === 'function' && actOn()) ? { activity: true, older: aadVars.actOlder } : { focused: true }) || { working: [], snoozed: [], ready: [], archive: [] }; return aadVars.sessions; };
+  const readSessions = () => { aadVars.sessions = api.sessions.list((typeof actOn === 'function' && actOn()) ? { activity: true } : { focused: true }) || { working: [], snoozed: [], ready: [], archive: [] }; return aadVars.sessions; };
   // (a chat opened from elsewhere may belong to an agent the sidebar is not focused on: look in the whole list too)
   const titleOf = id => { for (const s of [aadVars.sessions || readSessions(), api.sessions.list()]) for (const k of (typeof LKINDS !== 'undefined' ? LKINDS : KINDS)) { const r = ((s || {})[k] || []).find(x => x.id === id); if (r) return r.title; } return ''; };
   // Thread tracker (tweak, off by default): the row's ask dots, drawn by the tracker itself so every list agrees.

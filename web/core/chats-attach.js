@@ -150,13 +150,35 @@ window.WizCore.chatsParts.attach = function ({ ch, CHEV_SVG, clip, COG_SVG, draf
   }
   // Local thumbnails for files uploaded from this phone, so a just-sent photo shows before Wizard has it.
   const PREVIEW = {};
-  const mediaOfFile = f => ({ id: f.id, name: f.name, mime: f.mime || '', bytes: f.bytes || 0, kind: /^image\//.test(f.mime || '') ? 'image' : /^video\//.test(f.mime || '') ? 'video' : /^audio\//.test(f.mime || '') ? 'audio' : 'file', url: f.id && !PEND?.isPending(f.id) ? fileUrl(f.id) : '', thumb: PREVIEW[f.id] || '' });
+  // wizard-ux#1840: once Wizard has the file, the bubble shows Wizard's copy. The local blob: preview is only a stand-in
+  // while it is still uploading: on an Android WebView it can stop being readable, which left a broken photo in the
+  // owner's own bubble until a reload. It stays as `local`, a fallback for a moment Wizard can't be reached, and is
+  // released as soon as Wizard's copy has loaded (photoLoaded below).
+  const mediaOfFile = f => {
+    const url = f.id && !PEND?.isPending(f.id) ? fileUrl(f.id) : '', mine = PREVIEW[f.id] || '';
+    return { id: f.id, name: f.name, mime: f.mime || '', bytes: f.bytes || 0, kind: /^image\//.test(f.mime || '') ? 'image' : /^video\//.test(f.mime || '') ? 'video' : /^audio\//.test(f.mime || '') ? 'audio' : 'file', url, thumb: url ? '' : mine, local: url ? mine : '' };
+  };
+  const photoOf = e => { const img = e.target; return img instanceof HTMLImageElement && img.dataset.local ? img : null; };
+  function photoLoaded(e) {
+    const img = photoOf(e), u = img?.dataset.local; if (!img || img.getAttribute('src') === u) return;
+    img.removeAttribute('data-local');
+    for (const [id, p] of Object.entries(PREVIEW)) if (p === u) delete PREVIEW[id];
+    if (/^blob:/.test(u)) URL.revokeObjectURL(u);
+  }
+  function photoFailed(e) {
+    const img = photoOf(e), u = img?.dataset.local; if (!img || img.getAttribute('src') === u) return;
+    img.setAttribute('src', u); // Wizard's copy didn't load this time: the phone's own copy, while it still has it
+  }
+  // load/error don't bubble: listen in the capture phase, once for every thread this Chats draws.
+  document.addEventListener('load', photoLoaded, true);
+  document.addEventListener('error', photoFailed, true);
   // Every photo/file in the open thread gets an index into c.media; tapping it opens the in-app viewer.
   function mediaBtn(c, m) {
     const k = c.media.push(m) - 1;
     // Inline bytes are already local. Lazy decoding can deadlock an image-only
-    // shrink-to-fit bubble at zero width, so only network images remain lazy.
-    if (m.kind === 'image') return `<button type="button" class="mimg" data-mi="${k}" aria-label="Open ${esc(m.name || 'photo')}"><img src="${esc(m.thumb || m.url)}" alt="${esc(m.name || 'Photo')}" loading="${/^data:image\//i.test(m.thumb || m.url || '') ? 'eager' : 'lazy'}" decoding="async"></button>`;
+    // shrink-to-fit bubble at zero width, so only network images remain lazy; the owner's own images (m.eager, set by
+    // userMedia) load at once too, in a steer bubble beside a voice note as well (wizard-ux#1840).
+    if (m.kind === 'image') return `<button type="button" class="mimg" data-mi="${k}" aria-label="Open ${esc(m.name || 'photo')}"><img src="${esc(m.thumb || m.url)}"${m.local ? ` data-local="${esc(m.local)}"` : ''} alt="${esc(m.name || 'Photo')}" loading="${m.eager || /^data:image\//i.test(m.thumb || m.url || '') ? 'eager' : 'lazy'}" decoding="async"></button>`;
     if (m.kind === 'audio') return `<div class="mcard aud"><span class="mic">♪</span><span class="mn"><b>${esc(m.name)}</b><audio controls preload="none" src="${esc(m.url)}"></audio>${m.transcript ? `<small>${esc(m.transcript)}</small>` : ''}</span></div>`;
     // A file or video card: tap it to view it in Wizard; the ⤓ beside the name downloads it in one tap.
     const card = `<button type="button" class="mcard" data-mi="${k}"><span class="mic">${m.kind === 'video' ? PLAY_SVG : CLIP_SVG}</span><span class="mn"><b>${esc(m.name)}</b><small>${esc(m.kind === 'video' ? 'Video' : (m.mime.split('/')[1] || 'File').toUpperCase())}${m.bytes ? ' · ' + esc(fsize(m.bytes)) : ''}</small></span></button>`;
@@ -171,7 +193,7 @@ window.WizCore.chatsParts.attach = function ({ ch, CHEV_SVG, clip, COG_SVG, draf
   // What the owner sent: voice notes play inline, photos and screenshots show as photos, other files as cards.
   function userMedia(c, files, images) {
     const voice = files.filter(f => fileKind(f) === 'voice');
-    const list = files.filter(f => fileKind(f) !== 'voice').map(mediaOfFile).filter(m => m.url || m.thumb)
+    const list = files.filter(f => fileKind(f) !== 'voice').map(f => ({ ...mediaOfFile(f), eager: true })).filter(m => m.url || m.thumb)
       .concat((images || []).map((u, i) => ({ id: 'img' + i, name: 'Photo', mime: 'image/*', kind: 'image', url: u })));
     const unnamed = files.filter(f => fileKind(f) !== 'voice' && (!f.id || (PEND?.isPending(f.id) && !PREVIEW[f.id]))).map(f => `<span class="fchip">${CLIP_SVG} ${esc(f.name)}</span>`).join('');
     return (voice.length ? `<div class="fchips">${voice.map(fileChip).join('')}</div>` : '') + mediaBlock(c, list) + (unnamed ? `<div class="fchips">${unnamed}</div>` : '');
@@ -207,22 +229,36 @@ window.WizCore.chatsParts.attach = function ({ ch, CHEV_SVG, clip, COG_SVG, draf
   // Issue 1331: Needs you in the thread makes Reply standard (turnHtml's tt: main agent) and retires the tracker itself.
   const msgIds = (m, at, tt = true) => (tt && m ? `${m.id != null ? ` data-mid="${esc(String(m.id))}"` : ''}${isFinite(at ?? m.at) ? ` data-mat="${at ?? m.at}"` : ''}` : '');
   const quoteBtn = (tt = true) => (tt ? '<button type="button" data-mquote aria-label="Reply to this message" title="Reply"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 6 6v3"/></svg>Reply</button>' : '');
+  // wizard-agent-service issue 650: reply buttons are drawn only while the owner's switch is on (read live, like other switches).
+  const replyChoicesOn = () => { try { return (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/first-chat-goals'); } catch (e) { return false; } };
   // needs: the amber Needs you line (issue 1331) drawn right above this turn's reply bubble.
   function turnHtml(c, tn, last, working, helperStatus, reconnect, tt = true, needs = '') {
     let h = '';
     // A provider sign-out has its own panel (Open Claude / Open ChatGPT) in place of Hermes' generic failed-turn notice.
     if (last && reconnect && tn.a?.failed) tn = { ...tn, a: null };
+    // A turn whose last agent message still called tools never finished (failed, stopped, restarted): that message is a
+    // progress note, so it stays in the work fold and the turn says it stopped, instead of posing as the reply.
+    const stopped = !(last && working) && tn.a && tn.a.final === false && !tn.a.failed && !tn.a.sweep && !tn.media.length;
+    if (stopped) tn = { ...tn, notes: [...tn.notes, tn.a.text], steps: tn.steps + 1, a: null };
     // 9 Nov 2026 (James: "the message I sent is disappearing"): a message Hermes never took in stays in the thread,
     // marked Not sent. Retry here is the failed panel's own Retry (the same saved words and files, sent once).
     const unsent = tn.u && ['failed', 'interrupted'].includes(tn.u.queue?.status);
     const unsentRetry = unsent && c.retryRunId && tn.u.queue.runId === c.retryRunId
       ? `<button type="button" class="pbtn" data-chretry${c.retrying ? ' disabled' : ''}>${c.retrying ? 'Retrying…' : 'Retry'}</button>` : '';
-    if (tn.u) h += `<div class="msg u${tn.u.reply ? ' has-rq' : ''}${unsent ? ' unsent' : ''}"${isFinite(tn.u.at) ? ` data-morph-key="u${tn.u.at}"` : ''}${msgIds(tn.u, undefined, tt)}><div class="bub">${replyCard(tn.u.reply)}${userMedia(c, tn.u.files, tn.u.images)}${tn.u.text ? md(tn.u.text) : ''}</div><div class="mmeta">${unsent ? `<span class="pst fail" data-unsent>Not sent · message saved</span>${unsentRetry}` : ''}${timeTag(tn.u.at)}${quoteBtn(tt)}</div></div>`;
+    // The same words sent again after an unfinished turn (see parseRows) are a quiet line, not a second bubble. It keeps
+    // the message ids so going to that message (a quote's header, a tracker row) still lands on it.
+    // The owner's reply-button taps (wizard-ux issue 1889, core/action-cards.js): a quiet machine line, never his words.
+    const RB = globalThis.WosActionCards?.replyOn?.() ? globalThis.WosActionCards : null;
+    const tapsIn = u => (RB && u ? u.taps || KIT.tapsOf?.(u.text)?.taps || [] : []); // a local copy still carries the raw text
+    const taps = unsent ? [] : tapsIn(tn.u);
+    if (taps.length) h += `<div class="ch-renamed ch-taps" data-rb-taps${isFinite(tn.u.at) ? ` data-morph-key="u${tn.u.at}"` : ''}${msgIds(tn.u, undefined, tt)}>${RB.tapLinesHtml(taps)}${isFinite(tn.u.at) ? `<span class="ch-rb-at">${esc(KIT.time.stamp(tn.u.at))}</span>` : ''}</div>`;
+    else if (tn.u?.again && !unsent) h += `<div class="ch-renamed ch-again"${isFinite(tn.u.at) ? ` data-morph-key="u${tn.u.at}"` : ''}${msgIds(tn.u, undefined, tt)}><span>Sent again${isFinite(tn.u.at) ? ` · ${esc(KIT.time.stamp(tn.u.at))}` : ''}</span></div>`;
+    else if (tn.u) h += `<div class="msg u${tn.u.reply ? ' has-rq' : ''}${unsent ? ' unsent' : ''}"${isFinite(tn.u.at) ? ` data-morph-key="u${tn.u.at}"` : ''}${msgIds(tn.u, undefined, tt)}><div class="bub">${replyCard(tn.u.reply)}${userMedia(c, tn.u.files, tn.u.images)}${tn.u.text ? md(tn.u.text) : ''}</div><div class="mmeta">${unsent ? `<span class="pst fail" data-unsent>Not sent · message saved</span>${unsentRetry}` : ''}${timeTag(tn.u.at)}${quoteBtn(tt)}</div></div>`;
     else if (tn.note) h += noteHtml(tn.note);
     else if (tn.later) h += runContextHtml(tn.later);
     // A send a graceful restart holds is not live work: no Working timer under it (renderThread sets c.restartHeld).
     const live = last && working && !c.restartHeld;
-    const steersHtml = (tn.steers || []).map(st => st.note ? noteHtml(st) : `<div class="msg u steer" data-steer><div class="bub">${userMedia(c, st.files || [], [])}${md(st.text)}</div><div class="mmeta"><span class="srcpt">${CHECK_SVG}Read by ${esc(window.WizConfig.agent())}</span>${timeTag(st.at)}</div></div>`).join('');
+    const steersHtml = (tn.steers || []).map(st => st.note ? noteHtml(st) : tapsIn(st).length ? `<div class="ch-renamed ch-taps steer" data-rb-taps>${RB.tapLinesHtml(tapsIn(st))}</div>` : `<div class="msg u steer" data-steer><div class="bub">${userMedia(c, st.files || [], [])}${md(st.text)}</div><div class="mmeta"><span class="srcpt">${CHECK_SVG}Read by ${esc(window.WizConfig.agent())}</span>${timeTag(st.at)}</div></div>`).join('');
     const wk = PW ? PW.workHtml(c, tn, live, helperStatus) : null; // the work receipt (chat-work.js #17)
     if (wk != null) h += wk;
     else if (tn.steps || tn.notes.length || live) {
@@ -230,29 +266,36 @@ window.WizCore.chatsParts.attach = function ({ ch, CHEV_SVG, clip, COG_SVG, draf
       h += `<details class="steps${live ? ' live' : ''}"><summary>${live ? '<i class="dots"><b></b><b></b><b></b></i>' : '◇'} ${label}</summary>${tn.notes.map(x => `<div class="note-line">${md(x)}</div>`).join('')}</details>`;
     }
     h += steersHtml;
+    if (stopped) h += `<div class="ch-renamed ch-stopped" role="status"><span>Stopped before finishing</span></div>`;
     if (tn.a || tn.media.length) {
       const text = tn.a?.plainText ?? tn.a?.text;
       const k = text ? c.texts.push(text) - 1 : -1;
       const bAt = tn.a?.at ?? tn.mediaAt;
       const placed = new Set();
-      const sweep = tn.a?.sweep && typeof sweepHtml === 'function' ? sweepHtml(tn.a.sweep) : '';
-      const body = sweep || (tn.a ? md(tn.a.text, (url, marker) => {
+      const mediaHook = (url, marker) => {
         if (!marker || tn.a.inlineMedia?.[marker] !== url) return null;
         const image = tn.media.find(m => m.kind === 'image' && m.url === url);
         if (!image) return null; // no metadata: keep the ordinary safe image link
         if (placed.has(image.id)) return '';
         placed.add(image.id);
         return mediaBlock(c, [image]); // same thumbnail, gallery and viewer as bottom attachments
-      }) : '');
+      };
+      // Reply buttons (wizard-ux issue 1889): each group drawn where its line sits; off, the text keeps their labels.
+      const rbBody = RB && !tn.a?.sweep && tn.a?.buttons?.length ? RB.replyHtml(tn.a.btext || tn.a.text, tn.a.buttons, t => md(t, mediaHook), c.rbPicks) : '';
+      const sweep = tn.a?.sweep && typeof sweepHtml === 'function' ? sweepHtml(tn.a.sweep) : '';
+      const body = sweep || (typeof rbBody === 'string' && rbBody) || (tn.a ? md(tn.a.text, (url, marker) => mediaHook(url, marker)) : '');
       const lead = summaryOf(tn.a), rk = esc(String(bAt));
       const open = !!lead && (c.rsum?.get(String(bAt)) ?? summaryStartsOpen());
       const shown = lead ? `<button type="button" class="rsum" data-reply-summary="${rk}" aria-expanded="false"${open ? ' hidden' : ''}><span class="rsum-t">${esc(leadText(lead))}</span>${CHEV_SVG}</button>`
         + `<div class="rdet" data-reply-details="${rk}"${open ? '' : ' hidden'}><div class="rtools"><button type="button" class="rcog" data-reply-length aria-label="Short answer length" title="Short answer length">${COG_SVG}</button><button type="button" class="rless" data-reply-summary="${rk}" aria-expanded="true">Show less${CHEV_SVG}</button></div>${body}</div>` : body;
       // A tweak the reply carries (WIZARD_TWEAK_V1): Settings' own switch row, live state (core/settings.js tweakCard).
       const tweak = tn.a?.tweaks?.length ? window.WosSettings?.tweakCard?.(tn.a.tweaks) || '' : '';
-      // An app's proposed action the reply carries (WIZARD_ACTION_V1, wizard-ux issue 1463): core/action-cards.js, '' while off.
+      // An app's proposed action the reply carries (WIZARD_ACTION_V1, wizard-ux issue 1463): core/action-cards.js.
       const action = tn.a?.actions?.length ? window.WosActionCards?.html?.(tn.a.actions) || '' : '';
-      h += (needs || '') + `<div class="msg a${lead ? ` has-rsum${open ? ' rsum-open' : ''}` : ''}"${isFinite(bAt) ? ` data-boom-at="${bAt}" data-morph-key="a${bAt}"` : ''}${msgIds(tn.a, bAt, tt)}><div class="bub">${shown}${tweak}${mediaBlock(c, tn.media.filter(m => !placed.has(m.id)))}${action}</div>`
+      // Tap-to-pick replies (WIZARD_CHOICES_V1, wizard-agent-service issue 650, switch wizard/first-chat-goals): only under
+      // the newest finished answer, so they go once the owner answers; a tap sends that text (core/chats-bind.js).
+      const picks = last && !working && tn.a?.choices?.length && replyChoicesOn() ? `<div class="ch-choices" role="group" aria-label="Pick a reply">${tn.a.choices.map(t => `<button type="button" data-chchoice="${esc(t)}">${esc(t)}</button>`).join('')}</div>` : '';
+      h += (needs || '') + `<div class="msg a${lead ? ` has-rsum${open ? ' rsum-open' : ''}` : ''}"${isFinite(bAt) ? ` data-boom-at="${bAt}" data-morph-key="a${bAt}"` : ''}${msgIds(tn.a, bAt, tt)}><div class="bub">${shown}${tweak}${mediaBlock(c, tn.media.filter(m => !placed.has(m.id)))}${action}${picks}</div>`
         + `<div class="mmeta">${timeTag(tn.a?.at ?? tn.mediaAt)}${k >= 0 ? `<button type="button" data-mcopy="${k}" aria-label="Copy response">${COPY_SVG}Copy</button><button type="button" data-mshare="${k}" aria-label="Share response">${SHARE_SVG}Share</button>` : ''}${quoteBtn(tt)}${k >= 0 && last && !working && regenOn() ? '<button type="button" data-mregen aria-label="Regenerate response">↻ Regenerate</button>' : ''}</div></div>`;
     }
     return h;

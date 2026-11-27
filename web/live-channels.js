@@ -17,9 +17,12 @@ window.WizCore.liveParts.channels = function () {
    * followed by a fresh read; a read that started before a later edit is dropped, so a slow answer never undoes a tap.
    * Membership is keyed by the thread's agent plus its id ('hermes' = main), as the store keys it. */
   const CHANNELS_URL = '/wizard/v1/channels', CHANNEL_MEMBERSHIP_URL = '/wizard/v1/channels/membership', CHANNELS_CACHE = 'wos.chats.channels.v1';
-  // Tags (wizard-agent-service issue 608, switch wizard/chat-tags): with the box's Tags on (`tags: true` on the list) a
+  // Tags (wizard-agent-service issue 608, on for everyone): with the box's Tags on (`tags: true` on the list) a
   // chat carries several channels; PUT {sessionId, agent, add|remove} adds or removes one.
   const CHANNEL_TAGS_URL = '/wizard/v1/channels/tags';
+  // Automatic tags (wizard-agent-service issue 702, box switch wizard/auto-tags): with the box's auto tags on
+  // (`autoTags: true` on the list) each channel has a covers list, read and replaced through GET/PUT covers.
+  const CHANNEL_COVERS_URL = '/wizard/v1/channels/covers';
   function channelStore({ req, emit, normalize = r => r, onRow = r => r, onError = () => {}, now = () => Date.now(), storage = null, every = 30e3, offEvery = 5 * 60e3, feedMax = 200, moveKeep = 120e3 } = {}) {
     const ID = /^[a-z0-9-]{1,48}$/, AGENT = /^[a-z0-9][a-z0-9-]{0,47}$/;
     const agentKey = a => a && AGENT.test(a) ? a : 'hermes';
@@ -27,7 +30,7 @@ window.WizCore.liveParts.channels = function () {
     const one = c => ({ id: c.id, agent: c.agent, name: c.name.slice(0, 60), order: Number(c.order) || 0, createdAt: typeof c.createdAt === 'string' ? c.createdAt : '', archived: !!c.archived,
       ...(c.archived ? { archivedAt: typeof c.archivedAt === 'string' ? c.archivedAt : '' } : {}), pinned: !!c.pinned, ...(c.pinned ? { pinOrder: Number.isFinite(c.pinOrder) ? c.pinOrder : 0 } : {}),
       ...(c.kind === 'alerts' ? { kind: 'alerts' } : c.kind === 'daily' ? { kind: 'daily', dayStartsAt: typeof c.dayStartsAt === 'string' ? c.dayStartsAt.slice(0, 5) : '05:00' } : {}), count: Number(c.count) || 0 });
-    const clean = d => d && typeof d === 'object' && Array.isArray(d.channels) ? { sort: d.sort === 'za' ? 'za' : 'az', channels: d.channels.filter(valid).map(one), ...(d.tags === true ? { tags: true } : {}) } : null;
+    const clean = d => d && typeof d === 'object' && Array.isArray(d.channels) ? { sort: d.sort === 'za' ? 'za' : 'az', channels: d.channels.filter(valid).map(one), ...(d.tags === true ? { tags: true } : {}), ...(d.autoTags === true ? { autoTags: true } : {}) } : null;
     const store = storage || (() => { try { return globalThis.localStorage || null; } catch (_) { return null; } })();
     let doc = null; try { doc = clean(JSON.parse(store?.getItem(CHANNELS_CACHE) || 'null')); } catch (_) {}
     let rev = doc ? 1 : 0, off = false, readAt = 0, reading = null, edits = 0, pending = 0, writes = Promise.resolve();
@@ -53,7 +56,7 @@ window.WizCore.liveParts.channels = function () {
     // The store as Chats shows it, or null (unknown yet, store off, older service). Reading it keeps it fresh.
     function state() {
       if (!reading && now() - readAt >= (off ? offEvery : every)) pull();
-      return off || !doc ? null : { rev, sort: doc.sort, channels: doc.channels, ...(doc.tags ? { tags: true } : {}) };
+      return off || !doc ? null : { rev, sort: doc.sort, channels: doc.channels, ...(doc.tags ? { tags: true } : {}), ...(doc.autoTags ? { autoTags: true } : {}) };
     }
     // Sent in order; after the last one settles the list is read again (also after a refusal, to show the box's own).
     function send(url, method, body) {
@@ -119,6 +122,23 @@ window.WizCore.liveParts.channels = function () {
         return r;
       });
     }
+    // Auto tags on: a channel's covers ({covers, learned, not}) or null (switch off, older box, offline).
+    async function covers(id) {
+      if (off || !doc?.autoTags || !ID.test(id)) return null;
+      try { const d = await (await req(`${CHANNEL_COVERS_URL}?id=${encodeURIComponent(id)}`, { cache: 'no-store' })).json(); return d && Array.isArray(d.covers) ? { covers: d.covers.filter(x => typeof x === 'string'), learned: Array.isArray(d.learned) ? d.learned.filter(x => typeof x === 'string') : [], not: Array.isArray(d.not) ? d.not.filter(x => typeof x === 'string') : [] } : null; }
+      catch (_) { return null; }
+    }
+    // The owner's edit as one entry at a time (removals, then additions), from the list this device showed to the list
+    // he saved, so another device's edit made meanwhile is kept (an item operation, never this device's whole list).
+    // -> {ok, body}: ok when every entry landed; body is the box's list after the last one.
+    async function editCovers(id, before, after) {
+      if (!ID.test(id) || !Array.isArray(before) || !Array.isArray(after)) return { ok: false, status: 400 };
+      const k = x => String(x).toLowerCase(), had = new Set(before.map(k)), keep = new Set(after.map(k));
+      const ops = [...before.filter(x => !keep.has(k(x))).map(x => ({ remove: x })), ...after.filter(x => !had.has(k(x))).map(x => ({ add: x }))];
+      let last = { ok: true, body: null };
+      for (const op of ops) { const r = await send(CHANNEL_COVERS_URL, 'PUT', { id, ...op }); if (!r.ok) return r; last = r; }
+      return last;
+    }
     // [[agent|id, channel id, on]] still inside moveKeep.
     function tagEdits() {
       const t = now(), out = [];
@@ -168,7 +188,7 @@ window.WizCore.liveParts.channels = function () {
     }
     // A window coming back to the front reads again at once (another device may have pinned or sorted meanwhile).
     const fresh = () => { readAt = 0; for (const f of FEEDS.values()) f.at = 0; };
-    return { state, pull, patch, create, move, moves, tag, tagEdits, feed, rows, find, fresh, get off() { return off; } };
+    return { state, pull, patch, create, move, moves, tag, tagEdits, covers, editCovers, feed, rows, find, fresh, get off() { return off; } };
   }
   /* ---- end channel store ---- */
   /* ---- channel reads (wizard-agent-service issue 471) ----
@@ -322,7 +342,9 @@ window.WizCore.liveParts.channels = function () {
     const num = v => { const n = Number(v); return Number.isFinite(n) && n > 0 ? n : 0; };
     const rec = r => r && typeof r === 'object' && RID.test(r.id) && typeof r.thread_id === 'string' && SID.test(r.thread_id) && (r.state === 'running' || r.state === 'stale')
       ? { id: r.id, agent: typeof r.agent === 'string' && AID.test(r.agent) ? r.agent : 'hermes', thread: r.thread_id, title: str(r.title, 120), update: str(r.last_update, 200), state: r.state, createdAt: num(r.created_at), updatedAt: num(r.updated_at) || num(r.created_at) } : null;
-    const s = { records: [], stay: new Set(), ok: false, gone: false, at: 0, busy: null };
+    // privateDefault: the box's private default agent while its wizard/private-routing switch is on (wizard-agent-service
+    // issue 631): its threads move too. '' otherwise (switch off, an older box): only main-agent threads, as before.
+    const s = { records: [], stay: new Set(), privateDefault: '', ok: false, gone: false, at: 0, busy: null };
     const tell = () => { try { emit(); } catch (_) {} };
     function read() {
       if (s.busy) return s.busy;
@@ -333,8 +355,9 @@ window.WizCore.liveParts.channels = function () {
           s.records = (Array.isArray(j?.records) ? j.records : []).map(rec).filter(Boolean).sort((a, b) => b.updatedAt - a.updatedAt || (a.id < b.id ? -1 : 1));
           // The main agent's Daily and Alerts threads (issue 1569 review): Send to inbox is never offered for them.
           s.stay = new Set((Array.isArray(j?.stay) ? j.stay : []).filter(id => typeof id === 'string' && SID.test(id)).slice(0, 1000));
+          s.privateDefault = typeof j?.private_default === 'string' && AID.test(j.private_default) && j.private_default !== 'hermes' ? j.private_default : '';
           s.ok = true; s.gone = false;
-        } catch (e) { if (e?.status === 404) { s.records = []; s.stay = new Set(); s.ok = true; s.gone = true; } }
+        } catch (e) { if (e?.status === 404) { s.records = []; s.stay = new Set(); s.privateDefault = ''; s.ok = true; s.gone = true; } }
         finally { s.busy = null; tell(); }
         return s;
       })();
@@ -349,6 +372,8 @@ window.WizCore.liveParts.channels = function () {
     async function move(kind, thread, extra = {}) {
       if ((kind !== 'open' && kind !== 'send') || !SID.test(String(thread || ''))) throw Object.assign(new Error('invalid'), { status: 400 });
       const body = { thread_id: thread };
+      // Issue 631: a private default agent's thread names its agent (the box hides it in that agent's own Hermes).
+      if (typeof extra.agent === 'string' && extra.agent && extra.agent === s.privateDefault) body.agent = extra.agent;
       const title = str(extra.title, 120), utterance = str(extra.utterance, 600);
       if (title) body.title = title;
       if (utterance) body.utterance = utterance;
@@ -427,8 +452,8 @@ window.WizCore.liveParts.channels = function () {
       const j = await (await req('/wizard/v1/agent-inbox?state=new,surfaced&limit=200', { cache: 'no-store' })).json();
       return (Array.isArray(j?.records) ? j.records : []).map(alertRec).filter(r => r && LATER.has(r.kind)).sort((a, b) => b.updatedAt - a.updatedAt || (a.id < b.id ? -1 : 1)).slice(0, 30);
     }
-    /* Inbox rows (wizard-ux issue 1779, switch wizard/inbox-rows): the records waiting on the owner (kind needs_you,
-     * state new; `failed` when the task failed or stalled), read only while the switch asks for them, kept fresh like
+    /* Inbox rows (wizard-ux issue 1779): the records waiting on the owner (kind needs_you, state new; `failed` when
+     * the task failed or stalled), read only while the Inbox asks for them, kept fresh like
      * the Running list. archive(id): PATCH <id> {action: archive}, gone from the list on this frame. A 404 is none. */
     const nd = { records: [], ok: false, gone: false, at: 0, busy: null };
     function readNeeds() {
@@ -454,6 +479,29 @@ window.WizCore.liveParts.channels = function () {
       catch (e) { nd.records = was; tell(); throw e; }
       finally { nd.at = 0; readNeeds(); }
     }
+    /* A thread archived from anywhere (its own Archive, a link trail, a row, a swipe: LIVE.archive) takes its waiting
+     * records with it (wizard-ux issue 1928), so a background task's Inbox row goes with its thread. restoreThread(thread)
+     * (LIVE.restore: Undo, Restore) puts back the records this device archived for it: the box has no un-archive, and
+     * its `snooze` action is the one that sets a record back to waiting (state new). Errors are swallowed: the Inbox
+     * rule already leaves out a record whose thread is archived. */
+    const byThread = new Map();
+    function archiveThread(thread) {
+      const mine = nd.records.filter(r => r.thread === thread); if (!mine.length) return Promise.resolve([]);
+      const job = Promise.all(mine.map(r => archive(r.id).then(() => r, () => null))).then(done => done.filter(Boolean));
+      byThread.set(thread, job);
+      return job;
+    }
+    async function restoreThread(thread) {
+      const job = byThread.get(thread); if (!job) return [];
+      byThread.delete(thread);
+      const done = await job.catch(() => []); if (!done.length) return [];
+      const have = new Set(nd.records.map(r => r.id));
+      nd.records = nd.records.concat(done.filter(r => !have.has(r.id))).sort((a, b) => b.updatedAt - a.updatedAt || (a.id < b.id ? -1 : 1)); tell();
+      try { await Promise.all(done.map(r => req(`/wizard/v1/agent-inbox/${r.id}`, { method: 'PATCH', ...JSON_POST({ action: 'snooze' }) }))); }
+      catch (_) {}
+      finally { await Promise.resolve(nd.busy).catch(() => {}); nd.at = 0; readNeeds(); }
+      return done;
+    }
     async function feedback(id, action) {
       if (!RID.test(String(id || '')) || !FB.has(action)) throw Object.assign(new Error('invalid'), { status: 400 });
       try {
@@ -463,7 +511,8 @@ window.WizCore.liveParts.channels = function () {
         return { record: alertRec(j?.record), examples: { not_urgent: cnt(j?.examples?.not_urgent), should_alert: cnt(j?.examples?.should_alert) } };
       } finally { al.at = 0; readAlerts(); }
     }
-    return { state, records, read, fresh, move, stays, card, answer, yesToAll, sweep, alerts, alertState, readAlerts, later, feedback, needs, needsState, readNeeds, archive };
+    const privateDefault = () => state().privateDefault;
+    return { state, records, read, fresh, move, stays, privateDefault, card, answer, yesToAll, sweep, alerts, alertState, readAlerts, later, feedback, needs, needsState, readNeeds, archive, archiveThread, restoreThread };
   }
   /* ---- sent log (wizard-ux issue 1778) ----
    * The box's Sent log (wizard-agent-service issue 607, same switch as the agent inbox): one row per capture the owner
@@ -489,7 +538,15 @@ window.WizCore.liveParts.channels = function () {
       // and quiet (it needed nothing from him, so it stayed out of Inbox).
       wantsReply: r.wants_reply !== false, answer: str(r.answer, 200), quiet: r.quiet === true,
     } : null;
-    const s = { rows: [], next: null, ok: false, gone: false, at: 0, busy: null, deep: false };
+    // Typed messages (wizard-agent-service issue 669, Smart inbox): how often the box's guess for a typed task matched
+    // what he did, and whether typed tasks now run in the background (`on`). A box without it: null.
+    const count = v => { const n = Number(v); return Number.isFinite(n) && n >= 0 ? Math.floor(n) : 0; };
+    const typedOf = t => t && typeof t === 'object' && t.background && typeof t.background === 'object' ? {
+      on: t.on === true, graduated: t.graduated === true, judged: count(t.background.judged), matched: count(t.background.matched),
+      rate: Number.isFinite(Number(t.background.rate)) && t.background.rate !== null ? Number(t.background.rate) : null,
+      min: count(t.gate?.min) || 50, need: Number.isFinite(Number(t.gate?.rate)) ? Number(t.gate.rate) : 0.9,
+    } : null;
+    const s = { rows: [], next: null, ok: false, gone: false, at: 0, busy: null, deep: false, typed: null };
     const tell = () => { try { emit(); } catch (_) {} };
     function read() {
       if (s.busy) return s.busy;
@@ -502,8 +559,9 @@ window.WizCore.liveParts.channels = function () {
           const k = s.deep && page.length ? s.rows.findIndex(r => r.id === page.at(-1).id) : -1;
           if (k >= 0 && k < s.rows.length - 1) { const have = new Set(page.map(r => r.id)); s.rows = page.concat(s.rows.slice(k + 1).filter(r => !have.has(r.id))); }
           else { s.rows = page; s.next = next; s.deep = false; }
+          s.typed = typedOf(j?.typed_routing);
           s.ok = true; s.gone = false;
-        } catch (e) { if (e?.status === 404) { s.rows = []; s.next = null; s.deep = false; s.ok = true; s.gone = true; } }
+        } catch (e) { if (e?.status === 404) { s.rows = []; s.next = null; s.deep = false; s.ok = true; s.gone = true; s.typed = null; } }
         finally { s.busy = null; tell(); }
         return s;
       })();

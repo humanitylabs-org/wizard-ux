@@ -1,0 +1,3 @@
+/* Instant home-screen apps (wizard-ux issue 1830): nothing in the shell looks different; the Android app and the shell
+ * worker read the switch. This rule only marks the switch as present. */
+html[data-tweaks~="wizard/pin-instant-open"] { --wos-pin-instant-open: 1; }

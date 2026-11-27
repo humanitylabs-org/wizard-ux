@@ -4,7 +4,7 @@
   'use strict';
   if (window.WizAppServices) return;
   const VERSION = 1, ORIGIN = location.origin, frames = new Map();
-  const OPS = new Set(['ready', 'share.text', 'share.file', 'share.wizard', 'voice.transcribe', 'share.receive', 'share.targets', 'share.pending', 'share.ack', 'capture.pending', 'capture.ack', 'update.hold', 'update.release', 'badge.set', 'titlebar.set', 'orb.set', 'audio.duck', 'identity.info', 'identity.sign', 'identity.nip44_encrypt', 'identity.nip44_decrypt', 'shell.openCompanion', 'shell.closeCompanion', 'shell.postCompanion', 'shell.focusApp', 'notify.chatRead']);
+  const OPS = new Set(['ready', 'share.text', 'share.file', 'share.wizard', 'voice.transcribe', 'share.receive', 'share.targets', 'share.pending', 'share.ack', 'capture.pending', 'capture.ack', 'update.hold', 'update.release', 'badge.set', 'titlebar.set', 'orb.set', 'audio.duck', 'identity.info', 'identity.sign', 'identity.nip44_encrypt', 'identity.nip44_decrypt', 'shell.openCompanion', 'shell.closeCompanion', 'shell.postCompanion', 'shell.focusApp']);
   let registry, available = null, serial = 0, rootArm = null;
   // Share receiving (docs/SHARE-SHEET.md): the share sheet hands its per-app ops here once, at shell load, before
   // any app frame exists; they are never on a global, so a frame reaches only its own app id's items.
@@ -288,14 +288,37 @@
     if (r.old) { b.textContent = 'Start'; p.textContent = 'Update WizardOS in Settings, then tap Start.'; return; }
     b.textContent = 'Retry'; p.textContent = 'Could not start ' + appName(st) + ': ' + r.error;
   }
-  // Clear chat notifications (wizard-ux issue 1276, switch wizard/clear-chat-notifications): an app in front says the
-  // owner read a chat ({network, names}); the WizardOS Android app clears that chat app's notification from the tray
-  // (core/android-relay.js chatRead). Only a messaging app (its own wizard.md `provides: [messaging]`, from the box's
-  // trusted list) and only while its window is on screen, since reading needs it there.
-  function chatRead(st, data) {
-    if (document.hidden || st?.isVisible?.() !== true) return false;
-    if (!apps().some(a => a.id === st.appId && a.source === 'apps.json' && a.provides?.includes('messaging'))) return false;
-    return window.WizAndroidRelay?.chatRead?.(data) === true;
+  /* Agent access under the browser boundary (wizard-ux issue 1668, switch wizard/boundary-agent-access): Connected
+   * accounts' Agent access screen shows and sets which agents may use an account app (the owner's agent.json ticks,
+   * wizard-os spec/PERMISSIONS.md). A sandboxed page's own owner call carries no shell token, so the shell makes it:
+   * GET / PUT /wizard/v1/apps/<id>/agents, the same routes the App Manager's Connections page uses (core/agents.js).
+   * Only the installed Connected accounts app asks, only for the apps that hold accounts (ACCESS_APPS, the list on its
+   * screen), only while its window is on screen, and a change only right after a real tap in that window. Nothing is
+   * kept here; only the ticks cross back (browser-boundary.js accessShape). */
+  const ACCESS_SWITCH = 'wizard/boundary-agent-access', ACCESS_ASKERS = ['connected-accounts', 'wizard-connectors'];
+  const ACCESS_APPS = new Set(['connected-accounts', 'wizard-google', 'wizard-microsoft', 'messenger', 'wizard-mail', 'money', 'wizard-health',
+    'wizard-apple-health', 'wizard-fitbit', 'wizard-oura', 'wizard-whoop', 'wizard-withings']);
+  const ACCESS_AGENT = /^[a-z0-9][a-z0-9._-]{0,63}$/;
+  function accessOn() { try { return String(document.documentElement.dataset.tweaks || '').split(/\s+/).includes(ACCESS_SWITCH); } catch (_) { return false; } }
+  async function agentAccess(st, method, args, ctx) {
+    if (!accessOn()) throw fault('Agent access is not available here');
+    if (!apps().some(a => a.id === st.appId && a.source === 'apps.json' && ACCESS_ASKERS.includes(a.id))) throw fault('Only Connected accounts may ask');
+    if (document.hidden || st?.isVisible?.() !== true) throw fault('Open the app first');
+    const app = typeof args?.app === 'string' ? args.app : '';
+    if (!ACCESS_APPS.has(app)) throw fault('Not an app that holds accounts');
+    let body = null;
+    if (method === 'agents.set') {
+      if (ctx?.tapped !== true) throw fault('Changing agent access needs a tap in the app');
+      const ids = args?.agents;
+      if (!Array.isArray(ids) || ids.length > 64 || !ids.every(x => typeof x === 'string' && ACCESS_AGENT.test(x))) throw fault('Invalid agent list');
+      body = JSON.stringify({ agents: [...new Set(ids)] });
+    }
+    const headers = body ? { Accept: 'application/json', 'Content-Type': 'application/json' } : { Accept: 'application/json' };
+    const r = await fetch('/wizard/v1/apps/' + encodeURIComponent(app) + '/agents', { method: body ? 'PUT' : 'GET', cache: 'no-store', credentials: 'same-origin', redirect: 'error', headers, ...(body ? { body } : {}) });
+    let j = null; try { j = await r.json(); } catch (_) {}
+    if (r.status === 404 && j?.error === 'app_not_found') return { access: { state: 'absent' } };
+    if (!r.ok || !Array.isArray(j?.agents)) throw fault(typeof j?.error === 'string' && /^[a-z0-9_]{1,64}$/.test(j.error) ? j.error : 'request_failed');
+    return { access: { state: 'ok', agents: j.agents } };
   }
   // App badge: an installed app's own unread count on its desk mark / bar badge (same slot Notifications uses).
   // Keyed by the verified frame's app id, so an app can only badge itself; shell-owned counts are not writable.
@@ -643,7 +666,6 @@
         toast(icon, message) { check(); if (typeof icon !== 'string' || typeof message !== 'string') return false; const shell = window.__wos || window.__wux; shell?.toast?.(icon.slice(0, 20), message.slice(0, 2000), 2600); return !!shell?.toast; },
       }),
       badge: Object.freeze({ set(n, o) { check(); setBadge(st.appId, n, !!(o && o.more === true)); st.badged = true; return true; } }),
-      notifications: Object.freeze({ chatRead(data) { check(); return chatRead(st, data); } }),
       orb: Object.freeze({ set(spec) { check(); return setOrb(st, spec); }, shown() { check(); return orbShown(st.frame); } }),
       // Lower Wizard Music while this app plays a short sound; duck(false) restores it. Resolves true when ducked.
       audio: Object.freeze({ duck(on) { check(); return window.WizBackgroundAudio?.duck ? window.WizBackgroundAudio.duck(st, !!on) : Promise.resolve(false); } }),
@@ -892,7 +914,6 @@
       if (d.op === 'capture.ack') value = await svc.capture.ack(d.args?.id);
       if (d.op === 'update.hold') { const h = svc.update.hold(d.args?.reason, typeof d.args?.keepId === 'string' ? {keep: () => keepMessage(st, d.args.keepId)} : {}), id = uid(); st.messageHolds ||= new Map(); st.messageHolds.set(id, h); value = id; }
       if (d.op === 'badge.set') value = svc.badge.set(d.args?.n, { more: d.args?.more === true });
-      if (d.op === 'notify.chatRead') value = svc.notifications.chatRead(d.args);
       if (d.op === 'audio.duck') value = await svc.audio.duck(d.args?.on === true);
       if (d.op.startsWith('vault.')) { try { value = await svc.vault[d.op.slice(6)](d.op === 'vault.seal' ? d.args?.secret : d.args?.title, d.args?.title); } catch (err) { reply(null, 'vault:' + (err.code || 'failed')); return; } }
       if (d.op === 'titlebar.set') value = svc.titlebar.set(d.args?.tools);
@@ -998,7 +1019,8 @@
     if (receipt?.accepted !== true || receipt.request_id !== message.request_id) throw fault('App receipt uncertain · original kept');
     return { accepted: true, request_id: message.request_id };
   }
-  // Same list as chats.js HOSTED_APPS: apps whose conversations are the real Chats thread over their window.
+  // Same policy as chats.js openHosted (WizLauncher.hasHostedThread): every installed Wizard app may lay the real
+  // Chats thread over its own window (wizard-ux issue 1838).
   // `sandboxed`: a window under the browser boundary, verified by boundaryLive (its document can't be read).
   function hostedThreadAuthorized(st, sandboxed = false) {
     if (!st || !window.WizLauncher?.hasHostedThread(st.appId) || !(sandboxed ? boundaryLive(st) : valid(st, st.doc)) || typeof st.openThread !== 'function') return false;
@@ -1047,6 +1069,7 @@
       let url; try { url = new URL(app.url, location.href); } catch (_) { continue; }
       if (url.origin !== location.origin) continue;
       const frame = document.createElement('iframe'); frame.className = 'appframe'; frame.hidden = true; frame.dataset.voiceService = id;
+      frame.setAttribute('allow', "geolocation 'none'"); // never location for a hidden app frame (wizard-ux issue 1629)
       frame.src = url.href; frame.style.display = 'none'; frame.setAttribute('aria-hidden', 'true'); frame.setAttribute('tabindex', '-1');
       document.body.appendChild(frame);
       const detach = attach(frame, {appId:id, path:app.url});
@@ -1101,7 +1124,7 @@
       const st = frames.get(frame);
       if (!boundaryLive(st)) throw fault('App window not verified');
       if (method === 'badge.set') { setBadge(st.appId, args?.n, args?.more === true); st.badged = true; return true; }
-      if (method === 'notify.chatRead') return chatRead(st, args);
+      if (method === 'agents.read' || method === 'agents.set') return agentAccess(st, method, args, ctx);
       if (method === 'titlebar.set') {
         // The page's own address, only as the base for relative links (each link must still stay inside the app).
         let base = null; try { if (typeof args?.base === 'string' && args.base.length <= 2048) { const u = new URL(args.base); if (within(u, st.url)) base = u.href; } } catch (_) {}

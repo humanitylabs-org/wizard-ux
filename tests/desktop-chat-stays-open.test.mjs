@@ -98,10 +98,11 @@ for (const desktopHost of [true, false]) for (const agent of ['', 'philosopher']
   c.ch('chat').readNav++; c.markVisibleThreadsSeen();
   assert.equal(L.isNew(row),false,'navigating/reopening permits normal automatic read again');
 });
-for (const after of ['stay', 'list']) test(`phone Archive of a thread opened from another one goes straight to the list, preference ${after}`, async () => {
-  const f = fixture(false, after); f.context.CH.chat.trail = ['parent'];
+for (const after of ['stay', 'list']) test(`phone Archive of a thread opened from another one steps back to it, preference ${after}`, async () => {
+  const f = fixture(false, after); f.context.CH.chat.trail = ['parent']; f.context.LIVE.session = id => ({ id });
   await f.context.threadAct('chat', 'same', 'done');
-  assert.equal(f.w.thread, null);
-  assert.equal(f.context.CH.chat.trail.length, 0, 'the link trail is dropped, never stepped up');
-  assert.deepEqual(f.backs, ['list:same'], 'closed straight to the list, not threadBack');
+  assert.deepEqual(f.backs, ['same'], 'one step back up the link trail (issue 1902), not the list');
+  const g = fixture(false, after); g.context.LIVE.session = id => ({ id });
+  await g.context.threadAct('chat', 'same', 'done');
+  assert.deepEqual(g.backs, ['list:same'], 'no link trail: straight to the list');
 });

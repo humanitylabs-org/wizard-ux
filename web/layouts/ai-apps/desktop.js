@@ -73,7 +73,7 @@ import { glyphOf, colourOf } from '../orb/shared.js';
 import { HOLD_MS } from '../orb/keys.js';
 import { ACTS, svgIcon, initial, sectionsFor, archiveTop, KINDS, EMPTY, sectionsOpen, gridSlot, STATES, stateOf, stateGroups, gaugeInto, fuelOf,
   pinsFrom, togglePin, RAIL_WORDS, vtMove, relMoves, appLayers, shownIds, TIDY, TIDY_WORDS, TIDY_DEFAULT, tidyPlan, seedUsed, tidyWords,
-  TIDY_SHORT, tidySentence, readyGroups, projectGroups, GROUP_MODES, groupMode, readyFlat, readyStep, GROUP_ORDERS, groupOrder, railRows, railActive, railNext, shortTime, titleInProject } from './parts.js';
+  TIDY_SHORT, tidySentence, readyGroups, projectGroups, GROUP_MODES, groupMode, readyFlat, readyStep, GROUP_ORDERS, groupOrder, railRows, railActive, railNext, shortTime, titleInProject, sharedList } from './parts.js';
 import { homeView } from './home.js';
 import { appmenuPart } from './desktop-appmenu.js';
 import { closingPart } from './desktop-closing.js';
@@ -132,7 +132,6 @@ export default function desktop(api) {
   /* Values this view changes over time (wizard-ux issue 1665): the parts in layouts/ai-apps/desktop-*.js read and
    * write them as aadVars.<name>, accessors on these same variables, so every read and write is live. */
   const aadVars = {
-    get actOlder() { return actOlder; }, set actOlder(v) { actOlder = v; },
     get badgeMap() { return badgeMap; }, set badgeMap(v) { badgeMap = v; },
     get chatsFresh() { return chatsFresh; }, set chatsFresh(v) { chatsFresh = v; },
     get chatThread() { return chatThread; }, set chatThread(v) { chatThread = v; },
@@ -205,21 +204,20 @@ export default function desktop(api) {
   let pane = null, dockEl = null, want = null, docked = false, wide = false, chatThread = null, splitTries = 0, fixingBehind = false;
   let paneGeometry = null, secondEl = null;
   const paneVars = new Set();
-  /* Narrower window, one app at a time (ONE above): from the window's width alone, never stored */
-  const one = () => (globalThis.innerWidth || 1440) < ONE.from;
+  /* Narrower window, one app at a time (ONE above): from the window's width alone, never stored. Bottom app bar on
+   * desktop (wizard-ux issue 1692, switch wizard/desktop-bottom-bar, off by default): while it is on, the same one-app
+   * layout at every width (the bar's items keep their 96 px and centre, Chats keeps its list beside the chat). */
+  const barOn = () => { try { return String(root.dataset.tweaks || '').split(' ').includes('wizard/desktop-bottom-bar'); } catch (_) { return false; } };
+  const one = () => barOn() || (globalThis.innerWidth || 1440) < ONE.from;
   /* Activity as a short what-needs-me list (wizard-ux issue 1336, part of Channels, on for everyone since issue 1258): no agent
-   * chips (every agent's chats; agents live in the Channels list), Working, Ready (amber needs you and green unread
-   * only), Recent (the rest, newest first, a week back, then Show older), Snoozed and Archived folded at the bottom,
-   * one sort on Ready (Newest first, Oldest first, Needs you first), and one marker per row: spinner, amber or green. */
+   * chips (every agent's chats; agents live in the Channels list), Working, Inbox (every thread until it is archived,
+   * wizard-ux issue 1810), Snoozed and Archived folded at the bottom, one sort on Inbox (Newest first, Oldest first, Needs you first), and one marker per row: spinner, amber or green. */
   const actOn = () => true; // tests that slice this file without it get the older list
-  // The sidebar's list by the owner's Default Chats look (Settings › Chats; wizard-ux issue 1443), off by default.
-  const viewOn = () => { try { return String(root.dataset.tweaks || '').split(' ').includes('wizard/sidebar-chats-view'); } catch (_) { return false; } };
-  const ACT_SECTIONS = [['working', 'Working'], ['ready', 'Ready'], ['recent', 'Recent'], ['snoozed', 'Snoozed'], ['archive', 'Archived']];
+  const ACT_SECTIONS = [['working', 'Working'], ['ready', 'Inbox'], ['snoozed', 'Snoozed'], ['archive', 'Archived']];
   // (+ 'saved': sends a graceful restart holds, wizard-ux issue 1362; listed only while there are any)
-  const LKINDS = [...KINDS, 'recent', 'saved'];
-  let actOlder = false;
+  const LKINDS = [...KINDS, 'saved'];
   /* The app panel on the left and placing the panes; layouts/ai-apps/desktop-panes.js. */
-  const { appSideOf, desks, el, flipAppSide, flipSides, icon, leftOn, oneSplit, paneModel, placePanes, swapOn, swapped, bindLate: panesLate } = panesPart({ aadVars, api, COLS, doc, flip, one, ONE, panes, paneVars, RAIL, root });
+  const { desks, el, flipSides, icon, oneSplit, paneModel, placePanes, swapped, bindLate: panesLate } = panesPart({ aadVars, api, COLS, doc, flip, one, ONE, panes, paneVars, RAIL, root });
   let draftWant = false;   // round 21: the new chat in front holds an app's Reply: it docks as a chat (left), the app stays right
   /* Round 11 (Miguel: opening and closing panels must be smooth): a change of layout snaps at once and its pieces glide
    * from where they were with a short transform (FLIP: translate only, never width / left), 220 ms. */
@@ -265,15 +263,15 @@ export default function desktop(api) {
   let sessions = null, badgeMap = api.apps.badges(m => { badgeMap = m; paintBadges(); });
   /* A row's tracker dots and the sidebar's header; layouts/ai-apps/desktop-sidebar.js. */
   const { agentName, appName, badgeText, cancelBtn, field, findBtn, foot, fuel, head, khMarks, lit, newBtn, rail, readSessions, scroll, searchBox, setBtn, side, titleOf, togBtn, ttAgent, ttDots, wsBtn, wsName } = sidebarPart({ aadVars, actOn, api, desks, el, icon, LKINDS });
-  /* Swap sides (wizard-ux issue 1526, switch wizard/swap-sides): a button in the chats sidebar's header, before ◫, only
-   * while the switch is on (paintSwap) */
+  /* Swap sides (wizard-ux issue 1526): a button in the chats sidebar's header, before ◫, except in the narrower one-app
+   * window (paintSwap) */
   const sSwap = el('button', 'aad-ib aad-sswap', { type: 'button', 'aria-keyshortcuts': 'Alt+Shift+L' }); sSwap.append(icon('swap')); sSwap.hidden = true;
   /* The rail's Wizard switcher, the agent choices, the Channels pane and another Chats look; layouts/ai-apps/desktop-sidetabs.js. */
-  const { cBack, chanTitle, cTop, cX, FEED, feedBox, feedOn, modeBars, oneBack, paintAgents, paintChan, paintView, pIcon, pName, pTools, pTop, pW, pX, rFind, rList, rNew, rSet, rTog, rWs, shade, sName, sTop, top, tt, windowMode, bindLate: sidetabsLate } = sidetabsPart({ aadVars, actOn, api, el, flip, foot, head, icon, one, oneSplit, panes, rail, readSessions, scroll, side, viewOn });
+  const { cBack, chanTitle, cTop, cX, FEED, feedBox, feedOn, modeBars, oneBack, paintAgents, paintChan, paintView, pIcon, pName, pTools, pTop, pX, rFind, rList, rNew, rSet, rTog, rWs, shade, sName, sTop, top, tt, windowMode, bindLate: sidetabsLate } = sidetabsPart({ aadVars, actOn, api, el, flip, foot, head, icon, one, oneSplit, panes, rail, readSessions, scroll, side });
   // (in memory only: after a reload in full screen, Esc goes to tiled)
   var fullFrom = 'tiled';
   /* The window arrangement buttons and the Mac title-bar strip; layouts/ai-apps/desktop-modes.js. */
-  const { macHoles, pSide, bindLate: modesLate } = modesPart({ aadVars, api, cTop, cX, doc, el, flipAppSide, icon, MODE_KEYS, MODE_LABELS, modeBars, pTop, pW, root, sTop, toggleSide, top, windowMode });
+  const { macHoles, paintModes, bindLate: modesLate } = modesPart({ aadVars, api, cTop, cX, doc, el, MODE_LABELS, modeBars, panes, pTop, pX, root, sTop, top, windowMode });
   /* A slow app's placeholder, the apps column on the right and the orb's place; layouts/ai-apps/desktop-column.js. */
   const { chrome, cv, fb, hBack, hMid, near, orbAt, orbBox, orbBtn, paintOrbIdentity, pLoad, pLoadT, scene, tidyBtn, tidyW, toast, toastU, toastW, vChats, vChatsN, vOne, vtAll, vtFoot, vtList, vtTog } = columnPart({ api, desks, doc, el, feedBox, icon, shade, side, top });
 
@@ -351,6 +349,9 @@ export default function desktop(api) {
   let q = '';
   function setSearch(on) {
     if (on && root.dataset.aadSide === 'rail') { if (narrow()) { peek = true; offPeek = api.back.push(() => { peek = false; offPeek = null; paintSide(); }); } else { folded = false; api.storage.set('folded', false); } paintSide(); }
+    // The pane's Chats list (wizard-ux issue 1966) searches in its own title bar, as on the phone: ⌥K opens that field.
+    const sl = on ? sharedList(root.querySelector?.('.aad-chan')) : null, tb = sl?.querySelector('.ch-tbar [data-chtbsearch]');
+    if (tb) { if (tb.getAttribute('aria-pressed') !== 'true') tb.click(); else sl.querySelector('[data-chsearch]')?.focus?.({ preventScroll: true }); return; }
     searchBox.hidden = cancelBtn.hidden = !on; wsBtn.hidden = findBtn.hidden = on;
     if (!on) { q = ''; field.value = ''; offSearch?.(); offSearch = null; } else if (!offSearch) offSearch = api.back.push(() => { offSearch = null; setSearch(false); });
     paintList(true);
@@ -531,7 +532,7 @@ export default function desktop(api) {
   const noteTitle = () => notificationSurface()?.notificationTitle || 'Notification';
   let dropped = null;   // the panel just hidden for Home / Focus while the route still names its app
   /* The app beside a chat after a reload, the split and a channel feed in the chat column; layouts/ai-apps/desktop-split.js. */
-  const { paintSplit, bindLate: splitLate } = splitPart({ aadVars, anim, api, applySizes, appName, appSideOf, appTile, chatsEl, cTop, cX, desks, doneLoading, FEED, feedBox, flip, focusFrame, homeComposer, host, leftOn, markUsed, modeBars, one, orbBox, paintTools, paneModel, paneWins, pIcon, placementOf, pName, pSide, pTop, pX, retileSoon, root, sName, sTop, syncSide, top, waitLoaded, watchPaneWins, wsps });
+  const { paintSplit, bindLate: splitLate } = splitPart({ aadVars, anim, api, applySizes, appName, appTile, chatsEl, cTop, cX, desks, doneLoading, FEED, feedBox, flip, focusFrame, homeComposer, host, markUsed, one, orbBox, paintModes, paintTools, paneModel, paneWins, pIcon, placementOf, pName, pTop, pX, retileSoon, root, sName, sTop, syncSide, top, waitLoaded, watchPaneWins, wsps });
   // The post last opened from the feed (its row or its Reply), and the channel it was opened in.
   let fromFeed = null;
   /* A post opened from a channel feed and the way back to it; layouts/ai-apps/desktop-feed.js. */
@@ -543,8 +544,8 @@ export default function desktop(api) {
   // the panel hides (the app keeps running on its desk): back to the chat (docked) or Home
   let closing = null, exitMotion = null;
   /* Hiding the app panel, closing the chat column and Back; layouts/ai-apps/desktop-closing.js. */
-  const { chatBack, closeChat, hidePanel, listBack, setWide, bindLate: closingLate } = closingPart({ aadVars, anim, api, cX, doneLoading, DRAFT, FEED, feedBack, feedGone, flip, focusFrame, icon, mainChats, one, oneSplit, paintSide, paintSplit, panes, peekable, pTop, pW, pX, reduced, retileSoon, root, wantAppFocus });
-  modesLate({ hidePanel });
+  const { chatBack, closeChat, hidePanel, listBack, setWide, bindLate: closingLate } = closingPart({ aadVars, anim, api, cX, doneLoading, DRAFT, FEED, feedBack, feedGone, flip, focusFrame, mainChats, one, oneSplit, paintSide, paintSplit, panes, peekable, pTop, pX, reduced, retileSoon, root, wantAppFocus });
+  modesLate({ setSize, setWide });
   homeLate({ hidePanel });
   tabsLate({ closeChat, hidePanel, setWide });
   splitLate({ setWide });
@@ -656,7 +657,7 @@ export default function desktop(api) {
   /* Stepping through Ready; layouts/ai-apps/desktop-ready.js. */
   const { KEY_LIKE, readyIds, stepReady, bindLate: readyLate } = readyPart({ aadVars, actOn, api, curChat, groupBy, railNow, readSessions, readyOrder, root, scroll, showToast });
   /* Now playing marks, the keycaps while left Option is held and the app keys; layouts/ai-apps/desktop-keys.js. */
-  const { focusOn, here, markMedia, offAppKeys, offFrameKeys, onMainChats, onScreen, paintTop, releaseSettings, soon } = keysPart({ aadVars, allOpenNow, anim, api, appKeyOf, applySizes, appName, behindThread, chanTitle, chatAction, chatParts, chatWindows, closeAll, closeChat, closeDesk, closeTidy, closeWs, cTop, curChat, cX, deskOfNode, desks, doc, DRAFT, el, FEED, feedBack, feedGone, feedOn, feedTitle, findBtn, flipAppSide, focusIn, focusLeave, focusOut, FRAME_KEYS, goApp, grip, hBack, hidePanel, hMid, homeComposer, host, isAppKey, KEY_LIKE, khMarks, leftOn, listBack, macHoles, mainChats, MODE_KEYS, MODE_LABELS, modeBars, narrow, newBtn, NOTE, noteOn, noteTitle, one, oneBack, oneSplit, openAll, openTidy, openWs, orbBtn, paintAgents, paintBack, paintHome, paintList, paintOneChats, paintOrbIdentity, paintRail, paintSplit, paintVt, paintWs, paneFrame, panes, pIcon, plus, pSide, pW, pX, railMode, readSessions, readyIds, readyOrder, retileSoon, rFind, rList, rNew, root, rSet, rTog, setBtn, setSearch, setSize, settings, setWide, side, sizes, stepReady, swapOn, swapped, swapSides, syncOrb, syncSide, talkFromOrb, tidyBtn, titleOf, togBtn, toggleSide, toggleTabs, top, tt, typing, unpeek, vtAll, vtList, vtTog, windowMode, wsBtn, wsName });
+  const { focusOn, here, markMedia, offAppKeys, offFrameKeys, onMainChats, onScreen, paintTop, releaseSettings, soon } = keysPart({ aadVars, allOpenNow, anim, api, appKeyOf, applySizes, appName, behindThread, chanTitle, chatAction, chatParts, chatWindows, closeAll, closeChat, closeDesk, closeTidy, closeWs, cTop, curChat, cX, deskOfNode, desks, doc, DRAFT, el, FEED, feedBack, feedGone, feedOn, feedTitle, findBtn, focusIn, focusLeave, focusOut, FRAME_KEYS, goApp, grip, hBack, hidePanel, hMid, homeComposer, host, isAppKey, KEY_LIKE, khMarks, listBack, macHoles, mainChats, MODE_KEYS, MODE_LABELS, modeBars, narrow, newBtn, NOTE, noteOn, noteTitle, one, oneBack, oneSplit, openAll, openTidy, openWs, orbBtn, paintAgents, paintBack, paintHome, paintList, paintOneChats, paintOrbIdentity, paintRail, paintSplit, paintVt, paintWs, paneFrame, panes, pIcon, plus, pX, railMode, readSessions, readyIds, readyOrder, retileSoon, rFind, rList, rNew, root, rSet, rTog, setBtn, setSearch, setSize, settings, side, sizes, stepReady, swapped, swapSides, syncOrb, syncSide, talkFromOrb, tidyBtn, titleOf, togBtn, toggleSide, toggleTabs, top, tt, typing, unpeek, vtAll, vtList, vtTog, windowMode, wsBtn, wsName });
   sidetabsLate({ paintTop });
   sidepaintLate({ here });
   tabsLate({ here, markMedia, paintTop });
@@ -669,15 +670,10 @@ export default function desktop(api) {
   const offHost = host?.onChange(() => { paintTop(); watchPaneWins(); });
   let swapWas = swapped();
   const offPanes = panes.subscribe(() => { paintTop(); applySizes(); retileSoon(); paintSwap(); });
-  // (the app-panel-left switch turned on or off: lay the panes out again, also on a first load where the switches land late)
-  let leftWas = leftOn();
-  const leftCheck = () => { if (leftOn() === leftWas) return; leftWas = leftOn(); paintTop(); applySizes(); retileSoon(); };
-  api.listen(globalThis, 'wos:experience', leftCheck);
-  const leftMo = globalThis.MutationObserver ? new MutationObserver(leftCheck) : null; leftMo?.observe(root, { attributes: true, attributeFilter: ['data-tweaks'] });
-  /* Swap sides (wizard-ux issue 1526): the button, ⌥⇧L and the switch turned on or off */
+  /* Swap sides (wizard-ux issue 1526): the button and ⌥⇧L */
   function swapSides() { flipSides([side, vtList.parentNode, top, orbBox, ...shownDesks()]); }
   function paintSwap() {
-    const show = swapOn() && !one(), on = swapped(), t = on ? 'Move the chats to the left (⌥⇧L)' : 'Move the chats to the right (⌥⇧L)';
+    const show = !one(), on = swapped(), t = on ? 'Move the chats to the left (⌥⇧L)' : 'Move the chats to the right (⌥⇧L)';
     if (sSwap.hidden !== !show) sSwap.hidden = !show;
     if (show && sSwap.parentNode !== head) head.insertBefore(sSwap, togBtn); else if (!show && sSwap.parentNode) sSwap.remove();
     if (sSwap.title !== t) { sSwap.title = t; sSwap.setAttribute('aria-label', t); }
@@ -686,8 +682,12 @@ export default function desktop(api) {
   }
   api.listen(sSwap, 'click', e => { e.stopPropagation(); swapSides(); });
   const swapCheck = () => { const was = swapWas; paintSwap(); if (was !== swapWas) { paintTop(); applySizes(); retileSoon(); } };
+  // (the bottom app bar switch flipped: the one-app layout comes or goes at once, no reload; paintOne lays it out)
+  let barWas = barOn();
+  const barCheck = () => { if (barOn() === barWas) return; barWas = barOn(); paintTop(); paintSwap(); };
+  api.listen(globalThis, 'wos:experience', barCheck);
   api.listen(globalThis, 'wos:experience', swapCheck);
-  const swapMo = globalThis.MutationObserver ? new MutationObserver(swapCheck) : null; swapMo?.observe(root, { attributes: true, attributeFilter: ['data-tweaks'] });
+  const swapMo = globalThis.MutationObserver ? new MutationObserver(() => { barCheck(); swapCheck(); }) : null; swapMo?.observe(root, { attributes: true, attributeFilter: ['data-tweaks'] });
   api.listen(globalThis, 'resize', () => paintSwap());
   paintSwap();
   globalThis.dispatchEvent?.(new Event('resize'));
@@ -699,7 +699,7 @@ export default function desktop(api) {
     offFrameKeys?.();
     offPanes(); for (const v of paneVars) root.style.removeProperty(v);
     for (const k of ['aadPaneSide', 'aadDockEdge', 'aadPaneTiled', 'aadMode', 'aadAppSide']) delete root.dataset[k];
-    leftMo?.disconnect(); swapMo?.disconnect(); sSwap.remove();
+    swapMo?.disconnect(); sSwap.remove();
     closing?.(); closing = null; exitMotion?.cancel?.(); exitMotion = null;
     top.append(pTop); // release layout-owned chrome before restoring Classic Desks
     top.append(cTop); sTop.remove(); macHoles?.dispose();

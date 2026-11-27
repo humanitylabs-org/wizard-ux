@@ -183,7 +183,7 @@ async function picker(p, chord, i = 0) {
       assert.deepEqual(await page.evaluate(() => ({ ws: __wux.ws, cur: __wux.cur })), before);
       await field(page, before.cur).waitFor(); await picker(page, 'Alt+o', before.cur);
     });
-    // Looks (wizard-ux#1190): every colour is one tap on Settings › Appearance; there are no skin family tiles.
+    // Skins (wizard-ux#1190): every colour is one tap on Settings › Appearance; there are no skin family tiles.
     for (const skin of ['nebula', 'obsidian']) await check('in-shell skin proof and opaque picker: ' + skin, async () => {
       const i = await cur(page); await field(page, i).fill('skin change keeps this unsent text');
       await page.locator('#settingsBtn').click(); await page.locator('#dsettings [data-st-page="appearance"]').click();

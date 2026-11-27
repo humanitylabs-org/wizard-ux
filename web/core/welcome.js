@@ -93,7 +93,10 @@
   // Importer app. It embeds that app's own screen, like the provider sign-in step, so there is one Importer, two ways in.
   const IMPORTER = 'importer';
   let bringOpen = false;
-  const bringOn = () => { try { return isInstalled(IMPORTER); } catch (e) { return false; } };
+  // Get set up (wizard-ux issue 1837, switch wizard/get-set-up): the import leaves the first run for Setup's optional
+  // list, so only AI sign-in stays a required step. Off: unchanged.
+  const bringOn = () => { try { if (String(document.documentElement.getAttribute('data-tweaks') || '').split(' ').includes('wizard/get-set-up')) return false; } catch (e) {}
+    try { return isInstalled(IMPORTER); } catch (e) { return false; } };
   const order = () => solo ? ['private'] : (asked ? ['name'] : []).concat(['ai'], offered ? ['private'] : [], ['look'], bringOn() ? ['bring'] : [], ['hello']);
   const signing = () => step === 'ai' || step === 'private'; // a provider's sign-in page can show in either step
   const nextStep = () => { const all = order(), i = all.indexOf(step); return all[Math.min(all.length - 1, i + 1)] || 'hello'; };
@@ -239,7 +242,7 @@
   function paintSignin() {
     const p = PROVIDERS.find(x => x.app === provider), a = H.app(provider);
     return `${brand()}${dots()}<header class="wl-head wl-row"><button type="button" class="wl-back" data-wl="back" aria-label="Back">‹</button><h2 tabindex="-1">Sign in to ${esc(p.name)}</h2></header>
-      <div class="wl-frame"><iframe src="${esc(signinUrl(a.url))}"${sbx(signinUrl(a.url), provider)} title="${esc(p.name)} sign-in"></iframe></div>
+      <div class="wl-frame"><iframe src="${esc(signinUrl(a.url))}"${sbx(signinUrl(a.url), provider)} allow="geolocation 'none'" title="${esc(p.name)} sign-in"></iframe></div>
       <p class="wl-status${connected ? ' ok' : ''}" role="status">${connected ? `${esc(p.name)} is connected.` : `${privateFirst() && reconnect && p.app !== PRIVATE ? esc(extraNote(p)) + ' ' : ''}This continues by itself once you are signed in.`}</p>`;
   }
 
@@ -253,7 +256,8 @@
   }
 
   // Standard first's Private AI step (offered once). With nothing connected it leads with private AI as the way to get
-  // a model. "Why does this matter?" waits for its page (wizard-ux issue 1801), so it is not drawn yet.
+  // a model. "Why does this matter?" opens Settings › Privacy's Why it matters page (wizard-ux issue 1801, core/privacy.js),
+  // so it shows only while that page's switch (wizard/private-mode) is on.
   function paintOffer() {
     if (provider) return paintSignin();
     const none = skipped && !linked.size, busy = !!offerBusy;
@@ -261,7 +265,7 @@
     return `${brand()}${dots()}<header class="wl-head"><h2 tabindex="-1">Want a fully private AI?</h2>${none ? `<p class="wl-lead">You haven\u2019t connected an AI yet. Private AI can be how ${esc(agent())} thinks: set it up now and ${esc(agent())} can answer you.</p>` : ''}<p>Private AI runs in sealed hardware. No one except you, not us or any AI company, can see your messages, its answers or your data. Use it alongside your Claude or ChatGPT, or on its own.</p></header>
       ${offerError || installError ? `<p class="wl-status err" role="alert">${esc(offerError || installError)}</p>` : ''}
       ${btn('setup', 'Set up private AI', 'wl-primary')}
-      <div class="wl-offer-more">${btn('later', 'Later', 'wl-skip')}${btn('declined', 'No thanks', 'wl-skip')}</div>`;
+      <div class="wl-offer-more">${btn('later', 'Later', 'wl-skip')}${btn('declined', 'No thanks', 'wl-skip')}</div>${window.WosPrivacy?.on?.() ? '<button type="button" class="wl-skip wl-why" data-wl="why">Why does this matter?</button>' : ''}`;
   }
   // The answer: Set up private AI opts the box in, then signs in to Tinfoil here; Later and No thanks go on.
   async function answer(choice) {
@@ -313,7 +317,7 @@
     if (bringOpen) {
       const a = H.app(IMPORTER);
       return `${brand()}${dots()}<header class="wl-head wl-row"><button type="button" class="wl-back" data-wl="back" aria-label="Back">‹</button><h2 tabindex="-1">Bring your AI</h2></header>
-        <div class="wl-frame wl-embed"><iframe src="${esc(embedUrl(a?.url || ''))}"${sbx(embedUrl(a?.url || ''), IMPORTER)} title="Importer"></iframe></div>
+        <div class="wl-frame wl-embed"><iframe src="${esc(embedUrl(a?.url || ''))}"${sbx(embedUrl(a?.url || ''), IMPORTER)} allow="geolocation 'none'" title="Importer"></iframe></div>
         <button type="button" class="wl-primary" data-wl="next">Continue</button>`;
     }
     return `${brand()}${dots()}<header class="wl-head"><h2 tabindex="-1">Bring your AI</h2><p>Optional. Used ChatGPT, Claude or another agent? Bring your memories, chats and skills so ${esc(agent())} knows you from day one.</p></header>
@@ -524,6 +528,7 @@
     if (act === 'provider') { pfSeen = 0; choose(t.dataset.app); }
     else if (act === 'skip-ai' && step === 'ai') { skipped = !linked.size; log('ai:skipped'); step = nextStep(); provider = null; paint(); }
     else if (act === 'offer' && step === 'private') answer(t.dataset.offer);
+    else if (act === 'why') window.WosPrivacy?.open?.('why');
     else if (act === 'back' && step === 'bring') { bringOpen = false; paint(); }
     else if (act === 'back') { clearTimeout(pollT); provider = null; paint(); }
     else if (act === 'store') { close(); H.openStore?.(); }
@@ -632,7 +637,8 @@
   let pfAt = 0, pfAsking = false;
   const finishDue = () => {
     if (!pfAsking && Date.now() - pfAt > (pf ? 60000 : 15000)) { pfAsking = true; pfRead().then(() => { pfAt = Date.now(); pfAsking = false; try { window.WosSettings?.refresh?.(); } catch (e) {} }); }
-    return pf?.offer === 'later' && !pf?.private_agent;
+    // With private mode's Settings › Privacy on (wizard-ux issue 1801), its Private mode row says Finish setting up.
+    return pf?.offer === 'later' && !pf?.private_agent && !window.WosPrivacy?.on?.();
   };
   try {
     window.WosSettings?.register?.({ id: 'private-ai-finish', page: 'privacy', aliases: ['privacy', 'private-ai'], available: finishDue,
@@ -643,5 +649,8 @@
         return true; } });
   } catch (e) { console.error(e); }
 
-  window.WosWelcome = { whenThreadExists, aiConnected, boot, back, open: (at) => open(at || 'ai'), close, get active() { return !!el; }, get log() { return window.__welcomeLog || []; } };
+  // takesSetup: the Setup tile opens this Welcome. With Get set up on (wizard-ux issue 1837) the tile opens the Setup
+  // page instead, where the optional accounts list lives; the Welcome still opens by itself while no AI is signed in.
+  window.WosWelcome = { whenThreadExists, aiConnected, boot, back, open: (at) => open(at || 'ai'), close, get active() { return !!el; }, get log() { return window.__welcomeLog || []; },
+    get takesSetup() { try { return !String(document.documentElement.getAttribute('data-tweaks') || '').split(' ').includes('wizard/get-set-up'); } catch (e) { return true; } } };
 })();

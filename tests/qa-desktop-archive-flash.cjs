@@ -69,9 +69,10 @@ const refCache = new Map();
         const stem = skin + '-' + action;
         await p.screenshot({ path: path.join(out, stem + '-before.png') });
         if (action === 'row') {
-          await p.locator('.aad-rw[data-sid="qa-thread"] .aad-row').dispatchEvent('contextmenu');
+          // (the sidebar's shared row and its actions sheet, as on the phone: wizard-ux issue 1966)
+          await p.locator('.aad-chan [data-chopen="qa-thread"]').dispatchEvent('contextmenu');
           // No internal-action fallback: this case must exercise the row menu.
-          await p.locator('[role="menuitem"]').filter({ hasText: /Archive/ }).first().waitFor({ state: 'visible' });
+          await p.locator('.ch-sheet button').filter({ hasText: /^Archive$/ }).first().waitFor({ state: 'visible' });
         }
         if (action === 'voice') {
           // Archive with a reply recording active; never send audio or create a run.
@@ -113,7 +114,7 @@ const refCache = new Map();
           requestAnimationFrame(sample);
         });
         if (action === 'row') {
-          await p.locator('[role="menuitem"]').filter({ hasText: /Archive/ }).first().click();
+          await p.locator('.ch-sheet button').filter({ hasText: /^Archive$/ }).first().click();
         } else {
           await p.evaluate(() => {
             const w = Object.values(__wux.wins).find(w => w.thread === 'qa-thread');

@@ -20,6 +20,8 @@ const bodies={
  '/api/system/load':{cpuLoad:7,percentUsedMemory:12,percentUsed:10},
  '/api/system/devices':{devices:[]},
  '/api/system/health':{available:false,checks:[]},
+ // Graceful restart watch (wizard-ux issue 1362, on for everyone): a healthy box with no restart waiting.
+ '/wizard/health':{overall:'ok',checks:[]},
  // Disposable, unconfigured backup status; no credentials, repository URLs or owner state.
  '/backup/api/overview':{backup:{configured:false,status:'not_configured',last_snapshot:null},standby:null,connector:null,active:null},
  '/wizard/files':{files:[]},

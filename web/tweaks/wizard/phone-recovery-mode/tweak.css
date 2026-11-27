@@ -1,0 +1,3 @@
+/* Phone recovery mode (wizard-ux issue 1775): nothing in the shell looks different; the Android app draws the
+ * recovery card. This rule only marks the switch as present. */
+html[data-tweaks~="wizard/phone-recovery-mode"] { --wos-phone-recovery-mode: 1; }

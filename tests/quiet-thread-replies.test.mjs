@@ -1,4 +1,5 @@
-// Quiet inbox: replies typed in a thread (wizard-ux issue 1808; on for everyone since wizard-ux issue 1778).
+// Quiet inbox: replies typed in a thread (wizard-ux issue 1808). Keeping a reply out of Inbox is triage, so since
+// wizard-ux issue 1962 the mark counts only with Smart inbox on (wizard/smart-inbox, off by default).
 // The box (wizard-agent-service, same issue) logs every reply in a thread as a Sent row (source reply, route thread)
 // and marks a thread whose newest answer was to a reply that asked for none, ended done or fyi (quietReply). Here:
 // the real live.js quietReply + isNew + groups lines, the real Sent log reader (live-channels.js) and the real Sent
@@ -9,16 +10,17 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { between } from './fixtures/source-slice.mjs';
 import { withLiveParts } from './fixtures/live-parts.mjs';
+import { modelContext } from './fixtures/chats-list-model.mjs';
 
 const live = withLiveParts(readFileSync(new URL('../web/live.js', import.meta.url), 'utf8'));
 const clone = v => JSON.parse(JSON.stringify(v));
-const ON = '';
+const ON = 'wizard/smart-inbox';
 
 // live.js: quietReply and the three places that count a thread as new (isNew, visibleUnread, groups).
 function liveCtx(tweaks = ON) {
   const ctx = { document: { documentElement: { dataset: { tweaks } } }, WizChatsListModel: { isListWorking: s => s.status === 'running' }, console };
   ctx.globalThis = ctx; vm.createContext(ctx);
-  vm.runInContext(between(live, '  function tweakOn(id)', '  let backgroundPollTimer') + `
+  vm.runInContext(between(live, '  /* Quiet replies (wizard-ux issue 1808', '  let backgroundPollTimer') + `
     const hasNew = () => true, snoozeLast = () => false, isDeferred = () => false, inWorking = () => false, seenKeyOf = s => s.id, assistantAt = s => s.at, WEEK = 7 * 864e5;
     const groupWork = rows => ({ ready: rows });
     this.L = { inArchive: () => false, seenOf: () => ({}), deferred: {}, sessionsFor: (agent = '') => this.rows.filter(s => (s.agent || '') === agent),
@@ -63,12 +65,16 @@ test('issue 1808: main versus routed: only the main agent\'s list drops a quiet 
   assert.equal(c.L.isNew(quiet({ agent: 'hermes' })), false, 'a row pinned to the main agent by id is main');
 });
 
-test('issue 1778: no switch: a quiet reply is quiet with any or no data-tweaks (old saved values change nothing)', () => {
-  for (const tweaks of ['', 'wizard/agent-inbox', 'wizard/chats-inbox', 'wizard/agent-inbox wizard/chats-inbox']) {
+test('issue 1962: the quiet mark counts only with Smart inbox on; off (any other or no data-tweaks) the answer is new and in Ready like any other', () => {
+  for (const tweaks of ['', 'wizard/agent-inbox', 'wizard/chats-inbox', 'wizard/agent-inbox wizard/chats-inbox', 'wizard/smart-inboxes']) {
     const c = liveCtx(tweaks); c.rows = [quiet()];
-    assert.equal(c.L.isNew(c.rows[0]), false, `tweaks "${tweaks}": not unread`);
-    assert.equal(c.L.groups().ready.length, 0, `tweaks "${tweaks}": not in Ready`);
+    assert.equal(c.L.quietReply(c.rows[0]), false, `tweaks "${tweaks}": not quiet`);
+    assert.equal(c.L.isNew(c.rows[0]), true, `tweaks "${tweaks}": unread`);
+    assert.deepEqual(clone(c.L.groups().ready.map(s => s.id)), ['clips'], `tweaks "${tweaks}": in Ready`);
   }
+  const on = liveCtx('wizard/desktop-chats wizard/smart-inbox'); on.rows = [quiet()];
+  assert.equal(on.L.isNew(on.rows[0]), false, 'Smart inbox on: not unread');
+  assert.equal(on.L.groups().ready.length, 0, 'Smart inbox on: not in Ready');
 });
 
 test('issue 1808: the list keeps the box\'s mark from both list shapes, and only when it is true', () => {
@@ -90,32 +96,37 @@ test('issue 1808: the Sent log reader keeps a reply row (route thread, answer, q
   assert.deepEqual(clone(s.rows[0]), { id: 'sent_' + 'a'.repeat(24), at: 5, source: 'reply', text: 'Sent to Miguel, done', route: 'thread', decidedBy: 'owner_words', rules: ['statement'], state: 'done', thread: 'wizard_clips', record: null, tags: [], urgent: false, wouldRoute: null, corrected: null, error: '', wantsReply: false, answer: 'Clip edit is with Miguel. Nothing needed from you.', quiet: true });
 });
 
-// The real Sent part: Reply rows say so, show the agent's answer, offer no routing correction, and a tap opens the thread.
-function part(rows) {
+// The real Sent part (one row per thread since wizard-ux issue 1880): a reply's thread is a Sent row with the thread's
+// title and the agent's last message; one not loaded yet says where his reply went; no routing correction for a reply;
+// a tap opens the thread.
+function part(rows, threads = []) {
   const opened = [], CH = { main: {} }, W = { main: { id: 'main', thread: null } }, state = { ok: true, gone: false, rows, next: null };
   const ctx = { document: { documentElement: { dataset: { tweaks: ON } } }, window: { WizCore: {}, addEventListener() {} }, localStorage: { setItem() {} }, console, fetch: async () => ({ ok: false }) };
   vm.createContext(ctx);
+  modelContext(ctx);
   vm.runInContext(readFileSync(new URL('../web/core/chats-sent.js', import.meta.url), 'utf8'), ctx);
-  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-  const LIVE = { sentLog: { state: () => state, fresh() {}, read: async () => state }, onChange() {} };
+  const esc = s => String(s).replace(/[&<>\"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const LIVE = { sentLog: { state: () => state, fresh() {}, read: async () => state }, session: id => threads.find(t => t.id === id) || null, cardAt: () => '', onChange() {} };
+  // Stand-ins for Inbox's own rows (core/chats-inboxrows.js): what the row says, and what it opens.
+  const ibThreadRow = t => `<div class="row" data-chopen="${esc(t.id)}"><b>${esc(t.title)}</b> <i>${esc(t.preview || '')}</i></div>`;
+  const ibRow = o => `<div class="row" ${o.open}><b>${o.title}</b> <i>${o.line}</i></div>`;
   const p = ctx.window.WizCore.chatsParts.sent({ ago: () => '4m', ch: id => CH[id], CH, CHAN_VIEW_KEY: 'k', chanElsewhere: () => false, chanSide: () => false, chatVars: { chanView: 'activity' }, clip: (s, n) => String(s).slice(0, n), elOf: () => ({}), esc, H: { win: id => W[id] },
-    LIVE, openChat: (wid, t) => opened.push([wid, t]), renderChatList() {}, rerenderList() {}, toast() {}, W, winAgent: () => '' });
+    ibMark: () => '', ibRow, ibTagFace: () => ({ av: '', from: '' }), ibThreadRow, LIVE, openChat: (wid, t) => opened.push([wid, t]), renderChatList() {}, rerenderList() {}, toast() {}, W, winAgent: () => '' });
   CH.main.sent = true;
   return { p, W, opened };
 }
 const view = (c, extra) => ({ id: 'sent_' + c.repeat(24), at: 1000, source: 'reply', text: 'Words ' + c, route: 'thread', decidedBy: 'owner_words', rules: [], state: 'done', thread: 'wizard_' + c, record: null, tags: [], urgent: false, wouldRoute: null, corrected: null, error: '', wantsReply: false, answer: '', quiet: false, ...extra });
 
-test('issue 1808: Sent shows each reply as Reply with the agent\'s one-line answer, and a tap opens its thread', async () => {
+test('issue 1808: a reply\'s thread is one Sent row with the agent\'s answer, a reply has no routing correction, and a tap opens its thread', async () => {
   const rows = [view('a', { text: 'Sent to Miguel, done', quiet: true, answer: 'Clip edit is with Miguel. Nothing needed from you.' }), view('b', { text: 'is the mac app ready?', wantsReply: true, answer: 'The Mac app build is still running.' }),
     view('c', { text: 'ok, approve it', state: 'needs_you', answer: 'Phone update is ready. Reply ship to send it' })];
-  const f = part(rows), body = f.p.sentBody(f.W.main);
-  const text = body.split('<div class="ch-sent-row').slice(1).map(x => x.replace(/^[^>]*>/, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim());
-  assert.match(text[0], /^✓ Sent to Miguel, done 4m Reply · Done · nothing needed from you Clip edit is with Miguel\. Nothing needed from you\.$/, text[0]);
-  assert.match(text[1], /is the mac app ready\? 4m Reply · Done · you asked The Mac app build is still running\./);
-  assert.match(text[2], /ok, approve it 4m Reply · Needs you Phone update is ready/);
-  assert.doesNotMatch(body, /data-chsentfix/, 'a reply stays in its thread: no routing correction');
+  const threads = [{ id: 'wizard_a', title: 'Clip edit', preview: 'Clip edit is with Miguel. Nothing needed from you.' }];
+  const f = part(rows, threads), body = f.p.sentBody(f.W.main);
+  const text = [...body.matchAll(/<div class="row"[^>]*>([\s\S]*?)<\/div>/g)].map(m => m[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim());
+  assert.deepEqual(text, ['Clip edit Clip edit is with Miguel. Nothing needed from you.', 'is the mac app ready? Replied in its chat · Done', 'ok, approve it Replied in its chat · Needs you'], 'the loaded thread by its title and last message; the others by his words and where they went');
+  assert.doesNotMatch(body, /data-chsentfix|data-rssentfix/, 'a reply stays in its thread: no routing correction');
   const click = attrs => f.p.sentClick({ target: { closest: sel => { const k = /\[data-([a-z]+)\]/.exec(sel)?.[1]; return k && k in attrs ? { dataset: { [k]: attrs[k] } } : null; } } }, 'main', f.W.main);
-  assert.equal(click({ chsentopen: rows[0].id }), true);
+  assert.equal(click({ chsent: rows[1].id }), true);
   await new Promise(r => setTimeout(r, 0));
-  assert.deepEqual(f.opened, [['main', 'wizard_a']], 'the tap opens the thread he replied in');
+  assert.deepEqual(f.opened, [['main', 'wizard_b']], 'the tap opens the thread he replied in');
 });

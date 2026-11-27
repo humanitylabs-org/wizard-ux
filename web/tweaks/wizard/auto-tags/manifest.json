@@ -1,0 +1,14 @@
+{
+  "id": "wizard/auto-tags",
+  "name": "Automatic chat tags",
+  "version": "1.0.0",
+  "author": "wizard",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout"
+  ],
+  "issues": [
+    "humanitylabs-org/wizard-agent-service#702"
+  ],
+  "description": "Your Wizard tags each chat into the right channels by itself, from what the chat is about (its title, subject, app and your first message), not only from the agent's own guess. Each channel gets a short list of what goes in it (What goes here… on a channel's long-press menu), seeded from its name; 📊 Reports catches questions, lookups and reports, ⏰ Reminders catches remind-me chats. A tag you remove never comes back, and your own tagging teaches the lists. Read by the Agent Service (wizard-agent-service issue 702)."
+}

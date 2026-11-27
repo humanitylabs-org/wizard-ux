@@ -135,7 +135,7 @@ test('twinned Look shows every look, then Mode and Background for the worn colou
     S.setWallpaper = () => {}; S.wallpaper = 'landscapes';
     S.wallpapers = [{ id: 'landscapes', name: 'Landscapes' }]; S.wallpaperThumb = () => '';
     h.view.focus('look');
-    assert.match(h.root.innerHTML, /<h4>Looks<\/h4>[^]*data-skinpick="obsidian-light" aria-pressed="true"[^]*<h4>Mode<\/h4>[^]*data-skinmode="light"[^]*<h4>Background<\/h4>[^]*data-bgpick="plain"/);
+    assert.match(h.root.innerHTML, /<h4>Skins<\/h4>[^]*data-skinpick="obsidian-light" aria-pressed="true"[^]*<h4>Mode<\/h4>[^]*data-skinmode="light"[^]*<h4>Background<\/h4>[^]*data-bgpick="plain"/);
     assert.match(h.root.innerHTML, /data-skinpick="nebula"/, 'every colour is a look');
     assert.doesNotMatch(h.root.innerHTML, /data-skinpick="landscapes/, 'landscapes are a Background');
   }
@@ -145,7 +145,7 @@ test('Look: one row of looks, no family tiles, with Layout gone', () => {
   const h = harness(); h.s.WosSkin.current = 'obsidian-light'; h.view.focus('look');
   const html = h.root.innerHTML;
   assert.doesNotMatch(html, /data-skinfamily=/);
-  assert.match(html, /<h4>Looks<\/h4>[^]*data-skinpick="nebula" aria-pressed="false"[^]*data-skinpick="obsidian-light" aria-pressed="true"/);
+  assert.match(html, /<h4>Skins<\/h4>[^]*data-skinpick="nebula" aria-pressed="false"[^]*data-skinpick="obsidian-light" aria-pressed="true"/);
   assert.doesNotMatch(html, /data-layout-row|data-layoutpick|<b>Layout<\/b>/);
   h.s.WosSkin.current = 'nebula'; h.view.render();
   assert.match(h.root.innerHTML, /data-skinpick="nebula" aria-pressed="true"/);
@@ -207,7 +207,7 @@ test('New skin is last; nested Back returns to Look on both shells, never leaves
     h.s.WosExperience = { installed: async()=>[], defaults: async()=>({}), state: {tweaks:[]} };
     h.view.focus('look');
     // New skin is last in the one row of looks (wizard-ux#1190).
-    assert.match(h.root.innerHTML, /aria-label="Looks"[^]*data-skinpick="obsidian-light"[^]*data-newskin[^]*\+ New skin<\/span><\/button><\/div><\/div>/);
+    assert.match(h.root.innerHTML, /aria-label="Skins"[^]*data-skinpick="obsidian-light"[^]*data-newskin[^]*\+ New skin<\/span><\/button><\/div><\/div>/);
     h.act('data-newskin'); await tick();
     assert.match(h.root.innerHTML, /data-newskin-sheet/);
     assert.match(h.root.innerHTML, /aria-label="Back to Look"/);
@@ -237,7 +237,7 @@ test('own tiles use base preview; own panel shows colours, edit hint and a neste
   h.s.WosMySkin = { recipes:[own],active:own,state:{script:{}} };
   h.view.focus('look');
   assert.match(h.root.innerHTML,/data-ownskin="mine" aria-pressed="true"/);
-  assert.match(h.root.innerHTML,/aria-label="Looks"/); // one list of looks (wizard-ux#1190)
+  assert.match(h.root.innerHTML,/aria-label="Skins"/); // one list of skins (wizard-ux#1190)
   assert.doesNotMatch(h.root.innerHTML,/data-skinpick="[^"]+" aria-pressed="true"/, 'the own skin is the worn look');
   assert.match(h.root.innerHTML,/change my Quiet skin so…/);
   h.act('data-ownskin-remove','mine'); assert.match(h.root.innerHTML,/role="alertdialog"/);

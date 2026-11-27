@@ -35,9 +35,12 @@ window.WizCore.liveParts.work = function ({ J, req }) {
   const needsApproval = s => ['waiting_for_approval', 'unknown'].includes(s.status);
   const inWorking = s => window.WizChatsListModel.isListWorking(s);
   const firstValid = (...v) => v.find(x => isFinite(Date.parse(x ?? ''))) ?? '';
+  // A working or failed row is timed by its request; one with no request clock (a helper follow-through ran on machine
+  // turns, no owner message: wizard-ux#1994) falls back to its latest activity, so every row with activity has a time.
+  const activityAt = s => firstValid(s.previewAt, s.activityAt, s.lastUserAt, s.updatedAt);
   const cardAt = s => (WORKING_SECTION.has(s.status) && !needsApproval(s) && !isErr(s)) || isErr(s)
-    ? firstValid(s.assignedAt, s.requestAt, s.lastUserAt, s.previewRole === 'user' ? s.previewAt : undefined)
-    : firstValid(s.previewAt, s.activityAt, s.lastUserAt, s.updatedAt);
+    ? firstValid(s.assignedAt, s.requestAt, s.lastUserAt, s.previewRole === 'user' ? s.previewAt : undefined) || activityAt(s)
+    : activityAt(s);
   const newestFirst = (l, r) => {
     const a = Date.parse(cardAt(l)), b = Date.parse(cardAt(r));
     if (isFinite(a) !== isFinite(b)) return isFinite(a) ? -1 : 1;
@@ -72,6 +75,11 @@ window.WizCore.liveParts.work = function ({ J, req }) {
     replySummary: ['wos.chats.replySummary.v1', v => !!v && typeof v === 'object' && !Array.isArray(v) && typeof v.on === 'boolean', JSON.stringify],
     // The owner's other Wizards for the switcher (core/workspaces.js): the same list on every device of this box.
     savedWizards: ['wos.workspaces.box.v1', v => Array.isArray(v), JSON.stringify],
+    // The phone bar's pinned slot (app-sections.js, wizard-ux#1929): an app id, '' = Messenger.
+    phoneSlot: ['wos.phone.slot.v1', v => typeof v === 'string' && /^[A-Za-z0-9._-]{0,80}$/.test(v), String],
+    // The phone Apps panel (app-appspanel.js, switch wizard/apps-panel): Favorites in order, and the apps taken off Recent.
+    appFavorites: ['wos.apps.favorites.v1', v => Array.isArray(v) && v.every(x => typeof x === 'string' && /^[A-Za-z0-9._-]{1,80}$/.test(x)), JSON.stringify],
+    appRecentHidden: ['wos.apps.recentHidden.v1', v => Array.isArray(v) && v.every(x => typeof x === 'string' && /^[A-Za-z0-9._-]{1,80}$/.test(x)), JSON.stringify],
   };
   let prefsOff = false;
   const putPrefs = (patch, { requireShared = false } = {}) => {

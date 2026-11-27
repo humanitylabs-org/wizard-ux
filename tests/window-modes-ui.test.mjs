@@ -69,23 +69,23 @@ test('shifted mode shortcuts precede app dispatch but yield to existing modal gu
  for (const scope of [{ allOpenNow: () => true }, { settingsOpen: () => true }, { doc: { querySelector: s => s === '.boom-sheet' ? {} : null } }]) {
   const g=keys(scope); assert.equal(g.down('KeyU',{shiftKey:true}),true,'consumed'); assert.deepEqual(g.modes,[],JSON.stringify(Object.keys(scope)));
  }
- // native plain ⌥ keys: ⌥U while typing is the accent, ⌥F is wide (with a panel), ⌥← word jump
+ // native plain ⌥ keys: ⌥U while typing is the accent, ⌥← word jump; ⌥F no longer flips the panel wide (wizard-ux
+ // issue 1964: its Wider button is gone, ⌥⇧F is the one Full screen key)
  const t=keys({ typing: () => true }); assert.equal(t.down('KeyU'),false); assert.deepEqual(t.modes,[]);
  const wide=[]; const f=keys({ pane:{ id:'app' }, wide:false, setWide: v => wide.push(v) });
- assert.equal(f.down('KeyF'),true); assert.deepEqual(wide,[true]); assert.deepEqual(f.modes,[]);
+ assert.equal(f.down('KeyF'),true); assert.deepEqual(wide,[]); assert.deepEqual(f.modes,[]);
  assert.equal(keys().down('ArrowLeft'),false);
 });
 
-test('holding ⌥ shows ⇧U / ⇧J / ⇧F / ⇧T on each mode bar\'s own buttons', () => {
+test('holding ⌥ shows ⇧F on the one arrangement group\'s Full screen button (wizard-ux issue 1813: Full screen and Half screen only)', () => {
  // the layout's real keys guide (api.keys.guide), sliced like the handler above, over two mode bars
  const code = between(ui, '  const MODE_KEYS =', '\n') + '\n' + between(ui, '  const MODE_LABELS =', '\n') + '\n' + block(ui, '  api.keys.guide(() => {') + ');';
- let guide; const bar = name => ({ querySelector: sel => ({ bar: name, sel }) });
- runRecording(code, { api: { keys: { guide: g => { guide = g; } } }, modeBars: [{ bar: bar('chat') }, { bar: bar('app') }], shown: n => typeof n?.sel === 'string', onScreen: () => false,
+ let guide; const bar = name => ({ querySelector: sel => /"(full|half)"/.test(sel) ? { bar: name, sel } : null });
+ runRecording(code, { api: { keys: { guide: g => { guide = g; } } }, modeBars: [{ bar: bar('top') }], shown: n => typeof n?.sel === 'string', onScreen: () => false,
   side: { querySelectorAll: () => [] }, khMarks: new Set(), root: { dataset: {} }, readyIds: () => [], vtRows: () => [], vtAll: { querySelector: () => null }, tidyBtn: { querySelector: () => null },
   paneFrame: () => null, allOpenNow: () => false, settingsOpen: () => false, snoozeOpen: () => false, focusOn: () => false, pane: null, docked: false });
  const chips = [...guide()].filter(c => typeof c.el?.sel === 'string').map(c => [c.el.bar, c.el.sel, String(c.key), String(c.word)]);
- assert.deepEqual(chips, ['chat', 'app'].flatMap(b => [['centre', 'U', 'Centred'], ['pair', 'J', 'Side by side'], ['full', 'F', 'Full screen'], ['tiled', 'T', 'Back to tiled']]
-  .map(([m, k, w]) => [b, `[data-mode="${m}"]`, '⇧' + k, w])));
+ assert.deepEqual(chips, [['top', '[data-mode="full"]', '⇧F', 'Full screen']]);
 });
 
 // James, 6 Nov 2026: centred / side by side / full screen turned the window grey (--wz-panel = 10% text mixed into

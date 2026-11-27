@@ -16,7 +16,7 @@ const clone = v => JSON.parse(JSON.stringify(v));
 const tick = async () => { for (let i = 0; i < 8; i++) await new Promise(r => setImmediate(r)); };
 const OLD = 'wizard/skins-look-only';
 const catalog = JSON.parse(read('web/tweaks/catalog.json'));
-const builtin = catalog.defaults[0];
+const builtin = builtinDefaults(catalog)[0]; // a release-wide default (the catalog's own list is empty since wizard-ux issue 1236)
 const PATH = '/wizard/v1/pages/wizard-look/look.json';
 
 function lookSync() { const window = {}; vm.runInNewContext(read('web/core/look-sync.js'), { window, JSON, Object, Date, Math, Number, Error, setTimeout, clearTimeout }); return window.WosLookSync; }

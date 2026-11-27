@@ -9,6 +9,7 @@
 
   /* ================= message parsing ================= */
   const INTERNAL = ['[IMPORTANT: Background process ', '[ASYNC DELEGATION BATCH COMPLETE', '[Wizard follow-through] The delegated results', '[CONTEXT COMPACTION', '[CONTEXT SUMMARY]:', '[PRIOR CONTEXT', '[Your active task list was preserved', '[Your previous agent loop was paused', '[James requested recovery', '[OUT-OF-BAND', '[SYSTEM:'];
+  const REPORTER = /^\s*\[reporter\]/;
   const partsText = c => typeof c === 'string' ? c
     : Array.isArray(c) ? c.map(p => typeof p === 'string' ? p : p && typeof p === 'object' && typeof p.text === 'string' ? p.text : '').filter(Boolean).join('\n')
     : c && typeof c === 'object' ? String(c.text || c.content || '') : '';
@@ -26,10 +27,10 @@
     }
     return out;
   }
-  // [WIZARD_TWEAK_V1]{"id":"wizard/desktop-chats"}[/WIZARD_TWEAK_V1] (or {"ids":[…]}), on its own line: the reply carries
+  // [WIZARD_TWEAK_V1]{"id":"wizard/phone-recovery-mode"}[/WIZARD_TWEAK_V1] (or {"ids":[…]}), on its own line: the reply carries
   // a tweak's live switch (WosSettings.tweakCard, the same row as Settings › Look). Ids only; a malformed marker is hidden.
-  // An app feature switch `<app id>:<switch id>` (wizard.app-switches/1) parses too; the card shows it only while the
-  // switch wizard/chat-app-switches is on (wizard-ux issue 1560) and drops it otherwise, as before.
+  // An app feature switch `<app id>:<switch id>` (wizard.app-switches/1) parses too and draws the app's own switch row
+  // (wizard-ux issue 1560).
   const TWEAK_ID = /^(?:[a-z0-9][a-z0-9-]*\/[a-z0-9][a-z0-9-]*|[a-z0-9][a-z0-9-]{0,62}:[a-z0-9][a-z0-9-]{0,63})$/, TWEAK_RE = /\[WIZARD_TWEAK_V1\]\s*([\s\S]*?)\s*\[\/WIZARD_TWEAK_V1\]/g;
   function tweakIds(s) {
     const out = [];
@@ -42,7 +43,7 @@
     return out;
   }
   // [WIZARD_ACTION_V1]{"app":"wizard-messenger","id":"draft-42"}[/WIZARD_ACTION_V1], on its own line: an app's proposed
-  // action, drawn as an inline card (core/action-cards.js, switch wizard/action-cards, wizard-ux issue 1463). App id and
+  // action, drawn as an inline card (core/action-cards.js, wizard-ux issue 1463). App id and
   // item id only (the card reads everything else from the app); keys `<app>/<id>`, at most 4. Always hidden from the text.
   const ACTION_RE = /\[WIZARD_ACTION_V1\]\s*([\s\S]*?)\s*\[\/WIZARD_ACTION_V1\]/g, ACTION_APP = /^[a-z0-9][a-z0-9-]{0,62}$/, ACTION_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
   function actionIds(s) {
@@ -54,6 +55,73 @@
         if (ACTION_APP.test(app) && ACTION_ID.test(id) && !out.includes(key) && out.length < 4) out.push(key);
       } catch (e) { /* hidden, not shown */ }
     }
+    return out;
+  }
+  // Tap-to-answer buttons inside a reply (wizard-ux issue 1889, switch wizard/reply-buttons, core/action-cards.js):
+  //   [WIZARD_BUTTONS_V1]{"group":"Workout","buttons":[{"id":"done","label":"Done"}]}[/WIZARD_BUTTONS_V1]
+  // on its own line, drawn where it sits. A group is one ask (1-60 chars, also its name in the tap line), 1-6 buttons.
+  // Shells that can't draw it (the switch off, Copy) show the ask and its labels as text: `Workout: [Done]`.
+  const BUTTONS_RE = /\[WIZARD_BUTTONS_V1\]\s*([\s\S]*?)\s*\[\/WIZARD_BUTTONS_V1\]/g, RB_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+  const RB_TOKEN = /^\u2063WB(\d+)\u2063$/; // a placed group in the drawn copy of the text (buttonsText)
+  const one = (v, n) => typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, n) : '';
+  function buttonGroup(json) {
+    try {
+      const p = JSON.parse(json), group = one(p?.group, 60), seen = new Set(), buttons = [];
+      for (const b of Array.isArray(p?.buttons) ? p.buttons : []) {
+        const id = typeof b?.id === 'string' ? b.id.trim() : '', label = one(b?.label, 40);
+        // `act`: the button declares an app action (issue 1973, switch wizard/reply-actions). Only that it has one: the box
+        // reads the action itself from this message in the thread's history, never from what the shell sends.
+        if (RB_ID.test(id) && label && !seen.has(id) && buttons.length < 6) { seen.add(id); buttons.push({ id, label, ...(b?.action && typeof b.action === 'object' && !Array.isArray(b.action) ? { act: true } : {}) }); }
+      }
+      return group && buttons.length ? { group, buttons } : null;
+    } catch (e) { return null; }
+  }
+  function buttonGroups(s) {
+    const out = [];
+    for (const m of String(s || '').matchAll(BUTTONS_RE)) { const g = buttonGroup(m[1]); if (g && !out.some(x => x.group === g.group) && out.length < 12) out.push(g); }
+    return out;
+  }
+  const buttonsFallback = json => { const g = buttonGroup(json); return g ? `\n\n${g.group}: ${g.buttons.map(b => `[${b.label}]`).join(' ')}\n\n` : '\n\n'; }; // names its ask (issue 1963)
+  // The text with each drawn group replaced by its own token line (index into buttonGroups), for the switch-on render.
+  function buttonsText(s) {
+    const seen = [];
+    return String(s || '').replace(/\n*[ \t]*\[WIZARD_BUTTONS_V1\]\s*([\s\S]*?)\s*\[\/WIZARD_BUTTONS_V1\][ \t]*\n*/g, (_, j) => {
+      const g = buttonGroup(j); if (!g || seen.includes(g.group) || seen.length >= 12) return '\n\n';
+      seen.push(g.group); return `\n\n\u2063WB${seen.length - 1}\u2063\n\n`;
+    });
+  }
+  // The owner's taps, sent back as one ordinary message: readable "Tapped Done · Workout" lines plus
+  //   [WIZARD_TAPS_V1]{"taps":[{"thread","message","group","button","label"}]}[/WIZARD_TAPS_V1]
+  // The thread draws it as a quiet machine line, never as words he typed.
+  const TAPS_RE = /\[WIZARD_TAPS_V1\]\s*([\s\S]*?)\s*\[\/WIZARD_TAPS_V1\]/g;
+  function tapsOf(s) {
+    const taps = [], src = String(s || '');
+    for (const m of src.matchAll(TAPS_RE)) {
+      try {
+        for (const t of (JSON.parse(m[1])?.taps || []).slice(0, 24)) {
+          const tap = { thread: one(t?.thread, 200), message: one(t?.message, 200), group: one(t?.group, 60), button: typeof t?.button === 'string' ? t.button.trim() : '', label: one(t?.label, 40) };
+          if (tap.message && tap.group && RB_ID.test(tap.button) && tap.label) taps.push(tap);
+        }
+      } catch (e) { /* hidden */ }
+    }
+    return { taps, text: taps.length || src.includes('[WIZARD_TAPS_V1]') ? src.replace(/\n*[ \t]*\[WIZARD_TAPS_V1\](?:[\s\S]*?\[\/WIZARD_TAPS_V1\]|[\s\S]*$)[ \t]*\n*/g, '\n').trim() : src };
+  }
+  const tapLine = t => `Tapped ${t.label} · ${t.group}`;
+  // [WIZARD_CHOICES_V1]{"choices":["Get on top of my inbox","Find a job",…]}[/WIZARD_CHOICES_V1], on its own line: tap-to-pick
+  // replies under the answer (wizard-agent-service issue 650, switch wizard/first-chat-goals; the agent writes it on a first
+  // chat, wizard-guide "First chat: five choices"). Plain one-line texts, 1-80 characters, at most 5, first marker only.
+  // Always hidden from the text; drawn only while the switch is on (core/chats-attach.js turnHtml).
+  const CHOICES_RE = /\[WIZARD_CHOICES_V1\]\s*([\s\S]*?)\s*\[\/WIZARD_CHOICES_V1\]/;
+  function choiceList(s) {
+    const out = [], m = String(s || '').match(CHOICES_RE);
+    if (!m) return out;
+    try {
+      const p = JSON.parse(m[1]);
+      for (const v of Array.isArray(p?.choices) ? p.choices : []) {
+        const t = typeof v === 'string' ? v.replace(/\s+/g, ' ').trim() : '';
+        if (t && t.length <= 80 && !/[\u0000-\u001f\u007f<>]/.test(t) && !out.includes(t) && out.length < 5) out.push(t);
+      }
+    } catch (e) { /* hidden, not shown */ }
     return out;
   }
   // <helm_attachments>{"items":[…]}</helm_attachments>: port of normalizers.ts helmPresentation.
@@ -129,6 +197,10 @@
     .replace(/\[WIZARD_IMAGE_INTENT_V1\][\s\S]*?\[\/WIZARD_IMAGE_INTENT_V1\]/g, '')
     .replace(/\n*[ \t]*\[WIZARD_TWEAK_V1\](?:[\s\S]*?\[\/WIZARD_TWEAK_V1\]|[\s\S]*$)[ \t]*\n*/g, '\n\n') // unterminated: to the end
     .replace(/\n*[ \t]*\[WIZARD_ACTION_V1\](?:[\s\S]*?\[\/WIZARD_ACTION_V1\]|[\s\S]*$)[ \t]*\n*/g, '\n\n') // an action card (actionIds)
+    .replace(/\n*[ \t]*\[WIZARD_BUTTONS_V1\]\s*([\s\S]*?)\s*\[\/WIZARD_BUTTONS_V1\][ \t]*\n*/g, (_, j) => buttonsFallback(j)) // reply buttons: their labels
+    .replace(/\n*[ \t]*\[WIZARD_TAPS_V1\][\s\S]*?\[\/WIZARD_TAPS_V1\][ \t]*\n*/g, '\n') // the owner's taps (tapsOf): the Tapped lines stay
+    .replace(/\n*[ \t]*\[WIZARD_(?:BUTTONS|TAPS)_V1\][\s\S]*$/g, '') // unterminated (mid-stream): to the end
+    .replace(/\n*[ \t]*\[WIZARD_CHOICES_V1\](?:[\s\S]*?\[\/WIZARD_CHOICES_V1\]|[\s\S]*$)[ \t]*\n*/g, '\n\n') // reply buttons (choiceList)
     .replace(/<memory-context>[\s\S]*?<\/memory-context>/g, '')
     .replace(/^\[Workspace::v1: [^\]\r\n]+\]\s*/, '')
     .replace(/\n*\[Browser dogfooding policy[\s\S]*$/, '')
@@ -191,10 +263,14 @@
         // A mid-run steer the agent has taken in: shown inside the turn it steered, marked as received.
         if (isSteer) {
           const st = note ? note.text : steerText(raw);
-          if (st && cur && !cur.steers.some(x => x.text === st)) cur.steers.push(note ? { text: st, at, files: [], note: true, from: note.from } : { ...identity, text: st, at, files: chipFiles(raw) });
+          const stTaps = note ? [] : tapsOf(raw).taps; // reply-button taps that steered a running reply (issue 1889)
+          if (st && cur && !cur.steers.some(x => x.text === st)) cur.steers.push(note ? { text: st, at, files: [], note: true, from: note.from } : { ...identity, text: st, at, files: chipFiles(raw), ...(stTaps.length ? { taps: stTaps } : {}) });
           if (cur) cur.steps++;
           continue;
         }
+        // The Agent Service's reporter asks for a rewrite of the reply just given (wizard-agent-service scheduler.mjs
+        // checkReport). Not the owner speaking: hidden, and the reply that answers it replaces the one before (issue 1942).
+        if (REPORTER.test(raw)) { if (cur) { cur.steps++; if (cur.a) cur.rewrite = true; } continue; }
         if (kind || INTERNAL.some(p => raw.trimStart().startsWith(p))) { if (cur) cur.steps++; continue; }
         const files = chipFiles(raw), images = imagesOf(m, content);
         const rq = reply.split(raw).reply; // a Notifications Reply: shown as a card above his words
@@ -206,10 +282,16 @@
         // The Agent Service's copy of a message Hermes has not taken in (yet): queued, running, or failed (never sent).
         const q = m.wizard_queue && typeof m.wizard_queue === 'object' && typeof m.wizard_queue.status === 'string'
           ? { status: m.wizard_queue.status, runId: String(m.wizard_queue.public_run_id || '') } : null;
-        newTurn({ ...identity, text: t, files, images, at, ...(rq ? { reply: rq } : {}), ...(q ? { queue: q } : {}) });
+        const taps = tapsOf(raw).taps; // the owner's reply-button taps (issue 1889): a machine line, not his words
+        newTurn({ ...identity, text: t, files, images, at, ...(rq ? { reply: rq } : {}), ...(q ? { queue: q } : {}), ...(taps.length ? { taps } : {}) });
       } else if (m.role === 'assistant') {
         const h = helm(cleanText(raw));
-        const t = h.text, tweaks = kind === 'commentary' ? [] : tweakIds(raw), actions = kind === 'commentary' ? [] : actionIds(raw);
+        const t = h.text, tweaks = kind === 'commentary' ? [] : tweakIds(raw), actions = kind === 'commentary' ? [] : actionIds(raw), choices = kind === 'commentary' ? [] : choiceList(raw);
+        // Reply buttons (issue 1889): each group keeps the message it sits in (its tap names it); `btext` is the text
+        // with a token line where each group goes. `text` stays the plain fallback (labels) for everything else.
+        const msgKey = identity.id != null ? String(identity.id) : isFinite(at) ? 't' + Math.round(at) : '';
+        const groups = kind === 'commentary' || !msgKey ? [] : buttonGroups(raw).map(g => ({ ...g, msg: msgKey }));
+        const btext = groups.length ? helm(cleanText(buttonsText(raw))).text : '';
         // The Agent Service's signal sweep card (wizard-ux issue 1586): its own turn, never folded into another one's
         // answer; Chats draws its buttons from `sweep` (the markdown copy stays the text for Copy and older shells).
         if (kind === 'agent_sweep' && m.agent_sweep && typeof m.agent_sweep === 'object' && !Array.isArray(m.agent_sweep)) {
@@ -218,17 +300,30 @@
           cur = null; continue;
         }
         if (!cur) newTurn(null);
-        else if (later(cur, at)) { const prev = cur; newTurn(null); cur.at = at; cur.later = { at, after: prev.a.at }; }
+        else if (!cur.rewrite && later(cur, at)) { const prev = cur; newTurn(null); cur.at = at; cur.later = { at, after: prev.a.at }; }
         noteWork(cur, m, at);
         for (const a of h.attachments) if (!cur.media.some(x => x.id === a.id)) cur.media.push(a);
         for (const u of imagesOf(m, content)) if (!cur.media.some(x => x.url === u)) cur.media.push({ id: u.slice(-24), name: 'Image', mime: 'image/*', kind: 'image', url: u });
         if (h.attachments.length && !cur.mediaAt) cur.mediaAt = at;
-        if (!t && !tweaks.length && !actions.length) { if (!h.attachments.length) cur.steps++; continue; }
+        if (!t && !tweaks.length && !actions.length && !choices.length && !groups.length) { if (!h.attachments.length) cur.steps++; continue; }
         if (kind === 'commentary') { cur.notes.push(t); cur.steps++; continue; }
+        // A reporter rewrite replaces the answer it rewrites: its text and buttons go, never into the notes (issue 1942).
+        // The earlier message ids stay with a group the rewrite repeats, so a tap made on the original still counts.
+        if (cur.rewrite && kind !== 'failed_turn' && !FAILED_TURN_TEXT.has(String(t).trim())) { // a failed rewrite: the original stands
+          cur.rewrite = false;
+          if (cur.a) { const gone = cur.a; cur.a = { ...gone, text: '', buttons: (gone.buttons || []).filter(g => groups.some(x => x.group === g.group)) }; }
+        }
         // A tweak card stays with the turn's answer even when a later message in the same turn takes its place.
         const carried = [...new Set([...(cur.a?.tweaks || []), ...tweaks])].slice(0, 8), acts = [...new Set([...(cur.a?.actions || []), ...actions])].slice(0, 4);
+        // Buttons from an earlier message of the same turn stay too (drawn after the answer; only this one's are placed).
+        // One group name is drawn once per turn (issue 1942): a later copy wins and keeps the earlier message ids in
+        // `also`, so a tap on any copy reads as the group's pick (action-cards.js rbPick).
+        const prior = cur.a?.buttons || [];
+        const rbs = [...groups.map(g => { const ids = prior.filter(x => x.group === g.group && x.msg !== g.msg).flatMap(x => [x.msg, ...(x.also || [])]);
+          return ids.length ? { ...g, also: [...new Set(ids)].slice(0, 8) } : g; }),
+          ...prior.filter(g => !groups.some(x => x.group === g.group)).map(g => ({ ...g, placed: false }))].slice(0, 12);
         if (cur.a?.text) { cur.notes.push(cur.a.text); (cur.said ||= []).push(cur.a); }
-        cur.a = { ...(identity.id != null ? { id: identity.id } : {}), text: t, plainText: h.plainText, inlineMedia: h.inlineMedia, at, final: !(Array.isArray(m.tool_calls) && m.tool_calls.length), ...(carried.length ? { tweaks: carried } : {}), ...(acts.length ? { actions: acts } : {}) };
+        cur.a = { ...(identity.id != null ? { id: identity.id } : {}), text: t, plainText: h.plainText, inlineMedia: h.inlineMedia, at, final: !(Array.isArray(m.tool_calls) && m.tool_calls.length), ...(carried.length ? { tweaks: carried } : {}), ...(acts.length ? { actions: acts } : {}), ...(choices.length ? { choices } : {}), ...(rbs.length ? { buttons: rbs, btext } : {}) };
         // The reply's own plain-words ask (its hidden status line, served as wizard_ask): a long reply can lead with it.
         if (typeof m.wizard_ask === 'string' && m.wizard_ask.trim()) cur.a.ask = m.wizard_ask.trim();
         // Hermes' own "Your request was not processed" boundary row (display_kind failed_turn), not the model's words.
@@ -237,6 +332,13 @@
       } else if (cur) { if (later(cur, at)) { const prev = cur; newTurn(null); cur.at = at; cur.later = { at, after: prev.a.at }; } cur.steps++; noteWork(cur, m, at); }
     }
     for (const t of out) { liftAnswer(t); delete t.said; }
+    // 26 Nov 2026: a saved retry or a resend of the same words after a turn that never finished is one request, not
+    // two. The copy shows as a quiet "Sent again" line, not a second bubble.
+    for (let i = 1; i < out.length; i++) {
+      const t = out[i], prev = out[i - 1];
+      if (!t.u || !prev.u || !t.u.text || t.u.files?.length || t.u.images?.length || t.u.text !== prev.u.text) continue;
+      if (!prev.a || prev.a.final === false || prev.a.failed) t.u = { ...t.u, again: true };
+    }
     return out;
   }
   // The model often writes its whole answer in a message that also carries a tool call (a notes patch), then ends the
@@ -1238,7 +1340,7 @@
         // A plain link (no type known up front) previews only when the bytes turn out to be a PDF.
         if (!isPdf(it) && !/pdf/i.test(b.type || '')) { stage.innerHTML = fileCard(it, 'Download it to open it in another app.'); return; }
         dropPdf(); V.pdf = URL.createObjectURL(new Blob([b], { type: 'application/pdf' }));
-        stage.innerHTML = `<iframe class="mv-pdf" src="${esc(V.pdf)}" title="${esc(it.name || 'PDF')}"></iframe>`;
+        stage.innerHTML = `<iframe class="mv-pdf" src="${esc(V.pdf)}" allow="geolocation 'none'" title="${esc(it.name || 'PDF')}"></iframe>`;
       }).catch(() => { if (V.items[V.i] === want) stage.innerHTML = fileCard(it, 'Can’t preview this PDF here. Download it to open it.'); });
     } else stage.innerHTML = fileCard(it, isPdf(it) ? 'Download it to open it in a PDF app.' : 'Download it to open it in another app.');
     paint();
@@ -1339,8 +1441,11 @@
       if (typeof c === 'string') return { value: c, label: friendlyChoice(c) };
       const v = str(c?.value, c?.choice, c?.id); return v ? { value: v, label: str(c?.label, c?.name) || friendlyChoice(v) } : null;
     }).filter(Boolean);
-    return action && (choices.length || it.kind === 'clarify') ? { kind: it.kind || 'approval', requestId: str(it.prompt_id, it.request_id, it.id) || undefined, generation: canonical ? it.execution_generation : undefined, action, choices } : null;
+    // wizard-agent-service issue 597: a prompt that says when it closes (expires_at, seconds) carries it, so the card can
+    // show Expired instead of offering an answer the agent no longer waits for.
+    const closes = Number.isFinite(it.expires_at) && it.expires_at > 0 ? { expiresAt: it.expires_at * 1000, ...(it.expired === true ? { expired: true } : {}) } : {};
+    return action && (choices.length || it.kind === 'clarify') ? { kind: it.kind || 'approval', requestId: str(it.prompt_id, it.request_id, it.id) || undefined, generation: canonical ? it.execution_generation : undefined, action, choices, ...closes } : null;
   }
 
-  window.WosChat = { K, reply, esc, homePath, isHomeUrl, parseRows, helm, imagesOf, chipFiles, tweakIds, actionIds, md, inline, time, drafts, copyText, copyRich, richParts, bindSharePress, sharePayload, shareText, shareAssistantText, shareFile, saveFile, download: save, viewer, normalizeApproval, friendlyChoice, choiceReceipt };
+  window.WosChat = { K, reply, esc, homePath, isHomeUrl, parseRows, helm, imagesOf, chipFiles, tweakIds, actionIds, choiceList, buttonGroups, buttonsText, tapsOf, tapLine, RB_TOKEN, md, inline, time, drafts, copyText, copyRich, richParts, bindSharePress, sharePayload, shareText, shareAssistantText, shareFile, saveFile, download: save, viewer, normalizeApproval, friendlyChoice, choiceReceipt };
 })();

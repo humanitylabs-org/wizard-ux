@@ -44,7 +44,7 @@ window.WizCore.appParts.seed = function ({ APP, appVars, blank, MAXW, newId, sto
   const okStrip = () => appVars.W && typeof appVars.W === 'object' && Array.isArray(appVars.desks) && appVars.desks.length > 0 && appVars.desks[0] && appVars.desks[0].home && appVars.desks.every(d => d && d.id && Array.isArray(d.wins));
   if (!okStrip()) { if (migrateFive()) store.set('stripSeeded', true); else { freshLayout(); store.set('stripSeeded', launcherSettled() && !!window.WizLauncher?.get('autoOpen').some(id => APP[id])); } }
   window.WosFeatures.pruneWindows(appVars.W);
-  appVars.desks = window.WizCore.migrateChatsFocus(appVars.W, appVars.desks);
+  appVars.desks = window.WizCore.migrateChatsFocus(appVars.W, appVars.desks, { keepAgents: true });
   /* Upgrade: starter windows the previous shell opened carry no `seed` mark. Until this device first joins the shared
    * workspaces nothing it holds has reached the box, so its auto-open apps are still starter apps: mark them, and the
    * first join drops them instead of pushing them to every device. A joined device's windows already synced as before. */

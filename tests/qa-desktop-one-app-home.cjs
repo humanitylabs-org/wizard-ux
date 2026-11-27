@@ -1,18 +1,18 @@
 'use strict';
 // Narrow desktop, one app at a time: tapping the icon of the app already in front takes it back to its first view
-// (wizard-ux issue 1332, switch wizard/app-tap-home, off by default), in a real browser. Synthetic origin, no owner
+// (wizard-ux issue 1332, on for everyone), in a real browser. Synthetic origin, no owner
 // writes reach a box (the one-app harness's transport). The app in front is a synthetic page on the real
 // core/app-client.js with two kinds of views a real app has: pages on a history adapter (WizardApp.back.useHistory,
 // three levels deep) and a tab kept in memory that only the app's own Home knows (WizardApp.nav.onHome).
-// Switch on: one tap = tab "Chats", level 0, the typed word still in its field, the page never reloaded.
-// Switch off (QA_SWITCH=off): today's tap, one Back step (level 2, the other tab), nothing else changes.
-// QA_SHOTS=1 writes before/after shots at 412 px wide (the decider's card).
+// One tap = tab "Chats", level 0, the typed word still in its field, the page never reloaded. The same with a stale
+// saved choice for the removed switch wizard/app-tap-home (QA_SWITCH=stale): it is cleared and changes nothing.
+// QA_SHOTS=1 writes before/after shots at 412 px wide.
 const { chromium } = require('../tools/qa-playwright.cjs');
 const { ownerRead } = require('../tools/qa-desktop-frame-fixture.cjs');
 const fs = require('node:fs'), path = require('node:path'), assert = require('node:assert/strict');
 const repo = path.resolve(__dirname, '..'), prefix = '/wizard-os-home/', origin = 'https://narrow-home.test';
 const web = process.env.QA_WEB || path.join(repo, 'web'), out = process.env.QA_OUT || path.join(repo, 'one-app-home-evidence');
-const SW = (process.env.QA_SWITCH || 'on,off').split(','), W = Number(process.env.QA_WIDTH || 412), SHOTS = process.env.QA_SHOTS === '1';
+const SW = (process.env.QA_SWITCH || 'fresh,stale').split(','), W = Number(process.env.QA_WIDTH || 412), SHOTS = process.env.QA_SHOTS === '1';
 fs.mkdirSync(out, { recursive: true });
 const APP = `<!doctype html><meta name="viewport" content="width=device-width"><style>body{background:#fff;color:#111;font:18px system-ui;margin:24px}button{font:inherit;margin:6px 6px 0 0}</style>
 <h1 id="view">…</h1><p><input id="field" value="" placeholder="Type here"></p><p><button id="deeper">Open deeper</button><button id="other">Other tab</button></p>
@@ -35,11 +35,11 @@ const report = { web, width: W, cases: [] };
   const browser = await chromium.launch();
   try {
     for (const sw of SW) {
-      const on = sw === 'on', entry = { switch: sw }; report.cases.push(entry);
+      const entry = { switch: sw }; report.cases.push(entry);
       const context = await browser.newContext({ viewport: { width: W, height: 860 }, serviceWorkers: 'block', reducedMotion: 'reduce' });
       const errors = [], writes = [];
       await context.routeWebSocket('**/*', ws => ws.close());
-      const mix = on ? { 'wizard/app-tap-home': true } : {};
+      const mix = sw === 'stale' ? { 'wizard/app-tap-home': false } : {};
       await context.addInitScript(({ mix }) => {
         if (window !== top) return;
         for (const [k, v] of Object.entries({ 'wos.shell': 'desktop', 'wux.shell': 'desktop', 'wos.desktop-view.v1': 'ai-apps', 'wos.coached': 'true', 'wos.tour.v1': 'true', 'wos.welcome.v1': 'done', 'wos.skin': 'nebula',
@@ -64,7 +64,8 @@ const report = { web, width: W, cases: [] };
       await page.goto(origin + prefix + 'desktop.html');
       await page.waitForFunction(() => window.__wux && document.documentElement.dataset.aiApps === 'desktop' && !WosWelcome.active && !WosExperience.state.busy);
       const settle = async () => { await page.waitForTimeout(400); await page.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))); };
-      await page.waitForFunction(on => String(document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/app-tap-home') === on, on);
+      assert.ok(!String(await page.evaluate(() => document.documentElement.dataset.tweaks || '')).split(' ').includes('wizard/app-tap-home'), sw + ': no switch is loaded');
+      if (sw === 'stale') assert.equal(await page.evaluate(() => Object.hasOwn(JSON.parse(localStorage.getItem('wos.skin-tweaks.v1') || '{}').mix || {}, 'wizard/app-tap-home')), false, 'stale: the saved choice is cleared');
       await page.evaluate(() => __wux.openApp(WizCore.apps('desktop').APP['app-store']));
       const app = page.frameLocator('iframe[src*="/store/index.html"]');
       await app.locator('#field').waitFor();
@@ -85,17 +86,13 @@ const report = { web, width: W, cases: [] };
       assert.equal(entry.front, 'app', sw + ': the app stays in front');
       assert.equal(entry.after.field, 'unsent words', sw + ': the typed word is still there');
       assert.equal(entry.after.load, entry.before.load, sw + ': the app was not reloaded');
-      if (on) {
-        assert.equal(entry.after.view, 'Chats · level 0', 'on: one tap = the first view');
-        assert.equal(entry.after.url, '', 'on: the first page\'s address');
-        // a second tap at the first view changes nothing
-        await page.click('.aad-vt .aad-vtab[data-app="app-store"]'); await settle();
-        const again = await state(); entry.again = again;
-        assert.equal(again.view, 'Chats · level 0', 'on: a second tap stays at the first view');
-        assert.equal(await page.evaluate(() => document.documentElement.dataset.aadOne), 'app', 'on: still in front after a second tap');
-      } else {
-        assert.equal(entry.after.view, 'Other · level 2', 'off: today\'s one Back step');
-      }
+      assert.equal(entry.after.view, 'Chats · level 0', sw + ': one tap = the first view');
+      assert.equal(entry.after.url, '', sw + ': the first page\'s address');
+      // a second tap at the first view changes nothing
+      await page.click('.aad-vt .aad-vtab[data-app="app-store"]'); await settle();
+      const again = await state(); entry.again = again;
+      assert.equal(again.view, 'Chats · level 0', sw + ': a second tap stays at the first view');
+      assert.equal(await page.evaluate(() => document.documentElement.dataset.aadOne), 'app', sw + ': still in front after a second tap');
       assert.deepEqual(errors, [], sw + ': no page errors');
       assert.deepEqual(writes.filter(w => !/ui-preferences|look/.test(w)), [], sw + ': no writes');
       await context.close();

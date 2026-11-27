@@ -177,7 +177,7 @@ export function tabsPart({ aadVars, api, applySizes, appName, appTile, badgeText
     vtList.replaceChildren(...out, dropLine);
     markMedia();
   }
-  /* An app being installed (wizard-os#682, switch wizard/install-in-sidebar, off by default): core/apps.js
+  /* An app being installed (wizard-os#682): core/apps.js
    * WizCore.installs follows each Store Get on the box, also once the Store is closed; each shows here after the open
    * apps, with a spinner on its icon while it installs. Done, it is the app (not open yet: a click opens it, ✕ forgets
    * it); failed, it says so (a click shows the Store). An app already pinned or open is its own row. These rows are
@@ -237,7 +237,7 @@ export function tabsPart({ aadVars, api, applySizes, appName, appTile, badgeText
   function pickVt(d) {
     // narrower window (ONE): the app in front stays in front (one app at a time; Chats is the bar's first item) and goes
     // back to its top level, the phone's tap on the tab you are on
-    if (one() && aadVars.pane && Number(aadVars.pane.desk) === d.desk) { if (!homeOn() || !appHome()) appTop(); return; }
+    if (one() && aadVars.pane && Number(aadVars.pane.desk) === d.desk) { if (!appHome()) appTop(); return; }
     // The chat docked beside the panel has the keyboard (a reply was just sent there): the panel's tab brings its app
     // forward, never hides it out from under the pointer (James, 6 Nov 2026: "Messenger became unclickable").
     const chatHasIt = !!aadVars.pane && aadVars.docked && Number(api.route().desk) !== d.desk;
@@ -251,10 +251,9 @@ export function tabsPart({ aadVars, api, applySizes, appName, appTile, badgeText
     const f = paneFrame(), S = globalThis.WizAppServices; if (!f || !S?.back) return;
     for (let i = 0; i < 12; i++) if (S.back(f) !== 'handled') break;
   }
-  /* Tapping the app in front takes it to its first view (wizard-ux issue 1332, switch wizard/app-tap-home, off by
-   * default): the app's own Home (WizardApp.nav.onHome, else all its Back steps at once, also under the browser
-   * boundary), never a reload; false = this app has no Home, so appTop's Back steps run as before. */
-  const homeOn = () => { try { return String(globalThis.document?.documentElement?.dataset?.tweaks || '').split(' ').includes('wizard/app-tap-home'); } catch (_) { return false; } };
+  /* Tapping the app in front takes it to its first view (wizard-ux issue 1332, on for everyone): the app's own Home
+   * (WizardApp.nav.onHome, else all its Back steps at once, also under the browser boundary), never a reload;
+   * false = this app has no Home, so appTop's Back steps run instead. */
   function appHome() {
     const f = paneFrame(), S = globalThis.WizAppServices; if (!f || typeof S?.home !== 'function') return false;
     return S.home(f) !== 'unsupported';

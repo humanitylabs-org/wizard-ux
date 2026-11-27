@@ -19,7 +19,7 @@ test('skin picker renders preview cards for every skin, names in each skin\'s ow
   assert.match(html, /class="skp-all skp-wait"/, 'names hidden until the faces load');
   assert.doesNotMatch(html, /class="sk-dot"/, 'no dot swatches left');
   // James, 25 Nov 2026 (wizard-ux#1190): skins are a look only, so every colour is a look in one list.
-  assert.match(html, /<h4>Looks<\/h4>/);
+  assert.match(html, /<h4>Skins<\/h4>/);
   assert.doesNotMatch(html, /data-skinfamily=/, 'no separate family controls');
   for (const f of S.families) for (const id of f.palettes.filter(id => !/^landscapes/.test(id))) assert.match(html, new RegExp(`data-skinpick="${id}"`), id);
   // Each Wizard colour is a preview card (its own tokens) with the name set in its own face.

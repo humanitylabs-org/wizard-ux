@@ -87,7 +87,10 @@ window.WizCore.appParts.routing = function ({ $, APP, appAt, appByName, APPS, ap
         setVoice('think'); if (isPill()) tx.dataset.detail = 'Quick command? · routing'; else $('#txRouteText').textContent = 'Quick command? · routing';
         const r = await fetch(routeUrl, { method: 'POST', signal: AbortSignal.timeout ? AbortSignal.timeout(3000) : undefined, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, force: '', view: null, apps: APPS.filter(a => a.kind !== 'view').map(a => a.name), ...(dumpAsk ? { accept_dump: true } : {}) }) });
         const j = await r.json(); const c = r.ok && j.cmd || {};
-        if (dumpAsk && r.ok) snap.dumpAsked = true; // answered: the outbox never asks again
+        // answered: the outbox never asks again. Private routing (issue 1804): the answer names the take's agent, so the
+        // outbox gets this same answer (it puts the take there) instead of asking again.
+        const routed = dumpAsk && r.ok ? window.WosPrivateRoute?.answer?.(j) : null;
+        if (routed) snap.routed = routed; else if (dumpAsk && r.ok) snap.dumpAsked = true;
         if (dumpAsk && c.route === 'dump' && c.record_id) { setVoice('idle'); txHide(0); gotIt(c.title); return { outcome: 'local' }; }
         if (c.route === 'command' && !c.then_agent) { snap.quickRan = true; showRouted('command', `Quick command · ${j.ms} ms${sttNote}`); return finishCmd(c, text, qo); }
       } catch (_) {}
@@ -171,6 +174,9 @@ window.WizCore.appParts.routing = function ({ $, APP, appAt, appByName, APPS, ap
         if (c.then_agent) { await new Promise(resolve => setTimeout(resolve, 1500)); return toAgent(String(c.then_agent), `Opened ${c.app || 'app'} · follow-up to ${window.WizConfig.agent()}`, opts); }
         return ran;
       }
+      // Private routing (issue 1804): a typed new request goes to the agent the answer names (the outbox applies it).
+      const routed = !intoThread && kind !== 'command' && dumpTake(snap, null, target, kind) ? window.WosPrivateRoute?.answer?.(j) : null;
+      if (routed) opts.snap = Object.assign(opts.snap || snap, { routed });
       return toAgentOrThread(`To ${window.WizConfig.agent()} · routed in ${j.ms} ms${sttNote}`);
     } catch (e) {
       return toAgentOrThread(`Router offline · sent to ${window.WizConfig.agent()}`);
@@ -257,7 +263,7 @@ window.WizCore.appParts.routing = function ({ $, APP, appAt, appByName, APPS, ap
       return sendChat(opts.snap.newChatWid, text, 'new voice chat', opts.audio || opts.snap.audio || null, { custodyId: opts.snap.custodyId, sid: '__new__', route: opts.snap.route, seal: false, files: opts.files || [], instructions: 'Explicit new voice chat. No foreground app or private thread context shared.' });
     }
     // Saved before it is sent: a dropped connection can delay this, never lose it.
-    const item = await OUTBOX.enqueue({ sealKey: opts.snap?.seal?.key, custodyId: opts.snap?.custodyId, kind: 'new', text, typed: opts.typed || '', ...(opts.snap?.route || {}), instructions: ctx, audio: opts.audio || opts.snap?.audio || null, source: opts.source || 'orb', files: opts.files || [], ...(opts.reply ? { reply: opts.reply } : {}), ...(opts.snap?.dumpAsked ? { dump: false } : {}) });
+    const item = await OUTBOX.enqueue({ sealKey: opts.snap?.seal?.key, custodyId: opts.snap?.custodyId, kind: 'new', text, typed: opts.typed || '', ...(opts.snap?.route || {}), instructions: ctx, audio: opts.audio || opts.snap?.audio || null, source: opts.source || 'orb', files: opts.files || [], ...(opts.reply ? { reply: opts.reply } : {}), ...(opts.snap?.routed ? { dump: true, routed: opts.snap.routed } : opts.snap?.dumpAsked ? { dump: false } : {}) });
     renderMoons(); refreshHome(); renderDots();
     return item;
   }

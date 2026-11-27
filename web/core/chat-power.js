@@ -182,13 +182,15 @@ window.WosChatPower = function chatPower(A) {
     if (c.posFor !== sid) {
       c.posFor = sid; c.posLid = c.lid; c.readerMoved = false;
       c.posCached = !(c.loadedFor === sid && c.loadedNav === c.readNav);
-      // Back into a thread (the link trail, or Send and go stepping back to it) restores the place he was reading
-      // mid-thread even when a new reply landed there while he was away (issue 1653): it is anchored on the message he
-      // was reading, so the new reply below cannot move it (↓ Latest shows it). Any other open keeps the rules below.
-      const back = c.backTo === sid;
-      const kept = c.unreadOpen === sid && !back ? null : RP.read(sid);
-      const reading = back && !!kept?.anchor && !kept.atBottom;
-      const saved = kept && (reading || (!(kept.atBottom && kept.working) && kept.messageId === c.lid)) ? kept : null;
+      // Every return to a thread (Back from a linked thread, Back to the list and open it again, switching threads and
+      // coming back) restores the place he was reading mid-thread, also when a new reply landed there while he was away
+      // or the thread turned unread (issue 1653 for Back; James, 26 Nov 2026, issue 1882: "It should remember my scroll
+      // position in every thread"). It is anchored on the message he was reading, so the new reply below cannot move it
+      // (↓ Latest shows it). A place at the bottom keeps the rules below: an unread thread or a newer reply opens at its
+      // newest reply, as does a thread with no place from the last hour.
+      const kept = RP.read(sid);
+      const reading = !!kept?.anchor && !kept.atBottom;
+      const saved = kept && (reading || (c.unreadOpen !== sid && !(kept.atBottom && kept.working) && kept.messageId === c.lid)) ? kept : null;
       const reply = lastReply(nb), last = o.turns[o.turns.length - 1];
       let place = saved;
       if (!place) {
@@ -423,24 +425,17 @@ window.WosChatPower = function chatPower(A) {
   const failedShown = s => !!s && (FAILED.has(s.status) || (s.status === 'queued' && s.queueReason === 'provider_access')) && !(E && E.dismissed(s));
   /* Saved background result (wizard-agent-service #14): one-tap Continue in its original thread, on for everyone.
    * Showing the panel starts nothing; only the tap does. */
-  // wizard/needs-you-reason (wizard-agent-service issue 469): the same panel says why (the Service's reason) and adds Dismiss.
-  const REASON_TWEAK = 'wizard/needs-you-reason';
-  const tweakOn = id => { try { return (document.documentElement.dataset.tweaks || '').split(' ').includes(id); } catch (_) { return false; } };
-  const reasonOn = () => tweakOn(REASON_TWEAK);
+  // The panel says why (the Service's reason) and offers Dismiss (wizard-agent-service issue 469, on for everyone).
   // The main agent's own threads: rows carry no agent, or (since the shell names every agent) the main id hermes.
   const mainThread = s => !!s && (!s.agent || s.agent === 'hermes');
   function backgroundHtml(w, s) {
     const busy = ch(w.id)?.continuing === s.backgroundResult.id;
-    if (reasonOn()) {
-      const rid = esc(s.backgroundResult.id), gone = ch(w.id)?.dismissing === s.backgroundResult.id;
-      return `<section class="ch-fail ch-bg-result ch-bg-reason" role="status" data-bg-result="${rid}"><span class="lb">Needs you</span>
+    const rid = esc(s.backgroundResult.id), gone = ch(w.id)?.dismissing === s.backgroundResult.id;
+    return `<section class="ch-fail ch-bg-result ch-bg-reason" role="status" data-bg-result="${rid}"><span class="lb">Needs you</span>
         <p>${esc(s.backgroundResult.reason || 'A helper finished after this chat closed')}. Its result is saved: continue from it, or dismiss it.</p>
         <div class="ch-fail-b"><button type="button" data-background-continue="${rid}" ${busy || gone ? 'disabled' : ''}>${busy ? 'Continuing…' : 'Continue'}</button><button type="button" data-background-dismiss="${rid}" ${busy || gone ? 'disabled' : ''}>${gone ? 'Dismissing…' : 'Dismiss'}</button></div></section>`;
-    }
-    return `<section class="ch-fail ch-bg-result" role="status" data-bg-result="${esc(s.backgroundResult.id)}"><span class="lb">Background result ready</span>
-        <p>This work finished while Wizard wasn’t available. Continue from its saved result when you’re ready.</p>
-        <div class="ch-fail-b"><button type="button" data-background-continue="${esc(s.backgroundResult.id)}" ${busy ? 'disabled' : ''}>${busy ? 'Continuing…' : 'Continue'}</button></div></section>`;
   }
+
   async function continueBackground(id, sid, rid, button) {
     const c = ch(id);
     const own = LIVE.session(sid);
@@ -513,7 +508,7 @@ window.WosChatPower = function chatPower(A) {
   // Retry = send the thread's last request again, through the durable outbox, on the same thread
   // (and the same model, unless one was just picked). controller.ts retryServerFailedSession.
   const retrying = new Map();
-  async function retryThread(wid, sid, o, sourceId, alive) {
+  async function retryThread(wid, sid, o, sourceId, alive, auto = '') {
     let s = LIVE.session(sid); if (!s || !OUTBOX) return false;
     // Issue 1235: Hermes refuses every reply into a chat another app owns; a resend would only fail the same way.
     if (M?.foreignApp?.(s)) { toast('!', `This chat lives in ${M.foreignApp(s)} · reply there`, 2600); return false; }
@@ -556,10 +551,10 @@ window.WosChatPower = function chatPower(A) {
       if (!text) { toast('!', 'This thread has no request to send again · open it to reply', 2600); return false; }
       const cur = o ? { model: o.value, provider: o.provider } : threadModel(s);
       await OUTBOX.enqueue({ kind: 'reply', sessionId: sid, agent: s.agent || A.winAgent?.(w) || '', text, retryRunId: s.retryRunId || '', wid: w && w.thread === sid ? wid : '', how: 'retry', source: 'chat',
-        instructions: `${window.WizConfig.owner() || 'The owner'} pressed Retry on this thread after the last request failed${o ? `, choosing ${o.name}` : ''}. ${text === RETRY_WORD ? 'Carry out the last request in this thread again (it may be a follow-through note rather than a typed message).' : 'This is the same request again.'}`,
+        instructions: `${auto ? `Wizard is sending this again on its own: the last request failed because the ${auto} sign-in had expired, and ${window.WizConfig.owner() || 'the owner'} has signed ${auto} back in` : `${window.WizConfig.owner() || 'The owner'} pressed Retry on this thread after the last request failed${o ? `, choosing ${o.name}` : ''}`}. ${text === RETRY_WORD ? 'Carry out the last request in this thread again (it may be a follow-through note rather than a typed message).' : 'This is the same request again.'}`,
         ...(cur.model ? { model: cur.model, provider: cur.provider } : {}) });
       E?.cleared.set(sid, Date.now());
-      toast('↻', o ? `Retrying on ${o.name}` : 'Retrying', 1600);
+      toast('↻', o ? `Retrying on ${o.name}` : auto ? `${auto} is back · sending your saved message` : 'Retrying', 1600);
       if (c) follow(wid);
       return true;
     } catch (e) { toast('!', 'Couldn’t queue the retry', 2400); return false; }
@@ -614,7 +609,29 @@ window.WosChatPower = function chatPower(A) {
   function dismissThread(wid, sid) { E?.dismissFailure(sid, rowFor(wid, sid)); rerenderAll(); }
   function rerenderAll() { for (const id of Object.keys(A.CH)) { const w = H.win(id); if (w) A.renderChats(w); } H.changed?.(); }
   // A subscription signed out or back in (WosUsage reading): failed-send cards switch between Reconnect and Retry.
-  window.addEventListener?.('wos:ai-signin', () => rerenderAll());
+  // Issue 1799: the sign-in card promises "Sign in to Claude and it will send … on its own". When this device saw a
+  // subscription read signed out and now reads it signed in, each chat whose failed send that card holds goes again
+  // once, through the same saved retry as the Retry button (wizard_retry_run_id): the box admits one saved retry per
+  // failed run, so its own automatic resend or another device doing the same never sends it twice.
+  let wasOut = new Set();
+  const resentRuns = new Set();
+  function resendHeld(back) {
+    const rows = [...(LIVE.sessions || []), ...Object.values(LIVE.agentSessions || {}).flat()];
+    for (const s of rows) {
+      const rc = s?.reconnect;
+      if (!rc?.runId || !back.has(rc.provider) || resentRuns.has(rc.runId) || !['failed', 'interrupted'].includes(s.status)) continue;
+      // One owner per id, and a routed thread only when its row names its agent (the resend must reach that agent).
+      if (s.queueReason === 'provider_access' || E?.dismissed?.(s) || LIVE.session(s.id) !== s || (LIVE.ownerOf?.(s) && s.agent !== LIVE.ownerOf(s))) continue;
+      resentRuns.add(rc.runId);
+      retryThread('', s.id, null, rc.runId, null, rc.name || 'AI');
+    }
+  }
+  window.addEventListener?.('wos:ai-signin', e => {
+    const out = new Set(e?.detail?.signedOut || []), back = new Set((e?.detail?.signedIn || []).filter(f => wasOut.has(f)));
+    wasOut = out;
+    if (back.size) resendHeld(back);
+    rerenderAll();
+  });
 
   /* Errors section extras: background work Wizard flagged (/wizard/attention) and voice notes that didn't send. */
   const voiceFailed = () => (OUTBOX ? OUTBOX.unsent().filter(it => it.state === 'failed' && (it.audio || it.audioFile)) : []);
@@ -623,7 +640,9 @@ window.WosChatPower = function chatPower(A) {
   function errorRow(s, rowHtml) {
     if (!E) return rowHtml;
     const busy = E.busy.get(s.id);
-    const rc = s.reconnect ? `<button type="button" data-chreconnect="${esc(s.reconnect.appId)}" data-recovery-run="${esc(s.reconnect.runId || '')}">Sign in</button>` : '';
+    // Issue 1799: the stored sign-in diagnosis only while that subscription still reads signed out; else Retry.
+    const live = M?.reconnect ? M.reconnect(s) : s.reconnect;
+    const rc = live ? `<button type="button" data-chreconnect="${esc(live.appId)}" data-recovery-run="${esc(live.runId || '')}">Sign in</button>` : '';
     if (rc) return `<div class="ch-err diagnosed" data-errsid="${esc(s.id)}">${rowHtml}</div>`;
     // Issue 1235: a chat another app owns can't be retried from here; only Dismiss.
     if (M?.foreignApp?.(s)) return `<div class="ch-err diagnosed" data-errsid="${esc(s.id)}">${rowHtml}<div class="ch-err-b"><button type="button" class="ghost" data-errdismiss="${esc(s.id)}" ${busy ? 'disabled' : ''}>${busy === 'dismiss' ? 'Dismissing…' : 'Dismiss'}</button></div></div>`;
@@ -840,6 +859,7 @@ window.WosChatPower = function chatPower(A) {
     if (sheet && sheet.pane === id) {
       if (t.closest('[data-ficlose]') || (t.closest('.ch-psheet') && !t.closest('.ch-sheet-b'))) { closeSheet(); return true; }
       if (sheet.type === 'model') {
+        if (t.closest('[data-mprivsetup]')) { closeSheet(); window.WosPrivacy?.open?.('setup'); return true; }
         if (t.closest('[data-mall]')) { sheet.all = true; paint(id, A.elOf(id)); if (sheet.pop) { const l = A.elOf(id)?.querySelector('.ch-mpop .msheet-list'); if (l) l.scrollTop = 0; } return true; }
         const p = t.closest('[data-mpick]'); if (p) { const o = sheet.list?.[+p.dataset.mpick]; if (o) pickModel(o); return true; }
       }
@@ -866,7 +886,7 @@ window.WosChatPower = function chatPower(A) {
     const bg = t.closest('[data-background-continue]');
     if (bg) { if (w?.thread) void continueBackground(w.id, w.thread, bg.dataset.backgroundContinue, bg); return true; }
     const bd = t.closest('[data-background-dismiss]');
-    if (bd) { if (w?.thread && reasonOn()) void dismissBackground(w.id, w.thread, bd.dataset.backgroundDismiss, bd); return true; }
+    if (bd) { if (w?.thread) void dismissBackground(w.id, w.thread, bd.dataset.backgroundDismiss, bd); return true; }
     // Failed thread panel
     if (t.closest('[data-mregen]') && w?.thread) { regenerateThread(id, w.thread); return true; }
     if (t.closest('[data-chretry]') && w?.thread) { retryThread(id, w.thread); return true; }
@@ -907,7 +927,10 @@ window.WosChatPower = function chatPower(A) {
     });
   }
   // back: the open steps back into a thread he left (threadBack), so its reading place wins (issue 1653).
-  const opened = (wid, sid, back = false) => { const c = ch(wid), s = sid && sid !== '__new__' ? LIVE.session(sid) : null; c.unreadOpen = s && LIVE.isNew(s) ? sid : ''; c.posFor = ''; c.backTo = back && sid !== '__new__' ? sid : ''; if (sid !== '__new__') c.newModel = null; if (sheet && A.owner(sheet.pane) === wid && sheet.type === 'model') closeSheet(); };
+  // A Chats list pane (the desktop's id::list, the AI apps id::side) opens its thread in the window it belongs to, so the
+  // open resets that window's placement (issue 1882: a reopen from the list pane kept the old placement, and the fresh box
+  // at the top was saved over his place).
+  const opened = (wid, sid, back = false) => { wid = A.owner ? A.owner(wid) : wid; const c = ch(wid), s = sid && sid !== '__new__' ? LIVE.session(sid) : null; c.unreadOpen = s && LIVE.isNew(s) ? sid : ''; c.posFor = ''; c.backTo = back && sid !== '__new__' ? sid : ''; if (sid !== '__new__') c.newModel = null; if (sheet && A.owner(sheet.pane) === wid && sheet.type === 'model') closeSheet(); };
   const holds = id => !!sheet && sheet.pane === id;
   async function tweakModels(wid) {
     const w = H.win(wid); if (!w) return [];

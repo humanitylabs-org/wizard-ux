@@ -255,6 +255,34 @@ test('Apps sheet and New desk grid both carry the Add to home screen long-press'
   assert.equal(typeof ctx.window.WizHomeScreenApps?.attach, 'function'); assert.equal(ctx.window.WizHomeScreenApps.attach.length, 2, 'attach(menu, appFor, opts = {})');
 });
 
+// The phone Apps tile's panel (wizard-ux#1955) is a third app picker; it lost the hold to the home screen (ux#2001).
+// Its real long-press menu, run against the real home-screen module: a pinnable app gets Add to Home Screen, which opens
+// the sheet for it; an agent's chats (nothing to pin) gets only Favorites.
+test('Apps panel long-press menu carries Add to Home Screen too', () => {
+  const f = pinFixture('ready', false), H = f.window.WizHomeScreenApps, menus = [];
+  const el = () => ({ listeners: {}, dataset: {}, style: { setProperty() {} }, innerHTML: '', value: '', attrs: {}, classList: { add() {}, remove() {}, toggle() {}, contains: () => false },
+    addEventListener(t, fn) { (this.listeners[t] ||= []).push(fn); }, setAttribute() {}, append() {}, blur() {}, querySelector() { return this.kid ||= el(); }, querySelectorAll: () => [], getBoundingClientRect: () => ({ left: 0, bottom: 40 }) });
+  const made = [];
+  const APP = { notes: { id: 'notes', name: 'Notes', kind: 'wizard', url: '/notes/' }, 'agent:phil': { id: 'agent:phil', name: 'Phil', kind: 'chats', agent: 'phil' } };
+  const ctx = vm.createContext({ window: { WizCore: { appParts: {} }, WosContextMenu: { open: o => menus.push(o) }, WizHomeScreenApps: H },
+    document: { documentElement: { getAttribute: () => '' }, createElement: () => { const e = el(); made.push(e); return e; } },
+    localStorage: { getItem: () => null, setItem() {} }, MutationObserver: class { observe() {} }, addEventListener() {}, setTimeout, clearTimeout, Date, Math, JSON, Object, Set });
+  ctx.window.window = ctx.window;
+  vm.runInContext(read('app-appspanel.js'), ctx);
+  const noop = () => {};
+  ctx.window.WizCore.appParts.appspanel({ $: () => el(), APP, APPS: Object.values(APP), appVars: { desks: [] }, CHATS_APP: { id: 'wizard' }, device: el(), esc: String, ico: () => '', LIVE: {}, norm: String,
+    openApp: noop, openStoreKind: noop, phoneBack: { watch: noop }, store: { get: (k, d) => d, set: noop }, tapOpen: noop, toast: noop, vib: noop });
+  const panel = made.find(e => e.id === 'appsPanel') || made[0];
+  const hold = id => { const btn = { dataset: { apopen: id }, getBoundingClientRect: () => ({ left: 0, bottom: 40 }) }; panel.listeners.contextmenu.forEach(fn => fn({ target: { closest: () => btn }, preventDefault: noop })); return menus.at(-1); };
+  const notes = hold('notes');
+  assert.deepEqual(Array.from(notes.items, i => i.label), ['Add to Favorites', 'Add to Home Screen']);
+  assert.equal(H.state.open, false);
+  notes.items[1].action();
+  assert.equal(H.state.open, true, 'the home-screen sheet opens'); assert.equal(H.state.appId, 'notes');
+  H.back(); ctx.Date = { now: () => Date.now() + 5000 };
+  assert.deepEqual(Array.from(hold('agent:phil').items, i => i.label), ['Add to Favorites'], 'nothing to pin: Favorites only');
+});
+
 // Desks overview: hold a one-app desk and let go in place → the same sheet; a drag still reorders (James, 24 Oct).
 // A phone with Notes alone on desk 1, Chats on desk 2, Health and Chats together on desk 3, and an empty desk 4.
 const ovWorld = (mode = {}) => ({ mode, desks: [{ id: 'd1', wins: ['a'] }, { id: 'd2', wins: ['b'] }, { id: 'd3', wins: ['c', 'e'] }, { id: 'd4', wins: [] }],
@@ -286,7 +314,7 @@ test('Pinned home-screen apps keep the floating orb', async () => {
   visible.add(new MainActivity()); assert.equal(shellFront(), true, 'the shell itself is visible');
   // both lifecycle edges tell the floating orb what is in front, and say so with shellFront()
   const main = java('MainActivity.java'), told = [];
-  const ai = { wizards: { os: { AppSessionActivity, device: { AppState: { shellFront } }, everywhere: { EverywhereService: { setAppInFront: (a, front) => told.push(front) }, EverywhereOutbox: { get: () => ({ pump() {} }) } }, mizel: { MeetingRecorderService: { recoverFromActivity() {} } } } } };
+  const ai = { wizards: { os: { AppSessionActivity, device: { AppState: { shellFront } }, everywhere: { EverywhereService: { setAppInFront: (a, front) => told.push(front) }, EverywhereOutbox: { get: () => ({ pump() {} }) } }, mizel: { MeetingRecorderService: { recoverFromActivity() {} } }, StartGuard: { paused: () => false } } } };
   const Base = class { onStart() {} onStop() {} };
   method(main, 'protected void onStart()', { scope: { ai, AppSessionActivity, device: { onStart() {} } }, base: Base });
   visible.clear(); visible.add(new AppSessionActivity());

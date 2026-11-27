@@ -1,7 +1,7 @@
-// Inbox rows (wizard-ux issue 1779, switch wizard/inbox-rows): Chats › Inbox holds only what needs the owner, as
-// Signal / Telegram rows that stay until archived, with today's Daily and #priority / urgent pinned on top. Runs the
-// real list model rule, the real agent inbox reader (cut out of live-channels.js) against a fake box, and the real
-// chats-inboxrows.js part drawing and tapping rows. Switch off: the model gives exactly today's groups.
+// Inbox rows (wizard-ux issue 1779, on for everyone since James's yes on 27 Nov 2026; the switch wizard/inbox-rows is
+// gone): Chats › Inbox holds only what needs the owner, as Signal / Telegram rows that stay until archived, with today's
+// Daily and #priority / urgent pinned on top. Runs the real list model rule, the real agent inbox reader (cut out of
+// live-channels.js) against a fake box, and the real chats-inboxrows.js part drawing and tapping rows.
 // Run: node --test tests/inbox-rows.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -12,7 +12,7 @@ import { withLiveParts } from './fixtures/live-parts.mjs'; // live.js parts move
 
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
 const J = v => JSON.parse(JSON.stringify(v)); // vm arrays are from another realm
-const H = 3600e3, NOW = Date.now(), SW = 'wizard/inbox-rows';
+const H = 3600e3, NOW = Date.now(), GONE_ID = 'wizard/inbox-rows';
 const M = modelContext({}).WizChatsListModel;
 const iso = t => new Date(t).toISOString();
 const row = (id, h, extra = {}) => ({ id, title: 'T ' + id, status: 'completed', at: NOW - h * H, updatedAt: iso(NOW - h * H), lastAssistantAt: iso(NOW - h * H), messageCount: 2, ...extra });
@@ -29,20 +29,21 @@ const ROWS = () => [row('new1', 1, { fresh: true }), row('read1', 30), row('y1',
 const pin = s => s.id === 'd1' ? 1 : s.id === 'pr1' ? 2 : 0;
 const facts = { needs, unread, at: s => s.at };
 
-test('list model: the switch id is read from data-tweaks', () => {
-  assert.equal(M.INBOX_ROWS, SW);
-  assert.equal(M.inboxRowsOn(`wizard/desktop-chats ${SW}`), true);
-  assert.equal(M.inboxRowsOn('wizard/desktop-chats wizard/inbox-until-archived'), false);
-  assert.equal(M.inboxRowsOn(undefined), false);
+test('no switch: wizard/inbox-rows is gone from the catalog and the list model', () => {
+  assert.ok(!JSON.parse(read('web/tweaks/catalog.json')).tweaks.includes(GONE_ID), 'not offered in Settings');
+  assert.equal(M.INBOX_ROWS, undefined);
+  assert.equal(M.inboxRowsOn, undefined);
 });
 
-test('list model: Inbox holds only what needs him; pinned first in pin order; no Recent, no Show older', () => {
-  const g = M.activityGroups(groups(ROWS()), facts, { now: NOW, inbox: { quiet, pin } });
-  assert.deepEqual(J(g.ready.map(s => s.id)), ['d1', 'pr1', 'w1', 'new1', 'y1', 'f1', 'read1'], 'pinned Daily, #priority, then newest first');
+test('list model, Smart inbox off (wizard-ux issue 1962): every thread with agent activity is in Inbox, the quiet reply and his own running send too; pinned first in pin order; no Recent, no Show older', () => {
+  // w0 is his send: the box's Sent log names its thread (issue 1829); with Smart inbox off that keeps nothing out of
+  // Inbox, and the shell reports no quiet mark (live.js quietReply counts only with Smart inbox on).
+  const place = { sent: M.sentIndex([{ id: 'sent_w0', thread: 'w0', state: 'running', at: NOW }]), quiet: () => false };
+  const g = M.activityGroups(groups(ROWS()), facts, { now: NOW, inbox: { quiet: () => false, pin }, place });
+  assert.deepEqual(J(g.ready.map(s => s.id)), ['d1', 'pr1', 'q1', 'new1', 'y1', 'f1', 'read1'], 'pinned Daily, #priority, then newest first');
+  assert.deepEqual(J(g.working.map(s => s.id)), ['w0', 'w1'], 'every running thread is in Inbox › Working on top (issue 1810), his own too');
   assert.equal(g.pinned, 2);
-  assert.ok(!g.ready.some(s => s.id === 'q1'), 'a quiet "nothing needed" reply is never in Inbox (it is in Sent)');
-  assert.ok(!g.ready.some(s => s.id === 'w0'), 'his own send still working with no answer is not in Inbox (Sent › Working)');
-  assert.deepEqual(J(g.working.map(s => s.id)), [], 'no Working list beside Inbox: a run he started is in Sent › Working (issue 1829)');
+  assert.ok(g.ready.some(s => s.id === 'q1'), 'a quiet "nothing needed" reply is in Inbox (triage is Smart inbox only)');
   assert.deepEqual([g.recent.length, g.older], [0, 0]);
   assert.deepEqual(J(g.snoozed.map(s => s.id)), ['s1']);
   assert.deepEqual(J(g.archive.map(s => s.id)), ['a1']);
@@ -61,11 +62,12 @@ test('list model: a read reply stays until archived; archiving is the only way o
   assert.ok(M.activityGroups(g, facts, { now: NOW, inbox: { quiet, pin } }).ready.some(s => s.id === 'aged'));
 });
 
-test('list model: switch off gives exactly today\'s groups', () => {
-  const off = M.activityGroups(groups(ROWS()), facts, { now: NOW });
-  const off2 = M.activityGroups(groups(ROWS()), facts, { now: NOW, inbox: null });
+test('list model: without inbox facts (the pure model\'s plain lists) every thread waits in Inbox until archived', () => {
+  const off = M.activityGroups(groups(ROWS()), facts, {});
+  const off2 = M.activityGroups(groups(ROWS()), facts, { inbox: null });
   assert.deepEqual(J(off2), J(off));
-  assert.ok(off.recent.some(s => s.id === 'read1'), 'off: a read reply is in Recent as today');
+  assert.ok(off.ready.some(s => s.id === 'read1'), 'a read reply stays in Inbox (issue 1810: no Recent)');
+  assert.deepEqual([off.recent.length, off.older], [0, 0]);
   assert.ok(off.working.some(s => s.id === 'w1'));
 });
 
@@ -74,7 +76,8 @@ test('list model: the same rule for the main agent and routed agents (host-profi
     const rows = ROWS().map(s => ({ ...s, agent, id: (agent || 'main') + ':' + s.id }));
     const p = s => pin({ ...s, id: s.id.split(':')[1] });
     const g = M.activityGroups(groups(rows), facts, { now: NOW, inbox: { quiet, pin: p } });
-    assert.deepEqual(J(g.ready.map(s => s.id.split(':')[1])), ['d1', 'pr1', 'w1', 'new1', 'y1', 'f1', 'read1'], 'agent ' + (agent || 'main'));
+    assert.deepEqual(J(g.ready.map(s => s.id.split(':')[1])), ['d1', 'pr1', 'new1', 'y1', 'f1', 'read1'], 'agent ' + (agent || 'main'));
+    assert.deepEqual(J(g.working.map(s => s.id.split(':')[1])), ['w0', 'w1'], 'agent ' + (agent || 'main') + ': Working');
   }
   assert.equal(M.inboxWants({ id: 'h', hidden: true, attention: { state: 'needs_you' } }, { needs: () => true }), false, 'a hidden worker thread is never a thread row');
 });
@@ -122,11 +125,11 @@ test('agent inbox reader: a box without the agent inbox (404) is an empty list',
 });
 
 /* The real chats-inboxrows.js part, drawn and tapped. */
-function part({ on = true, records = [] } = {}) {
+function part({ tweaks = 'wizard/desktop-chats', records = [], cur = '' } = {}) {
   const taps = [], archived = [];
   const ctx = vm.createContext({ console, Date, Promise, String, Number, Set, Map, Array, Object, JSON, setTimeout });
   ctx.window = ctx; ctx.globalThis = ctx;
-  ctx.document = { documentElement: { dataset: { tweaks: on ? `wizard/desktop-chats ${SW}` : 'wizard/desktop-chats' } } };
+  ctx.document = { documentElement: { dataset: { tweaks } } };
   ctx.WizChatsListModel = M; ctx.WizCore = { chatsParts: {} };
   vm.runInContext(read('web/core/chats-inboxrows.js'), ctx);
   const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
@@ -142,21 +145,21 @@ function part({ on = true, records = [] } = {}) {
     actMark: s => s.status === 'running' ? 'working' : needs(s) ? 'needs' : unread(s) ? 'new' : '', actNeeds: needs, actUnread: unread,
     AGS: () => ({ sigil: a => `<span class="ag-sig">${a.id}</span>`, defaultId: () => 'hermes' }), agentName: id => id || 'Wizard', agentRec: id => ({ id }),
     ago: t => t ? 'ago' : '', attOf: s => s.attention || null, chanAt: s => s.at, chanFace: n => { const m = /^(\p{Extended_Pictographic}\uFE0F?)\s*(.*)$/u.exec(n); return m ? { emoji: m[1], label: m[2], own: true } : { emoji: '💬', label: n, own: false }; },
-    chanStore: () => ({ channels: [{ id: 'daily', kind: 'daily' }] }), chatVars: { readyOrder: 'newest', secOpen: {} }, ch: () => ({}), clip: (s, n) => String(s).slice(0, n), elOf: () => null, esc,
+    chanStore: () => ({ channels: [{ id: 'daily', kind: 'daily' }] }), chatVars: { readyOrder: 'newest', secOpen: {}, rowCur: cur }, ch: () => ({}), clip: (s, n) => String(s).slice(0, n), elOf: () => null, esc,
     isWorking: s => s.status === 'running', LIVE, noteAt: n => n.at, noteRow: n => `<div class="note" data-chnotif="${n.id}"></div>`, renderChatList: () => {}, rowAgent: s => s.agent || 'hermes',
     spacesOf: id => spaces[id] || [], threadAct: (wid, sid, a) => taps.push([wid, sid, a]), toast: () => {}, W: {}, winAgent: () => '',
   });
+  ctx.__live = LIVE;
   return { api, rows, taps, archived, ctx };
 }
 const rowsOf = html => [...html.matchAll(/<div class="ch-row-wrap ch-ib-wrap([^"]*)"[^>]*>([\s\S]*?)<\/button><\/div>/g)].map(m => ({ pinned: / pinned/.test(m[1]), id: (/data-ch(?:open|runopen)="([^"]+)"/.exec(m[2]) || [])[1], body: m[2] }));
 
 test('renderer: Signal rows: round avatar, sender line, title, one preview line, time, unread dot, Archive; pinned first', () => {
   const { api, rows, ctx } = part({ records: [{ id: RID('9'), agent: 'hermes', thread: 'bg9', title: 'Renew the permit', ask: 'Stalled: login', failed: true, updatedAt: NOW - 0.3 * H }] });
-  assert.equal(api.inboxRowsOn({ id: 'w' }), true);
   const html = api.inboxRowsBody({ id: 'w' }, rows, { awake: [], later: [] });
   const r = rowsOf(html);
-  assert.deepEqual(r.map(x => x.id), ['d1', 'read1', 'pr1', 'w1', 'bg9', 'new1', 'y1', 'f1'], 'Daily first, then #priority / urgent (newest first); then newest first with the waiting task in line');
-  assert.deepEqual(r.map(x => x.pinned), [true, true, true, false, false, false, false, false]);
+  assert.deepEqual(r.map(x => x.id), ['w0', 'w1', 'd1', 'read1', 'pr1', 'bg9', 'new1', 'y1', 'f1'], 'Working on top (issue 1810); then Daily first, then #priority / urgent (newest first); then newest first with the waiting task in line');
+  assert.deepEqual(r.map(x => x.pinned), [false, false, true, true, true, false, false, false, false]);
   const by = Object.fromEntries(r.map(x => [x.id, x.body]));
   assert.match(by.new1, /<span class="ch-ib-av"[^>]*>✈️<\/span>/, 'avatar: the tag emoji');
   assert.match(by.new1, /<span class="ch-ib-from">Trip<\/span><time>ago<\/time>/, 'sender line: the first tag, then the time');
@@ -171,8 +174,10 @@ test('renderer: Signal rows: round avatar, sender line, title, one preview line,
   assert.equal(shared.quiet({ quietReply: true }), true);
   assert.equal(shared.pin({ id: 'd1' }), 1);
   assert.equal(shared.extra(rows), 1, 'the waiting task counts once');
-  assert.match(html, /<section class="ch-sec ch-act ch-ib open" data-sec="ready">.*<span>Inbox<\/span><small>8<\/small>/s, 'the Inbox count is the row count');
-  assert.doesNotMatch(html, /data-sec="recent"|data-sec="working"|T q1|T w0/, 'no Recent, no Working, no quiet reply, no unanswered send');
+  assert.match(html, /<section class="ch-sec ch-act ch-ib open" data-sec="ready">.*<span>Inbox<\/span><small>7<\/small>/s, 'the Inbox count is the Inbox row count (Working is not counted)');
+  assert.match(html, /^<section class="ch-sec ch-act open" data-sec="working"><button class="ch-sec-h" data-sectoggle="working" aria-expanded="true"><span>Working<\/span><small>2<\/small>/, 'Working is the first section (issue 1810)');
+  assert.match(by.w0, /ch-ib-mk[^]*ch-spin|class="ch-ib-mk"[^>]*>[^]*working/, 'a Working row carries the spinner');
+  assert.doesNotMatch(html, /data-sec="recent"|T q1/, 'no Recent, no quiet reply');
 });
 
 test('renderer: Archive taps archive the thread (as its actions do) and a waiting task\'s record', async () => {
@@ -186,12 +191,80 @@ test('renderer: Archive taps archive the thread (as its actions do) and a waitin
   assert.equal(api.inboxRowsClick({ target: { closest: () => null } }, { id: 'w' }), false, 'any other tap is not ours');
 });
 
-test('renderer: switch off: not on, no rows drawn by this part, no box read for waiting tasks', () => {
-  let asked = 0;
-  const { api, ctx } = part({ on: false });
-  assert.equal(api.inboxRowsOn({ id: 'w' }), false);
-  assert.equal(api.inboxRowsFacts(), null);
-  assert.equal(ctx.WizCore.inboxRowsFacts(), null);
-  assert.equal(api.inboxRowsClick({ target: { closest: () => ({ dataset: { chibarch: 'x' } }) } }, { id: 'w' }), false);
-  assert.equal(asked, 0);
+test('renderer: no switch: the same rows with any or no data-tweaks, and a saved wizard/inbox-rows changes nothing', () => {
+  const draw = tweaks => { const { api, rows, ctx } = part({ tweaks }); return { ids: rowsOf(api.inboxRowsBody({ id: 'w' }, rows, { awake: [], later: [] })).map(x => x.id), facts: ctx.WizCore.inboxRowsFacts(), api }; };
+  const plain = draw(''), stale = draw(`wizard/desktop-chats ${GONE_ID}`);
+  assert.deepEqual(plain.ids, ['w0', 'w1', 'd1', 'read1', 'pr1', 'new1', 'y1', 'f1']);
+  assert.deepEqual(stale.ids, plain.ids);
+  assert.equal(typeof plain.facts?.quiet, 'function', 'the count and badges always read the Inbox rule');
+  assert.equal(typeof plain.api.inboxRowsFacts()?.pin, 'function');
+  const { api, taps } = part({ tweaks: undefined });
+  assert.equal(api.inboxRowsClick({ target: { closest: sel => sel === '[data-chibarch]' ? { dataset: { chibarch: 'x' } } : null } }, { id: 'w' }), true, 'a row\'s Archive is always handled');
+  assert.deepEqual(taps, [['w', 'x', 'done']]);
+});
+
+// wizard-ux issue 1966: in the AI apps sidebar pane the list sits beside the open thread, so that thread's row is marked
+// current (the shared row, as the sidebar's own rows were); listpaint sets chatVars.rowCur only for that pane.
+test('renderer: the thread open beside the list is the current row (aria-current), only that one; none when nothing is open', () => {
+  const { api, rows } = part({ cur: 'read1' });
+  const r = rowsOf(api.inboxRowsBody({ id: 'w' }, rows, { awake: [], later: [] }));
+  assert.deepEqual(r.filter(x => /aria-current="page"/.test(x.body)).map(x => x.id), ['read1']);
+  const none = part();
+  assert.doesNotMatch(none.api.inboxRowsBody({ id: 'w' }, none.rows, { awake: [], later: [] }), /aria-current|ch-ib-wrap cur/);
+  // (which list sets it, the pane beside the thread, is proven in a real browser: tests/qa-chats-shell-parity.cjs)
+});
+
+/* wizard-ux issue 1998: the phone Chats switcher has Archived as its own view. Switcher on: the Inbox draws no Archived
+ * fold, and Archived is every archived chat as Inbox rows with Restore (never a feed of message bubbles). Switcher off:
+ * the fold stays exactly as it was. Browser proof: tests/qa-chats-archived-view.cjs (160 archived chats). */
+test('switcher on (issue 1998): the Inbox draws no Archived fold; off: the fold stays as today', () => {
+  const { api, rows } = part();
+  const off = api.inboxRowsBody({ id: 'w' }, rows, { awake: [], later: [] });
+  assert.match(off, /<section class="ch-sec ch-act" data-sec="archived"><button class="ch-sec-h" data-sectoggle="archived" aria-expanded="false"><span>Archived<\/span><small>1<\/small>/, 'switcher off: the Archived fold, folded, with its count');
+  assert.equal(api.inboxRowsBody({ id: 'w' }, rows, { awake: [], later: [] }, 0, { noArchive: false }), off, 'noArchive false is today');
+  const on = api.inboxRowsBody({ id: 'w' }, rows, { awake: [], later: [] }, 0, { noArchive: true });
+  assert.doesNotMatch(on, /data-sec="archived"|>Archived</, 'switcher on: no Archived fold');
+  assert.equal(on.replace(/<section class="ch-sec ch-act" data-sec="archived">[^]*$/, ''), off.replace(/<section class="ch-sec ch-act" data-sec="archived">[^]*$/, ''), 'everything above the fold is the same');
+  // Only archived chats left: switcher on shows the Inbox empty state, not a bare fold.
+  const onlyArc = [row('a1', 6, { archived: true })];
+  assert.match(api.inboxRowsBody({ id: 'w' }, onlyArc, { awake: [], later: [] }, 0, { noArchive: true }), /Nothing needs you/);
+  assert.match(api.inboxRowsBody({ id: 'w' }, onlyArc, { awake: [], later: [] }), /data-sec="archived"/);
+});
+
+test('switcher Archived view (issue 1998): every archived chat as thread rows, newest first, with Restore; no message bubbles', () => {
+  const { api, taps } = part();
+  const many = Array.from({ length: 160 }, (_, i) => row('arc' + i, 10 + i, { archived: true, preview: 'Reply ' + i, previewRole: 'assistant' }));
+  const live = [row('new1', 1, { fresh: true }), row('s1', 2, { deferred: true })];
+  const html = api.archivedRowsBody({ id: 'w' }, live.concat(many.slice().reverse()));
+  const r = rowsOf(html);
+  assert.equal(r.length, 160, 'all 160, not a few');
+  assert.deepEqual(r.map(x => x.id), many.map(s => s.id), 'newest first, only archived chats');
+  for (const x of r) {
+    assert.match(x.body, /<span class="ch-ib-av/, 'the Inbox avatar'); assert.match(x.body, /<b class="ch-ib-t">T arc\d+<\/b>/, 'the title');
+    assert.match(x.body, /data-chopen="arc\d+"/, 'a tap opens the chat');
+  }
+  assert.match(r[0].body, /<span class="ch-ib-pv">Reply 0<\/span>/, 'the preview line');
+  assert.equal((html.match(/data-chibrestore="/g) || []).length, 160, 'Restore on every row');
+  assert.doesNotMatch(html, /data-chibarch=/, 'no Archive on an archived row');
+  assert.doesNotMatch(html, /ch-post|ch-feed|ch-msg|ch-bubble/, 'thread rows, not message bubbles');
+  // Restore: the thread's own Restore action (back to Inbox).
+  const tap = id => ({ target: { closest: sel => sel === '[data-chibrestore]' ? { dataset: { chibrestore: id } } : null } });
+  assert.equal(api.inboxRowsClick(tap('arc3'), { id: 'w' }), true);
+  assert.deepEqual(taps, [['w', 'arc3', 'restore']]);
+  assert.match(api.archivedRowsBody({ id: 'w' }, live), /Nothing archived/, 'none archived: a plain empty state');
+});
+
+test('switcher Archived (issue 1998): Restore on a chat older than the list window makes it readable by id first', () => {
+  const { api, taps, ctx } = part();
+  const old = row('arc99', 400, { archived: true }), remembered = [];
+  // the part's LIVE: the live list has no arc99; the title index (searchRows) has it
+  const LIVE = ctx.__live;
+  assert.ok(LIVE, 'the fake LIVE is reachable');
+  LIVE.session = id => remembered.find(s => s.id === id) || null; LIVE.searchRows = () => [old]; LIVE.rememberSearch = s => remembered.push(s);
+  const tap = id => ({ target: { closest: sel => sel === '[data-chibrestore]' ? { dataset: { chibrestore: id } } : null } });
+  assert.equal(api.inboxRowsClick(tap('arc99'), { id: 'w' }), true);
+  assert.deepEqual(remembered.map(s => s.id), ['arc99'], 'remembered before the action');
+  assert.deepEqual(taps, [['w', 'arc99', 'restore']]);
+  api.inboxRowsClick(tap('arc99'), { id: 'w' });
+  assert.equal(remembered.length, 1, 'a row already readable is not remembered again');
 });

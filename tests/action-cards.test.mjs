@@ -1,4 +1,4 @@
-// Inline action cards in chat (wizard-ux issue 1463, switch wizard/action-cards): an app's proposed action
+// Inline action cards in chat (wizard-ux issue 1463, on for everyone; switch wizard/action-cards removed): an app's proposed action
 // ([WIZARD_ACTION_V1]{"app":"<app id>","id":"<item id>"}[/WIZARD_ACTION_V1]) is drawn as a card from the app's own
 // answer at <app url>api/actions/<id> (wizard-os spec/APP_ACTIONS.md). Runs the real chat-kit.js and action-cards.js.
 import { modelContext } from './fixtures/chats-list-model.mjs';
@@ -37,9 +37,9 @@ test('marker: unsafe app or item ids are dropped (hidden, never drawn); at most 
 });
 
 // action-cards.js in a vm: a fake registry, document and fetch.
-function cardsWorld({ on = true, apps = [{ id: 'wizard-messenger', name: 'Messenger', kind: 'wizard', url: '/wizard-messenger/', originalUrl: '/wizard-messenger/' }], answer } = {}) {
+function cardsWorld({ apps = [{ id: 'wizard-messenger', name: 'Messenger', kind: 'wizard', url: '/wizard-messenger/', originalUrl: '/wizard-messenger/' }], answer } = {}) {
   const calls = [], opened = [], nodes = [];
-  const docEl = { dataset: { tweaks: on ? 'wizard/action-cards' : '' } };
+  const docEl = { dataset: { tweaks: '' } };
   const ctx = {
     URL, Date, JSON, Promise, CSS: { escape: s => String(s) }, location: { origin: 'https://box.example', href: 'https://box.example/wizard-os-home/' },
     document: { documentElement: docEl, activeElement: null, visibilityState: 'visible', addEventListener() {}, querySelectorAll: q => q === '[data-action-card]' ? nodes : [] },
@@ -61,15 +61,20 @@ const DRAFT = { schema: 'wizard.app-actions/1', id: 'draft-1', kind: 'Draft repl
   fields: [{ id: 'to', label: 'To', value: 'Sam' }, { id: 'text', label: 'Message', value: 'See you at 7!', editable: true }] };
 const btn = (card, act) => ({ dataset: { act }, disabled: false, closest: q => q === '[data-action-card]' ? card : null });
 
-test('switch off: no card, nothing read from or sent to the app', async () => {
-  const w = cardsWorld({ on: false, answer: () => ({ status: 200, d: DRAFT }) });
-  assert.equal(w.AC.html(['wizard-messenger/draft-1']), '');
-  const n = w.node('wizard-messenger/draft-1'); w.AC.paint(); await w.settle();
-  assert.equal(w.AC.tap(btn(n, 'approve')), true); await w.settle();
-  assert.equal(w.calls.length, 0);
+test('no switch: the card is drawn with no tweak on, and the switch is gone from the catalog and the shell', async () => {
+  const w = cardsWorld({ answer: () => ({ status: 200, d: DRAFT }) });
+  assert.equal(w.AC.SWITCH, undefined);
+  assert.equal(w.AC.on, undefined);
+  assert.match(w.AC.html(['wizard-messenger/draft-1']), /data-action-card="wizard-messenger\/draft-1"/);
+  await w.settle();
+  assert.deepEqual(w.calls.map(c => [c.method, c.url]), [['GET', '/wizard-messenger/api/actions/draft-1']]);
+  assert.equal(read('web/tweaks/catalog.json').includes('wizard/action-cards'), false);
+  assert.match(read('web/core/experience.js'), /const GONE = \[[^\]]*'wizard\/action-cards'/);
+  assert.match(read('web/core/action-cards.css'), /^html:root \.msg\.a \.ch-act \{/m);
+  for (const page of ['web/index.html', 'web/desktop.html', 'web/app-session.html']) assert.match(read(page), /href="core\/action-cards\.css"/, page);
 });
 
-test('switch on: the card reads the app\'s own item at the fixed same-origin path and shows its words', async () => {
+test('the card reads the app\'s own item at the fixed same-origin path and shows its words', async () => {
   const items = { 'draft-1': clone(DRAFT) };
   const w = cardsWorld({ answer: (url, method) => { const id = decodeURIComponent(url.split('/').pop()); return items[id] ? { status: 200, d: items[id] } : { status: 404, d: {} }; } });
   const first = w.AC.html(['wizard-messenger/draft-1']);
