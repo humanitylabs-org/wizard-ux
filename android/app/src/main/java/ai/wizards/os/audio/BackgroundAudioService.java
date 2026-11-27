@@ -1,10 +1,14 @@
 package ai.wizards.os.audio;
 
 import android.app.PendingIntent;
+import android.content.Context;
 import android.content.Intent;
+import android.media.AudioManager;
 import android.net.Uri;
 import android.os.Handler;
+import android.os.Build;
 import android.os.Looper;
+import android.os.SystemClock;
 import android.util.Log;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -47,13 +51,69 @@ public final class BackgroundAudioService extends MediaSessionService {
     private long skipBack, skipForward, lastDurationMs;
     private int lastIndex = -1;
     private static final long PROGRESS_EVERY_MS = 15000;
-    private void requestPlaying(boolean want) { userWant=want; syncIntent(); }
+    // Calls come first (wizard-ux issue 1976): a call stops the player and frees the output; it resumes after.
+    private final CallHold calls = new CallHold();
+    private AudioManager audio;
+    private AudioManager.OnModeChangedListener modeListener;
+    private boolean resumedFromCall;
+    private void requestPlaying(boolean want) { userWant=want; calls.personActed(); syncIntent(); }
     private void syncIntent() {
         if(destroyed || player==null) return;
         transportActive=userWant && player.getMediaItemCount()>0;
         // Microphone ownership is independent of music. Voice capture must not pause or duck it.
         // Keep Media3's normal system-focus/headset-loss handling and explicit user controls.
+        // During a call nothing plays or asks for the audio focus; the call's end decides (issue 1976).
+        if(userWant && calls.inCall()) { player.pause(); return; }
+        if(userWant && player.getPlaybackState()==Player.STATE_IDLE && player.getPlayerError()==null && player.getMediaItemCount()>0) player.prepare();
         if(userWant) player.play(); else player.pause();
+        watchMode();
+    }
+    private String currentItem() {
+        int at=player.getCurrentMediaItemIndex();
+        return at>=0 && at<tracks.size() ? tracks.get(at).optString("id") : null;
+    }
+    private int audioMode() {
+        try { return audio==null ? CallHold.MODE_NORMAL : audio.getMode(); } catch(RuntimeException e) { return CallHold.MODE_NORMAL; }
+    }
+    private boolean focusTaken() { return player.getPlaybackSuppressionReason()==Player.PLAYBACK_SUPPRESSION_REASON_TRANSIENT_AUDIO_FOCUS_LOSS; }
+    /** The audio mode or the focus changed: start or end a call hold. */
+    private void onMode(int mode, boolean focus) {
+        if(destroyed || player==null) return;
+        long now=SystemClock.elapsedRealtime();
+        int edge=calls.mode(mode, focus || focusTaken(), now);
+        if(edge==CallHold.START) startCallHold(now);
+        else if(edge==CallHold.END) { Log.i("WizardAudio","call ended mode="+mode); main.removeCallbacks(callOver); main.postDelayed(callOver, CallHold.RESUME_DELAY_MS); }
+        watchMode();
+    }
+    private void startCallHold(long now) {
+        main.removeCallbacks(callOver);
+        if(!userWant && calls.ringTookIt(now, generation, currentItem())) userWant=true;
+        if(userWant && player.getMediaItemCount()>0 && !calls.holding()) calls.hold(generation, currentItem());
+        Log.i("WizardAudio","call started mode="+calls.mode()+" held="+calls.holding());
+        if(calls.holding()) {
+            saveProgress(false);
+            // Pause abandons the audio focus; stop releases the audio track and wake lock but keeps queue and place.
+            player.pause(); player.stop();
+        }
+        transportActive=userWant && player.getMediaItemCount()>0;
+    }
+    private final Runnable callOver = () -> {
+        if(destroyed || player==null) return;
+        if(calls.inCall()) return; // another call began: its end decides
+        int mode=audioMode();
+        if(CallHold.telephony(mode) || CallHold.voip(mode)) { main.postDelayed(this.callOver, CallHold.RESUME_DELAY_MS); onMode(mode,false); return; }
+        boolean was=calls.holding();
+        boolean go=calls.release(userWant, generation, currentItem());
+        Log.i("WizardAudio","after call held="+was+" resume="+go);
+        if(go) { resumedFromCall=true; syncIntent(); }
+        else if(userWant) requestPlaying(false); // paused, stopped or something else loaded during the call: show it paused
+    };
+    // Android 11 and older have no mode listener: look once a second while something plays or waits for a call's end.
+    private final Runnable modePoll = () -> { if(!destroyed && player!=null) onMode(audioMode(), false); };
+    private void watchMode() {
+        if(modeListener!=null || destroyed || audio==null) return;
+        main.removeCallbacks(modePoll);
+        if(userWant || calls.holding() || calls.inCall()) main.postDelayed(modePoll, 1000);
     }
     private String refillKey = UUID.randomUUID().toString();
     @Override public void onCreate() {
@@ -62,6 +122,12 @@ public final class BackgroundAudioService extends MediaSessionService {
         player = new ExoPlayer.Builder(this).setMediaSourceFactory(new DefaultMediaSourceFactory(source))
             .setAudioAttributes(new AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MUSIC).build(), true)
             .setHandleAudioBecomingNoisy(true).setWakeMode(C.WAKE_MODE_NETWORK).setMaxSeekToPreviousPositionMs(4000).build();
+        audio=(AudioManager) getSystemService(Context.AUDIO_SERVICE);
+        if(audio!=null && Build.VERSION.SDK_INT>=31) {
+            try { modeListener=m -> onMode(m,false); audio.addOnModeChangedListener(main::post, modeListener); }
+            catch(RuntimeException e) { modeListener=null; }
+        }
+        calls.mode(audioMode(), false, SystemClock.elapsedRealtime());
         player.addListener(new Player.Listener() {
             @Override public void onEvents(Player p, Player.Events events) { transportActive=userWant && p.getMediaItemCount()>0; long d=p.getDuration(); if(d!=C.TIME_UNSET && d>0) lastDurationMs=d; }
             @Override public void onMediaItemTransition(@Nullable MediaItem item, int reason) {
@@ -73,9 +139,28 @@ public final class BackgroundAudioService extends MediaSessionService {
                 maybeRefill(); reportPlayed();
             }
             @Override public void onPlayWhenReadyChanged(boolean ready,int reason) {
-                if(!ready && (reason==Player.PLAY_WHEN_READY_CHANGE_REASON_AUDIO_BECOMING_NOISY || reason==Player.PLAY_WHEN_READY_CHANGE_REASON_AUDIO_FOCUS_LOSS)) { userWant=false; transportActive=false; }
+                if(ready || (reason!=Player.PLAY_WHEN_READY_CHANGE_REASON_AUDIO_BECOMING_NOISY && reason!=Player.PLAY_WHEN_READY_CHANGE_REASON_AUDIO_FOCUS_LOSS)) return;
+                long now=SystemClock.elapsedRealtime(); int mode=audioMode();
+                if(CallHold.callCaused(reason, mode, now, calls.callEndedAt())) {
+                    // A call took the audio (or the earphones switched profile for it): not the person's pause.
+                    Log.i("WizardAudio","call pause reason="+reason+" mode="+mode);
+                    if(CallHold.telephony(mode) || CallHold.voip(mode)) onMode(mode,true);
+                    else if(userWant) {
+                        // Just after a call: hold again and come back once Bluetooth has settled.
+                        if(!calls.holding()) calls.hold(generation, currentItem());
+                        main.removeCallbacks(callOver); main.postDelayed(callOver, CallHold.RESUME_DELAY_MS);
+                    }
+                    return;
+                }
+                userWant=false; transportActive=false; calls.realPause(reason, now, generation, currentItem());
             }
-            @Override public void onIsPlayingChanged(boolean playing) { if (playing) { failure=null; reportPlayed(); progressTick(); } else saveProgress(false); }
+            @Override public void onPlaybackSuppressionReasonChanged(int reason) {
+                // A ring or call took the focus for a while: in a voice-chat mode that makes it a call.
+                if(reason==Player.PLAYBACK_SUPPRESSION_REASON_TRANSIENT_AUDIO_FOCUS_LOSS) onMode(audioMode(),true);
+            }
+            @Override public void onIsPlayingChanged(boolean playing) {
+                if (playing) { failure=null; reportPlayed(); if(resumedFromCall) { resumedFromCall=false; saveProgress(false); } progressTick(); } else saveProgress(false);
+            }
             @Override public void onPlaybackStateChanged(int state) { if (state == Player.STATE_ENDED) { saveProgress(true); if(station==null) requestPlaying(false); else { advanceAfterRefill = true; maybeRefill(); } } }
             @Override public void onPlayerError(@NonNull PlaybackException e) {
                 error = "This track could not be played. Skipping."; failure=e; final String event = playEvent;
@@ -129,6 +214,7 @@ public final class BackgroundAudioService extends MediaSessionService {
     @Override public void onDestroy() {
 
         destroyed = true; live = null; main.removeCallbacksAndMessages(null); saveReports();
+        if(audio!=null && modeListener!=null && Build.VERSION.SDK_INT>=31) { try { audio.removeOnModeChangedListener(modeListener); } catch(RuntimeException ignored) { } }
         if (session != null) session.release(); if (player != null) player.release(); net.shutdownNow(); artwork.shutdownNow(); super.onDestroy();
     }
     private PendingIntent activity(String app) {
