@@ -135,7 +135,7 @@ const reopen = async (page, phone, sid) => { await openThread(page, phone, sid);
         if (EXPECT !== 'broken') assert.equal(entry.switchOn, SWITCH === 'on', 'switch state as asked');
         // A reply WITHOUT buttons: its thread markup, to compare on / off / main (renders exactly as today).
         await openThread(page, phone, 'qa-plain');
-        fs.writeFileSync(path.join(out, `plain-${stem}.html`), (await thread(page).locator('.ch-msgs').first().innerHTML()).replace(/ data-(at|mat|boom-at)="[^"]*"/g, '').replace(/\b1\d{12}(\.\d+)?\b/g, 'T').replace(/<time[^>]*>[^<]*<\/time>/g, '<time></time>'));
+        fs.writeFileSync(path.join(out, `plain-${stem}.html`), (await thread(page).locator('.ch-msgs').first().innerHTML()).replace(/ data-(at|mat|boom-at)="[^"]*"/g, '').replace(/1\d{12}(\.\d+)?/g, 'T').replace(/<time[^>]*>[^<]*<\/time>/g, '<time></time>'));
         await openThread(page, phone, 'qa-rb');
         entry.threadText = (await thread(page).innerText()).slice(0, 1500);
         if (EXPECT === 'broken' || SWITCH === 'off') {
