@@ -1211,3 +1211,9 @@ html[data-shell="desktop"][data-layout="ai-apps"] .aad-cview { position: relativ
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-cview[hidden],
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-scroll[hidden],
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-rlist[hidden] { display: none; }
+
+/* Running view in the AI apps sidebar (wizard-ux issue 1599, on for everyone; switch wizard/ai-apps-running removed): the
+ * sidebar's Chats pane fills the sidebar while it shows the Running view, as it does for Sent; the sidebar's own rows step aside. */
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-chan:has(> .ch-side-run) { flex: 1; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-panel:has(> .aad-chan:not([hidden]) > .ch-side-run) > .aad-scroll { display: none; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-panel > .aad-chan .ch-list.ch-side.ch-side-run > .ch-scroll { display: block; flex: 1; min-height: 0; overflow-y: auto; }
