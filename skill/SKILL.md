@@ -190,7 +190,6 @@ Settings › Appearance › Try new features lists unfinished features to try, A
 - **Phone Chats: one bar and a view switcher on the Chats tile**: Phone Chats: one bar; tap Chats again or the title to switch views.
 - **Phone media player for Music and Podcasts**: Android and iPhone: Music and Podcasts play through the phone's media player (lock screen, Control Center, headset buttons), and keep playing locked.
 - **Phone recovery mode**: Android: a frozen start reopens in recovery mode.
-- **Phone tester builds**: Phones get the newest tester build.
 - **Private first setup**: New installs start private: Welcome leads with Tinfoil; Claude and ChatGPT are optional extras.
 - **Private mode switch-over**: Settings › Privacy: Private mode, Privacy check.
 - **Private routing**: Orb opens the named agent's thread; a chip moves it.
