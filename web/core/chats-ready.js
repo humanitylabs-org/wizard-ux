@@ -52,7 +52,7 @@ window.WizCore.chatsParts.ready = function ({ actNeeds, actUnread, CH, chanAt, e
     const st = L?.sentLog?.state?.();
     // Smart inbox (wizard-ux issue 1883, switch wizard/smart-inbox): placeOf's smart rule (only what blocks him is Inbox).
     let smart = false; try { smart = !!M.smartInboxOn?.(document.documentElement.dataset.tweaks); } catch (_) {}
-    return { sent: M.sentIndex(st?.ok ? st.rows : []), quiet: s => !!L?.quietReply?.(s), held: s => !!globalThis.WizReach?.restartHeld?.(s), ...(smart ? { smart } : {}) };
+    return { sent: M.sentIndex(st?.ok ? st.rows : []), quiet: s => !!L?.quietReply?.(s), held: s => !!globalThis.WizReach?.restartHeld?.(s), ...(smart ? { smart, pinned: s => s?.hermesPinned === true || s?.pinned === true || !!window.WosChatPins?.has?.(s?.id) } : {}) }; // pinned: issue 1927
   }
   /* What the Inbox shows right now: its thread ids plus, with Inbox rows, the waiting background tasks (thread and record
    * ids). The Sent tab leaves those out (WizChatsListModel.sentShown), so the two lists can't disagree. Null when off. */
