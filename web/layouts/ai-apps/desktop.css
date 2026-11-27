@@ -1014,6 +1014,12 @@ html[data-shell="desktop"][data-layout="ai-apps"] .aad-chan { position: relative
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-chan[hidden] { display: none; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-chan:has(.ch-side-chan, .ch-side-feed) { flex: 1; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-panel:has(.aad-chan:not([hidden]) :is(.ch-side-chan, .ch-side-feed)) > .aad-scroll { display: none; }
+/* The pane's own Chats list (wizard-ux issue 1966: the phone's title bar, rows, folds and tabs, one design) fills the
+ * sidebar above the gear and + row, in place of the sidebar's rows; its title bar has the search, so the header's ⌥K
+ * icon steps aside (⌥K opens the title bar's field). Nothing here restyles the list itself. */
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-chan:has(> .ch-list:not(.ch-side)) { flex: 1; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-panel:has(.aad-chan:not([hidden]) > .ch-list:not(.ch-side)) > .aad-scroll { display: none; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-panel:has(.aad-chan:not([hidden]) > .ch-list:not(.ch-side)) .aad-find { display: none; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-chan .ch-list { position: relative; inset: auto; flex: 1; min-height: 0; background: none; box-shadow: none; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-chan .ch-side:not(.ch-side-chan):not(.ch-side-feed) > .ch-scroll { display: none; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-chan .ch-list .ch-scroll { padding: 2px 8px 12px; scrollbar-width: thin; }

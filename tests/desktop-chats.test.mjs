@@ -38,10 +38,15 @@ test('phone, no switch: compact rows, and a saved draft keeps the core 40 px for
   assert.notEqual(paddingRight(cascade(doc.querySelector('[data-chopen]'), sheets)), '12px');
 });
 
-// static-rule: every rule in the stylesheet is scoped to the phone shell, and no rule still waits for the switch
-test('desktop is unchanged: every rule is phone-only; nothing reads the old switch', () => {
-  for (const sel of css.replace(/\/\*[^]*?\*\//g, '').split('}').map(b => b.split('{')[0].trim()).filter(s => s && !s.startsWith('@')))
-    for (const part of sel.split(',')) assert.match(part.trim(), /^html:root\[data-shell="phone"\]/, part);
+// static-rule: every rule in the stylesheet is scoped to the phone shell or, as its twin, to the AI apps sidebar's Chats
+// pane (wizard-ux issue 1966: the same list, one design), never the Classic desktop; no rule still waits for the switch
+test('Classic desktop is unchanged: every rule is the phone\'s, each with its AI apps pane twin; nothing reads the old switch', () => {
+  const TWIN = 'html:root[data-layout="ai-apps"]:where([data-shell="desktop"]) :where(.aad-chan)';
+  for (const sel of css.replace(/\/\*[^]*?\*\//g, '').split('}').map(b => b.split('{')[0].trim()).filter(s => s && !s.startsWith('@'))) {
+    const parts = sel.split(',').map(x => x.trim()), phone = parts.filter(x => x.startsWith('html:root[data-shell="phone"]')), twins = parts.filter(x => x.startsWith(TWIN));
+    assert.equal(phone.length + twins.length, parts.length, sel);
+    assert.deepEqual(twins, phone.map(x => TWIN + x.slice('html:root[data-shell="phone"]'.length)), 'each phone rule has its pane twin: ' + sel);
+  }
   for (const f of ['web/core/desktop-chats.css', 'web/core/chats.css']) assert.doesNotMatch(read(f), /data-tweaks~="wizard\/desktop-chats"/, f);
 });
 

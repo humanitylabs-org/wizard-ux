@@ -233,7 +233,7 @@ window.WizCore.chatsParts.sent = function ({ agentName, agentRec, ago, AGS, ch, 
   const TB_TITLE = { inbox: 'Inbox', tags: 'Tags', sent: 'Sent' };
   // The tab this list's title bar names, or '' (not the main agent's tabbed list).
   function titleBarTab(w) {
-    return sentTabsOn(w) && !(typeof chanSide === 'function' && chanSide(w)) ? sentTab(w) : '';
+    return sentTabsOn(w) ? sentTab(w) : ''; // the AI apps sidebar pane too (wizard-ux issue 1966), as its tabs
   }
   const TB_FIND_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>';
   const TB_FILT_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M7 12h10M10 18h4"/></svg>';
@@ -258,7 +258,7 @@ window.WizCore.chatsParts.sent = function ({ agentName, agentRec, ago, AGS, ch, 
     try { if (!window.WizCore?.chatsSwitcher?.on?.()) return false; } catch (_) { return false; }
     // The main agent's own list (an agent's list opened from the sheet focuses that agent, but is still this window).
     const o = w ? (W[owner(w.id)] || w) : null;
-    return !w || (!o?.agent && !!LIVE.sentLog && !(typeof chanSide === 'function' && chanSide(w)));
+    return !w || (!o?.agent && !!LIVE.sentLog && !(typeof chanSide === 'function' && chanSide(w) && !(typeof chanElsewhere === 'function' && chanElsewhere(w))));
   }
   const CS_CHEV = '<svg class="ch-tbar-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg>';
   // The title as the switcher's button: the view's name (html), its count, the ▾.

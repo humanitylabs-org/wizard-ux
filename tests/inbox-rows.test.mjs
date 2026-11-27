@@ -125,7 +125,7 @@ test('agent inbox reader: a box without the agent inbox (404) is an empty list',
 });
 
 /* The real chats-inboxrows.js part, drawn and tapped. */
-function part({ tweaks = 'wizard/desktop-chats', records = [] } = {}) {
+function part({ tweaks = 'wizard/desktop-chats', records = [], cur = '' } = {}) {
   const taps = [], archived = [];
   const ctx = vm.createContext({ console, Date, Promise, String, Number, Set, Map, Array, Object, JSON, setTimeout });
   ctx.window = ctx; ctx.globalThis = ctx;
@@ -145,7 +145,7 @@ function part({ tweaks = 'wizard/desktop-chats', records = [] } = {}) {
     actMark: s => s.status === 'running' ? 'working' : needs(s) ? 'needs' : unread(s) ? 'new' : '', actNeeds: needs, actUnread: unread,
     AGS: () => ({ sigil: a => `<span class="ag-sig">${a.id}</span>`, defaultId: () => 'hermes' }), agentName: id => id || 'Wizard', agentRec: id => ({ id }),
     ago: t => t ? 'ago' : '', attOf: s => s.attention || null, chanAt: s => s.at, chanFace: n => { const m = /^(\p{Extended_Pictographic}\uFE0F?)\s*(.*)$/u.exec(n); return m ? { emoji: m[1], label: m[2], own: true } : { emoji: '💬', label: n, own: false }; },
-    chanStore: () => ({ channels: [{ id: 'daily', kind: 'daily' }] }), chatVars: { readyOrder: 'newest', secOpen: {} }, ch: () => ({}), clip: (s, n) => String(s).slice(0, n), elOf: () => null, esc,
+    chanStore: () => ({ channels: [{ id: 'daily', kind: 'daily' }] }), chatVars: { readyOrder: 'newest', secOpen: {}, rowCur: cur }, ch: () => ({}), clip: (s, n) => String(s).slice(0, n), elOf: () => null, esc,
     isWorking: s => s.status === 'running', LIVE, noteAt: n => n.at, noteRow: n => `<div class="note" data-chnotif="${n.id}"></div>`, renderChatList: () => {}, rowAgent: s => s.agent || 'hermes',
     spacesOf: id => spaces[id] || [], threadAct: (wid, sid, a) => taps.push([wid, sid, a]), toast: () => {}, W: {}, winAgent: () => '',
   });
@@ -200,4 +200,15 @@ test('renderer: no switch: the same rows with any or no data-tweaks, and a saved
   const { api, taps } = part({ tweaks: undefined });
   assert.equal(api.inboxRowsClick({ target: { closest: sel => sel === '[data-chibarch]' ? { dataset: { chibarch: 'x' } } : null } }, { id: 'w' }), true, 'a row\'s Archive is always handled');
   assert.deepEqual(taps, [['w', 'x', 'done']]);
+});
+
+// wizard-ux issue 1966: in the AI apps sidebar pane the list sits beside the open thread, so that thread's row is marked
+// current (the shared row, as the sidebar's own rows were); listpaint sets chatVars.rowCur only for that pane.
+test('renderer: the thread open beside the list is the current row (aria-current), only that one; none when nothing is open', () => {
+  const { api, rows } = part({ cur: 'read1' });
+  const r = rowsOf(api.inboxRowsBody({ id: 'w' }, rows, { awake: [], later: [] }));
+  assert.deepEqual(r.filter(x => /aria-current="page"/.test(x.body)).map(x => x.id), ['read1']);
+  const none = part();
+  assert.doesNotMatch(none.api.inboxRowsBody({ id: 'w' }, none.rows, { awake: [], later: [] }), /aria-current|ch-ib-wrap cur/);
+  // (which list sets it, the pane beside the thread, is proven in a real browser: tests/qa-chats-shell-parity.cjs)
 });

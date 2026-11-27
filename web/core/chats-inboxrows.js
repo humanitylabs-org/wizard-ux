@@ -134,8 +134,9 @@ window.WizCore.chatsParts.inboxrows = function ({ actMark, actNeeds, actUnread, 
    * part comes in as HTML the caller escaped: `key` the morph key, `wrap` / `cls` extra classes, `open` the row button's
    * attributes, `tip` its title, `av` the avatar, `from` the sender, `time`, `title`, `mark`, `line` the one line under
    * the title, `after` what follows the row button (Archive). */
-  function ibRow({ key, wrap = '', cls = '', open, tip, av, from, pin = 0, time, title, mark, line, after = '' }) {
-    return `<div class="ch-row-wrap ch-ib-wrap${wrap}" data-morph-key="${key}"><button type="button" data-part="thread-row" class="ch-row ch-ib-row${cls}" ${open} title="${tip}">${av}`
+  // `cur`: the thread open beside this list (the AI apps sidebar pane, wizard-ux issue 1966).
+  function ibRow({ key, wrap = '', cls = '', open, tip, av, from, pin = 0, time, title, mark, line, after = '', cur = false }) {
+    return `<div class="ch-row-wrap ch-ib-wrap${wrap}${cur ? ' cur' : ''}" data-morph-key="${key}"><button type="button" data-part="thread-row" class="ch-row ch-ib-row${cls}" ${open}${cur ? ' aria-current="page"' : ''} title="${tip}">${av}`
       + `<span class="ch-ib-bd"><span class="ch-ib-l1"><span class="ch-ib-from">${pin ? IB_PIN_MARK : ''}${from}</span><time>${time}</time></span>`
       + `<span class="ch-ib-l2"><b class="ch-ib-t">${title}</b>${mark}</span><span class="ch-ib-pv">${line}</span></span></button>`
       + `${after}</div>`;
@@ -151,7 +152,7 @@ window.WizCore.chatsParts.inboxrows = function ({ actMark, actNeeds, actUnread, 
       av: f.av, from: esc(f.from), pin, time: esc(ago(LIVE.cardAt(s))), title: esc(s.title || 'New chat'), mark: ibMark(m),
       // A saved, unsent draft says "✎ Draft" ahead of the line (wizard-ux issues 1445, 1604), as every Chats row does.
       line: (typeof draftTag === 'function' ? draftTag(s) : '') + esc(clip(ibLine(s), 160)),
-      after: `<button type="button" class="ch-ib-arch" data-chibarch="${esc(s.id)}" aria-label="Archive: ${esc(s.title || 'New chat')}" title="Archive">${IB_ARCH_SVG}</button>` });
+      after: `<button type="button" class="ch-ib-arch" data-chibarch="${esc(s.id)}" aria-label="Archive: ${esc(s.title || 'New chat')}" title="Archive">${IB_ARCH_SVG}</button>`, cur: !!chatVars.rowCur && chatVars.rowCur === s.id });
   }
   function ibRecRow(r) {
     return ibRow({ key: `ibrec:${esc(r.id)}`, cls: ' needs', open: `data-chrunopen="${esc(r.thread)}"`, tip: 'Open thread', av: ibSig(r.agent),

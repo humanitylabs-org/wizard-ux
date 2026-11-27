@@ -110,10 +110,12 @@ function sidebar() {
 const words = sc => sc.all().filter(n => n.cls === 'aad-sec-w').map(n => n.textContent);
 const rws = sc => sc.all().filter(n => n.cls === 'aad-rw').map(n => n.textContent);
 
-test('AI apps desktop sidebar: Working on top, then Inbox, Snoozed, Archived; every thread in Inbox with its marks', () => {
+// wizard-ux issue 1966: the sidebar's Working, Inbox, Snoozed and Archived are the pane's shared Chats list (the phone's,
+// tests/qa-chats-shell-parity.cjs), so the layout itself draws no sections or rows for them.
+test('AI apps desktop sidebar: Working, Inbox, Snoozed and Archived are the shared list, never sections of the sidebar\'s own', () => {
   const on = sidebar();
-  assert.deepEqual(words(on.scroll), ['Working', 'Inbox', 'Snoozed', 'Archived']);
-  assert.deepEqual(rws(on.scroll), ['w1:working', 'w2:working', 'g1:new', 'r1', 'y1:needs', 'r2', 'old']);
+  assert.deepEqual(words(on.scroll), []);
+  assert.deepEqual(rws(on.scroll), []);
   assert.equal(on.scroll.all().filter(n => n.cls === 'aad-more-older').length, 0, 'no Show older');
 });
 

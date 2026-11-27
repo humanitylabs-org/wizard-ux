@@ -438,7 +438,7 @@ test('AI apps sidebar lists: held rows move to `saved` (kind saved, no spinner m
   assert.equal('saved' in M.activityList(groups, hold([])), false);
   const desk = read('layouts/ai-apps/desktop.js');
   assert.match(desk, /function savedSec\(rows, cur\)/);
-  assert.equal((desk.match(/out\.push\(\.\.\.savedSec\(s\.saved, h\.thread\)\)/g) || []).length, 2, 'Activity and the stock sidebar both draw it');
+  assert.equal((desk.match(/out\.push\(\.\.\.savedSec\(s\.saved, h\.thread\)\)/g) || []).length, 1, 'the stock sidebar draws it; Activity is the pane\'s shared Chats list (wizard-ux issue 1966)');
   // Its search and titles find a held chat too (Codex P2): the sidebar's search lists include `saved`.
   assert.match(desk, /const LKINDS = \[\.\.\.KINDS, 'saved'\];/);
   // The Working filter (Chats' status filter) leaves held sends out, as the Working heading does (Codex P2).

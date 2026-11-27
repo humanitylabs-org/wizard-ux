@@ -79,7 +79,7 @@ async function interaction(p, row) {
   if (app.id === 'qa-editor' || app.id === 'qa-notes') await f.locator('input').focus({ timeout: 7000 });
   else await f.locator('input').click({ timeout: 7000 });
   await f.evaluate(() => fixturePulse());
-  await p.locator('.aad-scroll .aad-row').first().click({ timeout: 7000 });
+  await p.locator('.aad-chan .ch-row[data-chopen]').first().click({ timeout: 7000 }); // (a shared Chats row: wizard-ux issue 1966)
   await p.locator('.ch-compose textarea').first().focus({ timeout: 7000 });
   if (i === 4 || i === 9) {
    const skin = i === 4 ? 'novairecito' : 'nebula';
@@ -153,7 +153,8 @@ async function interaction(p, row) {
      // Classic chrome (menubar, windows, chat panes, skeleton rows) drawn before the AI apps sidebar is (issue 1556)
      const side = document.querySelector('.aad-side');
      if (document.documentElement.dataset.layout === 'ai-apps' && !(side && drawn(side))) for (const n of document.querySelectorAll('#bar,#logo,#wsList,.win,[data-chats],.pane-list,.pane-main,.ch-skel,.ch-row')) if (drawn(n) && __legacy.chrome.length < 50) __legacy.chrome.push({ why, id: n.id, cls: String(n.className), t: Math.round(performance.now()) });
-     __legacy.rows = Math.max(__legacy.rows, document.querySelectorAll('.ch-row').length);
+     // (the sidebar's Chats pane draws the shared list's rows since wizard-ux issue 1966: those are the layout's, not Classic)
+     __legacy.rows = Math.max(__legacy.rows, [...document.querySelectorAll('.ch-row')].filter(n => !n.closest('.aad-chan')).length);
      const ph = document.readyState + (document.documentElement.dataset.layout ? '+' + document.documentElement.dataset.layout : '');
      if (__legacy.phases.at(-1) !== ph) __legacy.phases.push(ph);
      const state = JSON.stringify({ layout: document.documentElement.dataset.layout || null, owner: document.documentElement.dataset.chatsOwner || null, booting: document.documentElement.hasAttribute('data-layout-booting'), state: window.WosSkinHost?.layoutState });
@@ -225,7 +226,7 @@ async function interaction(p, row) {
        assert.deepEqual(res.chrome, [], 'no Classic chrome drawn before the AI apps sidebar');
        if (realistic) {
         await p.locator('.aad-side').waitFor({ state: 'visible' });
-        await p.locator('.aad-scroll .aad-row').first().waitFor({ state: 'visible' });
+        await p.locator('.aad-chan .ch-row[data-chopen]').first().waitFor({ state: 'visible' }); // the sidebar's shared Chats rows (wizard-ux issue 1966)
         assert.equal(await p.locator('#wsList').count(), 1, 'Classic workspace menu exists for the negative oracle');
         assert.equal(await p.locator('#wsList').isVisible(), false, 'Classic workspace menubar is not visible');
         assert.equal(await p.locator('#logo').isVisible(), false, 'Classic Home menubar button is not visible');
