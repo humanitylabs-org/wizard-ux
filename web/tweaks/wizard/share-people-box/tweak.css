@@ -1,2 +1,0 @@
-/* Share to people in any window (wizard-ux issue 1627): no look of its own; core/share-sheet.js reads the switch. */
-html[data-tweaks~="wizard/share-people-box"] .wos-share { --shs-people-box: 1; }

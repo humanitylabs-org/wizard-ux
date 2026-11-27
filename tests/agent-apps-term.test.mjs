@@ -62,7 +62,7 @@ test('share sheet: People → Apps → Other apps', () => {
     WizAppServices: { claimShare: () => true }, WizOpenApp: () => true, dispatchEvent() {} };
   const document = { body: { appendChild() {} }, createElement() { el = { style: {}, classList: { add() {}, remove() {} }, setAttribute() {}, remove() {}, querySelector: () => null, addEventListener() {} }; return el; } };
   vm.runInNewContext(src('core/share-sheet.js'), { window, document, localStorage: { getItem: k => map.get(k), setItem: (k, v) => map.set(k, v) },
-    Date, File, Blob, URL, CustomEvent: class {}, requestAnimationFrame: f => f(), setTimeout: f => f() });
+    Date, File, Blob, URL, CustomEvent: class {}, requestAnimationFrame: f => f(), setTimeout: f => f(), clearTimeout: () => {} });
   window.WosShareSheet.show({ text: 'Synthetic' }, () => 'unsupported');
   const seen = words(el.innerHTML);
   const at = w => seen.indexOf(w);

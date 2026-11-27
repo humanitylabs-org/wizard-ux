@@ -93,7 +93,7 @@ window.WizCore.chatsParts.spaces = function ({ chanTags, actNeeds, actUnread, in
     else saved = await LIVE.prefOps([{ op: 'add', key: 'spaces', item: space }], { requireShared: true });
     if (!saved) { p.busy = false; p.error = SPACE.ch ? 'Couldn’t create channel. Try again.' : 'Couldn’t create space. Try again.'; if (chatVars.spacePicker === p) renderSpacePicker(); return; }
     if (chatVars.spacePicker === p) closeSpacePicker();
-    // Channel emoji from a model (issue 1605, switch wizard/channel-model-emoji): asked in the background, never awaited.
+    // Channel emoji from a model (issue 1605): asked in the background, never awaited.
     if (typeof chanModelEmoji === 'function' && SPACE.ch) chanModelEmoji(space.id, name, storeAgent(p.agent), agentRec(p.agent)?.privacy === 'private').catch(() => {});
     if (p.sid) return; // Row discovery creates a collection with this thread, never an agent run.
     const w = W[p.wid]; if (!w) return;
