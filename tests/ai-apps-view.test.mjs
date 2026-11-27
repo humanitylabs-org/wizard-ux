@@ -1038,8 +1038,7 @@ test('round 7 + 15 desktop: the app panel and the docked chat are back (Arc), ca
   assert.equal(w.q('.aad-ptop').hidden, false, 'its header'); assert.equal(w.q('.aad-ptop').parentNode, p.appDesk, 'riding on the app desk');
   assert.equal(style(w.html)('--aad-app-w'), 'var(--aad-pane-app-width)', 'the panel width feeds --aad-app-w');
   assert.equal(orb(), 'calc(var(--aad-side) + var(--aad-chat-w, 0px) + (100vw - var(--aad-side) - var(--aad-chat-w, 0px) - var(--aad-app-w, 0px) - var(--aad-rs)) / 2 - 30px)', 'the orb stays in the middle of the room left between the panels');
-  w.q('.aad-pw').dispatchEvent(new FakePointerEvent('click')); assert.equal(H.aadWide, '', 'Wider');
-  w.q('.aad-pw').dispatchEvent(new FakePointerEvent('click')); assert.equal(H.aadWide, undefined, 'and back');
+  assert.equal(w.q('.aad-pw'), null, 'no Wider ⤢ in the app panel\'s header (wizard-ux issue 1964, James: it did nothing beside Full / Half screen)');
   w.q('.aad-px').dispatchEvent(new FakePointerEvent('click')); w.run(); assert.equal(w.st.gone.at(-1), 1, '✕ hides the panel: back to the main Chats desk');
   // a thread docks beside the sidebar; another thread slides in from the left
   p.go({ view: 'thread', thread: 'r1', desk: 1 });
@@ -1343,7 +1342,7 @@ test('desktop app panel: an app\'s title-bar tools (Morning Report\'s ‹ date �
   w.st.renderTools = (frame, slot) => { asked.push(frame); slot.replaceChildren(...tools.map(t => { const b = node('button', 'tool'); b.textContent = t; return b; })); return tools.length > 0; };
   p.go({ view: 'desk', desk: 4 });
   const top = w.q('.aad-ptop'), slot = w.q('.aad-ptop .aad-ptools');
-  assert.deepEqual(top.children.map(c => c.className).filter(c => !/aad-modes/.test(c)), ['aad-pti', 'aad-ptn', 'aad-ptools', 'aad-ib aad-pw', 'aad-ib aad-px'], 'round 15: icon, name, the tools, then Wider and ✕ in the app panel\'s header');
+  assert.deepEqual(top.children.map(c => c.className).filter(c => !/aad-modes/.test(c)), ['aad-pti', 'aad-ptn', 'aad-ptools', 'aad-ib aad-px'], 'round 15: icon, name, the tools, then Hide in the app panel\'s header (issue 1964: no Wider)');
   assert.equal(slot.hidden, true, 'no tools yet: the slot is hidden'); assert.ok(asked.includes(p.appWins[0].querySelector('iframe')), 'the shared host renderer is asked for the panel window\'s frame');
   tools = ['‹', 'Today', '›', 'PDF']; w.st.hostChanged(); w.run(); await settle();
   assert.equal(slot.hidden, false, 'a late registration shows up (the host lifecycle)'); assert.deepEqual(slot.children.map(b => b.textContent), ['‹', 'Today', '›', 'PDF']);
@@ -2472,7 +2471,7 @@ test('round 20 item 1 / round 21: ⌥H Home folds both sides away, closes the ch
   assert.equal(xw.st.opened.at(-1), 'thread:r2', '⌥↓ from the docked chat (r1) opens the next one');
   xw.st.route = { home: false, view: 'desk', thread: null, desk: 4 }; xw.emit('route', xw.st.route); xw.run();
   const xk = x.keys[1];
-  xk.down({ altKey: true, code: 'KeyF' }); xw.run(); assert.equal(xw.html.dataset.aadWide, '', 'wide (⌥F)');
+  xk.down({ altKey: true, code: 'KeyF' }); xw.run(); assert.equal(xw.html.dataset.aadWide, undefined, '⌥F no longer flips the panel wide (wizard-ux issue 1964)');
   const g = xw.q('.aad-grip[data-grip="side"]'); g.dispatchEvent(new FakePointerEvent('keydown', { key: 'ArrowRight' })); const sideW = xw.html.style.getPropertyValue('--aad-side-w'); assert.equal(sideW, '304px');
   const thread0 = xw.st.opened.at(-1); assert.equal(xw.html.dataset.aadChat, 'on');
   xk.down({ altKey: true, code: 'KeyH' }); xw.run();
@@ -2483,7 +2482,7 @@ test('round 20 item 1 / round 21: ⌥H Home folds both sides away, closes the ch
   assert.equal(xw.html.dataset.aadFocus, undefined);
   assert.deepEqual(xw.st.opened.slice(opened), [thread0], 'the chat that was docked opened again');
   assert.ok(xw.st.gone.slice(gone).includes(4), 'the app back on its desk');
-  assert.equal(xw.html.dataset.aadWide, '', 'wide again'); assert.equal(xw.html.style.getPropertyValue('--aad-side-w'), sideW, 'the widths as they were');
+  assert.equal(xw.html.dataset.aadWide, undefined, 'as narrow as it was'); assert.equal(xw.html.style.getPropertyValue('--aad-side-w'), sideW, 'the widths as they were');
 });
 
 test('round 20 item 9 / round 22 (Activity since issue 1258): Ready is one list in the chosen Sort (each row its time since the last message, no status tags), never status groups', async t => {
@@ -3225,11 +3224,10 @@ test('desktop app panel: an app with its companion pane (Video Editor video + Fe
   assert.equal(H.aadWide, undefined, 'and goes back to the side when the companion closes');
   assert.equal(style(app)('inset'), '0', 'a single window still fills the panel');
   assert.ok(twoPx > parseFloat(w.html.style['--aad-app-px']), `the panel was wider for two columns (${twoPx}px), and returns after`);
-  // the owner's own Wider / Back press wins over the automatic one
+  // the companion again: wide again, with no button for it in the header (wizard-ux issue 1964)
   side.className = 'win'; w.st.hostChanged(); w.run(); await settle(); assert.equal(H.aadWide, '', 'the companion again: wide');
-  w.q('.aad-pw').dispatchEvent(new FakePointerEvent('click')); assert.equal(H.aadWide, undefined, 'Back pressed');
-  side.className = 'win gone'; w.st.hostChanged(); w.run(); await settle(); assert.equal(H.aadWide, undefined);
-  side.className = 'win'; w.st.hostChanged(); w.run(); await settle();
+  assert.equal(w.q('.aad-pw'), null, 'automatic, no Wider button');
+  side.className = 'win gone'; w.st.hostChanged(); w.run(); await settle(); assert.equal(H.aadWide, undefined, 'and back');
 });
 
 test('desktop open chat stays on the same thread through Ready → Working → Ready and Archive', async () => {

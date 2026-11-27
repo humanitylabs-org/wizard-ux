@@ -100,9 +100,8 @@ export function sidetabsPart({ aadVars, actOn, api, el, flip, foot, head, icon, 
   const pTop = el('div', 'aad-ptop'); pTop.hidden = true;
   const pIcon = el('span', 'aad-pti'), pName = el('span', 'aad-ptn');
   const pTools = el('span', 'aad-ptools'); pTools.hidden = true;
-  const pW = el('button', 'aad-ib aad-pw', { type: 'button' });
   const pX = el('button', 'aad-ib aad-px', { type: 'button', title: 'Hide (Esc) · it keeps running' }); pX.append(icon('hide'));
-  pTop.append(pIcon, pName, pTools, pW, pX);
+  pTop.append(pIcon, pName, pTools, pX);
   const sTop = el('div', 'aad-stop'), sName = el('span', 'aad-ptn'); sTop.hidden = true;
   sTop.append(sName);
   api.listen(sTop, 'mousedown', e => e.preventDefault()); // like the app bar: never takes the keyboard itself
@@ -115,5 +114,5 @@ export function sidetabsPart({ aadVars, actOn, api, el, flip, foot, head, icon, 
     // Only mode/focus change: the tiled ratios, slots and rail sizes stay saved.
     flip([aadVars.dockEl, aadVars.pane?.el, aadVars.secondEl], () => panes.set({ mode, focus: slot }));
   }
-  return { cBack, chanTitle, cTop, cX, FEED, feedBox, feedOn, modeBars, oneBack, paintAgents, paintChan, paintView, pIcon, pName, pTools, pTop, pW, pX, rFind, rList, rNew, rSet, rTog, rWs, shade, sName, sTop, top, tt, windowMode, bindLate: v => { if ('paintList' in v) paintList = v.paintList; if ('paintRail' in v) paintRail = v.paintRail; if ('paintTop' in v) paintTop = v.paintTop; } };
+  return { cBack, chanTitle, cTop, cX, FEED, feedBox, feedOn, modeBars, oneBack, paintAgents, paintChan, paintView, pIcon, pName, pTools, pTop, pX, rFind, rList, rNew, rSet, rTog, rWs, shade, sName, sTop, top, tt, windowMode, bindLate: v => { if ('paintList' in v) paintList = v.paintList; if ('paintRail' in v) paintRail = v.paintRail; if ('paintTop' in v) paintTop = v.paintTop; } };
 }

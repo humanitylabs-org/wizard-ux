@@ -1078,7 +1078,7 @@ html[data-shell="desktop"][data-layout="ai-apps"][data-aad-side="full"] :is(.aad
 html[data-shell="desktop"][data-layout="ai-apps"][data-aad-side="full"] :is(.aad-top, #bar) { visibility: hidden; }
 html[data-shell="desktop"][data-layout="ai-apps"][data-aad-side="full"]:not([data-aad-tabs="bar"]) .aad-orb { visibility: hidden; }
 html[data-shell="desktop"][data-layout="ai-apps"][data-aad-side="full"] #stage > .wsp:not([data-aad-role="app"]) { visibility: hidden; }
-html[data-shell="desktop"][data-layout="ai-apps"][data-aad-one] :is(.aad-modes, .aad-pw, .aad-tog, .aad-rtog, .aad-grip[data-grip="side"], .aad-grip[data-grip="app"]) { display: none !important; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-one] :is(.aad-modes, .aad-tog, .aad-rtog, .aad-grip[data-grip="side"], .aad-grip[data-grip="app"]) { display: none !important; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-vone { flex: none; display: flex; flex-direction: column; padding: 2px 8px 0; box-sizing: border-box; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-vone[hidden] { display: none; }
 html[data-shell="desktop"][data-layout="ai-apps"][data-aad-tabs="rail"] .aad-vone { align-items: center; padding: 2px 0 0; }

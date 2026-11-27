@@ -89,7 +89,7 @@ test('inside the Mac app the chat and app panel header buttons get click-through
     const doc = page({ 'data-shell': 'desktop', 'data-layout': 'ai-apps', ...(chrome ? { 'data-native-chrome': chrome } : {}) }, '<header id="bar"></header><div class="top"></div>');
     const el = (tag, cls, attrs = {}) => { const n = doc.createElement(tag); if (cls) n.className = cls; for (const [k, v] of Object.entries(attrs)) if (v != null) n.setAttribute(k, v); return n; };
     const head = cls => { const h = el('div', cls); const b = el('button', 'aad-ib ' + cls + '-x'); h.append(b); return h; };
-    const cTop = head('aad-ctop'), pTop = head('aad-ptop'), sTop = head('aad-stop'), cX = cTop.firstChild, pW = pTop.firstChild;
+    const cTop = head('aad-ctop'), pTop = head('aad-ptop'), sTop = head('aad-stop'), cX = cTop.firstChild, pX = pTop.firstChild;
     const top = doc.querySelector('.top'); top.append(sTop);
     Object.assign(doc.querySelector('#bar'), { clientLeft: 0, clientTop: 0 });
     // Layout: #bar spans the top 40 px; every header button is 30 x 24 at its own x, and is drawn.
@@ -101,7 +101,7 @@ test('inside the Mac app the chat and app panel header buttons get click-through
       const x = 100 * (doc.querySelectorAll('button').indexOf(this) + 1); return { left: x, top: 8, right: x + 30, bottom: 32, width: 30, height: 24 };
     };
     const frames = [], api = { listen() {}, frame: f => frames.push(f) };
-    const { macHoles } = modesPart({ aadVars: {}, api, cTop, cX, doc, el, icon: () => el('i', 'ic'), MODE_KEYS: {}, MODE_LABELS: {}, modeBars: [], pTop, pW, root: doc.documentElement, sTop, toggleSide() {}, top, windowMode() {} });
+    const { macHoles } = modesPart({ aadVars: {}, api, cTop, cX, doc, el, icon: () => el('i', 'ic'), MODE_KEYS: {}, MODE_LABELS: {}, modeBars: [], pTop, pX, root: doc.documentElement, sTop, toggleSide() {}, top, windowMode() {} });
     while (frames.length) frames.shift()();
     return { doc, macHoles, frames };
   };
