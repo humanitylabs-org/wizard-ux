@@ -24,7 +24,7 @@ Back: `WizEscapeBack`, `WosBack`; `WizChatsHost.registerBack`/back.push share re
 | Back in app; leave on dismiss | `WizardApp.back.register/push`, `nav.back/onHome`; `WizOpenApp(id,path)` validates repair app URL + origin |
 | Skin/tokens/mode | `WizardApp.theme.get/onChange`, `--wz-*` (`--wz-owner-message`); fresh: `view.onRefresh` |
 | Native Android skin | `WizardLook` (`android/app/src/main/java/ai/wizards/os/WizardLook.java`): saved roles, Nebula fallback |
-| Connect | `ReachScreen/ReachPolicy/TailscaleGuide` (a fast failure with Tailscale on retries quietly until give-up: `ReachPolicy.retryQuietly`), `ConnectActivity/ServerSettings`; web `WizReach` (help/check/direct, sandboxed; pill/auto-open) |
+| Connect | `ReachScreen/ReachPolicy/TailscaleGuide` (retry), `ConnectActivity/ServerSettings`; web `WizReach` (help/check/direct, sandbox; pill/auto-open) |
 | Switch/edit Wizards | `WizardSwitch` via `WizardOSNative.switchWizard`, from `WizWorkspaces` (+move/restore) |
 | Refuse an Android Wizard switch while work is unfinished | `ServerSwitchGuard` (`android/app/src/main/java/ai/wizards/os/ServerSwitchGuard.java`) |
 | Transcribe audio | `WizardApp.voice.transcribe(blob, {language})` → `{text}`/`{unavailable:true}`; verified frame, 25 MB; `WizConfig.transcribe` (rechecks) |
