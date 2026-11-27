@@ -62,6 +62,8 @@ for(const id of ['qa_s_live','qa_s_old','qa_r_live','qa_r_old']){
 const fixture={base:ORIGIN,responses:Object.fromEntries(Object.entries(bodies).flatMap(([p,body])=>['GET','HEAD','OPTIONS'].map(method=>[method+' '+p,{status:200,body:JSON.stringify(body)}])))};
 // These proofs have no owner Look file: explicitly absent, never a pretend sync success.
 for(const method of ['GET','HEAD','OPTIONS'])fixture.responses[method+' /wizard/v1/pages/wizard-look/look.json']={status:403,body:JSON.stringify({error:'fixture_look_unavailable'})};
+// Nor a share-people file (wizard-ux issue 1627): explicitly absent, so the share sheet keeps to this browser's own list and never writes.
+for(const method of ['GET','HEAD','OPTIONS'])fixture.responses[method+' /wizard/v1/pages/wizard-share/people.json']={status:403,body:JSON.stringify({error:'fixture_share_people_unavailable'})};
 fixture.responses['PUT /wizard/thread-seen']={status:200,body:JSON.stringify(bodies['/wizard/thread-seen'])};
 fixture.responses['PUT /wizard/thread-dispositions']={status:200,body:JSON.stringify(bodies['/wizard/thread-dispositions'])};
 // Writes: synthetic in-memory answers only. Nothing is forwarded and nothing persists past the response.
