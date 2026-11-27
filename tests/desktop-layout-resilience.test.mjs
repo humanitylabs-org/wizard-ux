@@ -47,7 +47,7 @@ test('tweak disposal never writes the layout diagnostic', async () => {
   const f = fixture(); await f.host.whenLayoutReady();
   assert.equal(f.lsMap.has(key), false, 'Classic has no layout module; it is not a load failure');
   f.host._test.setImporter(async () => ({ default: () => () => {} }));
-  await f.mount('wizard/sent-rows'); assert.ok(f.host.tweakState.includes('wizard/sent-rows'), JSON.stringify(f.toasts)); await f.clear();
+  await f.mount('wizard/sent-threads'); assert.ok(f.host.tweakState.includes('wizard/sent-threads'), JSON.stringify(f.toasts)); await f.clear();
   assert.equal(f.lsMap.has(key), false);
 });
 
