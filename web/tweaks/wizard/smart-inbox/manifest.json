@@ -8,7 +8,8 @@
     "layout"
   ],
   "issues": [
-    "humanitylabs-org/wizard-ux#1883"
+    "humanitylabs-org/wizard-ux#1883",
+    "humanitylabs-org/wizard-agent-service#667"
   ],
-  "description": "Chats › Inbox holds only what can't go on without you: a needs-you that blocks, an approval, a failed run (with one line saying why) and answers you asked for. Everything else finishes in Sent, whoever started it: done, FYI and check-this asks, watches, schedules and helper results, a new chat's first message. Running chats are in Sent › Working. Unread alone never puts a chat in Inbox, and a chat is never in both."
+  "description": "Chats › Inbox holds only what can't go on without you: a needs-you that blocks, an approval, a failed run (with one line saying why) and answers you asked for. Everything else finishes in Sent, whoever started it: done, FYI and check-this asks, watches, schedules and helper results, a new chat's first message. Running chats are in Sent › Working. Unread alone never puts a chat in Inbox, and a chat is never in both. Your agents keep needs-you for real blockers, and their check-this asks wait in the agent inbox for catch me up."
 }
