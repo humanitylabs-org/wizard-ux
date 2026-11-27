@@ -34,9 +34,10 @@
    * wizard-ux issue 1567: wizard/phone-app-notifications, the Android app shows every app's notifications;
    * wizard-ux issue 1560: wizard/chat-app-switches, a reply's switch card always shows app switches;
    * wizard-ux issue 1818: wizard/clear-chat-notifications, dropped (issue 1276), no Android chat notification clearing;
+   * wizard-ux issue 1929: wizard/phone-sections, the phone bar is Home, Chats, orb, Messenger, Apps;
    * wizard-ux issue 1779: wizard/inbox-rows, Chats › Inbox is Signal-style rows of only what needs you): a saved on/off for one is
    * cleared from this device, once, so no stale choice is kept. */
-  const GONE = ['wizard/desktop-chats', 'wizard/app-panel-left', 'wizard/needs-you-reason', 'wizard/follow-main', 'wizard/app-tap-home', 'wizard/plain-chat-titles', 'wizard/graceful-restart', 'wizard/interface-manual', 'wizard/write-guard', 'wizard/sidebar-chats-view', 'wizard/action-cards', 'wizard/swap-sides', 'wizard/phone-app-notifications', 'wizard/chat-app-switches', 'wizard/clear-chat-notifications', 'wizard/inbox-rows'];
+  const GONE = ['wizard/desktop-chats', 'wizard/app-panel-left', 'wizard/needs-you-reason', 'wizard/follow-main', 'wizard/app-tap-home', 'wizard/plain-chat-titles', 'wizard/graceful-restart', 'wizard/interface-manual', 'wizard/write-guard', 'wizard/sidebar-chats-view', 'wizard/action-cards', 'wizard/swap-sides', 'wizard/phone-app-notifications', 'wizard/chat-app-switches', 'wizard/clear-chat-notifications', 'wizard/phone-sections', 'wizard/inbox-rows'];
   if (Store.read()) {
     let dirty = false;
     for (const k of ['defaultsOff', 'promotedMigrated']) if (Array.isArray(state[k]) && state[k].some(id => GONE.includes(id))) { state[k] = state[k].filter(id => !GONE.includes(id)); dirty = true; }

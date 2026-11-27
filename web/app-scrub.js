@@ -11,7 +11,7 @@ window.WizCore = window.WizCore || {};
 window.WizCore.appParts = window.WizCore.appParts || {};
 window.WizCore.appParts.scrub = function ({ $, appVars, BAR_FLICK_MIN, BAR_FLICK_MS, BAR_FLICK_STEPS, CHATS, endDotHold, goDesk, HOME, parkDesks, placeTrack, renderDots, secOf, swipeDesk, tourEv, track, vib }) {
   let liftSettings, SC_STEP, scLabel, scrub, sectionsStops; // late-bound: app.js declares these after the call, see bindLate
-  /* Where a scrub of `steps` desks from desk `start` lands. With phone sections on (wizard-ux#1929) it steps through the
+  /* Where a scrub of `steps` desks from desk `start` lands. With phone sections (wizard-ux#1929) it steps through the
    * section desks only (sectionsStops: their indexes in bar order), counted from the section the start desk is in. */
   const scrubTo = (start, steps) => {
     const stops = typeof sectionsStops === 'function' ? sectionsStops() : null;
