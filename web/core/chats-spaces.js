@@ -78,11 +78,10 @@ window.WizCore.chatsParts.spaces = function ({ chanTags, actNeeds, actUnread, in
     if (p !== chatVars.spacePicker || p.busy) return;
     const typed = p.name.trim();
     if (!typed || typed.length > 60 || /[\u0000-\u001f\u007f]/u.test(typed)) return;
-    // Auto channel emoji (issue 1580, switch wizard/channel-auto-emoji, off by default): no emoji in front gets a fitting
-    // one from the keyword map (or none, shown as 💬). An added emoji never makes a second channel of the same words:
-    // "Money" is refused next to "Money", "💰 Money" or "🎯 Money". Switch off: the name is stored exactly as typed.
-    let autoOn = false; try { autoOn = (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/channel-auto-emoji'); } catch (_) {}
-    const name = autoOn && SPACE.ch && typeof globalThis.WizCore?.channelAutoName === 'function' ? globalThis.WizCore.channelAutoName(typed) : typed;
+    // Auto channel emoji (issue 1580, on for everyone): no emoji in front gets a fitting one from the keyword map (or
+    // none, shown as 💬). An added emoji never makes a second channel of the same words: "Money" is refused next to
+    // "Money", "💰 Money" or "🎯 Money".
+    const name = SPACE.ch && typeof globalThis.WizCore?.channelAutoName === 'function' ? globalThis.WizCore.channelAutoName(typed) : typed;
     const words = n => name !== typed ? globalThis.WizCore.channelFace(n).label : n;
     if (spaces().some(s => spaceAgent(s) === p.agent && (norm(s.name) === norm(name) || norm(words(s.name)) === norm(typed))) || (norm(name) === 'general' && SPACE.ch)) { p.error = SPACE.ch ? 'Already a channel' : 'Already a Space'; renderSpacePicker(); return; }
     // The channel store (wizard-ux issue 1261) holds 200 channels per agent and gives the new one its id.

@@ -172,7 +172,6 @@ Settings › Appearance › Try new features lists unfinished features to try, A
 - **Buttons that tick things off in apps**: Reply buttons that tick something off in an app (a checklist step) with no agent reply; a failure shows Retry.
 - **Calm offline card**: The can't-reach-your-Wizard card shows one dotted path (Internet · Tailscale · Wizard), one short next step and a small Check again with the automatic re-check time.
 - **Catch me up clears Sent**: Catch me up clears finished Sent chats, any age.
-- **Channels: a fitting emoji for new channels**: New channels get a fitting emoji.
 - **Channels: an AI-picked emoji for new channels**: New channels with no emoji get one picked by your Wizard's fast model.
 - **Chat replies as Chats notifications**: Android app: your agent's chat replies reach the phone as Notifications items under Chats; tap opens the chat.
 - **Five-choice first chat**: Five picks, then a first win.

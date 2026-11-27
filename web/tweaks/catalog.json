@@ -31,7 +31,6 @@
     "wizard/apps-panel",
     "wizard/ai-apps-running",
     "wizard/channel-model-emoji",
-    "wizard/channel-auto-emoji",
     "wizard/app-picker-store-search",
     "wizard/phone-push",
     "wizard/mac-app-updates",
