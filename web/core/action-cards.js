@@ -208,8 +208,14 @@
     }
     return out;
   }
+  // A group drawn once for several copies (chat-kit `also`, issue 1942): the newest pick on any of its messages.
+  function rbPick(g, picks) {
+    let p = null;
+    for (const msg of [g.msg, ...(Array.isArray(g.also) ? g.also : [])]) { const q = picks?.get(`${msg}\n${g.group}`); if (q && (!p || Number(q.at) > Number(p.at))) p = q; }
+    return p;
+  }
   function rbGroupHtml(g, picks) {
-    const p = picks?.get(`${g.msg}\n${g.group}`) || null, locked = !!p?.locked;
+    const p = rbPick(g, picks), locked = !!p?.locked;
     return `<div class="ch-rb${p ? ' picked' : ''}${locked ? ' locked' : ''}" role="group" aria-label="${esc(g.group)}" data-rb-group="${esc(g.group)}" data-rb-msg="${esc(g.msg)}" data-morph-key="rb:${esc(g.msg)}:${esc(g.group)}">`
       + g.buttons.map(b => { const on = p?.button === b.id; return `<button type="button" class="ch-rb-btn${on ? ' on' : p ? ' dim' : ''}" data-rb="${esc(b.id)}" aria-pressed="${on}"${locked ? ' disabled' : ''}>${on ? '✓ ' : ''}${esc(b.label)}</button>`; }).join('')
       + '</div>';

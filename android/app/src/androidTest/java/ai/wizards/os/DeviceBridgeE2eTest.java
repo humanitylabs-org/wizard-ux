@@ -44,6 +44,11 @@ public class DeviceBridgeE2eTest {
         LongMeetingStartupScenario.longMeetingUploadsDoNotHoldTheUiThread();
     }
 
+    /** wizard-ux#1948: a link an installed app owns opens in that app; others keep the browser panel; own links never loop. */
+    @Test public void linkAnInstalledAppOwnsOpensInThatApp() throws Exception {
+        AppLinkScenario.run();
+    }
+
     @Test public void genericPackagesAndLegacyCompatibility() throws Exception {
         Context c = InstrumentationRegistry.getInstrumentation().getTargetContext();
         UiDevice device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation());

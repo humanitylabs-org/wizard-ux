@@ -1,9 +1,11 @@
 /* Phone sections (wizard-ux#1929): Home · Chats · (orb) · Messenger · Apps. The orb (#orbWrap) is not touched: its
- * size, ring, halo, states and badge stay as they are. The desk dots and the desk + are hidden; app-sections.js draws
+ * size, ring, halo and states stay as they are. Its count badge is hidden (wizard-ux#1950, James: "there should be no
+ * number above the orb"): the Chats and Messenger tiles carry the counts, in every skin, with or without phone-nav. The desk dots and the desk + are hidden; app-sections.js draws
  * the tiles into #secL and #secR on either side of the orb. Colours come from the skin's tokens. */
 html[data-tweaks~="wizard/phone-sections"]:not([data-shell="desktop"]) #dock[data-sections] { gap: 0; padding-left: max(4px, env(safe-area-inset-left, 0px)); padding-right: max(4px, env(safe-area-inset-right, 0px)); }
 html[data-tweaks~="wizard/phone-sections"]:not([data-shell="desktop"]) #dock[data-sections] > .desk-dots { display: none !important; }
 html[data-tweaks~="wizard/phone-sections"]:not([data-shell="desktop"]) #dock[data-sections] > #orbWrap { margin-left: 6px; margin-right: 6px; }
+html[data-tweaks~="wizard/phone-sections"]:not([data-shell="desktop"]) #dock[data-sections] #orbBadge { display: none !important; }
 /* Even spacing (wizard-ux#1946): the bar is five equal columns, Home · Chats · orb · Messenger · Apps, so every icon sits one
  * pitch from the next, measured centre to centre, mirrored around the orb. The pitch is a fifth of the bar (at most 84 px):
  * each side is (bar - orb - 12 px) / 2 wide, so a fifth of the bar is 40% of a side plus a fifth of (orb + 12 px). The

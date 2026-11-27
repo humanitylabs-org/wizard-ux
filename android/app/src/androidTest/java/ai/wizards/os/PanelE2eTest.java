@@ -134,6 +134,8 @@ public class PanelE2eTest {
         volatile Intent seen;
         @Override public Instrumentation.ActivityResult onStartActivity(Intent intent) {
             if (!Intent.ACTION_VIEW.equals(intent.getAction())) return null;
+            // The installed-app hand-off tried first (issue 1948): let it run; no app owns the loopback link, so it is refused.
+            if (android.os.Build.VERSION.SDK_INT >= 30 && (intent.getFlags() & Intent.FLAG_ACTIVITY_REQUIRE_NON_BROWSER) != 0) return null;
             seen = intent; return new Instrumentation.ActivityResult(Activity.RESULT_CANCELED, null);
         }
     }

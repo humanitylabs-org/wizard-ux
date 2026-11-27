@@ -274,7 +274,7 @@ export default function desktop(api) {
   // (in memory only: after a reload in full screen, Esc goes to tiled)
   var fullFrom = 'tiled';
   /* The window arrangement buttons and the Mac title-bar strip; layouts/ai-apps/desktop-modes.js. */
-  const { macHoles, bindLate: modesLate } = modesPart({ aadVars, api, cTop, cX, doc, el, icon, MODE_KEYS, MODE_LABELS, modeBars, pTop, pW, root, sTop, toggleSide, top, windowMode });
+  const { macHoles, paintModes, bindLate: modesLate } = modesPart({ aadVars, api, cTop, cX, doc, el, MODE_LABELS, modeBars, panes, pTop, pW, root, sTop, top, windowMode });
   /* A slow app's placeholder, the apps column on the right and the orb's place; layouts/ai-apps/desktop-column.js. */
   const { chrome, cv, fb, hBack, hMid, near, orbAt, orbBox, orbBtn, paintOrbIdentity, pLoad, pLoadT, scene, tidyBtn, tidyW, toast, toastU, toastW, vChats, vChatsN, vOne, vtAll, vtFoot, vtList, vtTog } = columnPart({ api, desks, doc, el, feedBox, icon, shade, side, top });
 
@@ -532,7 +532,7 @@ export default function desktop(api) {
   const noteTitle = () => notificationSurface()?.notificationTitle || 'Notification';
   let dropped = null;   // the panel just hidden for Home / Focus while the route still names its app
   /* The app beside a chat after a reload, the split and a channel feed in the chat column; layouts/ai-apps/desktop-split.js. */
-  const { paintSplit, bindLate: splitLate } = splitPart({ aadVars, anim, api, applySizes, appName, appTile, chatsEl, cTop, cX, desks, doneLoading, FEED, feedBox, flip, focusFrame, homeComposer, host, markUsed, modeBars, one, orbBox, paintTools, paneModel, paneWins, pIcon, placementOf, pName, pTop, pX, retileSoon, root, sName, sTop, syncSide, top, waitLoaded, watchPaneWins, wsps });
+  const { paintSplit, bindLate: splitLate } = splitPart({ aadVars, anim, api, applySizes, appName, appTile, chatsEl, cTop, cX, desks, doneLoading, FEED, feedBox, flip, focusFrame, homeComposer, host, markUsed, one, orbBox, paintModes, paintTools, paneModel, paneWins, pIcon, placementOf, pName, pTop, pX, retileSoon, root, sName, sTop, syncSide, top, waitLoaded, watchPaneWins, wsps });
   // The post last opened from the feed (its row or its Reply), and the channel it was opened in.
   let fromFeed = null;
   /* A post opened from a channel feed and the way back to it; layouts/ai-apps/desktop-feed.js. */
@@ -545,7 +545,7 @@ export default function desktop(api) {
   let closing = null, exitMotion = null;
   /* Hiding the app panel, closing the chat column and Back; layouts/ai-apps/desktop-closing.js. */
   const { chatBack, closeChat, hidePanel, listBack, setWide, bindLate: closingLate } = closingPart({ aadVars, anim, api, cX, doneLoading, DRAFT, FEED, feedBack, feedGone, flip, focusFrame, icon, mainChats, one, oneSplit, paintSide, paintSplit, panes, peekable, pTop, pW, pX, reduced, retileSoon, root, wantAppFocus });
-  modesLate({ hidePanel });
+  modesLate({ setSize, setWide });
   homeLate({ hidePanel });
   tabsLate({ closeChat, hidePanel, setWide });
   splitLate({ setWide });

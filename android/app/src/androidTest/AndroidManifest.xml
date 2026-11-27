@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Instrumentation-only components. AppLinkTarget stands in for an installed app that owns a web link (YouTube owning
+     youtube.com) in AppLinkScenario (wizard-ux issue 1948); it ships only in the test APK, never in WizardOS. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <activity android:name="ai.wizards.os.AppLinkTarget" android:exported="true" android:label="App link target">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="applink-1948.wizard.test" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

@@ -677,7 +677,7 @@
       "status": "not-exercised",
       "source": "web/core/settings.js",
       "kind": "read",
-      "note": "Only read, and only posted to by a chat reply's app switch row (wizard-ux issue 1560), while the off-by-default wizard/chat-app-switches switch is on and a reply carries an <app id>:<switch id> marker; the QA harnesses run with it off. Also read (never posted to) by web/core/share-sheet.js when the media viewer opens a file or something is shared, and Messenger is installed (wizard-ux issue 1625); the QA harnesses share no files. Refused and collected, never answered, if a flow reaches it."
+      "note": "Only read, and only posted to by a chat reply's app switch row (wizard-ux issue 1560), when a reply carries an <app id>:<switch id> marker (on for everyone); the QA harnesses' replies carry no such marker. Also read (never posted to) by web/core/share-sheet.js when the media viewer opens a file or something is shared, and Messenger is installed (wizard-ux issue 1625); the QA harnesses share no files. Refused and collected, never answered, if a flow reaches it."
     },
     "/wizard-os-home/store-install/_updates": {
       "status": "catalogued",
