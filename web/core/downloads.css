@@ -74,6 +74,12 @@ html[data-shell="desktop"] .wdl-banner.on { translate: 0 0; }
 html[data-shell="desktop"] .wdl-sheet { align-items: center; }
 html[data-shell="desktop"] .wdl-grip { display: none; }
 html[data-shell="desktop"] .wdl-panel { border-radius: 18px; border-bottom: 1px solid var(--wdl-line); max-width: 480px; }
+/* Swipe away downloads (issue 1343): core/downloads.js moves the banner and the sheet with the finger (phone only). */
+html:not([data-shell="desktop"]) .wdl-banner { touch-action: none; transition: opacity 150ms ease, translate 180ms var(--ease, ease), transform 180ms var(--ease, ease); }
+html:not([data-shell="desktop"]) .wdl-sheet .wdl-panel { transition: translate 190ms var(--ease, ease), transform 190ms var(--ease, ease); }
+html:not([data-shell="desktop"]) .wdl-sheet .wdl-scrim { transition: opacity 190ms ease; }
+html:not([data-shell="desktop"]) .wdl-grip, html:not([data-shell="desktop"]) .wdl-title { touch-action: none; }
+html:not([data-shell="desktop"]) .wdl-dragging.wdl-banner, html:not([data-shell="desktop"]) .wdl-dragging .wdl-panel, html:not([data-shell="desktop"]) .wdl-dragging .wdl-scrim { transition: none; }
 
 @media (prefers-reduced-motion: reduce) {
   .wdl-banner, .wdl-sheet, .wdl-panel { transition: opacity 120ms ease; translate: 0 0; }

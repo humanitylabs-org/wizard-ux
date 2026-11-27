@@ -5,6 +5,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
+import vm from 'node:vm';
 import { build, HELP_FILE, SKILL_FILE, SIZE_BUDGET, REGENERATE, SETTINGS_MODULES, CONTENT_MODULES, NOT_RENDERED } from '../tools/build-agent-manual.mjs';
 
 const root = new URL('../', import.meta.url).pathname;
@@ -73,12 +74,14 @@ test('wizard.md ships the manual as the agent skill (name and description, as th
 });
 
 test('the manual names the Chats tabs the shell draws (wizard-ux issue 1437: "where do I turn on Channels?")', () => {
-  // The bottom tabs of the main agent's Chats list (core/chats-sent.js sentBar).
-  const bar = read('web/core/chats-sent.js').match(/function sentBar[\s\S]*?<\/nav>/)?.[0] || '';
-  const tabs = [...bar.matchAll(/tab\('\w+', '([^']+)'\)/g)].map(m => m[1]);
+  // Draw the real bottom tabs of the main agent's Chats list (core/chats-sent.js sentBar) and read their labels.
+  const ctx = { window: { WizCore: {} }, document: { documentElement: { dataset: { tweaks: '' } } }, console };
+  vm.createContext(ctx);
+  vm.runInContext(read('web/core/chats-sent.js'), ctx);
+  const p = ctx.window.WizCore.chatsParts.sent({ ch: () => ({}), chatVars: { chanView: 'activity' }, LIVE: { sentLog: {} }, winAgent: () => '', chanSide: () => false, chanElsewhere: () => false, esc: String });
+  const tabs = [...p.sentBar({ id: 'main' }).matchAll(/<span>([^<]+)<\/span>/g)].map(m => m[1]);
   assert.deepEqual(tabs, ['Inbox', 'Tags', 'Sent']);
-  const help = JSON.parse(read('skill/help.json'));
-  const answer = help.howTo['Turn on Channels?'];
+  const answer = JSON.parse(read('skill/help.json')).howTo['Turn on Channels?'];
   for (const t of tabs) assert.ok(answer.includes(t), `"Turn on Channels?" names the ${t} tab`);
   assert.match(answer, /tap Tags/);
 });
