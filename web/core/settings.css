@@ -94,6 +94,9 @@ a.st-row { color: inherit; text-decoration: none; }
 /* A quiet value on the right (the skin name, a count) instead of a second line. */
 .st-val { flex: none; max-width: 45%; font-size:var(--wz-font-size); color: var(--wz-text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
 .st-val:empty { display: none; }
+/* Wizard for Mac in About & updates (wizard-ux issue 1624): only the version row's value may wrap, so
+ * "Up to date · checked 5 min ago" stays whole in the Mac window's narrow Settings column. */
+html:root [data-settings-version="mac"] .st-val { white-space: normal; text-align: end; }
 .st-category[aria-current="page"] .st-tx b { font-weight: 700; }
 .st-desktop .st-category[aria-current="page"] { color: var(--wz-accent); }
 .st-index .st-title { margin-bottom: 8px; }
