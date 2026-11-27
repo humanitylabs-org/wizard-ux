@@ -33,7 +33,7 @@ async function installOnce({ access = null, needs = false, fail = null } = {}) {
     S: { busy: new Set(), busyAt: new Map(), removing: new Set(), starting: new Map(), late: new Set(), installed: new Map(), router: new Map(), access: new Map(), stack: [], link: null, architecture: '' },
     architectureReason: () => '', status: () => 'get', openId: x => x.id, key: x => x.id, routerId: x => x.id, refresh() {}, framed: false, parent: {}, location: { origin: 'https://box.test', search: '' }, URLSearchParams,
     installRelease: async () => { if (fail) throw new Error(fail); }, load: async () => { ctx.S.installed.set('calendar', { repo: 'r', commit: 'c' }); },
-    routerNeeds: async () => ({ data: needs ? { x: 1 } : null }), appAccess: async () => access, hasNeeds: d => !!d, top: () => '', push() {}, showSheet() {}, window: { scrollTo() {} },
+    routerNeeds: async () => ({ data: needs ? { x: 1 } : null }), appAccess: async () => access, hasNeeds: d => !!d, nudgeOn: () => false, nudgeDue: () => false, top: () => '', push() {}, showSheet() {}, window: { scrollTo() {} },
     toast: html => toasts.push(html) });
   await ctx.install(a);
   return toasts;

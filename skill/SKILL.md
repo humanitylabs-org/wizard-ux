@@ -94,7 +94,7 @@ Chats & app screens: how Chats behaves and looks, which Chats app is the default
 - Workspace sync › Same workspaces on every device: the same desks with the same apps on all your devices (layout and the current desk stay per device), plus Recently closed desks with Reopen. (when the box supports it).
 
 ### Notifications
-Notifications: for each app that sends notifications, choose Badge (a count on its icon) or Chats (its alerts arrive as threads in Chats). Saved on this device. Chats needs Notifications in Chats on.
+Notifications: per app, Badge (a count on its icon) or Chats (its alerts arrive as threads in Chats). Saved on this device.
 - One row per app that sends notifications, each with Badge or Chats.
 
 ### Voice & typing
@@ -184,6 +184,7 @@ Settings › Appearance › Try new features lists unfinished features to try, A
 - **Icons on the attach menu**: Android app: the + menu in a chat (and the orb's Attach) shows icons before Photo or video, Camera and File, on bigger rows. (Android app only).
 - **Inbox until archived**: Chats stay in Inbox until archived.
 - **Inbox: only what needs you**: Inbox: only what needs you.
+- **Inbox: pin threads to the top**: Pin threads on top.
 - **Install apps your agent builds**: Apps I build install with one tap.
 - **Install sheet recommends private AI**: Installing a personal-data app suggests private AI.
 - **Instant home-screen apps**: Android: pinned app icons open at once on their last screen.
@@ -206,10 +207,11 @@ Settings › Appearance › Try new features lists unfinished features to try, A
 - **Running view in the AI apps sidebar**: AI apps: Running view in the sidebar.
 - **Send and go**: On desktop, sending opens a fresh chat.
 - **Sent: the same rows as Inbox**: Sent uses Inbox's rows.
-- **Sent: threads, like email**: Sent lists threads, like email.
+- **Sent: threads, like email**: Sent lists threads.
 - **Share feature counts**: Sends features you tried and your thumbs, plus a random box id.
-- **Share to people in any window**: Share's People row shows Messenger's recent chats in every window, also one that never opened Messenger.
+- **Share to people in any window**: Share's People row shows Messenger's recent chats in every window.
 - **Short answer first**: A long agent reply shows only its one-line plain answer; tap it for the full reply. Choose whether replies start collapsed and how long the short answer is. Where: Settings › Appearance › Try new features › Short answer first; its options show under it when on.
+- **Shorter app updates**: App updates stop an app once.
 - **Side button opens the Agent chat**: Android app: the side button opens Messenger's Agent chat for a note instead of a new Wizard chat.
 - **Skins are look only**: Skins become a look only: only feature switches decide what runs. Your skin's own choices come back when you switch this off.
 - **Smart inbox: only what needs you**: Inbox: only what blocks you.

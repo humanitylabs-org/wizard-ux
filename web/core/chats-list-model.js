@@ -363,7 +363,13 @@ function activityGroups(groups, { needs, unread, at }, { order = 'newest', now =
   // Inbox rows (issue 1779): inbox = { quiet(s), pin(s) → 0 or its pin rank }. Ready is the Inbox: what inboxWants keeps
   // and placeOf puts in Inbox, pinned rows first. No Recent.
   if (inbox) {
-    const pin = s => Number(inbox.pin?.(s)) || 0, want = s => inInbox(s) && (pin(s) > 0 || inboxWants(s, { needs, unread, quiet: inbox.quiet }));
+    // Pin to top (issue 1887, switch wizard/inbox-pin-top): inbox.top(s) is true for a thread in the owner's pin list.
+    // It is always in Inbox (never in Sent) and ranks above Daily; `counted` leaves out a read one that is only here
+    // because of the pin, so pinning never adds to the count or the badge.
+    const top = s => !!inbox.top?.(s), pin = s => Number(inbox.pin?.(s)) || 0;
+    const base = s => Number(inbox.base ? inbox.base(s) : top(s) ? 0 : pin(s)) || 0;
+    const own = s => inInbox(s) && (base(s) > 0 || inboxWants(s, { needs, unread, quiet: inbox.quiet }));
+    const want = s => top(s) || inInbox(s) && (pin(s) > 0 || inboxWants(s, { needs, unread, quiet: inbox.quiet }));
     const aged = (groups.archive || []).filter(s => !s.archived), live = [...(groups.errors || []), ...(groups.ready || []), ...(groups.yesterday || []), ...(groups.pastWeek || []), ...aged];
     const ready = [], snz = [...(groups.deferred || [])], seen = new Set();
     for (const s of [...(groups.working || []), ...live]) {
@@ -372,8 +378,9 @@ function activityGroups(groups, { needs, unread, at }, { order = 'newest', now =
     }
     const sorted = activitySort(ready, order, { at, needs });
     const pinned = sorted.filter(s => pin(s) > 0).sort((a, b) => pin(a) - pin(b));
-    return { working: activitySort((groups.working || []).filter(held), order === 'priority' ? 'newest' : order, { at }), ready: [...pinned, ...sorted.filter(s => !(pin(s) > 0))],
-      pinned: pinned.length, recent: [], older: 0, snoozed: activitySort(snz, 'newest', { at }), archive: activitySort((groups.archive || []).filter(s => s.archived), 'newest', { at }) };
+    const readyAll = [...pinned, ...sorted.filter(s => !(pin(s) > 0))];
+    return { working: activitySort((groups.working || []).filter(held), order === 'priority' ? 'newest' : order, { at }), ready: readyAll,
+      ...(inbox.top ? { counted: readyAll.filter(s => !top(s) || own(s) || needs(s) || unread(s)) } : {}), pinned: pinned.length, recent: [], older: 0, snoozed: activitySort(snz, 'newest', { at }), archive: activitySort((groups.archive || []).filter(s => s.archived), 'newest', { at }) };
   }
   // keep: a thread only aged past "archive after" (not archived by the owner) stays in Inbox too.
   const aged = keep ? (groups.archive || []).filter(s => !s.archived) : [];
