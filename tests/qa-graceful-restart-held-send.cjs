@@ -1,6 +1,6 @@
 'use strict';
 // wizard-ux issue 1362 second re-review in a real browser: while the Agent Service holds new sends for a graceful
-// restart (wizard/graceful-restart on, /wizard/health restart.holding), a message sent then is saved, not Working:
+// restart (on for everyone, /wizard/health restart.holding), a message sent then is saved, not Working:
 //   1. an existing chat: no "Working · Ns" line in the thread, one quiet "Saved · sends after Wizard restarts" line;
 //   2. a new chat: the same, and its header shows the saved clock, not the working spinner;
 //   3. the Chats list: both under a Saved heading, Working counts only the chat that really runs;
@@ -31,7 +31,7 @@ const HOLD = { phase: 'waiting', holding: true, reason: 'update', active: 1, hel
     await context.addInitScript(() => {
       if (window !== top) return;
       for (const [k, v] of Object.entries({ 'wos.shell': 'phone', 'wos.coached': 'true', 'wos.tour.v1': 'true', 'wos.welcome.v1': 'done', 'wos.skin': 'nebula',
-        'wos.skin-tweaks.v1': JSON.stringify({ version: 1, preset: 'none', off: {}, mix: { 'wizard/graceful-restart': true } }) })) localStorage.setItem(k, v);
+        'wos.skin-tweaks.v1': JSON.stringify({ version: 1, preset: 'none', off: {}, mix: {} }) })) localStorage.setItem(k, v);
     });
     await context.route('**/*', async r => {
       const q = r.request(), u = new URL(q.url()), p = u.pathname, method = q.method();

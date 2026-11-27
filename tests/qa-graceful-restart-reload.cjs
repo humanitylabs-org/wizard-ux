@@ -1,7 +1,7 @@
 'use strict';
-// wizard-ux issue 1362 kick-back in a real browser: with the wizard/graceful-restart switch ALREADY on when the page
-// loads (first load on a phone or second device, then a reload; no switch tap in this tab), the shell must read
-// /wizard/health and show the restart note. Before the fix a first load made 0 health reads, because reach.js checked
+// wizard-ux issue 1362 kick-back in a real browser: on a first load (a phone or second device, then a reload; no tap
+// in this tab), the shell must read /wizard/health and show the restart note. On for everyone now (the switch
+// wizard/graceful-restart is gone), so no tweak list is involved. Before the fix a first load made 0 health reads, because reach.js checked
 // the switch before the skin host painted data-tweaks. Phone 412x915 (classic) and desktop 1440x900. Synthetic transport only (no box is reached).
 // QA_EXPECT=broken (with QA_WEB=<main>/web) asserts the old behaviour instead, as the baseline.
 const assert = require('node:assert/strict');
@@ -29,7 +29,7 @@ const HOLD = { phase: 'waiting', holding: true, reason: 'update', active: 1, hel
         await context.addInitScript(({ shell }) => {
           if (window !== top) return;
           for (const [k, v] of Object.entries({ 'wos.shell': shell, 'wos.coached': 'true', 'wos.tour.v1': 'true', 'wos.welcome.v1': 'done', 'wos.skin': 'nebula', 'wos.desktop-view.v1': 'classic',
-            'wos.skin-tweaks.v1': JSON.stringify({ version: 1, preset: 'none', off: {}, mix: { 'wizard/graceful-restart': true } }) })) localStorage.setItem(k, v);
+            'wos.skin-tweaks.v1': JSON.stringify({ version: 1, preset: 'none', off: {}, mix: {} }) })) localStorage.setItem(k, v);
         }, { shell });
         await context.route('**/*', async r => {
           const q = r.request(), u = new URL(q.url()), p = u.pathname, method = q.method();
@@ -54,7 +54,7 @@ const HOLD = { phase: 'waiting', holding: true, reason: 'update', active: 1, hel
         for (const round of ['first load', 'reload']) {
           health = 0;
           if (round === 'reload') await page.reload(); else await page.goto(origin + prefix + (phone ? 'index.html?phone' : 'desktop.html'));
-          await page.waitForFunction(() => String(document.documentElement.dataset.tweaks || '').includes('wizard/graceful-restart'), null, { timeout: 15000 });
+          await page.waitForFunction(() => !!window.WizReach, null, { timeout: 15000 });
           await nap(4000);
           const st = await page.evaluate(() => window.WizReach?.restart?.() || null);
           const row = { shell, round, healthReads: health, phase: st?.phase || null };

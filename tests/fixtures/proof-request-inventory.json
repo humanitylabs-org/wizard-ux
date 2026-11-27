@@ -460,16 +460,22 @@
       "note": "Channel read watermarks on the box (wizard-agent-service issue 471): Channels are on for everyone (wizard-ux issue 1258), so flows read it. The shared catalogue answers 404 (no read sync on the box: each device keeps its own marks); writes are refused and collected. tests/chat-channels.test.mjs (issue 471) covers the sync."
     },
     "/wizard/health": {
-      "status": "not-exercised",
+      "status": "catalogued",
       "source": "web/core/reach.js",
       "kind": "read",
-      "note": "Graceful restart watch (wizard-ux issue 1362): read only while the off-by-default wizard/graceful-restart switch is on, which none of the three flows turn on; tests/graceful-restart.test.mjs covers it. Refused and collected, never answered, if a flow reaches it."
+      "examples": [
+        {
+          "method": "GET",
+          "path": "/wizard/health"
+        }
+      ],
+      "note": "Graceful restart watch (wizard-ux issue 1362): on for everyone, so every flow reads it (every 30 s, every 5 s while a restart waits). The shared catalogue answers a healthy box with no restart waiting; tests/graceful-restart.test.mjs covers the hold."
     },
     "/wizard/v1/restart": {
       "status": "not-exercised",
       "source": "web/core/reach.js",
       "kind": "write",
-      "note": "The owner's Wait longer / Restart now on an overdue graceful restart (wizard-ux issue 1362): only with the off-by-default wizard/graceful-restart switch on and a tap; tests/graceful-restart.test.mjs covers it. Refused and collected, never answered, if a flow reaches it."
+      "note": "The owner's Wait longer / Restart now on an overdue graceful restart (wizard-ux issue 1362): only on a tap while the box reports an overdue restart, which none of the three flows see; tests/graceful-restart.test.mjs covers it. Refused and collected, never answered, if a flow reaches it."
     },
     "/wizard/v1/ui-preferences": {
       "status": "catalogued",

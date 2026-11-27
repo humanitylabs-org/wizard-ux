@@ -1,4 +1,4 @@
-// wizard-ux issue 1432: polish of the graceful restart note (switch wizard/graceful-restart, issue 1362).
+// wizard-ux issue 1432: polish of the graceful restart note (issue 1362; on for everyone, no switch).
 //   1. the note always sits on its own opaque panel (the desktop message box with no chat open floats on the wallpaper);
 //   2. a held chat's message box is a normal idle box: no Stop, no "Steer …";
 //   3. a new chat the box already lists as "New chat" shows the owner's words from the tap (main and routed kinds);
@@ -11,11 +11,10 @@ import vm from 'node:vm';
 import { withWebParts } from './fixtures/web-parts.mjs';
 
 const read = p => withWebParts(readFileSync(new URL('../web/' + p, import.meta.url), 'utf8'));
-const SWITCH = 'wizard/graceful-restart';
 
 test('the note has an opaque panel wherever it sits, not only when it floats', () => {
-  const css = read('tweaks/wizard/graceful-restart/tweak.css');
-  const rule = css.split('\n').find(l => l.startsWith('html[data-tweaks~="wizard/graceful-restart"] .ch-restart-notice {'));
+  const css = read('core/graceful-restart.css');
+  const rule = css.split('\n').find(l => l.startsWith('html:root .ch-restart-notice {'));
   assert.ok(rule, 'base rule for the note');
   for (const want of ['background: var(--bg', 'border: 1px solid', 'border-radius:', 'padding:']) assert.ok(rule.includes(want), want);
   assert.doesNotMatch(rule, /background: (transparent|none)/);
@@ -60,7 +59,7 @@ for (const [agent, kind] of [['', 'main'], ['host-ops', 'host-profile'], ['box',
 test('the note comes back at once when no note shows anywhere (phone: thread -> Chats list)', async () => {
   const src = read('core/reach.js');
   const observers = []; let painted = 0, notes = [], composes = [];
-  const document = { documentElement: { dataset: { tweaks: SWITCH }, nodeType: 1 }, hidden: false, body: { nodeType: 1 },
+  const document = { documentElement: { dataset: { tweaks: '' }, nodeType: 1 }, hidden: false, body: { nodeType: 1 },
     querySelectorAll: sel => sel === '.ch-compose' ? composes : sel === '[data-restart-notice]' ? notes : [], addEventListener() {} };
   const ctx = { document, navigator: { onLine: true }, location: { hostname: 'wizard.example.com' }, Event, AbortController, Date, console,
     addEventListener() {}, dispatchEvent() {}, setTimeout: () => 0, clearTimeout() {},

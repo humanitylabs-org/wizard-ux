@@ -39,7 +39,7 @@ window.WizCore.chatsParts.status = function ({ agentName, agentRec, AGS, esc, H,
     // attention/status intact so Restore (or a newer reply) recovers it, including approvals/errors.
     if (snoozeLast() && deferredOf(s) && !working) return 'deferred';
     const def = deferredOf(s) && !working && !needs, at = def ? null : attOf(s);
-    // A send a graceful restart holds (wizard/graceful-restart; WizReach.restartHeld: queued, on its way, or a 202 held
+    // A send a graceful restart holds (wizard-ux issue 1362; WizReach.restartHeld: queued, on its way, or a 202 held
     // for the restart) is saved, not working yet, also while the service is down for the restart itself.
     return working ? (globalThis.WizReach?.restartHeld?.(s) ? 'held' : s.pend === 'waiting' ? 'offline' : 'working') : (s.status === 'failed' || s.status === 'interrupted' || s.queueReason === 'provider_access') && !window.WosErrors?.dismissed?.(s) ? 'failed' : ['waiting_for_approval', 'unknown'].includes(s.status) ? 'approval' : def ? 'deferred' : at ? (at.state === 'needs_you' ? 'needs' : at.state) : 'none';
   }
