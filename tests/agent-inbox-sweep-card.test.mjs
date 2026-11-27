@@ -197,7 +197,7 @@ test('main versus routed: a routed agent\'s item answers by record id but never 
   assert.doesNotMatch(confirm, /ch-sw-confirm/);
 });
 
-// wizard-agent-service issue 631: the box's private default agent (wizard/private-routing on) is not a foreign agent here.
+// wizard-agent-service issue 631: the box's private default agent is not a foreign agent here.
 test('the private default agent\'s item opens like a main-agent one, naming its agent', () => {
   const routed = card().waiting.items[3];
   const html = cardBlock({ privateDefault: routed.agent }).api.sweepHtml(card());

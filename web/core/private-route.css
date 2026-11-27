@@ -1,0 +1,33 @@
+/* Private routing (wizard-agent-service issue 629, wizard-ux issue 1804): the Agent Service picks the agent each orb take
+ * is for; core/private-route.js opens that agent's thread, draws the "where it went" chip at its top and the sheet that
+ * moves the request to another agent. The skin's --wz-* tokens only, on an opaque panel (--wz-panel mixes into the
+ * skin's base colour), so the text reads on every skin, light or dark, and follows a skin change at once. On for
+ * everyone (the switch wizard/private-routing is removed; `html:root` keeps the specificity its attribute selector had). */
+html:root .wpr-chip-row { display: flex; justify-content: center; margin: 6px 12px 10px; }
+html:root .wpr-chip { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; min-height: 32px; padding: 4px 12px 4px 6px; border: 1px solid var(--wz-border); border-radius: var(--wz-radius-pill); background: var(--wz-panel); color: var(--wz-text-secondary); font: 500 var(--wz-text-sm) / 1.3 var(--wz-font-ui); cursor: pointer; text-align: left; }
+html:root .wpr-chip:hover, html:root .wpr-chip:focus-visible { border-color: var(--wz-accent); color: var(--wz-text); }
+html:root .wpr-chip b { font-weight: 600; color: var(--wz-text); }
+html:root .wpr-chip.priv { border-color: color-mix(in srgb, var(--wz-success) 45%, var(--wz-border)); }
+html:root .wpr-t { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 0 5px; min-width: 0; }
+html:root .wpr-sep { color: var(--wz-text-muted); }
+html:root .wpr-sig { flex: none; width: 22px; height: 22px; }
+html:root .wpr-sheet { position: fixed; inset: 0; z-index: 9200; display: flex; align-items: flex-end; justify-content: center; }
+html:root .wpr-scrim { position: absolute; inset: 0; background: color-mix(in srgb, var(--wz-canvas) 62%, transparent); }
+html:root .wpr-panel { position: relative; width: min(100%, 440px); max-height: min(80vh, 640px); overflow: auto; padding: 14px 12px calc(16px + env(safe-area-inset-bottom, 0px)); border: 1px solid var(--wz-border); border-radius: var(--wz-radius-tile) var(--wz-radius-tile) 0 0; background: var(--wz-panel); color: var(--wz-text); font-family: var(--wz-font-ui); box-shadow: 0 -8px 32px color-mix(in srgb, var(--wz-canvas) 40%, transparent); }
+html[data-shell="desktop"]:root .wpr-sheet { align-items: center; }
+html[data-shell="desktop"]:root .wpr-panel { border-radius: var(--wz-radius-tile); }
+html:root .wpr-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 4px 4px; }
+html:root .wpr-head b { font-size: var(--wz-text-title); color: var(--wz-text-heading); }
+html:root .wpr-x { flex: none; width: 32px; height: 32px; border: 0; border-radius: 50%; background: var(--wz-surface); color: var(--wz-text-secondary); font-size: var(--wz-text-md); }
+html:root .wpr-said { margin: 2px 4px 10px; font-size: var(--wz-text-sm); color: var(--wz-text-secondary); }
+html:root .wpr-grp + .wpr-grp { margin-top: 10px; }
+html:root .wpr-gh { display: flex; align-items: center; gap: 6px; padding: 4px 6px; font-size: var(--wz-text-sm); font-weight: 600; color: var(--wz-text-secondary); }
+html:root .wpr-gh .ag-lock { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; }
+html:root .wpr-opt { display: flex; align-items: center; gap: 10px; width: 100%; min-height: var(--wz-target); padding: 8px 10px; border: 0; border-radius: var(--wz-radius); background: transparent; color: var(--wz-text); font: inherit; text-align: left; cursor: pointer; }
+html:root .wpr-opt:hover, html:root .wpr-opt:focus-visible { background: var(--wz-surface); }
+html:root .wpr-opt.cur { cursor: default; background: var(--wz-surface); }
+html:root .wpr-opt .wpr-sig { width: 30px; height: 30px; }
+html:root .wpr-on { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+html:root .wpr-on b { font-size: var(--wz-text-md); font-weight: 600; }
+html:root .wpr-on small { font-size: var(--wz-text-sm); color: var(--wz-text-secondary); }
+html:root .wpr-ck { flex: none; color: var(--wz-accent); font-style: normal; }
