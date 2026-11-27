@@ -1,9 +1,9 @@
 'use strict';
 // wizard-ux issue 1639 in a real browser: James, 19 Nov 2026, "probably these would be more intuitive with icons."
-// With switch wizard/attach-menu-icons on, the Android app's attach menu (a chat's +, a New chat's +) shows a round
-// icon tile before each choice (camera, picture, paperclip) on taller rows, coloured from the skin's --wz-* tokens,
-// on an opaque panel. With the switch off the menu is exactly today's plain text rows. Each choice still opens
-// the same picker. Phone 412x915, Android user agent, skins nebula + grove. Synthetic transport only.
+// The Android app's attach menu (a chat's +, a New chat's +) shows a round icon tile before each choice (camera,
+// picture, paperclip) on taller rows, coloured from the skin's --wz-* tokens, on an opaque panel. On for everyone
+// since 27 Nov 2026 (switch wizard/attach-menu-icons removed): a device that still saved it off gets the icons too.
+// Each choice still opens the same picker. Phone 412x915, Android user agent, skins nebula + grove. Synthetic transport only.
 const assert = require('node:assert/strict');
 const { chromium } = require('../tools/qa-playwright.cjs');
 const { ownerRead } = require('../tools/qa-desktop-frame-fixture.cjs');
@@ -16,13 +16,13 @@ const now = Date.now(), iso = t => new Date(t).toISOString(), nap = ms => new Pr
 const ROWS = [{ id: 'qa-attach', title: 'Attach test', runtime: 'direct', status: 'completed', updated_at: iso(now - 6e5), updatedAt: iso(now - 6e5), last_active: (now - 6e5) / 1000, message_count: 2, messageCount: 2, preview: 'Done.' }];
 const MSGS = [{ role: 'user', content: 'Hello', timestamp: now / 1000 - 700 }, { role: 'assistant', content: 'Hi, send me a picture.', timestamp: now / 1000 - 690 }];
 const UA = 'Mozilla/5.0 (Linux; Android 14; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Mobile Safari/537.36';
-async function run(browser, skin, on) {
+async function run(browser, skin, stale) {
   const native = true;
   const context = await browser.newContext({ viewport: { width: 412, height: 915 }, isMobile: true, hasTouch: true, serviceWorkers: 'block', userAgent: UA });
   const errors = [], got = {};
   try {
     await context.routeWebSocket('**/*', w => w.close());
-    const mix = on ? { 'wizard/attach-menu-icons': true } : {};
+    const mix = stale ? { 'wizard/attach-menu-icons': false } : {}; // a saved off from before the switch was removed
     await context.addInitScript(({ skin, native, mix }) => {
       if (window !== top) return;
       if (native) window.WizardOSNative = {}; // the Android app's bridge object (no methods needed here)
@@ -72,7 +72,7 @@ async function run(browser, skin, on) {
         accent: getComputedStyle(m).getPropertyValue('--wz-accent').trim(), bg: cs.backgroundColor, opaque: alpha === undefined || Number(alpha) === 1 }; });
     await plus.click(); await nap(300);
     got.menu = await menu();
-    await page.screenshot({ path: path.join(out, `menu-${skin}-${on ? 'on' : 'off'}.png`) });
+    await page.screenshot({ path: path.join(out, `menu-${skin}${stale ? '-stale-off' : ''}.png`) });
     got.file = await chooser(() => page.locator('.wos-context-menu').getByRole('menuitem', { name: 'File', exact: true }).click());
     await plus.click(); await nap(200);
     got.camera = await chooser(() => page.locator('.wos-context-menu').getByRole('menuitem', { name: 'Camera', exact: true }).click());
@@ -90,10 +90,10 @@ async function run(browser, skin, on) {
   const browser = await chromium.launch(), report = [];
   try {
     for (const skin of skins) {
-      const on = await run(browser, skin, true), off = await run(browser, skin, false);
+      const on = await run(browser, skin, false), off = await run(browser, skin, true);
       report.push({ skin, on, off });
       for (const m of [on.menu, on.newMenu]) {
-        assert.ok(m && m.withIcons, 'switch on: the menu has icon rows');
+        assert.ok(m && m.withIcons, 'the menu has icon rows');
         assert.deepEqual([...m.items].sort(), ['Camera', 'File', 'Photo or video'], 'the same three choices, words unchanged');
         for (const r of m.rows) {
           assert.ok(r.tile, `${r.label}: has an icon tile`);
@@ -107,7 +107,7 @@ async function run(browser, skin, on) {
       assert.deepEqual(on.file?.multiple, true, 'File still opens the file picker');
       assert.deepEqual(on.camera, { accept: 'image/*', capture: true, multiple: false }, 'Camera still opens the camera');
       for (const m of [off.menu, off.newMenu]) {
-        assert.ok(m && !m.withIcons && m.rows.every(r => !r.tile), 'switch off: plain text rows as today');
+        assert.ok(m && m.withIcons && m.rows.every(r => r.tile), 'a stale saved off from the removed switch still gets the icons');
       }
       assert.deepEqual(off.menu.items, on.menu.items, 'same choices in the same order either way');
       assert.deepEqual(on.errors, []); assert.deepEqual(off.errors, []);

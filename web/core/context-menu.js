@@ -86,10 +86,8 @@
   // Android app (wizard-ux#1634): one empty-accept input made Android show its Camera/Files "Choose an action"
   // sheet. Offer the three plain choices instead, as Messenger does: Camera (camera at once), Photo or video (the
   // phone's photo grid at once) and File. Browsers and desktop keep their own file dialog.
-  // Icons on the attach menu (wizard-ux issue 1639, switch wizard/attach-menu-icons, off by default): James, 19 Nov
-  // 2026, "probably these would be more intuitive with icons". Read at open, so a flip shows on the next +.
-  const ICON_SWITCH = 'wizard/attach-menu-icons';
-  const iconsOn = () => { try { return (document.documentElement.dataset.tweaks || '').split(' ').includes(ICON_SWITCH); } catch (e) { return false; } };
+  // Icons on the attach menu (wizard-ux issue 1639): James, 19 Nov 2026, "probably these would be more intuitive
+  // with icons". On for everyone since 27 Nov 2026 (show-and-tell yes; switch wizard/attach-menu-icons removed).
   const ATTACH_ICONS = { Camera: 'camera', 'Photo or video': 'picture', File: 'file' };
   const nativeAndroid = () => { try { return !!window.WizardOSNative && /Android/i.test(navigator.userAgent || ''); } catch (e) { return false; } };
   function attach(input, anchor, { onCancel, label = 'Attach', multiple = true } = {}) {
@@ -106,7 +104,7 @@
       { label: 'Camera', action: pick('image/*', true) },
       { label: 'File', action: pick('*/*', false) },
     ];
-    if (iconsOn()) for (const it of items) it.icon = ATTACH_ICONS[it.label];
+    for (const it of items) it.icon = ATTACH_ICONS[it.label];
     open({ anchor, label, stay: true, onClose: onCancel, items });
     return true;
   }
