@@ -31,7 +31,7 @@ test('multiple agents retain agent tabs, no flat Spaces or add chip',()=>{
 });
 test('row-created Space persists its thread and never starts the fill run',async()=>{
   let saved,ran=false;const p={name:' First ',agent:'hermes',sid:'thread-1',wid:'w'};
-  const env={spacePicker:p,spaces:()=>[],spaceAgent:s=>s.agent,norm:s=>s.toLowerCase(),renderSpacePicker(){},crypto:{randomUUID:()=> 'new-space'},Date,
+  const env={spacePicker:p,SPACE:{ch:false},spaces:()=>[],spaceAgent:s=>s.agent,norm:s=>s.toLowerCase(),renderSpacePicker(){},crypto:{randomUUID:()=> 'new-space'},Date,
     LIVE:{prefOps:async (ops,o)=>(saved={ops,o},true)},window:{dispatchEvent(){}},Event,
     closeSpacePicker(){},W:{w:{}},setFocus(){},sendChat:async()=>{ran=true;}};
   vm.createContext(env);vm.runInContext(cut('  async function createPickerSpace(', '  function bindFocusStrip('),env);
