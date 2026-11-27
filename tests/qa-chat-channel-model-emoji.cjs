@@ -1,11 +1,11 @@
 'use strict';
-// Channel emoji from a model (wizard-ux issue 1605, switch wizard/channel-model-emoji) in a real browser, on the synthetic
+// Channel emoji from a model (wizard-ux issue 1605, on for everyone) in a real browser, on the synthetic
 // transport of tests/qa-chat-channel-emoji.cjs (nothing reaches a box). Phone 412x844 + desktop 1440x960 (classic Chats
 // window), Nebula + Grove. Per case: + New channel, type "Quarterly OKRs" / "Zzzqx" / "🎯 Plans" and Create. The
 // synthetic Agent Service answers POST /wizard/v1/channel-emoji with 📈 for "Quarterly OKRs" (after QA_DELAY ms, default
 // 1200) and 503 (no broker) for anything else. Expected: each channel is stored exactly as typed at once (Create never
 // waits), "Quarterly OKRs" is renamed once to "📈 Quarterly OKRs" within a few seconds, Zzzqx keeps 💬, "🎯 Plans" never
-// asks. QA_SWITCH=off (switch off) checks no ask is made and every name stays as typed. QA_KEYWORDS=on also adds
+// asks. QA_EXPECT=broken (a build before 1605) checks no ask is made and every name stays as typed. QA_KEYWORDS=on also adds
 // "Money": it gets 💰 from #1580's keyword map (on for everyone) and never asks.
 const assert = require('node:assert/strict');
 const { chromium } = require('../tools/qa-playwright.cjs');
@@ -13,7 +13,7 @@ const { ownerRead } = require('../tools/qa-desktop-frame-fixture.cjs');
 const fs = require('node:fs'), path = require('node:path');
 const repo = path.resolve(__dirname, '..'), origin = process.env.QA_ORIGIN || 'https://chat-channel-model-emoji.test', prefix = '/wizard-os-home/';
 const web = process.env.QA_WEB || path.join(repo, 'web'), out = process.env.QA_OUT || path.join(repo, 'chat-channel-model-emoji-evidence');
-const off = process.env.QA_SWITCH === 'off', broken = process.env.QA_EXPECT === 'broken' || off, DELAY = Number(process.env.QA_DELAY ?? 1200);
+const broken = process.env.QA_EXPECT === 'broken', DELAY = Number(process.env.QA_DELAY ?? 1200);
 fs.mkdirSync(out, { recursive: true });
 const now = Date.now(), iso = t => new Date(t).toISOString(), nap = ms => new Promise(r => setTimeout(r, ms));
 const SPACES = [
@@ -28,7 +28,7 @@ const ROWS = [
   { id: 'qa-v1', title: 'Voice keys', status: 'completed', at: now - 2 * 36e5, preview: 'Shipped.' },
   { id: 'qa-g1', title: 'Weekend plans', status: 'completed', at: now - 60 * 6e4, preview: 'Here is a plan.' },
 ].map(s => ({ id: s.id, title: s.title, runtime: 'direct', status: s.status, updated_at: iso(s.at), updatedAt: iso(s.at), last_active: s.at / 1000, message_count: 4, messageCount: 4, archived: false, preview: s.preview }));
-const report = { origin, web, broken, off, cases: [] };
+const report = { origin, web, broken, cases: [] };
 (async () => {
   const browser = await chromium.launch();
   try {
@@ -39,7 +39,7 @@ const report = { origin, web, broken, off, cases: [] };
       const context = await browser.newContext({ viewport: phone ? { width: Number(process.env.QA_PHONE_W) || 412, height: 844 } : { width: 1440, height: 960 }, isMobile: phone, hasTouch: phone, serviceWorkers: 'block' });
       try {
         await context.routeWebSocket('**/*', w => w.close());
-        const mix = off || broken ? { 'wizard/desktop-chats': true } : { 'wizard/desktop-chats': true, 'wizard/channel-model-emoji': true };
+        const mix = { 'wizard/desktop-chats': true };
         await context.addInitScript(({ shell, skin, mix, spaces }) => {
           if (window !== top) return;
           for (const [k, v] of Object.entries({ 'wos.shell': shell, 'wux.shell': shell, 'wos.desktop-view.v1': 'classic', 'wos.coached': 'true', 'wos.tour.v1': 'true', 'wos.welcome.v1': 'done', 'wos.skin': skin,
@@ -90,7 +90,6 @@ const report = { origin, web, broken, off, cases: [] };
         const page = await context.newPage(); page.on('pageerror', e => entry.errors.push(e.message));
         await page.goto(origin + prefix + (phone ? 'index.html?phone' : 'desktop.html'));
         await page.waitForFunction(() => (window.__wux || window.__wos) && !window.WosWelcome?.active && window.WosExperience?.state.tweaks.length && !window.WosExperience.state.busy);
-        if (!broken) await page.waitForFunction(() => (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/channel-model-emoji'), null, { timeout: 15000 });
         await page.addStyleTag({ content: '#wosWelcome{display:none!important}' });
         await page.evaluate(phone => phone ? __wos.openSheet('inbox') : __wux.openChatsList(), phone);
         const vis = sel => page.locator(sel).filter({ visible: true }).first();
@@ -119,14 +118,14 @@ const report = { origin, web, broken, off, cases: [] };
         }
         entry.stored = (entry.ops || []).filter(o => o.op === 'add' && o.key === 'spaces').map(o => o.item.name);
         if (!broken) { const t1 = Date.now(); await page.waitForFunction(() => [...document.querySelectorAll('.ch-chan-open b')].some(b => b.getClientRects().length && b.textContent === 'Quarterly OKRs' && b.closest('.ch-chan-open').querySelector('.ch-chan-hash')?.textContent === '📈'), null, { timeout: 15000 }).catch(() => {}); entry.waitedMs = Date.now() - t1; }
-        await nap(off ? DELAY + 800 : 400);
+        await nap(broken ? DELAY + 800 : 400);
         entry.renames = (entry.ops || []).filter(o => o.op === 'set' && /\/name$/.test(o.key)).map(o => o.item);
         entry.list = await lines();
         await page.screenshot({ path: path.join(out, stem + '-list.png') });
         assert.deepEqual(entry.stored, TYPED.map(t => kw && t === 'Money' ? '💰 Money' : t), 'every name stored as typed at create (keyword map: 💰 Money)');
         if (broken) {
-          assert.deepEqual(entry.asks || [], [], 'switch off / main: nothing asks a model');
-          assert.deepEqual(entry.renames, [], 'switch off / main: no rename');
+          assert.deepEqual(entry.asks || [], [], 'before 1605: nothing asks a model');
+          assert.deepEqual(entry.renames, [], 'before 1605: no rename');
           for (const want of [['💬', 'Quarterly OKRs'], ['💬', 'Zzzqx'], ['🎯', 'Plans']]) assert.ok(entry.list.some(l => l[0] === want[0] && l[1] === want[1]), 'list shows ' + want.join(' '));
           entry.pass = true; continue;
         }

@@ -58,6 +58,8 @@ const report = { origin, web, broken, off, cases: [] };
               for (const op of q.postDataJSON()?.ops || []) { const m = /^spaces\/([a-z0-9-]+)\/threads$/.exec(op.key); if (m && op.op === 'add') prefs.spaces = prefs.spaces.map(s => s.id === m[1] && !s.threads.includes(op.item) ? { ...s, threads: s.threads.concat(op.item) } : s); }
               return r.fulfill({ json: prefs });
             }
+            // Channel emoji from a model (issue 1605, on for everyone): a box without the lookup broker answers 503, so 💬 stays.
+            if (method === 'POST' && p === '/wizard/v1/channel-emoji') return r.fulfill({ status: 503, json: { error: 'channel_emoji_unavailable' } });
             entry.refused.push({ method, path: p, reason: 'unexpected-write' }); return r.fulfill({ status: 405, json: { error: 'Synthetic fixture refuses this write' } });
           }
           if (p === prefix + 'installed-apps.json') return r.fulfill({ json: { apps: [] } });
