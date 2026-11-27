@@ -1,6 +1,6 @@
-// Real Chromium proof for wizard-ux issue 1629 (switch wizard/app-location): under the shell's real Permissions-Policy
-// header, an app frame built with the real core/apps.js WizCore.frameAllow gets a position only when the switch is on
-// and the app declared location (Maps); any other app frame is denied with no prompt. The browser's own permission
+// Real Chromium proof for wizard-ux issue 1629 (on for everyone; the switch wizard/app-location is gone): under the
+// shell's real Permissions-Policy header, an app frame built with the real core/apps.js WizCore.frameAllow gets a
+// position only when the app declared location (Maps); any other app frame is denied with no prompt. The browser's own permission
 // is granted up front (Playwright), so what is measured is only the shell's frame rule.
 // Run: node tests/app-location.browser.cjs   (QA_WEB=<other web dir> for a baseline)
 const { chromium } = require('../tools/qa-playwright.cjs');
@@ -15,7 +15,7 @@ const APP_PAGE = `<!doctype html><script>
   navigator.geolocation.getCurrentPosition(p => parent.postMessage({ app: location.pathname, ok: true, lat: p.coords.latitude }, '*'),
     e => parent.postMessage({ app: location.pathname, ok: false, code: e.code }, '*'), { timeout: 4000 });
 </script>`;
-const shellPage = on => `<!doctype html><html data-tweaks="${on ? 'wizard/app-location' : ''}"><body><script>
+const shellPage = tweaks => `<!doctype html><html data-tweaks="${tweaks}"><body><script>
   window.WizCore = { norm: s => s.toLowerCase() }; window.WizConfig = { endpoint: () => '/apps' };
 </script><script src="/wizard-os-home/core/apps.js"></script><script>
   window.results = [];
@@ -34,13 +34,14 @@ const shellPage = on => `<!doctype html><html data-tweaks="${on ? 'wizard/app-lo
   const browser = await chromium.launch();
   const out = {};
   let failed = 0;
-  for (const on of [false, true]) {
+  // With no tweaks at all, and with a stale saved copy of the old switch: the same result either way.
+  for (const tweaks of ['', 'wizard/app-location']) {
     const ctx = await browser.newContext({ geolocation: { latitude: 52.37, longitude: 4.9 }, permissions: ['geolocation'] });
     const page = await ctx.newPage();
     await page.route('https://box.test/**', route => {
       const u = new URL(route.request().url());
       const html = body => route.fulfill({ status: 200, headers: { 'content-type': 'text/html', 'permissions-policy': header }, body });
-      if (u.pathname === '/wizard-os-home/') return html(shellPage(on));
+      if (u.pathname === '/wizard-os-home/') return html(shellPage(tweaks));
       if (u.pathname === '/wizard-os-home/core/apps.js') return route.fulfill({ status: 200, contentType: 'text/javascript', body: fs.readFileSync(path.join(WEB, 'core/apps.js')) });
       if (u.pathname === '/apps') return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(APPS) });
       if (u.pathname === '/maps/' || u.pathname === '/notes/') return route.fulfill({ status: 200, contentType: 'text/html', body: APP_PAGE });
@@ -50,31 +51,13 @@ const shellPage = on => `<!doctype html><html data-tweaks="${on ? 'wizard/app-lo
     await page.goto('https://box.test/wizard-os-home/');
     await page.waitForFunction(() => window.results.length >= 2, null, { timeout: 15000 });
     const r = Object.fromEntries((await page.evaluate(() => window.results)).map(x => [x.app, x]));
-    out[on ? 'on' : 'off'] = r;
-    const want = { '/maps/': on, '/notes/': false };
+    out[tweaks || 'none'] = r;
+    const want = { '/maps/': true, '/notes/': false };
     for (const [app, ok] of Object.entries(want)) {
       const got = r[app];
       const pass = got && got.ok === ok && (ok ? got.lat === 52.37 : got.code === 1);
       if (!pass) failed++;
-      console.log(`${pass ? 'PASS' : 'FAIL'} switch ${on ? 'on ' : 'off'} ${app} -> ${got?.ok ? 'position ' + got.lat : 'denied (code ' + got?.code + ')'}`);
-    }
-    if (on) {
-      // Switch turned off while Maps is open (here or from another device): the open Maps frame loses location.
-      await page.evaluate(() => { window.results.length = 0; document.documentElement.setAttribute('data-tweaks', ''); });
-      await page.waitForFunction(() => window.results.some(x => x.app === '/maps/'), null, { timeout: 15000 });
-      const again = (await page.evaluate(() => window.results)).find(x => x.app === '/maps/');
-      const pass = again.ok === false && again.code === 1;
-      if (!pass) failed++;
-      out.revoked = again;
-      console.log(`${pass ? 'PASS' : 'FAIL'} switch on->off with Maps open: /maps/ reloads -> ${again.ok ? 'position ' + again.lat : 'denied (code ' + again.code + ')'}`);
-      // On again with Maps still open (or the box's app list arriving after Maps was drawn): Maps may ask again.
-      await page.evaluate(() => { window.results.length = 0; document.documentElement.setAttribute('data-tweaks', 'wizard/app-location'); });
-      await page.waitForFunction(() => window.results.some(x => x.app === '/maps/'), null, { timeout: 15000 });
-      const back = (await page.evaluate(() => window.results)).find(x => x.app === '/maps/');
-      const passBack = back.ok === true && back.lat === 52.37;
-      if (!passBack) failed++;
-      out.restored = back;
-      console.log(`${passBack ? 'PASS' : 'FAIL'} switch off->on with Maps open: /maps/ reloads -> ${back.ok ? 'position ' + back.lat : 'denied (code ' + back.code + ')'}`);
+      console.log(`${pass ? 'PASS' : 'FAIL'} tweaks "${tweaks}" ${app} -> ${got?.ok ? 'position ' + got.lat : 'denied (code ' + got?.code + ')'}`);
     }
     await ctx.close();
   }

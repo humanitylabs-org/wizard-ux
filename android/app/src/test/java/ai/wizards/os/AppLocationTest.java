@@ -9,20 +9,19 @@ public class AppLocationTest {
     private static final String WIZARD = "https://box.example.ts.net";
 
     @Test
-    public void asksOnlyWhileTheSwitchIsOnAndOnlyForThisWizard() {
-        assertTrue(AppLocation.mayAsk(true, WIZARD, "https://box.example.ts.net/"));
-        assertTrue(AppLocation.mayAsk(true, WIZARD, "https://box.example.ts.net:443"));
-        assertFalse(AppLocation.mayAsk(false, WIZARD, "https://box.example.ts.net/"));
+    public void asksOnlyForThisWizard() {
+        assertTrue(AppLocation.mayAsk(WIZARD, "https://box.example.ts.net/"));
+        assertTrue(AppLocation.mayAsk(WIZARD, "https://box.example.ts.net:443"));
     }
 
     @Test
     public void otherAddressesAreDeniedWithNoPrompt() {
-        assertFalse(AppLocation.mayAsk(true, WIZARD, "https://evil.example/"));
-        assertFalse(AppLocation.mayAsk(true, WIZARD, "http://box.example.ts.net/"));
-        assertFalse(AppLocation.mayAsk(true, WIZARD, "https://box.example.ts.net:8443/"));
-        assertFalse(AppLocation.mayAsk(true, WIZARD, "null"));
-        assertFalse(AppLocation.mayAsk(true, WIZARD, ""));
-        assertFalse(AppLocation.mayAsk(true, WIZARD, null));
-        assertFalse(AppLocation.mayAsk(true, "", "https://box.example.ts.net/"));
+        assertFalse(AppLocation.mayAsk(WIZARD, "https://evil.example/"));
+        assertFalse(AppLocation.mayAsk(WIZARD, "http://box.example.ts.net/"));
+        assertFalse(AppLocation.mayAsk(WIZARD, "https://box.example.ts.net:8443/"));
+        assertFalse(AppLocation.mayAsk(WIZARD, "null"));
+        assertFalse(AppLocation.mayAsk(WIZARD, ""));
+        assertFalse(AppLocation.mayAsk(WIZARD, null));
+        assertFalse(AppLocation.mayAsk("", "https://box.example.ts.net/"));
     }
 }

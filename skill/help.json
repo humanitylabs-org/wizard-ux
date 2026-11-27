@@ -417,10 +417,6 @@
       "help": "Reply buttons that tick something off in an app (a checklist step) with no agent reply; a failure shows Retry.",
       "where": "Settings › Appearance › Try new features › Buttons that tick things off in apps"
     },
-    "wizard/app-location": {
-      "help": "Only apps whose wizard.md asks for location (today Maps) may use it, after your browser's or phone's own yes; others stay blocked.",
-      "where": "Settings › Appearance › Try new features › Location for Maps"
-    },
     "wizard/pin-instant-open": {
       "help": "Android: pinned app icons open at once on their last screen.",
       "where": "Settings › Appearance › Try new features › Instant home-screen apps"

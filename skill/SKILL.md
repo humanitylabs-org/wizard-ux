@@ -180,7 +180,6 @@ Settings › Appearance › Try new features lists unfinished features to try, A
 - **Install sheet recommends private AI**: Installing a personal-data app suggests private AI.
 - **Instant home-screen apps**: Android: pinned app icons open at once on their last screen.
 - **Instant phone notifications**: Android app, with Phone notifications per app on: app notifications reach the phone within seconds, even locked (one Tailscale connection, no Google).
-- **Location for Maps**: Only apps whose wizard.md asks for location (today Maps) may use it, after your browser's or phone's own yes; others stay blocked.
 - **Machines on Home**: Home shows a slim strip (Wizard, AI fuel, chats, backup, network); Settings › System holds your network, AI, security and storage.
 - **New chat quick links**: A new chat shows Catch me up, What's waiting on me and Plan my day above the message box; one tap sends it.
 - **Now playing**: While an app plays audio or video, small moving bars sit on that app's icon in the AI apps view (the desktop apps column; the phone Home dock and grid); click or tap them to pause without opening the app. Option+P pauses or plays what played last on the desktop. Nothing shows while nothing plays.
