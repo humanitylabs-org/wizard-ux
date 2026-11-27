@@ -148,6 +148,17 @@ public class HomeScreenIconTest {
             parent.draw(new Canvas(shot[0]));
             for (android.widget.TextView b : buttons) b.performClick();
             assertEquals(java.util.Arrays.asList("check", "diagnostics", "normal"), did);
+            // wizard-ux issue 2011: the diagnostics answer outlives the updater's once-a-second repaint
+            card.diagnosticsSent(true);
+            try { card.updateState(new org.json.JSONObject().put("state", "current").put("installed", "0.10.81")); } catch (org.json.JSONException e) { throw new AssertionError(e); }
+            card.updateState(null);
+            boolean stays = false;
+            for (int i = 0; i < col.getChildCount(); i++) {
+                android.view.View v = col.getChildAt(i);
+                if (v instanceof android.widget.TextView && v.getVisibility() == android.view.View.VISIBLE
+                        && "Diagnostics sent to your Wizard.".contentEquals(((android.widget.TextView) v).getText())) stays = true;
+            }
+            assertTrue("Diagnostics sent stays on the card after the update line repaints", stays);
             // the updater found the fixed build: the same button installs it
             try { card.updateState(new org.json.JSONObject().put("state", "ready").put("version", "0.10.72")); } catch (org.json.JSONException e) { throw new AssertionError(e); }
             parent.measure(android.view.View.MeasureSpec.makeMeasureSpec(w, android.view.View.MeasureSpec.EXACTLY),
