@@ -156,11 +156,14 @@
     const own = cleanTargets(r?.targets);
     return own.length ? own : cleanTargets(bx.apps[appId]);
   }
-  // Load: read the box, and offer it the people this browser already has (an app publishes only when its list
-  // changes, so a list cached earlier would otherwise wait for the next change).
+  // Load: read the box, and offer it the people this browser already has for an app the box holds nothing for yet
+  // (an app publishes only when its list changes, so a list cached earlier would otherwise wait for the next change).
+  // A list the box already holds is left alone: this browser's cached copy may be older than another device's.
   function boxStart() {
-    void readBox();
-    for (const [id, r] of Object.entries(receivers)) if (r?.targets?.length) keepOnBox(id);
+    return readBox().then(() => {
+      if (!bx.known || bx.gone) return;
+      for (const [id, r] of Object.entries(receivers)) if (r?.targets?.length && !Object.hasOwn(bx.apps, id)) keepOnBox(id);
+    });
   }
   if (typeof setTimeout === 'function') setTimeout(boxStart, 0);
   const live = kind => Object.entries({ ...DEFAULTS, ...receivers }).filter(([id, r]) => takes(id, r, kind) && installed(id));

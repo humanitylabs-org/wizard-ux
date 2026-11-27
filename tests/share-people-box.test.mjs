@@ -89,6 +89,13 @@ test('people this browser cached before (an older build) go to the box at load; 
   publish(a); await settle();
   const box = fakeBox(); device(box, { ls }); await settle();
   assert.equal(box.doc().apps.messenger.targets.length, 2, 'a reload sends the cached list without waiting for a change');
+  const ls2 = store(), b = device(box, { ls: ls2 }); await settle();
+  publish(b, 'messenger', [{ id: 'tg:9', name: 'Dan Moss', detail: 'Telegram' }]); await settle(100); // another device, newer
+  const puts = box.log.filter(l => l.startsWith('PUT')).length;
+  const stale = device(box, { ls }); await settle(100); // the first browser reopens with its older cached list
+  assert.equal(box.log.filter(l => l.startsWith('PUT')).length, puts, 'a stale cached list never overwrites the box');
+  assert.deepEqual(box.doc().apps.messenger.targets, [{ id: 'tg:9', name: 'Dan Moss', detail: 'Telegram' }]);
+  assert.deepEqual(stale.S._people('text'), ['tg:1', 'tg:2'], 'that browser keeps its own copy until Messenger runs there');
   const none = fakeBox({ pages: false }), d = device(none);
   publish(d); await settle();
   assert.deepEqual(d.S._people('text'), ['tg:1', 'tg:2']);
