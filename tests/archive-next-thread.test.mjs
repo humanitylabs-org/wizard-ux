@@ -1,5 +1,6 @@
 // James, 7 Nov 2026: on DESKTOP (Classic and AI apps) Archive on the open thread → next in this list;
-// on the PHONE Archive returns to the chats list. Nothing else changes navigation.
+// on the PHONE Archive returns to the chats list. Nothing else changes navigation. A thread opened from a link in another
+// thread steps back to that thread instead, on both (James, 26 Nov 2026, issue 1902).
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
@@ -8,8 +9,8 @@ import { execFileSync } from 'node:child_process';
 import { withParts } from './fixtures/chats-parts.mjs'; // chats.js parts moved out verbatim (issue 1665)
 const src = process.env.QA_REF ? execFileSync('git', ['show', process.env.QA_REF + ':web/core/chats.js'], { encoding: 'utf8' }) : withParts(readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8'));
 const slice = (a, b) => { const i = src.indexOf(a), j = src.indexOf(b, i); assert.ok(i >= 0 && j > i, a); return src.slice(i, j); };
-function fixture({ ids = ['a', 'b', 'c'], open = 'b', keep = true, phone = !keep, after = 'stay', layout = null, pending = false, success = true } = {}) {
-  const w = { id: 'qa', thread: open }, c = { trail: ['summary'], archiveOrder: ids }, toasts = [], calls = [], saved = [];
+function fixture({ ids = ['a', 'b', 'c'], open = 'b', keep = true, phone = !keep, after = 'stay', layout = null, pending = false, success = true, trail = [] } = {}) {
+  const w = { id: 'qa', thread: open }, c = { trail, archiveOrder: ids }, toasts = [], calls = [], saved = [];
   const rows = new Map([...ids, 'outside-space', 'summary'].map(id => [id, { id, title: id }]));
   const section = {}, other = {};
   const dom = [...ids.map(id => ({ dataset: { chopen: id }, closest: () => section })), { dataset: { chopen: 'outside-space' }, closest: () => other }];
@@ -57,6 +58,13 @@ for (const after of ['stay', 'list']) {
     const f = fixture({ keep: false, after }); f.c.trail = []; await f.act();
     assert.equal(f.w.thread, null, 'chats list, not the next row'); assert.equal(f.calls[0].id, 'b');
     const non = fixture({ keep: false, after }); await non.act('a'); assert.equal(non.w.thread, 'b', 'non-open Archive changes nothing');
+  });
+  test(`Archive on a thread opened from a link in another thread steps back to it (after=${after})`, async () => {
+    for (const keep of [true, false]) {
+      const f = fixture({ keep, after, trail: ['summary'] }); await f.act();
+      assert.equal(f.w.thread, 'summary', `${keep ? 'desktop' : 'phone'}: back to the linking thread`); assert.equal(f.calls[0].id, 'b', 'and it is archived');
+      f.back(); assert.equal(f.w.thread, null, 'Back from there goes to the list');
+    }
   });
 }
 test('held request paints immediately; late refusal restores row + toast, not navigation', async () => {
