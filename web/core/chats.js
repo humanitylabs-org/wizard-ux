@@ -31,7 +31,9 @@
 window.WizCore = window.WizCore || {};
 // Retire legacy pinned windows before either shell normalizes/persists its desks.
 // Preserve ordinary extra Chats/provider windows; only the old agent windows are folded away.
-window.WizCore.migrateChatsFocus = function (wins, desks) {
+// The phone keeps them (keepAgents): there an agent opened from the Apps section is its own app window (ux#2007).
+window.WizCore.migrateChatsFocus = function (wins, desks, opts = {}) {
+  if (opts.keepAgents) return desks;
   let main = Object.values(wins).find(w => w?.app === 'chats' && !w.agent && (!w.chatsProvider || w.chatsProvider === 'wizard-chats'));
   const dropped = new Set();
   for (const w of Object.values(wins)) if (w?.app === 'chats' && w.agent) {

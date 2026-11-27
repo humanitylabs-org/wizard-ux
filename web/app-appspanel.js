@@ -292,11 +292,12 @@ window.WizCore.appParts.appspanel = function ({ $, APP, APPS, appVars, CHATS_APP
   function apStepping() { return apReady && apOn() && !apState.open && !apGridState && !appVars.sheet && window.WizCore.phoneSections?.current?.() === 'apps'; }
   function apFront() {
     const P = window.WizCore.phoneSections, did = P?.sections?.().apps, d = did ? appVars.desks.find(x => x.id === did) : null;
-    const w = d ? appVars.W[d.focus] || appVars.W[d.wins[0]] : null; return w?.appId || '';
+    const w = d ? appVars.W[d.focus] || appVars.W[d.wins[0]] : null; return w?.app === 'chats' && w.agent ? 'agent:' + w.agent : w?.appId || '';
   }
   function apStepList() {
     const P = window.WizCore.phoneSections, skip = new Set([P?.slotId?.() || '', CHATS_APP.id]);
-    return apRecentAll().filter(id => !skip.has(id) && APP[id]?.kind === 'wizard' && APP[id].url);
+    // An agent's chats step like any app: they open as their own window in the Apps section (ux#2007).
+    return apRecentAll().filter(id => !skip.has(id) && ((APP[id]?.kind === 'wizard' && APP[id].url) || (APP[id]?.kind === 'chats' && APP[id].agent)));
   }
   // step +1: the next older recent app (a swipe to the left); -1: back toward the newest (a swipe to the right).
   function apStep(step) {
