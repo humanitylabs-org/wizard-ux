@@ -10,7 +10,7 @@
 window.WizCore = window.WizCore || {};
 window.WizCore.appParts = window.WizCore.appParts || {};
 window.WizCore.appParts.scrub = function ({ $, appVars, BAR_FLICK_MIN, BAR_FLICK_MS, BAR_FLICK_STEPS, CHATS, endDotHold, goDesk, HOME, parkDesks, placeTrack, renderDots, secOf, swipeDesk, tourEv, track, vib }) {
-  let chatsStepper, liftSettings, SC_STEP, scLabel, scrub, sectionsStops; // late-bound: app.js declares these after the call, see bindLate
+  let appsStep, appsStepping, chatsStepper, liftSettings, SC_STEP, scLabel, scrub, sectionsStops; // late-bound: app.js declares these after the call, see bindLate
   /* Where a scrub of `steps` desks from desk `start` lands. With phone sections (wizard-ux#1929) it steps through the
    * section desks only (sectionsStops: their indexes in bar order), counted from the section the start desk is in. */
   const scrubTo = (start, steps) => {
@@ -37,6 +37,8 @@ window.WizCore.appParts.scrub = function ({ $, appVars, BAR_FLICK_MIN, BAR_FLICK
     appVars.DS = { x: g.x, y: g.y, t: g.t, id: e.pointerId, h: true, ts: g.ts ?? e.timeStamp, start: appVars.idx, at: appVars.idx, live: false, up: false };
     // Chats in front with switch wizard/chats-switcher (app-chatsswitch.js): the drag steps one Chats view when it lifts.
     const st = typeof chatsStepper === 'function' && chatsStepper(); if (st) { appVars.DS.step = st; return true; }
+    // Apps in front with switch wizard/apps-panel (app-appspanel.js): the drag steps one recent app when it lifts.
+    if (typeof appsStepping === 'function' && appsStepping()) { appVars.DS.step = true; return true; }
     endDotHold(); if (appVars.sheet === 'settings') liftSettings();
     barScrubLive(appVars.DS, e); return true;
   };
@@ -46,6 +48,7 @@ window.WizCore.appParts.scrub = function ({ $, appVars, BAR_FLICK_MIN, BAR_FLICK
     if (e.pointerType === 'touch' && e.clientY > innerHeight - 22) return; // iOS home-indicator strip: the system's swipe
     appVars.DS = { x: e.clientX, y: e.clientY, t: performance.now(), id: e.pointerId, h: false, ts: e.timeStamp, start: appVars.idx, at: appVars.idx, live: false, up: false };
     const st = typeof chatsStepper === 'function' && chatsStepper(); if (st) appVars.DS.step = st; // one Chats view per swipe, decided at release
+    else if (typeof appsStepping === 'function' && appsStepping()) appVars.DS.step = true; // one recent app per swipe, decided at release
   });
   $('#dock').addEventListener('pointermove', e => {
     if (!appVars.DS || e.pointerId !== appVars.DS.id) return;
@@ -64,7 +67,7 @@ window.WizCore.appParts.scrub = function ({ $, appVars, BAR_FLICK_MIN, BAR_FLICK
     if (!s.h) return;
     const dx = e.clientX - s.x, quick = e.timeStamp - s.ts < BAR_FLICK_MS;
     appVars.dockSwiped = Date.now();
-    if (s.step) { if (e.type === 'pointerup' && Math.abs(dx) >= BAR_FLICK_MIN && Math.abs(dx) > Math.abs(e.clientY - s.y)) s.step(-Math.sign(dx)); return; }
+    if (s.step) { if (e.type === 'pointerup' && !s.up && Math.abs(dx) >= BAR_FLICK_MIN && Math.abs(dx) > Math.abs(e.clientY - s.y)) (typeof s.step === 'function' ? s.step : appsStep)(-Math.sign(dx)); return; }
     // A cancelled touch or one that rose is the system's swipe out: the desk goes back to where it started.
     if (s.up || e.type === 'pointercancel' || e.clientY - s.y < -30) { barScrubBack(s); return; }
     // A short quick flick moves exactly one desk, the way the finger travelled in total (wizard-ux#1601: decided at
@@ -84,5 +87,5 @@ window.WizCore.appParts.scrub = function ({ $, appVars, BAR_FLICK_MIN, BAR_FLICK
     barScrubPeek(false); scrub.classList.remove('on'); appVars.idx = s.start; goDesk(s.at, true); tourEv('desk', { home: appVars.idx === HOME });
   };
   $('#dock').addEventListener('pointerup', dockEnd); $('#dock').addEventListener('pointercancel', dockEnd);
-  return { barScrubDrop, barScrubJoin, bindLate: v => { if ('chatsStepper' in v) chatsStepper = v.chatsStepper; if ('liftSettings' in v) liftSettings = v.liftSettings; if ('SC_STEP' in v) SC_STEP = v.SC_STEP; if ('scLabel' in v) scLabel = v.scLabel; if ('scrub' in v) scrub = v.scrub; if ('sectionsStops' in v) sectionsStops = v.sectionsStops; } };
+  return { barScrubDrop, barScrubJoin, bindLate: v => { if ('chatsStepper' in v) chatsStepper = v.chatsStepper; if ('liftSettings' in v) liftSettings = v.liftSettings; if ('SC_STEP' in v) SC_STEP = v.SC_STEP; if ('scLabel' in v) scLabel = v.scLabel; if ('scrub' in v) scrub = v.scrub; if ('sectionsStops' in v) sectionsStops = v.sectionsStops; if ('appsStep' in v) appsStep = v.appsStep; if ('appsStepping' in v) appsStepping = v.appsStepping; } };
 };

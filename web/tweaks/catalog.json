@@ -28,6 +28,7 @@
     "wizard/try-feature-counts",
     "wizard/feature-counts-ask",
     "wizard/plain-alert-rows",
+    "wizard/apps-panel",
     "wizard/ai-apps-running",
     "wizard/channel-model-emoji",
     "wizard/channel-auto-emoji",

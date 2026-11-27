@@ -1,0 +1,90 @@
+/* Phone Apps tile (wizard-ux#1955): the Favorites panel and the hold-for-nine bubbles, drawn by app-appspanel.js only
+ * while this switch and the four-section bar are on. Colours come from the skin's --wz-* tokens (dark fallbacks), so a
+ * live skin change repaints them; text panels are opaque. Rows follow the desktop app sidebar (.aad-vtab): a 24 px
+ * icon tile and a 14 px name, 44 px tall for a finger. */
+html[data-tweaks~="wizard/apps-panel"] .ap-scrim { position: absolute; inset: 0; z-index: 48; background: rgba(3, 1, 10, .3); opacity: 0; transition: opacity 200ms; }
+html[data-tweaks~="wizard/apps-panel"] .ap-scrim.open { opacity: 1; }
+html[data-tweaks~="wizard/apps-panel"] .ap-scrim.ap-deep { background: rgba(3, 1, 10, .55); }
+html[data-tweaks~="wizard/apps-panel"] :is(.ap-scrim, .ap-panel, .ap-grid)[hidden] { display: none !important; }
+html[data-tweaks~="wizard/apps-panel"] .ap-panel {
+  --ap-bottom: var(--ap-above, calc(var(--dock-h, 84px) + var(--safe-b, 0px)));
+  --ap-ink: var(--wz-text, var(--ink, #f3efff)); --ap-ink-2: var(--wz-text-secondary, var(--ink-2, #cfc6ea)); --ap-ink-3: var(--wz-text-muted, var(--ink-3, #9a91b8));
+  --ap-line: var(--wz-border, var(--line-2, rgba(205, 190, 255, .18))); --ap-hover: color-mix(in srgb, var(--ap-ink) 8%, transparent);
+  position: absolute; z-index: 49; right: max(6px, env(safe-area-inset-right, 0px)); bottom: var(--ap-bottom);
+  width: max(190px, 54%); max-width: calc(100% - 12px); max-height: calc(100% - var(--ap-bottom) - 44px - var(--safe-t, 0px)); box-sizing: border-box;
+  display: flex; flex-direction: column; overflow: hidden; border-radius: 18px; border: 1px solid var(--ap-line); color: var(--ap-ink);
+  background-color: var(--bg, #0b0816); background-image: linear-gradient(var(--wz-panel, var(--wz-base, var(--bg, #0b0816))), var(--wz-panel, var(--wz-base, var(--bg, #0b0816))));
+  box-shadow: 0 18px 44px -12px rgba(0, 0, 0, .55); font-family: var(--wz-font-ui, var(--font, system-ui, sans-serif));
+  transform-origin: 100% 100%; transform: translateY(14px) scale(.96); opacity: 0; transition: transform 200ms var(--ease, ease), opacity 160ms;
+}
+html[data-tweaks~="wizard/apps-panel"] .ap-panel.open { transform: none; opacity: 1; }
+html[data-tweaks~="wizard/apps-panel"] .ap-panel.ap-tall { height: calc(100% - var(--ap-bottom) - 44px - var(--safe-t, 0px)); }
+html[data-tweaks~="wizard/apps-panel"] .ap-top { flex: none; display: flex; align-items: center; gap: 0; padding: 4px 2px 2px 6px; margin: 0; }
+html[data-tweaks~="wizard/apps-panel"] .ap-q { flex: 1; min-width: 0; height: 44px; display: flex; align-items: center; gap: 5px; padding: 0 6px 0 8px; container-type: inline-size; box-sizing: border-box; border-radius: 12px;
+  background: var(--wz-surface, color-mix(in srgb, var(--ap-ink) 7%, transparent)); color: var(--ap-ink-3); }
+html[data-tweaks~="wizard/apps-panel"] .ap-q svg { flex: none; width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+html[data-tweaks~="wizard/apps-panel"] .ap-q input { flex: 1; min-width: 0; height: 100%; border: 0; outline: 0; padding: 0; background: none; color: var(--ap-ink); font: 400 13.5px/1.2 var(--wz-font-ui, var(--font, system-ui, sans-serif)); -webkit-appearance: none; appearance: none; }
+/* A narrow phone: the field drops its magnifier so "Search apps" fits whole. */
+@container (max-width: 112px) { html[data-tweaks~="wizard/apps-panel"] .ap-q svg { display: none; } }
+html[data-tweaks~="wizard/apps-panel"] .ap-q input::placeholder { color: var(--ap-ink-3); opacity: 1; }
+html[data-tweaks~="wizard/apps-panel"] .ap-q input::-webkit-search-cancel-button { display: none; }
+html[data-tweaks~="wizard/apps-panel"] .ap-ib { flex: none; width: 44px; height: 44px; display: grid; place-items: center; padding: 0; margin: 0; border: 0; border-radius: 12px; background: none; color: var(--ap-ink-2); -webkit-tap-highlight-color: transparent; }
+html[data-tweaks~="wizard/apps-panel"] .ap-ib svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+html[data-tweaks~="wizard/apps-panel"] .ap-ib:active { background: var(--ap-hover); }
+html[data-tweaks~="wizard/apps-panel"] .ap-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; scrollbar-width: none; padding: 0 6px 6px; touch-action: pan-y; }
+html[data-tweaks~="wizard/apps-panel"] .ap-h { display: flex; align-items: center; min-height: 36px; padding: 0 0 0 8px; border-top: 1px solid color-mix(in srgb, var(--ap-line) 60%, transparent); margin-top: 2px; }
+html[data-tweaks~="wizard/apps-panel"] .ap-body > .ap-h:first-child { border-top: 0; margin-top: 0; }
+html[data-tweaks~="wizard/apps-panel"] .ap-ht { flex: 1; min-width: 0; display: flex; align-items: center; gap: 2px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--ap-ink-3); font: 600 12.5px/1.3 var(--wz-font-ui, var(--font, system-ui, sans-serif)); }
+html[data-tweaks~="wizard/apps-panel"] .ap-ht .ap-back { margin-left: -10px; color: var(--ap-ink); }
+html[data-tweaks~="wizard/apps-panel"] .ap-tb { flex: none; min-width: 44px; height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 4px; padding: 0 8px; margin: -4px 0; border: 0; border-radius: 12px;
+  background: none; color: var(--wz-accent, var(--violet-2, #b99bff)); font: 600 13px/1 var(--wz-font-ui, var(--font, system-ui, sans-serif)); -webkit-tap-highlight-color: transparent; }
+html[data-tweaks~="wizard/apps-panel"] .ap-tb svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+html[data-tweaks~="wizard/apps-panel"] .ap-list { display: flex; flex-direction: column; gap: 0; }
+html[data-tweaks~="wizard/apps-panel"] .ap-row { position: relative; display: flex; align-items: center; min-width: 0; height: 44px; border-radius: 10px; }
+html[data-tweaks~="wizard/apps-panel"] .ap-open { flex: 1; min-width: 0; height: 44px; display: flex; align-items: center; gap: 10px; padding: 0 8px; margin: 0; border: 0; border-radius: 10px; background: none; color: var(--ap-ink); text-align: left; -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; user-select: none; }
+html[data-tweaks~="wizard/apps-panel"] button.ap-open:active, html[data-tweaks~="wizard/apps-panel"] .ap-row.ap-best > .ap-open { background: var(--ap-hover); }
+html[data-tweaks~="wizard/apps-panel"] .ap-ic.sgt { flex: none; width: 24px; height: 24px; border-radius: 7px; font-size: 12px; box-shadow: none; }
+html[data-tweaks~="wizard/apps-panel"] .ap-ic.sgt::before { display: none; }
+/* Icon tiles from the skin's own panel and text colours, tinted by the app's colour, so the glyph reads on a dark skin
+ * and on a light one (a light skin draws glyphs dark). */
+html[data-tweaks~="wizard/apps-panel"] :is(.ap-ic, .ap-bi).sgt {
+  background: color-mix(in srgb, var(--c) 16%, color-mix(in srgb, var(--wz-text, var(--ink, #f3efff)) 8%, var(--wz-panel, var(--bg, #0b0816))));
+  border: 1px solid color-mix(in srgb, var(--c) 32%, var(--wz-border, var(--line-2, rgba(205, 190, 255, .18)))); }
+html[data-tweaks~="wizard/apps-panel"] :is(.ap-ic, .ap-bi).sgt::after { display: none; }
+html[data-tweaks~="wizard/apps-panel"] .ap-ic.sgt .sgi { width: 72%; height: 72%; }
+html[data-tweaks~="wizard/apps-panel"] .ap-nm { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: 400 14px/1.3 var(--wz-font-ui, var(--font, system-ui, sans-serif)); }
+html[data-tweaks~="wizard/apps-panel"] .ap-x { color: var(--ap-ink-3); opacity: .8; }
+html[data-tweaks~="wizard/apps-panel"] .ap-x svg { width: 14px; height: 14px; stroke-width: 2.2; }
+html[data-tweaks~="wizard/apps-panel"] .ap-minus { color: var(--wz-danger, #ff6b7a); width: 36px; }
+html[data-tweaks~="wizard/apps-panel"] .ap-editing .ap-open { padding-left: 2px; }
+html[data-tweaks~="wizard/apps-panel"] .ap-drag { color: var(--ap-ink-3); touch-action: none; cursor: grab; }
+html[data-tweaks~="wizard/apps-panel"] .ap-row.ap-dragging { background: var(--ap-hover); box-shadow: 0 6px 18px -8px rgba(0, 0, 0, .6); z-index: 1; }
+html[data-tweaks~="wizard/apps-panel"] .ap-star { color: var(--ap-ink-3); width: 44px; height: 44px; display: grid; place-items: center; padding: 0; border: 0; background: none; }
+html[data-tweaks~="wizard/apps-panel"] .ap-star svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linejoin: round; }
+html[data-tweaks~="wizard/apps-panel"] .ap-star.on { color: var(--amber, #ffbe55); }
+html[data-tweaks~="wizard/apps-panel"] .ap-star.on svg { fill: currentColor; }
+html[data-tweaks~="wizard/apps-panel"] .ap-empty { margin: 2px 8px 2px; color: var(--ap-ink-2); font: 400 13px/1.4 var(--wz-font-ui, var(--font, system-ui, sans-serif)); }
+html[data-tweaks~="wizard/apps-panel"] .ap-none { margin: 10px 8px; color: var(--ap-ink-3); font: 400 13px/1.4 var(--wz-font-ui, var(--font, system-ui, sans-serif)); }
+html[data-tweaks~="wizard/apps-panel"] .ap-add { display: flex; align-items: center; gap: 10px; width: 100%; height: 44px; padding: 0 8px; margin: 0 0 2px; border: 0; border-radius: 10px; background: none;
+  color: var(--wz-accent, var(--violet-2, #b99bff)); font: 600 14px/1.2 var(--wz-font-ui, var(--font, system-ui, sans-serif)); text-align: left; }
+html[data-tweaks~="wizard/apps-panel"] .ap-add svg { width: 20px; height: 20px; padding: 2px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; }
+html[data-tweaks~="wizard/apps-panel"] .ap-add:active { background: var(--ap-hover); }
+
+/* Hold Apps: nine round glowing bubbles in a card just above the tile, the newest bottom-right. */
+html[data-tweaks~="wizard/apps-panel"] .ap-grid {
+  position: absolute; z-index: 52; right: var(--ap-right, 6px); bottom: var(--ap-above, calc(var(--dock-h, 84px) + var(--safe-b, 0px)));
+  display: grid; grid-template-columns: repeat(3, 68px); grid-template-rows: repeat(3, 68px); padding: 6px 2px 2px; border-radius: 22px;
+  border: 1px solid var(--wz-border, var(--line-2, rgba(205, 190, 255, .18)));
+  background-color: var(--bg, #0b0816); background-image: linear-gradient(var(--wz-panel, var(--wz-base, var(--bg, #0b0816))), var(--wz-panel, var(--wz-base, var(--bg, #0b0816))));
+  box-shadow: 0 18px 44px -12px rgba(0, 0, 0, .6); transform-origin: 85% 100%; transform: scale(.9); opacity: 0; transition: transform 180ms var(--ease, ease), opacity 140ms;
+  font-family: var(--wz-font-ui, var(--font, system-ui, sans-serif)); color: var(--wz-text, var(--ink, #f3efff));
+}
+html[data-tweaks~="wizard/apps-panel"] .ap-grid.open { transform: none; opacity: 1; }
+html[data-tweaks~="wizard/apps-panel"] .ap-bub { position: relative; width: 68px; height: 68px; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 0; padding: 0; margin: 0; border: 0; background: none; color: inherit; -webkit-tap-highlight-color: transparent; }
+html[data-tweaks~="wizard/apps-panel"] .ap-bi.sgt { flex: none; width: 56px; height: 56px; border-radius: 50%; font-size: 26px; transition: transform 140ms var(--spring, ease), box-shadow 140ms;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--c) 40%, transparent), 0 0 18px -4px color-mix(in srgb, var(--c) 70%, transparent), inset 0 1px 0 rgba(255, 255, 255, .1); }
+html[data-tweaks~="wizard/apps-panel"] .ap-bi.sgt::before { border-radius: 50%; }
+html[data-tweaks~="wizard/apps-panel"] .ap-bi.sgt .sgi { width: 46%; height: 46%; }
+html[data-tweaks~="wizard/apps-panel"] .ap-bn { max-width: 66px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: 600 10px/11px var(--wz-font-ui, var(--font, system-ui, sans-serif)); color: var(--wz-text-secondary, var(--ink-2, #cfc6ea)); }
+html[data-tweaks~="wizard/apps-panel"] .ap-bub.hot .ap-bi.sgt { transform: scale(1.12); box-shadow: 0 0 0 2px var(--c), 0 0 26px 2px color-mix(in srgb, var(--c) 70%, transparent); }
+html[data-tweaks~="wizard/apps-panel"] .ap-bub.hot .ap-bn { color: var(--wz-text, var(--ink, #f3efff)); }

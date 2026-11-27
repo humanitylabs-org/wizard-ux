@@ -1068,13 +1068,15 @@
   linkdeskLate({ armBack });
   cardsLate({ armBack, armFrameBack, backStep, ensureGuard, onBack });
   orbswipeLate({ armBack });
+  /* The Apps tile's Favorites panel and hold-for-nine switcher (switch wizard/apps-panel, off by default); app-appspanel.js. */
+  const { appsPanelHold, appsPanelHoldEnd, appsPanelHoldMove, appsPanelOn, appsPanelOpen, appsPanelToggled, appsStep, appsStepping } = window.WizCore.appParts.appspanel({ $, APP, APPS, appVars, CHATS_APP, device, esc, ico, LIVE, norm, openApp, openStoreKind, phoneBack, store, tapOpen, toast, vib });
   /* The four sections around the orb (wizard-ux#1929, on for everyone); app-sections.js. */
-  const { sectionsArrange, sectionsPaint, sectionsPinHtml, sectionsStops, sectionsSwipe } = window.WizCore.appParts.sections({ $, APP, APPS, appVars, CHATS_APP, closeSheets, closeWin, esc, goDesk, HOME, launcher, LIVE, mainChats, openApp, openSheet, renderDots, renderLauncher, save, store, syncDesks, toast, vib, winApp });
+  const { sectionsArrange, sectionsPaint, sectionsPinHtml, sectionsStops, sectionsSwipe } = window.WizCore.appParts.sections({ $, APP, APPS, appVars, appsPanelHold, appsPanelHoldEnd, appsPanelHoldMove, appsPanelOn, appsPanelOpen, appsPanelToggled, appsStep, appsStepping, CHATS_APP, closeSheets, closeWin, esc, goDesk, HOME, launcher, LIVE, mainChats, openApp, openSheet, renderDots, renderLauncher, save, store, syncDesks, toast, vib, winApp });
   pinSheetHtml = sectionsPinHtml; swipeBySection = sectionsSwipe;
   desksLate({ sectionsArrange, sectionsPaint });
   /* The Chats tile's view switcher (wizard-ux#1957, switch wizard/chats-switcher, off by default); app-chatsswitch.js. */
   const { chatsStepper } = window.WizCore.appParts.chatsswitch({ $, appVars, CHATS, CHATS_APP, device, esc, mainChats, phoneBack, vib });
-  scrubLate({ chatsStepper, sectionsStops });
+  scrubLate({ appsStep, appsStepping, chatsStepper, sectionsStops });
   sectionsPaint();
   var dropUntil = 0; // retained for hosted-frame programmatic-pop accounting
   /* The Back guard, first run, the native shell bridge and deep links; app-boot.js. */
