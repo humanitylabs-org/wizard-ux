@@ -401,10 +401,6 @@
       "help": "Five picks, then a first win.",
       "where": "Settings › Appearance › Try new features › Five-choice first chat"
     },
-    "wizard/catch-me-up": {
-      "help": "Say catch me up: a two-step summary.",
-      "where": "Settings › Appearance › Try new features › Catch me up"
-    },
     "wizard/private-first-setup": {
       "help": "New installs start private: Welcome leads with Tinfoil; Claude and ChatGPT are optional extras.",
       "where": "Settings › Appearance › Try new features › Private first setup"
