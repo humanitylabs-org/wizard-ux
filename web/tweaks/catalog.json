@@ -32,7 +32,6 @@
     "wizard/app-picker-store-search",
     "wizard/phone-push",
     "wizard/install-agent-builds",
-    "wizard/share-people-box",
     "wizard/attach-menu-icons",
     "wizard/app-location",
     "wizard/boundary-agent-access",
