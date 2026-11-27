@@ -128,7 +128,9 @@ const report = { origin, web, cases: [] };
             secRow: !!sec?.querySelector(':scope > .ch-sec-h, :scope > .ch-sec-hl'), sort: !!list.querySelector('[data-chactorder]'), backRow: seen(list.querySelector('.ch-sent-h')),
             gap: r && fr ? Math.round(fr.top - r.bottom) : null, rows, secs: [...list.querySelectorAll('section.ch-sec[data-sec]')].map(s => s.dataset.sec + (s.querySelector(':scope > .ch-sec-h') ? ':fold' : '')) };
         });
-        await vis('.ch-tabbar').waitFor({ timeout: 15000 });
+        await vis('.ch-tbar').waitFor({ timeout: 15000 });
+        // The phone moves between views with its title's ▾ switcher (wizard-ux#1957); the desktops with the tabs.
+        const tab = async k => { if (phone) { await vis('.ch-tbar [data-chswitch]').click(); await vis(`#chatsSwitch [data-csview="${k}"]`).click(); } else await vis(`.ch-tabbar [data-chtab="${k}"]`).click(); };
         await vis('.ch-list [data-chopen="qa-new"]').waitFor({ timeout: 15000 });
         if (ROWS) await page.waitForFunction(() => !!document.querySelector('.ch-list [data-chrunopen="qa-bg"]'), null, { timeout: 15000 }).catch(() => {});
         await nap(800);
@@ -175,13 +177,15 @@ const report = { origin, web, cases: [] };
         const closed = await bar();
         assert.ok(!closed.field && closed.rows.length === B.rows.length, 'the icon closes search and the Inbox is back ' + JSON.stringify(closed));
         // The title follows the tab.
-        await vis('.ch-tabbar [data-chtab="tags"]').click(); await nap(700);
-        entry.tags = await bar(); assert.equal(entry.tags.title, 'Tags', 'Tags tab'); assert.equal(entry.tags.n, '', 'no Inbox count on Tags');
-        await shot('4-tags');
-        await vis('.ch-tabbar [data-chtab="sent"]').click(); await nap(900);
+        if (!phone) { // (the phone has no Tags page: its tags are in the switcher sheet)
+          await tab('tags'); await nap(700);
+          entry.tags = await bar(); assert.equal(entry.tags.title, 'Tags', 'Tags tab'); assert.equal(entry.tags.n, '', 'no Inbox count on Tags');
+          await shot('4-tags');
+        }
+        await tab('sent'); await nap(900);
         entry.sent = await bar(); assert.equal(entry.sent.title, 'Sent', 'Sent tab'); assert.ok(!entry.sent.backRow, 'no second "Sent" back row');
         await shot('5-sent');
-        await vis('.ch-tabbar [data-chtab="inbox"]').click(); await nap(700);
+        await tab('inbox'); await nap(700);
         assert.equal((await bar()).title, 'Inbox', 'back on Inbox');
         // Archive a row: the Archived fold at the bottom stays a fold.
         if (ROWS) {

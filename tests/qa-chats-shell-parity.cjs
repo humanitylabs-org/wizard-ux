@@ -3,9 +3,11 @@
 // James, 27 Nov 2026: "Let's have the same styling on mobile and desktop, not two totally different stylings of core app
 // functionality"). A real browser, a disposable synthetic box only (every write answered locally, nothing reached).
 // The same synthetic data is drawn on the phone (390x844) and in the AI apps sidebar pane (its <agent>::side window) at
-// 1440x900 and 1024x768, Nebula and a light skin. For Inbox, Tags, Sent and one tag the list's structure is read with
-// sizes stripped (the title bar: title, count, its buttons; each section: key, fold, open; each row in order: its key,
-// its parts, its words; the tabs) and must be the same on both. Any difference fails. Run it on every Chats change.
+// 1440x900 and 1024x768, Nebula and a light skin. For Inbox, Sent and one tag the list's structure is read with sizes
+// stripped (the title bar: its words and buttons; each section: key, fold, open; each row in order: its key, its parts,
+// its words) and must be the same on both. Any difference fails. Run it on every Chats change. How a person moves
+// between views is each shell's own (the phone's title ▾ switcher, wizard-ux#1957; the sidebar's Inbox · Tags · Sent
+// tabs, #1807), so the tabs are not compared; the sidebar's Tags tab is the shared tag list titled Tags.
 //   The sidebar also: no rows of its own (.aad-rw) and no "Inbox N · Newest" section row of its own; a row click opens
 //   that thread in the main column and marks the row current; right-click opens the row's actions sheet; ⌥↓ opens the
 //   first Inbox row; the row's Archive archives it.
@@ -58,12 +60,12 @@ function structure(root) {
   const text = n => (n?.textContent || '').replace(/\s+/g, ' ').trim();
   const list = root, tb = list.querySelector(':scope > .ch-tbar');
   const out = {
-    bar: tb && seen(tb) ? { title: text(tb.querySelector('.ch-tbar-t')), buttons: [...tb.querySelectorAll('button')].filter(seen).map(b => b.getAttribute('aria-label')) } : null,
+    // (the phone's title is also its view switcher's button, wizard-ux#1957: its own navigation, compared by its words)
+    bar: tb && seen(tb) ? { title: text(tb.querySelector('.ch-tbar-t')), buttons: [...tb.querySelectorAll('button:not([data-chswitch])')].filter(seen).map(b => b.getAttribute('aria-label')) } : null,
     heads: [...list.querySelectorAll(':scope > .ch-top:not(.ch-tbar), :scope > .ch-chan-h, :scope > .ch-sent-h')].filter(seen).map(n => cls(n) + ':' + text(n)),
     sections: [...list.querySelectorAll('section.ch-sec[data-sec]')].filter(seen).map(s => s.dataset.sec + (s.querySelector(':scope > .ch-sec-h, :scope > .ch-sec-hl') ? ':fold' : '') + (s.classList.contains('open') ? ':open' : '') + (s.querySelector('[data-chactorder]') ? ':sort' : '')),
     // (a row's words without its relative time: the cases run minutes apart on one fixed clock)
     rows: [...list.querySelectorAll('.ch-scroll .ch-row-wrap, .ch-scroll .ch-chan, .ch-scroll .ch-post')].filter(seen).map(r => { const c = r.cloneNode(true); c.querySelectorAll('time').forEach(t => t.remove()); return { key: r.dataset.morphKey || '', cls: cls(r), parts: parts(r), words: text(c) }; }),
-    tabs: [...list.querySelectorAll(':scope > .ch-tabbar [data-chtab]')].filter(seen).map(b => b.dataset.chtab + (b.getAttribute('aria-selected') === 'true' ? '*' : '')),
   };
   return out;
 }
@@ -143,19 +145,24 @@ function structure(root) {
           const vis = sel => page.locator(sel).filter({ visible: true }).first();
           const shot = async name => { await page.evaluate(() => document.fonts.ready); await new Promise(r => setTimeout(r, 300)); await page.screenshot({ path: path.join(out, `${stem}-${name}.png`) }); };
           const read = () => page.evaluate(([sel, fn]) => { const seen = n => !!n && n.getClientRects().length > 0; const root = [...document.querySelectorAll(sel)].find(seen); return root ? (0, eval)('(' + fn + ')')(root) : null; }, [LIST, structure.toString()]);
-          await vis(LIST + ' > .ch-tabbar').waitFor({ timeout: 15000 });
+          await vis(LIST + ' > .ch-tbar').waitFor({ timeout: 15000 });
+          // How a person moves between views: the phone's title ▾ and its switcher sheet (wizard-ux#1957, the phone's own
+          // navigation, out of scope here); the desktop sidebar's Inbox · Tags · Sent tabs (#1807), which stay.
+          const go = async view => {
+            if (isPhone) { await vis(LIST + ' .ch-tbar [data-chswitch]').click(); await vis(`#chatsSwitch [data-csview="${view}"]`).click(); }
+            else if (view.startsWith('#')) { await vis(LIST + ' > .ch-tabbar [data-chtab="tags"]').click(); await new Promise(r => setTimeout(r, 600)); await vis(LIST + ` [data-chchan="${view.slice(1)}"]`).click(); }
+            else await vis(LIST + ` > .ch-tabbar [data-chtab="${view}"]`).click();
+            await new Promise(r => setTimeout(r, 1000));
+          };
           await vis(LIST + ' [data-chopen="qa-new"]').waitFor({ timeout: 15000 });
           await page.waitForFunction(sel => !!document.querySelector(sel + ' [data-chrunopen="qa-bg"]'), LIST, { timeout: 15000 }).catch(() => {});
           await new Promise(r => setTimeout(r, 900));
           const got = {};
           got.inbox = await read(); await shot('1-inbox');
-          await vis(LIST + ' > .ch-tabbar [data-chtab="tags"]').click(); await new Promise(r => setTimeout(r, 800));
-          got.tags = await read(); await shot('2-tags');
-          await vis(LIST + ' > .ch-tabbar [data-chtab="sent"]').click(); await new Promise(r => setTimeout(r, 1000));
-          got.sent = await read(); await shot('3-sent');
-          await vis(LIST + ' > .ch-tabbar [data-chtab="tags"]').click(); await new Promise(r => setTimeout(r, 800));
+          if (!isPhone) { await go('tags'); got.tags = await read(); await shot('2-tags'); }
+          await go('sent'); got.sent = await read(); await shot('3-sent');
           // One tag: on the phone its list opens in place; on the desktop in the main column, beside the sidebar.
-          await vis(LIST + ' [data-chchan="trip"]').click(); await new Promise(r => setTimeout(r, 1200));
+          await go('#trip');
           got.tag = isPhone ? await read() : await page.evaluate(([fn]) => { const seen = n => !!n && n.getClientRects().length > 0; const root = [...document.querySelectorAll('.aad-feed .ch-list')].find(seen); return root ? (0, eval)('(' + fn + ')')(root) : null; }, [structure.toString()]);
           await shot('4-tag');
           entry.got = got;
@@ -163,14 +170,16 @@ function structure(root) {
           else {
             entry.side = await page.evaluate(() => ({ ownRows: [...document.querySelectorAll('.aad-scroll .aad-rw')].filter(n => n.getClientRects().length).length, ownSec: [...document.querySelectorAll('.aad-scroll .aad-sec')].filter(n => n.getClientRects().length).map(n => n.textContent.trim()) }));
             const diff = [];
-            for (const k of ['inbox', 'tags', 'sent']) {
+            for (const k of ['inbox', 'sent']) {
               const a = JSON.stringify(phone[k]), b = JSON.stringify(got[k]);
               if (a !== b) diff.push(k + ':\n phone ' + a.slice(0, 1600) + '\n side  ' + b.slice(0, 1600));
             }
             // The tag's posts: the same rows in the same order (its header is the column's own on the desktop).
             const tp = JSON.stringify(phone.tag?.rows), td = JSON.stringify(got.tag?.rows);
             if (!phone.tag?.rows?.length || tp !== td) diff.push('tag rows:\n phone ' + String(tp).slice(0, 1600) + '\n side  ' + String(td).slice(0, 1600));
-            for (const k of ['inbox', 'tags', 'sent']) if (!phone[k]?.rows?.length) diff.push(k + ': the phone drew no rows to compare');
+            for (const k of ['inbox', 'sent']) if (!phone[k]?.rows?.length) diff.push(k + ': the phone drew no rows to compare');
+            // Tags (the phone lists them in its switcher sheet): the desktop's Tags tab is the shared tag list, titled Tags.
+            if (got.tags?.bar?.title !== 'Tags' || !got.tags.rows.length) diff.push('tags: ' + JSON.stringify(got.tags).slice(0, 400));
             entry.diff = diff;
             if (broken) { assert.ok(diff.length || entry.side.ownRows, 'before the fix the sidebar differs from the phone'); entry.pass = true; continue; }
             assert.deepEqual(diff, [], 'the sidebar draws what the phone draws:\n' + diff.join('\n'));
