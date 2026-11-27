@@ -36,6 +36,8 @@ const bodies={
  '/wizard-os-home/store-data/wizard/v1/app-logos':{logos:{}},
  '/wizard-os-home/store-data/wizard/v1/installed-apps':{apps:[]},
  '/wizard-os-home/store-install/_updates':{updates:[]},
+ // Backup health in Resources (wizard-ux issue 1743, on for everyone): a box whose backup isn't set up has no rows.
+ '/wizard-os-home/store-install/_backup-health':{available:false,checks:[]},
 
  '/wizard/hermes/api/model/options':{provider:'fixture',model:'fixture',providers:[{slug:'fixture',authenticated:true,models:[{id:'fixture',name:'Fixture'}]}]},
  '/wizard/v1/apps':{apps:[app('morning'),app('wisdom')]},

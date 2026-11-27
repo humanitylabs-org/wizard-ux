@@ -1,15 +1,13 @@
-// Browser proof for wizard-ux#1743 (switch wizard/backup-health): Home › Resources › Health on a box with no watchdog.
+// Browser proof for wizard-ux#1743 (on for everyone): Home › Resources › Health on a box with no watchdog.
 // The shell's own files are served from QA_WEB at https://box.test/wizard-os-home/; /api/system/health answers 404 as
 // on a stock box (nginx passes it to the Agent Service, which has no such route); store-install/_backup-health goes to
 // a real App Manager store listener at QA_WAM (e.g. http://127.0.0.1:17743, adding the owner's Tailscale login as
 // Tailscale Serve does). QA_FREE_FILE: the file that App Manager reads its free disk from (Include it's estimate).
-// QA_SWITCH=off: the switch stays off and Health must look exactly as before (nothing read from the App Manager).
 // Usage: QA_PLAYWRIGHT=<playwright> QA_WEB=<repo>/web QA_WAM=<url> [QA_FREE_FILE=<file>] [QA_OUT=<dir>] node tests/qa-backup-health.cjs
 const pw = require(process.env.QA_PLAYWRIGHT || 'playwright');
 const fs = require('fs'), path = require('path'), http = require('http');
 const WEB = process.env.QA_WEB || path.join(__dirname, '..', 'web'), WAM = process.env.QA_WAM || '', OUT = process.env.QA_OUT || '';
-const ON = (process.env.QA_SWITCH || 'on') !== 'off', FREE = process.env.QA_FREE_FILE || '';
-const ID = 'wizard/backup-health';
+const FREE = process.env.QA_FREE_FILE || '';
 const UA = 'Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 Chrome/141.0.0.0 Mobile Safari/537.36';
 const TYPES = { js: 'application/javascript', mjs: 'application/javascript', css: 'text/css', html: 'text/html', json: 'application/json', svg: 'image/svg+xml', png: 'image/png', webp: 'image/webp', woff2: 'font/woff2', md: 'text/markdown' };
 let pass = 0, fail = 0; const ok = (v, n, x = '') => { console.log(v ? 'PASS' : 'FAIL', n, v ? '' : x); v ? pass++ : fail++; };
@@ -28,10 +26,7 @@ function toWam(req) {
 }
 async function context(b) {
   const c = await b.newContext({ viewport: { width: 412, height: 892 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true, serviceWorkers: 'block', userAgent: UA });
-  await c.addInitScript(([on, id]) => {
-    localStorage.setItem('wos.coached', 'true');
-    if (on) localStorage.setItem('wos.skin-tweaks.v1', JSON.stringify({ version: 1, preset: 'none', off: {}, mix: { [id]: true } }));
-  }, [ON, ID]);
+  await c.addInitScript(() => { localStorage.setItem('wos.coached', 'true'); });
   await c.route('https://box.test/**', async r => {
     const q = r.request(), u = new URL(q.url());
     if (u.pathname === '/wizard-os-home/store-install/_backup-health') {
@@ -51,7 +46,6 @@ async function context(b) {
 async function boot(c, url = 'https://box.test/wizard-os-home/') {
   const p = await c.newPage(), errs = []; p.on('pageerror', e => errs.push(String(e)));
   await p.goto(url);
-  if (ON) await p.waitForFunction(id => (document.documentElement.dataset.tweaks || '').split(' ').includes(id), ID, { timeout: 30000 });
   await p.waitForFunction(() => window.WosResources?.state.server, null, { timeout: 30000 });
   await p.evaluate(() => window.WosResources.update(true)); await p.waitForTimeout(900);
   return { p, errs };
@@ -62,16 +56,12 @@ const healthText = p => p.locator('.rs-sheet .rs-detail-body').innerText();
   {
     const c = await context(b), { p, errs: e } = await boot(c); errs.push(...e);
     const alert = p.locator('.rs-health-alert');
-    if (ON) {
-      ok(await alert.count() === 1 && /Main agent not in backup/.test(await alert.innerText()), 'Home names the left-out main agent', await alert.innerText().catch(() => ''));
-    } else {
-      ok(await alert.count() === 0, 'switch off: no Home line (as before)');
-    }
-    if (OUT) await p.screenshot({ path: path.join(OUT, `home-${ON ? 'on' : 'off'}.png`) });
+    ok(await alert.count() === 1 && /Main agent not in backup/.test(await alert.innerText()), 'Home names the left-out main agent', await alert.innerText().catch(() => ''));
+    if (OUT) await p.screenshot({ path: path.join(OUT, 'home.png') });
     await p.locator('[data-res-open=server]').first().tap(); await p.waitForTimeout(300);
     await p.locator('[data-res-tab=health]').tap(); await p.waitForTimeout(900);
     const t = await healthText(p);
-    if (ON) {
+    {
       ok(/Backup\s*Last backup 11h ago, 1 warning/.test(t), 'Backup row from backup-status.json (amber: a warning)', t);
       ok(/Your main agent \(its memory, skills and chats\) isn’t in this backup|Your main agent \(its memory, skills and chats\) isn't in this backup/.test(t), 'warning in plain words', t);
       ok(!/unavailable/i.test(t), 'no "unavailable" on a box without a watchdog', t);
@@ -95,14 +85,10 @@ const healthText = p => p.locator('.rs-sheet .rs-detail-body').innerText();
         ok(/Main agent\s*in the next backup/.test(t2) && await p.locator('.rs-sheet [data-res-bh]').count() === 0, 'row now says it is included, no button', t2);
         if (OUT) await p.locator('.rs-sheet').screenshot({ path: path.join(OUT, 'include-done.png') });
       }
-    } else {
-      ok(/Health checks unavailable right now/.test(t), 'switch off: Health as before', t);
-      ok(wam.length === 0, 'switch off: nothing read from the App Manager', wam.join(','));
-      if (OUT) await p.locator('.rs-sheet').screenshot({ path: path.join(OUT, 'health-off.png') });
     }
     await c.close();
   }
-  if (ON) { // the notification's link
+  { // the notification's link
     const c = await context(b), { p, errs: e } = await boot(c, 'https://box.test/wizard-os-home/?view=backup-health'); errs.push(...e);
     await p.waitForTimeout(600);
     ok(await p.locator('.rs-sheet [data-res-tab=health].selected').count() === 1, '?view=backup-health opens Home › Resources › Health');

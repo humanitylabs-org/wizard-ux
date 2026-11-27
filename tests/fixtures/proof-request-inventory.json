@@ -674,10 +674,15 @@
       "note": "Read by Settings > About & updates > Apps (on for everyone since wizard-ux#1191); the QA harnesses don't open that page. Refused and collected, never answered, if a flow reaches it."
     },
     "/wizard-os-home/store-install/_backup-health": {
-      "status": "not-exercised",
+      "status": "catalogued",
       "source": "web/core/resources.js",
       "kind": "read",
-      "note": "Read by Home > Resources > Health only while the wizard/backup-health switch is on (wizard-ux#1743), and posted to only by its Include it button; the QA harnesses run with the switch off. Refused and collected, never answered, if a flow reaches it."
+      "examples": [
+        {
+          "method": "GET",
+          "path": "/wizard-os-home/store-install/_backup-health"
+        }
+      ]
     },
     "/wizard-os-home/store-install/_app-updates": {
       "status": "not-exercised",

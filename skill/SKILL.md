@@ -165,7 +165,6 @@ Settings › Appearance › Try new features lists unfinished features to try, A
 - **Archive on top**: Archive is the first section of the Chats list in both By day and By status, so switching layouts never moves it.
 - **Ask before sharing feature counts**: Shared only after you say Share.
 - **Automatic chat tags**: Chats are tagged from what they are about; a channel's What goes here… edits its list.
-- **Backup health in Resources**: Resources shows your backup's health.
 - **Bottom app bar on desktop**: Apps bar at the bottom on any width.
 - **Buttons that tick things off in apps**: Reply buttons that tick something off in an app (a checklist step) with no agent reply; a failure shows Retry.
 - **Calm offline card**: The can't-reach-your-Wizard card shows one dotted path (Internet · Tailscale · Wizard), one short next step and a small Check again with the automatic re-check time.
@@ -205,6 +204,7 @@ Switches that are ordinary settings or views, not tester switches:
 - **Different shell view - AI apps**: The AI apps view: chats in a left sidebar that folds to a slim rail, the chat in a centred column, your apps in a right column; an app opens beside the chat. Where: desktop: Settings › Appearance › Shell view › AI apps (the standard desktop view; Desks is the other choice). (desktop only).
 
 No longer switches (owners and old chats may still name them):
+- **Backup health in Resources**: on for everyone, nothing to turn on: Home › Resources › Health shows this box's own backup (when it last ran, whether it was checked, warnings in plain words), and when a backup leaves your main agent out you are told once and Include it adds it after checking there is room on the disk.
 - **Agent access under the browser boundary**: on for everyone, nothing to turn on: with the browser boundary on, Connected accounts' Agent access screen shows which agents may use each account app, and a tap there changes it.
 - **Channels in Chats**: on for everyone now, nothing to turn on: open Chats and use the tabs at the bottom: Inbox (what needs you), Tags (your channels) and Sent. Tags lists your Spaces one per line, plus General; open one to see its chats as posts with a reply line.
 - **Thread tracker**: retired: Needs you now shows in the thread itself, on the reply that needs the owner (with Mark done), and in Inbox; Reply works on any message.
@@ -228,6 +228,7 @@ No longer switches (owners and old chats may still name them):
 - **Get alerts in Chats or as badges?** Settings › Notifications, per app; Notifications in Chats (Settings › Chats & app screens) must be on for Chats.
 - **Find a message that didn't send?** Settings › Unsent & recovered.
 - **See AI usage or server load?** Home's resource bars, or Settings › Resources.
+- **See whether my backup is working?** Home › Resources › Health has a Backup row: when the last backup ran, whether it was checked and how many are kept; amber or red with the reason in plain words when it is late, failed or left something out. If your main agent was left out, tap Include it there.
 - **Add another Wizard?** Settings › Connections › Wizards › Add a Wizard.
 - **Install an app?** Open the App Store (desktop: Apps column › + Add an app › Get more; phone: swipe the orb up › Get more), open the app, Get.
 - **See keyboard shortcuts?** Desktop: ⌥/ or hold ⌥.

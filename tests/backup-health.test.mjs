@@ -1,8 +1,8 @@
-// Backup health in Resources (wizard-ux issue 1743, switch wizard/backup-health). The real core/usage.js +
-// core/resources.js + core/features.js run in node:vm on the mini-dom with a fake box: with the switch on, Health shows
+// Backup health in Resources (wizard-ux issue 1743, on for everyone). The real core/usage.js +
+// core/resources.js + core/features.js run in node:vm on the mini-dom with a fake box: Health shows
 // the App Manager's rows from this box's own backup (store-install/_backup-health) even with no watchdog, a watchdog row
-// with the same key wins, Include it posts once and shows the answer, and ?view=backup-health opens Health. With the
-// switch off nothing is read and Health is exactly as before.
+// with the same key wins, Include it posts once and shows the answer, and ?view=backup-health opens Health. An App Manager
+// without the route (404) leaves Health exactly as before.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
@@ -14,12 +14,11 @@ const BACKUP = { key: 'backups', label: 'Backup', status: 'ok', value: 'Last bac
 const AGENT = { key: 'main-agent-backup', label: 'Main agent', status: 'warn', value: 'not in backup',
   detail: 'Your main agent (its memory, skills and every chat) isn’t in your backup.', action: { id: 'include-main-agent', label: 'Include it' } };
 
-function boot({ on = true, watchdog = null, own = { available: true, checks: [BACKUP, AGENT], checkedAt: new Date().toISOString() }, include } = {}) {
+function boot({ watchdog = null, own = { available: true, checks: [BACKUP, AGENT], checkedAt: new Date().toISOString() }, include } = {}) {
   const doc = createDocument(), proto = Object.getPrototypeOf(doc.body);
   proto.getClientRects ||= function () { return this.isConnected ? [{}] : []; };
   proto.before ||= function (...n) { for (const x of n) this.parentNode.insertBefore(x, this); };
   proto.focus ||= function () {};
-  if (on) doc.documentElement.dataset.tweaks = 'wizard/backup-health';
   const fetches = [], posts = [], timers = [], listeners = {};
   const answer = (status, body) => ({ ok: status >= 200 && status < 300, status, json: async () => body });
   const ctx = { document: doc, localStorage: { getItem: () => null, setItem() {} }, queueMicrotask, AbortController, Event, console, Date, URL,
@@ -50,7 +49,7 @@ function boot({ on = true, watchdog = null, own = { available: true, checks: [BA
 }
 const openHealth = async b => { assert.ok(b.F.open('backup-health'), '?view=backup-health opens Health'); await b.settle(); return b.doc.querySelector('[data-res-body]'); };
 
-test('switch on, no watchdog: Health shows the box\'s own backup rows and Home names the left-out main agent', async () => {
+test('no watchdog: Health shows the box\'s own backup rows and Home names the left-out main agent', async () => {
   const b = boot();
   const body = await openHealth(b);
   assert.equal(new URL(b.fetches.find(u => u.endsWith('/_backup-health'))).pathname, '/wizard-os-home/store-install/_backup-health', 'read next to the shell, like the Store');
@@ -86,15 +85,7 @@ test('a watchdog row with the same key wins; other watchdog rows stay', async ()
   assert.match(body.querySelector('[data-health="backups"]').textContent, /watchdog says fine/);
 });
 
-test('switch off: nothing is read and Health is exactly as before', async () => {
-  const b = boot({ on: false });
-  b.R.update(true); await b.settle();
-  assert.ok(!b.fetches.some(u => u.includes('_backup-health')));
-  assert.equal(b.R.healthProblems().length, 0);
-  assert.equal(b.R.state.health, null);
-});
-
-test('switch on but the App Manager answers 404 (its half off or older): Health as before', async () => {
+test('the App Manager answers 404 (an older one without the route): Health as before', async () => {
   const b = boot({ own: 404 });
   const body = await openHealth(b);
   assert.match(body.textContent, /Health checks unavailable right now/);
