@@ -80,7 +80,8 @@ window.WizCore.chatsParts.chanui = function ({ agentName, agentRec, ago, AGS, ch
   }
   /* What goes here (wizard-agent-service issue 702, the box's auto tags on): the channel's covers, one per line. Chats
    * about any of them get this channel's tag by themselves; `kind: report` (question, lookup, evaluation, digest,
-   * reminder, todo) matches the kind of chat. Saving replaces the owner's list; what the box learned stays. */
+   * reminder, todo) matches the kind of chat. Saving sends only the lines added and removed (one entry each), so an
+   * edit from another device made meanwhile stays; what the box learned stays too. */
   function openChannelCovers(wid, cid) {
     const el = track.querySelector(`[data-chats="${wid}"]`), sp = spaces().find(s => s.id === cid); if (!el || !sp || !LIVE.chanStore?.covers) return;
     closeRowSheet();
@@ -89,22 +90,22 @@ window.WizCore.chatsParts.chanui = function ({ agentName, agentRec, ago, AGS, ch
       <p class="ch-covers-help">Chats about any of these get this tag by themselves. One per line; <code>kind: report</code> matches questions, lookups and reports.</p>
       <textarea name="covers" rows="7" aria-label="What this channel covers" placeholder="Loading…" disabled></textarea>
       <div class="ch-rename-b"><button type="button" data-rncancel>Cancel</button><button type="button" class="go" data-chcvsave disabled>Save</button></div></div></div>`);
-    chatVars.rowSheet = { wid, chan: cid, covers: true };
+    chatVars.rowSheet = { wid, chan: cid, covers: [] };
     LIVE.chanStore.covers(cid).then(d => {
       const ta = el.querySelector('.ch-covers textarea'), go = el.querySelector('[data-chcvsave]'); if (!ta || chatVars.rowSheet?.chan !== cid) return;
       if (!d) { ta.placeholder = 'Not available right now'; return; }
-      ta.value = d.covers.join('\n'); ta.placeholder = 'clips\npodcast\nkind: report'; ta.disabled = false; if (go) go.disabled = false;
+      chatVars.rowSheet.covers = d.covers; ta.value = d.covers.join('\n'); ta.placeholder = 'clips\npodcast\nkind: report'; ta.disabled = false; if (go) go.disabled = false;
       const learned = d.learned.length ? `<p class="ch-covers-help">Learned from your tags: ${esc(d.learned.slice(-6).join(', '))}</p>` : '';
       if (learned) ta.insertAdjacentHTML('afterend', learned);
       ta.focus();
     });
   }
   function submitChannelCovers(sheet) {
-    const cid = chatVars.rowSheet?.chan, ta = sheet?.querySelector('.ch-covers textarea'); if (!cid || !ta || ta.disabled) return;
+    const cid = chatVars.rowSheet?.chan, before = chatVars.rowSheet?.covers || [], ta = sheet?.querySelector('.ch-covers textarea'); if (!cid || !ta || ta.disabled) return;
     const list = [...new Set(ta.value.split(/\n|,/u).map(x => x.replace(/\s+/g, ' ').trim()).filter(Boolean))];
     if (list.length > 40 || list.some(x => x.length > 60)) { toast('!', 'At most 40 lines of up to 60 letters', 2200); return; }
     closeRowSheet();
-    LIVE.chanStore.setCovers(cid, list).then(r => toast(r.ok ? '🏷️' : '!', r.ok ? 'Saved: new chats are tagged by this list' : 'Not saved: check the lines', 1800));
+    LIVE.chanStore.editCovers(cid, before, list).then(r => toast(r.ok ? '🏷️' : '!', r.ok ? 'Saved: new chats are tagged by this list' : 'Not saved: check the lines', 1800));
   }
   /* Mark channel read (issue 1317, with Mark done): the channel's read point moves to now (issue 1316) and its posts'
    * green New reply words clear (LIVE.markSeen of the posts that have one). Amber Needs you is cleared only per thread. */

@@ -128,8 +128,17 @@ window.WizCore.liveParts.channels = function () {
       try { const d = await (await req(`${CHANNEL_COVERS_URL}?id=${encodeURIComponent(id)}`, { cache: 'no-store' })).json(); return d && Array.isArray(d.covers) ? { covers: d.covers.filter(x => typeof x === 'string'), learned: Array.isArray(d.learned) ? d.learned.filter(x => typeof x === 'string') : [], not: Array.isArray(d.not) ? d.not.filter(x => typeof x === 'string') : [] } : null; }
       catch (_) { return null; }
     }
-    // The owner's list replaces the channel's listed covers (what was learned stays). -> {ok, body}
-    function setCovers(id, list) { return ID.test(id) && Array.isArray(list) ? send(CHANNEL_COVERS_URL, 'PUT', { id, covers: list }) : Promise.resolve({ ok: false, status: 400 }); }
+    // The owner's edit as one entry at a time (removals, then additions), from the list this device showed to the list
+    // he saved, so another device's edit made meanwhile is kept (an item operation, never this device's whole list).
+    // -> {ok, body}: ok when every entry landed; body is the box's list after the last one.
+    async function editCovers(id, before, after) {
+      if (!ID.test(id) || !Array.isArray(before) || !Array.isArray(after)) return { ok: false, status: 400 };
+      const k = x => String(x).toLowerCase(), had = new Set(before.map(k)), keep = new Set(after.map(k));
+      const ops = [...before.filter(x => !keep.has(k(x))).map(x => ({ remove: x })), ...after.filter(x => !had.has(k(x))).map(x => ({ add: x }))];
+      let last = { ok: true, body: null };
+      for (const op of ops) { const r = await send(CHANNEL_COVERS_URL, 'PUT', { id, ...op }); if (!r.ok) return r; last = r; }
+      return last;
+    }
     // [[agent|id, channel id, on]] still inside moveKeep.
     function tagEdits() {
       const t = now(), out = [];
@@ -179,7 +188,7 @@ window.WizCore.liveParts.channels = function () {
     }
     // A window coming back to the front reads again at once (another device may have pinned or sorted meanwhile).
     const fresh = () => { readAt = 0; for (const f of FEEDS.values()) f.at = 0; };
-    return { state, pull, patch, create, move, moves, tag, tagEdits, covers, setCovers, feed, rows, find, fresh, get off() { return off; } };
+    return { state, pull, patch, create, move, moves, tag, tagEdits, covers, editCovers, feed, rows, find, fresh, get off() { return off; } };
   }
   /* ---- end channel store ---- */
   /* ---- channel reads (wizard-agent-service issue 471) ----

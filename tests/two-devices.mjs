@@ -114,7 +114,10 @@ export function channelBox({ channels = [], sort = 'az', members = {}, threads =
     if (u.pathname === '/wizard/v1/channels/covers') {
       if (!box.autoTags) return bad(404, 'not_found')
       const id = method === 'GET' ? u.searchParams.get('id') : body.id, c = box.channels.find(x => x.id === id); if (!c) return bad(404, 'channel_not_found')
-      if (method === 'PUT') { if (!Array.isArray(body.covers) || body.covers.length > 40) return bad(400, 'invalid_covers'); box.covers[id] = { ...(box.covers[id] || { learned: [], not: [] }), covers: body.covers.slice() } }
+      const cur = box.covers[id] || (box.covers[id] = { covers: [], learned: [], not: [] }), k = x => String(x).toLowerCase()
+      if (method === 'PUT' && 'covers' in body) { if (!Array.isArray(body.covers) || body.covers.length > 40) return bad(400, 'invalid_covers'); cur.covers = body.covers.slice() }
+      if (method === 'PUT' && 'add' in body && !cur.covers.some(x => k(x) === k(body.add))) cur.covers.push(body.add)
+      if (method === 'PUT' && 'remove' in body) cur.covers = cur.covers.filter(x => k(x) !== k(body.remove))
       return answer(200, { id, covers: [], learned: [], not: [], ...(box.covers[id] || {}) })
     }
     if (u.pathname === '/wizard/v1/channels/tags') {

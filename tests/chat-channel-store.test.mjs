@@ -320,13 +320,44 @@ test('auto tags on: the live store reads and replaces a channel\'s covers; off, 
   assert.equal(dev.state().autoTags, true)
   box.covers.launch = { covers: ['launch', 'kind: report'], learned: ['Launch plan'], not: [] }
   assert.deepEqual(clone(await dev.covers('launch')), { covers: ['launch', 'kind: report'], learned: ['Launch plan'], not: [] })
-  const r = await dev.setCovers('launch', ['launch', 'press'])
+  const r = await dev.editCovers('launch', ['launch', 'kind: report'], ['launch', 'press'])
   assert.equal(r.ok, true); assert.deepEqual(box.covers.launch.covers, ['launch', 'press']); assert.deepEqual(box.covers.launch.learned, ['Launch plan'], 'what was learned stays')
+  assert.deepEqual(box.log.filter(l => l.startsWith('PUT')).map(l => JSON.parse(l.slice(l.indexOf('{')))), [{ id: 'launch', remove: 'kind: report' }, { id: 'launch', add: 'press' }], 'one entry per write, never the whole list')
   const plain = channelBox({ channels: START(), tags: true }), other = channelDevice(plain)
   await other.pull()
   assert.equal(other.state().autoTags, undefined)
   assert.equal(await other.covers('launch'), null)
   assert.ok(!plain.log.some(l => l.includes('/covers')), 'never asks a box whose auto tags are off')
+})
+
+test('auto tags on: two devices editing the same covers from stale lists both keep their change', async () => {
+  const box = channelBox({ channels: START(), tags: true, autoTags: true }), a = channelDevice(box), b = channelDevice(box)
+  await a.pull(); await b.pull()
+  box.covers.launch = { covers: ['launch', 'press'], learned: [], not: [] }
+  const seenA = (await a.covers('launch')).covers, seenB = (await b.covers('launch')).covers
+  box.race(2)
+  const [ra, rb] = await Promise.all([a.editCovers('launch', seenA, ['launch', 'press', 'keynote']), b.editCovers('launch', seenB, ['launch'])])
+  assert.equal(ra.ok && rb.ok, true)
+  assert.deepEqual(box.covers.launch.covers, ['launch', 'keynote'], 'A\'s new line and B\'s removal both stand')
+  // A stale device that saves later without touching a line changes nothing.
+  assert.deepEqual(clone(await a.editCovers('launch', seenA, seenA)), { ok: true, body: null })
+  assert.deepEqual(box.covers.launch.covers, ['launch', 'keynote'])
+})
+
+test('auto tags on: a routed agent\'s channel edits its own covers, with the same sheet (host-profile, container, restricted)', async () => {
+  for (const cid of ['host-ops', 'box', 'locked']) {
+    const s = await shell({ tags: true, autoTags: true }), t = sheetTrack()
+    s.env.track = t.track
+    s.box.covers[cid] = { covers: ['ops'], learned: [], not: [] }
+    s.openChannelSheet('w', cid)
+    assert.ok(t.html.at(-1).includes('data-rschcovers'), cid)
+    s.env.rowSheet = { wid: 'w', chan: cid }
+    s.channelSheetClick(at('data-rschcovers')); await settle()
+    t.ta.value = 'ops\ndeploys'
+    s.channelSheetClick(at('data-chcvsave', { '.ch-covers': t.sheet })); await settle()
+    assert.deepEqual(s.box.covers[cid].covers, ['ops', 'deploys'], cid)
+    assert.ok(!Object.keys(s.box.covers).some(k => k !== cid && s.box.covers[k].covers.includes('deploys')), `${cid}: no other channel changed`)
+  }
 })
 
 test('auto tags on: the channel sheet offers What goes here…, shows the covers and saves the edited list', async () => {
@@ -346,7 +377,8 @@ test('auto tags on: the channel sheet offers What goes here…, shows the covers
   t.ta.value = 'launch\npress release, launch\n\n  kind: report '
   assert.equal(s.channelSheetClick(at('data-chcvsave', { '.ch-covers': t.sheet })), true)
   await settle()
-  assert.deepEqual(s.box.covers.launch.covers, ['launch', 'press release', 'kind: report'])
+  assert.deepEqual(s.box.covers.launch.covers, ['launch', 'kind: report', 'press release'])
+  assert.deepEqual(s.box.log.filter(l => l.startsWith('PUT')).map(l => JSON.parse(l.slice(l.indexOf('{')))), [{ id: 'launch', add: 'press release' }], 'only the new line is sent')
   assert.ok(s.toasts.includes('Saved: new chats are tagged by this list'), s.toasts.join(','))
 })
 
