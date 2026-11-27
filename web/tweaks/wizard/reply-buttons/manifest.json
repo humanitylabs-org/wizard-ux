@@ -1,0 +1,14 @@
+{
+  "id": "wizard/reply-buttons",
+  "name": "Tap to answer in replies",
+  "version": "1.0.0",
+  "author": "wizard",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout"
+  ],
+  "description": "Your agent can put buttons inside a normal reply (Go for it / Drop this, Done under each step). A tap marks your pick and sends it back to the agent; several taps within a few seconds go as one message (wizard-ux issue 1889).",
+  "issues": [
+    "humanitylabs-org/wizard-ux#1889"
+  ]
+}

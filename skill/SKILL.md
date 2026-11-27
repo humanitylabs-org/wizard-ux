@@ -16,7 +16,7 @@ Every screen, Settings page and feature switch of the Wizard interface (the phon
 ## Screens
 
 - **Home**: The start screen: what's Working and Ready, the Resources bars (server and AI accounts), your apps. Desktop: AI apps view: close the open chat (✕, Esc or ⌥`) to get the empty Home with the message box, the orb and your pinned apps; Desks view: the house at the left of the top bar (⌥`). Phone: the first desk; the gear at its top right opens Settings.
-- **Chats**: All your conversations with the agent, in sections: Errors, Working, Saved, Ready, Yesterday, Past week, Snoozed, Archive (By day), or Working, Ready, Snoozed, Archive (By status; chosen in the Filter sheet). Search, the Filter button, + New chat, and a Focus strip with All, each agent and your Spaces. Long-press or right-click a chat for Pin, Rename, Mark unread, Snooze, Archive / Restore. Desktop: AI apps view: the chats sidebar on the left (search ⌥K, + New chat ⌥N); Desks view: the Inbox count in the top bar (⌥I). Phone: the Chats desk, or hold the orb and say 'chats'.
+- **Chats**: All your conversations with the agent, in sections: Errors, Working, Saved, Ready, Yesterday, Past week, Snoozed, Archive (By day), or Working, Ready, Snoozed, Archive (By status; chosen in the Filter sheet). Search, Filter and + New chat. Long-press or right-click a chat for Pin, Rename, Mark unread, Snooze, Archive / Restore. Desktop: AI apps view: the chats sidebar on the left (search ⌥K, + New chat ⌥N); Desks view: the Inbox count in the top bar (⌥I). Phone: the Chats desk, or hold the orb and say 'chats'.
 - **Work**: Chats opened at a section (a link to Working, Ready, Archive …).
 - **Chats › Errors**: Chats whose last reply failed, with Retry (and why, with Why a reply failed on).
 - **Chats › Working**: Chats where the agent is still working; order set in Settings › Chats & app screens › Working threads.
@@ -94,7 +94,7 @@ Chats & app screens: how Chats behaves and looks, which Chats app is the default
 - Workspace sync › Same workspaces on every device: the same desks with the same apps on all your devices (layout and the current desk stay per device), plus Recently closed desks with Reopen. (when the box supports it).
 
 ### Notifications
-Notifications: for each app that sends notifications, choose Badge (a count on its icon) or Chats (its alerts arrive as threads in Chats). Saved on this device. Chats needs Notifications in Chats on.
+Notifications: per app, Badge (a count on its icon) or Chats (its alerts arrive as threads in Chats). Saved on this device.
 - One row per app that sends notifications, each with Badge or Chats.
 
 ### Voice & typing
@@ -185,6 +185,7 @@ Settings › Appearance › Try new features lists unfinished features to try, A
 - **Icons on the attach menu**: Android app: the + menu in a chat (and the orb's Attach) shows icons before Photo or video, Camera and File, on bigger rows. (Android app only).
 - **Inbox until archived**: Chats stay in Inbox until archived.
 - **Inbox: only what needs you**: Inbox: only what needs you.
+- **Inbox: pin threads to the top**: Pin threads on top.
 - **Install apps your agent builds**: Apps I build install with one tap.
 - **Install sheet recommends private AI**: Installing a personal-data app suggests private AI.
 - **Instant home-screen apps**: Android: pinned app icons open at once on their last screen.
@@ -207,10 +208,11 @@ Settings › Appearance › Try new features lists unfinished features to try, A
 - **Running view in the AI apps sidebar**: AI apps: Running view in the sidebar.
 - **Send and go**: On desktop, sending opens a fresh chat.
 - **Sent: the same rows as Inbox**: Sent uses Inbox's rows.
-- **Sent: threads, like email**: Sent lists threads, like email.
+- **Sent: threads, like email**: Sent lists threads.
 - **Share feature counts**: Sends features you tried and your thumbs, plus a random box id.
-- **Share to people in any window**: Share's People row shows Messenger's recent chats in every window, also one that never opened Messenger.
+- **Share to people in any window**: Share's People row shows Messenger's recent chats in every window.
 - **Short answer first**: A long agent reply shows only its one-line plain answer; tap it for the full reply. Choose whether replies start collapsed and how long the short answer is. Where: Settings › Appearance › Try new features › Short answer first; its options show under it when on.
+- **Shorter app updates**: App updates stop an app once.
 - **Side button opens the Agent chat**: Android app: the side button opens Messenger's Agent chat for a note instead of a new Wizard chat.
 - **Skins are look only**: Skins become a look only: only feature switches decide what runs. Your skin's own choices come back when you switch this off.
 - **Smart inbox: only what needs you**: Inbox: only what blocks you.
@@ -219,6 +221,7 @@ Settings › Appearance › Try new features lists unfinished features to try, A
 - **Swipe away downloads**: Phone: swipe the Downloaded banner away and swipe the Downloads sheet down to close it. (phone only).
 - **Tags**: A chat can carry several tags.
 - **Tap the app in front for its first view**: Narrow desktop window: tapping the icon of the app in front takes it back to its first view.
+- **Tap to answer in replies**: Tap-to-answer buttons in agent replies.
 - **Tell the team about failed updates**: When an app or WizardOS update fails on this box, the App Manager files a bug for the team (or adds to the open one) with the box, versions, failing step and error, using this box's GitHub login. Your notification then says the team was told.
 - **Undated chat titles**: Same-topic chats: no date.
 - **Why a reply failed**: When a reply fails and Wizard knows why (subscription ended, usage limit, signed out, network), Chats > Errors and the thread say so plainly, with Choose another model first when Retry can't work.

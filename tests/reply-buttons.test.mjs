@@ -1,0 +1,175 @@
+// Tap-to-answer buttons inside agent replies (wizard-ux issue 1889, switch wizard/reply-buttons). The agent writes
+// [WIZARD_BUTTONS_V1]{"group","buttons":[{"id","label"}]}[/WIZARD_BUTTONS_V1] lines; the reply draws each group where
+// it sits; taps within a few seconds go back as ONE owner message carrying [WIZARD_TAPS_V1]{"taps":[...]}; the picked
+// state is read back from the thread's own history. Runs the real chat-kit.js, action-cards.js and live.js normalizer.
+import { modelContext } from './fixtures/chats-list-model.mjs';
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import vm from 'node:vm';
+import { withLiveParts } from './fixtures/live-parts.mjs';
+
+const read = p => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
+const clone = v => JSON.parse(JSON.stringify(v));
+const GROUP = (group, ...labels) => `[WIZARD_BUTTONS_V1]${JSON.stringify({ group, buttons: labels.map(l => ({ id: l.toLowerCase().replace(/[^a-z0-9]+/g, '-'), label: l })) })}[/WIZARD_BUTTONS_V1]`;
+const REPLY = `Two things today.\n\n**Ship desks?** I tested both layouts.\n${GROUP('Ship desks', 'Go for it', 'Drop this')}\n\n**Morning**\n1. Workout\n${GROUP('Workout', 'Done')}\n\nThat's all.`;
+const rows = (content, extra = []) => [{ role: 'user', timestamp: 1, content: 'What is up today?' }, { id: 41, role: 'assistant', timestamp: 2, content }, ...extra];
+
+function world({ on = true } = {}) {
+  const docEl = { dataset: { tweaks: on ? 'wizard/reply-buttons' : '' } };
+  const ctx = { URL, Intl, Date, JSON, Promise, Map, Set, navigator: {}, setTimeout, clearTimeout, CSS: { escape: s => String(s) },
+    location: { origin: 'https://box.example', href: 'https://box.example/wizard-os-home/' },
+    document: { documentElement: docEl, activeElement: null, visibilityState: 'visible', addEventListener() {}, querySelector() { return null; }, querySelectorAll: () => [] },
+    addEventListener() {} };
+  ctx.window = ctx; modelContext(ctx);
+  vm.createContext(ctx);
+  vm.runInContext(read('web/core/chat-kit.js'), ctx);
+  vm.runInContext(read('web/core/action-cards.js'), ctx);
+  return { KIT: ctx.WosChat, AC: ctx.WosActionCards, docEl };
+}
+// A tapped button as core/chats-bind.js hands it over: its group box carries the message and group.
+const button = (msg, group, id, label, pressed = false) => {
+  const box = { dataset: { rbMsg: msg, rbGroup: group } };
+  return { dataset: { rb: id }, textContent: (pressed ? '✓ ' : '') + label, disabled: false, getAttribute: a => a === 'aria-pressed' ? String(pressed) : null, closest: q => q === '.ch-rb' ? box : null };
+};
+const md = s => `<p>${s.replace(/\n+/g, ' ')}</p>`;
+
+test('marker: groups parsed in place, the plain text keeps their labels, a reply without it is unchanged', () => {
+  const { KIT } = world();
+  const [tn] = KIT.parseRows(rows(REPLY));
+  assert.deepEqual(clone(tn.a.buttons), [
+    { group: 'Ship desks', buttons: [{ id: 'go-for-it', label: 'Go for it' }, { id: 'drop-this', label: 'Drop this' }], msg: '41' },
+    { group: 'Workout', buttons: [{ id: 'done', label: 'Done' }], msg: '41' }]);
+  for (const t of [tn.a.text, tn.a.plainText]) {
+    assert.doesNotMatch(t, /WIZARD_BUTTONS|"group"/, 'no marker text');
+    assert.match(t, /I tested both layouts\.\n\n\[Go for it\] \[Drop this\]\n\n\*\*Morning\*\*\n1\. Workout\n\n\[Done\]\n\nThat's all\./, 'labels as text where the buttons sit');
+  }
+  assert.deepEqual(tn.a.btext.split('\n').filter(l => KIT.RB_TOKEN.test(l)).map(l => KIT.RB_TOKEN.exec(l)[1]), ['0', '1'], 'one token line per group, in order');
+  const plain = KIT.parseRows(rows('Nothing to tap.'))[0];
+  assert.ok(!('buttons' in plain.a) && !('btext' in plain.a)); assert.equal(plain.a.text, 'Nothing to tap.');
+  // no id in the history row: the message is named by its time
+  assert.equal(KIT.parseRows([{ role: 'assistant', timestamp: 5, content: GROUP('A', 'Yes') }])[0].a.buttons[0].msg, 't5000');
+});
+
+test('marker: bad groups are dropped (hidden), 1 to 6 buttons, unique groups, cut-off marker hidden', () => {
+  const { KIT } = world();
+  const seven = `[WIZARD_BUTTONS_V1]${JSON.stringify({ group: 'Many', buttons: Array.from({ length: 7 }, (_, i) => ({ id: 'b' + i, label: 'B' + i })) })}[/WIZARD_BUTTONS_V1]`;
+  assert.equal(KIT.buttonGroups(seven)[0].buttons.length, 6);
+  for (const bad of ['[WIZARD_BUTTONS_V1]{nope[/WIZARD_BUTTONS_V1]', `[WIZARD_BUTTONS_V1]${JSON.stringify({ group: '', buttons: [{ id: 'a', label: 'A' }] })}[/WIZARD_BUTTONS_V1]`,
+    `[WIZARD_BUTTONS_V1]${JSON.stringify({ group: 'G', buttons: [{ id: '../x', label: 'A' }, { id: 'b', label: ' ' }] })}[/WIZARD_BUTTONS_V1]`]) {
+    const [tn] = KIT.parseRows(rows(`Done.\n${bad}`));
+    assert.equal(tn.a.text, 'Done.', bad); assert.ok(!('buttons' in tn.a), bad);
+  }
+  assert.equal(KIT.buttonGroups(GROUP('Same', 'A') + GROUP('Same', 'B')).length, 1);
+  assert.equal(KIT.parseRows(rows('Pick one:\n[WIZARD_BUTTONS_V1]{"group":"x","butt'))[0].a.text, 'Pick one:', 'mid-stream marker hidden');
+});
+
+test('switch on: each group is drawn where it sits, plain buttons, nothing picked yet', () => {
+  const { KIT, AC } = world();
+  const [tn] = KIT.parseRows(rows(REPLY));
+  const html = AC.replyHtml(tn.a.btext, tn.a.buttons, md, AC.replyPicks([tn], 's1'));
+  const order = ['I tested both layouts', 'data-rb-group="Ship desks"', 'Morning', 'data-rb-group="Workout"', 'That&#39;s all'].map(x => html.indexOf(x.replace('&#39;', "'")) >= 0 ? html.indexOf(x.replace('&#39;', "'")) : html.indexOf(x));
+  assert.ok(order.every((v, i) => v >= 0 && (i === 0 || v > order[i - 1])), 'groups between the text, in place: ' + order);
+  assert.equal((html.match(/<button /g) || []).length, 3);
+  assert.doesNotMatch(html, /aria-pressed="true"|disabled|WIZARD_|\[Go for it\]/);
+  assert.match(html, /<button type="button" class="ch-rb-btn" data-rb="go-for-it" aria-pressed="false">Go for it<\/button>/);
+});
+
+test('taps: one in each group within the batch window go as ONE message naming both; the tap shows at once', async () => {
+  const { KIT, AC } = world(), sent = [], painted = [];
+  const ctx = { sid: 's1', send: async text => { sent.push(text); return { id: 'ob1' }; }, repaint: () => painted.push(1) };
+  assert.equal(AC.replyTap(button('41', 'Ship desks', 'go-for-it', 'Go for it'), ctx), true);
+  assert.equal(AC.replyTap(button('41', 'Workout', 'done', 'Done'), ctx), true);
+  assert.equal(sent.length, 0, 'nothing sent before the batch window ends');
+  assert.equal(painted.length, 2, 'each tap repaints on its own frame');
+  const [tn] = KIT.parseRows(rows(REPLY));
+  const now = AC.replyHtml(tn.a.btext, tn.a.buttons, md, AC.replyPicks([tn], 's1'));
+  assert.match(now, /class="ch-rb-btn on" data-rb="go-for-it" aria-pressed="true">✓ Go for it/);
+  assert.match(now, /class="ch-rb-btn dim" data-rb="drop-this" aria-pressed="false">Drop this/);
+  assert.match(now, /class="ch-rb-btn on" data-rb="done" aria-pressed="true">✓ Done/);
+  await AC.replyFlush('s1');
+  assert.equal(sent.length, 1, 'two taps, one turn');
+  assert.match(sent[0], /^Tapped Go for it · Ship desks\nTapped Done · Workout\n\[WIZARD_TAPS_V1\]/);
+  assert.deepEqual(clone(KIT.tapsOf(sent[0]).taps), [
+    { thread: 's1', message: '41', group: 'Ship desks', button: 'go-for-it', label: 'Go for it' },
+    { thread: 's1', message: '41', group: 'Workout', button: 'done', label: 'Done' }]);
+});
+
+test('taps: changing a group inside the window keeps only the last pick; the batch sends by itself after 3 s', async () => {
+  const { KIT, AC } = world(), sent = [];
+  const ctx = { sid: 's2', send: async text => { sent.push(text); return { id: 'ob' }; } };
+  AC.replyTap(button('41', 'Ship desks', 'go-for-it', 'Go for it'), ctx);
+  AC.replyTap(button('41', 'Ship desks', 'drop-this', 'Drop this'), ctx);
+  await new Promise(r => setTimeout(r, 3300));
+  assert.equal(sent.length, 1);
+  assert.deepEqual(clone(KIT.tapsOf(sent[0]).taps).map(t => t.button), ['drop-this']);
+});
+
+test('history: the picked state comes back on reload and on a second device; locked once the agent answered', () => {
+  const tapMsg = AC0 => AC0.replyMessage([{ thread: 's3', message: '41', group: 'Workout', button: 'done', label: 'Done' }]);
+  const a = world(), b = world(); // two devices, one history
+  const history = rows(REPLY, [{ id: 42, role: 'user', timestamp: 3, content: tapMsg(a.AC) }]);
+  for (const { KIT, AC } of [a, b]) {
+    const turns = KIT.parseRows(history);
+    assert.equal(turns.length, 2, 'the tap message is its own turn');
+    assert.deepEqual(clone(turns[1].u.taps).map(t => t.label), ['Done']);
+    assert.equal(turns[1].u.text, 'Tapped Done · Workout', 'readable line, no marker');
+    const html = AC.replyHtml(turns[0].a.btext, turns[0].a.buttons, md, AC.replyPicks(turns, 's3'));
+    assert.match(html, /aria-pressed="true">✓ Done<\/button>/);
+    assert.doesNotMatch(html, /disabled/, 'the agent has not acted yet: still changeable');
+    assert.match(html, /data-rb-group="Ship desks"[^>]*>(<button[^>]*aria-pressed="false"[^>]*>[^<]*<\/button>){2}/, 'other group untouched');
+  }
+  const answered = a.KIT.parseRows([...history, { id: 43, role: 'assistant', timestamp: 4, content: 'Logged your workout.' }]);
+  const locked = a.AC.replyHtml(answered[0].a.btext, answered[0].a.buttons, md, a.AC.replyPicks(answered, 's3'));
+  assert.match(locked, /class="ch-rb picked locked"[^>]*data-rb-group="Workout"/);
+  assert.match(locked, /aria-pressed="true" disabled>✓ Done/);
+  assert.doesNotMatch(locked.slice(0, locked.indexOf('Workout')), /disabled/, 'Ship desks still open');
+});
+
+test('switch off: no tap is sent; a failed save puts the buttons back', async () => {
+  const off = world({ on: false }), sent = [];
+  assert.equal(off.AC.replyOn(), false);
+  assert.equal(off.AC.replyTap(button('41', 'Workout', 'done', 'Done'), { sid: 's4', send: async t => { sent.push(t); return {}; } }), true);
+  await off.AC.replyFlush('s4'); assert.equal(sent.length, 0);
+  const { KIT, AC } = world(), toasts = [];
+  AC.replyTap(button('41', 'Workout', 'done', 'Done'), { sid: 's5', send: async () => null, toast: (i, t) => toasts.push(t) });
+  await AC.replyFlush('s5');
+  const [tn] = KIT.parseRows(rows(REPLY));
+  assert.doesNotMatch(AC.replyHtml(tn.a.btext, tn.a.buttons, md, AC.replyPicks([tn], 's5')), /aria-pressed="true"/);
+  assert.deepEqual(toasts, ['Couldn’t send that tap · try again']);
+});
+
+// Agent chat parity (AGENTS.md; wizard-agent-service qa/agent-parity/features.json "chat-reply-buttons"): the same reply in
+// a main thread and in host-profile, container and restricted routed threads gives the same buttons, the same tap
+// message (only its thread differs) and the same clean Chats preview.
+const ROUTES = { main: ['wizard_1793157258294_34b4a71ae61a', ''], 'host-profile': ['20261028_101500_ab12cd', 'qa-host-profile'],
+  container: ['agent-research:20261028_101501_ef34', 'agent-research'], restricted: ['restricted.vault_20261028-101502', 'restricted.vault'] };
+function listNormalizer() {
+  const live = withLiveParts(read('web/live.js')), a = live.indexOf('  const READY_OR_ATTENTION'), b = live.indexOf('  /* ---- thread-seen');
+  assert.ok(a > 0 && b > a, 'live.js normalizer block found');
+  const context = modelContext({});
+  vm.runInContext(`${live.slice(a, b)}\nthis.normalize = normalize;`, context);
+  return context.normalize;
+}
+test('parity: main and routed threads (host-profile, container, restricted) get the same buttons, tap message and preview', async () => {
+  const normalize = listNormalizer(), htmls = new Set(), msgs = new Set();
+  for (const [kind, [sid, agent]] of Object.entries(ROUTES)) {
+    const { KIT, AC } = world(), sent = [];
+    const history = rows(REPLY).map(r => ({ ...r, session_id: sid, ...(agent ? { agent } : {}) }));
+    const [tn] = KIT.parseRows(history);
+    htmls.add(AC.replyHtml(tn.a.btext, tn.a.buttons, md, AC.replyPicks([tn], sid)));
+    AC.replyTap(button('41', 'Workout', 'done', 'Done'), { sid, send: async t => { sent.push(t); return {}; } });
+    await AC.replyFlush(sid);
+    const taps = KIT.tapsOf(sent[0]).taps;
+    assert.equal(taps[0].thread, sid, kind);
+    msgs.add(JSON.stringify(taps.map(({ thread, ...t }) => t)));
+    const full = normalize({ id: sid, title: 'Synthetic', status: 'completed', ...(agent ? { agent } : {}), latest_message: { role: 'assistant', content: REPLY, timestamp: 2 } });
+    assert.equal(full.agent, agent, `${kind}: row keeps its agent`);
+    assert.doesNotMatch(full.preview, /WIZARD_|"group"/, `${kind}: no marker in the preview`);
+    assert.match(full.preview, /\[Go for it\] \[Drop this\]/, `${kind}: labels as text in the preview`);
+    const tapRow = normalize({ id: sid, title: 'Synthetic', status: 'completed', ...(agent ? { agent } : {}), latest_message: { role: 'user', content: sent[0], timestamp: 3 } });
+    assert.equal(tapRow.preview, 'Tapped Done · Workout', `${kind}: the tap message previews as its line`);
+  }
+  assert.equal(htmls.size, 1, 'byte-identical buttons for every runtime kind');
+  assert.equal(msgs.size, 1, 'the same tap for every runtime kind');
+});

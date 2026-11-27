@@ -34,7 +34,7 @@ window.WizCore.chatsParts.outbox = function ({ ch, CH, CHECK_SVG, elOf, esc, H, 
         && turns.some(t => t.a && t.a.final && !t.a.failed && isFinite(t.a.at) && t.a.at > p.sentAt + 10e3)) return true;
     if (p.state === 'sent') return us.some(u => sentMatch(u, p));
     if (!['queued', 'sending', 'waiting', 'unconfirmed'].includes(p.state) || !(p.attempts > 0) || p.steerRunId) return false;
-    const t = String(p.text || '').trim(), after = u => isFinite(u.at) && u.at >= (p.createdAt || 0) - 10e3; // made after this message was written (10 s for clock skew)
+    const t = String(typeof KIT !== 'undefined' && KIT.tapsOf ? KIT.tapsOf(p.text).text : p.text || '').trim(), after = u => isFinite(u.at) && u.at >= (p.createdAt || 0) - 10e3; // made after this message was written (10 s for clock skew)
     return us.some(u => after(u) && (files.length ? sameFiles(u) && (!t || String(u.text || '').trim().includes(t)) : !!t && String(u.text || '').trim() === t));
   }
   // A sent Retry of a saved request is that request again: Wizard's copy of it (Not sent, then Sending, then
@@ -51,7 +51,7 @@ window.WizCore.chatsParts.outbox = function ({ ch, CH, CHECK_SVG, elOf, esc, H, 
     const at = p.sentAt || p.createdAt, began = p.createdAt || at;
     if (!isFinite(u.at) || !isFinite(at) || u.at < began - 10e3 || u.at > at + 120e3) return false;
     const norm = s => String(s || '').normalize('NFKC').replace(/\s+/g, ' ').trim();
-    const text = norm(p.text), files = (p.files || []).filter(f => f?.id);
+    const text = norm(typeof KIT !== 'undefined' && KIT.tapsOf ? KIT.tapsOf(p.text).text : p.text), files = (p.files || []).filter(f => f?.id); // a tap message's history copy has no marker (issue 1889)
     const sameFiles = files.length && files.every(f => (u.files || []).some(x => x.id === f.id));
     return files.length ? !!sameFiles && (!text || norm(u.text) === text) : !!text && norm(u.text) === text;
   }
@@ -120,6 +120,9 @@ window.WizCore.chatsParts.outbox = function ({ ch, CH, CHECK_SVG, elOf, esc, H, 
     const files = (p.files || []).filter(f => f !== p.audioFile);
     const voice = p.audio || p.audioFile ? `<div class="fchips"><span class="fchip">${MIC_SVG} Voice note${p.text || ['empty', 'held'].includes(p.state) ? '' : ' · words come when it sends'}</span></div>` : '';
     const words = p.text || p.typed || ''; // a voice note not yet transcribed shows the typed words riding with it
+    // Reply-button taps on their way (wizard-ux issue 1889): the same quiet machine line as once they land.
+    const RB = globalThis.WosActionCards?.replyOn?.() ? globalThis.WosActionCards : null, taps = RB && p.text ? KIT.tapsOf?.(p.text)?.taps || [] : [];
+    if (taps.length) return `<div class="msg u pending ${p.state} ch-taps-pending" data-ob="${esc(p.id)}"><div class="ch-renamed ch-taps" data-rb-taps>${RB.tapLinesHtml(taps)}</div><div class="pmeta">${pendingState(p, s)}</div></div>`;
     return `<div class="msg u pending ${p.state}${p.steered ? ' steer' : ''}${p.reply ? ' has-rq' : ''}" data-ob="${esc(p.id)}"><div class="bub">${replyCard(KIT.reply.clean(p.reply))}${voice}${userMedia(c || { media: [] }, files, [])}${words ? md(words) : ''}</div><div class="pmeta">${pendingState(p, s)}</div></div>`;
   }
   // A thread that is still on its way: this device has an unsent/unconfirmed message for it, or the list shows its

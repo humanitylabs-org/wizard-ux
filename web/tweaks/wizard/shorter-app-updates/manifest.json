@@ -1,0 +1,14 @@
+{
+  "id": "wizard/shorter-app-updates",
+  "name": "Shorter app updates",
+  "version": "1.0.0",
+  "author": "wizard",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout"
+  ],
+  "issues": [
+    "humanitylabs-org/wizard-app-manager#1074"
+  ],
+  "description": "An app update stops the app once, for seconds instead of minutes. The App Manager (wam/short_updates.py) copies the app's data for its backup while the app still runs, stops it once, copies only what changed and starts the new version straight away (the new images were already pulled). Today the backup stops the app for the whole copy, starts the old version, and the update stops it again. Nothing on screen changes; apps just come back sooner after an update."
+}

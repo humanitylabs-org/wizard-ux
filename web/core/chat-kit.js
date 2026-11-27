@@ -56,6 +56,54 @@
     }
     return out;
   }
+  // Tap-to-answer buttons inside a reply (wizard-ux issue 1889, switch wizard/reply-buttons, core/action-cards.js):
+  //   [WIZARD_BUTTONS_V1]{"group":"Workout","buttons":[{"id":"done","label":"Done"}]}[/WIZARD_BUTTONS_V1]
+  // on its own line, drawn where it sits. A group is one ask (1-60 chars, also its name in the tap line), 1-6 buttons.
+  // Shells that can't draw it (the switch off, a list preview, Copy) show the labels as text: `[Done]`.
+  const BUTTONS_RE = /\[WIZARD_BUTTONS_V1\]\s*([\s\S]*?)\s*\[\/WIZARD_BUTTONS_V1\]/g, RB_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+  const RB_TOKEN = /^\u2063WB(\d+)\u2063$/; // a placed group in the drawn copy of the text (buttonsText)
+  const one = (v, n) => typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, n) : '';
+  function buttonGroup(json) {
+    try {
+      const p = JSON.parse(json), group = one(p?.group, 60), seen = new Set(), buttons = [];
+      for (const b of Array.isArray(p?.buttons) ? p.buttons : []) {
+        const id = typeof b?.id === 'string' ? b.id.trim() : '', label = one(b?.label, 40);
+        if (RB_ID.test(id) && label && !seen.has(id) && buttons.length < 6) { seen.add(id); buttons.push({ id, label }); }
+      }
+      return group && buttons.length ? { group, buttons } : null;
+    } catch (e) { return null; }
+  }
+  function buttonGroups(s) {
+    const out = [];
+    for (const m of String(s || '').matchAll(BUTTONS_RE)) { const g = buttonGroup(m[1]); if (g && !out.some(x => x.group === g.group) && out.length < 12) out.push(g); }
+    return out;
+  }
+  const buttonsFallback = json => { const g = buttonGroup(json); return g ? `\n\n${g.buttons.map(b => `[${b.label}]`).join(' ')}\n\n` : '\n\n'; };
+  // The text with each drawn group replaced by its own token line (index into buttonGroups), for the switch-on render.
+  function buttonsText(s) {
+    const seen = [];
+    return String(s || '').replace(/\n*[ \t]*\[WIZARD_BUTTONS_V1\]\s*([\s\S]*?)\s*\[\/WIZARD_BUTTONS_V1\][ \t]*\n*/g, (_, j) => {
+      const g = buttonGroup(j); if (!g || seen.includes(g.group) || seen.length >= 12) return '\n\n';
+      seen.push(g.group); return `\n\n\u2063WB${seen.length - 1}\u2063\n\n`;
+    });
+  }
+  // The owner's taps, sent back as one ordinary message: readable "Tapped Done · Workout" lines plus
+  //   [WIZARD_TAPS_V1]{"taps":[{"thread","message","group","button","label"}]}[/WIZARD_TAPS_V1]
+  // The thread draws it as a quiet machine line, never as words he typed.
+  const TAPS_RE = /\[WIZARD_TAPS_V1\]\s*([\s\S]*?)\s*\[\/WIZARD_TAPS_V1\]/g;
+  function tapsOf(s) {
+    const taps = [], src = String(s || '');
+    for (const m of src.matchAll(TAPS_RE)) {
+      try {
+        for (const t of (JSON.parse(m[1])?.taps || []).slice(0, 24)) {
+          const tap = { thread: one(t?.thread, 200), message: one(t?.message, 200), group: one(t?.group, 60), button: typeof t?.button === 'string' ? t.button.trim() : '', label: one(t?.label, 40) };
+          if (tap.message && tap.group && RB_ID.test(tap.button) && tap.label) taps.push(tap);
+        }
+      } catch (e) { /* hidden */ }
+    }
+    return { taps, text: taps.length || src.includes('[WIZARD_TAPS_V1]') ? src.replace(/\n*[ \t]*\[WIZARD_TAPS_V1\](?:[\s\S]*?\[\/WIZARD_TAPS_V1\]|[\s\S]*$)[ \t]*\n*/g, '\n').trim() : src };
+  }
+  const tapLine = t => `Tapped ${t.label} · ${t.group}`;
   // [WIZARD_CHOICES_V1]{"choices":["Get on top of my inbox","Find a job",…]}[/WIZARD_CHOICES_V1], on its own line: tap-to-pick
   // replies under the answer (wizard-agent-service issue 650, switch wizard/first-chat-goals; the agent writes it on a first
   // chat, wizard-guide "First chat: five choices"). Plain one-line texts, 1-80 characters, at most 5, first marker only.
@@ -146,6 +194,9 @@
     .replace(/\[WIZARD_IMAGE_INTENT_V1\][\s\S]*?\[\/WIZARD_IMAGE_INTENT_V1\]/g, '')
     .replace(/\n*[ \t]*\[WIZARD_TWEAK_V1\](?:[\s\S]*?\[\/WIZARD_TWEAK_V1\]|[\s\S]*$)[ \t]*\n*/g, '\n\n') // unterminated: to the end
     .replace(/\n*[ \t]*\[WIZARD_ACTION_V1\](?:[\s\S]*?\[\/WIZARD_ACTION_V1\]|[\s\S]*$)[ \t]*\n*/g, '\n\n') // an action card (actionIds)
+    .replace(/\n*[ \t]*\[WIZARD_BUTTONS_V1\]\s*([\s\S]*?)\s*\[\/WIZARD_BUTTONS_V1\][ \t]*\n*/g, (_, j) => buttonsFallback(j)) // reply buttons: their labels
+    .replace(/\n*[ \t]*\[WIZARD_TAPS_V1\][\s\S]*?\[\/WIZARD_TAPS_V1\][ \t]*\n*/g, '\n') // the owner's taps (tapsOf): the Tapped lines stay
+    .replace(/\n*[ \t]*\[WIZARD_(?:BUTTONS|TAPS)_V1\][\s\S]*$/g, '') // unterminated (mid-stream): to the end
     .replace(/\n*[ \t]*\[WIZARD_CHOICES_V1\](?:[\s\S]*?\[\/WIZARD_CHOICES_V1\]|[\s\S]*$)[ \t]*\n*/g, '\n\n') // reply buttons (choiceList)
     .replace(/<memory-context>[\s\S]*?<\/memory-context>/g, '')
     .replace(/^\[Workspace::v1: [^\]\r\n]+\]\s*/, '')
@@ -209,7 +260,8 @@
         // A mid-run steer the agent has taken in: shown inside the turn it steered, marked as received.
         if (isSteer) {
           const st = note ? note.text : steerText(raw);
-          if (st && cur && !cur.steers.some(x => x.text === st)) cur.steers.push(note ? { text: st, at, files: [], note: true, from: note.from } : { ...identity, text: st, at, files: chipFiles(raw) });
+          const stTaps = note ? [] : tapsOf(raw).taps; // reply-button taps that steered a running reply (issue 1889)
+          if (st && cur && !cur.steers.some(x => x.text === st)) cur.steers.push(note ? { text: st, at, files: [], note: true, from: note.from } : { ...identity, text: st, at, files: chipFiles(raw), ...(stTaps.length ? { taps: stTaps } : {}) });
           if (cur) cur.steps++;
           continue;
         }
@@ -224,10 +276,16 @@
         // The Agent Service's copy of a message Hermes has not taken in (yet): queued, running, or failed (never sent).
         const q = m.wizard_queue && typeof m.wizard_queue === 'object' && typeof m.wizard_queue.status === 'string'
           ? { status: m.wizard_queue.status, runId: String(m.wizard_queue.public_run_id || '') } : null;
-        newTurn({ ...identity, text: t, files, images, at, ...(rq ? { reply: rq } : {}), ...(q ? { queue: q } : {}) });
+        const taps = tapsOf(raw).taps; // the owner's reply-button taps (issue 1889): a machine line, not his words
+        newTurn({ ...identity, text: t, files, images, at, ...(rq ? { reply: rq } : {}), ...(q ? { queue: q } : {}), ...(taps.length ? { taps } : {}) });
       } else if (m.role === 'assistant') {
         const h = helm(cleanText(raw));
         const t = h.text, tweaks = kind === 'commentary' ? [] : tweakIds(raw), actions = kind === 'commentary' ? [] : actionIds(raw), choices = kind === 'commentary' ? [] : choiceList(raw);
+        // Reply buttons (issue 1889): each group keeps the message it sits in (its tap names it); `btext` is the text
+        // with a token line where each group goes. `text` stays the plain fallback (labels) for everything else.
+        const msgKey = identity.id != null ? String(identity.id) : isFinite(at) ? 't' + Math.round(at) : '';
+        const groups = kind === 'commentary' || !msgKey ? [] : buttonGroups(raw).map(g => ({ ...g, msg: msgKey }));
+        const btext = groups.length ? helm(cleanText(buttonsText(raw))).text : '';
         // The Agent Service's signal sweep card (wizard-ux issue 1586): its own turn, never folded into another one's
         // answer; Chats draws its buttons from `sweep` (the markdown copy stays the text for Copy and older shells).
         if (kind === 'agent_sweep' && m.agent_sweep && typeof m.agent_sweep === 'object' && !Array.isArray(m.agent_sweep)) {
@@ -241,12 +299,14 @@
         for (const a of h.attachments) if (!cur.media.some(x => x.id === a.id)) cur.media.push(a);
         for (const u of imagesOf(m, content)) if (!cur.media.some(x => x.url === u)) cur.media.push({ id: u.slice(-24), name: 'Image', mime: 'image/*', kind: 'image', url: u });
         if (h.attachments.length && !cur.mediaAt) cur.mediaAt = at;
-        if (!t && !tweaks.length && !actions.length && !choices.length) { if (!h.attachments.length) cur.steps++; continue; }
+        if (!t && !tweaks.length && !actions.length && !choices.length && !groups.length) { if (!h.attachments.length) cur.steps++; continue; }
         if (kind === 'commentary') { cur.notes.push(t); cur.steps++; continue; }
         // A tweak card stays with the turn's answer even when a later message in the same turn takes its place.
         const carried = [...new Set([...(cur.a?.tweaks || []), ...tweaks])].slice(0, 8), acts = [...new Set([...(cur.a?.actions || []), ...actions])].slice(0, 4);
+        // Buttons from an earlier message of the same turn stay too (drawn after the answer; only this one's are placed).
+        const rbs = [...groups, ...(cur.a?.buttons || []).filter(g => !groups.some(x => x.group === g.group && x.msg === g.msg)).map(g => ({ ...g, placed: false }))].slice(0, 12);
         if (cur.a?.text) { cur.notes.push(cur.a.text); (cur.said ||= []).push(cur.a); }
-        cur.a = { ...(identity.id != null ? { id: identity.id } : {}), text: t, plainText: h.plainText, inlineMedia: h.inlineMedia, at, final: !(Array.isArray(m.tool_calls) && m.tool_calls.length), ...(carried.length ? { tweaks: carried } : {}), ...(acts.length ? { actions: acts } : {}), ...(choices.length ? { choices } : {}) };
+        cur.a = { ...(identity.id != null ? { id: identity.id } : {}), text: t, plainText: h.plainText, inlineMedia: h.inlineMedia, at, final: !(Array.isArray(m.tool_calls) && m.tool_calls.length), ...(carried.length ? { tweaks: carried } : {}), ...(acts.length ? { actions: acts } : {}), ...(choices.length ? { choices } : {}), ...(rbs.length ? { buttons: rbs, btext } : {}) };
         // The reply's own plain-words ask (its hidden status line, served as wizard_ask): a long reply can lead with it.
         if (typeof m.wizard_ask === 'string' && m.wizard_ask.trim()) cur.a.ask = m.wizard_ask.trim();
         // Hermes' own "Your request was not processed" boundary row (display_kind failed_turn), not the model's words.
@@ -1370,5 +1430,5 @@
     return action && (choices.length || it.kind === 'clarify') ? { kind: it.kind || 'approval', requestId: str(it.prompt_id, it.request_id, it.id) || undefined, generation: canonical ? it.execution_generation : undefined, action, choices, ...closes } : null;
   }
 
-  window.WosChat = { K, reply, esc, homePath, isHomeUrl, parseRows, helm, imagesOf, chipFiles, tweakIds, actionIds, choiceList, md, inline, time, drafts, copyText, copyRich, richParts, bindSharePress, sharePayload, shareText, shareAssistantText, shareFile, saveFile, download: save, viewer, normalizeApproval, friendlyChoice, choiceReceipt };
+  window.WosChat = { K, reply, esc, homePath, isHomeUrl, parseRows, helm, imagesOf, chipFiles, tweakIds, actionIds, choiceList, buttonGroups, buttonsText, tapsOf, tapLine, RB_TOKEN, md, inline, time, drafts, copyText, copyRich, richParts, bindSharePress, sharePayload, shareText, shareAssistantText, shareFile, saveFile, download: save, viewer, normalizeApproval, friendlyChoice, choiceReceipt };
 })();

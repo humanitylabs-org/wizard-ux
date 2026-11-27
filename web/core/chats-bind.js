@@ -51,6 +51,17 @@ window.WizCore.chatsParts.bind = function ({ activityClick, actSetOrder, AGS, al
     const twk = e.target.closest('[data-chat-tweak]'); if (twk) { window.WosSettings?.tweakCardTap?.(twk, (i, t) => toast(i, t, 2400)); return true; }
     // An app's action card (wizard-ux issue 1463, core/action-cards.js): Approve, Edit, Open in app, Reject.
     const act = e.target.closest('[data-action-card] [data-act]'); if (act) { window.WosActionCards?.tap?.(act, (i, t) => toast(i, t, 3200)); return true; }
+    // A button inside a reply (wizard-ux issue 1889, core/action-cards.js replyTap): picked on this frame, sent as one
+    // owner message a few seconds after the last tap, through this thread's own send path (never the composer).
+    const rbt = e.target.closest('.ch-rb [data-rb]');
+    if (rbt && w.thread && w.thread !== '__new__') {
+      // The thread's own agent, the way rowOf scopes it: the window's agent when it lists this id, else the id's owner.
+      const wa = winAgent(W[owner(id)] || w), sid = w.thread, how = 'tapping a button in a reply';
+      const agent = (wa && LIVE.sessionFor && LIVE.sessionFor(sid, wa) ? wa : '') || (LIVE.agentOf && LIVE.agentOf(sid)) || '';
+      const repaint = () => { const ww = H.win(id); if (ww && ww.thread === sid) renderThreadNow(ww); };
+      if (window.WosActionCards?.replyTap?.(rbt, { sid, toast: (i, t) => toast(i, t, 3200), repaint,
+        send: text => sendChat(id, text, how, null, { sid, away: true, ...(agent ? { agent } : {}) }) })) return true;
+    }
     // Thread tracker: the strip's own taps, Reply on a message, and the quote header's jump (all inert with the tweak off).
     if (globalThis.WosThreadTracker?.onFor?.(LIVE.agentOf && w.thread ? LIVE.agentOf(w.thread) : '')) {
       const resume = text => resumeTracked(id, w, text);

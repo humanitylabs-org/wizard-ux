@@ -32,14 +32,16 @@ window.WizCore.chatsParts.ready = function ({ actNeeds, actUnread, CH, chanAt, e
    * same rows and rule activityBody draws for the main list (needs you OR unread, never snoozed), so the badges can never
    * disagree with the list. Notifications set to Chats are added by the badge itself (WosBell.unreadCount). Null with
    * Channels off: the badges keep their unread tally there. */
-  function activityReady(live) { const r = activityReadyRows(live); return r ? r.length + inboxExtra(live) : null; }
-  function activityReadyRows(live) {
+  // Pin to top (issue 1887): a read thread that is in Inbox only because it is pinned is not counted (`counted`).
+  function activityReady(live) { const g = activityReadyGroups(live); return g ? (g.counted || g.ready).length + inboxExtra(live) : null; }
+  function activityReadyRows(live) { return activityReadyGroups(live)?.ready || null; }
+  function activityReadyGroups(live) {
     const L = live || LIVE, M = window.WizChatsListModel;
     if (!L?.ok || !M?.activityGroups) return null;
     const rows = (L.sessionsFor ? L.sessionsFor('') : L.unified()).filter(s => !s.hidden);
     // Inbox rows (wizard-ux issue 1779, switch wizard/inbox-rows): the Inbox's own rule, plus the waiting background tasks.
     const ib = window.WizCore.inboxRowsFacts?.() || null;
-    return M.activityGroups(L.workGroups(rows), { needs: actNeeds, unread: actUnread, at: chanAt }, { keep: inboxKeep(), inbox: ib, place: inboxPlace(L) }).ready;
+    return M.activityGroups(L.workGroups(rows), { needs: actNeeds, unread: actUnread, at: chanAt }, { keep: inboxKeep(), inbox: ib, place: inboxPlace(L) });
   }
   /* Inbox or Sent (wizard-ux issue 1829): while Inbox keeps threads (inboxKeep), the list model's placeOf decides where
    * each thread is from the box's Sent log (which thread he sent into, how that ended), the quiet-reply mark and the

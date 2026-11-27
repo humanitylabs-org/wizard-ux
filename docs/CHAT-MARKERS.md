@@ -13,6 +13,8 @@ in `web/core/chat-kit.js` (`cleanText` and the per-marker readers).
 | `[WIZARD_REPLY_V1]` / `[WIZARD_REPLY_TO_V1]` | Wizard | Notifications Reply card / Thread tracker quote |
 | `[WIZARD_TWEAK_V1]{"id":"<tweak id>"}[/WIZARD_TWEAK_V1]` | agent, on its own line | a live tweak switch in the message (below) |
 | `[WIZARD_ACTION_V1]{"app":"<app id>","id":"<item id>"}[/WIZARD_ACTION_V1]` | agent, on its own line (an app's propose tool gives it) | an app's proposed action as a card: Approve, Edit, Open in app (below) |
+| `[WIZARD_BUTTONS_V1]{"group":"<ask>","buttons":[{"id","label"}]}[/WIZARD_BUTTONS_V1]` | agent, on its own line | tap-to-answer buttons in place (below); elsewhere its labels as text, `[Done]` |
+| `[WIZARD_TAPS_V1]{"taps":[{"thread","message","group","button","label"}]}[/WIZARD_TAPS_V1]` | Wizard, on the owner's tap message | a quiet machine line per tap (its readable `Tapped …` lines stay) |
 
 ## WIZARD_TWEAK_V1: a tweak toggle in the chat
 
@@ -60,3 +62,26 @@ does always come from the app. A message is history: the card shows the item's c
 hidden from the text; with the switch off no card is drawn and nothing is read or sent.
 
 - Tests: `tests/action-cards.test.mjs`; browser: `tests/qa-chat-action-cards.cjs` (`QA_SWITCH=off` for the off case).
+
+## WIZARD_BUTTONS_V1: tap-to-answer buttons in a reply
+
+wizard-ux issue 1889, behind the off-by-default switch `wizard/reply-buttons` (the Agent Service reads the same switch
+from the Look file and only then tells the agent about the marker, `server/reply-buttons.mjs`). An agent asks in its
+normal text and puts one line per ask where the buttons belong:
+
+```
+**Ship desks?** I tried both layouts.
+[WIZARD_BUTTONS_V1]{"group":"Ship desks","buttons":[{"id":"go","label":"Go for it"},{"id":"drop","label":"Drop this"}]}[/WIZARD_BUTTONS_V1]
+```
+
+- `group`: the ask, 1-60 characters, unique in the reply (it names the ask in the tap line). 1 to 6 buttons, ids
+  `[A-Za-z0-9._-]`, labels up to 40 characters; up to 12 groups per reply. Parsed by `WosChat.buttonGroups`
+  (core/chat-kit.js), drawn in place by `WosActionCards.replyHtml` (core/action-cards.js); no card, plain buttons.
+- A tap marks the button picked on the tap frame (the group's others dim). Taps a few seconds apart (3 s after the last
+  tap, at most 10 s) go as one ordinary owner message through the thread's own send path (the durable outbox, routed
+  agents, steering a running reply): `Tapped <label> · <group>` lines plus a `[WIZARD_TAPS_V1]` line naming each tap.
+  The thread draws it as a quiet machine line. The picked state is read back from the thread's history, so a reload and
+  every other device show it; a group can be changed until the agent has replied after its tap.
+- Switch off, Copy, the Chats list preview and any client that can't draw them: the labels as text (`[Go for it]
+  [Drop this]`), so the owner can type one.
+- Tests: `tests/reply-buttons.test.mjs`; browser: `tests/qa-chat-reply-buttons.cjs` (`QA_SWITCH=off` for the off case).

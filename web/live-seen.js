@@ -46,6 +46,8 @@ window.WizCore.liveParts.seen = function ({  }) {
     .replace(/\[WIZARD_IMAGE_INTENT_V1\][\s\S]*?\[\/WIZARD_IMAGE_INTENT_V1\]/g, ' ')
     .replace(/\[WIZARD_TWEAK_V1\](?:[\s\S]*?\[\/WIZARD_TWEAK_V1\]|[\s\S]*$)/g, ' ') // a tweak card (core/chat-kit.js tweakIds); unterminated: to the end
     .replace(/\[WIZARD_ACTION_V1\](?:[\s\S]*?\[\/WIZARD_ACTION_V1\]|[\s\S]*$)/g, ' ') // an action card (core/chat-kit.js actionIds)
+    .replace(/\[WIZARD_BUTTONS_V1\]\s*([\s\S]*?)\s*\[\/WIZARD_BUTTONS_V1\]/g, (_, j) => { try { return ' ' + JSON.parse(j).buttons.map(b => `[${String(b.label).trim()}]`).join(' ') + ' '; } catch (e) { return ' '; } }) // reply buttons: their labels (issue 1889)
+    .replace(/\[WIZARD_(?:BUTTONS|TAPS)_V1\](?:[\s\S]*?\[\/WIZARD_(?:BUTTONS|TAPS)_V1\]|[\s\S]*$)/g, ' ') // the owner's taps (their Tapped lines stay); unterminated: to the end
     .replace(/\[WIZARD_CHOICES_V1\](?:[\s\S]*?\[\/WIZARD_CHOICES_V1\]|[\s\S]*$)/g, ' ') // reply buttons (core/chat-kit.js choiceList)
     .replace(/^Please use the attached files?\.\s*/, '')
     .replace(/<memory-context>[\s\S]*?<\/memory-context>/g, ' ')

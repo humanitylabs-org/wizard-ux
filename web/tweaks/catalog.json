@@ -26,6 +26,7 @@
     "wizard/private-first-setup",
     "wizard/chat-app-switches",
     "wizard/action-cards",
+    "wizard/reply-buttons",
     "wizard/phone-app-notifications",
     "wizard/phone-chat-replies",
     "wizard/lock-screen-player",
@@ -59,6 +60,7 @@
     "wizard/boundary-agent-access",
     "wizard/phone-badge-look",
     "wizard/sent-threads",
+    "wizard/inbox-pin-top",
     "wizard/smart-inbox",
     "wizard/private-mode",
     "wizard/phone-recovery-mode",
@@ -69,7 +71,8 @@
     "wizard/catch-me-up",
     "wizard/private-ai-nudge",
     "wizard/pin-instant-open",
-    "wizard/get-set-up"
+    "wizard/get-set-up",
+    "wizard/shorter-app-updates"
   ],
   "defaults": [],
   "promotedDefaults": [],
