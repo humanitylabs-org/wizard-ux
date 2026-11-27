@@ -263,15 +263,14 @@ window.WizCore.chatsParts.sent = function ({ ago, ch, CH, CHAN_VIEW_KEY, chanEls
     if (e.target.closest('[data-rssentopen]') && chatVars.rowSheet?.sent) { const { wid, sent } = chatVars.rowSheet; closeRowSheet?.(); sentOpenRow(wid, sent); return true; }
     return false;
   }
-  /* The title bar (wizard-ux issue 1836, switch wizard/chats-title-bar, off by default; James, 25 Nov 2026: "Also remove
-   * these, collapse into bar above, change \"all chats\" to Inbox"). With it on, the list's own header (.ch-top, the one
-   * every shell draws: phone, the Classic desktop panel, a full Chats window) is a title bar naming the bottom tab,
-   * Inbox (with its count pill), Tags or Sent, then the search and filter icons; the search field opens under it only
-   * while searching or filtering. Inbox's own section row (fold + sort) goes: the sort is in the filter sheet. */
-  const TB_SWITCH = 'wizard/chats-title-bar', TB_TITLE = { inbox: 'Inbox', tags: 'Tags', sent: 'Sent' };
-  // The tab this list's title bar names, or '' (switch off, or not the main agent's tabbed list).
+  /* The title bar (wizard-ux issue 1836, on for everyone; James, 25 Nov 2026: "Also remove these, collapse into bar
+   * above, change \"all chats\" to Inbox"). The list's own header (.ch-top, the one every shell draws: phone, the Classic
+   * desktop panel, a full Chats window) is a title bar naming the bottom tab, Inbox (with its count pill), Tags or Sent,
+   * then the search and filter icons; the search field opens under it only while searching or filtering. Inbox has no
+   * section row (fold + sort): the sort is in the filter sheet. */
+  const TB_TITLE = { inbox: 'Inbox', tags: 'Tags', sent: 'Sent' };
+  // The tab this list's title bar names, or '' (not the main agent's tabbed list).
   function titleBarTab(w) {
-    try { if (!(document.documentElement.dataset.tweaks || '').split(' ').includes(TB_SWITCH)) return ''; } catch (_) { return ''; }
     return sentTabsOn(w) && !(typeof chanSide === 'function' && chanSide(w)) ? sentTab(w) : '';
   }
   const TB_FIND_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>';
