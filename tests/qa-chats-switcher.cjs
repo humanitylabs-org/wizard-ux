@@ -8,7 +8,7 @@
 //   close it; Sent in two taps; Philosopher is one tile and opens the same list as Tags › Philosopher; hold Chats and
 //   slide opens the item under the finger (letting go on nothing changes nothing); a sideways swipe on the Chats tile
 //   flips the last two views (never the section swipe); a sideways swipe on the bar or the orb steps one view at a time
-//   and past the first or the last view moves to the next section as before; Back from a tag goes to Inbox, then Home; the badge counts the Inbox in every view; a live skin
+//   and stops at the ends; Back from a tag goes to Inbox, then Home; the badge counts the Inbox in every view; a live skin
 //   change repaints the open sheet; no browser errors, no writes the box would refuse.
 // QA_SWITCH=off: today's three tabs, no ▾, no sheet; with QA_WEB=<main's web> the list markup written to
 // list-off-*.html is byte-identical to the branch's. Shots and report.json go to QA_OUT.
@@ -229,15 +229,11 @@ const report = { origin, web, on: ON, cases: [] };
           // The bar and the orb step one view at a time (Inbox, Sent, Archived, then tags and agents), stopping at the ends.
           const order = await page.evaluate(() => WizCore.chatsSwitcher.order()); S.order = order;
           await sideways('.sec-tile[data-sec="home"]', 44, 8); S.step1 = await look();
-          assert.equal(S.step1.section, 'home', 'before Inbox the bar swipe goes on to Home, as before');
-          await tapAt('.sec-tile[data-sec="chats"]'); assert.equal((await look()).view, 'inbox');
+          assert.equal(S.step1.view, 'inbox', 'a swipe right at the first view stays'); assert.equal(S.step1.section, 'chats');
           await sideways('.sec-tile[data-sec="home"]', -44, 8); S.step2 = await look();
           assert.equal(S.step2.view, 'sent', 'a swipe left on the bar steps to Sent'); assert.equal(S.step2.section, 'chats', 'no section change');
           const orb = await center('#orb');
-          const orbLeft = async () => { await touch([orb, ...[1, 2, 3, 4].map(k => ({ x: orb.x - 20 * k, y: orb.y }))], 20, 8); await nap(900); return look(); };
-          S.step3 = await orbLeft();
-          // A busy test runner can turn the orb drag into its hold (the orb's own 380 ms timer, unchanged here): try once more.
-          if (S.step3.view === 'sent') { await page.evaluate(() => { WosOrbSwitcher?.close?.(); __wos.sheet && __wos.onBack(); }).catch(() => {}); await nap(400); S.step3retry = true; S.step3 = await orbLeft(); }
+          await touch([orb, ...[1, 2, 3, 4].map(k => ({ x: orb.x - 20 * k, y: orb.y }))], 20); await nap(900); S.step3 = await look();
           assert.equal(S.step3.view, 'archived', 'a sideways swipe on the orb steps to Archived'); assert.match(S.step3.title, /^Archived\b/);
           assert.ok(S.step3.rows.includes('qa-old'), 'Archived lists the archived chat ' + JSON.stringify(S.step3.rows));
           await shot('7-archived');
@@ -246,11 +242,7 @@ const report = { origin, web, on: ON, cases: [] };
           S.walk = await page.evaluate(() => { const seen = []; for (let i = 0; i < 30 && WizCore.chatsSwitcher.step(1); i++) seen.push(WizCore.chatsSwitcher.view()); return seen; }); await nap(900);
           const last = (await page.evaluate(() => WizCore.chatsSwitcher.order())).at(-1);
           S.end = await look(); assert.equal(S.end.view, last, 'the last view ' + JSON.stringify(S.walk));
-          await sideways('.sec-tile[data-sec="home"]', -44, 8); S.pastEnd = await look(); S.pastEndSheet = await page.evaluate(() => __wos.sheet);
-          assert.ok(S.pastEnd.section !== 'chats' || S.pastEndSheet === 'launcher', 'after the last view the bar swipe goes on to the next section, as before ' + JSON.stringify([S.pastEnd.section, S.pastEndSheet]));
-          await page.evaluate(() => __wos.onBack()); await nap(500);
-          if ((await look()).section !== 'chats') await tapAt('.sec-tile[data-sec="chats"]');
-          assert.equal((await look()).view, last, 'Chats kept the view it was left in');
+          await sideways('.sec-tile[data-sec="home"]', -44, 8); S.pastEnd = await look(); assert.equal(S.pastEnd.view, last, 'stops at the end'); assert.equal(S.pastEnd.section, 'chats');
           // Another agent's chats: one tile, its own list.
           await tapAt('.sec-tile[data-sec="chats"]'); await tapAt('#chatsSwitch [data-csview="#@agent:claude"]'); await nap(600);
           S.claude = await look(); assert.equal(S.claude.view, '#@agent:claude'); assert.match(S.claude.title, /Claude/);

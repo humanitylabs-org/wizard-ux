@@ -64,8 +64,7 @@ window.WizCore.appParts.scrub = function ({ $, appVars, BAR_FLICK_MIN, BAR_FLICK
     if (!s.h) return;
     const dx = e.clientX - s.x, quick = e.timeStamp - s.ts < BAR_FLICK_MS;
     appVars.dockSwiped = Date.now();
-    // Chats in front (wizard-ux#1957): one view per swipe; past the first or the last view it is the section swipe as before.
-    if (s.step) { if (e.type === 'pointerup' && Math.abs(dx) >= BAR_FLICK_MIN && Math.abs(dx) > Math.abs(e.clientY - s.y) && !s.step(-Math.sign(dx))) { swipeDesk(-Math.sign(dx)); tourEv('desk', { home: appVars.idx === HOME }); } return; }
+    if (s.step) { if (e.type === 'pointerup' && Math.abs(dx) >= BAR_FLICK_MIN && Math.abs(dx) > Math.abs(e.clientY - s.y)) s.step(-Math.sign(dx)); return; }
     // A cancelled touch or one that rose is the system's swipe out: the desk goes back to where it started.
     if (s.up || e.type === 'pointercancel' || e.clientY - s.y < -30) { barScrubBack(s); return; }
     // A short quick flick moves exactly one desk, the way the finger travelled in total (wizard-ux#1601: decided at
