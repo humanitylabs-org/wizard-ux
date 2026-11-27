@@ -37,7 +37,6 @@
     "wizard/mac-app-updates",
     "wizard/install-agent-builds",
     "wizard/share-people-box",
-    "wizard/agent-approvals",
     "wizard/attach-menu-icons",
     "wizard/app-location",
     "wizard/boundary-agent-access",
