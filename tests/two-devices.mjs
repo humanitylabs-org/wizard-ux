@@ -75,14 +75,15 @@ export async function simultaneous({ initial, local = {}, first, second, patch =
 // item operation applied atomically, pinning appends to that agent's pin order, a thread is in one channel of its
 // agent (keyed agent|id), unknown channels are 404, another agent's channel is 409. off: true = the store is off (404).
 // box.race(n) and box.fail(n, status) hold or refuse the next requests, like sharedBox.
-export function channelBox({ channels = [], sort = 'az', members = {}, threads = {}, off = false, tags = false } = {}) {
+export function channelBox({ channels = [], sort = 'az', members = {}, threads = {}, off = false, tags = false, autoTags = false } = {}) {
   // tags (wizard-agent-service issue 608): the box's Tags are on; `tagged` holds each chat's other tags (agent|id -> [ids]).
-  const box = { channels: clone(channels), sort, members: { ...members }, threads: clone(threads), off, tags, tagged: {}, log: [], held: 0, waiters: [], failing: 0, failStatus: 0, hold: null, ids: 0 }
+  // autoTags (wizard-agent-service issue 702): the box's auto tags are on; `covers` holds each channel's list.
+  const box = { channels: clone(channels), sort, members: { ...members }, threads: clone(threads), off, tags, autoTags, covers: {}, tagged: {}, log: [], held: 0, waiters: [], failing: 0, failStatus: 0, hold: null, ids: 0 }
   const tagsOf = k => [...new Set([...(box.members[k] ? [box.members[k]] : []), ...(box.tagged[k] || [])])]
   box.race = (n = 2) => { box.held = n }
   box.fail = (n = 1, status = 503) => { box.failing = n; box.failStatus = status }
   const view = c => ({ ...c, count: Object.values(box.members).filter(x => x === c.id).length })
-  const list = () => ({ schema: 'wizard.channels/1', sort: box.sort, migratedAt: null, channels: box.channels.map(view), ...(box.tags ? { tags: true } : {}) })
+  const list = () => ({ schema: 'wizard.channels/1', sort: box.sort, migratedAt: null, channels: box.channels.map(view), ...(box.tags ? { tags: true } : {}), ...(box.autoTags ? { autoTags: true } : {}) })
   const bad = (status, error) => answer(status, { error })
   box.req = async (url, init = {}) => {
     const method = init.method || 'GET', u = new URL(url, 'https://box.test'), body = init.body ? JSON.parse(init.body) : null
@@ -109,6 +110,15 @@ export function channelBox({ channels = [], sort = 'az', members = {}, threads =
       if (body.agent && body.agent !== c.agent) return bad(409, 'agent_mismatch')
       box.members[c.agent + '|' + body.sessionId] = c.id
       return answer(200, { sessionId: body.sessionId, agent: c.agent, channel: c.id })
+    }
+    if (u.pathname === '/wizard/v1/channels/covers') {
+      if (!box.autoTags) return bad(404, 'not_found')
+      const id = method === 'GET' ? u.searchParams.get('id') : body.id, c = box.channels.find(x => x.id === id); if (!c) return bad(404, 'channel_not_found')
+      const cur = box.covers[id] || (box.covers[id] = { covers: [], learned: [], not: [] }), k = x => String(x).toLowerCase()
+      if (method === 'PUT' && 'covers' in body) { if (!Array.isArray(body.covers) || body.covers.length > 40) return bad(400, 'invalid_covers'); cur.covers = body.covers.slice() }
+      if (method === 'PUT' && 'add' in body && !cur.covers.some(x => k(x) === k(body.add))) cur.covers.push(body.add)
+      if (method === 'PUT' && 'remove' in body) cur.covers = cur.covers.filter(x => k(x) !== k(body.remove))
+      return answer(200, { id, covers: [], learned: [], not: [], ...(box.covers[id] || {}) })
     }
     if (u.pathname === '/wizard/v1/channels/tags') {
       if (!box.tags) return bad(404, 'not_found')

@@ -166,6 +166,7 @@ Settings › Appearance › Try new features lists unfinished features to try, A
 - **Agents run code without asking**: Container agents run code without an approval nobody sees (Agents: Just run, Ask me, Refuse); prompts wait an hour.
 - **Archive on top**: Archive is the first section of the Chats list in both By day and By status, so switching layouts never moves it.
 - **Ask before sharing feature counts**: Shared only after you say Share.
+- **Automatic chat tags**: Chats are tagged from what they are about; a channel's What goes here… edits its list.
 - **Backup health in Resources**: Resources shows your backup's health.
 - **Bottom app bar on desktop**: Apps bar at the bottom on any width.
 - **Calm offline card**: The can't-reach-your-Wizard card shows one dotted path (Internet · Tailscale · Wizard), one short next step and a small Check again with the automatic re-check time.
