@@ -495,7 +495,15 @@ window.WizCore.liveParts.channels = function () {
       // and quiet (it needed nothing from him, so it stayed out of Inbox).
       wantsReply: r.wants_reply !== false, answer: str(r.answer, 200), quiet: r.quiet === true,
     } : null;
-    const s = { rows: [], next: null, ok: false, gone: false, at: 0, busy: null, deep: false };
+    // Typed messages (wizard-agent-service issue 669, Smart inbox): how often the box's guess for a typed task matched
+    // what he did, and whether typed tasks now run in the background (`on`). A box without it: null.
+    const count = v => { const n = Number(v); return Number.isFinite(n) && n >= 0 ? Math.floor(n) : 0; };
+    const typedOf = t => t && typeof t === 'object' && t.background && typeof t.background === 'object' ? {
+      on: t.on === true, graduated: t.graduated === true, judged: count(t.background.judged), matched: count(t.background.matched),
+      rate: Number.isFinite(Number(t.background.rate)) && t.background.rate !== null ? Number(t.background.rate) : null,
+      min: count(t.gate?.min) || 50, need: Number.isFinite(Number(t.gate?.rate)) ? Number(t.gate.rate) : 0.9,
+    } : null;
+    const s = { rows: [], next: null, ok: false, gone: false, at: 0, busy: null, deep: false, typed: null };
     const tell = () => { try { emit(); } catch (_) {} };
     function read() {
       if (s.busy) return s.busy;
@@ -508,8 +516,9 @@ window.WizCore.liveParts.channels = function () {
           const k = s.deep && page.length ? s.rows.findIndex(r => r.id === page.at(-1).id) : -1;
           if (k >= 0 && k < s.rows.length - 1) { const have = new Set(page.map(r => r.id)); s.rows = page.concat(s.rows.slice(k + 1).filter(r => !have.has(r.id))); }
           else { s.rows = page; s.next = next; s.deep = false; }
+          s.typed = typedOf(j?.typed_routing);
           s.ok = true; s.gone = false;
-        } catch (e) { if (e?.status === 404) { s.rows = []; s.next = null; s.deep = false; s.ok = true; s.gone = true; } }
+        } catch (e) { if (e?.status === 404) { s.rows = []; s.next = null; s.deep = false; s.ok = true; s.gone = true; s.typed = null; } }
         finally { s.busy = null; tell(); }
         return s;
       })();

@@ -24,10 +24,11 @@
    * now core/desktop-chats.*) or dropped with their code (wizard-os#639: wizard/app-panel-left), or on for everyone in core (wizard-agent-service
    * issue 469: wizard/needs-you-reason, now core/chat-power.*; issue 514: wizard/follow-main, the box follows main
    * wherever its timer runs; wizard-ux issue 1332: wizard/app-tap-home, the narrow desktop's tap takes the app home;
-   * wizard-agent-service issue 518: wizard/plain-chat-titles, the Agent Service serves undated titles;
+   * wizard-agent-service issue 518: wizard/plain-chat-titles, the Agent Service serves undated titles; wizard-ux issue
+   * 1362: wizard/graceful-restart, the calm restart note is core/reach.js + core/graceful-restart.css;
    * wizard-ux issue 1437: wizard/interface-manual, every agent gets the interface manual): a saved on/off for one is
    * cleared from this device, once, so no stale choice is kept. */
-  const GONE = ['wizard/desktop-chats', 'wizard/app-panel-left', 'wizard/needs-you-reason', 'wizard/follow-main', 'wizard/app-tap-home', 'wizard/plain-chat-titles', 'wizard/interface-manual'];
+  const GONE = ['wizard/desktop-chats', 'wizard/app-panel-left', 'wizard/needs-you-reason', 'wizard/follow-main', 'wizard/app-tap-home', 'wizard/plain-chat-titles', 'wizard/graceful-restart', 'wizard/interface-manual'];
   if (Store.read()) {
     let dirty = false;
     for (const k of ['defaultsOff', 'promotedMigrated']) if (Array.isArray(state[k]) && state[k].some(id => GONE.includes(id))) { state[k] = state[k].filter(id => !GONE.includes(id)); dirty = true; }

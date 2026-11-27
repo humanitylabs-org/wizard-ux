@@ -357,10 +357,6 @@
       "help": "If the agent's app tools fail (unauthorized), `wizard link` restores the box's token; `wizard doctor` checks it.",
       "where": "Settings › Appearance › Try new features › Repair the agent's Wizard connection"
     },
-    "wizard/graceful-restart": {
-      "where": "Settings › Appearance › Try new features › Calm Agent Service restarts",
-      "help": "While a restart waits for running chats you see a quiet note; messages sent meanwhile go after it; if overdue, Wait longer or Restart now."
-    },
     "wizard/unified-inbox": {
       "where": "Settings › Chats & app screens › Notifications › Notifications in Chats (on for everyone)"
     },

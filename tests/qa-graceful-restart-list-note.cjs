@@ -26,7 +26,7 @@ const row = (id, title, status, at) => ({ id, title, runtime: 'direct', status, 
       await context.addInitScript(skin => {
         if (window !== top) return;
         for (const [k, v] of Object.entries({ 'wos.shell': 'phone', 'wos.coached': 'true', 'wos.tour.v1': 'true', 'wos.welcome.v1': 'done', 'wos.skin': skin,
-          'wos.skin-tweaks.v1': JSON.stringify({ version: 1, preset: 'none', off: {}, mix: { 'wizard/graceful-restart': true } }) })) localStorage.setItem(k, v);
+          'wos.skin-tweaks.v1': JSON.stringify({ version: 1, preset: 'none', off: {}, mix: {} }) })) localStorage.setItem(k, v);
       }, skin);
       await context.route('**/*', async r => {
         const q = r.request(), u = new URL(q.url()), p = u.pathname, method = q.method();

@@ -1785,6 +1785,7 @@
     "core/features.js",
     "core/files.js",
     "core/focused-field.js",
+    "core/graceful-restart.css",
     "core/home-screen-apps.css",
     "core/home-screen-apps.js",
     "core/home-screen-policy.js",
