@@ -100,7 +100,9 @@ window.WizCore.appParts.search = function ({ APP, appAt, appVars, blank, CHATS, 
     closeSheets(true);
     const w = placeApp(mainChats, { app: 'chats', thread: null });
     if (!w) return false;
-    CHATS.setFocus(w, { kind: 'agent', key: id });
+    // Chats on its Activity list (the phone's Inbox) shows every agent and drops an agent Focus on its next paint
+    // (actAllAgents), so the agent's own list opens there the way the Chats switcher opens it (ux#1989).
+    if (!(CHATS.chanView?.() === 'activity' && CHATS.switcher?.go?.(w, '#@agent:' + id))) CHATS.setFocus(w, { kind: 'agent', key: id });
     if (w && o.thread === '__new__') CHATS.openNewDraft(w.id, '');
     LIVE?.refreshAgents?.().then(() => LIVE.emit());
     return o.share ? { id: w.id, agentId: id } : true;

@@ -9,6 +9,7 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 
 const src = readFileSync(new URL('../web/app-appspanel.js', import.meta.url), 'utf8');
+const kindsSrc = readFileSync(new URL('../web/core/app-kinds.js', import.meta.url), 'utf8');
 
 function el() {
   const kids = {};
@@ -19,7 +20,7 @@ function el() {
   return e;
 }
 
-function harness({ on = true, sections = true, current = 'apps', front = 'notes', recent = ['notes', 'music', 'calendar', 'podcasts', 'maps', 'messenger'], favs = null, hidden = null } = {}) {
+function harness({ on = true, sections = true, current = 'apps', front = 'notes', recent = ['notes', 'music', 'calendar', 'podcasts', 'maps', 'messenger'], favs = null, hidden = null, extra = [] } = {}) {
   const local = new Map(), store = new Map([['recent', recent]]), puts = [], opened = [], toasts = [];
   if (favs) local.set('wos.apps.favorites.v1', JSON.stringify(favs));
   if (hidden) local.set('wos.apps.recentHidden.v1', JSON.stringify(hidden));
@@ -27,6 +28,7 @@ function harness({ on = true, sections = true, current = 'apps', front = 'notes'
   const APP = Object.fromEntries(ids.map(id => [id, { id, name: id[0].toUpperCase() + id.slice(1), desc: id === 'books' ? 'a calendar of reads' : '', url: `/${id}/`, kind: 'wizard' }]));
   APP.wizard = { id: 'wizard', name: 'Chats', kind: 'chats' }; APP['app-store'] = { id: 'app-store', name: 'App Store', url: '/s/', kind: 'wizard' }; APP.agents = { id: 'agents', name: 'Agents', kind: 'wizard' };
   APP.android = { id: 'android', name: 'Android thing', kind: 'native' };
+  for (const a of extra) APP[a.id] = a;
   const root = { getAttribute: k => k === 'data-tweaks' ? (on ? 'wizard/apps-panel other/x' : 'other/x') : null };
   const desks = [{ id: 'home', home: true, wins: [] }, { id: 'da', wins: ['w1'], focus: 'w1' }];
   const appVars = { desks, W: { w1: { id: 'w1', app: 'frame', appId: front } }, idx: 1, sheet: null };
@@ -39,7 +41,7 @@ function harness({ on = true, sections = true, current = 'apps', front = 'notes'
     MutationObserver: class { observe() {} }, addEventListener() {}, requestAnimationFrame: f => f(), setTimeout, clearTimeout, Date, Math, JSON, Object, Set, console,
   };
   ctx.window.window = ctx.window; vm.createContext(ctx);
-  vm.runInContext(src, ctx);
+  vm.runInContext(kindsSrc, ctx); vm.runInContext(src, ctx);
   const api = ctx.window.WizCore.appParts.appspanel({
     $: s => s === '#dock' ? dock : null, APP, APPS: Object.values(APP), appVars, CHATS_APP: { id: 'wizard' }, device, esc: s => String(s),
     ico: (t, c, a) => `<${t} class="${c}">${a.id}</${t}>`, LIVE: { putPrefs: p => puts.push(JSON.parse(JSON.stringify(p))) }, norm: s => String(s).toLowerCase(),
@@ -129,4 +131,53 @@ test('Home, Chats or Messenger in front, or the panel up: the bar swipe is not t
   const h = harness(); h.api.appsPanelOpen(); assert.equal(h.api.appsStepping(), false, 'panel up');
   assert.equal(h.api.appsPanelToggled(), true, 'the Apps tile again closes the panel'); assert.equal(h.A.isOpen(), false);
   assert.equal(h.api.appsStepping(), true);
+});
+
+// wizard-ux issue 1989: other agents' chats star, stay starred after a reload (box prefs), land on Recent and open;
+// connectors (wizard.md `type: external`) and screenless agent apps are not listed anywhere in the panel.
+const PHIL = { id: 'agent:philosopher', kind: 'chats', agent: 'philosopher', name: 'Philosopher Agent', desc: 'Chats with Philosopher Agent' };
+const CLAUDE = { id: 'wizard-claude', name: 'Claude', desc: 'Your Claude subscription', url: '/wizard-claude/', kind: 'wizard', type: 'external', category: 'app' };
+const BRIGHT = { id: 'wizard-brightdata', name: 'Bright Data', desc: 'Web data for your agent and apps.', url: '/brightdata/', kind: 'wizard', type: 'external', category: 'app' };
+
+test('an agent\'s chats star, survive a reload from the box, land on Recent after opening, and open its chats', () => {
+  const h = harness({ extra: [PHIL] });
+  h.api.appsPanelOpen(); h.click({ apadd: '' });
+  assert.ok(h.rows().includes('agent:philosopher'), 'listed in Add favorites');
+  h.click({ apstar: 'agent:philosopher' });
+  assert.deepEqual(h.A.favorites(), ['agent:philosopher'], 'the star sticks');
+  // ui-preferences takes app ids without a colon: the box gets agent.philosopher.
+  assert.deepEqual(h.puts.at(-1), { appFavorites: ['agent.philosopher'] });
+  // A reload, or another device, reading the box's list: still a Favorite.
+  const r = harness({ extra: [PHIL], favs: h.puts.at(-1).appFavorites });
+  assert.deepEqual(r.A.favorites(), ['agent:philosopher']);
+  r.api.appsPanelOpen(); assert.deepEqual(r.rows().slice(0, 2), ['h:Favorites', 'agent:philosopher']);
+  // Reorder by drag keeps it, and the minus takes it off again.
+  r.click({ apedit: '' }); r.click({ apminus: 'agent:philosopher' }); assert.deepEqual(r.puts.at(-1), { appFavorites: [] });
+  // Opened from All apps: the panel closes, the tile opens (openApp → the agent's chats), and it is on Recent.
+  const o = harness({ extra: [PHIL] }); o.api.appsPanelOpen(); o.click({ apall: '' });
+  o.click({ apopen: 'agent:philosopher' });
+  assert.equal(o.A.isOpen(), false); assert.deepEqual(o.opened, ['tap:agent:philosopher']);
+  assert.equal(o.A.recent()[0], 'agent:philosopher');
+  // Taken off Recent: stored for the box the same way, and back on Recent once opened again.
+  o.click({ apx: 'agent:philosopher' }); assert.deepEqual(o.puts.at(-1), { appRecentHidden: ['agent.philosopher'] });
+  assert.ok(!o.A.recent().includes('agent:philosopher'));
+  o.ctx.window.WizCore.appsPanelOpened('agent:philosopher'); assert.deepEqual(o.puts.at(-1), { appRecentHidden: [] });
+});
+
+test('connectors are absent from search, All apps, Add favorites, Favorites, Recent and the nine; apps and agents stay', () => {
+  const h = harness({ extra: [PHIL, CLAUDE, BRIGHT], recent: ['wizard-claude', 'notes'], favs: ['wizard-claude', 'music'] });
+  h.api.appsPanelOpen();
+  assert.deepEqual(h.A.favorites(), ['music']); assert.ok(!h.A.recent().includes('wizard-claude'));
+  assert.ok(!h.A.nine().includes('wizard-claude'));
+  h.q('claude'); assert.deepEqual(h.rows(), [], 'search finds no connector');
+  h.q('bright'); assert.deepEqual(h.rows(), []);
+  h.q('philo'); assert.deepEqual(h.rows(), ['agent:philosopher'], 'an agent is found');
+  h.q('');
+  h.click({ apall: '' });
+  const all = h.rows();
+  assert.ok(!all.includes('wizard-claude') && !all.includes('wizard-brightdata'), 'All apps has no connector');
+  assert.ok(all.includes('notes') && all.includes('agent:philosopher'), 'a view app and an agent are listed');
+  h.click({ apback: '' }); h.click({ apadd: '' });
+  const add = h.rows();
+  assert.ok(!add.includes('wizard-claude') && add.includes('notes') && add.includes('agent:philosopher'), 'Add favorites the same');
 });

@@ -374,9 +374,13 @@
     // Publish before rebuild emits wizard:apps; listeners may look it up synchronously.
     const result = { APPS, APP, findApp, appAt, appByName, searchApps, searchApp, searchUrl, quickSearch: text => searchApp() ? parseQuickSearch(text) : null };
     REGISTRIES.set(shell, result);
+    let agentsWatched = false;
     const rebuild = () => {
       const chats = ALL.findIndex(a => a.kind === 'chats');
       const AG = window.WosAgents;
+      // A registry made before core/agents.js loaded (app-services.js asks early) follows the agents from its next
+      // rebuild on, or agent chat tiles never appear until something else rebuilds the list (ux#1989).
+      if (AG?.onChange && !agentsWatched) { agentsWatched = true; AG.onChange(rebuild); }
       // Agent chat views are apps; the Agents management app remains separate. Rebuild fresh
       // records so rename/delete/privacy changes cannot leave cached names or sigils behind.
       const agentTile = a => ({
@@ -481,7 +485,9 @@
     }
     rebuild(); listeners.add(rebuild);
     window.WizLauncher?.onChange(rebuild);
-    window.WosAgents?.onChange(rebuild);
+    // Asked for before core/agents.js loaded: rebuild once the page's scripts are all in, which also starts following them.
+    if (!agentsWatched && typeof window.addEventListener === 'function' && window.document?.readyState === 'loading')
+      window.addEventListener('DOMContentLoaded', () => { if (!agentsWatched && window.WosAgents) rebuild(); }, { once: true });
     return result;
   }
   /* "ask AI is milk bad for gout", "image search capybaras", "find images of eames chairs", "search why is the sky blue", "quick search …".

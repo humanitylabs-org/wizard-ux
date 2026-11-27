@@ -25,16 +25,25 @@ window.WizCore.appParts.appspanel = function ({ $, APP, APPS, appVars, CHATS_APP
     try { return (document.documentElement.getAttribute('data-tweaks') || '').split(' ').includes(AP_SW) && !!window.WizCore.phoneSections?.on?.(); } catch (_) { return false; }
   }
   /* ---- the lists ---- */
-  const apRead = k => { try { const v = JSON.parse(localStorage.getItem(k) || '[]'); return Array.isArray(v) ? v.filter(x => typeof x === 'string' && AP_ID.test(x)) : []; } catch (_) { return []; } };
+  // An agent's chats are the tile `agent:<id>` (core/apps.js); the box's ui-preferences take app ids without a colon,
+  // so the lists store it as `agent.<id>` and read it back (ux#1989: a starred agent never stuck).
+  const apKey = id => String(id).replace(/^agent:/, 'agent.'), apUnkey = k => String(k).replace(/^agent\./, 'agent:');
+  const apRead = k => { try { const v = JSON.parse(localStorage.getItem(k) || '[]'); return Array.isArray(v) ? v.filter(x => typeof x === 'string' && AP_ID.test(x)).map(apUnkey) : []; } catch (_) { return []; } };
   // This device at once, then the box for every device (live-work.js prefsFields keeps the copy in step).
-  const apWrite = (k, field, list) => { list = [...new Set(list.filter(x => typeof x === 'string' && AP_ID.test(x)))].slice(0, 100); try { localStorage.setItem(k, JSON.stringify(list)); } catch (_) {} LIVE?.putPrefs?.({ [field]: list }); };
-  const apUsable = a => !!a && a.id !== 'agents' && a.kind !== 'native' && !window.WizCore.isMaintenanceApp?.(a) && ['wizard', 'chats'].includes(a.kind);
-  const apAll = () => APPS.filter(apUsable).sort((x, y) => (x.name || '').localeCompare(y.name || '', undefined, { sensitivity: 'base' }));
-  const apFavs = () => [...new Set(apRead(AP_FAV).map(id => APP[id]?.id))].filter(id => id && apUsable(APP[id]));
+  const apWrite = (k, field, list) => { list = [...new Set(list.filter(x => typeof x === 'string').map(apKey).filter(x => AP_ID.test(x)))].slice(0, 100); try { localStorage.setItem(k, JSON.stringify(list)); } catch (_) {} LIVE?.putPrefs?.({ [field]: list }); };
+  // What the panel lists: things you open and use, sorted the launcher's way (WosAppKinds): Apps, In development and
+  // each agent's chats; never Connectors or screenless agent apps (they stay in Get apps and Settings).
+  function apOk() {
+    const K = window.WosAppKinds?.kinds(APPS, APP); if (!K) return new Set();
+    return new Set([...K.apps, ...K.dev, ...K.agents].filter(a => a && APP[a.id] === a && a.id !== 'agents' && a.kind !== 'native').map(a => a.id));
+  }
+  const apUsable = (a, ok = apOk()) => !!a && ok.has(a.id);
+  const apAll = () => { const ok = apOk(); return APPS.filter(a => apUsable(a, ok)).sort((x, y) => (x.name || '').localeCompare(y.name || '', undefined, { sensitivity: 'base' })); };
+  const apFavs = () => { const ok = apOk(); return [...new Set(apRead(AP_FAV).map(id => APP[id]?.id))].filter(id => id && apUsable(APP[id], ok)); };
   const apHidden = () => new Set(apRead(AP_HID));
   function apRecentAll() {
-    const hid = apHidden();
-    return [...new Set(store.get('recent', window.WizLauncher?.get('recents') || []).map(id => APP[id]?.id))].filter(id => id && id !== 'app-store' && !hid.has(id) && apUsable(APP[id]));
+    const hid = apHidden(), ok = apOk();
+    return [...new Set(store.get('recent', window.WizLauncher?.get('recents') || []).map(id => APP[id]?.id))].filter(id => id && id !== 'app-store' && !hid.has(id) && apUsable(APP[id], ok));
   }
   const apRecent = () => { const f = new Set(apFavs()); return apRecentAll().filter(id => !f.has(id)).slice(0, 4); };
   const apIsFav = id => apFavs().includes(id);
@@ -222,7 +231,7 @@ window.WizCore.appParts.appspanel = function ({ $, APP, APPS, appVars, CHATS_APP
   /* ---- hold the Apps tile: nine bubbles ---- */
   var apGridState = null, apHoldT = 0;
   function apNine() {
-    const seen = new Set(), out = [], add = id => { if (out.length < 9 && id && !seen.has(id) && apUsable(APP[id])) { seen.add(id); out.push(id); } };
+    const seen = new Set(), out = [], ok = apOk(), add = id => { if (out.length < 9 && id && !seen.has(id) && apUsable(APP[id], ok)) { seen.add(id); out.push(id); } };
     apRecentAll().forEach(add); apFavs().forEach(add); apAll().forEach(a => add(a.id)); // a new owner still gets nine to pick from
     return out;
   }
