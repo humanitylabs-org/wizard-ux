@@ -29,7 +29,6 @@
     "wizard/apps-panel",
     "wizard/phone-push",
     "wizard/install-agent-builds",
-    "wizard/inbox-pin-top",
     "wizard/smart-inbox",
     "wizard/phone-recovery-mode",
     "wizard/auto-tags",
