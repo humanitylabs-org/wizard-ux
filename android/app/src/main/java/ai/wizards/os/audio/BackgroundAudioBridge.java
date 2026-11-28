@@ -42,7 +42,7 @@ public final class BackgroundAudioBridge {
             String method=r.optString("method");
             final String app=r.optString("appId"), rid=id;
             if(!AudioPolicy.METHODS.contains(method) || r.optInt("v")!=1 || !AudioPolicy.admitted(app)) { answer(reply,id,null,"Unknown audio capability"); return; }
-            if("capabilities".equals(method)) { answer(reply,id,new JSONObject().put("v",1).put("backgroundAudio",true).put("methods",new JSONArray(AudioPolicy.METHODS)).put("apps",new JSONArray(new TreeSet<>(AudioPolicy.APPS))).put("skip",true),null); return; }
+            if("capabilities".equals(method)) { answer(reply,id,new JSONObject().put("v",1).put("backgroundAudio",true).put("methods",new JSONArray(AudioPolicy.METHODS)).put("apps",new JSONArray(new TreeSet<>(AudioPolicy.APPS))).put("skip",true).put("rate",true),null); return; }
             if("detach".equals(method) && BackgroundAudioService.current()==null) { answer(reply,id,new JSONObject(),null); return; }
             if(pending>=16) { answer(reply,id,null,"Audio busy"); return; }
             pending++;

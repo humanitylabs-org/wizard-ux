@@ -68,7 +68,21 @@
   // nothing happened in the thread since it was set (no message from James, no Restore).
   const adopted=new Set();
   function adopt(list){const L=live();if(!L?.ok||!L.defer)return;for(const r of list){const t=Date.parse(r.created_at);if(r.status!=='scheduled'||!isFinite(t)||adopted.has(r.id))continue;const s=L.session?.(r.session_id);if(!s||s.archived||s.deferred||L.busy?.(s.id))continue;adopted.add(r.id);if(Date.parse(s.lastUserAt)>t||Date.parse(s.restoredAt)>t)continue;void L.defer(s.id)}}
-  async function refresh(){try{const p=await req(API);const list=(Array.isArray(p.schedules)?p.schedules:[]).filter(j=>j.kind==='return').map(fromJob);arrived(list);reminders=list;loaded=true;adopt(list);reminders.forEach(r=>arm(r));emit();return reminders}catch{return reminders}}
+  /* Only Snooze's own return jobs, and nothing at all when they are unchanged (wizard-ux issue 2055): the whole
+   * schedule list with its run history was 5.4 MB on a busy box, read twice on every resume, and it slowed the very
+   * list read a tapped thread waits for. An older service ignores ?kind and sends no ETag: same filter here as before. */
+  let etag='',reading=null,readDone=0;
+  async function read(){
+    const r=await fetch(`${API}?kind=return`,{cache:'no-store',credentials:'same-origin',headers:etag&&loaded?{'If-None-Match':etag}:{}});
+    if(r.status===304){reminders.forEach(r=>arm(r));return reminders} // unchanged: keep long Snoozes armed
+    let p={};try{p=await r.json()}catch{}
+    if(!r.ok)throw new Error(p.error?.message||p.error||`HTTP ${r.status}`);
+    const list=(Array.isArray(p.schedules)?p.schedules:[]).filter(j=>j.kind==='return').map(fromJob);arrived(list);reminders=list;loaded=true;etag=r.headers?.get?.('ETag')||'';adopt(list);reminders.forEach(r=>arm(r));emit();return reminders}
+  // After a change of its own (Snooze, Change, Cancel) the list is always read again, never joined to an older read.
+  async function refresh(){try{return await read()}catch{return reminders}finally{readDone=Date.now()}}
+  // Coming back to the front fires both visibilitychange and focus, and the poll may fall in the same moment: one read.
+  // The 15 s poll (poll=true) only joins a read in flight; a resume also skips a read that just finished.
+  function fresh(poll=false){if(reading||(!poll&&Date.now()-readDone<3000))return reading||Promise.resolve(reminders);reading=refresh().finally(()=>{reading=null});return reading}
   const forSession=id=>reminders.filter(r=>r.session_id===id);
   const dueFor=id=>forSession(id).filter(r=>r.status==='due');
   const nextFor=id=>forSession(id).filter(r=>r.status==='scheduled').sort((a,b)=>Date.parse(a.due_at)-Date.parse(b.due_at))[0]||null;
@@ -170,6 +184,6 @@
   // 10 minutes (wizard-os issue 648), enough to arm a Snooze set on another device.
   const HIDDEN_EVERY=10*60000;let readAt=0;
   const due=()=>{if(document.hidden&&DEV()&&Date.now()-readAt<HIDDEN_EVERY)return false;readAt=Date.now();return true};
-  function start(){if(poll)return;readAt=Date.now();void refresh();poll=setInterval(()=>{if(due())void refresh()},15000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)void refresh()});addEventListener('focus',()=>void refresh())}
+  function start(){if(poll)return;readAt=Date.now();void fresh();poll=setInterval(()=>{if(due())void fresh(true)},15000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)void fresh()});addEventListener('focus',()=>void fresh())}
   window.WosBoomerang={someday,start,refresh,open,close,back,banner,handle,dueFor,nextFor,forSession,focusFor,focusedOn,_returnLabel:returnLabel,_preset:preset,isOpen:()=>Boolean(sheet),_wallToUtc:wallToUtc,_addWallDays:addWallDays,_addWallMonths:addWallMonths,_daysInMonth:daysInMonth,_fromJob:fromJob,onChange(fn){listeners.add(fn);return()=>listeners.delete(fn)}};start();
 })();

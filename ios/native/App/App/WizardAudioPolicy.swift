@@ -5,7 +5,7 @@ import Foundation
 /// `ios/tests/audio/run.sh` checks it on any Mac (or in a Linux swift container) without Xcode.
 enum WizardAudioPolicy {
     static let methods: Set<String> = ["capabilities", "attach", "state", "load", "play", "pause", "seek", "next", "previous", "jump",
-                                       "enqueueNext", "removeCurrent", "removeUpcoming", "volume", "detach", "stop"]
+                                       "enqueueNext", "removeCurrent", "removeUpcoming", "volume", "rate", "detach", "stop"]
     static let music = "wizard-music", podcasts = "wizard-podcasts"
     /// Exactly these apps get the phone's media player, the way only Maps gets location. Never widen this from the registry.
     static let apps: Set<String> = [music, podcasts]
@@ -26,6 +26,12 @@ enum WizardAudioPolicy {
     static func skipSeconds(_ seconds: Double?) -> Double {
         guard let seconds, !seconds.isNaN, seconds > 0 else { return 0 }
         return (max(5, min(120, seconds))).rounded()
+    }
+
+    /// A playback speed the app asked for (wizard-ux issue 2061), clamped to 0.5...3; anything unreadable is 1.
+    static func rate(_ value: Double?) -> Float {
+        guard let value, value.isFinite, value > 0 else { return 1 }
+        return Float(max(0.5, min(3, value)))
     }
 
     /// `/path` on this Wizard becomes `https://wizard/path`; anything else is left for `trusted` to refuse.

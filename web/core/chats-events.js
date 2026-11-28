@@ -14,6 +14,12 @@ window.WizCore.chatsParts.events = function ({ attOf, ch, CH, deferredOf, H, hol
     let wasTopic = topicOn();
     new MutationObserver(() => { const on = topicOn(); if (on === wasTopic) return; wasTopic = on; for (const id of Object.keys(CH)) if (W[id] && !W[id].thread) renderChats(W[id]); })
       .observe(document.documentElement, { attributes: true, attributeFilter: ['data-skin'] });
+    // One reply card (wizard-ux issue 2064): an open thread repaints when its switch turns on or off, also when the
+    // switch is applied after the thread first painted.
+    const cardOn = () => { try { return (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/reply-card'); } catch (_) { return false; } };
+    let wasCard = cardOn();
+    new MutationObserver(() => { const on = cardOn(); if (on === wasCard) return; wasCard = on; for (const id of Object.keys(CH)) if (W[id]?.thread && W[id].thread !== '__new__') renderThreadNow(W[id]); })
+      .observe(document.documentElement, { attributes: true, attributeFilter: ['data-tweaks'] });
   }
   // A pin changed here, on another tab, or on another device (pulled through the shared preferences).
   // The device refused to store drafts (storage full): say so, the words stay in the box on screen (issue 1444).

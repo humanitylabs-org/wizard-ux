@@ -72,4 +72,16 @@ public class AudioPolicyTest {
         assertEquals(0,AudioPolicy.skipMs(0));
         assertEquals(0,AudioPolicy.skipMs(Double.NaN));
     }
+    @Test public void playbackSpeedIsAMethodAndClamped() {
+        // wizard-ux issue 2061: Podcasts' speed buttons need a rate command on the device player.
+        assertTrue(AudioPolicy.METHODS.contains("rate"));
+        assertEquals(2f,AudioPolicy.rate(2),0f);
+        assertEquals(1.5f,AudioPolicy.rate(1.5),0f);
+        assertEquals(0.5f,AudioPolicy.rate(0.1),0f);
+        assertEquals(3f,AudioPolicy.rate(9),0f);
+        assertEquals(1f,AudioPolicy.rate(0),0f);
+        assertEquals(1f,AudioPolicy.rate(-2),0f);
+        assertEquals(1f,AudioPolicy.rate(Double.NaN),0f);
+        assertEquals(1f,AudioPolicy.rate(Double.POSITIVE_INFINITY),0f);
+    }
 }

@@ -6,7 +6,7 @@ import java.util.Set;
 /** Generic transport for the explicitly admitted installed media apps (Music; Podcasts since wizard-ux issue 1661). */
 public final class AudioPolicy {
     private AudioPolicy() {}
-    public static final Set<String> METHODS = Set.of("capabilities", "attach", "state", "load", "play", "pause", "seek", "next", "previous", "jump", "enqueueNext", "removeCurrent", "removeUpcoming", "volume", "detach", "stop");
+    public static final Set<String> METHODS = Set.of("capabilities", "attach", "state", "load", "play", "pause", "seek", "next", "previous", "jump", "enqueueNext", "removeCurrent", "removeUpcoming", "volume", "rate", "detach", "stop");
     public static final String MUSIC = "wizard-music", PODCASTS = "wizard-podcasts";
     /** Exactly these apps get the phone's media player, the way only Maps gets location. Never widen this from the registry. */
     public static final Set<String> APPS = Set.of(MUSIC, PODCASTS);
@@ -24,6 +24,11 @@ public final class AudioPolicy {
     public static long skipMs(double seconds) {
         if (Double.isNaN(seconds) || seconds <= 0) return 0;
         return Math.round(Math.max(5, Math.min(120, seconds)) * 1000);
+    }
+    /** A playback speed the app asked for (wizard-ux issue 2061), clamped to 0.5..3; anything unreadable is 1. */
+    public static float rate(double value) {
+        if (Double.isNaN(value) || Double.isInfinite(value) || value <= 0) return 1f;
+        return (float) Math.max(0.5, Math.min(3, value));
     }
     /** Music's original rules, unchanged. */
     public static boolean trusted(String url, String origin, String kind) { return trusted(url, origin, kind, MUSIC); }

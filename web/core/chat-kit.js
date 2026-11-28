@@ -326,6 +326,8 @@
         cur.a = { ...(identity.id != null ? { id: identity.id } : {}), text: t, plainText: h.plainText, inlineMedia: h.inlineMedia, at, final: !(Array.isArray(m.tool_calls) && m.tool_calls.length), ...(carried.length ? { tweaks: carried } : {}), ...(acts.length ? { actions: acts } : {}), ...(choices.length ? { choices } : {}), ...(rbs.length ? { buttons: rbs, btext } : {}) };
         // The reply's own plain-words ask (its hidden status line, served as wizard_ask): a long reply can lead with it.
         if (typeof m.wizard_ask === 'string' && m.wizard_ask.trim()) cur.a.ask = m.wizard_ask.trim();
+        // Its status (needs_you, check, done, fyi): the one reply card names it (wizard-ux issue 2064).
+        if (['needs_you', 'check', 'done', 'fyi'].includes(m.wizard_state)) cur.a.state = m.wizard_state;
         // Hermes' own "Your request was not processed" boundary row (display_kind failed_turn), not the model's words.
         // Older Hermes stores it as plain assistant text: the same exact sentences the Agent Service treats as one.
         if (kind === 'failed_turn' || FAILED_TURN_TEXT.has(String(t).trim())) cur.a.failed = true;
@@ -365,7 +367,7 @@
       media[k2] = url;
     }
     t.a = { ...a, text: `${text}\n\n${a.text}`, plainText: `${long.plainText ?? long.text}\n\n${a.plainText ?? a.text}`,
-      inlineMedia: media, ...(!a.ask && long.ask ? { ask: long.ask } : {}) };
+      inlineMedia: media, ...(!a.ask && long.ask ? { ask: long.ask, ...(long.state ? { state: long.state } : {}) } : {}) };
   }
   // What the work between a request and its answer was made of (the work receipt reads this, chat-work.js):
   // named tool calls (display_label from the Agent Service), their results, the plan and clarify questions.

@@ -37,7 +37,8 @@ test('Boomerang reads and writes the one scheduler, never its own store or a run
   assert.doesNotMatch(js, /\/wizard\/v1\/boomerangs|\/v1\/runs['"`]|OUTBOX\.send/)
   const { calls } = load()
   await new Promise(r => setTimeout(r, 5))
-  assert.equal(calls[0].url, '/wizard/v1/schedules')
+  // Only Snooze's own return jobs (wizard-ux issue 2055): never the whole schedule list with its run history.
+  assert.equal(calls[0].url, '/wizard/v1/schedules?kind=return')
 })
 
 test('a scheduler job maps to the picker shape; only the current time reads as returned', async () => {
@@ -236,3 +237,29 @@ async function pickerSheet() {
     return { text, post: calls.find(c => c.method === 'POST'), deferred }
   } finally { for (const [k, d] of Object.entries(had)) { if (d) Object.defineProperty(proto, k, d); else delete proto[k] } }
 }
+
+test('wizard-ux#2055: one Snooze read per resume, and an unchanged list costs a 304, not the list again', async () => {
+  const handlers = {}, sent = []
+  const job = { id: 'r1', kind: 'return', thread: 'wizard_t', when: { once: '2030-01-01T09:00:00.000Z' }, timezone: 'UTC', prompt: '', target: { message: null, excerpt: '' }, name: 'Snooze · Synthetic' }
+  const { B, sandbox } = load([], {
+    addEventListener: (k, f) => { (handlers[k] ||= []).push(f) },
+    fetch: async (url, init = {}) => {
+      sent.push({ url, tag: init.headers?.['If-None-Match'] || '' })
+      if (init.headers?.['If-None-Match'] === '"t1"') return { ok: false, status: 304, headers: { get: () => '"t1"' }, json: async () => { throw Error('no body') } }
+      return { ok: true, status: 200, headers: { get: k => k.toLowerCase() === 'etag' ? '"t1"' : null }, json: async () => ({ schedules: [job] }) }
+    } })
+  sandbox.document.addEventListener = (k, f) => { (handlers[k] ||= []).push(f) }
+  await new Promise(r => setTimeout(r, 5))
+  assert.equal(sent.length, 1)
+  assert.equal(B.forSession('wizard_t').length, 1)
+  // Back to the front 5 s later: visibilitychange and focus arrive together.
+  const realNow = Date.now
+  sandbox.Date = class extends Date { static now() { return realNow() + 5000 } }
+  for (const f of handlers.focus || []) f()
+  for (const f of handlers.focus || []) f()
+  await new Promise(r => setTimeout(r, 5))
+  assert.equal(sent.length, 2, 'focus twice in one moment: one read')
+  assert.equal(sent[1].url, '/wizard/v1/schedules?kind=return')
+  assert.equal(sent[1].tag, '"t1"', 'asks with the last ETag')
+  assert.equal(B.forSession('wizard_t').length, 1, 'a 304 keeps the Snoozes it has')
+})
